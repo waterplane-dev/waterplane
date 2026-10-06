@@ -1,0 +1,5 @@
+{
+  "collect": true,
+  "prune": true,
+  "keep": 3
+}

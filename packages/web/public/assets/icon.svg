@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512"><style>svg{color:#0A1B28}@media (prefers-color-scheme:dark){svg{color:#E9F4F2}}</style>
+  <g transform="rotate(7 286 228)">
+    <path d="M128,146 L286,228 L128,310" fill="none" stroke="currentColor" stroke-width="50" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M272,228 L84,228" stroke="currentColor" stroke-width="22" stroke-linecap="round"/>
+    <path d="M92,204 L104,228 L92,252" fill="none" stroke="currentColor" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+    
+  </g>
+  <rect x="318" y="302" width="128" height="28" rx="9" fill="currentColor">
+  </rect>
+  <path d="M40,352 L472,352" stroke="currentColor" stroke-width="10" stroke-linecap="round" opacity=".55"/></svg>

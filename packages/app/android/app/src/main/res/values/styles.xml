@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Base application theme. -->
+    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+        <!-- Customize your theme here. -->
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+    </style>
+
+    <!-- This is the theme the app actually runs under: Capacitor's BridgeActivity
+         swaps to it once the splash is done, so the system-bar items belong HERE
+         and not only on the launch theme below.
+
+         The app is dark end to end (the `bg` custom property in styles.css,
+         #0b0d10; XML comments cannot contain a double hyphen, hence the prose),
+         and the platform default leaves a light grey status bar with dark icons
+         sitting on top of it, which reads as a rendering fault rather than a
+         style choice.
+
+         `windowBackground` is the one that matters now. The shell lays out edge
+         to edge and pads the WebView's container by the system-bar insets
+         (MainActivity.takeOverWindowInsets), so the strip of screen behind the
+         status bar shows this colour and nothing else. Left inherited it is
+         AppCompat's dark grey, which against a near black app reads as a band
+         someone forgot to paint. It has to be a COLOUR and not a drawable:
+         Capacitor's SystemBars plugin copies this attribute onto the decor view
+         with `TypedValue.data`, which for a drawable reference is a resource id
+         rendered as a colour.
+
+         There is deliberately no `windowOptOutEdgeToEdgeEnforcement` here any
+         more. It kept the pre-Android-15 layout, where the window sat below the
+         bars, and it is IGNORED on Android 16 for an app targeting SDK 36 — so
+         the same APK laid out one way on one phone and the other way on the
+         next, and on the newer phone the app's own top strip ran under the
+         clock and the battery. Edge-to-edge is now entered on purpose and the
+         insets are handled once, in one place, for every version. -->
+    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.NoActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:background">@null</item>
+        <item name="android:windowBackground">#0B0D10</item>
+        <item name="android:statusBarColor">#0B0D10</item>
+        <item name="android:navigationBarColor">#0B0D10</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">false</item>
+    </style>
+
+
+    <!-- The app is dark end to end (the `bg` custom property in styles.css,
+         #0b0d10; XML comments cannot contain a double hyphen, hence the prose).
+         Capacitor's
+         default theme leaves a LIGHT status bar with dark icons sitting on top
+         of it, and the launch window flashes white before the WebView paints —
+         both read as a rendering fault rather than a style choice on a phone.
+         The splash drawable is regenerated on the same background.
+
+         Same as above: no edge-to-edge opt-out. The splash is a centred drawable
+         on a solid background, so it looks identical either way, and having the
+         launch window and the app window disagree about whether they are
+         edge-to-edge is a visible jump at the handover. -->
+    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <item name="android:background">@drawable/splash</item>
+        <item name="android:statusBarColor">#0B0D10</item>
+        <item name="android:navigationBarColor">#0B0D10</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">false</item>
+    </style>
+</resources>

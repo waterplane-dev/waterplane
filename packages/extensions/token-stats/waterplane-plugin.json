@@ -1,0 +1,8 @@
+{
+  "id": "token-stats",
+  "name": "Token statistics",
+  "version": "0.1.0",
+  "apiVersion": 1,
+  "description": "Every token this desktop has used, per day, by model and by repo, for Claude's ledger and every ledger another extension draws here (one tab each, never summed), plus the two live rate-limit windows and the windows before them.",
+  "web": "web/index.ts"
+}

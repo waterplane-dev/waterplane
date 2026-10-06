@@ -1,0 +1,15 @@
+{
+  "wordmark": "waterplane_",
+  "palette": {
+    "night": "#0A1B28",
+    "dusk": "#10324A",
+    "sea": "#0F5A66",
+    "amber": "#F5A93F",
+    "coral": "#EC6F55",
+    "foam": "#E9F4F2"
+  },
+  "smallCutPx": 64,
+  "androidAdaptive": { "canvasDp": 108, "safeZoneDp": 66 },
+  "maskable": { "background": "android-background.svg", "foreground": "android-foreground.svg" },
+  "statIcon": { "dp": 24, "color": "#FFFFFF", "source": "icon-mono.svg" }
+}

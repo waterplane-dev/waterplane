@@ -1,0 +1,219 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1060" width="1200" height="1060" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>waterplane — plugin mechanism</title>
+  <style>
+    .bg { fill: #ffffff; }
+    .panel { fill: #f4f6f8; stroke: #c9d1d9; stroke-width: 1.2; }
+    .band { fill: #e8f1fb; stroke: #7aa7d9; stroke-width: 1.2; }
+    .box { fill: #ffffff; stroke: #57606a; stroke-width: 1.3; }
+    .ext { fill: #ffffff; stroke: #8250df; stroke-width: 1.5; stroke-dasharray: 7 4; }
+    .plug { fill: #fff8ec; stroke: #bc4c00; stroke-width: 1.5; stroke-dasharray: 2 3; }
+    .prov { fill: #f6f8fa; stroke: #8c959f; stroke-width: 1; }
+    .h { fill: #1f2328; font-size: 15px; font-weight: 700; }
+    .t { fill: #1f2328; font-size: 13.5px; font-weight: 650; }
+    .s { fill: #424a53; font-size: 11.5px; }
+    .k { fill: #0b5cad; font-size: 12.5px; font-weight: 600; }
+    .arrow { stroke: #57606a; stroke-width: 1.6; fill: none; }
+    .ah { fill: #57606a; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #0d1117; }
+      .panel { fill: #161b22; stroke: #30363d; }
+      .band { fill: #0f2540; stroke: #3b6ea8; }
+      .box { fill: #0d1117; stroke: #8b949e; }
+      .ext { fill: #0d1117; stroke: #a371f7; }
+      .plug { fill: #1f1608; stroke: #f0883e; }
+      .prov { fill: #161b22; stroke: #6e7681; }
+      .h, .t { fill: #e6edf3; }
+      .s { fill: #9da7b3; }
+      .k { fill: #79c0ff; }
+      .arrow { stroke: #8b949e; }
+      .ah { fill: #8b949e; }
+    }
+  </style>
+
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="ah"/>
+    </marker>
+  </defs>
+  <rect class="bg" x="0" y="0" width="1200" height="1060"/>
+  <text class="h" x="600" y="40" text-anchor="middle">The plugin mechanism: how a plugin is found, loaded, what it may do, and where it lands</text>
+  <text class="s" x="600" y="60" text-anchor="middle">A plugin runs inside the daemon with the daemon's rights — not a sandbox. The API exists so core rules cannot be skipped by accident.</text>
+  <rect class="panel" x="20" y="76" width="275" height="520" rx="10"/>
+  <text class="h" x="40" y="104">1 · Found</text>
+  <rect class="panel" x="315" y="76" width="275" height="520" rx="10"/>
+  <text class="h" x="335" y="104">2 · Loaded</text>
+  <rect class="panel" x="610" y="76" width="275" height="520" rx="10"/>
+  <text class="h" x="630" y="104">3 · May do (HostPluginApi)</text>
+  <rect class="panel" x="905" y="76" width="275" height="520" rx="10"/>
+  <text class="h" x="925" y="104">4 · Lands in core</text>
+  <rect class="ext" x="32" y="120" width="251" height="72" rx="7"/>
+  <text class="t" x="46" y="142">In-repo builtins</text>
+  <text class="s" x="46" y="162">requirements, opencode</text>
+  <text class="s" x="46" y="179">release.json may turn optional off</text>
+  <rect class="plug" x="32" y="200" width="251" height="56" rx="7"/>
+  <text class="t" x="46" y="222">~/.config/waterplane/plugins/*/</text>
+  <text class="s" x="46" y="240">every directory, sorted</text>
+  <rect class="plug" x="32" y="264" width="251" height="56" rx="7"/>
+  <text class="t" x="46" y="286">plugin-paths.json → paths</text>
+  <text class="s" x="46" y="304">a plugin in its own git repo</text>
+  <text class="s" x="36" y="340">same directory twice → loaded once (realpath)</text>
+  <rect class="box" x="32" y="354" width="251" height="124" rx="7"/>
+  <text class="t" x="46" y="376">install.sh --with copilot</text>
+  <text class="s" x="46" y="396">reads deploy/plugins.json</text>
+  <text class="s" x="46" y="413">clones the pinned commit into</text>
+  <text class="s" x="46" y="430">plugins/&lt;id&gt;, checks the manifest id;</text>
+  <text class="s" x="46" y="447">runs no plugin code, no npm install</text>
+  <rect class="box" x="32" y="486" width="251" height="96" rx="7"/>
+  <text class="t" x="46" y="508">install.sh --without opencode</text>
+  <text class="s" x="46" y="528">switches an optional builtin off</text>
+  <text class="s" x="46" y="545">(.waterplane/plugins.json)</text>
+  <rect class="box" x="327" y="120" width="251" height="108" rx="7"/>
+  <text class="t" x="341" y="142">waterplane-plugin.json</text>
+  <text class="s" x="341" y="162">id, apiVersion (1.x), settings,</text>
+  <text class="s" x="341" y="179">actions, toggles, env, answers,</text>
+  <text class="s" x="341" y="196">backends, optional, experimental</text>
+  <text class="s" x="341" y="213">+ host.mjs (the code)</text>
+  <rect class="box" x="327" y="236" width="251" height="56" rx="7"/>
+  <text class="t" x="341" y="258">manifestProblems()</text>
+  <text class="s" x="341" y="276">checked before any code runs</text>
+  <rect class="box" x="327" y="300" width="251" height="56" rx="7"/>
+  <text class="t" x="341" y="322">import(host.mjs), once at boot</text>
+  <text class="s" x="341" y="340">a change needs npm run restart</text>
+  <rect class="box" x="327" y="364" width="251" height="56" rx="7"/>
+  <text class="t" x="341" y="386">activate(api) — 10 s budget</text>
+  <text class="s" x="341" y="404">every call dies on switch-off</text>
+  <rect class="box" x="327" y="428" width="251" height="80" rx="7"/>
+  <text class="t" x="341" y="450">state: active · error · off</text>
+  <text class="s" x="341" y="468">broken = listed with the reason,</text>
+  <text class="s" x="341" y="484">never hidden, never takes the</text>
+  <text class="s" x="341" y="500">daemon down</text>
+  <rect class="box" x="327" y="516" width="251" height="66" rx="7"/>
+  <text class="t" x="341" y="538">deactivate() on switch-off</text>
+  <text class="s" x="341" y="556">shutdown() at daemon exit:</text>
+  <text class="s" x="341" y="572">kill child processes here</text>
+  <rect class="box" x="622" y="118" width="251" height="464" rx="7"/>
+  <text class="k" x="636" y="140">Read</text>
+  <text class="s" x="636" y="157">session(id), scrollback(id, n)</text>
+  <text class="s" x="636" y="173">repo(id): files + git, path-guarded</text>
+  <text class="s" x="636" y="189">env(name): declared names only</text>
+  <text class="k" x="636" y="213">Listen</text>
+  <text class="s" x="636" y="230">on(prompt | question | action)</text>
+  <text class="s" x="636" y="246">onSettings()</text>
+  <text class="k" x="636" y="270">Show</text>
+  <text class="s" x="636" y="287">setStatus, suggest, setBadge,</text>
+  <text class="s" x="636" y="303">notify, decision (log row)</text>
+  <text class="k" x="636" y="327">Act</text>
+  <text class="s" x="636" y="344">answer() → the answer gate</text>
+  <text class="s" x="636" y="360">handToAgent() → backlog item</text>
+  <text class="s" x="636" y="376">meter(): a model call it paid for</text>
+  <text class="k" x="636" y="400">Phone</text>
+  <text class="s" x="636" y="417">handle(method) ↔ plugin.call</text>
+  <text class="s" x="636" y="433">push(event) → plugin.push</text>
+  <text class="k" x="636" y="457">Setup</text>
+  <text class="s" x="636" y="474">setupCheck(), setupFix()</text>
+  <text class="k" x="636" y="498">Backend</text>
+  <text class="s" x="636" y="515">backend(def), hookSink(),</text>
+  <text class="s" x="636" y="531">onHook(fn, {maxHoldMs})</text>
+  <rect class="box" x="917" y="120" width="251" height="76" rx="7"/>
+  <text class="t" x="931" y="142">Backend registry</text>
+  <text class="s" x="931" y="160">offered in the phone's picker;</text>
+  <text class="s" x="931" y="176">refused in words on a taken id</text>
+  <text class="s" x="931" y="192">or a screen reader core lacks</text>
+  <rect class="box" x="917" y="204" width="251" height="108" rx="7"/>
+  <text class="t" x="931" y="226">Answer gate (answergate.ts)</text>
+  <text class="s" x="931" y="244">manifest says answers: true</text>
+  <text class="s" x="931" y="260">per-session switch, OFF by default</text>
+  <text class="s" x="931" y="276">same box it was told about</text>
+  <text class="s" x="931" y="292">not trust / plan / destructive</text>
+  <text class="s" x="931" y="308">choice is one of the options</text>
+  <rect class="box" x="917" y="320" width="251" height="60" rx="7"/>
+  <text class="t" x="931" y="342">Backlog</text>
+  <text class="s" x="931" y="360">a hand-off waits for a tap;</text>
+  <text class="s" x="931" y="376">at most once per key</text>
+  <rect class="box" x="917" y="388" width="251" height="76" rx="7"/>
+  <text class="t" x="931" y="410">The one WebSocket</text>
+  <text class="s" x="931" y="428">plugin.call → plugin.reply once</text>
+  <text class="s" x="931" y="444">per ackId; plugin.push broadcast;</text>
+  <text class="s" x="931" y="460">no second socket</text>
+  <rect class="box" x="917" y="472" width="251" height="110" rx="7"/>
+  <text class="t" x="931" y="494">Phone UI</text>
+  <text class="s" x="931" y="512">in-repo web half: bundled via</text>
+  <text class="s" x="931" y="528">features/registry.ts, each in</text>
+  <text class="s" x="931" y="544">an ExtBoundary. External plugin:</text>
+  <text class="s" x="931" y="560">declares settings, actions, badges;</text>
+  <text class="s" x="931" y="576">the app draws them</text>
+  <line class="arrow" x1="297" y1="330" x2="313" y2="330" marker-end="url(#a)"/>
+  <line class="arrow" x1="592" y1="330" x2="608" y2="330" marker-end="url(#a)"/>
+  <line class="arrow" x1="887" y1="330" x2="903" y2="330" marker-end="url(#a)"/>
+  <rect class="panel" x="20" y="616" width="1160" height="430" rx="10"/>
+  <text class="h" x="40" y="644">A plugin backend at runtime — Copilot's permission dialog, end to end</text>
+  <rect class="plug" x="36" y="660" width="172" height="100" rx="7"/>
+  <text class="t" x="50" y="682">1 · CLI in the PTY</text>
+  <text class="s" x="50" y="702">Copilot wants to run</text>
+  <text class="s" x="50" y="719">a command; its hook</text>
+  <text class="s" x="50" y="736">curls the hookSink</text>
+  <line class="arrow" x1="209" y1="710" x2="225" y2="710" marker-end="url(#a)"/>
+  <rect class="box" x="226" y="660" width="172" height="100" rx="7"/>
+  <text class="t" x="240" y="682">2 · Loopback route</text>
+  <text class="s" x="240" y="702">POST 127.0.0.1:8770</text>
+  <text class="s" x="240" y="719">/api/plugin/copilot/hook</text>
+  <text class="s" x="240" y="736">not loopback → 403</text>
+  <line class="arrow" x1="399" y1="710" x2="415" y2="710" marker-end="url(#a)"/>
+  <rect class="plug" x="416" y="660" width="172" height="100" rx="7"/>
+  <text class="t" x="430" y="682">3 · Plugin onHook</text>
+  <text class="s" x="430" y="702">a SourceDialog with</text>
+  <text class="s" x="430" y="719">the CLI's own id; the</text>
+  <text class="s" x="430" y="736">reply is HELD ≤ 8 s</text>
+  <line class="arrow" x1="589" y1="710" x2="605" y2="710" marker-end="url(#a)"/>
+  <rect class="box" x="606" y="660" width="172" height="100" rx="7"/>
+  <text class="t" x="620" y="682">4 · Host → phone</text>
+  <text class="s" x="620" y="702">the box goes out on</text>
+  <text class="s" x="620" y="719">the one WebSocket,</text>
+  <text class="s" x="620" y="736">CLI's own words</text>
+  <line class="arrow" x1="779" y1="710" x2="795" y2="710" marker-end="url(#a)"/>
+  <rect class="box" x="796" y="660" width="172" height="100" rx="7"/>
+  <text class="t" x="810" y="682">5 · A tap</text>
+  <text class="s" x="810" y="702">sessions.answerBox()</text>
+  <text class="s" x="810" y="719">→ the dialog's</text>
+  <text class="s" x="810" y="736">answer()</text>
+  <line class="arrow" x1="969" y1="710" x2="985" y2="710" marker-end="url(#a)"/>
+  <rect class="box" x="986" y="660" width="172" height="100" rx="7"/>
+  <text class="t" x="1000" y="682">6 · Back to the CLI</text>
+  <text class="s" x="1000" y="702">the held reply returns:</text>
+  <text class="s" x="1000" y="719">allow or deny;</text>
+  <text class="s" x="1000" y="736">the command runs</text>
+  <rect class="box" x="36" y="776" width="1132" height="64" rx="7"/>
+  <text class="t" x="50" y="798">No tap inside the hold</text>
+  <text class="s" x="50" y="818">core answers {} → the CLI draws its own dialog → the same box now answers by keystrokes ({keys}, at most 8, typed through the session).</text>
+  <text class="k" x="36" y="868">Every fact about a session climbs one ladder, per backend:</text>
+  <rect class="box" x="36" y="880" width="108" height="30" rx="15"/>
+  <text class="s" x="90" y="900" text-anchor="middle">turns</text>
+  <rect class="box" x="156" y="880" width="108" height="30" rx="15"/>
+  <text class="s" x="210" y="900" text-anchor="middle">dialogs</text>
+  <rect class="box" x="276" y="880" width="108" height="30" rx="15"/>
+  <text class="s" x="330" y="900" text-anchor="middle">delivery</text>
+  <rect class="box" x="396" y="880" width="108" height="30" rx="15"/>
+  <text class="s" x="450" y="900" text-anchor="middle">transcript</text>
+  <rect class="box" x="516" y="880" width="108" height="30" rx="15"/>
+  <text class="s" x="570" y="900" text-anchor="middle">context</text>
+  <rect class="box" x="636" y="880" width="108" height="30" rx="15"/>
+  <text class="s" x="690" y="900" text-anchor="middle">tokens</text>
+  <text class="s" x="770" y="893">tokens are served at /api/tokenstats/&lt;id&gt;,</text>
+  <text class="s" x="770" y="909">in the backend's own unit</text>
+  <rect class="plug" x="36" y="926" width="364" height="74" rx="7"/>
+  <text class="t" x="50" y="948">1 · the plugin's source</text>
+  <text class="s" x="50" y="966">hooks, a local server, an event log</text>
+  <text class="s" x="50" y="982">— exact, from the CLI itself</text>
+  <line class="arrow" x1="402" y1="963" x2="418" y2="963" marker-end="url(#a)"/>
+  <rect class="box" x="420" y="926" width="364" height="74" rx="7"/>
+  <text class="t" x="434" y="948">2 · a core screen reader</text>
+  <text class="s" x="434" y="966">regex over the rendered TUI,</text>
+  <text class="s" x="434" y="982">only while the source is down</text>
+  <line class="arrow" x1="786" y1="963" x2="802" y2="963" marker-end="url(#a)"/>
+  <rect class="box" x="804" y="926" width="364" height="74" rx="7"/>
+  <text class="t" x="818" y="948">3 · absent</text>
+  <text class="s" x="818" y="966">shown as unknown —</text>
+  <text class="s" x="818" y="982">never a guessed number</text>
+  <text class="s" x="36" y="1028">Legend:  dotted orange = plugin code   ·   dashed violet = in-repo extension   ·   solid = core</text>
+</svg>
+

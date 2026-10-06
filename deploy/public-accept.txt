@@ -1,0 +1,68 @@
+# Reviewed false positives of the public-snapshot scan (scripts/release/publish-public.mjs --accept).
+# One `path:line:hash` per line; a token goes stale when its line changes, and the publisher
+# reports stale tokens. Reviewed 2026-10-05: every entry below is a TEST FIXTURE — fake keys
+# planted to prove redaction (the anthropic one that must never appear, the openai A-to-J one), and made-up
+# tailnet names / 100.64.0.0/10 addresses (example-tailnet, tail1234, 100.64.x, 100.90.x).
+# Never add a real address or key here: fix the file instead.
+packages/host/test/claudeendpoint.test.mjs:23:88d662a4be  # anthropic-key fixture
+packages/host/test/clihealth.test.mjs:93:fafbaed40c  # openai-key fixture
+packages/host/test/clihealth.test.mjs:97:2c4cd6cf37  # openai-key fixture
+scripts/claude-stub-tui.mjs:557:f51ec33f39  # openai-key fixture
+scripts/e2e-clihealth.mjs:161:dc0a0b6b4b  # openai-key fixture
+scripts/e2e-demorecord.mjs:50:efb769abcb  # anthropic-key fixture
+tools/demo-scenario.test.mjs:47:2cc559d440  # anthropic-key fixture
+packages/host/test/origin.test.mjs:21:83c1f18aa9  # ts-net-name fixture
+packages/host/test/origin.test.mjs:27:929a3855a3  # ts-net-name fixture
+packages/host/test/origin.test.mjs:38:3ecc5a0bba  # ts-net-name fixture
+packages/host/test/pairing.test.mjs:228:c1c75715f5  # tailscale-ip fixture
+packages/host/test/pairing.test.mjs:285:01b1bd3082  # tailscale-ip fixture
+packages/host/test/peersstore.test.mjs:23:d677af191b  # tailscale-ip fixture
+packages/host/test/peersstore.test.mjs:32:caed6e5c4d  # tailscale-ip fixture
+packages/host/test/tailnetpeers.test.mjs:16:6a5718fb2d  # tailscale-ip fixture
+packages/host/test/tailnetpeers.test.mjs:17:7aa2148c86  # tailscale-ip fixture
+packages/host/test/tailnetpeers.test.mjs:19:e7ea9b32c6  # tailscale-ip fixture
+packages/host/test/tailnetpeers.test.mjs:52:cd614c435f  # tailscale-ip fixture
+packages/host/test/tailnetpeers.test.mjs:55:ee55a5ac52  # tailscale-ip fixture
+packages/host/test/tailnetpeers.test.mjs:61:e38bf5cda6  # tailscale-ip fixture
+packages/host/test/tailnetpeers.test.mjs:63:cfdacb1df0  # tailscale-ip fixture
+packages/shared/test/hosts.test.mjs:50:bf456d86df  # ts-net-name fixture
+packages/shared/test/hosts.test.mjs:51:3ac4f69eda  # ts-net-name fixture
+packages/shared/test/hosts.test.mjs:52:02d9fc08dc  # ts-net-name fixture
+packages/shared/test/peer.test.mjs:31:8cffc44ff8  # tailscale-ip fixture
+packages/web/src/features/hostTools/logic.test.mjs:23:2939d41ce8  # ts-net-name fixture
+packages/web/src/features/hostTools/logic.test.mjs:24:b254f90962  # ts-net-name fixture
+packages/web/src/features/hosts/logic.test.mjs:51:ada2f16912  # ts-net-name fixture
+packages/web/src/features/hosts/logic.test.mjs:56:4a0406807a  # ts-net-name fixture
+packages/web/src/pairRedeem.test.mjs:45:63373f31d1  # ts-net-name fixture
+packages/web/src/pairRedeem.test.mjs:46:17912d0da0  # ts-net-name fixture
+packages/web/src/pairRedeem.test.mjs:51:389e5a6a22  # ts-net-name fixture
+scripts/e2e-agentintent.mjs:153:c1d20ebb83  # tailscale-ip fixture
+scripts/release/public-lib.test.mjs:89:9d58e0b970  # tailscale-ip fixture
+scripts/release/public-lib.test.mjs:92:d0ab2b6062  # ts-net-name fixture
+tools/demo-scenario.test.mjs:13:a737d35612  # tailscale-ip fixture
+- `docs/analysis/assess.md` (1): `docs/notes/host.md:4382`
+- `docs/analysis/backends-design.md` (5): `.claude/skills/host-core/SKILL.md:231`, `docs/notes/architecture.md:90`, `docs/notes/architecture.md:90`, `docs/notes/host.md:5039`, `docs/notes/host.md:5137`
+- `docs/analysis/demo-mode-plan.md` (1): `CLAUDE.md:38`
+- `docs/analysis/extensions-plan.md` (2): `docs/notes/plugins.md:218`, `docs/notes/token-stats-architecture.md:6`
+- `docs/analysis/first-app-plan.md` (2): `docs/notes/host.md:6784`, `packages/web/src/features/onboard/README.md:3`
+- `docs/analysis/fork-and-reset.md` (1): `docs/notes/host.md:4304`
+- `docs/analysis/peer-hosts-plan.md` (5): `CLAUDE.md:65`, `docs/notes/distribution.md:384`, `docs/notes/host.md:6825`, `docs/notes/protocol-and-security.md:75`, `packages/web/src/features/peers/README.md:3`
+- `docs/analysis/session-budget-plan.md` (3): `.claude/skills/shared/SKILL.md:160`, `docs/notes/host.md:3628`, `docs/notes/web.md:5838`
+- `docs/analysis/spikes/2026-10-01-claude-local.md` (1): `docs/notes/host.md:5098`
+- `docs/analysis/spikes/2026-10-02-claude-local-lean.md` (1): `docs/notes/host.md:5103`
+- `docs/analysis/spikes/2026-10-02-local-usage-metrics.md` (1): `docs/notes/host.md:3926`
+- `docs/guide.md` (3): `.claude/skills/docs-media/SKILL.md:60`, `README.md:63`, `docs/requirements/demo.md:41`
+- `docs/media/apk-install.gif` (1): `README.md:90`
+- `docs/media/first-look.gif` (1): `README.md:11`
+- `docs/media/gallery-and-files.gif` (1): `README.md:78`
+- `docs/media/limit-and-budget.gif` (1): `README.md:126`
+- `docs/media/numbers.gif` (1): `README.md:108`
+- `docs/media/queue-and-schedule.gif` (1): `README.md:99`
+- `packages/extensions/opencode/README.md` (3): `.claude/skills/heuristics/SKILL.md:86`, `.claude/skills/host-core/SKILL.md:22`, `.claude/skills/host-ledgers/SKILL.md:128`
+- `(root)` (1): `.npmrc`
+- `docs` (3): `docs/code-quality-review.md`, `docs/guide.md`, `docs/play-review.md`
+- `docs/analysis` (72)
+- `docs/media` (23)
+- `docs/prompts` (2): `docs/prompts/prompt-log-raw.md`, `docs/prompts/prompt-log-summary.md`
+- `packages/extensions` (86)
+- `scripts` (1): `scripts/sync-gemini-key.sh`

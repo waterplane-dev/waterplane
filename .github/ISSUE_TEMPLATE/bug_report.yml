@@ -1,0 +1,109 @@
+name: Bug report
+description: Something in the host daemon or the phone PWA is broken.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. Found a security issue
+        instead (something that lets an unauthorized caller reach or drive
+        the daemon)? Please use [private reporting](../../security/advisories/new)
+        instead of a public issue — see `SECURITY.md`.
+
+        **The most useful bug report is a failing test.** A PR that only adds a
+        test reproducing this bug is one of the two kinds of code PR this project
+        merges (see `CONTRIBUTING.md`) — link it below if you write one.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you do, what did you expect, what happened instead?
+      placeholder: |
+        Steps to reproduce, expected behavior, actual behavior.
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      description: e.g. macOS 15.1, Ubuntu 24.04
+    validations:
+      required: true
+
+  - type: input
+    id: node-version
+    attributes:
+      label: node --version
+    validations:
+      required: true
+
+  - type: input
+    id: claude-version
+    attributes:
+      label: claude --version
+      description: This project wraps the claude CLI's terminal output, which shifts between versions.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-route
+    attributes:
+      label: How did you install it?
+      options:
+        - Installer script
+        - npm
+        - From source (git clone)
+        - WSL
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: latest-commit
+    attributes:
+      label: Are you on the latest commit on main?
+      description: Only the latest commit on main is supported (see SECURITY.md).
+      options:
+        - "Yes"
+        - "No"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: access-path
+    attributes:
+      label: How are you reaching the host?
+      options:
+        - Tailscale
+        - LAN with WATERPLANE_ALLOW_PUBLIC=1 + password
+        - Loopback (same machine)
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: failing-test
+    attributes:
+      label: Failing test (optional)
+      description: |
+        A link to a PR that adds a failing test for this, or the test inline. Pure
+        logic goes in a `*.test.mjs` beside the module (`npm run test:unit`), screen
+        heuristics in `packages/host/test/` (`npm run test:host`), host behaviour in
+        a `scripts/e2e-*.mjs`.
+      render: js
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Host logs
+      description: |
+        If running under launchd, logs are at `~/Library/Logs/waterplane-host.*.log`.
+        Paste the relevant tail (redact anything sensitive — repo paths, tokens).
+      render: text
+    validations:
+      required: false

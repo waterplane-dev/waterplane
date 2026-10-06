@@ -1,0 +1,49 @@
+name: CI
+
+# Auto-triggers removed 2026-09-11. These checks now run locally, on `git push`,
+# via the repo's pre-push hook -- GitHub Actions minutes on a private repo are
+# billed, and a macOS runner bills at 10x. The job definition below is kept so
+# the pipeline is still documented and can be run by hand from the Actions tab.
+on:
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    # macOS is the primary platform (PTY behaviour, launchd, the `tailscale`
+    # bundle path); Linux is where most contributors and the runners live. The
+    # PTY/tmux layer is exactly the kind of thing that passes on one and not the
+    # other, so test both.
+    #
+    # This matrix is now the ONLY thing that covers Linux: the pre-push hook runs
+    # on the author's Mac. Dispatch this workflow by hand before a release, or
+    # the ubuntu leg is never exercised again.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: deploy/node-version
+          cache: npm
+      # The e2e suite creates throwaway git repos (git init + commit), so the
+      # runner needs a git identity.
+      - name: Configure git identity
+        run: |
+          git config --global user.email "ci@example.com"
+          git config --global user.name "waterplane-ci"
+      # e2e-tmux.mjs proves sessions survive a host restart inside tmux.
+      - name: Install tmux (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y tmux
+      - name: Install tmux (macOS)
+        if: runner.os == 'macOS'
+        run: brew install tmux
+      - run: npm ci
+      - run: npm run build
+      # The whole e2e suite (scripts/run-e2e.mjs discovers every e2e-*.mjs, so
+      # a new one is covered without touching this file). It drives a stub shell
+      # as the `claude` binary — no claude install, login or API access needed.
+      - run: npm test

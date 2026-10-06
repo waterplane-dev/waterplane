@@ -1,0 +1,116 @@
+# What is PUBLIC. Everything not matched here stays private (default = private).
+#
+# Read by scripts/release/publish-public.mjs, which builds the public snapshot
+# from `git archive <tag>`. gitignore-style globs, with one difference that
+# matters: the LAST matching line wins, so a `!` carve-out must come AFTER the
+# include it narrows. `**` crosses directories, `*` does not. A pattern that
+# matches a directory covers everything under it.
+#
+# To publish more, add a line. To hide something, add a `!` line below it.
+# Never put a path here to "fix" a scan hit: fix the file, or review the hit and
+# list it in an --accept file.
+
+# ---- source -----------------------------------------------------------------
+packages/**
+scripts/**
+deploy/**
+brand/**
+tools/**
+
+# ---- docs: notes, requirements and assets -----------------------------------
+# docs/notes is public (redacted by the owner's decision; the publisher's scan
+# keeps it clean). docs/analysis, docs/prompts and docs/code-quality-review.md
+# stay private, pending the owner's review: links into them are reported as
+# dangling.
+docs/notes/**
+docs/requirements/**
+docs/assets/**
+# The README's and guide's pictures: the finished gifs and stills only (owner decision,
+# 2026-10-06). The mp4 copies stay private (size), and so does everything that MAKES them
+# (carve-outs below).
+docs/media/*.gif
+docs/media/*.png
+docs/guide.md
+# The plugin API reference, generated from packages/shared/src/plugin.ts (scripts/gen-plugin-docs.mjs).
+docs/plugins-api.md
+
+# ---- repo plumbing ----------------------------------------------------------
+.github/**
+# Only the skills under .claude/ travel. .claude/outbox, inbox, worktrees and any
+# .patch there are phone/session plumbing and are never listed.
+.claude/skills/**
+
+# ---- root files -------------------------------------------------------------
+/README.md
+/LICENSE
+/SECURITY.md
+/CONTRIBUTING.md
+/CODE_OF_CONDUCT.md
+/CHANGELOG.md
+/NOTICES.md
+/DISCLAIMER.md
+/CLAUDE.md
+/package.json
+/package-lock.json
+/tsconfig.base.json
+/eslint.config.js
+/.gitignore
+/.env.example
+/.editorconfig
+/.nvmrc
+/.npmrc
+
+# ---- carve-outs: personal, or credentials -----------------------------------
+# Env files hold keys. Only the template is public.
+!**/.env
+!**/.env.*
+**/.env.example
+# Signing material and anything shaped like it.
+!**/*.jks
+!**/*.keystore
+!**/*.p8
+!**/*.p12
+!**/*.pfx
+!**/*.pem
+!packages/app/android/keystore-*
+!packages/app/android/keystore.properties
+!packages/app/android/key.properties
+!**/local.properties
+!**/google-services.json
+!**/service-account*.json
+# ...except the release key's PUBLIC half: it is already published verbatim in
+# packages/host/src/cli/releasesig.ts and the rendered installer, and the
+# public tree's own tests pin those two to this file (releasesig.test.mjs,
+# sign-lib.test.mjs, render-install.test.mjs).
+deploy/release-pubkey.pem
+# Scripts that are this desktop's, not the project's: Bitwarden item names and
+# the key's path on this machine.
+!scripts/sync-gemini-key.sh
+# The opencode extension stays PRIVATE (owner decision, 2026-10-04): its host half,
+# readers, tests, e2e and stubs travel with its folder. Core discovers extensions by
+# folder (packages/host/src/plugins/builtin.ts) and builds, type-checks and tests
+# without it (tools/publictree.test.mjs, scripts/verify-public-tree.mjs).
+!packages/extensions/opencode/**
+# The vault extension (biometric-gated secrets) stays PRIVATE (owner decision,
+# 2026-10-05). The generic keystore bridge it uses (ShellKeystorePlugin.java,
+# nativeKeystore.ts) is public and names none of it (vault/publictree.json).
+!packages/extensions/vault/**
+# The media tooling stays PRIVATE (owner decision, 2026-10-06): the Playwright journeys
+# that film the demo, the gif/svg/apk recorders, their tests and the skill that drives
+# them. The pictures they make are public (docs/media above); how they are made is not.
+!scripts/ui/**
+!scripts/media/**
+!tools/uicaptions.test.mjs
+!tools/uipace.test.mjs
+!tools/stublogo.test.mjs
+!.claude/skills/docs-media/**
+# Pending owner review (listed again on purpose, so a future broad include above
+# cannot publish them by accident).
+!docs/analysis/**
+!docs/prompts/**
+!docs/code-quality-review.md
+!.claude/outbox/**
+!.claude/inbox/**
+!.claude/worktrees/**
+!.claude/*.patch
+!**/*.patch

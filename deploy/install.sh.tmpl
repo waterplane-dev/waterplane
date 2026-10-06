@@ -1,0 +1,705 @@
+#!/bin/sh
+# @@NAME@@ installer — @@SLUG@@ @@VERSION@@.
+#
+#   curl -fsSL @@INSTALL_URL@@ | sh
+#   curl -fsSL @@INSTALL_URL@@ | sh -s -- --no-service
+#
+# You can (and should) read this script before running it: download it, open
+# it, then `sh install.sh`. What it does, in order:
+#
+#   1. checks the platform (macOS arm64/x64, Linux x64/arm64, Windows only
+#      inside WSL2), that `claude` (Claude Code) is installed, and that tmux is
+#      (required: sessions live in it). A missing tmux is offered for install
+#      through brew / apt / dnf / pacman, and only runs when you answer y;
+#   2. downloads Node @@NODE_VERSION@@ from nodejs.org and verifies it against
+#      nodejs.org's SHASUMS256.txt (skipped when that version is already here);
+#   3. downloads @@SLUG@@-<version>.tar.gz and verifies it against its .sha256,
+#      and that .sha256 against the publisher's signature (.sha256.sig) with
+#      the public key written into this script (RELEASE_PUBKEY below);
+#   4. unpacks both under ${XDG_DATA_HOME:-~/.local/share}/@@SLUG@@/ and
+#      writes ~/.local/bin/@@SLUG@@ — it edits no shell rc file and uses no sudo
+#      (except the tmux install of step 1, and only when you say yes);
+#   5. runs `@@SLUG@@ service install` (skip: --no-service) and `@@SLUG@@ doctor`.
+#
+# Optional, only when you ask: `--with <id>` clones a plugin from this script's
+# catalogue (at a pinned tag or commit) into ~/.config/@@CONFIG_NAME@@/plugins/<id>
+# and never runs the plugin's code. `--without <id>` switches an optional
+# built-in extension off for this install.
+#
+# Re-running it upgrades. `--uninstall` removes the program and the service and
+# leaves your repos, settings (~/.config/@@CONFIG_NAME@@) and state (~/.local/state/@@CONFIG_NAME@@) alone.
+#
+# GENERATED from deploy/install.sh.tmpl by scripts/release/render-install.mjs.
+# Edit the template, not this file.
+
+# Everything is inside main(), called on the LAST line, so a download cut off
+# half-way through `curl | sh` runs nothing.
+
+set -eu
+
+SLUG='@@SLUG@@'
+NAME='@@NAME@@'
+NODE_VERSION='@@NODE_VERSION@@'
+DEFAULT_VERSION='@@VERSION@@'
+RELEASE_BASE='@@REPO_URL@@'
+ENV_PREFIX='@@ENV_PREFIX@@'
+NODE_MIRROR_DEFAULT='https://nodejs.org/dist'
+CLAUDE_DOCS='https://docs.anthropic.com/en/docs/claude-code'
+TAILSCALE_DL='https://tailscale.com/download'
+CONFIG_NAME='@@CONFIG_NAME@@'
+STATE_DIR='@@STATE_DIR@@'
+MANIFEST='@@MANIFEST@@'
+# The release publisher's Ed25519 public key (deploy/release-pubkey.pem, its SPKI DER in base64).
+# Only a release whose .sha256 this key signed is installed; a new key means a new install.sh.
+RELEASE_PUBKEY='@@RELEASE_PUBKEY@@'
+
+# The external plugins this script can install: id|listed|experimental|repo|ref|name,
+# from deploy/plugins.json at render time. Only listed=1 rows are installable.
+catalogue() {
+  cat <<'CATALOGUE_EOF'
+@@CATALOGUE@@
+CATALOGUE_EOF
+}
+
+# The extensions that ship INSIDE the release: id|optional. --with cannot install
+# these (they are already in the tarball); --without can switch an optional one off.
+builtins() {
+  cat <<'BUILTINS_EOF'
+@@BUILTINS@@
+BUILTINS_EOF
+}
+
+say() { printf '[%s] %s\n' "$SLUG" "$*"; }
+warn() { printf '[%s] %s\n' "$SLUG" "$*" >&2; }
+die() { warn "$*"; exit 1; }
+has() { command -v "$1" >/dev/null 2>&1; }
+
+usage() {
+  cat <<EOF
+usage: install.sh [options]
+
+  --version <v>        install this version instead of $DEFAULT_VERSION
+  --from <dir|url>     take the release files from here (a local dist-release/
+                       directory, or a URL) instead of $RELEASE_BASE
+  --node-mirror <url>  where to download Node from (default $NODE_MIRROR_DEFAULT)
+  --bin-dir <dir>      where to put the $SLUG command (default ~/.local/bin)
+  --no-service         do not install the login service (start it with: $SLUG start)
+  --skip-claude-check  continue even though claude (Claude Code) is not installed
+  --with <id>          also install this plugin (repeatable) from the catalogue below
+  --without <id>       switch an optional built-in extension off for this install (repeatable)
+  --uninstall          remove the program, the runtime, the service and the command
+  -h, --help           this text
+
+Plugins you can install with --with:
+$(catalogue_help)
+
+A plugin runs inside the host with the host's rights. The installer clones it at
+the pinned tag or commit and checks its manifest; it never runs the plugin's code.
+EOF
+}
+
+catalogue_help() {
+  out="$(catalogue | awk -F'|' '$2 == 1 {printf "  %s  %s%s\n", $1, $6, ($3 == 1 ? " (experimental)" : "")}')"
+  if [ -n "$out" ]; then printf '%s\n' "$out"; else echo '  (none yet)'; fi
+}
+
+# ── plugins ──────────────────────────────────────────────────────────────
+
+valid_id() { printf '%s' "$1" | grep -Eq '^[a-z][a-z0-9-]{1,39}$'; }
+catalogue_row() { catalogue | awk -F'|' -v id="$1" '$1 == id {print; exit}'; }
+builtin_row() { builtins | awk -F'|' -v id="$1" '$1 == id {print; exit}'; }
+listed_ids() { catalogue | awk -F'|' '$2 == 1 {printf "%s%s", sep, $1; sep = ", "}'; }
+
+# Every refusal happens here, before anything is downloaded or unpacked.
+resolve_plugins() {
+  for id in $WITH_IDS; do
+    valid_id "$id" || die "--with $id: that is not a plugin id (lowercase letters, digits and dashes, starting with a letter)."
+    if [ -n "$(builtin_row "$id")" ]; then
+      die "--with $id: $id is built into $NAME and ships inside the release, so there is nothing to fetch. The release already contains it; --without $id switches it off if it is optional."
+    fi
+    row="$(catalogue_row "$id")"
+    known="$(listed_ids)"
+    if [ -z "$row" ]; then
+      die "--with $id: no plugin called '$id' is in this installer's catalogue. Installable plugins: ${known:-none yet}."
+    fi
+    case "$row" in
+      "$id|1|"*) ;;
+      *) die "--with $id: '$id' is known to $NAME but not published yet, so this installer will not fetch it. Installable plugins: ${known:-none yet}." ;;
+    esac
+  done
+  for id in $WITHOUT_IDS; do
+    valid_id "$id" || die "--without $id: that is not an extension id."
+    row="$(builtin_row "$id")"
+    [ -n "$row" ] || die "--without $id: '$id' is not a built-in extension of $NAME, so there is nothing to switch off. (A plugin is simply not installed unless you pass --with.)"
+    case "$row" in
+      "$id|1") ;;
+      *) die "--without $id: $id is part of $NAME itself and cannot be switched off." ;;
+    esac
+  done
+  if [ -n "$WITH_IDS" ]; then has git || die "--with needs git to fetch the plugin, and git was not found; install it and re-run."; fi
+}
+
+# Clone and check every requested plugin into $TMP; place nothing yet.
+stage_plugins() {
+  [ -n "$WITH_IDS" ] || return 0
+  mkdir -p "$TMP/plugins"
+  for id in $WITH_IDS; do
+    IFS='|' read -r _id _listed _exp repo ref pname <<ROW_EOF
+$(catalogue_row "$id")
+ROW_EOF
+    dest="$CONFIG_DIR/plugins/$id"
+    if [ -e "$dest" ] && [ ! -f "$dest/.git/$SLUG-installer-plugin" ]; then
+      die "$dest exists and was not put there by this installer; move it away and re-run. Nothing was installed."
+    fi
+    say "fetching plugin $id ($pname) at $ref"
+    d="$TMP/plugins/$id"
+    # Hooks off, nothing checked out until we pick the ref: no code of the plugin executes here.
+    git -c core.hooksPath=/dev/null clone --quiet --no-checkout "$repo" "$d" ||
+      die "could not clone $repo. Nothing was installed."
+    git -C "$d" -c core.hooksPath=/dev/null -c advice.detachedHead=false checkout --quiet --detach "$ref" ||
+      die "$repo has no tag or commit '$ref'. Nothing was installed."
+    [ -f "$d/$MANIFEST" ] || die "$repo at $ref has no $MANIFEST, so it is not a $NAME plugin. Nothing was installed."
+    got="$("$NODE" -e 'try{process.stdout.write(String(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).id||""))}catch(e){}' "$d/$MANIFEST")"
+    [ "$got" = "$id" ] ||
+      die "$repo at $ref declares plugin id '${got:-(unreadable manifest)}', not '$id'. Nothing was installed."
+    printf '%s\n' "$ref" > "$d/.git/$SLUG-installer-plugin"
+  done
+}
+
+place_plugins() {
+  [ -n "$WITH_IDS" ] || return 0
+  mkdir -p "$CONFIG_DIR/plugins"
+  for id in $WITH_IDS; do
+    dest="$CONFIG_DIR/plugins/$id"
+    rm -rf "$dest.old.$$"
+    if [ -e "$dest" ]; then mv "$dest" "$dest.old.$$"; fi
+    mv "$TMP/plugins/$id" "$dest"
+    rm -rf "$dest.old.$$"
+    say "installed plugin $id into $dest (it loads at the next host start and runs with the host's rights; none of its code was run here)"
+  done
+}
+
+# The host's global state dir, the host's own precedence (packages/host/src/branddirs.ts):
+# <PREFIX>STATE_DIR, else $XDG_STATE_HOME/<name>, else ~/.local/state/<name>.
+state_home() {
+  s="$(printenv "${ENV_PREFIX}STATE_DIR" 2>/dev/null || true)"
+  if [ -n "$s" ]; then printf '%s\n' "$s"; return; fi
+  if [ -n "${XDG_STATE_HOME:-}" ]; then printf '%s\n' "$XDG_STATE_HOME/$CONFIG_NAME"; return; fi
+  printf '%s\n' "$HOME/.local/state/$CONFIG_NAME"
+}
+
+# <state>/plugins.json {"enabled": {"<id>": false}}: the switch the host already honours.
+# An upgrade from a host that still keeps its state under the code root writes
+# THERE, so the host's one-time boot move carries it — a file written into the
+# new dir first would make that move refuse (both dirs holding state).
+apply_without() {
+  [ -n "$WITHOUT_IDS" ] || return 0
+  state="$(state_home)"
+  root="$(printenv "${ENV_PREFIX}ROOT" 2>/dev/null || true)"
+  [ -n "$root" ] || root="$HOME/dev"
+  if [ -z "$(ls -A "$state" 2>/dev/null)" ] && [ -d "$root/$STATE_DIR" ] && [ ! -L "$root/$STATE_DIR" ] && [ -n "$(ls -A "$root/$STATE_DIR" 2>/dev/null)" ]; then
+    state="$root/$STATE_DIR"
+  fi
+  file="$state/plugins.json"
+  mkdir -p "$state"
+  FILE="$file" IDS="$WITHOUT_IDS" "$NODE" -e '
+    const fs = require("fs"); const f = process.env.FILE;
+    let doc = {};
+    try { doc = JSON.parse(fs.readFileSync(f, "utf8")); } catch (e) { if (e.code !== "ENOENT") { console.error("cannot read " + f + ": " + e.message); process.exit(3); } }
+    if (!doc || typeof doc !== "object" || Array.isArray(doc)) { console.error(f + " is not a JSON object"); process.exit(3); }
+    doc.enabled = (doc.enabled && typeof doc.enabled === "object") ? doc.enabled : {};
+    for (const id of process.env.IDS.split(/\s+/).filter(Boolean)) doc.enabled[id] = false;
+    fs.writeFileSync(f + ".tmp", JSON.stringify(doc, null, 2) + "\n"); fs.renameSync(f + ".tmp", f);
+  ' || die "could not update $file; fix it and re-run (the program itself is installed)."
+  say "switched off for this install: $WITHOUT_IDS (in $file; remove the entry to turn it back on)"
+}
+
+# ── platform ─────────────────────────────────────────────────────────────
+
+detect_platform() {
+  OS=''; ARCH=''; IS_WSL=0
+  case "$(uname -s)" in
+    Darwin) OS=darwin ;;
+    Linux) OS=linux ;;
+    MINGW*|MSYS*|CYGWIN*|Windows_NT)
+      die "Windows is supported only inside WSL2. Install WSL2 (wsl --install in an admin PowerShell), open the Linux shell, and run this there." ;;
+    *) die "unsupported system: $(uname -s). $NAME runs on macOS, Linux, and Windows inside WSL2." ;;
+  esac
+  if [ "$OS" = linux ] && [ -r /proc/version ] && grep -qi microsoft /proc/version; then
+    case "$(uname -r)" in
+      *[Mm]icrosoft-standard*|*WSL2*) IS_WSL=1 ;;
+      *) die "this is WSL1, which $NAME does not support. Convert the distro with: wsl --set-version <distro> 2 (in Windows), then re-run." ;;
+    esac
+  fi
+  case "$(uname -m)" in
+    x86_64|amd64) ARCH=x64 ;;
+    arm64|aarch64) ARCH=arm64 ;;
+    *) die "unsupported CPU: $(uname -m). Supported: x64 and arm64." ;;
+  esac
+  # A Rosetta-translated shell on Apple silicon reports x86_64; use the native build.
+  if [ "$OS" = darwin ] && [ "$ARCH" = x64 ] && [ "$(sysctl -n sysctl.proc_translated 2>/dev/null || echo 0)" = 1 ]; then
+    ARCH=arm64
+  fi
+}
+
+# ── tools ────────────────────────────────────────────────────────────────
+
+# fetch <url-or-path> <out>: a plain path or file:// is copied; anything else is downloaded.
+fetch() {
+  case "$1" in
+    file://*) cp "${1#file://}" "$2" ;;
+    http://*|https://*)
+      if has curl; then curl -fsSL --retry 2 -o "$2" "$1"
+      elif has wget; then wget -q -O "$2" "$1"
+      else die "neither curl nor wget is installed; install one and re-run."
+      fi ;;
+    *) cp "$1" "$2" ;;
+  esac
+}
+
+sha256_of() {
+  if has sha256sum; then sha256sum "$1" | awk '{print $1}'
+  elif has shasum; then shasum -a 256 "$1" | awk '{print $1}'
+  else die "no sha256 tool (sha256sum or shasum) found; cannot verify downloads."
+  fi
+}
+
+# verify <file> <expected-hex> <what>
+verify() {
+  got="$(sha256_of "$1")"
+  if [ -z "$2" ] || [ "$got" != "$2" ]; then
+    die "checksum mismatch for $3 (expected ${2:-nothing}, got $got). Nothing was installed."
+  fi
+}
+
+# verify_sig <file> <sig-file>: the publisher's Ed25519 signature over <file>'s exact bytes, checked
+# by the Node this script already verified against nodejs.org (install_node runs first).
+verify_sig() {
+  "$NODE" -e '
+    const c = require("crypto"), fs = require("fs");
+    try {
+      const key = c.createPublicKey({ key: Buffer.from(process.argv[1], "base64"), format: "der", type: "spki" });
+      const sig = Buffer.from(fs.readFileSync(process.argv[3], "utf8").trim(), "base64");
+      process.exit(sig.length === 64 && c.verify(null, fs.readFileSync(process.argv[2]), key, sig) ? 0 : 1);
+    } catch (e) { process.exit(1); }
+  ' "$RELEASE_PUBKEY" "$1" "$2"
+}
+
+# flip <target> <link>: point a symlink at a new target, replacing it in one rename where mv can.
+flip() {
+  ln -sfn "$1" "$2.new.$$"
+  mv -T "$2.new.$$" "$2" 2>/dev/null || { rm -f "$2"; mv "$2.new.$$" "$2"; }
+}
+
+# ── prerequisites ────────────────────────────────────────────────────────
+
+check_prereqs() {
+  for t in tar gzip uname; do has "$t" || die "$t is required and was not found."; done
+  has curl || has wget || die "neither curl nor wget is installed; install one and re-run."
+  has sha256sum || has shasum || die "no sha256 tool (sha256sum or shasum) found; cannot verify downloads."
+
+  CLAUDE_BIN="$(command -v claude 2>/dev/null || true)"
+  if [ -z "$CLAUDE_BIN" ]; then
+    for c in "$HOME/.local/bin/claude" "$HOME/.claude/local/claude"; do
+      if [ -x "$c" ]; then CLAUDE_BIN="$c"; break; fi
+    done
+  fi
+  if [ -z "$CLAUDE_BIN" ]; then
+    if [ "$SKIP_CLAUDE" = 1 ]; then
+      warn "claude (Claude Code) is not installed; continuing because of --skip-claude-check."
+    else
+      warn "claude (Claude Code) was not found."
+      warn "$NAME drives the claude CLI you already have (other CLIs come as plugins), so install"
+      warn "and sign in to Claude Code first: $CLAUDE_DOCS"
+      warn "Then re-run this. To install anyway, add --skip-claude-check."
+      exit 1
+    fi
+  else
+    say "found claude at $CLAUDE_BIN"
+  fi
+
+  if ! has tailscale && ! [ -d /Applications/Tailscale.app ]; then
+    warn "Tailscale was not found. Your phone reaches this machine over your tailnet; install it: $TAILSCALE_DL"
+    if [ "$IS_WSL" = 1 ]; then
+      warn "  On WSL install it INSIDE this distro ($TAILSCALE_DL/linux): Tailscale on Windows does not reach into the WSL VM."
+    fi
+  fi
+  has git || warn "git was not found; repo discovery, diffs and commits need it."
+  # The service bakes in only PATH, HOME and explicit --env values, never this shell's
+  # environment — so a public-bind switch set here is NOT carried into it. Say so.
+  if [ "$(printenv "${ENV_PREFIX}ALLOW_PUBLIC" 2>/dev/null || true)" = 1 ]; then
+    say "note: ${ENV_PREFIX}ALLOW_PUBLIC is set in this shell; the installer does not carry it into the service, which binds Tailscale and loopback only."
+  fi
+}
+
+# ── tmux (required) ──────────────────────────────────────────────────────
+# Every session runs inside a private tmux server, so it survives a host restart
+# and a self-update. Without tmux the host refuses to start sessions, so a
+# missing tmux stops the install here — after offering to install it, with
+# consent, through the package manager this machine already has.
+
+# tmux_install_cmd: the exact command that installs tmux here, or nothing.
+tmux_install_cmd() {
+  if [ "$OS" = darwin ]; then
+    if has brew; then echo 'brew install tmux'; fi
+    return 0
+  fi
+  if has apt-get; then echo 'sudo apt-get install -y tmux'
+  elif has dnf; then echo 'sudo dnf install -y tmux'
+  elif has pacman; then echo 'sudo pacman -S --noconfirm tmux'
+  elif has zypper; then echo 'sudo zypper install -y tmux'
+  elif has apk; then echo 'sudo apk add tmux'
+  fi
+}
+
+ensure_tmux() {
+  if has tmux; then
+    say "found tmux ($(tmux -V 2>/dev/null || echo 'version unknown'))"
+    return 0
+  fi
+  CMD="$(tmux_install_cmd)"
+  warn "tmux was not found. $NAME runs every claude session inside tmux, so it survives a host restart"
+  warn "and an upgrade; without it the host refuses to start sessions."
+  if [ -z "$CMD" ]; then
+    if [ "$OS" = darwin ]; then
+      die "Install Homebrew (https://brew.sh), then run: brew install tmux — and re-run this installer."
+    fi
+    die "Install tmux with your distribution's package manager, then re-run this installer."
+  fi
+  if can_ask; then
+    printf '[%s] Install it now with: %s ? [y/N] ' "$SLUG" "$CMD"
+    ANS=''
+    read -r ANS </dev/tty || ANS=''
+    case "$ANS" in
+      y|Y|yes|YES)
+        # Word-split on purpose: CMD is one of the fixed lines above.
+        # shellcheck disable=SC2086
+        if $CMD </dev/tty && has tmux; then
+          say "installed tmux ($(tmux -V 2>/dev/null || echo 'version unknown'))"
+          return 0
+        fi
+        die "installing tmux failed (see above). Run it yourself: $CMD — then re-run this installer." ;;
+    esac
+  fi
+  die "Install it with: $CMD — then re-run this installer."
+}
+
+# ── node ─────────────────────────────────────────────────────────────────
+
+install_node() {
+  NODE_NAME="node-v$NODE_VERSION-$OS-$ARCH"
+  NODE_DIR="$DATA/runtime/$NODE_NAME"
+  if [ -x "$NODE_DIR/bin/node" ] && [ "$("$NODE_DIR/bin/node" --version 2>/dev/null)" = "v$NODE_VERSION" ]; then
+    say "Node $NODE_VERSION already installed"
+  else
+    say "downloading Node $NODE_VERSION ($OS-$ARCH)"
+    fetch "$NODE_MIRROR/v$NODE_VERSION/SHASUMS256.txt" "$TMP/SHASUMS256.txt"
+    fetch "$NODE_MIRROR/v$NODE_VERSION/$NODE_NAME.tar.gz" "$TMP/$NODE_NAME.tar.gz"
+    want="$(awk -v f="$NODE_NAME.tar.gz" '$2 == f {print $1}' "$TMP/SHASUMS256.txt")"
+    verify "$TMP/$NODE_NAME.tar.gz" "$want" "$NODE_NAME.tar.gz"
+    say "verified $NODE_NAME.tar.gz against nodejs.org's SHASUMS256.txt"
+    mkdir -p "$DATA/runtime"
+    stage="$DATA/runtime/.stage.$$"
+    rm -rf "$stage"; mkdir -p "$stage"
+    tar --no-same-owner -xzf "$TMP/$NODE_NAME.tar.gz" -C "$stage"
+    [ -x "$stage/$NODE_NAME/bin/node" ] || die "the Node archive did not contain $NODE_NAME/bin/node."
+    rm -rf "$NODE_DIR"
+    mv "$stage/$NODE_NAME" "$NODE_DIR"
+    rm -rf "$stage"
+  fi
+  flip "$NODE_NAME" "$DATA/runtime/current"
+  NODE="$DATA/runtime/current/bin/node"
+}
+
+# ── the release ──────────────────────────────────────────────────────────
+
+install_release() {
+  TARBALL="$SLUG-$VERSION.tar.gz"
+  say "downloading $TARBALL from $BASE"
+  fetch "$BASE/$TARBALL" "$TMP/$TARBALL" || die "could not download $BASE/$TARBALL (is $VERSION a released version?)"
+  fetch "$BASE/$TARBALL.sha256" "$TMP/$TARBALL.sha256" || die "could not download $BASE/$TARBALL.sha256; refusing to install an unverified archive."
+  # The .sha256 comes over the same channel as the archive, so on its own it proves only that the
+  # download is intact. Its signature proves WHO published it. The skip is for a release you built
+  # yourself (release:build --unsigned); it is said loudly, never silently.
+  if [ "$(printenv "${ENV_PREFIX}INSECURE_SKIP_SIG" 2>/dev/null || true)" = 1 ]; then
+    warn "WARNING: ${ENV_PREFIX}INSECURE_SKIP_SIG=1 — NOT checking who published $TARBALL. Only do this for a release you built yourself."
+  else
+    fetch "$BASE/$TARBALL.sha256.sig" "$TMP/$TARBALL.sha256.sig" ||
+      die "could not download $BASE/$TARBALL.sha256.sig; refusing to install a release whose publisher cannot be checked. Nothing was installed."
+    verify_sig "$TMP/$TARBALL.sha256" "$TMP/$TARBALL.sha256.sig" ||
+      die "the signature on $TARBALL.sha256 does not match this installer's release key: it was not published by the $NAME release key, or it was altered. Nothing was installed."
+    say "verified the publisher's signature on $TARBALL.sha256"
+  fi
+  verify "$TMP/$TARBALL" "$(awk 'NR==1 {print $1}' "$TMP/$TARBALL.sha256")" "$TARBALL"
+  say "verified $TARBALL"
+
+  mkdir -p "$DATA/versions"
+  stage="$DATA/versions/.stage.$$"
+  rm -rf "$stage"; mkdir -p "$stage"
+  tar --no-same-owner -xzf "$TMP/$TARBALL" -C "$stage"
+  top="$stage/$SLUG-$VERSION"
+  [ -f "$top/bin/$SLUG.mjs" ] && [ -f "$top/release.json" ] ||
+    die "$TARBALL is not laid out as expected ($SLUG-$VERSION/bin/$SLUG.mjs and release.json)."
+  # The archive says which version it is; believe it over the file name, and refuse a mismatch.
+  inner="$("$NODE" -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).version||""))' "$top/release.json")"
+  [ "$inner" = "$VERSION" ] || die "$TARBALL contains version '$inner', not $VERSION. Nothing was installed."
+
+  dest="$DATA/versions/$VERSION"
+  if [ -e "$dest" ]; then
+    mv "$dest" "$DATA/versions/.old.$$"
+  fi
+  mv "$top" "$dest"
+  rm -rf "$stage" "$DATA/versions/.old.$$"
+  PREV="$(readlink "$DATA/current" 2>/dev/null || true)"
+  flip "versions/$VERSION" "$DATA/current"
+  if [ -n "$PREV" ] && [ "$PREV" != "versions/$VERSION" ]; then
+    say "upgraded: ${PREV#versions/} -> $VERSION (older versions stay in $DATA/versions; delete them when you like)"
+  else
+    say "installed $VERSION"
+  fi
+}
+
+# Checked before anything is unpacked, so a refusal leaves the old install as it was.
+check_wrapper_path() {
+  W="$BIN_DIR/$SLUG"
+  if [ -e "$W" ] && ! grep -q "^# $SLUG-installer-wrapper" "$W" 2>/dev/null; then
+    die "$W exists and was not written by this installer; move it away (or pass --bin-dir) and re-run."
+  fi
+}
+
+write_wrapper() {
+  mkdir -p "$BIN_DIR"
+  cat > "$W.tmp.$$" <<EOF
+#!/bin/sh
+# $SLUG-installer-wrapper — written by the $NAME installer; re-run the installer to upgrade.
+exec "$DATA/runtime/current/bin/node" "$DATA/current/bin/$SLUG.mjs" "\$@"
+EOF
+  chmod 755 "$W.tmp.$$"
+  mv "$W.tmp.$$" "$W"
+  say "wrote $W"
+  case ":$PATH:" in
+    *":$BIN_DIR:"*) ;;
+    *)
+      say "$BIN_DIR is not on your PATH. Add it (this installer does not edit your shell files):"
+      case "${SHELL:-}" in
+        */zsh) say "  echo 'export PATH=\"$BIN_DIR:\$PATH\"' >> ~/.zshrc" ;;
+        */fish) say "  fish_add_path $BIN_DIR" ;;
+        *) say "  echo 'export PATH=\"$BIN_DIR:\$PATH\"' >> ~/.bashrc" ;;
+      esac ;;
+  esac
+}
+
+# ── https front door ─────────────────────────────────────────────────────
+# Plain http://100.x is not a secure context: no service worker, push, install
+# or clipboard, and the app is lost on any navigation while the tunnel is down.
+# `tailscale serve` fixes that. Which port it fronts is DISCOVERED (the host's own
+# rule, net.ts serveHttpsUrl: match the proxy TARGET, never a substring), and an
+# existing serve is never overwritten.
+
+# Prints the tailscale command, or nothing.
+find_tailscale() {
+  if has tailscale; then command -v tailscale
+  elif [ -x /Applications/Tailscale.app/Contents/MacOS/Tailscale ]; then echo /Applications/Tailscale.app/Contents/MacOS/Tailscale
+  fi
+}
+
+# serve_front TS PORT: prints the https URL already proxying to 127.0.0.1:PORT, or nothing.
+serve_front() {
+  "$1" serve status --json 2>/dev/null | awk -v port="$2" '
+    /^[ \t]*"[^"]+:[0-9]+": *\{/ { k = $0; sub(/^[ \t]*"/, "", k); sub(/":.*/, "", k) }
+    /"Proxy":/ {
+      t = $0; sub(/.*"Proxy": *"/, "", t); sub(/".*/, "", t)
+      sub(/^[a-z]+:\/\//, "", t); sub(/\/.*/, "", t)
+      n = split(t, a, ":")
+      if (n >= 2 && a[n] == port && k != "") { sub(/:443$/, "", k); print "https://" k; exit }
+    }'
+}
+
+# serve_uses_443 TS: succeeds when something already listens on https :443.
+serve_uses_443() { "$1" serve status --json 2>/dev/null | grep -q ':443": *{'; }
+
+# tailnet_name TS: this machine's MagicDNS name, no trailing dot ("Self" precedes "Peer").
+tailnet_name() {
+  "$1" status --json 2>/dev/null | awk '/"DNSName":/ { v = $0; sub(/.*"DNSName": *"/, "", v); sub(/\.?".*/, "", v); print v; exit }'
+}
+
+# can_ask: succeeds when a person can answer (a terminal exists, even under curl | sh).
+can_ask() { [ -t 1 ] && { : </dev/tty; } 2>/dev/null; }
+
+# env_file_get FILE KEY: KEY's value in a .env file (last assignment wins, `export ` and
+# one layer of quotes allowed), or nothing. Enough of dotenv for a port number.
+env_file_get() {
+  [ -r "$1" ] || return 0
+  awk -v key="$2" '
+    { sub(/^[ \t]*export[ \t]+/, "") }
+    index($0, key "=") == 1 { v = substr($0, length(key) + 2); sub(/[ \t]+#.*$/, "", v); gsub(/^[ \t]+|[ \t\r]+$/, "", v)
+      if (v ~ /^".*"$/ || v ~ /^\047.*\047$/) v = substr(v, 2, length(v) - 2); found = v }
+    END { if (found != "") print found }' "$1"
+}
+
+# host_port: the port the host will listen on, read the way the host reads it
+# (packages/host/src/env.ts): the shell, then <config>/.env, then the install's own
+# .env, then <state>/.env — the first that sets it wins.
+host_port() {
+  p="$(printenv "${ENV_PREFIX}PORT" 2>/dev/null || true)"
+  cfg="${CONFIG_DIR:-}"
+  if [ -z "$cfg" ]; then
+    cfg="$(printenv "${ENV_PREFIX}CONFIG_DIR" 2>/dev/null || true)"
+    [ -n "$cfg" ] || cfg="${XDG_CONFIG_HOME:-$HOME/.config}/$CONFIG_NAME"
+  fi
+  data="${DATA:-${XDG_DATA_HOME:-$HOME/.local/share}/$SLUG}"
+  for f in "$cfg/.env" "$data/current/.env" "$(state_home)/.env"; do
+    [ -z "$p" ] || break
+    p="$(env_file_get "$f" "${ENV_PREFIX}PORT")"
+  done
+  case "$p" in ''|*[!0-9]*) p=8770 ;; esac
+  printf '%s\n' "$p"
+}
+
+# finish_https [LEAD]: the phone-facing ending — the https URL when the host is
+# already fronted, else the one `tailscale serve` line and the URL it will give.
+# LEAD ("done — " after a clean doctor) prefixes the fronted sentence. Fails
+# (prints nothing) when there is no tailscale here, so the caller says that instead.
+finish_https() {
+  LEAD="${1:-}"
+  PORT="$(host_port)"
+  TS="$(find_tailscale)"
+  [ -n "$TS" ] || return 1
+  FRONT="$(serve_front "$TS" "$PORT")"
+  if [ -n "$FRONT" ]; then
+    say "${LEAD}open this on your phone (https, so the app installs and notifications work): $FRONT"
+    return 0
+  fi
+  HPORT=443
+  if serve_uses_443 "$TS"; then HPORT=8443; fi
+  SHOWN="tailscale serve --bg --https=$HPORT http://127.0.0.1:$PORT"
+  [ "$TS" = "$(command -v tailscale 2>/dev/null || true)" ] || SHOWN="\"$TS\" serve --bg --https=$HPORT http://127.0.0.1:$PORT"
+  NAME_TS="$(tailnet_name "$TS")"
+  URL=''
+  if [ -n "$NAME_TS" ]; then
+    URL="https://$NAME_TS"
+    [ "$HPORT" = 443 ] || URL="$URL:$HPORT"
+  fi
+  say ""
+  say "Last step: the host answers on plain http, which is not a secure context. The phone app will not install,"
+  say "notifications and clipboard are off, and the app is lost on any navigation while the tunnel is down."
+  [ "$HPORT" = 443 ] || say "(https port 443 already serves something else here, so this uses $HPORT.)"
+  say "Run:  $SHOWN"
+  say "Needs MagicDNS and HTTPS certificates enabled in the tailnet admin console (https://login.tailscale.com/admin/dns)."
+  if can_ask; then
+    printf '[%s] Run it now? [y/N] ' "$SLUG"
+    ANS=''
+    read -r ANS </dev/tty || ANS=''
+    case "$ANS" in
+      y|Y|yes|YES)
+        if "$TS" serve --bg --https="$HPORT" "http://127.0.0.1:$PORT"; then
+          FRONT="$(serve_front "$TS" "$PORT")"
+          [ -n "$FRONT" ] || FRONT="$URL"
+          [ -z "$FRONT" ] || say "open this on your phone: $FRONT"
+          return 0
+        fi
+        warn "tailscale serve failed (see above). Fix that, then run the line above yourself." ;;
+    esac
+  fi
+  [ -z "$URL" ] || say "Then open on your phone: $URL"
+}
+
+# ── uninstall ────────────────────────────────────────────────────────────
+
+uninstall() {
+  W="$BIN_DIR/$SLUG"
+  if [ -x "$DATA/runtime/current/bin/node" ] && [ -f "$DATA/current/bin/$SLUG.mjs" ]; then
+    "$DATA/runtime/current/bin/node" "$DATA/current/bin/$SLUG.mjs" service uninstall ||
+      warn "service uninstall failed; see the message above. Continuing with the files."
+  fi
+  rm -rf "$DATA/runtime" "$DATA/versions" "$DATA/current"
+  rmdir "$DATA" 2>/dev/null || true
+  if [ -f "$W" ] && grep -q "^# $SLUG-installer-wrapper" "$W" 2>/dev/null; then rm -f "$W"; fi
+  say "removed the program from $DATA and the $W command."
+  say "kept: your repos, your settings in $CONFIG_DIR, the host's state in $(state_home), and each repo's own state. Delete those by hand if you want them gone."
+}
+
+# ── main ─────────────────────────────────────────────────────────────────
+
+main() {
+  WITH_IDS=''; WITHOUT_IDS=''
+  VERSION="$DEFAULT_VERSION"; FROM=''; NO_SERVICE=0; SKIP_CLAUDE=0; UNINSTALL=0
+  NODE_MIRROR="$NODE_MIRROR_DEFAULT"; BIN_DIR="$HOME/.local/bin"; VERSION_GIVEN=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --version) [ $# -ge 2 ] || die "--version needs a value"; VERSION="${2#v}"; VERSION_GIVEN=1; shift 2 ;;
+      --version=*) VERSION="${1#*=}"; VERSION="${VERSION#v}"; VERSION_GIVEN=1; shift ;;
+      --from) [ $# -ge 2 ] || die "--from needs a directory or URL"; FROM="$2"; shift 2 ;;
+      --from=*) FROM="${1#*=}"; shift ;;
+      --node-mirror) [ $# -ge 2 ] || die "--node-mirror needs a URL"; NODE_MIRROR="${2%/}"; shift 2 ;;
+      --bin-dir) [ $# -ge 2 ] || die "--bin-dir needs a directory"; BIN_DIR="${2%/}"; shift 2 ;;
+      --no-service) NO_SERVICE=1; shift ;;
+      --skip-claude-check) SKIP_CLAUDE=1; shift ;;
+      --with) [ $# -ge 2 ] || die "--with needs a plugin id"; WITH_IDS="$WITH_IDS $2"; shift 2 ;;
+      --with=*) WITH_IDS="$WITH_IDS ${1#*=}"; shift ;;
+      --without) [ $# -ge 2 ] || die "--without needs an extension id"; WITHOUT_IDS="$WITHOUT_IDS $2"; shift 2 ;;
+      --without=*) WITHOUT_IDS="$WITHOUT_IDS ${1#*=}"; shift ;;
+      --uninstall) UNINSTALL=1; shift ;;
+      -h|--help) usage; exit 0 ;;
+      *) usage >&2; die "unknown option: $1" ;;
+    esac
+  done
+  [ -n "$VERSION" ] || die "no version to install; pass --version <v>."
+  [ -n "${HOME:-}" ] || die "HOME is not set."
+  DATA="${XDG_DATA_HOME:-$HOME/.local/share}/$SLUG"
+
+  CONFIG_DIR="$(printenv "${ENV_PREFIX}CONFIG_DIR" 2>/dev/null || true)"
+  [ -n "$CONFIG_DIR" ] || CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/$CONFIG_NAME"
+
+  if [ "$UNINSTALL" = 1 ]; then uninstall; exit 0; fi
+
+  resolve_plugins
+
+  if [ -n "$FROM" ]; then
+    BASE="${FROM%/}"
+    case "$BASE" in http://*|https://*|file://*) ;; *) [ -d "$BASE" ] || die "--from $BASE is not a directory or URL." ;; esac
+  elif [ "$VERSION_GIVEN" = 1 ]; then
+    # The default base is ".../releases/latest/download"; a named version lives under its tag.
+    BASE="${RELEASE_BASE%/latest/download}/download/v$VERSION"
+  else
+    BASE="${RELEASE_BASE%/}"
+  fi
+
+  detect_platform
+  say "installing $NAME $VERSION for $OS-$ARCH$([ "$IS_WSL" = 1 ] && echo ' (WSL2)' || true) into $DATA"
+  check_prereqs
+  ensure_tmux
+  check_wrapper_path
+
+  TMP="$(mktemp -d 2>/dev/null || mktemp -d -t "$SLUG")"
+  trap 'rm -rf "$TMP"' EXIT
+  trap 'rm -rf "$TMP"; exit 130' INT TERM
+
+  install_node
+  stage_plugins
+  install_release
+  write_wrapper
+  place_plugins
+  apply_without
+
+  if [ "$NO_SERVICE" = 1 ]; then
+    say "skipped the login service (--no-service). Start the host with: $SLUG start"
+  else
+    "$W" service install || warn "the service was not installed (see above). You can start the host by hand: $SLUG start"
+  fi
+  # The installer never sets ${ENV_PREFIX}ALLOW_PUBLIC: the host binds Tailscale and loopback only.
+  # ONE ending, phone-facing: the https URL when the host is already fronted, else the
+  # serve line and the URL it will give — never "done, open the URL" followed by
+  # "that URL is insecure". A failed doctor is said LAST: a person reading the last
+  # line must not take a broken install for a working one.
+  DOCTOR_OK=1
+  "$W" doctor || DOCTOR_OK=0
+  LEAD=''
+  [ "$DOCTOR_OK" = 0 ] || LEAD='done — '
+  if ! finish_https "$LEAD" && [ "$DOCTOR_OK" = 1 ]; then
+    say "done — but Tailscale is not on this machine, so your phone cannot reach the host yet: $TAILSCALE_DL"
+  fi
+  [ "$DOCTOR_OK" = 1 ] || warn "installed, but doctor reported problems (see above) — fix those, then run: $SLUG doctor"
+}
+
+main "$@"

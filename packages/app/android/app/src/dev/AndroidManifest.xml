@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+        The `dev` flavor only — the owner's dogfood build. Merged over
+        src/main/AndroidManifest.xml; the `play` flavor must never carry this
+        (Play policy), which is why it does not live in main.
+
+        `UPDATE_PACKAGES_WITHOUT_USER_ACTION` is what makes the phone stop asking
+        after the first time. From Android 12 an installer holding it may commit
+        an UPDATE with `USER_ACTION_NOT_REQUIRED`, and from Android 14 that needs
+        update ownership as well — which `setRequestUpdateOwnership(true)` asks
+        for during the one install that DOES show a dialog. Neither can make a
+        FIRST install silent, and nothing here pretends otherwise: a refused
+        silence comes back as a pending user action, which is the same door the
+        loud path uses. Normal permission, granted at install time, inert until
+        the person allows this app to install apps at all.
+    -->
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
+</manifest>

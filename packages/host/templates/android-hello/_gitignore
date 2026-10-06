@@ -1,0 +1,17 @@
+build/
+.gradle/
+local.properties
+*.jks
+*.keystore
+keystore.properties
+.idea/
+*.iml
+captures/
+.DS_Store
+.env
+
+# waterplane: per-repo daemon state + the phone<->repo file drops.
+{{state}}/
+.claude/inbox/
+.claude/outbox/
+.claude/settings.local.json

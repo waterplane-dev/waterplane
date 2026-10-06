@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1, interactive-widget=resizes-content" />
+    <meta name="theme-color" content="#0b0d10" />
+    <!--
+      The theme, before one byte of the bundle is parsed.
+
+      `theme.ts` owns this decision and re-applies it the moment it loads, but
+      "the moment it loads" is a fetch and a parse away, and until then the page
+      paints whatever `:root` says — which is dark. On a light-mode phone that is
+      a full frame of near-black before the app appears, every cold start. So the
+      same three lines run inline, first thing in <head>, off the same
+      localStorage key. Deliberately duplicated rather than imported: anything
+      importable arrives too late to be the thing that prevents the flash.
+
+      The key PREFIXES are stamped by vite (`stampBrand`, from shared/brand.ts),
+      current first. An older prefix is read only until the brand migration
+      has marked this phone as copied (`boot/brandMigrate.ts`): on the very
+      first boot of a renamed build the copy has not run yet, and after it a
+      key cleared under the new name must stay cleared.
+    -->
+    <script>
+      (function () {
+        try {
+          var P = __BRAND_LS_PREFIXES__;
+          var done = localStorage.getItem(__BRAND_LS_MARK__) !== null;
+          var ls = function (n) {
+            for (var i = 0; i < (done ? 1 : P.length); i++) {
+              var v = localStorage.getItem(P[i] + n);
+              if (v !== null) return v;
+            }
+            return null;
+          };
+          var c = ls("theme");
+          var t = c === "dark" || c === "light" ? c
+            : (window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+          document.documentElement.setAttribute("data-theme", t);
+          // A fork's colour overlay (`themeOverlay.ts`), as last derived and
+          // cached — absent with no overlay, which adds nothing at all.
+          var oc = ls("themeOverlayCss");
+          if (oc) { var os = document.createElement("style"); os.id = "theme-overlay"; os.textContent = oc; document.head.appendChild(os); }
+          document.documentElement.style.colorScheme = t;
+          var m = document.querySelector('meta[name="theme-color"]');
+          if (m) m.setAttribute("content", t === "light" ? "#eef1f6" : "#0b0d10");
+          // Text and icon size, before the bundle parses — same reason as the
+          // theme above: a size applied when React mounts is a frame of the
+          // wrong LAYOUT on every cold start, which is worse than a wrong
+          // colour because it moves things under a thumb already on its way.
+          // Clamped here too; `uiScale.ts` re-asserts both at boot.
+          var cl = function (v, lo, hi) { v = Number(v); return isFinite(v) ? Math.min(hi, Math.max(lo, v)) : 1; };
+          document.documentElement.style.setProperty("--ui-font", String(cl(ls("textScale"), 0.9, 1.45)));
+          document.documentElement.style.setProperty("--ui-icon", String(cl(ls("iconScale"), 0.9, 1.4)));
+        } catch (e) { /* private mode, or no matchMedia — dark is the default */ }
+      })();
+    </script>
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="__BRAND_NAME__" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="/assets/icon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/assets/icon-48.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+    <title>__BRAND_NAME__</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

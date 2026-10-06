@@ -1,0 +1,10 @@
+{
+  "id": "stubcli",
+  "name": "Stub CLI",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "description": "e2e fixture (scripts/e2e-pluginbackend.mjs): registers the backend \"stubcli\" — the claude stub TUI posting its hooks to this plugin's sink — and turns those hooks into turns, a held permission dialog and a dialog in its own TUI answered by keystrokes the host types.",
+  "backends": ["stubcli"],
+  "answers": true,
+  "env": ["STUBCLI_HOLD_MS", "STUB_LOG"]
+}

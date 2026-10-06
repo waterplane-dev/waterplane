@@ -1,0 +1,402 @@
+/**
+ * **The session-tab strip: what is on it, in what order, and how often you open
+ * each one.**
+ *
+ * The third always-on bar, under the connection strip and the local-runner one
+ * (`NetPulseBar` / `LocalRtBar`), and it is their shape for their reason: `App`
+ * returns early once per overlay, so a layer that has to exist on every screen
+ * cannot live inside it. The strip is mounted beside `App` in `main.tsx`, which
+ * means it can neither read `App`'s session list nor call its setters — hence
+ * this module. One writer (`noteSessionTabs`, called from `App`'s own render
+ * data), one subscription, and taps that leave as events `App` listens for.
+ * `link.ts` and `localRt.ts` are the same arrangement; this one is deliberately
+ * smaller, because it holds no history and measures nothing.
+ *
+ * **Why a tab strip at all.** Switching sessions meant Back to the launcher,
+ * finding the row in a list grouped by repo, and tapping it — three gestures
+ * and a scroll to answer "what was the other thing I had open". The strip makes
+ * that one tap from wherever you are, and it is the only surface in the app
+ * where sessions sit side by side rather than in a column.
+ *
+ * **Everything here is per device** (`storage.ts`'s `sessionTabs*`), which is
+ * `waterplane.netPulse`'s argument and one step plainer: HOW MANY tabs fit is a
+ * measurement of the screen in your hand, and a phone's four carried onto a
+ * desktop tab is four labels stretched over 1200 px. The open counts are per
+ * device for a second reason — they are a record of taps on one screen, and a
+ * synced counter is one two devices race to increment.
+ *
+ * The pure half is here and node-tested (`sessionTabs.test.mjs`); the drawing
+ * is `SessionTabsBar.tsx`.
+ */
+import { useEffect, useRef, useState } from "react";
+import { trimDefaultBranch } from "@waterplane/shared";
+// Type-only, so `node --test` running straight over this file never has to load
+// a `.tsx`: what a tab's state IS belongs to `sessionFacts.tsx` and may not be
+// a second opinion held here.
+import type { SessionStatus } from "./sessionFacts";
+import { LS, lsBool, lsGet, lsJson, lsNum, lsSet, lsSetBool, lsSetJson } from "./storage.ts";
+
+// ── What a tab is ────────────────────────────────────────────────────────────
+
+/** One tab, as `App` publishes it. Everything the strip draws and nothing else. */
+export interface SessionTab {
+  id: string;
+  /** The ≤3-word name the host derived, or the session's own `title`. */
+  label: string;
+  /** Repo name — the strip's colour comes from this (`format.ts`'s `repoHue`). */
+  repo: string;
+  /**
+   * What the session is DOING — `sessionFacts.tsx`'s `sessionStatus()`, which
+   * is the ONE definition the row badge, the per-repo roll-up and the status
+   * filter already share.
+   *
+   * It was two booleans of the strip's own (`running` plus a bare `turnActive`)
+   * and that is precisely how a tab came to disagree with the row it stands
+   * for: a session blocked on a question and a session at the usage limit both
+   * drew as plain idle, and so did one whose main loop had stopped while two
+   * background agents kept working — the case `sessionStatus` exists to get
+   * right. A fourth copy of that ladder was never going to stay in step with
+   * the three that are one.
+   */
+  status: SessionStatus;
+  /** When the session was created — the "open sequence" order, and the tie-break. */
+  createdAt: number;
+}
+
+/** How the tabs are laid out left to right. */
+export type TabOrder = "open" | "frequent" | "recent";
+
+export const TAB_ORDERS: readonly TabOrder[] = ["open", "frequent", "recent"];
+
+/** What each order is called where a person chooses it, and what it promises. */
+export const TAB_ORDER_LABEL: Record<TabOrder, string> = {
+  open: "in the order opened",
+  frequent: "most opened first",
+  recent: "last opened first",
+};
+
+/**
+ * How many tabs may be asked to fit at once.
+ *
+ * Two is the floor because one tab is not a strip — it is a title bar that
+ * costs a row of screen. Eight is the ceiling because the label is what a tab
+ * is FOR: at eight across a 360 px phone a tab is 45 px, which is three
+ * characters and a close button, and a strip of unreadable tabs is furniture.
+ * The number does not hide anything — everything past it is still there, one
+ * horizontal scroll away.
+ */
+export const TAB_COUNT_MIN = 2;
+export const TAB_COUNT_MAX = 8;
+/**
+ * Three, not four. Four was a guess at "how many fit"; three is what a name
+ * worth reading needs — the labels are up to four words now, and at a quarter
+ * of a 360 px phone a tab is ~85 px, which is one word and an ellipsis. The
+ * number hides nothing either way (the rest scroll), so the default is set by
+ * legibility rather than by capacity, and anyone who wants the capacity has the
+ * setting.
+ */
+export const TAB_COUNT_DEFAULT = 3;
+
+/** The strip's own height, published to every screen as `--ui-tabs-h`. Four
+ *  more than the flat blocks it replaced: the tabs sit on a rail and the open
+ *  one is three pixels taller than the rest, which is what makes it read as the
+ *  front tab rather than merely the brightest — and "brightest" is also what a
+ *  repo with a vivid hue looks like. Restated in `.sess-tabs`; the two are one
+ *  number and `sessionTabs.test.mjs` is where they are held together. */
+export const TAB_STRIP_H = 34;
+
+/**
+ * How many tabs the strip DRAWS — unlike `count`, this one is a limit.
+ *
+ * Asked for by the owner: with twenty sessions open a sideways scroll is a
+ * strip nobody reaches the end of, and in `recent` order the far end is by
+ * construction the sessions you have not been in for longest. Ten by default;
+ * the open session is always drawn even when it falls past the cut, and what
+ * is cut is SAID at the end of the strip ("+N"), never silently dropped — every
+ * session is still in the launcher.
+ */
+export const TAB_LIMIT_MIN = 2;
+export const TAB_LIMIT_MAX = 50;
+export const TAB_LIMIT_DEFAULT = 10;
+
+// ── The pure half ────────────────────────────────────────────────────────────
+
+/**
+ * What this device remembers about each session being opened: how OFTEN, and
+ * WHEN last. Two facts because they order the strip two different ways, and one
+ * record because they are written by the same tap — a second store would be a
+ * second thing to prune and a second thing to get out of step.
+ *
+ * The old shape was a bare number. `readOpens` migrates one rather than
+ * dropping it: a count is the more expensive of the two to re-earn (it takes
+ * weeks of use), and a migrated row simply has no last-opened instant until the
+ * next time it is opened — `orderTabs` reads that as "longest ago", which is
+ * true of a session nobody has touched since the upgrade.
+ */
+export interface TabOpen {
+  /** Times opened from this device. */
+  n: number;
+  /** Epoch ms of the last open, or 0 when only a migrated count is known. */
+  at: number;
+}
+
+export type TabOpens = Record<string, TabOpen>;
+
+/** The stored shape, which may still be the pre-migration bare count. */
+export type StoredOpens = Record<string, TabOpen | number>;
+
+/** One stored entry, whatever shape it was written in. Junk reads as nothing. */
+export function readOpen(raw: TabOpen | number | undefined): TabOpen | null {
+  // A zero count is not a row — it orders nothing and is what a hand-edited or
+  // half-written store looks like.
+  if (typeof raw === "number") return Number.isFinite(raw) && raw > 0 ? { n: raw, at: 0 } : null;
+  if (!raw || typeof raw !== "object") return null;
+  const n = typeof raw.n === "number" && Number.isFinite(raw.n) ? raw.n : 0;
+  const at = typeof raw.at === "number" && Number.isFinite(raw.at) ? raw.at : 0;
+  return n || at ? { n, at } : null;
+}
+
+/** The whole store, migrated. */
+export function migrateOpens(raw: StoredOpens): TabOpens {
+  const out: TabOpens = {};
+  for (const [id, v] of Object.entries(raw ?? {})) {
+    const o = readOpen(v);
+    if (o) out[id] = o;
+  }
+  return out;
+}
+
+export function clampTabLimit(n: unknown): number {
+  const v = typeof n === "number" && Number.isFinite(n) ? Math.round(n) : TAB_LIMIT_DEFAULT;
+  return Math.min(TAB_LIMIT_MAX, Math.max(TAB_LIMIT_MIN, v));
+}
+
+/**
+ * The first `limit` of an ordered strip, plus how many were left off.
+ *
+ * The open session is never one of them: when it falls past the cut it takes
+ * the last drawn slot, so the strip always says something about the screen you
+ * are on. Order is otherwise untouched.
+ */
+export function limitTabs(ordered: readonly SessionTab[], limit: number, activeId: string | null): { shown: SessionTab[]; hidden: number } {
+  if (ordered.length <= limit) return { shown: [...ordered], hidden: 0 };
+  const shown = ordered.slice(0, limit);
+  if (activeId && !shown.some((t) => t.id === activeId)) {
+    const active = ordered.find((t) => t.id === activeId);
+    if (active) shown[limit - 1] = active;
+  }
+  return { shown, hidden: ordered.length - shown.length };
+}
+
+export function clampTabCount(n: unknown): number {
+  const v = typeof n === "number" && Number.isFinite(n) ? Math.round(n) : TAB_COUNT_DEFAULT;
+  return Math.min(TAB_COUNT_MAX, Math.max(TAB_COUNT_MIN, v));
+}
+
+/** A stored order, or the default — `recent`, because "where was I" is what
+ *  the owner reaches for the strip to answer, and with a limit on how many are
+ *  drawn it is the order that keeps the sessions you are actually in on it. */
+export const TAB_ORDER_DEFAULT: TabOrder = "recent";
+
+export function cleanTabOrder(raw: unknown): TabOrder {
+  return (TAB_ORDERS as readonly unknown[]).includes(raw) ? raw as TabOrder : TAB_ORDER_DEFAULT;
+}
+
+/**
+ * The label a tab wears.
+ *
+ * `tabTitle` when the host has derived one, and the session's own `title`
+ * otherwise — never a blank tab and never an invented name. The repo prefix is
+ * dropped from the fallback because the tab is already COLOURED by its repo and
+ * sits beside a header naming it: `myapp · main` in 90 px spends half the label
+ * restating the stripe down its left edge. What is left is the branch, which is
+ * the part that differs between two tabs of the same colour.
+ *
+ * The prefix comes off only when it is exactly this repo's — a title that is
+ * one word, or that names something else, is passed through whole rather than
+ * cut at the first separator it happens to contain.
+ */
+export function tabLabel(s: { tabTitle?: string; title: string }, repo: string): string {
+  const derived = (s.tabTitle ?? "").trim();
+  if (derived) return derived;
+  // `myapp · main` is `myapp` before the prefix is looked for, or the strip spends
+  // its 90 px on the word every primary checkout shares (`trimDefaultBranch`).
+  const title = trimDefaultBranch(s.title);
+  const prefix = `${repo} · `;
+  if (repo && title.startsWith(prefix) && title.length > prefix.length) return title.slice(prefix.length);
+  return title || repo || "session";
+}
+
+/**
+ * The strip, left to right.
+ *
+ * Three orders, three different questions:
+ *
+ *  - `open` — the sequence they were started in. It never moves, so a tab's
+ *    position is something you can learn and reach without reading it.
+ *  - `frequent` — the ones you open most, on the left where the thumb is. Worth
+ *    more than a stable position once the strip is longer than it is wide.
+ *  - `recent` — the one you were last in, first. The other two are about a
+ *    HABIT; this one is about the last ten minutes, which is what "where was I"
+ *    actually asks. It is also the only order that moves under you — the tab
+ *    you just left walks to the front. It is the default all the same, at the
+ *    owner's ask: with a cap on how many are drawn, it is what keeps the
+ *    sessions you are in on the strip.
+ *
+ * **The tie-break is always the open sequence**, under all three: two sessions
+ * with the same count (or the same unknown instant) would otherwise swap places
+ * on every publish depending on nothing but object order, and a tab that moves
+ * when nothing has changed is the failure this whole strip is trying to avoid.
+ * A sort on a copy, never in place — the caller's array is `App`'s render data.
+ */
+export function orderTabs(tabs: readonly SessionTab[], order: TabOrder, opens: TabOpens): SessionTab[] {
+  const seq = [...tabs].sort((a, b) => a.createdAt - b.createdAt);
+  if (order === "open") return seq;
+  if (order === "recent") {
+    return seq.sort((a, b) => (opens[b.id]?.at ?? 0) - (opens[a.id]?.at ?? 0) || a.createdAt - b.createdAt);
+  }
+  return seq.sort((a, b) => (opens[b.id]?.n ?? 0) - (opens[a.id]?.n ?? 0) || a.createdAt - b.createdAt);
+}
+
+/** One more open of this session, on this device — the count and the instant. */
+export function bumpOpen(opens: TabOpens, id: string, now: number): TabOpens {
+  return { ...opens, [id]: { n: (opens[id]?.n ?? 0) + 1, at: now } };
+}
+
+/**
+ * The counts, minus the sessions that no longer exist.
+ *
+ * A count kept for an archived conversation orders nothing and never will, and
+ * this store is written on every publish — so it is pruned there rather than
+ * swept on a timer. Only prunes against a NON-EMPTY list: an empty session list
+ * is what this app looks like for the first second after a cold start and
+ * through every dead tunnel, and deleting a device's whole ordering history
+ * because the socket has not answered yet is a loss with no way back.
+ */
+export function pruneOpens(opens: TabOpens, liveIds: readonly string[]): TabOpens {
+  if (!liveIds.length) return opens;
+  const live = new Set(liveIds);
+  const out: TabOpens = {};
+  for (const [id, n] of Object.entries(opens)) if (live.has(id)) out[id] = n;
+  return out;
+}
+
+/** What the confirm asks before a tab's × closes a session. */
+export function tabCloseAsk(label: string, running: boolean): { title: string; lines: string[]; confirmLabel: string } {
+  return {
+    title: running ? `Close “${label}”?` : `Remove “${label}”?`,
+    lines: [
+      running
+        ? "The CLI process ends and the tab goes. The conversation itself is kept — reopen it under “Recently closed”, or in Archive."
+        : "The row goes off the list. The conversation itself is kept — it is in Archive.",
+    ],
+    confirmLabel: running ? "Close" : "Remove",
+  };
+}
+
+// ── The settings, per device ─────────────────────────────────────────────────
+
+export const tabsEnabled = (): boolean => lsBool(LS.sessionTabs, true);
+export const tabsCount = (): number => clampTabCount(lsNum(LS.sessionTabsCount, TAB_COUNT_DEFAULT));
+export const tabsOrder = (): TabOrder => cleanTabOrder(lsGet(LS.sessionTabsOrder));
+export const tabsLimit = (): number => clampTabLimit(lsNum(LS.sessionTabsLimit, TAB_LIMIT_DEFAULT));
+
+export function setTabsEnabled(on: boolean): void { lsSetBool(LS.sessionTabs, on); emit(); }
+export function setTabsCount(n: number): void { lsSet(LS.sessionTabsCount, String(clampTabCount(n))); emit(); }
+export function setTabsOrder(o: TabOrder): void { lsSet(LS.sessionTabsOrder, o); emit(); }
+export function setTabsLimit(n: number): void { lsSet(LS.sessionTabsLimit, String(clampTabLimit(n))); emit(); }
+
+const readOpens = (): TabOpens => migrateOpens(lsJson<StoredOpens>(LS.tabOpens, {}));
+
+/** One more open of `id`, written straight through — `App`'s `attach` calls this. */
+export function noteTabOpen(id: string, now = Date.now()): void {
+  if (!id) return;
+  lsSetJson(LS.tabOpens, bumpOpen(readOpens(), id, now));
+  emit();
+}
+
+// ── The store ────────────────────────────────────────────────────────────────
+
+export interface TabsSnapshot {
+  enabled: boolean;
+  count: number;
+  order: TabOrder;
+  /** Already ordered and cut to the limit — the strip draws what it is given
+   *  and decides nothing. */
+  tabs: SessionTab[];
+  /** How many sessions the limit left off the strip. */
+  hidden: number;
+  activeId: string | null;
+}
+
+let tabs: SessionTab[] = [];
+let activeId: string | null = null;
+let snap: TabsSnapshot = { enabled: false, count: TAB_COUNT_DEFAULT, order: TAB_ORDER_DEFAULT, tabs: [], hidden: 0, activeId: null };
+const listeners = new Set<(s: TabsSnapshot) => void>();
+
+function rebuild(): void {
+  const order = tabsOrder();
+  const { shown, hidden } = limitTabs(orderTabs(tabs, order, readOpens()), tabsLimit(), activeId);
+  snap = {
+    enabled: tabsEnabled(),
+    count: tabsCount(),
+    order,
+    tabs: shown,
+    hidden,
+    activeId,
+  };
+}
+
+function emit(): void {
+  rebuild();
+  for (const fn of listeners) fn(snap);
+}
+
+/**
+ * **The one writer.** `App` publishes the sessions it is already rendering and
+ * which one is open; everything else here derives from that.
+ *
+ * The counts are pruned on the way through (`pruneOpens`), which is why this is
+ * the only place that needs to know a session went away — there is no second
+ * listener watching the session list for removals.
+ */
+export function noteSessionTabs(next: readonly SessionTab[], active: string | null): void {
+  tabs = [...next];
+  activeId = active;
+  const opens = readOpens();
+  const pruned = pruneOpens(opens, tabs.map((t) => t.id));
+  if (Object.keys(pruned).length !== Object.keys(opens).length) lsSetJson(LS.tabOpens, pruned);
+  emit();
+}
+
+export function subscribeTabs(fn: (s: TabsSnapshot) => void): () => void {
+  listeners.add(fn);
+  fn(snap);
+  return () => { listeners.delete(fn); };
+}
+
+/** `useLink`'s shape: select, compare by identity, re-render only on a change. */
+export function useSessionTabs<T>(select: (s: TabsSnapshot) => T): T {
+  const sel = useRef(select);
+  sel.current = select;
+  const [v, setV] = useState<T>(() => select(snap));
+  useEffect(() => subscribeTabs((s) => {
+    const next = sel.current(s);
+    setV((prev) => (Object.is(prev, next) ? prev : next));
+  }), []);
+  return v;
+}
+
+// ── What a tap says, since the strip cannot call `App` ───────────────────────
+
+export const TAB_ATTACH_EVENT = "app:tab-attach";
+export const TAB_CLOSE_EVENT = "app:tab-close";
+
+function say(name: string, id: string): void {
+  try { window.dispatchEvent(new CustomEvent(name, { detail: { id } })); } catch { /* no DOM */ }
+}
+
+export const askTabAttach = (id: string): void => say(TAB_ATTACH_EVENT, id);
+export const askTabClose = (id: string): void => say(TAB_CLOSE_EVENT, id);
+
+rebuild();

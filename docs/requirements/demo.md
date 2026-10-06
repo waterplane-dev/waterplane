@@ -1,0 +1,157 @@
+# demo
+
+### R-demo-001 · shipped
+A demo of the app — no desktop, no Tailscale, no `claude` installed — is reachable from the first-run
+screen with one tap, in the APK and in a plain browser.
+- asked: 2026-10-01 (demo-mode plan, docs/analysis/demo-mode-plan.md)
+- shipped: demo-mode WP5a (first-run "Try the demo" in HostSetup; a browser has no first-run screen, so there it is Settings → Connection → try the demo, or `?demo=`)
+
+### R-demo-002 · shipped
+Opening the app with `?demo=<scenario>` starts the demo straight into that named scenario.
+- asked: 2026-10-01 (demo-mode plan, docs/analysis/demo-mode-plan.md)
+- shipped: demo-mode WP4 + WP5a (`?demo=first-look` boots; an unknown id says so in words, `demoProblem()`)
+
+### R-demo-003 · shipped
+While the demo is on, a line on screen says so in words, so nobody mistakes it for a connected
+desktop, and offers the way out to set up a real one.
+- asked: 2026-10-01 (demo-mode plan, docs/analysis/demo-mode-plan.md)
+- shipped: demo-mode WP5a (`DemoLine.tsx`: APK "Connect a real desktop" / "Leave the demo", host-served browser "Leave the demo", static page says to open waterplane from your own host)
+
+### R-demo-004 · shipped
+The demo makes zero network requests off the app's own origin — no push, no update check, no
+background fetch, no LAN probe, no native worker.
+- asked: 2026-10-01 (demo-mode plan, docs/analysis/demo-mode-plan.md)
+- shipped: demo-mode WP7 (`npm run test:ui`: every request off the served origin is aborted and fails the `first-look` journey, with the service worker allowed and blocked)
+
+### R-demo-005 · shipped
+An action the demo cannot perform answers in text saying it is not available in the demo and why —
+it never silently does nothing, never retries forever, and is never a greyed-out control.
+- asked: 2026-10-01 (demo-mode plan, docs/analysis/demo-mode-plan.md)
+- shipped: demo-mode WP2b + WP5a (tier-B verdicts reach the screen as text: build save and session fork toast the reason; build scan answers empty instead of a spinner)
+
+### R-demo-006 · requested
+A Google Play reviewer can open the APK and use it through the demo without any desktop, and the
+store listing's app-access note tells them how.
+- asked: 2026-10-01 (demo-mode plan, docs/analysis/demo-mode-plan.md)
+
+### R-demo-007 · shipped
+Every user journey in the docs has a gif or screenshot produced from the demo by a script, so the
+docs' media is regenerated rather than hand-recorded.
+- asked: 2026-10-01 (demo-mode plan, docs/analysis/demo-mode-plan.md)
+- shipped: `docs/guide.md` embeds one `--media` gif per journey (`first-look`, `queue-and-schedule`, `gallery-and-files`, `numbers`, `demo-tour`); `first-app` needs a real host and keeps its own gif
+
+### R-demo-008 · shipped
+One contract test suite runs against both the real host and the demo's fake host, and fails when
+the two answer the same message differently.
+- asked: 2026-10-01 (demo-mode plan, docs/analysis/demo-mode-plan.md)
+- shipped: demo-mode WP6 (`npm run test:contract`, scripts/run-contract.mjs)
+
+### R-demo-009 · shipped
+The demo can be made to fail the way a real tunnel does — offline, a lost receipt, a socket that dies
+mid-send and a watchdog reload — so tests show a prompt queued through any of them runs exactly once;
+those faults can never be reached in a shipped build or scenario.
+- asked: 2026-10-01 (demo-mode plan §6 "Fault journeys", docs/analysis/demo-mode-plan.md)
+- shipped: demo-mode WP8b (`scripts/ui/journey-fault-*.mjs`; the page hook exists only in a VITE_DEMO_FAULTS=1 build, `assertShippable` refuses a scenario carrying rules)
+
+### R-demo-010 · shipped
+Every scenario the build ships has a journey that plays it end to end, with its screens as aria
+snapshots, the zero-network check and a regenerated gif, so a scenario nobody can walk through
+cannot be added.
+- asked: 2026-10-02 (demo-mode plan WP8a, docs/analysis/demo-mode-plan.md)
+- shipped: demo-mode WP8a (`queue-and-schedule`, `gallery-and-files`, `numbers` with `scripts/ui/journey-<id>.mjs`; `scenarios.test.mjs` pins every registry entry)
+
+### R-demo-011 · shipped
+The demo guides a person through the app's headline features: a "More to try" list, grouped, one
+plain sentence per feature, each a tap into that screen of the demo. It is reachable any time from
+the demo line and from the first minute's closing card (it no longer opens by itself — the first
+minute is R-demo-014), and marks each feature tried (a check and the word) so progress is visible;
+leaving the demo forgets it.
+- asked: 2026-10-02 ("Demo mode needs more elaboration … make sure all our key features are fully sold to the user of the demo")
+- shipped: `features/demoTour` (overlay `demotour`, `DemoLine`'s "More to try")
+
+### R-demo-012 · shipped
+The default demo shows every headline screen with fictional, self-consistent figures — token
+ledger, usage windows, budget, context, CLI and repo health, notifications and logs — never an
+empty screen that reads like a broken one.
+- asked: 2026-10-02 (user, inbox screenshot of an empty Token usage screen in the demo)
+- shipped: `scripts/ui/journey-demo-tour.mjs` asserts the ledger is populated
+
+### R-demo-013 · shipped
+The demo shows a session's own budget holding a deferred send before the account's usage limit,
+then the session parked at the limit and continuing by itself at the reset, with the held prompt
+run exactly once — the hold, the park and the resume answered the way the real desktop answers them.
+- asked: 2026-10-02 (user: "limit → continue … pair it with a token budget for the session"; docs/analysis/demo-pitch-plan.md §2.7)
+- shipped: scenario `limit-and-budget`, `scripts/ui/journey-limit-and-budget.mjs`, `docs/media/limit-and-budget.gif`
+
+### R-demo-014 · shipped
+The default demo opens straight into a live session that is already working — tool lines stream and
+the context meter moves with no tap. One non-modal hint points at the real reader toggle. The turn
+ends with a screenshot (notification, thumbnail, gallery); marking it up and sending it back with a
+request gets a fix and a new screenshot; the finished turn shows what it cost (tokens in/out/cache,
+dollars at list price, and what the next prompt costs against a fresh session); a closing card then
+offers the schedule, the token ledger and repo health, and "More to try".
+- asked: 2026-10-02 (docs/analysis/demo-pitch-plan.md §1 and §7, decision 1)
+- shipped: `demo/scenarios/first-look.ts` (`script`, the "bigger" reply), `features/demoTour` (`DemoHook.tsx`), the reader's turn foot (`TranscriptView.tsx` `TurnCost`, `TranscriptTurn.tokens`); `scripts/ui/journey-first-look.mjs`
+
+### R-demo-015 · requested
+Every picture in the docs — journey gifs, their stills, the animated flow diagram — is regenerated
+by scripts from the current code with no model in the loop, so a UI change reaches the docs by
+re-running one command (`npm run media`), never by hand-recording or spending tokens. Only the
+hand-drawn architecture SVGs are edited by hand, and a test keeps their names honest.
+- asked: 2026-10-03 (user: "must be regenerateable without burning new tokens … if the UI changes should automatically get up to date if the scripts re-run")
+
+### R-demo-016 · requested
+The first gif that shows the terminal opens on something a Claude Code user recognises at once: the
+CLI's own welcome header with the Claude logo, version, model and folder.
+- asked: 2026-10-03 (user, inbox screenshot `.claude/inbox/1000077783-mus5yb9nd5cd28.png`)
+
+### R-demo-017 · requested
+Every screen a docs gif shows carries one plain sentence, under the app picture, saying what is
+being done there.
+- asked: 2026-10-03 (user: "the gifs need an explainer sentence for every shown screen that tells what is done")
+
+### R-demo-018 · requested
+The demo's token statistics and per-prompt cost are shaped on the owner's real heavy use — long
+sessions dominating, cache reads dwarfing output, subagents a large share, cold-start premium,
+prompts costing tens of dollars — with fictional repo names, so the insights read as worth having.
+- asked: 2026-10-03 (user: "use sessions from my real use that are impressive … the cheap ones shown don't seem to be interesting enough")
+
+### R-demo-019 · requested
+The per-prompt cost card the reader draws under a turn is also drawn under the terminal, always for
+the last prompt, and can be collapsed to one line and expanded again.
+- asked: 2026-10-03 (user, inbox screenshot `.claude/inbox/combined-2-screens-marked-mus60xm461af25.png`)
+
+### R-demo-020 · requested
+Wherever a list-price dollar figure is shown, a tap explains why dollars are shown to someone on a
+flat-fee plan: plan limits don't count token kinds the same, so a summed token count misleads and the
+list price is the one figure comparable across prompts, sessions and models.
+- asked: 2026-10-03 (user: "explain why we show dollar values for a user that has Claude max plan")
+
+### R-demo-021 · shipped
+The APK film tells one story on two phones: a screenshot of the running app is marked in the
+annotator ("put the logo here") and sent to the session; the session changes the app and bumps its
+version; the build runs; the other phone installs the update by itself and opens it with the logo
+where it was marked. Scripted end to end, the session's `claude` a stub, so it costs no tokens.
+- asked: 2026-10-03 (user: "the user uses the image annotation feature to mark something like the target position of a not yet shown Logo and then the simulator shows us the update happening automatically and the new logo showing up in the new version")
+- shipped: `scripts/media/apk-install.mjs` + `STUB_MODE=logo` (`scripts/media/tide-tables.mjs`, `tools/stublogo.test.mjs`)
+
+### R-demo-022 · shipped
+Every scripted docs gif also comes as an mp4 from the same run, for places a video beats a gif; and
+the gifs are as sharp as the size cap allows — filmed at device pixels, not shrunk from a blurred
+recording.
+- asked: 2026-10-03 (user: "Extend that so I also have videos as alternative material. Also i think gifs can have higher quality")
+- shipped: `scripts/ui/encode.mjs` (CDP screencast → lossless captioned master → gif + mp4); `docs/media/<journey>.mp4`, `docs/media/apk-install.mp4`
+
+### R-demo-023 · shipped
+The docs gifs and videos run at one even, readable pace: every screen worth showing stays up long
+enough to see, the last one under each caption long enough to read the caption, and that pace is the
+same in every film — not whatever a journey's waits happened to take.
+- asked: 2026-10-03 (user: "the gifs and videos are too fast in general and I think also not in same speed - I mean the time one thing is shown until the next thing is visible that is worth showing")
+- shipped: `scripts/ui/pace.mjs` (`PACE`, one rule for all journeys) + `tools/uipace.test.mjs`; the change probe in `scripts/ui/encode.mjs`
+
+### R-demo-024 · requested
+The APK film shows the notifications the other phone gets: the build succeeded, and the new version
+is downloaded and ready to install, with its one-tap Install button, which is tapped. The subtitle
+says that both the download and the install can also happen by themselves, on the phone the build
+was started from or any other phone with waterplane.
+- asked: 2026-10-05 (user: "Here we must show this notification with the one tap install button and the download succeeded message and say in the subtitle that both can happen automatically if desired on the same phone or other phones where waterplane is installed")

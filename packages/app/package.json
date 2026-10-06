@@ -1,0 +1,24 @@
+{
+  "name": "@waterplane/app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "waterplane Android shell — Capacitor wrapper around packages/web, so the UI survives a dead tunnel",
+  "type": "module",
+  "scripts": {
+    "sync": "node ./scripts/build-web.mjs && cap sync android",
+    "apk": "npm run sync && cd android && ./gradlew assembleDevDebug",
+    "apk:dev-release": "npm run sync && cd android && ./gradlew assembleDevRelease",
+    "aab:play": "npm run sync && cd android && ./gradlew bundlePlayRelease",
+    "apk:play-debug": "npm run sync && cd android && ./gradlew assemblePlayDebug",
+    "install-apk": "npm run apk && adb install -r android/app/build/outputs/apk/dev/debug/app-dev-debug.apk",
+    "open": "cap open android",
+    "doctor": "cap doctor"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/core": "^8.5.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.0"
+  }
+}

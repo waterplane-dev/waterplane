@@ -1,0 +1,77 @@
+/**
+ * Re-time many: the pick list's eligibility, counts and receipts.
+ *
+ * Part of `backlogFilter.ts`, the barrel every caller imports. Pure, and its
+ * imports carry `.ts` because `node --test` loads it straight off the source.
+ */
+import type { BacklogItem } from "@waterplane/shared";
+
+// ── Re-time many ──────────────────────────────────────────────────────
+
+/**
+ * **Which rows a bulk re-time can touch** — ONE edge for the checkbox, the
+ * count on the button and the frames the tap sends, so the number and the cut
+ * cannot come from two readings of "eligible".
+ *
+ * The host's `update()` is the authority and this is its reading: a running
+ * row refuses (an edit would describe a run that never happened), a settled one
+ * refuses, and a FAILED row is revived by a new trigger only when it was a
+ * timed one — a failed row with no clock is *run it again*'s, never this verb's.
+ * Archived rows are out: a clock on something filed away is a clock nobody sees.
+ */
+export function retimeEligible(it: BacklogItem): boolean {
+  if (it.archived) return false;
+  if (it.status === "running" || it.status === "done") return false;
+  if (it.status === "failed") return !!it.at;
+  return true;
+}
+/** The toggle that turns the list into a pick list. */
+export const RETIME_PICK_LABEL = "pick to re-time";
+/**
+ * What the bar says above the button. Counted against the rows that COULD be
+ * picked, and the ones that could not are said in TEXT with the reason — a row
+ * with no checkbox and no sentence is a row the reader thinks the tap missed.
+ */
+export function retimeNote(picked: number, eligible: number, shown: number): string {
+  const head = `${picked} of ${eligible} picked`;
+  const rest = shown - eligible;
+  const skipped = rest > 0
+    ? ` · ${rest} ${rest === 1 ? "has" : "have"} no box: running, finished, archived, or failed with no clock to move`
+    : "";
+  return `${head}${skipped}. A new when replaces each one's — the words, where it goes and the place in the list stay.`;
+}
+/** Nothing picked: the button is absent and this says why. */
+export const RETIME_NONE_PICKED = "tick the rows to move — the button appears with the count";
+/** One tap, one receipt — `dropClocksToast`'s rule. */
+export function retimeToast(n: number, when: string): string {
+  return n === 1 ? `re-timed — the same row, now ${when}` : `re-timed ${n} — the same rows, now ${when}`;
+}
+/**
+ * **The receipt for a re-time that took the CLOCK OFF** (next in line, when
+ * it's free, after another). Such a row leaves Schedules' *On a clock* list and
+ * the launcher's clock chip and is counted on its repo's ⌛ chip instead — a
+ * move nothing on screen used to announce, so four rows re-timed to "now" read
+ * as gone. Says where they went, and what is holding them when something is.
+ */
+export function retimeQueuedToast(n: number, when: string, repos: string[], heldUntil?: string | null): string {
+  const head = n === 1 ? `re-timed — now ${when}` : `re-timed ${n} — now ${when}`;
+  const where = repos.length === 1 ? ` on ${repos[0]}` : repos.length > 1 ? ` on each repo's row` : "";
+  const off = `. Off the clock list: ${n === 1 ? "it waits" : "they wait"} in the queue, ⌛${where}`;
+  const held = heldUntil ? ` — held by the budget until ${heldUntil}` : "";
+  return `${head}${off}${held}.`;
+}
+/** Under the When editor while re-timing to a when with no clock. */
+export function retimeOffClockNote(n: number): string {
+  return n === 1
+    ? "No clock: it leaves the Schedules clock list and waits in its repo's queue — the ⌛ chip on the repo's row."
+    : "No clock: these leave the Schedules clock list and wait in their repo's queue — the ⌛ chip on the repo's row.";
+}
+/**
+ * The ⌛ chip's words beyond the count: what is holding the queue, when the
+ * BUDGET holds some of it. Empty when nothing is budget-held, so the chip is a
+ * bare number exactly when there is nothing more to say.
+ */
+export function queuedChipHeld(n: number, held: number): string {
+  if (held <= 0) return "";
+  return held >= n ? " · budget" : ` · ${held} budget`;
+}

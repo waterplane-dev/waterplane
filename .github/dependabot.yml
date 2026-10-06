@@ -1,0 +1,33 @@
+version: 2
+updates:
+  # Grouped and monthly on purpose: this is a solo project, and a PR per patch
+  # bump is noise that gets ignored, which is worse than no automation at all.
+  # Security advisories are raised by Dependabot regardless of this schedule.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    # Same week as .npmrc's min-release-age: most hijacked releases are pulled
+    # within days. Security-advisory PRs are not held by this.
+    cooldown:
+      default-days: 7
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+  - package-ecosystem: npm
+    directory: "/packages/app"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    cooldown:
+      default-days: 7
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]

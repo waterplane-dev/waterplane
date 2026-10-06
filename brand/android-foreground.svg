@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108"><defs><linearGradient id="fgw" gradientUnits="userSpaceOnUse" x1="60" y1="140" x2="300" y2="320"><stop offset="0" stop-color="#F5A93F"/><stop offset="1" stop-color="#EC6F55"/></linearGradient></defs><g transform="translate(54 54) scale(.118) translate(-262 -250)">
+  <g transform="rotate(7 286 228)">
+    <path d="M128,146 L286,228 L128,310" fill="none" stroke="url(#fgw)" stroke-width="50" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M272,228 L84,228" stroke="url(#fgw)" stroke-width="22" stroke-linecap="round"/>
+    <path d="M92,204 L104,228 L92,252" fill="none" stroke="url(#fgw)" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+    
+  </g>
+  <rect x="318" y="302" width="128" height="28" rx="9" fill="#F5A93F">
+  </rect></g></svg>

@@ -1,0 +1,995 @@
+{
+ "totals": {
+  "input": 81976,
+  "output": 161222,
+  "cacheRead": 8038000,
+  "cacheWrite": 64600,
+  "cacheWrite1h": 59100,
+  "turns": 408
+ },
+ "days": [
+  {
+   "day": "2026-07-01",
+   "input": 1266,
+   "output": 652,
+   "cacheRead": 41000,
+   "cacheWrite": 45500,
+   "cacheWrite1h": 42000,
+   "turns": 5,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   },
+   "byModel": [
+    {
+     "model": "claude-test-a",
+     "totals": {
+      "input": 1215,
+      "output": 590,
+      "cacheRead": 34000,
+      "cacheWrite": 42500,
+      "cacheWrite1h": 42000,
+      "turns": 3
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "total": 0
+     }
+    },
+    {
+     "model": "claude-test-b",
+     "totals": {
+      "input": 51,
+      "output": 62,
+      "cacheRead": 7000,
+      "cacheWrite": 3000,
+      "cacheWrite1h": 0,
+      "turns": 2
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "total": 0
+     }
+    }
+   ],
+   "agents": [
+    {
+     "model": "claude-test-b",
+     "count": 1
+    }
+   ],
+   "byRepo": [
+    {
+     "repo": "/fx/repo-one",
+     "turns": 5,
+     "pricedTurns": 0,
+     "usd": 0
+    }
+   ]
+  },
+  {
+   "day": "2026-07-02",
+   "input": 10,
+   "output": 480,
+   "cacheRead": 17000,
+   "cacheWrite": 15100,
+   "cacheWrite1h": 15100,
+   "turns": 2,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   },
+   "byModel": [
+    {
+     "model": "claude-test-b",
+     "totals": {
+      "input": 10,
+      "output": 480,
+      "cacheRead": 17000,
+      "cacheWrite": 15100,
+      "cacheWrite1h": 15100,
+      "turns": 2
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "total": 0
+     }
+    }
+   ],
+   "agents": [],
+   "byRepo": [
+    {
+     "repo": "/fx/repo-one",
+     "turns": 2,
+     "pricedTurns": 0,
+     "usd": 0
+    }
+   ]
+  },
+  {
+   "day": "2026-07-03",
+   "input": 9453,
+   "output": 19044,
+   "cacheRead": 945300,
+   "cacheWrite": 1400,
+   "cacheWrite1h": 700,
+   "turns": 138,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   },
+   "byModel": [
+    {
+     "model": "claude-test-a",
+     "totals": {
+      "input": 6348,
+      "output": 12788,
+      "cacheRead": 634800,
+      "cacheWrite": 900,
+      "cacheWrite1h": 450,
+      "turns": 92
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "total": 0
+     }
+    },
+    {
+     "model": "qwen-test:7b",
+     "totals": {
+      "input": 3105,
+      "output": 6256,
+      "cacheRead": 310500,
+      "cacheWrite": 500,
+      "cacheWrite1h": 250,
+      "turns": 46
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "total": 0
+     }
+    }
+   ],
+   "agents": [],
+   "byRepo": [
+    {
+     "repo": "/fx/repo-one",
+     "turns": 138,
+     "pricedTurns": 0,
+     "usd": 0
+    }
+   ]
+  },
+  {
+   "day": "2026-07-04",
+   "input": 50100,
+   "output": 98695,
+   "cacheRead": 4920000,
+   "cacheWrite": 2050,
+   "cacheWrite1h": 1050,
+   "turns": 206,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   },
+   "byModel": [
+    {
+     "model": "claude-test-a",
+     "totals": {
+      "input": 32640,
+      "output": 65416,
+      "cacheRead": 3264000,
+      "cacheWrite": 1400,
+      "cacheWrite1h": 700,
+      "turns": 136
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "total": 0
+     }
+    },
+    {
+     "model": "qwen-test:7b",
+     "totals": {
+      "input": 17460,
+      "output": 33279,
+      "cacheRead": 1656000,
+      "cacheWrite": 650,
+      "cacheWrite1h": 350,
+      "turns": 70
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "total": 0
+     }
+    }
+   ],
+   "agents": [],
+   "byRepo": [
+    {
+     "repo": "/fx/repo-one",
+     "turns": 205,
+     "pricedTurns": 0,
+     "usd": 0
+    },
+    {
+     "repo": "/fx/repo-two",
+     "turns": 1,
+     "pricedTurns": 0,
+     "usd": 0
+    }
+   ]
+  },
+  {
+   "day": "2026-07-05",
+   "input": 21147,
+   "output": 42351,
+   "cacheRead": 2114700,
+   "cacheWrite": 550,
+   "cacheWrite1h": 250,
+   "turns": 57,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   },
+   "byModel": [
+    {
+     "model": "claude-test-a",
+     "totals": {
+      "input": 14079,
+      "output": 28196,
+      "cacheRead": 1407900,
+      "cacheWrite": 350,
+      "cacheWrite1h": 150,
+      "turns": 38
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "total": 0
+     }
+    },
+    {
+     "model": "qwen-test:7b",
+     "totals": {
+      "input": 7068,
+      "output": 14155,
+      "cacheRead": 706800,
+      "cacheWrite": 200,
+      "cacheWrite1h": 100,
+      "turns": 19
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "total": 0
+     }
+    }
+   ],
+   "agents": [],
+   "byRepo": [
+    {
+     "repo": "/fx/repo-one",
+     "turns": 57,
+     "pricedTurns": 0,
+     "usd": 0
+    }
+   ]
+  }
+ ],
+ "hourOfDay": [
+  {
+   "hour": 0,
+   "input": 4255,
+   "output": 8527,
+   "cacheRead": 425500,
+   "cacheWrite": 200,
+   "cacheWrite1h": 100,
+   "turns": 17,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   }
+  },
+  {
+   "hour": 1,
+   "input": 4194,
+   "output": 8405,
+   "cacheRead": 419400,
+   "cacheWrite": 100,
+   "cacheWrite1h": 50,
+   "turns": 17,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   }
+  },
+  {
+   "hour": 2,
+   "input": 4544,
+   "output": 9105,
+   "cacheRead": 454400,
+   "cacheWrite": 200,
+   "cacheWrite1h": 100,
+   "turns": 17,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   }
+  },
+  {
+   "hour": 3,
+   "input": 4860,
+   "output": 9738,
+   "cacheRead": 486000,
+   "cacheWrite": 200,
+   "cacheWrite1h": 100,
+   "turns": 18,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   }
+  },
+  {
+   "hour": 4,
+   "input": 4456,
+   "output": 8928,
+   "cacheRead": 445600,
+   "cacheWrite": 150,
+   "cacheWrite1h": 50,
+   "turns": 16,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   }
+  },
+  {
+   "hour": 5,
+   "input": 5166,
+   "output": 10350,
+   "cacheRead": 516600,
+   "cacheWrite": 150,
+   "cacheWrite1h": 100,
+   "turns": 18,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   }
+  },
+  {
+   "hour": 6,
+   "input": 3722,
+   "output": 7458,
+   "cacheRead": 372200,
+   "cacheWrite": 150,
+   "cacheWrite1h": 50,
+   "turns": 14,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   }
+  },
+  {
+   "hour": 7,
+   "input": 1612,
+   "output": 3232,
+   "cacheRead": 161200,
+   "cacheWrite": 100,
+   "cacheWrite1h": 50,
+   "turns": 8,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   }
+  },
+  {
+   "hour": 8,
+   "input": 4095,
+   "output": 5012,
+   "cacheRead": 234600,
+   "cacheWrite": 60650,
+   "cacheWrite1h": 57100,
+   "turns": 25,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   }
+  },
+  {
+   "hour": 9,
+   "input": 1872,
+   "output": 3827,
+   "cacheRead": 202500,
+   "cacheWrite": 300,
+   "cacheWrite1h": 200,
+   "turns": 18,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   }
+  },
+  {
+   "hour": 10,
+   "input": 2215,
+   "output": 4447,
+   "cacheRead": 221500,
+   "cacheWrite": 200,
+   "cacheWrite1h": 100,
+   "turns": 17,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   }
+  },
+  {
+   "hour": 11,
+   "input": 2154,
+   "output": 4325,
+   "cacheRead": 215400,
+   "cacheWrite": 100,
+   "cacheWrite1h": 50,
+   "turns": 17,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   }
+  },
+  {
+   "hour": 12,
+   "input": 2504,
+   "output": 5025,
+   "cacheRead": 250400,
+   "cacheWrite": 200,
+   "cacheWrite1h": 100,
+   "turns": 17,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   }
+  },
+  {
+   "hour": 13,
+   "input": 2700,
+   "output": 5418,
+   "cacheRead": 270000,
+   "cacheWrite": 200,
+   "cacheWrite1h": 100,
+   "turns": 18,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   }
+  },
+  {
+   "hour": 14,
+   "input": 2536,
+   "output": 5088,
+   "cacheRead": 253600,
+   "cacheWrite": 150,
+   "cacheWrite1h": 50,
+   "turns": 16,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   }
+  },
+  {
+   "hour": 15,
+   "input": 3006,
+   "output": 6030,
+   "cacheRead": 300600,
+   "cacheWrite": 150,
+   "cacheWrite1h": 100,
+   "turns": 18,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   }
+  },
+  {
+   "hour": 16,
+   "input": 2885,
+   "output": 5787,
+   "cacheRead": 288500,
+   "cacheWrite": 200,
+   "cacheWrite1h": 100,
+   "turns": 17,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   }
+  },
+  {
+   "hour": 17,
+   "input": 3235,
+   "output": 6487,
+   "cacheRead": 323500,
+   "cacheWrite": 200,
+   "cacheWrite1h": 100,
+   "turns": 17,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   }
+  },
+  {
+   "hour": 18,
+   "input": 3174,
+   "output": 6365,
+   "cacheRead": 317400,
+   "cacheWrite": 100,
+   "cacheWrite1h": 50,
+   "turns": 17,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   }
+  },
+  {
+   "hour": 19,
+   "input": 3524,
+   "output": 7065,
+   "cacheRead": 352400,
+   "cacheWrite": 200,
+   "cacheWrite1h": 100,
+   "turns": 17,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   }
+  },
+  {
+   "hour": 20,
+   "input": 3780,
+   "output": 7578,
+   "cacheRead": 378000,
+   "cacheWrite": 200,
+   "cacheWrite1h": 100,
+   "turns": 18,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   }
+  },
+  {
+   "hour": 21,
+   "input": 3496,
+   "output": 7008,
+   "cacheRead": 349600,
+   "cacheWrite": 150,
+   "cacheWrite1h": 50,
+   "turns": 16,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   }
+  },
+  {
+   "hour": 22,
+   "input": 4086,
+   "output": 8190,
+   "cacheRead": 408600,
+   "cacheWrite": 150,
+   "cacheWrite1h": 100,
+   "turns": 18,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   }
+  },
+  {
+   "hour": 23,
+   "input": 3905,
+   "output": 7827,
+   "cacheRead": 390500,
+   "cacheWrite": 200,
+   "cacheWrite1h": 100,
+   "turns": 17,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   }
+  }
+ ],
+ "models": [
+  {
+   "key": "claude-test-a",
+   "label": "claude-test-a",
+   "input": 54282,
+   "output": 106990,
+   "cacheRead": 5340700,
+   "cacheWrite": 45150,
+   "cacheWrite1h": 43300,
+   "turns": 269,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   },
+   "priced": false
+  },
+  {
+   "key": "qwen-test:7b",
+   "label": "qwen-test:7b",
+   "input": 27633,
+   "output": 53690,
+   "cacheRead": 2673300,
+   "cacheWrite": 1350,
+   "cacheWrite1h": 700,
+   "turns": 135,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   },
+   "priced": false
+  },
+  {
+   "key": "claude-test-b",
+   "label": "claude-test-b",
+   "input": 61,
+   "output": 542,
+   "cacheRead": 24000,
+   "cacheWrite": 18100,
+   "cacheWrite1h": 15100,
+   "turns": 4,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   },
+   "priced": false
+  }
+ ],
+ "repos": [
+  {
+   "key": "/fx/repo-one",
+   "label": "repo-one",
+   "input": 81076,
+   "output": 161132,
+   "cacheRead": 8038000,
+   "cacheWrite": 64600,
+   "cacheWrite1h": 59100,
+   "turns": 407,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   },
+   "priced": false,
+   "byModel": [
+    {
+     "model": "claude-test-a",
+     "totals": {
+      "input": 54282,
+      "output": 106990,
+      "cacheRead": 5340700,
+      "cacheWrite": 45150,
+      "cacheWrite1h": 43300,
+      "turns": 269
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "total": 0
+     }
+    },
+    {
+     "model": "qwen-test:7b",
+     "totals": {
+      "input": 26733,
+      "output": 53600,
+      "cacheRead": 2673300,
+      "cacheWrite": 1350,
+      "cacheWrite1h": 700,
+      "turns": 134
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "total": 0
+     }
+    },
+    {
+     "model": "claude-test-b",
+     "totals": {
+      "input": 61,
+      "output": 542,
+      "cacheRead": 24000,
+      "cacheWrite": 18100,
+      "cacheWrite1h": 15100,
+      "turns": 4
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "total": 0
+     }
+    }
+   ]
+  },
+  {
+   "key": "/fx/repo-two",
+   "label": "repo-two",
+   "input": 900,
+   "output": 90,
+   "cacheRead": 0,
+   "cacheWrite": 0,
+   "cacheWrite1h": 0,
+   "turns": 1,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   },
+   "priced": false,
+   "byModel": [
+    {
+     "model": "qwen-test:7b",
+     "totals": {
+      "input": 900,
+      "output": 90,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "cacheWrite1h": 0,
+      "turns": 1
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "total": 0
+     }
+    }
+   ]
+  }
+ ],
+ "conversations": 2,
+ "subagents": {
+  "input": 51,
+  "output": 62,
+  "cacheRead": 7000,
+  "cacheWrite": 3000,
+  "cacheWrite1h": 0,
+  "turns": 2
+ },
+ "subagentLogs": 1,
+ "cost": {
+  "input": 0,
+  "output": 0,
+  "cacheRead": 0,
+  "cacheWrite": 0,
+  "total": 0
+ },
+ "subagentCost": {
+  "input": 0,
+  "output": 0,
+  "cacheRead": 0,
+  "cacheWrite": 0,
+  "total": 0
+ },
+ "unpriced": {
+  "input": 81976,
+  "output": 161222,
+  "cacheRead": 8038000,
+  "cacheWrite": 64600,
+  "cacheWrite1h": 59100,
+  "turns": 408
+ },
+ "fastTurns": 1,
+ "coldStarts": {
+  "count": 1,
+  "tok": 15000
+ },
+ "top": [
+  {
+   "id": "conv-a",
+   "repo": "/fx/repo-one",
+   "label": "repo-one",
+   "firstAt": 1782892800000,
+   "lastAt": 1783231200000,
+   "totals": {
+    "input": 81076,
+    "output": 161132,
+    "cacheRead": 8038000,
+    "cacheWrite": 64600,
+    "cacheWrite1h": 59100,
+    "turns": 407
+   },
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   },
+   "agentTotals": {
+    "input": 51,
+    "output": 62,
+    "cacheRead": 7000,
+    "cacheWrite": 3000,
+    "cacheWrite1h": 0,
+    "turns": 2
+   },
+   "agentCost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   },
+   "agents": 1
+  },
+  {
+   "id": "conv-b",
+   "repo": "/fx/repo-two",
+   "label": "repo-two",
+   "firstAt": 1783152000000,
+   "lastAt": 1783152000000,
+   "totals": {
+    "input": 900,
+    "output": 90,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "cacheWrite1h": 0,
+    "turns": 1
+   },
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   },
+   "agentTotals": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "cacheWrite1h": 0,
+    "turns": 0
+   },
+   "agentCost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   },
+   "agents": 0
+  }
+ ],
+ "firstAt": 1782864000000,
+ "lastAt": 1783209600000,
+ "logs": 5,
+ "reread": 4
+}

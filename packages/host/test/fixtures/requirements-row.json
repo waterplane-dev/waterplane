@@ -1,0 +1,96 @@
+{
+  "notSetUp": {
+    "row": {
+      "id": "requirements",
+      "label": "Requirements list",
+      "status": "pass",
+      "fix": "requirements",
+      "detail": "Optional, not set up. The fix writes .claude/skills/requirements/SKILL.md and docs/requirements/README.md and spends nothing. After that this row counts your prompts since the list was last built and gives the build to this repo's agent: a cheap model extracts requirements from your prompts, a stronger one merges them with the commits, and it leaves an uncommitted diff for you to review."
+    },
+    "before": "env-gitignored",
+    "after": null
+  },
+  "neverBuilt": {
+    "row": {
+      "id": "requirements",
+      "label": "Requirements list",
+      "status": "warn",
+      "fix": null,
+      "detail": "Set up, never built — 3 prompts and 2 commits to read. Build it from the repo root: node <ROOT>/scripts/requirements/update.mjs . The CLI deletes transcripts after 30 days (cleanupPeriodDays in ~/.claude/settings.json), and this list is built from them — raise it, or build at least that often."
+    },
+    "before": "env-gitignored",
+    "after": null
+  },
+  "builtFresh": {
+    "row": {
+      "id": "requirements",
+      "label": "Requirements list",
+      "status": "pass",
+      "fix": null,
+      "detail": "5 items — 1 requested, 2 shipped, 2 superseded or dropped. Built 2026-09-01 for $0.43; 4 prompts and 1 commit since. The CLI deletes transcripts after 30 days (cleanupPeriodDays in ~/.claude/settings.json), and this list is built from them — raise it, or build at least that often."
+    },
+    "before": "env-gitignored",
+    "after": "apk-install"
+  },
+  "builtStale": {
+    "row": {
+      "id": "requirements",
+      "label": "Requirements list",
+      "status": "warn",
+      "fix": null,
+      "detail": "5 items — 1 requested, 2 shipped, 2 superseded or dropped. Built 2026-08-01; 25 prompts and 1 commit since. Update it from the repo root: node <ROOT>/scripts/requirements/update.mjs . The CLI deletes transcripts after 30 days (cleanupPeriodDays in ~/.claude/settings.json), and this list is built from them — raise it, or build at least that often."
+    },
+    "before": "env-gitignored",
+    "after": null
+  },
+  "builtLongRetention": {
+    "row": {
+      "id": "requirements",
+      "label": "Requirements list",
+      "status": "pass",
+      "fix": null,
+      "detail": "5 items — 1 requested, 2 shipped, 2 superseded or dropped. Built 2026-09-01 for $0.43; 4 prompts and 1 commit since."
+    },
+    "before": "env-gitignored",
+    "after": "apk-install"
+  },
+  "builtShortRetention": {
+    "row": {
+      "id": "requirements",
+      "label": "Requirements list",
+      "status": "pass",
+      "fix": null,
+      "detail": "5 items — 1 requested, 2 shipped, 2 superseded or dropped. Built 2026-09-01 for $0.43; 4 prompts and 1 commit since. The CLI deletes transcripts after 14 days (cleanupPeriodDays in ~/.claude/settings.json), and this list is built from them — raise it, or build at least that often."
+    },
+    "before": "env-gitignored",
+    "after": "apk-install"
+  },
+  "fix": {
+    "first": {
+      "ok": true,
+      "applied": [
+        "requirements"
+      ],
+      "notes": [
+        "wrote .claude/skills/requirements/SKILL.md, docs/requirements/README.md"
+      ]
+    },
+    "skill": "---\nname: requirements\ndescription: What this repo is expected to do, as a person asked for it — one file per area under docs/requirements/, stable IDs, status + source. Load before changing behaviour someone relies on, or when asked how something should work.\ngenerated-by: waterplane requirements (packages/shared/src/requirements.ts) — a machine-written preset, not one of this repo's hand-authored skills. Edit it freely; nothing overwrites it.\n---\n\n# Requirements\n\nThe list of what this project is expected to do, reconstructed from the prompts\nthat asked for it and the commits that shipped it. Index:\n`docs/requirements/README.md` — read it, then only the area file you need.\n\n## Before you change behaviour\n\nGrep the area file for the thing you are about to change. If an item says it\nmust work another way, **say so before acting** — the person may have forgotten\nthey asked for it, or may be superseding it on purpose. Either way it is their\ncall, not yours.\n\n## Item format\n\n```\n### R-<area>-<nnn> · <status>\nOne or two sentences: observable behaviour, from the user's side, as an end state.\n- asked: 2026-08-25 (session 1a2b3c4d)\n- shipped: 3f9e2a1\n- superseded-by: R-<area>-<nnn>\n```\n\n- **status** — `requested` (asked, no evidence it shipped), `shipped` (a commit\n  or the code shows it), `superseded` (a later item replaced it —\n  `superseded-by` says which), `dropped` (the person withdrew it).\n- **IDs are stable.** Never renumber, never reuse, never delete an item: change\n  its status. A later request that contradicts an item supersedes it.\n- Behaviour, not implementation: \"Child mode has one canvas and no save\", not\n  \"ChildActivity hides the save button\".\n\n## Who updates it\n\n`node <ROOT>/scripts/requirements/update.mjs .` reads the prompts and commits since\n`docs/requirements/.state.json` — a cheap model extracts, a stronger one merges\nas add/amend/status operations — and leaves an **uncommitted diff** for a\nperson to review. It preserves every item it was not told to change, byte for\nbyte, so hand edits are safe. waterplane's setup checklist says when it is behind.\n",
+    "readme": "# Requirements\n\nNot built yet. waterplane's setup checklist says how to build it; the format is in `.claude/skills/requirements/SKILL.md`.\n",
+    "second": {
+      "ok": true,
+      "applied": [],
+      "notes": [
+        "requirements preset and index already present — left as they are"
+      ]
+    },
+    "rowAfter": {
+      "id": "requirements",
+      "label": "Requirements list",
+      "status": "warn",
+      "fix": null,
+      "detail": "Set up, never built. Build it from the repo root: node <ROOT>/scripts/requirements/update.mjs . The CLI deletes transcripts after 14 days (cleanupPeriodDays in ~/.claude/settings.json), and this list is built from them — raise it, or build at least that often."
+    },
+    "stateWritten": false
+  }
+}

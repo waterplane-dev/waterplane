@@ -1,0 +1,448 @@
+/**
+ * The TypeScript/JavaScript pack: everything the engine knows that is a fact
+ * about this language family rather than about measurement.
+ *
+ * ── Why this is a pack and not a constant ───────────────────────────────────
+ *
+ * `constants.mjs` used to hold `SRC_EXT`, `SRC_EXCLUDE_SUFFIX`, `HATCH_KINDS`
+ * and `UNTESTED_TEST_GLOBS` in the same frozen block as the rank window, the
+ * LOC convention and the re-touch clocks. Those two halves are not the same
+ * kind of thing. The window and the clocks are the METHOD: they are what makes
+ * two readings comparable, and they are identical in every repo. `: any` and
+ * `*.test.mjs` are a fact about one language. Leaving them pinned as
+ * universals is what made a Kotlin repo's source invisible while the engine
+ * reported its numbers with the same confidence.
+ *
+ * Measured over the thirteen repositories under `~/dev` that have any
+ * committed files, counting tree entries at HEAD outside the excluded
+ * directories: `.ts`/`.tsx` appear in six of them, `.kt` in five (239, 105,
+ * 85, 29 and 10 files), `.py` in four (343, 297, 140 and 52) and `.dart` in
+ * two (67 and 13). `Tiptoi` is the case that makes the point twice over: 239
+ * Kotlin files and 140 Python files that no pack here can read, and 32 `.js`
+ * files that activate this one — so it IS measured, and what it is measured on
+ * is its web front end and nothing else. The row says which, because the
+ * active pack travels with its file count.
+ *
+ * ── The extensions were widened, deliberately, and this changed the count ───
+ *
+ * `SRC_EXT` was `[".ts", ".tsx"]`. This pack claims the whole family —
+ * `.ts .tsx .js .jsx .mjs .cjs` — because a pack is supposed to describe a
+ * language, and a repo that is half `.mjs` is not half unmeasured. It is also
+ * what brings two more of the fleet into view at all: `Tiptoi` (32 `.js`, no
+ * TypeScript anywhere) and `webcam` (16) activate no pack under a `.ts`-only
+ * definition and are read by this one. It is a CHANGE OF WHAT IS MEASURED and
+ * it is stated here rather than discovered later: at waterplane's HEAD the old
+ * definition selected 335 files (`packages/**​/src/**​/*.ts{,x}`); the new one,
+ * after the test globs and the excluded directories below are taken out,
+ * selects 374 — the same 335, none of them dropped, plus 39 that were
+ * invisible: `tools/**` (25), `scripts/**` (8), four files under `packages/`
+ * that sit outside a `src/`, and two at the repo root.
+ * `tools/repohealth/` measuring itself is a consequence of that and is
+ * the honest one: those files are source, they are written by the same agents,
+ * and a tool that exempted itself from its own size and duplicate rows would
+ * be reporting on a tree it had quietly cut a hole in.
+ *
+ * It also makes the test exclusion in `source.mjs` load-bearing for the first
+ * time. Under `[".ts", ".tsx"]` every `*.test.mjs` and every
+ * `scripts/e2e-*.mjs` was excluded by accident, because `.mjs` was not an
+ * extension. At HEAD that is 160 test files and 99 e2e scripts — 259 files
+ * that would otherwise walk straight into the measured set the moment `.mjs`
+ * became source. `source.mjs` now excludes them on purpose, using the globs
+ * below, and says so.
+ *
+ * ── The test globs were this repo's conventions, and are now the family's ──
+ *
+ * `["**​/*.test.mjs", "scripts/e2e-*.mjs"]` is how waterplane writes a test. It is
+ * how almost nobody else does, and a pack is supposed to describe a language.
+ * Counted at HEAD with `git ls-tree -r --name-only`, files ending
+ * `.test.<ext>` or `.spec.<ext>` in this family: `FeedbackPlatform` 170,
+ * `todolist` 36, `realestatecalc` 23, `personal-podcast-news` 9, `Tiptoi` and
+ * `trading` 4 each, `webcam` 2 — and not one of them was a `.mjs`, so every
+ * one was counted as a module of the project being measured.
+ *
+ * What that cost is visible in each row separately, which is the argument
+ * `tools/repohealth/source.mjs` makes: a test inside the measured population
+ * moves `size`, `hatches`, `dups`, `cochange` and `classics.files`, and
+ * OUTSIDE the corpus it moves `untested`. `FeedbackPlatform` had both ends of
+ * it at once — `classics.files` 660 with `apps/web/test` (99 files) and
+ * `apps/web/e2e` (24) inside it, a `dups` pair whose two halves were two test
+ * files agreeing on their setup boilerplate, and
+ * `untested: {value: null, reason: "no tests at this commit"}` in a repo with
+ * 170 of them.
+ *
+ * So the globs below are the family's three conventions — the `*.test.*` and
+ * `*.spec.*` suffixes, and the directories a suite lives in — and waterplane's own
+ * `scripts/e2e-*.mjs` is kept beside them. Taking both halves together, the
+ * files this pack now calls tests: `FeedbackPlatform` 187 of 656 JS/TS files,
+ * `todolist` 37 of 102, `realestatecalc` 24 of 436, `personal-podcast-news`
+ * 10 of 127, `Tiptoi` 5 of 32, `trading` 4 of 155, `webcam` 2 of 16.
+ *
+ * In THIS repo the widening moves the source set by nothing at all: 391
+ * source files before and 391 after, none gained and none lost, because every
+ * test here was already a `*.test.mjs` or an e2e script and both were already
+ * matched. What it does move is the corpus — `packages/host/test/**` was
+ * already in it through `*.test.mjs`, and the directory glob adds the 18
+ * non-`.mjs` files beside them: two `README.md`s, an `ExampleUnitTest.java`
+ * that no pack reads, and 15 recorded-terminal fixtures. `untested` is unchanged
+ * at 227 modules with them in the corpus, which is the check that mattered —
+ * a fixture that happened to print a module's path would have marked that
+ * module covered.
+ *
+ * ── What this pack does NOT detect ──────────────────────────────────────────
+ *
+ *   - **`TODO` and `FIXME`.** They are in `packs/common.mjs`, because they are
+ *     written the same way in every language and counting them twice would
+ *     collide on the kind name.
+ *   - **Renamed clones.** The analyzer normalises string and numeric literals
+ *     and NOT identifiers, so a copy under new names does not pair. That is
+ *     `PREREG.DUP_NORMALISE`'s decision and the reasoning is there.
+ *   - **Anything at all when `typescript` is not installed.** The parser is
+ *     the compiler's own, loaded from the tree being measured. Where it is
+ *     absent `analyzer()` returns `null`, `dups` and `deadExports` report
+ *     `{value: null, reason}` and nothing reports a zero — see
+ *     `lang/typescript-ast.mjs`.
+ *   - **Coverage.** `mentions` answers whether a test NAMES a module, never
+ *     whether it exercises one. `metrics/untested.mjs` argues that out at
+ *     length and this pack only supplies the language half of it.
+ *   - **Transitive or workspace dependency resolution.** `manifests` counts
+ *     the keys declared in each `package.json` and resolves nothing: no lock
+ *     file is read, no version is compared, a workspace link counts as a
+ *     dependency like any other.
+ *   - **Any other JS-adjacent manifest.** `deno.json`, `jsr.json`,
+ *     `bower.json` and a bare `tsconfig.json` are not read.
+ */
+import { NO_TYPESCRIPT, contentKey, identsOf, loadTypeScript, signedBlocks } from "../lang/typescript-ast.mjs";
+
+/**
+ * One path reference in a test's text: the directory part, then the basename,
+ * then either an accepted extension or the closing quote of an extensionless
+ * specifier.
+ *
+ * Copied from `metrics/untested.mjs`, where the full argument for every piece
+ * of it lives, because the rule it encodes is a fact about how JavaScript
+ * writes an import and not about how a module is measured. The three accepted
+ * extensions are `tsx|ts|js`: the host tests import COMPILED output
+ * (`../dist/echo.js`), so the source extension alone would miss every one of
+ * them. The lookbehind anchors the match at the start of the path — which is
+ * what makes the directory part capturable, and, as a side effect, is the left
+ * boundary that stops `smartpickstore.js` naming `store`. The `(?![\w])` after
+ * the extension is the right boundary: without it `.js` matches inside
+ * `.json`, and at HEAD `scripts/e2e-notifyprefs.mjs` reading `.waterplane/notify.json`
+ * marked `packages/shared/src/wire/notify.ts` tested.
+ */
+const PATH_REF = new RegExp(
+  "(?<![\\w$.\\-/])" +
+    "((?:\\.{0,2}/)?(?:[\\w$.-]+/)*)" +
+    "([\\w$-]+)" +
+    "(?:\\.(tsx|ts|js)(?![\\w])|(?=[\"']))",
+  "g",
+);
+
+/** `packages/web/src/foo/bar.tsx` -> `bar`. */
+function basename(path) {
+  const slash = path.lastIndexOf("/");
+  const file = slash === -1 ? path : path.slice(slash + 1);
+  const dot = file.lastIndexOf(".");
+  return dot <= 0 ? file : file.slice(0, dot);
+}
+
+/** `packages/web/src/foo/bar.tsx` -> `["packages", "web", "src", "foo"]`. */
+function dirSegments(path) {
+  const parts = path.split("/");
+  parts.pop();
+  return parts;
+}
+
+/**
+ * The directory a reference points at, as segments.
+ *
+ * `base` is the directory of the file the reference was written in and is
+ * consulted only for a reference that starts `./` or `../`; an absolute-
+ * looking `/api/...` is treated as repo-relative, because in this corpus that
+ * shape is a URL and not a path into the tree. `..` above the root clamps
+ * rather than escaping, so a malformed reference degrades to a shorter path
+ * and never to a key that could match anything.
+ */
+function resolveDir(dir, base) {
+  const raw = dir.split("/").filter((s) => s.length > 0);
+  const relative = raw[0] === "." || raw[0] === "..";
+  const out = relative ? [...base] : [];
+  for (const seg of raw) {
+    if (seg === ".") continue;
+    if (seg === "..") out.pop();
+    else out.push(seg);
+  }
+  return out;
+}
+
+export default Object.freeze({
+  name: "typescript",
+  // 2: the test globs stopped being this repo's conventions and became the
+  // family's. See the header — it is a change of what is measured in every
+  // JS/TS repo but this one.
+  version: "2",
+
+  /** Activates when the tree at HEAD carries one of these. See the header. */
+  exts: Object.freeze([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]),
+
+  /**
+   * A `.d.ts` is a declaration emitted or hand-written to describe code that
+   * lives somewhere else. Counting it as source double-counts every module it
+   * describes and inflates the LOC total with lines nobody wrote by hand.
+   */
+  excludeSuffixes: Object.freeze([".d.ts"]),
+
+  /**
+   * What a test file looks like in this family — the family's conventions,
+   * not one repo's. `**​/` crosses directories; `*` does not.
+   *
+   * Two readers, one definition. `source.mjs` uses it to keep tests OUT of the
+   * measured population, and `snapshot.mjs` uses it to collect the corpus that
+   * `mentions` then reads. Before the extensions widened these two uses could
+   * not disagree, because `.mjs` was not source; now they must be the same
+   * list, or a file would be both a module and the test that covers it.
+   *
+   * The list is written out one entry per shape because `globToRegExp` in
+   * `source.mjs` supports `**​/` and `*` and nothing else — no braces — so
+   * `*.test.{ts,tsx,js}` would compile to a pattern that matches a file
+   * literally named that.
+   *
+   * They are unioned with every other active pack's and applied to a PATH,
+   * never to a language: `census.mjs` merges the lists and `source.mjs` asks
+   * only whether a path matches. So the directory globs below are this pack's
+   * contribution to a mixed repo as well as to a JS one — `trading`'s
+   * `mobile/test/widget/widget_test.dart` leaves the measured population
+   * because that repo activates this pack, and `packs/dart.mjs`'s header says
+   * so where it declines a Dart convention of its own.
+   *
+   * Three families of shape, and each is here because the family writes it:
+   * the `*.test.*` and `*.spec.*` suffixes that every JS runner discovers by,
+   * the directories that hold a suite (`test/`, `tests/`, `__tests__/`,
+   * `e2e/`), and `scripts/e2e-*.mjs`, which is waterplane's own and stays because a
+   * glob that finds nothing elsewhere costs nothing.
+   */
+  testGlobs: Object.freeze([
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.test.js",
+    "**/*.test.jsx",
+    "**/*.test.mjs",
+    "**/*.test.cjs",
+    "**/*.spec.ts",
+    "**/*.spec.tsx",
+    "**/*.spec.js",
+    "**/*.spec.jsx",
+    "**/*.spec.mjs",
+    "**/*.spec.cjs",
+    "**/test/**/*",
+    "**/tests/**/*",
+    "**/__tests__/**/*",
+    "**/e2e/**/*",
+    "scripts/e2e-*.mjs",
+  ]),
+
+  /**
+   * The TypeScript half of the escape hatches, as regex SOURCE — compiled by
+   * `hatches.mjs` per call, never stored compiled, because a module-level
+   * global regex carries `lastIndex` between calls.
+   *
+   * Counted as OCCURRENCES (`matchAll`), not matching lines, and word-bounded.
+   * Unbounded `as any` counts "has any" and "was any" in prose: at the time
+   * this was measured that is 32 substring hits against 8 real ones. `grep -c`
+   * counts lines, which is a third number again. The fixture is the authority
+   * over all three.
+   *
+   * `tsIgnore` and `tsNocheck` were at zero when this list was written and are
+   * kept in it on purpose: the "a new kind of escape hatch appeared" tripwire
+   * needs a NAME to fire on, and a kind absent from this list can never fire.
+   * `tsExpectError` was at 1, not 0 — `packages/web/src/hostUrl.ts:184`, a
+   * deliberate variadic passthrough. Worth stating because the brief this was
+   * written from asserted zero: a hand-counted baseline is exactly the kind of
+   * number the fixture exists to replace.
+   *
+   * `todo` and `fixme` are NOT here. They are `common`'s, and `census.mjs`
+   * refuses a merge in which two packs claim one kind name — the tripwire
+   * fires on the name, so a shadowed kind is a tripwire that silently reports
+   * somebody else's count.
+   */
+  hatchKinds: Object.freeze({
+    colonAny: ":\\s*any\\b",
+    asAny: "\\bas any\\b",
+    asUnknownAs: "\\bas unknown as\\b",
+    eslintDisable: "eslint-disable",
+    tsIgnore: "@ts-ignore\\b",
+    tsExpectError: "@ts-expect-error\\b",
+    tsNocheck: "@ts-nocheck\\b",
+  }),
+
+  /**
+   * Which tree entries are dependency manifests, as regex SOURCE over the
+   * repo-relative path.
+   *
+   * A `package.json` AT ANY DEPTH, generalised from the
+   * `^packages/([^/]+)/package\.json$` that `snapshot.mjs` used to hardcode.
+   * That pattern was a statement about one monorepo's layout: it found this
+   * repo's four workspace manifests and would find nothing at all in a repo
+   * that keeps its packages under `apps/` or `libs/`, or in a single-package
+   * project whose only manifest is at the root — which the old pattern handled
+   * only by naming `package.json` a second time, as a special case, in the
+   * caller. Depth is not a property of a manifest.
+   *
+   * `snapshot.mjs` applies the shared excluded-directory check to the result,
+   * so a committed `node_modules/*​/package.json` — or one under `vendor/` —
+   * is not counted as this project's own declaration.
+   */
+  manifestPath: "(?:^|/)package\\.json$",
+
+  /**
+   * `{pkg, deps, devDeps}` per manifest, or `null` when the tree has none.
+   *
+   * `null` and `[]` are different claims and only `null` is honest here: "this
+   * commit has no manifest" is not "this project depends on nothing", and
+   * `classics.mjs` turns the absence into `deps: null` rather than a row of
+   * zeros.
+   *
+   * `pkg` is the manifest's DIRECTORY, `"."` for one at the repo root. It used
+   * to be the bare workspace name (`web`, and `root` for the root one), which
+   * is a label that cannot survive two manifests of the same basename at
+   * different depths — and which quietly assumed every manifest is exactly two
+   * segments deep. A directory path is unique by construction.
+   *
+   * `deps` and `devDeps` are counted separately and never summed: a runtime
+   * dependency ships and is in the attack surface, a dev dependency is a
+   * build-time cost. Unparseable JSON counts as zero of each rather than
+   * throwing — a malformed manifest at some historical sha must not take the
+   * whole backfill down.
+   *
+   * @param {{path: string, oid: string}[]} entries  Already filtered to
+   *   `manifestPath` and to paths no excluded directory contains.
+   * @param {(entry: {path: string, oid: string}) => string} textOf
+   */
+  manifests(entries, textOf) {
+    if (entries.length === 0) return null;
+    return entries
+      .map((e) => {
+        const slash = e.path.lastIndexOf("/");
+        const pkg = slash === -1 ? "." : e.path.slice(0, slash);
+        let json = {};
+        try {
+          json = JSON.parse(textOf(e));
+        } catch {
+          json = {};
+        }
+        return {
+          pkg,
+          deps: Object.keys(json.dependencies ?? {}).length,
+          devDeps: Object.keys(json.devDependencies ?? {}).length,
+        };
+      })
+      .sort((a, b) => (a.pkg < b.pkg ? -1 : a.pkg > b.pkg ? 1 : 0));
+  },
+
+  /**
+   * Every `dir/name` key one test file's text names.
+   *
+   * The corpus is tokenised ONCE into a Set and each candidate module then
+   * asks the Set about the handful of keys its own path could answer to. The
+   * obvious loop — one regex per candidate module over every test file, per
+   * commit, over the whole history — is hundreds of gigabytes scanned to
+   * answer a set-membership question.
+   *
+   * A reference is normalised against the file that wrote it, so `./x` and
+   * `../dist/x.js` mean exactly one directory, and a leading `/` is treated as
+   * repo-relative because in this corpus that shape is a URL.
+   *
+   * @param {string} text  The test file's contents.
+   * @param {string} path  Its repo-relative path — relative specifiers resolve
+   *   against this, which is what makes `./` references carry a directory at
+   *   all and what stops `./api.js` in a web test naming the host's `api.ts`.
+   * @param {{requireDir?: boolean}} [opts]  `requireDir: false` restores the
+   *   bare-basename rule `PREREG.UNTESTED_REQUIRE_DIR_SEGMENT` switches off.
+   *   Kept exact, so turning that constant off restores the previous
+   *   definition and not a third one — a fallback that differs from what it
+   *   replaces is a metric nobody can reproduce.
+   * @returns {Set<string>}
+   */
+  mentions(text, path, opts = {}) {
+    const requireDir = opts.requireDir !== false;
+    const base = dirSegments(path ?? "");
+    const out = new Set();
+    for (const m of text.matchAll(PATH_REF)) {
+      if (!requireDir) {
+        if (m[3] || m[1]) out.add(m[2]);
+        continue;
+      }
+      const dir = resolveDir(m[1], base);
+      // No directory at all is the bare basename — the case the rule rejects.
+      if (dir.length) out.add(dir.join("/") + "/" + m[2]);
+    }
+    return out;
+  },
+
+  /**
+   * Every `dir/name` key the module at `path` answers to: each non-empty
+   * suffix of its own directory, and of its compiled mirror.
+   *
+   * Suffixes rather than the full path alone, because a test may name only
+   * part of the path (`web/src/link`); non-empty, because the empty suffix is
+   * the bare basename the rule exists to reject.
+   *
+   * The `src` → `dist` mirror is the TypeScript-specific half and is why this
+   * function is in a pack: the host tests import compiled output, so
+   * `packages/host/src/echo.ts` must also answer to `packages/host/dist/echo`.
+   * The mirror is generated on the MODULE side rather than rewritten on the
+   * mention side, so what a test actually wrote is never edited before it is
+   * compared.
+   *
+   * @param {string} path
+   * @returns {string[]}
+   */
+  keysFor(path) {
+    const name = basename(path);
+    const segs = dirSegments(path);
+    const mirrors = segs.includes("src") ? [segs, segs.map((s) => (s === "src" ? "dist" : s))] : [segs];
+    const keys = [];
+    for (const dir of mirrors) {
+      for (let i = 0; i < dir.length; i++) keys.push(dir.slice(i).join("/") + "/" + name);
+    }
+    return keys;
+  },
+
+  /**
+   * The parser `dups` and `deadExports` need, or `null` when it cannot be
+   * loaded.
+   *
+   * `null` is not a failure path to be smoothed over: it is the reason those
+   * two metrics can say "nothing read this code" instead of reporting zero
+   * duplicate pairs over a tree no analyzer opened. `analyzerReason` is the
+   * sentence that travels with the absence.
+   *
+   * The two memos inside `lang/typescript-ast.mjs` are keyed by blob oid,
+   * which names the same bytes forever, so `blocks` and `idents` may be called
+   * once per file per commit without re-parsing anything.
+   *
+   * @returns {{blocks: Function, idents: Function} | null}
+   */
+  analyzer() {
+    const ts = loadTypeScript();
+    if (!ts) return null;
+    return {
+      /**
+       * Signed duplicate-candidate blocks of one source file.
+       * @param {{oid: string, path: string, text: string}} file
+       * @param {{minLines: number, shingle: number, hashes: number, nested: boolean}} params
+       */
+      blocks: (file, params) => signedBlocks(ts, file.oid, file.path, file.text, params),
+      /**
+       * `{exports, identifiers}` of one file. A test file has no blob oid in
+       * the snapshot, so its text hashes to a content key instead — same memo,
+       * same guarantee that a key names one set of bytes.
+       * @param {{oid?: string, path: string, text: string}} file
+       */
+      idents: (file) => identsOf(ts, file.oid ?? contentKey(file.text), file.path, file.text),
+    };
+  },
+
+  /** The sentence `dups` and `deadExports` print when `analyzer()` is null. */
+  analyzerReason: NO_TYPESCRIPT,
+});

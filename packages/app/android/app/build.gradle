@@ -1,0 +1,199 @@
+apply plugin: 'com.android.application'
+
+// ── Two distributions, two signing keys, one codebase ────────────────────
+//
+// `dev`  — the owner's own dogfood build (`dev.waterplane.app.dev`): self-update
+//          of the shell APK, quiet updates of other apps. Signed with the
+//          owner's keystore from `keystore-dev.properties` when that file is
+//          there, else with the debug key so a fresh checkout still builds.
+// `play` — the Google Play build (`dev.waterplane.app`, permanent once
+//          uploaded): never installs itself, never installs anything quietly.
+//          A RELEASE of it is signed with the Play UPLOAD key and refuses to
+//          build without one; a debug build of it uses the debug key.
+//
+// Both properties files and every keystore are gitignored (../.gitignore).
+// The page learns which one it runs in by asking the shell
+// (`ShellInstall.status().distribution`), never at build time: the web bundle
+// is shared and updates over the air.
+
+/** storeFile/storePassword/keyAlias/keyPassword from a properties file next to
+ *  the root project, or null when the file is absent. A relative storeFile
+ *  resolves against packages/app/android, where the properties file lives. */
+def keystoreFrom = { String name ->
+    def f = rootProject.file(name)
+    if (!f.isFile()) return null
+    def p = new Properties()
+    f.withInputStream { p.load(it) }
+    def missing = ['storeFile', 'storePassword', 'keyAlias', 'keyPassword'].findAll { !p.getProperty(it) }
+    if (missing) throw new GradleException("${name} is missing ${missing.join(', ')} — see packages/app/README.md, Build")
+    return [storeFile: rootProject.file(p.getProperty('storeFile')), storePassword: p.getProperty('storePassword'),
+            keyAlias: p.getProperty('keyAlias'), keyPassword: p.getProperty('keyPassword')]
+}
+
+/** The Play upload key: `keystore-play.properties`, else four Gradle properties
+ *  (`-PplayUploadStoreFile=…`, or ORG_GRADLE_PROJECT_playUploadStoreFile in the
+ *  environment), else the plain env names PLAY_UPLOAD_STORE_FILE etc. */
+def playUploadKey = { ->
+    def fromFile = keystoreFrom('keystore-play.properties')
+    if (fromFile) return fromFile
+    def read = { String prop, String envName -> (project.findProperty(prop) ?: System.getenv(envName)) as String }
+    def store = read('playUploadStoreFile', 'PLAY_UPLOAD_STORE_FILE')
+    if (!store) return null
+    def k = [storeFile: rootProject.file(store),
+             storePassword: read('playUploadStorePassword', 'PLAY_UPLOAD_STORE_PASSWORD'),
+             keyAlias: read('playUploadKeyAlias', 'PLAY_UPLOAD_KEY_ALIAS'),
+             keyPassword: read('playUploadKeyPassword', 'PLAY_UPLOAD_KEY_PASSWORD')]
+    def missing = k.findAll { key, v -> !v }.keySet()
+    if (missing) throw new GradleException("Play upload key: a store file is set but ${missing.join(', ')} is not — see packages/app/README.md, Build")
+    return k
+}
+
+def devKey = keystoreFrom('keystore-dev.properties')
+def playKey = playUploadKey()
+
+android {
+    namespace = "dev.waterplane.app"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "dev.waterplane.app"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 2
+        versionName "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    buildFeatures {
+        // The flavor's facts below reach Java as BuildConfig fields.
+        buildConfig = true
+    }
+    signingConfigs {
+        if (devKey) {
+            ownerDev {
+                storeFile devKey.storeFile
+                storePassword devKey.storePassword
+                keyAlias devKey.keyAlias
+                keyPassword devKey.keyPassword
+            }
+        }
+        if (playKey) {
+            playUpload {
+                storeFile playKey.storeFile
+                storePassword playKey.storePassword
+                keyAlias playKey.keyAlias
+                keyPassword playKey.keyPassword
+            }
+        }
+    }
+    flavorDimensions = ["distribution"]
+    productFlavors {
+        dev {
+            dimension "distribution"
+            // Side by side with a Play install, and on a different key: the two
+            // can never update each other, so they must not share an id.
+            applicationIdSuffix ".dev"
+            buildConfigField "String", "DISTRIBUTION", '"dev"'
+            // May install a build of ITSELF (the shell APK updating itself).
+            buildConfigField "boolean", "SELF_UPDATE", "true"
+            // May ask for USER_ACTION_NOT_REQUIRED and update ownership.
+            buildConfigField "boolean", "QUIET_INSTALLS", "true"
+        }
+        play {
+            dimension "distribution"
+            buildConfigField "String", "DISTRIBUTION", '"play"'
+            // Play policy: an app from Play is updated only by Play.
+            buildConfigField "boolean", "SELF_UPDATE", "false"
+            // Play policy: every install of another app goes through the
+            // system's confirm dialog — no silent path, no update ownership.
+            buildConfigField "boolean", "QUIET_INSTALLS", "false"
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+// Signing per variant, decided in one place: a flavor-level signingConfig loses
+// to the debug build type's implicit debug key, so the choice is made here.
+// dev (debug AND release) takes the owner's key where it exists — a dev build
+// signed one way cannot update one signed the other; play release takes the
+// upload key; play debug keeps AGP's default, the debug key.
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        if (variant.flavorName == 'dev') {
+            // No owner key on this machine: the debug key, release included,
+            // so today's flow keeps working on a fresh checkout.
+            variant.signingConfig.setConfig(devKey ? android.signingConfigs.ownerDev : android.signingConfigs.debug)
+        } else if (variant.flavorName == 'play' && variant.buildType == 'release' && playKey) {
+            variant.signingConfig.setConfig(android.signingConfigs.playUpload)
+        }
+    }
+}
+
+// A play release without the upload key must fail HERE, by name — not produce
+// an unsigned artifact that fails at upload. Checked when the build runs, so a
+// dev build or an IDE sync never trips over it.
+tasks.matching { it.name == 'prePlayReleaseBuild' }.configureEach {
+    doFirst {
+        if (!playKey) {
+            throw new GradleException(
+                "The play release needs the Play UPLOAD key and none is configured. Put " +
+                "storeFile/storePassword/keyAlias/keyPassword in packages/app/android/keystore-play.properties, " +
+                "or pass -PplayUploadStoreFile=… with playUploadStorePassword, playUploadKeyAlias and " +
+                "playUploadKeyPassword (ORG_GRADLE_PROJECT_… in the environment works too), or set " +
+                "PLAY_UPLOAD_STORE_FILE, PLAY_UPLOAD_STORE_PASSWORD, PLAY_UPLOAD_KEY_ALIAS, PLAY_UPLOAD_KEY_PASSWORD. " +
+                "See packages/app/README.md, Build.")
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    // The background link (ShellLinkService).
+    //
+    // OkHttp for the WebSocket: the platform ships no WebSocket client, and the
+    // one property this socket is built around — liveness by PROTOCOL ping
+    // rather than a JSON heartbeat, so the host's ws library auto-pongs and the
+    // radio wakes twice an hour instead of five times a minute — is one line of
+    // OkHttp (`pingInterval`) and a few hundred of hand-rolled RFC 6455.
+    //
+    // WorkManager for the backstop: it is the only scheduler here that survives
+    // process death and a reboot, which is the entire job. Its 15-minute floor
+    // is why it is the backstop and not the transport.
+    implementation "com.squareup.okhttp3:okhttp:$okhttpVersion"
+    implementation "androidx.work:work-runtime:$workManagerVersion"
+    // ShellKeystorePlugin: BiometricPrompt with a CryptoObject (BIOMETRIC_STRONG).
+    implementation "androidx.biometric:biometric:1.1.0"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

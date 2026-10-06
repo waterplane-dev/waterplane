@@ -1,0 +1,12 @@
+[
+  {
+    "id": "release",
+    "name": "Release APK",
+    "cmd": "./gradlew --console=plain assembleRelease"
+  },
+  {
+    "id": "debug",
+    "name": "Debug APK",
+    "cmd": "./gradlew --console=plain assembleDebug"
+  }
+]

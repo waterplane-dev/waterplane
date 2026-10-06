@@ -1,0 +1,750 @@
+/**
+ * Heuristic detector for Claude Code's interactive choice prompts, so the
+ * phone can show one-tap Yes/No buttons and fire a push notification instead
+ * of leaving the session silently blocked.
+ *
+ * It works on the cleaned (ANSI-stripped) tail of the PTY scrollback. Claude
+ * renders numbered options ("1. Yes" / "2. No") with a "❯" cursor and a
+ * "Enter to confirm · Esc to cancel" footer. We look for ≥2 consecutive
+ * numbered options near the end of the buffer.
+ */
+import type { DetectedPrompt, PromptOption } from "@waterplane/shared";
+// The composer's own full-width rules, above and below its input row. Shared
+// with `echo.ts`, which anchors the delivery echo on the same box — the
+// CONSTANT only, and deliberately not the input row: the one below accepts a
+// plain `>` because a shell stub's prompt is a composer for the purpose of
+// retiring a box, and `echo.ts` explains at length why that is exactly wrong
+// when the question is "is the user's text sitting in the box right now".
+import { COMPOSER_RULE_RE } from "./echo.js";
+
+// Strip ANSI/CSI escape sequences and carriage returns. The last two alternatives
+// matter more than they look: the claude TUI emits charset designators (ESC ( B)
+// and single-char escapes constantly, and a strip that only knows CSI leaves the
+// "(B" tail behind as literal text — which is exactly how garbage like
+// "My recommendation(B" ended up rendered as a one-tap option label.
+const ANSI = /\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[PX^_].*?\x1b\\|\x1b\][^\x07]*(?:\x07|\x1b\\)|\x1b[()*+][A-Za-z0-9]|\x1b[=>78MDEHcZ]|\r/g;
+
+/** Strip ANSI/CSI escapes + CRs — shared by prompt and usage-limit detection. */
+export function stripAnsi(text: string): string {
+  return text.replace(ANSI, "");
+}
+const clean = stripAnsi;
+
+/**
+ * An option row, with an optional ONE-CHARACTER marker in front of the index.
+ * The marker is deliberately not an allow-list of cursor glyphs: whatever draws
+ * it (the "\u276f" cursor, a bullet, or a substitution artefact from a terminal
+ * that mangled the glyph) sits in that column, and a marker we don't recognise
+ * used to make the row stop parsing ENTIRELY — so option 1 vanished, the run
+ * read "first index is not 1", and a real choice box published nothing at all.
+ * Only "\u276f" ever counts as PROOF of a cursor; the rest just parses.
+ */
+const OPTION_RE = /^\s*(?:(\S)\s+)?(\d+)\.\s+(.+?)\s*$/;
+/**
+ * A panel drawn to the RIGHT of the options — the preview pane the newer
+ * question box renders beside its choices — occupies the same ROWS, so an
+ * option's label runs straight into that panel's border and its contents. Cut
+ * at the column gap before the first box-drawing character: a real label never
+ * contains one after two spaces, and without this the one-tap buttons read
+ * "New Files sheet     \u250c\u2500\u2500\u2500\u2510".
+ */
+const SIDE_PANEL_RE = /\s{2,}[\u2500-\u257f].*$/;
+/** Multi-select rows carry their own checkbox: "1. [ ] Prose questions". */
+const CHECKBOX_RE = /^\[( |x|X|\u2713)\]\s*/;
+/** Real option labels are short. Anything longer is prose that happens to be numbered. */
+const MAX_LABEL = 160;
+/**
+ * Options a published box may carry, whatever the screen and the log between
+ * them produce.
+ *
+ * The strict parse caps its own run at 8 (below). Two things can legitimately
+ * exceed that afterwards — `askbox.ts` recovering a tall box's scrolled-off head
+ * (its own cap is 12 of the tool's options, and the TUI draws two rows of its
+ * own after them), and `mergeBox` keeping an index a later repaint no longer
+ * shows — so the union needs a bound of its own or a wire message has none.
+ * 14 is the widest box those two rules can honestly produce.
+ */
+export const MAX_BOX_OPTIONS = 14;
+/** Rows scanned upward from the tail. A multi-select box with a description line
+ *  per option plus a wrapped question is far taller than a Yes/No box. */
+const WINDOW = 80;
+/**
+ * Non-option rows tolerated BETWEEN two numbered options. The tool-approval box
+ * has none; AskUserQuestion puts a (wrapped) description under every option, so
+ * demanding a contiguous run found only the last two rows, read "first index is
+ * not 1" and published nothing — the whole box was invisible to the phone.
+ * Bounded so an unrelated numbered line far above can't be glued onto a run.
+ */
+const GAP_MAX = 8;
+/** Rows above option 1 joined back into the question (it wraps). */
+const QUESTION_LINES = 4;
+const QUESTION_MAX = 300;
+/** What a box whose question row has scrolled off the top is published with.
+ *  Named because `sameBox` has to tell "nobody read the question" from "the
+ *  question is this". */
+export const PLACEHOLDER_QUESTION = "Claude is waiting for a choice";
+
+const FOOTER_RE = /enter to (confirm|select)|esc to (cancel|exit|interrupt)/i;
+/**
+ * The footer of an interactive DIALOG specifically — "esc to interrupt" (the
+ * TUI's working line, printed by every busy session) is excluded on purpose, so
+ * this stays a cheap "something is asking you something" test.
+ */
+export const DIALOG_FOOTER_RE = /enter to (confirm|select)|esc to cancel/i;
+/**
+ * The same footer with every space removed. Not paranoia: the TUI repaints a row
+ * by ERASING a cell and stepping over it (`ESC[1X ESC[C`) rather than writing the
+ * space back, so an ANSI-stripped BYTE window of a live dialog reads
+ * "Entertoselect". The cheap pre-gate runs on exactly such a window, and matching
+ * only the spaced form meant a real choice box never bought the render that would
+ * have published it — no approve bar, no push, nothing.
+ */
+const DIALOG_FOOTER_COMPACT_RE = /enterto(confirm|select)|esctocancel/i;
+
+/**
+ * The rows the CLI draws only when it is accepting TYPING again — its composer.
+ *
+ * The detector scans upward and had no bottom anchor at all, which was fine
+ * while the reasoning was "an alt screen is repainted, so what is on it is what
+ * is up". This CLI does not use an alt screen: it scrolls, and the strict pass
+ * reads the last 60 rendered LINES — so a box answered thirty seconds ago is
+ * still in that window, still carries its cursor and its footer, and was
+ * re-detected on every check until the conversation pushed it out. That is a
+ * published approve bar for a question nobody is being asked, an
+ * `awaitingInput` interlock holding everything queued for the session, and — the
+ * report this came from — a panel over a live console. "Only the strict
+ * verifier clears it" clears nothing while the strict verifier keeps finding
+ * the corpse.
+ *
+ * Ground truth, three real captures off claude v2.1.236 (the workspace-trust
+ * box, a Bash permission box, the resume-from-summary box): while a dialog is
+ * open the CLI draws NO composer — the footer is the last non-blank row. Once
+ * the box is answered the composer comes back under it. So "is a composer drawn
+ * below this box" is the same question as "has this box been answered", asked of
+ * something structural rather than of a row count: the count was tried first and
+ * a shell stub that echoes a shell prompt per Return sat in exactly the same
+ * range as a real composer.
+ *
+ * Failure direction is deliberate. A composer we do not recognise (upstream
+ * redraws it) reads as "no composer", i.e. the old behaviour — a box that
+ * lingers. The opposite mistake would retire a LIVE box and take the approve bar
+ * with it, and that is the one this file must never make.
+ */
+/** The status line under it: the mode, and the shortcuts hint. */
+const COMPOSER_HINT_RE = /shift\+tab to cycle|\? for shortcuts|for shortcuts$/i;
+/** Its input row — "\u276f " with something that is not a numbered option after it. */
+const COMPOSER_INPUT_RE = /^[\u276f>]\s/;
+
+/** Is this rendered row part of the CLI's composer? */
+function isComposerRow(raw: string): boolean {
+  const line = raw.trim();
+  if (!line) return false;
+  if (COMPOSER_RULE_RE.test(line)) return true;
+  if (COMPOSER_HINT_RE.test(line)) return true;
+  const bare = line.replace(/^[\u2502\u2503|]\s*/, "").replace(/[\u2502\u2503|]\s*$/, "").trim();
+  return COMPOSER_INPUT_RE.test(bare) && !OPTION_RE.test(bare);
+}
+
+/** Does this text carry an interactive dialog's footer? Tolerates a repaint that
+ *  swallowed the spaces (see `DIALOG_FOOTER_COMPACT_RE`). */
+export function hasDialogFooter(text: string): boolean {
+  return DIALOG_FOOTER_RE.test(text) || DIALOG_FOOTER_COMPACT_RE.test(text.replace(/\s+/g, ""));
+}
+
+/**
+ * The same question asked of a RENDERED screen: is a dialog still up, or has
+ * the CLI moved on past it?
+ *
+ * `hasDialogFooter` is the right rule for a byte window, which has no bottom to
+ * speak of. A screen has one, and without it the interlock read an answered box
+ * — still sitting in the last 60 rendered lines with the conversation drawn
+ * under it — as a session parked on a question: silent, "waiting", and holding
+ * everything queued for it. Deliberately as loose as `hasDialogFooter` about
+ * WHAT the row says (this is the interlock, and a false wait is the cheap
+ * error); all that is added is whether the CLI has since started taking typing
+ * again. See `isComposerRow`.
+ */
+export function dialogStillUp(screen: string): boolean {
+  const lines = clean(screen).split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    if (hasDialogFooter(line)) return true;
+    if (isComposerRow(lines[i])) return false;  // the CLI takes typing again: that box is answered
+  }
+  return false;
+}
+
+// ── Was there actually a box, or only words that read like one? ────────────
+/**
+ * `hasDialogFooter` asks a deliberately cheap question — "is anything possibly
+ * asking you something?" — and it is the right rule for the SAFETY INTERLOCK
+ * that sits on it: a session parked on a dialog must not be typed into, a false
+ * wait costs a queue a few seconds, and a false clear types a prompt into a
+ * question box. Loose is correct there.
+ *
+ * It is the wrong rule for a CLAIM ABOUT THE DETECTOR, and the two got joined.
+ * A claude session displaying our OWN prose about this file — an agent editing
+ * `prompt.ts`, a reader view of `CLAUDE.md`, a code review of `e2e-prompt.mjs` —
+ * puts the words "Esc to cancel" on the screen inside a sentence. The cheap gate
+ * fires, the strict pass then correctly refuses to parse a paragraph as a choice
+ * box, and the app recorded that CORRECT REFUSAL as a miss against the
+ * choice-box detector. Four of nine on the live host, reported to the user as a
+ * detector failing 44% of the time while it was in fact working perfectly. A
+ * health signal that cries wolf is worse than no signal: the board it sits on
+ * gets ignored, and then the real break goes unread too.
+ *
+ * This is the same hazard as the standing repo rule that keeps usage-limit
+ * banner phrases out of strings and comments, one layer up: there, printing the
+ * phrase makes the app act; here, printing it makes the app REPORT. And there is
+ * no reliable way to tell a session rendering our source from one that is not —
+ * it is the same terminal, the same bytes, and an agent's own reasoning about
+ * TUI chrome is indistinguishable from TUI chrome by construction. So the answer
+ * cannot be "detect the self-reference"; it has to be evidence that a box is
+ * really there.
+ *
+ * Which is what this returns. Two independent things, both of which a paragraph
+ * lacks:
+ *
+ *   • the footer drawn as its OWN ROW — a row made of key hints and nothing
+ *     else, which is a thing the TUI paints and not a thing a sentence contains;
+ *   • something above it to choose from — the "❯" selection cursor, or numbered
+ *     option rows.
+ *
+ * Requiring both means a box whose rows AND cursor have all become unreadable
+ * at once records nothing rather than a miss, and that trade is taken
+ * deliberately: a detector that has gone completely blind stops recording
+ * `good`s too, and `clihealth.ts` keeps `unknown` as a state distinct from
+ * `healthy` precisely so that silence is legible. Under-reporting degrades to
+ * "I cannot say"; over-reporting degrades to a chip nobody taps.
+ */
+
+/** Separators the TUI puts between key hints — and the two-space gap it uses
+ *  when it draws none. */
+const HINT_SPLIT_RE = /\s*[·•|,;]\s*|\s{2,}/;
+/**
+ * One key hint, ANCHORED AT BOTH ENDS: a key, at most a word or two of noun
+ * ("Tab/Arrow keys"), the word "to", and a one- or two-word verb.
+ *
+ * The anchors are the whole point. "Esc to cancel" as a segment of its own is a
+ * footer; "…the login screen's Esc to cancel footer already…" is a sentence
+ * that contains one, and only an anchored match can tell them apart. The verb
+ * tail is capped at two words for the same reason — "cancel footer already"
+ * is three.
+ */
+const KEY_HINT_RE = /^\S{1,20}(?:\s+\S{1,15}){0,2}\s+to\s+[a-z]+(?:\s+[a-z]+)?$/i;
+/** A row that is nothing but the "❯" selection cursor and what it points at. */
+const CURSOR_ROW_RE = /^❯(?:\s|$)/;
+/** Rows above the footer that still belong to the same box. Same reasoning as
+ *  `NAV_SPAN`: a checkbox box with a wrapped description under every option is
+ *  tall, and anything further up is the conversation. */
+const BOX_ROWS = 40;
+/** A footer row is chrome, so it is short. Prose that survives the anchors by
+ *  accident usually does not. */
+const FOOTER_ROW_MAX = 120;
+
+/** Strip the box-drawing frame the way the detector's own scan does, so a
+ *  footer inside a bordered panel reads the same as a bare one. */
+function unframe(line: string): string {
+  return line.replace(/^[│┃|╮╯╰╭─\s]+/, "").replace(/[│┃|─\s]+$/, "").trim();
+}
+
+/**
+ * Is this line the dialog's footer ROW — i.e. made of key hints, one of which
+ * is a dialog hint — rather than a paragraph containing the words?
+ */
+export function isDialogFooterRow(rawLine: string): boolean {
+  const line = unframe(rawLine);
+  if (!line || line.length > FOOTER_ROW_MAX) return false;
+  // The repaint-swallowed-spaces form has no segments to split; it is only ever
+  // seen on a BYTE window (the render puts real spaces in real cells), but a
+  // short row that says nothing else is a footer either way.
+  if (!DIALOG_FOOTER_RE.test(line)) {
+    return line.length <= 40 && DIALOG_FOOTER_COMPACT_RE.test(line.replace(/\s+/g, ""));
+  }
+  const segments = line.split(HINT_SPLIT_RE).map((s) => s.trim()).filter(Boolean);
+  // Every segment must be a hint, and the dialog phrase must live inside one of
+  // them WHOLE. One prose clause on the row is enough to make it a sentence.
+  return segments.length > 0
+    && segments.every((s) => KEY_HINT_RE.test(s))
+    && segments.some((s) => DIALOG_FOOTER_RE.test(s));
+}
+
+export interface DialogEvidence {
+  /** The footer, drawn as its own row. */
+  footerRow: boolean;
+  /** The "❯" selection cursor, on a row belonging to that box. */
+  cursor: boolean;
+  /** Numbered option rows belonging to it. */
+  options: number;
+  /**
+   * The composer's own STATUS LINE inside that span — so what is up is the CLI's
+   * own inline picker (a slash command's menu, `/effort`, `/model`), not a
+   * question the agent asked.
+   *
+   * The second false alarm on the live host, and the same shape as the first:
+   * `/effort` draws a real footer row ("Enter to select · ↑/↓ to navigate · Esc
+   * to cancel") with a "❯" on the highlighted row and NO numbered options,
+   * because it has none. Footer plus cursor is the evidence rule, so every trip
+   * to that menu filed a miss against a detector that had nothing of its shape
+   * to parse. Seven all-time, permanently amber, which is how a board teaches
+   * the person reading it to stop reading it.
+   *
+   * Only the status line counts, deliberately. The "❯" INPUT row cannot be used:
+   * a box whose options renumbered upstream (`1)` for `1.`) leaves "❯ 1) Yes",
+   * which fails `OPTION_RE` and reads exactly like a composer — and that is the
+   * one miss this signal exists to record. A modal box never draws the mode
+   * line, being the last thing on screen.
+   */
+  composer: boolean;
+  /** A footer row AND something above it to choose from AND no composer under
+   *  it: a box is really up, so a strict parse that came back empty is a MISS
+   *  and not a refusal. */
+  box: boolean;
+}
+
+/** What the rendered screen says about whether a dialog is actually open. */
+export function dialogEvidence(screen: string): DialogEvidence {
+  const lines = clean(screen).split("\n");
+  let footer = -1;
+  for (let i = lines.length - 1; i >= 0; i--) if (isDialogFooterRow(lines[i])) { footer = i; break; }
+  if (footer < 0) return { footerRow: false, cursor: false, options: 0, composer: false, box: false };
+  let cursor = false;
+  let options = 0;
+  let composer = false;
+  for (let i = Math.max(0, footer - BOX_ROWS); i < footer; i++) {
+    const line = unframe(lines[i]);
+    if (!line) continue;
+    if (COMPOSER_HINT_RE.test(line)) composer = true;
+    if (CURSOR_ROW_RE.test(line)) cursor = true;
+    const m = OPTION_RE.exec(line);
+    if (m) {
+      options++;
+      if (m[1] === "❯") cursor = true;
+    }
+  }
+  return { footerRow: true, cursor, options, composer, box: !composer && (cursor || options > 0) };
+}
+
+export interface DetectOpts {
+  /**
+   * Cheap-stage mode: the caller only wants to know whether it's worth paying
+   * for a VT render, so the two pieces of evidence a repaint-shuffled byte
+   * window is most likely to have LOST are not required — the "❯" selection
+   * cursor and the "Enter to confirm · Esc to cancel" footer both live on their
+   * own rows, and a repaint can leave them outside any given byte window while
+   * the option rows sit inside it. Requiring them in the cheap stage turns a
+   * real prompt into no candidate at all, i.e. no approve bar and no push.
+   *
+   * Structural sanity (>=2 options, indices 1..N, short labels) still applies —
+   * it costs nothing and keeps prose from triggering constant renders. The
+   * strict pass over the RENDERED screen is what actually gets published, so a
+   * lenient candidate can never surface as a phantom prompt.
+   */
+  lenient?: boolean;
+}
+
+export function detectPrompt(rawTail: string, opts: DetectOpts = {}): DetectedPrompt | null {
+  const text = clean(rawTail);
+  const lines = text.split("\n").map((l) => l.replace(/[\u2502\u2503|]\s*$/, "").trimEnd());
+
+  // Scan from the bottom: collect a run of numbered options, newest-first. The
+  // run may be interrupted by each option's own description rows (multi-select),
+  // so a non-option row is a GAP, not the end of the box.
+  const options: PromptOption[] = [];
+  const questionParts: string[] = [];
+  let footerSeen = false;
+  /** The DIALOG footer specifically. `FOOTER_RE` also matches "esc to interrupt"
+   *  \u2014 the TUI's working line, printed by every busy session \u2014 which is fine as
+   *  weak evidence but is NOT proof a box is open. */
+  let dialogFooterSeen = false;
+  let cursorSeen = false;
+  let multi = false;
+  let gap = 0;
+  /** A composer row walked past below the box — see `isComposerRow`. */
+  let composerBelow = false;
+  let boxSeen = false;
+
+  for (let i = lines.length - 1; i >= 0 && i > lines.length - WINDOW; i--) {
+    // Asked BEFORE the blank test: the composer's own rules unframe to nothing,
+    // and a row read as blank would never be seen at all.
+    if (!boxSeen && !options.length && isComposerRow(lines[i])) { composerBelow = true; continue; }
+    const line = lines[i].replace(/^[\u2502\u2503|\u256e\u256f\u2570\u256d\u2500\s]+/, "").replace(/[\u2502\u2503|]+$/, "").trim();
+    if (!line) {
+      // A blank row ends the question: above it is the conversation, not the box.
+      if (options[0]?.index === 1 && questionParts.length) break;
+      continue;
+    }
+    if (FOOTER_RE.test(line)) {
+      footerSeen = true;
+      boxSeen = true;
+      if (DIALOG_FOOTER_RE.test(line)) dialogFooterSeen = true;
+      continue;
+    }
+
+    const m = OPTION_RE.exec(lines[i].trim()) || OPTION_RE.exec(line);
+    const idx = m ? Number(m[2]) : 0;
+    // Indices must descend by exactly one as we walk up, so a stray "2." inside a
+    // description can't extend the run.
+    if (m && (!options.length || idx === options[0].index - 1)) {
+      // Only "\u276f" proves a selection cursor. ">" still PARSES (an ASCII-cursor
+      // box must keep detecting) but never counts as proof: a markdown blockquoted
+      // list in the assistant's prose ("> 1. first") is exactly that shape.
+      if (m[1] === "\u276f") cursorSeen = true;
+      let label = m[3].replace(SIDE_PANEL_RE, "").trim();
+      const box = CHECKBOX_RE.exec(label);
+      if (box) { multi = true; label = label.slice(box[0].length).trim(); }
+      options.unshift({ index: idx, label });
+      gap = 0;
+      boxSeen = true;
+      continue;
+    }
+    if (!options.length) continue;            // still below the box (conversation, tabs, …)
+    if (options[0].index === 1) {             // above the box: this is the question, wrapped
+      questionParts.unshift(line);
+      if (questionParts.length >= QUESTION_LINES) break;
+      continue;
+    }
+    if (++gap > GAP_MAX) break;               // too far from the next option — run is broken
+  }
+
+  if (options.length < 2) return null;
+  // The CLI is taking typing again below this box: it was answered, and
+  // re-publishing it is a question nobody is being asked. See `isComposerRow`.
+  if (!opts.lenient && composerBelow) return null;
+  // A real choice box always carries a selection cursor ("\u276f 1. Yes") or the
+  // "Enter to confirm \u00b7 Esc to cancel" footer. Without either, a numbered list
+  // in the assistant's own prose ("1. Now: \u2026 2. Then: \u2026 3. \u2026") reads as a prompt
+  // \u2014 which is what made phantom approve-bars flicker in and out mid-answer.
+  if (!opts.lenient && !footerSeen && !cursorSeen) return null;
+  /**
+   * The run may start ABOVE 1 \u2014 a box with six options and a wrapped description
+   * each is TALLER than a phone's terminal, so the CLI scrolls its own top away
+   * and option 1 is simply not on screen.
+   *
+   * Requiring index 1 there was not a missing feature, it was an oscillator: the
+   * strict pass published null, the approve panel unmounted, the terminal grew
+   * back the ~200 px the panel had taken, the PTY was resized, claude repainted
+   * a box that now FIT \u2014 and the panel came back. About once a second, exactly
+   * the "renders and hides" the phone shows.
+   *
+   * Dropping the anchor is only safe with real evidence of a dialog, so it is
+   * conditioned on the strict pass: the LENIENT gate has neither footer nor
+   * cursor to lean on and keeps index 1 as its one defence against prose that
+   * happens to be numbered. What is published is what is legible \u2014 the indices
+   * are still exactly what a keystroke means, and `truncated` says the top is
+   * missing rather than pretending the box starts here.
+   */
+  const first = options[0].index;
+  if (first < 1) return null;
+  /**
+   * Dropping the index-1 anchor needs PROOF of a box, not merely evidence: the
+   * assistant's own prose can be a numbered list, and a busy session prints
+   * "esc to interrupt" on its working line the whole time \u2014 so `footerSeen`
+   * alone would read "2. \u2026 3. \u2026" mid-answer as a truncated dialog. The
+   * dialog footer or the "\u276f" cursor is the evidence that a real box is open,
+   * and the lenient gate (which has neither by design) keeps the anchor.
+   */
+  if (first !== 1 && (opts.lenient || !(dialogFooterSeen || cursorSeen))) return null;
+  if (options.some((o) => !o.label || o.label.length > MAX_LABEL)) return null;
+  if (options.some((o, i) => o.index !== first + i)) return null;
+
+  const questionLine = questionParts.join(" ").replace(/\s+/g, " ").trim().slice(0, QUESTION_MAX);
+  const blob = (questionLine + " " + options.map((o) => o.label).join(" ")).toLowerCase();
+  let kind: DetectedPrompt["kind"] = "select";
+  if (/trust|created or one you/.test(blob)) kind = "trust";
+  else if (/proceed|want to (make|run|create|edit|allow)|don't ask again|approve/.test(blob)) kind = "tool";
+  else if (/plan|ready to code|proceed with/.test(blob)) kind = "plan";
+
+  return {
+    kind,
+    question: questionLine || PLACEHOLDER_QUESTION,
+    // Sliced from the FRONT: on a truncated box the rows that survived are the
+    // ones nearest the footer, and dropping them would leave the cap holding
+    // options the user cannot see either.
+    options: options.slice(0, 8),
+    ...(multi ? { multi: true } : {}),
+    ...(first > 1 ? { truncated: true } : {}),
+  };
+}
+
+// ── Placing the cursor on a checkbox box's Submit row ──────────────────────
+/**
+ * The COMMIT row of a multi-select box. It carries no index — the numbered rows
+ * are the checkboxes plus the TUI's own trailing actions — so it is matched on
+ * the word alone, with the same optional one-character marker in front that an
+ * option row tolerates ("❯  Submit").
+ *
+ * **The word is not always "Submit".** Read off the installed binary (claude
+ * 2.1.267): the multi-select list is handed
+ * `submitButtonText: <on the last question> ? "Submit" : "Next"`, so an
+ * `AskUserQuestion` carrying SEVERAL questions draws "Next" on every question
+ * but the last. Matching "Submit" alone therefore found no commit row at all on
+ * exactly those boxes — `navToSubmit` returned null, `submitPromptBox` fell back
+ * to a bare Return, and a bare Return on a checkbox box re-toggles whatever row
+ * the cursor is sitting on and leaves the box open. That is the health board's
+ * "Placing the cursor on a multi-select Submit row" going red.
+ *
+ * The two words are kept APART in what is published (`SubmitNav.label`): Return
+ * on "Next" moves to the next question rather than answering, and a button that
+ * says Submit while the TUI says Next is a claim about what a tap will do.
+ *
+ * The marker slot is the CURSOR GLYPH only, unlike `OPTION_RE`'s deliberately
+ * permissive one. There the loose slot is a defence — an unrecognised marker
+ * used to cost the whole option row. Here it is the opposite: the row is two
+ * common words, so `- Next` or `# Next` in the agent's own prose inside the
+ * scan window would read as a commit row. "Newest box wins" hides that while
+ * the real row is on screen; restricting the slot means it cannot be the
+ * target when the real row has scrolled off either. An unrecognised cursor
+ * glyph costs the walk, which falls back to the bare Return it always did.
+ */
+const SUBMIT_ROW_RE = /^(?:(❯)\s+)?(Submit|Next)$/;
+/** Screen rows scanned upward. Same reasoning as WINDOW: a checkbox box with a
+ *  description under every option is tall. */
+const NAV_WINDOW = 80;
+/** How far a navigable row may sit from the Submit row and still count as part
+ *  of the same box — an older box scrolled above must not join the run. */
+const NAV_SPAN = 40;
+
+export interface SubmitNav {
+  /**
+   * Selectable ROWS between the cursor and the Submit row: positive means press
+   * Down that many times, negative Up, 0 means the cursor is already there.
+   *
+   * Rows, not screen lines — every option draws a wrapped description under its
+   * label, and the arrow keys step over those.
+   */
+  steps: number;
+  /** The word the TUI drew on that row — `Submit` or `Next`. See
+   *  `SUBMIT_ROW_RE`: they are different acts and the phone says which. */
+  label: "Submit" | "Next";
+}
+
+/**
+ * Where the selection cursor is, relative to the box's Submit row.
+ *
+ * A checkbox box is answered by TOGGLING rows and then pressing Return **on the
+ * Submit row** — Return anywhere else toggles whatever the cursor is sitting on.
+ * The phone's Submit button used to send a bare Return, which therefore did the
+ * one thing it must never do: it re-toggled option 1 (where the cursor starts)
+ * and left the box open. The keystroke only means "submit" once the cursor has
+ * been walked there, which is what this measures.
+ *
+ * Returns null when the screen does not show BOTH a Submit row and a cursor —
+ * a box taller than the terminal can have scrolled either off, and guessing a
+ * direction there would toggle a row nobody chose. The caller falls back to the
+ * bare Return, i.e. to what it did before.
+ */
+export function navToSubmit(screen: string): SubmitNav | null {
+  const lines = clean(screen)
+    .split("\n")
+    .map((l) => l.replace(/^[│┃|╮╯╰╭─\s]+/, "").replace(/[│┃|]+$/, "").trim());
+  const rows: { line: number; cursor: boolean; submit: boolean; label?: "Submit" | "Next" }[] = [];
+  for (let i = Math.max(0, lines.length - NAV_WINDOW); i < lines.length; i++) {
+    const sub = SUBMIT_ROW_RE.exec(lines[i]);
+    if (sub) { rows.push({ line: i, cursor: sub[1] === "❯", submit: true, label: sub[2] as "Submit" | "Next" }); continue; }
+    const m = OPTION_RE.exec(lines[i]);
+    // Only rows the arrows can land on. A description line that happens to start
+    // with a number is filtered by the same shape test the detector uses.
+    if (m) rows.push({ line: i, cursor: m[1] === "❯", submit: false });
+  }
+  // Newest box wins, and only its own rows count.
+  let sIdx = -1;
+  for (let i = rows.length - 1; i >= 0; i--) if (rows[i].submit) { sIdx = i; break; }
+  if (sIdx < 0) return null;
+  const near = rows.filter((r) => Math.abs(r.line - rows[sIdx].line) <= NAV_SPAN);
+  const s = near.indexOf(rows[sIdx]);
+  // The cursor nearest the Submit row: two boxes in one scrollback would
+  // otherwise hand us the older one's marker and a wildly wrong distance.
+  let c = -1;
+  for (let i = 0; i < near.length; i++) {
+    if (!near[i].cursor) continue;
+    if (c < 0 || Math.abs(i - s) < Math.abs(c - s)) c = i;
+  }
+  if (c < 0) return null;
+  return { steps: s - c, label: rows[sIdx].label ?? "Submit" };
+}
+
+// ── Keeping one box ONE box while the TUI repaints under it ───────────────
+/**
+ * Two strict parses that are the same box on screen, seen at two moments.
+ *
+ * The strict pass runs about twice a second while a dialog is up, and what it
+ * reads is not stable: this CLI scrolls rather than repainting an alt screen,
+ * so panning the console, a repaint the phone's own answer card provoked, or a
+ * box taller than the terminal all change WHICH rows are legible from one pass
+ * to the next. Each of those re-published a different `DetectedPrompt` for a
+ * question nobody had touched — and because `promptFingerprint` is built from
+ * the question and the option rows, a re-publish is not cosmetic:
+ *
+ *   • the phone's card is keyed on the fingerprint, so collapsing it or hiding
+ *     it (the two ways to answer at the DESK instead) was undone on the next
+ *     repaint — the complaint this exists for;
+ *   • an answer already queued against the old fingerprint goes `stale`;
+ *   • `applyPrompt` fires a push per change.
+ *
+ * **Where the CLI will say which box this is, that is the answer.** `askId`
+ * (host `askbox.ts`) is the pending tool call's own id plus the question index
+ * inside it: minted by the CLI, written to the log before anybody answers, and
+ * untouched by any repaint. Two `AskUserQuestion` boxes in a row have different
+ * ones, so nothing here has to guess.
+ *
+ * The rest is the fallback, for a tool approval or a trust dialog — which carry
+ * no such call. Identity is then asked of the parts that cannot move: the kind,
+ * the shape (`multi`/`nav`), and the option rows at the indices the two passes
+ * SHARE. A label is compared by prefix in either direction, because the terminal
+ * cuts one and the log's enrichment does not. There the question IS compared
+ * whenever both passes read a real one, deliberately strictly: without an id
+ * there is nothing else standing between "this box again" and "the next box,
+ * whose buttons mean something else", and a wrong question over live buttons is
+ * the one mistake this must not make. Those boxes are three rows tall and do
+ * not truncate, so the strictness costs nothing they suffer from.
+ *
+ * Measured on a live shell: one box published its question three different ways
+ * inside four seconds — the detector joins up to four lines above option 1, and
+ * on a scrolling screen those lines are whatever is there.
+ */
+export function sameBox(a: DetectedPrompt, b: DetectedPrompt): boolean {
+  if (!!a.multi !== !!b.multi) return false;
+  if (!!a.nav !== !!b.nav) return false;
+  // Two ids that disagree is the cheapest NO there is.
+  if (a.askId && b.askId && a.askId !== b.askId) return false;
+  const named = !!a.askId && a.askId === b.askId;
+  // `kind` is DERIVED from the question and the labels, so a truncated pass
+  // that lost the question flips an ask containing "proceed"/"plan"/"approve"
+  // from `tool` to `select` — and `kind` is in the fingerprint, so testing it
+  // first made that class of box alternate between two identities on every
+  // pan, which is the complaint. Where the CLI has named the box, its own id
+  // outranks a reading of words that are not on screen.
+  if (!named && a.kind !== b.kind) return false;
+  if (!named) {
+    const qa = realQuestion(a);
+    const qb = realQuestion(b);
+    if (qa && qb && qa !== qb) return false;
+  }
+  // The rows still have to agree, NAMED OR NOT. The id says which question the
+  // log holds; it does not say the screen is still showing that question, and
+  // the matcher that produced it works on a handful of labels. Requiring the
+  // shared indices to line up costs nothing on a real repaint (they do) and is
+  // the difference between a card whose buttons answer this box and one whose
+  // buttons answer the last one.
+  const byIndex = new Map(a.options.map((o) => [o.index, o.label]));
+  let shared = 0;
+  let own = 0;
+  for (const o of b.options) {
+    const mine = byIndex.get(o.index);
+    if (mine === undefined) continue;
+    if (!labelsAgree(mine, o.label)) return false;
+    shared++;
+    // …and at least one agreement has to be about THIS box. The TUI appends
+    // its own rows to every question it draws ("Other", "Chat about this",
+    // "Type something"), so a new box whose top has scrolled away can present
+    // nothing but those — two generic rows agreeing with the previous box's
+    // two generic rows, which is no evidence at all. Measured as the path that
+    // glued a dead box's question and labels onto a live one.
+    if (!GENERIC_ROW_RE.test(mine.trim())) own++;
+  }
+  return shared > 0 && own > 0;
+}
+
+/**
+ * Rows the TUI draws on EVERY question of its own accord, after the tool's
+ * options. They are numbered like options and they say nothing about which box
+ * is on screen.
+ */
+const GENERIC_ROW_RE = /^(other|chat about this|type something\.?|none of these)$/i;
+
+/**
+ * Do two published boxes say the same thing? Field by field, because
+ * `JSON.stringify` also compares KEY ORDER — and the merge builds its object in
+ * its own order, so a byte comparison reported a change on the pass after every
+ * merge: one more broadcast, one more push, one more plugin event per box, for a
+ * card that had not moved.
+ */
+export function samePrompt(a: DetectedPrompt | null, b: DetectedPrompt | null): boolean {
+  if (!a || !b) return a === b || (!a && !b);
+  if (a.kind !== b.kind || a.question !== b.question) return false;
+  if (!!a.multi !== !!b.multi || !!a.nav !== !!b.nav || !!a.truncated !== !!b.truncated) return false;
+  if ((a.ask ?? "") !== (b.ask ?? "")) return false;
+  if ((a.askId ?? "") !== (b.askId ?? "")) return false;
+  if ((a.submitLabel ?? "") !== (b.submitLabel ?? "")) return false;
+  if (a.options.length !== b.options.length) return false;
+  return a.options.every((o, i) =>
+    o.index === b.options[i].index && o.label === b.options[i].label && (o.desc ?? "") === (b.options[i].desc ?? ""));
+}
+
+/**
+ * Fold a fresh parse of the SAME box into what is already published.
+ *
+ * The published box wins every field it has, and the new one may only ADD: an
+ * option index nobody had seen yet, a real question where the placeholder stood.
+ * That is what makes a box whose top has scrolled away keep the options it was
+ * published with — "the first options are scrolled away and therefore missing
+ * from the selection dialogue" — without the card ever changing shape under a
+ * thumb.
+ *
+ * Nothing here is invented: every option in the result was read off this
+ * screen, for this box, at some point while it was up.
+ */
+export function mergeBox(published: DetectedPrompt, parsed: DetectedPrompt): DetectedPrompt {
+  const byIndex = new Map(published.options.map((o) => [o.index, o]));
+  for (const o of parsed.options) {
+    // A published label is NEVER rewritten, not even by a longer reading of
+    // itself. It was tried the other way — "the screen cut this one, so the
+    // longer read is the truer one" — and it is the wrong trade twice over:
+    // the labels ARE the fingerprint, so growing one restarts the card and
+    // makes an answer queued against it stale, which is the whole thing this
+    // merge exists to stop; and a garbled read that happens to be longer (a
+    // panel border the side-panel cut missed) then wins permanently, since
+    // the correct shorter read can never take it back. A label the terminal cut
+    // is a label the card shows cut — and `desc`/`ask`, which carry the CLI's
+    // own full words, are what make that readable anyway.
+    if (!byIndex.has(o.index)) byIndex.set(o.index, o);
+  }
+  // Lowest indices first and capped there: the head is the half that scrolled
+  // away, so if anything has to go it is the tail — which is on screen.
+  const options = [...byIndex.values()].sort((x, y) => x.index - y.index).slice(0, MAX_BOX_OPTIONS);
+  const question = realQuestion(published) ? published.question : (realQuestion(parsed) ? parsed.question : published.question);
+  const ask = published.ask ?? parsed.ask;
+  const submitLabel = published.submitLabel ?? parsed.submitLabel;
+  // The freshest reading wins here, not the oldest: this is the CLI's own
+  // answer to "which box", and a pass that could not reach the log says
+  // nothing rather than something older.
+  const askId = parsed.askId ?? published.askId;
+  const truncated = options.length > 0 && options[0].index > 1;
+  // `nav` boxes lose their options off the RIGHT EDGE, not off the top, so the
+  // index-1 test says nothing about them: keep what the two passes agreed on.
+  const navTruncated = !!published.truncated && !!parsed.truncated;
+  const cut = published.nav ? navTruncated : truncated;
+  // Field by field rather than a spread of `published`: `truncated` has to be
+  // able to go AWAY (the head arrived, so nothing is unreachable any more), and
+  // a spread would carry the old `true` straight past the line that computed it.
+  return {
+    kind: published.kind,
+    question,
+    options,
+    ...(published.multi ? { multi: true as const } : {}),
+    ...(published.nav ? { nav: true as const } : {}),
+    ...(ask ? { ask } : {}),
+    ...(askId ? { askId } : {}),
+    ...(submitLabel ? { submitLabel } : {}),
+    ...(cut ? { truncated: true as const } : {}),
+  };
+}
+
+/** The question a pass actually read, or "" for the placeholder a truncated box
+ *  falls back to (`detectPrompt`). */
+function realQuestion(p: DetectedPrompt): string {
+  const q = p.question.replace(/\s+/g, " ").trim();
+  return q === PLACEHOLDER_QUESTION ? "" : q;
+}
+
+/** Same label, allowing for the end the terminal cut off. */
+function labelsAgree(a: string, b: string): boolean {
+  const x = a.replace(/\s+/g, " ").trim();
+  const y = b.replace(/\s+/g, " ").trim();
+  if (x === y) return true;
+  const short = x.length < y.length ? x : y;
+  const long = x.length < y.length ? y : x;
+  return short.length >= 6 && long.startsWith(short);
+}

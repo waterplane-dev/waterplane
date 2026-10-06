@@ -1,0 +1,61 @@
+# Who reviews what. The web client's feature folders get ONE LINE EACH, so a
+# change that stays inside one folder asks one owner, and a change that touches
+# the core (App.tsx, core/, sdk/) is visibly a different kind of change.
+# Adding a feature adds its line here — docs/notes/web-architecture.md.
+
+# The feature contract and the core side of it.
+/packages/web/src/sdk/                @johanneshoh
+/packages/web/src/core/               @johanneshoh
+/packages/web/src/core/conn/          @johanneshoh
+/packages/web/src/core/route/         @johanneshoh
+/packages/web/src/core/term/          @johanneshoh
+/packages/web/src/core/queue/         @johanneshoh
+/packages/web/src/core/launch/        @johanneshoh
+/packages/web/src/core/send/          @johanneshoh
+/packages/web/src/core/compose/       @johanneshoh
+/packages/web/src/core/settings/      @johanneshoh
+/packages/web/src/core/sessions/      @johanneshoh
+/packages/web/src/core/launcher/      @johanneshoh
+/packages/web/src/core/session/       @johanneshoh
+/packages/web/src/features/registry.ts @johanneshoh
+/packages/web/src/App.tsx             @johanneshoh
+
+# One line per packages/web/src/features/<name>/ below.
+/packages/web/src/features/authGate/ @johanneshoh
+/packages/web/src/features/sentLog/ @johanneshoh
+/packages/web/src/features/cliHealth/ @johanneshoh
+/packages/web/src/features/tokens/ @johanneshoh
+/packages/web/src/features/oracle/ @johanneshoh
+/packages/web/src/features/pull/ @johanneshoh
+/packages/web/src/features/clipboard/ @johanneshoh
+/packages/web/src/features/notifications/ @johanneshoh
+/packages/web/src/features/build/ @johanneshoh
+/packages/web/src/features/capture/ @johanneshoh
+/packages/web/src/features/limits/ @johanneshoh
+/packages/web/src/features/questions/ @johanneshoh
+/packages/web/src/features/search/ @johanneshoh
+/packages/web/src/features/history/ @johanneshoh
+/packages/web/src/features/scrollback/ @johanneshoh
+/packages/web/src/features/tools/ @johanneshoh
+/packages/web/src/features/context/ @johanneshoh
+/packages/web/src/features/fanout/ @johanneshoh
+/packages/web/src/features/snippets/ @johanneshoh
+/packages/web/src/features/toolbarCfg/ @johanneshoh
+/packages/web/src/features/schedule/ @johanneshoh
+/packages/web/src/features/backlog/ @johanneshoh
+/packages/web/src/features/activity/ @johanneshoh
+/packages/web/src/features/queue/ @johanneshoh
+/packages/web/src/features/setup/ @johanneshoh
+/packages/web/src/features/hostTools/ @johanneshoh
+/packages/web/src/features/hosts/ @johanneshoh
+/packages/web/src/features/pad/ @johanneshoh
+/packages/web/src/features/images/ @johanneshoh
+/packages/web/src/features/share/ @johanneshoh
+/packages/web/src/features/shells/ @johanneshoh
+/packages/web/src/features/shellLogins/ @johanneshoh
+/packages/web/src/features/sessionBudget/ @johanneshoh
+/packages/web/src/features/onboard/ @johanneshoh
+
+# In-repo extensions.
+/packages/extensions/token-stats/ @johanneshoh
+/packages/extensions/requirements/ @johanneshoh

@@ -1,0 +1,7 @@
+[
+  {
+    "id": "publish",
+    "name": "Publish page",
+    "cmd": "mkdir -p .claude/outbox && cp index.html .claude/outbox/{{name}}.html"
+  }
+]

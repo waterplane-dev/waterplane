@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!--
+    The dev flavor's launcher label. It installs BESIDE a Play build (its id
+    carries `.dev`), so the two icons on one phone must not read the same.
+    Only the labels are overridden; everything else comes from src/main.
+-->
+<resources>
+    <string name="app_name">waterplane dev</string>
+    <string name="title_activity_main">waterplane dev</string>
+</resources>

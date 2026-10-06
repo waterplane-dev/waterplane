@@ -1,0 +1,318 @@
+// The pure half of `publish-public.mjs`: no fs, no git, no process. Everything
+// here takes strings and returns data, so `public-lib.test.mjs` can pin it.
+//
+//   - allow-list matching (gitignore-style, LAST MATCH WINS, default = private)
+//   - the secret and personal-data scans, line by line
+//   - markdown link checking against the included set
+//   - CHANGELOG section extraction for the release commit body
+import { createHash } from "node:crypto";
+
+// ---------------------------------------------------------------- allow-list
+
+/** One glob (no leading `!`) to a regex source. `**` crosses `/`, `*` and `?` do not. */
+function globSource(glob) {
+  let out = "";
+  for (let i = 0; i < glob.length; i++) {
+    const c = glob[i];
+    if (c === "*") {
+      if (glob[i + 1] === "*") {
+        const atEnd = i + 2 >= glob.length;
+        const slashAfter = glob[i + 2] === "/";
+        const slashBefore = i > 0 && glob[i - 1] === "/";
+        if (slashAfter) { out += "(?:.*/)?"; i += 2; }          // `**/x`: any depth, including none
+        else if (atEnd && slashBefore) { out = out.slice(0, -1) + "/.*"; i += 1; } // `a/**`: everything below
+        else { out += ".*"; i += 1; }
+      } else out += "[^/]*";
+    } else if (c === "?") out += "[^/]";
+    else out += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+  }
+  return out;
+}
+
+/** Parse allow-list text into ordered rules. Comments and blanks are dropped. */
+export function parseAllowlist(text) {
+  const rules = [];
+  text.split(/\r?\n/).forEach((raw, idx) => {
+    let p = raw.trim();
+    if (!p || p.startsWith("#")) return;
+    let negate = false;
+    if (p.startsWith("!")) { negate = true; p = p.slice(1); }
+    else if (p.startsWith("\\")) p = p.slice(1); // `\#` / `\!` literal
+    const dirOnly = p.endsWith("/");
+    if (dirOnly) p = p.slice(0, -1);
+    const anchored = p.includes("/");
+    if (p.startsWith("/")) p = p.slice(1);
+    const src = globSource(p);
+    const re = new RegExp(anchored ? `^${src}$` : `^(?:.*/)?${src}$`);
+    rules.push({ raw: raw.trim(), line: idx + 1, negate, dirOnly, re });
+  });
+  return rules;
+}
+
+function ruleMatches(rule, path) {
+  const parts = path.split("/");
+  // A pattern that matches a directory covers everything under it.
+  for (let n = 1; n < parts.length; n++) if (rule.re.test(parts.slice(0, n).join("/"))) return true;
+  return !rule.dirOnly && rule.re.test(path);
+}
+
+/** `{ included, rule }`: the last matching rule decides; no match = private. */
+export function classify(path, rules) {
+  let decided = null;
+  for (const r of rules) if (ruleMatches(r, path)) decided = r;
+  return { included: !!decided && !decided.negate, rule: decided };
+}
+
+/**
+ * The in-repo extensions the allow-list keeps PRIVATE — the folder ids of its whole-folder carve-outs
+ * (`!packages/extensions/<id>/**`), in file order. The allow-list is the one record of that decision,
+ * so the guards (`tools/publictree.test.mjs`, `scripts/verify-public-tree.mjs`) read it from here and
+ * name no extension themselves.
+ */
+export function privateExtensions(text) {
+  const out = [];
+  for (const r of parseAllowlist(text)) {
+    const m = /^packages\/extensions\/([a-z0-9][a-z0-9-]*)\/\*\*$/.exec(r.raw.replace(/^!/, ""));
+    if (r.negate && m && !out.includes(m[1])) out.push(m[1]);
+  }
+  return out;
+}
+
+// ----------------------------------------------------------------- redaction
+
+export const lineHash = (rule, text) => createHash("sha1").update(`${rule}\n${text.trim()}`).digest("hex").slice(0, 10);
+/** What an `--accept` file lists: `path:line:hash`. */
+export const hitToken = (path, line, rule, text) => `${path}:${line}:${lineHash(rule, text)}`;
+
+export function parseAccept(text) {
+  return new Set(text.split(/\r?\n/).map((l) => l.replace(/\s+#.*$/, "").trim()).filter((l) => l && !l.startsWith("#")));
+}
+
+/** A secret is never printed whole, because the report lands in a phone gallery. */
+export const mask = (s) => (s.length <= 8 ? "****" : `${s.slice(0, 4)}…(${s.length})`);
+const excerpt = (line, at, len) => {
+  const start = Math.max(0, at - 30);
+  const s = line.slice(start, start + len).trim();
+  return (start > 0 ? "…" : "") + s + (line.length > start + len ? "…" : "");
+};
+
+// -------------------------------------------------------------------- secrets
+
+export const SECRET_RULES = [
+  { id: "private-key-block", re: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY(?: BLOCK)?-----/ },
+  { id: "aws-access-key", re: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/ },
+  { id: "gcp-service-account", re: /"type"\s*:\s*"service_account"/ },
+  { id: "gcp-private-key-field", re: /"private_key"\s*:\s*"-----BEGIN/ },
+  { id: "google-api-key", re: /\bAIza[0-9A-Za-z_-]{35}\b/ },
+  { id: "github-token", re: /\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{50,})\b/ },
+  { id: "npm-token", re: /\bnpm_[A-Za-z0-9]{36}\b/ },
+  { id: "anthropic-key", re: /\bsk-ant-[A-Za-z0-9_-]{20,}/ },
+  { id: "openai-key", re: /\bsk-(?!ant-)(?:proj-)?[A-Za-z0-9_-]{32,}/ },
+  { id: "slack-token", re: /\bxox[baprs]-[A-Za-z0-9-]{10,}/ },
+  { id: "jwt", re: /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/ },
+];
+
+/** Config-style files, where `password = value` is a credential and not code. */
+export const CONFIG_FILE_RE = /(?:\.(?:properties|ini|cfg|conf|toml|gradle|ya?ml|env)$|(?:^|\/)\.env(?:\.[^/]*)?$)/i;
+const PASSWORD_RE = /\b\w*password\w*\s*=\s*["']?([^\s"']+)/i;
+const PASSWORD_PLACEHOLDER_RE = /^(?:\$|<|\{|%|changeme|example|xxx|\*+$|null$|undefined$|process\.|System\.)/i;
+
+/** Files that are credentials by their name alone. */
+export const SECRET_FILE_RE = /\.(?:p8|p12|jks|keystore|pfx)$/i;
+
+// ------------------------------------------------------------------- personal
+
+const PLACEHOLDER_TS_LABEL_RE = /^(?:\*|<.*>|\{.*\}|\$.*|example|tailnet|tailnet-name|your-?tailnet|my-?tailnet|yourname|name|host|hostname|machine|device|desktop|laptop|foo|bar|baz|xxx+|x+|placeholder|something|mydesktop|my-?desktop|my-?machine|your-?host|your-?machine|\.\.\.?|tail(?:1234|5678|abcd|0000|x+)|tailnet\d*)$/i;
+const TS_NET_RE = /([A-Za-z0-9<>{}$*_-][A-Za-z0-9<>{}$*_.-]*)\.ts\.net\b/g;
+const CGNAT_RE = /(?<![\d.])100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.(\d{1,3})\.(\d{1,3})(?![\d])/g;
+const LAN_RE = /(?<![\d.])(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3})(?![\d])/g;
+/** The resolver every tailnet exposes, and the documentation-style obvious fakes. */
+const DOC_CGNAT_RE = /^100\.64\.0\.\d{1,3}$/; // the documentation-style range
+const OBVIOUS_CGNAT = new Set(["100.100.100.100", "100.64.0.0", "100.64.0.1", "100.101.102.103", "100.127.255.255", "100.100.0.0", "100.64.1.1", "100.100.1.1", "100.64.0.2"]);
+const IGNORED_EMAILS = new Set(["noreply@github.com", "noreply@anthropic.com"]);
+
+/** Build the machine's own identifiers once; `scanText` reuses them for every file. */
+export function buildContext({ emails = [], home = "", hostnames = [], extraNeedles = [] } = {}) {
+  const needles = [];
+  for (const e of new Set(emails.map((x) => x.trim().toLowerCase()).filter(Boolean))) {
+    if (!IGNORED_EMAILS.has(e) && e.includes("@")) needles.push({ rule: "personal-email", needle: e });
+  }
+  const homes = new Set();
+  if (home && home !== "/") {
+    homes.add(home);
+    const name = home.split("/").filter(Boolean).pop();
+    if (name && !/^(?:user|runner|me|root|ubuntu|node|home|app)$/i.test(name)) {
+      homes.add(`/Users/${name}`);
+      homes.add(`/home/${name}`);
+      // Claude Code encodes a project path as a dir name: /Users/x/dev -> -Users-x-dev.
+      homes.add(`-Users-${name}-`);
+      homes.add(`-home-${name}-`);
+    }
+  }
+  for (const h of homes) needles.push({ rule: "home-path", needle: h.toLowerCase() });
+  for (const h of new Set(hostnames.map((x) => x.trim().toLowerCase()).filter((x) => x.length >= 4 && x !== "localhost"))) {
+    needles.push({ rule: "hostname", needle: h });
+  }
+  for (const n of extraNeedles) needles.push(n);
+  return { needles };
+}
+
+const isDocsPath = (path) => /^docs\//.test(path) || /\.md$/i.test(path);
+
+/**
+ * Scan one text file. Returns `hits` (gate the release) and `warnings` (reported,
+ * never gate). Every entry carries `token` for the `--accept` file.
+ */
+export function scanText(path, text, ctx) {
+  const hits = [];
+  const warnings = [];
+  const config = CONFIG_FILE_RE.test(path);
+  const lines = text.split(/\r?\n/);
+  const push = (list, rule, category, i, line, at, shown) => {
+    list.push({ path, line: i + 1, rule, category, excerpt: shown ?? excerpt(line, at, 120), token: hitToken(path, i + 1, rule, line) });
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line) continue;
+    for (const r of SECRET_RULES) {
+      const m = r.re.exec(line);
+      if (m && !/EXAMPLE/.test(m[0])) push(hits, r.id, "secret", i, line, m.index, `${r.id}: ${mask(m[0])}`);
+    }
+    if (config) {
+      const m = PASSWORD_RE.exec(line);
+      if (m && !PASSWORD_PLACEHOLDER_RE.test(m[1]) && !/^\s*[#/;]/.test(line)) push(hits, "password-assignment", "secret", i, line, m.index, `password assignment: ${mask(m[1])}`);
+    }
+    const lower = line.toLowerCase();
+    for (const n of ctx.needles) {
+      const at = lower.indexOf(n.needle);
+      if (at >= 0) push(hits, n.rule, "personal", i, line, at);
+    }
+    for (const m of line.matchAll(CGNAT_RE)) {
+      if (!OBVIOUS_CGNAT.has(m[0]) && !DOC_CGNAT_RE.test(m[0])) push(hits, "tailscale-ip", "personal", i, line, m.index);
+    }
+    for (const m of line.matchAll(TS_NET_RE)) {
+      const label = m[1].split(".").pop();
+      if (!PLACEHOLDER_TS_LABEL_RE.test(m[1]) && !PLACEHOLDER_TS_LABEL_RE.test(label)) push(hits, "ts-net-name", "personal", i, line, m.index);
+    }
+    for (const m of line.matchAll(LAN_RE)) {
+      push(warnings, isDocsPath(path) ? "lan-ip-docs" : "lan-ip", "lan", i, line, m.index);
+    }
+  }
+  return { hits, warnings };
+}
+
+/** Name-only checks (no content): a key store present at all is a hit. */
+export function scanPath(path) {
+  if (!SECRET_FILE_RE.test(path)) return [];
+  return [{ path, line: 0, rule: "key-file", category: "secret", excerpt: "credential file present", token: hitToken(path, 0, "key-file", "") }];
+}
+
+// ------------------------------------------------------------------ changelog
+
+/** The body of `## <version> ...` up to the next `## `, or null. */
+export function extractChangelogSection(text, version) {
+  const lines = text.split(/\r?\n/);
+  const v = version.replace(/^v/, "");
+  const head = new RegExp(`^##\\s+\\[?v?${v.replace(/[.+^${}()|[\]\\]/g, "\\$&")}\\]?(?:\\s|$|[—–-])`);
+  const start = lines.findIndex((l) => head.test(l));
+  if (start < 0) return null;
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i++) if (/^##\s/.test(lines[i])) { end = i; break; }
+  const body = lines.slice(start + 1, end).join("\n").trim();
+  return body || null;
+}
+
+// ---------------------------------------------------------------------- links
+
+const posixDirname = (p) => (p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "");
+/** Resolve `target` against `dir` without touching a filesystem; null if it escapes the root. */
+export function resolveRel(dir, target) {
+  const out = target.startsWith("/") ? [] : dir.split("/").filter(Boolean);
+  for (const seg of target.split("/")) {
+    if (seg === "" || seg === ".") continue;
+    if (seg === "..") { if (!out.length) return null; out.pop(); } else out.push(seg);
+  }
+  return out.join("/");
+}
+
+const stripFences = (md) => md.replace(/^(```|~~~)[^\n]*\n[\s\S]*?^\1[^\n]*$/gm, (m) => m.replace(/[^\n]/g, " "));
+
+/**
+ * Links and path mentions in one markdown file that point at something that is
+ * not in the snapshot. `kind: "excluded"` = exists in the private tree but is
+ * not published; `"missing"` = exists nowhere (broken already).
+ */
+export function checkLinks(path, md, { included, tracked, includedDirs }) {
+  const found = [];
+  const body = stripFences(md);
+  const dir = posixDirname(path);
+  const lines = body.split("\n");
+  const consider = (target, via, i) => {
+    let t = target.trim().replace(/^<|>$/g, "");
+    if (!t || /^(?:[a-z][a-z0-9+.-]*:|#|\/\/)/i.test(t)) return;
+    t = t.replace(/[?#].*$/, "");
+    if (!t) return;
+    // A markdown link is relative to its file, but skills and CLAUDE.md also write
+    // repo-root paths in link position: accept either reading before calling it broken.
+    const cands = [resolveRel(via === "link" ? dir : "", t), via === "link" ? resolveRel("", t) : null]
+      .filter((c) => c !== null && c !== "").map((c) => c.replace(/\/$/, ""));
+    if (!cands.length) return;
+    if (cands.some((c) => included.has(c) || includedDirs.has(c))) return;
+    const bare = cands.find((c) => tracked.has(c) || [...tracked].some((p) => p.startsWith(`${c}/`))) ?? cands[0];
+    const existsPrivately = tracked.has(bare) || [...tracked].some((p) => p.startsWith(`${bare}/`));
+    if (via === "mention" && !existsPrivately) return; // prose that merely looks like a path
+    found.push({ path, line: i + 1, target: t, resolved: bare, kind: existsPrivately ? "excluded" : "missing", via });
+  };
+  lines.forEach((line, i) => {
+    for (const m of line.matchAll(/!?\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) consider(m[1], "link", i);
+    const ref = /^\s{0,3}\[[^\]]+\]:\s*(\S+)/.exec(line);
+    if (ref) consider(ref[1], "link", i);
+    for (const m of line.matchAll(/`([\w@.-]+(?:\/[\w@.-]+)+\.md)`/g)) consider(m[1], "mention", i);
+  });
+  return found;
+}
+
+/** Every directory that holds at least one of the given files. */
+export function dirsOf(paths) {
+  const out = new Set();
+  for (const p of paths) {
+    const parts = p.split("/");
+    for (let n = 1; n < parts.length; n++) out.add(parts.slice(0, n).join("/"));
+  }
+  return out;
+}
+
+// ------------------------------------------------------------------- grouping
+
+/** Group a path list for a report: one row per two-level prefix. */
+export function groupPaths(paths) {
+  const groups = new Map();
+  for (const p of paths) {
+    const parts = p.split("/");
+    const key = parts.length === 1 ? "(root)" : parts.length === 2 ? parts[0] : `${parts[0]}/${parts[1]}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(p);
+  }
+  return [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+}
+
+export const topDir = (p) => (p.includes("/") ? p.slice(0, p.indexOf("/")) : "(root)");
+
+/**
+ * What `scripts/verify-public-tree.mjs` runs inside the copied public tree, in order. `stop`: a
+ * failure there ends the run (nothing after an install or a build means anything); the others all
+ * run so one report lists every failure. `npm ci` is the copy's OWN install (its package.json,
+ * package-lock.json and .npmrc) — never a link to this checkout's node_modules, which proved only
+ * that the tree runs on dependencies it may not declare. `e2e`: comma-separated run-e2e filters.
+ */
+export function verifySteps({ e2e = null } = {}) {
+  const steps = [
+    { cmd: "npm", args: ["ci"], stop: true },
+    { cmd: "npm", args: ["run", "build"], stop: true },
+    { cmd: "npm", args: ["run", "lint"], stop: false },
+    { cmd: "npm", args: ["run", "test:unit"], stop: false },
+    { cmd: "npm", args: ["run", "test:host"], stop: false },
+  ];
+  if (e2e) steps.push({ cmd: "node", args: ["scripts/run-e2e.mjs", ...String(e2e).split(",").filter(Boolean)], stop: false });
+  return steps;
+}

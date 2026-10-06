@@ -1,0 +1,30 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+.env
+.env.local
+packages/*/dist/
+dist-release/
+dist-demo/
+*.tsbuildinfo
+# `.claude/*` and not `.claude/`, because git cannot re-include anything below an
+# excluded DIRECTORY — and the project skills below have to be re-included: they
+# are the on-demand half of CLAUDE.md and carry rules this repo depends on.
+.claude/*
+!.claude/skills/
+.usmc
+.waterplane/
+
+# Android signing keys, wherever they land — the owner's dev key and the Play
+# upload key must never be committed (packages/app/README.md, Build).
+*.jks
+*.keystore
+keystore-dev.properties
+keystore-play.properties
+
+# waterplane phone↔repo transport — do not commit
+.claude/inbox
+.claude/outbox
+.outbox
+

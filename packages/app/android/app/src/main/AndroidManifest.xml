@@ -1,0 +1,333 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+        `usesCleartextTraffic` is REQUIRED, not a convenience. Since API 28 the
+        platform blocks plain HTTP by default, and the daemon's normal address is
+        plain `http://100.x.y.z:8770` over Tailscale — an HTTPS front door needs
+        `tailscale serve`, which is exactly the setup step this app exists to stop
+        requiring. Without this flag every API call and the WebSocket fail with a
+        cleartext-not-permitted error and the app looks permanently offline.
+
+        The exposure is bounded by what the app can reach at all: the user types
+        one host address (validated to http/https only, see shared/hosturl.ts) and
+        nothing else is ever contacted. The transport is already inside a
+        Tailscale tunnel, which is where this project's confidentiality comes from
+        — see SECURITY.md.
+    -->
+    <!--
+        `enableOnBackInvokedCallback` is stated rather than inherited. Targeting
+        SDK 36 the platform treats it as on anyway from Android 15 up, but on
+        Android 13 and 14 the default is OFF, and there Back reaches the app
+        through the old `onBackPressed` path instead of the callback AndroidX
+        registers. Declaring it means one code path — MainActivity's
+        `OnBackPressedCallback` — on every version the app runs on, rather than
+        two that have to be reasoned about separately every time Back changes.
+    -->
+    <application
+        android:allowBackup="true"
+        android:usesCleartextTraffic="true"
+        android:enableOnBackInvokedCallback="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+
+        <!--
+            `windowSoftInputMode="adjustResize"`: the shell lays out edge to edge
+            (MainActivity.takeOverWindowInsets), and an edge-to-edge window is not
+            resized by the platform when the keyboard opens — the app is handed an
+            IME inset and is expected to make room itself, which the inset listener
+            does. Stating the mode keeps the pre-R path, where the platform still
+            does the resizing, on the same behaviour instead of whatever
+            `adjustUnspecified` picks per screen.
+        -->
+        <activity
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:name=".MainActivity"
+            android:label="@string/title_activity_main"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize"
+            android:exported="true">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!--
+                Pairing: the host's /pair/<code> landing page links here once
+                the APK is installed (`waterplane://pair?u=<base>&c=<code>`).
+                `singleTask` above means a live app receives it in onNewIntent;
+                MainActivity parks it until the page's `shellPair` takes it.
+                Any app can fire this link, so the page treats it as a
+                suggestion the person confirms, never as a command.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="waterplane" android:host="pair" />
+            </intent-filter>
+
+            <!--
+                Share → waterplane, from any app's share sheet (ShellShare). Every
+                type, one file or many, or plain text: the page asks where it
+                goes (this session, another, a new one) and then routes it the
+                way the compose bar's camera and paperclip do.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+
+        </activity>
+
+        <!--
+            The background link (ShellLinkService). Backgrounded, this app used to
+            do nothing at all: with no foreground service the process drops to
+            the cached bucket within minutes and Android 12+'s cached-app
+            freezer suspends it whole — JS, timers, socket. The service's first
+            job is done merely by existing, which is what keeps the page's own
+            `ws.ts` running unchanged.
+
+            `specialUse`, and NOT `dataSync`, is the load-bearing choice.
+            Android 15+ caps a `dataSync` foreground service at roughly six
+            hours per 24-hour window, then calls `onTimeout()` and refuses
+            background restarts — a "permanent connection" built on it stops
+            working overnight, which is precisely the failure this app exists to
+            prevent — and Android 15 also bans starting one from
+            BOOT_COMPLETED, which would take the recovery path with it.
+            `specialUse` has no timeout and is allowed from a boot receiver. Its
+            only cost is a Play Store policy review: the `play` flavor has to
+            declare and justify it in the Play Console (the subtype text below
+            is that justification); the `dev` flavor is sideloaded.
+
+            `stopWithTask="false"`: swiping the app out of Recents is not
+            "switch the link off". The service is exactly what the app has when
+            its process is gone.
+        -->
+        <service
+            android:name=".ShellLinkService"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Holds one WebSocket to the user's own self-hosted waterplane daemon on their private network, so the daemon's notifications (a waiting question, a usage limit) reach the phone while the app is closed, and so the app's offline send queue is not frozen. There is no push service behind an Android WebView and no cloud component in this product." />
+        </service>
+
+
+        <!--
+            The download engine (ShellPullService). `web/pull.ts` is a complete
+            resumable downloader and in the APK it stopped dead every time the
+            user switched apps: the foreground link service keeps the PROCESS
+            unfrozen, but Chromium freezes the DOCUMENT on its own 300 s after
+            `visibilitychange` (measured — see ShellLinkService), and the pump,
+            the retry timer, the stall fuses and the fetch loop are all inside
+            it. So the transfer runs here instead.
+
+            `dataSync`, and NOT `specialUse` like the link service, because the
+            shapes are opposite. Android 15's ~6h-per-24h cap on `dataSync` is
+            what makes it wrong for a permanent connection and irrelevant for a
+            download, which is bounded and measured in minutes; `dataSync` is
+            the type that honestly describes moving a file. Its one consequence
+            is that Android 15+ refuses a background START — an enqueue made
+            while the app is already backgrounded is caught, the row stays
+            queued, and it runs when the app is next opened.
+
+            `stopWithTask="false"`: swiping the app out of Recents must not
+            cancel a 90 MB transfer half way. The service stops itself when the
+            queue drains.
+        -->
+        <service
+            android:name=".ShellPullService"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!--
+            The two recovery paths for a service an OEM killer, a low-memory
+            kill or a reboot took down. Both are no-ops until the user switches
+            the link on: `startIfEnabled` reads the stored flag first.
+        -->
+        <receiver
+            android:name=".ShellBootReceiver"
+            android:exported="true"
+            android:directBootAware="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!--
+            Where every install ends up (ShellInstallReceiver). The
+            PackageInstaller answers a PendingIntent, and this is the only thing
+            that ever sends to it — hence `exported="false"`. It is also where
+            "the platform wants a confirmation" is turned into a NOTIFICATION
+            when the app is in the background: an activity start from there is
+            refused by the platform, and a row stuck at "installing" waiting for
+            a dialog nobody can see is the failure that would replace it.
+        -->
+        <receiver
+            android:name=".ShellInstallReceiver"
+            android:exported="false" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths"></meta-data>
+        </provider>
+    </application>
+
+    <!-- Permissions -->
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+        ShellKeystorePlugin: a fingerprint unlocks a Keystore key for one
+        operation. A normal permission, granted at install time; inert until a
+        page calls the plugin.
+    -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+
+    <!--
+        The background link. Every one of these is dormant until the user turns
+        the feature on: the service is started by nothing but an explicit
+        plugin call, and the boot receiver returns immediately while the stored
+        flag is unset.
+
+        `FOREGROUND_SERVICE_SPECIAL_USE` for the LINK — see the service
+        declaration above for why that distinction decides whether it still
+        works at 4 a.m. The download engine below takes `_DATA_SYNC`, which is
+        the right type for a transfer and the wrong one for a connection.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!--
+        The download engine, which is a `dataSync` service — see the
+        ShellPullService declaration above for why it is not `specialUse` like
+        the link, and why the 6h cap that rules `dataSync` out there does not
+        apply to a transfer that finishes.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!--
+        The Wi-Fi name, for the per-host LAN auto-route (ShellNetPlugin). Android
+        treats an SSID as location, so reading it needs FINE location granted at
+        runtime and the system location switch on; without them the name reads
+        as unknown and the LAN route simply never auto-selects. Requested only
+        when the person turns LAN switching on for a host. The name is compared
+        on the phone with the names saved for each host and is never sent
+        anywhere. `ACCESS_WIFI_STATE` (install-time) is what the pre-API-31
+        WifiManager read needs.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+
+    <!--
+        Declared so the app can send the user to the exemption screen and read
+        back whether it was granted.
+
+        `BatteryLife` is suppressed with an argument, not out of convenience.
+        Lint's objection is aimed at apps that opt out of power management to
+        keep doing ordinary work; here the exemption is what makes the RECOVERY
+        paths legal — an app the system may doze cannot start a foreground
+        service from the background, which is exactly what the boot receiver and
+        the WorkManager health check do. It is offered, never demanded: the link
+        runs without it and degrades to "a notification in the next Doze
+        maintenance window", never to silence. And nothing here requests the
+        direct-grant dialog — `ShellLinkPlugin` opens the Settings screen and
+        lets the user decide.
+    -->
+    <uses-permission
+        android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+        tools:ignore="BatteryLife" />
+
+    <!--
+        Push-to-talk dictation (`web/useVoice.ts`). Capacitor's
+        BridgeWebChromeClient already answers the WebView's `AUDIO_CAPTURE`
+        permission request by asking the platform for these two — but a runtime
+        request for a permission the manifest does not DECLARE is denied
+        instantly, with no dialog, and Android's app-info screen lists only
+        declared permissions. So without these lines the microphone fails the
+        one way that cannot be diagnosed from the phone: no prompt to approve
+        and no switch to flip. `getUserMedia` then rejects, and `useVoice`
+        reports it as "this app has no permission to use the microphone".
+
+        `MODIFY_AUDIO_SETTINGS` is an install-time permission and prompts for
+        nothing; it rides along because the same request asks for both, and a
+        partial grant is a denied grant.
+    -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+    <!--
+        Installing a build this app downloaded (Installs / ShellInstallReceiver).
+
+        `REQUEST_INSTALL_PACKAGES` is only half of it: the platform also keeps a
+        per-app "install unknown apps" switch that nothing but the person can
+        turn on, which is why `canRequestPackageInstalls()` is asked before any
+        install verb is drawn and the row offers the Settings screen instead of
+        a button that would fail.
+
+        `UPDATE_PACKAGES_WITHOUT_USER_ACTION` — the quiet-update half — is NOT
+        here: it is declared by the `dev` flavor only (src/dev/AndroidManifest.xml).
+        The `play` build must not declare it, and installs every app through the
+        system's confirm dialog (BuildConfig.QUIET_INSTALLS, Installs.java).
+
+        A normal permission, granted at install time, and inert until the person
+        allows this app to install apps at all.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!--
+        "Is this package already installed?" (Installs.isInstalled) decides
+        whether a build may install itself — and from Android 11 the answer is
+        filtered: another app's package is INVISIBLE unless the manifest says
+        which apps it wants to see. Without this, getPackageInfo threw
+        NameNotFound for every app not installed by waterplane itself, so each new
+        build read as a first install and the automatic path skipped it with
+        auto-install switched on. The packages are whatever a repo builds, so
+        they cannot be listed here; every app a person installs to use has a
+        launcher entry, and this query makes exactly those visible — narrower
+        than QUERY_ALL_PACKAGES.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
+    <!--
+        Saving a downloaded artifact out of the app and into the phone's own
+        Downloads (ShellSavePlugin). API 29+ does this through MediaStore with no
+        permission at all, which is why this is capped at 28 — asking for broad
+        storage access on a modern phone would be both a scary prompt and, since
+        Android 10, ignored. `minSdkVersion` is 24, so the older path still has to
+        exist; there it is a real filesystem path and needs the runtime grant.
+    -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+</manifest>

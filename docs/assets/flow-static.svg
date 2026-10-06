@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 640" width="900" height="640" role="img" aria-label="Your phone, a waterplane web app or Android app, reaches your desktop over Tailscale, encrypted, with no waterplane server and no account. On the desktop the waterplane daemon types into the real claude CLI running in a PTY, which works in your repos; the screen, screenshots from .claude/outbox and files come back to the phone, scheduled jobs fire against the weekly usage window while the phone sleeps, and a web push wakes it. Optional: other phones that get your APK builds installed (Android app development only), and a peer desktop that takes delegated jobs.">
+<title>waterplane: phone, Tailscale, desktop</title>
+<desc>Your phone, a waterplane web app or Android app, reaches your desktop over Tailscale, encrypted, with no waterplane server and no account. On the desktop the waterplane daemon types into the real claude CLI running in a PTY, which works in your repos; the screen, screenshots from .claude/outbox and files come back to the phone, scheduled jobs fire against the weekly usage window while the phone sleeps, and a web push wakes it. Optional: other phones that get your APK builds installed (Android app development only), and a peer desktop that takes delegated jobs.</desc>
+<style>
+:root{--fg:#1f2328;--muted:#59636e;--line:#c8d1da;--panel:#f6f8fa;--card:#ffffff;--sea:#0f6b73;--seaSoft:rgba(15,107,115,.08);--out:#1f5fbf;--back:#a8620a;--push:#c4432b;--screen:#0a1b28;--dim:rgba(10,27,40,.94)}
+@media (prefers-color-scheme: dark){:root{--fg:#e6edf3;--muted:#9aa4ae;--line:#3d444d;--panel:#151b23;--card:#0d1117;--sea:#4fb8b2;--seaSoft:rgba(79,184,178,.10);--out:#6ea8fe;--back:#f5a93f;--push:#ec6f55;--screen:#050d14;--dim:rgba(0,0,0,.9)}}
+svg{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.t-cap{font-size:20px;font-weight:600;fill:var(--fg)}
+.t-h{font-size:18px;font-weight:600;fill:var(--fg)}
+.t-hs{font-size:16px;font-weight:600;fill:var(--fg)}
+.t-m{font-size:14px;fill:var(--muted)}
+.t-s{font-size:13px;fill:var(--muted)}
+.t-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.t-code{font-size:13px;fill:var(--fg);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.t-tun{font-size:16px;font-weight:600;fill:var(--sea)}
+.t-out{font-size:13px;fill:var(--out);font-weight:600}
+.t-back{font-size:13px;fill:var(--back);font-weight:600}
+.t-push{font-size:13px;fill:var(--push);font-weight:600}
+.t-on-scr{font-size:11px;fill:#e9f4f2}
+.t-opt{font-size:12px;font-weight:600;fill:var(--muted);letter-spacing:.06em}
+.ico{fill:none;stroke:var(--fg);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ico-sea{fill:none;stroke:var(--sea);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ico-light{fill:none;stroke:#e9f4f2;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.panel{fill:var(--panel);stroke:var(--line);stroke-width:1.5}
+.card{fill:var(--card);stroke:var(--line);stroke-width:1.5}
+.opt{fill:none;stroke:var(--muted);stroke-width:1.5;stroke-dasharray:6 5}
+.wire{fill:none;stroke:var(--muted);stroke-width:1.5}
+.wire-opt{fill:none;stroke:var(--muted);stroke-width:1.5;stroke-dasharray:6 5}
+.tunnel{fill:var(--seaSoft);stroke:var(--sea);stroke-width:2}
+.lane-out{stroke:var(--out);stroke-width:2;fill:none}
+.lane-back{stroke:var(--back);stroke-width:2;fill:none}
+.lane-push{stroke:var(--push);stroke-width:2;fill:none;stroke-dasharray:3 5}
+.ah-out{fill:var(--out)}.ah-back{fill:var(--back)}.ah-push{fill:var(--push)}.ah-muted{fill:var(--muted)}
+.screen{fill:var(--screen)}
+.glow{fill:none;stroke:var(--sea);stroke-width:3}
+.week-track{fill:var(--line)}.week-fill{fill:var(--sea)}
+.fire{fill:none;stroke:var(--sea);stroke-width:2}
+.dim{fill:var(--dim)}
+.anim,.glow{display:none}
+</style>
+<text x="450" y="38" class="t-cap" text-anchor="middle">Your phone drives the real claude CLI on your desktop, over Tailscale</text>
+<rect x="40" y="100" width="160" height="340" rx="24" class="card"/>
+<rect x="52" y="124" width="136" height="290" rx="8" class="screen"/>
+<rect x="102" y="110" width="36" height="5" rx="2.5" fill="var(--line)"/>
+<rect x="60" y="132" width="120" height="14" rx="3" fill="#0f5a66"/>
+<rect x="60" y="384" width="120" height="22" rx="11" fill="none" stroke="#3d5566" stroke-width="1.5"/>
+<text x="70" y="399" class="t-on-scr">fix the flaky test</text>
+<rect class="line0" x="62" y="158" width="96" height="6" rx="3" fill="#e9f4f2" opacity=".85"/>
+<rect class="line1" x="62" y="171" width="70" height="6" rx="3" fill="#7fd1c7" opacity=".85"/>
+<rect class="line2" x="72" y="184" width="84" height="6" rx="3" fill="#e9f4f2" opacity=".85"/>
+<rect class="line3" x="72" y="197" width="58" height="6" rx="3" fill="#e9f4f2" opacity=".85"/>
+<rect class="line4" x="62" y="210" width="104" height="6" rx="3" fill="#f5a93f" opacity=".85"/>
+<rect class="line5" x="72" y="223" width="66" height="6" rx="3" fill="#e9f4f2" opacity=".85"/>
+<g class="thumb"><rect x="62" y="248" width="116" height="74" rx="6" fill="#10324a" stroke="#f5a93f" stroke-width="1.5"/><g class="ico-light" transform="translate(104 269) scale(1.3333333333333333)"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></g></g>
+<g class="anim dim"><rect x="52" y="124" width="136" height="290" rx="8" class="dim"/><g class="ico-light" transform="translate(106 236) scale(1.1666666666666667)"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></g><text x="120" y="288" class="t-on-scr" text-anchor="middle">asleep</text></g>
+<g class="anim banner"><rect x="58" y="130" width="124" height="40" rx="8" fill="#e9f4f2" stroke="#ec6f55" stroke-width="1.5"/><g class="ico" transform="translate(66 140) scale(0.8333333333333334)"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></g><text x="94" y="155" font-size="13" font-weight="600" fill="#0a1b28">job done</text></g>
+<text x="120" y="470" class="t-h" text-anchor="middle">Your phone</text>
+<text x="120" y="490" class="t-m" text-anchor="middle">waterplane web app</text>
+<text x="120" y="508" class="t-m" text-anchor="middle">or Android app</text>
+<rect x="214" y="112" width="272" height="124" rx="62" class="tunnel"/>
+<line x1="232" y1="150" x2="474" y2="150" class="lane-out"/>
+<path d="M482 150l-9 -5v10z" class="ah-out"/>
+<line x1="226" y1="196" x2="468" y2="196" class="lane-back"/>
+<path d="M218 196l9 -5v10z" class="ah-back"/>
+<text x="350" y="136" class="t-out" text-anchor="middle">prompts, taps</text>
+<text x="350" y="224" class="t-back" text-anchor="middle">screen, images, files</text>
+<g class="ico-sea" transform="translate(300 262) scale(0.8333333333333334)"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></g>
+<text x="326" y="278" class="t-tun">Tailscale</text>
+<text x="350" y="302" class="t-m" text-anchor="middle">encrypted phone to desktop</text>
+<text x="350" y="322" class="t-m" text-anchor="middle">no waterplane server, no account</text>
+<text x="350" y="342" class="t-m" text-anchor="middle">nobody in between reads it</text>
+<path d="M520,134 C452,66 262,66 200,116" class="lane-push"/>
+<path d="M199 118l9 -5v10z" class="ah-push"/>
+<text x="357" y="58" class="t-push" text-anchor="middle">web push, encrypted</text>
+<rect x="500" y="72" width="360" height="424" rx="16" class="panel"/>
+<g class="ico" transform="translate(520 82) scale(1)"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></g>
+<text x="554" y="101" class="t-h">Your desktop</text>
+<rect x="520" y="120" width="316" height="102" rx="10" class="card"/>
+<rect x="517" y="117" width="322" height="108" rx="12" class="glow glow-daemon"/>
+<g class="ico" transform="translate(534 136) scale(1)"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></g>
+<text x="572" y="154" class="t-h">waterplane daemon</text>
+<text x="572" y="178" class="t-m">Node, one socket per tab</text>
+<text x="572" y="200" class="t-m">queue, schedules, push</text>
+<line x1="560" y1="222" x2="560" y2="241" class="wire"/>
+<path d="M560 249l-5 -9h10z" class="ah-muted"/>
+<text x="572" y="242" class="t-s">types into, reads the screen</text>
+<rect x="520" y="250" width="316" height="60" rx="10" class="card"/>
+<rect x="517" y="247" width="322" height="66" rx="12" class="glow glow-pty"/>
+<g class="ico" transform="translate(534 268) scale(1)"><path d="M4 17l6-6-6-6M12 19h8"/></g>
+<text x="572" y="276" class="t-h t-mono">claude</text>
+<text x="572" y="296" class="t-m">the real CLI, in a PTY</text>
+<line x1="560" y1="310" x2="560" y2="327" class="wire"/>
+<path d="M560 335l-5 -9h10z" class="ah-muted"/>
+<text x="572" y="329" class="t-s">reads, edits, runs</text>
+<rect x="520" y="336" width="316" height="66" rx="10" class="card"/>
+<rect x="517" y="333" width="322" height="72" rx="12" class="glow glow-repos"/>
+<g class="ico" transform="translate(534 354) scale(1)"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></g>
+<text x="572" y="363" class="t-h">your repos</text>
+<text x="572" y="386" class="t-code">.claude/outbox  .claude/inbox</text>
+<rect x="520" y="414" width="316" height="66" rx="10" class="card"/>
+<rect x="517" y="411" width="322" height="72" rx="12" class="glow glow-sched"/>
+<g class="ico" transform="translate(534 432) scale(1)"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></g>
+<text x="572" y="440" class="t-hs">scheduled job</text>
+<rect x="700" y="430" width="120" height="10" rx="5" class="week-track"/>
+<rect x="700" y="430" width="120" height="10" rx="5" class="week-fill" transform="translate(700 0) scale(.55 1) translate(-700 0)"/>
+<text x="572" y="464" class="t-s">fires when the weekly window is back</text>
+<path d="M836 447 H848 V280 H845" class="fire"/>
+<path d="M837 280l9 -5v10z" class="ah-out" style="fill:var(--sea)"/>
+<rect x="40" y="548" width="420" height="78" rx="12" class="opt"/>
+<g class="ico" transform="translate(56 568) scale(1.0833333333333333)"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></g>
+<g class="ico" transform="translate(76 568) scale(1.0833333333333333)"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></g>
+<text x="116" y="574" class="t-opt">OPTIONAL · ANDROID APP DEV ONLY</text>
+<text x="116" y="596" class="t-hs">other phones</text>
+<text x="116" y="615" class="t-m">get your APK builds, installed by themselves</text>
+<path d="M550 496 V586 H470" class="wire-opt"/>
+<path d="M461 586l9 -5v10z" class="ah-muted"/>
+<text x="560" y="576" class="t-s">APK builds</text>
+<rect x="640" y="548" width="220" height="78" rx="12" class="opt"/>
+<g class="ico" transform="translate(654 568) scale(1.0833333333333333)"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></g>
+<text x="692" y="574" class="t-opt">OPTIONAL</text>
+<text x="692" y="596" class="t-hs">peer desktop</text>
+<text x="692" y="615" class="t-m">takes delegated jobs</text>
+<path d="M750 496 V539" class="wire-opt"/>
+<path d="M750 547l-5 -9h10z" class="ah-muted"/>
+<text x="740" y="530" class="t-s" text-anchor="end">job out, report back</text>
+</svg>

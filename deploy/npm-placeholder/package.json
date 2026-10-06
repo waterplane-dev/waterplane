@@ -1,0 +1,15 @@
+{
+  "name": "waterplane",
+  "version": "0.0.1",
+  "description": "waterplane — phone-native remote control for Claude Code on your PC. Name reserved; the real package follows.",
+  "license": "MIT",
+  "author": "Johannes Hoh",
+  "homepage": "https://waterplane.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/waterplane-dev/waterplane.git"
+  },
+  "keywords": ["claude-code", "claude", "mobile", "remote", "pwa"],
+  "files": ["README.md"],
+  "engines": { "node": ">=20.12" }
+}

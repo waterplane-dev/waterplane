@@ -1,0 +1,191 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 990" width="1200" height="990" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>waterplane architecture</title>
+  <style>
+    .bg { fill: #ffffff; }
+    .panel { fill: #f4f6f8; stroke: #c9d1d9; stroke-width: 1.2; }
+    .band { fill: #e8f1fb; stroke: #7aa7d9; stroke-width: 1.2; }
+    .box { fill: #ffffff; stroke: #57606a; stroke-width: 1.3; }
+    .ext { fill: #ffffff; stroke: #8250df; stroke-width: 1.5; stroke-dasharray: 7 4; }
+    .plug { fill: #fff8ec; stroke: #bc4c00; stroke-width: 1.5; stroke-dasharray: 2 3; }
+    .prov { fill: #f6f8fa; stroke: #8c959f; stroke-width: 1; }
+    .h { fill: #1f2328; font-size: 15px; font-weight: 700; }
+    .t { fill: #1f2328; font-size: 13.5px; font-weight: 650; }
+    .s { fill: #424a53; font-size: 11.5px; }
+    .k { fill: #0b5cad; font-size: 12.5px; font-weight: 600; }
+    .arrow { stroke: #57606a; stroke-width: 1.6; fill: none; }
+    .ah { fill: #57606a; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #0d1117; }
+      .panel { fill: #161b22; stroke: #30363d; }
+      .band { fill: #0f2540; stroke: #3b6ea8; }
+      .box { fill: #0d1117; stroke: #8b949e; }
+      .ext { fill: #0d1117; stroke: #a371f7; }
+      .plug { fill: #1f1608; stroke: #f0883e; }
+      .prov { fill: #161b22; stroke: #6e7681; }
+      .h, .t { fill: #e6edf3; }
+      .s { fill: #9da7b3; }
+      .k { fill: #79c0ff; }
+      .arrow { stroke: #8b949e; }
+      .ah { fill: #8b949e; }
+    }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="ah"/>
+    </marker>
+  </defs>
+  <rect class="bg" x="0" y="0" width="1200" height="990"/>
+
+  <!-- PHONE -->
+  <rect class="panel" x="20" y="20" width="1160" height="142" rx="10"/>
+  <text class="h" x="40" y="48">PHONE — React PWA in a browser, or the Android APK (Capacitor shell, same bundle)</text>
+  <rect class="box" x="40" y="62" width="204" height="86" rx="7"/>
+  <text class="t" x="54" y="84">Terminal</text>
+  <text class="s" x="54" y="104">xterm.js mirror of the PTY</text>
+  <text class="s" x="54" y="120">type, scroll, CLI keys</text>
+  <rect class="box" x="269" y="62" width="204" height="86" rx="7"/>
+  <text class="t" x="283" y="84">Reader</text>
+  <text class="s" x="283" y="104">the transcript as turns</text>
+  <text class="s" x="283" y="120">a tap answers a choice box</text>
+  <rect class="box" x="498" y="62" width="204" height="86" rx="7"/>
+  <text class="t" x="512" y="84">Composer + send queue</text>
+  <text class="s" x="512" y="104">works offline, retried by ackId</text>
+  <text class="s" x="512" y="120">at-most-once delivery</text>
+  <rect class="box" x="727" y="62" width="204" height="86" rx="7"/>
+  <text class="t" x="741" y="84">Core sheets</text>
+  <text class="s" x="741" y="104">backlog, gallery, files,</text>
+  <text class="s" x="741" y="120">git, builds, settings</text>
+  <rect class="ext" x="956" y="62" width="204" height="86" rx="7"/>
+  <text class="t" x="970" y="84">In-repo extensions</text>
+  <text class="s" x="970" y="104">token-stats, requirements</text>
+  <text class="s" x="970" y="120">plugin-shaped, shipped built in</text>
+
+  <!-- TRANSPORT -->
+  <line class="arrow" x1="600" y1="164" x2="600" y2="180" marker-start="url(#a)" marker-end="url(#a)"/>
+  <rect class="band" x="20" y="182" width="1160" height="54" rx="10"/>
+  <text class="k" x="600" y="205" text-anchor="middle">Tailscale tailnet = the security boundary (never a public interface)</text>
+  <text class="s" x="600" y="224" text-anchor="middle">ONE WebSocket /ws per tab carries everything  ·  HTTP /api for reads  ·  every request checked on Origin + Host</text>
+  <line class="arrow" x1="600" y1="238" x2="600" y2="254" marker-start="url(#a)" marker-end="url(#a)"/>
+
+  <!-- HOST -->
+  <rect class="panel" x="20" y="256" width="1160" height="356" rx="10"/>
+  <text class="h" x="40" y="282">HOST DAEMON — Node on your desktop (packages/host, :8770, Tailscale IP or loopback)</text>
+  <rect class="box" x="40" y="296" width="265" height="96" rx="7"/>
+  <text class="t" x="54" y="318">Server</text>
+  <text class="s" x="54" y="338">api.ts, routes/, the one socket</text>
+  <text class="s" x="54" y="354">origin.ts: Origin + Host check</text>
+  <text class="s" x="54" y="370">auth.ts: optional LAN password</text>
+  <rect class="box" x="325" y="296" width="265" height="96" rx="7"/>
+  <text class="t" x="339" y="318">Sessions</text>
+  <text class="s" x="339" y="338">one PTY per tab (node-pty / tmux)</text>
+  <text class="s" x="339" y="354">deliver.ts: type it, prove it landed</text>
+  <text class="s" x="339" y="370">answergate.ts: who may answer a box</text>
+  <rect class="box" x="610" y="296" width="265" height="96" rx="7"/>
+  <text class="t" x="624" y="318">Work</text>
+  <text class="s" x="624" y="338">intents: timed, chained, new session</text>
+  <text class="s" x="624" y="354">backlog, fan-out, archive</text>
+  <text class="s" x="624" y="370">runs while the phone is closed</text>
+  <rect class="box" x="895" y="296" width="265" height="96" rx="7"/>
+  <text class="t" x="909" y="318">Machine</text>
+  <text class="s" x="909" y="338">.claude/outbox + inbox, git, worktrees</text>
+  <text class="s" x="909" y="354">builds, verified screenshots</text>
+  <text class="s" x="909" y="370">CPU, memory, Ollama's loaded models</text>
+
+  <rect class="box" x="40" y="408" width="730" height="188" rx="7"/>
+  <text class="t" x="54" y="430">Backend registry — every CLI is one descriptor</text>
+  <text class="s" x="54" y="449">descriptor = launch args + caps + sources (turns, dialogs, transcript, tokens, context)</text>
+  <rect class="box" x="60" y="464" width="130" height="56" rx="6"/>
+  <text class="t" x="72" y="486">claude</text>
+  <text class="s" x="72" y="505">core</text>
+  <rect class="box" x="202" y="464" width="130" height="56" rx="6"/>
+  <text class="t" x="214" y="486">claude-local</text>
+  <text class="s" x="214" y="505">core</text>
+  <rect class="ext" x="344" y="464" width="130" height="56" rx="6"/>
+  <text class="t" x="356" y="486">opencode</text>
+  <text class="s" x="356" y="505">in-repo extension</text>
+  <rect class="plug" x="486" y="464" width="130" height="56" rx="6"/>
+  <text class="t" x="498" y="486">copilot</text>
+  <text class="s" x="498" y="505">plugin, own repo</text>
+  <rect class="plug" x="628" y="464" width="130" height="56" rx="6"/>
+  <text class="t" x="640" y="486">codex</text>
+  <text class="s" x="640" y="505">plugin, own repo</text>
+  <text class="k" x="54" y="552">Every fact climbs one ladder:</text>
+  <text class="s" x="54" y="572">1. the CLI's own side channel (hooks, server, event log)  →  2. a screen reader (regex on the TUI)</text>
+  <text class="s" x="54" y="588">→  3. absent. Never a guessed number.</text>
+
+  <rect class="box" x="790" y="408" width="370" height="88" rx="7"/>
+  <text class="t" x="804" y="430">Plugin host</text>
+  <text class="s" x="804" y="449">loads ~/.config/waterplane/plugins/ + plugins.json</text>
+  <text class="s" x="804" y="465">api.backend(), hookSink, onHook, plugin.call</text>
+  <text class="s" x="804" y="481">a broken plugin is listed with its reason</text>
+  <rect class="box" x="790" y="508" width="370" height="88" rx="7"/>
+  <text class="t" x="804" y="530">Ledgers — tokens, cost, context</text>
+  <text class="s" x="804" y="549">tokenstats.ts ← claude jsonl (both claude backends)</text>
+  <text class="s" x="804" y="565">api.storeReader() ← a plugin's own store</text>
+  <text class="s" x="804" y="581">sources.tokens ← a plugin, in its own unit</text>
+
+  <!-- HOST ↔ PTY -->
+  <line class="arrow" x1="300" y1="614" x2="300" y2="650" marker-end="url(#a)"/>
+  <text class="s" x="312" y="637">keystrokes in (deliver.ts)</text>
+  <line class="arrow" x1="880" y1="650" x2="880" y2="614" marker-end="url(#a)"/>
+  <text class="s" x="892" y="637">screen out + side-channel events</text>
+
+  <!-- PTYs -->
+  <rect class="panel" x="20" y="652" width="1160" height="180" rx="10"/>
+  <text class="h" x="40" y="678">DESKTOP TERMINALS — the real CLI binaries in a PTY, never re-implemented</text>
+  <rect class="box" x="40" y="692" width="204" height="124" rx="7"/>
+  <text class="t" x="54" y="714">Claude Code</text>
+  <text class="s" x="54" y="734">the claude binary</text>
+  <text class="s" x="54" y="754">side channel:</text>
+  <text class="s" x="54" y="770">hooks + ~/.claude jsonl</text>
+  <rect class="box" x="269" y="692" width="204" height="124" rx="7"/>
+  <text class="t" x="283" y="714">Claude Code (local)</text>
+  <text class="s" x="283" y="734">the SAME binary, one env change:</text>
+  <text class="s" x="283" y="754">ANTHROPIC_BASE_URL → Ollama</text>
+  <text class="s" x="283" y="770">same hooks + jsonl</text>
+  <rect class="ext" x="498" y="692" width="204" height="124" rx="7"/>
+  <text class="t" x="512" y="714">opencode</text>
+  <text class="s" x="512" y="734">TUI attached to its own</text>
+  <text class="s" x="512" y="754">opencode serve (127.0.0.1)</text>
+  <text class="s" x="512" y="770">HTTP events + sqlite store</text>
+  <rect class="plug" x="727" y="692" width="204" height="124" rx="7"/>
+  <text class="t" x="741" y="714">GitHub Copilot CLI</text>
+  <text class="s" x="741" y="734">hooks → loopback sink</text>
+  <text class="s" x="741" y="754">events.jsonl + OTel file</text>
+  <text class="s" x="741" y="770">permission held 8 s for a tap</text>
+  <rect class="plug" x="956" y="692" width="204" height="124" rx="7"/>
+  <text class="t" x="970" y="714">OpenAI Codex CLI</text>
+  <text class="s" x="970" y="734">app-server daemon</text>
+  <text class="s" x="970" y="754">rollout files for tokens</text>
+  <text class="s" x="970" y="770">private, not shipped yet</text>
+
+  <!-- PROVIDERS -->
+  <line class="arrow" x1="142" y1="818" x2="142" y2="858" marker-end="url(#a)"/>
+  <line class="arrow" x1="371" y1="818" x2="371" y2="858" marker-end="url(#a)"/>
+  <line class="arrow" x1="600" y1="818" x2="600" y2="858" marker-end="url(#a)"/>
+  <line class="arrow" x1="829" y1="818" x2="829" y2="858" marker-end="url(#a)"/>
+  <line class="arrow" x1="1058" y1="818" x2="1058" y2="858" marker-end="url(#a)"/>
+  <rect class="prov" x="40" y="860" width="204" height="56" rx="7"/>
+  <text class="t" x="54" y="882">Anthropic</text>
+  <text class="s" x="54" y="900">subscription or API key</text>
+  <rect class="prov" x="269" y="860" width="204" height="56" rx="7"/>
+  <text class="t" x="283" y="882">Ollama :11434</text>
+  <text class="s" x="283" y="900">on this machine, $0</text>
+  <rect class="prov" x="498" y="860" width="204" height="56" rx="7"/>
+  <text class="t" x="512" y="882">opencode's providers</text>
+  <text class="s" x="512" y="900">whichever it is configured for</text>
+  <rect class="prov" x="727" y="860" width="204" height="56" rx="7"/>
+  <text class="t" x="741" y="882">GitHub Copilot</text>
+  <text class="s" x="741" y="900">premium requests</text>
+  <rect class="prov" x="956" y="860" width="204" height="56" rx="7"/>
+  <text class="t" x="970" y="882">OpenAI</text>
+  <text class="s" x="970" y="900">or a local Ollama</text>
+
+  <!-- LEGEND -->
+  <rect class="box" x="40" y="944" width="34" height="20" rx="4"/>
+  <text class="s" x="82" y="959">core (packages/host, packages/web)</text>
+  <rect class="ext" x="330" y="944" width="34" height="20" rx="4"/>
+  <text class="s" x="372" y="959">in-repo extension (packages/extensions/*)</text>
+  <rect class="plug" x="650" y="944" width="34" height="20" rx="4"/>
+  <text class="s" x="692" y="959">external plugin (its own git repo, waterplane-plugin.json + host.mjs)</text>
+</svg>

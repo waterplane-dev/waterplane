@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{label}}</title>
+<style>
+  :root { color-scheme: light dark; --bg: #f7f7f9; --fg: #1b1b1f; --accent: #3b6ef5; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #16161a; --fg: #ececf1; --accent: #7c9bff; } }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+    background: var(--bg); color: var(--fg); font: 18px/1.4 system-ui, sans-serif; padding: 24px; box-sizing: border-box;
+  }
+  h1 { margin: 0; font-size: 28px; }
+  p { margin: 0; opacity: .75; }
+  button {
+    font: inherit; padding: 14px 28px; border: 0; border-radius: 12px; background: var(--accent); color: #fff;
+  }
+  button:active { transform: scale(.97); }
+</style>
+</head>
+<body>
+  <h1>Hello, world</h1>
+  <p>Built from your phone.</p>
+  <button id="b" type="button">Tapped 0 times</button>
+  <p><small>The count lives in memory: reloading starts it over.</small></p>
+<script>
+  // State is in memory on purpose: the gallery's sandboxed frame has no storage.
+  let taps = 0;
+  const b = document.getElementById("b");
+  b.addEventListener("click", () => { taps++; b.textContent = "Tapped " + taps + (taps === 1 ? " time" : " times"); });
+</script>
+</body>
+</html>

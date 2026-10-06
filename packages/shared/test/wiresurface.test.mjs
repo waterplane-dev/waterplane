@@ -1,0 +1,322 @@
+// The wire modules' surface, pinned through the type checker, so splitting `wire/session.ts`
+// and `wire/messages.ts` into `wire/session/` and `wire/messages/` cannot add, drop or retype an
+// export — and cannot change which messages the two unions carry: every `t` literal of
+// `ClientMessage` and `HostMessage` (and the member count) is read off the checker, not a regex.
+// Written against the unsplit files before the first move. Changing a list is a decision about
+// the protocol, never a way to make a refactor pass. Reasoning: docs/notes/shared-architecture.md.
+import test from "node:test";
+import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
+import ts from "typescript";
+
+const SESSION = fileURLToPath(new URL("../src/wire/session.ts", import.meta.url));
+const MESSAGES = fileURLToPath(new URL("../src/wire/messages.ts", import.meta.url));
+
+const SESSION_SURFACE = [
+  "AGENT_CTX_POINTS:value",
+  "AGENT_CUM_POINTS:value",
+  "AgentRun:type",
+  "ArchiveListing:type",
+  "ArchivedConversation:type",
+  "ClosedBy:type",
+  "ClosedSession:type",
+  "CompactionCost:type",
+  "CompactionLedger:type",
+  "ContextEvent:type",
+  "ContextSample:type",
+  "ContextSeriesDoc:type",
+  "ContextSpark:type",
+  "ContextWindowSource:type",
+  "DetectedPrompt:type",
+  "Effort:type",
+  "ExternalSession:type",
+  "HistoryEntry:type",
+  "LaunchOpts:type",
+  "LimitResumeMode:type",
+  "NewImage:type",
+  "OpenDelivery:type",
+  "PermissionMode:type",
+  "PromptOption:type",
+  "RecentSession:type",
+  "SampleKinds:type",
+  "SendView:type",
+  "SessionAgent:type",
+  "SessionAsk:type",
+  "SessionInfo:type",
+  "SessionLimit:type",
+  "SessionLogin:type",
+  "SessionOrigin:type",
+  "SessionOriginKind:type",
+  "SessionSearchMatch:type",
+  "SessionSearchResult:type",
+  "SessionSearchScope:type",
+  "SessionShell:type",
+  "SessionShellDetail:type",
+  "ShellLink:type",
+  "StandingRule:type",
+];
+const MESSAGES_SURFACE = [
+  "AuthState:type",
+  "ClientMessage:type",
+  "HostMessage:type",
+  "IntentDraft:type",
+  "IntentPatch:type",
+  "PROTOCOL_VERSION:value",
+  "PeerKind:type",
+  "decode:value",
+  "encode:value",
+];
+const CLIENT_T = [
+  "artifacts.get",
+  "artifacts.save",
+  "assess.apply",
+  "assess.discard",
+  "assess.run",
+  "assess.state",
+  "auth.clear",
+  "auth.gateTailscale",
+  "auth.get",
+  "auth.set",
+  "backends.recheck",
+  "backlog.add",
+  "backlog.archive",
+  "backlog.check",
+  "backlog.continue",
+  "backlog.done",
+  "backlog.fire",
+  "backlog.list",
+  "backlog.name",
+  "backlog.nextStep",
+  "backlog.openRepoSession",
+  "backlog.remove",
+  "backlog.reorder",
+  "backlog.setAuto",
+  "backlog.setSmartPick",
+  "backlog.swap",
+  "backlog.unmerge",
+  "backlog.update",
+  "backlog.validate",
+  "budget.get",
+  "budget.set",
+  "build.cancel",
+  "build.list",
+  "build.options",
+  "build.run",
+  "build.save",
+  "build.scan",
+  "capture.cancel",
+  "capture.list",
+  "capture.run",
+  "capture.save",
+  "clihealth.get",
+  "closed.clear",
+  "decisions.archive",
+  "decisions.archiveAll",
+  "decisions.delete",
+  "decisions.get",
+  "delivery.list",
+  "fanout.followup",
+  "fanout.list",
+  "fanout.run",
+  "hello",
+  "input.settle",
+  "install.get",
+  "install.report",
+  "intent.cancel",
+  "intent.dismiss",
+  "intent.list",
+  "intent.post",
+  "intent.requeue",
+  "intent.retarget",
+  "intent.run",
+  "intent.update",
+  "intent.waive",
+  "launch.cancel",
+  "launch.list",
+  "launch.run",
+  "limit.first",
+  "limit.resume",
+  "limit.session",
+  "limit.setAuto",
+  "limit.setMode",
+  "localrt.evict",
+  "localrt.watch",
+  "meter.get",
+  "notification.clear",
+  "notification.get",
+  "notify.prefs.set",
+  "ping",
+  "plugin.action",
+  "plugin.call",
+  "plugin.enable",
+  "plugin.list",
+  "plugin.sessionAnswer",
+  "plugin.sessionToggle",
+  "plugin.set",
+  "pull.add",
+  "pull.dismiss",
+  "pull.get",
+  "pull.list",
+  "pull.save",
+  "recent.clear",
+  "recent.list",
+  "schedule.list",
+  "schedule.remove",
+  "schedule.run",
+  "schedule.save",
+  "schedule.setEnabled",
+  "schedule.skipNext",
+  "sent.clear",
+  "sent.get",
+  "session.ackAsking",
+  "session.attach",
+  "session.background",
+  "session.budget.set",
+  "session.closecheck",
+  "session.create",
+  "session.detach",
+  "session.fork",
+  "session.history",
+  "session.input",
+  "session.kill",
+  "session.list",
+  "session.name",
+  "session.pin",
+  "session.record",
+  "session.remoteControl",
+  "session.remove",
+  "session.rename",
+  "session.reopen",
+  "session.resize",
+  "session.search",
+  "session.star",
+  "settings.get",
+  "settings.set",
+  "shell.kill",
+  "update.apply",
+  "update.check",
+  "update.status",
+  "usage.get",
+  "usage.refresh",
+];
+const HOST_T = [
+  "artifacts.config",
+  "assess.state",
+  "auth.state",
+  "authRequired",
+  "backends",
+  "backlog.ack",
+  "backlog.list",
+  "budget.state",
+  "build.candidates",
+  "build.list",
+  "build.options",
+  "build.output",
+  "build.run",
+  "capture.list",
+  "capture.output",
+  "capture.run",
+  "clihealth",
+  "closed.list",
+  "decisions.log",
+  "delivery.list",
+  "delivery.settled",
+  "error",
+  "fanout.list",
+  "fanout.run",
+  "input.ack",
+  "input.settled",
+  "install.log",
+  "intent.changed",
+  "intent.list",
+  "launch.list",
+  "launch.opened",
+  "limit.config",
+  "localrt.evict",
+  "localrt.sample",
+  "meter.status",
+  "notification",
+  "notification.list",
+  "notify.prefs",
+  "onboard.progress",
+  "op.ack",
+  "plugin.actionResult",
+  "plugin.error",
+  "plugin.list",
+  "plugin.push",
+  "plugin.reply",
+  "pong",
+  "pty",
+  "pull.config",
+  "pull.list",
+  "pull.new",
+  "recent.list",
+  "schedule.list",
+  "sent.log",
+  "sent.new",
+  "session.closecheck",
+  "session.closed",
+  "session.created",
+  "session.exit",
+  "session.focus",
+  "session.history",
+  "session.images",
+  "session.list",
+  "session.named",
+  "session.searchResults",
+  "session.updated",
+  "settings.all",
+  "settings.update",
+  "shell.killed",
+  "toast",
+  "update.status",
+  "usage.status",
+  "welcome",
+];
+
+const program = ts.createProgram([SESSION, MESSAGES], {
+  module: ts.ModuleKind.NodeNext,
+  moduleResolution: ts.ModuleResolutionKind.NodeNext,
+  target: ts.ScriptTarget.ES2022,
+  noEmit: true,
+  skipLibCheck: true,
+});
+const checker = program.getTypeChecker();
+const exportsOf = (file) => checker.getExportsOfModule(checker.getSymbolAtLocation(program.getSourceFile(file)));
+
+const surface = (file) => exportsOf(file).map((s) => {
+  const target = s.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(s) : s;
+  return `${s.name}:${target.flags & ts.SymbolFlags.Value ? "value" : "type"}`;
+}).sort();
+
+const tags = (name) => {
+  const sym = exportsOf(MESSAGES).find((s) => s.name === name);
+  const ty = checker.getDeclaredTypeOfSymbol(sym);
+  const members = ty.isUnion() ? ty.types : [ty];
+  const out = new Set();
+  for (const m of members) {
+    const tt = checker.getTypeOfSymbol(m.getProperty("t"));
+    for (const l of tt.isUnion() ? tt.types : [tt]) out.add(l.value);
+  }
+  return { tags: [...out].sort(), members: members.length };
+};
+
+test("wire/session.ts exports exactly its pinned surface, values and types alike", () => {
+  assert.deepEqual(surface(SESSION), [...SESSION_SURFACE].sort());
+});
+
+test("wire/messages.ts exports exactly its pinned surface, values and types alike", () => {
+  assert.deepEqual(surface(MESSAGES), [...MESSAGES_SURFACE].sort());
+});
+
+test("ClientMessage carries exactly the pinned message types", () => {
+  const { tags: got, members } = tags("ClientMessage");
+  assert.deepEqual(got, [...CLIENT_T].sort());
+  assert.equal(members, 131, "a member was added or merged");
+});
+
+test("HostMessage carries exactly the pinned message types", () => {
+  const { tags: got, members } = tags("HostMessage");
+  assert.deepEqual(got, [...HOST_T].sort());
+  assert.equal(members, 72, "a member was added or merged");
+});

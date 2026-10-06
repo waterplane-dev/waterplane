@@ -1,0 +1,18 @@
+{
+  "id": "echo",
+  "name": "Echo",
+  "version": "1.0.0",
+  "apiVersion": "1.2",
+  "description": "e2e fixture: suggests option 1 on every box, and answers it when asked.",
+  "answers": true,
+  "settings": [
+    { "kind": "number", "key": "cap", "label": "Cap", "default": 3, "min": 0, "max": 10 }
+  ],
+  "actions": [
+    { "id": "ping", "label": "Ping", "scope": "global" },
+    { "id": "answer", "label": "Answer with option 1", "scope": "session" }
+  ],
+  "toggles": [
+    { "id": "quiet", "label": "Quiet", "default": false }
+  ]
+}

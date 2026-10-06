@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "moduleResolution": "Bundler",
+    // A pure module may import a sibling by its `.ts` name. The reason is the
+    // test story, not taste: `packages/web` has no test runner, so its pure
+    // modules are run by `node --test` straight over the TypeScript (see
+    // `activityRows.test.mjs`), and node cannot resolve an extensionless
+    // relative import. Safe here because this project is `noEmit` — Vite
+    // rewrites the specifier and nothing ships with a `.ts` in it.
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "types": ["vite/client"],
+    // Extension web halves (packages/extensions/<id>/web) import the SDK and the kit by these names.
+    "paths": { "@waterplane/sdk": ["./src/sdk/index.ts"], "@waterplane/kit": ["./src/kit/index.ts"], "@brand/*": ["../../brand/*"] }
+  },
+  "include": ["src", "../extensions/*/web"]
+}

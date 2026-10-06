@@ -1,0 +1,14 @@
+{
+  "_comment": "The installer's catalogue of EXTERNAL plugins (`install.sh --with <id>`). In-repo builtins are NOT listed here: ship.json (or an optional extension's own ship.json) + release.json decide those. An entry is installable only with listed:true; listed:false is a known id the installer refuses in words. `ref` is a commit sha, never a branch: what the installer checks out is exactly what was verified. Copilot is listed after its real check on 1.0.91 (2026-10-02); its repo is private until the public release, so until then only an authenticated clone can fetch it.",
+  "plugins": [
+    {
+      "id": "copilot",
+      "name": "GitHub Copilot CLI backend",
+      "repo": "https://github.com/waterplane-dev/waterplane-plugin-copilot.git",
+      "ref": "96ab6a62354cfe9dd59a25590d1fc2f7ca18be1c",
+      "description": "GitHub Copilot CLI as a backend (measured on Copilot CLI 1.0.91). Experimental.",
+      "experimental": true,
+      "listed": true
+    }
+  ]
+}

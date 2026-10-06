@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: How to contribute
+    url: https://github.com/waterplane-dev/waterplane/blob/main/CONTRIBUTING.md
+    about: Features arrive as intent requests; code PRs are accepted only for a failing test or a docs/typo fix.
+  - name: Report a vulnerability
+    url: https://github.com/waterplane-dev/waterplane/security/advisories/new
+    about: Please report security issues privately (see SECURITY.md) instead of opening a public issue.
