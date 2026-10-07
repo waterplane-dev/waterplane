@@ -35,7 +35,9 @@ One command, `scripts/release/publish.mjs` (pure parts `publish-lib.mjs`, tests
 `publish-lib.test.mjs`). **Dry run by default**: it makes only read-only calls (git, `gh release
 view`, `npm view`, `gh auth status`, `npm whoami`) and prints every command the real run would make;
 `--yes` runs them. Flags: `--build [--apk=<file>]` (run `release:build` first), `--public-clone
-<dir>` (a clone of `github.com/<org>/<slug>`, for `release:public`), `--accept <file>` (passed to
+<dir>` (a clone of `github.com/<org>/<slug>`, for `release:public`), `--media-clone <dir>` (a clone
+of the media repo in `deploy/public-media.json`: the hosted walkthrough videos, see
+testing-and-ops.md "Rewritten on the way out"), `--accept <file>` (passed to
 it), `--allow-dirty` (dry run only: waives clean tree / on main / pushed / built-from-HEAD, each
 printed as `waived`, never as ok), `--no-apk` (publish without an Android APK, on purpose).
 
@@ -50,8 +52,8 @@ printed as `waived`, never as ok), `--no-apk` (publish without an Android APK, o
   an APK-less release goes out only on purpose (the plan's undraft step refuses it too).
 - **Steps**: `verify-public-tree.mjs --rev HEAD` (the allow-listed snapshot of HEAD, a real
   `npm ci` from its own lockfile and `.npmrc`, then build, lint, unit and host tests — a failure
-  stops the run before anything leaves the desktop) → tag `v<version>` here and push the tag → `release:public --commit` into the clone, push
-  it → render `install.sh` → `gh release create v<version> --draft` on `<org>/<slug>` with the
+  stops the run before anything leaves the desktop) → tag `v<version>` here and push the tag → `release:public --commit` into the clone (and the
+  hosted videos into the media clone), push the media clone, then the public clone → render `install.sh` → `gh release create v<version> --draft` on `<org>/<slug>` with the
   tarball, `.sha256`, `.sha256.sig`, `release.json`, `release.json.sig`, the APK when `release.json`
   names one, and `install.sh` → undraft (`--latest`) → `npm publish <tgz> --access public`. A draft
   first so `releases/latest` never points at a release still missing its `.sig`. No `--provenance`:
@@ -397,7 +399,7 @@ rendered script.
 
 ## A second desktop as a peer: WSL2, and an OrbStack VM to rehearse it
 
-Paired hosts delegate jobs to each other (`docs/analysis/peer-hosts-plan.md`; SECURITY.md for the trust
+Paired hosts delegate jobs to each other ([host.md](host.md#peers--delegating-a-job-to-another-waterplane-host); SECURITY.md for the trust
 model). Windows is reached only as a waterplane host inside WSL2, so a peer setup is the WSL2 install
 plus pairing.
 

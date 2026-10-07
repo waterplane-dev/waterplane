@@ -42,7 +42,7 @@ export function RowNotes({ m, row }: { m: BacklogModel; row: RowFacts }) {
                       row takes `undoWhileRunningWords` INSTEAD of
                       `smartWroteWords`, and both are `backlogFilter.ts`'s. */}
                   {agentPosted && openText.has(it.id) && <span className="bl-smart-note">{AGENT_POSTED_WORDS}</span>}
-                  {it.manual && it.status === "queued" && <span className="bl-smart-note">{MANUAL_HOLD_TEXT}</span>}
+                  {it.manual && it.status === "queued" && <span className="bl-hold">{MANUAL_HOLD_TEXT}</span>}
                   {(smartWritten || mergedFrom.length > 0) && (
                     <span className="bl-smart-note">
                       {mergedFrom.length === 0 ? "written by the smart pick"

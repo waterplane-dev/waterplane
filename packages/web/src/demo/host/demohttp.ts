@@ -203,10 +203,11 @@ function transcriptDoc(m: DemoModel, id: string, now: number) {
     let blocks: { kind: "text" | "screen"; text: string }[] = [];
     if (h.output) blocks = [{ kind: "text", text: h.output }];
     else if (i === rows.length - 1) {
-      const at = lines.lastIndexOf(`> ${h.text}`);
+      const at = lines.lastIndexOf(`❯ ${h.text}`);
       if (at >= 0) {
         const rest: string[] = [];
-        for (const l of lines.slice(at + 1)) { if (l.startsWith("> ")) break; rest.push(l); }
+        // The next prompt ends the turn — `❯ text`, not a choice box's selected `❯ 1.` row.
+        for (const l of lines.slice(at + 1)) { if (/^❯ (?!\d+\. )/.test(l)) break; rest.push(l); }
         const text = rest.join("\n").trim();
         if (text) blocks = [{ kind: "screen", text }];
       }

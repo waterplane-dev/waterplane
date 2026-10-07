@@ -87,5 +87,9 @@ through `sessions.answerBox()` to that dialog's `answer()`, and the held reply l
 No tap inside the hold ⇒ the CLI draws its own dialog and the same box answers by keystrokes.
 
 Detail: [plugins.md](plugins.md) (seams, answer gate, decision log), the source interfaces in
-`packages/shared/src/backendsources.ts`, and [`docs/analysis/backends-design.md`](../analysis/backends-design.md)
-for why each backend lives where it does.
+`packages/shared/src/backendsources.ts`. **Why each backend lives where it does:** claude,
+claude-local and claude-endpoint are core (one TUI, one jsonl, one hook pipe). opencode is an in-repo
+extension, kept private, because the first proof of `api.backend()` had to be a backend that ships,
+and `local/extension-boundary` is what proves it. Further CLIs are external plugins
+(`plugin-paths.json`). A screen reader is core work either way: it is measured against one binary and
+pinned by fixtures, so a plugin names one and never brings its own.

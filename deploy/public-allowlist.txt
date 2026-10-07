@@ -95,6 +95,10 @@ deploy/release-pubkey.pem
 # 2026-10-05). The generic keystore bridge it uses (ShellKeystorePlugin.java,
 # nativeKeystore.ts) is public and names none of it (vault/publictree.json).
 !packages/extensions/vault/**
+# The disk-space extension (deletes caches, build output and models on this desktop)
+# stays PRIVATE (owner decision, 2026-10-07): a tool for this machine, not the project.
+# Public code names none of it (diskspace/publictree.json).
+!packages/extensions/diskspace/**
 # The media tooling stays PRIVATE (owner decision, 2026-10-06): the Playwright journeys
 # that film the demo, the gif/svg/apk recorders, their tests and the skill that drives
 # them. The pictures they make are public (docs/media above); how they are made is not.
@@ -102,6 +106,7 @@ deploy/release-pubkey.pem
 !scripts/media/**
 !tools/uicaptions.test.mjs
 !tools/uipace.test.mjs
+!tools/uiteaser.test.mjs
 !tools/stublogo.test.mjs
 !.claude/skills/docs-media/**
 # Pending owner review (listed again on purpose, so a future broad include above

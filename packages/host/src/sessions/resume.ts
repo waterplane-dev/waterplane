@@ -501,6 +501,7 @@ export class ResumeSlice {
     // this is the only place a session is reopened on a limit exit, so it is the
     // only place that can answer "which one replaced it" without guessing.
     this.noteRevived(id, created.id);
+    this.core.repointCompanions(id, created.id); // its companion shells follow it
     const ns = this.core.sessions.get(created.id);
     if (ns) {
       // Carried on the SESSION as well as written into its limit state: the

@@ -1,7 +1,7 @@
 # onboard
 
-Build your first app — the phone half of `docs/analysis/first-app-plan.md` (WP7). The job itself
-is the desktop's (`packages/host/src/onboard.ts`, WP6): it scaffolds from a template, installs the
+Build your first app — the phone half of the first-app job. The job itself
+is the desktop's (`packages/host/src/onboard.ts`; why it is one persisted step list: `docs/notes/host.md`): it scaffolds from a template, installs the
 Android tools and makes the signing key when consented, runs the setup checklist and the first
 build, and opens a session. This feature asks the questions, shows the consent, follows the
 progress and hands the person into the session.

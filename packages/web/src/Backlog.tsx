@@ -6,12 +6,8 @@ import { useBacklogDrag } from "./backlog/useBacklogDrag";
 import { useBacklogEdit } from "./backlog/useBacklogEdit";
 import { useBacklogFilters } from "./backlog/useBacklogFilters";
 import { useBacklogUi } from "./backlog/useBacklogUi";
-import { BacklogHead, RepoBar } from "./backlog/RepoBar";
-import { AutoOffNote, HereNotice, StrandedDraft } from "./backlog/Notices";
-import { SmartPickNotes } from "./backlog/SmartPickNotes";
-import { BacklogFilterBar } from "./backlog/BacklogFilterBar";
-import { BulkBars } from "./backlog/BulkBars";
-import { BacklogList } from "./backlog/BacklogList";
+import { BacklogHead } from "./backlog/RepoBar";
+import { BacklogBody } from "./backlog/BacklogBody";
 
 /**
  * **A repo's waiting work — the list, never a place words are "sent to".**
@@ -55,18 +51,7 @@ export function Backlog(p: BacklogProps) {
     <div className="sheet">
       <BacklogHead m={m} />
 
-      <div className="sheet-scroll">
-      <RepoBar m={m} />
-      <AutoOffNote m={m} />
-      <SmartPickNotes m={m} />
-      <StrandedDraft m={m} />
-      <HereNotice m={m} />
-
-      <BacklogFilterBar m={m} />
-      <BulkBars m={m} />
-
-      <BacklogList m={m} />
-      </div>
+      <BacklogBody m={m} />
     </div>
   );
 }

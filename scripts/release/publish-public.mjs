@@ -13,10 +13,16 @@
 //   --accept <file>  reviewed false positives, one `path:line:hash` per line (the report prints each)
 //   --report <file>  also write the report as markdown
 //   --allowlist <f>  use this allow-list instead of the one inside the tag
+//   --media-to <p>   a local clone of the media repo (deploy/public-media.json): the hosted files
+//                    the snapshot links to are copied there (and committed with --commit). Needed
+//                    by --write whenever such a link exists. Push it BEFORE the public repo.
 //
+// On the way out, published markdown loses its Claude session ids and its links to hosted files
+// are re-pointed at their hosted URLs (public-lib.mjs "rewriting"); the scans see the result.
 // The snapshot is `git archive <tag>`: tracked files only, never the working tree.
 // Any unaccepted scan hit exits 1 and writes nothing. Pure parts: public-lib.mjs.
 import { execFileSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync,
   readlinkSync, realpathSync, renameSync, rmSync, rmdirSync, symlinkSync, writeFileSync,
@@ -25,8 +31,8 @@ import { homedir, hostname, tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  buildContext, checkLinks, classify, dirsOf, extractChangelogSection, groupPaths, hitToken, parseAccept,
-  parseAllowlist, scanPath, scanText, topDir,
+  buildContext, checkLinks, classify, dirsOf, extractChangelogSection, groupPaths, hitToken, hostedName, parseAccept,
+  parseAllowlist, rewriteHostedLinks, scanPath, scanText, stripSessionIds, topDir,
 } from "./public-lib.mjs";
 
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -35,7 +41,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 // ------------------------------------------------------------------------ args
 
 function parseArgs(argv) {
-  const o = { tag: null, to: null, write: false, commit: false, accept: null, report: null, allowlist: null };
+  const o = { tag: null, to: null, write: false, commit: false, accept: null, report: null, allowlist: null, mediaTo: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const val = () => {
@@ -50,7 +56,8 @@ function parseArgs(argv) {
     else if (a === "--accept") o.accept = resolve(val());
     else if (a === "--report") o.report = resolve(val());
     else if (a === "--allowlist") o.allowlist = resolve(val());
-    else if (a === "-h" || a === "--help") { console.log(readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 19).map((l) => l.replace(/^\/\/ ?/, "")).join("\n")); process.exit(0); }
+    else if (a === "--media-to") o.mediaTo = resolve(val());
+    else if (a === "-h" || a === "--help") { console.log(readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 25).map((l) => l.replace(/^\/\/ ?/, "")).join("\n")); process.exit(0); }
     else die(`unknown argument ${a}`);
   }
   if (o.write && !o.to) die("--write/--commit need --to <path>");
@@ -98,7 +105,8 @@ const repoRoot = git(process.cwd(), ["rev-parse", "--show-toplevel"]);
 const warnings = [];
 
 let NAME = "project";
-try { ({ NAME } = await import("../lib-brand.mjs")); } catch { warnings.push("scripts/lib-brand.mjs unavailable (run `npm run build:shared`): report title is generic"); }
+let GITHUB_ORG = null;
+try { ({ NAME, GITHUB_ORG } = await import("../lib-brand.mjs")); } catch { warnings.push("scripts/lib-brand.mjs unavailable (run `npm run build:shared`): report title is generic"); }
 
 const ref = opts.tag ?? "HEAD";
 if (!opts.tag) warnings.push("no --tag given: publishing HEAD. Releases should be tags (`git tag vX.Y.Z`).");
@@ -107,6 +115,7 @@ if (!commit) die(`cannot resolve ${ref}`);
 if (opts.tag && !gitOk(repoRoot, ["describe", "--exact-match", "--tags", commit])) warnings.push(`${ref} is not an annotated or lightweight tag on that commit`);
 if (opts.to && resolve(opts.to) === resolve(repoRoot)) die("--to is this repo");
 if (opts.to && (resolve(opts.to) + sep).startsWith(repoRoot + sep) && !resolve(opts.to).startsWith(tmpdir())) die("--to is inside this repo's working tree");
+if (opts.mediaTo && (resolve(opts.mediaTo) === resolve(repoRoot) || resolve(opts.mediaTo) === resolve(opts.to ?? "/nonexistent"))) die("--media-to must be its own clone, not this repo or --to");
 
 const work = mkdtempSync(join(tmpdir(), "public-snapshot-"));
 const fullDir = join(work, "full");
@@ -135,6 +144,45 @@ try {
   for (const p of included) {
     mkdirSync(dirname(join(snapDir, p)), { recursive: true });
     renameSync(join(fullDir, p), join(snapDir, p));
+  }
+
+  // 2b. rewrite on the way out: session ids dropped, links to hosted files re-pointed. Before the
+  // scans, so they judge what is actually published.
+  let media = null;
+  const mediaCfg = join(snapDir, "deploy/public-media.json");
+  if (existsSync(mediaCfg)) {
+    const c = JSON.parse(readFileSync(mediaCfg, "utf8"));
+    const fill = (v) => {
+      if (!String(v).includes("{org}")) return String(v);
+      if (!GITHUB_ORG) die("deploy/public-media.json uses {org}: run `npm run build:shared` first");
+      return String(v).replaceAll("{org}", GITHUB_ORG);
+    };
+    media = { repo: fill(c.repo), urlBase: fill(c.urlBase).replace(/\/$/, ""), rules: parseAllowlist((c.hosted ?? []).join("\n")) };
+  }
+  const excludedSet = new Set(excluded);
+  const hosted = new Map(); // repo path -> { name, url, size }
+  const hostOf = (p) => {
+    if (!media || !excludedSet.has(p) || !classify(p, media.rules).included) return null;
+    if (!hosted.has(p)) {
+      const buf = readFileSync(join(fullDir, p));
+      const name = hostedName(p, createHash("sha256").update(buf).digest("hex"));
+      hosted.set(p, { name, url: `${media.urlBase}/${name}`, size: buf.length });
+    }
+    return hosted.get(p).url;
+  };
+  let sessionIds = 0;
+  let hostedLinks = 0;
+  const sessionFiles = [];
+  for (const p of included) {
+    if (!/\.md$/i.test(p)) continue;
+    const abs = join(snapDir, p);
+    if (lstatSync(abs).isSymbolicLink()) continue;
+    const before = readFileSync(abs, "utf8");
+    const a = stripSessionIds(p, before);
+    const b = rewriteHostedLinks(p, a.text, hostOf);
+    if (a.n) { sessionIds += a.n; sessionFiles.push(p); }
+    hostedLinks += b.n;
+    if (b.text !== before) writeFileSync(abs, b.text);
   }
 
   // 3. scans over the snapshot
@@ -280,6 +328,14 @@ try {
   for (const [target, ls] of [...byTarget].sort()) md.push(`- \`${target}\` (${ls.length}): ${ls.slice(0, 6).map((l) => `\`${l.path}:${l.line}\``).join(", ")}${ls.length > 6 ? ", ..." : ""}`);
   if (brokenAlready.length) md.push("", "Already broken (target is in no tree):", ...brokenAlready.map((l) => `- \`${l.path}:${l.line}\` -> \`${l.target}\``));
 
+  md.push("", "## Rewritten on the way out", "");
+  md.push(`- Claude session ids: ${sessionIds} removed from ${sessionFiles.length} markdown file(s)`);
+  if (!media) md.push("- hosted files: none (no deploy/public-media.json)");
+  else {
+    const bytes = [...hosted.values()].reduce((n, h) => n + h.size, 0);
+    md.push(`- hosted files: ${hosted.size} (${human(bytes)}) in \`${media.repo}\`, ${hostedLinks} link(s) re-pointed at \`${media.urlBase}/\``);
+    for (const [p, h] of [...hosted].sort()) md.push(`  - \`${p}\` -> \`${h.name}\` (${human(h.size)})`);
+  }
   md.push("", "## Excluded (private)", "");
   for (const [key, list] of groupPaths(excluded)) {
     md.push(`- \`${key}\` (${list.length})${list.length <= 6 ? `: ${list.map((p) => `\`${p}\``).join(", ")}` : ""}`);
@@ -292,13 +348,38 @@ try {
   if (opts.report) {
     console.log(`${headline}\nverdict: ${hits.length ? "BLOCKED" : "clean"}`);
     for (const [k, n] of [...byRule].sort()) console.log(`  ${k}: ${n}`);
+    console.log(`rewritten: ${sessionIds} session id(s) removed, ${hostedLinks} link(s) to ${hosted.size} hosted file(s)`);
     console.log(`full report: ${opts.report}`);
   } else console.log(report);
   for (const w of warnings) console.error(`warning: ${w}`);
 
   if (hits.length) { console.error(`\n${hits.length} scan hit(s): nothing written.`); process.exitCode = 1; }
   else if (opts.write) {
-    // 7. write: make the target equal the snapshot, never touching its .git
+    // 7a. the hosted files first: a public tree whose links point at files nobody hosts is worse
+    // than no public tree, so a media problem stops the run before anything else is written.
+    if (hosted.size) {
+      if (!opts.mediaTo) die(`${hosted.size} hosted file(s) are linked (deploy/public-media.json): pass --media-to <a clone of github.com/${media.repo}>`);
+      if (!existsSync(join(opts.mediaTo, ".git"))) die(`--media-to ${opts.mediaTo} is not a git clone (of github.com/${media.repo})`);
+      if (git(opts.mediaTo, ["status", "--porcelain"])) die(`${opts.mediaTo} has uncommitted changes: commit or discard them first`);
+      let added = 0;
+      // Never delete: an older release's README still links to the names it was written with.
+      for (const [p, h] of hosted) {
+        const dst = join(opts.mediaTo, h.name);
+        if (!existsSync(dst)) { copyFileSync(join(fullDir, p), dst); added++; }
+      }
+      // Pages would otherwise run Jekyll over a folder of videos.
+      if (!existsSync(join(opts.mediaTo, ".nojekyll"))) writeFileSync(join(opts.mediaTo, ".nojekyll"), "");
+      console.log(`media: ${added} new of ${hosted.size} hosted file(s) in ${opts.mediaTo}`);
+      if (opts.commit) {
+        git(opts.mediaTo, ["add", "--all", "--", "."]);
+        if (git(opts.mediaTo, ["status", "--porcelain"])) {
+          if (!gitOk(opts.mediaTo, ["config", "user.email"])) die(`no git identity in ${opts.mediaTo}: set a public one (git -C ${opts.mediaTo} config user.email ...)`);
+          execFileSync("git", ["-C", opts.mediaTo, "commit", "-q", "-m", `Media for ${version ? `${NAME} ${version}` : ref}`]);
+          console.log(`media committed (${git(opts.mediaTo, ["rev-parse", "--short", "HEAD"])})`);
+        }
+      }
+    }
+    // 7b. write: make the target equal the snapshot, never touching its .git
     mkdirSync(opts.to, { recursive: true });
     if (!targetGit) git(opts.to, ["init", "-b", "main"]);
     else if (git(opts.to, ["status", "--porcelain"])) die(`${opts.to} has uncommitted changes: commit or discard them first`);
@@ -325,7 +406,7 @@ try {
         execFileSync("git", ["-C", opts.to, "commit", "-q", "-F", "-"], { input: message });
         console.log(`committed: ${message.split("\n")[0]} (${git(opts.to, ["rev-parse", "--short", "HEAD"])})`);
       }
-      console.log(`\nNot pushed. When you are happy with it:\n  git -C ${opts.to} push origin main`);
+      console.log(`\nNot pushed. When you are happy with it:${hosted.size ? `\n  git -C ${opts.mediaTo} push origin main   # first: the links point there` : ""}\n  git -C ${opts.to} push origin main`);
     }
   } else {
     console.log(`\ndry run: nothing written. To publish:\n  node scripts/release/publish-public.mjs --tag ${opts.tag ?? "<tag>"} --to <public-clone> --commit`);

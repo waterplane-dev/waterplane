@@ -250,6 +250,17 @@ export class LadderSlice {
       // Nothing is claimed while it holds. The row is `blocked`, not `starting`,
       // so `busyCwds`, `hostBusy` and `autoSlotsFree` are all untouched and
       // every other repo keeps moving while this one thinks.
+      // The row cleared the whole ladder, so whatever it was waiting for is over:
+      // its old sentence must not outlive the yield below. A broadcast lands in
+      // that yield — the auto switch's own, sent right after its kick — and it
+      // said "auto is off" beside `auto: true` (`e2e-backlog-wait.mjs`).
+      // Words only: the state is the transition's to write (`block`/`fire`).
+      if (row.state === "blocked") {
+        row.blockReason = undefined;
+        row.blockDetail = undefined;
+        row.blockSessionId = undefined;
+        row.missing = undefined;
+      }
       const hold = await this.core.deps.pickHold?.(row);
       // `picking` is rung 4.7 — below rung 3, and therefore a hold that must not
       // cost the row its deadline either. The verdict that got here is a `go`,

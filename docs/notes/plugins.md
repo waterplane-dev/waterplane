@@ -31,7 +31,7 @@ Two things that sound alike and are kept apart on purpose:
 
 ## The API is versioned: semver, one rule
 
-`PLUGIN_API_VERSION` is `MAJOR.MINOR.PATCH` (`1.2.0` now). A manifest's `apiVersion` (`"1.2"`, or a
+`PLUGIN_API_VERSION` is `MAJOR.MINOR.PATCH` (`1.3.0` now). A manifest's `apiVersion` (`"1.2"`, or a
 bare `1`, which is what every manifest before semver says and means `1.0`) loads when its **major
 equals the host's and its minor is no newer**; the patch is never compared. Anything else is
 refused before any of its code runs, as a sentence naming both versions and which side is behind
@@ -120,6 +120,7 @@ external plugin needs UI. The contract as requirements: `docs/requirements/plugi
 | `handToAgent()` | `agentintents.ts`'s `handToAgentVia` → `addClientBacklogItem`, the SAME add the phone's `backlog.add` and an agent's `POST /api/agent/backlog` take: contained, persisted, `origin: "plugin:<id>"`, waiting for a tap (`manual`) unless `fire`, then fired by the intent ladder. A `key` makes it at-most-once in the store (`plugin-<id>-<key>`, 64 chars in all). Never `deliver.ts`, never a session's PTY |
 | `backend(def)` | `backends/registry.ts`'s `registerBackend`, through `pluginapi.ts`'s `pluginDescriptor` (see **Backends** below). Refused by THROWING a sentence; unregistered on switch-off |
 | `screenReader(name, r)` / `storeReader(name, r)` (1.1) | `backends/readers.ts`'s `registerScreenReader` / `registerStoreReader` (see **Contributed readers** below). A malformed or taken name THROWS; unregistered on switch-off, after the plugin's backends |
+| `thermalReader(name, r)` (1.3) | `sysstat.ts`'s `registerThermalReader`: asked on the readout's slow cadence BEFORE core's own sysfs reader, first reading wins. Every figure passes `cleanThermal` — a temperature outside 1..149 °C, a non-finite or negative figure is DROPPED, never shown — and a throw or an answer past `PLUGIN_THERMAL_TIMEOUT_MS` is no reading. Its `{ note, fix }` shows only when nothing reads. Added so macOS's SMC helpers (which third-party tool, built how) live outside this repo; core names none of them. Unregistered on switch-off |
 | `hookSink()` / `onHook()` | the loopback route `POST /api/plugin/<id>/hook` (`routes/apisystem.ts`) → `PluginRegistry.hook`, the response HELD while the handler's promise is pending (see **Backends**) |
 | `route(method, pattern, fn)` (1.2) | `* /api/plugin/<id>/*` in `routes/apisystem.ts` → `PluginRegistry.route`, matched with the core's own `matchSegs` (`routes/apitable.ts`). Namespaced under the plugin's id and served by `handleApi`, so it is behind the SAME origin/Host and token gates as every core route — not loopback-only, not in `OPAQUE_READ_ROUTES`. JSON in (≤ `PLUGIN_ROUTE_BODY_MAX`, else 413) and out. `hook…` is refused (the sink's), and so is a duplicate method + pattern; a path no plugin route matches is the core's plain 404. Unregistered on switch-off |
 
@@ -154,7 +155,7 @@ rule that is not about pixels or rows**:
 
 ## Backends (`api.backend`, `hookSink`, `onHook`)
 
-A plugin may add a CLI to the launcher (docs/analysis/backends-design.md §3). It is the same
+A plugin may add a CLI to the launcher. It is the same
 `BackendDescriptor` core's three are, registered while the plugin is on:
 
 - **Declared first.** The manifest lists `backends: ["<id>"]`; `api.backend(def)` refuses any other
@@ -185,7 +186,7 @@ A plugin may add a CLI to the launcher (docs/analysis/backends-design.md §3). I
   `hold.onExpired`. Switching the plugin off answers every held response `{}` at once. A throw or a
   rejection answers `{}` and becomes the status line. **Keep `maxHoldMs` below the CLI's own hook
   timeout**: Copilot 1.0.91 SIGTERMs a hook at its `timeoutSec`, then shows its TUI dialog and never
-  re-fires (`spikes/2026-10-01-copilot-1.0.91.md`), so a hold that outlives it answers nobody.
+  re-fires (measured on copilot 1.0.91), so a hold that outlives it answers nobody.
 - **A held hook is answered through the box, not around it.** The plugin turns the hook into a
   `SourceDialog` on its `sources.dialogs`; the side channel publishes it with `askId` and `nav`, and
   the phone's tap (and a gated plugin's `answer()`) reaches `sessions.answerBox`, which calls that
@@ -222,7 +223,8 @@ a dialog answered `{ keys }`, which `e2e-pluginbackend.mjs` reads back off the s
 
 `packages/extensions/<id>/` holds a feature built as a plugin but shipped with waterplane:
 `waterplane-plugin.json` + `host/` + `web/` (+ `shared/` later) + `README.md` — the external layout
-verbatim, so moving one out is a folder move ([the plan](../analysis/extensions-plan.md)). The first
+verbatim, so moving one out is a folder move, not a rewrite. One folder holding the whole extension
+also means a diff confined to it is visibly confined. The first
 is `requirements` (the setup row and its set-up fix, moved out of `host/src/requirements.ts`; the
 row's words are pinned by `packages/host/test/requirementsrow.test.mjs`). The second is `token-stats`, **web-only** (no `host/`): the token statistics screen, reading the ledgers through `@waterplane/sdk`'s `ledgers`; see [token-stats-architecture.md](token-stats-architecture.md). The third is `opencode`, **host-only** and **private** (left out of the public snapshot, `deploy/public-allowlist.txt`): the opencode BACKEND on `api.backend()` — the descriptor, the hybrid and its `serve` children, and its two readers on `api.screenReader`/`api.storeReader` (above) — the first extension that is `optional` and `experimental`. Its tests, e2e and stubs live in its folder (`test/`, `e2e/`, `scripts/`); core finds them by glob, and builds and tests without them (`tools/publictree.test.mjs`, `scripts/verify-public-tree.mjs`).
 

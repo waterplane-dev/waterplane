@@ -47,7 +47,7 @@ export type ClientSessionMsg =
   // and stay listed in the archive, and `deleteArchived` remains the only way to
   // lose a conversation. Paired with `replaceSessionId` it is "reset to here":
   // the old PTY is killed and the fork opens in its place, one atomic op.
-  | ({ t: "session.create"; cwd: string; cols?: number; rows?: number; title?: string; resume?: boolean; resumeMode?: "continue" | "pick" | "fork"; resumeSessionId?: string; forkAtTurn?: string; launch?: LaunchOpts; ackId?: string; replaceSessionId?: string; prompt?: string; needs?: string[]; budget?: SessionBudget } & SendStamp)
+  | ({ t: "session.create"; cwd: string; cols?: number; rows?: number; title?: string; resume?: boolean; resumeMode?: "continue" | "pick" | "fork"; resumeSessionId?: string; forkAtTurn?: string; launch?: LaunchOpts; ackId?: string; replaceSessionId?: string; prompt?: string; needs?: string[]; budget?: SessionBudget; companionOf?: string } & SendStamp)
   /** The launches this host is holding. Answered with `launch.list`. */
   | { t: "launch.list" }
   /** Call one off. Not durable and deliberately so: like `session.kill`, a

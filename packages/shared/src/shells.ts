@@ -221,3 +221,47 @@ export function shellCloseWords(summary: ShellsSummary, list: SessionShell[]): s
   const noun = summary.total === 1 ? "background shell" : "background shells";
   return `stops ${summary.total} ${noun}${labels.length ? ` — ${labels.join(", ")}` : ""}`;
 }
+
+/**
+ * Move every companion shell (`SessionInfo.companionOf`) to sit right after
+ * the session it belongs to — the tab strip and the launcher list both draw it
+ * there, so the pair reads as one thing rather than a shell stranded at the end
+ * of the list. A companion whose parent is not in `list` (hidden, filtered,
+ * gone) keeps its own place. Several companions of one parent keep their
+ * relative order. Pure; returns a new array.
+ */
+export function glueCompanions<T extends { id: string; companionOf?: string }>(list: readonly T[]): T[] {
+  const ids = new Set(list.map((s) => s.id));
+  const byParent = new Map<string, T[]>();
+  for (const s of list) {
+    if (!s.companionOf || s.companionOf === s.id || !ids.has(s.companionOf)) continue;
+    const g = byParent.get(s.companionOf);
+    if (g) g.push(s); else byParent.set(s.companionOf, [s]);
+  }
+  if (!byParent.size) return [...list];
+  const glued = new Set([...byParent.values()].flat().map((s) => s.id));
+  const out: T[] = [];
+  const place = (s: T) => { out.push(s); for (const c of byParent.get(s.id) ?? []) place(c); };
+  for (const s of list) if (!glued.has(s.id)) place(s);
+  // A cycle (two sessions each naming the other) is not a shape the host
+  // makes; if one arrived, nothing in it was placed — keep them, not drop them.
+  if (out.length < list.length) for (const s of list) if (!out.includes(s)) out.push(s);
+  return out;
+}
+
+/**
+ * Where the header's parent ↔ companion toggle goes from `active`: to its
+ * parent when it IS a companion shell (`to: "cli"`), to its newest companion
+ * when it has one (`to: "shell"`), else nowhere. Only sessions in `list` count
+ * — a toggle to a session that is not there is a tap that does nothing.
+ */
+export function companionToggle<T extends { id: string; companionOf?: string; createdAt?: number }>(active: T, list: readonly T[]): { target: T; to: "cli" | "shell" } | null {
+  if (active.companionOf) {
+    const parent = list.find((s) => s.id === active.companionOf);
+    return parent ? { target: parent, to: "cli" } : null;
+  }
+  const kids = list.filter((s) => s.companionOf === active.id);
+  if (!kids.length) return null;
+  const newest = kids.reduce((a, b) => ((b.createdAt ?? 0) > (a.createdAt ?? 0) ? b : a));
+  return { target: newest, to: "shell" };
+}

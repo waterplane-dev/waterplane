@@ -24,6 +24,7 @@ import { env } from "./env.js";
 import { logTag, BRAND, envName, claudeNewerThanTested, claudeConfigDirFromEnv, NODE_MIN, nodeMeetsMin } from "@waterplane/shared";
 import { homedir, release } from "node:os";
 import { wslChecks } from "./doctorwsl.js";
+import { claudeBinResolution, tilde } from "./claudebin.js";
 import { probeAndroidEnv, type AndroidEnvReport } from "./androidenv.js";
 import { compareVersions, currentMode, currentSigPolicy, latestRelease, releaseSource, SignatureRefused } from "./cli/selfupdate.js";
 import { hostStateDir, resolveStateDir, stateDirReport } from "./branddirs.js";
@@ -47,8 +48,10 @@ export interface Check {
 
 export interface DoctorInput {
   root: string;
-  /** True when nobody named the root and the `~/dev` default was assumed (`env.ts`' `ROOT_DEFAULTED`). */
+  /** True when nobody named the root and it was derived (`env.ts`' `ROOT_DEFAULTED`). */
   rootDefaulted?: boolean;
+  /** How a defaulted root was derived (`env.ts`' `ROOT_PICKED`): `found` an existing usual folder, `fallback` `~/dev`. */
+  rootPicked?: "named" | "found" | "fallback";
   port: number;
   claudeBin: string;
   /**
@@ -101,6 +104,26 @@ async function checkNode(): Promise<Check> {
     status: "fail",
     detail: `node ${process.versions.node} is too old (needs ${NODE_MIN} or newer)`,
     fix: `Install Node ${NODE_MIN} or newer — the host reads \`import.meta.dirname\` and uses modern ESM.`,
+  };
+}
+
+/**
+ * The npm that `.npmrc`'s `min-release-age` needs (npm 11.10). An older npm prints
+ * "Unknown project config" on every command and silently drops the week-long hold
+ * on fresh releases for `npm install` (`npm ci` installs the lockfile and is
+ * unaffected). Read from `npm_config_user_agent`, which npm sets for `npm run …`;
+ * not run through npm (a release install, `node dist/main.js`) ⇒ no row.
+ */
+export const NPM_MIN = "11.10.0";
+export function checkNpm(userAgent: string | undefined): Check | null {
+  const m = /\bnpm\/(\d+\.\d+\.\d+)/.exec(userAgent ?? "");
+  if (!m) return null;
+  if (nodeMeetsMin(m[1], NPM_MIN)) return { id: "npm", status: "ok", detail: `npm ${m[1]}` };
+  return {
+    id: "npm",
+    status: "warn",
+    detail: `npm ${m[1]} ignores .npmrc's min-release-age (needs ${NPM_MIN}) — \`npm install\` may pick a release published minutes ago`,
+    fix: "npm install -g npm@latest",
   };
 }
 
@@ -198,20 +221,29 @@ export async function claudeSignInState(bin: string, now = Date.now()): Promise<
 
 async function checkClaude(bin: string): Promise<Check[]> {
   const resolved = await which(bin);
+  const res = claudeBinResolution();
+  const home = homedir();
   if (!resolved) {
+    const tried = res.tried.length ? ` Looked in: ${res.tried.map((t) => tilde(t, home)).join(", ")}.` : "";
+    const win = res.windowsSide
+      ? ` Claude is installed on the Windows side (${res.windowsSide}), but WSL cannot use that one — install it inside WSL too, in the WSL shell: \`npm i -g @anthropic-ai/claude-code\` or the native installer.`
+      : "";
     return [{
       id: "claude-binary",
       status: "fail",
       detail: `\`${bin}\` not found — ${BRAND.name} currently drives Claude Code primarily (other CLIs come as plugins)`,
-      fix: `Install Claude Code (https://docs.anthropic.com/en/docs/claude-code) and make sure it's on PATH, or point ${envName("CLAUDE_BIN")} at the binary.`,
+      fix: `Install Claude Code (https://docs.anthropic.com/en/docs/claude-code) or point ${envName("CLAUDE_BIN")} at the binary.${tried}${win}`,
     }];
   }
   const out: Check[] = [];
   const ver = await run(resolved, ["--version"]);
+  const verLine = ver.ok && ver.out ? ver.out.split("\n")[0] : "";
   out.push({
     id: "claude-binary",
     status: "ok",
-    detail: `${resolved}${ver.ok && ver.out ? ` (${ver.out.split("\n")[0]})` : ""}`,
+    detail: bin === res.bin && res.source === "found"
+      ? `claude${verLine ? ` ${verLine}` : ""} at ${tilde(resolved, home)} (not on PATH — found in a usual install location)`
+      : `${resolved}${verLine ? ` (${verLine})` : ""}`,
   });
   // Newer than the build the heuristics were checked against: a warning with the
   // remedy already in the product (clihealth), never a refusal. Absent when the
@@ -340,14 +372,24 @@ async function checkGit(): Promise<Check> {
  * phone would show an EMPTY repo list with no reason — so that case says it was
  * a guess, and how to name the real one.
  */
-export function checkRoot(root: string, defaulted = false): Check {
+export function checkRoot(root: string, defaulted = false, picked?: "named" | "found" | "fallback"): Check {
+  if (defaulted && picked === "found" && existsSync(root)) {
+    const home = homedir();
+    const shown = root.startsWith(home) ? `~${root.slice(home.length)}` : root;
+    return {
+      id: "root",
+      status: "ok",
+      detail: `code root ${shown} (${envName("ROOT")} unset — first usual code folder that exists) — everything under here is reachable from the phone`,
+    };
+  }
   if (!existsSync(root)) {
     return defaulted
       ? {
         id: "root",
         status: "fail",
-        detail: `no code folder named — ${envName("ROOT")} is unset and the default ${root} does not exist, so the phone would list no repos`,
-        fix: `Name the folder holding your repos: \`${BRAND.slug} service install --force --env ${envName("ROOT")}=/path/to/code\` ` +
+        detail: `no code folder found — ${envName("ROOT")} is unset and none of the usual ones (~/dev, ~/code, ~/src, ~/projects, …) exists, so the phone would list no repos`,
+        fix: `Create ${root} and clone your repos into it (\`mkdir ${root}\`), or name another folder: ` +
+          `\`${BRAND.slug} service install --force --env ${envName("ROOT")}=/path/to/code\` ` +
           `(or export ${envName("ROOT")} in the shell that starts the host) — it is read from the environment, not from a .env file.`,
       }
       : {
@@ -727,6 +769,7 @@ export async function runChecks(i: DoctorInput, skipPort = false, skipCapture = 
   ]);
   return [
     node,
+    ...[checkNpm(process.env.npm_config_user_agent)].filter((c): c is Check => c !== null),
     ptyc,
     ptycap,
     ...claude,
@@ -736,7 +779,7 @@ export async function runChecks(i: DoctorInput, skipPort = false, skipCapture = 
     curl,
     ...(capture ? [capture] : []),
     dictate,
-    checkRoot(i.root, i.rootDefaulted),
+    checkRoot(i.root, i.rootDefaulted, i.rootPicked),
     checkState(i.root),
     overlaysCheck(),
     ...serviceChecks(),
@@ -766,6 +809,17 @@ export function printReport(checks: Check[]): void {
     `\n  ${checks.length - fails - warns} ok, ${warns} warning${warns === 1 ? "" : "s"}, ${fails} failure${fails === 1 ? "" : "s"}.` +
     (fails ? " Fix the failures above before expecting sessions to work.\n" : "\n"),
   );
+}
+
+/**
+ * `doctor --json`: the same checks as one JSON document on stdout, for an agent
+ * installing this on someone's behalf — it loops over `fail` rows and acts on
+ * each `fix` instead of parsing the padded table. Nothing else may reach stdout
+ * in that mode (`env.ts` sends console output to stderr), so `| jq` just works.
+ */
+export function reportJson(checks: Check[]): string {
+  const count = (s: CheckStatus) => checks.filter((c) => c.status === s).length;
+  return JSON.stringify({ ok: count("fail") === 0, fails: count("fail"), warns: count("warn"), checks });
 }
 
 /**

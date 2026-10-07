@@ -82,6 +82,10 @@
   /* Gold: starred, and the sign-in link. */
   --star-rgb: 230 180 80;
   --star: rgb(var(--star-rgb));
+  /* Orange: the CLI ↔ companion-shell pair (`.pair-tabs`, the lit tab), the
+     owner's ask — it is the other half of a PAIR, not one more view control. */
+  --pair-rgb: 255 140 50;
+  --pair: rgb(var(--pair-rgb));
   /* "At the usage limit": blocked, and handling itself. One meaning wore four
      colours — the row badge gold (#e6b450, which is the STAR colour), the
      manually-resumed row red-filled (which is the "waiting for your answer"
@@ -238,6 +242,7 @@
       white panel is a control with no pressed state at all. */
 
 [data-theme="light"] {
+  --pair-rgb: 178 78 0;
   color-scheme: light;
 
   --bg: #eef1f6;
@@ -493,7 +498,7 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
    a line. */
 .sess-top { border-left: 3px solid var(--repo-accent, transparent); padding-left: 7px; }
 /* The title takes the first row: it is the only thing up here worth a row, and
-   it is the one thing that wraps. (The launcher's `.brand` is a 32px logo that
+   it is the one thing that wraps. (The launcher's `.brand` is a 40px logo that
    must stay beside the menu, which is why this is `.sess-top` and not
    `.topbar`.) */
 /* Basis ZERO so the title's own three parts wrap INSIDE it. With basis `auto`
@@ -528,6 +533,7 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
    empty columns beside it. 40px is still a comfortable target and it is what
    buys the row back. Both headers: the launcher's is the one that wrapped, the
    session's is the one this change is about. */
+/* 40px is also the launcher logo's size (LauncherScreen): change both together. */
 .topbar > .key, .hdr-ctl > .key, .hdr-pin > .key { min-width: 40px; min-height: 40px; padding: 7px 9px; }
 /* ── Header command chips ────────────────────────────────────────────
    One-tap user-configured commands, between the session title and the view
@@ -568,6 +574,29 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
    takes its natural width beside the title and the header is a single strip. */
 .sess-top.collapsed .hdr-row2 { flex: 1 1 auto; }
 .sess-top.collapsed .brand { flex: 0 1 auto; }
+/* The model line may break at its own spaces in the session header: beside
+   the [Claude | Shell] tabs the title has ~120px on a 390px phone, and a
+   nowrap "opus-5-5 · medium" was CLIPPED there rather than wrapped. */
+.sess-top .brand > .row-sub { white-space: normal; }
+/* [Claude | Shell] (`SessionHeader` `PairTabsSeg`): the CLI ↔ companion-shell
+   pair as two tabs on the title row. One rounded track, the tab on screen lit
+   in the pair's orange — the hue the corner toggle it replaced wore. Its own
+   size, not `.key`'s: it sits beside a title that wraps, and 34px tall at 12px
+   text is what keeps it from costing the title a line on a 390px phone. Never
+   shrinks — a clipped "Sh…" is a tab nobody can read. */
+.pair-tabs {
+  flex: 0 0 auto; display: inline-flex; align-items: stretch; padding: 2px; gap: 2px;
+  border: 1px solid var(--line); border-radius: 9px; background: var(--raise);
+}
+.pair-tab {
+  display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 9px;
+  font: inherit; font-size: calc(12px * var(--ui-font, 1)); font-weight: 600; white-space: nowrap;
+  color: var(--muted); background: none; border: 1px solid transparent; border-radius: 7px; cursor: pointer;
+}
+.pair-tab.on {
+  cursor: default; color: var(--pair);
+  border-color: rgb(var(--pair-rgb) / .6); background: rgb(var(--pair-rgb) / .16);
+}
 .conn { font-size: calc(12.5px * var(--ui-font, 1)); color: var(--muted); }
 .conn-open { color: var(--ok); }
 .conn-closed, .conn-connecting { color: var(--dead); }
@@ -1754,6 +1783,13 @@ select.search { appearance: none; }
 .annot-canvas { position: absolute; top: 0; left: 0; touch-action: none; will-change: transform; }
 .annot-hint { padding: 6px 12px; font-size: calc(11px * var(--ui-font, 1)); color: var(--muted); text-align: center; background: var(--panel); }
 .annot-crop-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--panel); border-top: 1px solid var(--line); }
+.annot-hint-x { display: flex; align-items: center; gap: 8px; }
+/* "Text only": the desktop's reading of the whole picture, editable, under it. */
+.annot-ocr { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px 0; background: var(--panel); border-top: 1px solid var(--line); }
+.annot-ocr .annot-hint { padding: 0; text-align: left; }
+.annot-ocr-text { width: 100%; box-sizing: border-box; min-height: 28vh; max-height: 45vh; resize: vertical; font: 13px/1.4 ui-monospace, Menlo, monospace; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+.annot-hint-x > span { flex: 1; }
+.annot-hint-x > .key { padding: 2px 6px; flex: none; }
 .annot-crop-bar .annot-hint { flex: 1; padding: 0; text-align: left; }
 .annot-crop-bar .annot-text-in { flex: 1; min-width: 0; }
 /* What the host read inside the newest highlighted band, with the two verbs that
@@ -2317,6 +2353,11 @@ button.bl-chip { cursor: pointer; }
    each session its own card; drawn as the border so it works whatever the list
    behind it is painted. */
 .row-wrap[data-sid] { border-top: 1px solid var(--line); border-bottom: 8px solid var(--bg); }
+/* An agent's worktree row is part of the card that made it: the gutter moves
+   from under the session to under its last worktree row. Left where it was, the
+   row sat flush against the NEXT card and read as belonging to that one. */
+.row-wrap[data-sid]:has(+ .row-wt-owned) { border-bottom: 1px solid var(--line); }
+.row-wrap.row-wt-owned:not(:has(+ .row-wt-owned)) { border-bottom: 8px solid var(--bg); }
 /* The session card is a GRID:
      title line ·········· status
      prompt               star · rename · ×
@@ -4596,6 +4637,31 @@ button.repo-group-stat.on, button.repo-group-wait.on, .tag.tag-filter.on {
 .lrt-big .lrt-line { fill: none; stroke: var(--accent); stroke-width: 1.4; stroke-linejoin: round; stroke-linecap: round; }
 .lrt-big .lrt-dot { fill: var(--accent); }
 .lrt-big .lrt-miss { fill: var(--dead-edge); }
+
+/* The sheet's machine graphs (SysGraph.tsx): full width, the scale on the
+   right, the readings in words above. A gap is a thin dashed mark — still
+   drawn, never bridged, but no longer a wall as wide as a reading. */
+.sg { display: flex; flex-direction: column; gap: 4px; margin: 2px 0 12px; min-width: 0; }
+.sg-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: calc(12px * var(--ui-font, 1)); color: var(--muted); }
+.sg-key { display: inline-flex; align-items: baseline; gap: 5px; }
+.sg-key .sys-dot { align-self: center; }
+.sg-now { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.sg-range { font-variant-numeric: tabular-nums; }
+.sg-plot { width: 100%; min-width: 0; overflow: hidden; }
+.sg-plot svg { display: block; overflow: visible; }
+.sg-grid { stroke: var(--line); stroke-width: 1; stroke-dasharray: 2 3; }
+.sg-base { stroke: var(--line); stroke-width: 1; }
+.sg-gap { stroke: var(--dead-edge); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.sg-tick { fill: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.sg-stroke { fill: none; stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+.sg-area { stroke: none; opacity: .12; }
+.sg-app .sg-stroke { stroke: var(--accent); }
+.sg-app .sg-area, .sg-app .sg-dot { fill: var(--accent); }
+.sg-wired .sg-stroke { stroke: var(--sched); }
+.sg-wired .sg-area, .sg-wired .sg-dot { fill: var(--sched); }
+.sg-compressed .sg-stroke { stroke: var(--star); }
+.sg-compressed .sg-area, .sg-compressed .sg-dot { fill: var(--star); }
+.sg-time { display: flex; justify-content: space-between; color: var(--muted); font-size: calc(10px * var(--ui-font, 1)); font-variant-numeric: tabular-nums; }
 
 /* ── The machine itself (sysStat.ts) ──────────────────────────────────
    The memory bar adds up to the WHOLE machine, always: slices are drawn
@@ -6992,3 +7058,52 @@ button.onb-card-head { width: 100%; background: none; border: 0; padding: 0; tex
 .explain-chip.open { color: var(--fg); }
 .explain-label { font-size: calc(12px * var(--ui-font, 1)); line-height: 1.2; }
 .explain-body { flex-basis: 100%; font-size: calc(12px * var(--ui-font, 1)); color: var(--muted); margin-top: 4px; }
+/* A `manual` row's hold (`MANUAL_HOLD_TEXT`): the row's STATE — nothing but its
+   own `fire` starts it — so it is read, not skimmed past like a footnote. */
+.bl-hold { display: block; font-size: calc(12px * var(--ui-font, 1)); color: var(--fg); font-weight: 600; margin-top: 4px; }
+
+/* ── Desktop workspace, phase 1 (P1c): wide layout ─────────────────────
+   Everything here sits under `html[data-layout="wide"]`; phone never matches.
+   DOM contract: Workspace.tsx. `#root` (already fixed, bound to the viewport
+   and the top strips' offset) becomes a two-column grid: `aside.ws-side`, then
+   the main pane, which has no wrapper — it is `#root > .ws-side + *` (a session
+   `.screen`, a `.sheet`, or `.screen.ws-empty`).
+   Sidebar width 320px: the launcher's repo rows and two-row header were drawn
+   for a ~390px phone and read fine down to ~300; 320 keeps a repo name and its
+   badges on one line while leaving 1120px of a 1440 window to the terminal
+   (about 150 columns). Fixed, never a percentage, so the terminal's fit does
+   not move when the window is dragged. No transition on it: a width tween
+   would refit the PTY every frame. */
+html[data-layout="wide"] #root {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+/* The sidebar is a column of its own. Its `.screen` already carries the strip
+   offsets in its padding-top, so the aside itself adds none (the main pane does
+   the same through its own `.screen`/`.sheet`). */
+html[data-layout="wide"] .ws-side {
+  min-width: 0; min-height: 0; height: 100%;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  background: var(--bg);
+  border-right: 1px solid var(--line);
+}
+html[data-layout="wide"] .ws-side > .screen {
+  position: static; flex: 1 1 auto; min-height: 0; height: auto; width: 100%;
+  overflow-y: auto; overscroll-behavior: contain;
+}
+/* The main pane: whatever follows the sidebar fills the second column and
+   scrolls on its own, never the page. */
+html[data-layout="wide"] #root > .ws-side + * {
+  min-width: 0; min-height: 0; height: 100%; width: auto;
+  position: relative; overflow: hidden;
+}
+html[data-layout="wide"] #root > .ws-side + .sheet { overflow-y: auto; }
+/* Nothing attached: the hint sits in the middle of the pane. */
+html[data-layout="wide"] .screen.ws-empty {
+  align-items: center; justify-content: center; text-align: center;
+  color: var(--muted);
+}
+/* Decision O3 (no tab strip in wide) is SessionTabsBar's: it renders nothing and publishes
+   `--ui-tabs-h: 0px` there (`tabStripHeight`), so no rule here. */

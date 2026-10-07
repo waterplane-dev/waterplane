@@ -13,6 +13,7 @@ import { countOutbox, outboxSeenAt, discoverArtifacts, newOutboxPath, type Artif
 import { hostStat, takeScreenshot, setHostClipboard } from "../host.js";
 import { dictateStatusLive, transcribe } from "../dictate.js";
 import { readImageText } from "../readtext.js";
+import { ocrStatus, readImageLocal } from "../ocrlocal.js";
 import { newFolder, newRepo, newWorktree, type TemplateId } from "../scaffold.js";
 import { countChangedFiles } from "../git.js";
 import { listWriteTargets, setSecret } from "../secrets.js";
@@ -28,6 +29,8 @@ import { route, type ApiEntry, type ApiHandler } from "./apitable.js";
 // hundred KB at worst. The ceiling is here so a mis-aimed POST cannot turn a
 // hand-drawn mark into a multi-megabyte call against the host's Gemini key.
 const MAX_OCR_BYTES = 8 * 1024 * 1024;
+/** A whole phone photo, sent once at the size the phone holds it. */
+const MAX_LOCAL_OCR_BYTES = 24 * 1024 * 1024;
 
 // One dictation, as 16 kHz mono PCM — exactly 32 kB per second of speech, so
 // this ceiling IS `DICTATE_MAX_SECONDS` expressed in the unit the transport
@@ -211,6 +214,31 @@ export const HOST_ROUTES: readonly ApiEntry[] = [
     // A reason is a 200: "no key on this host" and "no words in that band" are
     // answers the phone SHOWS, not transport failures it should retry.
     json(res, r);
+    return true;
+  }),
+
+  // The whole picture's words, read ON THIS DESKTOP (`ocrlocal.ts`) — the
+  // annotator's "text only": a photo with a person in it goes no further than
+  // this machine, and only the text the person then edits is ever sent. The GET
+  // is asked before the verb is offered; the POST takes the bytes as the body
+  // for `readtext`'s reason, writes nothing, and every reason is a 200.
+  route("GET", "/api/host/ocr", async ({ res }) => {
+    json(res, await ocrStatus());
+    return true;
+  }),
+  route("POST", "/api/host/ocr", async ({ req, res }) => {
+    const tooBig = "that picture is too large to read";
+    if (Number(req.headers["content-length"] || 0) > MAX_LOCAL_OCR_BYTES) return json(res, { error: tooBig }, 413), true;
+    let body: Buffer;
+    try {
+      body = await readBody(req, MAX_LOCAL_OCR_BYTES);
+    } catch {
+      return json(res, { error: tooBig }, 413), true;
+    }
+    if (!body.length) return json(res, { error: "empty image" }, 400), true;
+    const mime = String(req.headers["content-type"] || "image/jpeg").split(";")[0].trim();
+    if (!/^image\//.test(mime)) return json(res, { error: "not an image" }, 400), true;
+    json(res, await readImageLocal(body, mime));
     return true;
   }),
 

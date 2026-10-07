@@ -19,6 +19,8 @@ export interface ToolbarCtx {
   send: Connection["send"];
   geomRef: TermFeed["geomRef"];
   submitInput: QueueApi["submitInput"];
+  /** `useLaunch`'s temporary shell, closed with the session it was opened for. */
+  openCompanionShell(s: SessionInfo): unknown;
 }
 
 /**
@@ -76,6 +78,10 @@ export function runToolbarCommand(id: string, ctx: ToolbarCtx) {
       if (!active) break;
       send({ t: "session.fork", id: active.id, cols: geomRef.current.cols, rows: geomRef.current.rows });
       showToast("forking conversation into a new session…");
+      break;
+    case "companion":
+      if (!active) { showToast("no active session"); break; }
+      ctx.openCompanionShell(active);
       break;
     default: runFeatureCommand(id);
   }

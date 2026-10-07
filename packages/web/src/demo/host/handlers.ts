@@ -24,7 +24,7 @@
 import { cleanIntentRow, DEFAULT_ARTIFACT_POLICY, nextFireAt } from "@waterplane/shared";
 import type { ClientMessage, HostMessage, Intent } from "@waterplane/shared";
 import {
-  backlogFrame, createSession, findSession, input, killSession, recordHistory, removeSession,
+  backlogFrame, createSession, findSession, input, killSession, recordHistory, removeSession, repaint,
   replay, sessions, submit,
 } from "./desk.ts";
 import { setBudget } from "./budget.ts";
@@ -181,7 +181,11 @@ export const HANDLERS = {
     tier: "A",
     run: (c) => {
       const sc = m(c).screens?.[c.msg.id];
-      if (sc) { sc.cols = c.msg.cols; sc.rows = c.msg.rows; }
+      if (!sc) return;
+      const wider = sc.cols !== c.msg.cols;
+      sc.cols = c.msg.cols; sc.rows = c.msg.rows;
+      // The CLI lays its transcript out to the PTY's width: a new width is a new picture.
+      if (wider && sc.log != null) repaint(c.desk, c.msg.id);
     },
   },
   "session.kill": { tier: "A", run: (c) => { killSession(c.desk, c.msg.id); } },

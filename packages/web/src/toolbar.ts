@@ -14,7 +14,7 @@
  * reason in reverse — a stale pin from an older build must not render an empty
  * slot in the header.
  */
-import { BookKey, Brain, Camera, CircleDollarSign, ClipboardPaste, Copy, Cpu, FileDiff, FolderTree, GalleryVerticalEnd, Gauge, GitBranch, GitFork, Hammer, History, Hourglass, Images, List, ListChecks, ListTodo, MessageSquare, MessageSquareReply, Monitor, Paperclip, Puzzle, Radio, RotateCw, ScrollText, Search, Slash, Star, Waypoints, type LucideIcon } from "lucide-react";
+import { BookKey, Brain, Camera, CircleDollarSign, ClipboardPaste, Copy, Cpu, FileDiff, FolderTree, GalleryVerticalEnd, Gauge, GitBranch, GitFork, Hammer, History, Hourglass, Images, List, ListChecks, ListTodo, MessageSquare, MessageSquareReply, Monitor, Paperclip, Puzzle, Radio, RotateCw, ScrollText, Search, Slash, SquareTerminal, Star, Waypoints, type LucideIcon } from "lucide-react";
 import { usageCount } from "./usage";
 import { LS, lsGet, lsSetJson } from "./storage";
 
@@ -108,6 +108,9 @@ export const TOOLBAR_ITEMS: { id: string; name: string; Icon: LucideIcon }[] = [
   { id: "refresh", name: "refresh reader", Icon: RotateCw },
   { id: "scrollback", name: "scrollback", Icon: ScrollText },
   { id: "fork", name: "fork", Icon: GitFork },
+  // A temporary shell in this session's folder, closed WITH the session (host
+  // `companionOf`). Not drawn on a shell session, nor where the host has no shell.
+  { id: "companion", name: "companion shell", Icon: SquareTerminal },
   { id: "star", name: "star", Icon: Star },
 ];
 

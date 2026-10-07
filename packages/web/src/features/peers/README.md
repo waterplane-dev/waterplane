@@ -1,6 +1,6 @@
 # peers
 
-Peer desktops (plan: `docs/analysis/peer-hosts-plan.md`): one waterplane host hands a job to another
+Peer desktops (host side and decisions: `docs/notes/host.md`, section `peers/`): one waterplane host hands a job to another
 and gets the answer back. This folder is the PHONE's half — it pairs two saved desktops and shows
 that a session is waiting on one. The wire types and every sentence about a wait are
 `@waterplane/shared`'s `peer.ts` (`peerAddressOk`, `peerWaitWords`) and are never re-worded here.

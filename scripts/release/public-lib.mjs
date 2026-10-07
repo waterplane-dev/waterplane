@@ -130,6 +130,13 @@ const LAN_RE = /(?<![\d.])(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1
 const DOC_CGNAT_RE = /^100\.64\.0\.\d{1,3}$/; // the documentation-style range
 const OBVIOUS_CGNAT = new Set(["100.100.100.100", "100.64.0.0", "100.64.0.1", "100.101.102.103", "100.127.255.255", "100.100.0.0", "100.64.1.1", "100.100.1.1", "100.64.0.2"]);
 const IGNORED_EMAILS = new Set(["noreply@github.com", "noreply@anthropic.com"]);
+/** A Claude session id as this repo's docs cite one: 8+ letters and digits, at least one digit. */
+const SID = String.raw`(?=[0-9A-Za-z]*\d)[0-9A-Za-z]{8,}`;
+/** `session 9c2215c5`, `session \`5630c7fb\``, `session_014Xmz…`: provenance only the owner can follow.
+ *  Markdown only; `stripSessionIds` removes the forms the docs use, so a hit is a new phrasing. */
+const SESSION_ID_RE = new RegExp(String.raw`\bsession[ _:]\`?${SID}\b`, "gi");
+/** A link to a Claude Code session, in any file. */
+const SESSION_URL_RE = /claude\.ai\/code\/session_[0-9A-Za-z]{10,}/g;
 
 /** Build the machine's own identifiers once; `scanText` reuses them for every file. */
 export function buildContext({ emails = [], home = "", hostnames = [], extraNeedles = [] } = {}) {
@@ -194,6 +201,8 @@ export function scanText(path, text, ctx) {
       const label = m[1].split(".").pop();
       if (!PLACEHOLDER_TS_LABEL_RE.test(m[1]) && !PLACEHOLDER_TS_LABEL_RE.test(label)) push(hits, "ts-net-name", "personal", i, line, m.index);
     }
+    if (/\.md$/i.test(path)) for (const m of line.matchAll(SESSION_ID_RE)) push(hits, "session-id", "personal", i, line, m.index);
+    for (const m of line.matchAll(SESSION_URL_RE)) push(hits, "session-url", "personal", i, line, m.index);
     for (const m of line.matchAll(LAN_RE)) {
       push(warnings, isDocsPath(path) ? "lan-ip-docs" : "lan-ip", "lan", i, line, m.index);
     }
@@ -264,8 +273,11 @@ export function checkLinks(path, md, { included, tracked, includedDirs }) {
     found.push({ path, line: i + 1, target: t, resolved: bare, kind: existsPrivately ? "excluded" : "missing", via });
   };
   lines.forEach((line, i) => {
-    for (const m of line.matchAll(/!?\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) consider(m[1], "link", i);
-    const ref = /^\s{0,3}\[[^\]]+\]:\s*(\S+)/.exec(line);
+    // A link written inside a code span is an example of the syntax, not a link.
+    const prose = line.replace(/`[^`]*`/g, (m) => " ".repeat(m.length));
+    // Every `](target)`: `[![alt](a.gif)](b.mp4)` carries two, and `[text](t)` only sees the first.
+    for (const m of prose.matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) consider(m[1], "link", i);
+    const ref = /^\s{0,3}\[[^\]]+\]:\s*(\S+)/.exec(prose);
     if (ref) consider(ref[1], "link", i);
     for (const m of line.matchAll(/`([\w@.-]+(?:\/[\w@.-]+)+\.md)`/g)) consider(m[1], "mention", i);
   });
@@ -280,6 +292,85 @@ export function dirsOf(paths) {
     for (let n = 1; n < parts.length; n++) out.add(parts.slice(0, n).join("/"));
   }
   return out;
+}
+
+// ----------------------------------------------------------------- rewriting
+// What publishing CHANGES on the way out, so the private tree keeps what only its owner needs and
+// the public one never carries it. Each returns the new text and a count; the report says both.
+
+const SID_LIST = String.raw`${SID}(?:, ${SID})*`;
+const SID_PAREN_RE = new RegExp(String.raw`[ \t]*\(session ${SID_LIST}\)`, "g");
+const SID_PAREN_LEAD_RE = new RegExp(String.raw`\(session ${SID_LIST};\s*`, "g");
+const SID_ON_RE = new RegExp(String.raw` on session \`?${SID}\`?`, "g");
+const ASKED_RE = /^(\s*- asked: )(.*)$/;
+/** An `asked:` entry that is a prompt-log ref (`ec4932bb`): a key into the private prompt log. */
+const PROMPT_REF_RE = /(^|, )[0-9a-f]{8}(?=, |$)/g;
+
+/**
+ * Drop the Claude session ids, and the prompt-log refs of an `asked:` line, from a markdown file.
+ * The requirements record `asked: <ref>, <date> (session <id>)` so the owner can find the prompt
+ * and the conversation behind an item; nobody else can open either, so publicly they are noise
+ * that also leaks how the owner works. An `asked:` line left with nothing is dropped. Markdown
+ * only; an id in a new phrasing is a `session-id` scan hit.
+ */
+export function stripSessionIds(path, text) {
+  if (!/\.md$/i.test(path)) return { text, n: 0 };
+  let n = 0;
+  const count = (r) => () => { n++; return r; };
+  const out = [];
+  for (const line of text.split("\n")) {
+    let l = line.replace(SID_PAREN_LEAD_RE, count("(")).replace(SID_PAREN_RE, count("")).replace(SID_ON_RE, count(""));
+    const asked = ASKED_RE.exec(l);
+    if (asked) {
+      const rest = asked[2].replace(PROMPT_REF_RE, () => { n++; return ""; }).replace(/^, /, "");
+      if (!rest.trim()) continue;
+      l = asked[1] + rest;
+    }
+    out.push(l);
+  }
+  return { text: out.join("\n"), n };
+}
+
+/**
+ * Re-point links at files published somewhere else (the videos: too big to carry in the
+ * public repo's history). `host(repoPath)` answers the URL for a path that is hosted, else null.
+ * Every `](target)` and `[ref]: target` outside fences and code spans is considered, resolved
+ * like `checkLinks` (relative to the file, then from the repo root). Returns the new text, the
+ * number of links changed and the set of repo paths they point at.
+ */
+export function rewriteHostedLinks(path, md, host) {
+  const dir = posixDirname(path);
+  const used = new Set();
+  let n = 0;
+  const fenced = stripFences(md).split("\n");
+  const target = (t) => {
+    const bare = t.replace(/[?#].*$/, "");
+    if (!bare || /^(?:[a-z][a-z0-9+.-]*:|#|\/\/)/i.test(bare)) return null;
+    for (const c of [resolveRel(dir, bare), resolveRel("", bare)]) {
+      const url = c ? host(c) : null;
+      if (url) { used.add(c); n++; return url + t.slice(bare.length); }
+    }
+    return null;
+  };
+  const out = md.split("\n").map((line, i) => {
+    if (fenced[i] !== line) return line; // inside a fence
+    const ref = /^(\s{0,3}\[[^\]]+\]:\s*)(\S+)(.*)$/.exec(line);
+    if (ref) { const u = target(ref[2]); return u ? ref[1] + u + ref[3] : line; }
+    return line.replace(/(`[^`]*`)|\]\(([^)\s]+)/g, (m, code, t) => {
+      if (code) return code;
+      const u = target(t);
+      return u ? `](${u}` : m;
+    });
+  }).join("\n");
+  return { text: out, n, used };
+}
+
+/** The hosted name of a file: its stem plus the first 10 hex of its sha256, so a re-recording is a
+ *  new URL and every older release's links keep pointing at the bytes they were written against. */
+export function hostedName(path, sha256hex) {
+  const base = path.split("/").pop();
+  const dot = base.lastIndexOf(".");
+  return dot > 0 ? `${base.slice(0, dot)}-${sha256hex.slice(0, 10)}${base.slice(dot)}` : `${base}-${sha256hex.slice(0, 10)}`;
 }
 
 // ------------------------------------------------------------------- grouping

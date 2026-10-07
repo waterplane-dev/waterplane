@@ -17,12 +17,13 @@ import { clampRect, normRect } from "./annGeom";
 import { pointerActions } from "./annPointer";
 import { readActions } from "./annRead";
 import { sendActions } from "./annSend";
+import { ocrActions, type OcrState } from "./annOcr";
 import { COLORS, type AnnCtx, type AnnotatorProps, type AnnRect, type Shape, type Tool } from "./annTypes";
-import { LS, lsBool, lsJson, lsSetJson } from "../storage";
+import { LS, lsBool, lsJson, lsSetBool, lsSetJson } from "../storage";
 import { readLayout, type AnnLayout } from "../annLayout";
 import { type Knob } from "../annKnobs";
 
-export function useAnnotator({ source, repoId, index, total, facts, onUploaded, onDispatch, onPark, onSkip, onSendAll, onClose }: AnnotatorProps) {
+export function useAnnotator({ source, repoId, index, total, facts, onUploaded, onDispatch, onPark, onSkip, onSendAll, onText, onClose }: AnnotatorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<ImageBitmap | HTMLImageElement | HTMLCanvasElement | null>(null);
@@ -55,6 +56,10 @@ export function useAnnotator({ source, repoId, index, total, facts, onUploaded, 
   // Knob mode (annKnobs.ts): the selected mark wears move/size/turn knobs on
   // strings instead of end dots and the whole·A·B chips. Opt-in, per device.
   const [knobs, setKnobs] = useState(() => lsBool(LS.annKnobs));
+  // The idle gesture hint, closed once and gone for good on this device — it
+  // costs a row of picture on every open once it has been read.
+  const [hintHidden, setHintHidden] = useState(() => lsBool(LS.annHintHidden));
+  const hideHint = () => { lsSetBool(LS.annHintHidden, true); setHintHidden(true); };
   const knobsRef = useRef(knobs);
   knobsRef.current = knobs;
   // Live drag of an existing shape, held OUT of state for the same reason
@@ -101,6 +106,10 @@ export function useAnnotator({ source, repoId, index, total, facts, onUploaded, 
   // One dot of the CURRENT colour opens the palette: five always-on swatches
   // cost a phone's toolbar five slots to say one thing.
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // "Text only" (annOcr.ts): the desktop's reading of the whole picture and the
+  // words as the person is editing them. Per picture — cleared with the marks.
+  const [ocr, setOcr] = useState<OcrState | null>(null);
+  const [ocrDraft, setOcrDraft] = useState("");
 
   // The toolbar as the person arranged it (`annLayout.ts`), and whether its
   // config panel is up. Written through on every change, like the knobs switch.
@@ -122,6 +131,8 @@ export function useAnnotator({ source, repoId, index, total, facts, onUploaded, 
     let revoked: string | null = null;
     let cancelled = false;
     setShapes([]); // fresh marks per image when stepping through a batch
+    setOcr(null);
+    setOcrDraft("");
     genRef.current++;
     readsRef.current = new Map(); // a read for the PREVIOUS image answers nobody
     setEditRead(null);
@@ -255,6 +266,7 @@ export function useAnnotator({ source, repoId, index, total, facts, onUploaded, 
   const read = readActions(ctx);
   const pointer = pointerActions(ctx, read.readBand);
   const { send, sendAll } = sendActions(ctx);
+  const ocrAct = ocrActions({ canvasRef, genRef, redraw, setOcr, setOcrDraft, onText });
   const zoomed = view.k > fitRef.current.k * 1.02;
 
   // The newest highlighted band — the one a person has just drawn and is about
@@ -263,12 +275,13 @@ export function useAnnotator({ source, repoId, index, total, facts, onUploaded, 
   const lastBand = [...shapes].reverse().find((s) => s.tool === "marker");
 
   return {
-    props: { index, total, onSkip, onSendAll, onDispatch, onClose },
+    props: { index, total, onSkip, onSendAll, onDispatch, onText, onClose },
     canvasRef, wrapRef, tool, color, setColor, factor, setFactor, shapes, setShapes, moveMode, selected, setSelected,
     target, setTarget, moveNote, setMoveNote, knobs, busy, err, cropMode, pendingCrop, pendingText, textDraft, setTextDraft,
     textInputRef, editRead, setEditRead, readDraft, setReadDraft, readInputRef, paletteOpen, setPaletteOpen, view, fitRef,
     layout, setLayout, configOpen, setConfigOpen,
-    moveRef, zoomed, lastBand, ...edit, ...read, ...pointer, send, sendAll,
+    moveRef, zoomed, lastBand, hintHidden, hideHint, ...edit, ...read, ...pointer, send, sendAll,
+    ocr, ocrDraft, setOcrDraft, ...ocrAct,
   };
 }
 

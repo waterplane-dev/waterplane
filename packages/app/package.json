@@ -12,13 +12,15 @@
     "apk:play-debug": "npm run sync && cd android && ./gradlew assemblePlayDebug",
     "install-apk": "npm run apk && adb install -r android/app/build/outputs/apk/dev/debug/app-dev-debug.apk",
     "open": "cap open android",
-    "doctor": "cap doctor"
+    "doctor": "cap doctor",
+    "ios:sim": "bash scripts/ios-sim.sh"
   },
   "dependencies": {
-    "@capacitor/android": "^8.5.0",
-    "@capacitor/core": "^8.5.0"
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/ios": "^8.5.2"
   },
   "devDependencies": {
-    "@capacitor/cli": "^8.5.0"
+    "@capacitor/cli": "^8.5.2"
   }
 }

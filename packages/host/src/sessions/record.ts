@@ -344,7 +344,9 @@ export async function search(core: SessionCore, query: string, scope: SessionSea
  * disk (the history), and it makes the whole call a ~1,000-character one.
  */
 export function firstPromptOf(s: Session): string {
-  return (s.history[0]?.text ?? "").trim().slice(0, NAME_INPUT_CHARS);
+  // A typed slash command says what the CLI was told, not what the work is
+  // (same rule as `recentPromptsOf`) — a `/compact` is no name for a tab.
+  return (s.history.find((e) => e.kind !== "command")?.text ?? "").trim().slice(0, NAME_INPUT_CHARS);
 }
 
 /**
@@ -354,8 +356,7 @@ export function firstPromptOf(s: Session): string {
  * what the work is. Never read by the automatic pass.
  */
 export function recentPromptsOf(s: Session): string[] {
-  return s.history.slice(1)
-    .filter((e) => e.kind !== "command")
+  return s.history.filter((e) => e.kind !== "command").slice(1)
     .map((e) => (e.text ?? "").trim())
     .filter(Boolean)
     .slice(-RENAME_RECENT_PROMPTS)

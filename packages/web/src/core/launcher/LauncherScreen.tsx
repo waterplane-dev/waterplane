@@ -122,7 +122,8 @@ export function LauncherScreen(p: LauncherProps) {
           // people match against); the text goes, and its space becomes chips.
           // The host switcher is a row in the menu (Android shell): a long
           // desktop name here took the whole bar for a rarely asked question.
-          <div className="brand"><Logo size={32} /></div>
+          // 40 = `.topbar > .key`'s min-height: the mark is as tall as the buttons beside it.
+          <div className="brand"><Logo size={40} /></div>
         )}
         {launch.permissionMode && RISKY_PERM_MODES.has(launch.permissionMode) && (
           // Standing reminder: the launch default is armed to skip every

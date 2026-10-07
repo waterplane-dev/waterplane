@@ -2,11 +2,9 @@
 
 ### R-connection-001 · requested
 Connection status bar is visible on every screen, showing connection state, ping response times as a graph, upload/download speed, total bytes transferred, last connection/sync time, and next session-limit reset time; tapping items shows detailed information.
-- asked: de110463, 23b66381, 36a37470
 
 ### R-connection-002 · shipped
 Offline star works and syncs when reconnected.
-- asked: d0d86b57
 - shipped: 3702412
 
 ### R-connection-003 · shipped

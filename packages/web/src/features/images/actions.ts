@@ -23,7 +23,7 @@ import {
   ann, browseAim, browseRepoId, collage, flow, galleryCtx, minimizedNewImg, newImages, sweepFor, swipe,
 } from "./store";
 import {
-  annReturnOverlay, dropStrip, findInStrips, galleryCtxForFile, isVideoPath, isViewable, markedRef, mergeNewImages, outboxCut,
+  annReturnOverlay, dropStrip, findInStrips, galleryCtxForFile, isVideoPath, isViewable, markedRef, mergeNewImages, ocrBlock, outboxCut,
   parkLane, swapImageRef, trimNewImages, type GalleryCtx, type NewImg, type SwipeState,
 } from "./logic";
 
@@ -392,6 +392,36 @@ export async function afterUpload(relPath: string, note?: string): Promise<void>
   if (a?.rest && a.rest.length) { advanceBatch(); say.toast(`Sent ${a.index}/${a.total} · next…`); return; }
   goTo(null); ann.set(null);
   say.toast(`Sent · path copied: ${relPath}`);
+}
+
+/**
+ * The annotator's "text only": the words the desktop read off the picture, as
+ * edited, go where the picture's path would have gone — and the picture goes
+ * nowhere (nothing is uploaded to the inbox, so no agent can open it). Appended,
+ * never seeded over a draft.
+ */
+export function afterText(text: string): void {
+  const block = ocrBlock(text);
+  const c = core();
+  if (flow.ret === "backlog-item" && flow.backlogEdit) {
+    const { id, oldPath, text: row } = flow.backlogEdit;
+    flow.backlogEdit = null;
+    flow.ret = "session";
+    ann.set(null); c.nav.open("backlog");
+    c.conn.liveSend({ t: "backlog.update", id, text: swapImageRef(row, oldPath, block) }, "the image is now its text",
+      "no connection — the backlog row lives on the desktop and still names the image");
+    return;
+  }
+  if (flow.ret === "send") c.compose.appendSheetDraft(SEND_DRAFT, block);
+  else if (flow.ret === "pad") {
+    c.compose.appendSheetDraft("pad.editor", block);
+    if (!c.compose.loadSheetDraft("pad.editor.id")) c.compose.seedSheetDraft("pad.editor.id", "new");
+  } else if (c.world.active) c.compose.insert(block);
+  else void copyText(block);
+  const a = ann.get();
+  if (a?.rest && a.rest.length) { advanceBatch(); c.say.toast(`Text added ${a.index}/${a.total} · next…`); return; }
+  c.say.toast(flow.ret === "session" && !c.world.active ? "text copied — no session open to put it in" : "text added — the photo was not sent");
+  closeAnnotator();
 }
 
 /** Open a picture at a URL in the annotator. */

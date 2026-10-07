@@ -35,7 +35,7 @@ Three workspaces, one deliberate non-workspace:
   Capacitor deps stay out of every `npm install`. **The UI updates over the air** — only
   Java/manifest/icon changes need a new APK. See `packages/app/README.md`.
 
-Demo mode + fake host: [plan](docs/analysis/demo-mode-plan.md) (built).
+Demo mode + fake host: `docs/notes/testing-and-ops.md`.
 
 ## The phone↔repo transport
 
@@ -62,7 +62,7 @@ at, which is not confined to one area of the code — and a convention only load
   handed to every spawned `claude` via `--plugin-dir` (`reposkill.ts`). A new repo-facing
   capability is a paragraph there.
 
-- **Peer desktops** ([plan](docs/analysis/peer-hosts-plan.md)): a paired host runs a job and
+- **Peer desktops** (`docs/notes/host.md`, `peers/`): a paired host runs a job and
   reports back as one prompt. A peer token unlocks only `/api/peer/*` (never a device token); a job
   never restarts the peer's live daemon.
 

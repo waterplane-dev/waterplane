@@ -42,10 +42,12 @@ if (!nodeMeetsMin(process.versions.node)) {
 }
 
 const rootPick = resolveRoot(process.env);
-/** The code root: `<PREFIX>ROOT`, else `~/dev` (`branddirs.ts`' `defaultRoot`, the one spelling). */
+/** The code root: `<PREFIX>ROOT`, else the first usual code folder that exists, else `~/dev` (`branddirs.ts`' `resolveRoot`). */
 export const ROOT = rootPick.root;
-/** True when nobody named the root and `~/dev` was assumed — the doctor says so. */
+/** True when nobody named the root and it was derived (found or assumed) — the doctor says so. */
 export const ROOT_DEFAULTED = rootPick.defaulted;
+/** How the root came about: `named` (the knob), `found` (an existing usual folder) or `fallback` (`~/dev`, which may not exist). */
+export const ROOT_PICKED = rootPick.picked;
 
 /**
  * True when this process IS the daemon — its entry script is this package's
@@ -100,6 +102,11 @@ async function otherDaemonFor(root: string, oldState: string): Promise<string | 
 // state under a test run). Never throws; what it did is one line each.
 // `--doctor` is the daemon's entry too, but a preflight only looks: it reads
 // wherever the state is now and reports a pending move instead of making it.
+// `doctor --json` owns stdout: the report is one JSON document there, so every
+// other line the boot prints (this module's own notes included) goes to stderr.
+if (process.argv.includes("--doctor") && process.argv.includes("--json")) {
+  console.log = console.info = console.error;
+}
 const statePick = resolveStateDir(process.env);
 let stateDir: string;
 if (isDaemonEntry()) {

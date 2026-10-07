@@ -92,7 +92,7 @@ export interface PluginEntry {
   methods: Map<string, (args: unknown) => unknown>;
   /** Backend ids this activation registered (`api.backend`) — unregistered when it is switched off. */
   backends: Set<string>;
-  /** Unregisters for the readers this activation contributed (`api.screenReader` / `api.storeReader`). */
+  /** Unregisters for the readers this activation contributed (`api.screenReader` / `api.storeReader` / `api.thermalReader`). */
   readers: Set<() => void>;
   /** `api.onHook` — what `/api/plugin/<id>/hook` hands its body to. */
   hook: { fn: (payload: unknown, hold: PluginHookHold) => unknown; maxHoldMs: number } | null;

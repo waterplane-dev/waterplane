@@ -26,6 +26,7 @@ import { readInlineImages } from "../files.js";
 import { isSecretFile } from "../git.js";
 import { contained, inRoot } from "../paths.js";
 import { stripAnsi } from "../prompt.js";
+import { registerThermalReader } from "../sysstat.js";
 import type { PluginEntry, PluginRegistry } from "./pluginregistry.js";
 import { hostStateDir } from "../branddirs.js";
 import { makePluginRoute, pluginRouteProblem } from "./pluginroutes.js";
@@ -405,6 +406,13 @@ export function makeApi(reg: PluginRegistry, e: PluginEntry, gen: number): HostP
     storeReader: (name, reader) => {
       if (!live()) throw new Error(`${e.manifest.name} is not running`);
       const off = registerStoreReader(name, reader);
+      e.readers.add(off);
+      return () => { if (e.readers.delete(off)) off(); };
+    },
+    // The machine readout's temperature and fans (`sysstat.ts`), where core has no reader.
+    thermalReader: (name, reader) => {
+      if (!live()) throw new Error(`${e.manifest.name} is not running`);
+      const off = registerThermalReader(name, reader);
       e.readers.add(off);
       return () => { if (e.readers.delete(off)) off(); };
     },

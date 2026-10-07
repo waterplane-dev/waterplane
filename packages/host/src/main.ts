@@ -1,6 +1,6 @@
 // FIRST, before every other import: it computes ROOT and loads the .env files,
 // so a WATERPLANE_* knob a module reads at import sees them (env.ts says why).
-import { ROOT, ROOT_DEFAULTED, env } from "./env.js";
+import { ROOT, ROOT_DEFAULTED, ROOT_PICKED, env } from "./env.js";
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { WebSocketServer, type WebSocket } from "ws";
@@ -8,7 +8,7 @@ import {
   type ClientMessage, logTag, envName } from "@waterplane/shared";
 import { tailscaleIp, tailscaleBin, tailscaleDnsName, serveHttpsUrl, lanIps } from "./net.js";
 import { configureOrigins } from "./origin.js";
-import { printBootSummary, printReport, runChecks } from "./doctor.js";
+import { printBootSummary, printReport, reportJson, runChecks } from "./doctor.js";
 import { AuthManager, authLostNotice, selectWsProtocol } from "./auth.js";
 import { SessionManager } from "./sessions.js";
 import { AckLedger, lostLedgerNotice } from "./acks.js";
@@ -567,7 +567,7 @@ async function main(): Promise<void> {
   // changes when someone runs `tailscale serve`, so boot-time is enough.
   const httpsUrl = await serveHttpsUrl(PORT);
   const doctorInput = {
-    root: ROOT, rootDefaulted: ROOT_DEFAULTED,
+    root: ROOT, rootDefaulted: ROOT_DEFAULTED, rootPicked: ROOT_PICKED,
     port: PORT,
     claudeBin: claudeBackend.bin(),
     // Which backends this host has already launched sessions on (the recent list
@@ -584,7 +584,8 @@ async function main(): Promise<void> {
   // module's timers and sockets would keep every PTY they own alive for ever.
   if (DOCTOR) {
     const checks = await runChecks(doctorInput);
-    printReport(checks);
+    if (process.argv.includes("--json")) process.stdout.write(reportJson(checks) + "\n");
+    else printReport(checks);
     process.exit(checks.some((c) => c.status === "fail") ? 1 : 0);
   }
   // SAFETY: this daemon spawns `claude`, which can run arbitrary code, and has

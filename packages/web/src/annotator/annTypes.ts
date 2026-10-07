@@ -81,6 +81,9 @@ export interface AnnotatorProps {
   /** Batch only: send the current (flattened) image plus every remaining one
    *  raw/as-is, no more annotating. `mode` applies once all uploads finish. */
   onSendAll?: (cur: AnnDispatch, mode: AnnSend) => void;
+  /** "Text only": the words the desktop read off this picture, as edited, sent
+   *  INSTEAD of the picture (annOcr.ts). Absent ⇒ the verb is not offered. */
+  onText?: (text: string) => void;
   onClose: () => void;
 }
 

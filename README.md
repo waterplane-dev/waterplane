@@ -6,7 +6,9 @@ waterplane drives the real **Claude Code** CLI on your own desktop from your pho
 the actual terminal, a reader view of the same session, and what the desktop builds and screenshots
 sent back to the phone. No waterplane server, no account, no telemetry; waterplane keeps nothing of yours anywhere but your machine.
 
-![The real claude terminal on a phone, flipped to the reader and back; a screenshot arrives, is marked up and sent back; what the prompt cost](docs/media/first-look.gif)
+[![The real claude terminal on a phone, mid-turn; a screenshot arrives, is circled and sent back, and Claude fixes what was circled](docs/media/first-look.gif)](https://waterplane-dev.github.io/media/first-look-ef0a8d56b4.mp4)
+
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/first-look-ef0a8d56b4.mp4), with pause and seek.*
 
 - **The real CLI, not a re-implementation.** Every slash command, plan and trust prompt and the
   context meter work as at the desk; choice boxes come up as buttons.
@@ -70,7 +72,9 @@ come up as buttons. *(gif at the top of this page)*
 
 ### Screenshot, mark it up, send it back
 
-![A screenshot Claude saved appears on the phone; open it, mark it up, send the note back](docs/media/gallery-and-files.gif)
+[![Tap the new-file count: the gallery lists what Claude made, and a markdown file, a live HTML page and a screenshot open on the phone](docs/media/gallery-and-files.gif)](https://waterplane-dev.github.io/media/gallery-and-files-d96756c1ea.mp4)
+
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/gallery-and-files-d96756c1ea.mp4), with pause and seek.*
 
 What Claude leaves in `.claude/outbox/` appears on the phone as a picture or a file, with a badge on
 the repo and a notification. Open it full size, draw a circle or a box on it, type what to change,
@@ -82,7 +86,9 @@ out of the crop so the prompt carries them verbatim.
 
 *Android app developers only (optional).*
 
-![Phone one circles a spot on a screenshot of the app, Claude Code adds a logo there, the build runs, phone two's notifications say the build succeeded and the update is ready to install, one tap on Install updates it, and it opens with the logo in the circled spot](docs/media/apk-install.gif)
+[![Phone one circles a spot on a screenshot of the app, Claude Code adds a logo there, the build runs, phone two's notifications say the build succeeded and the update is ready to install, one tap on Install updates it, and it opens with the logo in the circled spot](docs/media/apk-install.gif)](https://waterplane-dev.github.io/media/apk-install-cd81f3614e.mp4)
+
+*Loops. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/apk-install-cd81f3614e.mp4), with pause and seek.*
 
 Save a build command per repo and run it from the phone without a Claude session, so it spends no
 tokens; it is the way out when you are rate limited and still need a build. Produced files are
@@ -91,7 +97,9 @@ each new APK of your app by itself, and the build sheet says on which phones it 
 
 ### Schedule against the weekly window
 
-![A prompt waits behind a running turn, then runs; schedules and the backlog at a glance](docs/media/queue-and-schedule.gif)
+[![Tap the waiting count: the queued prompt waits behind a running turn, then runs by itself](docs/media/queue-and-schedule.gif)](https://waterplane-dev.github.io/media/queue-and-schedule-84fab1746e.mp4)
+
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/queue-and-schedule-84fab1746e.mp4), with pause and seek.*
 
 Post a prompt for later: at a time, when the session goes quiet, after another one finishes, or
 anchored to a usage-limit reset ("right after the weekly window comes back", "two hours before the
@@ -100,7 +108,9 @@ in a queue and is typed in exactly once. The Backlog holds a repo's work that no
 
 ### Know what it costs
 
-![The usage windows, what the budget says about them, a session's context window, the token ledger](docs/media/numbers.gif)
+[![Two weeks of heavy use priced at API list price, and what drives the cost](docs/media/numbers.gif)](https://waterplane-dev.github.io/media/numbers-b168ebe603.mp4)
+
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/numbers-b168ebe603.mp4), with pause and seek.*
 
 Every finished turn says what it cost: tokens in, out and cached, and dollars at list price, plus
 what the *next* turn will cost compared with a fresh session. The token ledger splits every total by
@@ -118,7 +128,9 @@ weight, each with its trend. The numbers are only readings: nothing changes code
 
 ### Usage limit and session budget
 
-![A session budget holds the next send before the usage wall; at the reset the session continues](docs/media/limit-and-budget.gif)
+[![The session hits the 5-hour usage wall and is parked; at the reset it continues and the held prompt runs once](docs/media/limit-and-budget.gif)](https://waterplane-dev.github.io/media/limit-and-budget-f2a9c7fca8.mp4)
+
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/limit-and-budget-f2a9c7fca8.mp4), with pause and seek.*
 
 Give a session a budget (tokens, dollars, or a share of the 5-hour or weekly window) and the next send is held when it is reached, before the
 usage wall, with your words kept and the reason said. When a session does hit a Claude usage limit,
@@ -158,6 +170,10 @@ Paseo and Orca put coding agents on a phone too. Reaching your agent from a phon
 different here. What is: the real terminal plus a reader, no vendor or relay in the path, the build
 and artifact loop back to the phone, schedules against usage windows with an exactly-once queue, and
 token and cost history with the next turn's price.
+
+Nor is it a chat agent. OpenClaw and similar assistants can run Claude Code for you headless and
+report back in a message, which is enough for "go do X". waterplane is for driving the session
+yourself: the live terminal, the boxes it asks, what it is doing and what it costs, as it happens.
 
 It is not either/or with Remote Control. Turn on the launch option "Remote Control" and every session
 waterplane starts is also reachable from the Claude app: waterplane to start sessions on any repo,
@@ -230,13 +246,20 @@ from the phone's build sheet.
   restart; without it the host refuses to start sessions. `brew install tmux` on macOS,
   `sudo apt-get install -y tmux` on Debian/Ubuntu/WSL (or your distribution's package manager). The
   installer offers to install it for you.
-- **Node ≥ 20.12** for a source checkout.
+- **Node ≥ 20.12** for a source checkout. Any npm runs `npm ci`; an npm older than 11.10 prints
+  "Unknown project config min-release-age", which is harmless for `npm ci` (it installs the lockfile
+  exactly). Upgrade npm only if you will `npm install` new dependencies yourself.
 
 ### Install
 
+> **On Windows, open a WSL2 shell first** (`wsl --install`, then work inside Ubuntu) and clone there,
+> not under `C:\`. From native Windows the host starts but refuses to run sessions: there is no tmux.
+
 A `curl | sh` installer (it brings its own pinned Node, verifies checksums, and adds a `waterplane`
 command with `start`, `doctor`, `service`, `update` and `pair`) ships with the first public release;
-see [docs/notes/distribution.md](docs/notes/distribution.md). Until then, from source:
+see [docs/notes/distribution.md](docs/notes/distribution.md). On a home server or a VPS, the
+host also runs in Docker, joining the tailnet as its own machine:
+[deploy/docker/README.md](deploy/docker/README.md). Until then, from source:
 
 ```bash
 git clone https://github.com/waterplane-dev/waterplane.git
@@ -248,6 +271,8 @@ npm start
 ```
 
 `npm run doctor` is the first thing to run and the first thing to re-run when something misbehaves.
+`npm run --silent doctor -- --json` (or `waterplane doctor --json`) prints the same checks as one
+JSON document for a script or an agent.
 
 **Where it keeps things.** Your repos stay where they are (`WATERPLANE_ROOT`, default `~/dev`), and
 the host keeps none of its own state there. That state — the delivery ledger, sessions,
@@ -275,8 +300,28 @@ first look but is not a secure context (no install, push or clipboard), so set u
 the next section and open **that** on your phone to add it to your home screen. To add another phone, **Settings → pair another phone** shows a
 QR code; on a desktop with no screen, `waterplane pair` prints the link and code instead.
 
-By default it scans `~/dev` for git repos and worktrees. Set `WATERPLANE_ROOT` if your code lives
-elsewhere. **Everything under that directory is reachable from the phone**, so choose it deliberately.
+By default it scans `~/dev` for git repos and worktrees, or, if that does not exist, the first usual
+code folder that does (`~/code`, `~/src`, `~/projects`, `~/repos`, …; the doctor says which). Set
+`WATERPLANE_ROOT` to choose. **Everything under that directory is reachable from the phone**, so choose it deliberately.
+
+### Installing with an agent
+
+An agent (Claude Code, OpenClaw, …) can do almost all of this. Hand it this section:
+
+- **Ask the person which folder to expose** (`WATERPLANE_ROOT`) before installing. Never set
+  `WATERPLANE_ALLOW_PUBLIC`, never bind `0.0.0.0`, never expose the port beyond the tailnet
+  (`tailscale serve`, never `funnel`).
+- Install `tmux` first: the installer offers it only on an interactive terminal.
+- Do not leave `npm start` running in the foreground; install the service instead
+  (`waterplane service install`, or `bash deploy/install-service.sh` on macOS from source).
+- Loop on `doctor --json` (`{ ok, fails, warns, checks: [{ id, status, detail, fix? }] }`, exit 1
+  on a failure): run each `fix` that is a command here, hand the person each one that is not.
+- **Only the person can**: sign `claude` in, put Tailscale on the phone, and enable HTTPS +
+  MagicDNS in the tailnet admin console. Everything after that is a command.
+- Pair with `waterplane pair --json` and send the person its `landingUrl` and `code`.
+
+For OpenClaw, [deploy/openclaw/waterplane/SKILL.md](deploy/openclaw/waterplane/SKILL.md) is all of
+this as a skill.
 
 ### Notifications and the install prompt (recommended)
 
@@ -294,10 +339,13 @@ it is in place.
 
 ### Or the Android app
 
-[`packages/app`](packages/app/README.md) builds an APK that carries the same UI inside itself. Its
+Download the APK from the [latest release](https://github.com/waterplane-dev/waterplane/releases/latest)
+(the pairing page links it too) and allow the install. It carries the same UI inside itself. Its
 origin is `http://localhost`, a secure context, so it needs no `tailscale serve`; and its interface is
 not on the network at all, so a reload or cold start while the tunnel is down lands in the working
 app, with the send queue and drafts intact.
+
+To build it yourself instead ([`packages/app`](packages/app/README.md)):
 
 ```bash
 cd packages/app && npm install && npm run install-apk   # needs JDK 21 + Android SDK
@@ -306,7 +354,11 @@ cd packages/app && npm install && npm run install-apk   # needs JDK 21 + Android
 It updates its own UI from the desktop: after a `npm run build` the app picks up the new bundle on its
 next launch.
 
-### Run it as a background service (macOS)
+### Run it as a background service
+
+With the installer, `waterplane service install|uninstall|status` registers a launchd agent
+(macOS) or a systemd user unit (Linux); the installer does it for you unless `--no-service`. From a
+source checkout on macOS:
 
 ```bash
 bash deploy/install-service.sh      # installs a launchd agent, starts on login
@@ -318,6 +370,28 @@ Always use `npm run restart` rather than killing the process by hand: it builds 
 build never takes the host down) and lets launchd hand off cleanly. Sessions run inside tmux, so
 they survive the restart. Logs land in `~/Library/Logs/waterplane-host.{out,err}.log`.
 
+### Update
+
+From the folder you cloned into (on Windows: inside the WSL shell, not `C:\`):
+
+```bash
+git pull --ff-only   # the latest release
+npm ci               # the lockfile exactly, as on install; also drops removed packages
+npm run doctor       # new checks arrive with new releases; re-read what it says
+npm run restart      # builds, then restarts the host (the service if installed, else detached)
+```
+
+- **Sessions survive it.** They run inside tmux; the phone reconnects and carries on.
+- **The phone updates itself.** The new UI is served by the host; the web app and the Android app
+  pick it up on their next launch. A new APK is needed only when the native shell changed:
+  `git diff --stat ORIG_HEAD -- packages/app/android` after the pull lists it if so.
+- **Started with `npm start` in a terminal instead?** `npm run restart` still works (it stops that
+  one and starts a detached copy); or Ctrl+C, then `npm run build && npm start`.
+- **A failed build leaves the running host alone.** Fix it (usually `npm ci` was skipped), re-run
+  `npm run restart`.
+
+With the `curl | sh` installer (first public release on), all of this is `waterplane update`.
+
 ## Configuration
 
 Everything is optional. Copy [.env.example](.env.example) to `.env` and edit, or export the
@@ -325,7 +399,7 @@ variables. The most useful ones:
 
 | Variable | Default | What |
 | --- | --- | --- |
-| `WATERPLANE_ROOT` | `~/dev` | Directory scanned for repos. **This is the blast radius.** |
+| `WATERPLANE_ROOT` | `~/dev`, else the first of `~/code`, `~/src`, `~/projects`, `~/repos`, … that exists | Directory scanned for repos. **This is the blast radius.** |
 | `WATERPLANE_STATE_DIR` | `~/.local/state/waterplane` | The host's own state, outside the code root. Read from the environment, not a `.env` file. |
 | `WATERPLANE_PORT` | `8770` | HTTP + WebSocket port. |
 | `WATERPLANE_HOST` | Tailscale IP, then loopback | Bind address override. |

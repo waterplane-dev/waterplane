@@ -29,7 +29,7 @@
  * is `SessionTabsBar.tsx`.
  */
 import { useEffect, useRef, useState } from "react";
-import { trimDefaultBranch } from "@waterplane/shared";
+import { glueCompanions, trimDefaultBranch } from "@waterplane/shared";
 // Type-only, so `node --test` running straight over this file never has to load
 // a `.tsx`: what a tab's state IS belongs to `sessionFacts.tsx` and may not be
 // a second opinion held here.
@@ -41,6 +41,8 @@ import { LS, lsBool, lsGet, lsJson, lsNum, lsSet, lsSetBool, lsSetJson } from ".
 /** One tab, as `App` publishes it. Everything the strip draws and nothing else. */
 export interface SessionTab {
   id: string;
+  /** A companion shell's parent (`SessionInfo.companionOf`): drawn right after it. */
+  companionOf?: string;
   /** The ≤3-word name the host derived, or the session's own `title`. */
   label: string;
   /** Repo name — the strip's colour comes from this (`format.ts`'s `repoHue`). */
@@ -104,6 +106,15 @@ export const TAB_COUNT_DEFAULT = 3;
  *  repo with a vivid hue looks like. Restated in `.sess-tabs`; the two are one
  *  number and `sessionTabs.test.mjs` is where they are held together. */
 export const TAB_STRIP_H = 34;
+
+/** What the strip publishes as `--ui-tabs-h`, in CSS px. Zero when it is not
+ *  drawn: no sessions, switched off, or the wide workspace (owner decision O3 —
+ *  there the sidebar is the session switcher and a second one above the main
+ *  pane would be furniture). One function so the drawing and the padding every
+ *  screen takes from it cannot disagree. */
+export function tabStripHeight(enabled: boolean, anyTabs: boolean, wide: boolean): number {
+  return enabled && anyTabs && !wide ? TAB_STRIP_H : 0;
+}
 
 /**
  * How many tabs the strip DRAWS — unlike `count`, this one is a limit.
@@ -336,7 +347,7 @@ const listeners = new Set<(s: TabsSnapshot) => void>();
 
 function rebuild(): void {
   const order = tabsOrder();
-  const { shown, hidden } = limitTabs(orderTabs(tabs, order, readOpens()), tabsLimit(), activeId);
+  const { shown, hidden } = limitTabs(glueCompanions(orderTabs(tabs, order, readOpens())), tabsLimit(), activeId);
   snap = {
     enabled: tabsEnabled(),
     count: tabsCount(),

@@ -15,7 +15,7 @@ import { sized, viewerWidth } from "../../media";
 import { useStore } from "../../sdk";
 import { ann, collage, flow, newImages, swipe } from "./store";
 import {
-  afterUpload, closeAnnotator, closeSwipe, collageClose, collageCombine, collageSeparate, dispatchImage,
+  afterText, afterUpload, closeAnnotator, closeSwipe, collageClose, collageCombine, collageSeparate, dispatchImage,
   markFromSwipe, parkAnnotated, refFromSwipe, sendAllBatch, setSwipe, skipImage,
 } from "./actions";
 import { isVideoPath } from "./logic";
@@ -43,6 +43,7 @@ export function MarkUpSheet() {
     onPark={parkAnnotated}
     onSkip={batch ? skipImage : undefined}
     onSendAll={batch && sessionFlow ? sendAllBatch : undefined}
+    onText={afterText}
     onClose={closeAnnotator} />;
 }
 

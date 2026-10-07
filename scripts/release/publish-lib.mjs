@@ -81,6 +81,7 @@ export function verifyReleaseBytes(files, publicKey, { slug, version }) {
  *   missingLocal: string[], byteProblems: string[], releaseCommit, head,
  *   npmHasShrinkwrap: bool, ghAuth: bool, npmUser: string|null, changelog: string|null,
  *   publicClone: { given, ok, why } | null,
+ *   mediaClone: { ok, why } | null   (null: no deploy/public-media.json, or the release exists),
  *   assets: releaseAssets() (an APK there = release.json names one), noApk: bool (--no-apk)
  * }
  * Returns { checks: [{ name, ok, why }], refused: bool }.
@@ -125,6 +126,7 @@ export function preflight(f) {
   add("gh auth status", f.ghAuth, "gh is not logged in (gh auth login)");
   add("npm whoami", !!f.npmUser, "npm is not logged in (npm login)");
   if (f.publicClone) add("public clone", f.publicClone.ok, f.publicClone.why);
+  if (f.mediaClone) add("media clone", f.mediaClone.ok, f.mediaClone.why);
   return { checks, refused: checks.some((c) => !c.ok) };
 }
 
@@ -136,7 +138,8 @@ export function preflight(f) {
  * state: { tag: "absent"|"head", tagPushed, release: "absent"|"draft"|"published",
  *          releaseAssets: string[] (names already on the release), npmPublished }
  * ctx:   { slug, name, version, repo ("<org>/<slug>"), pkg, assets (releaseAssets()), build,
- *          buildArgs: string[], publicClone, accept, notesFile, dir ("dist-release"),
+ *          buildArgs: string[], publicClone, mediaClone (null: nothing hosted), accept, notesFile,
+ *          dir ("dist-release"),
  *          noApk (--no-apk: undraft without an APK asset, on purpose) }
  */
 export function planSteps(state, ctx) {
@@ -161,10 +164,13 @@ export function planSteps(state, ctx) {
     ],
     skip: state.tag === "head" && state.tagPushed ? `${tag} exists on HEAD and on origin` : null,
   });
+  // The media repo is pushed BEFORE the public one: the snapshot's video links point at it.
   steps.push({
-    id: "public", title: "commit the public snapshot and push it",
+    id: "public", title: ctx.mediaClone ? "commit the public snapshot and its hosted media, push the media, then the snapshot" : "commit the public snapshot and push it",
     cmds: [
-      ["node", "scripts/release/publish-public.mjs", "--tag", tag, "--to", ctx.publicClone ?? "<public-clone>", "--commit", ...(ctx.accept ? ["--accept", ctx.accept] : [])],
+      ["node", "scripts/release/publish-public.mjs", "--tag", tag, "--to", ctx.publicClone ?? "<public-clone>", "--commit",
+        ...(ctx.mediaClone ? ["--media-to", ctx.mediaClone] : []), ...(ctx.accept ? ["--accept", ctx.accept] : [])],
+      ...(ctx.mediaClone ? [["git", "-C", ctx.mediaClone, "push", "origin", "main"]] : []),
       ["git", "-C", ctx.publicClone ?? "<public-clone>", "push", "origin", "main"],
     ],
     skip: released ? `the GitHub release ${tag} exists, so its snapshot was pushed` : null,

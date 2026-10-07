@@ -11,6 +11,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   SHELL_QUIET_MS,
+  companionToggle,
+  glueCompanions,
   selfMatchOf,
   selfMatchPattern,
   serverLikeOf,
@@ -204,4 +206,22 @@ test("shellCloseWords: a foreground shell is left out — closing the session en
   ];
   const summary = shellsSummary(list, NOW);
   assert.equal(shellCloseWords(summary, list), "stops 1 background shell — emulator");
+});
+
+test("glueCompanions puts a companion right after its parent", () => {
+  const ids = (l) => glueCompanions(l).map((s) => s.id).join(",");
+  assert.equal(ids([{ id: "a" }, { id: "b" }, { id: "s", companionOf: "a" }]), "a,s,b");
+  assert.equal(ids([{ id: "s", companionOf: "b" }, { id: "a" }, { id: "b" }]), "a,b,s");
+  assert.equal(ids([{ id: "a" }, { id: "s", companionOf: "gone" }]), "a,s", "an orphan keeps its place");
+  assert.equal(ids([{ id: "a" }, { id: "s1", companionOf: "a" }, { id: "b" }, { id: "s2", companionOf: "a" }]), "a,s1,s2,b");
+  assert.equal(ids([{ id: "x", companionOf: "y" }, { id: "y", companionOf: "x" }]).split(",").sort().join(","), "x,y", "a cycle drops nothing");
+});
+
+test("companionToggle goes parent → newest companion and companion → parent", () => {
+  const a = { id: "a" }, s1 = { id: "s1", companionOf: "a", createdAt: 1 }, s2 = { id: "s2", companionOf: "a", createdAt: 2 }, b = { id: "b" };
+  const all = [a, s1, s2, b];
+  assert.deepEqual(companionToggle(a, all), { target: s2, to: "shell" });
+  assert.deepEqual(companionToggle(s1, all), { target: a, to: "cli" });
+  assert.equal(companionToggle(b, all), null);
+  assert.equal(companionToggle(s1, [s1]), null, "parent not listed: no toggle");
 });

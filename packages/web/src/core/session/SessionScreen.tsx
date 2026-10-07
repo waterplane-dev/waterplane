@@ -111,7 +111,7 @@ export function SessionScreen(p: SessionScreenProps): ReactNode {
   };
   return (
     <div className={`screen${chromeHidden ? " typing" : ""}${fullMode ? " fullscreen" : ""}${readerShown ? " reading" : ""}`}>
-      <SessionHeader active={active} pending={pending} pendingEntry={pendingEntry} status={status} liveSend={liveSend}
+      <SessionHeader active={active} sessions={sessions} pending={pending} pendingEntry={pendingEntry} status={status} liveSend={liveSend}
         backends={backends} sessionCan={launch.sessionCan} sessionRepoName={sessionRepoName} repoForCwd={repoForCwd}
         setActiveId={setActiveId} setOverlay={setOverlay} removeQueued={removeQueued} closeSession={closeSession}
         chrome={chrome} hdrShown={hdrSplit.shown} headerCmds={headerCmds} runHeaderCmd={compose.runHeaderCmd}

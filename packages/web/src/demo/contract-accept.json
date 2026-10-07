@@ -75,6 +75,8 @@
     "POST /api/host/clipboard": "not reachable in demo: writes the real desktop's clipboard",
     "POST /api/host/dictate": "not reachable in demo: dictation transcribes on the desktop",
     "POST /api/host/readtext": "not reachable in demo: the highlighter's text reader runs on the desktop",
+    "GET /api/host/ocr": "not reachable in demo: on-device text reading runs on the desktop",
+    "POST /api/host/ocr": "not reachable in demo: on-device text reading runs on the desktop",
     "POST /api/host/screenshot": "not reachable in demo: screenshots the real desktop",
     "POST /api/host/setupprefs": "gap: host setup prefs are not modelled",
     "POST /api/lan/verify": "not reachable in demo: LAN route verification needs a real host",

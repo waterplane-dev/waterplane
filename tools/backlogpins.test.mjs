@@ -148,6 +148,7 @@ test("fire and re-fire are one tap — never a ConfirmButton", () => {
   for (const m of text.matchAll(/<ConfirmButton[\s\S]*?<\/ConfirmButton>/g)) {
     assert.doesNotMatch(m[0], /backlog\.(fire|refire)|onFire\(/, "a fire verb wrapped in a confirm");
   }
-  assert.match(text, /<button className="key" data-hint="backlog\.fire"[^>]*onClick=\{\(\) => \{ track\("action:backlog\.fire"\); p\.verbs\.onFire\(it\.id\); \}\}>fire<\/button>/);
+  // A `manual` row (an agent handed it over) wears `primary`: its fire is the only way it runs.
+  assert.match(text, /<button className=(?:"key"|\{`key\$\{it\.manual \? " primary" : ""\}`\}) data-hint="backlog\.fire"[^>]*onClick=\{\(\) => \{ track\("action:backlog\.fire"\); p\.verbs\.onFire\(it\.id\); \}\}>fire<\/button>/);
   assert.match(text, /<button className="key" data-hint="backlog\.refire"[^>]*onClick=\{\(\) => \{ track\("action:backlog\.refire"\); p\.verbs\.onFire\(it\.id\); \}\}>re-fire<\/button>/);
 });

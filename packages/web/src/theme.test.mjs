@@ -179,7 +179,7 @@ test("light states no token dark has never heard of", () => {
 
 /** Hues used as TEXT (a tag, a chip label, a status word). 4.5:1 or it is not
  *  text, it is decoration. */
-const TEXT_HUES = ["--accent", "--ok", "--dead", "--warn", "--star", "--limit", "--ask",
+const TEXT_HUES = ["--accent", "--ok", "--dead", "--warn", "--star", "--limit", "--ask", "--pair",
   "--purple", "--sched", "--defer", "--ctx-low", "--fg", "--muted"];
 
 for (const [name, vars] of [["dark", DARK], ["light", LIGHT]]) {

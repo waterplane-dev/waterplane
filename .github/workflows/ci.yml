@@ -42,6 +42,9 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install tmux
       - run: npm ci
+      # Known advisories: any in what ships, high+ in dev tooling, high+ in the
+      # Android/iOS shell's own lockfile (packages/app).
+      - run: npm run audit
       - run: npm run build
       # The whole e2e suite (scripts/run-e2e.mjs discovers every e2e-*.mjs, so
       # a new one is covered without touching this file). It drives a stub shell

@@ -3,7 +3,7 @@
 <!-- GENERATED from packages/shared/src/plugin.ts by scripts/gen-plugin-docs.mjs — do not edit by hand. -->
 <!-- Rewrite with `npm run docs:plugins`; `tools/plugindocs.test.mjs` fails when this is stale. -->
 
-**API version: `1.2.0`** (`PLUGIN_API_VERSION`). A manifest's `apiVersion` loads when it has the
+**API version: `1.3.0`** (`PLUGIN_API_VERSION`). A manifest's `apiVersion` loads when it has the
 same major and a minor no newer than this one; the rules for what bumps which number are under
 `PLUGIN_API_VERSION` below. Why the API looks the way it does: `docs/notes/plugins.md`.
 
@@ -84,6 +84,9 @@ shape for both, so moving an extension out of the repo is a folder move.
 - [`PluginStoreLook`](#pluginstorelook) — interface
 - [`PluginStoreContext`](#pluginstorecontext) — interface
 - [`PluginStoreReader`](#pluginstorereader) — interface
+- [`PLUGIN_THERMAL_TIMEOUT_MS`](#plugin_thermal_timeout_ms) — const
+- [`PluginThermalReading`](#pluginthermalreading) — type
+- [`PluginThermalReader`](#pluginthermalreader) — interface
 - [`PluginDoctorCheck`](#plugindoctorcheck) — interface
 - [`PLUGIN_HOOK_HOLD_DEFAULT_MS`](#plugin_hook_hold_default_ms) — const
 - [`PLUGIN_HOOK_HOLD_MAX_MS`](#plugin_hook_hold_max_ms) — const
@@ -128,7 +131,7 @@ A bare number (`"apiVersion": 1`, every manifest written before semver) means `1
   can observe through types.
 
 ```ts
-export const PLUGIN_API_VERSION = "1.2.0";
+export const PLUGIN_API_VERSION = "1.3.0";
 ```
 
 ## PluginApiVersion
@@ -610,6 +613,7 @@ export interface HostPluginApi { … }
 | `backend` | `backend(def: PluginBackendDef): () => void` | Register a backend (a CLI the launcher may spawn). THROWS a sentence — and the plugin is listed broken when that escapes `activate()` — when the id is not in the manifest's `backends`, is already taken, or `caps` names a reader this host does not have. Unregistered when the plugin is switched off; the returned function unregisters it earlier. |
 | `screenReader` | `screenReader(name: string, reader: PluginScreenReader): () => void` | Contribute a SCREEN reader under `name` (since 1.1): the reader for a TUI whose choice dialog has no numbers and is answered by walking a selection (`PluginScreenReader`). A backend this plugin registers may then name it in `caps.promptBoxes` — so register the reader FIRST. THROWS a sentence when the name is not a short lowercase word or is already taken (core's own `claude-numbered` among them). Unregistered with the plugin; the returned function earlier. A reader is measured against ONE binary's screen and pinned by the plugin's own fixtures. |
 | `storeReader` | `storeReader(name: string, reader: PluginStoreReader): () => void` | Contribute a STORE reader under `name` (since 1.1): the reader of a CLI's own conversation record — a database or files on disk it writes (`PluginStoreReader`). A backend may then name it in `caps.transcript`, and the core asks it for the reader view, the context graph, the tool details, which conversation a session is in, and the backend's ledger. Same rules as `screenReader`: register it before the backend; a taken name (`claude-jsonl`) throws. |
+| `thermalReader` | `thermalReader(name: string, reader: PluginThermalReader): () => void` | Contribute a THERMAL reader under `name` (since 1.3): temperature and fan speed for the machine readout, where the core has no reader of its own (macOS keeps the SMC behind root). Asked on the readout's slow cadence, before the core's own sysfs reader; the first reading wins. A reading the core cannot vouch for (a non-finite figure, a temperature outside 1..149 °C, a negative rpm) is DROPPED, never shown — answer null rather than guess. A note (`{ note, fix? }`) is shown only when nothing reads. A throw or an answer slower than `PLUGIN_THERMAL_TIMEOUT_MS` counts as no reading. Same naming rules as `screenReader`. |
 | `hookSink` | `hookSink(): string` | The loopback URL this plugin's hooks POST to: `http://127.0.0.1:<port>/api/plugin/<id>/hook`. Loopback only, like the core's own hook sink; a remote caller is refused. |
 | `onHook` | `onHook(fn: (payload: unknown, hold: PluginHookHold) => unknown \| Promise<unknown>, opts?: { maxHoldMs?: number; }): () => void` | Receive the posts to `hookSink()`. The handler's return value (JSON) is the HTTP response body; `undefined` answers `{}`. Return a Promise to HOLD the response (a CLI that waits on its hook for a permission answer): the core answers `{}` itself after `maxHoldMs` (default `PLUGIN_HOOK_HOLD_DEFAULT_MS`, at most `PLUGIN_HOOK_HOLD_MAX_MS`) and calls `hold.onExpired` — so keep it BELOW the CLI's own hook timeout, or the CLI kills the hook first. One handler per plugin; a second replaces the first. A throw answers `{}` and becomes the status line. |
 | `route` | `route(method: PluginHttpMethod, pattern: string, fn: (req: PluginHttpRequest) => PluginHttpReply \| Promise<PluginHttpReply>): () => void` | Serve an HTTP route (since 1.2) at `/api/plugin/<id>/<pattern>`. It sits behind the SAME origin/Host gate and token gate as every core `/api` route — never loopback-only, never exempt. `pattern` is `/`-separated: literal segments, `:name` (exactly one segment, handed over RAW in `params`), and a trailing `*` (what follows, in `rest`). JSON in and out: the body is parsed (`{}` when there is none or it is not JSON; past `PLUGIN_ROUTE_BODY_MAX` the request is a 413), and the reply's `body` goes back as JSON with its `status` (default 200). A GET must not change anything — the core's rule for every `/api` GET. THROWS a sentence for a method outside `PluginHttpMethod`, a malformed pattern, one whose first segment is `hook` (the sink's), or one this plugin already serves for that method. A throw in the handler answers 500 `{ ok:false, error }` and becomes the status line. Unregistered with the plugin; the returned function earlier. |
@@ -895,11 +899,54 @@ export interface PluginStoreReader { … }
 | `discover` | `discover(look: PluginStoreLook): { id: string \| null; carry: unknown; }` | One pass of finding WHICH conversation a session is in, for a backend whose launch does not know the id. `id` only when exactly one candidate answers — a guess points the reader at somebody else's conversation. `carry` is handed back on the next pass. |
 | `ledger` | `ledger?(maxAgeMs: number \| undefined): Promise<unknown>` | The backend's own ledger, served verbatim at `GET /api/tokenstats/<backendId>` for a backend whose `caps.transcript` names this reader and which has no `sources.tokens`. JSON; a store that cannot be read answers `{ available: false, reason }`, never throws. |
 
-## PluginDoctorCheck
+## PLUGIN_THERMAL_TIMEOUT_MS
+
+*const*
+
+How long the core waits for a contributed thermal reader before it counts as no reading.
+
+```ts
+export const PLUGIN_THERMAL_TIMEOUT_MS = 8000;
+```
+
+## PluginThermalReading
+
+*type*
+
+What a contributed thermal reader answers (since 1.3). A READING carries what it read and
+which tool read it (`source`, shown beside the figures — the numbers are that tool's); a
+NOTE says why there is none and, optionally, shell commands that would fill it in (drawn as
+copy blocks); null is "nothing to say".
+
+```ts
+export type PluginThermalReading = {
+    cpuTempC?: number;
+    gpuTempC?: number;
+    fans: FanRow[];
+    source: string;
+} | {
+    note: string;
+    fix?: string[];
+} | null;
+```
+
+## PluginThermalReader
 
 *interface*
 
-One line of the preflight report a builtin's `doctor` contributes.
+A thermal reader (`api.thermalReader`).
+
+```ts
+export interface PluginThermalReader { … }
+```
+
+| member | signature | notes |
+|---|---|---|
+| `read` | `read(): Promise<PluginThermalReading>` |  |
+
+## PluginDoctorCheck
+
+*interface*
 
 ```ts
 export interface PluginDoctorCheck { … }

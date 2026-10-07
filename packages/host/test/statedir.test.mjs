@@ -50,8 +50,8 @@ test("the state dir: <PREFIX>STATE_DIR, then $XDG_STATE_HOME/<name>, then ~/.loc
 
 test("the code root default is ~/dev, defined once, and says when it was assumed", () => {
   assert.equal(defaultRoot("/home/sam"), "/home/sam/dev");
-  assert.deepEqual(resolveRoot({}, "/home/sam"), { root: "/home/sam/dev", defaulted: true });
-  assert.deepEqual(resolveRoot({ [`${P}ROOT`]: "/code" }, "/home/sam"), { root: "/code", defaulted: false });
+  assert.deepEqual(resolveRoot({}, "/home/sam", { isDir: () => false, hasGitChild: () => false }).root, "/home/sam/dev");
+  assert.deepEqual(resolveRoot({ [`${P}ROOT`]: "/code" }, "/home/sam"), { root: "/code", defaulted: false, picked: "named", tried: [] });
 });
 
 test("hostStateDir answers the bound dir for the daemon's root only — a scratch root keeps <root>/<state dir>", () => {
@@ -334,7 +334,7 @@ test("treeMismatch: names, kinds, sizes and bytes", () => {
 test("doctor: a defaulted root that does not exist says it was a guess and how to name the real one", () => {
   const c = checkRoot("/nowhere/dev", true);
   assert.equal(c.status, "fail");
-  assert.match(c.detail, /unset and the default \/nowhere\/dev does not exist, so the phone would list no repos/);
+  assert.match(c.detail, /none of the usual ones .* exists, so the phone would list no repos/);
   assert.match(c.fix, new RegExp(`--env ${P}ROOT=`));
   assert.match(checkRoot("/nowhere/dev", false).detail, /does not exist$/, "a named root that is missing keeps its old sentence");
 });

@@ -17,7 +17,12 @@ const config: CapacitorConfig = {
   // The web build, verbatim. `packages/web` is not forked, wrapped or
   // re-implemented — the APK ships the exact bundle the PWA serves, which is
   // why a UI change needs no work here at all.
-  webDir: "../web/dist",
+  //
+  // `WATERPLANE_APP_WEBDIR` points a sync at a bundle built somewhere else.
+  // `scripts/ios-sim.sh` uses it: `packages/web/dist` is what the host serves
+  // to every phone over the air, so a shell build must never be the thing that
+  // rewrites it. Unset (every Android script), it is the dist as before.
+  webDir: process.env.WATERPLANE_APP_WEBDIR || "../web/dist",
 
   server: {
     /**
@@ -66,6 +71,46 @@ const config: CapacitorConfig = {
      * (session reorder, image zoom). The default WebView debugging flag stays
      * off in release builds; Capacitor honours the build type.
      */
+    webContentsDebuggingEnabled: true,
+  },
+
+  ios: {
+    /**
+     * **`capacitor://localhost`, and it cannot be `http` the way Android is.**
+     * WKWebView refuses a custom scheme handler for `http`/`https`, so the
+     * shell's origin on iOS is Capacitor's own scheme. What that costs and why
+     * it still works (full reasoning: docs/analysis/ios-shell-plan.md):
+     *
+     *  - Mixed-content blocking keys off an `https` page; `capacitor://` is not
+     *    one, so the plain `ws://100.x:8770/ws` socket still opens. App
+     *    Transport Security is the other gate, and Info.plist opens it for web
+     *    content only (`NSAllowsArbitraryLoadsInWebContent`).
+     *  - The daemon's Origin guard (`host/src/origin.ts`) names
+     *    `capacitor://localhost` exactly — the one non-http origin it trusts.
+     *
+     * Stated rather than left to the default so nobody "fixes" it to `https`,
+     * which would put the page on a secure origin and block the socket.
+     */
+    scheme: "capacitor",
+
+    /**
+     * The web layer pads itself with `env(safe-area-inset-*)` (viewport-fit=cover
+     * in index.html), so the WebView must span the whole screen and report the
+     * insets — not have UIKit inset its scroll view a second time.
+     */
+    contentInset: "never",
+
+    /**
+     * **Left scrollable, deliberately.** Most screens scroll an inner list, but
+     * some sheets (the launch ask, among others) are taller than the phone and
+     * scroll the DOCUMENT — with `scrollEnabled: false` their bottom half, and
+     * the "start" button in it, could not be reached at all. Android and every
+     * browser scroll the document; so does this. The keyboard is handled by
+     * `ShellViewController` shortening the WebView, not by disabling scroll.
+     */
+    scrollEnabled: true,
+
+    /** Same reasoning as Android's flag: Safari's Web Inspector on the simulator. */
     webContentsDebuggingEnabled: true,
   },
 

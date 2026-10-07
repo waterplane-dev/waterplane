@@ -9,7 +9,9 @@ import { chmodSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const prebuilds = "node_modules/node-pty/prebuilds";
-if (!existsSync(prebuilds)) process.exit(0);
+// Windows has no exec bit (chmod only toggles read-only there), and printing a fix for
+// darwin prebuilds on a Windows install reads like something went wrong.
+if (process.platform === "win32" || !existsSync(prebuilds)) process.exit(0);
 
 for (const dir of readdirSync(prebuilds)) {
   const helper = join(prebuilds, dir, "spawn-helper");

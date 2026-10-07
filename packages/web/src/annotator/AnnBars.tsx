@@ -7,11 +7,12 @@
  * A region: it draws the model and owns no hook (a child's effects run before its parent's).
  */
 
+import { X } from "lucide-react";
 import { knobHint } from "../annKnobs";
 import type { AnnModel } from "./useAnnotator";
 
 export function AnnBars({ m }: { m: AnnModel }) {
-  const { tool, shapes, moveMode, selected, target, setTarget, moveNote, knobs, err, cropMode, pendingCrop, pendingText, textDraft, setTextDraft, textInputRef, editRead, setEditRead, readDraft, setReadDraft, readInputRef, lastBand, applyCrop, toggleCrop, commitText, cancelText, readBand, startEditRead, commitRead, dropRead } = m;
+  const { tool, shapes, moveMode, selected, target, setTarget, moveNote, knobs, err, cropMode, pendingCrop, pendingText, textDraft, setTextDraft, textInputRef, editRead, setEditRead, readDraft, setReadDraft, readInputRef, lastBand, applyCrop, toggleCrop, commitText, cancelText, readBand, startEditRead, commitRead, dropRead, hintHidden, hideHint } = m;
   return (
     <>
       {cropMode ? (
@@ -55,15 +56,16 @@ export function AnnBars({ m }: { m: AnnModel }) {
             <span className="annot-hint">{moveNote ?? "Drag anywhere — the finger needn't be on the mark · pinch to zoom for finer steps"}</span>
           </div>
         )
-      ) : (
-        <div className="annot-hint">
-          {moveMode
+      ) : hintHidden ? null : (
+        <div className="annot-hint annot-hint-x">
+          <span>{moveMode
             ? "Tap a mark to select it"
             : tool === "text"
               ? "Tap where the label goes, then type it · two fingers pinch-zoom & pan"
               : tool === "marker"
                 ? "Swipe along a line of text · the host reads the words and sends them with the mark"
-                : "One finger draws, from beside the picture too · two fingers pinch-zoom & pan · crop trims the image"}
+                : "One finger draws, from beside the picture too · two fingers pinch-zoom & pan · crop trims the image"}</span>
+          <button className="key" onClick={hideHint} aria-label="hide this hint for good"><X size={14} aria-hidden /></button>
         </div>
       )}
       {/* What the agent will be told this band says — shown BEFORE anything is

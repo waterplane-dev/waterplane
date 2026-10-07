@@ -18,7 +18,7 @@ import { CATEGORY_ICON } from "./backlogLabels";
 
 export function BacklogFilterBar({ m }: { m: BacklogModel }) {
   const {
-    archivedCount, base, clearFilter, counts, cut, filter, filtering, idsLabel, pickAge, pickCategory, pickClock,
+    archivedCount, base, counts, filter, filtering, pickAge, pickCategory, pickClock,
     pickStatus, setText, showArchived, text, toggleArchived,
   } = m;
   return (
@@ -118,19 +118,23 @@ export function BacklogFilterBar({ m }: { m: BacklogModel }) {
         </div>
       )}
 
-      {filtering && (
-        // Same bar, same words, same clear button as the launcher's and the
-        // schedule sheet's: what is hidden, counted against the UNFILTERED list,
-        // and the one way out.
-        <div className="section filter-bar">
-          <span className="filter-bar-txt">
-            {backlogFilterSentence(filter, idsLabel)}{" · "}{backlogCountWords(cut.length, base.length, filter)}
-            {cut.length === 0 && " — nothing here is in that cut"}
-          </span>
-          <button className="filter-bar-clear" title="clear the filter — show every item in this repo again"
-            onClick={() => { track("action:backlog.filter.clear"); clearFilter(); }}><X size={13} /> clear</button>
-        </div>
-      )}
+      {filtering && !filter.ids && <CutBar m={m} />}
     </>
+  );
+}
+
+/** What the cut hides, `n of N`, and its clear — above the rows on an ids cut. */
+export function CutBar({ m }: { m: BacklogModel }) {
+  const { base, clearFilter, cut, filter, idsLabel } = m;
+  return (
+    // The launcher's and schedule sheet's bar: hidden, `n of N`, one way out.
+    <div className="section filter-bar">
+      <span className="filter-bar-txt">
+        {backlogFilterSentence(filter, idsLabel)}{" · "}{backlogCountWords(cut.length, base.length, filter)}
+        {cut.length === 0 && " — nothing here is in that cut"}
+      </span>
+      <button className="filter-bar-clear" title="clear the filter — show every item in this repo again"
+        onClick={() => { track("action:backlog.filter.clear"); clearFilter(); }}><X size={13} /> clear</button>
+    </div>
   );
 }

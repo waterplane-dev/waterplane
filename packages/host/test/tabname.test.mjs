@@ -29,6 +29,11 @@ test("the name is asked off the FIRST prompt only, clipped", () => {
   assert.ok(prompt.includes("fix the flaky login test"));
   assert.equal(prompt.includes("SECOND"), false);
   assert.equal(firstPromptOf(session([])), "");
+  assert.equal(firstPromptOf(session([{ id: "c", kind: "command", text: "/compact", sentAt: 1 }])), "", "a slash command names nothing");
+  assert.equal(firstPromptOf(session([
+    { id: "c", kind: "command", text: "/compact", sentAt: 1 },
+    { id: "a", kind: "prompt", text: "fix the login", sentAt: 2 },
+  ])), "fix the login");
 });
 
 test("a hand-asked rename also sees the recent prompts, commands left out, clipped", () => {

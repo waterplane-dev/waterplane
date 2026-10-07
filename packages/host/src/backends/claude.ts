@@ -22,6 +22,7 @@ import type { BackendDescriptor, LaunchPlan, LaunchRequest } from "./types.js";
 import { claudeSources } from "./claude-sources.js";
 import { claudeModels } from "./claudemodels.js";
 import { ensureRepoClaudePlugin } from "../reposkill.js";
+import { claudeBinResolution } from "../claudebin.js";
 import { env } from "../env.js";
 
 /**
@@ -34,7 +35,7 @@ import { env } from "../env.js";
  * live value gets it; the module-level consts that hold it keep their existing
  * read-once-at-boot semantics by calling this once, exactly as before.
  */
-export const claudeBin = (): string => env("CLAUDE_BIN") || "claude";
+export const claudeBin = (): string => env("CLAUDE_BIN") || claudeBinResolution().bin;
 
 // ── claude hook lifecycle reporting ─────────────────────────────────────
 // Every session we spawn carries hooks (injected via `claude --settings <json>`)

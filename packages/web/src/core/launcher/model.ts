@@ -11,7 +11,7 @@
  * second copy of the rule.
  */
 import type { Intent, RepoSetupState, RepoTarget, SessionInfo } from "@waterplane/shared";
-import { branchLabel, isBacklogRow, isScheduleRow } from "@waterplane/shared";
+import { branchLabel, glueCompanions, isBacklogRow, isScheduleRow } from "@waterplane/shared";
 import type { OutboxEntry, OutboxStatus } from "../../outbox";
 import { baseName } from "../../format.ts";
 import { intentRowKey, queueRowKey } from "../../activityRows.ts";
@@ -113,7 +113,8 @@ export function sortSessions(visible: readonly SessionInfo[], order: readonly st
     const g = groups.get(n);
     if (g) g.push(s); else groups.set(n, [s]);
   }
-  return [...groups.values()].flat();
+  // A companion shell sits right under its session, whatever the order says.
+  return glueCompanions([...groups.values()].flat());
 }
 
 /** A new visible order to persist, keeping ids of currently-hidden sessions and dropping dead ones. */

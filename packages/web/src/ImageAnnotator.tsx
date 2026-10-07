@@ -3,6 +3,7 @@ import { SheetHead } from "./Sheet";
 import { AnnBars } from "./annotator/AnnBars";
 import { AnnSendBar } from "./annotator/AnnSendBar";
 import { AnnStage } from "./annotator/AnnStage";
+import { AnnTextOnly } from "./annotator/AnnTextOnly";
 import type { AnnotatorProps } from "./annotator/annTypes";
 import { useAnnotator } from "./annotator/useAnnotator";
 
@@ -32,8 +33,7 @@ export function ImageAnnotator(props: AnnotatorProps) {
 
       <AnnStage m={m} />
 
-      <AnnBars m={m} />
-      <AnnSendBar m={m} />
+      {m.ocr ? <AnnTextOnly m={m} /> : <><AnnBars m={m} /><AnnSendBar m={m} /></>}
     </div>
   );
 }

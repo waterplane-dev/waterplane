@@ -51,12 +51,12 @@ The phone runs plugin UI only as in-repo extensions built into the bundle, never
 - shipped: 0a371ac, 8002346
 ### R-plugins-011 · shipped
 The web app is built from isolated feature folders with one shape, so developers change one folder instead of one large App.tsx.
-- asked: 2026-09-24 (session cc4b7b46)
+- asked: 2026-09-24
 - shipped: f0de72e, 2fbfbce, 25810bd
 
 ### R-plugins-012 · shipped
 A plugin mechanism lets users add customizations from outside the waterplane repo.
-- asked: 2026-09-27 (session 95102cd7)
+- asked: 2026-09-27
 - shipped: 41585a9
 
 ### R-plugins-013 · shipped

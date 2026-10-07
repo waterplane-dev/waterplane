@@ -143,6 +143,10 @@ export interface Session {
   linksDueAt?: number;
   lastLinksCheckAt?: number;
   linksRendering?: boolean;
+  /** Pane height (`rows`) when each published screen link was last read on
+   *  screen — what `setScreenLinks` holds a link against when the pane has
+   *  since shrunk (the links bar's own height). Memory only, never on the wire. */
+  linkRows?: Map<string, number>;
   /**
    * When this session's PTY was last resized.
    *
@@ -512,6 +516,8 @@ export interface SessionCore {
   persistLive(m: LiveMeta): void;
   loadLive(id: string): LiveMeta | null;
   deleteLive(id: string): void;
+  /** drive.ts: a parent's companion shells follow it to a new id. */
+  repointCompanions(from: string, to: string): void;
   hasLiveTmux(id: string): boolean;
   armOrphanSweep(): void;
 

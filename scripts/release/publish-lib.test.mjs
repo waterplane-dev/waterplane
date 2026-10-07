@@ -80,6 +80,7 @@ test("preflight: a ready release passes; each missing condition is its own refus
   assert.deepEqual(refusals({ ...good, changelog: null }), ["CHANGELOG.md entry"]);
   assert.deepEqual(refusals({ ...good, ghAuth: false, npmUser: null }), ["gh auth status", "npm whoami"]);
   assert.deepEqual(refusals({ ...good, publicClone: { ok: false, why: "no clone" } }), ["public clone"]);
+  assert.deepEqual(refusals({ ...good, mediaClone: { ok: false, why: "no clone" } }), ["media clone"]);
   assert.deepEqual(refusals({ ...good, headOnOriginMain: false }), ["HEAD is on origin/main"]);
 });
 
@@ -126,6 +127,12 @@ test("plan, first run: verify, tag, public snapshot, install.sh, draft release w
   assert.ok(!steps.flatMap((s) => s.cmds).flat().includes("--provenance"));
   assert.deepEqual(steps.find((s) => s.id === "public").cmds[0], ["node", "scripts/release/publish-public.mjs", "--tag", "v1.2.3", "--to", "/c/pub", "--commit"]);
   assert.equal(planSteps(fresh, { ...ctx, build: true, buildArgs: ["--apk=/x.apk"] })[0].cmds[0].join(" "), "npm run release:build -- --apk=/x.apk");
+});
+
+test("plan: with hosted media, the snapshot gets --media-to and the media repo is pushed before the public one", () => {
+  const cmds = planSteps(fresh, { ...ctx, mediaClone: "/c/media" }).find((s) => s.id === "public").cmds;
+  assert.deepEqual(cmds[0], ["node", "scripts/release/publish-public.mjs", "--tag", "v1.2.3", "--to", "/c/pub", "--commit", "--media-to", "/c/media"]);
+  assert.deepEqual(cmds.slice(1), [["git", "-C", "/c/media", "push", "origin", "main"], ["git", "-C", "/c/pub", "push", "origin", "main"]]);
 });
 
 test("plan, resume after the GitHub release and before npm: only npm runs", () => {

@@ -1,0 +1,6 @@
+{
+  "about": "Files that published markdown links to but the public repo does not carry: the walkthrough videos, too big for every clone's history. scripts/release/publish-public.mjs renames each to <stem>-<sha256:10>.<ext>, copies it into a clone of `repo` (--media-to) and re-points every link at `urlBase`/<name>. A re-recording is a new name, so older releases keep their links. {org} is BRAND.githubOrg. urlBase is GitHub Pages on that repo; https://cdn.jsdelivr.net/gh/{org}/media@main serves the same files without Pages.",
+  "repo": "{org}/media",
+  "urlBase": "https://{org}.github.io/media",
+  "hosted": ["docs/media/*.mp4"]
+}

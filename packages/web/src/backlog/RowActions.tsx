@@ -114,7 +114,7 @@ export function RowActions({ m, row }: { m: BacklogModel; row: RowFacts }) {
                 {holder && <button className="key" data-hint="backlog.openholder" title={holder.title}
                   onClick={() => { track("action:backlog.openholder"); p.nav.onOpenSession(holder.sessionId); }}><ArrowRight size={14} /> {holder.label}</button>}
                 {/* Absent offline rather than dimmed — the banner at the top says why once. */}
-                {it.status === "queued" && p.online && <button className="key" data-hint="backlog.fire" title={fireTitle} onClick={() => { track("action:backlog.fire"); p.verbs.onFire(it.id); }}>fire</button>}
+                {it.status === "queued" && p.online && <button className={`key${it.manual ? " primary" : ""}`} data-hint="backlog.fire" title={fireTitle} onClick={() => { track("action:backlog.fire"); p.verbs.onFire(it.id); }}>fire</button>}
                 {/* On a TIMED row this is the other half of the pair above, and
                     the title has to say which: it starts now and skips the
                     ladder (`runNow`), so seven taps put seven agents in one

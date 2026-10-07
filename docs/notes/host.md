@@ -188,7 +188,7 @@ Plus a fourth package that is deliberately **not** a workspace:
   opened listed 33, i.e. a count on a control that was not the cut it opened. `--untracked-files=all`
   is load-bearing — porcelain collapses a wholly untracked directory to one `?? src/` line, so ten
   brand-new files would have counted as one (the same trap `tree.ts` walks ancestors around).
-- `transcript.ts` — **reader view** source. Parses the claude CLI's OWN conversation log (`<claude home>/.claude/projects/<slug>/<conversation-uuid>.jsonl`, one JSON record per line) into `TranscriptTurn[]`: one turn per real user prompt, with the assistant's text / thinking / tool calls (name + one-line label + input + matched result + error flag) in order. Synthetic prompt records (hook output, slash plumbing, `<task-notification>`, caveats) and sidechain (sub-agent) lines never open a turn — sidechains are counted. **A LOCAL COMMAND is the exception, and it is the one the reader was lying about.** `/goal`, `/context`, `/help` are written by the CLI as an envelope (`<command-name>` + `<command-args>`) with a `<local-command-stdout>` record beside it, and dropping both as plumbing — correct for opening a model turn, correct for titling an archive row — also deleted the command and its answer from read mode, while the terminal one swipe away showed both. `localCommandOf`/`localOutputOf` recognise the pair and give it a turn of its own, marked `local: "log"`, whose output is a `screen` BLOCK: terminal text, rendered monospace and never as markdown, because box drawing through a markdown renderer is soup. **And some commands the CLI never writes down at all** — `/btw` is the measured case: no envelope, no stdout, nothing in the log, so the exchange exists only on the screen and in waterplane's own per-turn PTY capture. `screenCommandTurns()` rebuilds those from `HistoryEntry.output` (cut to the command's own echo by `sliceToCommand`, folded to one answer by `foldRepaints`, stripped of the composer/mode/hint furniture by `trimTuiChrome`) and `mergeLocalTurns()` splices them in by time, RENUMBERING every turn — `n` is what the outline scrolls to, and two turns sharing a number send the reader to the wrong one. They are marked `local: "screen"` and say so on the row: approximate by construction, and not forkable (there is no log record to cut at). Only COMMANDS are taken from the capture and only ones the log does not already carry — a prompt reaches the log by definition, and re-adding a logged command would print it twice, the second time approximately. The `since` short-circuit takes `max(log mtime, newest history stamp)`, because a `/btw` moves neither the log nor its mtime and an open reader would otherwise not see it until something else wrote to the log. **Two things that capture is NOT, said out loud rather than papered over.** It is a VT replay, and this TUI does not print a panel and move on: it paints a short draft, then repaints a taller one as the text arrives, and each paint SCROLLS into the replay buffer instead of overwriting the last. Measured on session `5630c7fb` (2026-09-12), one `/btw` came back as the question plus its opening paragraph, then the question plus the whole answer — which read as the same exchange happening twice, the first time truncated. Every paint restates the echoed command, so the echoes are the seams: `foldRepaints` drops a section whose body is the BEGINNING of another section's body (that section's earlier draft) and keeps anything that says something the others do not — an answer long enough to scroll leaves rows in an early paint that no later one holds, and folding on "keep the longest" would delete them silently. Compared on the body only, ignoring whitespace, because the echo line itself differs between drafts: the TUI truncates it to the width it has (`very very …`, then `very very e…`). And a replay only has cells that were PAINTED. A TUI paints only the visible slice of a scrollable panel, so rows below the fold were never written to the PTY and are in no record this daemon keeps — not the capture, not the scrollback, not the log the command never reached. The CLI's own `↑/↓ to scroll` footer is the only evidence that happened, and it is chrome `trimTuiChrome` throws away, so `scrollHintTrimmed` keeps it as `TranscriptBlock.scrollable` and the reader says the record is partial rather than presenting it as the whole answer. Asked of the TRAILING chrome run only — a hint mid-capture belongs to a panel the CLI has since repainted over, and hanging the notice under an unrelated answer points at the wrong thing — and worded as *the panel could scroll*, never as *text was lost*, because the footer is printed whether or not anything overflowed. Measured precision on this desktop's history: 1 of 36 command captures. The obvious neighbouring signal — "the capture ends in content, so it sealed mid-paint" — was measured at 18 of 36 and dropped: half of those end in statusline rows (`5 shells · 2 agents`, an agent's elapsed/token line) that `CHROME` does not list, so it would have put a doubt on half the reader's screen blocks to catch a real one. `packages/host/test/localcmd.test.mjs`. Each turn also carries the outline fields: a **heuristic** summary (first sentence of the final assistant text — no AI call, so it's instant and nothing leaves the host), tool count, and repo-relative files touched. Tail-reads at most 24 MB and keeps the newest 500 turns (`truncated` flags either). Exposes `claudeProjectDir()` (`sessions.ts` imports it; defined in `claudeconfig.ts` with `claudeConfigDir()` — the ONE definition of the CLI's private dir: `CLAUDE_CONFIG_DIR` (replaces `~/.claude`, inherited by spawned `claude`, also onto the tmux pane's `env(1)` prefix) over `WATERPLANE_CLAUDE_HOME` + `.claude` (tests) over `~/.claude`; a slug past 200 chars is truncated + hashed by the CLI, so the folder is found by its head and accepted only when exactly ONE holds a log naming this cwd, else absent) and `transcriptFromHistory()` — the fallback that builds turns from the recorded prompt + PTY capture when a session has no conversation log (stub binary, nothing produced yet). Served by `GET /api/transcript?id=<sessionId>[&since=<updatedAt>][&detail=full]`, which answers **204 from a stat** when the log hasn't changed, so the client can poll cheaply. **The default document is `lite`**: tool inputs and results are withheld and each tool block carries `omitted: true` instead. Those two strings are the overwhelming majority of a real conversation's bytes — a day's work is a few KB of prose and many MB of `git diff` and test output — and the phone paid for all of them twice, once over the tunnel on every poll that found a change and once into IndexedDB, which is what made a long session slow to open and unreliable to keep offline at all. What survives the strip is everything the reader shows without being asked: name, one-line label, and `ok` — the last one deliberately, because it is set exactly when a `tool_result` was matched back and is therefore the only remaining evidence that a call FINISHED; without it "still running" and "text stayed on the host" would render identically. The withheld pair comes back per turn from `GET /api/transcript/tools?id=<sessionId>&turn=<turnId>` → `{ tools: { <tool_use id>: { input, result, ok, resultTruncated } } }`, keyed by turn **id** and not turn number on purpose: `n` is a position in the read window, so as the log grows and the 24 MB tail-read slides, turn 7 stops being the turn it was. `?detail=full` returns the old whole-document shape for a caller that wants every byte (the reader's "download details" setting, and `e2e-transcript.mjs`). Works for a merely-closed session too, as long as its conversation id is still remembered. Verified by `e2e-transcript.mjs`.
+- `transcript.ts` — **reader view** source. Parses the claude CLI's OWN conversation log (`<claude home>/.claude/projects/<slug>/<conversation-uuid>.jsonl`, one JSON record per line) into `TranscriptTurn[]`: one turn per real user prompt, with the assistant's text / thinking / tool calls (name + one-line label + input + matched result + error flag) in order. Synthetic prompt records (hook output, slash plumbing, `<task-notification>`, caveats) and sidechain (sub-agent) lines never open a turn — sidechains are counted. **A LOCAL COMMAND is the exception, and it is the one the reader was lying about.** `/goal`, `/context`, `/help` are written by the CLI as an envelope (`<command-name>` + `<command-args>`) with a `<local-command-stdout>` record beside it, and dropping both as plumbing — correct for opening a model turn, correct for titling an archive row — also deleted the command and its answer from read mode, while the terminal one swipe away showed both. `localCommandOf`/`localOutputOf` recognise the pair and give it a turn of its own, marked `local: "log"`, whose output is a `screen` BLOCK: terminal text, rendered monospace and never as markdown, because box drawing through a markdown renderer is soup. **And some commands the CLI never writes down at all** — `/btw` is the measured case: no envelope, no stdout, nothing in the log, so the exchange exists only on the screen and in waterplane's own per-turn PTY capture. `screenCommandTurns()` rebuilds those from `HistoryEntry.output` (cut to the command's own echo by `sliceToCommand`, folded to one answer by `foldRepaints`, stripped of the composer/mode/hint furniture by `trimTuiChrome`) and `mergeLocalTurns()` splices them in by time, RENUMBERING every turn — `n` is what the outline scrolls to, and two turns sharing a number send the reader to the wrong one. They are marked `local: "screen"` and say so on the row: approximate by construction, and not forkable (there is no log record to cut at). Only COMMANDS are taken from the capture and only ones the log does not already carry — a prompt reaches the log by definition, and re-adding a logged command would print it twice, the second time approximately. The `since` short-circuit takes `max(log mtime, newest history stamp)`, because a `/btw` moves neither the log nor its mtime and an open reader would otherwise not see it until something else wrote to the log. **Two things that capture is NOT, said out loud rather than papered over.** It is a VT replay, and this TUI does not print a panel and move on: it paints a short draft, then repaints a taller one as the text arrives, and each paint SCROLLS into the replay buffer instead of overwriting the last. Measured (2026-09-12), one `/btw` came back as the question plus its opening paragraph, then the question plus the whole answer — which read as the same exchange happening twice, the first time truncated. Every paint restates the echoed command, so the echoes are the seams: `foldRepaints` drops a section whose body is the BEGINNING of another section's body (that section's earlier draft) and keeps anything that says something the others do not — an answer long enough to scroll leaves rows in an early paint that no later one holds, and folding on "keep the longest" would delete them silently. Compared on the body only, ignoring whitespace, because the echo line itself differs between drafts: the TUI truncates it to the width it has (`very very …`, then `very very e…`). And a replay only has cells that were PAINTED. A TUI paints only the visible slice of a scrollable panel, so rows below the fold were never written to the PTY and are in no record this daemon keeps — not the capture, not the scrollback, not the log the command never reached. The CLI's own `↑/↓ to scroll` footer is the only evidence that happened, and it is chrome `trimTuiChrome` throws away, so `scrollHintTrimmed` keeps it as `TranscriptBlock.scrollable` and the reader says the record is partial rather than presenting it as the whole answer. Asked of the TRAILING chrome run only — a hint mid-capture belongs to a panel the CLI has since repainted over, and hanging the notice under an unrelated answer points at the wrong thing — and worded as *the panel could scroll*, never as *text was lost*, because the footer is printed whether or not anything overflowed. Measured precision on this desktop's history: 1 of 36 command captures. The obvious neighbouring signal — "the capture ends in content, so it sealed mid-paint" — was measured at 18 of 36 and dropped: half of those end in statusline rows (`5 shells · 2 agents`, an agent's elapsed/token line) that `CHROME` does not list, so it would have put a doubt on half the reader's screen blocks to catch a real one. `packages/host/test/localcmd.test.mjs`. Each turn also carries the outline fields: a **heuristic** summary (first sentence of the final assistant text — no AI call, so it's instant and nothing leaves the host), tool count, and repo-relative files touched. Tail-reads at most 24 MB and keeps the newest 500 turns (`truncated` flags either). Exposes `claudeProjectDir()` (`sessions.ts` imports it; defined in `claudeconfig.ts` with `claudeConfigDir()` — the ONE definition of the CLI's private dir: `CLAUDE_CONFIG_DIR` (replaces `~/.claude`, inherited by spawned `claude`, also onto the tmux pane's `env(1)` prefix) over `WATERPLANE_CLAUDE_HOME` + `.claude` (tests) over `~/.claude`; a slug past 200 chars is truncated + hashed by the CLI, so the folder is found by its head and accepted only when exactly ONE holds a log naming this cwd, else absent) and `transcriptFromHistory()` — the fallback that builds turns from the recorded prompt + PTY capture when a session has no conversation log (stub binary, nothing produced yet). Served by `GET /api/transcript?id=<sessionId>[&since=<updatedAt>][&detail=full]`, which answers **204 from a stat** when the log hasn't changed, so the client can poll cheaply. **The default document is `lite`**: tool inputs and results are withheld and each tool block carries `omitted: true` instead. Those two strings are the overwhelming majority of a real conversation's bytes — a day's work is a few KB of prose and many MB of `git diff` and test output — and the phone paid for all of them twice, once over the tunnel on every poll that found a change and once into IndexedDB, which is what made a long session slow to open and unreliable to keep offline at all. What survives the strip is everything the reader shows without being asked: name, one-line label, and `ok` — the last one deliberately, because it is set exactly when a `tool_result` was matched back and is therefore the only remaining evidence that a call FINISHED; without it "still running" and "text stayed on the host" would render identically. The withheld pair comes back per turn from `GET /api/transcript/tools?id=<sessionId>&turn=<turnId>` → `{ tools: { <tool_use id>: { input, result, ok, resultTruncated } } }`, keyed by turn **id** and not turn number on purpose: `n` is a position in the read window, so as the log grows and the 24 MB tail-read slides, turn 7 stops being the turn it was. `?detail=full` returns the old whole-document shape for a caller that wants every byte (the reader's "download details" setting, and `e2e-transcript.mjs`). Works for a merely-closed session too, as long as its conversation id is still remembered. Verified by `e2e-transcript.mjs`.
 - `slash.ts` — built-in slash commands + reads user's `.claude/commands/`.
 - `files.ts` — file upload to `.claude/inbox/` (ANY kind — photos, PDFs, office docs, archives, audio, source files), artifact gallery (outbox or whole tree), with path-traversal guards. `statInTree()` is the same viewability gate as `readInTree` without the read — it exists so the artifact route can STREAM a big deliverable (see `api.ts`) instead of buffering it. `saveInboxFile(..., { dedupe })` (the `x-dedupe: 1` header) is what makes the phone's QUEUED uploads re-sendable: there is no ackId ledger on the HTTP path, so without it a tunnel that dropped mid-POST leaves the same photo under `name` and `name_2`. The client names a queued upload with a random suffix precisely so "same name, same byte count already on disk" identifies that upload rather than a collision; every interactive upload still always uniquifies. Upload cap = `WATERPLANE_MAX_UPLOAD`. **Two extension sets, deliberately different:** `DISCOVERABLE` (image+video+`DOC_EXT`) is what `discoverArtifacts` walks the tree for, `VIEWABLE` (= that plus `SERVE_ONLY_EXT`: source, config, patches…) is what the transport routes may SERVE. Putting source extensions in the discovery set floods the gallery's "this repo" tab and the per-turn new-file notifications with every `src/*.ts` in the repo; leaving them out of the serve set means the app accepts an upload and then refuses to hand it back. The curated **outbox** scope uses the full set (an agent's `report.yaml` is a deliverable), a whole-repo walk does not. The inbox GET passes `anyType` — an inbox file is there because this app uploaded it, so no extension list gates it — and `.env` files are refused on every path (same promise `git.ts` makes). Filenames arrive percent-encoded in `x-file-name`: an HTTP header is Latin-1 and the browser throws on anything else, so an umlaut in a document name used to kill the upload before it started. **Outbox convention:** the gallery's "outbox" tab scans the dirs in `OUTBOX_SUBDIRS` — `.claude/outbox/` (ours) and a top-level `.outbox/` (some repos' convention), repo→phone. Agents that produce screenshots/artifacts for the phone should save them into one of those; otherwise they only surface under the broader "this repo" tab and the new-image popups (which scan the whole tree). Outbox is deliberately narrow so it stays a curated, phone-facing drop — add new locations to `OUTBOX_SUBDIRS` in `files.ts` if more conventions appear. **The repo badge counts the outbox, not the inbox** (`countOutbox`/`markOutboxSeen`, a `.seen` marker per outbox dir whose mtime is "when you last looked"): the number answers "is there something for me to look at", and inbox files are the ones this phone just uploaded — counting them made the badge a receipt for your own action. It is counted THROUGH `discoverArtifacts`, so the badge and the outbox tab can't disagree about what a file is, and the marker itself is invisible to both (`.seen` has no viewable extension). Clearing is a POST (`/api/repos/:id/artifacts/seen`) for the same reason the inbox marker is: no `/api` GET may change state. The other half of the promise lives in the client — a chip carrying a count opens the outbox with the time filter OFF, because "unread since you last looked" is routinely older than the tab's 4h default, and the bug this all started from was a badge saying 42 opening an empty grid. Verified by `e2e-outboxbadge.mjs`.
 - `archive.ts` — **the conversation archive: every chat the CLI ever wrote for a repo, read off disk instead of remembered.** The question it answers is "can we archive conversations instead of just killing them", and the honest answer was that killing already archived — badly. `sessions.kill()` ends the PTY and the tmux session; it never touches `~/.claude/projects/<slug>/<uuid>.jsonl`, and `session.create` with `resumeSessionId` reopens that exact conversation. What was missing was the route back. The two records of a closed session are both **shortlists with a cap**: `recentlyClosed` (the launcher's "Recently closed") and `recent` (`.waterplane/sessions.json`, "Resume recent", capped per-cwd so one busy repo can't evict the rest). On a machine with 60+ live sessions in one repo, the top-of-list × closes all of them in one tap and most fall off both lists in the same gesture — the conversations still on disk, unreachable from the phone. Two fixes, and they are different in kind. `recentlyClosed` is now **persisted** (`.waterplane/closed.json`, tmp+rename, cap raised to 120) and downgrades a stale `alive: true` on load, because a claim that a tmux session is still running is only true if the server survived the restart — `alive` is re-earned by `hasLiveTmux`, never by a file. That is the cheap patch; it makes the shortlist survive the restart it used to be wiped by. The real fix is this module, which keeps no state at all: a listing is `readdir` + `stat` over the CLI's own project directory, newest first, and the filename IS the conversation id, so a row is resumable without anything having remembered it. Nothing to fall out of sync, no cap, nothing a restart can lose. The cost discipline matters because a repo here holds thousands of logs: a row's TITLE is its first user prompt, which means reading the file, so titles are read only for the page being returned, from a bounded head (96 KB — enough for a conversation's opening records even with a `<system-reminder>` block), and memoized by conversation id, which is sound precisely because a first prompt is immutable once written. The `q` search is the one path that has to title everything in the directory to filter it; that sweep warms the same cache, so it is paid once per repo per boot — and it is a SUBMIT in the UI rather than a keystroke filter for the same reason. Titles come from `transcript.ts`'s exported `promptOf()`, which is also what `parseTranscript` now opens a turn on: two copies of "which records are real prompts" would drift, and the visible symptom would be an archive row named `<command-name>` or `<user-prompt-submit-hook>`. `deleteArchived()` is the one genuinely destructive act in the app — the only way to lose a conversation — so it is a separate verb from closing a session, refuses anything that is not a bare id (`transcriptPath` would otherwise happily take `../../`), and the phone arms it per row and refuses it outright while the conversation is open. Routed as `GET`/`DELETE /api/repos/:id/archive`, i.e. inside the same `findTarget` containment every other per-repo route uses. `e2e-archive.mjs` pins the ordering, the awkward title shapes, search, paging, the delete guards, that closing a session leaves its conversation listed, and that the reopen stack comes back after a real host restart.
@@ -3111,7 +3111,7 @@ the CLI and written down before anybody answers. Outside `promptFingerprint` for
 
 ### `backends/shell.ts` + `sessions/links.ts` + `shelllinks.ts` — a plain shell, and the links it wants opened
 
-- `shell.ts` — **a login shell in the repo, as a backend** (`docs/analysis/shell-plan.md`). Data
+- `shell.ts` — **a login shell in the repo, as a backend**. Data
   like every descriptor and no new function: `$SHELL_BIN`/`$SHELL`/`/bin/sh` with `-l`, every
   claude-shaped cap false, `healthScope:false`, and ONE new cap, `turns: false`, because the two
   readers that were not already gated assumed a turn: `turn.ts`'s silence ping ("Turn finished" after
@@ -3685,7 +3685,7 @@ happens on the clock and never in the file. `e2e-limitreset.mjs`.
 Asked 2026-10-01: a cap on ONE session, subagents included, settable on a live session, at launch
 and on scheduled work, in tokens, dollars, or percent of the 5-hour or weekly window. The account's
 `budget.ts` above is untouched — that one pauses AUTOMATIC work everywhere near the wall; this is a
-number a person put on one conversation. Plan and decisions: `docs/analysis/session-budget-plan.md`.
+number a person put on one conversation.
 The pure rule is `shared/sessionbudget.ts`; the host half is three pieces.
 
 - **The judge, `sessions/budgetwatch.ts`** (`BudgetSlice`). Spend is the session's own TOTAL, the
@@ -3965,11 +3965,15 @@ Four readers, each independent, each degrading to an ABSENT field and never to a
   desktop, `powermetrics` answers `powermetrics must be invoked as the superuser`, and `--samplers
   smc` does not even exist on Apple Silicon. A daemon whose job is spawning `claude` must not prompt
   for a root password, and `sudo -n` in a poll loop is a password prompt waiting for the timestamp to
-  expire. So the field is absent with a SENTENCE (`MAC_THERMAL_NOTE`) naming `smctemp`, `istats` and
-  the `WATERPLANE_SMC_BIN` escape hatch — **this repo's rule is that a heuristic degrades to absent, and the
-  corollary nobody writes down is that an absence a person cannot explain reads as a bug in the app.**
-  A helper that is not installed is memoized as missing (`ocdb.ts`'s rule for its driver) so a poll
-  never spawns for it twice.
+  expire. Reading the SMC without root takes a third-party helper, and which one (and how it is
+  built) is not core's to choose: a **plugin contributes the reader** (`api.thermalReader`, 1.3) and
+  core only checks its figures (`cleanThermal` — a `0.0` from a sensor that has not answered yet, or a
+  digit lifted out of an error message, is dropped, never drawn). With none, the field is absent with a
+  SENTENCE (`MAC_THERMAL_NOTE`) saying a plugin fills it in — **this repo's rule is that a heuristic
+  degrades to absent, and the corollary nobody writes down is that an absence a person cannot explain
+  reads as a bug in the app.** (Until 2026-10 core shelled out to `smctemp`/`istats` itself; on an M4
+  Max that read `smctemp -f` — fail-soft mode — as the fan list, and took the first digit of
+  `smctemp -g`'s "In M2 Mac…" error as a 2 °C GPU.)
 
 **Cost.** This runs inside `localrt.ts`'s 5 s watch, in the process that pumps every PTY, so the two
 expensive readers are on a slower cadence of their own (`WATERPLANE_SYSSTAT_SLOW_MS`, 15 s, floored at 5 s)
@@ -3983,7 +3987,9 @@ off rather than that nothing is running. `packages/host/test/sysstat.test.mjs`.
 
 `localrt.ts` says what the runner is holding NOW and keeps no history; this keeps what it DID —
 compute time, tokens and memory per model per day — for `GET /api/localusage` and the token-stats
-*Local runner* tab. Measured first: [the spike](../analysis/spikes/2026-10-02-local-usage-metrics.md).
+*Local runner* tab. Measured first (2026-10-02, Ollama 0.35.0 at its default INFO log, `OLLAMA_NUM_PARALLEL:1`,
+`qwen3-coder:30b-64k`): the log's timing block matched the native `/api/chat` fields exactly for the
+same request, and its format was identical across all five rotated logs.
 
 - **Sources are passive.** None of the APIs the backends use (`/v1/messages`, `/v1/responses`,
   `/v1/chat/completions`) carries the runner's durations, and reading their responses would sit in
@@ -3993,13 +3999,19 @@ compute time, tokens and memory per model per day — for `GET /api/localusage` 
   (`parseRunnerLog`), up to a COMMIT POINT only (a timestamped line with no block open or waiting),
   so a chunk ending mid-request is re-read, and the cursor (first-line hash + byte offset) is saved
   with the data: a restart neither loses nor re-counts. A rotation (`server.log` → `server-1.log` on
-  every ollama start) is followed by finishing the old file first.
+  every ollama start) is followed by finishing the old file first. **No measuring proxy** in front of
+  `:11434`: it would sit in every session's request path, and measuring must never break or slow a
+  session. Revisit only if a future Ollama stops copying `print_timing` into its INFO log, and then as
+  an opt-in nothing depends on.
 - **Runner time and time to answer are never one number.** Busy = prompt processing + generation;
   loading is its own line (`llama-server started in`); time to answer is the `[GIN]` wall time, which
   includes waiting in the runner's queue (3.4 s of 3.65 s in the spike). A request with a `[GIN]` line
   and no block is counted as time-to-answer only; two blocks waiting for one access line keep their
   timings and drop the wall time (it belongs to one of them, unknown which).
-- **The log never names the model, so ps does.** `pickModel`: the models `/api/ps` showed from the last
+- **The log never names the model, so ps does.** Nothing in it joins reliably: the registry name
+  appears only on a `template selection` line whose place relative to a load varies, `keep_alive`
+  expiries are not logged at INFO, an `evicting` line does not say which model, and two resident
+  models' blocks interleave. `pickModel`: the models `/api/ps` showed from the last
   sample before the request's second to the first after it; one ⇒ it, several ⇒ the one whose context
   equals the block's `n_ctx_slot`, if exactly one; a load the samples do not explain, a sampling gap, or
   no sample after ⇒ **`model: null`**, its own row with one sentence (`UNATTRIBUTED_WHY`) — never the
@@ -4361,7 +4373,16 @@ turns, but a fork needs the HEAD and has to hold the whole file. File checkpoint
 `~/.claude/file-history/<sessionId>/` are NOT copied, which bounds a fork's own `/rewind`.
 
 `ForkOk` reports `records`, `dropped` (unparseable lines, normally 0) and `pruned` (fires on roughly
-one fork in twenty). Deeper: [fork-and-reset.md](../analysis/fork-and-reset.md).
+one fork in twenty). **The premise was tried on the real CLI before anything was built on it** (a
+throwaway repo, four cheap turns): `claude --resume <newId>` accepts a file we wrote, headless and in
+the TUI, and answers from the forked history (forked at turn 1, "what did you say" answered "ONE"
+where the original answered "ONE, TWO, FOUR"). A cut at a tool turn carries the whole turn, `tool_use`
+and `tool_result` together; the original's sha256 was unchanged after every fork, malformed ones
+included. **Driving `/rewind` inside a fork is not built**, and what blocks it is known: a fork has
+none of its parent's checkpoints until `file-history/<sessionId>/` is copied (a second write outside
+the conversation file), it needs a picker-walker on `submitPromptBox`'s pattern (read, move, re-read,
+never open-loop key counts), and an in-place rewind branches the log, which the linear
+`parseTranscript` would render as both branches.
 `packages/host/test/convfork.test.mjs`, `scripts/e2e-forkfrom.mjs`.
 
 ### `assess.ts`
@@ -4438,8 +4459,15 @@ proposal is allowed to do and the narrow type is the place that says so. Nothing
 row — `remove()` is deliberately not in it — and the one rule the whole feature rests on is that an
 assessment retires words and never loses them. Nothing here decides, either: verdicts arrive through
 `shared/assess.ts`'s `cleanAssessment`, which is where every rule that stops a confident-sounding
-model from retiring real work lives and which can be pinned without spawning anything. Deeper:
-[assess.md](../analysis/assess.md). `scripts/e2e-assess.mjs`.
+model from retiring real work lives and which can be pinned without spawning anything.
+It is deliberately NOT a replan: replacing the list loses the sentences a person wrote, so every row
+survives with a verdict attached, and a retirement is dimmed, never hidden. It is manual only (no
+schedule, sweep or fire-on-idle: it reads a whole repo), one run per repo at a time (two proposals on
+one list is a merge nobody can do on a phone), and its button sits in the Backlog/Activity header,
+not the launcher row, where a token-spending button gets pressed by accident. "Sequence" is an
+integer rank over the `wanted` rows plus the per-repo `serial` group, never a dependency graph: a
+graph would be wrong, cannot be repaired from a phone, and nothing in the daemon executes edges.
+`scripts/e2e-assess.mjs`.
 
 #### What the run says these things should be CALLED
 
@@ -5096,7 +5124,7 @@ and opencode name their own models). A model id added here is passed to `--model
 binary, not waterplane, decides whether it exists. `packages/host/test/claudemodels.test.mjs`.
 
 `backends/claude-sources.ts` is claude's hook pipe as a `BackendSources` (`claudeBackend.sources`,
-inherited by `claude-local`/`claude-endpoint`; design: `docs/analysis/backends-design.md` §10).
+inherited by `claude-local`/`claude-endpoint`; behaviour-neutral: same edges, same order, same wire).
 `/api/hook` → `turn.ts`'s `onHookEvent` ROUTES the payload (the router needs this host's session
 table, which no source sees) and hands it to `postClaudeHook`, which translates it into the seam's
 edges — health `up` on the first hook, `SessionStart` ⇒ `identified` + `ready`, `UserPromptSubmit` ⇒
@@ -5106,6 +5134,13 @@ from `attach`, never published as `sideChannel`, health is `hooked`) and `turns.
 `ended` is a REQUEST held against the working line, and the screen turn watch stays armed). Only
 `turns`: transcript and context stay the named jsonl readers, and the delivery proof stays
 `deliver.ts`'s `prompt-hook` rung over the words `started` records. `claudehooks.test.mjs`.
+**The router stays in core** because a source never sees this host's session table (live
+`claudeSessionId`s, cwds, spawn times). Its cwd-fallback candidates are the sessions subscribed to the
+claude hook pipe (`claudeHookWatched`), not "any backend whose `caps.hooks` is not none", so a
+`plugin-inject` backend is never handed a claude hook. `turnHookSeen` stays a fact the sink sets, not a
+source edge (`SessionEnd` maps to `ready` but never sets it). One known difference from the old switch:
+a hook routed to a session whose channel already closed is dropped instead of applied to a dead record,
+invisible because the exit path has already ended the turn.
 
 **The rule that makes a second backend safe** is the one this repo already lives by: a heuristic
 degrades to null or absent, never to a wrong number. `caps` is therefore read only to decide whether
@@ -5154,20 +5189,21 @@ with no window). Caps `usageLimits`/`usageProbe`/`remoteControl`/`contextMeter` 
 `BackendModels.unavailable` = `Ollama not reachable at <url>`, which rides `BackendInfo.unavailable`.
 Cost is absent with no code of its own (`pricing.ts` prices only `claude-*`), and
 `resolveContextWindow` refuses a non-claude id, so the claude table is never borrowed. Measured
-2026-10-01 on claude 2.1.287 + `qwen3-coder:30b-64k` (probe: `scripts/probe-claude-local.mjs`, spike:
-`docs/analysis/spikes/2026-10-01-claude-local.md`): the TUI prints **no context gauge at all** after a
+2026-10-01 on claude 2.1.287 + `qwen3-coder:30b-64k` (probe: `scripts/probe-claude-local.mjs`): the TUI prints **no context gauge at all** after a
 turn, hooks (SessionStart/UserPromptSubmit/Stop) and the jsonl work unchanged, so `contextMeter:false`
 is the right cap, not a workaround. `packages/host/test/claudelocal.test.mjs`.
 
-**Lean, warm, and the window sentence (2026-10-02,
-`docs/analysis/spikes/2026-10-02-claude-local-lean.md`).** The 64k window was half spent before
+**Lean, warm, and the window sentence (2026-10-02, Ollama 0.35.0, `scripts/probe-claude-local.mjs`
+with `PROBE_LEAN=1`).** The 64k window was half spent before
 anybody typed: the first request carried 32.4k tokens, and the one-word turn took 65 s on a model
-that was ALREADY resident — prefill, not loading. `leanArgs` appends `--tools
+that was ALREADY resident — prefill, not loading (cold and unlean: 33.7k, 81 s). The built-in tool
+schemas are ~27k of those tokens. `leanArgs` appends `--tools
 Read,Edit,Write,Bash,Grep,Glob --strict-mcp-config` (default ON for claude-local only,
 `WATERPLANE_CLAUDE_LOCAL_LEAN`/`_TOOLS`): 5.7k tokens, 5 s warm, 8 s cold, and tool calls still
 work. `--tools` is the whole saving; `--disable-slash-commands` measured nothing once Skill was gone,
 and `--setting-sources project,local` (−1k) would drop the person's own permissions, so neither is
-used. The warm ping (`localrt.ts`'s `warmLocalModel`, `WATERPLANE_CLAUDE_LOCAL_KEEP_ALIVE`, default
+used. `--strict-mcp-config` measured nothing in an empty dir and is kept so a repo's `.mcp.json`
+cannot add schemas to every turn. The warm ping (`localrt.ts`'s `warmLocalModel`, `WATERPLANE_CLAUDE_LOCAL_KEEP_ALIVE`, default
 `30m`, `off`) is fired from `launchArgs` and never awaited — `warmDeps` is the seam a test replaces
 so no unit test loads 18 GB. Ollama's `/v1/messages` IGNORES a `keep_alive` in the body (measured:
 expiry stayed at the 5-minute default), but a model loaded with an explicit `keep_alive` KEEPS it:
@@ -5194,7 +5230,7 @@ credential is never sent to a third-party URL. A key file readable by group/othe
 (`keyProblem`), and so is a keychain service that is not there (asked without `-w`). Unconfigured,
 bad key, or no model list ⇒ LISTED with `unavailable`. `packages/host/test/claudeendpoint.test.mjs`.
 
-#### The registry, the reader names and the sources seam (WP1a of `docs/analysis/backends-design.md`)
+#### The registry, the reader names and the sources seam
 
 `backends/registry.ts` is the live list: claude and opencode are seeded as core (`registerCore`,
 never removable), a plugin's backend joins with `registerBackend` and leaves with `unregisterBackend`,
@@ -6841,7 +6877,7 @@ proved the reinstall killed it — the host logged no exit at all, which is the 
 
 ## `onboard.ts` — the first-app job, and why it is one persisted step list
 
-The first-app journey (`docs/analysis/first-app-plan.md`) turns three answers and one consent
+The first-app journey turns three answers and one consent
 screen into a repo, a build the phone can hold and a session. Every step but the last is
 deterministic and already existed (`androidenv.ts`, `toolchain.ts`, `scaffold.ts`, `signkey.ts`,
 `compliance.ts`, `builds.ts`), so `onboard.ts` only ORDERS them: android `probe → toolchain →
@@ -6861,6 +6897,23 @@ template build either works or names its fix.
   ticked (`missing` names them); a step whose consent is absent at run time stops at
   `needs-consent` rather than acting. `resume()` may only ADD ticks. The toolchain tick is the
   licence acceptance; nothing else accepts one.
+- **Consent is a server fact, not the caller's word** (`confirmgate.ts`). The gated fixes
+  (`CONFIRM_GATED_FIXES`), an onboard start and a resume that adds consent need an `Origin` that
+  passes `origin.ts` (Origin-less is refused there, never by loosening `origin.ts`) and a one-shot
+  token minted by the GET that draws the confirm, bound to what it confirms, live
+  `CONFIRM_TTL_MS`, spent only when the action was accepted. It stops one documented POST from an
+  agent or plugin accepting Google's licence; it is not a wall against a program running as this user.
+- **A template, not the agent, makes hello world.** The first build must not fail or cost tokens;
+  the agent's work starts after the first install, and a description becomes the first prompt only
+  then. Compose stays: the cold first build measured 323 s (empty Gradle cache) against a 6-minute
+  budget, over which the template would drop to plain Views. The web path (`templates/web-hello`)
+  is one inline `index.html` drawn by the gallery's sandboxed frame: no new route, no new trust.
+- **Toolchain: find first, install user-local, never sudo** (`androidenv.ts`, `toolchain.ts`). No
+  emulator: the phone in hand is the device. Downloads go to a private 0700 `mkdtemp` dir and are
+  verified and unpacked from inside it, because a shared tmp dir was a TOCTOU.
+- **One signing key per desktop** (`signkey.ts`, `<config dir>/keys/sideload.jks`, files 600): one
+  secret to back up, and updates keep working across every app it signs. Never in a repo, and not
+  the Play upload key.
 - **The first prompt goes through the store, not around it.** With a description, the session
   opens as a `files`-trigger intent with no files to wait for — the path a parked `session.create`
   already takes (`sessions.create` + `startPrompt` through `deliver.ts`). Without one, a live
@@ -6882,9 +6935,21 @@ a restart mid-build and mid-scaffold, idempotence, a stop naming its fix), `scri
 
 ## `peers/` — delegating a job to another waterplane host
 
-Plan and decisions: `docs/analysis/peer-hosts-plan.md`. Delegate and report back, nothing else: a job
-opens ONE session on the peer and its final answer returns as ONE prompt. One entry per module; the
-wire types are `shared/peer.ts`.
+Delegate and report back, nothing else: a job opens ONE session on the peer and its final answer
+returns as ONE prompt. One entry per module; the wire types are `shared/peer.ts`.
+
+**The decisions.** PULL, not push: the asker polls the peer only while a job is open
+(`WATERPLANE_PEER_POLL_MS`, 5 s running, backing off to 60 s while unreachable, 30 s at a usage limit;
+a restart resumes from `peer-jobs.json`), so each edge has one direction of trust and the asking side
+needs no inbound route. Code travels through the shared git remote, never rsync, and the peer never
+clones: a repo it does not have is a refusal sentence, because `WATERPLANE_ROOT` is everything
+reachable from the phone and widening it is the owner's call. The job worktree sits under
+`.claude/worktrees/`, below discovery depth, so a job never shows up as a repo on the phone; it is
+kept for inspection and swept after 7 days (`PEER_WORKTREE_MAX_AGE_MS`). `PEER_API_VERSION` follows
+`PROTOCOL_VERSION`'s rule: an additive field never bumps it, a changed meaning does. A peer session
+at its usage limit reports `limit` with the reset words and the report arrives after the resume; a
+failed fetch on the peer is `failed` with git's stderr; an artifact that cannot be fetched is listed
+as "not fetched: <why>" while the rest come.
 
 - **`peers/store.ts`** — `peers.json` (0600, under the host store dir). Outbound rows keep the clear
   token, inbound rows only its sha256 (the `deviceledger.ts` shape); an unlisted name is refused;

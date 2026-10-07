@@ -7,6 +7,11 @@ import type { HostStat } from "@waterplane/shared";
 import type { ConnInfo } from "../../sdk";
 
 /** The desktop's CPU/memory load, as the toast says it. */
+/** What the notifications screen says on a native shell with no background
+ *  link and no push of its own (the iOS shell): the truth, not a switch. */
+export const NO_BACKGROUND_ALERTS =
+  "This app has no OS push and no background link — alerts show in the in-app feed while it is open.";
+
 export function hostStatText(s: Pick<HostStat, "cpuPct" | "loadavg" | "cores" | "memTotal" | "memFree">): string {
   const gb = (b: number) => (b / 1e9).toFixed(1);
   const load = s.loadavg.map((n) => n.toFixed(2)).join("/");

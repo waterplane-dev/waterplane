@@ -290,6 +290,11 @@ export default defineConfig({
   plugins: [react(), stampBrand(), buildStamp()],
   build: {
     rollupOptions: { output: { manualChunks: vendorChunk } },
+    // The sheets chunk is one big static chunk on purpose (see vendorChunk); Vite's
+    // default 500 kB warning then fires on every build and reads like a fault to
+    // someone installing for the first time. The limit sits just above today's size,
+    // so real growth still warns.
+    chunkSizeWarningLimit: 1600,
   },
   server: {
     host: true, // listen on all interfaces so the phone can reach the dev server

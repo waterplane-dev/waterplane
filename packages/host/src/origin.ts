@@ -78,6 +78,24 @@ interface Compiled {
 
 let compiled: Compiled = compile({ port: 8770 });
 
+/**
+ * The one origin that is not `http(s)` and is still ours: the iOS shell
+ * (`packages/app`, Capacitor). WKWebView will not serve an app's own page from
+ * `http`/`https`, so its page lives at `capacitor://localhost` — the iOS twin
+ * of the Android shell's `http://localhost`. Named exactly: scheme AND host.
+ *
+ * Every other non-web scheme is refused (`webScheme` below). Before this
+ * constant existed the guard judged only host + port, so `capacitor://localhost`
+ * passed by accident — and so would `anything://localhost`. A browser never
+ * sends a made-up scheme today; naming the one we serve keeps it that way.
+ */
+const NATIVE_SHELL_ORIGINS = new Set<string>(["capacitor://localhost"]);
+
+/** Origins are judged on host + port only for the web's own two schemes. */
+function webScheme(protocol: string): boolean {
+  return protocol === "http:" || protocol === "https:";
+}
+
 /** Split a `host:port` / origin authority into its parts. Handles `[::1]:80`. */
 function splitAuthority(authority: string): { host: string; port: number | null } {
   const a = authority.trim().toLowerCase();
@@ -184,7 +202,9 @@ export function originHeaderAllowed(origin: string | undefined): boolean {
   const n = normaliseOrigin(raw);
   if (!n) return false;
   if (compiled.origins.has(n)) return true;
+  if (NATIVE_SHELL_ORIGINS.has(n)) return true;
   const u = new URL(n);
+  if (!webScheme(u.protocol)) return false;
   if (!hostAllowed(u.hostname)) return false;
   const port = u.port ? Number(u.port) : u.protocol === "https:" ? 443 : 80;
   return compiled.ports.has(port);

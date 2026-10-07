@@ -125,7 +125,8 @@ The counted half of the host: every token, context, cost and limit figure this d
   `PluginStoreReader.discover`, exactly one candidate or none) and its ledger at
   `/api/tokenstats/<id>` (`PluginStoreReader.ledger`, served verbatim). Core keeps the poll contract
   and the watcher's cadence; every answer degrades to ABSENT, and a reader that left (its plugin
-  switched off) answers nothing. opencode's readers and their rules: `packages/extensions/opencode/README.md`.
+  switched off) answers nothing. opencode's readers and their rules: the opencode extension's README
+  (`packages/extensions/opencode/`, private, not in the public tree).
 - `usagelog.ts` — the `/usage` readings this daemon took, KEPT, so the two limit windows have a
   history. **Nothing is ever scraped for it** — it records what was already fetched. The series is
   therefore IRREGULAR and a gap is a gap, never resampled. The reset instants ride along because a

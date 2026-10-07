@@ -18,7 +18,9 @@ features, one plain sentence each.
 
 ## The first minute
 
-![The real claude terminal at work, flipped to the reader and back; a screenshot arrives, is marked up and sent back; what the turn cost](media/first-look.gif)
+[![The real claude terminal on a phone, mid-turn; a screenshot arrives, is circled and sent back, and Claude fixes what was circled](media/first-look.gif)](https://waterplane-dev.github.io/media/first-look-ef0a8d56b4.mp4)
+
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/first-look-ef0a8d56b4.mp4), with pause and seek.*
 
 1. **A live session.** The real `claude` terminal in a fictional repo is mid-turn: tool lines
    stream and the context meter ticks. It is the actual CLI, so every slash command and dialog is
@@ -41,7 +43,9 @@ Try it: `?demo=first-look`
 
 ## Screenshot, mark it up, send it back
 
-![Screenshots Claude saved appear as pictures; open one, then browse the repo's files](media/gallery-and-files.gif)
+[![Tap the new-file count: the gallery lists what Claude made, and a markdown file, a live HTML page and a screenshot open on the phone](media/gallery-and-files.gif)](https://waterplane-dev.github.io/media/gallery-and-files-d96756c1ea.mp4)
+
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/gallery-and-files-d96756c1ea.mp4), with pause and seek.*
 
 Whatever Claude leaves in `.claude/outbox/` shows up on the phone as a picture or a file, with a
 badge on the repo that has something new. You can open it full size, mark it up and send the note
@@ -53,7 +57,9 @@ Try it: `?demo=gallery-and-files`
 
 *Android app developers only (optional).*
 
-![Phone one circles a spot on a screenshot of the app, Claude Code adds a logo there, the build runs, phone two's notifications say the build succeeded and the update is ready to install, one tap on Install updates it, and it opens with the logo in the circled spot](media/apk-install.gif)
+[![Phone one circles a spot on a screenshot of the app, Claude Code adds a logo there, the build runs, phone two's notifications say the build succeeded and the update is ready to install, one tap on Install updates it, and it opens with the logo in the circled spot](media/apk-install.gif)](https://waterplane-dev.github.io/media/apk-install-cd81f3614e.mp4)
+
+*Loops. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/apk-install-cd81f3614e.mp4), with pause and seek.*
 
 A build command saved for a repo runs from the phone without a Claude session, so it spends no
 tokens. When it produces an APK, every phone running the developer build of the Android app that
@@ -66,7 +72,9 @@ the build, the download and the install are the real ones.
 
 ## Usage limit and session budget
 
-![A session budget holds the next send before the usage wall; at the reset the session continues](media/limit-and-budget.gif)
+[![The session hits the 5-hour usage wall and is parked; at the reset it continues and the held prompt runs once](media/limit-and-budget.gif)](https://waterplane-dev.github.io/media/limit-and-budget-f2a9c7fca8.mp4)
+
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/limit-and-budget-f2a9c7fca8.mp4), with pause and seek.*
 
 Give a session a budget and, once it is reached, the next send is held before the usage wall: your
 words are kept and the reason is said. When a session does hit a Claude usage limit, the host waits
@@ -80,7 +88,9 @@ Try it: `?demo=limit-and-budget`
 
 ## Schedule against the week
 
-![A queued prompt waits behind a running turn, then runs; schedules and backlog at a glance](media/queue-and-schedule.gif)
+[![Tap the waiting count: the queued prompt waits behind a running turn, then runs by itself](media/queue-and-schedule.gif)](https://waterplane-dev.github.io/media/queue-and-schedule-84fab1746e.mp4)
+
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/queue-and-schedule-84fab1746e.mp4), with pause and seek.*
 
 A prompt sent while the session is busy is queued and says why it waits. When the turn ends it is
 typed into the same session, and its row in Activity goes from waiting to running to done. It never
@@ -93,7 +103,9 @@ Try it: `?demo=queue-and-schedule`
 
 ## What it costs
 
-![The usage windows in the header, what the budget says about them, and one session's context window](media/numbers.gif)
+[![Two weeks of heavy use priced at API list price, and what drives the cost](media/numbers.gif)](https://waterplane-dev.github.io/media/numbers-b168ebe603.mp4)
+
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/numbers-b168ebe603.mp4), with pause and seek.*
 
 The header carries the two usage windows, the 5-hour session and the week, with when each resets.
 The budget setting reads the same figures and says in words what they mean for you. Each session
@@ -125,7 +137,9 @@ servers; waterplane's own does not.
 
 ## The demo tour
 
-![The More to try list, and three of its rows: token ledger, context window, notifications](media/demo-tour.gif)
+[![The More to try list, and three of its rows: token ledger, context window, notifications](media/demo-tour.gif)](https://waterplane-dev.github.io/media/demo-tour-6995511f9e.mp4)
+
+*Loops. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/demo-tour-6995511f9e.mp4), with pause and seek.*
 
 The demo line has a **More to try** button, and the first minute's closing card links to it. It opens a list of the app's headline features, one
 plain sentence each, grouped by what you want to do: drive a session, leave work running, see what

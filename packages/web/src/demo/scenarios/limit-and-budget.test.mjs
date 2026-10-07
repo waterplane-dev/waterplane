@@ -103,7 +103,7 @@ test("limit-and-budget: the budget holds the next send before the wall; at the r
   assert.deepEqual(h.frames().filter((m) => m.t === "decisions.log").at(-1).entries.map((x) => x.phase), ["resumed", "attempt", "blocked"]);
   const out = ptyText(h.frames(), id);
   assert.equal(out.split(HELD_PROMPT).length - 1, 1, "the held prompt was typed exactly once");
-  assert.match(out, /continue\r\n[\s\S]*its due date moves with it/);
+  assert.match(out.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, ""), /❯ continue\r\n[\s\S]*its due date moves with it/);
   h.conn.receive({ t: "session.history", id });
   const hist = h.frames().at(-1).entries.map((x) => x.text);
   assert.equal(hist.filter((t) => t === HELD_PROMPT).length, 1);

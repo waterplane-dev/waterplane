@@ -34,7 +34,18 @@ export function screenCommandTurns(entries: HistoryEntry[], logged: TranscriptTu
       t.prompt.trim().split(/\s+/)[0] === head &&
       Math.abs((t.sentAt ?? 0) - e.sentAt) < LOCAL_MATCH_MS);
     if (already) continue;
-    const cut = e.output ? sliceToCommand(e.output, text) : "";
+    // Typed into a turn that was still running, and the capture never shows the
+    // command's echo: then the capture is that TURN's output, which the log
+    // already holds, not the command's answer. Measured: an `/effort high`
+    // typed 50 s into a turn that launched background agents came back as a
+    // frozen copy of the turn's screen, sorted after it, so the reader's tail
+    // was a 20:42 snapshot ("took 2m") while the turn above it ran to 21:08.
+    // Absent, not someone else's words: no body and no finish claimed.
+    const midTurn = logged.some((t) =>
+      !t.local && (t.sentAt ?? Infinity) <= e.sentAt && (t.endedAt ?? 0) > e.sentAt);
+    const echoed = !!e.output && e.output.split("\n").some((l) => l.trim().startsWith(head));
+    const own = !midTurn || echoed;
+    const cut = e.output && own ? sliceToCommand(e.output, text) : "";
     const body = cut ? trimTuiChrome(foldRepaints(cut, text)) : "";
     // Asked of the CUT capture, not of `body`: the hint is exactly what `body`
     // has had removed, so reading it back off the trimmed text finds nothing.
@@ -45,7 +56,7 @@ export function screenCommandTurns(entries: HistoryEntry[], logged: TranscriptTu
       prompt: text.slice(0, TEXT_CAP),
       promptLabel: oneLine(text),
       sentAt: e.sentAt,
-      endedAt: e.outputAt,
+      endedAt: own ? e.outputAt : undefined,
       blocks: body
         ? [{ kind: "screen", text: body.slice(0, TEXT_CAP), ...(clipped ? { scrollable: true } : {}) }]
         : [],

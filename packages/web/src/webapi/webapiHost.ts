@@ -33,6 +33,33 @@ export const hostApi = {
       return { error: "the host could not be reached" };
     }
   },
+  /** Whether the desktop can read a whole picture ON-DEVICE (`ocrlocal.ts`). A
+   *  reason, never a bare false — the annotator says it in place of the text. */
+  ocrStatus: async (): Promise<{ available: true; engine: string } | { available: false; reason: string }> => {
+    try {
+      const r = await nfetch("/api/host/ocr");
+      if (!r.ok) return { available: false, reason: "this desktop is running an older host" };
+      return await r.json();
+    } catch {
+      return { available: false, reason: "the host could not be reached" };
+    }
+  },
+  /**
+   * Every word in one picture, read on the desktop and nowhere else — the
+   * annotator's "text only". The bytes are the body for `readText`'s reason
+   * (nothing is written, no repo), and the fuse is long: a phone photo is a
+   * megabyte or two up a tunnel, and the desktop's first read may build its
+   * reader. A reason is a 200, shown in place of the text.
+   */
+  ocrImage: async (img: Blob): Promise<{ text: string; engine: string; ms: number } | { error: string }> => {
+    try {
+      const r = await nfetch("/api/host/ocr", { method: "POST", headers: { "content-type": img.type || "image/jpeg" }, body: img }, 120_000);
+      if (r.status === 404) return { error: "this desktop is running an older host — update it to read pictures on-device" };
+      return await r.json();
+    } catch {
+      return { error: "the host could not be reached" };
+    }
+  },
   /**
    * Whether the desktop can turn speech into words, asked BEFORE the mic opens.
    *

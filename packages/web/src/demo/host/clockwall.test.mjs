@@ -162,8 +162,9 @@ test("a wall parks the session until its reset; the clock gets there; auto-conti
   h.tick(500);
   s = h.sess();
   assert.equal(s.turnActive, false, "the reply's own end of turn ran after `resumed`");
-  const pty = h.frames().filter((m) => m.t === "pty").map((m) => Buffer.from(m.dataB64, "base64").toString("utf8")).join("");
-  assert.equal(pty.match(/\x1b\[0m go\r\n/g)?.length ?? 0, 1, "the prompt was typed once");
+  const pty = h.frames().filter((m) => m.t === "pty").map((m) => Buffer.from(m.dataB64, "base64").toString("utf8")).join("")
+    .replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "");
+  assert.equal(pty.match(/❯ go\r\n/g)?.length ?? 0, 1, "the prompt was typed once");
   assert.match(pty, /continue\r\n[\s\S]*finished/);
   h.conn.receive({ t: "decisions.get" });
   assert.equal(h.frames().at(-1).entries.length, 3, "a later read answers the same rows");

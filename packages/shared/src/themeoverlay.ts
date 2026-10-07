@@ -50,7 +50,7 @@ import { TERM_COLORS, type TermColors, type TermThemeName } from "./termpalette.
 export const THEME_TOKENS: readonly string[] = [
   "--bg", "--panel", "--sub", "--raise", "--well", "--line", "--pipe-bg",
   "--fg", "--muted", "--dim", "--ring",
-  "--accent", "--ok", "--dead", "--warn", "--star", "--limit", "--ask",
+  "--accent", "--ok", "--dead", "--warn", "--star", "--limit", "--ask", "--pair",
   "--purple", "--sched", "--defer", "--ctx-low",
   "--on-accent", "--on-accent-strong", "--on-accent-line", "--on-dead", "--on-ok", "--on-limit", "--on-star", "--on-media",
   "--accent-wash", "--accent-tint", "--accent-tint-hi", "--accent-edge", "--accent-edge-hi",
@@ -71,7 +71,7 @@ export const THEME_TOKENS: readonly string[] = [
 ];
 
 /** Tokens declared as `rgb(var(<token>-rgb))`: an override is written to the triple. */
-export const THEME_RGB_TOKENS: readonly string[] = ["--accent", "--ok", "--dead", "--warn", "--star", "--limit", "--ask"];
+export const THEME_RGB_TOKENS: readonly string[] = ["--accent", "--ok", "--dead", "--warn", "--star", "--limit", "--ask", "--pair"];
 
 const TOKENS = new Set(THEME_TOKENS);
 const RGB_TOKENS = new Set(THEME_RGB_TOKENS);

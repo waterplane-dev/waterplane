@@ -155,8 +155,16 @@ machine or a user's desktop. Each line is a check, not a promise:
 - **`tools/lockfile.test.mjs`** (in `test:unit`): every lockfile entry resolves from
   `https://registry.npmjs.org/` and carries a sha512 `integrity`. A git/tarball/other-registry dep or
   a stripped hash fails the suite.
-- **`npm run audit:prod`** (`npm audit --omit=dev`) runs in the pre-push hook; dev-only advisories
-  don't block a push.
+- **`npm run audit`** runs in the pre-push hook and `ci.yml`: any advisory in what ships
+  (`audit:prod`), **high+ in dev tooling too**, and high+ in `packages/app`'s own lockfile (the
+  Capacitor shell, outside the workspaces). Dev deps used to be exempt; that let 8 advisories (one
+  critical, `shell-quote` under `concurrently`) and a critical in `@capacitor/android` — which
+  ships inside the APK — sit unseen until a fresh `npm ci` printed them on a first install
+  (2026-10-07). Dev tooling runs on the contributor's machine; it is not harmless.
+- **Fixing one: `npm audit fix`, then `overrides`** in the root `package.json` for a transitive dep
+  whose parent pins an exact vulnerable version (`concurrently` pins `shell-quote`). Neither path
+  bypasses `min-release-age`: a fix published under a week ago is not installable yet, and the gate
+  stays red until it is — wait it out rather than lowering the age.
 - **Actions are pinned to a commit SHA**, not a tag (a tag can be moved).
 - **The npm tarball ships `npm-shrinkwrap.json`** generated from the lockfile, so `npm i -g` installs
   the same transitive versions we tested. **The release tarball ships `node_modules`** and needs no
@@ -553,8 +561,9 @@ layout is identical in both.
 ```bash
 git tag v0.2.0
 npm run release:public -- --tag v0.2.0 --to ../public-clone --report /tmp/snapshot.md   # dry run
-npm run release:public -- --tag v0.2.0 --to ../public-clone --accept reviewed.txt --commit
-git -C ../public-clone push origin main                                                  # by hand
+npm run release:public -- --tag v0.2.0 --to ../public-clone --media-to ../media-clone --accept reviewed.txt --commit
+git -C ../media-clone push origin main     # by hand, FIRST when the run hosted videos
+git -C ../public-clone push origin main    # by hand
 ```
 
 The default is a DRY RUN. The snapshot is `git archive <tag>` (tracked files only, never the working
@@ -580,3 +589,75 @@ never accepted.
 markdown link, and every backticked `path/x.md` mention, in published markdown that points at a
 tracked-but-unpublished file (separately: links that were already broken). It does not fail: the
 owner decides whether to publish the target or rewrite the link.
+
+**Rewritten on the way out** (`public-lib.mjs` "rewriting", before the scans, so they judge what is
+published; the report has a section for it). Two things the private tree needs and the public one
+must not carry:
+
+- **Claude session ids.** The requirements record `asked: <prompt ref>, <date> (session <id>)` so the
+  owner can find the prompt and the conversation behind an item; `docs/notes` cites a session as
+  evidence now and then. Nobody else can open either, and together they are a log of how the owner
+  works, so `stripSessionIds` drops them from every published `.md` (an `asked:` line left empty goes
+  too). The private tree keeps them. Anything in a new phrasing is a `session-id` scan hit, and a
+  `claude.ai/code/session_…` link in any file is a `session-url` hit.
+- **Videos.** The README and guide link a full walkthrough video next to each gif, for pause and seek.
+  The mp4s stay out of the public repo (every re-recording would sit in every clone's history for
+  ever) and are served from their own repo instead, named in `deploy/public-media.json` (`repo`,
+  `urlBase`, `hosted` globs; `{org}` is `BRAND.githubOrg`). Each linked file is renamed
+  `<stem>-<sha256:10>.<ext>`, copied into a clone of that repo (`--media-to`, committed with
+  `--commit`, never deleted from, with a `.nojekyll`), and every `](…)` to it in published markdown
+  is re-pointed at `urlBase/<name>`. A re-recording is a new name, so an older release's README keeps
+  the bytes it was written against. **Why not release assets:** GitHub serves those as
+  `content-disposition: attachment`, so a click downloads the file instead of playing it. `urlBase`
+  is GitHub Pages on the media repo (plays in the browser, with seek); `https://cdn.jsdelivr.net/gh/
+  <org>/media@main` serves the same files if Pages is ever unavailable, a one-line change. `--write`
+  with a hosted link and no `--media-to` stops before anything is written. `release:publish` takes
+  `--media-clone`, checks its origin in preflight, and pushes it before the public repo.
+
+## Demo mode and the fake host
+
+Demo mode (`?demo=<scenario>`, or the "Try the demo" button) runs the phone app against `DemoHost`
+(`packages/web/src/demo/host/`), an in-memory fake of the desktop. One fake serves four readers: a
+Play reviewer who will not install a daemon, Tailscale and `claude`; a first-time visitor; the docs
+gifs; and the tests, for which it is the only host double. The rules it keeps:
+
+- **No DOM, no storage, no timers, no `Date.now()`** in `demo/host/` (eslint holds it), so it runs
+  in node without a build and the clock is injected.
+- **Exhaustive by type.** `HANDLERS satisfies HandlerTable`, a mapped type over
+  `ClientMessage["t"]`: a new client message fails `tsc` until the fake answers it.
+  `packages/host/test/demoparity.test.mjs` pins the host side; `demo/contract.test.mjs` pins the
+  other direction, with reasoned exceptions in `contract-accept.json`.
+- **A refusal is a wire verdict** (`demo/host/verdict.ts`): every message whose sender waits gets its
+  receipt with `ok:false` and a sentence, never a toast, because the queue retries anything else with
+  the same ackId for ever. Never `retryable`: "not in the demo" does not change with time.
+- **Zero requests off the bundle's origin.** `isDemo()` is what is RUNNING (only `demo/transport.ts`
+  turns it on), not what was asked, so every guard (push, OTA, LAN probes, native workers) follows
+  the transport. `?demo=` writes nothing, so a journey run on a real host's origin cannot leave it
+  stuck in the demo; the button's choice is stored per device so a cold APK start returns to it.
+- **Scenarios are recorded from the real host driving the stub TUI** (`WATERPLANE_WIRE_RECORD`,
+  `scripts/e2e-demorecord.mjs`), never from a real `claude`, whose output drifts per version and
+  carries real paths; the scrub fails closed.
+
+## The demo terminal is drawn like the real CLI
+
+The docs gifs film the in-app demo, whose "PTY" is a string the fake host writes. Scenarios used to
+write that string as the screen itself — `> prompt`, `● text`, 80-column lines — and on a phone it
+read as a sketch of Claude Code: lines broken mid-word by xterm, no input box, the wrong glyphs. The
+owner's verdict on the first README gif (2026-10-06): the real CLI looks different.
+
+`packages/web/src/demo/host/cli.ts` is now the one place that turns the scenarios' short source form
+into what a real `claude` v2.1 prints, measured against one in tmux: a prompt is `❯ text` on a grey
+band, an answer `⏺ text`, a tool a green `⏺ Tool(arg)` over its dim `⎿` result, blocks set off by a
+blank line, text wrapped at words to the grid with a hanging indent. Under the transcript sits the
+CLI's own input box (rule, `❯ `, rule, `? for shortcuts`) and, while a turn runs, the spinner line
+above it. The box is redrawn the way Ink redraws its live region: cursor up to its first row, erase
+down, the new transcript lines, the box again. The source stays in `DemoScreen.log` so a resize
+repaints at the new width — the CLI lays its transcript out to the PTY's width, and so does the demo.
+
+Scenarios keep writing the source form on purpose: one renderer means the next CLI restyle is one
+file, not six scenarios. The transcript reader's live turn splits on `❯ ` lines but not on a choice
+box's selected `❯ 1.` row, which uses the same glyph.
+
+Films also seed the console one zoom step down (`scripts/ui/lib.mjs`, only under `--media`) and run
+at a Pixel 8 Pro's 448 x 998 viewport — the APK film's emulators are Pixel 8 Pro AVDs too — so the
+grid is ~60 columns rather than ~45 columns of oversized text.

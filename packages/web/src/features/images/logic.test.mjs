@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 
 import {
   NEWIMG_CAP, annReturnOverlay, dropStrip, findInStrips, galleryCtxForFile, isViewable, isVideoPath, markedRef,
-  mergeNewImages, outboxCut, parkLane, swapImageRef, trimNewImages,
+  mergeNewImages, ocrBlock, outboxCut, parkLane, swapImageRef, trimNewImages,
 } from "./logic.ts";
 
 const im = (relPath, extra = {}) => ({ name: relPath.split("/").pop(), relPath, mtime: 1, ...extra });
@@ -90,4 +90,12 @@ test("the outbox badge's cut is its own edge and number, absent when nothing is 
   assert.equal(outboxCut({ outboxSeenAt: 5, outboxCount: 0 }), undefined);
   assert.equal(outboxCut({ outboxCount: 3 }), undefined);
   assert.equal(outboxCut(undefined), undefined);
+});
+
+test("text read off a photo goes in fenced and labelled, a fence inside it is out-fenced", () => {
+  const b = ocrBlock("  Error: boom\nat x  ");
+  assert.match(b, /^Text read off a photo .*not sent/);
+  assert.ok(b.includes("\n```\nError: boom\nat x\n```\n"));
+  const nested = ocrBlock("see ```js\ncode\n```");
+  assert.ok(nested.includes("\n````\nsee ```js"));
 });

@@ -51,6 +51,7 @@ export function useTabStripBridge(ctx: UseTabStripBridgeCtx) {
           // status filter make (`sessionFacts.tsx`).
           status: sessionStatus(s, backends),
           createdAt: s.createdAt,
+          ...(s.companionOf ? { companionOf: s.companionOf } : {}),
         };
       }),
       activeId,

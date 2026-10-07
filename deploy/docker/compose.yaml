@@ -1,0 +1,58 @@
+# waterplane in Docker. Guide: deploy/docker/README.md
+#
+#   cd deploy/docker
+#   docker compose up -d --build
+#   docker compose logs -f        # the Tailscale login link, then the host's own log
+#
+# The host is reached over your tailnet only. There is deliberately no `ports:`
+# section: publishing 8770 would put a daemon that runs code on your LAN (or the
+# internet). If you add one, bind it to 127.0.0.1 and know why.
+
+services:
+  waterplane:
+    build:
+      context: .
+      # A release you built yourself (npm run release:build && npm run release:install-sh),
+      # e.g. WATERPLANE_RELEASE_DIR=../../dist-release. Default: the published installer.
+      additional_contexts:
+        release: "${WATERPLANE_RELEASE_DIR:-./no-release}"
+      args:
+        # 1 = bake a JDK and the Android SDK into the image. You accept Google's
+        # Android SDK licence by building it. On an ARM host also set platform below.
+        ANDROID: "${WATERPLANE_DOCKER_ANDROID:-0}"
+    image: waterplane:local
+    # Google's Android build tools are x86_64-only on Linux. On Apple silicon or an
+    # ARM server with ANDROID=1, uncomment (OrbStack and Docker Desktop run it via Rosetta/qemu):
+    # platform: linux/amd64
+    hostname: waterplane
+    restart: unless-stopped
+    # Kernel networking for Tailscale: the container gets its own 100.x address.
+    # Without these two it falls back to userspace mode (https via tailscale serve only).
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      # A reusable or one-off auth key from https://login.tailscale.com/admin/settings/keys.
+      # Unset: the log prints a login link once; the node identity is then kept in the volume.
+      TS_AUTHKEY: "${TS_AUTHKEY:-}"
+      TS_HOSTNAME: "${TS_HOSTNAME:-waterplane}"
+      # 0 = do not set up `tailscale serve` (https on :443 in front of the host).
+      TS_SERVE: "${TS_SERVE:-1}"
+      # 0 = do not install Claude Code on first start; bring your own.
+      CLAUDE_INSTALL: "${CLAUDE_INSTALL:-1}"
+      # Optional instead of signing in to a Claude subscription.
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+    volumes:
+      # Repos (~/dev), the Claude login and binary, waterplane settings and state,
+      # the Gradle cache. Swap for a bind mount (./home:/home/wp) to see the files.
+      - home:/home/wp
+      - tailscale:/var/lib/tailscale
+    # Gradle and claude together want room. Raise for bigger Android projects.
+    mem_limit: "${WATERPLANE_DOCKER_MEM:-8g}"
+    # tmux sessions, the Gradle daemon and claude subprocesses: give tini the whole group.
+    init: false
+
+volumes:
+  home:
+  tailscale:

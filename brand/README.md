@@ -12,7 +12,8 @@ inputs changed without a regeneration (`brand/outputs.json` records the input ha
 |---|---|
 | `icon.svg` | master mark, dark: every size of 64 px and up |
 | `icon-small.svg` | simplified mark: every raster **below 64 px** (the spec's cut, `smallCutPx`) |
-| `icon-light.svg` | light-background variant (docs on white) |
+| `icon-light.svg` | light-background variant (docs on white; the in-app logo in the light theme) |
+| `icon-small-light.svg` | light simplified mark: the in-app logo below 64 px in the light theme (header). Not rasterised |
 | `icon-mono.svg` | single-colour silhouette: SVG favicon, push badge, status-bar glyph |
 | `android-{foreground,background,monochrome}.svg` | adaptive icon layers, 108 dp canvas, 66 dp safe zone; also the PWA maskable icon |
 | `hero.svg` | README / store hero, 1600x900. Its text is **outlined** (JetBrains Mono ExtraBold, Inter 600/400) so it does not depend on installed fonts |

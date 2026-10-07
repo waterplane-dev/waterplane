@@ -227,6 +227,25 @@ export function memUsedSeries(samples: readonly LocalRuntimeSample[]): (number |
   return seriesOf(samples, (s) => (s.memTotal > 0 ? Math.max(0, s.memTotal - memAvailBytes(s)) : null));
 }
 
+/**
+ * CPU and GPU temperature per sample, °C, `null` where the sample carried no
+ * thermal reading — a host with no sensor reader draws nothing, never 0°C.
+ * The thermal reader runs on the slow cadence, so neighbouring samples can
+ * repeat one reading; a step rather than a slope is that, not the machine.
+ */
+export function cpuTempSeries(samples: readonly LocalRuntimeSample[]): (number | null)[] {
+  return seriesOf(samples, (s) => s.sys?.thermal?.cpuTempC);
+}
+export function gpuTempSeries(samples: readonly LocalRuntimeSample[]): (number | null)[] {
+  return seriesOf(samples, (s) => s.sys?.thermal?.gpuTempC);
+}
+
+/** One fan's rpm per sample, matched by the sensor's LABEL (not its index —
+ *  a reader that lists one fan fewer must not shift fan 2's line onto fan 1's). */
+export function fanSeries(samples: readonly LocalRuntimeSample[], label: string): (number | null)[] {
+  return seriesOf(samples, (s) => s.sys?.thermal?.fans.find((f) => f.label === label)?.rpm);
+}
+
 /** The one place the gap rule lives for every per-sample series. */
 function seriesOf(samples: readonly LocalRuntimeSample[], pick: (s: LocalRuntimeSample) => number | null | undefined): (number | null)[] {
   const out: (number | null)[] = [];

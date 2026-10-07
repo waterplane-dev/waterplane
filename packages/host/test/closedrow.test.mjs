@@ -112,3 +112,23 @@ test("pushClosed persists the new fields, and a restart reads them back", () => 
   assert.equal(row.itemId, "agent-k");
   rmSync(root, { recursive: true, force: true });
 });
+
+test("a typed slash command is never a row's Started or Latest", () => {
+  const { r, root } = roster();
+  const only = session({ history: [{ id: "c1", kind: "command", text: "/compact", sentAt: 2_000 }] });
+  r.applyPromptLabels(only);
+  assert.equal(only.info.firstPrompt, undefined, "a resumed session's /compact must not replace its tab name on the row");
+  assert.equal(only.info.lastPrompt, undefined);
+  const row = r.closedRowOf(only, false);
+  assert.equal("firstPrompt" in row, false);
+  assert.equal(row.turns, 1, "still a turn");
+  const mixed = session({ history: [
+    { id: "c1", kind: "command", text: "/model opus", sentAt: 1_500 },
+    { id: "h1", kind: "prompt", text: "fix the flaky test", sentAt: 2_000 },
+    { id: "c2", kind: "command", text: "/compact", sentAt: 3_000 },
+  ] });
+  r.applyPromptLabels(mixed);
+  assert.equal(mixed.info.firstPrompt, "fix the flaky test");
+  assert.equal(mixed.info.lastPrompt, "fix the flaky test");
+  rmSync(root, { recursive: true, force: true });
+});

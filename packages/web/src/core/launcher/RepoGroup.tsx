@@ -459,7 +459,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
   const ownedBy = (id: string) => wts.filter((t) => t.ownerSessionId === id);
   const loose = wts.filter((t) => !t.ownerSessionId || !shownIds.has(t.ownerSessionId));
   const wtRow = (t: typeof wts[number]) => (
-    <div key={t.id} className="row-wrap repo-row row-wt" style={repoAccentStyle(repoName)}>
+    <div key={t.id} className={`row-wrap repo-row row-wt${t.ownerSessionId && shownIds.has(t.ownerSessionId) ? " row-wt-owned" : ""}`} style={repoAccentStyle(repoName)}>
       <div className="row grow repo-main" role="button" tabIndex={0}
         onClick={() => openRepo(t)}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openRepo(t); } }}>

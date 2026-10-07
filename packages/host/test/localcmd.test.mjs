@@ -148,6 +148,36 @@ test("the capture is cut to the command and stripped of the CLI's furniture", ()
   assert.equal(sliceToCommand("just output\nmore output", "/btw x"), "just output\nmore output");
 });
 
+test("a command typed into a running turn does not take that turn's screen as its answer", () => {
+  // Measured (session 0fa9eacb, 2026-10-06): `/effort high` typed 50 s into a
+  // turn that went on to launch background agents. The capture held no echo of
+  // the command, only the turn's own output, and as the newest row the reader
+  // showed that frozen screen with "finished 20:42 · took 2m" while the turn
+  // above it ran to 21:08.
+  const logged = [{ id: "a", n: 1, prompt: "fix both", promptLabel: "fix both", sentAt: T, endedAt: T + 30 * 60_000, blocks: [], toolCount: 3, files: [], sidechains: 0 }];
+  const capture = "⏺ 2 background agents launched\n\n✻ Waiting for 2 background agents to finish\n\n❯ ";
+  const [turn] = screenCommandTurns(
+    [{ id: "h1", kind: "command", text: "/effort high", sentAt: T + 50_000, output: capture, outputAt: T + 170_000 }],
+    logged,
+  );
+  assert.deepEqual(turn.blocks, []);
+  assert.equal(turn.endedAt, undefined);
+  // The same capture with the command's own echo in it IS the command's answer.
+  const [echoed] = screenCommandTurns(
+    [{ id: "h2", kind: "command", text: "/effort high", sentAt: T + 50_000, output: `${capture}\n  /effort high\n  Set effort level to high`, outputAt: T + 170_000 }],
+    logged,
+  );
+  assert.match(echoed.blocks[0].text, /Set effort level to high/);
+  assert.doesNotMatch(echoed.blocks[0].text, /background agents/);
+  // Typed into an IDLE session, an echo-less capture is still the only record.
+  const [idle] = screenCommandTurns(
+    [{ id: "h3", kind: "command", text: "/btw x", sentAt: T + 40 * 60_000, output: "just output", outputAt: T + 41 * 60_000 }],
+    logged,
+  );
+  assert.equal(idle.blocks[0].text, "just output");
+  assert.equal(idle.endedAt, T + 41 * 60_000);
+});
+
 test("a capture the CLI could scroll is MARKED as partial, not passed off as whole", () => {
   // The footer is the only evidence there is: the rows below the fold were never
   // painted, so they are in no capture, no scrollback and no log. A block that

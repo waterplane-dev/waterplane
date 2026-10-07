@@ -150,6 +150,20 @@ export function swapImageRef(text: string, oldPath: string, ref: string): string
   return re.test(text) ? text.replace(re, ref) : `${text} ${ref}`;
 }
 
+/**
+ * Words read off a picture, as the agent receives them INSTEAD of the picture
+ * (the annotator's "text only"). Fenced so the agent sees where the reading
+ * starts and ends, and labelled as a reading so a misread glyph is taken for
+ * what it is rather than as the person's own typing. A fence inside the text is
+ * lengthened past, never stripped — the words are the person's, as edited.
+ */
+export function ocrBlock(text: string): string {
+  const body = text.trim();
+  const longest = Math.max(2, ...[...body.matchAll(/`+/g)].map((m) => m[0].length));
+  const fence = "`".repeat(longest + 1);
+  return `Text read off a photo (on-device OCR, the photo itself not sent — glyphs may be misread):\n${fence}\n${body}\n${fence}\n`;
+}
+
 /** The agent gets the path PLUS what was marked, so it knows where to look. */
 export function markedRef(relPath: string, note?: string): string {
   return note ? `${relPath} (marked: ${note})` : relPath;

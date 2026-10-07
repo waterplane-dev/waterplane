@@ -12,7 +12,7 @@ import { BatteryCharging, Bell, BellOff, Copy, ExternalLink, Smartphone, Wifi, W
 import { core } from "../../sdk";
 import { SetAction, SetCustom, SetSwitch, SetWarn } from "../../SettingsKit";
 import { copyText } from "../../api";
-import { requestShellBatteryExemption } from "../../shellLink";
+import { requestShellBatteryExemption, shellLinkSupported } from "../../shellLink";
 import { usePhoneSetup } from "../../usePhoneSetup";
 import { setupSummary } from "../../phoneSetup";
 import { SetupStepRows } from "./PhoneSetupSheet";
@@ -20,7 +20,7 @@ import { isNativeShell } from "../../hostUrl";
 import { AppUpdateSection } from "../../AppUpdate";
 import { showToast } from "../../toast";
 import { refreshShellLink, togglePush, toggleShellLink, useShellLinkPoll } from "./actions";
-import { endpoints, serveCmd } from "./logic";
+import { NO_BACKGROUND_ALERTS, endpoints, serveCmd } from "./logic";
 import { useHostPush, useShellLink } from "./store";
 
 const ICON = 16;
@@ -68,6 +68,11 @@ export function HostNotifySettings() {
             </div>
           </div>
         </SetCustom>
+      ) : push === "native" && !shellLinkSupported() ? (
+        /* A shell with no background link — the iOS shell. No push either
+           (that needs a paid Apple account and APNs), so alerts exist only
+           while the app is on screen, and the row says exactly that. */
+        <SetCustom id="notif-push" label="OS push" icon={BellOff} note={NO_BACKGROUND_ALERTS} />
       ) : push === "native" ? (
         /* The shell has no Web Push (no service worker in the APK, by
            design — see `push.ts`). What matters is not that the switch

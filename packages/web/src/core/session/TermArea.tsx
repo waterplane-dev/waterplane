@@ -173,6 +173,11 @@ function ScreenCorner({ zoom: zoomOn, active, pending, readerShown, readMode, se
   const narrower = readerShown ? "" : ", i.e. fewer columns and rows";
   return (<>
     <div className="term-zoom" data-hint="term.zoom">
+      {/* The CLI ↔ companion-shell toggle USED TO BE HERE (orange, first in
+          the group). It is the header's [Claude | Shell] tabs now
+          (`SessionHeader` `PairTabsSeg`), the owner's ask: two tabs by the
+          title that say which half is on screen, not one button naming only
+          where a tap goes. */}
       {/* The model wheel, left of the view switch. Absent on a pending
           session: there is no process yet to send /model to or relaunch. */}
       {!pending && !isShellBackend(wheel.backends, active.backend) && (

@@ -604,7 +604,7 @@ export const LS = {
   dismissInsecure: lsKey("dismissInsecure"),
   /** Phone-setup banner snoozed until (ms). Per device: it is about THIS phone. */
   dismissPhoneSetup: lsKey("dismissPhoneSetup"),
-  dismissedUpdate: lsKey("dismissedUpdate"),
+  dismissedUpdate: lsKey("dismissedUpdate"), annHintHidden: lsKey("annHintHidden"),
   /** The watchdog reload's own loop guard. */
   lastForcedReload: lsKey("lastForcedReload"),
   /** Web bundle staged for the next start, and whether to take it unasked. */
@@ -751,7 +751,7 @@ export const KEY_SCOPE = {
   schedPctLeft: "device", closeBy: "device", closeKeepStar: "device", collageGap: "device",
   collageLabels: "device", toastLog: "device", hostedAck: "device",
   // dismissals and the app's own update machinery
-  dismissInsecure: "device", dismissPhoneSetup: "device", dismissedUpdate: "device",
+  dismissInsecure: "device", dismissPhoneSetup: "device", dismissedUpdate: "device", annHintHidden: "device",
   lastForcedReload: "device",
   webUpdateStaged: "host", webUpdateAuto: "host", webUpdateApply: "host", webUpdateApplyTries: "host",
   webUpdateSnooze: "host", routeLast: "host", routeResume: "host",

@@ -95,6 +95,13 @@ export interface DemoScreen {
   seq: number;
   cols?: number;
   rows?: number;
+  /** The transcript in the scenarios' source form (`cli.ts`); unset on a screen a scenario seeded,
+   *  whose `data` is then that source until it is first drawn. */
+  log?: string;
+  /** Rows the input box (and spinner) under the transcript take right now, to lift them off. */
+  foot?: number;
+  /** The transcript ends on a blank line. */
+  endsBlank?: boolean;
 }
 
 /** An open choice box and what follows each answer. */

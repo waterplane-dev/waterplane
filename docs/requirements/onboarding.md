@@ -70,3 +70,7 @@ instead, with nothing installed, and opens on the phone from the gallery.
 - progress 2026-10-02: host half landed (WP6): the web path needs no toolchain or key, builds in about a second and leaves `<name>.html` in the outbox (`scripts/e2e-onboard.mjs`).
 - shipped: first-app WP7 (web page preselected in a browser, *make a web page instead* on the toolchain line; the finished page opens in the gallery viewer)
 
+### R-onboarding-010 · shipped
+A device that never touched the settings gets session tabs, the connection strip and the local runner strip on by default.
+- shipped: fda924a
+

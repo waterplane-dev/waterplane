@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 import {
-  TAB_COUNT_DEFAULT, TAB_COUNT_MAX, TAB_COUNT_MIN, TAB_STRIP_H,
+  TAB_COUNT_DEFAULT, TAB_COUNT_MAX, TAB_COUNT_MIN, TAB_STRIP_H, tabStripHeight,
   TAB_LIMIT_DEFAULT, bumpOpen, clampTabCount, clampTabLimit, limitTabs, cleanTabOrder, migrateOpens, orderTabs, pruneOpens, tabCloseAsk, tabLabel,
 } from "./sessionTabs.ts";
 
@@ -167,4 +167,11 @@ test("the limit: default 10, clamped, the open session always drawn, the cut cou
   const far = limitTabs(all, 3, "s4");
   assert.deepEqual(far.shown.map((t) => t.id), ["s0", "s1", "s4"]);
   assert.equal(far.hidden, 2);
+});
+
+test("the strip is 34px on a phone with tabs, and 0 in every other case (O3: none in wide)", () => {
+  assert.equal(tabStripHeight(true, true, false), TAB_STRIP_H);
+  assert.equal(tabStripHeight(true, true, true), 0, "wide hides the strip");
+  assert.equal(tabStripHeight(false, true, false), 0);
+  assert.equal(tabStripHeight(true, false, false), 0);
 });

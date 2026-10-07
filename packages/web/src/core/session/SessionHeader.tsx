@@ -10,15 +10,17 @@
  */
 import type { ReactNode } from "react";
 import {
-  BarChart3, Bell, Check, ChevronLeft, ChevronsDownUp, ChevronsUpDown, Clock, Gauge, List, Loader, Menu, Pencil, Plus,
-  Sigma, Sparkles, Unplug, X,
+  BarChart3, Bell, Bot, Check, ChevronLeft, ChevronsDownUp, ChevronsUpDown, Clock, Gauge, List, Loader, Menu, Pencil, Plus,
+  Sigma, Sparkles, SquareTerminal, Unplug, X,
 } from "lucide-react";
 import { repoBranchLabel, trimDefaultBranch, usageChip, usageText, weekShareText } from "@waterplane/shared";
 import type { BackendInfo, ClientMessage, RepoTarget, SessionInfo } from "@waterplane/shared";
 import type { HeaderCmd } from "../../headerCmds";
 import type { Overlay } from "../../routing";
 import type { OutboxEntry } from "../../outbox";
-import { backendMark, sideChannelLine } from "../../backendCaps";
+import { backendIdOf, backendInfo, backendMark, isShellBackend, shellBackend, sideChannelLine } from "../../backendCaps";
+import { pairTabs } from "../../pairTabs";
+import { askTabAttach } from "../../sessionTabs";
 import { ContextSparkline, SpendSparkline } from "../../ContextGraph";
 import { spendSparkGeom } from "../../contextPlot";
 import { dur, fmtTok, hhmm, repoAccentStyle, usageTitle } from "../../format";
@@ -60,6 +62,8 @@ const SPEND_SPARK_H = 12;
 
 export interface SessionHeaderProps {
   active: SessionInfo;
+  /** Every session — for the [Claude | Shell] tabs' other half (`pairTabs`). */
+  sessions: readonly SessionInfo[];
   pending: boolean;
   /** The queued create behind a pending screen (`q.pendingEntry`). */
   pendingEntry: OutboxEntry | null;
@@ -84,7 +88,7 @@ export interface SessionHeaderProps {
 
 export function SessionHeader(p: SessionHeaderProps): ReactNode {
   const {
-    active, pending, pendingEntry, status, liveSend, backends, sessionCan, sessionRepoName, repoForCwd,
+    active, sessions, pending, pendingEntry, status, liveSend, backends, sessionCan, sessionRepoName, repoForCwd,
     setActiveId, setOverlay, removeQueued, closeSession, chrome, hdrShown, headerCmds, runHeaderCmd, refreshTerminal,
     toolbar,
   } = p;
@@ -129,6 +133,7 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
             ? <span className="brand-name"><Sparkles size={12} aria-hidden="true" /> {active.tabTitle}</span>
             : null}
         </div>
+        <PairTabsSeg active={active} sessions={sessions} pending={pending} backends={backends} runToolbar={toolbar.runToolbar} />
         {/* Name this conversation, now.
 
             The desktop names a session ONCE, off the first summary that lands,
@@ -493,5 +498,64 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
       </div>
       )}
     </>
+  );
+}
+
+/**
+ * `[Claude | Shell]`: the CLI ↔ companion-shell pair as two tabs on the title
+ * row, the one on screen lit. It used to be one orange button in the
+ * terminal's corner group that named only where a tap would GO; two tabs say
+ * where you are as well, and sit with the title they switch. The decision is
+ * `pairTabs` (pure, tested); a tap is `askTabAttach` — the session strip's own
+ * verb — or, with no shell yet, the burger's "companion shell" command, so
+ * neither half is a new path. The lit tab is a label, not a button: tapping
+ * where you already are has nothing to do.
+ *
+ * Kept in a collapsed header — it is the switch between the two screens, not
+ * context — and hidden with the rest of the chrome in typing room and full
+ * screen.
+ */
+function PairTabsSeg({ active, sessions, pending, backends, runToolbar }: {
+  active: SessionInfo;
+  sessions: readonly SessionInfo[];
+  pending: boolean;
+  backends: BackendInfo[] | null;
+  runToolbar(id: string): void;
+}): ReactNode {
+  const tabs = pairTabs(active, sessions, {
+    pending, isShell: isShellBackend(backends, active.backend), canOpenShell: !!shellBackend(backends),
+  });
+  if (!tabs) return null;
+  const agent = tabs.on === "cli" ? active : tabs.cli;
+  const agentName = backendIdOf(agent) === "claude" ? "Claude" : backendInfo(backends, agent.backend)?.label ?? "CLI";
+  const cliTab = <><Bot size={14} aria-hidden="true" /> {agentName}</>;
+  const shellTab = <><SquareTerminal size={14} aria-hidden="true" /> Shell</>;
+  return (
+    <div className="pair-tabs" role="tablist" aria-label="session or its shell" data-hint="hdr.pair">
+      {tabs.on === "cli"
+        ? <span className="pair-tab on" role="tab" aria-selected="true">{cliTab}</span>
+        : (
+          <button className="pair-tab" role="tab" aria-selected="false" onPointerDown={keepFocus}
+            title="back to the CLI session this shell belongs to"
+            onClick={() => { track("action:companion.to.cli"); askTabAttach(tabs.cli.id); }}>
+            {cliTab}
+          </button>
+        )}
+      {tabs.on === "shell"
+        ? <span className="pair-tab on" role="tab" aria-selected="true">{shellTab}</span>
+        : (
+          <button className="pair-tab" role="tab" aria-selected="false" onPointerDown={keepFocus}
+            title={tabs.shell === "open"
+              ? "open a companion shell in this session's folder — it closes when this session does"
+              : "switch to this session's companion shell"}
+            onClick={() => {
+              const sh = tabs.shell;
+              if (sh === "open") { track("action:companion.open.tab"); runToolbar("companion"); }
+              else { track("action:companion.to.shell"); askTabAttach(sh.attach.id); }
+            }}>
+            {shellTab}
+          </button>
+        )}
+    </div>
   );
 }

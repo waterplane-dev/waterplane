@@ -18,7 +18,7 @@ test("the asks a shell actually prints", () => {
 test("a mention is not an ask", () => {
   for (const line of [
     "",
-    "johannes@mac usmc % ",
+    "johannes@mac proj % ",
     "Password:  set in settings — see docs",
     "the password field is required",
     "Sorry, try again.",

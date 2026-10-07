@@ -53,6 +53,7 @@ import { CliUpdateBanner, InsecureBanner, PhoneSetupBanner } from "./core/Banner
 import { SessionScreen } from "./core/session/SessionScreen";
 import { useSessionChrome } from "./core/session/useSessionChrome";
 import { LauncherScreen } from "./core/launcher/LauncherScreen";
+import { Workspace } from "./core/layout/Workspace";
 import { repoOfCwd, sessionRepoNameIn, sessionRowTitleIn } from "./core/launcher/model";
 import { useLatest } from "./sdk/hooks";
 import { useViewport } from "./useViewport";
@@ -265,7 +266,7 @@ export function App() {
   // One effect covers all of them (setOverlay is called from ~40 places).
   useEffect(() => { if (overlay) track(`overlay:${overlay}`); }, [overlay]);
   // The toolbar's command switch (`core/session/runToolbar.ts`).
-  const runToolbar = (id: string) => runToolbarCommand(id, { setOverlay, activeRepoId, active, readMode, fireReader, send, geomRef, submitInput });
+  const runToolbar = (id: string) => runToolbarCommand(id, { setOverlay, activeRepoId, active, readMode, fireReader, send, geomRef, submitInput, openCompanionShell: launchCore.openCompanionShell });
   // The socket's frame switch and its one subscription (`core/conn`).
   useHostFrames({ conn, term, verbs, q, focusSession }, {
     connRef, setBackends, setSessions, setRecent, setClosed, setUpdate, setMeter, setIntents, updateResultSeenRef, wantNavRef,
@@ -367,11 +368,16 @@ export function App() {
     launchCore, sessionCant, pickBackend, refreshRepos, sendCore, sendSeed, voice, installed, canInstall, installEvt,
     setCanInstall, gitRepoId, setGitRepoId, activeRepoId,
   });
-  if (sheet) return sheet;
-
-  // ── Session list / launcher (`core/launcher`) ───────────────────────
-  // The queue bars and the two banners, between the header and the list.
-  if (!active) return (
+  // ── The frame (`core/layout/Workspace`): phone = sheet ?? session ??
+  // launcher, wide = the launcher as a sidebar beside them. The launcher's
+  // banners: the queue bars and the two banners, between header and list.
+  return <Workspace sheet={sheet} session={active ? (
+    <SessionScreen active={active} pending={pending} conn={conn} term={term} q={q} compose={composeCore}
+      launch={launchCore} chrome={chrome} backends={backends} sessions={sessions} update={update}
+      readerShown={readerShown} activeRepo={activeRepo} transportKnown={transportKnown}
+      visibleBacklogItems={visibleBacklogItems} verbs={verbs} repoForCwd={repoForCwd}
+      sessionRepoName={sessionRepoName} setActiveId={setActiveId} setOverlay={setOverlay} runToolbar={runToolbar} />
+  ) : null} launcher={
     <LauncherScreen sessions={sessions} recent={recent} closed={closed} repos={repos} reposAt={reposAt} reposFailAt={reposFailAt} backends={backends}
       intents={intents} outbox={outbox} nowTick={nowTick} launch={launch} conn={conn}
       route={{ focusRepo, setFocusRepo, setOverlay, lastVisitedId }}
@@ -384,14 +390,5 @@ export function App() {
         <PhoneSetupBanner onOpen={() => setOverlay("phonesetup")} />
         <CliUpdateBanner update={update} liveAsk={liveAsk} liveSend={liveSend} />
       </>} />
-  );
-
-  // ── Active terminal (`core/session`) ─────────────────────────────
-  return (
-    <SessionScreen active={active} pending={pending} conn={conn} term={term} q={q} compose={composeCore}
-      launch={launchCore} chrome={chrome} backends={backends} sessions={sessions} update={update}
-      readerShown={readerShown} activeRepo={activeRepo} transportKnown={transportKnown}
-      visibleBacklogItems={visibleBacklogItems} verbs={verbs} repoForCwd={repoForCwd}
-      sessionRepoName={sessionRepoName} setActiveId={setActiveId} setOverlay={setOverlay} runToolbar={runToolbar} />
-  );
+  } />;
 }

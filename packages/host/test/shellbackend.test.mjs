@@ -213,6 +213,34 @@ test("screen links keep their first-seen at, merge with a browser one, and retir
   assert.equal(s.info.awaitingCode, undefined);
 });
 
+test("a screen link hidden only by a SHORTER pane stays: the links bar's own height must not flicker it", () => {
+  const { core, s, emitted } = fakeCore();
+  const url = "https://registry.npmjs.org/";
+  s.scrollback = `$ npm login\r\nnpm notice Log in on ${url}\r\n`;
+  s.rows = 40;
+  setScreenLinks(core, "s1", [{ url, line: 1 }], false, 100);
+  // The bar appeared, the pane shrank, tmux repainted only the rows that fit.
+  s.rows = 30;
+  const n = emitted.length;
+  setScreenLinks(core, "s1", [], false, 200);
+  assert.deepEqual(s.info.links?.map((l) => l.url), [url], "held while the pane is shorter and the output still holds it");
+  assert.equal(emitted.length, n, "no change ⇒ no broadcast ⇒ no relayout");
+  // Output moved past it: the byte tail no longer has the URL.
+  s.scrollback = "x".repeat(70 * 1024);
+  setScreenLinks(core, "s1", [], false, 300);
+  assert.equal(s.info.links, undefined);
+});
+
+test("a pane as tall as when the link was seen that no longer shows it retires it", () => {
+  const { core, s } = fakeCore();
+  const url = "https://a.io/x";
+  s.scrollback = `open ${url}\r\n`;
+  s.rows = 30;
+  setScreenLinks(core, "s1", [{ url }], false, 100);
+  setScreenLinks(core, "s1", [], false, 200);
+  assert.equal(s.info.links, undefined, "same height ⇒ it really left (clear, scrolled)");
+});
+
 test("nothing is stored for an unknown, ended or non-shell session", () => {
   const { core, s } = fakeCore();
   assert.equal(addBrowserLink(core, "nope", "https://a.io"), false);

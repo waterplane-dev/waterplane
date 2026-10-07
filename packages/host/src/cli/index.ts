@@ -54,7 +54,8 @@ const HELP = `${BRAND.slug} — ${BRAND.tagline}
 usage: ${BRAND.slug} <command>
 
   start                       run the host in the foreground (default)
-  doctor                      preflight checks, then exit
+  doctor [--json]             preflight checks, then exit (1 on a failure);
+                              --json: one JSON document on stdout, for scripts and agents
   version                     name, version and commit of this install
   service install|uninstall|status
                               register the host with launchd / systemd
@@ -90,7 +91,7 @@ export async function main(argv: string[]): Promise<number> {
   const [cmd = "start", ...rest] = argv;
   switch (cmd) {
     case "start": return runDaemon([]);
-    case "doctor": return runDaemon(["--doctor"]);
+    case "doctor": return runDaemon(["--doctor", ...rest.filter((a) => a === "--json")]);
     case "version": case "--version": case "-v": {
       const id = identity();
       console.log(`${id.name} ${id.version}${id.commit ? ` (${id.commit})` : ""}${id.source === "checkout" ? " [dev checkout]" : ""}`);

@@ -10,7 +10,7 @@ import { disablePush, enablePush, pushStatus } from "../../push";
 import { disableShellLink, enableShellLink, shellLinkStatus, shellLinkSupported } from "../../shellLink";
 import { core } from "../../sdk";
 import { push, shellLink } from "./store";
-import { hostStatText, loginCodeProblem } from "./logic";
+import { NO_BACKGROUND_ALERTS, hostStatText, loginCodeProblem } from "./logic";
 
 /** Peek at the desktop host's CPU/memory load — surfaced as a toast. */
 export async function showHostStat(): Promise<void> {
@@ -69,7 +69,13 @@ export async function pasteLoginCode(id: string): Promise<void> {
 export async function togglePush(): Promise<void> {
   const c = core();
   const p = push.get();
-  if (p === "native") { openSettingsAt("notif-shell-link"); c.say.toast("This app gets alerts through the background link"); return; }
+  if (p === "native") {
+    // Only the Android shell has a background link to point at; the iOS shell
+    // has neither it nor push, and a toast naming a row that is not there
+    // sends the reader looking for it.
+    if (!shellLinkSupported()) { c.say.toast(NO_BACKGROUND_ALERTS); return; }
+    openSettingsAt("notif-shell-link"); c.say.toast("This app gets alerts through the background link"); return;
+  }
   if (p === "insecure") { openSettingsAt("notif-push"); c.say.toast("OS notifications need HTTPS"); return; }
   if (p === "unsupported") { c.say.toast("This browser has no Web Push support"); return; }
   if (p === "on") { await disablePush(); push.set("off"); c.say.toast("Notifications off"); }

@@ -963,13 +963,15 @@ public class ShellPullService extends Service {
             return;
         }
         if (!asked && !Installs.mayAutoInstall(this, info)) return;
-        // A silent install is only ever possible for an UPDATE, and only when
-        // the person put the package on the list. Everything else asks — and a
-        // refused silence asks too, so this can never cost an install.
+        // A silent install is only ever possible for an UPDATE, and only with a
+        // consent: the person's tap on Install (a second "Update?" after it was
+        // the same question twice), or the package on the list for the
+        // automatic path. A first install always asks — and a refused silence
+        // (another app's update owner) asks too, so this can never cost one.
         boolean silent = info != null
                 && Installs.silentPossible()
                 && Installs.isInstalled(this, info.pkg)
-                && Installs.allowed(this).contains(info.pkg);
+                && (asked || Installs.allowed(this).contains(info.pkg));
         // `installAuto` is recorded HERE because this is the only moment that
         // knows: the status receiver is woken by the system long afterwards and
         // cannot tell a tap from the automatic path at the end of a download.

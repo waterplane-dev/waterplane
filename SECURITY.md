@@ -119,6 +119,13 @@ summary:
   The shell does not inherit the daemon's API keys and key files
   (`*_API_KEY`, `*_KEY_FILE`, `*_KEYCHAIN` are unset in the pane), and its
   commands are never written to the session's prompt history.
+- **Browser origins** (`packages/host/src/origin.ts`). Every `/api/*` request
+  and WebSocket upgrade is checked on `Origin` and `Host`; only `http`/`https`
+  origins naming this machine on a port it serves pass, plus exactly one
+  non-web origin: `capacitor://localhost`, the iOS shell's page (WKWebView
+  cannot serve an app from `http`, so it is the twin of the Android shell's
+  `http://localhost`). Any other scheme is refused, and the CORS header only
+  ever reflects an origin that passed — never `*`.
 - `/api/agent/intents` and `/api/agent/backlog` (an agent in a driven repo
   posting work for later, `agentintents.ts`) answers only a loopback caller that is neither a browser
   (any `Origin` or `Sec-Fetch-Site` header is refused, same-origin included)

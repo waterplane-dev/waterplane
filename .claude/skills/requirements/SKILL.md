@@ -22,7 +22,7 @@ call, not yours.
 ```
 ### R-<area>-<nnn> · <status>
 One or two sentences: observable behaviour, from the user's side, as an end state.
-- asked: 2026-08-25 (session 1a2b3c4d)
+- asked: 2026-08-25 (session <id>)
 - shipped: 3f9e2a1
 - superseded-by: R-<area>-<nnn>
 ```

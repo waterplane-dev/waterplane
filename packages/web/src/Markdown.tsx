@@ -77,7 +77,8 @@ const THUMB_CSS = 132;
  * is allowed to keep. A thumbnail drawn LIVE is then remembered, so the same
  * screenshot is one request ever, not one per reader session.
  */
-function FileRefNode({ fref: r, ctx, q, wide }: { fref: FileRef; ctx: FileRefCtx; q: string; wide?: boolean }) {
+// `opens`: what a tap opens when it is not the picture itself — a linked image's target.
+function FileRefNode({ fref: r, ctx, q, wide, opens }: { fref: FileRef; ctx: FileRefCtx; q: string; wide?: boolean; opens?: string }) {
   const [broken, setBroken] = useState(false);
   const mtime = useFileMtime(ctx.repoId, r.relPath);
   // `wide` is a document's own image link: drawn at reading width, not as a
@@ -90,7 +91,7 @@ function FileRefNode({ fref: r, ctx, q, wide }: { fref: FileRef; ctx: FileRefCtx
   // as a gap: the label is the point, the picture is the bonus.
   if (url) {
     return (
-      <button type="button" className={`fileref fileref-img${wide ? " fileref-wide" : ""}`} title={`${r.relPath} — tap to open`} onClick={() => ctx.open(r.relPath)}>
+      <button type="button" className={`fileref fileref-img${wide ? " fileref-wide" : ""}`} title={`${opens ?? r.relPath} — tap to open`} onClick={() => ctx.open(opens ?? r.relPath)}>
         {src && <img
           src={src}
           alt={r.name}
@@ -112,14 +113,17 @@ function FileRefNode({ fref: r, ctx, q, wide }: { fref: FileRef; ctx: FileRefCtx
   );
 }
 
-// Inline markdown: `code`, **bold**, [label](url), bare URLs (tappable), and
+// Inline markdown: `code`, **bold**, *italic*, [label](url), bare URLs (tappable), and
 // inbox/outbox file paths. The file-ref branch is LAST so a URL that happens to
 // contain `.claude/outbox/` still renders as the link it is (alternation picks
 // the leftmost match, and a URL starts earlier than the path inside it).
 const INLINE_RE = new RegExp(
   "`([^`\\n]+)`" +
-  "|\\*\\*([^*\\n]+)\\*\\*" +
-  "|\\[([^\\]\\n]+)\\]\\(([^)\\s]+)\\)" +
+  // Emphasis and link labels may cross a soft line break: a paragraph holds
+  // no blank line, and a hard-wrapped README splits them anywhere.
+  "|\\*\\*([^*]+)\\*\\*" +
+  "|\\*([^*\\s](?:[^*]*[^*\\s])?)\\*" +
+  "|\\[([^\\]]+)\\]\\(([^)\\s]+)\\)" +
   "|(https?://[^\\s<>()\"']+)" +
   `|(${FILE_REF_SRC})`,
   "g",
@@ -152,7 +156,9 @@ function linkNode(href: string, label: string, q: string, key: string): JSX.Elem
 function inline(text: string, q: string, key: string, files?: FileRefCtx): (string | JSX.Element)[] {
   const out: (string | JSX.Element)[] = [];
   let last = 0, n = 0;
-  INLINE_RE.lastIndex = 0;
+  // Own copy: emphasis recurses into this function, and a shared global
+  // regex's lastIndex would be reset under the outer loop.
+  const re = new RegExp(INLINE_RE);
   // A parsed ref drops trailing sentence punctuation ("…/a.png." → "…/a.png"),
   // so the caller gets back what still has to be emitted as plain text.
   const fileNode = (raw: string, k: string): { node: JSX.Element; rest: string } | null => {
@@ -161,8 +167,8 @@ function inline(text: string, q: string, key: string, files?: FileRefCtx): (stri
     if (!r) return null;
     return { node: <FileRefNode key={k} fref={r} ctx={files} q={q} />, rest: raw.slice(r.raw.length) };
   };
-  for (let m = INLINE_RE.exec(text); m; m = INLINE_RE.exec(text)) {
-    const bang = m[3] !== undefined && text[m.index - 1] === "!" && m.index > last;
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    const bang = m[4] !== undefined && text[m.index - 1] === "!" && m.index > last;
     if (m.index > last) {
       // `![alt](path)` — the bang belongs to the image syntax, not the prose.
       let pre = text.slice(last, m.index);
@@ -181,28 +187,52 @@ function inline(text: string, q: string, key: string, files?: FileRefCtx): (stri
         : null;
       out.push(asFile ? asFile.node : <code key={`${key}c${n++}`}>{hl(m[1], q)}</code>);
     }
-    else if (m[2] !== undefined) out.push(<b key={`${key}b${n++}`}>{hl(m[2], q)}</b>);
-    else if (m[3] !== undefined) {
+    // Emphasis holds inline forms of its own: **[a link](…)**, **`code` in bold**.
+    else if (m[2] !== undefined) out.push(<b key={`${key}b${n++}`}>{inline(m[2], q, `${key}b${n}`, files)}</b>);
+    else if (m[3] !== undefined) out.push(<i key={`${key}i${n++}`}>{inline(m[3], q, `${key}i${n}`, files)}</i>);
+    else if (m[4] !== undefined) {
       // ![alt](.claude/outbox/x.png) / [label](…) pointing at a transport file.
-      const asFile = wholeFileRef(m[4]) ? fileNode(m[4], `${key}f${n++}`) : null;
+      const asFile = wholeFileRef(m[5]) ? fileNode(m[5], `${key}f${n++}`) : null;
       // An IMAGE link in a document (a README's hero) is the picture itself,
       // resolved against that document's folder; the alt text is its label.
-      const img = !asFile && bang && files?.docPath != null ? docImageRef(m[4], files.docPath) : null;
+      const img = !asFile && bang && files?.docPath != null ? docImageRef(m[5], files.docPath) : null;
       out.push(asFile ? asFile.node
-        : img && files ? <FileRefNode key={`${key}f${n++}`} fref={{ ...img, raw: m[3] }} ctx={files} q={q} wide />
-        : linkNode(m[4], m[3], q, `${key}a${n++}`));
+        : img && files ? <FileRefNode key={`${key}f${n++}`} fref={{ ...img, raw: m[4] }} ctx={files} q={q} wide />
+        : linkNode(m[5], m[4], q, `${key}a${n++}`));
     }
-    else if (m[5] !== undefined) out.push(<a key={`${key}u${n++}`} href={m[5]} target="_blank" rel="noreferrer">{hl(m[5], q)}</a>);
+    else if (m[6] !== undefined) out.push(<a key={`${key}u${n++}`} href={m[6]} target="_blank" rel="noreferrer">{hl(m[6], q)}</a>);
     else {
-      const asFile = fileNode(m[6], `${key}f${n++}`);
+      const asFile = fileNode(m[7], `${key}f${n++}`);
       if (asFile) {
         out.push(asFile.node);
         if (asFile.rest) out.push(<span key={`${key}t${n++}`}>{hl(asFile.rest, q)}</span>);
-      } else out.push(<span key={`${key}t${n++}`}>{hl(m[6], q)}</span>);
+      } else out.push(<span key={`${key}t${n++}`}>{hl(m[7], q)}</span>);
     }
     last = m.index + m[0].length;
   }
   if (last < text.length) out.push(<span key={`${key}t${n++}`}>{hl(text.slice(last), q)}</span>);
+  return out;
+}
+
+// `[![alt](a.gif)](a.mp4)` in a document: a README's looping gif whose tap
+// opens the whole film. Drawn as the picture; the tap opens the link's target
+// when it is a picture or a video of this repo (the viewer plays it with
+// controls), the picture itself otherwise. Split out before `inline` because
+// its link pattern would take the outer brackets for a label.
+const LINKED_IMG_RE = /\[!\[([^\]]*)\]\(([^)\s]+)\)\]\(([^)\s]+)\)/g;
+function inlineDoc(text: string, q: string, key: string, files?: FileRefCtx): (string | JSX.Element)[] {
+  if (files?.docPath == null || !text.includes("[![")) return inline(text, q, key, files);
+  const out: (string | JSX.Element)[] = [];
+  let last = 0, n = 0;
+  for (const m of text.matchAll(LINKED_IMG_RE)) {
+    const img = docImageRef(m[2], files.docPath);
+    if (!img?.image) continue;
+    if (m.index! > last) out.push(...inline(text.slice(last, m.index), q, `${key}l${n}`, files));
+    const target = docImageRef(m[3], files.docPath);
+    out.push(<FileRefNode key={`${key}v${n++}`} fref={{ ...img, raw: m[1] }} ctx={files} q={q} wide opens={target?.relPath} />);
+    last = m.index! + m[0].length;
+  }
+  if (last < text.length) out.push(...inline(text.slice(last), q, `${key}l${n}`, files));
   return out;
 }
 
@@ -329,13 +359,13 @@ export function Markdown({ src, q, onCopy, files, lineTag }: {
     const flushPara = (k: string) => {
       if (!para.length) return;
       const text = para.join("\n");
-      nodes.push(<p {...tag(start + paraAt, start + paraAt + para.length - 1, "tr-p")} key={k}>{inline(text, q, k, files)}</p>);
+      nodes.push(<p {...tag(start + paraAt, start + paraAt + para.length - 1, "tr-p")} key={k}>{inlineDoc(text, q, k, files)}</p>);
       para = [];
     };
     const flushList = (k: string) => {
       if (!list) return;
       const L = list;
-      const items = L.items.map((it, i) => <li {...(lineTag ? tag(start + L.at[i], start + L.to[i], "") : {})} key={i}>{inline(it, q, `${k}i${i}`, files)}</li>);
+      const items = L.items.map((it, i) => <li {...(lineTag ? tag(start + L.at[i], start + L.to[i], "") : {})} key={i}>{inlineDoc(it, q, `${k}i${i}`, files)}</li>);
       nodes.push(L.ordered ? <ol className="tr-list" key={k}>{items}</ol> : <ul className="tr-list" key={k}>{items}</ul>);
       list = null;
     };

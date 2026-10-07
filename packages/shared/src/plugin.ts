@@ -31,6 +31,7 @@ import type { ComplianceCheck } from "./wire/repo.js";
 import type { ContextEvent, ContextSample, DetectedPrompt, LaunchOpts, PermissionMode } from "./wire/session.js";
 import type { TranscriptDoc, TranscriptToolDetail } from "./wire/transcript.js";
 import type { BackendSources } from "./backendsources.js";
+import type { FanRow } from "./wire/sysstat.js";
 import { BRAND, LEGACY } from "./brand.js";
 
 /**
@@ -59,7 +60,7 @@ import { BRAND, LEGACY } from "./brand.js";
  * - PATCH: wording, documentation and fixes that change no shape — nothing a plugin
  *   can observe through types.
  */
-export const PLUGIN_API_VERSION = "1.2.0";
+export const PLUGIN_API_VERSION = "1.3.0";
 
 /** A parsed `MAJOR.MINOR.PATCH`. */
 export interface PluginApiVersion { major: number; minor: number; patch: number }
@@ -441,6 +442,16 @@ export interface HostPluginApi {
    */
   storeReader(name: string, reader: PluginStoreReader): () => void;
   /**
+   * Contribute a THERMAL reader under `name` (since 1.3): temperature and fan speed for the
+   * machine readout, where the core has no reader of its own (macOS keeps the SMC behind root).
+   * Asked on the readout's slow cadence, before the core's own sysfs reader; the first reading
+   * wins. A reading the core cannot vouch for (a non-finite figure, a temperature outside
+   * 1..149 °C, a negative rpm) is DROPPED, never shown — answer null rather than guess. A note
+   * (`{ note, fix? }`) is shown only when nothing reads. A throw or an answer slower than
+   * `PLUGIN_THERMAL_TIMEOUT_MS` counts as no reading. Same naming rules as `screenReader`.
+   */
+  thermalReader(name: string, reader: PluginThermalReader): () => void;
+  /**
    * The loopback URL this plugin's hooks POST to:
    * `http://127.0.0.1:<port>/api/plugin/<id>/hook`. Loopback only, like the
    * core's own hook sink; a remote caller is refused.
@@ -711,6 +722,25 @@ export interface PluginStoreReader {
 }
 
 /** One line of the preflight report a builtin's `doctor` contributes. */
+/** How long the core waits for a contributed thermal reader before it counts as no reading. */
+export const PLUGIN_THERMAL_TIMEOUT_MS = 8_000;
+
+/**
+ * What a contributed thermal reader answers (since 1.3). A READING carries what it read and
+ * which tool read it (`source`, shown beside the figures — the numbers are that tool's); a
+ * NOTE says why there is none and, optionally, shell commands that would fill it in (drawn as
+ * copy blocks); null is "nothing to say".
+ */
+export type PluginThermalReading =
+  | { cpuTempC?: number; gpuTempC?: number; fans: FanRow[]; source: string }
+  | { note: string; fix?: string[] }
+  | null;
+
+/** A thermal reader (`api.thermalReader`). */
+export interface PluginThermalReader {
+  read(): Promise<PluginThermalReading>;
+}
+
 export interface PluginDoctorCheck {
   /** Short stable name, e.g. `opencode-binary`. */
   id: string;

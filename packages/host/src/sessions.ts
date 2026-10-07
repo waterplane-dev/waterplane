@@ -98,7 +98,7 @@ export class SessionManager extends EventEmitter {
       // tmux.ts
       spawnBackend: (id, cwd, cols, rows, args, backend, launchEnv, dropEnv) => spawnBackend(this.core, id, cwd, cols, rows, args, backend, launchEnv, dropEnv),
       reattach: (m) => reattach(this.core, m), persistLive: (m) => persistLive(this.core, m), loadLive: (id) => loadLive(this.core, id),
-      deleteLive: (id) => deleteLive(this.core, id), hasLiveTmux: (id) => hasLiveTmux(id), armOrphanSweep: () => armOrphanSweep(this.core),
+      deleteLive: (id) => deleteLive(this.core, id), repointCompanions: (from, to) => drive.repointCompanions(this.core, from, to), hasLiveTmux: (id) => hasLiveTmux(id), armOrphanSweep: () => armOrphanSweep(this.core),
       // convid.ts
       detectClaudeId: (s) => detectClaudeId(this.core, s), adoptClaudeId: (s, cid) => adoptClaudeId(this.core, s, cid),
       watchClaudeId: (s) => watchClaudeId(this.core, s), stopClaudeIdWatch: (s) => stopClaudeIdWatch(s),
@@ -246,7 +246,7 @@ export class SessionManager extends EventEmitter {
       title: opts.title ?? basename(cwd),
       remoteControl: true,
       running: true,
-      ...backendField(backend), ...record.shellTitleField(backend, cwd),
+      ...backendField(backend), ...record.shellTitleField(backend, cwd), ...(opts.origin?.companionOf ? { companionOf: opts.origin.companionOf } : {}),
       model: launch.model,
       effort: launch.effort,
       permissionMode: launch.permissionMode,
@@ -632,7 +632,7 @@ export class SessionManager extends EventEmitter {
   detach(id: string): boolean { return drive.detach(this.core, id); }
   setItemLookup(fn: Parameters<RosterSlice["setItemLookup"]>[0]): void { this.roster.setItemLookup(fn); }
   reattachById(id: string): boolean { return drive.reattachById(this.core, id); }
-  remove(id: string, onShellsStopped?: (counts: drive.ShellStopCounts) => void, by?: ClosedBy): boolean { return drive.remove(this.core, id, onShellsStopped, by); }
+  remove(id: string, onShellsStopped?: (counts: drive.ShellStopCounts) => void, by?: ClosedBy): boolean { return drive.remove(this.core, id, onShellsStopped, by); } repointCompanions(from: string, to: string): void { drive.repointCompanions(this.core, from, to); } // a replaced session's companion shells follow it
   killShell(id: string, pid: number, startedAt: number): Promise<{ ok: boolean; reason?: string }> { return drive.killOneShell(this.core, id, pid, startedAt); }
   shellDetail(id: string, pid: number): SessionShellDetail | null { return drive.shellDetail(this.core, id, pid); }
   scrollback(id: string): string { return drive.scrollback(this.core, id); }

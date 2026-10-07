@@ -204,7 +204,7 @@ const PINS = [
   {
     name: "sessions emits",
     re: /\b(?:this|core)\.emit\(\s*"/g, scope: SESSIONS,
-    today: { "sessions.ts": 9, "sessions/boxes.ts": 6, "sessions/budgetwatch.ts": 3, "sessions/convid.ts": 4, "sessions/drive.ts": 2, "sessions/links.ts": 1, "sessions/record.ts": 6, "sessions/ctxseries.ts": 2, "sessions/resume.ts": 6, "sessions/roster.ts": 8, "sessions/sidechannel.ts": 2, "sessions/turn.ts": 10, "sessions/wall.ts": 18 },
+    today: { "sessions.ts": 9, "sessions/boxes.ts": 6, "sessions/budgetwatch.ts": 3, "sessions/convid.ts": 4, "sessions/drive.ts": 3, "sessions/links.ts": 1, "sessions/record.ts": 6, "sessions/ctxseries.ts": 2, "sessions/resume.ts": 6, "sessions/roster.ts": 8, "sessions/sidechannel.ts": 2, "sessions/turn.ts": 10, "sessions/wall.ts": 18 },
     // claude onto the sources seam (design §10): the pipe-live emit moved turn.ts → sidechannel.ts, and
     // UserPromptSubmit's idle-clear emit was the SAME line as `sourceTurn`'s started edge — one path now, one site.
     why: "an emit doubled or dropped is a session.updated frame the phone gets twice or never",

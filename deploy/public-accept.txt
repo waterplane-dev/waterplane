@@ -13,7 +13,7 @@ scripts/e2e-demorecord.mjs:50:efb769abcb  # anthropic-key fixture
 tools/demo-scenario.test.mjs:47:2cc559d440  # anthropic-key fixture
 packages/host/test/origin.test.mjs:21:83c1f18aa9  # ts-net-name fixture
 packages/host/test/origin.test.mjs:27:929a3855a3  # ts-net-name fixture
-packages/host/test/origin.test.mjs:38:3ecc5a0bba  # ts-net-name fixture
+packages/host/test/origin.test.mjs:52:3ecc5a0bba  # ts-net-name fixture
 packages/host/test/pairing.test.mjs:228:c1c75715f5  # tailscale-ip fixture
 packages/host/test/pairing.test.mjs:285:01b1bd3082  # tailscale-ip fixture
 packages/host/test/peersstore.test.mjs:23:d677af191b  # tailscale-ip fixture
@@ -37,8 +37,9 @@ packages/web/src/pairRedeem.test.mjs:45:63373f31d1  # ts-net-name fixture
 packages/web/src/pairRedeem.test.mjs:46:17912d0da0  # ts-net-name fixture
 packages/web/src/pairRedeem.test.mjs:51:389e5a6a22  # ts-net-name fixture
 scripts/e2e-agentintent.mjs:153:c1d20ebb83  # tailscale-ip fixture
-scripts/release/public-lib.test.mjs:89:9d58e0b970  # tailscale-ip fixture
-scripts/release/public-lib.test.mjs:92:d0ab2b6062  # ts-net-name fixture
+scripts/release/public-lib.test.mjs:90:9d58e0b970  # tailscale-ip fixture
+scripts/release/public-lib.test.mjs:93:d0ab2b6062  # ts-net-name fixture
+scripts/release/public-lib.test.mjs:211:422e825151  # session-url fixture (a fake id)
 tools/demo-scenario.test.mjs:13:a737d35612  # tailscale-ip fixture
 - `docs/analysis/assess.md` (1): `docs/notes/host.md:4382`
 - `docs/analysis/backends-design.md` (5): `.claude/skills/host-core/SKILL.md:231`, `docs/notes/architecture.md:90`, `docs/notes/architecture.md:90`, `docs/notes/host.md:5039`, `docs/notes/host.md:5137`

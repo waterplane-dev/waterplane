@@ -1,16 +1,21 @@
 import { useEffect, useRef } from "react";
-import { Activity, Cpu, Monitor, Fan, Gauge, HardDrive, MemoryStick, PowerOff, Thermometer } from "lucide-react";
+import { Activity, Copy, Cpu, Monitor, Fan, Gauge, HardDrive, MemoryStick, PowerOff, Thermometer } from "lucide-react";
 import {
-  RING_CAP, acquireLocalRtWatch, cpuSeries, evictLocalModel, gbText, gpuSeries, heldBytes, heldSeries,
-  localRtState, machineText, memUsedSeries, seriesCeiling, useLocalRt, type LocalRtSnapshot,
+  RING_CAP, acquireLocalRtWatch, cpuSeries, cpuTempSeries, evictLocalModel, fanSeries, gbText, gpuSeries,
+  gpuTempSeries, heldBytes, heldSeries, localRtState, machineText, memUsedSeries, seriesCeiling, useLocalRt,
+  type LocalRtSnapshot,
 } from "./localRt";
-import { HeldSpark, type LocalRtFocus } from "./LocalRtBar";
+import type { LocalRtFocus } from "./LocalRtBar";
+import { SysGraph } from "./SysGraph";
+import { roomyCeiling } from "./graphGeom";
 import { useLink } from "./link";
 import { dur, hhmm, until } from "./format";
 import { SheetHead } from "./Sheet";
 import { BRAND } from "@waterplane/shared";
 import { ConfirmButton } from "./Confirm";
 import { SetWarn } from "./SettingsKit";
+import { copyText } from "./api";
+import { showToast } from "./toast";
 import {
   cpuSplitText, diskLow, diskSize, diskText, diskUsedPct, loadText, memNote, memSlices, procFoldText,
   rssSumText, slowAgeSec, swapText, tempText, uptimeText,
@@ -77,6 +82,15 @@ import {
 
 const ICON = 16;
 
+/** An axis label in GB: whole numbers once they are big enough to read that way. */
+const gbAxis = (v: number) => {
+  const gb = Math.max(0, v) / 2 ** 30;
+  return `${gb >= 10 || gb === 0 ? Math.round(gb) : gb.toFixed(1)} GB`;
+};
+const pctAxis = (v: number) => `${Math.round(v)}%`;
+const tempAxis = (v: number) => `${Math.round(v)}°C`;
+const rpmAxis = (v: number) => `${Math.round(v)} rpm`;
+
 interface Props {
   onClose: () => void;
   /** Which strip reading sent the user here; scrolled to and flashed once. */
@@ -110,6 +124,17 @@ export function LocalRtSheet({ onClose, focus }: Props) {
   const cpuS = cpuSeries(s.samples);
   const memS = memUsedSeries(s.samples);
   const memTotal = r.sample?.memTotal ?? 0;
+  const cpuTS = cpuTempSeries(s.samples);
+  const gpuTS = gpuTempSeries(s.samples);
+  const tempRead = cpuTS.some((v) => v != null) || gpuTS.some((v) => v != null);
+  // Fans by the labels the latest reading names: a fan that stopped being
+  // reported is not drawn as a line that ends, it is simply not listed now.
+  const fanLines = (r.sample?.sys?.thermal?.fans ?? []).map((f, i) => ({
+    key: `fan-${f.label}`, label: f.label, tone: (["app", "wired", "compressed"] as const)[i % 3],
+    series: fanSeries(s.samples, f.label),
+  }));
+  const fanHi = roomyCeiling(fanLines.flatMap((l) => l.series), 2000, 500);
+  const span = s.samples.length > 1 ? { from: s.samples[0].at, to: s.samples[s.samples.length - 1].at } : {};
   const gpuRead = gpuS.some((v) => v != null);
   const models = r.sample?.models ?? [];
   // The machine's own numbers, absent wholesale on a host that predates them
@@ -204,10 +229,8 @@ export function LocalRtSheet({ onClose, focus }: Props) {
           <h3 className="set-title">Held memory, recently</h3>
           {series.length > 1 ? (
             <>
-              <div className="lrt-big">
-                <HeldSpark series={series} ceiling={seriesCeiling(series)} w={280} h={64} />
-                <span className="lrt-axis">{gbText(seriesCeiling(series))}</span>
-              </div>
+              <SysGraph lines={[{ key: "held", label: "held", tone: "app", series }]}
+                lo={0} hi={seriesCeiling(series)} fmt={gbAxis} {...span} />
               <span className="set-note">
                 The last {series.length} reading{series.length === 1 ? "" : "s"} (at most {RING_CAP}, roughly ten
                 minutes). A model being loaded or evicted is a step, not a slope. A reading where the
@@ -237,10 +260,8 @@ export function LocalRtSheet({ onClose, focus }: Props) {
           <h3 className="set-title">GPU utilization, recently</h3>
           {gpuS.length > 1 && gpuRead ? (
             <>
-              <div className="lrt-big">
-                <HeldSpark series={gpuS} ceiling={100} w={280} h={64} />
-                <span className="lrt-axis">100%</span>
-              </div>
+              <SysGraph lines={[{ key: "gpu", label: "GPU busy", tone: "app", series: gpuS }]}
+                lo={0} hi={100} fmt={pctAxis} {...span} />
               <span className="set-note">
                 Same shape as the memory graph above, but fixed 0-100% rather than fitted to the
                 data — a line drawn to a floating ceiling makes 20% look identical to 80% across two
@@ -376,15 +397,11 @@ export function LocalRtSheet({ onClose, focus }: Props) {
           <h3 className="set-title">The desktop, recently</h3>
           {cpuS.some((v) => v != null) && cpuS.length > 1 ? (
             <>
-              <div className="lrt-big">
-                <HeldSpark series={cpuS} ceiling={100} w={280} h={64} />
-                <span className="lrt-axis">CPU 100%</span>
-              </div>
+              <SysGraph lines={[{ key: "cpu", label: "CPU busy", tone: "app", series: cpuS }]}
+                lo={0} hi={100} fmt={pctAxis} {...span} />
               {memS.some((v) => v != null) && memTotal > 0 && (
-                <div className="lrt-big">
-                  <HeldSpark series={memS} ceiling={memTotal} w={280} h={64} />
-                  <span className="lrt-axis">in use · {gbText(memTotal)}</span>
-                </div>
+                <SysGraph lines={[{ key: "mem", label: "memory in use", tone: "wired", series: memS }]}
+                  lo={0} hi={memTotal} fmt={gbAxis} {...span} />
               )}
               <span className="set-note">
                 CPU busy, then memory in use, over the last {cpuS.length} readings — both drawn against the
@@ -574,7 +591,25 @@ export function LocalRtSheet({ onClose, focus }: Props) {
                   </div>
                 ))}
               </div>
+              {tempRead && s.samples.length > 1 && (
+                <SysGraph
+                  lines={[
+                    ...(cpuTS.some((v) => v != null) ? [{ key: "cpu-t", label: "CPU", tone: "app" as const, series: cpuTS }] : []),
+                    ...(gpuTS.some((v) => v != null) ? [{ key: "gpu-t", label: "GPU", tone: "wired" as const, series: gpuTS }] : []),
+                  ]}
+                  lo={20} hi={Math.max(100, ...[...cpuTS, ...gpuTS].filter((v): v is number => v != null))}
+                  fmt={tempAxis} {...span} />
+              )}
+              {fanLines.length > 0 && s.samples.length > 1 && (
+                <SysGraph lines={fanLines} lo={0} hi={fanHi} fmt={rpmAxis} {...span} />
+              )}
               <span className="set-note">
+                {s.samples.length > 1 && (tempRead || fanLines.length > 0) && (
+                  <>Temperature is drawn 20-100°C, fixed, so a warm minute is not stretched into a
+                    fever. Fans are the one fitted axis — the sensor names no maximum — so read their
+                    rpm, not the height. The sensor is read on a slower beat than the rest, so a step
+                    is a fresh reading arriving, not a jump. </>
+                )}
                 Read by <span className="mono">{sys.thermal.source}</span> — a sensor tool this app
                 does not own, so these are its numbers and not ours.
                 {sys.thermal.fans.length === 0 ? " It reported no fans: a fanless machine, or a VM." : ""}
@@ -582,9 +617,17 @@ export function LocalRtSheet({ onClose, focus }: Props) {
               </span>
             </>
           ) : (
-            <span className="set-note">
-              {sys?.thermalNote ?? `This desktop is not sending a temperature reading — its ${BRAND.name} predates this readout.`}
-            </span>
+            <>
+              <span className="set-note">
+                {sys?.thermalNote ?? `This desktop is not sending a temperature reading — its ${BRAND.name} predates this readout.`}
+              </span>
+              {sys?.thermalFix?.map((cmd) => (
+                <div className="cmd-copy" key={cmd}>
+                  <code>{cmd}</code>
+                  <button className="key" aria-label="copy command" onClick={async () => showToast(await copyText(cmd) ? "command copied" : "copy failed")}><Copy size={16} /></button>
+                </div>
+              ))}
+            </>
           )}
         </section>
 

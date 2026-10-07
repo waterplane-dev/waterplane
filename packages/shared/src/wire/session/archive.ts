@@ -186,6 +186,10 @@ export interface SessionOrigin {
   itemId?: string;
   itemLabel?: string;
   fromSession?: string;
+  /** A temporary companion shell: the session this one belongs to. Closing
+   *  that session closes this one too (host `drive.remove`); a relaunch or a
+   *  limit resurrect of it re-points the link to the new id. */
+  companionOf?: string;
 }
 
 /**

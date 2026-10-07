@@ -2,8 +2,8 @@
 
 `TokenStatsSheet.tsx` is 3268 lines and is the last big screen in core. It moves to
 `packages/extensions/token-stats/` and is split there. This note is written before the first cut
-(refactoring skill, step 1); the plan it serves is item 5b of
-[extensions-plan.md](../analysis/extensions-plan.md). Reasoning for the rules it leans on:
+(refactoring skill, step 1); it is the second in-repo extension, after `requirements`
+([plugins.md](plugins.md#in-repo-extensions)). Reasoning for the rules it leans on:
 [refactoring.md](refactoring.md), [web-architecture.md](web-architecture.md).
 
 ## Layers

@@ -16,15 +16,16 @@ import type { HistoryEntry, HostMessage, SessionInfo } from "@waterplane/shared"
 import { judgeBudget } from "./budget.ts";
 import { autoContinue, parkAtWall } from "./usagewall.ts";
 import { base64, mint, utf8 } from "./model.ts";
-import type { DemoModel, DemoStep, DemoTimedStep, Desk } from "./model.ts";
+import type { DemoModel, DemoScreen, DemoStep, DemoTimedStep, Desk } from "./model.ts";
 import { CLAUDE_BANNER } from "./banner.ts";
+import { eraseFooter, footer, join, render } from "./cli.ts";
 
 /** How much PTY text a session keeps for replay. The snapshot lives in
  *  sessionStorage, so the tail is bounded; `seq` still counts every byte. */
 const SCREEN_KEEP = 32_000;
 
 export const NO_REPLY =
-  "\r\n\x1b[2m● This demo has no scripted answer to that prompt. On your own desktop, claude would answer here.\x1b[0m\r\n";
+  "\r\n● \x1b[2mThis demo has no scripted answer to that prompt. On your own desktop, claude would answer here.\x1b[0m\r\n";
 
 export const SESSION_GONE = "That session is closed — open a new one from the repo list.";
 
@@ -37,24 +38,65 @@ const repoName = (cwd: string): string => cwd.split("/").filter(Boolean).pop() ?
 
 // ── the PTY ───────────────────────────────────────────────────────────────
 
-/** Append `text` to the session's screen and stream it to attached sockets. */
+/** Append `text` (the scenario's source form, `cli.ts`) to the session's transcript and stream it the
+ *  way the CLI draws it: the input box lifted off, the new lines wrapped to the grid, the box again. */
 export function write(d: Desk, id: string, text: string, silent = false): void {
   if (!text) return;
+  const sc = paintOnce(d, id);
+  sc.log = (sc.log ?? "") + text;
+  if (sc.log.length > SCREEN_KEEP) sc.log = sc.log.slice(sc.log.length - SCREEN_KEEP);
+  const r = render(text, sc.cols ?? 80, sc.endsBlank ?? true);
+  sc.endsBlank = r.endsBlank;
+  drawFooter(d, id, sc, r.lines.length ? join(r.lines) + "\r\n" : "", silent);
+}
+
+/** Redraw the CLI's live region (spinner + input box) in place, after a turn starts or ends. */
+export function redrawFooter(d: Desk, id: string): void {
+  const sc = d.m.screens?.[id];
+  if (sc?.log != null) drawFooter(d, id, sc, "", false);
+}
+
+function drawFooter(d: Desk, id: string, sc: DemoScreen, body: string, silent: boolean): void {
+  const rows = footer(findSession(d.m, id), sc.cols ?? 80, d.now(), sc.endsBlank ?? true);
+  const out = eraseFooter(sc.foot ?? 0) + body + join(rows);
+  sc.foot = rows.length;
+  emit(d, id, sc, out, silent);
+}
+
+function emit(d: Desk, id: string, sc: DemoScreen, text: string, silent: boolean, replace = false): void {
+  const bytes = utf8(text);
+  sc.data = replace ? text : sc.data + text;
+  sc.seq += bytes.length;
+  if (sc.data.length > SCREEN_KEEP * 2) sc.data = sc.data.slice(sc.data.length - SCREEN_KEEP * 2);
+  if (!silent) d.toSession(id, { t: "pty", id, dataB64: base64(bytes), seq: sc.seq });
+}
+
+/** The whole screen again from the transcript, at the grid's width (a resize, or a screen a scenario
+ *  seeded as source and nobody has drawn yet). */
+export function repaint(d: Desk, id: string, silent = false): void {
+  const sc = d.m.screens?.[id];
+  if (!sc) return;
+  const r = render(sc.log ?? "", sc.cols ?? 80, true);
+  sc.endsBlank = r.endsBlank;
+  const rows = footer(findSession(d.m, id), sc.cols ?? 80, d.now(), r.endsBlank);
+  sc.foot = rows.length;
+  emit(d, id, sc, `\x1b[?25l\x1b[2J\x1b[3J\x1b[H${join([...r.lines, ...rows])}`, silent, true);
+}
+
+/** A seeded screen's `data` is source text (`log` unset): draw it once before anything is added. */
+function paintOnce(d: Desk, id: string): DemoScreen {
   const screens = (d.m.screens ??= {});
   const sc = (screens[id] ??= { data: "", seq: 0 });
-  const bytes = utf8(text);
-  sc.data += text;
-  sc.seq += bytes.length;
-  if (sc.data.length > SCREEN_KEEP) sc.data = sc.data.slice(sc.data.length - SCREEN_KEEP);
-  if (!silent) d.toSession(id, { t: "pty", id, dataB64: base64(bytes), seq: sc.seq });
+  if (sc.log == null) { sc.log = sc.data; sc.data = ""; repaint(d, id, true); }
+  return sc;
 }
 
 /** The attach replay: the delta since `resumeSeq` when it is from this boot
  *  and still retained, the whole retained screen (`full`) otherwise, nothing
  *  when the client is already current. */
 export function replay(d: Desk, id: string, resumeSeq?: number, resumeBoot?: string): { dataB64: string; seq: number; full?: boolean } | null {
-  const sc = d.m.screens?.[id];
-  if (!sc) return null;
+  if (!d.m.screens?.[id]) return null;
+  const sc = paintOnce(d, id);
   const bytes = utf8(sc.data);
   const base = sc.seq - bytes.length;
   const usable = resumeSeq != null && (!resumeBoot || resumeBoot === d.bootId) && resumeSeq >= base && resumeSeq <= sc.seq;
@@ -67,8 +109,9 @@ export function replay(d: Desk, id: string, resumeSeq?: number, resumeBoot?: str
 
 /** The retained screen as plain lines, for `/api/scrollback`. */
 export function screenLines(m: DemoModel, id: string): string[] {
-  const text = (m.screens?.[id]?.data ?? "").replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "").replace(/\r\n?/g, "\n");
-  return text.split("\n");
+  const sc = m.screens?.[id];
+  const src = sc ? (sc.log ?? sc.data) : "";
+  return render(src, Infinity, true).lines.map((l) => l.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, ""));
 }
 
 // ── sessions ──────────────────────────────────────────────────────────────
@@ -82,6 +125,7 @@ export function updateSession(d: Desk, id: string, patch: Partial<SessionInfo>, 
   // the end of every spark refresh, and so does the demo.
   if ("contextSpark" in patch || "running" in patch) judgeBudget(d, s);
   d.broadcast({ t: "session.updated", session: s });
+  if ("turnActive" in patch || "awaitingInput" in patch || unset.includes("turnActive")) redrawFooter(d, id);
 }
 
 export function createSession(d: Desk, o: { cwd: string; title?: string; cols?: number; rows?: number }): SessionInfo {
@@ -91,8 +135,8 @@ export function createSession(d: Desk, o: { cwd: string; title?: string; cols?: 
     remoteControl: false, running: true, createdAt: now, idle: true, idleSince: now,
   };
   sessions(d.m).push(info);
-  (d.m.screens ??= {})[info.id] = { data: "", seq: 0, cols: o.cols, rows: o.rows };
-  write(d, info.id, (d.m.banner ?? DEFAULT_BANNER).replaceAll("{repo}", repoName(o.cwd)).replaceAll("{cwd}", o.cwd), true);
+  (d.m.screens ??= {})[info.id] = { data: "", seq: 0, cols: o.cols, rows: o.rows, log: (d.m.banner ?? DEFAULT_BANNER).replaceAll("{repo}", repoName(o.cwd)).replaceAll("{cwd}", o.cwd) };
+  repaint(d, info.id, true);
   d.broadcast({ t: "session.created", session: info });
   return info;
 }

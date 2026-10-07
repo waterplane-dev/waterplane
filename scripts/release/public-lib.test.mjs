@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  buildContext, checkLinks, classify, dirsOf, extractChangelogSection, groupPaths, hitToken, parseAccept,
+  buildContext, checkLinks, classify, dirsOf, extractChangelogSection, groupPaths, hitToken, hostedName, parseAccept,
+  rewriteHostedLinks, stripSessionIds,
   parseAllowlist, resolveRel, scanPath, scanText, verifySteps,
 } from "./public-lib.mjs";
 
@@ -148,6 +149,13 @@ test("links: reports links and mentions into excluded paths only", () => {
   ]);
 });
 
+test("links: a link inside a code span is an example, not a link", () => {
+  const tracked = new Set(["README.md"]);
+  const included = new Set(["README.md"]);
+  const f = checkLinks("README.md", "shipped: `[![a](x.gif)](x.mp4)`, and [real](gone.md)", { included, tracked, includedDirs: dirsOf(included) });
+  assert.deepEqual(f.map((x) => `${x.resolved}:${x.kind}`), ["gone.md:missing"]);
+});
+
 test("links: a repo-root path in link position counts too", () => {
   const tracked = new Set(["a/b/x.md", "docs/notes/n.md"]);
   const included = new Set(["a/b/x.md"]);
@@ -161,6 +169,77 @@ test("links: relative to the file's own directory", () => {
   const f = checkLinks(".claude/skills/x/SKILL.md", "[n](../../../docs/notes/a.md)", { included, tracked, includedDirs: dirsOf(included) });
   assert.equal(f.length, 1);
   assert.equal(f[0].resolved, "docs/notes/a.md");
+});
+
+test("links: the outer target of an image inside a link counts too", () => {
+  const tracked = new Set(["README.md", "docs/media/a.gif", "docs/media/a.mp4"]);
+  const included = new Set(["README.md", "docs/media/a.gif"]);
+  const f = checkLinks("README.md", "[![x](docs/media/a.gif)](docs/media/a.mp4)", { included, tracked, includedDirs: dirsOf(included) });
+  assert.deepEqual(f.map((x) => x.resolved), ["docs/media/a.mp4"]);
+});
+
+test("stripSessionIds: every form the requirements and notes use, prompt refs too, and nothing else", () => {
+  const md = [
+    "- asked: ec4932bb, 60aeda7b, 2026-09-11 (session 8c2bc4c6), 2026-09-12 (session 8c417efe, eb25ef1f)",
+    "- asked: 2026-10-02 (session 01MLwEutenLZpjtnWKLfuQyv; an earlier request was not recorded)",
+    "All items: asked by the owner 2026-10-05 (session 014XmzA8Z2UD2M66UU1CkRX3) — \"full control\".",
+    "Measured on session `5630c7fb` (2026-09-12), one",
+    "(session restored) and the session ended",
+    "- asked: bfa500f5, 12f1e81f",
+    "- asked: 2026-10-01 (session: extensions plan agreed that day, id not recorded)",
+    "- shipped: 3f9e2a1",
+  ].join("\n");
+  const r = stripSessionIds("docs/requirements/x.md", md);
+  assert.equal(r.text, [
+    "- asked: 2026-09-11, 2026-09-12",
+    "- asked: 2026-10-02 (an earlier request was not recorded)",
+    "All items: asked by the owner 2026-10-05 — \"full control\".",
+    "Measured (2026-09-12), one",
+    "(session restored) and the session ended",
+    "- asked: 2026-10-01 (session: extensions plan agreed that day, id not recorded)",
+    "- shipped: 3f9e2a1",
+  ].join("\n"));
+  assert.equal(r.n, 9);
+  assert.equal(stripSessionIds("a.ts", "(session 8c2bc4c6)").n, 0, "markdown only");
+});
+
+test("scan: a session id or session link left in published text is a hit", () => {
+  const ctx = buildContext({});
+  assert.deepEqual(scanText("docs/a.md", "see session 9c2215c5 for why", ctx).hits.map((h) => h.rule), ["session-id"]);
+  assert.deepEqual(scanText("docs/a.md", "the session ended, session <id>", ctx).hits, []);
+  assert.deepEqual(scanText("x.ts", "// session 9c2215c5", ctx).hits, [], "ids only in markdown");
+  assert.deepEqual(scanText("x.ts", "https://claude.ai/code/session_0123456789abcdefXYZ", ctx).hits.map((h) => h.rule), ["session-url"]);
+});
+
+test("rewriteHostedLinks: both targets of a linked image, captions and refs; never fences or code spans", () => {
+  const host = (p) => (p === "docs/media/x.mp4" ? "https://h.example/x-0123456789.mp4" : null);
+  const md = [
+    "[![a](media/x.gif)](media/x.mp4)",
+    "*[The video](media/x.mp4#t=3), `[![…](x.gif)](media/x.mp4)`*",
+    "[v]: ../docs/media/x.mp4",
+    "```",
+    "[f](media/x.mp4)",
+    "```",
+    "[elsewhere](https://example.com/x.mp4) [other](media/y.mp4)",
+  ].join("\n");
+  const r = rewriteHostedLinks("docs/guide.md", md, host);
+  assert.equal(r.text, [
+    "[![a](media/x.gif)](https://h.example/x-0123456789.mp4)",
+    "*[The video](https://h.example/x-0123456789.mp4#t=3), `[![…](x.gif)](media/x.mp4)`*",
+    "[v]: https://h.example/x-0123456789.mp4",
+    "```",
+    "[f](media/x.mp4)",
+    "```",
+    "[elsewhere](https://example.com/x.mp4) [other](media/y.mp4)",
+  ].join("\n"));
+  assert.equal(r.n, 3);
+  assert.deepEqual([...r.used], ["docs/media/x.mp4"]);
+  assert.equal(rewriteHostedLinks("README.md", "[a](docs/media/x.mp4)", host).n, 1, "repo-root path from the root README");
+});
+
+test("hostedName: stem plus ten hex of the content hash", () => {
+  assert.equal(hostedName("docs/media/first-look.mp4", "abcdef0123456789"), "first-look-abcdef0123.mp4");
+  assert.equal(hostedName("x/README", "abcdef0123456789"), "README-abcdef0123");
 });
 
 test("groupPaths: two-level prefixes", () => {

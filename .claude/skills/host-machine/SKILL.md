@@ -54,8 +54,10 @@ This desktop as a resource the phone reaches: its files and worktrees, its build
   app/wired split**. Processes are **FOLDED BY PROGRAM** (23 `claude` processes holding 11.7 GB is
   the answer; 23 rows is not), a `pid` survives only a fold of one, and `rssSumBytes` ships because
   RSS counts a shared page once per process. **macOS temperature is ABSENT with a sentence**:
-  `powermetrics` is root-only, this daemon must never prompt for a password, so `MAC_THERMAL_NOTE`
-  names `smctemp`/`istats`/`WATERPLANE_SMC_BIN` — an absence a person cannot explain reads as a bug. The
+  `powermetrics` is root-only, this daemon must never prompt for a password; **a PLUGIN contributes
+  the reader** (`api.thermalReader` → `registerThermalReader`) and core names no helper tool, only
+  checks figures (`cleanThermal`: outside 1..149 °C or non-finite ⇒ DROPPED); none ⇒
+  `MAC_THERMAL_NOTE` — an absence a person cannot explain reads as a bug. The
   two expensive readers run on `WATERPLANE_SYSSTAT_SLOW_MS` (15 s, floored) and **carry their own
   timestamp** so a repeat is visibly a repeat; `WATERPLANE_SYSSTAT_PROCS=0` stops sending program names and
   the section SAYS so. `sysstat.test.mjs`.

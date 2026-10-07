@@ -29,7 +29,7 @@
  * the returned note — a person decides which copy is the real one.
  */
 import { createHash } from "node:crypto";
-import { cpSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { BRAND, LEGACY, defaultRootOf, resolveEnv, rootPick, stateDirPick, type StateDirSource } from "@waterplane/shared";
@@ -265,10 +265,75 @@ export function defaultRoot(home: string = homedir()): string {
   return resolve(defaultRootOf(home));
 }
 
-/** `<PREFIX>ROOT`, else `defaultRoot()`, absolute. `defaulted` says which. */
-export function resolveRoot(e: NodeJS.ProcessEnv = process.env, home: string = homedir()): { root: string; defaulted: boolean } {
+/** The usual code folders under a home, in the order they are tried. `~/dev` first: it is the
+ *  fallback too. The last two are what Visual Studio and GitHub Desktop create. */
+export const CODE_FOLDERS: readonly string[] = [
+  "dev", "code", "Code", "src", "projects", "Projects", "repos", "git", "Developer", "workspace",
+  "source/repos", "Documents/GitHub",
+];
+
+/** The two disk questions the pick asks, injectable so it is testable with no disk. */
+export interface RootFs {
+  isDir(p: string): boolean;
+  /** One level only: is any child directory of `p` a checkout (has a `.git`)? */
+  hasGitChild(p: string): boolean;
+}
+
+export const realRootFs: RootFs = {
+  isDir(p) { try { return statSync(p).isDirectory(); } catch { return false; } },
+  hasGitChild(p) {
+    try {
+      for (const e of readdirSync(p, { withFileTypes: true }).slice(0, 500)) {
+        if (e.isDirectory() && existsSync(join(p, e.name, ".git"))) return true;
+      }
+    } catch { /* unreadable — not a repo holder */ }
+    return false;
+  },
+};
+
+export interface RootChoice {
+  root: string;
+  defaulted: boolean;
+  /** `named` — the knob. `found` — an existing usual folder. `fallback` — none existed, `~/dev` assumed. */
+  picked: "named" | "found" | "fallback";
+  /** The candidates looked at, in order (empty when the knob named the root). */
+  tried: string[];
+}
+
+/**
+ * The code root with the knob unset: the first usual folder holding a repo, else the first that
+ * exists, else `<home>/dev`. Pure over `fs`; does NOT `resolve()` (a Windows-style home stays
+ * testable anywhere) — `resolveRoot` makes it absolute. Cheap sync checks: this runs at import.
+ */
+export function pickCodeRoot(
+  home: string, fs: RootFs = realRootFs, platform: NodeJS.Platform = process.platform,
+): { root: string; picked: "found" | "fallback"; tried: string[] } {
+  const base = home.length > 1 ? home.replace(/[\\/]+$/, "") : home;
+  // macOS guards ~/Documents (TCC): a launchd daemon touching it raises a privacy prompt on
+  // every boot. Not worth it for one GitHub Desktop default.
+  const folders = platform === "darwin" ? CODE_FOLDERS.filter((rel) => !rel.startsWith("Documents/")) : CODE_FOLDERS;
+  // Lazy, in order: the first folder holding a repo ends the walk, so a populated ~/dev
+  // costs one stat and one readdir, and later candidates are never touched.
+  const tried: string[] = [];
+  let firstExisting: string | undefined;
+  for (const rel of folders) {
+    const p = `${base}/${rel}`;
+    tried.push(p);
+    if (!fs.isDir(p)) continue;
+    if (fs.hasGitChild(p)) return { root: p, picked: "found", tried };
+    firstExisting ??= p;
+  }
+  return firstExisting
+    ? { root: firstExisting, picked: "found", tried }
+    : { root: defaultRootOf(home), picked: "fallback", tried };
+}
+
+/** `<PREFIX>ROOT`, else the first usual code folder that exists (`pickCodeRoot`), else `~/dev`; absolute. `defaulted` = the knob was unset. */
+export function resolveRoot(e: NodeJS.ProcessEnv = process.env, home: string = homedir(), fs: RootFs = realRootFs): RootChoice {
   const p = rootPick(e, home);
-  return { root: resolve(p.root), defaulted: p.defaulted };
+  if (!p.defaulted) return { root: resolve(p.root), defaulted: false, picked: "named", tried: [] };
+  const f = pickCodeRoot(home, fs);
+  return { root: resolve(f.root), defaulted: true, picked: f.picked, tried: f.tried.map((t) => resolve(t)) };
 }
 
 /** Where the daemon's global state belongs — `@waterplane/shared`'s `stateDirPick`, made absolute. Touches no disk. */

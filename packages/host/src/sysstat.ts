@@ -31,18 +31,20 @@
  * superuser`; `--samplers smc` does not even exist on Apple Silicon. A daemon
  * whose whole job is spawning `claude` has no business prompting for a root
  * password, and `sudo -n` in a poll loop is a password prompt waiting to
- * happen on a machine where the timestamp has expired. So the reading is absent
- * with a SENTENCE naming the two small helpers that would fill it in
- * (`smctemp`, `istats`) and the `WATERPLANE_SMC_BIN` escape hatch — this repo's rule
- * is that a heuristic degrades to absent, and the corollary nobody writes down
- * is that an absence a person cannot explain reads as a bug in the app.
+ * happen on a machine where the timestamp has expired. Reading the SMC without
+ * root takes a third-party helper, and which one is not this repo's to choose:
+ * a PLUGIN contributes the reader (`api.thermalReader`, `registerThermalReader`
+ * below) and the core only checks its figures (`cleanThermal`). With none, the
+ * reading is absent with a SENTENCE saying so — this repo's rule is that a
+ * heuristic degrades to absent, and the corollary nobody writes down is that an
+ * absence a person cannot explain reads as a bug in the app.
  *
  * ── Cost of the poll itself ─────────────────────────────────────────────────
  *
  * This runs inside `localrt.ts`'s 5 s watch, in the process that pumps every
  * PTY, so the two expensive readers are on a SLOWER cadence of their own
  * (`WATERPLANE_SYSSTAT_SLOW_MS`, 15 s) and cached in between: a full `ps -A` measured
- * 31 ms over 793 processes here, and a thermal helper is another subprocess.
+ * 31 ms over 793 processes here, and a thermal reader may spawn one of its own.
  * The cached rows carry their OWN timestamp so the phone can say how old they
  * are rather than presenting a 14-second-old table as current.
  */
@@ -52,7 +54,8 @@ import type {
   CpuBusy, DiskSnapshot, DiskVolume, FanRow, MemBreakdown, ProcRow, ProcSnapshot, SysStat, Thermal,
 } from "@waterplane/shared";
 import { ROOT, env } from "./env.js";
-import { BRAND, envName } from "@waterplane/shared";
+import { BRAND, envName, PLUGIN_READER_NAME_RE, PLUGIN_THERMAL_TIMEOUT_MS } from "@waterplane/shared";
+import type { PluginThermalReader } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
 import { execFileP as pexecFile } from "./proc.js";
 
@@ -329,7 +332,8 @@ async function readProcs(): Promise<{ snap: ProcSnapshot } | { note: string }> {
 // ────────────────────────────────────────────────────────────────────────────
 
 /**
- * The sentence a macOS desktop gets instead of a temperature.
+ * The sentence a macOS desktop gets instead of a temperature, when no plugin
+ * contributes a reader.
  *
  * Exported and pinned because it is the whole feature on this platform: an
  * empty row with no explanation reads as a broken app, and this repo's rule
@@ -337,13 +341,10 @@ async function readProcs(): Promise<{ snap: ProcSnapshot } | { note: string }> {
  */
 export const MAC_THERMAL_NOTE =
   "macOS keeps the SMC sensors behind root — `powermetrics` refuses to run without sudo, and a " +
-  "daemon that spawns your CLI should not be asking for a password. Install `smctemp` or `istats` " +
-  `(or point ${envName("SMC_BIN")} at a command that prints {"cpuTempC":…,"fanRpm":[…]}) and this fills in.`;
+  "daemon that spawns your CLI should not be asking for a password. Nothing on this desktop reads " +
+  `them: a ${BRAND.name} plugin that contributes a thermal reader fills this row in.`;
 
-/** Parse the first finite number out of a helper's stdout. Deliberately
- *  shape-agnostic: `smctemp` and `istats` each print a bare figure, sometimes
- *  with a unit and sometimes not, and a strict format would be this app
- *  asserting something about a third-party tool's output it cannot keep true. */
+/** Parse the first finite number out of a sysfs file. */
 export function firstNumber(text: string): number | null {
   const m = /-?\d+(?:\.\d+)?/.exec(text);
   if (!m) return null;
@@ -351,39 +352,71 @@ export function firstNumber(text: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Every finite number in a helper's stdout, for a fan list. */
-export function allNumbers(text: string): number[] {
-  return [...text.matchAll(/-?\d+(?:\.\d+)?/g)].map((m) => Number(m[0])).filter((n) => Number.isFinite(n));
+/** Thermal readers contributed by plugins (`api.thermalReader`), by name, in
+ *  registration order. Looked up at CALL time, so a reader whose plugin was
+ *  switched off answers nothing — absent, never stale. */
+const THERMAL = new Map<string, PluginThermalReader>();
+
+/** Register a contributed thermal reader. Throws a sentence on a bad or taken name. */
+export function registerThermalReader(name: string, reader: PluginThermalReader): () => void {
+  if (typeof name !== "string" || !PLUGIN_READER_NAME_RE.test(name)) {
+    throw new Error(`a thermal reader name must be a short lowercase word (letters, digits, dashes); got ${JSON.stringify(name)}`);
+  }
+  if (name === "sysfs" || THERMAL.has(name)) {
+    throw new Error(`a thermal reader called \`${name}\` already exists; this host has: ${["sysfs", ...THERMAL.keys()].join(", ")}`);
+  }
+  if (typeof (reader as unknown as Record<string, unknown> | null)?.read !== "function") throw new Error(`the thermal reader \`${name}\` has no read()`);
+  THERMAL.set(name, reader);
+  return () => { if (THERMAL.get(name) === reader) THERMAL.delete(name); };
 }
 
+/** A temperature the core will put on screen: finite and in a range a running
+ *  machine can be at. `0.0` (a sensor that has not answered yet) and a stray
+ *  digit out of an error message are both outside it. */
+const plausibleC = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0 && v < 150;
+
 /**
- * Parse whatever `WATERPLANE_SMC_BIN` printed. JSON, because the escape hatch is for
- * somebody wiring up their own sensor and a named shape is the only thing this
- * can validate. Any missing field is absent, never zero; a body that is not
- * JSON at all answers null and the note stands.
+ * What a contributed reading may put on screen. A figure the core cannot vouch
+ * for is DROPPED, never repaired; a reading with nothing left is null. Pure,
+ * exported for the test.
  */
-export function parseSmcJson(text: string): Omit<Thermal, "at" | "source"> | null {
-  let body: unknown;
-  try { body = JSON.parse(text); } catch { return null; }
-  const o = body as { cpuTempC?: unknown; gpuTempC?: unknown; fanRpm?: unknown; fans?: unknown };
-  if (!o || typeof o !== "object") return null;
-  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
+export function cleanThermal(r: unknown, source: string): Omit<Thermal, "at"> | null {
+  if (!r || typeof r !== "object") return null;
+  const o = r as { cpuTempC?: unknown; gpuTempC?: unknown; fans?: unknown; source?: unknown };
   const fans: FanRow[] = [];
-  if (Array.isArray(o.fanRpm)) {
-    o.fanRpm.forEach((v, i) => {
-      const n = num(v);
-      if (n != null) fans.push({ label: `fan ${i + 1}`, rpm: Math.round(n) });
-    });
+  for (const f of Array.isArray(o.fans) ? o.fans as { label?: unknown; rpm?: unknown }[] : []) {
+    const rpm = f?.rpm;
+    if (typeof rpm !== "number" || !Number.isFinite(rpm) || rpm < 0) continue;
+    fans.push({ label: typeof f.label === "string" && f.label ? f.label.slice(0, 40) : `fan ${fans.length + 1}`, rpm: Math.round(rpm) });
   }
-  if (Array.isArray(o.fans)) {
-    for (const f of o.fans as { label?: unknown; rpm?: unknown }[]) {
-      const n = num(f?.rpm);
-      if (n != null) fans.push({ label: typeof f?.label === "string" && f.label ? f.label : `fan ${fans.length + 1}`, rpm: Math.round(n) });
-    }
-  }
-  const cpu = num(o.cpuTempC), gpu = num(o.gpuTempC);
+  const cpu = plausibleC(o.cpuTempC) ? o.cpuTempC : undefined;
+  const gpu = plausibleC(o.gpuTempC) ? o.gpuTempC : undefined;
   if (cpu == null && gpu == null && !fans.length) return null;
-  return { ...(cpu == null ? {} : { cpuTempC: cpu }), ...(gpu == null ? {} : { gpuTempC: gpu }), fans };
+  const src = typeof o.source === "string" && o.source ? o.source.slice(0, 60) : source;
+  return { ...(cpu == null ? {} : { cpuTempC: cpu }), ...(gpu == null ? {} : { gpuTempC: gpu }), fans, source: src };
+}
+
+/** One contributed reader, asked once: a reading, a note, or nothing. A throw
+ *  or a hang is nothing — this runs on the loop pumping every PTY. */
+async function askThermal(name: string, reader: PluginThermalReader): Promise<{ thermal: Thermal } | { note: string; fix?: string[] } | null> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    const r = await Promise.race([
+      reader.read(),
+      new Promise<null>((res) => { timer = setTimeout(() => res(null), PLUGIN_THERMAL_TIMEOUT_MS); }),
+    ]);
+    if (r && typeof r === "object" && "note" in r) {
+      if (typeof r.note !== "string" || !r.note) return null;
+      const fix = Array.isArray(r.fix) ? r.fix.filter((c): c is string => typeof c === "string" && !!c).slice(0, 6) : [];
+      return { note: r.note, ...(fix.length ? { fix } : {}) };
+    }
+    const t = cleanThermal(r, name);
+    return t ? { thermal: { at: Date.now(), ...t } } : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** Linux's sensors, straight out of sysfs — no subprocess, no helper to
@@ -424,63 +457,22 @@ async function readLinuxThermal(): Promise<Thermal | null> {
   return { at: Date.now(), ...(cpuTempC == null ? {} : { cpuTempC }), fans, source: "sysfs" };
 }
 
-/** Helpers that are NOT there stay not there — a spawn per poll for a binary
- *  nobody installed is a subprocess this readout would pay for ever. Memoized
- *  INCLUDING the failure, `ocdb.ts`'s rule for its driver. */
-const helperMissing = new Set<string>();
-
-async function runHelper(bin: string, args: string[]): Promise<string | null> {
-  if (helperMissing.has(bin)) return null;
-  try {
-    const { stdout } = await pexecFile(bin, args, { timeout: 3000 });
-    return stdout;
-  } catch (e) {
-    if ((e as { code?: string }).code === "ENOENT") helperMissing.add(bin);
-    return null;
+async function readThermal(): Promise<{ thermal: Thermal } | { note: string; fix?: string[] }> {
+  // A contributed reader first, on every platform: a person who installed one
+  // wants its figures. Its note is kept only for when nothing reads at all.
+  let pluginNote: { note: string; fix?: string[] } | null = null;
+  for (const [name, reader] of [...THERMAL]) {
+    const r = await askThermal(name, reader);
+    if (r && "thermal" in r) return r;
+    if (r && !pluginNote) pluginNote = r;
   }
-}
-
-async function readMacThermal(): Promise<Thermal | null> {
-  const custom = env("SMC_BIN");
-  if (custom) {
-    const out = await runHelper(custom, []);
-    const parsed = out == null ? null : parseSmcJson(out);
-    if (parsed) return { at: Date.now(), ...parsed, source: custom };
-  }
-  // `smctemp` first: it is the one that still reads Apple Silicon's sensors.
-  // Flags are asked one at a time on purpose — a failure of the fan read must
-  // not cost the temperature, which is the reading people actually want.
-  const cpu = firstNumberOrNull(await runHelper("smctemp", ["-c"]));
-  const gpu = firstNumberOrNull(await runHelper("smctemp", ["-g"]));
-  const fanOut = await runHelper("smctemp", ["-f"]);
-  if (cpu != null || gpu != null) {
-    const fans = (fanOut ? allNumbers(fanOut) : []).filter((n) => n > 0)
-      .map((rpm, i) => ({ label: `fan ${i + 1}`, rpm: Math.round(rpm) }));
-    return { at: Date.now(), ...(cpu == null ? {} : { cpuTempC: cpu }), ...(gpu == null ? {} : { gpuTempC: gpu }), fans, source: "smctemp" };
-  }
-  const icpu = firstNumberOrNull(await runHelper("istats", ["cpu", "temp", "--value-only"]));
-  if (icpu != null) {
-    const ifan = await runHelper("istats", ["fan", "speed", "--value-only"]);
-    const fans = (ifan ? allNumbers(ifan) : []).filter((n) => n > 0)
-      .map((rpm, i) => ({ label: `fan ${i + 1}`, rpm: Math.round(rpm) }));
-    return { at: Date.now(), cpuTempC: icpu, fans, source: "istats" };
-  }
-  return null;
-}
-
-function firstNumberOrNull(text: string | null): number | null {
-  return text == null ? null : firstNumber(text);
-}
-
-async function readThermal(): Promise<{ thermal: Thermal } | { note: string }> {
   if (process.platform === "linux") {
     const t = await readLinuxThermal();
-    return t ? { thermal: t } : { note: "Nothing under /sys/class/thermal or /sys/class/hwmon on this host — a VM, or a kernel with no sensor drivers loaded." };
+    if (t) return { thermal: t };
+    return pluginNote ?? { note: "Nothing under /sys/class/thermal or /sys/class/hwmon on this host — a VM, or a kernel with no sensor drivers loaded." };
   }
-  if (process.platform === "darwin") {
-    const t = await readMacThermal();
-    return t ? { thermal: t } : { note: MAC_THERMAL_NOTE };
-  }
+  if (pluginNote) return pluginNote;
+  if (process.platform === "darwin") return { note: MAC_THERMAL_NOTE };
   return { note: `No temperature reader for ${process.platform}.` };
 }
 
@@ -611,7 +603,7 @@ async function readDisks(): Promise<{ disks: DiskSnapshot } | { note: string }> 
 let slow: {
   at: number;
   procs: { snap: ProcSnapshot } | { note: string };
-  thermal: { thermal: Thermal } | { note: string };
+  thermal: { thermal: Thermal } | { note: string; fix?: string[] };
   disks: { disks: DiskSnapshot } | { note: string };
 } | null = null;
 
@@ -645,7 +637,7 @@ export async function sampleSysStat(): Promise<SysStat> {
     ...(cpu ? { cpu } : {}),
     ...(mem ? { mem } : {}),
     ..."snap" in p ? { procs: p.snap } : { procsNote: p.note },
-    ..."thermal" in t ? { thermal: t.thermal } : { thermalNote: t.note },
+    ..."thermal" in t ? { thermal: t.thermal } : { thermalNote: t.note, ...(t.fix ? { thermalFix: t.fix } : {}) },
     ..."disks" in d ? { disks: d.disks } : { disksNote: d.note },
   };
 }

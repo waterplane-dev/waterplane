@@ -19,7 +19,8 @@ One live PTY session, end to end: which binary it drives, how words get typed in
   `packages/host/test/backendargs.test.mjs`. A second backend (opencode) is an IN-REPO EXTENSION on `api.backend()`, with its readers on
   `api.screenReader`/`api.storeReader` (`backends/readers.ts`); its measured rules — the autoupdate
   SAFETY env, the id that only rides `backendSessionId`, the catalogue filter, `providerHosting()`,
-  the hybrid — are in `packages/extensions/opencode/README.md`.
+  the hybrid — are in the opencode extension's README (`packages/extensions/opencode/`, private, not
+  in the public tree).
 - `sessions.ts` — `SessionManager`, the facade: the constructor and hub, `create`/`fork`/`register`
   (the ONE PTY wiring), `rediscover`, the lookups and one-line delegations; the rules below live in
   the slice each sentence names. **Every claude-shaped reader is armed only where the session's
@@ -238,7 +239,7 @@ One live PTY session, end to end: which binary it drives, how words get typed in
   never `sessions.write`), a `sent.json` row `source: "plugin"`, a decision row, an `autofire` note.
   `packages/host/test/answergate.test.mjs` · `scripts/e2e-plugin.mjs`.
 - `sessions/sidechannel.ts` — **a backend's own channel, consumed** (`ChannelSlice`; state on
-  `Session.channel`, design: `docs/analysis/backends-design.md` §2). Attached on `register()` ONLY for
+  `Session.channel`; one ladder per fact, source → screen reader → absent: `docs/notes/architecture.md`). Attached on `register()` ONLY for
   a descriptor with `sources` (none ⇒ today's session, `sideChannel` absent). Health →
   `SessionInfo.sideChannel` ("down" until it says up). `sources.turns` → `turn.ts`'s `sourceTurn` →
   the one `settleStop` (believed outright, idempotent: one turn, one `stopCount`), `hooked` true while

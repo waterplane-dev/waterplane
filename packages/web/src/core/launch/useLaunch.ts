@@ -417,11 +417,23 @@ export function useLaunch(deps: LaunchDeps) {
     track("action:shell.new");
     return openCwd(t.worktreePath, `shell · ${repoBranchLabel(t)}`, false, undefined, { backend: sh.id });
   }
+  /**
+   * A temporary companion shell for session `s`: a plain shell in its folder,
+   * opened as its own tab, that the HOST closes when `s` is closed
+   * (`companionOf`, host `drive.remove`). `openShell`'s path exactly — the
+   * launch is an override, so nothing asks which model.
+   */
+  function openCompanionShell(s: SessionInfo): string | null {
+    const sh = shellBackend(backendsRef.current);
+    if (!sh) { showToast("This desktop can’t open a shell — it needs an update."); return null; }
+    track("action:shell.companion");
+    return openCwd(s.cwd, `shell · ${s.title}`, false, undefined, { backend: sh.id }, undefined, undefined, s.id);
+  }
   /** Open a session in `cwd`. Returns the PENDING screen's session id it put
    *  on screen (`pending:<createAck>`), or null when the tap was deferred to a
    *  launch question — so a caller that owes that screen words can seed its
    *  draft (`compose.seedDraft`) rather than typing into the box it is leaving. */
-  function openCwd(cwd: string, title: string, resume = false, resumeMode?: "continue" | "pick" | "fork", launchOverride?: LaunchOpts, resumeSessionId?: string, budget?: SessionBudget): string | null {
+  function openCwd(cwd: string, title: string, resume = false, resumeMode?: "continue" | "pick" | "fork", launchOverride?: LaunchOpts, resumeSessionId?: string, budget?: SessionBudget, companionOf?: string): string | null {
     // Not a RESUME (a resumed conversation carries the launch it was recorded
     // with; asking offers to continue it under a different binary) and not over
     // an OVERRIDE (the archive's explicit claude, a relaunch, a worktree row
@@ -435,11 +447,11 @@ export function useLaunch(deps: LaunchDeps) {
       resume = false; resumeMode = undefined; resumeSessionId = undefined;
     }
     if (askLaunchFirst(title, { resume, override: !!launchOverride, launch: launchOverride ?? launch },
-      (l, b) => { openCwd(cwd, title, resume, resumeMode, l, resumeSessionId, b === undefined ? budget : b ?? undefined); })) return null;
+      (l, b) => { openCwd(cwd, title, resume, resumeMode, l, resumeSessionId, b === undefined ? budget : b ?? undefined, companionOf); })) return null;
     track(resume ? "action:session.resume" : "action:session.new");
     const createAck = newAckId();
     queueOp(
-      createOp({ cwd, title, resume, resumeMode, resumeSessionId, launch: launchOverride ?? launch, ...(budget ? { budget } : {}) }),
+      createOp({ cwd, title, resume, resumeMode, resumeSessionId, launch: launchOverride ?? launch, ...(budget ? { budget } : {}), ...(companionOf ? { companionOf } : {}) }),
       `create:${cwd}`, `${resume ? "resume" : "open"} ${title}`, { cwd, focus: true, ackId: createAck },
     );
     // Same screen for a resume as for a fresh open: what is being waited for is
@@ -676,7 +688,7 @@ export function useLaunch(deps: LaunchDeps) {
   return {
     launch, setLaunch, setLaunchOpt, pickBackend, wireLaunch,
     sessionCan, sessionCant, reopenCant, refreshRepos,
-    openRepo, openShell, openCwd, runForkRequest, startSessionWithPrompt, relaunch, setBranchPick,
+    openRepo, openShell, openCompanionShell, openCwd, runForkRequest, startSessionWithPrompt, relaunch, setBranchPick,
     sheets,
   };
 }

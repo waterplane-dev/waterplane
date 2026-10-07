@@ -63,7 +63,7 @@ function client() {
     if (m.t === "welcome") st.welcome = m;
     if (m.t === "backends") st.backends = m.list;
     if (m.t === "session.created") st.created = m.session;
-    if (m.t === "session.list") for (const s of m.sessions) st.sessions.set(s.id, s);
+    if (m.t === "session.list") { st.list = m.sessions; for (const s of m.sessions) st.sessions.set(s.id, s); }
     if (m.t === "session.updated") st.sessions.set(m.session.id, m.session);
     if (m.t === "notification") st.notifs.push(m.item);
     if (m.t === "input.ack") st.acks.set(m.ackId, m);
@@ -190,6 +190,17 @@ if (existsSync("/bin/zsh")) {
     "…and line 1 ran only after line 2 was on the line — one paste, one Return");
   c.send({ t: "session.kill", id: sid3 });
 } else console.log("SKIP: no /bin/zsh — the bracketed-paste path is pinned by deliversubmit.test.mjs");
+
+// ── 4d. a companion shell: temporary, closed with the session it belongs to ──
+c.created = null;
+c.send({ t: "session.create", cwd: repo.path, cols: 100, rows: 30, launch: { backend: "shell" }, companionOf: sid, ackId: "create-comp" });
+if (!(await c.until(() => c.created))) await fail("companion session.create produced no session");
+const compId = c.created.id;
+check(c.created.companionOf === sid, `the companion names its parent (${JSON.stringify(c.created.companionOf)})`);
+c.created = null;
+c.send({ t: "session.create", cwd: repo.path, cols: 100, rows: 30, launch: { backend: "shell" }, companionOf: "nosuchid", ackId: "create-orphan" });
+await sleep(800);
+check(!c.created, "a companion of a session that is not open is refused, never opened as a shell nothing closes");
 c.close();
 
 // ── 5. restart ──
@@ -207,6 +218,10 @@ await sleep(500);
 c.send({ t: "session.input", id: sid, data: "echo again$((6*7))", submit: true, ackId: "in-3" });
 check(await c.until(() => c.acks.get("in-3")?.ok === true, 15000), "a command after the restart is acked ok");
 check(await c.until(() => c.pane.includes("again42")), "…and runs");
+check(c.sessions.get(compId)?.companionOf === sid, `the companion link survives the restart (${JSON.stringify(c.sessions.get(compId)?.companionOf)})`);
+c.send({ t: "session.remove", id: sid });
+const listed2 = () => (c.list ?? []).map((s) => s.id);
+check(await c.until(() => !listed2().includes(sid) && !listed2().includes(compId)), `closing the session closes its companion shell with it (${JSON.stringify(listed2())})`);
 c.close();
 
 await stopHost();

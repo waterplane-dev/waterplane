@@ -13,6 +13,8 @@ export const E = new Proxy({}, { get: (_t, key) => (typeof key === "string" ? `$
 export const LEGACY_E = new Proxy({}, { get: (_t, key) => (typeof key === "string" ? `${LEGACY[0].envPrefix}${key}` : undefined) });
 
 export const NAME = BRAND.name;
+/** The GitHub org the public repos live under (`deploy/public-media.json`'s `{org}`). */
+export const GITHUB_ORG = BRAND.githubOrg;
 /** Temp-dir / file-name prefix: `mkdtempSync(join(tmpdir(), `${SLUG}-ack-`))`. */
 export const SLUG = BRAND.slug;
 /** `<root>/<STATE>` and `<repo>/<STATE>`. */

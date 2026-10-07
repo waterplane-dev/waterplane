@@ -37,7 +37,7 @@ const FEATURES = join(SRC, "features");
  * file every change conflicts in, not a way to make the check pass: the new
  * code belongs in a feature folder.
  */
-const MAX_APP_LINES = 397;
+const MAX_APP_LINES = 394;
 
 /** A feature file is a slice, never a new App. The same number eslint's
  *  `max-lines` warns at — here it fails. */
@@ -49,7 +49,7 @@ const MAX_CORE_FILE_LINES = 900;
 
 /** The folders `core/` may have: one per thing there is one of. A module that
  *  is none of these is a single file at `core/`'s top, or a feature. */
-const CORE_DIRS = ["conn", "route", "term", "queue", "launch", "compose", "send", "sessions", "launcher", "session", "settings"];
+const CORE_DIRS = ["conn", "route", "term", "queue", "launch", "compose", "send", "sessions", "launcher", "session", "settings", "layout"];
 
 /** A README shorter than this cannot say what the feature is, what it owns
  *  and what it reads from the core. */
@@ -499,6 +499,7 @@ const BACKLOG_FACADES = {
 /** Every file in the split folders, by path under `packages/web/src`, and its
  *  cap. None may exceed 900 (`MAX_FEATURE_FILE_LINES`); aim ≤ 500. */
 const BACKLOG_SPLIT_FILES = {
+  "backlog/BacklogBody.tsx": 60,
   "backlog/BacklogFilterBar.tsx": 140,
   "backlog/BacklogList.tsx": 75,
   "backlog/BacklogRow.tsx": 205,
@@ -907,15 +908,17 @@ const ANNOTATOR_SPLIT_FILES = {
   "annotator/AnnConfig.tsx": 75,
   "annotator/AnnSendBar.tsx": 55,
   "annotator/AnnStage.tsx": 48,
+  "annotator/AnnTextOnly.tsx": 45,
   "annotator/AnnToolbar.tsx": 105,
   "annotator/annDraw.ts": 270,
   "annotator/annEdit.ts": 150,
   "annotator/annGeom.ts": 95,
+  "annotator/annOcr.ts": 70,
   "annotator/annPointer.ts": 280,
   "annotator/annRead.ts": 115,
   "annotator/annSend.ts": 155,
   "annotator/annTypes.ts": 170,
-  "annotator/useAnnotator.ts": 280,
+  "annotator/useAnnotator.ts": 290, // +"text only" (annOcr.ts) state
 };
 
 test("the annotator facade does not grow", () => {
@@ -960,7 +963,7 @@ const WEBCLIENT_SPLIT_FILES = {
   "webapi/webapiFetch.ts": 105,
   "webapi/webapiFiles.ts": 150,
   "webapi/webapiGit.ts": 50,
-  "webapi/webapiHost.ts": 125,
+  "webapi/webapiHost.ts": 150, // +on-device whole-picture OCR
   "webapi/webapiNet.ts": 155,
   "webapi/webapiRepoOps.ts": 85,
   "webapi/webapiRepos.ts": 47,

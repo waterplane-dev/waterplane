@@ -4,7 +4,7 @@
   "description": "waterplane — phone-native remote control for Claude Code on your PC. Name reserved; the real package follows.",
   "license": "MIT",
   "author": "Johannes Hoh",
-  "homepage": "https://waterplane.dev",
+  "homepage": "https://github.com/waterplane-dev/waterplane",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/waterplane-dev/waterplane.git"

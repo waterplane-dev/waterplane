@@ -7,13 +7,13 @@
  * A region: it draws the model and owns no hook (a child's effects run before its parent's).
  */
 
-import { Hourglass } from "lucide-react";
+import { Hourglass, ScanText } from "lucide-react";
 import { UploadScalePicker } from "../UploadScalePicker";
 import type { AnnModel } from "./useAnnotator";
 
 export function AnnSendBar({ m }: { m: AnnModel }) {
-  const { busy, send, sendAll } = m;
-  const { index, total, onSkip, onSendAll, onDispatch } = m.props;
+  const { busy, send, sendAll, readAll } = m;
+  const { index, total, onSkip, onSendAll, onDispatch, onText } = m.props;
   return (
     <>
       {/* Last stop before the bytes go: shrink more (or less) than auto would.
@@ -42,6 +42,10 @@ export function AnnSendBar({ m }: { m: AnnModel }) {
             <button className="key" onClick={() => send("queue")} disabled={busy} title="attach the image and hand the prompt to the desktop — it goes in when this session is free"><Hourglass size={14} /> Send &amp; when it&apos;s free</button>
           </>
         )}
+        {/* The picture's WORDS instead of the picture, read on the desktop
+            (annOcr.ts) — for a photo with a person in it. */}
+        {onText && <button className="key" onClick={() => void readAll()} disabled={busy}
+          title="read every word on the desktop and send only the text, not the photo"><ScanText size={14} /> text only</button>}
         <button className="send" onClick={() => send("none")} disabled={busy}>
           {busy ? "Sending…" : total && total > 1 && (index ?? 1) < total ? "Send & next" : "Send to repo"}
         </button>

@@ -115,6 +115,10 @@ export function LaunchAskSheet({ title, backends, defaults, budget: startBudget,
   return (
     <div className="sheet">
       <SheetHead title="Start with…" onClose={onClose} />
+      {/* Its own scroller: `#root` is fixed and clips, so on a phone shorter
+          than the wheel + chips (an iPhone 17 is) Start was below the edge
+          with nothing to scroll. */}
+      <div className="sheet-scroll">
       <div className="form-hint">
         {title} — {pickBackends ? "which binary and which model" : "which model"}{wheel ? " and effort" : ""} this session runs.
         Just this one: your new-session defaults don’t change, and everything else about the
@@ -203,6 +207,7 @@ export function LaunchAskSheet({ title, backends, defaults, budget: startBudget,
         <div className="form-hint">
           Closing this starts nothing — nothing is queued until you press Start.
         </div>
+      </div>
       </div>
     </div>
   );

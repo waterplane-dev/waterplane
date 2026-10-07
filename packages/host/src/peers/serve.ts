@@ -68,7 +68,7 @@ import type { PeerPublic } from "./store.js";
 import { hostVersion, type PeerServe } from "./routes.js";
 
 export const PEER_JOB_MARKER = `${BRAND.stateDirName}/peer-job.json`;
-/** Job worktrees older than this are removed (plan, decision 3). */
+/** Job worktrees older than this are removed: kept a week for inspection, then swept. */
 export const PEER_WORKTREE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const SWEEP_EVERY_MS = 60 * 60 * 1000;
 const WORKTREES_SUBDIR = join(".claude", "worktrees");

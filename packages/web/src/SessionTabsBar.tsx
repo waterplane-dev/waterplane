@@ -1,11 +1,12 @@
 import { Loader, X } from "lucide-react";
 import { useEffect, useRef } from "react";
+import { useWide } from "./core/layout/layout";
 import { askConfirm } from "./Confirm";
 import { repoAccentStyle } from "./format";
 import { useRepoColors } from "./repoColors";
 import { STATUS_LABEL } from "./sessionFacts";
 import {
-  TAB_STRIP_H, askTabAttach, askTabClose, tabCloseAsk, useSessionTabs,
+  askTabAttach, askTabClose, tabCloseAsk, tabStripHeight, useSessionTabs,
   type SessionTab, type TabsSnapshot,
 } from "./sessionTabs";
 
@@ -89,16 +90,20 @@ import {
 export function SessionTabsBar() {
   const enabled = useSessionTabs((s) => s.enabled);
   const any = useSessionTabs((s) => s.tabs.length > 0);
-  const show = enabled && any;
+  // Wide mode: the sidebar lists the sessions, so the strip is not drawn and
+  // reports height 0 (decision O3, desktop-workspace-plan.md).
+  const wide = useWide();
+  const h = tabStripHeight(enabled, any, wide);
+  const show = h > 0;
 
   // The strip's height, published once for every screen to pad itself clear of
   // — `.screen` and `.sheet` add it to their top padding, exactly as they do
   // for the two strips above. A variable rather than a per-screen component, so
   // a sheet written next year clears it without being told.
   useEffect(() => {
-    document.documentElement.style.setProperty("--ui-tabs-h", show ? `${TAB_STRIP_H}px` : "0px");
+    document.documentElement.style.setProperty("--ui-tabs-h", `${h}px`);
     return () => { document.documentElement.style.removeProperty("--ui-tabs-h"); };
-  }, [show]);
+  }, [h]);
 
   return show ? <Strip /> : null;
 }

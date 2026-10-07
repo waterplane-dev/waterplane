@@ -32,6 +32,20 @@ test("a stranger's origin does not", () => {
   assert.equal(originHeaderAllowed("http://100.64.0.1:9999"), false, "wrong port");
 });
 
+test("the iOS shell's capacitor://localhost passes — exactly that, no other non-web scheme", () => {
+  // WKWebView cannot serve the app from http(s), so the iOS shell's page is
+  // capacitor://localhost (Android's is http://localhost, judged as web).
+  assert.equal(originHeaderAllowed("capacitor://localhost"), true);
+  assert.equal(originHeaderAllowed("http://localhost"), true, "the Android shell");
+  // Before the scheme check these passed on host + port alone.
+  assert.equal(originHeaderAllowed("ionic://localhost"), false);
+  assert.equal(originHeaderAllowed("capacitor://127.0.0.1"), false);
+  assert.equal(originHeaderAllowed("capacitor://evil.example.com"), false);
+  assert.equal(originHeaderAllowed("ws://127.0.0.1:8770"), false);
+  assert.equal(originHeaderAllowed("chrome-extension://localhost"), false);
+  assert.deepEqual(corsHeaders({ origin: "capacitor://localhost" })["access-control-allow-origin"], "capacitor://localhost");
+});
+
 test("another tailnet's name is not automatically trusted", () => {
   // `*.ts.net` is accepted by suffix ONLY as a fallback for when we could not
   // read our own MagicDNS name. We read it above, so the exact name is required.

@@ -458,7 +458,36 @@ export function remove(core: SessionCore, id: string, onShellsStopped?: (counts:
   // it here is what made `.waterplane/summaries/` grow-only: it was added after this
   // line and the matching delete was never written.
   try { rmSync(core.summaryPath(id), { force: true }); } catch { /* non-fatal */ }
+  // A companion shell is temporary BY CONTRACT: it was opened to live exactly
+  // as long as this session, so it goes with it, by the same hand. Only on a
+  // remove — a detach keeps the parent alive in tmux, and a kill leaves its row.
+  for (const cid of companionsOf(core, id)) remove(core, cid, undefined, by);
   return true;
+}
+
+/** The live companion shells opened for session `id` (`SessionOrigin.companionOf`). */
+export function companionsOf(core: SessionCore, id: string): string[] {
+  const out: string[] = [];
+  for (const [cid, c] of core.sessions) if (c.origin?.companionOf === id) out.push(cid);
+  return out;
+}
+
+/**
+ * The parent moved to a new id (a relaunch's replace, a limit resurrect):
+ * re-point its companions, in memory and in their `live/` records, so the
+ * close of the NEW session still takes them along. Without this they would
+ * wait on an id that is never closed again — a temporary shell for good.
+ */
+export function repointCompanions(core: SessionCore, from: string, to: string): void {
+  for (const cid of companionsOf(core, from)) {
+    const c = core.sessions.get(cid);
+    if (!c?.origin) continue;
+    c.origin = { ...c.origin, companionOf: to };
+    c.info.companionOf = to;
+    const m = core.loadLive(cid);
+    if (m) core.persistLive({ ...m, origin: c.origin });
+    core.emit("updated", c.info);
+  }
 }
 
 export function scrollback(core: SessionCore, id: string): string {

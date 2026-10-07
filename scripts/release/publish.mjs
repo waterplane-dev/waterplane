@@ -4,13 +4,16 @@
 // calls (git, gh/npm status and view) and prints every command the real run would make.
 //
 //   npm run release:publish -- [--yes] [--build [--apk=<file.apk>]] [--public-clone <dir>]
-//                              [--accept <file>] [--allow-dirty] [--no-apk]
+//                              [--media-clone <dir>] [--accept <file>] [--allow-dirty] [--no-apk]
 //
 //   --yes             really publish. Without it nothing is written, tagged, pushed or uploaded.
 //   --build           run `npm run release:build` first (else dist-release/ must already hold it)
 //   --apk=<file>      passed to release:build (with --build)
 //   --public-clone    a local clone of github.com/<org>/<slug>, for release:public. Needed
 //                     until the GitHub release exists.
+//   --media-clone     a local clone of the media repo named in deploy/public-media.json (the
+//                     walkthrough videos the README links to). Needed until the GitHub release
+//                     exists, whenever that file does; pushed before the public clone.
 //   --accept <file>   passed to release:public (reviewed scan false positives)
 //   --allow-dirty     dry run only: waive the clean-tree / main / built-from-HEAD checks
 //   --no-apk          publish without an Android APK asset, on purpose (else undrafting refuses)
@@ -34,7 +37,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const DIR = "dist-release";
 
 // ── args ───────────────────────────────────────────────────────────────────
-const opts = { yes: false, build: false, allowDirty: false, noApk: false, apk: null, publicClone: null, accept: null };
+const opts = { yes: false, build: false, allowDirty: false, noApk: false, apk: null, publicClone: null, mediaClone: null, accept: null };
 {
   const argv = process.argv.slice(2);
   for (let i = 0; i < argv.length; i++) {
@@ -51,8 +54,9 @@ const opts = { yes: false, build: false, allowDirty: false, noApk: false, apk: n
     else if (a === "--no-apk") opts.noApk = true;
     else if (a.startsWith("--apk=")) opts.apk = resolve(a.slice(6));
     else if (a === "--public-clone" || a.startsWith("--public-clone=")) opts.publicClone = resolve(val("--public-clone"));
+    else if (a === "--media-clone" || a.startsWith("--media-clone=")) opts.mediaClone = resolve(val("--media-clone"));
     else if (a === "--accept" || a.startsWith("--accept=")) opts.accept = resolve(val("--accept"));
-    else if (a === "-h" || a === "--help") { console.log(readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 21).map((l) => l.replace(/^\/\/ ?/, "")).join("\n")); process.exit(0); }
+    else if (a === "-h" || a === "--help") { console.log(readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 24).map((l) => l.replace(/^\/\/ ?/, "")).join("\n")); process.exit(0); }
     else die(`unknown argument ${a}`);
   }
   if (opts.apk && !opts.build) die("--apk goes with --build (it is a release:build flag)");
@@ -116,15 +120,23 @@ function npmState() {
   return "unknown";
 }
 
-function cloneCheck(dir) {
-  if (!dir) return { ok: false, why: "--public-clone <dir> is needed until the GitHub release exists (a clone of github.com/" + REPO + ")" };
+function cloneCheck(dir, repo = REPO, flag = "--public-clone") {
+  if (!dir) return { ok: false, why: `${flag} <dir> is needed until the GitHub release exists (a clone of github.com/${repo})` };
   if (!existsSync(join(dir, ".git"))) return { ok: false, why: `${dir} is not a git clone` };
   const url = run("git", ["-C", dir, "remote", "get-url", "origin"]);
-  const re = new RegExp(`github\\.com[:/]${BRAND.githubOrg}/${SLUG}(\\.git)?$`, "i");
-  if (!url.ok || !re.test(url.out)) return { ok: false, why: `${dir}'s origin is ${url.out || "unset"}, not github.com/${REPO}` };
+  const re = new RegExp(`github\\.com[:/]${repo.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\.git)?$`, "i");
+  if (!url.ok || !re.test(url.out)) return { ok: false, why: `${dir}'s origin is ${url.out || "unset"}, not github.com/${repo}` };
   if (run("git", ["-C", dir, "status", "--porcelain"]).out) return { ok: false, why: `${dir} has uncommitted changes` };
   return { ok: true };
 }
+
+/** The media repo of deploy/public-media.json (`{org}` filled), or null when nothing is hosted. */
+function mediaRepo() {
+  const f = join(ROOT, "deploy/public-media.json");
+  if (!existsSync(f)) return null;
+  return String(JSON.parse(readFileSync(f, "utf8")).repo).replaceAll("{org}", BRAND.githubOrg);
+}
+const MEDIA_REPO = mediaRepo();
 
 function gather() {
   const head = run("git", ["rev-parse", "HEAD"]).out;
@@ -154,7 +166,7 @@ function gather() {
   };
   // An unknown release state is refused below; the plan is shown as for a first publish.
   const planRelease = rs.release === "unknown" ? "absent" : rs.release;
-  return { facts: { ...facts, release: planRelease, publicClone: planRelease === "absent" ? cloneCheck(opts.publicClone) : null }, state: { tag, tagPushed, release: planRelease, releaseAssets: rs.releaseAssets, npmPublished: npmPublished === true }, unknown: [rs.release === "unknown" && `could not tell whether ${TAG} is released: ${rs.why}`, npmPublished === "unknown" && `could not tell whether ${PKG}@${version} is on npm (npm view failed)`].filter(Boolean) };
+  return { facts: { ...facts, release: planRelease, publicClone: planRelease === "absent" ? cloneCheck(opts.publicClone) : null, mediaClone: planRelease === "absent" && MEDIA_REPO ? cloneCheck(opts.mediaClone, MEDIA_REPO, "--media-clone") : null }, state: { tag, tagPushed, release: planRelease, releaseAssets: rs.releaseAssets, npmPublished: npmPublished === true }, unknown: [rs.release === "unknown" && `could not tell whether ${TAG} is released: ${rs.why}`, npmPublished === "unknown" && `could not tell whether ${PKG}@${version} is on npm (npm view failed)`].filter(Boolean) };
 }
 
 const { facts, state, unknown } = gather();
@@ -170,7 +182,7 @@ const notesFile = opts.yes ? join(mkdtempSync(join(tmpdir(), `${SLUG}-notes-`)),
 if (opts.yes && facts.changelog) writeFileSync(notesFile, facts.changelog + "\n");
 const steps = planSteps(state, {
   slug: SLUG, name: BRAND.name, version, repo: REPO, pkg: PKG, assets: facts.assets, build: opts.build,
-  buildArgs: opts.apk ? [`--apk=${opts.apk}`] : [], publicClone: opts.publicClone, accept: opts.accept, notesFile, dir: DIR,
+  buildArgs: opts.apk ? [`--apk=${opts.apk}`] : [], publicClone: opts.publicClone, mediaClone: MEDIA_REPO ? (opts.mediaClone ?? "<media-clone>") : null, accept: opts.accept, notesFile, dir: DIR,
   noApk: opts.noApk,
 });
 
@@ -185,13 +197,13 @@ console.log("  (no --provenance: npm provenance needs a CI OIDC identity — Git
 
 if (!opts.yes) {
   if (facts.changelog) console.log(`\nrelease notes (CHANGELOG.md "## ${version}"):\n${facts.changelog.split("\n").map((l) => `  | ${l}`).join("\n")}`);
-  console.log(`\ndry run: nothing was changed.${refused ? " Fix every REFUSE above first." : ""} To publish:\n  npm run release:publish -- --yes${opts.build ? " --build" : ""}${opts.noApk ? " --no-apk" : ""}${opts.publicClone ? ` --public-clone ${opts.publicClone}` : ""}`);
+  console.log(`\ndry run: nothing was changed.${refused ? " Fix every REFUSE above first." : ""} To publish:\n  npm run release:publish -- --yes${opts.build ? " --build" : ""}${opts.noApk ? " --no-apk" : ""}${opts.publicClone ? ` --public-clone ${opts.publicClone}` : ""}${opts.mediaClone ? ` --media-clone ${opts.mediaClone}` : ""}`);
   process.exit(refused ? 1 : 0);
 }
 if (refused) die("refused: fix every REFUSE above. Nothing was changed.", 1);
 
 // ── run ────────────────────────────────────────────────────────────────────
-const resumeHint = `re-run \`npm run release:publish -- --yes${opts.publicClone ? ` --public-clone ${opts.publicClone}` : ""}${opts.noApk ? " --no-apk" : ""}\` to resume from here (done steps are skipped)`;
+const resumeHint = `re-run \`npm run release:publish -- --yes${opts.publicClone ? ` --public-clone ${opts.publicClone}` : ""}${opts.mediaClone ? ` --media-clone ${opts.mediaClone}` : ""}${opts.noApk ? " --no-apk" : ""}\` to resume from here (done steps are skipped)`;
 for (const s of steps) {
   if (s.skip) { console.log(`\n== ${s.id}: skipped, already done (${s.skip})`); continue; }
   if (s.refuse) die(`step ${s.id} refused: ${s.refuse}. ${resumeHint}.`, 1);

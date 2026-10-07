@@ -29,6 +29,11 @@ export interface SessionInfo {
    * one, spelled by leaving the field out.
    */
   backend?: string;
+  /**
+   * A temporary companion shell's parent session id: closing that session
+   * closes this one with it. Absent on every ordinary session.
+   */
+  companionOf?: string;
   /** Launch settings this session was started with (for display). */
   model?: string;
   effort?: Effort;

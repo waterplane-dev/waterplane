@@ -15,7 +15,7 @@ import type { Overlay } from "../../routing";
 import type { PendingStars } from "../../localState";
 import { HINTS } from "../../hints";
 import { shortModel } from "../../sessionFacts";
-import { isShellBackend, type BackendList } from "../../backendCaps";
+import { isShellBackend, shellBackend, type BackendList } from "../../backendCaps";
 import { orderedToolbarItems, type ToolbarCfg } from "../../toolbar";
 import { Unavailable } from "../../Unavailable";
 import { featureToolbarItem } from "../toolbarItems";
@@ -67,6 +67,9 @@ export function renderToolbarItem(c: ToolbarCtx, t: { id: string; name: string; 
   const isShell = isShellBackend(backends, active?.backend);
   if (t.id === "model" && isShell) return null;
   if (t.id === "logins" && !isShell) return null;
+  // A companion shell belongs to a session that is not itself a shell, and
+  // needs a host that can open one at all.
+  if (t.id === "companion" && (isShell || pending || !shellBackend(backends))) return null;
   switch (t.id) {
     case "untracked":
       if (!activeRepo || activeRepo.changedCount <= 0) return null;

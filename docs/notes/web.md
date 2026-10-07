@@ -5864,7 +5864,7 @@ mechanical once its sheet reads `Intent`.
 
 ### The session budget — a cap on one conversation, drawn and never decided here
 
-*(Asked 2026-10-01; plan: [session-budget-plan](../analysis/session-budget-plan.md). The verdict,
+*(Asked 2026-10-01; the decisions: [host.md](host.md#sessionbudgetts--a-sessions-own-budget). The verdict,
 the calibration and every sentence are `shared/sessionbudget.ts`'s and the host's; the phone reads
 `SessionInfo.budget` and draws it.)*
 

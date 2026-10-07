@@ -152,9 +152,9 @@ export interface Thermal {
   /** Empty means "read, and this machine reports no fans" — a fanless Mac, a
    *  VM. Absent thermals entirely is a different fact and is `thermalNote`. */
   fans: FanRow[];
-  /** Which reader answered (`smctemp`, `istats`, `sysfs`, or the command named
-   *  by `WATERPLANE_SMC_BIN`). Shown, because a third-party sensor tool's numbers are
-   *  its own and this app is not vouching for them. */
+  /** Which reader answered (`sysfs`, or the tool a plugin's thermal reader
+   *  names). Shown, because a third-party sensor tool's numbers are its own and
+   *  this app is not vouching for them. */
   source: string;
 }
 
@@ -211,10 +211,17 @@ export interface SysStat {
    * Why there is no `thermal` — a SENTENCE, present only when the reading is
    * absent, and never both. On macOS the SMC sensors are root-only
    * (`powermetrics`), and a daemon that spawns `claude` has no business
-   * prompting for a password, so this says which small helper would fill the
-   * row in. A blank space with no explanation reads as a bug in this app.
+   * prompting for a password, so this says what would fill the row in (a
+   * plugin's thermal reader). A blank space with no explanation reads as a bug.
    */
   thermalNote?: string;
+  /**
+   * Shell commands that fill the row in, each run as-is in a terminal on this
+   * desktop — the phone draws every one as its own copy block, because a
+   * helper named in prose is a lookup the reader then has to do somewhere
+   * else. Only beside `thermalNote`, and only where a thermal reader knows a fix.
+   */
+  thermalFix?: string[];
   /**
    * Why there is no `procs`. Absent when there is a table (never both), and
    * present when the reader was switched off (`WATERPLANE_SYSSTAT_PROCS=0`) or

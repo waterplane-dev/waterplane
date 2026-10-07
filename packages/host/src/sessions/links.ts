@@ -9,7 +9,8 @@
  *  - `setScreenLinks` — links read off the rendered grid (the heuristic, WP3's
  *    `shelllinks.ts`, armed on the quiet tick by `armLinksCheck`). Replaces every screen-sourced
  *    entry; an entry keeps its first-seen `at` across repaints, and is retired
- *    the tick it is no longer on screen.
+ *    the tick it is no longer on screen — unless only a SHORTER pane hid it
+ *    (`heldOffScreen`).
  *
  * Only for a session whose backend has no turns (`caps.turns === false`): a
  * claude session's document stays exactly what it was. Stateless — the list
@@ -126,7 +127,34 @@ export function setScreenLinks(core: SessionCore, id: string, found: readonly Om
       ...(f.local || isLocalLink(url) ? { local: true } : {}),
     });
   }
+  for (const prev of before.values()) {
+    if (prev.source === "screen" && !byUrl.has(prev.url) && !screen.some((l) => l.url === prev.url) && heldOffScreen(s, prev.url)) screen.push(prev);
+  }
+  const seen = new Set((found ?? []).map((f) => cleanLinkUrl(f.url)));
+  const rows = new Map<string, number>();
+  for (const l of screen) {
+    const r = seen.has(l.url) ? s.rows : s.linkRows?.get(l.url);
+    if (typeof r === "number") rows.set(l.url, r);
+  }
+  s.linkRows = rows;
   return publish(core, s, [...byUrl.values(), ...screen], awaitingCode);
+}
+
+/**
+ * A published screen link the read no longer finds, kept because the pane is
+ * SHORTER than when it was last on screen and the program's output still holds
+ * it. The links bar takes its height from the terminal: publishing a link
+ * shrinks the pane, tmux repaints only the rows that still fit, the link's
+ * line is off the top, the read retires it, the bar shrinks, the pane grows,
+ * the line is back — measured as a shell flickering between two layouts every
+ * read (`npm login`'s three links, 2026-10-07). Geometry is not news; output
+ * moving past it (the byte tail no longer holds the URL) or a pane at least as
+ * tall that does not show it is.
+ */
+function heldOffScreen(s: Session, url: string): boolean {
+  const at = s.linkRows?.get(url);
+  return typeof at === "number" && typeof s.rows === "number" && s.rows < at
+    && s.scrollback.slice(-LINKS_PROOF_BYTES).includes(url);
 }
 
 

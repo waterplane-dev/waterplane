@@ -262,6 +262,7 @@ export function reattach(core: SessionCore, m: LiveMeta): void {
   if (re) re.copyMode = inCopyMode(TMUX_SERVER, tmuxName(m.id));
   // How it was opened survives the restart for its closed row (`closedRowOf`).
   if (re && m.origin) re.origin = m.origin;
+  if (re && m.origin?.companionOf) re.info.companionOf = m.origin.companionOf;
   // …and so does the budget's latch: a session already told it is over is not
   // told, or interrupted, again because the daemon restarted.
   if (re && budget && m.budgetTripped) re.budgetTripped = true;

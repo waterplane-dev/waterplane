@@ -184,15 +184,26 @@ const onSessionCreate: RouteSpec<"session.create"> = {
       }
       // A relaunch onto the same conversation keeps its prompt history and tab
       // name; read BEFORE the kill, which deletes both (`sessions.carryFor`).
+      // A companion shell: temporary, closed with the session it was opened
+      // for. Refused (and remembered — a retry cannot do better) when that
+      // session is already gone: opened anyway it would be a shell nothing
+      // ever closes, which is the one thing the person asked it not to be.
+      const companionOf = a.msg.companionOf;
+      if (companionOf && !a.c.sessions.get(companionOf)) {
+        const reason = "companion shell not opened: the session it belongs to is closed";
+        a.c.send(a.ws, { t: "toast", text: reason });
+        return { ok: false, reason };
+      }
       const carry = a.msg.replaceSessionId && !a.msg.forkAtTurn ? a.c.sessions.carryFor(a.msg.replaceSessionId, resumeSessionId) : null;
       if (a.msg.replaceSessionId) a.c.sessions.kill(a.msg.replaceSessionId, undefined, "replaced");
       const info = a.c.sessions.create(cwd, { cols: a.msg.cols, rows: a.msg.rows, title, resume: a.msg.resume, carry,
-        origin: { kind: a.msg.forkAtTurn ? "fork" : "hand" },
+        origin: { kind: a.msg.forkAtTurn ? "fork" : "hand", ...(companionOf ? { companionOf } : {}) },
         // A forked file is already its own conversation, so it is resumed
         // PLAINLY — `--fork-session` on top would fork the copy again and open a
         // third id. `"fork"` on the wire names the user's verb, not the flag.
         resumeMode: serverFork ? "fork" : a.msg.forkAtTurn ? "continue" : a.msg.resumeMode,
         resumeSessionId, ...(serverFork ? { forkAtTurn: a.msg.forkAtTurn } : {}), launch: a.msg.launch, budget });
+      if (a.msg.replaceSessionId) a.c.sessions.repointCompanions(a.msg.replaceSessionId, info.id);
       a.att.add(info.id);
       a.c.recomputeWatched();
       // "Open a session here AND run this" — one op, because the phone cannot

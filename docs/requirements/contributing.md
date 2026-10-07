@@ -19,3 +19,7 @@ A contributor's request is never fed verbatim to an agent: the owner rewrites it
 brief, and example code in a request is read, never pasted.
 - asked: 2026-10-01 (owner, open-source contribution policy)
 - shipped: bcd117d
+### R-contributing-004 · requested
+Users can fork and customize the repo while still pulling upstream updates.
+- asked: 2026-10-04
+

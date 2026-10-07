@@ -7,6 +7,11 @@ from the daemon. It exists for exactly one property:
 
 Everything else here follows from that.
 
+**iOS:** the same package also holds an iOS shell (`ios/`, simulator-only — no paid Apple account),
+built and launched with `scripts/ios-sim.sh`. Its page is `capacitor://localhost` rather than
+`http://localhost`; why, and what is ported, is under [iOS shell](#ios-shell) at the end.
+Everything else here is the Android shell.
+
 ---
 
 ## The problem it solves
@@ -995,6 +1000,52 @@ the one-time migration note above for what that costs an installed phone.
 - **Debug-signed by default.** `npm run apk` produces `app-dev-debug.apk`, signed
   with the owner's key when `keystore-dev.properties` exists and the debug key
   otherwise. The Play release needs the upload key (see *Two flavors* above).
-- **Android only.** The same Capacitor project takes `cap add ios` when wanted;
-  iOS is where the missing Background Fetch hurts most, so it is the obvious next
-  target.
+- **iOS is simulator-only** (see *iOS shell* below): no push, no background
+  pulls, no over-the-air bundle.
+
+---
+
+## iOS shell
+
+Simulator only: there is no paid Apple Developer account, so nothing signs, archives or uploads, and
+there is no APNs. `scripts/ios-sim.sh` (or `npm run ios:sim`) builds, installs and launches; the web
+bundle goes to `ios/App/build/web`, never `packages/web/dist`, which is what the host serves to every
+phone. Capacitor 8 resolves its iOS parts with SwiftPM, so there is no CocoaPods.
+
+**The origin.** Android's page is `http://localhost` so the plain `ws://100.x:8770/ws` socket is not
+mixed content. WKWebView refuses a custom handler for `http`/`https`, so iOS serves the page from
+`capacitor://localhost`, and `capacitor.config.ts` pins `scheme: "capacitor"` so nobody "fixes" it:
+
+- Mixed-content blocking keys off an `https` page, and `capacitor://` is not one, so `ws://` and
+  `http://` to the daemon are allowed, the property Android gets from `http`.
+- App Transport Security is the other gate: `Info.plist` sets `NSAllowsArbitraryLoadsInWebContent`
+  (cleartext for the WebView only; the daemon is plain HTTP on the tailnet, by IP or MagicDNS name)
+  and `NSAllowsLocalNetworking` (the LAN route). Native code does no networking of its own.
+- `origin.ts` judges only `http`/`https` origins on host and port; `capacitor://localhost` is the one
+  non-web origin, named exactly (`NATIVE_SHELL_ORIGINS`). Before, `anything://localhost` passed by
+  accident, so this narrowed the guard (`SECURITY.md`).
+
+**What is ported.** The web side never branches on Android: every native call looks its plugin up by
+name (`shellBridge.ts`), so a missing plugin is absent, never a dead button.
+
+| Android | iOS |
+|---|---|
+| `MainActivity` (keyboard, bar colours, deep links, resume nudge) | `ShellViewController.swift`: keyboard resizes the WebView, status bar follows the page theme read off the DOM, `waterplane://pair`, resume nudge. No back button on iOS. |
+| `ShellSavePlugin` (bytes to Downloads) | `ShellSavePlugin.swift`, same methods, writes to Documents, shown in Files as *On My iPhone › waterplane*. |
+| `ShellNetPlugin`, `ShellPullPlugin`, `ShellKeystorePlugin`, `ShellUpdatePlugin`, `ShellShare` | Not ported. Equivalents when wanted: `NWPathMonitor`, a background `URLSession`, Keychain with `SecAccessControl`, `setServerBasePath`, a Share Extension. |
+| `ShellLinkService` stack, `ShellInstallPlugin` | Android-only. No background service on iOS (the replacement is APNs, paid program); install controls are hidden by `nativeInstallSupported()`. The notifications screen says there is no background alert (`shellLinkSupported()`). |
+
+Checked in the Simulator (iOS 27): pair by deep link, repo and session sync, a prompt typed and
+answered, the keyboard under the composer, outbox thumbnails, a download into Files, and a 60-second
+background stay resumed with the link live.
+
+**Build trap.** The first `xcodebuild` can hang at *Resolve Package Graph* on a SwiftPM file lock
+while fetching Capacitor's two binary xcframeworks. Seeding
+`~/Library/Caches/org.swift.swiftpm/artifacts/` with the two checksum-verified zips unblocks it;
+later builds are cached.
+
+**Not done.** APNs push, a Share Extension, background pulls, the OTA bundle swap. Auto-download
+still pulls every announced APK onto an iPhone, where it cannot be installed (skip `.apk` in the
+automatic path where `nativeInstallSupported()` is false). Some copy is Android-worded ("inside the
+APK", "in Downloads"). The status bar follows the page theme, so over the black image viewer on a
+light theme the clock is dark on dark.

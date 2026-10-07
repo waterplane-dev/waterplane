@@ -14,9 +14,11 @@ test("the small mark is used strictly below the spec's cut, and the cut is brand
   assert.equal(useSmallMark(192), false);
 });
 
-test("Logo inlines both marks from brand/ through the @brand alias", () => {
+test("Logo inlines all four marks (full/small x dark/light) from brand/ through the @brand alias", () => {
   const src = fs.readFileSync(new URL("./Logo.tsx", import.meta.url), "utf8");
-  assert.match(src, /@brand\/icon\.svg\?raw/);
-  assert.match(src, /@brand\/icon-small\.svg\?raw/);
-  for (const f of ["icon.svg", "icon-small.svg"]) assert.ok(fs.existsSync(brand(f)), f);
+  const files = ["icon.svg", "icon-small.svg", "icon-light.svg", "icon-small-light.svg"];
+  for (const f of files) {
+    assert.match(src, new RegExp(`@brand/${f.replace(/\./g, "\\.")}\\?raw`), f);
+    assert.ok(fs.existsSync(brand(f)), f);
+  }
 });

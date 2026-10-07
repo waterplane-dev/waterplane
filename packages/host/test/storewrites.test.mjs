@@ -21,6 +21,7 @@ const ALLOW = {
   "packages/host/src/localusage.ts": "async tmp+rename so a large ledger never blocks the event loop; jsonstore is sync-only",
   "packages/host/src/convfork.ts": "writes a forked conversation .jsonl (the CLI's own transcript), not a state file",
   "packages/host/src/reposkill.ts": "writes the markdown skill text handed to the driven repo's agent, not JSON state",
+  "packages/host/src/ocrlocal.ts": "moves a swiftc-compiled OCR helper BINARY into place (copy then rename, mode 755); not a JSON store",
   "packages/host/src/signkey.ts": "moves a keytool-generated binary keystore into place; the tmp name is keytool's output path",
   "packages/host/src/tree.ts": "the one place a user's file is written back from the phone: raw text, preserves the target's mode",
   "packages/host/src/cli/selfupdate.ts": "swaps an install dir / symlink atomically; not a JSON store",

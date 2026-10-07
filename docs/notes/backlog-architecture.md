@@ -61,6 +61,7 @@ backlogFilter/*.ts                  pure rules, `.ts` specifiers (node --test lo
 | `backlog/BacklogFilterBar.tsx` | search row, the chip rows, the filter bar |
 | `backlog/BulkBars.tsx` | re-time pick, the focus sentence, drop clocks / run again / archive done / name |
 | `backlog/BacklogList.tsx` | the list, empty state and group heads |
+| `backlog/BacklogBody.tsx` | the scroll body's two orders: an ids cut leads with its rows (cut bar → rows → the rest) |
 | `backlog/BacklogRow.tsx` | one row's frame: clock head, number, title, text, thumbs, order buttons |
 | `backlog/RowEditor.tsx` | the inline edit form |
 | `backlog/RowChips.tsx` | the meta line of chips |

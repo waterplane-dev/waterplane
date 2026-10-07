@@ -12,7 +12,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 const {
-  cpuBusyFrom, firstNumber, parseMemInfo, parsePsTable, parseSmcJson, parseSwapUsage, parseVmStat,
+  cpuBusyFrom, cleanThermal, firstNumber, MAC_THERMAL_NOTE, parseMemInfo, parsePsTable, parseSwapUsage, parseVmStat,
+  registerThermalReader,
 } = await import("../dist/sysstat.js");
 
 // A real `vm_stat` head from an Apple Silicon desktop (16 KiB pages).
@@ -160,21 +161,40 @@ test("cpu: no pair, no interval, a resize or a counter reset ⇒ null, never zer
   assert.equal(cpuBusyFrom(a, [{ user: 200, nice: 0, sys: 50, idle: 850, irq: 0 }], 0), null);
 });
 
-test("a sensor helper's output is read for its numbers, not its format", () => {
-  assert.equal(firstNumber("56.2"), 56.2);
-  assert.equal(firstNumber("CPU: 56.2°C\n"), 56.2);
+test("a sysfs file is read for its number", () => {
+  assert.equal(firstNumber("56200\n"), 56200);
   assert.equal(firstNumber("no reading"), null);
 });
 
-test("WATERPLANE_SMC_BIN: fields are absent, never zeroed, and junk is null", () => {
-  const t = parseSmcJson('{"cpuTempC":61.5,"fanRpm":[1200,0,2400]}');
+test("a contributed thermal reading: implausible figures are DROPPED, never shown", () => {
+  const t = cleanThermal({ cpuTempC: 61.5, gpuTempC: 0, fans: [{ label: "left", rpm: 1200 }, { rpm: 0 }, { rpm: -1 }, { rpm: NaN }], source: "smctemp" }, "mac");
   assert.equal(t.cpuTempC, 61.5);
+  // 0.0 is what a sensor that has not answered yet prints — not a temperature.
   assert.equal(t.gpuTempC, undefined);
   // A fan reading 0 is a STOPPED fan, which is a measurement — dropping it
   // would turn "the fans are off because the machine is cool" into silence.
-  assert.deepEqual(t.fans.map((f) => f.rpm), [1200, 0, 2400]);
-  assert.equal(parseSmcJson("not json"), null);
-  assert.equal(parseSmcJson("{}"), null); // nothing readable ⇒ the note stands
+  assert.deepEqual(t.fans, [{ label: "left", rpm: 1200 }, { label: "fan 2", rpm: 0 }]);
+  assert.equal(t.source, "smctemp");
+  assert.equal(cleanThermal({ cpuTempC: 2 * 100, fans: [] }, "mac"), null, "200 °C is a misread, and nothing is left");
+  assert.equal(cleanThermal({ cpuTempC: "56" }, "mac"), null);
+  assert.equal(cleanThermal(null, "mac"), null);
+  assert.equal(cleanThermal({ cpuTempC: 40, fans: [] }, "mac").source, "mac", "no source named ⇒ the reader's name");
+});
+
+test("a thermal reader name is checked, and a taken one throws a sentence", () => {
+  const r = { read: async () => null };
+  assert.throws(() => registerThermalReader("Bad Name", r), /short lowercase word/);
+  assert.throws(() => registerThermalReader("sysfs", r), /already exists/);
+  assert.throws(() => registerThermalReader("noread", {}), /has no read\(\)/);
+  const off = registerThermalReader("probe", r);
+  assert.throws(() => registerThermalReader("probe", r), /already exists/);
+  off();
+  registerThermalReader("probe", r)();
+});
+
+test("the macOS note names no third-party tool — that is a plugin's to say", () => {
+  assert.ok(MAC_THERMAL_NOTE.includes("plugin"));
+  assert.ok(!/smctemp|istats/i.test(MAC_THERMAL_NOTE));
 });
 
 // ── Disks ────────────────────────────────────────────────────────────────────

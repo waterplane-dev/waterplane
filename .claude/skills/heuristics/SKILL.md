@@ -85,7 +85,8 @@ description: waterplane's regex heuristics over the claude TUI — everything re
   shape — cheap gate, render, miss budget, resize grace — and `choosePromptBox` walks one arrow per
   pass, RE-READS, and **REFUSES rather than pressing a bare Return**; the reader only answers
   `candidate`/`read`/`prompt`/`stillUp`/`navTo`, and a throw reads as no box. opencode's
-  (`ocprompt.mts`): `packages/extensions/opencode/README.md`.
+  (`ocprompt.mts`): the opencode extension's README (`packages/extensions/opencode/`, private, not in
+  the public tree).
 - **A box is not the only question.** `prompt.ts` answers "is the CLI blocked on a dialog";
   `question.ts` answers "did the TURN END ON A QUESTION TO YOU" — the question with NO BOX, the
   commonest way work stops here, and the one that published nothing for the longest. The agent ends

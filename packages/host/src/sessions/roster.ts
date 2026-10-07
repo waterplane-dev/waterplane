@@ -19,6 +19,16 @@ import { resolveBackend } from "../backends/index.js";
 import { hostStateDir } from "../branddirs.js";
 import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
 
+/**
+ * The entries a row's "Started"/"Latest" may quote: what the person asked for,
+ * never a typed slash command. A `/compact` on a session whose earlier prompts
+ * the history never held (a resumed conversation) became its "Started" and
+ * replaced the tab name the row showed — the one line saying what it was for.
+ */
+export function promptWords<E extends { kind: string }>(h: readonly E[]): E[] {
+  return h.filter((e) => e.kind !== "command");
+}
+
 export class RosterSlice {
   /** Session IDs a client is currently attached to ("in the loop"). A plugin
    *  reads it as `PluginSession.watched`. */
@@ -211,6 +221,7 @@ export class RosterSlice {
     const own = by === "exited" || by === "limit";
     const h = s.history;
     const last = h[h.length - 1];
+    const words = promptWords(h);
     const lastActiveAt = i.lastTurnAt ?? last?.outputAt ?? last?.sentAt;
     const o = s.origin;
     let item: ReturnType<typeof closedItemFacts> = {};
@@ -228,7 +239,7 @@ export class RosterSlice {
       ...(typeof i.createdAt === "number" ? { openedAt: i.createdAt } : {}),
       ...(typeof lastActiveAt === "number" ? { lastActiveAt } : {}),
       ...(h.length > 0 ? { turns: h.length } : {}),
-      ...txt("firstPrompt", h[0]?.text ?? i.firstPrompt), ...txt("lastPrompt", last?.text ?? i.lastPrompt),
+      ...txt("firstPrompt", words[0]?.text ?? i.firstPrompt), ...txt("lastPrompt", words[words.length - 1]?.text ?? i.lastPrompt),
       ...txt("tabTitle", i.tabTitle), ...txt("model", i.model),
     };
   }
@@ -294,8 +305,9 @@ export class RosterSlice {
   applyPromptLabels(s: Session): void {
     const cut = (t?: string) => t?.replace(/\s+/g, " ").trim().slice(0, RosterSlice.LABEL_CAP) || undefined;
     const h = s.history;
-    s.info.firstPrompt = cut(h[0]?.text);
-    s.info.lastPrompt = cut(h[h.length - 1]?.text);
+    const words = promptWords(h);
+    s.info.firstPrompt = cut(words[0]?.text);
+    s.info.lastPrompt = cut(words[words.length - 1]?.text);
     const pinned = this.pins.get(s.info.id);
     s.info.pinnedEntryId = pinned && h.some((e) => e.id === pinned) ? pinned : undefined;
     s.info.pinnedPrompt = s.info.pinnedEntryId ? cut(h.find((e) => e.id === s.info.pinnedEntryId)!.text) : undefined;

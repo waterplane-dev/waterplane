@@ -59,6 +59,11 @@ const CURRENT_NAME_ALLOWED = [
   (p) => p === "packages/app/capacitor.config.ts",
   (p) => p === "packages/app/android/app/build.gradle",
   (p) => p.startsWith("packages/app/android/app/src/") && /\/(strings\.xml|AndroidManifest\.xml)$|\.java$/.test(p),
+  // The iOS shell's identity (bundle id, display name, scheme, the simulator script). No
+  // generator yet like brand-android.mjs: until there is one, these are the rename checklist.
+  (p) => p === "packages/app/ios/App/App.xcodeproj/project.pbxproj",
+  (p) => /^packages\/app\/ios\/App\/App\/[^/]+\.(plist|swift)$/.test(p),
+  (p) => p === "packages/app/scripts/ios-sim.sh",
   (p) => p.startsWith(".github/"),
   (p) => p.startsWith("deploy/"),                  // plist template, npm placeholder
   (p) => p === ".env.example",                     // the documented list of every knob, by its full name
