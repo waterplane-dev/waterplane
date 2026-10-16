@@ -42,7 +42,7 @@ test("single use: redeem spends it, peek (landing, APK) does not", () => {
   const s = new PairStore({ now: clock().now });
   const { code } = s.mint("dev1");
   for (let i = 0; i < 5; i++) assert.equal(s.peek(code), "ok");
-  assert.deepEqual(s.redeem(code), { state: "ok", mintedBy: "dev1" });
+  assert.deepEqual(s.redeem(code), { state: "ok", mintedBy: "dev1", passive: false });
   assert.equal(s.redeem(code).state, "used");
   assert.equal(s.peek(code), "used");
   assert.equal(s.peek("ABCDEFGH"), "unknown");

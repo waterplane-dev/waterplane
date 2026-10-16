@@ -2,6 +2,8 @@
 
 import type { ArtifactPolicy } from "../../artifacts.js";
 import type { BudgetVerdict, UsageBudget } from "../../budget.js";
+import type { PeriodState } from "../../period.js";
+import type { BillingStatus } from "../../billing.js";
 import type { CliHealth, HealthRollup } from "../../clihealth.js";
 import type { LocalRuntimeSample } from "../localrt.js";
 import type { Intent } from "../../intent.js";
@@ -13,6 +15,7 @@ import type { BuildCandidate } from "../../buildscan.js";
 import type { CaptureBackendInfo, CaptureRun, CaptureTarget } from "../capture.js";
 import type { OnboardJob } from "../onboard.js";
 import type { LimitResumeMode } from "../session.js";
+import type { HaltState } from "../../halt.js";
 import type { MeterSummary } from "../telemetry.js";
 import type { AssessRun, AutoPullConfig, BuildConfig, BuildRun, FanoutRun, PullItem } from "../work.js";
 
@@ -50,7 +53,22 @@ export type HostToolsMsg =
    * scraped on the host, and a client that has been offline through a reset
    * would otherwise explain a queue with a percentage from an hour ago.
    */
-  | { t: "budget.state"; budget: UsageBudget; verdict: BudgetVerdict }
+  | {
+      t: "budget.state"; budget: UsageBudget; verdict: BudgetVerdict;
+      /** Each configured period and where it stands (`periodBounds` at send time,
+       *  spend from the host's ledger). Optional: an older host omits it and the
+       *  phone shows today's two windows; an older phone ignores it. Additive,
+       *  `PROTOCOL_VERSION` stays 2. */
+      periods?: PeriodState[];
+    }
+  /**
+   * Which billing profile this desktop's claude runs under (`shared/billing.ts`):
+   * probed, or the person's override (`source: "setting"`). Sent on hello and on
+   * change, and as the answer to `billing.get` / `billing.set`. Absent from an
+   * older host: the phone treats that as `unknown` and shows today's subscription
+   * chrome. Additive, `PROTOCOL_VERSION` stays 2.
+   */
+  | ({ t: "billing.status" } & BillingStatus)
   /**
    * The health board and its rollup — sent on hello and on change (debounced
    * ~5 s: a health record must not become a frame source on this link).
@@ -83,10 +101,16 @@ export type HostToolsMsg =
    *  still blocked — the limit demonstrably has not reset, so no OTHER session
    *  may spend an attempt proving the same thing until then. */
   | { t: "limit.config"; enabled: boolean; resumingId: string | null; resumingIds?: string[]; holdUntil: number | null; mode?: LimitResumeMode }
+  /** The halt latch (sent on hello and on every change). */
+  | { t: "halt.state"; halt: HaltState }
   | { t: "pong" } // heartbeat reply to { t: "ping" }
   // ── Build buttons ──
-  /** A repo's build config + recent runs (sent on request and on save). */
-  | { t: "build.list"; repoDir: string; builds: BuildConfig[]; runs: BuildRun[] }
+  /** A repo's build config + recent runs (sent on request and on save). `builds` is the
+   *  MERGED list (committed `.waterplane-shared/builds.json`, then this desktop's own
+   *  `.waterplane/builds.json`, local winning by id). `localIds`: the ids that live in
+   *  the local file — every other entry came with the checkout. Absent from an older
+   *  host: nobody said, so the phone draws no attribution. */
+  | { t: "build.list"; repoDir: string; builds: BuildConfig[]; runs: BuildRun[]; localIds?: string[] }
   /** Streamed build output. `full` (on a fresh list/reconnect) = the retained
    *  tail, replacing the client's buffer; absent/false = a live delta to append. */
   | { t: "build.output"; runId: string; dataB64: string; full?: boolean }

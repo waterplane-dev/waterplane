@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   actionKey, changedValues, cutDecisions, decisionSources, envRows, fieldValue, globalActions, nextToggleValue,
-  parseFieldInput, pluginName, pluginStateLine, sessionBadges, sessionControls, sourceLabel,
+  parseFieldInput, pluginName, pluginStateLine, pluginSearchWords, pluginWords, sessionBadges, sessionControls, sourceLabel,
 } from "./logic.ts";
 
 const manifest = {
@@ -143,4 +143,14 @@ test("standing rules on a session: from host state, by plugin, each a line sayin
   assert.deepEqual(g[0].lines, ["touch a.txt — answered 2 times without asking", "a request — answered 1 time without asking"]);
   assert.deepEqual(g[1].lines, ["ls — not used yet"]);
   assert.equal(ruleLine({ label: "x", uses: -3 }), "x — not used yet");
+});
+
+test("a plugin's search words are everything its section says: name, id, description, fields, choices, buttons", () => {
+  const w = pluginWords(view({ manifest: { ...manifest, description: "asks a second model" } }));
+  for (const word of ["Decision oracle", "oracle", "asks a second model", "use Decision oracle", "auto-fire", "model", "A", "B", "break after", "guardrails", "test the key"]) {
+    assert.ok(w.includes(word), `missing "${word}"`);
+  }
+  assert.equal(pluginSearchWords(null), "");
+  const both = pluginSearchWords([view(), view({ manifest: { ...manifest, id: "notary", name: "Notary" } })]);
+  assert.ok(both.includes("Notary") && both.includes("Decision oracle"), "the row's words are every section's");
 });

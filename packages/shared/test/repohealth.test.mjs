@@ -787,3 +787,89 @@ test("…including the absence sentences this repo's own history can never produ
     );
   }
 });
+
+// ───────────────────────────────────────────────────────────────────────────
+// A repo's OWN readings: carried apart from waterplane's, with their provenance.
+// ───────────────────────────────────────────────────────────────────────────
+
+test("own readings survive the parse as the repo's, apart from waterplane's — every key path included", async () => {
+  const { buildPlot } = await import(new URL("../../../tools/repohealth/plot.mjs", import.meta.url));
+  const { PREREG, PREREG_VERSION } = await import(new URL("../../../tools/repohealth/constants.mjs", import.meta.url));
+  const own = (value, reason) => ({
+    file: ".waterplane-shared/health.json",
+    readings: [{ key: "screenFixtures", name: "Signals", means: "How many.", better: "higher", unit: "signals", value, ...(reason ? { reason } : {}) }],
+    problems: ["entry 2 has no usable \"key\""],
+  });
+  const rows = [
+    { sha: "a".repeat(40), day: "2026-10-14", ts: 1, prereg: PREREG_VERSION },
+    { sha: "b".repeat(40), day: "2026-10-15", ts: 2, prereg: PREREG_VERSION, own: own(4) },
+    { sha: "c".repeat(40), day: "2026-10-16", ts: 3, prereg: PREREG_VERSION, own: own(null, "exited 1: version unknown") },
+  ];
+  const doc = JSON.stringify(buildPlot({ rows, prereg: PREREG, preregVersion: PREREG_VERSION, ownDeclared: true }));
+  const want = assertCarried("own readings", doc);
+  for (const key of ["own.series[].means", "own.series[].better", "own.series[].source", "own.problems", "series[].source"]) {
+    assert.ok(want.includes(key), `the document no longer carries ${key}`);
+  }
+  const plot = parseRepoHealthPlot(doc);
+  assert.ok(plot.series.every((s) => s.source === "central"));
+  const [s] = plot.own.series;
+  assert.equal(s.source, "repo");
+  assert.deepEqual(s.points.map((p) => p.v), [null, 4, null], "before it was declared is a hole, and a failed run is a hole");
+  assert.equal(s.last, null);
+  assert.equal(s.absent, "exited 1: version unknown");
+  assert.equal(plot.own.declared, true);
+});
+
+test("an older engine's series read as waterplane's; a malformed own block is dropped WHOLE, never half-drawn", () => {
+  const base = {
+    preregVersion: "v", windowReadings: 60, minReadings: 14, days: 1,
+    series: [{ key: "size.p95", label: "p95", unit: "lines", points: [{ day: "2026-10-16", sha7: "abcdef0", v: 3 }], last: 3, reading: { rank: null, slope: null, n: 1, from: "2026-10-16", reason: "r" }, detail: "" }],
+    context: { areas: {} },
+    classics: { loc: [], files: [], deps: [], packages: [], tape: null },
+  };
+  const old = parseRepoHealthPlot(JSON.stringify(base));
+  assert.equal(old.series[0].source, "central");
+  assert.equal("own" in old, false, "no field from an older engine stays no field — the phone then says nothing about own readings");
+
+  const mislabelled = { ...base, series: [{ ...base.series[0], source: "repo" }] };
+  assert.equal(parseRepoHealthPlot(JSON.stringify(mislabelled)), null, "a repo reading inside waterplane's list is a document nobody wrote");
+
+  const ownSeries = { ...base.series[0], key: "x", source: "repo", means: "m", better: "higher" };
+  const good = parseRepoHealthPlot(JSON.stringify({ ...base, own: { file: "f", declared: true, series: [ownSeries] } }));
+  assert.equal(good.own.series.length, 1);
+  const unlabelled = parseRepoHealthPlot(JSON.stringify({ ...base, own: { file: "f", declared: true, series: [{ ...ownSeries, source: undefined }] } }));
+  assert.ok(unlabelled, "the rest of the plot still draws");
+  assert.equal("own" in unlabelled, false, "provenance is never guessed");
+});
+
+test("…and a repo's central disable and override (`variant`, `central`) survive the parse", async () => {
+  const { buildPlot } = await import(new URL("../../../tools/repohealth/plot.mjs", import.meta.url));
+  const { PREREG, PREREG_VERSION } = await import(new URL("../../../tools/repohealth/constants.mjs", import.meta.url));
+  const central = {
+    file: ".waterplane-shared/health.json", fp: "abc",
+    disabled: { context: { why: "CLAUDE.md is generated" } },
+    override: { size: { why: "ours only", means: "p95 of ours", run: ["node", "p.mjs"], value: null, reason: "exited 1" } },
+    problems: ['"bogus" is not a central reading'],
+  };
+  const rows = ["2026-09-21", "2026-09-22"].map((day, i) => ({
+    sha: String(i).repeat(40), day, ts: 1790019502 + i * 86400, prereg: PREREG_VERSION,
+    size: { value: { p95: 400, max: 900, nearMax: 2 } },
+    context: { value: { claudeMdChars: 12000, descChars: 3000, skillCount: 4, skillBodyChars: 9000, areas: {} } },
+    ...(i === 1 ? { central } : {}),
+  }));
+  const doc = JSON.stringify(buildPlot({ rows, prereg: PREREG, preregVersion: PREREG_VERSION }));
+  const want = assertCarried("central variants", doc);
+  for (const key of ["series[].variant.kind", "series[].variant.why", "series[].variant.points[].v", "series[].variant.since", "series[].variant.absent", "central.problems"]) {
+    assert.ok(want.includes(key), `the document no longer carries ${key}`);
+  }
+  const parsed = parseRepoHealthPlot(doc);
+  const size = parsed.series.find((s) => s.key === "size.p95");
+  assert.equal(size.variant.kind, "override");
+  assert.equal(size.variant.last, null);
+  assert.equal(size.variant.absent, "exited 1");
+  assert.deepEqual(parsed.series.find((s) => s.key === "context.descChars").variant, { kind: "disabled", why: "CLAUDE.md is generated" });
+  // A variant that does not match the plot's days is dropped whole, never half-read.
+  const bad = JSON.parse(doc);
+  bad.series.find((s) => s.key === "size.p95").variant.points.pop();
+  assert.equal(parseRepoHealthPlot(JSON.stringify(bad)).series.find((s) => s.key === "size.p95").variant, undefined);
+});

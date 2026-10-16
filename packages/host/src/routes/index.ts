@@ -8,7 +8,7 @@
  * host has never heard of should be a no-op, not a thrown error that closes a
  * socket carrying ninety other message types that do work.
  */
-import type { ClientMessage, SendStamp } from "@waterplane/shared";
+import { roleAccepts, type ClientMessage, type SendStamp } from "@waterplane/shared";
 import type { WebSocket } from "ws";
 import type { HostCtx, OpVerdict, RouteArgs, RouteSpec, RouteTable } from "./types.js";
 import { sessionRoutes } from "./session.js";
@@ -30,8 +30,14 @@ type AnyArgs = RouteArgs<ClientMessage["t"]>;
 type AnySpec = RouteSpec<ClientMessage["t"]>;
 
 export function dispatch(c: HostCtx, ws: WebSocket, msg: ClientMessage): void {
+  // Own keys only: `ROUTES` is a plain object, so `{"t":"__proto__"}` or
+  // `"toString"` would otherwise resolve off its prototype and reach `spec.run`.
+  if (!Object.hasOwn(ROUTES, msg.t)) return;
   const entry = ROUTES[msg.t] as ((a: AnyArgs) => void) | AnySpec | undefined;
   if (!entry) return;
+  // A notify link says hello and pings, nothing else: never an attach, so it
+  // can never count as somebody watching a session.
+  if (!roleAccepts(c.wsRole.get(ws), msg.t)) return;
   const att = c.attached.get(ws)!;
   // A handler that declared no `contain` is handed no directory. The empty
   // string is not a path anything here would accept, so a handler reaching for

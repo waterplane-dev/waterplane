@@ -55,9 +55,8 @@ backlogFilter/*.ts                  pure rules, `.ts` specifiers (node --test lo
 | `backlog/useBacklogEdit.ts` | the inline editor's fields, `beginEdit`/`saveEdit` |
 | `backlog/useBacklogCuts.ts` | every derived list and number: base, counts, cut, visible, groups, `nextFireIds`, focus breakdown, bulk ids, the predicates over live sessions |
 | `backlog/useBacklogDrag.ts` | the drag id, `canDrag`, the window pointer effect |
-| `backlog/RepoBar.tsx` | sheet head (send…, auto) and the repo bar (picker, assess, smart pick) |
+| `backlog/RepoBar.tsx` | sheet head (send…, auto) and the repo bar (picker, assess) |
 | `backlog/Notices.tsx` | auto-off banner, kept-from-before draft, the wait-verb and offline lines |
-| `backlog/SmartPickNotes.tsx` | the smart pick's explainer, *on in N repos*, the last-look strip |
 | `backlog/BacklogFilterBar.tsx` | search row, the chip rows, the filter bar |
 | `backlog/BulkBars.tsx` | re-time pick, the focus sentence, drop clocks / run again / archive done / name |
 | `backlog/BacklogList.tsx` | the list, empty state and group heads |
@@ -97,7 +96,7 @@ done + assess scope → `cutCounts`; 1309–1470 → `titleWords`; 1471–1491 t
 + keys → `backlogLabels.ts`; 554–676 state → hooks; 678–1121 derivations → `useBacklogCuts` (+
 `selectRepo`, `toggleArchived` → filters, `beginEdit`/`saveEdit` → edit); 1123–1164 drag →
 `useBacklogDrag`; 1166–1258 head + repo bar → `RepoBar`; 1259–1442 notices + smart pick →
-`Notices`/`SmartPickNotes`; 1444–1551 search + chips + bar → `BacklogFilterBar`; 1552–1738 bulk →
+`Notices` (its smart-pick strip, `SmartPickNotes`, was removed 2026-10-16); 1444–1551 search + chips + bar → `BacklogFilterBar`; 1552–1738 bulk →
 `BulkBars`; 1740–1786 list + groups → `BacklogList`; 1787–2667 the row → `BacklogRow` with
 `RowEditor`, `RowChips`, `RowNotes`, `RowActions`.
 

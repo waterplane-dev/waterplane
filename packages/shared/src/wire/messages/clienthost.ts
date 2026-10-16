@@ -28,6 +28,22 @@ export type ClientHostMsg =
   /** Ask a plugin's `handle()`d method. NOT durable, never queued offline, not in the ack ledger:
    *  `ackId` addresses the reply and de-duplicates a repeated frame (host `plugins/pluginrpc.ts`). */
   | { t: "plugin.call"; plugin: string; method: string; args?: unknown; ackId: string }
+  // ── Live streams (plugin API 1.4, shared/stream.ts) ── NOT durable, never queued offline,
+  //    never retried: a late open is for a screen nobody watches, a late input lands elsewhere.
+  /** Open `plugin`'s stream `name` for THIS socket. Answered by `stream.opened` or
+   *  `stream.refused`, matched on `reqId` (client-minted). */
+  | { t: "stream.open"; reqId: string; plugin: string; name: string; params?: unknown }
+  /** Re-steer an open stream (quality, crop, source). Replaces the params; the plugin decides
+   *  what changes. */
+  | { t: "stream.params"; streamId: number; params: unknown }
+  /** One upstream event (a pointer move, a key). Fire-and-forget, at most once. */
+  | { t: "stream.input"; streamId: number; ev: unknown }
+  /** What the client has received so far on this stream: the newest `seq` and the payload bytes
+   *  it counted. This is the Auto controller's measure of what is in flight. */
+  | { t: "stream.ack"; streamId: number; seq: number; rxBytes: number }
+  /** Ask the producer for a keyframe now (a decoder error, a reopened view). */
+  | { t: "stream.keyframe"; streamId: number }
+  | { t: "stream.close"; streamId: number }
   // ── The decision log: limit auto-continues + plugin decisions ──
   | { t: "decisions.get"; sessionId?: string }
   | { t: "decisions.archive"; id: string; archived: boolean }
@@ -84,6 +100,10 @@ export type ClientHostMsg =
   | { t: "limit.resume"; id?: string }
   /** How the resume queue releases sessions once the limit lifts (host-wide). */
   | { t: "limit.setMode"; mode: LimitResumeMode }
+  /** The emergency halt: `on` stops every AI process this host started and
+   *  latches until a later `on: false` (`shared/halt.ts`). Idempotent — a
+   *  repeat of the same value is a no-op, so no ackId is needed. */
+  | { t: "host.halt"; on: boolean }
   /** Fetch the in-app notification feed. */
   | { t: "notification.get" }
   /** Clear all in-app notifications. */
@@ -109,6 +129,14 @@ export type ClientHostMsg =
    */
   | { t: "budget.get" }
   | { t: "budget.set"; budget: UsageBudget }
+  /**
+   * The billing profile (`shared/billing.ts`): `billing.get` asks, `billing.set`
+   * overrides it (`profile: null` clears the override back to the probe). Both
+   * are answered with `billing.status`. Additive, NOT durable - idempotent state
+   * like `budget.set`; an older host ignores both.
+   */
+  | { t: "billing.get" }
+  | { t: "billing.set"; profile: "subscription" | "api" | "cloud" | null }
   /**
    * The CLI integration's own health (`shared/clihealth.ts`) — answered with
    * `clihealth`.

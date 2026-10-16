@@ -17,11 +17,15 @@ import { FEATURES } from "../features/registry.ts";
 import { core } from "./api.ts";
 import { createFeatureRunner } from "./featureRun.ts";
 import { pluginCalls } from "./pluginCalls.ts";
+import { streamRouter } from "./streamRouter.ts";
+// App wires it into `nav.openPlugin` (a tapped plugin alert); it lives with the other registry readers.
+export { openPluginFromNotification } from "./extensionPoints.ts";
 
 const RUNNER = createFeatureRunner(FEATURES, core);
 
 export function dispatchFeatureMessage(msg: HostMessage): void {
   pluginCalls().onFrame(msg); // a `plugin.reply` / a reconnect's `welcome`: the generic call channel
+  streamRouter().onText(msg); // `stream.*`, plus the `welcome` that reopens and the status edge that parks
   RUNNER.dispatch(msg);
 }
 

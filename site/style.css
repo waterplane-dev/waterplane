@@ -1,0 +1,112 @@
+/* waterplane.dev — the app's own tokens (packages/web/src/styles.css), one accent: the
+   wordmark's amber. No webfonts, no third-party requests. */
+:root {
+  color-scheme: light dark;
+  --bg: #eef1f6;
+  --panel: #ffffff;
+  --line: #d4dae4;
+  --fg: #1c2430;
+  --muted: #57616f;
+  --accent: #a84c0c;
+  --code-bg: #e3e8f0;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b0d10;
+    --panel: #14181d;
+    --line: #232a32;
+    --fg: #d6dce5;
+    --muted: #8b95a2;
+    --accent: #f5a93f;
+    --code-bg: #14181d;
+  }
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 17px/1.55 var(--sans);
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:hover { text-decoration-thickness: 2px; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+code, pre { font-family: var(--mono); font-size: .88em; }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+pre {
+  background: var(--code-bg);
+  border-left: 3px solid var(--accent);
+  padding: 12px 14px;
+  margin: 0 0 1.1em;
+  overflow-x: auto;
+  line-height: 1.5;
+}
+pre code { background: none; padding: 0; font-size: 1em; }
+img { max-width: 100%; height: auto; display: block; }
+
+.wrap { max-width: 1060px; margin: 0 auto; padding: 0 16px; }
+@media (min-width: 720px) { .wrap { padding: 0 40px; } }
+
+/* Top line: the wordmark and nothing that competes with the hero. */
+.top { display: flex; align-items: center; gap: 10px; padding: 20px 0 0; }
+.top img { width: 28px; height: 28px; }
+.wordmark { font: 700 18px/1 var(--mono); color: var(--fg); text-decoration: none; }
+.wordmark span { color: var(--accent); }
+
+h1, h2, h3 { line-height: 1.2; letter-spacing: -.01em; }
+h1 { font-size: clamp(30px, 6.2vw, 46px); margin: 0 0 .45em; max-width: 16ch; }
+h2 { font-size: 26px; margin: 0 0 .6em; }
+h3 { font-size: 20px; margin: 0 0 .5em; }
+p { margin: 0 0 1em; }
+.lede { font-size: 19px; max-width: 34em; }
+.muted { color: var(--muted); }
+.small { font-size: 15px; }
+
+/* A section is text on the left, the phone on the right; stacked under 860px. */
+.row { display: grid; gap: 28px; padding: 48px 0; border-top: 1px solid var(--line); }
+.row:first-of-type { border-top: 0; }
+.row > * { min-width: 0; }
+.row > .text { max-width: 36em; }
+@media (min-width: 860px) {
+  .row { grid-template-columns: minmax(0, 1fr) 270px; gap: 64px; align-items: start; }
+  .row.hero { padding-top: 56px; }
+}
+.hero { padding-top: 28px; }
+
+.phone {
+  margin: 0;
+  width: 270px;
+  max-width: 100%;
+}
+.phone img {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #0b0d10;
+}
+figcaption { font-size: 14px; color: var(--muted); margin-top: 8px; }
+
+.links { margin: 1.4em 0 .6em; font-size: 17px; }
+.links a { font-weight: 600; }
+.links .sep { color: var(--muted); padding: 0 .35em; }
+
+.diagram { margin: 1.4em 0 0; }
+.diagram img { width: 100%; max-width: 640px; }
+
+.note {
+  border-left: 3px solid var(--accent);
+  padding: 2px 0 2px 14px;
+  margin: 0 0 1.2em;
+}
+ul { padding-left: 1.2em; margin: 0 0 1em; }
+li { margin: 0 0 .35em; }
+
+footer { border-top: 1px solid var(--line); padding: 28px 0 40px; font-size: 15px; color: var(--muted); }
+footer p { margin: 0 0 .4em; }
+
+/* Long-form pages (privacy, 404). */
+.doc { max-width: 40em; padding: 40px 0 24px; }
+.doc h2 { font-size: 21px; margin-top: 1.6em; }

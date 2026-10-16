@@ -61,7 +61,7 @@ const PAIR_MAX_ENTRIES = 50;
 
 export type PairState = "ok" | "unknown" | "expired" | "used";
 
-interface Entry { hash: Buffer; createdAt: number; expiresAt: number; mintedBy: string | null; usedAt: number | null }
+interface Entry { hash: Buffer; createdAt: number; expiresAt: number; mintedBy: string | null; usedAt: number | null; passive: boolean }
 
 /** `WATERPLANE_PAIR_TTL_MS` shortens the lifetime for e2e (floored at 1 s, never
  *  longer than the shared 10 minutes the phone's sentences promise). */
@@ -93,7 +93,7 @@ export class PairStore {
   }
 
   /** A new code; the plaintext exists only in the return value. */
-  mint(mintedBy: string | null): { code: string; expiresAt: number } {
+  mint(mintedBy: string | null, passive = false): { code: string; expiresAt: number } {
     const now = this.now();
     this.prune(now);
     let code = newPairCode();
@@ -101,7 +101,7 @@ export class PairStore {
     const live = this.entries.filter((e) => e.usedAt === null && e.expiresAt > now);
     for (let i = 0; i <= live.length - this.maxOutstanding; i++) this.entries.splice(this.entries.indexOf(live[i]!), 1);
     const expiresAt = now + this.ttlMs;
-    this.entries.push({ hash: hashCode(code), createdAt: now, expiresAt, mintedBy, usedAt: null });
+    this.entries.push({ hash: hashCode(code), createdAt: now, expiresAt, mintedBy, usedAt: null, passive });
     while (this.entries.length > PAIR_MAX_ENTRIES) this.entries.shift();
     return { code, expiresAt };
   }
@@ -127,14 +127,19 @@ export class PairStore {
     return this.stateOf(this.find(code), now);
   }
 
+  /** Does this code pair a passive device? Spends nothing. */
+  isPassive(code: string): boolean {
+    return this.find(code)?.passive === true;
+  }
+
   /** Spend a live code. Anything but "ok" spends nothing. */
-  redeem(code: string): { state: PairState; mintedBy: string | null } {
+  redeem(code: string): { state: PairState; mintedBy: string | null; passive: boolean } {
     const now = this.now();
     this.prune(now);
     const e = this.find(code);
     const state = this.stateOf(e, now);
     if (state === "ok" && e) e.usedAt = now;
-    return { state, mintedBy: e?.mintedBy ?? null };
+    return { state, mintedBy: e?.mintedBy ?? null, passive: e?.passive === true };
   }
 
   /** Live codes right now. */
@@ -302,6 +307,7 @@ export type PairRedeemReply =
   | { ok: false; error: PairRedeemRefusal; message: string };
 
 const NO_PASSWORD_LAN = "This desktop has no password set, so it refuses every device on the Wi-Fi. Pair over Tailscale, or set a password on the paired phone first.";
+const NO_PASSWORD_PASSIVE = "This desktop has no password set, and a passive device needs a token of its own. Set a password on the desktop first, then show a new code.";
 const NO_PASSWORD_NOTE = "This desktop has no password set, so this phone needs no token over Tailscale. It cannot use the Wi-Fi route until a password is set.";
 
 function reply(req: IncomingMessage, res: ServerResponse, status: number, body: unknown, extra: Record<string, string> = {}): void {
@@ -343,14 +349,18 @@ export async function redeemPair(
   const state = deps.store.peek(code);
   if (state !== "ok") return { status: state === "unknown" ? 404 : 410, body: refuse(state) };
   if (!deps.auth.isEnabled() && !trustedPath) return { status: 403, body: refuse("no-password") };
-  if (deps.store.redeem(code).state !== "ok") return { status: 410, body: refuse("used") };
+  // A passive device without a token would be a full one on Tailscale: refused, code unspent.
+  if (!deps.auth.isEnabled() && deps.store.isPassive(code)) return { status: 403, body: refuse("no-password", NO_PASSWORD_PASSIVE) };
+  const spent = deps.store.redeem(code);
+  if (spent.state !== "ok") return { status: 410, body: refuse("used") };
   const net = await deps.net();
   const host: PairRedeemHost = { name: net.name, base: net.base, httpsUrl: net.httpsUrl, ...(net.lanBase ? { lanBase: net.lanBase } : {}) };
   const out: PairRedeemReply = { ok: true, host };
   if (deps.auth.isEnabled()) {
-    const { token, deviceId } = deps.auth.issueToken(normalizeDeviceName(body.deviceName) ?? "paired phone", kind);
+    const { token, deviceId } = deps.auth.issueToken(normalizeDeviceName(body.deviceName) ?? "paired phone", kind, spent.passive ? "passive" : undefined);
     out.token = token;
     out.deviceId = deviceId;
+    if (spent.passive) out.scope = "passive";
     if (presented && deps.auth.deviceFor(presented)) deps.auth.revoke(presented);
   } else {
     out.note = NO_PASSWORD_NOTE;
@@ -382,10 +392,12 @@ export async function handlePairAuthed(req: IncomingMessage, res: ServerResponse
   const path = (req.url ?? "/").split("?")[0];
   if (path !== "/api/pair/mint") return false;
   if (req.method !== "POST") { reply(req, res, 405, { error: "POST only" }); return true; }
-  const { code, expiresAt } = deps.store.mint(deps.auth.deviceFor(tok)?.id ?? null);
+  const passive = (await readJson(req)).passive === true;
+  if (passive && !deps.auth.isEnabled()) { reply(req, res, 409, { error: NO_PASSWORD_PASSIVE }); return true; }
+  const { code, expiresAt } = deps.store.mint(deps.auth.deviceFor(tok)?.id ?? null, passive);
   const net = await deps.net();
   const out: PairMintResponse & { lanBase?: string } = {
-    code, expiresAt, base: net.base,
+    code, expiresAt, base: net.base, ...(passive ? { passive } : {}),
     landingUrl: pairLandingUrl(net.base, code),
     deepLink: pairDeepLink(net.base, code),
     ...(net.lanBase ? { lanBase: net.lanBase } : {}),

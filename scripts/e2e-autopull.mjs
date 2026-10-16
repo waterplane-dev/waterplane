@@ -13,7 +13,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, utimes
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
-import { bootWait } from "./lib-e2e.mjs";
+import { bootWait, waitForHost } from "./lib-e2e.mjs";
 import { E, SLUG, STATE, rootEnv } from "./lib-brand.mjs";
 
 const PORT = 8807;
@@ -97,7 +97,7 @@ bootWait(PORT, 1200, async () => {
     await sleep(600);
     host = spawn("node", ["packages/host/dist/main.js"], { env, stdio: ["ignore", "pipe", "pipe"] });
     host.stderr.on("data", (d) => process.stderr.write("[host] " + d));
-    await sleep(1200);
+    await waitForHost(PORT); // a fixed 1.2 s: a host answers in 3-5 s under WSL
     const afterBoot = await ask({ t: "pull.list" }, (m) => m.t === "pull.list" && m.items.length > 0);
     check(afterBoot.items.some((i) => i.name === "app-e2e.apk"), "queued pull survives a host restart");
 

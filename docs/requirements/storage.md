@@ -9,3 +9,17 @@ Cleanup utilities let the user see and remove accumulated downloads and other st
 App storage lives under the waterplane namespace; the legacy .usmc location still resolves to it.
 - shipped: f8ec634
 
+### R-storage-003 · requested
+Per-user state lives in the state directory (WATERPLANE_STATE_DIR, else XDG_STATE_HOME, else ~/.local/state/waterplane); config lives in ~/.config/waterplane and per-repo state in <repo>/.waterplane.
+- asked: 2026-10-04
+
+### R-storage-004 · shipped
+An overview shows disk usage and free space per volume.
+- asked: 2026-10-06
+- shipped: 13492173
+
+### R-storage-005 · shipped
+The private disk-space plugin gives one-click cleanup for purely temporary files, shows delete buttons only for AI models and temporary files (other large items are display-only), and can scan on demand for large files with a script that uses no AI tokens.
+- asked: 2026-10-07
+- shipped: ac002699
+

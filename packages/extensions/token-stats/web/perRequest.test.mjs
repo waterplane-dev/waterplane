@@ -72,3 +72,15 @@ test("per repo: this week against last, a change only where both are a price", (
   assert.equal(c.change, null);
   assert.equal(rows[0].key, "/r/c", "ordered by what the repo cost this week");
 });
+
+test("per repo under a span: the span against as many days before it", () => {
+  // Days 0-2 at $0.10 a request, days 3-5 at $0.30, day 6 at $1 (outside both 3-day runs).
+  const days = [day(6, ["/r/a", 10, 10])];
+  for (let b = 5; b >= 3; b--) days.push(day(b, ["/r/a", 10, 3]));
+  for (let b = 2; b >= 0; b--) days.push(day(b, ["/r/a", 10, 1]));
+  const { rows } = repoPerRequest(days, [], NOW, 20, { from: key(2), to: key(0) });
+  const a = rows[0];
+  assert.ok(Math.abs(a.cur - 0.1) < 1e-9);
+  assert.ok(Math.abs(a.prev - 0.3) < 1e-9, "the three days before, not seven");
+  assert.equal(a.change, -67);
+});

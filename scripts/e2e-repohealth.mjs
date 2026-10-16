@@ -61,6 +61,7 @@ import { spawn } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { waitForHost } from "./lib-e2e.mjs";
 
 const PORT = 8892;
 const ROOT = realpathSync(mkdtempSync(join(tmpdir(), `${SLUG}-repohealth-`)));
@@ -404,7 +405,7 @@ const post = (path, body = {}) =>
  */
 const view = (b) => (b && typeof b.view === "object" && b.view ? b.view : b) ?? {};
 
-await sleep(1800);
+await waitForHost(PORT);
 
 // ── §1 which repos even have the tool ───────────────────────────────────────
 const listed = (await api("/api/repos")).body?.targets ?? [];

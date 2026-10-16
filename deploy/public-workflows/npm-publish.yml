@@ -1,0 +1,169 @@
+name: npm publish
+
+# PARKED (2026-10-10): kept outside .github/workflows/ until reviewed for launch; install it into the
+# PUBLIC repo's .github/workflows/ by hand. Why: docs/notes/distribution.md, "Publishing a release".
+#
+# Publishes the npm package WITH a provenance attestation, from the PUBLIC repo only.
+#
+# Why here and not on the desktop: npm provenance is a signed statement, made by this CI run's OIDC
+# identity, that "these bytes were built by this workflow from this commit of this repo". So the
+# tarball is built HERE, from the release tag, and never copied in from the desktop's dist-release/:
+# publishing bytes built elsewhere would make the attestation vouch for a build it never saw.
+#
+# Auth is npm trusted publishing (OIDC): there is no NPM_TOKEN secret anywhere. The package's
+# settings on npmjs.com name this repo and this workflow file as its trusted publisher.
+#
+# Started by `npm run release:publish` on the desktop: its undraft makes the GitHub release
+# "published", which fires this; the desktop then waits for the version to appear on npm
+# (scripts/release/npm-verify.mjs). Why each step: docs/notes/distribution.md, "Publishing a release".
+#
+# Re-run a failed publish ON THE TAG (provenance records the commit a run started on, so a run
+# started on main would attest main):
+#   gh workflow run npm-publish.yml --repo waterplane-dev/waterplane --ref v1.2.3 -f tag=v1.2.3
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish, e.g. v1.2.3. Start the run ON that tag (Use workflow from: the tag)."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write # the OIDC token npm trusted publishing and the provenance signature need
+
+concurrency:
+  group: npm-publish-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # Hard guard: only ever on the public repo. The private repo carries this file too (the public
+    # snapshot is made from it) and must never publish. A literal, because `if:` runs before any
+    # checkout can read the brand; scripts/release/npm-publish-workflow.test.mjs holds it equal to
+    # BRAND.githubOrg/BRAND.slug, and a step below checks it again against the checked-out brand.
+    if: github.repository == 'waterplane-dev/waterplane'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - name: The run is on the release tag
+        run: |
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::'$TAG' is not a release tag (v<major>.<minor>.<patch>). Nothing was published."
+            exit 1
+          fi
+          if [ "$GITHUB_REF" != "refs/tags/$TAG" ]; then
+            echo "::error::This run started on $GITHUB_REF, not refs/tags/$TAG. Provenance records the commit a run starts on, so start it ON the tag: gh workflow run npm-publish.yml --ref $TAG -f tag=$TAG. Nothing was published."
+            exit 1
+          fi
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: refs/tags/${{ github.event.release.tag_name || inputs.tag }}
+          persist-credentials: false
+
+      - name: The checkout is the commit the run attests
+        run: |
+          HEAD_SHA="$(git rev-parse HEAD)"
+          if [ "$HEAD_SHA" != "$GITHUB_SHA" ]; then
+            echo "::error::$TAG is $HEAD_SHA, but this run is for $GITHUB_SHA: the provenance would name another commit than the bytes. Nothing was published."
+            exit 1
+          fi
+
+      # No `cache: npm`: a publishing job restores nothing another run could have written.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: deploy/node-version
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm >= 11.5.1. Pinned exactly, so the publishing CLI does not move
+      # with the Node pin.
+      - name: npm CLI for trusted publishing
+        run: |
+          npm install -g npm@11.12.1
+          node -e '
+            const [a, b, c] = process.argv[1].split(".").map(Number);
+            if (a < 11 || (a === 11 && (b < 5 || (b === 5 && c < 1)))) { console.error(`npm ${process.argv[1]} is older than 11.5.1, which trusted publishing needs`); process.exit(1); }
+            console.log(`npm ${process.argv[1]}`);
+          ' "$(npm --version)"
+
+      - name: package.json's version is the tag
+        run: |
+          VERSION="$(node -p 'JSON.parse(require("fs").readFileSync("package.json", "utf8")).version')"
+          if [ "v$VERSION" != "$TAG" ]; then
+            echo "::error::package.json at $TAG says version $VERSION, so it would publish v$VERSION under the tag $TAG. Nothing was published."
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - run: npm ci
+
+      - name: The package name and this repo, from the brand
+        run: |
+          npm run build:shared
+          PKG="$(node --input-type=module -e 'const { BRAND } = await import("./packages/shared/dist/brand.js"); console.log(BRAND.slug)')"
+          REPO="$(node --input-type=module -e 'const { BRAND } = await import("./packages/shared/dist/brand.js"); console.log(`${BRAND.githubOrg}/${BRAND.slug}`)')"
+          if [ "$REPO" != "$GITHUB_REPOSITORY" ]; then
+            echo "::error::The brand names github.com/$REPO, this run is in $GITHUB_REPOSITORY: the job guard above is stale. Nothing was published."
+            exit 1
+          fi
+          echo "PKG=$PKG" >> "$GITHUB_ENV"
+
+      - name: Already on npm?
+        id: npm
+        run: |
+          set +e
+          node scripts/release/npm-verify.mjs "$PKG" "$VERSION"
+          code=$?
+          set -e
+          if [ "$code" = 0 ]; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "$PKG@$VERSION is already on npm: nothing to publish, skipped." | tee -a "$GITHUB_STEP_SUMMARY"
+          elif [ "$code" = 3 ]; then
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Could not tell whether $PKG@$VERSION is on npm. Nothing was published."
+            exit 1
+          fi
+
+      # The same build the desktop makes (scripts/release/build.mjs): `npm run build`, then the npm
+      # tarball with npm-shrinkwrap.json and @waterplane/shared bundled. --unsigned: the Ed25519
+      # release key signs the curl|sh tarball on the desktop and never leaves it; the npm .tgz is
+      # not signed by that key on either route — on this one, provenance is its signature.
+      - name: Build the npm tarball from the tag
+        if: steps.npm.outputs.published == 'false'
+        run: npm run release:build -- --unsigned
+
+      - name: The tarball is this version, with its shrinkwrap
+        if: steps.npm.outputs.published == 'false'
+        run: |
+          TGZ="dist-release/$PKG-$VERSION.tgz"
+          if [ ! -f "$TGZ" ]; then
+            echo "::error::release:build made no $TGZ. Nothing was published."
+            ls -la dist-release || true
+            exit 1
+          fi
+          GOT="$(tar -xOzf "$TGZ" package/package.json | node -e 'let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => { const p = JSON.parse(s); console.log(`${p.name}@${p.version}`); })')"
+          if [ "$GOT" != "$PKG@$VERSION" ]; then
+            echo "::error::$TGZ is $GOT, not $PKG@$VERSION (the tag $TAG). Nothing was published."
+            exit 1
+          fi
+          if ! tar -tzf "$TGZ" | grep -qx 'package/npm-shrinkwrap.json'; then
+            echo "::error::$TGZ has no npm-shrinkwrap.json: npm i -g would re-resolve every transitive dependency. Nothing was published."
+            exit 1
+          fi
+          echo "TGZ=$TGZ" >> "$GITHUB_ENV"
+
+      - name: npm publish --provenance
+        if: steps.npm.outputs.published == 'false'
+        run: npm publish "$TGZ" --provenance --access public
+
+      - name: On npm, with its shrinkwrap and a provenance attestation
+        if: steps.npm.outputs.published == 'false'
+        run: |
+          node scripts/release/npm-verify.mjs "$PKG" "$VERSION" --wait 300 --check
+          echo "Published $PKG@$VERSION from $TAG ($GITHUB_SHA) with provenance: https://www.npmjs.com/package/$PKG/v/$VERSION" | tee -a "$GITHUB_STEP_SUMMARY"

@@ -75,6 +75,9 @@ test("the table matches the published list prices", () => {
   assert.deepEqual(rateFor("claude-sonnet-5-5"), { input: 2, output: 10 });
   assert.deepEqual(rateFor("claude-sonnet-4-6"), { input: 3, output: 15 });
   assert.deepEqual(rateFor("claude-haiku-4-5"), { input: 1, output: 5 });
+  // Haiku 5.5's SHORT-prompt card (≤100K): the list's figure, cache at the multipliers.
+  assert.deepEqual(rateFor("claude-haiku-5-5"), { input: 0.1, output: 0.5 });
+  assert.ok(isPriced("claude-haiku-5-5[1m]"), "the long-context marker prices like the base id");
   assert.ok(PRICES_AS_OF.match(/^\d{4}-\d{2}-\d{2}$/), "the table says when it was taken");
 });
 

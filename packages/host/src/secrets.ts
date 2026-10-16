@@ -20,13 +20,13 @@
  *            neither ignored nor tracked, so a secret can never land in history.
  */
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { BRAND } from "@waterplane/shared";
 import { configDir } from "./branddirs.js";
 import { contained } from "./paths.js";
 import { expandHome } from "./pathx.js";
-import { writeTextAtomic } from "./jsonstore.js";
+import { writeTextAtomic, writeTextAtomicKeepMode } from "./jsonstore.js";
 
 /**
  * Fixed per-user dir for the daemon's own (host-scope) secrets, independent of
@@ -258,7 +258,7 @@ export function setSecret(opts: SetSecretOpts): SecretResult {
       const cur = existsSync(gi) ? readFileSync(gi, "utf8") : "";
       const has = cur.split("\n").some((l) => l.trim() === file || l.trim() === "/" + file);
       if (!has) {
-        writeFileSync(gi, (cur && !cur.endsWith("\n") ? cur + "\n" : cur) + file + "\n");
+        writeTextAtomicKeepMode(gi, (cur && !cur.endsWith("\n") ? cur + "\n" : cur) + file + "\n");
         addedToGitignore = true;
       }
     } catch {

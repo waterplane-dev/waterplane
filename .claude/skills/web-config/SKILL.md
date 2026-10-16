@@ -13,7 +13,7 @@ How this app is configured and what it is allowed to launch: the Settings screen
   section is absent exactly when a broken heuristic matters), plus one toast when an arriving rollup
   is WORSE than the last seen. `healthy` and `unknown` render nothing.
 - `PluginsSettings.tsx` (`features/plugins`, with its session-menu group and the decision log) —
-  **UI code only from in-repo extensions in the bundle, never lazily, never outside the SDK** (plugins.md, "Trust"); a plugin without it DECLARES fields, actions, toggles, a badge and a status
+  plugin UI per CLAUDE.md (`local/extension-boundary`); a plugin without it DECLARES fields, actions, toggles, a badge and a status
   line (`shared/plugin.ts`) and these draw them with the app's own controls. A plugin's fields are
   dynamic, so they NEST (no `id`) inside the one catalogued row `plugins` — a new catalogue row per
   plugin would fail `settingsIndex.test.mjs` and could never be searched. `plugin.set` carries ONLY
@@ -37,21 +37,18 @@ How this app is configured and what it is allowed to launch: the Settings screen
   a chevron ONLY when it opens another screen). `disabled` is gone from three rows: `cant` draws the
   REASON where the button was (`Unavailable.tsx`), `busy` is a running verb in its own glyph.
   **`SetNote` folds all but one line** into `hint-more`; **`SetWarn` never folds** — an absence and
-  a warning are what must be read unasked. **Search is `settingsIndex.ts`**, pure and node-tested:
-  keywords carry the words the LABELS do not (dark · font · password · battery), terms are **ANDed
-  not ORed**, substrings so it narrows as you type. **A group carries NO keywords of its own** — one
-  did, and `gemini` on the Sessions group matched all fourteen session rows instead of the eight
-  about the (then in-core) oracle; its TITLE still matches, because searching a group name asks for the group.
+  a warning are what must be read unasked. **Search is `settingsIndex.ts`** — keywords carry the
+  words the LABELS do not; its matching rules (AND, substring, no group keywords, group title
+  matches) are pinned by `settingsIndex.test.mjs`.
   **A group never skips rendering its rows** — one did, and the rows inside never counted
   themselves, so the filter bar read **"1 of 8" on a screen holding 54**; only the SECTION hides
   (`gone`, exact and `:has()`-free, plus a `:has()` rule for a group whose every row is absent).
   **The counts are the RENDER's, never the catalogue's length** (a third of the rows are
   conditional): rows push their ids into a tally, and `SetFilterBar` is drawn LAST and floated up
-  with `order: -1` so it reads this pass rather than trailing a `useEffect`. `settingsIndex.test.mjs`
-  reads the sheet (`core/settings/`) and every feature `*Settings.tsx` BACK and fails on a row with no entry (on screen, unfindable), an entry with no
-  row (a heading over nothing), or a feature row whose manifest `group` is not its catalogue group
-  (drawn under one heading, found under another). Seventeen sections are SEVEN groups; the three always-on strips moved
+  with `order: -1` so it reads this pass rather than trailing a `useEffect`. Screen ⇄ catalogue
+  ⇄ manifest group agreement is `settingsIndex.test.mjs`'s. Seventeen sections are SEVEN groups; the three always-on strips moved
   into Appearance (a strip costs a line of THIS screen — the text-size question, not a diagnostic).
+  **`local-sessions`** (*local model sessions at once*: desktop default · 1 · 2 · 3 · no limit) writes the synced `LOCAL_SESSIONS_KEY` (`localSessionsSetting`, `""` deletes the key ⇒ the desktop's `WATERPLANE_LOCAL_SESSIONS`, else 1); the host's `localslot.ts` reads it.
 - `settings.ts` / `hostUrl.ts` / `hints.ts` + `settingsPush.ts` — three places where a rule is enforced by **patching a
   global** rather than a helper call sites must remember. All three fail silently otherwise, weeks
   later, on the device you aren't holding. Keep it that way. **`AdoptGuard` may RETURN the string to
@@ -118,7 +115,9 @@ How this app is configured and what it is allowed to launch: the Settings screen
   people to tap through it. Residual STATED not closed (a hosted model via the backend's own unnamed
   default slips it). Client-side — **the host never refuses a spawn over it**. Hangs off
   `askLaunchFirst`; `createOp.test.mjs` fails BY NAME on a start site that stops handing over its launch.
-- `ModelField.tsx` + `LaunchAskSheet.tsx` — **choosing a model, and choosing WHEN to be asked.**
+- `ModelField.tsx` + `LaunchAskSheet.tsx` + `LaunchPicker.tsx` — **choosing a model, and choosing WHEN to be asked.**
+  `LaunchPicker` is the backend/wheel/effort/version set, ONCE: the ask and the fan-out's sweep row
+  both draw it (they were two looks for one decision); the caller owns the pick and what is remembered.
   `ModelField` is the one model control before a session exists (new-session defaults + the ask):
   ONE drop-down with *Aliases* and *Versions*, the typed field only for a genuinely empty catalogue,
   and **a stored id the catalogue does not name shown as ITSELF** — a `<select>` whose value matches
@@ -162,10 +161,9 @@ How this app is configured and what it is allowed to launch: the Settings screen
   `fork ?? transcript`, `resumePick ?? transcript`, `contextSeries ?? contextMeter`. Read raw,
   `undefined` is falsy and deletes working controls from every host one version behind, so the
   resolution lives ONLY in `hasCap`/`capReason` and no call site touches `caps.fork` itself —
-  enforced by **`local/no-raw-optional-cap`**, not by `backendCaps.test.mjs` (which pins the
-  resolution and cannot see a raw read in another file; that claim was false until the rule existed).
+  enforced by **`local/no-raw-optional-cap`**.
 - **A shell is a backend with `kind: "shell"`** (`isShellBackend`, `shellBackend`, `shellQuietLine`):
-  not in the picker (`pickableBackends`), opened by its own action, and it gets ONE quiet line in
+  not in the picker (`agentBackends`), opened by its own action, and it gets ONE quiet line in
   place of the claude-only strip — never a row of greyed gaps.
   `sessionCants` is the strip as ONE builder: the fork sentence only where a READER EXISTS (with no
   transcript that absence is already said once), and `[]` for claude.
@@ -179,3 +177,4 @@ How this app is configured and what it is allowed to launch: the Settings screen
   where the tap is decided, not in the cants strip of the session you land in. Titles say the EFFECT
   (`resumeHint`), never a command the row may not run. `createOp.test.mjs` fails on a site that reads
   either field directly.
+- `BillingSettings.tsx` — billing profile override and the dollar periods + caps form; written with shared `withLimit`/`withoutLimit`. Reasoning: [web.md](docs/notes/web.md).

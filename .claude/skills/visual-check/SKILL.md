@@ -104,14 +104,6 @@ and it should be a choice rather than a reflex.
 An image left resident in a long session with no active reason. Once it has
 answered its question it goes on costing the same as it did when it was useful.
 
-## Naming a file so it resolves
-
-Name any artifact by its FULL path every time you mention it —
-`.claude/outbox/capture-home-2026-09-13-a1b2.png`, never a bare filename and
-never "the PNG in the outbox". That path is what the reader turns into the
-picture; a bare name only resolves when the listing holds exactly one media file
-by that name, and never in prose.
-
 ## Triggering a capture without spending tokens on it
 
 Ask the host for the run and read the verdict out of the response body. Nothing

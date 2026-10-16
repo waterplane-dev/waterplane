@@ -56,6 +56,28 @@ export function fieldValue(p: PluginView, f: PluginField): PluginValue {
   return p.values[f.key] ?? f.default;
 }
 
+/**
+ * What the Settings search finds ONE plugin's section by: its name, id,
+ * description, the `use <name>` switch, its field labels and choice labels,
+ * and its action labels. The section hides by these under a query
+ * (`useNestedShown`), so they are the same words the row is found by.
+ */
+export function pluginWords(p: PluginView): string {
+  const m = p.manifest;
+  return [m.name, m.id, m.description ?? "", `use ${m.name}`,
+    ...(m.settings ?? []).flatMap((f) => [f.label, ...(f.kind === "choice" ? f.options.map((o) => o.label) : [])]),
+    ...(m.actions ?? []).map((a) => a.label)].filter(Boolean).join(" ");
+}
+
+/**
+ * What the Settings search finds the `plugins` row by, beyond its catalogued
+ * words: every installed plugin's `pluginWords` — "sensors" must land on the
+ * Mac sensors section.
+ */
+export function pluginSearchWords(list: readonly PluginView[] | null): string {
+  return (list ?? []).map(pluginWords).join(" ");
+}
+
 /** The actions a plugin's Settings section draws. */
 export function globalActions(p: PluginView): PluginActionDef[] {
   return (p.manifest.actions ?? []).filter((a) => a.scope === "global");

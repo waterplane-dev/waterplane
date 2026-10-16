@@ -8,7 +8,7 @@
  * is the pipe/CLI surface and the per-session draft, the one the compose bar
  * has always had (`web-send`) — nothing new is hand-rolled.
  */
-import { useLayoutEffect, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, type PointerEvent as ReactPointerEvent } from "react";
 import {
   ArrowDown, ArrowUp, Camera, Check, ChevronsUpDown, Eye, EyeOff, Hourglass, KeyRound, ListTodo, Loader, NotebookPen, Paperclip, Pencil,
   Plus, Quote, SendHorizontal, Terminal as TerminalIcon, Trash2, Waypoints, X, Zap,
@@ -34,12 +34,21 @@ import { track } from "../../usage";
 import { useSnippets } from "../../features/snippets";
 import { openBacklogIn } from "../../features/backlog";
 import type { ComposeApi } from "./useCompose";
+import { useFileDrop } from "./useFileDrop";
 import { isShellBackend } from "../../backendCaps";
+import { routeFiles } from "../../features/images";
+import { isAnnotatable } from "../../media";
+import { pastedImages } from "../../pasteImages";
+import { isLaterId, isPendingId } from "../queue/logic.ts";
 
 const ICON = 16;
 
 /** Stop a tap from blurring the compose box (which would dismiss the keyboard). */
 export const keepFocus = (e: ReactPointerEvent) => e.preventDefault();
+
+function coarsePointer(): boolean {
+  try { return window.matchMedia?.("(pointer: coarse)").matches ?? false; } catch { return false; }
+}
 
 export interface ComposeBarProps {
   api: ComposeApi;
@@ -76,10 +85,23 @@ export function ComposeBar(p: ComposeBarProps) {
   const literal = cliMode || isShellBackend(null, active.backend);
 
   const snippets = useSnippets();
+  const { dragOver, dropProps } = useFileDrop();
   // The box remounts at two rows under every sheet, and CLI mode swaps its
   // value: measure again on both, or a long draft reads through a porthole.
   // eslint-disable-next-line react-hooks/exhaustive-deps -- growCompose is the draft hook's, reading by ref
   useLayoutEffect(() => { api.growCompose(); }, [cliMode]);
+  // **A fresh session is somewhere to type**: the "+" opens a pending screen,
+  // and on a desktop the next thing done is typing — so the caret goes into
+  // the box. Keyed on the PENDING id (one per create), never on the switch to
+  // the real id, which would steal focus from wherever it has gone since. Not
+  // on a touch screen: a focus there raises the keyboard over the screen
+  // nobody has read yet.
+  const activeId = active?.id;
+  const later = isLaterId(activeId);
+  useEffect(() => {
+    if (!isPendingId(activeId) || coarsePointer()) return;
+    composeRef.current?.focus();
+  }, [activeId, composeRef]);
   return (
     <>
       {/* **The armed aim, said out loud for as long as it is not this session.**
@@ -94,7 +116,8 @@ export function ComposeBar(p: ComposeBarProps) {
           conversation on screen*), which no badge can say — and the line
           carries the one tap that puts it back. `composeSend.ts` owns the
           words. */}
-      {active && (() => {
+      {/* Not on `+ later`: the screen itself says where the words go. */}
+      {active && !later && (() => {
         const note = composeAimNote(sendWhere, {
           repoName: repoForCwd(active.cwd)?.repoName ?? baseName(active.cwd),
           sessionName: aimedSession ? sessionPickLabel(aimedSession) : null,
@@ -112,7 +135,7 @@ export function ComposeBar(p: ComposeBarProps) {
         );
       })()}
 
-      <div className="compose">
+      <div className={`compose${dragOver ? " drop-over" : ""}`} {...dropProps}>
         {(uploadPending || uploadRowLinger) && (
           <div className="upload-progress" title="images upload in the background; a prompt naming one is delivered after it lands">
             <div className="upload-progress-line">
@@ -218,7 +241,8 @@ export function ComposeBar(p: ComposeBarProps) {
 
                 It applies to every row under it, including *keep it on the pad*
                 — a note is filed against the repo its words were aimed at. */}
-            <div className="send-where">
+            {/* Not on `+ later`: a new session is the only answer there is. */}
+            {!later && <div className="send-where">
               <span className="send-where-lead">{WHERE_LEAD}</span>
               {composeWhere().map((w) => (
                 <button key={w.key}
@@ -240,7 +264,7 @@ export function ComposeBar(p: ComposeBarProps) {
                   {w.label}
                 </button>
               ))}
-            </div>
+            </div>}
             {/* The pick `other` needs. Drawn IN the strip rather than behind a
                 sheet: the whole reason this toggle exists is that leaving this
                 screen to answer WHERE cost five taps. An empty list is a
@@ -364,6 +388,7 @@ export function ComposeBar(p: ComposeBarProps) {
         <textarea
           ref={composeRef}
           className={cliMode ? "pipe" : undefined}
+          data-compose=""
           // In CLI mode the box holds a pad of spaces and never any of your
           // words: what you type is already on the screen above, echoed by the
           // CLI itself, so a second copy of it down here is only a second place
@@ -380,6 +405,16 @@ export function ComposeBar(p: ComposeBarProps) {
           spellCheck={literal ? false : undefined}
           enterKeyHint={cliMode ? "enter" : enterSends ? "send" : "enter"}
           onKeyDown={cliMode ? onPipeKey : onComposeKey}
+          // Ctrl+V of a screenshot takes the picker's route — the annotator,
+          // then the upload — rather than pasting nothing (`pasteImages.ts`).
+          onPaste={cliMode ? undefined : (e) => {
+            const images = pastedImages(e.clipboardData, isAnnotatable);
+            if (!images.length) return;
+            e.preventDefault();
+            if (!activeRepoId) { showToast("not a known repo — the picture was not attached"); return; }
+            track("action:attach.paste");
+            routeFiles(images, activeRepoId);
+          }}
           onFocus={() => setComposeFocused(true)}
           onBlur={() => setComposeFocused(false)}
         />
@@ -433,13 +468,11 @@ export function ComposeBar(p: ComposeBarProps) {
           {(() => {
             // …and the tap's OTHER cut: the sheet's default view hides archived
             // rows, so a count that included them described a longer list than
-            // the one it opened. The smart pick makes that routine rather than
-            // rare — every applied merge archives N originals, so a repo merged
-            // 3→1 over-counted by exactly 2 the moment the feature worked.
+            // the one it opened.
             // done/failed rows stay in, because the default view draws those.
             //
-            // …and `hiddenByArchive`, not `!archived`: putting a RUNNING merged
-            // row's originals back archives that row while it runs, and a badge
+            // …and `hiddenByArchive`, not `!archived`: a row archived while it
+            // RUNS is still doing something, and a badge
             // that drops by one for a session still typing is the count
             // describing a shorter list than the sheet it opens.
             const here = (active ? visibleBacklogItems.filter((it) => it.repoDir === active.cwd) : visibleBacklogItems)

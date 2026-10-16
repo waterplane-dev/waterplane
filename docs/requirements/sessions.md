@@ -124,3 +124,91 @@ A session can be named by hand through a dedicated header button; the typed name
 - asked: 2026-10-01
 - shipped: b6f9684
 
+
+### R-sessions-029 · requested
+A claude session's permission mode (manual, accept edits, plan, auto — and bypass / don't ask where the session has them) can be read and switched from the phone the way the desktop's mode menu does, following a change typed at the desk; ultracode shows as the CLI last confirmed it. A mode the session's shift+tab cycle does not hold, an open question box or an unreadable footer is said in words, never guessed.
+- asked: 2026-10-07
+### R-sessions-030 · requested
+When a new project folder is opened for the first time, waterplane asks whether to trust it; until trusted, the folder runs in restricted mode and its hooks do not execute.
+- asked: 2026-10-04
+
+### R-sessions-031 · requested
+Tapping the worktree chip does not apply the note filter.
+- asked: 2026-10-05
+
+### R-sessions-032 · requested
+The latest item shows at the top of the list.
+- asked: 2026-10-06
+
+### R-sessions-033 · shipped
+A shared item can go to the currently open session, a new session, or an existing session the user selects.
+- asked: 2026-10-06
+- shipped: c1d7d699
+
+### R-sessions-034 · requested
+Sessions started from the backlog or by the scheduler appear in the main session view.
+- asked: 2026-10-06
+
+### R-sessions-035 · shipped
+A worktree is shown next to the session it belongs to, not visually closer to the session below it.
+- asked: 2026-10-06
+- shipped: dc5373ce
+
+### R-sessions-036 · requested
+The user can see the kick-off progress of a session.
+- asked: 2026-10-08
+
+### R-sessions-037 · shipped
+Open sessions are numbered per repo from 0, in list order; only open sessions get numbers and a filter never renumbers the rest.
+- asked: 2026-10-09
+- shipped: 7e2cb96c
+
+### R-sessions-038 · shipped
+Sending a file to a session shows a picker of the live sessions to choose from, and a separate new-session button sits beside it.
+- asked: 2026-10-09
+- shipped: f15b3ed8
+
+### R-sessions-039 · shipped
+A repo with no active session wears the same header and fold as the others; opened, it shows a "No active session" line pointing to the + button.
+- asked: 2026-10-12
+- shipped: b6df0dab
+
+
+### R-sessions-040 · shipped
+Every repo header carries two worded buttons right under the repo name: "+ now" opens a new session at once, "+ later" opens the Send sheet aimed at that repo with its When on "when it's free". They replace the header's bare + and the "⋯" menu's send….
+- asked: 2026-10-13
+- changed: "+ later" opens a session screen, not the Send sheet — R-sessions-046
+
+### R-sessions-041 · shipped
+A session can be flagged for follow up, beside its star, with a flag icon. The flag is one-shot: opening the session never clears it, only the person's explicit "done" tap does. It is kept per conversation, so it survives restarts, a closed session and a resume, and a bulk close spares flagged sessions.
+- asked: 2026-10-14
+- shipped: 308625ba, dc25a182
+
+### R-sessions-042 · shipped
+Who set the follow-up flag is visible in its colour and words: the person by hand, the person's launch option, or the session's own agent (with its one-line reason under the row and in the notification).
+- asked: 2026-10-14
+- shipped: 308625ba, dc25a182
+
+### R-sessions-043 · shipped
+A backlog item, a scheduled prompt and a fan-out can be launched with "Flag for follow up when done", off unless ticked; the session gets the flag when it is done (no turn running, no box open, nothing still running under it). A run that failed or stopped on a usage limit never gets it from this option.
+- asked: 2026-10-14
+- shipped: bea81941, dc25a182
+
+### R-sessions-044 · shipped
+An agent in a waterplane-driven session can flag its own session for follow up with a one-line reason when it finishes with something the person should read; it can set the flag but never clear it.
+- asked: 2026-10-14
+- shipped: f66af4b4, dc25a182
+
+### R-sessions-045 · shipped
+A count of flagged sessions shows on the repo group; tapping it shows exactly those sessions, saying "n of N" with a clear button.
+- asked: 2026-10-14
+- shipped: dc25a182
+
+### R-sessions-046 · shipped
+"+ later" (and a worktree row's send button) opens the same session screen as "+ now", with the same prompt box — paste, drop, chain, dictation — instead of a separate prompt input in the Send sheet. Where the terminal would be, it says the session starts only once the backlog item runs. Send queues it for a new session when the repo is free; "elsewhere or later…" puts it on a clock. Nothing is queued until Send, and the draft stays for the next "+ later" on that repo.
+- asked: 2026-10-15
+
+### R-sessions-047 · shipped
+An emergency halt stops every AI process waterplane started on the desktop (agent sessions, attached or detached, with their tools, and headless model runs) with a hard kill after a short grace, and latches: nothing automatic (schedules, backlog, limit resumes) starts again until the person lifts it, across host restarts. Processes started outside waterplane are not reached yet.
+- asked: 2026-10-15
+- shipped: 68ae6d70

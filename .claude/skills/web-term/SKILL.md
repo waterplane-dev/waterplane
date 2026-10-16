@@ -16,7 +16,11 @@ The two surfaces that show what the CLI is doing — the live terminal and the t
   each it still showed TWO, with four inside a scroll region Android draws no scrollbar on. In the
   terminal view a box is answered the terminal's way (press the digit); a card there only covers the
   CLI drawing the same question. So the surfaces that draw it are the two with a scroll of their own,
-  and nothing here is capped or clamped. **The commit row is never inside the option list** (on a
+  and nothing here is capped or clamped. **One exception, the trust box** (`termAnswers.ts`, kind
+  `trust` only): the terminal view draws this card as an OVERLAY at the grid's bottom (`.term-answer`,
+  its own scroll, never a PTY resize), because it is a new person's first box, before they know the
+  key bar, and 2.1.293 draws it unnumbered with the cursor on "No, exit". Widen that predicate only
+  for a box with the same argument. **The commit row is never inside the option list** (on a
   multi-select Submit is the only control that answers). Every tap is still `answerPrompt` — durable,
   fingerprinted, refused host-side once the box is gone — **no new send path**; sharing one body is
   what stopped the sheet's copy sending a DIGIT at a `nav` box.
@@ -51,9 +55,8 @@ The two surfaces that show what the CLI is doing — the live terminal and the t
 - `Terminal.tsx` + `useLinger` — **a resize repaints the whole screen, so layout churn IS flicker**:
   report geometry only when cols/rows changed, transient strips linger and keep stable height.
   **A fit measured on a COLLAPSED container is not reported at all** (`drawableViewport`,
-  `shared/ptysize.ts`): `FitAddon` answers for a no-height box too, and the `54x3` it reported left a
-  session the CLI could not draw a composer in, so every send into it came back unconfirmable. The
-  last-reported geometry is deliberately NOT updated when a report is withheld, or the real one that
+  `shared/ptysize.ts`, whose bullet in `shared` has the `54x3` reason): `FitAddon` answers for a
+  no-height box too. The last-reported geometry is deliberately NOT updated when a report is withheld, or the real one that
   follows is skipped as a no-change.
 - `screenlog.ts` + `ScrollbackSheet.tsx` — **scrolling the TUI is a REMOTE operation**, so a dead link
   means the gesture does nothing. Lines that scrolled off are archived per session in IndexedDB and an
@@ -76,3 +79,10 @@ The two surfaces that show what the CLI is doing — the live terminal and the t
 - `cliKeys.ts` — **CLI mode**: the compose box becomes a raw key pipe, per device, NOT synced. Android
   soft keyboards report no `keydown` for letters, so the box holds a pad of spaces and every `input`
   is diffed. **Don't advance the baseline mid-composition, and don't reset the value through state.**
+- `strayKeys.ts` (`core/session/`) — **a desktop key typed at no field goes to the terminal**, then
+  the terminal keeps the keyboard; through `sendInput`, never a new send path. **A stray Esc, any
+  Ctrl/Alt/Meta chord and Tab are NEVER forwarded** — a stray Esc or ^C interrupts a running turn;
+  those reach the CLI only from the FOCUSED terminal. Enter/Space on a button activate it. Decided
+  after every other keydown handler (`escape.ts`'s reason) and off while a panel, dialog or confirm
+  is over the grid. The focused grid SAYS it has the keys (wide CSS), and Ctrl+C over a selection
+  copies (`Terminal.tsx`'s key handler) instead of interrupting.

@@ -5,6 +5,8 @@ import {
   type ActiveHint,
 } from "./hints";
 import { track } from "./usage";
+import { prefs, setPref, usePref } from "./core/prefs";
+import { showToast } from "./toast";
 
 /**
  * Renders whatever `hints.ts` decided to say, and the explain-mode banner.
@@ -18,13 +20,22 @@ export function HintLayer() {
   const [explain, setExplain] = useState(explainMode());
 
   useEffect(() => onHintCard(setHint), []);
-  useEffect(() => onExplainChange(setExplain), []);
+  // The one-time ask: the first time explain mode is LEFT, the person has just
+  // used the `?` and knows what it does — so ask whether it may go, to give
+  // the headers its room back. Asked on leaving, never on entering: the
+  // question only makes sense after the answer to "what is this button".
+  const [askChip, setAskChip] = useState(false);
+  useEffect(() => onExplainChange((on) => {
+    setExplain(on);
+    if (!on && prefs.get("hintChip") === "") setAskChip(true);
+  }), []);
 
   // Explain mode intercepts every tap, so it must be leavable by a key too —
   // on a desktop the banner's Done button can be off in a corner of a sheet.
   useEffect(() => {
     if (!explain) return;
-    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setExplainMode(false); };
+    // preventDefault: answered here, so `core/layout/escape.ts` adds no Back.
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") { e.preventDefault(); setExplainMode(false); } };
     window.addEventListener("keydown", esc);
     return () => window.removeEventListener("keydown", esc);
   }, [explain]);
@@ -36,6 +47,26 @@ export function HintLayer() {
           <HelpCircle size={14} />
           <span>Explain mode — tap any button to read what it does. Nothing runs.</span>
           <button className="key" data-nohint onClick={() => setExplainMode(false)}><X size={14} /> done</button>
+        </div>
+      )}
+      {askChip && !hint && (
+        // Backdrop = not answered: asked again next time, like a hint card.
+        <div className="hint-backdrop" onClick={() => setAskChip(false)}>
+          <div className="hint-card" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <div className="hint-card-head"><HelpCircle size={16} /><span>Keep the ? button?</span></div>
+            <p className="hint-card-what">Now you know what it does. Long-pressing any button explains it too, so the ? can go
+              to give the headers their space back — in the launcher and in every session.</p>
+            <p className="hint-card-when">Settings › Writing &amp; reading brings it back, or resets the whole UI to its defaults.</p>
+            <div className="hint-card-acts">
+              <button className="key" data-nohint onClick={() => { setPref("hintChip", "asked"); setAskChip(false); }}>keep it</button>
+              <span className="spacer" />
+              <button className="send" data-nohint onClick={() => {
+                track("action:hints.chipHidden");
+                setPref("hintChip", "hidden"); setAskChip(false);
+                showToast("? removed — Settings › Writing & reading brings it back");
+              }}><X size={14} /> remove it</button>
+            </div>
+          </div>
         </div>
       )}
       {hint && (
@@ -88,6 +119,9 @@ export function HintLayer() {
 export function HintToggle({ compact = false }: { compact?: boolean }) {
   const [on, setOn] = useState(explainMode());
   useEffect(() => onExplainChange(setOn), []);
+  // Removed by the one-time ask (or the Settings switch) — from BOTH headers,
+  // since this one component is what each of them draws.
+  if (usePref("hintChip") === "hidden") return null;
   return (
     <button className={`key hint-toggle${on ? " on" : ""}`} data-nohint
       aria-pressed={on}

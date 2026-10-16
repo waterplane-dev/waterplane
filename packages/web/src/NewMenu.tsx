@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Check, Rocket } from "lucide-react";
+import { Check, Loader2, Rocket } from "lucide-react";
 import type { RepoTarget } from "@waterplane/shared";
 import { api, isOffline } from "./api";
 import { track } from "./usage";
 import { SheetHead } from "./Sheet";
 import { backendOptionLabel } from "./backendCaps";
+import { Unavailable } from "./Unavailable";
 
 interface Props {
   root: string;
@@ -30,11 +31,12 @@ interface Props {
   onBuildApp?: () => void;
 }
 
-/** Create a new folder, a new git repo, or a new worktree of an existing repo. */
+/** Create a new folder, a new git repo, a clone of a remote, or a new worktree of an existing repo. */
 export function NewMenu({ root, repos, onOpen, onChanged, onClose, backends, backend, onBackend, onBuildApp }: Props) {
-  const [tab, setTab] = useState<"repo" | "folder" | "worktree">("repo");
+  const [tab, setTab] = useState<"repo" | "clone" | "folder" | "worktree">("repo");
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
+  const [url, setUrl] = useState("");
   /** Seed the phone-facing scaffold (gitignore, README, CLAUDE.md, inbox/outbox). */
   const [initSetup, setInitSetup] = useState(true);
   const [repoId, setRepoId] = useState(repos[0]?.id ?? "");
@@ -45,6 +47,12 @@ export function NewMenu({ root, repos, onOpen, onChanged, onClose, backends, bac
   const [busy, setBusy] = useState(false);
 
   const primaryRepos = repos.filter((r) => r.isPrimary);
+  const verb = tab === "clone" ? "Clone & open" : tab === "repo" ? "Create project & open" : tab === "folder" ? "Create folder" : "Create worktree & open";
+  /** What the form still needs before its one verb can run — said, never greyed (`Unavailable.tsx`). */
+  const missing = tab === "worktree"
+    ? (!primaryRepos.length ? "no repo on this desktop to branch from" : !branch ? "name the new branch first" : "")
+    : tab === "clone" ? (!url.trim() ? "paste a URL first" : "")
+    : !name ? `name the new ${tab === "repo" ? "project" : "folder"} first` : "";
 
   async function go() {
     setBusy(true);
@@ -54,6 +62,18 @@ export function NewMenu({ root, repos, onOpen, onChanged, onClose, backends, bac
         const r = await api.newFolder(root, name);
         setMsg(r.error ? `Error: ${r.error}` : `Created ${r.path}`);
         if (r.path) onChanged();
+      } else if (tab === "clone") {
+        track("action:repo.clone");
+        const r = await api.cloneRepo(root, url.trim(), name.trim());
+        if (r.error) setMsg(`Error: ${r.error}`);
+        else {
+          onChanged();
+          const title = r.path!.split("/").pop() || "clone";
+          if (r.warning) {
+            setMade({ path: r.path!, title });
+            setMsg(`Cloned into ${r.path}${r.branch ? ` on ${r.branch}` : ""} — ${r.warning}`);
+          } else onOpen(r.path!, title);
+        }
       } else if (tab === "repo") {
         track(initSetup ? "action:repo.new.project" : "action:repo.new.bare");
         const r = await api.newRepo(root, name, { setup: initSetup, description: desc });
@@ -94,13 +114,26 @@ export function NewMenu({ root, repos, onOpen, onChanged, onClose, backends, bac
       <SheetHead title={"New"} onClose={onClose} />
       <div className="annot-tools">
         <button className={`key ${tab === "repo" ? "active" : ""}`} onClick={() => setTab("repo")}>project</button>
+        <button className={`key ${tab === "clone" ? "active" : ""}`} onClick={() => setTab("clone")}>clone</button>
         <button className={`key ${tab === "folder" ? "active" : ""}`} onClick={() => setTab("folder")}>folder</button>
         <button className={`key ${tab === "worktree" ? "active" : ""}`} onClick={() => setTab("worktree")}>worktree</button>
       </div>
 
       <div className="form">
         <div className="form-hint mono">{root}</div>
-        {tab !== "worktree" && (
+        {tab === "clone" && (
+          <>
+            <input className="search" type="url" inputMode="url" autoCapitalize="off" autoCorrect="off" spellCheck={false}
+              placeholder="https://github.com/owner/repo or git@host:owner/repo" value={url} onChange={(e) => setUrl(e.target.value)} autoFocus />
+            <input className="search" placeholder="folder name (optional — taken from the URL)" value={name} onChange={(e) => setName(e.target.value)} />
+            <div className="form-hint">
+              Cloned on the desktop with its own git sign-in, so private repos work where the desktop can reach them.
+              The phone's inbox and outbox are excluded in this clone only — the project itself is not changed.
+              A big repo takes a while; this sheet waits.
+            </div>
+          </>
+        )}
+        {tab !== "worktree" && tab !== "clone" && (
           <input className="search" placeholder={tab === "repo" ? "new project name" : "new folder name"} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
         )}
         {tab === "repo" && onBuildApp && (
@@ -145,9 +178,13 @@ export function NewMenu({ root, repos, onOpen, onChanged, onClose, backends, bac
             </div>
           </>
         )}
-        <button className="send" onClick={go} disabled={busy || (tab === "worktree" ? !branch : !name)}>
-          {busy ? "Working…" : tab === "repo" ? "Create project & open" : tab === "folder" ? "Create folder" : "Create worktree & open"}
-        </button>
+        {/* Running is a line of text, not a dimmed button: the tap already happened, and a
+            second one must not be offered while the first is still on the desktop. */}
+        {busy
+          ? <div className="form-hint"><Loader2 size={13} className="spin" style={{ verticalAlign: "-2px" }} /> {tab === "clone" ? "Cloning on the desktop — a big repo takes a while" : "Working…"}</div>
+          : missing
+            ? <Unavailable cants={[{ label: verb, reason: missing }]} />
+            : <button className="send" onClick={go}>{verb}</button>}
         {msg && <div className="form-hint">{msg}</div>}
         {made && <button className="send" onClick={() => onOpen(made.path, made.title)}>Open session anyway</button>}
       </div>

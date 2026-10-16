@@ -101,8 +101,8 @@
  *     absent `analyzer()` returns `null`, `dups` and `deadExports` report
  *     `{value: null, reason}` and nothing reports a zero — see
  *     `lang/typescript-ast.mjs`.
- *   - **Coverage.** `mentions` answers whether a test NAMES a module, never
- *     whether it exercises one. `metrics/untested.mjs` argues that out at
+ *   - **Coverage.** `mentions` answers whether a test NAMES a module and
+ *     `imports` which modules a file LOADS; neither says which lines ran. `metrics/untested.mjs` argues that out at
  *     length and this pack only supplies the language half of it.
  *   - **Transitive or workspace dependency resolution.** `manifests` counts
  *     the keys declared in each `package.json` and resolves nothing: no lock
@@ -114,17 +114,44 @@
 import { NO_TYPESCRIPT, contentKey, identsOf, loadTypeScript, signedBlocks } from "../lang/typescript-ast.mjs";
 
 /**
+ * The source extensions this pack claims. Module-level rather than written
+ * inline in the export, because `PATH_REF` below is BUILT from it — see there.
+ */
+const EXTS = Object.freeze([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
+
+/**
+ * What a build writes that a test may import IN PLACE of the source: the host
+ * tests import `../dist/echo.js` about `src/echo.ts`. Declared beside `EXTS`
+ * so that the extensions a reference may carry are `EXTS ∪ EMITS` — one
+ * derivation, never a second list. Here `.js` is in both, and the set says so
+ * once.
+ */
+const EMITS = Object.freeze([".js"]);
+
+/** `[".ts", ".mjs"]` -> `mjs|ts`, longest first so an alternation can never
+ *  settle on `ts` where `tsx` was written, and regex-escaped. */
+function extAlternation(exts) {
+  return [...new Set(exts.map((e) => e.replace(/^\./, "")))]
+    .sort((a, b) => b.length - a.length || (a < b ? -1 : 1))
+    .map((e) => e.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
+}
+
+/**
  * One path reference in a test's text: the directory part, then the basename,
  * then either an accepted extension or the closing quote of an extensionless
  * specifier.
  *
- * Copied from `metrics/untested.mjs`, where the full argument for every piece
- * of it lives, because the rule it encodes is a fact about how JavaScript
- * writes an import and not about how a module is measured. The three accepted
- * extensions are `tsx|ts|js`: the host tests import COMPILED output
- * (`../dist/echo.js`), so the source extension alone would miss every one of
- * them. The lookbehind anchors the match at the start of the path — which is
- * what makes the directory part capturable, and, as a side effect, is the left
+ * The accepted extensions are DERIVED, `EXTS ∪ EMITS`, never typed out. They
+ * used to be the literal `tsx|ts|js`, written when the pack claimed `.ts` and
+ * `.tsx` only; when `EXTS` widened to the whole JS family that literal did not
+ * move, so every `.mjs` module a test imported by its file name —
+ * `import … from "./repohealth/metrics/untested.mjs"` — was measured as
+ * named by no test: 108 of 854 entries at the time it was found. Two lists that
+ * must agree drift; one list and a derivation cannot.
+ *
+ * The lookbehind anchors the match at the start of the path — which is what
+ * makes the directory part capturable, and, as a side effect, is the left
  * boundary that stops `smartpickstore.js` naming `store`. The `(?![\w])` after
  * the extension is the right boundary: without it `.js` matches inside
  * `.json`, and at HEAD `scripts/e2e-notifyprefs.mjs` reading `.waterplane/notify.json`
@@ -134,9 +161,32 @@ const PATH_REF = new RegExp(
   "(?<![\\w$.\\-/])" +
     "((?:\\.{0,2}/)?(?:[\\w$.-]+/)*)" +
     "([\\w$-]+)" +
-    "(?:\\.(tsx|ts|js)(?![\\w])|(?=[\"']))",
+    `(?:\\.(${extAlternation([...EXTS, ...EMITS])})(?![\\w])|(?=["']))`,
   "g",
 );
+
+/**
+ * The specifier of an IMPORT, as opposed to any path a file happens to spell:
+ * `from "x"` (which covers `import … from` and `export … from`), a bare
+ * `import "x"`, a dynamic `import("x")` and `require("x")`. Group 2 is the
+ * specifier.
+ *
+ * `imports` reads this and `mentions` does not, and the difference is the
+ * point: `packages/web/src/createOp.test.mjs` `readFileSync`s `./App.tsx`,
+ * which NAMES App and runs none of it. Followed as an edge, that one string
+ * would mark every module App imports as reached by a test.
+ *
+ * `import type … from` and `export type … from` are matched and then SKIPPED
+ * (group 1): the compiler and node's type stripping erase them, so they load
+ * nothing. Followed, they were the widest wrong edge in this tree —
+ * `features/setup/logic.ts` type-imports `./store`, and through it one test
+ * "reached" 361 modules for a week of the series. A named list whose every
+ * member is `type` (`import { type A } from`) is still an edge: under
+ * `verbatimModuleSyntax` it survives as `import {} from`, which runs the
+ * module.
+ */
+const IMPORT_SPEC =
+  /\b(?:import|export)\s+(type\s+)?[\w$*{}\s,]*?\bfrom\s*(["'])([^"'\n]+)\2|\b(?:import\s*\(\s*|import\s*|require\s*\(\s*)(["'])([^"'\n]+)\4/g;
 
 /** `packages/web/src/foo/bar.tsx` -> `bar`. */
 function basename(path) {
@@ -175,15 +225,39 @@ function resolveDir(dir, base) {
   return out;
 }
 
+/**
+ * The keys every `PATH_REF` in `text` names, added to `out`. `mentions` and
+ * `imports` both end here, so a reference means the same key whichever of
+ * them read it.
+ */
+function refKeys(text, base, requireDir, out) {
+  for (const m of text.matchAll(PATH_REF)) {
+    if (!requireDir) {
+      if (m[3] || m[1]) out.add(m[2]);
+      continue;
+    }
+    const dir = resolveDir(m[1], base);
+    // No directory at all is the bare basename — the case the rule rejects.
+    if (dir.length) out.add(dir.join("/") + "/" + m[2]);
+  }
+}
+
 export default Object.freeze({
   name: "typescript",
   // 2: the test globs stopped being this repo's conventions and became the
   // family's. See the header — it is a change of what is measured in every
   // JS/TS repo but this one.
-  version: "2",
+  // 3: a mention may carry any extension the pack claims (`EXTS ∪ EMITS`),
+  // a directory's `index` answers to the directory, and `imports` exists.
+  // 4: `import type` / `export type` are not edges — they load nothing.
+  // 5: `hatchExplain` exists — which escapes carry their reason (see below).
+  version: "5",
 
   /** Activates when the tree at HEAD carries one of these. See the header. */
-  exts: Object.freeze([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]),
+  exts: EXTS,
+
+  /** See `EMITS`. */
+  emits: EMITS,
 
   /**
    * A `.d.ts` is a declaration emitted or hand-written to describe code that
@@ -276,6 +350,40 @@ export default Object.freeze({
   }),
 
   /**
+   * When an escape carries its own reason — `hatches.mjs` reads this to split
+   * every occurrence into EXPLAINED and UNEXPLAINED, and the health index
+   * counts only the second.
+   *
+   * Two ways to be explained, and nothing else:
+   *
+   *   - **On the same line, after the mark** — `after[kind]`, regex SOURCE
+   *     tested against the rest of the line past the match. ESLint has a
+   *     syntax for it, ` -- why` after the rule list, and it is the only one
+   *     accepted for `eslintDisable`: a rule NAME after the directive is not a
+   *     reason, and `// eslint-disable-next-line react-hooks/exhaustive-deps`
+   *     is exactly the bare form the reason is there to replace. The three
+   *     `@ts-*` directives take any words after them (`@ts-expect-error the
+   *     DOM lib lags`), which TypeScript itself allows. The code-shaped kinds
+   *     (`: any`, `as any`, `as unknown as`) take a trailing comment.
+   *   - **On the line directly above** — `commentLine`: a comment line with
+   *     words in it that is not itself an escape. The line above a
+   *     `// eslint-disable-next-line` is the natural place to say why, and
+   *     a directive stacked on a directive explains nothing.
+   */
+  hatchExplain: Object.freeze({
+    commentLine: "^\\s*(?://|/\\*|\\*)",
+    after: Object.freeze({
+      colonAny: "(?://|/\\*)\\s*[A-Za-z]{2}",
+      asAny: "(?://|/\\*)\\s*[A-Za-z]{2}",
+      asUnknownAs: "(?://|/\\*)\\s*[A-Za-z]{2}",
+      eslintDisable: "\\s--\\s*[A-Za-z]{2}",
+      tsIgnore: "^[\\s:—-]*[A-Za-z]{2}",
+      tsExpectError: "^[\\s:—-]*[A-Za-z]{2}",
+      tsNocheck: "^[\\s:—-]*[A-Za-z]{2}",
+    }),
+  }),
+
+  /**
    * Which tree entries are dependency manifests, as regex SOURCE over the
    * repo-relative path.
    *
@@ -364,17 +472,40 @@ export default Object.freeze({
    * @returns {Set<string>}
    */
   mentions(text, path, opts = {}) {
+    const out = new Set();
+    refKeys(text, dirSegments(path ?? ""), opts.requireDir !== false, out);
+    return out;
+  },
+
+  /**
+   * Every `dir/name` key one file's IMPORTS name — the edges `untested`
+   * follows from a test to what it runs, and from a module to what it runs.
+   *
+   * The same keys `mentions` produces, read off a narrower part of the text:
+   * only the specifier of an import statement (`IMPORT_SPEC`), and only a
+   * RELATIVE one. A bare specifier (`react`, `@waterplane/shared`) names a
+   * package by its manifest name, and resolving that is a workspace lookup
+   * this pack does not make — so such an import contributes no edge, which
+   * leaves a module reached only that way on the list rather than marking it
+   * reached on a guess.
+   *
+   * @param {string} text  The file's contents.
+   * @param {string} path  Its repo-relative path.
+   * @param {{requireDir?: boolean}} [opts]  As for `mentions`.
+   * @returns {Set<string>}
+   */
+  imports(text, path, opts = {}) {
     const requireDir = opts.requireDir !== false;
     const base = dirSegments(path ?? "");
     const out = new Set();
-    for (const m of text.matchAll(PATH_REF)) {
-      if (!requireDir) {
-        if (m[3] || m[1]) out.add(m[2]);
-        continue;
-      }
-      const dir = resolveDir(m[1], base);
-      // No directory at all is the bare basename — the case the rule rejects.
-      if (dir.length) out.add(dir.join("/") + "/" + m[2]);
+    for (const m of text.matchAll(IMPORT_SPEC)) {
+      if (m[1]) continue; // `import type` / `export type`: erased, loads nothing.
+      const spec = m[3] ?? m[5];
+      if (!spec.startsWith("./") && !spec.startsWith("../")) continue;
+      // Re-quoted so the extensionless form meets the closing quote
+      // `PATH_REF` looks for — the specifier is read by the one rule that
+      // reads every other reference.
+      refKeys(`"${spec}"`, base, requireDir, out);
     }
     return out;
   },
@@ -394,6 +525,13 @@ export default Object.freeze({
    * mention side, so what a test actually wrote is never edited before it is
    * compared.
    *
+   * An `index` module also answers to its DIRECTORY, because that is how the
+   * family resolves `import … from "./features/backlog"`: to
+   * `features/backlog/index.ts`. Without it every barrel is unreachable by the
+   * one specifier that is written about it, and so is everything only the
+   * barrel imports. The directory's own key still needs a directory segment
+   * above it, so a top-level `foo/index.ts` answers to `foo/index` alone.
+   *
    * @param {string} path
    * @returns {string[]}
    */
@@ -404,6 +542,11 @@ export default Object.freeze({
     const keys = [];
     for (const dir of mirrors) {
       for (let i = 0; i < dir.length; i++) keys.push(dir.slice(i).join("/") + "/" + name);
+      if (name === "index" && dir.length > 1) {
+        const parent = dir.slice(0, -1);
+        const self = dir[dir.length - 1];
+        for (let i = 0; i < parent.length; i++) keys.push(parent.slice(i).join("/") + "/" + self);
+      }
     }
     return keys;
   },

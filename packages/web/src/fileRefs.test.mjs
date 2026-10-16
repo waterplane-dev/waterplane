@@ -14,7 +14,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { bareFileRef, docImageRef, dropFileRef, parseFileRef, refsIn, wholeFileRef } from "./fileRefs.ts";
+import { bareFileRef, docImageRef, dropFileRef, linkedImages, parseFileRef, refsIn, wholeFileRef } from "./fileRefs.ts";
 
 const OUTBOX = [
   ".claude/outbox/boulder-10-flow.gif",
@@ -73,6 +73,22 @@ test("docImageRef resolves an image link against the document's folder", () => {
   assert.equal(docImageRef("/brand/logo.png?raw=1", "docs/x.md")?.relPath, "brand/logo.png");
   assert.equal(docImageRef("my%20shot.png", "x.md")?.relPath, "my shot.png");
   assert.equal(docImageRef("clip.mp4", "x.md")?.video, true);
+});
+
+test("a docs gif linked to its film is found in both spellings, in text order", () => {
+  // The sized HTML one is how README shows a phone-tall film without overflowing a laptop;
+  // the phone reader must still draw it as the picture, never print the tags.
+  const t = `[![one](a.gif)](a.mp4) then <a href="docs/media/b.mp4"><img src="docs/media/b.gif" width="270" alt="the phone&#39;s &quot;loop&quot;"></a>.`;
+  const got = linkedImages(t);
+  assert.deepEqual(got.map((m) => [m.alt, m.src, m.href]), [["one", "a.gif", "a.mp4"], [`the phone's "loop"`, "docs/media/b.gif", "docs/media/b.mp4"]]);
+  assert.equal(t.slice(got[1].at, got[1].end).endsWith("</a>"), true);
+  // Attribute order is free, and a self-closed img is the same picture.
+  assert.equal(linkedImages(`<a href="x.mp4"><img alt="x" width="9" src="x.gif" /></a>`)[0]?.src, "x.gif");
+  // A plain link, or an img with no src, is not one.
+  assert.deepEqual(linkedImages(`<a href="x.mp4">x</a> <a href="y.mp4"><img alt="y"></a> [x](y.mp4)`), []);
+  // A bare img is the picture, its tap the picture itself; one inside a link is found once, as the link.
+  const bare = linkedImages(`<p> <img src="docs/menu.jpg" width="49%" alt="Menu"> <a href="v.mp4"><img src="v.gif"></a> <img src="docs/play.jpg"> </p>`);
+  assert.deepEqual(bare.map((m) => [m.src, m.href]), [["docs/menu.jpg", "docs/menu.jpg"], ["v.gif", "v.mp4"], ["docs/play.jpg", "docs/play.jpg"]]);
 });
 
 test("docImageRef refuses what is not a picture inside the repo", () => {

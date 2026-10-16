@@ -94,12 +94,12 @@ bootWait(PORT, 900, async () => {
       `no compliance check carries a series id (ids: ${r0.checks.map((c) => c.id).join(", ")})`);
 
     // ── The requirements list is an OFFER, not a finding ────────────────
-    // Not set up is a pass carrying its fix: a warn here would sit on every
-    // repo on the machine with nobody able to close it. Once set up (and never
-    // built) it IS a finding, and its detail quotes the command the phone hands
-    // to the repo's agent — the host never runs it.
-    const rq0 = find(r0, "requirements");
-    check(rq0?.status === "pass" && rq0?.fix === "requirements", "requirements: not set up → pass offering the set-up fix");
+    // Not set up is no row at all: the offer is the Opt-ins card, and a warn
+    // here would sit on every repo on the machine with nobody able to close it.
+    // The fix stays registered for that opt-in. Once set up (and never built)
+    // it IS a finding, and its detail quotes the command the phone hands to the
+    // repo's agent — the host never runs it.
+    check(!find(r0, "requirements"), "requirements: not set up → no checklist row (the offer is the Opt-ins card)");
     check(!findings.some((c) => c.id === "requirements"), "requirements: the offer is not counted in the badge");
     const fxr = await post(`/api/repos/${id}/compliance/fix`, { fixes: ["requirements"] });
     const skillP = join(repo.path, ".claude/skills/requirements/SKILL.md");

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import type { LinkSnapshot, Section } from "./linkTypes";
+import type { LinkSnapshot } from "./linkTypes";
+import { dirty, emit, invalidate, listeners, setSnapshotBuilder, type Listener } from "./linkBus";
 import { doc } from "./linkDoc";
 import { status } from "./linkStatus";
 import { pulseOn, samples } from "./linkPulse";
@@ -8,21 +9,9 @@ import { trafficSnapshot } from "./linkTraffic";
 import { everOutstanding, outstanding, rollup, stuckSends } from "./linkLog";
 import { ops } from "./linkOps";
 
+// The dirty set, the listeners and `emit` are `linkBus.ts`'s, so the slices
+// that emit never import this module back (it reads all of them).
 let snap: LinkSnapshot | null = null;
-const dirty = new Set<Section>();
-
-/**
- * Mark a section changed. The next `linkSnapshot()` rebuilds that section and
- * the top-level object; everything else keeps the object it already had.
- *
- * The previous snapshot is deliberately KEPT here rather than cleared — it is
- * what the rebuild copies the untouched sections out of, and dropping it is how
- * a memoization like this quietly stops memoizing anything while still looking
- * correct.
- */
-export function invalidate(...s: Section[]): void {
-  for (const x of s) dirty.add(x);
-}
 
 export function linkSnapshot(): LinkSnapshot {
   if (snap && !dirty.size) return snap;
@@ -47,19 +36,10 @@ export function linkSnapshot(): LinkSnapshot {
   return built;
 }
 
-interface Listener {
-  fn: (s: LinkSnapshot) => void;
-  live: boolean;
-}
-const listeners = new Set<Listener>();
+setSnapshotBuilder(linkSnapshot);
+
 let ticker: number | null = null;
 export let clockNow = Date.now();
-
-export function emit(): void {
-  if (!listeners.size) return;
-  const s = linkSnapshot();
-  for (const l of listeners) l.fn(s);
-}
 
 /** The once-a-second clock. Rebuilds the top-level object so time-since labels
  *  move, without touching a section — a consumer watching one section still

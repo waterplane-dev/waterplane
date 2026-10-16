@@ -15,8 +15,9 @@
  * `k`, so a knob is the same size on screen at any zoom.
  *
  * What each mark gets:
- *   - arrow / line: move · size (length, both ends, direction kept) · turn (the
- *     two points swing round their middle — a segment needs no angle of its own)
+ *   - arrow / line: move · one knob per END (tail, head), each dragging its own
+ *     point freely while the other stays put — so length and direction are one
+ *     gesture, and a segment needs neither a size nor a turn knob
  *   - box / ellipse / blur: move · size (the lower-right corner, the opposite
  *     one held) · turn (`Mark.angle`, about the middle)
  *   - text:         move · turn (its size is the stroke setting, not a gesture)
@@ -33,7 +34,7 @@
  */
 import type { Mark } from "./annNote";
 
-export type Knob = "move" | "size" | "turn";
+export type Knob = "move" | "size" | "turn" | "tail" | "head";
 
 /** Knob radius on screen, CSS px — 36 px across. */
 export const KNOB_R_PX = 18;
@@ -50,11 +51,13 @@ export interface KnobPlace { knob: Knob; ax: number; ay: number; x: number; y: n
 type Pt = { x: number; y: number };
 
 const isSegment = (tool: string) => tool === "arrow" || tool === "line" || tool === "marker";
+const hasEnds = (tool: string) => tool === "arrow" || tool === "line";
 
 /** Which knobs a mark gets — see the table above. */
 export function knobsFor(tool: string): Knob[] {
   if (tool === "text") return ["move", "turn"];
   if (tool === "marker") return ["move", "size"];
+  if (hasEnds(tool)) return ["move", "tail", "head"];
   return ["move", "size", "turn"];
 }
 
@@ -84,6 +87,13 @@ export function knobPlaces(m: Mark, box: Box, k: number, cw: number, ch: number)
       raw.push(below + r <= ch
         ? { knob, ax: cx, ay: bottom, x: cx, y: below }
         : { knob, ax: cx, ay: top, x: cx, y: top - L - r });
+    } else if (knob === "head" || knob === "tail") {
+      // Straight on past its own end, along the line, so each knob reads as
+      // "this end" and the two never sit on the same side.
+      const u = unit(m.x1 - m.x0, m.y1 - m.y0);
+      const s = knob === "head" ? 1 : -1;
+      const ex = knob === "head" ? m.x1 : m.x0, ey = knob === "head" ? m.y1 : m.y0;
+      raw.push({ knob, ax: ex, ay: ey, x: ex + s * u.x * (L + r), y: ey + s * u.y * (L + r) });
     } else if (knob === "size") {
       if (isSegment(m.tool)) {
         // Off the head end, along the mark's own line.
@@ -156,6 +166,19 @@ export function applyKnob<T extends Mark>(knob: Knob, base: T, from: Pt, to: Pt,
   if (knob === "move") {
     return { ...base, x0: base.x0 + dx, y0: base.y0 + dy, x1: base.x1 + dx, y1: base.y1 + dy };
   }
+  if (knob === "head" || knob === "tail") {
+    // That end follows the finger, the other end holds. Never closer than a
+    // visible span: pulled through the held end, it stops short on the
+    // finger's side instead of collapsing to a dot.
+    const head = knob === "head";
+    const hx = head ? base.x0 : base.x1, hy = head ? base.y0 : base.y1;
+    let ex = (head ? base.x1 : base.x0) + dx, ey = (head ? base.y1 : base.y0) + dy;
+    if (Math.hypot(ex - hx, ey - hy) < min) {
+      const u = unit(ex - hx || (head ? base.x1 - base.x0 : base.x0 - base.x1), ey - hy || (head ? base.y1 - base.y0 : base.y0 - base.y1));
+      ex = hx + u.x * min; ey = hy + u.y * min;
+    }
+    return head ? { ...base, x1: ex, y1: ey } : { ...base, x0: ex, y0: ey };
+  }
   const cx = center?.x ?? (base.x0 + base.x1) / 2, cy = center?.y ?? (base.y0 + base.y1) / 2;
   if (knob === "turn") {
     // Too near the middle and a twitch is a half-turn: hold still instead.
@@ -209,7 +232,7 @@ function rotate(p: Pt, c: Pt, a: number): Pt {
 
 /** One colour per knob, the same three child-paint uses, so a knob is told
  *  apart before its glyph is read. */
-export const KNOB_COLORS: Record<Knob, string> = { move: "#2f80ed", size: "#f2994a", turn: "#27ae60" };
+export const KNOB_COLORS: Record<Knob, string> = { move: "#2f80ed", size: "#f2994a", turn: "#27ae60", tail: "#f2994a", head: "#f2994a" };
 
 /** The hint line in knob mode, naming exactly the knobs this mark wears. */
 export function knobHint(tool: string): string {
@@ -217,14 +240,16 @@ export function knobHint(tool: string): string {
     move: "blue moves",
     size: isSegment(tool) ? "orange sets the length" : "orange sizes",
     turn: "green turns",
+    tail: "orange drags that end",
+    head: "orange drags that end",
   };
-  const parts = knobsFor(tool).map((k) => say[k]);
+  const parts = [...new Set(knobsFor(tool).map((k) => say[k]))];
   return parts[0][0].toUpperCase() + parts.join(" · ").slice(1);
 }
 
 /**
  * The white line glyph inside a knob: four-way arrows, a corner-to-corner double
- * arrow, or a circular arrow. Drawn rather than an icon font because it is on the
+ * arrow, a circular arrow, or a ring for an end. Drawn rather than an icon font because it is on the
  * canvas and must scale with the zoom like the knob does. The one function here
  * that touches a canvas; it is never called by the tests.
  */
@@ -245,6 +270,8 @@ export function drawKnobGlyph(ctx: CanvasRenderingContext2D, knob: Knob, x: numb
       ctx.lineTo(tx, ty);
       ctx.lineTo(tx - dx * h - dy * h, ty - dy * h - dx * h);
     }
+  } else if (knob === "head" || knob === "tail") {
+    ctx.arc(x, y, s * 0.55, 0, Math.PI * 2);
   } else if (knob === "size") {
     const d = s * 0.75;
     ctx.moveTo(x - d, y - d); ctx.lineTo(x + d, y + d);

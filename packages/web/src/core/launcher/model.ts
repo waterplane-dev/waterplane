@@ -15,6 +15,7 @@ import { branchLabel, glueCompanions, isBacklogRow, isScheduleRow } from "@water
 import type { OutboxEntry, OutboxStatus } from "../../outbox";
 import { baseName } from "../../format.ts";
 import { intentRowKey, queueRowKey } from "../../activityRows.ts";
+import { isFlagged } from "../sessions/followUpFacts.ts";
 
 /** A session's status bucket — `sessionFacts.tsx`'s `sessionStatus` values. */
 export type StatusBucket = "wait" | "limit" | "coding" | "done" | "exited";
@@ -33,8 +34,21 @@ export interface RepoStatusRollup { wait: number; limit: number; coding: number;
 export interface StatusFilter<F extends string = string> { status: F; repo?: string }
 
 // ── Names ──────────────────────────────────────────────────────────────────
-/** The repo (worktree) a directory is, if the listing knows it. */
-export const repoOfCwd = (repos: readonly RepoTarget[], cwd: string) => repos.find((r) => r.worktreePath === cwd) ?? null;
+/** The repo (worktree) a directory is, or is INSIDE, if the listing knows it.
+ *  Exact first; else the deepest worktree containing it on a path boundary —
+ *  a shell that `cd`'d into `trading/backend` still belongs to `trading`, and
+ *  `/dev/app-worktrees/x` is never inside `/dev/app`. Outside every repo ⇒ null. */
+export const repoOfCwd = (repos: readonly RepoTarget[], cwd: string): RepoTarget | null => {
+  const exact = repos.find((r) => r.worktreePath === cwd);
+  if (exact) return exact;
+  let best: RepoTarget | null = null;
+  for (const r of repos) {
+    const root = r.worktreePath.replace(/\/+$/, "");
+    if (!root || !cwd.startsWith(root + "/")) continue;
+    if (!best || root.length > best.worktreePath.replace(/\/+$/, "").length) best = r;
+  }
+  return best;
+};
 /** The repo NAME a session belongs to — the group it is listed under. */
 export const sessionRepoNameIn = (repos: readonly RepoTarget[], s: { cwd: string }) => repoOfCwd(repos, s.cwd)?.repoName ?? baseName(s.cwd);
 /** `repo · branch`, for a row's own gist fallback. */
@@ -181,13 +195,49 @@ export function starredByRepoOf(sorted: readonly SessionInfo[], repoName: (s: Se
 }
 
 /**
- * The launcher's ONE list of places work happens: every repo, with whatever
- * live sessions it currently has underneath it. Repos with live sessions first,
- * in the session list's own order, then the rest as the listing gives them. A
- * status filter drops the sessionless repos — they cannot match a status.
+ * **A number per OPEN session, counted per repo from 0**, in the list's own
+ * order (`sortSessions`, so a drag renumbers) and BEFORE any status filter —
+ * a cut hides rows, it never renumbers the ones left. A session whose process
+ * has gone (`running` false) gets no number and does not take one.
  */
+export function sessionNumbersOf(sorted: readonly SessionInfo[], repoName: (s: SessionInfo) => string): Map<string, number> {
+  const next = new Map<string, number>();
+  const out = new Map<string, number>();
+  for (const s of sorted) {
+    if (!s.running) continue;
+    const n = repoName(s);
+    const i = next.get(n) ?? 0;
+    out.set(s.id, i);
+    next.set(n, i + 1);
+  }
+  return out;
+}
+
+/**
+ * The launcher's ONE list of places work happens: every repo, with whatever
+ * live sessions it currently has underneath it, alphabetically by repo name
+ * (case-insensitive) — a repo keeps its place whether or not anything runs in
+ * it. Sessions inside a group keep the session list's own order. A status
+ * filter drops the sessionless repos — they cannot match a status.
+ *
+ * `openByRepo` is the opt-in second order (`repoSort: "sessions"`): most open
+ * sessions first, ties alphabetically. Counted off every live session, not the
+ * filtered ones, so typing a filter does not reshuffle the repos it leaves.
+ */
+export type RepoOrder = "name" | "sessions";
+export const REPO_ORDERS: readonly RepoOrder[] = ["name", "sessions"];
+export const REPO_ORDER_LABEL: Record<RepoOrder, string> = { name: "alphabetical", sessions: "most open sessions first" };
+
+/** Live sessions per repo name — what `repoSort: "sessions"` ranks by. */
+export function openCountByRepo(sessions: readonly SessionInfo[], repoName: (s: SessionInfo) => string): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const s of sessions) if (s.running) { const n = repoName(s); m.set(n, (m.get(n) ?? 0) + 1); }
+  return m;
+}
+
 export function repoGroupsOf(shown: readonly SessionInfo[], visibleRepos: readonly RepoTarget[], filtered: boolean,
-  repoName: (s: SessionInfo) => string, keep: readonly string[] = []): { repoName: string; sessions: SessionInfo[] }[] {
+  repoName: (s: SessionInfo) => string, keep: readonly string[] = [],
+  openByRepo?: ReadonlyMap<string, number>): { repoName: string; sessions: SessionInfo[] }[] {
   const byName = new Map<string, SessionInfo[]>();
   const order: string[] = [];
   for (const s of shown) {
@@ -197,6 +247,8 @@ export function repoGroupsOf(shown: readonly SessionInfo[], visibleRepos: readon
     arr.push(s);
   }
   for (const r of visibleRepos) if ((!filtered || keep.includes(r.repoName)) && !byName.has(r.repoName)) { byName.set(r.repoName, []); order.push(r.repoName); }
+  order.sort((a, b) => (openByRepo ? (openByRepo.get(b) ?? 0) - (openByRepo.get(a) ?? 0) : 0)
+    || a.localeCompare(b, undefined, { sensitivity: "base", numeric: true }));
   return order.map((name) => ({ repoName: name, sessions: byName.get(name) ?? [] }));
 }
 
@@ -261,17 +313,50 @@ export function queuedChipCut(keys: readonly string[], intents: readonly Intent[
 // SCOPE decision, made before any facet, and both the close sheet and its
 // test still read these two.
 
+/**
+ * A mark a person left on a session that a bulk close spares while the toggle
+ * holds: a star, or a follow-up flag (R-sessions-041) — whoever set the flag.
+ * ONE predicate behind the scope, the spared count and the toggle's words.
+ */
+export const isCloseSpared = (s: SessionInfo): boolean => !!s.starred || isFlagged(s);
+
 /** The sessions a bulk close would touch: the repo's (or all listed), minus the
- *  starred ones while `keepStar` holds — ONE list every count and close reads. */
+ *  starred and flagged ones while `keepStar` holds — ONE list every count and
+ *  close reads. */
 export function closeScope(visible: readonly SessionInfo[], repo: string | undefined, keepStar: boolean,
   repoName: (s: SessionInfo) => string): SessionInfo[] {
   const inRepo = repo ? visible.filter((s) => repoName(s) === repo) : [...visible];
-  return keepStar ? inRepo.filter((s) => !s.starred) : inRepo;
+  return keepStar ? inRepo.filter((s) => !isCloseSpared(s)) : inRepo;
 }
-/** The starred sessions a bulk close is currently sparing — 0 when the toggle is off. */
+/** The marked sessions in reach of a bulk close, split by mark: `starred` and
+ *  `flagged` may overlap (a session can carry both), `n` counts each once. */
+export interface MarkedCount { n: number; starred: number; flagged: number }
+export function closeMarked(visible: readonly SessionInfo[], repo: string | undefined,
+  repoName: (s: SessionInfo) => string): MarkedCount {
+  const inRepo = repo ? visible.filter((s) => repoName(s) === repo) : visible;
+  const marked = inRepo.filter(isCloseSpared);
+  return { n: marked.length, starred: marked.filter((s) => s.starred).length, flagged: marked.filter(isFlagged).length };
+}
+/** The marked sessions a bulk close is currently sparing — 0 when the toggle is off. */
 export function starredSpared(visible: readonly SessionInfo[], repo: string | undefined, keepStar: boolean,
   repoName: (s: SessionInfo) => string): number {
-  if (!keepStar) return 0;
-  const inRepo = repo ? visible.filter((s) => repoName(s) === repo) : visible;
-  return inRepo.filter((s) => s.starred).length;
+  return keepStar ? closeMarked(visible, repo, repoName).n : 0;
+}
+/** What the marks are, in words: `2 starred`, `1 flagged`, `3 starred & flagged`. */
+export function markedWords(c: MarkedCount): string {
+  const what = c.starred && c.flagged ? "starred & flagged" : c.flagged ? "flagged" : "starred";
+  return `${c.n} ${what}`;
+}
+
+/**
+ * The launcher's quick filter: every word typed must appear somewhere in what
+ * the row SHOWS (title, prompts, repo, branch), case-insensitive, in any
+ * order. Text on screen only — searching what sessions SAID is the search
+ * sheet's job, over the host's transcripts. A blank query matches everything.
+ */
+export function matchesText(query: string, fields: readonly (string | null | undefined)[]): boolean {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const hay = fields.filter(Boolean).join("\n").toLowerCase();
+  return words.every((w) => hay.includes(w));
 }

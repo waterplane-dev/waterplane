@@ -23,7 +23,13 @@ export interface DeviceRow {
   lastKind: PeerKind | null;
   /** The device making this request. */
   current?: boolean;
+  /** `"passive"`: the kids'-phone scope — app updates only, everything else
+   *  refused by the host until a PIN unlocks it (`passive.ts`). Absent = full. */
+  scope?: DeviceScope;
 }
+
+/** A token's scope. Only `"passive"` is ever stored; absent means full. */
+export type DeviceScope = "passive";
 
 /** `GET /api/devices` → */
 export interface DeviceListResponse {
@@ -71,6 +77,7 @@ export function cleanDeviceRow(raw: unknown): DeviceRow | null {
   const lastKind = PEER_KINDS.includes(r.lastKind as PeerKind) ? (r.lastKind as PeerKind) : null;
   const row: DeviceRow = { id: r.id, name, createdAt, lastSeenAt, lastKind };
   if (r.current === true) row.current = true;
+  if (r.scope === "passive") row.scope = "passive";
   return row;
 }
 

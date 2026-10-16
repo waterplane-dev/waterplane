@@ -8,6 +8,7 @@ import { mkdtempSync, mkdirSync, readFileSync, realpathSync, writeFileSync, exis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CONVENTIONS, E, SLUG, STATE, rootEnv } from "./lib-brand.mjs";
+import { waitForHost } from "./lib-e2e.mjs";
 
 const PORT = 8804;
 const ROOT = mkdtempSync(join(tmpdir(), `${SLUG}-setupwatch-`));
@@ -88,7 +89,7 @@ const tWarn = makeWarnOnlyRepo("warn-only");
 setTimeout(async () => {
   try {
     boot();
-    await sleep(900);
+    await waitForHost(PORT);
 
     // ── The sweep finds a repo nobody opened ────────────────────────────
     const flagged = await until(async () => {
@@ -150,7 +151,7 @@ setTimeout(async () => {
     host.kill();
     await sleep(400);
     boot();
-    await sleep(900);
+    await waitForHost(PORT);
     const after = await until(async () => {
       const t = await repoNamed("appeared-later");
       return t && t.setup ? t : null;
@@ -183,4 +184,5 @@ setTimeout(async () => {
   setTimeout(() => process.exit(failed ? 1 : 0), 100);
 }, 300);
 
-setTimeout(() => { console.log("FAIL: timeout"); if (host) host.kill(); process.exit(1); }, 30000);
+// Two boots inside: a host answers in under a second on a Mac and in 3-5 s under WSL.
+setTimeout(() => { console.log("FAIL: timeout"); if (host) host.kill(); process.exit(1); }, 60000);

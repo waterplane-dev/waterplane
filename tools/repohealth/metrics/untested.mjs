@@ -1,5 +1,32 @@
 /**
- * Which modules no test names — as a LIST, not a ratio.
+ * Which modules no test reaches — as a LIST, not a ratio — and, beside it,
+ * which are reached only through another module.
+ *
+ * ── Named, reached, and why the headline is the second ──────────────────────
+ *
+ * A module is NAMED when a test's text references its path (the rule below).
+ * It is REACHED when a test imports it, or imports something that does, to
+ * any depth, by each language's own import syntax (a pack's `imports`).
+ * `value` is the modules that are neither; `unnamed` is the ones reached and
+ * never named.
+ *
+ * Naming alone was the headline until 2026-10-15, and in a repo that splits
+ * big files it measured the splitting: carving one named file into a dozen
+ * slices it imports added a dozen lines, every one of them run by the same
+ * tests as before. Here that read "854 of 1,655 modules, rising" over a
+ * window in which `App.tsx` was cut into 811 files under `core/` and
+ * `features/`, and 341 of the 854 were reached by a test's own imports.
+ * Reach is what a person asking "is this tested" means; naming is kept as the
+ * second list because "only ever exercised from a distance" is worth reading
+ * too, and it is not the same fact as "never run".
+ *
+ * Reach still promises less than coverage: an imported module is LOADED by a
+ * test, which says nothing about which of its branches ran. And only imports
+ * are edges — a module a test merely names (reads as text, spawns by path)
+ * counts as named, but its own imports are not followed from it, because
+ * `createOp.test.mjs` reading `./App.tsx` as a string would otherwise mark
+ * the whole phone reached. A pack with a mention rule and no import rule
+ * contributes no edges, so its modules are read on naming alone.
  *
  * ── Why a list and not a percentage ─────────────────────────────────────────
  *
@@ -114,6 +141,85 @@ function mentionsOf(tests, packs, requireDir) {
 }
 
 /**
+ * The keys one source file's imports name, memoised by blob.
+ *
+ * Reach reads EVERY source file's imports at every commit, where the mention
+ * corpus is only the tests, and over a backfill most of those blobs are the
+ * same bytes commit after commit. So the answer is kept under the blob oid —
+ * which names one set of bytes forever, the guarantee `lang/typescript-ast.mjs`
+ * keys its own memo on — plus the path (a relative specifier resolves against
+ * it), the pack and the rule. A file with no oid is read and not kept.
+ */
+const IMPORTS_MEMO = new Map();
+function importsOf(owner, file, requireDir) {
+  if (!file.oid) return owner.pack.imports(file.text, file.path, { requireDir });
+  const key = `${owner.name}\0${file.oid}\0${file.path}\0${requireDir ? 1 : 0}`;
+  let keys = IMPORTS_MEMO.get(key);
+  if (!keys) {
+    keys = [...owner.pack.imports(file.text, file.path, { requireDir })];
+    IMPORTS_MEMO.set(key, keys);
+  }
+  return keys;
+}
+
+/**
+ * Which readable modules a test REACHES: what a test file imports, then what
+ * those import, to the end — following each file's imports by the rule of the
+ * pack that owns that file, because an import statement is one language's
+ * syntax and a key is only ever compared as a string afterwards.
+ *
+ * Seeded from every file in the test corpus, helpers included: a fixture
+ * builder in `test/` that imports `../dist/x.js` is how half these suites
+ * reach the code, and it is in the corpus for exactly that reason.
+ *
+ * Mentions are deliberately NOT seeds. A module a test only names — reads as
+ * text, spawns by path — counts as tested on that name, as it always has, but
+ * its own imports are not followed from it: `createOp.test.mjs` reading
+ * `./App.tsx` would otherwise mark the whole phone reached.
+ *
+ * @param {{f: {path: string, oid?: string, text: string}, owner: object}[]} readable
+ * @returns {Set<string>} paths
+ */
+function reachOf(readable, tests, prereg, requireDir) {
+  const leaf = (k) => (requireDir ? k : k.slice(k.lastIndexOf("/") + 1));
+  /** key -> every readable module answering to it. Two modules on one key are
+   *  both reached, which is the ambiguity `mentions` already resolves the
+   *  same way (`src/api.ts` naming no package marks both copies). */
+  const byKey = new Map();
+  const byPath = new Map();
+  for (const r of readable) {
+    byPath.set(r.f.path, r);
+    for (const k of r.owner.pack.keysFor(r.f.path)) {
+      const key = leaf(k);
+      const at = byKey.get(key);
+      if (at) at.push(r.f.path);
+      else byKey.set(key, [r.f.path]);
+    }
+  }
+
+  const reached = new Set();
+  const queue = [];
+  const visit = (keys) => {
+    for (const key of keys) {
+      for (const p of byKey.get(key) ?? []) {
+        if (reached.has(p)) continue;
+        reached.add(p);
+        queue.push(p);
+      }
+    }
+  };
+  for (const t of tests) {
+    const owner = packFor(t.path ?? "", prereg);
+    if (owner && typeof owner.pack.imports === "function") visit(owner.pack.imports(t.text, t.path ?? "", { requireDir }));
+  }
+  while (queue.length) {
+    const r = byPath.get(queue.pop());
+    if (typeof r.owner.pack.imports === "function") visit(importsOf(r.owner, r.f, requireDir));
+  }
+  return reached;
+}
+
+/**
  * @param {import("../types.mjs").Snapshot} snapshot
  * @param {import("../types.mjs").History} history
  * @param {number} index
@@ -151,8 +257,8 @@ export function measureUntested(snapshot, history, index, prereg) {
   const mentioned = mentionsOf(tests, speakers, requireDir);
   const speaks = new Set(speakers.map((p) => p.name));
 
-  const out = [];
-  let read = 0;
+  const named = new Set();
+  const readable = [];
   for (const f of files) {
     // Each file is asked of the ONE pack that owns its extension: a module's
     // keys are its own language's, and a file no pack can read is not a
@@ -160,7 +266,7 @@ export function measureUntested(snapshot, history, index, prereg) {
     // line in either direction.
     const owner = packFor(f.path, prereg);
     if (!owner || !speaks.has(owner.name)) continue;
-    read++;
+    readable.push({ f, owner });
     const keys = owner.pack.keysFor(f.path);
     // `requireDir` off is the bare-basename rule `UNTESTED_REQUIRE_DIR_SEGMENT`
     // restores, and the pack's mention set then holds bare names. Every key a
@@ -170,13 +276,13 @@ export function measureUntested(snapshot, history, index, prereg) {
     const hit = requireDir
       ? keys.some((k) => mentioned.has(k))
       : keys.some((k) => mentioned.has(k.slice(k.lastIndexOf("/") + 1)));
-    if (!hit) out.push(f.path);
+    if (hit) named.add(f.path);
   }
 
   // Every source file belonged to a pack that cannot read a mention. The list
   // would be empty, and an empty list here reads as "every module is named by
   // a test" — the opposite of what happened.
-  if (read === 0) {
+  if (readable.length === 0) {
     return {
       value: null,
       reason: reasonFor(prereg, (p) =>
@@ -185,6 +291,18 @@ export function measureUntested(snapshot, history, index, prereg) {
     };
   }
 
+  // A pack with a mention rule and no import rule contributes no edge, so its
+  // modules are read on mentions alone — the definition this row had before
+  // reach existed, and never a guess in the other direction.
+  const reached = reachOf(readable, tests, prereg, requireDir);
+  const out = [];
+  const unnamed = [];
+  for (const { f } of readable) {
+    if (named.has(f.path)) continue;
+    if (reached.has(f.path)) unnamed.push(f.path);
+    else out.push(f.path);
+  }
   out.sort();
-  return { value: out };
+  unnamed.sort();
+  return { value: out, unnamed };
 }

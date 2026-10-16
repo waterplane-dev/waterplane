@@ -26,12 +26,14 @@ import type { Route, RouteSpec, RouteTable } from "../types.js";
  * while there is still a socket to refuse on. `contain` still does the only
  * thing it has ever done here, which is resolve the DIRECTORY; the ids are
  * contained by being looked up in this repo's own rows and not by being parsed.
+ * A slot `scope` goes through too, and there the ids are ignored: the host
+ * re-derives the slot from its own rows (`startAssessment`).
  */
 const onAssessRun: RouteSpec<"assess.run"> = {
   durable: true,
   contain: "repoDir",
   run: (a) => {
-    const r = startAssessment(a.c.intents, a.c.assess, a.dir, a.msg.ids);
+    const r = startAssessment(a.c.intents, a.c.assess, a.dir, a.msg.ids, a.msg.scope);
     if ("error" in r) { a.c.send(a.ws, { t: "toast", text: `assess: ${r.error}` }); return { ok: false, reason: r.error }; }
     // The row is on disk before this returns (`post()` persists synchronously),
     // which is what the ack is a receipt for.
@@ -101,7 +103,7 @@ const onPullSave: Route<"pull.save"> = (a) => {
     // The content is shape-checked by `cleanConfig`, which makes this arbitrary
     // PLACEMENT rather than arbitrary bytes; it is still the one gate being
     // skipped, on the one verb that touches the disk.
-    void a.c.containRepoDir(a.msg.repoDir).then((repoDir) => {
+    void a.c.containRepoDir(a.msg.repoDir).then(async (repoDir) => {
       if (!repoDir) { a.c.send(a.ws, { t: "toast", text: "that folder is outside the configured root" }); return; }
       const saved = a.c.autopull.saveConfig(repoDir, a.msg.config);
       a.c.broadcast({ t: "pull.config", repoDir, config: saved });
@@ -119,7 +121,7 @@ const onPullSave: Route<"pull.save"> = (a) => {
       // that says nothing at all is indistinguishable from a switch that does
       // nothing at all.
       if (!saved.enabled) return;
-      const queued = a.c.pullCatchUp(repoDir);
+      const queued = await a.c.pullCatchUp(repoDir);
       a.c.send(a.ws, { t: "toast", text: queued.length === 1
         ? `fetching ${queued[0].name} — it was already here`
         : queued.length

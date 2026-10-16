@@ -92,12 +92,14 @@ rather than chasing the sketch's guess.
 | file | holds | lines |
 | --- | --- | --- |
 | `ctx.ts` | TYPES ONLY: `ServerCtx extends HostCtx`, the draft type `main.ts` fills | 114 |
+| `ctxseal.ts` | `assertCtxComplete(ctx)`: just before listening, throws naming any `ServerCtx` key `main.ts` never assigned; `serverCtxKeys()` must list every key (type-checked exhaustive) | 45 |
 | `clients.ts` | `createClients(deps)`: sockets, `send`/`broadcast`, auth re-evaluation, watched set, notification feed, `notify()` | 146 |
 | `intentDeps.ts` | `makeIntentDeps(ctx)`: the `IntentDeps` literal, executors included, the sweep-dirs cache | 349 |
 | `intentEvents.ts` | `createSnapshots(ctx)` (the store's snapshots, `padNotesFor`) and `wireIntentEvents(ctx)` (the four `intents.on`) | 239 |
 | `scan.ts` | `createScan(ctx)`: outbox/image/auto-pull baselines and scanners, `announceBuild`, the `autopull.on("item")` | 201 |
 | `deliveries.ts` | `createDeliveries(ctx)`: `startPrompt`, `deliverChain`, `deliverInput`, the re-send callback, `wireDeliverySettled`, `deliverySnapshot` | 273 |
 | `wsops.ts` | `createWsOps(ctx)`: in-flight maps, `sendOpAck`, `durableOp`, `containRepoDir`, the `/ws` connection handler | 218 |
+| `liveness.ts` | pure policy, no socket: `pingTick` (ping or terminate after two unanswered) and `ptyFrameAction` (send / skip / one full resync past the PTY backlog) — why in protocol-and-security.md | 62 |
 | `sessionEvents.ts` | `wireSessionEvents(ctx)`: all fifteen `sessions.on`, the limit-event log (`proposeReply` left core with the Gemini oracle, `41585a9` — now a plugin) | 283 |
 | `http.ts` | `createHttp(ctx)`: `MIME`, auth endpoints, `serveStatic`, the per-bind request handler, `listenWithRetry` | 267 |
 | `shutdown.ts` | `installShutdown(ctx)`: the SIGTERM/SIGINT flush (order pinned) and the two process-error handlers | 74 |
@@ -293,7 +295,7 @@ listeners — never module-level state, never a listener registered at import.
 server/
   ctx.ts            ServerCtx extends HostCtx: the ~20 names main.ts's functions close over that
                     HostCtx does not carry (push, setupWatch, contextLimits, cliHealthStore,
-                    tokenStats, uiStats, usageLog, reviewStore, smartpick, assessExecutor, wsToken,
+                    tokenStats, uiStats, usageLog, reviewStore, assessExecutor, wsToken,
                     outSeen, opsInFlight, deliverChain, isAttachedToSomeone, considerPull,
                     announceBuild, padNotesFor, PORT, DOCTOR). Types only. (`knownRepoDirs` is
                     NOT on it: its only reader is the deps literal, see M3.)
@@ -442,11 +444,11 @@ facade beside its one user.
   separate change, because it would alter the `IntentDeps` shape `main.ts` builds and every test
   constructs.
 - **`core.deps` is the SAME object the constructor received, and `deps.executors.<x>` is read at
-  call time.** `pickhold.test.mjs` (337, 372) does `store.deps.executors.freshSession = …` AFTER
+  call time.** `ladderpass.test.mjs` (was `pickhold.test.mjs`; 337, 372) does `store.deps.executors.freshSession = …` AFTER
   construction; `pastbudget.test.mjs` spreads `store.deps` to build a second store. A slice that
   wrote `const { freshSession } = core.deps.executors` in its constructor would hold the stub the
   test replaced.
-- **TypeScript `private` is not a runtime boundary, and the tests are `.mjs`.** `pickhold.test.mjs`
+- **TypeScript `private` is not a runtime boundary, and the tests are `.mjs`.** `ladderpass.test.mjs`
   calls `store.pass()` (420, 445), `requeue.test.mjs` calls `store.fire(row, {})` (703, 710) and
   writes `store.inflight.set(…)` (708), `backlogedit.test.mjs` calls `store.settle(…)` (140). All
   three methods are `private` today and move (`pass` → ladder, `fire`/`settle` → fire). The
@@ -471,8 +473,7 @@ other functions close over (listed in the layout). `main.ts` builds ONE object i
 boot order, and hands it to every factory; the same object is the `HostCtx` `dispatch()` receives.
 
 **The one rule for a `server/` factory: read `ctx.<x>` at CALL time, never destructure at
-construction.** The `IntentManager` deps literal (444–717) references `backlog` (782), `smartpick`
-(743), `fanout` (784), `builds` (788), `capture` (799), `assessExecutor` (812), `usage` (1348),
+construction.** The `IntentManager` deps literal (444–717) references `backlog` (782), `fanout` (784), `builds` (788), `capture` (799), `assessExecutor` (812), `usage` (1348),
 `budget` (1374) — all defined AFTER it — and is safe only because the closures are late-bound and
 nothing invokes them during construction (`load()` and `foldLegacyWorkParents()` read only
 `deps.root`; `migrateLegacy` never calls `onChange`; `start()`'s synchronous `kick()` returns at
@@ -611,7 +612,7 @@ exclusion method of two more (chain, durable ops) is corrected in place.
 | **intervals** | `\bsetInterval\(` | `sessions.ts: 1` (1012), `intents/manager.ts: 1` (1716), `main.ts: 1` (832), `localrt.ts: 1`, `opendeliveries.ts: 1`, `setupwatch.ts: 1`, `update.ts: 2`, `usage.ts: 2` |
 | **timeouts in the three files** | `\bsetTimeout\(` scoped to the three files + `sessions/**`, `intents/**`, `server/**` (so a moved timer is still counted) | `sessions.ts: 18`, `main.ts: 3`, `intents/manager.ts: 0` (the rest of the tree is not pinned) |
 | **summary spends** | `\brunSummaryTask\(`, `\brunSummary\(`, `\bnameTab\(` minus definitions | `sessions.ts: 3` (5332, 5374, 5596), `sessions.ts: 2` (5273, 5322), `sessions.ts: 1` (5282) |
-| **intent state writes, assignment** | `\.state\s*=\s*(?!=)` | `intents/manager.ts: 22` (and, not pinned but counted: `screenlog.ts: 1`, `smartpick.ts: 3` — different `state`s; the pin is scoped to `intents/**`) |
+| **intent state writes, assignment** | `\.state\s*=\s*(?!=)` | `intents/manager.ts: 22` (and, not pinned but counted: `screenlog.ts: 1` — a different `state`; the pin is scoped to `intents/**`) |
 | **intent state writes, literal** | `\bstate:\s*"queued"` (every row-literal write is `"queued"`; `settle`'s signature is not matched) | `intents/manager.ts: 6` (535, 736, 994, 1070, 3203, 3213) |
 | **settle / block calls** | `\b(?:this\|core)\.settle\(`, `\b(?:this\|core)\.block\(` | `intents/manager.ts: 9`, `intents/manager.ts: 3` |
 | **intents persist / archive** | `\b(?:this\|core)\.persist\(\)`, `\b(?:this\|core)\.archive\(` scoped to `intents/**` | `intents/manager.ts: 36`, `intents/manager.ts: 2` |
@@ -733,7 +734,7 @@ delegations. Each commit's number is the measured count, not these estimates.
 | 640–692, 3149–3299, 3301–3456 | `foldLegacyWorkParents`; `load`, `migrateLegacy`, `migrateFileAt`, `migrateFile`, `present`; `chainFacts`, `readArchiveTail`, `compact`, `archive`, `persist`, `flush` | `intents/disk.ts` (class: `path`, `archivePath`, `loadedSchema`, `archiveTail`) | **I2** |
 | 710–880, 882–1224 | `post`, `snapshotConv`, `upsert`; `waive`, `update`, `retarget`, `edit`, `name` | `intents/write.ts` | **I3** |
 | 1226–1556, 1558–1710 | `markDone`, `revive`, `requeue`, `requeueFailed`, `wouldNotRun`; `emitChanged`, `cancel`, `dismiss`, `remove`, `runNow`, `noteSession`, `fileLanded` | `intents/requeue.ts` | **I4** |
-| 1741–2031, 2617–2685 | `pass` (with its `groupBusy`/`nonGo` closures), the "State transitions" section comment (2619), `block` | `intents/ladder.ts` (the facade keeps a one-line `private pass()` delegation — `pickhold.test.mjs` calls it) | **I5** |
+| 1741–2031, 2617–2685 | `pass` (with its `groupBusy`/`nonGo` closures), the "State transitions" section comment (2619), `block` | `intents/ladder.ts` (the facade keeps a one-line `private pass()` delegation — `ladderpass.test.mjs` calls it) | **I5** |
 | 2269–2616, 2686–2770 | `fire`, `execute`, `resolveSessionFor`; `unspend`, `stampCleared`, `recordMissed`*, `settle`, `replace` | `intents/fire.ts` (the facade keeps one-line `private fire()` and `private settle()` delegations — `requeue.test.mjs` and `backlogedit.test.mjs` call them) | **I6** |
 | 2033–2267, 2944–3147 | `onTurnEnded`, `onSessionExit`, `sweepRunning`, `giveUp`, `sessionAwaitingInput`, `complete`, `endWithDeadSession`; `reconcile`, `reconcileOne` | `intents/watch.ts` | **I7** |
 | 562–638, 694–708, 1712–1739 | class, fields, constructor, `list`/`get`/`pending`, `start`/`stop`/`kick`/`tick` | **stays in `manager.ts`** + delegations | facade |
@@ -742,7 +743,7 @@ delegations. Each commit's number is the measured count, not these estimates.
 → I3 write → I4 requeue → I5 ladder → I6 fire → I7 watch.** `disk` first because `persist` is the
 one write and every later package retargets `this.persist()` → `core.persist()` in the pin map;
 `ladder`/`fire`/`watch` last because they are what `intentsched`, `requeue`, `pastbudget`,
-`pickhold`, `queuehere`, `smartpickchains` and `naming` tests drive, and the whole `test:host`
+`ladderpass` (was `pickhold`), `queuehere` and `naming` tests drive, and the whole `test:host`
 suite plus `e2e-schedule`/`e2e-timedwork`/`e2e-backlog-slots`/`e2e-resurrect-item` run on each.
 
 Ratchet after each: I1 ≈ 2,950 · I2 ≈ 2,450 · I3 ≈ 1,950 · I4 ≈ 1,450 · I5 ≈ 1,120 · I6 ≈ 620 ·
@@ -795,10 +796,8 @@ thing the e2e harness would notice.
   1156 and 1289 and they fire in that order. `wireSessionEvents(ctx)` must register ALL of main's
   session listeners in today's order, and the `turnEnded`/`exit` → intents pair (842–843) stays
   FIRST — it is registered before the store's own `intents.on` blocks and before the broadcast
-  listeners, and `listenWithRetry`'s callback (`sessions.rediscover()` → `intents.reconcile()` →
-  `smartpick.finishApplying()`) relies on every listener existing before `rediscover` emits.
-- **Late binding, not TDZ.** The deps literal, `startPrompt` (reads `backlog`), `smartpick.isOn`
-  (reads `backlog`), the `assessExecutor.notes` (reads `settings`), the `usage` callback (reads
+  listeners, and `listenWithRetry`'s callback (`sessions.rediscover()` → `intents.reconcile()`) relies on every listener existing before `rediscover` emits.
+- **Late binding, not TDZ.** The deps literal, `startPrompt` (reads `backlog`), the `assessExecutor.notes` (reads `settings`), the `usage` callback (reads
   `budget`) and `announceBuild` (reads `fmtSize`, a `const` at 1268) all reference names defined
   later and are correct only because nothing invokes them before `main()`. A factory reads
   `ctx.<x>` at call time; the review checklist for M2–M5 says so and `hostshape` refuses a column-0
@@ -1099,10 +1098,10 @@ below; the rule above (no second implementation) is exactly what that section ke
 
 - `ladder.ts` is `LadderSlice(core)`, stateless, constructed after `WriteSlice`. `core.pass` points
   at it; the facade's `tick` still awaits its own one-line `private pass()`, which
-  `pickhold.test.mjs` calls.
+  `ladderpass.test.mjs` calls.
 - **`block` stays private to the slice**: `pass` is its only caller, so it is no hub member, and
   its three `this.block(` calls are the pin's three. `pass`'s direct row writes (the `window`
-  arming, the expired-waiver drop, the limit re-aim) and the re-asked ladder after `pickHold`
+  arming, the expired-waiver drop, the limit re-aim) and the re-asked ladder after the pre-claim yield
   moved unchanged; rows are read through `core.rows()` at each use, never cached over the await.
   No member was added to `IntentCore`. Ratchet 1,538 → 1,224.
 
@@ -1146,7 +1145,7 @@ below; the rule above (no second implementation) is exactly what that section ke
 - **`ServerCtx`'s extra members were derived by script, not read off the layout list.** A
   TypeScript-checker pass over each M2–M6 range collected every free identifier bound at main's
   top level and defined outside that range, minus `HostCtx`. That gives 23 members: `PORT`, `DOCTOR`,
-  `push`, `setupWatch`, `cliHealthStore`, `tokenStats`, `uiStats`, `usageLog`, `smartpick`,
+  `push`, `setupWatch`, `cliHealthStore`, `tokenStats`, `uiStats`, `usageLog`,
   `assessExecutor`, `wsToken`, `isAttachedToSomeone`, `startPrompt` (narrowed: `opts.rescue`,
   `DeliveryResult`), `deliverChain`, `outSeen`, `announceBuild`, `scanImages`, `scanOutboxDocs`,
   `scanPullCandidates`, `pullNewFiles`, `fmtSize`, `padNotesFor`, `handleClientMessage`. The layout
@@ -1316,7 +1315,7 @@ and `git.ts` already own the plain names; each ≤ 500 lines, `hostshape`):
 | --- | --- |
 | `apiroutes.ts` | the one table, assembled in order (`API_ROUTES`), and `listRoutes()` for the pin |
 | `apitable.ts` | `ApiCtx`, `ApiReq`/`RepoReq`, `route`, `mount`, the matcher, `dispatchApi`, `listApiRoutes` |
-| `apiio.ts` | `json`, `readBody`/`readJson`, the multipart parser, `MIME`, `serveRange`, `serveFileStream`, `serveTreeFile`, `isLoopbackAddr`, the upload ceiling |
+| `apiio.ts` | `json`, `readBody`/`readJson`, the multipart parser, `MIME`, `serveRange`, `serveFileStream`, `serveTreeFile`, the upload ceiling |
 | `apisystem.ts` | health, theme, web bundle, both hook sinks, a plugin's own routes (`* /api/plugin/:id/*`, `api.route`, plugin API 1.2), the four mounts, speed test, ui-usage, netstats, push |
 | `apisession.ts` | transcript (+tools), scrollback, shell, context, slash, external |
 | `apistats.ts` | tokenstats (+ per backend), localusage, tokenwindows, usagelog |
@@ -1454,14 +1453,14 @@ an absolute or `..` dir) moved verbatim.
 
 **`backlog/`:** `BacklogManager` keeps the constructor, the reads (`rows`, `list`, `waiting`), the
 one-line verbs and a `core: BacklogCore` — one object holding the root, `sessions`, `intents`,
-`reviews`, the smart-pick seam and the manager's mutable state (`auto`, `smartPickOn`/`smartPickAt`,
+`reviews` and the manager's mutable state (`auto`,
 `repoSessions`, `openedBy`, `closeDefault`). Each slice is functions over `c: BacklogCore`, written
 against it the way `sessions/` is against `SessionCore`: `backlogcore.ts` (the type, types only),
 `backlogknobs.ts` (`BACKLOG_SESSIONS_MAX`, `BACKLOG_LINGER_MS`, `REAP_*`, read at import),
 `backlogwording.ts` (`deliveryError`, `retryableStep`, `chainDeliveryError` — `retry` is only ever a
 first-step claim), `backlogtitles.ts` (the `backlog · ` PREFIX mark and `withoutBacklogMark`),
 `backlogstore.ts` (`init`, the legacy-file migration, `saveConfig` — tmp+rename — `setAuto`,
-`setSmartPick`, `backlogRows`), `backlogedits.ts` (`add`, `fire`, `update`, `swap`, `reorder`) and
+`backlogRows`), `backlogedits.ts` (`add`, `fire`, `update`, `swap`, `reorder`) and
 `backlogsessions.ts` (`openItemSession`, `lingerSweep`, `reapAutoSession`, `reapable` with its
 background-shell/agent refusal and `REAP_CEILING_MS` overrule, the repo-session helpers, `deliver`).
 `BacklogManager`'s public members and the module's exports are unchanged (pinned).
@@ -1483,7 +1482,7 @@ had. `sidecarroute.ts` (the task and engine types, `SIDECAR_ENV`, `NEEDS_TOOLS`,
 `sidecarPlan`, `sayOnce`), `sidecarclaude.ts` (`runHeadlessClaude` and its streaming variant, the flags,
 `envelopeUsage`, `runToolTask`), `sidecartrust.ts` (`workspaceTrust`, `trustRefusal` — the folder-trust
 refusal), `sidecaropenai.ts` (the local engine: timeout, token budget, `chatCompletion`),
-`sidecartasks.ts` (summary and smart pick) and `sidecarname.ts` (naming and the commit message). Flags,
+`sidecartasks.ts` (summary) and `sidecarname.ts` (naming and the commit message). Flags,
 prompts and timeouts moved byte-identically; `sayOnce` is the one name newly exported, to cross slices.
 
 **`octranscript.mts` (opencode extension):** the facade keeps the header doc and re-exports the same

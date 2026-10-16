@@ -2,13 +2,15 @@
  * The ladder: one pass of the tick over every pending row, and `block` — the
  * one transition a pass writes itself. Moved whole from `manager.ts` (I5,
  * docs/notes/host-architecture.md); the facade keeps a one-line private
- * `pass()` delegation because `pickhold.test.mjs` calls it.
+ * `pass()` delegation because `ladderpass.test.mjs` calls it.
  *
  * `pass` mutates rows directly beside the transitions (the `window` arming,
  * the expired-waiver drop, the limit re-aim) — those writes are behaviour, not
  * an oversight, and so is the whole ladder being re-asked on the far side of
- * the `pickHold` await. Every read of the rows goes through `core.rows()` at
- * the moment it is needed, never cached across that await.
+ * the one microtask yield before each claim (it was the smart pick's
+ * `pickHold` await until 2026-10-16; the yield is kept for the batching it
+ * gives a kick). Every read of the rows goes through `core.rows()` at the
+ * moment it is needed, never cached across that await.
  */
 import {
   budgetWaived,
@@ -24,6 +26,11 @@ import {
 } from "@waterplane/shared";
 import { isTerminal, START_WATCHDOG_MS, type IntentCore } from "./contract.js";
 
+/** A mutable copy of `IntentFacts.local` for one pass. */
+function localCopy(l: IntentFacts["local"]): { free: number; rows: ReadonlySet<string>; busy: Set<string> } | undefined {
+  return l ? { free: l.free, rows: l.rows, busy: new Set(l.busy) } : undefined;
+}
+
 export class LadderSlice {
   constructor(private readonly core: IntentCore) {}
 
@@ -31,6 +38,9 @@ export class LadderSlice {
     // A read-only store (a newer host's file) fires nothing: a `starting` that
     // cannot reach the disk is a row the next restart may run a second time.
     if (this.core.readOnly()) return;
+    // Halted (`halt.ts`): nothing fires, and nothing is used up — a row that
+    // tried and was refused would be spent. It waits for the lift.
+    if (this.core.deps.halted?.()) return;
     const now = Date.now();
     // Free the in-memory guard for an executor that never answered. The row
     // stays `starting` on disk — only a restart may reconcile that.
@@ -63,9 +73,12 @@ export class LadderSlice {
     // `budgetWaived` already refuses an expired one everywhere it is asked;
     // this makes the stored row SAY so, so no phone draws a waiver chip over a
     // row the budget is holding again. Not a starting row: its waiver is
-    // cleared by the start's own outcome.
+    // cleared by the start's own outcome. A WEEKLY waiver that ran out before
+    // its row started leaves the row a leftover of that week, so the new week
+    // is not spent on it at once (`leftoverCeiling`).
     for (const row of this.core.rows()) {
       if (row.pastBudget && !budgetWaived(row, now) && row.state !== "starting" && row.state !== "running") {
+        if (row.pastBudget.weekly && !isTerminal(row)) row.leftoverOf = row.pastBudget.until;
         row.pastBudget = undefined;
         armedAny = true;
       }
@@ -109,6 +122,10 @@ export class LadderSlice {
       if (repoSession.has(r.cwd)) continue;
       repoSession.set(r.cwd, this.core.deps.repoSession(r.cwd));
     }
+    // The local-model cap, read and spent exactly like `autoSlotsFree`
+    // (`localslot.ts`). Copied, so the per-fire decrement below cannot write
+    // through to whatever the dep handed back; `base.local` IS this object.
+    const local = localCopy(this.core.deps.localSlots?.());
     const base: Omit<IntentFacts, "present"> = {
       sessions,
       repoSession,
@@ -118,6 +135,7 @@ export class LadderSlice {
       budgetBlocked: this.core.deps.budgetBlocked(),
       budgetDetail: this.core.deps.budgetDetail?.(),
       budgetOver: this.core.deps.budgetOver?.(),
+      leftoverOver: this.core.deps.leftoverOver?.(),
       budgetHeldSessions: this.core.deps.budgetHeldSessions?.(),
       autoFire: this.core.deps.autoFire(),
       knownDirs: knownDirs ?? new Set<string>(),
@@ -134,14 +152,12 @@ export class LadderSlice {
       // repos in one pass would each read the cap as untouched and each open a
       // session. Decremented per fire, a pass opens min(due, free) of them.
       autoSlotsFree: this.core.deps.autoSlotsFree(),
+      local,
       // What a chain reads. Built once per pass off the live rows plus the tail
       // of the archive — see `chainFacts()` for why all four are supplied
       // together and `ARCHIVE_TAIL_BYTES` for what the tail's far end costs.
       ...this.core.chainFacts(),
     };
-    /** `reapAutoSession` has been asked this pass — see the dep's own note. */
-    let reaped = false;
-
     /** Slots this pass has already handed out per group, on top of what is
      *  already in flight — a pass fires several rows before any of them reports. */
     const claimed = new Map<string, number>();
@@ -151,9 +167,9 @@ export class LadderSlice {
     /**
      * What a verdict that is not `go` does to a row.
      *
-     * Written once and called TWICE — before the pick hold and again after it,
-     * because the facts a hold spans are stale on the other side of it (see the
-     * re-ask below). Two spellings of this would be two answers to one question,
+     * Written once and called TWICE — before the yield and again after it,
+     * because the facts are stale on the other side of it (see the re-ask
+     * below). Two spellings of this would be two answers to one question,
      * and the one that drifted would be the one nobody reads.
      */
     const nonGo = (row: Intent, verdict: Extract<IntentVerdict, { kind: "fail" | "wait" }>): void => {
@@ -171,28 +187,15 @@ export class LadderSlice {
       // pure rule is handed `autoSlotsFree` and never the ceiling it was
       // subtracted from, so it writes the general sentence and this is where
       // the specific one replaces it. Exactly `budgetDetail`'s arrangement.
-      let detail = verdict.reason === "noSlot"
+      const detail = verdict.reason === "noSlot"
         ? this.core.deps.autoSlotsDetail?.() ?? verdict.detail
-        : verdict.detail;
-      // A row that everything else said yes to, held only by the cap: ask the
-      // host to make room. Reached only AFTER the gate, the budget, the
-      // trigger, `serial` and `holdForHost` have all cleared, which is what
-      // keeps a session from being closed on behalf of work nobody wants run
-      // yet. Once per pass — a pass that closed three sessions to answer three
-      // blocked rows would spend the whole cap on one sweep of the clock.
-      //
-      // **The freed slot is NOT handed out by this pass.** `base.autoSlotsFree`
-      // used to be incremented here, and the row that asked is `continue`d past
-      // — so the slot went to the row BEHIND it. With a cap of 1 and three due
-      // rows in three repos, reproduced: A blocks and reaps, B takes A's slot;
-      // next pass B's request reaps and C takes it; A and B run only once
-      // nothing is queued behind them. The user's order inverts for as long as
-      // there is due work. The next tick's fresh `autoSlotsFree()` hands it to
-      // the first row in order, which is what `SKILL.md` has always said.
-      if (verdict.reason === "noSlot" && !reaped) {
-        reaped = true;
-        if (this.core.deps.reapAutoSession?.()) detail = `${detail} — closing an idle one to make room`;
-      }
+        : verdict.reason === "localModel"
+          ? this.core.deps.localSlotsDetail?.() ?? verdict.detail
+          : verdict.detail;
+      // Nothing is closed to make room: only a WORKING automatic session holds
+      // a slot (`slotBusy`, R-automation-042), so closing an idle one would free
+      // nothing — the slot frees itself when a working one goes idle, and the
+      // next tick's fresh `autoSlotsFree()` hands it to the first row in order.
       this.block(row, verdict.reason, detail, verdict.missing, verdict.holderSessionId);
     };
 
@@ -240,16 +243,6 @@ export class LadderSlice {
         this.block(row, "serial", `waiting its turn in this sweep — ${this.core.deps.groupConcurrency()} repos at a time`);
         continue;
       }
-      // `go` — but a ticked repo looks over its waiting items first. The hold is
-      // a WAIT this row wears (`picking`), never a refusal, and it is keyed per
-      // cwd BY THE DEP: the second row of the same repo reaches this line in the
-      // same pass (`serial` only bites once something is claimed) and must not
-      // start a second look. See `IntentDeps.pickHold` for why the de-dupe
-      // cannot live here.
-      //
-      // Nothing is claimed while it holds. The row is `blocked`, not `starting`,
-      // so `busyCwds`, `hostBusy` and `autoSlotsFree` are all untouched and
-      // every other repo keeps moving while this one thinks.
       // The row cleared the whole ladder, so whatever it was waiting for is over:
       // its old sentence must not outlive the yield below. A broadcast lands in
       // that yield — the auto switch's own, sent right after its kick — and it
@@ -261,11 +254,23 @@ export class LadderSlice {
         row.blockSessionId = undefined;
         row.missing = undefined;
       }
-      const hold = await this.core.deps.pickHold?.(row);
-      // `picking` is rung 4.7 — below rung 3, and therefore a hold that must not
-      // cost the row its deadline either. The verdict that got here is a `go`,
-      // so the released occurrence is on it rather than on a wait.
-      if (hold) { this.core.stampCleared(row, verdict.occurrence); this.block(row, "picking", hold); continue; }
+      // The local model, LOADED, before the row opens on it — synchronous (the
+      // load runs in the background and kicks the tick when it ends), so this
+      // is not a yield. A sentence holds the row `localModel` and claims
+      // nothing; below rung 3, so the wait costs no deadline.
+      const localHold = this.core.deps.localHold?.(row);
+      if (localHold) { this.core.stampCleared(row, verdict.occurrence); this.block(row, "localModel", localHold); continue; }
+      // ── The one yield in this loop, kept on purpose ───────────────────────
+      //
+      // A bare microtask before every `go` row is claimed. Until 2026-10-16
+      // this was the smart pick's `await pickHold?.(row)`; the smart pick is
+      // gone, the yield is not. A kick runs the pass synchronously only as far
+      // as here, so a synchronous batch of writes — a bulk waive, an apply's
+      // re-queues, a post and its kick — lands BEFORE any of its rows is
+      // claimed, and the claim below is judged against all of it. Removing it
+      // turned ~30 host tests red (intentsched, pastbudget, requeue): that
+      // batching is behaviour, not an accident of the old dep.
+      await Promise.resolve();
       // That `await` is the first yield inside this loop, so it is the first
       // moment a `cancel()`, a `remove()` or an `edit()` off the wire can land
       // mid-pass. Re-read exactly what the top of the iteration reads, for the
@@ -275,15 +280,14 @@ export class LadderSlice {
       // ── …and the VERDICT is older than the await, too ────────────────────
       //
       // Re-reading the row is not enough. `busyCwds`, `busySessions`, `hostBusy`
-      // and `autoSlotsFree` were all computed at the top of the pass, and a real
-      // `pickHold` spawns `git` (30–200 ms, longer on a cold cache in a big
-      // repo) — a macrotask window in which `backlog.fire` → `runNow` reaches
-      // `fire()` DIRECTLY, not through this loop, and starts a sibling in this
-      // very worktree. The held row then fired on the pre-await verdict:
-      // reproduced as `ran = ["B", "A"]`, both `starting`, one cwd. That is
-      // precisely the "five due rows putting five agents in one worktree" that
-      // `serial` exists to stop, and it is new — this is the first `await`
-      // inside the loop.
+      // and `autoSlotsFree` were all computed at the top of the pass, and any
+      // continuation queued ahead of this one — an async route handler
+      // resuming into `runNow` — reaches `fire()` DIRECTLY, not through this
+      // loop, and can start a sibling in this very worktree. When this await
+      // was the smart pick's (which spawned `git`, a macrotask window) the held
+      // row fired on the pre-await verdict: reproduced as `ran = ["B", "A"]`,
+      // both `starting`, one cwd. That is precisely the "five due rows putting
+      // five agents in one worktree" that `serial` exists to stop.
       //
       // So the busy facts are re-read and the ladder is asked again. Every
       // re-read is MONOTONIC — nothing is ever removed from `busyCwds` or
@@ -315,19 +319,24 @@ export class LadderSlice {
       // off again put the figure one-per-fire below the truth on every pass that
       // had fired anything.
       //
-      // Reproduced: cap 3, an empty host, three due rows in three repos, smart
-      // pick off everywhere (the re-ask runs for every `go` row whenever the
-      // `pickHold` dep exists, so this was every pass on the real host) — `a`
-      // and `b` fire, and `c` reads `noSlot` with one slot genuinely free, then
-      // `reapAutoSession()` closes a lingering finished session somebody may
+      // Reproduced: cap 3, an empty host, three due rows in three repos (the
+      // re-ask runs for every `go` row) — `a` and `b` fire, and `c` reads `noSlot` with one slot genuinely free — and
+      // the reap of that time closed a lingering finished session somebody may
       // still have wanted to read, to make room that was already there. `c` then
-      // fired anyway on the next tick. One destroyed conversation per pass that
-      // fires two or more fresh rows.
+      // fired anyway on the next tick.
       //
       // The PRE-await decrement (`base.autoSlotsFree -= 1` at the bottom of the
       // loop) stays: it is what makes the rows behind a fire in the SAME pass see
       // one fewer slot before anything has been counted by the host.
       base.autoSlotsFree = Math.min(base.autoSlotsFree, this.core.deps.autoSlotsFree());
+      // The local cap the same way: the live reading already counts every
+      // row this pass fired (`starting` is written before the executor), so
+      // MIN, never a subtraction; busy sessions only ever added.
+      const localNow = this.core.deps.localSlots?.();
+      if (local && localNow) {
+        local.free = Math.min(local.free, localNow.free);
+        for (const id of localNow.busy) local.busy.add(id);
+      }
       const again = intentVerdict(row, { ...base, present }, now);
       if (again.kind !== "go") { nonGo(row, again); continue; }
       // `go`. Claim the group and the session for the rest of THIS pass — the
@@ -345,6 +354,9 @@ export class LadderSlice {
       // asked twice — but the session it opens is as real as any other, so the
       // automatic row behind it in the same pass must see one fewer.
       if (needsSlot(row)) base.autoSlotsFree -= 1;
+      // …and a local row spends one of the local cap, so the next local row in
+      // this same pass reads it as taken.
+      if (local?.rows.has(row.id)) local.free -= 1;
       void this.core.fire(row, { sessionId: again.sessionId, occurrence: again.occurrence, late: again.late });
     }
   }

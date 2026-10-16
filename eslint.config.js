@@ -29,7 +29,7 @@ const STORAGE_OWNERS = [
 ];
 
 export default tseslint.config(
-  { ignores: ["**/dist/**", "**/node_modules/**", "packages/app/**", "docs/**"] },
+  { ignores: ["**/dist/**", "**/node_modules/**", "packages/app/**", "packages/vscode/**", "docs/**"] },
 
   // ---- everything TypeScript ----
   {

@@ -60,6 +60,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
+import { waitForHost } from "./lib-e2e.mjs";
 
 const PORT = 8823;
 const ROOT = mkdtempSync(join(tmpdir(), `${SLUG}-assess-`));
@@ -256,7 +257,7 @@ const ack = (s, id) => s.acks.find((a) => a.ackId === id);
 const outPath = join(REPO, STATE, "assess-out.json");
 
 boot();
-await sleep(1500);
+await waitForHost(PORT);
 let c = await connect();
 
 // ── The list the run is about ────────────────────────────────────────────────
@@ -327,7 +328,7 @@ check((ack(c, "run-second")?.reason ?? "").includes("already running"), `…with
 c.close();
 await stop();
 boot();
-await sleep(1800);
+await waitForHost(PORT);
 c = await connect();
 await c.refresh();
 check(!!c.intent(slowRunId), "the run's intent row is still there after a restart — it was on disk before the tap returned");

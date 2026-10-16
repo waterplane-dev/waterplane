@@ -79,14 +79,12 @@ export function intentProse(i: Intent): string | null {
 }
 
 /**
- * A one-off whose instant has passed, as opposed to one somebody switched off.
- *
- * On the wire these were the same row — `intentToSchedule` derives `enabled`
+ * A one-off whose instant has passed, as opposed to one somebody switched off. On
+ * the wire these were the same row — `intentToSchedule` derives `enabled`
  * from `nextAt !== null` because an intent has no second flag — so the old
  * `scheduleRow` could not tell them apart and read EVERY spent one-off as
- * "switched off, turn it back on": a sentence pointing at a switch that
- * recomputes the same null and moves nothing. Off the intent the question is
- * simply answerable, which is the whole argument for reading the store.
+ * "switched off, turn it back on": a switch that recomputes the same null and
+ * moves nothing. Off the intent it is answerable — the argument for the store.
  */
 export function spentOnce(i: Intent, now: number): boolean {
   if (i.trigger.kind !== "at") return false;
@@ -97,6 +95,14 @@ export function spentOnce(i: Intent, now: number): boolean {
   // spent about a one-off the host still had armed inside its grace window —
   // the one case where it is about to run.
   return isSpentOnce({ rule: i.trigger.rule, nextAt: i.nextAt, lastOccurrence: i.lastOccurrence }, now);
+}
+
+/** Does a result already say WHERE a repo row ran — its repo AND a session? Meaning, not one
+ *  string: the host's `ran in <repo> · a session of its own` / `opened a session in <repo>`
+ *  (`server/intentDeps.ts`), the demo's `ran in a new <repo> session`; `its turn finished` no. */
+export function resultSaysPlace(detail: string | undefined, repo: string): boolean {
+  const esc = repo.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return !!detail && !!repo && /\bsession\b/i.test(detail) && new RegExp(`(^|[^\\w-])${esc}($|[^\\w-])`, "i").test(detail);
 }
 
 /** The sentence, when the host has not written one. It only ever covers states

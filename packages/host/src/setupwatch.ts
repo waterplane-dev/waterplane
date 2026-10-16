@@ -38,7 +38,7 @@
 import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import type { RepoSetupState } from "@waterplane/shared";
-import { inspectRepo, summarize } from "./compliance.js";
+import { inspectRepo, inspectRepoAsync, summarize } from "./compliance.js";
 import { discoverTargets } from "./repos.js";
 import { env } from "./env.js";
 import { logTag } from "@waterplane/shared";
@@ -87,6 +87,8 @@ export class SetupWatcher {
   private path: string;
   private timer: NodeJS.Timeout | null = null;
   private sweeping = false;
+  /** A `checkedAt` moved without the verdict changing, not yet written. */
+  private unsaved = false;
 
   constructor(private root: string) {
     this.path = join(hostStateDir(root), "setup.json");
@@ -153,6 +155,14 @@ export class SetupWatcher {
     }
   }
 
+  /** `check` with its git run in the background (`inspectRepoAsync`) — the sweep's, which nobody
+   *  waits on: a blocking git per path held the loop for minutes on WSL over a Windows drive. */
+  private async checkInBackground(worktreePath: string, repoName: string): Promise<void> {
+    try {
+      this.record(worktreePath, await inspectRepoAsync(worktreePath), repoName);
+    } catch { /* as in `check`: the last verdict stands */ }
+  }
+
   /** Remember a checklist someone else already produced (the sheet's GET, a fix's
    *  refreshed report) without paying for a second inspection. */
   record(worktreePath: string, checks: Parameters<typeof summarize>[0], repoName = ""): RepoSetupState {
@@ -167,7 +177,10 @@ export class SetupWatcher {
     };
     const changed = !prev || prev.ok !== entry.ok || prev.issues !== entry.issues;
     this.entries.set(k, entry);
-    if (changed || !prev) this.persist();
+    // An unchanged verdict still moved `checkedAt`; the sweep saves those once per pass. Unsaved,
+    // every restart found every repo stale and re-inspected the whole root.
+    if (changed) this.persist();
+    else this.unsaved = true;
     if (!prev && !entry.ok) {
       // The whole point of the sweep, in one line of the host log: this repo was
       // never opened in the checklist and is not wired up.
@@ -209,17 +222,19 @@ export class SetupWatcher {
         return e && now - e.checkedAt > RECHECK_MS;
       });
       for (const t of [...fresh, ...stale].slice(0, MAX_PER_SWEEP)) {
-        this.check(t.worktreePath, t.repoName);
-        // inspectRepo shells out synchronously; hand the loop back between repos
-        // so a boot sweep never stalls a PTY frame.
+        // One repo at a time, its git in the background; the file reads that remain are
+        // synchronous, so the loop is handed back between repos too.
+        await this.checkInBackground(t.worktreePath, t.repoName);
         await new Promise((r) => setImmediate(r));
       }
     } catch { /* discovery failed (root gone?) — next tick tries again */ } finally {
+      if (this.unsaved) this.persist();
       this.sweeping = false;
     }
   }
 
   private persist(): void {
+    this.unsaved = false;
     try {
       mkdirSync(hostStateDir(this.root), { recursive: true });
       const repos: Record<string, StoredEntry> = {};

@@ -7,6 +7,7 @@
  */
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
+import { monitorEventLoopDelay } from "node:perf_hooks";
 import { PLUGIN_ROUTE_BODY_MAX, PROTOCOL_VERSION } from "@waterplane/shared";
 import { findTarget } from "../repos.js";
 import { handleOnboardRoutes } from "../onboardroutes.js";
@@ -17,16 +18,37 @@ import { sendBody, notModified, statTag } from "../httpio.js";
 import { webBundleFile, webBundleManifest } from "../webbundle.js";
 import { claudeBin } from "../backends/index.js";
 import { handleAgentIntents } from "../agentintents.js";
+import { handleAgentFollowUp } from "../agentfollowup.js";
 import { handlePeerRoutes } from "../peers/routes.js";
 import { PeerClient } from "../peers/client.js";
 import { handlePeerAgent } from "../peers/agentpeer.js";
 import { ownPtys } from "../ptycap.js";
-import { MIME, json, readBody, readJson } from "./apiio.js";
+import { ACK_WRITE_FAILED } from "../acks.js";
+import { BadBody, MIME, json, readBody, readJson, serveFileStream } from "./apiio.js";
+import { rangeLastByte } from "../plugins/pluginfiles.js";
 import { localProcessRefusal } from "../net.js";
 import { mount, route, type ApiEntry } from "./apitable.js";
 
 /** The phone's "is that desktop signed in" asks (`/api/peers/<name>/status`), never cached. */
 const peerAsker = new PeerClient();
+
+/**
+ * How late the event loop's timers fire. ONE loop pumps every PTY, so a
+ * blocking call anywhere (a sync `ps`, a sync tmux query) shows up as every
+ * session's output stalling at once — and nothing else on `/api/health` could
+ * say so. Enabled when this module loads (host start) and read-and-reset by
+ * each health call, so the figure is "the worst 1% since the last probe", not a
+ * lifetime average that buries a stall that has just begun.
+ */
+const loopDelay = monitorEventLoopDelay({ resolution: 10 });
+loopDelay.enable();
+
+/** p99 loop delay in whole ms since the previous call; 0 when nothing was sampled. */
+function takeLoopDelayP99Ms(): number {
+  const ms = loopDelay.count > 0 ? Math.round(loopDelay.percentile(99) / 1e6) : 0;
+  loopDelay.reset();
+  return ms;
+}
 
 /** A plugin id in a hook-sink path — the registry's own rule. */
 const PLUGIN_HOOK_ID = /^[a-z][a-z0-9-]{1,39}$/;
@@ -36,7 +58,16 @@ export const SYSTEM_ROUTES: readonly ApiEntry[] = [
   route("*", "/api/health", ({ res }, ctx) => {
     // `ptys` is the leak gauge: masters this process holds vs PTYs it should
     // (one per live session, plus running builds) — see `ownPtys()`.
-    json(res, { ok: true, protocol: PROTOCOL_VERSION, root: ctx.root, ptys: ownPtys(), sessions: ctx.sessions.list().length });
+    // `writeErrors`: a durable store whose last write did NOT reach the disk,
+    // in the error's own words — present only while one is failing. The ack
+    // ledger's means a retry after a restart may run twice; the intent
+    // store's means new work is being refused (`acks.ts`, `intents/disk.ts`).
+    const acksErr = ctx.acks?.lastWriteError() ?? null;
+    const intentsErr = ctx.intents.lastWriteError();
+    const writeErrors = acksErr || intentsErr
+      ? { ...(acksErr ? { acks: `${ACK_WRITE_FAILED} (${acksErr})` } : {}), ...(intentsErr ? { intents: `could not save to disk: ${intentsErr}` } : {}) }
+      : undefined;
+    json(res, { ok: true, protocol: PROTOCOL_VERSION, root: ctx.root, ptys: ownPtys(), sessions: ctx.sessions.list().length, loopDelayP99Ms: takeLoopDelayP99Ms(), ...(writeErrors ? { writeErrors } : {}) });
     return true;
   }),
 
@@ -86,7 +117,10 @@ export const SYSTEM_ROUTES: readonly ApiEntry[] = [
   // `localProcessRefusal`, the one predicate all three sinks below share).
   route("POST", "/api/hook", async ({ req, res }, ctx) => {
     { const refused = localProcessRefusal(req.socket.remoteAddress, req.headers); if (refused) { json(res, { ok: false, error: refused }, 403); return true; } }
-    const body = await readJson(req);
+    // Keeps reading a bad body as `{}` (so do the two plugin sinks below): its caller is the
+    // CLI's own hook command, which has nobody to show a 400 to, and the sink's
+    // contract is "no-op on anything it cannot use" (an unknown session included).
+    const body = await readJson(req, { optional: true }).catch(() => ({}));
     try { ctx.sessions.onHookEvent(body); } catch { /* a bad hook must never break the host */ }
     res.writeHead(204).end();
     return true;
@@ -113,8 +147,29 @@ export const SYSTEM_ROUTES: readonly ApiEntry[] = [
     if (!PLUGIN_HOOK_ID.test(params.id!)) return false;
     { const refused = localProcessRefusal(req.socket.remoteAddress, req.headers); if (refused) { json(res, { ok: false, error: refused }, 403); return true; } }
     if (!ctx.pluginHook) { json(res, { ok: false, error: "this host runs no plugins" }, 404); return true; }
-    const r = await ctx.pluginHook(params.id!, await readJson(req));
+    // Tolerant like `/api/hook`: the CLI's hook command is the caller.
+    const r = await ctx.pluginHook(params.id!, await readJson(req, { optional: true, anyJson: true }).catch(() => ({})));
     json(res, r.body, r.status);
+    return true;
+  }),
+  // ── a file a plugin OFFERED (`api.offerFile()`, plugin API 1.5) ──────
+  // Its own prefix, so no plugin route pattern shadows it. Bytes (ranges for a resumed download),
+  // never cached; the core deletes the file once a response delivered its LAST byte
+  // (`pluginfiles.ts`). Gone — fetched, expired, or never offered — is a 404 in words.
+  route("GET", "/api/plugin-file/:id/:token", ({ req, res, params }, ctx) => {
+    if (!PLUGIN_HOOK_ID.test(params.id!)) return false;
+    const f = ctx.pluginFile?.(params.id!, params.token!) ?? null;
+    if (!f) { json(res, { error: "that file is gone from the desktop — it is deleted once fetched, or when its time runs out; ask for it again" }, 404); return true; }
+    const etag = `"o-${f.token.slice(0, 12)}-${f.size}"`;
+    const ifRange = req.headers["if-range"];
+    if (ifRange && ifRange !== etag) delete req.headers.range;
+    const last = rangeLastByte(req.headers.range, f.size);
+    const mime = MIME[extname(f.name).toLowerCase()] || "application/octet-stream";
+    serveFileStream(req, res, f.file, f.size, mime, {
+      "content-disposition": `attachment; filename="${f.name.replace(/[^\w. -]/g, "_")}"`, "cache-control": "no-store", etag,
+    });
+    // Delivered = the response that ends at the last byte FINISHED (every byte handed to the socket).
+    if (last === f.size - 1) res.on("finish", () => f.delivered());
     return true;
   }),
   // ── a plugin's OWN routes (`api.route()`, plugin API 1.2) ────────────
@@ -128,8 +183,13 @@ export const SYSTEM_ROUTES: readonly ApiEntry[] = [
     // A null-prototype object: `?constructor=` or `?__proto__=` is a plain key, first value wins.
     const query: Record<string, string> = Object.create(null);
     for (const [k, v] of url.searchParams) if (!Object.hasOwn(query, k)) query[k] = v;
-    let body: unknown;
-    try { body = await readJson(req, PLUGIN_ROUTE_BODY_MAX); } catch { json(res, { ok: false, error: "payload too large" }, 413); return true; }
+    // Any method, so usually no body (a GET); any JSON value, since the payload is
+    // the plugin's own. Over the cap ⇒ `BadBody` 413, answered by `handleApi`. Not
+    // JSON ⇒ `{}`, because that is the published plugin API (`shared/plugin.ts`'s
+    // `route`: "`{}` when there is none or it is not JSON") — changing it is a
+    // plugin-API decision, not this edge's.
+    const body: unknown = await readJson(req, { limit: PLUGIN_ROUTE_BODY_MAX, optional: true, anyJson: true })
+      .catch((e: unknown) => { if (e instanceof BadBody && e.status === 400) return {}; throw e; });
     const r = await run({ query, body });
     json(res, r.body, r.status);
     return true;
@@ -151,6 +211,7 @@ export const SYSTEM_ROUTES: readonly ApiEntry[] = [
   mount("agentintents", ({ req, res, path, url }, ctx) => handleAgentIntents(req, res, path, url, {
     intents: ctx.intents,
     backlog: ctx.backlog,
+    periods: ctx.periods,
     containRepoDir: (d) => ctx.containRepoDir(d),
     sessionCwd: (id) => { const s = ctx.sessions.get(id); return s && s.running ? s.cwd : null; },
     repoDir: async (id) => (await findTarget(ctx.root, id))?.worktreePath ?? null,
@@ -158,8 +219,11 @@ export const SYSTEM_ROUTES: readonly ApiEntry[] = [
     readJson: (r) => readJson(r),
   })),
 
+  // `POST /api/agent/followup` — an agent flags its OWN session for follow up; sets, never clears (`agentfollowup.ts`).
+  mount("agentfollowup", ({ req, res, path }, ctx) => handleAgentFollowUp(req, res, path, { sessions: ctx.sessions, json, readJson: (r) => readJson(r) })),
+
   // ── First app: plan, start, resume, read back (`onboardroutes.ts`) ──
-  mount("onboardroutes", ({ req, res, path, url }, ctx) => handleOnboardRoutes(req, res, path, url, { onboard: ctx.onboard, json, readJson: (r) => readJson(r), signedIn: () => claudeSignInState(claudeBin()) })),
+  mount("onboardroutes", ({ req, res, path, url }, ctx) => handleOnboardRoutes(req, res, path, url, { onboard: ctx.onboard, json, readJson: (r) => readJson(r, { optional: true }), signedIn: () => claudeSignInState(claudeBin()) })),
 
   // ── Speed test (bidirectional throughput + connection diagnostics) ──
   // Not repo-scoped: it measures the transport, not any repo. Traffic rides
@@ -188,7 +252,7 @@ export const SYSTEM_ROUTES: readonly ApiEntry[] = [
   // this must stay cheap and never fail the client. GET returns the whole doc
   // (Settings → feature usage); DELETE resets the window.
   route("POST", "/api/ui-usage", async ({ req, res }, ctx) => {
-    const body = await readJson(req);
+    const body = await readJson(req, { optional: true });
     const n = ctx.uiStats.merge(body?.counts ?? body);
     json(res, { ok: true, merged: n });
     return true;
@@ -210,7 +274,7 @@ export const SYSTEM_ROUTES: readonly ApiEntry[] = [
   // contract as /api/ui-usage: cheap, never fails the client, DELETE resets the
   // window. Nothing here leaves the machine.
   route("POST", "/api/netstats", async ({ req, res }, ctx) => {
-    const body = await readJson(req);
+    const body = await readJson(req, { optional: true });
     ctx.netstats.putClientReport(String(body?.deviceId ?? ""), body?.report ?? body);
     json(res, { ok: true });
     return true;
@@ -236,7 +300,7 @@ export const SYSTEM_ROUTES: readonly ApiEntry[] = [
     return true;
   }),
   route("POST", "/api/push/unsubscribe", async ({ req, res }, ctx) => {
-    const { endpoint } = await readJson(req);
+    const { endpoint } = await readJson(req, { optional: true });
     if (endpoint) ctx.push.unsubscribe(String(endpoint));
     json(res, { ok: true });
     return true;

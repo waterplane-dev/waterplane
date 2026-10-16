@@ -19,7 +19,7 @@
  * (`npm run test:unit`) runs this straight off the TypeScript with node's type
  * stripping, and this file must never end up pulling in DOM or JSX.
  */
-import type { SessionCostLevel } from "@waterplane/shared";
+import type { SessionCostLevel, SpendWarnLevel } from "@waterplane/shared";
 
 /** How far along the ladder each level sits — comparable with `>=`. */
 const RANK: Record<SessionCostLevel, number> = { fresh: 0, warm: 1, heavy: 2, steep: 3 };
@@ -85,6 +85,27 @@ export function shouldNoticeAgent(
   }
   if (seen[sessionId] === agent) return { notice: false, next: seen };
   const next: Record<string, string> = { ...seen, [sessionId]: agent };
+  const ids = Object.keys(next);
+  if (ids.length > MAX_REMEMBERED) {
+    for (const id of ids.slice(0, ids.length - MAX_REMEMBERED)) delete next[id];
+  }
+  return { notice: true, next };
+}
+
+const SPEND_RANK: Record<SpendWarnLevel, number> = { warn: 1, high: 2 };
+
+/**
+ * The spend-mark toast's decision (`useCostNotices`): once per session per
+ * step UP — orange once, red once — never downward and never per frame. A
+ * session's spend only rises, so there is no re-arming; a raised threshold that
+ * leaves a session under its mark simply draws no mark. Bounded like
+ * `shouldNotice`.
+ */
+export function shouldNoticeSpend(sessionId: string, level: SpendWarnLevel | null, seen: Record<string, string>): NoticeVerdict {
+  if (!level) return { notice: false, next: seen };
+  const already = SPEND_RANK[seen[sessionId] as SpendWarnLevel] ?? 0;
+  if (already >= SPEND_RANK[level]) return { notice: false, next: seen };
+  const next: Record<string, string> = { ...seen, [sessionId]: level };
   const ids = Object.keys(next);
   if (ids.length > MAX_REMEMBERED) {
     for (const id of ids.slice(0, ids.length - MAX_REMEMBERED)) delete next[id];

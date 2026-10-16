@@ -145,7 +145,13 @@ export function storeRedeemed(kv: KV, reply: Extract<RedeemReply, { ok: true }>,
   const put = (bare: string, v: string) => {
     for (const k of scopedKeys(bare, host!.id, active)) { kv.setItem(k, v); wrote.push(k); }
   };
-  if (isDeviceToken(reply.token)) put(LS.deviceToken, reply.token);
+  if (isDeviceToken(reply.token)) {
+    put(LS.deviceToken, reply.token);
+    // A passive token opens on the passive screen even before the first status
+    // read (`passiveMode.ts`); a full one clears a passive mark a re-pair left.
+    if (reply.scope === "passive") put(LS.passive, "1");
+    else for (const k of scopedKeys(LS.passive, host.id, active)) kv.removeItem(k);
+  }
   const id = reply.lanIdentity;
   if (id && typeof id.hostId === "string" && typeof id.secret === "string" && id.secret.length >= 16) {
     put(LS.lanIdentity, JSON.stringify({ hostId: id.hostId, secret: id.secret }));

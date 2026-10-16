@@ -26,6 +26,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
 import { E, SLUG, rootEnv } from "./lib-brand.mjs";
+import { waitForHost } from "./lib-e2e.mjs";
 
 const PORT = 8839;
 const ROOT = mkdtempSync(join(tmpdir(), `${SLUG}-netstats-`));
@@ -47,7 +48,7 @@ const host = spawn("node", ["packages/host/dist/main.js"], {
   stdio: ["ignore", "pipe", "pipe"],
 });
 host.stderr.on("data", (d) => process.stderr.write("[host] " + d));
-await sleep(900);
+await waitForHost(PORT);
 
 const repo = await fetch(`${base}/api/repo`, {
   method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "ns" }),

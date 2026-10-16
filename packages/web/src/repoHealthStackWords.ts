@@ -90,6 +90,12 @@ export function magnitudeLeadWords(files: number | null, loc: number | null): st
  * the longest file as rules over this distribution would say somebody chose
  * them. Nobody did: they are two readings of the same tape, and they belong in
  * the sentence under it.
+ *
+ * `{lead, more}`, like the context sheet's notes: `lead` is the figures, the
+ * line drawn under the tape; `more` is WHY they are words and not rules, which
+ * folds — a reason about the drawing, not a reading. A caller that already
+ * prints the longest file above the tape (`LongestFiles`' value line) passes
+ * `longest` null, so the figure is said once, where a reader looks first.
  */
 export function tapeWords(
   n: number,
@@ -101,7 +107,7 @@ export function tapeWords(
    *  "App.tsx is" is a file somebody can open — the same argument the tool's
    *  `size` metric makes for carrying `maxPath` beside `max` at all. */
   path?: string | null,
-): string {
+): { lead: string; more: string } {
   const bits = [`the ${nf(n)} longest source files, biggest first`];
   if (longest != null) bits.push(`longest ${nf(longest)} lines${path ? ` — ${path}` : ""}`);
   if (p95 != null) bits.push(`p95 ${nf(p95)} lines`);
@@ -109,7 +115,12 @@ export function tapeWords(
   // down here: the tool decides how long the tape is, and a constant copied to
   // this side would keep answering after it changed.
   if (files != null && files > n) bits.push(`the other ${nf(files - n)} files in the tree are not in this row`);
-  return `${bits.join(" \u00b7 ")}. Neither figure is drawn as a rule: a dashed line means a threshold on every other chart here, and nobody chose these.`;
+  return {
+    lead: `${bits.join(" \u00b7 ")}.`,
+    // Names both figures rather than "neither figure": the longest may be said
+    // on the line above the tape instead of in `lead`, and is no rule there either.
+    more: "Neither the longest file nor p95 is drawn as a rule: a dashed line means a threshold on every other chart here, and nobody chose these.",
+  };
 }
 
 /**
@@ -242,19 +253,27 @@ export function holderWords(
  * stretch is — without calling the curve anything. Whether one file holding
  * a growing share of the tree matters is the reader's call; this says only
  * that it is the same file, or that it is not.
+ *
+ * `{lead, more}`: four sentences stood under the chart on every visit, beside
+ * a `?` that already says what a hue and a ring are. `more` — the method, the
+ * handover count, the folded holders, the axis rules — opens on request.
+ * `lead` is only what is MISSING (no names on the wire, or a stretch with a
+ * length and no name), which never folds: an absence nobody is told about
+ * reads as a file that did not change hands.
  */
 export function longestCaptionWords(o: {
   handovers: number;
   folded: number;
   unnamed: boolean;
   named: boolean;
-}): string {
+}): { lead: string | null; more: string } {
   if (!o.named) {
-    return (
-      "The length of the single longest source file at each reading. This reading carries no file " +
-      "names per day, so a new file taking the top spot cannot be told from the same one growing — " +
-      "re-run the readings to get them."
-    );
+    return {
+      lead:
+        "This reading carries no file names per day, so a new file taking the top spot cannot be told " +
+        "from the same one growing — re-run the readings to get them.",
+      more: "The length of the single longest source file at each reading.",
+    };
   }
   const bits = [
     "The length of the single longest source file at each reading, one hue per file.",
@@ -265,7 +284,9 @@ export function longestCaptionWords(o: {
   if (o.folded > 0) {
     bits.push(`The ${nf(o.folded)} earliest holder${o.folded === 1 ? "" : "s"} share one ink line — four hues is the palette.`);
   }
-  if (o.unnamed) bits.push("A stretch in ink with no legend entry is readings that carried a length and no name.");
   bits.push("Same axis rules as the tiles: fitted to its own low and high, by position, a missing day cuts the line.");
-  return bits.join(" ");
+  return {
+    lead: o.unnamed ? "A stretch in ink with no legend entry is readings that carried a length and no name." : null,
+    more: bits.join(" "),
+  };
 }

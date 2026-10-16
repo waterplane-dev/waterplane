@@ -12,9 +12,12 @@
  */
 import { logTag } from "@waterplane/shared";
 import type { ReactNode } from "react";
-import type { HostMessage, RepoTarget } from "@waterplane/shared";
+import type { HostMessage, RepoTarget, SessionInfo } from "@waterplane/shared";
+import { addSettingRows } from "../settingsIndex.ts";
 import type { ComponentType } from "react";
-import type { CoreApi, FeatureManifest, RepoChipDef, SettingsGroupId, SetupRowDef, SheetDef, SheetId, ToolbarItemDef } from "../sdk/types.ts";
+import type {
+  Availability, ContributionIcon, CoreApi, FeatureManifest, LauncherItemCount, LauncherItemDef, MenuItemDef, RepoChipDef, SessionViewDef, SettingsGroupId, SetupRowDef, SheetDef, SheetId, ToolbarItemDef,
+} from "../sdk/types.ts";
 
 type AnyHandler = (msg: HostMessage, c: CoreApi) => void;
 
@@ -138,6 +141,7 @@ export interface KeyedNode { key: string; node: ReactNode }
  */
 export function createSettingsRowTable(features: readonly FeatureManifest[], getCore: () => CoreApi) {
   const defs = features.flatMap((f) => (f.settings ?? []).map((d, i) => ({ feature: f.id, key: `${f.id}:${i}`, d })));
+  addSettingRows(defs.flatMap((x) => (x.d.rows ?? []).map((r) => ({ ...r, group: x.d.group }))));
   const fail = createFailReporter(true);
   return {
     /** `band` cuts the group's rows to `from <= order < to` — so the core sheet
@@ -227,4 +231,95 @@ export function createRepoChipList(features: readonly FeatureManifest[]): { key:
 /** Every feature's setup-row words, in registry order (`setupRowLookup` decides which are refused). */
 export function setupRowDefs(features: readonly FeatureManifest[]): SetupRowDef[] {
   return features.flatMap((f) => [...(f.setupRows ?? [])]);
+}
+
+/**
+ * A contributed session view or launcher item, resolved for this render: its words, and either the
+ * open or the sentence why it cannot. `unavailable` set ⇒ the entry is still drawn like any other,
+ * and its tap says the sentence (never a grey control).
+ */
+export interface ContributedEntry {
+  /** `<manifest id>:<entry id>` — stable across renders, for React and for `track`. */
+  key: string;
+  feature: string;
+  id: string;
+  label: string;
+  icon: ContributionIcon;
+  unavailable: string | null;
+  /** Contained: a throw is said once, never takes the header down. */
+  open(): void;
+  /** A launcher item's count HOOK (`LauncherItemDef.useCount`), passed through as given. */
+  useCount?(): LauncherItemCount | null;
+}
+
+/** What `available` said, as the sentence or null. Anything but `true` or a non-empty string is a
+ *  bug in the extension, and still reads as a refusal in words rather than as available. */
+export function availabilityText(a: Availability | unknown, label: string): string | null {
+  if (a === true) return null;
+  if (typeof a === "string" && a.trim()) return a.trim();
+  return `${label} is not available here`;
+}
+
+type Contributed = { id: string; label: string; icon: ContributionIcon; order?: number; available?(c: CoreApi): Availability };
+
+function contributionTable<D extends Contributed, A extends unknown[]>(
+  features: readonly FeatureManifest[], pick: (f: FeatureManifest) => readonly D[] | undefined, what: string,
+  getCore: () => CoreApi, run: (d: D, c: CoreApi, ...args: A) => void,
+) {
+  // `order` first, then registry order (`sort` is stable).
+  const defs = features
+    .flatMap((f) => (pick(f) ?? []).map((d) => ({ feature: f.id, d })))
+    .sort((a, b) => (a.d.order ?? 0) - (b.d.order ?? 0));
+  const fail = createFailReporter(true);
+  return {
+    entries(...args: A): ContributedEntry[] {
+      if (!defs.length) return [];
+      const c = getCore();
+      const out: ContributedEntry[] = [];
+      for (const { feature, d } of defs) {
+        try {
+          const unavailable = d.available ? availabilityText(d.available(c), d.label) : null;
+          out.push({
+            key: `${feature}:${d.id}`, feature, id: d.id, label: d.label, icon: d.icon, unavailable,
+            open: () => { const cc = getCore(); try { run(d, cc, ...args); } catch (e) { fail(feature, `${what} ${d.id}`, e, cc); } },
+          });
+        } catch (e) { fail(feature, `${what} ${d.id}`, e, c); }
+      }
+      return out;
+    },
+  };
+}
+
+/** Session views for the header's segment, `order` then registry order. An `available` that throws
+ *  drops that view (said once); an `open` that throws is contained and said once. */
+export function createSessionViewTable(features: readonly FeatureManifest[], getCore: () => CoreApi) {
+  const t = contributionTable<SessionViewDef, [string]>(features, (f) => f.sessionViews, "session view", getCore,
+    (d, c, sessionId) => d.open(c, { sessionId }));
+  return { views: (sessionId: string) => t.entries(sessionId) };
+}
+
+/** Launcher header items, `order` then registry order, under the same containment. */
+export function createLauncherItemTable(features: readonly FeatureManifest[], getCore: () => CoreApi) {
+  const t = contributionTable<LauncherItemDef, []>(features, (f) => f.launcherItems, "launcher item", getCore, (d, c) => d.open(c));
+  const counts = new Map<string, () => LauncherItemCount | null>();
+  for (const f of features) for (const d of f.launcherItems ?? []) if (typeof d.useCount === "function") counts.set(`${f.id}:${d.id}`, d.useCount);
+  return { items: () => t.entries().map((e) => (counts.has(e.key) ? { ...e, useCount: counts.get(e.key) } : e)) };
+}
+
+/** A contributed menu line's catalog id: namespaced, so it can never take a core line's id. */
+export const menuItemKey = (feature: string, id: string) => `${feature}:${id}`;
+
+/** The contributed ☰ lines as catalog rows (`toolbar.ts`), `order` then registry order. */
+export function menuItemCatalog(features: readonly FeatureManifest[]): { id: string; name: string; Icon: ContributionIcon }[] {
+  return features
+    .flatMap((f) => (f.menuItems ?? []).map((d) => ({ feature: f.id, d })))
+    .sort((a, b) => (a.d.order ?? 0) - (b.d.order ?? 0))
+    .map(({ feature, d }) => ({ id: menuItemKey(feature, d.id), name: d.label, Icon: d.icon }));
+}
+
+/** Contributed ☰ lines for one session, under the same containment as the launcher's items. The
+ *  entry's `key` is its catalog id. */
+export function createMenuItemTable(features: readonly FeatureManifest[], getCore: () => CoreApi) {
+  const t = contributionTable<MenuItemDef, [SessionInfo]>(features, (f) => f.menuItems, "menu item", getCore, (d, c, active) => d.open(c, { active }));
+  return { items: (active: SessionInfo) => t.entries(active) };
 }

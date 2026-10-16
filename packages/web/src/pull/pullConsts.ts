@@ -76,6 +76,8 @@ export function artifactUrl(item: PullItem): string {
   // native shell installs (hostUrl.ts), and to the native download service,
   // which sends no bearer — so `abs()` pins the SAVED (tailnet) address, never
   // the LAN route, where a token-less request is a 401. No-op in the browser.
+  // A file a plugin offered outside every repo (`api.offerFile`): its own route, same gates.
+  if (item.src && item.src.startsWith("/api/plugin-file/")) return abs(item.src);
   return abs(`/api/repos/${item.repoId}/artifact?path=${encodeURIComponent(item.relPath)}&download=1`);
 }
 

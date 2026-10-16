@@ -70,6 +70,10 @@ const REPEAT_MS = Math.max(60_000, Number(env("USAGELOG_REPEAT_MS") || 30 * 60 *
  *  append — a rewrite per reading is pointless IO for a line-at-a-time log. */
 const SLACK = 1.25;
 
+/** The knobs as this process read them — ONE read, shared with every source's log
+ *  (`usagesourcelog.ts`), so claude's file and the others' cannot drift apart. */
+export const USAGELOG_KNOBS = { CAP, RETAIN_MS, REPEAT_MS, SLACK } as const;
+
 const num = (v: unknown): number | null =>
   typeof v === "number" && Number.isFinite(v) ? v : null;
 

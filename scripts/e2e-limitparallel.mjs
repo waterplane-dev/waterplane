@@ -124,6 +124,14 @@ bootWait(PORT, 800, async () => {
     }
     if (m.t === "limit.config") {
       cfg = { mode: m.mode ?? null, resumingIds: m.resumingIds ?? [] };
+      trail.push(`${Date.now() % 100000} cfg mode=${cfg.mode} resuming=${cfg.resumingIds.join(",")}`);
+      // The phases advance on THIS frame too. `limit.setMode` publishes the
+      // queue (session updates) BEFORE it broadcasts the new mode, so the last
+      // session.updated the switch causes arrives while `cfg.mode` is still
+      // "one" — and a run whose sessions then sat quiet (a loaded desktop: no
+      // stray redraw to deliver one more update) waited on a mode it already
+      // had until the timeout.
+      advance();
       return;
     }
     if (m.t === "session.created") {
@@ -143,6 +151,13 @@ bootWait(PORT, 800, async () => {
     lim.set(m.session.id, m.session.limit);
     { const l = m.session.limit; trail.push(`${Date.now() % 100000} lim ${m.session.id} blocked=${l.blocked} attempts=${l.attempts} resuming=${!!l.resuming} prompt=${!!m.session.prompt}`); }
     checkParallel();
+    advance();
+  });
+
+  /** One step of the phases, off whatever the newest frame made true — asked
+   *  on every session.updated AND every limit.config, since each phase waits
+   *  on a fact that only one of the two carries. */
+  function advance() {
     if (created < PLAN.length) return;
     const all = [...lim.values()];
 
@@ -182,7 +197,7 @@ bootWait(PORT, 800, async () => {
         process.exit(0);
       }, 1500);
     }
-  });
+  }
   ws.on("error", (e) => fail("ws error " + e.message));
 });
 

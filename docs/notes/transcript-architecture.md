@@ -18,6 +18,8 @@ TranscriptView.tsx                COMPOSER: calls useTranscriptView, lays out th
 transcript/useTranscriptView.ts   ALL state, refs, effects and handlers, in the original declaration order
 transcript/Tv*.tsx                presentational regions: NO hooks, they read the model `m`
 transcript/tvLive.ts              the status strip's reading (pure)
+transcript/readThrough.ts         the read watermark from turn edges (pure)
+transcript/spentVerb.ts           a fired verb or outline jump runs once per tap, not per remount (pure)
 transcript/tvRows.ts              fold rows, tally, `since`, poll constants
 transcript/tvTypes.ts             `TranscriptStatus`, `TranscriptViewProps`, `DetailState`
 transcript/tvParts.tsx            `Collapse`, `ToolRow`

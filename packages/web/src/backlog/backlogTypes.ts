@@ -4,9 +4,10 @@
  * hooks' results spread together, built once per render by `Backlog.tsx`.
  * Shape: docs/notes/backlog-architecture.md.
  */
-import type { AutoSlotFacts, BacklogItem, Intent, ItemCategory, RepoTarget, SessionInfo, SmartPickSummary } from "@waterplane/shared";
+import type { AutoSlotFacts, BacklogItem, Intent, ItemCategory, RepoTarget, SessionBudget, SessionInfo } from "@waterplane/shared";
 import type { CloseChoice } from "../autoSessions";
 import type { RenderRetime } from "../RetimeBar";
+import type { SlotCheck } from "../slotCheck";
 import type { useBacklogCuts } from "./useBacklogCuts";
 import type { useBacklogDraft } from "./useBacklogDraft";
 import type { useBacklogDrag } from "./useBacklogDrag";
@@ -83,21 +84,6 @@ export interface BacklogProps {
    * ended. Absent id ⇒ nothing to say (the item isn't queued, or is archived).
    */
   waiting?: Record<string, string>;
-  /**
-   * The repos whose backlog takes a **look before its next item fires** — the
-   * per-repo tick.
-   *
-   * `undefined` is a host that has never heard of the smart pick, and the tick
-   * is then not drawn at all: an old daemon would silently ignore
-   * `backlog.setSmartPick`, and a switch that flips back on the next list is
-   * worse than no switch. An EMPTY ARRAY is a host that knows about it and has
-   * no repo ticked, which is the ordinary first run — so the two readings are
-   * deliberately not collapsed.
-   */
-  smartPick?: string[] | null;
-  /** The last pass per repo, keyed by worktree path. Absent until a repo has
-   *  ever taken a look; the strip is then not drawn. */
-  passes?: Record<string, SmartPickSummary>;
   /**
    * When the backlog snapshot under this sheet last came from the host.
    *
@@ -182,33 +168,12 @@ export interface BacklogRowVerbs {
    *  Allowed in any state — a running item's session is exactly the one a
    *  person may decide to keep. Live-only, like every mutation here. */
   onSetCloseWhenDone: (id: string, choice: CloseChoice) => void;
+  /** "Flag for follow up when done" on this row — `backlog.update`, live-only. */
+  onSetFlagWhenDone: (id: string, on: boolean) => void;
+  /** Set, change or clear (`null`) the budget of a still-queued row's session — `backlog.update`, live-only. */
+  onSetBudget: (id: string, b: SessionBudget | null) => void;
   /** Open an item's referenced image in the annotator (view + mark); marked result swaps the path. */
   onEditImage: (it: BacklogItem, relPath: string) => void;
-  /**
-   * Put the originals of a merged row back and remove the row the pass wrote.
-   *
-   * The whole safeguard of a feature that applies itself: nothing was destroyed
-   * (every original is archived with its own words), and one tap puts them
-   * back.
-   *
-   * Reachable in the case it exists FOR, which is the asleep one. The pass
-   * picks and applies in the same breath and the merged row is routinely the
-   * pick, so a row's pre-run `undo` window is about a tick — the person the
-   * notification wakes meets a row that has already run. So the same message
-   * serves both sides, and the ROW words which one it is: before it runs this
-   * is an undo, and after it runs it is "queue the originals again", because
-   * the merged words have been typed and cannot be untyped.
-   *
-   * **Offered while it is RUNNING too**, because the host offers it: it
-   * archives the row without stopping it and answers "still running and has not
-   * been stopped". The row said *"can be put back once it has finished"*
-   * instead — a refusal the host would never make, in exactly the state a
-   * sleeping person wakes into.
-   *
-   * `verb` is the word that was ON the button, so the caller's toast can say
-   * what was tapped rather than one of the two words every time.
-   */
-  onUnmerge: (id: string, verb: string) => void;
   /**
    * **Take the clock off a timed row and leave the words.**
    *
@@ -217,12 +182,11 @@ export interface BacklogRowVerbs {
    * saying it missed something for ever: a one-off cannot be re-armed, and
    * `re-fire` runs it right now in a session of its own rather than putting it
    * back in the queue. This is the verb that puts it back in the queue: the
-   * trigger becomes `idle`, the row becomes ordinary waiting work, and `auto`,
-   * `serial` and the smart pick take it from there.
+   * trigger becomes `idle`, the row becomes ordinary waiting work, and `auto`
+   * and `serial` take it from there.
    *
    * It is the answer to the complaint this whole change comes from — seven
-   * skipped scheduled items the user wanted to run *with the smart picker*,
-   * which only ever looks at queued backlog rows.
+   * skipped scheduled items the user wanted run as ordinary queued work.
    *
    * A plain `liveSend`, never durable, for the reason every mutation on this
    * sheet is: a decision about a clock, replayed an hour late, is a decision
@@ -242,8 +206,8 @@ export interface BacklogRowVerbs {
    * **Put a FAILED row back in the queue** — `onDropClock`'s sibling, for the
    * row that is stuck for the other reason.
    *
-   * A failed row is terminal: the ladder never looks at it again, `auto` skips
-   * it and the smart pick, which only ever reads queued rows, cannot see it.
+   * A failed row is terminal: the ladder never looks at it again and `auto` skips
+   * it.
    * The only verbs this sheet had for one were `re-fire` — which starts an
    * agent THIS SECOND, past every rung — and the archive. Measured on the
    * desktop this was written on: 0 queued against 19 failed, so the list the
@@ -329,12 +293,13 @@ export interface BacklogCutVerbs {
    * run can return a verdict about.
    */
   onAssess?: (repoDir: string, ids?: string[]) => void;
+  /** The slot check: exactly `c.ids`, named as one slot (`slotCheck.ts`). */
+  onSlotCheck?: (c: SlotCheck) => void;
   /** Why it cannot be pressed for this repo, in the caller's words (offline, a
    *  run already in flight, the budget gate) — `null` when it can. A reason
    *  rather than a boolean: a greyed-out button that says nothing is the thing
    *  this app keeps finding it has shipped. */
   assessBlocked?: (repoDir: string) => string | null;
-  onSetSmartPick: (repoDir: string, enabled: boolean) => void;
   /**
    * **The same verb over the whole cut — ONE tap, ONE receipt.**
    *

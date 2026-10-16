@@ -3,12 +3,11 @@ import { type ComponentProps, type ReactNode } from "react";
 import { fmtCount, type TokenStatsDoc } from "@waterplane/shared";
 import { ScopeCard, ScopeTag } from "./TokenInsights.tsx";
 import { PerRequestSection } from "./PerRequestSection.tsx";
-import { type DayPoint, HOUR_MS, modelBands, weekBounds, type WeekDay, weekTotals } from "@waterplane/kit";
-import { type RangeId, RANGES, TREND_DAYS } from "./constants.ts";
+import { type DayPoint, HOUR_MS, modelBands } from "@waterplane/kit";
+import { TREND_DAYS } from "./constants.ts";
 import { ClockChart, ModelLegend } from "./charts/Bars.tsx";
 import { AgentDayChart, DayChart } from "./charts/DayChart.tsx";
 import { MixChart } from "./charts/MixChart.tsx";
-import { WeekNav } from "./Readouts.tsx";
 import { TableView } from "./TableView.tsx";
 
 /**
@@ -17,20 +16,27 @@ import { TableView } from "./TableView.tsx";
  * for the same reason as `TotalsCard`; `boxRef` is the body's one width probe and
  * goes onto the same element it always did.
  */
-export function OverTimeCard({ doc, money, table, range, setRange, rangeCaption, rangeWords, week, bounds, setWeekAt, wTotals, prevTotals, weekRows, boxRef, width, running, dayView, setDayView, canModel, mixBy, setMixBy, dayArea, setDayShape, dayAreaOk, dailyFilled, daily, trend, mixFilled, mixRows, bands, days, agentDays, hourWords, hourRows, hourArea, setHourShape, hourlyFilled, hourly }: {
+export function OverTimeCard({ doc, money, table, dayCharts, narrow, chips = null, lead = null, reqSpan = null, rangeCaption, rangeWords, clock, hourNote, boxRef, width, running, dayView, setDayView, canModel, mixBy, setMixBy, dayArea, setDayShape, dayAreaOk, dailyFilled, daily, trend, mixFilled, mixRows, bands, days, agentDays, hourWords, hourRows, hourArea, setHourShape, hourlyFilled, hourly }: {
   doc: TokenStatsDoc;
   money: boolean;
   table: boolean;
-  range: RangeId;
-  setRange: (r: RangeId) => void;
+  /** False under the five-hour span: a day chart of one or two days says nothing the hours do not. */
+  dayCharts: boolean;
+  /** Few enough days that a column would be absurdly wide — capped like the old week view. */
+  narrow: boolean;
+  /** A span control of the box's OWN, in its head — only the VS Code panel, which has no sheet-wide
+   *  span filter; the phone's span is the sticky bar's. With `lead`, drawn first in the body. */
+  chips?: ReactNode;
+  lead?: ReactNode;
+  /** The span's own day edges (inclusive keys) for the cost-per-request section, which then
+   *  compares it with as many days before it. Absent = the drawn days, 7 against 7. */
+  reqSpan?: { from: string; to: string } | null;
   rangeCaption: ReactNode;
   rangeWords: string;
-  week: number;
-  bounds: ReturnType<typeof weekBounds>;
-  setWeekAt: (w: number | null) => void;
-  wTotals: ReturnType<typeof weekTotals>;
-  prevTotals: TokenStatsDoc["totals"];
-  weekRows: WeekDay[];
+  /** The clock face's slots and what span they cover (the span when the hour record reaches it). */
+  clock: { slots: TokenStatsDoc["hourOfDay"]; tag: string; note?: string };
+  /** Why the hour chart covers less than the span, or null. */
+  hourNote: string | null;
   boxRef: (el: HTMLDivElement | null) => void;
   width: number;
   running: DayPoint[];
@@ -61,22 +67,19 @@ export function OverTimeCard({ doc, money, table, range, setRange, rangeCaption,
     <>
 
       {/* ── OVER TIME: one box, its calendar window in its own head ──── */}
-      <ScopeCard title="Over time"
-        chips={RANGES.map((r) => (
-          <button key={r.id} className={`key${range === r.id ? " active" : ""}`}
-            onClick={() => setRange(r.id)}>{r.label}</button>
-        ))}
-        caption={<>{rangeCaption} Everything in this box follows these chips.</>}>
-        {range === "week" && (
-          <WeekNav week={week} bounds={bounds} onGo={setWeekAt}
-            totals={wTotals} prev={prevTotals} rows={weekRows} />
-        )}
+      <ScopeCard title="Over time" chips={chips} caption={rangeCaption}>
+        {/* The box's one width probe: an empty `ctx-box`, so it measures the same content width
+            every chart below draws into, whichever of them the span leaves on screen. */}
+        <div className="ctx-box" style={{ paddingTop: 0 }} ref={boxRef} />
+        {lead}
         {!table ? <>
+        {!dayCharts && <div className="empty ts-caveat">A five-hour window is drawn by the hour only — a day chart of it would be one or two columns.</div>}
+        {dayCharts && <>
         <div className="section section-head">
           <span>Cumulative <ScopeTag>{rangeWords}</ScopeTag></span>
         </div>
-        <div className="ctx-box" ref={boxRef}>
-          {width > 0 && <DayChart pts={running} width={width} kind="area" slots={range === "week"} money={money} />}
+        <div className="ctx-box">
+          {width > 0 && <DayChart pts={running} width={width} kind="area" money={money} />}
         </div>
 
         <div className="section section-head">
@@ -123,11 +126,11 @@ export function OverTimeCard({ doc, money, table, range, setRange, rangeCaption,
             ? <DayChart pts={dayArea && dailyFilled ? dailyFilled : daily} width={width}
                 kind={dayArea ? "area" : "columns"} money={money} trend={trend}
                 label={money ? "spend per day" : "tokens per day"}
-                slots={range === "week"} maxColW={range === "week" ? 30 : undefined} />
+                maxColW={narrow ? 30 : undefined} />
             : <MixChart rows={dayArea && mixFilled ? mixFilled : mixRows} width={width}
                 normalize={dayView === "share"} shape={dayArea ? "area" : "bars"}
                 by={canModel ? mixBy : "kind"} bands={bands}
-                slots={range === "week"} maxColW={range === "week" ? 30 : undefined} />)}
+                maxColW={narrow ? 30 : undefined} />)}
         </div>
         {/* Three things stay on the page. One is a LEGEND for a mark on
             the chart; the other two explain something that is NOT there
@@ -193,7 +196,7 @@ export function OverTimeCard({ doc, money, table, range, setRange, rangeCaption,
           <div className="section section-head">
             <span>Cost per request <ScopeTag>{rangeWords}</ScopeTag></span>
           </div>
-          <PerRequestSection doc={doc} from={days[0].day} to={days[days.length - 1].day} width={width} table={false} />
+          <PerRequestSection doc={doc} from={reqSpan?.from ?? days[0].day} to={reqSpan?.to ?? days[days.length - 1].day} compare={!!reqSpan} width={width} table={false} />
         </>}
 
         {/* ── how often the work fans out ─────────────────────────────── */}
@@ -204,8 +207,8 @@ export function OverTimeCard({ doc, money, table, range, setRange, rangeCaption,
           <div className="ctx-box">
             {width > 0 && (
               <AgentDayChart rows={dayArea && mixFilled ? mixFilled : mixRows} width={width}
-                bands={bands} slots={range === "week"}
-                maxColW={range === "week" ? 30 : undefined} />
+                bands={bands}
+                maxColW={narrow ? 30 : undefined} />
             )}
           </div>
           <ModelLegend bands={bands} />
@@ -224,6 +227,8 @@ export function OverTimeCard({ doc, money, table, range, setRange, rangeCaption,
               smeared across the days it worked.
             </p>
           </details>
+        </>}
+
         </>}
 
         {/* ── intraday ────────────────────────────────────────────────── */}
@@ -247,12 +252,8 @@ export function OverTimeCard({ doc, money, table, range, setRange, rangeCaption,
               label={money ? "spend per hour" : "tokens per hour"}
               stepMs={HOUR_MS} maxColW={10} />}
           </div>
-          {/* Both of these are facts about what is NOT on the chart —
-              how far back it reaches at all, and that the window chips
-              do not move it. The bucketing under them is method. */}
-          <div className="empty ts-caveat">
-            {doc.hoursFrom != null && <>Hourly detail is kept from {new Date(doc.hoursFrom).toLocaleDateString(undefined, { day: "numeric", month: "short" })} onward; everything before that is in the day charts only. </>}
-          </div>
+          {/* A fact about what is NOT on the chart: how far back the hours reach. */}
+          {hourNote && <div className="empty ts-caveat">{hourNote}</div>}
           <details className="hint-more ctx-method">
             <summary>how the hours are bucketed</summary>
             <p>
@@ -271,7 +272,7 @@ export function OverTimeCard({ doc, money, table, range, setRange, rangeCaption,
           <div className="empty">
             {(doc.hours?.length ?? 0) === 0
               ? "No hourly detail yet — the host records it from the next scan of the conversation logs onward."
-              : "Nothing in this week at hourly resolution."}
+              : hourNote ?? `Nothing in ${rangeWords} at hourly resolution.`}
           </div>
         )}
 
@@ -281,25 +282,26 @@ export function OverTimeCard({ doc, money, table, range, setRange, rangeCaption,
             <div className="section section-head">
               <span>Cost per request <ScopeTag>{rangeWords}</ScopeTag></span>
             </div>
-            <PerRequestSection doc={doc} from={days[0].day} to={days[days.length - 1].day} width={width} table />
+            <PerRequestSection doc={doc} from={reqSpan?.from ?? days[0].day} to={reqSpan?.to ?? days[days.length - 1].day} compare={!!reqSpan} width={width} table />
           </>}
         </>}
-      </ScopeCard>
-
         <div className="section section-head">
-          <span>Time of day <ScopeTag muted>all time · no filter</ScopeTag></span>
+          <span>Time of day <ScopeTag>{clock.tag}</ScopeTag></span>
         </div>
+        {clock.note && <div className="empty ts-caveat">{clock.note}</div>}
         <div className="ctx-box">
-          {width > 0 && <ClockChart slots={doc.hourOfDay} width={width} money={money} />}
+          {width > 0 && <ClockChart slots={clock.slots} width={width} money={money} />}
         </div>
         <details className="hint-more ctx-method">
           <summary>how to read the clock</summary>
           <p>
-            Every hour on record folded onto one clock face, so this is a position rather than a
+            Every hour in the span folded onto one clock face, so this is a position rather than a
             date — hour 23 sits beside hour 0 of the next day in the chart above, and beside hour
             22 here. The empty slots are drawn: an hour nobody has ever worked is a reading.
           </p>
         </details>
+      </ScopeCard>
+
     </>
   );
 }

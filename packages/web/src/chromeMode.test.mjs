@@ -58,6 +58,18 @@ test("CLI mode is not typing room, but full screen still works there", () => {
   assert.equal(m.fullMode, true);
 });
 
+test("CLI mode with the caret in the box is full screen, and the button brings the chrome back", () => {
+  const m = mode({ composeFocused: true, cliMode: true });
+  assert.equal(m.typingMode, false);
+  assert.equal(m.fullMode, true, "the key row stays: full screen keeps it");
+  assert.equal(mode({ composeFocused: false, cliMode: true }).chromeHidden, false, "keyboard down, header back");
+  assert.equal(mode({ composeFocused: true, cliMode: true, typingRoom: false }).chromeHidden, false);
+  const s = { ...base, composeFocused: true, cliMode: true };
+  const shown = { ...s, ...fullScreenTap(s) };
+  assert.equal(chromeMode(shown).chromeHidden, false, "never a dead tap");
+  assert.equal(chromeMode({ ...shown, ...fullScreenTap(shown) }).chromeHidden, true);
+});
+
 test("typing room switched off leaves full screen the only hider", () => {
   assert.equal(mode({ typingRoom: false, composeFocused: true }).chromeHidden, false);
   assert.equal(mode({ typingRoom: false, composeFocused: true, fullScreen: true }).fullMode, true);

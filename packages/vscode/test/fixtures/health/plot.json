@@ -1,0 +1,496 @@
+{
+  "scope": null,
+  "preregVersion": "2026-09-22a+5b250243",
+  "windowReadings": 60,
+  "minReadings": 14,
+  "days": 5,
+  "series": [
+    {
+      "key": "size.p95",
+      "label": "p95 file length",
+      "unit": "lines",
+      "points": [
+        {
+          "day": "2026-01-01",
+          "sha7": "1342ccb",
+          "v": 10
+        },
+        {
+          "day": "2026-02-02",
+          "sha7": "b045e5c",
+          "v": 20
+        },
+        {
+          "day": "2026-03-03",
+          "sha7": "ad30170",
+          "v": 30
+        },
+        {
+          "day": "2026-04-04",
+          "sha7": "05b75a7",
+          "v": 40
+        },
+        {
+          "day": "2026-05-05",
+          "sha7": "5f4c0d2",
+          "v": 50
+        }
+      ],
+      "last": 50,
+      "reading": {
+        "rank": 0.95,
+        "slope": "rising",
+        "n": 5,
+        "from": "2026-01-01"
+      },
+      "detail": ""
+    },
+    {
+      "key": "retouch.rate",
+      "label": "the re-touch rate",
+      "unit": "",
+      "points": [
+        {
+          "day": "2026-01-01",
+          "sha7": "1342ccb",
+          "v": null
+        },
+        {
+          "day": "2026-02-02",
+          "sha7": "b045e5c",
+          "v": 0
+        },
+        {
+          "day": "2026-03-03",
+          "sha7": "ad30170",
+          "v": 0
+        },
+        {
+          "day": "2026-04-04",
+          "sha7": "05b75a7",
+          "v": 0
+        },
+        {
+          "day": "2026-05-05",
+          "sha7": "5f4c0d2",
+          "v": 0
+        }
+      ],
+      "last": 0,
+      "reading": {
+        "rank": null,
+        "slope": null,
+        "n": 4,
+        "from": "2026-02-02",
+        "reason": "not enough history (4 of 14 readings)"
+      },
+      "detail": "0 re-touches out of 1 touch over 14 days."
+    },
+    {
+      "key": "hatches.perKloc",
+      "label": "escape hatches per kLOC",
+      "unit": "",
+      "points": [
+        {
+          "day": "2026-01-01",
+          "sha7": "1342ccb",
+          "v": 0
+        },
+        {
+          "day": "2026-02-02",
+          "sha7": "b045e5c",
+          "v": 0
+        },
+        {
+          "day": "2026-03-03",
+          "sha7": "ad30170",
+          "v": 0
+        },
+        {
+          "day": "2026-04-04",
+          "sha7": "05b75a7",
+          "v": 0
+        },
+        {
+          "day": "2026-05-05",
+          "sha7": "5f4c0d2",
+          "v": 0
+        }
+      ],
+      "last": 0,
+      "reading": {
+        "rank": null,
+        "slope": null,
+        "n": 5,
+        "from": "2026-01-01",
+        "reason": "not enough history (5 of 14 readings)"
+      },
+      "detail": "0 occurrences over 50 lines."
+    },
+    {
+      "key": "context.claudeMdChars",
+      "label": "CLAUDE.md",
+      "unit": "chars",
+      "points": [
+        {
+          "day": "2026-01-01",
+          "sha7": "1342ccb",
+          "v": 10
+        },
+        {
+          "day": "2026-02-02",
+          "sha7": "b045e5c",
+          "v": 10
+        },
+        {
+          "day": "2026-03-03",
+          "sha7": "ad30170",
+          "v": 10
+        },
+        {
+          "day": "2026-04-04",
+          "sha7": "05b75a7",
+          "v": 10
+        },
+        {
+          "day": "2026-05-05",
+          "sha7": "5f4c0d2",
+          "v": 10
+        }
+      ],
+      "last": 10,
+      "reading": {
+        "rank": 0.6,
+        "slope": "rising",
+        "n": 5,
+        "from": "2026-01-01"
+      },
+      "detail": ""
+    },
+    {
+      "key": "context.descChars",
+      "label": "the always-on skill descriptions",
+      "unit": "chars",
+      "points": [
+        {
+          "day": "2026-01-01",
+          "sha7": "1342ccb",
+          "v": null
+        },
+        {
+          "day": "2026-02-02",
+          "sha7": "b045e5c",
+          "v": null
+        },
+        {
+          "day": "2026-03-03",
+          "sha7": "ad30170",
+          "v": null
+        },
+        {
+          "day": "2026-04-04",
+          "sha7": "05b75a7",
+          "v": null
+        },
+        {
+          "day": "2026-05-05",
+          "sha7": "5f4c0d2",
+          "v": null
+        }
+      ],
+      "last": null,
+      "reading": {
+        "rank": null,
+        "slope": null,
+        "n": 0,
+        "from": null,
+        "reason": "not enough history (0 of 14 readings)"
+      },
+      "detail": "",
+      "absent": "no .claude/skills at this commit"
+    },
+    {
+      "key": "context.skillCount",
+      "label": "the count of skills",
+      "unit": "",
+      "points": [
+        {
+          "day": "2026-01-01",
+          "sha7": "1342ccb",
+          "v": null
+        },
+        {
+          "day": "2026-02-02",
+          "sha7": "b045e5c",
+          "v": null
+        },
+        {
+          "day": "2026-03-03",
+          "sha7": "ad30170",
+          "v": null
+        },
+        {
+          "day": "2026-04-04",
+          "sha7": "05b75a7",
+          "v": null
+        },
+        {
+          "day": "2026-05-05",
+          "sha7": "5f4c0d2",
+          "v": null
+        }
+      ],
+      "last": null,
+      "reading": {
+        "rank": null,
+        "slope": null,
+        "n": 0,
+        "from": null,
+        "reason": "not ranked: plotted for its shape — the direction of this series carries no claim"
+      },
+      "detail": "",
+      "absent": "no .claude/skills at this commit"
+    },
+    {
+      "key": "untested.count",
+      "label": "the count of modules no test names",
+      "unit": "",
+      "points": [
+        {
+          "day": "2026-01-01",
+          "sha7": "1342ccb",
+          "v": null
+        },
+        {
+          "day": "2026-02-02",
+          "sha7": "b045e5c",
+          "v": null
+        },
+        {
+          "day": "2026-03-03",
+          "sha7": "ad30170",
+          "v": null
+        },
+        {
+          "day": "2026-04-04",
+          "sha7": "05b75a7",
+          "v": null
+        },
+        {
+          "day": "2026-05-05",
+          "sha7": "5f4c0d2",
+          "v": null
+        }
+      ],
+      "last": null,
+      "reading": {
+        "rank": null,
+        "slope": null,
+        "n": 0,
+        "from": null,
+        "reason": "not enough history (0 of 14 readings)"
+      },
+      "detail": "",
+      "absent": "no tests at this commit"
+    }
+  ],
+  "context": {
+    "areas": {},
+    "areasAbsent": "no skill in this tree routes to another (no `<router>-*` convention)"
+  },
+  "classics": {
+    "loc": [
+      {
+        "day": "2026-01-01",
+        "sha7": "1342ccb",
+        "v": 10
+      },
+      {
+        "day": "2026-02-02",
+        "sha7": "b045e5c",
+        "v": 20
+      },
+      {
+        "day": "2026-03-03",
+        "sha7": "ad30170",
+        "v": 30
+      },
+      {
+        "day": "2026-04-04",
+        "sha7": "05b75a7",
+        "v": 40
+      },
+      {
+        "day": "2026-05-05",
+        "sha7": "5f4c0d2",
+        "v": 50
+      }
+    ],
+    "files": [
+      {
+        "day": "2026-01-01",
+        "sha7": "1342ccb",
+        "v": 1
+      },
+      {
+        "day": "2026-02-02",
+        "sha7": "b045e5c",
+        "v": 1
+      },
+      {
+        "day": "2026-03-03",
+        "sha7": "ad30170",
+        "v": 1
+      },
+      {
+        "day": "2026-04-04",
+        "sha7": "05b75a7",
+        "v": 1
+      },
+      {
+        "day": "2026-05-05",
+        "sha7": "5f4c0d2",
+        "v": 1
+      }
+    ],
+    "deps": [
+      {
+        "day": "2026-01-01",
+        "sha7": "1342ccb",
+        "v": null
+      },
+      {
+        "day": "2026-02-02",
+        "sha7": "b045e5c",
+        "v": null
+      },
+      {
+        "day": "2026-03-03",
+        "sha7": "ad30170",
+        "v": null
+      },
+      {
+        "day": "2026-04-04",
+        "sha7": "05b75a7",
+        "v": null
+      },
+      {
+        "day": "2026-05-05",
+        "sha7": "5f4c0d2",
+        "v": null
+      }
+    ],
+    "packages": [
+      {
+        "pkg": ".",
+        "rank": 0,
+        "points": [
+          {
+            "day": "2026-01-01",
+            "sha7": "1342ccb",
+            "v": 10
+          },
+          {
+            "day": "2026-02-02",
+            "sha7": "b045e5c",
+            "v": 20
+          },
+          {
+            "day": "2026-03-03",
+            "sha7": "ad30170",
+            "v": 30
+          },
+          {
+            "day": "2026-04-04",
+            "sha7": "05b75a7",
+            "v": 40
+          },
+          {
+            "day": "2026-05-05",
+            "sha7": "5f4c0d2",
+            "v": 50
+          }
+        ]
+      }
+    ],
+    "types": [
+      {
+        "ext": ".ts",
+        "pack": "typescript",
+        "rank": 0,
+        "files": 1,
+        "points": [
+          {
+            "day": "2026-01-01",
+            "sha7": "1342ccb",
+            "v": 10
+          },
+          {
+            "day": "2026-02-02",
+            "sha7": "b045e5c",
+            "v": 20
+          },
+          {
+            "day": "2026-03-03",
+            "sha7": "ad30170",
+            "v": 30
+          },
+          {
+            "day": "2026-04-04",
+            "sha7": "05b75a7",
+            "v": 40
+          },
+          {
+            "day": "2026-05-05",
+            "sha7": "5f4c0d2",
+            "v": 50
+          }
+        ]
+      }
+    ],
+    "tape": [
+      50
+    ],
+    "tapePaths": [
+      "src.ts"
+    ]
+  },
+  "longest": {
+    "points": [
+      {
+        "day": "2026-01-01",
+        "sha7": "1342ccb",
+        "v": 10
+      },
+      {
+        "day": "2026-02-02",
+        "sha7": "b045e5c",
+        "v": 20
+      },
+      {
+        "day": "2026-03-03",
+        "sha7": "ad30170",
+        "v": 30
+      },
+      {
+        "day": "2026-04-04",
+        "sha7": "05b75a7",
+        "v": 40
+      },
+      {
+        "day": "2026-05-05",
+        "sha7": "5f4c0d2",
+        "v": 50
+      }
+    ],
+    "paths": [
+      "src/big\u001b[31m\r\nrm -rf ~.ts",
+      "src/big\u001b[31m\r\nrm -rf ~.ts",
+      "src/big\u001b[31m\r\nrm -rf ~.ts",
+      "src/big\u001b[31m\r\nrm -rf ~.ts",
+      "src/big\u001b[31m\r\nrm -rf ~.ts"
+    ],
+    "path": "src/big\u001b[31m\r\nrm -rf ~.ts",
+    "day": "2026-05-05"
+  }
+}

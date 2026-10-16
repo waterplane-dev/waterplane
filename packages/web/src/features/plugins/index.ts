@@ -5,7 +5,9 @@
  */
 import { createElement } from "react";
 import type { FeatureManifest } from "../../sdk";
+import { setRowWords } from "../../settingsIndex";
 import { onActionResult, onPluginError } from "./actions";
+import { pluginSearchWords } from "./logic";
 import { DecisionLogSheet } from "./DecisionLogSheet";
 import { DecisionLogDoor, PluginsSettings } from "./PluginsSettings";
 import { PluginsToolbar } from "./PluginsToolbar";
@@ -19,7 +21,10 @@ export const manifest: FeatureManifest = {
   id: "plugins",
   sheets: [{ id: "decisions", persisted: false, render: () => createElement(DecisionLogSheet) }],
   messages: {
-    "plugin.list": (msg) => plugins.set(msg.plugins),
+    "plugin.list": (msg) => {
+      plugins.set(msg.plugins);
+      setRowWords("plugins", pluginSearchWords(msg.plugins));
+    },
     "plugin.actionResult": (msg) => onActionResult(msg),
     "plugin.error": (msg) => onPluginError(msg),
     "decisions.log": (msg) => decisions.set(msg.entries),

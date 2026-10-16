@@ -14,7 +14,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { autoSaveEligible, downloadAction, downloadStatus, fileMatch, needsFetch, pumpEligible, syncKeeps } from "./downloadState.ts";
+import { autoSaveEligible, browserPullAsk, downloadAction, downloadStatus, fileMatch, needsFetch, pumpEligible, stripRows, syncKeeps } from "./downloadState.ts";
 
 const rec = (over = {}) => ({
   item: { id: "l_x", repoId: "r", repoDir: "", repoName: "repo", name: "app.apk", relPath: ".claude/outbox/app.apk", size: 1000, mtime: 5, ts: 5, source: "manual" },
@@ -308,4 +308,26 @@ test("an open socket refutes a WebView that claims to be offline", async () => {
   // A dead HOST is not a dead phone — the attempt is what tells them apart.
   assert.equal(noNetwork(true, false), false);
   assert.equal(noNetwork(true, true), false);
+});
+
+test("with auto-download off, the strip counts only what moves or was tapped", () => {
+  const waiting = rec({ state: "queued" });
+  const tapped = rec({ state: "queued", local: true });
+  const running = rec({ state: "downloading" });
+  const done = rec({ state: "done" });
+  const paused = rec({ state: "paused" });
+  assert.deepEqual(stripRows([waiting, tapped, running, done, paused], true), [waiting, tapped, running, paused]);
+  assert.deepEqual(stripRows([waiting, tapped, running, done, paused], false), [tapped, running]);
+});
+
+test("a browser beside the APK is asked once, and only about automatic work", () => {
+  const auto = rec({ state: "downloading" });
+  const base = { native: false, android: true, auto: true, answered: false, records: [auto] };
+  assert.equal(browserPullAsk(base), true);
+  assert.equal(browserPullAsk({ ...base, native: true }), false, "the shell is the app");
+  assert.equal(browserPullAsk({ ...base, android: false }), false, "no APK off Android");
+  assert.equal(browserPullAsk({ ...base, auto: false }), false, "already off here");
+  assert.equal(browserPullAsk({ ...base, answered: true }), false, "asked once");
+  assert.equal(browserPullAsk({ ...base, records: [rec({ local: true })] }), false, "a tap is not automatic");
+  assert.equal(browserPullAsk({ ...base, records: [rec({ state: "done" })] }), false, "nothing on its way");
 });

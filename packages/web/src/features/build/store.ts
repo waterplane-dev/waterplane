@@ -18,6 +18,11 @@ import { createStore, repoRunStore, useStore } from "../../sdk";
 import { loadBuildsSnap, saveBuildsSnap } from "../../localState";
 import { buildNameIn } from "./logic";
 
+/** Per repo: the ids living in this desktop's own file (`build.list.localIds`).
+ *  A repo with no entry, or an entry of `undefined`, is an older host: nothing
+ *  is attributed and `build.save` sends no `local`. Not cached to disk. */
+export const buildLocalIds = createStore<ReadonlyMap<string, string[] | undefined>>(new Map());
+
 export const builds = repoRunStore<BuildConfig, BuildRun>({ load: loadBuildsSnap, save: saveBuildsSnap });
 
 /** The repo whose BuildSheet is open (and which a reconnect re-asks for). Never

@@ -1,22 +1,48 @@
-import { CloudOff, HardDrive, Inbox, Loader2, RotateCw, Search, Trash2, TriangleAlert, X } from "lucide-react";
+import { CloudOff, HardDrive, Loader2, RotateCw, Search, Trash2, TriangleAlert, X } from "lucide-react";
+import { isDemo } from "../demo/mode";
 import { SheetHead } from "../Sheet";
-import { KINDS, SINCE, fmtCreated } from "./galleryTypes";
+import { FilterBar } from "../kit/FilterBar";
+import { fmtCreated } from "./galleryTypes";
+import { newCutText } from "./galleryCuts";
+import { GalleryFilters } from "./GalleryFilters";
 import type { GalleryModel } from "./useGallery";
 
 declare const __BUILD_ID__: string; // injected by vite define — UI build stamp
 
-/** The sheet head, the search box, the tab / kind / time chips and the notes about the list. */
+/** The sheet head, the search box, the where/what controls (`GalleryFilters`) and the notes
+ *  about the list. */
 export function GalleryBar({ m }: { m: GalleryModel }) {
-  const { scope, loading, files, truncated, query, setQuery, singleRepo, chipCls, busyMark, changeScope, kind, setKind,
-    since, setSince, newSecs, onNewCut, setOnNewCut, loadErr, setReload, cachedAt, staleWhy, note, open } = m;
+  const { scope, loading, files, truncated, query, setQuery, singleRepo, setSince, onNewCut, setOnNewCut, loadErr,
+    setReload, cachedAt, staleWhy, note, open } = m;
   const { onClose, onSweep, onSurvey, initialNew } = m.props;
+  const n = files.length;
+  const clearTime = () => { setSince(undefined); setOnNewCut(false); };
   return (
     <>
       <SheetHead title="Images & documents" onClose={onClose}>
-        {/* Live count makes scope switching visibly verifiable; build stamp confirms which bundle loaded. */}
-        <span className="gallery-meta" title={`build ${__BUILD_ID__}`}>
-          {scope} · {loading ? <Loader2 size={11} className="spin" /> : <>{files.length}{truncated ? "+" : ""}</>} <span className="gallery-build">{__BUILD_ID__}</span>
-        </span>
+        {/* The count is said once, here, and only when there is one: "0 files" over a grid
+            saying nothing is here was the empty state twice. The build stamp is this span's
+            long-press text, not on screen, where the hash read as a debug leftover; Settings ›
+            app version is where the APK says which bundle it runs. Not in the demo (no bundle). */}
+        {(n > 0 || loading) && (
+          <span className="gallery-meta" title={isDemo() ? undefined : `build ${__BUILD_ID__}`}>
+            {loading && !n ? <Loader2 size={12} className="spin" /> : `${n}${truncated ? "+" : ""} file${n === 1 && !truncated ? "" : "s"}`}
+          </span>
+        )}
+        {/* Only on the two TRANSPORT scopes: those are the only directories a
+            sweep is allowed to touch (`files.ts deleteArtifact`'s guard), so
+            offering it over "this repo" would be offering a verb that refuses.
+            Not drawn at all rather than drawn dimmed — CLAUDE.md. */}
+        {onSweep && singleRepo && (scope === "inbox" || scope === "outbox") && (
+          <button className="key gallery-head-btn" title={`clear out old ${scope} files`} aria-label={`clear out old ${scope} files`}
+            onClick={() => onSweep(scope)}><Trash2 size={17} /></button>
+        )}
+        {/* The same verb where it CAN'T be per-repo: ranked bytes across every
+            repo, each row opening exactly that repo's sweep. */}
+        {onSurvey && scope === "all" && (
+          <button className="key gallery-head-btn" title="what is taking space, repo by repo" aria-label="what is taking space"
+            onClick={onSurvey}><HardDrive size={17} /></button>
+        )}
       </SheetHead>
 
       <div className="form">
@@ -24,70 +50,24 @@ export function GalleryBar({ m }: { m: GalleryModel }) {
           <Search size={16} />
           <input
             className="search"
-            placeholder={scope === "all" ? "Search all repos by name (e.g. screenshot, .pdf)…" : "Search by name (e.g. report, .csv)…"}
+            placeholder={scope === "all" ? "Search every repo by name" : "Search by name"}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          {query && <button className="key" onClick={() => setQuery("")}><X size={14} /></button>}
+          {query && <button className="key" aria-label="clear the search" onClick={() => setQuery("")}><X size={14} /></button>}
         </div>
       </div>
 
-      <div className="annot-tools">
-        {singleRepo && <>
-          <button className={chipCls(scope === "inbox")} onClick={() => changeScope("inbox")}><Inbox size={16} /> inbox{busyMark(scope === "inbox")}</button>
-          <button className={chipCls(scope === "outbox")} onClick={() => changeScope("outbox")}>outbox{busyMark(scope === "outbox")}</button>
-          <button className={chipCls(scope === "repo")} onClick={() => changeScope("repo")}>this repo{busyMark(scope === "repo")}</button>
-        </>}
-        <button className={chipCls(scope === "all")} onClick={() => changeScope("all")}>all repos{busyMark(scope === "all")}</button>
-        {/* Only on the two TRANSPORT scopes: those are the only directories a
-            sweep is allowed to touch (`files.ts deleteArtifact`'s guard), so
-            offering it over "this repo" would be offering a verb that refuses.
-            Not drawn at all rather than drawn dimmed — CLAUDE.md. */}
-        {onSweep && singleRepo && (scope === "inbox" || scope === "outbox") && <>
-          <span className="spacer" />
-          <button className="key" onClick={() => onSweep(scope)}><Trash2 size={16} /> clear out…</button>
-        </>}
-        {/* The same verb where it CAN'T be per-repo: ranked bytes across every
-            repo, each row opening exactly that repo's sweep. */}
-        {onSurvey && scope === "all" && <>
-          <span className="spacer" />
-          <button className="key" onClick={onSurvey}><HardDrive size={16} /> what’s taking space…</button>
-        </>}
-      </div>
+      <GalleryFilters m={m} />
 
-      <div className="annot-tools">
-        {KINDS.map((k) => (
-          <button key={k.value} className={chipCls(kind === k.value)} onClick={() => setKind(k.value)}>{k.label}{busyMark(kind === k.value)}</button>
-        ))}
-        {scope !== "inbox" && <>
-          <span className="spacer" />
-          {/* The badge's own cut, named. It exists only while it is the answer
-              to a question somebody asked by tapping a number — every other
-              chip clears it, and reopening without a badge never shows it. */}
-          {newSecs !== undefined && (
-            <button className={chipCls(onNewCut)}
-              title={`the ${initialNew!.count} file${initialNew!.count > 1 ? "s" : ""} added since you last opened this outbox — the badge you tapped`}
-              onClick={() => { setSince(newSecs); setOnNewCut(true); }}>
-              new {initialNew!.count}{busyMark(onNewCut)}
-            </button>
-          )}
-          {SINCE.map((s) => (
-            <button key={s.label} className={chipCls(since === s.secs)} onClick={() => { setSince(s.secs); setOnNewCut(false); }}>{s.label}{busyMark(since === s.secs)}</button>
-          ))}
-        </>}
-      </div>
-
-      {/* A filtered list says so, with the way out — the same bar the launcher
-          and the schedules sheet carry. Without it a badge of 42 opening on 42
-          rows is indistinguishable from a badge of 42 opening on everything,
-          which is the whole complaint. */}
+      {/* A filtered list says so, with the way out — the kit's bar, the one the
+          launcher and the logins sheet carry. Without it a badge of 42 opening
+          on 42 rows is indistinguishable from a badge of 42 opening on
+          everything, which is the whole complaint. */}
       {onNewCut && (
-        <div className="gallery-note">
-          <span>showing the {initialNew!.count} added since you last looked{files.length ? ` · ${files.length} here` : ""}</span>
-          <button className="key" onClick={() => { setSince(undefined); setOnNewCut(false); }}>
-            <X size={14} /> show everything
-          </button>
-        </div>
+        <FilterBar onClear={clearTime} clearLabel="show all">
+          {newCutText(initialNew!.count, n, loading, truncated)}
+        </FilterBar>
       )}
 
       {/* A failed listing is its own state. Rows already on screen are KEPT (a
@@ -96,8 +76,8 @@ export function GalleryBar({ m }: { m: GalleryModel }) {
       {loadErr && (
         <div className="gallery-note err">
           <TriangleAlert size={14} />
-          <span>Could not load the list ({loadErr}){files.length ? " — showing what was already loaded" : ""}.</span>
-          <button className="key" onClick={() => setReload((n) => n + 1)}><RotateCw size={14} /> Retry</button>
+          <span>Could not load the list ({loadErr}){n ? " — showing what was already loaded" : ""}.</span>
+          <button className="key" onClick={() => setReload((x) => x + 1)}><RotateCw size={14} /> retry</button>
         </div>
       )}
 
@@ -113,7 +93,7 @@ export function GalleryBar({ m }: { m: GalleryModel }) {
               ? `Showing the list this phone last saw, ${fmtCreated(cachedAt)} — ${staleWhy}.`
               : `Showing the list this phone last saw, ${fmtCreated(cachedAt)} — refreshing…`}
           </span>
-          {staleWhy && <button className="key" onClick={() => setReload((n) => n + 1)}><RotateCw size={14} /> Retry</button>}
+          {staleWhy && <button className="key" onClick={() => setReload((x) => x + 1)}><RotateCw size={14} /> retry</button>}
         </div>
       )}
       {/* Actions the gallery hands off report here too when no viewer is open —

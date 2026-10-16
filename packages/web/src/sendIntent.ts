@@ -30,7 +30,10 @@
  */
 export * from "./sendIntent/sendTypes.ts";
 export * from "./sendIntent/sendClock.ts";
+export * from "./sendIntent/sendLead.ts";
 export * from "./sendIntent/sendLabels.ts";
+export * from "./sendIntent/sendLaunch.ts";
+export * from "./sendIntent/sendFlag.ts";
 export * from "./sendIntent/sendChain.ts";
 export * from "./sendIntent/sendRule.ts";
 export * from "./sendIntent/sendRetime.ts";

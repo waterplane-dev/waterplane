@@ -53,7 +53,18 @@ public class ShellInstallPlugin extends Plugin {
         JSArray allow = new JSArray();
         for (String p : Installs.allowed(getContext())) allow.put(p);
         ret.put("allow", allow);
+        // The clean-up switch lives in the shell (it runs at the install's
+        // receiver, with the page asleep), so the page reads it from here.
+        ret.put("cleanAfterInstall", ShellPullService.cleanEnabled(getContext()));
         call.resolve(ret);
+    }
+
+    /** Turn the delete-the-APK-after-it-installs clean-up on or off for this
+     *  phone ({@link ShellPullService#cleanAfterInstall}). */
+    @PluginMethod
+    public void setCleanAfterInstall(PluginCall call) {
+        ShellPullService.setClean(getContext(), Boolean.TRUE.equals(call.getBoolean("on")));
+        call.resolve();
     }
 
     /**

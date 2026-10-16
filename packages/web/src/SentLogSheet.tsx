@@ -4,6 +4,9 @@ import type { SentCommand, SentSource } from "@waterplane/shared";
 import { SheetHead } from "./Sheet";
 import { ConfirmButton } from "./Confirm";
 import { Empty } from "./Empty";
+import { Explain } from "./Explain";
+import { FilterBar } from "./kit/FilterBar";
+import { FilterChip } from "./kit/FilterChip";
 import { ago } from "./format";
 
 interface Props {
@@ -62,6 +65,12 @@ const SETTLED: Record<NonNullable<SentCommand["settled"]>, { label: string; cls:
   unknown: { label: "settled: still unreadable", cls: "muted" },
 };
 
+type Who = "all" | "auto" | "user";
+const WHO_LABEL: Record<Who, string> = { all: "all", auto: "automatic", user: "yours" };
+/** ONE bucketing function feeds both the number on a chip and the cut it opens (a count on a
+ *  control is a filter), so the two can never disagree about an edge. */
+const inCut = (e: SentCommand, v: Who) => (v === "all" ? true : e.actor === v);
+
 function clock(ts: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
@@ -80,18 +89,24 @@ function clock(ts: number): string {
  */
 export function SentLogSheet({ entries, filterSessionId, sessionTitle, onClose, onRefresh, onClear, onOpenSession }: Props) {
   const [open, setOpen] = useState<Set<string>>(new Set());
-  const [who, setWho] = useState<"all" | "auto" | "user">("all");
+  const [pick, setWho] = useState<Who>("all");
   const toggle = (id: string) => setOpen((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const inSession = useMemo(
     () => entries.filter((e) => (filterSessionId ? e.sessionId === filterSessionId : true)),
     [entries, filterSessionId],
   );
+  const count = (v: Who) => inSession.filter((e) => inCut(e, v)).length;
+  const autoCount = count("auto");
+  // Chips exist only where there is something to tell apart: a log of only yours, or only the
+  // app's, has no second answer to a chip's question. A cut picked earlier and no longer offered
+  // (the log changed under it) is not applied, rather than left hiding rows with no way out.
+  const mixed = autoCount > 0 && autoCount < inSession.length;
+  const who: Who = mixed ? pick : "all";
   const shown = useMemo(
-    () => inSession.filter((e) => (who === "all" ? true : e.actor === who)).slice().sort((a, b) => b.ts - a.ts),
+    () => inSession.filter((e) => inCut(e, who)).slice().sort((a, b) => b.ts - a.ts),
     [inSession, who],
   );
-  const autoCount = inSession.filter((e) => e.actor === "auto").length;
 
   return (
     <div className="sheet">
@@ -101,28 +116,44 @@ export function SentLogSheet({ entries, filterSessionId, sessionTitle, onClose, 
             edge of the phone. */}
         <span className="head-acts tight">
           <button className="key" onClick={onRefresh} title="refresh"><RefreshCw size={16} /></button>
-          <ConfirmButton className="key" title="clear the log"
-            confirmTitle="tap again to clear the sent-command log"
-            confirm={<><Trash2 size={16} /> sure?</>}
-            onConfirm={onClear}><Trash2 size={16} /></ConfirmButton>
+          {/* Absent, not dimmed, on an empty log: there is nothing for it to clear, and the
+              header carries no count either (a "0" over "Nothing sent yet." says it twice). */}
+          {entries.length > 0 && (
+            <ConfirmButton className="key" title="clear the log"
+              confirmTitle="tap again to clear the sent-command log"
+              confirm={<><Trash2 size={16} /> sure?</>}
+              onConfirm={onClear}><Trash2 size={16} /></ConfirmButton>
+          )}
         </span>
       </SheetHead>
 
-      {autoCount > 0 && autoCount < inSession.length && (
-        <div className="annot-tools tri olog-kinds">
+      {/* One line says what this is; the rest of what it means is behind the `?`. The words are
+          the sheet's own, unchanged but for the last clause: it said a tap on the row opens the
+          session, when the row's text expands and "open the session" is the button that opens it. */}
+      <div className="form-hint">
+        Every command this app typed into a session.
+        <Explain of="the sent log">
+          Including the ones it decided on by itself (backlog, fan-out, plugin auto-answers,
+          usage-limit auto-continue). One row per command, stamped with how the delivery ended; tap a
+          row&apos;s text to read all of it, or &ldquo;open the session&rdquo; to check it against the terminal.
+        </Explain>
+      </div>
+
+      {/* One chip is always lit (a choice, not a cut), so none carries an x. */}
+      {mixed && (
+        <div className="fchips wrap olog-kinds">
           {(["all", "auto", "user"] as const).map((v) => (
-            <button key={v} className={`key ${who === v ? "active" : ""}`} onClick={() => setWho(v)}>
-              {v === "auto" ? `automatic (${autoCount})` : v === "user" ? "yours" : "all"}
-            </button>
+            <FilterChip key={v} on={who === v} clears={false} onClick={() => setWho(v)}>
+              {WHO_LABEL[v]} · {count(v)}
+            </FilterChip>
           ))}
         </div>
       )}
-
-      <div className="form-hint">
-        Every command this app typed into a session — including the ones it decided on by itself
-        (backlog, fan-out, plugin auto-answers, usage-limit auto-continue). One row per command, stamped
-        with how the delivery ended; tap a row to open the session and check it against the terminal.
-      </div>
+      {who !== "all" && (
+        <FilterBar onClear={() => setWho("all")} clearLabel="show all">
+          Showing {WHO_LABEL[who]} only: {shown.length} of {inSession.length}
+        </FilterBar>
+      )}
 
       <div className="list hist">
         <Empty empty={shown.length === 0}>Nothing sent yet.</Empty>
@@ -133,7 +164,7 @@ export function SentLogSheet({ entries, filterSessionId, sessionTitle, onClose, 
           const expanded = open.has(e.id);
           const oneLine = e.text.replace(/\s+/g, " ").trim();
           return (
-            <div key={e.id} className={`olog-card outcome-${res.cls}`}>
+            <div key={e.id} className="olog-row">
               <div className="olog-head">
                 <span className={`tag oracle-${res.cls}`}><res.Icon size={12} /> {res.label}</span>
                 {set && (

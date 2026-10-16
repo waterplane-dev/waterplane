@@ -102,6 +102,15 @@ export interface ScheduleRule {
   /** Which reset this rule tracks. */
   window?: "session" | "weekly";
   /**
+   * `window` only: the budget PERIOD this rule tracks, when it is not one of the
+   * two scraped windows - a calendar `month`/`week`/`day` or a span (`PeriodId`).
+   * Absent means `window` says it (and `session`/`weekly` stay valid ids). A
+   * rolling period has no reset edge and `windowRuleRefusal` (period.ts) refuses
+   * it with a sentence. When set, `window` is `session` (the default) and means
+   * nothing; read the anchor through `anchorPeriodId`.
+   */
+  periodId?: string;
+  /**
    * Which side of it.
    *
    * `before` fires `offsetMin` ahead of the reset — the "spend what is left"
@@ -218,6 +227,7 @@ export function composeRule(
   return {
     kind: "window",
     window: src?.window ?? "session",
+    ...(src?.periodId ? { periodId: src.periodId } : {}),
     edge: src?.edge ?? "before",
     offsetMin: src?.offsetMin ?? Math.min(0, prev.offsetMin ?? -60),
     ...(src?.minPctLeft != null ? { minPctLeft: src.minPctLeft } : {}),
@@ -235,11 +245,18 @@ export interface WindowResets {
   /** 0..100 USED, as the CLI reports it. */
   sessionPct?: number | null;
   weeklyPct?: number | null;
+  /** Reset instants of the configured periods by id (`periodBounds(...).resetAt`,
+   *  computed by the caller). Read when a rule carries a `periodId`. */
+  periodResetAt?: Record<string, number | null | undefined>;
 }
 
 /** The reset this rule tracks, or `null` when the host has not read one yet. */
 export function windowResetAt(rule: ScheduleRule, r: WindowResets | undefined): number | null {
   if (!r) return null;
+  if (rule.periodId) {
+    const p = r.periodResetAt?.[rule.periodId];
+    return typeof p === "number" && p > 0 ? p : null;
+  }
   const at = rule.window === "weekly" ? r.weeklyResetAt : r.sessionResetAt;
   return typeof at === "number" && at > 0 ? at : null;
 }
@@ -250,6 +267,9 @@ export function windowPct(rule: ScheduleRule, r: WindowResets | undefined): numb
   const p = rule.window === "weekly" ? r.weeklyPct : r.sessionPct;
   return typeof p === "number" && Number.isFinite(p) ? p : null;
 }
+
+/** The period id this rule's anchor tracks: its `periodId`, else its window. */
+export const anchorPeriodId = (rule: ScheduleRule): string => rule.periodId ?? (rule.window === "weekly" ? "weekly" : "session");
 
 /** The window this rule's ANCHOR tracks, with the same default `windowPct`
  *  reads (`undefined` is the session window). */

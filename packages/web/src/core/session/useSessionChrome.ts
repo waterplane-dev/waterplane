@@ -15,14 +15,12 @@
  */
 import { useEffect, useState, type RefObject } from "react";
 import type { SessionInfo } from "@waterplane/shared";
-import type { Overlay } from "../../routing";
 import { chromeMode, trackKeyboard, KEYBOARD_SETTLE_MS, type KbTrack } from "../../chromeMode";
 import { usePref } from "../prefs";
 
 export interface SessionChromeDeps {
   activeId: string | null;
   active: SessionInfo | null | undefined;
-  overlay: Overlay;
   composeFocused: boolean;
   setComposeFocused(v: boolean): void;
   composeRef: RefObject<HTMLTextAreaElement | null>;
@@ -30,7 +28,7 @@ export interface SessionChromeDeps {
 }
 
 export function useSessionChrome(d: SessionChromeDeps) {
-  const { activeId, active, overlay, composeFocused, setComposeFocused, composeRef, cliMode } = d;
+  const { activeId, active, composeFocused, setComposeFocused, composeRef, cliMode } = d;
   const [dismissedReply, setDismissedReply] = useState(""); // free-text reply suggestion hidden by the user
   // Typing room: while the compose box has focus — which on a phone means the
   // on-screen keyboard is up and has taken half the screen — the chrome ABOVE
@@ -73,15 +71,31 @@ export function useSessionChrome(d: SessionChromeDeps) {
   // the box or the session changes, and the next focus starts hidden again.
   const [typingPeek, setTypingPeek] = useState(false);
   /**
+   * A sheet is DRAWN over the session — not "an overlay name is set". The
+   * overlay table answers a miss with null and the session screen paints
+   * underneath (`overlayViews.tsx`): an `image` or `collage` route whose
+   * picture is gone after a mark-and-send. Gating on the NAME then left
+   * `onSessionScreen` false on a screen showing the session, and the full-screen
+   * button flipped its switch into a mode that refused to apply — a dead tap
+   * with nothing on screen to say why. App reports what it drew through
+   * `drawnSheet` in the same render (a set-during-render, so the corrected
+   * frame is the first one committed).
+   */
+  const [sheetDrawn, setSheetDrawn] = useState(false);
+  const drawnSheet = <T,>(node: T): T => {
+    if (!!node !== sheetDrawn) setSheetDrawn(!!node);
+    return node;
+  };
+  /**
    * The session screen is on top: a session (or a pending one) is attached and
-   * no overlay is covering it.
+   * no sheet is drawn over it.
    *
    * Everything that hides chrome is scoped to this — see `chromeMode.ts`,
    * which holds that rule, the two others it lives with, and the failures each
    * of them is. The conjunction is pure and node-tested because every bug this
    * has had was a bug in the conjunction.
    */
-  const onSessionScreen = !!active && !overlay;
+  const onSessionScreen = !!active && !sheetDrawn;
   const chromeIn = { onSessionScreen, typingRoom, composeFocused, cliMode, typingPeek, fullScreen };
   const { typingMode, typingPeeking, fullMode, chromeHidden } = chromeMode(chromeIn);
   /* The net-pulse strip is mounted in `main.tsx`, outside this tree, and every
@@ -92,9 +106,9 @@ export function useSessionChrome(d: SessionChromeDeps) {
     if (chromeHidden) root.dataset.typing = "1"; else delete root.dataset.typing;
     return () => { delete root.dataset.typing; };
   }, [chromeHidden]);
-  /* An overlay unmounts the compose box without firing a blur, which would
+  /* A sheet unmounts the compose box without firing a blur, which would
      leave the chrome hidden on a screen with no caret in it. */
-  useEffect(() => { if (overlay) setComposeFocused(false); }, [overlay]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (sheetDrawn) setComposeFocused(false); }, [sheetDrawn]); // eslint-disable-line react-hooks/exhaustive-deps -- `setComposeFocused` is the compose hook's setter
   useEffect(() => { if (!composeFocused) setTypingPeek(false); }, [composeFocused]);
   /* The back gesture hides Android's keyboard and leaves the caret in the box,
      so focus alone kept typing room up on a screen with no keyboard — the key
@@ -119,7 +133,7 @@ export function useSessionChrome(d: SessionChromeDeps) {
     vv?.addEventListener("resize", check);
     window.addEventListener("resize", check);
     return () => { clearTimeout(settle); vv?.removeEventListener("resize", check); window.removeEventListener("resize", check); };
-  }, [composeFocused]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [composeFocused]); // eslint-disable-line react-hooks/exhaustive-deps -- bound while the box has focus; `composeRef` is a ref
   useEffect(() => { setTypingPeek(false); }, [activeId]);
   /* Full screen ends when the session does. `fullMode` already refuses to apply
      off the session screen, so this is not what keeps the launcher's strips on
@@ -129,7 +143,7 @@ export function useSessionChrome(d: SessionChromeDeps) {
   useEffect(() => { if (!activeId) setFullScreen(false); }, [activeId]);
   return {
     fullScreen, setFullScreen, typingPeek, setTypingPeek, dismissedReply, setDismissedReply,
-    typingMode, typingPeeking, fullMode, chromeHidden, chromeIn,
+    typingMode, typingPeeking, fullMode, chromeHidden, chromeIn, drawnSheet,
   };
 }
 

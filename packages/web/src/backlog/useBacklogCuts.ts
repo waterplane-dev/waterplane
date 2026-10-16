@@ -7,16 +7,18 @@
  * live sessions. A count on a control is a filter, so each number here is the
  * length of the list its control opens.
  */
-import { useMemo } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import type { BacklogItem } from "@waterplane/shared";
 import { itemHeadline, repoBranchLabel, sessionPickLabel } from "@waterplane/shared";
 import {
   assessableInCut, backlogCounts, clockGroups, focusRunWords, hasBacklogFilter, hiddenByArchive, matchesBacklogFilter,
-  nameableInCut, realLabel, retimeEligible, runAgainAimedCount, runAgainEligible, runAgainIds, runAgainState,
+  nameableInCut, realLabel, retimeEligible, clockPicks, runAgainAimedCount, runAgainEligible, runAgainIds, runAgainState,
   type BacklogFilter, type FocusRunBreakdown,
 } from "../backlogFilter";
 import { autoSlotSessions } from "../autoSessions";
 import { busyInCheckout } from "../sendIntent";
+import { slotChecks } from "../slotCheck";
+import { isSlotAskOff, onSlotAsk } from "../slotAskStore";
 import { CLOSED_GROUP } from "./backlogLabels";
 import type { BacklogProps } from "./backlogTypes";
 
@@ -146,11 +148,6 @@ export function useBacklogCuts(
     const r = p.repos.find((r) => r.worktreePath === dir);
     return r ? repoBranchLabel(r) : dir.split(/[/\\]/).filter(Boolean).pop() || dir;
   };
-  // Per-repo item counts — shown in the repo selector. `hiddenByArchive` and
-  // not `!archived`, for the reason that predicate states: `unmerge` archives a
-  // RUNNING row, and a count that drops it describes a shorter list than the
-  // one the tap opens.
-  const repoCount = (dir: string) => p.items.filter((it) => !hiddenByArchive(it) && it.repoDir === dir).length;
   // Scope to the selected repo only — there is no combined "all repos" view.
   //
   // An IDS cut is the exception to the archived hide, and it has to be: every
@@ -169,6 +166,12 @@ export function useBacklogCuts(
   // Status + age. Counted over `base` (never over the search results), so a chip
   // reading 4 opens four rows whether or not something is typed in the box.
   const counts = backlogCounts(base, filter, now);
+  /** **The slot check's verb — one per slot with two or more waiting rows.**
+   *  Off `inRepo`, never the cut on screen: N is exactly the ids the run reads
+   *  (`slotChecks`), the same rows the host will find in that slot. */
+  const slotCheckList = useMemo(() => slotChecks(inRepo, repoDir), [inRepo, repoDir]);
+  /** Whether the ask after a timed send is off in THIS repo — the way back is drawn only then. */
+  const slotAskOff = useSyncExternalStore(onSlotAsk, () => isSlotAskOff(repoDir));
   const filtering = hasBacklogFilter(filter);
   const cut = filtering ? base.filter((it) => matchesBacklogFilter(it, filter, now)) : base;
   // The draft field doubles as a search over THIS repo's items; Add turns the
@@ -192,10 +195,6 @@ export function useBacklogCuts(
    *  words of its own text. Never `label` on its own — `add()` fills that with a
    *  truncation, which `realLabel` is the rule for. */
   const nameOf = (it: BacklogItem) => realLabel(it) ?? (it.text.length > 40 ? `${it.text.slice(0, 40)}…` : it.text);
-  /** The repo's last look, and whether this repo is ticked. Both absent on a
-   *  host that has never heard of the smart pick — see the props. */
-  const pass = repoDir ? p.passes?.[repoDir] : undefined;
-  const smartOn = !!repoDir && !!p.smartPick?.includes(repoDir);
   /**
    * The rows a naming pass has in hand this second, as a set.
    *
@@ -266,6 +265,9 @@ export function useBacklogCuts(
    * them, which is exactly the list the seat is about.
    */
   const clockCuts = useMemo(() => clockGroups(base), [base]);
+  /** One pick per clock with two or more movable rows ON SCREEN — the
+   *  "move all 20 waiting for the reset" tap (`clockPicks`). */
+  const retimeClocks = clockPicks(clockCuts, retimeable);
   // In auto mode, each group's first queued item is what auto-fire picks next —
   // except the closed-target group, which is not a queue at all: nothing in it
   // fires until a person re-aims or un-queues it, so `▶ next` there would be
@@ -328,7 +330,7 @@ export function useBacklogCuts(
   /** The sentence itself, computed once: it is drawn below AND it decides
    *  whether the head's auto-off banner is drawn at all, and two calls that
    *  could drift would be two answers to "does this screen say auto is off". */
-  const focusWords = filter.ids ? focusRunWords(focusBreakdown, p.auto, smartOn) : null;
+  const focusWords = filter.ids ? focusRunWords(focusBreakdown, p.auto) : null;
   /**
    * **The cut's clocks, as one tap.** Seven failed one-offs is seven taps of a
    * verb that says the same thing every time, and the cut on screen is already
@@ -428,7 +430,6 @@ export function useBacklogCuts(
     hereInRepo,
     queuedHere,
     repoLabel,
-    repoCount,
     inRepo,
     base,
     counts,
@@ -439,8 +440,6 @@ export function useBacklogCuts(
     archivedCount,
     byId,
     nameOf,
-    pass,
-    smartOn,
     namingIds,
     groupKeyOf,
     groups,
@@ -448,6 +447,7 @@ export function useBacklogCuts(
     retimeable,
     retimeIds,
     clockCuts,
+    retimeClocks,
     nextFireIds,
     clockAhead,
     focusBreakdown,
@@ -459,5 +459,7 @@ export function useBacklogCuts(
     assessIds,
     nameIds,
     namingHere,
+    slotCheckList,
+    slotAskOff,
   };
 }

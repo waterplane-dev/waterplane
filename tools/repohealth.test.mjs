@@ -103,6 +103,9 @@ const TOOL_DIR = join(ROOT, "tools", "repohealth");
  * the point: the series was re-cut.
  */
 const CFG = configure(ROOT, git);
+/** `retouch` needs the line-level history (`git.readHunks`); read once, lazily. */
+let HUNKS_MEMO = null;
+const HUNKS = () => (HUNKS_MEMO ??= git.readHunks(ROOT));
 
 /** Every module of the tool, as text, for the checks that are about code shape. */
 function toolSources() {
@@ -188,8 +191,19 @@ function recompute(sha, history, prevRow, knownIndex) {
   };
 }
 
-test("the fixture's own version matches the constants that produced it", () => {
+test("the fixture's own version matches the constants that produced it", (t) => {
   const fixture = JSON.parse(readFileSync(join(TOOL_DIR, "fixture.json"), "utf8"));
+  // The pack half is a fact about the tree the fixture was recorded in: a copy
+  // that leaves files out (the public snapshot drops private extensions, and
+  // with them the one .py file) activates other packs. Where the recorded
+  // history is not in this clone, only the method half is comparable.
+  try {
+    execFileSync("git", ["cat-file", "-e", `${fixture.lastSha}^{commit}`], { cwd: ROOT, stdio: "ignore" });
+  } catch {
+    t.diagnostic(`fixture's last commit ${String(fixture.lastSha).slice(0, 7)} is not in this clone: comparing PREREG_VERSION only`);
+    assert.equal(fixture.prereg.split("+")[0], CFG.VERSION.split("+")[0], "PREREG_VERSION moved without regenerating the fixture");
+    return;
+  }
   assert.equal(
     fixture.prereg,
     CFG.VERSION,
@@ -216,7 +230,7 @@ test("the recorded history still reproduces", (t) => {
     return;
   }
 
-  const history = git.readHistory(ROOT, CFG);
+  const history = { ...git.readHistory(ROOT, CFG), hunks: HUNKS() };
   const full = process.env.REPOHEALTH_FULL === "1";
 
   if (full) {
@@ -646,7 +660,8 @@ test("plot is one JSON line, exits 0, and says which window a rank was taken in"
   assert.equal(raw.trim().split("\n").length, 1, "one line, so a caller can read it without a parser");
   const doc = JSON.parse(raw);
   const fixture = JSON.parse(readFileSync(join(TOOL_DIR, "fixture.json"), "utf8"));
-  assert.equal(doc.preregVersion, CFG.VERSION);
+  // The series' own version, which the test above pins to CFG.VERSION wherever the history is here.
+  assert.equal(doc.preregVersion, fixture.prereg);
   assert.equal(doc.days, fixture.rows.length);
   // Shipped so nothing on the drawing end hardcodes 60 and 14 — the pair that
   // decides what "recent" means and when there is a rank at all.
@@ -959,7 +974,7 @@ test("two scopes never share a series file, however they are spelled", () => {
 });
 
 test("a scoped history holds only the commits that touched the subtree", () => {
-  const history = git.readHistory(ROOT, CFG);
+  const history = { ...git.readHistory(ROOT, CFG), hunks: HUNKS() };
   const scoped = scopeHistory(history, "tools", CFG);
   assert.ok(scoped.commits.length > 0, "this repo has commits under tools/");
   assert.ok(
@@ -978,7 +993,7 @@ test("a scoped history holds only the commits that touched the subtree", () => {
 });
 
 test("a scoped snapshot is the subtree, measured as a repo", () => {
-  const history = git.readHistory(ROOT, CFG);
+  const history = { ...git.readHistory(ROOT, CFG), hunks: HUNKS() };
   const head = history.commits[history.commits.length - 1];
   const whole = buildSnapshot(ROOT, head.sha, git, CFG);
   const part = buildSnapshot(ROOT, head.sha, git, CFG, "packages/web");
@@ -1013,7 +1028,7 @@ test("the per-type cut of the tree adds up to the same tree", () => {
   // are one quantity cut two ways. If the two totals can differ, they are two
   // measurements wearing one label, and a reader comparing the top edges is
   // being shown a difference that is really a bug in one of the cuts.
-  const history = git.readHistory(ROOT, CFG);
+  const history = { ...git.readHistory(ROOT, CFG), hunks: HUNKS() };
   const head = history.commits[history.commits.length - 1];
   const snap = buildSnapshot(ROOT, head.sha, git, CFG);
   const value = measureClassics(snap, history, history.commits.length - 1, CFG).value;

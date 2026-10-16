@@ -19,7 +19,8 @@ import { claudeHookWatched, postClaudeHook, type ClaudeHookPayload } from "../ba
 import { samePromptText } from "../echo.js";
 import { stripAnsi } from "../prompt.js";
 import { askLine, looksLikeQuestion, sameAsk } from "../question.js";
-import { readShellList } from "../shells.js";
+import { cliSuggestionOf, composerPlain } from "../clisuggest.js";
+import { readPsTableAsync, readShellList, shellsEnabled } from "../shells.js";
 import type { Session, SessionCore } from "./core.js";
 import {
   AGENT_POLL_MS, HEALTH_SPAWN_GRACE_MS, QUESTION_TAIL_BYTES, STOP_VERIFY_BYTES, STOP_VERIFY_MS, SUBMIT_RING, tmuxName,
@@ -73,6 +74,41 @@ function checkAsking(core: SessionCore, s: Session): void {
 }
 
 /**
+ * Is the composer showing the CLI's own proposal for the next prompt?
+ * (`clisuggest.ts` holds the rule and the measurement.)
+ *
+ * Re-entered on every quiet repaint, like `checkAsking` — the proposal is a
+ * model call of the CLI's own and lands a moment AFTER the Stop, so one read on
+ * the transition would miss it. The plain grid is the cheap gate; the render
+ * with attributes is paid once per distinct composer text.
+ */
+function checkCliSuggestion(core: SessionCore, s: Session): void {
+  // Measured on claude's TUI only; another backend's dim hint is a placeholder.
+  if (s.backend.id !== "claude" || s.turnActive || s.info.prompt || s.info.limit?.blocked) {
+    s.hintRead = null;
+    setCliSuggestion(core, s, null);
+    return;
+  }
+  const grid = s.screenLog?.gridText();
+  if (!grid) return;
+  const rows = grid.split("\n");
+  const plain = composerPlain(rows);
+  if (!plain) { s.hintRead = null; setCliSuggestion(core, s, null); return; }
+  if (plain === s.hintRead) return;
+  s.hintRead = plain;
+  void core.screenCells(s.info.id, rows.length).then((cells) => {
+    if (s.hintRead !== plain || s.turnActive) return; // the screen moved on while this rendered
+    setCliSuggestion(core, s, cliSuggestionOf(rows, cells.map((r) => r.undimmed)));
+  }).catch(() => { /* no reading — leave what is published */ });
+}
+
+export function setCliSuggestion(core: SessionCore, s: Session, text: string | null): void {
+  if ((s.info.cliSuggestion ?? null) === text) return;
+  s.info.cliSuggestion = text;
+  core.emit("updated", s.info);
+}
+
+/**
  * Publish which agents are running UNDER this session, and keep polling while
  * any are.
  *
@@ -93,6 +129,10 @@ function checkAsking(core: SessionCore, s: Session): void {
  */
 export function checkAgents(core: SessionCore, s: Session): void {
   if (s.agentTimer) { clearTimeout(s.agentTimer); s.agentTimer = null; }
+  // Any call supersedes a still-pending `ps` read from an earlier one: that one
+  // must not publish an older picture over this one, nor arm a second timer.
+  const gen = (agentGen.get(s) ?? 0) + 1;
+  agentGen.set(s, gen);
   if (!s.info.running) {
     if (s.info.agents || s.info.shells || s.info.shellList) {
       s.info.agents = undefined; s.info.shells = undefined; s.info.shellList = undefined; s.shellsFp = undefined;
@@ -119,10 +159,33 @@ export function checkAgents(core: SessionCore, s: Session): void {
   // something under it worth asking about — a `busy` main loop still gets
   // asked, for the same edge `shells` itself is asked through: the Stop hook
   // can land before the record catches up to `shell`.
-  let shellList: SessionShell[] | undefined;
-  if (record && (cli === "shell" || cli === "busy")) {
-    try { shellList = readShellList(record.pid, s.info.cwd, s.info.claudeSessionId, cli); } catch { shellList = undefined; }
+  if (record && (cli === "shell" || cli === "busy") && shellsEnabled()) {
+    // The process table is read ASYNC: this runs per shell/busy session every
+    // `AGENT_POLL_MS`, on the one loop that pumps every PTY, and the blocking
+    // `ps` it replaced cost ~50 ms a time. The rest of the tick is unchanged
+    // and picks up when the table is in (`publishAgents`).
+    const pid = record.pid;
+    void readPsTableAsync()
+      .then((psRows) => readShellList(pid, s.info.cwd, s.info.claudeSessionId, cli, Date.now(), psRows))
+      .catch((): SessionShell[] | undefined => undefined)
+      .then((shellList) => {
+        if (agentGen.get(s) !== gen) return;               // a newer tick owns the result and the timer
+        if (!s.info.running) { checkAgents(core, s); return; } // ended meanwhile: the early branch retires the fields
+        publishAgents(core, s, rows, shells, cli, shellList);
+      });
+    return;
   }
+  publishAgents(core, s, rows, shells, cli, undefined);
+}
+
+/** Per-session generation of the latest `checkAgents` call — see there. */
+const agentGen = new WeakMap<Session, number>();
+
+/** The second half of `checkAgents`: compare, broadcast on a change, re-arm. */
+function publishAgents(
+  core: SessionCore, s: Session, rows: SessionAgent[], shells: true | undefined, cli: string | null,
+  shellList: SessionShell[] | undefined,
+): void {
   const shellsFp = shellsFingerprint(shellList, Date.now());
   const changed = agentsChanged(s.info.agents, rows) || shells !== s.info.shells || shellsFp !== s.shellsFp;
   if (changed) {
@@ -204,6 +267,8 @@ export function setTurn(core: SessionCore, s: Session, active: boolean, opts: { 
   // …and the memory of an acknowledged one goes with it: the next turn may
   // end on the same words for a new reason, and that is a fresh question.
   if (active) s.askDismissed = null;
+  // The CLI's proposal was for the composer this turn just took.
+  if (active) { s.hintRead = null; if (s.info.cliSuggestion) s.info.cliSuggestion = null; }
   // A turn STARTING on a session we believe is blocked is the earliest moment
   // that belief can be shown to be wrong, and `checkLimit`'s third branch
   // already accepts `turnStartedAt > blockedSince` as proof. Ask now rather
@@ -270,6 +335,9 @@ function markIdle(core: SessionCore, s: Session, emitPing: boolean): void {
   }
   core.checkLimit(s);
   core.checkContext(s);
+  // The footer's mode and ultracode (`livemode.ts`): a shift+tab typed at the desk
+  // is output, and this is the quiet tick after it. Claude's TUI only.
+  core.checkMode(s);
   // Cheap (one statSync) and correct on a repaint: the log's mtime only moves
   // when the CLI writes a turn, so re-reading it here cannot manufacture
   // activity the way stamping a clock does.
@@ -292,6 +360,8 @@ function markIdle(core: SessionCore, s: Session, emitPing: boolean): void {
   // Did the turn END ON A QUESTION? Read before the ping, so the notification
   // below can say what is being asked instead of "Turn finished".
   checkAsking(core, s);
+  // …and has the CLI proposed what to type next? (Tab at the desk; a tap here.)
+  checkCliSuggestion(core, s);
   // …and is anything still running under it? A turn that ended by launching
   // background agents has not ended the work, and this is the transition the
   // reader reads as idle without it.

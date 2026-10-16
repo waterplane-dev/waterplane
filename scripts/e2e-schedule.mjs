@@ -17,7 +17,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
-import { readIntents } from "./lib-e2e.mjs";
+import { readIntents, waitForHost } from "./lib-e2e.mjs";
 import { cleanAction, cleanRule, describeRule, nextFireAt } from "../packages/shared/dist/schedule.js";
 import { E, SLUG, STATE, rootEnv } from "./lib-brand.mjs";
 
@@ -130,7 +130,7 @@ const boot = () => {
 };
 let host = boot();
 const base = `http://127.0.0.1:${PORT}`;
-await sleep(1000);
+await waitForHost(PORT);
 
 const mk = (name) => fetch(`${base}/api/repo`, {
   method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name }),
@@ -246,7 +246,7 @@ onDisk.push({
 writeFileSync(join(ROOT, STATE, "schedules.json"), JSON.stringify(onDisk, null, 2));
 
 host = boot();
-await sleep(1200);
+await waitForHost(PORT);
 ws = await connect();
 check(!!entry("sched-weekly"), "the weekly schedule survives a host restart");
 check(entry("sched-weekly")?.nextAt === armedAt, "and comes back armed at the same instant");

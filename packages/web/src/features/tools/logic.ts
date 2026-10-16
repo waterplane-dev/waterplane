@@ -28,8 +28,8 @@ export const ACTION_IDS = [
   // `session.read` is the launcher's own way in: straight to the reader with the
   // outline up, tracked apart from `session.attach` because "opened to LOOK" and
   // "opened to WORK" are different uses of the same list.
-  "session.attach", "session.read", "session.new", "session.resume", "session.close", "session.close.all", "session.close.stale", "session.close.custom", "session.rename", "session.name", "session.star", "session.pin", "session.reorder", "session.order.reset", "session.filter.wait", "session.filter.limit", "session.filter.coding", "session.filter.done", "session.filter.exited", "session.filter.starred",
-  "repo.build.header", "repo.files.header", "repo.close.all", "repo.close.stale", "repo.close.custom", "repo.collapse", "repo.collapse.all", "repo.expand.all", "repo.new.header", "repo.new.offline", "repo.new.project", "repo.new.bare", "repo.more", "repo.focus", "repo.setup", "repohealth.refresh", "repohealth.ask", "repohealth.askall", "repohealth.scope", "repohealth.help", "repo.branch", "repo.build", "repo.capture", "repo.hide", "repo.inbox", "repo.git",
+  "session.attach", "session.read", "session.new", "session.resume", "session.close", "session.close.all", "session.close.stale", "session.close.custom", "session.rename", "session.name", "session.star", "session.followup", "session.followup.closed", "session.pin", "session.reorder", "session.order.reset", "session.filter.wait", "session.filter.limit", "session.filter.coding", "session.filter.done", "session.filter.exited", "session.filter.starred", "session.filter.followup",
+  "repo.build.header", "repo.files.header", "repo.close.all", "repo.close.stale", "repo.close.custom", "repo.collapse", "repo.collapse.all", "repo.expand.all", "repo.new.header", "repo.new.offline", "repo.new.project", "repo.new.bare", "repo.clone", "repo.more", "repo.focus", "repo.setup", "repohealth.refresh", "repohealth.ask", "repohealth.askall", "repohealth.scope", "repohealth.help", "repo.branch", "repo.build", "repo.capture", "repo.hide", "repo.inbox", "repo.git",
   // A box answered by tapping, from the READER's card (`PromptAnswer.tsx`).
   // The approve bar's size counters (`prompt.mini`/`expand`/`hide`/`show`,
   // `prompt.detail`) are gone with the bar: they were measuring how often the
@@ -51,17 +51,11 @@ export const ACTION_IDS = [
   // missing from it can never report zero, and these are the ones that say
   // whether the reworked sheet is being used the way it was rebuilt to be.
   "backlog.send", "backlog.fire", "backlog.refire", "backlog.done", "backlog.remove",
-  // The smart pick, from the phone's side: the tick, the undo, and the two
-  // chips that are filters. `backlog.unmerge` is the safety catch — if it
-  // climbs, the merges are wrong; if it never fires at all, either they are
-  // right or nobody can reach it, and `backlog.mergedfrom` is what tells those
-  // two apart.
-  "backlog.smartpick", "backlog.unmerge", "backlog.mergedfrom", "backlog.mergedinto",
   // The backlog's own cut. Enumerated for the reason the assess ids are: an id
   // `UsageSheet` does not know reads as noise, and these three are how "is the
   // list still being read, or is it being filtered" gets answered.
   "backlog.filter.status", "backlog.filter.age", "backlog.filter.clear",
-  "git.stage", "git.commit", "git.push", "git.branch", "git.diff",
+  "git.stage", "git.commit", "git.pull", "git.push", "git.sync", "git.branch", "git.diff",
   // The desktop drafting the commit message (host `commitmsg.ts`). Counted
   // apart from `git.commit`: how often a drafted message is actually committed
   // is the only reading that says whether the draft is any good.
@@ -70,7 +64,7 @@ export const ACTION_IDS = [
   // phone" was specified as a rare case, and a counter that climbs says the
   // editor stopped being a fallback and became a workflow.
   "files.open", "files.edit", "files.save", "files.search", "files.download",
-  "gallery.delete", "gallery.annotate", "gallery.download", "gallery.more", "gallery.fullres", "image.send", "image.queue", "newimg.open", "newimg.ref", "swipe.download",
+  "gallery.delete", "gallery.annotate", "gallery.download", "gallery.more", "gallery.fullres", "gallery.pick", "gallery.combine", "image.send", "image.queue", "newimg.open", "newimg.ref", "swipe.download",
   // Several pictures as one. `collage.separate` is the counter that says whether
   // this sheet is a step in the way: if it is what people press, the offer
   // belongs behind a button rather than in front of every multi-image pick.
@@ -105,7 +99,7 @@ export const ACTION_IDS = [
   "schedule.new", "schedule.save", "schedule.edit", "schedule.runnow", "schedule.toggle", "schedule.remove",
   "schedule.skipnext", "schedule.session", "schedule.reposession", "schedule.spent",
   "pull.auto", "pull.enable", "pull.supersede", "pull.retry", "pull.pause", "pull.resumeall", "pull.save", "pull.clearall", "gallery.pull", "gallery.pullsave",
-  "search.recent", "search.history", "read.toggle", "read.find", "read.outline", "read.new", "read.fileref", "outline.find", "outline.jump", "scrollback.find", "scrollback.reachback",
+  "search.recent", "search.history", "read.toggle", "read.find", "read.outline", "read.fileref", "outline.find", "outline.jump", "scrollback.find", "scrollback.reachback",
   // `setup.fix` patches; `setup.remedy` opens a prompt. Counted apart because a
   // checklist whose findings are mostly remedies is one whose checks have
   // outgrown being auto-fixable, which is a different thing to know.
@@ -164,7 +158,7 @@ export const ACTION_IDS = [
   // hidden is the wrong default on that device, not that the button is missing.
   "typing.peek", "typing.hide",
   "pad.new", "pad.save", "pad.remove", "pad.send", "pad.queue", "pad.fanout", "pad.start",
-  "session.newprompt", "attach.file", "outbox.auto",
+  "session.newprompt", "attach.file", "attach.paste", "outbox.auto",
   "https.switch", "hostSetup", "hosts.switch", "hosts.remove",
   "appUpdate.check", "appUpdate.download", "appUpdate.apply", "appUpdate.auto", "appUpdate.revert",
   "hdrcmd.send", "hdrcmd.manage", "hdrcmd.save",

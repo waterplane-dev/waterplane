@@ -28,6 +28,7 @@ import { cleanHealth } from "@waterplane/shared";
 import type { CliHealthDoc } from "./CliHealthSheet";
 import type { Snippet } from "./SnippetSheet";
 import { LS, lsDel, lsGet, lsJson, lsNum, lsSetJson } from "./storage";
+import { type PendingMarks, parsePendingMarks } from "./pendingMarks";
 
 /** What the compose bar's send button does: straight away, queued for this
  *  session, held until the agent is idle, or handed to the scheduler. Declared
@@ -114,81 +115,31 @@ export function loadCollapsedRepos(): Set<string> {
 }
 
 /**
- * Stars pressed with no link — the one piece of HOST state this file keeps a
- * device-local shadow of, and only until the host agrees.
+ * Stars and follow-up flags pressed with no link — the one piece of HOST state
+ * this file keeps a device-local shadow of, and only until the host agrees.
  *
- * `session.star` is a fire-and-forget frame: offline it lands in the socket's
- * in-memory queue, which paints nothing (the star stayed hollow, so the press
- * read as ignored) and is thrown away by a reload — which the `ws.ts` watchdog
- * performs on exactly the link this happens on. So the INTENT is written here:
- * id → wanted flag, overriding the host's value on screen and re-sent on
- * reconnect. It is not a preference and it never wins an argument —
- * `reconcileStars` drops each entry the moment a LIVE session says the host has
- * it, which is also what makes a star set from another device visible here.
+ * `session.star` / `session.followup` are fire-and-forget frames: offline they
+ * land in the socket's in-memory queue, which paints nothing (the star stayed
+ * hollow, so the press read as ignored) and is thrown away by a reload — which
+ * the `ws.ts` watchdog performs on exactly the link this happens on. So the
+ * INTENT is written here: id → wanted flag, overriding the host's value on
+ * screen and re-sent on reconnect. It is not a preference and it never wins an
+ * argument — `reconcileMarks` (`pendingMarks.ts`, the pure half both marks
+ * share) drops each entry the moment a LIVE session says the host has it, which
+ * is also what makes a mark set from another device visible here.
  */
 export const PENDING_STARS_KEY = LS.pendingStars;
-export type PendingStars = Record<string, boolean>;
+export const PENDING_FOLLOWUPS_KEY = LS.pendingFollowUps;
+export type PendingStars = PendingMarks;
 
-export function loadPendingStars(): PendingStars {
-  try {
-    const v = JSON.parse(lsGet(PENDING_STARS_KEY) || "{}");
-    if (!v || typeof v !== "object" || Array.isArray(v)) return {};
-    const out: PendingStars = {};
-    for (const [k, b] of Object.entries(v)) if (typeof b === "boolean") out[k] = b;
-    return out;
-  } catch { return {}; }
+export function loadPendingMarks(key: string): PendingMarks {
+  return parsePendingMarks(lsGet(key));
 }
 
-export function savePendingStars(p: PendingStars): void {
+export function savePendingMarks(key: string, p: PendingMarks): void {
   // quota / private mode — the intent still holds for this page (both helpers swallow it)
-  if (Object.keys(p).length === 0) lsDel(PENDING_STARS_KEY);
-  else lsSetJson(PENDING_STARS_KEY, p);
-}
-
-/** The session list as the user last left it: host rows with the un-acknowledged
- *  presses painted over them. Same array back when there is nothing pending, so
- *  the common case costs no re-render. */
-export function applyPendingStars(list: SessionInfo[], pending: PendingStars): SessionInfo[] {
-  if (Object.keys(pending).length === 0) return list;
-  let touched = false;
-  const out = list.map((s) => {
-    const want = pending[s.id];
-    if (want === undefined || want === !!s.starred) return s;
-    touched = true;
-    return { ...s, starred: want };
-  });
-  return touched ? out : list;
-}
-
-/**
- * Drop the presses the host has now confirmed. `dropMissing` is for an
- * AUTHORITATIVE list (`session.list`): a session the host no longer lists cannot
- * be starred, so its intent is dead. A single-session update carries no such
- * proof, so it may only clear its own id.
- *
- * Returns null when nothing changed — the caller keeps its object identity.
- */
-export function reconcileStars(
-  pending: PendingStars,
-  live: SessionInfo[],
-  dropMissing: boolean,
-): PendingStars | null {
-  const ids = Object.keys(pending);
-  if (ids.length === 0) return null;
-  const byId = new Map(live.map((s) => [s.id, s]));
-  const out: PendingStars = {};
-  let changed = false;
-  for (const id of ids) {
-    const s = byId.get(id);
-    if (!s) {
-      if (dropMissing) { changed = true; continue; }
-      out[id] = pending[id];
-      continue;
-    }
-    if (!!s.starred === pending[id]) { changed = true; continue; }
-    out[id] = pending[id];
-  }
-  return changed ? out : null;
+  if (Object.keys(p).length === 0) lsDel(key);
+  else lsSetJson(key, p);
 }
 
 /**

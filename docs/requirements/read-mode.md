@@ -26,6 +26,29 @@ Text picking, quoting and decision answers work in read mode as well as in CLI v
 - shipped: 9b96a3e
 
 ### R-read-mode-006 · requested
-Read mode shows the latest output from the current session.
-- asked: 2026-10-04
+Read mode shows the latest output from the current session, never an outdated copy.
+- asked: 2026-10-04, 2026-10-06
+
+### R-read-mode-007 · shipped
+Markdown read mode renders line breaks naturally, without strange breaks in the document.
+- asked: 2026-10-06
+- shipped: b53a7b8a
+
+### R-read-mode-008 · requested
+Read mode displays documents without the layout problems shown in the marked screenshot.
+- asked: 2026-10-06
+
+### R-read-mode-009 · shipped
+The reader marks a turn read only once it has stayed on screen while scrolled through, so there are no false unread items and no "n new" button.
+- asked: 2026-10-07
+- shipped: 7731bd2e
+
+### R-read-mode-010 · requested
+Read mode shows all the information needed to decide between the options, captured from the CLI output.
+- asked: 2026-10-08
+
+### R-read-mode-011 · shipped
+Read mode does not scrape fragile slash commands like /btw; the reader shows a row that opens the CLI view instead.
+- asked: 2026-10-11
+- shipped: 0dfaae39
 

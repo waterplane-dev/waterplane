@@ -104,3 +104,69 @@ test("an unanswerable alive set deletes nothing at all", () => {
   assert.equal(r2.deleted, 1);
   assert.equal(existsSync(old), false);
 });
+
+// ── `staleLiveIds`: which `live/` records the boot reclaim may delete ────────
+//
+// A record is how a restart finds its pane, and `aliveSessionIds` reads every
+// record as a session — so a record whose pane died while the daemon was down
+// used to protect its own history and summary for ever (162 of 277 on this
+// desktop). The reclaim that fixes it deletes records, so every reason it has to
+// keep one is pinned here.
+
+const { staleLiveIds } = await import("../dist/sessions.js");
+const HOUR = 60 * 60 * 1000;
+const SOCK = "/tmp/tmux-501/waterplane";
+const SERVER = { socket: SOCK, isDefault: true };
+/** `{ id: [ageInHours, tmuxSocket?] }` → the facts map `staleLiveIds` takes. */
+const facts = (o) => new Map(Object.entries(o).map(([id, [hours, tmuxSocket]]) => [id, { mtimeMs: NOW - hours * HOUR, ...(tmuxSocket ? { tmuxSocket } : {}) }]));
+const { tmuxName } = await import("../dist/sessions/knobs.js");
+const tmux = (...ids) => new Set(ids.map(tmuxName));
+
+test("a listing that could not be had reclaims nothing — a failed `tmux ls` is never an empty one", () => {
+  const f = facts({ deadbeef: [999, SOCK] });
+  assert.deepEqual(staleLiveIds(["deadbeef"], null, NOW, f, HOUR, SERVER), []);
+  // …and the same record against a real (empty) listing IS reclaimed, so the
+  // line above proves the null branch and not some other reason to keep it.
+  assert.deepEqual(staleLiveIds(["deadbeef"], tmux(), NOW, f, HOUR, SERVER), ["deadbeef"]);
+});
+
+test("a record whose tmux session is listed is kept, however old", () => {
+  const f = facts({ aaaa1111: [999, SOCK], bbbb2222: [999, SOCK] });
+  assert.deepEqual(staleLiveIds(["aaaa1111", "bbbb2222"], tmux("aaaa1111"), NOW, f, HOUR, SERVER), ["bbbb2222"]);
+});
+
+test("a record younger than the gate is kept — its spawn may still be in flight", () => {
+  const f = facts({ aaaa1111: [0.5, SOCK], bbbb2222: [1.5, SOCK] });
+  assert.deepEqual(staleLiveIds(["aaaa1111", "bbbb2222"], tmux(), NOW, f, HOUR, SERVER), ["bbbb2222"]);
+});
+
+test("old and absent from the listing is the one case that is listed", () => {
+  const f = facts({ aaaa1111: [48, SOCK], bbbb2222: [48, SOCK], cccc3333: [48, SOCK] });
+  assert.deepEqual(staleLiveIds(["aaaa1111", "bbbb2222", "cccc3333"], tmux("bbbb2222"), NOW, f, HOUR, SERVER), ["aaaa1111", "cccc3333"]);
+});
+
+test("a traversal-shaped id is refused, never sanitised", () => {
+  const ids = ["..", "../etc", "a/b", "-lead", ".hidden", "deadbeef.json", ""];
+  const f = new Map(ids.map((id) => [id, { mtimeMs: NOW - 999 * HOUR, tmuxSocket: SOCK }]));
+  assert.deepEqual(staleLiveIds(ids, tmux(), NOW, f, HOUR, SERVER), []);
+});
+
+test("an id this host holds (the map, the parked set) is kept even with no name listed", () => {
+  const f = facts({ aaaa1111: [48, SOCK], bbbb2222: [48, SOCK] });
+  assert.deepEqual(staleLiveIds(["aaaa1111", "bbbb2222"], tmux(), NOW, f, HOUR, SERVER, new Set(["aaaa1111"])), ["bbbb2222"]);
+});
+
+test("a record stamped with ANOTHER tmux server is kept — this listing says nothing about it", () => {
+  const f = facts({ aaaa1111: [48, "/tmp/tmux-501/other"], bbbb2222: [48, SOCK] });
+  assert.deepEqual(staleLiveIds(["aaaa1111", "bbbb2222"], tmux(), NOW, f, HOUR, SERVER), ["bbbb2222"]);
+});
+
+test("an unstamped (older) record is judged only by a host on the default socket", () => {
+  const f = facts({ aaaa1111: [48, undefined] });
+  assert.deepEqual(staleLiveIds(["aaaa1111"], tmux(), NOW, f, HOUR, SERVER), ["aaaa1111"]);
+  assert.deepEqual(staleLiveIds(["aaaa1111"], tmux(), NOW, f, HOUR, { socket: SOCK, isDefault: false }), []);
+});
+
+test("a record with no facts (unreadable, unparseable) is kept", () => {
+  assert.deepEqual(staleLiveIds(["aaaa1111"], tmux(), NOW, new Map(), HOUR, SERVER), []);
+});

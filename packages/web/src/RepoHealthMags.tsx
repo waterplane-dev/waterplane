@@ -22,8 +22,10 @@ import {
   TYPE_FILTER_CLEAR, depsWords, magnitudeLeadWords, magnitudesNoteWords, packageStackWords,
   tapePickWords, typeChipWords, typeFilterWords, typeStackWords, typesAbsentWords,
 } from "./repoHealthStackWords";
-import { pointReadoutWords, scrubHintWords, seriesValueWords } from "./repoHealthWords";
+import { pointReadoutWords, seriesValueWords } from "./repoHealthWords";
+import { ScrubHint } from "./kit/chart/ScrubHint";
 import { HintChip } from "./HintChip";
+import { Explain } from "./Explain";
 
 const TAPE_H = 64;
 
@@ -67,7 +69,7 @@ function MagnitudeCurve({ points, label, unit, width, hint }: {
           onPick={setPickedIndex} />
       ) : null}
       {drawn ? (
-        <div className="rh-scrub">{pointReadoutWords(picked, unit) ?? scrubHintWords()}</div>
+        <div className="rh-scrub">{pointReadoutWords(picked, unit) ?? <ScrubHint />}</div>
       ) : null}
     </li>
   );
@@ -298,7 +300,8 @@ export function Tape({ tape, paths, width, caption, onOpenFile }: {
   tape: number[];
   paths: (string | null)[] | null;
   width: number;
-  caption: string;
+  /** `tapeWords`' pair: `lead` drawn, `more` folded. */
+  caption: { lead: string; more: string };
   onOpenFile?: (path: string) => void;
 }) {
   const [picked, setPicked] = useState<number | null>(null);
@@ -351,14 +354,20 @@ export function Tape({ tape, paths, width, caption, onOpenFile }: {
         ))}
       </svg>
       <div className="rh-scrub rh-tape-pick">
-        <span className="rh-tape-pick-words">{tapePickWords(pick, !!paths)}</span>
+        {/* Unpicked, the line is an instruction, muted like the kit's `ScrubHint`;
+            a picked bar's answer keeps the readout's weight. */}
+        <span className={`rh-tape-pick-words${pick ? "" : " scrub-hint"}`}>{tapePickWords(pick, !!paths)}</span>
         {pick?.path && onOpenFile ? (
           <button className="key" onClick={() => onOpenFile(pick.path!)}>
             <FileText size={14} /> open
           </button>
         ) : null}
       </div>
-      <div className="rh-cap">{caption}</div>
+      {/* The figures in the open; why they are words and not rules folds behind
+          the `?` at the end of that line. */}
+      <div className="rh-cap">
+        {caption.lead} <Explain of="the longest-files caption">{caption.more}</Explain>
+      </div>
     </div>
   );
 }

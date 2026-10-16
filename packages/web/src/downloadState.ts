@@ -327,3 +327,39 @@ export function pumpEligible(
 export function noNetwork(navOnline: boolean, linkOpen: boolean): boolean {
   return !navOnline && !linkOpen;
 }
+
+/**
+ * The rows the always-visible download strip (and the menu's progress chip)
+ * should speak for: what is moving, or WILL move without anyone tapping.
+ *
+ * With auto-download off here, a host-queued row is a file waiting for a tap
+ * — nothing is happening to it, and a strip reading "3 files to download"
+ * over that is a standing nag, on precisely the screen (a browser beside the
+ * APK) that turned auto-download off so as not to fetch them. Those rows stay
+ * in the Downloads sheet; only the strip stops counting them. A row a person
+ * tapped (`local`) is theirs whatever the switch says, and one already
+ * downloading is in flight whatever it was.
+ */
+export function stripRows<R extends Pick<PullRecord, "state" | "local">>(records: readonly R[], auto: boolean): R[] {
+  return records.filter((r) => r.state !== "done" && (auto || !!r.local || r.state === "downloading"));
+}
+
+/**
+ * Ask this browser whether the waterplane app on the same phone should be the
+ * only one fetching automatically?
+ *
+ * Auto-download is per WebView: the APK and a browser tab on the same phone
+ * each keep their own switch, both on by default, so the same 100 MB build was
+ * fetched twice. A browser cannot see whether the APK is installed, so it ASKS,
+ * once, at the first moment the question means something — an automatic
+ * download on its way here. Never in the shell (it IS the app), never off
+ * Android (there is no APK to be beside), never once answered or with the
+ * switch already off, and never for a file a person tapped.
+ */
+export function browserPullAsk(o: {
+  native: boolean; android: boolean; auto: boolean; answered: boolean;
+  records: readonly Pick<PullRecord, "state" | "local">[];
+}): boolean {
+  if (o.native || !o.android || !o.auto || o.answered) return false;
+  return o.records.some((r) => !r.local && r.state !== "done");
+}

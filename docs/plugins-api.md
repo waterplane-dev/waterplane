@@ -3,7 +3,12 @@
 <!-- GENERATED from packages/shared/src/plugin.ts by scripts/gen-plugin-docs.mjs — do not edit by hand. -->
 <!-- Rewrite with `npm run docs:plugins`; `tools/plugindocs.test.mjs` fails when this is stale. -->
 
-**API version: `1.3.0`** (`PLUGIN_API_VERSION`). A manifest's `apiVersion` loads when it has the
+Start a new plugin from `examples/plugin-template/`; installing one and the list of plugins are in
+`docs/plugins.md`. **Publishing yours? Tag its GitHub repo with the `waterplane-plugin` topic**, so
+it shows up at https://github.com/topics/waterplane-plugin. A plugin is not a fork, so that topic is
+the only place it is counted.
+
+**API version: `1.7.0`** (`PLUGIN_API_VERSION`). A manifest's `apiVersion` loads when it has the
 same major and a minor no newer than this one; the rules for what bumps which number are under
 `PLUGIN_API_VERSION` below. Why the API looks the way it does: `docs/notes/plugins.md`.
 
@@ -87,6 +92,8 @@ shape for both, so moving an extension out of the repo is a folder move.
 - [`PLUGIN_THERMAL_TIMEOUT_MS`](#plugin_thermal_timeout_ms) — const
 - [`PluginThermalReading`](#pluginthermalreading) — type
 - [`PluginThermalReader`](#pluginthermalreader) — interface
+- [`PluginUsageProbe`](#pluginusageprobe) — interface
+- [`PLUGIN_USAGE_PROBE_TIMEOUT_MS`](#plugin_usage_probe_timeout_ms) — const
 - [`PluginDoctorCheck`](#plugindoctorcheck) — interface
 - [`PLUGIN_HOOK_HOLD_DEFAULT_MS`](#plugin_hook_hold_default_ms) — const
 - [`PLUGIN_HOOK_HOLD_MAX_MS`](#plugin_hook_hold_max_ms) — const
@@ -131,7 +138,7 @@ A bare number (`"apiVersion": 1`, every manifest written before semver) means `1
   can observe through types.
 
 ```ts
-export const PLUGIN_API_VERSION = "1.3.0";
+export const PLUGIN_API_VERSION = "1.7.0";
 ```
 
 ## PluginApiVersion
@@ -602,9 +609,9 @@ export interface HostPluginApi { … }
 | `setBadge` | `setBadge(sessionId: string, badge: PluginBadge \| null): void` |  |
 | `decision` | `decision(row: Omit<DecisionLogEntry, "id" \| "ts" \| "source" \| "plugin" \| "sessionTitle"> & { sessionTitle?: string; }): void` | Append a decision-log row (`source`/`plugin` are filled in). |
 | `meter` | `meter(call: { service: string; model: string; inTok: number; outTok: number; }): void` | Record a paid model call, so it shows in the phone's usage numbers. |
-| `notify` | `notify(n: { title: string; body: string; sessionId?: string; }): void` |  |
+| `notify` | `notify(n: { title: string; body: string; sessionId?: string; urgent?: boolean; }): void` | `urgent` (since 1.6): a request a person must approve now; lands on the loud "approval" kind. Use for nothing else. |
 | `claudeUsage` | `claudeUsage(): { sessionPct: number \| null; weeklyPct: number \| null; } \| null` | The Claude plan usage (5-hour / weekly %), or null when unknown. |
-| `repo` | `repo(repoId: string): Promise<PluginRepoScope \| null>` | One repo by its id (the ids `GET /api/repos` hands out); null when unknown or outside the root. |
+| `repo` | `repo(repoId: string): Promise<PluginRepoScope \| null>` | One repo by its id (`GET /api/repos`) or absolute worktree path (realpath); null when unknown or outside the root. |
 | `setupCheck` | `setupCheck(fn: (repo: SetupSubject) => ComplianceCheck \| null): () => void` | Contribute a row to every repo's setup checklist. Called on each check of each repo, so keep it cheap; null = no row for this repo. A throw drops the row and becomes the plugin's status line. Returns an unregister. |
 | `setupFix` | `setupFix(id: string, fn: (repo: SetupSubject) => SetupFixOutcome): () => void` | Handle the fix a contributed row names in `fix`. Ids the core owns (`gitignore`, `claude-md`, …) or another plugin already took are refused: the call throws, saying which. Returns an unregister. |
 | `handle` | `handle(method: string, fn: (args: unknown) => unknown \| Promise<unknown>): () => void` | Answer `method` when the phone (or core) calls this plugin — the registry's `call(pluginId, method, args)`. One handler per method; a second replaces the first. A throw is the caller's `{ ok:false, error }` and the plugin's status line. Returns an unregister. |
@@ -613,10 +620,13 @@ export interface HostPluginApi { … }
 | `backend` | `backend(def: PluginBackendDef): () => void` | Register a backend (a CLI the launcher may spawn). THROWS a sentence — and the plugin is listed broken when that escapes `activate()` — when the id is not in the manifest's `backends`, is already taken, or `caps` names a reader this host does not have. Unregistered when the plugin is switched off; the returned function unregisters it earlier. |
 | `screenReader` | `screenReader(name: string, reader: PluginScreenReader): () => void` | Contribute a SCREEN reader under `name` (since 1.1): the reader for a TUI whose choice dialog has no numbers and is answered by walking a selection (`PluginScreenReader`). A backend this plugin registers may then name it in `caps.promptBoxes` — so register the reader FIRST. THROWS a sentence when the name is not a short lowercase word or is already taken (core's own `claude-numbered` among them). Unregistered with the plugin; the returned function earlier. A reader is measured against ONE binary's screen and pinned by the plugin's own fixtures. |
 | `storeReader` | `storeReader(name: string, reader: PluginStoreReader): () => void` | Contribute a STORE reader under `name` (since 1.1): the reader of a CLI's own conversation record — a database or files on disk it writes (`PluginStoreReader`). A backend may then name it in `caps.transcript`, and the core asks it for the reader view, the context graph, the tool details, which conversation a session is in, and the backend's ledger. Same rules as `screenReader`: register it before the backend; a taken name (`claude-jsonl`) throws. |
-| `thermalReader` | `thermalReader(name: string, reader: PluginThermalReader): () => void` | Contribute a THERMAL reader under `name` (since 1.3): temperature and fan speed for the machine readout, where the core has no reader of its own (macOS keeps the SMC behind root). Asked on the readout's slow cadence, before the core's own sysfs reader; the first reading wins. A reading the core cannot vouch for (a non-finite figure, a temperature outside 1..149 °C, a negative rpm) is DROPPED, never shown — answer null rather than guess. A note (`{ note, fix? }`) is shown only when nothing reads. A throw or an answer slower than `PLUGIN_THERMAL_TIMEOUT_MS` counts as no reading. Same naming rules as `screenReader`. |
+| `thermalReader` | `thermalReader(name: string, reader: PluginThermalReader): () => void` | Contribute a THERMAL reader under `name` (since 1.3): temperature and fan speed for the machine readout, where the core has no reader of its own (macOS keeps the SMC behind root). Asked on the readout's slow cadence, before the core's own sysfs reader; the first reading wins. A reading the core cannot vouch for (non-finite, outside 1..149 °C, a negative rpm) is DROPPED — answer null. A note (`{ note, fix? }`) is shown only when nothing reads. A throw or an answer slower than `PLUGIN_THERMAL_TIMEOUT_MS` counts as no reading. Same naming rules as `screenReader`. |
+| `usageProbe` | `usageProbe(def: PluginUsageProbe): () => void` | Contribute a USAGE PROBE (since 1.7): one account's quota as its own segment beside claude's on the usage chip. `claude` or a taken `source` throws. Null = ABSENT; a throw or timeout keeps the last reading until its reset; an unvouchable window is dropped. Returns an unregister. |
 | `hookSink` | `hookSink(): string` | The loopback URL this plugin's hooks POST to: `http://127.0.0.1:<port>/api/plugin/<id>/hook`. Loopback only, like the core's own hook sink; a remote caller is refused. |
 | `onHook` | `onHook(fn: (payload: unknown, hold: PluginHookHold) => unknown \| Promise<unknown>, opts?: { maxHoldMs?: number; }): () => void` | Receive the posts to `hookSink()`. The handler's return value (JSON) is the HTTP response body; `undefined` answers `{}`. Return a Promise to HOLD the response (a CLI that waits on its hook for a permission answer): the core answers `{}` itself after `maxHoldMs` (default `PLUGIN_HOOK_HOLD_DEFAULT_MS`, at most `PLUGIN_HOOK_HOLD_MAX_MS`) and calls `hold.onExpired` — so keep it BELOW the CLI's own hook timeout, or the CLI kills the hook first. One handler per plugin; a second replaces the first. A throw answers `{}` and becomes the status line. |
 | `route` | `route(method: PluginHttpMethod, pattern: string, fn: (req: PluginHttpRequest) => PluginHttpReply \| Promise<PluginHttpReply>): () => void` | Serve an HTTP route (since 1.2) at `/api/plugin/<id>/<pattern>`. It sits behind the SAME origin/Host gate and token gate as every core `/api` route — never loopback-only, never exempt. `pattern` is `/`-separated: literal segments, `:name` (exactly one segment, handed over RAW in `params`), and a trailing `*` (what follows, in `rest`). JSON in and out: the body is parsed (`{}` when there is none or it is not JSON; past `PLUGIN_ROUTE_BODY_MAX` the request is a 413), and the reply's `body` goes back as JSON with its `status` (default 200). A GET must not change anything — the core's rule for every `/api` GET. THROWS a sentence for a method outside `PluginHttpMethod`, a malformed pattern, one whose first segment is `hook` (the sink's), or one this plugin already serves for that method. A throw in the handler answers 500 `{ ok:false, error }` and becomes the status line. Unregistered with the plugin; the returned function earlier. |
+| `stream` | `stream(name: string, handlers: PluginStreamHandlers): () => void` | Since 1.4. Serve live stream `name` to the sockets that open it: binary frames on the one socket, never durable or retried (`shared/stream.ts` has the whole contract). THROWS on a bad name or one already served. The returned function ends every open subscription. |
+| `offerFile` | `offerFile(file: string, opts: import("./pluginfile.js").PluginFileOfferOpts): import("./pluginfile.js").PluginFileOffer` | Since 1.5: ONE `dataDir` file to the phone's download path, deleted once fetched or at its TTL (`pluginfile.ts`). |
 
 ## PluginHttpMethod
 
@@ -753,7 +763,7 @@ export interface PluginBackendDef { … }
 | `launchArgs` | `launchArgs(req: PluginLaunchRequest): PluginLaunchPlan` |  |
 | `delivery` | `delivery?: { submitKey?: string; textThenSubmitDelayMs?: number; requiresChannel?: boolean; pastePlaceholder?: RegExp \| null; composerCursorRe?: RegExp \| null; composerRuleRe?: RegExp \| null; composerPlaceholderRe?: RegExp \| null; trustPromptRe?: RegExp \| null; isLocalCommand?(text: string): boolean; startsNoTurn?(text: string): boolean; }` |  |
 | `caps` | `caps: { hooks: "settings-inject" \| "plugin-inject" \| "none"; promptBoxes: false \| string; transcript: string; slash?: "claude" \| "own" \| "none"; contextMeter?: boolean; usageLimits?: boolean; usageProbe?: boolean; asking?: boolean; remoteControl?: boolean; effort?: boolean; permissionModes?: PermissionMode[]; forkVia?: "jsonl" \| "server" \| false; turns?: boolean; }` |  |
-| `models` | `models(): Promise<{ aliases: string[]; ids: string[]; where?: Record<string, "local" \| "hosted">; zeroCost?: string[]; contextWindow?: Record<string, number>; unavailable?: string; }>` | The model catalogue. Empty ⇒ a free-text field on the phone, never a guessed list. |
+| `models` | `models(): Promise<{ aliases: string[]; ids: string[]; where?: Record<string, "local" \| "hosted">; zeroCost?: string[]; contextWindow?: Record<string, number>; unavailable?: string; note?: string; }>` | The model catalogue. Empty ⇒ a free-text field on the phone, never a guessed list. |
 | `sources` | `sources?: BackendSources` | A source per fact beside the screen readers (`backendsources.ts`). |
 
 ## PLUGIN_READER_NAME_RE
@@ -944,9 +954,39 @@ export interface PluginThermalReader { … }
 |---|---|---|
 | `read` | `read(): Promise<PluginThermalReading>` |  |
 
+## PluginUsageProbe
+
+*interface*
+
+A usage probe (`api.usageProbe`, since 1.7): one account's quota as a `UsageReading`.
+
+```ts
+export interface PluginUsageProbe { … }
+```
+
+| member | signature | notes |
+|---|---|---|
+| `source` | `source: UsageSourceId` | The reading's id: short, lowercase, `[a-z0-9:_-]` (`USAGE_SOURCE_RE`). Never `claude`. |
+| `label` | `label: string` | As drawn on the chip: `"Copilot"`. |
+| `backend` | `backend?: string` | The backend id this account belongs to, when there is one (a session header shows its own). |
+| `everyMs` | `everyMs?: number` | Poll period while polling is on; default 15 min, never less than 60 s. |
+| `probe` | `probe(): Promise<UsageReading \| null>` | A reading, or null when there is nothing to say (the source is then absent). |
+
+## PLUGIN_USAGE_PROBE_TIMEOUT_MS
+
+*const*
+
+How long a usage probe may take before it counts as a failure (its last reading is kept).
+
+```ts
+export const PLUGIN_USAGE_PROBE_TIMEOUT_MS = 20000;
+```
+
 ## PluginDoctorCheck
 
 *interface*
+
+One line of the preflight report a builtin's `doctor` contributes.
 
 ```ts
 export interface PluginDoctorCheck { … }

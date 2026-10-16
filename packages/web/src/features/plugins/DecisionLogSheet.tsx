@@ -11,13 +11,15 @@
  */
 import { useState, type ReactNode } from "react";
 import {
-  AlertTriangle, Archive, Bot, Check, CircleSlash, Hand, Hourglass, Puzzle, RefreshCw, ScrollText, Send, ShieldAlert, ThumbsUp, Trash2, X,
+  AlertTriangle, Archive, Bot, Check, CircleSlash, Hand, Hourglass, Puzzle, RefreshCw, ScrollText, Send, ShieldAlert, ThumbsUp, Trash2,
 } from "lucide-react";
 import type { DecisionLogEntry, PluginView } from "@waterplane/shared";
 import { useCore, useStore } from "../../sdk";
 import { SheetHead } from "../../Sheet";
 import { ConfirmButton } from "../../Confirm";
 import { Empty } from "../../Empty";
+import { Explain } from "../../Explain";
+import { FilterBar, FilterChip } from "../../kit";
 import { ago } from "../../format";
 import { cleanTerm, cutDecisions, decisionSource, decisionSources, sourceLabel } from "./logic";
 import { decisions, decisionScope, plugins } from "./store";
@@ -53,18 +55,21 @@ export function DecisionLogSheet() {
   const [open, setOpen] = useState<Set<string>>(new Set());
   const session = sid ? c.world.sessions.find((x) => x.id === sid) : undefined;
   const { inScope, shown, archived } = cutDecisions(entries, { sessionId: sid, source, showArchived });
-  const sources = decisionSources(inScope);
+  // What a person can SEE before any chip is tapped: archived rows stay hidden until asked for,
+  // so every number on a chip and in "n of N" counts this list, never rows that are hidden.
+  const visible = showArchived ? inScope : inScope.filter((e) => !e.archived);
+  const sources = decisionSources(visible);
   const toggle = (id: string) => setOpen((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const live = c.conn;
   const archive = (id: string, a: boolean) => live.liveSend({ t: "decisions.archive", id, archived: a }, a ? "archived" : "unarchived");
   const del = (id: string) => live.liveSend({ t: "decisions.delete", id }, "deleted");
   const acts = (e: DecisionLogEntry) => (
     <span className="hist-acts">
-      <button className="row-act" title={e.archived ? "un-archive" : "archive (hide)"} onClick={() => archive(e.id, !e.archived)}><Archive size={12} /></button>
+      <button className="row-act" title={e.archived ? "un-archive" : "archive (hide)"} onClick={() => archive(e.id, !e.archived)}><Archive size={16} /></button>
       <ConfirmButton className="row-act" title="delete permanently"
         confirmTitle="tap again to delete this log entry for good"
-        confirm={<><Trash2 size={12} /> sure?</>}
-        onConfirm={() => del(e.id)}><Trash2 size={12} /></ConfirmButton>
+        confirm={<><Trash2 size={16} /> sure?</>}
+        onConfirm={() => del(e.id)}><Trash2 size={16} /></ConfirmButton>
     </span>
   );
 
@@ -79,30 +84,46 @@ export function DecisionLogSheet() {
         <button className="key" title="refresh" onClick={() => live.liveAsk(sid ? { t: "decisions.get", sessionId: sid } : { t: "decisions.get" })}><RefreshCw size={14} /></button>
       </SheetHead>
 
-      {sources.length > 1 && (
-        <div className="annot-tools tri olog-kinds">
-          <button className={`key ${source === null ? "active" : ""}`} onClick={() => setSource(null)}>all · {inScope.length}</button>
-          {sources.map((s) => (
-            <button key={s.key} className={`key ${source === s.key ? "active" : ""}`} onClick={() => setSource(s.key)}>
-              {s.key === "limit" ? <Hourglass size={12} /> : <Puzzle size={12} />} {sourceLabel(s.key, list)} · {s.n}
-            </button>
-          ))}
+      {/* One line says what this is; what a row holds is behind the `?`. */}
+      <div className="form-hint">
+        Done or proposed for a session without a tap.
+        <Explain of="the decision log">
+          Each row is a usage-limit auto-continue, or a plugin&apos;s suggestion or answer with what it
+          was shown and why it chose.
+        </Explain>
+      </div>
+
+      {/* The kit's filter chips. "all" is lit exactly when no source is, so it is a choice and
+          carries no x; a lit source chip is a cut, and the bar below says what it hides. The
+          archived chip is the other cut: those rows stay hidden until it is lit. */}
+      {(sources.length > 1 || archived > 0) && (
+        <div className="fchips wrap olog-kinds">
+          {sources.length > 1 && (
+            <>
+              <FilterChip on={source === null} clears={false} onClick={() => setSource(null)}>all · {visible.length}</FilterChip>
+              {sources.map((s) => (
+                <FilterChip key={s.key} on={source === s.key} onClick={() => setSource(source === s.key ? null : s.key)}>
+                  {s.key === "limit" ? <Hourglass size={12} /> : <Puzzle size={12} />} {sourceLabel(s.key, list)} · {s.n}
+                </FilterChip>
+              ))}
+            </>
+          )}
+          {archived > 0 && (
+            <>
+              {sources.length > 1 && <span className="fchips-gap" aria-hidden />}
+              <FilterChip on={showArchived} onClick={() => setShowArchived((v) => !v)}
+                title={showArchived ? "hide the archived entries again" : `also show the ${archived} archived`}>
+                archived · {archived}
+              </FilterChip>
+            </>
+          )}
         </div>
       )}
-
-      <div className="form-hint">
-        Each row is something done or proposed for a session without a tap: a usage-limit auto-continue, or
-        a plugin&apos;s suggestion or answer with what it was shown and why it chose.
-        {source && (
-          <div>
-            Showing {sourceLabel(source, list)} only: {shown.length} of {inScope.length}{" "}
-            <button className="link-btn" onClick={() => setSource(null)}><X size={11} /> clear</button>
-          </div>
-        )}
-        {archived > 0 && (
-          <> · <button className="link-btn" onClick={() => setShowArchived((v) => !v)}>{showArchived ? "hide" : "show"} {archived} archived</button></>
-        )}
-      </div>
+      {source && (
+        <FilterBar onClear={() => setSource(null)}>
+          Showing {sourceLabel(source, list)} only: {shown.length} of {visible.length}
+        </FilterBar>
+      )}
 
       <div className="list hist">
         <Empty empty={shown.length === 0}>{inScope.length ? "Nothing in this cut." : "No decisions yet."}</Empty>
@@ -118,7 +139,7 @@ export function DecisionLogSheet() {
 function LimitRow({ e, showSession, acts }: { e: DecisionLogEntry; showSession: boolean; acts: ReactNode }) {
   const meta = LIMIT_PHASE[e.phase ?? "blocked"] ?? LIMIT_PHASE.blocked;
   return (
-    <div className={`olog-card outcome-${meta.cls} ${e.archived ? "archived" : ""}`}>
+    <div className={`olog-row${e.archived ? " archived" : ""}`}>
       <div className="olog-head">
         <span className={`tag oracle-${meta.cls}`}><meta.Icon size={12} /> {meta.label}</span>
         {showSession && <span className="olog-sess">{e.sessionTitle}</span>}
@@ -142,7 +163,7 @@ function PluginRow({ e, showSession, acts, list, open, onToggle }: {
   const tok = (e.inTok ?? 0) + (e.outTok ?? 0);
   const facts = [e.model, e.images != null ? `${e.images} image${e.images === 1 ? "" : "s"}` : "", tok ? `${tok} tok` : ""].filter(Boolean);
   return (
-    <div className={`olog-card outcome-${meta.cls} ${e.archived ? "archived" : ""}`}>
+    <div className={`olog-row${e.archived ? " archived" : ""}`}>
       <div className="olog-head">
         <span className={`tag oracle-${meta.cls}`}><meta.Icon size={12} /> {meta.label}</span>
         <span className="tag"><Puzzle size={12} /> {who}</span>

@@ -1,7 +1,7 @@
 /** A slice of assess.ts — moved whole from assess.ts, see docs/notes/shared-architecture.md. */
 import type { ItemCategory } from "../naming.js";
 import { type AssessVerdict } from "./sassvocab.js";
-import { type AssessDowngrade, type AssessProposal, type AssessRow } from "./sassio.js";
+import { type AssessConflict, type AssessDowngrade, type AssessProposal, type AssessRow, type AssessSplit } from "./sassio.js";
 
 // ── The sentences ────────────────────────────────────────────────────────────
 
@@ -88,6 +88,25 @@ export function assessNameCount(p: AssessProposal): number {
   return p.rows.filter(has).length + p.merges.filter(has).length + p.news.filter(has).length;
 }
 
+/** A conflict card's sentence. The ids are the caller's to draw as rows; this
+ *  is the line above them, so the sheet and any notification say it alike. */
+export function assessConflictSentence(c: AssessConflict): string {
+  return `${c.ids.length === 2 ? "these two" : `these ${c.ids.length}`} contradict each other — ${c.why}`;
+}
+
+/** A split card's sentence. */
+export function assessSplitSentence(s: AssessSplit): string {
+  const tail = s.rationale ? ` — ${s.rationale}` : "";
+  return `two jobs in one item: split into two, on the same clock${tail}`;
+}
+
+/** The reason an approved split's ORIGINAL carries once archived. `intoIds`
+ *  are the two posted rows' ids, which only the host knows. */
+export function assessSplitReason(rationale: string, intoIds?: readonly string[]): string {
+  const into = intoIds && intoIds.length ? intoIds.join(" and ") : "two new items";
+  return `split into ${into}${rationale ? ` — ${rationale}` : ""}`;
+}
+
 // ── Applying ─────────────────────────────────────────────────────────────────
 
 /**
@@ -102,20 +121,21 @@ export interface AssessChoices {
   /** Indices into `proposal.news`. */
   news?: readonly number[];
   /**
-   * **Does the order you just approved stay put, or may the smart pick re-sort
-   * it?** Asked at apply time, because only the person applying knows.
+   * Split ids (`AssessSplit.sid`) approved — post both texts on the original's
+   * clock, archive the original. There is deliberately NO field for conflicts:
+   * a conflict is words, and what a person does about one (edit, drop one,
+   * ignore) is a separate tap with the existing verbs, never an apply.
+   */
+  splits?: readonly string[];
+  /**
+   * **Is the order you just approved marked as yours?** Asked at apply time,
+   * because only the person applying knows.
    *
    * An assessment ranks the wanted set, and applying writes that rank as each
-   * row's `order`. The smart pick then re-sorts the repo's waiting items before
-   * each one fires — and it leaves alone exactly the rows marked as placed by a
-   * person. An applied rank was not marked, so until this field existed a
-   * ranking somebody had read sixty-two verdicts to approve was re-decided by a
-   * cheap toolless pass that had seen only the item text.
-   *
-   * Neither answer is right in general, which is why it is a question rather
-   * than a default: a ranking you worked through row by row is usually the more
-   * considered of the two, but a repo where the smart pick is doing the
-   * day-to-day grooming wants its ordering to keep breathing.
+   * row's `order` either way. Pinned, each ranked row is also stamped
+   * `handOrdered` — the mark a drag leaves, drawn as "placed by you". Nothing
+   * on the host re-sorts a row on its own any more (see `Intent.handOrdered`), so the mark says who placed a row;
+   * it does not defend it from a machine.
    *
    * Absent is false — the behaviour every apply had before the question
    * existed, so an older client applying a proposal changes nothing.
@@ -146,27 +166,23 @@ export interface AssessChoices {
  * the row (`applyProposal`'s `handOrdered`) and a second wording of one fact is
  * how two screens come to disagree about what was decided.
  *
- * `pinLabel` deliberately does not say "keep" alone: what is kept is the ORDER,
- * and the thing it is kept from is the smart pick, which the person may not
- * have in mind while reading sixty-two verdicts.
+ * Neither label may promise protection from a re-sort: nothing re-sorts a
+ * row on its own, so the only difference is the "placed by you" mark.
  */
 export function assessPinQuestion(n: number): string {
   return `This applies an order to ${n === 1 ? "1 item" : `${n} items`}. Should it stay as you approved it?`;
 }
 export const ASSESS_PIN_KEEP = "keep this order";
-export const ASSESS_PIN_FREE = "the smart pick may re-sort it";
+export const ASSESS_PIN_FREE = "leave it unmarked";
 /**
  * …and what each answer means, since the consequence is not on either label.
- *
- * The smart pick is only mentioned as a thing that *may* re-sort: it runs
- * before each item fires and only in repos where it is switched on, so a
- * sentence promising it *will* would be wrong in most repos, and one that never
- * named it would leave "why did my order move" unanswerable.
+ * Both are true in every repo: the order is written either way, and nothing
+ * moves a row on its own afterwards.
  */
 export function assessPinNote(pinned: boolean): string {
   return pinned
-    ? "Marked as placed by you, the way a drag is — the smart pick sorts around these and never moves them."
-    : "Left free: the smart pick may re-order these before an item fires, the same as any row you have not placed yourself.";
+    ? "Marked as placed by you, the way a drag is — each row says so."
+    : "The order is written either way; these rows just do not say “placed by you”. Nothing re-sorts them on its own.";
 }
 
 /**

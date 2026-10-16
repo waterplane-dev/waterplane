@@ -7,21 +7,27 @@
  * routes as tables").
  */
 import { statSync } from "node:fs";
-import { DICTATE_MAX_BYTES, DICTATE_MAX_SECONDS } from "@waterplane/shared";
-import { discoverTargets, findTarget } from "../repos.js";
-import { countOutbox, outboxSeenAt, discoverArtifacts, newOutboxPath, type ArtifactKind } from "../files.js";
+import { ASK_RULE_BACKENDS, ASK_RULES_STALE, SUGGESTED_ASK_RULES, type AskRulesReply, DICTATE_MAX_BYTES, DICTATE_MAX_SECONDS, envName, type HostSetupFixResult, type HostSetupReport, type RootInfo, type RootPostReply } from "@waterplane/shared";
+import { discoverTargets, findTarget, listTargets } from "../repos.js";
+import { countOutbox, outboxSeenAt, discoverArtifactsAsync, newOutboxPath, type ArtifactKind } from "../files.js";
 import { hostStat, takeScreenshot, setHostClipboard } from "../host.js";
 import { dictateStatusLive, transcribe } from "../dictate.js";
 import { readImageText } from "../readtext.js";
 import { ocrStatus, readImageLocal } from "../ocrlocal.js";
-import { newFolder, newRepo, newWorktree, type TemplateId } from "../scaffold.js";
-import { countChangedFiles } from "../git.js";
+import { cloneRepo, newFolder, newRepo, newWorktree, type TemplateId } from "../scaffold.js";
+import { changedCountsWithin } from "../git.js";
 import { listWriteTargets, setSecret } from "../secrets.js";
 import { setupPrefsStore } from "../setupprefs.js";
+import { askRulesStore } from "../askrules.js";
+import { ASK_RULES_SCOPE, browserOriginRefusal, confirmGate } from "../confirmgate.js";
+import { hostChecks, hostFixes } from "../plugins/setupcontrib.js";
 import { canReadRepoHealth } from "../repohealth.js";
 import { surveyTransport } from "../transportsurvey.js";
 import { clearHostStore, hostStoreReport } from "../hoststore.js";
 import { worktreeOwners } from "../worktreeowner.js";
+import { ROOT_PICKED } from "../env.js";
+import { peerKind } from "../net.js";
+import { cleanRootInput, hostSupervisor, readChosenRoot, rootCandidates, rootChoicePath, writeChosenRoot } from "../rootchoice.js";
 import { json, readBody, readJson } from "./apiio.js";
 import { route, type ApiEntry, type ApiHandler } from "./apitable.js";
 
@@ -29,6 +35,10 @@ import { route, type ApiEntry, type ApiHandler } from "./apitable.js";
 // hundred KB at worst. The ceiling is here so a mis-aimed POST cannot turn a
 // hand-drawn mark into a multi-megabyte call against the host's Gemini key.
 const MAX_OCR_BYTES = 8 * 1024 * 1024;
+/** How long the repo listing waits for its git counts before answering with the last ones. */
+const CHANGED_BUDGET_MS = 2500;
+/** …and when every worktree already has a count: long enough for a local disk's fresh answer. */
+const CHANGED_REFRESH_MS = 400;
 /** A whole phone photo, sent once at the size the phone holds it. */
 const MAX_LOCAL_OCR_BYTES = 24 * 1024 * 1024;
 
@@ -55,9 +65,114 @@ const setupPrefs: ApiHandler = async ({ req, res, method }) => {
   return true;
 };
 
+// ── Ask rules (`askrules.ts`, agent-authority §2) ──────────────────
+// The permission rules every claude launch is given as `permissions.ask`. GET reads and
+// mints a one-shot confirm bound to the list's `rev`; PUT replaces the whole list and
+// needs BOTH `confirmgate.ts` gates: (a) a browser `Origin` and (b) that confirm, for the
+// CURRENT rev. A forged Origin alone no longer deletes the rule that asks about the
+// forger, and a phone holding an older copy is refused instead of overwriting a list it
+// never saw. The token is consumed only by a save that landed; its reply carries a fresh one.
+const askRules: ApiHandler = async ({ req, res, method }) => {
+  const store = askRulesStore();
+  if (!store) { json(res, { ok: false, error: "no ask-rules store on this host" }, 503); return true; }
+  let dropped: number | undefined;
+  if (method === "PUT") {
+    const why = browserOriginRefusal(req);
+    if (why) { json(res, { ok: false, error: `${why} — the ask rules were not changed` }, 403); return true; }
+    const body = await readJson(req);
+    const sent = body && typeof body === "object" && Array.isArray(body.rules) ? body.rules : null;
+    if (!sent) { json(res, { ok: false, error: "send { rules: [...] } — the ask rules were not changed" }, 400); return true; }
+    if (typeof body.rev !== "string") { json(res, { ok: false, error: "send the rev the list was read at — reopen the ask rules; nothing was changed" }, 400); return true; }
+    const rev = store.rev();
+    if (body.rev !== rev) { json(res, { ok: false, error: ASK_RULES_STALE, stale: true }, 409); return true; }
+    const refused = confirmGate.check(body.confirm, ASK_RULES_SCOPE, rev);
+    if (refused) { json(res, { ok: false, error: `${refused} — the ask rules were not changed` }, 403); return true; }
+    let kept;
+    try { kept = store.set({ rules: sent }); } catch (e: any) {
+      json(res, { ok: false, error: `the ask rules could not be saved (${e?.message ?? e}) — nothing was changed` }, 500);
+      return true;
+    }
+    confirmGate.consume(body.confirm);
+    dropped = sent.length - kept.rules.length;
+    // The confirm gate's promise: an accepted change leaves a line saying it happened.
+    console.log(`[askrules] list replaced from ${req.headers.origin}: ${kept.rules.length} rule(s)` +
+      (dropped ? `, ${dropped} dropped` : "") + ` (rev ${rev} → ${store.rev()})`);
+  }
+  const rev = store.rev();
+  const reply: AskRulesReply = {
+    ok: true, doc: store.get(), suggested: SUGGESTED_ASK_RULES, honouredBy: ASK_RULE_BACKENDS,
+    rev, confirm: confirmGate.mint(ASK_RULES_SCOPE, rev),
+    ...(dropped !== undefined ? { dropped } : {}),
+    ...(store.lost() ? { lost: store.lost()! } : {}),
+  };
+  json(res, reply);
+  return true;
+};
+
+// ── The code folder (`rootchoice.ts`) ──────────────────────────────
+// What the running host scans, how it came about, and the usual folders that
+// exist — for the phone's one-time dialog and its Settings row. A POST checks
+// a folder (`save` absent) or keeps it in `<config dir>/root.json`; only the
+// trusted path may (loopback + Tailscale, the LAN-password rule), because the
+// root is what the phone can reach. Read once at boot, so a save restarts the
+// host when a supervisor will bring it back, and says "restart it" otherwise.
+const isDirNow = (p: string): boolean => { try { return statSync(p).isDirectory(); } catch { return false; } };
+const countRepos = async (dir: string): Promise<number> => {
+  try { return (await discoverTargets(dir)).length; } catch { return 0; }
+};
+
+const rootInfo: ApiHandler = async ({ req, res }, ctx) => {
+  const chosen = ROOT_PICKED === "named" ? undefined : readChosenRoot();
+  const candidates = await Promise.all(rootCandidates().map(async (path) => ({ path, repos: await countRepos(path) })));
+  const rootExists = isDirNow(ctx.root);
+  const info: RootInfo = {
+    ok: true,
+    root: ctx.root,
+    picked: ROOT_PICKED,
+    rootExists,
+    repos: rootExists ? await countRepos(ctx.root) : 0,
+    pending: chosen && chosen !== ctx.root ? chosen : null,
+    choicePath: rootChoicePath(),
+    envName: envName("ROOT"),
+    canChange: !!ctx.canManage?.(peerKind(req.socket.remoteAddress)),
+    restart: hostSupervisor() ? "auto" : "manual",
+    candidates,
+  };
+  json(res, info);
+  return true;
+};
+
+const rootPost: ApiHandler = async ({ req, res }, ctx) => {
+  const reply = (r: RootPostReply, status = 200): true => (json(res, r, status), true);
+  if (!ctx.canManage?.(peerKind(req.socket.remoteAddress))) {
+    return reply({ ok: false, error: "The code folder can only be changed from this desktop or over Tailscale." }, 403);
+  }
+  const body = await readJson(req);
+  const c = cleanRootInput(body?.path);
+  if (!c.ok) return reply({ ok: false, error: c.error }, 400);
+  const repos = await countRepos(c.root);
+  if (body?.save !== true) return reply({ ok: true, root: c.root, repos });
+  if (ROOT_PICKED === "named") {
+    return reply({ ok: false, error: `${envName("ROOT")} is set where the host is started, and it wins over a choice made here — change it there.` }, 409);
+  }
+  try { writeChosenRoot(c.root); } catch (e) {
+    return reply({ ok: false, error: `Could not save it: ${(e as Error).message}` }, 500);
+  }
+  console.log(`[root] code folder chosen: ${c.root} (${rootChoicePath()})`);
+  if (c.root === ctx.root) return reply({ ok: true, root: c.root, repos, saved: true, restart: "none" });
+  const sup = hostSupervisor();
+  if (sup) {
+    // After the reply is out: the SIGTERM flush (`shutdown.ts`) runs as for any restart, and
+    // launchd/systemd start the host again, which reads the new folder at boot.
+    console.log(`[root] restarting under ${sup} to scan it`);
+    setTimeout(() => process.kill(process.pid, "SIGTERM"), 800).unref();
+  }
+  return reply({ ok: true, root: c.root, repos, saved: true, restart: sup ? "auto" : "manual" });
+};
+
 export const HOST_ROUTES: readonly ApiEntry[] = [
   route("GET", "/api/repos", async ({ res }, ctx) => {
-    const targets = await discoverTargets(ctx.root);
+    const targets = await listTargets(ctx.root);
     for (const t of targets) {
       t.outboxCount = countOutbox(t.worktreePath);
       // The EDGE the count was taken at, so a tap on the badge can cut the
@@ -77,11 +192,22 @@ export const HOST_ROUTES: readonly ApiEntry[] = [
     // control on every one of them; `false` now means the DESKTOP has no
     // engine, which is a real fault and says so in `repoHealthUnavailableText`.
     for (const t of targets) t.hasRepoHealth = canReadRepoHealth(t.worktreePath);
+    // The health index from the watcher's cache only — the engine never runs in this request.
+    for (const t of targets) { const h = ctx.health?.summaryFor(t.worktreePath); if (h) t.healthIndex = h; }
     // Which live session spawned each agent worktree, so the launcher draws
     // it under that session. Off the CLI's own subagent records.
     const owners = worktreeOwners(ctx.sessions.list());
     for (const t of targets) { const o = !t.isPrimary && owners.get(t.worktreePath); if (o) t.ownerSessionId = o; }
-    await Promise.all(targets.map(async (t) => { t.changedCount = await countChangedFiles(t.worktreePath); }));
+    // Within a budget: a repo whose `git status` is still running (WSL on `/mnt/c` can take a
+    // minute) keeps its last count, or none yet — never holds the whole list (`changedCountsWithin`).
+    const counts = await changedCountsWithin(targets.map((t) => t.worktreePath), CHANGED_BUDGET_MS, CHANGED_REFRESH_MS);
+    for (const t of targets) {
+      const c = counts.get(t.worktreePath);
+      if (!c) continue;
+      t.changedCount = c.changed;
+      if (c.ahead !== undefined) { t.ahead = c.ahead; t.behind = c.behind; }
+      if (c.hasOrigin !== undefined) t.hasOrigin = c.hasOrigin;
+    }
     json(res, { targets });
     return true;
   }),
@@ -97,6 +223,14 @@ export const HOST_ROUTES: readonly ApiEntry[] = [
   // (CLAUDE.md), and `origin.ts` checks both on `Origin` and `Host` either way.
   route("GET", "/api/storage/transport", async ({ res }, ctx) => {
     json(res, await surveyTransport(ctx.root));
+    return true;
+  }),
+
+  // Every Android app's repo half of "installs itself", across every repo — the Apps
+  // screen's checklist joins it with the phone's half. A pure read, so GET.
+  route("GET", "/api/apps/readiness", async ({ res }, ctx) => {
+    if (!ctx.appReadiness) return false;
+    json(res, await ctx.appReadiness());
     return true;
   }),
 
@@ -140,7 +274,7 @@ export const HOST_ROUTES: readonly ApiEntry[] = [
     const hits: any[] = [];
     for (const t of targets) {
       if (allowed && !allowed.has(t.id)) continue;
-      const { files } = discoverArtifacts(t.worktreePath, { scope, sinceSeconds: since, query, kind: fkind, limit, includeInbox: true });
+      const { files } = await discoverArtifactsAsync(t.worktreePath, { scope, sinceSeconds: since, query, kind: fkind, limit, includeInbox: true });
       for (const f of files) hits.push({ repoId: t.id, repoName: t.repoName, branch: t.branch, ...f });
     }
     hits.sort((a, b) => b.mtime - a.mtime);
@@ -148,8 +282,31 @@ export const HOST_ROUTES: readonly ApiEntry[] = [
     return true;
   }),
 
+  route("GET", "/api/host/root", rootInfo),
+  route("POST", "/api/host/root", rootPost),
   route("GET", "/api/host/setupprefs", setupPrefs),
   route("POST", "/api/host/setupprefs", setupPrefs),
+  route("GET", "/api/askrules", askRules),
+  route("PUT", "/api/askrules", askRules),
+  // The desktop's own checklist: the rows about this machine (`scope: "host"`), which no repo's
+  // checklist lists. The fix answers with the re-read rows and the fix's own words.
+  route("GET", "/api/host/setup", ({ res }, ctx) => {
+    json(res, { checks: hostChecks(ctx.root) } satisfies HostSetupReport);
+    return true;
+  }),
+  route("POST", "/api/host/setup/fix", async ({ req, res }, ctx) => {
+    const { fixes } = await readJson(req);
+    const list = Array.isArray(fixes) ? fixes.map(String) : [];
+    const ran = hostFixes(list, ctx.root);
+    const reply: HostSetupFixResult = {
+      ok: true,
+      applied: ran.filter((r) => r.outcome.applied).map((r) => r.id),
+      notes: ran.length ? ran.map((r) => r.outcome.note) : ["Nothing to fix: no desktop row names that fix any more."],
+      checks: hostChecks(ctx.root),
+    };
+    json(res, reply);
+    return true;
+  }),
   route("GET", "/api/host/stat", ({ res }) => {
     json(res, hostStat());
     return true;
@@ -293,6 +450,13 @@ export const HOST_ROUTES: readonly ApiEntry[] = [
       // A template id is checked against `TEMPLATES` inside `newRepo` (unknown = refused in words).
       ...(typeof template === "string" && template ? { template: template as TemplateId } : {}),
     });
+    json(res, r, "error" in r ? 400 : 200);
+    return true;
+  }),
+  route("POST", "/api/clone", async ({ req, res }, ctx) => {
+    // The URL is checked (and the transports pinned) inside `cloneRepo`; a refusal is a sentence.
+    const { parent, url, name } = await readJson(req);
+    const r = await cloneRepo(ctx.root, parent || ctx.root, String(url || ""), name ? String(name) : undefined);
     json(res, r, "error" in r ? 400 : 200);
     return true;
   }),

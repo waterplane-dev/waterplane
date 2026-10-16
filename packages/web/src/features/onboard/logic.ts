@@ -46,8 +46,25 @@ export function firstRunCard(f: FirstRunFacts): FirstRunCard {
   if (f.demo) return "none";
   if (f.job && (f.job.state === "running" || f.job.state === "stopped")) return "job";
   if (f.dismissed || !f.online) return "none";
-  if (f.sessions > 0 || f.recent > 0 || f.closed > 0) return "none";
+  if (!neverRanSession(f)) return "none";
   return "first-run";
+}
+
+/** "This host has never run a session": the reading the card above keys off. */
+export function neverRanSession(f: { sessions: number; recent: number; closed: number }): boolean {
+  return f.sessions === 0 && f.recent === 0 && f.closed === 0;
+}
+
+
+/**
+ * The first-run card's line about the repos already here. With repos listed right under the card,
+ * an "open an existing repo" BUTTON only said "tap one below" in a toast — a control whose whole
+ * effect is pointing at the thing beside it. So the card SAYS it, with the count, and the button
+ * exists only when there is nothing to point at (it then says how to make one).
+ */
+export function existingReposLine(repos: number): string | null {
+  if (repos <= 0) return null;
+  return `Or tap + now on one of your ${repos} repo${repos === 1 ? "" : "s"} below to open a session in it.`;
 }
 
 // ── Question 1: the name ─────────────────────────────────────────────

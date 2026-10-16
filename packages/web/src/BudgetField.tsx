@@ -16,6 +16,7 @@
  * spent so far in the chosen unit, with its subagent split, and the typed cap
  * against it (`budgetPreview`). A launch has no session and draws neither.
  */
+import { RadioRows } from "./kit";
 import { useId, useState } from "react";
 import type { SessionBudget, SessionBudgetCal, SessionBudgetSpark, SessionBudgetUnit } from "@waterplane/shared";
 import { SetSwitch } from "./SettingsKit";
@@ -55,12 +56,11 @@ export function BudgetField({ initial, cal, onChange, calFor, spark }: {
     <div className="budget-field">
       <div className="set-item">
         <div className="set-lead"><span className="set-lbl">measured in</span></div>
-        <div className="segmented budget-units" role="group" aria-label="budget unit">
-          {BUDGET_UNITS.map((u) => (
-            <button key={u.unit} className={`seg${unit === u.unit ? " on" : ""}`} aria-pressed={unit === u.unit}
-              onClick={() => { setUnit(u.unit); emit(u.unit, text, interrupt); }}>{u.label}</button>
-          ))}
-        </div>
+        <RadioRows
+          label="budget unit"
+          options={BUDGET_UNITS.map((u) => ({ key: u.unit, label: u.label }))}
+          value={unit}
+          onChange={(u) => { setUnit(u); emit(u, text, interrupt); }} />
       </div>
       {spent && <div className="budget-spent"><span className="budget-k">spent</span> {spent}</div>}
       <div className="set-item">

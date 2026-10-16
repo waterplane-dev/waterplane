@@ -110,6 +110,32 @@ test("the socket: a scripted frame is delivered when the transport advances the 
   assert.equal(toast.message, "scripted");
 });
 
+test("the socket: a session.attach's full keyframe is handed over before send() returns, so the opening tap never paints the empty terminal", async () => {
+  const REPO = "/demo/todo";
+  const sc = scenario({ state: { bootId: "boot-demo", model: {
+    repos: [{ id: "todo", repoName: "todo", branch: "main", isPrimary: true, worktreePath: REPO, outboxCount: 0, changedCount: 0 }],
+    sessions: [{ id: "s1", cwd: REPO, title: "todo", remoteControl: false, running: true, createdAt: 1, idle: true }],
+    screens: { s1: { data: "welcome to the demo\r\n", seq: 21 } },
+  } } });
+  const t = createDemoTransport({ scenario: sc, href: HREF, target: { fetch: async () => new Response("") }, store: null, tick: false, clock: { now: () => 1_000 } });
+  const s = openSocket(t);
+  await s.opened;
+  await s.until((m) => m.t === "welcome");
+  await s.until((m) => m.t === "session.list");  // everything the hello answered has been delivered
+  const before = s.got.length;
+  s.ws.send(encode({ t: "session.attach", id: "s1" }));
+  const keyframe = s.got.slice(before).find((m) => m.t === "pty");
+  assert.ok(keyframe?.full, "the full keyframe is already delivered when send() returns");
+  assert.match(Buffer.from(keyframe.dataB64, "base64").toString("utf8"), /welcome to the demo/);
+  assert.ok(!s.got.slice(before).some((m) => m.t === "session.history"), "everything else about the attach still travels like a frame");
+  await s.until((m) => m.t === "session.history");
+  // …and a second attach from the same point is current: nothing to replay, nothing delivered early.
+  const n = s.got.length;
+  s.ws.send(encode({ t: "session.attach", id: "s1", resumeSeq: keyframe.seq, resumeBoot: "boot-demo" }));
+  assert.ok(!s.got.slice(n).some((m) => m.t === "pty"), "a current resume point replays nothing");
+  t.stop();
+});
+
 test("the socket: closing it reports the close, and a demo disconnect fault closes from the host side", async () => {
   const { t } = harness();
   t.host.faults.set([{ kind: "disconnect", match: { t: "ping" } }]);

@@ -18,6 +18,7 @@ export { openEditActiveHost, openHosts, refreshHosts, setHostRoute } from "./act
 export { useHosts, useHostRoute, type HostRouteView } from "./store";
 export { HostMenuItem } from "./HostMenuItem";
 export { HostNameTag } from "./HostNameTag";
+export { HostSwitchKey } from "./HostSwitchKey";
 
 export const manifest: FeatureManifest = {
   id: "hosts",

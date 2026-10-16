@@ -16,13 +16,13 @@ import type { Overlay } from "../../routing.ts";
 import { PTY_SAVE_MS, PTY_TAIL, TRANSCRIPT_SWEEP_MS, loadPtyTails, savePtyTail } from "../../ptyTail.ts";
 import { prefetchTranscript, sweepTranscripts } from "../../offlineCache.ts";
 import { hydrateScreenLogs, saveScreenLog } from "../../screenlog.ts";
-import { noteTabOpen } from "../../sessionTabs.ts";
 import { b64ToStr } from "../../format.ts";
 import { track } from "../../usage.ts";
 import { LS, lsBool, lsSetBool } from "../../storage.ts";
 import { useLatest } from "../../sdk/hooks.ts";
 import { appendTail, applyPtyBytes, seedFromTails, sweepOrder } from "./tail.ts";
 import { isPendingId } from "../queue/logic.ts";
+import { bgFresh, catchUpMs, parksWhenHidden } from "./bgFresh.ts";
 
 export interface TermFeedDeps {
   /** The one socket (`useConnection`), whole: `send` for attach/detach/resize,
@@ -104,6 +104,15 @@ export function useTermFeed(deps: TermFeedDeps) {
   const attachedRef = useRef<string | null>(null); // session id we've sent session.attach for
   const prevStatusRef = useRef(status); // detect closed→open transitions to re-attach after a reconnect
   const sessionsRef = useLatest(sessions);
+  // Background freshness (`bgFresh.ts`): while the app is hidden the open
+  // session is DETACHED (parked) instead of streaming every redraw to a page
+  // nobody sees, and caught up on the chosen interval. `syncRef` is the session
+  // a catch-up attach is in flight for; its `session.history` reply ends it.
+  const parkedRef = useRef(false);
+  const syncRef = useRef<string | null>(null);
+  const syncFuseRef = useRef<number | undefined>(undefined);
+  const [unparkNonce, setUnparkNonce] = useState(0);
+  const statusRef = useLatest(status);
 
   /** The host has spoken for this session, so what is on screen is no longer a
    *  restored-from-disk guess: the resume point has been spent (drop it, which
@@ -112,6 +121,7 @@ export function useTermFeed(deps: TermFeedDeps) {
    *  `session.history` reply — because a resume delta of zero bytes sends only
    *  the latter. */
   function hostAnsweredFor(id: string) {
+    if (syncRef.current === id) endCatchUp(id);
     restoreRef.current.delete(id);
     // Whatever the host just replayed is numbered in THIS boot's stream, so the
     // stored boot stamp has been consumed — later resumes use the live one.
@@ -127,12 +137,6 @@ export function useTermFeed(deps: TermFeedDeps) {
   function attach(s: SessionInfo) {
     track("action:session.attach");
     deps.noteVisited(s.id);
-    // One more open of this session, on this device — what the tab strip's
-    // dynamic order sorts on (`sessionTabs.ts`). Counted HERE rather than in
-    // the strip, because every route into a session comes through this function
-    // and a count that only saw the taps on the strip would rank the sessions
-    // you reach from the launcher last.
-    noteTabOpen(s.id);
     setOverlay(null);
     // A reader verb is spent where it was tapped. `readerCmd` outlives the
     // session it was fired in, and `TranscriptView` is keyed on the session id —
@@ -342,6 +346,7 @@ export function useTermFeed(deps: TermFeedDeps) {
   // attach so the host replays its scrollback (the tap path does this in attach()).
   useEffect(() => {
     if (!activeId) { attachedRef.current = null; return; }
+    if (parkedRef.current) return; // hidden + parked: the catch-up tick attaches, briefly
     if (attachedRef.current === activeId) return;
     if (!sessions.some((s) => s.id === activeId)) return; // wait for session.list
     if (!ptyRestored) return; // …and for the stored resume point (see ptyRestored)
@@ -356,8 +361,8 @@ export function useTermFeed(deps: TermFeedDeps) {
     // without it a session opened from a URL or restored on a cold start would
     // never be cached until its next turn ended.
     if (!readModeRef.current) void prefetchTranscript(activeId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeId, sessions, ptyRestored]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `send` is bound to the one connection; the resume points are refs
+  }, [activeId, sessions, ptyRestored, unparkNonce]);
 
   // ── Offline transcripts: keep EVERY session cached, in the background ────
   //
@@ -427,7 +432,9 @@ export function useTermFeed(deps: TermFeedDeps) {
       if (restoreRef.current.has(id)) return;
       void savePtyTail(id, (buffers.current.get(id) ?? []).join(""), lastSeqById.current.get(id), bootIdRef.current);
     };
-    const iv = window.setInterval(save, PTY_SAVE_MS);
+    // Parked (hidden, `bgFresh.ts`): nothing arrives between catch-ups, and each
+    // catch-up saves on its own — a timer here would only rewrite the same bytes.
+    const iv = window.setInterval(() => { if (!parkedRef.current) save(); }, PTY_SAVE_MS);
     window.addEventListener("pagehide", save);
     window.addEventListener("freeze", save);
     return () => {
@@ -437,13 +444,71 @@ export function useTermFeed(deps: TermFeedDeps) {
       save();
     };
   }, [activeId]);
+  // ── Background freshness: park the terminal while the app is hidden ──────
+  function saveTail(id: string) {
+    void saveScreenLog(id);
+    if (restoreRef.current.has(id)) return;
+    void savePtyTail(id, (buffers.current.get(id) ?? []).join(""), lastSeqById.current.get(id), bootIdRef.current);
+  }
+  /** A catch-up attach was answered (or its fuse ran out): save what it
+   *  brought and let go of the stream again. */
+  function endCatchUp(id: string) {
+    syncRef.current = null;
+    window.clearTimeout(syncFuseRef.current);
+    if (!parkedRef.current) return; // came back to the foreground meanwhile: stay attached
+    saveTail(id);
+    send({ t: "session.detach", id });
+  }
+  useEffect(() => {
+    const id = activeId;
+    if (!id || isPendingId(id)) return;
+    let tick: number | undefined;
+    const park = () => {
+      const mode = bgFresh();
+      if (!parksWhenHidden(mode) || parkedRef.current) return;
+      parkedRef.current = true;
+      saveTail(id);
+      send({ t: "session.detach", id });
+      const every = catchUpMs(mode);
+      if (every != null) tick = window.setInterval(catchUp, every);
+    };
+    const catchUp = () => {
+      if (!parkedRef.current || syncRef.current || statusRef.current !== "open") return;
+      syncRef.current = id;
+      send({ t: "session.attach", id, resumeSeq: lastSeqById.current.get(id), resumeBoot: resumeBootRef.current.get(id) ?? bootIdRef.current });
+      // A zombie socket never answers: give up on this round rather than
+      // leave the attach standing until the next one.
+      syncFuseRef.current = window.setTimeout(() => endCatchUp(id), 20_000);
+      sweepRef.current(); // the reader's copy too, since-conditional
+    };
+    const unpark = () => {
+      window.clearInterval(tick); tick = undefined;
+      if (!parkedRef.current) return;
+      parkedRef.current = false;
+      syncRef.current = null;
+      window.clearTimeout(syncFuseRef.current);
+      attachedRef.current = null; // the attach effect re-attaches from the last seq
+      setUnparkNonce((n) => n + 1);
+    };
+    const onVis = () => { if (document.visibilityState === "hidden") park(); else unpark(); };
+    document.addEventListener("visibilitychange", onVis);
+    if (document.visibilityState === "hidden") park();
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.clearInterval(tick);
+      // Leaving the session while parked: the attach for the NEXT one must go out.
+      if (parkedRef.current) { parkedRef.current = false; syncRef.current = null; window.clearTimeout(syncFuseRef.current); }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- bound per session; `send` is the one connection's, `endCatchUp` and the handlers read refs (`parkedRef`, `syncRef`, `statusRef`)
+  }, [activeId]);
+
   // Detach from a session when we navigate away (stops the host streaming it).
   // A pending screen (`pending:<createAck>`) was never attached: the host has no
   // session by that id yet.
   useEffect(() => {
     if (!activeId || isPendingId(activeId)) return;
     return () => send({ t: "session.detach", id: activeId });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the detach names the session this effect ran for, which is the one being left
   }, [activeId]);
 
   return {

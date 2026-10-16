@@ -23,6 +23,10 @@
 export * from "./wire/session.js";
 /** What a *Recently closed* row may say — clipped, optional, never guessed. */
 export * from "./closed.js";
+/** The follow-up flag: who set it, what it may say, its one wording. */
+export * from "./followup.js";
+/** The emergency halt latch: its state, its receipt and the one refusal sentence. */
+export * from "./halt.js";
 
 /** The wire subset of a host-side backend descriptor — what a picker or a
  *  capability check is allowed to know about a backend other than claude. */
@@ -31,12 +35,20 @@ export * from "./wire/backend.js";
 /** The opt-in second opinion, and the audit of everything typed into a session. */
 export * from "./wire/sent.js";
 export * from "./plugin.js";
+export * from "./pluginfile.js";
+export * from "./stream.js";
 
 /** Metering, feature usage, scraped CLI usage, and the desktop's own load. */
 export * from "./wire/telemetry.js";
+/** Usage readings per source: claude's adapter, the chip's one cut, the long-press words. */
+export * from "./usagesources.js";
+/** What an arbitrary span cost, by hour, repo and conversation — `GET /api/costwindow`. */
+export * from "./wire/costwindow.js";
 
 /** Which notification kinds may fire at all — checked on BOTH ends. */
 export * from "./wire/notify.js";
+/** The Android background link: which frames a notify-only socket is sent. */
+export * from "./wire/notifylink.js";
 
 /** Work the host does on the user's behalf: backlog, builds, fan-out, downloads. */
 export * from "./wire/work.js";
@@ -61,10 +73,13 @@ export * from "./wire/onboard.js";
 
 /** The two unions on the wire, `PROTOCOL_VERSION`, and the JSON codec. */
 export * from "./wire/messages.js";
+/** The shape check on a decoded client frame, ahead of the host's dispatch. */
+export * from "./clientframe.js";
 
 // A per-session budget (tokens, dollars, window percent): the verdict, the
 // calibration and the one predicate both ends hold a session's sends by.
 export * from "./sessionbudget.js";
+export * from "./spendwarn.js";
 
 // Send-queue scheduling (offline outbox): the one-send-per-session lane rule.
 export * from "./queue.js";
@@ -86,6 +101,9 @@ export * from "./lanroute.js";
 export * from "./pairing.js";
 // The paired-device ledger as the phone sees it.
 export * from "./devices.js";
+export * from "./passive.js";
+// Ask rules: the permission rules every claude launch is given as `permissions.ask`.
+export * from "./askrules.js";
 
 // Question identity — what makes an answer typed OFFLINE safe to deliver later.
 export * from "./promptid.js";
@@ -162,6 +180,14 @@ export * from "./pad.js";
  *  own limit banner, and lets it start again when the window resets. */
 export * from "./budget.js";
 
+/** Budget PERIODS (rolling, calendar month/week/day, span), the one `periodBounds`
+ *  that decides their edges, and the pacing maths over a period's spend. */
+export * from "./period.js";
+
+/** The billing profile (subscription / api / cloud / unknown) and the pure
+ *  classifier the host's probe feeds. */
+export * from "./billing.js";
+
 /** The health of every point where this app reads a CLI it does not own — the
  *  rule that makes degrading to null stop being quiet. */
 export * from "./clihealth.js";
@@ -188,6 +214,10 @@ export * from "./contextweight.js";
  *  env > repo local > repo > user. Behind the checklist's auto-compact row. */
 export * from "./autocompact.js";
 
+/** Opt-ins: the advanced things a repo can turn on — one catalog, a probe per
+ *  offer on the host, three states the person controls, counted in nothing. */
+export * from "./optins.js";
+
 /** What a pile of token counts MEANS — the derived figures and the words for
  *  them, including why a single "tokens used" number is 96% cache reads. */
 export * from "./tokens.js";
@@ -201,6 +231,12 @@ export * from "./pricing.js";
 export * from "./intent.js";
 export * from "./fanoutruns.js";
 
+/** The cost window read both ways: the hour bucket, launches, ranked repos,
+ *  dollars-per-weekly-point (a refusal when it cannot be calibrated), and the
+ *  burn rate's reset-cut stretch and push words. */
+export * from "./costwindow.js";
+export * from "./burn.js";
+
 /** "Of the work still standing, what is actually still worth doing?" — the
  *  rules that stop a confident-sounding assessment from retiring real work. */
 export * from "./assess.js";
@@ -210,10 +246,10 @@ export * from "./assess.js";
  *  deciding whose name is on a row. */
 export * from "./naming.js";
 
-/** The look a repo takes over its own waiting items before one of them fires —
- *  pick, merge, sort — and the rules that stop that look inventing an item,
- *  losing a file path, or moving a row a person placed by hand. */
-export * from "./smartpick.js";
+/** The files an item's words name — images anywhere and the inbox/outbox
+ *  transport by full path (the row's thumbnails; anything folding two items
+ *  into one must keep every one). */
+export * from "./itempaths.js";
 
 // A URL the terminal GRID broke across rows, put back together — what makes a
 // `/login` link on a phone something you can tap instead of transcribe.
@@ -265,6 +301,9 @@ export * from "./repohealth.js";
  *  because a dropped field and a wrong sentence fail differently — and because
  *  the one file was at the lint cap. */
 export * from "./repohealthread.js";
+/** The health index: the one layer over the repo-health series that takes a
+ *  side (lower-is-better), chained weekly, with its move test and wording. */
+export * from "./healthindex.js";
 /** A repo's requirements list: the prompt filter, the item format, the preset. */
 export * from "./requirements.js";
 /** Where the claude CLI keeps its private dir (CLAUDE_CONFIG_DIR) and its project-folder slug rule. */
@@ -303,3 +342,6 @@ export * from "./transcriptfold.js";
 
 /** A fork's `<config dir>/theme.json`: colour tokens, terminal palette, display name. */
 export * from "./themeoverlay.js";
+
+/** The code folder: `GET/POST /api/host/root` and whether the first-start dialog asks. */
+export * from "./rootchoice.js";

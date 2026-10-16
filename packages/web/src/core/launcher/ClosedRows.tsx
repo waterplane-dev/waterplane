@@ -20,6 +20,7 @@ import type { LauncherProps } from "./types";
 import type { LauncherModel } from "./useLauncherModel";
 import { countBadges } from "./SessionRow";
 import { CountChips, FilterBar } from "../../kit";
+import { FOLLOWUP_CLEAR, FlagIcon, FollowUpLine, followUpClass } from "../sessions/followUp";
 import {
   closedCut, closedFilterWords, closedHeadline, closedKindWord, closedMeta, closedOutcome,
   closedReason, closedSubtitle, isAutoClosed, type ClosedFilter,
@@ -29,7 +30,7 @@ const ICON = 16;
 
 export function ClosedRows({ p, m }: { p: LauncherProps; m: LauncherModel }) {
   const { backends, openGitFor } = p;
-  const { send } = p.conn;
+  const { send, liveSend } = p.conn;
   const { setOverlay } = p.route;
   const { hiddenRepos, toggleHideRepo } = p.view;
   const { openCwd, openRepo, reopenCant } = p.launchCore;
@@ -133,7 +134,21 @@ export function ClosedRows({ p, m }: { p: LauncherProps; m: LauncherModel }) {
               )}
               <span className="row-gist"><PromptPair firstPrompt={c.firstPrompt} lastPrompt={c.lastPrompt} className="closed-gist" /></span>
               {meta.length > 0 && <span className="row-sub closed-line closed-meta">{meta.join(" · ")}</span>}
+              {/* The follow-up flag outlives the session (R-sessions-041): its
+                  one line here, and its "done" beside the row. */}
+              {c.followUp && <span className="closed-line"><FollowUpLine f={c.followUp} /></span>}
             </button>
+            {/* Marked read from here too — keyed on the CONVERSATION, which is
+                what the desktop keeps the flag by; answered by a fresh list. */}
+            {c.followUp && (
+              <button className={`row-act fu-btn${followUpClass(c.followUp)}`} data-hint="session.followup" aria-pressed
+                title={`${FOLLOWUP_CLEAR} — the conversation stays where it is`}
+                onClick={() => {
+                  track("action:session.followup.closed");
+                  liveSend({ t: "session.followup", id: c.claudeSessionId ?? c.id, on: false },
+                    "flag cleared", "no connection — the desktop didn't get that, the flag is still set");
+                }}><FlagIcon on size={ICON} /></button>
+            )}
             {/* "Pick an older conversation" is claude's own `--resume`
                 list. A backend whose session ids are DISCOVERED rather
                 than minted, and whose conversations do not live beside

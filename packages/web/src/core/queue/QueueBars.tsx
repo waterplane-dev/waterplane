@@ -16,13 +16,15 @@ import {
 import type { OutboxEntry } from "../../outbox";
 import type { PullRecord } from "../../pull";
 import type { Overlay } from "../../routing";
-import { PullBar } from "../../PullSheet";
+import { PullBar, PullBrowserAsk } from "../../PullSheet";
+import { autoPull } from "../../pull";
+import { stripRows } from "../../downloadState";
 import { confirmingLine, hostStillConfirming } from "../../sendConfirm";
 import { showToast } from "../../toast";
 import { track } from "../../usage";
 import { setPref } from "../prefs.ts";
 // Activity, cut to what a strip counted (a count on a control is a filter).
-import { openActivity, openActivityOn } from "../../features/activity";
+import { openActivityOn } from "../../features/activity";
 import { WHICH_MAX, sendingLabel, whichWords } from "./logic.ts";
 import type { QueueApi } from "./useQueue.ts";
 import type { Connection } from "../conn/useConnection";
@@ -92,11 +94,14 @@ export function QueueBars(props: QueueBarsProps) {
   // ("work is in flight that you didn't have to watch"), just in the other
   // direction, and a second floating bar somewhere else would be missed.
   const pullBar = <PullBar records={pullRecords} onOpen={() => { track("overlay:pull"); setOverlay("pull"); }} />;
-  const pullActive = pullRecords.some((r) => r.state !== "done");
+  // The same cut the strip draws (`stripRows`): a file waiting for a tap with
+  // auto-download off here keeps no bar on screen.
+  const pullActive = stripRows(pullRecords, autoPull()).length > 0;
   if (!asking && !failed.length && !confirming.length && !queued.length && !inFlight && !pullActive && !sendSettled) return null;
   return (
     <>
       {pullBar}
+      <PullBrowserAsk records={pullRecords} />
       {reconnectAsk && parkedSends.length > 0 && (
         <div className="outbox-recover ask">
           <Radio size={14} />
@@ -217,7 +222,11 @@ export function QueueBars(props: QueueBarsProps) {
                   if (on) { holdQueueRef.current = false; setReconnectAsk(false); flushOutbox(); }
                   showToast(on ? "auto-send on — the queue goes out as soon as the link is back" : "auto-send off — the queue waits for “Send now”");
                 }}><Zap size={14} /> auto {autoSend && !confirmQueue ? "on" : "off"}</button>}
-              <button className="key" onPointerDown={keepFocus} onClick={() => { track("action:queue.manage"); openActivity(null); }}><ListOrdered size={14} /> Manage</button>
+              {/* A count is a filter: "2 queued" opens those two. Unfiltered it
+                  opened all ~200 rows, ranked with the queued ones under every
+                  failed and needs-you row — the words just sent were nowhere
+                  on the first screen. */}
+              <button className="key" onPointerDown={keepFocus} onClick={() => { track("action:queue.manage"); openActivityOn(queued, "the messages still waiting to go out"); }}><ListOrdered size={14} /> Manage</button>
             </>
           ) : (
             // "Sending…" with no clock is the exact complaint this bar was
@@ -229,7 +238,7 @@ export function QueueBars(props: QueueBarsProps) {
             <>
               <Loader size={14} className="spin" />
               <span>{sendingLabel(flying)}</span>
-              <button className="key" onPointerDown={keepFocus} onClick={() => { track("action:queue.manage"); openActivity(null); }}><ListOrdered size={14} /> Manage</button>
+              <button className="key" onPointerDown={keepFocus} onClick={() => { track("action:queue.manage"); openActivityOn(flying, "the messages going out now"); }}><ListOrdered size={14} /> Manage</button>
             </>
           )}
         </div>

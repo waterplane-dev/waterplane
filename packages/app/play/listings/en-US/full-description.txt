@@ -1,0 +1,15 @@
+waterplane is a remote control for the coding agent running on YOUR computer. It drives the real Claude Code command-line tool there, in a real terminal, and puts it on your phone: every slash command, plan prompt and context meter works as it does at your desk.
+
+You need your own desktop (macOS, Linux, or Windows via WSL) running the free, open-source waterplane daemon, and Tailscale on both devices. Without that, the app has nothing to connect to. Install instructions: https://github.com/waterplane-dev/waterplane
+
+What you get:
+• The live terminal, plus a reader view of the conversation
+• Answer the agent's questions with a tap, even from a notification
+• An offline send queue: type while the tunnel is down, it is delivered when it is back
+• Files both ways: send photos and files to the agent, download what it builds
+• Install the Android apps you build on your desktop (every install asks you first)
+• Usage, context and cost readouts
+
+There is no cloud service: the app talks only to your own computer over your private network. Try Demo mode on the first screen to see every screen with sample data.
+
+waterplane is an independent project and is not affiliated with or endorsed by Anthropic.

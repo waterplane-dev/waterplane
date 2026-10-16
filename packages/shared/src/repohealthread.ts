@@ -69,6 +69,10 @@ import {
   type RepoHealthPlot,
   type RepoHealthPlotClassics,
   type RepoHealthPlotContext,
+  type RepoHealthPlotOwn,
+  type RepoHealthPlotCentral,
+  type RepoHealthVariant,
+  type RepoHealthOwnSeries,
   type RepoHealthPlotSeries,
   type RepoHealthPoint,
   type RepoHealthReading,
@@ -320,11 +324,16 @@ export function parseRepoHealthPlot(stdout: string): RepoHealthPlot | null {
     if (!isStr(s.key) || !isStr(s.label) || typeof s.unit !== "string" || typeof s.detail !== "string") return null;
     if (!isNumOrNull(s.last)) return null;
     if (s.absent !== undefined && !isStr(s.absent)) return null;
+    if (s.source !== undefined && s.source !== "central") return null;
     const points = readPoints(s.points);
     const reading = readReading(s.reading);
     if (!points || !reading) return null;
     const one: RepoHealthPlotSeries = {
       key: s.key,
+      // This list is waterplane's by construction, so an engine older than
+      // the field is read as what it was. A series in it CLAIMING to be the
+      // repo's is a document nobody wrote — void it.
+      source: "central",
       label: s.label,
       unit: s.unit,
       points,
@@ -333,6 +342,10 @@ export function parseRepoHealthPlot(stdout: string): RepoHealthPlot | null {
       detail: s.detail,
     };
     if (isStr(s.absent)) one.absent = s.absent;
+    // A malformed variant is DROPPED, never guessed: reading an override as
+    // the engine's number (or the reverse) is the one wrong answer here.
+    const variant = readVariant(s.variant, o.days);
+    if (variant) one.variant = variant;
     series.push(one);
   }
 
@@ -451,7 +464,75 @@ export function parseRepoHealthPlot(stdout: string): RepoHealthPlot | null {
     classics,
   };
   if (longest) plot.longest = longest;
+  const own = readOwn(o.own);
+  if (own) plot.own = own;
+  const cen = o.central as Record<string, unknown> | null | undefined;
+  if (cen && typeof cen === "object" && isStr(cen.file)) {
+    const central: RepoHealthPlotCentral = { file: cen.file };
+    if (Array.isArray(cen.problems)) {
+      const problems = cen.problems.filter(isStr);
+      if (problems.length) central.problems = problems;
+    }
+    plot.central = central;
+  }
   return plot;
+}
+
+/** One series' `variant` — see `RepoHealthVariant`. Null when absent or malformed. */
+function readVariant(v: unknown, days: number): RepoHealthVariant | null {
+  const o = v as Record<string, unknown> | null | undefined;
+  if (!o || typeof o !== "object" || !isStr(o.why)) return null;
+  if (o.kind === "disabled") return { kind: "disabled", why: o.why };
+  if (o.kind !== "override") return null;
+  const points = readPoints(o.points);
+  if (!points || points.length !== days) return null;
+  if (typeof o.means !== "string" || typeof o.unit !== "string" || !isNumOrNull(o.last)) return null;
+  if (!(o.since === null || isStr(o.since))) return null;
+  const out: RepoHealthVariant = {
+    kind: "override", why: o.why, means: o.means, unit: o.unit, points, last: o.last, since: o.since,
+  };
+  if (isStr(o.absent)) out.absent = o.absent;
+  return out;
+}
+
+/**
+ * The repo's own readings — OPTIONAL, parsed apart like `longest`: an engine
+ * older than the field sends no key, and a reader that voided the whole plot
+ * over it would blank waterplane's charts too. A block that IS there and is
+ * malformed is dropped WHOLE (never half a set of tiles), and so is any series
+ * in it that does not say `repo` — provenance is the one field here that must
+ * never be guessed.
+ */
+function readOwn(v: unknown): RepoHealthPlotOwn | null {
+  const o = v as Record<string, unknown> | null | undefined;
+  if (!o || typeof o !== "object") return null;
+  if (!isStr(o.file) || typeof o.declared !== "boolean" || !Array.isArray(o.series)) return null;
+  if (o.absent !== undefined && !isStr(o.absent)) return null;
+  const series: RepoHealthOwnSeries[] = [];
+  for (const raw of o.series) {
+    const s = raw as Record<string, unknown> | null;
+    if (!s || typeof s !== "object" || s.source !== "repo") return null;
+    if (!isStr(s.key) || !isStr(s.label) || typeof s.unit !== "string" || typeof s.detail !== "string") return null;
+    if (typeof s.means !== "string" || !(s.better === null || s.better === "lower" || s.better === "higher")) return null;
+    if (!isNumOrNull(s.last)) return null;
+    if (s.absent !== undefined && !isStr(s.absent)) return null;
+    const points = readPoints(s.points);
+    const reading = readReading(s.reading);
+    if (!points || !reading) return null;
+    const one: RepoHealthOwnSeries = {
+      key: s.key, source: "repo", label: s.label, unit: s.unit, means: s.means, better: s.better,
+      points, last: s.last, reading, detail: s.detail,
+    };
+    if (isStr(s.absent)) one.absent = s.absent;
+    series.push(one);
+  }
+  const out: RepoHealthPlotOwn = { file: o.file, declared: o.declared, series };
+  if (isStr(o.absent)) out.absent = o.absent;
+  if (Array.isArray(o.problems)) {
+    const problems = o.problems.filter(isStr);
+    if (problems.length) out.problems = problems;
+  }
+  return out;
 }
 
 /**

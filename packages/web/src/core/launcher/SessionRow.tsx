@@ -1,6 +1,7 @@
 /**
  * One live session under its repo header: the tap that opens it, the badges
- * that say what it is doing, and the four verbs (outline, star, rename, close).
+ * that say what it is doing, and the five verbs (outline, star, flag, rename,
+ * close).
  */
 import type { ReactNode } from "react";
 import { CalendarClock, Clock, FileDiff, Images, List, Pencil, Radio, Star, X } from "lucide-react";
@@ -11,10 +12,12 @@ import { SessionName } from "../../SessionName";
 import { dur, repoAccentStyle } from "../../format";
 import { fmtWhen } from "../../sendIntent";
 import { launchLabel } from "../../sessionFacts";
+import { liveLaunch } from "../../liveLaunch";
 import { PromptPair } from "../../PromptPair";
 import { promptPairParts } from "../../promptPairParts";
 import { backendMark } from "../../backendCaps";
 import { track } from "../../usage";
+import { gitPending, gitSyncText, gitTitle } from "../../gitCounts";
 import { openContextFor } from "../../features/context";
 import { openSessionBudget } from "../../features/sessionBudget";
 import { openBacklogCut } from "../../features/backlog";
@@ -27,6 +30,8 @@ import { openShellsFor } from "../../features/shells";
 import type { LauncherProps } from "./types";
 import { renameSession } from "../session/rename";
 import type { LauncherModel } from "./useLauncherModel";
+import { useSpendWarn } from "../sessions/spendWarn";
+import { FlagIcon, FollowUpLine, followUpButtonTitle, followUpClass } from "../sessions/followUp";
 
 const ICON = 16;
 
@@ -36,17 +41,18 @@ const ICON = 16;
 // the inbox holds what this phone uploaded, which it already knows about.
 export const countBadges = (repo: RepoTarget | null, openGitFor: (repoId: string) => void): ReactNode => repo ? (<>
   {repo.outboxCount > 0 && <button className="row-act count" title={`${repo.outboxCount} new outbox file${repo.outboxCount > 1 ? "s" : ""} since last opened — open gallery`} onClick={() => openOutboxFor(repo.id)}><Images size={14} />{repo.outboxCount}</button>}
-  {repo.changedCount > 0 && <button className="row-act count" title={`${repo.changedCount} changed file${repo.changedCount > 1 ? "s" : ""} — open git`} onClick={() => openGitFor(repo.id)}><FileDiff size={14} />{repo.changedCount}</button>}
+  {gitPending(repo) && <button className="row-act count" title={gitTitle(repo)} onClick={() => openGitFor(repo.id)}><FileDiff size={14} />{repo.changedCount > 0 && repo.changedCount}{gitSyncText(repo) && <span className="git-ab">{gitSyncText(repo)}</span>}</button>}
 </>) : null;
 
 export function SessionRow({ p, m, s, repoName }: { p: LauncherProps; m: LauncherModel; s: SessionInfo; repoName: string }) {
+  const spendWarn = useSpendWarn()(s);
   const { backends, openGitFor } = p;
   const { status, liveSend } = p.conn;
   const { lastVisitedId } = p.route;
   const { attach, openReader } = p.term;
   const { sessionCan } = p.launchCore;
-  const { pendingStars, toggleStar, closeSession } = p.verbs;
-  const { dragSid, dragRef, armRowDrag, sessionRowBranch, sessionRepoName, sessionRepoLabel, sessionRowTitle, sessionRepo, repliesBySession } = m;
+  const { pendingStars, toggleStar, pendingFollowUps, toggleFollowUp, closeSession } = p.verbs;
+  const { dragSid, dragRef, armRowDrag, sessionRowBranch, sessionRepoName, sessionRepoLabel, sessionRowTitle, sessionRepo, repliesBySession, sessionNumbers } = m;
   const limitAuto = useLimitAuto();
   // The row badge is a FILTER control here — the one list that has a filter.
   const tagFilter: TagFilter = { isOn: (st) => m.statusFilterActive(st), toggle: (st) => m.toggleStatusFilter(st) };
@@ -74,6 +80,8 @@ export function SessionRow({ p, m, s, repoName }: { p: LauncherProps; m: Launche
         {/* `.row-head`: the title line as ONE grid item — the card is a grid
             (styles.css) and this line shares its row with the status chip. */}
         <span className="row-head">
+        {/* Its number among this repo's OPEN sessions, from 0 (`sessionNumbersOf`). */}
+        {sessionNumbers.has(s.id) && <span className="row-num" title={`open session ${sessionNumbers.get(s.id)} in ${repoName}`}>{sessionNumbers.get(s.id)}</span>}
         {sessionRowBranch(s) && <span className="row-title">{sessionRowBranch(s)}</span>}
         {sessionName(s)
           ? <SessionName s={s} />
@@ -88,7 +96,7 @@ export function SessionRow({ p, m, s, repoName }: { p: LauncherProps; m: Launche
               not claude (`backendMark` answers null otherwise),
               so every row that ran the default binary is exactly
               the string it has always been. */}
-          <span className={`row-sub row-launch${backendMark(backends, s.backend) ? " row-foreign" : ""}`}>{launchLabel(s, backendMark(backends, s.backend), backends)}</span>
+          <span className={`row-sub row-launch${backendMark(backends, s.backend) ? " row-foreign" : ""}`}>{launchLabel(liveLaunch(s), backendMark(backends, s.backend), backends)}</span>
           {s.createdAt && s.running && <span className="row-sub" title={`session open for ${dur(s.createdAt)}`}><Clock size={11} /> {dur(s.createdAt)}</span>}
         </span>
         </span>
@@ -97,6 +105,9 @@ export function SessionRow({ p, m, s, repoName }: { p: LauncherProps; m: Launche
             <button>, because a nested button is invalid. */}
         <span className="row-gist">
           {hasPrompts ? <PromptPair firstPrompt={s.firstPrompt} lastPrompt={s.lastPrompt} pinnedPrompt={s.pinnedPrompt} /> : gist && <span className="row-summary">{gist}</span>}
+          {/* The follow-up flag's one line — who set it and, from an agent,
+              what to read. Here and nowhere else on the row. */}
+          {s.followUp && <FollowUpLine f={s.followUp} />}
         </span>
       </button>
       {/* Actions are a TOOLBAR ROW, not a column beside it. As columns
@@ -286,7 +297,7 @@ export function SessionRow({ p, m, s, repoName }: { p: LauncherProps; m: Launche
                       re-reads. Absent on a host that sends no `usedPts`,
                       and then the `Σ` total stays up on the first row
                       exactly as it was. */}
-                  <SpendSparkline spark={s.contextSpark} />
+                  <SpendSparkline spark={s.contextSpark} warn={spendWarn} />
                 </span>
               )}
           </span>
@@ -308,6 +319,9 @@ export function SessionRow({ p, m, s, repoName }: { p: LauncherProps; m: Launche
             a session carries any badges at all. */}
         <span className="row-ctl">
           <button className={`row-act${s.starred ? " starred" : ""}${s.id in pendingStars ? " star-pending" : ""}`} data-hint="session.star" title={s.id in pendingStars ? (status === "open" ? "starred here — the desktop has not confirmed it yet" : "starred here — offline, so it is only on this phone until the link is back") : s.starred ? "unstar (prima interest)" : "star — mark as prima interest to come back to"} onClick={() => toggleStar(s.id, !s.starred)}><Star size={ICON} fill={s.starred ? "currentColor" : "none"} /></button>
+          <button className={`row-act fu-btn${followUpClass(s.followUp)}${s.id in pendingFollowUps ? " star-pending" : ""}`} data-hint="session.followup"
+            aria-pressed={!!s.followUp} title={followUpButtonTitle(s, s.id in pendingFollowUps, status === "open")}
+            onClick={() => toggleFollowUp(s.id, !s.followUp)}><FlagIcon on={!!s.followUp} size={ICON} /></button>
           <button className="row-act" title="name this session" onClick={() => { void renameSession(s, liveSend); }}><Pencil size={ICON} /></button>
           <button className="row-act danger" title={s.running ? "close" : "remove"} onClick={() => closeSession(s)}><X size={ICON} /></button>
         </span>

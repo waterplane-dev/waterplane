@@ -499,3 +499,31 @@ test("a prose bullet reading “Next” is not a commit row", () => {
   ].join("\n");
   assert.equal(navToSubmit(prose), null);
 });
+
+test("a Bash box framed in dashed rules is a tool box, its question free of the rules (v2.1.293)", () => {
+  // Captured off the binary with tmux, 2026-10-07: the command sits between two
+  // rows of U+254C, which used to fill the question and cut off its last line.
+  const rule = "╌".repeat(100);
+  const screen = [
+    "────────────────────────────────────────────────────────────────────────────────────────────────────",
+    " Bash command",
+    " Tip: auto mode handles these prompts for you — choose \"switch to auto mode\" below",
+    " Create wp-smoke directory and echo hi",
+    rule,
+    " mkdir -p wp-smoke && echo hi",
+    rule,
+    " Do you want to proceed?",
+    " ❯ 1. Yes",
+    "   2. Yes, and always allow access to",
+    "      /private/var/folders/7_/zb4jhm2x0j18kgjwfpmh_97h0000gn/T/tmp.euvw0wRdxE from this project",
+    "   3. Yes, and switch to auto mode · auto mode handles these prompts for you",
+    "   4. No",
+    " Esc to cancel · Tab to amend",
+  ].join("\n");
+  const p = detectPrompt(screen);
+  assert.ok(p, "the box must be detected");
+  assert.equal(p.kind, "tool");
+  assert.match(p.question, /Do you want to proceed\?/);
+  assert.doesNotMatch(p.question, /╌/);
+  assert.deepEqual(p.options.map((o) => o.index), [1, 2, 3, 4]);
+});

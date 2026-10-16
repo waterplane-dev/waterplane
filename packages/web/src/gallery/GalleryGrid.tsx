@@ -1,4 +1,5 @@
 import { Download, Eye, Trash2, TriangleAlert } from "lucide-react";
+import { DocIcon } from "./DocIcon";
 import { track } from "../usage";
 import { Empty } from "../Empty";
 import { ConfirmButton } from "../Confirm";
@@ -7,23 +8,32 @@ import { downloadStatus } from "../downloadState";
 import { fmtSize } from "../format";
 import { GridThumb, GridVideo } from "./GalleryTiles";
 import { MARK_TITLE, PAGE, fmtCreated, fmtCreatedFull } from "./galleryTypes";
+import { emptyCutText } from "./galleryCuts";
+import { GalleryPickBar } from "./GalleryPickBar";
 import type { GalleryModel } from "./useGallery";
 
 /** The tiles (thumbnail, name, date, read / download badges, the inbox delete) and "load more". */
 export function GalleryGrid({ m }: { m: GalleryModel }) {
   const { files, loading, loadErr, query, kind, scope, truncated, showFile, badSrc, markBad, urlFor, thumbFor, markOf, pullOf,
-    pullBadge, isInboxFile, removeInbox, setLimit } = m;
+    pullBadge, isInboxFile, removeInbox, setLimit, onNewCut, since, setSince, setOnNewCut } = m;
+  /** Inside the badge's own cut every tile is new and the bar says so once: no mark per tile. */
+  const shownMark = (f: Parameters<typeof markOf>[0]) => (onNewCut && markOf(f) === "new" ? null : markOf(f));
+  const cutEmpty = scope !== "inbox" && !onNewCut ? emptyCutText(since) : null;
+  const { picked, pickIndex, togglePicked } = m;
   return (
     <>
+      <GalleryPickBar m={m} />
       <div className={`grid${loading && files.length ? " stale" : ""}`}>
         {files.map((f) => (
-          <div key={`${f.repoId ?? ""}:${f.relPath}`} className="thumb-wrap">
-            <button className="thumb" onClick={() => showFile(f)}>
+          <div key={`${f.repoId ?? ""}:${f.relPath}`} className={`thumb-wrap${pickIndex(f) >= 0 ? " picked" : ""}`}>
+            {picked && pickIndex(f) >= 0 && <span className="thumb-pick" aria-hidden="true">{pickIndex(f) + 1}</span>}
+            <button className="thumb" aria-pressed={picked && isImage(f.relPath) ? pickIndex(f) >= 0 : undefined}
+              onClick={() => (picked ? togglePicked(f) : showFile(f))}>
               {isImage(f.relPath)
                 ? <GridThumb url={thumbFor(f)} name={f.name} missing={badSrc.has(thumbFor(f))} onMissing={() => markBad(thumbFor(f))} />
                 : isVideo(f.relPath)
                   ? <GridVideo src={urlFor(f)} poster={thumbFor(f)} name={f.name} />
-                  : <span className="doc">{f.name.split(".").pop()?.toUpperCase()}</span>}
+                  : <DocIcon name={f.name} />}
               <span className="thumb-name">{f.name}</span>
               <span className="thumb-date" title={fmtCreatedFull(f.ctime ?? f.mtime)}>
                 {fmtCreated(f.ctime ?? f.mtime)}
@@ -31,9 +41,10 @@ export function GalleryGrid({ m }: { m: GalleryModel }) {
               </span>
               {f.repoName && <span className="thumb-repo">{f.repoName}</span>}
               <span className="thumb-badges">
-                {markOf(f) && !pullOf(f) && (
-                  <span className={`thumb-mark ${markOf(f)}`} title={MARK_TITLE[markOf(f)!]}>
-                    {markOf(f) === "new" ? "new" : markOf(f) === "downloaded" ? <Download size={11} /> : <Eye size={11} />}
+                {/* "new" is a dot (the unread mark), not a worded pill on every fresh tile. */}
+                {shownMark(f) && !pullOf(f) && (
+                  <span className={`thumb-mark ${shownMark(f)}`} title={MARK_TITLE[shownMark(f)!]}>
+                    {shownMark(f) === "new" ? <span className="sr-only">new</span> : shownMark(f) === "downloaded" ? <Download size={11} /> : <Eye size={11} />}
                   </span>
                 )}
                 {/* Never both badges: the read mark's `downloaded` and the pull
@@ -70,9 +81,12 @@ export function GalleryGrid({ m }: { m: GalleryModel }) {
           <Empty>
             {query || kind !== "all"
               ? "No matches."
-              : scope === "outbox"
-                ? "Outbox is empty. Agents drop phone-facing artifacts in .claude/outbox or .outbox — ask the agent to save screenshots there. To browse images saved elsewhere in the repo, switch to “this repo”."
-                : "Nothing here yet."}
+              // Only the time cut hides things: say that, with the way out ("empty" was false).
+              : cutEmpty
+                ? <>{cutEmpty} <button className="link-btn" onClick={() => { setSince(undefined); setOnNewCut(false); }}>show older files</button></>
+                : scope === "outbox"
+                  ? "The outbox is empty. Claude puts screenshots and files meant for your phone in .claude/outbox. To see images anywhere in the repo, switch to this repo."
+                  : "Nothing here yet."}
           </Empty>
         )}
       </div>

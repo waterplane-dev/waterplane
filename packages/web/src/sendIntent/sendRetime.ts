@@ -103,7 +103,7 @@ export function pastBudgetNote(k: number, n: number): string {
   const rest = k < n ? `${k} of the ${n} you ticked are held by the budget; the rest wait on something else. ` : "";
   const who = k === 1 ? "this row" : `these ${k}`;
   const serial = k > 1 ? "rows in the same repo still run one at a time, " : "";
-  return `${rest}Lifts the budget for ${who} and nothing else — ${serial}wait until free, the session cap, the smart pick and each row's own when all still apply. It lasts until the row starts, or until this budget window resets. The smart pick still takes its look first — a small model call, made even while over budget.`;
+  return `${rest}Lifts the budget for ${who} and nothing else — ${serial}wait until free, the session cap and each row's own when all still apply. It lasts until the row starts, or until this budget window resets.`;
 }
 export function pastBudgetConfirm(k: number): string {
   return `let ${k} past the budget?`;
@@ -125,7 +125,7 @@ export function pastBudgetToast(k: number): string {
  */
 export function skipQueueNote(own: boolean): string {
   return own
-    ? "starts it this second in a session of its own — skips the queue: the budget, the smart pick, one at a time and wait until free"
+    ? "starts it this second in a session of its own — skips the queue: the budget, one at a time and wait until free"
     : "goes into its session this second — skips the queue: the budget and waiting for that session to be free";
 }
 /** What the tap DOES when another row is already starting or running in the

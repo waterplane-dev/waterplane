@@ -9,7 +9,9 @@ import { showToast } from "../../toast";
 import { LS } from "../../storage";
 import { onAssessAck } from "../../features/backlog";
 import { noteHistory } from "../../features/history";
+import { noteModed } from "../session/modeSwitch";
 import { dispatchFeatureMessage } from "../dispatch";
+import { streamRouter } from "../streamRouter";
 import { useLatest } from "../../sdk/hooks";
 import type { Connection } from "./useConnection";
 import type { TermFeed } from "../term/useTermFeed";
@@ -168,6 +170,13 @@ export function useHostFrames(latest: HostFrameLatest, sinks: HostFrameSinks) {
           // path is written around.
           showToast(msg.name ? `named “${msg.name}”` : (msg.reason ?? "no name was written"));
           break;
+        case "session.moded":
+          // The mode switch's receipt (`modeSwitch.ts`): ends the row's
+          // "switching…" and says what the footer shows — or the host's reason
+          // it does not show the mode asked for. The new mode itself arrives as
+          // `liveMode` on the session list.
+          noteModed(msg);
+          break;
         case "update.status":
           setUpdate(msg.info);
           // Toast only the FIRST time we see each `lastResult` (by timestamp).
@@ -208,7 +217,9 @@ export function useHostFrames(latest: HostFrameLatest, sinks: HostFrameSinks) {
       }
     });
     const offFeatures = connRef.current.on(dispatchFeatureMessage); // AFTER App's; ws.ts isolates each listener
-    return () => { offApp(); offFeatures(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Plugin streams' binary frames (`core/streams.ts`); their JSON rides `dispatchFeatureMessage`.
+    const offBinary = connRef.current.onBinary((data) => streamRouter().onBinary(data));
+    return () => { offApp(); offFeatures(); offBinary(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- subscribed once: the handler reads this render's hooks through `wsLatest`, and `sinks` are stable setters and refs
   }, []);
 }

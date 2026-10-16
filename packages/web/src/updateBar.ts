@@ -35,14 +35,23 @@ export interface UpdateBarView {
   sig: string;
   /** The last apply finished recently enough to still be worth saying. */
   recentResult: boolean;
+  /** Draw the apply button. Only while there is something to apply: after a
+   *  clean upgrade the bar stays up for its "Updated: …" line, and an "update"
+   *  button beside that read as if the upgrade had not happened. A run that
+   *  moved nothing (cask lagging npm) leaves `available` true, so it stays. */
+  canApply: boolean;
+  /** When the fresh result goes stale and the bar must be re-read, or null. */
+  staleAt: number | null;
 }
 
 export function updateBarView(u: UpdateInfo | null, dismissed: string, now: number): UpdateBarView {
-  if (!u) return { show: false, sig: "", recentResult: false };
+  if (!u) return { show: false, sig: "", recentResult: false, canApply: false, staleAt: null };
   const recentResult = !!u.lastResult && now - u.lastResult.at < RESULT_FRESH_MS;
+  const canApply = !!u.available;
+  const staleAt = recentResult ? u.lastResult!.at + RESULT_FRESH_MS : null;
   const sig = [u.current ?? "", u.latest ?? "", u.lastResult?.at ?? 0, u.lastError ?? ""].join("|");
   // Nothing to act on: no update, nothing running, no fresh result, no error.
-  if (!u.available && !u.running && !recentResult && !u.lastError) return { show: false, sig, recentResult };
-  if (!u.running && dismissed === sig) return { show: false, sig, recentResult };
-  return { show: true, sig, recentResult };
+  if (!u.available && !u.running && !recentResult && !u.lastError) return { show: false, sig, recentResult, canApply, staleAt };
+  if (!u.running && dismissed === sig) return { show: false, sig, recentResult, canApply, staleAt };
+  return { show: true, sig, recentResult, canApply, staleAt };
 }

@@ -2,7 +2,7 @@
  * Work routes — schedule slice of `routes/work.ts` (see that file for the whole picture).
  */
 import { scheduleToIntent } from "../../intents/adapters.js";
-import { fmtOffset } from "@waterplane/shared";
+import { fmtOffset, windowRuleRefusal } from "@waterplane/shared";
 import type { Route, RouteSpec, RouteTable } from "../types.js";
 
 /**
@@ -48,13 +48,24 @@ const onScheduleSave: Route<"schedule.save"> = (a) => {
     // prompt, and a replay lands on the same row.
     const entry = a.msg.entry;
     a.c.durableOp(a.ws, a.msg.ackId, () => {
+      // A `window` rule on a rolling period has no edge to anchor to: refused in
+      // words, never saved to wait for ever (`windowRuleRefusal`). `ok:false` is
+      // remembered, so a replayed ack answers the same sentence.
+      const refusal = entry.rule?.kind === "window" ? windowRuleRefusal(entry.rule.periodId, a.c.budget.get().periods) : null;
+      if (refusal) {
+        a.c.send(a.ws, { t: "toast", text: `schedule: not saved — ${refusal}` });
+        return { ok: false, reason: refusal };
+      }
       const draft = scheduleToIntent(entry, Date.now());
       const saved = draft ? a.c.intents.upsert(draft) : null;
       a.c.broadcast(a.c.scheduleSnapshot());
-      const ro = a.c.intents.readOnly();
-      if (!saved && ro) {
-        a.c.send(a.ws, { t: "toast", text: `schedule: not saved — ${ro}` });
-        return { ok: false, reason: ro };
+      // Read-only, or a write that did not reach the disk (`upsert` took the
+      // row back out of memory): the store's own sentence, never "saved".
+      const writeErr = a.c.intents.lastWriteError();
+      const why = a.c.intents.readOnly() ?? (draft && writeErr ? `could not save to disk: ${writeErr}` : null);
+      if (!saved && why) {
+        a.c.send(a.ws, { t: "toast", text: `schedule: not saved — ${why}` });
+        return { ok: false, reason: why };
       }
       if (!saved) {
         a.c.send(a.ws, { t: "toast", text: "schedule: nothing to run (pick repos and write a prompt)" });

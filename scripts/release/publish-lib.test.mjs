@@ -4,9 +4,10 @@
 // Throwaway keys only; nothing here touches git, gh, npm or the network.
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
-  extractChangelogSection, npmTarballName, planSteps, preflight, readHasShrinkwrap, releaseAssets, sha256Hex, shellLine,
-  tagOf, verifyReleaseBytes,
+  NPM_WAIT_SECONDS, NPM_WORKFLOW, extractChangelogSection, npmTarballName, npmWaitDecision, planSteps, preflight, readHasShrinkwrap, readNpmHasVersion,
+  readProvenance, readWorkflowRun, releaseAssets, sha256Hex, shellLine, tagOf, verifyReleaseBytes,
 } from "./publish-lib.mjs";
 import { generateKeys, loadPrivateKey, loadPublicKey, signBytes } from "./sign-lib.mjs";
 
@@ -66,6 +67,7 @@ const good = {
   missingLocal: [], byteProblems: [], releaseCommit: "abc", npmHasShrinkwrap: true, ghAuth: true, npmUser: "me",
   changelog: "- a thing", publicClone: { ok: true },
   assets: releaseAssets({ slug: SLUG, version: V, apk: "waterplane-1.2.3.apk" }), noApk: false,
+  npmFromDesktop: false, actionsEnabled: true,
 };
 const refusals = (f) => preflight(f).checks.filter((c) => !c.ok).map((c) => c.name);
 
@@ -78,7 +80,7 @@ test("preflight: a ready release passes; each missing condition is its own refus
   assert.deepEqual(refusals({ ...good, releaseCommit: "old" }), ["release.json is this commit"]);
   assert.deepEqual(refusals({ ...good, npmHasShrinkwrap: false }), ["npm tarball carries npm-shrinkwrap.json"]);
   assert.deepEqual(refusals({ ...good, changelog: null }), ["CHANGELOG.md entry"]);
-  assert.deepEqual(refusals({ ...good, ghAuth: false, npmUser: null }), ["gh auth status", "npm whoami"]);
+  assert.deepEqual(refusals({ ...good, ghAuth: false }), ["gh auth status"]);
   assert.deepEqual(refusals({ ...good, publicClone: { ok: false, why: "no clone" } }), ["public clone"]);
   assert.deepEqual(refusals({ ...good, mediaClone: { ok: false, why: "no clone" } }), ["media clone"]);
   assert.deepEqual(refusals({ ...good, headOnOriginMain: false }), ["HEAD is on origin/main"]);
@@ -113,9 +115,9 @@ const ctx = {
 const fresh = { tag: "absent", tagPushed: false, release: "absent", releaseAssets: [], npmPublished: false };
 const run = (steps) => steps.filter((s) => !s.skip).map((s) => s.id);
 
-test("plan, first run: verify, tag, public snapshot, install.sh, draft release with every asset, undraft, npm — nothing skipped", () => {
+test("plan, first run: verify, tag, public snapshot, install.sh, draft release with every asset, undraft, wait for npm — nothing skipped", () => {
   const steps = planSteps(fresh, ctx);
-  assert.deepEqual(run(steps), ["verify", "tag", "public", "install-sh", "release", "undraft", "npm"]);
+  assert.deepEqual(run(steps), ["verify", "tag", "public", "install-sh", "release", "undraft", "npm-wait"]);
   const create = steps.find((s) => s.id === "release").cmds[0];
   assert.deepEqual(create.slice(0, 6), ["gh", "release", "create", "v1.2.3", "--repo", "waterplane-dev/waterplane"]);
   assert.ok(create.includes("--draft"));
@@ -123,8 +125,7 @@ test("plan, first run: verify, tag, public snapshot, install.sh, draft release w
     assert.ok(create.includes(`dist-release/${n}`), n);
   }
   assert.ok(!create.includes("dist-release/waterplane-1.2.3.tgz"), "the npm tarball is not a GitHub asset");
-  assert.deepEqual(steps.find((s) => s.id === "npm").cmds[0], ["npm", "publish", "dist-release/waterplane-1.2.3.tgz", "--access", "public"]);
-  assert.ok(!steps.flatMap((s) => s.cmds).flat().includes("--provenance"));
+  assert.ok(!steps.flatMap((s) => s.cmds).some((c) => c[0] === "npm" && c[1] === "publish"), "the desktop never runs npm publish by default");
   assert.deepEqual(steps.find((s) => s.id === "public").cmds[0], ["node", "scripts/release/publish-public.mjs", "--tag", "v1.2.3", "--to", "/c/pub", "--commit"]);
   assert.equal(planSteps(fresh, { ...ctx, build: true, buildArgs: ["--apk=/x.apk"] })[0].cmds[0].join(" "), "npm run release:build -- --apk=/x.apk");
 });
@@ -135,10 +136,12 @@ test("plan: with hosted media, the snapshot gets --media-to and the media repo i
   assert.deepEqual(cmds.slice(1), [["git", "-C", "/c/media", "push", "origin", "main"], ["git", "-C", "/c/pub", "push", "origin", "main"]]);
 });
 
-test("plan, resume after the GitHub release and before npm: only npm runs", () => {
+test("plan, resume after the GitHub release and before npm: only the npm wait runs (or the desktop publish, with the flag)", () => {
   const all = ctx.assets.filter((a) => a.github).map((a) => a.name);
   const steps = planSteps({ tag: "head", tagPushed: true, release: "published", releaseAssets: all, npmPublished: false }, ctx);
-  assert.deepEqual(run(steps).filter((id) => id !== "install-sh"), ["npm"]);
+  assert.deepEqual(run(steps).filter((id) => id !== "install-sh"), ["npm-wait"]);
+  const desk = planSteps({ tag: "head", tagPushed: true, release: "published", releaseAssets: all, npmPublished: false }, { ...ctx, npmFromDesktop: true });
+  assert.deepEqual(run(desk).filter((id) => id !== "install-sh"), ["npm"]);
   assert.match(steps.find((s) => s.id === "release").skip, /exists/);
   assert.match(steps.find((s) => s.id === "public").skip, /snapshot was pushed/);
 });
@@ -146,7 +149,7 @@ test("plan, resume after the GitHub release and before npm: only npm runs", () =
 test("plan, resume a draft that lost an upload: upload only the missing assets, then undraft, then npm", () => {
   const some = ["waterplane-1.2.3.tar.gz", "waterplane-1.2.3.tar.gz.sha256"];
   const steps = planSteps({ tag: "head", tagPushed: true, release: "draft", releaseAssets: some, npmPublished: false }, ctx);
-  assert.deepEqual(run(steps), ["install-sh", "upload", "undraft", "npm"], "verify skips: the snapshot went out with the release");
+  assert.deepEqual(run(steps), ["install-sh", "upload", "undraft", "npm-wait"], "verify skips: the snapshot went out with the release");
   const up = steps.find((s) => s.id === "upload").cmds[0];
   assert.deepEqual(up.slice(0, 6), ["gh", "release", "upload", "v1.2.3", "--repo", "waterplane-dev/waterplane"]);
   assert.ok(!up.includes("dist-release/waterplane-1.2.3.tar.gz"), "already there, not uploaded again");
@@ -155,7 +158,66 @@ test("plan, resume a draft that lost an upload: upload only the missing assets, 
 
 test("plan, everything done: every outward step skips", () => {
   const all = ctx.assets.filter((a) => a.github).map((a) => a.name);
-  assert.deepEqual(run(planSteps({ tag: "head", tagPushed: true, release: "published", releaseAssets: all, npmPublished: true }, ctx)), ["install-sh"]);
+  const done = { tag: "head", tagPushed: true, release: "published", releaseAssets: all, npmPublished: true };
+  assert.deepEqual(run(planSteps(done, ctx)), ["install-sh"]);
+  assert.deepEqual(run(planSteps(done, { ...ctx, npmFromDesktop: true })), ["install-sh"], "already on npm: the escape hatch publishes nothing either");
+  assert.match(planSteps(done, ctx).find((s) => s.id === "npm-wait").skip, /already on npm/);
+});
+
+test("plan: npm is the public repo's workflow by default — the desktop only waits for it, after the undraft that starts it", () => {
+  const steps = planSteps(fresh, ctx);
+  const wait = steps.find((s) => s.id === "npm-wait");
+  assert.deepEqual(wait.cmds, [["node", "scripts/release/npm-verify.mjs", "waterplane", "1.2.3", "--wait", String(NPM_WAIT_SECONDS), "--repo", "waterplane-dev/waterplane"]]);
+  assert.ok(steps.indexOf(wait) === steps.findIndex((s) => s.id === "undraft") + 1, "right after the undraft (release: published fires the workflow)");
+  assert.match(wait.title, /npm-publish workflow.*with provenance/);
+  assert.match(wait.hint, new RegExp(`gh workflow run ${NPM_WORKFLOW.replace(".", "\\.")} --repo waterplane-dev/waterplane --ref v1\\.2\\.3 -f tag=v1\\.2\\.3`), "a failed wait names the re-run ON the tag");
+  assert.match(wait.hint, /--npm-from-desktop.*WITHOUT provenance/);
+  assert.equal(planSteps(fresh, { ...ctx, npmWaitSeconds: 60 }).find((s) => s.id === "npm-wait").cmds[0][5], "60");
+  assert.equal(steps.find((s) => s.id === "npm"), undefined);
+});
+
+test("plan: --npm-from-desktop publishes dist-release's .tgz here, says WITHOUT provenance, and never claims one", () => {
+  const steps = planSteps(fresh, { ...ctx, npmFromDesktop: true });
+  assert.deepEqual(run(steps), ["verify", "tag", "public", "install-sh", "release", "undraft", "npm"]);
+  const npm = steps.find((s) => s.id === "npm");
+  assert.deepEqual(npm.cmds, [["npm", "publish", "dist-release/waterplane-1.2.3.tgz", "--access", "public"]]);
+  assert.match(npm.title, /WITHOUT provenance/);
+  assert.ok(!steps.flatMap((s) => s.cmds).flat().includes("--provenance"), "a desktop has no OIDC identity: --provenance would fail there");
+  assert.equal(steps.find((s) => s.id === "npm-wait"), undefined);
+});
+
+test("preflight: npm login is needed only to publish from the desktop; the workflow route needs Actions on the public repo", () => {
+  assert.equal(preflight({ ...good, npmUser: null }).refused, false, "the default route publishes from CI: no npm login here");
+  assert.deepEqual(refusals({ ...good, npmFromDesktop: true, npmUser: null, actionsEnabled: null }), ["npm whoami"]);
+  assert.equal(preflight({ ...good, npmFromDesktop: true, actionsEnabled: false }).refused, false, "the escape hatch does not need Actions");
+  assert.deepEqual(refusals({ ...good, actionsEnabled: false }), ["Actions on the public repo"]);
+  assert.match(preflight({ ...good, actionsEnabled: false }).checks.find((c) => !c.ok).why, /enable them.*--npm-from-desktop/);
+  assert.deepEqual(refusals({ ...good, actionsEnabled: null }), ["Actions on the public repo"], "unreadable is refused, never assumed on");
+  assert.match(preflight({ ...good, actionsEnabled: undefined }).checks.find((c) => !c.ok).why, /could not read/);
+  const resumedDone = { ...good, tag: "head", release: "published", publicClone: null, npmPublished: true, actionsEnabled: null };
+  assert.equal(preflight(resumedDone).refused, false, "already on npm: whether Actions are on no longer matters");
+});
+
+test("npm reads: version present, provenance attestation, the workflow run for a tag", () => {
+  assert.equal(readNpmHasVersion("1.2.3\n", V), true);
+  assert.equal(readNpmHasVersion("'1.2.2'\n'1.2.3'", V), true, "a range query lists quoted versions");
+  assert.equal(readNpmHasVersion("", V), false);
+  assert.equal(readNpmHasVersion("1.2.30", V), false);
+  const att = JSON.stringify({ url: "https://registry.npmjs.org/-/npm/v1/attestations/waterplane@1.2.3", provenance: { predicateType: "https://slsa.dev/provenance/v1" } });
+  assert.equal(readProvenance(att), true);
+  assert.equal(readProvenance(""), false, "npm prints nothing when the field is absent");
+  assert.equal(readProvenance(JSON.stringify({ url: "x" })), false, "attestations without a provenance one (a publish attestation only)");
+  assert.equal(readProvenance(JSON.stringify({ provenance: { predicateType: "https://example.com/not-slsa" } })), false);
+  assert.equal(readProvenance("npm ERR! code E500"), null, "unreadable is never read as either");
+  assert.equal(readProvenance("[]"), null);
+  const runs = JSON.stringify([
+    { headBranch: "main", status: "completed", conclusion: "success", url: "u0" },
+    { headBranch: "v1.2.3", status: "in_progress", conclusion: "", url: "u1" },
+    { headBranch: "v1.2.3", status: "completed", conclusion: "failure", url: "u2" },
+  ]);
+  assert.deepEqual(readWorkflowRun(runs, "v1.2.3"), { status: "in_progress", conclusion: "", url: "u1" }, "the newest run for the tag, not an older failed one");
+  assert.equal(readWorkflowRun(runs, "v9.9.9"), null);
+  assert.equal(readWorkflowRun("not json", "v1.2.3"), null);
 });
 
 test("plan: a local tag on HEAD that never reached origin is pushed, not re-created", () => {
@@ -195,4 +257,33 @@ test("undraft needs an APK asset unless --no-apk: refused in the preflight and s
   assert.equal(undraft(fresh, { ...ctx, assets: bare, noApk: true }).refuse, undefined);
   assert.equal(undraft(fresh, ctx).refuse, undefined);
   assert.equal(undraft({ ...fresh, release: "published" }, { ...ctx, assets: bare }).refuse, undefined, "published: the step skips, nothing to refuse");
+});
+
+test("npm-verify's wait: 3 only after npm ANSWERED not-there; never asking is a 1 (the header's \"could not ask\")", () => {
+  const spec = "waterplane@1.2.3";
+  const d = (o) => npmWaitDecision({ spec, elapsed: "0m05s", ...o });
+  assert.deepEqual(d({ answer: true, streak: 2, expired: true }), { streak: 0, stop: { code: 0, text: `${spec} is on npm (0m05s).` } });
+  // asked, not there: keep polling until the wait is spent, then 3
+  assert.deepEqual(d({ answer: false, streak: 1, expired: false, wait: 60 }), { streak: 0, stop: null });
+  assert.deepEqual(d({ answer: false, expired: true, wait: 0 }).stop, { code: 3, text: `${spec} is not on npm.` });
+  assert.deepEqual(d({ answer: false, expired: true, wait: 300 }).stop, { code: 3, text: `${spec} is not on npm after 0m05s.` });
+  // could not ask: `--wait 0` with a failed npm view used to exit 3, claiming an answer it never got
+  const dead0 = d({ answer: null, expired: true, wait: 0 });
+  assert.equal(dead0.stop.code, 1);
+  assert.match(dead0.stop.text, /could not ask npm/);
+  assert.equal(d({ answer: null, streak: 0, expired: false, wait: 60 }).stop, null, "one failed ask while waiting is retried");
+  assert.equal(d({ answer: null, streak: 0, expired: false, wait: 60 }).streak, 1);
+  const third = d({ answer: null, streak: 2, expired: false, wait: 60 });
+  assert.equal(third.stop.code, 1, "three failed asks in a row stop the wait");
+  assert.match(third.stop.text, /three times in a row/);
+  // a real answer resets the count, so two flaky asks around a 404 never add up
+  assert.equal(d({ answer: false, streak: 2, expired: false, wait: 60 }).streak, 0);
+  // the last answer decides at the deadline: null after a false is still "could not ask"
+  assert.equal(d({ answer: null, streak: 0, expired: true, wait: 60 }).stop.code, 1);
+});
+
+test("npm-verify tells a failed workflow run to check npm first: a run can fail after publishing", () => {
+  const src = readFileSync(new URL("./npm-verify.mjs", import.meta.url), "utf8");
+  assert.match(src, /check \\`npm view \$\{SPEC\}\\` before re-running \(a re-run skips a version already on npm\)/);
+  assert.doesNotMatch(src, /without publishing/);
 });

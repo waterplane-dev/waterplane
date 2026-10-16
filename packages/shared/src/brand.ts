@@ -44,6 +44,9 @@ export interface BrandIds {
 }
 
 export interface Brand extends BrandIds {
+  /** `<repo>/<x>` — per-repo config meant to be COMMITTED (today `builds.json`), beside the
+   *  gitignored state dir. New with this identity, so no legacy name and no fallback. */
+  sharedDirName: string;
   /** What a person reads in the UI. Lowercase is the decision, not an accident. */
   displayName: string;
   tagline: string;
@@ -62,6 +65,7 @@ export const BRAND: Brand = {
   envPrefix: "WATERPLANE_",
   configDirName: "waterplane",
   stateDirName: ".waterplane",
+  sharedDirName: ".waterplane-shared",
   storagePrefix: "waterplane.",
   cacheName: "waterplane-cache",
   wsProtocol: "waterplane",
@@ -130,6 +134,8 @@ export const logTag = `[${BRAND.slug}]`;
 export const legacyStateDirNames: readonly string[] = LEGACY.map((l) => l.stateDirName);
 /** A path inside a REPO's current state dir: `stateRel("assess-in.json")`. */
 export const stateRel = (name: string): string => `${BRAND.stateDirName}/${name}`;
+/** A path inside a REPO's committed config dir: `sharedRel("builds.json")`. */
+export const sharedRel = (name: string): string => `${BRAND.sharedDirName}/${name}`;
 
 /** The dev flavor's applicationId suffix (`applicationIdSuffix` in android/app/build.gradle). The
  *  play flavor is the bare `BRAND.appId`; the release tooling refuses it as a sideload asset. */

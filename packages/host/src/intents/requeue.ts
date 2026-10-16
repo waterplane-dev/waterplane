@@ -335,6 +335,7 @@ function wouldNotRun(core: IntentCore, probe: Intent): string | null {
     budgetBlocked: core.deps.budgetBlocked(),
     budgetDetail: core.deps.budgetDetail?.(),
     budgetOver: core.deps.budgetOver?.(),
+    leftoverOver: core.deps.leftoverOver?.(),
     budgetHeldSessions: core.deps.budgetHeldSessions?.(),
     autoFire: core.deps.autoFire(),
     knownDirs: core.lastKnownDirs() ?? new Set<string>(),
@@ -409,6 +410,8 @@ export function remove(core: IntentCore, id: string): boolean {
 export async function runNow(core: IntentCore, id: string): Promise<{ ok: boolean; reason?: string }> {
   const ro = core.readOnly(); // a newer host's file: nothing fires (`intents/disk.ts`)
   if (ro) return { ok: false, reason: ro };
+  const halted = core.deps.halted?.() ?? null; // refused, never spent (`halt.ts`)
+  if (halted) return { ok: false, reason: halted };
   const row = core.get(id);
   if (!row) return { ok: false, reason: "that intent is gone" };
   if (core.inflight.has(row.id)) return { ok: false, reason: "it is already running" };
@@ -438,7 +441,7 @@ export async function runNow(core: IntentCore, id: string): Promise<{ ok: boolea
     // and rung 3 gravestones it), settle FAILED in that pass, and the `fire()`
     // below then started a row this store had just written down as over. The
     // only thing standing between that and a genuine double fire was the pass
-    // happening to `await pickHold?.()` first. So the tick is not invited: the
+    // happening to yield before its claim. So the tick is not invited: the
     // tap fires the row itself, `fire()` refuses a row that is already
     // claimed, and the sentence below is true again.
     if (row.state === "failed") {
@@ -471,7 +474,9 @@ export async function runNow(core: IntentCore, id: string): Promise<{ ok: boolea
     missing = absent.length ? absent : undefined;
   }
   const sessionId = core.resolveSessionFor(row);
-  await core.fire(row, { sessionId, missing, spendOccurrence: false });
+  // A sentence back means `starting` never reached the disk and nothing ran.
+  const notStarted = await core.fire(row, { sessionId, missing, spendOccurrence: false });
+  if (notStarted) return { ok: false, reason: notStarted };
   return { ok: true };
 }
 

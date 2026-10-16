@@ -5,7 +5,9 @@ apply plugin: 'com.android.application'
 // `dev`  — the owner's own dogfood build (`dev.waterplane.app.dev`): self-update
 //          of the shell APK, quiet updates of other apps. Signed with the
 //          owner's keystore from `keystore-dev.properties` when that file is
-//          there, else with the debug key so a fresh checkout still builds.
+//          there (else from DEV_STORE_FILE & co. in the environment, e.g.
+//          under `wp-secret exec`), else with the debug key so a fresh
+//          checkout still builds.
 // `play` — the Google Play build (`dev.waterplane.app`, permanent once
 //          uploaded): never installs itself, never installs anything quietly.
 //          A RELEASE of it is signed with the Play UPLOAD key and refuses to
@@ -30,26 +32,34 @@ def keystoreFrom = { String name ->
             keyAlias: p.getProperty('keyAlias'), keyPassword: p.getProperty('keyPassword')]
 }
 
-/** The Play upload key: `keystore-play.properties`, else four Gradle properties
- *  (`-PplayUploadStoreFile=…`, or ORG_GRADLE_PROJECT_playUploadStoreFile in the
- *  environment), else the plain env names PLAY_UPLOAD_STORE_FILE etc. */
-def playUploadKey = { ->
-    def fromFile = keystoreFrom('keystore-play.properties')
+/** A signing key: the properties file `file` first, else four Gradle properties
+ *  (`-P<prop>StoreFile=…`, or ORG_GRADLE_PROJECT_<prop>StoreFile in the
+ *  environment), else the plain env names <ENV>_STORE_FILE, <ENV>_STORE_PASSWORD,
+ *  <ENV>_KEY_ALIAS, <ENV>_KEY_PASSWORD. The env path is what
+ *  `wp-secret exec --as-file <ENV>_STORE_FILE=<id> --as-tmpfile --secret <ENV>_STORE_PASSWORD=<id> …`
+ *  fills (packages/app/README.md, Build). A message names a MISSING field, never
+ *  a value — no password is ever printed. */
+def signingKey = { String what, String file, String prop, String env ->
+    def fromFile = keystoreFrom(file)
     if (fromFile) return fromFile
-    def read = { String prop, String envName -> (project.findProperty(prop) ?: System.getenv(envName)) as String }
-    def store = read('playUploadStoreFile', 'PLAY_UPLOAD_STORE_FILE')
+    def read = { String suffix, String envSuffix -> (project.findProperty(prop + suffix) ?: System.getenv(env + envSuffix)) as String }
+    def store = read('StoreFile', '_STORE_FILE')
     if (!store) return null
     def k = [storeFile: rootProject.file(store),
-             storePassword: read('playUploadStorePassword', 'PLAY_UPLOAD_STORE_PASSWORD'),
-             keyAlias: read('playUploadKeyAlias', 'PLAY_UPLOAD_KEY_ALIAS'),
-             keyPassword: read('playUploadKeyPassword', 'PLAY_UPLOAD_KEY_PASSWORD')]
+             storePassword: read('StorePassword', '_STORE_PASSWORD'),
+             keyAlias: read('KeyAlias', '_KEY_ALIAS'),
+             keyPassword: read('KeyPassword', '_KEY_PASSWORD')]
     def missing = k.findAll { key, v -> !v }.keySet()
-    if (missing) throw new GradleException("Play upload key: a store file is set but ${missing.join(', ')} is not — see packages/app/README.md, Build")
+    if (missing) throw new GradleException("${what}: a store file is set but ${missing.join(', ')} is not — see packages/app/README.md, Build")
+    // Gradle opens the keystore more than once: a regular file, never a FIFO (`wp-secret exec --as-file`).
+    if (!k.storeFile.isFile()) throw new GradleException("${what}: the store file ${store} is not a regular file that exists (wp-secret: add --as-tmpfile to --as-file, a FIFO will not do; its file lives only while its command runs) — see packages/app/README.md, Build")
     return k
 }
 
-def devKey = keystoreFrom('keystore-dev.properties')
-def playKey = playUploadKey()
+// The owner's dev key: keystore-dev.properties, else devStoreFile… / DEV_STORE_FILE….
+def devKey = signingKey('Dev key', 'keystore-dev.properties', 'dev', 'DEV')
+// The Play upload key: keystore-play.properties, else playUploadStoreFile… / PLAY_UPLOAD_STORE_FILE….
+def playKey = signingKey('Play upload key', 'keystore-play.properties', 'playUpload', 'PLAY_UPLOAD')
 
 android {
     namespace = "dev.waterplane.app"
@@ -58,8 +68,10 @@ android {
         applicationId "dev.waterplane.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 2
-        versionName "1.0"
+        // `npm run release:play` passes both: versionCode one past the highest Play has seen,
+        // versionName the root package.json version. The defaults are for a plain gradle build.
+        versionCode((project.findProperty('versionCode') ?: '2') as int)
+        versionName((project.findProperty('versionName') ?: '1.0') as String)
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

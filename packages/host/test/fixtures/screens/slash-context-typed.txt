@@ -1,0 +1,30 @@
+
+ ▐▛███▛█   Claude Code v2.1.301
+▝▜██████▀  Haiku 5.5 · Claude Max
+ ▝▝   ▝▝   /tmp/wp301
+
+
+❯ Call the AskUserQuestion tool exactly once, with one question "Which fruits should go in the
+  salad?" header "Fruits", multiSelect true, options Apple, Banana, Cherry (each with a short
+  description). Do nothing else.
+
+⏺ User declined to answer questions
+  ⎿  · Which fruits should go in the salad? (Apple / Banana / Cherry)
+
+✻ Brewed for 2s · done 10:06 AM
+
+
+
+
+
+
+  ❯ /context                                Visualize current context usage as a colored grid
+    /sales:rep-context                      (sales) Leader's prep on a single rep before a 1:1 -
+                                            their pipeline, recent activity, what they've been wo…
+    /data:data-context-extractor            (data) Generate or improve a company-specific data
+                                            analysis skill by extracting tribal knowledge from an…
+────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ /context
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  [CAVEMAN]
+  ⏵⏵ auto mode on (shift+tab to cycle)

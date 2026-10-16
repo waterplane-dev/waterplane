@@ -4,14 +4,14 @@
  *
  * Moved verbatim out of `main.ts` (M3 of the host split, see
  * docs/notes/host-architecture.md). Every main-scope name is read as
- * `ctx.<name>` at CALL time: the literal references `backlog`, `smartpick`,
+ * `ctx.<name>` at CALL time: the literal references `backlog`,
  * `fanout`, `builds`, `capture`, `assessExecutor`, `usage`, `budget` and
  * `intents` itself, all defined AFTER `new IntentManager(…)` in `main.ts`, and
  * is correct only because nothing invokes these closures during construction.
  * Never destructure `ctx` here.
  */
 import { basename } from "node:path";
-import { autoSlotsWaitText, budgetHoldText, isAutomaticOrigin, isCaptureRow, scheduleItemOrigin, sessionBudgetHeld, sessionOriginOfIntent, waitedSessionName, type LaunchOpts } from "@waterplane/shared";
+import { autoSlotsWaitText, budgetHoldText, isAutomaticOrigin, isCaptureRow, scheduleItemOrigin, sessionBudgetHeld, sessionOriginOfIntent, waitedSessionName, LOCAL_SESSIONS_KEY, type LaunchOpts } from "@waterplane/shared";
 import { BACKLOG_SESSIONS_MAX, REAP_CEILING_MS, chainDeliveryError, isBacklogTitle, retryableStep } from "../backlog.js";
 import { intentToCaptureRun } from "../capture.js";
 import { FANOUT_CONCURRENCY } from "../fanout.js";
@@ -30,7 +30,9 @@ import {
 import { hostStateDir } from "../branddirs.js";
 import { readJsonGuardedDetail, writeTextAtomic } from "../jsonstore.js";
 import { discoverTargets } from "../repos.js";
+import { installLocalSlots, localModelHold, localSlotsDetail, localSlotsPass, localStartNotice } from "../localslot.js";
 import { logVerdict } from "../settle.js";
+import { haltRefusal } from "../halt.js";
 import type { ServerCtx } from "./ctx.js";
 
 /**
@@ -73,6 +75,19 @@ export function makeIntentDeps(ctx: ServerCtx): IntentDeps {
     return knownDirsCache.dirs;
   }
 
+  // The local-model gate the three deps below read (`localslot.ts`): which
+  // sessions and rows run on a local model, the synced cap, and a kick when a
+  // model finishes loading. Every closure reads `ctx` when CALLED — `intents`
+  // and `settings` are assigned after this factory runs.
+  installLocalSlots({
+    sessions: () => ctx.sessions.list().map((s) => ({
+      id: s.id, running: s.running, backend: s.backend, model: s.model, turnActive: s.turnActive,
+      name: waitedSessionName(s, ctx.sessions.originOf(s.id)?.itemLabel),
+    })),
+    rows: () => ctx.intents.list(),
+    setting: () => ctx.settings?.get(LOCAL_SESSIONS_KEY)?.value,
+    kick: () => ctx.intents.kick(),
+  });
 
   return {
     root: ctx.ROOT,
@@ -122,27 +137,21 @@ export function makeIntentDeps(ctx: ServerCtx): IntentDeps {
     // The cap, as a fact rather than as a refusal string. Every fired work item
     // opens a session of its OWN now, so the thing that has to be bounded is how
     // many of those may be alive at once — one `claude` is one real process and one
-    // real share of the account, and a host that has been away for a week must not
+    // real share of the account — counted while WORKING, an idle one left open holds none — and a host that has been away for a week must not
     // answer a pile of due work by spawning a dozen agents. The ladder's `noSlot`
     // rung reads this; nothing here refuses anything.
     autoSlotsFree: () => Math.max(0, BACKLOG_SESSIONS_MAX - ctx.backlog.autoSessionCount()),
     // …and the numbers for the sentence, which only this side knows (the pure rule
     // is handed the difference, never the ceiling). Same shape as `budgetDetail`.
     // The wording is `autoSlotsWaitText`'s (shared, one sentence for both
-    // ends): when no open automatic session closes itself, it says a person has
-    // to close one — nothing else will free the slot.
+    // ends). Only a WORKING automatic session holds a slot (`slotBusy`), so a
+    // slot frees itself when one goes idle — nothing is closed to make room.
     autoSlotsDetail: () => autoSlotsWaitText(ctx.backlog.autoSlotFacts()),
-    // Make room, once per pass, for a row the cap is the only thing holding. Never
-    // a session somebody is attached to, never one with work still in it, never
-    // one that printed something in the last minute, NEVER one that is not set to
-    // close when done (the default) — and `sessions.remove()`, so what it closes
-    // lands under *Recently closed* and reopens with `--continue`.
-    reapAutoSession: () => ctx.backlog.reapAutoSession(ctx.isAttachedToSomeone),
-    // The last question before a work item fires: is this repo looking over its
-    // waiting items first? A sentence holds the row (`picking`, a wait it wears,
-    // nothing claimed); `null` fires it. Un-ticked repos answer `null` off a `Set`
-    // lookup, which is the whole of "the feature costs nothing when it is off".
-    pickHold: (row) => ctx.smartpick.hold(row),
+    // The local-model gate (`localslot.ts`): the cap on local coding turns as a
+    // rung (`localModel`), its sentence, and the model loaded before the fire.
+    localSlots: () => localSlotsPass(),
+    localSlotsDetail: () => localSlotsDetail(),
+    localHold: (row) => localModelHold(row),
     // EXACTLY the session that replaced the one that died, never "the newest one
     // in that directory". See `SessionManager.revivedSessionFor`.
     revivedSessionFor: (deadId) => ctx.sessions.revivedSessionFor(deadId),
@@ -165,7 +174,7 @@ export function makeIntentDeps(ctx: ServerCtx): IntentDeps {
     // belong to the pure rules rather than to this seam.
     usageWindows: () => {
       const u = ctx.usage.get();
-      return { sessionResetAt: u.sessionResetAt, weeklyResetAt: u.weeklyResetAt, sessionPct: u.sessionPct, weeklyPct: u.weeklyPct };
+      return { sessionResetAt: u.sessionResetAt, weeklyResetAt: u.weeklyResetAt, sessionPct: u.sessionPct, weeklyPct: u.weeklyPct, periodResetAt: ctx.budget.periodResets() };
     },
     budgetBlocked: () => ctx.budget.verdict().blocked,
     // The first tripped ceiling's sentence, and every one of them for the rung
@@ -175,10 +184,12 @@ export function makeIntentDeps(ctx: ServerCtx): IntentDeps {
       return c ? budgetHoldText(c, Date.now()) : undefined;
     },
     budgetOver: () => ctx.budget.ceilings(),
+    leftoverOver: () => ctx.budget.leftover(),
     // The sessions whose OWN budget is spent — the one shared predicate, so a
     // row aimed at one waits exactly when the phone's queue holds it.
     budgetHeldSessions: () => new Set(ctx.sessions.list().filter(sessionBudgetHeld).map((s) => s.id)),
     autoFire: () => ctx.backlog.getAuto(),
+    halted: haltRefusal, // the emergency halt: nothing fires, nothing is spent (`halt.ts`)
     // Restart reconciliation's evidence: the CLI's own conversation log, which
     // outlives both the session and this process.
     logVerdict: (sessionId, text, since, claimer) => logVerdict(ctx.sessions, sessionId, text, since, { claimer }),
@@ -213,6 +224,10 @@ export function makeIntentDeps(ctx: ServerCtx): IntentDeps {
         // and changing that would rewrite what every parked create reports.
         if (isBacklogRow(i)) {
           let sessionId: string;
+          // A person's tap past the local cap is TOLD, never held: an
+          // automatic row only reaches here with the cap free, so a sentence
+          // here means somebody pressed "run now" (`localslot.ts`).
+          const localOver = localStartNotice(i.launch, { rowId: i.id });
           try {
             sessionId = ctx.backlog.openItemSession(i);
           } catch (err) {
@@ -238,7 +253,7 @@ export function makeIntentDeps(ctx: ServerCtx): IntentDeps {
             failedStep = tail.step + 1;
           }
           if (last === "ok") {
-            return { ok: true, detail: `ran in ${where}`, sessionId, watch: "turn" };
+            return { ok: true, detail: `ran in ${where}${localOver ? ` — ${localOver}` : ""}`, sessionId, watch: "turn" };
           }
           // `retry` sends the row back to the queue, which will open a SECOND
           // session for it — and the first one is left standing, deliberately. It
@@ -369,5 +384,19 @@ export function makeIntentDeps(ctx: ServerCtx): IntentDeps {
         if (run) ctx.broadcast({ t: "fanout.run", run });
       }
     },
+    // `intents.json` stopped reaching the disk: told once per failing streak
+    // (`intents/disk.ts`), never per tick. New work is refused in words at the
+    // op itself; this is the sentence for whoever is not sending anything.
+    onWriteError: (message) => ctx.notify("backlog", intentsWriteNotice(message)),
+  };
+}
+
+/** The feed row for an `intents.json` that can no longer be written. */
+export function intentsWriteNotice(message: string): { title: string; body: string; tag: string } {
+  return {
+    title: "Scheduled work is not reaching disk",
+    body: `The host could not save its backlog and schedules (${message}). New work is refused and nothing new starts ` +
+      "until it can; check free disk space and that the host's state folder is writable.",
+    tag: "intents-write",
   };
 }

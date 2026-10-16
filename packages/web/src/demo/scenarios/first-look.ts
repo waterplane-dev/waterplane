@@ -1,13 +1,17 @@
 /**
- * Scenario `first-look` (demo-mode-plan.md §3, WP4; demo-pitch-plan.md §1): the
- * first minute with the app. It opens on a session ALREADY WORKING — the
- * todo-garden turn "add a quick-add bar" streams its tool lines and moves the
- * context meter with no tap (`HOOK_SCRIPT`), ends with a screenshot in the
- * outbox (gallery, new-images strip, notification), and the reader prices it
- * under the turn. Marking that screenshot up and sending it back with "make
- * this bigger" gets a scripted fix and an "after" screenshot (`biggerReply`).
- * Beside it: a choice box to answer by tap ("sort"), a few backlog items and
- * one schedule so the other tabs are not empty.
+ * Scenario `first-look` (demo-mode-plan.md §3, WP4; demo-pitch-plan.md §1; R-demo-014, R-demo-033):
+ * the first minute with the app. It opens on the repo list; a cue points at todo-garden's `+ now`,
+ * and the session that tap starts is Claude Code's own welcome header. The demo types the first
+ * prompt into the compose box and sends it by itself: make the add button bigger and check it in
+ * the iOS simulator and the Android emulator (`hookReply`). The turn builds, takes a screenshot on
+ * each, reads both, and lands them in the outbox (gallery, new-images strip, notifications): ① iOS
+ * looks right, ② Android has the button under the keyboard. Combined into one picture, ② circled
+ * and sent back with "make ② look like ①", the fix (`fixReply`) changes the Android window, checks
+ * both again, lands the after screenshot, and builds the debug APK into the outbox, which reaches
+ * the phone as the host's own "Outbox:" notification — a download for the real device. The reader
+ * prices every turn under it.
+ * Beside it: a session already in todo-garden with a choice box to answer by tap ("sort"), a few
+ * backlog items and one schedule so the other tabs are not empty.
  *
  * Shape: the model WP2b reads (`demo/host/model.ts`), seeded from the stub-driven
  * recording (`STUB_MODE=demo`, `tools/demo-scenario.mjs`): the todo-app work
@@ -15,7 +19,7 @@
  * script, grown into a longer, readable session. Everything is fictional — no
  * path, name or number comes from this machine; `scenarios.test.mjs` runs the
  * recording tool's scrub (`findLeaks`) over the result so a hand edit cannot
- * leak one.
+ * leak one. The three simulator screenshots are drawn by `scripts/media/demo-shots.mjs`.
  *
  * Time: every instant is relative to `now`. The shipped build calls
  * `firstLook(Date.now())`, so a reviewer opening the demo in a year still reads
@@ -29,11 +33,12 @@ import { demoTopConvos } from "../host/ledger.ts";
 import { GARDEN_LAST_TOK, GARDEN_SERIES, GARDEN_WINDOW_TOK, numbersFill, windowSchedules, workFill } from "./first-look-fill.ts";
 import { CLAUDE_BANNER, claudeBanner } from "../host/banner.ts";
 
-/** Where todo-garden's context stands before the hook turn, after it, and after the fix. */
+/** Where the session the hook starts stands: what a fresh claude here re-reads before the first
+ *  prompt (the welcome, CLAUDE.md, the tools), after the hook turn, and after the fix. */
 const GARDEN_LAST = GARDEN_LAST_TOK;
-const HOOK_LAST = 295_000;
-const BIGGER_LAST = 306_000;
-
+const FRESH_TOK = 56_000;
+const HOOK_LAST = 128_000;
+const FIX_LAST = 151_000;
 /** 2026-10-01 09:00 UTC — what `tools/demo-scenario.mjs` pins recordings to. */
 export const CLOCK_START = Date.UTC(2026, 9, 1, 9, 0, 0);
 
@@ -46,19 +51,27 @@ const NOTES = "~/dev/pocket-notes";
 const TRAIL = "~/dev/trail-log";
 
 const SORTED = ".claude/outbox/todo-garden-sorted.png";
-/** The hook turn's screenshot, and the one the annotate-and-send-back reply makes. */
-export const QUICK_ADD = ".claude/outbox/todo-garden-quick-add.png";
-export const BIGGER = ".claude/outbox/todo-garden-bigger-add.png";
-/** The prompt the session is working on when the demo opens. */
-export const HOOK_PROMPT = "add a quick-add bar above the task list";
-/** What the annotate-and-send-back reply matches (`features/demoTour` `HOOK_REPLY_MATCH`). */
-export const BIGGER_MATCH = "bigger";
+/** The hook turn's two screenshots (① the iOS simulator, ② the Android emulator), and the after
+ *  picture the fix lands (`scripts/media/demo-shots.mjs` draws all three). */
+export const IOS_SHOT = ".claude/outbox/todo-garden-ios.png";
+export const ANDROID_SHOT = ".claude/outbox/todo-garden-android.png";
+export const ANDROID_FIXED = ".claude/outbox/todo-garden-android-fixed.png";
+/** The build the fix ends with: the host's outbox notification offers it to the phone. */
+export const APK = ".claude/outbox/todo-garden-debug.apk";
+const APK_SIZE = 8_812_544;
+/** The prompt the demo types into the box of the session the first tap starts. */
+export const HOOK_PROMPT = "make + Add bigger, check iOS sim and Android emulator";
+/** What the combine-mark-and-send-back reply matches (`features/demoTour` `HOOK_REPLY_MATCH`). */
+export const FIX_MATCH = "look like";
 const BEFORE = ".claude/outbox/todo-garden-before.png";
 const SKETCH = ".claude/inbox/swipe-sketch.png";
 const RIDGE = ".claude/outbox/trail-log-ridge-loop.png";
 
 /** Bytes of what is in `public/demo/media/r1/` — a test pins these to the files. */
-export const MEDIA_SIZES = { [SORTED]: 31628, [BEFORE]: 31174, [SKETCH]: 2169, [RIDGE]: 4174, [QUICK_ADD]: 30968, [BIGGER]: 31814 } as const;
+export const MEDIA_SIZES = {
+  [SORTED]: 31628, [BEFORE]: 31174, [SKETCH]: 2169, [RIDGE]: 4174,
+  [IOS_SHOT]: 32068, [ANDROID_SHOT]: 28428, [ANDROID_FIXED]: 31187,
+} as const;
 
 /** The model the todo-garden session runs, as its log names it — what `facts` are priced at. */
 const MODEL = "claude-opus-5-5";
@@ -175,65 +188,99 @@ export function firstLook(now: number): DemoScenario {
     },
   ];
 
-  // ── the hook: the turn already running when the demo opens ──────────────
+  // ── the hook: the session the first tap starts ──────────────────────────
   //
-  // Context per step (tokens): the series ends at 282k before this turn; the
-  // turn's reads take it to 295k, the fix to 306k. `contextLeft` and the spark
-  // move with it, and each turn's `facts` carry the same figure as `ctxTok`.
+  // The person starts it (`+ now` on todo-garden, cued by `features/demoTour`), so it is a FRESH
+  // claude: its context starts at what a new session here re-reads (56k), the hook turn takes it to
+  // 128k and the fix to 151k. `contextLeft` and the spark move with it (no session id on these steps:
+  // they belong to whichever session the reply runs in), and each turn's `facts` carry the same
+  // figure as `ctxTok`.
   const g1 = "demo-g1";
   const sparkAt = (...more: number[]): ContextSpark => {
     const pts = [...GARDEN_SERIES, ...more];
     return { pts, marks: [], peak: Math.max(...pts), windowTok: GARDEN_WINDOW_TOK, windowFrom: "model", autoCompactTok: null, baseTok: GARDEN_SERIES[0], turns: 1 + more.length, spentTok: pts.reduce((a, b) => a + b, 0) };
   };
-  const ctx = (tok: number, ...more: number[]): DemoStep => ({ kind: "session", sessionId: g1, patch: { contextLeft: left(tok), contextSpark: sparkAt(...more, tok) } });
-  // The shape of a heavy real session: the first prompt climbed from the 56k a fresh session
-  // starts with to 282k over an hour and a quarter, and the agents it sent to read the codebase
-  // spent most of its money; the hook turn is a dozen requests on a full window; the fix sends three
-  // agents to check every other tap target, which is most of what that prompt costs.
+  const freshSpark = (...pts: number[]): ContextSpark => ({
+    pts: [FRESH_TOK, ...pts], marks: [], peak: Math.max(FRESH_TOK, ...pts), windowTok: GARDEN_WINDOW_TOK, windowFrom: "model", autoCompactTok: null,
+    baseTok: FRESH_TOK, turns: pts.length, spentTok: pts.reduce((a, b) => a + b, FRESH_TOK),
+  });
+  const ctx = (tok: number, ...before: number[]): DemoStep => ({ kind: "session", patch: { contextLeft: left(tok), contextSpark: freshSpark(...before, tok) } });
+  // The shape of heavy real use: todo-garden's older session climbed from 56k to 282k over an hour
+  // and a quarter, and the agents it sent to read the codebase spent most of its money. The hook turn
+  // is a fresh session's first prompt — big cache writes, a build, two devices — and the fix sends
+  // three agents to look for other inputs the keyboard can cover, which is most of what it costs.
   const firstFacts = turnFacts({ input: 3_100, output: 41_000, cacheRead: 9_800_000, cacheWrite: 290_000 }, GARDEN_LAST, { main: 0, agents: 0 }, [
     { type: "Explore", model: MODEL, bag: { input: 1_200, output: 64_000, cacheRead: 88_000_000, cacheWrite: 1_050_000 } },
     { type: "Explore", model: MODEL, bag: { input: 900, output: 51_000, cacheRead: 76_000_000, cacheWrite: 820_000 } },
   ]);
-  const hookFacts = turnFacts({ input: 600, output: 9_000, cacheRead: 4_000_000, cacheWrite: 16_000 }, HOOK_LAST, cumOf(firstFacts));
-  const biggerFacts = turnFacts({ input: 700, output: 48_000, cacheRead: 17_000_000, cacheWrite: 14_000 }, BIGGER_LAST, cumOf(hookFacts), [
-    { type: "Explore", model: MODEL, bag: { input: 800, output: 45_000, cacheRead: 50_000_000, cacheWrite: 500_000 } },
+  const hookFacts = turnFacts({ input: 1_400, output: 33_000, cacheRead: 6_200_000, cacheWrite: 240_000 }, HOOK_LAST, { main: 0, agents: 0 });
+  const fixFacts = turnFacts({ input: 700, output: 46_000, cacheRead: 14_000_000, cacheWrite: 60_000 }, FIX_LAST, cumOf(hookFacts), [
+    { type: "Explore", model: MODEL, bag: { input: 800, output: 45_000, cacheRead: 48_000_000, cacheWrite: 500_000 } },
     { type: "code-reviewer", model: "claude-fable-5-1", bag: { input: 300, output: 7_000, cacheRead: 3_200_000, cacheWrite: 140_000 } },
     { type: "Explore", model: "claude-sonnet-5-5", bag: { input: 200, output: 6_000, cacheRead: 2_200_000, cacheWrite: 70_000 } },
   ]);
 
-  /** `at` ms after the demo opens. A journey waits on text, never on these numbers. */
-  const script: { at: number; event: DemoStep }[] = [
-    { at: 1_200, event: { kind: "output", sessionId: g1, text: tool("Read", "src/components/TaskList.tsx", "Read 84 lines") } },
-    { at: 1_300, event: ctx(286_000) },
-    { at: 2_600, event: { kind: "output", sessionId: g1, text: tool("Write", "src/components/QuickAdd.tsx", "Wrote 38 lines") } },
-    { at: 2_700, event: ctx(290_000) },
-    { at: 4_000, event: { kind: "output", sessionId: g1, text: tool("Update", "src/components/TaskList.tsx", "Added 3 lines") } },
-    { at: 4_100, event: ctx(293_000) },
-    { at: 5_800, event: { kind: "output", sessionId: g1, text: tool("Bash", "npm test -- QuickAdd", `${G}PASS${R0} src/components/QuickAdd.test.tsx (3 tests)`) } },
-    { at: 7_400, event: { kind: "output", sessionId: g1, text: tool("Bash", "npx playwright screenshot", `saved ${QUICK_ADD}`) } },
-    { at: 8_100, event: { kind: "artifact", sessionId: g1, repoId: "r1", relPath: QUICK_ADD, size: MEDIA_SIZES[QUICK_ADD] } },
-    { at: 8_800, event: { kind: "output", sessionId: g1, text: bullet(`Done. A quick-add bar now sits above the list (src/components/QuickAdd.tsx). Screenshot: ${QUICK_ADD}`) } },
-    { at: 8_900, event: { kind: "facts", sessionId: g1, facts: hookFacts } },
-    { at: 8_900, event: ctx(HOOK_LAST) },
-    { at: 9_000, event: { kind: "turnEnd", sessionId: g1 } },
+  // The hook turn, as the reply to its prompt: the demo types HOOK_PROMPT into the compose box of the
+  // session the first tap started and sends it (`features/demoTour` `typeHookPrompt`). A journey waits
+  // on text, never on these numbers.
+  //
+  // The rhythm is the docs film's too (scripts/ui/pace.mjs): lines under 0.35 s apart are one burst that
+  // plays at real speed, and every pause becomes a held picture of 1.2 s or more. So the work comes in
+  // bursts: the change with the build, then the two devices and the two reads, then (right behind them)
+  // the screenshots landing with the closing line — three pictures, where five held the README's loop
+  // twice as long.
+  const hookReply: DemoTimedStep[] = [
+    { kind: "output", text: bullet("I'll make + Add 44px, then build and check it on both platforms."), afterMs: 150 },
+    { kind: "output", text: tool("Update", "src/components/QuickAdd.tsx", "Added 4 lines, removed 2 lines"), afterMs: 100 },
+    { ...ctx(74_000), afterMs: 0 },
+    { kind: "output", text: tool("Bash", "npm run build && npx cap sync", "Built the web bundle · synced ios and android"), afterMs: 100 },
+    { ...ctx(88_000, 74_000), afterMs: 0 },
+    {
+      kind: "output",
+      text: tool("Bash", `xcrun simctl io booted screenshot ${IOS_SHOT}`, `Wrote screenshot to: ${IOS_SHOT}`)
+        + tool("Bash", `adb exec-out screencap -p > ${ANDROID_SHOT}`, "(No output)"),
+      afterMs: 1_200,
+    },
+    { kind: "output", text: tool("Read", IOS_SHOT, "Read image (31KB)") + tool("Read", ANDROID_SHOT, "Read image (28KB)"), afterMs: 150 },
+    { ...ctx(104_000, 74_000, 88_000), afterMs: 0 },
+    { kind: "artifact", repoId: "r1", relPath: IOS_SHOT, size: MEDIA_SIZES[IOS_SHOT], afterMs: 300 },
+    { kind: "artifact", repoId: "r1", relPath: ANDROID_SHOT, size: MEDIA_SIZES[ANDROID_SHOT], afterMs: 150 },
+    { kind: "output", text: bullet(`Done. + Add is 44px on iOS and Android (src/components/QuickAdd.tsx). Screenshots: ${IOS_SHOT}, ${ANDROID_SHOT}`), afterMs: 150 },
+    { kind: "facts", facts: hookFacts, afterMs: 100 },
+    { ...ctx(HOOK_LAST, 74_000, 88_000, 104_000), afterMs: 0 },
   ];
 
-  // The marked-up screenshot comes back with "make this bigger": the fix, and the after picture.
-  const biggerReply: DemoTimedStep[] = [
-    { kind: "output", text: bullet("I can see the circled button: the + in the quick-add bar is 22px, well under the 44px a finger needs."), afterMs: 700 },
-    { kind: "output", text: tool("Read", "src/components/QuickAdd.tsx", "Read 38 lines"), afterMs: 700 },
-    { kind: "output", text: tool("Update", "src/components/QuickAdd.tsx", "Added 4 lines, removed 2 lines"), afterMs: 1_000 },
-    { kind: "output", text: bullet("Three agents will check every other tap target in the app against 44px while I fix this one."), afterMs: 600 },
-    { kind: "output", text: tool("Agent", "Explore: tap targets in src/components", "Done · 6 under 44px"), afterMs: 900 },
-    { kind: "output", text: tool("Agent", "Explore: tap targets in src/screens", "Done · 2 under 44px"), afterMs: 700 },
-    { kind: "output", text: tool("Agent", "code-reviewer: the QuickAdd change", "Done · no findings"), afterMs: 700 },
-    { ...ctx(300_000, HOOK_LAST), afterMs: 100 },
-    { kind: "output", text: tool("Bash", "npm test -- QuickAdd", `${G}PASS${R0} src/components/QuickAdd.test.tsx (3 tests)`), afterMs: 1_100 },
-    { kind: "output", text: tool("Bash", "npx playwright screenshot", `saved ${BIGGER}`), afterMs: 1_100 },
-    { kind: "artifact", repoId: "r1", relPath: BIGGER, size: MEDIA_SIZES[BIGGER], afterMs: 600 },
-    { kind: "output", text: bullet(`Done. The add button is now a 44px "+ Add" with a label (src/components/QuickAdd.tsx); the agents found 8 more buttons under 44px, listed above. Screenshot: ${BIGGER}`), afterMs: 700 },
-    { kind: "facts", facts: biggerFacts, afterMs: 100 },
-    { ...ctx(BIGGER_LAST, HOOK_LAST), afterMs: 0 },
+  // The combined picture comes back with ② circled and "make ② look like ①": the fix, both devices
+  // again, the after picture, and the debug build in the outbox — which the real host announces as
+  // "Outbox: <name>" with a tap to download (server/sessionEvents.ts), the way it reaches the phone.
+  const fixReply: DemoTimedStep[] = [
+    { kind: "output", text: bullet("I see your circle in ②: on Android the keyboard covers the bar, because the window does not resize for it. ① on iOS keeps it above."), afterMs: 150 },
+    {
+      kind: "output",
+      text: tool("Update", "android/app/src/main/AndroidManifest.xml", "Added 1 line, removed 1 line")
+        + tool("Update", "src/components/QuickAdd.tsx", "Added 3 lines"),
+      afterMs: 150,
+    },
+    { ...ctx(132_000, HOOK_LAST), afterMs: 0 },
+    {
+      kind: "output",
+      text: bullet("Three agents look for other inputs the keyboard can cover while I check both devices again.")
+        + tool("Agent", "Explore: text inputs in src/screens", "Done · 2 sit low on the screen, both scroll")
+        + tool("Agent", "Explore: windowSoftInputMode across activities", "Done · 1 activity")
+        + tool("Agent", "code-reviewer: the QuickAdd change", "Done · no findings")
+        + tool("Bash", `xcrun simctl io booted screenshot ${IOS_SHOT}`, `Wrote screenshot to: ${IOS_SHOT}`)
+        + tool("Bash", `adb exec-out screencap -p > ${ANDROID_FIXED}`, "(No output)")
+        + tool("Read", ANDROID_FIXED, "Read image (30KB)"),
+      afterMs: 150,
+    },
+    { kind: "artifact", repoId: "r1", relPath: ANDROID_FIXED, size: MEDIA_SIZES[ANDROID_FIXED], afterMs: 150 },
+    { kind: "output", text: bullet(`Fixed on both: the bar now sits on the keyboard on Android too, + Add whole. After: ${ANDROID_FIXED}`), afterMs: 150 },
+    { ...ctx(146_000, HOOK_LAST, 132_000), afterMs: 0 },
+    { kind: "output", text: tool("Bash", "cd android && ./gradlew assembleDebug", `${G}BUILD SUCCESSFUL${R0} in 41s`), afterMs: 1_600 },
+    { kind: "deliverable", repoId: "r1", relPath: APK, size: APK_SIZE, afterMs: 900 },
+    { kind: "output", text: bullet(`Built the debug APK into the outbox: ${APK} — install it on your phone to try it for real.`), afterMs: 150 },
+    { kind: "facts", facts: fixFacts, afterMs: 2_000 },
+    { ...ctx(FIX_LAST, HOOK_LAST, 132_000), afterMs: 0 },
   ];
 
   // ── two sessions already on the desktop ─────────────────────────────────
@@ -243,9 +290,7 @@ export function firstLook(now: number): DemoScenario {
     `${claudeBanner("~/dev/todo-garden")}` +
     `> make overdue tasks show a red edge\r\n` +
     bullet("Done. Overdue tasks get a red left edge.") +
-    "\r\n" +
-    `> ${HOOK_PROMPT}\r\n` +
-    bullet("I'll add a quick-add bar above the task list, then check it on screen.");
+    "\r\n";
   const notesScreen =
     `${claudeBanner("~/dev/pocket-notes")}` +
     `> the markdown export drops the title\r\n` +
@@ -263,11 +308,11 @@ export function firstLook(now: number): DemoScenario {
     ],
     sessions: [
       {
-        // Mid-turn when the demo opens: the hook script carries it to the end.
+        // An older session, idle: the hook starts a NEW one beside it (`+ now`), and the tour's rows open this one.
         id: g1, cwd: GARDEN, title: "todo-garden · main", tabTitle: "Red edge for overdue", remoteControl: true, running: true,
-        idle: false, turnActive: true, turnStartedAt: ago(6_000), lastTurnAt: ago(6_000), createdAt: ago(100 * MIN), claudeSessionId: "c-garden-1",
+        idle: true, idleSince: ago(18 * MIN), lastTurnAt: ago(22 * MIN), createdAt: ago(100 * MIN), claudeSessionId: "c-garden-1",
         contextLeft: left(GARDEN_LAST), contextSpark: sparkAt(), starred: false,
-        firstPrompt: "make overdue tasks show a red edge", lastPrompt: HOOK_PROMPT,
+        firstPrompt: "make overdue tasks show a red edge", lastPrompt: "make overdue tasks show a red edge",
       },
       {
         id: "demo-n1", cwd: NOTES, title: "pocket-notes · main", tabTitle: "Markdown export title", remoteControl: true, running: true,
@@ -282,8 +327,6 @@ export function firstLook(now: number): DemoScenario {
           id: "h-1", kind: "prompt", text: "make overdue tasks show a red edge", sentAt: ago(95 * MIN), outputAt: ago(22 * MIN),
           output: "Done. An overdue task now has a red left edge and a bold due date. I changed src/components/TaskRow.tsx and added a test; all 4 pass.",
         },
-        // The turn running as the demo opens: no stored answer, so the reader reads it off the PTY.
-        { id: "h-hook", kind: "prompt", text: HOOK_PROMPT, sentAt: ago(6_000) },
       ],
       "demo-n1": [
         {
@@ -340,8 +383,9 @@ export function firstLook(now: number): DemoScenario {
     ...workFill(now, { sorted: SORTED, before: BEFORE, sketch: SKETCH, sketchSize: MEDIA_SIZES[SKETCH] }),
     numbers: numbersFill(now),
     replies: [
+      { match: HOOK_PROMPT, cwd: GARDEN, steps: hookReply },
       { match: "sort", cwd: GARDEN, steps: sortReply },
-      { match: BIGGER_MATCH, cwd: GARDEN, steps: biggerReply },
+      { match: FIX_MATCH, cwd: GARDEN, steps: fixReply },
       // Anything else a person types still gets an answer, in the same voice.
       {
         steps: [
@@ -355,9 +399,9 @@ export function firstLook(now: number): DemoScenario {
   };
 
   return {
-    meta: { id: "first-look", protocol: PROTOCOL_VERSION, stamp: "first-look-3" },
+    meta: { id: "first-look", protocol: PROTOCOL_VERSION, stamp: "first-look-7" },
     clock: { start: now },
     state: { bootId: "boot", model: model as unknown as DemoScenario["state"]["model"] },
-    script,
+    script: [],
   };
 }

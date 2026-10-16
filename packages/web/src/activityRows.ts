@@ -117,7 +117,6 @@ export type {
   DeliveryTruth,
 } from "./activity/activityTypes.ts";
 export {
-  SMARTPICK_ORIGIN,
   entryProse,
   intentRowKey,
   onlyUploadsFailed,
@@ -134,7 +133,7 @@ export {
 export {
   ACTIVITY_FILTERS,
   activityCounts,
-  activityHeadline,
+  activityHeadlineCut,
   matchesFilter,
 } from "./activity/activityFilters.ts";
 export {

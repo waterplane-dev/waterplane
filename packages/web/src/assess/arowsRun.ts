@@ -27,7 +27,7 @@ export function assessApplyBlocker(o: {
   if (run.status === "running") return "the assessment is still running — its verdicts are not final until it finishes";
   if (run.status === "failed") return `the run did not produce a proposal${run.detail ? ` — ${run.detail}` : ""}`;
   const p = run.proposal;
-  if (!p || !(p.rows.length + p.merges.length + p.news.length)) return "this run came back with nothing to decide";
+  if (!p || !(p.rows.length + p.merges.length + p.news.length + (p.splits?.length ?? 0) + (p.conflicts?.length ?? 0))) return "this run came back with nothing to decide";
   if (run.status === "applied") return "this proposal has already been applied — run a new assessment to judge what is left now";
   if (o.busy) return "the decisions have been sent — waiting for the desktop";
   if (!o.picked) return "nothing is ticked yet — tap retire it or keep it on the rows you agree with, or retire all on a strip";

@@ -26,7 +26,7 @@ import { rememberMtime } from "../../fileMtime";
 import { noteUploadRate } from "../../uploadScale";
 import type { DurableOp, QueueBacklogOpts } from "../../sdk/types.ts";
 import {
-  ACK_TIMEOUT_MS, LANE_GAP_MS, PENDING_PREFIX, UPLOAD_STALL_MS, ackWindow, goneLanesOf, isPendingId, laneFor, requeue,
+  ACK_TIMEOUT_MS, LANE_GAP_MS, PENDING_PREFIX, UPLOAD_STALL_MS, ackWindow, goneLanesOf, isLaterId, isPendingId, laneFor, requeue,
   serialStates, serialTextFor, markAttempt, entryFrame,
 } from "./logic.ts";
 import type { QueueCtx, SendFns } from "./types.ts";
@@ -455,6 +455,12 @@ export function sendFns(c: QueueCtx): SendFns {
     // `bindPendingSession` re-aims them the moment `op.ack` names the session.
     // Not a special path — the same queue entry `startSessionWithPrompt` writes
     // for prompt 2 of a chain.
+    // `+ later` has no create to chain behind: its words go only through the
+    // compose bar's NEW-session aim, never a lane of their own.
+    if (isLaterId(id)) {
+      showToast("this session starts only when its backlog item runs — write it in the box and Send");
+      return false;
+    }
     if (isPendingId(id)) {
       queueSessionPrompt(cwd, text, id.slice(PENDING_PREFIX.length), kind);
       flushOutbox();
@@ -729,7 +735,10 @@ export function sendFns(c: QueueCtx): SendFns {
       steps: opts.steps && opts.steps.length > 1 ? opts.steps : undefined,
       resume: opts.resume || undefined,
       closeWhenDone: typeof opts.closeWhenDone === "boolean" ? opts.closeWhenDone : undefined,
+      flagWhenDone: opts.flagWhenDone === true ? true : undefined,
       budget: opts.budget,
+      launch: opts.launch,
+      pastBudget: opts.pastBudget || undefined,
       offline, armed: !offline,
     });
     if (!offline) armLane(opts.targetSessionId ?? opts.repoDir);

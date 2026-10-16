@@ -235,7 +235,10 @@ function isDevList(path) {
 
 export default Object.freeze({
   name: "python",
-  version: "1",
+  // 2: `imports` exists — the same import statements `mentions` reads, as
+  // the edges `untested` follows from a test to what it runs.
+  // 3: `hatchExplain` exists — which escapes carry their reason.
+  version: "3",
 
   /** Activates when the tree at HEAD carries one of these. See the header. */
   exts: Object.freeze([".py"]),
@@ -273,6 +276,24 @@ export default Object.freeze({
     // The two annotation positions only. See the header for the 210 container
     // occurrences this deliberately does not reach.
     pyAny: "(?:->|:)\\s*Any\\b",
+  }),
+
+  /**
+   * When an escape carries its reason — `packs/typescript.mjs` argues the two
+   * places (same line after the mark, or a comment line directly above). A
+   * rule CODE is not a reason: `# noqa: E501` and `# type: ignore[attr]` are
+   * the bare forms, and only words after the codes — behind `--`, `—` or a
+   * second `#` — explain them. The bare `except:` and the `Any` annotation
+   * take a trailing comment.
+   */
+  hatchExplain: Object.freeze({
+    commentLine: "^\\s*#",
+    after: Object.freeze({
+      pyNoqa: "^(?::?\\s*[A-Z]+[0-9]+(?:[\\s,]+[A-Z]+[0-9]+)*)?\\s*(?:#|--|—)\\s*[A-Za-z]{2}",
+      pyTypeIgnore: "^(?:\\[[^\\]]*\\])?\\s*(?:#|--|—)\\s*[A-Za-z]{2}",
+      pyBareExcept: "#\\s*[A-Za-z]{2}",
+      pyAny: "#\\s*[A-Za-z]{2}",
+    }),
   }),
 
   /**
@@ -415,6 +436,15 @@ export default Object.freeze({
     }
 
     return out;
+  },
+
+  /**
+   * The edges `untested` follows. In this language a mention already IS an
+   * import statement and nothing else, so the two capabilities are one rule:
+   * called as a method, never detached.
+   */
+  imports(text, path, opts = {}) {
+    return this.mentions(text, path, opts);
   },
 
   /**

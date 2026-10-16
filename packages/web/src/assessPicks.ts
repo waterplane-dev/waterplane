@@ -75,6 +75,10 @@ export interface AssessPicks {
    * at a picture would be the same delete, one field along.
    */
   writeNames: boolean;
+  /** Split ids approved (`AssessChoices.splits`) — a slot check's other
+   *  tickable card. Optional: absent on a run that proposed none. There is no
+   *  field for a conflict, which is words and never a choice. */
+  splits?: string[];
 }
 
 /**
@@ -92,6 +96,7 @@ const copy = (p: AssessPicks): AssessPicks => ({
   rejected: [...p.rejected],
   pinRanks: p.pinRanks === true,
   writeNames: p.writeNames === true,
+  ...(p.splits ? { splits: [...p.splits] } : {}),
 });
 
 /** What was ticked on this run, or `null` if nothing has been. `null` rather

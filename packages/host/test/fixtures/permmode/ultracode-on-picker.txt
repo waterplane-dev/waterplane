@@ -1,0 +1,30 @@
+
+ ▐▛███▛█▄╱✦  Claude Code v2.1.293
+▝▜██████▘    Opus 5.5 with high effort · Claude Max
+ ▝▝   ▝▝     /tmp/wp-scratch
+
+
+❯ Reply with the single word hi. Do not use tools.
+
+⏺ hi
+
+✻ Crunched for 1s · done 10:50 PM
+
+❯ /effort ultracode on
+  ⎿  Ultracode on (this session only): dynamic workflows on every task. Effort stays high.
+
+❯ /effort
+  ⎿  Ultracode off. Effort stays high.
+
+❯ /effort
+  ⎿  Ultracode on (this session only): dynamic workflows on every task. Effort stays high.
+
+
+
+
+                                                                      ● high · ultracode · /effort
+──────────────────────────────────────────────────────────────────────────────────────── ultracode ─
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  [CAVEMAN]
+  ⏸ manual mode on · ← 3 agents

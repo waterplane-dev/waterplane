@@ -54,9 +54,10 @@ import {
   type Plotted, type StackInput,
 } from "./repoHealthPlot";
 import {
-  areaRowWords, areaSpreadWords, axisDayWords, pointReadoutWords, rankSentence, rankChipWords, kpiMeaning, scrubHintWords,
-  seriesValueWords, slopeWords, stackReadoutWords, tileAbsentWords,
+  areaRowWords, areaSpreadWords, axisDayWords, pointReadoutWords, rankSentence, rankChipWords, kpiMeaning,
+  seriesValueWords, slopeWords, stackReadoutWords, tileAbsentWords, variantHidesChart, variantWords,
 } from "./repoHealthWords";
+import { ScrubHint } from "./kit/chart/ScrubHint";
 import { weightStackWords } from "./repoHealthStackWords";
 import { SLOT } from "./kit/chart/TokenComposition";
 import { HintChip } from "./HintChip";
@@ -358,10 +359,13 @@ function Slope({ slope }: { slope: RepoHealthPlotSeries["reading"]["slope"] }) {
  * chart module that cannot reach a send path cannot become one that applies
  * itself.
  */
-export function SeriesTile({ s, width, actions }: {
+export function SeriesTile({ s, width, actions, means }: {
   s: RepoHealthPlotSeries;
   width: number;
   actions?: ReactNode;
+  /** A repo's OWN reading: its declared sentence stands where waterplane's
+   *  catalog meaning and `?` would, since the catalog knows nothing about it. */
+  means?: string;
 }) {
   // The INDEX the crosshair is on, resolved against `s.points` on the same
   // render the ring is drawn from — see `SeriesSpark`'s `onPick`.
@@ -372,8 +376,11 @@ export function SeriesTile({ s, width, actions }: {
   // whether a curve exists WITHOUT a second geometry pass — and the readout
   // line below is gated on the same fact. A hint inviting a drag across a
   // chart that was never drawn is an invitation to touch nothing.
-  const drawn = width > 0 && readings >= MIN_READINGS;
-  const absent = tileAbsentWords({
+  // A reading the repo DISABLED says so where its curve would be, and draws
+  // none: a chart under "left out of the index" invites reading it as an input.
+  const variant = s.variant ? variantWords(s.variant) : null;
+  const drawn = width > 0 && readings >= MIN_READINGS && !variantHidesChart(s.variant);
+  const absent = variantHidesChart(s.variant) ? null : tileAbsentWords({
     absent: s.absent,
     readings,
     minToDraw: MIN_READINGS,
@@ -383,7 +390,7 @@ export function SeriesTile({ s, width, actions }: {
   // chip has nothing honest to say.
   const chip = rankChipWords(s.reading);
   const reading = chip ? null : rankSentence(s.reading);
-  const meaning = kpiMeaning(s.key);
+  const meaning = means ?? kpiMeaning(s.key);
   return (
     <li className="rh-tile">
       {/* Hierarchy, top down: WHAT it is (label + `?`, then one plain line),
@@ -392,9 +399,18 @@ export function SeriesTile({ s, width, actions }: {
       <div className="rh-tile-head">
         {/* The chip sits INSIDE the label, not after it, so it reads as
             belonging to the name and not to anything at the far right. */}
-        <span className="rh-tile-label">{s.label} <HintChip id={hintOf(s.key)} of={s.label} /></span>
+        <span className="rh-tile-label">{s.label}{means === undefined ? <> <HintChip id={hintOf(s.key)} of={s.label} /></> : null}</span>
       </div>
       {meaning ? <div className="rh-tile-mean">{meaning}</div> : null}
+      {/* The repo's say over this reading, ON its tile, attributed to the repo
+          — once here, never as a badge. */}
+      {variant ? (
+        <div className="rh-tile-variant">
+          <div>{variant.lead}</div>
+          {variant.why ? <div>{variant.why}</div> : null}
+          {variant.absent ? <div>{variant.absent}</div> : null}
+        </div>
+      ) : null}
       <div className="rh-tile-valrow">
         <span className="rh-tile-val">{seriesValueWords(s.last, s.unit)}</span>
         <Slope slope={s.reading.slope} />
@@ -409,7 +425,7 @@ export function SeriesTile({ s, width, actions }: {
           across a curve does not shuffle the lines and the send button under
           it up and down. Before anything is touched it says how to. */}
       {drawn ? (
-        <div className="rh-scrub">{pointReadoutWords(picked, s.unit) ?? scrubHintWords()}</div>
+        <div className="rh-scrub">{pointReadoutWords(picked, s.unit) ?? <ScrubHint />}</div>
       ) : null}
       {/* The absence, where there is one, sits where the curve would have been
           — never a blank strip, and never a dimmed anything. */}
@@ -543,7 +559,7 @@ export function StackChart({ inputs, points, unit, totalLabel, label, width, cap
         <XAxis points={points} w={plotW} y={STACK_H + TICK_BASELINE} gutter={gutter} />
         {at ? <Crosshair at={at} h={STACK_H} gutter={gutter} /> : null}
       </svg>
-      <div className="rh-scrub">{readout ?? scrubHintWords()}</div>
+      <div className="rh-scrub">{readout ?? <ScrubHint />}</div>
       <ul className="rh-legend">
         {g.bands.map((b) => (
           <li key={b.key}>

@@ -16,7 +16,7 @@ while they read your replies. Design for a small touch screen first.
 mkdir -p .claude/outbox && cp index.html .claude/outbox/{{name}}.html
 ```
 
-That is the one configured build (`{{state}}/builds.json`, "Publish page"). It copies the page
+That is the one configured build (`{{shared}}/builds.json`, "Publish page"). It copies the page
 to `.claude/outbox/{{name}}.html`, which is where the phone's gallery opens it. Run it after every
 change the person should see.
 
@@ -35,6 +35,7 @@ change the person should see.
 - **`.claude/outbox/`** is where anything a human should LOOK at goes: this page, screenshots,
   reports. A new file there notifies the phone. Name a file by its full path when you mention it.
 - **`.claude/inbox/`** holds images uploaded from the phone; prompts reference them by path.
-- **`{{state}}/`** is per-repo daemon state (builds, backlog). Don't hand-edit.
+- **`{{state}}/`** is per-repo daemon state (backlog, this desktop's own build overrides), gitignored. Don't hand-edit.
+- **`{{shared}}/builds.json`** is the phone's build buttons, committed so every checkout gets them.
 
 All three are gitignored. Prefer writing a file over printing a wall of terminal output.

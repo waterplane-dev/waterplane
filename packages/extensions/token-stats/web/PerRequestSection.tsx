@@ -14,7 +14,7 @@
  */
 import { useCallback, useMemo, useRef, useState } from "react";
 import { fmtCount, fmtUsd, type TokenStatsDoc } from "@waterplane/shared";
-import { SERIES, SLOT, dayTicks, makeDayPlot, stepPath } from "@waterplane/kit";
+import { ScrubHint, SERIES, SLOT, dayTicks, makeDayPlot, stepPath } from "@waterplane/kit";
 import {
   clipRuns, hasRepoDays, PER_REQ_DAYS, PER_REQ_MIN, repoPerRequest, reqDays, rollingPerRequest, unpricedIn,
   type ReqPoint,
@@ -36,10 +36,13 @@ function dayMs(day: string): number {
 const fmtDate = (t: number) => new Date(t).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 
 /** The section body. `from`/`to` are the Over-time box's window as day keys. */
-export function PerRequestSection({ doc, from, to, width, table }: {
+export function PerRequestSection({ doc, from, to, width, table, compare = false }: {
   doc: TokenStatsDoc;
   from: string;
   to: string;
+  /** The repo table compares `[from, to]` with the equally long run of days before it, instead of
+   *  the last 7 days against the 7 before — the token sheet's span filter reaching it. */
+  compare?: boolean;
   width: number;
   /** The values half: the line as rows instead of pixels. */
   table: boolean;
@@ -57,7 +60,7 @@ export function PerRequestSection({ doc, from, to, width, table }: {
     () => (repo ? clipRuns(rollingPerRequest(reqDays(doc.days, repo)), lo, hi) : []),
     [doc, repo, lo, hi],
   );
-  const repos = useMemo(() => repoPerRequest(doc.days, doc.repos, Date.now()), [doc]);
+  const repos = useMemo(() => repoPerRequest(doc.days, doc.repos, Date.now(), undefined, compare ? { from, to } : undefined), [doc, compare, from, to]);
   const unpriced = useMemo(() => unpricedIn(allRows, from, to), [allRows, from, to]);
   // The dearest few first; the rest behind one tap, and a drawn repo is never
   // the one row hidden.
@@ -97,7 +100,7 @@ export function PerRequestSection({ doc, from, to, width, table }: {
       </details>
 
       <div className="section section-head">
-        <span>By repo <span className="section-hint">· last {PER_REQ_DAYS} days against the {PER_REQ_DAYS} before</span></span>
+        <span>By repo <span className="section-hint">· {compare ? "this span against as many days before it" : <>last {PER_REQ_DAYS} days against the {PER_REQ_DAYS} before</>}</span></span>
       </div>
       {repos.rows.length === 0
         ? <div className="empty ctx-note">No repo has {PER_REQ_MIN} priced requests on record yet.</div>
@@ -109,7 +112,7 @@ export function PerRequestSection({ doc, from, to, width, table }: {
           </div>
           <div className="ts-perreq">
             <div className="ts-perreq-row ts-perreq-head">
-              <span>repo</span><span>7 days</span><span>7 before</span><span>change</span><span>all time</span>
+              <span>repo</span><span>{compare ? "span" : "7 days"}</span><span>{compare ? "before" : "7 before"}</span><span>change</span><span>all time</span>
             </div>
             {shown.map((r) => (
               <button key={r.key} type="button"
@@ -204,7 +207,7 @@ function PerRequestChart({ all, mine, repoLabel, lo, hi, width }: {
       </div>
       <div className="ctx-readout">
         {hover == null
-          ? "drag across the chart to read a value"
+          ? <ScrubHint />
           : `${fmtDate(hover)} · ${ha ? `${fmtUsd(ha.v)} per request (${fmtCount(ha.priced)} in ${PER_REQ_DAYS} days)` : "too few requests for a price"}${
               repoLabel ? ` · ${repoLabel} ${hm ? fmtUsd(hm.v) : "–"}` : ""}`}
       </div>

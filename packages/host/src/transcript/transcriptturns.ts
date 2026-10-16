@@ -1,7 +1,7 @@
 /** Turns that are not in the log (screen commands, queued prompts), merged in; the history fallback. Moved from transcript.ts. */
 import type { HistoryEntry, TranscriptBlock, TranscriptDoc, TranscriptTurn } from "@waterplane/shared";
 import { squash } from "../echo.js";
-import { TEXT_CAP, oneLine } from "@waterplane/shared";
+import { TEXT_CAP, answeredOnlyInCli, oneLine } from "@waterplane/shared";
 import { localCommandOf, promptOf, queuedPromptOf } from "./transcriptlog.js";
 import { foldRepaints, scrollHintTrimmed, sliceToCommand, trimTuiChrome } from "./transcriptscreen.js";
 
@@ -14,6 +14,12 @@ import { foldRepaints, scrollHintTrimmed, sliceToCommand, trimTuiChrome } from "
  * never happened, while the terminal one swipe away showed both. waterplane's own
  * per-turn PTY capture (`HistoryEntry.output`) is the only record of it, and
  * this is where that record gets to be part of the document.
+ *
+ * …as a ROW, not as its answer, for `/btw` itself: typed into a running turn
+ * (its whole purpose) the capture is that turn's screen with the overlay on it,
+ * and carving one out of the other kept breaking. The row stays — the reader
+ * says where the answer is and opens the CLI (`answeredOnlyInCli`); commands
+ * typed into an idle session keep their captured answer.
  *
  * Only COMMANDS, and only ones the log does not already carry: a prompt reaches
  * the log by definition, and a command the log DID write is already a `"log"`
@@ -45,7 +51,9 @@ export function screenCommandTurns(entries: HistoryEntry[], logged: TranscriptTu
       !t.local && (t.sentAt ?? Infinity) <= e.sentAt && (t.endedAt ?? 0) > e.sentAt);
     const echoed = !!e.output && e.output.split("\n").some((l) => l.trim().startsWith(head));
     const own = !midTurn || echoed;
-    const cut = e.output && own ? sliceToCommand(e.output, text) : "";
+    // `/btw`: a row with no body, by decision rather than by miss — the reader
+    // says the answer is in the CLI and opens it (`answeredOnlyInCli`).
+    const cut = e.output && own && !answeredOnlyInCli(text) ? sliceToCommand(e.output, text) : "";
     const body = cut ? trimTuiChrome(foldRepaints(cut, text)) : "";
     // Asked of the CUT capture, not of `body`: the hint is exactly what `body`
     // has had removed, so reading it back off the trimmed text finds nothing.

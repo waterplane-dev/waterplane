@@ -27,6 +27,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
 import { E, LS, SLUG, rootEnv } from "./lib-brand.mjs";
+import { waitForHost } from "./lib-e2e.mjs";
 
 const PORT = 8852;
 const ROOT = mkdtempSync(join(tmpdir(), `${SLUG}-settings-`));
@@ -49,7 +50,7 @@ function boot() {
 const stop = async () => { host?.kill(); await sleep(700); };
 
 boot();
-await sleep(900);
+await waitForHost(PORT);
 
 /** One connected client. Keeps every settings frame it was sent, in order. */
 async function connect(label) {
@@ -130,7 +131,7 @@ a.close(); b.close(); fresh.close(); fresh2.close();
 // constantly. This is the whole reason the store is on disk.
 await stop();
 boot();
-await sleep(1000);
+await waitForHost(PORT);
 const after = await connect("E");
 check(after.doc?.[SNIPPETS]?.value === v2, "settings survive a host restart");
 check(after.doc?.[SNIPPETS]?.ts === 2000, "…including the timestamp that decides who wins next");

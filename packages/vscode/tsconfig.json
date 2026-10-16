@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "declaration": false,
+    "sourceMap": false,
+    "lib": ["ES2023"],
+    "types": ["node", "vscode"],
+    "typeRoots": ["./node_modules/@types"],
+    "allowImportingTsExtensions": true,
+    "paths": { "@waterplane/shared": ["../shared/src/index.ts"] }
+  },
+  "include": ["src"]
+}

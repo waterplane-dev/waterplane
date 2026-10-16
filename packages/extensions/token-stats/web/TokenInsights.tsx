@@ -15,14 +15,14 @@
  */
 import { useState, type ReactNode } from "react";
 import { Lightbulb, SearchCheck, BarChart3 } from "lucide-react";
-import { fmtCount, fmtUsd, tokenTotal, type TokenConvo } from "@waterplane/shared";
+import { agentModelInsight, fmtCount, fmtUsd, tokenTotal, type TokenConvo } from "@waterplane/shared";
 import type { Insight } from "./statsInsights.ts";
 
 export function InsightsPanel({ items }: { items: Insight[] }) {
   if (!items.length) return null;
   return (
     <div className="ts-insights">
-      <div className="ts-insights-head"><Lightbulb size={14} /> What drives the cost</div>
+      <div className="ts-insights-head"><Lightbulb size={14} /> What drives the cost <ScopeTag muted>whole record · not cut to the span</ScopeTag></div>
       {items.map((i) => (
         <div key={i.id} className="ts-insight">
           <div className="ts-insight-head">{i.head}</div>
@@ -48,13 +48,17 @@ function span(c: TokenConvo): string {
 /** Rows shown before *show all*: five is a phone screen of them. */
 const TOP_SHOWN = 5;
 
-export function TopConvos({ rows, total, nameOf, onExplain, isLive, onOpen }: {
+export function TopConvos({ rows, total, pts, nameOf, onExplain, isLive, onOpen }: {
   /** Ranked by cost on the host; drawn in that order and IN MONEY whatever the
    *  screen's metric — a list called "costliest" printing token counts that
    *  do not descend reads as a sorting bug. Tokens ride in the facts line. */
   rows: TokenConvo[];
   /** The corpus's list-price total, for each row's share. */
   total: number;
+  /** A row's dollars as weekly points (`ptsText` over the screen's ONE calibration), or null
+   *  where it refused or the row is not this week's to price — then the clause is absent,
+   *  never a zero. Handed the row, because the rows are all-time and the rate is not. */
+  pts?: (usd: number, c: TokenConvo) => string | null;
   /** A title for a conversation this phone knows (live or recent), by id. */
   nameOf?: (id: string) => string | undefined;
   /** Start a new session explaining this conversation's cost. Absent in a
@@ -75,6 +79,8 @@ export function TopConvos({ rows, total, nameOf, onExplain, isLive, onOpen }: {
         const title = nameOf?.(c.id) ?? `${c.label} · ${c.id.slice(0, 8)}`;
         const agentShare = tokenTotal(c.totals) > 0 ? Math.round((tokenTotal(c.agentTotals) / tokenTotal(c.totals)) * 100) : 0;
         const share = total > 0 ? v / total : 0;
+        const p = pts?.(v, c) ?? null;
+        const insight = agentModelInsight(c);
         return (
           <div key={c.id} className="ts-convo">
             <div className="ts-barhead">
@@ -88,7 +94,9 @@ export function TopConvos({ rows, total, nameOf, onExplain, isLive, onOpen }: {
               {c.label} · {span(c)} · {fmtCount(tokenTotal(c.totals))} tokens
               {c.agents > 0 && <> · {c.agents} subagents ({agentShare}% of it)</>}
               {c.coldUsd ? <> · {fmtUsd(c.coldUsd)} re-caching after breaks</> : null}
+              {p ? <> · {p}</> : null}
             </div>
+            {insight && <div className="ts-convo-facts">{insight}</div>}
             {onExplain && (
               <div className="ts-convo-acts">
                 <button className="key" onClick={() => onExplain(c, title)}>

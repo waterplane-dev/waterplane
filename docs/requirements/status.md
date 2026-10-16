@@ -37,3 +37,11 @@ Handled items stop showing as waiting and no longer display red 'ask you' marker
 Connection status icon accurately represents the current connection state and is never misleading.
 - asked: 2026-10-03
 
+### R-status-009 · requested
+The status output shows more detail, so users see more information there.
+- asked: 2026-10-07
+
+### R-status-010 · requested
+The done status shown for an item matches its actual completion state.
+- asked: 2026-10-08
+

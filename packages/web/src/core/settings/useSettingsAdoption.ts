@@ -47,6 +47,6 @@ export function useSettingsAdoption(ctx: SettingsAdoptionCtx) {
         default: break;
       }
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only install; `connRef` is a ref and both setters are App's useState setters
   }, []);
 }

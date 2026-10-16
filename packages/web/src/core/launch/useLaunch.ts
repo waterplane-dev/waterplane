@@ -43,6 +43,12 @@ import type { QueueApi } from "../queue/useQueue.ts";
 import { launchSheets, type AskedBudget, type LaunchSheets } from "./LaunchSheets.tsx";
 import { pendingLaneId } from "../queue/logic.ts";
 import { prefRef } from "../prefs.ts";
+import { baseName } from "../../format.ts";
+import { pickShell, type ReturnTo } from "./shellTab.ts";
+import { rememberShell, shellTabs } from "./shellReturn.ts";
+
+/** What a shell tap says on a desktop whose host lists no shell backend. */
+const SHELL_CANT = "This desktop can’t open a shell — it needs an update.";
 
 /** How long a reset's confirm waits for the worktree's drift before it opens
  *  without that line (`resetFileDrift`). */
@@ -413,7 +419,7 @@ export function useLaunch(deps: LaunchDeps) {
    */
   function openShell(t: RepoTarget): string | null {
     const sh = shellBackend(backendsRef.current);
-    if (!sh) { showToast("This desktop can’t open a shell — it needs an update."); return null; }
+    if (!sh) { showToast(SHELL_CANT); return null; }
     track("action:shell.new");
     return openCwd(t.worktreePath, `shell · ${repoBranchLabel(t)}`, false, undefined, { backend: sh.id });
   }
@@ -425,9 +431,52 @@ export function useLaunch(deps: LaunchDeps) {
    */
   function openCompanionShell(s: SessionInfo): string | null {
     const sh = shellBackend(backendsRef.current);
-    if (!sh) { showToast("This desktop can’t open a shell — it needs an update."); return null; }
+    if (!sh) { showToast(SHELL_CANT); return null; }
     track("action:shell.companion");
     return openCwd(s.cwd, `shell · ${s.title}`, false, undefined, { backend: sh.id }, undefined, undefined, s.id);
+  }
+  /** Why this desktop cannot open a shell, or null — the sentence a sheet draws
+   *  where its shell button would be (`Unavailable`), never a grey button. */
+  function shellCant(): string | null {
+    return shellBackend(backendsRef.current) ? null : SHELL_CANT;
+  }
+  /**
+   * `launch.focusShell` (`CoreApi`): go to `key`'s shell tab — the one it went
+   * to last while that is alive, else a running plain shell in `cwd`, else a
+   * fresh one through `openCwd` with the shell as an OVERRIDE (`openShell`'s
+   * path: nothing asks which model). `back` registers the one-tap return the
+   * shell's screen draws (`shellTab.ts`, `ReturnChip.tsx`). Returns the id of
+   * the shell it went to — a pending open's `pending:<createAck>` included, which
+   * `compose.seedDraft` takes (`adoptPendingSession` carries that draft over) —
+   * so a caller that owes the shell words can seed them. Null, with a toast,
+   * when this desktop has no shell.
+   */
+  function focusShell(key: string, opts: { cwd?: string; title?: string; back?: ReturnTo } = {}): string | null {
+    const sh = shellBackend(backendsRef.current);
+    if (!sh) { showToast(SHELL_CANT); return null; }
+    const c = core();
+    const cwd = opts.cwd || deps.root;
+    const pick = pickShell({
+      remembered: shellTabs.get()[key] ?? null, sessions: c.world.sessions, cwd,
+      isShell: (b) => isShellBackend(backendsRef.current, b),
+      pendingAlive: (ack) => c.queue.entries.some((e) => e.ackId === ack && e.status !== "failed"),
+    });
+    let id: string | null = null;
+    if (pick.do === "attach") {
+      const s = c.world.sessions.find((x) => x.id === pick.id)!;
+      track("action:shell.focus");
+      c.nav.attach(s);
+      id = s.id;
+    } else if (pick.do === "enter") {
+      enterPending(pick.ack);
+      id = pendingLaneId(pick.ack);
+    } else {
+      track("action:shell.new");
+      id = openCwd(cwd, opts.title || `shell · ${baseName(cwd)}`, false, undefined, { backend: sh.id });
+    }
+    if (!id) return null;
+    rememberShell(key, id, opts.back);
+    return id;
   }
   /** Open a session in `cwd`. Returns the PENDING screen's session id it put
    *  on screen (`pending:<createAck>`), or null when the tap was deferred to a
@@ -688,7 +737,7 @@ export function useLaunch(deps: LaunchDeps) {
   return {
     launch, setLaunch, setLaunchOpt, pickBackend, wireLaunch,
     sessionCan, sessionCant, reopenCant, refreshRepos,
-    openRepo, openShell, openCompanionShell, openCwd, runForkRequest, startSessionWithPrompt, relaunch, setBranchPick,
+    openRepo, openShell, openCompanionShell, focusShell, shellCant, openCwd, runForkRequest, startSessionWithPrompt, relaunch, setBranchPick,
     sheets,
   };
 }

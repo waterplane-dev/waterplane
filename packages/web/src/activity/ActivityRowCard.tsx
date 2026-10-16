@@ -14,7 +14,8 @@ import type { OutboxEntry } from "../outbox";
 import { SessionName } from "../SessionName";
 import { CantInline, Unavailable } from "../Unavailable";
 import { track } from "../usage";
-import { ACTION_ICON, DELIVERY_TEXT, ICON, KIND_ICON, STATE_ICON, bytes, inWords } from "./activityLabels";
+import { ACTION_ICON, DELIVERY_TEXT, ICON, KIND_ICON, STATE_ICON, inWords } from "./activityLabels";
+import { bytes } from "./activityPullRow";
 import type { ReviewMarks } from "./activitySheetTypes";
 
 /**
@@ -34,7 +35,9 @@ import type { ReviewMarks } from "./activitySheetTypes";
  */
 function ActionButton({ a, onPress }: { a: ActivityAction; onPress: () => void }) {
   const Icon = ACTION_ICON[a.id];
-  const cls = `key${a.danger ? " danger" : ""}${a.primary ? " primary" : ""}`;
+  // `primary` decides ORDER (it leads the strip), never paint: the solid accent fill is a
+  // sheet's one primary verb, and a list of rows each with its own read as twenty of them.
+  const cls = `key${a.danger ? " danger" : ""}`;
   // No verb here asks first: *run it now* into a busy checkout was the last
   // one, and it is the manual override — one tap, its consequence in `a.note`.
   return (
@@ -180,7 +183,7 @@ export function Row({ row, now, sessions, repos, pick, outbox, online, review, r
         ) : null}
         {row.lastRun ? (
           <span className={`act-last${row.lastRun.ok ? "" : " act-last-bad"}`}>
-            last run {ago(row.lastRun.at)}{row.lastRun.late ? " (late)" : ""} — {row.lastRun.detail}
+            last run {ago(row.lastRun.at)}{row.lastRun.late ? " (late)" : ""}{row.lastRun.detail ? ` — ${row.lastRun.detail}` : ""}
           </span>
         ) : null}
         {row.attempts > 1 ? <span className="act-tries">{row.attempts} attempts</span> : null}
@@ -255,8 +258,13 @@ export function Row({ row, now, sessions, repos, pick, outbox, online, review, r
       ) : null}
 
       <div className="act-acts">
-        {primary ? <ActionButton a={primary} onPress={() => press(primary)} /> : null}
-        {shown.map((a) => <ActionButton key={a.id} a={a} onPress={() => press(a)} />)}
+        {/* The verbs wrap among themselves; "more" is not one of them. In the same wrapping
+            line, a long verb ("check whether it is already done") left it alone on a row of
+            its own at 390 px, so it sits outside the group, at the end of the first line. */}
+        <span className="act-acts-verbs">
+          {primary ? <ActionButton a={primary} onPress={() => press(primary)} /> : null}
+          {shown.map((a) => <ActionButton key={a.id} a={a} onPress={() => press(a)} />)}
+        </span>
         {/* "more" covers the rest of the live controls AND the reasons — a row
             whose only news is what it cannot do keeps that behind one tap like
             everything else, unless there is nothing else at all. */}

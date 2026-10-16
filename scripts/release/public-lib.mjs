@@ -244,6 +244,10 @@ export function resolveRel(dir, target) {
   return out.join("/");
 }
 
+/** An `<a …>` or `<img …>` tag, and the `href="…"`/`src="…"` targets inside one. */
+const HTML_LINK_TAG_RE = /<(?:a|img)\s[^>]*>/gi;
+const HTML_TARGET_RE = /(\b(?:href|src)=")([^"]+)"/gi;
+
 const stripFences = (md) => md.replace(/^(```|~~~)[^\n]*\n[\s\S]*?^\1[^\n]*$/gm, (m) => m.replace(/[^\n]/g, " "));
 
 /**
@@ -277,6 +281,8 @@ export function checkLinks(path, md, { included, tracked, includedDirs }) {
     const prose = line.replace(/`[^`]*`/g, (m) => " ".repeat(m.length));
     // Every `](target)`: `[![alt](a.gif)](b.mp4)` carries two, and `[text](t)` only sees the first.
     for (const m of prose.matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) consider(m[1], "link", i);
+    // …and the sized HTML spelling of a docs gif, `<a href="b.mp4"><img src="a.gif" width=…></a>`.
+    for (const tag of prose.matchAll(HTML_LINK_TAG_RE)) for (const m of tag[0].matchAll(HTML_TARGET_RE)) consider(m[2], "link", i);
     const ref = /^\s{0,3}\[[^\]]+\]:\s*(\S+)/.exec(prose);
     if (ref) consider(ref[1], "link", i);
     for (const m of line.matchAll(/`([\w@.-]+(?:\/[\w@.-]+)+\.md)`/g)) consider(m[1], "mention", i);
@@ -356,8 +362,9 @@ export function rewriteHostedLinks(path, md, host) {
     if (fenced[i] !== line) return line; // inside a fence
     const ref = /^(\s{0,3}\[[^\]]+\]:\s*)(\S+)(.*)$/.exec(line);
     if (ref) { const u = target(ref[2]); return u ? ref[1] + u + ref[3] : line; }
-    return line.replace(/(`[^`]*`)|\]\(([^)\s]+)/g, (m, code, t) => {
+    return line.replace(/(`[^`]*`)|\]\(([^)\s]+)|<(?:a|img)\s[^>]*>/gi, (m, code, t) => {
       if (code) return code;
+      if (t === undefined) return m.replace(HTML_TARGET_RE, (a, pre, h) => { const u = target(h); return u ? `${pre}${u}"` : a; });
       const u = target(t);
       return u ? `](${u}` : m;
     });
@@ -390,6 +397,25 @@ export function groupPaths(paths) {
 export const topDir = (p) => (p.includes("/") ? p.slice(0, p.indexOf("/")) : "(root)");
 
 /**
+ * What CI's "The tarball is this version, with its shrinkwrap" step (`.github/workflows/npm-publish.yml`)
+ * asserts of `dist-release/<slug>-<version>.tgz`, as a list of sentences (empty = it would pass):
+ * `listing` is the tarball's member names (`tar -tzf`), `pkgJson` the text of `package/package.json`
+ * (null = unreadable). Pure; `scripts/release/check-npm-tarball.mjs` gathers the facts.
+ */
+export function npmTarballProblems({ slug, version, listing, pkgJson }) {
+  const tgz = `dist-release/${slug}-${version}.tgz`;
+  const out = [];
+  let got = null;
+  try { const p = JSON.parse(pkgJson ?? ""); got = `${p.name}@${p.version}`; } catch { /* reported below */ }
+  if (got === null) out.push(`${tgz}: package/package.json is missing or unreadable`);
+  else if (got !== `${slug}@${version}`) out.push(`${tgz} is ${got}, not ${slug}@${version}`);
+  if (!listing.includes("package/npm-shrinkwrap.json")) {
+    out.push(`${tgz} has no package/npm-shrinkwrap.json: npm i -g would re-resolve every transitive dependency`);
+  }
+  return out;
+}
+
+/**
  * What `scripts/verify-public-tree.mjs` runs inside the copied public tree, in order. `stop`: a
  * failure there ends the run (nothing after an install or a build means anything); the others all
  * run so one report lists every failure. `npm ci` is the copy's OWN install (its package.json,
@@ -400,6 +426,11 @@ export function verifySteps({ e2e = null } = {}) {
   const steps = [
     { cmd: "npm", args: ["ci"], stop: true },
     { cmd: "npm", args: ["run", "build"], stop: true },
+    // The step npm-publish.yml runs on the release tag, here BEFORE the release is undrafted and that
+    // workflow starts: on the clean copy, right after the build, as CI has it (build.mjs refuses a
+    // dirty tree). Then the same two assertions CI makes of the .tgz it would publish.
+    { cmd: "npm", args: ["run", "release:build", "--", "--unsigned"], stop: true },
+    { cmd: "node", args: ["scripts/release/check-npm-tarball.mjs"], stop: false },
     { cmd: "npm", args: ["run", "lint"], stop: false },
     { cmd: "npm", args: ["run", "test:unit"], stop: false },
     { cmd: "npm", args: ["run", "test:host"], stop: false },

@@ -25,20 +25,23 @@ const SRC = join(ROOT, "packages", "web", "src");
 
 const SURFACE = [
   "CHAIN_EMPTY:value", "CHAIN_NOTE:value", "CHAIN_RECENT_MS:value", "DEVICE_TZ:value", "EMPTY_PROMPT_BLOCKER:value",
-  "GRACES:value", "GUARD_LABEL:value", "LEADS:value", "PCT_LEFTS:value", "QUEUES_ITEM_RUN_NOTE:value",
+  "GRACES:value", "GUARD_LABEL:value", "LEADS:value", "LEAD_MAX_MIN:value", "PCT_LEFTS:value", "QUEUES_ITEM_RUN_NOTE:value",
   "RETIME_NOW_SEG:value", "SEND_DRAFT:value", "SKIP_QUEUE_BUSY_NOTE:value", "SendIntent:type", "SendNames:type",
   "SendResume:type", "SendSeed:type", "SendTarget:type", "SendWhen:type", "WHEN_EDIT_BUILD:value",
   "WHEN_EDIT_RUNNING:value", "WHEN_EDIT_SWEEP:value", "WHEN_PATCH_OFFLINE:value", "WINDOW_LABEL:value",
   "WhenRoute:type", "afterWords:value", "anchorWindowOf:value", "atClock:value", "budgetHeldIds:value",
   "budgetOfTarget:value", "busyInCheckout:value", "chainCandidates:value", "chainOkWords:value",
-  "clockSessionNote:value", "fmtWhen:value", "guardWindowOf:value", "guardWords:value", "hoursWords:value",
-  "inWords:value", "inboxRefs:value", "isBudgetHeld:value", "offlineLabel:value", "onceIn:value",
+  "clockSessionNote:value", "flagWhenDoneOf:value", "flagWhenDoneOffered:value", "fmtWhen:value", "guardWindowOf:value", "guardWords:value", "hoursWords:value",
+  "inWords:value", "inboxRefs:value", "isBudgetHeld:value", "launchClause:value", "launchOfTarget:value",
+  "launchWords:value", "leadChoices:value", "leadLabel:value",
+  "leadOk:value", "leadWords:value", "offlineLabel:value", "onceIn:value",
   "pastBudgetConfirm:value", "pastBudgetLabel:value", "pastBudgetNote:value", "pastBudgetToast:value",
   "pctChoices:value", "pctOk:value", "pctWords:value", "previewOf:value", "quickTimes:value", "resumeWhen:value",
   "retimeBlocker:value", "retimeHeldWords:value", "retimeWhenLabel:value", "seedAfterRescue:value",
   "sendBlocker:value", "sendLabel:value", "sequentialMeans:value", "skipQueueNote:value", "targetWords:value",
   "toLocalInput:value", "whenPatchToast:value", "whenRoute:value", "whenWords:value", "windowIn:value",
-  "withBudget:value",
+  "withBudget:value", "withLaunch:value",
+  "withoutLaunch:value",
 ];
 
 test("P1: sendIntent.ts exports exactly its pinned surface, values and types alike", () => {

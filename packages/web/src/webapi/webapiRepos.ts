@@ -11,6 +11,9 @@ export const reposApi = {
       "/api/repo",
       { parent, name, setup: opts.setup !== false, description: opts.description },
     ),
+  /** `git clone` into a new folder under `parent`; the host refuses any URL but https/ssh, in words. */
+  cloneRepo: (parent: string, url: string, name?: string) =>
+    jpost<{ path?: string; branch?: string; warning?: string; error?: string }>("/api/clone", { parent, url, name: name || undefined }),
   /**
    * The first-app job (`host/onboardroutes.ts`, plan WP6). The plan is a read
    * and writes nothing; a refusal comes back as `ok:false` + `error` in words

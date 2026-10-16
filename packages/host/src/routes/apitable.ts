@@ -16,7 +16,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { OnboardManager } from "../onboard.js";
 import type { SetupWatcher } from "../setupwatch.js";
 import type { PeerStore } from "../peers/store.js";
-import type { PeerKind, RepoTarget } from "@waterplane/shared";
+import type { AppReadinessReport, PeerKind, RepoTarget } from "@waterplane/shared";
 import type { IntentManager } from "../intents/manager.js";
 import type { BacklogManager } from "../backlog.js";
 import type { PushManager } from "../push.js";
@@ -26,6 +26,7 @@ import type { UiStats } from "../uistats.js";
 import type { NetStats } from "../netstats.js";
 import type { TokenStatsStore } from "../tokenstats.js";
 import type { UsageLog } from "../usagelog.js";
+import type { UsageSourceRegistry } from "../usagesources.js";
 
 export interface ApiCtx {
   root: string;
@@ -36,15 +37,21 @@ export interface ApiCtx {
   /** The host's own setup sweep — repo listings read its verdicts, and the
    *  checklist routes write theirs back into it. */
   setup: SetupWatcher;
+  /** The health index cache (`healthwatch.ts`): `/api/repos` reads it, never runs the engine. */
+  health?: import("../healthwatch.js").HealthWatch;
   /** Sessions parked until their files arrive. An inbox POST is the event that
    *  most often opens one, and waiting up to a tick for it would be latency
    *  nobody asked for — so the upload route kicks the gate directly. */
   launches: { fileLanded(cwd: string): void };
+  /** The configured budget periods (an agent's `window` trigger may name one). */
+  periods?: () => readonly import("@waterplane/shared").BudgetPeriod[];
   /** Token usage across every conversation log on disk — the statistics
    *  screen's source (`tokenstats.ts`). */
   tokenStats: TokenStatsStore;
   /** The `/usage` readings this daemon has taken, kept (`usagelog.ts`). */
   usageLog: UsageLog;
+  /** The other sources' kept readings (`usagesourcelog.ts`), by source id. */
+  usageSources: Pick<UsageSourceRegistry, "history">;
   /** The checker's poll period, passed through so the history can say what
    *  a dense series would have looked like. */
   usagePollMs: number;
@@ -66,6 +73,9 @@ export interface ApiCtx {
    *  route (`agentintents.ts`) — the same `post` the phone's `intent.post`
    *  reaches, through the same `postClientDraft`. */
   intents: IntentManager;
+  /** The ack ledger, read-only here: `/api/health` says when its receipts stop
+   *  reaching the disk (`acks.ts`'s `lastWriteError`). */
+  acks?: { lastWriteError(): string | null };
   /** …and `backlog.add`, for the agent's backlog add (`addClientBacklogItem`,
    *  the same path the socket's `backlog.add` takes). */
   backlog: BacklogManager;
@@ -75,12 +85,18 @@ export interface ApiCtx {
   canManage?(kind: PeerKind): boolean;
   /** The first-app onboarding job (`onboard.ts`, `/api/onboard*`). */
   onboard?: OnboardManager;
+  /** Every Android app module across the repos, as facts (`apkcheck.ts`' `apkRepoFacts`) —
+   *  `GET /api/apps/readiness`. A closure because the build list and the auto-download rule
+   *  belong to their managers, which this table does not otherwise reach. */
+  appReadiness?(): Promise<AppReadinessReport>;
   /** A plugin's hook sink (`PluginRegistry.hook`): status + JSON body, possibly HELD. Never rejects. */
   pluginHook?(pluginId: string, payload: unknown): Promise<{ status: number; body: unknown }>;
   /** A plugin's own route (`api.route`, `PluginRegistry.route`): the runner, or null when nothing
    *  is served at `parts` for `method`. Never rejects. */
   pluginRoute?(pluginId: string, method: string, parts: readonly string[]):
     ((req: { query: Record<string, string>; body: unknown }) => Promise<{ status: number; body: unknown }>) | null;
+  /** A file a plugin offered (`api.offerFile`, `PluginRegistry.offeredFile`); null when gone. */
+  pluginFile?(pluginId: string, token: string): { file: string; name: string; size: number; mtime: number; token: string; delivered(): void } | null;
 }
 
 /** One request as a handler sees it. */

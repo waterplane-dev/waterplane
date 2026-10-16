@@ -11,6 +11,7 @@ import type { GalleryProps, Row } from "./galleryTypes";
 import { useGalleryOpen } from "./useGalleryOpen";
 import { useGalleryListing } from "./useGalleryListing";
 import { useGalleryViewer } from "./useGalleryViewer";
+import { useGalleryPick } from "./useGalleryPick";
 
 /**
  * Everything the gallery's three regions (bar, grid, viewer) read and call.
@@ -154,7 +155,8 @@ export function useGallery(props: GalleryProps) {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "ArrowRight") nav(1);
       else if (e.key === "ArrowLeft") nav(-1);
-      else if (e.key === "Escape") closeDoc();
+      // preventDefault: answered here, so `core/layout/escape.ts` adds no second Back.
+      else if (e.key === "Escape") { e.preventDefault(); closeDoc(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -183,6 +185,9 @@ export function useGallery(props: GalleryProps) {
     if (await removeInbox(f)) showFile(null);
   }
 
+  // Picking pictures to combine (`useGalleryPick`).
+  const pick = useGalleryPick({ onCombine: props.onCombine, singleRepo: lst.singleRepo, files, repoOf, urlFor });
+
   async function copy(p: string) {
     const ok = await copyText(p);
     setCopied(ok ? p : null);
@@ -193,6 +198,7 @@ export function useGallery(props: GalleryProps) {
     props, ...lst, ...vw, open, showFile, closeDoc, copied, note, badSrc, markBad, chipCls, busyMark,
     repoOf, urlFor, thumbFor, canFullRes, isInboxFile, markOf, pullOf, dlTarget, pullBadge,
     localUrl, mediaSrc, fileSrc, htmlLive, imgs, openIdx, nav, removeInbox, del, copy,
+    ...pick,
   };
 }
 

@@ -123,6 +123,14 @@ export interface SparkGeom {
  *  value, not a shape, and the tile prints the value anyway. */
 export const MIN_READINGS = 2;
 
+/** The two series the always-on weight stack is made of, by the tool's own
+ *  keys. Named here rather than matched on a label: a label is prose the tool
+ *  is free to reword, a key is its identifier. Read by both regions of
+ *  `Repo readings` (`SetupSheet.tsx`, `RepoHealthRegion.tsx`), so kept in this
+ *  leaf rather than in either of them. */
+export const CLAUDE_MD_KEY = "context.claudeMdChars";
+export const DESC_KEY = "context.descChars";
+
 /**
  * A series as a path inside a `w × h` box, x by reading index.
  *

@@ -31,7 +31,9 @@ interface NativeInstallPlugin {
   /** `distribution` and `self` are absent on a shell older than the dev/play
    *  split — read as today's full behaviour, never as `play`. */
   status(): Promise<{ supported?: boolean; canInstall?: boolean; silent?: boolean; allow?: string[];
-    distribution?: string; self?: string }>;
+    distribution?: string; self?: string; cleanAfterInstall?: boolean }>;
+  /** Absent on a shell older than the clean-up switch. */
+  setCleanAfterInstall?(o: { on: boolean }): Promise<void>;
   openSettings(): Promise<void>;
   setAllow(o: { packages: string[] }): Promise<void>;
   install(o: { id: string }): Promise<void>;
@@ -59,9 +61,9 @@ export function nativeInstallSupported(): boolean {
 /** What the phone allows right now, plus the list it is holding. Never throws:
  *  a bridge that answers nothing is a phone that installs nothing, which is the
  *  same sentence the browser gets. */
-export async function installStatus(): Promise<{ caps: InstallCaps; allow: string[] }> {
+export async function installStatus(): Promise<{ caps: InstallCaps; allow: string[]; cleanup: boolean | null }> {
   const p = plugin();
-  if (!p) return { caps: NO_INSTALL, allow: [] };
+  if (!p) return { caps: NO_INSTALL, allow: [], cleanup: null };
   try {
     const r = await p.status();
     return {
@@ -72,9 +74,12 @@ export async function installStatus(): Promise<{ caps: InstallCaps; allow: strin
         ...shellDistribution(r),
       },
       allow: Array.isArray(r?.allow) ? r.allow.filter((s) => typeof s === "string") : [],
+      // Null where the shell predates the switch: unknown, never "off".
+      cleanup: typeof r?.cleanAfterInstall === "boolean" && typeof p.setCleanAfterInstall === "function"
+        ? r.cleanAfterInstall : null,
     };
   } catch {
-    return { caps: NO_INSTALL, allow: [] };
+    return { caps: NO_INSTALL, allow: [], cleanup: null };
   }
 }
 
@@ -111,6 +116,17 @@ export async function openInstallSettings(): Promise<void> {
  */
 export async function pushInstallAllow(packages: string[]): Promise<void> {
   try { await plugin()?.setAllow({ packages }); } catch { /* the phone keeps the list it had */ }
+}
+
+/**
+ * Turn the clean-up after an install on or off. Held by the SHELL, not the
+ * page and not synced: it runs at the install's broadcast receiver, with the
+ * document asleep, and it is a question about this phone's storage.
+ */
+export async function setCleanAfterInstall(on: boolean): Promise<void> {
+  const p = plugin();
+  if (!p?.setCleanAfterInstall) throw new Error("this app build cannot do that yet");
+  await p.setCleanAfterInstall({ on });
 }
 
 /** Install this finished download now. The answer arrives on the row. */

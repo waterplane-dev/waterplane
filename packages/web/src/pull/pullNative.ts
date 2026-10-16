@@ -131,6 +131,16 @@ export async function pullSyncNative(this: PullManager, state?: NativePullState)
       // about work nobody did.
       patch.installAuto = typeof row.installAuto === "boolean" ? row.installAuto : undefined;
       patch.installSnoozedUntil = row.installSnoozedUntil || undefined;
+      patch.cleanedAt = row.cleanedAt || undefined;
+      patch.cleanedBytes = row.cleanedAt ? row.cleanedBytes || undefined : undefined;
+      patch.cleanNote = row.cleanNote || undefined;
+      // The clean-up removed the Downloads copy too (the shell cleared `where`):
+      // the row must stop pointing at a file it deleted.
+      if (row.cleanedAt && !row.where && rec.savedTo && rec.saveVia === "device") {
+        patch.savedTo = undefined;
+        patch.savedPresent = undefined;
+        patch.savedCheckedAt = undefined;
+      }
       if (row.where) {
         if (rec.savedTo !== row.where) {
           patch.savedTo = row.where;

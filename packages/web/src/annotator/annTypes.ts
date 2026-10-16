@@ -84,6 +84,7 @@ export interface AnnotatorProps {
   /** "Text only": the words the desktop read off this picture, as edited, sent
    *  INSTEAD of the picture (annOcr.ts). Absent ⇒ the verb is not offered. */
   onText?: (text: string) => void;
+  prompt?: { value: string; onChange: (next: string) => void }; // the session's own draft, when it is not on screen (AnnPrompt)
   onClose: () => void;
 }
 

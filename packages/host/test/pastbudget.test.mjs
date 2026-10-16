@@ -3,14 +3,14 @@
  *
  * The incident: the re-time sheet's bulk *run all 4 now, past the budget* sent
  * `intent.run` per row, `runNow` skips the WHOLE ladder, and four queued rows in
- * one repo (holdForHost, serial, smart pick on) started in parallel in one
+ * one repo (holdForHost, serial) started in parallel in one
  * worktree. The waiver lifts rung 2 and nothing else, so every test here is the
  * budget being over the ceiling (`budgetBlocked: () => true`) and some rung
  * BELOW it still doing its job.
  *
  * `freshSession` is DEFERRED — a row it starts stays `starting` until the test
  * releases it, because a running row is what `serial` and `hostBusy` are made
- * of. The harness is `pickhold.test.mjs`'s.
+ * of. The harness is `ladderpass.test.mjs`'s.
  *
  * The waiver is SCOPED: `waive()` stamps `{ until }`, the latest reset among
  * the ceilings `budgetOver()` reports tripped, and rung 2 honours it only
@@ -29,7 +29,7 @@ const { workRoutes } = await import("../dist/routes/work.js");
 const REPO = "/tmp/waterplane-pastbudget-repo";
 const OTHER = "/tmp/waterplane-pastbudget-other";
 
-function makeStore({ hold, slots = 3, answer, ...over } = {}) {
+function makeStore({ slots = 3, answer, ...over } = {}) {
   const root = mkdtempSync(join(tmpdir(), "waterplane-pastbudget-"));
   const state = {
     root, sessions: [], slots, live: 0,
@@ -39,8 +39,6 @@ function makeStore({ hold, slots = 3, answer, ...over } = {}) {
     over: true,
     /** Every executor call. */
     ran: [],
-    /** Every row `pickHold` was offered. */
-    asked: [],
     /** Resolvers for the fresh sessions still "running", by row id. */
     open: new Map(),
   };
@@ -51,7 +49,6 @@ function makeStore({ hold, slots = 3, answer, ...over } = {}) {
     repoSession: () => null,
     repoAnySession: () => false,
     autoSlotsFree: () => Math.max(0, state.slots - state.live),
-    reapAutoSession: () => null,
     revivedSessionFor: () => null,
     diedAtLimit: () => false,
     stopCount: () => 0,
@@ -80,7 +77,6 @@ function makeStore({ hold, slots = 3, answer, ...over } = {}) {
       assess: async () => ({ ok: true, detail: "x" }),
     },
     onChange: () => {},
-    ...(hold ? { pickHold: async (row) => { state.asked.push(row.id); return hold(row); } } : {}),
     ...over,
   });
   const done = () => { store.stop(); rmSync(root, { recursive: true, force: true }); };
@@ -112,7 +108,7 @@ async function fourWaived(opts) {
 }
 
 test("four waived rows in one checkout start ONE at a time — the waiver is not a fire", async () => {
-  const { store, state, done, release } = makeStore({ hold: () => null });
+  const { store, state, done, release } = makeStore();
   try {
     await store.reconcile();
     ["a", "b", "c", "d"].forEach((id, n) => store.post(item(id, { order: n })));
@@ -125,7 +121,6 @@ test("four waived rows in one checkout start ONE at a time — the waiver is not
     store.kick();
     await settle();
     assert.deepEqual(state.ran, ["a"], "one executor, not four");
-    assert.ok(state.asked.includes("a"), "the smart pick is still asked about a waived row");
     for (const id of ["b", "c", "d"]) {
       assert.equal(store.get(id).state, "blocked");
       assert.notEqual(store.get(id).blockReason, "budget", `${id} is held by a rung below the budget`);
@@ -289,23 +284,13 @@ test("waive refuses what it cannot be about, in words, and on:false is the undo"
 });
 
 test("case 1 WITHOUT holdForHost: serial alone still lets only the first go", async () => {
-  const { store, state, done } = await fourWaived({ hold: () => null, holdForHost: false });
+  const { store, state, done } = await fourWaived({ holdForHost: false });
   try {
     assert.deepEqual(state.ran, ["a"], "one executor, not four — `serial` is on every repo-target item");
     for (const id of ["b", "c", "d"]) {
       assert.equal(store.get(id).state, "blocked");
       assert.equal(store.get(id).blockReason, "serial", `${id} waits for the checkout, not the budget`);
     }
-  } finally { done(); }
-});
-
-test("the smart pick still holds waived rows — blocked `picking`, nothing fires", async () => {
-  const { store, state, done } = await fourWaived({ hold: () => "the smart pick is taking its look" });
-  try {
-    assert.deepEqual(state.ran, [], "a holding sentence fires nothing, waiver or not");
-    assert.ok(state.asked.includes("a"), "the waived row reached the pick");
-    assert.equal(store.get("a").state, "blocked");
-    assert.equal(store.get("a").blockReason, "picking");
   } finally { done(); }
 });
 
@@ -414,4 +399,90 @@ test("intent.post off the wire cannot bring a waiver — or a before-reset pass"
     await settle();
     assert.equal(store.get("w1").blockReason, "budget");
   } finally { done(); }
+});
+
+test("backlog.add with pastBudget waives the NEW row; a budget holding nothing is silent, any other refusal is said", async () => {
+  const run = async (waive) => {
+    const sent = [], waived = [];
+    const c = {
+      containRepoDir: async (d) => d,
+      backlog: { add: (text, repoDir) => ({ id: "new1", text, repoDir, status: "queued" }) },
+      intents: { waive: (id, rung, on) => { waived.push([id, rung, on]); return waive; } },
+      send: (_ws, m) => sent.push(m),
+    };
+    workRoutes["backlog.add"]({ msg: { t: "backlog.add", text: "go", repoDir: REPO, autoFire: true, targetSessionId: "s1", pastBudget: true }, ws: {}, c });
+    await settle();
+    return { sent, waived };
+  };
+  const ok = await run({ ok: true });
+  assert.deepEqual(ok.waived, [["new1", "budget", true]]);
+  assert.equal(ok.sent.length, 0);
+  const idle = await run({ ok: false, reason: "the budget is not holding anything right now" });
+  assert.equal(idle.sent.length, 0, "nothing tripped is nothing to lift — the row runs when free anyway");
+  const refused = await run({ ok: false, reason: "the usage reading does not say when that budget window resets" });
+  assert.equal(refused.sent.length, 1);
+  assert.match(refused.sent[0].text, /not past the budget — the usage reading/);
+});
+
+test("a WEEKLY waiver that runs out unstarted leaves a leftover: the new week holds it at the leftover ceiling", async () => {
+  const realNow = Date.now;
+  let clock = realNow();
+  Date.now = () => clock;
+  const weekly = { over: true, leftover: null };
+  const { store, state, done } = makeStore({
+    slots: 0,
+    budgetBlocked: () => weekly.over,
+    budgetOver: () => (weekly.over ? [{ which: "weekly", pct: 97, max: 75, resetAt: state.resetAt }] : []),
+    leftoverOver: () => weekly.leftover,
+  });
+  try {
+    await store.reconcile();
+    store.post(item("w", { holdForHost: false }));
+    await settle();
+    waiveAll(store, ["w"]);
+    await settle();
+    assert.deepEqual(store.get("w").pastBudget, { until: state.resetAt, weekly: true }, "granted against the weekly cap");
+    const reset = state.resetAt;
+    // The week resets with the row still waiting for a slot; the new week is
+    // already past the leftover ceiling.
+    clock = reset + 60_000;
+    weekly.over = false;
+    weekly.leftover = { which: "weekly", pct: 25, max: 20, resetAt: reset + 7 * 86_400_000 };
+    store.kick();
+    await settle();
+    let row = store.get("w");
+    assert.equal(row.pastBudget, undefined);
+    assert.equal(row.leftoverOf, reset, "stamped with the week it outlived");
+    assert.equal(row.blockReason, "budget");
+    assert.match(row.blockDetail ?? "", /leftover from a week that has reset/);
+    // Under the leftover ceiling it is ordinary work again (only the slot holds it).
+    weekly.leftover = null;
+    store.kick();
+    await settle();
+    row = store.get("w");
+    assert.equal(row.blockReason, "noSlot");
+    assert.equal(row.leftoverOf, reset, "the stamp stays until the row starts");
+  } finally { Date.now = realNow; done(); }
+});
+
+test("a SESSION-only waiver that runs out leaves nothing behind", async () => {
+  const realNow = Date.now;
+  let clock = realNow();
+  Date.now = () => clock;
+  const made = makeStore({ slots: 0, budgetBlocked: () => made.state.over, leftoverOver: () => ({ which: "weekly", pct: 25, max: 20, resetAt: null }) });
+  const { store, state, done } = made;
+  try {
+    await store.reconcile();
+    store.post(item("s", { holdForHost: false }));
+    await settle();
+    waiveAll(store, ["s"]);
+    await settle();
+    assert.deepEqual(store.get("s").pastBudget, { until: state.resetAt });
+    clock = state.resetAt + 60_000;
+    state.over = false;
+    store.kick();
+    await settle();
+    assert.equal(store.get("s").leftoverOf, undefined);
+    assert.equal(store.get("s").blockReason, "noSlot", "not held as a leftover");
+  } finally { Date.now = realNow; done(); }
 });

@@ -29,6 +29,17 @@ Two things that sound alike and are kept apart on purpose:
 - **Loaded once at boot** (`import()` of the file URL). A changed plugin needs `npm run restart`,
   which the plugin's section says. Hot reload is not worth an ESM cache-busting scheme in v1.
 
+## Publishing one: the `waterplane-plugin` topic
+
+**A plugin author tags their plugin's GitHub repo with the `waterplane-plugin` topic.** The
+template's README (`examples/plugin-template/`), [docs/plugins.md](../plugins.md), the generated
+reference's intro and `CONTRIBUTING.md` all ask for it, and the README links the topic search.
+Why: plugins exist so nobody has to fork to customise, which means the fork count — the number
+GitHub shows for "people building on this" — undercounts exactly the people the plugin API serves.
+A topic is the one signal GitHub keeps for free that a repo outside this one can add to, and its
+search page doubles as the place people find plugins. The curated list in `docs/plugins.md` is
+what this project vouches for; the topic is everything that exists.
+
 ## The API is versioned: semver, one rule
 
 `PLUGIN_API_VERSION` is `MAJOR.MINOR.PATCH` (`1.3.0` now). A manifest's `apiVersion` (`"1.2"`, or a
@@ -117,7 +128,7 @@ external plugin needs UI. The contract as requirements: `docs/requirements/plugi
 | `setupCheck()`/`setupFix()` | the setup checklist: `compliance.ts` asks `plugins/setupcontrib.ts`, which asks the registry, for the contributed rows (at the place the requirements row always sat, before the APK row) and fixes. A fix id the core owns (`CORE_FIX_IDS`) or another plugin took is refused by THROWING in `activate()`, so the plugin is listed broken with the reason |
 | `handle()` | the registry's `call(pluginId, method, args)` — the one entry the generic `plugin.call` wire message routes to, through `callOnce` and its ledger (`plugins/pluginrpc.ts`). Answers `{ok, result}` or `{ok:false, error}` in words; a result past 512 KB or not JSON is refused |
 | `push(event, data)` | broadcast as `plugin.push {plugin, event, data}` to every phone (the web half's `pushes`). Returns null when sent, else the refusal in words: bad event name (`PLUGIN_EVENT_RE`), not JSON, over 64 KB, plugin not running |
-| `handToAgent()` | `agentintents.ts`'s `handToAgentVia` → `addClientBacklogItem`, the SAME add the phone's `backlog.add` and an agent's `POST /api/agent/backlog` take: contained, persisted, `origin: "plugin:<id>"`, waiting for a tap (`manual`) unless `fire`, then fired by the intent ladder. A `key` makes it at-most-once in the store (`plugin-<id>-<key>`, 64 chars in all). Never `deliver.ts`, never a session's PTY |
+| `handToAgent()` | `agentintents.ts`'s `handToAgentVia` → `addClientBacklogItem`, the SAME add the phone's `backlog.add` and an agent's `POST /api/agent/backlog` take: contained, persisted, `origin: "plugin:<id>"`, waiting for a tap (`manual`) unless `fire`, then fired by the intent ladder. A `key` makes it at-most-once in the store (`plugin-<id>-<key>`, 64 chars in all). The first argument is a repo id, or an absolute worktree path (starts with `/`, matched by realpath — ids stay `sha1(worktreePath)[:10]`, which a plugin must not re-derive). Never `deliver.ts`, never a session's PTY |
 | `backend(def)` | `backends/registry.ts`'s `registerBackend`, through `pluginapi.ts`'s `pluginDescriptor` (see **Backends** below). Refused by THROWING a sentence; unregistered on switch-off |
 | `screenReader(name, r)` / `storeReader(name, r)` (1.1) | `backends/readers.ts`'s `registerScreenReader` / `registerStoreReader` (see **Contributed readers** below). A malformed or taken name THROWS; unregistered on switch-off, after the plugin's backends |
 | `thermalReader(name, r)` (1.3) | `sysstat.ts`'s `registerThermalReader`: asked on the readout's slow cadence BEFORE core's own sysfs reader, first reading wins. Every figure passes `cleanThermal` — a temperature outside 1..149 °C, a non-finite or negative figure is DROPPED, never shown — and a throw or an answer past `PLUGIN_THERMAL_TIMEOUT_MS` is no reading. Its `{ note, fix }` shows only when nothing reads. Added so macOS's SMC helpers (which third-party tool, built how) live outside this repo; core names none of them. Unregistered on switch-off |
@@ -294,6 +305,86 @@ ONLY `read()` calls, with the SAME ackId; a pending `call()` when the socket dro
 dropped before <plugin> answered — it may have run; look before trying again". **A write that must be
 at-most-once across a host restart uses `handToAgent`'s `key`, never a retried call.**
 
+### Streams — live binary on the one socket (`api.stream`, plugin API 1.4)
+
+**What.** A plugin serves a named live stream (`api.stream(name, {open, params?, input?, keyframe?,
+ack?, close?})`); a phone opens it with `stream.open {reqId, plugin, name, params}` and gets
+`stream.opened {streamId}` or `stream.refused {reason}`. Frames are binary WebSocket messages (the
+12-byte header in `shared/stream.ts`, `{binary: true, compress: false}` — deflate on video burns CPU
+for nothing) sent with `sub.send` to **the socket that opened the stream and no other**. Upstream,
+`stream.params` re-steers, `stream.input` carries one event (≤ 4 KB), `stream.ack` reports what
+arrived (`sub.lastAck`), `stream.keyframe` asks for a decodable frame, `stream.close` ends it. The
+first user is the live desktop ([desktop-stream-plan.md](../analysis/desktop-stream-plan.md)); the
+seam is generic. Host half: `packages/host/src/plugins/pluginstreams.ts`.
+
+**Why one socket.** `local/no-second-socket` stands: one socket carries auth, the queue's acks and
+the PTY, and a second one would need its own origin check, token, reconnect and liveness. So video
+shares the TCP connection — which is why the PTY has priority below. A socket that never sent
+`stream.open` never receives a binary frame, so an old APK bundle (whose `ws.ts` reads every frame as
+text) is untouched; `e2e-stream.mjs` asserts zero binary frames on such a socket.
+
+**Not durable.** No `stream.*` message is queued offline, ackId'd, in the ack ledger, or retried: a
+stream opened an hour late is for a screen nobody watches, and a click delivered late lands on a
+different screen (`intent.cancel`'s reasoning). Input is at-most-once because it is never retried.
+A dead socket (close or `terminate()`) ends every sub on it with cause `socket` and sends nothing; the
+phone reopens on reconnect. An unknown `streamId` is ignored in silence — a stale close after a
+reconnect is normal. Switching a plugin off (or its unregister function, or `sub.end`) ends its subs
+with cause `plugin` and tells the phone (`stream.ended`). `sub.end(reason, "replaced")` (additive)
+ends one with cause `replaced` instead: a plugin with a cap on views ends the OLDEST rather than
+refusing the newest — the live desktop's two-view cap once locked a phone out after two reconnects,
+because a dropped tunnel leaves subs on sockets not yet known dead (ping 20 s × 2) — and a phone
+never reopens a `replaced` view by itself (two screens would take it from each other for ever),
+only on a tap. Shutdown ends everything quietly. One host
+log line per open and close: plugin, name, id, cause.
+
+**Refusals are sentences.** No such plugin, not running, no such stream, params over 8 KB or not
+JSON, more than `STREAM_MAX_PER_SOCKET` (2) open on the socket, or the plugin's own `open` returning a
+string or throwing — each is `stream.refused` with the words, and nothing is sent. An `open` that
+takes over 10 s is refused; if it later says yes, `close(sub, "error")` follows so the plugin lets go.
+
+**Backpressure, and the PTY first.** Per sub, a `droppable` frame is skipped while the socket's
+`bufferedAmount` is past `streamBacklogLimit` of the params' `bitrateKbps` (≈0.4 s of video, 64 KB–1
+MiB; 256 KB without one). Any skip marks the sub "needs key": every non-key frame is then skipped
+until a key frame goes out. **The key that ends the episode, and the ask for it, wait for the drain**:
+the producer's `keyframe` handler is called once the buffer is back under the line (checked on the
+next frame offered and on every `stream.ack`), once per drain, and a key offered while the buffer is
+still past the line is skipped too. Before, a skip asked at once and the key went out regardless: on
+a link slower than a fixed bitrate that was P skipped → ask → IDR into the over-line socket → P
+skipped → …, an IDR every other frame, the buffer growing to `WS_PTY_BACKLOG_BYTES` before the PTY
+hold fired — the terminal seconds late, then torn. Now the buffer stays near the line (the line
+plus one frame), and `pluginstreams.test.mjs` pins it with a simulated slow link. A key in a
+healthy run (the producer's own GOP, a re-aim; no episode) may still go out past the line, up to
+`STREAM_KEY_OVERSHOOT` (2) × the line; further behind it is skipped and starts an episode. A key
+that is also `droppable` (a still the next still replaces) is droppable first. **While that socket's PTY is held back, every stream frame
+is skipped, a key frame too** (`liveness.ts`'s `ptyHoldsStreams`: the buffer is past
+`WS_PTY_BACKLOG_BYTES`, or a terminal on the socket is torn and waiting for its full replay with
+bytes still queued). That is how a keyframe is "deferred": nothing is held in memory and nothing can
+go out late — the sub needs a key, and the keyframe ask waits until the PTY lets go (the next frame
+the producer offers, or the next `stream.ack`, ~4 a second). The alternative, buffering the key
+until the PTY drains, keeps a stale picture in host memory and sends it late; asking again costs one
+fresh IDR. `sentBytes` counts payload bytes, so `sentBytes − lastAck.rxBytes` is what is in flight.
+
+**Security.** Streams ride the authenticated device socket, through the same gate as everything else
+(`wsops.ts`): `Origin`/`Host`, then a device token where one is needed. A peer token unlocks only
+`/api/peer/*` and never opens a socket (`pluginstreams.test.mjs` pins `deviceFor(peerToken) === null`).
+Whether a stream may take INPUT is the plugin's decision (the desktop's control switch lives in its
+own settings and its `input` handler).
+
+### A file for the phone, outside every repo (`api.offerFile`, plugin API 1.5)
+
+**What.** `api.offerFile(file, {name, ttlMs?, onGone?})` hands ONE file the plugin wrote into its own
+`dataDir` to the phone's one download path: the phone calls `files.downloadArtifact({…, src: path})`
+and the queue fetches `GET /api/plugin-file/<id>/<token>` instead of a repo artifact (`PullItem.src`).
+**Why.** The only way bytes reached the phone was a repo's transport dir, and some files must never sit
+in a repo — an extension's encrypted backup file is the first. **Rules** (`pluginfiles.ts`): the file's realpath
+lies inside the realpath of `dataDir`, the path is not a symlink, the name is a plain file name; the
+token is 24 random bytes; the core DELETES the file once one response delivered its last byte (a
+resumed range that ends at the last byte counts), at its TTL (10 min default, 1 h at most), on
+`withdraw`, or when the plugin stops — `onGone` says which. Its own `/api/plugin-file/` prefix, so no
+plugin route can shadow it; behind the same origin/Host and token gates as every `/api` route and
+NOT in `OPAQUE_READ_ROUTES`. Memory only: a restart forgets the offers and the plugin sweeps its own
+leftovers. `packages/host/test/pluginfiles.test.mjs`.
+
 ## The answer gate
 
 The one thing a plugin can do that types into a session without a person's tap, so the core owns
@@ -400,6 +491,12 @@ It was the oracle's log, and it also held the usage-limit auto-continue events. 
   now), the pure `gateRefusal` and `gateAnswer`. Condition 3 (same box) is the fingerprint the
   registry recorded when it fired `prompt` for that session. A checkbox (`multi`) box is refused too
   and is `blocked` in the event: a digit TOGGLES a row there.
+- `packages/host/src/plugins/pluginstreams.ts` — `api.stream`'s registry (`name → handlers` per
+  plugin, `streamId → sub` per socket) and the backpressure state machine ("Streams" above); the
+  `stream.*` routes are in `routes/system.ts`, the socket's end in `server/wsops.ts`'s close handler.
+- `packages/host/src/plugins/pluginfiles.ts` — `api.offerFile`'s offers (token → file, TTL timer,
+  delete on delivery) and `rangeLastByte`; the route is `GET /api/plugin-file/:id/:token` in
+  `routes/apisystem.ts`.
 - `packages/host/src/decisionlog.ts` — the log and its migration.
 - Per-session state (`pluginToggles`, `pluginAnswer`, `pluginBadges`) is on the session record
   (`sessions/roster.ts`), **memory only**: a restart puts every "let <plugin> answer" switch back to
@@ -408,7 +505,7 @@ It was the oracle's log, and it also held the usage-limit auto-continue events. 
 - The usage reading is kept warm (`syncUsagePolling`) while an active answering plugin has its switch
   on in some session, so `api.claudeUsage()` is not a stale number.
 - Loaded after boot, never in `--doctor`; `deactivate()` is started on SIGTERM, never awaited.
-- Tests: `packages/host/test/{plugins,pluginseam,pluginbackend,answergate,decisionlog}.test.mjs`, and `scripts/e2e-plugin.mjs`
+- Tests: `packages/host/test/{plugins,pluginseam,pluginbackend,pluginstreams,answergate,decisionlog}.test.mjs`, `scripts/e2e-stream.mjs` (fixture `scripts/fixtures/plugin-stream/`), and `scripts/e2e-plugin.mjs`
   against the fixture in `scripts/fixtures/plugin-echo/`; `scripts/e2e-pluginbackend.mjs` against
   `scripts/fixtures/plugin-backend-stub/` (backend listed, spawned, hooked off the sink, a held hook
   answered by a tap and expired to `{}`, switch-off refuses the next create).

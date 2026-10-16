@@ -1,13 +1,12 @@
 /** The two rate-limit windows, right now: their bars, the figure under each and the readings chart. */
 import { useEffect } from "react";
-import { Clock, Gauge, RefreshCw } from "lucide-react";
+import { Clock, Gauge, ScanLine } from "lucide-react";
 import { fmtCount, fmtShare, fmtUsd, tokenTotal, type UsageHistoryDoc, type UsageInfo } from "@waterplane/shared";
 import {
   type CutRefusal, cutRefusalText, isCut, LIVE_WINDOWS, type LiveWindowId, type WindowCut,
 } from "./usageCut.ts";
-import { ledgers } from "@waterplane/sdk";
-import { ago, until, useRemoteResource } from "@waterplane/kit";
-import { FETCH_HOURS, USAGE_STALE_MS } from "./constants.ts";
+import { ago, until } from "@waterplane/kit";
+import { USAGE_STALE_MS } from "./constants.ts";
 import { resetWhen, short } from "./when.ts";
 import { UsageSpark } from "./UsageSpark.tsx";
 
@@ -30,14 +29,16 @@ import { UsageSpark } from "./UsageSpark.tsx";
  * weekly reset is null whenever the screen named no DATE, because a bare
  * wall-clock time for a window that resets days out lands on the wrong day.
  */
-export function LimitWindows({ usage, onRefresh, online = true, history, cuts, scope, onScope }: {
+export function LimitWindows({ usage, onRefresh, history, cuts, scope, onScope, compact = false }: {
   usage: UsageInfo | null;
   onRefresh?: (quiet?: boolean) => void;
-  /** The socket's verdict — the history read is skipped when it is down. */
-  online?: boolean;
-  /** A history to draw instead of reading one. Only a static render passes it;
-   *  a chart nobody can see rendered is a chart nobody checked. */
-  history?: UsageHistoryDoc | null;
+  /**
+   * The readings the host kept (`/api/usagelog`), or null while they are read or when the host
+   * cannot be reached — then the charts say so in words. Read by `TokenStatsBody`, not here: the
+   * week card calibrates its points off the same samples, and two reads of one log are two
+   * instants drawn as one reading.
+   */
+  history: UsageHistoryDoc | null;
   /**
    * What each window has actually used, or why that cannot be said — the other
    * half of a percentage. Computed by the BODY and handed down, so the number
@@ -52,6 +53,10 @@ export function LimitWindows({ usage, onRefresh, online = true, history, cuts, s
   /** Taking the row's own numbers down to the readouts — a figure on a control
    *  is a filter. Absent ⇒ the line is text and nothing is tappable. */
   onScope?: (s: "all" | LiveWindowId) => void;
+  /** The token sheet's "now" block (2026-10-15): bar, readings chart, figure and reset per window,
+   *  without the per-window note — both windows stay above the span filter. The charts stay in the
+   *  open: folded, the owner read them as gone. */
+  compact?: boolean;
 }) {
   // Opening this screen is the act of asking "where am I right now", so a
   // reading older than the host's own cache TTL is re-scraped on the way in —
@@ -67,18 +72,9 @@ export function LimitWindows({ usage, onRefresh, online = true, history, cuts, s
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // The readings the host kept, which is the only history either window has.
-  // Re-read whenever a new scrape lands (`checkedAt` moves), because the point
-  // of the line is that it ends at the number above it. No cache: a stale
-  // sparkline under a live percentage would be two different instants drawn as
-  // one reading, and the chart is absent rather than wrong when the host cannot
-  // be reached.
-  const hist = useRemoteResource<UsageHistoryDoc>(
-    `usagelog:${usage?.checkedAt ?? 0}`,
-    () => ledgers.usageLog(FETCH_HOURS),
-    { enabled: !history, offline: !online },
-  );
-  const doc = history ?? hist.data;
+  // The readings the host kept, which is the only history either window has —
+  // read by the body (re-read whenever a new scrape lands, no cache).
+  const doc = history;
   const samples = doc?.samples ?? [];
 
   /** The reasons no token figure could be put on a row, de-duplicated: both
@@ -114,15 +110,17 @@ export function LimitWindows({ usage, onRefresh, online = true, history, cuts, s
     <div className="ts-lims">
       <div className="section section-head">
         <span><Gauge size={12} style={{ verticalAlign: "-2px", marginRight: 4 }} />Right now</span>
-        {/* Not sheet chrome: this is a section's own verb, and it wore the same
-            glyph as the head's rescan while meaning something else entirely
-            (re-scrape `/usage` vs re-scan the conversation logs), told apart
-            only by a `title` nobody on a phone can see. So it carries the
-            word. */}
+        {/* Not sheet chrome: this is a section's own verb, and it means
+            something else than the head's rescan (re-scrape the CLI's `/usage`
+            SCREEN vs re-scan the conversation logs). It wore the head's
+            `RefreshCw`, told apart only by a `title` nobody on a phone can see,
+            so it carries the word AND its own glyph: `ScanLine`, reading a
+            screen, while `RefreshCw` stays the head's "read the document
+            again" as on every other sheet. One icon per meaning. */}
         {onRefresh && (
           <button className="key" onClick={() => onRefresh()}
             title="re-read the CLI’s /usage screen (spawns a short claude probe)">
-            <RefreshCw size={14} /> re-read
+            <ScanLine size={14} /> re-read
           </button>
         )}
       </div>
@@ -153,7 +151,7 @@ export function LimitWindows({ usage, onRefresh, online = true, history, cuts, s
               : r.pct != null
                 ? <>The screen did not name a reset time for this window. </>
                 : null}
-            {r.note}
+            {!compact && r.note}
           </div>
         </div>
       ))}
@@ -172,7 +170,7 @@ export function LimitWindows({ usage, onRefresh, online = true, history, cuts, s
           : usage?.checkedAt
             ? <>Read off the CLI’s own <code>/usage</code> screen {ago(usage.checkedAt)}{usage.ok ? "" : ", which could not be parsed"}. </>
             : <>The <code>/usage</code> screen has not been read yet on this desktop, so these two windows are unknown. </>}
-        The history below comes from the conversation logs, not from this.
+        {!compact && "The history below comes from the conversation logs, not from this."}
         {/* Why a window has no token figure, once per reason rather than once
             per row — the two windows usually fail for the same reason and the
             sentence is a paragraph, not a chip. */}

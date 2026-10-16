@@ -1,8 +1,11 @@
-/** Git review operations for a worktree: status, diff, stage, commit, push. */
+/** Git review operations for a worktree: status, diff, stage, commit, pull, push. */
 import { readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { contained } from "./paths.js";
+import { spawn } from "node:child_process";
+import type { GitPushState } from "@waterplane/shared";
 import { execFileP as pexec } from "./proc.js";
+import { PushProgress } from "./pushprogress.js";
 
 
 export interface GitFile {
@@ -38,13 +41,122 @@ async function git(wt: string, args: string[]): Promise<{ stdout: string; stderr
  * untracked directory to one `?? src/` line, so a fresh directory of ten files
  * would count as one.
  */
-export async function countChangedFiles(wt: string): Promise<number> {
+export async function countChangedFiles(wt: string): Promise<{ changed: number; ahead?: number; behind?: number; hasOrigin?: boolean }> {
+  // Beside the status, not inside its try: a repo with no `origin` is a fact
+  // worth drawing even when the status failed. Unknown (git itself broke) =
+  // absent, never a made-up "no remote".
+  const origin = hasOriginRemote(wt);
+  const counts = await countStatus(wt);
+  const hasOrigin = await origin;
+  return hasOrigin === undefined ? counts : { ...counts, hasOrigin };
+}
+
+/** `git config --get` exits 1 for a key that is not set and something else when
+ *  git itself failed — only the first is "no origin". */
+async function hasOriginRemote(wt: string): Promise<boolean | undefined> {
   try {
-    const { stdout } = await git(wt, ["status", "--porcelain=v1", "--untracked-files=all"]);
-    return stdout.split("\n").filter((l) => l.trim()).length;
-  } catch {
-    return 0;
+    const { stdout } = await pexec("git", ["config", "--get", "remote.origin.url"], { cwd: wt, timeout: 10_000 });
+    return stdout.trim() !== "";
+  } catch (e) {
+    return (e as { code?: unknown }).code === 1 ? false : undefined;
   }
+}
+
+async function countStatus(wt: string): Promise<{ changed: number; ahead?: number; behind?: number }> {
+  try {
+    // `--branch` adds the `## main...origin/main [ahead 2, behind 1]` header, so
+    // the launcher's in/out counts cost no second git call. No upstream (no
+    // `...` in the header) = nothing to compare against: ahead/behind ABSENT,
+    // never a made-up 0.
+    const { stdout } = await git(wt, ["status", "--porcelain=v1", "--branch", "--untracked-files=all"]);
+    const lines = stdout.split("\n").filter((l) => l.trim());
+    const head = lines[0]?.startsWith("## ") ? lines.shift()! : "";
+    if (!head.includes("...")) return { changed: lines.length };
+    return {
+      changed: lines.length,
+      ahead: Number(/ahead (\d+)/.exec(head)?.[1] ?? 0),
+      behind: Number(/behind (\d+)/.exec(head)?.[1] ?? 0),
+    };
+  } catch {
+    return { changed: 0 };
+  }
+}
+
+export type ChangedCount = Awaited<ReturnType<typeof countChangedFiles>>;
+
+/** Last answer per worktree, and the run in flight — `changedCountsWithin`'s memory. */
+const changedCache = new Map<string, ChangedCount>();
+const changedInflight = new Map<string, Promise<ChangedCount>>();
+/** `git status` runs at once. 38 at a time over WSL's 9P bridge to `/mnt/c` took 55-400 s for the
+ *  slowest (everything thrashing one link); a few at a time finishes the set sooner, and on a
+ *  local disk four is no limit worth noticing. */
+const CHANGED_PARALLEL = 4;
+let changedRunning = 0;
+const changedQueue: (() => void)[] = [];
+
+/** When each cached count was taken, and how long its `git status` ran. */
+const changedTaken = new Map<string, { at: number; tookMs: number }>();
+/**
+ * A count stays fresh for this many times as long as it took to make, up to the cap. On a local
+ * disk a status takes milliseconds, so every listing still re-asks; over 9P one takes up to a
+ * minute, and re-asking all of them on every listing kept 4 `git status` grinding the bridge
+ * permanently — which slowed every other file read the host made, its event loop's among them.
+ */
+const CHANGED_FRESH_FACTOR = 10;
+const CHANGED_FRESH_CAP_MS = 5 * 60_000;
+
+function changedFresh(wt: string, now = Date.now()): boolean {
+  const t = changedTaken.get(wt);
+  return !!t && changedCache.has(wt) && now - t.at < Math.min(CHANGED_FRESH_CAP_MS, t.tookMs * CHANGED_FRESH_FACTOR);
+}
+
+function refreshChanged(wt: string): Promise<ChangedCount> {
+  let p = changedInflight.get(wt);
+  if (p) return p;
+  if (changedFresh(wt)) return Promise.resolve(changedCache.get(wt)!);
+  p = (async () => {
+    if (changedRunning >= CHANGED_PARALLEL) await new Promise<void>((r) => changedQueue.push(r));
+    changedRunning++;
+    try {
+      const began = Date.now();
+      const c = await countChangedFiles(wt);
+      changedCache.set(wt, c);
+      changedTaken.set(wt, { at: Date.now(), tookMs: Date.now() - began });
+      return c;
+    } finally {
+      changedRunning--;
+      changedQueue.shift()?.();
+      changedInflight.delete(wt);
+    }
+  })();
+  changedInflight.set(wt, p);
+  return p;
+}
+
+/**
+ * The launcher's per-worktree git counts, answered within `budgetMs`: each worktree's `git status`
+ * is (re)started unless its last count is still fresh (`changedFresh`), and whatever has not finished by the deadline is answered from the last run —
+ * or not at all (absent from the map) the first time, while the run carries on and caches for the
+ * next listing. On a local disk every run beats the budget and this is exactly the old "await them
+ * all"; on a slow one (WSL reading `/mnt/c`: a repo's status can take a minute) the listing no
+ * longer waits for the slowest repo on the machine.
+ */
+export async function changedCountsWithin(
+  wts: readonly string[], budgetMs: number, refreshBudgetMs: number = budgetMs,
+): Promise<Map<string, ChangedCount>> {
+  // Every worktree already answered once: only a short wait for fresher counts (the cached ones
+  // stand in for any still running). Some never have: the full budget, so a first listing has them.
+  const wait = wts.every((wt) => changedCache.has(wt)) ? refreshBudgetMs : budgetMs;
+  const runs = wts.map((wt) => refreshChanged(wt).catch(() => undefined));
+  let timer: NodeJS.Timeout | undefined;
+  await Promise.race([
+    Promise.all(runs),
+    new Promise<void>((r) => { timer = setTimeout(r, wait); }),
+  ]);
+  clearTimeout(timer);
+  const out = new Map<string, ChangedCount>();
+  for (const wt of wts) { const c = changedCache.get(wt); if (c) out.set(wt, c); }
+  return out;
 }
 
 /**
@@ -443,20 +555,182 @@ export async function gitDeleteBranch(wt: string, name: string, force = false): 
   }
 }
 
-export async function gitPush(wt: string): Promise<{ ok: boolean; output?: string; error?: string }> {
+/**
+ * `git push` with its output streamed to `onData` as it comes — the pre-push
+ * hook is the local CI and prints for tens of minutes, and the phone follows it
+ * (`pushprogress.ts`). Resolves and rejects like `execFile`: `{ stdout, stderr }`,
+ * or an error carrying both.
+ */
+function gitStreamed(wt: string, args: string[], onData?: (stream: "out" | "err", chunk: string) => void): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("git", args, { cwd: wt, stdio: ["ignore", "pipe", "pipe"] });
+    const out = { out: "", err: "" };
+    for (const k of ["out", "err"] as const) {
+      const s = k === "out" ? child.stdout : child.stderr;
+      s.setEncoding("utf8");
+      s.on("data", (d: string) => {
+        // Same ceiling `git()` gives execFile; past it the oldest half goes —
+        // `pushFailureText` reads the tail and the `FAILED:` line, both late.
+        out[k] = (out[k] + d).length > STREAM_MAX ? (out[k] + d).slice(-STREAM_MAX / 2) : out[k] + d;
+        onData?.(k, d);
+      });
+    }
+    child.on("error", (e) => reject(Object.assign(e, { stdout: out.out, stderr: out.err })));
+    child.on("close", (code, signal) => {
+      if (code === 0) resolve({ stdout: out.out, stderr: out.err });
+      else reject(Object.assign(new Error(`git ${args[0]} exited ${code ?? signal}`), { stdout: out.out, stderr: out.err }));
+    });
+  });
+}
+const STREAM_MAX = 16 * 1024 * 1024;
+
+export async function gitPush(wt: string, onData?: (stream: "out" | "err", chunk: string) => void): Promise<{ ok: boolean; output?: string; error?: string }> {
+  if (pulling.has(wt)) return { ok: false, error: "A pull is running in this worktree — push once it has ended." };
   try {
     // Set upstream automatically on first push of a branch.
-    const { stdout, stderr } = await git(wt, ["push", "--porcelain"]).catch(async (e) => {
+    const { stdout, stderr } = await gitStreamed(wt, ["push", "--porcelain"], onData).catch(async (e) => {
       if (/no upstream|set-upstream/i.test(String(e?.stderr || e))) {
         const { stdout: br } = await git(wt, ["rev-parse", "--abbrev-ref", "HEAD"]);
-        return git(wt, ["push", "--set-upstream", "origin", br.trim()]);
+        return gitStreamed(wt, ["push", "--set-upstream", "origin", br.trim()], onData);
       }
       throw e;
     });
     return { ok: true, output: (stdout || stderr || "pushed").toString().trim() };
   } catch (err: any) {
-    return { ok: false, error: (err?.stderr || err?.stdout || String(err)).toString().trim() };
+    return { ok: false, error: pushFailureText(String(err?.stdout ?? ""), String(err?.stderr ?? "") || String(err)) };
   }
+}
+
+/**
+ * One push job per worktree. The pre-push hook is the local CI — build,
+ * audit, lint, unit, then the whole e2e suite, tens of minutes — and the
+ * phone's request fuse is three. Held open across it, the phone said the push
+ * failed at 3:00 while the desktop carried on with nobody left to hear how it
+ * ended. So the push is started here and asked after: a second start while
+ * one runs joins it, and the last result stays until the next push.
+ */
+const pushes = new Map<string, GitPushJob>();
+
+interface GitPushJob {
+  running: boolean;
+  startedAt: number;
+  result?: { ok: boolean; output?: string; error?: string; finishedAt: number };
+  progress: PushProgress;
+  done: Promise<{ ok: boolean; output?: string; error?: string }>;
+}
+
+/** Start a push in `wt`, or join the one already running there. */
+export function startPush(wt: string): GitPushJob {
+  const live = pushes.get(wt);
+  if (live?.running) return live;
+  const job: GitPushJob = { running: true, startedAt: Date.now(), progress: new PushProgress(), done: null as never };
+  job.done = gitPush(wt, (k, d) => job.progress.feed(k, d)).then((r) => {
+    job.running = false;
+    job.result = { ...r, finishedAt: Date.now() };
+    return r;
+  });
+  pushes.set(wt, job);
+  return job;
+}
+
+/** The push running or last run in `wt`, or null when there has been none since the host started. */
+export function pushState(wt: string): GitPushState | null {
+  const job = pushes.get(wt);
+  return job ? { running: job.running, startedAt: job.startedAt, result: job.result, progress: job.progress.snapshot() } : null;
+}
+
+/** Worktrees with a pull in flight — a second tap joins nothing, it is refused in words. */
+const pulling = new Set<string>();
+
+const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
+
+/**
+ * Bring the upstream's commits into this branch: fetch, then fast-forward, or
+ * — when both sides moved — replay the local commits on top.
+ *
+ * Every path either lands whole or changes nothing. A fast-forward over a
+ * dirty tree is git's own call (it refuses to overwrite an edited file). The
+ * diverged case rebases only a tree with no tracked edits, and never with
+ * `--autostash`: several sessions edit one working tree at once, and a stash
+ * would lift their half-written files out from under them. A rebase that
+ * stops on a conflict is aborted, so the branch is back where it was.
+ *
+ * Refused while a push runs here: the pre-push hook is building and testing
+ * this very tree, and moving HEAD under it would test one thing and push another.
+ */
+export async function gitPull(wt: string): Promise<{ ok: boolean; output?: string; error?: string }> {
+  if (pushes.get(wt)?.running) return { ok: false, error: "A push is running in this worktree — pull once it has ended." };
+  if (pulling.has(wt)) return { ok: false, error: "A pull is already running in this worktree." };
+  pulling.add(wt);
+  try {
+    let up: string;
+    try {
+      up = (await git(wt, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])).stdout.trim();
+    } catch {
+      return { ok: false, error: "This branch has no upstream to pull from. Push it once to set one." };
+    }
+    try {
+      await pexec("git", ["fetch", "--no-tags"], { cwd: wt, timeout: 120_000, env: NO_PROMPT, maxBuffer: 4 * 1024 * 1024 });
+    } catch (err) {
+      return { ok: false, error: `The fetch from ${up} failed — nothing was changed.\n\n${errText(err)}` };
+    }
+    const [ahead, behind] = (await git(wt, ["rev-list", "--left-right", "--count", "HEAD...@{u}"])).stdout.trim().split(/\s+/).map(Number);
+    const toPush = ahead ? ` ${plural(ahead, "local commit")} still to push.` : "";
+    if (!behind) return { ok: true, output: `Already up to date with ${up}.${toPush}` };
+    if (!ahead) {
+      try {
+        await git(wt, ["merge", "--ff-only", "@{u}"]);
+      } catch (err) {
+        return { ok: false, error: `Could not fast-forward to ${up} — nothing was changed.\n\n${errText(err)}` };
+      }
+      return { ok: true, output: `Pulled ${plural(behind, "commit")} from ${up}.` };
+    }
+    const dirty = (await git(wt, ["status", "--porcelain", "--untracked-files=no"])).stdout.trim();
+    if (dirty) {
+      return { ok: false, error: `Both sides moved — ${plural(ahead, "local commit")}, ${plural(behind, "commit")} on ${up} — and the working tree has uncommitted edits. Commit them, then pull again. Nothing was changed.` };
+    }
+    try {
+      await git(wt, ["rebase", "@{u}"]);
+    } catch (err) {
+      await git(wt, ["rebase", "--abort"]).catch(() => undefined);
+      return { ok: false, error: `Replaying ${plural(ahead, "local commit")} on top of ${up} hit a conflict, so it was undone — nothing was changed. Resolve it in a session on the desktop.\n\n${errText(err)}` };
+    }
+    return { ok: true, output: `Pulled ${plural(behind, "commit")} from ${up} and replayed your ${plural(ahead, "local commit")} on top.${toPush}` };
+  } finally {
+    pulling.delete(wt);
+  }
+}
+
+/**
+ * What a refused push says on the phone. A pre-push hook (the local CI) prints
+ * its steps to git's STDOUT, so stderr alone held only node's warnings and
+ * git's closing "failed to push" — the step that failed was in the half that
+ * was dropped. Both halves, colour codes and node's MODULE_TYPELESS noise out,
+ * the hook's `FAILED: <step>` line first, then the last lines that explain it.
+ *
+ * A hook that PASSED and a remote that then refused is the other case: `--porcelain`
+ * writes the refusal (`!\t<ref>\t[rejected] (fetch first)`) to stdout, and 20k of e2e
+ * chatter on stderr pushed it out of the tail — the phone showed host warnings and
+ * "failed to push" after a green 24-minute check, with the reason nowhere on screen.
+ */
+export function pushFailureText(stdout: string, stderr: string, tail = 40): string {
+  const clean = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "").split("\n")
+    .filter((l) => !/^\(node:\d+\) \[MODULE_TYPELESS_PACKAGE_JSON\]|^Reparsing as ES module|^To eliminate this warning|^\(Use `node --trace-warnings/.test(l));
+  const lines = [...clean(stdout), ...clean(stderr)].filter((l, i, a) => l.trim() || (i > 0 && a[i - 1].trim()));
+  const failed = lines.find((l) => /^FAILED: /.test(l));
+  const body = lines.slice(-tail).join("\n").trim();
+  if (failed) return `The pre-push check stopped it — ${failed.replace(/^FAILED: /, "")}\n\n${body}`;
+  const rejected = lines.map((l) => /^!\t(\S+)\t(.*)$/.exec(l)).find(Boolean);
+  if (rejected) {
+    const ref = rejected[1].split(":").pop()!.replace(/^refs\/heads\//, "");
+    const why = rejected[2].trim();
+    const passed = lines.some((l) => /^local CI passed\b/.test(l)) ? "The pre-push check passed, but the" : "The";
+    const moved = /fetch first|non-fast-forward/.test(why)
+      ? ` — ${ref} moved on the remote while this ran. Pull, then push again.`
+      : ` — ${why}`;
+    return `${passed} remote refused ${ref}${moved}\n\n${rejected[0]}\n${body}`;
+  }
+  return body;
 }
 
 // ── Peer jobs (peers/serve.ts): find a clone by its remote, run a job in a detached worktree ──

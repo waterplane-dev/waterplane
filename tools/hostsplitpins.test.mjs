@@ -43,7 +43,7 @@ function members(file, className) {
 
 const CAPTURE_SURFACE = ["CaptureEvents:type","CaptureManager:value","CleanTargetResult:type","EmitInput:type","VerdictInput:type","VerificationInput:type","classifyOverlay:value","cleanTarget:value","diffRecord:value","intentToCaptureRun:value","probeCaptureBackends:value","shouldEmit:value","verdictLine:value","verificationLevel:value"];
 const BACKLOG_SURFACE = ["BACKLOG_LINGER_MS:value","BACKLOG_SESSIONS_MAX:value","BacklogManager:value","REAP_CEILING_MS:value","backlogTitle:value","chainDeliveryError:value","deliveryError:value","isBacklogTitle:value","retryableStep:value","withoutBacklogMark:value"];
-const BACKLOG_MEMBERS = ["add","archive","autoSessionCount","autoSlotFacts","closesWhenDone","deliver","ensureRepoSession","fire","getAuto","idleMs","init","lingerSweep","list","markDone","openItemSession","reapAutoSession","remove","reorder","resolveRepoSession","rows","setAuto","setCloseWhenDoneDefault","setSmartPick","smartPickEnabled","smartPickList","swap","unmerge","update","waiting"];
+const BACKLOG_MEMBERS = ["add","archive","autoSessionCount","autoSlotFacts","closesWhenDone","deliver","ensureRepoSession","fire","getAuto","idleMs","init","lingerSweep","list","markDone","openItemSession","remove","reorder","resolveRepoSession","rows","setAuto","setCloseWhenDoneDefault","swap","update","waiting"];
 const CAPTURE_MEMBERS = ["cancel","execute","getOutput","list","run","runsFor","save"];
 
 test("capture.ts exports exactly its pinned surface", () => {

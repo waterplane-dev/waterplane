@@ -4,7 +4,7 @@
 // lost photo).
 import test from "node:test";
 import assert from "node:assert/strict";
-import { attachBlockers, attachState, attachStatuses, attachmentsReady } from "../dist/index.js";
+import { attachBlockers, attachState, attachStatuses, attachmentsReady, sendingUploads, sendingUploadsKey } from "../dist/index.js";
 
 const facts = (over = {}) => ({ onHost: [], sending: [], kept: [], dead: {}, ...over });
 const P = ".claude/inbox/shot-1.jpg";
@@ -47,4 +47,19 @@ test("blockers come back fixable-first, and never include a sendable file", () =
     { relPath: "d", state: "dead" }, { relPath: "s", state: "sending" },
   ];
   assert.deepEqual(attachBlockers(states).map((s) => s.relPath), ["k", "d", "m", "u"]);
+});
+
+test("the strip's queue key moves when an upload dies or lands, not on a progress tick", () => {
+  const up = (relPath, status, extra = {}) => ({ mode: "upload", status, upload: { relPath }, ...extra });
+  const before = [up("a.jpg", "pending", { attempts: 1 }), { mode: "input", status: "queued", text: "look at a.jpg" }];
+  const key = sendingUploadsKey(before);
+  assert.deepEqual(sendingUploads(before), ["a.jpg"]);
+  // Another write to the same row (an attempt count, another lane's ack) is not a new fact.
+  assert.equal(sendingUploadsKey([up("a.jpg", "pending", { attempts: 2 }), before[1]]), key);
+  // The upload GIVING UP is: the verdict it fed ("sending", sendable) is now wrong.
+  assert.notEqual(sendingUploadsKey([up("a.jpg", "failed"), before[1]]), key);
+  // …and so is it landing (the row leaves the queue).
+  assert.notEqual(sendingUploadsKey([before[1]]), key);
+  // Order in the queue is not a fact either.
+  assert.equal(sendingUploadsKey([up("b.jpg", "queued"), up("a.jpg", "queued")]), sendingUploadsKey([up("a.jpg", "queued"), up("b.jpg", "queued")]));
 });

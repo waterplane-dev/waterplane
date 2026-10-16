@@ -32,6 +32,7 @@
  */
 import { closeSync, openSync, readSync, statSync } from "node:fs";
 import { stamp, toMs } from "./convlog.js";
+import { detectSpendText } from "./limit.js";
 
 /** How much of the log tail to read. A rejection is followed by very little —
  *  the turn it killed ended there — so the answer is always near the end. */
@@ -53,6 +54,14 @@ export interface LimitLogVerdict {
   resetAt: number | null;
   /** Anything other than the 5-hour session window (weekly, monthly, …). */
   weekly: boolean;
+  /**
+   * The newest rejection is a SPEND wall (API-key / cloud account out of credit
+   * or over a spend limit), written as a synthetic API-error turn rather than a
+   * `quotaLimits` row. `resetAt` is then only an instant the message printed;
+   * null means nobody knows when it lifts, and the block stands until a turn is
+   * served.
+   */
+  spend: boolean;
   /** Newest ordinary assistant turn — the account provably served us then. */
   servedAt: number | null;
   /**
@@ -73,7 +82,7 @@ export interface LimitLogVerdict {
   clearedBy: "served" | "reset" | "none" | null;
 }
 
-const UNKNOWN: LimitLogVerdict = { state: "unknown", rejectedAt: null, resetAt: null, weekly: false, servedAt: null, clearedBy: null };
+const UNKNOWN: LimitLogVerdict = { state: "unknown", rejectedAt: null, resetAt: null, weekly: false, spend: false, servedAt: null, clearedBy: null };
 
 /** Read the tail of a log. Null when it isn't there. */
 function tailLines(path: string): string[] | null {
@@ -104,6 +113,7 @@ export function readLimitLog(path: string, now = Date.now()): LimitLogVerdict {
   let rejectedAt: number | null = null;
   let resetAt: number | null = null;
   let weekly = false;
+  let spend = false;
   let servedAt: number | null = null;
   let sawRow = false;
   for (let i = lines.length - 1; i >= 0; i--) {
@@ -111,7 +121,9 @@ export function readLimitLog(path: string, now = Date.now()): LimitLogVerdict {
     if (!line || line.charCodeAt(0) !== 123 /* { */) continue;
     const isQuota = rejectedAt == null && line.includes('"quotaLimits"');
     const isAssistant = servedAt == null && line.includes('"assistant"');
-    if (!isQuota && !isAssistant) continue;
+    // A spend wall is an API-error turn (`isApiErrorMessage`), not a quota row.
+    const isApiErr = rejectedAt == null && line.includes('"isApiErrorMessage":true');
+    if (!isQuota && !isAssistant && !isApiErr) continue;
     let row: Record<string, unknown>;
     try { row = JSON.parse(line); } catch { continue; }
     sawRow = true;
@@ -121,6 +133,15 @@ export function readLimitLog(path: string, now = Date.now()): LimitLogVerdict {
       resetAt = toMs(q.resetsAt);
       weekly = typeof q.rateLimitType === "string" && q.rateLimitType !== "five_hour";
       continue;
+    }
+    if (rejectedAt == null && isApiErr && !q && row.isApiErrorMessage === true) {
+      const found = detectSpendText(rowText(row));
+      if (found.spend) {
+        rejectedAt = stamp(row) ?? now;
+        resetAt = found.resetAt;
+        spend = true;
+        continue;
+      }
     }
     // A REAL assistant turn. The rejection itself is written as one too, with
     // `<synthetic>` for a model — counting that as service would make every
@@ -145,5 +166,13 @@ export function readLimitLog(path: string, now = Date.now()): LimitLogVerdict {
   // only a fact about the clock.
   const clearedBy: LimitLogVerdict["clearedBy"] =
     state !== "clear" ? null : rejectedAt == null ? "none" : superseded ? "served" : "reset";
-  return { state, rejectedAt, resetAt, weekly, servedAt, clearedBy };
+  return { state, rejectedAt, resetAt, weekly, spend: spend && rejectedAt != null, servedAt, clearedBy };
+}
+
+/** The text of a synthetic assistant turn: a string, or the text blocks of its content. */
+function rowText(row: Record<string, unknown>): string {
+  const c = (row.message as { content?: unknown } | undefined)?.content;
+  if (typeof c === "string") return c;
+  if (!Array.isArray(c)) return "";
+  return c.map((b) => (b && typeof (b as { text?: unknown }).text === "string" ? (b as { text: string }).text : "")).filter(Boolean).join("\n");
 }

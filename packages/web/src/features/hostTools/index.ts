@@ -7,6 +7,7 @@ import type { FeatureManifest } from "../../sdk";
 import { HostConnectionSettings, HostNotifySettings } from "./HostSettings";
 import { bootHostTools, showHostStat, takeShot } from "./actions";
 import { PhoneSetupSheet } from "./PhoneSetupSheet";
+import { DesktopSetupChecklist } from "./DesktopSetupSettings";
 
 export {
   pasteLoginCode, refreshShellLink, showHostStat, takeShot, togglePush, toggleShellLink, useShellLinkPoll,
@@ -27,6 +28,8 @@ export const manifest: FeatureManifest = {
     { group: "notifications", order: 20, render: () => createElement(HostNotifySettings) },
     // The head of Connection, before the password rows.
     { group: "connection", order: -10, render: () => createElement(HostConnectionSettings) },
+    // The head of Tools & diagnostics: what this desktop needs, whichever repo is open.
+    { group: "tools", order: -30, render: () => createElement(DesktopSetupChecklist) },
   ],
   boot: bootHostTools,
 };

@@ -8,7 +8,7 @@ import type { RepoTarget } from "@waterplane/shared";
 import { SetupSheet } from "../../SetupSheet";
 import { useCore, useStore } from "../../sdk";
 import { setupAim, setupRepo } from "./store";
-import { closeRepoHealth, closeSetup, openRepoFile, remedy } from "./actions";
+import { closeRepoHealth, closeSetup, openCaptureFromReadings, openRepoFile, remedy, seedSend } from "./actions";
 
 /** The checklist door (and the settings door, with no repo). */
 export function RepoReadingsSheet() {
@@ -23,6 +23,8 @@ export function RepoReadingsSheet() {
     // decision made with the words on screen.
     onRemedy={remedy}
     onOpenFile={openRepoFile}
+    onSeed={seedSend}
+    onCapture={openCaptureFromReadings}
     onClose={closeSetup} />;
 }
 
@@ -42,6 +44,8 @@ export function RepoHealthAliasSheet({ repo }: { repo: RepoTarget }) {
     // alias, region 2's `ask the agent about this…` was absent.
     onRemedy={remedy}
     onOpenFile={openRepoFile}
+    onSeed={seedSend}
+    onCapture={openCaptureFromReadings}
     onClose={closeRepoHealth}
   />;
 }

@@ -6,7 +6,7 @@ import { intentTitle } from "../activityRows";
 import { loadSheetDraft, saveSheetDraft } from "../outbox";
 import { LS, lsGet } from "../storage";
 import { track } from "../usage";
-import { DEVICE_TZ, anchorWindowOf, chainCandidates, guardWindowOf, inboxRefs, onceIn, previewOf, pctOk, resumeWhen, retimeBlocker, retimeWhenLabel, RETIME_NOW_SEG, sendBlocker, sendLabel, sequentialMeans, whenWords, windowIn, type SendIntent, type SendNames, type SendTarget, type SendWhen } from "../sendIntent";
+import { DEVICE_TZ, anchorWindowOf, chainCandidates, guardWindowOf, inboxRefs, onceIn, leadLabel, leadOk, previewOf, pctOk, resumeWhen, retimeBlocker, retimeWhenLabel, RETIME_NOW_SEG, sendBlocker, sendLabel, sequentialMeans, whenWords, windowIn, type SendIntent, type SendNames, type SendTarget, type SendWhen } from "../sendIntent";
 import { usePref } from "../core/prefs";
 import type { SendSheetProps } from "./sendSheetTypes";
 import { defaultTarget } from "./sendTargets";
@@ -91,6 +91,7 @@ export function useSendSheet(props: SendSheetProps) {
   /** The `budget…` row's field is open. The cap itself lives ON the target
    *  (`SendTarget.budget`), so closing the field keeps it and the button says so. */
   const [budgetOpen, setBudgetOpen] = useState(false);
+  const [launchOpen, setLaunchOpen] = useState(false); // the *model* row's picker; the pick lives ON the target
   /** Which quick chip set the instant, so it can stay lit. Compared by identity,
    *  never by re-deriving the time — the chips move with the clock. */
   const [quickKey, setQuickKey] = useState<string | null>(null);
@@ -109,6 +110,14 @@ export function useSendSheet(props: SendSheetProps) {
   const [pctOpen, setPctOpen] = useState(false);
   const [savedPct, setSavedPct] = useState<number | null>(() => pctOk(lsGet(LS.schedPctLeft)));
   const [pctRaw, setPctRaw] = useState<string>(() => String(pctOk(lsGet(LS.schedPctLeft)) ?? ""));
+  /** *How long before*'s *another…* field — the same shape as the headroom one
+   *  above, kept in minutes under `LS.schedLeadMin`. */
+  const [leadOpen, setLeadOpen] = useState(false);
+  const [savedLead, setSavedLead] = useState<number | null>(() => leadOk(lsGet(LS.schedLeadMin)));
+  const [leadRaw, setLeadRaw] = useState<string>(() => {
+    const n = leadOk(lsGet(LS.schedLeadMin));
+    return n == null ? "" : leadLabel(n);
+  });
   /** The last rule seen under each ANCHOR, so flipping between "at a time" and
    *  "a usage window" is not a delete — a ref, not state, because it is only
    *  ever read back into a fresh rule, never rendered itself. */
@@ -306,7 +315,8 @@ export function useSendSheet(props: SendSheetProps) {
     if (blocker) return;
     track("action:send.post");
     const final = promptsRef.current.map((p) => p.trim()).filter(Boolean);
-    if (!onSend({ prompts: final, target, when, sequential })) return;
+    // This sheet's *model* row IS the launch question: never asked again on top.
+    if (!onSend({ prompts: final, target, when, sequential, launchChosen: true })) return;
     if (!retime) saveSheetDraft(draftKey, "");
     onClose();
   }
@@ -333,7 +343,7 @@ export function useSendSheet(props: SendSheetProps) {
 
   return {
     ...props,
-    live, draftKey, retime, promptsRef, names, resumed, seededTarget, closeGlobal, decideRef, ruleMemo, atMemo, focusStep, text, intent, preview, editing, blocker, label, seqMeans, openedAt, chainRows, attachCwd, attachRepo, repoId, waitsForFiles, ready, blockers, rule, days, anchor, recurs, anchorW, guardW, prompts, setPrompts, target, setTarget, when, setWhen, sequential, setSequential, open, setOpen, more, setMore, budgetOpen, setBudgetOpen, quickKey, setQuickKey, pctOpen, setPctOpen, savedPct, setSavedPct, pctRaw, setPctRaw, states, setStates, nonce, setNonce, busy, setBusy, shots, setShots, updatePrompts, guard, pick, patchRule, replaceRule, setAnchor, setAfter, leaveAt, go,
+    live, draftKey, retime, promptsRef, names, resumed, seededTarget, closeGlobal, decideRef, ruleMemo, atMemo, focusStep, text, intent, preview, editing, blocker, label, seqMeans, openedAt, chainRows, attachCwd, attachRepo, repoId, waitsForFiles, ready, blockers, rule, days, anchor, recurs, anchorW, guardW, prompts, setPrompts, target, setTarget, when, setWhen, sequential, setSequential, open, setOpen, more, setMore, budgetOpen, setBudgetOpen, launchOpen, setLaunchOpen, quickKey, setQuickKey, pctOpen, setPctOpen, savedPct, setSavedPct, pctRaw, setPctRaw, leadOpen, setLeadOpen, savedLead, setSavedLead, leadRaw, setLeadRaw, states, setStates, nonce, setNonce, busy, setBusy, shots, setShots, updatePrompts, guard, pick, patchRule, replaceRule, setAnchor, setAfter, leaveAt, go,
   };
 }
 

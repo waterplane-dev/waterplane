@@ -13,7 +13,7 @@ import {
   markOutboxSeen,
   deleteArtifact,
   deleteInboxFile,
-  discoverArtifacts,
+  discoverArtifactsAsync,
   listInbox,
   listTransport,
   saveInboxFile,
@@ -177,13 +177,13 @@ const REPO_FILE_ROUTES: readonly ApiEntry<RepoReq>[] = [
     return true;
   }),
 
-  route<RepoReq>("GET", "artifacts/*", ({ res, url, wt }) => {
+  route<RepoReq>("GET", "artifacts/*", async ({ res, url, wt }) => {
     const scope = (url.searchParams.get("scope") as "repo" | "outbox") || "repo";
     const since = Number(url.searchParams.get("since") || 0) || undefined;
     const limit = Number(url.searchParams.get("limit") || 0) || undefined;
     const query = url.searchParams.get("q") || undefined;
     const fkind = (url.searchParams.get("kind") as ArtifactKind) || undefined;
-    json(res, discoverArtifacts(wt, { scope, sinceSeconds: since, limit, query, kind: fkind }));
+    json(res, await discoverArtifactsAsync(wt, { scope, sinceSeconds: since, limit, query, kind: fkind }));
     return true;
   }),
 

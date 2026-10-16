@@ -8,7 +8,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { TermQueryResponder, answerTermQueries, x11Rgb, CELL_PX, HOLD_MS } from "../dist/termqueries.js";
+import { TermQueryResponder, answerTermQueries, x11Rgb, CELL_PX, HOLD_MS, STARTUP_REPLY_MS } from "../dist/termqueries.js";
 
 const facts = { cols: () => 80, rows: () => 24 };
 const E = "\x1b";
@@ -61,7 +61,7 @@ test("a held prefix that never becomes a query comes back untouched", () => {
   assert.equal(a.out, "hello");
   assert.equal(r.holding(), true);
   // …completed by something else:
-  assert.deepEqual(r.feed(`;1Hworld`), { out: `${E}[1;1Hworld`, replies: "" });
+  assert.deepEqual(r.feed(`;1Hworld`), { out: `${E}[1;1Hworld`, replies: "", late: 0 });
   // …or by nothing at all: flush releases it.
   r.feed(`${E}]1`);
   assert.equal(r.flush(), `${E}]1`);
@@ -114,6 +114,43 @@ test("answerTermQueries sits in front of the handler: replies to the PTY, stripp
   await new Promise((r) => setTimeout(r, HOLD_MS * 4));
   assert.deepEqual(seen, ["a", "b", `${E}[1`]);
   q.dispose();
+});
+
+// tmux reads DA1/DA2/XTVERSION replies only inside its ~5 s start-up window; one
+// arriving later is typed into the pane (measured, tmux 3.4 and 3.6b). The colour,
+// scheme and size replies are read at any time.
+test("past the start-up window the three start-up-only queries are stripped UNANSWERED, the rest still answered", () => {
+  let age = STARTUP_REPLY_MS + 1;
+  const r = new TermQueryResponder({ ...facts, ageMs: () => age });
+  const late = r.feed(START);
+  assert.equal(late.out, START_CLEAN);
+  assert.equal(late.late, 3);
+  assert.equal(late.replies, `${E}[?997;1n${E}]10;rgb:d6d6/dcdc/e5e5${E}\\${E}]11;rgb:0b0b/0d0d/1010${E}\\`);
+  age = STARTUP_REPLY_MS;
+  const inTime = r.feed(START);
+  assert.equal(inTime.replies, START_REPLIES);
+  assert.equal(inTime.late, 0);
+  // No age fact (a caller that does not know): everything answered, as before.
+  assert.equal(new TermQueryResponder(facts).feed(START).replies, START_REPLIES);
+});
+
+test("answerTermQueries counts the client's age from its own call and reports what it left unanswered", async () => {
+  let handler = null;
+  const written = [];
+  const pty = { cols: 80, rows: 24, onData: (cb) => { handler = cb; }, write: (s) => written.push(s) };
+  const lates = [];
+  const realNow = Date.now;
+  const t0 = realNow();
+  try {
+    const q = answerTermQueries(pty, () => {}, undefined, (n, ageMs) => lates.push([n, ageMs]));
+    Date.now = () => t0 + STARTUP_REPLY_MS + 500;
+    handler(`${E}[c${E}[>c${E}[>q${E}]11;?${E}\\`);
+    assert.deepEqual(written, [`${E}]11;rgb:0b0b/0d0d/1010${E}\\`]);
+    assert.equal(lates.length, 1);
+    assert.equal(lates[0][0], 3);
+    assert.ok(lates[0][1] > STARTUP_REPLY_MS);
+    q.dispose();
+  } finally { Date.now = realNow; }
 });
 
 // XTVERSION names the xterm.js the phone actually runs. The string is a

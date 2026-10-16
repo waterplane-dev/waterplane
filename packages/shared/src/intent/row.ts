@@ -9,6 +9,7 @@
 
 import type { ItemCategory, NameAuthor } from "../naming.js";
 import type { SessionBudget } from "../sessionbudget.js";
+import type { LaunchOpts } from "../wire/session.js";
 import type { AssessPayload, BlockReason, BudgetPass, BudgetWaiver, BuildPayload, CapturePayload, IntentPayload, IntentRequeue, IntentResult, IntentTarget, IntentTrigger, Lifecycle } from "./types.js";
 
 /**
@@ -41,7 +42,7 @@ export interface Intent {
    * A person let this row past the usage BUDGET, for its next start and inside
    * the budget window it was granted against — and nothing else. Rung 2 and
    * the `budget` trigger skip it (`budgetWaived`); every rung below (serial,
-   * `holdForHost`, `noSlot`, the smart pick, target readiness) still holds it,
+   * `holdForHost`, `noSlot`, target readiness) still holds it,
    * which is the whole point: the re-time sheet's bulk release used to send
    * `intent.run` per row and four rows in one worktree started at once.
    *
@@ -69,6 +70,15 @@ export interface Intent {
    * pass never covers the weekly one, and the real usage limit holds either.
    */
   budgetPass?: BudgetPass;
+  /**
+   * The weekly reset this row outlived without starting, after being let past
+   * that week's budget by a person's waiver — stamped by the tick as it drops
+   * the expired waiver, cleared by the row's next start. The before-reset
+   * PASS needs no stamp: it is still on the row (`budgetPassOf`), so
+   * `budgetLeftoverOf` reads it off that. Rung 2 holds a leftover row while the
+   * leftover ceiling is tripped (`shared/budget.ts`'s `leftoverCeiling`).
+   */
+  leftoverOf?: number;
   /**
    * Posted by machinery rather than by a person mid-tap.
    *
@@ -113,6 +123,14 @@ export interface Intent {
    */
   closeWhenDone?: boolean;
   /**
+   * "Flag for follow up when done" (R-sessions-043): the session this row
+   * OPENS gets a `launch` follow-up flag once the row settled `done` and the
+   * session is no longer working (`slotBusy` false). Off unless a person ticked
+   * it — `true` or absent, no global setting. A row that FAILED never flags,
+   * and neither does one parked on a usage limit (it has not settled).
+   */
+  flagWhenDone?: boolean;
+  /**
    * Set aside: kept in full, listed on demand, never run until it is brought
    * back. The backlog's `archived`, which was never a delete and must not
    * become one.
@@ -121,8 +139,7 @@ export interface Intent {
   /**
    * **Waits for a person's tap — nothing starts it by itself.** Set on a
    * backlog item an AGENT added (`agentintents.ts`): the agent may put words
-   * on the person's list, never start work on it, so neither auto-fire nor the
-   * smart pick may take it. Rung 1 holds it (`MANUAL_HOLD_TEXT`); the row's own
+   * on the person's list, never start work on it, so auto-fire may not take it. Rung 1 holds it (`MANUAL_HOLD_TEXT`); the row's own
    * `fire` is `runNow`, which skips the ladder, and is the one way it runs.
    * Absent on every row a person made, which is what every row before this
    * field was.
@@ -140,12 +157,11 @@ export interface Intent {
    * `min(orders) - 1`, and that is a position nobody chose. Machinery never
    * clears it either, so a row dragged once keeps its slot until it runs.
    *
-   * It exists for one reason. The smart pick sorts and picks among the rows
-   * machinery placed and sorts AROUND the ones a person placed, so the one
-   * explicit act in that sheet cannot be quietly undone by an automatic pass.
-   * Without a field recording it, a drag to the top is indistinguishable
-   * afterwards from a row that was simply added last — which is what made this
-   * the one place the feature could destroy intent.
+   * The row says so ("placed by you"), and an assessment that pins its order
+   * writes the same mark. Without a field recording it, a drag to the top is
+   * indistinguishable afterwards from a row that was simply added last — and
+   * anything that ever re-sorts rows must sort AROUND the ones a person placed.
+   * (The automatic smart pick that read it was removed 2026-10-16.)
    *
    * `true` or absent, never `false`: "nobody has placed this" is the absence of
    * a statement, not a statement that nobody has.
@@ -188,7 +204,11 @@ export interface Intent {
   categoryBy?: NameAuthor;
   cols?: number;
   rows?: number;
-  launch?: unknown;
+  /** The model/effort/backend the session this row OPENS is started with —
+   *  a parked create's own, a sweep's, or a later "new session" a person picked
+   *  a model for on the send sheet. Absent = the desktop's new-session
+   *  defaults. Always `cleanLaunchOpts`'s shape: never trusted raw off disk. */
+  launch?: LaunchOpts;
   /** A budget the session this row OPENS is born with (`sessionbudget.ts`).
    *  Not part of `launch`: a backlog item opens its session without one. Absent
    *  = none; a fork or a reopened closed row never inherits it. */
@@ -390,7 +410,7 @@ export const ON_TIME_MS = 60_000;
  *
  * "Held for ever, silently" is not an improvement on "failed wrongly". A
  * desktop that is permanently busy, a `serial` group with a wedged session, a
- * repo whose smart pick never answers: each of those can hold a released row
+ * local model that never finishes loading: each of those can hold a released row
  * indefinitely, and a row that waits for a week without a word is the same
  * disappearance as one that failed — just quieter.
  *

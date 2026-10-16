@@ -27,7 +27,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
-import { readIntents } from "./lib-e2e.mjs";
+import { readIntents, waitForHost } from "./lib-e2e.mjs";
 import { E, SLUG, STATE, rootEnv } from "./lib-brand.mjs";
 
 const PORT = 8843;
@@ -58,7 +58,7 @@ const env = {
 const host = spawn("node", ["packages/host/dist/main.js"], { env, stdio: ["ignore", "pipe", "pipe"] });
 host.stderr.on("data", (d) => process.stderr.write("[host] " + d));
 const base = `http://127.0.0.1:${PORT}`;
-await sleep(900);
+await waitForHost(PORT);
 
 const repo = await fetch(`${base}/api/repo`, {
   method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "alpha" }),
@@ -161,7 +161,9 @@ ws.send(JSON.stringify({
   t: "session.create", cwd: repo.path, title: "alpha · ready", prompt: "Read .claude/inbox/ready-shot.jpg",
   cols: 80, rows: 24, ackId: "launch-ack-2", needs: [".claude/inbox/ready-shot.jpg"],
 }));
-await waitFor(() => sessions.size === before + 1, 10000);
+// Wait for the ack too: the session's own frame can land before its op.ack,
+// and under load reading the acks on the first frame found none (undefined).
+await waitFor(() => sessions.size === before + 1 && opAcks.some((a) => a.ackId === "launch-ack-2"), 10000);
 const readyAck = opAcks.find((a) => a.ackId === "launch-ack-2");
 check(sessions.size === before + 1, "a create whose files are already there opens immediately");
 check(!!readyAck?.sessionId && !readyAck?.launchId,

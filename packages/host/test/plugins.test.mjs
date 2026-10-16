@@ -10,7 +10,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -267,4 +267,40 @@ test("registry: a throwing event handler is the plugin's status, not the daemon'
   assert.equal(v.state, "active");
   assert.equal(v.status.tone, "bad");
   assert.match(v.status.text, /prompt handler failed: handler blew up/);
+});
+
+test("registry: a corrupt plugins.json / settings.json is moved aside, not read as 'nothing' and overwritten", async () => {
+  const cfg = mkdtempSync(join(tmpdir(), "waterplane-regcfg-"));
+  const root = mkdtempSync(join(tmpdir(), "waterplane-regroot-"));
+  plugin(join(cfg, "plugins"), "echo", manifest());
+  const state = join(root, ".waterplane");
+  mkdirSync(join(state, "plugins", "echo"), { recursive: true });
+  writeFileSync(join(state, "plugins.json"), '{"enabled":{"echo":fal'); // torn write
+  writeFileSync(join(state, "plugins", "echo", "settings.json"), "[1,2]"); // parses, not an object
+  const orig = console.error;
+  console.error = () => {};
+  const { reg } = registry(cfg, root);
+  try { await reg.loadAll(); } finally { console.error = orig; }
+  const v = reg.views()[0];
+  assert.equal(v.enabled, true, "an unreadable switch file is the default, loudly, not a crash");
+  assert.equal(v.values.cap, 5, "settings fall back to the defaults");
+  assert.equal(readdirSync(state).filter((n) => n.startsWith("plugins.json.corrupt-")).length, 1);
+  assert.ok(!readdirSync(state).includes("plugins.json"));
+  assert.equal(readdirSync(join(state, "plugins", "echo")).filter((n) => n.startsWith("settings.json.corrupt-")).length, 1);
+});
+
+test("registry: an urgent plugin notify lands on the approval kind, tagged with the plugin; otherwise it stays quiet", async () => {
+  const cfg = mkdtempSync(join(tmpdir(), "waterplane-regcfg-"));
+  const root = mkdtempSync(join(tmpdir(), "waterplane-regroot-"));
+  plugin(join(cfg, "plugins"), "echo", manifest(),
+    'export function activate(api) { api.on("action", () => { api.notify({ title: "a", body: "b", urgent: true }); api.notify({ title: "c", body: "d" }); return { ok: true, message: "sent" }; }); }');
+  const notes = [];
+  const reg = new PluginRegistry({
+    root, configDir: cfg, sessions: fakeSessions(),
+    decision: () => {}, meter: () => {}, notify: (k, p) => notes.push([k, p]), usage: () => ({ ok: false }),
+    changed: () => {},
+  });
+  await reg.loadAll();
+  await reg.action("echo", "ping");
+  assert.deepEqual(notes.map(([k, p]) => [k, p.plugin, p.title]), [["approval", "echo", "a"], ["plugin", "echo", "c"]]);
 });

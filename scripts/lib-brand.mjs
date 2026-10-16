@@ -20,6 +20,8 @@ export const SLUG = BRAND.slug;
 /** `<root>/<STATE>` and `<repo>/<STATE>`. */
 export const STATE = BRAND.stateDirName;
 export const LEGACY_STATE = LEGACY[0].stateDirName;
+/** `<repo>/<SHARED>` — the committed per-repo config dir (`builds.json`). */
+export const SHARED = BRAND.sharedDirName;
 /**
  * The env that names a throwaway root AND the host's global state dir:
  * `{ ...rootEnv(ROOT) }` where a script used to set `[E.ROOT]` alone. The state

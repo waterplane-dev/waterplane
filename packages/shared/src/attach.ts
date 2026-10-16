@@ -117,3 +117,30 @@ export function attachBlockers(states: AttachStatus[]): AttachStatus[] {
   const rank: Record<string, number> = { kept: 0, dead: 1, missing: 2, unknown: 3 };
   return states.filter((s) => s.state in rank).sort((a, b) => rank[a.state] - rank[b.state]);
 }
+
+/** The queue facts `sending` is read from — structurally a web `OutboxEntry`. */
+export interface UploadRowLike {
+  mode?: string;
+  status: string;
+  upload?: { relPath: string } | null;
+}
+
+/**
+ * `AttachFacts.sending` off the send queue: every upload row that will still be
+ * attempted. A row that has GIVEN UP is not sending anything, or a prompt would
+ * be called sendable on the strength of an upload that has already failed.
+ */
+export function sendingUploads(rows: readonly UploadRowLike[]): string[] {
+  return rows.filter((e) => e.mode === "upload" && e.upload && e.status !== "failed").map((e) => e.upload!.relPath);
+}
+
+/**
+ * What a cached `checkAttachments` verdict depends on in the queue, as one
+ * string: it moves when an upload is queued, lands or dies, and NOT on a
+ * progress tick or another lane's ack. The strip was keyed on nothing from the
+ * queue at all, so an upload that died after the check went on reading
+ * `sending` — sendable, no re-attach button — over a file that would never come.
+ */
+export function sendingUploadsKey(rows: readonly UploadRowLike[]): string {
+  return [...sendingUploads(rows)].sort().join("\n");
+}

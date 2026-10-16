@@ -21,8 +21,8 @@ import { inWords } from "../sendIntent.ts";
  * puts on the wire.
  *
  * Measured, on this desktop: nine live `at` rows, every one of them a one-off,
- * zero recurring — seven of them `failed`, in no backlog, and invisible to the
- * smart pick, which only ever looks at backlog rows. That is the whole reason
+ * zero recurring — seven of them `failed`, in no backlog, where nobody grooming
+ * the list ever saw them. That is the whole reason
  * these sentences exist.
  *
  * They are HERE, beside the filter rules, for `ageBucket`'s reason: the chip on
@@ -46,7 +46,10 @@ export type BacklogClock = NonNullable<BacklogItem["at"]>;
  *
  *  - `· next in 2h` when an instant is armed. Relative, not a wall clock: this
  *    is read inside a list of waiting work where every other time on the row
- *    ("added 3d ago", "took 4m") is relative too.
+ *    ("added 3d ago", "took 4m") is relative too. Only on a row still
+ *    `queued`: the host leaves `nextAt` on a row after it fires (it is the
+ *    instant it fired AT), so a `done` row read "next due now" a fortnight
+ *    after it ran — a clock contradicting the verdict beside it.
  *  - `· waiting for a usage reading` when the rule is anchored to a usage
  *    WINDOW and nothing is armed yet. That is the ordinary first state of such
  *    a rule and it is not "not armed" in the sense of switched off — the host
@@ -59,7 +62,7 @@ export type BacklogClock = NonNullable<BacklogItem["at"]>;
  */
 export function clockWords(at: BacklogClock, now: number, status: BacklogStatus): string {
   const rule = describeRule(at.rule);
-  if (at.nextAt != null) return `${rule} · next ${inWords(at.nextAt, now)}`;
+  if (at.nextAt != null && status === "queued") return `${rule} · next ${inWords(at.nextAt, now)}`;
   if (at.rule.kind === "window" && status === "queued") return `${rule} · waiting for a usage reading`;
   return rule;
 }

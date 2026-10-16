@@ -1,14 +1,14 @@
-import { Loader, X } from "lucide-react";
+import { FileText, Loader, X } from "lucide-react";
 import { useEffect, useRef } from "react";
-import { useWide } from "./core/layout/layout";
 import { askConfirm } from "./Confirm";
 import { repoAccentStyle } from "./format";
 import { useRepoColors } from "./repoColors";
 import { STATUS_LABEL } from "./sessionFacts";
 import {
-  askTabAttach, askTabClose, tabCloseAsk, tabStripHeight, useSessionTabs,
-  type SessionTab, type TabsSnapshot,
+  askTabAttach, askTabClose, askTabFile, fileTabKey, fileTabLabel, setFilePinned, tabCloseAsk, tabStripHeight, useSessionTabs,
+  type FileTab, type SessionTab, type TabsSnapshot,
 } from "./sessionTabs";
+import { showToast } from "./toast";
 
 /**
  * **The session-tab strip** — the third always-on bar, under the connection
@@ -51,11 +51,14 @@ import {
  * **How many are DRAWN is a second setting, and that one is a limit**
  * (`tabsLimit`, default 10): what it cuts is counted at the strip's end.
  *
- * **How many fit is a setting, and it is not a limit.** `count` sizes each tab
- * to `1/N` of the strip so N of them fill it exactly; everything past N is
- * still there and still reachable — the strip scrolls sideways, and the active
- * tab is scrolled into view when it changes, so a tab opened from the launcher
- * is never off-screen on arrival.
+ * **How many fit is a setting, and it is not a limit.** `count` is the
+ * narrowest a tab gets — `1/N` of the strip, so N of them fill it exactly;
+ * everything past N is still there and still reachable — the strip scrolls
+ * sideways, and the active tab is scrolled into view when it changes, so a tab
+ * opened from the launcher is never off-screen on arrival. With fewer than N
+ * open a tab is as wide as its NAME (`.stab`): a fixed `1/N` cut a four-word
+ * label off beside an empty half strip, which is the one thing the room was
+ * for.
  *
  * **The × asks.** Closing a session ends a running CLI process, which is not
  * something a thumb may do by brushing a 20 px target beside the label it was
@@ -83,17 +86,20 @@ import {
  * mark away — the icon is a different SHAPE from the dot, not only a different
  * behaviour, which is what makes the still version still say something.
  *
- * It renders NOTHING with no sessions: a strip that is permanently empty is
+ * **Pinned files ride the same strip** (`FileTab`, pinned from the file
+ * viewer's header), sorted in among the sessions by the same order
+ * (`mergeStrip`) and marked as files: a file icon where a
+ * session's state mark goes, a dashed edge where a session's is solid. While
+ * one is on screen IT is the front tab, not the session under the viewer.
+ *
+ * It renders NOTHING with no sessions and no pins: a strip that is permanently empty is
  * furniture, and the height it publishes goes to zero with it so no screen pads
  * itself clear of a bar that is not there.
  */
 export function SessionTabsBar() {
   const enabled = useSessionTabs((s) => s.enabled);
-  const any = useSessionTabs((s) => s.tabs.length > 0);
-  // Wide mode: the sidebar lists the sessions, so the strip is not drawn and
-  // reports height 0 (decision O3, desktop-workspace-plan.md).
-  const wide = useWide();
-  const h = tabStripHeight(enabled, any, wide);
+  const any = useSessionTabs((s) => s.tabs.length > 0 || s.files.length > 0);
+  const h = tabStripHeight(enabled, any);
   const show = h > 0;
 
   // The strip's height, published once for every screen to pad itself clear of
@@ -117,6 +123,7 @@ function Strip() {
   // until the next session list arrived.
   useRepoColors();
   const ref = useRef<HTMLDivElement | null>(null);
+  const fileOn = !!s.fileActive && s.files.some((f) => fileTabKey(f) === s.fileActive);
 
   // Keep the open session on screen. A tab opened from the launcher, or the
   // eleventh one in the order, is otherwise scrolled past the right edge on
@@ -130,15 +137,19 @@ function Strip() {
   useEffect(() => {
     const strip = ref.current;
     if (!strip) return;
-    const el = s.activeId ? strip.querySelector<HTMLElement>(".stab.on") : null;
+    const el = s.activeId || s.fileActive ? strip.querySelector<HTMLElement>(".stab.on") : null;
     if (el) el.scrollIntoView({ block: "nearest", inline: "nearest" });
     else strip.scrollLeft = 0;
-  }, [s.activeId, s.order, s.tabs.length]);
+  }, [s.activeId, s.fileActive, s.order, s.strip.length]);
 
   return (
     <div className="sess-tabs" ref={ref} role="tablist" aria-label="open sessions"
       style={{ ["--stab-n" as string]: String(s.count) }}>
-      {s.tabs.map((t) => <Tab key={t.id} t={t} active={t.id === s.activeId} />)}
+      {/* A pinned file on screen is the front tab; the session under the
+          viewer is not, or two tabs would both claim to be the one you see. */}
+      {s.strip.map((x) => x.kind === "session"
+        ? <Tab key={x.tab.id} t={x.tab} active={!fileOn && x.tab.id === s.activeId} />
+        : <FileTabView key={fileTabKey(x.file)} f={x.file} active={fileTabKey(x.file) === s.fileActive} />)}
       {/* What the limit cut, said rather than dropped. Words, not a control:
           every one of them is in the launcher, and a count that opened the
           unfiltered list would break the count-is-a-filter rule. */}
@@ -183,6 +194,37 @@ function Tab({ t, active }: { t: SessionTab; active: boolean }) {
         : <span className="stab-led" aria-hidden="true" />}
       <span className="stab-label">{t.label}</span>
       <button className="stab-x" aria-label={`close ${t.label}`} title="close this session" onClick={close}>
+        <X size={12} />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * One pinned file. A tap opens the viewer on it; the × unpins WITHOUT asking —
+ * nothing ends and nothing is lost (the file is where it was) — and the toast
+ * names the way back, because a tab that vanishes must say where it went.
+ */
+function FileTabView({ f, active }: { f: FileTab; active: boolean }) {
+  const label = fileTabLabel(f.path);
+  function unpin(e: React.MouseEvent) {
+    e.stopPropagation();
+    setFilePinned(f, false);
+    showToast(`unpinned ${label} — pin it again from the file's header`);
+  }
+  return (
+    <div
+      className={`stab stab-file${active ? " on" : ""}`}
+      style={repoAccentStyle(f.repo)}
+      role="tab"
+      aria-selected={active}
+      data-hint="session.tabs"
+      title={`${f.path} — ${f.repo || "file"} · pinned file`}
+      onClick={() => askTabFile(f)}
+    >
+      <FileText size={11} className="stab-fico" aria-hidden="true" />
+      <span className="stab-label">{label}</span>
+      <button className="stab-x" aria-label={`unpin ${label}`} title="unpin this file" onClick={unpin}>
         <X size={12} />
       </button>
     </div>

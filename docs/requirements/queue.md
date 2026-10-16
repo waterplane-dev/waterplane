@@ -26,3 +26,13 @@ A queued prompt clearly shows it is tied to a specific session, and what that me
 - asked: 2026-09-30
 - shipped: 412916b
 
+### R-queue-007 · shipped
+Queued sessions run one at a time: the next starts only once the previous one has finished coding and is idle; an open question from a running session blocks it, clearly shown in the UI; the manual fire action starts it immediately, overriding both checks.
+- asked: 2026-10-06
+- shipped: 5ed143c9, 5ef5e1d7
+
+### R-queue-008 · shipped
+Sending a prompt while the session is busy asks whether to send it now or queue it until the session is idle; a remembered answer is kept per device.
+- asked: 2026-10-12
+- shipped: d112079a
+

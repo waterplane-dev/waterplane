@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import {
-  Check, CloudOff, Download, Eye, FileText, Loader, Pencil, Play, Plus, ScanEye, ShieldCheck, Square, Trash2, X,
+  CloudOff, Download, Eye, FileText, Loader, Pencil, Play, Plus, ScanEye, ShieldCheck, Square, Trash2, X,
 } from "lucide-react";
 import type {
   BuildArtifact, CaptureBackendId, CaptureBackendInfo, CaptureRun, CaptureRunStatus, CaptureTarget,
@@ -12,6 +12,7 @@ import { Unavailable } from "./Unavailable";
 import { track } from "./usage";
 import { ago, durSpan, fmtSize, seqId, stripAnsi, when } from "./format";
 import { SheetHead } from "./Sheet";
+import { RadioRows } from "./kit";
 import { useBackStep } from "./backStep";
 import { Empty } from "./Empty";
 
@@ -648,13 +649,12 @@ function CaptureEditor({ draft, backends, onCancel, onSave }: {
               how a picker ends up with no visible selection at all on the one
               screen nobody re-tested. A mark works in both themes and needs no
               CSS this file does not own. */}
-          <div className="sheet-actions" role="group" aria-label="capture backend">
-            {CAPTURE_BACKEND_IDS.map((id) => (
-              <button key={id} className="key" aria-pressed={backend === id} onClick={() => setBackend(id)}>
-                {backend === id ? <Check size={14} /> : null} {id}
-              </button>
-            ))}
-          </div>
+          <RadioRows
+            label="capture backend"
+            options={CAPTURE_BACKEND_IDS.map((id) => ({ key: id, label: id }))}
+            value={backend}
+            onChange={setBackend}
+          />
           {/* Said, not dimmed. `available: true` may still carry a sentence —
               which tool was found — and that is worth printing too. */}
           {be?.reason && (
@@ -684,13 +684,12 @@ function CaptureEditor({ draft, backends, onCancel, onSave }: {
             <>
               <input className="search" placeholder="URL (required — e.g. http://localhost:5173/)" value={url} onChange={(e) => setUrl(e.target.value)} style={{ fontFamily: "monospace" }} />
               <input className="search" placeholder={`Viewports, e.g. ${DEFAULT_CAPTURE_VIEWPORT.w}x${DEFAULT_CAPTURE_VIEWPORT.h}, 1280x800`} value={viewports} onChange={(e) => setViewports(e.target.value)} style={{ fontFamily: "monospace" }} />
-              <div className="sheet-actions" role="group" aria-label="emulated colour scheme">
-                {(["", "light", "dark", "both"] as const).map((t) => (
-                  <button key={t || "default"} className="key" aria-pressed={theme === t} onClick={() => setTheme(t)}>
-                    {theme === t ? <Check size={14} /> : null} {t || "default theme"}
-                  </button>
-                ))}
-              </div>
+              <RadioRows
+                label="emulated colour scheme"
+                options={(["", "light", "dark", "both"] as const).map((t) => ({ key: t || "default", label: t || "default theme" }))}
+                value={theme || "default"}
+                onChange={(k) => setTheme(k === "default" ? "" : (k as typeof theme))}
+              />
               <div className="form-hint">
                 Capture never starts a dev server. A URL that does not answer is refused in words, and the Build sheet is where you start one. Empty viewports means one frame at <span className="mono">{DEFAULT_CAPTURE_VIEWPORT.w}×{DEFAULT_CAPTURE_VIEWPORT.h}</span>.
               </div>

@@ -67,3 +67,14 @@ test("a result goes stale on its own, and takes the bar with it", () => {
   assert.equal(updateBarView(u, "", NOW + RESULT_FRESH_MS - 1).show, true);
   assert.equal(updateBarView(u, "", NOW + RESULT_FRESH_MS).show, false);
 });
+
+test("after a clean upgrade the bar says so without offering the upgrade again", () => {
+  const done = { ...base, current: "2.1.267", latest: "2.1.267", lastResult: { ok: true, message: "updated to 2.1.267", at: NOW } };
+  const v = updateBarView(done, "", NOW);
+  assert.equal(v.show, true);
+  assert.equal(v.canApply, false);
+  assert.equal(v.staleAt, NOW + RESULT_FRESH_MS);
+  // A run that moved nothing (cask lagging npm) still has something to apply.
+  const lagging = { ...done, available: true, latest: "2.1.270" };
+  assert.equal(updateBarView(lagging, "", NOW).canApply, true);
+});

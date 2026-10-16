@@ -98,6 +98,26 @@ export function showHostName(hosts: readonly SavedHost[]): boolean {
   return hosts.length > 1;
 }
 
+/** The launcher bar's switch key names the desktop in a few letters — its
+ *  first word ("DeskMini-von-Alex" → "DeskM…"), capped so the key fits
+ *  beside the settings cog instead of wrapping onto a row of its own. The
+ *  full name is the title and the menu row. */
+export const SHORT_HOST_MAX = 6;
+export function shortHostName(name: string): string {
+  const first = name.trim().split(/[\s\-_.·]+/).find((w) => w.length > 0) ?? "";
+  return first.length > SHORT_HOST_MAX ? `${first.slice(0, SHORT_HOST_MAX - 1)}…` : first;
+}
+
+/** The toggle half of that key: the next of the person's own desktops after
+ *  the one in use, wrapping — so two hosts flip and three go round. `hosts`
+ *  arrives without the demo row (`realHosts`). Fewer than two, or nothing but
+ *  the one in use ⇒ null, and the key is not drawn. */
+export function nextHostId(hosts: readonly SavedHost[], activeId: string | null): string | null {
+  if (hosts.length < 2) return null;
+  const i = hosts.findIndex((h) => h.id === activeId);
+  return hosts[(i + 1) % hosts.length].id;
+}
+
 /** Active first, then the order they were added — so the row a thumb wants
  *  (another one) is never under the one it is on. */
 export function hostRows(hosts: readonly SavedHost[], activeId: string | null): SavedHost[] {

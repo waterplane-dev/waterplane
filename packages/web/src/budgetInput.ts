@@ -170,8 +170,17 @@ export const HELD_SENDS =
 
 /** The state line for a session's budget, from the host's verdict: what it is
  *  doing now, in shared's own sentences. Used by the sheet and the context
- *  panel alike, so the two cannot disagree. */
-export function budgetStateLine(b: SessionBudgetInfo | undefined, now: number, spark?: SessionBudgetSpark | null): string {
+ *  panel alike, so the two cannot disagree.
+ *
+ *  With no budget, the SPARK says which caller this is. Without one (the
+ *  budget sheet) the line stands alone and says there is none. With one (the
+ *  context sheet's budget card, whose TITLE is "no budget on this session") it
+ *  is only what the session has spent — the card printed "no budget on this
+ *  session" twice, as its title and as its body — and null where nothing is
+ *  known, leaving the card its title and its door. */
+export function budgetStateLine(b: SessionBudgetInfo | undefined, now: number): string;
+export function budgetStateLine(b: SessionBudgetInfo | undefined, now: number, spark: SessionBudgetSpark | null): string | null;
+export function budgetStateLine(b: SessionBudgetInfo | undefined, now: number, spark?: SessionBudgetSpark | null): string | null {
   if (!b) {
     // With the session's spark at hand, say what it has spent — in dollars, or
     // in tokens where no list price covers the model — so "no budget" is never
@@ -179,7 +188,7 @@ export function budgetStateLine(b: SessionBudgetInfo | undefined, now: number, s
     if (spark === undefined) return "No budget on this session.";
     const unit = sessionSpend("usd", spark, null, now).value != null ? "usd" : sessionSpend("tok", spark, null, now).value != null ? "tok" : null;
     const line = unit && budgetSpentLine(unit, spark, null, now);
-    return line ? `No budget on this session. Spent: ${line}.` : "No budget on this session.";
+    return line ? `Spent: ${line}.` : null;
   }
   const v = b.verdict;
   if (v.state === "unknown") return sessionBudgetUnknownText(v.why ?? "noSpark", v.why === "stale" && b.cal ? now - b.cal.checkedAt : undefined);

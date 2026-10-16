@@ -30,6 +30,8 @@ const SESSION_SURFACE = [
   "DetectedPrompt:type",
   "Effort:type",
   "ExternalSession:type",
+  "FollowUp:type",
+  "FollowUpBy:type",
   "HistoryEntry:type",
   "LaunchOpts:type",
   "LimitResumeMode:type",
@@ -91,11 +93,11 @@ const CLIENT_T = [
   "backlog.remove",
   "backlog.reorder",
   "backlog.setAuto",
-  "backlog.setSmartPick",
   "backlog.swap",
-  "backlog.unmerge",
   "backlog.update",
   "backlog.validate",
+  "billing.get",
+  "billing.set",
   "budget.get",
   "budget.set",
   "build.cancel",
@@ -119,6 +121,7 @@ const CLIENT_T = [
   "fanout.list",
   "fanout.run",
   "hello",
+  "host.halt",
   "input.settle",
   "install.get",
   "install.report",
@@ -148,6 +151,12 @@ const CLIENT_T = [
   "ping",
   "plugin.action",
   "plugin.call",
+  "stream.open",
+  "stream.params",
+  "stream.input",
+  "stream.ack",
+  "stream.keyframe",
+  "stream.close",
   "plugin.enable",
   "plugin.list",
   "plugin.sessionAnswer",
@@ -175,11 +184,13 @@ const CLIENT_T = [
   "session.closecheck",
   "session.create",
   "session.detach",
+  "session.followup",
   "session.fork",
   "session.history",
   "session.input",
   "session.kill",
   "session.list",
+  "session.mode",
   "session.name",
   "session.pin",
   "session.record",
@@ -207,6 +218,7 @@ const HOST_T = [
   "backends",
   "backlog.ack",
   "backlog.list",
+  "billing.status",
   "budget.state",
   "build.candidates",
   "build.list",
@@ -224,6 +236,7 @@ const HOST_T = [
   "error",
   "fanout.list",
   "fanout.run",
+  "halt.state",
   "input.ack",
   "input.settled",
   "install.log",
@@ -244,6 +257,10 @@ const HOST_T = [
   "plugin.error",
   "plugin.list",
   "plugin.push",
+  "stream.opened",
+  "stream.refused",
+  "stream.status",
+  "stream.ended",
   "plugin.reply",
   "pong",
   "pty",
@@ -262,6 +279,7 @@ const HOST_T = [
   "session.history",
   "session.images",
   "session.list",
+  "session.moded",
   "session.named",
   "session.searchResults",
   "session.updated",
@@ -312,11 +330,11 @@ test("wire/messages.ts exports exactly its pinned surface, values and types alik
 test("ClientMessage carries exactly the pinned message types", () => {
   const { tags: got, members } = tags("ClientMessage");
   assert.deepEqual(got, [...CLIENT_T].sort());
-  assert.equal(members, 131, "a member was added or merged");
+  assert.equal(members, 140, "a member was added or merged");
 });
 
 test("HostMessage carries exactly the pinned message types", () => {
   const { tags: got, members } = tags("HostMessage");
   assert.deepEqual(got, [...HOST_T].sort());
-  assert.equal(members, 72, "a member was added or merged");
+  assert.equal(members, 79, "a member was added or merged");
 });

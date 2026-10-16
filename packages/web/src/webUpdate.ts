@@ -42,6 +42,7 @@ import { nativePlugin } from "./shellBridge";
 import { LS, lsDel, lsGet, lsJson, lsSet, lsSetJson } from "./storage";
 import { api, bgFetch } from "./api";
 import { armRouteResume } from "./resumeRoute";
+import { showToast } from "./toast";
 
 /** One file in the daemon's bundle manifest (host/webbundle.ts). */
 interface BundleFile {
@@ -65,6 +66,7 @@ export type UpdatePhase =
   | "checking"
   | "downloading"
   | "staged"        // downloaded and verified; takes effect on restart
+  | "held"          // the host's build already failed to start on this phone; not taken again unasked
   | "error";
 
 export interface UpdateStatus {
@@ -77,7 +79,8 @@ export interface UpdateStatus {
   stagedId: string | null;
   /** Files done / total and bytes done / total, while downloading. */
   progress?: { files: number; totalFiles: number; bytes: number; totalBytes: number };
-  /** Populated for `error`, or the host's explanation for `unavailable`. */
+  /** Populated for `error`, the host's explanation for `unavailable`, or why
+   *  the build is `held` (what the native fallback recorded). */
   message?: string;
   /** When the host last actually answered a check — not when one was last
    *  attempted, so "up to date" carries a clock a person can distrust. */
@@ -94,6 +97,12 @@ export interface NativeUpdateInfo {
    *  OTA never touches it, so it is what answers "is the SHELL current?" */
   versionName: string;
   versionCode: number;
+  /** The build the shell fell back from and still refuses to stage unasked
+   *  ("" when none, or an APK that predates the mark), and why. */
+  badBuild: string;
+  badReason: string;
+  /** When the shell last fell back to its built-in bundle by itself; 0 never. */
+  lastRecoveryAt: number;
 }
 
 type Listener = (s: UpdateStatus) => void;
@@ -102,6 +111,7 @@ const LS_AUTO = LS.webUpdateAuto;
 const LS_STAGED = LS.webUpdateStaged;
 const LS_APPLY = LS.webUpdateApply;
 const LS_TRIES = LS.webUpdateApplyTries;
+const LS_SEEN = LS.webUpdateRecoverySeen;
 /** Put down for this long ⇒ the reload is invisible, so take the staged build. */
 const APPLY_HIDDEN_MS = 20_000;
 /** Away for this long ⇒ coming back IS the app starting; reload on the way in.
@@ -214,6 +224,7 @@ class UpdateManager {
     const p = plugin();
     if (!p) return;
     try { await p.markHealthy(); } catch { /* best effort */ }
+    void this.sayFallback();
     const current = await runningBuildId();
     this.set({ current });
     if (current && this.status.stagedId === current) {
@@ -221,6 +232,20 @@ class UpdateManager {
       clearApplyTries();
       this.set({ stagedId: null, phase: "idle" });
     }
+  }
+
+  /**
+   * Say once that the shell abandoned a build by itself. The native toast
+   * (`ShellUpdatePlugin.fallBack`) only covers the in-process deadline and is
+   * gone in seconds; a fallback decided at launch has no screen to say it on.
+   */
+  private async sayFallback(): Promise<void> {
+    const n = await nativeInfo();
+    if (!n || !n.lastRecoveryAt) return;
+    if (Number(lsGet(LS_SEEN) ?? 0) >= n.lastRecoveryAt) return;
+    lsSet(LS_SEEN, String(n.lastRecoveryAt));
+    const what = n.badBuild ? `Build ${n.badBuild.slice(0, 8)}` : "A downloaded build";
+    showToast(`${what} did not start${n.badReason ? ` (${n.badReason})` : ""}, so the app went back to the build inside it. It takes the desktop's next build as usual.`);
   }
 
   /**
@@ -304,8 +329,16 @@ class UpdateManager {
         return this.status;
       }
       this.set({ current, available: m.buildId, lastCheckedAt: Date.now() });
+      const held = m.buildId === current ? null : await heldBuild(m.buildId);
       if (m.buildId === current) {
         this.set({ phase: "idle" });
+      } else if (held !== null) {
+        // The shell fell back from exactly this build. Downloading it again is
+        // what turned one white screen into a loop: staged, restarted into on
+        // the next pocketing, blank again. Wait for a different build, or for
+        // the person to ask for this one by hand (`download(true)`).
+        this.unstage(m.buildId);
+        this.set({ phase: "held", message: held });
       } else if (m.buildId === this.status.stagedId) {
         // Already downloaded on an earlier run; just waiting for a restart.
         this.set({ phase: "staged" });
@@ -329,7 +362,7 @@ class UpdateManager {
    * on any real edit anyway, and a bundle assembled out of two builds is a
    * failure mode nobody wants to debug on a phone.
    */
-  async download(): Promise<void> {
+  async download(force = false): Promise<void> {
     const p = plugin();
     if (!p || this.busy) return;
     if (isDemo()) { this.set({ phase: "unavailable", message: DEMO_NO_UPDATE }); return; }
@@ -366,7 +399,18 @@ class UpdateManager {
         this.set({ progress: { files: i + 1, totalFiles: m.files.length, bytes, totalBytes: m.total } });
       }
       await p.finishBundle({ id });
-      await p.stage({ id });
+      try {
+        await p.stage({ id, force });
+      } catch (e) {
+        // The shell refuses a build that already failed here unless asked by
+        // hand — `check()` normally stops before downloading it at all.
+        if ((e as { code?: string })?.code === "BAD_BUILD") {
+          this.unstage(id);
+          this.set({ phase: "held", message: msg(e), progress: undefined });
+          return;
+        }
+        throw e;
+      }
       lsSet(LS_STAGED, id);
       // From here on the next start is a different bundle, whether it comes from
       // `applyNow` below or from the app being opened cold days later — and a
@@ -381,6 +425,14 @@ class UpdateManager {
     } finally {
       this.busy = false;
     }
+  }
+
+  /** Forget a staged marker for a build the shell will not serve. */
+  private unstage(id: string): void {
+    if (this.status.stagedId !== id) return;
+    lsDel(LS_STAGED);
+    clearApplyTries();
+    this.set({ stagedId: null });
   }
 
   /** Switch to the staged bundle right now. Reloads the WebView. */
@@ -436,10 +488,20 @@ export async function nativeInfo(): Promise<NativeUpdateInfo | null> {
       basePath: typeof r.basePath === "string" ? r.basePath : "",
       versionName: typeof r.versionName === "string" ? r.versionName : "",
       versionCode: typeof r.versionCode === "number" ? r.versionCode : 0,
+      badBuild: typeof r.badBuild === "string" ? r.badBuild : "",
+      badReason: typeof r.badReason === "string" ? r.badReason : "",
+      lastRecoveryAt: typeof r.lastRecoveryAt === "number" ? r.lastRecoveryAt : 0,
     };
   } catch {
     return null;
   }
+}
+
+/** Why the shell will not take `id` unasked, or null when it will. */
+async function heldBuild(id: string): Promise<string | null> {
+  const n = await nativeInfo();
+  if (!n || n.badBuild !== id) return null;
+  return `build ${id.slice(0, 8)} did not start on this phone${n.badReason ? ` (${n.badReason})` : ""}, so the app went back to the build inside it`;
 }
 
 export async function runningBuildId(): Promise<string | null> {

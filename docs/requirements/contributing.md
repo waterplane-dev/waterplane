@@ -20,6 +20,20 @@ brief, and example code in a request is read, never pasted.
 - asked: 2026-10-01 (owner, open-source contribution policy)
 - shipped: bcd117d
 ### R-contributing-004 · requested
-Users can fork and customize the repo while still pulling upstream updates.
-- asked: 2026-10-04
+Users can fork and customize waterplane while still pulling upstream release updates; a fork is an upstream release plus a plugins directory and a config overlay, and never edits core.
+- asked: 2026-10-04, 2026-10-05
+
+### R-contributing-005 · requested
+The project stays low-maintenance and easy for others to collaborate on.
+- asked: 2026-10-08
+
+### R-contributing-006 · shipped
+Every module named in CLAUDE.md or a skill is described in docs/notes, so no entry is the only record of that module.
+- asked: 2026-10-09
+- shipped: 57829310
+
+### R-contributing-007 · shipped
+The README is a clear first touchpoint: a visitor understands the project and how to get started from its first screen.
+- asked: 2026-10-11
+- shipped: bbb4349c
 

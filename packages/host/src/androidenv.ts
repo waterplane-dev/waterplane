@@ -15,6 +15,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { readdir as readdirAsync, readFile as readFileAsync, stat as statAsync } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { BRAND } from "@waterplane/shared";
@@ -249,13 +250,35 @@ export function probeAndroidEnv(d: AndroidEnvDeps = realDeps()): AndroidEnvRepor
 const SKIP = new Set(["node_modules", "build", "dist", ".git", ".gradle", ".idea", ".claude", BRAND.stateDirName]);
 
 /**
+ * The real disk for `isAndroidRepo`, with "is it a directory" answered by the LISTING that named
+ * the entry (its `Dirent`) — a `statSync` per entry was one 9P round trip each on WSL over a
+ * Windows drive, and in a vcpkg checkout (thousands of port dirs full of patches) the setup sweep
+ * held the loop for minutes. A symlink is still followed with one `stat`.
+ */
+function direntDeps(): Pick<AndroidEnvDeps, "readdir" | "readText"> & { isDir(p: string): boolean } {
+  const dirs = new Set<string>();
+  return {
+    readText: realDeps().readText,
+    readdir: (p) => {
+      try {
+        return readdirSync(p, { withFileTypes: true }).map((e) => {
+          const full = join(p, e.name);
+          if (e.isDirectory()) dirs.add(full);
+          else if (e.isSymbolicLink()) { try { if (statSync(full).isDirectory()) dirs.add(full); } catch { /* dangling */ } }
+          return e.name;
+        });
+      } catch { return []; }
+    },
+    isDir: (p) => dirs.has(p),
+  };
+}
+
+/**
  * `AndroidManifest.xml`, or a `build.gradle(.kts)` applying a `com.android` plugin, within six
  * directories (`packages/app/android/app/src/main` is six). Bounded: this runs in the checklist, on the
  * process pumping every PTY.
  */
-export function isAndroidRepo(root: string, d: Pick<AndroidEnvDeps, "readdir" | "readText"> & { isDir?(p: string): boolean } = {
-  ...realDeps(),
-}): boolean {
+export function isAndroidRepo(root: string, d: Pick<AndroidEnvDeps, "readdir" | "readText"> & { isDir?(p: string): boolean } = direntDeps()): boolean {
   const isDir = d.isDir ?? ((p: string) => { try { return statSync(p).isDirectory(); } catch { return false; } });
   let budget = 400;
   const walk = (dir: string, depth: number): boolean => {
@@ -272,6 +295,35 @@ export function isAndroidRepo(root: string, d: Pick<AndroidEnvDeps, "readdir" | 
       if (n.startsWith(".") || SKIP.has(n)) continue;
       const p = join(dir, n);
       if (isDir(p) && walk(p, depth + 1)) return true;
+    }
+    return false;
+  };
+  return walk(root, 0);
+}
+
+/** `isAndroidRepo` on the real disk without holding the event loop — the same walk, rules and
+ *  budget, every call awaited. For the unattended setup sweep (`compliance.ts`' `inspectRepoAsync`). */
+export async function isAndroidRepoAsync(root: string): Promise<boolean> {
+  let budget = 400;
+  const walk = async (dir: string, depth: number): Promise<boolean> => {
+    if (budget-- <= 0) return false;
+    let ents: import("node:fs").Dirent[];
+    try { ents = await readdirAsync(dir, { withFileTypes: true }); } catch { ents = []; }
+    for (const e of ents) {
+      if (e.name === "AndroidManifest.xml") return true;
+      if (e.name === "build.gradle" || e.name === "build.gradle.kts") {
+        let text = "";
+        try { text = await readFileAsync(join(dir, e.name), "utf8"); } catch { /* unreadable */ }
+        if (/com\.android\b|["']android(?:-library)?["']/.test(text.slice(0, 262144))) return true;
+      }
+    }
+    if (depth >= 6) return false;
+    for (const e of ents) {
+      if (e.name.startsWith(".") || SKIP.has(e.name)) continue;
+      const p = join(dir, e.name);
+      let isDir = e.isDirectory();
+      if (e.isSymbolicLink()) { try { isDir = (await statAsync(p)).isDirectory(); } catch { /* dangling */ } }
+      if (isDir && await walk(p, depth + 1)) return true;
     }
     return false;
   };

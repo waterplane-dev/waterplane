@@ -51,10 +51,10 @@ export const THEME_TOKENS: readonly string[] = [
   "--bg", "--panel", "--sub", "--raise", "--well", "--line", "--pipe-bg",
   "--fg", "--muted", "--dim", "--ring",
   "--accent", "--ok", "--dead", "--warn", "--star", "--limit", "--ask", "--pair",
-  "--purple", "--sched", "--defer", "--ctx-low",
+  "--purple", "--sched", "--defer", "--ctx-low", "--fu-hand", "--fu-launch", "--fu-agent",
   "--on-accent", "--on-accent-strong", "--on-accent-line", "--on-dead", "--on-ok", "--on-limit", "--on-star", "--on-media",
   "--accent-wash", "--accent-tint", "--accent-tint-hi", "--accent-edge", "--accent-edge-hi",
-  "--ok-wash", "--ok-edge",
+  "--ok-wash", "--ok-edge", "--pick-fill", "--pick-edge",
   "--dead-wash", "--dead-tint", "--dead-edge", "--dead-edge-hi",
   "--warn-wash", "--warn-tint", "--warn-tint-hi", "--warn-edge",
   "--star-wash", "--star-edge", "--star-edge-hi",
@@ -62,7 +62,7 @@ export const THEME_TOKENS: readonly string[] = [
   "--ask-wash", "--ask-tint-hi", "--ask-edge",
   "--ctx-low-edge",
   "--hover-soft", "--hover", "--hover-hi", "--sheen",
-  "--panel-veil", "--panel-veil-hi", "--bg-veil",
+  "--panel-veil", "--panel-veil-hi", "--bg-veil", "--float-edge",
   "--scrim", "--scrim-media", "--scrim-label", "--shadow", "--shadow-soft",
   "--media-bg", "--paper",
   "--chart-1", "--chart-2", "--chart-3", "--chart-4",
@@ -71,7 +71,7 @@ export const THEME_TOKENS: readonly string[] = [
 ];
 
 /** Tokens declared as `rgb(var(<token>-rgb))`: an override is written to the triple. */
-export const THEME_RGB_TOKENS: readonly string[] = ["--accent", "--ok", "--dead", "--warn", "--star", "--limit", "--ask", "--pair"];
+export const THEME_RGB_TOKENS: readonly string[] = ["--accent", "--ok", "--dead", "--warn", "--star", "--limit", "--ask", "--pair", "--fu-agent"];
 
 const TOKENS = new Set(THEME_TOKENS);
 const RGB_TOKENS = new Set(THEME_RGB_TOKENS);

@@ -5,6 +5,7 @@ import { track } from "./usage";
 import { ago } from "./format";
 import { SheetHead } from "./Sheet";
 import { Empty } from "./Empty";
+import { Explain } from "./Explain";
 import { SessionFacts } from "./sessionFacts";
 import type { BackendList } from "./backendCaps";
 
@@ -57,11 +58,12 @@ const SCOPES: [SessionSearchScope, string][] = [
   ["history", "full history"],
 ];
 
-/** What each store actually reads — said, because the difference is the feature. */
-const SCOPE_HINT: Record<SessionSearchScope, string> = {
-  prompts: "Searches only what was sent in — prompts, slash commands and filed backlog items — never the CLI's reply.",
-  recent: "Searches the current terminal output — what's on screen now (plus a shell's scrollback).",
-  history: "Searches the full saved prompt + output of every turn — deepest, may be older.",
+/** What each store actually reads — said, because the difference is the feature. `line` is the one
+ *  line always on screen; `more` is the rest of the same sentence, behind a closed `Explain`. */
+const SCOPE_HINT: Record<SessionSearchScope, { line: string; more: string }> = {
+  prompts: { line: "Searches only what was sent in.", more: "Prompts, slash commands and filed backlog items — never the CLI's reply." },
+  recent: { line: "Searches the current terminal output.", more: "What's on screen now (plus a shell's scrollback)." },
+  history: { line: "Searches the full saved history.", more: "The saved prompt + output of every turn — deepest, may be older." },
 };
 
 /** Wrap every case-insensitive occurrence of `q` in the line with <mark>. */
@@ -136,7 +138,7 @@ export function SearchSheet({ sessionId, sessionLabel, results, loading, online 
     if (query.length < 2) return;
     timer.current = window.setTimeout(() => { setShown(query); track(`action:search.${scope}`); onSearch(query, scope); }, 300);
     return () => clearTimeout(timer.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- debounced on the query and scope; `onSearch` is a parent callback, not guaranteed stable
   }, [q, scope]);
 
   const totalHits = useMemo(() => (results ?? []).reduce((n, r) => n + r.total, 0), [results]);
@@ -146,8 +148,9 @@ export function SearchSheet({ sessionId, sessionLabel, results, loading, online 
     <div className="sheet">
       <SheetHead title={<><Search size={16} style={{ verticalAlign: "-3px", marginRight: 4 }} />
           {sessionId ? `Search · ${sessionLabel ?? "session"}` : "Search all sessions"}</>} onClose={onClose} />
+      {/* Words to find, not a command: the UI font, like the fields around it. */}
       <input
-        className="search mono"
+        className="search"
         placeholder={sessionId ? "Find a word in this CLI…" : "Find a word in any session…"}
         value={q}
         onChange={(e) => setQ(e.target.value)}
@@ -158,7 +161,10 @@ export function SearchSheet({ sessionId, sessionLabel, results, loading, online 
           <button key={key} className={scope === key ? "seg on" : "seg"} onClick={() => setScope(key)}>{label}</button>
         ))}
       </div>
-      <div className="form-hint">{SCOPE_HINT[scope]}</div>
+      <div className="form-hint">
+        {SCOPE_HINT[scope].line}
+        <Explain of="what this search reads">{SCOPE_HINT[scope].more}</Explain>
+      </div>
 
       <div className="list">
         {q.trim().length < 2 && <Empty>Type at least 2 characters.</Empty>}

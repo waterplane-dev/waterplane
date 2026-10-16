@@ -36,10 +36,10 @@
  *    tokens; identity comes from the mark beside them.
  */
 import { useCallback, useId, useRef, useState } from "react";
-import { Sigma } from "lucide-react";
-import { contextPct, costChip, costText, fmtShare, usageChip, usageText, type AgentRun, type ContextEvent, type ContextSample, type ContextSpark } from "@waterplane/shared";
+import { Sigma, TriangleAlert } from "lucide-react";
+import { contextPct, costChip, costText, fmtShare, usageChip, usageText, type AgentRun, type ContextEvent, type ContextSample, type ContextSpark, type SpendWarn } from "@waterplane/shared";
 import {
-  areaPath, eventLabel, fmtAxisTime, fmtGap, fmtTokens, fmtTokensFine, fmtYTick, linePath, makePlot,
+  areaPath, autoCompactSetLabel, eventLabel, fmtAxisTime, fmtGap, fmtTokens, fmtTokensFine, fmtYTick, linePath, makePlot,
   agentAtPoint, agentLanes, agentLines, agentSpendBand, laneGeom, modelLabel, nearestSample, sparkGeom, spendSparkGeom,
   spendSparkTitle, stackBands, USED,
   type AgentLane, type ModelSlots, type Plot, type SpendFacts, type StackSeries,
@@ -134,6 +134,7 @@ export function ContextSparkline({ spark, width = 76, height = 20, value = false
     // whose window is not this axis's.
     g.agentPeak != null ? `agents peaked at ${fmtTokens(g.agentPeak)}` : null,
     spark.autoCompactTok != null ? `compacts at ${fmtTokens(spark.autoCompactTok)}` : null,
+    spark.autoCompactSetTok ? `curve tops out at the auto-compact setting, ${fmtTokens(spark.autoCompactSetTok)}` : null,
     compacts ? `${compacts} compaction${compacts > 1 ? "s" : ""}` : null,
     limits ? `${limits} usage limit${limits > 1 ? "s" : ""}` : null,
   ].filter(Boolean).join(" · ");
@@ -236,10 +237,13 @@ function SeriesWash({ id }: { id: string }) {
  * Null on a host that sends no `usedPts`, and then the launcher row is exactly
  * what it was: one curve, with the total as a `Σ` chip beside it.
  */
-export function SpendSparkline({ spark, width = 76, height = 14 }: {
+export function SpendSparkline({ spark, width = 76, height = 14, warn = null }: {
   spark: ContextSpark;
   width?: number;
   height?: number;
+  /** Past the person's orange/red spend mark (`shared/spendwarn.ts`): a
+   *  triangle in that colour beside the figure, and the figure in it too. */
+  warn?: SpendWarn | null;
 }) {
   const wash = paintId(useId());
   const g = spendSparkGeom(spark, width, height);
@@ -257,7 +261,7 @@ export function SpendSparkline({ spark, width = 76, height = 14 }: {
   // else the end of the curve. Each step is absent rather than zero, so a host
   // that cannot price a model shows exactly what it showed before.
   const chip = costChip(spark.costUsd) ?? usageChip(spark.usageTok) ?? fmtTokensFine(g.end);
-  const title = spendSparkTitle(spark, g);
+  const title = warn ? `${warn.text}\n${spendSparkTitle(spark, g)}` : spendSparkTitle(spark, g);
   return (
     <span className="ctx-spark-pair" title={title}>
       <svg className="ctx-spark" width={width} height={height} viewBox={`0 0 ${width} ${height}`}
@@ -274,11 +278,22 @@ export function SpendSparkline({ spark, width = 76, height = 14 }: {
             strokeOpacity={0.45} strokeWidth={1} strokeDasharray="3 3" />
         )}
         <path d={g.area} fill={`url(#${wash})`} />
+        {/* The subagents' spend stacked on the parent's, in the sheet's grey
+            (no fifth hue): on a fan-out session it is most of the box, and
+            without it the parent's curve sat on the floor under a total at the
+            top — a scale that looked wrong because half of it was missing. */}
+        {g.agentBand && <>
+          <path d={g.agentBand.area} fill="var(--fg)" fillOpacity={0.16} />
+          <path d={g.agentBand.top} fill="none" stroke="var(--fg)" strokeOpacity={0.5} strokeWidth={1}
+            strokeLinejoin="round" strokeLinecap="round" />
+        </>}
         <path d={g.line} fill="none" stroke={CTX_SERIES} strokeWidth={1.5}
           strokeLinejoin="round" strokeLinecap="round" />
         <circle cx={g.endX} cy={g.endY} r={2.2} fill={CTX_SERIES} stroke="var(--panel)" strokeWidth={1.5} />
       </svg>
-      <span className="ctx-spark-use"><Sigma size={10} /> {chip}</span>
+      <span className={warn ? `ctx-spark-use spend-warn-${warn.level}` : "ctx-spark-use"}>
+        {warn ? <TriangleAlert size={10} aria-label={warn.level === "high" ? "past the red spend mark" : "past the orange spend mark"} /> : <Sigma size={10} />} {chip}
+      </span>
     </span>
   );
 }
@@ -293,6 +308,9 @@ export interface ContextChartProps {
   windowTok: number | null;
   /** Where an auto-compaction was OBSERVED to fire. Not the window. */
   autoCompactTok: number | null;
+  /** The `autoCompactWindow` SETTING as it reads now, in tokens — a second line,
+   *  labelled as a setting so it is never read as the measurement above. */
+  autoCompactSetTok?: number | null;
   /** The session's subagents: each one's own window is drawn on this axis. */
   agents?: AgentRun[];
   width: number;
@@ -318,12 +336,12 @@ export interface ContextChartProps {
   bands?: StackSeries[] | null;
 }
 
-export function ContextChart({ samples, events, windowTok, autoCompactTok, width, height = 200, onHover, bands, agents }: ContextChartProps) {
+export function ContextChart({ samples, events, windowTok, autoCompactTok, autoCompactSetTok = null, width, height = 200, onHover, bands, agents }: ContextChartProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [hover, setHoverAt] = useState<ContextSample | null>(null);
   const setHover = useCallback((s: ContextSample | null) => { setHoverAt(s); onHover?.(s); }, [onHover]);
 
-  const refs = [autoCompactTok].filter((v): v is number => v != null);
+  const refs = [autoCompactTok, autoCompactSetTok].filter((v): v is number => v != null);
   const p = makePlot({ width, height, pad: PAD, samples, events, refs, windowTok, agents });
   const span = p.t1 - p.t0;
 
@@ -412,6 +430,12 @@ export function ContextChart({ samples, events, windowTok, autoCompactTok, width
       {autoCompactTok != null && (
         <RefLine p={p} v={autoCompactTok} label={`compacts ~${fmtYTick(p, autoCompactTok)}`}
           below={p.py(autoCompactTok) - p.y < 13} />
+      )}
+      {/* The SETTING, beside the measurement: a finer dash and its label on the
+          LEFT, so the two never print over each other when they nearly agree. */}
+      {autoCompactSetTok != null && (
+        <RefLine p={p} v={autoCompactSetTok} label={autoCompactSetLabel(autoCompactSetTok)}
+          below={p.py(autoCompactSetTok) - p.y < 13} start dash="1.5 3" />
       )}
 
       {/* `rebuild` events are not drawn on the chart — see `sparkOf` in the
@@ -760,14 +784,14 @@ export function ModelLegend({ slots, only }: {
 
 /** A dashed threshold with its own label, clamped inside the plot so the text
  *  never rides off the top or bottom edge. */
-function RefLine({ p, v, label, below }: { p: Plot; v: number; label: string; below?: boolean }) {
+function RefLine({ p, v, label, below, start, dash = "4 4" }: { p: Plot; v: number; label: string; below?: boolean; start?: boolean; dash?: string }) {
   const y = p.py(v);
   const ty = below ? Math.min(p.y + p.h - 2, y + 11) : Math.max(p.y + 9, y - 4);
   return (
     <g>
       <line x1={p.x} x2={p.x + p.w} y1={y} y2={y} stroke="var(--fg)" strokeOpacity={0.4}
-        strokeWidth={1} strokeDasharray="4 4" />
-      <text className="ctx-ref" x={p.x + p.w} y={ty} textAnchor="end">{label}</text>
+        strokeWidth={1} strokeDasharray={dash} />
+      <text className="ctx-ref" x={start ? p.x + 4 : p.x + p.w} y={ty} textAnchor={start ? "start" : "end"}>{label}</text>
     </g>
   );
 }

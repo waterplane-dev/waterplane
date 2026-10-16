@@ -11,8 +11,7 @@ The sheets a person grooms, fires and reviews a repo's work from: the backlog an
   `set up` spends an agent turn on the whole repo; the EDITOR's suggest list is free
   (`build.scan` → `shared/buildscan.ts`) — a rate-limited Claude is why you are here.
   **A tap FILLS THE FIELDS and saves nothing.** The query is what you already typed, and only for a
-  NEW build. **The count on the control counts the FILTERED list.** Its three empty states
-  (unanswered · repo describes nothing · query matches nothing) are worded apart. One scroll region
+  NEW build. **The count on the control counts the FILTERED list.** One scroll region
   (`.build-body`), because a build log is unbounded.
   The third is the EDITOR's **`work it out`** (`buildPrompt.ts`, pinned): ONE agent turn on
   ONE entry, seeded with what is typed — **the brief is asked for ON THE PHONE first**, nothing
@@ -44,8 +43,9 @@ The sheets a person grooms, fires and reviews a repo's work from: the backlog an
   words. A row shows its own TEXT (clamped to three lines), never `label`, which `add()` fills with
   `text.slice(0, 40)`; `realLabel` tells a typed label from that truncation. Status + age chips are
   a FILTER, cross-counted (`backlogCounts`): with an age on, the status chips count only that
-  window, and vice versa. `ageBucket` owns the edges and the age windows NEST (`withinAge`). Drag is
-  blocked while filtered as well as while searching — `onReorder` sends the WHOLE order. The filter
+  window, and vice versa; the age windows NEST (one `ageBucket`/`withinAge`: `backlogpins` P2). Drag
+  works in any cut: `onReorder` sends the rows ON SCREEN and the host makes them trade their OWN
+  slots (`reorder`), so a hidden row keeps its seat — never renumber a subset 0..n. The filter
   is the tap, not a setting. Ages tick (`useNow.ts`, shared with `ActivitySheet`).
   **Schedules and this list are TWO sheets with the seam drawn in both directions** — a rule is a
   clock listing every repo, an item is words waiting in ONE; the join was what was missing, not the
@@ -54,37 +54,16 @@ The sheets a person grooms, fires and reviews a repo's work from: the backlog an
   never matched on the label, which a child inherits. Its three sentences are `backlogFilter.ts`'s
   (`fromScheduleWords` / `scheduleRuleLabel` / `scheduleItemsLabel`), and `focusIds` is how any cut
   opens this sheet from outside.
-  **The smart pick is the one feature here that APPLIES ITSELF**, so the sheet's job is that nothing
-  is destroyed and every row says what happened to it; **its state has a SECOND home** (the launcher
-  repo header's `Sparkles`, and *on in N repos* here — a count, so the tap opens those N) because a
-  switch readable only from inside the repo it is on cannot be surveyed: the per-repo tick is drawn only when the host
-  sent `smartPick` (**`undefined` ≠ `[]`** — an old daemon would ignore the message and the switch
-  would flip back) and only while online; the last-look STRIP words a failure as plainly as a
-  success, verbatim from `smartpickOutcomeText`, with tokens/$ off the envelope and **ABSENT when it
-  carried none**; **`merged from N` is a filter** whose ids cut takes the UNHIDDEN base (the
-  originals are archived — that is the point) and whose sentence's `idsLabel` is the sheet's,
-  because only it knows which side was tapped, and its count NAMES its base (*3 of 12, archived
-  included*); **the undo is reachable in the case it exists FOR** — the pass picks and applies in one
-  breath, so whoever the notification wakes meets a row that has ALREADY RUN — so the same
-  `backlog.unmerge` is `undo` while it waits and **`put them back`** once it has STARTED — running
-  included, because the HOST accepts it there (it archives the row without stopping it) and a
-  refusal drawn in that state withheld the capability in exactly the case the feature exists for;
-  the running row's NOTE carries what the tap will not do, never a dimmed button, and it is drawn
-  INSTEAD of `smartWroteWords`, never beside it. **A `running` row is never hidden by the archived
-  cut** (`hiddenByArchive`, one predicate for the sheet's base, the repo counts and the composer's
-  badge) — that same tap archives it mid-run. The toast says the verb the BUTTON wore. Those strings
-  and the state rule are `backlogFilter.ts`'s (`smartWroteWords` / `undoWhileRunningWords` /
-  `undoOfferFor` / `hiddenByArchive`), pinned; **`you placed this`** is what
-  makes "the sort never moves your drag" visible. `auto off` carries a sentence (it pauses every
+  **A `running` row is never hidden by the archived cut** (`hiddenByArchive`, one predicate for the
+  sheet's base, the repo counts and the composer's badge). Nothing re-sorts rows on its own; a row
+  a drag (or a pinned assessment rank) placed is marked `handOrdered` and says so. `auto off` carries a sentence (it pauses every
   deferred send in the app, not just this list) and the check/validate verdicts wear `CHECK_ICON`,
-  never the `⏳ ⚠ ✓ ✗` that were glued to their labels. `IMG_RE` is `shared/smartpick.ts`'s now — one regex, global, never
-  `.test()`.
+  never the `⏳ ⚠ ✓ ✗` that were glued to their labels.
   **A row's TITLE and its KIND are `shared/naming.ts`'s, and `label` (the person's) is never
   replaced by `headline` (the machine's)** — `itemHeadline` is the ONE display rule on both ends and
   `realLabel` is only its typed half; a derived title wears `Sparkles` and, expanded, says whose it
   is (`HEADLINE_BY_WORDS`, TEXT never a `title`). **Absent category = NOBODY SAID**: no chip, no
-  default bucket; `categoryBucket` is that axis's `ageBucket` (one function, chip count AND cut,
-  `none` its own chip), cross-counted with status and age. **No colour per kind** — a red `bug`
+  default bucket; `categoryBucket` (`none` its own chip) is cross-counted with status and age. **No colour per kind** — a red `bug`
   beside a red `failed` reads as a failure; `CATEGORY_ICON` is the difference. `name these N`
   (`backlog.name`, DURABLE, `nameableInCut`/`nameNote`/`NAME_COST_NOTE`) is the one bulk verb here
   that is not a `ConfirmButton`; while `naming` holds a row the button is ABSENT with
@@ -95,7 +74,7 @@ The sheets a person grooms, fires and reviews a repo's work from: the backlog an
 - `clockDirectory.tsx` + `clockCuts.ts` — **recurrence decides the list.** A one-off aimed at ONE
   place (`isTimedWorkRow`) is a BACKLOG row wearing a clock, never a Schedules card: it is spent by
   its one run, so there is nothing to arm, pause or skip — and filing it under Schedules took it off
-  the list the smart pick is fed from (measured: 9 live `at` rows, all one-off, 7 `failed`, in no
+  the backlog list (measured: 9 live `at` rows, all one-off, 7 `failed`, in no
   backlog). A recurring rule, and a one-off SWEEP (no single backlog to live in), stay cards. What
   Schedules keeps is a read-only DIRECTORY, `On a clock · N`, one line per timed item with **exactly
   ONE affordance** — open it where it lives; a line with verbs would be the second home this change
@@ -113,10 +92,9 @@ The sheets a person grooms, fires and reviews a repo's work from: the backlog an
   `dropClocksToast`/`holdChipWords`) — the verb that answers "run the ones that were skipped":
   `intent.update` carrying a `trigger` of `idle`, a plain `liveSend`, taking the instant off and
   leaving the words. A one-off cannot be re-armed, and `re-fire` beside it runs it THIS SECOND in a
-  session of its own (`runNow` skips the ladder) instead of putting it back where the smart pick can
-  see it. Two states, two different offers, never one sentence; the receipt names the CLOCK and never
+  session of its own (`runNow` skips the ladder) instead of putting it back in the queue. Two states, two different offers, never one sentence; the receipt names the CLOCK and never
   a state (the host kicks synchronously — the row may already be `blocked` or firing).
-  **`holdForHost` survives it** — and that, plus *auto and the smart pick take it from there*, are
+  **`holdForHost` survives it** — and that, plus *auto takes it from there*, are
   **TEXT on the row, never a `title`** (invisible on a phone, the `Unavailable.tsx` rule): the hold
   chip carries `· survives a dropped clock` where the verb is offered, `dropClockNote` is drawn under
   the chips AND used as the button's title, so there is one string and not two copies of a claim.
@@ -147,12 +125,9 @@ The sheets a person grooms, fires and reviews a repo's work from: the backlog an
   **`by:"run"` reads *started again*** (it was fired, not queued), `(2nd time)` **only when the host
   sent a count** (`n` is optional; absent ⇒ NO ordinal, never `requeues.length`), the old failure
   quoted only where the entry carried one.
-- **A count on a control is a FILTER** (`horizonBucket`/`horizonLead`/`HORIZON_LABEL` in
-  `shared/schedule.ts`, the schedules chip, `ScheduleSheet`'s `focus`). A tap on "2 within the hour"
-  opens those two, never the ten for the reader to re-derive them from. **One bucketing function
-  feeds both the number and the cut** — a second copy of the edge makes the badge a liar. The
-  filtered view carries `.filter-bar`: what is hidden, `n of N` against the UNFILTERED list, and a
-  *clear* button. **Empty states stay keyed on the unfiltered count** (a filter matching nothing must
+- **The schedules chip's count** (`horizonBucket`/`horizonLead`/`HORIZON_LABEL` in
+  `shared/schedule.ts`, `ScheduleSheet`'s `focus`) follows CLAUDE.md's count-is-a-filter rule; the
+  filtered view is `.filter-bar`. **Empty states stay keyed on the unfiltered count** (a filter matching nothing must
   not claim nothing is scheduled). **The filter is the tap, not a setting** — cleared when the
   overlay closes. **The pool is two kinds and the chip's sentence says which** (`N rules · N on a
   clock in a backlog`) — one `horizonBucket` over both, so the tap opens what it counted whichever
@@ -210,10 +185,17 @@ The sheets a person grooms, fires and reviews a repo's work from: the backlog an
   days. **A refusal prints as the TOOL'S OWN paragraph** (200, `ok: false`):
   it ends in a command that DELETES the series and nothing here runs it.
   Every sentence here is `repoHealthWords.ts`'s, and the charts are
-  `web-numbers`'. `RepoHealthSheet.tsx` is DELETED, merged into
-  `Repo readings`, drawn from here now.
-- `AssessSheet.tsx` + `assessRows.ts` + `assessPicks.ts` — the assessment as a diff a person approves. **Nothing applies
-  itself.** Words IN FULL, **never clipped**; a merge is ONE decision about all N; confirms on the
+  `web-numbers`'.
+- `OptInRegion.tsx` + `optInSeed.ts` — `Repo readings`'s region 3, **Opt-ins**:
+  offers, not readings (`shared/optins.ts` is the catalog and its header the
+  design). **Counted in NOTHING** — no stripe, no status hue, never in the badge.
+  **Every count and list is `optInCut`'s**; the folded `declined`/`unfit` heads
+  are the lists they open. **A tap seeds, never sends**: `fix` is the host's
+  existing `complianceFix`, `open` lands on `series` or the capture sheet,
+  `agent`/`schedule` seed the Send sheet (`optInSeed`: the phone's zone, the
+  catalog's model, `waitUntilFree`) and the person can change it all there.
+  The repo menu's `OptInMenuItem` lands on `optins`.
+- `AssessSheet.tsx` + `assessRows.ts` + `assessPicks.ts` — the assessment as a diff a person approves. Words IN FULL, **never clipped**; a merge is ONE decision about all N; confirms on the
   BULK buttons. **A RUNNING run says what it is doing** (`assessWatch`; quiet is an AGE never
   "stuck"). **`accept` names its EFFECT** (`assessAcceptWords`, per verdict AND store), TEXT never a
   title. **A verb that does nothing is not drawn** — `unclear`, pad notes and merge members get a
@@ -262,8 +244,7 @@ The sheets a person grooms, fires and reviews a repo's work from: the backlog an
   **A COLUMN BASIS IN PIXELS IS A CLAIM ABOUT HOW WIDE WORDS ARE** — `.asr-asks > .asr-pin` is
   `flex: 1 1 18ch` and `.asr-answer > .key` is `flex: 1 1 12ch; min-width: 0; white-space: normal`,
   never the annotator's `.annot-tools tri` (`overflow: visible` over `flex: 0 0 auto` `.key`s, and a
-  36 px floor): a fixed `118px` column at a larger `--ui-font` painted `the smart pick may re-sort
-  it` over the question beside it and `leave the rows as they are` 347 px off the screen. `ch`
+  36 px floor): a fixed `118px` column at a larger `--ui-font` painted a sentence over the question beside it and `leave the rows as they are` 347 px off the screen. `ch`
   scales with the text, so the pair drops to ONE column where two would be narrower than the words,
   with no media query — the threshold is the comfort, the no-overflow/no-overlap is `min-width: 0`
   plus wrapping and holds past the 1.45 ceiling. **`18ch` is measured in `.form-hint`'s 13px sans,
@@ -284,17 +265,25 @@ The sheets a person grooms, fires and reviews a repo's work from: the backlog an
   gated on `run.applied` IN the pure module; a ZERO count is dropped and its sentence is about the
   REPO. **A route never clears `assessRepo`** — the cut is pushed OVER the sheet's history entry, so
   nulling it made Back paint the launcher under `overlay === "assess"` and the next Back do nothing.
-  The cut it lands in says whether anything will run it — `focusRunWords(breakdown, auto, smartOn)`,
+  The cut it lands in says whether anything will run it — `focusRunWords(breakdown, auto)`,
   fed a `FocusRunBreakdown` built off `nextFireIds`' own predicates, **never a count**: an ids base
-  holds ARCHIVED rows on purpose, so `merged from 3` was told "3" and claimed all four clauses. It
+  holds ARCHIVED rows on purpose, so a cut of 3 was told "3" and claimed all four clauses. It
   returns **`null` when nothing in the cut starts**; *a session of its own* only for FRESH rows,
   *in <session>* for aimed; *one at a time in this repo* only with `aimed === 0` (one per GROUP
-  fires); *in the order you see* only with the smart pick OFF; what is not starting is COUNTED, not
+  fires); *in the order you see*; what is not starting is COUNTED, not
   diagnosed. **ONE COPY of "auto is off"** — the head banner is drawn exactly when that sentence is
   not (keyed on the sentence, not on `filter.ids`), and the switch's title is `FOCUS_AUTO_ON_TITLE`.
-- `GitView.tsx` — review, stage, commit, push. Its **`message` button asks the DESKTOP to draft the
-  commit message** (host `commitmsg.ts`, one cheap toolless call over the diff `Commit all` would
-  record): an EMPTY box takes the answer straight away, a box with words in it gets the draft
-  offered ABOVE it with *Use this one* / *Keep mine* — seeding over a draft is a delete and this
-  box is the last copy of those words. `writing…` is a LABEL, never a disabled attribute, and every
-  refusal is the host's own sentence in the note line, never an empty box.
+- `slotCheck.ts` + `slotAskStore.ts` + `SlotAskLayer.tsx` — **the slot check**: rows that fire
+  together, checked together ([web.md](docs/notes/web.md)). Every count is `@waterplane/shared`'s
+  slot functions and **N is exactly the ids sent** (`slotChecks`, `slotAskFor` = `slotMates`). The
+  ask after a timed send waits for the list to hold the row ON THE NEW CLOCK, is a card beside the
+  toast (never a modal, never a toast), and *don't ask in this repo* names its way back (*ask after
+  a timed send* in that backlog). *check* never runs over a running or undecided proposal
+  (`slotCheckStart`). A conflict is words: its verbs are the rows' own and it has NO choice; a split
+  is approved behind a confirm into `AssessChoices.splits` (`assessChoicesOf`).
+- `GitView.tsx` — review, stage, commit, push. **`message` asks the DESKTOP for a draft** (host
+  `commitmsg.ts`): an EMPTY box takes it, a box with words gets it offered ABOVE with *Use this one* /
+  *Keep mine*. `writing…` is a LABEL, not a disabled
+  attribute; a refusal is the host's sentence in the note, never an empty box.
+  **`fix in a new session…`** on a failed push/pull (`gitFailPrompt.ts`) SEEDS the Send sheet, never
+  sends (`copy`: same words, toast receipt); the push stays yours; both die with their note.

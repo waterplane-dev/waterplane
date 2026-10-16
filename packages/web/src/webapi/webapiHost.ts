@@ -1,9 +1,11 @@
 import type { DictateAnswer, DictateStatus, HostStat } from "@waterplane/shared";
 import { nfetch, jget, jpost } from "./webapiFetch";
+import { rootApi } from "./webapiRoot";
 import type { FileEntry, UploadError } from "./webapiTypes";
 
 /** Desktop host: load, screen capture, dictation, clipboard. One slice of `api` (see api.ts). */
 export const hostApi = {
+  ...rootApi,
   // Desktop host: resource load + screen capture.
   hostStat: () => jget<HostStat>("/api/host/stat"),
   screenshot: async (repoId: string) => {

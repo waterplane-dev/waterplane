@@ -13,11 +13,8 @@ Everything on the path from a typed word to a delivery the desktop has confirmed
   `op`). One delivery in flight per lane; cap enforced on the way IN; retries only with the same
   ackId; an attempt rolled back when the socket wasn't open; every attached file parked to IndexedDB
   before it can be lost. Queued opens carrying a prompt are **serialized per repo by default**.
-  **Seeding a sheet draft is a DELETE unless it rescues first** (`seedSheetDraft` + `shared/pad.ts`'s
-  `draftToRescue`, lint `local/no-draft-clobber`; `clearSheetDraft` for a deliberate discard): this
-  store has no listing, so the one route back to a draft is re-opening the sheet that wrote it, and
-  anything that breaks that route strands words nothing can reach — which `openSend` then
-  overwrote. It becomes a PAD NOTE and is SAID; `seeded`/`kept`/**`refused`**, and on a refusal the
+  **Seeding a sheet draft rescues first** (`seedSheetDraft` + `shared/pad.ts`'s `draftToRescue`;
+  enforced, with its reason, by lint `local/no-draft-clobber`). The old draft becomes a PAD NOTE and is SAID; `seeded`/`kept`/**`refused`**, and on a refusal the
   draft is left exactly where it is (a rescue that could not happen must not also be a delete) —
   **and the SEED then drops its `padId`/`ackId`** (`seedAfterRescue`): the sheet is composing the
   rescued draft, so Send must not retire the note or the row those OTHER words came from.
@@ -37,9 +34,7 @@ Everything on the path from a typed word to a delivery the desktop has confirmed
   screen**. Bytes of a dying upload are **moved aside, not deleted**.
 - `PadSheet.tsx` — a note is target-less but can be a CHAIN and carry FILES. **A note that knows its
   repo says so**; marked, never preselected. **The pad is synced and the merge is PER NOTE**
-  (`shared/pad.ts` on adopt, tombstones so a delete TRAVELS) — the whole-list last-write-wins it
-  replaces is why the rescue store, the amber *kept for you* block and `notesToRescue` existed, and
-  all three are gone with it. The trash stays a `ConfirmButton` because the tombstone makes it a
+  (`shared/pad.ts` on adopt, tombstones so a delete TRAVELS), replacing a whole-list last-write-wins. The trash stays a `ConfirmButton` because the tombstone makes it a
   delete everywhere. **It REFUSES rather than sheds** — the editor stays open with the buffer and
   the reason, checked BEFORE the buffer is cleared. **`file it`** (only where the note's `cwd`
   resolves; nothing drawn where it does not) is `queueBacklog`'s existing `mode: "backlog"`, **no
@@ -56,7 +51,7 @@ Everything on the path from a typed word to a delivery the desktop has confirmed
   the gallery with `insertInto: "send"`, because the clipboard route needs a secure context and a
   plain `http://100.x` tunnel is not one. The primary box GROWS rather than
   `rows={N}`; carries the prompt CHAIN (delivered one turn at a time, never concatenated) and an
-  `inline` mode. **Don't hand-roll a fifth prompt textarea.**
+  `inline` mode.
 - `secretAsk.ts` + `useCompose`'s secret state — **a password asked on a SHELL's screen** (the cursor
   line ENDS with `Password:` / `passphrase for …:`, read by `Terminal`'s `onCursorLine`) swaps the
   draft box for a masked `<input type=password>` with an eye to reveal and no auto-capital. Its words
@@ -77,7 +72,7 @@ Everything on the path from a typed word to a delivery the desktop has confirmed
 - `composeSend.ts` + `NextPrompt.tsx` / `nextPromptState.ts` + `sendMemory.ts` — **the compose bar's split button and
   the strip above it.** Two modes, `Send` and `When free`, **one row that runs NOTHING**
   (*keep it on the pad* → `addPadNote` with the session's `cwd`: no target, no trigger, out of
-  reach of `auto` and the smart pick, filed onto a backlog later only by a person — it may never
+  reach of `auto`, filed onto a backlog later only by a person — it may never
   be worded as *queued*/*scheduled*, and a refusal leaves the words in the box), plus ONE errand
   (*elsewhere or later…*) into `SendSheet`. Two rows carry `mode: null`, so a caller switches on
   `key`, never on `mode === null`. **`.send-more` restates `flex: 0 0 auto`**: `.row-more`'s

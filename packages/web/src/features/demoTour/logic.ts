@@ -144,27 +144,34 @@ export const TOUR_ROWS: readonly TourRow[] = TOUR.flatMap((g) => g.rows);
 /**
  * What this device remembers about this visit: which rows a tap has reached,
  * and how far the HOOK got — the first minute (docs/analysis/demo-pitch-plan.md
- * §1): `opened` the demo session by itself once, the reader toggle was `read`
- * (so its hint is gone), and the closing card was `closed`. Cleared when the
- * demo is entered or left.
+ * §1, R-demo-014): the cue at `+ now` was spent (`opened`: a session was started
+ * or the cue put away), the session that tap started (`sid`) was `typed` its first
+ * prompt, the reader toggle was `read` (so its hint is gone), and the closing card
+ * was `closed`. Cleared when the demo is entered or left.
  */
 export interface TourState {
   seen: readonly string[];
+  /** The start cue is spent: the hook's session was started, or the cue's X was tapped. */
   opened: boolean;
   read: boolean;
   closed: boolean;
+  /** The hook's first prompt was typed into the box and sent (or a person's typing stopped it). */
+  typed: boolean;
+  /** The session the cued tap started — the one the hook types into, hints on and closes on. */
+  sid: string | null;
 }
 
-export const EMPTY_TOUR: TourState = { seen: [], opened: false, read: false, closed: false };
+export const EMPTY_TOUR: TourState = { seen: [], opened: false, read: false, closed: false, typed: false, sid: null };
 
 /** A stored value, made safe: anything malformed reads as a fresh tour, and
  *  ids no longer in the list are dropped. */
 export function parseTourState(raw: unknown): TourState {
   if (!raw || typeof raw !== "object") return EMPTY_TOUR;
-  const r = raw as { seen?: unknown; opened?: unknown; read?: unknown; closed?: unknown };
+  const r = raw as { seen?: unknown; opened?: unknown; read?: unknown; closed?: unknown; typed?: unknown; sid?: unknown };
   const known = new Set(TOUR_ROWS.map((x) => x.id));
   const seen = Array.isArray(r.seen) ? [...new Set(r.seen.filter((s): s is string => typeof s === "string" && known.has(s)))] : [];
-  return { seen, opened: r.opened === true, read: r.read === true, closed: r.closed === true };
+  const sid = typeof r.sid === "string" && r.sid ? r.sid : null;
+  return { seen, opened: r.opened === true, read: r.read === true, closed: r.closed === true, typed: r.typed === true, sid };
 }
 
 /** The state with `id` seen. Unknown ids and repeats change nothing (same object back). */
@@ -174,7 +181,7 @@ export function markSeen(s: TourState, id: string): TourState {
 }
 
 /** One hook step done. Already done ⇒ the same object back. */
-export function markHook(s: TourState, step: "opened" | "read" | "closed"): TourState {
+export function markHook(s: TourState, step: "opened" | "read" | "closed" | "typed"): TourState {
   return s[step] ? s : { ...s, [step]: true };
 }
 
@@ -192,11 +199,15 @@ export function progressText(s: TourState): string {
 
 // ── The hook: the demo's first minute ─────────────────────────────────────
 
-/** The scenario that opens on a session already working (`demo/scenarios/first-look.ts`). */
+/** The scenario whose first minute this is (`demo/scenarios/first-look.ts`). */
 export const HOOK_SCENARIO = "first-look";
-/** What that scenario's annotate-and-send-back reply matches — the loop is done
- *  once a turn on that prompt has ended. `logic.test.mjs` holds it to the scenario. */
-export const HOOK_REPLY_MATCH = "bigger";
+/** What that scenario's combine-mark-and-send-back reply matches ("make ② look like ①") — the
+ *  loop is done once a turn on that prompt has ended. `scenarios.test.mjs` holds it to the scenario. */
+export const HOOK_REPLY_MATCH = "look like";
+/** The first prompt the demo types into the compose box of the session the cued tap started, and
+ *  sends by itself, so the first thing the app is seen doing there is the box a person will use.
+ *  `scenarios.test.mjs` holds it to the scenario's `HOOK_PROMPT`, whose scripted reply is the hook turn. */
+export const HOOK_PROMPT = "make + Add bigger, check iOS sim and Android emulator";
 
 /** The facts the hook decisions read: never the DOM, never a timer. */
 export interface HookCtx {
@@ -208,32 +219,51 @@ export interface HookCtx {
 const hooked = (f: HookCtx): boolean => f.demo && f.scenario === HOOK_SCENARIO;
 
 /**
- * Open the demo session by itself? Once per visit, in the hook scenario, and
- * only while nothing else is on screen (a reload restores its own route).
- * Under browser automation too: the journeys walk this first minute.
+ * The cue on the repo list ("start a session here", at todo-garden's `+ now`)? In the hook
+ * scenario, until a session was started from it or it was put away, and only while no session is
+ * on screen. The demo opens on the repo list; nothing is attached by itself.
  */
-export function shouldOpenHook(s: TourState, f: HookCtx & { active: boolean }): boolean {
-  return hooked(f) && !s.opened && !f.active;
+export function cueShown(s: TourState, f: HookCtx & { active: boolean }): boolean {
+  return hooked(f) && !s.opened && !s.sid && !f.active;
 }
 
-/** The "Read it like a chat" hint: on the hook session, until the reader has
- *  been opened once (or the visit's closing card was dismissed). */
-export function hintShown(s: TourState, f: HookCtx & { activeId: string | null }): boolean {
-  return hooked(f) && f.activeId === TOUR_SESSION && !s.read && !s.closed;
+/** A session is on screen: is it the one the hook takes — the first FRESH session (no prompt sent
+ *  yet) in the tour's repo this visit? Never the older one there, never a second one, and never over
+ *  a hook already spent. */
+export function claimsHook(s: TourState, f: HookCtx & { session: { id: string; cwd: string; firstPrompt?: string } }): boolean {
+  return hooked(f) && !s.sid && !s.typed && !f.session.firstPrompt && f.session.cwd.replace(/\/+$/, "").endsWith(`/${TOUR_REPO}`);
 }
 
-/** The annotate-and-send-back turn has run and finished. */
+/** The state with the hook's session claimed: the cue is spent with it. */
+export function claimHook(s: TourState, sid: string): TourState {
+  return s.sid === sid ? s : { ...s, sid, opened: true };
+}
+
+/** Type the first prompt into the box? Once per visit, on the session the cued tap started, and
+ *  only into an EMPTY box — a person's words are never added to or sent. */
+export function shouldTypeHook(s: TourState, f: HookCtx & { activeId: string | null; draft: string }): boolean {
+  return hooked(f) && !s.typed && !!s.sid && f.activeId === s.sid && f.draft === "";
+}
+
+/** The combine-mark-and-send-back turn has run and finished. */
 export function loopDone(session: { turnActive?: boolean; lastPrompt?: string } | null | undefined): boolean {
   return !!session && !session.turnActive && (session.lastPrompt ?? "").toLowerCase().includes(HOOK_REPLY_MATCH);
 }
 
-/** The closing card ("While you're away"): on the hook session once the loop
- *  is done, until its X puts it away (a door leaves it standing). */
-export function cardShown(s: TourState, f: HookCtx & { session: { id: string; turnActive?: boolean; lastPrompt?: string } | null }): boolean {
-  return hooked(f) && f.session?.id === TOUR_SESSION && !s.closed && loopDone(f.session);
+/** The "Read it like a chat" hint: on the hook's session once the loop is done (the first minute is
+ *  the loop; the reader is what comes after it), until the reader has been opened once or the
+ *  visit's closing card was dismissed. */
+export function hintShown(s: TourState, f: HookCtx & { session: { id: string; turnActive?: boolean; lastPrompt?: string } | null }): boolean {
+  return hooked(f) && !!s.sid && f.session?.id === s.sid && loopDone(f.session) && !s.read && !s.closed;
 }
 
-/** The session the tour drives into: the scenario's own id, else the first
+/** The closing card ("While you're away"): on the hook's session once the loop is done, until its X
+ *  puts it away (a door leaves it standing). */
+export function cardShown(s: TourState, f: HookCtx & { session: { id: string; turnActive?: boolean; lastPrompt?: string } | null }): boolean {
+  return hooked(f) && !!s.sid && f.session?.id === s.sid && !s.closed && loopDone(f.session);
+}
+
+/** The session the tour's rows drive into: the scenario's own id, else the first
  *  session in its repo, else none (the list has not arrived yet). */
 export function tourSession<S extends { id: string; cwd: string }>(sessions: readonly S[]): S | null {
   return sessions.find((s) => s.id === TOUR_SESSION)

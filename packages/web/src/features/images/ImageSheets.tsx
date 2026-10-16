@@ -12,13 +12,14 @@ import { ImageAnnotator } from "../../ImageAnnotator";
 import { ImageSwiper, type SwipeItem } from "../../ImageSwiper";
 import { api } from "../../api";
 import { sized, viewerWidth } from "../../media";
-import { useStore } from "../../sdk";
+import { core, useStore } from "../../sdk";
+import { useBesideRoom } from "../../besideRoom";
 import { ann, collage, flow, newImages, swipe } from "./store";
 import {
   afterText, afterUpload, closeAnnotator, closeSwipe, collageClose, collageCombine, collageSeparate, dispatchImage,
   markFromSwipe, parkAnnotated, refFromSwipe, sendAllBatch, setSwipe, skipImage,
 } from "./actions";
-import { isVideoPath } from "./logic";
+import { isVideoPath, viewableStrip } from "./logic";
 
 /** More than one image picked: one picture, or several? */
 export function CombineSheet() {
@@ -27,15 +28,39 @@ export function CombineSheet() {
   return <CollageSheet files={c.files} onCombine={collageCombine} onSeparate={collageSeparate} onClose={collageClose} />;
 }
 
+/**
+ * The annotator drawn in a column BESIDE the session it is marking a picture
+ * for (`core/layout/Workspace.tsx`), so the prompt is typed while marking. Only
+ * the session flow (its result lands in that session's box — a backlog or
+ * gallery round trip has no box beside it to type in), only with a session on
+ * screen, and only where the window has room (`useBesideRoom`).
+ */
+export function useAnnBeside(): boolean {
+  const a = useStore(ann);
+  const room = useBesideRoom();
+  return room && !!a && flow.ret === "session" && !!core().world.active;
+}
+
 /** The annotator, on the picture `ann` holds. */
 export function MarkUpSheet() {
   const a = useStore(ann);
+  const beside = useAnnBeside();
   if (!a) return null;
   // Read at render, like App's `imageReturnRef.current`: the flow is set before
   // the sheet opens and does not change while it is up.
   const sessionFlow = flow.ret === "session";
   const batch = !!a.total && a.total > 1;
-  return <ImageAnnotator source={a.source} repoId={a.repoId} index={a.index} total={a.total} facts={a.facts}
+  // The session's box, edited from here when it is not on screen beside the
+  // annotator. `typeOn` is the compare-and-set edit: it refuses when the box no
+  // longer holds what this render showed, so nothing typed elsewhere is lost.
+  const c = core();
+  const prompt = sessionFlow && !beside && c.world.active ? {
+    value: c.compose.draft,
+    onChange: (next: string) => {
+      if (!core().compose.typeOn(core().compose.draft, next)) core().say.toast("The message box changed meanwhile — that key was not applied");
+    },
+  } : undefined;
+  return <ImageAnnotator prompt={prompt} source={a.source} repoId={a.repoId} index={a.index} total={a.total} facts={a.facts}
     onUploaded={afterUpload}
     onDispatch={sessionFlow ? dispatchImage : undefined}
     // Backlog / gallery flows upload inline inside the sheet; with no tunnel
@@ -53,7 +78,8 @@ export function ViewerSheet() {
   const s = useStore(swipe);
   const strips = useStore(newImages);
   if (!s) return null;
-  const strip = s.sessionId ? strips.get(s.sessionId) ?? [] : [];
+  // The strip's pictures only: its markdown tiles open the reader, not this.
+  const strip = s.sessionId ? viewableStrip(strips.get(s.sessionId) ?? []) : [];
   const rows: SwipeItem[] = s.items ?? strip.map((im) => ({
     name: im.name,
     relPath: im.relPath,

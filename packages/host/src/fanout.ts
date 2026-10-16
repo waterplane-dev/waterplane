@@ -101,7 +101,7 @@ export class FanoutManager {
   async start(
     dirs: string[],
     text: string,
-    opts: { launch?: LaunchOpts; budget?: SessionBudget; cols?: number; rows?: number; id?: string } = {},
+    opts: { launch?: LaunchOpts; budget?: SessionBudget; flagWhenDone?: boolean; cols?: number; rows?: number; id?: string } = {},
   ): Promise<FanoutRun | { error: string }> {
     const body = text.trim();
     if (!body) return { error: "nothing to run" };
@@ -124,6 +124,8 @@ export class FanoutManager {
       launch: opts.launch,
       // Not one budget for the sweep: EACH target's session is born with it.
       ...(opts.budget ? { budget: opts.budget } : {}),
+      // Each target's session gets the launch flag when ITS row is done (`followUpSweep`).
+      ...(opts.flagWhenDone === true ? { flagWhenDone: true } : {}),
     });
     if (!posted.ok || !posted.intent) return { error: posted.reason || "could not be written down" };
     return this.run(id) ?? { error: "could not be written down" };
@@ -162,6 +164,7 @@ export class FanoutManager {
         rows: i.rows,
         launch: i.launch,
         ...(i.budget ? { budget: i.budget } : {}),
+        ...(i.flagWhenDone ? { flagWhenDone: true } : {}),
       } as IntentDraft);
     });
     return { ok: true, detail: `fan-out started in ${targets.length} repo${targets.length === 1 ? "" : "s"}` };

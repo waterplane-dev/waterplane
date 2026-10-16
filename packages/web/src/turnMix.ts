@@ -1,5 +1,5 @@
 import { normalizeModel, type TranscriptTurn } from "@waterplane/shared";
-import { familySlots, REST_SLOT } from "./modelHue.ts";
+import { byPrice, familySlots, REST_SLOT } from "./modelHue.ts";
 
 /**
  * The reader's per-turn model donut and subagent chips, as pure data.
@@ -76,6 +76,6 @@ export function turnMix(t: TranscriptTurn, slots: MixSlots | null): { by: "cost"
       slot: REST_SLOT, share: tail.reduce((a, m) => a + val(m), 0) / sum, costUsd: cost, tok,
     });
   }
-  parts.sort((a, b) => a.slot - b.slot);
+  parts.sort((a, b) => byPrice(a.slot, b.slot));
   return { by: priced ? "cost" : "tokens", parts };
 }

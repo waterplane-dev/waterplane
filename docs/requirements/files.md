@@ -32,3 +32,12 @@ File links open in the internal viewer instead of downloading.
 A text file open in the file browser has a review mode, in the spirit of the image annotator: mark one line or a run of lines (or a paragraph of rendered markdown), type or dictate a comment about it, collect several remarks down the file, and send them all to the chat as one message that names each remark's lines and quotes them. Remarks are kept on the phone until sent.
 - asked: 2026-10-05
 - shipped: 0bf66ad4
+### R-files-008 · requested
+File access stays confined by path guards, and those guards are never loosened.
+- asked: 2026-10-06
+
+### R-files-009 · shipped
+The new-files strip shows new and rewritten markdown files alongside images.
+- asked: 2026-10-12
+- shipped: 961b08e0
+

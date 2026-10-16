@@ -23,6 +23,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
 import { E, SLUG, rootEnv } from "./lib-brand.mjs";
+import { waitForHost } from "./lib-e2e.mjs";
 
 const PORT = 8846;
 const ROOT = mkdtempSync(join(tmpdir(), `${SLUG}-sent-`));
@@ -55,7 +56,7 @@ function boot() {
 const stop = async () => { host?.kill(); await sleep(700); };
 
 boot();
-await sleep(900);
+await waitForHost(PORT);
 
 const repo = await fetch(`${base}/api/repo`, {
   method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "audited" }),
@@ -136,7 +137,7 @@ check(c.state.sentLog.length < all, `…and fewer than the unfiltered list (${c.
 c.ws.close();
 await stop();
 boot();
-await sleep(1200);
+await waitForHost(PORT);
 c = await connect();
 c.send({ t: "sent.get" });
 await waitFor(() => c.state.sentLog.length > 0, 10000);

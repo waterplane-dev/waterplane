@@ -11,8 +11,13 @@ import * as pty from "node-pty";
 import type { UsageInfo, UsageSample } from "@waterplane/shared";
 import { parseResetTime } from "./limit.js";
 import { renderCapture } from "./render.js";
+import { readNavBox, trustKeys } from "./prompt.js";
+
+// `trustKeys` moved beside `readNavBox`; deliver.ts presses the same keys.
+export { trustKeys };
 import { claudeBackend } from "./backends/index.js";
 import { ptyEnv } from "./ptyenv.js";
+import { isHalted, trackRun } from "./halt.js";
 import { env } from "./env.js";
 
 // Read once at boot, as before — `backends/claude.ts` owns the env knob.
@@ -253,6 +258,9 @@ export class UsageChecker {
   }
 
   async refresh(): Promise<UsageInfo> {
+    // The probe is a real `claude` process; halted (`halt.ts`) means none is
+    // started. The kept reading stands, exactly as after a failed probe.
+    if (isHalted()) return usageAfterResets(this.cache);
     if (this.inflight) return this.inflight;
     this.inflight = this.scrape().finally(() => { this.inflight = null; });
     return this.inflight;
@@ -276,9 +284,16 @@ export class UsageChecker {
       let buf = "";
       let done = false;
       let onDone: (() => void) | null = null;
+      // The probe is a real `claude`: a halt (`halt.ts`) reaches it like any
+      // headless run — its group gets the signal, and the read ends as a failed one.
+      const untrack = trackRun((sig) => {
+        try { process.kill(-proc.pid, sig); } catch { try { proc.kill(sig); } catch { /* gone */ } }
+        finish(this.fail());
+      });
       const finish = (u: UsageInfo) => {
         if (done) return;
         done = true;
+        untrack();
         onDone?.();
         try { proc.kill(); } catch { /* gone */ }
         if (u.ok && !u.remembered) this.failedAt = 0;
@@ -290,10 +305,15 @@ export class UsageChecker {
 
       const sq = () => strip(buf).replace(/\s+/g, "").toLowerCase();
       // 1) clear trust prompt if present, 2) send /usage, 3) wait for it to render.
-      setTimeout(() => {
-        if (/trustthisfolder|createdoroneyoutrust/.test(sq())) proc.write("1\r");
-      }, 1500);
-      setTimeout(() => { buf = ""; proc.write("/usage\r"); }, 4000);
+      // Looked for until /usage is typed, not once: a cold `claude` (WSL reading a Windows drive)
+      // may not have drawn the box 1.5 s in.
+      let trustAnswered = false;
+      const trust = setInterval(() => {
+        if (done || trustAnswered || !/trustthisfolder|createdoroneyoutrust/.test(sq())) return;
+        trustAnswered = true;
+        void renderCapture(buf, COLS).then((text) => { if (!done) proc.write(trustKeys(readNavBox(text))); }, () => {});
+      }, 500);
+      setTimeout(() => { clearInterval(trust); buf = ""; proc.write("/usage\r"); }, 4000);
       /**
        * Look at the screen REPEATEDLY, and stop at the first one that names a
        * window.

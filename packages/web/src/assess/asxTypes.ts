@@ -2,7 +2,7 @@
  * The sheet's props.
  * Part of `AssessSheet.tsx`, the facade every caller imports; map and rules: docs/notes/assess-architecture.md.
  */
-import type { AssessChoices, AssessItem, AssessRun } from "@waterplane/shared";
+import type { AssessChoices, AssessItem, AssessRun, AssessScope } from "@waterplane/shared";
 import type { AssessReadyRow } from "../assessRows";
 import type { OutboxEntry } from "../outbox";
 import type { ResourceState } from "../useRemoteResource";
@@ -72,6 +72,13 @@ export interface AssessSheetProps {
    * answer a different question than the button says.
    */
   scope?: string[] | null;
+  /** **What `scope`'s ids ARE** when the sheet was opened as a slot check — so
+   *  the run button says *check these N together* and the run names its slot. */
+  slot?: AssessScope | null;
+  /** Open one row in the Send sheet to edit it (a conflict card's *edit*). */
+  onEditItem?: (id: string) => void;
+  /** Archive one row — a conflict card's *drop this one*, behind its confirm. */
+  onDropItem?: (id: string) => void;
   /** Start an assessment for this repo (`assess.run`, durable). Must say
    *  something: a toast, or the row appearing in Activity. */
   onRun: () => void;

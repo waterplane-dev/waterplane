@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy · waterplane</title>
+<meta name="description" content="What the waterplane app and host store, and what leaves your own desktop and tailnet: nothing, unless you turn on a feature that says otherwise.">
+<meta name="theme-color" content="#eef1f6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <img src="assets/icon.svg" width="28" height="28" alt="">
+  <a class="wordmark" href="./">waterplane<span>_</span></a>
+</header>
+
+<main class="doc">
+<h1>Privacy</h1>
+<p class="muted">Applies to the waterplane Android app, the waterplane web app and the waterplane
+host. Effective 15 October 2026.</p>
+
+<p><strong>We collect nothing.</strong> waterplane has no server, no account, no analytics, no
+crash reporting and no advertising. The app talks to one machine: the desktop you run the host on,
+at the address you give it, normally over your own Tailscale network. We, the people who make
+waterplane, never receive your data, because nothing is sent to us.</p>
+
+<h2>What the phone stores</h2>
+<p>On the phone, in the app's own storage (the browser's for the web app, the WebView's for the
+Android app):</p>
+<ul>
+  <li>Your settings, and the list of desktops you added with their addresses.</li>
+  <li>A device token for each desktop, which is how the host knows this phone is paired.</li>
+  <li>Prompts you have not sent yet: drafts, the prompt pad, and the offline queue of prompts
+  waiting for the desktop. They stay until they are delivered or you discard them.</li>
+  <li>Copies of what you looked at, so the app works offline: terminal output, transcripts, the
+  file tree, gallery pictures and thumbnails, files you downloaded, and token and context
+  readings.</li>
+  <li>Recorded dictation waiting to be transcribed, until it is.</li>
+  <li>Counts of which features you used and network statistics. These are sent to your own host,
+  never anywhere else.</li>
+</ul>
+<p>Clearing the app's storage, or uninstalling the app, deletes all of it. If Android backup is on
+for your device, Android may include the app's storage in your device backup, under your backup
+provider's terms.</p>
+
+<h2>What the host stores</h2>
+<p>On your desktop, under <code>~/.local/state/waterplane</code> (or
+<code>WATERPLANE_STATE_DIR</code>), <code>~/.config/waterplane</code> and a
+<code>.waterplane/</code> folder in each repo:</p>
+<ul>
+  <li>Paired devices, with their tokens hashed, and the LAN password as a salted hash if you set
+  one.</li>
+  <li>Push subscriptions for the browsers you allowed to notify, and the host's own key pair for
+  them.</li>
+  <li>Session state: open and closed sessions, the queue and its delivery receipts, a log of what
+  was sent, schedules, the backlog, stars, reviews and settings.</li>
+  <li>Usage and cost readings, limit events, install logs and terminal scrollback.</li>
+  <li>Files you send from the phone, in that repo's <code>.claude/inbox/</code>.</li>
+</ul>
+<p>The host reads Claude Code's own logs under <code>~/.claude/projects</code> to show transcripts,
+the archive and token figures. All of this stays on your desktop; delete the folders above to
+remove it.</p>
+
+<h2>Permissions the Android app asks for</h2>
+<ul>
+  <li><strong>Network</strong>: to reach your desktop.</li>
+  <li><strong>Notifications</strong>, a <strong>foreground service</strong> and <strong>start at
+  boot</strong>: an optional background link, one connection to your own desktop, so it can tell
+  you a session needs you. There is no push service behind it. Start at boot does nothing unless
+  you turned the link on.</li>
+  <li><strong>Microphone</strong>: push-to-talk dictation, only while you hold the button.</li>
+  <li><strong>Location and Wi-Fi state</strong>: only if you turn on switching to a desktop's LAN
+  address at home. Android requires location permission to read the Wi-Fi name; the app compares
+  it on the phone and sends it nowhere.</li>
+  <li><strong>Biometrics</strong>: to unlock values kept in the Android Keystore.</li>
+  <li><strong>Install apps</strong> and <strong>storage</strong> (Android 9 and older): to install
+  or save an APK or file you downloaded from your desktop.</li>
+</ul>
+
+<h2>When something does leave your desktop</h2>
+<p>Only through a feature you use, and only to the service it names:</p>
+<ul>
+  <li><strong>Claude Code itself</strong> talks to Anthropic under your own account. That is the CLI
+  you installed and signed in to; waterplane adds nothing to what it sends.</li>
+  <li><strong>Browser notifications</strong> in the web app are delivered through your browser
+  maker's push service, as every web push is. The message is encrypted for your browser and holds
+  the notice's title and text and which session or file it is about. The Android app does not use
+  this.</li>
+  <li><strong>Dictation</strong> is transcribed on your desktop when it has whisper.cpp. Without it,
+  the phone's own speech recogniser is used, which may send audio to the phone or browser
+  maker.</li>
+  <li><strong>Reading text off a screenshot</strong> sends the marked crop to Google's Gemini API,
+  only if you set your own <code>GEMINI_API_KEY</code>.</li>
+  <li><strong>Another model provider</strong> receives prompts only if you configure one for the
+  host's own small tasks.</li>
+  <li><strong>Update checks</strong>: the host asks npm or Homebrew whether a newer Claude Code is
+  out, and <code>waterplane update</code> downloads releases from GitHub. Android build tools are
+  downloaded from Google and Adoptium only when you ask for them.</li>
+</ul>
+<p>The demo at <a href="/demo/">waterplane.dev/demo</a> runs entirely in your browser and makes no
+network requests. This website sets no cookies, uses no analytics and loads nothing from other
+sites; GitHub Pages, which hosts it, keeps standard server logs.</p>
+
+<h2>Children</h2>
+<p>waterplane is a developer tool and is not directed at children.</p>
+
+<h2>Changes and contact</h2>
+<p>Changes to this page are made in public, in
+<a href="https://github.com/waterplane-dev/waterplane-dev.github.io">this site's repository</a>.
+Questions: <a href="https://github.com/waterplane-dev/waterplane/issues">open an issue</a>.
+Anything security-related: <a href="https://github.com/waterplane-dev/waterplane/security/advisories/new">report
+it privately</a>. There is no email address.</p>
+</main>
+
+<footer>
+  <p><a href="./">waterplane.dev</a></p>
+</footer>
+
+</div>
+</body>
+</html>

@@ -22,8 +22,8 @@
  *
  * ── What it costs, and why that shape ──────────────────────────────────────
  *
- * `smartpick.ts`'s measurement, which applies here more strongly than it does
- * there: the cost of a pass like this is THINKING, not input. So `NAME_SYSTEM`
+ * The measurement in `sidecar/sidecarname.ts` (`runTextTask`'s
+ * `--thinking disabled`): the cost of a pass like this is THINKING, not input. So `NAME_SYSTEM`
  * ends by asking for the answer straight away, `runNameTask` runs
  * `--thinking disabled`, and the task is toolless — which also makes it one of
  * the three that MAY be routed at a local model (`WATERPLANE_SIDECAR_NAME`), and the
@@ -34,9 +34,8 @@
  *
  * `NAME_BATCH_ITEMS` / `NAME_BATCH_CHARS` cut the repo into calls. Nothing is
  * ever CLIPPED to make an item fit: an item too long for the budget goes in a
- * batch of its own, at full length. `smartpick.ts` clips and marks the clip,
- * because a clipped item can still be SORTED — the model saw enough to place
- * it. A title is not like that. The half of a prompt a clip keeps is the half
+ * batch of its own, at full length. A sorter could clip and mark the
+ * clip, because a clipped item can still be SORTED. A title is not like that. The half of a prompt a clip keeps is the half
  * this app already shows on the row, so a title written from it can only ever
  * be the truncation it was asked not to be, which `cleanHeadline` then refuses
  * — money spent to produce a drop.
@@ -99,8 +98,8 @@ export const NAME_BATCH_CHARS = 40_000;
  * the answer being right the FIRST time, which is the difference between a pass
  * that titles eleven rows and one that titles none and writes four notes.
  *
- * The last paragraph is `SMARTPICK_SYSTEM`'s and is here for its measured
- * reason: cost is thinking, not input.
+ * The last line (*answer straight away*) is there for the measured reason:
+ * cost is thinking, not input.
  */
 export const NAME_SYSTEM = [
   "You title backlog items. For each item answer JSON only:",
@@ -237,10 +236,9 @@ export function namingPrompt(batch: NamingBatch): string {
 /**
  * The JSON inside whatever the model actually answered.
  *
- * `smartpick.ts`'s `parseLoose`, with one deliberate difference: a bare ARRAY
- * is accepted here. There it is refused because an array parses as "an order,
- * no merges, no pick" — a document that cannot be interpreted turned into a
- * confident "change nothing". Here an array of `{id, headline}` objects is
+ * `assess/hassutil.ts`'s `parseLoose` in spirit (a fence is unwrapped, not
+ * refused), plus the outermost `{…}`/`[…]` slice, and a bare ARRAY is
+ * accepted: an array of `{id, headline}` objects is
  * unambiguous, `cleanNamingDoc` already reads that shape, and every entry in it
  * still has to name an id that was in the batch before anything is written.
  */
@@ -327,7 +325,7 @@ export interface NamingDeps {
    *  the rows it is working on ride the snapshot as a TRANSIENT (`naming`). */
   readonly onChange: () => void;
   /** The completion. Injected so the tests and the e2e can drive a pass with no
-   *  model at all — `smartpick.ts`'s `deps.run`, for its reason. */
+   *  model at all. */
   readonly run?: (req: NameRequest) => Promise<NameRun>;
 }
 

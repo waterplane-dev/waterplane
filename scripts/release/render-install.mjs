@@ -104,7 +104,7 @@ export async function installVars({ root = ROOT, version } = {}) {
     NODE_VERSION: node,
     VERSION: v,
     REPO_URL: `https://github.com/${BRAND.githubOrg}/${BRAND.slug}/releases/latest/download`,
-    INSTALL_URL: `https://${BRAND.domain}/install.sh`,
+    INSTALL_URL: `https://github.com/${BRAND.githubOrg}/${BRAND.slug}/releases/latest/download/install.sh`,
     CONFIG_NAME: BRAND.configDirName,
     STATE_DIR: BRAND.stateDirName,
     CATALOGUE: catalogueLines(JSON.parse(readFileSync(join(root, "deploy/plugins.json"), "utf8"))),

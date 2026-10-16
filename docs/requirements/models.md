@@ -66,3 +66,8 @@ The new-session dialog uses the model selector wheel instead of a combo box.
 Model selector text appears above the wheel chart, not below, so thumbs do not hide it.
 - asked: 2026-10-04
 
+### R-models-015 · shipped
+When switching models within a session, the UI shows the extra cost of the prompt-cache rewrite (for example Opus to Haiku) together with a hint.
+- asked: 2026-10-05
+- shipped: ad441dd5
+

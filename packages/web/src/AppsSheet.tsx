@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BellRing, Boxes, CloudOff, History, ListChecks, PackageCheck, PackagePlus, Pencil, RotateCw, Settings, Smartphone, X } from "lucide-react";
+import { BellRing, Boxes, CloudOff, History, Trash2, ListChecks, PackageCheck, PackagePlus, Pencil, RotateCw, Settings, Smartphone, X } from "lucide-react";
 import {
   deviceLabel, filterInstallLog, installLogLine, installLogSummary, installTitle,
   type InstallLogEntry,
@@ -11,18 +11,19 @@ import { track } from "./usage";
 import { showToast } from "./toast";
 import { pulls, type PullRecord } from "./pull";
 import {
-  appInstallVerb, appRows, appsSummary, appStateText, buildsOf, isPlayBuild, NO_INSTALL, QUIET_INSTALL_RULES, quietOwnerText,
+  appInstallVerb, appRows, appsSummary, appStateText, buildsOf, cleanupLabel, cleanupText, isPlayBuild, NO_INSTALL, QUIET_INSTALL_RULES, quietOwnerText,
   quietVerdict, readyApps, snoozeText, toggleAllow, type InstallSources,
   type AppRow, type InstallCaps,
 } from "./installPolicy";
 import {
   installSources, installStatus, nativeInstall, nativeInstallSupported, openInstallSettings,
-  readInstallAllow, writeInstallAllow,
+  readInstallAllow, setCleanAfterInstall, writeInstallAllow,
 } from "./nativeInstall";
 import { deviceName, installLogState, setDeviceName, subscribeInstallLog, type InstallLogState } from "./installLog";
 import { deviceId } from "./link";
 import { hhmm, when } from "./format";
 import { takeAppsPane, type AppsPane } from "./appsPane";
+import { AppsSetupPane } from "./AppsSetupPane";
 
 /**
  * **Your own apps, and which of them install themselves.**
@@ -57,6 +58,9 @@ export function AppsSheet({ onClose, onOpenDownloads }: {
   // screen said on every cold start — and this sheet is one of the restored
   // overlays, so cold start is exactly when it is read.
   const [caps, setCaps] = useState<InstallCaps | null>(null);
+  // The clean-up switch, as the SHELL holds it. `undefined` = still asking,
+  // `null` = a shell older than the switch.
+  const [cleanup, setCleanup] = useState<boolean | null | undefined>(undefined);
   const [allow, setAllow] = useState<string[]>(() => readInstallAllow());
   // The desktop's log of what every phone installed. Held here rather than
   // fetched: it arrives unprompted on `hello` and again whenever any device
@@ -82,7 +86,7 @@ export function AppsSheet({ onClose, onOpenDownloads }: {
   // and this screen is where somebody comes after granting it.
   useEffect(() => {
     let live = true;
-    void installStatus().then((r) => { if (live) setCaps(r.caps); });
+    void installStatus().then((r) => { if (live) { setCaps(r.caps); setCleanup(r.cleanup); } });
     return () => { live = false; };
   }, []);
 
@@ -99,7 +103,7 @@ export function AppsSheet({ onClose, onOpenDownloads }: {
     let live = true;
     void installSources(rows.map((r) => r.pkg)).then((s) => { if (live) setSources(s); });
     return () => { live = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `rows` is re-derived every render; `pkgKey` is its packages plus their install stamps, i.e. exactly what this read depends on
   }, [pkgKey]);
   const ready = readyApps(rows);
   const shownRows = pane === "ready" ? ready : rows;
@@ -131,6 +135,13 @@ export function AppsSheet({ onClose, onOpenDownloads }: {
           onClick={() => { setPane("apps"); track("action:apps.pane.apps"); }}>
           <Boxes size={14} /> apps{rows.length ? ` · ${rows.length}` : ""}
         </button>
+        {/* Which apps are set up to install themselves at all — the repo half
+            and this phone's, per app (`AppsSetupPane.tsx`). No count: it would
+            have to open a cut, and the pane carries its own two. */}
+        <button className={`seg ${pane === "setup" ? "on" : ""}`}
+          onClick={() => { setPane("setup"); track("action:apps.pane.setup"); }}>
+          <ListChecks size={14} /> setup
+        </button>
         <button className={`seg ${pane === "log" ? "on" : ""}`}
           onClick={() => { setPane("log"); setCut({}); track("action:apps.pane.log"); }}>
           <History size={14} /> installed{log.doc.total ? ` · ${log.doc.total}` : ""}
@@ -141,6 +152,10 @@ export function AppsSheet({ onClose, onOpenDownloads }: {
       {pane === "log" ? (
         <InstallLogPane log={log} cut={cut} onCut={setCut}
           naming={naming} draft={nameDraft} onNaming={setNaming} onDraft={setNameDraft} />
+      ) : pane === "setup" ? (
+        caps === null ? <div className="form-hint">Asking this phone what it will allow…</div> :
+        <AppsSetupPane rows={rows} caps={known} allow={allow} log={log.doc.entries} me={deviceId()}
+          onFlip={flip} onOpenDownloads={onOpenDownloads} />
       ) : (
       <>
         <div className="form-hint">
@@ -163,6 +178,27 @@ export function AppsSheet({ onClose, onOpenDownloads }: {
                 {QUIET_INSTALL_RULES.map((r) => <li key={r}>{r}</li>)}
               </ol>
             )}
+          </div>
+        )}
+        {/* Delete an installed build's APK — opt-in, per phone, held by the
+            shell because it runs at the install's receiver with the page
+            asleep. An old shell gets the sentence, never a dead switch. */}
+        {caps?.supported && !isPlayBuild(caps) && cleanup !== undefined && (
+          <div className="set-row">
+            {cleanup !== null && (
+              <button className={`key ${cleanup ? "active" : ""}`}
+                onClick={() => {
+                  const next = !cleanup;
+                  track("action:apps.cleanup");
+                  void setCleanAfterInstall(next).then(() => {
+                    setCleanup(next);
+                    showToast(next
+                      ? "an installed build's APK will now be deleted from this phone"
+                      : "installed builds keep their APK on this phone");
+                  }).catch((e: unknown) => showToast(e instanceof Error ? e.message : "could not change it"));
+                }}><Trash2 size={14} /> {cleanupLabel(cleanup)}</button>
+            )}
+            <span className="set-note">{cleanupText(cleanup)}</span>
           </div>
         )}
         <div className="form-hint dim">

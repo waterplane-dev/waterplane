@@ -1,13 +1,12 @@
 /** A slice of assess.ts — moved whole from assess.ts, see docs/notes/shared-architecture.md. */
 import type { ItemCategory } from "../naming.js";
 import { categoryDropNote, cleanCategory, cleanHeadline, headlineDropNote } from "../naming.js";
-import { ASSESS_VERDICTS, type AssessVerdict, MAX_ASSESS_NOTES, MAX_EVIDENCE_CHARS, MAX_MERGE_GROUPS, MAX_MERGE_SIZE, MAX_NEW, MAX_PROMPT_CHARS, MAX_RANK, MAX_RATIONALE_CHARS, MIN_MERGE_SIZE } from "./sassvocab.js";
+import { ASSESS_VERDICTS, type AssessVerdict, MAX_ASSESS_NOTES, MAX_EVIDENCE_CHARS, MAX_MERGE_GROUPS, MAX_MERGE_SIZE, MAX_NEW, MAX_PROMPT_CHARS, MAX_RANK, MAX_RATIONALE_CHARS, MIN_MERGE_SIZE, clip, str } from "./sassvocab.js";
 import { type AssessDowngrade, type AssessItem, type AssessMerge, type AssessNew, type AssessProposal, type AssessRow } from "./sassio.js";
+import { cleanConflicts, cleanSplits } from "./sassslot.js";
 
 // ── Cleaning ─────────────────────────────────────────────────────────────────
 
-const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
-const clip = (s: string, n: number): string => (s.length > n ? s.slice(0, n) : s);
 
 const rankOf = (v: unknown): number | undefined => {
   const n = Math.round(Number(v));
@@ -385,11 +384,16 @@ export function cleanAssessment(raw: unknown, input: readonly AssessItem[]): Ass
   // the CLI's own list.
   news.push(...offers);
 
+  const conflicts = cleanConflicts(arr(doc.conflicts), canDecide, note);
+  const splits = cleanSplits(arr(doc.splits), items, canDecide, rows, memberOf, note);
+
   // One sentence per kind of drop, carrying the count — see the counters above.
   if (headlineDrops) note(headlineDropNote(headlineDrops));
   if (categoryDrops) note(categoryDropNote(categoryDrops));
 
-  return { rows, merges, news, notes };
+  // Only when there is one: a proposal from a run that found none keeps the
+  // shape every proposal had before these existed.
+  return { rows, merges, news, notes, ...(conflicts.length ? { conflicts } : {}), ...(splits.length ? { splits } : {}) };
 }
 
 /** The same "only when there is one" spread as `naming`, for the two places

@@ -169,6 +169,11 @@ function ModelFill({ group, frac, money, bands: modelSlots }: {
   bands: ReturnType<typeof modelBands>;
 }) {
   const named = new Map(modelSlots.bands.map((b) => [b.alias, b.slot]));
+  // The legend's order (dearest family first, tints after their hue), grey last.
+  const rank = (slot: number) => {
+    const i = modelSlots.bands.findIndex((b) => b.slot === slot);
+    return i < 0 ? modelSlots.bands.length : i;
+  };
   const val = (m: ModelSlice) => (money ? m.cost.total : tokenTotal(m.totals));
   // Folded to the ALIAS, so a dated snapshot and the plain id are one segment.
   const byAlias = new Map<string, { slot: number; name: string; v: number }>();
@@ -184,7 +189,7 @@ function ModelFill({ group, frac, money, bands: modelSlots }: {
     cur.v += val(m);
     byAlias.set(key, cur);
   }
-  const segs = [...byAlias.values()].filter((sg) => sg.v > 0).sort((a, b) => a.slot - b.slot);
+  const segs = [...byAlias.values()].filter((sg) => sg.v > 0).sort((a, b) => rank(a.slot) - rank(b.slot));
   const whole = segs.reduce((n, sg) => n + sg.v, 0);
   if (!segs.length || whole <= 0) {
     return <span className="ts-barfill" style={{ width: `${Math.max(1, frac * 100)}%` }} />;

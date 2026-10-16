@@ -19,8 +19,9 @@ import {
   CHAIN_EMPTY, CHAIN_NOTE, CHAIN_RECENT_MS, GUARD_LABEL, WHEN_EDIT_BUILD, WHEN_EDIT_RUNNING,
   WHEN_EDIT_SWEEP, WINDOW_LABEL, afterWords, anchorWindowOf,
   chainCandidates, chainOkWords, guardWindowOf, guardWords, hoursWords, offlineLabel, previewOf,
-  clockSessionNote, pctChoices, pctOk, pctWords, resumeWhen, sendBlocker, sendLabel, sequentialMeans,
-  targetWords, whenPatchToast, seedAfterRescue, whenRoute, whenWords, budgetOfTarget, withBudget,
+  clockSessionNote, leadChoices, leadLabel, leadOk, leadWords, pctChoices, pctOk, pctWords, resumeWhen, sendBlocker, sendLabel, sequentialMeans,
+  targetWords, whenPatchToast, seedAfterRescue, whenRoute, whenWords, budgetOfTarget, withBudget, withoutLaunch,
+  launchOfTarget, launchWords, withLaunch,
 } from "./sendIntent.ts";
 
 const NOW = Date.now();
@@ -668,6 +669,41 @@ test("the field says what it wants and refuses nothing", () => {
   assert.match(pctWords("half"), /not a number/);
 });
 
+// ── How long before the reset: a typed lead ─────────────────────────
+
+test("a typed lead is read as a duration, a bare number as minutes", () => {
+  assert.equal(leadOk("45"), 45);
+  assert.equal(leadOk("45m"), 45);
+  assert.equal(leadOk("4h"), 240);
+  assert.equal(leadOk("1.5h"), 90);
+  assert.equal(leadOk("1h30"), 90);
+  assert.equal(leadOk(" 1h 30m "), 90, "spaces are what a phone keyboard puts in");
+  assert.equal(leadOk("24h"), 1440);
+  assert.equal(leadOk("25h"), null, "past a day the host would clamp it, and the chip would lie");
+  assert.equal(leadOk("0"), null, "zero before the reset is `right after it resets`");
+  assert.equal(leadOk("-2h"), null);
+  assert.equal(leadOk("soon"), null);
+  assert.equal(leadOk(""), null);
+  assert.equal(leadOk(null), null);
+});
+
+test("lead chips are the presets plus what was typed, in order and labelled", () => {
+  assert.deepEqual(leadChoices(null, null), [30, 60, 120, 180, 360]);
+  assert.deepEqual(leadChoices(240, 60), [30, 60, 120, 180, 240, 360]);
+  assert.deepEqual(leadChoices(null, 720), [30, 60, 120, 180, 360, 720], "a rule's own lead is offered so it can be lit");
+  assert.deepEqual(leadChoices(0, 2000), [30, 60, 120, 180, 360]);
+  assert.deepEqual([45, 60, 90, 720].map(leadLabel), ["45m", "1h", "1h30m", "12h"]);
+});
+
+test("the lead field says what it wants and refuses nothing", () => {
+  assert.equal(leadWords("4h"), null);
+  assert.match(leadWords(""), /45m, 4h/);
+  assert.match(leadWords("0"), /right after it resets/);
+  assert.match(leadWords("-2h"), /minus/);
+  assert.match(leadWords("30h"), /24h/);
+  assert.match(leadWords("soon"), /not a duration/);
+});
+
 test("re-time mode refuses only on the WHEN — no words, no target to ask about", async () => {
   const { retimeBlocker, retimeWhenLabel } = await import("./sendIntent.ts");
   const once = (at) => ({ kind: "at", rule: { kind: "once", at, offsetMin: 0 }, graceMin: 120 });
@@ -696,7 +732,7 @@ test("re-time says what holds it, and names the way past it for what it is", asy
   assert.match(pastBudgetNote(4, 4), /still run one at a time/);
   assert.match(pastBudgetNote(4, 4), /wait until free/);
   assert.match(pastBudgetNote(4, 4), /until this budget window resets/, "the waiver is scoped, and says so");
-  assert.match(pastBudgetNote(1, 1), /smart pick still takes its look first — a small model call, made even while over budget/);
+  assert.doesNotMatch(pastBudgetNote(1, 1), /smart pick/, "the smart pick is gone (2026-10-16), and so is its clause");
   assert.doesNotMatch(pastBudgetNote(4, 4), /at once|this second/, "a waiver never promises now");
   assert.doesNotMatch(pastBudgetNote(1, 1), /one at a time/, "one row has no one-at-a-time to speak of");
   assert.ok(pastBudgetNote(2, 4).startsWith("2 of the 4 you ticked"), "the count is the held ones, and it says what it left out");
@@ -740,7 +776,7 @@ test("budgetHeldIds is the one cut behind the count and the waiver", async () =>
 test("every single-row skip-the-queue verb makes one promise", async () => {
   const { skipQueueNote, busyInCheckout, SKIP_QUEUE_BUSY_NOTE, QUEUES_ITEM_RUN_NOTE } = await import("./sendIntent.ts");
   assert.equal(skipQueueNote(true),
-    "starts it this second in a session of its own — skips the queue: the budget, the smart pick, one at a time and wait until free");
+    "starts it this second in a session of its own — skips the queue: the budget, one at a time and wait until free");
   assert.match(skipQueueNote(false), /this second — skips the queue/);
   assert.doesNotMatch(skipQueueNote(false), /of its own/, "a row aimed at a session opens nothing");
   // Said, never asked: a fire is the manual override and takes ONE tap.
@@ -799,4 +835,44 @@ test("withBudget sets and removes the cap, leaving no undefined key, and ignores
   assert.equal(withBudget(s, CAP), s);
   assert.equal(budgetOfTarget(s), undefined);
   assert.equal(budgetOfTarget(withBudget(t, CAP)), CAP);
+});
+
+test("a sweep's own launch survives a budget change and is dropped only by withoutLaunch", () => {
+  const t = { kind: "repos", dirs: ["/a"], launch: { model: "sonnet" } };
+  assert.deepEqual(withBudget(t, CAP), { ...t, budget: CAP });
+  assert.deepEqual(withoutLaunch(withBudget(t, CAP)), { kind: "repos", dirs: ["/a"], budget: CAP });
+  // A repo target carries one now too (the sheet's *model* row); a session does not.
+  const r = { kind: "repo", cwd: "/r" };
+  assert.deepEqual(withoutLaunch({ ...r, launch: { model: "opus" } }), r);
+  const s = { kind: "session", sessionId: "s", cwd: "/r" };
+  assert.equal(withoutLaunch(s), s);
+});
+
+// ── The *model* row: a later "new session" can name its model ─────────────────
+
+test("the model row's words: the defaults until something is picked, the backend only when it is not claude", () => {
+  assert.equal(launchWords(undefined), "new-session defaults");
+  assert.equal(launchWords({}), "new-session defaults");
+  assert.equal(launchWords({ permissionMode: "plan" }), "new-session defaults", "nothing the row picks was picked");
+  assert.equal(launchWords({ model: "sonnet" }), "sonnet");
+  assert.equal(launchWords({ model: "opus", effort: "high", backend: "claude" }), "opus · high");
+  assert.equal(launchWords({ backend: "localrun", model: "qwen3-coder:30b" }), "localrun · qwen3-coder:30b");
+  assert.equal(launchWords({ effort: "low" }), "the default model · low");
+});
+
+test("a repo target carries its launch like its budget, and both restate it", () => {
+  const t = { kind: "repo", cwd: "/a" };
+  const picked = withLaunch(t, { model: "sonnet", effort: "low" });
+  assert.deepEqual(launchOfTarget(picked), { model: "sonnet", effort: "low" });
+  assert.equal("launch" in withLaunch(picked, null), false, "no `launch: undefined` key is left behind");
+  assert.deepEqual(withBudget(picked, CAP).launch, picked.launch, "a budget change keeps the model");
+  const s = { kind: "session", sessionId: "s", cwd: "/a" };
+  assert.equal(withLaunch(s, { model: "opus" }), s, "a live session is already running whatever it runs");
+  assert.equal(launchOfTarget(s), undefined);
+  // Untouched, the words are exactly what they always were.
+  assert.equal(targetWords(t, names), "app · a new session");
+  assert.equal(targetWords(picked, names), "app · a new session, sonnet · low");
+  assert.equal(sendLabel(send(t, NOWISH), names, null), "Start in app");
+  assert.equal(sendLabel(send(picked, NOWISH), names, null), "Start in app · sonnet · low");
+  assert.match(sendLabel(send(withLaunch({ kind: "repos", dirs: ["/a", "/b"] }, { model: "haiku" }), NOWISH), names, null), / · haiku$/);
 });

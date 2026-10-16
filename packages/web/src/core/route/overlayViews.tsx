@@ -1,8 +1,9 @@
 import type { MutableRefObject, ReactNode } from "react";
-import type { Intent, SessionInfo, UsageInfo } from "@waterplane/shared";
+import type { BackendInfo, Intent, RepoTarget, SessionInfo, UsageInfo } from "@waterplane/shared";
 import type { Overlay } from "../../routing";
 import { SlashSheet } from "../../SlashSheet";
 import { GitView } from "../../GitView";
+import { gitFailSeed } from "../../gitFailPrompt";
 import { OutlineSheet } from "../../OutlineSheet";
 import { SheetGuard } from "../../BootGuard";
 import { showToast } from "../../toast";
@@ -46,6 +47,9 @@ export interface OverlayCtx extends Pick<Route, "overlay" | "setOverlay" | "clos
   gitRepoId: string | null;
   setGitRepoId: (id: string | null) => void;
   activeRepoId: string | null;
+  repos: RepoTarget[];
+  /** What this host said it can launch — the Send sheet's *model* row. */
+  backends: BackendInfo[] | null;
 }
 
 /**
@@ -60,7 +64,7 @@ export function overlayLayer(ctx: OverlayCtx): ReactNode | null {
     overlay, setOverlay, closeSheet, connRef, status, setReconnectAsk, submitInput, holdQueueRef, flushOutbox, removeQueued,
     pendingSession, insertCompose, setOutlineJump, setView, active, sessions, visibleRepos, outbox, usage, intents,
     launchCore, sessionCant, pickBackend, refreshRepos, sendCore, sendSeed, voice, installed, canInstall, installEvt,
-    setCanInstall, gitRepoId, setGitRepoId, activeRepoId,
+    setCanInstall, gitRepoId, setGitRepoId, activeRepoId, repos, backends,
   } = ctx;
   // ── Overlays ────────────────────────────────────────────────────────
   /**
@@ -138,7 +142,12 @@ export function overlayLayer(ctx: OverlayCtx): ReactNode | null {
 
     git: () => {
       if (!((gitRepoId ?? activeRepoId))) return null;
-        return <GitView repoId={(gitRepoId ?? activeRepoId)!} onClose={() => { setGitRepoId(null); setOverlay(null); refreshRepos(); }} />;
+      const gitRepo = repos.find((r) => r.id === (gitRepoId ?? activeRepoId));
+        return <GitView repoId={(gitRepoId ?? activeRepoId)!}
+          // A failed push/pull's log, as a seed for a new session in this repo:
+          // the Send sheet opens on it and sends nothing. Back lands here again.
+          onAskAgent={gitRepo ? (f) => sendCore.openSend(gitFailSeed(f, gitRepo)) : undefined}
+          onClose={() => { setGitRepoId(null); setOverlay(null); refreshRepos(); }} />;
     },
 
     outline: () => {
@@ -162,6 +171,7 @@ export function overlayLayer(ctx: OverlayCtx): ReactNode | null {
     send: () => (sendSeed ? (
       <SendSheetEntry send={sendCore} sessions={sessions} pendingSession={pendingSession} visibleRepos={visibleRepos}
         outbox={outbox} online={status === "open"} usage={usage} intents={intents} removeQueued={removeQueued}
+        backends={backends} launch={launchCore.launch}
         closeSheet={closeSheet}
         onAttach={(files, repo) => attachForInbox(repo, files)}
         onAnnotate={(files, repo) => annotate(repo, files, "send")}

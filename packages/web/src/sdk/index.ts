@@ -10,8 +10,9 @@
  * feature needs it, not before.
  */
 export type {
-  CommandDef, ConnInfo, CoreApi, DurableOp, FeatureManifest, LedgerSummary, LedgerViewDef, LedgerViewParts, LedgerViewProps, MessageHandlers, QueueBacklogOpts, RepoActionDef, RepoChipCount,
-  RepoChipDef, SettingsGroupId, SettingsRowsDef, SetupRowDef, SheetDef, SheetId, ToolbarItemDef, UploadApi, UploadBuf, UploadProgress,
+  Availability, CommandDef, ConnInfo, ContributionIcon, CoreApi, DurableOp, FeatureManifest, LauncherItemCount, LauncherItemDef, LedgerSummary, MenuItemDef, LedgerViewDef, LedgerViewParts, LedgerViewProps,
+  MessageHandlers, QueueBacklogOpts, RepoActionDef, RepoChipCount, RepoChipDef, ReturnTo, SessionViewDef, SettingsGroupId, SettingsRowsDef, SetupRowDef, SheetDef, SheetId,
+  ToolbarItemDef, UploadApi, UploadBuf, UploadProgress,
 } from "./types.ts";
 export { core } from "../core/api.ts";
 export { createStore, useStore, type Store } from "./store.ts";
@@ -25,7 +26,19 @@ export type { CachedListStore, CachedLists } from "./cached.ts";
 export { repoRunStore, type RepoRunStore, type RunLike } from "./repoRun.ts";
 export { featureSheetId, type FeatureSheetId } from "../routing.ts";
 export { pluginClient, type PluginClient } from "./pluginClient.ts";
+export { extStorage, type ExtStorage } from "./extStorage.ts";
 export type { PluginCallResult, PluginMethods } from "@waterplane/shared";
+export { openStream, type StreamCallbacks, type StreamHandle, type StreamState, type StreamStats, type StreamStopCause } from "./stream.ts";
+export type { StreamFrame } from "@waterplane/shared";
 export { ledgers, type CachedRead } from "./ledgers.ts";
+/** Open a URL outside the app — the one call that works in both a browser tab and the Android shell. */
+export { openExternal } from "../openExternal.ts";
+/** A full-resolution screenshot of the desktop into a repo's `.claude/outbox/` — the one capture route. */
+export { desktopScreenshot } from "../desktopShot.ts";
+export {
+  modelRows, pacing, pacingLine, periodCap, periodReadSpan, periodTitle, primaryUsdPeriod, usdWords,
+  type ModelRow, type Pacing,
+} from "../periodWords.ts";
 export { explainCostPrompt, type CostSubject } from "../explainCost.ts";
+export { pqKem, type PqKem, type PqKemPair } from "../pqKem.ts";
 export { nativeKeystore, isKeystoreError, KEYSTORE_CODES, type KeystoreCode, type KeystoreError, type KeystoreStatus, type NativeKeystore, type PromptText } from "../nativeKeystore.ts";

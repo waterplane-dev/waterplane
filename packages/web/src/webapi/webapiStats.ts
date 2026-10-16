@@ -1,5 +1,5 @@
 import { SLOW_OP_TIMEOUT_MS } from "@waterplane/shared";
-import type { BackendTokensDoc, LocalUsageDoc, TokenStatsDoc, TokenWindowsDoc, UsageHistoryDoc, PeerJobLedgerRow } from "@waterplane/shared";
+import type { BackendTokensDoc, CostWindowDoc, LocalUsageDoc, TokenStatsDoc, TokenWindowsDoc, UsageHistoryDoc, UsageSourceHistoryDoc, PeerJobLedgerRow } from "@waterplane/shared";
 import { jget } from "./webapiFetch";
 
 /** Token, usage and cost readings. One slice of `api` (see api.ts). */
@@ -42,6 +42,10 @@ export const statsApi = {
   usageLog: (hours = 0) =>
     jget<UsageHistoryDoc>(`/api/usagelog${hours > 0 ? `?hours=${hours}` : ""}`),
 
+  /** One non-claude source's kept readings (`GET /api/usagelog/<source>`); an older host 404s. */
+  usageLogSource: (source: string) =>
+    jget<UsageSourceHistoryDoc>(`/api/usagelog/${encodeURIComponent(source)}`),
+
   /**
    * The same ledger folded into PAST rate-limit windows — one grid per spec.
    *
@@ -63,4 +67,16 @@ export const statsApi = {
       `/api/tokenwindows?${specs.map((s) => `w=${encodeURIComponent(`${s.id}:${Math.round(s.anchor)}:${Math.round(s.lenMs)}`)}`).join("&")}${fresh ? "&fresh=1" : ""}`,
       SLOW_OP_TIMEOUT_MS,
     ),
+
+  /**
+   * Every conversation with a turn inside `[from, to)`, by hour, repo and launch — the cost
+   * window (`CostWindowDoc`). The host folds it out of the same ledger `tokenStats` reads, joined
+   * with the titles and launches it holds; an hour is the finest bucket, so the answer starts at
+   * the top of the hour `from` falls in and says so (`fromHour`).
+   *
+   * No offline cache on purpose: an older host has no route and answers 404, which the caller
+   * says in words rather than showing a stale window. Slow-op fuse: a cold host walks every log.
+   */
+  costWindow: (from: number, to: number, fresh = false) =>
+    jget<CostWindowDoc>(`/api/costwindow?from=${Math.round(from)}&to=${Math.round(to)}${fresh ? "&fresh=1" : ""}`, SLOW_OP_TIMEOUT_MS),
 };

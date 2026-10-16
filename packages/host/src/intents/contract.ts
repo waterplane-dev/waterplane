@@ -254,53 +254,21 @@ export interface IntentDeps {
    */
   autoSlotsDetail?(): string | undefined;
   /**
-   * Close the oldest automatic session that has nothing left in it, and say
-   * which — the answer to a row that is otherwise ready and is blocked on
-   * `noSlot`.
-   *
-   * `null` is a real and common answer: every automatic session is attached,
-   * mid-turn or too recently active. Nothing is forced, and the blocked row goes
-   * on saying it is waiting for a slot, which is true.
-   *
-   * Asked at most ONCE per pass. Reaping is the second most expensive thing this
-   * loop can do and the slot it frees is not visible until the next tick anyway
-   * (the executor reads `autoSlotsFree` afresh), so a pass that closed three
-   * sessions to answer three blocked rows would be spending the whole cap on one
-   * sweep of the clock.
+   * The local-model cap (`IntentFacts.local`, rung 4.55 `localModel`) — asked
+   * once per pass like `autoSlotsFree`, decremented per fire of a row in
+   * `rows`, re-read monotonically on the far side of the pass's yield. Absent = the
+   * rung is skipped (`localslot.ts`).
    */
-  reapAutoSession?(): string | null;
+  localSlots?(): IntentFacts["local"];
+  /** That cap's sentence in the host's numbers (`localSlotWaitText`). */
+  localSlotsDetail?(): string | undefined;
   /**
-   * The last thing asked before a row fires: *is something looking over this
-   * repo's waiting items first?*
-   *
-   * A sentence means HOLD — the row is blocked `picking` with it and this pass
-   * leaves it alone. `null` means go. Optional, and absent is the whole of the
-   * old behaviour: a host that supplies no `pickHold` fires exactly what it
-   * fired before this dep existed, which is what makes the seam shippable on
-   * its own.
-   *
-   * ── Why the manager does not de-dupe this, and must not ────────────────────
-   *
-   * The manager does not know what a "pick" IS. It cannot: whether two calls
-   * are the same pick depends on a fingerprint over items, branch, dirty paths
-   * and commit subjects, none of which this module has ever heard of, and all
-   * of which live in the dep.
-   *
-   * That matters here rather than being a nicety, because of how `serial`
-   * works. `serial` only bites once something has been CLAIMED, and a held row
-   * claims nothing — so the second row of the same worktree reaches this line
-   * in the SAME pass and asks again. The hold is therefore keyed per cwd BY THE
-   * DEP, which answers both rows from one in-flight entry and starts one look.
-   * A de-dupe written here, per row or per pass, would be a second opinion
-   * about the same question and the two would drift.
-   *
-   * It is asked at the very last moment, after the whole ladder and after the
-   * fan-out pool, so a repo never spends anything looking over items that were
-   * not going to run anyway. `runNow` — a person's own tap — never asks it: a
-   * tap is not a pick, and holding somebody's finger for twenty seconds while
-   * machinery reconsiders is not what they pressed.
+   * Is the local model this row opens on LOADED? A sentence holds it
+   * (`localModel`, nothing claimed), `null` lets it fire. Synchronous: the
+   * load runs in the background and kicks the tick when it ends. Asked after
+   * the whole ladder and the sweep pool, last before the claim; never by `runNow`.
    */
-  pickHold?(row: Intent): Promise<string | null>;
+  localHold?(row: Intent): string | null;
   /**
    * The live session that REPLACED this exact one after a usage-limit exit, so
    * a row whose session died can follow it — and null when nothing did.
@@ -382,9 +350,16 @@ export interface IntentDeps {
   /** Every tripped ceiling, session first (`budgetCeilings`). Optional, and
    *  absent is the old behaviour: a before-reset row is held like any other. */
   budgetOver?(): readonly BudgetCeiling[];
+  /** The leftover ceiling when tripped (`leftoverCeiling`), else null. Optional,
+   *  and absent holds no leftover — the behaviour before it existed. */
+  leftoverOver?(): BudgetCeiling | null;
   /** Sessions whose OWN budget is spent (`sessionBudgetHeld`). Optional; absent
    *  is "nobody said" = none held, exactly the old behaviour. */
   budgetHeldSessions?(): ReadonlySet<string>;
+  /** The emergency halt's refusal (`halt.ts`'s `haltRefusal`), or null. While it
+   *  answers, the ladder fires nothing and `runNow` refuses: rows are held,
+   *  never spent. Optional; absent = never halted (a unit fake). */
+  halted?(): string | null;
   autoFire(): boolean;
   /**
    * What the CLI's own conversation log says about a delivery — `settle.ts`'s
@@ -401,6 +376,12 @@ export interface IntentDeps {
   executors: IntentExecutors;
   /** One row changed (or, with no argument, several did). */
   onChange(intent?: Intent): void;
+  /**
+   * `intents.json` stopped reaching the disk (`disk.ts`'s `persist()`), with the
+   * error's own words — called ONCE per failing streak, so the daemon can tell a
+   * person. Optional: absent, the failure is still logged and still refuses.
+   */
+  onWriteError?(message: string): void;
 }
 
 /** The lifecycle states a tick will not touch. */
@@ -501,7 +482,7 @@ export interface IntentCore {
   // ── facade: state the facade keeps, shared with every slice ──────────────
   /** The constructor's OWN object — never a copy, never destructured: a test
    *  replaces `deps.executors.freshSession` after construction
-   *  (`pickhold.test.mjs`), so `deps.executors.<x>` is read at call time. */
+   *  (`ladderpass.test.mjs`), so `deps.executors.<x>` is read at call time. */
   readonly deps: IntentDeps;
   /** The live rows. `this.rows` is REASSIGNED in four slices (`upsert`,
    *  `remove`, `replace`, `load`/`compact`), so it is never shared by
@@ -528,8 +509,11 @@ export interface IntentCore {
   pending(): Intent[];
 
   // ── disk (disk.ts) ───────────────────────────────────────────────────────
-  /** The ONE write to `intents.json` (pinned per file). */
-  persist(): void;
+  /** The ONE write to `intents.json` (pinned per file). `false` ⇒ nothing reached
+   *  the disk (read-only this boot, or the write failed — `lastWriteError()`). */
+  persist(): boolean;
+  /** Why the last write failed, or null when it landed. */
+  lastWriteError(): string | null;
   /** A sentence when the store must not write this boot (a newer host's file), else null. */
   readOnly(): string | null;
   archive(rows: readonly Intent[]): void;
@@ -542,7 +526,7 @@ export interface IntentCore {
   armFrom(row: Intent, basis: number, now: number): number | null | undefined;
 
   // ── ladder (ladder.ts) ───────────────────────────────────────────────────
-  /** The facade's `tick` (and `pickhold.test.mjs`, through the facade's
+  /** The facade's `tick` (and `ladderpass.test.mjs`, through the facade's
    *  private delegation). */
   pass(): Promise<void>;
 
@@ -550,7 +534,7 @@ export interface IntentCore {
   fire(
     row: Intent,
     opts: { sessionId?: string; occurrence?: number; late?: boolean; missing?: string[]; spendOccurrence?: boolean },
-  ): Promise<void>;
+  ): Promise<string | void>;
   settle(row: Intent, state: "done" | "failed" | "canceled", result: IntentResult, missing?: string[]): void;
   replace(row: Intent): void;
   resolveSessionFor(row: Intent): string | undefined;

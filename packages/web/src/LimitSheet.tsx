@@ -4,15 +4,17 @@ import { track } from "./usage";
 import { SheetHead } from "./Sheet";
 import { ago, clock as hhmm } from "./format";
 import { Empty } from "./Empty";
+import { Explain } from "./Explain";
 import { Unavailable } from "./Unavailable";
+import { RadioRows } from "./kit";
 import { openSettingsAt } from "./settingsFocus";
 
 interface Props {
   /** Every session — the blocked ones are what this lists. */
   sessions: SessionInfo[];
   /** True while the socket is up. Every control here is a live socket message
-   *  (deliberately not durable — see below), so offline they are disabled and
-   *  said to be, rather than tapped into a void. */
+   *  (deliberately not durable — see below), so offline they are not drawn and
+   *  the offline line says why, rather than being tapped into a void. */
   online: boolean;
   /** When the session list last came from the host. */
   seenAt: number | null;
@@ -47,7 +49,8 @@ interface Props {
  * steered. Nothing here fetches — it renders the same `SessionInfo` snapshot
  * the launcher paints from, so it looks the same offline, with the age of what
  * you are reading stated rather than implied. The controls themselves are live
- * socket messages and are disabled with no link: unlike a prompt, "resume this
+ * socket messages and are not drawn with no link — the offline line says so,
+ * never a dimmed button (`Unavailable.tsx`): unlike a prompt, "resume this
  * one first" delivered twenty minutes late is an instruction about a situation
  * that has since resolved itself, which is the same reason `session.kill` and
  * the backlog mutations are not durable either.
@@ -100,8 +103,11 @@ export function LimitSheet({
   /** What is true about this session right now, in a sentence. */
   const state = (s: SessionInfo): string => {
     const l = s.limit!;
+    if (l.spend && !l.resetAt && !l.nextAttemptAt) return "spend limit — needs you: add credit or raise the limit, then resume it";
     if (l.resuming) return "resuming now — the queue is waiting to see whether it took";
-    if (!l.autoContinue) return `manual${l.attempts ? ` · ${l.attempts} attempt${l.attempts > 1 ? "s" : ""} made` : ""} — it waits for you`;
+    // A manual row draws no "go first" and no "now" (never dimmed ones), so its
+    // sentence carries why they are missing.
+    if (!l.autoContinue) return `manual${l.attempts ? ` · ${l.attempts} attempt${l.attempts > 1 ? "s" : ""} made` : ""} — it waits for you; go first and now need it on`;
     if (l.queuePos === 1) {
       if (holding) return `next up · held off until ${hhmm(holdUntil!)}`;
       return l.nextAttemptAt ? `next up · continues at ${hhmm(l.nextAttemptAt)}` : "next up";
@@ -125,21 +131,22 @@ export function LimitSheet({
         </div>
         <div className="approve-hint">
           {state(s)}
-          {l.resetAt ? ` · limit resets ~${hhmm(l.resetAt)}` : ""}
+          {l.resetAt ? ` · ${l.spend ? "spend limit resumes" : "limit resets"} ~${hhmm(l.resetAt)}` : ""}
           {l.blockedSince ? ` · blocked ${ago(l.blockedSince)}` : ""}
         </div>
-        <div className="approve-opts">
-          <button
+        {/* Offline the row has no buttons at all and the sheet's offline line
+            says why; a manual row has no "go first" or "now", and its state
+            sentence says why. Never a dimmed button. */}
+        {online && <div className="approve-opts">
+          {l.autoContinue && <button
             className={`approve-btn${l.first ? " primary" : ""}`}
             data-hint="limit.first"
-            disabled={!online || !l.autoContinue}
             title="Go first — resume this session before the others when the limit lifts"
             onClick={() => { track("action:limit.first"); onSetFirst(s.id, !l.first); }}
-          ><ChevronsUp size={14} /> {l.first ? "first" : "go first"}</button>
+          ><ChevronsUp size={14} /> {l.first ? "first" : "go first"}</button>}
           <button
             className="approve-btn"
             data-hint="limit.auto"
-            disabled={!online}
             title={l.autoContinue ? "Stop this session resuming by itself" : "Let this session resume by itself again"}
             onClick={() => {
               track("action:limit.auto");
@@ -150,30 +157,31 @@ export function LimitSheet({
               onSetOverride(s.id, next === globalAuto ? null : next);
             }}
           ><Power size={14} /> {l.autoContinue ? "off" : "on"}</button>
-          <button
+          {l.autoContinue && <button
             className="approve-btn"
             data-hint="limit.resumeone"
-            disabled={!online || !l.autoContinue}
             title="Resume this one now, without waiting for the reset time"
             onClick={() => { track("action:limit.resumeone"); onResume(s.id); }}
-          ><Play size={14} /> now</button>
-        </div>
+          ><Play size={14} /> now</button>}
+        </div>}
       </div>
     );
   };
 
   return (
     <div className="sheet">
+      {/* The count only over a list: a "0" above a body that says "Nothing is
+          blocked" was the same fact twice. */}
       <SheetHead title={<><Hourglass size={16} /> Usage limit</>} onClose={onClose}>
-        <span className="muted">{blocked.length}</span>
+        {blocked.length > 0 && <span className="muted">{blocked.length}</span>}
       </SheetHead>
 
       {!online && (
         <div className="form-hint">
           <CloudOff size={13} style={{ verticalAlign: "-2px" }} />{" "}
           offline — {seenAt ? <>this is the state as of {ago(seenAt)}</> : <>nothing has been synced to this device yet</>}.
-          The buttons need the host, so they wait for the link rather than queueing: which session should go first is a
-          decision about right now.
+          The buttons need the host, so they are back with the link rather than queueing: which session should go first
+          is a decision about right now.
         </div>
       )}
 
@@ -186,11 +194,13 @@ export function LimitSheet({
 
       {blocked.length === 0 && (
         <Empty>
-          <Hourglass size={20} />
-          <div>Nothing is blocked on a usage limit.</div>
-          <div className="muted">
+          {/* One sentence and a closed `?`, no icon: the schedules sheet's
+              empty state, in the same shape. The head already carries the
+              hourglass. */}
+          Nothing is blocked on a usage limit.{" "}
+          <Explain of="the queue" label="what is the queue?">
             When several sessions hit the limit together, they queue up here and resume one at a time.
-          </div>
+          </Explain>
         </Empty>
       )}
 
@@ -207,13 +217,11 @@ export function LimitSheet({
           preference with three values is a choice among three, not a verb. */}
       <div className="mode-row" data-hint="limit.mode">
         {online
-          ? MODES.map((m) => (
-            <button key={m} className={`key${m === mode ? " on" : ""}`}
-              aria-pressed={m === mode}
-              title={MODE_TITLE[m]}
-              onClick={() => { track(`action:limit.mode.${m}`); onSetMode(m); }}
-            >{MODE_ICON[m]} {MODE_TEXT[m].label}</button>
-          ))
+          ? <RadioRows
+              label="how many resume at once"
+              options={MODES.map((m) => ({ key: m, label: <>{MODE_ICON[m]} {MODE_TEXT[m].label}</>, title: MODE_TITLE[m] }))}
+              value={mode}
+              onChange={(m) => { track(`action:limit.mode.${m}`); onSetMode(m); }} />
           // Offline the mode is still worth READING — it is what will happen at
           // the reset — so it is stated, and the verb that is gone is named.
           : <Unavailable cants={[{ label: "changing how many resume at once", reason: `there is no link to the desktop · it stays ${MODE_TEXT[mode].label}` }]} />}
@@ -240,25 +248,28 @@ export function LimitSheet({
         {parked.map(row)}
       </div>
 
+      {/* A verb that has nothing to act on is not drawn, never dimmed: with
+          nothing blocked the empty sentence above is the reason, with nothing
+          in line the "Not resuming" head is, and offline the offline line is. */}
       <div className="sheet-actions">
-        <button
-          className="key" data-hint="limit.resumeall" disabled={!online || queued.length === 0}
+        {online && queued.length > 0 && <button
+          className="key" data-hint="limit.resumeall"
           title={`Stop waiting for the clock — the queue starts now, ${MODE_TEXT[mode].label}`}
           onClick={() => { track("action:limit.resumeall"); onResume(); }}
-        ><Play size={16} /> resume all</button>
-        <button
-          className="key" data-hint="limit.starredonly" disabled={!online || blocked.length === 0}
+        ><Play size={16} /> resume all</button>}
+        {online && blocked.length > 0 && <button
+          className="key" data-hint="limit.starredonly"
           title="Only starred sessions resume by themselves; the rest wait for you"
           onClick={() => {
             track("action:limit.starredonly");
             for (const s of blocked) onSetOverride(s.id, !!s.starred);
           }}
-        ><Star size={16} /> starred only</button>
-        <button
-          className={`key ${globalAuto ? "active" : ""}`} data-hint="limit.global" disabled={!online}
+        ><Star size={16} /> starred only</button>}
+        {online && <button
+          className={`key ${globalAuto ? "active" : ""}`} data-hint="limit.global"
           title="The global switch: whether a session resumes itself at all once a limit resets"
           onClick={() => { track("action:limit.global"); onSetGlobal(!globalAuto); }}
-        ><Power size={16} /> auto {globalAuto ? "on" : "off"}</button>
+        ><Power size={16} /> auto {globalAuto ? "on" : "off"}</button>}
         <button className="key" onClick={onClose}><X size={16} /> close</button>
       </div>
     </div>

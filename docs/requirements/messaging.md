@@ -40,3 +40,11 @@ Quoting dialog auto-scrolls to show the bottom by default, and each line has a c
 User can quote marked content from a second screen while remaining on the first screen.
 - asked: 2026-09-24
 
+### R-messaging-010 · requested
+Typed compose words are kept until the user deletes them, and deleting them asks for confirmation once with an in-app confirm button, never a browser confirm dialog.
+- asked: 2026-10-04
+
+### R-messaging-011 · requested
+A promo that was sent successfully is reported as sent.
+- asked: 2026-10-06
+

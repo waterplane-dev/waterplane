@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,8 +11,9 @@ import "./lib-tmuxiso.mjs"; // every host booted here runs tmux in a socket dir 
 // Right now this owns exactly one thing, and it is the one every script got
 // slightly differently: WAITING FOR THE HOST TO COME UP.
 
-/** Poll until the host answers `/api/health`, or give up after `timeoutMs`. */
-export async function waitForHost(port, timeoutMs = 20_000) {
+/** Poll until the host answers `/api/health`, or give up after `timeoutMs`. `E2E_BOOT_MS` raises
+ *  the default where a boot is slow for a known reason — WSL loading a Windows checkout over /mnt. */
+export async function waitForHost(port, timeoutMs = Number(process.env.E2E_BOOT_MS) || 20_000) {
   const deadline = Date.now() + timeoutMs;
   let lastErr;
   while (Date.now() < deadline) {
@@ -105,6 +106,9 @@ export function freePort() {
  * under the real home (config, keys, plugins, `~/.claude`) is read or written.
  */
 export async function bootHost({ env = {}, quiet = false, tag = "e2e", home = false } = {}) {
+  if (!existsSync("packages/host/dist/main.js")) {
+    throw new Error("packages/host/dist/main.js is missing — build the host first (npm run build:shared && npm run build -w @waterplane/host)");
+  }
   const port = await freePort();
   const scratch = mkdtempSync(join(tmpdir(), `${SLUG}-${tag}-`));
   const homeDir = home ? realpathSync(scratch) : null;

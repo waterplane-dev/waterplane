@@ -18,10 +18,14 @@ export interface NameRequest {
   readonly system: string;
   /** The model the claude engine runs on (`WATERPLANE_NAME_MODEL`). */
   readonly model: string;
-  /** The watchdog, in milliseconds. The caller's, for `runSmartPickTask`'s
-   *  reason: a naming pass is bounded by what the person who tapped it is
-   *  willing to wait, and this module does not know that number. */
+  /** The watchdog, in milliseconds. The caller's: a naming pass is bounded by
+   *  what the person who tapped it is willing to wait, and this module does
+   *  not know that number. */
   readonly timeoutMs: number;
+  /** `false` ⇒ `--no-session-persistence`: the CLI writes no transcript of this prompt under
+   *  `~/.claude/projects/`. For a caller whose prompt should leave no copy on disk; absent = the
+   *  default, a transcript as every other headless call keeps. The claude engine only. */
+  readonly persist?: false;
 }
 
 export interface NameRun {
@@ -44,11 +48,15 @@ export interface NameRun {
 /**
  * One batch of backlog items, titled.
  *
- * ── The argv is `runSmartPickTask`'s, verbatim, and every flag is justified ─
+ * ── The argv (`runTextTask`'s), and every flag is justified ─────────────────
+ *
+ * This argv was first written for the backlog's smart pick (removed
+ * 2026-10-16; its grooming call was `runSmartPickTask`, and this was a verbatim
+ * copy of it). It lives here now, and its measurements with it.
  *
  * CLAUDE.md's rule is that a new unattended `claude -p` starts from
  * `runSummaryTask`'s flags (the tab name's) and justifies every one it DROPS. **This call drops
- * none of them**, and adds the one the smart pick added:
+ * none of them**, and adds one:
  *
  *  • `-p --output-format json` — the envelope is the completion signal, the
  *    error channel and the only honest cost line (`envelopeUsage`). It is never
@@ -63,24 +71,26 @@ export interface NameRun {
  *    to go and read. It is also the mechanical guarantee behind the rule that
  *    matters: a naming pass may never touch the repo, and with no tools there
  *    is nothing to touch it with.
- *  • `--thinking disabled` — the smart pick's measurement, and this job is even
- *    more of a fit for it: titling a sentence is not a problem thinking
- *    improves, and thinking is the whole of what a pass like this costs (a
- *    trivial haiku reply measured 548 thinking tokens at $0.0049). Asking for
- *    brevity in the system prompt does not work; it was asked for there too,
- *    and the flag is what actually stops it.
+ *  • `--thinking disabled` — measured (see the table at the flag below): for a
+ *    toolless JSON job over a few sentences, thinking is the whole of what a
+ *    pass costs (a trivial haiku reply measured 548 thinking tokens at
+ *    $0.0049). Titling a sentence is not a problem thinking improves. Asking
+ *    for brevity in the system prompt does not work; it was asked for and the
+ *    tokens were spent anyway — the flag is what actually stops it.
  *  • `--system-prompt <req.system>` — its own contract, replacing Claude Code's.
  *
- * `maxBuffer` is 1 MiB, the smart pick's, for the smart pick's reason: the
- * contract is one small JSON object and anything approaching a megabyte of it
- * is a model that has lost the plot.
+ * `maxBuffer` is 1 MiB rather than the summary's 4 MiB: the contract is one
+ * small JSON object and anything approaching a megabyte of it is a model that
+ * has lost the plot.
  *
- * ── The one thing it does NOT copy from the smart pick ─────────────────────
+ * ── What it does NOT copy from the summary ─────────────────────────────────
  *
  * The local branch runs no `tidy()` — the summary's whitespace-squash and
- * 240-char clip would turn a JSON document into something `JSON.parse` refuses,
- * which is the same reason `runSmartPickTask` does not use it. The text comes
- * back exactly as the server wrote it and the caller parses it.
+ * 240-char clip would turn a JSON document into something `JSON.parse` refuses.
+ * No usage is reported for it either: an OpenAI-compatible body carries its
+ * own `usage` shape, `chatCompletion` does not return it, and inventing one
+ * from the prompt's length is the wrong number this seam exists to refuse. The
+ * text comes back exactly as the server wrote it and the caller parses it.
  *
  * ── What a failure is ──────────────────────────────────────────────────────
  *
@@ -134,15 +144,39 @@ async function runTextTask(task: SidecarTask, req: NameRequest): Promise<NameRun
       "--model", req.model,
       "--setting-sources", "user",
       "--tools", "",
+      // ── The measurement that put this flag here ─────────────────────────
+      //
+      // `envelopeUsage`'s header warns that thinking, not input size, is what
+      // a toolless pass is billed for. Measured for the smart pick (the first
+      // caller of this argv, 2026-09) against the installed binary: the SAME
+      // three-item JSON pass, five runs —
+      //
+      //   thinking on   $0.0067 – $0.025, 13 s – 36 s, 1,044 – 3,371 thinking tokens
+      //   --effort low  $0.0155, 28 s, 2,407 thinking tokens (barely moves it)
+      //   this flag     $0.0014, 2.8 s, 0 thinking tokens, identical conclusion
+      //
+      // Twelve times the money and ten times the wall clock, for a job over
+      // six sentences — and a 30 s pass blew a 20 s watchdog on two runs in
+      // three, paying for a completion then thrown away. Asking for it in the
+      // system prompt does not work; it was asked for and 2,644 thinking tokens
+      // were spent anyway.
+      //
+      // Nothing is dropped — CLAUDE.md's rule is about the flags a new
+      // unattended call loses, and this one KEEPS all of `runSummaryTask`'s. It
+      // is added here and not there: a tab name is prose about a conversation
+      // and a review is a judgement about code, and neither is a job where the
+      // thinking is the waste. A `claude` too old to know the flag exits
+      // non-zero, which is `failed` — the same empty result as any failure.
       "--thinking", "disabled",
       "--system-prompt", req.system,
+      ...(req.persist === false ? ["--no-session-persistence"] : []),
     ],
     prompt: req.prompt,
     timeoutMs: req.timeoutMs,
     maxBuffer: 1024 * 1024,
   });
 
-  // Asked FIRST, exactly as the summary and the smart pick ask it: an account
+  // Asked FIRST, exactly as the summary asks it: an account
   // block's envelope still parses and still carries a `result` string, and that
   // string is a quota banner. Reading it as an answer would hand the banner's
   // words to a parser expecting titles — and count the block as a real pass.

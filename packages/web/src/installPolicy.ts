@@ -112,6 +112,13 @@ export interface InstallRow {
   pkgVersion?: string;
   install?: InstallState;
   installError?: string;
+  /** When the shell's clean-up deleted this build's APK after an install
+   *  (`ShellPullService.cleanAfterInstall`). Absent = never cleaned. */
+  cleanedAt?: number;
+  /** Bytes that clean-up gave back, app copy and Downloads copy together. */
+  cleanedBytes?: number;
+  /** Why a Downloads copy stayed, in the shell's words. */
+  cleanNote?: string;
 }
 
 /** Is this row an app at all? Name or declared type — the host's mime table and
@@ -159,6 +166,7 @@ export function installOffer(row: InstallRow, caps: InstallCaps): {
   if (row.state !== "done") return { verb: null, reason: null };
   if (isPlaySelf(row.pkg, caps)) return { verb: null, reason: PLAY_SELF_TEXT };
   if (isPlayBuild(caps) && !row.pkg) return { verb: null, reason: PLAY_UNREAD_TEXT };
+  if (row.evicted && row.cleanedAt) return { verb: null, reason: cleanedText(row) };
   if (row.evicted) {
     return { verb: null, reason: "the bytes were cleared to save space — fetch it again to install it" };
   }
@@ -188,7 +196,7 @@ function stateText(install: InstallState | undefined, error: string | undefined,
   }
 }
 
-/** PackageInstaller's out-of-space refusal reads "Failed to allocate N because
+/** A failure in words a person can act on. PackageInstaller's out-of-space refusal reads "Failed to allocate N because
  *  only M allocatable" — true, but in bytes and without the one fact that
  *  matters: freeing space and retrying fixes it. Anything else keeps the
  *  phone's own words.
@@ -198,8 +206,20 @@ function stateText(install: InstallState | undefined, error: string | undefined,
  *  Saying "has 0 MB free" sent a person who had freed space to free a little
  *  more, retry, and read the same 0 again — so the sentence names the reserve
  *  and the figure Settings has to reach. */
-function failureText(error: string | undefined): string {
+export function failureText(error: string | undefined): string {
   if (!error) return "the phone did not say why";
+  // Play Protect's package verifier said no. The shell already re-asks OUT LOUD after a
+  // refused silent attempt (`installLoudAfterRefusal`), so reaching this means that ask
+  // was refused or dismissed too — the platform's words name neither Play Protect nor a remedy.
+  if (/VERIFICATION_FAILURE/.test(error)) {
+    return "Google Play Protect stopped it — it checks every app from outside the Play Store, and refused this build " +
+      "with nobody there to answer it. Retry with the phone in hand: if Play Protect asks, install anyway. If it " +
+      "refuses without asking, Play Store › Play Protect says why";
+  }
+  if (/Session was abandoned/i.test(error)) {
+    return "the install was dropped before it finished — Android abandons one when the app is closed mid-install or " +
+      "the confirm dialog goes unanswered. A retry starts a fresh one";
+  }
   const m = /allocate (\d+) because only (\d+) allocatable/i.exec(error);
   if (!m) return error;
   const mb = (n: number) => `${Math.ceil(n / 1e6)} MB`;
@@ -303,6 +323,9 @@ export interface BuildSource {
   install?: InstallState;
   installError?: string;
   installSnoozedUntil?: number;
+  cleanedAt?: number;
+  cleanedBytes?: number;
+  cleanNote?: string;
   updatedAt?: number;
 }
 
@@ -320,6 +343,9 @@ export function buildsOf(records: readonly BuildSource[]): InstallBuild[] {
     install: r.install,
     installError: r.installError,
     installSnoozedUntil: r.installSnoozedUntil,
+    cleanedAt: r.cleanedAt,
+    cleanedBytes: r.cleanedBytes,
+    cleanNote: r.cleanNote,
     updatedAt: r.updatedAt,
     repo: r.item.repoName || undefined,
   }));
@@ -537,3 +563,37 @@ export const QUIET_INSTALL_RULES: readonly string[] = [
   "Every build is signed with the same key. A build signed differently cannot update the installed app at all.",
   "The app targets a recent Android version, and the phone runs Android 12 or newer.",
 ];
+
+// ── Clean-up after an install ────────────────────────────────────────
+
+function mb(bytes: number): string {
+  return bytes >= 1e6 ? `${Math.round(bytes / 1e6)} MB` : `${Math.max(1, Math.round(bytes / 1e3))} kB`;
+}
+
+/** What a cleaned row says: the APK went because the build installed, how much
+ *  came back, and — never swallowed — a Downloads copy that stayed. */
+export function cleanedText(row: Pick<InstallRow, "cleanedAt" | "cleanedBytes" | "cleanNote">): string {
+  const freed = row.cleanedBytes ? ` (${mb(row.cleanedBytes)} freed)` : "";
+  const base = `APK deleted after it installed${freed} — fetch it again to reinstall`;
+  return row.cleanNote ? `${base} · ${row.cleanNote}` : base;
+}
+
+/**
+ * The clean-up switch, in words. `on` null = a shell older than the switch:
+ * the sentence says what would bring it, never a dimmed control.
+ */
+export function cleanupText(on: boolean | null): string {
+  if (on === null) {
+    return "Deleting a build's APK once it has installed needs a newer app build — the next APK you install brings it.";
+  }
+  return on
+    ? "Once a build installs, its APK is deleted from this phone: the copy inside the app, the copy saved to " +
+      "Downloads, and older builds of the same app. Reinstalling means fetching it again."
+    : "Installed builds keep their APK on this phone (inside the app, and in Downloads where you saved one) until " +
+      "you clear it. Turn this on to delete it once the build is on.";
+}
+
+/** The toggle's label. */
+export function cleanupLabel(on: boolean): string {
+  return `delete APK after install: ${on ? "on" : "off"}`;
+}

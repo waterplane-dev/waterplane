@@ -15,3 +15,8 @@ Voice input shows when audio recording stops or reaches its limit, and for how l
 - asked: 2026-09-28
 - shipped: 07b6504
 
+### R-voice-input-004 · shipped
+Every dictation button in the app is the same reusable voice input component, looking and behaving identically, with the compose bar's round microphone as the template.
+- asked: 2026-10-05
+- shipped: 6792295e
+

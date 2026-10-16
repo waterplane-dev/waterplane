@@ -15,7 +15,7 @@
  */
 import { useEffect, useState } from "react";
 import { CircleCheck, CircleSlash, CloudOff, CloudUpload, RefreshCw, type LucideIcon } from "lucide-react";
-import { subscribeSync, syncChipWord, syncSentence, worstSync, type SyncPhase } from "./syncState";
+import { rowChipWord, subscribeSync, syncSentence, syncSummary, worstSync, type SyncPhase } from "./syncState";
 
 /**
  * The good state is a GREEN CHECK, and that is the whole point of the mark.
@@ -74,21 +74,45 @@ export function SyncMark({ keys, thing = "these" }: {
  * `unknown` renders NOTHING, for the reason the mark does: between a cold start
  * and the host's own listing there is no honest answer, and that gap is exactly
  * where a confident green check would do the damage.
+ *
+ * A row is still never silent about the good case BY DEFAULT. `saidAbove` is
+ * for a list that says it once at its head instead (`SyncSummary`): every card
+ * wearing the same green "on desktop" was one fact printed per row, and it hid
+ * the exception it exists to show. With `saidAbove` this draws only the
+ * exceptions; the list that passes it owes the head.
  */
-export function SyncChip({ phase, thing = "it", plural = false }: {
+export function SyncChip({ phase, thing = "it", plural = false, saidAbove = false }: {
   phase: SyncPhase;
   /** What the title sentence is about, in object position. */
   thing?: string;
   /** A row is one thing, so the sentence is singular by default here and plural
    *  in `SyncMark` — one table of wordings, agreeing with its caller. */
   plural?: boolean;
+  /** The list's head draws `SyncSummary`, so the synced case is said there. */
+  saidAbove?: boolean;
 }) {
-  const word = syncChipWord(phase);
+  const word = rowChipWord(phase, saidAbove);
   if (!word) return null;
   const Icon = ICON[phase as Exclude<SyncPhase, "unknown">];
   return (
     <span className={`tag sync-chip sync-${phase}`} title={syncSentence({ phase, wroteAt: null, ackedAt: null }, thing, plural) ?? undefined}>
       <Icon size={12} /> {word}
+    </span>
+  );
+}
+
+/**
+ * The good case of a LIST, said once in its head — the other half of
+ * `SyncChip`'s `saidAbove`. Same chip, same green, same word; it counts
+ * ("3 of 4 on desktop") when a row below is the exception, and draws nothing
+ * when no row is on the desktop (`syncSummary`).
+ */
+export function SyncSummary({ phases }: { phases: readonly SyncPhase[] }) {
+  const s = syncSummary(phases);
+  if (!s) return null;
+  return (
+    <span className="tag sync-chip sync-synced" title={s.title}>
+      <CircleCheck size={12} /> {s.word}
     </span>
   );
 }

@@ -14,11 +14,14 @@ import { deviceToken, wsProtocols } from "./deviceToken";
 import { LS } from "./storage";
 import { demoTransport } from "./demo/transport";
 import { HeldFrames } from "./heldFrames";
+import { bgFresh, parksWhenHidden } from "./core/term/bgFresh";
 
 /** How a socket is made: the browser's `WebSocket`, or the demo's in-memory one. */
 export type Dialer = (url: string, protocols?: string[]) => WebSocket;
 
 type Listener = (msg: HostMessage) => void;
+/** A binary frame: a plugin stream's (`shared/stream.ts`), routed by `core/streamRouter.ts`. */
+type BinaryListener = (data: ArrayBuffer) => void;
 
 /** Encode a frame and count what it weighs (`nettraffic.ts`). Every byte this
  *  app puts on the socket goes out through here, so the meter cannot be wrong
@@ -32,6 +35,15 @@ function wire(msg: ClientMessage): string {
   const s = encode(withSentAt(msg, Date.now()));
   noteTraffic("up", s.length);
   return s;
+}
+
+/** What a binary frame weighs: an ArrayBuffer's or a view's byteLength, a Blob's size, else 0
+ *  (`noteTraffic` ignores a 0 rather than guessing). */
+function binaryBytes(data: unknown): number {
+  if (data instanceof ArrayBuffer) return data.byteLength;
+  if (ArrayBuffer.isView(data)) return data.byteLength;
+  if (typeof Blob !== "undefined" && data instanceof Blob) return data.size;
+  return 0;
 }
 
 const HEARTBEAT_MS = 12000; // ping cadence; a missed pong by the next tick ⇒ dead socket
@@ -64,6 +76,8 @@ export function setReloadGuard(fn: (() => boolean) | null): void { reloadGuard =
 export class HostConnection {
   private ws: WebSocket | null = null;
   private listeners = new Set<Listener>();
+  /** Binary frames go here and never to `listeners`, whose contract is a decoded HostMessage. */
+  private binaryListeners = new Set<BinaryListener>();
   /** The hello batch can land before App's effect subscribes (`heldFrames.ts`). */
   private early = new HeldFrames<HostMessage>();
   private queue: ClientMessage[] = [];
@@ -375,6 +389,11 @@ export class HostConnection {
     this.awaitingPong = false;
     this.heartbeatTimer = window.setInterval(() => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+      // Hidden with the terminal parked (`core/term/bgFresh.ts`): no 12 s radio
+      // wake-up. A dead socket is found on the way back — the wake path
+      // ping-verifies before it trusts OPEN — and a catch-up that hits one is
+      // given up by its own fuse.
+      if (document.visibilityState === "hidden" && parksWhenHidden(bgFresh())) { this.awaitingPong = false; return; }
       if (this.awaitingPong) { this.awaitingPong = false; this.forceReconnect(); return; }
       this.awaitingPong = true;
       this.pingAt = Date.now();
@@ -424,6 +443,10 @@ export class HostConnection {
       return;
     }
     this.ws = ws;
+    // Plugin streams arrive as binary frames on this same socket (`shared/stream.ts`; never a
+    // second one). An ArrayBuffer is synchronous to read, where a Blob would need a promise per
+    // frame and could reorder them. Text frames are untouched by this.
+    try { ws.binaryType = "arraybuffer"; } catch { /* a socket that cannot say — its binary frames are dropped below */ }
 
     ws.onopen = () => {
       this.status = "open";
@@ -438,8 +461,12 @@ export class HostConnection {
     };
     ws.onmessage = (ev) => {
       // Counted before it is parsed: a frame we cannot decode still crossed the
-      // tunnel and still cost the radio.
-      if (typeof ev.data === "string") noteTraffic("down", ev.data.length);
+      // tunnel and still cost the radio. A binary frame (a plugin stream's) is
+      // counted by its bytes, header included — video is most of what a live
+      // desktop moves, and a ↓ meter that skipped it would be the one lie here.
+      const binary = typeof ev.data !== "string";
+      if (!binary) noteTraffic("down", ev.data.length);
+      else noteTraffic("down", binaryBytes(ev.data));
       // Same event, the other reading: an inbound frame is the newest proof the
       // desktop is there, which is what "last connected" means (`netsync.ts`).
       // An open `readyState` is not — it survives a tunnel that has already died.
@@ -451,6 +478,13 @@ export class HostConnection {
       this.verifyPending = false;
       if (this.verifyTimer != null) { window.clearTimeout(this.verifyTimer); this.verifyTimer = null; }
       this.clearWatchdog();
+      if (binary) {
+        // Never decoded as JSON and never handed to `listeners`. Anything that is not an
+        // ArrayBuffer (a Blob from a socket that ignored `binaryType`) is dropped in silence,
+        // like any binary frame the stream router does not recognise.
+        if (ev.data instanceof ArrayBuffer) this.deliverBinary(ev.data);
+        return;
+      }
       // Only the DECODE is guarded here: a throw inside a listener is not a
       // malformed frame, and swallowing it as one once hid App's own bugs AND
       // starved every listener after it (`deliver` isolates each instead).
@@ -523,6 +557,12 @@ export class HostConnection {
     }
   }
 
+  private deliverBinary(data: ArrayBuffer): void {
+    for (const l of this.binaryListeners) {
+      try { l(data); } catch (e) { console.error(`${logTag} binary listener failed`, e); }
+    }
+  }
+
   send(msg: ClientMessage): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(wire(msg));
@@ -544,6 +584,13 @@ export class HostConnection {
     this.listeners.add(listener);
     this.early.subscribed(queueMicrotask, (m) => this.fanOut(m));
     return () => this.listeners.delete(listener);
+  }
+
+  /** Binary frames (plugin streams). Not held for a late subscriber like `on`'s hello batch: a
+   *  frame for a stream nobody has opened yet is one nobody asked for. */
+  onBinary(listener: BinaryListener): () => void {
+    this.binaryListeners.add(listener);
+    return () => this.binaryListeners.delete(listener);
   }
 }
 

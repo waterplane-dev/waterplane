@@ -139,6 +139,8 @@ export function pullAddLocal(this: PullManager, t: LocalPull, opts: { autoSave?:
     mtime,
     ts: Date.now(),
     source: "manual",
+    // Only a plugin-offered file: an app-relative path, never a full URL (`artifactUrl` pins the host).
+    ...(t.src && t.src.startsWith("/api/plugin-file/") ? { src: t.src } : {}),
   };
   this.records[id] = {
     item, state: "queued", received: 0, attempts: 0, updatedAt: Date.now(),

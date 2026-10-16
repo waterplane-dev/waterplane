@@ -100,7 +100,10 @@ export interface OnboardDeps {
 
   builds: {
     list(repoDir: string): BuildConfig[];
-    save(repoDir: string, builds: BuildConfig[]): BuildConfig[];
+    /** `local`: the ids kept in this desktop's own file (absent ⇒ where each lives, new ⇒ shared). */
+    save(repoDir: string, builds: BuildConfig[], local?: string[]): BuildConfig[];
+    /** The ids this desktop's own (gitignored) file holds. Absent in a fake: none. */
+    localIds?(repoDir: string): string[];
     run(repoDir: string, buildId: string): BuildRun | { error: string };
     /** The run as the store holds it now, or null when it is unknown. */
     get(runId: string): BuildRun | null;
@@ -435,9 +438,11 @@ export class OnboardManager {
     if (!this.d.env.JAVA_HOME && r.jdk) {
       const list = this.d.builds.list(repoDir);
       const prefix = `JAVA_HOME='${r.jdk.home.replace(/'/g, "'\\''")}' `;
-      let changed = false;
-      const next = list.map((b) => (/^\.\/gradlew\b/.test(b.cmd) ? (changed = true, { ...b, cmd: prefix + b.cmd }) : b));
-      if (changed) { this.d.builds.save(repoDir, next); notes.push(`JAVA_HOME=${r.jdk.home} on the build commands`); }
+      // A JAVA_HOME path is true of THIS desktop only, so the patched copies are LOCAL
+      // overrides (same id) — never written into the committed shared file.
+      const local = new Set(this.d.builds.localIds?.(repoDir) ?? []);
+      const next = list.map((b) => (/^\.\/gradlew\b/.test(b.cmd) ? (local.add(b.id), { ...b, cmd: prefix + b.cmd }) : b));
+      if (next.some((b, i) => b !== list[i])) { this.d.builds.save(repoDir, next, [...local]); notes.push(`JAVA_HOME=${r.jdk.home} on the build commands`); }
     }
     return notes;
   }
@@ -539,7 +544,7 @@ export const fsDeps: Pick<OnboardDeps, "exists" | "readText" | "writeText" | "sl
 export interface OnboardHost {
   root: string;
   stateDir: string;
-  builds: { list(r: string): BuildConfig[]; save(r: string, b: BuildConfig[]): BuildConfig[]; run(r: string, id: string): BuildRun | { error: string } };
+  builds: { list(r: string): BuildConfig[]; save(r: string, b: BuildConfig[], local?: string[]): BuildConfig[]; localIds?(r: string): string[]; run(r: string, id: string): BuildRun | { error: string } };
   intents: {
     get(id: string): Intent | undefined;
     post(draft: IntentDraft, now?: number): { ok: boolean; intent?: Intent; existing?: boolean; reason?: string };
@@ -580,7 +585,8 @@ export function makeOnboardDeps(h: OnboardHost): OnboardDeps {
     },
     builds: {
       list: (r) => h.builds.list(r),
-      save: (r, b) => h.builds.save(r, b),
+      save: (r, b, local) => h.builds.save(r, b, local),
+      localIds: (r) => h.builds.localIds?.(r) ?? [],
       run: (r, id) => h.builds.run(r, id),
       get: (runId) => { const i = h.intents.get(runId); return i ? intentToBuildRun(i) : null; },
     },

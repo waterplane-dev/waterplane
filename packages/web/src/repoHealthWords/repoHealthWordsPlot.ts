@@ -73,14 +73,6 @@ export function stackReadoutWords(
   return `${p.day} · ${head}${split ? ` — ${split}` : ""}${p.sha7 ? ` · ${p.sha7}` : ""}`;
 }
 
-/** The line where the crosshair's answer goes, before anything is touched.
- *  Present always, so dragging does not shuffle everything under it up and
- *  down, and worded as an invitation because on a phone there is no hover to
- *  discover it by accident. */
-export function scrubHintWords(): string {
-  return "drag across the curve for a day's reading";
-}
-
 /**
  * The x axis, said out loud, once, under the tiles.
  *

@@ -1,0 +1,30 @@
+
+ ▐▛███▛█▄╱✦  Claude Code v2.1.293
+▝▜██████▘    Opus 5.5 with high effort · Claude Max
+ ▝▝   ▝▝     /tmp/wp-scratch
+
+
+❯ /effort ultracode on
+  ⎿  Ultracode on (this session only): dynamic workflows on every task. Effort stays high.
+
+❯ /effort ultracode off
+  ⎿  Ultracode off. Effort stays high.
+
+❯ /effort ultracode on
+  ⎿  Ultracode on (this session only): dynamic workflows on every task. Effort stays high.
+
+❯ /model
+  ⎿  Kept model as Opus 5.5
+
+
+
+
+▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+   Effort
+
+                   Faster                             Smarter
+                   ────────────────────▲─────────────────────      Ultracode  on
+                   low     medium     high     xhigh      max      Tab to toggle
+                   Ultracode: dynamic workflows on every task
+
+   ←/→ to adjust · Enter to confirm · s for this session only · Esc to cancel

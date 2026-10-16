@@ -4,7 +4,7 @@
  */
 import { useEffect } from "react";
 import type { LucideIcon } from "lucide-react";
-import { AlertTriangle, Bell, CircleDot, CornerDownLeft, Download, Hourglass, Images, ListTodo, Puzzle, SendHorizontal, Trash2 } from "lucide-react";
+import { AlertTriangle, Bell, CircleDot, CornerDownLeft, Download, Fingerprint, Flag, Flame, HeartPulse, Hourglass, Images, ListTodo, Puzzle, SendHorizontal, Trash2 } from "lucide-react";
 import { useCore, useStore } from "../../sdk";
 import { SheetHead } from "../../Sheet";
 import { Empty } from "../../Empty";
@@ -19,13 +19,17 @@ import { markAllSeen, openNotif } from "./actions";
 // settings switches (`NOTIF_LABEL` in `logic.ts` is the words).
 export const NOTIF_ICON: Record<string, LucideIcon> = {
   prompt: CircleDot,
+  approval: Fingerprint,
   idle: CornerDownLeft,
   image: Images,
   autofire: SendHorizontal,
   backlog: ListTodo,
+  followup: Flag,
+  health: HeartPulse,
   plugin: Puzzle,
   info: Bell,
   limit: Hourglass,
+  burn: Flame,
   artifact: Download,
   undelivered: AlertTriangle,
 };

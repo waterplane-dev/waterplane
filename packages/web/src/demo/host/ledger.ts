@@ -40,9 +40,10 @@
  */
 import {
   PRICES_AS_OF, addCost, addTotals, costOf, dayToMs, hourToMs, isPriced, normalizeModel, tokenTotal, zeroCost, zeroTotals,
-  type CostBreakdown, type TokenConvo, type TokenDay, type TokenGroup, type TokenHour, type TokenHourSlot,
+  type CostBreakdown, type CostConvo, type CostConvoHour, type CostHour, type CostWindowDoc, type ModelSlice,
+  type TokenConvo, type TokenDay, type TokenGroup, type TokenHour, type TokenHourSlot,
   type TokenStatsDoc, type TokenTotals, type TokenWindow, type TokenWindowSeries, type TokenWindowsDoc, type UsageHistoryDoc,
-  type UsageSample,
+  type UsageSample, windowStartHour,
 } from "@waterplane/shared";
 
 const GARDEN = "~/dev/todo-garden";
@@ -215,7 +216,11 @@ function generate(anchor: number): LogFile[] {
       for (let j = 0; j < s.turns && i < p.turns; j++, i++) {
         const at = s.from + (j / s.turns) * s.hours * HOUR;
         const ctx = Math.round(p.base + (p.peak - p.base) * Math.pow(i / Math.max(1, p.turns - 1), 0.85) * between(0.97, 1));
-        const output = Math.round(between(120, p.model === LEDGER_HAIKU ? 400 : 820));
+        // Output is small beside the window (cache reads dwarf it ~800×), and it is what separates
+        // the screen's two per-turn figures — "the mean turn carried X of context" (no output) and
+        // the tile's "X per turn" (with it). At ~350 per request the two straddled a rounding edge
+        // in the all-time and week cuts (167k beside 168k); at ~225 they print the same number.
+        const output = Math.round(between(100, p.model === LEDGER_HAIKU ? 300 : 520));
         const input = 1 + Math.floor(rng() * 30);
         if (j === 0) {
           // The first request writes the whole window; so does the first after a pause — the
@@ -239,7 +244,7 @@ function generate(anchor: number): LogFile[] {
       for (let q = 0; q < a.turns; q++) {
         const at = from + (q / AGENT_RATE) * HOUR;
         const ctx = Math.round(AGENT_BASE_TOK + (a.peak - AGENT_BASE_TOK) * Math.pow(q / Math.max(1, a.turns - 1), 0.8));
-        const output = Math.round(between(60, 420));
+        const output = Math.round(between(40, 260));
         if (q === 0) {
           add(ac, at, a.model, { input: 3, output, cacheRead: 0, cacheWrite: ctx, cacheWrite1h: 0, turns: 1 });
         } else {
@@ -308,6 +313,8 @@ interface Ledger {
   /** hour → model → tokens and money; what a window grid and the usage log fold. */
   cells: Map<string, Map<string, { t: TokenTotals; c: CostBreakdown }>>;
   titles: Map<string, string>;
+  /** The records themselves: what a cost window folds over any span. */
+  files: LogFile[];
 }
 
 const nest = <T>(m: Map<string, Map<string, T>>, a: string, b: string, blank: () => T): T => {
@@ -478,7 +485,7 @@ function aggregate(files: LogFile[], now: number): Ledger {
     firstAt: firstDay ? dayToMs(firstDay) : null, lastAt: lastDay ? dayToMs(lastDay) : null,
     scannedAt: now, logs: files.length, reread: 0,
   };
-  return { doc, cells, titles };
+  return { doc, cells, titles, files };
 }
 
 let memo: { anchor: number; ledger: Ledger } | null = null;
@@ -510,7 +517,7 @@ export function windowCells(hourMsAt: number, anchor: number, lenMs: number): nu
     if (k < 0) continue;
     const opened = anchor - (k + 1) * lenMs;
     const closes = anchor - k * lenMs;
-    if (hourMsAt >= hourFloorMs(opened) && hourMsAt < closes) out.push(k);
+    if (hourMsAt >= windowStartHour(opened) && hourMsAt < windowStartHour(closes)) out.push(k);
   }
   return out;
 }
@@ -551,6 +558,69 @@ export function demoTokenWindows(now: number, specs: { id: string; anchor: numbe
     return { id: spec.id, anchor: spec.anchor, lenMs: spec.lenMs, windows, oldestHour: oldest ? hourMs(oldest) : null, newestHour: newest ? hourMs(newest) : null };
   });
   return { series, scannedAt: doc.scannedAt };
+}
+
+type Bag = { totals: TokenTotals; cost: CostBreakdown };
+const bag = (): Bag => ({ totals: zeroTotals(), cost: zeroCost() });
+const slot = <V>(m: Map<string, V>, k: string, blank: () => V): V => m.get(k) ?? m.set(k, blank()).get(k)!;
+const slices = (m: Map<string, Bag>): ModelSlice[] =>
+  [...m].map(([model, b]) => ({ model, ...b })).sort((a, b) => tokenTotal(b.totals) - tokenTotal(a.totals));
+const byCost = (a: Bag, b: Bag) => (b.cost.total - a.cost.total) || (tokenTotal(b.totals) - tokenTotal(a.totals));
+const byKey = <T>([a]: [string, T], [b]: [string, T]) => (a < b ? -1 : a > b ? 1 : 0);
+const repoLabel = (repo: string) => repo.split("/").pop() ?? repo;
+type ConvoAcc = Bag & { repo: string; agent: Bag; agents: number; byModel: Map<string, Bag>; agentByModel: Map<string, Bag>; byHour: Map<string, CostConvoHour> };
+
+/**
+ * The demo's `/api/costwindow`: the host's `foldCostWindow` over the SAME records, so a week is a
+ * cut of the fortnight and no figure on the week card can disagree with the ledger's. `[from, to)`
+ * on hour cells from the hour `from` is in; a subagent folds into its parent, and is counted once
+ * per transcript with a turn in the span. `ledger` false folds nothing (the host with no logs).
+ * Not modelled: the cap (every conversation ships whole, no `rest`), launches, live rows.
+ */
+export function demoCostWindow(now: number, from: number, to: number, ledger = true): CostWindowDoc {
+  const { files, titles, doc } = ledgerAt(now);
+  const fromHour = hourFloorMs(from);
+  const all = bag(), agent = bag(), unpriced = zeroTotals();
+  const hours = new Map<string, Bag & { byRepo: Map<string, Bag>; byModel: Map<string, Bag> }>();
+  const convos = new Map<string, ConvoAcc>();
+  for (const f of ledger ? files : []) {
+    let cv: ConvoAcc | undefined;
+    for (const { hour, model, t } of f.cells) {
+      const at = hourMs(hour);
+      if (at < fromHour || at >= to || tokenTotal(t) <= 0) continue;
+      if (!cv) {
+        cv = slot(convos, f.convo, () => ({ repo: f.repo, ...bag(), agent: bag(), agents: 0, byModel: new Map(), agentByModel: new Map(), byHour: new Map() }));
+        if (f.sub) cv.agents++;
+      }
+      const h = slot(hours, hour, () => ({ ...bag(), byRepo: new Map(), byModel: new Map() }));
+      const ch = slot(cv.byHour, hour, () => ({ hour, usd: 0, tok: 0 }));
+      const c = costOf(t, model, hour.slice(0, 10));
+      ch.tok += tokenTotal(t);
+      ch.usd += c?.total ?? 0;
+      // An unpriced model adds tokens and no money — never a zero charge.
+      if (!c) addTotals(unpriced, t);
+      const into = [all, cv, h, slot(cv.byModel, model, bag), slot(h.byModel, model, bag), slot(h.byRepo, f.repo, bag),
+        ...(f.sub ? [agent, cv.agent, slot(cv.agentByModel, model, bag)] : [])];
+      for (const b of into) { addTotals(b.totals, t); if (c) addCost(b.cost, c); }
+    }
+  }
+  const convoRows = [...convos].sort(([, a], [, b]) => byCost(a, b)).map(([id, cv]): CostConvo => {
+    const byHour = [...cv.byHour].sort(byKey).map(([, x]) => x);
+    return {
+      id, repo: cv.repo, label: repoLabel(cv.repo), firstAt: hourMs(byHour[0].hour), lastAt: hourMs(byHour[byHour.length - 1].hour),
+      totals: cv.totals, cost: cv.cost, agentTotals: cv.agent.totals, agentCost: cv.agent.cost, agents: cv.agents,
+      byModel: slices(cv.byModel), agentByModel: slices(cv.agentByModel), byHour, live: false,
+      ...(titles.get(id) ? { title: titles.get(id) } : {}),
+    };
+  });
+  const hourRows = [...hours].sort(byKey).map(([hour, h]): CostHour => ({
+    hour, t: hourMs(hour), totals: h.totals, cost: h.cost, byModel: slices(h.byModel),
+    byRepo: [...h.byRepo].map(([repo, b]) => ({ repo, label: repoLabel(repo), ...b })).sort(byCost),
+  }));
+  return {
+    from, to, fromHour, hours: hourRows, convos: convoRows, totals: all.totals, cost: all.cost,
+    agentTotals: agent.totals, agentCost: agent.cost, unpriced, pricesAsOf: PRICES_AS_OF, scannedAt: doc.scannedAt,
+  };
 }
 
 /** The reading a usage log must end at: the scenario's `numbers.usage`. */

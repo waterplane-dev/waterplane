@@ -8,9 +8,10 @@
  *
  * `/api/health` stays in index.ts — it belongs to the disconnect fault.
  */
-import { PRICES_AS_OF, zeroCost, zeroTotals, type TokenStatsDoc } from "@waterplane/shared";
-import { demoTokenStats, demoTokenWindows, demoUsageLog, parseWindowSpecs } from "./ledger.ts";
+import { ASK_RULE_BACKENDS, PRICES_AS_OF, SUGGESTED_ASK_RULES, filterGalleryRows, zeroCost, zeroTotals, type GalleryQuery, type GalleryRow, type TokenStatsDoc } from "@waterplane/shared";
+import { demoCostWindow, demoTokenStats, demoTokenWindows, demoUsageLog, parseWindowSpecs } from "./ledger.ts";
 import { demoRepoHealth } from "./repohealth.ts";
+import { demoHealthIndex } from "./healthindex.ts";
 import { findSession, screenLines, sessions } from "./desk.ts";
 import { NOT_IN_DEMO } from "./verdict.ts";
 import type { DemoModel } from "./model.ts";
@@ -49,6 +50,10 @@ function safeName(raw: string | undefined): string | null {
   return n && n !== "." && n !== ".." ? n : null;
 }
 
+/** The host's `kind=image`, pictures and clips (`files.ts` `kindExt`), for the demo's own fixtures.
+ *  The app's `docKind.isImageKind` is out of reach here: DemoHost imports only shared. */
+const isDemoImage = (p: string): boolean => /\.(png|jpe?g|gif|webp|svg|avif|bmp|mp4|webm|mov)$/i.test(p);
+
 export function demoHttp(m: DemoModel, now: number, req: DemoHttpRequest): DemoHttpResponse {
   const { method, path } = req;
   const q = req.query ?? {};
@@ -66,7 +71,13 @@ export function demoHttp(m: DemoModel, now: number, req: DemoHttpRequest): DemoH
       return json({ ok: true });
     }
     if (!seen && method === "GET") {
-      if (kind === "artifacts") return json({ files: m.gallery?.[id] ?? [], truncated: false });
+      // The real host cuts the listing by kind, age and name (`files.ts`); so does this one, or a
+      // lit "docs" or "4h" toggle in the demo sits over a grid it did not change.
+      if (kind === "artifacts") {
+        const since = Number(q.since) || undefined;
+        const want: GalleryQuery = { kind: q.kind === "image" || q.kind === "doc" ? q.kind : "all", since, query: q.q };
+        return json({ files: filterGalleryRows((m.gallery?.[id] ?? []) as GalleryRow[], want, isDemoImage, now), truncated: false });
+      }
       return json({ files: m.inbox?.[id] ?? [] });
     }
     // An upload (the annotator's marked picture, a file from the phone): listed in the inbox under
@@ -119,6 +130,13 @@ export function demoHttp(m: DemoModel, now: number, req: DemoHttpRequest): DemoH
   if (path === "/api/tokenwindows" && method === "GET" && m.numbers?.ledger) {
     return json(demoTokenWindows(now, parseWindowSpecs(q.w)));
   }
+  // The week card's read, folded over the same records. As the host: a malformed span (or one past
+  // five weeks) is an empty document, never a 404; without the ledger, a fold over no logs.
+  if (path === "/api/costwindow" && method === "GET") {
+    const from = Number(q.from), to = Number(q.to);
+    const ok = to > from && to - from <= 35 * 24 * 3_600_000; // NaN compares false
+    return json(demoCostWindow(now, ok ? from : 0, ok ? to : 0, ok && !!m.numbers?.ledger));
+  }
   if (path === "/api/usagelog" && method === "GET" && m.numbers?.ledger && m.numbers.usage) {
     return json(demoUsageLog(now, m.numbers.usage, Number(q.hours || 0) || undefined));
   }
@@ -155,6 +173,16 @@ export function demoHttp(m: DemoModel, now: number, req: DemoHttpRequest): DemoH
     return json(view);
   }
 
+  // The health index: the same fictional repos, chained through the real shared arithmetic.
+  const hix = /^\/api\/repos\/([^/]+)\/healthindex$/.exec(path);
+  if (hix && method === "GET" && m.numbers?.repoHealth) {
+    const id = decodeURIComponent(hix[1]);
+    const target = repoTargets(m).find((r) => r.id === id) as { repoName?: unknown } | undefined;
+    const doc = typeof target?.repoName === "string" ? demoHealthIndex(target.repoName, now) : null;
+    if (!doc) return json({ error: "no health index for that repo" }, 404);
+    return json(doc);
+  }
+
   // Sessions started outside waterplane on this desktop: the demo's desktop runs no claude of its own,
   // so none — an honest empty list rather than a 404 the adopt sheet would print as a failure.
   if (path === "/api/external" && method === "GET") return json({ sessions: [] });
@@ -166,6 +194,8 @@ export function demoHttp(m: DemoModel, now: number, req: DemoHttpRequest): DemoH
   // not a 404 the Activity sheet would print as "could not read".
   if (path === "/api/peerjobs" && method === "GET") return json({ ok: true, jobs: [] });
 
+  // The demo's repos build no Android app: the Apps screen's setup pane says so.
+  if (path === "/api/apps/readiness" && method === "GET") return json({ at: now, apps: [] });
   if (path === "/api/storage/transport" && method === "GET") {
     return json(m.storage?.transport ?? { at: now, repos: [], total: { count: 0, bytes: 0 }, partial: false });
   }
@@ -174,6 +204,16 @@ export function demoHttp(m: DemoModel, now: number, req: DemoHttpRequest): DemoH
   }
   if (path === "/api/storage/host/clear" && method === "POST") {
     return json({ deleted: 0, bytes: 0, failed: 0, refused: "The demo's desktop keeps no files, so there is nothing to clear." });
+  }
+
+  // Ask rules (agent-authority §2): the demo's desktop launches no claude, so it holds an empty
+  // list with the suggested rules offered — and a save is refused in words, never pretended.
+  if (path === "/api/askrules" && method === "GET") {
+    // No `confirm`: there is nothing a save could change here, and the PUT below says so.
+    return json({ ok: true, doc: { rules: [] }, suggested: SUGGESTED_ASK_RULES, honouredBy: ASK_RULE_BACKENDS, rev: "demo" });
+  }
+  if (path === "/api/askrules" && method === "PUT") {
+    return json({ ok: false, error: "The demo's desktop launches no claude, so it keeps no ask rules — nothing was changed." }, 400);
   }
 
   // The first-app journey (first-app plan WP7). Its card is not drawn in the demo, but "Build

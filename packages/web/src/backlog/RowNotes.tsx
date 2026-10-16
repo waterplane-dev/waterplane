@@ -7,17 +7,19 @@
  * before its parent's, so a hook here would reorder them), only the model.
  * Shape: docs/notes/backlog-architecture.md.
  */
-import { ArrowRight, ChevronDown, ChevronRight, DoorClosed, X } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronRight, DoorClosed, Wallet, X } from "lucide-react";
+import { RowFlagChoice } from "./RowFlagChoice";
+import { RowBudgetEdit } from "./RowBudgetEdit";
+import { RadioRows } from "../kit";
 import type { RowFacts } from "./BacklogRow";
 import { AGENT_POSTED_WORDS, MANUAL_HOLD_TEXT } from "@waterplane/shared";
 import { skipQueueNote } from "../sendIntent";
 import {
-  HEADLINE_BY_WORDS, dropClockNote, requeuedWords, runAgainClosedNote, runAgainRowNote, smartWroteWords,
-  undoWhileRunningWords,
+  HEADLINE_BY_WORDS, dropClockNote, requeuedWords, runAgainClosedNote, runAgainRowNote,
 } from "../backlogFilter";
 import { ago } from "../format";
 import {
-  CLOSE_CHOICES, closeChoiceLabel, closeChoiceOf, closeEffectWords, closeOneLabel, opensOwnSession, slotHeld,
+  CLOSE_CHOICES, budgetEditable, closeChoiceLabel, closeChoiceOf, closeEffectWords, closeOneLabel, opensOwnSession, slotHeld,
   slotSessionState,
 } from "../autoSessions";
 import { toggled } from "../RetimeBar";
@@ -30,32 +32,17 @@ export function RowNotes({ m, row }: { m: BacklogModel; row: RowFacts }) {
     fireIntoBusy, now, openDetail, openText, openValidate, p, runAgainHeld, runAgainOffered, setSlotOpen, slotOpen,
     slotSessions, targetLive, toggleDetail, toggleValidate,
   } = m;
-  const { it, mergedFrom, smartWritten, agentPosted, undoOffer, mergedTimed } = row;
+  const { it, agentPosted } = row;
   return (
     <>
-                  {/* What wrote this row, and what the button beside it will do.
-                      ONE sentence, never two: while the row is RUNNING the
-                      `again` button is drawn like any other post-start state,
-                      but "it has already run" is not true yet and the fact
-                      worth saying is the one the host says back — the tap does
-                      not stop the session typing those words. So the running
-                      row takes `undoWhileRunningWords` INSTEAD of
-                      `smartWroteWords`, and both are `backlogFilter.ts`'s. */}
+                  {/* What wrote this row, when it was an agent. */}
                   {agentPosted && openText.has(it.id) && <span className="bl-smart-note">{AGENT_POSTED_WORDS}</span>}
                   {it.manual && it.status === "queued" && <span className="bl-hold">{MANUAL_HOLD_TEXT}</span>}
-                  {(smartWritten || mergedFrom.length > 0) && (
-                    <span className="bl-smart-note">
-                      {mergedFrom.length === 0 ? "written by the smart pick"
-                        : undoOffer && it.status === "running" ? undoWhileRunningWords(mergedFrom.length, mergedTimed)
-                          : smartWroteWords(mergedFrom.length, undoOffer, mergedTimed)}
-                    </span>
-                  )}
                   {/* **What dropping this row's clock does — as text.**
                       It was a `title` on the button, which on a phone is no
                       sentence at all, and the clause it carried is the whole
                       answer to "how do I run the ones that were skipped": the
-                      row joins the queue, and auto and the smart pick take it
-                      from there. Drawn only where the verb is drawn, so a row
+                      row joins the queue, and auto takes it from there. Drawn only where the verb is drawn, so a row
                       nobody can act on says nothing extra, and the BUTTON wears
                       the same string as its title — one claim, not two copies
                       of it. */}
@@ -152,8 +139,8 @@ export function RowNotes({ m, row }: { m: BacklogModel; row: RowFacts }) {
                       : <span className="bl-waiting">{p.waiting[it.id]}</span>
                   )}
                   {/* **Held for a slot: offer the room, never take it.** Every
-                      automatic slot is held by a session that is open; closing
-                      one is a person's tap on the ordinary close. The count IS
+                      automatic slot is held by a session that is WORKING;
+                      closing one is a person's tap on the ordinary close. The count IS
                       the list the tap opens (`autoSlotSessions`). */}
                   {p.online && it.status === "queued" && slotHeld(p.waiting?.[it.id], p.autoSlots) && slotSessions.length > 0 && (
                     <div className="bl-slots">
@@ -186,19 +173,31 @@ export function RowNotes({ m, row }: { m: BacklogModel; row: RowFacts }) {
                     <div className="bl-close-choice">
                       <span className="bl-smart-note">{closeEffectWords(it.closeWhenDone, p.closeWhenDoneGlobal)}</span>
                       {p.online ? (
-                        <div className="bl-close-chips">
-                          {CLOSE_CHOICES.map((c) => (
-                            <button key={c} className={`key${closeChoiceOf(it.closeWhenDone) === c ? " active" : ""}`}
-                              aria-pressed={closeChoiceOf(it.closeWhenDone) === c}
-                              onClick={() => { if (closeChoiceOf(it.closeWhenDone) !== c) p.verbs.onSetCloseWhenDone(it.id, c); }}>
-                              {closeChoiceLabel(c, p.closeWhenDoneGlobal)}
-                            </button>
-                          ))}
-                        </div>
+                        <RadioRows
+                          label="when this item is done"
+                          options={CLOSE_CHOICES.map((c) => ({ key: c, label: closeChoiceLabel(c, p.closeWhenDoneGlobal) }))}
+                          value={closeChoiceOf(it.closeWhenDone)}
+                          onChange={(c) => p.verbs.onSetCloseWhenDone(it.id, c)} />
                       ) : (
                         <span className="bl-waiting">Changing it needs the desktop — the link is down.</span>
                       )}
+                      {p.online && <RowFlagChoice on={!!it.flagWhenDone} onSet={(on) => p.verbs.onSetFlagWhenDone(it.id, on)} />}
+                      {/* No cap yet: the `budget…` chip lives in the expanded row, so an
+                          unset row carries no extra chip in the list. Same words as the
+                          Send sheet's. A set cap is the chip in the meta line. */}
+                      {p.online && budgetEditable(it) && !it.budget && (
+                        <div className="bl-close-chips">
+                          <button className={`key${m.budgetOpen.has(it.id) ? " active" : ""}`} aria-pressed={m.budgetOpen.has(it.id)}
+                            onClick={() => m.toggleBudget(it.id)}><Wallet size={13} /> budget…</button>
+                        </div>
+                      )}
                     </div>
+                  )}
+                  {/* The cap's editor — the one `BudgetField`, opened from either chip. */}
+                  {budgetEditable(it) && m.budgetOpen.has(it.id) && (
+                    <RowBudgetEdit key={`${it.id}:${it.budget ? `${it.budget.unit}${it.budget.max}${it.budget.interrupt}` : "none"}`}
+                      current={it.budget} online={p.online}
+                      onSet={(b) => { p.verbs.onSetBudget(it.id, b); m.toggleBudget(it.id); }} />
                   )}
                   {openText.has(it.id) && (
                     <div className="bl-check-detail">

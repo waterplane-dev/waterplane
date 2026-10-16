@@ -3,6 +3,7 @@
 
 import type { SessionBudget } from "../sessionbudget.js";
 import { cleanSessionBudget } from "../sessionbudget.js";
+import { cleanLaunchOpts } from "../launch.js";
 import type { ScheduleRule } from "./schedrule.js";
 import { INTENT_MAX_STEPS, type ScheduleAction } from "./schedaction.js";
 import { zoneOffsetMs } from "./schedzone.js";
@@ -93,6 +94,7 @@ export function cleanRule(v: any): ScheduleRule {
     return {
       kind: "window",
       window,
+      ...(typeof raw.periodId === "string" && raw.periodId && raw.periodId !== "session" && raw.periodId !== "weekly" ? { periodId: raw.periodId } : {}),
       edge,
       // `before` must be a LEAD: a positive offset there would place the run
       // after the reset it claims to precede, which is the one reading of this
@@ -156,13 +158,15 @@ export function cleanAction(v: any): ScheduleAction | null {
       autoFire: raw.autoFire !== false,
       ...(steps ? { steps } : {}),
       ...(typeof raw.closeWhenDone === "boolean" ? { closeWhenDone: raw.closeWhenDone } : {}),
+      ...(raw.flagWhenDone === true ? { flagWhenDone: true } : {}),
       ...actionBudget(raw.budget),
+      ...(cleanLaunchOpts(raw.launch) ? { launch: cleanLaunchOpts(raw.launch) } : {}),
     };
   }
   const rawDirs: string[] = Array.isArray(raw.dirs) ? raw.dirs.filter((d: any) => typeof d === "string" && d) : [];
   const dirs: string[] = [...new Set<string>(rawDirs)].slice(0, 60);
   if (!dirs.length) return null;
-  return { kind: "fanout", dirs, text, launch: raw.launch && typeof raw.launch === "object" ? raw.launch : undefined, ...actionBudget(raw.budget) };
+  return { kind: "fanout", dirs, text, launch: cleanLaunchOpts(raw.launch), ...actionBudget(raw.budget) };
 }
 
 /**

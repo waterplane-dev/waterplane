@@ -15,11 +15,12 @@
  */
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { BRAND } from "@waterplane/shared";
 import { configDir } from "./branddirs.js";
+import { writeTextAtomic, writeTextAtomicKeepMode } from "./jsonstore.js";
 
 export const KEY_ALIAS = "sideload";
 const VALIDITY_DAYS = 36500;
@@ -96,7 +97,7 @@ export function ensureDesktopKey(opts: SignKeyOpts = {}): EnsureResult {
     ], { stdio: ["ignore", "pipe", "pipe"], timeout: 60_000 });
     chmodSync(tmp, 0o600);
     // Properties first (a jks without them is the "broken" state), jks last.
-    writeFileSync(props, fmtProps({ storeFile: jks, storePassword: password, keyAlias: KEY_ALIAS, keyPassword: password }), { mode: 0o600 });
+    writeTextAtomic(props, fmtProps({ storeFile: jks, storePassword: password, keyAlias: KEY_ALIAS, keyPassword: password }), { mode: 0o600 });
     chmodSync(props, 0o600);
     renameSync(tmp, jks);
     return { ok: true, created: true, jks, note: `created the desktop signing key ${jks} (mode 600)` };
@@ -120,7 +121,7 @@ function ensureIgnores(repo: string): string[] {
   const have = new Set(cur.split("\n").map((l) => l.trim().replace(/^\//, "")));
   const missing = IGNORES.filter((e) => !have.has(e));
   if (!missing.length) return [];
-  writeFileSync(gi, (cur && !cur.endsWith("\n") ? cur + "\n" : cur) + "\n# signing key pointer — never commit\n" + missing.join("\n") + "\n");
+  writeTextAtomicKeepMode(gi, (cur && !cur.endsWith("\n") ? cur + "\n" : cur) + "\n# signing key pointer — never commit\n" + missing.join("\n") + "\n");
   return missing;
 }
 
@@ -144,7 +145,7 @@ export function linkKey(repo: string, kind: KeyKind = "desktop"): LinkResult {
     const real = realpathSync(p.storeFile);
     if (real === root || real.startsWith(root + sep)) return { ok: false, error: `${p.storeFile} is inside the repo — refusing to link a key that would live in it` };
     const file = join(repo, "keystore.properties");
-    writeFileSync(file, fmtProps(p), { mode: 0o600 });
+    writeTextAtomic(file, fmtProps(p), { mode: 0o600 });
     chmodSync(file, 0o600);
     const gitignore = ensureIgnores(repo);
     return { ok: true, kind, file, gitignore, note: `keystore.properties points at the ${kind} key${gitignore.length ? `; .gitignore += ${gitignore.join(", ")}` : ""}` };

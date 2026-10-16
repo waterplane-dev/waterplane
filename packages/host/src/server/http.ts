@@ -4,8 +4,8 @@
  *
  * Moved verbatim out of `main.ts` (M6 of the host split, see
  * docs/notes/host-architecture.md). Every main-scope name is read as
- * `ctx.<name>` at CALL time — `listenWithRetry`'s callback reaches `intents`
- * and `smartpick`, and the handler reaches every manager, all of which exist by
+ * `ctx.<name>` at CALL time — `listenWithRetry`'s callback reaches `intents`,
+ * and the handler reaches every manager, all of which exist by
  * the time `main()` binds.
  *
  * Security-critical and unchanged: the origin/Host gate runs ahead of
@@ -18,8 +18,9 @@ import type { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { existsSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
-import { normalizeDeviceName, type DeviceTokenResponse, type PeerKind, logTag, envName, BRAND } from "@waterplane/shared";
-import { peerKind } from "../net.js";
+import { normalizeDeviceName, type DeviceTokenResponse, type PassiveAuthFields, type PassiveStateResponse, type PeerKind, logTag, envName, BRAND } from "@waterplane/shared";
+import { passiveAllows, passiveItems, queuedApkIn } from "../passive.js";
+import { requestPeerKind } from "../net.js";
 import { canonicalRequestPath, checkRequestOrigin, corsHeaders } from "../origin.js";
 import { cookieToken, tokenFromRequest, authCookie, clearAuthCookie } from "../auth.js";
 import { handleAuthedRoutes, handleLanPreAuth, type AuthRouteDeps } from "../authroutes.js";
@@ -27,10 +28,12 @@ import { discoverTailnetPeers } from "../tailnetpeers.js";
 import { PairStore, handlePairAuthed, handlePairPage, handlePairPreAuth, latestApk, pairNet, type PairDeps } from "../pair.js";
 import { USAGE_POLL_MS } from "../usage.js";
 import { handleApi, answerPreflight } from "../api.js";
-import { sendBody, statTag, notModified } from "../httpio.js";
+import { sendBody, statTag, notModified, readJsonBody, answerBadBody } from "../httpio.js";
+import { contained } from "../paths.js";
 import { WEB_DIST } from "../webbundle.js";
 import { brandIndexHtml, brandManifest, iconUrlsTag, themeIconFile, themeIconUrls, themeOverlayState, THEME_ICON_PREFIX } from "../themeoverlay.js";
 import type { ServerCtx } from "./ctx.js";
+import { appReadinessReport } from "../appready.js";
 
 // ── HTTP: API router, then static web app ────────────────────────────
 
@@ -45,16 +48,10 @@ export function createHttp(ctx: ServerCtx) {
   // Pairing codes: memory only, so a restart invalidates every outstanding one.
   const pairs = new PairStore();
   const pairDeps = (): PairDeps => ({ root: ctx.ROOT, port: ctx.PORT, auth: ctx.auth, store: pairs, net: () => pairNet(ctx.PORT), apk: () => latestApk() });
-  async function readSmallJson(req: IncomingMessage): Promise<any> {
-    const chunks: Buffer[] = [];
-    let n = 0;
-    for await (const c of req) {
-      n += (c as Buffer).length;
-      if (n > 1_000_000) { req.destroy(); return {}; }
-      chunks.push(c as Buffer);
-    }
-    try { return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"); } catch { return {}; }
-  }
+  // Empty ⇒ `{}` (the field checks below refuse in their own words); malformed
+  // or over 1 MB ⇒ `BadBody`, answered 400/413 by `fail` — never "wrong password"
+  // for a body that never arrived whole.
+  const readSmallJson = (req: IncomingMessage): Promise<any> => readJsonBody(req, { optional: true });
 
   /**
    * LAN password gate HTTP surface (always reachable, even from an un-authed LAN
@@ -68,9 +65,45 @@ export function createHttp(ctx: ServerCtx) {
     const jsonHead = { "content-type": "application/json", ...corsHeaders(req.headers) } as Record<string, string>;
 
     if (url.pathname === "/api/auth/status" && method === "GET") {
-      const authed = !ctx.auth.needsToken(kind) || ctx.auth.checkToken(tokenFromRequest(req.headers), kind);
+      const tok = tokenFromRequest(req.headers);
+      const authed = !ctx.auth.needsToken(kind) || ctx.auth.checkToken(tok, kind);
       res.writeHead(200, jsonHead);
-      res.end(JSON.stringify({ kind, authed, ...ctx.authStateFor(kind) }));
+      res.end(JSON.stringify({ kind, authed, ...ctx.authStateFor(kind), ...passiveFields(tok) }));
+      return;
+    }
+    // Passive devices (`passive.ts`): the unlock is the passive token's own
+    // route — the one write it may make — and rate-limited per device there.
+    if (url.pathname === "/api/auth/unlock" && method === "POST") {
+      const row = ctx.auth.deviceFor(tokenFromRequest(req.headers), kind);
+      const body = await readSmallJson(req);
+      const r = ctx.auth.passive.unlock(row, body.pin);
+      const status = r.ok ? 200 : r.error === "rate-limited" ? 429 : r.error === "bad-request" ? 400 : r.error === "no-pin" ? 409 : 403;
+      const { retryAfterMs, ...out } = r;
+      res.writeHead(status, { ...jsonHead, "cache-control": "no-store", ...(retryAfterMs ? { "retry-after": String(Math.ceil(retryAfterMs / 1000)) } : {}) });
+      res.end(JSON.stringify(out));
+      return;
+    }
+    if (url.pathname === "/api/auth/lock" && method === "POST") {
+      const row = ctx.auth.deviceFor(tokenFromRequest(req.headers), kind);
+      const locked = row ? ctx.auth.passive.lock(row.id) : false;
+      res.writeHead(200, jsonHead);
+      res.end(JSON.stringify({ ok: true, locked }));
+      return;
+    }
+    // The unlock PIN: set or cleared only from the trusted path (loopback /
+    // Tailscale, holding a valid token when that path is gated) and never by a
+    // passive token — not even one that is unlocked right now.
+    if (url.pathname === "/api/auth/pin" && method === "POST") {
+      const tok = tokenFromRequest(req.headers);
+      const row = ctx.auth.deviceFor(tok, kind);
+      const trusted = ctx.auth.canManage(kind) && (!ctx.auth.needsToken(kind) || !!row) && row?.scope !== "passive";
+      if (!trusted) { res.writeHead(403, jsonHead); res.end(JSON.stringify({ ok: false, error: "The unlock PIN is set from a trusted phone over Tailscale, or on the desktop — never from a passive device or the Wi-Fi route." })); return; }
+      const body = await readSmallJson(req);
+      try { ctx.auth.passive.setPin(body.pin === null ? null : String(body.pin ?? "")); } catch (e) {
+        res.writeHead(400, jsonHead); res.end(JSON.stringify({ ok: false, error: (e as Error).message })); return;
+      }
+      res.writeHead(200, jsonHead);
+      res.end(JSON.stringify({ ok: true, pinSet: ctx.auth.passive.pinSet() }));
       return;
     }
     if (url.pathname === "/api/auth/login" && method === "POST") {
@@ -90,7 +123,11 @@ export function createHttp(ctx: ServerCtx) {
     // header and a WS subprotocol instead. No password retyping over the
     // tailnet; still nothing while no password is set (deny-until-set).
     if (url.pathname === "/api/auth/token" && method === "POST") {
-      const trusted = !ctx.auth.needsToken(kind) || ctx.auth.checkToken(tokenFromRequest(req.headers), kind);
+      const presented = ctx.auth.deviceFor(tokenFromRequest(req.headers), kind);
+      // A passive token never mints another — unlocked or not, a full token
+      // would outlive the 30 minutes.
+      if (presented?.scope === "passive") { res.writeHead(403, jsonHead); res.end(JSON.stringify({ ok: false, error: "passive device", passive: true })); return; }
+      const trusted = !ctx.auth.needsToken(kind) || !!presented;
       if (!trusted) { res.writeHead(401, jsonHead); res.end(JSON.stringify({ ok: false, error: "auth required", authRequired: true, enabled: ctx.auth.isEnabled() })); return; }
       if (!ctx.auth.isEnabled()) { res.writeHead(403, jsonHead); res.end(JSON.stringify({ ok: false, error: "no password set on host" })); return; }
       const body = await readSmallJson(req);
@@ -110,6 +147,15 @@ export function createHttp(ctx: ServerCtx) {
     }
     res.writeHead(404, jsonHead);
     res.end(JSON.stringify({ error: "not found" }));
+  }
+
+  /** What `/api/auth/status` adds about a passive caller and the PIN. */
+  function passiveFields(tok: string | null): PassiveAuthFields {
+    const row = ctx.auth.deviceFor(tok);
+    const pin = { pinSet: ctx.auth.passive.pinSet() };
+    if (row?.scope !== "passive") return pin;
+    const until = ctx.auth.passive.unlockedUntil(row.id);
+    return { ...pin, scope: "passive", ...(until ? { unlockedUntil: until } : {}) };
   }
 
   /** A name for a browser row in the device list when it sent none: its
@@ -146,8 +192,10 @@ export function createHttp(ctx: ServerCtx) {
     }
     const rel = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
     const safe = normalize(rel).replace(/^(\.\.[/\\])+/, "");
-    let filePath = join(WEB_DIST, safe);
-    if (!filePath.startsWith(WEB_DIST) || !existsSync(filePath)) filePath = join(WEB_DIST, "index.html");
+    // `contained`, not a bare `startsWith(WEB_DIST)`: that also admitted a
+    // sibling such as `web/dist-old/` (no separator in the comparison).
+    let filePath = contained(WEB_DIST, safe) ?? "";
+    if (!filePath || !existsSync(filePath)) filePath = join(WEB_DIST, "index.html");
     try {
       // Vite emits content-hashed names under /assets — those can be cached
       // forever. index.html (and anything else) must revalidate, but gets an ETag
@@ -184,7 +232,7 @@ export function createHttp(ctx: ServerCtx) {
   /** The `createServer` callback, one per bind in `main()` (it keeps no
    *  per-server state, so one function serves every bind). */
   function handler(req: IncomingMessage, res: ServerResponse): void {
-    const kind = peerKind(req.socket.remoteAddress);
+    const kind = requestPeerKind(req.socket.remoteAddress, req.headers);
     const canon = canonicalRequestPath(req.url);
     if (canon === null) {
       res.writeHead(400, { "content-type": "application/json" });
@@ -211,6 +259,8 @@ export function createHttp(ctx: ServerCtx) {
     // It answers headers only; no route runs.
     if (p.startsWith("/api/") && req.method === "OPTIONS") { answerPreflight(req, res); return; }
     const fail = (err: unknown) => {
+      // A bad JSON body on the auth/pair/LAN paths, which `handleApi` never sees.
+      if (answerBadBody(res, err, corsHeaders(req.headers))) return;
       console.error(`${logTag} http error`, err);
       if (!res.headersSent) res.writeHead(500);
       res.end("Internal error");
@@ -245,6 +295,27 @@ export function createHttp(ctx: ServerCtx) {
         res.end(JSON.stringify({ error: "auth required", authRequired: true, enabled: ctx.auth.isEnabled() }));
         return;
       }
+      // A passive token (`passive.ts`): default deny over every `/api/` route,
+      // `/api/peer/*` included; only `passiveAllows`' list passes.
+      if (p.startsWith("/api/") && ctx.auth.restricted(tok)) {
+        const query = new URL(req.url ?? "/", "http://localhost").searchParams;
+        if (!passiveAllows(req.method ?? "GET", p, query, queuedApkIn(ctx.autopull.list()))) {
+          res.writeHead(403, { "content-type": "application/json", ...corsHeaders(req.headers) });
+          res.end(JSON.stringify({ error: "passive device", passive: true }));
+          return;
+        }
+      }
+      if (p === "/api/passive/state" && req.method === "GET") {
+        const row = ctx.auth.deviceFor(tok);
+        const out: PassiveStateResponse = {
+          items: passiveItems(ctx.autopull.list()), checkedAt: Date.now(),
+          unlockedUntil: row?.scope === "passive" ? ctx.auth.passive.unlockedUntil(row.id) : null,
+          pinSet: ctx.auth.passive.pinSet(),
+        };
+        res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store", ...corsHeaders(req.headers) });
+        res.end(JSON.stringify(out));
+        return;
+      }
       if ((p.startsWith("/api/lan/") || p.startsWith("/api/devices")) && await handleAuthedRoutes(req, res, kind, tok, deps)) return;
       // Tailnet discovery: read-only, and ONLY for a trusted path (loopback / Tailscale) — a LAN
       // or public caller never gets a map of the tailnet, token or not.
@@ -261,11 +332,13 @@ export function createHttp(ctx: ServerCtx) {
       // `launches` is the intent store: `api.ts` needs exactly one method of it —
       // "an upload landed in this worktree, re-ask the gate now".
       const handled = await handleApi(req, res, {
-        root: ctx.ROOT, push: ctx.push, sessions: ctx.sessions, uiStats: ctx.uiStats, netstats: ctx.netstats, setup: ctx.setupWatch, launches: ctx.intents,
-        tokenStats: ctx.tokenStats, usageLog: ctx.usageLog, usagePollMs: USAGE_POLL_MS, capture: ctx.capture,
-        intents: ctx.intents, backlog: ctx.backlog, containRepoDir: (d) => ctx.containRepoDir(d), onboard: ctx.onboard,
+        root: ctx.ROOT, push: ctx.push, sessions: ctx.sessions, uiStats: ctx.uiStats, netstats: ctx.netstats, setup: ctx.setupWatch, health: ctx.healthWatch, launches: ctx.intents,
+        periods: () => ctx.budget.get().periods ?? [], tokenStats: ctx.tokenStats, usageLog: ctx.usageLog, usageSources: ctx.usageSources, usagePollMs: USAGE_POLL_MS, capture: ctx.capture,
+        intents: ctx.intents, acks: ctx.acks, backlog: ctx.backlog, containRepoDir: (d) => ctx.containRepoDir(d), onboard: ctx.onboard,
+        appReadiness: () => appReadinessReport(ctx.ROOT, (d) => ctx.builds.list(d), (d) => ctx.autopull.config(d)),
         pluginHook: (id, payload) => ctx.plugins.hook(id, payload),
         pluginRoute: (id, method, parts) => ctx.plugins.route(id, method, parts),
+        pluginFile: (id, token) => ctx.plugins.offeredFile(id, token),
         peers: ctx.peers, canManage: (k) => ctx.auth.canManage(k),
         // A hand-asked image read spends the same key a plugin may, so it is
         // metered the same way and kept apart by `kind` — "a plugin got
@@ -302,17 +375,10 @@ export function createHttp(ctx: ServerCtx) {
       // process died actually mean. A tmux session outlives the daemon, so "is
       // that session still there" is not answerable until the map is rebuilt.
       // Idempotent: several binds call this, and it reconciles once.
-      void ctx.intents.reconcile().then(() => {
-        // …and only then finish any merge the last process died in the middle of.
-        // After reconciliation for the same reason reconciliation runs after
-        // `rediscover()`: the store has to be settled before anything writes to
-        // it. Every step of an apply is idempotent, so completing an interrupted
-        // one twice is completing it once — and leaving one half-applied is the
-        // only way this feature could lose somebody's work.
-        try { ctx.smartpick.finishApplying(); } catch (e) { console.error(`${logTag} smartpick resume failed`, e); }
-      });
+      void ctx.intents.reconcile();
     });
   }
 
   return { handler, listenWithRetry };
 }
+

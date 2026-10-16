@@ -10,12 +10,10 @@
  * control is a filter, so a chip saying 3 must open exactly three rows —
  * including when the OTHER dimension is already filtering.
  *
- * A THIRD dimension arrived with the smart pick: `ids`, the cut behind
- * "merged from 3" on a row a grooming pass wrote. That is the sharpest version
- * of the same rule in the app — those three rows are ARCHIVED, so the default
- * view hides every one of them, and a tap that opened anything but exactly
- * those three would be the sheet asking the reader to work out by eye which
- * words the machine folded. Its half of this file is at the bottom.
+ * A THIRD dimension is `ids`, the cut a count elsewhere opens (an applied
+ * assessment's *N waiting*, a schedule's rows). It may name ARCHIVED rows the
+ * default view hides, and a tap that opened anything but exactly those rows
+ * would be the sheet asking the reader to work them out by eye.
  */
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -23,7 +21,7 @@ import { NO_CATEGORY_LABEL, describeRule } from "@waterplane/shared";
 import {
   BACKLOG_AGES, BACKLOG_STATUSES, DROP_CLOCK_TOAST, HOLD_FOR_HOST_TEXT, HOLD_FOR_HOST_TITLE, holdChipWords,
   NO_BACKLOG_FILTER,
-  ageBucket, backlogCountWords, backlogCounts, backlogFilterSentence, clockGroupWords, clockGroups,
+  ageBucket, backlogCountWords, backlogCounts, backlogFilterSentence, clockGroupWords, clockGroups, drawnChips,
   clockSeat, clockSeatWords, itemClockKey, onClockIds, clockWords, dropClockNote,
   ASSESS_NONE_IN_CUT, archiveDoneLabel, archiveDoneNote, archiveDoneToast,
   assessScopeLabel, assessScopeNote, assessableInCut,
@@ -33,7 +31,7 @@ import {
   scheduleParentLabel,
   fromScheduleWords, hiddenByArchive, matchesBacklogFilter, onClockLabel, realLabel,
   scheduleItemsLabel,
-  scheduleRuleLabel, smartWroteWords, undoOfferFor, undoWhileRunningWords, withinAge,
+  scheduleRuleLabel, withinAge,
   RUN_AGAIN_LABEL, RUN_AGAIN_TOAST,
   requeuedWords, runAgainAimedCount, runAgainClosedNote, runAgainEligible, runAgainIds,
   runAgainLabel, runAgainNote, runAgainRowNote, runAgainState, runAgainToast,
@@ -156,7 +154,7 @@ test("an ids cut is a filter, and an EMPTY one shows nothing rather than everyth
   assert.deepEqual(cut([item({ id: "a" })], { ...NO_BACKLOG_FILTER, ids: [] }), []);
 });
 
-test("“merged from 3” opens exactly those three", () => {
+test("an ids cut of 3 opens exactly those three", () => {
   const items = ["a", "b", "c", "d", "e"].map((id) => item({ id }));
   assert.deepEqual(
     cut(items, { ...NO_BACKLOG_FILTER, ids: ["a", "c", "e"] }).map((it) => it.id),
@@ -165,9 +163,9 @@ test("“merged from 3” opens exactly those three", () => {
 });
 
 test("an ids cut shows an ARCHIVED row — the base it is handed is the unhidden one", () => {
-  // Every original of a merge is archived. A predicate that also knew about the
-  // sheet's archived toggle would make "merged from 3" open one row; the hide
-  // is the caller's job, membership is all this asks.
+  // A predicate that also knew about the sheet's archived toggle would make a
+  // cut of three open one row; the hide is the caller's job, membership is all
+  // this asks.
   const items = [item({ id: "a", archived: true }), item({ id: "b" }), item({ id: "c", archived: true })];
   assert.deepEqual(cut(items, { ...NO_BACKLOG_FILTER, ids: ["a", "c"] }).map((it) => it.id), ["a", "c"]);
 });
@@ -213,12 +211,12 @@ test("an ids cut NAMES ITSELF, and the other dimensions ride behind it", () => {
   const ids = ["a", "b", "c"];
   assert.equal(backlogFilterSentence({ status: null, age: null, ids }), "made from these");
   assert.equal(
-    backlogFilterSentence({ status: null, age: null, ids }, "merged into “fix the flaky test”"),
-    "merged into “fix the flaky test”",
+    backlogFilterSentence({ status: null, age: null, ids }, "opened from “fix the flaky test”"),
+    "opened from “fix the flaky test”",
   );
   assert.equal(
-    backlogFilterSentence({ status: "failed", age: "day", ids }, "merged into “x”"),
-    "merged into “x” · failed · added in the past 24h",
+    backlogFilterSentence({ status: "failed", age: "day", ids }, "opened from “x”"),
+    "opened from “x” · failed · added in the past 24h",
   );
   assert.equal(backlogFilterSentence({ status: null, age: null, ids }, "   "), "made from these",
     "a blank label is no label");
@@ -243,52 +241,10 @@ test("an ids cut says which base its N is counted against", () => {
 });
 
 /**
- * ── The undo, reachable in the case it exists for ────────────────────────────
+ * ── A row archived while it runs may not disappear ──────────────────────────
  *
- * The pass picks and applies in the same breath and the merged row is routinely
- * the pick, so the pre-run window is about one tick. Whoever the notification
- * wakes meets a row that has ALREADY RUN — which is exactly the person the
- * safety catch was built for, and exactly the person who used to be told to
- * bring N rows back by hand with the machine's text unreversed.
- */
-test("a merged row offers a verb in every state the host accepts one in", () => {
-  const q = { mergedFrom: 3, status: "queued", online: true };
-  assert.equal(undoOfferFor(q), "undo");
-  assert.equal(undoOfferFor({ ...q, status: "done" }), "again");
-  assert.equal(undoOfferFor({ ...q, status: "failed" }), "again",
-    "a merge that failed is exactly when you want the originals back");
-  /*
-   * RUNNING is a verb too, and this line is the fix for a wrong one.
-   *
-   * The sheet used to answer `null` here and draw a refusal instead — *"can be
-   * put back once it has finished"*. The host accepts the message in this state
-   * (`smartpick.ts`'s `undo`: it archives the row WITHOUT stopping it, restores
-   * the members and answers "still running and has not been stopped"), so the
-   * phone was withholding a capability, and wording a refusal nobody would
-   * make, in the one state the sleeper wakes into. On a phone "come back later"
-   * is the words staying archived for ever.
-   */
-  assert.equal(undoOfferFor({ ...q, status: "running" }), "again");
-  // …and the row's own note is what stops `again` over-claiming: the tap does
-  // not stop the session that is typing those words.
-  assert.match(undoWhileRunningWords(3), /it is running now and will not be stopped/);
-  assert.match(undoWhileRunningWords(3), /queues your 3 originals again, as they were/);
-  assert.match(undoWhileRunningWords(1), /queues your original again/);
-  // The retired refusal, in both of its claims.
-  assert.doesNotMatch(undoWhileRunningWords(3), /once it has finished/);
-  assert.doesNotMatch(undoWhileRunningWords(3), /stay under archived/);
-  // Offline every mutation is read-only and no verb is drawn, so the row must
-  // not promise one — the sheet's own offline line covers it.
-  assert.equal(undoOfferFor({ ...q, online: false }), null);
-  // A row nothing was merged into has no verb and no sentence.
-  assert.equal(undoOfferFor({ mergedFrom: 0, status: "queued", online: true }), null);
-});
-
-/**
- * ── …and the row it archives may not disappear while it runs ────────────────
- *
- * The tap above ARCHIVES a running row (the host does, on purpose: the row
- * that ran is the only account of the session running it). Three places cut on
+ * An archive tap on a running row archives it while it runs (the smart pick's
+ * undo, removed 2026-10-16, did so on purpose). Three places cut on
  * `archived` — the sheet's default base, the repo counts, the composer's badge
  * — so without this predicate the one row that is doing something vanished
  * from all three mid-run, and the badge dropped by one for a session still
@@ -298,49 +254,9 @@ test("the archived cut never hides a running row", () => {
   assert.equal(hiddenByArchive({ archived: true, status: "done" }), true);
   assert.equal(hiddenByArchive({ archived: true, status: "queued" }), true);
   assert.equal(hiddenByArchive({ archived: true, status: "running" }), false,
-    "unmerge archives a running row; hiding it is how a row stops saying what happened to it");
+    "a row archived mid-run is still running; hiding it is how a row stops saying what happened to it");
   assert.equal(hiddenByArchive({ archived: false, status: "done" }), false);
   assert.equal(hiddenByArchive({ status: "queued" }), false, "absent means not archived");
-});
-
-test("the row's sentence is a different promise on each side of having run", () => {
-  assert.equal(smartWroteWords(2, "undo"), "written by the smart pick, from your 2 — undo puts them back");
-  const ran = smartWroteWords(2, "again");
-  assert.match(ran, /it has already run/);
-  assert.match(ran, /put them back queues your 2 originals as they were/);
-  // It must NOT read as an undo once it has run: the machine's words have been
-  // typed into a session and cannot be untyped.
-  assert.doesNotMatch(ran, /undo/);
-  assert.match(smartWroteWords(1, "again"), /queues your original as they were/);
-  // Offline: what wrote the row, and nothing about a button that is not drawn.
-  assert.equal(smartWroteWords(2, null), "written by the smart pick, from your 2");
-  // And the retired sentence, which sent a sleeping person to do it by hand.
-  assert.doesNotMatch(smartWroteWords(2, "again"), /by hand/);
-  assert.doesNotMatch(undoWhileRunningWords(2), /by hand/);
-});
-
-test("“as they were” says what that means when an original had a CLOCK", () => {
-  // `undo` restores each original with the `nextAt` it had. Merged twins on
-  // *tonight 21:00*, put back tomorrow, come back to a ladder that fails them
-  // with "that instant has passed and this was a one-off — post it again". So
-  // the receipt was promising a run that cannot happen — under the one button
-  // the whole case for applying a merge automatically rests on.
-  const ran = smartWroteWords(2, "again", true);
-  assert.match(ran, /put them back queues your 2 originals as they were/, "the promise it CAN keep is unchanged");
-  assert.match(ran, /clocks come back with them/);
-  assert.match(ran, /failed rows wearing “drop the clock”/, "and the row is not lost — that verb puts it back in the queue");
-  // Not a COUNT of which ones will fail: that depends on a tick, a grace and,
-  // for a window rule, a usage reading this phone has not got. A heuristic here
-  // degrades to a true sentence about all of them, never to a number about
-  // some. `\d` would catch "1 of the 2" creeping back in.
-  assert.doesNotMatch(ran.slice(ran.indexOf("clocks come back")), /\d/);
-  assert.match(undoWhileRunningWords(2, true), /clocks come back with them/);
-  assert.match(smartWroteWords(2, "undo", true), /undo puts them back — their clocks come back with them/);
-  // Untimed originals are the case the old sentence was written for, and it is
-  // still exactly right for them: nothing extra is said.
-  assert.equal(smartWroteWords(2, "again", false), smartWroteWords(2, "again"));
-  assert.doesNotMatch(smartWroteWords(2, "again"), /clock/);
-  assert.doesNotMatch(undoWhileRunningWords(2), /clock/);
 });
 
 /**
@@ -409,6 +325,12 @@ test("nothing armed is not the same fact twice — a window rule is WAITING, a s
   const spent = clockWords(clock({ nextAt: null, rule: { kind: "once", at: NOW - H } }), NOW, "failed");
   assert.equal(spent, describeRule({ kind: "once", at: NOW - H }));
   assert.doesNotMatch(spent, /next|waiting/);
+  // The host leaves `nextAt` on a row after it fires — the instant it fired
+  // AT. A row that has run must not read "next due now" beside its `done`.
+  for (const st of ["running", "done", "failed"]) {
+    const ran = clockWords(clock({ nextAt: NOW - 14 * 24 * H }), NOW, st);
+    assert.equal(ran, describeRule(clock().rule), st);
+  }
 });
 
 test("`wait until free` keeps its own chip, and dropping the clock does not drop it", () => {
@@ -433,7 +355,7 @@ test("what dropping a clock DOES is text on the row, not a title nobody can see"
   // the whole answer to "how do I run the seven that were skipped", and on the
   // one device this app runs on it was not said at all.
   const failed = dropClockNote("failed");
-  assert.match(failed, /auto and the smart pick take it from there/);
+  assert.match(failed, /auto takes it from there/);
   assert.match(failed, /a one-off cannot be re-armed/);
   const queued = dropClockNote("queued");
   assert.match(queued, /in turn instead of at its time/);
@@ -451,7 +373,7 @@ test("`drop the clock` is two different offers and never one sentence", () => {
   const failed = dropClockTitle("failed");
   assert.match(failed, /its instant has passed/);
   assert.match(failed, /waits its turn like any other item/);
-  assert.match(failed, /smart pick/, "the whole reason this verb exists is that the pass only sees backlog rows");
+  assert.doesNotMatch(failed, /smart pick/, "the smart pick is gone (2026-10-16)");
   // queued: not a rescue. Nothing is being saved, and the sentence must not
   // read as though something is.
   const queued = dropClockTitle("queued");
@@ -483,7 +405,7 @@ test("the bulk verb's number is the timed rows in the CUT, and it says what it l
   // on a phone is nowhere. Both are things a person needs BEFORE the tap: what
   // becomes of the words, and what the tap does not take away.
   for (const n of [dropClocksNote(5, 7), dropClocksNote(7, 7)]) {
-    assert.match(n, /auto and the smart pick take it from there/);
+    assert.match(n, /auto takes it from there/);
     assert.match(n, /hold until the desktop is free keep doing so/);
   }
   // ONE tap, ONE receipt. The bar sends seven frames — the wire has no batch
@@ -617,7 +539,7 @@ test("the verb's promise is ONE string, and it says all four things a tap needs"
   // What runs it afterwards, which is the answer to "how do I get the failed
   // ones moving" and which lived nowhere at all before.
   assert.match(note, /a new session of its own when its turn comes/);
-  assert.match(note, /auto and the smart pick take it from there/);
+  assert.match(note, /auto takes it from there/);
   // What is NOT wiped.
   assert.match(note, /The failure it had stays on the row/);
   // …and what the other button does instead, because they sit side by side.
@@ -735,7 +657,7 @@ test("the count on the control is the cut, and the note says what it leaves alon
   for (const s of [all, some]) {
     assert.match(s, /one at a time in this repo/);
     assert.match(s, /each in a session of its own/);
-    assert.match(s, /auto and the smart pick take it from there/);
+    assert.match(s, /auto takes it from there/);
     assert.match(s, /the failure each one had stays on its row/);
   }
 });
@@ -878,6 +800,79 @@ test("the kind chips are cross-counted, and a chip saying 2 opens exactly two", 
   assert.equal(backlogCounts(items, { ...NO_BACKLOG_FILTER, category: "chore" }, NOW).age.hour, 1);
 });
 
+// A chip that holds the WHOLE pool opens the list already on screen: "past week 4" and "no kind 4"
+// over four items were the same 4 said four times. `drawnChips` is the one place that decides,
+// off the counts the chips print, and a chip it leaves out is one whose tap would change nothing.
+test("a chip equal to the total is hidden unless it is active", () => {
+  // The demo's backlog: four items, none named, all inside the week.
+  const items = [
+    item({ id: "a", status: "queued", createdAt: NOW - 10 * 60_000 }),   // past hour
+    item({ id: "b", status: "queued", createdAt: NOW - 5 * H }),         // past 24h
+    item({ id: "c", status: "done", createdAt: NOW - 2 * 24 * H }),      // past week
+    item({ id: "d", status: "done", createdAt: NOW - 3 * 24 * H }),      // past week
+  ];
+  const f = NO_BACKLOG_FILTER;
+  const counts = backlogCounts(items, f, NOW);
+  assert.equal(counts.age.week, 4);
+  assert.equal(counts.category.none, 4);
+  assert.deepEqual(counts.pool, { status: 4, age: 4, category: 4, clock: 4 });
+  const shown = drawnChips(counts, f);
+  assert.deepEqual(shown.age, ["hour", "day"], "past week = all four: it cuts nothing, so it is not drawn");
+  assert.deepEqual(shown.category, [], "no kind = all four: the whole axis goes");
+  assert.deepEqual(shown.status, ["queued", "done"], "two of four each: both cut something");
+  assert.equal(shown.clock, false, "nothing is on a clock");
+
+  // Active beats hidden: lit, the chip is the way out of the cut it made.
+  const lit = { ...NO_BACKLOG_FILTER, category: "none" };
+  assert.deepEqual(drawnChips(backlogCounts(items, lit, NOW), lit).category, ["none"]);
+  const litAge = { ...NO_BACKLOG_FILTER, age: "week" };
+  assert.ok(drawnChips(backlogCounts(items, litAge, NOW), litAge).age.includes("week"));
+
+  // Every chip that IS drawn opens exactly its count, and that is fewer rows than the pool —
+  // the number and the cut still come from the one bucketing function.
+  const cutOf = (g) => items.filter((it) => matchesBacklogFilter(it, g, NOW)).length;
+  for (const a of shown.age) assert.equal(cutOf({ ...f, age: a }), counts.age[a], a);
+  for (const s of shown.status) assert.equal(cutOf({ ...f, status: s }), counts.status[s], s);
+  for (const a of shown.age) assert.ok(counts.age[a] < counts.pool.age, `${a} cuts something`);
+});
+
+test("the pool is cross-counted: a chip equal to the OTHER axes' cut is hidden too", () => {
+  // Two queued (hour, day) and one older done. With `queued` on, the pool for age is the two
+  // queued rows: "past week 2" is all of them, "past hour 1" is one.
+  const items = [
+    item({ id: "a", status: "queued", createdAt: NOW - 10 * 60_000 }),
+    item({ id: "b", status: "queued", createdAt: NOW - 5 * H }),
+    item({ id: "c", status: "done", createdAt: NOW - 30 * 24 * H }),
+  ];
+  const f = { ...NO_BACKLOG_FILTER, status: "queued" };
+  const counts = backlogCounts(items, f, NOW);
+  assert.equal(counts.pool.age, 2, "the pool is what the age chips are cutting: the queued rows");
+  assert.equal(counts.pool.status, 3, "…and the status chips cut all three, their own axis cleared");
+  assert.deepEqual(drawnChips(counts, f).age, ["hour"], "past 24h and past week are both the whole pool of 2");
+  // Unfiltered, the same rows draw past week (2 of 3) and older (1 of 3): neither is the whole.
+  const open = drawnChips(backlogCounts(items, NO_BACKLOG_FILTER, NOW), NO_BACKLOG_FILTER);
+  assert.deepEqual(open.age, ["hour", "day", "week", "older"]);
+});
+
+test("a chip equal to the total stays when its tap opens something the list cannot", () => {
+  // `failed` and `done` are the doors to the bulk verbs, drawn on that status cut alone: hiding
+  // the chip over an all-done repo would take *archive these N* out of reach.
+  const allDone = [item({ id: "a", status: "done" }), item({ id: "b", status: "done" })];
+  assert.deepEqual(drawnChips(backlogCounts(allDone, NO_BACKLOG_FILTER, NOW), NO_BACKLOG_FILTER).status, ["done"]);
+  const allFailed = [item({ id: "a", status: "failed" }), item({ id: "b", status: "failed" })];
+  assert.deepEqual(drawnChips(backlogCounts(allFailed, NO_BACKLOG_FILTER, NOW), NO_BACKLOG_FILTER).status, ["failed"]);
+  // …whereas a repo of nothing but waiting rows has no status row: `queued` cuts nothing.
+  const allQueued = [item({ id: "a", status: "queued" }), item({ id: "b", status: "queued" })];
+  assert.deepEqual(drawnChips(backlogCounts(allQueued, NO_BACKLOG_FILTER, NOW), NO_BACKLOG_FILTER).status, []);
+  // `on a clock` re-groups the rows by the instant they share, so it stays when every row has one.
+  const timed = [item({ id: "a", at: NOW + H }), item({ id: "b", at: NOW + 2 * H })];
+  const timedCounts = backlogCounts(timed, NO_BACKLOG_FILTER, NOW);
+  assert.equal(timedCounts.clock, timedCounts.pool.clock);
+  assert.equal(drawnChips(timedCounts, NO_BACKLOG_FILTER).clock, true);
+  // A chip with nothing in it was never drawn.
+  assert.equal(drawnChips(backlogCounts(allQueued, NO_BACKLOG_FILTER, NOW), NO_BACKLOG_FILTER).clock, false);
+});
+
 test("the bar names the kind as a noun, and says what “no kind” is", () => {
   assert.match(backlogFilterSentence({ ...NO_BACKLOG_FILTER, category: "bug" }), /bugs/);
   assert.match(backlogFilterSentence({ ...NO_BACKLOG_FILTER, category: "feature" }), /features/);
@@ -1003,8 +998,7 @@ test("the edit form says the one consequence of saving a title, and the way back
  *
  * It took a COUNT and a boolean once, and an ids base is the one base where a
  * count is not enough: it is `inRepo` and holds archived rows on purpose, so
- * `merged from 3` — three originals whose never-running is the point of a merge
- * — was answered *"these 3 start one at a time in this repo, each in a session
+ * a cut of three archived rows that will never run was answered *"these 3 start one at a time in this repo, each in a session
  * of its own, in the order you see"*. Four claims, four of them false. So it
  * takes the BREAKDOWN, and every clause below is pinned to the rows it is true
  * of.
@@ -1013,14 +1007,14 @@ test("the edit form says the one consequence of saving a title, and the way back
 const bd = (o) => ({ fresh: 0, aimed: 0, held: 0, other: 0, ...o });
 
 test("the focused cut says whether anything is going to work through it", () => {
-  const on = focusRunWords(bd({ fresh: 3 }), true, false);
+  const on = focusRunWords(bd({ fresh: 3 }), true);
   assert.match(on, /auto is on/);
   assert.match(on, /one at a time/, "the host serializes per repo — this describes it, it does not do it");
   assert.match(on, /session of its own/, "a fresh item opens its own conversation when it fires");
   assert.match(on, /order you see/);
   assert.match(on, /fire/, "the per-row control that already exists is the other answer");
 
-  const off = focusRunWords(bd({ fresh: 3 }), false, false);
+  const off = focusRunWords(bd({ fresh: 3 }), false);
   assert.match(off, /auto is off/);
   assert.match(off, /none of these 3 start on their own/, "the refusal is a sentence about THESE rows");
   assert.match(off, /Turn auto back on/, "the remedy is the switch this sheet already has");
@@ -1029,37 +1023,35 @@ test("the focused cut says whether anything is going to work through it", () => 
 
 test("one row is worded as one, and a cut nothing starts in promises nothing", () => {
   // One row is not a queue, so it does not get the queue's sentence.
-  assert.match(focusRunWords(bd({ fresh: 1 }), true, false), /this one starts when the repo is free/);
-  assert.doesNotMatch(focusRunWords(bd({ fresh: 1 }), true, false), /one at a time/, "there is nothing for one row to be in order with");
-  assert.match(focusRunWords(bd({ fresh: 1 }), false, false), /this one does not start on its own/);
-  assert.match(focusRunWords(bd({ fresh: 1 }), false, false), /Turn auto back on/);
+  assert.match(focusRunWords(bd({ fresh: 1 }), true), /this one starts when the repo is free/);
+  assert.doesNotMatch(focusRunWords(bd({ fresh: 1 }), true), /one at a time/, "there is nothing for one row to be in order with");
+  assert.match(focusRunWords(bd({ fresh: 1 }), false), /this one does not start on its own/);
+  assert.match(focusRunWords(bd({ fresh: 1 }), false), /Turn auto back on/);
   // Nothing on screen is nothing to promise about, and the bar above already
   // says the cut is empty.
-  assert.equal(focusRunWords(bd({}), true, false), null);
-  assert.equal(focusRunWords(bd({}), false, false), null);
+  assert.equal(focusRunWords(bd({}), true), null);
+  assert.equal(focusRunWords(bd({}), false), null);
 });
 
 /**
- * **`merged from 3` is three ARCHIVED rows** — the cut this sentence was most
- * often drawn over, and the one it was most wrong about. An ids cut takes the
- * unhidden base deliberately (the originals of a merge are archived; that is
- * what a merge IS), so the rows are on screen and none of them will ever start.
+ * **A cut of three ARCHIVED rows** — an ids cut takes the unhidden base
+ * deliberately, so the rows are on screen and none of them will ever start.
  */
 test("a cut of rows that cannot start says nothing rather than something false", () => {
-  assert.equal(focusRunWords(bd({ other: 3 }), true, false), null, "three archived originals start nothing");
-  assert.equal(focusRunWords(bd({ other: 3 }), false, false), null, "and auto has nothing to do with it");
+  assert.equal(focusRunWords(bd({ other: 3 }), true), null, "three archived rows start nothing");
+  assert.equal(focusRunWords(bd({ other: 3 }), false), null, "and auto has nothing to do with it");
   // A schedule child cut is routinely `done` or `failed`; *Aimed at a session
   // that closed* is `blocked` on `sessionGone` for ever and is out of
   // `nextFireIds`. Neither is about to run.
-  assert.equal(focusRunWords(bd({ other: 2, held: 1 }), true, false), null);
-  assert.equal(focusRunWords(bd({ held: 4 }), true, false), null, "held is not started");
+  assert.equal(focusRunWords(bd({ other: 2, held: 1 }), true), null);
+  assert.equal(focusRunWords(bd({ held: 4 }), true), null, "held is not started");
   // One row that WILL start beside rows that will not: the sentence is about
   // the one, and says how many it is not about.
-  const mixed = focusRunWords(bd({ fresh: 1, other: 3 }), true, false);
+  const mixed = focusRunWords(bd({ fresh: 1, other: 3 }), true);
   assert.match(mixed, /this one starts/);
   assert.match(mixed, /other 3 here are not going to start/, "what is on screen and is not starting is counted, never claimed");
   assert.match(mixed, /each row says why/, "held is four reasons and the row already carries its own");
-  assert.doesNotMatch(focusRunWords(bd({ fresh: 2 }), true, false), /not going to start/, "with nothing left over there is no clause");
+  assert.doesNotMatch(focusRunWords(bd({ fresh: 2 }), true), /not going to start/, "with nothing left over there is no clause");
 });
 
 /**
@@ -1069,43 +1061,29 @@ test("a cut of rows that cannot start says nothing rather than something false",
  * so "one at a time in this repo" is false as soon as one is aimed.
  */
 test("an aimed row is worded as aimed, never as a session of its own", () => {
-  const aimed = focusRunWords(bd({ aimed: 2 }), true, false);
+  const aimed = focusRunWords(bd({ aimed: 2 }), true);
   assert.doesNotMatch(aimed, /session of its own/, "these run in the session they name");
   assert.match(aimed, /in their sessions/);
   assert.doesNotMatch(aimed, /one at a time in this repo/, "nextFireIds picks one per GROUP, so groups run at once");
   assert.doesNotMatch(aimed, /order you see/, "their order is their session's, not this flat list's");
 
-  const one = focusRunWords(bd({ aimed: 1 }), true, false);
+  const one = focusRunWords(bd({ aimed: 1 }), true);
   assert.match(one, /the session it is aimed at/);
   assert.doesNotMatch(one, /session of its own/);
 
   // Mixed: two promises, and the only claim made about both is the wait.
-  const mix = focusRunWords(bd({ fresh: 2, aimed: 1 }), true, false);
+  const mix = focusRunWords(bd({ fresh: 2, aimed: 1 }), true);
   assert.match(mix, /of these 3/);
   assert.match(mix, /2 start in a session of their own/);
   assert.match(mix, /1 in the session it is aimed at/);
   assert.doesNotMatch(mix, /one at a time in this repo/);
 });
 
-/**
- * **The smart pick is the one feature here that applies itself**, so with it on
- * the list on screen is explicitly NOT the fire order — and the sentence that
- * said it was is the sentence somebody reads before walking away.
- */
-test("with the smart pick on, the visible order is not claimed as the order", () => {
-  const smart = focusRunWords(bd({ fresh: 4 }), true, true);
-  assert.doesNotMatch(smart, /order you see/);
-  assert.match(smart, /smart pick chooses which one goes next/, "it says what decides instead, rather than going quiet");
-  assert.match(focusRunWords(bd({ fresh: 4 }), true, false), /order you see/, "and with it off the order is the order");
-  // One row has no order to be in either way.
-  assert.doesNotMatch(focusRunWords(bd({ fresh: 1 }), true, true), /smart pick chooses/);
-});
-
 test("the switch the sentence names and the button that flips it are one string", () => {
   assert.equal(FOCUS_AUTO_ON_LABEL, "turn auto on");
   // The sentence tells you to turn auto back on; the control beside it must not
   // be wearing a different verb for the same tap.
-  assert.match(focusRunWords(bd({ fresh: 2 }), false, false), /auto/);
+  assert.match(focusRunWords(bd({ fresh: 2 }), false), /auto/);
   // And the button's TITLE is a sentence like every other, pinned here rather
   // than written inline in the component.
   assert.match(FOCUS_AUTO_ON_TITLE, /auto/);
@@ -1254,6 +1232,19 @@ test("re-time many: one edge for the box, the count and the frames", async () =>
   assert.match(retimeNote(2, 8, 8), /^2 of 8 picked\. /, "no clause about rows that are not there");
   assert.match(retimeNote(2, 6, 8), /2 have no box: running/, "the rows with no box are said in text");
   assert.equal(retimeToast(7, "Fr 09:00"), "re-timed 7 — the same rows, now Fr 09:00", "one tap, one receipt with the count");
+});
+
+test("re-time a whole clock: the count is the ids the tap ticks", async () => {
+  const { clockPicks, clockPickLabel, clockGroups, retimeEligible } = await import("./backlogFilter.ts");
+  const at = { rule: { kind: "once", at: 1, offsetMin: 0 }, graceMin: 120, nextAt: 5 };
+  const other = { rule: { kind: "once", at: 9, offsetMin: 0 }, graceMin: 120, nextAt: 9 };
+  const row = (id, o) => ({ id, text: "t", status: "queued", repoDir: "/r", at, ...o });
+  const all = [row("a"), row("b"), row("c", { status: "running" }), row("d"), row("e", { at: other }), row("f", { at: undefined })];
+  const shown = all.filter((it) => it.id !== "d"); // a filter hides d
+  const picks = clockPicks(clockGroups(all), shown.filter(retimeEligible));
+  assert.equal(picks.length, 1, "a clock with one movable row on screen is not offered");
+  assert.deepEqual(picks[0].ids, ["a", "b"], "on screen and eligible only — never the hidden or the running row");
+  assert.match(clockPickLabel(picks[0]), /^re-time the 2 on “.+”$/);
 });
 
 test("re-time off the clock: the receipt says where the rows went", async () => {

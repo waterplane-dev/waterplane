@@ -31,10 +31,10 @@
  * (`call`, which the generic `plugin.call` wire message routes to through
  * `callOnce` and its ledger, `pluginrpc.ts`).
  */
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { BRAND, cleanPluginValue, PLUGIN_MANIFEST, promptFingerprint, pluginValues, PLUGIN_ARGS_MAX } from "@waterplane/shared";
-import type { PluginCallResult } from "@waterplane/shared";
+import type { PluginCallResult, PluginUsageProbe } from "@waterplane/shared";
 import { createCallLedger } from "./pluginrpc.js";
 import type {
   AnswerSuggestion, ComplianceCheck, DecisionLogEntry, DetectedPrompt, HandToAgentResult, HostPluginModule,
@@ -44,16 +44,18 @@ import type {
 import { forgetRules, isBlocked } from "../answergate.js";
 import { unregisterBackend } from "../backends/index.js";
 import { handToAgentVia } from "../agentintents.js";
-import { findTarget } from "../repos.js";
+import { discoverTargets, findTarget } from "../repos.js";
 import type { HostCtx } from "../routes/types.js";
 import type { SessionManager } from "../sessions.js";
 import { cleanReply, findPluginRoute, type PluginRoute } from "./pluginroutes.js";
 import { builtinDir, builtinHostModule, releaseBuiltins, shippedBuiltins, type ReleaseBuiltins } from "./builtin.js";
 import { discoverPluginDirs, importHost, readPluginDir } from "./pluginloader.js";
 import { makeApi } from "./pluginapi.js";
+import { PluginStreams, type StreamSink } from "./pluginstreams.js";
 import { setSetupSource } from "./setupcontrib.js";
+import { PluginFiles, type ServedFile } from "./pluginfiles.js";
 import { hostStateDir } from "../branddirs.js";
-import { writeJsonAtomic } from "../jsonstore.js";
+import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
 
 const ACTIVATE_MS = 10_000;
 const ACTION_MS = 90_000;
@@ -113,7 +115,7 @@ export interface RegistryDeps {
   sessions: SessionManager;
   decision(row: DecisionLogEntry): void;
   meter(e: { service: string; model: string; kind: string; inTok: number; outTok: number; ts: number }): void;
-  notify(kind: NotificationKind, p: { title: string; body: string; sessionId?: string; tag?: string }): void;
+  notify(kind: NotificationKind, p: { title: string; body: string; sessionId?: string; tag?: string; plugin?: string }): void;
   usage(): UsageInfo;
   /** The plugin list changed — broadcast it. */
   changed(): void;
@@ -123,10 +125,17 @@ export interface RegistryDeps {
   host?: Pick<HostCtx, "backlog" | "intents" | "containRepoDir">;
   /** Test seam: a repo by id. Absent ⇒ `repos.ts`'s `findTarget(root, id)`, the ids `GET /api/repos` hands out. */
   findRepo?(repoId: string): Promise<RepoTarget | null>;
+  /** Test seam: a repo by its worktree's REALPATH. Absent ⇒ `discoverTargets(root)` realpath-compared. */
+  findRepoByPath?(realPath: string): Promise<RepoTarget | null>;
   /** Test seam over `handToAgentVia(host, …)`. */
   handToAgent?(p: HandToAgentArgs): Promise<HandToAgentResult>;
   /** The daemon's port, for `api.hookSink()` (loopback). Absent ⇒ the default port. */
   hookPort?: number;
+  /** How `api.stream` reaches the sockets (`pluginstreams.ts`), read at CALL time. Absent ⇒ every
+   *  `stream.open` is refused in words. */
+  streamSink?(): StreamSink | null;
+  /** `api.usageProbe` — the host's usage-source registry (`usagesources.ts`). Absent ⇒ refused in words. */
+  usageProbe?(plugin: string, def: PluginUsageProbe): () => void;
 }
 
 export interface HandToAgentArgs { repoDir: string; text: string; label?: string; id?: string; origin: string; fire: boolean }
@@ -134,6 +143,8 @@ export interface HandToAgentArgs { repoDir: string; text: string; label?: string
 /** Fix ids `compliance.ts` answers itself — a plugin may not take one. */
 export const CORE_FIX_IDS: readonly string[] = ["gitignore", "claude-md", "visual-check", "auto-compact", "state-dir", "android-toolchain", "signing-key", "builds-configured"];
 
+const isPlainObject = (v: unknown): boolean => !!v && typeof v === "object" && !Array.isArray(v);
+const isEnabledDoc = (v: unknown): boolean => isPlainObject(v) && ((v as { enabled?: unknown }).enabled === undefined || isPlainObject((v as { enabled?: unknown }).enabled));
 const msgOf = (e: unknown): string => (e instanceof Error ? e.message : String(e)).slice(0, 400);
 
 /** Race a promise against a clock; the reason says which. */
@@ -150,6 +161,10 @@ export class PluginRegistry {
   /** Session id → fingerprint of the box plugins were last told about (gate condition 3). */
   readonly told = new Map<string, string>();
   private readonly ledger = createCallLedger();
+  /** `api.stream`'s registry and every socket's open subs (`pluginstreams.ts`). */
+  readonly streams: PluginStreams;
+  /** `api.offerFile`'s live offers (`pluginfiles.ts`): memory only, each file deleted when it ends. */
+  readonly files = new PluginFiles();
   private readonly stateDir: string;
   private readonly enabledPath: string;
   private builtinsStarted = false;
@@ -161,6 +176,16 @@ export class PluginRegistry {
     this.stateDir = hostStateDir(deps.root);
     this.enabledPath = join(this.stateDir, "plugins.json");
     setSetupSource(this);
+    this.streams = new PluginStreams({
+      plugin: (id) => {
+        const e = this.byId(id);
+        if (!e) return null;
+        const refusal = e.state === "active" ? null : `${e.manifest.name} is ${e.state === "off" ? "turned off" : `not running: ${e.error ?? "error"}`}`;
+        return { name: e.manifest.name, refusal };
+      },
+      failed: (id, what, err) => { const e = this.byId(id); if (e) this.handlerFailed(e, what, err); },
+      sink: () => deps.streamSink?.() ?? null,
+    });
   }
 
   private newEntry(p: Pick<PluginEntry, "dir" | "source" | "manifest" | "hostFile" | "loadError" | "enabled" | "stored" | "manifestLegacy"> & { builtin?: boolean }): PluginEntry {
@@ -306,6 +331,10 @@ export class PluginRegistry {
     forgetRules({ plugin: e.manifest.id });
     e.hook = null;
     e.routes.length = 0;
+    // Every stream it served ends, and the phones watching are told (`stream.ended`, cause "plugin").
+    this.streams.dropPlugin(e.manifest.id, `${e.manifest.name} is no longer running`);
+    // Every file it offered is withdrawn and deleted (`pluginfiles.ts`).
+    this.files.dropPlugin(e.manifest.id);
     for (const release of [...e.holds]) release();
     e.holds.clear();
   }
@@ -369,6 +398,13 @@ export class PluginRegistry {
    * running or serves nothing there — the caller then answers the core's plain 404, as for any
    * path nobody serves. The runner never rejects: a throw is a 500 in words and the status line.
    */
+  /** A file a running plugin offered (`api.offerFile`), for `GET /api/plugin-file/<id>/<token>`; null = gone. */
+  offeredFile(pluginId: string, token: string): ServedFile | null {
+    const e = this.byId(pluginId);
+    if (!e || e.state !== "active") return null;
+    return this.files.get(pluginId, token);
+  }
+
   route(pluginId: string, method: string, parts: readonly string[]): ((req: { query: Record<string, string>; body: unknown }) => Promise<PluginHookReply>) | null {
     const e = this.byId(pluginId);
     if (!e || e.state !== "active") return null;
@@ -543,6 +579,18 @@ export class PluginRegistry {
     return this.deps.findRepo ? this.deps.findRepo(repoId) : findTarget(this.deps.root, repoId);
   }
 
+  /**
+   * A repo by its worktree's realpath, among the repos this host lists — the lookup behind a path
+   * `api.repo()`/`api.handToAgent` is given when its spelling is not the one the id was made from
+   * (`/tmp` vs `/private/tmp`, a symlinked root). Never a folder outside the list.
+   */
+  async findRepoByPath(realPath: string): Promise<RepoTarget | null> {
+    if (this.deps.findRepoByPath) return this.deps.findRepoByPath(realPath);
+    const real = (p: string): string | null => { try { return realpathSync(p); } catch { return null; } };
+    for (const t of await discoverTargets(this.deps.root)) if (real(t.worktreePath) === realPath) return t;
+    return null;
+  }
+
   /** The backlog add behind `api.handToAgent`, or why there is none. */
   handToAgent(p: HandToAgentArgs): Promise<HandToAgentResult> {
     if (this.deps.handToAgent) return this.deps.handToAgent(p);
@@ -648,21 +696,20 @@ export class PluginRegistry {
   // ── disk ────────────────────────────────────────────────────────────────
 
   private readEnabled(): Record<string, boolean> {
-    try {
-      const doc = JSON.parse(readFileSync(this.enabledPath, "utf8"));
-      return doc && typeof doc.enabled === "object" && doc.enabled ? doc.enabled : {};
-    } catch { return {}; }
+    // `{ enabled: {...} }`. Anything else that is there is moved aside, not left for the next
+    // switch to overwrite — a person's on/off choices are the one thing here nothing can re-derive.
+    const doc = readJsonGuarded<{ enabled?: Record<string, boolean> } | null>(this.enabledPath, null, isEnabledDoc);
+    return doc?.enabled ?? {};
   }
 
   private readStored(id: string, m: PluginManifestLike): Record<string, PluginValue> {
     const out: Record<string, PluginValue> = {};
-    try {
-      const doc = JSON.parse(readFileSync(join(this.stateDir, "plugins", id, "settings.json"), "utf8"));
-      for (const f of m.settings ?? []) {
-        const c = f.key in (doc ?? {}) ? cleanPluginValue(f, doc[f.key]) : undefined;
-        if (c !== undefined) out[f.key] = c;
-      }
-    } catch { /* none yet */ }
+    // Absent is a plugin with nothing stored yet; a file that is not an object is moved aside.
+    const doc = readJsonGuarded<Record<string, unknown>>(join(this.stateDir, "plugins", id, "settings.json"), {}, isPlainObject);
+    for (const f of m.settings ?? []) {
+      const c = f.key in doc ? cleanPluginValue(f, doc[f.key]) : undefined;
+      if (c !== undefined) out[f.key] = c;
+    }
     return out;
   }
 

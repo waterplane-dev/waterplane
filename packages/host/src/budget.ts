@@ -27,9 +27,9 @@
  */
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { 
-  DEFAULT_USAGE_BUDGET, budgetCeilings, budgetVerdict, cleanBudget,
-  type BudgetCeiling, type BudgetVerdict, type UsageBudget, type UsageInfo } from "@waterplane/shared";
+import {
+  BUILTIN_PERIODS, DEFAULT_USAGE_BUDGET, budgetCeilings, budgetLimits, budgetVerdict, cleanBudget, leftoverCeiling, periodStates, withLimit,
+  type BudgetCeiling, type BudgetSpend, type BudgetVerdict, type KnownReset, type PeriodId, type PeriodState, type UsageBudget, type UsageInfo } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
 import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
 
@@ -40,7 +40,13 @@ export class BudgetStore {
    *  real change, the same rule `backlog.waiting()` follows. */
   private lastKey = "";
 
-  constructor(root: string, private readUsage: () => UsageInfo | null) {
+  /**
+   * `spend` is the local ledger's period-to-date dollars (`periodspend.ts`) and
+   * `scraped` says whether the `session`/`weekly` periods mean anything on this
+   * account (`hasScrapedWindows`); both default to "nothing", which is exactly
+   * the subscription-only behaviour that predates periods.
+   */
+  constructor(root: string, private readUsage: () => UsageInfo | null, private spend: () => BudgetSpend = () => ({}), private scraped: () => boolean = () => true) {
     const dir = hostStateDir(root);
     mkdirSync(dir, { recursive: true });
     this.path = join(dir, "budget.json");
@@ -54,7 +60,16 @@ export class BudgetStore {
   }
 
   set(next: UsageBudget): UsageBudget {
-    this.cfg = cleanBudget(next);
+    // A phone bundle from before `leftoverMax` sends a budget without it; that
+    // is silence about the field, never a request to reset it to the default.
+    const inc = next as Partial<UsageBudget>;
+    let cfg = cleanBudget({ leftoverMax: this.cfg.leftoverMax, ...(inc.periods === undefined ? { periods: this.cfg.periods } : {}), ...inc });
+    // The same silence rule for the dollar ceilings: a phone that predates periods
+    // sends the two percents and no list, and that is not a request to drop a cap.
+    if (inc.ceilings === undefined) {
+      for (const l of budgetLimits(this.cfg)) if (l.unit === "usd" && cfg.periods?.some((p) => p.id === l.periodId)) cfg = withLimit(cfg, l);
+    }
+    this.cfg = cfg;
     this.save();
     return this.get();
   }
@@ -69,13 +84,48 @@ export class BudgetStore {
    * delivered and nobody awake to receive it.
    */
   verdict(now = Date.now()): BudgetVerdict {
-    return budgetVerdict(this.cfg, this.readUsage(), now);
+    return budgetVerdict(this.cfg, this.readUsage(), now, this.spend());
   }
 
   /** Every ceiling over right now, session first — the per-window truth
    *  `verdict()` is the first line of, for the ladder's before-reset lift. */
   ceilings(now = Date.now()): BudgetCeiling[] {
-    return budgetCeilings(this.cfg, this.readUsage(), now);
+    return budgetCeilings(this.cfg, this.readUsage(), now, this.spend());
+  }
+
+  /**
+   * Each configured period and where it stands (`periodBounds`), with the
+   * measured dollars where there are any. The built-in `session`/`weekly` ride
+   * only on an account that has scraped windows. Empty on a subscription with
+   * nothing configured, so the wire field is omitted and the phone is unchanged.
+   */
+  periods(now = Date.now()): PeriodState[] {
+    const u = this.readUsage();
+    const known: Record<PeriodId, KnownReset> = { session: { resetAt: u?.sessionResetAt }, weekly: { resetAt: u?.weeklyResetAt } };
+    const list = [...(this.scraped() && this.cfg.periods?.length ? BUILTIN_PERIODS : []), ...(this.cfg.periods ?? [])];
+    const spend = this.spend();
+    return periodStates(list, now, known).map((s) => {
+      const usd = spend[s.period.id];
+      return typeof usd === "number" ? { ...s, spentUsd: usd } : s;
+    });
+  }
+
+  /** Reset instants of every period that has an edge, for `window` schedule rules. */
+  periodResets(now = Date.now()): Record<PeriodId, number | null> {
+    const out: Record<PeriodId, number | null> = {};
+    for (const s of this.periods(now)) out[s.period.id] = s.resetAt;
+    return out;
+  }
+
+  /** The dollar periods worth measuring: every configured one that is in dollars. */
+  usdPeriods() {
+    return (this.cfg.periods ?? []).filter((p) => p.unit === "usd");
+  }
+
+  /** The leftover ceiling when it is tripped — what holds a row let past LAST
+   *  week's budget that did not start before the reset (`leftoverCeiling`). */
+  leftover(now = Date.now()): BudgetCeiling | null {
+    return leftoverCeiling(this.cfg, this.readUsage(), now);
   }
 
   /**
@@ -87,7 +137,9 @@ export class BudgetStore {
    * caller pushes only when this returns true.
    */
   changed(v: BudgetVerdict): boolean {
-    const key = `${v.state}:${v.blocked}:${v.which ?? ""}:${v.pct ?? ""}:${v.max ?? ""}`;
+    const spend = this.spend();
+    const usd = this.usdPeriods().map((p) => `${p.id}=${typeof spend[p.id] === "number" ? Math.round(spend[p.id]! * 100) : "-"}`).join(",");
+    const key = `${v.state}:${v.blocked}:${v.which ?? ""}:${v.pct ?? ""}:${v.max ?? ""}:${usd}`;
     if (key === this.lastKey) return false;
     this.lastKey = key;
     return true;

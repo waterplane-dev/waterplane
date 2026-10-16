@@ -27,6 +27,8 @@ import {
   parseEtimeSec,
   parsePsTable,
   pruneCpuTrack,
+  readPsTable,
+  readPsTableAsync,
   shellOutputStat,
   shellTranscriptFacts,
   shellsUnder,
@@ -313,4 +315,36 @@ test("shellOutputStat: only fills in past 0 bytes — a 0-byte file is silence b
     rmSync(join("/private/tmp", `claude-${uid}`, slug), { recursive: true, force: true });
     rmSync(home, { recursive: true, force: true });
   }
+});
+
+test("readPsTableAsync: the same rows as parsePsTable for the same text, sharing the 2s memo and one in-flight read", async () => {
+  let spawned = 0;
+  const run = async () => { spawned++; await new Promise((r) => setImmediate(r)); return PS_FIXTURE; };
+  const realNow = Date.now;
+  Date.now = () => realNow() + 60_000;                    // any earlier memo is stale
+  try {
+    // Memo cold, two concurrent pollers: ONE spawn between them, same rows as the pure parse.
+    const [a, b] = await Promise.all([readPsTableAsync(false, run), readPsTableAsync(false, run)]);
+    assert.equal(spawned, 1, "concurrent non-fresh reads share one spawn");
+    assert.deepEqual(a, parsePsTable(PS_FIXTURE));
+    assert.deepEqual(b, a);
+    // Inside the window nothing is spawned, by either reader.
+    assert.deepEqual(await readPsTableAsync(false, run), a);
+    assert.deepEqual(readPsTable(), a, "the sync reader reads the memo the async one wrote");
+    assert.equal(spawned, 1);
+    // A fresh read always spawns, whatever the memo says (the rule killShellGroup relies on).
+    await readPsTableAsync(true, run);
+    assert.equal(spawned, 2);
+  } finally { Date.now = realNow; }
+});
+
+test("readPsTableAsync: a failing read rejects and does not poison the in-flight slot", async () => {
+  await readPsTableAsync(true, async () => PS_FIXTURE);   // set a memo we can age out below
+  const realNow = Date.now;
+  Date.now = () => realNow() + 10_000;                    // memo is now stale
+  try {
+    await assert.rejects(readPsTableAsync(false, async () => { throw new Error("ps gone"); }), /ps gone/);
+    const rows = await readPsTableAsync(false, async () => PS_FIXTURE);
+    assert.deepEqual(rows, parsePsTable(PS_FIXTURE));
+  } finally { Date.now = realNow; }
 });

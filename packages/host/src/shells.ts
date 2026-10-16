@@ -22,9 +22,10 @@
  * `undefined` (absent — "could not read") rather than a guess, kept apart
  * from `[]` ("read, and there are none").
  */
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { statSync } from "node:fs";
 import { basename, join } from "node:path";
+import { promisify } from "node:util";
 import type { SessionShell, SessionShellDetail } from "@waterplane/shared";
 import { selfMatchOf, serverLikeOf } from "@waterplane/shared";
 import { readTail } from "./agents.js";
@@ -114,18 +115,52 @@ export function parsePsTable(text: string): PsRow[] {
 let psMemo: { at: number; rows: PsRow[] } | null = null;
 const PS_MEMO_MS = 2000;
 
+/** `ps`'s own arguments and spawn options, shared by the sync and async
+ *  readers so the two cannot drift into reading different tables. */
+const PS_ARGS = ["-axo", "pid=,ppid=,pgid=,etime=,time=,command="];
+const PS_OPTS = {
+  encoding: "utf8" as const, maxBuffer: 8 * 1024 * 1024, timeout: 3000,
+  // `etime=` is `[[dd-]hh:]mm:ss` everywhere we know, but force the C locale anyway.
+  env: { ...process.env, LC_ALL: "C", LANG: "C" },
+};
+
 /** `fresh: true` bypasses the 2s memo — `killShellGroup` must never act on a
- *  stale reading of who is still alive. */
+ *  stale reading of who is still alive. Blocking (~50 ms measured): that is
+ *  the point for a reading that must precede a kill, and wrong for a poll —
+ *  the pollers use `readPsTableAsync`. */
 export function readPsTable(fresh = false): PsRow[] {
   if (!fresh && psMemo && Date.now() - psMemo.at < PS_MEMO_MS) return psMemo.rows;
-  const out = execFileSync("ps", ["-axo", "pid=,ppid=,pgid=,etime=,time=,command="], {
-    encoding: "utf8", maxBuffer: 8 * 1024 * 1024, timeout: 3000, stdio: ["ignore", "pipe", "ignore"],
-    // `etime=` is `[[dd-]hh:]mm:ss` everywhere we know, but force the C locale anyway.
-    env: { ...process.env, LC_ALL: "C", LANG: "C" },
-  });
+  const out = execFileSync("ps", PS_ARGS, { ...PS_OPTS, stdio: ["ignore", "pipe", "ignore"] });
   const rows = parsePsTable(out);
   psMemo = { at: Date.now(), rows };
   return rows;
+}
+
+const execFileP = promisify(execFile);
+const spawnPs = async (): Promise<string> => (await execFileP("ps", PS_ARGS, PS_OPTS)).stdout;
+
+/** A read already in flight, so N sessions polling in the same tick share ONE
+ *  `ps` instead of spawning N behind the same cold memo. */
+let psInflight: Promise<PsRow[]> | null = null;
+
+/**
+ * The same table without blocking the event loop that pumps every PTY — for the
+ * pollers (`checkAgents` runs per shell/busy session every `AGENT_POLL_MS`).
+ * Shares `readPsTable`'s memo and parse, so either reader warms the other.
+ * `fresh: true` is accepted for symmetry, but a reading that PRECEDES A KILL
+ * stays on the sync `readPsTable(true)` (`killShellGroup`, `stopShellsUnder`).
+ * `run` is the text source, injectable so a test needs no real `ps`.
+ */
+export function readPsTableAsync(fresh = false, run: () => Promise<string> = spawnPs): Promise<PsRow[]> {
+  if (!fresh && psMemo && Date.now() - psMemo.at < PS_MEMO_MS) return Promise.resolve(psMemo.rows);
+  if (!fresh && psInflight) return psInflight;
+  const p: Promise<PsRow[]> = run().then((out) => {
+    const rows = parsePsTable(out);
+    psMemo = { at: Date.now(), rows };
+    return rows;
+  }).finally(() => { if (psInflight === p) psInflight = null; });
+  if (!fresh) psInflight = p;
+  return p;
 }
 
 // ── The wrapper discriminator + its group ───────────────────────────────────
@@ -362,10 +397,13 @@ export function shellOutputStat(cwd: string, conversationId: string, taskId: str
  */
 export function readShellList(
   cliPid: number, cwd: string, claudeSessionId: string | undefined, cliStatus: string | null, now = Date.now(),
+  /** A table the caller already read (`readPsTableAsync`) — a poller hands it in
+   *  so this function does not block the loop on its own `ps`. */
+  psRows?: PsRow[],
 ): SessionShell[] | undefined {
   if (!shellsEnabled()) return undefined;
   let rows: PsRow[];
-  try { rows = readPsTable(); } catch { return undefined; }
+  try { rows = psRows ?? readPsTable(); } catch { return undefined; }
   const groups = shellsUnder(cliPid, rows).slice(0, MAX_SHELLS);
   pruneCpuTrack(cpuTrack, new Set(rows.map((r) => r.pid)));
   if (!groups.length) return [];

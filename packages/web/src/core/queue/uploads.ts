@@ -19,7 +19,7 @@ import { useLinger } from "../../useLinger";
 import { effectiveMaxWidth, etaText, scaleForUpload } from "../../uploadScale";
 import { sendModeToast } from "../../composeSend";
 import type { UploadBuf, UploadProgress } from "../../sdk/types.ts";
-import { UPLOAD_ROW_LINGER_MS } from "./logic.ts";
+import { UPLOAD_ROW_LINGER_MS, isLaterId } from "./logic.ts";
 import type { QueueCtx, UploadFns, UploadState } from "./types.ts";
 
 /** The buffer's state and the label it draws. Nothing here reaches the queue:
@@ -287,6 +287,8 @@ export function uploadFns(c: QueueCtx): UploadFns {
       if (queued === null) return;
       pushHistory(text);
       if (targetIsActive) setCompose("");
+      // The `+ later` screen is done once its row is posted — as its own Send.
+      if (targetIsActive && isLaterId(buf.target.id)) c.setActiveId(null);
       // With no live session to pin to, the item is the REPO's and waits for a
       // session of its own — a different promise, and the only reason there are
       // two sentences here rather than one.
@@ -306,7 +308,8 @@ export function uploadFns(c: QueueCtx): UploadFns {
     } else if (targetIsActive) {
       // Safe to append to the (still-current) compose box.
       setCompose(withDraft);
-      showToast(buf.submit ? `Attached ${refs.length} · session gone, in box` : `Attached ${refs.length} · ready`);
+      // `+ later` has no session to run in: the words wait in the box for its Send.
+      showToast(buf.submit && !isLaterId(buf.target?.id) ? `Attached ${refs.length} · session gone, in box` : `Attached ${refs.length} · ready`);
     } else {
       // User switched sessions — don't touch the current draft. Refs are on the clipboard.
       showToast(`Attached ${refs.length} · copied (switched away)`);

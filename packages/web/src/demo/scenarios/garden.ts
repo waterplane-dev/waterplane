@@ -9,6 +9,7 @@
  * `public/demo/media/<repoId>/` is keyed by).
  */
 import type { DemoModel } from "../host/model.ts";
+import { demoRepoHealthIndex } from "../host/healthindex.ts";
 
 export const MIN = 60_000;
 export const HOUR = 60 * MIN;
@@ -30,11 +31,14 @@ export const bullet = (t: string) => `● ${t}\r\n`;
 export const tool = (name: string, arg: string, res: string) => `${B}● ${name}${R0}(${arg})\r\n${D}  ⎿  ${res}${R0}\r\n`;
 
 /** The three repos; `outbox`/`changed` differ per scenario. */
-export function repos(o: { outbox?: Partial<Record<"r1" | "r2" | "r3", number>> } = {}): NonNullable<DemoModel["repos"]> {
+export function repos(o: { outbox?: Partial<Record<"r1" | "r2" | "r3", number>>; healthIndex?: number } = {}): NonNullable<DemoModel["repos"]> {
   const n = (id: "r1" | "r2" | "r3") => o.outbox?.[id] ?? 0;
+  // `healthIndex: <now>` = the scenarios that serve the repo-health routes also send the chained index
+  // (`demo/host/healthindex.ts`), so the launcher chip appears; trail-log has none, to show the absent case.
+  const hi = (name: string) => (o.healthIndex ? { healthIndex: demoRepoHealthIndex(name, o.healthIndex) } : {});
   return [
-    { id: "r1", repoName: "todo-garden", branch: "main", isPrimary: true, worktreePath: GARDEN, outboxCount: n("r1"), changedCount: 2, hasRepoHealth: true },
-    { id: "r2", repoName: "pocket-notes", branch: "main", isPrimary: true, worktreePath: NOTES, outboxCount: n("r2"), changedCount: 0, hasRepoHealth: true },
+    { id: "r1", repoName: "todo-garden", branch: "main", isPrimary: true, worktreePath: GARDEN, outboxCount: n("r1"), changedCount: 2, hasRepoHealth: true, ...hi("todo-garden") },
+    { id: "r2", repoName: "pocket-notes", branch: "main", isPrimary: true, worktreePath: NOTES, outboxCount: n("r2"), changedCount: 0, hasRepoHealth: true, ...hi("pocket-notes") },
     { id: "r3", repoName: "trail-log", branch: "main", isPrimary: true, worktreePath: TRAIL, outboxCount: n("r3"), changedCount: 1, hasRepoHealth: true },
   ];
 }

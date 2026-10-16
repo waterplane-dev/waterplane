@@ -9,6 +9,12 @@ import { since } from "./tvRows";
  */
 export function liveReading(status: TranscriptStatus | undefined, busy: boolean) {
   const now = Date.now();
+  // The day this is read ON. A prompt's "posted" stamp (TvTurn) is drawn only
+  // for a prompt from ANOTHER day: the turn head's clock already says the
+  // time, and on the day itself "posted Mon 12 Oct, 06:33" under "#1 06:33"
+  // said it twice. Past midnight a bare clock no longer says which day — the
+  // one case the stamp is for.
+  const today = new Date(now).toDateString();
   const work = busy ? workingLine(status?.tail) : null;
   // A clipped screen block is missing rows the CLI never printed, so they are in
   // no record — but while the panel is still open they are one scroll away in
@@ -34,16 +40,16 @@ export function liveReading(status: TranscriptStatus | undefined, busy: boolean)
   const shellSum = shellList ? shellsSummary(shellList, now) : null;
   const anyShells = !!shellSum?.total || !!status?.shells;
   // What still keeps the NEWEST turn from being finished, in words — the same
-  // facts that make `sessionStatus()` read `coding` (busy, agents, a shell that
-  // is working or waiting), so the turn foot never says "finished" under a
+  // facts that make `sessionStatus()` read `coding` (busy, agents, a shell with
+  // real workers — a `waiting` poll loop is not work), so the turn foot never says "finished" under a
   // "coding" chip. Null when nothing is running.
   const stillGoing = !status || !status.running ? null
     : status.busy ? "working"
     : agentCount ? `${agentCount} agent${agentCount === 1 ? "" : "s"} still running`
-    : (shellSum ? shellSum.working + shellSum.waiting > 0 : !!status.shells) ? "a background shell still running"
+    : (shellSum ? shellSum.working > 0 : !!status.shells) ? "a background shell still running"
     : null;
-  // One line, in priority order: dead > blocked > waiting on you > working > idle.
-  // Only one of those is ever the thing worth knowing.
+  // One line, in priority order: dead > blocked > waiting on you > working >
+  // agents > shells > idle. Only one of those is ever the thing worth knowing.
   const live = !status ? null
     : !status.running ? { kind: "dead", text: "session ended" }
     : status.blocked ? { kind: "blocked", text: "blocked — usage limit" }
@@ -61,6 +67,11 @@ export function liveReading(status: TranscriptStatus | undefined, busy: boolean)
     : agentCount ? { kind: "agents", text: `${agentCount} agent${agentCount === 1 ? "" : "s"} running${agentAge ? ` · ${agentAge}` : ""}${anyShells ? " · shells too" : ""}` }
     : shellSum?.total ? { kind: "shells", text: shellsChipText(shellSum) }
     : status.shells ? { kind: "shells", text: "background shells running" }
+    // Idle repeats the header's "done · 18m ago", and it stays anyway: this
+    // strip sits ABOVE the reader's scroll body, so dropping it when a turn
+    // ends moved the text 25px at the moment the answer lands — a layout
+    // change nobody caused, mid-glance (ux §5). One fact said twice is the
+    // smaller cost. Link down, it is also the "last known" marker.
     : { kind: "idle", text: "idle — nothing running" };
   const shellFirstWords = shellList?.length ? shellWords(shellList[0], now) : null;
   const stale = !!status?.linkDown && live?.kind !== "dead";
@@ -70,7 +81,7 @@ export function liveReading(status: TranscriptStatus | undefined, busy: boolean)
     ? "turn state from the claude hooks (exact)"
     : "turn state guessed from output silence — no hook pipe on this session, so a long quiet tool run can read as idle";
   return {
-    now, work, panelOpen, elapsed, agents, agentCount, agentAge, shellList, shellSum, anyShells,
+    now, today, work, panelOpen, elapsed, agents, agentCount, agentAge, shellList, shellSum, anyShells,
     stillGoing, live, shellFirstWords, stale, liveTitle,
   };
 }

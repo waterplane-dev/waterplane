@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { shouldNotice, shouldNoticeAgent } from "./costNotice.ts";
+import { shouldNotice, shouldNoticeAgent, shouldNoticeSpend } from "./costNotice.ts";
 
 test("a first crossing at a real level notices, and records it", () => {
   const { notice, next } = shouldNotice("s1", "warm", {});
@@ -98,4 +98,15 @@ test("the agent record is bounded, oldest evicted first", () => {
   assert.equal(Object.keys(seen).length, 60);
   assert.equal("s0" in seen, false);
   assert.equal("s60" in seen, true);
+});
+
+test("a spend mark is announced once per step up: orange once, red once, never back down", () => {
+  let r = shouldNoticeSpend("s1", null, {});
+  assert.equal(r.notice, false);
+  r = shouldNoticeSpend("s1", "warn", {});
+  assert.equal(r.notice, true);
+  assert.equal(shouldNoticeSpend("s1", "warn", r.next).notice, false, "same mark again is silent");
+  const red = shouldNoticeSpend("s1", "high", r.next);
+  assert.equal(red.notice, true);
+  assert.equal(shouldNoticeSpend("s1", "warn", red.next).notice, false, "never downward");
 });

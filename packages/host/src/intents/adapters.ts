@@ -257,9 +257,13 @@ export function scheduleToIntent(raw: unknown, now: number): IntentDraft | null 
       // item by `workItemInherits`. Absent stays absent (follow the global);
       // `upsert()` carries a stored one when an older bundle's save is silent.
       ...(typeof action.closeWhenDone === "boolean" ? { closeWhenDone: action.closeWhenDone } : {}),
+      ...(action.flagWhenDone === true ? { flagWhenDone: true } : {}),
       // The budget each occurrence's session is born with, the same way —
       // `null` included: that is a person CLEARING it, which `upsert()` honours.
       ...(action.budget !== undefined ? { budget: action.budget } : {}),
+      // The model each occurrence's session starts with — the sweep arm's
+      // rule below: absent is the desktop's new-session defaults.
+      ...(action.launch ? { launch: action.launch } : {}),
     } as IntentDraft;
   }
   return {
@@ -304,12 +308,14 @@ export function intentToSchedule(i: Intent): ScheduleEntry | null {
   // the same silent drop the whole-rule round trip above is written to avoid.
   const chain = i.payload.kind === "prompt" && i.payload.steps.length > 1 ? [...i.payload.steps] : undefined;
   const action: ScheduleAction = i.target.kind === "repos"
-    ? { kind: "fanout", dirs: i.target.dirs, text, launch: i.launch as LaunchOpts | undefined, ...(i.budget ? { budget: i.budget } : {}) }
+    ? { kind: "fanout", dirs: i.target.dirs, text, launch: i.launch, ...(i.budget ? { budget: i.budget } : {}) }
     : {
       kind: "backlog", repoDir: i.cwd, text, label: i.label, autoFire: i.auto !== false, ...(chain ? { steps: chain } : {}),
       // Back out as well as in, or renaming the rule would drop it.
       ...(typeof i.closeWhenDone === "boolean" ? { closeWhenDone: i.closeWhenDone } : {}),
+      ...(i.flagWhenDone ? { flagWhenDone: true } : {}),
       ...(i.budget ? { budget: i.budget } : {}),
+      ...(i.launch ? { launch: i.launch } : {}),
     };
   return {
     id: i.id,
@@ -394,19 +400,7 @@ export type ReviewSidecar = Partial<Pick<BacklogItem,
  * third terminal word and a row that vanished into an unknown status would be
  * the one thing this rework exists to prevent.
  */
-/**
- * What a smart-pick merge did to this row, from `smartpick.ts`'s own store.
- *
- * `ReviewSidecar`'s arrangement exactly, and for its reason: it is keyed by
- * intent id, it is not lifecycle, and it outlives the pass that wrote it — so it
- * lives beside the store rather than on the `Intent`, and is merged in here
- * where the wire DTO is built. Both halves are optional and a row has at most
- * one of them: a merged row says what it was made FROM, an original says what it
- * was folded INTO.
- */
-export type SmartPickSidecar = Partial<Pick<BacklogItem, "mergedFrom" | "mergedInto">>;
-
-export function intentToBacklogItem(i: Intent, review?: ReviewSidecar, pick?: SmartPickSidecar): BacklogItem {
+export function intentToBacklogItem(i: Intent, review?: ReviewSidecar): BacklogItem {
   const status: BacklogStatus =
     i.state === "done" ? "done"
       : i.state === "failed" || i.state === "canceled" ? "failed"
@@ -475,17 +469,20 @@ export function intentToBacklogItem(i: Intent, review?: ReviewSidecar, pick?: Sm
     resume: i.resume,
     // The item's own close-when-done answer; absent = follows the global.
     closeWhenDone: i.closeWhenDone,
+    flagWhenDone: i.flagWhenDone,
     // The budget the session it opens is born with; absent = none.
     budget: i.budget,
+    // The model the session it opens starts on (`Intent.launch`, 9dea53cd);
+    // absent = the new-session defaults.
+    launch: i.launch,
     // A COUNT, never the chain: the row shows "3 steps" and the steps themselves
     // stay on the host in full (`payload.steps`), where nothing clips them.
     // Absent for the ordinary one-turn item rather than a `1` on every row.
     steps: i.payload.kind === "prompt" && i.payload.steps.length > 1 ? i.payload.steps.length : undefined,
-    // A PERSON put this row where it is, so the row says so ("you placed this")
-    // and the smart pick sorts around it. A rule the user cannot see is a rule
+    // A PERSON put this row where it is, so the row says so ("you placed this"). A rule the user cannot see is a rule
     // they cannot trust, which is why this crosses the wire at all.
     handOrdered: i.handOrdered,
-    // What put this row here when it was not a person — `smartpick:<passId>`,
+    // What put this row here when it was not a person — `assess:<runId>`,
     // `retry:<id>`. Already capped at 40 chars by `cleanIntentRow`.
     origin: i.origin,
     // The CLOCK, on the one shape of row that has one and is still work
@@ -521,7 +518,6 @@ export function intentToBacklogItem(i: Intent, review?: ReviewSidecar, pick?: Sm
     category: i.category,
     categoryBy: i.categoryBy,
     ...review,
-    ...pick,
   };
 }
 
@@ -561,9 +557,15 @@ export function backlogDraft(p: {
   /** Close the session this item opens once done; absent follows the global
    *  setting (`Intent.closeWhenDone`). `false` is kept — it is an answer. */
   closeWhenDone?: boolean;
+  /** Flag the session for follow up once done (`Intent.flagWhenDone`); absent = off. */
+  flagWhenDone?: boolean;
   /** The budget the session this item opens is born with (`Intent.budget`).
    *  Meaningless on a row aimed at a live session, so it is dropped there. */
   budget?: SessionBudget;
+  /** The model/effort/backend the session this item opens starts with
+   *  (`Intent.launch`). Dropped on a row aimed at a live session, like the
+   *  budget: that session is already running whatever it runs. */
+  launch?: LaunchOpts;
   /**
    * The other half of *wait until it's free*, when the item is being created BY
    * a row that was ticked that way — a schedule, today (F14).
@@ -579,12 +581,15 @@ export function backlogDraft(p: {
    */
   holdForHost?: boolean;
   /** A waiver a person already gave (`Intent.pastBudget`), window and all —
-   *  carried by the two rows the HOST makes out of rows that had one: a
-   *  smart-pick merge and a recurring rule's child. */
+   *  carried by the row the HOST makes out of a row that had one: a
+   *  recurring rule's child. */
   pastBudget?: BudgetWaiver;
   /** The before-reset lift a recurring rule's occurrence carries
    *  (`Intent.budgetPass`, stamped by `workItemInherits`). */
   budgetPass?: BudgetPass;
+  /** A leftover of this reset week (`Intent.leftoverOf`) — host-written only;
+   *  `intent.post` strips it off the wire. */
+  leftoverOf?: number;
   /**
    * What to CALL the row, for the one caller that is making a row nobody typed:
    * an assessment posting a merge or a genuinely new item.
@@ -621,10 +626,13 @@ export function backlogDraft(p: {
     holdForHost: p.holdForHost || undefined,
     pastBudget: p.pastBudget,
     budgetPass: p.budgetPass,
+    leftoverOf: p.leftoverOf,
     pinned: p.autoFire || undefined,
     resume: p.resume || undefined,
     closeWhenDone: typeof p.closeWhenDone === "boolean" ? p.closeWhenDone : undefined,
+    flagWhenDone: p.flagWhenDone === true ? true : undefined,
     ...(p.budget && !p.targetSessionId ? { budget: p.budget } : {}),
+    ...(p.launch && !p.targetSessionId ? { launch: p.launch } : {}),
     label: p.label,
     order: p.order,
     // Pairwise or not at all, which is what `cleanIntentRow` would enforce on
@@ -675,15 +683,17 @@ export function backlogDraft(p: {
  * occurrence being fired — or the cap the parent was exempt from would hold
  * the work it was exempt for. Nothing for any other rule.
  */
-export function workItemInherits(i: Intent): { steps: readonly string[]; resume?: boolean; closeWhenDone?: boolean; budget?: SessionBudget; holdForHost?: boolean; pastBudget?: BudgetWaiver; budgetPass?: BudgetPass } {
+export function workItemInherits(i: Intent): { steps: readonly string[]; resume?: boolean; closeWhenDone?: boolean; flagWhenDone?: boolean; budget?: SessionBudget; launch?: LaunchOpts; holdForHost?: boolean; pastBudget?: BudgetWaiver; budgetPass?: BudgetPass } {
   return {
     steps: i.payload.kind === "prompt" ? i.payload.steps : [],
     resume: i.resume,
     // The rule said what becomes of the session each occurrence opens, and the
     // occurrence's ITEM is what opens it — so the answer travels with `resume`.
     closeWhenDone: i.closeWhenDone,
-    // …and so does the budget that session is born with.
+    flagWhenDone: i.flagWhenDone,
+    // …and so does the budget that session is born with, and its model.
     budget: i.budget,
+    launch: i.launch,
     holdForHost: i.holdForHost,
     pastBudget: i.pastBudget,
     budgetPass: i.trigger.kind === "at" && i.lastOccurrence != null

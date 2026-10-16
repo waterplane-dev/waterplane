@@ -1,7 +1,6 @@
 /**
- * The backlog's own persistence and boot: the config file (auto switch + smart
- * pick ticks), the legacy items-file migration, and the two switches that write
- * it. Split out of `BacklogManager` (move only): the methods are functions over
+ * The backlog's own persistence and boot: the config file (the auto switch),
+ * the legacy items-file migration, and the switch that writes it. Split out of `BacklogManager` (move only): the methods are functions over
  * `BacklogCore` now.
  */
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
@@ -35,14 +34,9 @@ export async function init(c: BacklogCore): Promise<void> {
   try {
     if (existsSync(c.autoPath)) {
       const cfg = readJsonGuarded<any>(c.autoPath, null) as BacklogConfig;
+      // Only `auto` is read: a `smartPick` key an older host wrote is ignored
+      // and dropped by the next `saveConfig`.
       c.auto = !!cfg?.auto;
-      // Absent is the old file, and the old file is every host that predates
-      // the feature: no repo has the tick, which is also the default.
-      for (const [cwd, v] of Object.entries(cfg?.smartPick ?? {})) {
-        if (!cwd) continue;
-        c.smartPickOn.add(cwd);
-        c.smartPickAt.set(cwd, Number(v?.setAt) || 0);
-      }
     }
   } catch { /* fresh */ }
   // The pre-per-repo global store, if a host this old is being upgraded: its
@@ -77,26 +71,16 @@ export function migrateFile(c: BacklogCore, path: string, repoDir: string | null
 /**
  * The whole config file, written at once.
  *
- * `saveAuto()` as was, renamed because it writes two things now — and it
- * writes them TOGETHER on purpose: a partial write of one key would drop the
- * other, and "the tick turned itself off when I toggled auto-fire" is the
- * exact failure a second writer of one file produces.
- *
- * **tmp+rename, for the same reason `SmartPickStore.persist` is.** This was a
- * bare `writeFileSync`, and a torn one is silent in exactly the worst way:
- * `init()` wraps the read in `try { … } catch { /* fresh *\/ }`, so half a JSON
- * document reads back as `auto: false` with no repo ticked — auto-fire OFF and
- * every smart-pick tick off, on the next boot, with nothing said. "Half a JSON
- * document where a backlog used to be" is this repo's recorded failure for
- * exactly this, and the file now holds two settings instead of one, which is
- * when a torn write costs most.
+ * **tmp+rename.** This was a bare `writeFileSync`, and a torn one is silent in
+ * exactly the worst way: `init()` wraps the read in `try { … } catch {
+ * /* fresh *\/ }`, so half a JSON document reads back as `auto: false` —
+ * auto-fire OFF on the next boot, with nothing said. "Half a JSON document
+ * where a backlog used to be" is this repo's recorded failure for exactly this.
  */
 export function saveConfig(c: BacklogCore): void {
   try {
     mkdirSync(hostStateDir(c.root), { recursive: true });
-    const smartPick: Record<string, { setAt: number }> = {};
-    for (const cwd of c.smartPickOn) smartPick[cwd] = { setAt: c.smartPickAt.get(cwd) ?? 0 };
-    const cfg: BacklogConfig = { auto: c.auto, ...(c.smartPickOn.size ? { smartPick } : {}) };
+    const cfg: BacklogConfig = { auto: c.auto };
     writeJsonAtomic(c.autoPath, cfg, { space: 2 });
   } catch { /* non-fatal */ }
 }
@@ -109,31 +93,3 @@ export function setAuto(c: BacklogCore, enabled: boolean): void {
   c.intents.kick();
   c.intents.emitChanged();
 }
-
-/**
- * Turn it on or off for one worktree.
- *
- * `cwd` has already been through `containRepoDir` (the route declares
- * `contain`), so the key stored here is the same realpath every `Intent.cwd`
- * carries — which is what makes the lookup above a plain `has`.
- *
- * It kicks, because turning it ON changes what the very next tick does with
- * this repo's ready rows, and turning it OFF frees anything the pass is
- * holding right now: a row blocked `picking` re-asks the ladder and, with the
- * dep now answering `null`, fires. Nothing has to wait out an in-flight pass
- * to be allowed to run again.
- */
-export function setSmartPick(c: BacklogCore, cwd: string, enabled: boolean): void {
-  if (enabled) {
-    if (c.smartPickOn.has(cwd)) return;
-    c.smartPickOn.add(cwd);
-    c.smartPickAt.set(cwd, Date.now());
-  } else {
-    if (!c.smartPickOn.delete(cwd)) return;
-    c.smartPickAt.delete(cwd);
-  }
-  saveConfig(c);
-  c.intents.kick();
-  c.intents.emitChanged();
-}
-

@@ -1,10 +1,10 @@
 /** Work the host is doing on the user's behalf: backlog items, builds, fan-out sweeps, downloads. */
 
-import type { AssessInput, AssessProposal } from "../assess.js";
+import type { AssessInput, AssessProposal, AssessScope } from "../assess.js";
 import type { ItemCategory, NameAuthor } from "../naming.js";
 import type { ScheduleRule } from "../schedule.js";
 import type { SessionBudget } from "../sessionbudget.js";
-import type { SmartPickOutcomeFacts } from "../smartpick.js";
+import type { LaunchOpts } from "./session.js";
 
 /** Backlog item — a queued instruction to fire at a session. */
 export type BacklogStatus = "queued" | "running" | "done" | "failed";
@@ -70,9 +70,15 @@ export interface BacklogItem {
    * never as off; `false` is an explicit "keep this one open".
    */
   closeWhenDone?: boolean;
+  /** "Flag for follow up when done" (`Intent.flagWhenDone`). Absent = off. */
+  flagWhenDone?: boolean;
   /** The budget the session this row opens is born with (`Intent.budget`).
    *  Absent = none. */
   budget?: SessionBudget;
+  /** The backend/model/effort the session this row opens starts on
+   *  (`Intent.launch`, picked in the Send sheet). Absent = the new-session
+   *  defaults. Additive: an older host never sends it. */
+  launch?: LaunchOpts;
   /**
    * How many turns the item carries — a COUNT, never the words.
    *
@@ -132,7 +138,7 @@ export interface BacklogItem {
   error?: string;
   /** Archived items are hidden from the default backlog view but kept for reference. */
   archived?: boolean;
-  /** Waits for a person's tap: auto-fire and the smart pick never start it
+  /** Waits for a person's tap: auto-fire never starts it
    *  (`Intent.manual`, an agent's backlog add). The row says so in
    *  `MANUAL_HOLD_TEXT`. */
   manual?: boolean;
@@ -157,31 +163,17 @@ export interface BacklogItem {
   validateSteps?: BacklogNextStep[];
   validatedAt?: number;
   /**
-   * This row was written by the smart pick out of these items, which are now
-   * archived with their own words intact.
-   *
-   * A COUNT on the row's chip ("merged from 3"), and the ids beside it, because
-   * **a count on a control is a filter**: the tap has to open exactly those
-   * three and not the unfiltered list for the reader to re-derive them from.
-   * Carrying the ids is the only way the chip can keep that promise.
-   */
-  mergedFrom?: string[];
-  /** The other side of the same fact, on an original: the merged row that now
-   *  stands in for it. Renders the "merged into …" chip, which is one tap back. */
-  mergedInto?: string;
-  /**
    * A person dragged this row to where it is.
    *
-   * The smart pick sorts AROUND a row carrying this and never through it — a
-   * drag is the one explicit act in the sheet, and a pass that quietly re-places
-   * it is the feature undoing a decision somebody made. On the wire because the
-   * row says so ("placed by you"): a rule the user cannot see is a rule they
-   * cannot trust.
+   * Nothing automatic re-places a row carrying this — a drag is the one
+   * explicit act in the sheet, and an assessment that pins its order writes the
+   * same mark. On the wire because the row says so ("placed by you"): a rule
+   * the user cannot see is a rule they cannot trust.
    */
   handOrdered?: boolean;
   /**
-   * What put this row here, when it was not a person — `smartpick:<passId>`,
-   * `assess:<runId>`. Capped on the host at 40 chars. Absent on everything
+   * What put this row here, when it was not a person — `assess:<runId>`,
+   * `agent`. Capped on the host at 40 chars. Absent on everything
    * somebody typed, which is the overwhelming majority.
    */
   origin?: string;
@@ -224,8 +216,7 @@ export interface BacklogItem {
    *
    * The host keeps the history (`IntentRequeue[]`, capped at `REQUEUE_KEEP`).
    * What travels is the newest entry plus `n`, how many there have been, and
-   * the reason is the rule this file already follows for `steps` and
-   * `mergedFrom`: a list every phone renders is a list every phone downloads,
+   * the reason is the rule this file already follows for `steps`: a list every phone renders is a list every phone downloads,
    * and the row itself says one sentence — "re-queued by the assessment, after
    * it failed: <the failure>". The older entries answer a question nobody asks
    * from the list; `n` is what says "this is the third time", which is the
@@ -259,47 +250,6 @@ export interface BacklogItem {
   requeued?: { at: number; by: "assess" | "hand" | "run"; n?: number; error?: string };
 }
 
-// ── Smart pick: the look a repo takes before its next item fires ────────────
-
-/**
- * What the last smart-pick pass for one repo did, as the strip under the repo
- * bar reads it.
- *
- * Every number here is measured or absent — never zero standing in for
- * "nobody said". `tokens` and `usd` come out of the `claude -p` envelope when it
- * carried them and are ABSENT when it did not, because a cost line that reads
- * `$0.00` for an unmeasured call is a wrong number, and CLAUDE.md's rule is that
- * heuristics degrade to absent rather than to a wrong number. The local-runner
- * engine reports neither, and says so by omitting both.
- *
- * `merged` and `mergedInto` are both kept: "merged 5 → 2" is not derivable from
- * either one on its own, and the sentence is the contract
- * (`smartpickOutcomeText`).
- *
- * The whole object is optional on `backlog.list` and absent until a pass has
- * ever run for the repo, so an old bundle that never asks for it renders exactly
- * what it rendered before.
- */
-export interface SmartPickSummary extends SmartPickOutcomeFacts {
-  passId: string;
-  /** When the pass finished (or gave up). */
-  at: number;
-  /** The model's own sentence about what it did. */
-  why?: string;
-  /** How many items the pass was shown. Items past the cap are not in it, and a
-   *  note says how many were not looked at. */
-  looked: number;
-  /** Every refusal the sanitiser made, one sentence each — the `details`
-   *  disclosure under the strip. */
-  notes: string[];
-  /** The model the pass actually ran on. Absent when the engine does not name
-   *  one. */
-  model?: string;
-  engine: "claude-p" | "openai-compat";
-  tokens?: { inTok: number; outTok: number; cacheRead: number; cacheWrite: number };
-  usd?: number;
-}
-
 /**
  * Verdict of an implementation check (CLI self-reports structured JSON).
  * "checking" = in flight; "questions" = done-ish but the agent has open questions.
@@ -328,7 +278,8 @@ export interface BacklogNextStep {
 /**
  * A named build command wired to a repo, runnable from the phone WITHOUT a
  * claude session — the token-limit escape hatch (still build an APK when you're
- * rate-limited). Persisted per-repo in <repoDir>/.waterplane/builds.json.
+ * rate-limited). Persisted per-repo in <repoDir>/.waterplane-shared/builds.json (committed) and
+ * <repoDir>/.waterplane/builds.json (this desktop only; same id = override) — see host `builds.ts`.
  */
 export interface BuildConfig {
   id: string;
@@ -564,6 +515,9 @@ export interface AssessRun {
    * already follows.
    */
   scopedIds?: string[];
+  /** **What `scopedIds` ARE**, when the run was a slot check (`AssessScope`) —
+   *  written at start for `scopedIds`' reason. Absent on every other run. */
+  scope?: AssessScope;
   /**
    * What was actually assessed — the document the host wrote for the CLI.
    *
@@ -706,6 +660,10 @@ export interface PullItem {
    *  The client drops those records and ABORTS one that is downloading — the
    *  bytes of a build that has already been rebuilt are worth nothing. */
   supersedes?: string[];
+  /** Fetched from this app-relative path instead of the repo's artifact route: a file a plugin
+   *  offered OUTSIDE every repo (`api.offerFile`, `/api/plugin-file/<id>/<token>`). Only ever on a
+   *  phone-local record; the host's own queue never sets it. */
+  src?: string;
 }
 
 // ── Fan-out (one prompt, N repos, a fresh session each) ──────────────

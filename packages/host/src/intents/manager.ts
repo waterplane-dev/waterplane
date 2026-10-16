@@ -185,6 +185,7 @@ export class IntentManager extends EventEmitter {
       pending: () => this.pending(),
       // disk
       persist: () => this.disk.persist(),
+      lastWriteError: () => this.disk.lastWriteError(),
       readOnly: () => this.disk.readOnly(),
       archive: (rows) => this.disk.archive(rows),
       chainFacts: () => this.disk.chainFacts(),
@@ -284,7 +285,7 @@ export class IntentManager extends EventEmitter {
     finally { this.ticking = false; }
   }
 
-  /** `pickhold.test.mjs` calls `store.pass()` — the body is `intents/ladder.ts`. */
+  /** `ladderpass.test.mjs` calls `store.pass()` — the body is `intents/ladder.ts`. */
   private pass(): Promise<void> { return this.ladder.pass(); }
 
   // ── Completion and restart reconciliation — delegations (`intents/watch.ts`) ──
@@ -296,7 +297,7 @@ export class IntentManager extends EventEmitter {
 
   // ── Firing — delegations (`intents/fire.ts`) ─────────────────────────────
   /** `requeue.test.mjs` calls `store.fire(row, {})`, and the core's `fire` arrow forwards here — the body is `intents/fire.ts`. */
-  private fire(row: Intent, opts: Parameters<FireSlice["fire"]>[1]): Promise<void> { return this.fireSlice.fire(row, opts); }
+  private fire(row: Intent, opts: Parameters<FireSlice["fire"]>[1]): Promise<string | void> { return this.fireSlice.fire(row, opts); }
   /** `backlogedit.test.mjs` calls `store.settle(…)`, and the core's `settle` arrow forwards here — the body is `intents/fire.ts`. */
   private settle(row: Intent, state: "done" | "failed" | "canceled", result: IntentResult, missing?: string[]): void { this.fireSlice.settle(row, state, result, missing); }
 
@@ -308,7 +309,8 @@ export class IntentManager extends EventEmitter {
   migrateFileAt(src: string, label: string, convert: (raw: unknown, now: number) => IntentDraft[]): void { this.disk.migrateFileAt(src, label, convert); }
   /** Write now, whatever a debounce would have said. Called on SIGTERM. */
   flush(): void { this.disk.flush(); }
-  /** `intents.json` at boot: the read-only sentence (a newer schema), and the feed row `main.ts` notifies (`intents/disk.ts`). */
+  /** `intents.json`: the read-only sentence (a newer schema), why the last write failed (null once one landed), and the boot feed row `main.ts` notifies (`intents/disk.ts`). */
   readOnly(): string | null { return this.disk.readOnly(); }
+  lastWriteError(): string | null { return this.disk.lastWriteError(); }
   storeNotice(): { title: string; body: string; tag: string } | null { return this.disk.storeNotice(); }
 }

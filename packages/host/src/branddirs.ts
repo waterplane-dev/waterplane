@@ -32,7 +32,8 @@ import { createHash } from "node:crypto";
 import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { BRAND, LEGACY, defaultRootOf, resolveEnv, rootPick, stateDirPick, type StateDirSource } from "@waterplane/shared";
+import { BRAND, LEGACY, defaultRootOf, resolveEnv, rootPick, stateDirPick, type RootPicked, type StateDirSource } from "@waterplane/shared";
+export type { RootPicked };
 
 /** What `adoptLegacyDir` did, for the boot log and for tests. */
 export interface AdoptResult {
@@ -202,6 +203,13 @@ export function repoStateDir(repo: string): string {
   return resolveExisting(c.current, c.legacy);
 }
 
+/** `<repo>/<shared dir>` — per-repo config meant to be COMMITTED with the checkout
+ *  (`builds.json`), beside the gitignored state dir. A new name with no legacy
+ *  spelling, so there is nothing to resolve: always the current name. */
+export function repoSharedDir(repo: string): string {
+  return join(repo, BRAND.sharedDirName);
+}
+
 /** The legacy state dirs this repo still has as real directories (not our own
  *  symlink back), newest first — what the setup row reports. */
 export function legacyRepoStateDirs(repo: string): string[] {
@@ -294,8 +302,9 @@ export const realRootFs: RootFs = {
 export interface RootChoice {
   root: string;
   defaulted: boolean;
-  /** `named` — the knob. `found` — an existing usual folder. `fallback` — none existed, `~/dev` assumed. */
-  picked: "named" | "found" | "fallback";
+  /** `named` — the knob. `chosen` — the person picked it (`rootchoice.ts`). `found` — an existing
+   *  usual folder. `fallback` — none existed, `~/dev` assumed. */
+  picked: RootPicked;
   /** The candidates looked at, in order (empty when the knob named the root). */
   tried: string[];
 }
@@ -328,10 +337,35 @@ export function pickCodeRoot(
     : { root: defaultRootOf(home), picked: "fallback", tried };
 }
 
-/** `<PREFIX>ROOT`, else the first usual code folder that exists (`pickCodeRoot`), else `~/dev`; absolute. `defaulted` = the knob was unset. */
-export function resolveRoot(e: NodeJS.ProcessEnv = process.env, home: string = homedir(), fs: RootFs = realRootFs): RootChoice {
+/** Running under WSL — the kernel says so. Read once; false anywhere `/proc` is not. */
+export const RUNNING_IN_WSL: boolean = process.platform === "linux" && (() => {
+  try { return /microsoft|wsl/i.test(readFileSync("/proc/version", "utf8")); } catch { return false; }
+})();
+
+/**
+ * A Windows path (`c:/dev`, `C:\dev`) as WSL mounts it (`/mnt/c/dev`); anything else unchanged.
+ * On Windows the host runs inside WSL from the Windows checkout, so the repo `.env` is shared by
+ * both sides and its `<PREFIX>ROOT` is naturally written the Windows way — which `resolve()` would
+ * otherwise turn into `<cwd>/c:/dev`, a folder nobody has.
+ */
+export function wslMountPath(p: string): string {
+  const m = /^([a-z]):(?:[\\/](.*))?$/i.exec(p.trim());
+  if (!m) return p;
+  const rest = (m[2] ?? "").replace(/\\/g, "/").replace(/\/+$/, "");
+  return `/mnt/${m[1].toLowerCase()}${rest ? `/${rest}` : ""}`;
+}
+
+/** `<PREFIX>ROOT`, else the folder the person chose (`chosen`, from `rootchoice.ts`), else the first
+ *  usual code folder that exists (`pickCodeRoot`), else `~/dev`; absolute. `defaulted` = nobody named
+ *  or chose it. Under WSL a Windows-style path is its `/mnt/<drive>` mount (`wslMountPath`). */
+export function resolveRoot(
+  e: NodeJS.ProcessEnv = process.env, home: string = homedir(), fs: RootFs = realRootFs, chosen?: string,
+  inWsl: boolean = RUNNING_IN_WSL,
+): RootChoice {
+  const abs = (p: string): string => resolve(inWsl ? wslMountPath(p) : p);
   const p = rootPick(e, home);
-  if (!p.defaulted) return { root: resolve(p.root), defaulted: false, picked: "named", tried: [] };
+  if (!p.defaulted) return { root: abs(p.root), defaulted: false, picked: "named", tried: [] };
+  if (chosen) return { root: abs(chosen), defaulted: false, picked: "chosen", tried: [] };
   const f = pickCodeRoot(home, fs);
   return { root: resolve(f.root), defaulted: true, picked: f.picked, tried: f.tried.map((t) => resolve(t)) };
 }
@@ -339,7 +373,7 @@ export function resolveRoot(e: NodeJS.ProcessEnv = process.env, home: string = h
 /** Where the daemon's global state belongs — `@waterplane/shared`'s `stateDirPick`, made absolute. Touches no disk. */
 export function resolveStateDir(e: NodeJS.ProcessEnv = process.env, home: string = homedir()): { dir: string; source: StateDirSource } {
   const p = stateDirPick(e, home);
-  return { dir: resolve(p.dir), source: p.source };
+  return { dir: resolve(RUNNING_IN_WSL ? wslMountPath(p.dir) : p.dir), source: p.source };
 }
 
 /** The note left at the old place when a symlink could not be. */

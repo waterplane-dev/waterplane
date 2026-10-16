@@ -29,8 +29,9 @@ export function matchesFilter(row: ActivityRow, filter: ActivityFilter): boolean
   return filter === "all" || row.bucket === filter;
 }
 
-/** How many rows each chip would show. A chip reading 0 is still drawn — the
- *  absence of failures is a fact worth stating on this screen. */
+/** How many rows each chip would show, zeros included: a 0 is no chip, it is
+ *  NAMED in the head's `nothing …` line (`activityChips`) — the absence of
+ *  failures is a fact worth stating on this screen. */
 export function activityCounts(rows: readonly ActivityRow[]): Record<ActivityFilter, number> {
   const out: Record<ActivityFilter, number> = {
     all: 0, needsYou: 0, failed: 0, running: 0, waiting: 0, scheduled: 0, done: 0, dismissed: 0,
@@ -48,19 +49,21 @@ export function activityCounts(rows: readonly ActivityRow[]): Record<ActivityFil
  *
  * `queueIdleReason`'s job, generalized past the send queue — and its lesson
  * kept: `null` means nothing is stuck, and the caller stays silent rather than
- * inventing reassurance.
+ * inventing reassurance. `cut` is the chip whose rows the number counted, so a
+ * tap on the sentence opens exactly those (a count is a filter) — one function
+ * for the number and the cut. `null` where no chip is that set (offline holds).
  */
-export function activityHeadline(all: readonly ActivityRow[], online: boolean): string | null {
+export function activityHeadlineCut(all: readonly ActivityRow[], online: boolean): { text: string; cut: ActivityFilter | null } | null {
   // A filed row has been dealt with, by definition. Counting it here would make
   // the standing sentence the one thing on the screen that never shrinks.
   const rows = all.filter((r) => r.dismissedAt == null);
   if (!online) {
     const held = rows.filter((r) => r.blockReason === "offline").length;
-    if (held) return `${held} ${held === 1 ? "thing is" : "things are"} still on this phone — nothing expires while the link is down`;
+    if (held) return { text: `${held} ${held === 1 ? "thing is" : "things are"} still on this phone — nothing expires while the link is down`, cut: null };
   }
   const needs = rows.filter((r) => r.bucket === "needsYou").length;
-  if (needs) return `${needs} ${needs === 1 ? "row needs" : "rows need"} a decision from you`;
+  if (needs) return { text: `${needs} ${needs === 1 ? "row needs" : "rows need"} a decision from you`, cut: "needsYou" };
   const failed = rows.filter((r) => r.bucket === "failed").length;
-  if (failed) return `${failed} ${failed === 1 ? "thing" : "things"} never ran`;
+  if (failed) return { text: `${failed} ${failed === 1 ? "thing" : "things"} never ran`, cut: "failed" };
   return null;
 }

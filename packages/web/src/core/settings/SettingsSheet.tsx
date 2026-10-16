@@ -36,10 +36,11 @@ import { core } from "../api.ts";
 import { featureSettingsRows } from "../settingsRows.ts";
 import { RISKY_PERM_MODES, RISKY_PERM_WARNING } from "./permModes.ts";
 import { setPref, usePref } from "../prefs.ts";
+import { SpendWarnRow } from "./SpendWarnRow.tsx";
 import { SheetHead } from "../../Sheet.tsx";
 import { SyncMark } from "../../SyncMark.tsx";
 import {
-  SetAction, SetCustom, SetFilterBar, SetGroup, SetPick, SetSearch, SetSwitch, SettingsScope, newSettingsTally,
+  SetAction, SetChoice, SetCustom, SetFilterBar, SetGroup, SetPick, SetSearch, SetSwitch, SettingsScope, newSettingsTally,
 } from "../../SettingsKit.tsx";
 import { CantInline, Unavailable } from "../../Unavailable.tsx";
 import { ModelField } from "../../ModelField.tsx";
@@ -195,6 +196,7 @@ function SessionRows({ pickBackend }: { pickBackend: SettingsSheetProps["pickBac
   const setLaunchOpt = c.launch.setOpt;
   const launchAsk = usePref("launchAsk");
   const closeWhenDone = usePref("closeWhenDone");
+  const localSessions = usePref("localSessions");
   return (
     <>
       {/* Rendered ONLY once this desktop has said what it can launch
@@ -328,13 +330,16 @@ function SessionRows({ pickBackend }: { pickBackend: SettingsSheetProps["pickBac
         more={<p>The answer applies to that session only — these defaults stay as they are. Resuming a conversation never asks: it keeps the launch it was recorded with.</p>}
       />
 
+      {/* Orange/red marks on a session's spend — the person's thresholds. */}
+      <SpendWarnRow />
+
       {/* **Automatic sessions stay open unless asked.** The session a fired
           backlog or scheduled item opens used to close itself once done; the
           person chose OFF as the default, with a per-row answer on the
           backlog that wins either way. Synced, and read by the HOST — the
           desktop is the one place it acts. */}
       <SetSwitch
-        id="close-when-done" label="Close automatic sessions when done" icon={DoorClosed}
+        id="close-when-done" label="close automatic sessions when done" icon={DoorClosed}
         on={closeWhenDone}
         onChange={() => { track("action:closeWhenDone.toggle"); setPref("closeWhenDone", !closeWhenDone); }}
         note={closeWhenDone
@@ -345,9 +350,38 @@ function SessionRows({ pickBackend }: { pickBackend: SettingsSheetProps["pickBac
           <p><b>Never closed by this.</b> Sessions you open yourself, the backlog's “open a session here”, one prompt sent to several repos, a launch you queued for later, and anything you reopened from “Recently closed”.</p>
           <p><b>What “done” means.</b> The turn has ended and the idle wait (10 minutes by default) has passed with nobody watching it on a phone, no background agent and no background shell still running under it. A session waiting on your answer is never closed.</p>
           <p><b>One item, its own answer.</b> Open a row on the backlog (or use the choice under “To” when you schedule one) to say “keep open” or “close when done” for that item only; it wins over this switch.</p>
-          <p><b>What a slot is.</b> The desktop runs at most 3 automatic sessions at the same time (the default; <code>{envName("BACKLOG_SESSIONS")}</code> on the desktop changes it). Each open “backlog ·” session holds one of those slots, whether it is working or finished and idle; the backlog's “open a session here” holds one too. Sessions you open yourself never do.</p>
+          <p><b>What a slot is.</b> The desktop runs at most 3 automatic sessions at the same time (the default; <code>{envName("BACKLOG_SESSIONS")}</code> on the desktop changes it). A “backlog ·” session holds one of those slots only while it is working (a turn running, a box waiting on you, a background shell or agent still going); finished and idle, it holds none, even left open. The backlog's “open a session here” counts the same way. Sessions you open yourself never do.</p>
           <p><b>Why there is a limit.</b> Every session is a real <code>claude</code> process on your desktop, using its memory and your account's usage. Without a limit, a desktop that comes back after a few days with a pile of due items would start them all inside a minute.</p>
-          <p><b>Why it matters with this switch off.</b> A finished session keeps its slot until you close it. Once all 3 are held, the next backlog or scheduled item does not start: it waits and says “waiting for a free slot”, with “close one to make room” listing exactly the sessions holding them. Turn this on, or set “close when done” on items you will not read, if you want queued work to keep flowing without you.</p>
+          <p><b>Leaving sessions open does not stop queued work.</b> With this switch off, finished sessions stay open for you to read, and the next backlog or scheduled item still starts as soon as fewer than 3 are working. When all 3 are working, it waits and says “waiting for a free slot”; a slot frees itself when one goes idle, and “close one to make room” lists the working ones if you want to stop one sooner.</p>
+        </>}
+      />
+
+      {/* **One local-model session working at a time, by default.** The
+          owner's rule: a local model is one GPU and one runner, so automatic
+          work waits for the local session that is mid-turn; a session you
+          start yourself is never refused, only told. Synced, read by the
+          HOST (`localslot.ts`); absent = the desktop's own default. */}
+      <SetChoice
+        id="local-sessions" label="local model sessions at once" icon={Cpu}
+        value={localSessions}
+        options={[
+          { value: "", label: "desktop default" },
+          { value: "1", label: "1" },
+          { value: "2", label: "2" },
+          { value: "3", label: "3" },
+          { value: "0", label: "no limit" },
+        ]}
+        onChange={(v) => { track("action:localSessions.set"); setPref("localSessions", v); }}
+        note={localSessions === "0"
+          ? <>No limit: automatic work on a local model starts whenever it is due, even while another local session is working.</>
+          : localSessions
+            ? <>At most {localSessions} session{localSessions === "1" ? "" : "s"} on a local model working at once. Queued work waits for the local model; one you start yourself still starts, and says so.</>
+            : <>The desktop's own setting — 1 unless <code>{envName("LOCAL_SESSIONS")}</code> says otherwise.</>}
+        more={<>
+          <p><b>What counts.</b> A session on a model that runs on this desktop (Claude Code on a local model, or another backend on a local model) while a turn is running. An open local session that is idle holds nothing.</p>
+          <p><b>What waits.</b> Backlog items, scheduled work, prompts an agent posted for later, and each repo of a sweep. Their row says “waiting for the local model — 1 local session is working”.</p>
+          <p><b>The model is loaded first.</b> Before queued work opens on a local model, the desktop loads that model on Ollama and waits for it. If Ollama is not running or does not have the model, the row says so and tries again; it never switches to another model.</p>
+          <p><b>Background helpers.</b> A summary or naming pass sent to the same local runner is skipped while a local coding session is working on a different model, so it cannot swap that model out mid-turn.</p>
         </>}
       />
 

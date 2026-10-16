@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 
 import {
   NEWIMG_CAP, annReturnOverlay, dropStrip, findInStrips, galleryCtxForFile, isViewable, isVideoPath, markedRef,
-  mergeNewImages, ocrBlock, outboxCut, parkLane, swapImageRef, trimNewImages,
+  mergeNewImages, newFilesToast, ocrBlock, outboxCut, parkLane, pasteRoute, swapImageRef, trimNewImages, viewableStrip,
 } from "./logic.ts";
 
 const im = (relPath, extra = {}) => ({ name: relPath.split("/").pop(), relPath, mtime: 1, ...extra });
@@ -98,4 +98,44 @@ test("text read off a photo goes in fenced and labelled, a fence inside it is ou
   assert.ok(b.includes("\n```\nError: boom\nat x\n```\n"));
   const nested = ocrBlock("see ```js\ncode\n```");
   assert.ok(nested.includes("\n````\nsee ```js"));
+});
+
+test("a pasted file goes to the session only from its own box or from nowhere editable", () => {
+  const base = { files: 1, editable: false, inCompose: false, sheet: false, annotating: false, repoId: "r" };
+  assert.equal(pasteRoute(base), "route");
+  assert.equal(pasteRoute({ ...base, editable: true, inCompose: true }), "route");
+  // The compose box takes it even with the annotator's column beside it…
+  assert.equal(pasteRoute({ ...base, editable: true, inCompose: true, sheet: true }), "route");
+  // …but another sheet's field, or a bare sheet, keeps its own attach route.
+  assert.equal(pasteRoute({ ...base, editable: true }), "ignore");
+  assert.equal(pasteRoute({ ...base, sheet: true }), "ignore");
+  // Text only, or no repo to put it in: the browser's own paste.
+  assert.equal(pasteRoute({ ...base, files: 0 }), "ignore");
+  assert.equal(pasteRoute({ ...base, repoId: null }), "ignore");
+  // A picture being marked is never replaced by the next paste: append or leave it.
+  assert.equal(pasteRoute({ ...base, inCompose: true, editable: true, annotating: true }), "ask");
+});
+
+test("a rewritten markdown file moves to the strip's end; a rewritten picture stays one thumb", () => {
+  const a = mergeNewImages(new Map(), "s", "r", [im("docs/a.md"), im("o/x.png"), im("docs/b.md", { changed: true })]);
+  const b = mergeNewImages(a, "s", "r", [im("docs/a.md", { mtime: 2, changed: true }), im("o/x.png", { mtime: 2 })]);
+  assert.deepEqual(b.get("s").map((x) => x.relPath), ["o/x.png", "docs/b.md", "docs/a.md"]);
+  // New to this strip's run, then rewritten: still new, not "edited".
+  assert.equal(b.get("s")[2].changed, undefined);
+  assert.equal(b.get("s")[2].mtime, 2);
+  const c = mergeNewImages(b, "s", "r", [im("docs/b.md", { mtime: 3, changed: true })]);
+  assert.equal(c.get("s")[2].changed, true);
+  // The same report twice is a no-op.
+  assert.deepEqual(mergeNewImages(c, "s", "r", [im("docs/b.md", { mtime: 3, changed: true })]).get("s"), c.get("s"));
+});
+
+test("the viewer swipes the strip's pictures only, and a notification finds its place among them", () => {
+  const strip = [im("docs/a.md"), im("o/x.png"), im("o/y.mp4")].map((x) => ({ ...x, repoId: "r" }));
+  assert.deepEqual(viewableStrip(strip).map((x) => x.relPath), ["o/x.png", "o/y.mp4"]);
+  assert.deepEqual(findInStrips(new Map([["s", strip]]), { repoId: "r", relPath: "o/x.png" }), { sessionId: "s", i: 0 });
+});
+
+test("a turn's toast counts pictures, new markdown and edited markdown apart", () => {
+  assert.equal(newFilesToast([im("a.png"), im("b.png")]), "2 new images");
+  assert.equal(newFilesToast([im("a.png"), im("n.md"), im("e.md", { changed: true })]), "1 new image · 1 new markdown · 1 markdown edited");
 });

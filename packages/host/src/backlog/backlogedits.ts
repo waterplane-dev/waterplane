@@ -3,7 +3,7 @@
  * of `BacklogManager` (move only): the methods are functions over `BacklogCore`.
  */
 import { randomUUID } from "node:crypto";
-import type { BacklogItem, BudgetPass, BudgetWaiver, IntentPatch, ItemCategory, SessionBudget } from "@waterplane/shared";
+import type { BacklogItem, BudgetPass, BudgetWaiver, Intent, IntentPatch, ItemCategory, LaunchOpts, SessionBudget } from "@waterplane/shared";
 import { backlogDraft, intentToBacklogItem } from "../intents/adapters.js";
 import type { BacklogCore } from "./backlogcore.js";
 import { backlogRows } from "./backlogstore.js";
@@ -20,7 +20,7 @@ import { backlogRows } from "./backlogstore.js";
  * taps sets it.
  */
 export function add(c: BacklogCore, text: string, repoDir: string, label?: string, targetSessionId?: string, autoFire?: boolean,
-  opts?: { steps?: readonly string[]; resume?: boolean; closeWhenDone?: boolean; budget?: SessionBudget; holdForHost?: boolean; pastBudget?: BudgetWaiver; budgetPass?: BudgetPass; origin?: string; id?: string; manual?: boolean }): BacklogItem {
+  opts?: { steps?: readonly string[]; resume?: boolean; closeWhenDone?: boolean; flagWhenDone?: boolean; budget?: SessionBudget; launch?: LaunchOpts; holdForHost?: boolean; pastBudget?: BudgetWaiver; budgetPass?: BudgetPass; origin?: string; id?: string; manual?: boolean }): BacklogItem {
   const now = Date.now();
   const orders = backlogRows(c).filter((i) => i.cwd === repoDir).map((i) => i.order ?? i.createdAt);
   // Newest on top (a smaller `order` than everything in this repo), EXCEPT an
@@ -33,7 +33,7 @@ export function add(c: BacklogCore, text: string, repoDir: string, label?: strin
     // A caller-minted id (the agent route's `agent-<key>`) makes the add
     // at-most-once in the STORE: `post()` answers an id it holds with that row.
     id: opts?.id ?? randomUUID().slice(0, 8), cwd: repoDir, text, label, targetSessionId, autoFire, order,
-    steps: opts?.steps, resume: opts?.resume, closeWhenDone: opts?.closeWhenDone, budget: opts?.budget, holdForHost: opts?.holdForHost,
+    steps: opts?.steps, resume: opts?.resume, closeWhenDone: opts?.closeWhenDone, flagWhenDone: opts?.flagWhenDone, budget: opts?.budget, launch: opts?.launch, holdForHost: opts?.holdForHost,
     pastBudget: opts?.pastBudget, budgetPass: opts?.budgetPass,
   });
   // What put this row here, when it was not a person. The only caller that
@@ -83,6 +83,10 @@ export type BacklogUpdatePatch = {
    *  through `edit()` like the name: not an edit to the work, so it never
    *  re-queues the row and is allowed while it runs. */
   closeWhenDone?: boolean | null;
+  /** Flag the session for follow up when done: `true` sets, `false`/`null` clears. Through `edit()` like closeWhenDone. */
+  flagWhenDone?: boolean | null;
+  /** The cap the session this row opens is born with: `null` clears. Already cleaned (`cleanSessionBudget`) — never the raw wire shape. Queued/blocked rows only. */
+  budget?: SessionBudget | null;
   /** A title a person typed, or `""` to clear it. `edit()`'s field and
    *  `edit()`'s rules — see there for what clearing means. */
   headline?: string;
@@ -125,12 +129,18 @@ export function update(c: BacklogCore, id: string, patch: BacklogUpdatePatch): {
   if (patch.closeWhenDone === true || patch.closeWhenDone === false || patch.closeWhenDone === null) {
     c.intents.edit(id, { closeWhenDone: patch.closeWhenDone });
   }
+  if (patch.flagWhenDone === true || patch.flagWhenDone === false || patch.flagWhenDone === null) {
+    c.intents.edit(id, { flagWhenDone: patch.flagWhenDone });
+  }
+  // Through `edit()` like the flag, but its refusal (a row that already started) is SAID.
+  const budgetRefused = patch.budget === undefined ? undefined : c.intents.edit(id, { budget: patch.budget }).refused;
   // The half a person typed that this app would not write is carried back to
   // the caller so it can be SAID. It is not an error and it stops nothing —
   // the rest of this patch lands exactly as it would have — but a title that
   // is dropped without a sentence is typed words lost in silence, which is
   // the one thing `edit()` must never do.
-  const refused = Object.keys(names).length ? c.intents.edit(id, names).refused : undefined;
+  const nameRefused = Object.keys(names).length ? c.intents.edit(id, names).refused : undefined;
+  const refused = [nameRefused, budgetRefused].filter((s): s is string => !!s).join(" · ") || undefined;
   const said = (): { refused?: string } => (refused ? { refused } : {});
 
   // What is left once the name is dealt with. A patch that named nothing else
@@ -211,14 +221,34 @@ export function swap(c: BacklogCore, idA: string, idB: string): void {
   c.intents.edit(idB, { order: oa, handOrdered: true });
 }
 
-/** Apply an explicit top-to-bottom order (drag and drop). Renumbered 0..n in
- *  the given sequence; anything unlisted keeps its position. */
-export function reorder(c: BacklogCore, ids: string[]): void {
+/** The two store verbs `reorder` needs — narrow so the assessment's approved
+ *  slot order (`assess/hassapply.ts`) is the drag's own verb, not a copy. */
+export interface OrderStore {
+  get(id: string): Intent | undefined;
+  edit(id: string, patch: { order: number; handOrdered: true }): unknown;
+}
+
+/**
+ * Apply an explicit top-to-bottom order to the LISTED rows (a drag, or an
+ * agent asked to by the person). The listed rows trade their own slots — the
+ * sorted set of their `order ?? createdAt` — so a row that is not listed keeps
+ * its seat relative to all of them. That is what makes a drag inside a
+ * filtered cut (the *on a clock* group, a search) safe: it used to renumber
+ * the subset 0..n, which seated it ahead of every row off screen, so a drag
+ * was refused whenever anything was filtered — exactly where seven items on
+ * one reset are gathered to be put in order. Given the whole list, the result
+ * is the old one.
+ */
+export function reorder(c: { intents: OrderStore }, ids: string[]): void {
+  const rows = [...new Set(ids)].map((id) => c.intents.get(id)).filter((r): r is NonNullable<typeof r> => !!r);
+  const slots = rows.map((r) => r.order ?? r.createdAt).sort((a, b) => a - b);
+  // Two rows on one slot would leave their order to the sort's stability.
+  for (let i = 1; i < slots.length; i++) if (slots[i] <= slots[i - 1]) slots[i] = slots[i - 1] + 0.001;
   // Every id in the list, not just the one that moved: the client sends the
   // whole display order, and a person who dragged one row past four others
   // has placed all five — the four are where they are BECAUSE that drag put
   // them there, and marking only the moved row would leave the rest free for
   // an automatic sort to shuffle back under it.
-  ids.forEach((id, i) => c.intents.edit(id, { order: i, handOrdered: true }));
+  rows.forEach((r, i) => c.intents.edit(r.id, { order: slots[i], handOrdered: true }));
 }
 

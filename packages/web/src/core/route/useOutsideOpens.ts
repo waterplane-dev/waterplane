@@ -4,6 +4,8 @@ import { setRepoNamer, startDownload } from "../../download";
 import { viewerHandles } from "../../docKind";
 import { onServiceWorkerPullMessage } from "../../pull";
 import { onShellOpenSession } from "../../shellLink";
+import { openPluginFromNotification } from "../extensionPoints";
+import { shellOpenTarget } from "./shellOpenTarget";
 import { openArtifact, viewImage } from "../../features/images";
 import type { Route } from "./useRoute";
 import type { TermFeed } from "../term/useTermFeed";
@@ -40,12 +42,12 @@ export function useOutsideOpens(ctx: UseOutsideOpensCtx) {
   // the queue is already running — the notification's whole promise is that the
   // file ends up on the phone.
   useEffect(() => {
-    if (!initRoute.file) return;
     // ...unless it is a file this app can SHOW, in which case the boot state
     // above already opened the viewer on it and a background transfer of
     // something you are looking at is not what the tap asked for.
-    if (viewerHandles(initRoute.file.relPath)) return;
-    startDownload(initRoute.file);
+    if (initRoute.file && !viewerHandles(initRoute.file.relPath)) startDownload(initRoute.file);
+    // Same errand for a plugin's alert: `sw.js` put `plugin=<id>` in the hash.
+    if (initRoute.plugin) openPluginFromNotification(initRoute.plugin);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- cold-tap download fires once at mount from the initial route
   }, []);
 
@@ -71,11 +73,13 @@ export function useOutsideOpens(ctx: UseOutsideOpensCtx) {
         const s = sessions.find((x) => x.id === e.data.sessionId);
         if (s) attach(s);
         viewImage(e.data.image as { repoId: string; relPath: string }, e.data.sessionId);
+      } else if (e.data?.type === "open-plugin" && typeof e.data.plugin === "string") {
+        openPluginFromNotification(e.data.plugin);
       }
     };
     navigator.serviceWorker.addEventListener("message", h);
     return () => navigator.serviceWorker.removeEventListener("message", h);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-bound on `sessions` for the lookup; `attach` and `setOverlay` are fine at that render's closure
   }, [sessions]);
 
   // The same errand in the APK, which has no service worker at all: a tapped
@@ -91,6 +95,9 @@ export function useOutsideOpens(ctx: UseOutsideOpensCtx) {
   const shellWantRef = useRef<string | null>(null);
   const [shellWant, setShellWant] = useState<string | null>(null);
   useEffect(() => onShellOpenSession((sessionId) => {
+    // `plugin:<id>` is a plugin's alert, not a session (see `shellOpenTarget`): no list to wait for.
+    const target = shellOpenTarget(sessionId);
+    if ("plugin" in target) { openPluginFromNotification(target.plugin); return; }
     shellWantRef.current = sessionId;
     setShellWant(sessionId);
   }), []);
@@ -102,6 +109,6 @@ export function useOutsideOpens(ctx: UseOutsideOpensCtx) {
     shellWantRef.current = null;
     setShellWant(null);
     attach(s);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the parked id is read from `shellWantRef`; `attach` must not re-trigger a navigation
   }, [sessions, shellWant]);
 }

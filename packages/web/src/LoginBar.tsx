@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Copy, ExternalLink, KeyRound, ClipboardPaste, ChevronDown, ChevronUp } from "lucide-react";
 import type { SessionLogin } from "@waterplane/shared";
 import { ago } from "./format";
+import { Stowable, StowButton } from "./Stowable";
 
 /**
  * Signing in, from a phone.
@@ -38,12 +39,14 @@ export function LoginBar({ login, onOpen, onCopy, onPasteCode }: {
 }) {
   const [showUrl, setShowUrl] = useState(false);
   return (
+    <Stowable slot="login" stowKey={`${login.url}\n${login.awaitingCode ? "await" : ""}`} label="sign-in link" icon={KeyRound}>
     <div className="approve login">
       <div className="login-head">
         <span className="login-title"><KeyRound size={14} /> sign-in link</span>
         {/* A login URL expires. "Nine minutes ago" is the difference between a
             page that signs you in and one that refuses for no stated reason. */}
         <span className="login-age" title="when the CLI printed this link">{ago(login.at)}</span>
+        <StowButton />
       </div>
       <div className="approve-opts">
         <button className="approve-btn primary" onClick={() => onOpen(login.url)}>
@@ -68,5 +71,6 @@ export function LoginBar({ login, onOpen, onCopy, onPasteCode }: {
       )}
       {showUrl && <div className="login-url mono">{login.url}</div>}
     </div>
+    </Stowable>
   );
 }

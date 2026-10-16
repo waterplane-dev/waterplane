@@ -105,7 +105,7 @@ The chrome around whatever is on screen: theme, routing and Back, the link store
   *waiting on you* and *at the limit* as the same grey dot as *nothing left to do*. **A running turn
   SPINS** — `statusPill`'s own `Loader`, only while a turn runs, only on tabs running one, stilled by
   `prefers-reduced-motion` into a spoked RING that is still not a dot.
-  **How many fit is a setting and NOT a limit** (`--stab-n` sizes a tab to `1/N`; the rest scroll,
+  **How many fit is a setting and NOT a limit** (`--stab-n` is a tab's floor, `1/N`; fewer open, a tab is as wide as its name; the rest scroll,
   the active one is scrolled into view) — per device with `netPulse`'s argument, because three tabs
   is a measurement of THIS screen; **default 3 because the names are up to FOUR words**. **How many
   are DRAWN is a second setting that IS a limit** (`tabsLimit`, default 10, `limitTabs` pure/tested):
@@ -114,9 +114,9 @@ The chrome around whatever is on screen: theme, routing and Back, the link store
   that MOVES under you — and the DEFAULT, by the owner's ask), and **the tie-break is always the open sequence** or tabs swap places on a publish that
   changed nothing. The store is `{n, at}` per session, ONE store for both orders, `migrateOpens`
   converting the old bare count rather than dropping it (**no instant reads as longest-ago, never as
-  just-now**); bumped in `attach` (every route in goes through it), **pruned on publish but NEVER
+  just-now**); bumped when a session COMES ON SCREEN (`openOwed`, off the published active id — Back, hash, `session.focus` and a create all skip `attach`), **pruned on publish but NEVER
   against an empty session list** (a cold start and a dead tunnel look identical). **The × asks**
-  (`Confirm.tsx`) and archives — never `window.confirm`. **Nothing to show ⇒ nothing drawn**, height
+  (`Confirm.tsx`) and archives. **Nothing to show ⇒ nothing drawn**, height
   published as 0. `tabLabel` is the one label rule: the host's ≤4-word `tabTitle`, else the title with
   the repo prefix cut, never blank and never invented — and the SESSION HEADER draws that name in
   FULL (`.brand-name`, wrapping, `Sparkles`), INLINE beside the branch, which is what four words are
@@ -208,6 +208,10 @@ The chrome around whatever is on screen: theme, routing and Back, the link store
   `backlogFilter.ts`'s age/status pair uses). A full `Sheet` reached via `useBackStep`, never a route of
   its own. The list under the chips is the actual rows (`SessionFacts`) with a per-row "keep" toggle; the
   foot sends `session.remove` once per row still in and says `close N · stops M background shells`
-  before it stops them — CLAUDE.md's "closing a session stops its shells, fully". `N = 0` is a sentence,
+  before it stops them — "closing a session stops its shells, fully" (web.md; not in CLAUDE.md). `N = 0` is a sentence,
   never a dimmed button. A session a TIMED prompt is aimed at starts KEPT (`isKept`: there `kept` is the
   override) and `timedKeptNote` says so — never silently spared. Reasoning: [web.md](docs/notes/web.md#the-close-sheet-facets-that-combine-replacing-five-single-cut-buttons).
+- `Stowable.tsx` + `stow.ts` — **a strip above the prompt bar FOLDS, never closes.** Wrap it in `Stowable`
+  (slot + `stowKey` = its CONTENT, so new content unfolds by itself) and put `<StowButton />` in its head;
+  the chip rides the session status line (`StowTray`), no row of its own. Used by `ShellLinksBar`,
+  `LoginBar`, `NextPrompt`. Reasoning: [web.md](docs/notes/web.md#a-strip-above-the-prompt-bar-folds-it-never-closes-stowabletsx--stowts).

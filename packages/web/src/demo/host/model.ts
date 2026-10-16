@@ -70,7 +70,12 @@ export type DemoStep =
    *  (`/api/repos/<id>/artifacts`, the badge count), and — as the real host's
    *  turn-end scan does — `session.images` to the session's strip plus an
    *  `image` notification. The bytes are bundled media (`demo/media.ts`). */
-  | { kind: "artifact"; sessionId?: string; repoId: string; relPath: string; size: number };
+  | { kind: "artifact"; sessionId?: string; repoId: string; relPath: string; size: number }
+  /** A deliverable that is not a picture (an APK, a zip) lands in a repo's outbox: into the gallery
+   *  and its badge, and — as the real host's turn-end scan words it (`server/sessionEvents.ts`) —
+   *  one `artifact` notification, "Outbox: <name>", whose tap downloads it. No bytes are bundled:
+   *  the demo has no build to hand over, and its transport says so if one is asked for. */
+  | { kind: "deliverable"; sessionId?: string; repoId: string; relPath: string; size: number };
 
 /** The per-turn figures a scenario states for the reader (`DemoStep` `facts`). */
 export type DemoTurnFacts = Pick<TranscriptTurn,
@@ -139,7 +144,9 @@ export interface DemoModel {
   sent?: Frame<"sent.log">["entries"];
   pulls?: Frame<"pull.list">["items"];
   install?: Frame<"install.log">["doc"];
-  /** Every number is optional; absent means its frame is not sent. */
+  /** Every number is optional; absent means its frame is not sent — except `usage`: the app asks for it
+   *  on every screen change and shows "?" in its header without it, so the host seeds a default one
+   *  (`demoUsage`) when the scenario carries none. */
   numbers?: {
     usage?: Frame<"usage.status">["usage"];
     meter?: Frame<"meter.status">["summary"];

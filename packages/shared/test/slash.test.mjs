@@ -21,6 +21,15 @@ test("the usage view and both of the CLI's aliases for it are local", () => {
   }
 });
 
+test("settings applied in place are local — /effort high started no turn", () => {
+  // Reported from a phone: `/effort high` printed "Set effort level to high",
+  // and the delivery still came back `unsubmitted` after five Returns.
+  for (const c of ["/effort high", "/fast", "/theme"]) {
+    assert.equal(isLocalCommand(c), true, c);
+    assert.equal(startsNoTurn(c), true, c);
+  }
+});
+
 test("arguments do not change what a command IS", () => {
   assert.equal(isLocalCommand("/resume some-session-id"), true);
   assert.equal(isLocalCommand("  /context  "), true);

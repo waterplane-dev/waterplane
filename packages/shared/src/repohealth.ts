@@ -35,7 +35,7 @@
  * It states paths, shapes and sentences. The refresh, the write and the
  * refusal to overwrite are the host's.
  */
-import { stateRel } from "./brand.js";
+import { sharedRel, stateRel } from "./brand.js";
 
 /** The tool, from a repo root — the one spelling of the path that runs it.
  *  It is where a repo's OWN copy lives and where the desktop's bundled engine
@@ -238,9 +238,23 @@ export interface RepoHealthReading {
   reason?: string;
 }
 
+/**
+ * Whose reading a series is. `central`: the engine's own — waterplane's,
+ * measured the same way in every repo, and the only readings the health index
+ * is built from. `repo`: one the repo declares about itself in
+ * `REPOHEALTH_OWN_FILE` — drawn beside, never inside, the index. The value is
+ * `central` and not the product's name so a rename never changes the wire;
+ * the phone words it with `BRAND.displayName`.
+ */
+export type RepoHealthSource = "central" | "repo";
+
 export interface RepoHealthPlotSeries {
   /** `size.p95`, `retouch.rate`, … — the tool's own key, never re-derived. */
   key: string;
+  /** Whose reading this is. Every entry of `RepoHealthPlot.series` is
+   *  `central` (an engine older than the field is read as that, which is what
+   *  it was); every entry of `RepoHealthPlot.own.series` is `repo`. */
+  source: RepoHealthSource;
   /** A noun phrase that reads as the subject of "…is now". Printed verbatim. */
   label: string;
   /** Appended to a value; `""` for a dimensionless rate. */
@@ -255,6 +269,44 @@ export interface RepoHealthPlotSeries {
   /** Set when the family read NOTHING on the latest day, carrying the metric's
    *  own reason. An absent family is never drawn as zeros. */
   absent?: string;
+  /**
+   * The repo DISABLED or OVERRODE the index entry this series draws, in its
+   * committed `health.json` (`central`), as of the latest day. Only ever on a
+   * `central` series. Absent = the engine's own reading, as everywhere else.
+   */
+  variant?: RepoHealthVariant;
+}
+
+/**
+ * A repo's say over one central reading (`tools/repohealth/central.mjs`).
+ *
+ * - `disabled`: the series is still measured and drawn, but it is out of the
+ *   health index; `why` is the repo's sentence, attributed to the repo.
+ * - `override`: the index reads the REPO's command instead. `points` is its
+ *   own series, index for index with the series' days, non-null only on days
+ *   that ran the same command — it runs at HEAD only, so it has no history
+ *   before `since` (its first measurement), and the index carried the link
+ *   into it. `unit` is the central unit the command was asked to print;
+ *   `absent` is today's failure, in the run's own words.
+ */
+export type RepoHealthVariant =
+  | { kind: "disabled"; why: string }
+  | {
+      kind: "override";
+      why: string;
+      means: string;
+      unit: string;
+      points: RepoHealthPoint[];
+      last: number | null;
+      since: string | null;
+      absent?: string;
+    };
+
+/** The `central` block of `health.json` as the plot saw it: the file, and the
+ *  entries it ignored with the reason (no `why`, an unknown key, …). */
+export interface RepoHealthPlotCentral {
+  file: string;
+  problems?: string[];
 }
 
 /** One area's always-on context weight, latest day. Every number is nullable
@@ -371,6 +423,36 @@ export interface RepoHealthLongest {
   day: string | null;
 }
 
+/** Where a repo declares its own readings, repo-relative and COMMITTED. The
+ *  engine's `tools/repohealth/own.mjs` names the same path. */
+export const REPOHEALTH_OWN_FILE = sharedRel("health.json");
+
+/** One of the repo's own readings: a series like any other, plus the repo's
+ *  own sentence for it and the direction the repo says it wants. */
+export interface RepoHealthOwnSeries extends RepoHealthPlotSeries {
+  source: "repo";
+  /** The declaration's `means`: what it counts and why it matters here. */
+  means: string;
+  /** The declaration's `better`, attributed to the repo — never the engine's
+   *  opinion. Null where the declaration's own field was not one of the two. */
+  better: "lower" | "higher" | null;
+}
+
+/**
+ * The repo's own readings. `declared` is whether HEAD's tree holds the file;
+ * `absent` says why there is nothing to draw where something was declared (a
+ * refused file, or not measured yet); `problems` are entries that could not
+ * even be keyed. Absent from the plot under a scope, and from an engine older
+ * than the field — a phone then says nothing about own readings at all.
+ */
+export interface RepoHealthPlotOwn {
+  file: string;
+  declared: boolean;
+  series: RepoHealthOwnSeries[];
+  absent?: string;
+  problems?: string[];
+}
+
 export interface RepoHealthPlot {
   /**
    * The subtree these readings are of, or null for the whole repo.
@@ -396,6 +478,11 @@ export interface RepoHealthPlot {
   /** Absent on a host or a tool older than the field — the sheet then draws
    *  the column and the name it has, never a blank it presents as a reading. */
   longest?: RepoHealthLongest;
+  /** The repo's OWN readings, apart from `series` — see `RepoHealthPlotOwn`. */
+  own?: RepoHealthPlotOwn;
+  /** Present when the latest row carries the repo's `central` block — see
+   *  `RepoHealthVariant` for what it did to each series. */
+  central?: RepoHealthPlotCentral;
 }
 
 /** Everything a repo row and its sheet need, in one read. */

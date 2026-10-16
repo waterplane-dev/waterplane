@@ -88,6 +88,10 @@ export interface NativePullRow {
   item?: PullItem;
   /** "Later" on the ready-to-install notification. Absent when not put off. */
   installSnoozedUntil?: number;
+  /** The clean-up after an install deleted this row's APK (`cleanAfterInstall`). */
+  cleanedAt?: number;
+  cleanedBytes?: number;
+  cleanNote?: string;
 }
 
 interface Handle { remove(): void }

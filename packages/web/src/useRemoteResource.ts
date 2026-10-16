@@ -32,6 +32,10 @@ import { isOffline } from "./api";
 import { agoText } from "./format";
 import { linkOnline } from "./link";
 
+/** How long a cache read may hold up the live one. IndexedDB answers in a few
+ *  ms when it works; past this it is not going to, and the host is the answer. */
+const CACHE_WAIT_MS = 1500;
+
 export type ResourceState = "loading" | "fresh" | "cached" | "error" | "offline";
 
 export interface RemoteResource<T> {
@@ -90,10 +94,17 @@ export interface RemoteResourceOpts<T> {
  *              away from is dropped instead of painting over the new one.
  * @param fetcher Performs the read. Should reject on transport failure and
  *              throw on a refusal — the two are told apart by `isOffline`.
+ *              Gets a signal that aborts once the read is superseded (key
+ *              change, reload, unmount, the link flipping) — pass it to the
+ *              request. A dropped answer whose request still runs holds a
+ *              connection for up to its whole fuse, and the APK reaches the
+ *              host over plain HTTP/1.1: six such orphans are every socket the
+ *              WebView will open to it, and the transcript and every other
+ *              read queue behind them ("loading files +6 · 18s").
  */
 export function useRemoteResource<T>(
   key: string,
-  fetcher: () => Promise<T>,
+  fetcher: (signal: AbortSignal) => Promise<T>,
   opts: RemoteResourceOpts<T> = {},
 ): RemoteResource<T> {
   // Default to the store's ONE online fact rather than making every caller
@@ -131,6 +142,7 @@ export function useRemoteResource<T>(
     liveKey.current = key;
     if (!enabled) return;
     let cancelled = false;
+    const ac = new AbortController();
     const mine = key;
     const stillMine = () => !cancelled && liveKey.current === mine;
 
@@ -140,7 +152,14 @@ export function useRemoteResource<T>(
         // Cache first, always. Painting a stale list labelled stale beats an
         // empty one, and on the link this app is for the live read may never
         // arrive at all.
-        const cached = await cacheRef.current.fromCache?.().catch(() => null);
+        // Bounded: the cache is a courtesy, and a read that never settles (an
+        // IndexedDB open the WebView never answers) must not hold the LIVE read
+        // hostage — that was a Files sheet saying "Reading this folder…" for
+        // ever while the host answered the same request in 65 ms.
+        const cached = await Promise.race([
+          cacheRef.current.fromCache?.().catch(() => null) ?? null,
+          new Promise<null>((r) => setTimeout(() => r(null), CACHE_WAIT_MS)),
+        ]);
         if (cached && stillMine()) {
           setData(cached.value);
           setAge(Date.now() - cached.savedAt);
@@ -151,7 +170,7 @@ export function useRemoteResource<T>(
           return;
         }
         try {
-          const live = await fetcherRef.current();
+          const live = await fetcherRef.current(ac.signal);
           if (!stillMine()) return;
           setData(live);
           setAge(null);
@@ -174,7 +193,7 @@ export function useRemoteResource<T>(
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => { cancelled = true; ac.abort(); };
   }, [key, enabled, forcedOffline, nonce]);
 
   return { data, state, age, error, inflight: busy > 0, reload, set: setData };

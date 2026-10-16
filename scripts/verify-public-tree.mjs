@@ -6,7 +6,8 @@
 // --drop-only, only the private extension folders — the allow-list's `!packages/extensions/<id>/**`
 // carve-outs), then runs, in the copy, the steps `verifySteps()` lists (public-lib.mjs):
 //
-//   npm ci && npm run build && npm run lint && npm run test:unit && npm run test:host   [&& node scripts/run-e2e.mjs <filters>]
+//   npm ci && npm run build && npm run release:build -- --unsigned && (check the .tgz) && npm run lint && npm run test:unit && npm run test:host   [&& node scripts/run-e2e.mjs <filters>]
+// (release:build is the step the public repo's npm-publish workflow runs on the tag: rehearsed here, before the undraft.)
 //
 // `npm ci` is a REAL install from the copy's own package.json + package-lock.json + .npmrc, never
 // this checkout's node_modules: a lockfile that still names a private package, or a dependency

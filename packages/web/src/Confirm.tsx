@@ -131,7 +131,13 @@ interface Ask {
   /** `info` for an explanation before a permission, which is not a warning and
    *  must not wear the red triangle. */
   tone: "warn" | "info";
-  resolve: (ok: boolean) => void;
+  /** A "don't ask again" box under the question, worded by the caller; absent = none. */
+  rememberLabel?: string;
+  /** A third answer, drawn under the other two (`askChoice` only); absent = none. */
+  altLabel?: string;
+  /** `dismissed` = no button was pressed (backdrop, a second ask); `alt` = the
+   *  third button was. */
+  resolve: (ok: boolean, remember: boolean, dismissed: boolean, alt?: boolean) => void;
 }
 
 let pending: Ask | null = null;
@@ -150,7 +156,7 @@ function emitAsk(): void { for (const fn of askListeners) fn(pending); }
 export function askConfirm(opts: {
   title: string; lines?: string[]; confirmLabel?: string; cancelLabel?: string; tone?: "warn" | "info";
 }): Promise<boolean> {
-  pending?.resolve(false);
+  pending?.resolve(false, false, true);
   return new Promise<boolean>((resolve) => {
     pending = {
       title: opts.title, lines: opts.lines ?? [], confirmLabel: opts.confirmLabel ?? "Yes",
@@ -160,26 +166,72 @@ export function askConfirm(opts: {
   });
 }
 
+/**
+ * `askConfirm` with a "don't ask again" box: resolves the answer AND whether the
+ * box was ticked. Dismissing (backdrop, a second ask) is never remembered — the
+ * person did not answer, so there is nothing to keep.
+ */
+export function askConfirmRemember(opts: {
+  title: string; lines?: string[]; confirmLabel?: string; cancelLabel?: string; tone?: "warn" | "info";
+  rememberLabel?: string;
+}): Promise<{ ok: boolean; remember: boolean }> {
+  pending?.resolve(false, false, true);
+  return new Promise((resolve) => {
+    pending = {
+      title: opts.title, lines: opts.lines ?? [], confirmLabel: opts.confirmLabel ?? "Yes",
+      cancelLabel: opts.cancelLabel ?? "Cancel", tone: opts.tone ?? "info",
+      rememberLabel: opts.rememberLabel ?? "don't ask again",
+      resolve: (ok, remember) => resolve({ ok, remember }),
+    };
+    emitAsk();
+  });
+}
+
+/**
+ * A choice between two ANSWERS, neither of which is "cancel" — so a dismissal
+ * (backdrop, a second ask) is its own result, `null`, and never read as the
+ * second button. With a "don't ask again" box when `rememberLabel` is given,
+ * and a third answer when `altLabel` is (`alt: true`, `ok: false`).
+ */
+export function askChoice(opts: {
+  title: string; lines?: string[]; confirmLabel: string; cancelLabel: string; tone?: "warn" | "info";
+  rememberLabel?: string; altLabel?: string;
+}): Promise<{ ok: boolean; remember: boolean; alt?: boolean } | null> {
+  pending?.resolve(false, false, true);
+  return new Promise((resolve) => {
+    pending = {
+      title: opts.title, lines: opts.lines ?? [], confirmLabel: opts.confirmLabel,
+      cancelLabel: opts.cancelLabel, tone: opts.tone ?? "info", rememberLabel: opts.rememberLabel, altLabel: opts.altLabel,
+      resolve: (ok, remember, dismissed, alt) => resolve(dismissed ? null : { ok, remember, ...(alt ? { alt: true } : {}) }),
+    };
+    emitAsk();
+  });
+}
+
 /** Mounted once in `main.tsx`. Renders nothing when nothing is being asked. */
 export function ConfirmHost() {
   const [ask, setAsk] = useState<Ask | null>(null);
+  const [remember, setRemember] = useState(false);
   useEffect(() => {
     askListeners.add(setAsk);
     setAsk(pending);
     return () => { askListeners.delete(setAsk); };
   }, []);
-  const answer = useCallback((ok: boolean) => {
+  // Each question starts unticked: a tick carried over from the last one would
+  // remember an answer to a question the person never saw the box on.
+  useEffect(() => { setRemember(false); }, [ask]);
+  const answer = useCallback((ok: boolean, keep: boolean, dismissed = false, alt = false) => {
     const a = pending;
     pending = null;
     emitAsk();
-    a?.resolve(ok);
+    a?.resolve(ok, keep, dismissed, alt);
   }, []);
   if (!ask) return null;
   return (
     // The backdrop answers `false`, which is what a tap outside a destructive
     // question means everywhere else in this app (and what the native dialog's
     // dismiss did).
-    <div className="bl-modal-backdrop confirm-backdrop" onClick={() => answer(false)}>
+    <div className="bl-modal-backdrop confirm-backdrop" onClick={() => answer(false, false, true)}>
       <div className="bl-modal confirm-modal" onClick={(e) => e.stopPropagation()}>
         <div className="bl-modal-title">
           {ask.tone === "info"
@@ -190,9 +242,16 @@ export function ConfirmHost() {
         {ask.lines.length > 0 && (
           <ul className="confirm-lines">{ask.lines.map((l, i) => <li key={i}>{l}</li>)}</ul>
         )}
+        {ask.rememberLabel && (
+          <label className="confirm-remember">
+            <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+            {ask.rememberLabel}
+          </label>
+        )}
         <div className="bl-modal-actions">
-          <button className="send confirm-go" onClick={() => answer(true)}>{ask.confirmLabel}</button>
-          <button className="key" onClick={() => answer(false)}>{ask.cancelLabel}</button>
+          <button className={`send confirm-go${ask.tone === "info" ? " info" : ""}`} onClick={() => answer(true, remember)}>{ask.confirmLabel}</button>
+          <button className="key" onClick={() => answer(false, remember)}>{ask.cancelLabel}</button>
+          {ask.altLabel && <button className="key" onClick={() => answer(false, remember, false, true)}>{ask.altLabel}</button>}
         </div>
       </div>
     </div>

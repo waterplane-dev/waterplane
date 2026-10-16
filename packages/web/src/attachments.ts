@@ -22,7 +22,7 @@
  * upload with the SAME path — so the prompt needs no rewriting, which is the
  * whole point: the words were fine, the transport wasn't.
  */
-import { attachStatuses, type AttachFacts, type AttachStatus } from "@waterplane/shared";
+import { attachStatuses, sendingUploads, type AttachFacts, type AttachStatus } from "@waterplane/shared";
 import { api } from "./api";
 import { deadUploads } from "./outbox";
 import type { OutboxEntry } from "./outbox";
@@ -108,9 +108,7 @@ export async function checkAttachments(
     // A queue entry that has GIVEN UP is not sending anything. Only rows that
     // will still be attempted count, or a prompt would be called sendable on the
     // strength of an upload that has already failed for good.
-    sending: outbox
-      .filter((e) => e.mode === "upload" && e.upload && e.status !== "failed")
-      .map((e) => e.upload!.relPath),
+    sending: sendingUploads(outbox),
     kept: await keptPaths(),
     dead: deadUploads(),
   };

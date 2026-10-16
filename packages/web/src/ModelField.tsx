@@ -24,6 +24,7 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { memoryPressureNote, windowAdviceText } from "@waterplane/shared";
+import { FilterChip } from "./kit/FilterChip";
 import { acquireLocalRtWatch, freshSample, modelBaseName, useLocalRt } from "./localRt";
 import {
   backendInfo, isZeroCost, modelChoices, modelGroups, showWhereFilter,
@@ -74,14 +75,18 @@ export function ModelField({ backends, backend, value, onChange, placeholder }: 
   useEffect(() => acquireLocalRtWatch(), []);
   const rt = useLocalRt((s) => freshSample(s.last, s.now), true);
   const cat = modelChoices(backends, backend);
+  // The backend's own sentence about this list ("Copilot lists only Auto for
+  // this account") — so a near-empty picker says WHY instead of looking broken.
+  const listNote = backendInfo(backends, backend)?.models.note?.trim() || null;
   // A catalogue that came back EMPTY is a typed field, never a guessed list —
   // and an id here may carry a slash and a colon (`ollama/qwen3-coder:30b`), so
   // nothing splits it.
   if (cat.freeText) {
-    return (
-      <input className="search mono" placeholder={placeholder ?? "model id (blank = this backend’s default)"}
+    const field = (
+      <input className="search" placeholder={placeholder ?? "model id (blank = this backend’s default)"}
         value={value ?? ""} onChange={(e) => onChange(e.target.value.trim() || undefined)} />
     );
+    return listNote ? <div className="model-field">{field}<div className="set-note">{listNote}</div></div> : field;
   }
   const listed = new Set([...cat.aliases, ...cat.ids]);
   const offList = value && !listed.has(value) ? value : null;
@@ -144,13 +149,12 @@ export function ModelField({ backends, backend, value, onChange, placeholder }: 
           those two. Drawn only when there is more than one group — one group is
           furniture implying a decision nobody has. */}
       {pickWhere && (
-        <div className="model-where">
+        <div className="fchips wrap model-where">
           {groups.map((g) => (
-            <button key={g.where} type="button"
-              className={`key ${active === g.where ? "active" : ""}`}
+            <FilterChip key={g.where} on={active === g.where}
               onClick={() => setOnly(active === g.where ? null : g.where)}>
               {WHERE_LABEL[g.where]} · {g.ids.length}
-            </button>
+            </FilterChip>
           ))}
         </div>
       )}
@@ -188,7 +192,7 @@ export function ModelField({ backends, backend, value, onChange, placeholder }: 
           <span>{ZERO_COST_DISCLAIMER}</span>
         </div>
       )}
-      <select className="mono" value={value ?? ""} onChange={(e) => onChange(e.target.value || undefined)}>
+      <select value={value ?? ""} onChange={(e) => onChange(e.target.value || undefined)}>
         <option value="">default</option>
         {offList && <option value={offList}>{offList} — not in this list</option>}
         {/* Aliases and versions are the SAME decision at two precisions, so they
@@ -211,6 +215,7 @@ export function ModelField({ backends, backend, value, onChange, placeholder }: 
           </optgroup>
         ))}
       </select>
+      {listNote && <div className="set-note">{listNote}</div>}
       {/* A model chosen and then filtered out of view is still the model that
           will run. Say so rather than letting the control look empty-handed. */}
       {active && value && !shown.some((g) => g.ids.includes(value)) && (

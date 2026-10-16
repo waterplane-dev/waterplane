@@ -10,8 +10,8 @@
  */
 import { CircleHelp } from "lucide-react";
 import { DOLLARS_WHY, DOLLARS_WHY_HEAD, TOKEN_KINDS, fmtCount, fmtExact, fmtUsd, type TokenStatsDoc } from "@waterplane/shared";
-import { KindBar, SLOT } from "@waterplane/kit";
-import { headline, headlineSpanWords } from "./headline.ts";
+import { Explain, KindBar, SLOT } from "@waterplane/kit";
+import { headline, headlineDaysWords, headlineSpanWords } from "./headline.ts";
 
 const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -73,9 +73,15 @@ export function Headline({ doc, now = Date.now() }: { doc: TokenStatsDoc; now?: 
               })}
             </tbody>
           </table>
+          {/* One line, always: the days and the busiest. What the span is and what
+              the money means fold behind the `?` — they stood here as a paragraph
+              on every visit. Days before the record are said in the line itself. */}
           <div className="ts-headline-cap">
-            Over {headlineSpanWords(h)}, {h.active} of them with work in them · busiest day {fmtCount(h.peak)}.
-            {" "}Money is what the API would charge for these tokens at today’s list prices, not your bill.
+            {headlineDaysWords(h)}{" "}
+            <Explain of="the last 7 days">
+              Counted over {headlineSpanWords(h)}. Money is what the API would charge for these tokens at
+              today’s list prices, not your bill.
+            </Explain>
           </div>
           {/* The first dollar figure on the screen is above, so the question it raises is answered
               here, in words (shared wording, never a copy): a Max plan pays no per-token price. */}

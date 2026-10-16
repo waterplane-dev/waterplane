@@ -2,10 +2,14 @@
 
 import type { SessionBudget } from "../../sessionbudget.js";
 import type { SendStamp } from "../../sendstamp.js";
-import type { LaunchOpts, SendView, SessionSearchScope } from "../session.js";
+import type { ClientRole } from "../notifylink.js";
+import type { LaunchOpts, PermissionMode, SendView, SessionSearchScope } from "../session.js";
 
 export type ClientSessionMsg =
-  | { t: "hello"; protocol: number }
+  // `role` (optional): "notify" marks the APK's background link
+  // (`wire/notifylink.ts`), which is then sent only the frames it acts on.
+  // Additive — an old host ignores it — so `PROTOCOL_VERSION` stays.
+  | { t: "hello"; protocol: number; role?: ClientRole }
   | { t: "ping" } // heartbeat — host replies { t: "pong" } so the client can detect a dead (zombie) socket
   | { t: "session.list" }
   // `resumeSessionId`: resume that EXACT claude conversation (`--resume <uuid>`)
@@ -223,6 +227,18 @@ export type ClientSessionMsg =
    * delivered an hour late is a name for a screen nobody is looking at.
    */
   | { t: "session.name"; id: string }
+  /**
+   * Switch a live claude session's permission mode the way a person at the
+   * desktop would: the host presses shift+tab and re-reads the footer until it
+   * shows `mode`, or until the cycle comes back round (the mode is not in this
+   * session's cycle — `bypassPermissions` only exists when launched with it).
+   * Answered by `session.moded`, always.
+   *
+   * Not durable and never queued offline, for `intent.cancel`'s reason: a mode
+   * switch delivered an hour late changes what a session nobody is watching
+   * may do unasked. Re-sending is safe (the target is a state, not a step).
+   */
+  | { t: "session.mode"; id: string; mode: PermissionMode }
   /** Set (or, with `null`, clear) a session's own budget (`sessionbudget.ts`).
    *  Additive, idempotent, not durable and never queued: re-sending the same
    *  budget is a no-op, and one delivered late would hold or release a session
@@ -231,6 +247,15 @@ export type ClientSessionMsg =
   | { t: "session.remoteControl"; id: string; enabled: boolean }
   /** Toggle the manual "prima interest" star (durable — survives restart). */
   | { t: "session.star"; id: string; starred: boolean }
+  /**
+   * Set or clear the follow-up flag (R-sessions-041). `id` is a live session
+   * id OR a conversation id (a *Recently closed* row's `claudeSessionId`), so a
+   * flagged session can be marked read after it closed. `on:true` sets it as
+   * `by:"hand"`; `on:false` clears it whoever set it — the only way it clears.
+   * Fire-and-forget like `session.star`: answered by `session.updated` (live)
+   * or a fresh closed list.
+   */
+  | { t: "session.followup"; id: string; on: boolean }
   /** Pin a history entry as the session's "last" overview label (null = clear). */
   | { t: "session.pin"; id: string; entryId: string | null }
   /**

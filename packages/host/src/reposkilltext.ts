@@ -15,6 +15,7 @@ import { BRAND, legacyParamEnvNames, paramEnvName } from "@waterplane/shared";
  */
 export function repoSkillBody(port: number): string {
   const D = BRAND.stateDirName;
+  const S = BRAND.sharedDirName;
   const N = BRAND.displayName;
   const [wpU, wpL] = BRAND.promptAliases;
   const param = paramEnvName("<ID>");
@@ -84,10 +85,15 @@ unless asked (copy what you need).
 
 ## Builds the phone can run without you
 
-\`${D}/builds.json\` is the list of build buttons the phone shows for this
-repo. A tap runs the command in a plain shell here — no \`claude\` session, no
-tokens — which is how the person still gets an APK while rate-limited. You may
-add or fix entries when asked; keep every other entry as it is. Shape:
+\`${S}/builds.json\` is the list of build buttons the phone shows for this
+repo. It is COMMITTED with the repo, so every clone and every desktop gets the
+same buttons — this is where you add one. A tap runs the command in a plain
+shell here — no \`claude\` session, no tokens — which is how the person still
+gets an APK while rate-limited. You may add or fix entries when asked; keep
+every other entry as it is. \`${D}/builds.json\` (gitignored) has the same shape
+and is only for an entry that holds a path existing on THIS desktop alone (a
+\`JAVA_HOME\`, a local SDK); an entry there with a shared entry's \`id\`
+replaces it on this desktop only. Shape:
 
 \`\`\`json
 [{ "id": "apk", "name": "Release APK", "cmd": "./gradlew assembleRelease",
@@ -113,6 +119,45 @@ artifact are removed. **So never copy a build artifact into the outbox by
 hand** — a hand copy is a second copy nothing prunes. The rule is
 \`${D}/artifacts.json\`: \`{ "collect": true, "prune": true, "keep": 3 }\`
 (those are the defaults when the file is absent).
+
+## A reading of this repo's own, on its health charts
+
+The phone's repo-health charts are ${N}'s readings, the same in every repo. A
+repo may add numbers only it knows about itself in \`${S}/health.json\`
+(COMMITTED; only the committed version runs):
+
+\`\`\`json
+{ "readings": [{ "key": "screenFixtures", "name": "Signals tested on today's screens",
+  "means": "One sentence: what it counts and why it matters here.",
+  "better": "higher", "unit": "signals", "run": ["node", "tools/x.mjs", "--reading"] }] }
+\`\`\`
+
+\`run\` is an argv list (no shell), run in the repo root once per refresh that
+measures a new commit, 30 s limit, at most 8 readings. It must print ONE JSON
+number or \`{"value": n}\` on stdout; when it cannot count, print nothing and
+exit non-zero with the reason on stderr — never print 0 for "unknown". These
+are drawn apart from ${N}'s and never enter the health index.
+
+The same file may change ONE of ${N}'s five index readings (\`size\`,
+\`retouch\`, \`hatches\`, \`context\`, \`untested\`) instead of replacing the
+whole engine — disable it, or measure it with the repo's own command:
+
+\`\`\`json
+{ "central": {
+  "context": { "disable": true, "why": "CLAUDE.md here is generated from docs/" },
+  "size": { "run": ["node", "tools/p95.mjs"], "why": "generated parsers are not ours",
+            "means": "p95 lines per hand-written file" } } }
+\`\`\`
+
+\`why\` is required (without it the entry is ignored, and the phone says so).
+A disabled reading is still drawn, marked disabled, and leaves the index
+mean. An override runs like a reading above — at HEAD only, same limits — and
+must print the number in the central reading's own unit, lower = healthier
+(\`retouch\` and \`untested\` as a fraction 0–1, \`hatches\` per 1,000 lines,
+\`context\` in chars, \`size\` in lines). It has no history before its first
+refresh. Any change here — adding, removing, or editing a \`run\` — makes the
+index CARRY that week instead of comparing it, so a tweak never reads as the
+repo getting healthier or worse; expect one flat week, not a jump.
 
 ## Downloads that start on their own
 
@@ -181,6 +226,30 @@ curl -s -X POST ${base}/api/agent/intents -H 'content-type: application/json' \\
 - \`GET ${base}/api/agent/intents\` lists what agents posted (both kinds); \`DELETE
   ${base}/api/agent/intents/<id>\` calls one off before it starts. Local only:
   it answers \`curl\` on this desktop, never a browser.
+- **Run order.** Rows due at the same moment (one reset, one instant) run in
+  queue order. \`GET ${base}/api/agent/queue?repo=<repoId>\` lists every waiting
+  row — the person's too — first to run first, with \`seat\`, \`id\`, \`title\`,
+  \`fires\`. When the person says which goes first (now, or when they ask you to
+  schedule several), \`POST ${base}/api/agent/queue/order\` with
+  \`{"ids":["<first>","<second>",…]}\`: those rows run in that order among
+  themselves, rows not listed keep their seats. Only when the person asked for
+  an order — it is their decision, and the phone marks it as theirs. Posting
+  several in one go: post them, then set the order.
+
+## Flagging your own session for follow up
+
+When you FINISH with something the person must read or decide — a test you could
+not fix, a call only they can make, a risky change to review — flag this session
+with one line, so it is marked on the phone and they get a push. Most of all on
+unattended, backlog or scheduled runs, where nobody is watching. Not for routine
+success, and at most once per finished task. You can set the flag, never clear it.
+
+\`\`\`sh
+curl -s -X POST ${base}/api/agent/followup -H 'content-type: application/json' \\
+  -d "{\\"dir\\":\\"$PWD\\",\\"reason\\":\\"migration needs your call: drop the old column?\\"}"
+\`\`\`
+
+If two sessions share the folder the answer lists them; retry with \`"session":"<id>"\`.
 
 ## Delegating to a paired desktop (a peer), and what comes back
 
@@ -207,6 +276,31 @@ opens ONE session on the peer, in a fresh detached checkout of a commit you push
    at the peer's own running ${N} checkout.
 5. **Never restart the peer's ${N}.** A job's worktree (\`<clone>/.claude/worktrees/peer-<from>-<key>\`) is marked, and
    \`scripts/restart.sh\` and \`deploy/install-service.sh\` refuse there. Tests that start a host use their own port, never the live one.
+
+## A button of their own: a ${N} plugin
+
+When the person asks for something on the PHONE that ${N} does not ship (a
+button, a switch, a status line, a settings field, a suggested answer to a
+choice box), the answer is a ${N} plugin. **It is not a Claude Code mod or
+plugin**: the \`plugin-authoring\` skill and \`/plugin\` change Claude's own
+interface, never the phone's.
+
+- **Where it lives:** its own folder, never inside this repo's source unless
+  the person says so: \`~/.config/${BRAND.configDirName}/plugins/<id>/\`, or any folder listed in
+  \`~/.config/${BRAND.configDirName}/plugin-paths.json\` as \`{"paths":["<dir>"]}\` (so it can be its
+  own git repo).
+- **What it holds:** \`${BRAND.pluginManifest}\` (id, name, version, apiVersion, and
+  the actions, toggles and settings the phone draws) and \`host.mjs\`, an ESM
+  module exporting \`activate(api)\`. The phone draws what the manifest declares;
+  a plugin ships no UI code.
+- **The contract:** \`docs/plugins-api.md\` in the ${N} repo
+  (github.com/${BRAND.githubOrg}/${BRAND.slug}). Read it before writing one;
+  do not guess the API.
+- **It loads when the host starts.** A new or changed plugin needs a host
+  restart; ask the person for it rather than killing the daemon. A broken
+  plugin is listed on the phone with its reason, never skipped silently.
+- **Answering a box goes through the core's gate** (\`api.answer\`), never typed
+  keys: permissions, plan/trust dialogs and anything destructive are refused there.
 
 ## Everything else under ${D}/
 

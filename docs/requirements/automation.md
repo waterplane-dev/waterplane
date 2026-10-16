@@ -49,10 +49,11 @@ Each backlog item executes in its own independent session rather than all items 
 - asked: 2026-09-17
 - shipped: f7caebb
 
-### R-automation-013 · shipped
+### R-automation-013 · dropped
 Backlog smart-pick option evaluates all remaining items when the next item is picked.
 - asked: 2026-09-17
 - shipped: f7caebb
+- dropped: 2026-10-16 — smart pick removed: ~26 real passes, 0 merges, 2 reorders.
 
 ### R-automation-014 · shipped
 Scheduled tasks and backlog items stay synchronized as one list.
@@ -67,9 +68,10 @@ System tracks which scheduled items for today were worked on.
 Backlog displays items from all repos, including Garmin.
 - asked: 2026-09-18
 
-### R-automation-017 · requested
+### R-automation-017 · dropped
 Smart picker button is visible and functional for already-shipped scheduled items.
 - asked: 2026-09-18
+- dropped: 2026-10-16 — smart pick removed (see R-automation-013).
 
 ### R-automation-018 · shipped
 Once and recurring scheduling options work independently from usage-window settings.
@@ -140,7 +142,7 @@ Scheduled items due before a weekly usage-limit reset execute as planned instead
 - shipped: bdd2968, 8cc4f68, 9efbe6e, 8dffa3f
 
 ### R-automation-032 · shipped
-Queued items can be explicitly run past usage-budget limits when waived, executing one at a time in turn (not fired all at once), still honoring serial 'keep till free' constraints and smart-pick rules.
+Queued items can be explicitly run past usage-budget limits when waived, executing one at a time in turn (not fired all at once), still honoring serial 'keep till free' constraints.
 - asked: 2026-09-24, 2026-09-24, 2026-09-24
 - shipped: bc8770d, fa9158e
 
@@ -170,3 +172,103 @@ A session budget can be set when launching a session, on a backlog item, on a fa
 - asked: 2026-10-01
 - shipped: e4c2815, 4c8d686
 
+### R-automation-038 · shipped
+Jobs scheduled on the host start and run even when the phone is off; the phone is not needed for startup queries.
+- asked: 2026-10-04, 2026-10-05
+- shipped: b7fea804
+
+### R-automation-039 · requested
+A custom time input is available wherever a time has to be chosen.
+- asked: 2026-10-08
+
+### R-automation-040 · shipped
+The Build sheet has an additional entry that generates everything in one action.
+- asked: 2026-10-12
+- shipped: build entry "Docs media: everything" (named in b8e9b5e7) — first in the untracked `.waterplane/builds.json`; build entries now live in the committed `.waterplane-shared/builds.json`, where the shared-builds migration moves it
+
+
+### R-automation-041 · superseded
+Sessions that backlog or scheduled work opens stay open by default; closing them when done is a global setting with a per-item override, and while every automatic slot is held by an open session the next item waits until a person closes one.
+- asked: 2026-10-01
+- shipped: cd044878
+- superseded-by: R-automation-042
+
+### R-automation-042 · shipped
+An automatic session holds one of the desktop's automatic-session slots only while it is working (a turn running, a question or permission box open, a background shell or agent still going). A finished, idle session left open holds none, so keeping sessions open never stops queued or scheduled work from starting; nothing is closed to make room.
+- asked: 2026-10-14
+- shipped: 67d048ac
+
+### R-automation-043 · shipped
+Work let past last week's budget (timed before the weekly reset, or waived past the weekly ceiling) that did not start before the reset runs in the new week only while the week's usage is under a separate leftover ceiling (default 20%, settable or off); a person letting it past the budget again lifts it.
+- asked: 2026-10-14
+- shipped: be8dc2e0
+
+### R-automation-044 · shipped
+A backlog item that is already queued — including one waiting on a clock — can have its session budget set, changed or cleared from its own row, as long as it opens a session of its own and has not started. A row aimed at a live session shows no budget (that session's budget is set on the session), and offline the row says the change needs the desktop.
+- asked: 2026-10-15 — "add the option for scheduled items to set a budget", clarified as: change/clear on an already-queued item
+- shipped: 5ff4bf7c
+
+### R-automation-045 · shipped
+Work timed to start at the weekly reset or right after it (within the new week's first five hours) is held by the same leftover ceiling as work let past last week's budget: it starts only while the new week is under that ceiling, and its row says so.
+- asked: 2026-10-15 — "our new budget cap that we introduced for sessions that start right before should also affect these ones that start right after the session limit reset"
+- shipped: cc11f1a5
+
+### R-automation-046 · shipped
+On a repo's backlog, every timed item waiting on the same clock can be picked in one tap and moved to one new time together (e.g. past the reset); the pick list is above the rows, including in a cut opened from elsewhere, and stays on screen while ticking.
+- asked: 2026-10-15 — "Add a multi select option so I can reschedule any timed work items at the same time e.g. to move them past the session reset"
+- shipped: 8feaea28
+
+### R-automation-047 · shipped
+A dollar cap on a period holds automatic work only once the period's spend reaches it; a prompt a person sends by hand never asks the cap. The hold says which period and releases by itself at the period's computed reset. With nothing measured, nothing is held.
+- asked: 2026-10-12 (billing-periods plan)
+- shipped: de9aef7d
+
+### R-automation-048 · shipped
+A schedule rule that follows the session window refuses a rolling-30-day period, in words, since it has no edge to follow; a calendar period is accepted and its reset reaches window rules.
+- asked: 2026-10-12 (billing-periods plan)
+- shipped: 413bfbd8, de9aef7d
+
+### R-automation-049 · shipped
+When an API account runs out of credit or hits a spend limit, the session counts as at a wall: its automatic work is held, and it makes one attempt to resume at a reset the CLI printed or at the active dollar calendar period's reset. With neither, it tells the person it needs them; no clock time is ever invented. Subscription banners behave as before.
+- asked: 2026-10-12 (billing-periods plan)
+- shipped: fd07bc44
+
+### R-intent-local-001 · shipped
+Automatic starts on a local model wait while the local-session cap is in use (one at a time by default) and the model is loaded on the runner before the item opens; a held row names the reason (the working local session, the model loading, Ollama unreachable, the model missing). A person's own start past the cap is told, never refused. The cap is a synced setting on the phone ("local model sessions at once", 1–3 or no limit).
+- asked: 2026-10-13
+
+### R-automation-050 · shipped
+A desktop-wide list of "ask before" rules (Claude Code permission-rule strings such as `Bash(git push * main)`) makes a driven `claude` stop and show the person a box with the exact command, even in bypass-permissions mode. A fresh install has no rule active; a suggested list (force pushes, pushes to main/master, production deploys, releases, publishes, applies) is offered and never applied by itself. With no rule the launch is unchanged. Host side only: the list is stored on the desktop and read and changed over the host API.
+- asked: 2026-10-13 (owner, agent-authority plan)
+- shipped: 68f67124 83624d31 94a23918
+- note: a rule matches the words typed, not git's state; it stops the accident, not a wrapper script or an agent that talks the person into Yes. docs/plans/agent-authority.md §2.
+
+### R-automation-051 · requested
+On the phone, a desktop-wide "Ask before" settings section lists the rules (with the suggested list one tap to add) and a per-repo "off here" row turns a rule off for a repo where that action is the daily flow. It says at the moment of a change that running sessions keep the rules they were launched with, and that other backends (opencode, Copilot) take no such rule.
+- asked: 2026-10-13 (owner, agent-authority plan)
+- note: in progress; the host half is R-automation-050.
+
+### R-automation-052 · shipped
+Changing the ask-rule list needs a browser origin: an agent's origin-less request cannot quietly delete a rule.
+- asked: 2026-10-13 (owner, agent-authority plan)
+- shipped: 83624d31
+
+### R-automation-053 · requested
+A per-repo Claude-dollar day ceiling, a third scope beside the account periods and session budgets, holds that repo's automatic work once reached ("4.10 $ of 5 today in <repo>") and releases through the existing past-budget waiver tap. Not built; waits on owner question 2 of docs/plans/agent-authority.md.
+- asked: 2026-10-13 (owner, agent-authority plan)
+
+### R-automation-054 · requested
+A repo's own external-API spend (a key it holds in the vault) is shown as yesterday's number from the provider's usage API where one exists, never today's, never a refusal, and unknown rather than zero otherwise. Not built; waits on owner question 3 of docs/plans/agent-authority.md.
+- asked: 2026-10-13 (owner, agent-authority plan)
+
+### R-automation-055 · requested
+Releasing a login that belongs to the owner (`mine`) to an agent requires a written reason, quoted on the release card with "whatever this program does, it does as you". Not built; waits on owner question 4 of docs/plans/agent-authority.md.
+- asked: 2026-10-13 (owner, agent-authority plan)
+
+### R-automation-056 · requested
+When more than three tool boxes in a day were answered by the person, a sentence says the policy is wrong, not the person; words only, never a refusal. Not built; waits on owner question 7 of docs/plans/agent-authority.md.
+- asked: 2026-10-13 (owner, agent-authority plan)
+
+### R-automation-057 · requested
+When a timed item lands in a slot that already holds others (same usage-window reset, or the same instant), the person is asked whether to check them together — on the send receipt when they typed it, on the slot's group header (*check these N*, exactly those rows) when an agent posted it — and a per-repo switch turns the ask off. The check is the assessment scoped to that slot: it may propose merges (carrying the latest member's clock), an order within the slot, a split of one item into two (posted on the same clock, the original archived), and conflicts (words only, never resolved for the person); each change is approved one at a time and nothing applies itself. Replaces the smart pick (R-automation-013, R-automation-017).
+- asked: 2026-10-16 (owner, .claude/outbox/schedule-check-plan.md)

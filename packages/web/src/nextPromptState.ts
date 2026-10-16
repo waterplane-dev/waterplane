@@ -84,6 +84,12 @@ export interface NextPromptView {
    * strip, not left to the backlog row. Null for everything untimed.
    */
   tie: string | null;
+  /**
+   * The usage budget is what holds this one (a desktop-held row only;
+   * `isBudgetHeld`, the re-time sheet's test). Offers *past the budget* — the
+   * waiver for THIS row, which still waits for the session to be free.
+   */
+  budgetHeld: boolean;
 }
 
 /**
@@ -147,6 +153,8 @@ export function nextPromptView(o: {
     why?: string;
     /** `tieNote`, already worded — this file keeps no clock and no formatter. */
     tie?: string;
+    /** `isBudgetHeld` on its intent, already answered — the host's verdict. */
+    budgetHeld?: boolean;
   }[];
   /**
    * How old the backlog snapshot `pinned` came out of is, in words, and read
@@ -222,6 +230,8 @@ export function nextPromptView(o: {
       behind: pinned.length - 1,
       why: !o.online && o.asOf ? `${why} · as of ${o.asOf}` : why,
       tie: head.tie ?? null,
+      // Live facts only: offline the verdict is a copy and the tap cannot land.
+      budgetHeld: !!head.budgetHeld && o.online,
       // A dead link is not a wait HERE — the desktop is holding this one and
       // runs it either way. What the link blocks is the tap, so that is what
       // the sentence says, and it must not read as "your prompt is stuck".
@@ -248,6 +258,7 @@ export function nextPromptView(o: {
     behind: mine.length - 1,
     why,
     tie: null,
+    budgetHeld: false,
     // Offering "send now" against a dead link is offering a tap that queues
     // what is already queued. The park is the only thing a tap can lift here.
     wall: o.wall

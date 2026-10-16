@@ -1,5 +1,5 @@
 // A slice of the repo-health words (../repoHealthWords.ts is the facade; docs/notes/webclient-architecture.md).
-import { commitWords } from "./repoHealthWordsFmt.ts";
+import { commitWords, nf } from "./repoHealthWordsFmt.ts";
 
 /** A duration as the sheet prints it. One decimal below a minute, because the
  *  difference between 2.1 s and 18.4 s is the whole reading of a run. */
@@ -7,8 +7,6 @@ export function msWords(ms: number): string {
   const s = Math.max(0, ms) / 1000;
   return s < 60 ? `${s.toFixed(1)} s` : `${Math.round(s)} s`;
 }
-
-
 
 export interface StalenessInput {
   /** First-parent commits between the last row and HEAD. `null`/absent = the
@@ -48,6 +46,26 @@ export function stalenessWords(a: StalenessInput): string | null {
   }
   const n = `${a.behind} commit${a.behind === 1 ? "" : "s"} since the last reading`;
   return `${n} — last row ${row}, HEAD ${head ?? "unknown"}`;
+}
+
+/**
+ * The ONE line above the series' charts: how far behind, and how much history.
+ *
+ * Four grey paragraphs used to stand before the first number — the comparator,
+ * the intro, the engine and this line with both shas, two ages and the
+ * definition in it. The reader's first question is "is this current, and how
+ * much is there", so that is all this says; `stalenessWords` (both endpoints),
+ * the two ages and `seriesSizeWords` (the definition) fold under it, unchanged.
+ * Still counted in COMMITS, and null exactly where `stalenessWords` is.
+ */
+export function seriesStatusWords(a: StalenessInput & { rows?: number | null; days?: number | null }): string | null {
+  if (!commitWords(a.lastSha, a.lastDay)) return null;
+  const distance = a.behind == null ? "could not tell how far behind"
+    : a.behind <= 0 ? "up to date"
+    : `${nf(a.behind)} commit${a.behind === 1 ? "" : "s"} since the last reading`;
+  if (!a.rows) return distance;
+  const days = a.days ? ` over ${nf(a.days)} day${a.days === 1 ? "" : "s"}` : "";
+  return `${distance} · ${nf(a.rows)} commit${a.rows === 1 ? "" : "s"} measured${days}`;
 }
 
 /** How much history is in the file, and under which definition — the basis

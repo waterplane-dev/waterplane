@@ -1,6 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { logTag } from "@waterplane/shared";
-import { RESET_KEEP_PREFIXES } from "./storage";
+import { RESET_KEEP_PREFIXES } from "./resetKeys";
 import { appName } from "./themeOverlay";
 import { PULL_CACHE_PREFIXES } from "./boot/brandMigrate";
 
@@ -19,7 +19,7 @@ import { PULL_CACHE_PREFIXES } from "./boot/brandMigrate";
  * device-local view state before reloading. It deliberately does NOT clear the
  * send outbox or the prompt pad — unsent text is the one thing here that cannot
  * be re-fetched from the host — nor the bookkeeping that decides whether those
- * survive the next sync (see `storage.ts`'s `RESET_KEEP_PREFIXES`).
+ * survive the next sync (see `resetKeys.ts`'s `RESET_KEEP_PREFIXES`).
  */
 
 async function hardReset(): Promise<void> {

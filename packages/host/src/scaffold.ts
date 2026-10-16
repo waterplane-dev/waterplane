@@ -1,5 +1,5 @@
 /** Git/filesystem scaffolding: new folder, new repo, new worktree. */
-import { chmodSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -91,9 +91,10 @@ const BINARY_EXT = new Set([".jar", ".png", ".webp", ".jpg", ".ico"]);
 
 /**
  * Copy a template tree into `dir`, replacing `{{name}}` `{{label}}` `{{package}}`
- * `{{description}}` `{{state}}` in text files and `__PKGPATH__` in paths. `_gitignore` is
+ * `{{description}}` `{{state}}` `{{shared}}` in text files and `__PKGPATH__` in paths. `_gitignore` is
  * stored under that name because npm never publishes a `.gitignore`; `_state/` becomes
- * the brand's state dir. Never overwrites. Returns the repo-relative paths written.
+ * the brand's (gitignored) state dir and `_shared/` its committed config dir, which the
+ * initial commit picks up. Never overwrites. Returns the repo-relative paths written.
  */
 function copyTemplate(id: TemplateId, dir: string, vars: Record<string, string>): string[] {
   const src = join(TEMPLATE_ROOT, id);
@@ -104,7 +105,7 @@ function copyTemplate(id: TemplateId, dir: string, vars: Record<string, string>)
       if (ent.isSymbolicLink()) continue;
       const from = join(rel, ent.name);
       if (ent.isDirectory()) { walk(from); continue; }
-      let out = from.split(sep).map((seg, i) => (i === 0 && seg === "_state" ? BRAND.stateDirName : seg))
+      let out = from.split(sep).map((seg, i) => (i === 0 && seg === "_state" ? BRAND.stateDirName : i === 0 && seg === "_shared" ? BRAND.sharedDirName : seg))
         .join(sep).replace("__PKGPATH__", vars.package.split(".").join(sep));
       if (out === "_gitignore") out = ".gitignore";
       const to = join(dir, out);
@@ -176,6 +177,7 @@ export async function newRepo(
       package: packageId(projectName),
       description: desc || "TODO: what this is.",
       state: BRAND.stateDirName,
+      shared: BRAND.sharedDirName,
     };
     files = copyTemplate(opts.template, dir, vars);
     // The transport dirs exist even though the template wrote nothing into them.
@@ -284,10 +286,11 @@ This repo is driven remotely from a phone, so three paths are load-bearing:
   one repo here came to hold 33 APKs and 4.5 GB.
 - **\`.claude/inbox/\`** — images uploaded from the phone land here; prompts
   reference them by path.
-- **\`${BRAND.stateDirName}/\`** — per-repo state (backlog items, build commands, stars/pins),
-  written by the daemon. Don't hand-edit.
+- **\`${BRAND.stateDirName}/\`** — per-repo state (backlog items, stars/pins, build
+  commands true of this desktop only), written by the daemon. Don't hand-edit.
 
-All three are gitignored.
+All three are gitignored. **\`${BRAND.sharedDirName}/\`** is not: its \`builds.json\` holds the
+phone's build buttons and is committed, so every checkout gets them.
 `;
 }
 
@@ -321,4 +324,124 @@ export async function newWorktree(
   } catch (err) {
     return { error: `git worktree add failed: ${String(err)}` };
   }
+}
+
+// ── Clone ────────────────────────────────────────────────────────────────
+
+/**
+ * A remote the phone may ask this desktop to clone, or why not. The URL is typed
+ * on a phone and handed to `git`, so it is held to the three shapes a person
+ * actually pastes — `https://`, `ssh://` and scp-like `user@host:path` — and
+ * everything git would ALSO accept is refused: `ext::` (runs a command),
+ * `file://` and bare local paths (reads outside the root), `http://` (cleartext),
+ * a leading `-` (an option, not a URL). `cloneRepo` backs this with
+ * `protocol.allow=never`, so a shape that slips past here still cannot reach a
+ * transport git was not told to allow.
+ */
+export function cloneUrl(raw: string): { url: string; name: string } | { error: string } {
+  const url = String(raw || "").trim();
+  if (!url) return { error: "no URL" };
+  if (url.length > 2048) return { error: "URL too long" };
+  if (/[\s\x00-\x1f\x7f]/.test(url)) return { error: "URL contains spaces or control characters" };
+  if (url.startsWith("-")) return { error: "not a URL" };
+  if (url.includes("::")) return { error: "only https://, ssh:// or git@host:path URLs" };
+  let path: string;
+  const scheme = /^([a-z][a-z0-9+.-]*):\/\//i.exec(url);
+  if (scheme) {
+    const s = scheme[1].toLowerCase();
+    if (s !== "https" && s !== "ssh") {
+      return { error: s === "http" ? "http:// is cleartext — use the https:// URL" : `${s}:// is not allowed — only https:// or ssh://` };
+    }
+    let u: URL;
+    try { u = new URL(url); } catch { return { error: "not a valid URL" }; }
+    if (!u.hostname || u.hostname.startsWith("-")) return { error: "URL has no usable host" };
+    path = u.pathname;
+  } else {
+    // scp-like: [user@]host:path — git's own rule is "a colon before any slash".
+    const m = /^(?:[A-Za-z0-9._][A-Za-z0-9._-]*@)?([A-Za-z0-9][A-Za-z0-9.-]*):(?!\/\/)(.+)$/.exec(url);
+    if (!m || !m[1]) return { error: "only https://, ssh:// or git@host:path URLs" };
+    path = m[2];
+  }
+  const last = path.replace(/\/+$/, "").split("/").pop() || "";
+  const name = slug(last.replace(/\.git$/i, ""));
+  if (!name || name === "." || name === "..") return { error: "cannot tell a folder name from this URL — name it" };
+  return { url, name };
+}
+
+export interface CloneResult {
+  path: string;
+  branch: string;
+  /** Non-fatal problem worth showing. */
+  warning?: string;
+}
+
+/** How long a clone may run before it is killed. A phone is waiting on the answer. */
+const CLONE_TIMEOUT_MS = 15 * 60_000;
+
+/** `git clone` runner — injectable so the argv and refusals are testable without a network. */
+export type CloneRun = (args: string[], opts: { cwd: string; env: NodeJS.ProcessEnv; timeout: number }) => Promise<unknown>;
+const runGit: CloneRun = (args, opts) => pexec("git", args, { ...opts, maxBuffer: 8 * 1024 * 1024 });
+
+/**
+ * Clone a remote into a new folder under `parent` (inside `root`) — the "I have no
+ * repo for this yet" start. Same containment as `newRepo`: the folder is named by
+ * `name` or the URL's last segment, must resolve inside the root, and must not
+ * exist. Nothing is fetched beyond the default branch's checkout (no submodules),
+ * nothing prompts (no terminal on a phone: a credential or host-key question is a
+ * failure in words), and the cloned project is never edited — the phone's
+ * transport dirs are excluded through `.git/info/exclude`, which is local to this
+ * checkout, so the clone has no diff the person did not make.
+ */
+export async function cloneRepo(
+  root: string,
+  parent: string,
+  rawUrl: string,
+  name?: string,
+  run: CloneRun = runGit,
+): Promise<CloneResult | { error: string }> {
+  const u = cloneUrl(rawUrl);
+  if ("error" in u) return u;
+  const folder = slug(name || "") || u.name;
+  const target = inRoot(root, join(parent || root, folder));
+  if (!target) return { error: "path escapes root" };
+  if (existsSync(target)) return { error: `${folder} already exists — name the folder` };
+  const cwd = dirname(target);
+  if (!existsSync(cwd)) return { error: "parent folder does not exist" };
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    GIT_TERMINAL_PROMPT: "0",
+    // A person's own ssh command wins; otherwise never stop to ask about a host key or passphrase.
+    GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND || "ssh -o BatchMode=yes",
+  };
+  const args = [
+    "-c", "protocol.allow=never",
+    "-c", "protocol.https.allow=always",
+    "-c", "protocol.ssh.allow=always",
+    "clone", "--no-recurse-submodules", "--", u.url, target,
+  ];
+  try {
+    await run(args, { cwd, env, timeout: CLONE_TIMEOUT_MS });
+  } catch (err) {
+    const e = err as { stderr?: string; killed?: boolean; message?: string };
+    if (e.killed) return { error: "clone took longer than 15 minutes and was stopped" };
+    const said = String(e.stderr || e.message || err).trim().split("\n").filter((l) => !/^Cloning into/.test(l)).slice(-3).join(" ");
+    return { error: `git clone failed: ${said || "no reason given"}` };
+  }
+  let warning: string | undefined;
+  try {
+    for (const d of [".claude/inbox", ".claude/outbox"]) mkdirSync(join(target, d), { recursive: true });
+    const exclude = join(target, ".git", "info", "exclude");
+    mkdirSync(dirname(exclude), { recursive: true });
+    const have = existsSync(exclude) ? readFileSync(exclude, "utf8") : "";
+    const want = [".claude/inbox/", ".claude/outbox/", `${BRAND.stateDirName}/`].filter((l) => !have.split("\n").includes(l));
+    if (want.length) {
+      appendFileSync(exclude, `${have && !have.endsWith("\n") ? "\n" : ""}# ${BRAND.name}: the phone↔repo drops, local to this clone\n${want.join("\n")}\n`);
+    }
+  } catch (err) {
+    warning = `cloned, but the phone's inbox/outbox were not set up: ${String(err)}`;
+  }
+  const branch = await pexec("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: target })
+    .then((r) => r.stdout.trim())
+    .catch(() => "");
+  return { path: target, branch, ...(warning ? { warning } : {}) };
 }

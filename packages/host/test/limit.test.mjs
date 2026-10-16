@@ -49,6 +49,19 @@ test("nothing in ordinary output blocks", () => {
   assert.equal(d.blocked, false);
 });
 
+test("the demo's stop line never reads as a block", () => {
+  // `limit-and-budget`'s words where the CLI halts at the 5-hour wall (packages/web/src/demo/scenarios/
+  // limit-and-budget.ts `stopLine`), drawn in the docs films: a screen showing them must not park a
+  // real session that displays them.
+  for (const line of [
+    "5-hour window used up · back at 12:47 PM (demo)",
+    "⏺ 5-hour window used up · back at 12:47 PM (demo)",
+  ]) {
+    const d = detectLimitText(`Update(src/components/TaskRow.tsx)\n  ⎿  Added 21 lines, removed 2 lines\n\n${line}`, NOW);
+    assert.equal(d.blocked, false, line);
+  }
+});
+
 test("a relative reset is measured from now", () => {
   assert.equal(parseResetTime("resets in 2 hours", NOW), NOW + 2 * 3600_000);
   assert.equal(parseResetTime("resets in 45 minutes", NOW), NOW + 45 * 60_000);

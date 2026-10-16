@@ -17,7 +17,7 @@ import { dirname, join } from "node:path";
 
 import {
   TAB_COUNT_DEFAULT, TAB_COUNT_MAX, TAB_COUNT_MIN, TAB_STRIP_H, tabStripHeight,
-  TAB_LIMIT_DEFAULT, bumpOpen, clampTabCount, clampTabLimit, limitTabs, cleanTabOrder, migrateOpens, orderTabs, pruneOpens, tabCloseAsk, tabLabel,
+  TAB_LIMIT_DEFAULT, bumpOpen, cleanFileTabs, fileOpenKey, mergeStrip, fileTabKey, fileTabLabel, setPinned, clampTabCount, clampTabLimit, limitTabs, cleanTabOrder, migrateOpens, openOwed, orderTabs, pruneOpens, tabCloseAsk, tabLabel,
 } from "./sessionTabs.ts";
 
 const tab = (id, createdAt, over = {}) => ({
@@ -153,6 +153,21 @@ test("the height the strip publishes is the height it draws", () => {
   assert.equal(Number(m[1]), TAB_STRIP_H);
 });
 
+test("a tab is as wide as its name, with 1/N of the strip as its floor", () => {
+  // A fixed `1/N` basis cut a four-word name off beside an empty half strip
+  // whenever fewer than N were open. The name decides the width; `--stab-n`
+  // is the FLOOR, which is what keeps a full strip at N equal tabs that scroll.
+  const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "styles.css"), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "");
+  const at = css.indexOf("\n.stab {");
+  assert.ok(at >= 0, "no .stab rule");
+  const body = css.slice(at, css.indexOf("}", at));
+  assert.match(body, /flex:\s*0 1 auto/, ".stab is not sized to its content");
+  assert.match(body, /min-width:\s*calc\([^;]*var\(--stab-n/, ".stab's floor is not 1/--stab-n");
+  // …and nothing else on the page sets a tab's width back to a fixed share.
+  assert.doesNotMatch(css, /\.stab\s*\{[^}]*flex-basis/, "a .stab rule fixes the basis again");
+});
+
 test("the limit: default 10, clamped, the open session always drawn, the cut counted", () => {
   assert.equal(TAB_LIMIT_DEFAULT, 10);
   assert.equal(clampTabLimit(undefined), 10);
@@ -170,8 +185,75 @@ test("the limit: default 10, clamped, the open session always drawn, the cut cou
 });
 
 test("the strip is 34px on a phone with tabs, and 0 in every other case (O3: none in wide)", () => {
-  assert.equal(tabStripHeight(true, true, false), TAB_STRIP_H);
-  assert.equal(tabStripHeight(true, true, true), 0, "wide hides the strip");
-  assert.equal(tabStripHeight(false, true, false), 0);
-  assert.equal(tabStripHeight(true, false, false), 0);
+  assert.equal(tabStripHeight(true, true), TAB_STRIP_H, "drawn on a phone and on a wide window alike");
+  assert.equal(tabStripHeight(false, true), 0);
+  assert.equal(tabStripHeight(true, false), 0);
+});
+
+test("a pinned file is keyed by repo AND path, appended on pin, removed on unpin", () => {
+  const a = { repoId: "r1", repo: "myapp", path: "README.md" };
+  const b = { repoId: "r2", repo: "other", path: "README.md" };
+  // The same path in two repos is two tabs.
+  assert.notEqual(fileTabKey(a), fileTabKey(b));
+  const one = setPinned([], a, true);
+  const two = setPinned(one, b, true);
+  assert.deepEqual(two.map(fileTabKey), [fileTabKey(a), fileTabKey(b)]);
+  // Pinning again does not duplicate; it moves to the end, as a fresh pin.
+  assert.deepEqual(setPinned(two, a, true).map(fileTabKey), [fileTabKey(b), fileTabKey(a)]);
+  assert.deepEqual(setPinned(two, a, false), [b]);
+  assert.deepEqual(one, [a], "never in place");
+});
+
+test("the stored pins drop junk and fold duplicates to the first", () => {
+  const a = { repoId: "r1", repo: "myapp", path: "docs/a.md" };
+  assert.deepEqual(cleanFileTabs(null), []);
+  assert.deepEqual(cleanFileTabs({ not: "a list" }), []);
+  assert.deepEqual(cleanFileTabs([a, { repoId: "", path: "x" }, { repoId: "r1" }, 7, { ...a, repo: "later" }]), [a]);
+  assert.deepEqual(cleanFileTabs([{ repoId: "r1", path: "x" }]), [{ repoId: "r1", repo: "", path: "x" }]);
+});
+
+test("a file tab wears the file's own name", () => {
+  assert.equal(fileTabLabel("docs/notes/web.md"), "web.md");
+  assert.equal(fileTabLabel("README.md"), "README.md");
+});
+
+test("pinned files sort in among the sessions by the strip's own order, never cut, never between a glued pair", () => {
+  const t = (id, createdAt, extra = {}) => ({ id, label: id, repo: "r", status: "idle", createdAt, ...extra });
+  const f = (path, at) => ({ repoId: "r1", repo: "r", path, at });
+  const kinds = (strip) => strip.map((x) => x.kind === "session" ? x.tab.id : x.file.path);
+  const sessions = [t("a", 10), t("b", 30)];
+  const files = [f("late.md", 40), f("mid.md", 20)];
+  assert.deepEqual(kinds(mergeStrip(sessions, files, "open", {})), ["a", "mid.md", "b", "late.md"]);
+  // recent: a file looked at last is first, exactly as a session would be.
+  const opens = { a: { n: 1, at: 100 }, b: { n: 9, at: 300 }, [fileOpenKey(files[0])]: { n: 5, at: 200 } };
+  assert.deepEqual(kinds(mergeStrip([t("b", 30), t("a", 10)], files, "recent", opens)), ["b", "late.md", "a", "mid.md"]);
+  assert.deepEqual(kinds(mergeStrip([t("b", 30), t("a", 10)], files, "frequent", opens)), ["b", "late.md", "a", "mid.md"]);
+  // a companion shell stays glued to its parent even when a file outranks it.
+  const glued = [t("p", 10), t("shell", 50, { companionOf: "p" })];
+  assert.deepEqual(kinds(mergeStrip(glued, [f("x.md", 20)], "open", {})), ["p", "shell", "x.md"]);
+  // no sessions at all: the pins are the strip.
+  assert.deepEqual(kinds(mergeStrip([], files, "open", {})), ["mid.md", "late.md"]);
+});
+
+test("pruning keeps a pinned file's opens row, but a pin alone never licenses a prune", () => {
+  const opens = { a: { n: 1, at: 1 }, gone: { n: 1, at: 1 }, "file:r1:x.md": { n: 2, at: 2 }, "file:r1:old.md": { n: 1, at: 1 } };
+  assert.deepEqual(pruneOpens(opens, ["a"], ["file:r1:x.md"]), { a: { n: 1, at: 1 }, "file:r1:x.md": { n: 2, at: 2 } });
+  assert.deepEqual(pruneOpens(opens, [], ["file:r1:x.md"]), opens);
+});
+
+test("a stored pin keeps the instant it was pinned, and junk instants are dropped", () => {
+  assert.deepEqual(cleanFileTabs([{ repoId: "r1", path: "x", at: 5 }]), [{ repoId: "r1", repo: "", path: "x", at: 5 }]);
+  assert.deepEqual(cleanFileTabs([{ repoId: "r1", path: "x", at: "soon" }]), [{ repoId: "r1", repo: "", path: "x" }]);
+});
+
+test("a session is owed an open whenever it comes on screen, by any route, once per arrival", () => {
+  // Back, a hash, `session.focus` and a create set the active id without
+  // `attach`: counting off the published id is what keeps `recent` honest.
+  assert.equal(openOwed(null, "a", ["a", "b"]), "a");
+  assert.equal(openOwed("a", "a", ["a", "b"]), null, "a re-publish of the same screen is not an open");
+  assert.equal(openOwed("a", "b", ["a", "b"]), "b");
+  assert.equal(openOwed("a", null, ["a"]), null);
+  // A pending lane is not a session; its real id is counted when it lands.
+  assert.equal(openOwed(null, "create:/x", ["a"]), null);
+  assert.equal(openOwed(null, "a", []), null, "a cold start's empty list counts nothing yet");
 });

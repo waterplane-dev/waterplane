@@ -5,7 +5,7 @@ import {
   allowToggle, appInstallVerb, appLabel, appRows, appsSummary, appStateText,
   autoInstallText, installIntroText, installOffer, installStatusText, installVerbText, isApkRow,
   buildsOf, isAllowed, NO_INSTALL, readyApps, snoozeText, toggleAllow, waitingAppNote,
-  installerName, quietOwnerText, quietVerdict,
+  installerName, quietOwnerText, quietVerdict, cleanedText, cleanupText, cleanupLabel,
   isPlayBuild, isPlaySelf, PLAY_INTRO_TEXT, PLAY_SELF_TEXT, PLAY_UNREAD_TEXT, playAutoText, shellDistribution,
 } from "./installPolicy.ts";
 
@@ -379,4 +379,30 @@ test("play: no auto-install switch, and the row SAYS why (never a dimmed switch)
   assert.match(waitingAppNote(true, PLAY), /installs nothing by itself/);
   // Without the special access the Settings sentence still comes first.
   assert.match(installIntroText({ ...PLAY, canInstall: false }, []) ?? "", /Allow waterplane to install apps/);
+});
+
+test("a cleaned build says the clean-up took it, not the eviction, and a Downloads copy that stayed is said", () => {
+  const cleaned = installOffer(row({ evicted: true, install: "installed", cleanedAt: 1, cleanedBytes: 42e6 }), PHONE);
+  assert.equal(cleaned.verb, null);
+  assert.match(cleaned.reason, /deleted after it installed \(42 MB freed\)/);
+  assert.doesNotMatch(cleaned.reason, /cleared to save space/);
+  const stayed = cleanedText({ cleanedAt: 1, cleanedBytes: 0, cleanNote: "the copy in Downloads/a.apk is no longer this app's to delete — remove it by hand" });
+  assert.match(stayed, /remove it by hand/);
+  assert.doesNotMatch(stayed, /freed/);
+  // Bytes still here: the clean-up mark alone never hides the install verb.
+  assert.equal(installOffer(row({ cleanedAt: 1 }), PHONE).verb, "install");
+});
+
+test("the clean-up switch: an old shell gets a sentence, never a dead switch", () => {
+  assert.match(cleanupText(null), /newer app build/);
+  assert.match(cleanupText(true), /older builds of the same app/);
+  assert.match(cleanupText(false), /Turn this on/);
+  assert.equal(cleanupLabel(true), "delete APK after install: on");
+});
+
+test("buildsOf carries the clean-up facts", () => {
+  const [b] = buildsOf([{ item: { id: "a", name: "x.apk" }, state: "done", evicted: true, cleanedAt: 5, cleanedBytes: 9, cleanNote: "n" }]);
+  assert.equal(b.cleanedAt, 5);
+  assert.equal(b.cleanedBytes, 9);
+  assert.equal(b.cleanNote, "n");
 });

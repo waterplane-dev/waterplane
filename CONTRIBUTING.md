@@ -59,7 +59,10 @@ Fork freely; to keep pulling upstream, customise **from outside the core**:
 - **Plugins** for behaviour — a folder under `~/.config/waterplane/plugins/` or a path in
   `~/.config/waterplane/plugin-paths.json`, built against the generated reference
   [docs/plugins-api.md](docs/plugins-api.md). The API is semver: a plugin declaring
-  `apiVersion` `1.x` loads on any host speaking `1.y` with `y ≥ x`.
+  `apiVersion` `1.x` loads on any host speaking `1.y` with `y ≥ x`. Start from
+  [examples/plugin-template/](examples/plugin-template/); when you publish yours, **tag its repo with
+  the `waterplane-plugin` topic** so it is [findable](https://github.com/topics/waterplane-plugin),
+  and see [docs/plugins.md](docs/plugins.md) for how to get it listed.
 - **Config overlays** in the same config dir for wording and data: `prompts/<name>.md`
   (the unattended prompts), `models.json` (the model catalogue) and `theme.json` — the
   look, the name and the icons:
@@ -88,7 +91,7 @@ Fork freely; to keep pulling upstream, customise **from outside the core**:
 | | how | can change | cannot change |
 |---|---|---|---|
 | **theme** | `<config dir>/theme.json` | colour tokens, the terminal's background/foreground, the display name, the icons (files inside the config dir) | layout, components, the build-time brand (`shared/brand.ts`, the APK's name, launcher icon and package id) |
-| **promptText** | `<config dir>/prompts/<name>.md` | the WORDS of the unattended model calls: `session-title`, `session-title-system`, `session-rename` (the tab title), `tab-name` (backlog-row names), `assess-guidance`, `smartpick`, `commit-message`, `review-check`, `review-check-diff`, `review-validate`, `review-validate-diff` | the flags, model, engine route, timeouts and trust check of those calls, and the JSON contracts their parsers read — those stay in code |
+| **promptText** | `<config dir>/prompts/<name>.md` | the WORDS of the unattended model calls: `session-title`, `session-title-system`, `session-rename` (the tab title), `tab-name` (backlog-row names), `assess-guidance`, `commit-message`, `review-check`, `review-check-diff`, `review-validate`, `review-validate-diff` | the flags, model, engine route, timeouts and trust check of those calls, and the JSON contracts their parsers read — those stay in code |
 | **models** | `<config dir>/models.json` | add model ids/aliases to the picker, hide some | how a model is launched |
 | **plugins** | `<config dir>/plugins/<id>/` or `plugin-paths.json` | host behaviour through the versioned API: commands, backends, screen/store readers, an answer to a box (through `answergate.ts`), declared UI (settings, actions, badges, status lines) | the wire (no new message types; use `plugin.call`/`plugin.push`), the send queue, the path guards. **Plugin UI code runs on the phone only as an in-repo extension compiled into the bundle** (`packages/extensions/<id>/web/`) — never loaded from a plugin dir at run time |
 | **env knobs** | `.env` / `<config dir>/.env`, listed in full in [`.env.example`](.env.example) | ports, root, bind host, allowed hosts/origins, models, timeouts, sidecar routing | the security boundary: no knob binds a public interface without `WATERPLANE_ALLOW_PUBLIC=1` and its password gate, and none loosens the origin or path checks |
@@ -151,6 +154,9 @@ WATERPLANE_PREFLIGHT: "0",   // no boot preflight — it would probe the real cl
 `bootHost()` (`scripts/lib-e2e.mjs`) does both, and `run-e2e.mjs` gives each
 script its own socket directory too. Sessions always run inside tmux — there
 is no direct-PTY mode to pin.
+
+The gifs in the README and the guide are filmed by the maintainer's own UI journeys against the
+demo; that tooling is not part of this repository.
 
 ## Ground rules
 

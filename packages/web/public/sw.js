@@ -99,7 +99,7 @@ self.addEventListener("activate", (e) => {
 
 // Push: show the notification the host sent.
 self.addEventListener("push", (event) => {
-  let data = { title: BRAND_NAME, body: "", sessionId: undefined, tag: undefined, image: undefined, file: undefined, pull: undefined };
+  let data = { title: BRAND_NAME, body: "", sessionId: undefined, plugin: undefined, tag: undefined, image: undefined, file: undefined, pull: undefined };
   try { data = { ...data, ...event.data.json() }; } catch { /* plain text */ }
   // Auto-download: a `pull` id means the host queued this file for the phone to
   // fetch on its own. Start it HERE, in the push handler, because that is the
@@ -113,7 +113,7 @@ self.addEventListener("push", (event) => {
       tag: data.tag,
       icon: "/assets/icon-192.png",
       badge: "/assets/icon-192.png",
-      data: { sessionId: data.sessionId, image: data.image, file: data.file },
+      data: { sessionId: data.sessionId, plugin: data.plugin, image: data.image, file: data.file },
       requireInteraction: true,
     }),
   );
@@ -125,6 +125,7 @@ self.addEventListener("notificationclick", (event) => {
   const sessionId = event.notification.data?.sessionId;
   const image = event.notification.data?.image;
   const file = event.notification.data?.file;
+  const plugin = event.notification.data?.plugin;
   // An artifact notification used to navigate straight to `…&download=1`, which
   // is the browser's own download: no resume, no row in the app, and nothing at
   // all in the Android shell. It goes through the app's ONE download path now
@@ -137,12 +138,14 @@ self.addEventListener("notificationclick", (event) => {
         if (file) w.postMessage({ type: "download-file", file });
         else if (image) w.postMessage({ type: "open-image", sessionId, image });
         else if (sessionId) w.postMessage({ type: "open-session", sessionId });
+        else if (plugin) w.postMessage({ type: "open-plugin", plugin });
         return;
       }
       // Cold start (no open window): encode the target in the hash so the app
       // restores it on boot — same scheme App.tsx parses for reload routing.
       const p = new URLSearchParams();
       if (sessionId) p.set("a", sessionId);
+      if (plugin && !sessionId) p.set("plugin", plugin);
       if (image) { p.set("imgRepo", image.repoId); p.set("imgPath", image.relPath); }
       if (file) {
         p.set("dlRepo", file.repoId);

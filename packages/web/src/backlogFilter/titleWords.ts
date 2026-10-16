@@ -160,7 +160,7 @@ export const NAME_RUNNING_NOTE = "a naming pass is already running for this repo
  *
  * It takes the BUTTON's own label rather than a count, so the receipt says the
  * verb that was tapped and there is no second spelling of the number to drift
- * (`onUnmerge`'s `verb` is the same trick one sheet along). And it promises the
+ * (`dropClocksToast` is the same trick one verb along). And it promises the
  * queue, never the result: the pass is a call the desktop has yet to make, so
  * "titled" would be a claim about something that has not happened.
  */

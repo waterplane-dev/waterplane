@@ -16,6 +16,12 @@
  * in between (a reading gone stale for a while) is not a second crossing, so a
  * session is never told twice, or interrupted twice, for one overspend.
  *
+ * The crossing's one Esc is OWED, not attempted once (`Session.budgetEscOwed`):
+ * every judge while still over re-emits `budgetEscDue` until it goes out. The
+ * one-shot version asked for a running turn at the crossing INSTANT and, finding
+ * none there (the spend crossed between turns, after a limit resume, across a
+ * daemon restart), left the next turn spending past the cap for good.
+ *
  * What the crossing DOES — the notification, the one Esc — is
  * `server/sessionEvents.ts`'s, where the delivery facts are. This file decides
  * and types nothing.
@@ -43,13 +49,27 @@ export class BudgetSlice {
     s.info.budget = next;
     if (verdict.state === "over" && !s.budgetTripped) {
       s.budgetTripped = true;
+      s.budgetEscOwed = b.cfg.interrupt ? true : undefined;
       this.persist(s);
       this.core.emit("budgetTripped", s.info.id, s.info);
+    } else if (verdict.state === "over" && s.budgetEscOwed) {
+      this.core.emit("budgetEscDue", s.info.id, s.info);
     } else if (verdict.state === "ok" && s.budgetTripped) {
       s.budgetTripped = false;
+      s.budgetEscOwed = undefined;
       this.persist(s);
     }
     return changed;
+  }
+
+  /** The owed Esc is settled — it went out, or a person sent to the session by
+   *  hand and so chose to let it work past the cap. Never re-armed but by a new
+   *  crossing. */
+  settleEsc(id: string): void {
+    const s = this.core.sessions.get(id);
+    if (!s?.budgetEscOwed) return;
+    s.budgetEscOwed = undefined;
+    this.persist(s);
   }
 
   /**
@@ -59,7 +79,8 @@ export class BudgetSlice {
    * (latch cleared), so raising one the session is still past is a new
    * crossing and says so. Flipping only `interrupt` is not a new cap: the
    * crossing already happened and was already told, and clearing the latch
-   * there would tell it twice — or send an Esc long after the crossing.
+   * there would tell it twice — or send an Esc long after the crossing. Flipping
+   * it OFF does drop an Esc still owed: that is exactly what the switch says.
    * Always answers with the session as it now stands (`updated` is emitted).
    */
   set(id: string, cfg: SessionBudget | null): SessionInfo | null {
@@ -72,6 +93,7 @@ export class BudgetSlice {
       if (cfg) s.info.budget = { cfg, verdict: sessionBudgetVerdict(cfg, null, null, Date.now()) };
       else delete s.info.budget;
       if (newCap) s.budgetTripped = undefined;
+      if (newCap || !cfg?.interrupt) s.budgetEscOwed = undefined;
       this.persist(s);
     }
     this.judge(s);

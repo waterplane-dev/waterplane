@@ -46,6 +46,7 @@ moving a hook down reorders effects. The model `m` is `{ p, ...state }`.
 | `useAssessSheet.ts` | the one hook: picks, answers, clock, derived values, toggles, bulk, merge confirm, apply. Returns the model `m` |
 | `AsxParts.tsx` | `RunLog`, `NameHead`, `ItemFiles` (the last keeps its own `useInView`, as before) |
 | `AsxRowCard.tsx` / `AsxMergeCard.tsx` | one assessed row; one merge card |
+| `AsxSlotCards.tsx` | a slot check's conflict cards (words, no choice) and split cards (approve/leave) |
 | `AsxActions.tsx` / `AsxHead.tsx` / `AsxFooter.tsx` | the verbs; the pinned run status; the apply bar and the route out |
 | `AsxTop.tsx` | verdict counts, the guide, detail, the watch panel, empty states, refused notes |
 | `AsxStrips.tsx` / `AsxNews.tsx` / `AsxTail.tsx` | the verdict strips; proposed new items and offered pad notes; what the run looked at, then `AsxAsks.tsx` (the pin and naming answers) |

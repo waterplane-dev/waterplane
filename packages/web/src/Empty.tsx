@@ -34,6 +34,14 @@
  * queue, the snippet catalog) passes no `res` and gets just its own words in
  * the same box — which is why every site migrates rather than only the
  * resource-backed ones.
+ *
+ * How it LOOKS is one decision too (`.empty-msg`): one centred, muted sentence
+ * in the space the rows would take. It used to sit top-left at body size, and
+ * the callers that stacked a 20 px glyph over two sentences made every empty
+ * sheet read as a stub somebody forgot to finish. An icon a caller passes is
+ * centred and quiet; the age line is NOT centred, because it also stands above
+ * a list that has rows and belongs to the list's edge. The words, and which of
+ * the four states says them, are untouched by any of that.
  */
 import type { ReactNode } from "react";
 import { agoText, type ResourceState } from "./useRemoteResource";
@@ -109,5 +117,5 @@ export function Empty({ res, empty = true, thing, offlineNote, note, noun = "lis
     }
   }
   if (!body) return stale;
-  return <>{stale}<div className="empty">{body}{note ? <> {note}</> : null}</div></>;
+  return <>{stale}<div className="empty empty-msg">{body}{note ? <> {note}</> : null}</div></>;
 }

@@ -46,7 +46,7 @@ export function numbers(now: number): DemoScenario {
   const compactAt = t0 + (climb.length - 1) * 6 * MIN + 3 * MIN;
 
   const model: DemoModel = {
-    repos: repos(),
+    repos: repos({ healthIndex: now }),
     sessions: [
       {
         id: g1, cwd: GARDEN, title: "todo-garden · main", tabTitle: "Group by day", remoteControl: true, running: true,
@@ -56,7 +56,9 @@ export function numbers(now: number): DemoScenario {
     ],
     screens: {
       [g1]: screen(
-        `${claudeBanner("~/dev/todo-garden")}> add a test for the empty day\r\n` +
+        // The header names the model the context series is for (sonnet, a 200k window), so the terminal
+        // and the context sheet a tap away do not name two different ones.
+        `${claudeBanner("~/dev/todo-garden", "Sonnet 5.5")}> add a test for the empty day\r\n` +
           bullet("A day with no tasks should not draw a heading.") +
           tool("Update", "src/store/tasks.test.ts", "Added 14 lines") +
           tool("Bash", "npm test -- tasks", "PASS src/store/tasks.test.ts (10 tests)") +
@@ -92,7 +94,7 @@ export function numbers(now: number): DemoScenario {
         sessionResetAt: now + 2 * HOUR + 10 * MIN, weeklyResetAt: now + 3 * DAY + 5 * HOUR,
       },
       budget: {
-        budget: { enabled: true, sessionMax: 80, weeklyMax: 90 },
+        budget: { enabled: true, sessionMax: 80, weeklyMax: 90, leftoverMax: 20 },
         verdict: { blocked: false, state: "ok", which: "weekly", pct: 61, max: 90 },
       },
       meter: {

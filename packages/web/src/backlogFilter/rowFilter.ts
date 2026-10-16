@@ -33,19 +33,19 @@ export interface BacklogFilter {
   /**
    * An explicit set of ids — the cut a COUNT ON A CONTROL opens.
    *
-   * "merged from 3" on a smart-picked row is a number, and CLAUDE.md's rule is
-   * that a tap on a count shows exactly those things and never the unfiltered
-   * list for the reader to re-derive them from. The chip carries the ids
-   * (`BacklogItem.mergedFrom`) and this is where they land, so the number and
-   * the cut come from the one place — the same reason `ageBucket` is the only
-   * thing that buckets an age.
+   * A count on a control (an applied assessment's *N waiting*, a schedule's
+   * rows) is a number, and CLAUDE.md's rule is that a tap on a count shows
+   * exactly those things and never the unfiltered list for the reader to
+   * re-derive them from. The caller carries the ids and this is where they
+   * land, so the number and the cut come from the one place — the same reason
+   * `ageBucket` is the only thing that buckets an age.
    *
    * The other dimensions still apply on top of it, so an ids cut with "failed"
    * on shows the failed ones of those three and the bar says "3 of N" about
    * whatever it actually drew.
    *
-   * **An ids cut is about rows the default view HIDES.** Every original of a
-   * merge is archived, so the base the caller filters must be the unhidden one —
+   * **An ids cut may name rows the default view HIDES** (an archived row the
+   * cut was opened on), so the base the caller filters must be the unhidden one —
    * that is the caller's job (`Backlog.tsx` passes `p.items` without the
    * archived cut), not this predicate's: a membership test that also knew about
    * a view toggle would be two rules in one function.
@@ -112,12 +112,11 @@ export function backlogFilterSentence(f: BacklogFilter, idsLabel?: string): stri
 /**
  * **A row the archived cut may not hide: one that is running.**
  *
- * The host's `unmerge` on a running merged row ARCHIVES it while it runs, on
- * purpose — the row that ran is the only account of the session running it. But
- * the sheet's default base, the repo counts and the composer's badge all cut on
- * `archived` alone, so the tap the host offers made the running row vanish from
- * the list mid-run and dropped the badge by one for a session that is still
- * typing. Nothing was destroyed; "every row says what happened to it" simply
+ * A row can be archived while it runs (the smart pick's undo did exactly that
+ * until it was removed 2026-10-16; an archive tap on a running row still
+ * does). But the sheet's default base, the repo counts and the composer's
+ * badge all cut on `archived` alone, so such a row vanished from the list
+ * mid-run and dropped the badge by one for a session that is still typing. Nothing was destroyed; "every row says what happened to it" simply
  * stopped being true for the one row doing something.
  *
  * One predicate for all three sites, for `ageBucket`'s reason: a second copy of

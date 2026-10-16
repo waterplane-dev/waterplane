@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
-import { bootWait } from "./lib-e2e.mjs";
+import { bootWait, waitForHost } from "./lib-e2e.mjs";
 import { E, SLUG, rootEnv } from "./lib-brand.mjs";
 const PORT = 8813;
 const ROOT = mkdtempSync(join(tmpdir(), `${SLUG}-r-`));
@@ -57,7 +57,7 @@ bootWait(PORT, 900, async () => {
 
   // ── Phase 2: fresh host, resume EACH conversation from the recent list ──
   host = startHost();
-  await new Promise((r) => setTimeout(r, 900));
+  await waitForHost(PORT);
   await new Promise((resolve) => {
     const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
     let target = null, rid = null, cap = "";

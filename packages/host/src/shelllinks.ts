@@ -88,6 +88,19 @@ const AWAIT_RE = new RegExp(
   String.raw`(?:\bauthori[sz]ation\s+${C}\b|\bpaste\b[^\n]{0,40}\b${C}\b|\benter\b[^\n]{0,40}\b${C}\b)[^\n]{0,40}[:>❯][ \t]*$`,
   "i",
 );
+/** A yes/no question at the end of a row: `[y/N]`, `(Y/n)`, `(yes/no)`, ssh's `(yes/no/[fingerprint])`. */
+const YES_NO_RE = /[[(]\s*(?:y|yes)\s*\/\s*(?:n|no)\b[^\n]{0,24}?[\])]\s*[:?>]?\s*$/i;
+
+/**
+ * The program in front of a shell is asking a yes/no question on its LAST
+ * non-blank row — `deliver/deliverrun.ts` lets a one-line send through to it
+ * the way it does to a code prompt. A question above the last row is history.
+ */
+export function asksYesNo(screen: string): boolean {
+  const last = screen.split("\n").reverse().find((r) => r.trim()) ?? "";
+  return YES_NO_RE.test(last);
+}
+
 /** The word before a token that makes it a variable, a process or a listener. */
 const NOT_A_CODE_BEFORE = /(?:\$|\b(?:pid|port)\s*[:=#]?)\s*$/i;
 

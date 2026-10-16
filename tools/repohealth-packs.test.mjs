@@ -47,6 +47,9 @@ import python from "./repohealth/packs/python.mjs";
 import dart from "./repohealth/packs/dart.mjs";
 import shell from "./repohealth/packs/shell.mjs";
 import c from "./repohealth/packs/c.mjs";
+import typescript from "./repohealth/packs/typescript.mjs";
+import { measureUntested } from "./repohealth/metrics/untested.mjs";
+import { SERIES, listMoves } from "./repohealth/readings.mjs";
 
 /**
  * A hatch kind's pattern, compiled the way `hatches.mjs` compiles it: fresh,
@@ -391,7 +394,7 @@ test("a pack with no parser says so, and the sentence is not empty", () => {
 
 test("a declined capability is null — never undefined, 0 or false", () => {
   for (const pack of SIZE_ONLY) {
-    for (const cap of ["manifestPath", "manifests", "mentions", "keysFor"]) {
+    for (const cap of ["manifestPath", "manifests", "mentions", "keysFor", "imports"]) {
       assert.equal(pack[cap], null, `${pack.name}.${cap} must be an explicit null`);
       // `route.mjs` tests a capability with `typeof === "function"`, so the
       // one thing that must never be true is that this looks callable.
@@ -401,6 +404,7 @@ test("a declined capability is null — never undefined, 0 or false", () => {
   for (const pack of [kotlin, python]) {
     assert.equal(typeof pack.mentions, "function", `${pack.name}.mentions`);
     assert.equal(typeof pack.keysFor, "function", `${pack.name}.keysFor`);
+    assert.equal(typeof pack.imports, "function", `${pack.name}.imports`);
   }
   // Kotlin declines dependencies; Python supplies them.
   assert.equal(kotlin.manifestPath, null);
@@ -611,4 +615,121 @@ test("only an always-on pack may say what is vendored", () => {
   // true rather than being remembered.
   const rogue = { ...kotlin, always: false, excludeDirs: Object.freeze(["thirdparty"]) };
   assert.throws(() => configure("/nowhere", treeOf(["a/Main.kt"]), [common, rogue]), /excludeDirs/);
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// Which modules a test names, and which it reaches.
+// ───────────────────────────────────────────────────────────────────────────
+
+test("typescript: a reference may carry every extension the pack claims, not a second list of them", () => {
+  // The bug this pins: the accepted extensions were the literal `tsx|ts|js`
+  // after `exts` had widened to the whole family, so a `.mjs` module imported
+  // by its file name read as named by no test. Driven off `exts` itself, so a
+  // pack that claims another extension tomorrow is covered by this line.
+  for (const ext of [...typescript.exts, ...typescript.emits]) {
+    const named = typescript.mentions(`import { x } from "./metrics/untested${ext}";`, "tools/repohealth.test.mjs");
+    assert.ok(named.has("tools/metrics/untested"), `${ext}: ${[...named].join(", ")}`);
+  }
+  // And the right-hand boundary still holds for the longer alternatives.
+  assert.deepEqual([...typescript.mentions('"./a/notify.json"', "x/t.test.mjs")], []);
+  assert.deepEqual([...typescript.mentions('"./a/b.mjson"', "x/t.test.mjs")], []);
+});
+
+test("typescript: imports reads import specifiers, never a path a file merely spells", () => {
+  const text = [
+    'import { a } from "./a.ts";',
+    'export * from "../lib/b.js";',
+    'import "./side";',
+    'const c = await import("./lazy/c.tsx");',
+    'const d = require("./d.cjs");',
+    'import React from "react";',
+    'import { q } from "@waterplane/shared";',
+    'const src = readFileSync("./App.tsx", "utf8");',
+  ].join("\n");
+  const got = [...typescript.imports(text, "pkg/src/x.test.mjs")].sort();
+  assert.deepEqual(got, ["pkg/lib/b", "pkg/src/a", "pkg/src/d", "pkg/src/lazy/c", "pkg/src/side"]);
+  // The same text NAMES App: `mentions` is the wider rule on purpose.
+  assert.ok(typescript.mentions(text, "pkg/src/x.test.mjs").has("pkg/src/App"));
+});
+
+test("typescript: a type-only import loads nothing, so it is no edge", () => {
+  const text = [
+    'import type { SetupAim } from "./store";',
+    'export type { Row } from "./rows.ts";',
+    'import type {\n  A,\n  B,\n} from "./multi";',
+    // Survives as `import {} from` under verbatimModuleSyntax, which runs it.
+    'import { type Kept } from "./kept.ts";',
+    'import { live, type T } from "./live.ts";',
+  ].join("\n");
+  assert.deepEqual([...typescript.imports(text, "web/src/setup/logic.ts")].sort(), ["web/src/setup/kept", "web/src/setup/live"]);
+});
+
+test("typescript: an index answers to its directory, because that is how the family resolves it", () => {
+  const keys = typescript.keysFor("packages/web/src/features/backlog/index.ts");
+  assert.ok(keys.includes("features/backlog"));
+  assert.ok(keys.includes("packages/web/dist/features/backlog"), "and under the compiled mirror");
+  assert.ok(!keys.includes("backlog"), "never as a bare name");
+  assert.deepEqual(typescript.keysFor("foo/index.ts"), ["foo/index"]);
+});
+
+test("python and kotlin: an import IS a mention, so the two rules agree", () => {
+  const py = "from service.store import Thing\nimport db.session";
+  assert.deepEqual([...python.imports(py, "tests/t.py")], [...python.mentions(py, "tests/t.py")]);
+  const kt = "import de.hoh.tiptoi.Foo";
+  assert.deepEqual([...kotlin.imports(kt, "app/src/test/T.kt")], [...kotlin.mentions(kt, "app/src/test/T.kt")]);
+});
+
+/** A prereg holding one pack, the shape `measureUntested` reads. */
+const TS_ONLY = Object.freeze({ PACKS: [{ name: "typescript", pack: typescript }], UNTESTED_REQUIRE_DIR_SEGMENT: true });
+const file = (path, text = "") => ({ path, oid: `oid:${path}:${text.length}`, text, loc: 1 });
+
+test("untested: the headline is what no test reaches; the reached-but-unnamed travel beside it", () => {
+  const snap = {
+    files: [
+      file("src/logic.ts", 'import { s } from "./slice.ts";'),
+      file("src/slice.ts", 'import { d } from "./deep";'),
+      file("src/deep.ts"),
+      file("src/App.tsx", 'import { g } from "./glue.ts";'),
+      file("src/glue.ts"),
+      file("src/alone.ts"),
+    ],
+    tests: [
+      { path: "src/logic.test.mjs", text: 'import { f } from "./logic.ts";' },
+      // Named as text, never imported: App is named, and nothing App imports
+      // is reached through it.
+      { path: "src/shape.test.mjs", text: 'const t = readFileSync("./App.tsx", "utf8");' },
+    ],
+  };
+  const got = measureUntested(snap, null, 0, TS_ONLY);
+  assert.deepEqual(got.value, ["src/alone.ts", "src/glue.ts"]);
+  assert.deepEqual(got.unnamed, ["src/deep.ts", "src/slice.ts"]);
+});
+
+test("untested: a pack with no import rule is read on naming alone, never guessed reached", () => {
+  const noImports = Object.freeze({ ...typescript, imports: null });
+  const prereg = { PACKS: [{ name: "typescript", pack: noImports }], UNTESTED_REQUIRE_DIR_SEGMENT: true };
+  const snap = {
+    files: [file("src/logic.ts", 'import { s } from "./slice.ts";'), file("src/slice.ts")],
+    tests: [{ path: "src/logic.test.mjs", text: 'import { f } from "./logic.ts";' }],
+  };
+  const got = measureUntested(snap, null, 0, prereg);
+  assert.deepEqual(got.value, ["src/slice.ts"]);
+  assert.deepEqual(got.unnamed, []);
+});
+
+test("untested: what moved the list is counted from the two rows, and says what a row cannot tell", () => {
+  const then = { day: "2026-06-18", untested: { value: ["a.ts", "b.ts"], unnamed: ["c.ts"] }, classics: { value: { files: 4 } } };
+  const now = { day: "2026-10-15", untested: { value: ["a.ts", "c.ts", "n.ts"], unnamed: [] }, classics: { value: { files: 5 } } };
+  // c.ts was reached then and is not now: the one transition. n.ts is new to
+  // the list and that row never saw it. b.ts left — reached since, or gone.
+  assert.deepEqual(listMoves(then, now), { joined: 2, lost: 1, left: 1 });
+  // A row written before `unnamed` existed has no count to offer.
+  assert.equal(listMoves({ untested: { value: ["a.ts"] } }, now), null);
+
+  const s = SERIES.find((d) => d.key === "untested.count");
+  const detail = s.detail(now, null, then);
+  assert.match(detail, /^ 3 of 5 modules in the tree\./, "the level keeps its denominator first");
+  assert.match(detail, /A further 0 are reached/);
+  assert.match(detail, /Since 2026-06-18: 2 joined the list \(1 of them reached by a test on that day\) and 1 left it/);
+  assert.doesNotMatch(s.detail(now, null, now), /Since/, "a row compared with itself says nothing moved, by saying nothing");
 });

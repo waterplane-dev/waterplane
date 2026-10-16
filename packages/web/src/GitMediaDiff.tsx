@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { RotateCw } from "lucide-react";
 import { api } from "./api";
 import { isAudio, isImage, isVideo } from "./docKind";
 import { fmtBytes } from "@waterplane/shared";
@@ -18,7 +19,7 @@ export function sideWords(side: Side, staged: boolean): string {
 }
 
 type Loaded =
-  | { state: "loading" }
+  | { state: "loading"; got: number; total: number }
   | { state: "absent" }
   | { state: "error"; reason: string }
   | { state: "ok"; url: string; size: number };
@@ -29,12 +30,14 @@ type Loaded =
  * and must not become one for this.
  */
 function MediaSide({ repoId, path, side, staged }: { repoId: string; path: string; side: Side; staged: boolean }) {
-  const [got, setGot] = useState<Loaded>({ state: "loading" });
+  const [got, setGot] = useState<Loaded>({ state: "loading", got: 0, total: 0 });
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let url: string | null = null;
     let live = true;
-    setGot({ state: "loading" });
-    api.gitBlob(repoId, path, side, staged).then(
+    setGot({ state: "loading", got: 0, total: 0 });
+    const onProgress = (n: number, total: number) => { if (live) setGot({ state: "loading", got: n, total }); };
+    api.gitBlob(repoId, path, side, staged, onProgress).then(
       (b) => {
         if (!live) return;
         if (!b) return setGot({ state: "absent" });
@@ -44,12 +47,21 @@ function MediaSide({ repoId, path, side, staged }: { repoId: string; path: strin
       (e: unknown) => { if (live) setGot({ state: "error", reason: e instanceof Error ? e.message : String(e) }); },
     );
     return () => { live = false; if (url) URL.revokeObjectURL(url); };
-  }, [repoId, path, side, staged]);
+  }, [repoId, path, side, staged, attempt]);
 
   let body;
-  if (got.state === "loading") body = <div className="gm-note">loading…</div>;
+  if (got.state === "loading") {
+    body = <div className="gm-note">loading… {got.got > 0 && (got.total ? `${fmtBytes(got.got)} of ${fmtBytes(got.total)}` : fmtBytes(got.got))}</div>;
+  }
   else if (got.state === "absent") body = <div className="gm-note">{side === "old" ? "no file here — it is new" : "no file here — it was deleted"}</div>;
-  else if (got.state === "error") body = <div className="gm-note">could not load this side: {got.reason}</div>;
+  else if (got.state === "error") {
+    body = (
+      <div className="gm-note">
+        could not load this side: {got.reason}{" "}
+        <button className="key" onClick={() => setAttempt((n) => n + 1)}><RotateCw size={14} /> Retry</button>
+      </div>
+    );
+  }
   else if (isVideo(path)) body = <video src={got.url} controls loop muted playsInline />;
   else if (isAudio(path)) body = <audio src={got.url} controls />;
   else body = <img src={got.url} alt={sideWords(side, staged)} />;

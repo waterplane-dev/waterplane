@@ -30,8 +30,7 @@ export const isBacklogTitle = (title: string): boolean => title.startsWith(BACKL
  * opened is allowed to be called.
  *
  * The prefix is the ONLY mark of an automatic session: it is what
- * `autoSessionCount()` counts against the cap, what `reapAutoSession` may close
- * to make room and what `lingerSweep` retires after ten minutes. A finished
+ * `autoSessionCount()` counts against the cap (while working) and what `lingerSweep` retires after ten minutes. A finished
  * item's session is closed by the linger sweep WITH its title, so it lands in
  * *Recently closed* still called `backlog · myrepo · fix the flaky test` — and the
  * reopen button sends that title straight back. The session a person is now

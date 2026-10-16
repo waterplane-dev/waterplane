@@ -22,11 +22,15 @@
  *
  * An hour bucket is the finest thing on record, so a window that opened at
  * 01:59 cannot be cut at 01:59. The honest move is not to fudge the edge but to
- * MOVE IT and say where it went: the cut starts at the top of the hour the
- * window opened in (`hourFloor`), and every readout built on it names that
- * instant. The number is then exact for the span it states — a little wider
- * than the window — instead of being approximately right about the window.
- * `WindowCut.leadMs` is how much wider, so the caller can say so.
+ * MOVE IT and say where it went: the cut starts at the NEAREST hour boundary to
+ * the instant the window opened (`windowStartHour`, shared — the one rule the
+ * heat grid, the week card and the host's cost window use too), and every
+ * readout built on it names that instant. The number is then exact for the span
+ * it states — off the window by at most half an hour — instead of being
+ * approximately right about the window. Always the FLOOR counted the whole
+ * opening hour: a week resetting at 18:59 carried 59 minutes of last week's
+ * spend, ≈ 4 points against a 35% meter. `WindowCut.leadMs` is the difference,
+ * signed, so the caller can say which way.
  *
  * Every refusal here is a REASON, never a zero: a window with no reset instant,
  * a reading old enough that the window has already rolled over, and an hour
@@ -34,7 +38,7 @@
  * three different sentences.
  */
 import {
-  addCost, addTotals, normalizeModel, tokenTotal, zeroCost, zeroTotals,
+  addCost, addTotals, normalizeModel, tokenTotal, windowStartHour, zeroCost, zeroTotals,
   type CostBreakdown, type ModelSlice, type TokenGroup, type TokenHour, type TokenStatsDoc,
   type TokenTotals, type TokenWindowSeries, type UsageInfo,
 } from "@waterplane/shared";
@@ -80,14 +84,6 @@ export const LIVE_WINDOWS: {
   },
 ];
 
-/** Epoch ms of the top of the LOCAL hour `t` falls in — the first bucket key a
- *  cut starting at `t` can honestly include. */
-export function hourFloor(t: number): number {
-  const d = new Date(t);
-  d.setMinutes(0, 0, 0);
-  return d.getTime();
-}
-
 /** Why a window has no cut. Each one is a different sentence on screen, which
  *  is why this is a union and not a boolean. */
 export type CutRefusal =
@@ -115,11 +111,13 @@ export interface WindowCut {
   back: number;
   /** When the limit window itself opened — `resetAt - lenMs`. */
   openedAt: number;
-  /** Where the CUT starts: the top of the hour `openedAt` falls in. Always at
-   *  or before `openedAt`. */
+  /** Where the CUT starts: the hour boundary nearest `openedAt`
+   *  (`windowStartHour`) — up to half an hour either side of it. */
   fromHour: number;
-  /** How much earlier the cut starts than the window did. Zero only when the
-   *  window opened exactly on the hour. */
+  /** `openedAt - fromHour`, SIGNED: positive when the cut starts earlier than
+   *  the window (the first hour is counted whole), negative when later (the
+   *  window's first minutes fall before the first bucket and are left out).
+   *  Zero only when the window opened exactly on the hour. */
   leadMs: number;
   resetAt: number;
   /**
@@ -169,7 +167,7 @@ export function windowCut(
   if (resetAt <= now) return { why: "rolled", resetAt };
 
   const openedAt = resetAt - spec.lenMs;
-  const fromHour = hourFloor(openedAt);
+  const fromHour = windowStartHour(openedAt);
   const hoursFrom = doc?.hoursFrom ?? null;
   // `hoursFrom` is local midnight of the first day on the wire. The record
   // reaching back further than the cut is the whole condition — an empty
@@ -221,7 +219,7 @@ export function isCut(x: WindowCut | CutRefusal): x is WindowCut {
  * A model the all-time list does not name leaves the flag absent, which is the
  * one honest third answer.
  */
-function foldModels(hours: TokenHour[], all: TokenGroup[]): TokenGroup[] {
+export function foldModels(hours: readonly { byModel?: ModelSlice[] }[], all: TokenGroup[]): TokenGroup[] {
   const totals = new Map<string, TokenTotals>();
   const costs = new Map<string, CostBreakdown>();
   for (const h of hours) {
@@ -260,17 +258,42 @@ export function cutSpan(cut: WindowCut, now: number): string {
   const day = (t: number) => new Date(t).toLocaleDateString(undefined, { day: "numeric", month: "short" });
   const wide = cut.resetAt - cut.fromHour > 26 * HOUR_MS;
   const from = wide ? `${day(cut.fromHour)}, ${at(cut.fromHour)}` : at(cut.fromHour);
-  const lead = cut.leadMs > 0
-    ? ` The window itself opened at ${at(cut.openedAt)}; the finest bucket on record is an hour, so the cut starts at the top of that hour and covers ${Math.round(cut.leadMs / 60_000)} minutes more than the window.`
-    : "";
+  const lead = leadWords(cut.leadMs, at(cut.openedAt));
   // A window that has CLOSED ran to its own reset instant, not to now. Saying
   // "to now" about last Tuesday would put four days nobody counted inside a
-  // span the sentence claims to state exactly.
+  // span the sentence claims to state exactly. Its cut ends where the NEXT
+  // window's starts (`windowStartHour(resetAt)`), so neighbours never share an
+  // hour — and the sentence prints that hour, the span actually counted.
   if (cut.back > 0) {
-    const to = wide ? `${day(cut.resetAt)}, ${at(cut.resetAt)}` : at(cut.resetAt);
-    return `Counted from ${from} to ${to}, ${hoursWord(cut.resetAt - cut.fromHour)} of hour buckets.${lead}`;
+    const toHour = windowStartHour(cut.resetAt);
+    const to = wide ? `${day(toHour)}, ${at(toHour)}` : at(toHour);
+    return `Counted from ${from} to ${to}, ${hoursWord(toHour - cut.fromHour)} of hour buckets.${lead}`;
   }
   return `Counted from ${from} to now, ${hoursWord(now - cut.fromHour)} of hour buckets.${lead}`;
+}
+
+/**
+ * The one wording of a window's left edge against the hour its cut starts on — the live cut's
+ * span line and the week card's caption both say it, so it is worded once. `leadMs` is SIGNED
+ * (`WindowCut.leadMs`): positive, the first hour is counted whole and the cut is wider than the
+ * window; negative, the window's first minutes fall before the cut and are left out. Null on the
+ * hour. `before` names what they fall before — a column on the week card, a bucket elsewhere.
+ */
+export function leadClause(leadMs: number, what: "window" | "week", before: string): string | null {
+  const min = Math.round(Math.abs(leadMs) / 60_000);
+  if (!min) return null;
+  if (leadMs > 0) return `the first hour is counted whole, ${min} min wider than the ${what}`;
+  return min === 1
+    ? `the first minute of the ${what} falls before ${before} and is left out`
+    : `the first ${min} minutes of the ${what} fall before ${before} and are left out`;
+}
+
+/** `leadClause` as a sentence after the span line, naming the instant the window opened. */
+function leadWords(leadMs: number, openedClock: string): string {
+  const clause = leadClause(leadMs, "window", "the first hour bucket");
+  return clause
+    ? ` The window itself opened at ${openedClock}; the finest bucket on record is an hour, so the cut starts at the nearest hour: ${clause}.`
+    : "";
 }
 
 function hoursWord(ms: number): string {
@@ -361,7 +384,7 @@ export function windowGrid(series: TokenWindowSeries | null): WindowCell[] {
     // A window the record only PARTLY covers is left unknown rather than
     // counted: half a window drawn as a whole one is the box that reads
     // quietest on the heatmap and is the one with the least behind it.
-    const covered = series.oldestHour <= hourFloor(openedAt);
+    const covered = series.oldestHour <= windowStartHour(openedAt);
     out.push({
       back,
       openedAt,
@@ -405,7 +428,7 @@ export function seriesCut(
   if (!series || !(series.anchor > 0)) return { why: "no-reset" };
   const resetAt = series.anchor - back * series.lenMs;
   const openedAt = resetAt - series.lenMs;
-  const fromHour = hourFloor(openedAt);
+  const fromHour = windowStartHour(openedAt);
   if (series.oldestHour == null || series.oldestHour > fromHour) {
     return { why: "short", fromHour, hoursFrom: series.oldestHour };
   }

@@ -103,3 +103,31 @@ test("core() refuses before App binds it, and returns the last binding after", (
   bindCore(api);
   assert.equal(core(), api);
 });
+
+test("extStorage: an extension's keys are built, per plugin, host-scoped, and refuse a bad name", async () => {
+  const { extStorage } = await import("./extStorage.ts");
+  const { EXT_PREFIX, HOST_KEY_PREFIXES, isDeviceKey } = await import("../storage.ts");
+  const mem = new Map();
+  const prev = globalThis.localStorage;
+  globalThis.localStorage = {
+    getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => { mem.set(k, String(v)); }, removeItem: (k) => { mem.delete(k); },
+  };
+  try {
+    const s = extStorage("desktop");
+    assert.deepEqual(s.read("quality", { a: 1 }), { a: 1 });
+    s.write("quality", { a: 2 });
+    assert.deepEqual(s.read("quality", null), { a: 2 });
+    const [k] = [...mem.keys()];
+    assert.equal(k, `${EXT_PREFIX}desktop.quality`);
+    assert.ok(HOST_KEY_PREFIXES.includes(EXT_PREFIX));
+    assert.equal(isDeviceKey(k), false);
+    // Another plugin's same name is another key.
+    assert.equal(extStorage("other").read("quality", "none"), "none");
+    s.remove("quality");
+    assert.equal(mem.size, 0);
+    assert.throws(() => s.read("../x", 0));
+    assert.throws(() => extStorage("Bad Id"));
+  } finally {
+    globalThis.localStorage = prev;
+  }
+});

@@ -245,6 +245,10 @@ export function createDeliveries(ctx: ServerCtx) {
     // its prompt" is a row that says the wrong thing, on the screen that exists
     // to say the right one.
     let detail: string | undefined;
+    // A person sending to a session past its budget chose to let it work: an
+    // Esc still owed for that crossing would interrupt the turn they just asked
+    // for (`sessions/budgetwatch.ts`).
+    ctx.sessions.settleBudgetEsc(id);
     try {
       // `interactive` — a person typed this. Do not wait for the agent to finish;
       // typing at a working session is a deliberate interjection, and the app has a

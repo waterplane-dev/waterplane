@@ -12,7 +12,7 @@
  * the rest of its list out from there.
  */
 import { promptStillCurrent } from "@waterplane/shared";
-import type { HistoryEntry, HostMessage, SessionInfo } from "@waterplane/shared";
+import type { HistoryEntry, HostMessage, PermissionMode, SessionInfo } from "@waterplane/shared";
 import { judgeBudget } from "./budget.ts";
 import { autoContinue, parkAtWall } from "./usagewall.ts";
 import { base64, mint, utf8 } from "./model.ts";
@@ -133,6 +133,8 @@ export function createSession(d: Desk, o: { cwd: string; title?: string; cols?: 
   const info: SessionInfo = {
     id: mint(d.m, "demo"), cwd: o.cwd, title: o.title || repoName(o.cwd),
     remoteControl: false, running: true, createdAt: now, idle: true, idleSince: now,
+    // A fresh claude's footer carries no mode label, which the host reads as Manual.
+    liveMode: "default",
   };
   sessions(d.m).push(info);
   (d.m.screens ??= {})[info.id] = { data: "", seq: 0, cols: o.cols, rows: o.rows, log: (d.m.banner ?? DEFAULT_BANNER).replaceAll("{repo}", repoName(o.cwd)).replaceAll("{cwd}", o.cwd) };
@@ -163,7 +165,9 @@ export function removeSession(d: Desk, id: string): void {
   if (d.m.screens) delete d.m.screens[id];
   if (d.m.composer) delete d.m.composer[id];
   if (s) {
-    (d.m.closed ??= []).unshift({ id, cwd: s.cwd, title: s.title, closedAt: d.now(), closedBy: "you", firstPrompt: s.firstPrompt, lastPrompt: s.lastPrompt });
+    (d.m.closed ??= []).unshift({ id, cwd: s.cwd, title: s.title, closedAt: d.now(), closedBy: "you", firstPrompt: s.firstPrompt, lastPrompt: s.lastPrompt,
+      // The flag outlives the session (kept per conversation on the host).
+      ...(s.followUp ? { followUp: s.followUp } : {}) });
     d.broadcast({ t: "session.closed", id, shellsStopped: 0, shellsLeft: 0 });
     d.broadcast({ t: "closed.list", closed: d.m.closed });
   }
@@ -171,8 +175,12 @@ export function removeSession(d: Desk, id: string): void {
 }
 
 export function recordHistory(d: Desk, id: string, text: string, kind: HistoryEntry["kind"]): void {
-  const h = (d.m.history ??= {});
-  (h[id] ??= []).push({ id: mint(d.m, "h"), kind, text, sentAt: d.now() });
+  const rows = ((d.m.history ??= {})[id] ??= []);
+  // A scenario seeds its past rows with ids of the same shape (`h-1`); a minted one that matched
+  // would share that row's turn facts, and the reader would price two turns as one.
+  let rowId = mint(d.m, "h");
+  while (rows.some((r) => r.id === rowId)) rowId = mint(d.m, "h");
+  rows.push({ id: rowId, kind, text, sentAt: d.now() });
 }
 
 // ── turns ─────────────────────────────────────────────────────────────────
@@ -185,6 +193,7 @@ export function submit(d: Desk, id: string, raw: string, echo = true): void {
   if (echo) write(d, id, `\x1b[1m>\x1b[0m ${text}\r\n`);
   recordHistory(d, id, text, "prompt");
   const now = d.now();
+  if (effortCommand(d, id, text)) return;
   updateSession(d, id, { lastPrompt: text, firstPrompt: s.firstPrompt ?? text, turnActive: true, turnStartedAt: now, idle: false, lastTurnAt: now }, ["idleSince"]);
   const q = text.toLowerCase();
   const rule = (d.m.replies ?? []).find((r) =>
@@ -192,6 +201,41 @@ export function submit(d: Desk, id: string, raw: string, echo = true): void {
   const steps: DemoTimedStep[] = rule ? [...rule.steps] : [{ kind: "output", text: NO_REPLY, afterMs: 400 }];
   steps.push({ kind: "turnEnd" });
   schedule(d, id, steps);
+}
+
+/** `/effort <level>` and `/effort ultracode on|off`, answered the way the CLI
+ *  does — a line on screen, no turn — and recorded on the session so the
+ *  phone's wheel and ultracode row read them back. False for anything else. */
+function effortCommand(d: Desk, id: string, text: string): boolean {
+  const m = /^\/effort\s+(?:ultracode\s+(on|off)|(low|medium|high|xhigh|max))\s*$/i.exec(text.trim());
+  if (!m) return false;
+  if (m[1]) {
+    const on = m[1].toLowerCase() === "on";
+    write(d, id, on ? "Ultracode on for this session\r\n" : "Ultracode off\r\n");
+    updateSession(d, id, { ultracode: on });
+  } else {
+    const effort = m[2].toLowerCase() as NonNullable<SessionInfo["effort"]>;
+    write(d, id, `Set effort level to ${effort}\r\n`);
+    updateSession(d, id, { effort });
+  }
+  return true;
+}
+
+/** `session.mode`: what the host does with shift+tab, minus the keys. The
+ *  cycle is the CLI's four, plus `bypassPermissions` only for a session
+ *  launched with it; anything else is refused in the host's shape — the
+ *  footer's mode (unchanged) and the sentence why. */
+export function switchMode(d: Desk, id: string, mode: PermissionMode): { ok: boolean; mode?: PermissionMode; reason?: string } {
+  const s = findSession(d.m, id);
+  if (!s || !s.running) return { ok: false, reason: SESSION_GONE };
+  const cur = s.liveMode ?? s.permissionMode ?? "default";
+  const cycle: PermissionMode[] = ["default", "acceptEdits", "plan", "auto"];
+  if (s.permissionMode === "bypassPermissions") cycle.push("bypassPermissions");
+  if (!cycle.includes(mode)) {
+    return { ok: false, mode: cur, reason: `${mode} is not in this session’s shift+tab cycle — it exists only in a session launched with it.` };
+  }
+  updateSession(d, id, { liveMode: mode });
+  return { ok: true, mode };
 }
 
 /** Lay `steps` out from `from` (default now). A `prompt` step holds the rest of
@@ -300,6 +344,7 @@ export function runStep(d: Desk, step: DemoStep, fallbackId?: string, rest: Demo
       return;
     }
     case "artifact": landArtifact(d, id, step.repoId, step.relPath, step.size); return;
+    case "deliverable": landDeliverable(d, id, step.repoId, step.relPath, step.size); return;
     case "wall": {
       const s = findSession(d.m, id);
       if (!s) return;
@@ -335,6 +380,26 @@ function landArtifact(d: Desk, id: string, repoId: string, relPath: string, size
   const item = {
     id: mint(d.m, "n"), ts: now, kind: "image" as const, title: `New screenshot in ${repo?.repoName ?? "the repo"}`, body: name,
     sessionId: id, image: { repoId, relPath },
+  };
+  (d.m.notifications ??= []).unshift(item);
+  d.broadcast({ t: "notification", item });
+}
+
+/** A non-picture deliverable this session's turn wrote into the outbox (`deliverable` step): the
+ *  gallery entry and its badge, and the one notification the real host's turn-end scan sends for
+ *  it (`server/sessionEvents.ts`: "Outbox: <name>", its size, the session, "tap to download"). */
+function landDeliverable(d: Desk, id: string, repoId: string, relPath: string, size: number): void {
+  const now = d.now();
+  const name = relPath.slice(relPath.lastIndexOf("/") + 1);
+  const files = ((d.m.gallery ??= {})[repoId] ??= []) as unknown[];
+  if (!files.some((f) => (f as { relPath?: unknown })?.relPath === relPath)) files.unshift({ name, relPath, size, mtime: now, ctime: now });
+  const repo = (d.m.repos ?? []).find((r) => !!r && typeof r === "object" && (r as { id?: unknown }).id === repoId) as { outboxCount?: number } | undefined;
+  if (repo) repo.outboxCount = (repo.outboxCount ?? 0) + 1;
+  const mb = `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  const item = {
+    id: mint(d.m, "n"), ts: now, kind: "artifact" as const, title: `Outbox: ${name}`,
+    body: `${mb} · ${findSession(d.m, id)?.title ?? "this session"} — tap to download`,
+    sessionId: id, file: { repoId, relPath, name, size, mtime: now },
   };
   (d.m.notifications ??= []).unshift(item);
   d.broadcast({ t: "notification", item });

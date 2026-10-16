@@ -47,10 +47,11 @@ sendIntent/*.ts         pure rules, no React, `.ts` specifiers (node --test load
 | `send/WhenSection.tsx` | the *When* row, now/idle, anchors, after-another, wait-until-free |
 | `send/RuleEditor.tsx` | how often, once/weekly, the preview line and week bar |
 | `send/WindowRule.tsx` | the usage-window rule's fields |
+| `send/LeadPick.tsx` | *how long before*: lead presets, a typed lead, its kept chip |
 | `send/MoreRule.tsx` | lead time, run hours, late runs, name |
 | `send/SendActions.tsx` | the footer: attach buttons, cancel, the one primary button |
 | `sendIntent.ts` | barrel |
-| `sendIntent/send{Types,Clock,Labels,Chain,Rule,Retime}.ts` | the vocabulary and rules by subject: the four answers + seed; clock chips; summary rows and refusals; chain candidates; the two rare clauses; re-time and budget holds. `send` prefix because file basenames must be unique across packages (`hostshape`: `clock.ts` is the host's) |
+| `sendIntent/send{Types,Clock,Lead,Labels,Chain,Rule,Retime}.ts` | the vocabulary and rules by subject: the four answers + seed; clock chips; a typed lead time; summary rows and refusals; chain candidates; the two rare clauses; re-time and budget holds. `send` prefix because file basenames must be unique across packages (`hostshape`: `clock.ts` is the host's) |
 
 ## Caps and pins
 

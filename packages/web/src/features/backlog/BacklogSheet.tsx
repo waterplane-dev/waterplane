@@ -22,7 +22,7 @@ import { useCore, usePref, useStore } from "../../sdk";
 import { closeChoicePatch, closeChoiceToast } from "../../autoSessions";
 import { BL_OFFLINE, clockParentsOf, scheduleMaps } from "./logic";
 import { assessBusy, assessRuns, backlog, backlogFocus, backlogScope } from "./store";
-import { openAssessFor, openBacklogCut, runAgain, runAgainMany } from "./actions";
+import { openAssessFor, openBacklogCut, openSlotCheck, runAgain, runAgainMany } from "./actions";
 
 export function BacklogSheet() {
   const core = useCore();
@@ -62,7 +62,7 @@ export function BacklogSheet() {
          *naming…* on rows nothing is naming, and the sheet reads the same
          list to decide whether to offer the verb at all. */
       naming={online ? bl.naming : []}
-      smartPick={bl.smartPick} passes={bl.passes} snapAt={bl.snapAt}
+      snapAt={bl.snapAt}
       online={online}
       // The cut this sheet was opened on, and the seam back to the rule that
       // wrote a row. Both halves of "these two lists are the same subject".
@@ -78,6 +78,16 @@ export function BacklogSheet() {
         onSetCloseWhenDone: (id, c) => liveSend(
           { t: "backlog.update", id, closeWhenDone: closeChoicePatch(c) },
           closeChoiceToast(c, closeGlobal), BL_OFFLINE),
+        /* "Flag for follow up when done" (R-sessions-043): `true` sets it,
+           `null` clears it — live-only like the close answer beside it. */
+        onSetFlagWhenDone: (id, on) => liveSend(
+          { t: "backlog.update", id, flagWhenDone: on ? true : null },
+          on ? "its session gets the follow-up flag once it is done" : "no follow-up flag when it is done", BL_OFFLINE),
+        /* The session budget of a QUEUED row (R-automation-044): an object sets
+           or changes it, `null` clears it — live-only, never a requeue. */
+        onSetBudget: (id, b) => liveSend(
+          { t: "backlog.update", id, budget: b },
+          b ? "its session will start with that budget" : "no budget on its session", BL_OFFLINE),
         /* **Take the clock off and leave the words.** An `intent.update` whose
            patch carries a `trigger`; live-only, because a decision about a clock
            replayed an hour later is about an instant that may have arrived. The
@@ -119,8 +129,6 @@ export function BacklogSheet() {
         onSwap: (id, otherId) => liveSend({ t: "backlog.swap", id, otherId }, "reordered", BL_OFFLINE),
         onFire: (id) => { if (liveSend({ t: "backlog.fire", id }, "running it now…", BL_OFFLINE)) core.nav.followFire(id); },
         onDone: (id) => liveSend({ t: "backlog.done", id }, "marked done", BL_OFFLINE),
-        // The verb the BUTTON wore (`undo` or `put them back`), never a fixed one.
-        onUnmerge: (id, verb) => liveSend({ t: "backlog.unmerge", id }, verb, BL_OFFLINE),
         onArchive: (id, archived) => liveSend({ t: "backlog.archive", id, archived }, archived ? "archived" : "unarchived", BL_OFFLINE),
         onCheck: (id) => liveSend({ t: "backlog.check", id }, "checking…", BL_OFFLINE),
         onValidate: (id) => liveSend({ t: "backlog.validate", id }, "validating…", BL_OFFLINE),
@@ -148,11 +156,6 @@ export function BacklogSheet() {
            receipt says `auto` — a switch with three names is a switch a person
            cannot be sure they just flipped. */
         onSetAuto: (enabled) => liveSend({ t: "backlog.setAuto", enabled }, `auto ${enabled ? "on" : "off"}`, BL_OFFLINE),
-        /* The per-repo tick, live-only like every other backlog mutation. */
-        onSetSmartPick: (repoDir, enabled) => liveSend(
-          { t: "backlog.setSmartPick", repoDir, enabled },
-          enabled ? "smart pick on — it looks before each item starts" : "smart pick off",
-          BL_OFFLINE),
         /* The same contract over a cut, and **one receipt for one tap** —
            `onDropClocks`' rule exactly. */
         onArchiveMany: (ids) => liveSendAll(
@@ -165,6 +168,7 @@ export function BacklogSheet() {
           const repo = visibleRepos.find((r) => r.worktreePath === repoDir);
           if (repo) openAssessFor(repo, ids);
         },
+        onSlotCheck: (c) => openSlotCheck(c),
         assessBlocked: (repoDir) => {
           const run = runs.get(repoDir) ?? null;
           if (run) return null; // there is something to read — opening it spends nothing

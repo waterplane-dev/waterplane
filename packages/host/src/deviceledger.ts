@@ -18,7 +18,7 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { chmodSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { cleanDeviceRow, deviceSeenDue, normalizeDeviceName, sortDevices, type DeviceRow, type PeerKind } from "@waterplane/shared";
+import { cleanDeviceRow, deviceSeenDue, normalizeDeviceName, sortDevices, type DeviceRow, type DeviceScope, type PeerKind } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
 import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
 
@@ -63,13 +63,15 @@ export class DeviceLedger {
     try { chmodSync(this.file, 0o600); } catch { /* best effort */ }
   }
 
-  /** Issue a token for a new device. The token is returned here and nowhere else. */
-  mint(name: unknown, kind: PeerKind | null, now = Date.now()): { token: string; row: DeviceRow } {
+  /** Issue a token for a new device. The token is returned here and nowhere else.
+   *  `scope` is stored on the row (only "passive" exists; absent = full). */
+  mint(name: unknown, kind: PeerKind | null, now = Date.now(), scope?: DeviceScope): { token: string; row: DeviceRow } {
     const token = randomBytes(32).toString("base64url");
     let id: string;
     do { id = randomBytes(9).toString("base64url"); } while (this.rows.some((r) => r.id === id));
     const row: StoredRow = {
       id, name: normalizeDeviceName(name) ?? "device", createdAt: now, lastSeenAt: now, lastKind: kind, tokenHash: hashToken(token),
+      ...(scope === "passive" ? { scope } : {}),
     };
     this.rows.push(row);
     if (this.rows.length > DEVICE_LEDGER_MAX) {
@@ -127,8 +129,11 @@ export class DeviceLedger {
   }
 
   get size(): number { return this.rows.length; }
+
+  /** Some paired device is passive — `AuthManager` then holds Tailscale gated. */
+  hasPassive(): boolean { return this.rows.some((r) => r.scope === "passive"); }
 }
 
 function publicRow(r: StoredRow): DeviceRow {
-  return { id: r.id, name: r.name, createdAt: r.createdAt, lastSeenAt: r.lastSeenAt, lastKind: r.lastKind };
+  return { id: r.id, name: r.name, createdAt: r.createdAt, lastSeenAt: r.lastSeenAt, lastKind: r.lastKind, ...(r.scope === "passive" ? { scope: r.scope } : {}) };
 }

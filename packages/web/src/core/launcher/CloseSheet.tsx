@@ -22,6 +22,7 @@ import { shellsChipText, shellsSummary } from "@waterplane/shared";
 import { Sheet } from "../../Sheet";
 import { ConfirmButton } from "../../Confirm";
 import { Empty } from "../../Empty";
+import { Explain } from "../../Explain";
 import { useBackStep } from "../../backStep";
 import { SessionFacts, sessionStatus } from "../../sessionFacts";
 import { draftSessionIds } from "../../outbox";
@@ -29,10 +30,13 @@ import { showToast } from "../../toast";
 import { track } from "../../usage";
 import { noteSessionClosing } from "../../features/shells";
 import { useBacklog } from "../../features/backlog";
+import { FilterChip } from "../../kit/FilterChip";
+import { RadioRows } from "../../kit/RadioRows";
+import { chipText } from "../../kit/chips";
 import { hhmm } from "../../format";
 import type { LauncherProps } from "./types";
 import type { LauncherModel } from "./useLauncherModel";
-import { closeScope, starredSpared } from "./model";
+import { closeMarked, closeScope, markedWords, starredSpared } from "./model";
 import {
   CLOSE_STATE_OPTIONS, CONVO_OPTIONS, type CloseFacets, type CloseCtx, EMPTY_CLOSE_FACETS, STAKES_OPTIONS,
   TIME_EDGE_OPTIONS, UNDER_OPTIONS, CLOSE_STATE_LABEL, CONVO_LABEL, STAKES_LABEL, TIME_EDGE_LABEL, UNDER_LABEL,
@@ -42,14 +46,15 @@ import {
 
 const ICON = 16;
 
-/** One facet's chip row. A ZERO option is never a vanishing chip — an option
- *  ACTIVE (selected) stays drawn even at 0, so a tap that emptied it can
- *  still be un-selected, and every zero option this row leaves OFF the chip
- *  strip is instead named in one quiet line ("none waiting for your answer")
- *  rather than silently missing — the same rule `Unavailable.tsx` states for
- *  a verb applied here to a filter: nothing about this sheet may go quiet by
- *  omission. Only when EVERY option in a facet is empty does the facet fall
- *  back to the one plain sentence instead of a chip strip. */
+/** One facet: its label, and beside it a kit `FilterChip` per option some
+ *  session here answers. Every option that NO session answers is still said —
+ *  once, in one lower-case line under the chips ("none: idle, exited") —
+ *  because a filter left off the strip without a word reads as a filter that
+ *  does not exist: the rule `Unavailable.tsx` states for a verb, applied here
+ *  to a filter, and why nothing about this sheet may go quiet by omission. An
+ *  option that is ACTIVE stays a chip even at 0, so a tap that emptied it can
+ *  still be taken back. A facet with no chip at all is its label and that one
+ *  line. None of it sits in a `.section`, whose uppercase shouted the line. */
 function FacetRow<K extends string>({ label, options, counts, active, labels, onToggle, hintId }: {
   label: string;
   options: readonly K[];
@@ -62,30 +67,38 @@ function FacetRow<K extends string>({ label, options, counts, active, labels, on
   hintId?: string;
 }) {
   const shown = options.filter((o) => counts[o] > 0 || active.has(o));
-  const hidden = options.filter((o) => !(counts[o] > 0 || active.has(o)));
+  const none = options.filter((o) => !(counts[o] > 0 || active.has(o)));
   return (
-    <div className="section" data-hint={hintId}>
-      <div className="section-head"><span>{label}</span></div>
-      {shown.length === 0 ? (
-        <div className="form-hint">none of these sessions match any {label.toLowerCase()} cut right now.</div>
-      ) : (
-        <>
-          <div className="head-acts tight" style={{ flexWrap: "wrap", padding: "0 12px 10px" }}>
+    <div className="close-facet" data-hint={hintId}>
+      <span className="close-facet-label">{label}</span>
+      <div className="close-facet-body">
+        {shown.length > 0 && (
+          <div className="fchips wrap">
             {shown.map((o) => (
-              <button key={o} className={`repo-group-stat${active.has(o) ? " on" : ""}`}
+              <FilterChip key={o} on={active.has(o)}
                 title={`${labels[o]} — ${counts[o]} session${counts[o] === 1 ? "" : "s"}`}
                 onClick={() => onToggle(o)}>
-                {labels[o]} ({counts[o]})
-              </button>
+                {chipText(labels[o], { count: counts[o] })}
+              </FilterChip>
             ))}
           </div>
-          {hidden.length > 0 && (
-            <div className="form-hint">{hidden.map((o) => `none ${labels[o].toLowerCase()}`).join(" · ")}</div>
-          )}
-        </>
-      )}
+        )}
+        {none.length > 0 && <div className="close-facet-none">{`none: ${none.map((o) => labels[o]).join(", ")}`}</div>}
+      </div>
     </div>
   );
+}
+
+/** `idleUnknownNote` is one sentence with one dash: the fact, then what it
+ *  does to the "idle for" chips. The fact is the line; the why is a closed `?`
+ *  (it was three lines of prose, always drawn, over the chips it qualifies).
+ *  The words are the model's — this only cuts them at the dash. No dash, no
+ *  `?`: the whole sentence stays the line. */
+function splitIdleNote(note: string): [lead: string, why: string] {
+  const at = note.indexOf(" — ");
+  if (at < 0) return [note.replace(/\.$/, ""), ""];
+  const why = note.slice(at + 3);
+  return [note.slice(0, at), why.charAt(0).toUpperCase() + why.slice(1)];
 }
 
 function toggled<T>(set: ReadonlySet<T>, o: T): Set<T> {
@@ -141,8 +154,10 @@ export function CloseSheet({ p, m }: { p: LauncherProps; m: LauncherModel }) {
   const now = Date.now();
   const scope = closeScope(visibleSessions, repo, closeKeepStar, sessionRepoName);
   const sparedStars = starredSpared(visibleSessions, repo, closeKeepStar, sessionRepoName);
-  const starsHere = (repo ? visibleSessions.filter((s) => sessionRepoName(s) === repo) : visibleSessions)
-    .filter((s) => s.starred).length;
+  // Stars and follow-up flags, one toggle (`isCloseSpared`).
+  const marked = closeMarked(visibleSessions, repo, sessionRepoName);
+  const starsHere = marked.n;
+  const markedHere = markedWords(marked);
 
   const ctx: CloseCtx = {
     now, repoName: sessionRepoName,
@@ -165,7 +180,7 @@ export function CloseSheet({ p, m }: { p: LauncherProps; m: LauncherModel }) {
   const shells = closeShellsAtStake(sendList);
   const waitingN = closeWaitingCount(sendList, ctx);
   const footLabel = closeFootLabel(sendList.length, shells);
-  const idleNote = idleUnknownNote(counts.idleUnknown);
+  const [idleLead, idleWhy] = splitIdleNote(idleUnknownNote(counts.idleUnknown));
 
   function set<K extends keyof CloseFacets>(key: K, next: CloseFacets[K]) {
     setFacets((f) => ({ ...f, [key]: next }));
@@ -181,7 +196,7 @@ export function CloseSheet({ p, m }: { p: LauncherProps; m: LauncherModel }) {
     // OTHER open phone (`features/shells/store.ts`).
     for (const s of sendList) { noteSessionClosing(s.id); send({ t: "session.remove", id: s.id }); }
     setCloseAllPick(null);
-    showToast(closeToast(sendList.length, shells, sparedStars, repo));
+    showToast(closeToast(sendList.length, shells, sparedStars > 0 ? markedHere : "", repo));
   }
 
   return (
@@ -202,7 +217,7 @@ export function CloseSheet({ p, m }: { p: LauncherProps; m: LauncherModel }) {
               <div className="form-hint">
                 {scope.length === 0
                   ? (sparedStars > 0
-                    ? `Nothing left to close — every session here is starred. "Close them too" below puts ${sparedStars === 1 ? "it" : "them"} back in reach.`
+                    ? `Nothing left to close — every session here is starred or flagged. "Close them too" below puts ${sparedStars === 1 ? "it" : "them"} back in reach.`
                     : "Nothing here to close.")
                   : "Nothing in the cut, or every matching row is kept — nothing to send."}
               </div>
@@ -218,13 +233,16 @@ export function CloseSheet({ p, m }: { p: LauncherProps; m: LauncherModel }) {
         <div className="sheet-body">
         {starsHere > 0 && (
           <div className="section">
-            <div className="bl-modal-seg" role="group" aria-label="what happens to the starred sessions" style={{ padding: "10px 12px 0" }}>
-              <button className={`key${closeKeepStar ? " on" : ""}`} aria-pressed={closeKeepStar}
-                title={`leave the ${starsHere} starred session(s) alone — out of every count and cut below`}
-                onClick={() => setCloseKeepStar(true)}>keep {starsHere} starred</button>
-              <button className={`key${closeKeepStar ? "" : " on"}`} aria-pressed={!closeKeepStar}
-                title={`treat the ${starsHere} starred session(s) like any other`}
-                onClick={() => setCloseKeepStar(false)}>close them too</button>
+            <div style={{ padding: "10px 12px 0" }}>
+              <RadioRows<"keep" | "close">
+                label="what happens to the starred and flagged sessions"
+                value={closeKeepStar ? "keep" : "close"}
+                options={[
+                  { key: "keep", label: `keep ${markedHere}`, title: `leave the ${markedHere} session(s) alone — out of every count and cut below` },
+                  { key: "close", label: "close them too", title: `treat the ${markedHere} session(s) like any other` },
+                ]}
+                onChange={(k) => setCloseKeepStar(k === "keep")}
+              />
             </div>
           </div>
         )}
@@ -236,11 +254,17 @@ export function CloseSheet({ p, m }: { p: LauncherProps; m: LauncherModel }) {
           </div>
         )}
 
+        <div className="close-facets">
         <FacetRow label="State" options={CLOSE_STATE_OPTIONS} counts={counts.state} active={facets.state}
           labels={CLOSE_STATE_LABEL} onToggle={(o) => set("state", toggled(facets.state, o))} />
         <FacetRow label="Idle for" options={TIME_EDGE_OPTIONS} counts={counts.idleOver} active={facets.idleOver}
           labels={TIME_EDGE_LABEL} onToggle={(o) => set("idleOver", toggled(facets.idleOver, o))} hintId="session.close.stale" />
-        {idleNote && <div className="form-hint">{idleNote}</div>}
+        {idleLead && (
+          <div className="form-hint">
+            {idleLead}.{" "}
+            {idleWhy && <Explain of="the idle-for reading" label="what does that change?">{idleWhy}</Explain>}
+          </div>
+        )}
         <FacetRow label="Open for" options={TIME_EDGE_OPTIONS} counts={counts.openOver} active={facets.openOver}
           labels={TIME_EDGE_LABEL} onToggle={(o) => set("openOver", toggled(facets.openOver, o))} />
         <FacetRow label="Underneath" options={UNDER_OPTIONS} counts={counts.under} active={facets.under}
@@ -253,9 +277,11 @@ export function CloseSheet({ p, m }: { p: LauncherProps; m: LauncherModel }) {
           <FacetRow label="Repo" options={repoNames} counts={counts.repo} active={facets.repo}
             labels={Object.fromEntries(repoNames.map((n) => [n, n]))} onToggle={(o) => set("repo", toggled(facets.repo, o))} />
         )}
+        </div>
 
         {timedNote && <div className="form-hint">{timedNote}</div>}
-        <div className="section section-head"><span>The cut{waitingN > 0 ? ` · ${waitingN} waiting on a box` : ""}</span></div>
+        {/* Sentence case like the facet labels above it: `.section` uppercases. */}
+        <div className="section section-head close-cut"><span>The cut{waitingN > 0 ? ` · ${waitingN} waiting on a box` : ""}</span></div>
         {cut.length === 0 ? (
           <Empty>Nothing here matches every facet ticked above.</Empty>
         ) : (

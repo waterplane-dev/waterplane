@@ -1,7 +1,8 @@
 /**
- * The SHAPE of the two unattended model spenders' files, split into folders:
- * `smartpick.ts` and `assess.ts` in `packages/host/src` and in
- * `packages/shared/src`. Each original path is a barrel over `<name>/`.
+ * The SHAPE of the unattended model spender's files, split into folders:
+ * `assess.ts` in `packages/host/src` and in `packages/shared/src` (the smart
+ * pick's two were here too until it was removed, 2026-10-16). Each original
+ * path is a barrel over `<name>/`.
  *
  * Moves only: the `claude -p` flags, prompts, timeouts and the "nothing applies
  * itself" rule live in the same text as before (the host's spawn seam is
@@ -14,8 +15,8 @@
  *   - a slice never imports its own barrel (a cycle), and nothing outside the
  *     folder names a slice — the barrel is the one door.
  *
- * Basenames are unique across packages (hostshape): host slices are `hsp*` /
- * `hass*`, shared slices `ssp*` / `sass*`; web's assess slices are `arows*`.
+ * Basenames are unique across packages (hostshape): host slices are `hass*`,
+ * shared slices `sass*`; web's assess slices are `arows*`.
  * Reasoning: docs/notes/spender-split.md.
  */
 import test from "node:test";
@@ -27,10 +28,8 @@ import ts from "typescript";
 const ROOT = new URL("..", import.meta.url).pathname;
 
 const MODULES = {
-  "host/smartpick": { pkg: "host", name: "smartpick", barrelMax: 66, surface: ["SMARTPICK_SYSTEM:value","SmartPick:value","SmartPickDeps:type","SmartPickIntents:type","SmartPickStore:value","isCandidateRow:value","mergedRowId:value","smartpickPrompt:value"] },
   "host/assess": { pkg: "host", name: "assess", barrelMax: 61, surface: ["ASSESSABLE_STATES:value","ASSESS_CONTEXT_MAX:value","ASSESS_MAX_RUNS:value","ASSESS_PROGRESS_MS:value","ASSESS_TAIL_MAX:value","ASSESS_TIMEOUT_MS:value","AssessApplyOutcome:type","AssessDeps:type","AssessIntents:type","AssessRunOutcome:type","AssessStore:value","applyProposal:value","assessProgressInit:value","assessPrompt:value","buildAssessInput:value","foldAssessEvent:value","makeAssessExecutor:value","resultText:value","runAssessment:value","startAssessment:value"] },
-  "shared/smartpick": { pkg: "shared", name: "smartpick", barrelMax: 88, surface: ["IMG_RE:value","MAX_SMARTPICK_MERGES:value","SMARTPICK_FIRED_AS_WAS:value","SMARTPICK_MAX_CHARS:value","SMARTPICK_MAX_ITEMS:value","SMARTPICK_MAX_NOTES:value","SMARTPICK_MAX_WHY_CHARS:value","SMARTPICK_NOOP_TEXT:value","SMARTPICK_OUTCOMES:value","SMARTPICK_UNREADABLE:value","SmartPickCandidate:type","SmartPickFacts:type","SmartPickMerge:type","SmartPickMergePlan:type","SmartPickOrder:type","SmartPickOutcome:type","SmartPickOutcomeFacts:type","SmartPickPlan:type","SmartPickProposal:type","TRANSPORT_RE:value","applySmartPick:value","cleanSmartPick:value","fingerprint:value","imagePaths:value","mergeKey:value","smartpickFingerprint:value","smartpickName:value","smartpickOutcomeText:value","transportPaths:value"] },
-  "shared/assess": { pkg: "shared", name: "assess", barrelMax: 59, surface: ["ASSESS_IN_FILE:value","ASSESS_NAME_SKIP:value","ASSESS_NAME_WRITE:value","ASSESS_OUT_FILE:value","ASSESS_PIN_FREE:value","ASSESS_PIN_KEEP:value","ASSESS_PLAN_FILE:value","ASSESS_VERDICTS:value","AssessApplyContext:type","AssessChoices:type","AssessDismiss:type","AssessDowngrade:type","AssessInput:type","AssessItem:type","AssessMerge:type","AssessMutations:type","AssessName:type","AssessNew:type","AssessNote:type","AssessPost:type","AssessProposal:type","AssessRank:type","AssessRow:type","AssessSource:type","AssessVerdict:type","CITING_VERDICTS:value","MAX_ASSESS_NOTES:value","MAX_EVIDENCE_CHARS:value","MAX_MERGE_GROUPS:value","MAX_MERGE_SIZE:value","MAX_NEW:value","MAX_PROMPT_CHARS:value","MAX_RANK:value","MAX_RATIONALE_CHARS:value","MIN_MERGE_SIZE:value","applyAssessment:value","assessCounts:value","assessDismissReason:value","assessNameCount:value","assessNameNote:value","assessNameQuestion:value","assessOrigin:value","assessPinNote:value","assessPinQuestion:value","assessRowSentence:value","assessVerdictLabel:value","cleanAssessment:value","downgradeText:value"] },
+  "shared/assess": { pkg: "shared", name: "assess", barrelMax: 59, surface: ["ASSESS_IN_FILE:value","ASSESS_NAME_SKIP:value","ASSESS_NAME_WRITE:value","ASSESS_OUT_FILE:value","ASSESS_PIN_FREE:value","ASSESS_PIN_KEEP:value","ASSESS_PLAN_FILE:value","ASSESS_VERDICTS:value","AssessApplyContext:type","AssessChoices:type","AssessConflict:type","AssessDismiss:type","AssessDowngrade:type","AssessInput:type","AssessItem:type","AssessMerge:type","AssessMutations:type","AssessName:type","AssessNew:type","AssessNote:type","AssessPost:type","AssessProposal:type","AssessRank:type","AssessRow:type","AssessScope:type","AssessSource:type","AssessSplit:type","AssessSplitApply:type","AssessVerdict:type","CITING_VERDICTS:value","MAX_ASSESS_NOTES:value","MAX_CONFLICTS:value","MAX_CONFLICT_IDS:value","MAX_EVIDENCE_CHARS:value","MAX_MERGE_GROUPS:value","MAX_MERGE_SIZE:value","MAX_NEW:value","MAX_PROMPT_CHARS:value","MAX_RANK:value","MAX_RATIONALE_CHARS:value","MAX_SPLITS:value","MIN_MERGE_SIZE:value","SPLIT_PARTS:value","applyAssessment:value","assessConflictSentence:value","assessCounts:value","assessDismissReason:value","assessNameCount:value","assessNameNote:value","assessNameQuestion:value","assessOrigin:value","assessPinNote:value","assessPinQuestion:value","assessRowSentence:value","assessSplitReason:value","assessSplitSentence:value","assessVerdictLabel:value","cleanAssessScope:value","cleanAssessment:value","downgradeText:value"] },
 };
 const MAX_SLICE_LINES = 500;
 

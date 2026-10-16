@@ -80,12 +80,23 @@ export function measureSize(snapshot, history, index, prereg) {
 
   const app = files.find((f) => f.path === APP_TSX);
 
+  // How many files sit within `SIZE_NEAR_MAX_FRAC` of the largest one, the
+  // largest included. A lint cap (`max-lines`) bends the top of the
+  // distribution into a shelf: files are cut just under it, p95 barely moves,
+  // and the pile under the cap is the queue of splits the next feature lands
+  // on. One count shows the shelf where p95 and max cannot. Tile detail, never
+  // an index input.
+  const nearCut = max.loc * prereg.SIZE_NEAR_MAX_FRAC;
+  let nearMax = 0;
+  for (const f of files) if (f.loc >= nearCut) nearMax++;
+
   return {
     value: {
       p95: nearestRankP95(ascending),
       max: max.loc,
       maxPath: max.path,
       appTsx: app ? app.loc : null,
+      nearMax,
     },
   };
 }

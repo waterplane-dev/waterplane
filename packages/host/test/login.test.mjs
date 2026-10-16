@@ -12,7 +12,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { detectLogin, hyperlinkTargets, sameLogin } from "../dist/login.js";
+import { detectLogin, hyperlinkTargets, loginCandidate, sameLogin } from "../dist/login.js";
 
 const URL =
   "https://claude.com/cai/oauth/authorize?code=true&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e" +
@@ -108,4 +108,28 @@ test("sameLogin is what stops a broadcast per repaint", () => {
   assert.equal(sameLogin(a, { ...a, awaitingCode: true }), false);
   assert.equal(sameLogin(a, null), false);
   assert.equal(sameLogin(null, null), true);
+});
+
+// claude 2.1.293's sign-in screen draws NO dialog footer — it ends on the code
+// input — so the render that reads the link must be bought by the link itself.
+// Bytes shaped as the CLI writes them (measured, fresh config dir, 54 columns):
+// one row per write, each wrapped in an OSC 8 hyperlink to the whole URL.
+const strip = (s) => s.replace(/\x1b\][^\x07]*\x07|\x1b\[[0-9;?]*[ -/]*[@-~]|\r/g, "");
+
+test("the link's own shape opens the render gate, footer or not", () => {
+  const osc = grid(URL, 54)
+    .map((row) => `\x1b]8;id=ecs8f0;${URL}\x07\x1b[38;5;246m${row}\x1b[39m\x1b]8;;\x07\r\r\n`)
+    .join("");
+  const raw = ` Browser didn't open? Use the url below to\r\n${osc} Paste code here if prompted >`;
+  assert.equal(loginCandidate(raw, strip(raw)), true);
+  // A terminal that dropped the hyperlinks still has the rows; their breaks
+  // fall inside `client_id`, and the gate reads across them.
+  const plain = grid(URL, 54).map((r) => `\x1b[38;5;246m${r}\x1b[39m\r\n`).join("");
+  assert.equal(loginCandidate(plain, strip(plain)), true);
+  assert.ok(detectLogin(strip(raw).replace(/\r/g, "")));
+});
+
+test("an ordinary busy tail does not buy a render", () => {
+  const raw = "\x1b[2K✻ Crunching… (12s · esc to interrupt)\r\n\x1b]8;;https://example.com/docs\x07docs\x1b]8;;\x07\r\n";
+  assert.equal(loginCandidate(raw, strip(raw)), false);
 });

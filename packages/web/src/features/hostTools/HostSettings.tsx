@@ -8,6 +8,7 @@
  * The two door rack entries (`tool-host-stat`, `tool-screenshot`) stay in the
  * core sheet's rack — they sit mid-rack, and a feature's band can only open it.
  */
+import { useState } from "react";
 import { BatteryCharging, Bell, BellOff, Copy, ExternalLink, Smartphone, Wifi, WifiOff } from "lucide-react";
 import { core } from "../../sdk";
 import { SetAction, SetCustom, SetSwitch, SetWarn } from "../../SettingsKit";
@@ -34,7 +35,19 @@ const ICON = 16;
  */
 function PhoneSetupChecklist() {
   const { steps, refresh } = usePhoneSetup();
+  const [open, setOpen] = useState(false);
   if (!steps) return null;
+  // Everything allowed: one line, not four "done" rows. The line says so and
+  // names the way back to the rows.
+  if (steps.every((s) => s.done) && !open) {
+    return (
+      <SetCustom id="phone-setup" label={`phone setup · ${setupSummary(steps)}`} icon={Smartphone}>
+        <div className="set-note">
+          Everything Android needs is allowed. <button className="link-btn" onClick={() => setOpen(true)}>show the {steps.length} steps</button>
+        </div>
+      </SetCustom>
+    );
+  }
   return (
     <SetCustom id="phone-setup" label={`phone setup · ${setupSummary(steps)}`} icon={Smartphone}
       note="What Android needs you to allow before this app works with the app closed. Nothing is granted without your tap.">

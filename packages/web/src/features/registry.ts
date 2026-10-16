@@ -50,7 +50,11 @@ import { manifest as shells } from "./shells";
 import { manifest as shellLogins } from "./shellLogins";
 import { manifest as sessionBudget } from "./sessionBudget";
 import { manifest as onboard } from "./onboard";
+import { manifest as codeFolder } from "./codeFolder";
 import { manifest as demoTour } from "./demoTour";
+import { manifest as newSession } from "./newSession";
+import { manifest as halt } from "./halt";
+import { manifest as askRules } from "./askRules";
 
 // In-repo EXTENSIONS (packages/extensions/<id>/web): the same contract, globbed, listed after the core.
 const EXTENSION_MODULES = import.meta.glob<{ manifest: FeatureManifest }>("../../../extensions/*/web/index.ts", { eager: true });
@@ -92,7 +96,11 @@ export const FEATURES: readonly FeatureManifest[] = [
   shellLogins,
   sessionBudget,
   onboard,
+  codeFolder,
   demoTour,
+  newSession,
+  halt,
+  askRules,
   // extensions
   ...EXTENSIONS,
 ];

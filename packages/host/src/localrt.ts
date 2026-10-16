@@ -228,6 +228,37 @@ export async function warmLocalModel(name: string, keepAlive: string, timeoutMs 
   }
 }
 
+/** Why a load did not finish — `loadLocalModel`'s failure vocabulary. */
+export type LocalLoadFailure = "unreachable" | "missing" | "timeout" | "error";
+
+/**
+ * Load one model and WAIT for it — `warmLocalModel` with the failure told
+ * apart, for the local-model gate (`localslot.ts`) that holds an automatic
+ * item until the model it opens on is resident. A 404 is Ollama saying it has
+ * no such model (never "unreachable"); an abort past `timeoutMs` is `timeout`;
+ * a refused connection is `unreachable`. `error` is the runner's own sentence.
+ */
+export async function loadLocalModel(name: string, keepAlive: string, timeoutMs: number): Promise<{ ok: true } | { ok: false; kind: LocalLoadFailure; error: string }> {
+  const ka: string | number = /^-?\d+$/.test(keepAlive) ? Number(keepAlive) : keepAlive;
+  try {
+    const res = await fetch(`${ollamaUrl()}/api/generate`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model: name, keep_alive: ka }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (res.status === 404) return { ok: false, kind: "missing", error: "the runner has no such model" };
+    if (!res.ok) return { ok: false, kind: "error", error: `the runner answered ${res.status}` };
+    // Drain the body: the answer is a one-line `done_reason: "load"` document.
+    await res.text().catch(() => "");
+    return { ok: true };
+  } catch (e) {
+    const err = e as { name?: string; message?: string };
+    if (err?.name === "TimeoutError" || err?.name === "AbortError") return { ok: false, kind: "timeout", error: "it did not finish loading in time" };
+    return { ok: false, kind: "unreachable", error: err?.message || String(e) };
+  }
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // The watch manager — a LEASE, not a subscription
 // ────────────────────────────────────────────────────────────────────────────

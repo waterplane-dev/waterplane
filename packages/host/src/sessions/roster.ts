@@ -11,8 +11,8 @@
  */
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { clipClosedText, closedItemFacts, cleanClosedRow } from "@waterplane/shared";
-import type { ClosedBy, Intent, PluginBadge, SessionInfo } from "@waterplane/shared";
+import { clipClosedText, closedItemFacts, cleanClosedRow, cleanFollowUp } from "@waterplane/shared";
+import type { ClosedBy, FollowUp, Intent, PluginBadge, SessionInfo } from "@waterplane/shared";
 import type { ClosedRow, RecentRow, Session, SessionCore } from "./core.js";
 import { onRulesChanged, sessionRules } from "../answergate.js";
 import { resolveBackend } from "../backends/index.js";
@@ -51,6 +51,13 @@ export class RosterSlice {
   private stars = new Set<string>();
   private starsPath: string;
 
+  /** Durable key (conversation id, else boot id — `starKey`) → the follow-up
+   *  flag on it (R-sessions-041). Persisted to `.waterplane/followups.json`;
+   *  a closed conversation keeps its flag, so the *Recently closed* row can
+   *  still say it and a tap there can still clear it. */
+  private followUps = new Map<string, FollowUp>();
+  private followUpsPath: string;
+
   /** Session boot id → pinned HistoryEntry id. Keyed by boot id (same key the
    *  history file uses), persisted to .waterplane/pins.json so a pin survives restart. */
   private pins = new Map<string, string>();
@@ -81,6 +88,13 @@ export class RosterSlice {
     this.starsPath = join(hostStateDir(root), "stars.json");
     try {
       if (existsSync(this.starsPath)) this.stars = new Set(readJsonGuarded<string[]>(this.starsPath, [], Array.isArray));
+    } catch { /* fresh */ }
+    this.followUpsPath = join(hostStateDir(root), "followups.json");
+    try {
+      if (existsSync(this.followUpsPath)) {
+        const raw = readJsonGuarded<Record<string, unknown>>(this.followUpsPath, {});
+        for (const [k, v] of Object.entries(raw)) { const f = cleanFollowUp(v); if (f) this.followUps.set(k, f); }
+      }
     } catch { /* fresh */ }
     this.pinsPath = join(hostStateDir(root), "pins.json");
     try {
@@ -190,7 +204,17 @@ export class RosterSlice {
   /** A copy: the stack is this slice's, and a caller that sorts or trims the
    *  answer must not reorder what the next reopen pops. */
   listClosed(): ClosedRow[] {
-    return this.recentlyClosed.slice();
+    return this.recentlyClosed.map((c) => this.withFollowUp(c));
+  }
+
+  /** A closed row wearing its conversation's follow-up flag as it is NOW —
+   *  the store owns the flag, so a stale copy persisted on a row is replaced. */
+  private withFollowUp(c: ClosedRow): ClosedRow {
+    const f = this.followUps.get(c.claudeSessionId ?? c.id) ?? this.followUps.get(c.id);
+    if (f) return { ...c, followUp: f };
+    if (!c.followUp) return c;
+    const { followUp: _gone, ...rest } = c;
+    return rest;
   }
 
   /** Drop the whole reopen stack. Clears the persisted file too — but the
@@ -254,7 +278,7 @@ export class RosterSlice {
   /** Broadcast the stack and write it down (tmp+rename — a half-written file
    *  read at the next boot would lose the whole list, not one row). */
   publishClosed(): void {
-    this.core.emit("closed", this.recentlyClosed);
+    this.core.emit("closed", this.listClosed());
     try {
       mkdirSync(hostStateDir(this.core.root), { recursive: true });
       writeJsonAtomic(this.closedPath, this.recentlyClosed);
@@ -280,9 +304,11 @@ export class RosterSlice {
     return info.claudeSessionId ?? info.id;
   }
 
-  /** Reflect the persisted star set onto a session's info flag. */
+  /** Reflect the persisted star set onto a session's info flag — and the
+   *  follow-up flag, which hangs on the same key at the same moments. */
   applyStar(info: SessionInfo): void {
     info.starred = this.stars.has(this.starKey(info)) || (info.id ? this.stars.has(info.id) : false);
+    this.applyFollowUp(info);
   }
 
   private persistStars(): void {
@@ -290,6 +316,62 @@ export class RosterSlice {
       mkdirSync(hostStateDir(this.core.root), { recursive: true });
       writeJsonAtomic(this.starsPath, [...this.stars], { space: 2 });
     } catch { /* non-fatal */ }
+  }
+
+  // ── Follow-up flag (R-sessions-041…044) ────────────────────────────────
+  // Same key as the star, and the same reflect-on-register. What differs is
+  // who may set it (the person, a launch option, the session's agent) and that
+  // attaching never clears it — only `setFollowUp(…, null)`, a person's tap.
+
+  /** Reflect the persisted flag onto a session's info. */
+  applyFollowUp(info: SessionInfo): void {
+    const f = this.followUps.get(this.starKey(info)) ?? (info.id ? this.followUps.get(info.id) : undefined);
+    if (f) info.followUp = f; else delete info.followUp;
+  }
+
+  private persistFollowUps(): void {
+    try {
+      mkdirSync(hostStateDir(this.core.root), { recursive: true });
+      writeJsonAtomic(this.followUpsPath, Object.fromEntries(this.followUps), { space: 2 });
+    } catch { /* non-fatal */ }
+  }
+
+  /**
+   * Set (`f`) or clear (`null`) the flag. `id` is a live session's id or a
+   * conversation id (a closed row's), so a flag can be cleared after the
+   * session ended. Returns the live session's info when there is one, and
+   * emits `followUp` for a flag nobody tapped (the push is `sessionEvents`').
+   * An unknown id with no stored flag is a no-op (`false`).
+   */
+  setFollowUp(id: string, f: FollowUp | null): boolean {
+    const s = this.core.sessions.get(id)
+      ?? [...this.core.sessions.values()].find((x) => x.info.claudeSessionId === id);
+    const keys = s ? [this.starKey(s.info), s.info.id] : [id];
+    const closed = s ? undefined : this.recentlyClosed.find((c) => c.claudeSessionId === id || c.id === id);
+    if (closed) keys.push(closed.claudeSessionId ?? closed.id, closed.id);
+    if (!s && !closed && !keys.some((k) => this.followUps.has(k))) return false;
+    if (f) {
+      for (const k of keys.slice(1)) this.followUps.delete(k);
+      this.followUps.set(keys[0], f);
+    } else {
+      let had = false;
+      for (const k of keys) had = this.followUps.delete(k) || had;
+      if (!had) return true;
+    }
+    this.persistFollowUps();
+    if (s) {
+      this.applyFollowUp(s.info);
+      this.core.emit("updated", s.info);
+      if (f && f.by !== "hand") this.core.emit("followUp", s.info, f);
+    }
+    if (closed || !s) this.core.emit("closed", this.listClosed());
+    return true;
+  }
+
+  /** The flag a session wears now, if any. */
+  followUpOf(id: string): FollowUp | undefined {
+    const s = this.core.sessions.get(id);
+    return s ? this.followUps.get(this.starKey(s.info)) ?? this.followUps.get(s.info.id) : this.followUps.get(id);
   }
 
   // ── Overview labels (first / last / pinned prompt) ──────────────────

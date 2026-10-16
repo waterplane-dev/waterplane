@@ -52,7 +52,7 @@ export interface LauncherProps {
   };
   launchCore: Pick<Launch, "openRepo" | "openShell" | "openCwd" | "reopenCant" | "sessionCan" | "refreshRepos" | "setBranchPick">;
   term: Pick<TermFeed, "attach" | "openReader">;
-  queue: Pick<QueueApi, "enterOldestPending">;
+  queue: Pick<QueueApi, "enterOldestPending" | "enterLater">;
   openSend: SendApi["openSend"];
   verbs: SessionVerbs;
   /** The git sheet on a repo (App holds which repo). */

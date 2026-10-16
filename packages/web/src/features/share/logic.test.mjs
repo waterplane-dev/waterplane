@@ -4,7 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { shareOtherSessions, shareSummary } from "./logic.ts";
+import { shareOtherSessions, sharePictures, shareSummary } from "./logic.ts";
 
 test("shareSummary counts pictures, files and text by how they will be routed", () => {
   assert.equal(shareSummary({ files: [{ type: "image/png", name: "a" }, { type: "application/pdf", name: "b" }], text: "x" }), "1 picture · 1 file · text");
@@ -16,4 +16,8 @@ test("shareOtherSessions: live ones, without the one on screen", () => {
   const ss = [{ id: "a", running: true }, { id: "b", running: false }, { id: "c", running: true }];
   assert.deepEqual(shareOtherSessions(ss, "a").map((s) => s.id), ["c"]);
   assert.deepEqual(shareOtherSessions(ss, null).map((s) => s.id), ["a", "c"]);
+});
+
+test("sharePictures counts what the annotator could open", () => {
+  assert.equal(sharePictures({ files: [{ type: "image/jpeg", name: "a" }, { type: "", name: "b.png" }, { type: "image/svg+xml", name: "c.svg" }] }), 2);
 });

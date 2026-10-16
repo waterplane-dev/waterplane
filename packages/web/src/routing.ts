@@ -25,7 +25,7 @@ export function featureSheetId(feature: string, sheet: string): FeatureSheetId {
 }
 export const isFeatureSheetId = (o: unknown): o is FeatureSheetId => typeof o === "string" && FEATURE_SHEET_RE.test(o);
 
-export type Overlay = null | "slash" | "image" | "swipe" | "gallery" | "new" | "send" | "backlog" | "git" | "model" | "text" | "toolbar" | "history" | "secret" | "setup" | "speedtest" | "branches" | "decisions" | "settings" | "notifications" | "snippets" | "build" | "capture" | "search" | "features" | "nethealth" | "fanout" | "queue" | "pad" | "pull" | "hdrcmd" | "sentlog" | "questions" | "outline" | "limits" | "schedule" | "clip" | "scrollback" | "browse" | "collage" | "archive" | "activity" | "clihealth" | "assess" | "context" | "tokens" | "launchask" | "hostedack" | "localrt" | "sweep" | "repocolor" | "apps" | "repohealth" | "storage" | "hosts" | "pairqr" | "devices" | "shells" | "logins" | "answers" | "sessionBudget" | "phonesetup" | "onboard" | "demotour" | "share" | FeatureSheetId;
+export type Overlay = null | "slash" | "image" | "swipe" | "gallery" | "new" | "send" | "backlog" | "git" | "model" | "text" | "toolbar" | "history" | "secret" | "setup" | "speedtest" | "branches" | "decisions" | "settings" | "notifications" | "snippets" | "build" | "capture" | "search" | "features" | "nethealth" | "fanout" | "queue" | "pad" | "pull" | "hdrcmd" | "sentlog" | "questions" | "outline" | "limits" | "schedule" | "clip" | "scrollback" | "browse" | "collage" | "archive" | "activity" | "clihealth" | "assess" | "context" | "tokens" | "launchask" | "hostedack" | "localrt" | "sweep" | "repocolor" | "apps" | "repohealth" | "storage" | "hosts" | "pairqr" | "devices" | "shells" | "logins" | "answers" | "sessionBudget" | "phonesetup" | "codefolder" | "onboard" | "demotour" | "share" | FeatureSheetId;
 
 // Overlays worth putting in the URL (reload-stable; the transient ones —
 // "image"/"collage"/"slash"/"text" — need in-memory state, so they're never
@@ -88,12 +88,28 @@ export type Overlay = null | "slash" | "image" | "swipe" | "gallery" | "new" | "
 // scoped to state held in memory, and the hash carries the overlay name and not that state.
 export const PERSISTED_OVERLAYS = new Set<Overlay>(["gallery", "new", "backlog", "git", "model", "toolbar", "browse", "archive", "activity", "clihealth", "context", "pull", "tokens", "repocolor", "apps", "storage"]);
 
+/**
+ * On a wide window (`core/layout`), which sheets take the MAIN pane instead of
+ * the side panel (docs/analysis/desktop-workspace-plan.md §3). Every other
+ * overlay — feature sheets included — opens as a panel over the right edge,
+ * leaving the session and its terminal width untouched. These need the width:
+ * a canvas (`image`, `clip`, `collage`, `swipe`), a chart (`tokens`,
+ * `context`, `repohealth`), an 80-col archive (`scrollback`), a split of its
+ * own (`git`), a reading surface (`text`, `outline`). Phone ignores it.
+ */
+export const WIDE_FULL = new Set<Overlay>(["swipe", "image", "clip", "collage", "tokens", "context", "repohealth", "scrollback", "git", "text", "outline"]);
+
+/** Does this overlay take the main pane on a wide window? Null is no sheet. */
+export const isWideFull = (o: Overlay): boolean => o !== null && WIDE_FULL.has(o);
+
 /** Parse the current location hash into a navigable route. */
 export function parseHash(): {
   activeId: string | null;
   overlay: Overlay;
   image?: { repoId: string; relPath: string };
   file?: { repoId: string; relPath: string; name?: string; mtime?: number };
+  /** A cold plugin-alert tap (`sw.js`): open this plugin's screen. */
+  plugin?: string;
 } {
   const p = new URLSearchParams(location.hash.replace(/^#/, ""));
   const o = p.get("o") as Overlay;
@@ -110,7 +126,7 @@ export function parseHash(): {
   const file = dlRepo && dlPath
     ? { repoId: dlRepo, relPath: dlPath, name: p.get("dlName") || undefined, mtime: mtime || undefined }
     : undefined;
-  return { activeId: p.get("a") || null, overlay: o && PERSISTED_OVERLAYS.has(o) ? o : null, image, file };
+  return { activeId: p.get("a") || null, overlay: o && PERSISTED_OVERLAYS.has(o) ? o : null, image, file, plugin: p.get("plugin") || undefined };
 }
 
 /** Serialize route → hash string ("" when at the session list root). */

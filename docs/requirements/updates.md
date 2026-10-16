@@ -16,3 +16,17 @@ Update availability shows as an overlay message on the main screen with a button
 Waterplane skills are kept up to date automatically for other users and repos, not just locally.
 - asked: 2026-10-04
 
+### R-updates-005 · shipped
+The README has a section that tells users the exact commands to update an existing waterplane installation to the latest version.
+- asked: 2026-10-07
+- shipped: 03268ba6
+
+### R-updates-006 · shipped
+After a successful CLI update the update button disappears.
+- asked: 2026-10-07
+- shipped: edf27820
+
+### R-updates-007 · requested
+For the project's developers only, the newest update installs automatically and an integration test then runs after each update, fixes what broke and reports what it did; this is not activated for other users of the repository.
+- asked: 2026-10-07
+

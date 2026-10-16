@@ -24,33 +24,41 @@
     "packages/web"
   ],
   "scripts": {
-    "build:shared": "node scripts/fix-node-pty.mjs && npm run build -w @waterplane/shared",
+    "build:shared": "node scripts/need-deps.mjs && node scripts/fix-node-pty.mjs && npm run build -w @waterplane/shared",
     "dev:host": "npm run dev -w @waterplane/host",
     "dev:web": "npm run dev -w @waterplane/web",
-    "dev": "npm run build:shared && concurrently -n host,web -c blue,green \"npm:dev:host\" \"npm:dev:web\"",
+    "dev": "node scripts/oswrap.mjs dev -- npm run dev:posix",
+    "dev:posix": "npm run build:shared && concurrently -n host,web -c blue,green \"npm:dev:host\" \"npm:dev:web\"",
     "build": "npm run build:shared && npm run build -w @waterplane/host && npm run build -w @waterplane/web",
-    "start": "npm run start -w @waterplane/host",
-    "restart": "bash scripts/restart.sh",
+    "start": "node scripts/oswrap.mjs start -- npm run start -w @waterplane/host",
+    "restart": "node scripts/oswrap.mjs restart -- bash scripts/restart.sh",
     "brand:assets": "node scripts/brand-assets.mjs",
     "brand:android": "node scripts/brand-android.mjs",
     "docs:plugins": "node scripts/gen-plugin-docs.mjs",
     "release:build": "node scripts/release/build.mjs",
     "release:install-sh": "npm run build:shared && node scripts/release/render-install.mjs",
-    "stop": "pkill -f packages/host/dist/main.js || true",
-    "doctor": "npm run build:shared --silent && npm run build -w @waterplane/host --silent && node packages/host/dist/main.js --doctor",
+    "stop": "node scripts/oswrap.mjs stop -- \"pkill -f packages/host/dist/main.js || true\"",
+    "doctor": "node scripts/oswrap.mjs doctor -- npm run doctor:posix --",
+    "health:fixtures": "npm run build:shared --silent && node tools/screenfixtures.mjs",
+    "doctor:posix": "npm run build:shared --silent && npm run build -w @waterplane/host --silent && node packages/host/dist/main.js --doctor",
     "lint": "eslint .",
-    "test:unit": "npm run build:shared && node scripts/with-tmp.mjs node --import ./scripts/lib-testtmp.mjs --test \"packages/shared/test/*.test.mjs\" \"packages/web/src/**/*.test.mjs\" \"packages/extensions/*/web/**/*.test.mjs\" \"tools/*.test.mjs\" \"scripts/release/*.test.mjs\"",
+    "test:unit": "npm run build:shared && npm run test:unit:only",
+    "test:unit:only": "node scripts/with-tmp.mjs node --import ./scripts/lib-testtmp.mjs --test --test-timeout=120000 \"packages/shared/test/*.test.mjs\" \"packages/web/src/**/*.test.mjs\" \"packages/extensions/*/web/**/*.test.mjs\" \"tools/*.test.mjs\" \"scripts/release/*.test.mjs\"",
     "audit:prod": "npm audit --omit=dev",
     "audit": "npm run audit:prod && npm audit --audit-level=high && npm audit --audit-level=high --prefix packages/app",
-    "test:host": "npm run build:shared && npm run build -w @waterplane/host && node scripts/with-tmp.mjs node --import ./scripts/lib-testtmp.mjs --test \"packages/host/test/*.test.mjs\" \"packages/extensions/*/test/*.test.mjs\"",
+    "test:host": "npm run build:shared && npm run build -w @waterplane/host && npm run test:host:only",
+    "test:host:only": "node scripts/with-tmp.mjs node --import ./scripts/lib-testtmp.mjs --test --test-timeout=120000 \"packages/host/test/*.test.mjs\" \"packages/extensions/*/test/*.test.mjs\"",
+    "test:vscode": "node scripts/vscode-check.mjs",
     "test:contract": "npm run build:shared && npm run build -w @waterplane/host && node scripts/run-contract.mjs",
     "build:demo-web": "node scripts/build-demo-web.mjs",
     "media": "node scripts/ui/run.mjs --media; s=$?; node scripts/media/flow-svg.mjs && node scripts/media/flow-gif.mjs && exit $s",
+    "site": "node scripts/site/build-site.mjs",
     "media:apk": "node scripts/media/apk-install.mjs",
     "test:ui": "node scripts/ui/run.mjs",
     "test": "npm run lint && npm run test:unit && npm run test:host && node scripts/run-e2e.mjs",
     "release:public": "node scripts/release/publish-public.mjs",
-    "release:publish": "npm run build:shared && node scripts/release/publish.mjs"
+    "release:publish": "npm run build:shared && node scripts/release/publish.mjs",
+    "release:play": "npm run build:shared && node scripts/release/play.mjs"
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",
@@ -62,6 +70,7 @@
     "typescript-eslint": "^8.69.0"
   },
   "overrides": {
-    "shell-quote": "^1.11.0"
+    "shell-quote": "^1.11.0",
+    "source-map-js": "^1.2.2"
   }
 }

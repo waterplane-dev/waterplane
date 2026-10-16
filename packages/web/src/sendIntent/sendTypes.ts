@@ -1,5 +1,5 @@
 /** The four answers of one send, and the seed a sheet opens on. Split from `sendIntent.ts` (docs/notes/send-architecture.md); pure, no React. */
-import { type SessionBudget, type ScheduleRule } from "@waterplane/shared";
+import { type LaunchOpts, type SessionBudget, type ScheduleRule } from "@waterplane/shared";
 
 // ── The intent ───────────────────────────────────────────────────────
 
@@ -29,12 +29,22 @@ export type SendTarget =
        *  `now`, which the person opened). ABSENT inherits the global setting
        *  and sends nothing; `false` is a real "keep this one open". */
       closeWhenDone?: boolean;
+      /** "Flag for follow up when done" (`Intent.flagWhenDone`): off unless ticked (`sendFlag.ts`). */
+      flagWhenDone?: boolean;
       /** The budget the session this send opens is BORN with (`Intent.budget`) —
        *  not a `LaunchOpts` field. Absent is none. A send aimed at a session that
        *  already exists has no field for this: its budget is set on the session. */
-      budget?: SessionBudget }
-  /** A sweep — one prompt, several repos. `budget` is each session's own. */
-  | { kind: "repos"; dirs: string[]; budget?: SessionBudget }
+      budget?: SessionBudget;
+      /** The *model* row (the Start-with picker, answered here). ABSENT — not
+       *  tapping it — is the new-session defaults for a `now`, the desktop's own
+       *  for anything later: offered, never forced. */
+      launch?: LaunchOpts }
+  /** A sweep — one prompt, several repos. `budget` is each session's own.
+   *  `launch` is the sweep's own launch, decided where it was composed (the
+   *  fan-out sheet's model row) or read back off the rule being edited; ABSENT
+   *  is what it always was — the new-session defaults for a `now`, nothing
+   *  (the desktop's own) for a rule or a chain. */
+  | { kind: "repos"; dirs: string[]; budget?: SessionBudget; launch?: LaunchOpts; flagWhenDone?: boolean }
   /** A build command: a shell, no agent, no session. */
   | { kind: "shell"; cwd: string; buildId: string };
 
@@ -116,6 +126,9 @@ export interface SendIntent {
    * else would be a switch that quietly does nothing.
    */
   sequential: boolean;
+  /** Set by the Send sheet, whose *model* row replaces the per-launch ask:
+   *  that ask is not posed on top. Absent elsewhere (the switch still applies). */
+  launchChosen?: boolean;
 }
 
 /**

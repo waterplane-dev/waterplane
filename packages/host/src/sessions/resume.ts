@@ -14,8 +14,9 @@ import type { LimitResumeMode } from "@waterplane/shared";
 import { serialGroup } from "@waterplane/shared";
 import { stripAnsi } from "../prompt.js";
 import { detectLimitText } from "../limit.js";
+import { spendRetry } from "../spendwall.js";
 import type { Session, SessionCore } from "./core.js";
-import { LIMIT_RESUME_GAP_MS, LIMIT_RESUME_SETTLE_MS, LIMIT_RETRY_MS } from "./knobs.js";
+import { LIMIT_RESUME_GAP_MS, LIMIT_RESUME_SETTLE_MS, LIMIT_RETRY_MS, LIMIT_RESET_BUFFER_MS } from "./knobs.js";
 import { hostStateDir } from "../branddirs.js";
 import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
 
@@ -465,7 +466,12 @@ export class ResumeSlice {
     // seconds until the attempts ran out — minutes into a wall lasting days.
     const weekly = log.rejectedAt != null ? log.weekly : det.weekly;
     const resetAt = log.resetAt ?? (weekly ? null : s.info.limit?.resetAt ?? det.resetAt);
-    const next = this.core.limitRetry(s, now, resetAt);
+    // A SPEND wall has no ladder: one attempt at a reset somebody can name (the
+    // message's own, or a configured dollar period's), else the person is told.
+    const spend = log.rejectedAt != null ? log.spend : det.spend;
+    const next = spend
+      ? spendRetry(now, resetAt ?? spendRetry(now).resetAt, s.info.limit?.attempts ?? 0, LIMIT_RESET_BUFFER_MS)
+      : this.core.limitRetry(s, now, resetAt);
     if (next.kind === "giveup") {
       this.core.noteGaveUp(s, next.why);
       return;

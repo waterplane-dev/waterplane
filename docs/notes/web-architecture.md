@@ -101,6 +101,18 @@ Defined in `sdk/types.ts`. Ten groups:
   cut), `openPadAt`, `followFire` (jump to the session a fired row lands in), `sendSeeded`.
 - `launch` — `setOpt`, `wire` (the `launchFor` gate), `openCwd` (returns the pending screen's
   session id, or null when the tap was deferred to a launch question) and `relaunch`.
+  `focusShell(key, { cwd?, title?, back? })` goes to a plain shell tab for a sheet whose job is half
+  at a desktop prompt: the tab `key` went to last while it runs (a pending open still queued is
+  re-entered, and re-keyed when the host names it), else a running plain shell in `cwd` (default the
+  host root; never a companion), else a fresh one through `openCwd` with the shell as an override.
+  It returns that shell's id (`pending:<ack>` while the open is queued; null, toasted, with no shell)
+  so a sheet that owes the shell a line seeds it with `compose.seedDraft(id, …)` — an append, and a
+  pending id's draft moves with the screen when the host names it.
+  `back: { label, open }` draws "back to <label>" on THAT shell's screen only
+  (`core/session/ReturnChip.tsx`), so the sheet and its shell are one tap apart both ways; × hides it
+  with a toast naming the way back. `shellCant()` is the sentence for `Unavailable` where the
+  sheet's button would be. Pure half and its tests: `core/launch/shellTab.ts`; memory-only state:
+  `shellReturn.ts`.
 - `term` — `snapshot()` (the local scrollback) and `geom()` (the grid the PTY was last sized to).
 - `compose` — the `draft`, `insert` (into the box on screen), `seedDraft(sid, text)` (into a
   session's draft, for use after a navigation, where `insert` would type into the box being left),
@@ -195,7 +207,7 @@ A feature declares what it adds; it does not patch App:
 - `commands` — `CommandDef { id, run(core) }`, run by the toolbar switch's `default:` arm
   (`runFeatureCommand`). The toolbar item itself stays declared in `toolbar.ts`, which owns order
   and pinning.
-- `settings` — `SettingsRowsDef { group, order, render(core) }`: rows in one Settings
+- `settings` — `SettingsRowsDef { group, order, render(core), rows? }`: rows in one Settings
   group (`group` is a `SettingsGroupId` from `settingsIndex.ts`), `order` first, then registry
   order (`featureSettingsRows(group, band?)`) — `order < 0` at the HEAD of the group, before the
   core's rows, `order >= 0` at its END, and in Tools `-10 <= order < 0` opens the door rack, so a
@@ -203,12 +215,23 @@ A feature declares what it adds; it does not patch App:
   `settingsIndex.test.mjs` reads the core sheet plus every `features/*/<Name>Settings.tsx`, so the
   rows live in a file of that name. `render` is called during the settings sheet's render, after
   App's early return: it returns an element, and any hook goes inside that element's component.
+  An extension catalogues the ids it draws in `rows` (kit `SetCustom`); words known only at run
+  time go through `setRowWords` (the plugins row's installed plugins). A section nested in a row
+  hides by `useNestedShown` (`nestedMatches`): under a query only the sections whose own words
+  match stay, unless the row's catalogued words matched.
 - `toolbarItems` — `ToolbarItemDef { id, render(core, { label, dismiss, active }) }`: a stateful
   toolbar item the feature draws itself (`plugins`' per-session group, the limit toggle). `renderToolbarItem`'s
   `default:` arm asks `featureToolbarItem` first: `undefined` means no feature declares the id and
   the generic button runs; `null` is the feature's "not now". The id, label and icon stay in
   `toolbar.ts`. A throw in either `render` hides that feature's piece only and is said once, a
   microtask later (never a state write during a render).
+- `menuItems` — `MenuItemDef { id, label, icon, order?, available?, open(core, { active }) }`: a ☰
+  line an EXTENSION owns outright, label and icon included, because a private extension may not
+  put its name into `toolbar.ts`. It joins the catalog (`toolbarItems()` = core + contributed,
+  bound by `extensionPoints.ts` via `bindMenuCatalog` — the registry's features import `toolbar.ts`,
+  so it cannot import the registry) under the id `<manifest id>:<id>`: a colon no core id has, so
+  the two never collide, and `loadToolbarCfg` keeps such ids even before the binding is made. The
+  customize sheet orders and hides it and can pin it into the header like any core line.
 - `boot` — once on App's mount (`bootFeatures`), may return a cleanup.
 
 `features/registry.ts` is a static list. **Nothing is lazily loaded**: sheets are opened from a
@@ -349,7 +372,13 @@ is `core/dispatch`, `sheets`, `settingsRows`, `toolbarItems`, `extensionPoints`.
 wraps every extension sheet, menu line and chip. **Open sheet ids:** `Overlay` accepts
 `feature:<manifest id>/<sheet>` (`routing.ts`'s `featureSheetId`, `FeatureSheetId`); never in
 `PERSISTED_OVERLAYS`, so a reload does not restore one. **Calls:** `pluginClient<M>(id)` →
-`core/pluginCall.ts` (the retry rule is in [plugins.md](plugins.md)).
+`core/pluginCall.ts` (the retry rule is in [plugins.md](plugins.md)). **Remembered choices:**
+`extStorage(id)` (`sdk/extStorage.ts`) → `read(name, fallback)` / `write` / `remove` over
+`storage.ts`'s `extKey` (`<prefix>ext.<id>.<name>`), a HOST key prefix (`HOST_KEY_PREFIXES`), so a choice
+is per desktop and parks with it on a switch; an extension may not import `storage.ts` nor write a key
+literal, so this is its one way to remember anything. **Words a person types** for somewhere that is
+not a session (the live desktop's typing) go in the kit's `PromptComposer` — the one prompt box, lent;
+it never sends, its caller does.
 
 ## The core modules
 
@@ -410,7 +439,8 @@ claude update bar both screens draw, their dismissals held outside either screen
 
 A toolbar command is the same shape: add the item to `toolbar.ts` (label, icon) and a
 `commands: [{ id, run }]` entry in the manifest; App's `runToolbar` falls through to it. An item
-that draws its own state (a count, a toggle) adds a `toolbarItems: [{ id, render }]` entry too. A
+that draws its own state (a count, a toggle) adds a `toolbarItems: [{ id, render }]` entry too. An
+in-repo extension's line is `menuItems` instead — nothing in `toolbar.ts`. A
 settings row is `settings: [{ group, order, render }]`, its component in `<Name>Settings.tsx`, its
 id in `settingsIndex.ts`.
 

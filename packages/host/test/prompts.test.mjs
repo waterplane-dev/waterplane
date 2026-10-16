@@ -12,14 +12,12 @@ const dir = mkdtempSync(join(tmpdir(), "wp-prompts-"));
 process.env.WATERPLANE_CONFIG_DIR = dir;
 const { promptText, overriddenPrompts } = await import("../dist/prompts.js");
 const { NAME_SYSTEM } = await import("../dist/naming.js");
-const { SMARTPICK_SYSTEM } = await import("../dist/smartpick.js");
 mkdirSync(join(dir, "prompts"), { recursive: true });
 const put = (n, t) => writeFileSync(join(dir, "prompts", n + ".md"), t);
 test.after(() => rmSync(dir, { recursive: true, force: true }));
 
 test("absent file: the default, byte for byte", () => {
   assert.equal(promptText("tab-name", NAME_SYSTEM), NAME_SYSTEM);
-  assert.equal(promptText("smartpick", SMARTPICK_SYSTEM), SMARTPICK_SYSTEM);
   assert.deepEqual(overriddenPrompts(), []);
 });
 

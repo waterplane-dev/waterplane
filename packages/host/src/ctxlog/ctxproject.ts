@@ -1,6 +1,6 @@
 /** The cursor as the wire document, and the row sparkline. Moved from ctxlog.ts. */
 import { updateContextLog } from "./ctxupdate.js";
-import { agentEnvelope, liveAgentOf } from "./ctxagents.js";
+import { agentEnvelope, agentSpendAt, liveAgentOf } from "./ctxagents.js";
 import type { ContextSpark, ContextWindowSource } from "@waterplane/shared";
 import { seriesCostFields, downsample } from "@waterplane/shared";
 import { projectCold, projectCompaction } from "./ctxcursor.js";
@@ -165,11 +165,16 @@ export function sparkOf(
   // The agents' own windows, bucketed onto these same readings — the one fact
   // a fan-out session's row otherwise hides (the parent at 31%, an agent at 97%).
   const agentEnv = agents?.runs ? agentEnvelope(pts.map((p) => p.t), agents.runs) : null;
+  // What the agents had SPENT by each of those readings, so the spend
+  // miniature stacks them on the parent's curve the way the sheet's spend chart
+  // does. Only beside `usedPts` — a stack needs the parent band under it.
+  const agentUsedPts = usedPts && agents?.files ? agentSpendAt(pts.map((p) => p.t), agents) : null;
   const live = agents?.files ? liveAgentOf(agents, now) : null;
   return {
     pts: pts.map((p) => p.tok),
     ...(usedPts ? { usedPts } : {}),
     ...(agentEnv ? { agentEnv } : {}),
+    ...(agentUsedPts ? { agentUsedPts } : {}),
     ...(live ? { liveAgentTok: live.tok, liveAgentAt: live.at, liveAgentId: live.id, ...(live.type ? { liveAgentType: live.type } : {}) } : {}),
     marks,
     peak: cur.samples.reduce((m, p) => (p.tok > m ? p.tok : m), 0),

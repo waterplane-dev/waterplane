@@ -14,10 +14,10 @@
  * contributes this row and its fix through `api.setupCheck`/`api.setupFix`;
  * it imports `@waterplane/shared` and node only, never a host module.
  *
- * Opt-in by construction. Not set up is a PASS carrying a `fix` (the offer),
- * which `isSetupFinding` keeps out of the badge and "Fix all" — a warn on every
- * repo on the machine would be one nobody can close. Once set up, falling
- * `REQ_STALE_PROMPTS` behind is a warn: the person asked for this list.
+ * Opt-in by construction. Not set up is NO ROW at all: the offer lives on the
+ * Opt-ins region (`shared/optins.ts`, which runs this extension's `requirements`
+ * fix), and a second copy of it here was the same offer twice. Once set up,
+ * falling `REQ_STALE_PROMPTS` behind is a warn: the person asked for this list.
  */
 import { execFile, execFileSync } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, statSync, writeFileSync } from "node:fs";
@@ -186,20 +186,13 @@ const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
 // ── the row ────────────────────────────────────────────────────────────────
 
-export function requirementsCheck(worktree: string): ComplianceCheck {
+/** The row, or `null` where the list is not set up (the offer is an opt-in, not a row). */
+export function requirementsCheck(worktree: string): ComplianceCheck | null {
   const id = "requirements";
   const label = "Requirements list";
   const skill = existsSync(join(worktree, REQ_SKILL_REL));
   const state = readState(worktree);
-  if (!skill && !state) {
-    return {
-      id, label, status: "pass", fix: "requirements",
-      detail: `Optional, not set up. The fix writes ${REQ_SKILL_REL} and ${REQ_DIR_REL}/README.md and spends ` +
-        `nothing. After that this row counts your prompts since the list was last built and gives the build ` +
-        `to this repo's agent: a cheap model extracts requirements from your prompts, a stronger one merges ` +
-        `them with the commits, and it leaves an uncommitted diff for you to review.`,
-    };
-  }
+  if (!skill && !state) return null;
   if (!existsSync(UPDATE_SCRIPT)) {
     return { id, label, status: "warn", fix: null,
       detail: `Set up, but this host cannot find its build script at ${UPDATE_SCRIPT}.` };

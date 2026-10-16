@@ -69,6 +69,7 @@ const scrub = (v, wt) => JSON.parse(JSON.stringify(v).split(REPO_ROOT).join("<RO
 function row(wt) {
   const checks = inspectRepo(wt);
   const i = checks.findIndex((c) => c.id === "requirements");
+  if (i < 0) return { row: null, before: null, after: null };
   return scrub({ row: checks[i] ?? null, before: checks[i - 1]?.id ?? null, after: checks[i + 1]?.id ?? null }, wt);
 }
 
@@ -80,7 +81,7 @@ const AREA = [
 function observe() {
   const out = {};
 
-  // 1. Not set up: a pass carrying the offer.
+  // 1. Not set up: no row at all — the offer is the Opt-ins region's (shared/optins.ts).
   const a = repo("none", { commits: 1 });
   out.notSetUp = row(a);
 

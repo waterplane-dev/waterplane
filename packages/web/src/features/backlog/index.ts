@@ -8,15 +8,19 @@ import type { FeatureManifest } from "../../sdk";
 import { BacklogSheet } from "./BacklogSheet";
 import { AssessmentSheet } from "./AssessmentSheet";
 import { assessRepo } from "./store";
-import { askAssessStates, clearBacklogFocus, onAssessState, onBacklogList } from "./actions";
+import { setSlotCheckOpener } from "../../slotAskStore";
+import { askAssessStates, clearBacklogFocus, onAssessState, onBacklogList, openSlotCheck } from "./actions";
 
 export { useBacklog } from "./store";
 export {
-  onAssessAck, openAssessFor, openBacklogCut, openBacklogFor, openBacklogIn,
+  onAssessAck, openAssessFor, openBacklogCut, openBacklogFor, openBacklogIn, openSlotCheck,
 } from "./actions";
 
 export const manifest: FeatureManifest = {
   id: "backlog",
+  // The ask after a timed send (`SlotAskLayer`, beside the toast) cannot import
+  // a feature, so its *check* is this feature's door, registered here.
+  boot: () => { setSlotCheckOpener(openSlotCheck); return () => setSlotCheckOpener(null); },
   sheets: [
     // The cut is the tap, not a setting: leaving the sheet drops it.
     { id: "backlog", persisted: true, render: () => createElement(BacklogSheet), onLeave: clearBacklogFocus },

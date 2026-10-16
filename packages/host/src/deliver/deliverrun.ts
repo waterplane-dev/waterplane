@@ -7,11 +7,13 @@
 import type { SessionManager } from "../sessions.js";
 import type { DeliveryShape, HistoryEntry } from "@waterplane/shared";
 import { noteHealth } from "../clihealth.js";
+import { asksYesNo } from "../shelllinks.js";
+import { readNavBox, trustKeys } from "../prompt.js";
 import { ROW_WINDOW, composerFramesAmbiguous } from "../echo.js";
 import { isLocalCommand, startsNoTurn, worksUnannounced } from "../slash.js";
 import { CHANNEL_CONNECT_WAIT_MS, ECHO_WAIT_MS, PROMPT_HOOK_WAIT_MS, sleep } from "./deliverknobs.js";
 import type { DeliverOpts, DeliveryResult } from "./delivertypes.js";
-import { foreignInComposer, makeScreenReader } from "./deliverscreen.js";
+import { composerHoldsOnlyHint, foreignInComposer, makeScreenReader } from "./deliverscreen.js";
 import { makeLogProof, makeSubmitProof } from "./deliverproof.js";
 import { hasTurns, submitAndConfirm } from "./deliverreturn.js";
 
@@ -162,8 +164,9 @@ export async function runDelivery(
   // Two ways a shell runs words BEFORE the one confirmed Return, both refused
   // here, before a byte is typed (`retry`: provably nothing typed):
   //  - a PROGRAM is in front of the shell (`vim`, `sleep`, a REPL): the words
-  //    would be typed into it. The one exception is a CLI the links reader saw
-  //    asking for a code (`awaitingCode`) — that is the input it wants.
+  //    would be typed into it. The exceptions are a CLI the links reader saw
+  //    asking for a code (`awaitingCode`), and one line to a program whose
+  //    last row asks yes/no (`asksYesNo`, `[y/N]`) — that is the input it wants.
   //  - a newline in the text: the shell runs each line the moment it arrives.
   //    Where the shell in front takes bracketed paste (zsh, fish —
   //    `sessions/drive.ts` says why by name) the text goes in as ONE paste,
@@ -172,7 +175,7 @@ export async function runDelivery(
   let typed = text;
   if (shell) {
     const facts = (await sessions.shellLineFacts?.(sessionId)) ?? { front: null, bracketed: false };
-    if (facts.front && !sessions.get(sessionId)?.awaitingCode) {
+    if (facts.front && !sessions.get(sessionId)?.awaitingCode && (/[\r\n]/.test(text) || !asksYesNo(await sessions.screenText(sessionId, 40)))) {
       return { result: "retry", detail: `the shell is running \`${facts.front}\` — use the keys, or quit it first` };
     }
     if (/[\r\n]/.test(text)) {
@@ -183,12 +186,32 @@ export async function runDelivery(
     }
   }
 
-  // A never-trusted dir → claude shows "Is this a project you trust? 1. Yes …".
-  // Auto-accept so the instruction doesn't land in the trust dialog. After
-  // accepting, claude redraws the whole TUI — so we must wait for it to settle.
+  // A never-trusted dir → claude shows its folder-trust box. Auto-accept so the
+  // instruction doesn't land in the trust dialog. After accepting, claude
+  // redraws the whole TUI — so we must wait for it to settle.
   // Never in a shell: those words on a shell's screen are output, and `1⏎` a command.
+  //
+  // The keys are `trustKeys`', never a bare `1⏎`: since 2.1.293 the box is
+  // UNNUMBERED with the cursor on "No, exit", so the digit typed nothing and the
+  // Return chose "No, exit" — every first prompt into a new repo quit claude
+  // (code 0, "session gone, left no readable conversation log"). An unnumbered
+  // box this cannot place a Yes on is refused, nothing typed: a Return there is
+  // a guess, and the guess under the cursor is "exit".
   if (!shell && /trustthisfolder|createdoroneyoutrust|doyoutrust/.test(await screen())) {
-    sessions.write(sessionId, "1\r");
+    const nav = readNavBox(await sessions.screenText(sessionId, 60));
+    const keys = trustKeys(nav);
+    if (!keys || (!nav && /noexit/.test(await screen()))) {
+      return { result: "retry", detail: "claude is asking whether to trust this folder and this app could not read the box — answer it in the terminal" };
+    }
+    sessions.write(sessionId, keys);
+    // Quiet is not ready here: claude boots AFTER the Yes, and words typed into
+    // that boot vanish (measured on 2.1.296 — an empty composer, `unconfirmed`).
+    // Wait for the composer's own status line, the box gone, then settle.
+    for (let t = Date.now(); Date.now() - t < 20000; await sleep(200)) {
+      if (!sessions.get(sessionId)?.running) return { result: "retry" };
+      const now = await screen();
+      if (/shifttabtocycle|forshortcuts/.test(now) && !/trustthisfolder|noexit/.test(now)) break;
+    }
     await sessions.waitReady(sessionId, 1500, 20000);
   }
 
@@ -234,7 +257,10 @@ export async function runDelivery(
   // wrong and this file presses Return at an empty box. Two frames that do not
   // agree is "I cannot tell", and the branch below is where that answer goes.
   const beforeRows = probe ? (await sessions.screenText(sessionId, ROW_WINDOW)).split("\n") : [];
-  const before = probe ? placeEcho(beforeRows, true) : "none";
+  let before = probe ? placeEcho(beforeRows, true) : "none";
+  // Our words drawn DIM in an empty box are the CLI's own proposal of them
+  // (`composerHoldsOnlyHint`), not a copy typed earlier: the box is empty, type.
+  if (before !== "none" && await composerHoldsOnlyHint(sessions, sessionId)) before = "none";
   const unplaceable = before !== "none" && composerFramesAmbiguous(beforeRows);
   if (before !== "none" && (unplaceable || !proven(before))) {
     // NO health observation here, and that is the point of the branch rather

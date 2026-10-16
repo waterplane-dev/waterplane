@@ -14,9 +14,9 @@ import { BRAND, PLUGIN_MANIFEST } from "@waterplane/shared";
 import type { PluginField, PluginView } from "@waterplane/shared";
 import { useCore, useStore } from "../../sdk";
 import { ConfirmButton } from "../../Confirm";
-import { SetAction, SetChoice, SetCustom, SetPick, SetSwitch, SetWarn } from "../../SettingsKit";
+import { SetAction, SetChoice, SetCustom, SetPick, SetSwitch, SetWarn, useNestedShown } from "../../SettingsKit";
 import { enablePlugin, openDecisions, refuseValue, runPluginAction, setPluginValue } from "./actions";
-import { actionKey, envRows, fieldValue, globalActions, parseFieldInput, pluginStateLine } from "./logic";
+import { actionKey, envRows, fieldValue, globalActions, parseFieldInput, pluginStateLine, pluginWords } from "./logic";
 import { errors, plugins as pluginStore, results } from "./store";
 
 /** The rack's door to the decision log. */
@@ -36,7 +36,7 @@ export function PluginsSettings() {
   // host knew the message. Nobody tapped anything, so no receipt.
   useEffect(() => {
     if (c.conn.status === "open") c.conn.send({ t: "plugin.list" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per opening of the screen, not on every reconnect (the host pushes the list itself)
   }, []);
   return (
     <SetCustom id="plugins" label="plugins" icon={Puzzle}
@@ -62,6 +62,8 @@ function PluginSection({ p }: { p: PluginView }) {
   const state = pluginStateLine(p);
   const StateIcon = TONE_ICON[state.tone];
   const env = envRows(p);
+  // Under a query only its own words answer, the sections beside it step aside.
+  if (!useNestedShown("plugins", pluginWords(p))) return null;
   return (
     <div className="plugin-sec">
       <div className="plugin-head">

@@ -43,6 +43,18 @@ _Full rationale split out of CLAUDE.md. Index: [docs/notes/README.md](README.md)
   Sharing the body is not tidiness: the sheet's copy had already drifted, sending a DIGIT at a `nav`
   box (opencode's unnumbered permission dialog), where a digit is a stray character in the composer.
 
+  **One box is answered by tap in the terminal view too: the workspace-trust box**
+  (`core/session/termAnswers.ts`, `kind: "trust"` on a running session, nothing else). The "the CLI
+  is drawing it, press the digit" argument fails for exactly this box, for two reasons. It is a new
+  person's FIRST box, met before they know the key bar exists. And claude 2.1.293 draws it
+  UNNUMBERED with the cursor on "No, exit", so a digit does nothing and the obvious Return leaves.
+  Filmed in the setup journey, a first session sat there with no way forward but ↓ then ↵ on the
+  key bar. The card is the same `PromptAnswer` body as an OVERLAY on the grid's bottom
+  (`.term-answer`, with its own scroll), so the PTY is never resized for it, and it covers only the
+  rows where the CLI draws the same box. A tap is `answerPrompt`, the host walks the cursor
+  (`chooseClaudeNavBox`), and the card goes when the host retires the box. Widen the predicate only
+  for a box with the same argument: first contact, and no keystroke that works.
+
   **Nothing about what an answer IS changed.** Every tap still goes through `core/queue/send.ts`'s `answerPrompt`:
   durable, fingerprinted, first in its lane, refused host-side once the box it names is gone. No new
   send path, and `prompt.answer`/`esc`/`submit` still count the taps — the bar's size counters
@@ -51,7 +63,7 @@ _Full rationale split out of CLAUDE.md. Index: [docs/notes/README.md](README.md)
   when no `onAnswer` reaches it, pointing at the CLI: a control that cannot act is not drawn as one
   (`Unavailable.tsx`).
 - `ws.ts` — `HostConnection`: single WebSocket, message queue while reconnecting, JSON encode/decode of shared types.
-- `webUpdate.ts` / `AppUpdate.tsx` — **the Android shell updates its own web bundle**, so a web change reaches the phone without a new APK; only a change to `packages/app` itself (Java, manifest, icons) needs one. Inert everywhere else — the PWA already updates through its service worker. Almost all of the work is here rather than in Java on purpose: the version check, the transfer, the hashing and the retry policy are worth reading and changing without an Android toolchain in the way, and they reuse the app's own host handling; the native plugin does only what a WebView cannot (write files, choose a serving directory, survive a restart). **Which build am I running?** is answered by fetching `/build-id.txt` — a file that ships INSIDE every bundle and is not one of the two paths the shell re-aims at the host, so it reports the running bundle whether that came from the APK or a download, with no bookkeeping that can drift. Every file is sha256-checked against the manifest and a mismatch aborts the WHOLE update: a bundle mixed from two builds is worse than no update. A finished download is **staged**, not applied — this is a remote control for live sessions, and reloading the page mid-turn for an update nobody asked for is worse than waiting; "restart into it" is a button, and a cold start picks it up anyway. **What "a cold start" means on a phone is the part that was quietly missing**: nobody restarts an Android app deliberately, so a staged build sat there for days while the only control that would take it was a button on a settings screen there is no reason to open — checking and downloading were automatic and the last step was not, which is the same as the whole thing being manual. So the restart is automatic too (`autoApply`, on by default, `auto-restart` in the section) and it is timed off **visibility**, which is the only signal that says whether anyone is looking: hidden for 20 s ⇒ reload off screen, so the app is simply new when it is picked up; or, for the phone that froze our timers the moment the screen went off, hidden for two minutes and then shown ⇒ reload on the way IN, where it reads as the app launching rather than as the screen being pulled away. The stated rule does not change — nothing is applied under a screen someone is reading — it is just no longer waiting for a restart that never comes. The failure it has to survive is a bundle that stages and then does not serve: `markHealthy()` clears a per-build attempt counter when the staged id IS the running id, and without that match a build gets `APPLY_MAX_TRIES` (2) auto-restarts and no more, or every pocketing of the phone would reload the app forever. That is the failure the native boot watchdog cannot see (it counts launches that never render, not launches that render the wrong build); the manual button is never gated by the counter. The origin is `http://localhost` either way, so localStorage/IndexedDB (send queue, drafts, paired host, cached transcripts) survive an update. `markHealthy()` fires from `main.tsx` after the first render and is what clears the native boot-failure counter — three launches that never get there and the shell falls back to the bundle inside the APK, which is never deleted. Settings → App version (`AppUpdate.tsx`) shows the ids, the progress, and the manual revert.
+- `webUpdate.ts` / `AppUpdate.tsx` — **the Android shell updates its own web bundle**, so a web change reaches the phone without a new APK; only a change to `packages/app` itself (Java, manifest, icons) needs one. Inert everywhere else — the PWA already updates through its service worker. Almost all of the work is here rather than in Java on purpose: the version check, the transfer, the hashing and the retry policy are worth reading and changing without an Android toolchain in the way, and they reuse the app's own host handling; the native plugin does only what a WebView cannot (write files, choose a serving directory, survive a restart). **Which build am I running?** is answered by fetching `/build-id.txt` — a file that ships INSIDE every bundle and is not one of the two paths the shell re-aims at the host, so it reports the running bundle whether that came from the APK or a download, with no bookkeeping that can drift. Every file is sha256-checked against the manifest and a mismatch aborts the WHOLE update: a bundle mixed from two builds is worse than no update. A finished download is **staged**, not applied — this is a remote control for live sessions, and reloading the page mid-turn for an update nobody asked for is worse than waiting; "restart into it" is a button, and a cold start picks it up anyway. **What "a cold start" means on a phone is the part that was quietly missing**: nobody restarts an Android app deliberately, so a staged build sat there for days while the only control that would take it was a button on a settings screen there is no reason to open — checking and downloading were automatic and the last step was not, which is the same as the whole thing being manual. So the restart is automatic too (`autoApply`, on by default, `auto-restart` in the section) and it is timed off **visibility**, which is the only signal that says whether anyone is looking: hidden for 20 s ⇒ reload off screen, so the app is simply new when it is picked up; or, for the phone that froze our timers the moment the screen went off, hidden for two minutes and then shown ⇒ reload on the way IN, where it reads as the app launching rather than as the screen being pulled away. The stated rule does not change — nothing is applied under a screen someone is reading — it is just no longer waiting for a restart that never comes. The failure it has to survive is a bundle that stages and then does not serve: `markHealthy()` clears a per-build attempt counter when the staged id IS the running id, and without that match a build gets `APPLY_MAX_TRIES` (2) auto-restarts and no more, or every pocketing of the phone would reload the app forever. That is the failure the native boot watchdog cannot see (it counts launches that never render, not launches that render the wrong build); the manual button is never gated by the counter. The origin is `http://localhost` either way, so localStorage/IndexedDB (send queue, drafts, paired host, cached transcripts) survive an update. `markHealthy()` fires from `main.tsx` after the first render and is what clears the native boot-failure counter — three launches that never get there and the shell falls back to the bundle inside the APK, which is never deleted. **Three launches was too slow and the revert did not stick** (a white screen, twice, on the owner's phone): reopening a blank app from recents resumes it and counts nothing, and once the counter did fire, the APK's own bundle downloaded the SAME build and auto-restarted into it on the next pocketing. So the shell also gives every page load from a downloaded bundle 15 s of ON-SCREEN time to call `markHealthy` and falls back in-process when it does not (`ShellUpdatePlugin.armBootWatch`), and it REMEMBERS the build it fell back from: `stage`/`applyNow` refuse that id with code `BAD_BUILD` unless `force` is passed, `check()` turns it into phase `held` without downloading, and only the person's own tap (*try build … again* → `download(true)`) retries it. The next different build is taken as usual. A fallback is said once, as a toast, keyed on the native `lastRecoveryAt`. Settings → App version (`AppUpdate.tsx`) shows the ids, the progress, and the manual revert.
 - `hostUrl.ts` / `HostSetup.tsx` — **where the host is, when the app is not served by it.** Inert in the browser (`hostBase()` null, `abs()` returns its argument, nothing patched, every request stays same-origin exactly as before) — it only wakes up inside the Android shell, where the UI is loaded out of the APK at `http://localhost` and the daemon is a different origin. Rules live in `shared/src/hosturl.ts` (node-runnable, so `e2e-hosturl.mjs` pins them); this is the runtime half. **The three transports are patched rather than the call sites**: the client has ~60 root-relative URLs across a dozen files and new ones land constantly, so a rule that only holds where someone remembered a helper is a rule that breaks silently in the APK weeks later — `fetch`, `XMLHttpRequest.open` and `sendBeacon` are wrapped once at boot and a `fetch("/api/…")` written next month is correct the day it is written. A native `shouldInterceptRequest` proxy was the alternative and cannot work: it never sees request bodies, so every upload and POST would break. Only the URLs that never pass through a transport call `abs()` by hand — `api.artifactUrl`/`inboxUrl` (they become `<img src>`) and `pull.ts`'s Background Fetch URL. **`/ws` is the one thing a fetch patch cannot cover** (a handshake isn't a fetch), so `makeConnection()` reads `wsUrl()`. Capacitor is detected off the global it injects, never imported — `packages/web` stays dependency-identical for the browser build. `HostSetup.tsx` is the pairing screen `main.tsx` renders *instead of* `App` until an address is stored (it has to sit above `App`, which opens the socket in a `useRef` initializer on its first render); its probe of `/api/health` before saving exists because every failure mode of a wrong address degrades into the app's NORMAL offline behaviour — reconnect banner, filling queue, sends that never ack — which is precisely the state the user opened the screen to escape. Settings → **Paired host** reopens it via a `app:host-setup` event; Settings → Connection is hidden in the shell, because every button there NAVIGATES to another origin, which in the APK means abandoning the bundled shell for the network.
 - **A resize repaints the whole screen — so layout churn IS the flicker** (`Terminal.tsx`, `sessions.ts` `resize`, `useLinger.ts`). `.term-wrap` is `flex: 1`, so every strip that mounts above or below the terminal (the queue bar, the composer's upload row, the connection banner) takes height from it; the container resize refits the xterm grid, the fit reports new geometry, the host SIGWINCHes the PTY and the claude TUI answers a SIGWINCH by CLEARING and redrawing everything. That is why the flicker was never confined to the strip that caused it, and why it appeared exactly during sends and reconnects — the moments when those strips come and go. Four rules keep it down: geometry is reported only when cols/rows actually CHANGED (a keyboard closing, a re-fit, a reattach mostly land on the same grid), `sessions.resize` no-ops on an unchanged size (the one place every client and every reattach passes through — `repaintTerminal`'s deliberate rows-1 jiggle still differs, so it still forces its redraw), transient strips LINGER (`useLinger`) so a burst of sends or a retrying upload is one mount instead of one per attempt, and their height is stable across states (`.outbox-recover`'s `min-height`, the upload track always rendered, a "sent"/"uploads done" frame of the same shape). The connection banner does not participate at all: it FLOATS inside `.term-wrap` (`.conn-banner.floating`), because a flapping tunnel is precisely when it mounts and unmounts, so the indicator for a bad link was repainting the screen twice per blip.
 - `LoginBar.tsx` + `openExternal.ts` — **signing in, from a phone.** The host publishes the rejoined sign-in link (`host/login.ts`); this is the part you can press. Rendered above the approve bar in the terminal view, amber rather than the approve bar's alarm-red — nothing is broken and nothing is blocked, there is a link to open. Three actions in the order the flow needs them: **open** (hand it to the phone's browser), **copy** (the fallback for a phone whose browser hand-off does not go where you want, and the only path that works with no hand-off at all), and **paste code**, offered ONLY while `awaitingCode` — outside that window the same keystrokes land in the composer as a prompt. Under a disclosure sits the URL itself, wrapping anywhere and selectable: every automatic path here can fail (a blocked popup, a clipboard that needs https, a browser that refuses the intent), and the last resort has to be the text in one piece rather than the six fragments on the terminal. It scrolls rather than growing, for the reason the approve bar's own height is capped — the bar takes its space from the terminal, and a bar that grows makes the CLI repaint. **The code goes in on the RAW, undurable path, on purpose.** `deliverPrompt` proves a delivery by watching for a turn to start, and a login code starts no turn: it goes into the CLI's login field, not the composer. The verified path would therefore conclude the Return had been swallowed and press it up to five more times into whatever the flow moved on to. Queueing it is meaningless for a second reason — a login code is short-lived, so a send saved for a later flush is a send that will be refused when it arrives. Text and Return are two writes with a gap, per the raw-input rule: sent as one chunk the TUI reads them as a paste and the Return becomes a literal. Clipboard content is sanity-checked (non-empty, no whitespace) and every refusal says which wall it hit, because a clipboard read fails silently as an empty string in three different ways. **`openExternal` is the shell split, and getting it wrong is silent in both directions.** In a browser tab it is `window.open(url, "_blank")`. In the Android shell that is the wrong call: Capacitor turns multiple windows off, so `_blank` either no-ops or punts the URL to the phone's browser, where it resolves against Capacitor's own local asset server and loads nothing — the same trap `Markdown.tsx` and `routing.ts` each document from their own side. What works there is an ordinary main-frame navigation: assigning `location.href` is the only form that reaches `MainActivity.guardNavigation`, which sees another origin, asks "open in your browser?" and fires an `ACTION_VIEW` intent while the WebView itself never navigates. Only `http(s)` is handed to the platform — a `javascript:` or `intent:` URL scraped off terminal text is not a link, it is an injection — and a refusal or a blocked popup is reported, never swallowed. The **Terminal text sheet** lists every link on the screen through the same `findUrls`, which is what makes a non-login URL reachable too. `e2e-login.mjs`.
@@ -63,6 +75,23 @@ _Full rationale split out of CLAUDE.md. Index: [docs/notes/README.md](README.md)
   **Busy indicator:** the reader shows no terminal, so a status strip under the toolbar (plus a pulsing card at the tail) states which of *working · waiting for your answer · blocked on a usage limit · idle · session ended* is true. A pending question outranks "working" (a hooked session stays turn-active while the dialog is up, so both are true): the tail card shows the question and its options — the approve bar with the real one-tap buttons sits directly under the reader — or, for an unparsable dialog (`awaitingInput`), an "open the CLI" button. It scrolls itself into view ONCE per question, so reading history can't swallow it but the scroll position isn't hijacked afterwards. "Working" is `SessionInfo.turnActive` — exact when the session is `hooked` (UserPromptSubmit → Stop, so it stays true through a long, silent tool run), else the same silence guess `idle` makes (the strip's tooltip says which). Alongside it, the CLI's own working line (`✳ Clauding… (9m 20s · ↓ 9.7k tokens)`) is scraped client-side out of the PTY frames the socket is already delivering (`App.tsx` keeps a 4 KB per-session tail), so the elapsed/token counter the terminal would show is visible in the reader too — no extra host traffic, and absent (not wrong) if the TUI stops printing it. **That scrape had stopped working, in the way a scrape does: silently.** It anchored on the literal "esc to interrupt", and claude 2.1.236 no longer prints it — measured in a node-pty at 46 columns (a phone) and at 100, the parenthetical carries the duration and the token count and nothing else. Nothing failed and nothing was wrong on screen; the reader just said *working · output appears here as claude writes it* for nine minutes beside a terminal that was counting seconds and tokens, which is the whole feature not existing. So `shared/working.ts` anchors on the SHAPE instead — a gerund, an ellipsis, and a parenthetical carrying a duration or a token count — and is pinned in `shared/test/working.test.mjs` against bytes a real CLI printed, partial redraws included. Two rules hold it honest: the ellipsis alone is not enough (the TUI truncates other lines with one — "⚠ Transcript saving is off — inherited CL…" — and rendering that as an activity would be the app inventing a fact), and a bare gerund with nothing measured behind it is a FALLBACK, never preferred to a line with numbers on it. The elapsed the reader shows is still the host's turn clock, which starts at `UserPromptSubmit`; the CLI's own counter is the fallback for an unhooked session, and the tokens are the part nothing else in the reader can say. **Offline honesty:** with the socket down the status strip and the tail card label themselves *last known* (`TranscriptStatus.linkDown`) instead of asserting "working · 43m 56s" — a counter reading off `turnStartedAt`, which ticks up just as convincingly whether the agent is working or the tunnel died forty minutes ago — and the pulsing dot (which reads as "something is happening right now") goes quiet. Same rule the backlog's waiting reasons follow: a session fact read from a cache is a fact about the past. When there is neither a live fetch nor a cached document, the failure says so in a sentence and offers the CLI view, which has its own persisted scrollback. **The one state the strip got wrong, for as long as it existed:** a session whose turn ended by launching BACKGROUND agents. The main loop's `Stop` really did fire, so `turnActive` is honestly false and `idle` is honestly true — and the reader said *idle — nothing running* while the terminal two taps away drew `⏵⏵ 2 agents` and counted `59s · ↓ 73.4k tokens` against each of them. The fix is not a wider `turnActive` (that flag is the hook pipe's own fact and half the daemon rests on it being a sharp boundary) but a second fact beside it: `SessionInfo.agents`, read by the host off the CLI's own `subagents/` logs and retired by the parent conversation's own task-notification (host `agents.ts`). In the reader it is a rung of its own — under "waiting for your answer" (a question is owed an answer no matter who else is working) and under "working" (the turn is the bigger fact), but above idle — reading `2 agents running · 3m`, with ONE ROW PER AGENT under it: what it was asked to do (the `description` the Agent call carried), the tool it last called, and how long it has been at it. The count is not the progress; "2 agents running" answers how many and nothing about what, and the reason this view exists at all is that the CLI's own agent panel is a keystroke and two taps away on a phone. The same fact moves `sessionStatus()` from `done` to `coding` (`sessionFacts.tsx`), so the launcher row, the per-repo roll-up and the status filter cannot disagree with the reader — that ladder is one function for exactly this reason — and the turn-finished push says *Turn finished · 2 agents still running* rather than three words claiming the work is over. It changes nothing about what may be SENT: the CLI takes typing while it waits for its agents, and a heuristic over somebody else's log files is not something to let block a delivery.
 
 - `Backlog.tsx`, `Gallery.tsx`, `GitView.tsx`, `SlashSheet.tsx`, `NewMenu.tsx`, `ImageAnnotator.tsx` — feature sheets.
+- `gitFailPrompt.ts` — **a failed push or pull on the git screen, handed to a new session.** A failed
+  push used to show its pre-push log in the note line and offer nothing to do with it — on a phone,
+  the person then had to copy a truncated tail into a prompt by hand. `fix in a new session…` opens the
+  Send sheet SEEDED with that log plus what an agent starting cold needs and cannot see: the branch,
+  the upstream, how many commits were ahead and the run's own clock. It is a seed, never a send — the
+  words are edited, timed and aimed from the Send sheet like every other "ask the agent", and the
+  prompt itself leaves the push to the person (an agent that pushes on its own is a push nobody
+  reviewed). The log is fenced one backtick longer than the longest run inside it, because test output
+  quotes source and source here is full of ``` fences that would close a plain one mid-log. The button
+  belongs to the note it was told in (`failure.note === note`): any later note — a fresh commit, a
+  successful retry — takes it away, so it can never offer to fix a failure that is no longer on screen.
+  Pure and pinned by `gitFailPrompt.test.mjs`. **`copy` beside it puts the SAME words on the
+  clipboard** — for a session or a chat that is not this repo's new one (the first failure this
+  button was built for was pasted by hand into an existing session). One builder, so the two can
+  never disagree. Its receipt is a toast, never the note line: the note is what both buttons belong
+  to, and writing a receipt there would take them away mid-tap. It shows even where there is no repo
+  to aim a session at, since copying needs none.
 - `ImageAnnotator.tsx` — the marks are **editable after placing**, and one of them is a plain **line**.
   A phone drag is imprecise and a circle placed two centimetres off used to cost the whole mark (undo,
   redraw, at whatever zoom you happened to be at): the `move` toggle turns drawing off, a tap selects
@@ -250,6 +279,19 @@ _Full rationale split out of CLAUDE.md. Index: [docs/notes/README.md](README.md)
   It renders inside the not-collapsed group, `headerCollapsed` rendering no menu for it to reveal;
   the pending session's `Unavailable` twin (`toolbar-cants toolbar-cants-menu`, taking the panel's
   own geometry) is gated identically, so the burger means one thing in both states.
+- **The header collapse toggle is gone (2026-10-07).** `headerCollapsed` (the right-most
+  `ChevronsDownUp` button, folding the header to one row) was removed at the owner's ask: the
+  terminal corner group's full-screen button does the same job better — it hides the whole chrome,
+  keeps the special-key row, and is drawn on both surfaces. Mentions of `headerCollapsed` above are
+  history. A stale `waterplane.headerCollapsed = "1"` on a phone is simply no longer read.
+- **The `?` chip asks once, then may go (2026-10-07).** `HintToggle` is on the launcher BAR now
+  (it was inside the nav menu) as well as the session header. The first time explain mode is LEFT,
+  `HintLayer` asks *keep the ? button?* — asked on leaving because only then does the person know
+  what it does. "remove it" sets `hintChip = "hidden"` and the one component renders nothing in both
+  headers; the backdrop answers nothing (asked again, like a hint card). Settings has the switch back
+  (`hints-chip`) and **`ui-reset`**: deletes `UI_RESET_KEYS` (device look only — theme, sizes,
+  zooms, strips, tabs, layout switches, the chip; never words or a synced choice, pinned by
+  `storage.test.mjs`) and reloads, behind `askConfirm`.
 - `headerCmds.ts` — **header commands**: user-configured one-tap chips between the session title and the view controls. They are in the HEADER rather than the terminal toolbar because the header is the one bar that survives `headerCollapsed` and reader view — a `/compact` you fire every few minutes should not cost an expand, a sheet and the keyboard. A tap goes through `submitInput()` (outbox + ackId), never a bare socket write, so a chip tapped on a dead tunnel queues like anything else. Storage is `{ list, removed }` in `waterplane.headerCmds` (synced through the host, like snippets/presets/toolbar cfg — see `web/settings.ts`) so a later build's NEW default can appear without resurrecting deleted ones, and an emptied list stays empty. The editor is `SnippetSheet` reused (same `{id,title,text}` shape) — do not fork it. Entry points: the pencil/`+ command` chip at the end of the row, and the customize-toolbar sheet.
 - `settings.ts` — **the client half of "settings follow the user, not the browser"** (the keys and the reasoning are in `shared/settings.ts`). **localStorage is PATCHED, not wrapped**: snippets, presets, header commands, the toolbar config, launch flags and the pad are read and written from a dozen places across `App.tsx` and five sheets, and new ones land regularly (`headerCmds.ts` was `presets.ts` copied wholesale) — a rule that only holds where somebody remembered to call a helper breaks silently three edits later, on the device you are NOT holding, so `setItem`/`removeItem` are wrapped once at boot and a `localStorage.setItem("waterplane.snippets", …)` written next month is correct the day it is written. Same argument `hostUrl.ts` makes for patching `fetch`. Write times live in `waterplane.syncTs`; `mergeSettingsDoc` runs on every `settings.all` (sent unprompted on hello, so on every reconnect), which is also what pushes edits made while the tunnel was down — there is no queue of its own. Adopting a remote value fires a `app:settings` event (`onSettingsChange`) because these are held in React state seeded at mount, so without it a template written on the phone would sit in localStorage on the desktop until the next reload. The one case with no right answer — a device that has never pushed holding a value the host also has — resolves to the HOST, and `pushAllSettings()` (Settings → Synced with the host → "use this device's copy") is the escape hatch, since nothing is deleted and the local values are still under the same keys.
 - `toast.ts` / `ToastLayer.tsx` / `ToastLog.tsx` — the one-sentence reply. Module-level state, mounted once beside `App`; see the `HintLayer` note below for why neither may live inside `App`. **Two later fixes, one report** — *"toast like notifications that disappear too fast to read and also don't list in the notification list"*. Both halves are the same bug: a sentence this app judged worth saying was reachable for 2200 ms, once, and then existed nowhere. So (1) the clock is the LENGTH OF THE WORDS — `toastMs()`, a base plus reading time per character up to a ceiling, pure and node-tested, and deliberately base PLUS rather than the larger of the two, since a `max()` gives "copied" and a forty-character explanation the same three seconds, which is the complaint; the toast became a BUTTON so the ceiling costs nobody anything, and the tap only takes it off screen. And (2) every toast is also a ROW, in a bounded durable log the notification feed renders under its own heading. Durable because the failure mode is a reload — the watchdog's, an update's, or the one a person does when the tunnel looks dead — and the sentence being re-read is usually the last thing before it; bounded and repeat-collapsed (identical words inside a minute bump a `×N` count) because ten "queued" rows push the sentence you were looking for off the bottom. The log is NOT the host's feed and is not merged into it: a host notification is something that happened on the DESKTOP while you were not looking, is mutable per kind, can carry a file and is pushed to the OS, whereas these are local sentences about a tap you just made. One merged stream would put "copied" between two prompts that need a person, which is what the notification kinds exist to prevent — so two labelled halves (*From the desktop* / *On this phone*), cleared apart, and **only the desktop's half moves the unread badge**: a badge that counts "copied" is a badge nobody reads. Not synced, for `activityDismissed`'s reason — every row is a thing that happened on THIS screen.
@@ -640,6 +682,58 @@ every layout change, so a toast would fire several times a second while the keyb
 resize that never lands is superseded by the next one and by `session.attach` on reconnect.
 
 
+## Chrome that changes itself says so
+
+A first-time reader could not find how to start a session: the repo header's `+` was one bare
+icon among five. The fix was a word, `+ new`, shown only while the host has never run a session
+(`neverRanSession`, the same reading the first-run card uses). That fix had a fault of its own,
+pointed out at once: the word **goes away by itself**, and a button that changes its look
+without warning reads as a bug or a lost control. That is exactly the habit the first-time aid
+was supposed to build.
+
+The header `?` had already solved this. The first time explain mode is left, it ASKS whether it
+may go, and its toast names where it comes back. The first-use hint card says *"Explained once.
+The next tap on this button just does it."* Both tell the person at the moment of the change.
+The `+ new` now does the same: the tap that opens the first session toasts `NEW_LABEL_RETIRES`.
+
+Superseded 2026-10-13: the header's start verbs are now always worded — `+ now` and `+ later`
+under the repo name (`RepoGroup.tsx`, `.repo-start`) — so there is no label left to retire and
+`NEW_LABEL_RETIRES` is gone. The rule it illustrates stands.
+
+The general rule (skill `ux`, §1): self-changing chrome says so when it changes, says what it
+becomes or where it comes back, keys the aid and the notice off one predicate, and **asks** when
+it removes a control but **tells** when it only drops a word. It is a skill and not a paragraph
+per component because three components had each worked it out separately, and the fourth got it
+wrong.
+
+## A strip above the prompt bar folds, it never closes (`Stowable.tsx` + `stow.ts`)
+
+The session screen grows cards between the terminal and the prompt bar — a shell's link card
+(`ShellLinksBar`), the sign-in card (`LoginBar`), the next prompt (`NextPrompt`) — and every one
+of them takes its height FROM the terminal. On a phone the shell link card alone was a third of
+the output area, and it stayed up as long as the link was on screen. The owner asked for a way to
+put such cards away that does not throw them away: the link is still the link and the code still
+the code, so the answer must still be one tap off.
+
+So it is a FOLD, and it is written once:
+
+- **`Stowable`** wraps the strip; `<StowButton />` goes wherever its head has room. Folded, the
+  strip renders nothing and a chip (its own icon and title, plus an optional live `detail` — the
+  device code, `+2` behind) stands in the session **status line** via `StowTray`. That line is on
+  screen anyway, so a fold gives the terminal back its whole height; a new row of chips would
+  have bought back only part of it.
+- **A fold is keyed by CONTENT**, not by the strip: slot + `stowKey`. A new link, a new code, the
+  CLI starting to wait for a code, the next queued entry — each is a new thing to read and comes
+  back up by itself. A fold keyed by slot alone would hide exactly the change that needed seeing.
+- **Marks persist per device** (`LS.stowed`, a week, 60 marks) because every OTA update is a
+  reload, and a fold that came undone on each one would be a fold nobody trusts.
+- **The first fold says where the strip went** (`STOW_TOLD`, once per device, `LS.stowTold`) —
+  skill `ux` §1: a control that vanishes names the way back. After that the chip appearing is the
+  receipt.
+
+Typing room and full screen hide the status line and therefore the chips; the strip stays folded
+and its chip is back when the chrome is.
+
 ## The overlay ladder became a table
 
 `App.tsx` chose which sheet to show with forty sequential `if (overlay === "x") return …` branches,
@@ -894,14 +988,14 @@ than floating over it: a popover and a phone keyboard is a coin toss about which
 
 Every other exit from this composer ends in something that fires itself. `now` types it in, *when
 it's free* hands it to the desktop, and every WHEN in the send sheet is a trigger — a backlog row
-is work somebody has decided to do, and `auto` plus the smart pick are what decide WHEN. An idea
+is work somebody has decided to do, and `auto` decides WHEN. An idea
 to reconsider, or a bug you want to look at once more yourself before an agent does, is not that
 yet, and there was nowhere in this menu to put one: the nearest answer, *when it's free*, still
 ran it.
 
 So the menu grew one row that is not a send. **`keep it on the pad`** writes the words to the
 prompt pad (`addPadNote`) with the session's `cwd` when there is one, and nothing in this app looks
-at them again until a person opens the pad — no target, no trigger, out of reach of the smart pick.
+at them again until a person opens the pad — no target, no trigger, out of reach of `auto`.
 Filing it onto a backlog later is one deliberate tap there (*file it*). The toast names both facts
 a person cannot see from the box emptying — that nothing runs it, and where it went — because this
 screen has no pad strip and a note that lands silently is a note nobody finds again. A refusal (the
@@ -1058,7 +1152,7 @@ verbs split in two, and the words say which:
   run reach `runNow` too but draw no note; `bulkverbs.test.mjs` pins each to
   one call site.) They skip the WHOLE queue, and the three that say so use ONE sentence,
   `sendIntent.ts`'s `skipQueueNote` (*starts it this second in a session of its
-  own — skips the queue: the budget, the smart pick, one at a time and wait
+  own — skips the queue: the budget, one at a time and wait
   until free*). As TEXT where the verb is: Activity draws it under the row's
   buttons, the compose strip in its `why` line, the Backlog under a row where
   the skip can hurt (another item is RUNNING in that checkout) or where nothing
@@ -1124,13 +1218,13 @@ own number is read with THAT facet's own picks set aside and every OTHER
 facet's current selection applied (`facetCounts`'s `withoutFacet`) — the same
 self-exclusion `backlogFilter.ts`'s age/status cross-count uses, generalised
 from two axes to seven, so ticking a second option in one facet reads as
-"adds these rows", never "recount everything already on screen". A facet
-whose every option currently reads 0 collapses to one sentence rather than a
-row of dead-looking chips; a facet with SOME options at 0 draws chips for the
-rest (plus any 0 option that is itself ticked — un-selecting it must stay
-possible) and folds every option it leaves off the strip into one quiet line
-("none waiting for your answer · none exited") rather than letting them go
-missing with nothing on screen to say so.
+"adds these rows", never "recount everything already on screen". Each facet
+is its label with kit `FilterChip`s beside it, one per option some row answers
+(plus any 0 option that is itself ticked — un-selecting it must stay
+possible); every option left off the strip is said once, in one lower-case
+line ("none: waiting for your answer, exited"), never missing with nothing on
+screen to say so — and never inside `.section`, whose uppercase shouted it
+(2026-10-12).
 
 The list under the facets is the ACTUAL rows (`SessionFacts`, the same
 component the launcher row and the search sheet already share), each with a
@@ -1956,7 +2050,9 @@ ack says a frame was taken; the listing says it was stored, and only the second 
 *same five words* the settings half does — a person asking "is this anywhere but this phone" is
 asking one question, and answering it with "synced" on the pad and "armed" on a schedule is how two
 words for one fact become two mental models of one app. `SyncChip` is the row-sized rendering: a
-chip carrying its word, with the sentence as its title, because a list is where the full prose
+chip carrying its word, with the sentence as its title (on the schedules sheet a card wears it only
+when NOT on the desktop, and the head's `SyncSummary` says the good case once — ten identical
+"on desktop" chips were noise, 2026-10-12), because a list is where the full prose
 cannot go and also where the silence bit hardest — ten schedule rows, and no way to tell *armed on
 the desktop* from *sitting in a phone on a train*.
 
@@ -2341,6 +2437,17 @@ correctly line by line:
   with everything else succeeding, so there is a size LADDER (asked-for → 2600 → 1800 → 1200 → 800),
   a `toDataURL` second encoder, every canvas zeroed before the retry, and the output capped at the
   width the upload would shrink it to anyway. Falling back is REPORTED, never silent.
+- **The gallery's combine** (`gallery/useGalleryPick.ts`, `GalleryPickBar.tsx`, and the fetch in
+  `features/images/GalleryEntry.tsx`): pictures the DESKTOP made — a screenshot per device, a
+  before and an after — are the ones most often compared, and until 2026-10-16 the only multi-image
+  picks were the phone's own file pickers, so two outbox screenshots could not be put on one canvas
+  without saving them to the phone first. The gallery has a pick MODE with its own worded bar (a
+  tile tap opens a file everywhere else, so a hidden long-press would never be found): tiles are
+  numbered in TAP order, which is the panel numbering the collage sheet starts from; Combine is
+  drawn once two are picked and the bar says why before then. One repo only — the combined picture
+  uploads into one inbox. The bytes come through `api.fileBlob` (the auth, routing and fuse of every
+  other read), then `offerCollage` exactly as a picker's files would. Asked for the demo's hero story
+  (docs/requirements/demo.md R-demo-033: "make ② look like ①").
 
 ### `PadSheet.tsx`
 
@@ -3605,6 +3712,25 @@ the chip's own count, which is on screen every time the sheet opens.
   browse-then-open path is untouched, where × still means *back to the pictures*. A ref and not
   state: nothing renders differently for it.
 
+  **The chrome read as generated, and each piece of that had a rule it broke** (2026-10-12, from
+  the owner's screenshot of a 31-file outbox). The count was said three times — `outbox · 31` in
+  the head, `new 31` on a chip, *showing the 31 added since you last looked · 31 here* — and a
+  worded `new` pill sat on all 31 tiles under a filter that already meant "new". Two rows of fat
+  chips lit three solid fills at once, and both rows held a chip spelled *all* (kind and time),
+  two answers under one word. Now: WHERE is the app's `.segmented` control (`GalleryFilters.tsx`,
+  the one the Apps, Downloads and Search sheets use), one tab lit; WHAT is a row of slim toggles
+  where none lit means everything and a lit one carries a × — the kit's `toggleChip` rule, so the
+  *all* chips are gone rather than renamed. The badge's cut is the kit's `FilterBar`
+  (`galleryCuts.ts`), which names the rows actually listed only when they differ from the badge's
+  number and never while the listing is on the wire. `new` is a dot, and inside the badge's cut no
+  mark at all. The count is said once, in the head; the build stamp is that count's long-press
+  text, because Settings › app version is where the APK says which bundle it runs. A document tile
+  is a file-type glyph (`DocIcon.tsx`), not its extension in monospace across the picture. An empty
+  grid under a time cut says *Nothing from the last 4 hours.* with the way out — it used to say
+  the outbox was empty, a false statement about a full outbox. And app-wide: `.key` began as the
+  terminal key bar's class and became every button, so every button was monospace; monospace says
+  *this is a key or a command*, so only `.keys .key` keeps it.
+
 ### `docKind.ts` — one click on a notification about a file
 
 The feed listed an outbox drop as **tap to download**, and that is all the row did. On a phone a
@@ -4014,13 +4140,14 @@ sheet; this is what the person has since decided.
   in a settings screen for two reasons. It is read in the second before a build is tapped — that is
   when "what will this be called, and what will it replace?" is a live question — and what it
   governs is visible nowhere else on a phone: a name in the download list, and files that stop
-  existing. The sentence above the chips says what the NEXT build will do in full
-  (`artifactPolicyText`), so a switch never has to be decoded from its own label, and the count sits
-  between two steppers as a readout rather than a third button.
+  existing. The switches are `SetSwitch` rows (state = the `on`/`off` at the edge); the sentence
+  saying what the NEXT build will do (`artifactPolicyText`) is behind the head's `?`, so a switch
+  never has to be decoded from its label; "keep − 3 +" is one line, the count a plain readout, each
+  stepper absent at its end (2026-10-12: the labels used to read "✓ collect + name: on").
 - **`undefined` is not the default.** A host that has not answered (or an older daemon that never
   will) draws NO row. A default painted as this repo's policy is a claim about what the next build
   is about to do to files on disk, and this is the one screen where that claim has to be true.
-  Offline the chips are replaced by the reason — the policy lives with the project on the desktop —
+  Offline the switches are replaced by the reason — the policy lives with the project on the desktop —
   never by dimmed chips, which on a phone explain nothing.
 - **The prompts carry the same rules** (`ARTIFACT_RULES`, in both). The first generation of them
   produced, across nine repos here, exactly the three defects the host now owns: a deliverable
@@ -4276,106 +4403,24 @@ facts about cost: `N turns` (a COUNT; the chain itself stays on the host, un-cli
 shipping it would put a whole prompt into every list every phone renders) and `continued` (it
 reopens the repo's last conversation rather than starting clean).
 
-#### The smart pick, on the phone: the one feature here that applies itself
+#### The smart pick, on the phone — removed 2026-10-16
 
-A per-repo tick (`smart pick` / `smart pick off`, beside *assess* in the repo bar): with it on, the
-moment the repo's next backlog item would fire, the host first looks over that repo's remaining
-items and may **pick**, **merge** and **sort** — all three with no approval step. That was chosen
-with the two CLAUDE.md rules it cuts against in view (*nothing applies itself*, *never overwrite
-typed words with words nobody typed*), so what those rules still buy is the whole of this sheet's
-job: **nothing is destroyed, and every row says what happened to it.**
+A per-repo smart-pick tick, its last-look strip, `merged from N` chip/filter and `undo`/`put them
+back` (`backlog.unmerge`) lived here; all are gone (reason in
+[host.md](host.md#smart-pick--removed-2026-10-16)). What stayed from that work: `hiddenByArchive`
+(archived hides a row *unless it is `running`*, one predicate for the sheet's base, the repo counts
+and the composer's badge), and the mark below.
 
-- **The tick is drawn only when the host said the feature exists.** `backlog.list`'s `smartPick` is
-  `string[] | undefined`, and `undefined` is not `[]`: an older daemon would ignore
-  `backlog.setSmartPick` silently, and a switch that flips back on the next list is worse than no
-  switch. It is also live-only — a `liveSend` mutation like *auto* — so it is ABSENT while offline
-  rather than dimmed, and the sheet's existing offline sentence already covers why.
-- **The last look is a strip, not a line of meta.** It is the only window onto a spender that runs
-  whether or not this phone is awake, so it says what the pass did, what it cost, and — as plainly —
-  what it failed to do. The sentence is `smartpickOutcomeText`'s, verbatim: the host writes the same
-  words into its record and its notification, and three copies of *fired in the order you had* is
-  three chances for one of them to stop being true. Every outcome but `applied` and `noop` ends on
-  that phrase, which is the feature's whole promise said out loud, and a failed pass wears `--warn`
-  rather than `--dead` because nothing broke — the backlog fired in the order it already had.
-- **Tokens and dollars are read off the `claude -p` envelope, and are ABSENT when it carried none.**
-  A pass drawn as `$0.00` because nobody measured it is the wrong number this app refuses to print;
-  the strip says *no token count came back with this pass* instead. Offline it also carries the
-  backlog snapshot's own age, because "it merged two of your items" means something different four
-  seconds old than four hours old.
-- **`merged from N` is a count on a control, so it is a filter.** The chip carries the ids
-  (`BacklogItem.mergedFrom`), the tap sets `BacklogFilter.ids`, and the bar reads *merged into “x” ·
-  3 of N · clear*. The one thing this cut has to do that no other cut here does is **ignore the
-  archived hide**: every original of a merge is archived, so opening the default base would show
-  nothing at all — a count describing an empty list. The predicate deliberately does not know about
-  the view toggle (two rules in one function); the sheet picks the unhidden base instead. The
-  sentence's `idsLabel` is the sheet's too, because only the sheet knows which side of a merge was
-  tapped — an original's chip goes the other way, to the row that stands in for it. The bar's count
-  then has to name the base it counted: an ids cut reads *3 of 12, **archived included***
-  (`backlogCountWords`), because the default view underneath draws nine and "3 of 12" over it is a
-  true number about a list nobody has seen.
-- **The undo is reachable in the case it exists FOR, and it is a different promise once the row has
-  run.** The pass picks and applies in the same breath and the merged row is routinely the pick, so
-  the pre-run window on the row the notification names is about one tick — meaning the person that
-  notification wakes meets a row that has ALREADY RUN. That person used to be told *"it has already
-  run — the 3 it was made from are under archived; bring one back by hand"*: show archived, find
-  each, unarchive three, and the machine's text still unreversed. So the same `backlog.unmerge`
-  serves both sides and the ROW words which one it is — `undo` while it is waiting (*undo puts them
-  back*), **`put them back`** once it has STARTED (*it has already run; put them back queues your 3
-  originals as they were*), because words typed into a session cannot be untyped and a button that
-  said `undo` there would be claiming they could.
+- **`placed by you`** on a hand-ordered row. Two things stamp `handOrdered` — a drag, and an
+  assessment ranking approved at apply time — so the chip says the thing that is true of both, a
+  position a PERSON decided. Nothing re-sorts rows automatically any more; the mark still says whose
+  order it is.
 
-  **`running` is a state that button is DRAWN in, and getting that wrong is the one review finding
-  that took a capability away.** The sheet used to answer `null` there and draw a refusal instead —
-  *"it is running now — its 3 originals stay under archived, and can be put back once it has
-  finished"*. The host accepts `backlog.unmerge` in that state and always has: `smartpick.ts`'s
-  `undo` archives the row WITHOUT stopping it, restores the members, and answers *"the merged item is
-  still running and has not been stopped — your 3 originals are back in the list"*. So the phone was
-  wording a refusal nobody would make, in exactly the state a sleeping person wakes into — and on a
-  phone "come back later" is the words staying archived for ever. The objection behind it was real
-  (neither verb is the whole truth while a session is typing those words) and the answer to it is the
-  SENTENCE beside the button, not the button's absence: *it is running now and will not be stopped —
-  put them back queues your 3 originals again, as they were*, which is the host's own wording one
-  beat before the host says it. ONE note, never two: a `running` row draws that INSTEAD of
-  `smartWroteWords`, whose *it has already run* is not true yet.
-
-  That tap has a visible consequence on this sheet, and closing it is the second half of the same
-  fix. The host archives the running row on purpose — a row that ran is the only account of the
-  session running it — and three places here cut on `archived`: the sheet's default base, the repo
-  counts, the composer's badge. So the row the host offers to keep an account of **vanished mid-run**,
-  and the badge dropped by one for a session that is still typing. `hiddenByArchive` is the one
-  predicate all three read now: archived hides a row *unless it is `running`*.
-
-  **"As they were" says what that means once an original had a CLOCK.** `undo` restores each member
-  with the `nextAt` it had, which for an untimed row is the whole truth — it goes back in the queue
-  and runs in turn. For a timed one it is not: twins merged on *tonight 21:00* and put back tomorrow
-  come back to a ladder that answers *that instant has passed and this was a one-off — post it
-  again* and fails each of them. So the receipt was promising a run that cannot happen, under the one
-  button the whole case for letting the pass apply itself rests on. The clause (`RESTORED_CLOCK_NOTE`)
-  is appended only when an original carried a clock, and it is deliberately NOT a count: which of
-  them will fail depends on a tick, a grace and — for a `window` rule — a usage reading this phone
-  has not got, and a heuristic here degrades to a true sentence about all of them rather than a
-  number about some. It ends by naming the way out, because a failed timed row wears *drop the
-  clock*. Whether any original was timed is read off the ORIGINALS in the list (archived, not gone —
-  that is what `merged from N` opens); one the store no longer carries answers nothing and the clause
-  is simply absent.
-
-  All of these sentences and the state rule are `backlogFilter.ts`'s (`smartWroteWords`,
-  `undoWhileRunningWords`, `RESTORED_CLOCK_NOTE`, `undoOfferFor`, `hiddenByArchive`), pinned by `backlogFilter.test.mjs` —
-  the words are the deliverable, so they live where a test can read them. The TOAST says the verb the
-  button WORE (`onUnmerge(id, verb)`): it always said *put them back*, which is wrong on the `undo`
-  half, and the host's own sentence lands a beat later, so one tap produced two receipts that
-  disagreed in one of the two states. No `askConfirm` in front of any of it: this IS the confirmation
-  step for something that already applied itself, and nothing is destroyed either way.
-- **`you placed this`** on a hand-ordered row is what makes the sort's guarantee visible. Two things
-  stamp `handOrdered` — a drag, and an assessment ranking approved at apply time — so the chip says
-  the thing that is true of both, a position a PERSON decided, rather than claiming a drag nobody made. The pass
-  sorts AROUND a row a person dragged and never through it; a guarantee nobody can see is one
-  nobody can trust, so the chip is the rule made readable.
 
 ### Automatic sessions stay open unless asked (`autoSessions.ts`)
 
 A session a fired backlog or scheduled item opens (`backlog · <repo> · <label>`) no longer closes
-itself by default — the person chose a global OFF (*Close automatic sessions when done*, Settings →
+itself by default — the person chose a global OFF (*close automatic sessions when done*, Settings →
 Sessions, the synced `waterplane.backlog.closeWhenDone`) plus a per-item override. Nothing closes itself:
 with the switch off and every slot taken, the next item WAITS and says so.
 
@@ -4400,8 +4445,7 @@ with the switch off and every slot taken, the next item WAITS and says so.
 
 ### Recurrence decides the list: a one-off with a clock is a backlog row
 
-> "there are items in the scheduler that were skipped and I would want to run them with the new smart
-> picker functionality but I still don't see a button there for smart pick … Also in the repo's
+> "there are items in the scheduler that were skipped … Also in the repo's
 > backlog these items don't show up so I feel we still have a mismatch: scheduled tasks and backlogs
 > are very related!"
 
@@ -4411,10 +4455,10 @@ that it is still two things. Take that seriously: **a link was not enough.**
 
 **What the complaint actually is.** Not "I cannot find the item from the other sheet". It is that the
 SAME piece of waiting work had two homes with two verb sets, and the one with the clock had FEWER
-verbs: no smart pick, no drag, no merge, no *re-fire* on a failed one, and no presence at all in the
+verbs: no drag, no merge, no *re-fire* on a failed one, and no presence at all in the
 list a repo's grooming pass is fed from. Measured on this desktop when it was written: **nine live
 `at` rows, every one a one-off, zero recurring — seven of them `failed`**, in no backlog, and
-invisible to the smart pick, whose candidates are backlog rows. Their Schedules sheet was, in
+invisible to the backlog features, which only read backlog rows. Their Schedules sheet was, in
 practice, a second backlog with clocks on it.
 
 **The rule.** `isTimedWorkRow` (`shared/intent.ts`): an `at` trigger whose rule does not recur, a
@@ -4430,7 +4474,7 @@ two lists on the next read, with nothing to migrate.
 **The cost, paid rather than dodged.** This user has zero recurring rules, so "Schedules lists
 standing rules" **empties their card list**. The alternatives were worse. *One row, two views* keeps
 the exact shape that produced the complaint — the reader is still holding one row in two lists and
-asking which one the smart pick is looking at, and "which is canonical" is a question nobody should
+asking which one a backlog feature is looking at, and "which is canonical" is a question nobody should
 have to ask about their own prompt. *Schedules as a filter over the backlog* throws away the one
 thing the Backlog sheet deliberately refuses to be (an all-repos list — `Backlog.tsx` says why) and
 the one thing a recurring rule IS (a clock over every repo, with arm / pause / skip verbs no work
@@ -4512,7 +4556,7 @@ queued) and `holds until the desktop is free` — and two verbs beyond the ones 
   of `idle`, a plain `liveSend` like every other backlog mutation. This is the verb the whole change
   is for. A one-off cannot be re-armed, so a missed one is stuck saying it missed something for ever,
   and `re-fire` beside it runs it THIS SECOND in a session of its own (`runNow` skips the ladder)
-  rather than putting it back in the queue where the smart pick can see it. The row's two titles are
+  rather than putting it back in the queue. The row's two titles are
   two different offers and never one sentence (`dropClockTitle`), and the receipt is about the CLOCK
   and never a state — the host kicks synchronously, so the row may be `blocked` behind the ladder or
   already firing by the time the toast is read. **`holdForHost` survives it**, because *wait until the
@@ -4530,7 +4574,7 @@ queued) and `holds until the desktop is free` — and two verbs beyond the ones 
   batched is the SENTENCE: `liveSendAll` sends N frames and says `dropClocksToast(n)` once.
 
   **And the two load-bearing sentences are TEXT now.** *The hold survives a dropped clock* and *auto
-  and the smart pick take it from there* lived in `title` attributes — and **a title is invisible on
+  takes it from there* lived in `title` attributes — and **a title is invisible on
   a phone**, which is the only device this app is used from; that is the rule `Unavailable.tsx`
   exists to enforce, brushed here by the two sentences a person most needs before tapping. The hold
   chip carries `· survives a dropped clock` as visible text on exactly the rows where the verb is
@@ -4540,8 +4584,7 @@ queued) and `holds until the desktop is free` — and two verbs beyond the ones 
 
 - **`run it again`** is `drop the clock`'s sibling, for the row that is stuck for the other reason.
   A backlog has two kinds of dead row and only one of them has a clock to drop: a row that simply
-  FAILED is terminal — the ladder never looks at it again, `auto` skips it, and the smart pick, which
-  only ever reads queued rows, cannot see it. The only verbs this sheet had for one were `re-fire`
+  FAILED is terminal — the ladder never looks at it again, `auto` skips it. The only verbs this sheet had for one were `re-fire`
   (which starts an agent THIS SECOND, past every rung) and the archive. Measured on this desktop: **0
   queued against 19 failed**, so the list the repo's agent is fed from was empty while nineteen live
   pieces of work sat one state away from it — and an assessment's *still wanted* verdict, applied,
@@ -4638,7 +4681,7 @@ promise a start at the top of the list that the host will not make until Saturda
 
 **Activity.** `intentKind` says `work`, so the row wears work verbs — *run it now* on a failed one,
 `check` as its primary, *rewrite it* — and its `where` gains the rule as a fragment, in the same slot
-`resume` and *written by the smart pick* put theirs, because it is a fact about where the words are
+`resume` puts its, because it is a fact about where the words are
 going. The bucket is unchanged: it has always keyed on the REASON (`notYet` ⇒ *scheduled*, sorted by
 `dueAt`), not on the kind. The `edit` arm sends a timed row to the Send sheet for the same reason the
 row's *when* button does.
@@ -4746,41 +4789,14 @@ never touches a `hand` field, and a wrong title costs one tap on the row. While 
 `naming: string[]` the button is ABSENT with `NAME_RUNNING_NOTE` and each row it names wears its own
 `naming…` chip — never a dimmed button, and never a spinner over rows nobody is naming.
 
-### Smart pick has two homes, and only one of them is a switch
+### Smart pick's two homes — removed 2026-10-16
 
-It was a per-repo toggle inside one repo's backlog sheet and nowhere else, so the only way to learn
-which repos groom themselves before each item was to open each backlog in turn — for the one feature
-in this app that APPLIES ITSELF and spends money doing it. `backlog.list` already ships
-`smartPick: string[]`, every cwd with it on, so the state was on the phone the whole time with
-nothing drawing it.
+The launcher `Sparkles` chip and the backlog sheet's *smart pick is on in N repos* count went with
+the feature (see [host.md](host.md#smart-pick--removed-2026-10-16)). `Backlog.tsx`'s private `IMG_RE`
+is still gone: the image/transport path regexes are `shared/itempaths.ts`'s (`imagePaths`,
+`transportPaths`), both GLOBAL — use `String.match`, never `.test()`, which carries `lastIndex`
+between calls.
 
-Two readouts, no second source of truth (the switch stays exactly where it was):
-
-- **The launcher repo header** wears a `Sparkles` chip for a ticked repo and opens that repo's
-  backlog, which is where the switch is. This is the "at a glance, across every repo" half, and it
-  costs nothing on a host that has never heard of the feature — `undefined` is not `[]`, the same
-  reading the tick itself is drawn on.
-- **The backlog sheet** carries *smart pick is on in N repos* wherever it is on, including in a repo
-  that is NOT ticked — "which repos" is precisely the question you cannot answer from here, and an
-  answer that only appears once you are already in one of them answers nobody. **A count on a control
-  is a filter**, so the tap opens exactly those N as buttons that scope the sheet to them.
-
-The explainer above it was six lines of wall on a phone, above the list it is about. One sentence
-stays (nothing is thrown away; your drag stays put — the two facts you need before leaving an
-automatic spender running) and the rest — what it costs, how it fails — is behind *how it works*.
-
-`Backlog.tsx`'s private `IMG_RE` went with this: the same regex is `shared/smartpick.ts`'s now,
-because a merge is refused unless its text keeps every path its members named, and two copies of
-that rule would mean a merged text that keeps every path the thumbnailer looks for while losing one
-the check looks for. Both are GLOBAL regexes — `String.match`, never `.test()`, which carries
-`lastIndex` between calls and answers differently the second time it is asked about one string.
-
-Activity's half is deliberately small: a row held for the look is `blocked` with `picking`, which
-renders through `intentReasonText` like every other reason and sorts at the bottom of the waiting
-ladder (there is nothing to press — the look releases the row on its own watchdog), and a row the
-pass WROTE carries `· written by the smart pick` beside where it is going, in the same place
-`resume` puts its fragment and for the same reason: it is a fact about where the words came from,
-and putting it in the title would make a machine's sentence read as a person's.
 
 ### `ActivitySheet.tsx`
 
@@ -5172,8 +5188,7 @@ mechanical once its sheet reads `Intent`.
   closed*); *in a session of its own* only for a FRESH row, *in &lt;session&gt;* for an aimed one
   (whose group head says the same two lines up); *one at a time in this repo* only with nothing
   aimed, because `nextFireIds` picks one per GROUP and two open sessions plus fresh rows start three
-  at once; *in the order you see* only where the flat list IS the order — never with the smart pick
-  on, which re-picks before each item and then says so instead. What is on screen and is not
+  at once; *in the order you see* only where the flat list IS the order — (nothing re-sorts rows automatically any more). What is on screen and is not
   starting is COUNTED and not diagnosed (*the other N here are not going to start — each row says
   why*), because held is four reasons and each row already carries its own. With auto off the
   refusal is a sentence with the existing `onSetAuto` switch beside it — and **that is the only copy
@@ -5241,7 +5256,7 @@ mechanical once its sheet reads `Intent`.
   this apply would give anything a position, and `· title N` whenever the naming switch is on — so
   the last line read before the only irreversible tap here names the decision even when the control
   was never on screen. It said only the naming half for one release, which meant a person could
-  Apply having never met the decision about whether the smart pick may re-sort this repo; the order
+  Apply having never met the decision about whether the ranks are marked *placed by you*; the order
   part is unconditional on the ANSWER, because a part that appears for one of two answers reports a
   choice as an exception. `assessRows.test.mjs` pins both halves.
 
@@ -5251,7 +5266,7 @@ mechanical once its sheet reads `Intent`.
   over `.key`s that are `flex: 0 0 auto`, i.e. always their max-content width and unable to shrink.
   Inside a column whose basis was a FIXED `118px` that was fine at `--ui-font` 1 and false above it
   — the column is a pixel count, the words are a font size — so on a 384 px phone with a larger text
-  setting `the smart pick may re-sort it` painted straight over the naming question beside it and
+  setting a pin-question sentence painted straight over the naming question beside it and
   `leave the rows as they are` ran off the right edge of the screen: 178–347 px outside the viewport,
   measured. Reported three times, invisible at 320 and 400 in a default-scaled browser, which is why
   it survived two rounds of "verified".
@@ -5321,6 +5336,42 @@ mechanical once its sheet reads `Intent`.
   line — after the four parts that change what runs and after the one that decides what may re-sort
   them; `assessAppliedWords` says `N titled` on the settled row, and omits a zero for `requeued`'s
   reason.
+
+### The slot check — `slotCheck.ts`, `slotAskStore.ts`, `SlotAskLayer.tsx`
+
+Smart pick's replacement (2026-10-16): *ask when a slot gets crowded, check it once, the person
+approves each change.* A slot is `shared/intent/slot.ts`'s — the waiting timed rows that fire
+together at one usage reset or one instant — and the phone never buckets rows itself: every number
+below is `slotMates`/`slotOf`/`slotsOf` over `slotRowOfItem`, and the ids a check sends are the ids
+the number was counted from (a count is a filter).
+
+- **The ask after a timed send.** `useSend` calls `expectSlotAsk(id, cwd)` on the four timed paths
+  (a one-off `schedule.save` aimed at one repo — the backlog row has the entry's id —, a clock aimed
+  at a session, a re-decided row's `patch`, and `retimeMany`). It waits for a `backlog.list` that
+  holds the row **on the clock the tap set** (`clockStamp`: a re-time's first list may still carry the
+  old one), then `resolveSlotAsk`: ≥1 mate and not switched off ⇒ the card *N others run at this
+  reset — check them together?* with *check*, *not now*, *don't ask in this repo*. Given up after
+  `SLOT_ASK_WAIT_MS`. The card is mounted beside the toast in `main.tsx` (App returns early per
+  overlay) and is NOT a modal and NOT a toast — a toast goes on any tap, this has to be answerable;
+  unanswered it goes after a minute, and the backlog verb below is still there.
+- **The switch is per repo, per host** (`LS.slotAskOff`, not synced). The toast that turns it off
+  names the way back — *ask after a timed send*, drawn in that repo's backlog bulk line only while it
+  is off (ux §1: said when it changes, named where it comes back).
+- **The backlog's *check these N*** (`PickBars`, beside *re-time the N on …*): one per slot with ≥2
+  waiting rows, off `inRepo` and never the cut on screen. It is how agent-posted rows — nobody
+  there to ask — get checked.
+- ***check* never spends over a decision** (`slotCheckStart`): a running run, or an unapplied
+  proposal that is not this slot's, opens the sheet and says so; its run button is
+  *check these N together* (`assessSlot` carries the scope for *run again*). `assess.run` carries
+  `scope: {kind:"slot", key}` beside the ids; the host re-derives the slot and refuses a stale key
+  in words — shown as every assess refusal is.
+- **The sheet** (`assess/AsxSlotCards.tsx`): a slot run says so (`assessSlotIntro`, the head's
+  *slot check · N rows*). A CONFLICT card names every row in full and why; its verbs are the rows'
+  own — *open*, *edit* (the Send sheet, the same row re-decided), *drop this one* (archive behind a
+  `ConfirmButton`), *leave them* — and there is no apply choice for it at all (`assessChoicesOf`
+  has no input for one). A SPLIT card shows the original and both texts in full; *approve the split*
+  is behind the merge's `askConfirm` and rides in `AssessChoices.splits`; the apply label says
+  *split N in two*.
 
 ### `ContextSheet.tsx` — the context window as a shape
 
@@ -6233,7 +6284,65 @@ the calibration and every sentence are `shared/sessionbudget.ts`'s and the host'
   is floor-inflated: at this scale the three small kinds are hairlines, which is the honest picture
   of a 96/3/0.2 split and the reason `share` exists beside `mix`.
 
+### `WeekCard.tsx` + `RepoHourChart.tsx` + `weekBands.ts` — where the week went
+
+`extensions/token-stats/web/`. Added 2026-10-09 after a weekly figure of 32% thirteen hours past its
+reset that the screen could not explain (about $470 at list price: one ~36-repo architect-review
+fan-out ≈48%, two garmin-monorepo sessions ≈41%, subagents 73%). Host half:
+[host.md](host.md#costwindowts); wire `shared/wire/costwindow.ts`.
+
+- **The cost view opens on the week since the reset** (all time when that cannot be cut), and the
+  Totals box's "By repo" follows ANY window: it is the host's cost window over the cut's span, ranked
+  by `rankRepos`, where it used to refuse under a live window. While the read is out, offline, or
+  answered 404 by an older host, one sentence says which. The body reads the week's window ONCE
+  (`weekcost:`) and the card, the repo split and the points all use that document; the usage-log read
+  moved up from `LimitWindows` into the body so the limit charts and the calibration read one log.
+- **`weekCut` is the one bucketing function** (`shared/costwindow.ts`): the figure on an hour and
+  the list that hour opens are the same predicate over `CostConvo.byHour`, so the count and the cut
+  cannot drift (a count on a control is a filter). The list says "n of N" and has a clear button.
+  Rows group by repo or by launch (`foldLaunches`: a fan-out is ONE row), each expanding to its
+  sessions with title, money, points, subagent share and `agentModelInsight`'s sentence.
+- **Repo colours are identity, not rank.** `repoSlots` gives the top four repos the four validated
+  hues (`SLOT`, never a generated fifth) and a repo that still qualifies KEEPS its slot when another
+  overtakes it, so a colour does not hop between two repos on a re-read; the rest is one grey
+  "other repos" band.
+- **The percentage axis is fixed and labelled 0 to 100.** An unlabelled fixed axis reads as a fitted
+  one. The line goes through `usageSegments` (the kit rule, now `shared/burn.ts`), so it is cut at
+  every rollover and gap, never joined; the x domain is the week's own, so an hour nothing ran in is a
+  gap and not a zero bar.
+- **Points are one calibration per screen** (`ptsCalibration`, made in the body from the week's
+  readings against its ledger). It REFUSES, in its own sentence per reason, when it has too few
+  readings, stretches under 6 h or a climb under 5 points, when stretches disagree past 35%, or when
+  it disagrees past 40% with the per-reading level calibration (`weekUsdPerPct`), so the two estimates
+  can never print different point figures beside one dollar figure.
+- **The demo answers `/api/costwindow`** by folding the SAME synthetic records as its ledger
+  (`demo/host/ledger.ts` `demoCostWindow`), so a week is a cut of the fortnight; it skips the cap
+  (no `rest`), launches and live rows. **Known gap**: a window's cut starts on the hour NEAREST its reset
+  (`windowStartHour`), so a 5-hour live window can read up to 10% wide or narrow, said in words.
+- **The fan-out hint** (`features/fanout/FanoutCostHint.tsx`, words in `logic.ts`'s `fanoutCostWords`):
+  one sentence above Run, "last similar run (36 repos): $218.00, 66% subagents". `pickSimilarRun`
+  (same prompt first, else the latest finished) then the cost window over that run's span, folded by
+  launch with the run's id. Words only, never a gate; absent offline, on an older host or when the
+  run's sessions are not in the logs. The "of week" clause is left out: the rate lives in
+  `features/tokens` and `local/feature-boundary` forbids one feature importing another, and an absent
+  clause beats a duplicated rate.
+
 ### `TokenInsights.tsx` + `statsInsights.ts` — the boxes, the findings, the dearest conversations
+
+**One span, 2026-10-15 (R-usage-025, `span.ts`).** The boxes below fixed which control moved which
+chart, and still left about eight time frames on one screen: a fixed seven-day headline, Totals'
+live-window chips, Over time's calendar chips and calendar-week stepper, a 7-vs-7 per-request table,
+an all-time costliest list and clock. Each was honest; together they could not be read against each
+other, and the owner said so. Now one sticky bar picks the span for EVERY box — a live window
+(stepped back by Totals' stepper and the heat grids), calendar days (calendar, not the last n
+active rows, which the old slice was), or all time — and the boxes keep their borders and lose their
+chips. The limit bars and the week's hour chart are the one exception, compact above the bar:
+they are always now. Where a section cannot be cut (the hour record starts later, the host folds
+repos over at most 35 days, insights are corpus findings), it says so instead of quietly showing all
+time under the span's name. The calendar week stepper is gone from the phone; the VS Code panel
+keeps its own chips through `OverTimeCard`'s `chips`/`lead`.
+
+The paragraphs below are the history that led here.
 
 **Why the screen is boxes now.** The all-sessions screen was one long list, and each chip row
 scoped "everything below it until something else" — the live-window chips sat under the hero and
@@ -6392,12 +6501,17 @@ grid". The instants are not carried per row either: cell `k` is
 `[anchor − (k+1)·lenMs, anchor − k·lenMs)`, derived on both ends, so a row cannot disagree with the
 grid it is in.
 
-**The hour rule is repeated, not re-decided.** A cell counts from the top of the hour its window
-opened in — exactly what `cutSpan` states on screen for the live window. Its price is that the
-opening hour is in that cell AND in the one before it, so the boxes do not sum to the corpus, and
-the caption says so rather than letting a reader add them up. The alternative — giving the grid an
-exclusive rule of its own — would have made cell 0 and the line under the limit bar two different
-numbers about the same five hours, which is the one failure this screen cannot have.
+**The hour rule is shared, not re-decided.** Every window edge — the live cut, each grid cell, the
+week card's and the Totals box's `/api/costwindow` `from` — is `windowStartHour` (shared
+`costwindow.ts`): the hour boundary NEAREST the instant, so a cell is
+`[windowStartHour(opened), windowStartHour(reset))` — exactly what `cutSpan` states on screen for the
+live window — and neighbours tile, every hour in one box. It used to be the FLOOR of the opening
+hour, which put that hour in two cells and, measured, 59 minutes of last week into a week resetting
+Thu 18:59: the week card read $512 ≈ 39 pts against a 35% meter, the extra hour ≈ 4 pts. Rounding
+bounds the error at 30 minutes either way, and the sentence says which way (`leadClause`: the first
+hour counted whole, or the first minutes left out). Giving the grid a rule of its own would have made
+cell 0 and the line under the limit bar two different numbers about the same five hours, which is
+the one failure this screen cannot have.
 
 **Only windows that RAN something are sent.** A window with no row ran nothing, which is a reading
 and is drawn as a real empty box; a window the record does not reach back to is UNKNOWN and is drawn
@@ -6960,6 +7074,21 @@ model to run, starting from the defaults. Three properties carry it:
   into `openCwd` with the answer as an override, so the create still goes through the one
   constructor and `wireLaunch` still strips a backend this host never described.
 
+### One set of launch controls — `LaunchPicker.tsx`
+
+- **The ask and the fan-out drew two different controls for the same decision.** The ask had the
+  backend drop-down, the wheel (model × effort) and *a specific version…*; the sweep's row was a bare
+  model `<select>` that could pick neither a backend nor an effort, so the owner met a second look
+  for one choice and could not run a sweep on fable at `high` without changing the defaults.
+- `LaunchPicker` is the ask's set lifted out whole; both sheets draw it and own the pick. What is
+  REMEMBERED stays each caller's: the ask writes `LS.launchLast`, the sweep `LS.fanoutModel`, which
+  is `null` while it equals the defaults (so a later default change reaches the sweep).
+- The sweep's stored pick is read through `launchAskStart`, the ask's own guard — a backend this
+  host no longer describes drops the pick whole. A pick stored as `{ model }` alone predates the
+  backend control and meant the default backend, so it is read as that.
+- A backend the host says cannot start replaces Run with the sentence, as it replaces Start on the
+  ask: N launches that would fail are not offered. *Later* stays — a schedule fires when it may.
+
 ### `useVoice.ts` — two engines, one microphone
 
 The hook was the Web Speech API and nothing else, which on Android Chrome is
@@ -7460,6 +7589,24 @@ One consequence worth naming for the next reader who greps for `RepoHealthMenuIt
 somewhere new: the sheet it opens is still `SetupSheet.tsx`, at `initialRegion: "series"`. The
 button moved; the destination did not.
 
+#### `OptInRegion.tsx` — region 3, offers that are counted in nothing
+
+`shared/optins.ts` is the catalog of advanced things a repo can turn on (a requirements list, the
+health series, a weekly security review, a pre-push hook…) and its header is the design. They are
+not checklist rows because a repo without them is not BROKEN: a warn nobody can close is noise, so
+they became a THIRD region of `Repo readings` with no stripe, no pass/warn/fail hue and no place in
+the badge. `optInCut` is the one bucketing function — the cards (`offered`), the *On* rows, and the
+two folded heads (*N you said not for me*, *N don't fit this repo*) all come from one call, so the
+number on a fold is the list it opens. A tap never applies anything on its own: `fix` runs the
+host's existing idempotent `complianceFix` and prints what it said, `open` switches to region 2 or
+opens the capture sheet (through `core().nav.openCapture`, since features never import each other),
+and `agent`/`schedule` SEED the Send sheet through `optInSeed.ts` — for a schedule, the weekly rule
+in the phone's own zone (`DEVICE_TZ`), the catalog's model as the repo target's `launch.model` and
+`waitUntilFree` — where words, clock and model can all still be changed. *walk me through these N…*
+appears only when an agent could post at least two of them, and N counts every card, because the
+prompt names every one. The repo menu's `OptInMenuItem` lands on this region, as
+`RepoHealthMenuItem` lands on `series`.
+
 ### `repoHealthPlot.ts` — geometry that cannot compute a reading
 
 `contextPlot.ts` already argues why a chart's scales and paths belong in a testable module with no
@@ -7890,3 +8037,54 @@ words. A false hit only masks a box, and `not a password` hides it until that as
 sessions only: claude's TUI draws the typed words on its own cursor line, so a prompt ending in
 "password:" would read as an ask there. Shell composers also drop autocapitalize/autocorrect — a
 shell takes commands, not sentences.
+
+### `strayKeys.ts` — a desktop key typed at nothing goes to the terminal
+
+The owner, on a 1430px window: *"if the user is on a pc with a keyboard he will expect that his key
+strokes also work and not only the on screen buttons."* xterm already piped its OWN keys
+(`Terminal.tsx`'s `onData` → `sendInput` → `session.input`) — measured in the demo, a click on the
+grid and typing reached the CLI. What went nowhere was a key that landed on NO field: focus on
+`<body>`, or on a sidebar button just clicked. That key now takes the same raw pipe (no new send
+path; deliberately not durable, same as every other keystroke) and the terminal then takes focus,
+so the rest of the word is xterm's.
+
+What is never forwarded, and why: a stray **Esc** or **Ctrl+C** interrupts a running turn, and a
+desktop hand presses Esc out of habit (the reason `Workspace.tsx` keeps Esc from leaving a
+session) — so every Ctrl/Alt/Meta chord and Esc reach the CLI only from the FOCUSED grid. **Tab**
+stays the browser's focus navigation, **Enter/Space on a button** activate it. The decision runs
+after every other keydown handler (`escape.ts`'s `setTimeout(0)`), so a component that answered the
+key has called `preventDefault()` by then, and it stands down while a side panel, a dialog or a
+confirm is over the grid. Mounted by `TermArea.tsx` only while the grid is the view (not the
+reader, not a pending session) — on a phone the session screen unmounts under a sheet, and a soft
+keyboard cannot type at `<body>`, so the phone never meets it.
+
+Two companions: the focused grid says so in words in its corner (wide CSS — a ring alone does not
+say what the keys will do), and Ctrl+C over a SELECTION copies it (`attachCustomKeyEventHandler`)
+instead of interrupting — what every desktop terminal does. Pure decision + listener tested in
+`strayKeys.test.mjs`; the desktop journey asserts the hand-off.
+
+## Billing profiles and dollar periods (2026-10-15, plan: docs/plans/billing-periods.md phase 3)
+
+An API-key, Bedrock or Vertex account has no 5-hour or weekly window, so `?` chips and an empty weekly
+card were a lie by omission. What the phone draws is decided by `hasScrapedWindows(profile)` (shared):
+subscription, `unknown` and an older host that never sends `billing.status` keep the two windows
+pixel for pixel; api/cloud draw the primary dollar period instead.
+
+- **The chip** (`features/tokens/logic.ts` `usageFace`, `periodWords.ts` `periodChip`): `Oct $412 / $2000 ·
+  on pace`, from the primary period (`primaryUsdPeriod`: capped before uncapped, then month, rolling 30
+  days, week, day, span). A period nobody measured has NO chip; with none measured the chip is the bare
+  gauge, a door into token statistics. Never `?`, never `$0`.
+- **The card** (`PeriodCard.tsx`, token-stats extension): the host's cost window over the period (the
+  host reads at most 35 days; a longer span says so in words). The hero is the document's own total, the
+  composition strip is its split, and the repo and model rows fold the host's capped `rest`, so every row
+  list adds up to the hero. Pacing (`pacing`, `pacingLine`) is shared's `linearPace` / `perDayLeft` /
+  `projectedEnd` and is absent without a cap, without a reset edge, or in the first tenth of a period. The
+  caveat that this is the local ledger at list price and not the invoice is the caption, once. On an
+  api/cloud account with no configured period the card falls back to the calendar month in the phone's
+  zone, uncapped, so it answers before anything is set up (the chip waits for a measured period).
+  The week card and limit bars are not drawn on such an account; on a subscription host with a dollar
+  period both cards show.
+- **Settings** (`features/tokens/BillingSettings.tsx`): the profile (auto-detect or override; the note says
+  what was detected) and the periods + caps form. Caps go out through `withLimit` / `withoutLimit` as a
+  whole `budget.set`; a refusal is a sentence beside the field, never a clamp. The percent budget rows
+  (session, weekly, leftovers) are absent on api/cloud. A cap holds automatic work only.

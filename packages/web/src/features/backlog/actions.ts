@@ -2,14 +2,16 @@
  * Every writer of the backlog feature's stores, and every frame it sends that
  * is more than one line in a sheet's prop list.
  */
-import type { AssessChoices, AssessRun, HostMessage, Intent, RepoTarget } from "@waterplane/shared";
+import type { AssessChoices, AssessRun, AssessScope, HostMessage, Intent, RepoTarget } from "@waterplane/shared";
 import { RUN_AGAIN_LABEL, RUN_AGAIN_TOAST, runAgainToast } from "../../backlogFilter";
 import { assessFiledSplit, assessFiledWords } from "../../assessRows";
 import { saveSnap } from "../../localState";
 import { LS } from "../../storage";
 import { core, mapWith, mapWithout, type CoreApi } from "../../sdk";
+import { onSlotAskList } from "../../slotAskStore";
+import { slotCheckStart, slotCheckStartToast, type SlotCheck } from "../../slotCheck";
 import { assessRunToast, runAgainQueuedToast } from "./logic";
-import { assessBusy, assessRepo, assessRuns, assessScope, backlog, backlogFocus, backlogScope } from "./store";
+import { assessBusy, assessRepo, assessRuns, assessScope, assessSlot, backlog, backlogFocus, backlogScope } from "./store";
 
 // ── The host's pushes ────────────────────────────────────────────────
 
@@ -24,19 +26,16 @@ export function onBacklogList(msg: Extract<HostMessage, { t: "backlog.list" }>):
     naming: msg.naming ?? [],
     // Facts about this second, like `waiting`: never snapshotted.
     autoSlots: msg.autoSlots ?? null,
-    // Absent means "this host does not have the feature", which is a
-    // different thing from "no repo is ticked".
-    smartPick: msg.smartPick ?? null,
-    passes: msg.passes ?? {},
     snapAt: at,
   });
   // Snapshot so the sheet still renders (read-only) offline. `at` rides along
-  // because the last-look strip is unreadable without its age: "it merged two
-  // of your items" means something different four seconds old than four hours.
+  // so an offline sheet can say how old its copy is.
   saveSnap(LS.snapBacklog, {
-    items: msg.items, auto: msg.auto, idleMs: msg.idleMs,
-    smartPick: msg.smartPick ?? null, passes: msg.passes ?? {}, at,
+    items: msg.items, auto: msg.auto, idleMs: msg.idleMs, at,
   });
+  // The slot check's ask waits for exactly this: the list holding a row a
+  // timed send just made, on the clock that send set (`slotAskStore.ts`).
+  onSlotAskList(msg.items);
 }
 
 /**
@@ -150,6 +149,7 @@ export function openAssessFor(repo: RepoTarget, ids?: string[]): void {
   const dir = repo.worktreePath;
   assessRepo.set(repo);
   assessScope.set(ids?.length ? ids : null);
+  assessSlot.set(null);
   // Ask for this repo specifically: the connect-time sweep only carries repos
   // that already had a run, and this may be the first.
   c.conn.liveAsk({ t: "assess.state", repoDir: dir });
@@ -164,14 +164,17 @@ export function openAssessFor(repo: RepoTarget, ids?: string[]): void {
  * than queued: a tap with no link is refused with a sentence instead of being
  * replayed into a repo whose state has moved on by the time it flushes.
  */
-export function runAssessment(repoDir: string, ids?: string[]): void {
+export function runAssessment(repoDir: string, ids?: string[], scope?: AssessScope | null): void {
   const c = core();
   c.say.track("action:assess.run");
   const ackId = c.queue.mintAckId();
   // `ids` is the CUT the caller asked about; omitted entirely when there is
   // none, so an unfiltered run is byte-identical to what this always sent.
   const scoped = ids?.length ? ids : undefined;
-  if (!c.conn.liveSend({ t: "assess.run", repoDir, ids: scoped, ackId, firstSentAt: Date.now() }, assessRunToast(scoped),
+  // A slot check names its slot as well as its ids (`AssessScope`); the host
+  // re-derives the slot from its own rows and refuses a stale one in words.
+  const slot = scoped && scope ? { scope } : {};
+  if (!c.conn.liveSend({ t: "assess.run", repoDir, ids: scoped, ...slot, ackId, firstSentAt: Date.now() }, assessRunToast(scoped),
     "no connection — the assessment runs on the desktop")) return;
   // A run owes the pad nothing: it only ever reads.
   noteAssessOp(ackId, []);
@@ -200,10 +203,34 @@ export function applyAssessment(run: AssessRun, choices: AssessChoices): void {
   noteAssessOp(ackId, noteIds);
 }
 
+/**
+ * **The slot check** — the assessment, scoped to one slot: exactly `c.ids`,
+ * named `c.scope`. From the backlog's *check these N* and the ask after a
+ * timed send. Never replaces a proposal somebody has not decided, never starts
+ * a second run beside a running one (`slotCheckStart`): those open the sheet,
+ * and its run button is the slot check.
+ */
+export function openSlotCheck(c: SlotCheck): void {
+  const k = core();
+  const repo = k.world.repos.find((r) => r.worktreePath === c.repoDir) ?? k.world.repoForCwd(c.repoDir);
+  if (!repo) { k.say.toast("that repo is not on this desktop's list any more"); return; }
+  const dir = repo.worktreePath;
+  assessRepo.set(repo);
+  assessScope.set([...c.ids]);
+  assessSlot.set(c.scope);
+  k.conn.liveAsk({ t: "assess.state", repoDir: dir });
+  k.nav.open("assess");
+  const start = slotCheckStart(assessRuns.get().get(dir), c);
+  if (start === "run") { runAssessment(dir, c.ids, c.scope); return; }
+  const said = slotCheckStartToast(start, c.ids.length);
+  if (said) k.say.toast(said);
+}
+
 /** The assessment sheet's own close — the one place its scope is cleared. */
 export function closeAssess(): void {
   assessRepo.set(null);
   assessScope.set(null);
+  assessSlot.set(null);
   core().nav.close("assess");
 }
 

@@ -22,8 +22,8 @@
  *    that was already idle; that was weighed and accepted, because the phone
  *    holding it meant a locked screen never delivered anything.
  *  - **`keep it on the pad`** — the answer that is NOT a send. The words go to
- *    the prompt pad and NOTHING runs them: no trigger, no target, nothing the
- *    smart pick or `auto` can reach. This exists because the other two answers
+ *    the prompt pad and NOTHING runs them: no trigger, no target, nothing
+ *    `auto` can reach. This exists because the other two answers
  *    and the sheet all end in something that fires itself eventually — a
  *    backlog row is work somebody has decided to do, and an idea to reconsider
  *    or a bug to check once more by hand is not that yet. Filing it onto a
@@ -315,4 +315,87 @@ export function sendButtonTitle(m: SendMode, w: SendWhere, sessionName?: string 
   return m === "idle"
     ? `Hand it to the desktop and let it go in when ${n} is free — not the conversation on screen`
     : `Send it to ${n} — not the conversation on screen`;
+}
+
+/**
+ * **Send tapped while this session's turn is still running.**
+ *
+ * The split button's `When free` is the answer to that, and it was too often
+ * missed: a plain Send mid-turn types the words into the running turn, which is
+ * sometimes wanted (steering it) and often not (the next task, typed while
+ * waiting). So the plain button ASKS — only then, only for the button's own
+ * `now` (a one-tap verb that names its mode has already answered), only aimed
+ * at this session, and never for a session that is still opening or a command
+ * the phone holds for the turn's end anyway.
+ *
+ * `BusySend` is the remembered answer: `""` asks, `now`/`idle` is "don't ask
+ * again" with that answer. Settings › Writing & reading puts it back.
+ */
+export type BusySend = "" | "now" | "idle";
+
+export function busySendRoute(o: {
+  how: SendMode;
+  /** The caller named the mode for THIS send (not the button's armed one). */
+  explicit: boolean;
+  aimedHere: boolean;
+  turnActive: boolean;
+  pending: boolean;
+  localCmd: boolean;
+  pref: BusySend;
+}): SendMode | "ask" {
+  if (o.how !== "now" || o.explicit || !o.aimedHere || !o.turnActive || o.pending || o.localCmd) return o.how;
+  return o.pref === "" ? "ask" : o.pref;
+}
+
+export const BUSY_SEND_ASK = {
+  title: "This session is still working",
+  lines: [
+    "Send now: the words go into the running turn straight away.",
+    "When it's free: the desktop holds them and sends them once this turn ends.",
+    "Tap outside to keep the words in the box.",
+  ],
+  confirmLabel: "Send now",
+  cancelLabel: "When it's free",
+  rememberLabel: "don't ask again",
+} as const;
+
+/**
+ * **The ask, with the usage budget's way past it — only while the budget is
+ * holding automatic work.** *When it's free* is a desktop work item, and over
+ * budget that item waits for the window to reset, not for this turn. The third
+ * answer lets THIS prompt past the budget (the host's waiver, `pastBudget` on
+ * `backlog.add`), never the budget for everything. Not drawn under the budget:
+ * there is nothing to lift, and a button that would change nothing is noise.
+ * "Don't ask again" ticked with it remembers *when it's free* alone — a waiver
+ * is a decision about one prompt, never a standing one.
+ */
+export const BUSY_PAST_BUDGET_LABEL = "When it's free, past the budget";
+export function busySendAsk(budgetNote: string | null): {
+  title: string; lines: string[]; confirmLabel: string; cancelLabel: string; rememberLabel: string; altLabel?: string;
+} {
+  if (!budgetNote) return { ...BUSY_SEND_ASK, lines: [...BUSY_SEND_ASK.lines] };
+  const [now, idle, outside] = BUSY_SEND_ASK.lines;
+  return {
+    ...BUSY_SEND_ASK,
+    lines: [
+      now,
+      `${idle} The usage budget holds it after that: ${budgetNote}.`,
+      "When it's free, past the budget: the same, but this prompt does not wait for the budget.",
+      outside,
+    ],
+    altLabel: BUSY_PAST_BUDGET_LABEL,
+  };
+}
+/** The receipt for the third answer — what it lifted and what it did not. */
+export function busyPastBudgetToast(online: boolean): string {
+  return online
+    ? "queued past the budget — the desktop sends it once this turn ends"
+    : "queued past the budget — it reaches the desktop when the link is back, then goes in once this session is free";
+}
+
+/** Said once, when "don't ask again" was ticked — names the way back. */
+export function busySendRememberedToast(m: SendMode): string {
+  return m === "idle"
+    ? "won't ask again — Send on a working session now waits until it is free; Settings › Writing & reading › Send while it works changes it"
+    : "won't ask again — Send on a working session now goes straight in; Settings › Writing & reading › Send while it works changes it";
 }

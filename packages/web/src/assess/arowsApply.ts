@@ -90,8 +90,8 @@ export function assessGuide(o: { repoName: string; judged: number; planPath?: st
 // ── What may be pressed ─────────────────────────────────────────────────────
 
 /** How many decisions are ticked. One number for the button and the footer. */
-export function assessPickedCount(picked: { rows: ReadonlySet<string>; merges: ReadonlySet<string>; news: ReadonlySet<number> }): number {
-  return picked.rows.size + picked.merges.size + picked.news.size;
+export function assessPickedCount(picked: { rows: ReadonlySet<string>; merges: ReadonlySet<string>; news: ReadonlySet<number>; splits?: ReadonlySet<string> }): number {
+  return picked.rows.size + picked.merges.size + picked.news.size + (picked.splits?.size ?? 0);
 }
 
 /**
@@ -267,6 +267,8 @@ export interface AssessAnswers {
   ranked?: number;
   /** The pin-ranks answer. Only read when `ranked` is above zero. */
   pinRanks?: boolean;
+  /** Approved splits (a slot check's) — each archives one row and posts two. */
+  splits?: number;
 }
 
 /**
@@ -284,7 +286,7 @@ export interface AssessAnswers {
  * them (see `AssessSheet`'s `asks`) and costs one thing: they can be scrolled
  * past. The footer is what cannot be, so the footer has to carry both answers —
  * and it carried only the naming one, so a person could Apply having never seen
- * that they had also decided whether the smart pick may re-sort this repo.
+ * that they had also decided whether the order is marked as theirs.
  * A restatement that names one of two decisions is how the other one becomes
  * invisible.
  */
@@ -299,6 +301,7 @@ export function assessApplyLabel(s: AssessApplySummary, repoName: string, answer
   // could not interpret in the last sentence before the tap.
   if (s.requeue) parts.push(`put ${s.requeue} back in the queue`);
   if (s.post) parts.push(`post ${s.post} new`);
+  if (answers.splits) parts.push(`split ${answers.splits} in two`);
   // **The ranking answer, whenever there is an order to have an opinion about.**
   // Unconditional on the answer and not on a default: `order free` is as much a
   // decision as `order pinned`, and a part that appears only for one of the two

@@ -7,28 +7,34 @@
  */
 import type { MutableRefObject } from "react";
 import {
-  Activity, BookOpen, Check, ChevronsDownUp, CornerDownLeft, Cpu, HelpCircle, Images, Keyboard, Languages, Layers,
+  Activity, ArrowDownToLine, ArrowDownWideNarrow, BatteryMedium, BookOpen, Check, ChevronsDownUp, Command, CornerDownLeft, Cpu, HelpCircle, Images, Keyboard, Languages, Layers,
   ListOrdered, Moon, Palette, Radio, RotateCw, SendHorizontal, Smartphone, SpellCheck, Sun, SunMoon,
-  Terminal as TerminalIcon, Type as TypeIcon, type LucideIcon,
+  Hourglass, Terminal as TerminalIcon, Type as TypeIcon, type LucideIcon,
 } from "lucide-react";
 import {
   DICTATE_AUTO, DICTATE_TERMS_MAX, dictateLangChoices, dictateLangOffered, dictateLangTitle, dictateTermsDropped,
   parseDictateTerms,
 } from "@waterplane/shared";
-import { SetAction, SetChoice, SetCustom, SetMulti, SetStepper, SetSwitch, SetWarn } from "../../SettingsKit.tsx";
+import { SetAction, SetChoice, SetCustom, SetMulti, SetSlider, SetStepper, SetSwitch, SetWarn } from "../../SettingsKit.tsx";
+import { BG_FRESH_STEPS, bgFreshLabel, bgFreshNote } from "../term/bgFresh.ts";
 import { core } from "../api.ts";
 import { applyTermZoom, prefs, setPref, usePref } from "../prefs.ts";
 import { resolvedTheme, type ThemeChoice } from "../../theme.ts";
 import { ICON_STEPS, TEXT_STEPS, nextTermZoom, termFontPx } from "../../uiScale.ts";
 import { TAB_COUNT_MAX, TAB_COUNT_MIN, TAB_LIMIT_MAX, TAB_LIMIT_MIN, TAB_ORDERS, TAB_ORDER_LABEL } from "../../sessionTabs.ts";
 import { LOCAL_RT_MODES, LOCAL_RT_MODE_LABEL } from "../../localRt.ts";
+import { REPO_ORDERS, REPO_ORDER_LABEL } from "../launcher/model.ts";
 import type { ReaderToolsMode } from "../../transcriptUtil.ts";
 import { hintSeenCount, resetHints, setExplainMode, type HintMode } from "../../hints.ts";
 import { deviceLangTag } from "../../dictateLang.ts";
 import { isIosSafari } from "../../platform.ts";
 import { showToast } from "../../toast.ts";
+import { askConfirm } from "../../Confirm.tsx";
+import { LS, lsDel } from "../../storage.ts";
+import { UI_RESET_KEYS } from "../../resetKeys.ts";
 import { track } from "../../usage.ts";
 import { useHostPush } from "../../features/hostTools";
+import { useHasKeyboard } from "../../ShortcutCard.tsx";
 
 const ICON = 16;
 
@@ -44,6 +50,8 @@ export function AppearanceRows() {
   const tabsSort = usePref("tabsSort");
   const tabsMax = usePref("tabsMax");
   const netPulse = usePref("netPulse");
+  const unfoldToEnd = usePref("unfoldToEnd");
+  const repoSort = usePref("repoSort");
   const localRtBar = usePref("localRtBar");
   const smaller = nextTermZoom(tZoom, -1, txtScale);
   const bigger = nextTermZoom(tZoom, 1, txtScale);
@@ -52,7 +60,7 @@ export function AppearanceRows() {
   return (
     <>
       <SetChoice
-        id="theme" label="theme" icon={SunMoon}
+        id="theme" radio label="theme" icon={SunMoon}
         value={theme}
         options={([
           ["system", "follow device", SunMoon],
@@ -157,8 +165,8 @@ export function AppearanceRows() {
           onLess={tabsN > TAB_COUNT_MIN ? () => setTabsN(tabsN - 1) : null}
           onMore={tabsN < TAB_COUNT_MAX ? () => setTabsN(tabsN + 1) : null}
           lessLabel="wider" moreLabel="narrower"
-          note={`How wide each tab is, between ${TAB_COUNT_MIN} and ${TAB_COUNT_MAX}. It hides nothing.`}
-          more={<p>Up to the limit below, every open session is on the strip and the rest scroll sideways; what this decides is how wide each tab is, and therefore how much of its name you can read.</p>}
+          note={`The narrowest a tab gets, between ${TAB_COUNT_MIN} and ${TAB_COUNT_MAX} across. Fewer open, each is as wide as its name. It hides nothing.`}
+          more={<p>Up to the limit below, every open session is on the strip and the rest scroll sideways; what this decides is the narrowest a tab gets once the strip fills, and therefore how much of its name you can read then. With fewer open, each tab is as wide as its name.</p>}
         />
       )}
 
@@ -176,7 +184,7 @@ export function AppearanceRows() {
 
       {tabsOn && (
         <SetChoice
-          id="tabs-order" label="tab order" icon={Layers}
+          id="tabs-order" radio label="tab order" icon={Layers}
           value={tabsSort}
           options={TAB_ORDERS.map((o) => ({ value: o, label: TAB_ORDER_LABEL[o] }))}
           onChange={(o) => {
@@ -188,6 +196,31 @@ export function AppearanceRows() {
           more={<p><b>In the order opened</b> never moves, so a tab's position is something you learn and reach without reading it. <b>Most opened first</b> keeps the ones you actually go back to under your thumb. <b>Last opened first</b> answers “where was I” instead — the one order that moves under you. Both counts are kept on this device only, and tabs that tie keep the order they were started in, so nothing shuffles on its own.</p>}
         />
       )}
+
+      <SetChoice
+        id="repo-order" radio label="repo order" icon={ArrowDownWideNarrow}
+        value={repoSort}
+        options={REPO_ORDERS.map((o) => ({ value: o, label: REPO_ORDER_LABEL[o] }))}
+        onChange={(o) => {
+          setPref("repoSort", o);
+          track(`action:reposort.${o}`);
+          showToast(`repos: ${REPO_ORDER_LABEL[o]}`);
+        }}
+        note="The launcher's repo list. Most open sessions first breaks ties alphabetically. Per device."
+        more={<p><b>Alphabetical</b> never moves, so a repo's place is something you learn. <b>Most open sessions first</b> keeps the repos you are working in on top — and moves a repo when a session in it starts or ends.</p>}
+      />
+
+      <SetSwitch
+        id="unfold-to-end" label="unfolding a repo shows its last row" icon={ArrowDownToLine}
+        on={unfoldToEnd}
+        onChange={() => {
+          const on = !unfoldToEnd;
+          setPref("unfoldToEnd", on);
+          track(`action:unfoldtoend.${on ? "on" : "off"}`);
+          showToast(on ? "unfolding a repo scrolls to its last row" : "unfolding a repo scrolls to its header");
+        }}
+        note="On the launcher, tapping a repo's chevron scrolls down until the last revealed row is on screen. Off, it scrolls to the repo's header instead. Per device."
+      />
 
       <SetSwitch
         id="net-pulse" label="connection strip" icon={Activity}
@@ -214,7 +247,7 @@ export function AppearanceRows() {
           watch a model NOT be there, which is exactly what somebody
           debugging a slow local session is doing. */}
       <SetChoice
-        id="local-rt" label="desktop strip" icon={Cpu}
+        id="local-rt" radio label="desktop strip" icon={Cpu}
         value={localRtBar}
         options={LOCAL_RT_MODES.map((m) => ({ value: m, label: LOCAL_RT_MODE_LABEL[m] }))}
         onChange={(m) => {
@@ -227,6 +260,28 @@ export function AppearanceRows() {
           <p><b>“While a model is loaded” still polls</b> — it cannot know whether to draw itself without asking — so what it saves is a line of screen, not battery and not the desktop's work. Pick “always on” to keep it pinned, which is the only way to watch a model <i>not</i> be there.</p>
           <p>It exists for the one question a hosted model never raises and a local one raises constantly — “is the thing I am talking to still resident, or is the desktop swapping?” With no model loaded it is the machine itself — CPU, GPU, memory available, amber when memory is tight. Tap it for the full readout.</p>
         </>}
+      />
+
+      {/* One way back from every look-and-layout choice on this phone at
+          once, for the switches that hide things (the `?` chip first among
+          them). Device look only — `UI_RESET_KEYS` says what, and its test
+          holds it off words and synced choices. Asks first: it is a reset. */}
+      <SetAction
+        id="ui-reset" label="reset UI settings to default" icon={RotateCw}
+        onClick={() => { void (async () => {
+          if (!await askConfirm({
+            title: "Reset UI settings?",
+            lines: [
+              "Theme, text and icon size, zooms, the strips, session tabs, layout switches and the ? button go back to their defaults on this phone.",
+              "Drafts, queued prompts, header commands, pins and everything synced stay as they are.",
+            ],
+            confirmLabel: "Reset and reload",
+          })) return;
+          track("action:settings.uiReset");
+          for (const k of UI_RESET_KEYS) lsDel(LS[k]);
+          location.reload();
+        })(); }}
+        note="Everything about how this phone draws the app, back to how it shipped. Your words and synced choices are kept."
       />
     </>
   );
@@ -244,8 +299,13 @@ export function WritingRows({ voice }: { voice: VoiceFacts }) {
   const dictTerms = usePref("dictTerms");
   const typingRoom = usePref("typingRoom");
   const closeKbOnSend = usePref("closeKbOnSend");
+  const shortcutCard = usePref("shortcutCard");
+  const hasKeyboard = useHasKeyboard();
+  const btwToCli = usePref("btwToCli");
+  const busySend = usePref("busySend");
   const toolsMode = usePref("toolsMode");
   const hintCfg = usePref("hints");
+  const hintChip = usePref("hintChip");
   const offered = dictateLangOffered(dictLangCodes, dictLang, deviceLangTag());
   const terms = parseDictateTerms(dictTerms);
   const dropped = dictateTermsDropped(dictTerms);
@@ -256,7 +316,7 @@ export function WritingRows({ voice }: { voice: VoiceFacts }) {
           them — so the same row read as two different settings
           depending on which way it was set. */}
       <SetChoice
-        id="enter-sends" label="the Return key" icon={CornerDownLeft}
+        id="enter-sends" radio label="the Return key" icon={CornerDownLeft}
         value={enterSends ? "send" : "newline"}
         options={[{ value: "send", label: "sends" }, { value: "newline", label: "inserts a newline" }]}
         onChange={(v) => setPref("enterSends", v === "send")}
@@ -274,7 +334,7 @@ export function WritingRows({ voice }: { voice: VoiceFacts }) {
           for a feature that has no button anywhere either. */}
       {voice.supported && (
         <SetChoice
-          id="dictate-lang" label="dictation is read as" icon={Languages}
+          id="dictate-lang" radio label="dictation is read as" icon={Languages}
           value={dictLang}
           options={offered.map((c) => ({
             value: c.code,
@@ -348,6 +408,52 @@ export function WritingRows({ voice }: { voice: VoiceFacts }) {
           : "The keyboard stays up after a send, ready for the next message."}
       />
 
+      {/* Only where a physical keyboard is known (a fine pointer, or a
+          hardware key seen): a touch-only phone never meets the card, so a
+          switch for it there would be a control for nothing. */}
+      {hasKeyboard && (
+        <SetSwitch
+          id="shortcut-card" label="hold Ctrl to see shortcuts" icon={Command}
+          on={shortcutCard}
+          onChange={() => setPref("shortcutCard", !shortcutCard)}
+          note={shortcutCard
+            ? "Hold Ctrl, ⌘ or Alt alone for half a second and a card lists what each key does with it right now. Letting go hides it."
+            : "Holding a modifier shows nothing. The shortcuts themselves still work."}
+        />
+      )}
+
+      <SetChoice
+        id="busy-send" radio label="Send while it works" icon={Hourglass}
+        value={busySend}
+        options={[
+          { value: "", label: "ask" },
+          { value: "now", label: "send now" },
+          { value: "idle", label: "when it's free" },
+        ]}
+        onChange={(v) => setPref("busySend", v)}
+        note={busySend === "now"
+          ? "Send on a session that is still working types the words into the running turn straight away."
+          : busySend === "idle"
+            ? "Send on a session that is still working hands the words to the desktop, which sends them when the turn ends."
+            : "Send on a session that is still working asks: send now, or when it's free."}
+      />
+
+      <SetChoice
+        id="btw-to-cli" radio label="/btw from the reader" icon={TerminalIcon}
+        value={btwToCli}
+        options={[
+          { value: "", label: "ask" },
+          { value: "switch", label: "switch to the CLI" },
+          { value: "stay", label: "stay" },
+        ]}
+        onChange={(v) => setPref("btwToCli", v)}
+        note={btwToCli === "switch"
+          ? "A /btw sent from the reader switches to the CLI, where its answer is — the reader cannot show it."
+          : btwToCli === "stay"
+            ? "A /btw sent from the reader stays in the reader; its row has an open the CLI button for the answer."
+            : "After a /btw sent from the reader, asks whether to switch to the CLI, where its answer is."}
+      />
+
       <SetSwitch
         id="typing-room" label="typing room" icon={ChevronsDownUp}
         on={typingRoom}
@@ -359,7 +465,7 @@ export function WritingRows({ voice }: { voice: VoiceFacts }) {
       />
 
       <SetChoice
-        id="reader-tools" label="tool calls in the reader" icon={BookOpen}
+        id="reader-tools" radio label="tool calls in the reader" icon={BookOpen}
         value={toolsMode}
         options={([["fold", "fold runs"], ["list", "one row each"], ["full", "download details"]] as [ReaderToolsMode, string][])
           .map(([v, label]) => ({ value: v, label }))}
@@ -375,7 +481,7 @@ export function WritingRows({ voice }: { voice: VoiceFacts }) {
       />
 
       <SetChoice
-        id="hints-mode" label="button hints" icon={HelpCircle}
+        id="hints-mode" radio label="button hints" icon={HelpCircle}
         value={hintCfg.mode}
         options={([["first", "explain once"], ["press", "long-press only"], ["off", "off"]] as [HintMode, string][])
           .map(([v, label]) => ({ value: v, label }))}
@@ -393,6 +499,15 @@ export function WritingRows({ voice }: { voice: VoiceFacts }) {
         onClick={() => { setExplainMode(true); core().nav.close("settings"); }}
         note="Turns every tap into an explanation until you leave it — the way back after everything has been dismissed."
         more={<p>Also on the “?” chip in the launcher and session headers.</p>}
+      />
+
+      <SetSwitch
+        id="hints-chip" label="? button in the headers" icon={HelpCircle}
+        on={hintChip !== "hidden"}
+        onChange={() => setPref("hintChip", hintChip === "hidden" ? "asked" : "hidden")}
+        note={hintChip === "hidden"
+          ? "Removed from the launcher and session headers. Long-press any button, or explain mode above, still explains it."
+          : "The ? in the launcher and session headers turns on explain mode. Leaving it the first time asks whether it can go."}
       />
 
       {/* Was `disabled` when nothing had been dismissed, which is a grey
@@ -437,6 +552,7 @@ export function OfflineRows({ install, reconnect }: { install: InstallFacts; rec
   const serialSessions = usePref("serialSessions");
   const confirmQueue = usePref("confirmQueue");
   const saver = usePref("saver");
+  const fresh = usePref("bgFresh");
   const queuedSends = core().queue.entries.filter((e) => e.status === "queued");
   return (
     <>
@@ -525,6 +641,17 @@ export function OfflineRows({ install, reconnect }: { install: InstallFacts; rec
         }}
         note="For a roaming or hotel link: smaller image copies, slower background polling. Per device."
         more={<p>Asks the host for smaller images in the grids and the full-screen viewer — “full res” is always one tap away — and slows the reader view's background polling.</p>}
+      />
+
+      <SetSlider
+        id="bg-fresh" label="in the background" icon={BatteryMedium}
+        min={0} max={BG_FRESH_STEPS.length - 1} step={1}
+        value={Math.max(0, BG_FRESH_STEPS.indexOf(fresh))}
+        readout={bgFreshLabel(fresh)}
+        onInput={(i) => setPref("bgFresh", BG_FRESH_STEPS[i] ?? fresh)}
+        onCommit={() => track("action:bgfresh")}
+        note={bgFreshNote(fresh)}
+        more={<p>Battery against how recent the screen is that you can read with no signal. Left is fresher, right saves more. Takes effect the next time the app goes to the background. Per device.</p>}
       />
     </>
   );

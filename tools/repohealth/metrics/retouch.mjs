@@ -143,6 +143,30 @@
  * excluded as the commit being classified, kept as a prior touch
  * (`PREREG.RETOUCH_BATCH_AS_PRIOR`).
  *
+ * ── Rework, not append (since `2026-10-16a`) ───────────────────────────────
+ *
+ * Both clocks say WHEN two touches were close; neither says whether the second
+ * one undid the first. A registry file — a route table, an index of exports,
+ * a changelog — is appended to by every feature and was this metric's
+ * loudest offender for doing exactly what it is for. So a pair that fires a
+ * clock is a re-touch only when the later commit REMOVES OR CHANGES a line the
+ * earlier one ADDED: one of the later commit's `-` ranges (pre-image line
+ * numbers) overlaps one of the earlier commit's `+` ranges (post-image).
+ *
+ * The two coordinate systems are the same file: the earlier commit is the
+ * most recent first-parent commit that touched the path (`lastTouch`), so the
+ * file it left is exactly the file the later commit starts from, and the
+ * overlap is exact arithmetic — no blame, no re-diff. It is also why only that
+ * one prior is consulted for rework: an older commit's lines have moved since.
+ * A pair that fires a clock and touches none of the earlier lines is counted
+ * in `appends`, so the rate still travels with what it left out. A binary file
+ * has no line ranges and is never rework.
+ *
+ * Cost: `history.hunks`, one `git log -p -U0` walk read once per `update`
+ * that has rows to measure (`git.mjs`'s `readHunks` states the size); per pair
+ * here, a scan of two short range lists. A history handed in without it has
+ * no line-level answer, and the reading is absent with that reason.
+ *
  * ── Purity ─────────────────────────────────────────────────────────────────
  *
  * No git, no filesystem, no network, no model — the `History` handed in is the
@@ -178,6 +202,24 @@ function isBatch(history, commit) {
   return history.batch?.has(commit.sha) ?? commit.batch ?? false;
 }
 
+/**
+ * Whether the later commit removed or changed a line the earlier one added —
+ * see the header. Ranges are flat `[start, len, …]`.
+ */
+export function reworks(hunks, earlierSha, laterSha, path) {
+  const a = hunks.get(earlierSha)?.get(path)?.add;
+  const d = hunks.get(laterSha)?.get(path)?.del;
+  if (!a?.length || !d?.length) return false;
+  for (let i = 0; i < d.length; i += 2) {
+    const dLo = d[i];
+    const dHi = d[i] + d[i + 1] - 1;
+    for (let j = 0; j < a.length; j += 2) {
+      if (a[j] <= dHi && dLo <= a[j] + a[j + 1] - 1) return true;
+    }
+  }
+  return false;
+}
+
 /** Count desc, then path asc — a total order, so the fixture can be compared. */
 function byCountThenPath(a, b) {
   if (b[1] !== a[1]) return b[1] - a[1];
@@ -191,7 +233,7 @@ function byCountThenPath(a, b) {
  * @param {number} index  Position of the commit being measured in
  *   `history.commits` (first-parent, oldest first).
  * @param {import("../types.mjs").EffectivePrereg} prereg
- * @returns {import("../types.mjs").Measured<{rate: number, touches: number, retouches: number, offenders: {path: string, n: number}[]}>}
+ * @returns {import("../types.mjs").Measured<{rate: number, touches: number, retouches: number, appends: number, offenders: {path: string, n: number}[]}>}
  *   `touches` is the classified denominator for the window and `retouches`
  *   the numerator, so `rate` can always be checked against what produced it.
  *   `types.mjs` declares the same four keys, with the argument for carrying
@@ -205,6 +247,8 @@ export function measureRetouch(snapshot, history, index, prereg) {
   // there would be a claim ("nothing was re-edited") where the truth is that
   // the question has no answer yet.
   if (index === 0) return { value: null, reason: "no prior commit" };
+  const hunks = history?.hunks;
+  if (!hunks) return { value: null, reason: "no line-level history was read, so rework cannot be told from an append" };
 
   const windowStart = here.ts - prereg.RETOUCH_WINDOW_DAYS * SECONDS_PER_DAY;
 
@@ -214,6 +258,7 @@ export function measureRetouch(snapshot, history, index, prereg) {
   const offenders = new Map();
   let touches = 0;
   let retouches = 0;
+  let appends = 0;
 
   for (let i = 0; i <= index; i++) {
     const commit = commits[i];
@@ -239,8 +284,12 @@ export function measureRetouch(snapshot, history, index, prereg) {
             distance <= prereg.RETOUCH_COMMITS &&
             hours <= prereg.RETOUCH_COMMITS_MAX_DAYS * 24;
           if (hours <= prereg.RETOUCH_HOURS || nearInCommits) {
-            retouches++;
-            offenders.set(path, (offenders.get(path) ?? 0) + 1);
+            if (reworks(hunks, commits[prev].sha, commit.sha, path)) {
+              retouches++;
+              offenders.set(path, (offenders.get(path) ?? 0) + 1);
+            } else {
+              appends++;
+            }
           }
         }
       }
@@ -273,5 +322,5 @@ export function measureRetouch(snapshot, history, index, prereg) {
   //
   // Key order is fixed and load-bearing: the row is compared to a committed
   // fixture with deepEqual.
-  return { value: { rate: retouches / touches, touches, retouches, offenders: top } };
+  return { value: { rate: retouches / touches, touches, retouches, appends, offenders: top } };
 }

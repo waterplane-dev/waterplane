@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { BRAND } from "@waterplane/shared";
-import { CODE_FOLDERS, pickCodeRoot, resolveRoot } from "../dist/branddirs.js";
+import { CODE_FOLDERS, pickCodeRoot, resolveRoot, wslMountPath } from "../dist/branddirs.js";
 import { checkRoot } from "../dist/doctor.js";
 
 const P = BRAND.envPrefix;
@@ -15,6 +15,20 @@ const fake = (dirs, repos = []) => ({ isDir: (p) => dirs.includes(p), hasGitChil
 test("coderoot: the knob wins and nothing is looked at", () => {
   const r = resolveRoot({ [`${P}ROOT`]: "/work" }, "/h", fake(["/h/code"], ["/h/code"]));
   assert.deepEqual(r, { root: "/work", defaulted: false, picked: "named", tried: [] });
+});
+
+test("coderoot: under WSL a Windows-style root is its /mnt mount (the .env both sides share)", () => {
+  assert.equal(wslMountPath("c:/dev"), "/mnt/c/dev");
+  assert.equal(wslMountPath("C:\\Users\\me\\code\\"), "/mnt/c/Users/me/code");
+  assert.equal(wslMountPath("D:"), "/mnt/d");
+  assert.equal(wslMountPath("/home/me/dev"), "/home/me/dev");
+  assert.equal(wslMountPath("~/dev"), "~/dev");
+  if (process.platform === "win32") return;   // resolve() below is POSIX
+  const named = resolveRoot({ [`${P}ROOT`]: "c:/dev" }, "/h", fake([]), undefined, true);
+  assert.deepEqual(named, { root: "/mnt/c/dev", defaulted: false, picked: "named", tried: [] });
+  assert.equal(resolveRoot({}, "/h", fake([]), "D:\\src", true).root, "/mnt/d/src");
+  // Outside WSL the path is left alone (macOS/Linux never see a drive letter for real).
+  assert.notEqual(resolveRoot({ [`${P}ROOT`]: "c:/dev" }, "/h", fake([]), undefined, false).root, "/mnt/c/dev");
 });
 
 test("coderoot: the first existing folder in the documented order", () => {

@@ -543,15 +543,17 @@ test("the marks are explained only where they are DRAWN", () => {
   const one = usageSegments([sample(t0, 1, 20, r1), sample(t0 + 8 * MIN, 2, 20, r1)], "session");
   assert.equal(usageMarksText(one), null, "an unbroken line explains nothing");
 
+  // The rule is how a rollover is DRAWN — method, so it is `more` (folded);
+  // a break is a stretch nobody read — an absence, so it is `lead` (open).
   const rolled = usageSegments([sample(t0, 1, 20, r1), sample(t0 + 8 * MIN, 2, 20, r2)], "session");
   const rw = usageMarksText(rolled);
-  assert.match(rw, /dashed rule/);
-  assert.ok(!/break in the line/.test(rw), "no gap was drawn, so no gap is described");
+  assert.match(rw.more, /dashed rule/);
+  assert.equal(rw.lead, null, "no gap was drawn, so no gap is described");
 
   const gapped = usageSegments([sample(t0, 1, 20, r1), sample(t0 + 300 * MIN, 2, 20, r1)], "session", 45 * MIN);
   const gw = usageMarksText(gapped);
-  assert.match(gw, /break in the line/);
-  assert.ok(!/dashed rule/.test(gw), "nothing rolled over, so no rule is described");
+  assert.match(gw.lead, /break in the line/);
+  assert.equal(gw.more, null, "nothing rolled over, so no rule is described");
 });
 
 test("a stretch nobody observed is a gap, never a line drawn across it", () => {
@@ -779,4 +781,20 @@ test("a kind that is absent from a day draws no band there, and the rest still t
   assert.ok(input.d, "an input band exists — it is zero-height on day one, not missing");
   const read = bands.find((b) => b.slot === 2);
   assert.ok(read.d.includes("L"), read.d.slice(0, 40));
+});
+
+test("modelBands: every model of a family gets a band, newest in the full hue, older in its tints", async () => {
+  const { modelBands } = await import("./statsPlot.ts");
+  // All-time volume order: last month's ids out-rank this week's.
+  const m = modelBands([
+    "claude-fable-5", "claude-opus-5", "claude-opus-5-5", "claude-sonnet-5-5",
+    "claude-fable-5-1", "claude-haiku-4-5", "claude-haiku-5-5", "gpt-x",
+  ].map((key) => ({ key, label: key })));
+  assert.deepEqual(m.bands.map((b) => [b.alias, b.slot]), [
+    ["claude-fable-5-1", 1], ["claude-fable-5", 6],
+    ["claude-opus-5-5", 3], ["claude-opus-5", 8],
+    ["claude-sonnet-5-5", 2],
+    ["claude-haiku-5-5", 0], ["claude-haiku-4-5", 5],
+  ]);
+  assert.equal(m.restName, "gpt-x");
 });

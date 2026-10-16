@@ -96,7 +96,6 @@ function makeStore(over = {}) {
     repoAnySession: () => false,
     autoSlotsFree: () => state.slots,
     autoSlotsDetail: () => (state.slots > 0 ? undefined : "waiting for a free slot"),
-    reapAutoSession: () => null,
     revivedSessionFor: () => null,
     diedAtLimit: () => false,
     stopCount: () => 0,
@@ -709,46 +708,6 @@ test("fire() refuses a row that is already claimed", async () => {
   state.ran.length = 0;
   await store.fire(row, {});
   assert.deepEqual(state.ran, [], "and the in-memory claim covers the window before there is a persisted state");
-  store.stop();
-  rmSync(root, { recursive: true, force: true });
-});
-
-test("run it now while a pass is parked on the pick fires the row exactly once", async () => {
-  // The real race, at its real seam. `pickHold` is the first `await` inside the
-  // pass — a hold spawns `git`, which is 30–200 ms — and `runNow` reaches
-  // `fire()` directly, through no ladder at all. Whatever order the two land in,
-  // the row runs once: the claim is asked in `fire()` itself, so neither caller
-  // has to know about the other.
-  const gate = { held: null, asked: 0 };
-  const { store, state, root } = makeStore({
-    pickHold: async () => { gate.asked++; return gate.held ? await gate.held : null; },
-  });
-  await store.reconcile();
-  state.slots = 3;
-  await postAndFail(store, state, workRow("p9"), "it went wrong");
-  state.ran.length = 0;
-  state.result = { ok: true, detail: "delivered" };
-
-  // Park the next pass on the hold, then put the row back: the re-queue's own
-  // kick is what walks the ladder down to it.
-  let release;
-  gate.held = new Promise((r) => { release = r; });
-  gate.asked = 0;
-  assert.equal(store.requeueFailed("p9", { kind: "hand" }).ok, true);
-  await settle(20);
-  // Parked, and holding nothing: the row is still plain `queued` — a hold is
-  // only worn (`picking`) once it has come back with a sentence, and until then
-  // no cwd, no session and no slot is claimed on its behalf. Which is exactly
-  // the window a tap fits through.
-  assert.equal(gate.asked, 1, "the pass is parked on the hold");
-  assert.equal(store.get("p9").state, "queued");
-
-  const r = await store.runNow("p9");
-  assert.deepEqual(r, { ok: true });
-  release(null);
-  await settle(80);
-  assert.deepEqual(state.ran.map((x) => x.id), ["p9"], "exactly once — the parked pass finds it claimed");
-  assert.equal(store.get("p9").requeues.length, 1, "…and it was put back exactly once too");
   store.stop();
   rmSync(root, { recursive: true, force: true });
 });

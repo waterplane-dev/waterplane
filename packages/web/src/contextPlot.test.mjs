@@ -16,6 +16,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  autoCompactSetLabel, autoCompactSetText,
   areaPath,
   eventLabel,
   fmtAxisTime,
@@ -216,6 +217,20 @@ test("the miniature draws a reference line only for an OBSERVED number", () => {
   assert.notEqual(sparkGeom(spark({ autoCompactTok: 180_000 }), 72, 18).refY, null);
 });
 
+test("the auto-compact SETTING is the spark's top, never under the peak", () => {
+  // 400k of a 1M window: at the setting the curve is at the top, not at 40%.
+  const g = sparkGeom(spark({ windowTok: 1_000_000, autoCompactSetTok: 400_000, pts: [10_000, 400_000], peak: 400_000 }), 72, 18);
+  assert.ok(Math.abs(g.endY) < 0.001, `400k under a 400k setting sits at the top, got y=${g.endY}`);
+  const mid = sparkGeom(spark({ windowTok: 1_000_000, autoCompactSetTok: 400_000, pts: [10_000, 200_000], peak: 200_000 }), 72, 18);
+  assert.ok(Math.abs(mid.endY - 9) < 0.001, `200k is half way, got y=${mid.endY}`);
+  // A reading past the setting widens the axis rather than clipping it.
+  const over = sparkGeom(spark({ windowTok: 1_000_000, autoCompactSetTok: 400_000, pts: [10_000, 500_000], peak: 500_000 }), 72, 18);
+  assert.ok(Math.abs(over.endY) < 0.001);
+  // No setting ⇒ the window, as before.
+  const win = sparkGeom(spark({ windowTok: 1_000_000, pts: [10_000, 400_000], peak: 400_000 }), 72, 18);
+  assert.ok(win.endY > 9);
+});
+
 test("a tick's x is its fraction of the box", () => {
   const g = sparkGeom(spark(), 72, 18);
   assert.equal(g.ticks.length, 1);
@@ -265,6 +280,27 @@ test("a host total BELOW the curve is refused, never drawn under the last point"
   const g = spendSparkGeom(spent({ usageTok: 1_000_000 }), 72, 14);
   assert.equal(g.totalY, null);
   assert.equal(g.top, 2_000_000);
+});
+
+test("the agents' spend STACKS on the parent's curve, top edge on the total", () => {
+  // The fan-out session that shipped this: parent 8% of the bill, so the line
+  // lay on the floor under a dashed total at the top — a scale that looked wrong.
+  const g = spendSparkGeom(spent({ agentUsedPts: [0, 0, 200_000, 600_000, 1_000_000] }), 72, 14);
+  assert.ok(g.agentBand, "a band is drawn");
+  assert.equal(g.totalY, null, "the stack's top edge IS the total — no dashed line on top of it");
+  // The top edge ends at the top of the box: 2M + 1M = the 3M total.
+  assert.match(g.agentBand.top, /L72(\.0)?,0\.5$/);
+  assert.ok(g.agentBand.area.endsWith("Z"));
+});
+
+test("an agent series that is misaligned or overshoots the total keeps the dashed line", () => {
+  assert.equal(spendSparkGeom(spent({ agentUsedPts: [0, 1] }), 72, 14).agentBand, null);
+  const over = spendSparkGeom(spent({ agentUsedPts: [0, 0, 0, 0, 5_000_000] }), 72, 14);
+  assert.equal(over.agentBand, null);
+  assert.ok(over.totalY != null);
+  // No agents at all: neither.
+  const none = spendSparkGeom(spent({ agentTok: 0, agentUsedPts: [0, 0, 0, 0, 0] }), 72, 14);
+  assert.equal(none.agentBand, null);
 });
 
 test("the spend miniature's area closes with a command too", () => {
@@ -837,11 +873,12 @@ test("the spend stack reads the CUMULATIVE tuple, and only ever rises", () => {
 test("a model's slot is its FAMILY's, fixed app-wide; the rest fold into one grey band", () => {
   const four = modelSlots(["claude-sonnet-5", "claude-opus-5", "claude-fable-5-1", "claude-haiku-4-5"], false);
   assert.deepEqual(four.named.map((m) => [m.id, m.slot]),
-    [["claude-opus-5", 0], ["claude-sonnet-5", 1], ["claude-haiku-4-5", 2], ["claude-fable-5-1", 3]]);
+    [["claude-fable-5-1", 1], ["claude-opus-5", 3], ["claude-sonnet-5", 2], ["claude-haiku-4-5", 0]],
+    "dearest first, red to blue");
   assert.equal(four.rest, null, "nothing left over ⇒ no leftover band");
-  assert.equal(four.slotOf(0), 1, "sonnet is slot 1 even as the biggest model");
+  assert.equal(four.slotOf(0), 2, "sonnet is slot 2 even as the biggest model");
   const more = modelSlots(["claude-opus-5", "claude-opus-4-7", "gpt-5"], false);
-  assert.deepEqual(more.named.map((m) => m.id), ["claude-opus-5"], "a second opus is not a second blue");
+  assert.deepEqual(more.named.map((m) => m.id), ["claude-opus-5"], "a second opus is not a second amber");
   assert.equal(more.rest.slot, REST_SLOT);
   assert.equal(more.slotOf(1), REST_SLOT);
   assert.match(more.rest.name, /2 more/);
@@ -859,7 +896,7 @@ test("the leftover band never shares a slot with a named model", () => {
 
 test("a request no record named a model for lands in the leftover band, not slot 0", () => {
   const s = modelSlots(["claude-opus-5"], true);
-  assert.equal(s.slotOf(0), 0);
+  assert.equal(s.slotOf(0), 3);
   assert.equal(s.slotOf(undefined), s.rest.slot);
   assert.match(s.rest.name, /unattributed/);
 });
@@ -905,7 +942,7 @@ test("agents are bars over their own span, packed into the fewest lanes", () => 
   // x spans the agent's own time on the chart's own axis.
   assert.equal(by.get(a.id).x, p.px(T0));
   assert.ok(Math.abs(by.get(a.id).x + by.get(a.id).w - p.px(T0 + 60_000)) < 1e-9);
-  assert.equal(by.get(b.id).slot, 2, "coloured by the model's one slot (haiku)");
+  assert.equal(by.get(b.id).slot, 0, "coloured by the model's one slot (haiku)");
   // No two bars in one lane overlap.
   for (const x of bars) for (const y of bars) {
     if (x !== y && x.lane === y.lane) assert.ok(x.x + x.w <= y.x || y.x + y.w <= x.x);
@@ -993,8 +1030,8 @@ test("a model that only the SUBAGENTS ran gets no band on the request charts", (
   // The slot still comes from the TABLE, so dropping an empty band moves no
   // colour on the bands that remain — and the agents' model keeps slot 1 for
   // the chart that DOES draw it.
-  assert.equal(series[0].slot, 1, "sonnet's fixed slot");
-  assert.equal(slots.slotOf(1), 0, "opus keeps ITS slot for the chart that does draw it");
+  assert.equal(series[0].slot, 2, "sonnet's fixed slot");
+  assert.equal(slots.slotOf(1), 3, "opus keeps ITS slot for the chart that does draw it");
 });
 
 test("an agent's own window shares the axis: its hours are not compressed, and its peak is in the domain and the summary", () => {
@@ -1013,4 +1050,12 @@ test("an agent's own window shares the axis: its hours are not compressed, and i
   assert.equal(agentPeak(agents), 967_000);
   assert.match(seriesSummary(parent, [], 1_000_000, agents), /an agent held 967k/);
   assert.equal(/agent/.test(seriesSummary(parent, [], 1_000_000, [])), false);
+});
+
+test("auto-compact setting: a size is a labelled line, auto/unset say why there is none", () => {
+  assert.equal(autoCompactSetLabel(400_000), "auto-compact set 400k");
+  assert.match(autoCompactSetText({ tokens: 400_000, source: "project", raw: "400k" }), /\.claude\/settings\.json sets it now \(400k\)/);
+  assert.match(autoCompactSetText({ tokens: null, source: "unset" }), /No autoCompactWindow is set/);
+  assert.match(autoCompactSetText({ tokens: null, source: "user", raw: "auto" }), /"auto" in ~\/\.claude\/settings\.json/);
+  assert.match(autoCompactSetText({ tokens: null, source: "local", raw: "lots" }), /not a size/);
 });

@@ -12,6 +12,7 @@
 import type { BuildArtifact } from "../wire/work.js";
 import type { CaptureBackendId } from "../wire/capture.js";
 import type { ScheduleRule } from "../schedule.js";
+import type { AssessScope } from "../assess.js";
 
 // ── The vocabulary ───────────────────────────────────────────────────────────
 
@@ -67,22 +68,14 @@ export type BlockReason =
    *  inside the host's `openBacklogSession`, said as a wait a row can wear. */
   | "noSlot"
   /**
-   * This repo's waiting items are being looked over before one of them is
-   * picked — the *smart pick* tick-box.
-   *
-   * A WAIT and never a refusal: the row is next, everything else has said yes,
-   * and the only thing between it and firing is a few seconds of a cheap
-   * headless pass deciding whether a different item should go first. It is a
-   * `blocked` row rather than a `starting` one on purpose — a held row claims
-   * no cwd, no `hostBusy` and no automatic-session slot, so every other repo
-   * keeps moving while one repo thinks.
-   *
-   * Self-resolving, with nothing for a person to press: the pass has a watchdog
-   * and every way it can end — an answer, a timeout, a failure, a usage limit —
-   * clears the hold and fires the item, in the worst case in exactly the order
-   * it would have had without the feature.
+   * The row's session runs on a LOCAL model (a backend whose model runs on
+   * this desktop — `BackendInfo.models.where === "local"`), and either the
+   * desktop's local-model cap is in use (another local session is mid-turn) or
+   * the model is not loaded yet. The host loads it and says which; the cap is
+   * the synced `waterplane.local.maxSessions` (default 1). A WAIT, never a
+   * refusal, and only automatic starts wear it — a person's own tap is told.
    */
-  | "picking";
+  | "localModel";
 
 // ── What an intent IS ────────────────────────────────────────────────────────
 
@@ -153,6 +146,12 @@ export interface AssessPayload {
    * refuses to let a verdict name.
    */
   ids?: string[];
+  /**
+   * **What those ids ARE**, when they are a slot — rows that fire together at
+   * one reset or instant (`intent/slot.ts`). Only ever beside `ids`; absent on
+   * every other run and every row written before the slot check.
+   */
+  scope?: AssessScope;
 }
 
 /**
@@ -408,7 +407,9 @@ export const REQUEUE_KEEP = 5;
 
 /** A lift of ONE window's budget ceiling, from an occurrence to its reset. */
 export interface BudgetPass {
-  window: "session" | "weekly";
+  /** The period whose reset this row was timed ahead of: `session` / `weekly`
+   *  or a configured calendar/span period id (`PeriodId`). */
+  window: string;
   /** The occurrence — the row's own time. Held by the ceiling before it. */
   from: number;
   /** The reset the occurrence was timed ahead of. Held again from it on. */
@@ -419,4 +420,13 @@ export interface BudgetPass {
  *  window the waiver was granted in. */
 export interface BudgetWaiver {
   until: number;
+  /** The WEEKLY ceiling (or the leftover one) was among those holding the row
+   *  when the waiver was granted. A waiver that expires unstarted leaves the
+   *  row a leftover of that week (`Intent.leftoverOf`) only when this is set:
+   *  a waiver against the 5-hour cap alone was not about the week. Absent on a
+   *  waiver from before this existed, which then leaves nothing behind. */
+  weekly?: true;
+  /** The period whose reset `until` is (the latest tripped one): `session`,
+   *  `weekly` or a configured period id. Absent on a waiver from before periods. */
+  periodId?: string;
 }

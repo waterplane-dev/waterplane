@@ -1,6 +1,6 @@
 /** A slice of assess.ts — moved whole from assess.ts, see docs/notes/assess-architecture.md (host). */
-import type { AssessInput, AssessItem, AssessNote, Intent } from "@waterplane/shared";
-import { ASSESS_IN_FILE, ASSESS_OUT_FILE, ASSESS_PLAN_FILE, ITEM_CATEGORIES, MAX_HEADLINE_CHARS, MAX_MERGE_SIZE, MAX_NEW, MIN_MERGE_SIZE } from "@waterplane/shared";
+import type { AssessInput, AssessItem, AssessNote, AssessScope, Intent } from "@waterplane/shared";
+import { ASSESS_IN_FILE, ASSESS_OUT_FILE, ASSESS_PLAN_FILE, ITEM_CATEGORIES, MAX_CONFLICTS, MAX_CONFLICT_IDS, MAX_HEADLINE_CHARS, MAX_MERGE_SIZE, MAX_NEW, MAX_SPLITS, MIN_MERGE_SIZE, SPLIT_PARTS, parseSlotKey } from "@waterplane/shared";
 import { ASSESSABLE_STATES, ASSESS_CONTEXT_MAX, CONTEXT_STATES } from "./hassknobs.js";
 import { promptText } from "../prompts.js";
 
@@ -51,6 +51,9 @@ export function buildAssessInput(
    * and a proposal about 10.
    */
   ids?: readonly string[],
+  /** What those ids ARE, when they are one slot (`AssessScope`). Only ever
+   *  beside `ids`: a slot with no ids scopes nothing. */
+  slot?: AssessScope,
 ): AssessInput {
   const items: AssessItem[] = [];
   const context: AssessItem[] = [];
@@ -108,6 +111,7 @@ export function buildAssessInput(
     version: 1, at: now, cwd,
     items: [...items, ...context.slice(0, ASSESS_CONTEXT_MAX)],
     ...(scope ? { scopedIds: [...scope] } : {}),
+    ...(scope && slot ? { scope: slot } : {}),
   };
 }
 
@@ -144,6 +148,43 @@ export const ASSESS_GUIDANCE = [
 ].join("\n");
 
 /**
+ * **When the slot fires, in words** — read off the key, the only place a run
+ * row carries it. ISO in UTC: the model reads it, and a local time with no
+ * zone is a number two readers disagree about.
+ */
+export function slotWhenText(scope: AssessScope): string {
+  const k = parseSlotKey(scope.key);
+  if (!k) return "at one moment";
+  const at = new Date(k.at).toISOString().slice(0, 16).replace("T", " ") + " UTC";
+  return k.kind === "reset" ? `at the ${k.period} usage-window reset (about ${at})` : `at ${at}`;
+}
+
+/**
+ * **The slot check's paragraph** (`AssessScope`), or nothing on any other run.
+ *
+ * A slot is a different question from "what is left": every row here fires in
+ * the same minute, so the order among them, a pair that undoes each other and
+ * a row leaning on one that runs after it are what a person can still fix
+ * before the clock does. The caps are interpolated from the constants the
+ * cleaners enforce (this file's rule), and a conflict is described as WORDS —
+ * the app changes nothing for one.
+ */
+function slotParagraph(input: AssessInput): string[] {
+  if (!input.scope) return [];
+  return [
+    "",
+    `This is a SLOT CHECK: every open item above fires TOGETHER, ${slotWhenText(input.scope)}. Judge them as one batch:`,
+    `  - "rank" is the order to run them in WITHIN this slot, 1 first: put a row that another one needs ahead of it.`,
+    "  - Merge rows that are one job (rules below). A merged row runs on the LATEST clock among its members.",
+    `  - Under "splits", name a row that is really two separate jobs: exactly ${SPLIT_PARTS} texts, each a complete prompt, which`,
+    `    together still name every file path the original names. At most ${MAX_SPLITS}; a split row is not also retired or merged.`,
+    `  - Under "conflicts", name rows that contradict each other: opposite changes to one thing, or a row that depends on a`,
+    `    row ordered after it. 2 to ${MAX_CONFLICT_IDS} ids and one sentence each, at most ${MAX_CONFLICTS}. A conflict changes nothing:`,
+    "    it is shown to the person, who decides.",
+  ];
+}
+
+/**
  * The kickoff prompt. Four paragraphs, and deliberately no items.
  *
  * It states the vocabulary, that evidence is REQUIRED and that a claim without
@@ -177,6 +218,7 @@ export function assessPrompt(input: AssessInput): string {
         "absence of an item as evidence that it was finished.",
       ]
       : []),
+    ...slotParagraph(input),
     "",
     promptText("assess-guidance", ASSESS_GUIDANCE),
     "",
@@ -210,7 +252,15 @@ export function assessPrompt(input: AssessInput): string {
     `${ASSESS_OUT_FILE} — JSON only, no prose, no code fence:`,
     '{"items":[{"id":"<id>","verdict":"done|obsolete|superseded|merged|wanted|unclear","evidence":"<citation>","rank":1,"supersededBy":"<id>","headline":"<title>","category":"bug|feature|enhancement|chore"}],',
     ' "merges":[{"gid":"g1","ids":["<id>","<id>"],"prompt":"<the prompt that covers them>","rank":1,"rationale":"<why they are one job>","headline":"<title>","category":"bug|feature|enhancement|chore"}],',
-    ' "new":[{"prompt":"<the missing piece, ready to run>","rank":1,"headline":"<title>","category":"bug|feature|enhancement|chore"}]}',
+    ' "new":[{"prompt":"<the missing piece, ready to run>","rank":1,"headline":"<title>","category":"bug|feature|enhancement|chore"}]' + (input.scope ? "," : "}"),
+    // A slot check's two extra lists — only on a slot run, so a repo-wide
+    // prompt is unchanged (the cleaners accept both lists from either kind).
+    ...(input.scope
+      ? [
+        ' "conflicts":[{"cid":"c1","ids":["<id>","<id>"],"why":"<what contradicts what>"}],',
+        ' "splits":[{"sid":"s1","id":"<id>","texts":["<the first job, ready to run>","<the second job, ready to run>"],"rationale":"<why it is two jobs>"}]}',
+      ]
+      : []),
     'Every open item must appear in "items". "rank" is an integer sort position over the wanted set — the order to work them in, 1 first.',
     "",
     `${ASSESS_PLAN_FILE} — the reasoning, in order, for a person and for the next agent in this repo: what you found, what you`,

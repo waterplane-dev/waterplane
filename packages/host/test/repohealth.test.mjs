@@ -560,6 +560,17 @@ test("this module cannot name the one subcommand that spends money", () => {
   assert.doesNotMatch(strip(readFileSync(join(HERE, "..", "dist", "repohealth.js"), "utf8")), /judge/i);
 });
 
+test("a repo's own readings: the trust is SAID here, and this module never reads or forwards the declaration", () => {
+  const text = readFileSync(SRC, "utf8");
+  // The sentence a reader looks for, beside the containment note.
+  assert.match(text, /runs code the repo supplies, from this daemon/);
+  assert.ok(text.indexOf("Trust: a repo's own readings") > text.indexOf("Containment: what `--root=` may be"));
+  // The engine reads the committed file itself; nothing on the request path
+  // here names it, so nothing a client sends can reach that argv.
+  const strip = (s) => s.replace(/\/\*[\s\S]*?\*\/|(^|\s)\/\/[^\n]*/g, "");
+  assert.doesNotMatch(strip(text), /health\.json|REPOHEALTH_OWN_FILE/);
+});
+
 // ───────────────────────────────────────────────────────────────────────────
 // Scopes: one subtree of a repo, read and refreshed on its own.
 // ───────────────────────────────────────────────────────────────────────────

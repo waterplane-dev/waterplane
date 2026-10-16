@@ -52,12 +52,26 @@ function scale(n: number, unit?: string): number {
  */
 const METER_GATE_RE = /[^\n]*\bcontext\b[^\n]*\b(?:left|remaining|free|window|used|auto-?compact)\b[^\n]*/gi;
 
+/**
+ * The words alone are not enough: the agent's own prose talks about "the
+ * Context window" and "/compact" all day, and every such line passed the gate
+ * and filed a miss — 18 of them, 0 good, a BROKEN chip over a meter that was
+ * never on screen. An indicator always carries a figure (`42%`, `123k`), and
+ * it is never a row of the conversation: `⏺` opens an assistant line, `⎿` a
+ * tool result, `>`/`❯` the person's own words.
+ */
+const METER_FIGURE_RE = /\d\s*%|\d(?:\.\d+)?\s*[km]\b/i;
+const CONVERSATION_ROW_RE = /^\s*[⏺⎿>❯]/;
+
 /** The last context-indicator row in the text, or null when there is none.
  *  Last, because a repaint-based TUI leaves older frames above the fresh one. */
 export function contextMeterRow(text: string): string | null {
   const re = new RegExp(METER_GATE_RE.source, METER_GATE_RE.flags);
   let hit: string | null = null;
-  for (let m = re.exec(text); m; m = re.exec(text)) hit = m[0].trim() || hit;
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    const row = m[0].trim();
+    if (row && METER_FIGURE_RE.test(row) && !CONVERSATION_ROW_RE.test(m[0])) hit = row;
+  }
   return hit;
 }
 

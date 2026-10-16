@@ -4,33 +4,50 @@
  * and the session toolbar's `inbox` count. A count is a filter: each opens
  * exactly what it counted.
  */
-import { Images, Minimize2, X } from "lucide-react";
+import { FileText, Images, Minimize2, X } from "lucide-react";
 import type { RepoTarget } from "@waterplane/shared";
 import { api } from "../../api";
 import { pickThumbWidth, sized } from "../../media";
 import { useNewImagesMinimized, useNewImagesOf } from "./store";
 import {
-  browseNewImages, dismissNewImages, minimizeNewImages, openNewImages, openOutboxFor, referenceNewImage, restoreNewImages,
+  browseNewImages, dismissNewImages, minimizeNewImages, openFileRef, openNewImages, openOutboxFor, referenceNewImage, restoreNewImages,
 } from "./actions";
-import { isVideoPath } from "./logic";
+import { isMarkdownPath, isVideoPath, isViewable } from "./logic";
 
-/** The session screen's strip, or its folded pill; nothing with no new images. */
+/** The session screen's strip, or its folded pill; nothing with no new files.
+ *  Pictures open the swipeable viewer; a markdown tile opens the reader. */
 export function NewImagesStrip({ sessionId }: { sessionId: string }) {
   const list = useNewImagesOf(sessionId);
   const folded = useNewImagesMinimized(sessionId);
   if (!list.length) return null;
   if (folded) return (
-    <button className="newimg-pill" onClick={() => restoreNewImages(sessionId)} title="show new images">
+    <button className="newimg-pill" onClick={() => restoreNewImages(sessionId)} title="show new files">
       <Images size={14} /> new {list.length}
     </button>
   );
   return (
     <div className="newimg-strip">
-      <button className="newimg-x" onClick={() => dismissNewImages(sessionId)} title="dismiss"><X size={14} /></button>
-      <button className="newimg-min" onClick={() => minimizeNewImages(sessionId)} title="minimize"><Minimize2 size={14} /></button>
-      <span className="newimg-label"><Images size={14} /> new {list.length}</span>
+      {/* One narrow column, not three side by side: the row is the thumbs'. */}
+      <div className="newimg-ctl">
+        <span className="newimg-label"><Images size={14} /> new {list.length}</span>
+        <div className="newimg-ctl-btns">
+          <button className="newimg-min" onClick={() => minimizeNewImages(sessionId)} title="minimize"><Minimize2 size={14} /></button>
+          <button className="newimg-x" onClick={() => dismissNewImages(sessionId)} title="dismiss"><X size={14} /></button>
+        </div>
+      </div>
       {list.map((im) => {
         const ext = (im.name.split(".").pop() || "").toUpperCase();
+        if (isMarkdownPath(im.relPath)) return (
+          <div key={im.relPath} className="newimg">
+            <button className="newimg-thumb newimg-doc" onClick={() => openFileRef(im.repoId, im.relPath)}
+              title={`${im.relPath} — ${im.changed ? "edited" : "new"} this session · tap to read`}>
+              <FileText size={18} />
+              <span className="newimg-doc-name">{im.name}</span>
+              <span className="newimg-type">{im.changed ? `${ext} · edited` : ext}</span>
+            </button>
+            <button className="newimg-ref" onClick={() => referenceNewImage(im)} title={`insert path: ${im.relPath}`}>ref</button>
+          </div>
+        );
         const vid = isVideoPath(im.relPath);
         return (
           <div key={im.relPath} className="newimg">
@@ -61,7 +78,8 @@ export function NewImagesStrip({ sessionId }: { sessionId: string }) {
  * chip built as a button would wear the strip's button styling.
  */
 export function NewImagesTag({ sessionId }: { sessionId: string }) {
-  const n = useNewImagesOf(sessionId).length;
+  // Pictures only: the tap opens the viewer, and a count opens exactly what it counted.
+  const n = useNewImagesOf(sessionId).filter((im) => isViewable(im.relPath)).length;
   if (n <= 0) return null;
   return (
     <span className="tag img tag-filter" role="button" tabIndex={0}

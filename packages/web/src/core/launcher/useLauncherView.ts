@@ -68,8 +68,8 @@ export function useLauncherView(ctx: LauncherViewCtx) {
     [hiddenRepoPaths, focusPaths, focusRepo],
   );
   const visibleBacklogItems = useMemo(
-    () => bl.items.filter((it) => !hiddenRepoPaths.has(it.repoDir) && cwdInFocus(it.repoDir)),
-    [bl.items, hiddenRepoPaths, focusPaths], // eslint-disable-line react-hooks/exhaustive-deps
+    () => bl.items.filter((it) => cwdVisible(it.repoDir)),
+    [bl.items, cwdVisible],
   );
 
   function toggleHideRepo(id: string) {

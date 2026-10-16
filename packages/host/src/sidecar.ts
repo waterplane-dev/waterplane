@@ -1,11 +1,11 @@
 /**
  * The one place an UNATTENDED completion is bought.
  *
- * Five things in this daemon spend tokens with nobody watching: the per-turn
+ * Four things in this daemon spend tokens with nobody watching: the per-turn
  * tab name (`sessions/record.ts`), the assessment (`assess.ts`), the two
- * reviewers (`review.ts`), the backlog's smart pick (`runSmartPickTask`) and
- * the naming pass (`runNameTask`, and `naming.ts` for what it is for). Three of
- * the five are TOOLLESS by contract and may take the local engine; the two that
+ * reviewers (`review.ts`) and the naming pass (`runNameTask`, and `naming.ts`
+ * for what it is for; the commit message shares its argv). Two of the four
+ * are TOOLLESS by contract and may take the local engine; the two that
  * read a repo refuse it in words. Each grew its own `execFile(claude, ["-p", …])`, and
  * the most expensive one by far was the per-turn session summary (one call per
  * turn-end per session, retired — the tab name, once per session off the first
@@ -77,7 +77,7 @@ export type { EnvelopeUsage, HeadlessRequest, HeadlessRun, ToolTaskRun } from ".
 export { claudeConfigPath, trustRefusal, workspaceTrust } from "./sidecar/sidecartrust.js";
 export { chatCompletion, completionText } from "./sidecar/sidecaropenai.js";
 export type { ChatRequest } from "./sidecar/sidecaropenai.js";
-export { runSmartPickTask, runSummaryTask } from "./sidecar/sidecartasks.js";
-export type { SmartPickRequest, SmartPickRun, SummaryRequest } from "./sidecar/sidecartasks.js";
+export { runSummaryTask } from "./sidecar/sidecartasks.js";
+export type { SummaryRequest } from "./sidecar/sidecartasks.js";
 export { runCommitTask, runNameTask } from "./sidecar/sidecarname.js";
 export type { NameRequest, NameRun } from "./sidecar/sidecarname.js";

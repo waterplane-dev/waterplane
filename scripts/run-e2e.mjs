@@ -1,21 +1,23 @@
 // Run the e2e suite: every scripts/e2e-*.mjs (and every in-repo extension's
 // packages/extensions/<id>/e2e/e2e-*.mjs, so a private extension's e2e travel
-// with its folder and the public tree runs without them), sequentially, with a per-script
-// timeout and a summary at the end. Discovering the scripts instead of listing
-// them is deliberate — a hand-maintained list in package.json silently drifted
-// until two thirds of the suite was never running in CI.
+// with its folder and the public tree runs without them), in a pool of worker
+// slots, with a per-script timeout and a summary at the end. Discovering the
+// scripts instead of listing them is deliberate — a hand-maintained list in
+// package.json silently drifted until two thirds of the suite was never running in CI.
 //
-//   node scripts/run-e2e.mjs            # everything
+//   node scripts/run-e2e.mjs            # everything, E2E_JOBS / default jobs
 //   node scripts/run-e2e.mjs git origin # only scripts whose name contains these
+//   node scripts/run-e2e.mjs --jobs 1   # one at a time, output streamed live
 //
 // Requires `npm run build` first: these drive packages/host/dist.
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { availableParallelism, cpus, homedir, loadavg, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { E } from "./lib-brand.mjs";
+import { E, SLUG } from "./lib-brand.mjs";
 import { killTmuxIn, makeTmuxDir, tmuxIsoEnv } from "./lib-tmuxiso.mjs";
+import { portLocks } from "./lib-portlock.mjs";
 
 // Re-run under `with-tmp.mjs` so the whole run's temp files live in one dir that
 // is removed at the end (and anything left in it is named). Not re-entered.
@@ -34,7 +36,47 @@ if (!existsSync(join(repoRoot, "packages/host/dist/main.js"))) {
   process.exit(1);
 }
 
-const filters = process.argv.slice(2).filter((a) => !a.startsWith("--"));
+/**
+ * How many scripts run at once: `--jobs N` (or `--jobs=N`), else `E2E_JOBS`, else 60% of the
+ * cores capped at 10. Not all: every script boots a host, a tmux server and a stub TUI, and
+ * the scripts assert on timing windows (settle, echo, idle) that a saturated machine
+ * stretches. But a script mostly WAITS on those windows — the pre-push gate showed 20% CPU at
+ * the old cap of 6 on 16 cores. Past 10 the port-sharing scripts bind it anyway: e2e-settle
+ * and e2e-settlesweep both own 8861, ~140 s back to back, so wider buys nothing (2026-10-16,
+ * simulated off e2e-times.json: 6 → ~220 s, 10 → ~150 s, 16 → ~150 s).
+ */
+function jobsArg(argv) {
+  for (let i = 0; i < argv.length; i++) {
+    const m = /^--jobs(?:=(.*))?$/.exec(argv[i]);
+    if (m) return m[1] ?? argv[i + 1];
+  }
+  return process.env.E2E_JOBS;
+}
+const cores = (() => { try { return availableParallelism(); } catch { return cpus().length || 2; } })();
+const JOBS = (() => {
+  const asked = jobsArg(process.argv.slice(2));
+  if (asked !== undefined && asked !== "") {
+    const n = Number(asked);
+    if (!Number.isInteger(n) || n < 1) { console.error(`--jobs / E2E_JOBS must be a whole number >= 1, not "${asked}"`); process.exit(2); }
+    return n;
+  }
+  return Math.max(1, Math.min(10, Math.ceil(cores * 0.6)));
+})();
+
+/**
+ * Scripts that must run ALONE — nothing else from this run beside them. Each line says why;
+ * a script lands here only for a measured reason that its own source cannot fix without
+ * weakening what it asserts. They run after the pool has drained, one at a time.
+ */
+const SERIAL = new Map([
+  // e2e-restore and e2e-backlog-echo were here while they booted a second host behind a fixed
+  // 900 ms sleep (refused beside five other boots); since they wait for the host to answer
+  // (1a470120) they run in the pool. Shape: ["e2e-x.mjs", "why"].
+  ["e2e-templates.mjs", "a real Gradle build of the android-hello template: 65 s alone and CPU-bound, it ran past the 240 s limit beside five other scripts"],
+]);
+
+const argv = process.argv.slice(2);
+const filters = argv.filter((a, i) => !a.startsWith("--") && !/^--jobs$/.test(argv[i - 1] ?? ""));
 /** Script name → its path relative to the repo root. */
 const where = new Map();
 const isE2e = (f) => f.startsWith("e2e-") && f.endsWith(".mjs");
@@ -138,6 +180,23 @@ function portsOf(file) {
   return [...found];
 }
 
+/**
+ * A port the runner cannot SEE is a port it cannot keep two scripts off. `e2e-backlog-echo`
+ * declared 8812 and booted two more hosts on `PORT + 1` and `PORT + 2`: the scheduler only
+ * knew 8812, ran it beside e2e-restore (8813), and its retrying bind took 8813 in restore's
+ * 800 ms restart gap — restore's second host was locked out and its requests were answered
+ * by backlog-echo's host, an empty recent list (2026-10-16, 2 of 16 under load). So a script
+ * that derives a port by arithmetic is refused before it runs: every port is a literal.
+ * Comment lines are skipped so a script can still say why.
+ */
+function hiddenPortsOf(file) {
+  let src = "";
+  try { src = readFileSync(join(repoRoot, where.get(file)), "utf8"); } catch { return null; }
+  const code = src.split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n");
+  const m = /\b(?:[A-Z_]*PORT|port|[a-z]\w*Port)\s*[+-]\s*\d+/.exec(code);
+  return m ? m[0] : null;
+}
+
 /** The port the developer's own daemon listens on — off limits, always. */
 const DAEMON_PORT = Number(process.env[E.PORT] || 8770);
 
@@ -157,6 +216,65 @@ function freePort(port) {
 }
 
 /**
+ * **A port is OWNED for the length of one script — across every run on this
+ * machine — before `freePort` may clear it.**
+ *
+ * `freePort` cannot tell a stale host of ours from a LIVE host of another run:
+ * both are `packages/host/dist/main.js` on the port. Two `git push`es run two
+ * full suites at once (one pre-push hook each), and the suites drift through the
+ * alphabet independently — so suite B starting `e2e-submit` (8836) SIGKILLed
+ * suite A's host in the middle of `e2e-smartpick` (8836 too; a script since
+ * removed with the smart pick). A then reported
+ * 123/124 with smartpick failing, B passed, and the one failure read as a flaky
+ * feature under load. Reproduced by starting `run-e2e submit` eight seconds into
+ * `run-e2e smartpick`: submit passes, smartpick fails every time.
+ *
+ * So each script first takes a lock file per declared port, in ascending order
+ * (no two runs can then wait on each other in a cycle), and gives them all back
+ * before the next script takes its own — a run never holds one port while
+ * waiting for its next script's. The other run is simply waited for: its script
+ * ends within `TIMEOUT_MS`. A lock whose owner is gone (crashed, kill -9) is
+ * taken over, so a dead run never wedges the next one. The dir is `/tmp` rather
+ * than `tmpdir()`, because `with-tmp.mjs` gives every run a TMPDIR of its own.
+ */
+const PORT_LOCKS = join(existsSync("/tmp") ? "/tmp" : tmpdir(), `${SLUG}-e2e-ports`);
+// The lock itself — atomic creation, and a takeover exactly one run can win —
+// is `lib-portlock.mjs`, where the two races the first version had are written
+// down and `tools/portlock.test.mjs` pins them.
+//
+// The lock's owner is a PID, so it says nothing about two workers of THIS run: both are
+// the same pid, and `tryAcquire` hands a port back to its own owner. Inside one run the
+// exclusion is the scheduler's instead — a script is only started when none of its ports
+// is in `busyPorts` (`nextRunnable`), so two scripts sharing 8813 serialize, never collide.
+const locks = portLocks({ dir: PORT_LOCKS });
+/** Every port some script of this run holds right now (the in-process half). */
+const busyPorts = new Set();
+async function acquirePorts(ports, file, heldPorts, say) {
+  const deadline = Date.now() + TIMEOUT_MS + 30_000;
+  for (const port of [...ports].sort((a, b) => a - b)) {
+    let said = false;
+    for (;;) {
+      const got = locks.tryAcquire(port);
+      if (got.held) { heldPorts.add(port); break; }
+      if (Date.now() > deadline) {
+        throw new Error(`port ${port} is still held by another e2e run (pid ${got.owner || "unknown"}) after ${(TIMEOUT_MS + 30_000) / 1000}s — not killing its host`);
+      }
+      // owner 0: a takeover is in flight right now — look again in a moment.
+      if (!got.owner) { await new Promise((r) => setTimeout(r, 50)); continue; }
+      if (!said) { say(`[run-e2e] ${file}: port ${port} is in use by another e2e run (pid ${got.owner}) — waiting for it, not killing it\n`); said = true; }
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+}
+function releasePorts(heldPorts) {
+  for (const port of heldPorts) locks.release(port);
+  heldPorts.clear();
+}
+/** Every script's held set, so an exit mid-run gives all of them back. */
+const allHeld = new Set();
+process.on("exit", () => { for (const h of allHeld) releasePorts(h); });
+
+/**
  * A host a script boots must never read or MOVE the developer's own per-user
  * dirs: the boot renames a legacy `~/.config/<old>` and `~/.local/share/<old>`
  * to the current name, and reads secrets and plugins from the config dir. So
@@ -171,8 +289,15 @@ function freePort(port) {
  */
 const isolate = !process.argv.includes("--keep-user-dirs");
 const SANDBOX = isolate ? mkdtempSync(join(tmpdir(), "e2e-userdirs-")) : null;
-const childEnv = isolate
-  ? { ...process.env, [E.CONFIG_DIR]: join(SANDBOX, "config"), XDG_DATA_HOME: join(SANDBOX, "data") }
+/** All three dirs are PER SCRIPT: with scripts running side by side, one shared config dir
+ *  would be one script's secrets and plugins showing up in another's host. */
+const envFor = (file) => isolate
+  ? {
+      ...process.env,
+      [E.CONFIG_DIR]: join(SANDBOX, "config", file),
+      XDG_DATA_HOME: join(SANDBOX, "data", file),
+      XDG_STATE_HOME: join(SANDBOX, "state", file),
+    }
   : process.env;
 process.on("exit", () => { if (SANDBOX) try { rmSync(SANDBOX, { recursive: true, force: true }); } catch { /* best effort */ } });
 
@@ -188,13 +313,43 @@ process.on("exit", () => { if (SANDBOX) try { rmSync(SANDBOX, { recursive: true,
 const tmuxDirs = new Set();
 process.on("exit", () => { for (const d of tmuxDirs) killTmuxIn(d); });
 
-function runOne(file) {
-  for (const port of portsOf(file)) freePort(port);
+if (SANDBOX) for (const d of ["config", "data", "state"]) mkdirSync(join(SANDBOX, d), { recursive: true });
+
+/**
+ * One script, start to finish: its ports (this run's scheduler already made sure no
+ * sibling holds them; the lock files keep OTHER runs off them), the ground cleared, the
+ * child run, everything given back. `say` is where its lines go — the script's own buffer
+ * in a pool, the terminal at `--jobs 1`.
+ */
+async function runOne(file, say) {
+  const hidden = hiddenPortsOf(file);
+  if (hidden) { say(`[run-e2e] ${file}: derives a port by arithmetic (\`${hidden}\`) — the scheduler reads ports from the literals, so this one could land on a sibling's. Give it a literal of its own.\n`); return 1; }
+  const ports = portsOf(file);
+  const held = new Set();
+  allHeld.add(held);
+  try {
+    try { await acquirePorts(ports, file, held, say); } catch (e) { say(`[run-e2e] ${e.message}\n`); return 1; }
+    for (const port of ports) freePort(port);
+    return await runChild(file, say);
+  } finally {
+    releasePorts(held);
+    allHeld.delete(held);
+  }
+}
+
+function runChild(file, say) {
   return new Promise((resolve) => {
     const tmuxDir = makeTmuxDir();
     tmuxDirs.add(tmuxDir);
-    const env = tmuxIsoEnv(isolate ? { ...childEnv, XDG_STATE_HOME: join(SANDBOX, "state", file) } : childEnv, tmuxDir);
-    const child = spawn(process.execPath, [where.get(file)], { cwd: repoRoot, env, stdio: "inherit", detached: true });
+    const env = tmuxIsoEnv(envFor(file), tmuxDir);
+    const live = JOBS === 1;
+    const child = spawn(process.execPath, [where.get(file)], { cwd: repoRoot, env, stdio: live ? "inherit" : ["ignore", "pipe", "pipe"], detached: true });
+    // stdout and stderr into ONE buffer in arrival order, so a FAIL line sits where it was
+    // printed, between the lines around it — two buffers would print every error at the end.
+    const drained = live ? Promise.resolve() : Promise.all([child.stdout, child.stderr].map((s) => new Promise((r) => {
+      s.on("data", (d) => say(d));
+      s.on("close", r);
+    })));
     liveGroups.add(child.pid);
     const reap = () => {
       liveGroups.delete(child.pid);
@@ -203,10 +358,13 @@ function runOne(file) {
       tmuxDirs.delete(tmuxDir);
     };
     const timer = setTimeout(() => {
-      console.error(`\n[run-e2e] ${file} exceeded ${TIMEOUT_MS / 1000}s — killing it.`);
+      say(`\n[run-e2e] ${file} exceeded ${TIMEOUT_MS / 1000}s — killing it.\n`);
       reap();
     }, TIMEOUT_MS);
-    child.on("close", async (code) => {
+    // `exit`, not `close`: with piped stdio, `close` waits for EVERY holder of the pipe, and a
+    // host the script spawned with inherited stdio holds it until the reap below kills it —
+    // so `close` would wait for the timeout. The pipes are drained after the reap instead.
+    child.on("exit", async (code) => {
       clearTimeout(timer);
       // The script is done; anything still alive in its group is a host it
       // failed to stop, and it is holding the port the NEXT run needs.
@@ -219,22 +377,111 @@ function runOne(file) {
       // `port 8796 already in use`, exits, and its assertions fail against a
       // host that never existed.
       await groupGone(child.pid);
+      // A daemonized grandchild that left the group could still hold a pipe: never wait on it long.
+      await Promise.race([drained, new Promise((r) => setTimeout(r, 2000))]);
       resolve(code ?? 1);
     });
-    child.on("error", (err) => { clearTimeout(timer); console.error(`[run-e2e] ${file} failed to start:`, err); resolve(1); });
+    child.on("error", (err) => { clearTimeout(timer); say(`[run-e2e] ${file} failed to start: ${err?.message ?? err}\n`); resolve(1); });
   });
 }
 
-const failures = [];
-for (const file of scripts) {
-  console.log(`\n──────── ${file} ────────`);
-  const started = Date.now();
-  const code = await runOne(file);
-  const secs = ((Date.now() - started) / 1000).toFixed(1);
-  if (code === 0) console.log(`[run-e2e] ${file} passed (${secs}s)`);
-  else { console.error(`[run-e2e] ${file} FAILED with exit ${code} (${secs}s)`); failures.push(file); }
+/**
+ * Longest first, by the last run's times: the pool's wall time is bounded below by its
+ * slowest script, and a 3-minute script started last is 3 minutes of one busy worker while
+ * the rest sit idle. Only ORDER comes from this file — never what runs — so a missing or
+ * stale file costs a little wall time, nothing else. `E2E_TIMES=0` turns it off.
+ */
+const TIMES_FILE = process.env.E2E_TIMES === "0" ? null
+  : join(process.env.XDG_CACHE_HOME || join(homedir(), ".cache"), SLUG, "e2e-times.json");
+const lastTimes = (() => { try { return JSON.parse(readFileSync(TIMES_FILE, "utf8")) || {}; } catch { return {}; } })();
+const thisTimes = {};
+
+const pooled = scripts.filter((f) => !SERIAL.has(f))
+  .sort((a, b) => (lastTimes[b] ?? 60) - (lastTimes[a] ?? 60) || a.localeCompare(b));
+const serial = scripts.filter((f) => SERIAL.has(f));
+
+/** The first queued script none of whose ports a running sibling holds. */
+function nextRunnable(queue) {
+  const i = queue.findIndex((f) => portsOf(f).every((p) => !busyPorts.has(p)));
+  return i < 0 ? null : queue.splice(i, 1)[0];
 }
 
-console.log(`\n════════ ${scripts.length - failures.length}/${scripts.length} e2e scripts passed ════════`);
-for (const f of failures) console.error(`  FAILED  ${f}`);
+const failures = [];
+const wallStart = Date.now();
+
+async function runAndReport(file) {
+  const ports = portsOf(file);
+  for (const p of ports) busyPorts.add(p);
+  const started = Date.now();
+  const live = JOBS === 1;
+  const out = [];
+  const say = live ? (d) => process.stdout.write(d) : (d) => out.push(Buffer.isBuffer(d) ? d : Buffer.from(String(d)));
+  if (live) console.log(`\n──────── ${file} ────────`);
+  let code = 1;
+  try { code = await runOne(file, say); } finally { for (const p of ports) busyPorts.delete(p); }
+  const secs = (Date.now() - started) / 1000;
+  thisTimes[file] = Math.round(secs);
+  const verdict = code === 0 ? `[run-e2e] ${file} passed (${secs.toFixed(1)}s)` : `[run-e2e] ${file} FAILED with exit ${code} (${secs.toFixed(1)}s)`;
+  if (code !== 0) failures.push(file);
+  if (live) { (code === 0 ? console.log : console.error)(verdict); return; }
+  // One block per script, whole, in the order scripts FINISH — never two scripts' lines mixed.
+  const tail = Buffer.concat(out).toString("utf8");
+  process.stdout.write(`\n──────── ${file} ────────\n${tail}${tail.endsWith("\n") || !tail ? "" : "\n"}${verdict}\n`);
+}
+
+/**
+ * A machine already this loaded (1-minute load average) gets no NEW script until it falls —
+ * one always keeps running, so this throttles toward serial, never to a halt. The suite's
+ * failures under someone else's load spike are hosts that had not bound yet when a script's
+ * first request went out; adding five more boots to a load of 150 only makes more of them.
+ * Default twice the cores (the pool alone stays well under it); `E2E_MAX_LOAD=0` turns it off.
+ */
+const MAX_LOAD = process.env.E2E_MAX_LOAD !== undefined && process.env.E2E_MAX_LOAD !== ""
+  ? Number(process.env.E2E_MAX_LOAD) : cores * 2;
+const overloaded = () => MAX_LOAD > 0 && loadavg()[0] > MAX_LOAD;
+
+/** Run `queue` on `width` workers; a worker with nothing runnable waits for a sibling to finish. */
+async function pool(queue, width) {
+  const running = new Set();
+  let wake = () => {};
+  const finished = () => { const w = wake; wake = () => {}; w(); };
+  let throttled = false;
+  while (queue.length || running.size) {
+    let file = null;
+    const hot = width > 1 && queue.length > 0 && overloaded();
+    if (hot !== throttled) {
+      console.log(hot
+        ? `[run-e2e] load average ${loadavg()[0].toFixed(0)} > ${MAX_LOAD} — one script at a time until it falls`
+        : `[run-e2e] load average back to ${loadavg()[0].toFixed(0)} — up to ${width} at a time again`);
+      throttled = hot;
+    }
+    const busy = hot && running.size > 0;
+    if (!busy && running.size < width && queue.length) file = nextRunnable(queue);
+    if (file) {
+      const p = runAndReport(file).finally(() => { running.delete(p); finished(); });
+      running.add(p);
+      continue;
+    }
+    // Throttled: look at the load again in a couple of seconds even if nobody finishes.
+    await new Promise((r) => { wake = r; if (busy) setTimeout(finished, 2000); });
+  }
+}
+
+console.log(`[run-e2e] ${scripts.length} script(s), ${Math.min(JOBS, pooled.length) || 1} at a time${serial.length ? ` + ${serial.length} alone afterwards (${serial.join(", ")})` : ""} — ${cores} cores`);
+await pool(pooled, JOBS);
+for (const file of serial) {
+  if (JOBS > 1) console.log(`\n[run-e2e] ${file} runs alone: ${SERIAL.get(file)}`);
+  await runAndReport(file);
+}
+
+if (TIMES_FILE && Object.keys(thisTimes).length) {
+  try {
+    mkdirSync(dirname(TIMES_FILE), { recursive: true });
+    writeFileSync(TIMES_FILE, JSON.stringify({ ...lastTimes, ...thisTimes }, null, 1) + "\n");
+  } catch { /* an ordering hint; never worth failing a run over */ }
+}
+
+const wall = Math.round((Date.now() - wallStart) / 1000);
+console.log(`\n════════ ${scripts.length - failures.length}/${scripts.length} e2e scripts passed in ${wall}s (jobs ${JOBS}) ════════`);
+for (const f of failures.sort()) console.error(`  FAILED  ${f}`);
 process.exit(failures.length ? 1 : 0);

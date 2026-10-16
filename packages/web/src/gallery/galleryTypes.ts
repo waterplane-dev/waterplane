@@ -33,9 +33,14 @@ export interface GalleryProps {
   openFile?: { repoId: string; relPath: string; name: string; size?: number; mtime?: number };
   onInsertPath: (relPath: string) => void;
   onAnnotate: (url: string, name: string, repoId: string) => void;
-  /** Pull this file into a coding session (open/resume in its repo, seed the path).
+  /** Combine picked pictures into one and mark it (collage sheet, annotator), in TAP order. Absent ⇒ no pick control. */
+  onCombine?: (items: { url: string; name: string; repoId: string }[]) => void;
+  /** Pull this file into a coding session and seed its path: the live session
+   *  `sessionId` the person picked, or a new one in the file's repo when null.
    *  Omitted when the gallery is feeding the backlog draft. */
-  onContinueInSession?: (relPath: string, repoId: string) => void;
+  onContinueInSession?: (relPath: string, repoId: string, sessionId: string | null) => void;
+  /** The live sessions in a repo, for the viewer's *to session* picker. */
+  sessionsIn?: (repoId: string) => { id: string; label: string; onScreen: boolean }[];
   /**
    * Clear out old files in the transport directory currently on screen.
    *
@@ -63,11 +68,12 @@ export type Scope = "inbox" | "outbox" | "repo" | "all";
 /** A row in the grid — a file plus, for all-repos hits, its owning repo. */
 export type Row = FileEntry & { repoId?: string; repoName?: string };
 
-export const SINCE: { label: string; secs?: number }[] = [
-  { label: "10m", secs: 600 },
-  { label: "4h", secs: 14400 },
-  { label: "24h", secs: 86400 },
-  { label: "All" },
+/** The time toggles. None lit = all time, so there is no "All" chip: a second chip spelled
+ *  "all" beside the kind row's was two answers to two questions under one word. */
+export const SINCE: { label: string; long: string; secs: number }[] = [
+  { label: "10m", long: "10 minutes", secs: 600 },
+  { label: "4h", long: "4 hours", secs: 14400 },
+  { label: "24h", long: "24 hours", secs: 86400 },
 ];
 
 /** Default time window per scope: outbox → last 4h, everything else → All time. */
@@ -75,8 +81,8 @@ export function defaultSince(scope: Scope): number | undefined {
   return scope === "outbox" ? 14400 : undefined;
 }
 
-export const KINDS: { label: string; value: ArtifactKind }[] = [
-  { label: "all", value: "all" },
+/** The kind toggles. None lit = `all`, which is therefore not a chip of its own. */
+export const KINDS: { label: string; value: Exclude<ArtifactKind, "all"> }[] = [
   { label: "images", value: "image" },
   { label: "docs", value: "doc" },
 ];

@@ -41,7 +41,8 @@ import org.json.JSONObject;
  *    which bundle to serve while coming up, by reading a preference — so the one
  *    moment at which "the last three launches never got anywhere, fall back to
  *    the built-in bundle" can still change the outcome is here, ahead of
- *    `super.onCreate`. See {@link ShellUpdatePlugin}.
+ *    `super.onCreate`. Every page load after that is put on a deadline
+ *    ({@link ShellUpdatePlugin#armBootWatch}). See {@link ShellUpdatePlugin}.
  *
  * 2. **Saving a file out of the app.** A WebView drops a `blob:` download on
  *    the floor, silently — see {@link ShellSavePlugin}.
@@ -126,6 +127,11 @@ public class MainActivity extends BridgeActivity {
         takeOverWindowInsets();
         guardNavigation();
         catchDownloads();
+
+        // The first page load was started inside `super.onCreate`, before the
+        // listener below existed; later ones (a bundle swap, a reload) arm from
+        // `onPageStarted`.
+        ShellUpdatePlugin.armBootWatch(this);
 
         applyBarAppearance();
         // The decor view applies the theme's own bar attributes when it is
@@ -731,6 +737,9 @@ public class MainActivity extends BridgeActivity {
                 // A reload (an over-the-air bundle swap, the ws.ts watchdog)
                 // starts a document that has not reported its depth yet.
                 runOnUiThread(MainActivity.this::forgetBackDepth);
+                // …and has not proven it can start: a downloaded bundle gets
+                // `BOOT_DEADLINE_MS` on screen to say so (ShellUpdatePlugin).
+                runOnUiThread(() -> ShellUpdatePlugin.armBootWatch(MainActivity.this));
             }
         });
     }

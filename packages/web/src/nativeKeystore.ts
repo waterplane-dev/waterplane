@@ -54,6 +54,8 @@ export interface KeystoreStatus {
 export interface PromptText {
   title?: string;
   subtitle?: string;
+  /** Several lines under the subtitle; an app shell from before it was read ignores it. */
+  description?: string;
 }
 
 type Plugin = {

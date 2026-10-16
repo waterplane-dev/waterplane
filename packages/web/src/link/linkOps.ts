@@ -1,5 +1,5 @@
 import type { NetOp } from "./linkTypes";
-import { emit, invalidate } from "./linkStore";
+import { emit, invalidate } from "./linkBus";
 
 /**
  * On a good link every request is over before you look up, so nothing needs
@@ -59,6 +59,7 @@ export function labelForUrl(url: string, method = "GET"): string {
   if (path.includes("/git/branches")) return "loading branches";
   if (path.includes("/git/commit")) return "committing";
   if (path.includes("/git/push")) return "pushing";
+  if (path.includes("/git/pull")) return "pulling";
   if (path.includes("/git/checkout")) return "switching branch";
   if (path.includes("/git/branch")) return "updating branches";
   if (path.includes("/git/stage")) return "staging";

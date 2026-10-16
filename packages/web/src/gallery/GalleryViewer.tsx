@@ -1,4 +1,5 @@
-import { ArrowRight, Check, ChevronLeft, CloudOff, FileQuestion, Pencil, Smartphone, X } from "lucide-react";
+import { useState } from "react";
+import { Check, ChevronLeft, CloudOff, FileQuestion, Pencil, Smartphone, X } from "lucide-react";
 import { track } from "../usage";
 import { api, copyText } from "../api";
 import { ZoomableImage } from "../ZoomableImage";
@@ -10,14 +11,17 @@ import { sized } from "../media";
 import { startDownload } from "../download";
 import { PREVIEW_MAX, fmtCreated, fmtCreatedFull } from "./galleryTypes";
 import type { GalleryModel } from "./useGallery";
+import { SessionPickButtons, SessionPickList } from "./GallerySessionPick";
 
 /** The open file: image / video / document / pdf / audio body, its path lines and the action bar. */
 export function GalleryViewer({ m }: { m: GalleryModel }) {
   const { open, closeDoc, repoOf, localUrl, fullRes, mediaSrc, fileSrc, imgs, nav, setDocRaw, docRaw, doc, docErr, docCachedAt,
     htmlLive, pullOf, dlTarget, files, showFile, openIdx, copied, copy, canFullRes, setFullRes, urlFor, setMarkTick,
     isInboxFile, del, note } = m;
-  const { onAnnotate, onContinueInSession, onInsertPath, onClose } = m.props;
+  const { onAnnotate, onInsertPath, onClose } = m.props;
+  const [picking, setPicking] = useState<string | null>(null); // the *to session* list, for THIS file only
   if (!open) return null;
+  const pick = { relPath: open.relPath, repoId: repoOf(open), repoName: open.repoName, props: m.props, picking: picking === open.relPath, setPicking: (v: boolean) => setPicking(v ? open.relPath : null) };
   return (
         <div className="viewer" onClick={() => closeDoc()}>
           <button className="viewer-close" onClick={() => closeDoc()} aria-label="close"><X size={22} /></button>
@@ -135,9 +139,10 @@ export function GalleryViewer({ m }: { m: GalleryModel }) {
                  and it draws its own badge. */
               onStart={() => setMarkTick((n) => n + 1)} />
               {isInboxFile(open) && <button className="key danger" onClick={() => del(open!)}>delete</button>}
-              {onContinueInSession && <button className="key" title="open/resume a coding session in this repo with this image as context" onClick={() => onContinueInSession(open!.relPath, repoOf(open!))}><ArrowRight size={16} /> session</button>}
+              <SessionPickButtons {...pick} />
               <button className="send" onClick={() => { onInsertPath(open.relPath); onClose(); }}>insert path</button>
             </div>
+            <SessionPickList {...pick} />
             {note && <div className="viewer-doc-note">{note}</div>}
           </div>
         </div>

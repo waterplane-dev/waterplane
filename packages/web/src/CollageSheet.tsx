@@ -120,7 +120,7 @@ export function CollageSheet({ files, onCombine, onSeparate, onClose }: Props) {
       for (const u of thumbs.current.values()) URL.revokeObjectURL(u);
       thumbs.current.clear();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `files` is fixed for the sheet's life: `offerCollage` sets it only while no collage sheet is up, and every exit sets the store to null, which unmounts this
   }, []);
 
   // Re-render the preview whenever order or arrangement changes. Generation-

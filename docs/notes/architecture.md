@@ -19,19 +19,22 @@ on GitHub in either theme and in the phone's gallery.
 ![System view](../assets/architecture.svg)
 
 - **Phone.** The same React bundle runs as a PWA in a browser and inside the Android APK
-  (`packages/app`, Capacitor). It never runs a model.
+  (`packages/app`, Capacitor). It never runs a model. What you type sits in a send queue until the
+  host confirms it landed in the terminal: once, never twice.
 - **Transport.** Your tailnet is the security boundary. One WebSocket per tab carries every message,
   plus HTTP `/api` for reads; every request is checked on `Origin` and `Host`
   ([protocol-and-security.md](protocol-and-security.md)).
 - **Host.** A Node daemon on the desktop. Sessions own one PTY per tab; `deliver.ts` types a prompt
   and proves it landed; Work holds what outlives a session (timed and chained prompts, backlog);
   Machine is files, git, builds and screenshots.
-- **Backends.** Each CLI is one descriptor in the backend registry. Claude Code and Claude Code on a
-  local Ollama model are core; opencode is an in-repo extension; Copilot and Codex are external
-  plugins in their own repos.
+- **Backends.** Each CLI is one descriptor in the backend registry. Claude Code, Claude Code on a
+  local Ollama model and Claude Code on a custom endpoint are core; opencode is an in-repo extension
+  you can switch off; Copilot and Codex (in the picture as examples) are external plugins in their
+  own repos, separate projects and not part of waterplane ([plugins.md](plugins.md)).
 - **One ladder per fact.** Turn ends, dialogs, transcript, context and tokens come first from the
   CLI's own side channel, then from a regex over the screen, then they are absent. Never guessed.
-- **Ledgers.** Token and cost readings stay per backend, in that backend's unit
+- **Ledgers.** Token and cost readings stay per backend, in that backend's unit, and are never
+  summed: Claude's is read from its own logs and priced in dollars
   ([token-stats-architecture.md](token-stats-architecture.md)). Claude and claude-local share
   Claude's log files and so share one ledger; local models are counted by model id and carry no price.
 
@@ -57,6 +60,10 @@ Four packages, each with its own layering, each layering held by an ESLint rule 
   only). Rule: `local/extension-boundary` — a host half sees only `@waterplane/shared`, `node:*`
   and the `HostPluginApi` it is handed; a web half only the sdk, kit and shared. Core reaches in
   through exactly two doors: `plugins/builtin.ts` and `features/registry.ts`.
+
+Beside them, **`packages/app`** is the Android shell (Capacitor): the same web bundle inside an APK,
+kept out of the npm workspaces so its dependencies stay out of every install
+([packages/app/README.md](../../packages/app/README.md)).
 
 ## 3. Plugins — how waterplane is extended
 

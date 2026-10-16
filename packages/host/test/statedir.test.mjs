@@ -10,7 +10,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, cpSync, writeFileSync, symlinkSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, cpSync, writeFileSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BRAND, LEGACY } from "@waterplane/shared";
@@ -352,6 +352,30 @@ test("doctor: the state row names the dir, and warns while an old under-root dir
     assert.equal(done.status, "ok");
     assert.match(done.detail, new RegExp(`host state in .*st \\(${P}STATE_DIR\\)`));
   } finally {
+    if (saved.s === undefined) delete process.env[`${P}STATE_DIR`]; else process.env[`${P}STATE_DIR`] = saved.s;
+  }
+});
+
+test("doctor: a state dir the host cannot write FAILS, saying new work is refused and a retry may run twice", { skip: process.getuid?.() === 0 && "root ignores directory modes" }, () => {
+  const home = fresh("doctor-ro");
+  const st = join(home, "st");
+  mkdirSync(st, { recursive: true });
+  const saved = { s: process.env[`${P}STATE_DIR`] };
+  process.env[`${P}STATE_DIR`] = st;
+  chmodSync(st, 0o500);
+  try {
+    const c = checkState(join(home, "dev"));
+    assert.equal(c.status, "fail");
+    assert.match(c.detail, /is not writable \(EACCES\)/);
+    assert.match(c.detail, /a retry after a restart may run twice/);
+    assert.match(c.fix, /writable/);
+  } finally {
+    chmodSync(st, 0o700);
+    if (saved.s === undefined) delete process.env[`${P}STATE_DIR`]; else process.env[`${P}STATE_DIR`] = saved.s;
+  }
+  // Writable again ⇒ the ordinary row.
+  process.env[`${P}STATE_DIR`] = st;
+  try { assert.equal(checkState(join(home, "dev")).status, "ok"); } finally {
     if (saved.s === undefined) delete process.env[`${P}STATE_DIR`]; else process.env[`${P}STATE_DIR`] = saved.s;
   }
 });

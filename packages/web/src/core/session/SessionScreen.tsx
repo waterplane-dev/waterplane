@@ -15,7 +15,7 @@
  * feature's own command.
  */
 import type { ReactNode } from "react";
-import type { BackendInfo, BacklogItem, RepoTarget, SessionInfo, UpdateInfo } from "@waterplane/shared";
+import type { BackendInfo, BacklogItem, Intent, RepoTarget, SessionInfo, UpdateInfo } from "@waterplane/shared";
 import type { Overlay } from "../../routing";
 import { NetActivity } from "../../NetActivity";
 import type { Connection } from "../conn/useConnection";
@@ -32,10 +32,12 @@ import { useHeaderCmds, useHeaderSplit, useToolbarCfg } from "../../features/too
 import { usePullRecords } from "../../features/pull";
 import { pickFileFor, pickImageFor } from "../../features/images";
 import { SessionHeader } from "./SessionHeader";
+import { ReturnChip } from "./ReturnChip";
 import { TermArea, type TermAreaProps } from "./TermArea";
 import type { ToolbarCtx } from "./ToolbarMenu";
 import type { Launch } from "../launch/useLaunch";
 import type { SessionChrome } from "./useSessionChrome";
+import { isLaterId } from "../queue/logic.ts";
 
 /** `Pick<>`s per hook, like `LauncherProps`: the members this screen and the
  *  pieces it draws read, and no more. */
@@ -60,8 +62,10 @@ export interface SessionScreenProps {
   transportKnown: readonly string[] | undefined;
   /** The backlog as the launcher cuts it (hidden repos, focus) — the compose badge counts this repo's share. */
   visibleBacklogItems: BacklogItem[];
+  /** The intent store — the next-prompt strip asks which pinned row the budget holds. */
+  intents: readonly Intent[];
   /** Star and close — the verbs the launcher takes as the same one prop. */
-  verbs: Pick<SessionVerbs, "pendingStars" | "toggleStar" | "closeSession">;
+  verbs: Pick<SessionVerbs, "pendingStars" | "toggleStar" | "pendingFollowUps" | "toggleFollowUp" | "closeSession">;
   repoForCwd(cwd: string): RepoTarget | null;
   sessionRepoName(s: SessionInfo): string;
   setActiveId(id: string | null): void;
@@ -75,7 +79,7 @@ export function SessionScreen(p: SessionScreenProps): ReactNode {
     active, pending, conn, term, q, compose, launch, chrome, backends, sessions, update, readerShown, activeRepo,
     transportKnown, visibleBacklogItems, repoForCwd, sessionRepoName, setActiveId, setOverlay, runToolbar,
   } = p;
-  const { pendingStars, toggleStar, closeSession } = p.verbs;
+  const { pendingStars, toggleStar, pendingFollowUps, toggleFollowUp, closeSession } = p.verbs;
   const { status, liveSend, liveAsk, reconnectAsk, setReconnectAsk } = conn;
   const outbox = q.entries;
   const { pendingEntry, outboxRef, holdWall, isPendingId, sendQueuedNow, toggleHoldQueued, handToDesktop, removeQueued } = q;
@@ -107,15 +111,16 @@ export function SessionScreen(p: SessionScreenProps): ReactNode {
    */
   const hdrSplit = useHeaderSplit(launch.sessionCan(active, "slash"));
   const toolbar: ToolbarCtx = {
-    active, pending, status, activeRepo, toolbarCfg, pendingStars, toggleStar, setOverlay, runToolbar, backends,
+    active, pending, status, activeRepo, toolbarCfg, pendingStars, toggleStar, pendingFollowUps, toggleFollowUp, setOverlay, runToolbar, backends,
   };
   return (
     <div className={`screen${chromeHidden ? " typing" : ""}${fullMode ? " fullscreen" : ""}${readerShown ? " reading" : ""}`}>
       <SessionHeader active={active} sessions={sessions} pending={pending} pendingEntry={pendingEntry} status={status} liveSend={liveSend}
         backends={backends} sessionCan={launch.sessionCan} sessionRepoName={sessionRepoName} repoForCwd={repoForCwd}
         setActiveId={setActiveId} setOverlay={setOverlay} removeQueued={removeQueued} closeSession={closeSession}
-        chrome={chrome} hdrShown={hdrSplit.shown} headerCmds={headerCmds} runHeaderCmd={compose.runHeaderCmd}
+        chrome={chrome} hdrShown={isLaterId(active.id) ? [] : hdrSplit.shown} headerCmds={headerCmds} runHeaderCmd={compose.runHeaderCmd}
         refreshTerminal={term.refreshTerminal} toolbar={toolbar} />
+      <ReturnChip activeId={active.id} />
       <InsecureBanner httpsUrl={conn.info.httpsUrl} />
       <CliUpdateBanner update={update} liveAsk={liveAsk} liveSend={liveSend} />
       {!pending && <CliRestartBanner active={active} update={update} relaunch={launch.relaunch} />}
@@ -123,11 +128,12 @@ export function SessionScreen(p: SessionScreenProps): ReactNode {
       <TermArea active={active} pending={pending} conn={conn} term={term} q={q}
         compose={compose} launch={launch} chrome={chrome} backends={backends} readerShown={readerShown}
         hiddenSlash={hdrSplit.hiddenSlash} activeRepoId={activeRepoId} transportKnown={transportKnown}
-        setActiveId={setActiveId} closeSession={closeSession} />
+        setActiveId={setActiveId} closeSession={closeSession}
+        openOutline={(toolbarCfg.pinned ?? []).includes("outline") ? () => runToolbar("outline") : undefined} />
 
       <NextPromptStrip active={active} outbox={outbox} outboxRef={outboxRef} online={status === "open"} holdWall={holdWall}
         isPendingId={isPendingId} sendQueuedNow={sendQueuedNow} toggleHoldQueued={toggleHoldQueued} handToDesktop={handToDesktop}
-        liveSend={liveSend} setOverlay={setOverlay} />
+        liveSend={liveSend} setOverlay={setOverlay} intents={p.intents} />
 
       <QueueBars q={q} status={status} reconnectAsk={reconnectAsk} setReconnectAsk={setReconnectAsk}
           autoSend={autoSend} confirmQueue={confirmQueue} pullRecords={pullRecords} setOverlay={setOverlay}

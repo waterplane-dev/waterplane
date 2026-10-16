@@ -4,6 +4,7 @@
  */
 import { ASSESS_NAME_SKIP, ASSESS_NAME_WRITE, ASSESS_PIN_FREE, ASSESS_PIN_KEEP, assessNameNote, assessNameQuestion, assessPinNote, assessPinQuestion } from "@waterplane/shared";
 import { track } from "../usage";
+import { RadioRows } from "../kit";
 import type { AssessModel } from "./useAssessSheet";
 
 export function AsxAsks({ m }: { m: AssessModel }) {
@@ -57,16 +58,15 @@ export function AsxAsks({ m }: { m: AssessModel }) {
             {/* `.asr-answer`, never the annotator's `.annot-tools tri` strip it
                 borrowed: that class is `overflow: visible` over `.key`s that are
                 `flex: 0 0 auto`, i.e. always their max-content width, so at a
-                larger `--ui-font` `the smart pick may re-sort` painted straight
+                larger `--ui-font` the old free-order label painted straight
                 over the question beside it and `leave the rows as they are` ran
                 off the right edge of the phone. Reported from a 384 px device
                 with a bigger-than-default text size, which is why it was never
                 seen at 320 or 400 in a default-scaled browser. */}
             <div className="asr-answer">
-              <button className={`key ${pinRanks ? "active" : ""}`}
-                onClick={() => { track("action:assess.pin"); setPinRanks(true); }}>{ASSESS_PIN_KEEP}</button>
-              <button className={`key ${pinRanks ? "" : "active"}`}
-                onClick={() => { track("action:assess.pin.free"); setPinRanks(false); }}>{ASSESS_PIN_FREE}</button>
+              <RadioRows label="the order of the rows" value={pinRanks ? "keep" : "free"}
+                options={[{ key: "keep", label: ASSESS_PIN_KEEP }, { key: "free", label: ASSESS_PIN_FREE }]}
+                onChange={(k) => { if (k === "keep") { track("action:assess.pin"); setPinRanks(true); } else { track("action:assess.pin.free"); setPinRanks(false); } }} />
             </div>
             <div>{assessPinNote(pinRanks)}</div>
           </div>
@@ -82,10 +82,9 @@ export function AsxAsks({ m }: { m: AssessModel }) {
           <div className="form-hint asr-pin">
             {assessNameQuestion(nameCount)}
             <div className="asr-answer">
-              <button className={`key ${writeNames ? "active" : ""}`}
-                onClick={() => { track("action:assess.name"); setWriteNames(true); }}>{ASSESS_NAME_WRITE}</button>
-              <button className={`key ${writeNames ? "" : "active"}`}
-                onClick={() => { track("action:assess.name.skip"); setWriteNames(false); }}>{ASSESS_NAME_SKIP}</button>
+              <RadioRows label="the run's titles" value={writeNames ? "write" : "skip"}
+                options={[{ key: "write", label: ASSESS_NAME_WRITE }, { key: "skip", label: ASSESS_NAME_SKIP }]}
+                onChange={(k) => { if (k === "write") { track("action:assess.name"); setWriteNames(true); } else { track("action:assess.name.skip"); setWriteNames(false); } }} />
             </div>
             <div>{assessNameNote(writeNames)}</div>
           </div>

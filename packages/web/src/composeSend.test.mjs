@@ -214,3 +214,41 @@ test("the strip's lead and the way back are worded once", () => {
   assert.equal(WHERE_LEAD, "Runs in");
   assert.match(AIM_HERE_LABEL, /aim it here/);
 });
+
+test("Send on a working session asks — only for the plain button, aimed here", async () => {
+  const { busySendRoute, BUSY_SEND_ASK, busySendRememberedToast } = await import("./composeSend.ts");
+  const base = { how: "now", explicit: false, aimedHere: true, turnActive: true, pending: false, localCmd: false, pref: "" };
+  assert.equal(busySendRoute(base), "ask");
+  // Remembered answers are used without asking.
+  assert.equal(busySendRoute({ ...base, pref: "idle" }), "idle");
+  assert.equal(busySendRoute({ ...base, pref: "now" }), "now");
+  // Everything else is the mode it already was.
+  assert.equal(busySendRoute({ ...base, turnActive: false }), "now");
+  assert.equal(busySendRoute({ ...base, explicit: true }), "now");
+  assert.equal(busySendRoute({ ...base, aimedHere: false }), "now");
+  assert.equal(busySendRoute({ ...base, pending: true }), "now");
+  assert.equal(busySendRoute({ ...base, localCmd: true }), "now");
+  assert.equal(busySendRoute({ ...base, how: "idle" }), "idle");
+  assert.equal(BUSY_SEND_ASK.confirmLabel, "Send now");
+  assert.equal(BUSY_SEND_ASK.cancelLabel, "When it's free");
+  assert.match(busySendRememberedToast("idle"), /Settings/);
+  assert.match(busySendRememberedToast("now"), /Settings/);
+});
+
+test("the busy ask offers *past the budget* only while the budget holds work", async () => {
+  const { busySendAsk, BUSY_SEND_ASK, BUSY_PAST_BUDGET_LABEL, busyPastBudgetToast } = await import("./composeSend.ts");
+  // Not held: the two answers it always had, nothing to lift.
+  const plain = busySendAsk(null);
+  assert.equal(plain.altLabel, undefined);
+  assert.deepEqual(plain.lines, [...BUSY_SEND_ASK.lines]);
+  // Held: a third answer, and the budget's own sentence says why it matters.
+  const held = busySendAsk("paused — 91% of the weekly window used, over the 75% budget");
+  assert.equal(held.altLabel, BUSY_PAST_BUDGET_LABEL);
+  assert.equal(held.confirmLabel, "Send now");
+  assert.equal(held.cancelLabel, "When it's free");
+  assert.ok(held.lines.some((l) => l.includes("over the 75% budget")));
+  assert.ok(held.lines.some((l) => l.startsWith("When it's free, past the budget:")));
+  // The receipt never claims it runs NOW — it still waits for the turn.
+  assert.match(busyPastBudgetToast(true), /once this turn ends/);
+  assert.match(busyPastBudgetToast(false), /link is back/);
+});

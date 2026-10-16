@@ -20,10 +20,10 @@ import { useRemoteResource } from "./useRemoteResource";
 
 /** Both directions: a prompt names what the phone uploaded, a report names what
  *  the agent wrote back, and a reader shows both halves of that conversation. */
-async function listTransport(repoId: string): Promise<string[]> {
+async function listTransport(repoId: string, signal: AbortSignal): Promise<string[]> {
   const [outbox, inbox] = await Promise.all([
-    api.artifacts(repoId, "outbox").then((d) => d.files).catch(() => []),
-    api.inbox(repoId).catch(() => []),
+    api.artifacts(repoId, "outbox", undefined, { signal }).then((d) => d.files).catch(() => []),
+    api.inbox(repoId, signal).catch(() => []),
   ]);
   return [...outbox, ...inbox].map((f) => f.relPath).filter(Boolean);
 }
@@ -37,7 +37,7 @@ async function listTransport(repoId: string): Promise<string[]> {
 export function useTransportIndex(repoId: string | null, enabled: boolean): readonly string[] | undefined {
   const res = useRemoteResource<string[]>(
     repoId ?? "",
-    () => listTransport(repoId as string),
+    (signal) => listTransport(repoId as string, signal),
     { enabled: enabled && !!repoId },
   );
   return res.data ?? undefined;

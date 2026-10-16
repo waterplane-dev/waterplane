@@ -52,8 +52,12 @@ export function backlogRepoFor(title: string, repos: readonly { worktreePath: st
  */
 export const NOTIF_LABEL: Record<string, { name: string; note: string }> = {
   prompt: { name: "Needs you", note: "A session is parked on a question and cannot continue without an answer." },
+  approval: { name: "Approvals", note: "A plugin asked for something you must approve now, such as a vault fingerprint. Loud on purpose." },
   limit: { name: "Usage limit", note: "A session hit the account limit, and whether auto-continue got it running again." },
+  burn: { name: "Week burning fast", note: "The weekly limit climbed faster than the threshold over the last stretch of readings — one push naming what spent it. Nothing is paused." },
   backlog: { name: "Backlog", note: "A queued backlog item started, finished, or failed." },
+  followup: { name: "Follow up", note: "A session was flagged for follow up without your tap — by a launch you ticked to flag when done, or by its own agent with one line on what to read. A flag you set by hand sends none." },
+  health: { name: "Repo health index", note: "A repo's health index moved by more than is usual for that repo's own past — at most one push per repo per week, in words, naming the readings that carried it." },
   artifact: { name: "Artifacts", note: "A build produced a file, or an auto-download queued one. Auto-download itself keeps working when this is off — the push is how the phone starts fetching with the app closed." },
   image: { name: "New images", note: "An agent wrote a picture into the repo." },
   plugin: { name: "Plugins", note: "Something an installed plugin wanted you to know — its own words, from the desktop." },

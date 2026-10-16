@@ -30,7 +30,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -144,6 +144,11 @@ const live = (state, id, { cwd = REPO, title = `${backlogTitle(cwd)} · an item`
   return id;
 };
 
+/** The one session the linger sweep closed, or null — what the slot reap
+ *  answered before an idle session stopped holding a slot (R-automation-042);
+ *  the exemptions under test are `reapable()`'s, which the sweep still asks. */
+const sweptOne = (b, att) => b.lingerSweep(att)[0] ?? null;
+
 const NOW = Date.now();
 /** A background shell reading `working` under `shellBucket` — CPU moved a
  *  second ago. */
@@ -205,24 +210,67 @@ test("add() puts the budget on the row it posts, and never on a row aimed at a l
 
 // ── 2. the cap counts PROCESSES ─────────────────────────────────────────────
 
+/** Mark a session in the fake as mid-turn on a hook pipe — WORKING, and
+ *  printing (a live turn's spinner repaints every second). */
+const working = (state, id) => Object.assign(state.sessions.find((s) => s.id === id), { hooksActive: true, turnActive: true, idle: 1_000 });
+
 test("the count is by prefix, so an older shared session and a hand-driven one are told apart", () => {
   const { backlog, state, root } = makeBacklog();
-  live(state, "s-item", { title: "backlog · waterplane-bls-repo · one thing" });
-  live(state, "s-shared", { title: backlogTitle(REPO) });   // the pre-per-item shape
-  live(state, "s-hand", { title: "waterplane-bls-repo" });        // opened by a person
+  working(state, live(state, "s-item", { title: "backlog · waterplane-bls-repo · one thing" }));
+  working(state, live(state, "s-shared", { title: backlogTitle(REPO) }));   // the pre-per-item shape
+  working(state, live(state, "s-hand", { title: "waterplane-bls-repo" }));        // opened by a person
   assert.equal(backlog.autoSessionCount(), 2,
     "both automatic shapes count against the cap; the one a person opened does not");
   rmSync(root, { recursive: true, force: true });
 });
 
-// ── 3. what may be closed to make room ──────────────────────────────────────
+test("only a WORKING automatic session holds a slot — an idle one left open holds none (R-automation-042)", () => {
+  const { backlog, state, root } = makeBacklog();
+  state.closeDefault = false;   // the shipped default: nothing closes them
+  live(state, "s-idle-a", { createdAt: 1 });
+  live(state, "s-idle-b", { createdAt: 2 });
+  live(state, "s-idle-c", { createdAt: 3 });
+  assert.equal(backlog.autoSessionCount(), 0, "three finished sessions open stop nothing");
+  working(state, "s-idle-b");
+  assert.equal(backlog.autoSessionCount(), 1);
+  const f = backlog.autoSlotFacts();
+  assert.deepEqual(f.open.map((o) => [o.id, o.busy]), [["s-idle-a", false], ["s-idle-b", true], ["s-idle-c", false]]);
+  rmSync(root, { recursive: true, force: true });
+});
 
-test("the reap takes the OLDEST idle automatic session, and uses remove() not kill()", () => {
+test("working is every fact reapable() refuses a close on: a live row, a background shell or agent, a box", () => {
+  const { backlog, state, root } = makeBacklog();
+  live(state, "s-row");
+  state.rows.push({ id: "r", state: "starting", sessionId: "s-row", createdAt: 1 });
+  live(state, "s-shell", { shellList: [workingShell()] });
+  live(state, "s-fg", { shellList: [workingShell({ foreground: true })] });
+  live(state, "s-agent");
+  state.sessions.find((s) => s.id === "s-agent").agents = [{ what: "a subagent" }];
+  live(state, "s-box", { idle: 5_000 });
+  state.sessions.find((s) => s.id === "s-box").prompt = { kind: "permission" };
+  live(state, "s-quiet");
+  const busy = Object.fromEntries(backlog.autoSlotFacts().open.map((o) => [o.id, o.busy]));
+  assert.deepEqual(busy, { "s-row": true, "s-shell": true, "s-fg": false, "s-agent": true, "s-box": true, "s-quiet": false },
+    "a foreground shell is the turn's own command — the turn is what says busy");
+  assert.equal(backlog.autoSessionCount(), 4);
+  rmSync(root, { recursive: true, force: true });
+});
+
+test("a lost Stop cannot hold a slot for ever — past the ceiling, silence wins over the CLI's word", () => {
+  const { backlog, state, root } = makeBacklog();
+  working(state, live(state, "s-stuck", { idle: 29_000 }));
+  assert.equal(backlog.autoSessionCount(), 1, "inside the ceiling the CLI is believed");
+  state.sessions[0].idle = 31_000;
+  assert.equal(backlog.autoSessionCount(), 0);
+  rmSync(root, { recursive: true, force: true });
+});
+
+// ── 3. what the linger sweep may close ──────────────────────────────────────
+
+test("the sweep closes with remove(), never kill()", () => {
   const { backlog, state, isAttached, root } = makeBacklog();
-  live(state, "s-new", { createdAt: 2_000 });
   live(state, "s-old", { createdAt: 1_000 });
-  const reaped = backlog.reapAutoSession(isAttached);
-  assert.equal(reaped, "s-old", "oldest first — the one whose output somebody is least likely to still be reading");
+  assert.equal(sweptOne(backlog, isAttached), "s-old");
   assert.deepEqual(state.removed, ["s-old"]);
   assert.deepEqual(state.killed, [], "kill() suppresses the closed-row; this one has to be reopenable");
   rmSync(root, { recursive: true, force: true });
@@ -232,7 +280,7 @@ test("a session somebody is attached to is never reaped, whatever else is true o
   const { backlog, state, isAttached, root } = makeBacklog();
   live(state, "s-watched", { createdAt: 1_000 });
   state.attached.add("s-watched");
-  assert.equal(backlog.reapAutoSession(isAttached), null);
+  assert.equal(sweptOne(backlog, isAttached), null);
   assert.deepEqual(state.removed, []);
   rmSync(root, { recursive: true, force: true });
 });
@@ -243,23 +291,23 @@ test("a session with a row still starting or running in it is never reaped", () 
   // `starting` is the whole window in which a delivery is being proved, which is
   // exactly the window in which the session looks idle and is not.
   state.rows.push({ id: "r1", state: "starting", sessionId: "s-busy" });
-  assert.equal(backlog.reapAutoSession(isAttached), null);
+  assert.equal(sweptOne(backlog, isAttached), null);
   state.rows[0].state = "done";
-  assert.equal(backlog.reapAutoSession(isAttached), "s-busy", "…and it is reapable the moment the row settles");
+  assert.equal(sweptOne(backlog, isAttached), "s-busy", "…and it is reapable the moment the row settles");
   rmSync(root, { recursive: true, force: true });
 });
 
 test("a session that printed something a moment ago is never reaped", () => {
   const { backlog, state, isAttached, root } = makeBacklog();
   live(state, "s-fresh", { createdAt: 1_000, idle: 100 });   // under the 1 s floor set above
-  assert.equal(backlog.reapAutoSession(isAttached), null);
+  assert.equal(sweptOne(backlog, isAttached), null);
   rmSync(root, { recursive: true, force: true });
 });
 
 test("a hand-driven session is never reaped, however idle — the prefix is the whole gate", () => {
   const { backlog, state, isAttached, root } = makeBacklog();
   live(state, "s-hand", { title: "waterplane-bls-repo", createdAt: 1, idle: 10 * 60_000 });
-  assert.equal(backlog.reapAutoSession(isAttached), null);
+  assert.equal(sweptOne(backlog, isAttached), null);
   assert.deepEqual(state.removed, []);
   rmSync(root, { recursive: true, force: true });
 });
@@ -270,7 +318,7 @@ test("a hand-driven session is never reaped, however idle — the prefix is the 
 test("a session with a WORKING background shell is never auto-reaped, even though the CLI itself says idle", () => {
   const { backlog, state, isAttached, root } = makeBacklog();
   live(state, "s-shell", { createdAt: 1_000, shellList: [workingShell()] });
-  assert.equal(backlog.reapAutoSession(isAttached), null);
+  assert.equal(sweptOne(backlog, isAttached), null);
   assert.deepEqual(state.removed, []);
   rmSync(root, { recursive: true, force: true });
 });
@@ -280,7 +328,7 @@ test("a session with a SERVER-LIKE background shell is never auto-reaped, howeve
   // Quiet for hours — `working` would already be false — but `serverLike`
   // stands on its own: quiet is the point for a dev server, not a concern.
   live(state, "s-server", { createdAt: 1_000, shellList: [workingShell({ cpuMovedAt: NOW - 3 * 60 * 60_000, serverLike: true })] });
-  assert.equal(backlog.reapAutoSession(isAttached), null);
+  assert.equal(sweptOne(backlog, isAttached), null);
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -290,14 +338,14 @@ test("a session whose only shell is QUIET (not working, not server-like) is reap
     createdAt: 1_000,
     shellList: [workingShell({ cpuMovedAt: NOW - 60 * 60_000, workers: 2 })], // long past the quiet window, real workers ⇒ "quiet"
   });
-  assert.equal(backlog.reapAutoSession(isAttached), "s-quiet-shell");
+  assert.equal(sweptOne(backlog, isAttached), "s-quiet-shell");
   rmSync(root, { recursive: true, force: true });
 });
 
 test("a FOREGROUND shell never blocks a reap — it is the running turn's own command, not a background shell", () => {
   const { backlog, state, isAttached, root } = makeBacklog();
   live(state, "s-fg", { createdAt: 1_000, shellList: [workingShell({ foreground: true })] });
-  assert.equal(backlog.reapAutoSession(isAttached), "s-fg");
+  assert.equal(sweptOne(backlog, isAttached), "s-fg");
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -320,7 +368,7 @@ test("a session with a BACKGROUND AGENT still running is never reaped — the or
     hooksActive: true, turnActive: false, idleSince: NOW - 60 * 60_000,
     agents: [{ id: "a1", what: "WP1 kit extraction", startedAt: NOW - 60_000, lastWriteAt: NOW - 1_000 }],
   });
-  assert.equal(backlog.reapAutoSession(isAttached), null);
+  assert.equal(sweptOne(backlog, isAttached), null);
   assert.deepEqual(backlog.lingerSweep(isAttached), []);
   state.sessions.at(-1).agents = [];
   assert.deepEqual(backlog.lingerSweep(isAttached), ["s-agent"], "…and once it has finished, the session is closed as normal");
@@ -380,14 +428,14 @@ test("a session the CLI says is MID-TURN is not reaped, even with no row in it",
   const { backlog, state, isAttached, root } = makeBacklog();
   live(state, "s-turn", { createdAt: 1, idle: 9_000 });
   Object.assign(state.sessions.at(-1), { hooksActive: true, turnActive: true });
-  assert.equal(backlog.reapAutoSession(isAttached), null, "a live turn is not a free slot");
+  assert.equal(sweptOne(backlog, isAttached), null, "a live turn is not a free slot");
   assert.deepEqual(backlog.lingerSweep(isAttached), [], "…and the linger sweep says the same");
   assert.deepEqual(state.removed, []);
 
   // The moment the CLI says the turn ended, it is reapable — no silence timer
   // between the two, because the hook is positive evidence and silence is a guess.
   state.sessions.at(-1).turnActive = false;
-  assert.equal(backlog.reapAutoSession(isAttached), "s-turn");
+  assert.equal(sweptOne(backlog, isAttached), "s-turn");
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -399,7 +447,7 @@ test("a session parked on a QUESTION is not reaped either — that is a person b
   Object.assign(state.sessions.at(-1), { awaitingInput: true });
   live(state, "s-limit", { cwd: OTHER, createdAt: 3, idle: 9_000 });
   Object.assign(state.sessions.at(-1), { limitBlocked: true });
-  assert.equal(backlog.reapAutoSession(isAttached), null);
+  assert.equal(sweptOne(backlog, isAttached), null);
   assert.deepEqual(backlog.lingerSweep(isAttached), []);
   rmSync(root, { recursive: true, force: true });
 });
@@ -414,9 +462,9 @@ test("…but a lost Stop cannot hold a slot for ever — the ceiling overrules t
   const { backlog, state, isAttached, root } = makeBacklog();
   live(state, "s-stuck", { createdAt: 1, idle: CEILING - 1 });
   Object.assign(state.sessions.at(-1), { hooksActive: true, turnActive: true });
-  assert.equal(backlog.reapAutoSession(isAttached), null, "just inside the ceiling, the CLI is still believed");
+  assert.equal(sweptOne(backlog, isAttached), null, "just inside the ceiling, the CLI is still believed");
   state.sessions.at(-1).idle = CEILING + 1;
-  assert.equal(backlog.reapAutoSession(isAttached), "s-stuck", "past it, silence wins");
+  assert.equal(sweptOne(backlog, isAttached), "s-stuck", "past it, silence wins");
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -425,9 +473,9 @@ test("…but a lost Stop cannot hold a slot for ever — the ceiling overrules t
 test("reorder and swap stamp handOrdered — nothing else in the host does", () => {
   // Without this, a row somebody dragged to the top is indistinguishable five
   // minutes later from a row that simply arrived last (`add()` puts a new one
-  // on top with `min(orders) - 1`). The moment anything automatic sorts this
-  // list — the smart pick does — it cannot tell them apart and will quietly
-  // undo the one deliberate thing in the sheet.
+  // on top with `min(orders) - 1`). The row says "placed by you", and anything
+  // that ever sorts this list automatically must be able to tell them apart or
+  // it will quietly undo the one deliberate thing in the sheet.
   const { backlog, state, root } = makeBacklog();
   state.rows.push({ id: "a", cwd: REPO, order: 0, createdAt: 10 });
   state.rows.push({ id: "b", cwd: REPO, order: 1, createdAt: 20 });
@@ -439,6 +487,22 @@ test("reorder and swap stamp handOrdered — nothing else in the host does", () 
     { id: "a", order: 1, handOrdered: true },
     { id: "b", order: 2, handOrdered: true },
   ], "EVERY id in the drag is placed — the client sends the whole display order, and the rows a drag moved past are where they are because of it");
+
+  // A drag inside a filtered cut lists only the rows on screen: they trade
+  // their OWN slots, so a row off screen keeps its seat between them.
+  state.rows.length = 0;
+  state.rows.push({ id: "x", cwd: REPO, order: 0, createdAt: 10 });
+  state.rows.push({ id: "y", cwd: REPO, order: 5, createdAt: 20 }); // off screen
+  state.rows.push({ id: "z", cwd: REPO, createdAt: 30 });
+  state.edits.length = 0;
+  backlog.reorder(["z", "x"]);
+  assert.deepEqual(state.edits, [
+    { id: "z", order: 0, handOrdered: true },
+    { id: "x", order: 30, handOrdered: true },
+  ], "a subset is never renumbered 0..n over the rows it cannot see");
+  state.rows.length = 0;
+  state.rows.push({ id: "a", cwd: REPO, order: 0, createdAt: 10 });
+  state.rows.push({ id: "b", cwd: REPO, order: 1, createdAt: 20 });
 
   state.edits.length = 0;
   backlog.swap("a", "b");
@@ -453,75 +517,35 @@ test("reorder and swap stamp handOrdered — nothing else in the host does", () 
   rmSync(root, { recursive: true, force: true });
 });
 
-// ── 5. the smart pick's tick, and what it costs to ask about it ─────────────
+// ── 5. the config file an older host wrote ───────────────────────────────────
 
-test("the tick is per repo, survives a restart, and shares the auto switch's file", async () => {
-  // One file, one writer. A second file for one boolean per repo is a second
-  // thing to write and migrate; a second WRITER of this one is how "the tick
-  // turned itself off when I toggled auto-fire" happens.
-  const { backlog, root } = makeBacklog();
-  assert.deepEqual(backlog.smartPickList(), [], "off for every repo by default");
-  assert.equal(backlog.smartPickEnabled(REPO), false);
-
-  backlog.setAuto(true);
-  backlog.setSmartPick(REPO, true);
-  assert.deepEqual(backlog.smartPickList(), [REPO]);
-
-  const cfg = JSON.parse(readFileSync(join(root, ".waterplane", "backlog-config.json"), "utf8"));
-  assert.equal(cfg.auto, true, "the switch is still there beside it");
-  assert.equal(typeof cfg.smartPick[REPO].setAt, "number", "and when it was ticked, which nothing else records");
-
+test("a `smartPick` key an older host wrote is ignored on read and dropped on the next write", async () => {
+  // The smart pick (per-repo ticks in this file) was removed 2026-10-16. Its
+  // key must not break the auto switch beside it, and must not live for ever.
+  const { root } = makeBacklog();
+  const path = join(root, ".waterplane", "backlog-config.json");
+  mkdirSync(join(root, ".waterplane"), { recursive: true });
+  writeFileSync(path, JSON.stringify({ auto: true, smartPick: { [REPO]: { setAt: 1 } } }));
   const again = new BacklogManager(root, { list: () => [] }, { list: () => [], kick: () => {}, emitChanged: () => {} }, { get: () => undefined });
   await again.init();
-  assert.equal(again.smartPickEnabled(REPO), true, "a restart re-derives nothing");
-  assert.equal(again.getAuto(), true);
-
-  again.setSmartPick(REPO, false);
-  const off = JSON.parse(readFileSync(join(root, ".waterplane", "backlog-config.json"), "utf8"));
-  assert.equal(off.auto, true, "turning the tick off leaves the switch alone");
-  assert.equal(off.smartPick, undefined);
+  assert.equal(again.getAuto(), true, "the switch beside it still reads");
+  again.setAuto(true);
+  const cfg = JSON.parse(readFileSync(path, "utf8"));
+  assert.equal(cfg.auto, true);
+  assert.equal(cfg.smartPick, undefined, "gone on the next write");
   rmSync(root, { recursive: true, force: true });
 });
 
-test("flipping the tick re-asks every waiting row at once", () => {
-  // Turning it ON changes what the next tick does with this repo's ready rows;
-  // turning it OFF must free anything a pass is holding right now, rather than
-  // making a blocked row wait out a look nobody wants any more.
-  const { backlog, state, root } = makeBacklog();
-  const before = state.kicks;
-  backlog.setSmartPick(REPO, true);
-  assert.equal(state.kicks, before + 1);
-  backlog.setSmartPick(REPO, true);
-  assert.equal(state.kicks, before + 1, "setting it to what it already is writes nothing and kicks nothing");
-  backlog.setSmartPick(REPO, false);
-  assert.equal(state.kicks, before + 2);
-  rmSync(root, { recursive: true, force: true });
-});
-
-test("a merge's two chips ride on the row, from the sidecar and not from the intent", () => {
-  // `review.ts`'s arrangement exactly: a fact that outlives the run it describes
-  // is not lifecycle, so it lives beside the store and is merged in where the
-  // wire DTO is built. A host with no smart pick renders the list it always did.
+test("handOrdered and origin ride on the row", () => {
   const { root } = makeBacklog();
   const rows = [
-    { id: "mg1", cwd: REPO, order: 0, createdAt: 1, state: "queued", payload: { kind: "prompt", steps: ["merged words"] }, target: { kind: "repo", fresh: true }, trigger: { kind: "idle" }, origin: "smartpick:p1" },
-    { id: "a", cwd: REPO, order: 1, createdAt: 2, state: "queued", archived: true, payload: { kind: "prompt", steps: ["do a"] }, target: { kind: "repo", fresh: true }, trigger: { kind: "idle" }, handOrdered: true },
+    { id: "a", cwd: REPO, order: 1, createdAt: 2, state: "queued", payload: { kind: "prompt", steps: ["do a"] }, target: { kind: "repo", fresh: true }, trigger: { kind: "idle" }, handOrdered: true, origin: "assess:r1" },
   ];
   const intents = { list: () => rows, kick: () => {}, emitChanged: () => {}, get: (id) => rows.find((r) => r.id === id), edit: () => ({ ok: true }) };
-  const facts = { mg1: { mergedFrom: ["a"] }, a: { mergedInto: "mg1" } };
-  const b = new BacklogManager(root, { list: () => [] }, intents, { get: () => undefined }, { rowFacts: (id) => facts[id], undo: () => ({ ok: true }) });
-
-  const list = b.list();
-  assert.deepEqual(list.find((i) => i.id === "mg1").mergedFrom, ["a"]);
-  assert.equal(list.find((i) => i.id === "a").mergedInto, "mg1");
-  assert.equal(list.find((i) => i.id === "a").handOrdered, true, "“you placed this” — a rule the user cannot see is one they cannot trust");
-  assert.equal(list.find((i) => i.id === "mg1").origin, "smartpick:p1");
-
-  // …and the undo's refusal is a SENTENCE the caller says out loud.
-  const bare = new BacklogManager(root, { list: () => [] }, intents, { get: () => undefined });
-  assert.equal(bare.unmerge("mg1").ok, false);
-  assert.ok(bare.unmerge("mg1").reason, "never a silent no-op");
-  assert.equal(bare.list().find((i) => i.id === "mg1").mergedFrom, undefined, "a host without one renders exactly the list it always did");
+  const b = new BacklogManager(root, { list: () => [] }, intents, { get: () => undefined });
+  const it = b.list().find((i) => i.id === "a");
+  assert.equal(it.handOrdered, true, "“you placed this” — a rule the user cannot see is one they cannot trust");
+  assert.equal(it.origin, "assess:r1");
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -554,18 +578,17 @@ test("a backlog nobody wired closes NOTHING — the default is a person closes t
   };
   const b = new BacklogManager(root, fake, { list: () => [], kick: () => {} }, { get: () => undefined });
   assert.deepEqual(b.lingerSweep(() => false), []);
-  assert.equal(b.reapAutoSession(() => false), null);
   assert.deepEqual(removed, []);
   rmSync(root, { recursive: true, force: true });
 });
 
-test("global OFF: neither the linger sweep nor the slot reap closes an idle automatic session", () => {
+test("global OFF: the linger sweep closes no idle automatic session", () => {
   const { backlog, state, isAttached, root } = makeBacklog();
   state.closeDefault = false;
   live(state, "s-a", { createdAt: 1, idle: 9_000 });
   live(state, "s-b", { createdAt: 2, idle: 9_000 });
   assert.deepEqual(backlog.lingerSweep(isAttached), []);
-  assert.equal(backlog.reapAutoSession(isAttached), null, "the queued row waits — a person closes one");
+  assert.equal(backlog.autoSessionCount(), 0, "…and holds no slot: the queued row is not waiting on them");
   assert.deepEqual(state.removed, []);
   rmSync(root, { recursive: true, force: true });
 });
@@ -589,16 +612,16 @@ test("the repo's own session (the sheet's \"open a session here\") never closes,
   live(state, "s-item", { createdAt: 2, idle: 9_000 });
   assert.equal(backlog.closesWhenDone("s-own"), false);
   assert.deepEqual(backlog.lingerSweep(isAttached), ["s-item"]);
-  assert.equal(backlog.reapAutoSession(isAttached), null);
+  assert.equal(sweptOne(backlog, isAttached), null);
   rmSync(root, { recursive: true, force: true });
 });
 
-test("global ON, the item said keep it open: the sweep and the reap both leave it", () => {
+test("global ON, the item said keep it open: the sweep leaves it", () => {
   const { backlog, state, isAttached, root } = makeBacklog();
   live(state, "s-keep", { createdAt: 1, idle: 9_000 });
   live(state, "s-close", { createdAt: 2, idle: 9_000 });
   state.rows.push({ id: "r1", state: "done", sessionId: "s-keep", createdAt: 1, closeWhenDone: false });
-  assert.equal(backlog.reapAutoSession(isAttached), "s-close", "the oldest is passed over — it was asked to stay");
+  assert.equal(sweptOne(backlog, isAttached), "s-close", "the older one is passed over — it was asked to stay");
   assert.deepEqual(backlog.lingerSweep(isAttached), []);
   assert.equal(state.sessions.some((s) => s.id === "s-keep"), true);
   rmSync(root, { recursive: true, force: true });
@@ -638,7 +661,7 @@ test("autoSlotFacts: the ceiling and every open automatic session, oldest first,
   state.rows.push({ id: "r", state: "done", sessionId: "s-new", createdAt: 2, closeWhenDone: true });
   const f = backlog.autoSlotFacts();
   assert.equal(typeof f.max, "number");
-  assert.deepEqual(f.open, [{ id: "s-old", closeWhenDone: false }, { id: "s-new", closeWhenDone: true }]);
+  assert.deepEqual(f.open, [{ id: "s-old", closeWhenDone: false, busy: false }, { id: "s-new", closeWhenDone: true, busy: false }]);
   assert.deepEqual(state.removed, [], "reading the facts closes nothing");
   rmSync(root, { recursive: true, force: true });
 });
@@ -660,13 +683,11 @@ test("backlog.update's closeWhenDone goes through edit() — any state, never a 
 // that forgot to name itself would land under *Recently closed* as a person's
 // close, which is exactly the row the phone must mark differently.
 
-test("the linger sweep closes as auto-done, the slot reap as auto-slot", () => {
+test("the linger sweep closes as auto-done", () => {
   const { backlog, state, isAttached, root } = makeBacklog();
   live(state, "s-linger", { createdAt: 1, idle: 9_000 });
   backlog.lingerSweep(isAttached);
-  live(state, "s-reap", { createdAt: 2, idle: 9_000 });
-  backlog.reapAutoSession(isAttached);
-  assert.deepEqual(state.removedBy, [{ id: "s-linger", by: "auto-done" }, { id: "s-reap", by: "auto-slot" }]);
+  assert.deepEqual(state.removedBy, [{ id: "s-linger", by: "auto-done" }]);
   rmSync(root, { recursive: true, force: true });
 });
 

@@ -4,8 +4,8 @@ import { setDocTitle } from "./themeOverlay";
 import { loadSheetDraft, seedSheetDraft, appendSheetDraft, newAckId, removePadNotes } from "./outbox";
 import { useTransportIndex } from "./transportIndex";
 import type { Overlay } from "./routing";
-import { applyPendingStars } from "./localState";
-import { useUsage } from "./features/tokens";
+import { FOLLOWUP_MARK, STAR_MARK, applyPendingMarks } from "./pendingMarks";
+import { clearTokensOn, readingsNow, tokensOpenOnNow, useBilling, useUsage } from "./features/tokens";
 import { askConfirm } from "./Confirm";
 import { useCostNotices } from "./core/session/useCostNotices";
 import { startLinkReporting } from "./link";
@@ -14,7 +14,7 @@ import { viewerHandles } from "./docKind";
 import { showToast } from "./toast";
 import { backendIdOf, hasCap } from "./backendCaps";
 import { useRepoColors } from "./repoColors";
-
+import { openCaptureFor } from "./features/capture";
 import { useUsedOrderSnapshot } from "./features/toolbarCfg";
 import { usePullRecords } from "./features/pull";
 import { openScheduleCut, useSchedules } from "./features/schedule";
@@ -32,7 +32,7 @@ import { useLaunch } from "./core/launch/useLaunch";
 import { QueueBars } from "./core/queue/QueueBars";
 import { useSend } from "./core/send/useSend";
 import { useCompose, useComposeDraft } from "./core/compose/useCompose";
-import { bootFeatures } from "./core/dispatch";
+import { bootFeatures, openPluginFromNotification } from "./core/dispatch";
 import { runSheetLeave } from "./core/sheets";
 import { useConnection } from "./core/conn/useConnection";
 import { useRoute } from "./core/route/useRoute";
@@ -78,11 +78,11 @@ export function App() {
   // the star presses held for a link that is down (`core/sessions`). Before
   // `sessions`: the pending stars ARE part of that list.
   const verbs = useSessionVerbs(conn, () => sessionsRef.current);
-  const { pendingStars, closeSession } = verbs;
+  const { pendingStars, pendingFollowUps, closeSession } = verbs;
   // Everything downstream — rows, the session header, the limit sheet's resume
   // order — reads the merged list, so an offline star is not a per-call-site
   // decoration that half the UI forgets about.
-  const sessions = useMemo(() => applyPendingStars(sessionsRaw, pendingStars), [sessionsRaw, pendingStars]);
+  const sessions = useMemo(() => applyPendingMarks(applyPendingMarks(sessionsRaw, pendingStars, STAR_MARK), pendingFollowUps, FOLLOWUP_MARK), [sessionsRaw, pendingStars, pendingFollowUps]);
   const { initRoute, activeId, setActiveId, overlay, setOverlay, closeSheet, overlayRef, focusRepo, setFocusRepo } = useRoute();
   const term = useTermFeed({
     conn, activeId, setActiveId, setOverlay, sessions,
@@ -151,6 +151,7 @@ export function App() {
   // read by the session screen's menu (`core/session`).
   useUsedOrderSnapshot(activeId);
   const usage = useUsage(); // the last `/usage` reading (features/tokens)
+  const billing = useBilling(); // the billing profile (features/tokens)
 
   const wantNavRef = useRef(false); // jump to the next created session (this client asked for it)
   const firedIdRef = useRef<string | null>(null); // backlog item we just fired (for queue-reuse nav)
@@ -202,9 +203,8 @@ export function App() {
    * `readMode`, which is only the sticky preference: a backend with no
    * `transcript` capability draws the terminal under it either way, and
    * anything scoped to "the reader is up" has to key on what is actually
-   * rendered or it fires over a live xterm.
-   */
-  const readerShown = readMode && hasCap(backends, active ? backendIdOf(active) : undefined, "transcript");
+   * rendered or it fires over a live xterm. Never PENDING: nothing to read yet. */
+  const readerShown = readMode && !pending && hasCap(backends, active ? backendIdOf(active) : undefined, "transcript") && !(active?.cliSetup && active.running);
   /**
    * The one send surface's plumbing (`core/send`): the Send sheet's seed,
    * `openSend` and `dispatchIntent` (the one map from a decision onto the send
@@ -226,8 +226,8 @@ export function App() {
    */
   const composeCore = useCompose(draft, {
     conn, active, pending, activeId, sessions, readerShown, enterSends, cliModeOn,
-    setCliModeOn: (on) => setPref("cliMode", on),
-    queue: q, sender: sendCore, repoForCwd: (cwd) => repoForCwd(cwd),
+    setCliModeOn: (on) => setPref("cliMode", on), showCli: () => setView(false),
+    queue: q, sender: sendCore, repoForCwd: (cwd) => repoForCwd(cwd), leave: () => setActiveId(null),
   });
   const { cliMode, voice } = composeCore;
   /**
@@ -235,7 +235,7 @@ export function App() {
    * dismissed reply (`core/session`). A hook here, not state in the screen,
    * because the screen unmounts under every sheet and these must not.
    */
-  const chrome = useSessionChrome({ activeId, active, overlay, composeFocused, setComposeFocused, composeRef, cliMode });
+  const chrome = useSessionChrome({ activeId, active, composeFocused, setComposeFocused, composeRef, cliMode });
   const activeRepo = useMemo(() => (active ? repoOfCwd(repos, active.cwd) : null), [active, repos]);
   const activeRepoId = activeRepo?.id ?? null;
   /** What is in this repo's inbox/outbox, read only while the reader is on
@@ -259,9 +259,9 @@ export function App() {
     setDocTitle(focusRepo); // `<repo> — <name>`, a fork's name included (`themeOverlay.ts`)
   }, [focusRepo]);
   useViewport();
-  // Tick so relative "finished N ago" labels stay current without new messages.
+  // Tick so relative "finished N ago" labels stay current without new messages (visible only: a hidden tick is a render nobody sees).
   const [nowTick, setNowTick] = useState(0);
-  useEffect(() => { const t = setInterval(() => setNowTick((n) => n + 1), 30000); return () => clearInterval(t); }, []);
+  useEffect(() => { const t = setInterval(() => { if (!document.hidden) setNowTick((n) => n + 1); }, 30000); return () => clearInterval(t); }, []);
   // Feature usage: every overlay/sheet open counts as a use of that feature.
   // One effect covers all of them (setOverlay is called from ~40 places).
   useEffect(() => { if (overlay) track(`overlay:${overlay}`); }, [overlay]);
@@ -296,7 +296,7 @@ export function App() {
     if (status !== "open") return;
     if (active && overlay !== "settings") return;
     send({ t: "usage.refresh" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `send` is bound to the one connection; asked on a screen change or a connect, never per render
   }, [overlay, active, status]);
 
   // Downloads named, notification taps and the shell's "open this" (`core/route`).
@@ -328,20 +328,20 @@ export function App() {
     },
     nav: {
       overlay, open: setOverlay, close: closeSheet, attach, openRepo, openSend, startSessionWithPrompt, openBacklogCut,
-      openScheduleCut, closeSession,
+      openScheduleCut, closeSession, openPlugin: (id) => { openPluginFromNotification(id); },
       followFire: (id) => { wantNavRef.current = true; firedIdRef.current = id; },
       openPadAt,
       sendSeeded: () => sendSeedRef.current != null,
-      openActivity, openGit: openGitFor, openReader: term.openReader,
+      openActivity, openGit: openGitFor, openReader: term.openReader, openCapture: openCaptureFor,
     },
-    launch: { setOpt: setLaunchOpt, wire: wireLaunch, openCwd, relaunch },
+    launch: { setOpt: setLaunchOpt, wire: wireLaunch, openCwd, relaunch, focusShell: launchCore.focusShell, shellCant: launchCore.shellCant },
     term: { snapshot: term.snapshot, geom: () => geomRef.current },
     compose: {
-      draft: compose, insert: insertCompose, seedDraft: composeCore.seedDraft, pushHistory, removePadNotes,
+      draft: compose, insert: insertCompose, seedDraft: composeCore.seedDraft, typeOn: composeCore.typeOn, send: composeCore.sendNow, pushHistory, removePadNotes,
       loadSheetDraft, seedSheetDraft, appendSheetDraft, gridText: () => termRef.current?.getText() ?? "",
     },
     world: {
-      sessions, repos, visibleRepos, active, activeRepo, backends, recent, closed, intents, launches: q.launches, budget: q.budget, meter, usage, launch, update,
+      sessions, repos, visibleRepos, active, activeRepo, backends, recent, closed, intents, launches: q.launches, budget: q.budget, billing, meter, usage, get usageReadings() { return readingsNow(); }, get tokensOpenOn() { return tokensOpenOnNow(); }, clearTokensOn, launch, update,
       sessionRepo, sessionRowTitle, sessionCan, sessionCant, repoForCwd, refreshRepos,
       schedules, pending, backlog: bl.items,
       cwdVisible,
@@ -362,20 +362,20 @@ export function App() {
   if (authGate) return <AuthGate reconnect={() => connRef.current.reconnect()} />;
 
   // ── Overlays (`core/route/overlayViews.tsx`) ─────────────────────────
-  const sheet = overlayLayer({
+  const sheet = chrome.drawnSheet(overlayLayer({
     overlay, setOverlay, closeSheet, connRef, status, setReconnectAsk, submitInput, holdQueueRef, flushOutbox, removeQueued,
     pendingSession, insertCompose, setOutlineJump, setView, active, sessions, visibleRepos, outbox, usage, intents,
     launchCore, sessionCant, pickBackend, refreshRepos, sendCore, sendSeed, voice, installed, canInstall, installEvt,
-    setCanInstall, gitRepoId, setGitRepoId, activeRepoId,
-  });
+    setCanInstall, gitRepoId, setGitRepoId, activeRepoId, repos, backends,
+  }));
   // ── The frame (`core/layout/Workspace`): phone = sheet ?? session ??
   // launcher, wide = the launcher as a sidebar beside them. The launcher's
   // banners: the queue bars and the two banners, between header and list.
-  return <Workspace sheet={sheet} session={active ? (
+  return <Workspace sheet={sheet} overlay={overlay} session={active ? (
     <SessionScreen active={active} pending={pending} conn={conn} term={term} q={q} compose={composeCore}
       launch={launchCore} chrome={chrome} backends={backends} sessions={sessions} update={update}
       readerShown={readerShown} activeRepo={activeRepo} transportKnown={transportKnown}
-      visibleBacklogItems={visibleBacklogItems} verbs={verbs} repoForCwd={repoForCwd}
+      visibleBacklogItems={visibleBacklogItems} intents={intents} verbs={verbs} repoForCwd={repoForCwd}
       sessionRepoName={sessionRepoName} setActiveId={setActiveId} setOverlay={setOverlay} runToolbar={runToolbar} />
   ) : null} launcher={
     <LauncherScreen sessions={sessions} recent={recent} closed={closed} repos={repos} reposAt={reposAt} reposFailAt={reposFailAt} backends={backends}

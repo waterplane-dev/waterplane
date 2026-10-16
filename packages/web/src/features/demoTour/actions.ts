@@ -12,7 +12,7 @@
 import { core } from "../../sdk";
 import { DEMO_TOUR_EVENT, demoActiveId, isDemo, openRepoHealthFor } from "../../demoEntry";
 import { LS, lsJson, lsSetJson } from "../../storage";
-import { markHook, markSeen, needsSession, parseTourState, shouldOpenHook, tourSession, type TourRow, type TourState } from "./logic";
+import { HOOK_PROMPT, claimHook, claimsHook, markHook, markSeen, needsSession, parseTourState, shouldTypeHook, tourSession, type TourRow, type TourState } from "./logic";
 import { tourStore } from "./store";
 
 /** The one writer: store and storage move together. */
@@ -103,28 +103,67 @@ export function bootDemoTour(): () => void {
 // ── The hook ──────────────────────────────────────────────────────────────
 
 /**
- * `welcome`: the first time the hook scenario connects on this visit, open
- * its working session — the demo's first screen is the real CLI mid-turn, not
- * a menu. The session list FOLLOWS the welcome and is App's frame, so this
- * looks for the session over the next few renders instead of racing it; a
- * screen already up (a route a reload restored) is never taken over.
+ * A session is on screen (`DemoHookHint`'s effect): the demo opens on the repo list with a cue at
+ * todo-garden's `+ now` (`DemoStartCue`), and nothing is attached by itself — starting a session on
+ * your desktop is the first thing the demo shows (R-demo-014). The first FRESH session in that repo
+ * this visit is the hook's: claimed (the cue is spent with it), and its first prompt typed into the
+ * box. The person's own tap put it on screen; the typing checks it still is, word by word.
  */
-export function openHookSession(): void {
-  if (!isDemo() || tourStore.get().opened) return;
-  let tries = 0;
-  const look = () => {
+export function claimHookSession(session: { id: string; cwd: string; firstPrompt?: string }): void {
+  if (!isDemo()) return;
+  if (!claimsHook(tourStore.get(), { demo: isDemo(), scenario: demoActiveId(), session })) return;
+  core().say.track("action:demohook.open");
+  saveTour(claimHook(tourStore.get(), session.id));
+  typeHookPrompt(session.id);
+}
+
+/** Put the start cue away (its X): the repo list is the person's again. */
+export function closeStartCue(): void {
+  saveTour(markHook(tourStore.get(), "opened"));
+}
+
+/** Before the first key: claude's own welcome header is on screen and gets a look first (R-demo-016).
+ *  Short: the header stays up above the box while the prompt is typed, so the look does not need a
+ *  still screen of its own (the README's loop held 1.6 s of nothing here). */
+const TYPE_LEAD_MS = 300;
+/** Between words: the prompt goes in a word at a time, its nine words in about two thirds of a second —
+ *  seen being typed, read once it stands whole (`SEND_PAUSE_MS`) and again on the session's screen.
+ *  Letter by letter it took 1.5 s and filmed as a run of near-still pictures (scripts/ui/pace.mjs). */
+const WORD_MS = 70;
+/** HOOK_PROMPT's prefixes a word apart (each with its leading space), the last one the whole prompt. */
+const WORD_ENDS = [...HOOK_PROMPT.matchAll(/\S+/g)].map((m) => (m.index ?? 0) + m[0].length);
+/** The whole prompt stands in the box for a moment before Send. */
+const SEND_PAUSE_MS = 700;
+
+/**
+ * The hook's first prompt, typed into the compose box a word at a time and sent, as
+ * a person would: the first thing the demo shows the app doing is the box they
+ * will use. Every word is `typeOn` from what the last one left, so a person's
+ * own typing (or leaving the session) stops it where it stands — their words
+ * are never added to, replaced or sent. Once per visit, either way.
+ */
+function typeHookPrompt(sid: string): void {
+  const stop = () => saveTour(markHook(tourStore.get(), "typed"));
+  const here = () => core().world.active?.id === sid;
+  window.setTimeout(() => {
     const c = core();
-    const s = tourSession(c.world.sessions);
-    if (!s) { if (++tries < 50) setTimeout(look, 100); return; }
-    const ctx = { demo: isDemo(), scenario: demoActiveId(), active: !!c.world.active };
-    if (shouldOpenHook(tourStore.get(), ctx)) {
-      c.say.track("action:demohook.open");
-      c.nav.attach(s);
-    }
-    // Opened, or a screen was already up: either way the hook's first move is spent.
-    saveTour(markHook(tourStore.get(), "opened"));
-  };
-  setTimeout(look, 0);
+    if (!shouldTypeHook(tourStore.get(), { demo: isDemo(), scenario: demoActiveId(), activeId: c.world.active?.id ?? null, draft: c.compose.draft })) { stop(); return; }
+    let w = 0;
+    const key = () => {
+      const from = w ? WORD_ENDS[w - 1] : 0;
+      if (!here() || !core().compose.typeOn(HOOK_PROMPT.slice(0, from), HOOK_PROMPT.slice(0, WORD_ENDS[w]))) { stop(); return; }
+      if (++w < WORD_ENDS.length) { window.setTimeout(key, WORD_MS); return; }
+      window.setTimeout(() => {
+        const k = core();
+        if (here() && k.compose.draft === HOOK_PROMPT) {
+          k.say.track("action:demohook.send");
+          k.compose.send();
+        }
+        stop();
+      }, SEND_PAUSE_MS);
+    };
+    key();
+  }, TYPE_LEAD_MS);
 }
 
 /** The reader toggle was used: its hint has done its job. */

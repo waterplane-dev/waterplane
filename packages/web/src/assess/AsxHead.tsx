@@ -26,7 +26,7 @@ export function AsxHead({ m }: { m: AssessModel }) {
           it is doing what they asked. */}
       {run.scopedIds?.length
         ? <span className="act-count" title="this run was asked about a cut of the backlog, not the whole repo — it still read the repo as evidence">
-          scoped to {run.scopedIds.length === 1 ? "1 row" : `${run.scopedIds.length} rows`}
+          {run.scope?.kind === "slot" ? "slot check ·" : "scoped to"} {run.scopedIds.length === 1 ? "1 row" : `${run.scopedIds.length} rows`}
         </span>
         : null}
       {/* The receipt for an apply that has happened, worded in

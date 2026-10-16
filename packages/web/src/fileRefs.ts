@@ -194,3 +194,38 @@ export function docImageRef(href: string, docPath: string): FileRef | null {
   if (!parts.length) return null;
   return { raw: href, relPath: parts.join("/"), name, image, video };
 }
+
+/** One picture, wrapped in a link or not, as `linkedImages` finds it; `href` is `src` for a bare one. */
+export interface LinkedImage { at: number; end: number; alt: string; src: string; href: string }
+
+const MD_LINKED_IMG_RE = /\[!\[([^\]]*)\]\(([^)\s]+)\)\]\(([^)\s]+)\)/g;
+const HTML_LINKED_IMG_RE = /<a\s[^>]*?\bhref="([^"]+)"[^>]*>\s*<img\s([^>]*?)\/?>\s*<\/a>/gi;
+const HTML_IMG_RE = /<img\s([^>]*?)\/?>/gi;
+const attr = (attrs: string, name: string) => new RegExp(`\\b${name}="([^"]*)"`, "i").exec(attrs)?.[1];
+const unescapeHtml = (s: string) => s.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+
+/**
+ * A docs gif whose tap opens the whole film, in either spelling a README uses:
+ * `[![alt](a.gif)](a.mp4)`, or `<a href="a.mp4"><img src="a.gif" width="270" alt="…"></a>`
+ * — the HTML one exists because markdown cannot say how WIDE to show a picture,
+ * and a 540 x 1280 phone film at its natural size overflows a laptop screen.
+ * A bare `<img src width>` (a README's sized hero, its side-by-side stills) is
+ * found too, its tap opening the picture itself — or the reader printed the tag
+ * as text. In text order; a width is GitHub's business, the phone draws the
+ * picture its own size.
+ */
+export function linkedImages(text: string): LinkedImage[] {
+  const out: LinkedImage[] = [];
+  for (const m of text.matchAll(MD_LINKED_IMG_RE)) out.push({ at: m.index!, end: m.index! + m[0].length, alt: m[1], src: m[2], href: m[3] });
+  for (const m of text.matchAll(HTML_LINKED_IMG_RE)) {
+    const src = attr(m[2], "src");
+    if (src) out.push({ at: m.index!, end: m.index! + m[0].length, alt: unescapeHtml(attr(m[2], "alt") ?? ""), src: unescapeHtml(src), href: unescapeHtml(m[1]) });
+  }
+  const linked = out.slice();
+  for (const m of text.matchAll(HTML_IMG_RE)) {
+    const src = attr(m[1], "src");
+    if (!src || linked.some((l) => m.index! >= l.at && m.index! < l.end)) continue;
+    out.push({ at: m.index!, end: m.index! + m[0].length, alt: unescapeHtml(attr(m[1], "alt") ?? ""), src: unescapeHtml(src), href: unescapeHtml(src) });
+  }
+  return out.sort((a, b) => a.at - b.at);
+}

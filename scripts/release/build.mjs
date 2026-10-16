@@ -165,6 +165,18 @@ function stageTree(dir, { sharedAtPackages }) {
     if (builtins[id]) copy(`packages/extensions/${id}/${BRAND_MANIFEST}`, t);
     else rmSync(join(dir, "packages/host/dist/extensions", id), { recursive: true, force: true });
   }
+  // The Windows launcher (`host/dist/cli/windows.ts`) runs the host inside WSL from this tree: it
+  // starts the keeper, and `setup` provisions the distro with the pinned Node and gh it names.
+  // A release built from a CRLF clone (Git for Windows' autocrlf on a clone older than
+  // `.gitattributes`' eol=lf) would ship a wsl-setup.sh bash dies on at its first `\r`: refuse here.
+  for (const f of ["scripts/windows/keeper.ps1", "scripts/windows/wsl-setup.sh", "deploy/node-version", "deploy/gh-version"]) {
+    if (!existsSync(join(ROOT, f))) { console.error(`release: ${f} is missing — the Windows launcher needs it. The release was not built.`); process.exit(1); }
+    if (!f.startsWith("deploy/") && readFileSync(join(ROOT, f), "utf8").includes("\r")) {
+      console.error(`release: ${f} has CRLF line endings — bash in WSL dies on them. Rewrite it with LF (git add --renormalize ${f}), then build the release again.`);
+      process.exit(1);
+    }
+    copy(f, t);
+  }
   // repohealth's engine is resolved at <root>/tools/repohealth.mjs (repohealth.ts).
   copy("tools/repohealth.mjs", t);
   copy("tools/repohealth", t);

@@ -10,12 +10,13 @@
 import type { OutboxEntry } from "../../outbox";
 import { clearSheetDraft, removePadNotes } from "../../outbox";
 import { SendSheet } from "../../SendSheet";
-import type { RepoTarget, SessionInfo, UsageInfo, Intent } from "@waterplane/shared";
+import type { BackendInfo, LaunchOpts, RepoTarget, SessionInfo, UsageInfo, Intent } from "@waterplane/shared";
 import type { SheetId } from "../../sdk/types.ts";
 import { showToast } from "../../toast";
 import { track } from "../../usage";
 import { SEND_DRAFT } from "../../sendIntent";
 import type { SendApi } from "./useSend";
+import { isLaterId } from "../queue/logic.ts";
 
 export interface SendSheetEntryProps {
   send: SendApi;
@@ -26,6 +27,10 @@ export interface SendSheetEntryProps {
   online: boolean;
   usage: UsageInfo | null;
   intents: Intent[];
+  /** The *model* row's picker: what this host can launch, and the stored
+   *  new-session defaults it starts from. */
+  backends: BackendInfo[] | null;
+  launch: LaunchOpts;
   /** The queue core's verb — a discarded row goes the way every discard goes. */
   removeQueued(ackId: string): void;
   /** `closeSheet` — never a bare `setOverlay(null)` (see below). */
@@ -43,14 +48,16 @@ export function SendSheetEntry(p: SendSheetEntryProps) {
     <SendSheet
       // The session being opened is a legitimate target (its lane already
       // takes prompts), and without it the sheet can only call it "that
-      // session".
-      seed={sendSeed} sessions={pendingSession ? [...sessions, pendingSession] : sessions} repos={p.visibleRepos}
+      // session". Never the `+ later` screen: no session stands behind it.
+      seed={sendSeed} sessions={pendingSession && !isLaterId(pendingSession.id) ? [...sessions, pendingSession] : sessions} repos={p.visibleRepos}
       outbox={p.outbox} online={p.online} usage={p.usage}
       // The store itself, not a list of names: the *after another…* picker
       // titles a row with `intentTitle` and decides what may be chained
       // behind with `chainCandidates`, and both of those are rules that
       // exist once.
       intents={p.intents}
+      backends={p.backends}
+      launchDefaults={p.launch}
       buildName={send.buildNames}
       onAttach={p.onAttach}
       onAnnotate={p.onAnnotate}

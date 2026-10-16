@@ -14,7 +14,7 @@
  * log — `fillSeries`' argument); a day before the first recorded one is NOT, and
  * is `null`, never a zero column.
  */
-import { type CostBreakdown, dayToMs, type TokenDay, type TokenTotals, tokenTotal } from "@waterplane/shared";
+import { type CostBreakdown, dayToMs, fmtCount, type TokenDay, type TokenTotals, tokenTotal } from "@waterplane/shared";
 
 export const HEADLINE_DAYS = 7;
 
@@ -102,4 +102,20 @@ export function headlineSpanWords(h: Headline): string {
   const known = h.days.filter((d) => d.tok != null).length;
   if (known < h.days.length) return `the ${known} day${known === 1 ? "" : "s"} on record, out of the last ${h.days.length}`;
   return `the last ${h.days.length} days, today included`;
+}
+
+/**
+ * The ONE line drawn under the split: how many days had work, and the busiest.
+ *
+ * It was a paragraph — the span, the counts and what the money means — on every
+ * visit; the span and the money now fold behind a `?` (`Headline.tsx`). Days
+ * before the record are an ABSENCE and are named here, in the open, first: a
+ * fold would leave "3 of 7 days" reading as four idle days.
+ */
+export function headlineDaysWords(h: Headline): string {
+  const n = h.days.length;
+  const known = h.days.filter((d) => d.tok != null).length;
+  const busiest = `busiest day ${fmtCount(h.peak)}`;
+  if (known < n) return `${known} of the last ${n} days on record, ${h.active} with work in them · ${busiest}`;
+  return `${h.active} of ${n} days with work in them · ${busiest}`;
 }

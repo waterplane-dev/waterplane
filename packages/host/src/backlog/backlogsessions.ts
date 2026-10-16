@@ -1,5 +1,5 @@
 /**
- * The sessions fired work runs in — one per item, their cap, linger and reap —
+ * The sessions fired work runs in — one per item, their cap and linger —
  * and the executor that types an item into one. Split out of `BacklogManager`
  * (move only): the methods are functions over `BacklogCore`.
  */
@@ -15,6 +15,25 @@ import type { BacklogCore } from "./backlogcore.js";
 /** Wire the global close-when-done default (main.ts: the synced setting). */
 export function setCloseWhenDoneDefault(c: BacklogCore, read: () => boolean): void {
   c.closeDefault = read;
+}
+
+/**
+ * The row that OPENED a session: the mark `openItemSession` left, else the
+ * earliest row whose `sessionId` names it (the opener, not a later row typed
+ * into the same session). The one lookup `closesWhenDone` and the follow-up
+ * sweep (`backlogfollowup.ts`) both ask.
+ */
+export function openerRow(c: BacklogCore, sessionId: string): Intent | undefined {
+  const rows = c.intents.list();
+  const marked = c.openedBy.get(sessionId);
+  let row = marked ? rows.find((r) => r.id === marked) : undefined;
+  if (!row) {
+    for (const r of rows) {
+      if (r.sessionId !== sessionId) continue;
+      if (!row || (r.startedAt ?? r.createdAt) < (row.startedAt ?? row.createdAt)) row = r;
+    }
+  }
+  return row;
 }
 
 /**
@@ -35,15 +54,7 @@ export function closesWhenDone(c: BacklogCore, sessionId: string): boolean {
     // so no setting closes it. Recognised by title, which survives a restart.
     const info = c.sessions.get(sessionId);
     if (info && info.title === backlogTitle(info.cwd)) return false;
-    const rows = c.intents.list();
-    const marked = c.openedBy.get(sessionId);
-    let row = marked ? rows.find((r) => r.id === marked) : undefined;
-    if (!row) {
-      for (const r of rows) {
-        if (r.sessionId !== sessionId) continue;
-        if (!row || (r.startedAt ?? r.createdAt) < (row.startedAt ?? row.createdAt)) row = r;
-      }
-    }
+    const row = openerRow(c, sessionId);
     return closeWhenDoneOf(row, c.closeDefault());
   } catch {
     return false;
@@ -58,7 +69,7 @@ export function autoSlotFacts(c: BacklogCore): AutoSlotFacts {
   const open = c.sessions.list()
     .filter((s) => s.running && isBacklogTitle(s.title))
     .sort((a, b) => a.createdAt - b.createdAt)
-    .map((s) => ({ id: s.id, closeWhenDone: closesWhenDone(c, s.id) }));
+    .map((s) => ({ id: s.id, closeWhenDone: closesWhenDone(c, s.id), busy: slotBusy(c, s.id) }));
   return { max: BACKLOG_SESSIONS_MAX, open };
 }
 
@@ -103,6 +114,10 @@ export function openItemSession(c: BacklogCore, i: Intent): string {
     origin: sessionOriginOfIntent(i),
     // The item's own budget, the session is born with it (`Intent.budget`).
     ...(i.budget ? { budget: i.budget } : {}),
+    // …and the model/effort/backend a person picked for it (`Intent.launch`,
+    // the send sheet's *model* row). Absent = the desktop's new-session
+    // defaults, which is what a backlog item has always opened on.
+    ...(i.launch ? { launch: i.launch } : {}),
   }).id;
   // Which item opened it — the shortcut `closesWhenDone` asks first.
   c.openedBy.set(id, i.id);
@@ -137,32 +152,6 @@ export function lingerSweep(c: BacklogCore, isAttached: (id: string) => boolean)
   }
   if (gone.length) c.intents.kick();
   return gone;
-}
-
-/**
- * Free ONE slot, now, because a row that is otherwise ready is blocked on
- * `noSlot` — the oldest automatic session with nothing left in it.
- *
- * Oldest first, because the sessions that are left are all idle and the one
- * that has been idle longest is the one whose output somebody is least likely
- * to still be reading. Returns the id it closed, or null when every automatic
- * session is genuinely still in use — which is the honest answer, and the
- * blocked row goes on saying it is waiting for a slot.
- *
- * Never a session that is not set to close when done: with the global
- * setting off (the default) this answers null and the row WAITS, its detail
- * saying a person has to close one (`autoSlotsWaitText`).
- */
-export function reapAutoSession(c: BacklogCore, isAttached: (id: string) => boolean): string | null {
-  let best: { id: string; createdAt: number } | null = null;
-  for (const s of c.sessions.list()) {
-    if (!reapable(c, s.id, isAttached, REAP_IDLE_MS)) continue;
-    if (!best || s.createdAt < best.createdAt) best = { id: s.id, createdAt: s.createdAt };
-  }
-  if (!best) return null;
-  if (!c.sessions.remove(best.id, undefined, "auto-slot")) return null;
-  c.intents.kick();
-  return best.id;
 }
 
 /**
@@ -363,7 +352,38 @@ export function adoptBacklogSession(c: BacklogCore, repoDir: string): string | n
  * cap is about processes, not about who asked for them.
  */
 export function autoSessionCount(c: BacklogCore): number {
-  return c.sessions.list().filter((s) => s.running && isBacklogTitle(s.title)).length;
+  return c.sessions.list().filter((s) => s.running && isBacklogTitle(s.title) && slotBusy(c, s.id)).length;
+}
+
+/**
+ * Does this automatic session hold a slot — is it WORKING? (R-automation-042)
+ *
+ * The cap bounds how many agents run at once, so an idle session left open
+ * (close-when-done is off by default) holds none: it is a conversation waiting
+ * to be read. Before this, every open `backlog · …` session counted, nothing
+ * closed them, and a desktop with three finished items open fired nothing —
+ * timed rows included, an hour before a reset they were timed for.
+ *
+ * Working is every fact `reapable()` refuses a close on, in the same order: a
+ * row `starting`/`running` in it (a delivery being proved looks idle and is
+ * not), a background shell `working` or `serverLike`, a background agent, and
+ * the CLI's own word (`autoFireBlocker` — a turn, a box, a limit wall). Who is
+ * attached is NOT a fact here: a person reading a finished session is not an
+ * agent running. `REAP_CEILING_MS` of PTY silence overrules the CLI's word and
+ * nothing else, for the reason it does there — a lost `Stop` leaves
+ * `turnActive` set for the life of the process, which would hold a slot until
+ * restart.
+ */
+export function slotBusy(c: BacklogCore, id: string): boolean {
+  const info = c.sessions.get(id);
+  if (!info?.running) return false;
+  if (c.intents.list().some((r) => (r.state === "starting" || r.state === "running") && r.sessionId === id)) return true;
+  const now = Date.now();
+  if (info.shellList?.some((sh) => !sh.foreground && (sh.serverLike || shellBucket(sh, now) === "working"))) return true;
+  if (info.agents?.length) return true;
+  if (c.sessions.autoFireBlocker(id, REAP_IDLE_MS) === null) return false;
+  const idle = c.sessions.idleMs(id);
+  return !(idle != null && idle >= REAP_CEILING_MS);
 }
 
 /**

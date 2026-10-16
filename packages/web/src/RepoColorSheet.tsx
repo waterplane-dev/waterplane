@@ -30,6 +30,7 @@ import {
   setPalette, setRepoColor, spreadRepoColors, type RepoTarget,
 } from "@waterplane/shared";
 import { Sheet } from "./Sheet";
+import { RadioRows } from "./kit";
 import { Empty } from "./Empty";
 import { repoColors, saveRepoColors, useRepoColors } from "./repoColors";
 import { showToast } from "./toast";
@@ -79,16 +80,17 @@ export function RepoColorSheet({ repos, onClose }: { repos: RepoTarget[]; onClos
     <Sheet title="Repo colours" icon={<Palette size={18} />} onClose={onClose}>
       <div className="sheet-scroll">
         <div className="set-row">
-          {REPO_PALETTES.map((p) => (
-            <button key={p.id} className={`key ${cfg.palette === p.id ? "active" : ""}`}
-              onClick={() => {
-                saveRepoColors(setPalette(repoColors(), p.id));
-                track(`action:repocolor.palette.${p.id}`);
-                showToast(`repo colours: ${p.label}`);
-              }}>
-              {p.label}
-            </button>
-          ))}
+          <RadioRows
+            label="repo colour ring"
+            options={REPO_PALETTES.map((p) => ({ key: p.id, label: p.label }))}
+            value={cfg.palette}
+            onChange={(id) => {
+              const p = REPO_PALETTES.find((q) => q.id === id)!;
+              saveRepoColors(setPalette(repoColors(), p.id));
+              track(`action:repocolor.palette.${p.id}`);
+              showToast(`repo colours: ${p.label}`);
+            }}
+          />
           <div className="rc-ring" aria-hidden="true">
             {ring.hues.map((h) => <span key={h} className="rc-dot" style={hueStyle(h)} />)}
           </div>

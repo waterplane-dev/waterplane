@@ -35,17 +35,20 @@ export class FireSlice {
    * occurrence it is spending) is persisted BEFORE the executor is invoked. A
    * crash in the gap leaves a row that is visibly stuck rather than a worktree
    * with two agents in it or a sweep that runs a second time on boot.
+   *
+   * Answers a SENTENCE only when it did not start the row because `starting`
+   * could not be written (`runNow` hands it to the tapper); otherwise nothing.
    */
   async fire(
     row: Intent,
     opts: { sessionId?: string; occurrence?: number; late?: boolean; missing?: string[]; spendOccurrence?: boolean },
-  ): Promise<void> {
+  ): Promise<string | void> {
     // ── The claim is the ONE gate, so it is asked here ──────────────────────
     //
     // Two callers reach this: the pass, which has just re-read the row on the
-    // far side of `pickHold`, and `runNow`, which has not been through the
+    // far side of its yield, and `runNow`, which has not been through the
     // ladder at all. Nothing compared their answers, so a tap that landed while
-    // a pass was awaiting a hold — or a second tap on a slow spawn — put two
+    // a pass was awaiting — or a second tap on a slow spawn — put two
     // executors on one row, which for a delivery means a prompt typed twice into
     // one session and for a fresh row means two agents in one worktree.
     //
@@ -84,6 +87,7 @@ export class FireSlice {
         // The occurrence the waiver was for is over; the next one waits for
         // the budget again, as it would have without this skip.
         row.pastBudget = undefined;
+        row.leftoverOf = undefined;
         row.nextAt = keep ? this.core.armFrom(row, opts.occurrence, now) : null;
         row.state = keep ? "queued" : "failed";
         row.startedAt = undefined;
@@ -103,6 +107,9 @@ export class FireSlice {
         return;
       }
     }
+    // What the row was, for the one case below where `starting` never reaches
+    // the disk and the claim has to be taken back whole.
+    const before: Intent = { ...row };
     this.core.inflight.set(row.id, now);
     row.state = "starting";
     row.startedAt = now;
@@ -148,7 +155,19 @@ export class FireSlice {
     // is already past the turn it was meant to measure.
     this.core.stopSeen.delete(row.id);
     if (opts.sessionId) this.core.stopBase.set(row.id, this.core.deps.stopCount(opts.sessionId));
-    this.core.persist();
+    // `starting` BEFORE the executor is only a guarantee if it is on DISK. A
+    // write that did not land (a full disk, a read-only state dir) would run the
+    // work with the file still saying `queued`, and the restart after it would
+    // run it again — so nothing runs: the row goes back to exactly what it was,
+    // still queued, and the next pass asks again. The failure itself is logged
+    // and told once (`disk.ts`'s `persist()`).
+    if (!this.core.persist()) {
+      for (const k of Object.keys(row) as (keyof Intent)[]) if (!(k in before)) delete row[k];
+      Object.assign(row, before);
+      this.core.inflight.delete(row.id);
+      if (opts.sessionId) this.core.stopBase.delete(row.id);
+      return this.core.readOnly() ?? `not started: could not save to disk: ${this.core.lastWriteError() ?? "the write failed"}`;
+    }
     this.core.deps.onChange(row);
 
     let res: ExecutorResult;
@@ -209,6 +228,7 @@ export class FireSlice {
     // Every other outcome USED the start the waiver was for: a recurring rule
     // let past once is held by the budget again from its next occurrence.
     row.pastBudget = undefined;
+    row.leftoverOf = undefined;
     // A `Stop` past the pre-delivery baseline is POSITIVE evidence that the turn
     // this delivery started has already run — and it outranks a four-second echo
     // window that could not confirm what it typed. On a fast turn the hook beats
@@ -297,8 +317,7 @@ export class FireSlice {
     // A ONE-OFF has nothing to outlive: it is spent by its single run, so a
     // child row is a second row for one piece of work — and the parent could
     // fail at rung 3 (its grace missed) with the child never made, which is why
-    // this desktop had seven failed scheduled items that were in no backlog and
-    // that the smart pick could never see. It falls through to the ordinary
+    // this desktop had seven failed scheduled items that were in no backlog. It falls through to the ordinary
     // repo/session dispatch below, where `freshSession`'s AWAITED branch runs
     // it exactly as any other backlog row — `isBacklogRow` is true for it now,
     // which is the one line that branch turns on. `serial` and `holdForHost`
@@ -469,6 +488,7 @@ export class FireSlice {
     row.clearedOccurrence = undefined;
     // And a waiver given for that occurrence goes with it.
     row.pastBudget = undefined;
+    row.leftoverOf = undefined;
     row.nextAt = this.core.armFrom(row, occurrence, now);
     row.result = { at: now, ok: false, detail, occurrence };
     row.state = "queued";
@@ -483,6 +503,7 @@ export class FireSlice {
     row.state = state;
     // A terminal row has no next start for a waiver to be about.
     row.pastBudget = undefined;
+    row.leftoverOf = undefined;
     row.result = result;
     row.settledAt = result.at;
     // A one-off that has reached a terminal state is not ARMED any more, and

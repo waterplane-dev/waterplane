@@ -9,12 +9,33 @@ import { FilesSheet } from "../../FilesSheet";
 import { SweepSheet } from "../../SweepSheet";
 import { SheetHead } from "../../Sheet";
 import { Empty } from "../../Empty";
-import { useCore, useStore } from "../../sdk";
-import { browseAim, browseRepoId, galleryCtx, sweepFor } from "./store";
+import { api } from "../../api";
+import { core, useCore, useStore } from "../../sdk";
+import { browseAim, browseRepoId, flow, galleryCtx, sweepFor } from "./store";
 import {
-  afterSweep, annotateUrlForSession, closeBrowse, closeGallery, closeSweep, continueImageInSession, insertFromGallery,
-  remarksToChat, setSweepScope, sweepFromGallery,
+  afterSweep, annBatch, annotateUrlForSession, closeBrowse, closeGallery, closeSweep, continueImageInSession, insertFromGallery, liveSessionsIn,
+  offerCollage, remarksToChat, setSweepScope, sweepFromGallery,
 } from "./actions";
+
+/**
+ * The gallery's `combine`: pictures the desktop made — a screenshot per device, a before and an
+ * after — picked in order, fetched as files and handed to the same combine-or-not question every
+ * multi-image pick gets (`offerCollage`), so one circle can point at a difference that spans two of
+ * them. The session flow, like the gallery's `mark`; declining marks each in turn (`annBatch`). A
+ * fetch that fails is SAID, and nothing half-combined goes on.
+ */
+function combineFromGallery(items: { url: string; name: string; repoId: string }[]): void {
+  const repoId = items[0]?.repoId;
+  if (!repoId || items.length < 2) return;
+  flow.ret = "session";
+  void Promise.all(items.map(async (it) => {
+    const b = await api.fileBlob(it.url);
+    return new File([b], it.name, { type: b.type || "image/png" });
+  })).then(
+    (files) => offerCollage(files, repoId, (ordered) => annBatch(ordered, repoId)),
+    () => core().say.toast("Could not fetch the pictures from the desktop — nothing was combined."),
+  );
+}
 
 export function GallerySheet() {
   const c = useCore();
@@ -25,6 +46,7 @@ export function GallerySheet() {
     onClose={closeGallery}
     onInsertPath={insertFromGallery}
     onContinueInSession={continueImageInSession}
+    sessionsIn={liveSessionsIn}
     // Only where there IS one transport directory to clear: the all-repos
     // scope has no single outbox, and "this repo" is a whole worktree rather
     // than a drop zone. The gallery hands over the tab you were on.
@@ -32,7 +54,8 @@ export function GallerySheet() {
     // On "all repos" there is no single directory to clear, and that is the
     // scope somebody is on when the question is WHICH repo is fat.
     onSurvey={() => { c.say.track("overlay:storage"); c.nav.open("storage"); }}
-    onAnnotate={annotateUrlForSession} />;
+    onAnnotate={annotateUrlForSession}
+    onCombine={combineFromGallery} />;
 }
 
 /** Clearing out a transport directory. The manifest guards it: with no target
@@ -69,7 +92,9 @@ export function FileTreeSheet() {
       <Empty>That repo is not in the listing any more — pick one from the launcher.</Empty>
     </div>
   );
-  return <FilesSheet repoId={target.id} repoName={target.repoName}
+  // Keyed on the aim: a pinned tab tapped while the viewer is open names a
+  // new file, and `initialFile` is read once per mount.
+  return <FilesSheet key={`${target.id}:${aim?.file ?? ""}`} repoId={target.id} repoName={target.repoName}
     initialFile={aim?.file}
     socketOpen={c.conn.status === "open"}
     onInsertPath={insertFromGallery}

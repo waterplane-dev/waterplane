@@ -73,7 +73,7 @@ function machine({ toolchainNeeded = true, keyExists = false, buildOutcome = "do
     setup: (repoDir) => { calls.push(["setup", repoDir]); return { ok: true, applied: [], notes: [] }; },
     builds: {
       list: (r) => builds.get(r) ?? [],
-      save: (r, b) => { calls.push(["saveBuilds", b.map((x) => x.cmd)]); builds.set(r, b); return b; },
+      save: (r, b, local) => { calls.push(["saveBuilds", b.map((x) => x.cmd), local]); builds.set(r, b); return b; },
       run: (r, id) => {
         calls.push(["build", id]);
         const runId = `br_${runs.size + 1}`;
@@ -203,6 +203,9 @@ test("android build is pointed at the found toolchain when the host env names no
   assert.match(mm.files.get(join(repo, "local.properties")), /^sdk\.dir=\/fake\/home\/Library\/Android\/sdk$/m);
   const saved = mm.calls.find((c) => c[0] === "saveBuilds")[1];
   assert.ok(saved.every((cmd) => cmd.startsWith("JAVA_HOME='/fake/home/.config/waterplane/jdk/jdk-21/Contents/Home' ./gradlew")), saved.join("\n"));
+  // A desktop path: every patched copy is a LOCAL override, never written into the committed file.
+  const local = mm.calls.find((c) => c[0] === "saveBuilds")[2];
+  assert.deepEqual([...local].sort(), ["debug", "release"]);
 
   const set = machine({ toolchainNeeded: false, keyExists: true, env: { JAVA_HOME: "/j", ANDROID_HOME: "/a" } });
   const ob2 = new OnboardManager(set.d);

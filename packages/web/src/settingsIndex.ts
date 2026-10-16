@@ -101,12 +101,18 @@ export const SETTING_ROWS: SettingRowMeta[] = [
   { id: "launch-permission", group: "sessions", label: "permission mode", keywords: "approvals dangerous skip ask tool calls yolo bypass" },
   { id: "launch-remote", group: "sessions", label: "remote control", keywords: "claude.ai steer remote-control" },
   { id: "launch-ask", group: "sessions", label: "ask before each launch", keywords: "prompt every time silently defaults pick" },
+  { id: "spend-warn", group: "sessions", label: "spend marks", keywords: "cost warning orange red triangle threshold dollars percent week alert expensive api" },
   { id: "close-when-done", group: "sessions", label: "close automatic sessions when done", keywords: "backlog scheduled linger keep open reap slot auto-close" },
+  { id: "local-sessions", group: "sessions", label: "local model sessions at once", keywords: "ollama qwen gpu runner local model limit cap one at a time concurrent" },
   { id: "hosted-notice", group: "sessions", label: "hosted-model notice", keywords: "privacy disclaimer acknowledge server third party leaves machine" },
   { id: "limit-auto", group: "sessions", label: "auto-continue after a usage limit", keywords: "rate limit resume reset blocked wall resurrect" },
   { id: "budget", group: "sessions", label: "usage budget", keywords: "reserve headroom pause unattended percent ceiling session window" },
   { id: "budget-session", group: "sessions", label: "session ceiling", keywords: "5-hour window percent reserve pause headroom" },
   { id: "budget-weekly", group: "sessions", label: "weekly ceiling", keywords: "week cap percent reserve" },
+  { id: "budget-leftover", group: "sessions", label: "leftovers in a new week", keywords: "leftover reset week spare budget before reset waiver" },
+  { id: "billing-profile", group: "sessions", label: "billing profile", keywords: "api key subscription bedrock vertex cloud account detect override console" },
+  { id: "billing-periods", group: "sessions", label: "dollar periods and caps", keywords: "month monthly week day spend cap budget dollars billing cycle anchor rolling span time zone limit" },
+  { id: "ask-rules", group: "sessions", label: "ask before", keywords: "ask rules permission confirm git push force main master deploy publish dangerous irreversible guard tap prod release" },
   { id: "auto-compact-default", group: "sessions", label: "auto-compact window", keywords: "autoCompactWindow compact context 400k repo setup settings.json threshold" },
 
   // ── Notifications ──────────────────────────────────────────────────────
@@ -127,8 +133,11 @@ export const SETTING_ROWS: SettingRowMeta[] = [
   { id: "tabs-count", group: "appearance", label: "tabs that fit", keywords: "how many width narrower wider strip" },
   { id: "tabs-limit", group: "appearance", label: "most tabs shown", keywords: "limit cap max maximum how many strip hide" },
   { id: "tabs-order", group: "appearance", label: "tab order", keywords: "sort opened frequent recent where was i" },
+  { id: "repo-order", group: "appearance", label: "repo order", keywords: "launcher sort alphabetical sessions open busiest list repos rank" },
+  { id: "unfold-to-end", group: "appearance", label: "unfolding a repo shows its last row", keywords: "launcher expand collapse fold scroll bottom end list sessions chevron" },
   { id: "net-pulse", group: "appearance", label: "connection strip", keywords: "ping latency graph round trip bar link live network" },
   { id: "local-rt", group: "appearance", label: "desktop strip", keywords: "local runner ollama lm studio model loaded memory pressure cpu gpu utilization machine mac bar" },
+  { id: "ui-reset", group: "appearance", label: "reset UI settings to default", keywords: "restore defaults factory look layout hidden buttons theme size zoom tabs strips" },
 
   // ── Writing & reading ──────────────────────────────────────────────────
   { id: "enter-sends", group: "writing", label: "what Return does", keywords: "enter key send newline keyboard compose submit" },
@@ -136,10 +145,14 @@ export const SETTING_ROWS: SettingRowMeta[] = [
   { id: "dictate-langs", group: "writing", label: "languages on the microphone", keywords: "voice speech dictation picker list offer languages mic which" },
   { id: "dictate-terms", group: "writing", label: "words dictation should know", keywords: "voice speech vocabulary glossary dictionary custom terms names jargon misheard recognise spelling whisper prompt" },
   { id: "close-kb-on-send", group: "writing", label: "keyboard after Send", keywords: "keyboard close hide dismiss blur send focus" },
+  { id: "shortcut-card", group: "writing", label: "hold Ctrl to see shortcuts", keywords: "keyboard shortcut shortcuts chord hotkey cheat sheet ctrl cmd command alt option modifier hold card" },
+  { id: "busy-send", group: "writing", label: "Send while it works", keywords: "send busy working turn running queue when free ask now wait" },
+  { id: "btw-to-cli", group: "writing", label: "/btw from the reader", keywords: "btw aside overlay cli terminal switch ask reader" },
   { id: "typing-room", group: "writing", label: "typing room", keywords: "hide chrome header keyboard space terminal rows full" },
   { id: "reader-tools", group: "writing", label: "tool calls in the reader", keywords: "transcript fold list full download details offline" },
   { id: "hints-mode", group: "writing", label: "button hints", keywords: "explain long press help tooltip first time" },
   { id: "hints-explain", group: "writing", label: "explain mode", keywords: "help what does this button do tap" },
+  { id: "hints-chip", group: "writing", label: "? button in the headers", keywords: "help question mark explain chip hide remove space header launcher" },
   { id: "hints-reset", group: "writing", label: "explain them again", keywords: "reset dismissed hints help" },
 
   // ── Offline & data ─────────────────────────────────────────────────────
@@ -148,13 +161,16 @@ export const SETTING_ROWS: SettingRowMeta[] = [
   { id: "serial-sessions", group: "offline", label: "one session at a time per repo", keywords: "queue parallel serialize worktree agents limit" },
   { id: "confirm-queue", group: "offline", label: "ask on reconnect", keywords: "queue review before sending offline drafts stale" },
   { id: "queue-manage", group: "offline", label: "manage the queue", keywords: "queued messages waiting outbox" },
+  { id: "bg-fresh", group: "offline", label: "in the background", keywords: "battery drain power hidden background stream offline dead zone fresh latest screen catch up" },
   { id: "data-saver", group: "offline", label: "data saver", keywords: "roaming hotel bandwidth smaller images polling mobile" },
   { id: "downloads", group: "offline", label: "downloads", keywords: "pull files artifacts background fetch resume auto" },
   { id: "upload-scale", group: "offline", label: "upload size", keywords: "image width shrink annotator camera photo auto slow link" },
 
   // ── Connection ─────────────────────────────────────────────────────────
   { id: "hosts", group: "connection", label: "hosts", keywords: "desktop address daemon apk android pair change ip switch add remove lan wifi peer desktops tailnet tailscale computer machine" },
+  { id: "code-folder", group: "connection", label: "Code folder", keywords: "root repos folder scan dev projects directory path where desktop host workspace env variable" },
   { id: "add-desktop", group: "connection", label: "add a desktop", keywords: "new desktop host computer machine pc mac linux windows tailnet tailscale found discover scan add pair peer" },
+  { id: "web-desktops", group: "connection", label: "another desktop, without the app", keywords: "browser web pwa no app without apk iphone ios pair second desktop another phone home screen address tailnet code" },
   { id: "demo", group: "connection", label: "try the demo", keywords: "demo sample example pretend fake tour first look leave play store reviewer" },
   { id: "pair-phone", group: "connection", label: "pair another phone", keywords: "qr code pairing new phone add device scan invite tailscale" },
   { id: "paired-devices", group: "connection", label: "paired devices", keywords: "revoke sign in token phones ledger last seen remove device" },
@@ -168,6 +184,7 @@ export const SETTING_ROWS: SettingRowMeta[] = [
   // ── Tools & diagnostics ────────────────────────────────────────────────
   { id: "token-stats", group: "tools", label: "token statistics", keywords: "usage cost spend money per day model repo cache history tokens" },
   { id: "tool-secret", group: "tools", label: "secret", keywords: "api key write only env credential" },
+  { id: "desktop-setup", group: "tools", label: "desktop setup", keywords: "checklist mac screen recording accessibility permission grant live desktop helper privacy security system settings" },
   { id: "tool-repo-setup", group: "tools", label: "repo setup", keywords: "checklist gitignore claude.md context weight check fix" },
   { id: "tool-speedtest", group: "tools", label: "speed test", keywords: "bandwidth latency diagnostics connection throughput" },
   { id: "tool-net-health", group: "tools", label: "connection health", keywords: "link prompts delivery retries lost dropped" },
@@ -197,6 +214,36 @@ function haystack(row: SettingRowMeta): string {
 const HAY = new Map(SETTING_ROWS.map((r) => [r.id, haystack(r)]));
 
 /**
+ * Rows an extension catalogues for itself (`SettingsRowsDef.rows`). An
+ * extension lives outside this repo's core, so its row cannot be a line in
+ * `SETTING_ROWS` — and an uncatalogued row is not merely unfindable: under any
+ * query it matches nothing, so its group's `gone` hides it along with the
+ * heading. The vault row vanished on "vault" that way. A core id wins over an
+ * extension claiming the same one.
+ */
+const EXTRA: SettingRowMeta[] = [];
+
+export function addSettingRows(rows: readonly SettingRowMeta[]): void {
+  for (const r of rows) {
+    if (BY_ID.has(r.id)) continue;
+    EXTRA.push(r);
+    BY_ID.set(r.id, r);
+    HAY.set(r.id, haystack(r));
+  }
+}
+
+/**
+ * Words a row is findable by that only exist at run time — the `plugins` row
+ * holds a section per installed plugin, and "sensors" or a plugin's own name
+ * must find it. Replaced whole by the one writer that knows them.
+ */
+const WORDS = new Map<string, string>();
+
+export function setRowWords(id: string, words: string): void {
+  WORDS.set(id, words.toLowerCase());
+}
+
+/**
  * Every term must appear somewhere in the row's words — AND, not OR.
  *
  * OR is the wrong answer for a screen this size: "tab order" under OR matches
@@ -207,9 +254,32 @@ const HAY = new Map(SETTING_ROWS.map((r) => [r.id, haystack(r)]));
 export function rowMatches(id: string, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
-  const hay = HAY.get(id);
-  if (hay == null) return true; // an id this file does not know is never hidden
-  return q.split(/\s+/).every((term) => hay.includes(term));
+  const base = HAY.get(id);
+  if (base == null) return true; // an id this file does not know is never hidden
+  const hay = WORDS.has(id) ? `${base} ${WORDS.get(id)}` : base;
+  return wordsMatch(hay, q);
+}
+
+/** `rowMatches`' rule over any words: every term, as a substring, case-insensitive. */
+export function wordsMatch(hay: string, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const h = hay.toLowerCase();
+  return q.split(/\s+/).every((term) => h.includes(term));
+}
+
+/**
+ * A piece NESTED inside a row (one plugin's section inside `plugins`): shown
+ * whole when the parent's CATALOGUED words answer the query ("plugin" means all
+ * of them), else only when its own `words` do — so a plugin's name shows that
+ * plugin's section, and the sections beside it (which made the row match only
+ * through `setRowWords`) step aside.
+ */
+export function nestedMatches(parentId: string, words: string, query: string): boolean {
+  if (!query.trim()) return true;
+  const base = HAY.get(parentId);
+  if (base != null && wordsMatch(base, query)) return true;
+  return wordsMatch(words, query);
 }
 
 /**
@@ -224,7 +294,7 @@ export function rowMatches(id: string, query: string): boolean {
  */
 export function groupMatches(groupId: string, query: string): boolean {
   if (!query.trim()) return true;
-  return SETTING_ROWS.some((r) => r.group === groupId && rowMatches(r.id, query));
+  return [...SETTING_ROWS, ...EXTRA].some((r) => r.group === groupId && rowMatches(r.id, query));
 }
 
 /**

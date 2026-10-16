@@ -17,11 +17,28 @@
 import { statSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { BuildRun, NewImage, PullItem } from "@waterplane/shared";
-import { discoverArtifacts } from "../files.js";
+import { discoverArtifacts, discoverArtifactsAsync, isMarkdownPath } from "../files.js";
 import { targetId } from "../repos.js";
 import { catchUpCandidates } from "../autopull.js";
 import type { ServerCtx } from "./ctx.js";
 import { logTag } from "@waterplane/shared";
+
+/**
+ * What a turn adds to a session's strip, against its baseline (relPath → mtime),
+ * which it advances. An image or video counts once, when it first appears; a
+ * markdown file also counts again when a turn rewrites it (`changed`).
+ */
+export function stripFresh(seen: Map<string, number>, found: readonly NewImage[]): NewImage[] {
+  const fresh: NewImage[] = [];
+  for (const f of found) {
+    const before = seen.get(f.relPath);
+    if (before === undefined) fresh.push(f);
+    else if (f.mtime > before && isMarkdownPath(f.relPath)) fresh.push({ ...f, changed: true });
+    else continue;
+    seen.set(f.relPath, f.mtime);
+  }
+  return fresh;
+}
 
 /** Everything `createScan` built; `main.ts` assigns each into `ctx`. */
 export type Scan = ReturnType<typeof createScan>;
@@ -87,10 +104,13 @@ export function createScan(ctx: ServerCtx) {
     } catch { /* a pull rule must never break a turn end or a build */ }
   }
 
-  // Per-session image baseline: relPaths already present so only NEW images notify.
-  const imgSeen = new Map<string, Set<string>>();
-  function scanImages(cwd: string): NewImage[] {
-    const { files } = discoverArtifacts(cwd, { scope: "repo", kind: "image", limit: 1000 });
+  // Per-session strip baseline: relPath → mtime already present, so only NEW
+  // images notify and a markdown file shows again when a turn rewrites it.
+  const imgSeen = new Map<string, Map<string, number>>();
+  // Repo-wide, so in the background (`discoverArtifactsAsync`): the sync walk froze the host on WSL.
+  // Images, videos AND markdown — the strip shows all three (`kind: "strip"`).
+  async function scanImages(cwd: string): Promise<NewImage[]> {
+    const { files } = await discoverArtifactsAsync(cwd, { scope: "repo", kind: "strip", limit: 1000 });
     return files.map((f) => ({ name: f.name, relPath: f.relPath, mtime: f.mtime }));
   }
   /**
@@ -129,17 +149,17 @@ export function createScan(ctx: ServerCtx) {
    * that we'd hand the rule every pre-existing file in the repo as "new".
    */
   const pullSeen = new Map<string, { scope: "outbox" | "repo"; paths: Set<string> }>();
-  function scanPullCandidates(cwd: string, scope: "outbox" | "repo") {
-    const { files } = discoverArtifacts(cwd, { scope, kind: "all", limit: 1000 });
+  async function scanPullCandidates(cwd: string, scope: "outbox" | "repo") {
+    const { files } = await discoverArtifactsAsync(cwd, { scope, kind: "all", limit: 1000 });
     return files.map((f) => ({ name: f.name, relPath: f.relPath, size: f.size, mtime: f.mtime }));
   }
   /** Diff this repo's auto-pull scope against the session's snapshot and queue what
    *  is new. A snapshot taken under a different scope (or none) is re-seeded and
    *  this round queues nothing — "new" has to mean new, not "first look". */
-  function pullNewFiles(id: string, cwd: string): void {
+  async function pullNewFiles(id: string, cwd: string): Promise<void> {
     const cfg = ctx.autopull.config(cwd);
     if (!cfg.enabled) return;
-    const found = scanPullCandidates(cwd, cfg.scope);
+    const found = await scanPullCandidates(cwd, cfg.scope);
     const prev = pullSeen.get(id);
     if (!prev || prev.scope !== cfg.scope) {
       pullSeen.set(id, { scope: cfg.scope, paths: new Set(found.map((f) => f.relPath)) });
@@ -167,13 +187,13 @@ export function createScan(ctx: ServerCtx) {
    * cover at all, and the build hand-over is how such a file normally reaches
    * the queue.
    */
-  function pullCatchUp(cwd: string): PullItem[] {
+  async function pullCatchUp(cwd: string): Promise<PullItem[]> {
     const cfg = ctx.autopull.config(cwd);
     if (!cfg.enabled) return [];
     const repo = { repoId: targetId(cwd), repoDir: cwd, repoName: basename(cwd) };
     const queued: PullItem[] = [];
     try {
-      queued.push(...ctx.autopull.consider(repo, catchUpCandidates(scanPullCandidates(cwd, cfg.scope)), "outbox"));
+      queued.push(...ctx.autopull.consider(repo, catchUpCandidates(await scanPullCandidates(cwd, cfg.scope)), "outbox"));
       if (cfg.builds) {
         const run = ctx.builds.runsFor(cwd).find((r) => r.status === "done" && r.artifacts?.length);
         const arts: { name: string; relPath: string; size: number; mtime: number }[] = [];

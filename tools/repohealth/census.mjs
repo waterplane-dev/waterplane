@@ -209,6 +209,33 @@ function mergeHatchKinds(active) {
   return Object.freeze(sorted);
 }
 
+/**
+ * How each merged hatch kind is CLASSIFIED — `{todo, after, commentLine}` per
+ * kind, off the pack that claims it (`hatchExplain`). `todo` kinds are
+ * reported apart from the escapes; for the rest, `after` (regex source tested
+ * against the rest of the line past the mark) and `commentLine` (a comment
+ * line directly above) are the two places a reason may sit. A pack with no
+ * `hatchExplain` contributes kinds that are never explained — every occurrence
+ * counts, which is what the index read before this existed.
+ */
+function mergeHatchExplain(active) {
+  const out = {};
+  for (const a of active) {
+    const ex = a.pack.hatchExplain ?? {};
+    const todo = new Set(ex.todo ?? []);
+    for (const kind of Object.keys(a.pack.hatchKinds ?? {})) {
+      out[kind] = Object.freeze({
+        todo: todo.has(kind),
+        after: todo.has(kind) ? null : ex.after?.[kind] ?? null,
+        commentLine: todo.has(kind) ? null : ex.commentLine ?? null,
+      });
+    }
+  }
+  const sorted = {};
+  for (const k of Object.keys(out).sort()) sorted[k] = out[k];
+  return Object.freeze(sorted);
+}
+
 /** The union of one field over the active packs, de-duplicated and sorted. */
 function union(active, field) {
   const out = new Set();
@@ -252,6 +279,8 @@ function versionOf(active) {
  *              `packs/common.mjs` owns and which are therefore the same
  *              everywhere. `source.mjs` is the only reader.
  *   - `HATCH_KINDS`  merged, collision-checked, sorted.
+ *   - `HATCH_EXPLAIN` per kind: a to-do or an escape, and where its reason
+ *                    may sit (`mergeHatchExplain`).
  *   - `VERSION`      the two-part version string every row records.
  *
  * `SRC.exts` is EMPTY in a repo no pack claims, and that is the correct
@@ -302,6 +331,7 @@ export function configure(root, git, packs = PACKS, scope = null) {
       testGlobs: union(active, "testGlobs"),
     }),
     HATCH_KINDS: mergeHatchKinds(active),
+    HATCH_EXPLAIN: mergeHatchExplain(active),
     VERSION: versionOf(active),
   };
 

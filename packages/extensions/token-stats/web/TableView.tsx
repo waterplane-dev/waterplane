@@ -1,5 +1,5 @@
 /** The table twin: every value the charts show, as numbers, scoped by the same window. */
-import { type CostBreakdown, fmtCount, fmtExact, fmtUsd, type TokenStatsDoc, tokenTotal } from "@waterplane/shared";
+import { type CostBreakdown, fmtCount, fmtExact, fmtUsd, type TokenGroup, type TokenStatsDoc, tokenTotal } from "@waterplane/shared";
 import { type WindowCut } from "./usageCut.ts";
 
 /** The table twin: every value the charts show, as numbers, in full. */
@@ -14,14 +14,18 @@ import { type WindowCut } from "./usageCut.ts";
  * answered a window by naming what an hour bucket cannot carry; the twin now
  * gives the same two answers rather than a wrong one.
  */
-export function TableView({ doc, days, cut = null, part }: {
+export function TableView({ doc, days, cut = null, part, repos = null, reposNote }: {
   doc: TokenStatsDoc;
   days: TokenStatsDoc["days"];
-  /** The live window on screen, or null for all time. */
-  cut?: WindowCut | null;
+  /** The span on screen — a live window or a run of calendar days — or null for all time. */
+  cut?: Pick<WindowCut, "long" | "modelSplit" | "models"> | null;
   /** Which half: the groups live in the Totals box and follow its span, the
    *  days in the Over-time box and follow its chips. */
   part: "groups" | "days";
+  /** The window's repos as the host folded them (the chart half's list), or null with
+   *  `reposNote` saying why there is none yet. Only read under a cut. */
+  repos?: TokenGroup[] | null;
+  reposNote?: string;
 }) {
   const rows = [...days].reverse();
   if (part === "days") return (
@@ -44,12 +48,13 @@ export function TableView({ doc, days, cut = null, part }: {
               next scan on. The tokens and money above are counted either way.
             </div>)
         : doc.models.map((m) => <NumRow key={m.key} label={m.label} t={m} cost={m.cost} />)}
-      <div className="section section-head"><span>By repo</span></div>
+      <div className="section section-head">
+        <span>By repo{cut ? <span className="section-hint"> · {cut.long}</span> : null}</span>
+      </div>
       {cut
-        ? <div className="empty">
-            Not answerable inside a live window — an hour bucket carries the model, not the repo.
-            Tap <b>All time</b> at the top of this box for it.
-          </div>
+        ? (repos
+          ? repos.map((r) => <NumRow key={r.key} label={r.label} t={r} title={r.key} cost={r.cost} />)
+          : <div className="empty">{reposNote}</div>)
         : doc.repos.map((r) => <NumRow key={r.key} label={r.label} t={r} title={r.key} cost={r.cost} />)}
     </>
   );

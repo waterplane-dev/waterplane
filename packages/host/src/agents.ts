@@ -35,8 +35,7 @@
 import { closeSync, openSync, readdirSync, readFileSync, readSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { SessionAgent } from "@waterplane/shared";
-import { claudeConfigDir } from "./claudeconfig.js";
-import { claudeProjectDir } from "./transcript.js";
+import { claudeConfigDir, claudeProjectDir } from "./claudeconfig.js";
 import { env } from "./env.js";
 import { pidAlive } from "./proc.js";
 

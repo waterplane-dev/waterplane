@@ -26,6 +26,7 @@ export function OpenQuestionsSheet() {
       onAnswer={c.queue.answerPrompt}
       onOpen={(id) => { const s = sessions.find((x) => x.id === id); if (s) c.nav.attach(s); else c.nav.close("questions"); }}
       onAck={ackAsking}
+      onSendSuggestion={(s, t) => c.queue.submitInput(s.id, s.cwd, t, "prompt")}
       onClose={() => c.nav.close("questions")}
     />
   );

@@ -59,6 +59,65 @@ export interface GitStatus {
   clean: boolean;
 }
 
+/** One commit as the history view lists it. `at` is the author date, epoch ms. */
+export interface GitCommit {
+  sha: string;
+  short: string;
+  author: string;
+  at: number;
+  subject: string;
+}
+
+/**
+ * The branch's commits against its upstream, in three disjoint lists:
+ * `incoming` is on the upstream and not here (what a pull brings), `outgoing`
+ * is here and not on the upstream (what a push sends), `shared` is the recent
+ * history both have. `incoming` is only as fresh as the desktop's last fetch —
+ * `fetchedAt` says when that was, ABSENT when the desktop cannot tell.
+ * No upstream ⇒ `upstream` absent, both directions empty, `shared` is the
+ * branch's own recent history. Each list is capped; `*Total` is the real count.
+ */
+export interface GitLog {
+  branch: string;
+  upstream?: string;
+  incoming: GitCommit[];
+  incomingTotal: number;
+  outgoing: GitCommit[];
+  outgoingTotal: number;
+  shared: GitCommit[];
+  fetchedAt?: number;
+}
+
+/**
+ * The push the desktop is running (or last ran) in one worktree. A push runs
+ * the repo's pre-push hook — the full local CI here, tens of minutes — so it
+ * is a job on the host that the phone starts and then asks after, never one
+ * request held open across it.
+ */
+export interface GitPushState {
+  running: boolean;
+  /** Epoch ms the push started. */
+  startedAt: number;
+  /** Present once it ended: what `git push` said. */
+  result?: { ok: boolean; output?: string; error?: string; finishedAt: number };
+  /** What the push has printed so far — absent from a host that does not stream it. */
+  progress?: GitPushProgress;
+}
+
+/**
+ * A push's output as it streams, read by the host (`pushprogress.ts`): the
+ * local-CI hook's steps, the e2e runner's count, and the last few lines.
+ * `steps` is empty for a hook whose format the host does not know — the tail
+ * is still there.
+ */
+export interface GitPushProgress {
+  steps: { name: string; state: "running" | "ok" | "failed" | "skipped" | "done"; secs?: number; why?: string }[];
+  /** e2e scripts finished (and of those failed) of the total the runner announced. */
+  e2e?: { done: number; failed: number; total: number };
+  /** The latest lines printed, colour codes out, oldest first. */
+  tail: string[];
+}
+
 export interface GitBranch {
   name: string;
   current: boolean;
@@ -95,6 +154,15 @@ export interface RepoTarget {
    *  --porcelain -uall`), respecting .gitignore. It is the size of the list the
    *  git view opens, so the badge and the sheet it opens cannot disagree. */
   changedCount: number;
+  /** Commits on this branch not on its upstream, and the other way round — the
+   *  same `## a...b [ahead N, behind M]` header the git view prints. ABSENT when
+   *  the branch has no upstream (nothing to count against), never 0 for that. */
+  ahead?: number;
+  behind?: number;
+  /** Whether the repo has an `origin` remote — where the git view pushes. `false`
+   *  = local only, nothing to push to (the launcher says so). ABSENT = not known
+   *  (an older host, or a count not taken yet) — never drawn as "no remote". */
+  hasOrigin?: boolean;
   /** What the host's own setup sweep last concluded about this worktree, when it
    *  has looked at all. Absent = never checked (a repo discovered seconds ago,
    *  or a host with the watcher switched off) — which is NOT the same as clean,
@@ -130,6 +198,14 @@ export interface RepoTarget {
    * stays with the repo's other worktrees.
    */
   ownerSessionId?: string;
+  /**
+   * The repo's health index (`shared/healthindex.ts`): one chained number over
+   * the repo-health series, baseline 100, every metric read lower-is-better.
+   * `deltaWeek` is null on a carried (gap) or baseline week; `move` is a CALLED
+   * move only (`assessHealthMove`). Absent = unknown — no series, no baseline,
+   * or an older host — never 0.
+   */
+  healthIndex?: { value: number; deltaWeek: number | null; week: string; move: "drop" | "rise" | null };
 }
 
 /**
@@ -352,6 +428,19 @@ export interface ComplianceLimitsResult {
 }
 
 /** Result of applying one or more fix actions, with the refreshed report. */
+/** The desktop's own checklist (`GET /api/host/setup`): the `scope: "host"` rows, which no repo's checklist lists. */
+export interface HostSetupReport {
+  checks: ComplianceCheck[];
+}
+
+/** `POST /api/host/setup/fix`: what ran, in its own words, and the rows re-read. */
+export interface HostSetupFixResult {
+  ok: boolean;
+  applied: string[];
+  notes: string[];
+  checks: ComplianceCheck[];
+}
+
 export interface ComplianceFixResult {
   ok: boolean;
   applied: string[];

@@ -1,7 +1,7 @@
 /** A slice of assess.ts — moved whole from assess.ts, see docs/notes/assess-architecture.md (host). */
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { AssessInput, AssessNote, AssessProgress, AssessProposal, Intent } from "@waterplane/shared";
+import type { AssessInput, AssessNote, AssessProgress, AssessProposal, AssessScope, Intent } from "@waterplane/shared";
 import { ASSESS_IN_FILE, ASSESS_OUT_FILE, ASSESS_PLAN_FILE, assessCounts, cleanAssessment } from "@waterplane/shared";
 import { detectHeadlessLimit, limitNote } from "../limit.js";
 import { runToolTask } from "../sidecar.js";
@@ -51,8 +51,10 @@ export async function runAssessment(
   /** Told, at most every `ASSESS_PROGRESS_MS`, what the run is doing. Absent is
    *  a run nobody is watching, which is exactly the old call. */
   onProgress?: (p: AssessProgress) => void,
+  /** What `ids` ARE when they are one slot — off the payload, like `ids`. */
+  scope?: AssessScope,
 ): Promise<AssessRunOutcome> {
-  const input = buildAssessInput(cwd, intents, notes, now, ids);
+  const input = buildAssessInput(cwd, intents, notes, now, ids, scope);
   const inPath = join(cwd, ASSESS_IN_FILE);
   const outPath = join(cwd, ASSESS_OUT_FILE);
   const planPath = join(cwd, ASSESS_PLAN_FILE);
@@ -135,6 +137,10 @@ function outcomeDetail(p: AssessProposal, planWritten: boolean): string {
   ];
   if (p.merges.length) parts.push(`${p.merges.length} merge${p.merges.length === 1 ? "" : "s"}`);
   if (p.news.length) parts.push(`${p.news.length} new`);
+  // The slot check's two kinds, only when there is one (`requeued`'s rule in
+  // the apply sentence: a zero here is noise on every repo-wide run).
+  if (p.splits?.length) parts.push(`${p.splits.length} split${p.splits.length === 1 ? "" : "s"}`);
+  if (p.conflicts?.length) parts.push(`${p.conflicts.length} conflict${p.conflicts.length === 1 ? "" : "s"}`);
   return `${p.rows.length} item(s) assessed: ${parts.join(", ")}${planWritten ? `; ${ASSESS_PLAN_FILE} written` : ""}`;
 }
 

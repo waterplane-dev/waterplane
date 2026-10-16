@@ -69,7 +69,7 @@ export function useTermPick(termRef: RefObject<TerminalHandle | null>, writeSeq:
     clearTimeout(timer.current);
     timer.current = window.setTimeout(reread, REREAD_MS);
     return () => clearTimeout(timer.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `reread` reads the terminal through its handle; re-armed on a write or a pick-mode change only
   }, [picking, writeSeq]);
 
   useEffect(() => {
@@ -77,7 +77,7 @@ export function useTermPick(termRef: RefObject<TerminalHandle | null>, writeSeq:
     const onResize = () => { clearTimeout(timer.current); timer.current = window.setTimeout(reread, REREAD_MS); };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- bound while picking; `reread` reads the terminal through its handle
   }, [picking]);
 
   const toggle = (row: number) => {

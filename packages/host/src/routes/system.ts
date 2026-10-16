@@ -3,7 +3,8 @@
  * LAN gate, settings, plugins and the decision log, telemetry and the
  * notification feed.
  */
-import { PLUGIN_ACK_RE, PROTOCOL_VERSION, logTag } from "@waterplane/shared";
+import { PLUGIN_ACK_RE, PROTOCOL_VERSION, haltReceiptWords, logTag, roleAfterHello } from "@waterplane/shared";
+import { haltState, isHalted, setHalted, stopRuns } from "../halt.js";
 import type { HostMessage } from "@waterplane/shared";
 import type { WebSocket } from "ws";
 import { cliHealth } from "../clihealth.js";
@@ -101,6 +102,12 @@ const onHello: Route<"hello"> = (a) => {
     if (a.msg.protocol !== PROTOCOL_VERSION) {
       console.warn(`${logTag} client speaks protocol ${a.msg.protocol}, this host speaks ${PROTOCOL_VERSION} — rebuild the web bundle (\`npm run build\`) if things behave oddly.`);
     }
+    // The APK's background link gets no snapshots: it acts on live
+    // notification / authRequired / pull.new frames only and replays nothing
+    // (`shared/wire/notifylink.ts`). `send` would drop them all anyway; this
+    // skips building twenty frames per reconnect for nobody.
+    const role = roleAfterHello(a.msg.role, a.c.wsRole.get(a.ws));
+    if (role) { a.c.wsRole.set(a.ws, role); return; }
     a.c.send(a.ws, { t: "session.list", sessions: a.c.sessions.list() });
     a.c.send(a.ws, { t: "recent.list", recent: a.c.sessions.listRecent() });
     a.c.send(a.ws, { t: "closed.list", closed: a.c.sessions.listClosed() });
@@ -108,11 +115,13 @@ const onHello: Route<"hello"> = (a) => {
     a.c.send(a.ws, { t: "update.status", info: a.c.updates.get() });
     a.c.send(a.ws, { t: "plugin.list", plugins: a.c.plugins.views() });
     a.c.send(a.ws, { t: "decisions.log", entries: a.c.decisionLog.list().slice(0, 100) });
-    a.c.send(a.ws, { t: "usage.status", usage: a.c.usage.get() });
+    a.c.send(a.ws, { t: "usage.status", usage: a.c.usage.get(), readings: a.c.usageSources.readings() });
     a.c.send(a.ws, { t: "meter.status", summary: a.c.meter.summary() });
     a.c.send(a.ws, { t: "notification.list", items: a.c.notifications });
     a.c.send(a.ws, { t: "notify.prefs", prefs: a.c.notifyPrefs.get() });
-    a.c.send(a.ws, { t: "budget.state", budget: a.c.budget.get(), verdict: a.c.budget.verdict() });
+    a.c.send(a.ws, budgetState(a.c));
+    a.c.send(a.ws, { t: "billing.status", ...a.c.billing.status() }); // unknown too: it resets a face a phone kept from another host or an earlier answer
+    a.c.send(a.ws, { t: "halt.state", halt: haltState() });
     a.c.send(a.ws, { t: "limit.config", enabled: a.c.sessions.getAutoContinue(), ...a.c.sessions.resumeState() });
     a.c.send(a.ws, { t: "fanout.list", runs: a.c.fanout.list() });
     a.c.send(a.ws, { t: "pull.list", items: a.c.autopull.list() });
@@ -160,7 +169,7 @@ const onUpdateApply: Route<"update.apply"> = (a) => {
 };
 
 const onUsageGet: Route<"usage.get"> = (a) => {
-    a.c.send(a.ws, { t: "usage.status", usage: a.c.usage.get() });
+    a.c.send(a.ws, { t: "usage.status", usage: a.c.usage.get(), readings: a.c.usageSources.readings() });
 };
 
 /**
@@ -176,6 +185,7 @@ const onUsageGet: Route<"usage.get"> = (a) => {
  */
 const onUsageRefresh: Route<"usage.refresh"> = (a) => {
     void a.c.usage.getFresh();
+    void a.c.usageSources.refreshFresh(); // every other source, behind the same TTL (`usagesources.ts`)
 };
 
 const onAuthSet: Route<"auth.set" | "auth.clear" | "auth.gateTailscale"> = (a) => {
@@ -236,6 +246,16 @@ const onPluginCall: Route<"plugin.call"> = (a) => {
     void a.c.plugins.callOnce(ackId, String(plugin), String(method), args).then((r) =>
       a.c.send(a.ws, { t: "plugin.reply", ackId, plugin, method, ...r }));
 };
+
+// ── Live streams (plugin API 1.4, `plugins/pluginstreams.ts`) ── NOT durable, never in the ack
+// ledger, never retried: a late open is for a screen nobody watches, a late input lands elsewhere.
+// An unknown streamId is ignored in silence (a stale close after a reconnect is normal).
+const onStreamOpen: Route<"stream.open"> = (a) => { void a.c.plugins.streams.open(a.ws, a.msg); };
+const onStreamParams: Route<"stream.params"> = (a) => a.c.plugins.streams.params(a.ws, a.msg.streamId, a.msg.params);
+const onStreamInput: Route<"stream.input"> = (a) => a.c.plugins.streams.input(a.ws, a.msg.streamId, a.msg.ev);
+const onStreamAck: Route<"stream.ack"> = (a) => a.c.plugins.streams.ack(a.ws, a.msg.streamId, a.msg.seq, a.msg.rxBytes);
+const onStreamKeyframe: Route<"stream.keyframe"> = (a) => a.c.plugins.streams.keyframe(a.ws, a.msg.streamId);
+const onStreamClose: Route<"stream.close"> = (a) => a.c.plugins.streams.close(a.ws, a.msg.streamId);
 
 const onPluginSessionToggle: Route<"plugin.sessionToggle"> = (a) => {
     pluginRefused(a, a.msg.id, a.c.plugins.sessionToggle(a.msg.id, a.msg.sessionId, a.msg.toggle, a.msg.value));
@@ -347,10 +367,33 @@ const onNotifyPrefsSet: Route<"notify.prefs.set"> = (a) => {
     // Broadcast, not send: the mute is the user's, not this device's, so a
     // second phone must not keep showing a switch the desktop just flipped.
     a.c.broadcast({ t: "notify.prefs", prefs: a.c.notifyPrefs.set(a.msg.prefs) });
+    // Muting `burn` is one of the things that decides whether `/usage` is polled at all.
+    a.c.syncUsagePolling();
 };
 
 const onBudgetGet: Route<"budget.get"> = (a) => {
-    a.c.send(a.ws, { t: "budget.state", budget: a.c.budget.get(), verdict: a.c.budget.verdict() });
+    a.c.send(a.ws, budgetState(a.c));
+};
+
+/** The `budget.state` frame: the periods ride only when there are any (a subscription with none configured is unchanged). */
+const budgetState = (c: HostCtx): HostMessage => {
+    const periods = c.budget.periods();
+    return { t: "budget.state", budget: c.budget.get(), verdict: c.budget.verdict(), ...(periods.length ? { periods } : {}) };
+};
+
+/** Answer with the billing profile. The first ask of a host that has not probed yet starts the probe; its answer arrives as a broadcast. */
+const onBillingGet: Route<"billing.get"> = (a) => {
+    a.c.send(a.ws, { t: "billing.status", ...a.c.billing.status() });
+    void a.c.billing.refresh(); // cheap: a no-op while the last probe is fresh; redoes one that read nothing
+};
+
+/** A person's override wins; null hands the profile back to the probe (and re-probes). Not durable: idempotent state. */
+const onBillingSet: Route<"billing.set"> = (a) => {
+    const s = a.c.billing.setOverride(a.msg.profile);
+    a.c.broadcast({ t: "billing.status", ...s });
+    a.c.syncUsagePolling();
+    a.c.publishBudget(true);
+    if (a.msg.profile === null) void a.c.billing.refresh(true);
 };
 
 const onBudgetSet: Route<"budget.set"> = (a) => {
@@ -364,8 +407,40 @@ const onBudgetSet: Route<"budget.set"> = (a) => {
     a.c.publishBudget(true);
 };
 
+/**
+ * The emergency halt (`halt.ts`). The latch is set BEFORE the kill, so nothing
+ * that wakes during the second of grace — the intent tick, a resurrect timer, a
+ * sidecar event — can start anything; then every live headless run and every
+ * agent session is stopped, and the receipt is broadcast. Lifting only clears
+ * the flag and kicks the tick: nothing that was killed comes back by itself.
+ * A repeat of the current value changes nothing and re-sends the state.
+ */
+const onHostHalt: Route<"host.halt"> = (a) => {
+  const publish = (): void => a.c.broadcast({ t: "halt.state", halt: haltState() });
+  if (a.msg.on === isHalted()) return void a.c.send(a.ws, { t: "halt.state", halt: haltState() });
+  if (!a.msg.on) {
+    setHalted(false);
+    console.log(`${logTag} halt lifted`);
+    publish();
+    a.c.intents.kick();
+    return;
+  }
+  setHalted(true);
+  console.warn(`${logTag} HALT: stopping every agent session and headless run`);
+  publish();
+  const sidecars = stopRuns();
+  const held = a.c.intents.pending().length;
+  void a.c.sessions.haltAll().then((k) => {
+    const receipt = { at: Date.now(), sidecars, held, ...k };
+    console.warn(`${logTag} HALT done: ${haltReceiptWords(receipt)}`);
+    setHalted(true, receipt);
+    publish();
+  });
+};
+
 export const systemRoutes: RouteTable = {
   "ping": onPing,
+  "host.halt": onHostHalt,
   "hello": onHello,
   "update.status": onUpdateStatus,
   "update.check": onUpdateCheck,
@@ -383,6 +458,12 @@ export const systemRoutes: RouteTable = {
   "plugin.call": onPluginCall,
   "plugin.sessionToggle": onPluginSessionToggle,
   "plugin.sessionAnswer": onPluginSessionAnswer,
+  "stream.open": onStreamOpen,
+  "stream.params": onStreamParams,
+  "stream.input": onStreamInput,
+  "stream.ack": onStreamAck,
+  "stream.keyframe": onStreamKeyframe,
+  "stream.close": onStreamClose,
   "decisions.get": onDecisionsGet,
   "decisions.archive": onDecisionsArchive,
   "decisions.delete": onDecisionsDelete,
@@ -403,4 +484,6 @@ export const systemRoutes: RouteTable = {
   "localrt.evict": onLocalRtEvict,
   "backends.recheck": onBackendsRecheck,
   "budget.set": onBudgetSet,
+  "billing.get": onBillingGet,
+  "billing.set": onBillingSet,
 };

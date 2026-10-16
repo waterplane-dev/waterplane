@@ -5,7 +5,11 @@
 import { buildRunTitle, repoBranchLabel, type ArtifactPolicy, type BuildCandidate, type BuildConfig, type BuildRun, type RepoTarget } from "@waterplane/shared";
 import { core, mapWith, type CoreApi } from "../../sdk";
 import { buildLane, buildQueueTitle, buildQueuedToast, buildRunToast } from "./logic";
-import { artifactPolicies, buildCands, buildNameOf, buildOpts, buildRepo, builds, type ParamOptions } from "./store";
+import { artifactPolicies, buildCands, buildLocalIds, buildNameOf, buildOpts, buildRepo, builds, type ParamOptions } from "./store";
+
+export function onBuildLocalIds(repoDir: string, localIds: string[] | undefined): void {
+  buildLocalIds.set((prev) => mapWith(prev, repoDir, localIds));
+}
 
 export function onArtifactsConfig(repoDir: string, policy: ArtifactPolicy): void {
   artifactPolicies.set((prev) => mapWith(prev, repoDir, policy));
@@ -50,8 +54,9 @@ export function resyncBuild(): void {
 // the whole list either way), so a silent failure here reads as "the delete
 // didn't take" — and the next open re-asks `build.list` and brings the row
 // back, with nothing having said why.
-export function saveBuilds(repoDir: string, list: BuildConfig[]): void {
-  core().conn.liveSend({ t: "build.save", repoDir, builds: list }, "build commands saved",
+export function saveBuilds(repoDir: string, list: BuildConfig[], local?: string[]): void {
+  // `local` rides only when the host said which ids are local; absent, the host keeps ids where they are.
+  core().conn.liveSend({ t: "build.save", repoDir, builds: list, ...(local ? { local } : {}) }, "build commands saved",
     "no connection — build commands live on the desktop and can't be edited from here");
 }
 
@@ -79,7 +84,7 @@ export function cancelBuild(runId: string): void {
 /**
  * "Set up" opens a real session and hands it the predefined prompt — the
  * ordinary durable create+prompt path, so a tap on a dead tunnel is kept and
- * opens the session on reconnect. The agent writes .waterplane/builds.json itself;
+ * opens the session on reconnect. The agent writes .waterplane-shared/builds.json itself;
  * the list refreshes the next time this sheet is opened, since `openBuildFor`
  * re-asks `build.list` every time.
  */

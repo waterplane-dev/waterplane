@@ -52,3 +52,4 @@ export function GridVideo({ src, poster, name }: { src: string; poster: string; 
     <video src={src} poster={posterSrc ?? undefined} title={name} muted playsInline preload="none" />
   );
 }
+

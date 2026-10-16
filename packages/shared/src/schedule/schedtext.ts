@@ -1,7 +1,7 @@
 // Cut from schedule.ts (move only): describing a rule
 // The one door stays `./schedule.js`; this slice imports its siblings directly, never the barrel.
 
-import { DAY_LABELS, anchorWindow, type ScheduleRule } from "./schedrule.js";
+import { DAY_LABELS, anchorPeriodId, anchorWindow, type ScheduleRule } from "./schedrule.js";
 import { describeHours } from "./schedzone.js";
 
 /**
@@ -81,7 +81,9 @@ export function describeRule(rule: ScheduleRule): string {
   if (rule.kind === "window") {
     // Named by its ANCHOR, never by a resolved clock — the anchor is the thing
     // that moves and the thing that has to be edited when it does.
-    const w = anchorWindow(rule) === "weekly" ? "the weekly window" : "the session window";
+    // (wording kept local: `budget.ts`'s `periodWord` would close an import cycle through this slice)
+    const pid = anchorPeriodId(rule);
+    const w = pid === "weekly" ? "the weekly window" : pid === "session" ? "the session window" : pid === "rolling30d" ? "the rolling 30 days" : `the ${pid} period`;
     // Which meter the condition reads is only worth saying when it is NOT the
     // one the sentence already named: "2h before the session window resets,
     // only if 40% is left" has one window in it and needs no second noun, while

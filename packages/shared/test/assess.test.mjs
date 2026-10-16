@@ -358,16 +358,13 @@ test("nothing applies itself: no approvals, no mutations", () => {
     },
     items,
   );
-  assert.deepEqual(applyAssessment(p, {}, ctx(items)), { dismiss: [], rank: [], post: [], requeue: [], pinRanks: false, name: [] });
+  assert.deepEqual(applyAssessment(p, {}, ctx(items)), { dismiss: [], rank: [], post: [], split: [], requeue: [], pinRanks: false, name: [] });
 });
 
 test("whether an approved order stays put is the caller's answer, and absent means it does not", () => {
   // **The question `AssessSheet` asks at apply time.** Applying an assessment
-  // writes each wanted row's rank as its `order`; the smart pick then re-sorts
-  // a repo's waiting items before each fire, leaving alone only rows marked as
-  // placed by a person. Until this flag existed an applied rank carried no such
-  // mark, so an ordering somebody read sixty-two verdicts to approve was
-  // re-decided by a toolless pass that had seen only the item text.
+  // writes each wanted row's rank as its `order`; pinned, each ranked row also
+  // carries the "placed by you" mark a drag leaves.
   const items = input("a", "b");
   const p = cleanAssessment({
     items: [{ id: "a", verdict: "wanted", rank: 2 }, { id: "b", verdict: "wanted", rank: 1 }],
@@ -387,7 +384,7 @@ test("whether an approved order stays put is the caller's answer, and absent mea
   assert.equal(applyAssessment(p, { ...choices, pinRanks: false }, ctx(items)).pinRanks, false);
   assert.equal(pinned.pinRanks, true);
   // Only a literal `true` pins: a truthy stray off the wire must not silently
-  // freeze a repo the smart pick is grooming.
+  // claim a person placed these rows.
   assert.equal(applyAssessment(p, { ...choices, pinRanks: 1 }, ctx(items)).pinRanks, false);
 });
 
@@ -396,20 +393,19 @@ test("the ordering question and its two answers say what they do, and neither is
   assert.match(assessPinQuestion(1), /1 item\b/);
   assert.match(assessPinQuestion(3), /stay as you approved it\?$/);
   // Both labels name an action. A pair where one said "keep" and the other said
-  // nothing would make the second read as the risky one, and it is not: a repo
-  // the smart pick grooms daily wants its order to keep breathing.
+  // nothing would make the second read as the risky one, and it is not.
   assert.match(ASSESS_PIN_KEEP, /keep this order/);
-  assert.match(ASSESS_PIN_FREE, /smart pick may re-sort/);
+  assert.match(ASSESS_PIN_FREE, /leave it unmarked/);
   assert.notEqual(ASSESS_PIN_KEEP, ASSESS_PIN_FREE);
   // The consequence is not on either label, so it is said underneath — and the
   // pinned half says it is the SAME mark a drag leaves, which is what makes the
   // row's chip and this sentence one claim rather than two.
   assert.match(assessPinNote(true), /placed by you, the way a drag is/);
-  assert.match(assessPinNote(true), /never moves them/);
-  assert.match(assessPinNote(false), /may re-order these before an item fires/);
-  // "may", never "will": the smart pick runs only in repos it is switched on
-  // for, so a promise either way would be wrong in most of them.
-  assert.doesNotMatch(assessPinNote(false), /will re-order/);
+  assert.match(assessPinNote(false), /written either way/);
+  // Nothing re-sorts a row on its own (the automatic re-sort is gone), so
+  // neither note may promise or threaten one.
+  assert.doesNotMatch(assessPinNote(false), /may re-order|will re-order/);
+  assert.doesNotMatch(assessPinNote(true), /never moves/);
 });
 
 test("an accepted retiring verdict dismisses the row with its verdict and citation on it", () => {
@@ -443,7 +439,7 @@ test("accepting a merged ROW without approving its group does nothing — the wo
   const items = input("a", "b");
   const p = cleanAssessment({ merges: [merge()] }, items);
   const m = applyAssessment(p, { rows: ["a", "b"] }, ctx(items));
-  assert.deepEqual(m, { dismiss: [], rank: [], post: [], requeue: [], pinRanks: false, name: [] });
+  assert.deepEqual(m, { dismiss: [], rank: [], post: [], split: [], requeue: [], pinRanks: false, name: [] });
 });
 
 test("approving the group is one decision about all N, ticked rows or not", () => {
@@ -595,7 +591,7 @@ test("no verdict but `wanted` ever puts a row back — the others retire it or d
 test("a wanted PAD NOTE is not ranked into an order it does not have", () => {
   const items = [item("n1", { source: "note" })];
   const p = cleanAssessment({ items: [{ id: "n1", verdict: "wanted", rank: 2 }] }, items);
-  assert.deepEqual(applyAssessment(p, { rows: ["n1"] }, ctx(items)), { dismiss: [], rank: [], post: [], requeue: [], pinRanks: false, name: [] });
+  assert.deepEqual(applyAssessment(p, { rows: ["n1"] }, ctx(items)), { dismiss: [], rank: [], post: [], split: [], requeue: [], pinRanks: false, name: [] });
 });
 
 test("a dismissed pad note says which store its words are in", () => {
@@ -608,7 +604,7 @@ test("a dismissed pad note says which store its words are in", () => {
 test("an accepted `unclear` does nothing — a tap cannot supply a decision nobody reached", () => {
   const items = input("a");
   const p = cleanAssessment({ items: [{ id: "a", verdict: "done" }] }, items);
-  assert.deepEqual(applyAssessment(p, { rows: ["a"] }, ctx(items)), { dismiss: [], rank: [], post: [], requeue: [], pinRanks: false, name: [] });
+  assert.deepEqual(applyAssessment(p, { rows: ["a"] }, ctx(items)), { dismiss: [], rank: [], post: [], split: [], requeue: [], pinRanks: false, name: [] });
 });
 
 test("approved new items are posted with an origin pointing back at the run", () => {
@@ -622,7 +618,7 @@ test("approvals naming ids, groups or indices that do not exist are ignored", ()
   const items = input("a");
   const p = cleanAssessment({ items: [{ id: "a", verdict: "wanted" }] }, items);
   const m = applyAssessment(p, { rows: ["ghost"], merges: ["nope"], news: [7] }, ctx(items));
-  assert.deepEqual(m, { dismiss: [], rank: [], post: [], requeue: [], pinRanks: false, name: [] });
+  assert.deepEqual(m, { dismiss: [], rank: [], post: [], split: [], requeue: [], pinRanks: false, name: [] });
 });
 
 

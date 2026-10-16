@@ -4,17 +4,20 @@
  * re-validated host-side at execution time, so a run delivered later may hit
  * fewer valid targets and still settle ok.
  */
+import type { LaunchOpts } from "@waterplane/shared";
 import { core } from "../../sdk";
 import { onceIn } from "../../sendIntent";
 import { FANOUT_LANE, fanoutToast, followUpLane, followUpToast } from "./logic";
 
-export function runFanout(dirs: string[], text: string): void {
+/** `launch` is the sweep's own (the sheet's launch row — backend, model and
+ *  effort over the new-session defaults, which every other option still is). */
+export function runFanout(dirs: string[], text: string, launch: LaunchOpts, flagWhenDone?: boolean): void {
   const c = core();
   // `launch.wire`, for the same reason every `session.create` gets it
   // (`createOp`): a sweep spawns N real sessions, so a stale synced
   // `backend` here is the same bad spawn N times over.
   const { cols, rows } = c.term.geom();
-  const offline = c.queue.queueOp({ t: "fanout.run", dirs, text, launch: c.launch.wire(c.world.launch), cols, rows },
+  const offline = c.queue.queueOp({ t: "fanout.run", dirs, text, launch: c.launch.wire(launch), ...(flagWhenDone ? { flagWhenDone: true } : {}), cols, rows },
     FANOUT_LANE, text);
   c.say.toast(fanoutToast(offline, dirs.length));
 }
@@ -26,10 +29,11 @@ export function followUpFanout(runId: string, text: string, dirs: string[]): voi
 }
 
 /** "Later" — the same composed sweep, handed to the Send sheet's *When*. The
- *  repos and the prompt travel with it; nothing is queued yet. */
-export function scheduleFanout(dirs: string[], text: string): void {
+ *  repos, the prompt and the launch row's pick travel with it (a snapshot: the
+ *  rule fires with the launch it was saved with); nothing is queued yet. */
+export function scheduleFanout(dirs: string[], text: string, launch: LaunchOpts): void {
   core().nav.openSend({
-    prompts: [text], target: { kind: "repos", dirs }, when: onceIn(3600e3),
+    prompts: [text], target: { kind: "repos", dirs, launch }, when: onceIn(3600e3),
     cwdHint: dirs[0] ?? null, origin: "This sweep, at a time you pick",
   });
 }

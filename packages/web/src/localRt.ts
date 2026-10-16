@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { LS, lsGet, lsJson, lsSet, lsSetJson } from "./storage.ts";
+import { isDemo } from "./demo/mode.ts";
 import { BRAND, envName, type ClientMessage, type HostMessage, type LoadedModel, type LocalRuntimeSample } from "@waterplane/shared";
 export { modelBaseName } from "@waterplane/shared";
 import type { LinkStatus } from "./link.ts";
@@ -478,20 +479,30 @@ export const LOCAL_RT_MODE_LABEL: Record<LocalRtMode, string> = {
  * The old values were `true`/`false` and the old `true` meant "always drawn",
  * so it migrates to `always` and NOT to `auto`: a preference already expressed
  * must not quietly become a weaker one on upgrade. Unset is `always`,
- * the default for a new device; anything unrecognised is `off` — never a mode
- * somebody did not pick.
+ * the default for a new device — except in the demo, where it is `auto`: the
+ * demo desktop runs no local model, so an always-on strip could only say "not
+ * polled here" over every screen, a standing row about nothing, and `auto`
+ * draws it the moment a model is resident, which the demo never has. A mode
+ * somebody PICKED is read as picked, demo or not; anything unrecognised is
+ * `off` — never a mode somebody did not pick.
  */
 export function readLocalRtMode(): LocalRtMode {
   const raw = lsGet(LS.localRtBar);
-  if (raw === null) return "always";
+  if (raw === null) return isDemo() ? "auto" : "always";
   const v = raw.replace(/^"|"$/g, "");
   if (v === "off" || v === "auto" || v === "always") return v;
   return v === "true" ? "always" : "off";
 }
 
-let barMode: LocalRtMode = readLocalRtMode();
+/**
+ * The mode somebody PICKED during this page life, or null — only then is it held here. An unset mode
+ * is re-read, never cached: this module loads before the demo transport is installed (`main.tsx`),
+ * so `isDemo()` is not yet true at import and a default fixed there would be the real app's.
+ */
+let barMode: LocalRtMode | null = null;
+const currentMode = (): LocalRtMode => barMode ?? readLocalRtMode();
 
-export function localRtMode(): LocalRtMode { return barMode; }
+export function localRtMode(): LocalRtMode { return currentMode(); }
 
 /**
  * **`localRtEnabled` / `setLocalRtEnabled` are a frozen contract** — kept
@@ -499,14 +510,14 @@ export function localRtMode(): LocalRtMode { return barMode; }
  * "Enabled" now means "not off", i.e. this device is watching; whether the
  * strip is DRAWN right now is `barVisible()`, which is a different question.
  */
-export function localRtEnabled(): boolean { return barMode !== "off"; }
+export function localRtEnabled(): boolean { return currentMode() !== "off"; }
 
 export function setLocalRtEnabled(on: boolean): void {
   setLocalRtMode(on ? "always" : "off");
 }
 
 export function setLocalRtMode(mode: LocalRtMode): void {
-  if (barMode === mode) return;
+  if (currentMode() === mode) return;
   barMode = mode;
   lsSet(LS.localRtBar, JSON.stringify(mode));
   // Off drops the ring rather than freezing it: samples kept across a stretch
@@ -657,8 +668,8 @@ function invalidate(): void { snap = null; }
 export function localRtSnapshot(): LocalRtSnapshot {
   if (snap) return snap;
   snap = {
-    enabled: barMode !== "off",
-    mode: barMode,
+    enabled: currentMode() !== "off",
+    mode: currentMode(),
     samples: ring.slice(),
     last: ring.length ? ring[ring.length - 1] : doc.last,
     disabled: doc.disabled,

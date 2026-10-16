@@ -22,17 +22,30 @@ import { showToast } from "../../toast";
 import { track } from "../../usage";
 import { baseName } from "../../format";
 import type { DurableOp } from "../../sdk/types.ts";
-import { PENDING_PREFIX, isPendingId, pendingLaneId } from "./logic.ts";
-import type { PendingFns, QueueCtx } from "./types.ts";
+import { LATER_PREFIX, PENDING_PREFIX, isLaterId, isPendingId, laterId, pendingLaneId } from "./logic.ts";
+import { noteShellAdopted } from "../launch/shellReturn.ts";
+import type { PendingFns, PendingKept, QueueCtx } from "./types.ts";
+
+/** How long an adopted screen may stand in for a session the list has not
+ *  named yet. Normally a frame; past this the id is just unknown, as before. */
+const ADOPT_BRIDGE_MS = 30_000;
+
+/** A kept entry, or undefined once its adoption is older than the bridge —
+ *  Back onto a long-adopted `pending:` id is an unknown screen, not a session
+ *  that "opens in a moment" for ever. */
+function adoptBridge(k: PendingKept | undefined): PendingKept | undefined {
+  return k?.adoptedAt && Date.now() - k.adoptedAt > ADOPT_BRIDGE_MS ? undefined : k;
+}
 
 /**
  * The pending screen's state: what each one was opened FOR, the queue entry
  * behind the one on top, and the synthetic session it renders from.
  */
-export function usePendingState(activeId: string | null, outbox: OutboxEntry[]) {
+export function usePendingState(activeId: string | null, outbox: OutboxEntry[], sessions: readonly SessionInfo[]) {
   /** What each pending screen was opened FOR, so it survives its queue entry
-   *  being retired by a successful ack. Written on entry, dropped on adoption. */
-  const pendingKept = useRef<Map<string, { cwd: string; title: string; ts: number }>>(new Map());
+   *  being retired by a successful ack. Written on entry, stamped on adoption
+   *  (and copied under the session's id) to bridge the frames until it is listed. */
+  const pendingKept = useRef<Map<string, PendingKept>>(new Map());
   /** The queue entry behind a pending screen, or null once it has been acked,
    *  dropped or evicted — the screen then says so rather than hanging. */
   const pendingEntry = useMemo(() => {
@@ -46,14 +59,34 @@ export function usePendingState(activeId: string | null, outbox: OutboxEntry[]) 
    * and a session that is on its way is not one that has finished.
    */
   const pendingSession = useMemo<SessionInfo | null>(() => {
+    // **Adopted, not yet listed.** `op.ack` names the session and moves the
+    // screen onto that id (`adoptPendingSession`) a frame or more before
+    // `session.created` puts it in the list — and in that gap App had no
+    // session at all, so the whole screen unmounted and came back: the
+    // "pick a session" pane flashed and the caret the fresh screen had put in
+    // the compose box was gone. The pending screen stands in until the real
+    // one arrives, and not a frame longer.
+    if (activeId && !isPendingId(activeId)) {
+      if (sessions.some((s) => s.id === activeId)) return null;
+      const was = adoptBridge(pendingKept.current.get(activeId));
+      if (!was?.adoptedAt) return null;
+      return {
+        id: activeId, cwd: was.cwd, title: was.title, remoteControl: false, running: true, createdAt: was.ts,
+      };
+    }
     if (!isPendingId(activeId)) return null;
+    // `+ later`: no create, no entry — the repo is in the id.
+    if (isLaterId(activeId)) {
+      const cwd = activeId!.slice(LATER_PREFIX.length);
+      return { id: activeId!, cwd, title: baseName(cwd) || "new session", remoteControl: false, running: true, createdAt: Date.now() };
+    }
     const e = pendingEntry;
     // The queue entry is GONE the moment `op.ack` says ok — and for a create the
     // host PARKED (it is holding it until the files land), the session it will
     // name is still minutes away. Without a fallback the screen would drop to
     // the launcher on the very ack that means it worked. So what was opened is
     // remembered separately, and the entry only ever adds detail.
-    const kept = pendingKept.current.get(activeId!.slice(PENDING_PREFIX.length));
+    const kept = adoptBridge(pendingKept.current.get(activeId!.slice(PENDING_PREFIX.length)));
     if (!e && !kept) return null;
     const op = e?.op as (DurableOp & { t: "session.create" }) | undefined;
     const cwd = e?.cwd || kept?.cwd || "";
@@ -63,7 +96,7 @@ export function usePendingState(activeId: string | null, outbox: OutboxEntry[]) 
       model: op?.launch?.model, effort: op?.launch?.effort,
       permissionMode: op?.launch?.permissionMode, remoteControlled: op?.launch?.remoteControlled,
     };
-  }, [pendingEntry, activeId]);
+  }, [pendingEntry, activeId, sessions]);
   return { pendingKept, pendingEntry, pendingSession };
 }
 
@@ -84,6 +117,13 @@ export function pendingFns(c: QueueCtx): PendingFns {
     if (e) enterPending(e.ackId);
   }
 
+  /** `+ later` (`laterId`): the same screen, with nothing queued behind it
+   *  until Send — the compose bar is aimed at a NEW session, when it's free. */
+  function enterLater(cwd: string): void {
+    wantNavRef.current = false;
+    setOverlay(null);
+    setActiveId(laterId(cwd));
+  }
   /**
    * Show the session NOW, before the host has made it.
    *
@@ -143,7 +183,19 @@ export function pendingFns(c: QueueCtx): PendingFns {
    */
   function adoptPendingSession(createAck: string, sessionId: string): void {
     const from = pendingLaneId(createAck);
-    pendingKept.current.delete(createAck);
+    // Not dropped yet: the ack's outbox write renders BEFORE `setActiveId`
+    // below does, and in that frame the pending screen has neither its entry
+    // nor this. Kept under both ids, stamped, for the gap until the session
+    // is listed (`usePendingState`); the same bound as every other entry here.
+    const was = pendingKept.current.get(createAck);
+    if (was) {
+      const adopted = { ...was, adoptedAt: Date.now() };
+      pendingKept.current.set(createAck, adopted);
+      pendingKept.current.set(sessionId, adopted);
+    }
+    // A shell a sheet went to (`launch.focusShell`) is remembered by this id
+    // too — re-keyed whether or not it is the screen on top right now.
+    noteShellAdopted(createAck, sessionId);
     if (activeIdRef.current !== from) return;
     const draft = loadDraft(from);
     if (draft) saveDraft(sessionId, draft);
@@ -242,7 +294,7 @@ export function pendingFns(c: QueueCtx): PendingFns {
   }
 
   return {
-    enterPending, enterOldestPending, retryPendingCreate, adoptPendingSession, queueSessionPrompt, holdForLaunch,
+    enterPending, enterOldestPending, enterLater, retryPendingCreate, adoptPendingSession, queueSessionPrompt, holdForLaunch,
     failPendingCreates, failDependentUploads,
   };
 }

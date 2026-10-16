@@ -105,8 +105,9 @@
 //
 //   STUB_MODE=login — the `/login` screen: a 300-character OAuth URL, hard-
 //     wrapped across six rows the way a terminal GRID wraps one (no soft wrap,
-//     no marker joining them), then the paste-the-code input and the dialog
-//     footer. This is the shape that made signing in from a phone impossible:
+//     no marker joining them), then the paste-the-code input and NO dialog
+//     footer — claude 2.1.293 draws none there, and a stub that still did hid
+//     a render gate that only opened on one. This is the shape that made signing in from a phone impossible:
 //     every consumer that reads the screen as text sees six fragments, none of
 //     which is a link. Typing a code and pressing Return signs in and clears
 //     the screen, so the test can also assert that the published link RETIRES.
@@ -151,6 +152,17 @@
 //     Claude Code should be (R-demo-016). A submitted prompt gets a short scripted turn on
 //     `logo`'s pace: the suggested first-app prompt (confetti) is answered as that work, anything
 //     else is acknowledged and nothing changes. No model, no tokens, no file is touched.
+//     The setup film (journey `setup`) sends the dark-mode prompt (`SETUP_PROMPT_RE`), answered as
+//     that work. `STUB_TRUST=1` opens on the CLI's first-launch workspace-trust box instead
+//     (packages/host/test/fixtures/permmode/trust-box.txt's wording, re-captured off claude 2.1.293
+//     on 2026-10-08: unnumbered rows, the cursor on "No, exit"; the folder said from `~`): arrows
+//     move the cursor, Return answers it — "Yes" draws the welcome header, "No" exits.
+//     `STUB_CLAUDE_VERSION` is the version the welcome header says (default 2.1.140).
+//
+//   STUB_MODE=permmode — the permission-mode footer of claude 2.1.293 under a real `❯`-plus-rules
+//     composer, and shift+tab (`\x1b[Z`) cycling it: auto → manual → accept edits → plan → auto,
+//     the labels and glyphs as measured (packages/host/test/fixtures/permmode/). `STUB_PERMMODE_DEAF=1`
+//     ignores shift+tab (the footer never moves). For e2e-permmode.mjs.
 //
 //   STUB_MODE=answer — a turn that ANSWERS, for the peer-job e2e (e2e-peer.mjs). The default
 //     composer, but a submit also writes the conversation log the host reads a report from
@@ -205,8 +217,18 @@ if (process.argv[2] === "auth" && process.argv[3] === "status") {
 // logo mode, headless: the host's one naming call for the tab (`nameTab`). Answered with the real
 // `--output-format json` envelope and a plain name — the gif shows the tab, and a painted screen read
 // back as a title is escape codes in it.
+/** welcome mode: the first prompt the setup film sends (scripts/ui/journey-setup.mjs). */
+const SETUP_PROMPT_RE = /dark mode/i;
 if (HEADLESS && (MODE === "logo" || MODE === "welcome")) {
-  out(JSON.stringify({ type: "result", subtype: "success", is_error: false, result: MODE === "logo" ? "Tide Tables logo" : "Confetti every tenth tap", usage: { input_tokens: 0, output_tokens: 0 }, total_cost_usd: 0 }) + "\n");
+  // The tab is named off the first prompt, which reaches a headless run on stdin.
+  let stdin = "";
+  if (MODE === "welcome" && !process.stdin.isTTY) {
+    const t = setTimeout(() => process.stdin.destroy(), 1500);
+    try { for await (const c of process.stdin) stdin += c; } catch { /* closed: name it off what arrived */ }
+    clearTimeout(t);
+  }
+  const result = MODE === "logo" ? "Tide Tables logo" : SETUP_PROMPT_RE.test(stdin) ? "Dark mode toggle" : "Confetti every tenth tap";
+  out(JSON.stringify({ type: "result", subtype: "success", is_error: false, result, usage: { input_tokens: 0, output_tokens: 0 }, total_cost_usd: 0 }) + "\n");
   process.exit(0);
 }
 
@@ -627,8 +649,7 @@ function paintLogin() {
   frame += "Login\r\n\r\n";
   frame += "Browser didn't open? Use the url below to sign in\r\n\r\n";
   for (let i = 0; i < LOGIN_URL.length; i += LOGIN_WRAP) frame += LOGIN_URL.slice(i, i + LOGIN_WRAP) + "\r\n";
-  frame += "\r\nPaste code here if prompted >\r\n\r\n";
-  frame += "Esc to cancel\r\n";
+  frame += "\r\nPaste code here if prompted >\r\n";
   out(frame);
 }
 
@@ -707,18 +728,55 @@ function feedDemo(d) {
  * mode loads nothing new.
  */
 const LOGO_C = "\x1b[38;2;215;119;87m", DIM = "\x1b[2m", BOLD = "\x1b[1m", RST = "\x1b[0m";
-const LOGO_BANNER = "\r\n\r\n\r\n\r\n\r\n" + `${LOGO_C} \u2590\u259b\u2588\u2588\u2588\u259c\u258c${RST}   ${BOLD}Claude Code${RST} ${DIM}v2.1.140${RST}\r\n` +
+const LOGO_BANNER = "\r\n\r\n\r\n\r\n\r\n" + `${LOGO_C} \u2590\u259b\u2588\u2588\u2588\u259c\u258c${RST}   ${BOLD}Claude Code${RST} ${DIM}v${process.env.STUB_CLAUDE_VERSION || "2.1.140"}${RST}\r\n` +
   `${LOGO_C}\u259d\u259c\u2588\u2588\u2588\u2588\u2588\u259b\u2598${RST}  ${DIM}Sonnet 5 \u00b7 Claude Max${RST}\r\n` +
   `${LOGO_C}  \u2598\u2598 \u259d\u259d${RST}    ${DIM}~/dev/${process.cwd().split("/").pop()}${RST}\r\n\r\n`;
 const LOGO_STEP_MS = Number(process.env.STUB_LOGO_STEP_MS || 900);
 let logoLog = [];
 let logoWorking = null; // { verb, t0 } while a turn runs
 let logoBusy = false;
+/** welcome mode under STUB_TRUST=1: the first-launch trust box is up until it is answered. */
+let trustOpen = MODE === "welcome" && process.env.STUB_TRUST === "1";
+let trustCursor = 0;
+const TRUST_OPTS = ["No, exit", "Yes, I trust this folder"];
+function paintTrust() {
+  const cols = Math.max(40, process.stdout.columns || 80);
+  const home = homedir();
+  const dir = process.cwd().startsWith(home + "/") ? "~" + process.cwd().slice(home.length) : process.cwd();
+  // Word-wrapped to the grid the way the CLI wraps it (a capture at 100 columns breaks after "a").
+  const wrap = (text) => {
+    const rows = [];
+    let row = "";
+    for (const w of text.split(" ")) {
+      if (row && row.length + 1 + w.length > cols - 2) { rows.push(row); row = w; } else row = row ? `${row} ${w}` : w;
+    }
+    return rows.concat(row).map((r) => ` ${r}\r\n`).join("");
+  };
+  let frame = "\x1b[H\x1b[2J" + `${LOGO_C}${"\u2500".repeat(cols)}${RST}\r\n` +
+    ` ${BOLD}Accessing workspace:${RST}\r\n\r\n ${dir}\r\n\r\n` +
+    wrap("Quick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source project, or work from your team). If not, take a moment to review what's in this folder first.") +
+    "\r\n" + wrap("Claude Code'll be able to read, edit, and execute files here.") + "\r\n" +
+    ` ${DIM}Security guide${RST}\r\n\r\n`;
+  TRUST_OPTS.forEach((o, i) => { frame += i === trustCursor ? ` ${LOGO_C}\u276f ${o}${RST}\r\n` : `   ${o}\r\n`; });
+  frame += `\r\n ${DIM}Enter to confirm \u00b7 Esc to cancel${RST}\r\n`;
+  out(frame);
+}
+// The phone sizes the grid after the spawn: the box is re-wrapped to it, as the CLI re-wraps.
+if (trustOpen) process.stdout.on("resize", () => { if (trustOpen) paintTrust(); });
+function answerTrust(i) {
+  if (i === 0) { out("\x1b[H\x1b[2J"); process.exit(0); }
+  trustOpen = false;
+  paintLogo();
+}
 function paintLogo() {
+  if (trustOpen) return paintTrust();
   let frame = "\x1b[H\x1b[2J" + LOGO_BANNER;
   for (const l of logoLog) frame += `${l}\r\n`;
   if (logoWorking) frame += `\r\n${LOGO_C}\u273b${RST} ${logoWorking.verb}\u2026 ${DIM}(${Math.max(1, Math.round((Date.now() - logoWorking.t0) / 1000))}s \u00b7 esc to interrupt)${RST}\r\n`;
   frame += `\r\n> ${buf}\r\n`;
+  // The status line the CLI draws under its composer once it takes typing — what a delivery
+  // waits for after accepting the trust box (`deliverrun.ts`). Only under STUB_TRUST: the docs' frames stay as filmed.
+  if (process.env.STUB_TRUST === "1") frame += `  ${DIM}? for shortcuts${RST}\r\n`;
   out(frame);
 }
 async function logoTurn(prompt) {
@@ -757,6 +815,18 @@ async function logoTurn(prompt) {
   hook("Stop");
 }
 function feedLogo(d) {
+  if (trustOpen) {
+    for (let i = 0; i < d.length && trustOpen; i++) {
+      const rest = d.slice(i);
+      if (rest.startsWith("\x1b[B")) { trustCursor = Math.min(TRUST_OPTS.length - 1, trustCursor + 1); i += 2; continue; }
+      if (rest.startsWith("\x1b[A")) { trustCursor = Math.max(0, trustCursor - 1); i += 2; continue; }
+      const ch = d[i];
+      if (ch === "1" || ch === "2") answerTrust(Number(ch) - 1);
+      else if (ch === "\r" || ch === "\n") answerTrust(trustCursor);
+    }
+    if (trustOpen) paintTrust();
+    return;
+  }
   for (const ch of d) {
     if (ch === "\r" || ch === "\n") {
       if (logoBusy || !buf.trim()) continue;
@@ -775,7 +845,14 @@ async function welcomeTurn(prompt) {
   hook("UserPromptSubmit", { prompt });
   const short = prompt.length > 160 ? prompt.slice(0, 157) + "\u2026" : prompt;
   logoLog.push(`${DIM}>${RST} ${short}`, "");
-  const lines = /confetti/i.test(prompt) ? [
+  const lines = SETUP_PROMPT_RE.test(prompt) ? [
+    ["\u25cf Read(src/App.tsx)", "  \u23bf  Read 112 lines"],
+    ["\u25cf Read(src/styles.css)", "  \u23bf  Read 87 lines"],
+    ["\u25cf Update(src/styles.css)", "  \u23bf  Added 24 lines: a dark palette under [data-theme=dark]"],
+    ["\u25cf Update(src/App.tsx)", "  \u23bf  Added 18 lines: a moon/sun toggle in the header, remembered per browser"],
+    ["\u25cf Bash(npm test)", "  \u23bf  14 passed (2 new: the toggle flips the theme, and it survives a reload)"],
+    ["", "\u25cf Done. The header has a dark mode toggle; it follows the system setting until you tap it, then remembers your choice.", ""],
+  ] : /confetti/i.test(prompt) ? [
     ["\u25cf Read(index.html)", "  \u23bf  Read 64 lines"],
     ["\u25cf Update(index.html)", "  \u23bf  Added 31 lines: a confetti burst on every tenth tap, and the best streak under the count"],
     ["", "\u25cf Done. Every tenth tap now bursts confetti, and the best streak of this visit shows under the count. Rebuild the page to see it.", ""],
@@ -807,6 +884,7 @@ function paint() {
   if (MODE === "stream") return paintStream();
   if (MODE === "menu") return paintMenu();
   if (MODE === "paste") return paintPaste();
+  if (MODE === "permmode") return paintPermMode();
   let frame = "\x1b[H\x1b[2J";
   for (let i = 0; i < 40; i++) frame += `\x1b[38;5;${i % 255}m  transcript line ${i} ${"lorem ipsum ".repeat(3)}\x1b[0m\r\n`;
   if (!BLIND) frame += `> ${buf}\r\n`;
@@ -841,6 +919,27 @@ function paintMenu() {
       frame += `                         length that wraps a line\r\n`;
     }
   }
+  out(frame);
+}
+
+/**
+ * permmode mode. The footer row the host reads the mode off (`permmode.ts`),
+ * under a composer `echo.ts` and `permmode.ts` both recognise, with a status
+ * line between them like a user's own `statusLine` draws.
+ */
+const PM_CYCLE = [
+  ["\u23f5\u23f5", "auto mode on (shift+tab to cycle)"],
+  ["\u23f8", "manual mode on"],
+  ["\u23f5\u23f5", "accept edits on (shift+tab to cycle)"],
+  ["\u23f8", "plan mode on (shift+tab to cycle)"],
+];
+let pmIdx = 0;
+const PM_RULE = "\u2500".repeat(60);
+function paintPermMode() {
+  let frame = "\x1b[H\x1b[2J";
+  for (let i = 0; i < 8; i++) frame += `  transcript line ${i} lorem ipsum\r\n`;
+  const [glyph, words] = PM_CYCLE[pmIdx];
+  frame += `${PM_RULE}\r\n\u276f\u00a0${buf}\r\n${PM_RULE}\r\n  [STATUS]\r\n  ${glyph} ${words} \u00b7 \u2190 1 agent\r\n`;
   out(frame);
 }
 
@@ -892,6 +991,13 @@ process.stdin.on("data", (d) => {
   // text, and Return means two different things depending on the cursor.
   if (MODE === "checkbox" && cbOpen) { feedCheckbox(d); return; }
   if (MODE === "demo") { feedDemo(d); return; }
+  // permmode: shift+tab moves the footer (unless deaf), and is never text.
+  if (MODE === "permmode" && d.includes("\x1b[Z")) {
+    const n = d.split("\x1b[Z").length - 1;
+    if (process.env.STUB_PERMMODE_DEAF !== "1") pmIdx = (pmIdx + n) % PM_CYCLE.length;
+    d = d.split("\x1b[Z").join("");
+    if (!d) { paint(); return; }
+  }
   if (MODE === "logo" || MODE === "welcome") { feedLogo(d); return; }
   // The sign-in input owns the screen until a code is submitted. Logged in, the
   // link leaves the screen — which is what the host has to notice.

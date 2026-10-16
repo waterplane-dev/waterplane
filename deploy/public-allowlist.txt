@@ -31,8 +31,12 @@ docs/assets/**
 docs/media/*.gif
 docs/media/*.png
 docs/guide.md
+# The long install guide the README points at (Windows, Docker, agent install, service, update, configuration).
+docs/install.md
 # The plugin API reference, generated from packages/shared/src/plugin.ts (scripts/gen-plugin-docs.mjs).
 docs/plugins-api.md
+docs/plugins.md
+examples/**
 
 # ---- repo plumbing ----------------------------------------------------------
 .github/**
@@ -42,6 +46,8 @@ docs/plugins-api.md
 
 # ---- root files -------------------------------------------------------------
 /README.md
+# waterplane.dev: its page is generated from the README (scripts/site), so it ships with it.
+site/**
 /LICENSE
 /SECURITY.md
 /CONTRIBUTING.md
@@ -59,6 +65,10 @@ docs/plugins-api.md
 /.editorconfig
 /.nvmrc
 /.npmrc
+/.gitattributes
+# The gitleaks config (publish-public.mjs's scan reads it from the snapshot root). Names public
+# test fixtures only; /.gitleaksignore, which holds the rest, is deliberately not listed.
+/.gitleaks.toml
 
 # ---- carve-outs: personal, or credentials -----------------------------------
 # Env files hold keys. Only the template is public.
@@ -99,6 +109,10 @@ deploy/release-pubkey.pem
 # stays PRIVATE (owner decision, 2026-10-07): a tool for this machine, not the project.
 # Public code names none of it (diskspace/publictree.json).
 !packages/extensions/diskspace/**
+# The links extension (this desktop's ports, tailnet front doors and GCP projects in one
+# list) stays PRIVATE (owner decision, 2026-10-10): a tool for this machine's projects.
+# Public code names none of it (links/publictree.json).
+!packages/extensions/links/**
 # The media tooling stays PRIVATE (owner decision, 2026-10-06): the Playwright journeys
 # that film the demo, the gif/svg/apk recorders, their tests and the skill that drives
 # them. The pictures they make are public (docs/media above); how they are made is not.
@@ -107,6 +121,8 @@ deploy/release-pubkey.pem
 !tools/uicaptions.test.mjs
 !tools/uipace.test.mjs
 !tools/uiteaser.test.mjs
+!tools/uiencode.test.mjs
+!tools/uifilm.test.mjs
 !tools/stublogo.test.mjs
 !.claude/skills/docs-media/**
 # Pending owner review (listed again on purpose, so a future broad include above

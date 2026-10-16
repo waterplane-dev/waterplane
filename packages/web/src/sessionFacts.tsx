@@ -21,6 +21,8 @@ import { PromptPair } from "./PromptPair";
 import { peerJobLine, peerJobOriginText, peerSpendSplit, peerWaitWords, sessionCostOf, shellsSummary } from "@waterplane/shared";
 import { ago, dur, hhmm } from "./format";
 import { isShellBackend, type BackendList } from "./backendCaps";
+import { isFlagged } from "./core/sessions/followUpFacts.ts";
+import { liveLaunch } from "./liveLaunch";
 
 /**
  * The ONE definition of "what is this session doing" — the row badge
@@ -61,8 +63,10 @@ export function sessionStatus(s: SessionInfo, backends: BackendList = null): Ses
   if (s.idle) {
     if (s.agents?.length) return "coding";
     if (s.shellList) {
-      const sum = shellsSummary(s.shellList, Date.now());
-      return sum.working + sum.waiting > 0 ? "coding" : "done";
+      // Only a shell with real workers under it is work. A `waiting` one is a
+      // poll loop that only sleeps between checks — counting it read "coding"
+      // on a session sitting at an empty prompt with nothing running.
+      return shellsSummary(s.shellList, Date.now()).working > 0 ? "coding" : "done";
     }
     return s.shells ? "coding" : "done";
   }
@@ -79,6 +83,10 @@ export function sessionStatus(s: SessionInfo, backends: BackendList = null): Ses
  * working, in this repo" shows and the launcher has no room to say which of them
  * is in force.
  *
+ * `"followup"` is the star's twin — the follow-up flag, set by hand, by a
+ * launch option or by the session's agent (R-sessions-045), one predicate for
+ * the chip and the cut (`isFlagged`).
+ *
  * `"shells"` is the same shape of exception: a session runs background shells
  * or it does not, independent of `sessionStatus` (a session with only quiet
  * shells reads `done`, one with a working shell reads `coding` — either may
@@ -87,12 +95,12 @@ export function sessionStatus(s: SessionInfo, backends: BackendList = null): Ses
 /** `worktrees` is a session running in one of a repo's other checkouts — the
  *  header's worktree chip. Only the launcher can tell (it needs the repo list),
  *  so `matchesFilterKind` answers false for it and the launcher decides. */
-export type SessionFilter = SessionStatus | "starred" | "shells" | "worktrees";
+export type SessionFilter = SessionStatus | "starred" | "followup" | "shells" | "worktrees";
 
 /** Words for a filter, used by the filter bar and every chip title. */
 export const STATUS_LABEL: Record<SessionFilter, string> = {
   exited: "exited", limit: "at the usage limit", wait: "waiting for your answer", done: "idle", coding: "working",
-  starred: "starred", shells: "running background shells", worktrees: "worktrees",
+  starred: "starred", followup: "flagged for follow up", shells: "running background shells", worktrees: "worktrees",
 };
 
 /**
@@ -101,6 +109,7 @@ export const STATUS_LABEL: Record<SessionFilter, string> = {
  */
 export function matchesFilterKind(s: SessionInfo, kind: SessionFilter, backends: BackendList = null): boolean {
   if (kind === "starred") return !!s.starred;
+  if (kind === "followup") return isFlagged(s);
   if (kind === "shells") return !!s.shellList?.length;
   if (kind === "worktrees") return false;
   return sessionStatus(s, backends) === kind;
@@ -138,6 +147,18 @@ export function statusPill(s: SessionInfo, backends: BackendList = null): Pill {
   const st = sessionStatus(s, backends);
   if (st === "exited") return { cls: "dead", title: "", body: "exited" };
   const lim = s.limit;
+  if (st === "limit" && lim?.spend) {
+    // An API account out of credit or over a spend limit: not a plan window, so no "usage" and no
+    // invented clock. A time is worded only where the host has one (a printed reset or the period's).
+    const at = lim.nextAttemptAt ?? lim.resetAt;
+    return {
+      cls: lim.autoContinue && at ? "limit-auto" : "limit-manual",
+      title: at
+        ? `at a spend limit — resumes ~${hhmm(at)}${lim.attempts ? ` · attempt ${lim.attempts}` : ""}`
+        : "at a spend limit — it needs you: add credit or raise the limit, then resume",
+      body: <><Hourglass size={12} /> {at ? `spend · resumes ${hhmm(at)}` : "spend limit · needs you"}</>,
+    };
+  }
   if (st === "limit" && lim) {
     // Wording dodges the limit.ts detection regexes (this file printed inside
     // a session must not trip them).
@@ -198,7 +219,7 @@ export function statusPill(s: SessionInfo, backends: BackendList = null): Pill {
       body: <><Bot size={12} /> {agents} agent{agents === 1 ? "" : "s"}</>,
     };
   }
-  // A session with only background shells working/waiting (no agents) is
+  // A session with only background shells working (no agents) is
   // still `coding` (`sessionStatus`), but the shell-specific words are
   // `shellsTag`'s own chip, drawn separately — this pill stays the plain
   // spinner it always was, whatever is running underneath.
@@ -341,7 +362,7 @@ export function SessionFacts({ s, repoLabel, backendLabel, backends }: {
         {peer && <span className={`tag ${peer.cls}`} title={peer.title}>{peer.body}</span>}
         {spend && <span className={`tag ${spend.cls}`} title={spend.title}>{spend.body}</span>}
         {origin && <span className={`tag ${origin.cls}`} title={origin.title}>{origin.body}</span>}
-        <span className="row-sub row-launch">{launchLabel(s, backendLabel, backends)}</span>
+        <span className="row-sub row-launch">{launchLabel(liveLaunch(s), backendLabel, backends)}</span>
         {s.createdAt && s.running && (
           <span className="row-sub" title={`session open for ${dur(s.createdAt)} — started ${new Date(s.createdAt).toLocaleString()}`}>
             <Clock size={11} /> {dur(s.createdAt)}

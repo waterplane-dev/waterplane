@@ -22,7 +22,7 @@
  * A `.corrupt-*` copy is `unknown` to `hoststore.ts`: counted, shown, never
  * cleared by it.
  */
-import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 
 export interface WriteJsonOpts {
@@ -60,6 +60,31 @@ export function writeTextAtomic(path: string, body: string, opts: Pick<WriteJson
   // The rename itself is durable only once the directory entry is. Best effort:
   // not every platform lets a directory be opened for fsync.
   try { const d = openSync(dir, "r"); try { fsyncSync(d); } finally { closeSync(d); } } catch { /* best effort */ }
+}
+
+/**
+ * `writeTextAtomic` for a file that BELONGS TO SOMEONE ELSE — a repo's `.gitignore`
+ * or `CLAUDE.md`, rewritten to add a block. Two things a store's own file never
+ * needs: the existing mode is carried over (a rename would otherwise swap in the
+ * umask's mode, silently loosening 0600 or dropping an executable bit), and a
+ * symlink is written THROUGH (a rename over the link would replace it with a
+ * regular file and orphan the real one). A file that does not exist yet gets the
+ * same mode a plain `writeFileSync` would have given it.
+ */
+export function writeTextAtomicKeepMode(path: string, body: string): void {
+  let target = path;
+  let mode: number | undefined;
+  try {
+    target = realpathSync(path);
+    mode = statSync(target).mode & 0o7777;
+  } catch { /* absent: a new file, today's default mode */ }
+  writeTextAtomic(target, body, { mode });
+}
+
+/** Rotate a JSONL ledger: keep the newest `keep` lines, via the atomic write (a kill mid-rotation leaves the old file whole). */
+export function keepLastLines(path: string, keep: number): void {
+  const lines = readFileSync(path, "utf8").trimEnd().split("\n");
+  writeTextAtomic(path, lines.slice(-keep).join("\n") + "\n");
 }
 
 /** What `readJsonGuarded` found, for a caller that must act on a loss (acks.ts). */

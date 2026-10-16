@@ -77,8 +77,9 @@ the root is under the cap, so the cap alone governs.
 ```
 web/index.ts  TokensSheet.tsx  TokenStatsSheet.tsx (root: the header note and the two cached reads)  constants.ts  when.ts
 web/LimitWindows.tsx  WindowHeats.tsx  UsageSpark.tsx  TokenStatsBody.tsx (every hook)
-web/TotalsCard.tsx  OverTimeCard.tsx  Readouts.tsx  TableView.tsx  guests.ts (contributed tabs)
+web/TotalsCard.tsx  OverTimeCard.tsx  Readouts.tsx  TableView.tsx  guests.ts (contributed tabs)  SourceWindows.tsx + sourceWords.ts (a usage SOURCE with a quota and no ledger: one chip per reading, "opened on X · 1 of N sources" + all; history via ledgers.sourceHistory, absent on 404)
 web/charts/{DayChart,MixChart,Bars}.tsx
+web/WeekCard.tsx  web/charts/RepoHourChart.tsx  web/weekBands.ts + test  (2026-10-09: the week by repo and launch)
 web/{TokenInsights,PerRequestSection}.tsx  web/{usageCut,perRequest,statsInsights}.ts + tests
 ```
 
@@ -118,6 +119,12 @@ render values as props, with the width probe's ref passed onto the element that 
 The helper words of the readouts live in `when.ts`, the shared constants in `constants.ts`. A headless
 412x915 render of the finished split matched the pre-split commit across chart/values, cost, the
 mix/share/area views, week and one step back, 90 days, all time and a reload on `#o=tokens`.
+
+**Added after the split (2026-10-09):** `WeekCard.tsx`, `charts/RepoHourChart.tsx` and `weekBands.ts` (pure,
+node-tested). `TokenStatsBody.tsx` keeps the reads (the usage
+log, the week's cost window under `weekcost:`, the Totals box's repo split) and the one points
+calibration (`WeekCard` holds only its own picked-hour and grouping state), and its pins in `tools/tokenstatspins.test.mjs` moved in the same commit. The reasoning is
+in [web.md](web.md#weekcardtsx--repohourcharttsx--weekbandsts--where-the-week-went).
 
 ## The scan does not hold the event loop
 

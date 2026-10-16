@@ -232,6 +232,10 @@ async function run<T>(store: string, mode: IDBTransactionMode, op: (s: IDBObject
       req.onsuccess = () => resolve(req.result as T);
       req.onerror = () => resolve(null);
       tx.onerror = () => resolve(null);
+      // An abort with no request error (quota, a version change closing the
+      // handle mid-transaction) fires neither handler above — and an unsettled
+      // read here is a sheet that says "Reading…" for ever.
+      tx.onabort = () => resolve(null);
     });
   } catch (err) {
     // `transaction()` throws on a handle that is closing or already closed

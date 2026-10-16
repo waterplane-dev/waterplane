@@ -38,6 +38,19 @@ export const MIN_PTY_COLS = 20;
  */
 export const MIN_PTY_ROWS = 12;
 
+/**
+ * Widest grid a PTY is given — the floor's twin. A desktop window's main pane
+ * fits 230+ columns, and the CLI wraps its prose to the width it is told, so a
+ * sign-in URL or a paragraph became one unreadable line across the screen.
+ * Every screen heuristic here (`prompt.ts`, the echo probe in `deliver.ts`) was
+ * measured at ≤120 columns, and the screen log's VT replay and the scrollback
+ * archive both scale with the width. The client draws the capped grid
+ * left-aligned and leaves the rest of the pane as margin; the host clamps to
+ * the same number (symmetry, never a refusal). A constant by the owner's
+ * decision (docs/analysis/desktop-workspace-plan.md, O2).
+ */
+export const MAX_PTY_COLS = 160;
+
 /** A terminal size, as the PTY will be told it. */
 export type PtySize = { cols: number; rows: number };
 
@@ -52,6 +65,10 @@ export const drawableViewport = (cols: number, rows: number): boolean =>
   Number.isFinite(cols) && Number.isFinite(rows) &&
   Math.floor(cols) >= MIN_PTY_COLS && Math.floor(rows) >= MIN_PTY_ROWS;
 
+/** The columns a client draws for a fit of `cols`: the fit, never wider than
+ *  `MAX_PTY_COLS`. Rows are untouched — height is not the readability problem. */
+export const cappedCols = (cols: number): number => Math.min(cols, MAX_PTY_COLS);
+
 /**
  * The size to actually give a PTY, whatever was asked for.
  *
@@ -61,9 +78,9 @@ export const drawableViewport = (cols: number, rows: number): boolean =>
  * the floor too — an absent geometry is not a small one.
  */
 export function ptySize(cols: unknown, rows: unknown): PtySize {
-  const n = (v: unknown, min: number): number => {
+  const n = (v: unknown, min: number, max = Infinity): number => {
     const x = typeof v === "number" && Number.isFinite(v) ? Math.floor(v) : 0;
-    return Math.max(min, x);
+    return Math.min(max, Math.max(min, x));
   };
-  return { cols: n(cols, MIN_PTY_COLS), rows: n(rows, MIN_PTY_ROWS) };
+  return { cols: n(cols, MIN_PTY_COLS, MAX_PTY_COLS), rows: n(rows, MIN_PTY_ROWS) };
 }

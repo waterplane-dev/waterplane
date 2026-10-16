@@ -35,7 +35,7 @@ in the lint `FETCH_OWNERS` list beside `api.ts`.
 
 `Gallery` was one 780-line component. It is now a composer: `useGallery(props)` builds one model, and
 three regions read it — `GalleryBar` (head, search, tab/kind/time chips, notes), `GalleryGrid` (tiles,
-load more), `GalleryViewer` (the open file and its action bar).
+load more), `GalleryViewer` (the open file and its action bar), `GallerySessionPick` (its *to session* verbs: a named live session, a picker past one, a new session).
 
 Hooks, in the original effect order (pinned): `useGalleryOpen` (the open file, `directRef`, the one
 `showFile` writer, Back step) → the pull subscription → `useGalleryListing` (tabs, cuts, the listing

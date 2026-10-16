@@ -12,7 +12,9 @@ import {
   rmSync,
   statSync,
   writeFileSync,
+  type Dirent,
 } from "node:fs";
+import { readdir as readdirAsync, stat as statAsync } from "node:fs/promises";
 import { extname, join, relative, resolve, sep } from "node:path";
 
 import { isSecretFile } from "./git.js";
@@ -40,6 +42,8 @@ const DOC_EXT = new Set([
   ".tar", ".gz", ".tgz", ".msi", ".pkg", ".whl", ".appimage",
   // Garmin Connect IQ: .iq is the store package, .prg the sideload build.
   ".iq", ".prg",
+  // A VS Code extension package — builds.ts detects it as a run's output.
+  ".vsix",
   // Office / productivity documents. The inbox is a phone→repo transport, and a
   // phone shares a PDF, a spreadsheet or an exported doc as readily as a photo;
   // refusing to serve those back is the app forgetting its own upload.
@@ -123,12 +127,19 @@ function serveable(full: string, relPath: string, opts: TreeReadOpts): boolean {
   return VIEWABLE.has(extname(full).toLowerCase());
 }
 
-export type ArtifactKind = "all" | "image" | "doc";
+export type ArtifactKind = "all" | "image" | "doc" | "strip";
+
+/** Markdown — the one document kind a session's new-files strip also shows. */
+const MD_EXT = new Set([".md", ".markdown", ".mdx"]);
+export function isMarkdownPath(relPath: string): boolean { return MD_EXT.has(extname(relPath).toLowerCase()); }
 
 /** Extensions in scope for a given type filter. The "image" (visual media) tab
  *  also covers video — both render inline in the gallery. */
 function kindExt(kind?: ArtifactKind, scope?: "repo" | "outbox"): Set<string> {
   if (kind === "image") return new Set([...IMAGE_EXT, ...VIDEO_EXT]);
+  // A turn's strip: the pictures plus markdown, in ONE walk (a second repo-wide
+  // walk per turn end is what froze the host on WSL).
+  if (kind === "strip") return new Set([...IMAGE_EXT, ...VIDEO_EXT, ...MD_EXT]);
   // The outbox is a curated, phone-facing drop — a handful of files an agent
   // put there on purpose, so a `.yaml` report belongs in the list. A whole-repo
   // walk is the opposite, and gets the deliverables-only set.
@@ -240,13 +251,18 @@ function safeName(name: string): string | null {
   return base;
 }
 
+/** Like existsSync but a DANGLING symlink counts as taken: writing to that name would follow it. */
+function taken(p: string): boolean {
+  try { lstatSync(p); return true; } catch { return false; }
+}
+
 function ensureUnique(dir: string, name: string): string {
-  if (!existsSync(join(dir, name))) return name;
+  if (!taken(join(dir, name))) return name;
   const ext = extname(name);
   const stem = name.slice(0, name.length - ext.length);
   for (let i = 2; i < 10000; i++) {
     const cand = `${stem}_${i}${ext}`;
-    if (!existsSync(join(dir, cand))) return cand;
+    if (!taken(join(dir, cand))) return cand;
   }
   return `${stem}_${Date.now()}${ext}`;
 }
@@ -281,9 +297,19 @@ export function saveInboxFile(
       }
     } catch { /* not there — fall through and write it */ }
   }
-  const name = ensureUnique(dir, safe);
-  const full = join(dir, name);
-  writeFileSync(full, data);
+  // "wx" = O_EXCL: refuses ANY existing path, a dangling symlink included, so
+  // the write can never follow a link out of the inbox. A lost race (EEXIST)
+  // picks the next free name; bounded.
+  let name = "";
+  let full = "";
+  for (let attempt = 0; ; attempt++) {
+    name = ensureUnique(dir, safe);
+    full = join(dir, name);
+    try { writeFileSync(full, data, { flag: "wx" }); break; }
+    catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== "EEXIST" || attempt >= 20) return { error: "could not save the upload" };
+    }
+  }
   let mtime = Date.now(), ctime = mtime;
   try { const st = statSync(full); mtime = st.mtimeMs; ctime = birthMs(st); } catch { /* keep defaults */ }
   return { name, relPath: `${INBOX_SUBDIR}/${name}`, size: data.length, mtime, ctime };
@@ -534,6 +560,69 @@ export function discoverArtifacts(
       } else if (st.isFile() && allow.has(extname(name).toLowerCase())) {
         if (cutoff && st.mtimeMs < cutoff) continue;
         if (q && !name.toLowerCase().includes(q)) continue;
+        out.push({ name, relPath: relative(root, full).split(sep).join("/"), size: st.size, mtime: st.mtimeMs, ctime: birthMs(st) });
+      }
+    }
+  }
+  out.sort((a, b) => b.mtime - a.mtime);
+  const truncated = out.length > limit;
+  return { files: out.slice(0, limit), truncated };
+}
+
+/**
+ * `discoverArtifacts` without holding the event loop: the same walk, the same filters, the same
+ * answer — for every REPO-scope caller (the cross-repo search, a session's image and auto-pull
+ * baselines). The sync walk `stat`s every entry of the whole tree in one go; on WSL reading a
+ * Windows drive (9P, ~20 ms a call, far worse while `git status` runs) one search over 36 repos
+ * froze the host for minutes. Here an entry's kind comes from the directory listing and only a
+ * symlink or a file the filter wants is `stat`ed, every call awaited.
+ */
+export async function discoverArtifactsAsync(
+  worktree: string,
+  opts: Parameters<typeof discoverArtifacts>[1] = {},
+): Promise<{ files: FileEntry[]; truncated: boolean }> {
+  const scope = opts.scope ?? "repo";
+  const limit = Math.min(opts.limit ?? 300, 1000);
+  const cutoff = opts.sinceSeconds ? Date.now() - opts.sinceSeconds * 1000 : 0;
+  const allow = kindExt(opts.kind, scope);
+  const q = opts.query?.trim().toLowerCase() || "";
+  const root = resolve(worktree);
+  const starts = scope === "outbox"
+    ? OUTBOX_SUBDIRS.map((sub) => inboxDir(worktree, sub)).filter((d) => existsSync(d))
+    : (existsSync(root) ? [root] : []);
+  if (!starts.length) return { files: [], truncated: false };
+
+  const out: FileEntry[] = [];
+  const stack = [...starts];
+  const inboxFull = inboxDir(worktree);
+  const nestedFull = join(root, NESTED_WORKTREES);
+  while (stack.length) {
+    const dir = stack.pop()!;
+    let entries: Dirent[];
+    try {
+      entries = await readdirAsync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const e of entries) {
+      const name = e.name;
+      const full = join(dir, name);
+      let isDir = e.isDirectory();
+      let isFile = e.isFile();
+      if (e.isSymbolicLink()) {
+        // The sync walk follows links (statSync); so does this one.
+        try { const st = await statAsync(full); isDir = st.isDirectory(); isFile = st.isFile(); } catch { continue; }
+      }
+      if (isDir) {
+        if (SKIP_DIRS.has(name)) continue;
+        if (scope === "repo" && !opts.includeInbox && full === inboxFull) continue;
+        if (full === nestedFull) continue;
+        stack.push(full);
+      } else if (isFile && allow.has(extname(name).toLowerCase())) {
+        if (q && !name.toLowerCase().includes(q)) continue;
+        let st;
+        try { st = await statAsync(full); } catch { continue; }
+        if (cutoff && st.mtimeMs < cutoff) continue;
         out.push({ name, relPath: relative(root, full).split(sep).join("/"), size: st.size, mtime: st.mtimeMs, ctime: birthMs(st) });
       }
     }

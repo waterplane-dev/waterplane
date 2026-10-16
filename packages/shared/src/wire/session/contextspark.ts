@@ -1,5 +1,6 @@
 import type { CostBreakdown } from "../../pricing.js";
 import type { ColdStarts } from "../../sessioncost.js";
+import type { AutoCompactSource } from "../../autocompact.js";
 import type { TokenTotals } from "../telemetry.js";
 import type { ContextSample, AgentRun, ContextEvent, CompactionLedger } from "./context.js";
 
@@ -40,6 +41,16 @@ export interface ContextSpark {
    * different quantity wearing the same units.
    */
   usedPts?: number[];
+  /**
+   * What the SUBAGENTS had spent by each of those same readings — cumulative,
+   * index-for-index with `usedPts`, its last value exactly `agentTok`. The spend
+   * miniature STACKS it on the parent's curve (the sheet's spend chart does the
+   * same with `agentCum`), so the top edge is the total beside it. Without it a
+   * fan-out session drew its parent's 8% as a line on the floor under a dashed
+   * total at the top of the box. Absent with no agent spend, without
+   * `usedPts`, and from an older host — then the dashed total, as before.
+   */
+  agentUsedPts?: number[];
   /**
    * The SUBAGENTS' windows, as an envelope index-for-index with `pts`: the
    * largest context any agent held within each reading's stretch of time (the
@@ -169,6 +180,12 @@ export interface ContextSpark {
   windowTok: number | null;
   windowFrom: ContextWindowSource;
   autoCompactTok: number | null;
+  /** The `autoCompactWindow` SETTING for this session's worktree as it read
+   *  when the spark was built, in tokens (`ContextSeriesDoc.autoCompactSet`'s
+   *  size). The miniature's y axis tops out here: past it the session does not
+   *  grow, so a 1M axis under a 400k setting draws every row in the bottom
+   *  half. Absent when no size is set, or on an older host. */
+  autoCompactSetTok?: number;
   /** The rebuilds this conversation has paid for — see `ColdStarts`. Absent on
    *  an older host; `count: 0` is the claim that there were none. */
   coldStarts?: ColdStarts;
@@ -245,6 +262,14 @@ export interface ContextSeriesDoc {
    * of the two when the window is unknown.
    */
   autoCompactTok: number | null;
+  /**
+   * The `autoCompactWindow` a session spawned in this conversation's directory
+   * would see NOW — a SETTING, read when this document was built, not what the
+   * conversation ran under (the file may have changed since). `tokens` is null
+   * for `auto`, unset or an unparseable value: auto compacts near the model's
+   * own window and no number for it is guessed. Absent on an older host.
+   */
+  autoCompactSet?: { tokens: number | null; source: AutoCompactSource; raw?: string };
   /** The log was longer than the tail this reads — the series starts mid-way. */
   truncated: boolean;
   /** Turns the log opened, counted — see `ContextSpark.turns`. A FLOOR. */

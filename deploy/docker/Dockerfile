@@ -23,7 +23,7 @@ FROM scratch AS release
 FROM ubuntu:${UBUNTU}
 
 ARG ANDROID=0
-ARG INSTALL_URL=https://waterplane.dev/install.sh
+ARG INSTALL_URL=https://github.com/waterplane-dev/waterplane/releases/latest/download/install.sh
 # Only for a release you built with --unsigned. Never for a downloaded one.
 ARG INSECURE_SKIP_SIG=0
 

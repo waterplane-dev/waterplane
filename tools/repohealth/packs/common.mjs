@@ -79,7 +79,9 @@ export default Object.freeze({
   name: "common",
   // 2: `excludeDirs` moved here from `census.mjs` and gained the vendored-code
   // names. See the header, and `packs/index.mjs` on what a version bump costs.
-  version: "2",
+  // 3: `todo` and `fixme` are declared TO-DOs (`hatchExplain.todo`): reported
+  // beside the escape hatches, never counted in the health index's number.
+  version: "3",
 
   /**
    * Active in every repo, whatever it is written in — the one pack that does
@@ -181,6 +183,14 @@ export default Object.freeze({
     fixme: "\\bFIXME\\b",
   }),
 
+  /**
+   * Both kinds here are TO-DOs, not escapes: a note that work is unfinished
+   * turns no rule off, so `hatches.mjs` reports them in their own bucket and
+   * the health index never counts them. Not explained-or-not either — a TODO
+   * IS its own explanation.
+   */
+  hatchExplain: Object.freeze({ commentLine: null, todo: Object.freeze(["todo", "fixme"]), after: Object.freeze({}) }),
+
   // See "What this pack does NOT detect". Spelled as explicit nulls rather
   // than left off the object, so a reader comparing two packs side by side can
   // see which capabilities this one declines instead of wondering whether the
@@ -189,6 +199,7 @@ export default Object.freeze({
   manifests: null,
   mentions: null,
   keysFor: null,
+  imports: null,
   analyzer: null,
   analyzerReason: null,
 });

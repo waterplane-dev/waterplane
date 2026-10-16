@@ -430,6 +430,25 @@ test("a SHELL never runs a line before the confirmed Return: multi-line goes in 
   assert.equal(one.state.screen, "echo one");
 });
 
+test("a SHELL's hard wrap splitting the probe is still an echo: one Return, ok", async () => {
+  // Measured: a 270-char command at 70 cols after a long zsh prompt wrapped as
+  // `… % cd /Users/pmar` | `tens/…`, so the 14-char probe sat on no single row;
+  // `unconfirmed`, no Return, the person pressed it by hand.
+  store();
+  const sessions = fakeSessions({ backend: "shell" });
+  sessions.healthScope = () => false;
+  sessions.shellLineFacts = async () => ({ front: null, bracketed: true });
+  const cmd = "cd /Users/pmartens/dev/tide-tables-companion && wp-runner exec --secret IMAGE_GEN_API_KEY=x -- sh -c 'echo hi'";
+  const line = `pmartens@studio-desk-machine-01 tide-tables-companion % ${cmd}`;
+  sessions.write = (_id, data) => {
+    if (data === "\r") { sessions.state.returns++; return; }
+    sessions.state.screen = (line.match(/.{1,70}/g) ?? []).join("\n");
+  };
+  assert.ok(!sessions.state.screen.split("\n").some(Boolean), "starts empty");
+  assert.equal(await deliverPrompt(sessions, "s1", cmd, "prompt", { watch: false }), "ok");
+  assert.equal(sessions.state.returns, 1);
+});
+
 test("a SHELL with a program in front is not typed into — unless that program is asking for a code", async () => {
   store();
   const busy = fakeSessions({ backend: "shell" });

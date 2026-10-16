@@ -5,7 +5,7 @@ import "@xterm/xterm/css/xterm.css";
 import { onThemeChange, resolvedTheme } from "./theme";
 import { termTheme } from "./termTheme";
 import { onUiScale, termPx } from "./uiScale";
-import { drawableViewport } from "@waterplane/shared";
+import { cappedCols, drawableViewport } from "@waterplane/shared";
 
 interface Props {
   /** Raw PTY chunks to write. Parent bumps `writeSeq` to push new data. */
@@ -46,6 +46,8 @@ export interface TerminalHandle {
   snapshot(): string[];
   /** Where the visible rows are drawn, relative to the terminal's element. */
   rowBox(): RowBox | null;
+  /** Give the grid the keyboard (a desktop key typed at nothing, `strayKeys.ts`). */
+  focus(): void;
 }
 
 export interface RowBox { top: number; left: number; width: number; rowH: number; rows: number }
@@ -130,6 +132,13 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalV
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
+    // The fit, never wider than `MAX_PTY_COLS`: on a desktop pane the grid sits
+    // left and the rest is margin. AFTER the fit, so the console zoom's bigger
+    // grid is still a bigger grid up to the cap.
+    const fitGrid = () => {
+      fit.fit();
+      if (term.cols > cappedCols(term.cols)) term.resize(cappedCols(term.cols), term.rows);
+    };
     term.open(hostRef.current!);
     // All input flows through the compose bar + special-keys row over the WS,
     // never through xterm's own keyboard. Its hidden helper textarea otherwise
@@ -137,7 +146,16 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalV
     // special-key tap). inputmode=none keeps the textarea focusable for paste
     // and hardware keys but stops it raising the virtual keyboard.
     hostRef.current!.querySelector(".xterm-helper-textarea")?.setAttribute("inputmode", "none");
-    fit.fit();
+    fitGrid();
+    // Ctrl+C over a SELECTION copies it — what every desktop terminal does —
+    // instead of sending ^C, which would interrupt the turn you were reading.
+    // With nothing selected it is ^C, as before. Copy needs a secure context;
+    // without one the key is still swallowed, never turned into an interrupt.
+    term.attachCustomKeyEventHandler((e) => {
+      if (e.type !== "keydown" || !e.ctrlKey || e.shiftKey || e.altKey || e.key.toLowerCase() !== "c" || !term.hasSelection()) return true;
+      void navigator.clipboard?.writeText(term.getSelection()).catch(() => { /* not a secure context */ });
+      return false;
+    });
     term.onData(onInput);
     termRef.current = term;
     // Light/dark applied to a LIVE grid. `term.options.theme` is a full
@@ -150,7 +168,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalV
     // the host to resize the PTY. One repaint, on a deliberate setting change.
     const offScale = onUiScale(() => {
       term.options.fontSize = termPx();
-      try { fit.fit(); } catch { return; /* detached */ }
+      try { fitGrid(); } catch { return; /* detached */ }
       // And TELL THE HOST. A cell-size change is a geometry change: the whole
       // point of zooming out is the extra cols and rows, and the PTY only gets
       // them from this report. Without it xterm drew a wider grid the CLI knew
@@ -168,7 +186,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalV
       resizeTimer = window.setTimeout(() => {
         try {
           const stick = atBottom();
-          fit.fit();
+          fitGrid();
           report(term.cols, term.rows);
           if (stick) term.scrollToBottom(); // only follow if user wasn't scrolled up
         } catch { /* not yet laid out */ }
@@ -293,7 +311,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalV
       term.dispose();
       termRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only: TermArea keys this view per session, so `onInput` and `report`'s `onResize` are that session's; the touch handlers read `liveRef`
   }, []);
 
   // Flush any not-yet-written chunks whenever the parent signals new data.
@@ -356,6 +374,9 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(function TerminalV
   }
 
   useImperativeHandle(ref, () => ({
+    focus(): void {
+      termRef.current?.focus();
+    },
     snapshot(): string[] {
       return termRef.current ? gridText(termRef.current) : [];
     },

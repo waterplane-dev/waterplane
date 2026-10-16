@@ -20,7 +20,8 @@ link.ts                BARREL: header comment + `export *` / `export type` from 
 link/linkTypes.ts      every type: status, the persisted doc, the snapshot and its sections
 link/linkDoc.ts        constants, load/migrate, `doc`, the one debounced writer (persist/persistNow)
 link/linkStatus.ts     status, connectedSince, noteLinkStatus (the one writer of online-ness)
-link/linkStore.ts      snapshot memo, invalidate, emit, listeners, the clock, subscribeLink, useLink
+link/linkBus.ts        LEAF: the dirty set, invalidate, listeners, emit (the snapshot builder handed in)
+link/linkStore.ts      snapshot memo, the clock, subscribeLink, useLink
 link/linkPulse.ts      the probe window and loop, summarize
 link/linkSync.ts       noteHostSeen, noteSynced, syncSnapshot, whenText
 link/linkTraffic.ts    byte buckets and rates, fmtTotal, fmtRate
@@ -30,9 +31,13 @@ link/linkOps.ts        netBegin, labelForUrl
 link/linkMeters.ts     the fetch/XHR/resource meters, the pagehide flush, the roll-up report
 ```
 
-`linkStore` and the slices import each other (a slice invalidates and emits; the snapshot reads every
-slice). Every cross-slice use is inside a function body, run after all modules have loaded, and no slice
-reads an import at top level, so the cycle is safe; it is the one place a cycle is deliberate.
+A slice invalidates and emits; the snapshot reads every slice. Those two directions used to be one
+import cycle between `linkStore` and the slices. `linkBus.ts` is now the leaf the slices invalidate and
+emit through, and `linkStore` hands it the snapshot builder at import (`setSnapshotBuilder`) — a
+listener can only be added through `subscribeLink` in that same module, so `emit` never has anyone to
+tell before the builder is set. No cycle is deliberate any more: `tools/importcycles.test.mjs`.
+`webapi/webapiFetch.ts` imports `link/linkOps.ts`, not the barrel, for the same reason (the barrel
+re-exports `linkMeters.ts`, which reads `api.ts`).
 
 ## pull.ts: one class, methods as `this`-typed functions
 

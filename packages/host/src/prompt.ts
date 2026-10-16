@@ -49,8 +49,9 @@ const OPTION_RE = /^\s*(?:(\S)\s+)?(\d+)\.\s+(.+?)\s*$/;
  * "New Files sheet     \u250c\u2500\u2500\u2500\u2510".
  */
 const SIDE_PANEL_RE = /\s{2,}[\u2500-\u257f].*$/;
-/** Multi-select rows carry their own checkbox: "1. [ ] Prose questions". */
-const CHECKBOX_RE = /^\[( |x|X|\u2713)\]\s*/;
+/** Multi-select rows carry their own checkbox: "1. [ ] Prose questions". A TICKED row is drawn
+ *  "[✔]" (U+2714, 2.1.301), not "[✓]": missed, the mark stayed in the label and toggling relabelled the box. */
+const CHECKBOX_RE = /^\[( |x|X|\u2713|\u2714)\]\s*/;
 /** Real option labels are short. Anything longer is prose that happens to be numbered. */
 const MAX_LABEL = 160;
 /**
@@ -344,9 +345,151 @@ export interface DetectOpts {
   lenient?: boolean;
 }
 
+// ── A box with NO NUMBERS: claude 2.1.293's first-launch trust box ─────────
+/**
+ * Measured on the binary (2026-10-08, `fixtures/permmode/trust-box.txt`):
+ * claude 2.1.293 draws its workspace-trust box UNNUMBERED \u2014
+ *
+ *     \u276f No, exit
+ *       Yes, I trust this folder
+ *
+ *     Enter to confirm \u00b7 Esc to cancel
+ *
+ * with the cursor starting on "No, exit". Every rule above wants a run of
+ * `N.` rows, so the box parsed as nothing: the very first session a new user
+ * opens published `awaitingInput` and no buttons, and the only way past it was
+ * the arrow keys.
+ *
+ * Read by SHAPE, never by its words, and anchored hard \u2014 a looser rule here is
+ * a phantom box over ordinary output:
+ *   \u2022 the dialog FOOTER, as its own row (`isDialogFooterRow`), is the LAST
+ *     non-blank row of the screen \u2014 a composer under it means the box was
+ *     answered, exactly as `isComposerRow` argues for the numbered box;
+ *   \u2022 directly above it (blanks only between), a contiguous run of 2..8 rows
+ *     whose labels all start in ONE column, exactly one of them carrying the
+ *     "\u276f" cursor two cells to the left of that column and the rest indented to
+ *     it with spaces;
+ *   \u2022 nothing numbered and no checkbox in the run (those boxes are the
+ *     numbered rules' business), and the run bounded above by a blank row or a
+ *     row LESS indented than the cursor (the question). Anything else in that
+ *     slot \u2014 a wrapped label, a deeper row \u2014 is a shape not measured, so null.
+ *
+ * Strict pass only. The lenient gate never needs it: this box's footer is a
+ * dialog footer, which already buys the render (`hasDialogFooter`).
+ *
+ * `cursor` is the 1-based index the "\u276f" sits on. It stays OUT of the published
+ * box on purpose: it moves with every arrow, and the box's fields are its
+ * identity (`samePrompt`, `promptFingerprint`) \u2014 a cursor in there would
+ * re-publish the box per keystroke. The answer walk asks for it here instead
+ * (`readNavBox`, `sessions/boxes.ts`).
+ */
+const NAV_MAX_ROWS = 8;
+/** Blank rows tolerated between the option run and the footer. */
+const NAV_FOOTER_GAP = 2;
+/** Paragraphs above the run searched for the question. */
+const NAV_QUESTION_PARAS = 4;
+const NAV_QUESTION_ROWS = 16;
+/** A label that begins like a numbered or checkbox row belongs to the numbered rules. */
+const NAV_NUMBERED_RE = /^(?:\d+[.)]|\[[ xX\u2713\u2714]\])(?:\s|$)/;
+
+export interface NavBoxRead {
+  prompt: DetectedPrompt;
+  /** 1-based index of the option the "\u276f" cursor is on. */
+  cursor: number;
+}
+
+function navBoxOf(lines: string[]): NavBoxRead | null {
+  let f = lines.length - 1;
+  while (f >= 0 && !lines[f].trim()) f--;
+  if (f < 0 || !isDialogFooterRow(lines[f])) return null;
+  let i = f - 1;
+  for (let gap = 0; i >= 0 && !lines[i].trim(); i--) if (++gap > NAV_FOOTER_GAP) return null;
+  const rows: { label: string; cursor: boolean }[] = [];
+  let labelCol = -1;
+  for (; i >= 0; i--) {
+    const line = lines[i];
+    if (!line.trim()) break;
+    const lead = line.length - line.trimStart().length;
+    const body = line.slice(lead);
+    const isCursor = /^\u276f\s/.test(body);
+    const col = isCursor ? lead + 2 : lead;
+    if (labelCol < 0) labelCol = col;
+    else if (col !== labelCol) {
+      // Less indented than where the cursor sits: the question, above the run.
+      if (!isCursor && lead < labelCol - 2) break;
+      return null;
+    }
+    if (isCursor && body[1] !== " ") return null; // "\u276f" then exactly one space to the label column
+    const label = (isCursor ? body.slice(2) : body).trim();
+    if (!label || label.length > MAX_LABEL) return null;
+    if (/^[\u2500-\u257f]/.test(label) || NAV_NUMBERED_RE.test(label) || /^\u276f/.test(label)) return null;
+    if (COMPOSER_HINT_RE.test(label) || COMPOSER_RULE_RE.test(line.trim())) return null;
+    rows.unshift({ label: label.replace(SIDE_PANEL_RE, "").trim(), cursor: isCursor });
+    if (rows.length > NAV_MAX_ROWS) return null;
+  }
+  if (rows.length < 2) return null;
+  const cursors = rows.filter((r) => r.cursor).length;
+  if (cursors !== 1) return null;
+  if (labelCol < 2) return null; // the cursor needs its two cells to the left
+
+  // The question: the nearest paragraph above that asks one, else the nearest.
+  const paras: string[] = [];
+  let para: string[] = [];
+  for (let n = 0; i >= 0 && n < NAV_QUESTION_ROWS && paras.length < NAV_QUESTION_PARAS; i--, n++) {
+    const t = lines[i].replace(/^[\u2502\u2503|\u256e\u256f\u2570\u256d\u2500\s]+/, "").trim();
+    if (/^[\u2500-\u257f]+$/.test(t)) break; // the box's own top rule
+    if (!t) { if (para.length) { paras.push(para.join(" ")); para = []; } continue; }
+    para.unshift(t);
+  }
+  if (para.length && paras.length < NAV_QUESTION_PARAS) paras.push(para.join(" "));
+  const question = (paras.find((p) => p.includes("?")) ?? paras[0] ?? "").replace(/\s+/g, " ").trim().slice(0, QUESTION_MAX);
+  const options = rows.map((r, k) => ({ index: k + 1, label: r.label }));
+  return {
+    prompt: { kind: kindOf(question, options), question: question || PLACEHOLDER_QUESTION, options, nav: true },
+    cursor: rows.findIndex((r) => r.cursor) + 1,
+  };
+}
+
+/** An unnumbered box on a RENDERED screen, with where its cursor is \u2014 or null. */
+export function readNavBox(screen: string): NavBoxRead | null {
+  return navBoxOf(clean(screen).split("\n").map((l) => l.replace(/[\u2502\u2503|]\s*$/, "").trimEnd()));
+}
+
+/**
+ * The keys that answer claude's folder-trust box with YES — the usage probe's
+ * (`usage.ts`) and a delivery's into a never-trusted dir (`deliver/deliverrun.ts`).
+ *
+ * Before 2.1.293 the box is numbered, `1. Yes, proceed` first, so `1⏎`. Since, it is UNNUMBERED
+ * with the cursor on `No, exit` (`readNavBox`): a digit types nothing and the Return chose "No,
+ * exit" — claude quit at once. So: walk the cursor to the option that says yes, then Return. A
+ * nav box with no such option gets NO key, never a Return at an unknown choice.
+ */
+export function trustKeys(nav: NavBoxRead | null): string {
+  if (!nav) return "1\r";
+  const yes = nav.prompt.options.find((o) => /^yes\b/i.test(o.label.trim()));
+  if (!yes) return "";
+  const d = yes.index - nav.cursor;
+  return (d > 0 ? "\x1b[B".repeat(d) : "\x1b[A".repeat(-d)) + "\r";
+}
+
+function kindOf(question: string, options: PromptOption[]): DetectedPrompt["kind"] {
+  const blob = (question + " " + options.map((o) => o.label).join(" ")).toLowerCase();
+  if (/trust|created or one you/.test(blob)) return "trust";
+  if (/proceed|want to (make|run|create|edit|allow)|don't ask again|approve/.test(blob)) return "tool";
+  if (/plan|ready to code|proceed with/.test(blob)) return "plan";
+  return "select";
+}
+
 export function detectPrompt(rawTail: string, opts: DetectOpts = {}): DetectedPrompt | null {
   const text = clean(rawTail);
   const lines = text.split("\n").map((l) => l.replace(/[\u2502\u2503|]\s*$/, "").trimEnd());
+
+  // Asked first: it is anchored on the footer being the screen's last row, so
+  // a numbered box answered long ago further up cannot be read in its place.
+  if (!opts.lenient) {
+    const nav = navBoxOf(lines);
+    if (nav) return nav.prompt;
+  }
 
   // Scan from the bottom: collect a run of numbered options, newest-first. The
   // run may be interrupted by each option's own description rows (multi-select),
@@ -370,6 +513,12 @@ export function detectPrompt(rawTail: string, opts: DetectOpts = {}): DetectedPr
     // and a row read as blank would never be seen at all.
     if (!boxSeen && !options.length && isComposerRow(lines[i])) { composerBelow = true; continue; }
     const line = lines[i].replace(/^[\u2502\u2503|\u256e\u256f\u2570\u256d\u2500\s]+/, "").replace(/[\u2502\u2503|]+$/, "").trim();
+    // A row of nothing but box-drawing glyphs is a rule, never words. v2.1.293
+    // frames a Bash box's command in dashed rules ("\u254c\u254c\u254c"), which survived the
+    // strip above, filled the question past QUESTION_MAX and cut off the
+    // "Do you want to proceed?" that makes it a `tool` box. Skipped, not blank:
+    // the question continues above it.
+    if (/^[\u2500-\u257f]+$/.test(line)) continue;
     if (!line) {
       // A blank row ends the question: above it is the conversation, not the box.
       if (options[0]?.index === 1 && questionParts.length) break;
@@ -450,11 +599,7 @@ export function detectPrompt(rawTail: string, opts: DetectOpts = {}): DetectedPr
   if (options.some((o, i) => o.index !== first + i)) return null;
 
   const questionLine = questionParts.join(" ").replace(/\s+/g, " ").trim().slice(0, QUESTION_MAX);
-  const blob = (questionLine + " " + options.map((o) => o.label).join(" ")).toLowerCase();
-  let kind: DetectedPrompt["kind"] = "select";
-  if (/trust|created or one you/.test(blob)) kind = "trust";
-  else if (/proceed|want to (make|run|create|edit|allow)|don't ask again|approve/.test(blob)) kind = "tool";
-  else if (/plan|ready to code|proceed with/.test(blob)) kind = "plan";
+  const kind = kindOf(questionLine, options);
 
   return {
     kind,
@@ -668,6 +813,7 @@ export function samePrompt(a: DetectedPrompt | null, b: DetectedPrompt | null): 
   if ((a.ask ?? "") !== (b.ask ?? "")) return false;
   if ((a.askId ?? "") !== (b.askId ?? "")) return false;
   if ((a.submitLabel ?? "") !== (b.submitLabel ?? "")) return false;
+  if ((a.plan?.text ?? "") !== (b.plan?.text ?? "") || !!a.plan?.cut !== !!b.plan?.cut) return false;
   if (a.options.length !== b.options.length) return false;
   return a.options.every((o, i) =>
     o.index === b.options[i].index && o.label === b.options[i].label && (o.desc ?? "") === (b.options[i].desc ?? ""));
@@ -711,6 +857,9 @@ export function mergeBox(published: DetectedPrompt, parsed: DetectedPrompt): Det
   // answer to "which box", and a pass that could not reach the log says
   // nothing rather than something older.
   const askId = parsed.askId ?? published.askId;
+  // Freshest too: the plan is a FILE and can be edited while its box is up
+  // (the box's own ctrl+g), so the newer read is the plan being approved.
+  const plan = parsed.plan ?? published.plan;
   const truncated = options.length > 0 && options[0].index > 1;
   // `nav` boxes lose their options off the RIGHT EDGE, not off the top, so the
   // index-1 test says nothing about them: keep what the two passes agreed on.
@@ -728,6 +877,7 @@ export function mergeBox(published: DetectedPrompt, parsed: DetectedPrompt): Det
     ...(ask ? { ask } : {}),
     ...(askId ? { askId } : {}),
     ...(submitLabel ? { submitLabel } : {}),
+    ...(plan ? { plan } : {}),
     ...(cut ? { truncated: true as const } : {}),
   };
 }

@@ -10,7 +10,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { detectShellLinks, MAX_SCREEN_LINKS } from "../dist/shelllinks.js";
+import { asksYesNo, detectShellLinks, MAX_SCREEN_LINKS } from "../dist/shelllinks.js";
 
 /** A URL as an `width`-column grid holds it, each row indented by `pad`. */
 function wrap(url, width = 80, pad = "") {
@@ -290,4 +290,15 @@ test("errno names, all-letter words and time ranges are not codes", () => {
   // …and the shapes that ARE codes still are.
   assert.equal(detectShellLinks(screen("code: EFGH-1234", "https://github.com/login/device")).links[0].code, "EFGH-1234");
   assert.equal(detectShellLinks(screen("Your one-time code: 4X7-K2Q9", "https://example.com/activate")).links[0].code, "4X7-K2Q9");
+});
+
+test("a program's yes/no question on the last row is one it waits on; above it is history", () => {
+  assert.equal(asksYesNo("Pairing code: 412 680\nCompare with the code on your phone.\nDoes it match? [y/N] \n\n"), true);
+  assert.equal(asksYesNo("Proceed (Y/n)?"), true);
+  assert.equal(asksYesNo("Are you sure you want to continue connecting (yes/no/[fingerprint])? "), true);
+  assert.equal(asksYesNo("Overwrite? [y/n]:"), true);
+  assert.equal(asksYesNo("Does it match? [y/N] y\naborted"), false);
+  assert.equal(asksYesNo("Does it match? [y/N] y"), false, "answered");
+  assert.equal(asksYesNo("$ echo [y/n] is a flag\n$ "), false);
+  assert.equal(asksYesNo("vim  [No Name]"), false);
 });

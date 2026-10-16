@@ -138,7 +138,11 @@ function dirSegments(path) {
 
 export default Object.freeze({
   name: "kotlin",
-  version: "1",
+  // 2: `imports` exists — the same import statements `mentions` reads, as
+  // the edges `untested` follows from a test to what it runs.
+  // 3: `hatchExplain` exists — which escapes carry their reason, and the
+  // throwing `TODO(` stub is a to-do, never an escape.
+  version: "3",
 
   /** Activates when the tree at HEAD carries one of these. See the header. */
   exts: Object.freeze([".kt", ".kts"]),
@@ -170,6 +174,24 @@ export default Object.freeze({
     // The throwing stub, not the comment. Overlaps `common`'s `todo` by
     // construction — see the header; the two are never summed.
     ktTodoStub: "\\bTODO\\s*\\(",
+  }),
+
+  /**
+   * When an escape carries its reason — `packs/typescript.mjs` argues the two
+   * places. Every Kotlin kind takes a trailing `//` comment or a comment line
+   * directly above (`@Suppress("UNCHECKED_CAST") // the map is built two lines
+   * up`). `ktTodoStub` is a TO-DO, like `common`'s `todo`: reported beside the
+   * escapes, never counted as one, because a stub that throws is unfinished
+   * work rather than a rule turned off.
+   */
+  hatchExplain: Object.freeze({
+    commentLine: "^\\s*(?://|/\\*|\\*)",
+    todo: Object.freeze(["ktTodoStub"]),
+    after: Object.freeze({
+      ktNotNull: "//\\s*[A-Za-z]{2}",
+      ktSuppress: "//\\s*[A-Za-z]{2}",
+      ktSuppressLint: "//\\s*[A-Za-z]{2}",
+    }),
   }),
 
   // Declined, spelled as explicit nulls so a reader comparing packs can see
@@ -247,6 +269,15 @@ export default Object.freeze({
       if (segs.length) out.add(segs.join("/") + "/" + name);
     }
     return out;
+  },
+
+  /**
+   * The edges `untested` follows. In this language a mention already IS an
+   * import statement and nothing else, so the two capabilities are one rule:
+   * called as a method, never detached.
+   */
+  imports(text, path, opts = {}) {
+    return this.mentions(text, path, opts);
   },
 
   /**

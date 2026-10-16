@@ -36,7 +36,6 @@
  *   clockGroups.ts    the GROUPS of rows that share a clock, and their seats
  *   dropClock.ts      *drop the clock*, the host hold, the budget waiver
  *   runAgain.ts       *run it again*, and what a revived row says
- *   mergeWords.ts     what a row the smart pick merged says, and its undo offer
  *   scheduleWords.ts  the schedule ↔ backlog seam, in words
  *   titleWords.ts     whose title a row wears, and *name these N*
  *   rowWords.ts       a span, the typed label, the edit form's session options, the serial holder
@@ -52,7 +51,6 @@ export * from "./backlogFilter/cutCounts.ts";
 export * from "./backlogFilter/clockGroups.ts";
 export * from "./backlogFilter/dropClock.ts";
 export * from "./backlogFilter/runAgain.ts";
-export * from "./backlogFilter/mergeWords.ts";
 export * from "./backlogFilter/scheduleWords.ts";
 export * from "./backlogFilter/titleWords.ts";
 export * from "./backlogFilter/rowWords.ts";

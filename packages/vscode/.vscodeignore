@@ -1,0 +1,12 @@
+**
+!dist/extension.js
+!dist/scanworker.js
+!dist/webview.js
+!dist/webview.css
+!package.json
+!README.md
+!CHANGELOG.md
+!LICENSE
+!icon.png
+!dist/healthworker.mjs
+!media/activity.svg

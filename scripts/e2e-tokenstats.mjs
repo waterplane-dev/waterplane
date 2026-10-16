@@ -29,6 +29,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { E, SLUG as BRAND_SLUG, rootEnv } from "./lib-brand.mjs";
+import { waitForHost } from "./lib-e2e.mjs";
 
 let failed = false;
 const check = (c, l) => { console.log(`${c ? "PASS" : "FAIL"}: ${l}`); if (!c) failed = true; };
@@ -136,7 +137,7 @@ const host = spawn("node", ["packages/host/dist/main.js"], {
   stdio: ["ignore", "pipe", "pipe"],
 });
 host.stderr.on("data", (d) => process.stderr.write("[host] " + d));
-await sleep(1300);
+await waitForHost(PORT);
 
 /** `fresh=1` skips the host's "scanned recently enough" shortcut. */
 const get = () => fetch(`${base}/api/tokenstats?fresh=1`).then((r) => (r.ok ? r.json() : null));
@@ -231,6 +232,26 @@ try {
       check(typeof hist.everyMs === "number" && hist.everyMs > 0,
         "…and the poll period, so the chart can say what dense would have looked like");
     }
+
+    // The same store folded over a SPAN (`/api/costwindow`): over a span that
+    // covers the whole fixture the two folds must agree to the cent, and the
+    // agent transcript must fold into its parent rather than stand as a row.
+    const cwFrom = new Date(2026, 2, 9).getTime();
+    const cwTo = new Date(2026, 2, 14).getTime();
+    const cw = await fetch(`${base}/api/costwindow?from=${cwFrom}&to=${cwTo}`).then((r) => (r.ok ? r.json() : null));
+    check(!!cw && Array.isArray(cw.convos), "GET /api/costwindow answers a window document");
+    if (cw) {
+      // Carried rows plus the ones the cap folded (`COST_CONVOS_CAP`) — the fixture sits under it today.
+      const cwN = cw.convos.length + (cw.rest ?? []).reduce((n, r) => n + r.count, 0);
+      check(cwN === doc.conversations && (cw.convosTotal ?? cw.convos.length) === cwN,
+        `one row per conversation, agents folded in (got ${cwN}, want ${doc.conversations})`);
+      check(total(cw.totals) === EXP_TOTAL, `the window over the whole fixture holds every token (got ${total(cw.totals)})`);
+      check(Math.abs(cw.cost.total - doc.cost.total) < 1e-9,
+        `…and the same money as the all-time fold (got ${cw.cost.total}, want ${doc.cost.total})`);
+      check([...cw.convos, ...(cw.rest ?? [])].reduce((n, c) => n + c.agents, 0) === doc.subagentLogs, "…with the agent counted once, on its parent");
+    }
+    const cwBad = await fetch(`${base}/api/costwindow?from=${cwTo}&to=${cwFrom}`).then((r) => (r.ok ? r.json() : null));
+    check(!!cwBad && cwBad.convos.length === 0 && cwBad.to === 0, "a backwards span is an empty answer, not an error");
 
     // ── list-price cost ───────────────────────────────────────────────────
     // The one part of this screen that puts a dollar figure in front of

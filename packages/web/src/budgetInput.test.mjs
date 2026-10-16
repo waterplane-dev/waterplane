@@ -99,9 +99,12 @@ test("the preview puts the typed cap against the spend", () => {
 
 test("no budget, but a spark: the state line says what was spent, split", () => {
   assert.equal(budgetStateLine(undefined, NOW), "No budget on this session.");
-  assert.equal(budgetStateLine(undefined, NOW, spark), "No budget on this session. Spent: $0.48 so far — $0.36 in this conversation, $0.12 in subagents.");
-  assert.match(budgetStateLine(undefined, NOW, { ...spark, costUsd: undefined }), /Spent: 1\.2M tokens so far/);
-  assert.equal(budgetStateLine(undefined, NOW, null), "No budget on this session.");
+  // With a spark the caller is the context card, whose TITLE says "no budget on
+  // this session": the line is the spend alone, never that sentence a second time.
+  assert.equal(budgetStateLine(undefined, NOW, spark), "Spent: $0.48 so far — $0.36 in this conversation, $0.12 in subagents.");
+  assert.match(budgetStateLine(undefined, NOW, { ...spark, costUsd: undefined }), /^Spent: 1\.2M tokens so far/);
+  // Nothing known: no line at all — the card is its title and its door.
+  assert.equal(budgetStateLine(undefined, NOW, null), null);
 });
 
 test("calibration: dollars and tokens need none; a percent says what one point costs or why it cannot", () => {

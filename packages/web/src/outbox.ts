@@ -32,7 +32,7 @@
 import {
   adoptPad, draftToRescue, parsePad, padFullText, removeNotes, serializePad, upsertNote,
   PAD_BYTES, PAD_CAP, PAD_WRITE_REFUSED,
-  type ClientMessage, type PadDoc, type PadNote, type SendView, type SessionBudget,
+  type ClientMessage, type PadDoc, type PadNote, type SendView, type SessionBudget, type LaunchOpts,
 } from "@waterplane/shared";
 import { LS, lsGet, lsSetJson } from "./storage";
 import { announceSetting, onAdopt } from "./settings";
@@ -270,8 +270,14 @@ export interface OutboxEntry {
   /** backlog mode: the item's own *close its session when done* — absent
    *  follows the global setting, so it is never folded into `false`. */
   closeWhenDone?: boolean;
+  /** backlog mode: "flag for follow up when done" — absent is off. */
+  flagWhenDone?: boolean;
   /** backlog mode: the budget the session this item opens is born with. */
   budget?: SessionBudget;
+  /** backlog mode: the model/effort/backend that session starts with. */
+  launch?: LaunchOpts;
+  /** backlog mode: let this row past the usage budget as it is added. */
+  pastBudget?: boolean;
   /**
    * This entry is an ANSWER to a question the CLI was showing — a one-tap
    * approve-bar choice, a checkbox toggle, a Submit, an Esc — rather than text

@@ -167,6 +167,18 @@ export function backendContextWindow(backendId: string | undefined, model: strin
 }
 
 /**
+ * Where one model of one backend RUNS, per the catalogue the backend gave
+ * (`models.where`) — `null` when nobody said. Never inferred from the id's
+ * spelling. The local-model gate's locality fact for a backend that has no
+ * `localRunner` of its own (opencode's local providers).
+ */
+export function backendModelWhere(backendId: string | undefined, model: string | undefined): "local" | "hosted" | null {
+  if (!model) return null;
+  const w = MODEL_CACHE.get(backendId || DEFAULT_BACKEND.id)?.where?.[model];
+  return w === "local" || w === "hosted" ? w : null;
+}
+
+/**
  * May a "fork this conversation at turn N" be attempted against this backend?
  * A sentence when it may not, null when it may.
  *
@@ -286,7 +298,8 @@ export function backendInfos(): BackendInfo[] {
         // Per-model window and MEASURED first-request overhead: the picker's
         // window sentence (`windowAdviceText`). Absent stays absent.
         ...(m.contextWindow && Object.keys(m.contextWindow).length ? { contextWindow: { ...m.contextWindow } } : {}),
-        ...(m.overheadTok && Object.keys(m.overheadTok).length ? { overheadTok: { ...m.overheadTok } } : {}) },
+        ...(m.overheadTok && Object.keys(m.overheadTok).length ? { overheadTok: { ...m.overheadTok } } : {}),
+        ...(m.note ? { note: m.note } : {}) },
       ...(m.unavailable ? { unavailable: m.unavailable } : {}),
       ...(b.experimental ? { experimental: true as const } : {}),
       // `contextWindowTokens` is deliberately never set: no backend here has a

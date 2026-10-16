@@ -17,13 +17,14 @@ import { isAnnotatable, sized, viewerWidth } from "../../media";
 import { effectiveMaxWidth, scaleForUpload } from "../../uploadScale";
 import { LS, lsSetJson } from "../../storage";
 import { SEND_DRAFT } from "../../sendIntent";
+import { tabLabel } from "../../sessionTabs";
 import type { SwipeItem } from "../../ImageSwiper";
 import { core, type CoreApi } from "../../sdk";
 import {
   ann, browseAim, browseRepoId, collage, flow, galleryCtx, minimizedNewImg, newImages, sweepFor, swipe,
 } from "./store";
 import {
-  annReturnOverlay, dropStrip, findInStrips, galleryCtxForFile, isVideoPath, isViewable, markedRef, mergeNewImages, ocrBlock, outboxCut,
+  annReturnOverlay, dropStrip, findInStrips, newFilesToast, viewableStrip, galleryCtxForFile, isVideoPath, isViewable, markedRef, mergeNewImages, ocrBlock, outboxCut,
   parkLane, swapImageRef, trimNewImages, type GalleryCtx, type NewImg, type SwipeState,
 } from "./logic";
 
@@ -126,8 +127,11 @@ function onPickFiles(input: HTMLInputElement): void {
 /** The any-type picker's routing, by each file's own type — also what a share
  *  from another app runs (`core().files.attachFiles`, features/share), so the
  *  two cannot disagree. Into the ACTIVE session's box and upload lane. */
-export function routeFiles(files: File[], repoId: string): void {
+export function routeFiles(files: File[], repoId: string, opts?: { annotate?: boolean }): void {
   flow.ret = "session";
+  // Not marking up: everything goes straight up, paths into the box — a share
+  // of 25 photos is not 25 annotator screens.
+  if (opts?.annotate === false) { void uploadMany(files, repoId); return; }
   const images = files.filter(isAnnotatable);
   const rest = files.filter((f) => !isAnnotatable(f));
   // Non-images leave first: their paths are appended to the compose box by
@@ -188,7 +192,7 @@ function openAnnotator(a: { source: AnnSource; repoId: string; facts?: string })
   core().nav.open("image");
 }
 /** Start a multi-image batch: the annotator, one picture at a time. */
-function annBatch(files: AnnSource[], repoId: string): void {
+export function annBatch(files: AnnSource[], repoId: string): void {
   ann.set({ source: files[0], repoId, rest: files.slice(1), total: files.length, index: 1 });
   core().nav.open("image");
 }
@@ -202,7 +206,7 @@ function annBatch(files: AnnSource[], repoId: string): void {
  * are on one canvas. `separate` is exactly what that pick site did before this
  * existed, so declining costs one tap and changes nothing.
  */
-function offerCollage(files: File[], repoId: string, separate: (files: File[]) => void): void {
+export function offerCollage(files: File[], repoId: string, separate: (files: File[]) => void): void {
   collage.set({ files, repoId, separate });
   core().nav.open("collage");
 }
@@ -444,6 +448,14 @@ function annotateNewImage(im: NewImg): void {
 export function annotatorBusy(): boolean {
   return core().nav.overlay === "image" && ann.get() != null;
 }
+/** A paste or drop while marking, answered yes: pictures join the batch after the current one, the rest upload. */
+export function appendToBatch(files: File[]): void {
+  const a = ann.get();
+  if (!a) return;
+  const images = files.filter(isAnnotatable);
+  if (files.length > images.length) void uploadMany(files.filter((f) => !isAnnotatable(f)), a.repoId);
+  if (images.length) ann.set({ ...a, rest: [...(a.rest ?? []), ...images], total: (a.total ?? 1) + images.length, index: a.index ?? 1 });
+}
 
 // ── Send sheet and pad: the annotator's round trip ───────────────────
 
@@ -454,7 +466,7 @@ export function annotatorBusy(): boolean {
  * the files. Shrunk exactly like a live upload — the wire cost is the same
  * whenever it happens to go out.
  */
-export async function attachForInbox(repo: RepoTarget, files: File[]): Promise<string[]> {
+export async function attachForInbox(repo: RepoTarget, files: File[], lane = `create:${repo.worktreePath}`): Promise<string[]> {
   const out: string[] = [];
   for (const f of files) {
     let blob: Blob = f, name = f.name;
@@ -463,7 +475,7 @@ export async function attachForInbox(repo: RepoTarget, files: File[]): Promise<s
       const shrunk = await scaleForUpload(f, f.name, width);
       blob = shrunk.blob; name = shrunk.name;
     } catch { /* un-shrinkable (odd type, decode failed) — send the original */ }
-    const parked = await core().queue.queueImageUpload(repo.id, blob, name, `create:${repo.worktreePath}`, repo.worktreePath);
+    const parked = await core().queue.queueImageUpload(repo.id, blob, name, lane, repo.worktreePath);
     if (parked) out.push(parked.relPath);
     else core().say.toast("this browser can't hold files offline — reconnect and attach again");
   }
@@ -563,7 +575,7 @@ export function openNewImages(sessionId: string): void {
  *  this one, so the batch can be swiped through instead of open-close-open. */
 export function browseNewImages(sessionId: string, im: NewImg): void {
   core().say.track("action:newimg.open");
-  const items = newImages.get().get(sessionId) ?? [];
+  const items = viewableStrip(newImages.get().get(sessionId) ?? []);
   setSwipe({ sessionId, i: Math.max(0, items.findIndex((x) => x.relPath === im.relPath)) });
   core().nav.open("swipe");
 }
@@ -654,7 +666,7 @@ function insertPath(p: string): void {
 export function onSessionImages(sessionId: string, repoId: string, images: readonly NewImage[]): void {
   newImages.set((prev) => mergeNewImages(prev, sessionId, repoId, images));
   restoreNewImages(sessionId);
-  core().say.toast(`${images.length} new image${images.length > 1 ? "s" : ""}`);
+  core().say.toast(newFilesToast(images));
 }
 /** Reference a new image by path in the compose box without annotating. */
 export function referenceNewImage(im: NewImg): void {
@@ -716,7 +728,7 @@ export function openArtifact(f: { repoId: string; relPath: string; name?: string
  * hand-off that says where the file landed. Never a hidden `<a download>`,
  * which was nothing whatsoever in the APK.
  */
-export function downloadArtifact(f: { repoId: string; relPath: string; name: string; size?: number; mtime?: number }): void {
+export function downloadArtifact(f: { repoId: string; relPath: string; name: string; size?: number; mtime?: number; src?: string }): void {
   startDownload(f);
 }
 
@@ -737,16 +749,31 @@ export function insertFromGallery(pth: string): void {
   }
   insertPath(pth);
 }
-/** From the gallery viewer: pull an image into a coding session as context.
- *  Reuses a live session in that repo, else opens one resumed (--continue), and
- *  puts the image path in the compose box so the work can continue. */
-export function continueImageInSession(relPath: string, repoId: string): void {
+/** The live sessions a gallery file can be sent to: the ones in its repo, the
+ *  session on screen first. The viewer lists them by name and the person picks —
+ *  "the first running one in this repo" was a session nobody chose. */
+export function liveSessionsIn(repoId: string): { id: string; label: string; onScreen: boolean }[] {
+  const c = core();
+  const repo = c.world.repos.find((r) => r.id === repoId);
+  if (!repo) return [];
+  const activeId = c.world.active?.id;
+  return c.world.sessions
+    .filter((s) => s.cwd === repo.worktreePath && s.running)
+    .sort((a, b) => Number(b.id === activeId) - Number(a.id === activeId))
+    .map((s) => ({ id: s.id, label: tabLabel(s, repo.repoName), onScreen: s.id === activeId }));
+}
+/** From the gallery viewer: pull a file into a coding session as context —
+ *  the live session the person picked, or (`sessionId` null) a new one in the
+ *  file's repo — with the path in that screen's compose box. */
+export function continueImageInSession(relPath: string, repoId: string, sessionId: string | null): void {
   const c = core();
   const repo = c.world.repos.find((r) => r.id === repoId);
   if (!repo) { c.say.toast("unknown repo"); return; }
+  const existing = sessionId ? c.world.sessions.find((s) => s.id === sessionId && s.running) : undefined;
+  if (sessionId && !existing) { c.say.toast("that session has ended — pick another, or start a new one"); return; }
   galleryCtx.set(null);
   goTo(null);
-  const existing = c.world.sessions.find((s) => s.cwd === repo.worktreePath && s.running);
+  void copyText(relPath);
   // Seeded into the draft of the screen being OPENED (`compose.seedDraft`),
   // never `insert` — that types into the box being left, and the incoming
   // screen's own draft then replaced it: the path was lost while the toast
@@ -754,11 +781,9 @@ export function continueImageInSession(relPath: string, repoId: string): void {
   if (existing) {
     c.nav.attach(existing);
     c.compose.seedDraft(existing.id, relPath);
-    void copyText(relPath);
     c.say.toast(`opened session · ${relPath}`);
   } else {
-    void copyText(relPath);
-    const sid = c.launch.openCwd(repo.worktreePath, repoBranchLabel(repo), true);
+    const sid = c.launch.openCwd(repo.worktreePath, repoBranchLabel(repo));
     // null: the tap waits on the launch question, and no screen was opened
     // yet — the box on screen is still the one to add to.
     if (sid) c.compose.seedDraft(sid, relPath); else c.compose.insert(relPath);
@@ -769,8 +794,7 @@ export function continueImageInSession(relPath: string, repoId: string): void {
 /**
  * Remarks on a file (`FileReview.tsx`) into the chat of the repo the file is
  * in: the session on screen if it is that repo's, else a live one there, else
- * a new one picking up its last conversation — `continueImageInSession`'s
- * ladder, except that the session already on screen comes first. Seeded into
+ * a new one picking up its last conversation. Seeded into
  * the draft of the screen being opened (APPENDED, never sent): the person
  * reads the remarks over in the box and sends them like any prompt, which is
  * where *now* or *when it's free* is decided.

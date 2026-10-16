@@ -89,6 +89,14 @@ export interface SessionLimit {
    *  so the reset lands days off; auto-continue attempts promptly instead of
    *  parking on the unreliable parsed reset (an upgraded plan continues now). */
   weekly: boolean;
+  /**
+   * The wall is a SPEND wall (API-key / cloud account out of credit, or a spend
+   * limit), not a plan window. `resetAt` is then the active dollar calendar
+   * period's computed reset (or an instant the message printed), and null means
+   * NOBODY knows when it lifts: the host holds the session's automatic work and
+   * does not retry - it needs the person. Absent = a plan window, as ever.
+   */
+  spend?: boolean;
   /** Effective auto-continue for THIS session (override ?? global switch). */
   autoContinue: boolean;
   /** Per-session override; null = inherit the global switch. */

@@ -1,10 +1,12 @@
 #!/usr/bin/env node
-// Publish a release in one command: tag, public snapshot, GitHub release with every asset, npm,
-// then download it all back and check it. DRY RUN unless --yes: the dry run makes only read-only
-// calls (git, gh/npm status and view) and prints every command the real run would make.
+// Publish a release in one command: tag, public snapshot, GitHub release with every asset, wait
+// for the public repo's npm-publish workflow to put it on npm WITH provenance, then download it all
+// back and check it. DRY RUN unless --yes: the dry run makes only read-only calls (git, gh/npm
+// status and view) and prints every command the real run would make.
 //
 //   npm run release:publish -- [--yes] [--build [--apk=<file.apk>]] [--public-clone <dir>]
 //                              [--media-clone <dir>] [--accept <file>] [--allow-dirty] [--no-apk]
+//                              [--npm-from-desktop]
 //
 //   --yes             really publish. Without it nothing is written, tagged, pushed or uploaded.
 //   --build           run `npm run release:build` first (else dist-release/ must already hold it)
@@ -17,6 +19,9 @@
 //   --accept <file>   passed to release:public (reviewed scan false positives)
 //   --allow-dirty     dry run only: waive the clean-tree / main / built-from-HEAD checks
 //   --no-apk          publish without an Android APK asset, on purpose (else undrafting refuses)
+//   --npm-from-desktop  escape hatch: `npm publish` dist-release's .tgz from THIS desktop, WITHOUT
+//                     provenance, instead of waiting for .github/workflows/npm-publish.yml (which
+//                     builds from the tag in the public repo's Actions and attests the build)
 //
 // A re-run resumes: each step says whether it is already done (tag on HEAD and origin, release
 // present, assets uploaded, version on npm) and is skipped then, so a run that died after the
@@ -28,8 +33,8 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  extractChangelogSection, planSteps, preflight, readHasShrinkwrap, releaseAssets, sha256Hex, shellLine, tagOf,
-  verifyReleaseBytes,
+  NPM_WORKFLOW, extractChangelogSection, planSteps, preflight, readHasShrinkwrap, readNpmHasVersion, readProvenance, releaseAssets,
+  sha256Hex, shellLine, tagOf, verifyReleaseBytes,
 } from "./publish-lib.mjs";
 import { PUBKEY_PATH, loadPublicKey } from "./sign-lib.mjs";
 
@@ -37,7 +42,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const DIR = "dist-release";
 
 // ── args ───────────────────────────────────────────────────────────────────
-const opts = { yes: false, build: false, allowDirty: false, noApk: false, apk: null, publicClone: null, mediaClone: null, accept: null };
+const opts = { yes: false, build: false, allowDirty: false, noApk: false, npmFromDesktop: false, apk: null, publicClone: null, mediaClone: null, accept: null };
 {
   const argv = process.argv.slice(2);
   for (let i = 0; i < argv.length; i++) {
@@ -52,11 +57,16 @@ const opts = { yes: false, build: false, allowDirty: false, noApk: false, apk: n
     else if (a === "--build") opts.build = true;
     else if (a === "--allow-dirty") opts.allowDirty = true;
     else if (a === "--no-apk") opts.noApk = true;
+    else if (a === "--npm-from-desktop") opts.npmFromDesktop = true;
     else if (a.startsWith("--apk=")) opts.apk = resolve(a.slice(6));
     else if (a === "--public-clone" || a.startsWith("--public-clone=")) opts.publicClone = resolve(val("--public-clone"));
     else if (a === "--media-clone" || a.startsWith("--media-clone=")) opts.mediaClone = resolve(val("--media-clone"));
     else if (a === "--accept" || a.startsWith("--accept=")) opts.accept = resolve(val("--accept"));
-    else if (a === "-h" || a === "--help") { console.log(readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 24).map((l) => l.replace(/^\/\/ ?/, "")).join("\n")); process.exit(0); }
+    else if (a === "-h" || a === "--help") {
+      const lines = readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1);
+      console.log(lines.slice(0, lines.findIndex((l) => !l.startsWith("//"))).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"));
+      process.exit(0);
+    }
     else die(`unknown argument ${a}`);
   }
   if (opts.apk && !opts.build) die("--apk goes with --build (it is a release:build flag)");
@@ -81,6 +91,14 @@ const PKG = SLUG; // the npm package name is the slug (build.mjs writes `name: S
 const out = (n) => join(ROOT, DIR, n);
 
 console.log(`release:publish ${BRAND.name} ${version} → github.com/${REPO} (${TAG}) and npm ${PKG}  ${opts.yes ? "[REAL RUN]" : "[dry run: nothing is changed]"}`);
+const NO_PROVENANCE_BANNER = [
+  "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
+  `  !! --npm-from-desktop: ${PKG}@${version} is published from THIS desktop, WITHOUT provenance.`,
+  "  !! Nothing will link the npm bytes to the public commit or a CI build, and a version",
+  `  !! cannot be re-published with it later. The normal route is the public repo's ${NPM_WORKFLOW}.`,
+  "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
+].join("\n");
+if (opts.npmFromDesktop) console.log(NO_PROVENANCE_BANNER);
 
 // ── facts ──────────────────────────────────────────────────────────────────
 function readLocal() {
@@ -115,9 +133,15 @@ function releaseState() {
 
 function npmState() {
   const r = run("npm", ["view", `${PKG}@${version}`, "version"]);
-  if (r.ok) return r.out.split("\n").map((s) => s.trim().replace(/^'|'$/g, "")).includes(version);
+  if (r.ok) return readNpmHasVersion(r.out, version);
   if (/E404|404/.test(r.err)) return false;
   return "unknown";
+}
+
+/** Are GitHub Actions on in the public repo (where npm-publish.yml runs)? true / false / null (unreadable). */
+function actionsEnabled() {
+  const r = run("gh", ["api", `repos/${REPO}/actions/permissions`, "--jq", ".enabled"]);
+  return r.ok && (r.out === "true" || r.out === "false") ? r.out === "true" : null;
 }
 
 function cloneCheck(dir, repo = REPO, flag = "--public-clone") {
@@ -155,13 +179,14 @@ function gather() {
   const changelogText = existsSync(join(ROOT, "CHANGELOG.md")) ? readFileSync(join(ROOT, "CHANGELOG.md"), "utf8") : "";
   const facts = {
     version, pkg: PKG, yes: opts.yes, allowDirty: opts.allowDirty, build: opts.build, noApk: opts.noApk,
+    npmFromDesktop: opts.npmFromDesktop, actionsEnabled: opts.npmFromDesktop || npmPublished === true ? null : actionsEnabled(),
     branch: run("git", ["rev-parse", "--abbrev-ref", "HEAD"]).out,
     dirty: !!run("git", ["status", "--porcelain"]).out,
     headOnOriginMain: run("git", ["merge-base", "--is-ancestor", "HEAD", "origin/main"]).ok,
     head, tag, release: rs.release, npmPublished: npmPublished === true, remoteShaMatches,
     ...local,
     ghAuth: run("gh", ["auth", "status"]).ok,
-    npmUser: run("npm", ["whoami"]).out || null,
+    npmUser: opts.npmFromDesktop ? run("npm", ["whoami"]).out || null : null,
     changelog: extractChangelogSection(changelogText, version),
   };
   // An unknown release state is refused below; the plan is shown as for a first publish.
@@ -183,7 +208,7 @@ if (opts.yes && facts.changelog) writeFileSync(notesFile, facts.changelog + "\n"
 const steps = planSteps(state, {
   slug: SLUG, name: BRAND.name, version, repo: REPO, pkg: PKG, assets: facts.assets, build: opts.build,
   buildArgs: opts.apk ? [`--apk=${opts.apk}`] : [], publicClone: opts.publicClone, mediaClone: MEDIA_REPO ? (opts.mediaClone ?? "<media-clone>") : null, accept: opts.accept, notesFile, dir: DIR,
-  noApk: opts.noApk,
+  noApk: opts.noApk, npmFromDesktop: opts.npmFromDesktop,
 });
 
 console.log("\nsteps");
@@ -192,26 +217,29 @@ for (const s of steps) {
   if (!s.skip) for (const c of s.cmds) console.log(`         $ ${shellLine(c)}`);
 }
 console.log("  then post-checks: download every asset back from the release URL and re-verify sha256 + signatures;");
-console.log(`         npm view ${PKG}@${version} _hasShrinkwrap must be true; print install.sh's deploy step`);
-console.log("  (no --provenance: npm provenance needs a CI OIDC identity — GitHub Actions — and this runs on a desktop)");
+console.log(`         npm view ${PKG}@${version} _hasShrinkwrap must be true, and dist.attestations must carry a`);
+console.log(`         provenance attestation${opts.npmFromDesktop ? " (it cannot: --npm-from-desktop — said loudly, not counted as a failure)" : ""}; print install.sh's deploy step`);
+if (!opts.npmFromDesktop) console.log(`  (npm is published by github.com/${REPO}'s ${NPM_WORKFLOW}, which the undraft starts: it builds the .tgz from ${TAG}
+   and publishes it with --provenance through npm trusted publishing; this desktop never runs npm publish)`);
 
 if (!opts.yes) {
   if (facts.changelog) console.log(`\nrelease notes (CHANGELOG.md "## ${version}"):\n${facts.changelog.split("\n").map((l) => `  | ${l}`).join("\n")}`);
-  console.log(`\ndry run: nothing was changed.${refused ? " Fix every REFUSE above first." : ""} To publish:\n  npm run release:publish -- --yes${opts.build ? " --build" : ""}${opts.noApk ? " --no-apk" : ""}${opts.publicClone ? ` --public-clone ${opts.publicClone}` : ""}${opts.mediaClone ? ` --media-clone ${opts.mediaClone}` : ""}`);
+  console.log(`\ndry run: nothing was changed.${refused ? " Fix every REFUSE above first." : ""} To publish:\n  npm run release:publish -- --yes${opts.build ? " --build" : ""}${opts.noApk ? " --no-apk" : ""}${opts.npmFromDesktop ? " --npm-from-desktop" : ""}${opts.publicClone ? ` --public-clone ${opts.publicClone}` : ""}${opts.mediaClone ? ` --media-clone ${opts.mediaClone}` : ""}`);
   process.exit(refused ? 1 : 0);
 }
 if (refused) die("refused: fix every REFUSE above. Nothing was changed.", 1);
 
 // ── run ────────────────────────────────────────────────────────────────────
-const resumeHint = `re-run \`npm run release:publish -- --yes${opts.publicClone ? ` --public-clone ${opts.publicClone}` : ""}${opts.mediaClone ? ` --media-clone ${opts.mediaClone}` : ""}${opts.noApk ? " --no-apk" : ""}\` to resume from here (done steps are skipped)`;
+const resumeHint = `re-run \`npm run release:publish -- --yes${opts.publicClone ? ` --public-clone ${opts.publicClone}` : ""}${opts.mediaClone ? ` --media-clone ${opts.mediaClone}` : ""}${opts.noApk ? " --no-apk" : ""}${opts.npmFromDesktop ? " --npm-from-desktop" : ""}\` to resume from here (done steps are skipped)`;
 for (const s of steps) {
   if (s.skip) { console.log(`\n== ${s.id}: skipped, already done (${s.skip})`); continue; }
   if (s.refuse) die(`step ${s.id} refused: ${s.refuse}. ${resumeHint}.`, 1);
   console.log(`\n== ${s.id}: ${s.title}`);
+  if (s.id === "npm") console.log(NO_PROVENANCE_BANNER);
   for (const c of s.cmds) {
     console.log(`$ ${shellLine(c)}`);
     const r = spawnSync(c[0], c.slice(1), { cwd: ROOT, stdio: "inherit" });
-    if (r.status !== 0) die(`step ${s.id} failed (${shellLine(c)} exited ${r.status ?? r.error?.message}). ${resumeHint}.`, 1);
+    if (r.status !== 0) die(`step ${s.id} failed (${shellLine(c)} exited ${r.status ?? r.error?.message}).${s.hint ? ` ${s.hint}.` : ""} ${resumeHint}.`, 1);
   }
   if (s.id === "build") {
     // The build made the bytes: check them as the preflight would have.
@@ -260,12 +288,29 @@ else {
   ].join("\n"));
 }
 
-const installUrl = `https://${BRAND.domain}/install.sh`;
+// Provenance: what makes the npm route checkable (npm audit signatures, the package page's badge).
+// From the desktop it cannot exist, so --npm-from-desktop says so loudly instead of failing.
+const prov = readProvenance(run("npm", ["view", `${PKG}@${version}`, "dist.attestations", "--json"]).out);
+if (prov === true) console.log(`  ok   npm ${PKG}@${version} has a SLSA provenance attestation (built by ${NPM_WORKFLOW} from ${TAG})`);
+else if (opts.npmFromDesktop && prov === false) console.log(`\n${NO_PROVENANCE_BANNER}\n  (expected with --npm-from-desktop: not counted as a failed post-check)`);
+else {
+  failed++;
+  console.log([
+    "",
+    "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
+    `  !! npm ${PKG}@${version}: ${prov === null ? "dist.attestations is unreadable" : "NO provenance attestation"}.`,
+    `  !! The npm-publish workflow publishes with --provenance; a version without one was published`,
+    "  !! some other way (from a desktop?). It cannot be replaced: bump the version and publish again.",
+    "  !! (Right after publishing the registry can lag a minute: re-check with",
+    `  !!   npm view ${PKG}@${version} dist.attestations   before acting on this.)`,
+    "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
+  ].join("\n"));
+}
+
+const installUrl = `https://github.com/${REPO}/releases/latest/download/install.sh`;
 console.log(`
-== install.sh: one step by hand
-  ${DIR}/install.sh is rendered and attached to the release, but ${installUrl} is not deployed by
-  anything in this repo. Put ${DIR}/install.sh at ${installUrl} (or make that URL redirect to
-  https://github.com/${REPO}/releases/latest/download/install.sh), then check it:
+== install.sh: served from the release itself
+  ${installUrl} now answers with this release's copy; check it:
     curl -fsSL ${installUrl} | cmp - ${DIR}/install.sh && echo same`);
 
 if (failed) die(`${failed} post-check(s) failed: the release is out, read each FAIL above.`, 1);

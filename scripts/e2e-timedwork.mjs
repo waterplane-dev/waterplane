@@ -4,7 +4,7 @@
 // rule is a clock to arm, pause and skip; a one-off aimed at ONE place is
 // waiting work whose WHEN happens to be an instant, and it belongs on the list
 // of the repo's waiting work, where the verbs it needs are (re-fire, drag,
-// merge, the smart pick, *drop the clock*).
+// *drop the clock*).
 //
 // Two shapes of failure this pins, both of which were silent:
 //
@@ -19,7 +19,7 @@
 //     backlog item and settled `done`, so one piece of work had two accounts of
 //     itself — and a parent that failed at rung 3 (its grace missed) made no
 //     child at all, which is how nine scheduled items on a real desktop ended up
-//     in no backlog and invisible to the smart pick. It runs itself now, in a
+//     in no backlog. It runs itself now, in a
 //     session of its own, once; and a failed one is rescued by *drop the clock*
 //     (`intent.update` with a new trigger), which is the only patch a terminal
 //     row accepts.
@@ -29,7 +29,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
-import { readIntents } from "./lib-e2e.mjs";
+import { readIntents, waitForHost } from "./lib-e2e.mjs";
 import { E, LS, SLUG, STATE, rootEnv } from "./lib-brand.mjs";
 
 const PORT = 8830;
@@ -61,7 +61,7 @@ const host = spawn("node", ["packages/host/dist/main.js"], { env, stdio: ["ignor
 host.stderr.on("data", (d) => process.stderr.write("[host] " + d));
 const base = `http://127.0.0.1:${PORT}`;
 const bail = setTimeout(() => { check(false, "timed out"); host.kill(); process.exit(1); }, 180_000);
-await sleep(1000);
+await waitForHost(PORT);
 
 const repo = await fetch(`${base}/api/repo`, {
   method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "timed" }),

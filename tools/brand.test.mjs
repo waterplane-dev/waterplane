@@ -42,8 +42,12 @@ const ROOT = new URL("..", import.meta.url).pathname;
 
 /** Lines carrying a legacy word outside history and `brand.ts`. Measured
  *  2026-10-01 at the foundation commit (1201), then at the rename's flip.
- *  May only go DOWN. */
-const LEGACY_BASELINE = 48;
+ *  May only go DOWN. 48 -> 51 on 2026-10-12 is not new spelling: the build
+ *  buttons moved from the untracked per-desktop builds.json into the tracked
+ *  `.waterplane-shared/builds.json`, and three of their lines (the CLI
+ *  fallback's machine path, the web zip's file name, the mirror's echo) became
+ *  visible to `git grep`. */
+const LEGACY_BASELINE = 51;
 
 const BRAND_FILE = "packages/shared/src/brand.ts";
 
@@ -54,7 +58,7 @@ const CURRENT_NAME_ALLOWED = [
   (p) => p === "eslint.config.js",                 // the lint rule's words (check 1)
   (p) => p.endsWith(".md"),                        // prose, CHANGELOG, skills
   (p) => p === "package.json" || p.endsWith("/package.json"),
-  (p) => p === "package-lock.json",
+  (p) => p === "package-lock.json" || p.endsWith("/package-lock.json"),
   // The Android shell's identity: written by scripts/brand-android.mjs, whose --check the test below runs.
   (p) => p === "packages/app/capacitor.config.ts",
   (p) => p === "packages/app/android/app/build.gradle",
@@ -64,16 +68,25 @@ const CURRENT_NAME_ALLOWED = [
   (p) => p === "packages/app/ios/App/App.xcodeproj/project.pbxproj",
   (p) => /^packages\/app\/ios\/App\/App\/[^/]+\.(plist|swift)$/.test(p),
   (p) => p === "packages/app/scripts/ios-sim.sh",
+  // The Play Store listing: plain text release:play uploads verbatim as the store page.
+  (p) => p.startsWith("packages/app/play/listings/"),
   (p) => p.startsWith(".github/"),
   (p) => p.startsWith("deploy/"),                  // plist template, npm placeholder
   (p) => p === ".env.example",                     // the documented list of every knob, by its full name
   (p) => p === ".gitignore",                       // the state dir, current and legacy
+  (p) => p.endsWith("/waterplane-plugin.json"),     // a plugin manifest's "env" names the knobs api.env() may read; JSON cannot import BRAND
+  (p) => p === ".waterplane-shared/builds.json",   // build buttons: shell commands in JSON, cannot import BRAND
   (p) => p.startsWith("brand/"),                   // the logo kit's sources (wordmark text, hero)
+  (p) => p.startsWith("site/"),                    // waterplane.dev: static HTML generated from the README (scripts/site), plus CNAME; cannot import BRAND
   (p) => /^docs\/assets\/.*\.svg$/.test(p),
+  // A parked diff under docs/plans: a snapshot of code that is not in the tree yet. It is
+  // history like a CHANGELOG, and when it lands its hunks are linted as code like any other.
+  (p) => /^docs\/plans\/.*\.(?:patch|diff)$/.test(p),
   (p) => /^scripts\/ui\/snapshots\/.*\.aria\.txt$/.test(p), // what the screen says, logo alt text included
-  // An extension's standalone, dependency-free CLI symlinked into ~/.local/bin: it
-  // cannot import the TS BRAND and finds the state dir by the same rule as branddirs.ts.
-  (p) => /^packages\/extensions\/[^/]+\/cli\/[^/]+\.mjs$/.test(p),
+  // An extension's standalone, dependency-free CLI symlinked into ~/.local/bin (and the
+  // modules under its cli/ dir): it cannot import the TS BRAND and finds the state dir by
+  // the same rule as branddirs.ts. The vault's vendored Python client (cli/client/*.py) likewise.
+  (p) => /^packages\/extensions\/[^/]+\/cli\/(?:[^/]+\/)*[^/]+\.(?:mjs|py)$/.test(p),
   (p) => p.startsWith("packages/host/templates/"), // copied verbatim into a person's new repo; cannot import BRAND        // diagrams: prose drawn as a picture, cannot import BRAND
   // Test fixtures: a test pins a name as a person would type it or find it on
   // disk; one that derived its expectation from BRAND could not catch BRAND
@@ -81,8 +94,8 @@ const CURRENT_NAME_ALLOWED = [
   (p) => /(^|\/)test\//.test(p) || p.endsWith(".test.mjs"),
 ];
 
-/** Code files: their comments are prose (see the header, check 2). */
-const CODE = /\.(m?[jt]sx?|cjs)$/;
+/** Code files and stylesheets: their comments are prose (see the header, check 2). */
+const CODE = /\.(m?[jt]sx?|cjs|css)$/;
 
 /** The part of a code line that is code — "" for a whole-line comment, the
  *  text before a trailing ` // ` comment otherwise. Other files: the line. */

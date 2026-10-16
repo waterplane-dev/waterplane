@@ -1,16 +1,19 @@
 /** The Totals box and the costliest conversations under it, hook-free: every value is a render value of TokenStatsBody. */
 import { type ComponentProps } from "react";
+import { CircleHelp } from "lucide-react";
 import {
-  type CostBreakdown, fmtCount, fmtExact, fmtUsd, type TokenConvo, type TokenStatsDoc, tokenTotal,
-  type TokenTotals, topGroups,
+  type CostBreakdown, DOLLARS_WHY, DOLLARS_WHY_HEAD, fmtCount, fmtExact, fmtUsd, type TokenConvo, type TokenStatsDoc, tokenTotal,
+  type TokenGroup, type TokenTotals, topGroups,
 } from "@waterplane/shared";
 import { ScopeCard, ScopeTag, TopConvos } from "./TokenInsights.tsx";
-import { cutSpan, LIVE_WINDOWS, type LiveWindowId, type WindowCut } from "./usageCut.ts";
+import { cutSpan, type WindowCut } from "./usageCut.ts";
+import { type DaysCut } from "./span.ts";
 import { CacheVerdict, modelBands } from "@waterplane/kit";
 import { WindowHeats, type WindowScope, WindowStep } from "./WindowHeats.tsx";
 import { Bars, ModelLegend } from "./charts/Bars.tsx";
-import { Composition, Tiles, WindowTiles } from "./Readouts.tsx";
+import { Composition, DaysTiles, Tiles, WindowTiles } from "./Readouts.tsx";
 import { TableView } from "./TableView.tsx";
+import { foldStateText } from "./weekBands.ts";
 
 /**
  * The Totals box and the costliest conversations under it: the hero, the split it
@@ -18,13 +21,14 @@ import { TableView } from "./TableView.tsx";
  * grids. Hook-free — every value it reads is a render value of `TokenStatsBody`,
  * which keeps all the state, so moving this out cannot change a hook's position.
  */
-export function TotalsCard({ doc, money, table, active, scopable, scopeOn, scope, setScope, grids, hist, shownTotals, shownCost, shownTok, coldNote, scopeWords, bands, canModel, days, nameOf, onExplain, isLive, onOpenConvo }: {
+export function TotalsCard({ doc, money, table, active, dcut, scope, setScope, grids, hist, shownTotals, shownCost, shownTok, coldNote, scopeWords, bands, canModel, days, scopeRepos, scopeRes, reposRefusal, top, pts, weekTwin, nameOf, onExplain, isLive, onOpenConvo }: {
   doc: TokenStatsDoc;
   money: boolean;
   table: boolean;
   active: WindowCut | null;
-  scopable: typeof LIVE_WINDOWS;
-  scopeOn: "all" | LiveWindowId;
+  /** The span filter's calendar days (30 / 90), with how many calendar days and its words — null
+   *  under a live window or all time. Never both this and `active`. */
+  dcut: { cut: DaysCut; calendarDays: number; caption: string } | null;
   scope: WindowScope;
   setScope: (s: WindowScope) => void;
   grids: ComponentProps<typeof WindowHeats>["grids"];
@@ -37,6 +41,22 @@ export function TotalsCard({ doc, money, table, active, scopable, scopeOn, scope
   bands: ReturnType<typeof modelBands>;
   canModel: boolean;
   days: TokenStatsDoc["days"];
+  /** The window's repos, folded by the host over the cut on screen (`/api/costwindow`) — null
+   *  while it is read or when it cannot be, which `scopeRes` words. Unused without a cut. */
+  scopeRepos?: TokenGroup[] | null;
+  scopeRes?: { state: string; error?: string | null };
+  /** Why the span has no repo split at all (a calendar span longer than the host's cost window
+   *  folds) — a sentence in place of the bars. */
+  reposRefusal?: string | null;
+  /** The costliest conversations for the span on screen: the rows, the span's total they are a
+   *  share of, and the words the section's tag and caption carry. */
+  top: { rows: TokenConvo[]; total: number; tag: string; note?: string };
+  /** A costliest row's dollars as weekly points, off the screen's one calibration; null where it
+   *  refused or the row did not run wholly inside this week (`convoInWeek`). */
+  pts?: (usd: number, c: TokenConvo) => string | null;
+  /** The live week's repo split is the week card's document, while the hero here is the hour
+   *  record — said in the caption so two "since reset" figures are never read as one. */
+  weekTwin?: boolean;
   nameOf?: (id: string) => string | undefined;
   onExplain?: (c: TokenConvo, title: string) => void;
   isLive?: (id: string) => boolean;
@@ -46,19 +66,14 @@ export function TotalsCard({ doc, money, table, active, scopable, scopeOn, scope
     <>
 
       {/* ── TOTALS: one box, its span chosen in its own head ─────────── */}
-      <ScopeCard title="Totals"
-        chips={<>
-          <button className={`key${!active ? " active" : ""}`}
-            onClick={() => setScope(null)}>All time</button>
-          {scopable.map((w) => (
-            <button key={w.id} className={`key${scopeOn === w.id ? " active" : ""}`}
-              onClick={() => setScope({ id: w.id, back: 0 })}>{w.label}</button>
-          ))}
-        </>}
+      {/* No chips of its own since 2026-10-15: the span is the sticky bar's, which reaches every
+          box below it. The caption still says exactly what span the numbers here stand for. */}
+      <ScopeCard title="Totals" chips={null}
         caption={active
-          ? <>{cutSpan(active, Date.now())} Everything in this box is cut to it; the boxes below are not.</>
-          : scopable.length > 0
-            ? <>Every conversation on record. Pick a live window to see what the limit percentages above are made of.</>
+          ? <>{cutSpan(active, Date.now())}
+            {weekTwin && <> Counted from the desktop’s hour record, like the figure under the limit bar; <em>Where the week went</em> folds each conversation’s log, so the two can differ by what ran between the two reads.</>}</>
+          : dcut
+            ? <>{dcut.caption}</>
             : <>Every conversation on record.</>}>
         {active && <WindowStep cut={active} grid={grids.get(active.id) ?? null} onScope={setScope} />}
       {/* ── the headline, and immediately what it is made of ───────── */}
@@ -81,11 +96,19 @@ export function TotalsCard({ doc, money, table, active, scopable, scopeOn, scope
               number nobody could check. */}
           {active
             ? <> · {fmtExact(active.totals.turns)} turns in {active.long}</>
+            : dcut
+            ? <> · {fmtExact(dcut.cut.totals.turns)} turns in {scopeWords}</>
             : <> across {fmtExact(doc.conversations)} conversations{doc.firstAt ? <> since {new Date(doc.firstAt).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })}</> : null}</>}
         </div>
       </div>
 
       <Composition totals={shownTotals!} cost={shownCost!} money={money} />
+      {/* The span's first dollar figure is the hero, so the question it raises is answered here, in
+          the shared words (moved with the last-7-days headline this box replaced, 2026-10-15). */}
+      <details className="hint-more ts-dollars-why">
+        <summary><CircleHelp size={12} aria-hidden /> {DOLLARS_WHY_HEAD}</summary>
+        <p>{DOLLARS_WHY}</p>
+      </details>
 
       {/* The caveat is a first-class part of the readout, not a footnote:
           a dollar figure this screen computed is the app's most
@@ -104,8 +127,8 @@ export function TotalsCard({ doc, money, table, active, scopable, scopeOn, scope
           {/* Both of these are counted over the WHOLE corpus, so they
               are withheld under a window rather than restated about a
               span they were not measured over. */}
-          {!active && tokenTotal(doc.unpriced) > 0 && <> {fmtCount(tokenTotal(doc.unpriced))} tokens ran on a model with no published rate and are <b>not</b> in this figure.</>}
-          {!active && doc.fastTurns > 0 && <> {fmtExact(doc.fastTurns)} turns ran in fast mode, which bills at roughly double and is priced here at the standard rate — the real figure is higher.</>}
+          {!active && !dcut && tokenTotal(doc.unpriced) > 0 && <> {fmtCount(tokenTotal(doc.unpriced))} tokens ran on a model with no published rate and are <b>not</b> in this figure.</>}
+          {!active && !dcut && doc.fastTurns > 0 && <> {fmtExact(doc.fastTurns)} turns ran in fast mode, which bills at roughly double and is priced here at the standard rate — the real figure is higher.</>}
           {/* A MEASUREMENT of this desktop, not method: it says which
               way the dearest line on the bill is moving, and it is the
               one number the rate rules below cannot be worked out
@@ -141,7 +164,7 @@ export function TotalsCard({ doc, money, table, active, scopable, scopeOn, scope
           restated about a span it was not measured over — the same
           rule the unpriced and fast-mode clauses follow. Drawn only
           when it happened. */}
-      {!active && coldNote && (
+      {!active && !dcut && coldNote && (
         <div className="empty ts-caveat">{coldNote}</div>
       )}
 
@@ -149,14 +172,16 @@ export function TotalsCard({ doc, money, table, active, scopable, scopeOn, scope
         {!table ? <>
         {active
           ? <WindowTiles cut={active} money={money} />
+          : dcut
+          ? <DaysTiles days={dcut.cut.days} totals={dcut.cut.totals} cost={dcut.cut.cost} calendarDays={dcut.calendarDays} money={money} />
           : <Tiles doc={doc} money={money} />}
 
         <div className="section section-head">
           <span>By model <ScopeTag>{scopeWords}</ScopeTag></span>
         </div>
-        {active
-          ? (active.modelSplit
-            ? <Bars rows={topGroups(active.models, 6, "models")} money={money} />
+        {(active ?? dcut?.cut)
+          ? ((active ?? dcut!.cut).modelSplit
+            ? <Bars rows={topGroups((active ?? dcut!.cut).models, 6, "models")} money={money} />
             : <div className="empty">
                 No model split in this desktop’s hour buckets yet — the host records one from
                 the next scan on. The tokens and money above are counted either way.
@@ -164,14 +189,19 @@ export function TotalsCard({ doc, money, table, active, scopable, scopeOn, scope
           : <Bars rows={topGroups(doc.models, 6, "models")} money={money} />}
 
         <div className="section section-head"><span>By repo <ScopeTag>{scopeWords}</ScopeTag></span></div>
-        {active
-          ? <div className="empty">
-              Not answerable inside a live window — an hour bucket carries the model, not the
-              repo. Tap <b>All time</b> at the top of this box for it.
-            </div>
+        {/* Under a window the repos come from the host's fold of that span's conversations —
+            an hour bucket carries the model, not the repo. While it is read, offline or
+            refused (an older host), a sentence says which. */}
+        {reposRefusal
+          ? <div className="empty">{reposRefusal}</div>
+          : (active || dcut)
+          ? (scopeRepos
+            ? <Bars rows={topGroups(scopeRepos, 8, "repos")} money={money} bands={canModel ? bands : undefined} />
+            : <div className="empty">{foldStateText(scopeRes ?? { state: "loading" }, "window")}</div>)
           : <Bars rows={topGroups(doc.repos, 8, "repos")} money={money}
               bands={canModel ? bands : undefined} />}
-        {!active && canModel && <>
+        {(active || dcut) && scopeRepos && !reposRefusal && canModel && <ModelLegend bands={bands} />}
+        {!active && !dcut && canModel && <>
           <ModelLegend bands={bands} />
           <details className="hint-more ctx-method">
             <summary>why the split is there</summary>
@@ -184,23 +214,29 @@ export function TotalsCard({ doc, money, table, active, scopable, scopeOn, scope
             </p>
           </details>
         </>}
-        </> : <TableView doc={doc} days={days} cut={active} part="groups" />}
+        </> : <TableView doc={doc} days={days} cut={active ?? (dcut ? { long: scopeWords, modelSplit: dcut.cut.modelSplit, models: dcut.cut.models } : null)} part="groups"
+          repos={reposRefusal ? null : scopeRepos} reposNote={reposRefusal ?? foldStateText(scopeRes ?? { state: "loading" }, "window")} />}
 
         {/* Every window BEFORE this one, as two grids — a tap on a box
-            scopes THIS box to that window, which is why they are in it. */}
-        <div className="section section-head"><span>Past windows <ScopeTag>tap one to cut this box to it</ScopeTag></span></div>
-        <WindowHeats grids={grids} res={hist} money={money} scope={scope} onScope={setScope} />
+            scopes THIS box to that window, which is why they are in it. No grid (an older host, the
+            VS Code panel, which reads no limit window) ⇒ no heading over nothing. */}
+        {grids.size > 0 && <>
+          <div className="section section-head"><span>Past windows <ScopeTag>tap one to set the span to it</ScopeTag></span></div>
+          <WindowHeats grids={grids} res={hist} money={money} scope={scope} onScope={setScope} />
+        </>}
       </ScopeCard>
 
       {/* ── The conversations that carried the bill ─────────────────── */}
-      {!!doc.top?.length && <>
-        <div className="section section-head">
-          <span>Costliest conversations <ScopeTag muted>all time · in money · no filter</ScopeTag></span>
-        </div>
-        <TopConvos rows={doc.top} total={doc.cost.total}
+      <div className="section section-head">
+        <span>Costliest conversations <ScopeTag>{top.tag}</ScopeTag></span>
+      </div>
+      {top.note && <div className="empty ts-caveat">{top.note}</div>}
+      {!top.rows.length && !top.note && <div className="empty">No conversation ran in {scopeWords}.</div>}
+      {!!top.rows.length && <>
+        <TopConvos rows={top.rows} total={top.total} pts={pts}
           nameOf={nameOf} onExplain={onExplain} isLive={isLive} onOpen={onOpenConvo} />
         <div className="empty ts-caveat">
-          Each counts its subagents in. <b>Explain the cost</b> starts a new session that reads
+          Each counts its subagents in{pts ? <>; weekly points are given only for a conversation that ran wholly inside this week, since the rate is this week’s</> : null}. <b>Explain the cost</b> starts a new session that reads
           that conversation’s log, names what made it expensive and lists ideas — it changes
           nothing until you pick one.
         </div>

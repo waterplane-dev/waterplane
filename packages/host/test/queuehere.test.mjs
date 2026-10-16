@@ -54,7 +54,6 @@ function makeStore(over = {}) {
     // this file is about where a PINNED row goes, and a pinned row is aimed at a
     // session that already exists, so it never asks for a slot at all.
     autoSlotsFree: () => 3,
-    reapAutoSession: () => null,
     revivedSessionFor: () => null,
     diedAtLimit: () => false,
     stopCount: () => 0,

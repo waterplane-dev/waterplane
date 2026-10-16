@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  AtSign, Copy, Eye, File as FileIcon, Folder, MessageSquarePlus, Pencil, RotateCw, Save, Search, X,
+  AtSign, Copy, Eye, File as FileIcon, Folder, MessageSquarePlus, Pencil, Pin, PinOff, RotateCw, Save, Search, X,
 } from "lucide-react";
 import { api, copyText, type TreeEntry, type TreeFile, type TreeListing } from "./api";
 import { ago, fmtSize } from "./format";
@@ -16,6 +16,8 @@ import { isImage, isMarkdown, isVideo } from "./docKind";
 import { ZoomableImage } from "./ZoomableImage";
 import { sized, viewerWidth } from "./media";
 import { FileReview, storedRemarkCount } from "./FileReview";
+import { fileTabKey, fileTabLabel, noteFileOnScreen, setFilePinned, useSessionTabs } from "./sessionTabs";
+import { showToast } from "./toast";
 
 /**
  * Browse the repo as a TREE, and edit a file now and then.
@@ -155,7 +157,7 @@ export function FilesSheet({ repoId, repoName, socketOpen, onInsertPath, onRemar
     // mtime 0: unknown until the host answers, so an offline open can only
     // miss the cache — and says so, rather than showing a stale body.
     void openEntry({ name, path: initialFile, dir: false, size: 0, mtime: 0 });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- once per named file (guarded by `aimed`); `openEntry` is a per-render closure
   }, [initialFile]);
 
   const closeFile = () => { setOpen(null); tree.reload({ quiet: true }); };
@@ -172,7 +174,7 @@ export function FilesSheet({ repoId, repoName, socketOpen, onInsertPath, onRemar
   if (open) {
     return (
       <FileView
-        repoId={repoId} file={open} socketOpen={socketOpen}
+        repoId={repoId} repoName={repoName ?? ""} file={open} socketOpen={socketOpen}
         onReopen={async () => { try { setOpen(await api.treeFile(repoId, open.path)); } catch { /* keep what we have */ } }}
         onInsertPath={onInsertPath}
         onRemarks={onRemarks}
@@ -264,6 +266,8 @@ export function FilesSheet({ repoId, repoName, socketOpen, onInsertPath, onRemar
 
 interface ViewProps {
   repoId: string;
+  /** The tab strip's colour for a pin (`sessionTabs.ts` `FileTab`). */
+  repoName: string;
   file: TreeFile;
   socketOpen: boolean;
   onReopen: () => Promise<void>;
@@ -274,8 +278,26 @@ interface ViewProps {
   onClose: () => void;
 }
 
-function FileView({ repoId, file, socketOpen, onReopen, onInsertPath, onRemarks, onOpenPath, onClose }: ViewProps) {
+function FileView({ repoId, repoName, file, socketOpen, onReopen, onInsertPath, onRemarks, onOpenPath, onClose }: ViewProps) {
   const [editing, setEditing] = useState(false);
+  /** Pinned to the tab strip — read off the strip's own store, so an × on the
+   *  strip flips this button too. */
+  const pinKey = fileTabKey({ repoId, path: file.path });
+  const pinned = useSessionTabs((s) => s.files.some((f) => fileTabKey(f) === pinKey));
+  const stripOn = useSessionTabs((s) => s.enabled);
+  // While this file is on screen its pinned tab is the front one.
+  useEffect(() => {
+    noteFileOnScreen(pinKey);
+    return () => noteFileOnScreen(null);
+  }, [pinKey]);
+  function togglePin() {
+    track("action:files.pin");
+    setFilePinned({ repoId, repo: repoName, path: file.path }, !pinned);
+    const name = fileTabLabel(file.path);
+    showToast(pinned ? `unpinned ${name}`
+      : stripOn ? `pinned ${name} to the tab strip`
+      : `pinned ${name} — the tab strip is off, turn it on in Settings to see it`);
+  }
   /** Review mode (`FileReview.tsx`): mark lines, say what should change, send
    *  the lot to the chat. Exclusive with editing — the remarks name lines on
    *  disk, and a box being typed into is not that. */
@@ -373,6 +395,11 @@ function FileView({ repoId, file, socketOpen, onReopen, onInsertPath, onRemarks,
   return (
     <div className="sheet">
       <SheetHead title={file.path} brandClass="mono" onClose={onClose}>
+        <button className={`key ${pinned ? "active" : ""}`}
+          title={pinned ? "unpin from the tab strip" : "pin to the tab strip — one tap back to this file from anywhere"}
+          aria-pressed={pinned} onClick={togglePin}>
+          {pinned ? <PinOff size={16} /> : <Pin size={16} />}
+        </button>
         {reviewable && !editing && (
           <button className={`key ${review ? "active" : ""}`}
             title={review ? "back to reading — the remarks are kept" : "mark lines and say what should change — sent to the chat as one message"}

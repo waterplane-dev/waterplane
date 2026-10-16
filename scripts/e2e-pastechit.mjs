@@ -23,7 +23,8 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
-import { E, NAME, SLUG, STATE, rootEnv } from "./lib-brand.mjs";
+import { E, NAME, SHARED, SLUG, rootEnv } from "./lib-brand.mjs";
+import { waitForHost } from "./lib-e2e.mjs";
 
 const PORT = 8880;
 const STUB = process.cwd() + "/scripts/claude-stub-tui.mjs";
@@ -39,7 +40,7 @@ const TEXT = [
   `${NAME} can run shell commands in this repo without a Claude session.`,
   "",
   "1. Work out how this project really builds and packages, from the repo itself.",
-  `2. Write ${STATE}/builds.json: a JSON array of objects { id, name, cmd, dir }.`,
+  `2. Write ${SHARED}/builds.json: a JSON array of objects { id, name, cmd, dir }.`,
   "   - id: short unique slug.",
   "   - name: short button label, e.g. Release APK.",
   "   - cmd: ONE shell command line, run by the login shell.",
@@ -76,7 +77,7 @@ const env = {
 const host = spawn("node", ["packages/host/dist/main.js"], { env, stdio: ["ignore", "pipe", "pipe"] });
 host.stderr.on("data", (d) => process.stderr.write("[host] " + d));
 const base = `http://127.0.0.1:${PORT}`;
-await sleep(900);
+await waitForHost(PORT);
 
 const repo = await fetch(`${base}/api/repo`, {
   method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "paste" }),

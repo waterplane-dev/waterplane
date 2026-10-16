@@ -21,23 +21,25 @@ import ts from "typescript";
 const BARREL = fileURLToPath(new URL("../src/intent.ts", import.meta.url));
 
 const SURFACE = [
-  "AGENT_POSTED_WORDS:value", "AssessPayload:type", "AutoSlotFacts:type", "BlockReason:type",
+  "AFTER_RESET_LEFTOVER_MS:value", "AGENT_POSTED_WORDS:value", "AssessPayload:type", "AutoSlotFacts:type", "BUDGET_NOT_HOLDING:value", "BlockReason:type",
   "BudgetPass:type", "BudgetWaiver:type", "BuildPayload:type", "CapturePayload:type",
   "HELD_MAX_MS:value", "INTENT_BLOCK_ORDER:value", "INTENT_MAX_ATTEMPTS:value", "INTENT_MAX_DIRS:value",
   "INTENT_MAX_NEEDS:value", "INTENT_MAX_STEPS:value", "Intent:type", "IntentFacts:type",
   "IntentKind:type", "IntentPayload:type", "IntentRequeue:type", "IntentResult:type",
   "IntentSettlement:type", "IntentTarget:type", "IntentTrigger:type", "IntentVerdict:type",
-  "Lifecycle:type", "MANUAL_HOLD_TEXT:value", "ON_TIME_MS:value", "ORIGIN_AGENT:value",
+  "Lifecycle:type", "LocalSlotFacts:type", "MANUAL_HOLD_TEXT:value", "ON_TIME_MS:value", "ORIGIN_AGENT:value",
   "ORIGIN_FANOUT_FOLLOWUP:value", "ORIGIN_FANOUT_RUN:value", "ORIGIN_FANOUT_TARGET:value", "ORIGIN_PEER_PREFIX:value",
   "ORIGIN_SCHEDULE_PREFIX:value", "ORIGIN_SCHEDULE_SWEEP:value", "ORIGIN_SCHEDULE_WORK:value", "REQUEUE_KEEP:value",
-  "RESET_MATCH_MS:value", "autoSlotsWaitText:value", "budgetPassAt:value", "budgetPassOf:value",
-  "budgetWaived:value", "budgetWaiverUntil:value", "busyIntentGroups:value", "cleanBudgetWaiver:value", "intentSerialHolders:value",
+  "RESET_MATCH_MS:value", "autoSlotsBusy:value", "autoSlotsWaitText:value", "budgetAfterResetOf:value", "budgetLeftoverOf:value", "budgetPassAt:value", "budgetPassOf:value",
+  "budgetWaived:value", "budgetWaiverPeriod:value", "budgetWaiverUntil:value", "busyIntentGroups:value", "cleanBudgetWaiver:value", "intentSerialHolders:value",
   "cleanIntentRow:value", "clockKey:value", "closeWhenDoneOf:value", "intentKind:value",
   "intentReasonText:value", "intentVerdict:value", "isAgentPosted:value", "isAssessRow:value",
   "isBacklogRow:value", "isBuildRow:value", "isCaptureRow:value", "isFanoutRow:value",
   "isLaunchRow:value", "isPeerPosted:value", "isScheduleRow:value", "isTimedWorkRow:value",
-  "liveConvSession:value", "needsSlot:value", "peerOfOrigin:value", "queuesBacklogItem:value",
+  "liveConvSession:value", "localSlotOverText:value", "localSlotWaitText:value", "needsSlot:value", "peerOfOrigin:value", "queuesBacklogItem:value",
   "reopensConversation:value", "scheduleIdFromOrigin:value", "scheduleItemOrigin:value", "timedWorkKey:value",
+  "ClockMember:type", "Slot:type", "SlotRow:type", "findSlot:value", "latestClock:value", "parseSlotKey:value",
+  "slotMates:value", "slotOf:value", "slotOthersText:value", "slotRowOfIntent:value", "slotRowOfItem:value", "slotsOf:value",
 ];
 
 test("the intent module exports exactly its pinned surface, values and types alike", () => {

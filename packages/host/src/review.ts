@@ -91,11 +91,11 @@ export class ReviewStore {
       const patch: ReviewSidecar = {};
       if (row.checkStatus === "error" && detectLimitText(row.checkDetail || "").blocked) {
         patch.checkStatus = "limited";
-        patch.checkNote = limitNote({ blocked: true, resetAt: null, weekly: false }, "checked");
+        patch.checkNote = limitNote({ blocked: true, spend: false, resetAt: null, weekly: false }, "checked");
       }
       if (row.validateStatus === "error" && detectLimitText(row.validateDetail || "").blocked) {
         patch.validateStatus = "limited";
-        patch.validateNote = limitNote({ blocked: true, resetAt: null, weekly: false }, "validated");
+        patch.validateNote = limitNote({ blocked: true, spend: false, resetAt: null, weekly: false }, "validated");
       }
       if (!Object.keys(patch).length) continue;
       this.rows.set(id, { ...row, ...patch });

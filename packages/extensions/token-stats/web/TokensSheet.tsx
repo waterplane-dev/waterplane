@@ -3,6 +3,7 @@
  * costliest-conversations list's two doors — explain a conversation's cost in a new session, or open
  * the context & cost sheet of one still live.
  */
+import { useEffect, useState } from "react";
 import type { TokenConvo } from "@waterplane/shared";
 import { core, explainCostPrompt, ledgers, useCore } from "@waterplane/sdk";
 import { ledgerBackends } from "./backendLedger.ts";
@@ -33,9 +34,17 @@ export function TokensSheet() {
   const live = (id: string) => sessions.find((s) => s.claudeSessionId === id);
   // Ledgers other extensions draw themselves (`LedgerViewDef`): a tab of their own, never a generic one too.
   const views = ledgers.views();
-  return <TokenStatsSheet online={c.conn.status === "open"} views={views} backends={c.world.backends}
-    ledgerTabs={ledgerBackends(c.world.backends, views.map((v) => v.id))} usage={u} onRefreshUsage={ledgers.refreshUsage}
-    onClose={() => c.nav.close("tokens")}
+  // The "opened on X" filter is for THIS open. Read ONCE, at the first render, and consumed: the
+  // store is cleared as the sheet mounts, so an open by any other door (Settings, a Back that
+  // never calls onClose) starts unfiltered. Not an unmount cleanup — StrictMode runs that at
+  // mount in dev — and this state survives StrictMode's second effect pass, the store does not
+  // need to. The body holds its own copy for the `all` button (a prop read here would not move).
+  const [openedOn] = useState(() => c.world.tokensOpenOn);
+  useEffect(() => { core().world.clearTokensOn(); }, []);
+  return <TokenStatsSheet readings={c.world.usageReadings} openedOn={openedOn} onClearOn={c.world.clearTokensOn}
+    online={c.conn.status === "open"} views={views} backends={c.world.backends}
+    ledgerTabs={ledgerBackends(c.world.backends, views.map((v) => v.id))} usage={u} spend={{ profile: c.world.billing?.profile ?? null, budget: c.world.budget?.budget ?? null, periods: c.world.budget?.periods ?? null }} onRefreshUsage={ledgers.refreshUsage}
+    onClose={() => { c.world.clearTokensOn(); c.nav.close("tokens"); }}
     nameOf={(id) => {
       const s = live(id);
       return s ? c.world.sessionRowTitle(s) : recent.find((r) => r.claudeSessionId === id)?.title || undefined;

@@ -87,12 +87,12 @@ export function rankChipWords(r: ReadingWords | null | undefined): string | null
  */
 export const KPI_MEANING: Readonly<Record<string, string>> = {
   "size.p95": "how long a large file runs — 95 in 100 source files are shorter",
-  "retouch.rate": "the share of file edits that came back to a file edited just before",
-  "hatches.perKloc": "places a type or lint rule was switched off on purpose, per 1,000 lines",
+  "retouch.rate": "the share of file edits that reworked lines the edit just before had added",
+  "hatches.perKloc": "places a type or lint rule was switched off with no reason given, per 1,000 lines",
   "context.claudeMdChars": "what every turn in this repo re-sends before anyone types",
   "context.descChars": "the one-line skill descriptions that ride in every window",
   "context.skillCount": "how many skills the repo ships",
-  "untested.count": "source modules that no test file names",
+  "untested.count": "source modules no test names or reaches through imports",
 };
 
 export function kpiMeaning(key: string): string | null {

@@ -8,11 +8,16 @@ packages/*/dist/
 dist-release/
 dist-demo/
 *.tsbuildinfo
+# Gradle's per-project cache (fileHashes.bin, last-build.bin, *.lock): a build of the
+# android-hello template — or any Android project here — writes it next to the sources.
+.gradle/
 # `.claude/*` and not `.claude/`, because git cannot re-include anything below an
 # excluded DIRECTORY — and the project skills below have to be re-included: they
 # are the on-demand half of CLAUDE.md and carry rules this repo depends on.
 .claude/*
 !.claude/skills/
+# The edit-time guard hook (scripts/guards/) — a check every session here runs.
+!.claude/settings.json
 .usmc
 .waterplane/
 
@@ -28,3 +33,6 @@ keystore-play.properties
 .claude/outbox
 .outbox
 
+
+# Python bytecode (the vault test imports cli/client/wp_secret.py)
+__pycache__/

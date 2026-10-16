@@ -5,7 +5,7 @@ import { LS, lsDel, lsJson, lsSetJson } from "./storage.ts";
 /**
  * Header commands — the user's own one-tap chips in the session header.
  *
- * The header is the one bar that survives `headerCollapsed` (the reading-room
+ * The header is the one bar that stays in reader view (the reading-room
  * layout), so it is where a command you fire constantly belongs: `/compact`,
  * `/context`, "continue". Everything else needed a sheet — the slash list, or
  * the compose box plus the keyboard — which on a phone is three taps and a

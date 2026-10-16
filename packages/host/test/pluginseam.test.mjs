@@ -13,7 +13,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const { PluginRegistry } = await import("../dist/plugins/pluginregistry.js");
-const { contributedChecks, contributedFixes } = await import("../dist/plugins/setupcontrib.js");
+const { contributedChecks, contributedFixes, hostChecks, hostFixes } = await import("../dist/plugins/setupcontrib.js");
+const { targetId } = await import("../dist/repos.js");
 const { inspectRepo } = await import("../dist/compliance.js");
 const { BRAND, PLUGIN_API_VERSION } = await import("@waterplane/shared");
 const { knownBackend, resolveBackend } = await import("../dist/backends/index.js");
@@ -34,6 +35,7 @@ function boot({ repos = {}, handed = [] } = {}) {
     root, configDir: cfg, sessions: { list: () => [], get: () => null, setPluginBadge: () => {} },
     decision: () => {}, meter: () => {}, notify: () => {}, usage: () => ({ ok: false }), changed: () => {},
     findRepo: async (id) => repos[id] ?? null,
+    findRepoByPath: async (p) => Object.values(repos).find((t) => { try { return realpathSync(t.worktreePath) === p; } catch { return false; } }) ?? null,
     handToAgent: async (p) => { handed.push(p); return { ok: true, intentId: p.id ?? `i${handed.length}` }; },
   });
   after(() => reg.shutdownAll()); // a builtin may hold a socket open, which keeps this process alive
@@ -72,6 +74,24 @@ test("setup rows and fixes: contributed, run in order, gone when the plugin is o
   assert.equal(await reg.setEnabled("rowmaker", false), null);
   assert.deepEqual(contributedChecks(wt), [], "switched off takes the rows with it");
   assert.deepEqual(contributedFixes(["rowmaker-fix"], wt), []);
+});
+
+test("a desktop row is on the desktop's checklist, never a repo's, and only its own fixes run there", async () => {
+  const { reg, pd } = boot();
+  plugin(pd, "deskrow", `
+    export function activate(api) {
+      api.setupCheck(() => ({ id: "desk", label: "Desk", status: "fail", detail: "d", fix: "desk-fix", scope: "host" }));
+      api.setupCheck(() => ({ id: "repo", label: "Repo", status: "warn", detail: "r", fix: "repo-fix" }));
+      api.setupFix("desk-fix", () => ({ applied: true, note: "asked" }));
+      api.setupFix("repo-fix", () => ({ applied: true, note: "patched" }));
+    }`);
+  await reg.loadAll();
+  const wt = mkdtempSync(join(tmpdir(), "waterplane-seamhost-"));
+  assert.deepEqual(contributedChecks(wt).map((r) => r.id), ["repo"], "the repo checklist leaves the desktop row out");
+  assert.ok(!inspectRepo(wt).some((c) => c.id === "desk"));
+  assert.deepEqual(hostChecks(wt).map((r) => r.id), ["desk"]);
+  assert.deepEqual(hostFixes(["desk-fix", "repo-fix"], wt), [{ id: "desk-fix", outcome: { applied: true, note: "asked" } }],
+    "a repo row's fix never runs from the desktop checklist");
 });
 
 test("call(): routes to a handled method; every failure is a sentence", async () => {
@@ -147,6 +167,41 @@ test("handToAgent(): through the backlog add, waiting for a tap unless asked to 
   await reg.setEnabled("hander", false);
   assert.match((await api.handToAgent("r1", "x")).reason, /not running/);
   assert.equal(handed.length, 2);
+});
+
+test("handToAgent(): an absolute worktree path resolves the same repo as its id (realpath-compared)", async () => {
+  const handed = [];
+  const wt = realpathSync(mkdtempSync(join(tmpdir(), "waterplane-seampath-")));
+  const link = `${wt}-link`;
+  symlinkSync(wt, link);
+  after(() => rmSync(link, { force: true }));
+  const t = target(targetId(wt), wt);
+  // A repo whose id was made from ANOTHER spelling of its path (`/tmp` vs `/private/tmp`): the id
+  // lane misses, the realpath lane over the host's own list finds it.
+  const wt2 = realpathSync(mkdtempSync(join(tmpdir(), "waterplane-seamodd-")));
+  const odd = target(targetId(`/not/the/real/spelling${wt2}`), wt2);
+  const { reg, pd } = boot({ repos: { [t.id]: t, [odd.id]: odd }, handed });
+  plugin(pd, "pather", `export function activate(api) { globalThis.__pathApi = api; }`);
+  await reg.loadAll();
+  const api = globalThis.__pathApi;
+  assert.deepEqual(await api.handToAgent(t.id, "by id"), { ok: true, intentId: "i1" });
+  assert.deepEqual(await api.handToAgent(wt, "by path"), { ok: true, intentId: "i2" });
+  assert.deepEqual(await api.handToAgent(link, "by a symlink to it"), { ok: true, intentId: "i3" });
+  assert.deepEqual(handed.map((h) => h.repoDir), [wt, wt, wt], "the same worktree every way");
+  assert.match((await api.handToAgent("/nonexistent/elsewhere", "x")).reason, /no repo "\/nonexistent\/elsewhere"/);
+  assert.match((await api.handToAgent(tmpdir(), "x")).reason, /no repo/, "a real path that is no worktree of the host");
+  assert.equal(handed.length, 3);
+  // `api.repo` takes the same spellings (the vault's `wp-secret use --repo PATH` names its repo by path):
+  // a path that is no worktree core lists — however real — is null, never a scope.
+  assert.equal((await api.repo(t.id))?.worktree, wt);
+  assert.equal((await api.repo(wt))?.worktree, wt, "by path");
+  assert.equal((await api.repo(link))?.worktree, wt, "by a symlink to it");
+  assert.equal((await api.repo(`${wt}/`))?.worktree, wt, "a trailing slash");
+  assert.equal(await api.repo(tmpdir()), null, "a real folder core does not list is no repo");
+  assert.equal(await api.repo("/nonexistent/elsewhere"), null);
+  assert.equal((await api.repo(wt2))?.id, odd.id, "a path whose id was made from another spelling: found by realpath in the list");
+  assert.deepEqual(await api.handToAgent(wt2, "odd spelling"), { ok: true, intentId: "i4" });
+  assert.equal(handed.at(-1).repoDir, wt2);
 });
 
 test("builtins: loaded first, always on unless optional, not listed unless optional, and their id cannot be taken", async () => {
@@ -238,4 +293,36 @@ test("createCallLedger: expiry and eviction, off an injected clock", async () =>
   assert.equal((await L.run("a", "k", fn)).result, 2, "expired ⇒ runs again");
   await L.run("b", "k", fn); await L.run("c", "k", fn); // max 2 ⇒ "a" evicted
   assert.equal((await L.run("a", "k", fn)).result, 5, "evicted oldest runs again");
+});
+
+test("api.usageProbe: a plugin's reading rides beside claude's, and dies with the switch-off", async () => {
+  const { UsageSourceRegistry } = await import("../dist/usagesources.js");
+  const cfg = mkdtempSync(join(tmpdir(), "waterplane-seamcfg-"));
+  const root = mkdtempSync(join(tmpdir(), "waterplane-seamroot-"));
+  after(() => { for (const d of [cfg, root]) rmSync(d, { recursive: true, force: true }); });
+  const updates = [];
+  const sources = new UsageSourceRegistry({ claude: () => ({ ok: false }), onUpdate: (s, r) => updates.push([s, r]) });
+  const reg = new PluginRegistry({
+    root, configDir: cfg, sessions: { list: () => [], get: () => null, setPluginBadge: () => {} },
+    decision: () => {}, meter: () => {}, notify: () => {}, usage: () => ({ ok: false }), changed: () => {},
+    usageProbe: (_plugin, def) => sources.register(def),
+  });
+  after(() => reg.shutdownAll());
+  const pd = join(cfg, "plugins");
+  plugin(pd, "quota", `
+    export function activate(api) {
+      api.usageProbe({ source: "stub", label: "Stub", probe: async () => ({ source: "stub", label: "Stub", checkedAt: Date.now(),
+        windows: [{ id: "day", unit: "d", pct: 33, resetAt: Date.now() + 3600000 }] }) });
+    }`);
+  plugin(pd, "grabber", `export function activate(api) { api.usageProbe({ source: "claude", label: "Mine", probe: async () => null }); }`);
+  await reg.loadAll();
+  const byId = (id) => reg.entries.find((e) => e.manifest.id === id);
+  assert.equal(byId("grabber").state, "error");
+  assert.match(byId("grabber").error, /"claude" is core's own reading/);
+  await sources.refresh();
+  assert.deepEqual(sources.readings().map((r) => [r.source, r.windows[0].pct]), [["stub", 33]]);
+  assert.equal(await reg.setEnabled("quota", false), null);
+  assert.deepEqual(sources.readings(), [], "switched off takes the source with it");
+  assert.deepEqual(updates.at(-1), ["stub", null]);
+  assert.deepEqual(sources.sources(), []);
 });

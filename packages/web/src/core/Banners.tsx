@@ -8,8 +8,8 @@
  * every sheet, and a dismissal that came back on the next Back would be a
  * banner that cannot be dismissed.
  */
-import { type ReactNode, useState } from "react";
-import { Download, Loader, RefreshCcw, RotateCw, ShieldAlert, Smartphone, X } from "lucide-react";
+import { type ReactNode, useEffect, useState } from "react";
+import { Download, Loader, OctagonX, RefreshCcw, RotateCw, ShieldAlert, Smartphone, X } from "lucide-react";
 import type { ClientMessage, LaunchOpts, SessionInfo, UpdateInfo } from "@waterplane/shared";
 import { cliRestartDue, cliRestartView } from "@waterplane/shared";
 import { askConfirm } from "../Confirm";
@@ -22,6 +22,7 @@ import { track } from "../usage";
 import { LS, lsGet, lsSet } from "../storage";
 import { usePhoneSetup } from "../usePhoneSetup";
 import { setupMissingText } from "../phoneSetup";
+import { haltBannerWords, liftHalt, useHalt } from "../features/halt";
 
 const ICON = 16;
 
@@ -43,6 +44,25 @@ function loadInsecureSnooze(): number {
   return Number(raw) || 0;
 }
 const insecureSnooze = createStore<number>(typeof window === "undefined" ? 0 : loadInsecureSnooze());
+
+/**
+ * The halt latch (`features/halt`), on every screen while it holds. Mounted in
+ * `main.tsx` beside `UpdateBanner` for that file's reason: `App` returns early
+ * per overlay, and a latch that stops everything must not hide behind a sheet.
+ * Draws nothing while off. Never dismissable — the only way it goes is the
+ * lift, because "why is nothing starting?" with no banner is what it is for.
+ */
+export function HaltBanner(): ReactNode {
+  const h = useHalt();
+  if (!h.on) return null;
+  return (
+    <div className="staged-bar halt-bar" role="alert">
+      <OctagonX size={16} />
+      <span className="staged-bar-text">{haltBannerWords(h)}</span>
+      <button type="button" className="key staged-bar-go" onClick={liftHalt}>Lift halt</button>
+    </div>
+  );
+}
 
 /**
  * "You are on the plain-HTTP door, and a secure one exists."
@@ -136,13 +156,21 @@ export interface CliUpdateBannerProps {
 /** The desktop's `claude` update: available, running, or what the last try said. */
 export function CliUpdateBanner({ update, liveAsk, liveSend }: CliUpdateBannerProps): ReactNode {
   const dismissedUpdate = usePref("dismissedUpdate");
-  if (!update) return null;
-  const result = update.lastResult;
+  const [, bump] = useState(0);
   // Whether the bar is up, and what a × on it records — `updateBar.ts`, which
   // is where the rule is pinned by tests. It was inline here, and the × was
   // dead on exactly the bars people most want gone.
-  const { show, sig, recentResult } = updateBarView(update, dismissedUpdate, Date.now());
-  if (!show) return null;
+  const { show, sig, recentResult, canApply, staleAt } = updateBarView(update, dismissedUpdate, Date.now());
+  // "Fresh" is a clock reading, and nothing else re-renders this when the 30 s
+  // run out — without a timer the "Updated: …" bar sat there until the next
+  // status frame, however long that took.
+  useEffect(() => {
+    if (staleAt == null) return;
+    const t = setTimeout(() => bump((n) => n + 1), Math.max(0, staleAt - Date.now()) + 50);
+    return () => clearTimeout(t);
+  }, [staleAt]);
+  if (!update || !show) return null;
+  const result = update.lastResult;
   // A FRESH result outranks the "an update is available" headline, and that
   // order is the whole point: the upgrade you just pressed can run clean and
   // move nothing (a Homebrew cask lagging the npm release the CLI nags about),
@@ -173,9 +201,9 @@ export function CliUpdateBanner({ update, liveAsk, liveSend }: CliUpdateBannerPr
           <button className="key" onClick={() => liveAsk({ t: "update.check" }, "no connection — the update lives on the desktop and can't be checked from here")}>
             <RotateCw size={ICON} />
           </button>
-          <button className="key" onClick={() => liveSend({ t: "update.apply" }, "updating — the host restarts itself when it is done")}>
+          {canApply && <button className="key" onClick={() => liveSend({ t: "update.apply" }, "updating — the host restarts itself when it is done")}>
             {update.applyLabel ?? "update"}
-          </button>
+          </button>}
           <button className="key" title="dismiss this — it comes back for a newer version, a new upgrade result or a new error"
             onClick={() => setPref("dismissedUpdate", sig)}>
             <X size={ICON} />

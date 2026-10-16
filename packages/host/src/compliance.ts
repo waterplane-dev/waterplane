@@ -17,26 +17,28 @@
  * current name (`branddirs.ts`' `adoptRepoStateDir` — merge without overwrite,
  * symlink back), offered only when git tracks nothing under it.
  */
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { execFile, execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { BRAND, LEGACY } from "@waterplane/shared";
-import type { AutoCompactResolution, ComplianceCheck, ComplianceFixResult, ComplianceIgnoreResult, ComplianceLimitsResult, ComplianceReport, ContextLimitsView, ContextWeightLimits, RepoTarget, RepoSetupState, SkillWeight } from "@waterplane/shared";
+import type { AutoCompactResolution, BuildCandidate, ComplianceCheck, ComplianceFixResult, ComplianceIgnoreResult, ComplianceLimitsResult, ComplianceReport, ContextLimitsView, ContextWeightLimits, RepoTarget, RepoSetupState, SkillWeight } from "@waterplane/shared";
 import { ADVISORY_CHECKS, AUTO_COMPACT_ENV, CONFIRM_GATED_FIXES, autoCompactVerdict, isSetupFinding, resolveAutoCompact, resolveContextLimits, sanitizeContextLimits, skillDescChars, weighContext, withAutoCompactWindow } from "@waterplane/shared";
-import { adoptRepoStateDir, legacyRepoStateDirs, repoStateDir } from "./branddirs.js";
+import { adoptRepoStateDir, legacyRepoStateDirs, repoSharedDir, repoStateDir } from "./branddirs.js";
+import { mergeBuilds, readBuildsFile } from "./builds.js";
 import { env } from "./env.js";
 import { claudeConfigDir } from "./claudeconfig.js";
 import { contextLimitsStore, repoContextLimits } from "./contextlimits.js";
 import { autoCompactDefault, ignoredChecks, setupPrefsStore } from "./setupprefs.js";
 import { contained, inRoot } from "./paths.js";
 import { INBOX_SUBDIR, OUTBOX_SUBDIR, OUTBOX_SUBDIRS } from "./files.js";
-import { apkInstallCheck } from "./apkcheck.js";
+import { apkInstallCheck, appModulesAsync } from "./apkcheck.js";
 import { ensureDesktopKey, linkKey } from "./signkey.js";
-import { isAndroidRepo, probeAndroidEnv } from "./androidenv.js";
+import { isAndroidRepo, isAndroidRepoAsync, probeAndroidEnv } from "./androidenv.js";
 import { startToolchainInstall } from "./toolchain.js";
-import { scanRepoBuilds } from "./buildscan.js";
+import { scanRepoBuilds, scanRepoBuildsAsync } from "./buildscan.js";
 import { contributedChecks, contributedFixes } from "./plugins/setupcontrib.js";
 import { VISUAL_SKILL_REL, writeVisualCheckSkill } from "./visualskill.js";
+import { writeTextAtomicKeepMode } from "./jsonstore.js";
 
 /**
  * The env layer of the context-weight thresholds — only the fields actually
@@ -138,7 +140,7 @@ const captureConfigPath = (worktree: string) => join(repoStateDir(worktree), "ca
  * which means the row below is simply not offered. A checklist that threw on a
  * malformed config would take the whole setup sheet down with it.
  */
-function captureTargetCount(worktree: string): number {
+export function captureTargetCount(worktree: string): number {
   let raw: string;
   try { raw = readFileSync(captureConfigPath(worktree), "utf8"); } catch { return 0; }
   try {
@@ -194,10 +196,71 @@ const isIgnored = (wt: string, path: string) => gitOk(wt, ["check-ignore", "-q",
 const trackedUnder = (wt: string, dir: string) =>
   gitOut(wt, ["ls-files", "--", dir]).split("\n").filter((l) => l.trim());
 
+/** The two git questions the checklist asks, so an inspection can be answered from facts fetched beforehand. */
+interface GitProbe {
+  isIgnored(path: string): boolean;
+  trackedUnder(dir: string): string[];
+}
+const liveProbe = (wt: string): GitProbe => ({ isIgnored: (p) => isIgnored(wt, p), trackedUnder: (d) => trackedUnder(wt, d) });
+
+const gitAsync = (wt: string, args: string[]): Promise<{ code: number; out: string }> => new Promise((resolve) => {
+  execFile("git", args, { cwd: wt, encoding: "utf8", maxBuffer: 16 << 20 }, (err, out) => {
+    resolve({ code: err ? (typeof (err as any).code === "number" ? (err as any).code : -1) : 0, out: String(out ?? "") });
+  });
+});
+
+/**
+ * Every git answer `inspectRepo` needs, in TWO background calls instead of one blocking
+ * `execFileSync` per path: a blocking git on the loop that pumps every PTY and answers every
+ * request froze the host for minutes on WSL, where a Windows drive is reached over 9P and one git
+ * there takes seconds. `check-ignore` exits 1 for "none ignored" and 128 outside a repo — both read
+ * as nothing ignored, as `gitOk` does. A path that was not fetched is asked live, never guessed.
+ */
+async function prefetchProbe(wt: string, paths: string[]): Promise<GitProbe> {
+  const [ign, ls] = await Promise.all([
+    gitAsync(wt, ["check-ignore", "--", ...paths]),
+    gitAsync(wt, ["ls-files", "--", ...paths]),
+  ]);
+  const ignored = new Set(ign.code === 0 ? ign.out.split("\n").map((l) => l.trim()).filter(Boolean) : []);
+  const files = ls.code === 0 ? ls.out.split("\n").filter((l) => l.trim()) : [];
+  const asked = new Set(paths);
+  return {
+    isIgnored: (p) => (asked.has(p) ? ignored.has(p) : isIgnored(wt, p)),
+    trackedUnder: (d) => (asked.has(d) ? files.filter((f) => f === d || f.startsWith(`${d.replace(/\/+$/, "")}/`)) : trackedUnder(wt, d)),
+  };
+}
+
+/** The paths `inspectRepo` asks git about: the transport dirs, a legacy state dir, the root `.env` files. */
+function probedPaths(wt: string): string[] {
+  return [...new Set([...TRANSPORT_DIRS, ...legacyRepoStateDirs(wt).map((d) => basename(d)), ...listRootEnvFiles(wt)])];
+}
+
+/** The three tree walks the checklist makes, done beforehand — see `inspectRepoAsync`. */
+export interface RepoWalks {
+  android: boolean;
+  appModules: string[];
+  builds: { candidates: BuildCandidate[]; total: number };
+}
+
+/**
+ * `inspectRepo` with its git and its tree walks done in the background first — what the
+ * unattended sweep runs (`setupwatch.ts`), so a boot that checks a dozen repos never holds the
+ * event loop for a git or a walk. Measured on WSL over a Windows drive: the Android, APK and
+ * build-scan walks alone held it ~9 s for a vcpkg checkout. One walk at a time, so the sweep adds
+ * one stream of calls to a slow disk, not three. What is left synchronous is single-file reads.
+ */
+export async function inspectRepoAsync(worktree: string): Promise<ComplianceCheck[]> {
+  const git = await prefetchProbe(worktree, probedPaths(worktree));
+  const android = await isAndroidRepoAsync(worktree);
+  const appMods = await appModulesAsync(worktree);
+  const builds = await scanRepoBuildsAsync(worktree);
+  return inspectRepo(worktree, git, { android, appModules: appMods, builds });
+}
+
 // ── checks ───────────────────────────────────────────────────────────────────
 
 /** Inspect a worktree and return the setup checklist. Pure read — no writes. */
-export function inspectRepo(worktree: string): ComplianceCheck[] {
+export function inspectRepo(worktree: string, git: GitProbe = liveProbe(worktree), walks?: RepoWalks): ComplianceCheck[] {
   const checks: ComplianceCheck[] = [];
 
   // 1. CLAUDE.md present.
@@ -275,7 +338,7 @@ export function inspectRepo(worktree: string): ComplianceCheck[] {
   }
 
   // 3. Transport dirs gitignored.
-  const notIgnored = TRANSPORT_DIRS.filter((d) => !isIgnored(worktree, d));
+  const notIgnored = TRANSPORT_DIRS.filter((d) => !git.isIgnored(d));
   checks.push(notIgnored.length === 0
     ? { id: "gitignore-transport", label: "inbox/outbox gitignored", status: "pass",
         detail: "All transport dirs are gitignored.", fix: null }
@@ -284,7 +347,7 @@ export function inspectRepo(worktree: string): ComplianceCheck[] {
         fix: "gitignore" });
 
   // 4. Nothing under the transport dirs is actually tracked (a stronger leak check).
-  const tracked = TRANSPORT_DIRS.flatMap((d) => trackedUnder(worktree, d));
+  const tracked = TRANSPORT_DIRS.flatMap((d) => git.trackedUnder(d));
   if (tracked.length) {
     checks.push({ id: "transport-tracked", label: "No tracked transport files", status: "warn",
       detail: `Already tracked: ${tracked.slice(0, 5).join(", ")}${tracked.length > 5 ? "…" : ""}. ` +
@@ -303,7 +366,7 @@ export function inspectRepo(worktree: string): ComplianceCheck[] {
   const legacyDirs = legacyRepoStateDirs(worktree);
   if (legacyDirs.length) {
     const names = legacyDirs.map((d) => basename(d));
-    const trackedState = names.flatMap((n) => trackedUnder(worktree, n));
+    const trackedState = names.flatMap((n) => git.trackedUnder(n));
     checks.push({
       id: "state-dir", label: "State dir name", status: "warn",
       detail: trackedState.length
@@ -328,7 +391,7 @@ export function inspectRepo(worktree: string): ComplianceCheck[] {
   // can close: the file is meant to be committed and holds placeholders.
   const leaky = listRootEnvFiles(worktree)
     .filter((f) => !/\.(example|sample|template|dist)$/.test(f))
-    .filter((f) => !isIgnored(worktree, f) && trackedUnder(worktree, f).length);
+    .filter((f) => !git.isIgnored(f) && git.trackedUnder(f).length);
   checks.push(leaky.length === 0
     ? { id: "env-gitignored", label: "Secrets (.env) gitignored", status: "pass",
         detail: "No tracked, un-ignored .env files.", fix: null }
@@ -367,15 +430,15 @@ export function inspectRepo(worktree: string): ComplianceCheck[] {
 
   // 5d. An Android app: can its builds reach the phone and update quietly?
   // Absent for every repo that builds none (`apkcheck.ts`).
-  const apk = apkInstallCheck(worktree);
+  const apk = apkInstallCheck(worktree, walks?.appModules);
   if (apk) checks.push(apk);
 
   // 5e. Android repos only: can this desktop build it (JDK + SDK)?
-  const toolchain = androidToolchainRow(worktree);
+  const toolchain = androidToolchainRow(worktree, probeAndroidEnv, walks?.android);
   if (toolchain) checks.push(toolchain);
 
   // 5f. Something buildable here, and the Build sheet has nothing configured?
-  const builds = buildsConfiguredRow(worktree);
+  const builds = buildsConfiguredRow(worktree, walks?.builds);
   if (builds) checks.push(builds);
 
   // A thing to consider, not a finding (`ADVISORY_CHECKS`): these rows read
@@ -403,8 +466,8 @@ export const ANDROID_TOOLCHAIN_FIX = "android-toolchain";
  * about how much an install would download; never a fail, nothing applies itself. The probe is
  * read-only (`androidenv.ts`).
  */
-export function androidToolchainRow(worktree: string, probe = probeAndroidEnv): ComplianceCheck | null {
-  if (!isAndroidRepo(worktree)) return null;
+export function androidToolchainRow(worktree: string, probe = probeAndroidEnv, android?: boolean): ComplianceCheck | null {
+  if (!(android ?? isAndroidRepo(worktree))) return null;
   const r = probe();
   if (!r.missing.length) {
     return { id: "android-toolchain", label: "Android toolchain on this desktop", status: "pass",
@@ -419,21 +482,25 @@ export function androidToolchainRow(worktree: string, probe = probeAndroidEnv): 
     detail: `${r.summary} ${remedy}`, fix: ANDROID_TOOLCHAIN_FIX };
 }
 
-/** The `fix` id of the `builds-configured` row: write `builds.json` from what `buildscan` found. */
+/** The `fix` id of the `builds-configured` row: write the shared `builds.json` from what `buildscan` found. */
 export const BUILDS_CONFIGURED_FIX = "builds-configured";
 const BUILDS_SEED_MAX = 8;
 const BUILDS_LABEL = "Build commands configured";
 
-/** The one place the seeded file's path is made: a fixed name in the state dir, contained and realpath-checked. */
-function buildsJsonPath(worktree: string): string | null {
-  const lexical = contained(worktree, join(basename(repoStateDir(worktree)), "builds.json"));
+/** A builds file's path: a fixed name in a fixed dir, contained and realpath-checked. */
+function containedBuilds(worktree: string, dir: string): string | null {
+  const lexical = contained(worktree, join(basename(dir), "builds.json"));
   return lexical && inRoot(worktree, lexical) ? lexical : null;
 }
+/** The COMMITTED file — the one the fix writes, so every checkout gets the buttons. */
+function buildsJsonPath(worktree: string): string | null { return containedBuilds(worktree, repoSharedDir(worktree)); }
+/** This desktop's own (gitignored) file — read for the row, never written by the fix. */
+function localBuildsJsonPath(worktree: string): string | null { return containedBuilds(worktree, repoStateDir(worktree)); }
 
 /** What the fix would write: the scan's ordinary candidates (never one it FLAGGED as publishing or
  *  deploying; those stay a person's choice in the Build sheet), capped. */
-function buildsSeed(worktree: string) {
-  const { candidates } = scanRepoBuilds(worktree);
+function buildsSeed(worktree: string, scan?: RepoWalks["builds"]) {
+  const { candidates } = scan ?? scanRepoBuilds(worktree);
   const safe = candidates.filter((c) => !c.note);
   return { found: candidates.length, safe: safe.slice(0, BUILDS_SEED_MAX) };
 }
@@ -441,35 +508,41 @@ function buildsSeed(worktree: string) {
 /**
  * The `builds-configured` row: this repo describes something buildable (`buildscan.ts`' detection)
  * and has no `builds.json`, so the Build sheet is empty. Absent when nothing buildable is found.
- * Pass when the file exists and parses to a list. Warn with `fix` when the scan has ordinary
+ * Pass when either file — the committed shared one or this desktop's own — parses to a list, and
+ * the count is the MERGED list the Build sheet shows (`builds.ts`' `mergeBuilds`). The fix writes
+ * the SHARED file, so the buttons reach every checkout. Warn with `fix` when the scan has ordinary
  * candidates to write; warn WITHOUT a fix (an agent's job, `setupRemedy.ts` GUIDANCE) when the file
  * exists but is unreadable, or the scan found only commands it flags (publishing). The fix never
  * overwrites: it writes with `wx`, and a file that appeared meanwhile is left alone.
  */
-export function buildsConfiguredRow(worktree: string): ComplianceCheck | null {
+export function buildsConfiguredRow(worktree: string, scan?: RepoWalks["builds"]): ComplianceCheck | null {
   const path = buildsJsonPath(worktree);
   if (!path) return null;
-  const rel = join(basename(dirname(path)), "builds.json");
+  const relOf = (p: string) => join(basename(dirname(p)), "builds.json");
+  const rel = relOf(path);
+  const local = localBuildsJsonPath(worktree);
   const id = "builds-configured";
-  if (existsSync(path)) {
-    let arr: unknown = null;
-    try { arr = JSON.parse(readFileSync(path, "utf8")); } catch { /* unparsable */ }
-    if (Array.isArray(arr)) {
-      return { id, label: BUILDS_LABEL, status: "pass", detail: `${arr.length} build command${arr.length === 1 ? "" : "s"} in ${rel}.`, fix: null };
-    }
-    return { id, label: BUILDS_LABEL, status: "warn", fix: null,
-      detail: `${rel} exists but is not a JSON list of builds, so the Build sheet shows none. It is left as it is.` };
+  const shared = readBuildsFile(path), mine = local ? readBuildsFile(local) : null;
+  if (shared || mine) {
+    const n = mergeBuilds(shared ?? [], mine ?? []).length;
+    const where = [shared ? rel : null, mine && local ? `${relOf(local)} (this desktop only)` : null].filter(Boolean).join(" and ");
+    return { id, label: BUILDS_LABEL, status: "pass", detail: `${n} build command${n === 1 ? "" : "s"} in ${where}.`, fix: null };
   }
-  const { found, safe } = buildsSeed(worktree);
+  const broken = [path, local].filter((p): p is string => !!p && existsSync(p));
+  if (broken.length) {
+    return { id, label: BUILDS_LABEL, status: "warn", fix: null,
+      detail: `${broken.map(relOf).join(" and ")} ${broken.length === 1 ? "exists but is" : "exist but are"} not a JSON list of builds, so the Build sheet shows none. Left as it is.` };
+  }
+  const { found, safe } = buildsSeed(worktree, scan);
   if (!found) return null;
   if (!safe.length) {
     return { id, label: BUILDS_LABEL, status: "warn", fix: null,
-      detail: `This repo describes ${found} build command${found === 1 ? "" : "s"}, all of them publishing or deploying ones, and has no builds.json. None is written for you.` };
+      detail: `This repo describes ${found} build command${found === 1 ? "" : "s"}, all of them publishing or deploying ones, and has no ${rel}. None is written for you.` };
   }
   return { id, label: BUILDS_LABEL, status: "warn", fix: BUILDS_CONFIGURED_FIX,
     detail: `Found ${safe.length} buildable command${safe.length === 1 ? "" : "s"} (${safe.map((c) => c.name).join(", ")}; from ` +
-      `${[...new Set(safe.map((c) => c.source))].join(", ")}) and no builds.json, so the Build sheet is empty. ` +
-      "The fix writes them as the file; it never overwrites one." };
+      `${[...new Set(safe.map((c) => c.source))].join(", ")}) and no ${rel}, so the Build sheet is empty. ` +
+      `The fix writes them as ${rel}, committed with the repo so every checkout gets them; it never overwrites one.` };
 }
 
 /**
@@ -580,7 +653,7 @@ function ensureGitignore(worktree: string, entries: string[], exact = false): st
   const missing = entries.filter((e) => !have.has(norm(e)));
   if (!missing.length) return [];
   const block = `\n# ${BRAND.displayName} phone↔repo transport — do not commit\n` + missing.join("\n") + "\n";
-  writeFileSync(gi, (cur && !cur.endsWith("\n") ? cur + "\n" : cur) + block);
+  writeTextAtomicKeepMode(gi, (cur && !cur.endsWith("\n") ? cur + "\n" : cur) + block);
   return missing;
 }
 
@@ -592,7 +665,10 @@ export function fixRepoCompliance(target: RepoTarget, fixes: string[]): Complian
     if (fixes.includes("gitignore")) {
       // Bare paths (no trailing slash) so `git check-ignore` matches even before
       // the dir exists — a trailing-slash pattern only matches real directories.
-      const added = ensureGitignore(wt, TRANSPORT_DIRS);
+      // Ask git which ones the CHECK sees as unignored, and compare exactly: a
+      // `.claude/inbox/` line already present is why the check fails, so it must
+      // not count as covering `.claude/inbox`.
+      const added = ensureGitignore(wt, TRANSPORT_DIRS.filter((d) => !isIgnored(wt, d)), true);
       if (added.length) { applied.push("gitignore"); notes.push(`gitignore += ${added.join(", ")}`); }
       else notes.push("gitignore already covered transport dirs");
     }
@@ -605,7 +681,7 @@ export function fixRepoCompliance(target: RepoTarget, fixes: string[]): Complian
         // graft our conventions onto an existing file.
         notes.push("no CLAUDE.md — run `/init` first, then re-run this fix to add the outbox convention");
       } else if (!hasClaudeMdMarker(cur)) {
-        writeFileSync(path, cur + (cur.endsWith("\n") ? "" : "\n") + "\n" + claudeMdBlock());
+        writeTextAtomicKeepMode(path, cur + (cur.endsWith("\n") ? "" : "\n") + "\n" + claudeMdBlock());
         applied.push("claude-md"); notes.push(`appended ${BRAND.displayName} conventions to CLAUDE.md`);
       } else {
         notes.push(`CLAUDE.md already has the ${BRAND.displayName} conventions section`);
@@ -671,9 +747,7 @@ export function fixRepoCompliance(target: RepoTarget, fixes: string[]): Complian
           notes.push(`${PROJECT_SETTINGS_REL}: ${r.error}`);
         } else {
           mkdirSync(dirname(path), { recursive: true });
-          const tmp = `${path}.${BRAND.slug}-tmp`;
-          writeFileSync(tmp, r.text);
-          renameSync(tmp, path);
+          writeTextAtomicKeepMode(path, r.text);
           applied.push("auto-compact");
           notes.push(`set "autoCompactWindow": "${value}" in ${PROJECT_SETTINGS_REL}`);
         }
@@ -698,9 +772,11 @@ export function fixRepoCompliance(target: RepoTarget, fixes: string[]): Complian
 
     if (fixes.includes(BUILDS_CONFIGURED_FIX)) {
       const path = buildsJsonPath(wt);
+      const local = localBuildsJsonPath(wt);
       const { safe } = buildsSeed(wt);
-      if (!path) notes.push("the state dir resolves outside this repo — left as it is");
-      else if (existsSync(path)) notes.push("builds.json already exists — left as it is");
+      if (!path) notes.push("the shared config dir resolves outside this repo — left as it is");
+      else if (existsSync(path)) notes.push(`${join(basename(dirname(path)), "builds.json")} already exists — left as it is`);
+      else if (local && existsSync(local)) notes.push(`${join(basename(dirname(local)), "builds.json")} already exists on this desktop — left as it is`);
       else if (!safe.length) notes.push("nothing buildable to write — left as it is");
       else {
         const list = safe.map((c, i) => ({ id: `scan_${i}`, name: c.name, cmd: c.cmd, ...(c.dir ? { dir: c.dir } : {}) }));

@@ -500,36 +500,37 @@ const BACKLOG_FACADES = {
  *  cap. None may exceed 900 (`MAX_FEATURE_FILE_LINES`); aim ≤ 500. */
 const BACKLOG_SPLIT_FILES = {
   "backlog/BacklogBody.tsx": 60,
-  "backlog/BacklogFilterBar.tsx": 140,
+  "backlog/BacklogFilterBar.tsx": 160, // +one kit FilterChip row per axis, and the archived chip
   "backlog/BacklogList.tsx": 75,
   "backlog/BacklogRow.tsx": 205,
-  "backlog/BulkBars.tsx": 220,
-  "backlog/Notices.tsx": 110,
+  "backlog/BulkBars.tsx": 230, // +the Bar helper (note, then one link on the chips' edge)
+  "backlog/PickBars.tsx": 150, // the re-time/name row, above the list in both orders, + one pick per clock, + the slot check
+  "backlog/Notices.tsx": 115, // +the auto-off sentence behind its Explain
   "backlog/RepoBar.tsx": 120,
   "backlog/RowActions.tsx": 185,
-  "backlog/RowChips.tsx": 290,
+  "backlog/RowChips.tsx": 300, // +a set cap is a tap to edit (R-automation-044)
   "backlog/RowEditor.tsx": 95,
-  "backlog/RowNotes.tsx": 285,
-  "backlog/SmartPickNotes.tsx": 145,
+  "backlog/RowBudgetEdit.tsx": 40,
+  "backlog/RowFlagChoice.tsx": 25,
+  "backlog/RowNotes.tsx": 310, // +the flag-when-done tick under the close choice, +the budget… chip and its editor
   "backlog/backlogLabels.ts": 125,
-  "backlog/backlogTypes.ts": 430,
+  "backlog/backlogTypes.ts": 435,
   "backlog/useBacklogCuts.ts": 470,
   "backlog/useBacklogDraft.ts": 30,
   "backlog/useBacklogDrag.ts": 68,
   "backlog/useBacklogEdit.ts": 90,
   "backlog/useBacklogFilters.ts": 125,
-  "backlog/useBacklogUi.ts": 65,
+  "backlog/useBacklogUi.ts": 70,
   "backlogFilter/rowBuckets.ts": 100,
   "backlogFilter/clockGroups.ts": 200,
-  "backlogFilter/cutCounts.ts": 300,
+  "backlogFilter/cutCounts.ts": 330, // +drawnChips (a chip that cuts nothing is not drawn) and the pools it reads
   "backlogFilter/dropClock.ts": 150,
   "backlogFilter/rowFilter.ts": 130,
   "backlogFilter/titleWords.ts": 175,
-  "backlogFilter/retimeMany.ts": 80,
+  "backlogFilter/retimeMany.ts": 110, // +clockPicks: one clock's movable rows as one tap
   "backlogFilter/rowWords.ts": 120, // +holderOffer (the serial row's way to the session it waits behind)
   "backlogFilter/runAgain.ts": 355,
   "backlogFilter/scheduleWords.ts": 60,
-  "backlogFilter/mergeWords.ts": 105,
 };
 const BACKLOG_SPLIT_DIRS = ["backlog", "backlogFilter"];
 
@@ -571,11 +572,14 @@ const SEND_FACADES = {
 };
 const SEND_SPLIT_FILES = {
   "send/ComposeSection.tsx": 80,
+  "send/FlagWhenDoneRow.tsx": 30,
+  "send/LaunchRow.tsx": 60,
+  "send/LeadPick.tsx": 60,
   "send/MoreRule.tsx": 110,
   "send/RetimeHint.tsx": 40,
   "send/RuleEditor.tsx": 140,
   "send/SendActions.tsx": 35,
-  "send/ToSection.tsx": 200,
+  "send/ToSection.tsx": 205, // +the flag-when-done row (FlagWhenDoneRow) in the repo and sweep arms
   "send/WhenSection.tsx": 180,
   "send/WindowRule.tsx": 150,
   "send/sendSheetTypes.ts": 80,
@@ -583,10 +587,13 @@ const SEND_SPLIT_FILES = {
   "send/useSendSheet.ts": 350,
   "sendIntent/sendChain.ts": 175,
   "sendIntent/sendClock.ts": 150,
-  "sendIntent/sendLabels.ts": 300,
+  "sendIntent/sendFlag.ts": 30,
+  "sendIntent/sendLabels.ts": 305, // +the flag-when-done clause on the To row
+  "sendIntent/sendLaunch.ts": 50,
+  "sendIntent/sendLead.ts": 80,
   "sendIntent/sendRetime.ts": 170,
   "sendIntent/sendRule.ts": 115,
-  "sendIntent/sendTypes.ts": 270,
+  "sendIntent/sendTypes.ts": 280,
 };
 const SEND_SPLIT_DIRS = ["send", "sendIntent"];
 
@@ -628,6 +635,8 @@ const TV_SPLIT_FILES = {
   "transcript/TvTurn.tsx": 170,
   "transcript/tvLive.ts": 90,
   "transcript/tvParts.tsx": 85,
+  "transcript/readThrough.ts": 30,
+  "transcript/spentVerb.ts": 30,
   "transcript/tvRows.ts": 80,
   "transcript/tvTypes.ts": 170,
   "transcript/useTranscriptView.ts": 500,
@@ -672,7 +681,9 @@ const ACTIVITY_SPLIT_FILES = {
   "activity/ActivityList.tsx": 35,
   "activity/ActivityNotices.tsx": 45,
   "activity/ActivityRowCard.tsx": 330,
+  "activity/activityBucket.ts": 35,
   "activity/activityBulk.ts": 125,
+  "activity/activityChips.ts": 50,
   "activity/activityFilters.ts": 70,
   "activity/activityIntentRow.ts": 295,
   "activity/activityIntentWords.ts": 230,
@@ -680,7 +691,7 @@ const ACTIVITY_SPLIT_FILES = {
   "activity/activityPieces.ts": 145,
   "activity/activityPullRow.ts": 90,
   "activity/activityQueueRow.ts": 320,
-  "activity/activitySelect.ts": 170,
+  "activity/activitySelect.ts": 150,
   "activity/activitySheetTypes.ts": 140,
   "activity/activityTriage.ts": 210,
   "activity/activityTypes.ts": 360,
@@ -735,12 +746,13 @@ const ASSESS_SPLIT_FILES = {
   "assess/AsxNews.tsx": 120,
   "assess/AsxParts.tsx": 115,
   "assess/AsxRowCard.tsx": 155,
+  "assess/AsxSlotCards.tsx": 135,
   "assess/AsxStrips.tsx": 110,
   "assess/AsxTail.tsx": 50,
   "assess/AsxTop.tsx": 120,
   "assess/asxConst.ts": 55,
-  "assess/asxTypes.ts": 125,
-  "assess/useAssessSheet.ts": 375,
+  "assess/asxTypes.ts": 130,
+  "assess/useAssessSheet.ts": 400, // + the slot check's splits (ticks, confirm) and conflict/split cards
 };
 
 test("the assessment facades do not grow", () => {
@@ -805,13 +817,14 @@ const PULLLINK_FACADES = {
   "link.ts": 70,
 };
 const PULLLINK_SPLIT_FILES = {
+  "link/linkBus.ts": 50,
   "link/linkDoc.ts": 135,
   "link/linkLog.ts": 190,
   "link/linkMeters.ts": 175,
   "link/linkOps.ts": 85,
   "link/linkPulse.ts": 165,
   "link/linkStatus.ts": 80,
-  "link/linkStore.ts": 140,
+  "link/linkStore.ts": 120,
   "link/linkSync.ts": 90,
   "link/linkTraffic.ts": 125,
   "link/linkTypes.ts": 200,
@@ -859,6 +872,7 @@ test("every file in pull/ and link/ is listed once, under its cap", () => {
 const CHART_FACADES = { "contextPlot.ts": 62, "kit/chart/statsPlot.ts": 46 };
 const CHART_SPLIT_FILES = {
   "contextPlot/cplotAgents.ts": 180,
+  "contextPlot/cplotCompactSet.ts": 45,
   "contextPlot/cplotAxis.ts": 275,
   "contextPlot/cplotModels.ts": 130,
   "contextPlot/cplotPaths.ts": 195,
@@ -868,6 +882,7 @@ const CHART_SPLIT_FILES = {
   "kit/chart/chartFmt.ts": 50,
   "kit/chart/chartPath.ts": 40,
   "kit/chart/chartScale.ts": 95,
+  "kit/chart/chartWords.ts": 15,
   "kit/chart/stats/splotBars.ts": 150,
   "kit/chart/stats/splotDay.ts": 180,
   "kit/chart/stats/splotMix.ts": 375,
@@ -906,6 +921,8 @@ const ANNOTATOR_FACADES = { "ImageAnnotator.tsx": 40 };
 const ANNOTATOR_SPLIT_FILES = {
   "annotator/AnnBars.tsx": 100,
   "annotator/AnnConfig.tsx": 75,
+  "annotator/AnnHeadKeys.tsx": 45,
+  "annotator/AnnPrompt.tsx": 40,
   "annotator/AnnSendBar.tsx": 55,
   "annotator/AnnStage.tsx": 48,
   "annotator/AnnTextOnly.tsx": 45,
@@ -958,37 +975,49 @@ const WEBCLIENT_FACADES = {
 
 /** Every file in the split folders, by path under `packages/web/src`, and its cap. */
 const WEBCLIENT_SPLIT_FILES = {
+  "webapi/webapiAskRules.ts": 30,
   "webapi/webapiBg.ts": 30,
+  "webapi/webapiBody.ts": 50, // a body read with a stall fuse + progress, and JSON under it
   "webapi/webapiClipboard.ts": 25,
   "webapi/webapiFetch.ts": 105,
-  "webapi/webapiFiles.ts": 150,
-  "webapi/webapiGit.ts": 50,
+  "webapi/webapiFiles.ts": 152, // +fileBlob, the gallery combine's bytes
+  "webapi/webapiGit.ts": 75, // +pull, +log/show/fetch, +blob progress
   "webapi/webapiHost.ts": 150, // +on-device whole-picture OCR
   "webapi/webapiNet.ts": 155,
-  "webapi/webapiRepoOps.ts": 85,
-  "webapi/webapiRepos.ts": 47,
+  "webapi/webapiRepoOps.ts": 103, // +opt-ins (read, choice, and the row cleaner)
+  "webapi/webapiRepos.ts": 50,
+  "webapi/webapiRoot.ts": 20,
   "webapi/webapiSessions.ts": 105,
   "webapi/webapiStats.ts": 85,
   "webapi/webapiTree.ts": 55,
   "webapi/webapiTypes.ts": 145,
-  "gallery/GalleryBar.tsx": 130,
-  "gallery/GalleryGrid.tsx": 95,
+  "gallery/DocIcon.tsx": 30,
+  "gallery/GalleryBar.tsx": 105, // where/what moved to GalleryFilters
+  "gallery/GalleryFilters.tsx": 65,
+  "gallery/GalleryPickBar.tsx": 30,
+  "gallery/GalleryGrid.tsx": 104, // +the empty grid under a time cut, with its way out; +the combine pick on a tile
+  "gallery/GallerySessionPick.tsx": 65,
   "gallery/GalleryTiles.tsx": 60,
   "gallery/GalleryViewer.tsx": 150,
+  "gallery/galleryCuts.ts": 20,
+  "gallery/galleryPick.ts": 20,
   "gallery/galleryTypes.ts": 140,
   "gallery/galleryUrls.ts": 25,
   "gallery/useGallery.tsx": 205,
   "gallery/useGalleryListing.ts": 190,
   "gallery/useGalleryOpen.ts": 50,
+  "gallery/useGalleryPick.ts": 35,
   "gallery/useGalleryViewer.ts": 110,
+  "repoHealthWords/repoHealthWordsCentral.ts": 70, // a repo's disable/override of a central reading, on its tile
   "repoHealthWords/repoHealthWordsEngine.ts": 115,
   "repoHealthWords/repoHealthWordsFmt.ts": 50,
+  "repoHealthWords/repoHealthWordsOwn.ts": 90,
   "repoHealthWords/repoHealthWordsPlot.ts": 155,
   "repoHealthWords/repoHealthWordsRank.ts": 125,
   "repoHealthWords/repoHealthWordsRegion.ts": 160,
   "repoHealthWords/repoHealthWordsRun.ts": 110,
   "repoHealthWords/repoHealthWordsScope.ts": 60,
-  "repoHealthWords/repoHealthWordsStale.ts": 115,
+  "repoHealthWords/repoHealthWordsStale.ts": 130, // +seriesStatusWords, the one line over the series charts
 };
 const WEBCLIENT_SPLIT_DIRS = ["webapi", "gallery", "repoHealthWords"];
 

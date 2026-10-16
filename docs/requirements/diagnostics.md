@@ -24,3 +24,8 @@ Each diagnostic view has a clear title with the total cost chart at the top.
 - asked: 2026-10-03
 - shipped: 9d0747e
 
+### R-diagnostics-006 · shipped
+The doctor reports the WSL idle state correctly by asking Windows for the keep-alive task.
+- asked: 2026-10-09
+- shipped: aeae7b6e
+

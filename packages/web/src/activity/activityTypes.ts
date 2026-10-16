@@ -241,7 +241,8 @@ export interface ActivityRow {
   progress: { done: number; total: number; label?: string } | null;
   /** A sweep's repos. Empty for everything else. */
   targets: ActivityTarget[];
-  /** What happened the last time it ran (a recurring schedule keeps the newest). */
+  /** What happened the last time it ran (a recurring schedule keeps the newest). `detail` is
+   *  "" where it would repeat `verdict`; null when the line would add nothing at all. */
   lastRun: { at: number; ok: boolean; detail: string; late?: boolean } | null;
   /** Delivery attempts spent, when the source counts them. */
   attempts: number;

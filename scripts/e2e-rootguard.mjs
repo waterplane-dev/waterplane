@@ -26,6 +26,13 @@ const OUTSIDE = mkdtempSync(join(tmpdir(), `${SLUG}-outside-`));
 const REPO = join(ROOT, "repo");
 mkdirSync(REPO, { recursive: true });
 writeFileSync(join(REPO, "README.md"), "# repo\n");
+// A project command in a repo under the root and one in a directory OUTSIDE it:
+// `/api/slash?cwd=` lists `<cwd>/.claude/commands`, so it is a directory listing
+// under whatever the query names unless `cwd` is contained.
+mkdirSync(join(REPO, ".claude", "commands"), { recursive: true });
+writeFileSync(join(REPO, ".claude", "commands", "rg-inside.md"), "inside\n");
+mkdirSync(join(OUTSIDE, ".claude", "commands"), { recursive: true });
+writeFileSync(join(OUTSIDE, ".claude", "commands", "rg-outside.md"), "outside\n");
 
 const env = {
   ...process.env,
@@ -118,6 +125,23 @@ ws.on("open", async () => {
   await sleep(800);
   const blAck = seen.acks.find((a) => a.ackId === "bl-1");
   check(!blAck, "backlog.add answers on its own channel, not op.ack");
+
+  // ── The slash list's `cwd` is contained too (a GET, so no ack to read) ──
+  const slash = async (cwd) => {
+    const q = cwd === undefined ? "" : `?cwd=${encodeURIComponent(cwd)}`;
+    const r = await fetch(`http://127.0.0.1:${PORT}/api/slash${q}`);
+    return { status: r.status, commands: (await r.json()).commands ?? [] };
+  };
+  const projectNames = (r) => r.commands.filter((c) => c.source === "project").map((c) => c.name);
+  const inside = await slash(REPO);
+  check(inside.status === 200 && projectNames(inside).includes("/rg-inside"), "/api/slash for a cwd inside the root lists its .claude/commands");
+  for (const [label, cwd] of [["a temp dir outside the root", OUTSIDE], ["/etc", "/etc"], ["a `..` climb out", join(REPO, "..", "..", "etc")]]) {
+    const r = await slash(cwd);
+    check(r.status === 200 && r.commands.some((c) => c.source === "builtin"), `/api/slash for ${label} still answers with the builtins (never a 4xx)`);
+    check(!r.commands.some((c) => c.name === "/rg-outside" || c.name === "/rg-inside"), `…and lists no project command from ${label}`);
+  }
+  const none = await slash(undefined);
+  check(none.status === 200 && none.commands.some((c) => c.source === "builtin"), "/api/slash with no cwd falls back to the root");
   done();
 });
 

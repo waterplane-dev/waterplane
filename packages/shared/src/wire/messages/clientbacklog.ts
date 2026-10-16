@@ -3,6 +3,7 @@
 import type { ItemCategory } from "../../naming.js";
 import type { SessionBudget } from "../../sessionbudget.js";
 import type { SendStamp } from "../../sendstamp.js";
+import type { LaunchOpts } from "../session.js";
 
 export type ClientBacklogMsg =
   | { t: "backlog.list" }
@@ -24,8 +25,20 @@ export type ClientBacklogMsg =
    *
    *  Both are ADDITIVE: `PROTOCOL_VERSION` did not move for it. Neither adds a message,
    *  neither changes what an existing field means, and absent is the behaviour
-   *  every bundle already shipped has. */
-  | ({ t: "backlog.add"; text: string; repoDir: string; label?: string; fire?: boolean; targetSessionId?: string; autoFire?: boolean; steps?: string[]; resume?: boolean; closeWhenDone?: boolean; budget?: SessionBudget; ackId?: string } & SendStamp)
+   *  every bundle already shipped has.
+   *
+   *  `pastBudget` is the person's *past the budget* for THIS prompt, asked at
+   *  the moment it is queued: the host lets the new row past the usage budget
+   *  exactly as `intent.waive` would (only the budget, until the tripped
+   *  window resets). Additive too — an older desktop ignores it and the row
+   *  waits for the budget like any other.
+   *
+   *  `launch` is the model/effort/backend the item's OWN session starts with
+   *  (`Intent.launch`, the send sheet's *model* row), cleaned by
+   *  `cleanLaunchOpts` on the way in; meaningless beside `targetSessionId`.
+   *  Additive: an older desktop drops it and opens the session on its own
+   *  new-session defaults, which is what absent means. */
+  | ({ t: "backlog.add"; text: string; repoDir: string; label?: string; fire?: boolean; targetSessionId?: string; autoFire?: boolean; steps?: string[]; resume?: boolean; closeWhenDone?: boolean; flagWhenDone?: boolean; budget?: SessionBudget; launch?: LaunchOpts; pastBudget?: boolean; ackId?: string } & SendStamp)
   | { t: "backlog.remove"; id: string }
   | { t: "backlog.fire"; id: string }
   | { t: "backlog.done"; id: string }
@@ -51,6 +64,15 @@ export type ClientBacklogMsg =
    * in any state (a running item's session is exactly the one a person may
    * decide to keep), and never re-queues anything. Additive, v1.
    *
+   * `flagWhenDone` is the item's *flag for follow up when done* (`Intent.
+   * flagWhenDone`): `true` sets it, `false`/`null` clears it, absent leaves it
+   * alone. Lands through `edit()` like `closeWhenDone`, on a row in any state.
+   *
+   * `budget` is the cap the session this row OPENS is born with (`Intent.
+   * budget`): an object sets or changes it, `null` clears it, absent leaves it
+   * alone. The host cleans it (`cleanSessionBudget`) and applies it only to a
+   * row that has not started (`edit()` says so otherwise). Additive, v1.
+   *
    * `headline` and `category` are the person taking a machine-written name over
    * (`naming.ts`). A non-empty string is stamped `hand` by the host and is never
    * written over again by an assessment or a naming pass; `""` CLEARS the value
@@ -59,7 +81,7 @@ export type ClientBacklogMsg =
    * about who wrote a name is the host's to make, exactly as `handOrdered` is.
    * Additive, v1.
    */
-  | { t: "backlog.update"; id: string; text?: string; label?: string; repoDir?: string; targetSessionId?: string; autoFire?: boolean; resume?: boolean; closeWhenDone?: boolean | null; headline?: string; category?: ItemCategory | "" }
+  | { t: "backlog.update"; id: string; text?: string; label?: string; repoDir?: string; targetSessionId?: string; autoFire?: boolean; resume?: boolean; closeWhenDone?: boolean | null; flagWhenDone?: boolean | null; budget?: SessionBudget | null; headline?: string; category?: ItemCategory | "" }
   /**
    * **Name these items** — the optional half of titles and kinds.
    *
@@ -88,34 +110,4 @@ export type ClientBacklogMsg =
   /** Open/resume a coding session for the item, seeded with its task + check/validate verdict as context. */
   | { t: "backlog.continue"; id: string }
   | { t: "backlog.setAuto"; enabled: boolean }
-  /**
-   * Turn the per-repo *smart pick* on or off.
-   *
-   * With it on, the moment this repo's next automatic item would fire the host
-   * first buys one cheap unattended pass over the repo's remaining items, which
-   * may pick which runs next, merge items that are one job, and sort the rest.
-   * Per REPO and not global, because the answer to "should a machine groom this
-   * list" is different for a repo with two items a week and one with fifty.
-   *
-   * ADDITIVE, and `PROTOCOL_VERSION` did not move for it. It adds a message and no existing
-   * field changes meaning; absent state is the old behaviour exactly, so a host
-   * or a bundle that does not know about it behaves as it always did and the
-   * feature is simply inert. `routes/work.ts` contains `repoDir` like every
-   * other repo-addressed message.
-   */
-  | { t: "backlog.setSmartPick"; repoDir: string; enabled: boolean }
-  /**
-   * Undo one smart-pick merge: `id` is the MERGED row.
-   *
-   * Puts each original back where it was (its previous `order` and its previous
-   * archived state, which is not always `false` — a member may have been
-   * archived by hand before the merge), rewires anything chained behind one of
-   * them, removes the merged row, and remembers the id-set so the next pass
-   * cannot propose the same merge again. Refused with a sentence once the merged
-   * row has started, because by then there is a session running its words.
-   *
-   * Not durable and never queued offline, for `intent.cancel`'s reason: an undo
-   * delivered an hour late calls back words that have since run. Additive, v1.
-   */
-  | { t: "backlog.unmerge"; id: string }
   | { t: "backlog.openRepoSession"; repoDir: string };

@@ -16,7 +16,7 @@ const ROOT = new URL("..", import.meta.url).pathname;
 const SRC = join(ROOT, "packages", "web", "src");
 
 // ── api.ts: the client object is the same shape it was ──────────────────────
-const API_KEYS = {"repos":0,"slash":0,"external":0,"transcript":0,"scrollback":0,"transcriptTools":0,"shellDetail":0,"contextSeries":0,"tokenStats":0,"localUsage":0,"peerJobs":0,"backendTokens":0,"usageLog":0,"tokenWindows":0,"inbox":0,"markInboxSeen":0,"markOutboxSeen":0,"artifacts":0,"search":0,"uploadInbox":0,"deleteInbox":0,"deleteArtifact":0,"sweepPlan":0,"sweepRun":0,"transportSurvey":0,"hostStore":0,"hostStoreClear":0,"newFolder":0,"newRepo":0,"onboardPlan":0,"onboardJob":0,"onboardStart":0,"onboardResume":0,"newWorktree":0,"worktreeLeftover":0,"removeWorktree":0,"artifactUrl":0,"inboxUrl":0,"gitStatus":0,"gitDiff":0,"gitBlob":0,"gitText":0,"gitStage":0,"gitCommit":0,"gitMessage":0,"gitPush":0,"archive":0,"archiveDelete":0,"tree":0,"treeFile":0,"treeWrite":0,"gitBranches":0,"gitCheckout":0,"gitCreateBranch":0,"gitDeleteBranch":0,"envFiles":0,"secretTargets":0,"setSecret":0,"compliance":0,"complianceFix":0,"complianceLimits":0,"complianceIgnore":0,"setupPrefs":0,"setSetupPrefs":0,"repoHealth":0,"repoHealthScopes":0,"repoHealthRefresh":0,"hostStat":0,"screenshot":0,"readText":0,"ocrStatus":0,"ocrImage":0,"dictateStatus":0,"dictate":0,"setClipboard":0,"speedtest":["download","upload","debug"],"netstats":["get","reset","report"],"push":["key","subscribe","unsubscribe"],"uiUsage":["get","flush","reset"],"webBundle":["manifest","file"],"auth":["status","login","logout"],"tailnet":["peers"],"pair":["mint","redeem"],"peers":["on"],"devices":["list","revoke"]};
+const API_KEYS = {"repos":0,"slash":0,"external":0,"transcript":0,"scrollback":0,"transcriptTools":0,"shellDetail":0,"contextSeries":0,"tokenStats":0,"localUsage":0,"peerJobs":0,"backendTokens":0,"usageLog":0,"usageLogSource":0,"tokenWindows":0,"costWindow":0,"inbox":0,"markInboxSeen":0,"markOutboxSeen":0,"artifacts":0,"search":0,"uploadInbox":0,"fileBlob":0,"deleteInbox":0,"deleteArtifact":0,"sweepPlan":0,"sweepRun":0,"transportSurvey":0,"appReadiness":0,"hostStore":0,"hostStoreClear":0,"newFolder":0,"newRepo":0,"cloneRepo":0,"onboardPlan":0,"onboardJob":0,"onboardStart":0,"onboardResume":0,"newWorktree":0,"worktreeLeftover":0,"removeWorktree":0,"artifactUrl":0,"inboxUrl":0,"gitStatus":0,"gitDiff":0,"gitBlob":0,"gitText":0,"gitStage":0,"gitCommit":0,"gitMessage":0,"gitLog":0,"gitShow":0,"gitFetch":0,"gitPull":0,"gitPush":0,"gitPushState":0,"archive":0,"archiveDelete":0,"tree":0,"treeFile":0,"treeWrite":0,"gitBranches":0,"gitCheckout":0,"gitCreateBranch":0,"gitDeleteBranch":0,"envFiles":0,"secretTargets":0,"setSecret":0,"compliance":0,"complianceFix":0,"complianceLimits":0,"complianceIgnore":0,"optIns":0,"optInChoice":0,"hostSetup":0,"hostSetupFix":0,"setupPrefs":0,"setSetupPrefs":0,"repoHealth":0,"healthIndex":0,"repoHealthScopes":0,"repoHealthRefresh":0,"hostStat":0,"screenshot":0,"readText":0,"ocrStatus":0,"ocrImage":0,"dictateStatus":0,"dictate":0,"setClipboard":0,"speedtest":["download","upload","debug"],"netstats":["get","reset","report"],"push":["key","subscribe","unsubscribe"],"uiUsage":["get","flush","reset"],"webBundle":["manifest","file"],"auth":["status","login","logout"],"tailnet":["peers"],"pair":["mint","redeem"],"peers":["on"],"devices":["list","revoke"]};
 
 const SLICES = ["Sessions", "Stats", "Files", "Repos", "Git", "Tree", "RepoOps", "Host", "Net"];
 
@@ -101,7 +101,7 @@ test("Gallery.tsx exports exactly its pinned surface", () => {
 const GALLERY = join(SRC, process.env.WEBCLIENT_GALLERY_FACADE || "Gallery.tsx");
 const GOLDEN = join(ROOT, "tools", "webclientpins.golden.json");
 
-test("Gallery: the server-rendered sheet (41 cases: every tab, every viewer kind) is byte-identical to the golden", async () => {
+test("Gallery: the server-rendered sheet (43 cases: every tab, every viewer kind, the session picks) is byte-identical to the golden", async () => {
   const { build } = createRequire(join(ROOT, "package.json"))("esbuild");
   const dir = join(ROOT, "node_modules", ".ssr");
   mkdirSync(dir, { recursive: true });
@@ -130,6 +130,9 @@ const cases = [
   ...files.flatMap((p) => ["outbox", "inbox", "all"].map((sc) => ({ ...base, repoId: "r1", repos, initialScope: sc, openFile: f(p), onContinueInSession: noop, onSweep: noop }))),
   { ...base, repoId: "r1", openFile: { repoId: "r1", relPath: "a/b.png", name: "b.png" } },
   { ...base, repoId: "r1", openFile: f("a/c.png", { repoName: "Repo One", ctime: 1600000000000 }), initialScope: "inbox" },
+  // *to session*: one live session is named on its button, two open a picker.
+  { ...base, repoId: "r1", openFile: f("x/shot.png"), onContinueInSession: noop, sessionsIn: () => [{ id: "s1", label: "main", onScreen: true }] },
+  { ...base, repoId: "r1", openFile: f("x/shot.png"), onContinueInSession: noop, sessionsIn: () => [{ id: "s1", label: "main", onScreen: true }, { id: "s2", label: "fix-x", onScreen: false }] },
 ];
 export default cases.map((p) => renderToString(createElement(Gallery, p)) + "\\n@@\\n" + renderToStaticMarkup(createElement(Gallery, p)));
 `);
@@ -161,7 +164,7 @@ test("Gallery: one download button, no native modal, no raw anchor download, tra
   assert.equal(count(t, /<DownloadButton\b/g), 3);
   assert.equal(count(t, /window\.(confirm|prompt)\s*\(/g), 0);
   assert.equal(count(t, /new WebSocket\(/g), 0);
-  for (const id of ["gallery.delete", "gallery.more", "gallery.fullres", "gallery.annotate", "gallery.download"]) {
+  for (const id of ["gallery.delete", "gallery.more", "gallery.fullres", "gallery.annotate", "gallery.download", "gallery.toSession", "gallery.toNewSession"]) {
     assert.equal(count(t, new RegExp('"action:' + id.replace(".", "\\.") + '"', "g")), 1, id);
   }
   assert.equal(count(t, /useBackStep\(/g), 1);
@@ -199,13 +202,15 @@ const WORDS = join(SRC, process.env.WEBCLIENT_WORDS_FACADE || "repoHealthWords.t
 
 test("repoHealthWords.ts exports exactly its pinned surface (the five helpers stay private)", async () => {
   const names = surface("repoHealthWords.ts");
-  assert.equal(names.length, 49);
+  // 49 at the split; the repo's own readings (whose each reading is) and its
+  // say over the central ones (repoHealthWordsCentral.ts) added the rest.
+  assert.equal(names.length, 60);
   const m = await import(pathToFileURL(WORDS).href);
   assert.deepEqual(Object.keys(m).sort(), names.filter((n) => n.endsWith(":value")).map((n) => n.split(":")[0]).sort());
   for (const priv of ["nf", "ordinal", "pctOf", "spanWords", "commitWords"]) assert.ok(!(priv in m), priv);
 });
 
-test("repoHealthWords: all 46 exports answer the fixed battery exactly as before the split (golden)", async () => {
+test("repoHealthWords: every export answers the fixed battery exactly as when last regoldened (golden)", async () => {
   const m = await import(pathToFileURL(WORDS).href);
   const digest = createHash("sha256").update(JSON.stringify(battery(m))).digest("hex");
   if (process.env.REGOLDEN) {
@@ -220,7 +225,11 @@ test("repoHealthWords/: pure — slices import only each other; no status colour
   const dir = join(SRC, "repoHealthWords");
   for (const f of readdirSync(dir)) {
     const t = readFileSync(join(dir, f), "utf8");
-    for (const m of t.matchAll(/^import .* from "([^"]+)"/gm)) assert.match(m[1], /^\.\/repoHealthWords\w+\.ts$/, `${f}: ${m[0]}`);
+    // A TYPE import from the wire is erased at run time, so it keeps a slice pure.
+    for (const m of t.matchAll(/^import (type )?.* from "([^"]+)"/gm)) {
+      if (m[1] && m[2] === "@waterplane/shared") continue;
+      assert.match(m[2], /^\.\/repoHealthWords\w+\.ts$/, `${f}: ${m[0]}`);
+    }
     for (const token of ["--warn", "--dead", "--limit", "--ok"]) assert.ok(!t.includes(token), );
   }
 });

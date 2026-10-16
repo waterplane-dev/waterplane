@@ -10,12 +10,12 @@
  * the queue's (`submitInput`, `answerPrompt`) or a raw key through the compose
  * core's `sendInput` — no new send path.
  */
-import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import {
-  AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, ChevronLeft, CloudOff, CornerDownLeft, Loader2,
-  Maximize2, Minimize2, Radar, RotateCw, ScrollText, Terminal as TerminalIcon, X,
+  AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, ChevronLeft, CloudOff, CornerDownLeft, GripVertical, Hourglass, Loader2,
+  List, Maximize2, Minimize2, Radar, RotateCw, ScrollText, Terminal as TerminalIcon, X,
 } from "lucide-react";
-import { promptFingerprint, sessionCostOf } from "@waterplane/shared";
+import { blockedReasonText, promptFingerprint, sessionCostOf } from "@waterplane/shared";
 import type { BackendInfo, SessionInfo } from "@waterplane/shared";
 import { api } from "../../api";
 import { backendIdOf, isShellBackend, sessionCants, shellQuietLine } from "../../backendCaps";
@@ -26,13 +26,19 @@ import { hasShellBar } from "../../shellLinks";
 import { ZoomPair } from "../../ZoomPair";
 import { sized } from "../../media";
 import { ReplyBar } from "../../ReplyBar";
+import { CliSuggestion } from "../../CliSuggestion";
 import { absorb as absorbScreenLog, hasScrollback } from "../../screenlog";
 import { resumeHint, resumeIdOf } from "../../sessionFacts";
 import { TerminalView } from "../../Terminal";
 import { showToast } from "../../toast";
 import { TranscriptView } from "../../TranscriptView";
 import { CliPeek } from "./CliPeek";
+import { PromptAnswer } from "../../PromptAnswer";
+import { termAnswersBox } from "./termAnswers";
 import { ModelWheel } from "./ModelWheel";
+import { ModeGlyph } from "./ModeSection";
+import { badgeMode, modeTitle } from "../../modePick";
+import { tallyTitle, turnTally } from "../sessions/tags";
 import { TermCostStrip } from "../../TermCostStrip";
 import { nextReaderZoom, nextTermZoom, readerScale } from "../../uiScale";
 import { track } from "../../usage";
@@ -40,6 +46,7 @@ import { Unavailable } from "../../Unavailable";
 import type { Connection } from "../conn/useConnection";
 import type { TermFeed } from "../term/useTermFeed";
 import type { QueueApi } from "../queue/useQueue";
+import { isLaterId } from "../queue/logic.ts";
 import type { ComposeApi } from "../compose/useCompose";
 import type { Launch } from "../launch/useLaunch";
 import { keepFocus } from "../compose/ComposeBar";
@@ -57,6 +64,8 @@ import { DemoHookCard, DemoHookHint } from "../../features/demoTour";
 import type { SessionChrome } from "./useSessionChrome";
 import { useTermPick } from "./useTermPick";
 import { useReaderPick } from "./useReaderPick";
+import { useCornerDrag } from "./useCornerDrag";
+import { OVER_TERMINAL, startStrayKeys } from "./strayKeys";
 
 const ICON = 16;
 
@@ -72,11 +81,14 @@ const blurCompose = (e: ReactPointerEvent) => {
 // hold compose focus — on Android a still-focused (but keyboard-dismissed)
 // textarea re-summons the on-screen keyboard on any focus-preserving tap. So
 // arrows blur the compose box instead; the rest keep focus for mid-typing use.
-const SPECIAL_KEYS: { label: ReactNode; data: string; nav?: boolean }[] = [
-  { label: "Esc", data: "\x1b" }, { label: "Tab", data: "\t" },
-  { label: <ArrowUp size={ICON} />, data: "\x1b[A", nav: true }, { label: <ArrowDown size={ICON} />, data: "\x1b[B", nav: true },
-  { label: <ArrowLeft size={ICON} />, data: "\x1b[D", nav: true }, { label: <ArrowRight size={ICON} />, data: "\x1b[C", nav: true },
-  { label: "^C", data: "\x03" }, { label: <CornerDownLeft size={ICON} />, data: "\r" },
+// `title` is what a long press explains (`hints.ts` falls back to it) and the name a screen
+// reader says: four of these are bare glyphs, which explained nothing.
+const SPECIAL_KEYS: { label: ReactNode; title: string; data: string; nav?: boolean }[] = [
+  { label: "Esc", title: "Esc — close a menu or interrupt claude", data: "\x1b" }, { label: "Tab", title: "Tab — complete", data: "\t" },
+  { label: <ArrowUp size={ICON} />, title: "up — move the selection in a box", data: "\x1b[A", nav: true },
+  { label: <ArrowDown size={ICON} />, title: "down — move the selection in a box", data: "\x1b[B", nav: true },
+  { label: <ArrowLeft size={ICON} />, title: "left", data: "\x1b[D", nav: true }, { label: <ArrowRight size={ICON} />, title: "right", data: "\x1b[C", nav: true },
+  { label: "^C", title: "Ctrl-C — cancel", data: "\x03" }, { label: <CornerDownLeft size={ICON} />, title: "Return — confirm the selection", data: "\r" },
 ];
 
 /** Each hook's members this area reads — `Pick<>`s, like `LauncherProps`, so
@@ -84,10 +96,10 @@ const SPECIAL_KEYS: { label: ReactNode; data: string; nav?: boolean }[] = [
 export interface TermAreaProps {
   active: SessionInfo;
   pending: boolean;
-  conn: Pick<Connection, "status" | "connVisible" | "send" | "info">;
+  conn: Pick<Connection, "status" | "connVisible" | "send" | "info" | "liveAsk">;
   term: Pick<TermFeed, "termRef" | "geomRef" | "buffers" | "lastPtyAt" | "ptyTail" | "exitedRef" | "staleAt" | "writeSeq"
     | "termNonce" | "readMode" | "setView" | "readerCmd" | "outlineJump" | "transcriptNonce">;
-  q: Pick<QueueApi, "entries" | "pendingEntry" | "answerPrompt" | "retryPendingCreate" | "submitInput">;
+  q: Pick<QueueApi, "entries" | "pendingEntry" | "answerPrompt" | "retryPendingCreate" | "submitInput" | "blocked">;
   compose: Pick<ComposeApi, "cliMode" | "sendInput" | "focusPipe" | "toggleCliMode" | "noteCursorLine">;
   launch: Pick<Launch, "sessionCan" | "openCwd" | "runForkRequest" | "relaunch" | "setLaunchOpt">;
   chrome: SessionChrome;
@@ -101,6 +113,8 @@ export interface TermAreaProps {
   transportKnown: readonly string[] | undefined;
   setActiveId(id: string | null): void;
   closeSession(s: SessionInfo): void;
+  /** Opens the outline — present only while the `outline` toolbar item is pinned. */
+  openOutline?: () => void;
 }
 
 /**
@@ -134,8 +148,9 @@ export interface TermAreaProps {
  * button itself is gone (`Unavailable.tsx`: never a dimmed one) and a control
  * that disappears without saying so is the thing that rule exists to stop.
  */
-function ScreenCorner({ zoom: zoomOn, active, pending, readerShown, readMode, setView, sessionCan, chrome, wheel }: {
+function ScreenCorner({ zoom: zoomOn, active, pending, readerShown, readMode, setView, sessionCan, chrome, wheel, openOutline }: {
   zoom?: boolean;
+  openOutline?: () => void;
   active: SessionInfo;
   pending: boolean;
   readerShown: boolean;
@@ -144,9 +159,14 @@ function ScreenCorner({ zoom: zoomOn, active, pending, readerShown, readMode, se
   sessionCan: Launch["sessionCan"];
   chrome: SessionChrome;
   /** What the model wheel needs to land a pick — `ModelSheet`'s two paths. */
-  wheel: Pick<Launch, "relaunch" | "setLaunchOpt"> & Pick<QueueApi, "submitInput"> & { backends: BackendInfo[] | null };
+  wheel: Pick<Launch, "relaunch" | "setLaunchOpt"> & Pick<QueueApi, "submitInput"> & Pick<Connection, "liveAsk">
+    & { backends: BackendInfo[] | null };
 }): ReactNode {
   const [wheelOpen, setWheelOpen] = useState(false);
+  const corner = useCornerDrag((wasReset) => showToast(wasReset
+    ? "buttons back in the corner"
+    : "drag the grip to move these buttons; double-tap it to put them back"));
+  const wheelBtn = useRef<HTMLButtonElement>(null);
   const { chromeHidden: shut, setFullScreen, setTypingPeek, chromeIn } = chrome;
   const txtScale = usePref("txtScale");
   const tZoom = usePref("tZoom");
@@ -172,23 +192,37 @@ function ScreenCorner({ zoom: zoomOn, active, pending, readerShown, readMode, se
   const wider = readerShown ? "" : ", i.e. more columns and rows for the CLI to draw in";
   const narrower = readerShown ? "" : ", i.e. fewer columns and rows";
   return (<>
-    <div className="term-zoom" data-hint="term.zoom">
+    <div ref={corner.ref} className="term-zoom" data-hint="term.zoom" style={corner.style}>
+      {/* The grip, FIRST so it sits at the far end from the fixed full-screen
+          button: drag it to move the whole group off a line it is hiding,
+          double-tap to put it back (`useCornerDrag`). No `active` highlight
+          once moved: the owner asked for it not to stay blue after a drag —
+          the group's new place already says it was moved. */}
+      <button className="key term-zoom-grip" data-hint="term.grip"
+        aria-label="move these buttons"
+        title="drag to move these buttons; double-tap to put them back"
+        {...corner.handle}>
+        <GripVertical size={ICON} />
+      </button>
+      {/* The outline, when pinned, LEFT of the view switch — the owner's
+          place for it. It was on the status line beside context for a build
+          (0679e450): a number there read as one more fact in a row of facts,
+          not as a door, and it sat away from the reader it opens. The count
+          rides on the button; the pin still decides whether it is shown. */}
+      {!pending && openOutline && (
+        <button className="key term-zoom-outline" data-hint="toolbar:outline"
+          onPointerDown={keepFocus}
+          aria-label="outline"
+          title={`outline — where you are in this session${tallyTitle(turnTally(active))}`}
+          onClick={openOutline}>
+          <List size={ICON} />{turnTally(active) == null ? null : <span className="term-zoom-count">{turnTally(active)}</span>}
+        </button>
+      )}
       {/* The CLI ↔ companion-shell toggle USED TO BE HERE (orange, first in
           the group). It is the header's [Claude | Shell] tabs now
           (`SessionHeader` `PairTabsSeg`), the owner's ask: two tabs by the
           title that say which half is on screen, not one button naming only
           where a tap goes. */}
-      {/* The model wheel, left of the view switch. Absent on a pending
-          session: there is no process yet to send /model to or relaunch. */}
-      {!pending && !isShellBackend(wheel.backends, active.backend) && (
-        <button className={`key${wheelOpen ? " active" : ""}`} data-hint="term.modelwheel"
-          onPointerDown={keepFocus}
-          aria-label="model and effort wheel" aria-expanded={wheelOpen}
-          title="model and effort — pick both on one wheel"
-          onClick={() => { track("action:modelwheel.open"); setWheelOpen((o) => !o); }}>
-          <Radar size={ICON} />
-        </button>
-      )}
       {/* The view switch, moved off the header: full screen hides that row,
           so the one control that swaps the whole view was absent from the
           layout people read long turns in.
@@ -202,7 +236,9 @@ function ScreenCorner({ zoom: zoomOn, active, pending, readerShown, readMode, se
           so the switch is ABSENT rather than greyed — and the sentence saying
           why is on the terminal screen under it (`noLog`), where the
           scrollback it points at actually is. */}
-      {!pending && sessionCan(active, "transcript") && (
+      {/* Absent while the CLI is in its first-launch setup: the terminal is held up then
+          (`cliSetup`), and the toast on entering said why and when the reader comes back. */}
+      {!pending && sessionCan(active, "transcript") && !(active.cliSetup && active.running) && (
         <button className="key" data-hint="term.read"
           /* `keepFocus` for the full-screen button's reason: with the caret
              in the box the pointerdown blurred it, typing room let go, the
@@ -215,6 +251,25 @@ function ScreenCorner({ zoom: zoomOn, active, pending, readerShown, readMode, se
           {readMode ? <TerminalIcon size={ICON} /> : <BookOpen size={ICON} />}
         </button>
       )}
+      {/* The model wheel, RIGHT of the view switch (the owner swapped them). Absent on a pending
+          session: there is no process yet to send /model to or relaunch.
+          It carries the footer's permission mode as a small second glyph
+          (`badgeMode`: the LIVE reading only, and nothing for Manual — the CLI
+          labels that state with nothing either), so the mode shows closed. */}
+      {!pending && !isShellBackend(wheel.backends, active.backend) && (() => {
+        const badge = badgeMode(active);
+        const label = `model, effort and mode${badge ? ` — now ${modeTitle(badge)}` : ""}`;
+        return (
+          <button ref={wheelBtn} className={`key${wheelOpen ? " active" : ""}${badge ? " mw-badged" : ""}`} data-hint="term.modelwheel"
+            onPointerDown={keepFocus}
+            aria-label={label} aria-expanded={wheelOpen}
+            title={label}
+            onClick={() => { track("action:modelwheel.open"); setWheelOpen((o) => !o); }}>
+            <Radar size={ICON} />
+            {badge && <span className="mw-badge"><ModeGlyph mode={badge} size={12} /></span>}
+          </button>
+        );
+      })()}
       {withZoom && (
         <ZoomPair smaller={smaller} bigger={bigger} onZoom={apply} what={what} subject={`the ${what}`}
           smallerHint={wider} biggerHint={narrower} endClassName="term-zoom-px muted" iconSize={ICON} />
@@ -251,21 +306,22 @@ function ScreenCorner({ zoom: zoomOn, active, pending, readerShown, readMode, se
           setTypingPeek(next.typingPeek);
         }}>{shut ? <Minimize2 size={ICON} /> : <Maximize2 size={ICON} />}</button>
     </div>
-    {wheelOpen && !pending && !isShellBackend(wheel.backends, active.backend) && <>
-      {/* A tap anywhere off the wheel closes it, and is not also a tap on
-          whatever is underneath. */}
-      <div className="model-wheel-scrim" onPointerDown={(e) => { e.preventDefault(); setWheelOpen(false); }} />
+    {wheelOpen && !pending && !isShellBackend(wheel.backends, active.backend) && (
       <ModelWheel cur={active} backends={wheel.backends} canSlash={sessionCan(active, "slash")}
-        submitInput={wheel.submitInput} setLaunchOpt={wheel.setLaunchOpt} relaunch={wheel.relaunch}
-        onClose={() => setWheelOpen(false)} />
-    </>}
+        submitInput={wheel.submitInput} setLaunchOpt={wheel.setLaunchOpt} relaunch={wheel.relaunch} liveAsk={wheel.liveAsk}
+        anchor={wheelBtn} onClose={() => setWheelOpen(false)} />
+    )}
   </>);
 }
+
+/** Said when the terminal is held up over the reader for the CLI's setup, and when it lets go. */
+export const CLI_SETUP_HOLD = "claude is not signed in on the desktop yet: the terminal stays up for its setup (theme, sign-in). The reader comes back once it reaches its prompt.";
+export const CLI_SETUP_DONE = "claude is set up: back to the reader.";
 
 export function TermArea(p: TermAreaProps): ReactNode {
   const {
     active, pending, conn, term, q, compose, launch, chrome, backends, readerShown, hiddenSlash,
-    activeRepoId, transportKnown, setActiveId, closeSession,
+    activeRepoId, transportKnown, setActiveId, closeSession, openOutline,
   } = p;
   const { pendingEntry } = q;
   const { status, connVisible, send } = conn;
@@ -279,21 +335,68 @@ export function TermArea(p: TermAreaProps): ReactNode {
   const { cliMode, sendInput, focusPipe, toggleCliMode } = compose;
   const { sessionCan, openCwd, runForkRequest } = launch;
   const { dismissedReply, setDismissedReply } = chrome;
+  // The CLI's proposal the person hid on this screen — by its words, so the
+  // next turn's different proposal shows again.
+  const [hiddenSuggestion, setHiddenSuggestion] = useState("");
   const usdPerWeekPct = useWeekUsdPerPct(); // turn costs as a share of the week
   const weekIncl = useWeekIncl(); // …and what that share counted beyond this desktop
   const pick = useTermPick(termRef, writeSeq, active.id);
+  // Answers queued for THIS box — matched on the FINGERPRINT, not the session: one queued for a box
+  // that has since been replaced is not this one's. A list because a checkbox box collects several
+  // (toggle, toggle, Submit); `failed` rows are excluded — those are the recovery bar's.
+  const queuedAnswers = active.prompt
+    ? outbox
+        .filter((e) => e.answer?.fingerprint === promptFingerprint(active.prompt!) && e.status !== "failed")
+        .map((e) => ({ label: e.answer!.label }))
+    : [];
+  const onAnswer = (data: string, label: string, submitBox?: boolean, choice?: number) => answerPrompt(active, data, label, submitBox, choice);
   const readerRef = useRef<HTMLDivElement>(null);
   const readerPick = useReaderPick(readerRef, active.id, readerShown);
+  // The CLI's first-launch setup holds the terminal up over the reader preference (App's
+  // `readerShown`). A view that switches itself says so, both ways (skill `ux`, §1).
+  const setupHold = readMode && !!active.cliSetup && active.running;
+  const heldFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (setupHold) {
+      if (heldFor.current !== active.id) { heldFor.current = active.id; showToast(CLI_SETUP_HOLD); }
+    } else if (heldFor.current === active.id) {
+      heldFor.current = null;
+      if (readMode && active.running && !active.cliSetup) showToast(CLI_SETUP_DONE);
+    }
+  }, [setupHold, active.id, active.running, active.cliSetup, readMode]);
+  // A desktop key typed at no field goes to the terminal (`strayKeys.ts`) — while the grid is the view.
+  const sendRef = useRef(sendInput);
+  sendRef.current = sendInput;
+  useEffect(() => (readerShown || pending ? undefined
+    : startStrayKeys(window, (b) => sendRef.current(b), () => termRef.current?.focus(), () => !!document.querySelector(OVER_TERMINAL))),
+  [readerShown, pending, termRef]);
   // Collapse the whole active-session header — the cants strip goes with it.
-  const headerCollapsed = usePref("headerCollapsed");
   /** How much of a tool call the reader shows/downloads — a synced setting. */
   const toolsMode = usePref("toolsMode");
   const txtScale = usePref("txtScale");
   const rZoom = usePref("rZoom");
   const corner = (zoom?: boolean) => (
     <ScreenCorner zoom={zoom} active={active} pending={pending} readerShown={readerShown} readMode={readMode}
-      setView={setView} sessionCan={sessionCan} chrome={chrome}
-      wheel={{ backends, submitInput, relaunch: launch.relaunch, setLaunchOpt: launch.setLaunchOpt }} />
+      setView={setView} sessionCan={sessionCan} chrome={chrome} openOutline={openOutline}
+      wheel={{ backends, submitInput, relaunch: launch.relaunch, setLaunchOpt: launch.setLaunchOpt, liveAsk: conn.liveAsk }} />
+  );
+  // `+ later` (`isLaterId`): there is no session and none is on its way, so
+  // nothing here is a terminal — the one sentence is the view. The compose
+  // bar under it is the real one (paste, drop, chain, dictation), aimed at a
+  // NEW session when it's free.
+  if (isLaterId(active.id)) return (
+    <div className="term-area term-later">
+      <div className="term-overlay as-card">
+        <div className="term-overlay-box">
+          <Hourglass size={16} />
+          <span>The session starts only once this backlog item runs.</span>
+          <span className="term-overlay-hint">
+            Send queues it for when this repo is free; the arrow beside Send has <em>elsewhere or later…</em> for a clock.
+            Write, chain and attach here — nothing is queued until you send.
+          </span>
+        </div>
+      </div>
+    </div>
   );
   return (
     <>
@@ -302,7 +405,7 @@ export function TermArea(p: TermAreaProps): ReactNode {
           that are missing would have been. Empty (and so unrendered) for
           claude and for every host that never described a backend, which is
           what keeps this screen pixel-identical to what it was. */}
-      {!headerCollapsed && !pending && (
+      {!pending && (
         /* Keyed on the DERIVED caps and built by one function
            (`backendCaps.ts`'s `sessionCants`), because two of the rows are
            conditional on another row and the slash row carries a count of the
@@ -313,7 +416,7 @@ export function TermArea(p: TermAreaProps): ReactNode {
           cants={sessionCants(backends, backendIdOf(active), { hiddenSlash })} />
       )}
       {/* A shell: no strip of missing Claude features — ONE quiet line. */}
-      {!headerCollapsed && !pending && shellQuietLine(backends, active.backend) && (
+      {!pending && shellQuietLine(backends, active.backend) && (
         <div className="act-cants toolbar-cants">
           <span className="act-cant"><TerminalIcon size={11} /> {shellQuietLine(backends, active.backend)}</span>
         </div>
@@ -385,17 +488,9 @@ export function TermArea(p: TermAreaProps): ReactNode {
                first in its lane, refused host-side once the box has gone), so
                this adds no send path; it moves the buttons to the one surface
                with room for the whole question. */
-            onAnswer={(data, label, submitBox, choice) => answerPrompt(active, data, label, submitBox, choice)}
+            onAnswer={onAnswer}
             onStop={() => sendInput("\x1b")}
-            /* Matched on the FINGERPRINT, not the session: an answer queued for
-               a box that has since been replaced is not this one's. A list
-               because a checkbox box collects several (toggle, toggle, Submit);
-               `failed` rows are excluded — those are the recovery bar's. */
-            queuedAnswers={active.prompt
-              ? outbox
-                  .filter((e) => e.answer?.fingerprint === promptFingerprint(active.prompt!) && e.status !== "failed")
-                  .map((e) => ({ label: e.answer!.label }))
-              : []}
+            queuedAnswers={queuedAnswers}
             cmd={readerCmd ?? undefined}
             toolsMode={toolsMode}
             // Composing from a cached transcript is fine — a turn uuid is stable
@@ -497,6 +592,16 @@ export function TermArea(p: TermAreaProps): ReactNode {
                 and the corner is where that card's own words are. */}
             {corner(!card)}
             {pick.chrome}
+            {/* The one box the terminal answers by tap (`termAnswers.ts`): the trust box a new
+                person meets first, before they know the key bar, drawn unnumbered with the
+                cursor on "No, exit". The reader's own card body, over the bottom of the grid
+                where the CLI draws the same box — an overlay, so the PTY is never resized. */}
+            {termAnswersBox(active.prompt, active.running) && (
+              <div className="term-answer" data-box="trust">
+                <PromptAnswer prompt={active.prompt} queued={queuedAnswers} suggestion={active.suggestion}
+                  onAnswer={onAnswer} ev="term.trust" />
+              </div>
+            )}
             {kind && (
               <div className={`term-overlay ${card ? "as-card" : "as-chip"} term-overlay-${kind}${kind === "pending" && pendingEntry?.status === "failed" ? " failed" : ""}`}>
                 <div className="term-overlay-box">
@@ -526,6 +631,10 @@ export function TermArea(p: TermAreaProps): ReactNode {
                   {kind === "pending" && (() => {
                     const failed = pendingEntry?.status === "failed";
                     const onWire = pendingEntry?.status === "pending";
+                    // Online but not going out: say what holds it (the budget,
+                    // auto-send off, …). "warming up the CLI" over an open the
+                    // queue had not even sent read as a session that was running.
+                    const held = !onWire && status === "open" && pendingEntry ? q.blocked.get(pendingEntry.ackId) : undefined;
                     return (
                     <>
                       {failed ? <AlertTriangle size={16} /> : <Loader2 size={16} className="spin" />}
@@ -537,7 +646,9 @@ export function TermArea(p: TermAreaProps): ReactNode {
                             // starting, or the host is holding the create until
                             // the files it names have landed (`launch.opened`).
                             ? <>the desktop has it — the session opens in a moment…</>
-                            : onWire || status === "open"
+                            : held
+                              ? <>not opened yet — {blockedReasonText(held)}</>
+                              : onWire || status === "open"
                               ? <>warming up the CLI for you…</>
                               : <>offline — the session will be created once you are back online</>}
                       </span>
@@ -593,7 +704,7 @@ export function TermArea(p: TermAreaProps): ReactNode {
             is either drawn or the reader is not up. */}
         {readerShown && corner()}
         {/* The demo's first minute only: one hint under the real reader toggle. */}
-        {!pending && <DemoHookHint sessionId={active.id} readMode={readMode} />}
+        {!pending && <DemoHookHint session={active} readMode={readMode} />}
       </div>
       </div>
 
@@ -675,6 +786,20 @@ export function TermArea(p: TermAreaProps): ReactNode {
         />
       )}
 
+      {/* The CLI's own proposal for the next prompt — Tab at the desk, a tap
+          here. Under a plugin's reply card when there is one: that card is an
+          answer to a question, this is only what to do next. */}
+      {!active.prompt && active.running && !active.turnActive && active.cliSuggestion
+        && active.cliSuggestion !== hiddenSuggestion
+        && !(active.suggestion?.reply != null && active.suggestion.reply !== dismissedReply) && (
+        <CliSuggestion
+          text={active.cliSuggestion}
+          onSend={(t) => { submitInput(active.id, active.cwd, t, "prompt"); setHiddenSuggestion(t); }}
+          onDismiss={() => setHiddenSuggestion(active.cliSuggestion!)}
+          ev="term"
+        />
+      )}
+
       {/* The raw-key row and CLI mode both write straight into a PTY. A pending
           session has none, so the row is not rendered at all rather than
           offering keys that can only answer with a toast.
@@ -694,7 +819,7 @@ export function TermArea(p: TermAreaProps): ReactNode {
             box IS the keyboard — dismissing it to press an arrow would mean
             re-opening it for the next letter. */}
         {SPECIAL_KEYS.map((k, i) => (
-          <button key={i} className="key" onPointerDown={k.nav && !cliMode ? blurCompose : keepFocus} onClick={() => sendInput(k.data)}>{k.label}</button>
+          <button key={i} className="key" title={k.title} aria-label={k.title} onPointerDown={k.nav && !cliMode ? blurCompose : keepFocus} onClick={() => sendInput(k.data)}>{k.label}</button>
         ))}
         {/* Lives at the END of this row on purpose: the row IS raw input, and
             CLI mode is the same thing with the alphabet added. */}

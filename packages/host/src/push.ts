@@ -31,6 +31,8 @@ export interface PushPayload {
    * normally closed when the artifact lands. The notification still shows.
    */
   pull?: string;
+  /** Id of the plugin that posted this; a tap opens that plugin's screen. */
+  plugin?: string;
 }
 
 export class PushManager {

@@ -32,7 +32,7 @@ const SRC = join(ROOT, "packages", "shared", "src");
 
 /** Lower it when code moves out, in the same commit. The end state is a
  *  barrel: the module's header and its re-exports, nothing defined. */
-const MAX_BARREL_LINES = 89;
+const MAX_BARREL_LINES = 90; // 89 → 90 (2026-10-16): the slot check's one export line (`intent/slot.ts`)
 
 /** Every `src/intent/*.ts`. The ESLint `max-lines` warning is 900; a slice
  *  here is held to 600 because the largest region of the old file (the

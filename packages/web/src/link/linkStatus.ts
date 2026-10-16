@@ -1,7 +1,7 @@
 import { setSyncOnline } from "../syncState";
 import type { LinkStatus } from "./linkTypes";
 import { doc, persist, persistNow } from "./linkDoc";
-import { emit, invalidate } from "./linkStore";
+import { emit, invalidate } from "./linkBus";
 
 export let connectedSince: number | null = null;
 

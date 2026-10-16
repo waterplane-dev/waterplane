@@ -2,7 +2,7 @@
 import { useMemo, useRef, useState } from "react";
 import { type UsageHistoryDoc } from "@waterplane/shared";
 import {
-  burnRate, nearestUsage, SERIES, timeTicks, until, usageMarksText, usageOutlook, usageSegments,
+  burnRate, Explain, nearestUsage, ScrubHint, SERIES, timeTicks, until, usageMarksText, usageOutlook, usageSegments,
   usageSpan, useBoxWidth,
 } from "@waterplane/kit";
 import { HISTORY_HOURS } from "./constants.ts";
@@ -64,9 +64,14 @@ const SPARK_TICK_PX = 78;
  * written by `resetWhen` — never as a bare wall-clock time, because the weekly
  * window's projection lands days out.
  */
-export function UsageSpark({ samples, which, reset, pct, everyMs, width }: {
+export function UsageSpark({ samples, which, reset, pct, everyMs, width, hours = HISTORY_HOURS, name }: {
   samples: UsageHistoryDoc["samples"];
   which: "session" | "week";
+  /** How far back the `session` lane looks. Another source's quota (a month, say) reads its
+   *  readings on that lane over a longer stretch (`SourceWindows`). */
+  hours?: number;
+  /** The window's name for a screen reader, where it is not claude's five-hour or weekly one. */
+  name?: string;
   reset: number | null;
   pct: number | null;
   everyMs: number;
@@ -100,7 +105,7 @@ export function UsageSpark({ samples, which, reset, pct, everyMs, width }: {
   // is drawn from outside the plot. Minute-rounded so the memo does not re-cut
   // on every render.
   const nowMin = Math.floor(Date.now() / 60_000) * 60_000;
-  const span = usageSpan(which, reset, nowMin, HISTORY_HOURS);
+  const span = usageSpan(which, reset, nowMin, hours);
   const inSpan = useMemo(
     () => samples.filter((r) => r.t >= span.t0 && r.t <= Math.max(span.t1, nowMin + 60_000)),
     [samples, span.t0, span.t1, nowMin],
@@ -129,7 +134,7 @@ export function UsageSpark({ samples, which, reset, pct, everyMs, width }: {
   const nowX = t1 - now > 60_000 ? now : null;
   const spanWords = span.isWindow
     ? `This week’s window, since ${resetWhen(t0)}`
-    : which === "week" ? "Last 7 days" : `Last ${HISTORY_HOURS}h`;
+    : which === "week" ? "Last 7 days" : hours > 24 && hours % 24 === 0 ? `Last ${hours / 24} days` : `Last ${hours}h`;
   /** The plot proper, to the right of the y labels. ONE width, computed once:
    *  two copies of this subtraction is a clamp in one place and a negative
    *  number in the other, exactly where the box is narrower than its gutter. */
@@ -180,7 +185,7 @@ export function UsageSpark({ samples, which, reset, pct, everyMs, width }: {
       {w > 0 && (
         <svg ref={svgRef} className="ts-spark-svg" width={w} height={SPARK_H + SPARK_TICK_H}
           viewBox={`0 0 ${w} ${SPARK_H + SPARK_TICK_H}`} role="img"
-          aria-label={`${which === "session" ? "five-hour" : "weekly"} window, ${spanWords}, ${pts.length} readings`}
+          aria-label={`${name ?? (which === "session" ? "five-hour" : "weekly")} window, ${spanWords}, ${pts.length} readings`}
           onPointerDown={(e) => { before.current = pickedT; pick(e, true); }}
           onPointerMove={(e) => { if (e.buttons || e.pointerType !== "mouse") pick(e); }}
           // Lifting clears for a MOUSE and must not for a finger: `pointerleave`
@@ -258,11 +263,11 @@ export function UsageSpark({ samples, which, reset, pct, everyMs, width }: {
       {/* The crosshair's answer, in a line that is ALWAYS there: a phone has no
           hover, so a floating box would sit under the finger that summoned it,
           and a reading reachable only by a gesture has to announce the
-          gesture. */}
+          gesture — in the kit's one wording, the same under every chart. */}
       <div className="ts-spark-scrub">
         {at
           ? <><b>{resetWhen(at.t)}</b> · <b>{at.v}% used</b>{at.r ? <> · in the window that reset {resetWhen(at.r)}</> : null}</>
-          : <>Touch the chart for the reading under your finger.</>}
+          : <ScrubHint />}
       </div>
       <div className="ts-spark-sub">
         {spanWords}, {pts.length} readings
@@ -279,8 +284,11 @@ export function UsageSpark({ samples, which, reset, pct, everyMs, width }: {
         {/* What the marks MEAN, named only where they are drawn. The line is
             cut in two different circumstances that look nothing alike once you
             know them and identical until you do, and the screen never said
-            which was which. */}
-        {marks && <><br />{marks}</>}
+            which was which. A break is an absence and stays in the open; the
+            dashed rule is how a rollover is DRAWN, so it folds behind a `?`
+            worded with the mark's name — it stood under the chart on every visit. */}
+        {marks?.lead && <><br />{marks.lead}</>}
+        {marks?.more && <> <Explain of="the dashed rule" label="dashed rule">{marks.more}</Explain></>}
       </div>
     </div>
   );

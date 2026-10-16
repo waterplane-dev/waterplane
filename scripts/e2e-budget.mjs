@@ -38,6 +38,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
 import { E, SLUG, STATE, rootEnv } from "./lib-brand.mjs";
+import { waitForHost } from "./lib-e2e.mjs";
 
 const PORT = 8879;
 const ROOT = mkdtempSync(join(tmpdir(), `${SLUG}-budget-`));
@@ -123,7 +124,7 @@ async function connect() {
 
 // ── 1/2 — no readable usage: told about the budget, and it holds nothing ──
 bootWith(null);
-await sleep(1200);
+await waitForHost(PORT);
 let a = await connect();
 check(a.budget !== null, "hello carries the usage budget unprompted");
 check(a.budget?.budget.sessionMax === 90, `the default ceiling is 90% (got ${a.budget?.budget.sessionMax})`);
@@ -139,7 +140,7 @@ await stop();
 
 // ── 3 — over the ceiling: the verdict flips, and every socket hears it ──
 bootWith(96);
-await sleep(1200);
+await waitForHost(PORT);
 a = await connect();
 const b = await connect();
 const blocked = await waitFor(() => a.budget?.verdict.blocked === true, 30000);
@@ -179,7 +180,7 @@ await stop();
 // weekly one (the stub's session reset is hours out, the weekly one days), and
 // the rows go through `schedule.save`, the op the Send sheet uses for a clock.
 bootWith(96);
-await sleep(1200);
+await waitForHost(PORT);
 a = await connect();
 check(await waitFor(() => a.budget?.verdict.blocked === true && a.budget?.verdict.resumeAt != null, 30000),
   `5b: the session ceiling is over and the host knows when it resets (state ${a.budget?.verdict.state})`);
@@ -210,7 +211,7 @@ await stop();
 
 // ── 6 — the control: under the ceiling, the same item fires by itself ──
 bootWith(20);
-await sleep(1200);
+await waitForHost(PORT);
 a = await connect();
 check(await waitFor(() => a.budget?.verdict.blocked === false && a.budget?.verdict.state === "ok", 30000),
   `20% is under the 90% ceiling (state ${a.budget?.verdict.state})`);
@@ -232,7 +233,7 @@ check(onDisk.sessionMax === 60, "the ceiling is on disk, not just in memory");
 a.close();
 await stop();
 bootWith(20);
-await sleep(1200);
+await waitForHost(PORT);
 a = await connect();
 check(a.budget?.budget.sessionMax === 60, "the ceiling survives a host restart");
 // …and now 20% is over the 60%? No — but the WEEKLY 10% is under 75 too, so the
@@ -245,7 +246,7 @@ await stop();
 // through a UI whose slider starts at 50.
 writeFileSync(join(ROOT, STATE, "budget.json"), JSON.stringify({ enabled: true, sessionMax: 0, weeklyMax: 900 }));
 bootWith(20);
-await sleep(1200);
+await waitForHost(PORT);
 a = await connect();
 check(a.budget?.budget.sessionMax === 1, `a 0% ceiling is clamped to 1, never believed (got ${a.budget?.budget.sessionMax})`);
 check(a.budget?.budget.weeklyMax === 100, `a 900% ceiling is clamped to 100 (got ${a.budget?.budget.weeklyMax})`);

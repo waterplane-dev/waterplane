@@ -23,13 +23,15 @@
 import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { ContextLimitsStore, setContextLimitsStore } from "./contextlimits.js";
-import { ADVISORY_CHECKS, AUTO_COMPACT_SUGGESTED, cleanAutoCompactDefault } from "@waterplane/shared";
+import { ADVISORY_CHECKS, AUTO_COMPACT_SUGGESTED, OPT_INS, cleanAutoCompactDefault, type OptInChoice } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
 import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
 
 interface Doc {
   autoCompactDefault?: string;
   ignored: Record<string, string[]>;
+  /** What the person said about each opt-in offer, per repo (`optins.ts`). Not a check: nothing here is counted. */
+  optIns: Record<string, Record<string, OptInChoice>>;
 }
 
 function key(worktree: string): string {
@@ -38,13 +40,13 @@ function key(worktree: string): string {
 
 export class SetupPrefsStore {
   private path: string;
-  private doc: Doc = { ignored: {} };
+  private doc: Doc = { ignored: {}, optIns: {} };
 
   constructor(root: string) {
     this.path = join(hostStateDir(root), "setupprefs.json");
     try {
       if (existsSync(this.path)) {
-        const raw = readJsonGuarded<any>(this.path, null) as { autoCompactDefault?: unknown; ignored?: unknown };
+        const raw = readJsonGuarded<any>(this.path, null) as { autoCompactDefault?: unknown; ignored?: unknown; optIns?: unknown };
         // Cleaned on the way IN too: a hand-edit must not put an unreadable
         // window or a non-advisory id where the checklist reads it.
         if (raw?.autoCompactDefault != null) {
@@ -55,6 +57,16 @@ export class SetupPrefsStore {
           for (const [k, v] of Object.entries(raw.ignored as Record<string, unknown>)) {
             const ids = Array.isArray(v) ? v.map(String).filter((id) => ADVISORY_CHECKS.includes(id)) : [];
             if (ids.length) this.doc.ignored[k] = [...new Set(ids)];
+          }
+        }
+        if (raw?.optIns && typeof raw.optIns === "object" && !Array.isArray(raw.optIns)) {
+          for (const [k, v] of Object.entries(raw.optIns as Record<string, unknown>)) {
+            if (!v || typeof v !== "object" || Array.isArray(v)) continue;
+            const m: Record<string, OptInChoice> = {};
+            for (const [id, c] of Object.entries(v as Record<string, unknown>)) {
+              if (OPT_INS.some((d) => d.id === id) && (c === "declined" || c === "done")) m[id] = c;
+            }
+            if (Object.keys(m).length) this.doc.optIns[k] = m;
           }
         }
       }
@@ -99,6 +111,24 @@ export class SetupPrefsStore {
     return { ok: true };
   }
 
+  optInChoices(worktree: string): Record<string, OptInChoice> {
+    return { ...(this.doc.optIns[key(worktree)] ?? {}) };
+  }
+
+  /** Store the person's word on one offer, or `null` to take it back. */
+  setOptInChoice(worktree: string, id: string, choice: OptInChoice | null): { ok: true } | { ok: false; error: string } {
+    if (!OPT_INS.some((d) => d.id === id)) return { ok: false, error: `"${id}" is not an opt-in this desktop knows` };
+    if (choice !== null && choice !== "declined" && choice !== "done") {
+      return { ok: false, error: `"${String(choice)}" is not a choice — only "declined", "done", or null to clear` };
+    }
+    const k = key(worktree);
+    const cur = { ...(this.doc.optIns[k] ?? {}) };
+    if (choice) cur[id] = choice; else delete cur[id];
+    if (Object.keys(cur).length) this.doc.optIns[k] = cur; else delete this.doc.optIns[k];
+    this.save();
+    return { ok: true };
+  }
+
   private save(): void {
     try {
       mkdirSync(join(this.path, ".."), { recursive: true });
@@ -132,4 +162,14 @@ export function autoCompactDefault(): string {
 
 export function ignoredChecks(worktree: string): string[] {
   return current?.ignored(worktree) ?? [];
+}
+
+/** What the person said about each opt-in offer in this repo — empty without a store. */
+export function optInChoices(worktree: string): Record<string, OptInChoice> {
+  return current?.optInChoices(worktree) ?? {};
+}
+
+export function setOptInChoice(worktree: string, id: string, choice: OptInChoice | null): { ok: true } | { ok: false; error: string } {
+  if (!current) return { ok: false, error: "no preference store is installed on this host" };
+  return current.setOptInChoice(worktree, id, choice);
 }

@@ -10,7 +10,7 @@ import { spawnSync, execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { E, SLUG, STATE } from "./lib-brand.mjs";
+import { E, SHARED, SLUG } from "./lib-brand.mjs";
 
 const skip = (why) => { console.log(`SKIP: e2e-templates did not build android-hello — ${why}`); process.exit(0); };
 let failed = false;
@@ -37,7 +37,7 @@ const ROOT = mkdtempSync(join(tmpdir(), `${SLUG}-templates-`));
 const res = await newRepo(ROOT, ROOT, "hello-e2e", { template: "android-hello" });
 if ("error" in res) { console.error("FAIL: scaffold:", res.error); process.exit(1); }
 const dir = res.path;
-const builds = JSON.parse(readFileSync(join(dir, STATE, "builds.json"), "utf8"));
+const builds = JSON.parse(readFileSync(join(dir, SHARED, "builds.json"), "utf8"));
 const release = builds.find((b) => b.id === "release");
 check(!!release, "builds.json offers a release build");
 

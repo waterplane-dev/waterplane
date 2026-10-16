@@ -47,7 +47,6 @@ function makeStore() {
     // being fired by the tick `update()` kicks.
     autoSlotsFree: () => 0,
     autoSlotsDetail: () => "waiting for a free slot",
-    reapAutoSession: () => null,
     revivedSessionFor: () => null,
     diedAtLimit: () => false,
     stopCount: () => 0,
@@ -141,4 +140,46 @@ test("a refused edit comes back as words instead of being dropped", () => {
   const res = backlog.update("e1", { text: "too late" });
   assert.match(res.refused ?? "", /already done/, "the editor must not close over words that never landed");
   rmSync(root, { recursive: true, force: true });
+});
+
+// ── R-automation-044: the session budget of a row that is still waiting ────────
+
+test("a queued row's budget can be set, changed and cleared — and nothing else moves", () => {
+  const { store, backlog, root } = makeStore();
+  post(store);
+  assert.deepEqual(backlog.update("e1", { budget: { unit: "usd", max: 5, interrupt: true } }), {});
+  assert.deepEqual(store.get("e1").budget, { unit: "usd", max: 5, interrupt: true });
+  assert.equal(store.get("e1").state, "queued", "a budget is not an edit to the work: it never moves the row");
+  assert.equal(store.get("e1").payload.steps[0], "the words that were there");
+  assert.deepEqual(backlog.update("e1", { budget: { unit: "weeklyPct", max: 10, interrupt: false } }), {});
+  assert.deepEqual(store.get("e1").budget, { unit: "weeklyPct", max: 10, interrupt: false });
+  assert.deepEqual(backlog.update("e1", { budget: null }), {});
+  assert.equal(store.get("e1").budget, undefined, "null clears it");
+  rmSync(root, { recursive: true, force: true });
+});
+
+test("a patch that says nothing about the budget leaves it alone", () => {
+  const { store, backlog, root } = makeStore();
+  post(store, { budget: { unit: "usd", max: 2, interrupt: true } });
+  backlog.update("e1", { text: "new words" });
+  assert.deepEqual(store.get("e1").budget, { unit: "usd", max: 2, interrupt: true });
+  rmSync(root, { recursive: true, force: true });
+});
+
+test("a row that has started is refused in words and keeps what it had", () => {
+  const { store, backlog, root } = makeStore();
+  post(store, { budget: { unit: "usd", max: 2, interrupt: true } });
+  store.settle(store.get("e1"), "done", { at: Date.now(), ok: true, detail: "ran" });
+  const res = backlog.update("e1", { budget: null });
+  assert.match(res.refused ?? "", /already open/);
+  assert.deepEqual(store.get("e1").budget, { unit: "usd", max: 2, interrupt: true });
+  rmSync(root, { recursive: true, force: true });
+});
+
+test("the route's validator refuses garbage before the store sees it", async () => {
+  const { cleanSessionBudget } = await import("@waterplane/shared");
+  assert.equal(cleanSessionBudget({ unit: "usd", max: -1 }), null);
+  assert.equal(cleanSessionBudget({ unit: "bogus", max: 3 }), null);
+  assert.equal(cleanSessionBudget({ unit: "sessionPct", max: 400 }), null);
+  assert.deepEqual(cleanSessionBudget({ unit: "usd", max: 3 }), { unit: "usd", max: 3, interrupt: true });
 });

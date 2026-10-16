@@ -10,7 +10,7 @@ import {
   sampleTotals,
   type ContextSample,
 } from "@waterplane/shared";
-import { familySlots, REST_SLOT } from "../modelHue.ts";
+import { byPrice, familySlots, REST_SLOT } from "../modelHue.ts";
 import { type StackSeries } from "./cplotPaths.ts";
 
 /**
@@ -50,7 +50,7 @@ export function modelSlots(models: string[] | undefined, unattributed: boolean):
   const named = models
     .map((id, idx) => ({ id, idx, slot: of.get(id) }))
     .filter((m): m is { id: string; idx: number; slot: number } => m.slot != null && models.indexOf(m.id) === m.idx)
-    .sort((x, y) => x.slot - y.slot);
+    .sort((x, y) => byPrice(x.slot, y.slot));
   const byIdx = new Map(named.map((m) => [m.idx, m.slot]));
   const more = models.length - named.length;
   const rest = more > 0 || unattributed

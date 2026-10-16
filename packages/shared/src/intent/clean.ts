@@ -11,7 +11,7 @@ import { cleanParamValue } from "../buildparams.js";
 import type { CaptureBackendId } from "../wire/capture.js";
 import { CAPTURE_BACKEND_IDS } from "../wire/capture.js";
 import { DEFAULT_GRACE_MIN, INTENT_MAX_STEPS, cleanRule } from "../schedule.js";
-import { LAUNCH_WAIT_MS, safeRel } from "../launch.js";
+import { LAUNCH_WAIT_MS, cleanLaunchOpts, safeRel } from "../launch.js";
 import { cleanAuthor, cleanCategory, cleanHeadline } from "../naming.js";
 import { cleanSessionBudget } from "../sessionbudget.js";
 import type { AssessPayload, BlockReason, BudgetPass, BuildPayload, CapturePayload, IntentPayload, IntentRequeue, IntentResult, IntentTarget, IntentTrigger, Lifecycle } from "./types.js";
@@ -20,6 +20,7 @@ import type { Intent } from "./row.js";
 import { INTENT_MAX_DIRS, INTENT_MAX_NEEDS } from "./row.js";
 import { INTENT_BLOCK_ORDER, intentReasonText } from "./words.js";
 import { cleanBudgetWaiver } from "./budgetpass.js";
+import { cleanAssessScope } from "../assess.js";
 
 // ── Normalising one row ──────────────────────────────────────────────────────
 
@@ -35,12 +36,12 @@ const num0 = (v: unknown): number | undefined => {
   return v != null && v !== "" && Number.isFinite(n) ? n : undefined;
 };
 
-/** `Intent.budgetPass`, read strictly: one of the two windows, two finite
+/** `Intent.budgetPass`, read strictly: a period id, two finite
  *  instants in order — anything else is no pass, never a repaired one. */
 function cleanBudgetPass(v: unknown): BudgetPass | undefined {
   if (!v || typeof v !== "object") return undefined;
   const p = v as Record<string, unknown>;
-  if (p.window !== "session" && p.window !== "weekly") return undefined;
+  if (typeof p.window !== "string" || !p.window.trim()) return undefined; // any period id (`budgetpass.ts` stamps them)
   const from = Number(p.from);
   const until = Number(p.until);
   if (typeof p.from !== "number" || typeof p.until !== "number" || !Number.isFinite(from) || !Number.isFinite(until) || !(from < until)) return undefined;
@@ -132,6 +133,7 @@ export function cleanIntentRow(raw: unknown, now: number): Intent | null {
     holdForHost: r.holdForHost === true ? true : undefined,
     pastBudget: cleanBudgetWaiver(r.pastBudget),
     budgetPass: cleanBudgetPass(r.budgetPass),
+    leftoverOf: typeof r.leftoverOf === "number" && Number.isFinite(r.leftoverOf) ? r.leftoverOf : undefined,
     auto: r.auto === true ? true : undefined,
     pinned: r.pinned === true ? true : undefined,
     interject: r.interject === true ? true : undefined,
@@ -139,6 +141,8 @@ export function cleanIntentRow(raw: unknown, now: number): Intent | null {
     // A real three-way: `false` is "keep this one open" and must not read as
     // "nobody said" — so a boolean is kept as it is and nothing else is.
     closeWhenDone: typeof r.closeWhenDone === "boolean" ? r.closeWhenDone : undefined,
+    // Two-way: on, or nobody asked. `false` is the same fact as absent.
+    flagWhenDone: r.flagWhenDone === true ? true : undefined,
     budget: cleanSessionBudget(r.budget) ?? undefined,
     archived: r.archived === true ? true : undefined,
     manual: r.manual === true ? true : undefined,
@@ -146,7 +150,7 @@ export function cleanIntentRow(raw: unknown, now: number): Intent | null {
     // Strictly `=== true`: this is a claim that a PERSON placed the row, and a
     // truthy `"yes"` off the wire or out of a hand-edited file is not one. The
     // wrong direction here is cheap to describe and expensive to have — a row
-    // wrongly marked hand-placed is a row the smart pick will never move again.
+    // wrongly marked hand-placed tells its reader a person put it there.
     handOrdered: r.handOrdered === true ? true : undefined,
     attempts: num(r.attempts),
     label: str(r.label).slice(0, 80) || undefined,
@@ -157,7 +161,9 @@ export function cleanIntentRow(raw: unknown, now: number): Intent | null {
     categoryBy: category ? categoryBy : undefined,
     cols: num(r.cols),
     rows: num(r.rows),
-    launch: r.launch ?? undefined,
+    // Rebuilt from its five fields (`cleanLaunchOpts`): a row keeps its launch
+    // for days, and what it spawns with is read back off this file every tick.
+    launch: cleanLaunchOpts(r.launch),
     replaceSessionId: str(r.replaceSessionId) || undefined,
     state,
     blockReason,
@@ -315,7 +321,10 @@ function cleanPayload(v: unknown): IntentPayload | BuildPayload | AssessPayload 
     const ids = Array.isArray(raw.ids)
       ? raw.ids.filter((s: unknown): s is string => typeof s === "string" && !!s.trim())
       : [];
-    return ids.length ? { kind: "assess", ids } : { kind: "assess" };
+    if (!ids.length) return { kind: "assess" };
+    // A slot scope names what the ids ARE; without ids it scopes nothing.
+    const scope = cleanAssessScope(raw.scope);
+    return scope ? { kind: "assess", ids, scope } : { kind: "assess", ids };
   }
   if (raw.kind !== "prompt") return null;
   // Note the absence of any `.slice()` on the text itself. A step is trimmed of

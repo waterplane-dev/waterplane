@@ -17,6 +17,7 @@ import type {
   RecentSession, SessionAsk, SessionBudget, SessionInfo, SessionLimit, SessionOrigin, SourceDialog, SourceHandle, TurnFacts,
 } from "@waterplane/shared";
 import type { AskQuestion } from "../askbox.js";
+import type { PendingPlan } from "../planbox.js";
 import type { BackendDescriptor } from "../backends/index.js";
 import type { PluginStoreReader } from "@waterplane/shared";
 import type { AgentUsage, SeriesCursor } from "../ctxlog.js";
@@ -69,6 +70,13 @@ export interface LiveMeta {
   /** The interrupt-once latch beside it: a restart must not re-notify, or
    *  re-interrupt, a session already told it is over. */
   budgetTripped?: boolean;
+  /** The crossing's one Esc, not yet sent (`Session.budgetEscOwed`). */
+  budgetEscOwed?: boolean;
+  /** The tmux server the pane lives on (`knobs.ts`'s `TMUX_SOCKET_ID`), stamped
+   *  by `persistLive` on every write. The boot reclaim (`staleLiveIds`) judges a
+   *  record only against a listing of THIS server; absent on records written
+   *  before the stamp existed. */
+  tmuxSocket?: string;
 }
 
 /**
@@ -161,6 +169,10 @@ export interface Session {
    *  the strict prompt pass runs about twice a second while a box is up and the
    *  log does not move in that window. See `enrichPrompt`. */
   askCache?: { mtime: number; asks: AskQuestion[] };
+  /** Last plan-file read for a plan-approval box (`planbox.ts`), keyed on the
+   *  log's mtime AND the plan file's — the plan can be edited while its box is
+   *  up (ctrl+g), and the log does not move when it is. */
+  planCache?: { logMtime: number; path: string | null; fileMtime: number; plan: PendingPlan | null };
   /** Bumped whenever the cheap stage sees NO candidate. An in-flight render that
    *  started before that carries a screen we already know is gone, so its result
    *  is dropped instead of flashing a prompt back on after it disappeared. */
@@ -212,6 +224,12 @@ export interface Session {
   naming: boolean;
   /** The automatic naming pass has already been bought for this session (this process). */
   nameAsked?: boolean;
+  /** The tail of this session's `session.mode` presses (`livemode.ts`): a second
+   *  tap waits for the first, so two walks never interleave their shift+tabs. */
+  modeChain?: Promise<unknown>;
+  /** This session's composer has worn the `ultracode` label at least once, so
+   *  a bare rule is the CLI saying "off" (`permmode.ts`'s `ultracodeVerdict`). */
+  ultracodeLabelSeen?: boolean;
   /**
    * DECSET private modes currently active (alt-screen, mouse tracking, bracketed
    * paste, …). Tracked because the enabling sequences are emitted once at claude
@@ -355,6 +373,11 @@ export interface Session {
    */
   askDismissed: { text: string; stop: number } | null;
   /**
+   * The plain composer text the last `checkCliSuggestion` paid a render for,
+   * so a repaint of the same screen costs one string compare, not a replay.
+   */
+  hintRead?: string | null;
+  /**
    * The prompts this session's CLI said it SUBMITTED, newest last, bounded.
    *
    * `UserPromptSubmit` carries the submitted text and the host threw it away,
@@ -418,11 +441,22 @@ export interface Session {
    *  has been read (`ctxlog.ts`'s `agentUsage`). Same trade as `ctxCursor`: a
    *  running agent's log grows, and this is asked once a minute. */
   agentUse?: AgentUsage | null;
+  /** What `info.contextSpark` was last BUILT from — the log's path and mtime
+   *  and the agents' token total. `ctxCursor` and `agentUse` are shared with
+   *  the graph's read (`getContextSeries`), which advances both without
+   *  rebuilding the spark, so they cannot say whether the spark is current. */
+  sparkFrom?: { path: string; mtime: number; agentTok: number | null } | null;
   /** The budget's interrupt-once latch (`sessions/budgetwatch.ts`): set on the
    *  crossing into `over`, cleared only by a verdict of `ok` or a new cap — an
    *  `unknown` in between (a reading gone stale) is not a second crossing. The
    *  cap itself lives on `info.budget.cfg`, the one copy. */
   budgetTripped?: boolean;
+  /** The crossing's one Esc, OWED: set on the crossing when the budget
+   *  interrupts, retried on every judge while still over (`budgetEscDue`), and
+   *  cleared by the Esc going out, a person's own send, a new cap, `interrupt`
+   *  switched off, or a verdict of `ok`. A turn that could not be interrupted at
+   *  the crossing instant used to be left spending for good. */
+  budgetEscOwed?: boolean;
   /** The backend's side channel for this session (`sessions/sidechannel.ts`),
    *  present only when the descriptor has `sources`. Absent = today's session. */
   channel?: SessionChannel;
@@ -603,6 +637,7 @@ export interface SessionCore {
   checkIdle(s: Session): void;
   armTurnWatch(s: Session, seqAt?: number): void;
   setAsking(s: Session, ask: SessionAsk | null): void;
+  setCliSuggestion(s: Session, text: string | null): void;
   checkAgents(s: Session): void;
   clearStopVerify(s: Session): void;
   /** A turn edge a backend's `sources.turns` reported (`sidechannel.ts`). */
@@ -614,7 +649,13 @@ export interface SessionCore {
   scheduleChecks(s: Session): void;
   armPromptCheck(s: Session, delayMs: number): void;
   applyPrompt(s: Session, prompt: DetectedPrompt | null): void;
+  /** Raise or lower `awaitingInput` (the "blocked on you, no box to tap" flag). */
+  setAwaiting(s: Session, on: boolean): void;
 
+  // ── livemode.ts ──
+  /** Re-read the footer's permission mode and ultracode off the live grid
+   *  (`permmode.ts`); emits `updated` on a change. Claude's TUI only. */
+  checkMode(s: Session): void;
   // ── links.ts ──
   /** Arm the shell-links read (`shelllinks.ts`) on the quiet tick — a no-op unless `caps.turns === false`. */
   armLinksCheck(s: Session): void;

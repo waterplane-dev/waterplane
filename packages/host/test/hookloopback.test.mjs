@@ -3,12 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-const { handleApi, isLoopbackAddr } = await import("../dist/api.js");
-
-test("isLoopbackAddr: only the machine itself", () => {
-  for (const a of ["127.0.0.1", "::1", "::ffff:127.0.0.1", "127.0.0.2"]) assert.equal(isLoopbackAddr(a), true, a);
-  for (const a of ["100.64.0.1", "192.168.1.5", "::ffff:100.64.0.1", "", undefined]) assert.equal(isLoopbackAddr(a), false, String(a));
-});
+const { handleApi } = await import("../dist/api.js");
 
 async function post(path, fakeRemote, extra = {}) {
   let hooked = 0;

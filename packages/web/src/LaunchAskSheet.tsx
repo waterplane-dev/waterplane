@@ -39,13 +39,11 @@ import { useState } from "react";
 import { Play, RefreshCw, Wallet } from "lucide-react";
 import type { Effort, LaunchOpts, SessionBudget } from "@waterplane/shared";
 import { SheetHead } from "./Sheet";
-import { ModelField } from "./ModelField";
+import { LaunchPicker, launchOf, pickHasWheel } from "./LaunchPicker";
 import { BudgetField } from "./BudgetField";
 import { budgetChipWords } from "./budgetInput";
 import { CantInline } from "./Unavailable";
-import { CLAUDE, agentBackends, backendIdOf, backendOptionLabel, backendUnavailable, effortChoices, launchAskStart, modelChoices, showBackendPicker, windowNote, type BackendList } from "./backendCaps";
-import { wheelSpokes } from "./modelWheel";
-import { WheelPicker } from "./WheelChart";
+import { backendUnavailable, launchAskStart, showBackendPicker, type BackendList } from "./backendCaps";
 import { LS, lsJson, lsSetJson } from "./storage";
 
 interface Props {
@@ -85,35 +83,19 @@ export function LaunchAskSheet({ title, backends, defaults, budget: startBudget,
   const [backend, setBackend] = useState<string | undefined>(start.backend);
   const [model, setModel] = useState<string | undefined>(start.model);
   const [effort, setEffort] = useState<Effort | undefined>(start.effort);
-  // The wheel is claude's: a short alias list that fits on spokes. A backend
-  // with a long or place-grouped catalogue keeps `ModelField`, whose groups and
-  // hosted disclaimer a wheel cannot carry.
-  const wheel = backendIdOf({ backend }) === CLAUDE;
-  const [versionOpen, setVersionOpen] = useState(false);
+  const wheel = pickHasWheel(backend);
   const [budget, setBudget] = useState<SessionBudget | null>(startBudget ?? null);
   // Collapsed behind its chip, like the Send sheet's: most launches want none,
   // and a field this size is a screen of furniture between the model and Start.
   const [budgetOpen, setBudgetOpen] = useState(!!startBudget);
   const pickBackends = showBackendPicker(backends);
-  /**
-   * Switching backend clears the model with it, for `App.pickBackend`'s reason:
-   * a model id belongs to the catalogue it came from — `opus` means nothing to a
-   * local runner and `ollama/qwen3-coder:30b` means nothing to claude — and
-   * carrying one across is how a launch fails with a message from a binary about
-   * a name it was handed by this app.
-   */
-  const pickBackend = (id: string | undefined) => { setBackend(id); setModel(undefined); setEffort(id === defaults.backend ? defaults.effort : undefined); };
-  const efforts = effortChoices(backends, backend);
-  const cat = modelChoices(backends, backend);
-  const spokes = wheel ? wheelSpokes(cat, model) : [];
-  const atDefaults = model === defaults.model && effort === defaults.effort;
-  const win = windowNote(backends, backend);
   // The host says this backend cannot start now (e.g. its runner is not
   // reachable): it stays listed, and the sentence REPLACES the Start button —
   // a launch that would fail is not offered, and the reason is on screen.
   const blocked = backendUnavailable(backends, backend);
   return (
-    <div className="sheet">
+    // One question, one verb: Ctrl/Cmd+Return presses Start (`primaryKey.ts`).
+    <div className="sheet" data-primary-key="">
       <SheetHead title="Start with…" onClose={onClose} />
       {/* Its own scroller: `#root` is fixed and clips, so on a phone shorter
           than the wheel + chips (an iPhone 17 is) Start was below the edge
@@ -125,51 +107,9 @@ export function LaunchAskSheet({ title, backends, defaults, budget: startBudget,
         launch ({wheel ? "permission mode" : "effort, permission mode"}) still comes from them.
       </div>
       <div className="form">
-        {/* `.set-row` and not a bare `<label>`: the labelled-control styling in
-            this app lives on that class (the settings screen's own rows), and a
-            `<label><select>` outside it is an unstyled browser widget flush
-            against the screen edge — which is exactly what this sheet shipped
-            as. One class, so the ask and the settings screen cannot drift into
-            two looks for the same two controls. */}
-        <div className="set-row">
-          {pickBackends && (
-            <label>backend
-              <select value={backend ?? CLAUDE}
-                onChange={(e) => pickBackend(e.target.value === CLAUDE ? undefined : e.target.value)}>
-                {agentBackends(backends)!.map((b) => <option key={b.id} value={b.id}>{backendOptionLabel(b)}</option>)}
-              </select>
-            </label>
-          )}
-          {!wheel && (
-            <label>model
-              <ModelField backends={backends} backend={backend} value={model} onChange={setModel} />
-            </label>
-          )}
-          {/* Said only when it IS known — never a 0k, and never claude's window
-              borrowed for a local model (`windowNote`). */}
-          {win && <span className="set-note">{win}.</span>}
-        </div>
-        {wheel && spokes.length > 0 && <>
-          {/* The same picker the live session's popover draws (`WheelPicker`):
-              one look in both places. */}
-          <WheelPicker cat={cat} efforts={efforts} value={model ? { model, effort: effort ?? null } : null}
-            onPick={(p) => { setModel(p.model); if (p.effort) setEffort(p.effort); }}
-            now={<>Starts on {model || "the default model"}{efforts.length > 0 ? ` · ${effort || "default effort"}` : ""}</>}
-            says={`Tap or drag to a point${efforts.length > 0 ? " — centre is low effort, the rim is max" : ""}.`} />
-          <div className="sched-days">
-            {/* The versioned ids (`claude-opus-5-5`, …) do not fit on spokes;
-                one picked here becomes a spoke of its own. */}
-            <button className={`row-chip${versionOpen ? " on" : ""}`} aria-pressed={versionOpen} onClick={() => setVersionOpen(!versionOpen)}>
-              a specific version…
-            </button>
-            {!atDefaults && (
-              <button className="row-chip" onClick={() => { setModel(defaults.model); setEffort(defaults.effort); }}>
-                back to my defaults
-              </button>
-            )}
-          </div>
-          {versionOpen && <div className="set-row"><ModelField backends={backends} backend={backend} value={model} onChange={setModel} /></div>}
-        </>}
+        <LaunchPicker backends={backends} defaults={defaults} nowLead="Starts on"
+          value={{ backend, model, effort }}
+          onChange={(p) => { setBackend(p.backend); setModel(p.model); setEffort(p.effort); }} />
         {/* What this session may spend, subagents included — blank is none.
             Just this launch, like the model: nothing here is remembered. A
             percent unit is converted at the window's measured rate once the
@@ -183,31 +123,36 @@ export function LaunchAskSheet({ title, backends, defaults, budget: startBudget,
           <BudgetField initial={budget ?? startBudget ?? null} onChange={setBudget}
             calFor="A percent is converted from dollars at the window's measured rate once this session is running — until there is a fresh usage reading, nothing is held." />
         )}
-        {blocked ? (
-          <>
-            <div className="act-cants"><CantInline>{blocked}</CantInline></div>
-            {onRecheck && (
-              <button className="send" onClick={() => { setAsked(true); onRecheck(); }}>
-                <RefreshCw size={14} /> Check again
-              </button>
-            )}
-            {asked && <div className="form-hint">Asked the desktop to look again — if the sentence above is still here, it is still not reachable. Start appears here by itself once it is.</div>}
-          </>
-        ) : (
-        <button className="send" onClick={() => {
-          // Remembered before the tap is resumed, and as a PAIR — `onStart`
-          // hands control back to the caller that posed the question, which may
-          // unmount this sheet on the same frame.
-          lsSetJson(LS.launchLast, { backend, model, ...(wheel ? { effort } : {}) });
-          onStart({ ...defaults, backend, model, ...(wheel ? { effort } : {}) }, budget);
-        }}>
-          <Play size={14} /> Start {title}
-        </button>
-        )}
         <div className="form-hint">
           Closing this starts nothing — nothing is queued until you press Start.
         </div>
       </div>
+      </div>
+      {/* Outside the scroller: Start is the verb the sheet exists for, and the
+          wheel + chips + version row are taller than a desktop browser's
+          side column too — it must never be below the edge. */}
+      <div className="sheet-actions">
+      {blocked ? (
+        <>
+          <div className="act-cants"><CantInline>{blocked}</CantInline></div>
+          {onRecheck && (
+            <button className="send" onClick={() => { setAsked(true); onRecheck(); }}>
+              <RefreshCw size={14} /> Check again
+            </button>
+          )}
+          {asked && <div className="form-hint">Asked the desktop to look again — if the sentence above is still here, it is still not reachable. Start appears here by itself once it is.</div>}
+        </>
+      ) : (
+      <button className="send" onClick={() => {
+        // Remembered before the tap is resumed, and as a PAIR — `onStart`
+        // hands control back to the caller that posed the question, which may
+        // unmount this sheet on the same frame.
+        lsSetJson(LS.launchLast, { backend, model, ...(wheel ? { effort } : {}) });
+        onStart(launchOf(defaults, { backend, model, effort }), budget);
+      }}>
+        <Play size={14} /> Start {title}
+      </button>
+      )}
       </div>
     </div>
   );

@@ -38,6 +38,7 @@ export function AsxTop({ m }: { m: AssessModel }) {
           with; the words are `assessRows.ts`'s. */}
       {run ? (
         <div className="assess-intro">
+          {m.slotIntro ? <div className="assess-guide-lead">{m.slotIntro}</div> : null}
           <div className="assess-guide-lead">{guide.lead}</div>
           <div className="act-group-head">
             <button className="key" title={guideOpen ? "hide this" : "what accepting and applying on this screen actually do"}

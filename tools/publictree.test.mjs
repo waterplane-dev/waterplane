@@ -115,6 +115,10 @@ const CODE = /\.(?:[cm]?[jt]sx?|mts|css|json|sh|tmpl)$|(?:^|\/)\.env\.example$/;
 test("no public file's code names a private extension", () => {
   const pats = [];
   for (const id of PRIVATE) {
+    // The names live in the private folder, so a public copy (scripts/verify-public-tree.mjs) has
+    // nothing to check against; the bare id is no stand-in, an id like `links` is an English word.
+    // The full tree's run checks the real names.
+    if (!existsSync(join(ROOT, "packages/extensions", id))) continue;
     const f = join(ROOT, "packages/extensions", id, "publictree.json");
     const names = existsSync(f) ? JSON.parse(readFileSync(f, "utf8")).names : [`\\b${id}\\b`];
     for (const n of names) pats.push({ id, re: new RegExp(n, "g") });

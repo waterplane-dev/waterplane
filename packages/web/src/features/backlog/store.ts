@@ -3,7 +3,7 @@
  * assessment) — and their read hooks. One writer: `actions.ts`, called by the
  * handlers in `index.ts`, the sheets and App's `op.ack` (`onAssessAck`).
  */
-import type { AssessRun, AutoSlotFacts, BacklogItem, RepoTarget, SmartPickSummary } from "@waterplane/shared";
+import type { AssessRun, AssessScope, AutoSlotFacts, BacklogItem, RepoTarget } from "@waterplane/shared";
 import { createStore, useStore } from "../../sdk";
 import { LS } from "../../storage";
 import { loadSnap } from "../../localState";
@@ -11,7 +11,7 @@ import { loadSnap } from "../../localState";
 /**
  * The host's `backlog.list`, as ONE value so a frame lands in one emit.
  *
- * `items`, `auto`, `smartPick`, `passes` and `snapAt` are **seeded from the
+ * `items`, `auto` and `snapAt` are **seeded from the
  * last-synced snapshot** (`waterplane.snap.backlog`, written on every live list) so
  * the sheet renders offline instead of empty — mutations are then refused in
  * words until the socket reopens (`Backlog.tsx`'s `online`).
@@ -21,10 +21,9 @@ import { loadSnap } from "../../localState";
  * copy read back offline would state something that ended an hour ago. The
  * sheet reads them only while online.
  *
- * `smartPick` `null` is not `[]`: a host that has never heard of the smart pick
- * sends neither field, and the sheet must then not draw the tick at all — an
- * old daemon would ignore `backlog.setSmartPick` and the switch would flip back.
- * `snapAt` is when that snapshot was written — the strip's age label offline.
+ * `snapAt` is when that snapshot was written — the age label offline. (An older
+ * snapshot may still carry `smartPick`/`passes`, the removed smart pick's
+ * fields; they are not read.)
  */
 export interface BacklogState {
   items: BacklogItem[];
@@ -35,21 +34,17 @@ export interface BacklogState {
    *  *close one to make room* lists. A fact about THIS second, so never
    *  snapshotted (`waiting`'s reason); null from a host that predates it. */
   autoSlots: AutoSlotFacts | null;
-  smartPick: string[] | null;
-  passes: Record<string, SmartPickSummary>;
   snapAt: number | null;
 }
 
 function seed(): BacklogState {
-  const snap = loadSnap<{ items?: BacklogItem[]; auto?: boolean; smartPick?: string[] | null; passes?: Record<string, SmartPickSummary>; at?: number }>(LS.snapBacklog, {});
+  const snap = loadSnap<{ items?: BacklogItem[]; auto?: boolean; at?: number }>(LS.snapBacklog, {});
   return {
     items: snap.items ?? [],
     auto: snap.auto ?? false,
     waiting: {},
     naming: [],
     autoSlots: null,
-    smartPick: snap.smartPick ?? null,
-    passes: snap.passes ?? {},
     snapAt: snap.at ?? null,
   };
 }
@@ -82,6 +77,10 @@ export const assessRepo = createStore<RepoTarget | null>(null);
  *  the whole repo — held because *run again* has to carry it. Cleared with the
  *  sheet: a scope is the tap, not a setting. */
 export const assessScope = createStore<string[] | null>(null);
+/** **What `assessScope`'s ids ARE**, when the sheet was opened by a slot check
+ *  (the backlog's *check these N*, the ask after a timed send) — so *run
+ *  again* is a slot check too. Cleared with the sheet, with `assessScope`. */
+export const assessSlot = createStore<AssessScope | null>(null);
 /**
  * Assess ops sent and not yet acked, and **what this phone still owes the pad
  * if one comes back `ok`** (ackId → pad note ids).

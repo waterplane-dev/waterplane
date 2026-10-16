@@ -29,7 +29,9 @@
  *    the peek resumes whatever was hiding before it.
  *
  * CLI mode is excluded from typing room for the reason `App` states: there the
- * box IS the keyboard and the special-key row is the rest of it.
+ * box IS the keyboard and the special-key row is the rest of it. So with the
+ * caret in the box it hides the chrome as FULL SCREEN instead, which keeps
+ * that row.
  */
 export type ChromeInput = {
   /** A session (or a pending one) is attached and no overlay covers it. */
@@ -55,11 +57,20 @@ export type ChromeMode = {
   chromeHidden: boolean;
 };
 
+/** The caret is in the box on the session screen, with typing room wanted. */
+const caretHeld = (i: ChromeInput): boolean => i.onSessionScreen && i.typingRoom && i.composeFocused;
+
 export function chromeMode(i: ChromeInput): ChromeMode {
-  const typing = i.onSessionScreen && i.typingRoom && i.composeFocused && !i.cliMode;
+  const held = caretHeld(i);
+  const typing = held && !i.cliMode;
   const typingMode = typing && !i.typingPeek;
   const typingPeeking = typing && i.typingPeek;
-  const fullMode = i.fullScreen && i.onSessionScreen && !typingMode && !typingPeeking;
+  // CLI mode with the keyboard up IS full screen: the key row is half the
+  // keyboard and full screen keeps it, while the header, toolbar and status
+  // lines left the shell five rows (reported). The peek suspends it like it
+  // suspends typing room.
+  const cliFull = held && i.cliMode;
+  const fullMode = (i.fullScreen || cliFull) && i.onSessionScreen && !typingMode && !(held && i.typingPeek);
   return { typingMode, typingPeeking, fullMode, chromeHidden: typingMode || fullMode };
 }
 
@@ -80,9 +91,9 @@ export function chromeMode(i: ChromeInput): ChromeMode {
  * peek left set would make the NEXT focus open with the chrome up.
  */
 export function fullScreenTap(i: ChromeInput): { fullScreen: boolean; typingPeek: boolean } {
-  const { typingMode, typingPeeking, chromeHidden } = chromeMode(i);
+  const { chromeHidden } = chromeMode(i);
   const hide = !chromeHidden;
-  const typing = typingMode || typingPeeking;
+  const typing = caretHeld(i);
   return { fullScreen: hide, typingPeek: typing ? !hide : i.typingPeek };
 }
 

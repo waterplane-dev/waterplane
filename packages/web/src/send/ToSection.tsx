@@ -1,13 +1,16 @@
 /** The To row and its expansion, with the budget chip. Split from `SendSheet.tsx` (docs/notes/send-architecture.md). */
 import { ChevronDown, ChevronRight, DoorClosed, DoorOpen, History, ListOrdered, Play, SendHorizontal, Split, Wallet } from "lucide-react";
+import { RadioRows } from "../kit";
+import { LaunchRow } from "./LaunchRow";
+import { FlagWhenDoneRow } from "./FlagWhenDoneRow";
 import { BudgetField } from "../BudgetField";
 import { budgetChipWords } from "../budgetInput";
 import { RepoPicker, RepoSelect } from "../RepoPicker";
 import { Unavailable } from "../Unavailable";
-import { clockSessionNote, budgetOfTarget, targetWords, withBudget } from "../sendIntent";
+import { clockSessionNote, budgetOfTarget, launchOfTarget, targetWords, withBudget, withLaunch } from "../sendIntent";
 import { Empty } from "../Empty";
 import { SessionName } from "../SessionName";
-import { CLOSE_CHOICES, closeChoiceDraft, closeChoiceLabel, closeChoiceOf, closeEffectWords } from "../autoSessions";
+import { CLOSE_CHOICES, type CloseChoice, closeChoiceDraft, closeChoiceLabel, closeChoiceOf, closeEffectWords } from "../autoSessions";
 import type { SendSheetModel } from "./useSendSheet";
 import { firstSession, cwdOf, dirsOf } from "./sendTargets";
 
@@ -37,12 +40,15 @@ export function ToSection({ m }: { m: SendSheetModel }) {
       )}
     </>
   );
+  // The *model* row — the Start-with picker, offered and never forced (`LaunchRow`).
+  const launchRow = <LaunchRow m={m} />;
+  const flagRow = <FlagWhenDoneRow target={target} when={when} setTarget={setTarget} />;
   return (
     <>
       {/* ── To ─────────────────────────────────────────────────────── */}
       <button className="send-sum" onClick={() => setOpen(open === "to" ? null : "to")}>
         <span className="send-sum-k">To</span>
-        <span className="send-sum-v">{targetWords(target, names)}</span>
+        <span className="send-sum-v">{targetWords(target, names, when)}</span>
         {open === "to" ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
       </button>
       {/* What a clock aimed at a session will do, said on the *To* row rather
@@ -59,38 +65,28 @@ export function ToSection({ m }: { m: SendSheetModel }) {
       )}
       {open === "to" && (
         <div className="send-exp">
-          <div className="segmented">
-            {/* Three answers to WHERE, and they are three different things:
-                join a conversation that is already running, open one, or do
-                it in several repos at once. There was a fourth — *work item*
-                — which meant "a repo's shared backlog conversation", a thing
-                this UI never showed and could not name; it and *new session*
-                now do exactly the same thing host-side, so one of them is
-                drawn. What was genuinely different about continuing survives
-                as the chip below. */}
-            {/* With nothing open this is not a choice, and it is not a
-                dimmed one either: it is not drawn, and the reason is drawn
-                instead (below). A `disabled` segment differing by opacity is
-                invisible on the one device this sheet is used from, and the
-                reason lived in a `title` nobody on a phone can read. */}
-            {!!live.length && (
-              <button className={`seg${target.kind === "session" ? " on" : ""}`}
-                title="type it into a session that is open right now"
-                onClick={() => setTarget(firstSession(live, seed.cwdHint))}>
-                <SendHorizontal size={13} /> this session
-              </button>
-            )}
-            <button className={`seg${target.kind === "repo" ? " on" : ""}`}
-              title="open a session for these words and run them there"
-              onClick={() => setTarget(withBudget({ kind: "repo", cwd: cwdOf(target, repos, seed.cwdHint) }, budgetOfTarget(target)))}>
-              <Play size={13} /> a new session
-            </button>
-            <button className={`seg${target.kind === "repos" ? " on" : ""}`}
-              title="one prompt, several repos"
-              onClick={() => setTarget(withBudget({ kind: "repos", dirs: dirsOf(target, seed.cwdHint) }, budgetOfTarget(target)))}>
-              <Split size={13} /> several repos
-            </button>
-          </div>
+          {/* Three answers to WHERE, and they are three different things:
+              join a conversation that is already running, open one, or do
+              it in several repos at once. There was a fourth — *work item*
+              — which meant "a repo's shared backlog conversation", a thing
+              this UI never showed and could not name; it and *new session*
+              now do exactly the same thing host-side, so one of them is
+              drawn. What was genuinely different about continuing survives
+              as the chip below. With nothing open "this session" is not a
+              choice, and not a dimmed one either: it is not drawn, and the
+              reason is drawn instead (below). */}
+          <RadioRows<"session" | "repo" | "repos"> label="Where it goes"
+            value={target.kind === "session" || target.kind === "repo" || target.kind === "repos" ? target.kind : null}
+            options={[
+              ...(live.length ? [{ key: "session" as const, label: <><SendHorizontal size={13} /> this session</>, title: "type it into a session that is open right now" }] : []),
+              { key: "repo" as const, label: <><Play size={13} /> a new session</>, title: "open a session for these words and run them there" },
+              { key: "repos" as const, label: <><Split size={13} /> several repos</>, title: "one prompt, several repos" },
+            ]}
+            onChange={(k) => setTarget(k === "session"
+              ? firstSession(live, seed.cwdHint)
+              : k === "repo"
+                ? withLaunch(withBudget({ kind: "repo", cwd: cwdOf(target, repos, seed.cwdHint) }, budgetOfTarget(target)), launchOfTarget(target))
+                : withLaunch(withBudget({ kind: "repos", dirs: dirsOf(target, seed.cwdHint) }, budgetOfTarget(target)), launchOfTarget(target)))} />
           {/* The missing segment, as the sentence it is. `Unavailable` is the
               house form for exactly this — what a surface cannot do, said
               without being asked for, never a shape you can aim a thumb at. */}
@@ -141,27 +137,30 @@ export function ToSection({ m }: { m: SendSheetModel }) {
                   closes. Default inherits the global and sends nothing. */}
               {when.kind !== "now" && (
                 <>
-                  <div className="sched-days" style={{ marginTop: 6 }}>
-                    {CLOSE_CHOICES.map((c) => (
-                      <button key={c} className={`row-chip${closeChoiceOf(target.closeWhenDone) === c ? " on" : ""}`}
-                        aria-pressed={closeChoiceOf(target.closeWhenDone) === c}
-                        onClick={() => setTarget({ ...target, closeWhenDone: closeChoiceDraft(c) })}>
-                        {c === "close" ? <DoorClosed size={13} /> : c === "keep" ? <DoorOpen size={13} /> : null} {closeChoiceLabel(c, closeGlobal)}
-                      </button>
-                    ))}
-                  </div>
+                  <RadioRows<CloseChoice> label="Its session once the work is done"
+                    value={closeChoiceOf(target.closeWhenDone)}
+                    options={CLOSE_CHOICES.map((c) => ({
+                      key: c,
+                      label: <>{c === "close" ? <DoorClosed size={13} /> : c === "keep" ? <DoorOpen size={13} /> : null} {closeChoiceLabel(c, closeGlobal)}</>,
+                    }))}
+                    onChange={(c) => setTarget({ ...target, closeWhenDone: closeChoiceDraft(c) })} />
                   <div className="form-hint">{closeEffectWords(target.closeWhenDone, closeGlobal)}</div>
                 </>
               )}
+              {flagRow}
+              {launchRow}
               {budgetRow}
             </>
           )}
           {target.kind === "repos" && (
             <RepoPicker multi repos={repos} home={seed.cwdHint ?? null} selected={target.dirs}
               listClass="pad-pick"
-              onChange={(dirs) => setTarget((t) => withBudget({ kind: "repos", dirs }, budgetOfTarget(t)))}
+              onChange={(dirs) => setTarget((t) => withLaunch(withBudget({ kind: "repos", dirs }, budgetOfTarget(t)), launchOfTarget(t)))}
               countHint={sequential ? "· one at a time in each" : "· a fresh session in each"} />
           )}
+          {/* The fan-out's model row, said here so no rule saves a model unseen. */}
+          {target.kind === "repos" && flagRow}
+          {target.kind === "repos" && launchRow}
           {target.kind === "repos" && budgetRow}
           {target.kind === "shell" && (
             <div className="form-hint">
@@ -174,14 +173,13 @@ export function ToSection({ m }: { m: SendSheetModel }) {
               it was baked into whichever sheet you opened, or repaired
               afterwards in the queue manager. */}
           {seqMeans && (
-            <div className="segmented" style={{ marginTop: 8 }}>
-              <button className={`seg${sequential ? "" : " on"}`} onClick={() => setSequential(false)}>
-                <Split size={13} /> all at once
-              </button>
-              <button className={`seg${sequential ? " on" : ""}`} onClick={() => setSequential(true)}>
-                <ListOrdered size={13} /> one at a time
-              </button>
-            </div>
+            <RadioRows<"parallel" | "sequential"> label="How many at once"
+              value={sequential ? "sequential" : "parallel"}
+              options={[
+                { key: "parallel", label: <><Split size={13} /> all at once</> },
+                { key: "sequential", label: <><ListOrdered size={13} /> one at a time</> },
+              ]}
+              onChange={(k) => setSequential(k === "sequential")} />
           )}
           {seqMeans && <div className="form-hint">{sequential ? seqMeans.on : seqMeans.off}</div>}
         </div>

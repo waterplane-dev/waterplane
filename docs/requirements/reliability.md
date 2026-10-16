@@ -35,6 +35,18 @@ CLI sessions do not exit unexpectedly.
 - shipped: 305e0fc
 
 ### R-reliability-009 · requested
-Waterplane works robustly and reliably for other open source users.
+Waterplane works robustly and reliably for other open source users who clone and run it.
+- asked: 2026-10-04, 2026-10-05
+
+### R-reliability-010 · requested
+Messages between phone and host are delivered at most once, tracked in an ack ledger so nothing is applied twice.
 - asked: 2026-10-04
+
+### R-reliability-011 · requested
+The app holds up under load and the full test suite passes.
+- asked: 2026-10-08
+
+### R-reliability-012 · requested
+The project passes a security review with no unaddressed high-impact issues.
+- asked: 2026-10-08
 

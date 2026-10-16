@@ -43,7 +43,11 @@ summary:
 
 - By default the host binds only **loopback** and the machine's **Tailscale
   IP**. Reaching it at all normally requires being on the same tailnet as the
-  machine — Tailscale's own device auth is the real gate.
+  machine — Tailscale's own device auth is the real gate. On Windows the host
+  runs inside WSL2 with mirrored networking: its loopback is shared with
+  Windows, so "loopback" there means any process on the Windows machine too —
+  the same local-machine boundary as on a Mac, and the `Origin`/`Host` checks
+  still apply to browsers on it.
 - `WATERPLANE_ALLOW_PUBLIC=1` additionally binds LAN interfaces. Connections
   classified as `lan` (see `peerKind` in `packages/host/src/net.ts`) are then
   required to authenticate with a password (`packages/host/src/auth.ts`):
@@ -98,6 +102,25 @@ summary:
   checks out; they carry `no-store`, `X-Frame-Options: DENY`, a
   `default-src 'none'` CSP and `no-referrer`. They are NOT in
   `OPAQUE_READ_ROUTES`.
+- **Passive devices** (the kids' phone). Pairing can mark a device
+  "passive": its ledger row stores `scope: "passive"` (rows without it are
+  full scope). The host holds such a token to a **default-deny allowlist**
+  (`passive.ts`): `GET /api/health`, `/api/webbundle[/file]`, `/api/theme`,
+  `/api/passive/state`, and `GET /api/repos/<id>/artifact` only for an APK
+  that is in the auto-pull queue at that moment — every other `/api/` route
+  (403) and the WebSocket (closed 4403) are refused, and `/api/auth/token`
+  never mints it a full token. A passive pairing needs a password and
+  switches "gate Tailscale" on; while any passive row exists the gate cannot
+  be switched off, so the phone has no tokenless path on Tailscale or the
+  LAN. A request that reaches loopback through `tailscale serve` (it carries
+  a proxy header) is classed as a Tailscale peer by the gate, so the gate
+  applies to the https address too. **Unlock:** a PIN (4–12 digits,
+  scrypt-hashed in `<state dir>/passive-pin.json`, 0600) set only from a
+  trusted caller that is not passive (`POST /api/auth/pin`);
+  `POST /api/auth/unlock` checks it, rate-limited per device (5, then one per
+  minute), and lifts that one token to full scope for 30 minutes, held in the
+  host's memory only — expiry, "Lock now" (`POST /api/auth/lock`), a PIN
+  change or a host restart end it, and its sockets are closed.
 - Password management (`auth.set` / `auth.clear` / `gateTailscale`) is only
   accepted from an already-trusted connection (loopback or Tailscale). A LAN
   caller — even one who knows the current password — can never set or change
@@ -119,6 +142,19 @@ summary:
   The shell does not inherit the daemon's API keys and key files
   (`*_API_KEY`, `*_KEY_FILE`, `*_KEYCHAIN` are unset in the pane), and its
   commands are never written to the session's prompt history.
+- **Live desktop** (`packages/extensions/desktop`, macOS, experimental). Watching is a
+  stream on the same device-token socket and widens no gate. **Control is
+  arbitrary input on the desktop** (clicks and keys reach every app, password
+  managers and a logged-in terminal included), so it carries the same trust as
+  the PTY and is a separate setting, **off by default**. It is gated on the
+  host, not only on the phone: with it off, `stream.input` is dropped before it
+  reaches the helper, and with it on it still needs the macOS Accessibility
+  grant. A peer token never reaches a stream (`/api/peer/*` only), and no job,
+  schedule or peer desktop opens a desktop stream. The helper `wp-desktop` runs
+  as the desktop user, is signed with a stable identifier and holds only the
+  Screen Recording and Accessibility grants a person gave it at the Mac (it asks
+  macOS only when a person taps Fix on a setup row), and capture runs only while a
+  view is open. macOS shows its own recording indicator the whole time.
 - **Browser origins** (`packages/host/src/origin.ts`). Every `/api/*` request
   and WebSocket upgrade is checked on `Origin` and `Host`; only `http`/`https`
   origins naming this machine on a port it serves pass, plus exactly one
@@ -149,6 +185,20 @@ summary:
   itself, so this does not stop a determined local program; it stops the
   spawned `claude` agent, a plugin or a script from accepting a licence with
   one undocumented POST, and every refusal is logged.
+- **Ask rules** (`packages/host/src/askrules.ts`). A desktop-wide list of
+  permission rules (`Bash(git push * main)`, `npm publish*`, ...) is passed to
+  every spawned `claude` as `permissions.ask` in the `--settings` flag, which
+  outranks anything the agent writes into the repo's settings and holds under
+  bypass-permissions; the resulting box is answerable only by a person's tap.
+  Changing the list (`PUT /api/askrules`) needs a browser `Origin` and a
+  one-shot confirm minted by the GET for the list's current revision, so a
+  `curl` with a forged header cannot delete a rule and a stale phone cannot
+  overwrite a newer list. It reaches `claude` sessions started on this
+  desktop only: a peer desktop's jobs run under that peer's own list, and the
+  host's own headless calls (review, assess) take no rule. The state file is
+  read at boot, so a same-user edit of it takes effect at the next restart.
+  Honest scope: it stops the accident, not a wrapper script the rule cannot
+  see or an agent talking you into Yes.
 - **Toolchain downloads** land in a fresh `mkdtemp` directory (0700) under the
   per-user data dir, are created with `O_EXCL`, and are hashed and unpacked
   from there, never from a shared temp dir another local account could plant
@@ -186,7 +236,7 @@ summary:
   the peer's running daemon (the marker is checked by `scripts/restart.sh` and
   `deploy/install-service.sh`). `GET /api/peers` lists the peers from loopback or
   Tailscale only and reports this daemon's own tailnet address, never a LAN one.
-- **The installer** (`curl -fsSL https://waterplane.dev/install.sh | sh`,
+- **The installer** (`curl -fsSL https://github.com/waterplane-dev/waterplane/releases/latest/download/install.sh | sh`,
   generated from `deploy/install.sh.tmpl`) is code you run as yourself, so
   read it first if you prefer: download it, open it, then `sh install.sh`.
   It never uses sudo and edits no shell rc file. It verifies the Node runtime

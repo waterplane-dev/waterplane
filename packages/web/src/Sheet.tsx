@@ -43,15 +43,23 @@ export interface SheetProps {
   footer?: ReactNode;
   /** Extra classes on the root, for the few sheets with their own modifier. */
   className?: string;
+  /**
+   * The body FILLS what is left under the head, edge to edge, and never scrolls (`.sheet-full-body`:
+   * no padding, `overflow: hidden`, a positioned box with a definite height) — for a canvas that
+   * sizes itself to its box, such as a live video view. The bottom safe area is padded so nothing
+   * sits under the gesture bar. The head (and its back arrow) stays: Back closes it like any sheet.
+   */
+  full?: boolean;
   children?: ReactNode;
 }
 
-export function Sheet({ title, icon, onClose, actions, head, footer, className, children }: SheetProps) {
+export function Sheet({ title, icon, onClose, actions, head, footer, className, full, children }: SheetProps) {
+  const root = ["sheet", full ? "sheet-full" : "", className ?? ""].filter(Boolean).join(" ");
   return (
-    <div className={className ? `sheet ${className}` : "sheet"}>
+    <div className={root}>
       <SheetHead title={title} icon={icon} onClose={onClose}>{actions}</SheetHead>
       {head}
-      {children}
+      {full ? <div className="sheet-full-body">{children}</div> : children}
       {footer ? <div className="sheet-actions">{footer}</div> : null}
     </div>
   );

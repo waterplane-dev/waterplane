@@ -236,3 +236,13 @@ test("a timed pinned row says when, and what closing this session does to it", (
   assert.equal(v.tie, reopens);
   assert.equal(view({ entries: [], pinned: [pin("i1", "untimed")] }).tie, null);
 });
+
+test("a pinned row the budget holds offers *past the budget* — only live, only on the desktop's row", () => {
+  const held = { ...pin("i1", "write the migration"), budgetHeld: true };
+  assert.equal(view({ entries: [], pinned: [held] }).budgetHeld, true);
+  // Offline the verdict is a copy and the waiver could not land.
+  assert.equal(view({ entries: [], pinned: [held], online: false }).budgetHeld, false);
+  assert.equal(view({ entries: [], pinned: [pin("i1", "x")] }).budgetHeld, false);
+  // The phone's own lane is never budget-held: the budget gates desktop work.
+  assert.equal(view({ entries: [entry({ text: "local", holdUntilIdle: true })], pinned: [held], busy: true }).budgetHeld, false);
+});

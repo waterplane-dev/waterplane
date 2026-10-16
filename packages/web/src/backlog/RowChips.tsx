@@ -1,32 +1,30 @@
 /**
  * A row's meta line: status, kind, *naming…*, ages, turns, *continued*,
  * close/budget answers, its clock and seat, holds, `▶ next`, target state,
- * the merge and schedule links, *you placed this*.
+ * the schedule link, *you placed this*.
  *
  * A REGION of the backlog sheet: no hooks of its own (a child's effects run
  * before its parent's, so a hook here would reorder them), only the model.
  * Shape: docs/notes/backlog-architecture.md.
  */
-import {
-  ArrowDown, ArrowUp, CalendarClock, Gauge, DoorClosed, DoorOpen, Hand, History, Hourglass, Merge, Play, Sparkles,
-  Wallet,
-} from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarClock, DoorClosed, DoorOpen, Flag, Gauge, Hand, History, Hourglass, Play, Sparkles, Wallet } from "lucide-react";
 import type { RowFacts } from "./BacklogRow";
 import { budgetWaived } from "@waterplane/shared";
 import { budgetChipWords } from "../budgetInput";
+import { launchClause, launchWords } from "../sendIntent";
 import {
   AGE_LABEL, HOLD_FOR_HOST_TITLE, ageBucket, clockSeat, clockSeatWords, CLOCK_MOVE_NOTE, clockWords, fmtSpan,
   fromScheduleWords, holdChipWords, pastBudgetChipWords, PAST_BUDGET_TITLE,
 } from "../backlogFilter";
 import { ago } from "../format";
-import { closeChipWords, opensOwnSession } from "../autoSessions";
+import { budgetEditable, closeChipWords, opensOwnSession } from "../autoSessions";
 import { track } from "../usage";
 import type { BacklogModel } from "./backlogTypes";
 import { CATEGORY_ICON, dropOffered } from "./backlogLabels";
 
 export function RowChips({ m, row }: { m: BacklogModel; row: RowFacts }) {
-  const { byId, clockCuts, nameOf, namingIds, nextFireIds, now, p, showIds, targetClosed, targetReopens } = m;
-  const { it, mergedFrom } = row;
+  const { clockCuts, namingIds, nextFireIds, now, p, targetClosed, targetReopens } = m;
+  const { it } = row;
   return (
                   <span className="bl-meta">
                     <span className={`tag-${it.status}`}>{it.status}</span>
@@ -100,14 +98,30 @@ export function RowChips({ m, row }: { m: BacklogModel; row: RowFacts }) {
                         {closeChipWords(it.closeWhenDone)}
                       </span>
                     )}
+                    {/* Its session gets the follow-up flag once done. Absent says nothing. */}
+                    {opensOwnSession(it) && it.flagWhenDone && (
+                      <span className="bl-age fu-launch" title="its session gets the follow-up flag once it is done">
+                        <Flag size={11} style={{ verticalAlign: "-1px" }} /> flag when done
+                      </span>
+                    )}
+                    {/* The model a WAITING row opens on (`BacklogItem.launch`), in the Send sheet's words. Defaults say nothing. */}
+                    {opensOwnSession(it) && it.status === "queued" && launchClause(it.launch) && (
+                      <span className="bl-age">opens on {launchWords(it.launch)}</span>
+                    )}
                     {/* The cap the session this row opens is born with
                         (`BacklogItem.budget`) — the cap as typed, in
                         `sessionBudgetLabel`'s words. Absent says nothing. */}
-                    {opensOwnSession(it) && it.budget && (
+                    {opensOwnSession(it) && it.budget && (budgetEditable(it) && p.online ? (
+                      // A queued row's cap is a tap away from changing (R-automation-044).
+                      <button className={`bl-age${m.budgetOpen.has(it.id) ? " active" : ""}`} aria-pressed={m.budgetOpen.has(it.id)}
+                        onClick={() => m.toggleBudget(it.id)}>
+                        <Wallet size={11} style={{ verticalAlign: "-1px" }} /> {budgetChipWords(it.budget)}
+                      </button>
+                    ) : (
                       <span className="bl-age">
                         <Wallet size={11} style={{ verticalAlign: "-1px" }} /> {budgetChipWords(it.budget)}
                       </span>
-                    )}
+                    ))}
                     {/* **This row waits on a CLOCK.**
                         A one-off aimed at one place is a backlog row whose WHEN
                         happens to be an instant — it used to be a card in the
@@ -217,28 +231,6 @@ export function RowChips({ m, row }: { m: BacklogModel; row: RowFacts }) {
                         session closed — reopens its conversation
                       </span>
                     )}
-                    {/* **A count on a control is a filter.** This one opens
-                        exactly the items this row was written from — archived
-                        every one of them, which is why the ids cut ignores the
-                        archived hide — and never the unfiltered list for the
-                        reader to work out which three it meant. */}
-                    {mergedFrom.length > 0 && (
-                      <button className="bl-chip bl-merged" data-hint="backlog.mergedfrom"
-                        title={`show the ${mergedFrom.length} items this row was written from — they are archived, with their own words intact`}
-                        onClick={() => { track("action:backlog.mergedfrom"); showIds(mergedFrom, `merged into “${nameOf(it)}”`); }}>
-                        <Merge size={11} style={{ verticalAlign: "-1px" }} /> merged from {mergedFrom.length}
-                      </button>
-                    )}
-                    {/* The same fact from the other side, on an original. One
-                        tap back to the row that now stands in for it. */}
-                    {it.mergedInto && (
-                      <button className="bl-chip bl-merged"
-                        title="show the row the smart pick wrote in place of this one"
-                        onClick={() => { track("action:backlog.mergedinto"); showIds([it.mergedInto!], `the row “${nameOf(it)}” was merged into`); }}>
-                        <Merge size={11} style={{ verticalAlign: "-1px" }} />{" "}
-                        {byId.has(it.mergedInto) ? `merged into “${nameOf(byId.get(it.mergedInto)!)}”` : "merged into another row"}
-                      </button>
-                    )}
                     {/* **Where this row came from, when it was a rule.**
                         A schedule's whole job is to write rows here, and until
                         this chip neither list named the other: the reader had to
@@ -262,9 +254,6 @@ export function RowChips({ m, row }: { m: BacklogModel; row: RowFacts }) {
                         </span>
                       );
                     })()}
-                    {/* What tells a person the automatic sort is leaving their
-                        drag alone. Without it the guarantee is invisible, and a
-                        guarantee nobody can see is one nobody can trust. */}
                     {/* **Two things set this now, so the words are true of
                         both.** It was `placed by you` / "you dragged this one
                         here", which was the whole story while a drag was the
@@ -276,7 +265,7 @@ export function RowChips({ m, row }: { m: BacklogModel; row: RowFacts }) {
                         careful not to get wrong. One field, because both ARE
                         one fact: a position a person decided. */}
                     {it.handOrdered && (
-                      <span className="bl-chip bl-hand" title="its position was decided by you — a drag, or an assessment ranking you approved — so the smart pick sorts around it and never moves it">
+                      <span className="bl-chip bl-hand" title="its position was decided by you — a drag, or an assessment ranking you approved">
                         <Hand size={11} style={{ verticalAlign: "-1px" }} /> you placed this
                       </span>
                     )}

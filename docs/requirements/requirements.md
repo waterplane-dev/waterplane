@@ -25,6 +25,11 @@ The setup checklist's requirements row warns when the list is stale and offers o
 The repo row carries no requirements chip — the count is said once, by the repo menu's 'requirements · N requested' line, whose tap opens the sheet cut to the requested items ('n of N' with a clear button).
 - asked: 2026-10-01
 ### R-requirements-006 · requested
-All planned refactorings are completed before the open source release.
+All known refactorings are completed before the open source release.
 - asked: 2026-10-04
+
+### R-requirements-007 · shipped
+After clicking update requirements, the generated prompt and its fire button are visible at once without scrolling, and it is clear the prompt is queued and not yet run.
+- asked: 2026-10-07
+- shipped: 864d97d5
 

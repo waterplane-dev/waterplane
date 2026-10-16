@@ -32,6 +32,7 @@ const BUILTINS: [string, string][] = [
   ["/compact", "Summarize and compact the conversation"],
   ["/config", "Open settings"],
   ["/model", "Switch the model"],
+  ["/effort", "Set the reasoning effort"],
   ["/output-style", "Switch the output style"],
   ["/agents", "Manage subagents"],
   ["/mcp", "Manage MCP servers"],

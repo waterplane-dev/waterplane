@@ -1,7 +1,6 @@
 /**
  * Drag-and-drop reordering: which row is held, whether a drag is allowed at
- * all (never while searching or filtered — `onReorder` sends the WHOLE order),
- * and the window-level pointer binding.
+ * all, and the window-level pointer binding.
  */
 import { useEffect, useRef, useState } from "react";
 import type { BacklogItem } from "@waterplane/shared";
@@ -9,17 +8,17 @@ import type { BacklogProps } from "./backlogTypes";
 
 export function useBacklogDrag(
   p: BacklogProps,
-  { q, filtering, displayOrder, groupKeyOf }: { q: string; filtering: boolean; displayOrder: BacklogItem[]; groupKeyOf: (it: BacklogItem) => string },
+  { displayOrder, groupKeyOf }: { q: string; filtering: boolean; displayOrder: BacklogItem[]; groupKeyOf: (it: BacklogItem) => string },
 ) {
   // ── Drag-and-drop reordering ───────────────────────────────────────────
-  // Only when not searching (visible == full repo list), so the order we send is
-  // complete. Each crossover commits the new order; the host renumbers + echoes.
+  // Each crossover commits the order of the rows ON SCREEN; the host makes
+  // those rows trade their own slots (`backlog/backlogedits.ts` `reorder`), so
+  // a row hidden by a search or a filter keeps its seat. It used to renumber
+  // the list 0..n, which is why a drag was refused whenever anything was
+  // filtered — including the *on a clock* cut, the one place several items on
+  // one instant are gathered to be put in order.
   const [dragId, setDragId] = useState<string | null>(null);
-  // Also blocked while FILTERED, for the same reason it is blocked while
-  // searching: `onReorder` sends the whole top-to-bottom order, and an order
-  // computed from a subset would renumber the repo's list against rows that are
-  // not on screen.
-  const canDrag = !q && !filtering && p.online;
+  const canDrag = p.online;
   // Drag uses WINDOW-level pointer listeners, not the container's — on touch the
   // grip's pointerdown implicitly captures the pointer, so the scroll container
   // never sees pointermove (drag looked dead on mobile). Window still receives it.

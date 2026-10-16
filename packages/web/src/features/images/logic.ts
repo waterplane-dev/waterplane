@@ -96,25 +96,52 @@ const VIDEO_RE = /\.(mp4|webm|mov|m4v|ogv|mkv)$/i;
 const PICTURE_RE = /\.(png|jpe?g|gif|webp|bmp|avif|heic|svg)$/i;
 
 export function isVideoPath(relPath: string): boolean { return VIDEO_RE.test(relPath); }
+/** A markdown file in the strip — a document tile that opens the reader, not the viewer. */
+export function isMarkdownPath(relPath: string): boolean { return /\.(md|markdown|mdx)$/i.test(relPath); }
 /** A path the full-screen viewer draws (images and videos); anything else is a download. */
 export function isViewable(relPath: string): boolean { return VIDEO_RE.test(relPath) || PICTURE_RE.test(relPath); }
+
+/** The strip's pictures and videos — what the viewer swipes through; its
+ *  markdown tiles open the reader instead. */
+export function viewableStrip<T extends { relPath: string }>(list: readonly T[]): T[] {
+  return list.filter((x) => isViewable(x.relPath));
+}
+
+/** The toast a turn's new files say: pictures and markdown counted apart. */
+export function newFilesToast(images: readonly NewImage[]): string {
+  const md = images.filter((i) => isMarkdownPath(i.relPath));
+  const edited = md.filter((i) => i.changed).length;
+  const pics = images.length - md.length;
+  const parts: string[] = [];
+  if (pics) parts.push(`${pics} new image${pics > 1 ? "s" : ""}`);
+  if (md.length - edited) parts.push(`${md.length - edited} new markdown`);
+  if (edited) parts.push(`${edited} markdown edited`);
+  return parts.join(" · ");
+}
 
 /** Where a picture opened from a notification sits: its place in a session's
  *  persisted batch (so the rest are swipeable), or null for a one-item list. */
 export function findInStrips(strips: NewImages, im: { repoId: string; relPath: string }, prefer?: string): { sessionId: string; i: number } | null {
-  const at = (sid: string) => (strips.get(sid) ?? []).findIndex((x) => x.repoId === im.repoId && x.relPath === im.relPath);
+  const at = (sid: string) => viewableStrip(strips.get(sid) ?? []).findIndex((x) => x.repoId === im.repoId && x.relPath === im.relPath);
   if (prefer && at(prefer) >= 0) return { sessionId: prefer, i: at(prefer) };
   for (const k of strips.keys()) { const i = at(k); if (i >= 0) return { sessionId: k, i }; }
   return null;
 }
 
 /** `session.images`: append what is new to that session's strip, by path, in
- *  arrival order — a file reported twice is one thumb. */
+ *  arrival order — a file reported twice is one thumb. A markdown file
+ *  reported again (rewritten) moves to the end with its new mtime, and stays
+ *  `changed` only if it was not new to the strip's whole run. */
 export function mergeNewImages(prev: NewImages, sessionId: string, repoId: string, images: readonly NewImage[]): Map<string, NewImg[]> {
   const n = new Map(prev);
   const merged = [...(n.get(sessionId) ?? [])];
   for (const im of images) {
-    if (!merged.some((x) => x.relPath === im.relPath)) merged.push({ ...im, repoId });
+    const at = merged.findIndex((x) => x.relPath === im.relPath);
+    if (at < 0) { merged.push({ ...im, repoId }); continue; }
+    if (!isMarkdownPath(im.relPath) || im.mtime <= merged[at].mtime) continue;
+    const [old] = merged.splice(at, 1);
+    const { changed: _rewritten, ...fresh } = im;
+    merged.push(old.changed ? { ...im, repoId } : { ...fresh, repoId });
   }
   n.set(sessionId, merged);
   return n;
@@ -205,3 +232,23 @@ export function outboxCut(r: { outboxSeenAt?: number | null; outboxCount: number
   return r?.outboxSeenAt != null && r.outboxCount > 0 ? { since: r.outboxSeenAt, count: r.outboxCount } : undefined;
 }
 
+
+/**
+ * What a paste carrying files does (Cmd/Ctrl+V of a screenshot or a copied
+ * file). Only the session's own box, or nowhere editable with no sheet up,
+ * takes it: every other text field belongs to a sheet with its own attach
+ * route (the pad, the Send sheet), and a picture routed past that sheet into
+ * the session would land somewhere the person was not looking. A picture
+ * already on the annotator is the last copy of its marks, so a second paste
+ * never replaces it: `ask` — append it to the batch, or leave it.
+ */
+export type PasteRoute = "route" | "ask" | "ignore";
+export function pasteRoute(p: {
+  files: number; editable: boolean; inCompose: boolean; sheet: boolean; annotating: boolean; repoId: string | null;
+}): PasteRoute {
+  if (!p.files || !p.repoId) return "ignore";
+  if (p.editable && !p.inCompose) return "ignore";
+  if (p.annotating) return "ask";
+  if (p.sheet && !p.inCompose) return "ignore";
+  return "route";
+}

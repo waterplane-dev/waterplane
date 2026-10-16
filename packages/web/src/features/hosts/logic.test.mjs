@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   codeLeftText, countHostWords, deviceRouteText, devicesEmptyText, hostAddress, hostRows, qrPath, removeLines, revokeLines, seenAgo,
-  showHostName, wordsText,
+  nextHostId, shortHostName, showHostName, wordsText,
 } from "./logic.ts";
 
 const KEYS = {
@@ -82,4 +82,24 @@ test("paired devices: route words, ages, and the revoke question for this phone 
   assert.match(mine, /signs this phone out/);
   assert.match(devicesEmptyText(false), /Set a host password to give each phone its own sign-in/);
   assert.doesNotMatch(devicesEmptyText(true), /password/);
+});
+
+test("shortHostName: first word, capped to fit beside the cog, never blank for a named host", () => {
+  assert.equal(shortHostName("DeskMini-von-Alex"), "DeskM…");
+  assert.equal(shortHostName("laptop.tail.ts.net"), "laptop");
+  assert.equal(shortHostName("  wp peer "), "wp");
+  assert.equal(shortHostName("Supercalifragilistic").length, 6);
+  assert.equal(shortHostName(""), "");
+});
+
+test("nextHostId: two flip, three go round, one or none is no toggle", () => {
+  const h = (id) => ({ id, name: id, base: "http://x" });
+  assert.equal(nextHostId([h("a"), h("b")], "a"), "b");
+  assert.equal(nextHostId([h("a"), h("b")], "b"), "a");
+  assert.equal(nextHostId([h("a"), h("b"), h("c")], "c"), "a");
+  assert.equal(nextHostId([h("a"), h("b"), h("c")], "b"), "c");
+  // In the demo (not in the list): the first real host.
+  assert.equal(nextHostId([h("a"), h("b")], "demo"), "a");
+  assert.equal(nextHostId([h("a")], "a"), null);
+  assert.equal(nextHostId([], null), null);
 });

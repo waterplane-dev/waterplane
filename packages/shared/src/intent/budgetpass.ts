@@ -45,7 +45,7 @@ export function budgetPassAt(rule: ScheduleRule, occurrence: number): BudgetPass
   if (rule.kind !== "window" || rule.edge === "after") return null;
   const off = (rule.offsetMin ?? 0) * 60_000;
   if (!(off < 0) || !Number.isFinite(occurrence)) return null;
-  return { window: rule.window === "weekly" ? "weekly" : "session", from: occurrence, until: occurrence - off };
+  return { window: rule.periodId ?? (rule.window === "weekly" ? "weekly" : "session"), from: occurrence, until: occurrence - off };
 }
 
 /** The pass this row carries: read off its own armed clock when it has one,
@@ -93,8 +93,7 @@ export function budgetHold(i: Intent, facts: IntentFacts, now: number): string |
 
 /**
  * Is this row's waiver in force at `now`? The one reading of `pastBudget` —
- * rung 2, the `budget` trigger, the tick's expiry sweep, the smart pick's merge
- * rule and the phone's chip all ask this, so an expired waiver cannot read as
+ * rung 2, the `budget` trigger, the tick's expiry sweep and the phone's chip all ask this, so an expired waiver cannot read as
  * live in one of them.
  */
 export function budgetWaived(i: { pastBudget?: BudgetWaiver }, now: number): boolean {
@@ -116,12 +115,74 @@ export function budgetWaiverUntil(over: readonly BudgetCeiling[] | undefined, no
   return until;
 }
 
+/** The CONFIGURED period whose reset is the waiver's `until` (the tripped ceiling that resets last), or
+ *  undefined - `session`/`weekly` are already what `weekly` says and stay unrecorded, so those waivers keep their shape. */
+export function budgetWaiverPeriod(over: readonly BudgetCeiling[] | undefined, until: number): string | undefined {
+  const w = over?.find((c) => c.resetAt === until)?.which;
+  return w && w !== "session" && w !== "weekly" ? w : undefined;
+}
+
+/** The host's refusal of a waiver when no ceiling is tripped — the one refusal
+ *  a waiver asked for AHEAD of the budget (`backlog.add`'s `pastBudget`) may
+ *  stay silent about: nothing holds the row, so it runs when free anyway. */
+export const BUDGET_NOT_HOLDING = "the budget is not holding anything right now";
+
 /** `Intent.pastBudget`, read strictly: one finite instant. Anything else —
  *  the legacy `true` of a waiver that had no window included — is DROPPED,
  *  never repaired: a waiver whose window nobody recorded cannot be scoped, and
  *  dropping it only makes the row wait for the budget again. */
 export function cleanBudgetWaiver(v: unknown): BudgetWaiver | undefined {
   if (!v || typeof v !== "object") return undefined;
-  const u = (v as Record<string, unknown>).until;
-  return typeof u === "number" && Number.isFinite(u) ? { until: u } : undefined;
+  const r = v as Record<string, unknown>;
+  const u = r.until;
+  if (typeof u !== "number" || !Number.isFinite(u)) return undefined;
+  const periodId = typeof r.periodId === "string" && r.periodId.trim() ? r.periodId : undefined;
+  return { until: u, ...(r.weekly === true ? { weekly: true as const } : {}), ...(periodId ? { periodId } : {}) };
+}
+
+// ── The leftover ─────────────────────────────────────────────────────────────
+/**
+ * The weekly reset this row is a leftover of, or `null`. A row let past a
+ * week's budget — a weekly before-reset pass, or a person's weekly waiver
+ * (stamped `leftoverOf` when it expired) — that is still waiting once that
+ * week has reset. Read by rung 2 against `facts.leftoverOver`.
+ *
+ * WEEKLY only, on purpose: a session window refills in hours, so what a
+ * session pass leaves behind costs a few hours of a window that refills
+ * anyway; the week is the budget that does not come back.
+ */
+export function budgetLeftoverOf(i: Intent, now: number): number | null {
+  if (typeof i.leftoverOf === "number") return i.leftoverOf;
+  const pass = budgetPassOf(i);
+  if (pass && pass.window === "weekly" && now >= pass.until) return pass.until;
+  return budgetAfterResetOf(i, now);
+}
+
+/**
+ * How far past a weekly reset a row still counts as starting "right after" it:
+ * the new week's first session window. Further in, the row was timed for a
+ * moment of the week, not for the reset, and the ordinary ceilings are its.
+ */
+export const AFTER_RESET_LEFTOVER_MS = 5 * 3_600_000;
+
+/**
+ * The weekly reset a row is timed to start AT or RIGHT AFTER, or `null` —
+ * the other half of the leftover. Rows moved past a reset (so they do not all
+ * start in the lead window before it) used to start together the moment the
+ * new week began, at ~0% of it, with nothing on the ordinary ceilings to slow
+ * them: the burst the leftover ceiling exists to stop, from the other side of
+ * the reset. So a `window`/weekly occurrence on the `after` edge, or at a
+ * non-negative offset, up to `AFTER_RESET_LEFTOVER_MS` past the reset, is held
+ * by the same leftover ceiling — once that reset has happened, never before.
+ */
+export function budgetAfterResetOf(i: Intent, now: number): number | null {
+  if (i.trigger.kind !== "at" || typeof i.nextAt !== "number") return null;
+  const rule = i.trigger.rule;
+  if (rule.kind !== "window" || rule.window !== "weekly") return null;
+  const off = (rule.offsetMin ?? 0) * 60_000;
+  if (rule.edge !== "after" && off < 0) return null;
+  const lead = Math.max(0, off);
+  if (lead > AFTER_RESET_LEFTOVER_MS) return null;
+  const reset = i.nextAt - lead;
+  return now >= reset ? reset : null;
 }

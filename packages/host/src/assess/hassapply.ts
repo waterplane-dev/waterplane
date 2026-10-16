@@ -1,10 +1,165 @@
 /** A slice of assess.ts — moved whole from assess.ts, see docs/notes/assess-architecture.md (host). */
-import { randomUUID } from "node:crypto";
-import type { AssessChoices, IntentDraft } from "@waterplane/shared";
-import { assessDismissReason, applyAssessment } from "@waterplane/shared";
+import { createHash, randomUUID } from "node:crypto";
+import type { AssessChoices, AssessSplitApply, Intent, IntentDraft } from "@waterplane/shared";
+import { assessDismissReason, applyAssessment, itemHeadline, latestClock, ruleRecurs } from "@waterplane/shared";
 import { backlogDraft } from "../intents/adapters.js";
+import { reorder } from "../backlog/backlogedits.js";
 import { type AssessIntents } from "./hassexec.js";
+import { ASSESSABLE_STATES } from "./hassknobs.js";
 import { AssessStore } from "./hassstore.js";
+
+// ── The slot check's three host halves (2026-10-16) ──────────────────────────
+
+/**
+ * **The clock a merged row carries.** Absent `carry` = no member runs on a
+ * one-off clock, which is the untimed post every merge made before.
+ *
+ * Before this, a merge was ALWAYS posted untimed (`backlogDraft`'s `idle`), so
+ * merging a row timed for the 18:00 reset made the merged work run at the next
+ * free moment — earlier than the person asked. Now the merged row takes the
+ * LATEST one-off clock among its members (`latestClock`, with that member's
+ * whole trigger — grace included — and its `holdForHost`), so it never runs
+ * before any member asked. An untimed member is content to wait, so it does
+ * not stop the merge; a recurring member is a standing rule, not one piece of
+ * work, and its clock is never copied onto a one-off. A near-tie between two
+ * DIFFERENT clocks, or a timed member not yet armed, is refused in words —
+ * `latestClock`'s null is "cannot tell which is later", and a guess there is
+ * exactly a merged row running before one member asked.
+ */
+export function mergeClock(members: readonly (Intent | undefined)[]): { carry?: Pick<Intent, "trigger" | "holdForHost"> } | { refused: string } {
+  const timed = members.filter((r): r is Intent => !!r && r.trigger?.kind === "at" && !ruleRecurs(r.trigger.rule));
+  if (!timed.length) return {};
+  const pick = latestClock(timed.map((row) => ({ rule: (row.trigger as Extract<Intent["trigger"], { kind: "at" }>).rule, nextAt: row.nextAt, row })));
+  if (!pick) {
+    return { refused: "its rows run on clocks too close to tell which is later (or one is not armed yet), so the merged item could have run before one of them asked" };
+  }
+  return { carry: { trigger: pick.row.trigger, holdForHost: pick.row.holdForHost } };
+}
+
+/**
+ * **Where a slot merge is posted: its members' lowest seat** (`order ??
+ * createdAt`). The run's `rank` is a small integer — a place WITHIN the slot —
+ * and posted as an `order` it sorted the merged row ahead of the whole
+ * backlog; `reorder` then handed that seat to the first approved row. Seated
+ * among its members, the slot's rows trade only their own seats and a row
+ * outside the slot keeps its place. `fallback` when no member is left to read.
+ */
+export function memberSeat(members: readonly string[], fallback: number, get: (id: string) => Intent | undefined): number {
+  const seats = members.map(get).filter((r): r is Intent => !!r).map((r) => r.order ?? r.createdAt);
+  return seats.length ? Math.min(...seats) : fallback;
+}
+
+/**
+ * **The two ids a split posts — the same every time it is applied.** A hash of
+ * (run, split) so a replayed apply (a crash between the posts and
+ * `recordApplied`) is answered by `post()` with the rows it already holds,
+ * never a second pair: at-most-once by intent id.
+ */
+export function splitIds(runId: string, sid: string): [string, string] {
+  const h = createHash("sha1").update(`${runId}\n${sid}`).digest("hex").slice(0, 10);
+  return [`sp_${h}_1`, `sp_${h}_2`];
+}
+
+/**
+ * One half of a split, on the ORIGINAL row's trigger and everything else that
+ * says where and how it runs — the same slot it was in. Its words are the
+ * run's (the person approved them); the original's `label` is NOT copied: a
+ * title somebody typed for the whole job is not a title for half of it.
+ */
+function splitDraft(orig: Intent, id: string, text: string, origin: string, order: number): IntentDraft {
+  return {
+    id, cwd: orig.cwd,
+    payload: { kind: "prompt", steps: [text] },
+    target: orig.target,
+    trigger: orig.trigger,
+    serial: orig.serial,
+    holdForHost: orig.holdForHost,
+    pastBudget: orig.pastBudget,
+    budgetPass: orig.budgetPass,
+    auto: orig.auto,
+    pinned: orig.pinned,
+    resume: orig.resume,
+    closeWhenDone: orig.closeWhenDone,
+    flagWhenDone: orig.flagWhenDone,
+    manual: orig.manual,
+    ...(orig.budget ? { budget: orig.budget } : {}),
+    ...(orig.launch ? { launch: orig.launch } : {}),
+    order,
+    origin,
+  };
+}
+
+/** A row's name as the backlog shows it, for a sentence. */
+function rowName(r: Intent): string {
+  const text = r.payload.kind === "prompt" ? (r.payload.steps[0] ?? "") : "";
+  const name = itemHeadline({ label: r.label, text, headline: r.headline }) ?? text.trim().slice(0, 40);
+  return name || r.id;
+}
+
+/** States a half may be set aside in — it has not started, so archiving it
+ *  stops it ever running. A half already started is past recall here. */
+const NOT_STARTED = new Set(["queued", "blocked"]);
+/** A chained row in one of these has settled and waits on nothing. */
+const TERMINAL = new Set(["done", "failed", "canceled"]);
+
+/**
+ * Set aside every half of this split that exists and has not started — not
+ * only the ones THIS call posted. A replay can find half 1 from an earlier,
+ * interrupted apply; left queued beside the untouched original, that job runs
+ * twice. Returns the halves that could NOT be set aside, for the sentence.
+ */
+function setAsideHalves(intents: AssessIntents, ids: readonly string[]): string[] {
+  const left: string[] = [];
+  for (const id of ids) {
+    const h = intents.get(id);
+    if (!h || h.archived) continue;
+    if (!NOT_STARTED.has(h.state) || !intents.edit(id, { archived: true }).ok) left.push(id);
+  }
+  return left;
+}
+
+/**
+ * Perform one approved split: post both halves, THEN archive the original.
+ * Archive, never cancel or remove — the original is the person's words, kept
+ * whole and one tap from coming back (CLAUDE.md: never overwrite typed words).
+ *
+ * Every way it can stop leaves ONE copy of the job runnable, never two:
+ * a post that fails sets aside every half that exists (this call's or an
+ * earlier one's), and an original whose archive is refused sets aside both
+ * halves and says so. And a split is REFUSED when a live row chains `after`
+ * the original — archiving it would leave that row waiting for ever on a row
+ * that never settles. Refusal, not re-pointing the chain at half 2: moving a
+ * person's chain onto a row they never saw is a rewrite of their trigger, and
+ * "after the whole job" is not the same promise as "after its second half".
+ */
+function applySplit(intents: AssessIntents, s: AssessSplitApply, runId: string): { ok: true; ids: string[] } | { ok: false; why: string } {
+  const ids = splitIds(runId, s.sid);
+  const orig = intents.get(s.id);
+  const replay = ids.every((id) => !!intents.get(id));
+  const refuse = (why: string): { ok: false; why: string } => {
+    const left = setAsideHalves(intents, ids);
+    return { ok: false, why: left.length ? `${why}; ${left.length} half already started and could not be set aside` : why };
+  };
+  if (!replay) {
+    if (!orig) return refuse("that item is gone");
+    if (orig.archived) return refuse("that item was archived in the meantime");
+    if (!ASSESSABLE_STATES.has(orig.state)) return refuse(`that item is ${orig.state} now`);
+    const waiter = intents.list().find((r) => r.id !== s.id && !r.archived && r.trigger?.kind === "after"
+      && r.trigger.id === s.id && !TERMINAL.has(r.state));
+    if (waiter) return refuse(`it is waited on by “${rowName(waiter)}”, which would wait for ever behind an archived row — split refused`);
+  }
+  if (!orig) return { ok: true, ids };
+  const base = orig.order ?? orig.createdAt;
+  for (let n = 0; n < ids.length; n++) {
+    const r = intents.post(splitDraft(orig, ids[n], s.texts[n], s.origin, base + n * 0.001));
+    if (!r.ok || !r.intent) return refuse(r.reason || "the new item could not be written");
+  }
+  const archived = intents.edit(s.id, { archived: true });
+  if (!archived.ok) {
+    return refuse(`the original could not be set aside${archived.refused ? ` (${archived.refused})` : ""}, so both halves were set aside instead and the job runs once`);
+  }
+  return { ok: true, ids };
+}
 
 // ── Applying one ─────────────────────────────────────────────────────────────
 
@@ -127,62 +282,61 @@ export function applyProposal(
    * for the sentence is `filed.length` — one fact, not two.
    */
   const filed: string[] = [];
+  /** What was approved and NOT done, one sentence each — said in `detail`. */
+  const refused: string[] = [];
+  /** A slot check: the ids are rows that fire together (`AssessScope`). */
+  const slotRun = !!(run.scope ?? run.input.scope);
+  /** Posted merge rows and their rank — a slot's order includes them. */
+  const postedRanks: { id: string; rank: number }[] = [];
   for (const p of m.post) {
+    // A merge carries the LATEST member clock, or is refused (`mergeClock`).
+    const members = p.gid ? (run.proposal.merges.find((g) => g.gid === p.gid)?.ids ?? p.sourceIds ?? []) : [];
+    const clock = members.length ? mergeClock(members.map((x) => intents.get(x))) : {};
+    if ("refused" in clock) { refused.push(`merge “${p.gid}” was not applied: ${clock.refused} — its items were left as they were`); continue; }
     const id = "ai_" + randomUUID().slice(0, 8);
     /**
-     * **`label` is what a PERSON typed, and this used to put machine
-     * bookkeeping in it.**
-     *
-     * The old value was `merge of 3: a1 b2 c3` — a count and three internal
-     * ids, written into the one field on the row that means "the name somebody
-     * gave this". It was there to keep a merged row one tap from the sentences
-     * it replaced, and that link is not lost by removing it: the ids are on
-     * `AssessRun.proposal.merges[].ids`, and every retired member already wears
-     * `merged into <id>` in its own result. So the row now carries a real
-     * title (below) where it used to carry a receipt.
-     *
-     * Rows already carrying the old label KEEP it. There is no migration and
-     * there should not be: rewriting `label` on rows in somebody's store to
-     * tidy up a string is exactly the "words nobody typed" write this app
-     * refuses, and the old text is at worst ugly.
-     */
-    /**
-     * **…and a row carrying the person's OWN words wears no label at all.**
-     *
-     * `from an assessment` is true of a merge and of a genuinely new item: the
-     * prompt on those was written by the run. It is a lie on a post made of a
-     * pad note — those words are the person's, copied verbatim — and
-     * `itemHeadline` lets a non-derived label BEAT the headline, so the label
-     * would sit over their own sentence as a title claiming a machine wrote it.
-     * Absent is the honest shape: the run's `headline` then shows, stamped
-     * `assess`, exactly as it does on every other posted row.
+     * **`label` is what a PERSON typed** — never machine bookkeeping. It once held
+     * `merge of 3: a1 b2 c3`; the link back lives on `AssessRun.proposal.merges[].ids`
+     * and each member's `merged into <id>`. Rows with the old label keep it (no
+     * migration: rewriting it is a "words nobody typed" write). A post made of a pad
+     * note wears NO label: those are the person's words, and `itemHeadline` lets a
+     * label beat the headline, so `from an assessment` would claim a machine wrote them.
      */
     const draft: IntentDraft = {
       ...backlogDraft({
         id, cwd: run.repoDir, text: p.prompt,
         label: p.fromNote ? undefined : "from an assessment",
-        order: p.rank ?? now,
-        // Carried whatever `writeNames` said — `AssessPost`'s note is the
-        // argument, and it is the one asymmetry in the feature: the prompt on
-        // this row was written by the same run in the same breath, so there are
-        // no typed words for a title to stand on top of, and the alternative to
-        // a machine's title here is no title at all.
+        order: slotRun && members.length ? memberSeat(members, p.rank ?? now, (x) => intents.get(x)) : (p.rank ?? now),
+        // Carried whatever `writeNames` said: the run wrote this prompt in the same
+        // breath, so there are no typed words for a title to stand on top of.
         headline: p.headline, category: p.category, nameBy: "assess",
+        holdForHost: clock.carry?.holdForHost,
       }),
+      ...(clock.carry ? { trigger: clock.carry.trigger } : {}),
       origin: p.origin,
     };
     const r = intents.post(draft);
     if (!r.ok || !r.intent) continue;
+    if (p.gid && typeof p.rank === "number") postedRanks.push({ id: r.intent.id, rank: p.rank });
     posted++;
     // Past the refusal check, so the id is on this list only when the row it
     // came from exists. `continue` above is the whole bug this guards.
     if (p.fromNote) filed.push(p.fromNote);
     // A posted row takes its place in the same ordering the ranks do, so it
     // takes the same answer. `IntentDraft` has no `handOrdered` — it is the
-    // host's field, `smartpick.ts` pins a merged row the same way — so it is a
-    // follow-up edit rather than a field on the draft.
+    // host's field — so it is a follow-up edit rather than a field on the draft.
     if (m.pinRanks) intents.edit(r.intent.id, { handOrdered: true });
     if (p.gid) postedFor.set(p.gid, r.intent.id);
+  }
+
+  // ── Splits: post both halves, then archive the original (`applySplit`) ──
+  // Conflicts have no branch here and never will: they are words, and no
+  // choice field can approve one (`AssessChoices`).
+  let splits = 0;
+  for (const s of m.split) {
+    const r = applySplit(intents, s, runId);
+    if (r.ok) { splits++; continue; }
+    refused.push(`split “${s.sid}” was not applied: ${r.why} — the original item was left as it was`);
   }
 
   // ── Then the retirements ──
@@ -203,13 +357,10 @@ export function applyProposal(
   }
 
   /**
-   * **The order, and whether it is allowed to be re-decided.**
+   * **The order, and whether it is marked as the person's.**
    *
-   * `handOrdered` is what the smart pick reads to leave a row's position alone.
-   * Until the apply could carry an answer, a ranking somebody had worked
-   * through sixty-two verdicts to approve was unmarked — so the next item to
-   * fire in this repo handed the list to a toolless pass that had seen only the
-   * item text, and it re-sorted what a person had just signed off.
+   * `handOrdered` is the mark a drag leaves ("placed by you"). Pinned, the
+   * ranks an apply writes carry it too; free, they are written unmarked.
    *
    * Neither answer is right in general, so it is not a default: `pinRanks` is
    * the question `AssessSheet` asks at apply time, and this is the whole of
@@ -252,8 +403,7 @@ export function applyProposal(
    * after the ranks. See `AssessIntents.kick` for the failure it closes: the
    * first revived row was fired by the kick its own re-queue sent, while the
    * other eighteen revives and the entire rank loop had still to happen — so it
-   * ran with neither the approved order written nor a candidate list the smart
-   * pick would even look at.
+   * ran before the approved order was written.
    */
   const failureSeen = new Map<string, number>();
   for (const it of run.input.items) if (it.failedAt != null) failureSeen.set(it.id, it.failedAt);
@@ -266,9 +416,23 @@ export function applyProposal(
   }
 
   let ranked = 0;
-  for (const r of m.rank) {
-    if (!intents.get(r.id)) continue;
-    if (intents.edit(r.id, { order: r.rank, ...(m.pinRanks ? { handOrdered: true } : {}) }).ok) ranked++;
+  if (slotRun) {
+    /**
+     * **A slot's order is the drag's own verb** (`backlogedits.reorder`): the
+     * listed rows trade their own seats, so a row outside the slot keeps its
+     * place, and each is stamped `handOrdered` — the person approved this
+     * order, which is what a drag means. `pinRanks` is not asked about here.
+     */
+    const order = [...m.rank, ...postedRanks]
+      .filter((r) => !!intents.get(r.id))
+      .sort((a, b) => a.rank - b.rank)
+      .map((r) => r.id);
+    if (order.length) { reorder({ intents }, order); ranked = order.length; }
+  } else {
+    for (const r of m.rank) {
+      if (!intents.get(r.id)) continue;
+      if (intents.edit(r.id, { order: r.rank, ...(m.pinRanks ? { handOrdered: true } : {}) }).ok) ranked++;
+    }
   }
 
   /**
@@ -322,6 +486,10 @@ export function applyProposal(
   // there — so the filing is said first and neither is said as a zero.
   if (filed.length) parts.push(`${filed.length} filed from the pad`);
   if (notes) parts.push(`${notes} pad note${notes === 1 ? "" : "s"} judged and left on the pad`);
+  // The slot check's: a split is said as the verb, and what was approved but
+  // NOT done is said in full — an apply is never silent about a refusal.
+  if (splits) parts.push(`${splits} split in two`);
+  parts.push(...refused);
   store.recordApplied(runId, counts, now);
   // `filed` even when empty: this host RAN the posts, so it can say what landed,
   // and "nothing did" is an answer the phone is allowed to act on. Only the

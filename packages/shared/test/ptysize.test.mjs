@@ -5,7 +5,7 @@
 // copies of one prompt stacked in a composer nobody could see.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { MIN_PTY_COLS, MIN_PTY_ROWS, drawableViewport, ptySize } from "../dist/index.js";
+import { MAX_PTY_COLS, MIN_PTY_COLS, MIN_PTY_ROWS, cappedCols, drawableViewport, ptySize } from "../dist/index.js";
 
 test("a collapsed container is not a viewport", () => {
   assert.equal(drawableViewport(54, 3), false);   // the real one
@@ -39,4 +39,14 @@ test("an absent geometry is not a small one — it is the floor, never NaN", () 
 test("fractional cells round DOWN — half a row is not a row", () => {
   assert.deepEqual(ptySize(54.9, 41.9), { cols: 54, rows: 41 });
   assert.equal(drawableViewport(54, MIN_PTY_ROWS - 0.5), false);
+});
+
+// The ceiling: a desktop pane fits 230+ columns and the CLI wraps prose to the
+// width it is told, so a sign-in URL became one line across the whole window.
+test("a desktop-wide report is capped at MAX_PTY_COLS, on both ends", () => {
+  assert.equal(MAX_PTY_COLS, 160);
+  assert.deepEqual(ptySize(231, 48), { cols: MAX_PTY_COLS, rows: 48 });
+  assert.equal(cappedCols(231), MAX_PTY_COLS);
+  assert.equal(cappedCols(54), 54);                  // a phone's grid is untouched
+  assert.deepEqual(ptySize(MAX_PTY_COLS, 40), { cols: MAX_PTY_COLS, rows: 40 });
 });

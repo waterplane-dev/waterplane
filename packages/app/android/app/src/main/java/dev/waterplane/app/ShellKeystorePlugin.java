@@ -41,8 +41,8 @@ import javax.crypto.spec.GCMParameterSpec;
  *     .status()                                      → {hardware, enrolled, strongBox}
  *     .has({alias})                                  → {exists}
  *     .generate({alias, strongBox?, replace?})       → {strongBox}
- *     .wrap({alias, dataB64, aadB64?, title?, subtitle?})          → {ctB64, nonceB64}
- *     .unwrap({alias, ctB64, nonceB64, aadB64?, title?, subtitle?}) → {dataB64}
+ *     .wrap({alias, dataB64, aadB64?, title?, subtitle?, description?})          → {ctB64, nonceB64}
+ *     .unwrap({alias, ctB64, nonceB64, aadB64?, title?, subtitle?, description?}) → {dataB64}
  *     .remove({alias})                               → {}
  * </pre>
  *
@@ -314,6 +314,7 @@ public class ShellKeystorePlugin extends Plugin {
         }
         String title = nonEmpty(call.getString("title"), "Confirm it's you");
         String subtitle = call.getString("subtitle");
+        String description = call.getString("description");
         activity.runOnUiThread(() -> {
             try {
                 BiometricPrompt.PromptInfo.Builder info = new BiometricPrompt.PromptInfo.Builder()
@@ -321,6 +322,7 @@ public class ShellKeystorePlugin extends Plugin {
                         .setNegativeButtonText("Cancel")
                         .setAllowedAuthenticators(AUTHENTICATORS);
                 if (subtitle != null && !subtitle.isEmpty()) info.setSubtitle(subtitle);
+                if (description != null && !description.isEmpty()) info.setDescription(description);
                 BiometricPrompt bp = new BiometricPrompt(activity, ContextCompat.getMainExecutor(activity),
                         new BiometricPrompt.AuthenticationCallback() {
                             @Override

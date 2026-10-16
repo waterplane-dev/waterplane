@@ -287,8 +287,9 @@ export const HINTS: Record<string, HintDef> = {
     when: "“One per repo” is the middle answer — two agents must not edit one checkout, but two worktrees are not each other's business. “All at once” spends the fresh window broadly.",
   },
   "term.fullscreen": { title: "Full screen", what: "Hides the header, the status line and the toolbar and gives those rows to whatever you are reading — the same layout typing room gives you, without the keyboard taking half the screen. The Esc/Tab/arrow row stays, because with no keyboard it is the only way to answer the CLI. Tap again, or the menu button in the corner, to come back." },
-  "hdr.pair": { title: "Claude · Shell", what: "The session and its companion shell, as two tabs: the lit one is on screen, a tap on the other switches. With no shell yet, Shell opens one in this session's folder — temporary, it closes when the session does. Gone in full screen and while typing, with the rest of the header." },
+  "hdr.pair": { title: "Claude · Shell", what: "The session and its companion shell, as two tabs: the lit one is on screen, a tap on the other switches. They appear once the menu's \"companion shell\" has opened one in this session's folder — temporary, it closes when the session does. Gone in full screen and while typing, with the rest of the header." },
   "term.read": { title: "Reader / terminal", what: "Swaps the whole view: the live CLI screen, or the scrollable, searchable transcript of the conversation. It sits here rather than on the header because full screen hides the header — and this is the control you want most in the layout you read a long turn in." },
+  "term.grip": { title: "Move these buttons", what: "Drag the grip to move the whole group of terminal buttons anywhere inside the terminal, off a line it is hiding. The terminal itself is not resized, so the CLI does not redraw. Double-tap the grip to put the group back in its corner. Where you put it is remembered on this phone only." },
   "term.modelwheel": { title: "Model · effort wheel", what: "Picks model and effort on one wheel: a spoke per model, effort from low at the centre to max at the rim. A tap only selects — the sentence above the wheel says what Apply will do, and only a change the CLI cannot make live relaunches the session. The prompt cache belongs to one model, so a switch makes the next turn re-write the context; the line under the wheel prices it. The chips below choose which models are spokes." },
   "term.zoom": { title: "Zoom this screen", what: "How big the terminal — or, in the reader, the conversation — is drawn, on top of the app's text size. In the terminal, smaller is a BIGGER grid: the desktop resizes the session to the new columns and rows, so more of what the CLI prints fits on the phone. The two surfaces remember their own zoom. At either end of the range that button is simply not there, and the readout says which end." },
   "limit.global": {
@@ -304,6 +305,11 @@ export const HINTS: Record<string, HintDef> = {
 
   // ── Launcher / sessions / repos ───────────────────────────────────
   "session.star": { title: "Star", what: "Marks a session as one you are waiting on. A starred session that finishes a turn while you are elsewhere gets a “new” flag. Works with the link down — the star is kept on this phone and sent to the desktop when the connection is back." },
+  "session.followup": {
+    title: "Flag for follow up",
+    what: "A one-shot mark that this session has something to come back and read. Opening the session does not clear it — only “Done — clear flag” does, here or on its Recently closed row, so it survives a restart, a close and a resume. A bulk close spares it, and the repo's flag count shows exactly the flagged ones.",
+    when: "Its colour says who set it: blue is you, by hand; purple is a launch you ticked “Flag for follow up when done” on, once it finished; teal is the session's own agent, with its one-line reason under the row.",
+  },
   "session.context": {
     title: "Context window",
     what: "How full this conversation's window has been over time, with a mark where it was compacted and a shaded band over every stretch the account refused to serve. Read off the CLI's own conversation log, which is dated — the badge beside it can only say where you are NOW.",
@@ -346,7 +352,7 @@ export const HINTS: Record<string, HintDef> = {
   // never reaches this verb (`intent.waive` lifts the budget only).
   "backlog.fire": {
     title: "Run this item now",
-    what: "Starts it this second in a session of its own (or in the session it is aimed at) — skipping the queue: the budget, the smart pick, one at a time and wait until free.",
+    what: "Starts it this second in a session of its own (or in the session it is aimed at) — skipping the queue: the budget, one at a time and wait until free.",
     when: "For the one item you want now — it is the manual override, and one tap fires it past every hold. Several at once are several agents; if another agent is already working in this checkout, the row says so and the tap starts a second beside it.",
     confirm: true,
   },
@@ -367,7 +373,7 @@ export const HINTS: Record<string, HintDef> = {
   // the only way back into the queue was to retype the words.
   "backlog.runagain": {
     title: "Put it back in the queue",
-    what: "Puts a failed item back among the waiting ones, keeping its words, its place and the failure it had. It runs again in a new session of its own when its turn comes \u2014 one at a time in this repo, with auto and the smart pick taking it from there.",
+    what: "Puts a failed item back among the waiting ones, keeping its words, its place and the failure it had. It runs again in a new session of its own when its turn comes \u2014 one at a time in this repo, with auto taking it from there.",
     when: "For work that failed for a reason that has passed. Nothing starts this second: \u201cre-fire\u201d beside it is the verb for that. The old failure stays on the row, so an item that keeps failing says so rather than looking new.",
     confirm: true,
   },
@@ -377,35 +383,6 @@ export const HINTS: Record<string, HintDef> = {
     when: "For a list of long prompts that all look alike. One short call on the cheap model, so it costs little; it names only what is in the cut you are looking at, and running it again on the same rows changes nothing. A title it writes is yours to edit, and once you edit one nothing writes over it again.",
   },
   "backlog.done": { title: "Mark done", what: "Closes the item off by hand, without running it." },
-  "backlog.smartpick": {
-    title: "Look over this repo before each item starts",
-    what: "With this on, the moment this repo is about to start its next waiting item, something reads everything still waiting first: it picks which one goes next, merges items that turn out to be the same job, and puts the rest in an order. It then does all three by itself — there is nothing to approve.",
-    when: "Per repo, because a list of two a week and a list of fifty want different answers. What it merges is kept: the originals go to archived with their own words, and the row that replaced them carries an undo. Anything you dragged into place is never moved. And if the look fails, or takes too long, the item runs in the order you already had. A few seconds each time, and the strip on the repo bar says what that look cost; nothing at all while this is off.",
-    confirm: true,
-  },
-  "backlog.smartpickrepos": {
-    title: "Which repos take a look first",
-    what: "Says how many repos have the look switched on, and opens the list of them.",
-    when: "The count is the filter: tapping it shows exactly those repos rather than the whole list for you to pick them out of again. Off everywhere, the look costs nothing at all \u2014 not a completion, not a git call.",
-  },
-  "backlog.mergedfrom": {
-    title: "Show the items this was written from",
-    what: "Opens exactly the items that were folded into this row and nothing else — they are under archived, with every word still theirs. Clear the filter to get the list back.",
-    when: "For reading what the merged wording actually came from, before you decide whether to keep it.",
-  },
-  // Its `when` used to read *"Only while it is still waiting: once it has
-  // started … the originals stay under archived for you to bring back one at a
-  // time."* That is the retired bring-one-back-by-hand sentence, attached to
-  // the very button that replaced it — false against the host (the message is
-  // accepted in every state but offline) and false against the row, which draws
-  // `put them back` on a row that has already run. The whole point of the
-  // button is the person the notification WAKES, and they always meet a row
-  // that has started.
-  "backlog.unmerge": {
-    title: "Undo / put them back",
-    what: "Returns the items this row was made from to the list, at the positions they had, and takes the row itself away. Nothing typed is lost either way — the words on this row were written by machinery, and the originals never left.",
-    when: "Any time. While it is still waiting this is a true undo — nothing ran, and the button says “undo”. Once it has started it queues the originals again, as they were, and the row that ran is kept under archived rather than deleted; a session already running it is NOT stopped. The same merge is never proposed again afterwards.",
-  },
 
   // ── Files / downloads ─────────────────────────────────────────────
   "gallery.pull": {
@@ -556,12 +533,12 @@ export const HINTS: Record<string, HintDef> = {
   },
   "repohealth.retouch.rate": {
     title: "The re-touch rate",
-    what: "Over a trailing window of days, the share of file touches that were re-touches: the same file edited again soon after — soon in HOURS, or within a couple of commits that are also close in time. Sweep commits touching most of the tree are left out of both halves of the fraction. The touches it is a share of, and the three most re-touched files, are printed beside it. The exact window, hour and commit distance are pre-registered in the tool, not written down on this phone.",
+    what: "Over a trailing window of days, the share of file touches that were re-touches: the same file edited again soon after — soon in HOURS, or within a couple of commits that are also close in time — AND the later edit changes or removes lines the earlier one added. A touch that only adds lines near the last one (an append to a list or a registry) is not rework: it is counted apart and printed beside the rate, never in it. Sweep commits touching most of the tree are left out of both halves of the fraction. The touches it is a share of, and the three most re-touched files, are printed beside it. The exact window, hour and commit distance are pre-registered in the tool, not written down on this phone.",
     when: "A file edited once and left alone is a decision that held; a file edited again two days later is one that did not. It is also the one number here that does not fall simply because more code was written, which is why the sheet plots it at all. Read it with its denominator: 1.00 over 6 touches and 0.69 over 36 are different claims.",
   },
   "repohealth.hatches.perKloc": {
-    title: "Escape hatches per kLOC",
-    what: "How many places a rule was switched off on purpose, per thousand source lines. Each detected language has its own marks — TypeScript's `as any` and `@ts-ignore`, Kotlin's `!!` and `@Suppress`, Python's `# type: ignore` and a bare `except:` — plus TODO and FIXME, which count the same way in every language. Counted as OCCURRENCES, so two on one line count twice.",
+    title: "Unexplained escape hatches per kLOC",
+    what: "How many places a rule was switched off WITHOUT a reason, per thousand source lines. Each detected language has its own marks — TypeScript's `as any` and `@ts-ignore`, Kotlin's `!!` and `@Suppress`, Python's `# type: ignore` and a bare `except:`. A mark that carries its reason (after it on the line, or in a comment directly above) is explained and counted apart; TODO and FIXME are reported apart too, and neither is in this number. All three counts are printed beside it. Counted as OCCURRENCES, so two on one line count twice.",
     when: "Per kLOC rather than raw, or it would mostly plot how fast the repo is growing. Whether any single hatch was the right call is a judgment and this tool never makes one: there is no threshold anywhere in it, and no colour on this number. Only the marks a detected language knows about are counted — the sheet lists which languages are active.",
   },
   "repohealth.context.claudeMdChars": {
@@ -580,9 +557,9 @@ export const HINTS: Record<string, HintDef> = {
     when: "The one tile with no percentile and no arrow under it, and that is deliberate. A rise can be reference leaving CLAUDE.md for a skill that loads only when it is needed, and a rise can be one skill split finer than its subject divides — the count is identical either way, so the tool draws the shape and takes no position. Read it beside the other two: those move in opposite directions when reference is relocated, and this says how many pieces it landed in.",
   },
   "repohealth.untested.count": {
-    title: "Modules no test names",
-    what: "Source modules that no test file names, by whatever counts as naming one in the detected language — an import path in TypeScript or Python, a package path in Kotlin. A mention has to carry at least one DIRECTORY segment, never a bare word on its own: a bare name is also ordinary prose, and matching it alone would mark most of the tree tested for no reason.",
-    when: "A count and not a percentage, because a ratio rises when you add a tested feature and falls when you add an untested one, which mostly plots growth. Nobody can write a test for 27%; a list can be closed one line at a time. It says a test NAMES the module, never that the module is covered — and a language with no naming rule of its own sits outside this count rather than inside it, neither tested nor untested. In a language whose own tests sit beside what they test rather than importing it, a test that needs no import names nothing, so this count reads high there even where the tests do exercise the code.",
+    title: "Modules no test reaches",
+    what: "Source modules that no test file names AND that no test reaches through imports — a test importing a module that imports this one, to any depth, by the import syntax of the detected language. A name has to carry at least one DIRECTORY segment, never a bare word on its own: a bare name is also ordinary prose, and matching it alone would mark most of the tree tested for no reason. The sentence under the tile adds the modules reached only through another module's imports, and what joined and left the list since the window opened.",
+    when: "A count and not a percentage, because a ratio rises when you add a tested feature and falls when you add an untested one, which mostly plots growth. Nobody can write a test for 27%; a list can be closed one line at a time. Reached means a test LOADS the module, never that its lines ran — and a module a test only reads as text counts as named without the modules it imports counting as reached. A language with no naming rule of its own sits outside this count rather than inside it, neither tested nor untested; one with a naming rule but no import rule is read on naming alone. In a language whose own tests sit beside what they test rather than importing it, a test that needs no import names nothing, so this count reads high there even where the tests do exercise the code.",
   },
   "repohealth.reading": {
     title: "The percentile and the arrow",

@@ -1,5 +1,11 @@
 /**
- * The demo's first minute, on the session screen (docs/analysis/demo-pitch-plan.md §1):
+ * The demo's first minute (docs/analysis/demo-pitch-plan.md §1, R-demo-014):
+ *
+ *  - `DemoStartCue` — on the repo list, the demo's first screen: one note under
+ *    todo-garden's REAL `+ now` (which pulses), "Start a session on your desktop".
+ *    Mounted by `core/launcher/LauncherScreen.tsx`; the tap is the person's.
+ *
+ * …and on the session that tap started:
  *
  *  - `DemoHookHint` — ONE non-modal hint, "Read it like a chat", pointing at the
  *    session's REAL reader toggle (`[data-hint="term.read"]`, `TermArea.tsx`). It
@@ -13,27 +19,29 @@
  * `hintShown`/`cardShown`, pure and tested) and send nothing anywhere.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { BookOpen, CalendarClock, ChevronRight, Coins, HeartPulse, Sparkles, X } from "lucide-react";
+import { BookOpen, CalendarClock, ChevronRight, Coins, HeartPulse, Plus, Sparkles, X } from "lucide-react";
 import type { SessionInfo } from "@waterplane/shared";
 import { core } from "../../sdk";
 import { demoActiveId, isDemo, openRepoHealthFor } from "../../demoEntry";
-import { cardShown, hintShown } from "./logic";
-import { closeHookCard, hookDoor, hookReadUsed, openDemoTourSheet } from "./actions";
+import { TOUR_REPO, cardShown, cueShown, hintShown } from "./logic";
+import { claimHookSession, closeHookCard, closeStartCue, hookDoor, hookReadUsed, openDemoTourSheet } from "./actions";
 import { useTour } from "./store";
 
 /** The toggle the hint points at — `TermArea`'s reader switch. */
 const TOGGLE = '[data-hint="term.read"]';
 
-/** How long the screen is left alone before the hint arrives (the first tool line streams at ~1.2 s). */
-const HINT_DELAY_MS = 3_500;
+/** How long the finished loop is left alone before the hint arrives: the after screenshot and the
+ *  build's last line get a look first. */
+const HINT_DELAY_MS = 1_500;
 
 interface Spot { top: number; right: number; arrow: number }
 
-export function DemoHookHint({ sessionId, readMode }: { sessionId: string; readMode: boolean }) {
+export function DemoHookHint({ session, readMode }: { session: SessionInfo; readMode: boolean }) {
   const tour = useTour();
-  const due = hintShown(tour, { demo: isDemo(), scenario: demoActiveId(), activeId: sessionId });
-  // The session opens on claude's own welcome header; the hint comes in once the person has had a look at
-  // it and the first tool line has streamed, so it never sits on the logo.
+  const due = hintShown(tour, { demo: isDemo(), scenario: demoActiveId(), session });
+  // The first minute is the loop (start, build on two devices, combine and mark, fix, the build for
+  // the phone); the hint comes in once it is done (`hintShown` reads `loopDone`), so it never stands
+  // over the work.
   const [waited, setWaited] = useState(false);
   useEffect(() => {
     if (!due) return undefined;
@@ -43,6 +51,9 @@ export function DemoHookHint({ sessionId, readMode }: { sessionId: string; readM
   const shown = due && waited;
   const ref = useRef<HTMLDivElement>(null);
   const [spot, setSpot] = useState<Spot | null>(null);
+
+  // The session the cued `+ now` started, once on screen: the hook's (its first prompt is typed in).
+  useEffect(() => { claimHookSession(session); }, [session]);
 
   // Used: the reader is up. The hint has done its one job.
   useEffect(() => { if (shown && readMode) hookReadUsed(); }, [shown, readMode]);
@@ -77,6 +88,65 @@ export function DemoHookHint({ sessionId, readMode }: { sessionId: string; readM
         <span>The same session as a transcript — tap the book above. Tap it again to come back.</span>
       </span>
       <button className="demo-hook-x" aria-label="dismiss the hint" onClick={hookReadUsed}><X size={14} /></button>
+    </div>
+  );
+}
+
+/** The repo `+ now` the start cue points at: todo-garden's (`core/launcher/RepoGroup.tsx` titles it). */
+const START = `button.repo-start-btn[title^="new session in ${TOUR_REPO} "]`;
+
+/**
+ * The demo's first screen is the repo list, as a real one is, and its one cue: start a session on
+ * your desktop — todo-garden's `+ now`, pulsing, the note floating under it (fixed to the viewport,
+ * so it never moves a row). The tap is the person's; `onSessionCreated` takes the session it starts.
+ * Gone once a session was started or its X was tapped; never drawn over a session.
+ */
+export function DemoStartCue() {
+  const tour = useTour();
+  const c = core();
+  const shown = cueShown(tour, { demo: isDemo(), scenario: demoActiveId(), active: !!c.world.active });
+  const [spot, setSpot] = useState<Spot | null>(null);
+
+  useLayoutEffect(() => {
+    if (!shown) { setSpot(null); return undefined; }
+    let btn: HTMLElement | null = null;
+    let tries = 0;
+    let timer = 0;
+    const place = () => {
+      if (!btn) return;
+      const b = btn.getBoundingClientRect();
+      const right = 8;
+      setSpot({ top: b.bottom + 8, right, arrow: Math.max(10, window.innerWidth - right - (b.left + b.width / 2) - 6) });
+    };
+    // The repo list arrives a render or two after the welcome: look for the button until it is there.
+    const find = () => {
+      btn = document.querySelector<HTMLElement>(START);
+      if (!btn) { if (++tries < 50) timer = window.setTimeout(find, 100); return; }
+      btn.classList.add("demo-hook-pulse");
+      place();
+    };
+    find();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.clearTimeout(timer);
+      btn?.classList.remove("demo-hook-pulse");
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [shown]);
+
+  if (!shown || !spot) return null;
+  return (
+    <div className="demo-hook-hint demo-start-cue" role="note" aria-label="Start a session"
+      style={{ top: spot.top, right: spot.right }}>
+      <span className="demo-hook-arrow" style={{ right: spot.arrow }} />
+      <Plus size={16} className="demo-hook-hint-icon" />
+      <span className="demo-hook-hint-text">
+        <b>Start a session on your desktop</b>
+        <span>Tap + now on {TOUR_REPO}: Claude Code opens in that repo, on the desktop’s own tools.</span>
+      </span>
+      <button className="demo-hook-x" aria-label="dismiss the cue" onClick={closeStartCue}><X size={14} /></button>
     </div>
   );
 }

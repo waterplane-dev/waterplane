@@ -31,6 +31,7 @@ export function TvTail({ m }: { m: TvModel }) {
                     answer, so the options are READ, never tapped. Deliberately
                     not buttons that toast — a control that cannot act is not a
                     control (`Unavailable.tsx`). */}
+                {status.prompt.plan && <div className="tr-ask-q">{status.prompt.plan.text}</div>}
                 <div className="tr-ask-q">{status.prompt.ask || status.prompt.question}</div>
                 <div className="tr-ask-opts">
                   {status.prompt.options.map((o) => (

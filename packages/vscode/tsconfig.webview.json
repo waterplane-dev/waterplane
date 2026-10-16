@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "moduleResolution": "Bundler",
+    // The reused web modules import siblings by their `.ts` name (see packages/web/tsconfig.json).
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "declaration": false,
+    "sourceMap": false,
+    "types": [],
+    "baseUrl": ".",
+    // react / lucide imported from ../web/src must resolve to THIS package's copy (esbuild does the same via nodePaths).
+    "paths": {
+      "@waterplane/shared": ["../shared/src/index.ts"],
+      "@waterplane/kit": ["./webview/shims/kit.ts"],
+      "react": ["./node_modules/@types/react"],
+      "react/jsx-runtime": ["./node_modules/@types/react/jsx-runtime"],
+      "react-dom/client": ["./node_modules/@types/react-dom/client"],
+      "lucide-react": ["./node_modules/lucide-react"]
+    }
+  },
+  "include": ["webview", "../extensions/token-stats/web/charts"]
+}

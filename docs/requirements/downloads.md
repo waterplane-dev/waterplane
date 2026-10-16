@@ -55,3 +55,9 @@ APK artifact filenames include version identifiers so builds of the same app can
 - asked: 2026-09-22
 - shipped: 3f7c7bc
 
+
+### R-downloads-013 · shipped
+With both the APK and a browser tab open on one phone, auto-downloads can be directed to only one of them, so a build is not fetched twice. Auto-download can be switched off per client, the switch is visible in the downloads section, and a browser beside the APK asks once whether the app alone should fetch.
+- asked: 2026-10-09, 2026-10-10, 2026-10-11
+- shipped: 7afaac5
+

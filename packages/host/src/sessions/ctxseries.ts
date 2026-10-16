@@ -8,10 +8,11 @@
  * Moved verbatim out of `sessions.ts` (docs/notes/host-architecture.md, S8).
  * Reaches the rest of the manager only through `core`.
  */
-import type { ContextSeriesDoc, ContextWindowSource, TranscriptToolDetail } from "@waterplane/shared";
+import type { ContextSeriesDoc, ContextWindowSource, Effort, TranscriptToolDetail } from "@waterplane/shared";
 import { resolveContextWindow } from "@waterplane/shared";
 import { stripAnsi } from "../prompt.js";
 import { subagentsDir } from "../agents.js";
+import { autoCompactFor } from "../compliance.js";
 import { detectContext } from "../context.js";
 import { agentCumOf, agentUsage, projectContextLog, sparkOf, updateContextLog, withAgentRuns, type AgentUsage, type SeriesCursor } from "../ctxlog.js";
 import { ContextWindowStore } from "../ctxwindow.js";
@@ -146,27 +147,41 @@ export class CtxSlice {
     // file, so gating this behind "has the conversation log moved" would freeze
     // the total for the whole of a fan-out, which is exactly the session the
     // total exists for.
-    const agentsBefore = s.agentUse?.tok ?? null;
     try { s.agentUse = agentUsage(subagentsDir(s.info.cwd, cid), s.agentUse ?? null); } catch { /* the curve is not worth a throw */ }
-    const agentsMoved = (s.agentUse?.tok ?? null) !== agentsBefore;
-    // "The log has not moved" is only a reason to stop if there is already a
-    // miniature to keep. The cursor is SHARED with `getContextSeries`, so
-    // opening the graph advances it — and without the second clause that read
-    // permanently suppressed the first spark this session would ever publish.
-    if (!agentsMoved && cur && cur.path === path && cur.mtime === mtime && cur.size > 0 && s.info.contextSpark) return false;
+    const agentTok = s.agentUse?.tok ?? null;
+    // "Nothing moved" is judged against what the SPARK was built from, never
+    // against the cursor or the agent tally: both are SHARED with
+    // `getContextSeries`, which advances them without rebuilding the spark.
+    // Judged against them, a context sheet polling a running fan-out kept the
+    // header's Σ frozen minutes behind the turn's own cost foot ($3.42 under a
+    // $6.34 prompt) — the sweep always found "nothing new" because the graph
+    // had already read it.
+    const from = s.sparkFrom;
+    if (from && from.path === path && from.mtime === mtime && from.agentTok === agentTok && s.info.contextSpark) return false;
     let next: SeriesCursor | null;
     // Best-effort in the strongest sense: this runs on the idle path of every
     // session, and a graph is not worth taking a turn boundary down for.
     try { next = updateContextLog(path, cur ?? null); } catch { return false; }
     if (!next) return false;
     s.ctxCursor = next;
+    // What the newest turn RAN on, beside the launch flags — the one place a
+    // `/model` or `/effort` typed since launch becomes visible. Before the
+    // spark, which can come out null on a log the turn fields still describe.
+    const turnMoved = noteTurnModel(s, next);
     const peak = next.samples.reduce((m, p) => (p.tok > m ? p.tok : m), 0);
     const window = this.noteAndResolveWindow(next.model ?? s.info.model, peak, s.info.contextTotalTok, s.backend.id);
     const spark = sparkOf(next, window.tok, window.from, s.agentUse ?? null);
-    if (!spark) return false;
+    if (!spark) return turnMoved;
+    // The setting the row miniature's axis tops out at. Absent rather than
+    // wrong when the read throws.
+    try {
+      const r = autoCompactFor(s.info.cwd);
+      if (r.value.kind === "size" && r.value.tokens > 0) spark.autoCompactSetTok = r.value.tokens;
+    } catch { /* the axis falls back to the window */ }
+    s.sparkFrom = { path, mtime, agentTok };
     const before = s.info.contextSpark;
     s.info.contextSpark = spark;
-    return !before || JSON.stringify(before) !== JSON.stringify(spark);
+    return turnMoved || !before || JSON.stringify(before) !== JSON.stringify(spark);
   }
 
   /**
@@ -376,6 +391,14 @@ export class CtxSlice {
       samples: parsed.samples,
       events: parsed.events,
       turns: parsed.turns,
+      // The auto-compact SETTING as it reads today, drawn beside the measured
+      // `autoCompactTok`. Absent rather than wrong when the read throws.
+      ...(() => {
+        try {
+          const r = autoCompactFor(log.cwd);
+          return { autoCompactSet: { tokens: r.value.kind === "size" ? r.value.tokens : null, source: r.source, ...(r.raw != null ? { raw: r.raw } : {}) } };
+        } catch { return {}; }
+      })(),
       // What the conversation's own requests were made of. Always sent where
       // the log was readable at all: the sheet's rule, like the all-sessions
       // screen's, is that a total is never printed without its split, and the
@@ -452,4 +475,20 @@ export class CtxSlice {
       truncated: parsed.truncated,
     };
   }
+}
+
+const EFFORTS: readonly string[] = ["low", "medium", "high", "xhigh", "max"] satisfies Effort[];
+
+/**
+ * Copy the cursor's newest model and effort onto `SessionInfo.turnModel` /
+ * `turnEffort`; true when either moved. An effort word this host does not know
+ * is left absent rather than passed on as an `Effort` it is not.
+ */
+function noteTurnModel(s: Session, cur: SeriesCursor): boolean {
+  const model = cur.model ?? undefined;
+  const effort = cur.effort && EFFORTS.includes(cur.effort) ? (cur.effort as Effort) : undefined;
+  if (s.info.turnModel === model && s.info.turnEffort === effort) return false;
+  if (model) s.info.turnModel = model; else delete s.info.turnModel;
+  if (effort) s.info.turnEffort = effort; else delete s.info.turnEffort;
+  return true;
 }

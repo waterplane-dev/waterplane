@@ -30,106 +30,29 @@
  *    above its chart, and the drag readout is a text line under it.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BarChart3, Bot, Loader, Plus, RefreshCw, Scissors, SearchCheck, TrendingUp, Wallet } from "lucide-react";
-import type { AgentRun, CompactionCost, CompactionLedger, ContextSample, ContextSeriesDoc } from "@waterplane/shared";
+import { BarChart3, Bot, Loader, RefreshCw, Scissors, SearchCheck, Wallet } from "lucide-react";
+import type { AgentRun, ContextSample, ContextSeriesDoc } from "@waterplane/shared";
 import {
-  coldStartText, compactionCostText, compactionCountText, compactionMethodText, compactionPendingText,
-  compactionRatioText, compactionReading, compactionRowFacts, compactionRowLabel,
-  compactionSavedText, compactionUnmeasuredText, compactionWindowText, costDoorsText,
-  sessionCostOfSeries, tokenTotal as tokenTot,
+  coldStartText, sessionCostOfSeries, tokenTotal as tokenTot,
 } from "@waterplane/shared";
 import { SheetHead } from "./Sheet";
 import { Empty } from "./Empty";
 import { Unavailable } from "./Unavailable";
+import { CompactionPanel } from "./CompactionPanel";
+import { NextTurnCost } from "./NextTurnCost";
 import { api } from "./api";
 import { useRemoteResource } from "./useRemoteResource";
 import { getContextSeriesAt, putContextSeries } from "./offlineCache";
 import { AgentLanesChart, ContextChart, ContextLegend, ModelLegend, SpendChart, SpendLegend, StackLegend } from "./ContextGraph";
 import { CacheVerdict, KindBar } from "./kit/chart/TokenComposition";
+import { ScrubHint } from "./kit/chart/ScrubHint";
 import {
-  agentReadout, agentSummary, agentUndatedText, axisNote, fmtAxisTime, fmtGap, fmtReading, kindSeries,
+  agentReadout, agentSummary, agentUndatedText, autoCompactSetText, axisNote, fmtAxisTime, fmtGap, fmtReading, kindSeries,
   makePlot, modelSlots, seriesSummary, spendFacts,
   spendNote, spendSplit, spendSummary, splitNote, splitSummary,
 } from "./contextPlot";
 import { GAP_BREAK_MS } from "./contextPlot";
 import { DollarsWhy } from "./TurnCostCard";
-
-/**
- * What compacting this conversation saved, and what it cost — in tokens and
- * in money.
- *
- * Two facts that live on the same screen for one reason: the context chart
- * already draws a tick at every compaction, and a tick is the one thing about
- * a compaction nobody has to be told. What it DID is the question, and it has
- * an answer the log can support — both sides of the drop are written down, and
- * every request after a boundary is a request that re-sent a smaller window.
- *
- * Split by trigger, because "was typing `/compact` worth it" is a different
- * question from "was the CLI right to compact when it did", and folded
- * together they cannot be told apart. A row is drawn only for a trigger that
- * actually ran: a `you typed /compact 0×` row is a control-shaped nothing.
- *
- * The SENTENCES are `shared/sessioncost.ts`'s. Nothing here derives a figure:
- * the arithmetic is the host's (`ctxlog.ts`, in the same pass that prices the
- * conversation) and the wording is shared's, so this screen cannot come to
- * disagree with a second surface that grows one later.
- */
-function CompactionPanel(
-  { l, windowTok, tok }: { l: CompactionLedger; windowTok: number | null; tok: number | null },
-) {
-  const r = compactionReading(l);
-  // Never compacted at all: nothing to draw. The values view already says "no
-  // compactions in this conversation" beside the events, which is where an
-  // absence belongs. A boundary the log could not describe still opens the
-  // panel — its own sentence is the whole point of counting it.
-  if (r.count <= 0 && r.unmeasured <= 0) return null;
-  const count = compactionCountText(r);
-  const saved = compactionSavedText(r) ?? compactionPendingText(r);
-  const ratio = compactionRatioText(r);
-  const cost = compactionCostText(r);
-  const window = compactionWindowText(r, tok, windowTok);
-  const unmeasured = compactionUnmeasuredText(r);
-  const row = (kind: "auto" | "manual", c: CompactionCost) => c.count > 0 && (
-    <div key={kind} className="row ctx-row ctx-val">
-      <span className="row-title">{compactionRowLabel(kind, c.count)}</span>
-      {/* Saved first: it is the bigger number and the one being asked about.
-          Money beside each, never instead of it — the two sides are a cache
-          read and a cache write, which differ by up to twenty times in price,
-          so the token counts alone cannot be compared. A side with nothing in
-          it is DROPPED by `compactionRowFacts`, never drawn as a zero. */}
-      <span className="row-meta">
-        {compactionRowFacts(c).map((f) => <span key={f} className="row-sub">{f}</span>)}
-      </span>
-    </div>
-  );
-  return (
-    <>
-      <div className="ctx-summary">What compacting saved</div>
-      {count && <div className="empty ctx-note">{count}</div>}
-      {row("manual", l.manual)}
-      {row("auto", l.auto)}
-      {/* The claim and its qualifier in one block: past the model's own window
-          the figure is not what you would have paid, it is what those turns
-          would have cost if they could have run at all — and a multiple read
-          without that sentence beside it is a benchmark nobody can hit. */}
-      {saved && <div className="empty ctx-note">{saved}{ratio ? ` ${ratio}` : ""}</div>}
-      {window && <div className="empty ctx-note">{window}</div>}
-      {cost && <div className="empty ctx-note">{cost}</div>}
-      {/* HOW both figures were arrived at — the longest block on the panel and
-          the one nobody reads twice, so it folds. Not deleted: it is the reason
-          the ratio above can be trusted in the direction it will be used in
-          (both estimates are biased against compacting looking worthwhile), and
-          a reader who wants to argue with the number needs it. */}
-      {(r.savedTok > 0 || r.rebuildTok > 0) && (
-        <details className="hint-more ctx-method">
-          <summary>how these two figures were arrived at</summary>
-          <p>{compactionMethodText()}</p>
-        </details>
-      )}
-      {unmeasured && <div className="empty ctx-note">{unmeasured}</div>}
-    </>
-  );
-}
 
 /** Chart height. Sized to include the x-axis band — a fixed height that only
  *  fits the plot is what gives a chart card its own tiny nested scrollbar. */
@@ -167,9 +90,11 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, budget, 
    * `budgetStateLine` over shared's sentences — this file words nothing about
    * it): spend against the cap with the subagent split, where it stands, and a
    * door to the sheet that sets it. `label` null is "no budget"; the door is
-   * drawn either way, because setting one is the point of the panel.
+   * drawn either way, because setting one is the point of the panel. `line`
+   * null is nothing to add to the title (no budget, spend unknown): the card is
+   * then its title and its door, never the title said again as a body.
    */
-  budget?: { label: string | null; line: string; onOpen: () => void };
+  budget?: { label: string | null; line: string | null; onOpen: () => void };
   /**
    * Open a new session in the same repo, if the caller can.
    *
@@ -184,7 +109,8 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, budget, 
    * Type `/compact` into THIS conversation — the other door, and the one the
    * ledger under the panel can already put a figure on.
    *
-   * It is not the same offer as `onFresh` and is deliberately drawn first: a
+   * It is not the same offer as `onFresh` and is deliberately drawn first —
+   * once, on the Context window chart's name, above the cost panel: a
    * compaction keeps the thread and re-reads a summary of it, so it answers the
    * common case (this work still needs what is here) that a fresh session
    * cannot. `costDoorsText` is the sentence that says so.
@@ -397,7 +323,7 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, budget, 
    * And the ORDER: **the charts sit together, then the panels, then the
    * captions.** Summary → spend · context · spend · agents (one width, one
    * x axis, adjacent, so a step in one lines up with a bar in the next) → the
-   * composition strip → the cost panel and its doors → expired cache →
+   * composition strip → the cost panel and its door → expired cache →
    * compactions → captions. The panels used to be interleaved under the chart
    * each was "about", which put three blocks of prose between charts that share
    * an axis and are read together. Each panel leads with a sentence or two;
@@ -450,13 +376,30 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, budget, 
               {spend.costUsd != null && <DollarsWhy className="ctx-method" />}
             </>}
 
-            {/* The window held, on the same x axis: the spend above is its integral. */}
-            <div className="ctx-chart-title">Context window</div>
+            {/* The window held, on the same x axis: the spend above is its integral.
+                `/compact` sits at the END of this chart's name — the window is what
+                it changes — and this is the sheet's ONE `/compact`. The cost panel
+                below carried a second (`/compact this one`, same send, same
+                subject) several screens down and only once there was advice; two
+                doors to one send read as two different things. Absent with its
+                reason in TEXT, said here once. */}
+            <div className="ctx-chart-title ctx-chart-title-row">
+              <span>Context window</span>
+              {onCompact && (
+                <button className="key" onClick={onCompact}>
+                  <Scissors size={14} /> /compact
+                </button>
+              )}
+            </div>
+            {!onCompact && compactCant && (
+              <Unavailable cants={[{ label: "/compact from here", reason: compactCant }]} />
+            )}
             {summary && <div className="ctx-summary">{summary}</div>}
             <div className="ctx-box" ref={boxRef}>
               {width > 0 && (
                 <ContextChart samples={samples} events={events} width={width} height={CHART_H}
                   windowTok={windowTok} autoCompactTok={doc?.autoCompactTok ?? null}
+                  autoCompactSetTok={doc?.autoCompactSet?.tokens ?? null}
                   onHover={onHover} bands={ctxBands} agents={agents} />
               )}
             </div>
@@ -464,7 +407,7 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, budget, 
             <div className="ctx-readout">
               {hover
                 ? `${fmtAxisTime(hover.t, span)} · ${fmtReading(hover.tok, windowTok)}`
-                : "drag across the chart to read a value"}
+                : <ScrubHint />}
             </div>
             <ContextLegend events={events} agents={agents.filter((a) => a.ctx?.length).length} />
             {ctxBands && width > 0 && (
@@ -526,7 +469,7 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, budget, 
             )}
           </>}
 
-          {/* ── What the next turn costs, and the doors ──────────────────────
+          {/* ── What the next turn costs, and the fresh-session door ─────────
               A reading, never a gate. The lead is the note and the advice; the
               doors' difference and the mechanism fold. */}
           {liveAgentNote && (
@@ -538,64 +481,20 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, budget, 
               <div className="ctx-cost-note">{liveAgentNote}</div>
             </div>
           )}
-          {cost && (
-            <div className={`ctx-cost ctx-cost-${cost.level}`}>
-              <div className="ctx-cost-head">
-                <TrendingUp size={14} />
-                <span>{cost.chip ? `${cost.chip} a fresh session` : "about a fresh session"}</span>
-              </div>
-              <div className="ctx-cost-note">{cost.note}</div>
-              {cost.advice && <div className="ctx-cost-note">{cost.advice}</div>}
-              {/* Two doors, not the same offer: `/compact` keeps the thread and
-                  LEADS; a fresh session keeps nothing. `/compact` only where the
-                  backend takes slash commands, absent with its reason in TEXT. */}
-              {cost.advice && (onCompact || onFresh) && (
-                <div className="sheet-actions">
-                  {onCompact && (
-                    <button className="key primary" onClick={onCompact}
-                      title="types /compact into this conversation — it keeps the thread and re-reads a summary of it">
-                      <Scissors size={14} /> /compact this one
-                    </button>
-                  )}
-                  {onFresh && (
-                    <button className="key" onClick={onFresh}>
-                      <Plus size={14} /> new session in this repo
-                    </button>
-                  )}
-                </div>
-              )}
-              {cost.advice && !onCompact && compactCant && (
-                <Unavailable cants={[{ label: "/compact from here", reason: compactCant }]} />
-              )}
-              {cost.advice && !onFresh && (
-                <Unavailable cants={[{
-                  label: "a new session from here",
-                  reason: "this session's directory is not one of this desktop's repos, so there is nowhere to start one",
-                }]} />
-              )}
-              {/* The mechanism, and what each door keeps — folded, never cut:
-                  it is the sentence that stops this panel reading as a scold. */}
-              <details className="hint-more ctx-method ctx-cost-more">
-                <summary>why the next turn costs this</summary>
-                <p>
-                  Every turn re-sends the whole conversation, so the next one is priced by what is
-                  already here, not by what you are about to ask.
-                  {cost.advice && onCompact && costDoorsText(true) ? ` ${costDoorsText(true)}` : ""}
-                </p>
-              </details>
-            </div>
-          )}
+          {cost && <NextTurnCost cost={cost} onFresh={onFresh} onCompact={onCompact} />}
 
           {/* The session's own budget: spend against the cap with the agent split,
               where it stands, and the door to the sheet. A readout and a door —
-              nothing here sets or clears. Unknown says why and holds nothing. */}
+              nothing here sets or clears. Unknown says why and holds nothing.
+              "No budget" is the TITLE's to say: the line under it is only what
+              was spent, and absent when there is nothing to add. */}
           {budget && (
             <div className="ctx-cost">
               <div className="ctx-cost-head">
                 <Wallet size={14} />
                 <span>{budget.label ? `budget ${budget.label}` : "no budget on this session"}</span>
               </div>
-              <div className="ctx-cost-note">{budget.line}</div>
+              {budget.line ? <div className="ctx-cost-note">{budget.line}</div> : null}
               <div className="sheet-actions">
                 <button className="key" onClick={budget.onOpen}>
                   <Wallet size={14} /> {budget.label ? "change or clear the budget" : "set a budget"}
@@ -671,6 +570,7 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, budget, 
           <div className="empty ctx-note">
             {axisNote(doc?.windowFrom, windowTok, doc?.model, backendLabel)}
             {doc?.autoCompactTok != null && " The dashed line is where a compaction was last observed to fire — a measurement, not a setting."}
+            {doc?.autoCompactSet && ` ${autoCompactSetText(doc.autoCompactSet)}`}
           </div>
           {gaps.length > 0 && (
             <div className="empty ctx-note">

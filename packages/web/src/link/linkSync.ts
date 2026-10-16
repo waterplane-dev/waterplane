@@ -2,7 +2,7 @@ import { hhmm } from "../format";
 import type { LinkSync, SyncPart } from "./linkTypes";
 import { doc, persistNow } from "./linkDoc";
 import { connectedSince } from "./linkStatus";
-import { emit, invalidate } from "./linkStore";
+import { emit, invalidate } from "./linkBus";
 
 const PARTS: SyncPart[] = ["sessions", "repos"];
 

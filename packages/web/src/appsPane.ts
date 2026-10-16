@@ -4,7 +4,7 @@
  * filter, so that tap opens exactly those two. Read once, then back to the
  * default. Its own module so the launcher need not import the sheet.
  */
-export type AppsPane = "ready" | "apps" | "log";
+export type AppsPane = "ready" | "apps" | "setup" | "log";
 
 let next: AppsPane | null = null;
 

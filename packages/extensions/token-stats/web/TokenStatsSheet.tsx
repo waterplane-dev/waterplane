@@ -80,10 +80,10 @@
  * start disagreeing.
  */
 import { useEffect, useState } from "react";
-import type { BackendInfo, TokenConvo, TokenStatsDoc, UsageInfo } from "@waterplane/shared";
+import type { BackendInfo, TokenConvo, TokenStatsDoc, UsageInfo, UsageReading } from "@waterplane/shared";
 import { ledgers, type LedgerViewDef } from "@waterplane/sdk";
 import { useRemoteResource } from "@waterplane/kit";
-import { TokenStatsBody } from "./TokenStatsBody.tsx";
+import { TokenStatsBody, type SpendView } from "./TokenStatsBody.tsx";
 import type { GuestLedger } from "./guests.ts";
 
 /** One view's read, as `GuestRead` lifts it into the sheet. */
@@ -119,13 +119,19 @@ function GuestRead({ def, fresh, online, onRead }: {
   return null;
 }
 
-export function TokenStatsSheet({ online, ledgerTabs, usage, onRefreshUsage, onClose, nameOf, onExplain, isLive, onOpenConvo, views = [], backends }: {
+export function TokenStatsSheet({ online, ledgerTabs, usage, spend, onRefreshUsage, onClose, nameOf, onExplain, isLive, onOpenConvo, views = [], backends, readings, openedOn, onClearOn }: {
+  /** Usage readings per source, and the one the launcher chip opened this sheet on (see `TokenStatsBody`). */
+  readings?: readonly UsageReading[];
+  openedOn?: string | null;
+  onClearOn?: () => void;
   /** The socket's verdict, not `navigator.onLine` — see `useRemoteResource`. */
   online: boolean;
   /** Backends beyond claude and the contributed views, each a generic ledger tab (`ledgerBackends`). */
   ledgerTabs?: { id: string; label: string }[];
   /** The live rate-limit windows, pushed on every host snapshot. */
   usage: UsageInfo | null;
+  /** The billing profile, the budget and its dollar periods (`world.billing` / `world.budget`). */
+  spend?: SpendView;
   /** Re-scrape `/usage` on the desktop. `quiet` suppresses the toast, for the
    *  automatic refresh this screen does on open. */
   onRefreshUsage: (quiet?: boolean) => void;
@@ -159,10 +165,11 @@ export function TokenStatsSheet({ online, ledgerTabs, usage, onRefreshUsage, onC
   return (
     <div className="sheet">
       {views.map((def) => <GuestRead key={def.id} def={def} fresh={fresh} online={online} onRead={onRead} />)}
-      <TokenStatsBody doc={res.data} res={res} guests={guests} usage={usage} online={online}
+      <TokenStatsBody doc={res.data} res={res} guests={guests} usage={usage} spend={spend} online={online}
         onRefreshUsage={onRefreshUsage}
         onClose={onClose} onRescan={() => setFresh((n) => n + 1)}
-        nameOf={nameOf} onExplain={onExplain} isLive={isLive} onOpenConvo={onOpenConvo} ledgerTabs={ledgerTabs} fresh={fresh} />
+        nameOf={nameOf} onExplain={onExplain} isLive={isLive} onOpenConvo={onOpenConvo} ledgerTabs={ledgerTabs} fresh={fresh}
+        readings={readings} openedOn={openedOn} onClearOn={onClearOn} />
     </div>
   );
 }

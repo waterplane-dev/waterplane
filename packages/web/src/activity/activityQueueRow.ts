@@ -16,7 +16,7 @@ import {
 } from "./activityPieces.ts";
 import {
   bucketOf,
-} from "./activitySelect.ts";
+} from "./activityBucket.ts";
 import type { ActivityAction, ActivityDeps, ActivityInput, ActivityKind, ActivityRow, DeliveryTruth } from "./activityTypes.ts";
 
 // ── Queue rows: the phone's own send queue ──────────────────────────────────

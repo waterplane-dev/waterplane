@@ -259,6 +259,8 @@ export class ChannelSlice {
         ch.turnsLive = true;
         if (!s.hooksActive || !s.info.hooked) {
           s.hooksActive = true; s.info.hooked = true;
+          // A hook means the CLI reached its prompt: its first-launch setup is over.
+          delete s.info.cliSetup;
           // The hook pipe going LIVE is one fact about a session, not one per
           // turn it ran: broadcast, and one `hook.pipe` good (claude's health
           // board; `noteFor` files nothing outside `healthScope`).
@@ -330,6 +332,9 @@ export class ChannelSlice {
     if (n === ch.unposed) return;
     const was = ch.unposed;
     ch.unposed = n;
+    // No screen reader to hand it to (Copilot's `ask_user` form): the session is still blocked
+    // on you, so the fact the source CAN give — one is open — is what the status says.
+    if (!s.backend.caps.promptBoxes) this.core.setAwaiting(s, n > 0 && s.info.running);
     if (n > 0 && was === 0) {
       if (s.info.running && s.backend.caps.promptBoxes) this.core.armPromptCheck(s, 0);
     } else if (n === 0) {

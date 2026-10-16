@@ -15,7 +15,8 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { FEATURE_SHEET_RE, PERSISTED_OVERLAYS, featureSheetId, isFeatureSheetId, VACANT, overlayFromKey, parseHash, routeFromPop, routeKey, routeStep, routeToHash, routeToUrl, screenOfKey, stepKey } from "./routing.ts";
+import { readFileSync } from "node:fs";
+import { FEATURE_SHEET_RE, PERSISTED_OVERLAYS, WIDE_FULL, isWideFull, featureSheetId, isFeatureSheetId, VACANT, overlayFromKey, parseHash, routeFromPop, routeKey, routeStep, routeToHash, routeToUrl, screenOfKey, stepKey } from "./routing.ts";
 
 test("a key names the overlay its own hash cannot", () => {
   for (const o of ["send", "pad", "image", "collage", "queue"]) {
@@ -231,5 +232,31 @@ test("a route keeps ?demo= — the URL is what keeps a URL-entered demo across a
     assert.equal(routeToUrl(null, null, null), "/", "focus is still the route's own to drop");
   } finally {
     if (had === undefined) delete globalThis.location; else globalThis.location = had;
+  }
+});
+
+// ── WIDE_FULL: which sheets take the main pane on a wide window ─────
+
+/** The literal names of the `Overlay` union, read off the source — the type
+ *  has no runtime value, and a misspelt name in the set would silently panel. */
+function overlayNames() {
+  const src = readFileSync(new URL("./routing.ts", import.meta.url), "utf8");
+  const line = src.split("\n").find((l) => l.startsWith("export type Overlay ="));
+  assert.ok(line, "the Overlay union is on one line");
+  return new Set([...line.matchAll(/"([^"]+)"/g)].map((m) => m[1]));
+}
+
+test("WIDE_FULL is a subset of the Overlay names", () => {
+  const names = overlayNames();
+  assert.ok(names.size > 40);
+  for (const o of WIDE_FULL) assert.ok(names.has(o), `${o} is not an Overlay`);
+});
+
+test("isWideFull: the canvas and chart sheets yes, everything else a panel", () => {
+  for (const o of ["swipe", "image", "clip", "collage", "tokens", "context", "repohealth", "scrollback", "git", "text", "outline"]) {
+    assert.equal(isWideFull(o), true, o);
+  }
+  for (const o of [null, "send", "settings", "backlog", "gallery", "queue", featureSheetId("demo", "main")]) {
+    assert.equal(isWideFull(o), false, String(o));
   }
 });

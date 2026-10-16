@@ -13,7 +13,7 @@
 //      prompt sets `awaitingCode`, and answering it clears it.
 //   2b. Never a line before the confirmed Return: a two-line send into /bin/sh
 //      (no bracketed paste) is refused and nothing runs; a send while `sleep`
-//      is in front of the shell is refused naming it. 4c: zsh (bracketed
+//      is in front of the shell is refused naming it, unless it asks `[y/N]`. 4c: zsh (bracketed
 //      paste on) takes the two lines as one paste.
 //   5. Restart the host on the same root: the pane is re-attached, still a
 //      shell, still named, and still runs a command.
@@ -127,6 +127,16 @@ const fg = c.acks.get("in-fg2");
 check(fg.ok === false && /the shell is running `sleep`/.test(fg.reason ?? ""), `a send while \`sleep\` runs is refused, naming it (${JSON.stringify(fg)})`);
 await sleep(4500);
 check(!c.pane.includes("typed-into-sleep"), "…and nothing was typed into it");
+
+// …unless the program in front asks yes/no on its last row: one line is the answer.
+c.send({ t: "session.input", id: sid, data: "python3 -c 'print(\"got-\" + input(\"Does it match? [y/N] \"))'", submit: true, ackId: "in-yn1" });
+if (!(await c.until(() => c.acks.get("in-yn1")?.ok === true, 15000))) await fail("the python yes/no program was not acked ok");
+await c.until(() => /\[y\/N\] $/m.test(c.pane), 5000);
+await sleep(400);
+c.send({ t: "session.input", id: sid, data: "y", submit: true, ackId: "in-yn2" });
+await c.until(() => c.acks.has("in-yn2"), 15000);
+check(c.acks.get("in-yn2")?.ok === true && await c.until(() => c.pane.includes("got-y"), 5000),
+  `a yes/no question from the program in front takes one line (${JSON.stringify(c.acks.get("in-yn2"))})`);
 
 // ── 3. $BROWSER → the phone ──
 c.send({ t: "session.input", id: sid, data: "\"$BROWSER\" 'https://github.com/login/device?x=1'", submit: true, ackId: "in-2" });

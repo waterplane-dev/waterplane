@@ -5,7 +5,8 @@
  * what lets it survive a host restart and a self-update. It used to be opt-in
  * (`<PREFIX>TMUX=1`), then on by default with `<PREFIX>TMUX=0` as an escape
  * hatch to a direct PTY. The direct substrate is gone: tmux is the ONE way a
- * session runs (macOS, Linux, WSL2; native Windows is unsupported), the knob is
+ * session runs (macOS, Linux, WSL2 — a Windows checkout runs its host there through
+ * `scripts/windows/host.mjs`; native Windows is unsupported), the knob is
  * IGNORED — `doctor` says so when it is still set — and a host that cannot find
  * tmux REFUSES to start a session, in words naming the install command.
  *
@@ -45,7 +46,7 @@ export function tmuxInstallCommand(platform: NodeJS.Platform, has: (bin: string)
 
 /** The "how to install it" sentence, for a platform with or without a known command. */
 export function tmuxInstallAdvice(platform: NodeJS.Platform, cmd: string | null): string {
-  if (platform === "win32") return "Native Windows is not supported: run it inside WSL2, where tmux installs with: sudo apt-get install -y tmux.";
+  if (platform === "win32") return "Native Windows is not supported: run it inside WSL2, where tmux installs with: sudo apt-get install -y tmux. From a Windows checkout, `npm run restart` does that for you (scripts/windows/host.mjs).";
   if (cmd) return `Install it with: ${cmd}`;
   if (platform === "darwin") return "Install Homebrew (https://brew.sh), then: brew install tmux.";
   return "Install tmux with your distribution's package manager.";

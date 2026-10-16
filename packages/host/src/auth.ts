@@ -26,9 +26,10 @@ import type { IncomingHttpHeaders } from "node:http";
 import { readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { readJsonGuardedDetail, writeJsonAtomic } from "./jsonstore.js";
-import type { DeviceRow } from "@waterplane/shared";
+import type { DeviceRow, DeviceScope } from "@waterplane/shared";
 import { peerKind, type PeerKind } from "./net.js";
 import { DeviceLedger } from "./deviceledger.js";
+import { PassiveGate } from "./passive.js";
 import { BRAND, LEGACY } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
 
@@ -74,10 +75,13 @@ export class AuthManager {
   lost: { movedTo: string | null; error: string; tailscaleGated: boolean } | null = null;
   /** Every issued token, hashed, one row per device. Survives restarts. */
   readonly devices: DeviceLedger;
+  /** Passive devices' PIN and unlocks (`passive.ts`). */
+  readonly passive: PassiveGate;
 
   constructor(root: string) {
     this.file = join(hostStateDir(root), "auth.json");
     this.devices = new DeviceLedger(root);
+    this.passive = new PassiveGate(root);
     // Guarded: a corrupt auth.json is moved aside and logged (never silently
     // overwritten by the next save). The fallback is "no password", which is
     // still deny-until-set for every LAN peer — the gate never opens on a loss.
@@ -107,7 +111,10 @@ export class AuthManager {
   }
 
   isEnabled(): boolean { return !!this.stored; }
-  gateTailscale(): boolean { return !!this.stored?.gateTailscale || this.lockedTailscale(); }
+  /** On when switched on, when a lost file holds it, and while ANY passive
+   *  device is paired: a passive phone must have no tokenless path on any
+   *  network (R-connection-012), Tailscale included. */
+  gateTailscale(): boolean { return !!this.stored?.gateTailscale || this.lockedTailscale() || (this.isEnabled() && this.devices.hasPassive()); }
 
   /** Set (or replace) the password. Rotates all tokens — every device re-logs. */
   setPassword(pw: string): void {
@@ -132,6 +139,9 @@ export class AuthManager {
 
   setGateTailscale(on: boolean): void {
     if (!this.stored) return; // meaningless without a password
+    if (!on && this.devices.hasPassive()) {
+      throw new Error("A passive device is paired, so Tailscale stays gated — otherwise it could reach everything without its token. Revoke the passive device first.");
+    }
     this.stored.gateTailscale = on;
     if (!on) delete this.stored.gateTailscale;
     this.persist();
@@ -147,9 +157,13 @@ export class AuthManager {
   /** Mint a token for a new device row. Callers decide WHO may (a correct
    *  password, or an already-trusted caller); this only refuses while no
    *  password is set, because such a token could never pass the gate. */
-  issueToken(deviceName: unknown, kind: PeerKind | null): { token: string; deviceId: string } {
+  issueToken(deviceName: unknown, kind: PeerKind | null, scope?: DeviceScope): { token: string; deviceId: string } {
     if (!this.isEnabled()) throw new Error("no password set on host");
-    const { token, row } = this.devices.mint(deviceName, kind);
+    const { token, row } = this.devices.mint(deviceName, kind, Date.now(), scope);
+    // A passive device switches the Tailscale gate on for good (R-connection-012):
+    // stored, so it stays on after the passive row is revoked until a person
+    // switches it off.
+    if (scope === "passive" && this.stored && !this.stored.gateTailscale) { this.stored.gateTailscale = true; this.persist(); }
     return { token, deviceId: row.id };
   }
 
@@ -160,6 +174,11 @@ export class AuthManager {
     const row = this.devices.lookup(tok);
     if (row && kind) this.devices.touch(row.id, kind);
     return row;
+  }
+
+  /** The token is a passive one and not unlocked right now: the allowlist applies. */
+  restricted(tok: string | undefined | null): boolean {
+    return this.passive.restricted(this.deviceFor(tok));
   }
 
   checkToken(tok: string | undefined | null, kind?: PeerKind): boolean {

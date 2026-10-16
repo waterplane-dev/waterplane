@@ -14,8 +14,9 @@ import { createDemoHost } from "../host/index.ts";
 import { DEMO_SCENARIOS } from "./index.ts";
 import { CLOCK_START } from "./first-look.ts";
 import { findLeaks } from "../../../../../tools/demo-scenario.mjs";
+import { toastMs } from "../../toast.ts";
 import {
-  ALL_READINGS, BUDGET_TOK, EARLIER, HELD_PROMPT, RAISED_TOK, WINDOW_TOK, limitAndBudget, usageAfter,
+  ALL_READINGS, BUDGET_TOK, EARLIER, HELD_PROMPT, RAISED_TOK, SKIP_TOAST, SKIP_TOAST_MS, WINDOW_TOK, limitAndBudget, usageAfter,
 } from "./limit-and-budget.ts";
 
 function play() {
@@ -36,6 +37,10 @@ test("limit-and-budget is registered, shippable and clean, and follows `now`", (
   const a = limitAndBudget(CLOCK_START).state.model.sessions[0].createdAt;
   const b = limitAndBudget(CLOCK_START + 1000).state.model.sessions[0].createdAt;
   assert.equal(b - a, 1000);
+});
+
+test("limit-and-budget: the skip toast's reading time is the phone's own (the resumed turn ends as it goes)", () => {
+  assert.equal(SKIP_TOAST_MS, toastMs(SKIP_TOAST));
 });
 
 test("limit-and-budget: the budget holds the next send before the wall; at the reset the held prompt's turn finishes, run once", () => {
@@ -82,16 +87,19 @@ test("limit-and-budget: the budget holds the next send before the wall; at the r
   h.conn.receive({ t: "session.budget.set", id, budget: { unit: "tok", max: RAISED_TOK, interrupt: false } });
   assert.equal(sessionBudgetHeld(sess()), false);
   assert.equal(row().state, "running");
-  h.tick(6_000);
+  h.tick(7_000);
   assert.equal(usage().sessionPct, 100);
   const blocked = sess().limit;
   assert.equal(blocked.blocked, true, "parked at the wall");
   assert.equal(blocked.resetAt, usage().sessionResetAt, "parked until the window's own reset");
+  // The CLI halts: its stop line is drawn with no spinner after it (the turn is not running any more).
+  const atWall = ptyText(h.frames(), id);
+  assert.ok(atWall.lastIndexOf("window used up") > atWall.lastIndexOf("Cooking"), "the spinner is gone under the stop line");
 
   // The scripted clock jump lands just past the reset: auto-continue, then the rest of the turn.
   h.tick(3_000);
   assert.equal(h.host.clockShift(), 0, "parked: nothing has jumped yet");
-  h.tick(8_000);
+  h.tick(10_000);
   assert.ok(h.host.clockShift() > 60 * 60_000, "the demo skipped ahead");
   h.tick(15_000);
   const s = sess();

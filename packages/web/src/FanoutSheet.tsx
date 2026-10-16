@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { CalendarClock, ChevronDown, ChevronUp, CircleAlert, CircleCheck, CornerDownRight, Loader, Pencil, Play, Send, Split, Square, SquareCheck } from "lucide-react";
-import type { FanoutRun, FanoutTarget, RepoTarget } from "@waterplane/shared";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { CalendarClock, ChevronDown, ChevronUp, CircleAlert, CircleCheck, CornerDownRight, Flag, Loader, Pencil, Play, Send, Split, Square, SquareCheck } from "lucide-react";
+import type { BackendInfo, FanoutRun, FanoutTarget, LaunchOpts, RepoTarget } from "@waterplane/shared";
 import { track } from "./usage";
 import { PromptComposer } from "./PromptComposer";
 import { RepoPicker } from "./RepoPicker";
@@ -11,34 +11,65 @@ import { LS, lsJson, lsSetJson } from "./storage";
 import { SheetHead } from "./Sheet";
 import { useBackStep } from "./backStep";
 import { SyncMark } from "./SyncMark";
+import { LaunchPicker, launchOf, type LaunchPick } from "./LaunchPicker";
+import { backendUnavailable, launchAskStart } from "./backendCaps";
+import { CantInline } from "./Unavailable";
+import { kickoff, kickoffSent } from "./fanoutKickoff";
 
 interface Props {
   repos: RepoTarget[];
   /** Recent runs, newest first. */
   runs: FanoutRun[];
+  /** The host's backends (model catalogue), null when it described none. */
+  backends: BackendInfo[] | null;
+  /** The new-session defaults — the model row starts on theirs. */
+  launch: LaunchOpts;
   /** Fire the sweep. App routes it through the durable send queue, so this is
-   *  never lost to a dead tunnel — it just runs later. */
-  onRun: (dirs: string[], text: string) => void;
+   *  never lost to a dead tunnel — it just runs later. `launch` is the sweep's
+   *  own pick (backend, model, effort) over the new-session defaults. */
+  onRun: (dirs: string[], text: string, launch: LaunchOpts, flagWhenDone?: boolean) => void;
   /** Send another instruction into the sessions a run already spawned. */
   onFollowUp: (runId: string, text: string, dirs: string[]) => void;
   /** Hand the composed sweep to the schedule editor instead of running it now.
    *  The repo picker and the prompt box ARE the sweep — retyping both in another
    *  sheet is the only other way to say "this, but on Thursday". */
-  onSchedule: (dirs: string[], text: string) => void;
+  onSchedule: (dirs: string[], text: string, launch: LaunchOpts) => void;
   /** false = no socket. The run is still accepted (it queues); the button says so. */
   online?: boolean;
   /** Open a spawned session (tap a target row). */
   onOpen: (sessionId: string) => void;
+  /** A line of words above Run (what the last similar sweep cost). Never a gate. */
+  CostHint?: ComponentType<{ text: string }>;
   onClose: () => void;
 }
 
 /** Sticky selection + draft — a maintenance sweep is usually the same repo set twice. */
 const SEL_KEY = LS.fanoutSel;
+/** The sweep's launch when it is NOT the new-session default: null follows the
+ *  defaults. Stored before backend/effort were on the row as `{ model }` alone,
+ *  which meant "on the default backend" — read back that way (`sweepStart`). */
+type SweepPick = LaunchPick | null;
 const TEXT_KEY = LS.fanoutText;
 const load = <T,>(key: string, fallback: T): T => {
   return lsJson<T>(key, fallback);
 };
 const save = (key: string, v: unknown) => { lsSetJson(key, v); };
+
+/**
+ * Where the sweep's row starts: the stored pick, read through the ask's own
+ * guard (`launchAskStart`) so a backend this host no longer describes drops
+ * the pick AS A WHOLE back to the defaults — a `<select>` off its options
+ * renders as the first, and the row would say claude while the run carried
+ * something else. A pick stored as `{ model }` alone predates the backend
+ * control and meant the default backend, so it is read as that.
+ */
+function sweepStart(backends: BackendInfo[] | null, launch: LaunchOpts, pick: SweepPick): LaunchPick | null {
+  if (!pick) return null;
+  const stored = { ...pick, backend: "backend" in pick ? pick.backend : launch.backend };
+  const pair = launchAskStart(backends, launch, stored);
+  if (pair.backend !== stored.backend || pair.model !== stored.model) return null;
+  return { ...pair, effort: "effort" in pick ? pick.effort : launch.effort };
+}
 
 /** How many preset chips are shown before the "more" toggle. The full list is
  *  long on purpose (it is the routine-sweep menu), and a phone screen has room
@@ -57,7 +88,7 @@ const STATUS_TAG: Record<FanoutTarget["status"], string> = {
  *
  * Each target is an ordinary session afterwards: tap it to open the terminal.
  */
-export function FanoutSheet({ repos, runs, onRun, onFollowUp, onSchedule, onOpen, onClose, online = true }: Props) {
+export function FanoutSheet({ repos, runs, backends, launch, onRun, onFollowUp, onSchedule, onOpen, CostHint, onClose, online = true }: Props) {
   const [text, setText] = useState<string>(() => load(TEXT_KEY, ""));
   const [sel, setSel] = useState<Set<string>>(() => new Set(load<string[]>(SEL_KEY, [])));
   /** One-tap routine sweeps. User-owned: editable, reorderable, extendable. */
@@ -71,6 +102,28 @@ export function FanoutSheet({ repos, runs, onRun, onFollowUp, onSchedule, onOpen
   const [fuRun, setFuRun] = useState<string | null>(null);
   const [fuText, setFuText] = useState("");
   const [fuSel, setFuSel] = useState<Set<string>>(new Set());
+  /** A sweep is ONE decision over N repos, so it gets one launch row — not the
+   *  per-launch ask, but the same controls (`LaunchPicker`). Sticky like the
+   *  selection: a sweep is usually re-run. */
+  const [pick, setPick] = useState<SweepPick>(() => load<SweepPick>(LS.fanoutModel, null));
+  const defaults: LaunchPick = { backend: launch.backend, model: launch.model, effort: launch.effort };
+  const chose = sweepStart(backends, launch, pick) ?? defaults;
+  const sweep = launchOf(launch, chose);
+  function pickLaunch(p: LaunchPick) {
+    // Picking the defaults back IS following them — so a later change to a
+    // default reaches the sweep too, instead of a stale copy of it.
+    const same = p.backend === launch.backend && p.model === launch.model && p.effort === launch.effort;
+    const next: SweepPick = same ? null : { backend: p.backend, model: p.model, effort: p.effort };
+    setPick(next);
+    save(LS.fanoutModel, next);
+  }
+  // A backend the host says cannot start now: the sentence replaces Run, as
+  // on the ask — N launches that would fail are not offered.
+  const blocked = backendUnavailable(backends, chose.backend);
+  /** The tap that has not shown up as a run yet: the run ids that existed
+   *  before it, so the first new one is this tap's. The host stamps
+   *  `startedAt`, and the phone's clock is not its clock. */
+  const [fired, setFired] = useState<{ known: Set<string>; repos: number; offline: boolean } | null>(null);
 
   // A selected worktree stays selected (and counted) even while the shared
   // picker is filtered to primaries — hiding a row must not silently drop it
@@ -97,13 +150,23 @@ export function FanoutSheet({ repos, runs, onRun, onFollowUp, onSchedule, onOpen
     setSel(new Set(next));
     save(SEL_KEY, next);
   }
+  // "Flag for follow up when done" (R-sessions-043): this run only, off unless
+  // ticked — never remembered, there is no global setting for it.
+  const [flagWhenDone, setFlagWhenDone] = useState(false);
   function go() {
     const dirs = chosen.map((r) => r.worktreePath);
     if (!dirs.length || !text.trim()) return;
     track("action:fanout.run");
     save(TEXT_KEY, text);
-    onRun(dirs, text.trim());
+    setFired({ known: new Set(runs.map((r) => r.id)), repos: dirs.length, offline: !online });
+    onRun(dirs, text.trim(), sweep, flagWhenDone || undefined);
   }
+
+  // The strip above Run: this tap's run once the host wrote it down, else the
+  // newest run still going (reopening the sheet mid-sweep still shows it).
+  const mine = fired ? runs.find((r) => !fired.known.has(r.id)) : undefined;
+  const shown = mine ?? (fired ? undefined : runs.find((r) => !r.finishedAt));
+  const kick = shown ? kickoff(shown.targets) : null;
 
   /** Targets of a run that can still be typed into (they have a session). */
   const addressable = (run: FanoutRun) => run.targets.filter((t) => t.sessionId);
@@ -187,6 +250,22 @@ export function FanoutSheet({ repos, runs, onRun, onFollowUp, onSchedule, onOpen
           <button className="key" title="edit the preset list"
             onClick={() => { track("action:fanout.presets.edit"); setEditPresets(true); }}><Pencil size={14} /></button>
         </div>
+        <LaunchPicker backends={backends} defaults={launch} nowLead="Every repo starts on"
+          value={chose} onChange={pickLaunch}>
+          {pick && (
+            <span className="set-note">
+              This sweep only — new sessions still start on {launch.model ?? "the default"}{launch.effort ? ` · ${launch.effort}` : ""}.{" "}
+              <button className="link-btn" onClick={() => pickLaunch(defaults)}>use that</button>
+            </span>
+          )}
+        </LaunchPicker>
+        <div className="annot-tools wrap">
+          <button className={`row-chip${flagWhenDone ? " on" : ""}`} aria-pressed={flagWhenDone} data-hint="session.followup"
+            onClick={() => setFlagWhenDone((v) => !v)}>
+            <Flag size={13} fill={flagWhenDone ? "currentColor" : "none"} /> Flag for follow up when done
+          </button>
+        </div>
+        {flagWhenDone && <div className="form-hint">Each session this run opens gets the follow-up flag once it is done — not if it failed or stopped on a usage limit. Not carried to “later”.</div>}
       </div>
 
       {/* The shared picker (`RepoPicker.tsx`) — its own all/none and its own
@@ -201,7 +280,7 @@ export function FanoutSheet({ repos, runs, onRun, onFollowUp, onSchedule, onOpen
             const live = addressable(run);
             const picking = fuRun === run.id;
             return (
-            <div key={run.id}>
+            <div key={run.id} id={`fanout-run-${run.id}`}>
               <div className="form-hint mono">{run.text.length > 90 ? `${run.text.slice(0, 90)}…` : run.text}</div>
               {run.followUps?.map((f, i) => (
                 <div key={i} className="form-hint mono"><CornerDownRight size={11} /> {f.text.length > 90 ? `${f.text.slice(0, 90)}…` : f.text}
@@ -268,6 +347,28 @@ export function FanoutSheet({ repos, runs, onRun, onFollowUp, onSchedule, onOpen
       )}
       </div>
 
+      {/* Kickoff progress, pinned above Run: the run's own rows are below the
+          whole repo checklist, so without this a tap on Run showed a toast and
+          then nothing. Words, never a tap that filters — "show" scrolls to the
+          run's full list. */}
+      {(kick || (fired && !mine)) && (
+        <div className="fanout-kick">
+          {kick && shown ? <>
+            {kick.waiting + kick.starting > 0 ? <Loader size={14} className="spin" /> : kick.failed ? <CircleAlert size={14} /> : kick.working ? <Loader size={14} className="spin" /> : <CircleCheck size={14} />}
+            <span className="grow">{kick.line}</span>
+            <button className="link-btn" onClick={() => document.getElementById(`fanout-run-${shown.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+              show the {kick.total}
+            </button>
+            <span className="pull-bar"><span className="pull-bar-fill" style={{ width: `${kick.total ? (100 * kick.kicked) / kick.total : 0}%` }} /></span>
+          </> : fired && <>
+            <Loader size={14} className="spin" />
+            <span className="grow">{kickoffSent(fired.offline, fired.repos)}</span>
+          </>}
+        </div>
+      )}
+
+      {CostHint && <CostHint text={text} />}
+
       <div className="sheet-actions">
         <span className="spacer" />
         <button
@@ -277,13 +378,15 @@ export function FanoutSheet({ repos, runs, onRun, onFollowUp, onSchedule, onOpen
           onClick={() => {
             track("action:fanout.schedule");
             save(TEXT_KEY, text);
-            onSchedule(chosen.map((r) => r.worktreePath), text.trim());
+            onSchedule(chosen.map((r) => r.worktreePath), text.trim(), sweep);
           }}
         ><CalendarClock size={16} /> later</button>
+        {blocked ? <CantInline>{blocked}</CantInline> : (
         <button className="send" data-hint="fanout.run" disabled={!chosen.length || !text.trim()} onClick={go}
           title={online ? undefined : "no connection — the sweep is queued and runs when the link is back"}>
           <Play size={16} /> {online ? "Run" : "Queue"} in {chosen.length} repo{chosen.length === 1 ? "" : "s"}
         </button>
+        )}
       </div>
     </div>
   );

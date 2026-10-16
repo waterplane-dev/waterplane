@@ -10,6 +10,7 @@
 import { CalendarClock, Gauge } from "lucide-react";
 import type { ScheduleEntry, WindowResets } from "@waterplane/shared";
 import { fmtWhen, inWords } from "./sendIntent";
+import { Explain } from "./Explain";
 import { anchorWords, weekBar, type BarWindow } from "./scheduleWeekPlot";
 
 const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -103,10 +104,16 @@ export function ScheduleWeekBar({ entries, usage, title, now = Date.now() }: {
           })}
         </div>
       )}
+      {/* The legend, closed. It was a paragraph under every bar, read once and
+          then scrolled past on each visit; the words are unchanged, one tap
+          away. The notes above stay open: they say what is MISSING from this
+          bar, which a legend never does. */}
       {read && (
         <div className="swb-note">
-          Shaded: the window open now, up to its reset. Filled pins are anchored to a reset, hollow ones to a clock.
-          {bar.session ? " Only the session window open now is drawn — the next one starts with the first prompt after its reset, which no clock can place." : ""}
+          <Explain of="the week bar" label="how to read it">
+            Shaded: the window open now, up to its reset. Filled pins are anchored to a reset, hollow ones to a clock.
+            {bar.session ? " Only the session window open now is drawn — the next one starts with the first prompt after its reset, which no clock can place." : ""}
+          </Explain>
         </div>
       )}
     </section>

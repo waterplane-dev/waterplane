@@ -3,9 +3,10 @@
 // otherwise sit on the version and model). The version and plan are made up (the demo carries no machine
 // data) and the model names what the demo sessions run.
 
-// Glyphs and colours as a real `claude` v2.1 prints them (captured in tmux): the logo in 256-colour
-// 174, the rest in the CLI's grey.
-const LOGO = "\x1b[38;5;174m";
+// Glyphs and colours as a real `claude` v2.1 prints them: the logo in the CLI's truecolour orange
+// (215,119,87 — what the stub TUI uses too; the 256-colour 174 a tmux capture shows is a quantised salmon,
+// and xterm.js draws the real one), the rest in the CLI's grey.
+const LOGO = "\x1b[38;2;215;119;87m";
 const R0 = "\x1b[0m";
 const B = "\x1b[1m";
 const D = "\x1b[38;5;246m";

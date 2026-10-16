@@ -78,6 +78,19 @@ export const WHICH_MAX = 3;
 export const PENDING_PREFIX = "pending:";
 export const isPendingId = (id: string | null | undefined): boolean => !!id?.startsWith(PENDING_PREFIX);
 export const pendingLaneId = (ackId: string) => `${PENDING_PREFIX}${ackId}`;
+/**
+ * **The later screen** (`pending:later:<cwd>`) — the repo header's `+ later`.
+ * The same session screen as `+ now`, for words whose session starts only when
+ * the backlog item they become runs: nothing is queued until Send, so there is
+ * no create behind it, and the terminal area says so instead of drawing one.
+ * A `pending:` id on purpose — every guard that keeps a synthetic id off the
+ * host (attach, resize, kill, star, the key pipe) already reads that prefix.
+ * Per REPO, not per tap: the draft is keyed by session id, so reopening
+ * `+ later` finds the words left there.
+ */
+export const LATER_PREFIX = `${PENDING_PREFIX}later:`;
+export const isLaterId = (id: string | null | undefined): boolean => !!id?.startsWith(LATER_PREFIX);
+export const laterId = (cwd: string) => `${LATER_PREFIX}${cwd}`;
 /** The send-queue lane for a target: a pending session's screen id is not a
  *  lane, its create's is (`create:<cwd>`), which is where the prompts and the
  *  files behind that create already queue. */
@@ -301,8 +314,14 @@ export function entryFrame(e: OutboxEntry): ClientMessage | null {
       steps: e.steps, resume: e.resume,
       // Additive, v1: absent inherits the global setting on the desktop.
       ...(typeof e.closeWhenDone === "boolean" ? { closeWhenDone: e.closeWhenDone } : {}),
+      // Additive: an older desktop ignores it and the session is not flagged.
+      ...(e.flagWhenDone ? { flagWhenDone: true } : {}),
       // Additive: an older desktop ignores it and the item runs uncapped.
       ...(e.budget ? { budget: e.budget } : {}),
+      // Additive: an older desktop ignores it and opens on its own defaults.
+      ...(e.launch ? { launch: e.launch } : {}),
+      // Additive: an older desktop ignores it and the row waits for the budget.
+      ...(e.pastBudget ? { pastBudget: true } : {}),
     };
   }
   if (e.answer) {

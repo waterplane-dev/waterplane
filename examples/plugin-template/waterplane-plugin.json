@@ -1,0 +1,27 @@
+{
+  "id": "plugin-template",
+  "name": "Plugin template",
+  "version": "0.1.0",
+  "apiVersion": "1.0",
+  "description": "Saves the last lines of a session's screen to a text file. A starting point for your own plugin.",
+  "settings": [
+    {
+      "kind": "number",
+      "key": "lines",
+      "label": "Lines to save",
+      "note": "How much of the screen the Save screen button keeps.",
+      "default": 40,
+      "min": 5,
+      "max": 500,
+      "step": 5
+    }
+  ],
+  "actions": [
+    {
+      "id": "save-screen",
+      "label": "Save screen",
+      "note": "Writes the last lines of this session's screen to a text file on the desktop.",
+      "scope": "session"
+    }
+  ]
+}

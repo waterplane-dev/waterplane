@@ -100,6 +100,61 @@ final class Downloads {
                 : findLegacy(name, size);
     }
 
+    /**
+     * Delete a file this app saved to Downloads — the clean-up after an install
+     * ({@link ShellPullService#cleanAfterInstall}).
+     *
+     * Matched EXACTLY: the display name the save read back, and the byte count,
+     * so a different file that happens to share the name (a later build, or
+     * something the person put there) is never touched. Returns null when it
+     * was removed, "" when it is not there any more (nothing to do), and a
+     * sentence when it is there and could not be removed — the caller puts
+     * that on the row rather than pretending the space came back.
+     *
+     * On API 29+ the query only sees rows this app inserted, which is exactly
+     * the set it may delete without asking. A reinstall of waterplane loses that
+     * ownership; the platform then refuses, and that refusal is the sentence.
+     */
+    @Nullable
+    static String remove(Context ctx, String name, long size) {
+        if (name == null || name.isEmpty() || name.contains("/")) return "";
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+                ? removeMediaStore(ctx, name, size)
+                : removeLegacy(ctx, name, size);
+    }
+
+    @RequiresApi(Build.VERSION_CODES.Q)
+    @Nullable
+    private static String removeMediaStore(Context ctx, String name, long size) {
+        ContentResolver cr = ctx.getContentResolver();
+        String sel = MediaStore.Downloads.DISPLAY_NAME + " = ?";
+        String[] args = { name };
+        if (size > 0) {
+            sel += " AND " + MediaStore.Downloads.SIZE + " = ?";
+            args = new String[] { name, String.valueOf(size) };
+        }
+        try (android.database.Cursor c = cr.query(MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                new String[] { MediaStore.Downloads._ID }, sel, args, null)) {
+            if (c == null || !c.moveToFirst()) return "";
+            Uri uri = android.content.ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, c.getLong(0));
+            return cr.delete(uri, null, null) > 0 ? null : "the copy in Downloads could not be removed";
+        } catch (SecurityException e) {
+            return "the copy in Downloads/" + name + " is no longer this app's to delete — remove it by hand";
+        } catch (RuntimeException e) {
+            Log.w(TAG, "cannot remove from Downloads: " + e);
+            return "the copy in Downloads could not be removed: " + e.getMessage();
+        }
+    }
+
+    @Nullable
+    private static String removeLegacy(Context ctx, String name, long size) {
+        File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+        File f = dir == null ? null : new File(dir, name);
+        if (f == null || !f.isFile() || (size > 0 && f.length() != size)) return "";
+        if (!canPublish(ctx)) return "the copy in Downloads/" + name + " stays — this app no longer has storage permission";
+        return f.delete() ? null : "the copy in Downloads could not be removed";
+    }
+
     @RequiresApi(Build.VERSION_CODES.Q)
     private static String publishMediaStore(Context ctx, File src, String name, String mime) throws IOException {
         ContentResolver cr = ctx.getContentResolver();

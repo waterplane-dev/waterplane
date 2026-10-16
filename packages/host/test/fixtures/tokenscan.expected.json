@@ -947,7 +947,27 @@
     "cacheWrite": 0,
     "total": 0
    },
-   "agents": 1
+   "agents": 1,
+   "agentByModel": [
+    {
+     "model": "claude-test-b",
+     "totals": {
+      "input": 51,
+      "output": 62,
+      "cacheRead": 7000,
+      "cacheWrite": 3000,
+      "cacheWrite1h": 0,
+      "turns": 2
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "total": 0
+     }
+    }
+   ]
   },
   {
    "id": "conv-b",

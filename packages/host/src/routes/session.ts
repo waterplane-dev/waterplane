@@ -14,6 +14,7 @@ import { backendForksOnServer, forkAtTurnRefusal } from "../backends/index.js";
 import { rivalTexts } from "../opendeliveries.js";
 import { createToIntent } from "../intents/adapters.js";
 import { withoutBacklogMark } from "../backlog.js";
+import { localStartNotice } from "../localslot.js";
 import type { InputVerdict, Route, RouteSpec, RouteTable } from "./types.js";
 
 const onSessionList: Route<"session.list"> = (a) => {
@@ -53,8 +54,7 @@ const onSessionCreate: RouteSpec<"session.create"> = {
       // ── A create off the WIRE is a person's, so it never wears the mark ───
       //
       // `backlog · ` is the ONLY thing that says a session belongs to
-      // machinery: it is what the automatic-session cap counts, what
-      // `reapAutoSession` may close to make room, and what `lingerSweep`
+      // machinery: it is what the automatic-session cap counts and what `lingerSweep`
       // retires after ten minutes. A finished item's session is closed WITH its
       // title, so it sits in *Recently closed* still called `backlog · waterplane ·
       // fix the flaky test` — and the reopen button sends that very title back
@@ -204,6 +204,10 @@ const onSessionCreate: RouteSpec<"session.create"> = {
         resumeMode: serverFork ? "fork" : a.msg.forkAtTurn ? "continue" : a.msg.resumeMode,
         resumeSessionId, ...(serverFork ? { forkAtTurn: a.msg.forkAtTurn } : {}), launch: a.msg.launch, budget });
       if (a.msg.replaceSessionId) a.c.sessions.repointCompanions(a.msg.replaceSessionId, info.id);
+      // A person's own start past the local-model cap is TOLD, never refused
+      // (`localslot.ts`): "another local-model session is working — …".
+      const localOver = localStartNotice(a.msg.launch, { sessionId: info.id });
+      if (localOver) a.c.send(a.ws, { t: "toast", text: localOver });
       a.att.add(info.id);
       a.c.recomputeWatched();
       // "Open a session here AND run this" — one op, because the phone cannot
@@ -575,6 +579,19 @@ const onSessionName: Route<"session.name"> = (a) => {
 };
 
 /**
+ * Switch a live claude session's permission mode (`session.mode`): the host
+ * presses shift+tab and re-reads the footer until it shows the target, the
+ * cycle comes back round, or the cap (`sessions/livemode.ts`). Not durable and
+ * never queued — like `session.name`, a switch delivered late changes what a
+ * session nobody is watching may do. Answered ALWAYS with `session.moded` to
+ * the asking socket; the new `liveMode` reaches every phone on the session
+ * list. Up to a few seconds: each press waits for the footer to repaint.
+ */
+const onSessionMode: Route<"session.mode"> = (a) => {
+    void a.c.sessions.setMode(a.msg.id, a.msg.mode).then((r) => a.c.send(a.ws, { t: "session.moded", id: a.msg.id, ...r }));
+};
+
+/**
  * Set or clear a session's own budget (`session.budget.set`). Not durable and
  * never queued — a cap delivered late would hold or release a session on a
  * figure the person has since changed — and idempotent, so a double tap is one
@@ -602,6 +619,11 @@ const onSessionRemoteControl: Route<"session.remoteControl"> = (a) => {
 
 const onSessionStar: Route<"session.star"> = (a) => {
     a.c.sessions.setStar(a.msg.id, a.msg.starred);
+};
+
+// A person's tap: `on` sets it as theirs, off clears it whoever set it (R-sessions-041).
+const onSessionFollowUp: Route<"session.followup"> = (a) => {
+    a.c.sessions.setFollowUp(a.msg.id, a.msg.on ? { by: "hand", at: Date.now() } : null);
 };
 
 const onSessionAckAsking: Route<"session.ackAsking"> = (a) => {
@@ -666,9 +688,11 @@ export const sessionRoutes: RouteTable = {
   "session.closecheck": onSessionClosecheck,
   "session.rename": onSessionRename,
   "session.name": onSessionName,
+  "session.mode": onSessionMode,
   "session.budget.set": onSessionBudgetSet,
   "session.remoteControl": onSessionRemoteControl,
   "session.star": onSessionStar,
+  "session.followup": onSessionFollowUp,
   "session.ackAsking": onSessionAckAsking,
   "session.pin": onSessionPin,
   "session.record": onSessionRecord,

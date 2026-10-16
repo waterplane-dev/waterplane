@@ -5,7 +5,8 @@
  * Separate documents on purpose — never summed, never merged. Moved out of
  * `api.ts` (host-architecture.md, "api.ts — the HTTP routes as tables").
  */
-import type { BackendTokensDoc } from "@waterplane/shared";
+import { PRICES_AS_OF, zeroCost, zeroTotals, type BackendTokensDoc, type CostWindowDoc } from "@waterplane/shared";
+import { costMeta } from "../costwindow.js";
 import { hostStoreDir } from "../hoststore.js";
 import { BACKENDS, backendInfos, storeReaderFor } from "../backends/index.js";
 import { localUsageDoc } from "../localusage.js";
@@ -19,6 +20,16 @@ import { route, type ApiEntry } from "./apitable.js";
  * screen on the same clock. `?fresh=1` passes 0.
  */
 const BACKEND_LEDGER_MAX_AGE_MS = 15_000;
+
+/** The widest span `/api/costwindow` folds: a weekly window plus slack. */
+const COST_WINDOW_MAX_MS = 35 * 24 * 3_600_000;
+
+/** What a malformed `/api/costwindow` span answers: a document with nothing in it. */
+const emptyCostWindow = (scannedAt: number): CostWindowDoc => ({
+  from: 0, to: 0, fromHour: 0, hours: [], convos: [],
+  totals: zeroTotals(), cost: zeroCost(), agentTotals: zeroTotals(), agentCost: zeroCost(), unpriced: zeroTotals(),
+  pricesAsOf: PRICES_AS_OF, scannedAt,
+});
 
 export const STATS_ROUTES: readonly ApiEntry[] = [
   // Token usage across every conversation log on disk — the statistics screen.
@@ -157,6 +168,39 @@ export const STATS_ROUTES: readonly ApiEntry[] = [
     const hours = Number(url.searchParams.get("hours") || 0);
     const since = Number.isFinite(hours) && hours > 0 ? hours * 3_600_000 : undefined;
     json(res, ctx.usageLog.read(since, ctx.usagePollMs));
+    return true;
+  }),
+
+  // Another source's kept readings (`usagesourcelog.ts`: Copilot's quota, a plugin's probe) —
+  // the same provenance as `/api/usagelog` (what THIS daemon observed), one file per source.
+  // claude's history is `/api/usagelog` above, unchanged; a source with no log is a 404 in words.
+  route("GET", "/api/usagelog/:source", ({ res, url, params }, ctx) => {
+    let source = "";
+    try { source = decodeURIComponent(params.source ?? ""); } catch { /* malformed ⇒ refused below */ }
+    const hours = Number(url.searchParams.get("hours") || 0);
+    const since = Number.isFinite(hours) && hours > 0 ? hours * 3_600_000 : undefined;
+    const doc = ctx.usageSources.history(source, since);
+    if (!doc) {
+      json(res, { error: source === "claude" ? "claude's readings are /api/usagelog" : `no usage readings kept for "${source.slice(0, 48)}" on this desktop` }, 404);
+      return true;
+    }
+    json(res, doc);
+    return true;
+  }),
+
+  // The ledger folded over one SPAN — "where did this week go", by hour, repo
+  // and conversation, with the titles and launches the host holds joined on.
+  // A malformed span is an EMPTY answer, not a 400 (`/api/tokenwindows`' rule):
+  // the screen draws nothing where it asked for nothing answerable.
+  route("GET", "/api/costwindow", async ({ res, url }, ctx) => {
+    const from = Number(url.searchParams.get("from") ?? NaN);
+    const to = Number(url.searchParams.get("to") ?? NaN);
+    if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from || to - from > COST_WINDOW_MAX_MS) {
+      json(res, emptyCostWindow(Date.now()));
+      return true;
+    }
+    const maxAge = url.searchParams.get("fresh") === "1" ? 0 : undefined;
+    json(res, await ctx.tokenStats.costWindow(from, to, costMeta(ctx.sessions, ctx.intents), maxAge));
     return true;
   }),
 ];

@@ -6,7 +6,9 @@
  * imports carry `.ts` because `node --test` loads it straight off the source.
  */
 import type { BacklogItem, BacklogStatus } from "@waterplane/shared";
-import { BACKLOG_AGES, categoryBucket, type BacklogAge, type CategoryBucket, withinAge } from "./rowBuckets.ts";
+import {
+  BACKLOG_AGES, BACKLOG_STATUSES, CATEGORY_BUCKETS, categoryBucket, type BacklogAge, type CategoryBucket, withinAge,
+} from "./rowBuckets.ts";
 import { type BacklogFilter } from "./rowFilter.ts";
 
 /**
@@ -20,6 +22,10 @@ import { type BacklogFilter } from "./rowFilter.ts";
  * the cut one specific count opens — but it narrows BOTH of the others, for the
  * rule above. With "merged from 3" on, the status chips have to say how many of
  * THOSE three are failed, or the chip says 9 and the tap shows one.
+ *
+ * `pool` is each axis's own whole: the rows that pass the OTHER three axes, i.e. the list that
+ * axis would be cutting. A chip whose count IS its pool opens the list already on screen, which
+ * is what `drawnChips` leaves undrawn.
  */
 export function backlogCounts(items: BacklogItem[], f: BacklogFilter, now: number) {
   const status = { running: 0, queued: 0, failed: 0, done: 0 } as Record<BacklogStatus, number>;
@@ -29,6 +35,7 @@ export function backlogCounts(items: BacklogItem[], f: BacklogFilter, now: numbe
   // against each other: with "failed" on, "on a clock 3" has to mean three
   // failed rows with a clock, because that is the list its tap opens.
   let clock = 0;
+  const pool = { status: 0, age: 0, category: 0, clock: 0 };
   for (const it of items) {
     if (f.ids && !f.ids.includes(it.id)) continue;
     // Each axis counted against the OTHER two, exactly as the first two have
@@ -39,14 +46,41 @@ export function backlogCounts(items: BacklogItem[], f: BacklogFilter, now: numbe
     const okAge = !f.age || withinAge(it.createdAt, f.age, now);
     const okCat = !f.category || categoryBucket(it) === f.category;
     const okClock = !f.clock || !!it.at;
-    if (okAge && okCat && okClock) status[it.status] = (status[it.status] ?? 0) + 1;
+    if (okAge && okCat && okClock) { status[it.status] = (status[it.status] ?? 0) + 1; pool.status++; }
     if (okStatus && okCat && okClock) {
+      pool.age++;
       for (const a of BACKLOG_AGES) if (withinAge(it.createdAt, a, now)) age[a]++;
     }
-    if (okStatus && okAge && okClock) category[categoryBucket(it)]++;
-    if (okStatus && okAge && okCat && it.at) clock++;
+    if (okStatus && okAge && okClock) { category[categoryBucket(it)]++; pool.category++; }
+    if (okStatus && okAge && okCat) { pool.clock++; if (it.at) clock++; }
   }
-  return { status, age, category, clock };
+  return { status, age, category, clock, pool };
+}
+
+/**
+ * **Which chips are worth drawing** — the ONE place that decides, from the same counts the chips
+ * print, so the number and the cut cannot disagree about whether a chip exists.
+ *
+ * A chip is drawn when it is LIT (its tap is the way out) or when its tap would change the list:
+ * some rows, but not all of its pool. `past week 4` and `no kind 4` over a list of four open the
+ * list already on screen, so they say a number the reader has to discard — "4" four times in one
+ * sheet was the complaint. A chip with nothing in it was never drawn, and still is not.
+ *
+ * Two kinds of chip are drawn even when they hold the whole pool, because their tap is not only
+ * a cut: `failed` and `done` are the doors to the bulk verbs (*run these N again*, *archive
+ * these N* are drawn on that status cut alone, so hiding the chip over an all-done repo would
+ * take the verb out of reach), and `on a clock` re-groups the rows by the instant they share.
+ */
+export function drawnChips(c: ReturnType<typeof backlogCounts>, f: BacklogFilter) {
+  const drawn = (count: number, pool: number, lit: boolean, door = false) =>
+    lit || (count > 0 && (door || count < pool));
+  return {
+    status: BACKLOG_STATUSES.filter((s) =>
+      drawn(c.status[s], c.pool.status, f.status === s, s === "failed" || s === "done")),
+    age: BACKLOG_AGES.filter((a) => drawn(c.age[a], c.pool.age, f.age === a)),
+    category: CATEGORY_BUCKETS.filter((k) => drawn(c.category[k], c.pool.category, f.category === k)),
+    clock: drawn(c.clock, c.pool.clock, !!f.clock, true),
+  };
 }
 
 /**
@@ -108,10 +142,9 @@ export interface FocusRunBreakdown {
  *   • **"one at a time in this repo" only with no aimed rows.** `nextFireIds`
  *     picks one per GROUP, so fresh rows plus two open sessions start three at
  *     once, and the serialization claim is the host's per-session one.
- *   • **"in the order you see" only where the order IS the order.** With the
- *     smart pick on, the repo re-picks before each item, which is the whole
- *     feature; with aimed rows in the cut the order is per session and not the
- *     flat list. Silence beats a half-truth on both.
+ *   • **"in the order you see" only where the order IS the order.** With aimed
+ *     rows in the cut the order is per session and not the flat list. Silence
+ *     beats a half-truth.
  *
  * With auto OFF the refusal is a sentence and the remedy is named, never a
  * dimmed row: the switch that fixes it is the one in this sheet's own head, and
@@ -119,7 +152,7 @@ export interface FocusRunBreakdown {
  * only copy of "auto is off"** — `Backlog.tsx` drops its head banner exactly
  * when this sentence is drawn, so one rule is stated once.
  */
-export function focusRunWords(b: FocusRunBreakdown, auto: boolean, smartOn: boolean): string | null {
+export function focusRunWords(b: FocusRunBreakdown, auto: boolean): string | null {
   const starting = b.fresh + b.aimed;
   // Nothing here is going to start, so there is no promise to make. The bar
   // above says what the cut is and every row says what state it is in; a
@@ -143,13 +176,9 @@ export function focusRunWords(b: FocusRunBreakdown, auto: boolean, smartOn: bool
   }
   const fire = starting === 1 ? " fire on the row starts it now." : " fire on a row starts that one now.";
   // The order clause is drawn only where the flat list on screen IS the order
-  // the host will take: no smart pick re-picking before each item, and no aimed
-  // rows (whose order is their session's, not this list's).
-  const order = !smartOn && b.aimed === 0 && starting > 1 ? ", in the order you see" : "";
-  // The smart pick is the one feature here that applies itself, so where it is
-  // on the list on screen is explicitly NOT the fire order and the sentence
-  // says so rather than going quiet about it.
-  const pick = smartOn && starting > 1 ? " The smart pick chooses which one goes next, so this is not the order." : "";
+  // the host will take: no aimed rows (whose order is their session's, not
+  // this list's).
+  const order = b.aimed === 0 && starting > 1 ? ", in the order you see" : "";
   let lead: string;
   if (b.aimed === 0) {
     lead = b.fresh === 1
@@ -163,7 +192,7 @@ export function focusRunWords(b: FocusRunBreakdown, auto: boolean, smartOn: bool
     const aimedPart = b.aimed === 1 ? "1 in the session it is aimed at" : `${b.aimed} in their sessions`;
     lead = `of these ${starting}, ${b.fresh} start in a session of their own and ${aimedPart}, each as soon as what it waits for is free`;
   }
-  return `auto is on: ${lead}.${fire}${pick}${restWords}`;
+  return `auto is on: ${lead}.${fire}${restWords}`;
 }
 
 /** The label on the switch `focusRunWords` names, so the sentence and the

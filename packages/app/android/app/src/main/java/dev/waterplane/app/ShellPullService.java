@@ -29,7 +29,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -255,6 +257,16 @@ public class ShellPullService extends Service {
         /** "Later" on the ready-to-install notification: when it comes back.
          *  0 = not snoozed. The row is still listed as ready in the app. */
         long snoozeUntil;
+        /** When the clean-up after an install deleted this row's APK
+         *  ({@link #cleanAfterInstall}). 0 = never cleaned. The row stays: it is
+         *  the record that the build was here and went on. */
+        long cleanedAt;
+        /** Bytes the clean-up gave back for this row, the app's copy and the
+         *  Downloads copy together. */
+        long cleanedBytes;
+        /** Why a Downloads copy STAYED, where the clean-up could not remove it
+         *  ("" = nothing stayed, or there was no copy). Said, never swallowed. */
+        String cleanNote = "";
 
         JSONObject toJson() throws JSONException {
             JSONObject o = new JSONObject();
@@ -288,6 +300,11 @@ public class ShellPullService extends Service {
             // (`shared/installlog.ts`).
             if (installAutoKnown) o.put("installAuto", installAuto);
             if (snoozeUntil > 0) o.put("installSnoozedUntil", snoozeUntil);
+            if (cleanedAt > 0) {
+                o.put("cleanedAt", cleanedAt);
+                o.put("cleanedBytes", cleanedBytes);
+                if (!cleanNote.isEmpty()) o.put("cleanNote", cleanNote);
+            }
             if (!origin.isEmpty()) {
                 o.put("origin", origin);
                 try { o.put("item", new JSONObject(pullItem)); } catch (JSONException e) { /* adopted by nobody */ }
@@ -322,6 +339,9 @@ public class ShellPullService extends Service {
             it.installAuto = o.optBoolean("installAuto", false);
             it.installAutoKnown = o.has("installAuto");
             it.snoozeUntil = o.optLong("installSnoozedUntil", 0);
+            it.cleanedAt = o.optLong("cleanedAt", 0);
+            it.cleanedBytes = o.optLong("cleanedBytes", 0);
+            it.cleanNote = o.optString("cleanNote", "");
             it.origin = o.optString("origin", "");
             JSONObject pi = o.optJSONObject("item");
             it.pullItem = pi == null ? "" : pi.toString();
@@ -1157,6 +1177,7 @@ public class ShellPullService extends Service {
      * again and claims nothing.
      */
     static void settleInstalls(Context ctx) {
+        List<String> landed = new ArrayList<>();
         synchronized (LOCK) {
             Map<String, Item> items = load(ctx);
             boolean moved = false;
@@ -1168,6 +1189,7 @@ public class ShellPullService extends Service {
                 if (it.pkgCode > 0 && have >= it.pkgCode) {
                     it.install = "installed";
                     it.installError = "";
+                    landed.add(it.id);
                 } else {
                     it.install = "";
                     it.installError = "";
@@ -1177,6 +1199,91 @@ public class ShellPullService extends Service {
                 moved = true;
             }
             if (moved) save(ctx, items);
+        }
+        // Outside the lock: the clean-up takes it itself, and touches MediaStore.
+        for (String id : landed) cleanAfterInstall(ctx, id);
+    }
+
+    // ── clean-up after an install, opt-in ────────────────────────────────
+
+    private static final String KEY_CLEAN = "cleanAfterInstall";
+
+    /**
+     * The page's "delete the APK once it is installed" switch, held HERE and
+     * nowhere else: the install ends at a broadcast receiver with the document
+     * frozen or the app closed, and that is the only moment the clean-up runs.
+     * Off by default — deleting a file is never something this app starts doing
+     * on its own; somebody turns it on. Per phone, never synced: it is a
+     * question about THIS phone's storage.
+     */
+    static boolean cleanEnabled(Context ctx) {
+        return prefs(ctx).getBoolean(KEY_CLEAN, false);
+    }
+
+    static void setClean(Context ctx, boolean on) {
+        prefs(ctx).edit().putBoolean(KEY_CLEAN, on).apply();
+    }
+
+    /**
+     * A build just installed: with the switch on, give back the space its APK
+     * holds — the copy inside the app ({@link #binOf}), the copy this app saved
+     * to Downloads, and the same two for every OLDER finished build of the same
+     * package still sitting here, which nothing will ever install now.
+     *
+     * Only what the platform has confirmed installed, never a guess: the row is
+     * `installed` (the receiver's STATUS_SUCCESS, or {@link #settleInstalls}
+     * reading the installed versionCode). An older build is one whose own
+     * versionCode is known and not newer than the installed one — an unread
+     * archive (code 0) is left alone, as is anything waiting at the installer.
+     *
+     * The ROW stays, marked cleaned: it is the record of what came and went on,
+     * and what the page reads to say why there is no file to install again.
+     * A Downloads copy that cannot be removed (another app now owns it, or the
+     * old-Android permission is gone) is SAID on the row, never dropped quietly.
+     */
+    static void cleanAfterInstall(Context ctx, String id) {
+        if (!cleanEnabled(ctx)) return;
+        Map<String, Item> items = load(ctx);
+        Item done = items.get(id);
+        if (done == null || !"installed".equals(done.install)) return;
+        List<Item> victims = new ArrayList<>();
+        victims.add(done);
+        if (!done.pkg.isEmpty() && done.pkgCode > 0) {
+            for (Item o : items.values()) {
+                if (o == done || !done.pkg.equals(o.pkg) || !"done".equals(o.state)) continue;
+                if (o.pkgCode <= 0 || o.pkgCode > done.pkgCode) continue;
+                if ("installing".equals(o.install) || "asked".equals(o.install)) continue;
+                victims.add(o);
+            }
+        }
+        long now = System.currentTimeMillis();
+        for (Item v : victims) {
+            File bin = binOf(ctx, v.id);
+            long size = bin.isFile() ? bin.length() : v.size;
+            long freed = 0;
+            if (bin.isFile() && bin.delete()) freed += size;
+            String note = "";
+            boolean removedCopy = false;
+            if (v.where.startsWith("Downloads/")) {
+                String saved = v.where.substring("Downloads/".length());
+                String why = Downloads.remove(ctx, saved, size);
+                if (why == null) { removedCopy = true; freed += size; }
+                else if (why.isEmpty()) removedCopy = true;   // already gone: the row stops claiming it
+                else note = why;
+            }
+            // Nothing was here to give back (cleared earlier, or by the seven-day
+            // eviction): claiming the clean-up did it would be a wrong account.
+            if (freed == 0 && note.isEmpty()) continue;
+            final long gave = freed;
+            final String said = note;
+            final boolean dropWhere = removedCopy;
+            patch(ctx, v.id, r -> {
+                r.cleanedAt = now;
+                r.cleanedBytes += gave;
+                r.cleanNote = said;
+                if (dropWhere) r.where = "";
+            });
+            ShellInstallReceiver.cancelReady(ctx, v.pkg, v.id);
         }
     }
 

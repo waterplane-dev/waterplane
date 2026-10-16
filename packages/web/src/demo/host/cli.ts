@@ -23,7 +23,8 @@ const SGR = /\x1b\[[0-9;?]*[A-Za-z]/g;
 const R0 = `${ESC}0m`;
 const DIM = `${ESC}38;5;246m`;
 const RULE = `${ESC}38;5;244m`;
-const ORANGE = `${ESC}38;5;174m`;
+// The CLI's truecolour orange (the logo's, the stub TUI's) — not the salmon 256-colour 174 a tmux capture quantises it to.
+const ORANGE = `${ESC}38;2;215;119;87m`;
 const GREEN = `${ESC}38;5;114m`;
 const BAND = `${ESC}48;5;237m`;
 

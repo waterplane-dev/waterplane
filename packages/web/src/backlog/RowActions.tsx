@@ -1,5 +1,5 @@
 /**
- * A row's verbs: edit, undo / put them back, the wait verb, when / drop the
+ * A row's verbs: edit, the wait verb, when / drop the
  * clock, fire, run it again, re-fire, open, check, validate, done, archive,
  * remove. A verb that cannot act is ABSENT with a sentence, never dimmed.
  *
@@ -9,7 +9,7 @@
  */
 import {
   AlarmClockOff, Archive, ArchiveRestore, ArrowRight, CalendarClock, CheckCheck, Hourglass, Pencil, RotateCcw,
-  Sparkles, Undo2, X,
+  Sparkles, X,
 } from "lucide-react";
 import type { RowFacts } from "./BacklogRow";
 import { ConfirmButton } from "../Confirm";
@@ -21,36 +21,13 @@ import { dropOffered } from "./backlogLabels";
 
 export function RowActions({ m, row }: { m: BacklogModel; row: RowFacts }) {
   const { beginEdit, fireIntoBusy, here, p, queuedHere, runAgainOffered } = m;
-  const { it, mergedFrom, undoOffer } = row;
+  const { it } = row;
   // fire/re-fire = the MANUAL OVERRIDE: one tap, always. A busy checkout is SAID (title, `RowNotes`), never asked.
   const fireTitle = fireIntoBusy(it) ? `${skipQueueNote(!it.targetSessionId)} — ${SKIP_QUEUE_BUSY_NOTE}` : skipQueueNote(!it.targetSessionId);
   const holder = holderOffer(it, p.sessions);
   return (
               <div className="bl-actions">
                 {p.online && <button className="key" title="edit" onClick={() => beginEdit(it)}><Pencil size={14} /></button>}
-                {/* Put the originals back and remove the row the pass wrote.
-                    No `askConfirm`: this IS the confirmation step for something
-                    that already applied itself, and nothing is destroyed either
-                    way — the merged row's text is machine-written and kept in
-                    the host's record, and the originals never left the store.
-                    A second modal in front of an undo is a modal in front of
-                    the safety catch. */}
-                {undoOffer && (
-                  <button className="key" data-hint="backlog.unmerge"
-                    title={undoOffer === "undo"
-                      ? `put the ${mergedFrom.length} it was made from back where they were, and remove this row`
-                      : it.status === "running"
-                        ? `queue the ${mergedFrom.length} it was made from again, as they were — the session running this row is not stopped, and the row is kept under archived`
-                        : `queue the ${mergedFrom.length} it was made from again, as they were — this row has already run and is archived, not undone`}
-                    /* The toast says the word that was ON the button. It always
-                       said "put them back", which is wrong on the `undo` half —
-                       and the host's own sentence lands a beat later, so the
-                       two receipts for one tap disagreed in one of the two
-                       states. */
-                    onClick={() => { track("action:backlog.unmerge"); p.verbs.onUnmerge(it.id, undoOffer === "undo" ? "undo" : "put them back"); }}>
-                    <Undo2 size={14} /> {undoOffer === "undo" ? "undo" : "put them back"}
-                  </button>
-                )}
                 {/* **One WHEN, one name.** This verb was `queue here`, which is
                     the composer's `When free`, the next-prompt strip's `make it
                     wait` and the queue row's hourglass — four spellings of one
@@ -96,8 +73,7 @@ export function RowActions({ m, row }: { m: BacklogModel; row: RowFacts }) {
                     composes one. *drop the clock* is the answer to the state a
                     one-off cannot leave — its instant went by, it cannot be
                     re-armed, and `re-fire` beside it runs it THIS SECOND in a
-                    session of its own rather than putting it back in the queue
-                    where the smart pick can see it. */}
+                    session of its own rather than putting it back in the queue. */}
                 {it.at && dropOffered(it) && p.online && (
                   <>
                     <button className="key" title="change its time — the send sheet, with this row already in it"
@@ -122,7 +98,7 @@ export function RowActions({ m, row }: { m: BacklogModel; row: RowFacts }) {
                     queue that runs them one at a time. */}
                 {/* **Two verbs, two promises: in turn, or this second.**
                     `run it again` puts the row back in the QUEUE — where auto
-                    and the smart pick can finally see it — and `re-fire`,
+                    can finally see it — and `re-fire`,
                     right beside it, starts an agent now, past every rung of the
                     ladder. Nineteen `re-fire` taps are nineteen agents in one
                     worktree; nineteen of these are nineteen rows the queue runs

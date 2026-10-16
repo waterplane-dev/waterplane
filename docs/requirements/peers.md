@@ -68,3 +68,12 @@ Adding a desktop lists online tailnet peers as one-tap rows in the UI.
 - asked: 2026-10-02
 - shipped: 515b817, 28057c1
 
+### R-peers-015 · shipped
+When more than one desktop is saved, a compact split host key is shown: one half toggles to the next paired desktop, the other opens the host switcher.
+- asked: 2026-10-08
+- shipped: fb64f57f, 4dc4f8b7
+
+### R-peers-016 · requested
+After pairing two hosts, the app visibly confirms that pairing succeeded.
+- asked: 2026-10-08
+

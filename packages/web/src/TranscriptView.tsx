@@ -26,7 +26,7 @@ export type { TranscriptStatus } from "./transcript/tvTypes";
 export function TranscriptView(props: TranscriptViewProps) {
   const m = useTranscriptView(props);
   const {
-    bodyRef, stickRef, seenRef, turnsRef, seenMark, setSeenMark, sessionId, loading, doc, probing, err, onShowCli,
+    bodyRef, stickRef, seenRef, turnsRef, noteRead, seenMark, setSeenMark, sessionId, loading, doc, probing, err, onShowCli,
     emptyNow, cliPeek, peek, setPeek, turns, shown, setLimit,
   } = m;
   return (
@@ -51,7 +51,7 @@ export function TranscriptView(props: TranscriptViewProps) {
         if (atEnd && seenRef.current === sessionId) {
           const m = newestTs(turnsRef.current);
           if (m && m > seenMark) { writeSeen(sessionId, m); setSeenMark(m); }
-        }
+        } else noteRead();
       }}
     >
       {/* Only once the cache has been ASKED and had nothing. Before this the

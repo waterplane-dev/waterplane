@@ -128,8 +128,7 @@ export const isFanoutRow = (i: Intent): boolean =>
  * put it on the one screen whose verbs it cannot use and took it off the list
  * of the repo's waiting work — which is what it is. Measured, on this desktop:
  * 9 live `at` rows, every one of them one-off, zero recurring; seven of them
- * `failed`, in no backlog, and invisible to the smart pick, which only ever
- * looks at backlog rows.
+ * `failed`, in no backlog, where nobody grooming the list ever saw them.
  *
  * Two exclusions, both deliberate:
  *  - a rule that RECURS is a standing thing, whatever it is aimed at;
@@ -168,9 +167,9 @@ export const ORIGIN_SCHEDULE_SWEEP = "schedule:sweep";
 export const queuesBacklogItem = (i: Intent): boolean => i.origin === ORIGIN_SCHEDULE_WORK && isScheduleRow(i);
 
 /**
- * Equality key for *these two rows wait on the SAME clock* — the smart pick's
- * merge rule, which may fold two items into one only when it is not thereby
- * deciding a clock.
+ * Equality key for *these two rows wait on the SAME clock* — what any rule
+ * folding two items into one must ask, so it is never thereby deciding a
+ * clock.
  *
  * `undefined` for a row with no clock, so an untimed row never accidentally
  * compares equal to a timed one: two `undefined`s are equal as values and the

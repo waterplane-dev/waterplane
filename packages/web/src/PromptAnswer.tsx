@@ -1,5 +1,8 @@
-import { Bot, CloudOff } from "lucide-react";
+import { Bot, CloudOff, ScrollText } from "lucide-react";
 import type { AnswerSuggestion, DetectedPrompt } from "@waterplane/shared";
+import { copyText } from "./api";
+import { Markdown } from "./Markdown";
+import { showToast } from "./toast";
 import { track } from "./usage";
 import { remembersText, suggestionBy } from "./suggestionBy";
 
@@ -44,7 +47,9 @@ interface Props {
  * digit (`cliKeys.ts`, the special-key row). So the bar is gone, and this is
  * what took its place: the card body shared by the READER's `tr-ask` and the
  * `QuestionsSheet`, the two surfaces that have a scroll of their own and are
- * therefore allowed to show the whole question.
+ * therefore allowed to show the whole question. One exception draws it over the
+ * terminal too: the workspace-trust box (`core/session/termAnswers.ts`), the first
+ * box a new person meets, before they know the key bar, unnumbered so no digit works.
  *
  * Nothing about WHAT an answer is changed: every tap goes through App's
  * `answerPrompt`, which queues it durably, fingerprinted and first-in-lane, and
@@ -63,6 +68,7 @@ export function PromptAnswer({ prompt: p, queued, suggestion, onAnswer, ev }: Pr
     <>
       {/* The CLI's own question where the host could read it out of the
           conversation log; the scraped one is whatever fit above option 1. */}
+      {p.plan && <PlanBody plan={p.plan} />}
       <div className="approve-q">{p.ask || p.question}</div>
       {p.truncated && (
         // Not cosmetic: options exist that cannot be tapped. Two shapes, two
@@ -108,7 +114,9 @@ export function PromptAnswer({ prompt: p, queued, suggestion, onAnswer, ev }: Pr
           return (
             <button
               key={o.index}
-              className={`approve-btn ${o.index === 1 && !p.multi ? "primary" : ""} ${suggested ? "suggested" : ""}`}
+              // Option 1 is the CLI's own first choice on a numbered box ("Yes"); a `nav` box keeps
+              // no such order — claude 2.1.293's trust box lists "No, exit" first — so none is primary.
+              className={`approve-btn ${o.index === 1 && !p.multi && !p.nav ? "primary" : ""} ${suggested ? "suggested" : ""}`}
               // A checkbox box answers on Submit: a digit there only TOGGLES the
               // row, so appending Return would submit whatever is ticked at that
               // moment (usually the wrong set).
@@ -156,5 +164,30 @@ export function PromptAnswer({ prompt: p, queued, suggestion, onAnswer, ev }: Pr
         <button className="approve-esc" onClick={() => { track(`action:${ev}.esc`); onAnswer("\x1b", "Esc"); }}>Esc</button>
       </div>
     </>
+  );
+}
+
+/**
+ * The plan a plan-approval box asks about (host `planbox.ts`): the CLI draws it
+ * ABOVE the box, so on the terminal it has scrolled away long before anyone
+ * reaches the buttons, and the log does not hold it until the box is answered.
+ * Open by default — it is the thing being approved — and foldable, because a
+ * long plan otherwise puts the buttons a whole document below the question.
+ */
+function PlanBody({ plan }: { plan: NonNullable<DetectedPrompt["plan"]> }) {
+  const copy = (text: string) => void copyText(text).then((ok) => showToast(ok ? "copied" : "copy failed"));
+  const lines = plan.text.split("\n").length;
+  return (
+    <details className="approve-plan" open>
+      <summary>
+        <ScrollText size={13} style={{ verticalAlign: "-2px" }} /> the plan · {lines} lines
+      </summary>
+      <div className="approve-plan-body">
+        <Markdown src={plan.text} q="" onCopy={copy} />
+      </div>
+      <div className="approve-hint">
+        {plan.cut ? "longer than the host sends — the rest is in " : "from "}{plan.path.replace(/^\/(Users|home)\/[^/]+/, "~")}
+      </div>
+    </details>
   );
 }

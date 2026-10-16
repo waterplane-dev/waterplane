@@ -1,0 +1,30 @@
+
+ ▐▛███▛█   Claude Code v2.1.293
+▝▜██████▀  Opus 5.5 with high effort · Claude Max
+ ▝▝   ▝▝   /tmp/wp-scratch
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  tmux detected · scroll with PgUp/PgDn · or add 'set -g mouse on' to ~/.tmux.conf for wheel scro…
+────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ Try "fix lint errors"
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  [CAVEMAN]
+  ⏵⏵ don't ask on (shift+tab to cycle) · ← 3 agents

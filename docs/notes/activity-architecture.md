@@ -18,8 +18,9 @@ Both stay top-level modules (`App.tsx`, `clockDirectory.tsx`, `assessRows.ts`, `
 activityRows.ts            BARREL: explicit `export { … } from "./activity/…"` lists, nothing else
 activity/activityTypes.ts  the model (types only)
 activity/activityPieces.ts row keys, clip, `act`, recorded-failure sentence
+activity/activityBucket.ts bucketOf (a leaf: the row builders stamp it, the selector ranks by it)
 activity/activityQueueRow.ts   activityIntentWords.ts + activityIntentRow.ts   activityPullRow.ts
-activity/activitySelect.ts bucketOf, compareActivity, activityRows (the selector)
+activity/activitySelect.ts compareActivity, activityRows (the selector)
 activity/activityFilters.ts   activityTriage.ts   activityBulk.ts
 ```
 

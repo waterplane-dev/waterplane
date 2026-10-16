@@ -7,7 +7,7 @@ import {
 } from "./activityPieces.ts";
 import {
   bucketOf,
-} from "./activitySelect.ts";
+} from "./activityBucket.ts";
 import type { ActivityInput, ActivityRow } from "./activityTypes.ts";
 
 // ── Download rows: bytes on their way to the phone ──────────────────────────
@@ -19,14 +19,13 @@ export function pullRow(p: PullRecord, input: ActivityInput): ActivityRow {
     : p.state === "paused" ? "blocked"
     : "queued";
   const pct = p.item.size ? Math.floor((p.received / p.item.size) * 100) : 0;
-  // Rate in the same units the Downloads sheet uses: a 5 MB/s link reading
-  // "5120 kB/s" is the same number told badly, and the two screens describe one
-  // transfer.
-  const rate = p.rate ? (p.rate >= 1e6 ? `${(p.rate / 1e6).toFixed(1)} MB/s` : p.rate >= 1e3 ? `${Math.round(p.rate / 1e3)} kB/s` : `${Math.round(p.rate)} B/s`) : null;
+  const rate = p.rate ? `${bytes(Math.round(p.rate))}/s` : null;
+  // Done, the size is said HERE, once: a full bar and "31 kB of 31 kB" under it said it twice more.
+  const got = `downloaded${p.item.size ? ` · ${bytes(p.item.size)}` : ""}`;
   const verdict = state === "running" ? `${pct}% — ${rate ?? "waiting for bytes"}`
     : state === "failed" ? (p.error || "the transfer stopped and nothing said why")
     : state === "blocked" ? "paused — it resumes from where it stopped"
-    : state === "done" ? (p.savedTo ? (p.saveVia === "browser" ? `downloaded, handed to ${p.savedTo}` : `downloaded, saved to ${p.savedTo}`) : p.evicted ? "downloaded — the bytes were cleared to make room; fetching again is one tap" : "downloaded, on this phone")
+    : state === "done" ? (p.savedTo ? `${got} · ${p.saveVia === "browser" ? "handed to" : "saved to"} ${p.savedTo}` : p.evicted ? `${got} — the bytes were cleared to make room; fetching again is one tap` : `${got} · on this phone`)
     : pct > 0 ? `queued — ${pct}% already here from an earlier attempt` : "queued";
   return {
     key: `pull:${p.item.id}`,
@@ -57,7 +56,9 @@ export function pullRow(p: PullRecord, input: ActivityInput): ActivityRow {
     // Local: the record lives in this phone's IndexedDB, so it is never a
     // stale copy of something the host knows better.
     asOf: null,
-    progress: { done: p.received, total: p.item.size, label: "bytes" },
+    // The bar is for a transfer in the MIDDLE (running, or paused part-way). Done, its size is
+    // in the verdict; queued, the verdict already says how much an earlier attempt left.
+    progress: state === "running" || state === "blocked" ? { done: p.received, total: p.item.size, label: "bytes" } : null,
     targets: [],
     lastRun: null,
     attempts: p.attempts,
@@ -82,3 +83,8 @@ export function pullRow(p: PullRecord, input: ActivityInput): ActivityRow {
     subject: { source: "pull", record: p },
   };
 }
+
+/** The Downloads sheet's units, rate included: a 5 MB/s link reading "5120 kB/s" is the same
+ *  number told badly, and the two screens describe one transfer. */
+export const bytes = (n: number): string => (n >= 1e9 ? `${(n / 1e9).toFixed(1)} GB`
+  : n >= 1e6 ? `${(n / 1e6).toFixed(1)} MB` : n >= 1e3 ? `${Math.round(n / 1e3)} kB` : `${n} B`);

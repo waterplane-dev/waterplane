@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import {
   buildContext, checkLinks, classify, dirsOf, extractChangelogSection, groupPaths, hitToken, hostedName, parseAccept,
   rewriteHostedLinks, stripSessionIds,
-  parseAllowlist, resolveRel, scanPath, scanText, verifySteps,
+  npmTarballProblems, parseAllowlist, resolveRel, scanPath, scanText, verifySteps,
 } from "./public-lib.mjs";
 
 const inc = (rules, p) => classify(p, parseAllowlist(rules)).included;
@@ -176,6 +176,10 @@ test("links: the outer target of an image inside a link counts too", () => {
   const included = new Set(["README.md", "docs/media/a.gif"]);
   const f = checkLinks("README.md", "[![x](docs/media/a.gif)](docs/media/a.mp4)", { included, tracked, includedDirs: dirsOf(included) });
   assert.deepEqual(f.map((x) => x.resolved), ["docs/media/a.mp4"]);
+  // The sized HTML spelling README uses for a phone-tall gif: both targets, a missing one named.
+  const html = `<a href="docs/media/a.mp4"><img src="docs/media/b.gif" width="270" alt="x"></a>`;
+  assert.deepEqual(checkLinks("README.md", html, { included, tracked, includedDirs: dirsOf(included) }).map((x) => [x.resolved, x.kind]),
+    [["docs/media/a.mp4", "excluded"], ["docs/media/b.gif", "missing"]]);
 });
 
 test("stripSessionIds: every form the requirements and notes use, prompt refs too, and nothing else", () => {
@@ -235,6 +239,9 @@ test("rewriteHostedLinks: both targets of a linked image, captions and refs; nev
   assert.equal(r.n, 3);
   assert.deepEqual([...r.used], ["docs/media/x.mp4"]);
   assert.equal(rewriteHostedLinks("README.md", "[a](docs/media/x.mp4)", host).n, 1, "repo-root path from the root README");
+  // The sized HTML spelling: the film's href is re-pointed, the gif's src and the width kept.
+  assert.equal(rewriteHostedLinks("docs/guide.md", `<a href="media/x.mp4"><img src="media/x.gif" width="270" alt="a"></a> \`<a href="media/x.mp4">\``, host).text,
+    `<a href="https://h.example/x-0123456789.mp4"><img src="media/x.gif" width="270" alt="a"></a> \`<a href="media/x.mp4">\``);
 });
 
 test("hostedName: stem plus ten hex of the content hash", () => {
@@ -255,8 +262,11 @@ test("privateExtensions: the allow-list's whole-folder extension carve-outs, in 
 
 test("verify-public-tree: a real npm ci first, then build, lint and both test layers; install and build failures stop the run", () => {
   const line = (st) => st.map((x) => [x.cmd, ...x.args].join(" "));
-  assert.deepEqual(line(verifySteps()), ["npm ci", "npm run build", "npm run lint", "npm run test:unit", "npm run test:host"]);
-  assert.deepEqual(verifySteps().filter((x) => x.stop).map((x) => x.args.join(" ")), ["ci", "run build"]);
+  assert.deepEqual(line(verifySteps()), [
+    "npm ci", "npm run build", "npm run release:build -- --unsigned", "node scripts/release/check-npm-tarball.mjs",
+    "npm run lint", "npm run test:unit", "npm run test:host",
+  ]);
+  assert.deepEqual(verifySteps().filter((x) => x.stop).map((x) => x.args.join(" ")), ["ci", "run build", "run release:build -- --unsigned"]);
   assert.equal(line(verifySteps({ e2e: "git,plugin" })).at(-1), "node scripts/run-e2e.mjs git plugin");
   const src = readFileSync(new URL("../verify-public-tree.mjs", import.meta.url), "utf8");
   assert.doesNotMatch(src, /symlinkSync\(join\(ROOT, "node_modules"/, "never this checkout's node_modules");
@@ -267,4 +277,15 @@ test("the allow-list publishes .npmrc, so the public tree's npm ci keeps install
   const al = parseAllowlist(readFileSync(new URL("../../deploy/public-allowlist.txt", import.meta.url), "utf8"));
   assert.equal(classify(".npmrc", al).included, true);
   assert.equal(classify("package-lock.json", al).included, true);
+});
+
+test("verify-public-tree rehearses CI's tarball: release:build --unsigned, then the .tgz is this version with its shrinkwrap", () => {
+  const wf = readFileSync(new URL("../../deploy/public-workflows/npm-publish.yml", import.meta.url), "utf8");
+  assert.match(wf, /run: npm run release:build -- --unsigned/, "the step being rehearsed is still the workflow's");
+  const ok = { slug: "waterplane", version: "1.2.3", listing: ["package/package.json", "package/npm-shrinkwrap.json"], pkgJson: '{"name":"waterplane","version":"1.2.3"}' };
+  assert.deepEqual(npmTarballProblems(ok), []);
+  assert.match(npmTarballProblems({ ...ok, listing: ["package/package.json"] })[0], /no package\/npm-shrinkwrap\.json/);
+  assert.match(npmTarballProblems({ ...ok, pkgJson: '{"name":"waterplane","version":"1.2.2"}' })[0], /waterplane@1\.2\.2, not waterplane@1\.2\.3/);
+  assert.match(npmTarballProblems({ ...ok, pkgJson: null })[0], /missing or unreadable/);
+  assert.equal(npmTarballProblems({ ...ok, listing: [], pkgJson: "nope" }).length, 2, "every failure is listed");
 });

@@ -269,3 +269,21 @@ test("a directory line may be ticked for re-timing only where the host accepts a
   assert.equal(retimeIntentEligible(row({ archived: true })), false);
   assert.equal(retimeIntentEligible(row({ trigger: { kind: "idle" } })), false);
 });
+
+test("the search narrows ON TOP of a horizon cut, and each count is its own control's", () => {
+  const rows = [
+    timed({ id: "soon-a", nextAt: NOW + 20 * 60_000, payload: { kind: "prompt", steps: ["fix the flaky test"] } }),
+    timed({ id: "soon-b", nextAt: NOW + 30 * 60_000, payload: { kind: "prompt", steps: ["sort the launcher"] } }),
+    timed({ id: "later", nextAt: NOW + 30 * H, payload: { kind: "prompt", steps: ["flaky again"] } }),
+  ];
+  const c = cuts(rows, { focus: "soon", text: "  FLAKY " });
+  // The bar's "n of N" is the cut before the search; the box's is after it.
+  assert.equal(c.cutTotal, 2);
+  assert.equal(c.shownTotal, 1);
+  assert.deepEqual(c.shown.map((i) => i.id), ["soon-a"]);
+  // The chip has no search box: what it counts never moves with one.
+  assert.equal(c.standingTotal, 3);
+  // A repo is matched by its folder name, never by a path segment above it.
+  assert.equal(cuts(rows, { text: "myapp" }).shownTotal, 3);
+  assert.equal(cuts(rows, { text: "dev" }).shownTotal, 0);
+});

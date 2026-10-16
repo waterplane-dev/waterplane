@@ -124,6 +124,21 @@ test("a recorded hook stream: start, prompt, held Stop, duplicate Stop — one t
   } finally { h.stop(); }
 });
 
+test("a pasted prompt named back in its envelope is the delivery's proof, claimed once", () => {
+  // The payload's shape as 2.1.301 sends it for a ~1.7 KB write read in two
+  // pieces. Before the envelope rule this claimed nothing, and a backlog item
+  // whose echo the screen missed was reported `unconfirmed` though it ran.
+  const h = harness();
+  try {
+    h.hook("SessionStart", { session_id: "c1", transcript_path: "/p/c1.jsonl", source: "startup" });
+    const ours = "Implement the WHOLE plan.\n\nOne subagent per package, in order.\n- Commit after each one.";
+    const since = Date.now() - 1;
+    h.hook("UserPromptSubmit", { session_id: "c1", prompt: `\n\n<pasted_content id="7ed2">\n${ours.slice(0, 30)}\n</pasted_content id="7ed2">\n\n${ours.slice(30)}` });
+    assert.equal(turn.claimSubmittedPrompt(h.core, "w1", ours, since), true, "the CLI named our words, wrapped");
+    assert.equal(turn.claimSubmittedPrompt(h.core, "w1", ours, since), false, "…claimed ONCE");
+  } finally { h.stop(); }
+});
+
 test("a Stop a hook refused: the working line keeps the turn, and it ends when the line stops", async () => {
   const h = harness();
   try {

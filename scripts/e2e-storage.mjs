@@ -31,6 +31,7 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync, utimes
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { E, SLUG, STATE, rootEnv } from "./lib-brand.mjs";
+import { waitForHost } from "./lib-e2e.mjs";
 
 const PORT = 8894;
 const ROOT = realpathSync(mkdtempSync(join(tmpdir(), `${SLUG}-storage-`)));
@@ -101,7 +102,7 @@ const api = async (path, init) => {
 const post = (path, body = {}, headers = {}) =>
   api(path, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
 
-await sleep(1800);
+await waitForHost(PORT);
 
 // ── §1 the survey and the per-repo sweep are one function ───────────────────
 const survey = (await api("/api/storage/transport")).body;

@@ -8,13 +8,16 @@ import { clockCuts } from "./clockCuts";
 import { ClockDirectory, ClocksGone } from "./clockDirectory";
 import type { RenderRetime } from "./RetimeBar";
 import { scheduleItemsLabel } from "./backlogFilter";
-import { fmtWhen, inWords } from "./sendIntent";
+import { fmtWhen } from "./sendIntent";
 import { SheetHead } from "./Sheet";
 import { ScheduleWeekBar } from "./ScheduleWeekBar";
+import { ScheduleSearch } from "./ScheduleSearch";
 import { Empty } from "./Empty";
+import { Explain } from "./Explain";
 import { Unavailable } from "./Unavailable";
-import { SyncChip } from "./SyncMark";
-import { queueSync } from "./syncState";
+import { ConfirmButton } from "./Confirm";
+import { SyncChip, SyncSummary } from "./SyncMark";
+import { queueSync, rowChipWord, type SyncPhase } from "./syncState";
 
 interface Props {
   repos: RepoTarget[];
@@ -215,6 +218,10 @@ export function ScheduleSheet({
    * accumulate rows that have since left the list.
    */
   const [openText, setOpenText] = useState<string | null>(null);
+  /** The search box (`ScheduleSearch.tsx` says how it sits with the cut). Not
+   *  persisted: it dies with the sheet, like the cut. */
+  const [query, setQuery] = useState("");
+  const searching = query.trim() !== "";
 
   /**
    * ── Every clock on this desktop, cut ONCE ────────────────────────────────
@@ -235,8 +242,8 @@ export function ScheduleSheet({
    */
   const now = Date.now();
   const clocks = useMemo(
-    () => clockCuts({ intents, entries, pending, focus, focusIds, now }),
-    [intents, entries, pending, focus, focusIds, now],
+    () => clockCuts({ intents, entries, pending, focus, focusIds, text: query, now }),
+    [intents, entries, pending, focus, focusIds, query, now],
   );
   /** id → whether that queued save has given up. A Map and not a Set because
    *  the row needs the verdict, not just membership. */
@@ -263,6 +270,36 @@ export function ScheduleSheet({
    *  launcher chip that opened it cannot be two numbers. */
   const shownTotal = clocks.shownTotal;
   const standingTotal = clocks.standingTotal;
+  /** One section on screen (cards of one kind, no directory): its count IS `shownTotal`. */
+  const oneSection = [repeating.length, oneOff.length, clocks.shown.length + clocks.shownPending.length]
+    .filter((n) => n > 0).length === 1;
+
+  /**
+   * Did this reach the desktop? The one question the sheet could not answer.
+   *
+   * A row the host lists is a row the host STORED: the phone can be put down
+   * and the rule still fires. That fact was previously conveyed by the absence
+   * of an amber chip, which is to say not conveyed at all — the screenshot
+   * that started this had ten rows and no way to tell "armed on the desktop"
+   * from "sitting in a phone on a train".
+   */
+  const phaseOf = (e: ScheduleEntry): SyncPhase =>
+    queueSync({ queued: queuedIds.has(e.id), failed: queuedIds.get(e.id) === true, onHost: hostIds.has(e.id), online });
+  /**
+   * …and the answer for EVERY row on screen, said once in the head. The good
+   * case used to be a green "on desktop" chip on each card — ten cards, one
+   * fact ten times, and the eye stopped reading a chip that never changed, so
+   * the one card stuck on this phone looked like the rest. The head says it
+   * (`SyncSummary`, counting when a row is the exception) and a card wears a
+   * chip only when it is NOT on the desktop (`saidAbove`). The directory's
+   * lines are in the tally because they are in `shownTotal`: a listed line is
+   * a host row, a pending one is this phone's and carries its own chip.
+   */
+  const shownPhases: SyncPhase[] = [
+    ...shown.map(phaseOf),
+    ...clocks.shown.map((): SyncPhase => "synced"),
+    ...clocks.shownPending.map((p) => queueSync({ queued: true, failed: !!p.failed, onHost: false, online })),
+  ];
 
   // ── the list ───────────────────────────────────────────────────────
   const row = (e: ScheduleEntry) => {
@@ -273,16 +310,7 @@ export function ScheduleSheet({
     // Gave up vs still on its way. Both mean the host does not have it, so the
     // same verbs are refused — but only one of them resolves itself.
     const sendFailed = queuedIds.get(e.id) === true;
-    /**
-     * Did this reach the desktop? The one question the sheet could not answer.
-     *
-     * A row the host lists is a row the host STORED: the phone can be put down
-     * and the rule still fires. That fact was previously conveyed by the absence
-     * of an amber chip, which is to say not conveyed at all — the screenshot
-     * that started this had ten rows and no way to tell "armed on the desktop"
-     * from "sitting in a phone on a train".
-     */
-    const syncPhase = queueSync({ queued, failed: sendFailed, onHost: hostIds.has(e.id), online });
+    const syncPhase = phaseOf(e);
     /**
      * **A spent one-off reaches this card down exactly one path: an ids link.**
      *
@@ -321,8 +349,8 @@ export function ScheduleSheet({
      * truncations. `typedName` is the one test for that, shared with the
      * backlog's `realLabel` and Activity's schedule row.
      *
-     * When it answers null the header row is spacer + sync + timing and the prose
-     * block is the card's only text. Titling the card by its RULE instead was
+     * When it answers null there is no title line and the prose block is the
+     * card's only text. Titling the card by its RULE instead was
      * considered and rejected: the rule line is two lines down already, and after
      * this change Activity titles the same Intent by its prose — two surfaces
      * calling one row two different things is the failure this is fixing, not a
@@ -375,37 +403,46 @@ export function ScheduleSheet({
       : act.autoFire === false
         ? `${repoName(act.repoDir)} · added to the backlog, not run${turns}`
         : `a new session in ${repoName(act.repoDir)}${turns}`;
+    /**
+     * ONE VOCABULARY PER QUESTION, and the card's head is where it is easiest
+     * to break. The `SyncChip` answers WHERE this rule is stored — drawn only
+     * when that is NOT the desktop, since the sheet's head says the good case
+     * once for every row. This tag answers the STATE of a rule with no next run;
+     * the rule line below answers WHAT it is and WHEN (`next …`). An armed rule
+     * wears no tag: its countdown pill ("in 3d 2h") was the instant the rule
+     * line already prints as "next Thu, Oct 15", said twice on one card. A chip
+     * that answers a second question — the "already spent" tag that used to sit
+     * in this slot — reads as a time, which is how this card came to claim a
+     * state in two vocabularies at once.
+     * `"not armed"` is `HORIZON_LABEL`'s word and not this file's for the same
+     * reason the counts are: the launcher chip and this sheet's own filter bar
+     * both call such a row that, and "no next run" was a third spelling of one
+     * bucket on one screen. `paused` and `off` stay — they are not another name
+     * for unarmed, they are the REASON it is.
+     */
+    const stateTag = queued || (e.nextAt && !e.running)
+      ? null
+      : e.running
+        ? <span className="tag"><Loader size={12} className="spin" /> running</span>
+        // "not armed" names a state you can leave, and a spent one-off
+        // cannot. It says what it IS instead; the sentence under the card
+        // says what is left to do with it.
+        : spent
+          ? <span className="tag">been and gone</span>
+          : <span className="tag">{e.enabled ? HORIZON_LABEL.unarmed : paused ? "paused" : "off"}</span>;
+    const syncTagged = rowChipWord(syncPhase, true) != null;
     return (
       <div key={e.id} className={`q-card${e.running ? " resuming" : ""}`}>
-        {/* ONE VOCABULARY PER QUESTION, and this header is where it is easiest
-            to break. The `SyncChip` answers WHERE this rule is stored (a phone, a
-            queue, the desktop); the tag on its right answers WHEN it fires; the
-            rule line below answers WHAT it is. A chip that answers a second
-            question — the "already spent" tag that used to sit in the WHEN slot —
-            reads as a time, which is how this card came to claim a state in two
-            vocabularies at once.
-            `"not armed"` is `HORIZON_LABEL`'s word and not this file's for the
-            same reason the counts are: the launcher chip and this sheet's own
-            filter bar both call such a row that, and "no next run" was a third
-            spelling of one bucket on one screen. `paused` and `off` stay — they
-            are not another name for unarmed, they are the REASON it is. */}
-        <div className="q-head">
-          {typed && <span className="row-title">{typed}</span>}
-          <span className="spacer" />
-          <SyncChip phase={syncPhase} thing="this schedule" />
-          {queued
-            ? null
-            : e.running
-            ? <span className="tag"><Loader size={12} className="spin" /> running</span>
-            : e.nextAt
-              ? <span className="tag limit-auto">{inWords(e.nextAt)}</span>
-              // "not armed" names a state you can leave, and a spent one-off
-              // cannot. It says what it IS instead; the sentence under the card
-              // says what is left to do with it.
-              : spent
-                ? <span className="tag">been and gone</span>
-                : <span className="tag">{e.enabled ? HORIZON_LABEL.unarmed : paused ? "paused" : "off"}</span>}
-        </div>
+        {/* The name on a line of its own, WRAPPED: beside two pills it was cut
+            mid-word ("Spend what i…"), the header the less useful of two cuts
+            of one string — the same failure `typedName` was written to end. */}
+        {typed && <div className="sched-title">{typed}</div>}
+        {(syncTagged || stateTag) && (
+          <div className="q-head">
+            <SyncChip phase={syncPhase} thing="this schedule" saidAbove />
+            {stateTag}
+          </div>
+        )}
         {/* WHAT it is, kind first. The `one-off` / `repeats` chip that used to
             lead this line is gone: `describeRule` now opens with the kind itself
             ("once · Wed, 9 Sept, 21:00", "every Thu · 16:00"), so the chip was the
@@ -511,6 +548,12 @@ export function ScheduleSheet({
             [repeats ? "pause/resume" : "on/off", why.toggle && SHEET_WIDE_REASONS.has(why.toggle) ? null : why.toggle],
             ["delete", why.remove && SHEET_WIDE_REASONS.has(why.remove) ? null : why.remove],
           ];
+          // **Two weights, not six equal buttons.** `edit` and `now` are the verbs
+          // this card is opened for (measured on this desktop's ui-usage: edit 36,
+          // now 6, delete 4, pause 1, skip and the backlog/session link 0), so
+          // they stay buttons. The rest are a row of plain text-buttons under
+          // them: every verb still drawn and named, none hidden behind a tap,
+          // none greyed. `delete` asks once (`ConfirmButton`, disarms itself).
           return (<>
             <div className="approve-opts">
               {why.run ? null : (
@@ -522,6 +565,8 @@ export function ScheduleSheet({
                 onClick={() => { track("action:schedule.edit"); onEdit(e); }}>
                 <Pencil size={14} /> edit
               </button>
+            </div>
+            <div className="sched-acts">
               {/* **Where this rule's work goes, in one slot with three shapes.**
                   In order of how much each knows:
 
@@ -541,26 +586,26 @@ export function ScheduleSheet({
                   backlog (that is the fan-out view's job), so it still gets
                   nothing. */}
               {childSession && onOpenSession ? (
-                <button className="approve-btn" data-hint="schedule.session"
+                <button className="link-btn" data-hint="schedule.session"
                   title="Open the session this item ran in"
                   onClick={() => { track("action:schedule.session"); onOpenSession(childSession); }}>
-                  <Terminal size={14} /> session
+                  <Terminal size={13} /> session
                 </button>
               ) : act.kind === "backlog" && onOpenBacklog ? (
                 child ? (
-                  <button className="approve-btn" data-hint="schedule.backlogitems"
+                  <button className="link-btn" data-hint="schedule.backlogitems"
                     title={`Show the item this rule wrote, in ${repoName(act.repoDir)}'s backlog`}
                     onClick={() => {
                       track("action:schedule.backlog");
                       onOpenBacklog(act.repoDir, [child.id], scheduleItemsLabel(typed || act.text.slice(0, 40)));
                     }}>
-                    <ListTodo size={14} /> backlog · 1 item
+                    <ListTodo size={13} /> backlog · 1 item
                   </button>
                 ) : (
-                  <button className="approve-btn" data-hint="schedule.backlogitems"
+                  <button className="link-btn" data-hint="schedule.backlogitems"
                     title={`Show ${repoName(act.repoDir)}'s backlog — this is the list each run of this rule writes into`}
                     onClick={() => { track("action:schedule.backlog"); onOpenBacklog(act.repoDir); }}>
-                    <ListTodo size={14} /> backlog
+                    <ListTodo size={13} /> backlog
                   </button>
                 )
               ) : null}
@@ -570,14 +615,14 @@ export function ScheduleSheet({
                   occurrence to spend, and never on a one-off — skipping the one
                   run a one-off has is deleting it. */}
               {repeats && e.nextAt && onSkipNext && !queued && online && (
-                <button className="approve-btn" data-hint="schedule.skipnext"
+                <button className="link-btn" data-hint="schedule.skipnext"
                   title="Let this one run go by, then carry on as scheduled"
                   onClick={() => { track("action:schedule.skipnext"); onSkipNext(e.id); }}>
-                  <SkipForward size={14} /> skip next
+                  <SkipForward size={13} /> skip next
                 </button>
               )}
               {why.toggle ? null : (
-                <button className="approve-btn" data-hint="schedule.toggle"
+                <button className="link-btn" data-hint="schedule.toggle"
                   title={repeats
                     ? e.enabled
                       ? "Pause it — nothing runs until you resume, and then it carries on at its own times"
@@ -585,13 +630,20 @@ export function ScheduleSheet({
                     : e.enabled ? "Stop it running" : "Arm it again — the next run is computed from now, not from what was missed"}
                   onClick={() => { track("action:schedule.toggle"); onSetEnabled(e.id, !e.enabled); }}>
                   {repeats
-                    ? e.enabled ? <><Pause size={14} /> pause</> : <><Play size={14} /> resume</>
-                    : <><Power size={14} /> {e.enabled ? "off" : "on"}</>}
+                    ? e.enabled ? <><Pause size={13} /> pause</> : <><Play size={13} /> resume</>
+                    : <><Power size={13} /> {e.enabled ? "off" : "on"}</>}
                 </button>
               )}
+              {/* Two taps: it was one, and a deleted rule is gone with its words.
+                  The hint sits on a wrapper — `ConfirmButton` passes no `data-hint`,
+                  and long press finds the nearest one. */}
               {why.remove ? null : (
-                <button className="approve-btn" data-hint="schedule.remove"
-                  onClick={() => { track("action:schedule.remove"); onRemove(e.id); }}><Trash2 size={14} /> delete</button>
+                <span className="sched-acts-hint" data-hint="schedule.remove">
+                  <ConfirmButton className="link-btn danger" confirm={<><Trash2 size={13} /> delete it?</>}
+                    title="Delete this schedule — the next tap asks once more"
+                    confirmTitle="Tap again to delete it for good"
+                    onConfirm={() => { track("action:schedule.remove"); onRemove(e.id); }}><Trash2 size={13} /> delete</ConfirmButton>
+                </span>
               )}
             </div>
             <Unavailable cants={cants.flatMap(([label, reason]) => reason ? [{ label, reason }] : [])} />
@@ -604,7 +656,14 @@ export function ScheduleSheet({
   return (
     <div className="sheet">
       <SheetHead title={<><CalendarClock size={16} /> Schedules</>} onClose={onClose}>
-        <span className="muted">{focus || focusIds ? `${shownTotal} of ${standingTotal}` : standingTotal}</span>
+        {/* The count, only when there is a list to count and no cut on it: a
+            "0" over a body saying nothing is scheduled is the empty state said
+            twice, and under a filter the bar below carries "n of N" with its
+            clear button — the head saying it too was the same fact twice. */}
+        {standingTotal > 0 && !focus && !focusIds && !searching && <span className="muted">{standingTotal}</span>}
+        {/* Where every row on screen is, said once (`shownPhases`). Last, so the
+            count beside the title is not read as "on desktop 3". */}
+        <SyncSummary phases={shownPhases} />
       </SheetHead>
 
       <div className="sheet-scroll">
@@ -624,8 +683,8 @@ export function ScheduleSheet({
               : focus
                 ? `showing the ${HORIZON_LABEL[focus] === "not armed" ? "not armed" : `ones ${HORIZON_LABEL[focus]}`}`
                 : ""}
-            {" · "}{shownTotal} of {standingTotal}
-            {shownTotal === 0 && (focusIds
+            {" · "}{clocks.cutTotal} of {standingTotal}
+            {clocks.cutTotal === 0 && (focusIds
               // An ids cut is one row from a card's own link, or a repo's whole
               // share from its chip — and "that rule" over eleven ids names a
               // row nobody tapped. The count decides which sentence, because
@@ -641,6 +700,7 @@ export function ScheduleSheet({
           )}
         </div>
       )}
+      <ScheduleSearch query={query} setQuery={setQuery} cutTotal={clocks.cutTotal} shownTotal={shownTotal} />
       {/* The whole-sheet fact, said ONCE and in full.
           Every verb the dead link takes off the cards is named here, because
           those verbs are simply not drawn and an absence explains nothing by
@@ -675,38 +735,35 @@ export function ScheduleSheet({
       )}
 
       {/* Offline with nothing cached, this says only that THIS DEVICE has never
-          seen the list — not that nothing is armed. */}
+          seen the list — not that nothing is armed. One sentence: that a
+          schedule written now is queued and saved when the link is back is the
+          offline line's above, and was said here a second time. No icon — the
+          calendar is the sheet's own title glyph and added nothing. */}
       {standingTotal === 0 && !online && (
         <Empty>
-          <CalendarClock size={20} />
-          <div>No connection, and no copy of the schedule list on this device.</div>
-          <div className="muted">
-            Whatever is armed on the desktop is still armed — this device has just never seen it. A schedule written
-            here now is queued and saved when the link is back.
-          </div>
+          No copy of the schedule list on this device — whatever is armed on the desktop is still armed.
         </Empty>
       )}
 
       {standingTotal === 0 && online && (
         <Empty>
-          <CalendarClock size={20} />
           {/* "Nothing is scheduled" is true of the FUTURE, which is what this
               list is about — but said on a screen the reader arrived at because
               ten prompts of theirs ran here, it reads as "your schedules are
               gone". So the spent ones are named in the same breath, with the
-              door to them. */}
-          <div>Nothing is scheduled.</div>
-          <div className="muted">
-            A schedule fires a prompt on its own: the same sweep the fan-out runs, at a time you pick — once tonight,
-            or every week two hours before your usage window rolls over.
-            {/* NOT "already run", for the `sched-spent` foot's reason: the clock
-                is all `isSpentOnce` reads, so one the desktop slept through is
-                just as spent and never fired at all — Activity buckets that one
-                `failed`, and this screen may not say it ran. */}
-            {spentRows.length > 0 && (
-              <> {spentRows.length} one-off sweep{spentRows.length === 1 ? " has" : "s have"} been and gone; {spentRows.length === 1 ? "it is" : "they are"} in Activity.</>
-            )}
-          </div>
+              door to them: the `sched-spent` foot, drawn right under this
+              whenever no filter is on (it was also a clause in here, the same
+              count said twice). Under a filter the foot stays away for its own
+              reason, and the filter bar says what the cut hides.
+              What a schedule IS stays one tap away, closed — the words are the
+              old always-on paragraph's, minus "the same sweep the fan-out
+              runs", which stopped being true when a rule could run in one
+              repo. */}
+          Nothing is scheduled.{" "}
+          <Explain of="a schedule" label="what is one?">
+            A schedule fires a prompt on its own, at a time you pick — once tonight, or every week two hours before
+            your usage window rolls over.
+          </Explain>
         </Empty>
       )}
 
@@ -720,7 +777,7 @@ export function ScheduleSheet({
           about the rows (they are in their backlogs, which is where their verbs
           are), and it does not pretend a list is missing. With neither, the
           `Empty` above still stands. */}
-      {sorted.length === 0 && standingTotal > 0 && (
+      {sorted.length === 0 && standingTotal > 0 && !searching && (
         <div className="form-hint sched-nothing-repeats">
           <Repeat size={13} style={{ verticalAlign: "-2px" }} /> Nothing repeats — there is no standing rule on this
           desktop. {standingTotal} one-off{standingTotal === 1 ? "" : "s"} wait{standingTotal === 1 ? "s" : ""} on a
@@ -752,15 +809,18 @@ export function ScheduleSheet({
         <ScheduleWeekBar entries={shown} usage={usage} now={now}
           title={(e) => typedName(e.name, e.action.text) ?? e.action.text.split("\n")[0]} />
       )}
+      {/* A section's count is said only beside ANOTHER section's: with one on screen it is the
+          head's number (or, under a cut, the filter bar's n), and `2` over `Repeating · 2`
+          was one count said twice. */}
       {repeating.length > 0 && (
         <>
-          <div className="sched-head"><Repeat size={13} /> Repeating · {repeating.length}</div>
+          <div className="sched-head"><Repeat size={13} /> Repeating{oneSection ? null : <> · {repeating.length}</>}</div>
           <div className="list">{repeating.map(row)}</div>
         </>
       )}
       {oneOff.length > 0 && (
         <>
-          <div className="sched-head"><CalendarClock size={13} /> One-off · {oneOff.length}</div>
+          <div className="sched-head"><CalendarClock size={13} /> One-off{oneSection ? null : <> · {oneOff.length}</>}</div>
           <div className="list">{oneOff.map(row)}</div>
         </>
       )}
@@ -769,8 +829,8 @@ export function ScheduleSheet({
           per timed item, grouped by the repo whose backlog holds it, soonest
           first, with ONE affordance each. `clockDirectory.tsx` says why that
           rule lives in a file of its own. */}
-      <ClockDirectory rows={clocks.shown} pending={clocks.pending} repoName={repoName}
-        online={online} onOpen={onOpenBacklog} renderRetime={renderRetime} />
+      <ClockDirectory rows={clocks.shown} pending={clocks.shownPending} repoName={repoName}
+        online={online} onOpen={onOpenBacklog} renderRetime={renderRetime} counted={!oneSection} />
 
       {/* The one-off SWEEPS that are OVER — named and counted, never listed here.
           A sweep is the only one-off left in this list: one aimed at a single
@@ -792,7 +852,7 @@ export function ScheduleSheet({
           over a missed run is the same lie in an icon. `History` is what both
           screens can stand behind, and which of the two it was is the one thing
           Activity's row is there to say. */}
-      {spentRows.length > 0 && !focus && !focusIds && (
+      {spentRows.length > 0 && !focus && !focusIds && !searching && (
         <div className="form-hint sched-spent">
           <History size={13} style={{ verticalAlign: "-2px" }} />{" "}
           {spentRows.length} one-off sweep{spentRows.length === 1 ? " has" : "s have"} been and gone — run or missed,{" "}
@@ -813,7 +873,7 @@ export function ScheduleSheet({
           `re-fire` and *drop the clock* on it. Suppressed under a filter, like
           the sweeps' foot: a foot counting rows the cut is hiding describes a
           list nobody has on screen. */}
-      {!focus && !focusIds && (
+      {!focus && !focusIds && !searching && (
         <ClocksGone goneByRepo={clocks.goneByRepo} repoName={repoName} onOpen={onOpenBacklog} />
       )}
       </div>

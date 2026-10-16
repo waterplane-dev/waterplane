@@ -1,0 +1,626 @@
+#!/usr/bin/env python3
+# Deliberately NOT named *.py: a .py file in the tree activates the repo-health Python pack and
+# re-cuts the version of every row of the series (tools/repohealth/census.mjs). This is a test driver
+# for a Swift helper, not Python the repo is written in.
+"""wp-desktop selftest: synthetic source only, input dry-run only.
+
+Run through selftest.sh (python3 -I selftest-driver BIN WORKDIR). Nothing here can
+capture the real screen or post an event: every serve runs with
+--no-capture, which makes the helper refuse any non-synthetic source as if
+Screen Recording were not granted, and input runs with --dry-input.
+"""
+
+import json
+import os
+import re
+import struct
+import subprocess
+import sys
+import threading
+import time
+
+BIN, WORK = sys.argv[1], sys.argv[2]
+FAILS = []
+
+
+def check(cond, msg):
+    print(("  ok   " if cond else "  FAIL ") + msg)
+    if not cond:
+        FAILS.append(msg)
+    return cond
+
+
+class Serve:
+    """One `wp-desktop serve` with its stdout records and stderr lines, timestamped."""
+
+    def __init__(self, *flags, synthetic=True):
+        args = [BIN, "serve", "--no-capture", *flags]
+        if synthetic:
+            args += ["--source", "synthetic"]
+        self.p = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.t0 = time.monotonic()
+        self.records = []  # (t, kind, flags, pts, payload)
+        self.err = []  # (t, line)
+        self.lock = threading.Lock()
+        self.ts = [threading.Thread(target=self._out, daemon=True), threading.Thread(target=self._errs, daemon=True)]
+        for t in self.ts:
+            t.start()
+
+    def now(self):
+        return time.monotonic() - self.t0
+
+    def _read(self, n):
+        b = b""
+        while len(b) < n:
+            c = self.p.stdout.read(n - len(b))
+            if not c:
+                return None
+            b += c
+        return b
+
+    def _out(self):
+        while True:
+            h = self._read(4)
+            if h is None:
+                return
+            (n,) = struct.unpack("<I", h)
+            rest = self._read(n)
+            if rest is None:
+                return
+            kind, flags = rest[0], rest[1]
+            (pts,) = struct.unpack("<Q", rest[2:10])
+            with self.lock:
+                self.records.append((self.now(), kind, flags, pts, rest[10:]))
+
+    def _errs(self):
+        for line in self.p.stderr:
+            with self.lock:
+                self.err.append((self.now(), line.decode("utf-8", "replace").rstrip("\n")))
+
+    def send(self, obj):
+        self.p.stdin.write((json.dumps(obj) + "\n").encode())
+        self.p.stdin.flush()
+
+    def sleep_until(self, t):
+        d = t - self.now()
+        if d > 0:
+            time.sleep(d)
+
+    def close(self):
+        t = time.monotonic()
+        self.p.stdin.close()
+        try:
+            self.p.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            self.p.kill()
+            self.p.wait()
+            return 99.0
+        dt = time.monotonic() - t
+        for th in self.ts:
+            th.join(timeout=2)
+        return dt
+
+    def video(self):
+        return [r for r in self.records if r[1] in (1, 2)]
+
+    def json_records(self, t=None):
+        out = []
+        for r in self.records:
+            if r[1] == 4:
+                o = json.loads(r[4])
+                if t is None or o.get("t") == t:
+                    out.append((r[0], o))
+        return out
+
+
+def bytes_per_sec(recs, a, b):
+    sel = [r for r in recs if a <= r[0] < b]
+    return sum(len(r[4]) for r in sel) / (b - a) if b > a else 0
+
+
+def enc_ms(run):
+    v = [float(m.group(1)) for _, l in run.err for m in [re.search(r"stats .* enc=([\d.]+)ms", l)] if m]
+    return sum(v) / len(v) if v else -1
+
+
+def ffmpeg_decode(path):
+    r = subprocess.run(["ffmpeg", "-v", "error", "-f", "h264", "-i", path, "-f", "null", "-"], capture_output=True, text=True)
+    return r.returncode, r.stderr.strip()
+
+
+def ffprobe_frames(path):
+    r = subprocess.run(
+        ["ffprobe", "-v", "error", "-f", "h264", "-count_frames", "-select_streams", "v:0",
+         "-show_entries", "stream=nb_read_frames,width,height,profile", "-of", "json", path],
+        capture_output=True, text=True)
+    try:
+        return json.loads(r.stdout)["streams"][0]
+    except Exception:
+        return {}
+
+
+def jpeg_components(b):
+    """Component count from the first SOF marker."""
+    i = 2
+    while i + 4 < len(b):
+        if b[i] != 0xFF:
+            return -1
+        m = b[i + 1]
+        seglen = struct.unpack(">H", b[i + 2:i + 4])[0]
+        if m in (0xC0, 0xC1, 0xC2):
+            return b[i + 9]
+        i += 2 + seglen
+    return -1
+
+
+PRESETS = [
+    ("saver", {"codec": "h264", "maxWidth": 640, "fps": 8, "bitrateKbps": 150}, (640, 400)),
+    ("balanced", {"codec": "h264", "maxWidth": 1280, "fps": 15, "bitrateKbps": 800}, (1280, 800)),
+    ("sharp", {"codec": "h264", "maxWidth": 1920, "fps": 30, "bitrateKbps": 3000}, (1920, 1200)),
+    ("stills", {"codec": "jpeg", "maxWidth": 1280, "fps": 2, "jpegQuality": 40}, (1280, 800)),
+]
+
+results = []
+
+
+def run_preset(name, params, size):
+    print(f"\n[{name}] {json.dumps(params)}")
+    cfg = {"t": "config", "source": {"kind": "synthetic"}, **params}
+    s = Serve()
+    s.send(cfg)
+    s.sleep_until(2.0)
+    s.send({"t": "keyframe"})
+    t_key = s.now()
+    s.sleep_until(3.0)
+    t_change = s.now()
+    h264 = params["codec"] == "h264"
+    if h264:
+        # Step to a rate that binds: 40% of the preset, or 60% of what the content
+        # actually used so far when that is lower (light content stays under a cap).
+        with s.lock:
+            so_far = bytes_per_sec([r for r in s.records if r[1] == 1], 1.0, t_change) * 8 / 1000
+        new_kbps = max(50, int(min(params["bitrateKbps"] * 0.4, so_far * 0.6)))
+        s.send({"t": "bitrate", "kbps": new_kbps})
+    else:
+        s.send({**cfg, "grayscale": True})
+    s.sleep_until(6.5)
+    exit_s = s.close()
+
+    st = s.json_records("status")
+    check(len(st) >= 1 and st[0][1]["state"] == "running", "status record on start, state running")
+    if st:
+        o = st[0][1]
+        check((o["width"], o["height"]) == size, f"output size {o['width']}x{o['height']} (want {size[0]}x{size[1]})")
+        check(o["srcWidth"] == 2560 and o["srcHeight"] == 1600, "srcWidth/srcHeight are the full source")
+        check(o["codec"] == params["codec"] and o["fps"] == params["fps"], "status carries codec and fps")
+    check(len(st) >= 2, "a status record follows the live change")
+    v = s.video()
+    check(len(v) > 3, f"{len(v)} video records")
+    if len(v) < 2:
+        return
+    span = v[-1][0] - v[0][0]
+    fps = (len(v) - 1) / span if span > 0 else 0
+    bps_all = bytes_per_sec(v, 0.5, 6.0)
+    keys = sum(1 for r in v if r[2] & 1)
+    check(v[0][2] & 1 == 1, "first video record is a key frame")
+    after = [r for r in v if r[0] > t_key]
+    first_key = next((i for i, r in enumerate(after) if r[2] & 1), None)
+    if h264:
+        check(first_key is not None and first_key <= 2, f"keyframe request answered within 2 frames (frame #{first_key} after the command)")
+    check(fps >= params["fps"] * 0.8, f"fps achieved {fps:.1f} (cap {params['fps']})")
+    check(exit_s <= 1.0, f"EOF on stdin ⇒ exit in {exit_s * 1000:.0f} ms")
+    row = {"preset": name, "fps": fps, "Bps": bps_all, "keys": keys, "encMs": enc_ms(s), "exitMs": exit_s * 1000}
+
+    if h264:
+        path = os.path.join(WORK, f"{name}.h264")
+        with open(path, "wb") as f:
+            for r in v:
+                f.write(r[4])
+        rc, err = ffmpeg_decode(path)
+        check(rc == 0 and err == "", f"ffmpeg decodes {name}.h264 with zero errors" + (f": {err[:300]}" if err else ""))
+        info = ffprobe_frames(path)
+        check(int(info.get("nb_read_frames", -1)) == len(v), f"ffprobe counts {info.get('nb_read_frames')} frames = {len(v)} records ({info.get('profile')}, {info.get('width')}x{info.get('height')})")
+        before = bytes_per_sec(v, 1.0, t_change)
+        aft = bytes_per_sec(v, t_change + 1.2, 6.4)
+        check(aft < before * 0.85 and aft * 8 / 1000 <= new_kbps * 1.3, f"live bitrate {params['bitrateKbps']}→{new_kbps} kbps moves bytes/s {before * 8 / 1000:.0f}→{aft * 8 / 1000:.0f} kbps")
+        row.update(before_kbps=before * 8 / 1000, after_kbps=aft * 8 / 1000, new_kbps=new_kbps)
+        st_avc = [o.get("avc") for _, o in st if o.get("avc")]
+        check(bool(st_avc), f"status names the stream's codec string ({st_avc[0] if st_avc else 'none'})")
+    else:
+        ok = all(r[4][:2] == b"\xff\xd8" and r[4][-2:] == b"\xff\xd9" for r in v)
+        check(ok, "every JPEG has SOI and EOI")
+        check(keys == len(v), "every JPEG record is flagged key")
+        first = os.path.join(WORK, f"{name}-first.jpg")
+        with open(first, "wb") as f:
+            f.write(v[0][4])
+        r = subprocess.run(["sips", "-g", "pixelWidth", "-g", "pixelHeight", first], capture_output=True, text=True)
+        m = re.search(r"pixelWidth: (\d+)", r.stdout)
+        check(m is not None and int(m.group(1)) == size[0], f"sips reads the JPEG as {m.group(1) if m else '?'} px wide")
+        last = [r for r in v if r[0] > t_change + 0.6]
+        check(jpeg_components(v[0][4]) == 3 and bool(last) and jpeg_components(last[-1][4]) == 1,
+              f"grayscale switches live: components {jpeg_components(v[0][4])} → {jpeg_components(last[-1][4]) if last else '?'}")
+        color = [len(r[4]) for r in v if r[0] < t_change]
+        gray = [len(r[4]) for r in v if r[0] > t_change + 0.6]
+        row["jpegAvgBytes"] = sum(color) / max(1, len(color))
+        row["jpegGrayBytes"] = sum(gray) / max(1, len(gray))
+    results.append(row)
+
+
+def run_idle():
+    print("\n[idle] h264 synthetic with still phases (frames only on change)")
+    s = Serve()
+    s.send({"t": "config", "source": {"kind": "synthetic", "idle": True}, "codec": "h264", "fps": 15, "bitrateKbps": 600})
+    s.sleep_until(4.0)
+    s.send({"t": "keyframe"})
+    t_key = s.now()
+    s.sleep_until(5.6)
+    s.close()
+    v = s.video()
+    still = [r for r in v if 3.3 < r[0] < 5.6]
+    keys_after = [r for r in still if r[2] & 1 and r[0] > t_key]
+    check(len(still) <= 2, f"still phase sends {len(still)} records (no change ⇒ no frames)")
+    check(bool(keys_after) and keys_after[0][0] - t_key < 0.5,
+          "keyframe request on a still screen re-sends the last frame as a key" + (f" in {(keys_after[0][0] - t_key) * 1000:.0f} ms" if keys_after else ""))
+    stats = s.json_records("stats")
+    check(any(o.get("idle") for _, o in stats), "stats record reports idle")
+
+
+def run_reconfig():
+    print("\n[reconfig] crop + maxWidth live, stream stays decodable")
+    s = Serve()
+    base = {"t": "config", "source": {"kind": "synthetic"}, "codec": "h264", "fps": 15, "bitrateKbps": 800, "maxWidth": 1280}
+    s.send(base)
+    s.sleep_until(1.5)
+    t_c = s.now()
+    s.send({**base, "maxWidth": 640, "crop": {"x": 0.25, "y": 0.25, "w": 0.5, "h": 0.5}})
+    s.sleep_until(3.0)
+    s.close()
+    st = s.json_records("status")
+    sizes = [(o["width"], o["height"]) for _, o in st]
+    check((640, 400) in sizes, f"status after crop: {sizes}")
+    v = s.video()
+    after = [r for r in v if r[0] > t_c]
+    sized = [r for r in after if r[2] & 1]
+    check(bool(sized), "a key frame starts the resized stream")
+    path = os.path.join(WORK, "reconfig.h264")
+    with open(path, "wb") as f:
+        for r in v:
+            f.write(r[4])
+    rc, err = ffmpeg_decode(path)
+    check(rc == 0 and err == "", "ffmpeg decodes across the size change" + (f": {err[:300]}" if err else ""))
+
+
+def run_refusal():
+    print("\n[refusal] a real source without Screen Recording")
+    s = Serve(synthetic=False)
+    s.send({"t": "config", "source": {"kind": "display"}, "codec": "h264"})
+    time.sleep(0.6)
+    s.close()
+    st = s.json_records("status")
+    o = st[0][1] if st else {}
+    check(o.get("state") == "error" and "System Settings → Privacy & Security → Screen Recording" in o.get("reason", ""),
+          f"status error names the pane: {o.get('reason', '')[:90]}…")
+    check(not s.video(), "no frames without the grant")
+
+
+def jpeg_dims(b):
+    """(width, height) from the first SOF marker, or None."""
+    i = 2
+    while i + 9 < len(b):
+        if b[i] != 0xFF:
+            return None
+        m = b[i + 1]
+        seglen = struct.unpack(">H", b[i + 2:i + 4])[0]
+        if m in (0xC0, 0xC1, 0xC2):
+            h, w = struct.unpack(">HH", b[i + 5:i + 9])
+            return (w, h)
+        i += 2 + seglen
+    return None
+
+
+def h264_dims(payload, tag):
+    """(width, height) of one H.264 key record (it carries its own SPS/PPS), via ffprobe."""
+    path = os.path.join(WORK, f"key-{tag}.h264")
+    with open(path, "wb") as f:
+        f.write(payload)
+    r = subprocess.run(["ffprobe", "-v", "error", "-f", "h264", "-select_streams", "v:0",
+                        "-show_entries", "stream=width,height", "-of", "json", path], capture_output=True, text=True)
+    try:
+        st = json.loads(r.stdout)["streams"][0]
+        return (st["width"], st["height"])
+    except Exception:
+        return None
+
+
+def expected_dims(crop, max_w):
+    """The helper's outputSize for the 2560x1600 synthetic desktop: aspect kept, never upscaled, even."""
+    cw, ch = 2560 * crop["w"], 1600 * crop["h"]
+    w = min(float(max_w), cw)
+    h = w * ch / cw
+    return (int(w) & ~1, int(h) & ~1)
+
+
+FULL_CROP = {"x": 0, "y": 0, "w": 1, "h": 1}
+
+
+def run_regions(codec):
+    """A status naming a region comes BEFORE that region's first frame, and no frame of an earlier
+    region comes after it. Frames are told apart by their real pixel size: the crops below all give
+    different output sizes. Keys are provoked from every side: the config's own, `keyframe` commands
+    right behind it, and `keyframeEverySec` (a key the encoder makes by itself, on its own thread)."""
+    print(f"\n[regions] {codec}: status-before-key across crop changes, with keys asked from every side")
+    mw = 640
+    crops = [None, {"x": 0.25, "y": 0, "w": 0.5, "h": 1}, {"x": 0, "y": 0.5, "w": 1, "h": 0.25}, None, {"x": 0.25, "y": 0, "w": 0.5, "h": 1}]
+    base = {"t": "config", "source": {"kind": "synthetic"}, "codec": codec, "fps": 30, "bitrateKbps": 800,
+            "maxWidth": mw, "keyframeEverySec": 0.07, "jpegQuality": 40}
+    s = Serve()
+    s.send({**base})
+    s.sleep_until(0.8)
+    marks = []
+    for i, c in enumerate(crops[1:], 1):
+        marks.append(s.now())
+        s.send({**base, **({"crop": c} if c else {})})
+        s.send({"t": "keyframe"})  # the core asks for its own key right behind the config
+        time.sleep(0.015)
+        s.send({"t": "keyframe"})
+        s.sleep_until(marks[-1] + 0.7)
+    s.close()
+
+    cur = None  # (crop, seq) of the newest status that named one
+    seen_seq = []
+    bad = []
+    n_checked = 0
+    keys_checked = 0
+    since = 0
+    ahead = 0  # frames seen before any status named a region
+    for idx, (t, kind, flags, pts, payload) in enumerate(list(s.records)):
+        if kind == 4:
+            o = json.loads(payload)
+            if o.get("t") == "status" and "crop" in o:
+                cur = (o["crop"], o.get("regionSeq"))
+                if not seen_seq or seen_seq[-1] != o.get("regionSeq"):
+                    seen_seq.append(o.get("regionSeq"))
+                    since = 0
+            continue
+        if kind not in (1, 2):
+            continue
+        if cur is None:
+            ahead += 1
+            continue
+        want = expected_dims(cur[0], mw)
+        if kind == 2:
+            got = jpeg_dims(payload)
+        elif flags & 1:
+            since += 1
+            keys_checked += 1
+            # ffprobe per key is slow: every key near a region change, a sample of the rest.
+            got = h264_dims(payload, f"{codec}-{idx}") if since <= 4 or keys_checked % 6 == 0 else want
+        else:
+            continue
+        n_checked += 1
+        if got != want:
+            bad.append((round(t, 3), got, want, cur[1]))
+    check(ahead == 0, f"no frame before the first status that names a region ({ahead})")
+    check(len(seen_seq) >= len(crops), f"each config announced a new region: seq {seen_seq}")
+    check(seen_seq == sorted(seen_seq) and len(set(seen_seq)) == len(seen_seq), "regionSeq only grows")
+    check(n_checked > 20, f"{n_checked} frames checked against the region their last status named")
+    check(not bad, f"every checked frame is the size of the region announced before it" + (f" — wrong: {bad[:4]}" if bad else ""))
+
+
+def assertions_for(pid):
+    """The power assertions `pmset -g assertions` (read-only) lists for this pid, or None if pmset is unusable."""
+    r = subprocess.run(["pmset", "-g", "assertions"], capture_output=True, text=True, timeout=10)
+    if r.returncode != 0 or "Listed by owning process" not in r.stdout:
+        return None
+    return [l.strip() for l in r.stdout.splitlines() if re.search(rf"\bpid {pid}\(", l)]
+
+
+def idle_hold(s):
+    a = assertions_for(s.p.pid)
+    if a is None:
+        return None
+    return any("PreventUserIdleSystemSleep" in l and "live desktop stream" in l for l in a)
+
+
+def wait_for(fn, want, timeout=2.0):
+    end = time.monotonic() + timeout
+    v = fn()
+    while v != want and time.monotonic() < end:
+        time.sleep(0.1)
+        v = fn()
+    return v
+
+
+def logged(s, text):
+    return sum(1 for _, l in s.err if text in l)
+
+
+def run_activity():
+    print("\n[activity] the idle-sleep hold exists only while a source runs (pmset -g assertions, read-only)")
+    s = Serve()
+    time.sleep(0.4)
+    check(wait_for(lambda: idle_hold(s), False) in (False, None), "no hold before the first config")
+    s.send({"t": "config", "source": {"kind": "synthetic"}, "codec": "jpeg", "fps": 5})
+    held = wait_for(lambda: idle_hold(s), True)
+    if held is None:
+        check(wait_for(lambda: logged(s, "activity: held") >= 1, True), "(pmset unusable: log) activity held while synthetic runs")
+    else:
+        check(held, "PreventUserIdleSystemSleep \"live desktop stream\" is present while synthetic runs")
+    s.send({"t": "stop"})
+    gone = wait_for(lambda: idle_hold(s), False)
+    if gone is None:
+        check(wait_for(lambda: logged(s, "activity: released") >= 1, True), "(pmset unusable: log) activity released after stop")
+    else:
+        check(gone is False, "…and absent after stop (the helper stays alive)")
+    s.send({"t": "config", "source": {"kind": "synthetic"}, "codec": "jpeg", "fps": 5})
+    again = wait_for(lambda: idle_hold(s), True)
+    check(again is None or again, "…and back when a config starts it again")
+    s.close()
+
+    # The error state, with no permission needed: --no-capture refuses a real source as ungranted.
+    e = Serve(synthetic=False)
+    e.send({"t": "config", "source": {"kind": "display"}, "codec": "h264"})
+    time.sleep(0.8)
+    st = e.json_records("status")
+    errored = bool(st) and st[-1][1].get("state") == "error"
+    alive = e.p.poll() is None
+    check(errored and alive, "a refused real source leaves the helper alive in state error")
+    h = wait_for(lambda: idle_hold(e), False)
+    if h is None:
+        check(logged(e, "activity: held") == 0, "(pmset unusable: log) no hold was ever taken in the error state")
+    else:
+        check(h is False, "no hold while it sits in error (a phone left on that sentence keeps nothing awake)")
+    check(logged(e, "activity: held") == 0, "the helper's own log never took one either")
+    e.close()
+
+
+def run_dry_input(main_bounds):
+    print("\n[dry-input] every ev shape is built, logged, never posted")
+    s = Serve("--dry-input")
+    s.send({"t": "config", "source": {"kind": "synthetic"}, "codec": "jpeg", "fps": 2})
+    time.sleep(0.3)
+    evs = [
+        {"k": "move", "x": 0.5, "y": 0.5},
+        {"k": "down", "b": "l", "x": 0.25, "y": 0.25},
+        {"k": "move", "x": 0.3, "y": 0.3},
+        {"k": "up", "b": "l", "x": 0.3, "y": 0.3},
+        {"k": "down", "b": "m", "x": 0.1, "y": 0.1},
+        {"k": "up", "b": "m", "x": 0.1, "y": 0.1},
+        {"k": "click", "b": "r", "x": 0.75, "y": 0.75, "n": 1},
+        {"k": "click", "b": "l", "x": 0.5, "y": 0.5, "n": 2},
+        {"k": "scroll", "x": 0.5, "y": 0.5, "dx": 0, "dy": 120},
+        {"k": "key", "key": "Escape", "mods": []},
+        {"k": "key", "key": "c", "mods": ["cmd"]},
+        {"k": "key", "key": "A"},
+        {"k": "key", "key": "ArrowLeft", "mods": ["alt", "shift"]},
+        {"k": "text", "s": "hello wörld, this is longer than twenty units 🎉🎉"},
+        {"k": "move"},
+        {"k": "zap", "x": 0.1, "y": 0.1},
+        {"k": "key", "key": "NoSuchKey"},
+        {"k": "click", "b": "q", "x": 0.1, "y": 0.1},
+    ]
+    for ev in evs:
+        s.send({"t": "input", "ev": ev})
+    s.send({"t": "input"})
+    s.p.stdin.write(b"this is not json\n")
+    s.p.stdin.flush()
+    time.sleep(0.5)
+    alive = s.p.poll() is None
+    s.close()
+    lines = [l for _, l in s.err if "dry-input:" in l]
+    ign = [l for _, l in s.err if "input ignored" in l or "ignored" in l]
+    bx, by, bw, bh = main_bounds
+
+    def has(pat):
+        return any(re.search(pat, l) for l in lines)
+
+    check(alive, "invalid input never crashes the helper")
+    check(has(rf"mouseMoved x={bx + 0.5 * bw:.1f} y={by + 0.5 * bh:.1f}"), f"move maps 0.5,0.5 to {bx + 0.5 * bw:.0f},{by + 0.5 * bh:.0f} (main display points)")
+    check(has(r"leftMouseDown .*clicks=1") and has(r"leftMouseDragged") and has(r"leftMouseUp"), "down → move (drag) → up")
+    check(has(r"otherMouseDown .*button=m") and has(r"otherMouseUp"), "middle button")
+    check(has(r"rightMouseDown .*clicks=1") and has(r"rightMouseUp"), "right click")
+    check(has(r"leftMouseDown .*clicks=2") and has(r"leftMouseUp .*clicks=2"), "double click carries clickState 2")
+    check(has(r"scrollWheel .*wheel=-120,0"), "scroll in pixel units, DOM sign")
+    check(has(r"keyDown .*flags=0x0 key=0x35") and has(r"keyUp .*key=0x35"), "Escape")
+    check(has(r"keyDown .*flags=0x100000 key=0x08"), "cmd+c")
+    check(has(r"keyDown .*flags=0x20000 key=0x00"), "A = shift+a")
+    check(has(r"keyDown .*flags=0xa0000 key=0x7b"), "alt+shift+ArrowLeft")
+    chunks = [int(m.group(1)) for l in lines for m in [re.search(r"keyDown .*units=(\d+)", l)] if m]
+    check(len(chunks) >= 3 and max(chunks) <= 20, f"text in ≤20-unit chunks: {chunks}")
+    check(len(ign) >= 5, f"{len(ign)} invalid lines ignored with one stderr line each")
+
+
+def main():
+    print("[probe]")
+    r = subprocess.run([BIN, "probe"], capture_output=True, text=True, timeout=10)
+    try:
+        probe = json.loads(r.stdout)
+    except Exception:
+        probe = {}
+    check(all(k in probe for k in ("screenRecording", "accessibility", "displays", "os", "helperVersion")), f"probe is one JSON line: {r.stdout.strip()[:160]}")
+    disp = probe.get("displays", [])
+    main_d = next((d for d in disp if d.get("main")), None)
+    check(main_d is not None and all(k in main_d for k in ("id", "width", "height", "scale")), "probe lists the main display")
+    b = main_d["bounds"] if main_d else {"x": 0, "y": 0, "w": 1280, "h": 800}
+
+    print("\n[request] parsed and answered WITHOUT asking (always --dry-request here: a real one raises a dialog)")
+    for name in ("screen", "accessibility", None):
+        r = subprocess.run([BIN, "request", *([name] if name else []), "--dry-request"], capture_output=True, text=True, timeout=10)
+        try:
+            o = json.loads(r.stdout)
+        except Exception:
+            o = {}
+        want = [name] if name else ["screen", "accessibility"]
+        check(r.returncode == 0 and o.get("dry") is True and all(k in o and o[k].get("asked") is False for k in want),
+              f"request {name or '(both)'} --dry-request: {r.stdout.strip()[:140]}")
+    r = subprocess.run([BIN, "request", "camera", "--dry-request"], capture_output=True, text=True, timeout=10)
+    check(r.returncode == 2 and "screen or accessibility" in r.stderr, "request refuses a name it does not know")
+
+    print("\n[whoami] re-exec with disclaimed responsibility keeps pid and stdio")
+    p = subprocess.Popen([BIN, "whoami", "--force-disclaim"], stdout=subprocess.PIPE, text=True)
+    out, _ = p.communicate(timeout=10)
+    w = json.loads(out)
+    check(w["disclaimed"] == "exec" and w["pid"] == p.pid and w["responsiblePid"] == p.pid,
+          f"exec: pid {w['pid']} (spawned {p.pid}), responsible {w['responsiblePid']}, stage {w['disclaimed']!r}")
+    p = subprocess.Popen([BIN, "whoami", "--force-disclaim-child"], stdout=subprocess.PIPE, text=True)
+    out, _ = p.communicate(timeout=10)
+    w = json.loads(out)
+    check(w["disclaimed"] == "child" and w["ppid"] == p.pid and w["responsibleSelf"] and p.returncode == 0,
+          f"child fallback: pid {w['pid']} under {w['ppid']} (spawned {p.pid}), responsible {w['responsiblePid']}, exit {p.returncode}")
+
+    print("\n[child] serve through the disclaimed-child fallback: same stdio, same exits")
+    s = Serve("--force-disclaim-child")
+    s.send({"t": "config", "source": {"kind": "synthetic"}, "codec": "jpeg", "fps": 5})
+    time.sleep(1.2)
+    check(len(s.video()) >= 3, f"{len(s.video())} frames through the child")
+    dt = s.close()
+    check(dt <= 1.0, f"EOF ⇒ child and parent gone in {dt * 1000:.0f} ms")
+    s = Serve("--force-disclaim-child")
+    s.send({"t": "config", "source": {"kind": "synthetic"}, "codec": "jpeg", "fps": 5})
+    time.sleep(0.6)
+    kids = subprocess.run(["pgrep", "-P", str(s.p.pid)], capture_output=True, text=True).stdout.split()
+    check(len(kids) == 1, f"the parent holds one child ({kids})")
+    t = time.monotonic()
+    s.p.terminate()
+    try:
+        s.p.wait(timeout=3)
+    except subprocess.TimeoutExpired:
+        s.p.kill()
+    time.sleep(0.2)
+
+    def alive(pid):
+        try:
+            os.kill(int(pid), 0)
+            return True
+        except OSError:
+            return False
+
+    gone = not any(alive(k) for k in kids)
+    check(s.p.returncode == 128 + 15 or s.p.returncode == 0, f"SIGTERM to the parent ends both (exit {s.p.returncode} in {(time.monotonic() - t) * 1000:.0f} ms)")
+    check(gone, "no orphaned child left")
+
+    for name, params, size in PRESETS:
+        run_preset(name, params, size)
+    run_idle()
+    run_reconfig()
+    run_refusal()
+    run_regions("jpeg")
+    run_regions("h264")
+    run_activity()
+    run_dry_input((b["x"], b["y"], b["w"], b["h"]))
+
+    print("\n| preset | fps achieved | bytes/s (kbps) | after live bitrate change | keys | encode ms/frame | EOF exit |")
+    print("|---|---|---|---|---|---|---|")
+    for r in results:
+        change = f"{r['before_kbps']:.0f}→{r['after_kbps']:.0f} kbps (set {r['new_kbps']})" if "before_kbps" in r else f"JPEG {r['jpegAvgBytes'] / 1024:.0f} KB colour → {r['jpegGrayBytes'] / 1024:.0f} KB grayscale"
+        print(f"| {r['preset']} | {r['fps']:.1f} | {r['Bps'] / 1024:.1f} KB/s ({r['Bps'] * 8 / 1000:.0f}) | {change} | {r['keys']} | {r['encMs']:.2f} | {r['exitMs']:.0f} ms |")
+    print(f"\nprobe: screenRecording={probe.get('screenRecording')} accessibility={probe.get('accessibility')} responsibleSelf={probe.get('responsibleSelf')}")
+    if FAILS:
+        print(f"\n{len(FAILS)} FAILED:")
+        for f in FAILS:
+            print("  - " + f)
+        sys.exit(1)
+    print("\nselftest passed")
+
+
+main()

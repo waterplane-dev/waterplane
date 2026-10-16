@@ -69,6 +69,25 @@ export function hyperlinkTargets(raw: string): string[] {
   return out;
 }
 
+/**
+ * The cheap gate: might this byte window hold a sign-in link worth a render?
+ *
+ * `detectLogin` rides the prompt check's render, and that render used to be
+ * bought only by a box or a dialog footer — "the login screen carries one".
+ * claude 2.1.293's sign-in screen does not: it ends on the code input with no
+ * `Esc to cancel` under it, so the gate never opened and the phone showed no
+ * sign-in card while the link sat on screen (measured on a fresh config dir,
+ * 54 columns). So the link's own SHAPE opens the gate: an OSC 8 target with an
+ * OAuth query, or the same query in the stripped text once whitespace is gone —
+ * the grid's row breaks arrive as line feeds or cursor moves, and dropping them
+ * rejoins `clien` + `t_id=`. A false positive only buys a render whose strict
+ * pass then publishes nothing.
+ */
+export function loginCandidate(raw: string, stripped: string): boolean {
+  if (hyperlinkTargets(raw).some((u) => OAUTH_QUERY_RE.test(u))) return true;
+  return OAUTH_QUERY_RE.test(stripped.replace(/\s+/g, ""));
+}
+
 export interface DetectedLogin {
   /** The sign-in URL, rejoined across however many rows the grid broke it into. */
   url: string;

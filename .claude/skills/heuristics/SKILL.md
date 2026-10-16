@@ -1,6 +1,6 @@
 ---
 name: heuristics
-description: waterplane's regex heuristics over the claude TUI — everything read off the rendered screen: the choice-box detector prompt.ts (and the contributed screen readers it hosts), the question as the CLI itself wrote it (askbox.ts), the question with no box (question.ts), the sign-in link (login.ts), a shell's links and one-time codes (shelllinks.ts), usage-limit banners, resets and the resume queue (limit.ts, limitlog.ts), the context meter (context.ts), turn boundaries with the Stop hook and /compact, and the health record that tracks when they miss (clihealth.ts). Load BEFORE editing any of those or anything else that reads the rendered screen, before changing how a box is detected, merged or answered, and before changing what counts as a turn ending. These degrade to null, never to a wrong number — keep it that way.
+description: waterplane's regex heuristics over the claude TUI — everything read off the rendered screen: the choice-box detector prompt.ts (and the contributed screen readers it hosts), the question as the CLI itself wrote it (askbox.ts), the question with no box (question.ts), the sign-in link (login.ts), a shell's links and one-time codes (shelllinks.ts), usage-limit banners, resets and the resume queue (limit.ts, limitlog.ts), the context meter (context.ts), the permission-mode footer and ultracode (permmode.ts), turn boundaries with the Stop hook and /compact, and the health record that tracks when they miss (clihealth.ts). Load BEFORE editing any of those or anything else that reads the rendered screen, before changing how a box is detected, merged or answered, and before changing what counts as a turn ending. These degrade to null, never to a wrong number — keep it that way.
 ---
 
 # waterplane heuristics over the TUI
@@ -80,6 +80,13 @@ description: waterplane's regex heuristics over the claude TUI — everything re
   (`Other`/`Chat about this` are drawn under every question). `kind` is DERIVED, so it is tested
   AFTER the id. The merge only ADDS, and **a published label is never rewritten** (labels are the
   fingerprint). `samePrompt`, never `JSON.stringify` — key order is not a change.
+- **claude's own box with no numbers**: 2.1.293's first-launch trust box draws `❯ No, exit` /
+  `  Yes, I trust this folder`, unnumbered. `prompt.ts`'s `readNavBox` reads it by SHAPE, strict
+  pass only: the footer row is the screen's LAST non-blank row, a one-column run of 2..8 rows
+  directly above it with exactly one `❯`, nothing numbered — published `nav: true`, kind derived as
+  ever (`trust`). The cursor stays OUT of the box (identity). A tap walks Up/Down with a re-read per
+  key (`boxes.ts`'s `chooseClaudeNavBox`), refuses if the label at that index changed, never types a
+  digit. `packages/host/test/trustbox.test.mjs`, `e2e-trustbox.mjs`.
 - **A TUI with no numbers** (opencode's) is read by a SCREEN READER its extension contributes by
   name (`api.screenReader`, `PluginScreenReader`): `sessions/boxes.ts`'s `checkNavBox` keeps the
   shape — cheap gate, render, miss budget, resize grace — and `choosePromptBox` walks one arrow per
@@ -112,6 +119,13 @@ description: waterplane's regex heuristics over the claude TUI — everything re
   `<toolUseId>#<n>`, what `prompt.ts`'s `sameBox` is asked; the `#n` is load-bearing. **`pickAsk`
   requires a UNIQUE best match** — one call may carry several questions, and two sharing "Yes"/"No"
   gave question 1's id, descriptions and head to a screen showing question 2; a tie enriches nothing.
+- `planbox.ts` — the plan a plan-approval box asks about. **`ExitPlanMode` is NOT in the jsonl while
+  its box is up** (unlike `AskUserQuestion`), so the plan comes from the plan FILE: the newest
+  `plan_mode` attachment's `planFilePath`, else `<config>/plans/<slug>.md` off the `slug` every record
+  carries. Recognised by the QUESTION ("…a plan…"), never by `kind` (that question says "proceed",
+  which files it as `tool`). Rides as `DetectedPrompt.plan`, outside `promptFingerprint`, capped at
+  `PLAN_CAP`; the freshest read wins in `mergeBox` (the file can be edited mid-box). Once answered,
+  the parser renders the call's `input.plan` as prose, not a folded tool row.
 - `login.ts` — the sign-in link, rejoined off the RENDERED screen (`shared/urls.ts`) because at phone
   width the grid breaks a 300-char OAuth URL across six rows. Detection is on the URL's SHAPE, never
   the CLI's prose. `at` is kept across repaints — a login link expires.
@@ -125,8 +139,15 @@ description: waterplane's regex heuristics over the claude TUI — everything re
   `remote:` and a `$` prompt pass every geometric test; unproven ⇒ the first row only if it is
   shorter than the pane, else nothing. `awaitingCode` only when the LAST row ends on the code prompt. Patterns
   built in halves; a throw is null, never a wrong link. `packages/host/test/shelllinks.test.mjs`.
+- `permmode.ts` — the permission mode off the footer under the NEWEST composer frame (rule, `❯`
+  row, closing rule, ≤6 footer rows), else null — a box, a picker or a slash menu is null, never a
+  mode. On 2.1.293 the default mode is LABELLED (`⏸ manual mode on`); no label is `default` only
+  beside `? for shortcuts`. The top rule may wear `ultracode` (echo.ts's anchor rejects that shape;
+  this one must not). Ultracode: that label, else the NEWEST `Ultracode on (this session only)` /
+  `Ultracode off` / refusal row; a picker's mid-row `Ultracode on` never counts. Real grids in
+  `packages/host/test/fixtures/permmode/`.
 - `prompt.ts` / `limit.ts` / `context.ts` are regex heuristics over TUI output — fragile to upstream
-  changes, pinned by e2e. They degrade to null/absent, never to a wrong number.
+  changes, pinned by e2e.
 - **An observation is a miss only if the primary rule was the RIGHT RULE and failed** (the health
   record, `shared/clihealth.ts`). A rule correctly declining to fire is a good outcome and records
   NOTHING — not a miss, which turns a working heuristic into a permanent amber chip nobody reads any
@@ -153,8 +174,8 @@ description: waterplane's regex heuristics over the claude TUI — everything re
   UI is `LimitSheet.tsx`. `LimitResumeMode` = `one` / `repo` / `all`, and **in every mode the first
   resume of a wave goes alone**. `detectHeadlessLimit` reads the block out of a `claude -p`
   ENVELOPE, `limitNote` is the one sentence every headless caller says, and `limited` is not
-  `error`. **Keep banner phrases out of strings/comments repo-wide** — printing one on screen
-  false-positives.
+  `error`.
+- **Spend walls** (`limit.ts`'s `spend`, `limitlog.ts`'s API-error rows, `spendwall.ts`): an API-key/cloud account out of credit or over a spend limit is a wall with NO ladder - one attempt at the printed instant or a configured usd calendar period's reset (`periodBounds`), else `noteGaveUp` (needs the person). Never a guessed clock. Messages are built from halves in tests too. `spendlimit.test.mjs`.
 - `limitlog.ts` — the same question asked of the CLI's own log, which is DATED. **The log OUTRANKS
   the screen in both directions**; **`unknown` when there is nothing to read** — an absent log is
   never a verdict.

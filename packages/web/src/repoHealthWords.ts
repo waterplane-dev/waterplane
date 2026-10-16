@@ -56,3 +56,5 @@ export * from "./repoHealthWords/repoHealthWordsRank.ts";
 export * from "./repoHealthWords/repoHealthWordsPlot.ts";
 export * from "./repoHealthWords/repoHealthWordsRegion.ts";
 export * from "./repoHealthWords/repoHealthWordsScope.ts";
+export * from "./repoHealthWords/repoHealthWordsOwn.ts";
+export * from "./repoHealthWords/repoHealthWordsCentral.ts";

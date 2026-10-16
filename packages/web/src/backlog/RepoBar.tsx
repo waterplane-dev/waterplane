@@ -1,12 +1,12 @@
 /**
  * The sheet's head (*send…*, *auto*) and the repo bar under it: the repo
- * picker, *assess* with its scope, and the per-repo smart-pick tick.
+ * picker and *assess* with its scope.
  *
  * A REGION of the backlog sheet: no hooks of its own (a child's effects run
  * before its parent's, so a hook here would reorder them), only the model.
  * Shape: docs/notes/backlog-architecture.md.
  */
-import { Circle, CircleDot, ClipboardCheck, SendHorizontal, Sparkles } from "lucide-react";
+import { Circle, CircleDot, ClipboardCheck, SendHorizontal } from "lucide-react";
 import { ASSESS_NONE_IN_CUT, assessScopeLabel, assessScopeNote } from "../backlogFilter";
 import { track } from "../usage";
 import { RepoSelect } from "../RepoPicker";
@@ -41,16 +41,18 @@ export function BacklogHead({ m }: { m: BacklogModel }) {
 }
 
 export function RepoBar({ m }: { m: BacklogModel }) {
-  const { assessIds, assessWhyNot, cut, filtering, p, repoCount, repoDir, selectRepo, smartOn } = m;
+  const { assessIds, assessWhyNot, cut, filtering, p, repoDir, selectRepo } = m;
   return (
     <>
       {/* Repo scope: the backlog belongs to ONE repo at a time. */}
       <div className="form bl-repobar">
         {/* The shared picker (`RepoPicker.tsx`), in its `<select>` shape: the
             repo is one field in a bar that also has the session button, so a
-            full-width row list would push the rest of the sheet off screen. */}
-        <RepoSelect repos={p.repos} value={repoDir} onChange={selectRepo} aria-label="repo"
-          note={(r) => (repoCount(r.worktreePath) ? String(repoCount(r.worktreePath)) : undefined)} />
+            full-width row list would push the rest of the sheet off screen.
+            No count in its labels: the selected repo's was the sheet's own
+            item count said a second time, and the others were a number
+            beside a name that opens nothing the picker itself does not. */}
+        <RepoSelect repos={p.repos} value={repoDir} onChange={selectRepo} aria-label="repo" />
         {/* *open a session here* is GONE. Its one stated purpose was "somewhere
             to queue items into by hand" — a control that existed to give
             another control a target. With the row verb saying *when <session>
@@ -96,21 +98,6 @@ export function RepoBar({ m }: { m: BacklogModel }) {
         {p.cutVerbs.onAssess && repoDir && !assessWhyNot && filtering && assessIds.length > 0 && (
           <span className="form-hint">{assessScopeNote(assessIds.length, cut.length)}</span>
         )}
-        {/* The per-repo tick. Drawn only when the host said the feature exists
-            (`smartPick` present) and only while the socket is up: it is a
-            `liveSend` mutation like *auto*, and the sheet's offline sentence
-            already says every mutation is read-only — a switch that flips back
-            when the next list lands is worse than no switch. Absent rather than
-            dimmed with no repo chosen, for the reason `Unavailable.tsx` gives. */}
-        {p.smartPick && p.online && repoDir ? (
-          <button className={`rc ${smartOn ? "on" : "off"}`} data-hint="backlog.smartpick"
-            title={smartOn
-              ? "stop looking before each item — the backlog then fires in the order you see"
-              : "look over this repo's waiting items before each one starts"}
-            onClick={() => { track("action:backlog.smartpick"); p.cutVerbs.onSetSmartPick(repoDir, !smartOn); }}>
-            <Sparkles size={14} /> {smartOn ? "smart pick" : "smart pick off"}
-          </button>
-        ) : null}
       </div>
     </>
   );

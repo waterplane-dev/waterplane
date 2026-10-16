@@ -115,7 +115,9 @@ be findable.
 leaving people to wonder.
 
 **E5. Platform reality.** [done] — README: macOS or Linux, Windows only in WSL2. macOS + launchd is the tested path; Linux/systemd is plausible and
-unverified; Windows is not a thing. Say so rather than letting people discover it.
+unverified. Windows (2026-10-07): the host runs in WSL2, verified on one Windows 11 box from a Windows
+checkout (`scripts/windows/`, [distribution.md](distribution.md#windows-the-launcher-drives-the-host-in-wsl));
+native Windows is not a thing. Say so rather than letting people discover it.
 
 ## F. Known gaps in what the app currently claims
 

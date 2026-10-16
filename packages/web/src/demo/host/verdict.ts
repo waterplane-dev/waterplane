@@ -18,7 +18,7 @@
  * A refusal never sets `input.ack.retryable`: that is the one auto-retried
  * failure, and "not in the demo" does not change with time.
  */
-import type { ClientMessage, HostMessage } from "@waterplane/shared";
+import type { ClientMessage, HostMessage, PermissionMode } from "@waterplane/shared";
 
 export type Msg<K extends ClientMessage["t"]> = Extract<ClientMessage, { t: K }>;
 
@@ -39,6 +39,8 @@ export interface DemoVerdict {
   itemId?: string;
   /** `session.named` */
   name?: string;
+  /** `session.moded`: what the footer shows after the switch */
+  mode?: PermissionMode;
   /** `plugin.reply` */
   result?: unknown;
 }
@@ -95,8 +97,12 @@ export const RECEIPTS: ReceiptTable = {
   "plugin.call": (m, v) =>
     ({ t: "plugin.reply", ackId: m.ackId, plugin: m.plugin, method: m.method, ok: v.ok, result: v.result, error: v.ok ? undefined : v.reason }),
   "session.name": (m, v) => ({ t: "session.named", id: m.id, name: v.name, reason: v.reason }),
+  // Always answered, refusal included — the phone's row waits on it.
+  "session.mode": (m, v) => ({ t: "session.moded", id: m.id, mode: v.mode, reason: v.ok ? undefined : (v.reason ?? "the mode did not change") }),
   "localrt.evict": (m, v) => ({ t: "localrt.evict", name: m.name, ok: v.ok, error: v.ok ? undefined : v.reason }),
   "shell.kill": (m, v) => ({ t: "shell.killed", id: m.id, pid: m.pid, ok: v.ok, reason: v.reason }),
+  // The view that asked is waiting on its `reqId`; a toast would leave it saying "opening" for ever.
+  "stream.open": (m, v) => (v.ok ? null : { t: "stream.refused", reqId: m.reqId, reason: v.reason ?? NOT_IN_DEMO }),
 };
 
 /** The receipt for `msg` under verdict `v`, or null when `msg` has none (or

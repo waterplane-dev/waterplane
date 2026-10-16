@@ -17,7 +17,8 @@ import { BRAND, BRAND_WORDS, HOST_PARK_PREFIX, LEGACY } from "@waterplane/shared
 import {
   LEGACY_PULL_CACHES, PULL_CACHE, PULL_CACHE_PREFIXES, isSyncTsKey, migrateStorage, rewriteSyncTs,
 } from "./brandMigrate.ts";
-import { LS, RESET_KEEP_PREFIXES } from "../storage.ts";
+import { LS } from "../storage.ts";
+import { RESET_KEEP_PREFIXES } from "../resetKeys.ts";
 import { activeHostId, bootHosts, finishSwitch, readHosts, writeSwitch } from "../hosts.ts";
 
 const OLD = LEGACY[0];

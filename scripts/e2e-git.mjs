@@ -1,9 +1,9 @@
-// Tier 3: git status, diff, stage, commit, push from the API.
+// Tier 3: git status, diff, stage, commit, pull, push from the API.
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
-import { spawn } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { bootWait } from "./lib-e2e.mjs";
 import { E, SLUG, rootEnv } from "./lib-brand.mjs";
 
@@ -53,6 +53,49 @@ bootWait(PORT, 900, async () => {
     // push fails gracefully (no remote configured)
     const p = await post(`/api/repos/${id}/git/push`, {});
     check(p.ok === false && !!p.error, "push fails gracefully without a remote");
+
+    // pull: no upstream is a sentence, not a throw
+    const noUp = await post(`/api/repos/${id}/git/pull`, {});
+    check(noUp.ok === false && /no upstream/.test(noUp.error ?? ""), "pull without an upstream says so");
+
+    // A bare remote outside ROOT, and a second clone that moves it on. Hooks
+    // off: a global hooksPath must not run anyone's CI inside this test.
+    const g = (cwd, ...args) => execFileSync("git", ["-c", "core.hooksPath=/dev/null", ...args], { cwd, stdio: "pipe" }).toString().trim();
+    const remote = mkdtempSync(join(tmpdir(), `${SLUG}-gitremote-`));
+    g(remote, "init", "--bare", "-q");
+    g(repo.path, "remote", "add", "origin", remote);
+    g(repo.path, "push", "-q", "-u", "origin", "HEAD");
+    const other = join(mkdtempSync(join(tmpdir(), `${SLUG}-gitother-`)), "c");
+    g(remote, "clone", "-q", remote, other);
+    const moveOn = (file, body) => { writeFileSync(join(other, file), body); g(other, "add", file); g(other, "commit", "-qm", `remote ${file}`); g(other, "push", "-q"); };
+
+    moveOn("remote.txt", "from elsewhere\n");
+    const ff = await post(`/api/repos/${id}/git/pull`, {});
+    check(ff.ok === true && /Pulled 1 commit/.test(ff.output ?? ""), `pull fast-forwards (${ff.output ?? ff.error})`);
+    st = await j(`/api/repos/${id}/git/status`);
+    check(st.behind === 0 && st.ahead === 0, "nothing behind or ahead after the pull");
+
+    // both sides moved, clean tree → local commits replayed on top
+    moveOn("remote2.txt", "again\n");
+    writeFileSync(join(repo.path, "local.txt"), "mine\n");
+    g(repo.path, "add", "local.txt"); g(repo.path, "commit", "-qm", "local");
+    const rb = await post(`/api/repos/${id}/git/pull`, {});
+    check(rb.ok === true && /replayed/.test(rb.output ?? ""), `diverged pull replays local commits (${rb.output ?? rb.error})`);
+    st = await j(`/api/repos/${id}/git/status`);
+    check(st.ahead === 1 && st.behind === 0, "one local commit left to push after the replay");
+
+    // a conflicting replay is undone: HEAD where it was, no rebase left open
+    moveOn("hello.txt", "line one\ntheirs\n");
+    writeFileSync(join(repo.path, "hello.txt"), "line one\nours\n");
+    g(repo.path, "commit", "-qam", "ours");
+    const before = g(repo.path, "rev-parse", "HEAD");
+    const cf = await post(`/api/repos/${id}/git/pull`, {});
+    check(cf.ok === false && /undone/.test(cf.error ?? ""), "conflicting pull refuses in words");
+    check(g(repo.path, "rev-parse", "HEAD") === before, "conflicting pull leaves HEAD where it was");
+    st = await j(`/api/repos/${id}/git/status`);
+    check(st.clean === true, "no half-done rebase left in the tree");
+    rmSync(remote, { recursive: true, force: true });
+    rmSync(dirname(other), { recursive: true, force: true });
 
     // file read + traversal guard
     const fr = await j(`/api/repos/${id}/git/file?path=hello.txt`);

@@ -3,7 +3,7 @@ import { useCallback, useRef, useState } from "react";
 import { fmtCount, fmtExact, fmtUsd, fmtUsdShort, normalizeModel } from "@waterplane/shared";
 import {
   areaUnder, columns, DAY_MS, type DayPoint, dayTicks, makeDayPlot, type MixSeries, MODEL_SLOT,
-  modelBands, nearestDay, SERIES, stacks, stepPath,
+  modelBands, nearestDay, ScrubHint, SERIES, stacks, stepPath,
 } from "@waterplane/kit";
 import { CHART_H, PAD } from "../constants.ts";
 import { type MixDay } from "./MixChart.tsx";
@@ -139,7 +139,7 @@ export function DayChart({ pts, width, kind, slots = false, maxColW, money = fal
               ? `${new Date(hover.t).toLocaleDateString(undefined, { day: "numeric", month: "short" })} ${new Date(hover.t).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`
               : new Date(hover.t).toLocaleDateString(undefined, { weekday: slots ? "short" : undefined, day: "numeric", month: "short", year: "numeric" })
             } · ${hover.v > 0 ? (money ? fmtUsd(hover.v) : fmtExact(hover.v)) : "nothing recorded"}`
-          : "drag across the chart to read a value"}
+          : <ScrubHint />}
       </div>
     </>
   );

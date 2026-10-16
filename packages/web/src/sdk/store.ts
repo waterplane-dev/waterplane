@@ -42,7 +42,8 @@ export function createStore<T>(initial: T): Store<T> {
   };
 }
 
-/** Re-render when the store's value changes. */
+/** Re-render when the store's value changes. The server snapshot is the same
+ *  read: the pin tests server-render sheets, and without one React throws. */
 export function useStore<T>(s: Store<T>): T {
-  return useSyncExternalStore(s.subscribe, s.get);
+  return useSyncExternalStore(s.subscribe, s.get, s.get);
 }

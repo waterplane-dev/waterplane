@@ -21,6 +21,12 @@ the 900-line cap and the cut order: [token-stats-architecture.md](../../../docs/
   hands the view its own widgets (`LedgerViewParts`: `DayChart`, `ScopeCard`, `ScopeTag`) plus the
   shared chart/values switch. `web/guests.ts` is the picker rule and Claude's scope sentence. A backend
   with a view gets no generic ledger tab. With no such extension installed the sheet is unchanged.
+- **Generic ledger tabs** (`web/BackendLedgerView.tsx` + `backendLedger.ts`) — every other backend
+  (Copilot, Codex, a local model…), drawn in the Claude Code tab's grammar from its own pieces: the
+  account's quota first when the source has a reading (`SourceWindows`, its history on Claude's
+  `UsageSpark`), hero + split, the shared chart/values switch, `DayChart` columns per day for tokens
+  and the billing unit with the 7-day mean, models as split bars. A launcher-chip tap on a source
+  lands on its own view — guest, ledger tab or reading chip (`sourceWords.ts`'s `openedTarget`).
 - `web/localSplit.ts` — the Claude Code tab's Anthropic-only cut of the ledger (local models are on
   the claude-local tab, a host-side cut of the same buckets); `web/overview.ts` + `AllBackendsView.tsx`
   — the "All backends" cards, one unit each, never summed. Why and the price file:

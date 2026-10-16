@@ -36,10 +36,16 @@ export type ScheduleAction =
      *  absent follows the global setting. Carried both ways by `adapters.ts`
      *  so renaming a rule cannot drop it. */
     closeWhenDone?: boolean;
+    /** "Flag for follow up when done" for the item each firing adds (`Intent.flagWhenDone`). */
+    flagWhenDone?: boolean;
     /** The budget the session this item opens is born with (`Intent.budget`).
      *  `null` CLEARS a stored one on a re-save (`schedule.save` upserts, and
      *  absent there keeps the old cap — `actionBudget`). */
-    budget?: SessionBudget | null };
+    budget?: SessionBudget | null;
+    /** The model/effort/backend each occurrence's session starts with
+     *  (`Intent.launch`); absent is the desktop's new-session defaults —
+     *  the fan-out arm's rule, so an edit that omits it clears it. */
+    launch?: LaunchOpts };
 
 /** Outcome of the last time a schedule fired — the row's honesty budget. */
 export interface ScheduleResult {

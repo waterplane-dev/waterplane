@@ -17,7 +17,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, utimes
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
-import { bootWait } from "./lib-e2e.mjs";
+import { bootWait, waitForHost } from "./lib-e2e.mjs";
 import { E, SLUG, STATE, rootEnv } from "./lib-brand.mjs";
 
 const PORT = 8836;
@@ -202,7 +202,7 @@ bootWait(PORT, 1200, async () => {
     await new Promise((r) => host.once("exit", r));
     await sleep(900);
     host = startHost();
-    await sleep(1200);
+    await waitForHost(PORT);
     const ws2 = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
     let closed2 = null;
     await new Promise((res, rej) => { ws2.on("open", res); ws2.on("error", rej); });

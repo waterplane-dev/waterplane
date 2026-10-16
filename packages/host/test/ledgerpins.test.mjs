@@ -39,7 +39,7 @@ function surface(file) {
 
 const SURFACES = {
   "ctxlog.ts": [
-    "AgentFile:type", "AgentRunRaw:type", "AgentUsage:type", "ContextLog:type", "MAX_SAMPLES:value", "SPARK_MARKS:value", "SPARK_POINTS:value", "SeriesCursor:type", "agentCumOf:value", "agentEnvelope:value", "agentUsage:value", "downsample:value", "liveAgentOf:value", "projectContextLog:value", "readContextLog:value", "sparkOf:value", "thinMax:value", "updateContextLog:value", "withAgentRuns:value",
+    "AgentFile:type", "AgentRunRaw:type", "AgentUsage:type", "ContextLog:type", "MAX_SAMPLES:value", "SPARK_MARKS:value", "SPARK_POINTS:value", "SeriesCursor:type", "agentCumOf:value", "agentEnvelope:value", "agentSpendAt:value", "agentUsage:value", "downsample:value", "liveAgentOf:value", "projectContextLog:value", "readContextLog:value", "sparkOf:value", "thinMax:value", "updateContextLog:value", "withAgentRuns:value",
   ],
   "transcript.ts": [
     "MAX_TURNS:value", "TEXT_CAP:value", "TOOL_INPUT_CAP:value", "TOOL_RESULT_CAP:value", "absorbedOpeners:value", "boxAnswersOf:value", "claudeConfigDir:value", "claudeProjectDir:value", "foldRepaints:value", "lastTurnAt:value", "localCommandOf:value", "localOutputOf:value", "logMtime:value", "mergeLocalTurns:value", "opensTurn:value", "parseTranscript:value", "promptLabel:value", "promptOf:value", "queuedPromptOf:value", "queuedTurns:value", "screenCommandTurns:value", "scrollHintTrimmed:value", "sliceToCommand:value", "summarize:value", "toolDetails:value", "transcriptFromHistory:value", "transcriptPath:value", "trimTuiChrome:value",

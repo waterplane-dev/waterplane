@@ -77,7 +77,7 @@ export function numbersFill(now: number): NonNullable<DemoModel["numbers"]> {
       sessionResetAt: now + 2 * HOUR + 10 * MIN, weeklyResetAt: now + 3 * DAY + 5 * HOUR,
     },
     budget: {
-      budget: { enabled: true, sessionMax: 80, weeklyMax: 90 },
+      budget: { enabled: true, sessionMax: 80, weeklyMax: 90, leftoverMax: 20 },
       verdict: { blocked: false, state: "ok", which: "weekly", pct: 61, max: 90 },
     },
     meter: {

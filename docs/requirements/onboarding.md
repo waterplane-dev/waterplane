@@ -74,3 +74,44 @@ instead, with nothing installed, and opens on the phone from the gallery.
 A device that never touched the settings gets session tabs, the connection strip and the local runner strip on by default.
 - shipped: fda924a
 
+### R-onboarding-011 · shipped
+Help text stays collapsed until the user clicks a helper icon, and the UI is compact enough that the first entry is visible without scrolling.
+- asked: 2026-10-06
+- shipped: 7f374b35
+
+### R-onboarding-012 · shipped
+On Windows, Claude CLI is detected even when it is not on PATH, by searching typical install locations.
+- asked: 2026-10-07
+- shipped: 9561ff77
+
+### R-onboarding-013 · shipped
+A fresh install on Windows run before `npm ci` says to run npm ci instead of a 'tsc' command-not-found error.
+- asked: 2026-10-07
+- shipped: f8d58d21
+
+### R-onboarding-014 · shipped
+On first start the user is shown a one-time dialog to set the folder holding their repos, and Settings → Code folder shows where to change it later.
+- asked: 2026-10-07
+- shipped: efdf749b, 01712621
+
+### R-onboarding-015 · shipped
+A first-time user on a host that has never run a session sees the repo row's + labelled "+ new", and is told when that label retires into a plain +. Superseded 2026-10-13 by R-sessions-040: the start buttons are always worded, so there is no label to retire.
+- asked: 2026-10-08
+- shipped: d3975281, df830262
+
+### R-onboarding-016 · requested
+The flow from the first install step through to the first prompt working runs end to end without failures.
+- asked: 2026-10-08
+
+
+### R-onboarding-017 · requested
+Beside the repo-setup checklist, a repo has an Opt-ins list: the advanced things it can turn on (requirements list, repo health series and own readings, a weekly Fable security review, pre-push checks, safer npm installs, a GCP registry cleanup policy, app screenshots). Each shows whether it is on, what it is for and what it costs. None of it counts as a setup problem or in the repo badge.
+- asked: 2026-10-16
+
+### R-onboarding-018 · requested
+Every opt-in is the person's choice: a tap seeds the Send sheet (or runs the existing no-cost setup fix, or opens the screen that does the job), and nothing is sent or scheduled until the person sends it there. "Not for me" hides an offer in that repo until they offer it again. An offer the desktop cannot check can be marked done by the person and is shown as their word, not as a check that passed. Offers that do not fit the repo sit behind a count.
+- asked: 2026-10-16
+
+### R-onboarding-019 · requested
+A "walk me through these" button seeds one prompt in which an agent interviews the person about the offers still open, then posts each one they pick as its own work item (a schedule for the recurring ones) instead of doing them all in one long session.
+- asked: 2026-10-16

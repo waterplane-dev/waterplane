@@ -28,6 +28,8 @@
  * so a crash between the two can never open the session twice.
  */
 
+import type { Effort, LaunchOpts, PermissionMode } from "./wire/session.js";
+
 /**
  * How long a launch may wait for its files before the host gives up.
  *
@@ -38,6 +40,41 @@
  * surprise, not a feature.
  */
 export const LAUNCH_WAIT_MS = 6 * 60 * 60_000;
+
+const EFFORTS: readonly Effort[] = ["low", "medium", "high", "xhigh", "max"];
+const PERM_MODES: readonly PermissionMode[] = ["default", "plan", "acceptEdits", "auto", "dontAsk", "bypassPermissions"];
+/** A model id or alias is one printable token — `opus`, `claude-opus-5[1m]`,
+ *  `ollama/qwen3-coder:30b`. A space or a control character is not a model. */
+const MODEL_RE = /^[\w.:/@[\]+-]{1,120}$/;
+const BACKEND_RE = /^[\w.-]{1,64}$/;
+
+/**
+ * **A launch somebody chose, as it may be STORED** — on a deferred row
+ * (`Intent.launch`), a schedule's action, a `backlog.add`.
+ *
+ * A `session.create` spends its launch at once; a row keeps it for days and
+ * every tick re-reads it off disk, so the opts are rebuilt from the five fields
+ * `LaunchOpts` names and nothing else rides along. A field that is not one of
+ * them, or not a value the CLI would take, is DROPPED rather than guessed at —
+ * a dropped field is the new-session default, which is what absent always
+ * meant. All five gone ⇒ `undefined`: an empty object is not a choice.
+ *
+ * It does not decide whether the BACKEND exists; that is the host's
+ * `resolveBackend` at spawn time, which refuses in words.
+ */
+export function cleanLaunchOpts(v: unknown): LaunchOpts | undefined {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return undefined;
+  const r = v as Record<string, unknown>;
+  const out: LaunchOpts = {};
+  const model = typeof r.model === "string" ? r.model.trim() : "";
+  if (MODEL_RE.test(model)) out.model = model;
+  if (EFFORTS.includes(r.effort as Effort)) out.effort = r.effort as Effort;
+  if (PERM_MODES.includes(r.permissionMode as PermissionMode)) out.permissionMode = r.permissionMode as PermissionMode;
+  if (r.remoteControlled === true) out.remoteControlled = true;
+  const backend = typeof r.backend === "string" ? r.backend.trim() : "";
+  if (BACKEND_RE.test(backend)) out.backend = backend;
+  return Object.keys(out).length ? out : undefined;
+}
 
 export type LaunchState =
   /** Files outstanding. Nothing has been spawned. */

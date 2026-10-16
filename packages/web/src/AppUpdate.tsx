@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowDownToLine, CheckCircle2, Loader2, RotateCcw, Smartphone, XCircle } from "lucide-react";
+import { ArrowDownToLine, CheckCircle2, Loader2, RotateCcw, ShieldAlert, Smartphone, XCircle } from "lucide-react";
 import { autoApply, autoUpdate, nativeInfo, setAutoApply, setAutoUpdate, updates, type NativeUpdateInfo, type UpdateStatus } from "./webUpdate";
 import { ago } from "./format";
 import { track } from "./usage";
@@ -99,6 +99,12 @@ export function AppUpdateSection({ onToast, bare }: {
             : "it starts the next time the app does."}
         </div>
       )}
+      {s.phase === "held" && (
+        <div className="set-note" style={{ color: "var(--warn)" }}>
+          <ShieldAlert size={13} style={{ verticalAlign: "-2px" }} /> {s.message}. Not downloaded
+          again by itself — the desktop's next build is taken as usual.
+        </div>
+      )}
       {s.phase === "unavailable" && (
         <div className="set-note">the desktop cannot serve a bundle: {s.message}</div>
       )}
@@ -123,10 +129,17 @@ export function AppUpdateSection({ onToast, bare }: {
           >restart into it</button>
         )}
         {!!s.available && !fresh && s.phase !== "downloading" && s.phase !== "staged" && (
-          <button
-            className="key"
-            onClick={() => { track("action:appUpdate.download"); void updates.download(); }}
-          >download now</button>
+          s.phase === "held" ? (
+            <button
+              className="key"
+              onClick={() => { track("action:appUpdate.retryHeld"); void updates.download(true); }}
+            >try build {s.available.slice(0, 8)} again</button>
+          ) : (
+            <button
+              className="key"
+              onClick={() => { track("action:appUpdate.download"); void updates.download(); }}
+            >download now</button>
+          )
         )}
         <button
           className={`key ${auto ? "active" : ""}`}
@@ -151,7 +164,9 @@ export function AppUpdateSection({ onToast, bare }: {
         ><RotateCcw size={12} /> use the build inside the APK</button>
         <span className="set-note">
           The escape hatch if a downloaded build misbehaves. The app does this by
-          itself too, after three launches that never finish starting.
+          itself too, when a downloaded build has not started after 15 seconds on
+          screen, or after three launches that never finish starting — and then
+          leaves that build alone until the desktop serves a different one.
         </span>
       </div>
     </Frame>

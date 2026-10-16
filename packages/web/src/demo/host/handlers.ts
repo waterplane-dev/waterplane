@@ -25,9 +25,10 @@ import { cleanIntentRow, DEFAULT_ARTIFACT_POLICY, nextFireAt } from "@waterplane
 import type { ClientMessage, HostMessage, Intent } from "@waterplane/shared";
 import {
   backlogFrame, createSession, findSession, input, killSession, recordHistory, removeSession, repaint,
-  replay, sessions, submit,
+  replay, sessions, submit, switchMode,
 } from "./desk.ts";
 import { setBudget } from "./budget.ts";
+import { setFollowUp } from "./followup.ts";
 import { addWaiting } from "./waiting.ts";
 import { inRepos, mint, NOT_A_DEMO_REPO } from "./model.ts";
 import type { DemoModel, Desk, Frame } from "./model.ts";
@@ -73,6 +74,7 @@ const UPDATE = because("Updating claude happens on your desktop — the demo's c
 const LIMITS = because("Usage-limit resumes need a real claude session — the demo never hits a limit of its own.");
 const CONVO = because("This reads the real conversation log on your desktop — the demo keeps no logs.");
 const RUNS = because("The demo keeps your waiting work but does not start it — on your own desktop it would run here.");
+const DESKTOP = because("A live desktop streams your own screen, and the demo has no desktop to show.");
 const STORE = because("The demo keeps no records on disk to change — this needs your own desktop.");
 
 const m = (c: { desk: Desk }): DemoModel => c.desk.m;
@@ -104,6 +106,19 @@ export const DEMO_BACKENDS: Frame<"backends">["list"] = [{
   },
   models: { aliases: ["opus", "sonnet", "haiku"], ids: ["claude-opus-5-5", "claude-sonnet-5", "claude-haiku-4-5"] },
 }];
+
+/**
+ * The usage reading a demo desktop holds when its scenario carries none of its own: the 5-hour
+ * window at 42% resetting in a little over two hours, the week at 61% — the figures the first-look
+ * scenario ships, so every film's header meter and every Token usage sheet say one consistent thing.
+ * Seeded once, at `at` (index.ts `build`), so `usage.status`, `usage.get` and `usage.refresh` all answer
+ * the same reading: an app that finds none shows "? / ? wk" in its header and asks again on every
+ * screen change, which the demo used to answer with a toast about itself.
+ */
+export const demoUsage = (at: number): Frame<"usage.status">["usage"] => ({
+  ok: true, sessionPct: 42, weeklyPct: 61, checkedAt: at - 2 * 60_000,
+  sessionResetAt: at + 130 * 60_000, weeklyResetAt: at + (3 * 24 + 5) * 3_600_000,
+});
 
 /** The frames the real host sends unasked on `hello` (routes/system.ts),
  *  minus the ones whose number the scenario does not carry. */
@@ -326,6 +341,8 @@ export const HANDLERS = {
     tier: "A",
     run: (c) => { const b = m(c).numbers?.budget; if (b) c.reply({ t: "budget.state", budget: b.budget, verdict: b.verdict }); },
   },
+  // Demo hosts have no billing profile: nothing to answer, the phone reads that as `unknown`.
+  "billing.get": { tier: "A", run: () => {} },
   "clihealth.get": {
     tier: "A",
     run: (c) => { const h = m(c).numbers?.clihealth; if (h) c.reply({ t: "clihealth", health: h.health, rollup: h.rollup }); },
@@ -372,12 +389,17 @@ export const HANDLERS = {
   // The cap is judged against the scenario's fictional spend, the way the host
   // judges the real one; garbage and a closed session are refused in the host's
   // own words (a toast: the message has no receipt there either).
+  // Live only on the real host too (never queued): flips `liveMode` on the
+  // session list and answers `session.moded` through its receipt.
+  "session.mode": { tier: "A", run: (c) => switchMode(c.desk, c.msg.id, c.msg.mode) },
   "session.budget.set": {
     tier: "A",
     run: (c) => { const no = setBudget(c.desk, c.msg.id, c.msg.budget); if (no) c.reply({ t: "toast", text: no }); },
   },
   "session.rename": STORE,
   "session.star": STORE,
+  // Toggled for real, so the docs can show a flag set, coloured and cleared.
+  "session.followup": { tier: "A", run: (c) => setFollowUp(c.desk, c.msg.id, c.msg.on) },
   "session.pin": STORE,
   "session.background": B,
   "session.closecheck": because("The close check reads git on your desktop — the demo has no working tree."),
@@ -395,9 +417,7 @@ export const HANDLERS = {
   "backlog.openRepoSession": RUNS,
   "backlog.reorder": STORE,
   "backlog.setAuto": RUNS,
-  "backlog.setSmartPick": ASSESS,
   "backlog.swap": STORE,
-  "backlog.unmerge": STORE,
   "backlog.validate": ASSESS,
   "build.cancel": BUILDS,
   "build.options": BUILDS,
@@ -420,6 +440,7 @@ export const HANDLERS = {
   "auth.gateTailscale": AUTH,
   "auth.set": AUTH,
   "budget.set": STORE,
+  "billing.set": STORE,
   "closed.clear": STORE,
   "decisions.archive": STORE,
   "decisions.archiveAll": STORE,
@@ -438,13 +459,21 @@ export const HANDLERS = {
   "limit.first": LIMITS,
   "limit.resume": LIMITS,
   "limit.session": LIMITS,
+  "host.halt": because("The demo has no AI processes to stop — on a real desktop this halts every agent session and holds automatic work until lifted."),
   "limit.setAuto": LIMITS,
   "limit.setMode": LIMITS,
   "backends.recheck": B,
   "localrt.evict": LOCALRT,
-  // The strip renews this watch every 25 s; a refusal toasted each time over every demo screen.
-  // No local runner is the same answer a desktop without one gives: no sample, nothing drawn.
-  "localrt.watch": { tier: "A", run: () => {} },
+  // The strip renews this watch every 25 s; a refusal would toast each time over every demo screen.
+  // Answered at once, as the real host always does (host/localrt.ts `localRtWatch`): silence is what
+  // the phone words as "this desktop didn't answer" — an amber strip over every film. The demo
+  // desktop measures nothing, which is exactly what a host with `WATERPLANE_LOCAL_RUNTIME=0` says:
+  // one `disabled` frame, drawn as a muted "not polled here". The zeros are the wire's required
+  // fields; the phone reads none of them while `disabled` is set, so no figure is made up.
+  "localrt.watch": {
+    tier: "A",
+    run: (c) => { c.reply({ t: "localrt.sample", disabled: true, sample: { at: c.now, models: [], reachable: false, cpuPct: 0, memTotal: 0, memFree: 0 } }); },
+  },
   "notification.clear": STORE,
   "notify.prefs.set": STORE,
   "plugin.action": PLUGINS,
@@ -462,16 +491,20 @@ export const HANDLERS = {
   "schedule.setEnabled": STORE,
   "schedule.skipNext": STORE,
   "sent.clear": STORE,
+  "stream.ack": DESKTOP,
+  "stream.close": DESKTOP,
+  "stream.input": DESKTOP,
+  "stream.keyframe": DESKTOP,
+  "stream.open": DESKTOP,
+  "stream.params": DESKTOP,
   "update.apply": UPDATE,
   "update.check": UPDATE,
-  // A re-read answers the reading the demo holds (a scenario's turns move it);
-  // with none, the refusal says why — the demo cannot read a real account.
+  // A re-read answers the reading the demo holds (a scenario's turns move it). The app asks on
+  // every screen change, so this is answered quietly like `usage.get`: a toast about the demo's own
+  // numbers sat over six to sixteen seconds of every film. A reading is always held (`demoUsage`).
   "usage.refresh": {
     tier: "A",
-    run: (c) => {
-      const u = m(c).numbers?.usage;
-      c.reply(u ? { t: "usage.status", usage: u } : { t: "toast", text: "The demo's numbers are fixed — refreshing reads your desktop's real usage." });
-    },
+    run: (c) => { const u = m(c).numbers?.usage; if (u) c.reply({ t: "usage.status", usage: u }); },
   },
 } satisfies HandlerTable;
 

@@ -12,7 +12,7 @@
  * flags live in `sidecar.ts` and the prompt in `knobs.ts`.
  */
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { hostStateDir } from "../branddirs.js";
 import { renderCapture } from "../render.js";
@@ -30,7 +30,7 @@ import {
   HISTORY_LIMIT, OUTPUT_CAP, SUMMARY_MODEL, TAB_TITLE_SYSTEM, TAB_TITLE_PROMPT, NAME_INPUT_CHARS,
   RENAME_PROMPT, RENAME_RECENT_PROMPTS, RENAME_RECENT_CHARS,
 } from "./knobs.js";
-import { writeJsonAtomic } from "../jsonstore.js";
+import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
 
 // ── History (prompt + captured output) ──────────────────────────────
 
@@ -199,6 +199,8 @@ export function getTranscript(core: SessionCore, id: string, since = 0, detail: 
     if (mtime != null && since && Math.max(mtime, localAt, agentsMtime(path)) <= since) return "unchanged";
     const parsed = parseTranscript(path, cwd, detail);
     if (parsed) {
+      // Judged on the log's OWN turns, before anything of ours is spliced in.
+      const logTurns = parsed.turns.length;
       // Commands the log never wrote down (`/btw`), from our own PTY capture,
       // spliced in by time. The log's own local commands are already turns by
       // now (`local: "log"`) and `screenCommandTurns` skips those, so nothing
@@ -220,13 +222,8 @@ export function getTranscript(core: SessionCore, id: string, since = 0, detail: 
         parsed.turns = mergeLocalTurns(parsed.turns, queued);
         parsed.updatedAt = Math.max(parsed.updatedAt, localAt);
       }
-      // A log with bytes in it that parses to no turns at all is the record
-      // shape having moved under us — which is the failure worth naming,
-      // since this log is the witness that settles everything a screen
-      // cannot. An EMPTY file is not that: the CLI creates it before it has
-      // anything to write.
-      core.noteLogHealth(live, parsed.turns.length ? "good" : parsed.bytes > 0 ? "miss" : null,
-        `${parsed.bytes} bytes, ${parsed.turns.length} turns`);
+      core.noteLogHealth(live, logHealthOutcome(logTurns, parsed.bytes, live?.history ?? [], logBirth(path)),
+        `${parsed.bytes} bytes, ${logTurns} turns`);
       return { sessionId: id, claudeSessionId: cid, source: "jsonl", ...parsed };
     }
   }
@@ -239,6 +236,36 @@ export function getTranscript(core: SessionCore, id: string, since = 0, detail: 
   core.noteLogHealth(live, "fallback", `${live.history.length} recorded turns`);
   if (since && hist.updatedAt && hist.updatedAt <= since) return "unchanged";
   return { sessionId: id, claudeSessionId: cid, source: "history", ...hist };
+}
+
+/** How long after we typed a prompt the CLI may take to write it down. */
+const LOG_WRITE_GRACE_MS = 30_000;
+
+/** When the CLI created this log, or null where the filesystem cannot say. */
+function logBirth(path: string): number | null {
+  try { const b = statSync(path).birthtimeMs; return b > 0 ? b : null; } catch { return null; }
+}
+
+/**
+ * Whether a parsed log says the reader works — `good`, `miss`, or null for
+ * "this read proves nothing".
+ *
+ * A log with no turns is a miss only when it OWES us one: a prompt we typed
+ * into this conversation (after the log was born, so not one from before a
+ * `/clear`), long enough ago for the CLI to have written it down. Bytes alone
+ * prove nothing — since 2.1.301 the CLI writes `mode`, `permission-mode`,
+ * `bridge-session`, the SessionStart hook's attachment and a `system` row at
+ * START-UP, so every session sitting at an untouched composer filed "the
+ * record shape moved" each time the reader polled it. A slash command owes
+ * nothing either: the log writes it as an envelope the parser drops
+ * (`isSlashText` in `echo.ts`).
+ */
+export function logHealthOutcome(logTurns: number, bytes: number, history: readonly HistoryEntry[], bornAt: number | null, now = Date.now()): "good" | "miss" | null {
+  if (logTurns > 0) return "good";
+  if (bytes <= 0 || bornAt == null) return null;
+  const owed = history.some((h) => h.kind !== "command" && !h.text.trimStart().startsWith("/")
+    && h.sentAt >= bornAt && h.sentAt <= now - LOG_WRITE_GRACE_MS);
+  return owed ? "miss" : null;
 }
 
 /** The live side channel's change stamp for this session's conversation, or
@@ -568,11 +595,13 @@ function saveSummary(core: SessionCore, s: Session): void {
 }
 
 export function loadHistory(core: SessionCore, id: string): HistoryEntry[] {
-  try {
-    const p = historyPath(core, id);
-    if (existsSync(p)) return JSON.parse(readFileSync(p, "utf8"));
-  } catch { /* corrupt/missing — start fresh */ }
-  return [];
+  // Absent is a session with no history yet. A file that is there and is not an array of entries
+  // is moved aside (`<name>.corrupt-<ts>`), not left for the next prompt's save to overwrite.
+  return readJsonGuarded<HistoryEntry[]>(historyPath(core, id), [], isHistory);
+}
+
+function isHistory(v: unknown): boolean {
+  return Array.isArray(v) && v.every((e) => !!e && typeof e === "object" && typeof (e as HistoryEntry).text === "string" && Number.isFinite((e as HistoryEntry).sentAt));
 }
 
 /**

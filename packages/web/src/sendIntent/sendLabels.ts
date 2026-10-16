@@ -1,6 +1,8 @@
 /** The summary rows: where it goes, what the button says, why it is refused. Split from `sendIntent.ts` (docs/notes/send-architecture.md); pure, no React. */
 import { afterWords, sessionBudgetLabel, describeRule, fmtWhen, type SessionBudget, type Intent } from "@waterplane/shared";
 import { type SendTarget, type SendWhen, type SendIntent, type SendNames } from "./sendTypes.ts";
+import { launchClause, launchOfTarget, launchWords } from "./sendLaunch.ts";
+import { flagWhenDoneOffered } from "./sendFlag.ts";
 
 // ── The summary rows ─────────────────────────────────────────────────
 
@@ -18,7 +20,10 @@ export function withBudget(t: SendTarget, b: SessionBudget | null | undefined): 
 }
 
 /** The *To* row's own words — short enough for a collapsed row. */
-export function targetWords(t: SendTarget, n: SendNames): string {
+export function targetWords(t: SendTarget, n: SendNames, w?: SendWhen): string {
+  // Said only where it will be honoured (`flagWhenDoneOffered`) — a tick left
+  // over from a WHEN that no longer takes it is not on the row.
+  const flag = (t.kind === "repo" || t.kind === "repos") && t.flagWhenDone && (!w || flagWhenDoneOffered(t, w)) ? ", flagged when done" : "";
   switch (t.kind) {
     case "session": return n.sessionTitle(t.sessionId);
     // `X · work item` went with the retired second reading of a repo target.
@@ -28,8 +33,12 @@ export function targetWords(t: SendTarget, n: SendNames): string {
     // (absent) is the default and says nothing on a collapsed row.
     case "repo": return `${n.repoName(t.cwd)} · a new session${t.resume ? ", continued" : ""}`
       + (t.closeWhenDone === true ? ", closes when done" : t.closeWhenDone === false ? ", kept open" : "")
+      + flag
+      + launchClause(t.launch)
       + (t.budget ? `, budget ${sessionBudgetLabel(t.budget)}` : "");
     case "repos": return (t.dirs.length === 1 ? n.repoName(t.dirs[0]) : `${t.dirs.length} repos`)
+      + flag
+      + launchClause(t.launch)
       + (t.budget ? `, budget ${sessionBudgetLabel(t.budget)}` : "");
     case "shell": return `${n.buildName(t.cwd, t.buildId)} · ${n.repoName(t.cwd)}`;
   }
@@ -48,9 +57,11 @@ export { afterWords, whenWords } from "@waterplane/shared";
  * words: after picking a time the button should be "save for XY date and time".
  */
 export function sendLabel(i: SendIntent, n: SendNames, preview: number | null): string {
-  const base = sendLabelBase(i, n, preview);
-  // The cap rides on the button like every other part of the decision: a budget
-  // set in a collapsed row is otherwise the one answer the button does not say.
+  // The model and the cap ride on the button like every other part of the
+  // decision: either one set in a collapsed row is otherwise the one answer the
+  // button does not say. Nothing is added for a send on the defaults.
+  const l = launchOfTarget(i.target);
+  const base = sendLabelBase(i, n, preview) + (launchClause(l) ? ` · ${launchWords(l)}` : "");
   return (i.target.kind === "repo" || i.target.kind === "repos") && i.target.budget
     ? `${base} · budget ${sessionBudgetLabel(i.target.budget)}` : base;
 }

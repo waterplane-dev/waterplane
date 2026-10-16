@@ -1,11 +1,15 @@
 import type { LaunchOpts } from "./launch.js";
+import type { FollowUp } from "./info.js";
 
-/** An image that appeared in a session's worktree during the turn. */
+/** A file a session's turn left in its worktree: an image or video that
+ *  appeared, or a markdown file that appeared or was rewritten. */
 export interface NewImage {
   name: string;
   /** Worktree-relative path (forward slashes). */
   relPath: string;
   mtime: number;
+  /** Markdown only: the file existed before and this turn rewrote it. */
+  changed?: true;
 }
 
 /** A session descriptor persisted across host restarts (for resume). One entry
@@ -106,6 +110,9 @@ export interface ClosedSession {
   //    `CLOSED_TEXT_CAP` (`shared/closed.ts`) so the persisted stack stays small.
   /** Why the session ended. See `ClosedBy`. */
   closedBy?: ClosedBy;
+  /** The conversation's follow-up flag, stamped by the host when it lists the
+   *  closed stack (never persisted on the row — the flag store owns it). */
+  followUp?: FollowUp;
   /** `closedBy` "exited"/"limit": the process's own exit code, when node-pty
    *  reported one. */
   exitCode?: number;
@@ -157,7 +164,9 @@ export interface ClosedSession {
  * - `auto-done` — the backlog's linger sweep: its item said close-when-done
  *                 and it sat idle past the linger after the work finished.
  * - `auto-slot` — reaped early to free an automatic-session slot for a waiting
- *                 item (also only close-when-done sessions).
+ *                 item (also only close-when-done sessions). No longer written:
+ *                 an idle session holds no slot (R-automation-042); older
+ *                 closed rows still carry it.
  * - `exited`    — the CLI process ended on its own (/exit, crash, signal);
  *                 `exitCode`/`exitSignal` say how when known.
  * - `limit`     — it exited at a usage limit; the host reopens it at the reset

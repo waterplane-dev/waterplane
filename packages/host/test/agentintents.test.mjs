@@ -9,7 +9,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { addClientBacklogItem, agentBacklogFrom, agentCallerRefusal, agentDraftFrom, agentWhenOf, postClientDraft } from "../dist/agentintents.js";
+import { addClientBacklogItem, agentBacklogFrom, agentCallerRefusal, agentDraftFrom, agentOrderIds, agentQueue, agentWhenOf, postClientDraft } from "../dist/agentintents.js";
 
 test("only a non-browser, unproxied process on loopback is an agent", () => {
   assert.equal(agentCallerRefusal("127.0.0.1", {}), null);
@@ -55,6 +55,12 @@ test("a body becomes the phone's own draft shape, keyed by the caller", () => {
   assert.equal(w.draft.trigger.rule.kind, "window");
   assert.equal(w.draft.trigger.rule.offsetMin, -180);
   assert.equal(w.draft.trigger.rule.oneShot, true);
+
+  const cp = { id: "month", kind: "calendar", unit: "usd", cycle: "month", anchorDay: 1, tz: "UTC" };
+  const m = agentDraftFrom({ key: "k3b", prompt: "x", when: { kind: "window", window: "month", leadMin: 60 } }, facts({ periods: () => [cp] }));
+  assert.equal(m.draft.trigger.rule.periodId, "month", "a configured period id is accepted");
+  assert.match(agentDraftFrom({ key: "k3c", prompt: "x", when: { kind: "window", window: "month" } }, facts()).refused, /no budget period/);
+  assert.match(agentDraftFrom({ key: "k3d", prompt: "x", when: { kind: "window", window: "rolling30d" } }, facts({ periods: () => [{ id: "rolling30d", kind: "rolling", unit: "usd", lenMs: 1, scraped: false }] })).refused, /no reset time/);
 
   const a = agentDraftFrom({ key: "k4", steps: ["one", "two"], when: { kind: "after", id: "prev", onlyIfOk: true } }, facts());
   assert.deepEqual(a.draft.trigger, { kind: "after", id: "prev", onlyIfOk: true, title: "the migration" });
@@ -139,4 +145,28 @@ test("an agent may say closeWhenDone for a NEW session — a boolean or nothing;
   assert.equal("closeWhenDone" in agentDraftFrom({ key: "c4", prompt: "x", session: "s1", closeWhenDone: true }, facts({ cwd: null })).draft, false,
     "typed into a session already there: it opens nothing, so there is nothing to close");
   assert.equal(agentBacklogFrom({ key: "c5", prompt: "x", closeWhenDone: false }, facts()).add.closeWhenDone, false);
+});
+
+test("the run order: every waiting row in tick order, and a reorder names only waiting rows", () => {
+  const row = (id, over = {}) => ({ id, cwd: "/root/proj", state: "queued", createdAt: 100, payload: { kind: "prompt", steps: [`do ${id}`] }, target: { kind: "repo" }, trigger: { kind: "idle" }, ...over });
+  const rows = [
+    row("b", { order: 5 }),
+    row("a", { order: 2, origin: "agent" }),
+    row("ran", { state: "running", order: 1 }),
+    row("gone", { state: "done", order: 0 }),
+    row("aside", { archived: true, order: 0 }),
+    row("other", { cwd: "/root/else", order: 3 }),
+  ];
+  const q = agentQueue(rows, "/root/proj");
+  assert.deepEqual(q.map((r) => [r.seat, r.id]), [[1, "a"], [2, "b"]], "started, settled, archived and other repos have no seat");
+  assert.equal(q[1].shownAs, "the person's");
+  assert.deepEqual(agentQueue(rows, null).map((r) => r.id), ["a", "other", "b"], "no repo = the tick's own order across repos");
+
+  const get = (id) => rows.find((r) => r.id === id);
+  assert.deepEqual(agentOrderIds({ ids: ["b", "a"] }, get), { ids: ["b", "a"] });
+  assert.match(agentOrderIds({ ids: ["b"] }, get).refused, /2-200/);
+  assert.match(agentOrderIds({ ids: ["b", "b"] }, get).refused, /twice/);
+  assert.match(agentOrderIds({ ids: ["b", "nope"] }, get).refused, /no such intent: nope/);
+  assert.match(agentOrderIds({ ids: ["b", "ran"] }, get).refused, /ran is running/);
+  assert.match(agentOrderIds({ ids: ["b", "aside"] }, get).refused, /aside is archived/);
 });

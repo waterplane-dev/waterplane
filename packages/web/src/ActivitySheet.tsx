@@ -54,11 +54,11 @@
  *     are mostly repeated re-sends of the same few texts, which is what a person
  *     does when the app tells them their prompt did not run; collapsing them
  *     turns eighty-four rows into a dozen decisions.
- *   • **chatter** — "continue please", "done?", a bare `/cost`. Not lost work,
+ *   • **hide chatter** — "continue please", "done?", a bare `/cost`. Not lost work,
  *     and re-reading it is pure cost. Off by default and it names its count,
  *     because a filter that removes rows from the screen you opened to find a
  *     lost prompt must be a deliberate tap.
- *   • **oldest** — the triage order. A ranked list buries the rows that have
+ *   • **oldest first** — the triage order. A ranked list buries the rows that have
  *     been waiting longest, which is how eighty-four of them accumulated.
  *   • **select** + the bulk bar — file many away, or send many again, in one
  *     confirmation with a count and a sample of the actual words.
@@ -95,10 +95,13 @@ export function ActivitySheet(p: ActivitySheetProps) {
       footer={m.selecting ? <ActivityBulkBar m={m} p={p} /> : null}
       head={<ActivityHead m={m} />}>
       <ActivityNotices m={m} online={p.online} />
-      <ActivityList m={m} p={p} />
-      {/* Work handed to a paired desktop: state, how long, what it cost THERE, both sessions.
-          Its own read (the asker's ledger) — absent on a desktop that never delegated. */}
-      {PeerJobs && <PeerJobs sessions={p.sessions} onOpenSession={p.onOpenSession} />}
+      {/* ONE scroll region: as flex siblings the list shrank to nothing beside peer jobs. */}
+      <div className="sheet-scroll">
+        <ActivityList m={m} p={p} />
+        {/* Work handed to a paired desktop (absent if it never delegated). Not under a cut:
+            "showing the messages that were not delivered" over peer jobs would be a lie. */}
+        {PeerJobs && !m.focus && m.filter === "all" && <PeerJobs sessions={p.sessions} onOpenSession={p.onOpenSession} />}
+      </div>
     </Sheet>
   );
 }

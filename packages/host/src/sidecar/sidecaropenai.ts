@@ -3,6 +3,8 @@
  */
 import { env } from "../env.js";
 import { sayOnce } from "./sidecarroute.js";
+import { isHalted } from "../halt.js";
+import { localSwapGuard } from "../localslot.js";
 import type { OpenAIRoute } from "./sidecarroute.js";
 
 /**
@@ -86,7 +88,13 @@ export interface ChatRequest {
  * correct response to all of them, which is to leave what is on screen alone.
  */
 export async function chatCompletion(route: OpenAIRoute, req: ChatRequest): Promise<string> {
+  if (isHalted()) return ""; // the emergency halt (`halt.ts`): "" is every failure's answer here
   const url = `${route.baseURL}/chat/completions`;
+  // Never swap the local model out from under a working coding turn
+  // (`localslot.ts`): same runner, different model, an agent mid-turn ⇒ the
+  // empty result every caller already reads as "no answer".
+  const swap = localSwapGuard(route.baseURL, route.model);
+  if (swap) { sayOnce(swap); return ""; }
   const messages = [
     ...(req.system ? [{ role: "system", content: req.system }] : []),
     { role: "user", content: req.prompt },

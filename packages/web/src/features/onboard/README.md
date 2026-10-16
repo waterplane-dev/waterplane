@@ -10,8 +10,10 @@ progress and hands the person into the session.
 
 - `FirstRunCard.tsx` — the launcher's card (`core/launcher/LauncherScreen.tsx` draws it). Shown
   when the host has never opened a session: no live session, nothing in recent, nothing recently
-  closed (`firstRunCard`; the host keeps no flag, those three lists are the cheap signal). Three
-  ways in: *Build your first app*, *Open an existing repo* (hides the card, says where to tap),
+  closed (`firstRunCard`; the host keeps no flag, those three lists are the cheap signal). The
+  ways in: *Build your first app*; the repos already listed under it — a line with their count
+  (`existingReposLine`), and an *Open an existing repo* button only when there are none (it then
+  says how to make one: a button whose whole effect was "tap one below" sat right above them);
   *Try the demo* (`enterDemo("first-look")`). While a job runs or is stopped the same place shows
   it, whatever else is open. Never in the demo. "Not now" lasts for the page only.
 - `OnboardSheet.tsx` — overlay `onboard` (not persisted: a consent screen, `hostedack`'s reason).

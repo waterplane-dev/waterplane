@@ -17,12 +17,15 @@
  * `dispatchIntent` accepted them, or `addPadNote` kept them); dictation and
  * snippets APPEND; the clear button takes two taps.
  */
+import { besidePicture } from "../../besideRoom";
+import { askChoice, askConfirm, askConfirmRemember } from "../../Confirm";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ChangeEvent, KeyboardEvent as ReactKeyboardEvent, MutableRefObject } from "react";
-import { isLocalCommand } from "@waterplane/shared";
+import { answeredOnlyInCli, budgetReasonText, isLocalCommand } from "@waterplane/shared";
 import type { ClientMessage, RepoTarget, SessionInfo } from "@waterplane/shared";
 import {
   PAD_EMPTY_TOAST, PAD_KEPT_TOAST, WHERE_UNPICKED_TOAST, sendModeToast, whereGoneToast, type SendMode, type SendWhere,
+  busyPastBudgetToast, busySendAsk, busySendRememberedToast, busySendRoute,
 } from "../../composeSend";
 import { recallMode, recallWhen, recallWhere, recalledWhenNote } from "../../sendMemory";
 import type { SendTarget } from "../../sendIntent";
@@ -34,13 +37,15 @@ import type { Snippet } from "../../SnippetSheet";
 import { useVoice } from "../../useVoice";
 import { baseName } from "../../format";
 import { LS, lsSetJson } from "../../storage";
-import { prefRef } from "../prefs.ts";
+import { prefRef, setPref } from "../prefs.ts";
 import { showToast } from "../../toast";
 import { track } from "../../usage";
 import type { HostConnection } from "../../ws";
 import { useLatest } from "../../sdk/hooks.ts";
+import type { SeedOutcome } from "../../sdk/types.ts";
 import { secretAsk } from "../../secretAsk";
 import { isShellBackend } from "../../backendCaps";
+import { isLaterId } from "../queue/logic.ts";
 import type { QueueApi, SendApi } from "../send/useSend";
 
 type Ref<T> = { readonly current: T };
@@ -151,9 +156,13 @@ export interface ComposeDeps {
   /** CLI mode as remembered, and its setter — the caller persists it. */
   cliModeOn: boolean;
   setCliModeOn(on: boolean): void;
-  queue: Pick<QueueApi, "submitInput" | "queueBacklog"> & { uploads: { parkingRef: MutableRefObject<number> } };
+  /** Put the terminal on screen instead of the reader (App's `setView(false)`). */
+  showCli(): void;
+  queue: Pick<QueueApi, "submitInput" | "queueBacklog" | "budget"> & { uploads: { parkingRef: MutableRefObject<number> } };
   sender: Pick<SendApi, "dispatchIntent" | "openSend" | "noteSendAim" | "sendMemRef">;
   repoForCwd(cwd: string): RepoTarget | null;
+  /** Off the session screen — the `+ later` screen once its words are posted. */
+  leave(): void;
 }
 
 export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
@@ -172,6 +181,42 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
   const { parkingRef } = deps.queue.uploads;
   const { dispatchIntent, openSend, noteSendAim, sendMemRef } = deps.sender;
   const closeKbOnSend = prefRef("closeKbOnSend");
+  const btwToCli = prefRef("btwToCli");
+  const busySend = prefRef("busySend");
+
+  /**
+   * A `/btw` just went from the READER: its answer only ever exists in an
+   * overlay of the CLI's own (`answeredOnlyInCli`), so offer to go there.
+   * Asked, never done unasked — the screen changing under a send would read
+   * as a bug — unless the person ticked "don't ask again", and then the
+   * switch says where the reader is. Settings › Writing & reading undoes it.
+   */
+  function offerCliForBtw() {
+    const go = () => {
+      deps.showCli();
+      showToast("switched to the CLI for the /btw answer — the book button above brings the reader back");
+    };
+    if (btwToCli.current === "switch") { go(); return; }
+    if (btwToCli.current === "stay") return;
+    void askConfirmRemember({
+      title: "Switch to the CLI to read the answer?",
+      lines: [
+        "The CLI answers /btw in an overlay of its own and keeps no record of it, so the reader cannot show it.",
+        "It stays readable in the CLI until the overlay is closed (Esc).",
+      ],
+      confirmLabel: "switch", cancelLabel: "stay", tone: "info",
+      rememberLabel: "don't ask again",
+    }).then(({ ok, remember }) => {
+      if (remember) {
+        setPref("btwToCli", ok ? "switch" : "stay");
+        if (!ok) showToast("won't ask again — Settings › Writing & reading › /btw from the reader changes it");
+      }
+      if (ok) {
+        track("action:compose.btwToCli");
+        go();
+      }
+    });
+  }
 
   /**
    * What the compose bar's Send button DOES — chosen on the chevron beside it.
@@ -214,6 +259,8 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
    *  there, so typing into it is typing blind. Switching back to the terminal
    *  puts the mode back, draft intact. */
   const cliMode = cliModeOn && !pending && !readerShown;
+  /** The `+ later` screen (`isLaterId`): no session until its backlog item runs. */
+  const later = isLaterId(activeId);
 
   // ── Compose durability: drafts (unsent) + outbox (sent, awaiting ack) ──
   // Persist the draft under its owning session on every change. Guarded by the
@@ -240,6 +287,9 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
    * is set to *when it's free*.
    */
   useEffect(() => {
+    // `+ later`: there is no session on screen to aim at, and nothing to
+    // remember — the screen exists to queue a NEW session for when it's free.
+    if (later) { setSendMode("idle"); setSendWhere("new"); setSendWhereSid(null); return; }
     setSendMode(recallMode(sendMemRef.current, active?.cwd));
     // The aim follows the repo too, and the session `other` named does NOT:
     // it belonged to the repo you were in, and carrying it across would aim
@@ -247,7 +297,7 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
     setSendWhere(recallWhere(sendMemRef.current, active?.cwd));
     setSendWhereSid(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sendMemRef is a ref; the repo is the key
-  }, [active?.cwd]);
+  }, [active?.cwd, later]);
 
   /**
    * The compose bar's microphone, aimed at THIS session's draft.
@@ -273,10 +323,28 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
    * load effect then replaced the box with the new session's saved draft and
    * the words were gone (`continueImageInSession`'s *new session · <path>*).
    */
-  function seedDraft(sid: string, text: string) {
-    if (activeIdRef.current === sid) { draft.insertCompose(text); return; }
-    const cur = loadDraft(sid);
-    saveDraft(sid, cur ? `${cur}${cur.endsWith(" ") ? "" : " "}${text}` : text);
+  function seedDraft(sid: string, text: string): SeedOutcome {
+    // Seeded words are for the person to read and send: CLI mode hides the box
+    // behind the raw-keys pad, so the mode is left (the caller says so).
+    const leftCli = cliModeOn;
+    if (cliModeOn) { setCliModeOn(false); pipePrev.current = PIPE_PAD; }
+    const onScreen = activeIdRef.current === sid;
+    const cur = onScreen ? draft.composeNow.current : (loadDraft(sid) ?? "");
+    // The same words twice (a second tap on the same button) are one copy, not two.
+    const already = text.trim() !== "" && cur.includes(text.trim());
+    if (already) return { leftCli, already };
+    if (onScreen) draft.insertCompose(text);
+    else saveDraft(sid, cur ? `${cur}${cur.endsWith(" ") ? "" : " "}${text}` : text);
+    return { leftCli, already };
+  }
+
+  /** `core.compose.typeOn`: one key of the demo's typing — only onto exactly
+   *  what the last key left, so a person's words stop it (`local/no-draft-clobber`). */
+  function typeOn(from: string, to: string): boolean {
+    if (draft.composeNow.current !== from) return false;
+    draft.composeNow.current = to;
+    draft.setCompose(to);
+    return true;
   }
 
   /**
@@ -389,7 +457,7 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
     if (on) {
       focusPipe();
       showToast(connRef.current.status === "open"
-        ? "CLI mode — keys go straight to the session"
+        ? "CLI mode — keys go straight to the session; full screen while the keyboard is up (corner button brings the header back)"
         : "CLI mode — link is down, so keystrokes are NOT queued");
     }
   }
@@ -428,11 +496,18 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
    *  Modifier+Return always inserts a newline (the default action), and an IME
    *  composition Return (Japanese/Chinese candidate pick) must never submit. */
   function onComposeKey(e: ReactKeyboardEvent<HTMLTextAreaElement>) {
+    // Cmd/Ctrl+Enter sends whatever `enterSends` says — the desktop habit from
+    // every other chat box, and the one way to send with Enter set to newline.
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      if (compose.trim() || besidePicture()) sendCompose();
+      return;
+    }
     if (e.key !== "Enter" || !enterSends) return;
     if (e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.nativeEvent.isComposing || e.keyCode === 229) return;
     e.preventDefault();
-    if (!compose.trim()) return;
+    if (!compose.trim() && !besidePicture()) return;
     sendCompose();
   }
   /**
@@ -459,6 +534,7 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
   /** The aim, back on the session you are looking at. Used by the aim line's
    *  one tap and by every refusal that had nowhere left to point. */
   function aimHere(): void {
+    if (later) return;
     setSendWhere("this");
     setSendWhereSid(null);
     noteSendAim(active?.cwd, { where: "this" });
@@ -479,12 +555,56 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
    * (`/usage`) opens a view and starts no turn, so a pinned item watching for
    * one would never settle.
    */
-  function sendCompose(mode?: SendMode) {
+  function sendCompose(mode?: SendMode, pictureAsked = false, busyPick?: SendMode, pastBudget = false) {
+    // A picture open on the annotator beside this box: ask whether it goes
+    // too, every time — sending the words alone and leaving the marked picture
+    // behind is the mistake this exists for. Yes is the annotator's own Send &
+    // run (or its when-free twin), which submits the box once the bytes land.
+    const picture = !pictureAsked && active && sendWhere === "this" ? besidePicture() : null;
+    if (picture) {
+      const how = mode ?? sendMode;
+      void askConfirm({
+        title: "Send the picture too?",
+        lines: [
+          "With the picture: the marked picture goes up and this message is sent with its path, once it lands.",
+          compose ? "Text only: just the words — the picture stays open to finish." : "The message box is empty, so without it there is nothing to send.",
+        ],
+        confirmLabel: "With the picture", cancelLabel: "Text only", tone: "info",
+      }).then((yes) => {
+        if (yes) { track("action:compose.send.picture"); picture(how === "idle" ? "queue" : "run"); }
+        else sendCompose(mode, true);
+      });
+      return;
+    }
     if (!active || !compose) return;
     // Only while a picture is still being READ. Past that the path is in the
     // text and the lane orders the prompt behind the bytes on its own.
     if (parkingRef.current > 0) { showToast("still reading that picture — Send goes the moment it is readable"); return; }
-    const how = mode ?? sendMode;
+    // The plain Send on a session whose turn is still running: ask whether the
+    // words go into that turn now or wait for it (`busySendRoute`). A tap
+    // outside keeps them in the box.
+    const routed = busySendRoute({
+      how: busyPick ?? mode ?? sendMode, explicit: mode !== undefined || busyPick !== undefined, aimedHere: sendWhere === "this",
+      turnActive: !!active.turnActive, pending, localCmd: isLocalCommand(compose), pref: busySend.current,
+    });
+    if (routed === "ask") {
+      // The budget's own sentence, only while it is holding automatic work —
+      // the third answer is offered exactly then (`busySendAsk`).
+      const budget = deps.queue.budget;
+      void askChoice(busySendAsk(budget?.verdict.blocked ? budgetReasonText(budget.verdict) : null)).then((r) => {
+        if (!r) return;
+        const pick: SendMode = r.ok ? "now" : "idle";
+        track(r.alt ? "action:compose.busy.pastbudget" : `action:compose.busy.${pick}`);
+        // Remembers the MODE only: a waiver is about this one prompt.
+        if (r.remember) { setPref("busySend", pick); showToast(busySendRememberedToast(pick)); }
+        sendCompose(undefined, true, pick, !!r.alt);
+      });
+      return;
+    }
+    const how = mode ?? routed;
+    // What the button stays armed with afterwards: an answer to the busy ask
+    // is about THIS message, never a new mode for the repo.
+    const armed = mode ?? sendMode;
     track(`action:compose.send.${how}`);
     const text = compose;
     const online = connRef.current.status === "open";
@@ -511,10 +631,14 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
       )) return;
       pushHistory(text);
       setCompose("");
+      // `+ later` is done once its row is posted: back to where it was opened
+      // from, the row now on the repo's chips. Nothing remembered — that aim
+      // is the screen's, not the repo's.
+      if (later) { afterSend(); deps.leave(); return; }
       // The aim is remembered per repo exactly as the mode is — `other` is
       // dropped on the way in (`reusableWhere`).
-      noteSendAim(active.cwd, { mode: how, where: sendWhere });
-      setSendMode(how);
+      noteSendAim(active.cwd, { mode: armed, where: sendWhere });
+      setSendMode(armed);
       afterSend();
       return;
     }
@@ -525,17 +649,18 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
       const offline = queueBacklog({
         text: text.trim(), repoDir: active.cwd, label: text.trim().slice(0, 40),
         targetSessionId: active.id, autoFire: true,
+        ...(pastBudget ? { pastBudget: true } : {}),
       });
       // null = refused (it names an upload that will never arrive). The words
       // stay in the box: `guardUploadRefs` has already said which file and why.
       if (offline === null) return;
       pushHistory(text);
       setCompose("");
-      const queued = sendModeToast("idle", { online: !offline, holder });
+      const queued = pastBudget ? busyPastBudgetToast(!offline) : sendModeToast("idle", { online: !offline, holder });
       if (queued) showToast(queued);
       // The mode STAYS armed and is remembered for this repo.
-      noteSendAim(active.cwd, { mode: how });
-      setSendMode(how);
+      noteSendAim(active.cwd, { mode: armed });
+      setSendMode(armed);
       afterSend();
       return;
     }
@@ -544,10 +669,11 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
     setCompose(""); // draft is cleared by the compose effect; text now lives in the outbox until acked
     const said = sendModeToast(how, { online, holder, phoneHold: localCmd ? "opens-a-view" : "session-not-open" });
     if (said) showToast(said);
+    if (readerShown && how !== "idle" && answeredOnlyInCli(text)) offerCliForBtw();
     // Per REPO, and visible on the button: the next prompt starts where this
     // one was aimed (`sendMemory.ts`).
-    noteSendAim(active.cwd, { mode: how });
-    setSendMode(how);
+    noteSendAim(active.cwd, { mode: armed });
+    setSendMode(armed);
     afterSend();
   }
   /** A send that went: drop the phone keyboard unless this device keeps it up. */
@@ -586,7 +712,8 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
       // when it posts: the seed outlives the overlay (the annotator round trip
       // lands back on `send`), so by then another session may be on screen.
       onPosted: () => {
-        if (activeIdRef.current === from) { setCompose(""); return; }
+        // A `+ later` screen whose words are posted has nothing left to do.
+        if (activeIdRef.current === from) { setCompose(""); if (isLaterId(from)) deps.leave(); return; }
         if (loadDraft(from) === words) saveDraft(from, "");
       },
     });
@@ -627,7 +754,7 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
     if (!active) return;
     track("action:hdrcmd.send");
     const text = c.text;
-    submitInput(active.id, active.cwd, text, text.trimStart().startsWith("/") ? "command" : "prompt");
+    if (!submitInput(active.id, active.cwd, text, text.trimStart().startsWith("/") ? "command" : "prompt")) return;
     pushHistory(text);
     // The chip is a single tap with no keyboard and, in reader view, no visible
     // echo — say what happened, and say it honestly when the link is down.
@@ -639,7 +766,8 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
     sendMode, setSendMode, sendWhere, setSendWhere, sendWhereSid, setSendWhereSid, sendMenu, setSendMenu,
     cliMode, enterSends, voice, aimedSession, noteSendAim,
     sendInput, stepHistory, clearCompose, appendSnippet, focusPipe, toggleCliMode, onPipeInput, flushPipe, onPipeKey,
-    onComposeKey, aimHere, sendCompose, openComposeSend, keepOnPad, runHeaderCmd, seedDraft,
+    onComposeKey, aimHere, sendCompose, openComposeSend, keepOnPad, runHeaderCmd, seedDraft, typeOn,
+    sendNow: () => sendCompose("now"),
     secretAskLine, secret, setSecret, secretShown, setSecretShown, noteCursorLine, dismissSecret, sendSecret,
   };
 }

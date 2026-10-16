@@ -2,7 +2,9 @@
  * The claude slice of `sidecar.ts` — see that file's header for the seam's rules.
  */
 import { execFile, spawn } from "node:child_process";
+import { HALT_REFUSAL } from "@waterplane/shared";
 import { claudeBackend } from "../backends/index.js";
+import { isHalted, trackRun } from "../halt.js";
 import { sayOnce, sidecarPlan } from "./sidecarroute.js";
 import type { SidecarTask } from "./sidecarroute.js";
 import { trustRefusal, workspaceTrust } from "./sidecartrust.js";
@@ -61,12 +63,17 @@ const STREAM_KEEP_BYTES = 256 * 1024;
  * where they are. This function's only opinion is that a run is a process.
  */
 export function runHeadlessClaude(req: HeadlessRequest): Promise<HeadlessRun> {
+  // Halted (`halt.ts`): a run that never started, in the shape every caller
+  // already reads as a failure — no caller learns a new verdict.
+  if (isHalted()) return Promise.resolve({ stdout: "", stderr: HALT_REFUSAL, failed: true, err: new Error(HALT_REFUSAL) });
   if (req.onOut) return streamClaude(req, req.onOut);
   return new Promise((resolve) => {
+    let untrack = (): void => {};
     const proc = execFile(
       claudeBackend.bin(), [...req.args],
       { cwd: req.cwd, timeout: req.timeoutMs, maxBuffer: req.maxBuffer, env: { ...process.env, ...claudeBackend.spawnEnv } },
       (err, stdout, stderr) => {
+        untrack();
         resolve({
           stdout: (stdout || "").toString(),
           stderr: (stderr || "").toString(),
@@ -75,6 +82,7 @@ export function runHeadlessClaude(req: HeadlessRequest): Promise<HeadlessRun> {
         });
       },
     );
+    untrack = trackRun((sig) => { proc.kill(sig); });
     proc.stdin?.end(req.prompt);
   });
 }
@@ -139,6 +147,7 @@ function streamClaude(req: HeadlessRequest, onOut: (chunk: string) => void): Pro
         else proc.kill(sig);
       } catch { /* already gone, or never started */ }
     };
+    const untrack = trackRun(killGroup); // the halt reaches a run mid-flight (`halt.ts`)
     /**
      * A timeout ANSWERS, it does not wait to be let go.
      *
@@ -157,6 +166,7 @@ function streamClaude(req: HeadlessRequest, onOut: (chunk: string) => void): Pro
     const done = (failed: boolean, error: Error | null): void => {
       if (settled) return;
       settled = true;
+      untrack();
       clearTimeout(timer);
       resolve({ stdout: out, stderr: err, failed, err: error });
     };
@@ -207,12 +217,13 @@ function streamClaude(req: HeadlessRequest, onOut: (chunk: string) => void): Pro
  *  • **`claude -p` DOES write a transcript**, at
  *    `~/.claude/projects/<cwd-slug>/<session_id>.jsonl`, keyed by the cwd it
  *    ran in. So `tokenstats.ts` already attributes an unattended pass to the
- *    repo it groomed, per repo, with no ledger code and no accounting of our
- *    own. (This is what `PLAN-SMARTPICK.md` open question 1 was asking.)
+ *    repo it ran in, per repo, with no ledger code and no accounting of our
+ *    own.
  *  • **Thinking is on by default and will dominate the bill.** A trivial
  *    one-word haiku reply cost **$0.0049** and spent **548 thinking tokens**
- *    (`usage.output_tokens_details.thinking_tokens`). At one pass per pick that
- *    is the cost of this feature — not the 2–4k of items going in. Whoever owns
+ *    (`usage.output_tokens_details.thinking_tokens`). For a toolless pass that
+ *    is the cost — not the 2–4k of input going in (`runTextTask` in
+ *    `sidecarname.ts` has the full table and the flag that fixes it). Whoever owns
  *    the prompt owns that number.
  *
  * ── Why it degrades to ABSENT and never to a zero ──────────────────────────

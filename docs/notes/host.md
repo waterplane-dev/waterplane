@@ -27,6 +27,7 @@ Plus a fourth package that is deliberately **not** a workspace:
 - `settle.ts` — **what became of a delivery `deliver.ts` could not confirm**, asked later. The two ambiguous verdicts are correct at the moment they are given and useless for ever after: `unconfirmed` (written, never seen on screen) and `unsubmitted` (in the composer, every Return swallowed) may not be auto-retried — retrying what may already be there is what stacked five copies of one prompt — so the phone's queue kept the row and *nothing ever revisited it*. A permanent gravestone for a prompt whose fate is, minutes later, perfectly knowable: the ambiguity belongs to a 4-second echo window, not to the world. `settleDelivery()` answers from evidence, in order — the CLI's OWN conversation log has the prompt ⇒ `landed` (it ran, and the log outlives the session, so a closed one still answers); the text is on the rendered screen ⇒ `composer` (still one keypress from running, still the user's call); the log is readable and has it, and neither does the screen ⇒ `absent` — it never ran and nothing is holding it, which is the one thing the original verdict could not say and the reason a re-send is now provably safe. Everything else is `unknown`, the answer that must never be turned into an action. Three rules carry it: **only the `jsonl` source counts** for `landed` (the `history` fallback is our OWN record, written by `recordPrompt` *before* the Return is pressed, so an unsubmitted prompt is in it — using that as proof it ran would confirm exactly the case this exists to catch); **`absent` requires the log**, because a screen is the last 40 rows and a prompt that ran and produced a long answer has scrolled off it, and the client acts on `absent` by sending it again; and it is **read-only by construction** — it decides what is true, `main.ts` reports it, the phone decides what to do. Wire: `input.settle` (batched, capped) → `input.settled`. Shares `squash`/`echoProbe`, **the composer anchor** (`composerEcho` — the same box, not a bottom-rows slice, and the same `ROW_WINDOW` too, so a prompt above streamed output settles `composer` rather than `unknown` here just as it confirms there) **and the collapsed-paste rule** with `deliver.ts` so "is this text there?" cannot get two answers — a multi-line prompt shows as `[Pasted text #1 +N lines]` with its head hidden, and reading that as not-there would answer `absent`, on which the client acts by sending again: a second copy stacked on the first, in the composer, which is the outcome this file exists to prevent. Verified by `e2e-settle.mjs`.
 - `fanout.ts` — `FanoutManager`: **one prompt, N repos, a fresh session each.** The maintenance sweep (`/init` everywhere, "what did this project cost this month?") that was otherwise N repo taps and N retypings. **A run is DURABLE now, and that is the change.** It used to be an in-memory ring on the argument that "the sessions survive a host restart, the run record doesn't need to" — which is wrong in exactly the case that matters: a restart mid-sweep left twelve live `claude` processes and no account at all of what they were for, no way to follow up on them as a set, and for a sweep the phone had just posted, no sweep. A fan-out is now N intents sharing a `groupId` — a parent row (`target: {kind:"repos"}`, whose id IS the run id the receipt names) plus one child per repo (`target: {kind:"repo", fresh:true}`) — and `FanoutRun` is rebuilt from those rows on demand (`intents/adapters.ts`'s `fanoutRuns`), so `fanout.*` is unchanged on the wire while a restart mid-run reconciles instead of forgetting. `finishedAt` is DERIVED (nothing in the group is still going), which is also what makes a follow-up correctly reopen a settled run. What stayed here: dir validation against `discoverTargets()` (an arbitrary path can never become a session cwd; an unknown one is silently dropped, never spawned), the per-target spawn + `deliverToNewSession`, and the one-shot `retry` re-attempt (a just-spawned session may still be booting, and `retry` means provably nothing was typed so no copy can stack; `unconfirmed` never is). What left: the runs ring, the watching map, the second `onSessionTurnEnded`/`onSessionExit` watcher, `settle()`, and the concurrency pool — which is now a store rule, a bound on rows of one `groupId` that are `starting`, i.e. exactly what the in-process pool meant minus the process it died with. A target completes on a `Stop` past its baseline and NEVER on silence (`watch: "hook"`): a sweep's whole output is the claim that N repos did the work, and a guess is not that claim, so a non-hooked session honestly stays `running`. **`followUp(runId, text, dirs?)`** posts one child intent per live session (`target: {kind:"session"}`, `interject`, sharing a batch id so the run records the subset one tap addressed) and spawns nothing — a target whose session is gone is left out and said so, because a fresh session would run "now commit that" against a repo that never did step one. `interject` is load-bearing: without it a follow-up would queue behind its own target row under the one-intent-per-session rule and, on a session with no hook pipe, wait for ever. A SCHEDULED sweep gets a fresh run id per occurrence — sharing one would make next week's occurrence post children that already exist (at-most-once by intent id) and therefore never run. Verified by `e2e-fanout.mjs`, which now also kills the daemon mid-run and asserts the run comes back with its targets, its sessions and its follow-up, reconciled rather than re-typed.
 - `intents/` — **the durable Intent store: one file, one tick, one lifecycle, for every piece of deferred work the host owns.** It replaces `launch.ts` and `schedule.ts`, which were the same 240 lines twice — launch's own header admitted the shape was "borrowed wholesale from `schedule.ts`" — and which were each right, in isolation, about the two rules that matter. Their reasoning is kept below, because it is the reason the store is shaped the way it is.
+- `localslot.ts` — **the local-model gate**: how many coding sessions on a LOCAL model may be working at once (synced setting, default 1), and the model loaded before an automatic item opens on it. Rung 4.55 `localModel`; see [The local-model gate](#the-local-model-gate--rung-455-localmodel).
 
   **Why the wait belongs to the host at all.** The bug it closes is one screenshot: *"8 messages not delivered — the image it refers to never uploaded — queued too long."* Everything about "open a session in this repo and look at `.claude/inbox/shot.jpg`" used to be assembled on the PHONE — bytes parked in the send queue, the `session.create` parked BEHIND them in the same lane, the ordering enforced by a browser tab on a device with a bad tunnel. The desktop, which was going to do the work and was not on a train, never learned that any of it was supposed to happen. Thirty minutes (the client's `QUEUE_TTL_MS`) and the upload failed, the create failed with it, and every prompt queued behind the create failed too. So the intent is handed over as early as it can possibly be, and the WAIT happens here. On the client such a create goes to the FRONT of its lane, ahead of the very uploads it depends on: handing over the intent is one small JSON message, and the megabytes can take as long as they take.
 
@@ -180,7 +181,7 @@ Plus a fourth package that is deliberately **not** a workspace:
 - `sentlog.ts` — the **sent-command audit log** (`<STATE_DIR>/sent.json`), the answer to "what did this thing type into my agent, and when?". Automation drives a session through the same PTY a person does, so a backlog item firing, a fan-out target, a plugin's gated answer and a usage-limit `continue` all land in the scrollback looking exactly like typed text — and the moment that question gets asked, the scrollback is the evidence under suspicion. Two rules make it worth reading. **One entry per semantic command, not per PTY write**: `deliver.ts` writes the text and the Return separately and re-presses Return up to five times, so a per-write log would show six rows for one prompt; the entry is recorded when delivery SETTLES, which is also what lets it carry the verdict. And **the verdict is kept, not flattened** — `unsubmitted` (text sitting in the composer, un-run) and `ok` are opposite facts about the session, so a log that called both "sent" would state the one thing that is untrue. Recording is not per-caller: `deliverPrompt()` records on every exit path (including `"retry"` = provably nothing typed, because "the backlog never managed to feed this session" is as much of an answer as the opposite), and the raw automation writes that bypass it — the oracle's auto-fired digit, the usage-limit menu answer, the auto-`continue` — call `recordSent()` at their own site. The store is reached through a module-level singleton (`setSentLog` in `main.ts`) rather than threaded through every caller, so a new send path is recorded by default instead of by remembering. Persisted for the same reason `acks.ts` is (`npm run restart` is routine, and an in-memory trail is empty exactly when something surprising happened before the last restart): tmp+rename, debounced, flushed on SIGTERM, every I/O failure degrading to in-memory. Wire: `sent.get`/`sent.clear` → `sent.log`, plus a `sent.new` broadcast per entry so an open sheet stays current without refetching. UI: `SentLogSheet.tsx`. Verified by `e2e-sent.mjs`.
 - `settings.ts` — **the settings that follow the USER, not the browser** (`<STATE_DIR>/settings.json`). Everything the app remembered lived in localStorage, which is right for a send queue or a measured uplink rate and wrong for the things the user AUTHORED: prompt templates (snippets), fan-out presets, header commands, the prompt pad, the toolbar layout, the default launch flags. Those were per-browser, so a template written on the phone did not exist on the desktop and a reinstalled PWA lost the lot — while a host that already persists the backlog, the ack ledger and the audit log sat right there. Deliberately dumb, because the alternative is a sync engine. **Opaque values**: a record is `{ value, ts }` where `value` is the client's RAW localStorage string, never parsed — shapes change with the UI, and `webbundle.ts` exists precisely so the phone can update its web bundle without the daemon moving. **Last write wins on the CLIENT's timestamp**, with equal timestamps losing (a reconnect re-push must not re-broadcast to every device), and the loser of a race is answered with the winning value instead of being ignored, so it stops holding a version nobody else has. **An allow-list, not a mirror** (`SYNCED_SETTING_KEYS` in `@waterplane/shared`, where both ends read it): syncing `waterplane.outbox` would let a second device replay another device's queue — a prompt typed twice — and syncing `waterplane.dataSaver`/`uploadScale` would copy a phone's DERP-relayed link settings onto a desktop on the LAN. An over-cap value is refused rather than truncated (a value silently cut in half is a corrupt prompt list on every other device). Persisted tmp+rename, debounced, flushed on SIGTERM, degrading to in-memory on any I/O failure. Wire: `settings.get`/`settings.set` → `settings.all` (sent unprompted on hello) + a `settings.update` broadcast. Verified by `e2e-settings.mjs`.
 - `scaffold.ts` — `newWorktree`, new-folder / new-repo scaffolding. **A new repo is a new *project*, initialized for phone use** (`newRepo(..., { setup: true, description })`, the default): `git init -b main` (symbolic-ref fallback for git < 2.28), the `.claude/inbox` + `.claude/outbox` drops and `.waterplane/` created, a `.gitignore` covering all three (plus the usual node/env noise), a README, a CLAUDE.md whose "Working from a phone" section tells the agent to write artifacts into the outbox instead of dumping unreadable walls of terminal output, and an initial commit (so `git worktree add` — hence backlog parallel mode — works immediately). No git identity configured → the commit is retried with a placeholder one and the result carries a `warning` (the phone shows it instead of jumping straight into the session). `usmc: false` is the old bare `git init` + empty commit; e2e scripts that need a non-compliant repo pass it. Verified by `e2e-scaffold.mjs`.
-- `repos.ts` / `discover.ts` — recursive multi-root repo + worktree discovery via `git worktree list`.
+- `repos.ts` / `discover.ts` — recursive multi-root repo + worktree discovery: an async walk (entry types from `readdir`, a `stat` only for a symlink), a single-worktree repo read off `.git/HEAD`, `git worktree list` only where `.git/worktrees/` has entries; concurrent scans share one. `discoverTargets` always scans; `listTargets` (the launcher's `/api/repos` only) answers the last scan when a fresh one takes over 1.5 s, and the route's git counts come from `git.ts`' `changedCountsWithin` (four at a time, cached, budgeted). Why: [distribution.md](distribution.md#windows-the-launcher-drives-the-host-in-wsl) — over WSL's `/mnt/c` the old synchronous walk froze the daemon for minutes. `repolist.test.mjs`.
 - `git.ts` — status, unified diffs, stage/unstage, commit, push (Tier-3 git review from the phone).
   `countChangedFiles()` feeds the launcher's git badge (`RepoTarget.changedCount`) and counts EVERY
   uncommitted path — staged, unstaged, untracked — because the tap opens the git view, which lists
@@ -198,7 +199,7 @@ Plus a fourth package that is deliberately **not** a workspace:
   The write half is where the care is. **The second writer is normal here, not exotic**: an agent is working in the same repo while a file sits open on a phone, so a save must present `baseSha` — the sha256 of the bytes it read — and a mismatch is refused `stale` (HTTP 409) with nothing written and the current sha named, so the client can re-read deliberately instead of guessing. Last-write-wins would silently delete a turn's work. The corollary is the part a refactor could quietly break: **a body we could not show in full carries no `sha` at all** (binary, or past `MAX_EDIT_BYTES` = 512 KB), which is what makes a shown prefix un-writable over the rest of the file — the un-editability is a consequence of the data, not a UI flag that could drift. It creates nothing (a missing path is refused: this is an editor, not a file manager), refuses `.env` in both directions (the same promise `git.ts` `readTextFile` makes and the secret sheet relies on), and writes tmp+rename **carrying the original mode** — a rename installs the tmp file's inode, so a hook script silently loses its `+x` otherwise. There is deliberately no queued/offline write path: a save composed now and replayed in an hour carries a base the file left behind long ago, and the only honest verdict for it is the `stale` refusal it would already get. Verified by `e2e-tree.mjs`.
 - `thumbs.ts` — **server-made image thumbnails**, the single biggest bandwidth lever. The gallery grid, the new-image strip and the backlog attachment row used to point an `<img>` at the ORIGINAL artifact: measured across this machine's outbox dirs, 1170 images averaging 607 KB (worst case 14 MB), so one scroll through a 300-row grid was >100 MB — unusable on a roaming link. A `?thumb=<w>` on the artifact/inbox GET routes returns a JPEG instead (a real 3.25 MB screenshot → 18 KB at 320 px, 63 KB at 640 px). **No image library is added:** node has no decoder and `sharp` is a native dep that would have to build on every host, so it shells out to whatever the platform already ships — `sips` on macOS (part of the OS), ImageMagick or ffmpeg elsewhere — the same way `host.ts` does screen capture. Widths come from a fixed allow-list (an open one would let a caller fill the cache); results are cached in `<STATE_DIR>/thumbs/` keyed by **path+mtime+size+width**, so a regenerated file at the same path never serves a stale thumb, and the dir self-prunes oldest-first. **Null always means "serve the original"** (no converter, unsupported type, source already under 48 KB, conversion failed) — the feature degrades to the old behaviour rather than breaking. Two carve-outs in `api.ts`: `download=1` always sends the real file, and a VIDEO poster that can't be produced answers 404 rather than falling through — falling through would push the whole movie into an `<img>`/`poster`. Verified by `e2e-thumbs.mjs`.
 - `httpio.ts` — response compression + conditional GETs, in one place so every route gets both. `sendBody()` negotiates brotli (quality 4 — near-gzip encode speed, better ratio) then gzip, only for compressible types over 1 KB, and never for a 206 (a compressed byte range is meaningless). `notModified()`/`statTag()` add ETag+304: artifacts revalidate, versioned thumbs (`&v=<mtime>` in the URL, so the URL changes when the file does) are `immutable` for a week, and Vite's content-hashed `/assets` are `immutable` for a year while `index.html` revalidates. Before this, every transcript poll re-sent hundreds of KB of raw JSON and every gallery revisit re-downloaded images the phone already had.
-- `builds.ts` — `BuildManager`: per-repo named build commands (persisted in `<repoDir>/.waterplane/builds.json`), runnable from the phone WITHOUT a claude session — the **token-limit escape hatch** (still build an APK when Claude is rate-limited). Each run spawns `$SHELL -lc <cmd>` under node-pty, streams output (`build.output` frames, broadcast to all — builds are rare, no per-session attach gating; `full` on reconnect replays the retained tail), and on completion scans the repo (incl. `build/`/`dist/`/`target/`, which the gallery skips) for build-output files touched during the run → surfaces them as `BuildArtifact`s downloaded via the normal artifact endpoint (`files.ts` `DOC_EXT` was widened to cover apk/aab/ipa/jar/… so the serve path allows them). The output scan reads dirents (only candidate files are `stat`ed), never follows symlinks, visits output-looking dirs (`build`/`dist`/`out`/`outputs`/`target`/`bin`/…) FIRST and bounds itself at 200k entries — a flat 40k budget that `stat`ed every entry made detection depend on readdir order in a repo with a big data tree (one app repo: 47k entries, 41k of them under `service/data/`), so a successful build could show no artifact at all. `.iq`/`.prg` (Garmin Connect IQ) are recognised alongside apk/aab/…. **A build that wrote NOTHING still names the artifact.** "Touched during the run" is the right test for what a build PRODUCED and the wrong one for what it can hand you: an incremental build whose outputs are current writes no file at all — gradle prints BUILD SUCCESSFUL and "52 actionable tasks: 2 executed, 50 up-to-date" — so a green `assembleRelease` offered zero downloads and read as a broken setup. With nothing fresh, detection falls back to the newest matching deliverables in the repo, each flagged `stale` with its `mtime`, and the sheet's row says "unchanged by this run": "here is the APK" and "this run made it" are different claims, and only the honest pair is worth showing. Optional per-build sub-dir is traversal-guarded; commands come only from the local `builds.json`. Trust model = same as spawning `claude`. Wire: `build.list`/`build.save`/`build.run`/`build.cancel`. UI: the repo-row Hammer button → `BuildSheet.tsx`. **The runs list is not this file's any more.** It was an in-memory ring with a hand-written "never evict a still-running run" loop (evicting one would orphan its process and leak its output); a run is now a `{payload:{kind:"build"}, target:{kind:"shell"}}` intent whose id IS the `runId` the wire already carried, so `build.output` frames are unchanged, and the store's compaction rule already guarantees the thing the loop was for — nothing queued, starting or running may leave the file at all. It guarantees the other half too, which the ring never did: a build that was running when the daemon died comes back as a row that says so rather than a run nobody can account for. The config is RESOLVED and snapshotted onto the row at fire time (name, command, guarded working dir), for two reasons — `builds.json` is edited between runs and a row that renames itself afterwards is a lie about what ran, and every refusal ("unknown build", "invalid working dir") is answered synchronously while there is still a socket to tell. `cancel` records that the death was ASKED FOR, because an exit code from a `kill` is otherwise indistinguishable from a failing command, and the row settles `canceled` rather than as one more red `failed`. **What a run produced is not what a person is handed** — see `artifacts.ts` below. Verified by `e2e-build.mjs` (which runs a second, no-op build to pin the stale fallback).
+- `builds.ts` — `BuildManager`: per-repo named build commands (persisted in `<repoDir>/.waterplane-shared/builds.json`, COMMITTED with the repo, plus this desktop's own gitignored `<repoDir>/.waterplane/builds.json` — see *two files, one list* below), runnable from the phone WITHOUT a claude session — the **token-limit escape hatch** (still build an APK when Claude is rate-limited). Each run spawns `$SHELL -lc <cmd>` under node-pty, streams output (`build.output` frames, broadcast to all — builds are rare, no per-session attach gating; `full` on reconnect replays the retained tail), and on completion scans the repo (incl. `build/`/`dist/`/`target/`, which the gallery skips) for build-output files touched during the run → surfaces them as `BuildArtifact`s downloaded via the normal artifact endpoint (`files.ts` `DOC_EXT` was widened to cover apk/aab/ipa/jar/… so the serve path allows them). The output scan reads dirents (only candidate files are `stat`ed), never follows symlinks, visits output-looking dirs (`build`/`dist`/`out`/`outputs`/`target`/`bin`/…) FIRST and bounds itself at 200k entries — a flat 40k budget that `stat`ed every entry made detection depend on readdir order in a repo with a big data tree (one app repo: 47k entries, 41k of them under `service/data/`), so a successful build could show no artifact at all. `.iq`/`.prg` (Garmin Connect IQ) are recognised alongside apk/aab/…. **A build that wrote NOTHING still names the artifact.** "Touched during the run" is the right test for what a build PRODUCED and the wrong one for what it can hand you: an incremental build whose outputs are current writes no file at all — gradle prints BUILD SUCCESSFUL and "52 actionable tasks: 2 executed, 50 up-to-date" — so a green `assembleRelease` offered zero downloads and read as a broken setup. With nothing fresh, detection falls back to the newest matching deliverables in the repo, each flagged `stale` with its `mtime`, and the sheet's row says "unchanged by this run": "here is the APK" and "this run made it" are different claims, and only the honest pair is worth showing. Optional per-build sub-dir is traversal-guarded. **Two files, one list.** The owner asked for build buttons on every machine and clone of a repo, and chose a second, committed folder over un-ignoring one file inside the state dir: `.waterplane-shared/` (`BRAND.sharedDirName`, `repoSharedDir`, `sharedRel`; new with this identity, so no legacy spelling) holds the `builds.json` every checkout gets, while `.waterplane/builds.json` stays for what is true of THIS desktop alone — a `JAVA_HOME` path, a local SDK. `list()` is shared then local, and a local entry with a shared id REPLACES that entry in place: a machine override, never a second button. `save(repo, list, local?)` partitions the phone's whole list back — ids in `local` go local; with no `local` (an older bundle) an id stays where it lives and a NEW one goes shared, because reaching every checkout is the point — and a shadowed shared entry is kept exactly as it is, so overriding here never edits what other checkouts run. A file is written only when its content changed (the shared one is in git; a no-op save must not dirty the tree), an emptied local file is deleted, no shared file is created to hold nothing, and a file that exists but does not parse is never overwritten. Wire: `build.list` carries optional `localIds` (absent from an older host = nobody said), `build.save` optional `local`; no `PROTOCOL_VERSION` bump, both are additive. `onboard.ts`' `bindToolchain` saves its JAVA_HOME-prefixed copies as LOCAL overrides; the `builds-configured` setup row reads the merged list and its fix writes the SHARED file (`wx`). Trust model = same as spawning `claude`: the shared file is part of the checkout and exactly as trusted as it (the same buttons run that checkout's gradle files and `package.json` scripts anyway), and a run SNAPSHOTS its command at fire time, so a later pull changes the next run, never a recorded one — no separate gate. Pinned by `packages/host/test/buildsmerge.test.mjs`. Wire: `build.list`/`build.save`/`build.run`/`build.cancel`. UI: the repo-row Hammer button → `BuildSheet.tsx`. **The runs list is not this file's any more.** It was an in-memory ring with a hand-written "never evict a still-running run" loop (evicting one would orphan its process and leak its output); a run is now a `{payload:{kind:"build"}, target:{kind:"shell"}}` intent whose id IS the `runId` the wire already carried, so `build.output` frames are unchanged, and the store's compaction rule already guarantees the thing the loop was for — nothing queued, starting or running may leave the file at all. It guarantees the other half too, which the ring never did: a build that was running when the daemon died comes back as a row that says so rather than a run nobody can account for. The config is RESOLVED and snapshotted onto the row at fire time (name, command, guarded working dir), for two reasons — `builds.json` is edited between runs and a row that renames itself afterwards is a lie about what ran, and every refusal ("unknown build", "invalid working dir") is answered synchronously while there is still a socket to tell. `cancel` records that the death was ASKED FOR, because an exit code from a `kill` is otherwise indistinguishable from a failing command, and the row settles `canceled` rather than as one more red `failed`. **What a run produced is not what a person is handed** — see `artifacts.ts` below. Verified by `e2e-build.mjs` (which runs a second, no-op build to pin the stale fallback).
 - `installlog.ts` — **which version of what is on which phone.** Every other part of the download path is a conversation between one desktop and one device, and this is the one question that is not: a build produced here is fetched by every phone whose allow-list names its package and installed by each of them by `ShellPullService`, with the app closed and the document frozen. The only account of that install is a row in the phone that did it — so *is the new build on both phones, and when did the second one get it?* is unanswerable from any single device and trivially answerable here, because this is where the builds came from and the only thing that outlives a reinstall of the app. The store is `settings.ts`' posture exactly: `<STATE_DIR>/installs.json`, tmp+rename, debounced, flushed on SIGTERM, cleaned on the way IN as well as out (a desktop's JSON file is hand-editable, and a row that cannot say what was installed is a gap pretending to be a log line wherever it is read). **It records and never decides** — nothing here installs, refuses or instructs a phone; it is an account of what already happened (`CLAUDE.md`). Three rules carry the whole design. **A report is a RE-STATEMENT, not an event**: the install worth logging is the one that happened at 3 a.m. with the tunnel down, so a phone cannot send it when it happens — it sends everything it still holds on every `hello`, and the merge is keyed and idempotent (`@waterplane/shared`'s `mergeInstallLog`), which is why the route stays QUIET when a reconnect re-states what is already held. Without that, every handshake would broadcast the whole log to every socket for no news. **The key is `<deviceId>:<pullId>:<at>`, and the `at` is in it on purpose**: installing the same build twice is two things that happened, and a key that folded them would lose the second; a shell too old to stamp `installedAt` falls to `0` and folds its re-installs into one row, which is the honest consequence of not knowing rather than a row per reconnect. **The host stamps only its own clock** — `at` is the phone's and an older shell leaves it ABSENT, so a reader says *reported 08:14*, a claim about the log, instead of *installed 08:14*, a wrong claim about the install. A repeat may FILL IN what was missing (the phone has since read the app's label) and may never blank what was there. The devices are DERIVED per read, never stored beside the entries: a device list that can disagree with the log is one nobody can trust, and a phone whose entries all aged out would otherwise linger claiming installs nobody can see. Wire: `install.get`/`install.report` → `install.log`, additive, `PROTOCOL_VERSION` stays 1, not durable and never queued offline — an ackId protects a delivery that is not already idempotent, and this one is. `packages/shared/test/installlog.test.mjs` (the rules) · `packages/host/test/installlog.test.mjs` (the store).
   **What a review changed, and why each one was reachable.** The cap was spent on `entryAt`, which prefers the PHONE's clock: a device a year fast held the top of the log for a year, and the rows that aged out were every other device's real history — reachable by a wrong unit as easily as by malice, since the key carries `at` and a varying one mints a new row per report. Eviction is `reportedAt` now (the host's own stamp, unspoofable) and only the DISPLAY order is `entryAt`; an equal share is reserved per device and the remainder goes by recency, so one phone alone still gets the whole cap and the share only ever costs the loudest device. An `at` later than the moment the host was told is refused outright — an install is reported after it happens, so that is provably not its instant — and the row then says *reported*, which is true. The key is JSON rather than `a:b:c`, because neither half is shape-checked and `("a:b","c")` and `("a","b:c")` were the same string, which is one phone's install landing on another's row. A failure's words no longer travel onto an outcome that is not a failure: on an `at`-less key (an older shell, where a retry folds onto one row) a failed install followed by a successful one came out `installed` still carrying *no space*, which `cleanInstallEntry` refuses to build in the first place. The load path drops a row with no usable `reportedAt` instead of stamping the boot instant on it — the same invention it forbids for `at` — and per-report truncation sorts by recency first, so a phone holding more terminal rows than one report may carry loses its OLDEST rather than whichever the sender happened to list first. **And `auto` became tri-state**, which was the sharpest of them: `false` is not the absence of a claim, it is the positive claim *a person tapped this*, so every unattended overnight install performed by a shell older than the field was logged as something somebody did by hand. Absent now prints no clause at all.
 - `artifacts.ts` (+ `@waterplane/shared`'s `artifacts.ts`) — **what a build leaves behind, and what it is called.** Three defects, measured across nine repos on this desktop at once, all of them invisible on the phone: three repos each produce a deliverable called exactly `app-debug.apk`, so the download list, the install log and the outbox show one word identifying neither the app nor the build; a script that copies its output to a friendlier name leaves the original in place, both are detected, both are queued, and the phone — which fetches one download at a time — spends 454 MB on one 227 MB APK; and nothing anywhere ever removes an old one (the 6.8 GB of transport files across fourteen repos that produced the sweep came mostly from here). The answer is host-side and not per-repo, because nine repos cannot each be taught this and the tenth is written by an agent that has never read the other nine: after every run, what it produced is FOLDED to the distinct artifacts among them, COLLECTED into `.claude/outbox/` under a name carrying the repo + the variant + the project's own version, and older builds of that same artifact are PRUNED. On by default, per repo, in `<repoDir>/.waterplane/artifacts.json` beside `builds.json` and `autopull.json` — how a project names and keeps its deliverables is a property of the project. Wire: `artifacts.get`/`artifacts.save` → `artifacts.config`, additive, not durable, BROADCAST on a save (`pull.save`'s shape and its reasons, including the containment: it MKDIRs and writes inside a client-named directory). **The rules are in `@waterplane/shared`** so the phone words the switches with the vocabulary the host acts on, and so they are pinned with no filesystem (`shared/test/artifacts.test.mjs`); `familyKey` MOVED there from `autopull.ts` because the prune asks it the same question the download queue does — "is this an older build of the thing I just made?" — and two answers to that would mean the phone de-duplicating one way while the desktop deletes another. **A name that already says which build it is, is kept** (`picture-app-debug-v1.1.0-344.apk`, `fp-functions-bundle-20260922-1042.tgz`): renaming those breaks the link between what the build printed and what arrived. **Identity for the fold is size AND a head+tail fingerprint, never size alone** — two ABI splits of one app are within bytes of each other and folding them would silently drop a release; a file that cannot be read is never folded with anything. **The copy is a COW clone, not a hard link** (`COPYFILE_FICLONE`, falling back to a real copy): links were cheaper and wrong, because `flutter build`, `cp -f` and `printf >` all rewrite their output IN PLACE, so the next build landed inside the artifact collected from the previous one and "the newest 3" became three names for one file. **The prune is narrower than the sweep and deliberately so**: only inside `.claude/outbox/`, only files whose `familyKey` matches something THIS run just produced, only past the newest `keep` (3), never the run's own output, and always through `files.ts`' `deleteArtifact` rather than a second `rmSync` with its own idea of safe — a build cleans up after itself and never touches a family it did not just rebuild. Every action is a LINE IN THE RUN'S OWN OUTPUT: a file appearing in the outbox and an older one ceasing to exist must both be sentences somebody can read afterwards. Nothing here may fail a build — an unwritable outbox, a refused clone or a vanished file degrades to "collected nothing", which is exactly where the feature started — and nothing touches what the build wrote: gradle's tree is not ours to tidy. `packages/host/test/artifactcollect.test.mjs` pins the disk half, `scripts/e2e-artifacts.mjs` the wire and the prune. **The AI that writes a repo's build buttons is told all of this** (`web/buildPrompt.ts`'s `ARTIFACT_RULES`, in both prompts): the first generation of those prompts produced exactly the three defects above, so a generated command must now not copy into the outbox, not stamp a name, and not delete anything.
@@ -268,6 +269,21 @@ Plus a fourth package that is deliberately **not** a workspace:
   read-only; a value it cannot read (a `targetSdk` from a variable) is absent, never a number. The
   phone half (install access, the app's auto-install switch, waterplane having done the first install) is
   read on the phone (`installPolicy.ts`). Tested by `apkcheck.test.mjs`.
+- `appready.ts` (+ `apkcheck.ts`' `apkRepoFacts`) — **the same repo half as DATA, across every
+  repo**: `GET /api/apps/readiness`. Measured need (2026-10-09): nine Android apps over nine repos,
+  the repo half a prose paragraph in each repo's setup sheet, the phone half on the Apps screen, the
+  outcomes in the install log — and the owner had lost track of which apps were actually set up,
+  while Tiptoi passed every repo check and failed on the phone (Play Protect, a new device id) and
+  picture-app failed on a full disk. So the desktop reports facts per app module — package plus each
+  literal `applicationIdSuffix` (the waterplane app installs as `….dev`), key kind, `targetSdk`, outbox
+  APKs, which build commands read like APK builds (a label, never a filter), and whether the
+  auto-download rule's patterns and size cap take the newest APK — and the PHONE words them
+  (`appReady.ts`, joined with its own half in `AppsSetupPane.tsx`, the Apps screen's `setup` pane):
+  the first `no` is the blocker, `unknown` blocks nothing, the last attempt is this phone's own.
+  Primary checkouts only (an agent worktree is the same app twice), one repo at a time on the loop,
+  and a package-less module beside a named one (a root `apply false` plugin line, a template) is
+  dropped. `installPolicy.ts`' `failureText` now says what Play Protect's
+  `INSTALL_FAILED_VERIFICATION_FAILURE` and an abandoned session mean.
 - `setupwatch.ts` — **the checklist, asked without being asked.** `compliance.ts` only ever ran when
   someone opened the sheet and picked a repo from a dropdown, i.e. for the repos they already
   suspected; the ones that bite are the other ones — a clone made on the desktop and then driven from
@@ -282,7 +298,11 @@ Plus a fourth package that is deliberately **not** a workspace:
   (`RepoTarget.setup` is simply omitted for a worktree nothing has checked, so the UI can't read
   silence as a pass), and **host-scope rows don't count** (`summarize()` skips `scope: "host"` —
   one unset `GEMINI_API_KEY` would otherwise flag every repo on the machine, and a badge that is
-  always on is a badge nobody reads). Persisted to `.waterplane/setup.json` (tmp+rename), keyed by
+  always on is a badge nobody reads). **A CONTRIBUTED host-scope row is not on a repo's checklist
+  at all** (`setupcontrib.ts`: `contributedChecks` leaves it out, `hostChecks`/`hostFixes` serve
+  `GET /api/host/setup` + `POST /api/host/setup/fix`): the live desktop's grants were listed under
+  every repo, where a fact about the Mac read as that repo's fault, and the phone draws them once
+  in Settings → Tools → *desktop setup*. A fix there runs only if a desktop row names it now. Persisted to `.waterplane/setup.json` (tmp+rename), keyed by
   **realpath** because `git worktree list` resolves symlinks and a session `cwd` does not — two
   spellings of one directory would mean the badge never clears for the repo you just fixed.
   `/api/repos` reads the store rather than shelling out to git per repo per request; the checklist
@@ -327,7 +347,7 @@ Plus a fourth package that is deliberately **not** a workspace:
 - `net.ts` — Tailscale IP detection for default bind; `lanIps()` (private IPv4s for the "hit the LAN IP to bypass the tunnel" hint), `peerKind()` (trust tier of a socket's remote address) and `tailscaleBin()`.
 - `origin.ts` — **same-origin guard** for `/api/*` and the WS upgrade. The network-identity boundary does NOT cover browsers: a WebSocket is exempt from the same-origin policy, and the API used to answer `access-control-allow-origin: *`, so any web page loaded in a browser on this machine or any tailnet device could open `ws://127.0.0.1:8770/ws`, spawn a session and run code — without ever being on the tailnet. `checkRequestOrigin()` therefore checks BOTH `Origin` (browser-set, unforgeable; the primary check) and `Host` (closes DNS rebinding, where an attacker name resolving to 127.0.0.1 makes the requests same-origin). A MISSING `Origin` is allowed — curl, the e2e scripts and the hook sink never send one, and a browser always does when it matters. The gap that leaves is a cross-origin **GET** (`<img src=…>`), which carries no `Origin` at all; `Sec-Fetch-Site` is the backstop for it (browser-set, unforgeable by page JS, absent on non-browser clients → anything but `same-origin`/`none` is refused). Belt and braces: side-effecting endpoints must not be GET routes either — `/api/host/screenshot` is POST for exactly this reason. Allowed hosts: loopback/127.x, the Tailscale IP, the exact MagicDNS name, this machine's own `<hostname>.local`, bound LAN IPs, plus `WATERPLANE_ALLOWED_HOSTS`/`WATERPLANE_ALLOWED_ORIGINS` for a reverse proxy or custom alias. `*.ts.net` is accepted by suffix ONLY as a fallback when we couldn't read our own MagicDNS name — don't widen it back to a blanket wildcard, and don't reinstate `*.local`. Ports: the bound port, 80, 443, **our own discovered `tailscale serve` front door whatever port it landed on** (`OriginConfig.serveUrl`, fed from the same `serveHttpsUrl(PORT)` the client gets as `welcome.httpsUrl`), plus the Vite dev port when `WATERPLANE_DEV=1` (set by the host's `dev` script — a production daemon has no reason to trust another server on the machine). The serve-door entry is not a widening — it is read off the local tailscaled and only for the listener whose proxy target is OUR port — and it closes a trap that mattered: `--https=443` claims one slot per machine, so a host already serving something there gets fronted on some other port, and a guard that refuses it makes the app advertise an HTTPS address it then 403s. The user then stays on plain `http://100.x`, which is not a secure context, so there is no service worker — and a dropped tunnel during ANY navigation (a reload, or Chrome discarding and restoring the tab) replaces the whole app with `ERR_CONNECTION_TIMED_OUT`. `corsHeaders()` reflects the caller's (already-allowlisted) origin — never `*` again. Configured at boot once the Tailscale/LAN facts are known. Verified by `e2e-origin.mjs`.
 - `doctor.ts` — **preflight checks**, the "why isn't this working" answer. Nearly every first-run failure is silent: a logged-out `claude` spawns a PTY that dies at the login screen, no Tailscale IP means the phone can never reach the host, plain HTTP means push/clipboard/install no-op. Each check returns `ok|warn|fail` with a one-line finding and a one-line fix. Runs fire-and-forget after listen (warnings only — a degraded host still works) and standalone via `npm run doctor` (`main.js --doctor`, report and exit). `WATERPLANE_PREFLIGHT=0` disables the boot run; the e2e scripts set it. The secure-context check consults `tailscale serve status` so it doesn't nag someone who already set up TLS.
-  - **WSL checks** (`doctorwsl.ts`, pure over injected facts, only under WSL): `wsl-tailscale` (no Tailscale IP: mirrored networking or in-distro Tailscale), `wsl-systemd` (PID 1 not systemd: `/etc/wsl.conf`), `wsl-idle` (VM shuts down when idle, always a warn), `wsl-root` (repo root under `/mnt/<drive>`), `wsl-claude` (the Windows `claude` on a Linux PTY: fail). A missing `claude-binary` names Claude Code's install docs and says opencode support is experimental.
+  - **WSL checks** (`doctorwsl.ts`, pure over injected facts, only under WSL): `wsl-tailscale` (no Tailscale IP: mirrored networking or in-distro Tailscale), `wsl-systemd` (PID 1 not systemd: `/etc/wsl.conf`), `wsl-interop` (EXECUTES `/mnt/c/Windows/System32/cmd.exe /d /c exit 0`, 5 s: "Exec format error" — ENOEXEC, exit 126 or the words — is a warn naming what is lost and both fixes, `wsl --shutdown` or re-registering `WSLInterop` as root; no file or a timeout is NO row, never a verdict; never keyed on the binfmt entry's name, since newer WSL registers `WSLInterop-late` — `interopFromProbe`; with it off, `wsl-idle`'s could-not-ask names it and `wsl-tailscale` stops sending a person to `.wslconfig`), `wsl-idle` (VM shuts down when idle), `wsl-root` (repo root under `/mnt/<drive>`), `wsl-claude` (the Windows `claude` on a Linux PTY: fail). `wsl-idle` asks Windows through interop (`schtasks.exe /query /tn`, exit 1 = no such task) for a keep-alive task — the launcher's `autostart` task (`<slug>-host` for a checkout, `<slug>-host-npm` for an npm install, `launcherTaskName`; [distribution.md](distribution.md#windows-the-launcher-drives-the-host-in-wsl)) or the two names `service install` prints — and is `ok` naming it, saying only that a task of that name EXISTS (not that it is enabled, nor which install it starts). None is a warn; Windows not answering (interop off, timeout) is a DIFFERENT warn sentence, never "none". The fix names the command for the install the host runs from (`keepAliveCommand`): the checkout launcher's `autostart`, the npm launcher's, or `service install` inside the distro — it used to name a `<slug>-host start` command that exists on no route, and stayed a warn while the task was there. On native win32 the report is ONE `platform` failure (`nativeWindowsCheck`) naming that launcher. A missing `claude-binary` names Claude Code's install docs and says opencode support is experimental.
   - **tmux is required, and it is the ONE substrate** (`tmuxreq.ts`, pure but for a PATH scan). History: `<PREFIX>TMUX` was opt-in and set only by the dev-checkout `deploy/install-service.sh`, so a release install lost every live session on each restart and self-update; then it was on unless exactly `0`, keeping the direct-PTY spawn as a test/dev escape hatch that every e2e host pinned. **The direct path is removed** (owner decision: tmux on macOS/Linux/WSL2, native Windows unsupported) — no `USE_TMUX`, no branch in `spawnBackend`/`persistLive`/`hasLiveTmux`/`rediscover`/`detach`/`kill`/`remove`/the pan, and `welcome.tmux` is always `true` (kept on the wire for old clients). The knob is IGNORED: `tmuxKnobSet` only lets `doctor` say so. With no `tmux` on PATH, `sessions/tmux.ts`'s `spawnBackend` THROWS `tmuxRefusal()`'s sentence (no session started, the install command for the package manager that is here) — asked per spawn, uncached, so installing tmux needs no restart. Doctor rows: `tmux-knob` — WARN "ignored" while the old knob is still set; `tmux` — FAIL when missing (with the command), WARN when older than 3.3 (the generated `tmux.conf` sets `allow-passthrough`, added in 3.3; an older server shows the config error in the first pane, in view mode, where typed text goes nowhere), else the version; `tmux-locale` — the UTF-8 trap (`protocol-and-security.md`): clients run `-u` and `ptyEnv()` supplies a UTF-8 `LANG` when NO locale is set (`en_US.UTF-8` on macOS, `C.UTF-8` on Linux, where `en_US` is often not generated), so the one visible failure is a locale that is SET and not UTF-8 (`LC_ALL` > `LC_CTYPE` > `LANG`), which the panes inherit. The login service bakes no tmux knob. **Tests isolate by socket DIRECTORY** (`scripts/lib-tmuxiso.mjs`: a private `TMUX_TMPDIR`, `TMUX` deleted, every server in it killed on exit; `run-e2e.mjs` hands each script its own) — a `-L` name is only a name, a directory is a boundary the owner's live server cannot be reached across. `packages/host/test/tmuxreq.test.mjs`.
 - `speedtest.ts` — bidirectional throughput probe + connection diagnostics behind three non-repo-scoped endpoints (`/api/speedtest/{download,upload,debug}`). Download streams a preallocated **random** block (incompressible so nothing inflates the rate) with backpressure + a 256 MB ceiling; upload drains + times the body server-side. **`debug` is the useful bit:** classifies the client IP the socket sees (tailscale 100.x / lan / loopback / public), and for a Tailscale client runs `tailscale ping --until-direct=false` against that exact peer to report **direct vs DERP relay** — the usual cause of a slow same-WiFi transfer — plus the host's LAN IPs so the phone can be told to hit `http://<lanIp>:8770` and skip the tunnel. Surfaced in `SpeedTestSheet.tsx` (Settings → Tools → speed test). All shell probes are best-effort/independently guarded.
 - `uistats.ts` — **UI feature-usage counters**, the "what do I actually use?" ledger. The phone `track()`s every feature entry point locally and flushes deltas to `POST /api/ui-usage`; this merges them into `<STATE_DIR>/ui-usage.json` (`{ updatedAt, since, features: { "toolbar:diff": { count, first, last } } }`). Ids are opaque namespaced strings the client invents (`toolbar:<id>`, `overlay:<name>`, `action:<name>`) — adding a `track()` call needs no host change — but they're sanity-capped (length/charset/per-flush increment, 1000 distinct ids) so a buggy client can't grow the file. `GET` returns the doc (the Settings viewer), `DELETE` resets the window. Writes are debounced 3 s. Purely local: nothing is sent anywhere, and the point of the file is that a coding agent can read it and prune what never fires. Verified by `e2e-uiusage.mjs`.
@@ -628,37 +648,7 @@ original paragraph, and CLAUDE.md's per-entry links point at these headings.
   words without saying so. Both sides of the comparison are whitespace-collapsed, or a prompt that
   wraps between two of its own opening words reads as a different string and the truncation goes
   through),
-  `smartpick.ts` (**the look a repo takes over its own waiting items before one of them fires** —
-  pick which runs next, merge what is one job, sort the rest, and no fourth verb. `cleanSmartPick`
-  is `cleanAssessment`'s posture aimed at a cheaper, more automatic answer: tolerant about shape (a
-  fence, prose either side of the JSON, `sorted` for `order`, `prompt` for `text`) and strict about
-  claims, because this one APPLIES with no approval step. An id that is not in the backlog is
-  dropped and never spawned; an item the model forgot keeps its place; a bare array is `null`
-  rather than the tolerant reading "an order with no merges", which would turn an uninterpretable
-  answer into a confident *change nothing*. A merge survives only if it has 2..`MAX_MERGE_SIZE`
-  known ids (`assess.ts`'s numbers, imported not restated) claimed by no other group, no `clipped`
-  member (the prompt only carried that item's first lines, so a merge would fold words the pass
-  never read), no member with `steps > 1` (a chain's turn structure cannot survive being flattened
-  into one prompt), members agreeing on `resume`, a non-empty text, an id-set the user has not
-  already undone, and — the one that is specific to this app — a text that still names **every**
-  transport and image path any member named: a merged prompt that loses `.claude/inbox/foo.png`
-  will tell an agent to look at a file it was never handed, so the group is DROPPED with the path in
-  the note rather than repaired, appending a path being this module authoring somebody's prompt.
-  `applySmartPick` returns a PLAN and mutates nothing — CLAUDE.md's *nothing applies itself* is
-  knowingly excepted for this feature by the user, with originals archived and an `undo` on the
-  merged row as the trade, but the split stays in the code so the pure half is pinnable. It sorts by
-  re-assigning the candidates' EXISTING slot values rather than renumbering 0..n, so non-candidate
-  rows in the repo keep their relative places; a slot whose occupant is `handOrdered` keeps it and
-  the machine's sequence fills the rest with `pick` at its front, so a row you dragged is never
-  moved and the record says so when that displaces the pick. `smartpickFingerprint` is 64-bit FNV-1a
-  over the items plus branch/dirty/commits — sync and node-runnable on purpose (`crypto.subtle` is
-  async and `node:crypto` is not in the browser bundle), and a collision costs one SKIPPED pass and
-  can never cause a wrong mutation, because the fingerprint gates whether a pass is bought and never
-  what one does. `smartpickOutcomeText` is the contract for every sentence the strip shows, here
-  rather than in the client because the host writes the same words into the record and a
-  notification — and every outcome but `applied`/`noop` ends on *fired in the order you had*, which
-  is the whole safety property: `tokens`/`usd` are absent when the `claude -p` envelope carried
-  none, never zero). Build before host/web.
+  `itempaths.ts` (`imagePaths`/`transportPaths`: the image and `.claude/outbox|inbox` paths a work item's words name). Build before host/web.
 
 ### `routes/`
 
@@ -712,8 +702,12 @@ original paragraph, and CLAUDE.md's per-entry links point at these headings.
   and the doctor's `state-service` row warns when the installed service's environment would resolve
   a different state dir than the shell running it. PER-REPO state (`<repo>/.waterplane/`: `builds.json`, `capture.json`, `artifacts.json`,
   `autopull.json`, `repohealth*`, `assess-*`, `peer-job.json`, a repo's own `backlog.json`) is the
-  repo's and does not move. `STATE_DIR` is read from the process environment only, like `ROOT`: it
-  must be known before the `.env` inside it is read. The default root `~/dev` is spelled once
+  repo's and does not move. `STATE_DIR` and `ROOT` are read from the process environment, the repo
+  `.env` and the per-user config `.env` — loaded into a scratch copy before either is resolved
+  (`loadHostEnv(null, …)`) — but never from the `.env` inside the state dir, which can only be found
+  once they are known. Until 2026-10-07 only the process environment counted, so a root set in the
+  repo `.env`, as `.env.example` said to, was silently ignored. Under WSL a drive-letter value
+  (`c:/dev`) is its `/mnt/<drive>` mount (`branddirs.ts`' `wslMountPath`). The default root `~/dev` is spelled once
   (`branddirs.ts`' `defaultRoot`; `sessions/knobs.ts` reads `env.ts`' `ROOT`), and the doctor's `root`
   row says when that default was assumed and does not exist, instead of the phone silently listing
   no repos. `statedir.test.mjs` · `e2e-statedir.mjs`. Until 2026-09-25 the loop sat in `main.ts`'s body, which
@@ -790,11 +784,10 @@ means exactly the old behaviour.
 #### `backlog-config.json` is tmp+rename, like every other store here
 
 It was a bare `writeFileSync`, which is the pattern this whole area was written to retire — and it
-matters more now than when the file held one boolean, because it holds two settings: the global
-auto-fire switch and the per-repo smart-pick ticks, written TOGETHER so a partial write of one key
-cannot drop the other. `init()` reads it inside `try { … } catch { /* fresh */ }`, so half a JSON
-document comes back as `auto: false` with no repo ticked — **auto-fire off and every smart-pick tick
-off, on the next boot, silently**. "Half a JSON document where a backlog used to be" is this repo's
+matters because it holds the global auto-fire switch (it once held a second setting, the removed smart
+pick's per-repo ticks; a stale `smartPick` key is ignored on read and dropped on the next write).
+`init()` reads it inside `try { … } catch { /* fresh */ }`, so half a JSON document comes back as
+`auto: false` — **auto-fire off on the next boot, silently**. "Half a JSON document where a backlog used to be" is this repo's
 recorded failure for exactly this. The observable difference from the reader's side is the INODE,
 which is what `backlogstore.test.mjs` asserts: a truncate-in-place keeps it, a rename replaces it.
 
@@ -804,16 +797,11 @@ which is what `backlogstore.test.mjs` asserts: a truncate-in-place keeps it, a r
 they are reached from a drag and a one-step move and from nowhere else. Nothing recorded a placement
 before: `add()` puts a new row on top with `min(orders) - 1`, so five minutes later a row somebody
 dragged to the front is indistinguishable from one that simply arrived last — and the moment anything
-automatic sorts this list it cannot tell them apart and quietly undoes the one deliberate act in the
-sheet. `reorder()` stamps EVERY id in the posted order, not just the row that moved: the client sends
+automatic sorted this list it could not tell them apart and would quietly undo the one deliberate act in the
+sheet (nothing sorts automatically any more, since the smart pick was removed 2026-10-16; the mark stays). `reorder()` stamps EVERY id in the posted order, not just the row that moved: the client sends
 the whole display order, and the rows a drag went past are where they are because of it. Machinery
-never sets the flag and never clears it, so a row placed once keeps its slot until it runs — and the
-smart pick sorts AROUND it (`applySmartPick`).
-
-The same file now also holds that feature's tick: `<STATE_DIR>/backlog-config.json` grew from
-`{ auto }` to `{ auto, smartPick: { [cwd]: { setAt } } }`, written by one `saveConfig()` that writes
-both keys together, and `smartPickEnabled(cwd)` is the `Set` lookup the pass's first rung is. See
-`smartpick.ts` below.
+never sets the flag and never clears it, so a row placed once keeps its slot until it runs. A pinned assessment rank
+leaves the same mark.
 
 #### Why every item gets its own conversation (F4 → F5 → this)
 
@@ -914,10 +902,34 @@ of it, which for work that has just RUN is the one outcome nobody wants.
   so: nothing is FIRED on it (no work runs, no prompt is typed, no decision a restart could get
   wrong), and "ten minutes from now" is a question no event can answer, because the session's last
   event is the turn that ended it.
-- **Early reap** (`reapAutoSession`): when a row that everything else has said yes to is held on
-  `noSlot`, the manager asks the host to make room — once per pass — and the host closes the OLDEST
-  automatic session that is reapable. Oldest, because the candidates are all idle and the one idle
-  longest is the one whose output somebody is least likely to still be reading.
+- **Early reap** (`reapAutoSession`) — **REMOVED 2026-10-14, see *Only a working session holds a
+  slot* below.** It was: when a row that everything else has said yes to is held on `noSlot`, the
+  manager asks the host to make room — once per pass — and the host closes the OLDEST automatic
+  session that is reapable.
+
+#### Only a working session holds a slot (R-automation-042, 2026-10-14)
+
+The cap counted every running `backlog · …` session, busy or idle, and since 2026-10-01
+(`cd044878`) automatic sessions stay open by default. Together: three finished items left open for
+reading and the desktop fired NOTHING more — fourteen timed rows armed for the hour before a weekly
+reset were going to sit on `noSlot` behind seven idle sessions. The owner's rule: a session does not
+need to be closed, only idle. The cap now bounds how many agents RUN at once.
+
+- `slotBusy(id)` (`backlogsessions.ts`) is the reading, and it is `reapable()`'s list of reasons not
+  to close, minus "attached" (a person reading a finished session is not an agent running): a row
+  `starting`/`running` in it, a background shell `working`/`serverLike`, a background agent,
+  `autoFireBlocker` non-null (a turn, a box, a limit wall; the no-hook silence floor is
+  `REAP_IDLE_MS`), overruled only by `REAP_CEILING_MS` of PTY silence — a lost `Stop` must not hold
+  a slot until restart.
+- `autoSessionCount()` counts only those; `AutoSlotFacts.open[].busy` says which, absent = an older
+  host = busy. `autoSlotsWaitText` says "N are working; a slot frees when one goes idle"; the phone's
+  *close one to make room* lists only the working ones (closing an idle one frees nothing).
+- **The reap is gone**: closing an idle session would free no slot, so nothing is ever closed to make
+  room and `IntentDeps.reapAutoSession` no longer exists. `closedBy: "auto-slot"` stays readable for
+  closed rows written before. The linger sweep is untouched — close-when-done still closes.
+- Pinned by `backlogsessions.test.mjs` (the count), `intentsched.test.mjs` (order when a slot frees),
+  `e2e-backlog-keepopen.mjs` (the default: kept open, the next item runs anyway) and
+  `e2e-backlog-slots.mjs` (one at a time, in order, nothing closed).
 
 **What "reapable" is, and why it stopped being PTY silence.** `PLAN.md` §2.2 promised *"Never a
 session a person is looking at, never one mid-turn"*, and the implementation's proxy for the second
@@ -943,6 +955,16 @@ that overrules the CLI's own word: **6× the linger of PTY silence**, an hour at
 far past any real tool call or permission box. One lost conversation against a slot held for ever.
 `backlogsessions.test.mjs` pins all three: a live turn is not reaped, a box is not reaped, and the
 ceiling reaps anyway.
+
+**Flag for follow up when done (`backlogfollowup.ts`, R-sessions-043).** A row, schedule or fan-out
+launched with `flagWhenDone` marks the session it opened for the person to come back to. The rule is
+the same shape as the close: the row that OPENED the session decides (`openerRow`, one lookup shared
+with `closesWhenDone`), and only a row that is `done` with an ok result and whose session `slotBusy`
+calls free — a failed or limit-stopped run never flags, and a turn, a box or a background shell/agent
+defers it. It flags ONCE per row; the applied ids are kept in `followup-launched.json` (capped), because
+the alternative, re-asserting "this row wants a flag" every tick, would undo a person clearing it, and
+a restart would re-flag every finished row. `BacklogManager.lingerSweep` calls it first so a session
+that wants a flag is flagged before anything may close it. `followupsweep.test.mjs` pins all of it.
 
 **A session a PERSON reopens does not wear the mark.** The `backlog · ` prefix is the only thing
 that says a session is machinery's — it is what `autoSessionCount()` counts against the cap, what the
@@ -1395,11 +1417,11 @@ acting on one, and every field degrades to absent rather than to a zero.
 The re-time sheet had a bulk *run all 4 now, past the budget*, and it sent
 `intent.run` per row. `runNow` skips the whole ladder — it is one row's tap,
 and a tap is not a pick — so four queued rows in one repo, each `serial`,
-`holdForHost` and behind a ticked smart pick, started in parallel in one
+`holdForHost`, started in parallel in one
 worktree. What the person wanted was the budget out of the way and every other
 wait kept. So the waiver is a persisted row fact, `pastBudget: true`, which
 rung 2 and the `budget` trigger skip and nothing below them reads: serial,
-`hostBusy`, `noSlot` and `pickHold` still hold the row. It is set by a new
+`hostBusy` and `noSlot` still hold the row. It is set by a new
 additive message rather than an `intent.update` patch key, for two reasons:
 `update()` forces `queued`, refuses failed rows and re-arms clocks, none of
 which a waiver should do; and an older host acks an unknown patch key `ok`
@@ -1417,7 +1439,7 @@ one shape of answer, a lift that ends at a reset), and `budgetHold` is the ONE
 function asking both: a live waiver lifts every tripped cap, a `budgetPass`
 only its own window's. `budgetWaived(i, now)` is the reading everyone shares —
 rung 2, the `budget` trigger, the tick's sweep that DROPS an expired waiver (so
-no phone draws a chip over a row the budget holds again), the smart pick and the
+no phone draws a chip over a row the budget holds again) and the
 phone's chip. `waive()` refuses in words when nothing is tripped or no tripped
 ceiling says when it resets (no window ⇒ nothing to scope to, never a guessed
 one), and on an archived row. `cleanIntentRow` DROPS the legacy `true`: a waiver
@@ -1439,14 +1461,6 @@ rule still carrying it while `execute()` runs). `intent.post` strips it (and
 `budgetPass`) off the wire — only `waive()` and the host's own drafts write it,
 which is why `post()` itself stays permissive.
 
-A smart-pick merge must agree on it like the hold: `SmartPickCandidate.pastBudget`
-is a waiver IN FORCE, a MIXED group is refused in words (`cleanSmartPick`, and
-the host again against the live rows at apply), and an all-waived merge carries
-the EARLIEST `until`. It was once merged anyway with a note, and the merged row
-silently waited on a budget a person had already answered. The fingerprint
-gains the flag only when set, so a repo with no waiver keeps its fingerprint.
-A waived row reaches `pickHold`, so letting rows past the budget also lets the
-pick spend its small model call while over budget — the sheet's note says so.
 **A bulk verb never reaches `runNow`**; `packages/web/src/bulkverbs.test.mjs`
 counts the `intent.run`, `schedule.run` and `launch.run` call sites in
 `App.tsx` so a new loop is a test failure, not a review miss.
@@ -1694,7 +1708,7 @@ It was found in a live store rather than on a screen, which is why it lasted thr
 passes over the same seam: **9 live `at` rows on the author's desktop, every one of them one-off,
 zero recurring; seven of them `failed`.** The Schedules sheet was, in practice, a second backlog with
 clocks on it — and because `isBacklogRow` excluded `at`, none of those rows was in any repo's
-backlog, so the smart pick (whose candidates are backlog rows) could never see one, and the user
+backlog, so no backlog feature could see one, and the user
 asked for the third time why "scheduled tasks and backlogs" were two things.
 
 `@waterplane/shared`'s **`isTimedWorkRow`** is the whole classification: an `at` trigger whose rule does not
@@ -1933,8 +1947,7 @@ correctness option and not a tuning one.** A kick runs a pass synchronously as f
 re-queues and then the approved ranks and calls `intents.kick()` ONCE at the end (`AssessIntents`
 carries `kick` for exactly this), and `runNow` fires the row itself. Before that, applying nineteen
 verdicts fired the FIRST revived row while the other eighteen revives and the whole rank loop had
-still to happen: the pass saw one candidate, `smartpick.hold()` refuses to think about a list of one,
-and the row went with neither the approved order nor the pick.
+still to happen: and the row went without the approved order.
 
 **The chain.** `chainFacts()` supplies `settled` and `knownIntents` from one walk and they answer
 differently about a revived row, which is what makes this safe mid-chain: it is dropped from
@@ -1952,8 +1965,8 @@ the history entry — and then falls through to `fire()`. `done` and `canceled` 
 before.
 
 **Not kicked, and `fire()` guards the claim.** The first version kicked and then fired the same row,
-and the only thing between that and a double fire was the kicked pass happening to `await
-pickHold?.()` even where the dep is absent. In one ordering the pass gets further: a chain fail, or a
+and the only thing between that and a double fire was the kicked pass happening to yield
+(`await Promise.resolve()`) before its claim. In one ordering the pass gets further: a chain fail, or a
 failed one-off SWEEP (`isTimedWorkRow` is false for `repos`, so its `nextAt: null` clock is not
 dropped and rung 3 gravestones it) settles the row `failed` synchronously, and `runNow` then started
 a row this store had just written down as over. So the tap does not invite the tick — the sentence
@@ -2135,7 +2148,7 @@ exempt from. So `workItemInherits` stamps `Intent.budgetPass` (`{window, from, u
 parent's `lastOccurrence` — written before the executor, so it IS the occurrence being fired — and
 `budgetPassOf` reads the stamp on a row with no clock. An `after` chain does not inherit it; a
 fan-out target row never had one. Once rung 3 releases the row it may still wait on `serial`,
-`holdForHost`, `noSlot` or `picking`; if that outlives the reset, the NEW window's budget applies —
+`holdForHost` or `noSlot`; if that outlives the reset, the NEW window's budget applies —
 expected, and what the pass's `until` says.
 
 **Arming one that is saved LATE** (`intents/clock.ts`'s `newBasis`). The incident rows were re-timed at
@@ -2154,6 +2167,45 @@ names one instant whatever its anchor, and the grace is the person's own "how la
 starting" — so it now runs at once, late, like a `once`; saved past the grace it arms next Thursday.
 A RECURRING rule still arms from now. `setArmed` (resume) still re-arms from now. Legacy migration (`migrateFile`) still arms from
 `createdAt`: it runs once, on files nothing writes any more.
+#### What a lift leaves behind after the reset — `leftoverOf` and the leftover ceiling
+
+Both lifts end at the reset, and that was the leak. A row let past a week's
+budget exists to spend allowance the reset would throw away; one that did not
+get to START before the reset (serial, the slots) fell back to
+the ordinary ceilings, and a week that has just reset reads 0%, so every
+leftover started at once. A desktop with a dozen "an hour before the weekly
+reset" rows spent the first hours of each new week on them.
+
+`budgetLeftoverOf` names such a row: a WEEKLY `budgetPass` with `now >= until`
+(read off the row, no stamp needed), or `Intent.leftoverOf`, which the tick
+stamps as it drops an expired waiver that was granted against the weekly cap
+(`BudgetWaiver.weekly`). Rung 2 holds it while `leftoverCeiling` is tripped:
+the week's reading at or over `UsageBudget.leftoverMax` (default 20, `null` off).
+Choices, each made deliberately:
+
+- **Weekly only.** A session window refills in hours; the week does not.
+- **A waiver counts** — a tap made against last week's cap was about last week.
+  An old waiver with no `weekly` mark leaves nothing behind (absent ⇒ no hold).
+- **A new waiver lifts it** — `waive()` counts the tripped leftover ceiling as a
+  ceiling, so the person's newer answer wins; that waiver is then about THIS week.
+- **The whole week's reading**, a person's own sends included: the number on the
+  usage screen, measured, not an estimate of what the leftovers alone spent.
+- **One global number** in `budget.json`, never per row.
+- **Not an account pause**: `budgetCeilings`/`budgetVerdict` never include it,
+  so nothing but a leftover reads as held. It FAILS OPEN like the rest, and
+  past the reading's `weeklyResetAt` it is untripped on the clock.
+- The stamp clears wherever a waiver is spent by a start (`fire.ts`, `watch.ts`);
+  - `BudgetStore.set` keeps the stored `leftoverMax` when a set omits it: an older
+  phone bundle's silence is not a reset to the default.
+- **The other side of the reset too** (`budgetAfterResetOf`, R-automation-045):
+  a row timed AT the weekly reset or within `AFTER_RESET_LEFTOVER_MS` (5 h, the
+  new week's first session window) after it is held by the same ceiling once
+  that reset has passed. Moving a pile of before-reset rows past the reset is
+  the same burst into a 0% week, so it gets the same answer, worded as its own
+  case (`budgetLeftoverText(…, afterReset)`). Only `window`/weekly rules — a
+  `once` at a wall-clock time is not anchored to a reset and is not read as one;
+  further than 5 h in, the row was timed for a moment of the week.
+
 
 ### `noSlot` — rung 4.6, the cap as a rung
 
@@ -2174,7 +2226,8 @@ subtracted from, so the host fills in *"runs 3 automatic sessions at a time and 
 `blockDetail`, the arrangement `budgetDetail` already has, and shared never guesses a plausible
 number nobody measured.
 
-**The host half.** `IntentDeps` lost `openBacklogSession` and gained three things: `autoSlotsFree()`
+**The host half.** (The reap below was removed on 2026-10-14 — *Only a working session holds a
+slot*.) `IntentDeps` lost `openBacklogSession` and gained three things: `autoSlotsFree()`
 (= `BACKLOG_SESSIONS_MAX − backlog.autoSessionCount()`), `autoSlotsDetail()` (the numbers, the way
 `budgetDetail` supplies the budget's) and `reapAutoSession()` (make room). The manager then does with
 `base.autoSlotsFree` exactly what it does with `hostBusy` and `busyCwds` — **decrements it per fire
@@ -2200,19 +2253,17 @@ It asks now. The increment is gone: the next tick's fresh `autoSlotsFree()` hand
 first row in order, and the `— closing an idle one to make room` sentence stays, because what the
 host did is still worth saying.
 
-#### The whole ladder is re-asked on the far side of `pickHold`
+#### The whole ladder is re-asked after one microtask yield
 
 `base` is built once per pass — `busyCwds`, `busySessions`, `hostBusy`, `autoSlotsFree`, the chain
-facts — and until the smart pick there was no `await` inside the loop at all, so "computed once" and
-"true when used" were the same statement. `IntentDeps.pickHold` broke that: a real hold spawns `git`
-(`repoFacts`, 30–200 ms, longer on a cold cache in a big repo), which is a macrotask window, and
-`backlog.fire` → `runNow` reaches `fire()` DIRECTLY rather than through this loop. `fire()` sets
-`starting` synchronously, so by the time the hold resolves `null` the worktree is occupied — and the
-held row fired on the verdict taken before the tap. Reproduced: `ran = ["B", "A"]`, both `starting`,
-one cwd. That is exactly the "five due rows putting five agents in one worktree" that `serial` exists
-to stop, and it was new, because this was the first `await` in the loop.
+facts. Before each `go` row's claim the loop does ONE `await Promise.resolve()`. It used to be the
+smart pick's `pickHold` await (a real hold spawned `git`, a macrotask window `backlog.fire` →
+`runNow` fit through, so the held row fired on a stale verdict and put two agents in one worktree);
+the pick is gone (2026-10-16) but the yield is kept, because a kick runs the pass synchronously only
+that far, so a synchronous batch of writes lands before any claim (~30 host tests pin that batching).
+The re-read below is kept for the same reason. `fire()` still sets `starting` synchronously.
 
-The re-read after the `await` was widened from "is this row still there" to the facts as well: the
+The re-read after the yield was widened from "is this row still there" to the facts as well: the
 currently `starting`/`running` rows are folded back into `busyCwds` and `busySessions`, `hostBusy` is
 re-checked, the cap is re-read as `min(base.autoSlotsFree, host's live free)`,
 and `intentVerdict` is asked AGAIN.
@@ -2225,8 +2276,7 @@ needs the same subtraction to be comparable. It does not: `autoSlotsFree()` is
 ALREADY EXIST — a fired row's session exists synchronously, because `fire()` → `execute()` →
 `freshSession()` → `openItemSession()` → `sessions.create()` all run before the executor's first
 `await`. So the live count already holds every session this pass opened. Reproduced at cap 3 with an
-empty host, three due rows in three repos and smart pick off everywhere (the re-ask runs for every
-`go` row whenever the `pickHold` dep exists, so this was every pass on the real host): `a` and `b`
+empty host, three due rows in three repos (the re-ask runs for every `go` row, so this was every pass on the real host): `a` and `b`
 fire, `c` reads `noSlot` with one slot genuinely free, and `reapAutoSession()` is asked — which
 closes the oldest idle automatic session, a finished item somebody may still have been reading, well
 inside its ten-minute linger, to make room that was already there. `c` then fired anyway on the next
@@ -2237,8 +2287,7 @@ now counts them, and the cap-3/three-repo case is pinned both ways. Every one of
 from either set and `hostBusy` is never un-set — because those sets also carry this pass's own claims,
 and a cwd that went quiet during the await is simply a row that runs on the next tick. A non-`go`
 second verdict goes through the same `nonGo` handler the first one would have: one spelling, so the
-two cannot drift. `packages/host/test/pickhold.test.mjs` pins both halves with a hold that resolves
-on a macrotask, a sibling hand-fired during it, and an executor that stays pending. `openFor`, `opened` and the one-repo-per-pass rule are gone with the side
+two cannot drift. `packages/host/test/ladderpass.test.mjs` pins both halves with a sibling hand-fired during the yield and an executor that stays pending. `openFor`, `opened` and the one-repo-per-pass rule are gone with the side
 door they served.
 
 #### …and rung 5 had to be re-ordered for that sentence to be true
@@ -2264,30 +2313,65 @@ wears words rather than crashing. `IntentFacts.repoAnySession` went with the bra
 along with its `IntentDeps` entry and the per-repo `sessions.list().some(…)` the tick was running to
 build it.
 
-### `pickHold` — rung 4.7, and why it is a block and never a claim
+### The local-model gate — rung 4.55, `localModel`
 
-The last question `pass()` asks before a row fires, and the only optional one: `IntentDeps.pickHold`
-is absent on a host that has not built a smart pick, and absent is the whole of the old behaviour.
-It sits AFTER the ladder, after `holdForHost` and `noSlot`, after the fan-out pool and immediately
-before the `go` claims, so a repo never spends anything looking over items that were not going to
-run anyway.
+Asked 2026-10-13 (R-intent-local-001), after 9dea53cd let a queued item open its session on a picked
+backend and model. The owner's words: *"the model must be loaded and aligned with other agents that
+use local ai — only one active coding session at a time for local ai as default but the user needs a
+setting to change this."* Before it, an item on `claude-local` whose model was not loaded started
+cold, and two local items could run at once on one GPU — each one slower than either alone, and an
+Ollama that evicts one model to load the other turns both into minutes of reload.
 
-A sentence blocks the row `picking` (ordered just before `sessionBusy` — it is self-resolving and
-there is nothing to press); `null` fires it. **Nothing is claimed while it holds**, and that is the
-whole of what a per-repo tick-box is allowed to cost: a `starting` row would take the worktree
-(`busyCwds`), set `hostBusy` for every `holdForHost` row on the desktop and spend one of the
-automatic-session slots, so one repo thinking for twenty seconds would stop every other repo.
+**"Active" is a turn running** (`SessionInfo.turnActive`) plus every local row `starting`/`running`
+(the spawn → first `UserPromptSubmit` window, and a chain between its turns). An idle local session
+that is merely open holds nothing — the same reading R-automation-042 gave the automatic-session cap
+— and a HAND session mid-turn counts too: it uses the same GPU.
 
-**The manager does not de-dupe it and must not.** Whether two calls are the same "pick" depends on a
-fingerprint over items, branch, dirty paths and commit subjects, none of which this module has ever
-heard of. That matters rather than being a nicety: `serial` bites only once something has been
-CLAIMED, so the second row of the same worktree reaches this line in the same pass and is asked too
-— and the dep answers both out of one in-flight entry keyed per cwd. A de-dupe written here would be
-a second opinion about the same question, and the two would drift. The `await` is also the first
-yield inside that loop, so the iteration's top-of-loop checks are repeated after it: a row somebody
-cancelled while the pass was thinking about it must not then fire. `packages/host/test/pickhold.test.mjs`
-pins all of it, including that NO executor is reached during a hold — the pass reads a list and
-reorders it, and may never type into a session.
+**Locality is a backend fact, never an id string.** `BackendDescriptor.localRunner: "ollama"`
+(`claude-local`) is local exactly when `ollamaUrl()` is loopback; any other backend is local for a
+model its boot catalogue placed `where: "local"` (`backendModelWhere`, opencode's local providers).
+Unknown is never local: the cap may only hold work KNOWN to compete for the machine.
+
+**Who waits is the host's decision, not the rung's.** `localSlotReading` builds `IntentFacts.local =
+{free, rows, busy}`: `rows` is the automatic rows (`auto`) and sweep targets (`origin ===
+ORIGIN_FANOUT_TARGET`) on a local launch; sweep parents, fan-out follow-ups and shells are not gated
+(each target is its own row). The pure rung (`intent/verdict.ts`, after `holdForHost`, before
+`noSlot`) holds a row in `rows` when `free <= 0`, unless its target session is itself in `busy` — it
+then waits on rung 5 as `sessionBusy`, the more precise sentence. Absent `local` ⇒ the rung is
+skipped, exactly the old behaviour. The detail is the host's (`localSlotWaitText`: *"1 local session
+is working (name); this desktop runs 1 at a time"*), substituted like `noSlot`'s, never a number the
+shared module guessed.
+
+**The ladder.** `local` is read once per pass and decremented per local fire (the `autoSlotsFree`
+trick: a fresh repo target passes rung 5 unconditionally, so two local rows in two repos would each
+read the cap as untouched). `localHold(row)` is asked after the sweep pool,
+synchronously: a sentence blocks the row `localModel`, claims nothing and stamps `clearedOccurrence`.
+After the pre-claim yield the reading is re-taken MONOTONICALLY (`min` of free,
+union of busy) — the same reason the whole ladder is re-asked there.
+
+**The model, loaded first** (`LocalModelGate`) — only for a backend with a `localRunner`, because
+Ollama is the one runner this host can ask (`localrt.ts` `loadLocalModel`: `/api/generate` with no
+prompt; 404 ⇒ `missing`, abort ⇒ `timeout`, fetch error ⇒ `unreachable`). The first ask starts ONE
+background load per model and holds (*"loading qwen3 on Ollama"*); its end kicks the tick. Ready is
+trusted `READY_FRESH_MS` (60 s), a failure `RETRY_MS` (30 s). Each failure is its own sentence —
+Ollama unreachable at the URL, the model missing (with the `ollama pull`), or the timeout in seconds
+(`WATERPLANE_LOCAL_LOAD_TIMEOUT_MS`, 180 s) — and **never a fallback model**: work picked for a model runs
+on it or waits saying why.
+
+**A person's start is told, never refused.** `runNow` never asks the ladder or `localHold` (a tap is
+not a pick); the backlog executor appends `localStartNotice` to the row's *ran in …* detail, and a
+wire `session.create` past the cap gets a toast (`localSlotOverText`). CLAUDE.md's *nothing applies
+itself* has a mirror here: nothing refuses itself either.
+
+**The setting.** Synced key `waterplane.local.maxSessions` (`LOCAL_SESSIONS_KEY`,
+`localSessionsSetting`): 1..16 is the cap, `"0"` is no cap, anything else falls back to
+`WATERPLANE_LOCAL_SESSIONS`, else 1. The phone's *local model sessions at once* row writes it;
+*desktop default* deletes the key.
+
+Pinned by `packages/shared/test/localslot.test.mjs` (the rung, the sentences, the setting parse) and
+`packages/host/test/localslot.test.mjs` (locality, the reading, the gate's one-load-per-model and its
+failure sentences, the swap guard, and the ladder over a real store: one of two due local items
+starts, the other waits naming the local model and fires exactly once when the first ends).
 
 ### The four scheduling additions, and the facts the host had to supply
 
@@ -2358,8 +2442,8 @@ code doing what it was told:
 
 1. the rule opts into `waitUntilFree` (`holdForHost`) — *hold until nothing else on this desktop is
    starting or running*;
-2. rung 3 judges the occurrence due and inside its grace, and rungs 4–4.7 (`serial`, `hostBusy`,
-   `noSlot`, `picking`) hold the row;
+2. rung 3 judges the occurrence due and inside its grace, and rungs 4–4.6 (`serial`, `hostBusy`,
+   `noSlot`) hold the row;
 3. **every tick re-runs rung 3 from scratch** — the ladder is a pure function of `(row, facts, now)`
    and remembers nothing — so the clock keeps advancing while the row is held;
 4. the desktop stayed busy for over two hours, so rung 3 eventually judged the same occurrence
@@ -2388,13 +2472,13 @@ in-memory stamp would re-arm the bug on the first tick after one.
 
 *What still expires it.* `HELD_MAX_MS`, 24 h, and never shorter than the configured grace. "Held for
 ever, silently" is not an improvement on "failed wrongly" — a permanently busy desktop, a `serial`
-group with a wedged session, a repo whose smart pick never answers can each hold a released row
+group with a wedged session can each hold a released row
 indefinitely, and a row that waits a week without a word has disappeared just as completely. It is
 an order of magnitude past the grace the send sheet offers (0–120 min) on purpose: it is a backstop
 for work nobody is ever going to get to, not a second deadline competing with the first.
 
 *And what it SAYS.* While held, the row says it is held (`intentReasonText`'s `hostBusy`/`serial`/
-`noSlot`/`picking` sentences) — never that it is late, and never anything about the desktop being
+`noSlot` sentences) — never that it is late, and never anything about the desktop being
 off, which in this branch is demonstrably false. When the ceiling does bite, `heldOutText` is a
 DIFFERENT sentence from `missedText`, because it is a different fact and the reader can do a
 different thing about it: *missed — it was due and cleared to start, then waited 24 h without ever
@@ -3095,6 +3179,33 @@ them, so the id alone would call two different boxes one box. What it is FOR is 
 the CLI and written down before anybody answers. Outside `promptFingerprint` for the same reason
 `ask` and `desc` are.
 
+### `planbox.ts`
+
+- `planbox.ts` — **the plan a plan-approval box asks you to approve.** Reported from the reader: the
+  card said "Claude has written up a plan and is ready to execute. Would you like to proceed?" over
+  three buttons, and the plan itself was nowhere on the phone — the terminal draws it ABOVE the box,
+  long scrolled away on a phone grid, and the reader is fed by the log.
+
+  `askbox.ts`'s route does not exist here. Measured on 2.1.x (2026-10-08, a picture-app session): the
+  `ExitPlanMode` call is **not in the jsonl while its box is up** — the log ends on the `ToolSearch`
+  that loaded the tool; the assistant record lands only once the box is answered. What IS on disk is
+  the plan FILE the CLI draws that box from, the path its own footer names after "ctrl+g to edit".
+  Its location comes from the log, never from the screen (the footer wraps at phone width): the
+  newest `plan_mode` attachment's `planFilePath` when the tail still holds one, else
+  `<config>/plans/<slug>.md` off the `slug` every record carries.
+
+  The box is recognised by its QUESTION ("…a plan…"), never by `kind`: that question also says
+  "proceed", which `prompt.ts`'s older rule files under `tool`. The text rides as
+  `DetectedPrompt.plan` (`text`, `path`, `cut`), capped at `PLAN_CAP` because the box is part of
+  `SessionInfo` and goes out on every `session.updated` while it is up; outside `promptFingerprint`
+  for `desc`'s reason. Cached on the log's mtime AND the file's (`Session.planCache`) — the plan can be
+  edited while its box is up, and `mergeBox` takes the freshest read for the same reason. Every miss
+  is absent: no log, no slug, no file, an empty file.
+
+  Once the box is answered the call IS logged, and the parser renders its `input.plan` as a prose
+  block ahead of the tool row — a `lite` document would otherwise carry the plan only behind a
+  folded row nobody opens. `packages/host/test/planbox.test.mjs`.
+
 ### `login.ts`
 
 - `login.ts` — **the sign-in link, reassembled.** `/login` is the one flow that cannot be finished
@@ -3208,6 +3319,21 @@ an account that will refuse the second run exactly as it refused the first.
 
 `packages/host/test/headlesslimit.test.mjs` pins the envelope shape, the stderr-only variant, the two
 false positives (an ordinary bad verdict, junk on stdout) and the sentence.
+
+### `spendwall.ts`
+
+- `spendwall.ts` — **a balance is not a window.** An API-key / cloud account whose credit ran out, or
+  that hit a workspace / organisation / gateway spend limit, is read as a wall by `limit.ts`
+  (`LimitDetection.spend`, line-anchored so prose that merely quotes the error is not one) and by
+  `limitlog.ts` (the CLI's synthetic API-error turn, `LimitLogVerdict.spend`). Wording: the installed
+  CLI bundle (2.1.300) for the credit and gateway messages; the workspace sentence is the API's own,
+  least certain. A plan banner outranks, so subscription behaviour is unchanged.
+  **No ladder:** typing into an empty balance earlier changes nothing, so a spend wall takes ONE
+  attempt, at an instant the message printed in full or the earliest active usd CALENDAR period's
+  reset (`periodBounds`, via `setSpendPeriodSource` from `main.ts`), else `noteGaveUp` - the person is
+  told it needs them. A clock time is never guessed. With no printed instant the missing reset is the
+  rule answering correctly, so `limit.reset` records neither a miss nor a good.
+  `packages/host/test/spendlimit.test.mjs`.
 
 ### `limitlog.ts`
 
@@ -3615,11 +3741,13 @@ happens on the clock and never in the file. `e2e-limitreset.mjs`.
 
   **`windowCells()` is the whole of the correctness** and is exported for its own test, because the
   fold is a sum and every way a heat grid can be wrong is a bucket landing in the wrong box. It
-  repeats — deliberately, rather than re-deciding — the rule the live cut states on screen: an hour
-  counts in a window from the TOP of the hour that window opened in. Its price is that the opening
-  hour is in that cell AND in the one before it, so it answers a LIST and the screen says so. The
-  alternative, an exclusive rule of the grid's own, would have made cell 0 and the line under the
-  limit bar two different numbers about the same five hours.
+  calls — deliberately, rather than re-deciding — the rule the live cut states on screen:
+  `windowStartHour` (shared), the hour NEAREST the instant, at both edges, so an hour counts in
+  `[windowStartHour(opened), windowStartHour(closes))` and the cells tile. It used to floor the
+  opening hour, which put that hour in two cells and 59 minutes of last week into a week resetting
+  Thu 18:59 (≈ 4 points of over-count, measured). Still a LIST, so empty needs no sentinel. An
+  exclusive rule of the grid's own would have made cell 0 and the line under the limit bar two
+  different numbers about the same five hours.
 
   A window with no row RAN NOTHING — a reading, drawn as a real empty box — and `oldestHour` is what
   tells that apart from a window the record does not reach back to. Cost is crossed by model like
@@ -3657,6 +3785,136 @@ happens on the clock and never in the file. `e2e-limitreset.mjs`.
   compacted in place against `WATERPLANE_USAGELOG_CAP` and `WATERPLANE_USAGELOG_RETAIN_MS`; a corrupt line is
   skipped and a corrupt file starts again. `packages/host/test/usagelog.test.mjs`; the web half is
   `UsageSpark` in [web.md](web.md#tokenstatssheettsx--every-token-this-desktop-has-used).
+
+### `usagesources.ts` and `usagesourcelog.ts`
+
+- `usagesources.ts` — **usage readings PER SOURCE: claude's, then every contributed probe.**
+
+  Asked 2026-10-15: one chip segment per account that has a reading (Claude, Copilot, any plugin),
+  a source with nothing to say drawing nothing. claude's `/usage` scrape could not simply become
+  "one of the sources": its `UsageInfo` is read by three host decisions (the budget gate, the intent
+  ladder's window conditions, the burn and session-budget calibrators) and by the public plugin API's
+  `claudeUsage()`, and `usage.ts` is pinned against growing. So the registry wraps
+  `UsageChecker.get()` through the shared `claudeReading()` and puts the LIST beside it —
+  `usage.status` keeps `usage` and gains `readings` (additive; `PROTOCOL_VERSION` stays 2; an older
+  host's frame without it is adapted on the phone). `createUsageSources()` gives `main.ts` ONE publisher, called by
+  claude's callback and by the registry's `onUpdate`, so two publishers in one tick both carry the
+  whole list and the phone's last write wins.
+
+  A probe (`api.usageProbe`, plugin API 1.7) answers a `UsageReading` or null. **Null is ABSENT**
+  (the source leaves the list — never `pct: null` with nothing beside it); **a throw or a timeout
+  keeps the last reading** until its windows reset, one log line per source until it recovers —
+  `UsageChecker`'s last-good-reading rule — **except a window that names NO reset**, which is
+  dropped once it is 24 h past its last successful probe (`readingAfterAge`, `KEPT_UNNAMED_MAX_MS`;
+  the drop is published). Copilot's quota may omit its reset date, and a probe failing for days (gh
+  signed out) drew a three-day-old `5% mo` as today's; absent beats that. Claude's reading is not
+  aged — its readers have `BUDGET_STALE_MS`. Every answer is VETTED: the identity is the definition's
+  (a probe cannot speak for another source), a percentage outside 0..100 or a count with no limit
+  is dropped, a future `checkedAt` is not believed. One probe in flight per source; the phone's
+  `usage.refresh` asks behind claude's TTL, a null or failed answer is not re-asked within a minute.
+  Polling is OFF by default and follows the predicate claude's `/usage` poll uses ("something gates
+  on usage") — never a bare timer, because a probe spawns something (`gh` for Copilot). Boot re-offers
+  each source's last kept row as `remembered` once its probe registers, only for windows whose named
+  reset is still ahead, keeping the row's own instant. `packages/host/test/usagesources.test.mjs`;
+  the plugin seam in `pluginseam.test.mjs`.
+
+- `usagesourcelog.ts` — **those readings kept, one `usagelog-<source>.jsonl` per source** (the id
+  escaped one-to-one, `_`→`__` and `:`→`_c`, so `a:b` and `a_b` never share a file).
+  `usagelog.ts`'s rules and knobs exactly — the knobs are `USAGELOG_KNOBS`, read once there (dropped when nothing parsed, a repeat every REPEAT_MS,
+  CAP and RETAIN, corrupt lines skipped), in a file of its own so claude's `usagelog.jsonl` and its
+  route stay byte-for-byte as they were — **no migration**. A row on disk keeps the window's unit and
+  count beside the wire sample's three fields, so the boot re-offer can draw the chip's text; the
+  route `GET /api/usagelog/:source` answers the wire `UsageSourceHistoryDoc` and a 404 in words for
+  claude or a source never kept. Flushed on SIGTERM after `usagelog.ts`.
+  `packages/host/test/usagesourcelog.test.mjs`.
+
+  **Copilot** is the first probe, an in-repo extension (`packages/extensions/copilot-usage/`,
+  host-only): `gh api /copilot_internal/user` — measured on this desktop to answer the plan, the
+  monthly reset and per-kind quota snapshots with gh's keyring token, no new credential. It is an
+  INTERNAL endpoint, so the parser names each field it reads and anything else is null. It registers
+  only with `copilot` on PATH, so a desktop that never runs Copilot never spawns `gh`. **A plugin
+  backend billed by its own provider keys contributes nothing yet**: there is no account quota to
+  read, and a dollar sum with no cap has no hot state.
+
+### `costwindow.ts`
+
+- `costwindow.ts` — **the token ledger folded over any span: `GET /api/costwindow?from&to`.**
+
+  Why it exists: on 2026-10-09 the weekly figure stood at 32% thirteen hours after its reset, and
+  the cost view could not say where it went. Read off the logs at list price that week was about
+  $470 API-equivalent in 13 h; one architect-review fan-out over ~36 repos was ≈48% of it, two
+  garmin-monorepo sessions ≈41% (92% of those subagents, mostly Opus), subagents 73% overall.
+  `TokenStatsDoc` could show none of it: its repo rows and its costliest list are all-time, its
+  hour rows carry no conversation, and under a live window the repo list could only say it was
+  not answerable. The store (`tokenstats.ts`) already keeps every hour of every file crossed by
+  model, so any span is a fold over that map and not a second scan.
+
+  **The fold prices exactly as `aggregate()` does** (per model and day), and the e2e pins a span
+  covering the whole fixture to the all-time fold to the cent. **The hour rule is repeated, not
+  re-decided**: an hour is the finest bucket on record, so the phone sends a window's `from` already
+  on its `windowStartHour` (`windowCells`' rule) and the fold's `hourFloor(from)` is the identity;
+  for a raw instant (the burn push) the document says how much wider than asked it came out
+  (`fromHour`). Tokens no list price covers go to `unpriced`, never charged zero. A subagent log
+  folds into the conversation `fileKey.split("/")[0]` names, the parent's worktree names the repo
+  (`repoOfWorktree`, which moved here from `tokenstats.ts` and is re-exported, so the two modules
+  import one way only), and a log with no cwd is "unknown repo". `TokenConvo` rows gained
+  `agentByModel` for the "Opus subagents: N%" sentence. A span that is malformed or wider than 35
+  days answers an EMPTY document, not a 400 (`/api/tokenwindows`' rule).
+
+  **`costMeta` joins names; the ledger stays the source.** Titles come from the roster (live
+  `sessions.list()`, else the closed stack's `tabTitle`/`title`, live wins, newest closed wins);
+  launches come from how the session was opened (`originOf`), and a fan-out target's `itemId` is
+  `${runId}#${n}`, so the run is `itemId.split("#")[0]` and its label is the run's intent row
+  (a scheduled sweep's id `${id}@${startedAt}` is looked up by the part before the `@`). Closed
+  sessions are in because the logs are every conversation on disk and a session that ended an hour
+  ago is the likeliest answer to "where did it go". A lookup that throws leaves the field absent: a
+  missing name is a row labelled `repo · id8`, a failed read would be a card with nothing on it.
+  **Known edge**: the closed stack holds 120 rows, so a conversation older than that has no title or
+  launch. It groups as `unrecorded` — worded "no launch record", never "by hand": the daemon's own
+  `claude -p` spenders land there too, and calling those a person's sessions was a wrong reading,
+  not a missing one. `archive.ts`'s first-prompt index is the follow-up if that matters. Peak
+  context per conversation was planned for the row and dropped (the wire field stays optional and
+  unset). **A launch row's kind is the RUN's** (`runKind`): a key that is a fan-out runId is a
+  fan-out even when its dearest target was resumed at reset, and an item's resume never renames
+  the item.
+
+  **The cap** (`COST_CONVOS_CAP`, 60): a real week was 591 conversations and 782 KB, nearly all
+  of it per-conversation hour and model splits. The dearest 60 ship whole; the rest fold by repo ×
+  launch into `rest` (`CostConvoRest`: a count and the sums, no ids), with `convosTotal` for the N
+  of "n of N" and `CostHour.restConvos` per hour. Hours, totals and every `byRepo` count them
+  already; `foldLaunches(convos, rest)` and `rankRepos(convos, rest)` add them back so a fan-out of
+  forty cheap targets is still the dear run it was. **No hour names a folded id** — the phone's
+  `convoIds` are built from carried rows, and `weekCut.restText` says what each list is hiding.
+  A folded run keeps only the run's own launch fields (one target's `itemId` or model is not the
+  run's). All three fields are optional, so an older phone parses the document and simply lists
+  the 60. `filterText` reads the bucket's own `t`: the key is host-local, and re-parsing it on a
+  phone in another zone printed a second clock beside the strip's.
+
+### `burnwatch.ts`
+
+- `burnwatch.ts` — **a push when the weekly figure climbs fast, not a hold.** The same ask
+  wanted something that says so while the week burns, not after. `shared/burn.ts` owns the rule:
+  the readings are cut into reset-bounded stretches by the SAME segment rule the usage chart uses
+  (`usageSegments`, lifted out of the chart kit so a push and a drawn line cannot disagree about a
+  rollover), the climb over the last three hours is a rate, and `burnVerdict` applies the
+  threshold, the cooldown and "never twice for one stretch". This module is plumbing: read the
+  kept readings, ask the verdict, look up the dearest launch in the stretch from the cost fold,
+  notify, remember.
+
+  **It pushes and never holds.** Nothing applies itself, so a fast burn is a sentence a person acts on: the words end "Nothing was paused." and the kind is default-on because it fires at most
+  once per cooldown. `WATERPLANE_BURN_PTS_PER_HOUR` (default 4, 0 = off) and
+  `WATERPLANE_BURN_COOLDOWN_MS` (default 3 h). **No timer of its own**: `UsageChecker`'s callback
+  drives `observe`, and rides the same irregular readings the chart does. That callback only fires
+  while something polls, and at first nothing polled for the burn push — it spoke only while a
+  plugin, an armed budget or a %-budget session happened to keep `/usage` warm, and `burnStretch`
+  needs two readings 45 min apart inside 3 h. So `syncUsagePolling` also polls while `armed()`
+  (threshold > 0) and the `burn` kind is not muted (`notify.prefs.set` re-syncs it). The poll is
+  the existing one: a short-lived `claude` PTY reading the `/usage` screen every `USAGE_POLL_MS`
+  (8 min), no model call — the same cost the budget already pays by default. The state
+  (`burnwatch.json`: last push, last stretch's start) is written BEFORE the push, so a crash loses a push rather than repeating one. A cost fold that cannot be
+  read costs the push only its "dearest in it" line. The points clause calibrates over an 8-day
+  cost window, not the stretch (a calibration needs 6 h+ stretches with cost in them) and is
+  simply absent when `ptsCalibration` refuses.
 
 ### `budget.ts`
 
@@ -3714,10 +3972,17 @@ The pure rule is `shared/sessionbudget.ts`; the host half is three pieces.
   fires anyway). A notification says so (`Session budget hit`, `sessionBudgetText`, tag
   `session-budget:<id>`), and — per-budget `interrupt`, default on, and
   `WATERPLANE_SESSION_BUDGET_INTERRUPT` not `0` — ONE Esc is written into the running turn.
-  **The Esc is gated, never assumed** (`budgetEscBlocker`): only a HOOKED session's
-  HOOK-announced turn (`turnFromHook`) proves a turn is running — not `turnActive`, which the
-  screen also sets (/compact, a turn nobody announced), and without the pipe the Esc lands on
-  whatever is there; never at a choice box or an unparsed dialog (`prompt`/`awaitingInput` — Esc
+  **The Esc is OWED, not attempted once** (`Session.budgetEscOwed`, persisted in `live/`): set at
+  the crossing when the budget interrupts, re-asked on every judge while still over
+  (`budgetEscDue` — `refreshSpark` runs on the sweep, so a few seconds apart), and settled by the
+  Esc going out, a person's own send (`deliverInput` — they chose to let it work), `interrupt`
+  switched off, a new cap or `ok`. The one-shot version asked at the crossing INSTANT and, with
+  no turn there, never again: on 2026-10-12 a session crossed $150 right after a limit resume, no
+  Esc, and worked on to $178+. A late Esc is said once (`Session budget · … interrupted`).
+  **The Esc is gated, never assumed** (`budgetEscBlocker`): the running turn is proven on the
+  LIVE grid (below), NOT by the hooks — it used to need `turnFromHook`, and the turns that
+  overspend most never have one (driven by background agents' task notifications, which fire no
+  `UserPromptSubmit`; or already running when the daemon restarted); never at a choice box or an unparsed dialog (`prompt`/`awaitingInput` — Esc
   there DECLINES, a decision nobody made); never while a delivery into that session is still
   unconfirmed (`opendeliveries.ts` — an Esc at a composer holding those words is the deletion
   `deliver.ts`'s miss sweep is forbidden). **And then the screen, in the write's own tick**
@@ -4108,7 +4373,7 @@ same minutes. `packages/host/test/queuedturns.test.mjs`.
   evict anything unsettled; the config is snapshotted onto the row at fire time, because a run that
   renames itself when `builds.json` is edited is a lie about what ran. The
   sheet's **set up** button fires a predefined prompt in a real session that writes
-  `.waterplane/builds.json` itself, since wiring one by hand means typing a gradle task on a phone.
+  `.waterplane-shared/builds.json` itself (the committed file; `.waterplane/builds.json` only for a desktop-only path), since wiring one by hand means typing a gradle task on a phone.
   Artifacts are "what was written since the run started", which an INCREMENTAL build satisfies for
   nothing at all — a successful `assembleRelease` with 50 tasks UP-TO-DATE produced no file — so a
   run that touched nothing falls back to the newest matching deliverables, flagged `stale`: "here is
@@ -4647,6 +4912,76 @@ Seven things about it are deliberate.
 `packages/host/test/sidecarstream.test.mjs` (the spawn branch, against a real child process through
 `WATERPLANE_CLAUDE_BIN`, no account and no network).
 
+### The slot check — `shared/intent/slot.ts` and the assessment's `conflict`/`split`
+
+Smart pick (removed 2026-10-16: ~26 real passes, 0 merges, 2 reorders) re-judged the queue at fire
+time and was mostly blocked by the clock rule. Its replacement asks ONCE, when a timed row lands in
+a slot that already holds others, and the check is the ordinary assessment scoped to that slot —
+one sidecar call, only on a tap, every change approved one at a time
+(R-automation-057).
+
+**A slot is "fires together", computed by one function on both ends.** `slotsOf` buckets waiting
+one-off timed rows: `window` rows by the reset read back off their own `nextAt` (both edges, any
+lead), one-off instants by `nextAt`, both within `RESET_MATCH_MS` — the scrape jitter
+`budgetpass.ts` measured. A one-off instant that lands on a window slot's reset, or on a member's
+own fire instant, JOINS that slot: they fire together, and splitting them by how the clock was
+typed would hide the pair most likely to collide. Clustering is greedy from the earliest instant so
+rows 4 minutes apart never chain into one long slot. `SlotRow` is the one input shape;
+`slotRowOfIntent`/`slotRowOfItem` build it so "waiting" means one thing on both ends, and
+`slotMates` is the cut whose length is the count. A key travels on `assess.run`'s optional `scope`
+and is matched back with tolerance (`findSlot`) — the phone may read the reset a minute apart.
+
+**Merging across clocks inside one slot takes the LATEST member's clock** (`latestClock`), so the
+merged row never runs before any member asked; a near-tie between two different rules is null,
+because which one is later can flip on the next scrape.
+
+**`conflict` is words.** Two or more known ids and a sentence; there is no `AssessChoices` field
+and no mutation for it, so "nothing applies itself" holds by construction. **`split` posts two
+texts in place of one intent row** (same clock, original ARCHIVED, never cancelled) and is refused
+when the two texts together no longer name every path the original did (`transportPaths`) —
+appending the lost path would be this module writing the instruction.
+`packages/shared/test/slot.test.mjs` · `packages/shared/test/assessslot.test.mjs`.
+
+**The host half** (`assess/hassexec.ts`, `hassinput.ts`, `hassapply.ts`). `assess.run` with a slot
+`scope` judges EXACTLY the caller's ids, never the host's slot: `startAssessment` re-derives the
+slot from this repo's live assessable rows with `findSlot` only to CONFIRM them — every id sent must
+still be waiting and sit in that slot, and at least two must, else "the slot changed since you
+looked — it now holds N; open the check again". It used to run over the host's members instead,
+and greedy clustering means one row posted since (an agent's `new` at T−2m beside the `a`@T,
+`b`@T+4m the phone counted) moves the cut: the run judged a row nobody saw and dropped one they
+did. A slot that merely GREW around the rows sent runs over the rows sent. A key that matches
+nothing (rows ran or moved, the reset drifted past `RESET_MATCH_MS`) or a slot down to one row is
+refused in a sentence too, and no run is posted — nothing is bought. The prompt gains one paragraph only on a slot run
+(when they fire, order WITHIN the slot, merges on the latest clock, splits, conflicts) plus the two
+JSON lists; the repo-wide prompt is unchanged. On apply:
+
+- **split** posts both halves on the original's trigger and run settings (`holdForHost`, target,
+  budget, launch…, never its `label`), THEN archives the original with `edit({archived:true})`. The
+  ids are a hash of (run, sid) (`splitIds`), so a replayed apply finds them through `post()`'s
+  at-most-once and posts nothing twice. **Every stop leaves one runnable copy, never two:** a
+  refused post sets aside EVERY half that exists and has not started — not only this call's, since a
+  replay can find half 1 from an interrupted apply, and left queued beside the original that job
+  ran twice — and an original whose archive `edit` is refused (`.ok` is read) sets both halves aside
+  and says so in `detail`. **A split is refused when a live row chains `after` the original**
+  ("it is waited on by “…”") — archived, the original never settles and the chain waits for ever.
+  Refused rather than re-pointing the chain at half 2: that rewrites a person's trigger, and "after
+  the whole job" is not "after its second half". The archived row carries no reason (there is no
+  field for one); the halves' `origin` (`assess:<runId>`) is the link back.
+- **conflict** has no branch in the apply at all.
+- **merge**, slot or repo-wide: the merged row now carries `latestClock` of its members' ONE-OFF
+  clocks (trigger with its grace, plus that member's `holdForHost`). Before, every merge posted
+  untimed, so merging a timed row made it run earlier than asked. Untimed members do not stop it
+  (they are content to wait); recurring members are a rule and their clock is never copied; a null
+  `latestClock` refuses that merge in words and its members stay. Members are still
+  cancelled+dismissed — `merged into <id>` lives on that result, and archive has no reason field.
+- **order** in a slot run goes through `backlogedits.reorder` (the drag's verb: the rows trade their
+  own seats, every one stamped `handOrdered`); `pinRanks` is not consulted. A slot MERGE is posted
+  at its members' lowest seat (`memberSeat`: `order ?? createdAt`) so it joins that trade — posted
+  at the run's `rank` (a small integer) it handed the backlog's first seat to the slot.
+
+Refusals travel only in the apply `detail` (the toast), not as a wire field.
+`packages/host/test/assessslot.test.mjs`.
+
 ### `clihealth.ts`
 
 The CLI integration's own health, host-side: the file it is kept in, the ten places the daemon feeds
@@ -4929,13 +5264,20 @@ session could only write the prompt into a file for the person to paste into the
   `backlog.add` body moved into `addClientBacklogItem` and both routes call it (the socket keeps its
   ack ledger and in-flight join around it; the agent's at-most-once is the same `agent-<key>` id,
   through `backlog.add`'s new `opts.id`). The item carries `Intent.manual`: **rung 1 holds it** with
-  `MANUAL_HOLD_TEXT`, auto on or off, pinned or not, so neither auto-fire nor the smart pick can
-  start it (and `smartpick.ts`'s `isCandidateRow` leaves it out, or a merge would mint an ordinary
-  `auto` row from its words) — the person's own `fire` is `runNow`, which skips the ladder, and is the one way it runs.
+  `MANUAL_HOLD_TEXT`, auto on or off, pinned or not, so auto-fire cannot
+  start it — the person's own `fire` is `runNow`, which skips the ladder, and is the one way it runs.
   A new field rather than `archived` (hidden by default, so the person would never see the add) or
   "no `auto`" (which the ladder reads as a person's tap and fires at once). The phone's backlog row
   says it, and `▶ next` skips it as it skips a clock still ahead. A `when` or `fire` on this route is
   refused in words — timed work is the intents route.
+- **`GET /api/agent/queue` + `POST /api/agent/queue/order` — the run order, by prompt.** Several
+  rows on one reset fire in `order ?? createdAt` order, and the person asked to say which goes
+  first by telling their agent rather than dragging. The queue lists EVERY waiting row (not settled,
+  not started, not archived), the person's too, because the person is the one asking; `order` takes
+  2–200 ids and calls the drag's own `backlog.reorder`, so the rows are stamped `handOrdered` and **trade their OWN slots** — a row not listed keeps its seat.
+  That same change is what let the phone drag inside a filtered cut: `reorder` used to renumber
+  the list 0..n, so a subset would have jumped ahead of every row off screen, and drag was refused
+  whenever anything was filtered — including the *on a clock* cut built to gather these rows.
 - **Who may call** is [protocol-and-security.md](protocol-and-security.md)'s paragraph: loopback,
   not proxied, not a browser. DELETE cancels only a row an agent posted; a person's row is theirs.
 - Pinned: `packages/host/test/agentintents.test.mjs` (every refusal as a sentence, the non-loopback
@@ -4964,6 +5306,29 @@ them to be *a thing to consider only*, and to be able to ignore them.
   100k–900k). The row PASSES at ≤ max(500k, chosen), so the value the checklist itself writes can
   never read as a warning; a smaller choice never lowers the 500k line.
 
+
+### `optins.ts` — offers a repo can turn on, which are not findings
+
+The setup checklist is hygiene: pass/warn/fail, counted in the badge. A requirements list, a weekly
+security review or a pre-push hook are worth having and their absence is not a defect, so they live in
+the shared `OPT_INS` catalog and this module answers the one question about each: *already on here?*
+
+- **Probes are filesystem + local repo reads, bounded, never paid.** No network, no model, no `gcloud`,
+  no spawning the repo's code. Each `detail` is one sentence naming what was read; a probe that cannot
+  read answers `unknown` with the reason, never a guessed on/off. `gcp-cleanup` is ALWAYS `unknown`:
+  the registry's policy is in the cloud, so the person closes it by saying *done*.
+- **A repo's own health readings count only when COMMITTED** (the file at `HEAD`, non-empty
+  `readings`), the same rule `repohealth.ts` runs under. Written but uncommitted reads `off`, saying so.
+- **Two inputs are injected, not imported:** `standingPrompts(worktree)` (the route wires it from the
+  intent store: recurring, not archived, not spent, realpath-equal cwd; a prompt carrying
+  `optInMarker(id)` is the card's own schedule) and the registered fix ids (`requirements` is offered
+  only while its extension is loaded). `null` prompts ⇒ `unknown`.
+- **The person's word** (`declined`/`done`) lives in `setupprefs.json` under `optIns`, realpath-keyed,
+  and is only STAMPED on the row; it never changes `state`. Ids outside the catalog and any other
+  choice are refused in words; `null` clears.
+- **Nothing here touches `inspectRepo`**, `ComplianceCheck`, the sweep's store or the badge
+  (`optins.test.mjs` pins it). `GET /api/repos/:id/optins` · `POST …/optins/choice` `{id, choice}`
+  (a POST: it writes), answering with the fresh report.
 
 ### `nameTab()` — the four words a session tab wears
 
@@ -5044,10 +5409,40 @@ server (`packages/host/test/sweepstores.test.mjs`). Three rules carry it:
   deleting nothing** (`skipped: true`). That rule lives inside the destructive function rather than
   at its one call site, so it travels with the code and is pinned by a test. Skipping a pass costs
   kilobytes until the next restart; guessing costs a session its prompt history.
-- **What it cannot reclaim, stated.** The sweep never prunes `live/` itself, and `deleteLive` only
-  runs while the daemon is alive — so a tmux session killed while the daemon was down leaves a live
-  record that shields its history and summary for good. Conservative, and therefore not a bug, but it
-  caps how much of the measured 436-file leak a boot pass actually recovers.
+- **`live/` is pruned by `rediscover()`, not by the sweep.** `deleteLive` used to run only while the
+  daemon watched a session end (`kill`, `remove`, the exit path), so a tmux session that died while
+  the daemon was down — a reboot, a crash, a `kill-session` at the desk — left a live record that
+  shielded its history and summary for good: on this desktop 162 of 277 records had no tmux session,
+  the oldest seven weeks old. That was called conservative and not a bug, on the reasoning that only
+  a live daemon can know a session ended. But `rediscover()` already holds the answer: a `tmux ls` of
+  this host's own server. So right after adoption it deletes (`reclaimStaleLive`, the rules in the
+  pure `staleLiveIds` beside `sweepSessionStores`, pinned in `sweepstores.test.mjs`; end to end in
+  `e2e-livereclaim.mjs`) every record that is **provably** gone, and it is safe because each
+  condition keeps on doubt:
+  - **only past a listing that succeeded.** Every way `tmux ls` can fail to list — no server
+    (after a reboot), a socket error, a permission error — exits non-zero, throws, and returns before
+    the reclaim; a failure is never read as an empty listing. (Measured: "no server running",
+    "error connecting", "Permission denied" all exit 1.) The cost is that a boot finding NO server
+    reclaims nothing; the next boot with any session running does.
+  - **only against the server the record belongs to.** `persistLive` stamps every record with this
+    process's `TMUX_SOCKET_ID` (socket dir + `-L` name), and a record stamped with another server is
+    kept — a listing of one server says nothing about another, and a dev host on a different
+    `TMUX_TMPDIR` or `WATERPLANE_TMUX_SERVER` sharing the state dir would otherwise delete the
+    service's records. A record from before the stamp is judged only by a host on the DEFAULT
+    socket (`TMUX_SOCKET_DEFAULT`: neither override set) — the only way such a record's pane lives
+    elsewhere is a host that once ran with an override.
+  - **only past an age gate** (`STALE_LIVE_MIN_AGE_MS`, 1 h, e2e shortens it): `create()` writes the
+    record in the same tick it starts the tmux client, but `new-session` happens in that client,
+    asynchronously — a second host process listing the server in between would see a record with
+    no session. An hour is orders of magnitude past that window; a spared record goes next boot.
+  - **never what this host holds** — the session map and the parked set (a parked record has a LIVE
+    pane, so it is in the listing anyway); never a record it cannot stat or parse (read with a plain
+    parse, not `loadLive`, whose guard would rename a corrupt one aside); never a non-`<id>` name.
+  Every backend runs in tmux (the one substrate) — opencode's panes too, and its seat reaper asks the
+  tmux session, not the record — so there is no record kind that legitimately lacks a session. The
+  orphan sweep, armed earlier but run 30 s later, then reads a `live/` that tells the truth, and the
+  freed sessions' history and summaries go once they pass its own 7-day gate. `aliveSessionIds` is
+  unchanged: still the map plus every record.
 - **It deletes files and nothing else.** No recursion, no directory removal, and the filename must be
   a bare `<id>.json` — a traversal-shaped name is refused and left alone, never sanitised, which is
   `archive.ts`'s `deleteArchived` rule for the same reason: this function deletes.
@@ -5329,10 +5724,10 @@ Tests over fake sources: `deliversubmit`, `settle`, `sourcerungs`.
 
 ### `sidecar.ts` — where an unattended completion is bought
 
-Five things in this daemon spend tokens with nobody watching: the tab name
-(`sessions/record.ts`'s `nameTab`; it was the per-turn summary until 2026-10-01), the assessment (`assess.ts`), the two reviewers (`review.ts`), the
-backlog's smart pick (`smartpick.ts`) and the naming pass (`naming.ts`) — the last two added after
-this file existed, which is the point of it having an engine axis at all. Three of the five are
+Four things in this daemon spend tokens with nobody watching: the tab name
+(`sessions/record.ts`'s `nameTab`; it was the per-turn summary until 2026-10-01), the assessment (`assess.ts`), the two reviewers (`review.ts`) and the
+naming pass (`naming.ts`) — the last added after
+this file existed, which is the point of it having an engine axis at all. Two of the four (the tab name and naming) are
 toolless BY CONTRACT and may therefore take the local engine; the two that read a repo refuse it in
 words. The first three had each grown their own `execFile(claude, ["-p", …])`, and the striking thing about the set is how
 unequal it is. The assessment fires when a person taps it. A review fires when a person asks for a
@@ -5356,7 +5751,7 @@ file existed — that is the whole safety argument for the change. `openai-compa
 **Why the local engine is not offered to everything.** A completion with no tools can only answer
 from what is in its prompt. That is a perfect fit for the summary, whose contract already forbids
 tools — it runs `--tools ""` precisely because the transcript is IN the prompt and there is nothing
-to go and read; for the smart pick, whose items and repo facts are in the prompt; and for the
+to go and read; and for the
 naming pass, which is handed the items' own words and asked what to CALL them. It is a category
 error for the assessment and the reviewers, which exist to read a repo and write files. A task that needs tools therefore REFUSES the toolless engine in a sentence
 naming the variable, rather than running it and reporting a judgement made without looking at the
@@ -5400,16 +5795,23 @@ of a `claude -p` envelope. A local model has no account and no such block, so ru
 over its prose could only ever produce a false positive on a model that happened to paraphrase one.
 It runs on the claude engine only.
 
-**`runNameTask` keeps every flag `summarize()` has, and adds the smart pick's one.** CLAUDE.md's
+**`runNameTask` keeps every flag `summarize()` has, and adds one.** CLAUDE.md's
 standing rule is that a new unattended `claude -p` starts from the summary's flags and justifies
 every one it DROPS. This one drops none — `-p --output-format json`, `--model`, `--setting-sources
 user`, `--tools ""`, `--system-prompt` — and adds `--thinking disabled` for the measurement recorded
-under `smartpick.ts`, which applies here more strongly: titling a sentence is not a problem thinking
-improves, and thinking is the whole of what a pass like this costs. `maxBuffer` is the smart pick's
+in a comment in `sidecar/sidecarname.ts` (thinking on: $0.0067–$0.025, 13–36 s, 1,044–3,371 thinking tokens; `--effort low` $0.0155, 28 s; the flag $0.0014, 2.8 s, 0 thinking tokens), which applies here more strongly: titling a sentence is not a problem thinking
+improves, and thinking is the whole of what a pass like this costs. `maxBuffer` is
 1 MiB, since the contract is one small JSON object; the limit detector is asked FIRST, because an
 account block's envelope parses and its `result` is a quota banner. The one thing it does NOT copy
 is `tidy()` — the summary's whitespace squash and 240-char clip would turn a JSON document into
 something `JSON.parse` refuses.
+
+**The local swap guard** (`localslot.ts` `localSwapGuard`, called in `sidecaropenai.ts` before the
+fetch). Sidecar calls never count against the local-session cap — they are seconds long — but one
+aimed at the SAME runner (host:port) as a local coding turn that is working on a DIFFERENT model is
+skipped with one `sayOnce` and the `""` every caller already reads as "no answer": Ollama would
+evict the coding model to load the summary's, and the turn pays a full reload for a tab name. Same
+model, or nothing local working ⇒ the call goes.
 
 Pinned by `packages/host/test/sidecar.test.mjs` (the spec parser including a model tag with a colon,
 the four ways a `/chat/completions` body can be worthless, that the claude engine still unwraps
@@ -5418,420 +5820,22 @@ spelled exactly once) and by `scripts/e2e-sidecar.mjs` and `scripts/e2e-naming.m
 a real daemon against a ten-line Node stub speaking `/chat/completions` — so CI needs no
 ollama, no model download and no GPU.
 
-### `smartpick.ts` — the look before the pick
+### Smart pick — removed 2026-10-16
 
-`packages/host/src/smartpick.ts` is the host half of *smart pick, merge and sort*: a per-repo
-tick-box that, the moment that repo's next automatic backlog item would fire, buys ONE cheap
-unattended completion over the repo's remaining items and lets it do exactly three things — pick
-which runs next, merge items that are one job, sort the rest. `@waterplane/shared`'s `smartpick.ts`
-decides (above); this file is everything that touches the world.
+An opt-in, per-repo, unattended `claude -p` pass used to run right before a backlog item fired and
+pick, merge or re-sort the repo's waiting items. It was removed after ~26 real passes produced 0
+merges and 2 reorders — the cost and the pre-fire hold bought nothing a person wanted.
 
-**The user chose that all three verbs apply with no approval step**, with CLAUDE.md's *nothing
-applies itself* and *never overwrite typed words with words nobody typed* put to them first. That
-exception is recorded here rather than in the always-on file, and what the two rules still buy is
-written into the code: **nothing is ever destroyed** (a merge ARCHIVES its originals — never cancel,
-never dismiss, never remove — so every word is still in the store, listed under *archived*, one tap
-from coming back, with an `undo` on the merged row), and **the row says what happened to it**
-(`mergedFrom`, `mergedInto`, `handOrdered`, `origin`).
-
-#### Where the hook is, and the guard ladder
-
-`IntentDeps.pickHold` is asked at the very last moment of `intents/ladder.ts`'s `pass()` — after the whole
-verdict ladder, after `holdForHost` and `noSlot`, after the fan-out pool, immediately before the
-`go` claims. A sentence HOLDS the row (`blocked`, reason `picking`); `null` fires it. Nothing is
-claimed while it holds, so `busyCwds`, `hostBusy` and `autoSlotsFree` are untouched and every other
-repo keeps moving. `runNow` never asks: a person's tap is not a pick, and holding somebody's finger
-for twenty seconds while machinery reconsiders is not what they pressed.
-
-The manager does not de-dupe the call and must not — it does not know what a "pick" is. `serial`
-bites only once something has been CLAIMED and a held row claims nothing, so the second row of the
-same worktree reaches the hook in the SAME pass. The hold is therefore keyed per **cwd** by the dep,
-and the whole of the feature's correctness is the order of `hold()`'s rungs:
-
-1. **Un-ticked repo ⇒ `null`.** A `Set` membership test (`BacklogManager.smartPickEnabled`) and
-   nothing else — no git spawn, no fingerprint, no file read. "An un-ticked repo costs exactly zero"
-   is a claim about this one line, and `smartpickstore.test.mjs` asserts it by counting fakes that
-   were never called.
-2. **Not a candidate row ⇒ `null`.** `isCandidateRow` is ONE predicate answering both "is the row
-   about to fire one of these?" and "which rows may the pass sort?", because two spellings would be
-   two answers and the disagreement would be a pass reordering rows around one it was never shown.
-   Excluded: a named session target, a `pinned` *queue here*, an `after` chain (its own clock), an
-   archived row, anything not `auto`. **INCLUDED, since recurrence decides the list: a one-off with
-   an instant on it** (`isTimedWorkRow`) — that was the whole ask, and what the pass may do with one
-   is *a row with a clock* below.
-3. **Already in flight for this cwd ⇒ HOLD, with no git, no fingerprint and not even the candidate
-   list.** This is the rung the second row lands on; doing any of that would be paying twice for one
-   look. It also answers for a pass that is APPLYING (`SmartPick.applying`, below), which is a
-   different thing from one that is still waiting for an answer and was missing for a while.
-
-   **It is asked BEFORE "fewer than two candidates", and the old order was a bug.** With A and B in
-   flight, anything that took B out of the list mid-pass — `intent.cancel`, `backlog.remove`,
-   `backlog.archive`, a hand `backlog.fire` (which makes it `starting`, so no longer a candidate) —
-   dropped the repo to ONE candidate, which answered `null`, which released A and started it with
-   A's own pass still running. The answer then landed not-late against a backlog whose A was
-   `running`, and `apply()` archived the running row and posted a merged row that would have typed
-   its words a second time. A cwd with a pass out always answers HOLD; the plan's stated cost for
-   that is "at most twenty seconds", which the watchdog enforces.
-4. **A row this feature WROTE, still inside its undo window ⇒ HOLD.** `MERGE_HOLD_MS`
-   (`WATERPLANE_SMARTPICK_MERGE_HOLD_MS`, 30 s, 0 to switch off). See *the undo window* below. A `Map`
-   lookup on the merge index, and only for a merged row, so an ordinary repo pays nothing.
-5. **Fewer than two candidates ⇒ `null`.** Nothing to sort and nothing to merge. No record, no
-   spend.
-6. **The fingerprint has not moved ⇒ `null`.** `smartpickFingerprint` over the candidates (id, text,
-   label, order, `resume`, `handOrdered`, `steps`, `atKey`) plus branch, dirty paths and the last ten
-   commit subjects.
-   The last pass is persisted, so a RESTART with an unchanged backlog spends nothing — `summarize()`'s
-   rule, applied to an ordering.
-7. **The churn floor (`WATERPLANE_SMARTPICK_MIN_INTERVAL_MS`, 15 s) ⇒ `null`, and a `skipped` record
-   carrying the gap.** Belt-and-braces that should never fire, because a pass records the
-   fingerprint of the state it LEFT BEHIND. If it ever does fire, a pass's own result is moving the
-   fingerprint, which without this guard is a repo buying a completion per tick for ever — so it
-   exists, and it says so in the strip rather than skipping quietly.
-
-##### The apply is part of the look (`applying`), and it is released a turn LATE
-
-`IntentManager.post()` kicks the tick SYNCHRONOUSLY. So posting the merged row re-enters `pass()` —
-and therefore `hold()` — from inside `performMerge`, in the two statements between that post and the
-archive of the rows it was made from. The in-flight entry is already gone by then (the answer landed),
-so the re-entrant call read a HALF-APPLIED backlog: the merged row AND both of its originals, all
-still waiting. It bought a second completion against that list, was handed the same merge again, and
-applied it a second time — two merged rows for one pair, and an `undo` that unwound only the newer of
-them. `scripts/e2e-smartpick.mjs` found it: two passes 3 ms apart, the second reporting it had looked
-at four items in a repo that had three.
-
-So every mutation this feature performs runs inside `whileApplying(cwd, …)`, and rung 3 holds
-anything that reaches it meanwhile: the apply, `undo` (whose refusal is recorded LAST, so a pass
-started in the middle of one would be offered the very merge being undone) and boot's
-`finishApplying`.
-
-The flag is released **on the next turn of the event loop, not at the end of the statement**, and
-that is the load-bearing half. The tick created inside the window walks the rows asking `hold()`
-about each in turn with an `await` between them — microtasks, every one — and `pass()` builds its
-`live` list BEFORE any of them, so that walk is ordered by the backlog as it was before the sort.
-Clearing the flag as the apply returns lands in the middle of that walk: the row it asked about first
-stays held and the NEXT one is let through, which fires the item the pass had just sorted out of the
-way. Measured, and it is the failure that reads least like a bug — a repo whose pass picked the third
-item quietly ran the second. A macrotask lands after every one of those awaits, so the stale walk
-holds every row, and the single kick on release starts a clean pass over the list as it now is;
-`TICK_MS` is the backstop if that kick lands on a tick still running. Every kick inside the feature
-goes through `SmartPick.kick(cwd)`, which swallows one raised inside the window for the same reason.
-
-**Why the first fire after a change WAITS** rather than proceeding and letting the pass affect the
-next pick: every completed item shrinks the remaining set, so *every* pick follows a change, and a
-"proceed now" rule would mean the pass never governed any pick at all. The cost is ≤ 20 s on one
-repo's next item, with nothing else held.
-
-#### Every failure fires the order you had
-
-Timeout, a failed run, an account block, an unreadable answer, an id that does not exist, an answer
-that lands after the watchdog let the row go — each writes a record against the fingerprint the pass
-STARTED on, so the next tick reads rung 6 and the item fires exactly as it would have with the
-feature off. The watchdog (`WATERPLANE_SMARTPICK_TIMEOUT_MS`, 20 s) is this side's as well as the child's:
-`runSmartPickTask` carries the same deadline, but a promise that never settles for any reason would
-hold a person's backlog item for ever, and *the pass may never block a fire for ever* outranks every
-other rule here. An answer arriving after that is `late` — recorded, applied to nothing, because
-reordering a backlog whose next item has already started is the one thing this feature may not do.
-
-**A THROW inside `finish()` records too, and that is a fix.** `start()`'s `.then` calls `release()`
-and then applies; anything that threw inside the apply — a store write, `notify` inside `onApplied`,
-the sanitiser on adversarial output — rejected into the `.catch`, whose first line is
-`if (!release()) return`. Already released, so it returned having written NOTHING; no record means
-the fingerprint never moves, so the next tick reads the backlog as changed and buys the same doomed
-pass again. Reproduced at four completions over four ticks — capped by the churn floor at one per
-15 s per repo, for ever, and with `WATERPLANE_SMARTPICK_MIN_INTERVAL_MS=0` (the e2e's setting) one per
-tick. The apply is now wrapped so the `.catch` only ever sees a rejected RUNNER.
-
-#### A row with a clock: pinned, never picked, merged only with its twin
-
-The user's words were *"there are items in the scheduler that were skipped and I would want to run
-them with the new smart picker functionality"*. Recurrence deciding the list (`isTimedWorkRow`,
-above) is what makes that possible — a one-off aimed at one repo is an ordinary backlog row, so
-`isCandidateRow` admits it and the pass SEES it, in the prompt, with its clock. What the three verbs
-may then do to it is three different answers, and two of them are refusals:
-
-| verb | what a clock does to it |
-|---|---|
-| **sort** | Its slot is its clock's. `applySmartPick` pins it by exactly the mechanism `handOrdered` is pinned by — one mechanism, because two would be two answers to "which rows may machinery move" and the one that drifted would be the one nobody reads. |
-| **pick** | Never. A timed row is not "next" because a model said so; its clock says when. `cleanSmartPick` moves the pick to the first entity WITHOUT a clock and says so — *the model picked "X", which runs on its own clock — the clock stands, and the pick is "Y", the first item without one*. Every candidate having one is a real answer: `pick` is `null`, and the note says that too. |
-| **merge** | Only when every member carries the identical `timedWorkKey` — the rule, the grace and the host-wide hold together, which is the store's one spelling of "the same clock" — AND the same `holdForHost`, which the key only speaks for on a row that has a clock. Mixed timed/untimed, or two different clocks, or one holding and one not, is REFUSED in words: *a merge was dropped: "X" runs once · Thu 21:00 and "Y" does not run on a clock — the pass never decides a clock*. Twins fold into a row that CARRIES the clock and the hold. |
-
-**Refused rather than guessed, deliberately.** An "earliest clock wins" rule would let a pass fold
-*tonight 21:00* into *tonight 23:00* and move somebody's work two hours; folding a timed row into an
-untimed one either loses the clock or puts one on words that never had it. Both are the pass deciding
-a clock, which is the one thing a person's own `at` says it may not. CLAUDE.md's *heuristics degrade
-to null or absent, never to a wrong number*, applied to an instant.
-
-The mechanics: `toCandidate` fills `at` (the `describeRule` SENTENCE, for the model to read, so its
-`why` is about something real) and `atKey` (`timedWorkKey`, the equality everything is decided on).
-Only the sentence goes in the prompt — the key, the grace, the hold and the armed instant are facts
-the model has no verb for, and a field it cannot act on is prompt somebody is billed for. The key
-rather than the sentence for equality, because two rules can render the same line and differ in
-grace or hold, and `describeRule` is locale-formatted for a `once` rule.
-
-`MergeRecord` carries the merged row's `trigger` and `atKey`, so `performMerge` posts the clock over
-`backlogDraft`'s `idle` and boot's `finishApplying()` rebuilds the identical row — a replay that
-posted an untimed one would have rescheduled somebody's work to "as soon as the repo is free" and
-said nothing.
-
-**`holdForHost` is recorded BESIDE all of that, and it used to be recorded inside it.** The hold is
-in `timedWorkKey` — for a row that HAS a clock, which is exactly the set this rule already covers and
-exactly not the set that needed covering. *Drop the clock* takes the clock and deliberately KEEPS the
-hold (the chip on the row says so, and the plan says so), so the rows this pass is most likely to
-meet are untimed rows that hold: both `atKey`s are absent, the clock rule compares two identical
-`""`s and waves the merge through, and the record — whose `holdForHost` lived inside the timed
-spread — came out with none. The row that replaced two held rows held nothing, and fired while
-another repo's item was mid-turn. The documented six-tap journey for re-running the user's seven
-skipped items walks into it on the very next tick.
-
-So the hold is asked on its own terms, everywhere the clock is: `SmartPickCandidate.holdForHost`
-travels whatever the clock did, `cleanSmartPick` refuses a group whose members disagree (*a merge was
-dropped: "X" waits until nothing else on the desktop is running and "Y" does not — the pass never
-drops a hold*), `applySmartPick` recomputes it and leaves it ABSENT on a disagreement, the host asks
-the LIVE rows again before it writes, and the fingerprint carries it — for an untimed row the key
-cannot. A hold is a person's statement about when work may run, which is the same kind of statement a
-clock is, so machinery may carry it or refuse the merge and may not quietly drop it. `post()` then arms it (`armNew`), so a merged one-off comes back armed to its
-own instant and not to the moment it was written.
-
-**And the fingerprint carries `atKey`.** Without it, *drop the clock* or a re-time left the repo
-reading "nothing has changed since the last look" about a list whose merge options had changed —
-`steps`'s failure, one field over. It is also what makes a clock that moves mid-pass a `late` rather
-than a wrong merge: the re-check in `finish()` sees it and nothing is applied. `apply()` asks the
-LIVE rows once more anyway, because `MergeRecord.trigger` is read from them there and this is what
-makes it provably the clock the merge was allowed on rather than whatever the store happens to hold
-when the write runs.
-
-#### The answer is about a list that may no longer exist
-
-Nothing is held while a pass thinks — that is the point of it: the row is `blocked`, so the phone is
-free. In those ~3 s the phone may `backlog.update` a member's text, `intent.cancel` or
-`backlog.remove` one, `backlog.reorder` the lot (which sets `handOrdered`) or `backlog.fire` one by
-hand, and every one of those is allowed on a `queued`/`blocked` row with nothing holding a lock.
-PLAN-SMARTPICK said the answer is applied only "when the fingerprint still matches"; only the
-watchdog and the tick-box were ever checked.
-
-Two failures, both reproduced against the real store:
-
-- **Words nobody typed over words somebody typed.** Edit B's text mid-pass and the merge of the OLD
-  words was posted while B — carrying the words just typed — was archived under it. That is
-  CLAUDE.md's cardinal rule, broken by machinery.
-- **A running row archived and its words re-posted.** Cancel B mid-pass; with the old rung order A
-  was released and fired; the answer landed not-late, `apply()` found both rows (a cancelled row is
-  still in `rows`, so the member count matched), archived the RUNNING A and posted a merged row that
-  would have run A's words again.
-
-So `finish()` recomputes `smartpickFingerprint(this.candidates(cwd), facts)` when the answer lands —
-same repo facts, since only the backlog half can have moved — and a difference is recorded `late`
-against the **current** fingerprint, with its own sentence. Recording against the current one is what
-keeps the promise: the next tick reads rung 6, sees nothing changed, and fires the order the person
-has NOW. `apply()` asks a second, narrower question the fingerprint cannot cover — each member still
-`queued`/`blocked`, un-archived, and still saying what the model was shown — because STATE is not in
-a fingerprint and a member that started between the re-check and the mutation is the same failure
-again.
-
-Two sentences were separated while this was being fixed: un-ticking the repo mid-pass used to be
-recorded `late` with *"arrived after the item had already started"*, which is not what happened. It
-now says *"the smart pick was switched off for this repo while the pass was thinking"*.
-
-#### Applying, and why it is crash-safe
-
-`.waterplane/smartpick.json` (host store keyed by worktree realpath, `contextlimits.ts`'s arrangement,
-tmp+rename because the per-repo backlog file this pattern replaced was a bare `writeFileSync`) holds
-the passes (≤ 10 per repo), the merges (≤ 200 per host, oldest evicted first and never one still
-`applying`, which is boot's to-do list) and the undone id-sets (≤ 50 per repo). An apply goes:
-**record first** in state `applying`, post the merged row, archive the originals, rewire chains, mark
-`applied`, then move the slots. The merged id is DETERMINISTIC — `mg` + a hash of the pass id and the
-sorted member ids — so a crash between any two steps and a replay after it both land on `post()`'s
-"this id already exists" branch rather than making a second row out of the same three items. Every
-step is idempotent, which is what lets `finishApplying()` (boot, after `intents.reconcile()`) simply
-do them all again. The sort is last because it is the cheapest thing to lose: a crash before it
-leaves a correct list in a stale order, while a crash between the post and the archive would leave
-the same work queued twice.
-
-**Chains are rewired, not stranded.** An archived predecessor is live and non-terminal, so it never
-appears in `chainFacts().settled` and a row chained behind a merged-away member would wait for ever
-under the most reassuring sentence in the sheet. Every `after` trigger naming a member is re-pointed
-at the merged row, `title` snapshot included, and the edge is put back exactly on undo.
-
-**A refused `post` closes its own record.** The `MergeRecord` goes to disk `applying` BEFORE the
-post, which is what makes an apply crash-safe — and the cost of that is that a post the store
-declines (`PENDING_MAX`: this host is already holding its maximum number of intents) has to close it
-again. Left `applying`, it stayed in `store.applying()` — boot's to-do list — and was retried on
-every start, to be refused every time; and `reindex()` went on telling both originals they had been
-merged into a row that does not exist, with the strip reporting `noop` and the truth buried in a
-note. It is marked `refused`, a state `reindex()` skips and `applying()` no longer lists — and kept
-separate from `undone`, because "a person said no" and "this host had no room" are opposite facts
-about one record.
-
-#### The undo window, and *put them back* after the row has run
-
-`REVIEW1-ux.md` walked the journey and found the safety case hollow at exactly the case it was built
-for. The notification says *"undo is on the row"*; the sleeper opens the Backlog and reads *"it has
-already run — the 2 it was made from are under archived; bring one back by hand"*. The pass picks and
-applies in one breath, `applySmartPick` may name the merged row as the pick and move it to the front,
-and the tick right behind the apply fires it. For a merged-and-picked row the window was ONE TICK.
-
-Both halves of the fix shipped, because each answers a different person:
-
-- **The row a pass wrote waits out `MERGE_HOLD_MS` before it may fire** (rung 4). The item that goes
-  instead is one somebody typed, and the repo does not stall — the row behind it is free. The whole
-  cost is that a repo's next item starts up to 30 s later, once, after a merge. That covers the
-  person who is awake and reading the notification.
-- **`backlog.unmerge` works AFTER the merged row has run.** That covers the sleeper, and it is the
-  only thing that can: no window is wide enough for eight hours.
-
-What a post-run put-back does, exactly — this is the contract the phone's button is drawn against,
-and the phone draws ONE button on any merged row whatever its state, never a greyed-out one:
-
-| the merged row is | what happens | what the toast says |
-|---|---|---|
-| `queued` / `blocked` | the machine-written row is REMOVED (its text is in the record) | *put back — your N items are in the list as they were* |
-| `done` / `failed` / `canceled` | the row is ARCHIVED, never removed | *the merged item already ran — your N originals are back in the list and will run as they were* |
-| `starting` / `running` | the row is ARCHIVED and **is not stopped** | *the merged item is still running and has not been stopped — your N originals are back…* |
-
-Two words in those sentences were wrong and both were wrong in the direction that matters. *"will
-run AGAIN as they were"* — the originals never ran; what ran was the merged text, once, so "again"
-tells a person their work has already been done when it has not. And the merge hold's own sentence
-promised *"so 'put them back' is there before it runs"* while the button on the row, during the hold,
-reads **undo** — *put them back* is what it becomes after the row has run. A sentence naming the
-other one sends somebody looking for a button that is not drawn yet.
-
-**A merged row is never folded a second time.** `mg` comes out of a merge auto, repo-targeted and
-`queued`, so it is an ordinary candidate and a later pass can be offered `[mg, C]`. The sidecar
-cannot represent the result: `reindex()` writes `index[mg] = {mergedFrom}` and then `index[mg] =
-{mergedInto: mg2}`, one `Map.set` overwriting the other, so the row shows one of its two chips — and
-`undo(mg)` taken before `undo(mg2)` puts A and B back in the queue while `mg2` still carries their
-words, so the work runs twice and nothing says so. `apply()` drops such a group whole and says why,
-alongside the two checks already there ("a member is no longer waiting", "a member changed while the
-pass was thinking"); it is refused there rather than filtered out of `isCandidateRow`, because a
-merged row is a perfectly good thing to PICK and to SORT.
-
-**And a throw mid-apply finishes the merge it started.** `performMerge` is `putMerge(applying)` →
-`post(mg)` → `edit(archived)` × n → `update(chain)` × n → `applied`, and every step is idempotent —
-which is what lets `finishApplying()` complete an interrupted one at boot. But boot is a long way
-off: a throw between the post and the last archive used to leave the merged row AND all of its
-members waiting with the record stuck `applying`, and the next tick would see a fingerprint that no
-longer matched the start one, take a fresh pass over `[mg, A, B]`, and be offered a merge of the
-merged row with its own members under a different `mergedRowId` — a second merged row, and an undo
-that unwinds only one. So the catch does what boot would do, at the one moment the process still
-knows a merge was in flight, before it records the failure against the start fingerprint.
-
-In every case the members come back to the `order` and the `archived` state each one HAD (not always
-`false` — a member may have been set aside by hand before the merge folded it), the chain edges go
-back, and the id-set is remembered as REFUSED so the next pass cannot propose it again: without that
-the person and the machine take turns for ever. The refusal is keyed on the member TEXTS as well as
-the ids, so editing one makes it a genuinely new proposal. The merged row is ARCHIVED rather than
-removed once it has run because it is the only account of the session that ran it, and *"where did my
-words go"* has to have an answer. **The duplicate is stated, never discovered**: the originals really
-will run again, which is why the sentence says so rather than leaving it to be found out.
-
-**The order of an undo's three steps is a fix.** Chains FIRST, then the members, then the merged row
-LAST. The other way round was reproduced failing: `IntentManager.update()` kicks the tick, `pass()`
-runs synchronously as far as its first `await`, and a chained row never reaches one — so the first
-re-point settled every OTHER rewired row on the spot. The merged row was already gone from `rows`,
-and `readArchiveTail` deliberately skips non-terminal rows, so it was not in `knownIntents` either:
-`intentVerdict` failed them with *"the item this waited for is gone — nothing is going to release
-it"* (`Z1 failed`, `Z2 blocked`), and the later restoring `update` was then refused because the row
-was already failed. Re-pointed while the merged row still exists, each chain lands on a predecessor
-that is live and known, so it simply WAITS. A chain that cannot be put back — it settled while the
-merged row ran — is a note on the record and in the answer, not a silence. `smartpickchains.test.mjs`
-drives that against the real manager, because the fake store's verbs kick nothing and cannot see it.
-
-#### The prompt, and what one pass actually costs
-
-Argv is `sidecar.ts`'s `runSmartPickTask`: `-p --output-format json --model ${WATERPLANE_SMARTPICK_MODEL
-|| haiku} --setting-sources user --tools "" --system-prompt <SMARTPICK_SYSTEM>`, prompt on stdin.
-CLAUDE.md's rule is that a new unattended `claude -p` starts from `summarize()`'s flags and justifies
-every one it DROPS; nothing is dropped, and the one difference is an ADDITION — the 20 s deadline,
-because a person's next item is held behind this and a summary's is not.
-
-Phase 0 measured the envelope against the installed binary (2026-09-17, this desktop) and three
-findings came out of it:
-
-- **The field names are real, not assumed.** Flat `usage` with `input_tokens`, `output_tokens`,
-  `cache_read_input_tokens`, `cache_creation_input_tokens`, plus `total_cost_usd`. `modelUsage` is
-  deliberately not read — it is keyed by a model id this daemon does not otherwise know and carries
-  nothing the flat object has not got. `envelopeUsage` degrades to ABSENT on anything unreadable and
-  on a PARTIAL usage object, because three of four kinds filled in and the fourth defaulted to 0
-  renders as a complete breakdown that nobody can tell from a measured one.
-- **`claude -p` DOES write a transcript**, at `~/.claude/projects/<cwd-slug>/<session_id>.jsonl`,
-  keyed by the cwd it ran in. So `tokenstats.ts` already attributes every pass to the repo it
-  groomed, per repo, with no ledger code of our own. (That was the plan's open question 1, answered
-  yes.)
-- **Thinking dominates the bill, not the items.** A trivial one-word haiku reply — four input tokens
-  — cost **$0.0049** and spent **548 thinking tokens**, essentially independent of the 2–4k of item
-  text going in.
-
-Phase 2 then measured the REAL prompt (three items, one obvious merge) against the installed binary,
-and the warning turned out to understate it:
-
-| run | cost | wall clock | thinking tokens |
-|---|---|---|---|
-| thinking on, three runs | $0.0067 · $0.020 · $0.025 | 13 s · 36 s · 29 s | 1,044 · 3,371 · 2,644 |
-| `--effort low` | $0.0155 | 28 s | 2,407 |
-| **`--thinking disabled`** | **$0.0014** | **2.8 s** | **0** |
-
-The conclusion was IDENTICAL in every run — same pick, same merge, and the no-thinking runs produced
-the cleaner `order` (all three ids rather than two). Twelve times the money and ten times the wall
-clock, for a list-tidying job over six sentences.
-
-**The wall clock is the half that matters most**, and it is why this is not merely a cost note: a
-person's next backlog item is HELD behind this call, and two runs in three blew through the 20 s
-watchdog. With thinking on, the shipped feature would have bought a completion, timed out, thrown the
-answer away as `late` and fired the original order — every time, for ever, paying for a pass it could
-never use. So `runSmartPickTask`'s argv carries `--thinking disabled`: nothing of `summarize()`'s
-flags is dropped, one is ADDED, and it is added to this task alone (a summary is prose about a
-conversation and a review is a judgement about code; neither is a job where the thinking is the
-waste). A `claude` too old to know the flag exits non-zero ⇒ `failed` ⇒ the backlog fires in exactly
-the order it had, and the strip says so.
-
-**Asking for it in the prompt does not work.** `SMARTPICK_SYSTEM` says *"a list-tidying job, not a
-coding job… answer straight away… do not reason step by step"* and 2,644 thinking tokens were spent
-anyway. The paragraph stays — it costs nothing and it is the only lever on an engine that has no such
-flag — but the flag is what actually did it. **One pass, as shipped: ~$0.0014 and ~3 s.** The rest of
-it is the output shape and four `never`s (invent a task, drop a task, change the words of a task you
-do not merge, answer with anything but the JSON object), each enforced twice: in words to the model,
-and in `cleanSmartPick` against the answer. `packages/host/test/smartpick.test.mjs` pins all of it,
-because a drift there is invisible from every direction — the sanitiser would go on refusing every
-answer, every pass would record `failed`, and the strip would read exactly like a flaky model.
-
-The user prompt is JSON: the repo's name, branch, dirty paths (sorted, capped at 40 with the count of
-the rest appended) and last ten commit subjects, plus the items with ids, words, label, age and
-`resume`. Items go in WHOLE, in current order, until `SMARTPICK_MAX_CHARS`; past it an item goes in
-as its first 240 characters and is marked `clipped`, and the flag TRAVELS to the sanitiser, which
-refuses a merge naming one — a clip made and not carried through is a merge folding words the model
-never read. Past `SMARTPICK_MAX_ITEMS` (40) the rest keep their positions untouched and the record
-says how many were not looked at, because a pass that silently ignores half a backlog while reporting
-a clean sweep is worse than one that admits it ran out of room.
-
-Repo facts degrade and are never invented: a worktree that is not a repo, a failed `git`, a detached
-checkout each answer empty with `branch: "?"`, and the pass still runs on the words. They are cached
-per worktree for 5 s so the confirming tick right after an apply pays no second spawn.
-
-#### Where the state lives, and who writes it
-
-The tick joins `<STATE_DIR>/backlog-config.json` (`{ auto, smartPick: { [cwd]: { setAt } } }`)
-rather than getting a file of its own: same manager, same broadcast, same lifetime as the global
-auto-fire switch, and a second file for one boolean per repo is a second thing to migrate.
-`BacklogManager` is its single writer (`saveConfig()` writes both keys together — a partial write of
-one would drop the other, which is how *"the tick turned itself off when I toggled auto-fire"*
-happens), and `SmartPick` reads it through one injected `isOn(cwd)` closure. `backlog.list()` merges
-`smartpick.rowFacts(id)` beside the review sidecar — two sidecars, both keyed by intent id, neither
-of them lifecycle, both merged where the wire DTO is built.
-
-Routes: `backlog.setSmartPick { repoDir, enabled }` is `contain`ed (a directory a client named, that
-the host will later spawn `claude -p` in) and not durable (idempotent by construction);
-`backlog.unmerge { id }` names a row rather than a directory, is not durable for `intent.cancel`'s
-reason — an undo delivered an hour late calls back words that have since run — and answers a refusal
-as a TOAST carrying the host's sentence. `PROTOCOL_VERSION` stays 1; every new field is optional and
-absent is the old behaviour exactly.
-
-Pinned by `packages/host/test/smartpick.test.mjs` (the envelope reader, the argv, the system prompt's
-shape and its four `never`s, the prompt's two caps), `packages/host/test/smartpickstore.test.mjs`
-(the ladder rung by rung, the zero-cost claim, the watchdog and the late answer, the merge's
-archive-not-destroy, the chain rewiring, undo and the refusal memory, the record's cap and its
-survival of a reload), `packages/host/test/pickhold.test.mjs` (the seam at the manager: a held row
-is `blocked`, claims no slot, and reaches NO executor) and `packages/host/test/backlogsessions.test.mjs`
-(the config round-trip and the two chips).
+What survived: `handOrdered` is still the "placed by you" mark a drag (or a pinned assessment rank)
+leaves, and nothing re-sorts rows automatically any more. The intent ladder keeps ONE microtask yield
+(`await Promise.resolve()`) before each `go` claim, with the busy facts re-read and the ladder
+re-asked (monotonic) after it — a kick runs the pass synchronously only that far, so a synchronous
+batch of writes lands before any claim (~30 host tests pin that batching). The sidecar's measured
+argv lives in `sidecar/sidecarname.ts` `runTextTask` (used by `runNameTask`/`runCommitTask`), with
+the `--thinking disabled` measurement table as a comment there; `parseLoose` lives in
+`assess/hassutil.ts`; `imagePaths`/`transportPaths` moved to `shared/itempaths.ts`.
+`backlog-config.json`'s `smartPick` key is ignored on read and dropped on the next write;
+`<state dir>/smartpick.json` is left inert on disk. `PROTOCOL_VERSION` is unchanged.
 
 ### `naming.ts` — what an untitled backlog row is called
 
@@ -5903,9 +5907,8 @@ means *this is a truncation of the item*.
 bound and the characters are the honest one. Nothing is ever CLIPPED to make an item fit — an item
 over the budget takes a batch of its own, at full length.
 
-That is the one place this file deliberately differs from `smartpick.ts`, which clips and marks the
-clip. A clipped item can still be SORTED: the model saw enough to place it. A title is not like
-that. The half of a prompt a clip keeps is precisely the half this app already shows on the row, so
+That is a deliberate choice (the removed smart pick clipped and marked the clip; a clipped item can
+still be sorted, but a title is not like that). The half of a prompt a clip keeps is precisely the half this app already shows on the row, so
 a title written from it can only ever be the truncation `cleanHeadline` refuses — money spent to
 produce a drop and a note.
 
@@ -5931,14 +5934,12 @@ holding a pass nothing will ever release would make the first refusal permanent 
 #### Everything else
 
 `NAME_MODEL` is `WATERPLANE_NAME_MODEL` (haiku). `NAME_SYSTEM` is pinned and its last line is
-`SMARTPICK_SYSTEM`'s *answer straight away*, for the measured reason recorded there: the cost of a
-pass like this is thinking, not input. There is deliberately no timeout knob — unlike the smart
-pick, nothing is HELD behind this call, so the sidecar's generous default is right and a second
+*answer straight away*, for the measured reason: the cost of a
+pass like this is thinking, not input. There is deliberately no timeout knob — nothing is HELD behind this call, so the sidecar's generous default is right and a second
 variable would be one nobody has a reason to turn.
 
-`parseNamingText` is `smartpick.ts`'s `parseLoose` with one difference: a bare ARRAY is accepted.
-There it is refused because an array parses as "an order, no merges, no pick" — a document nobody
-can interpret turned into a confident *change nothing*. Here an array of `{id, headline}` is
+`parseNamingText` is `assess/hassutil.ts`'s `parseLoose` with one difference: a bare ARRAY is accepted.
+An array of of `{id, headline}` is
 unambiguous, and every entry still has to name an id that was in the batch before anything is
 written.
 
@@ -5946,7 +5947,7 @@ Every failure is the empty result, the way every other `sidecar.ts` caller treat
 route, a dead server, an account block, an answer nothing parses out of, a runner that throws. The
 cost of that is exactly what it is elsewhere — the rows go on being called what they were already
 called, which is their own first line. `namingSentence` is a pure function with its own test for the
-same reason the smart pick's outcome string is: it is the whole of what a person sees of this
+same reason as any outcome string: it is the whole of what a person sees of this
 feature, and a string assembled inside an async method can only be checked by running a pass.
 
 #### The ack is not the pass
@@ -6240,6 +6241,76 @@ leaves the existing name exactly where it was: absent is this field's shipped
 state, and a wrong title is the version of *degrade to a wrong number* that a
 person taps.
 
+## `permmode.ts` + `sessions/livemode.ts` — the footer's mode, and switching it from the phone
+
+The desktop's mode menu (manual / accept edits / plan / auto, plus ultracode) has
+one source of truth the host can see: the row the CLI draws under its composer.
+`SessionInfo.permissionMode` is only what a session was LAUNCHED with, and a
+shift+tab at the desk — or a box's "Yes, and switch to auto mode" — moves the
+real mode without telling anyone.
+
+`permmode.ts` reads that row off the RENDERED grid (`screenlog.ts`'s `gridText()`,
+never a stripped byte tail). Measured on claude 2.1.293 by pressing `BTab` through
+the cycle in a private tmux server, at 100, 46 and 28 columns; the grids are the
+fixtures in `packages/host/test/fixtures/permmode/`:
+
+- `⏵⏵ accept edits on` / `⏸ plan mode on` / `⏵⏵ auto mode on` /
+  `⏵⏵ bypass permissions on` / `⏵⏵ don't ask on`, usually followed by
+  `(shift+tab to cycle)`.
+- **The default mode is labelled too: `⏸ manual mode on`** — wherever auto mode
+  exists. The brief this was built from expected no label. An older binary (or an
+  account without auto mode) draws none, and its idle footer says
+  `? for shortcuts`; so "no label" reads `default` only beside that hint. A
+  footer with neither is a transient message or a menu, and reads null.
+- The cycle: auto → manual → accept edits → plan → auto. `bypassPermissions`
+  joins it (between plan and auto) only when launched with it; `dontAsk` exists
+  only as a launch mode — the first shift+tab leaves it and it never comes back.
+
+The label is read **only under the newest composer frame** — a full-width rule, a
+`❯` row adjacent under it, the rule that closes it, then at most six footer rows.
+So a choice box, a picker or a slash menu (all of which replace or push away the
+footer) read as null, and words in the transcript that SAY "plan mode on" are
+never under a composer. With ultracode on, the composer's top rule wears a label
+(`──── ultracode ─`); `echo.ts`'s composer anchor does not accept that shape (a
+delivery into such a session takes its old distance fallback), and this reader
+must, or turning ultracode on would blind it.
+
+**Ultracode** has no footer row. Two sources, in order: the composer's top-rule
+label (drawn for as long as it is on), and the newest line the CLI printed —
+`Ultracode on (this session only): …`, `Ultracode off. …`, or a refusal
+(`Ultracode needs dynamic workflows enabled`, `Ultracode isn't available on …`,
+read as off). The model picker's `· Ultracode on (/effort)` and the effort
+picker's `Ultracode  on` are mid-row and never count. A BARE top rule is "off"
+only once this session's composer has worn the label (`ultracodeLabelSeen`):
+on a binary that never draws one, a bare rule says nothing.
+
+`sessions/livemode.ts` puts both on the session:
+
+- **`liveMode` is the screen now, or absent.** Re-read on the quiet tick
+  (`turn.ts`'s `markIdle`, beside `checkContext`), `updated` only on a change. A
+  null reading DELETES the field rather than keeping the last one: the thing that
+  hides the footer is usually a box, and a box can change the mode. Never
+  persisted (`live/` records carry no `SessionInfo`), so after a restart the first
+  quiet tick reads it again. Claude's TUI only (`caps.promptBoxes ===
+  "claude-numbered"` with permission modes); another backend has no field.
+- **`ultracode` is sticky**: the confirmation scrolls away, so the last screen
+  that said something stands until another does. Absent until one did. Memory
+  only, like `liveMode`.
+- **`setMode` (`session.mode`) presses shift+tab like a person.** Refused in words,
+  with nothing pressed, for a non-claude session, remote control off, an open
+  question box (shift+tab would go to the box), or an unreadable footer. Otherwise
+  one `\x1b[Z` at a time through `sessions.write`, then the live grid re-read every
+  60 ms for up to 1.5 s until the footer CHANGES; it stops on the target, when a
+  mode repeats (the cycle came round: "plan isn't in this session's shift+tab
+  cycle", the reply carrying wherever it stopped — normally the start), when a
+  press moves nothing, or after 6 presses. It never counts positions in a cycle it
+  was told about: the cycle differs per launch, and a count would land one off.
+  Serialised per session (`Session.modeChain`), so a double tap is one walk and
+  then "already there". Not durable, not queued, not in the ack ledger — a switch
+  delivered late changes what an unwatched session may do unasked (`session.name`'s
+  reasoning). The reply is `session.moded` to the asking socket; `liveMode` reaches
+  everyone with the `updated` it publishes. `packages/host/test/permmode.test.mjs`.
+
 ## `repohealth.ts` — the codebase's own vital signs, asked for from the phone
 
 `tools/repohealth.mjs` is a **zero-token metric series over git history**: git, regex and
@@ -6392,6 +6463,106 @@ rather than printing both — two sentences, one of them pointing at a dead butt
 one that is true. No repo on this desktop is in that state today; the state is designed for
 explicitly, here, which is exactly why the sentence had to stop lying about it.
 
+### A repo's own readings — and whose a reading is
+
+The engine's readings are the same method in every repo, which is what makes the health index
+comparable across repos — and what makes them blind to anything only one repo knows about itself.
+waterplane's own example: how many of the ten CLI screen/log readers are tested against a capture from
+the installed `claude` (`tools/screenfixtures.mjs --reading`). So a repo may declare readings of its
+own in a COMMITTED `.waterplane-shared/health.json` (`REPOHEALTH_OWN_FILE`; the committed per-repo
+config dir `builds.json` already uses — `.waterplane/` is gitignored and holds this desktop's own
+things): `{ "readings": [{ key, name, means, better: "lower"|"higher", unit?, run: [argv…] }] }`.
+
+- **Run at HEAD only, by `update`** (`tools/repohealth/own.mjs`): no backfill, no checkout, so a
+  reading's history starts when it is declared and every row before is a hole, never a 0. It runs in
+  the checkout as it stands — the one caveat for an author: an uncommitted edit is in it.
+- **One JSON number or `{"value": n}` on stdout, or ABSENT with the reason** — non-zero exit (its
+  last stderr line quoted), 30 s timeout, more than 64 KB, a program not on PATH, text, NaN. At most
+  eight run; the rest are listed absent. A file that is not the shape is refused whole, in words.
+- **Beside the measurements, never one of them.** Stored under the row's `own` key, which no metric,
+  no `readings.mjs` series and no index entry reads; stripped from `fixture.json` (it cannot be
+  recomputed from a sha); `PREREG_VERSION` and the pack hash do not move. `plot` ships them as
+  `own: { file, declared, series, absent?, problems? }` with `source: "repo"` on each series, and
+  every central series carries `source: "central"` — the engine's, worded `BRAND.displayName`'s on
+  the phone, so a rename never touches the wire. A scope's plot has no `own` at all.
+- **Trust** is the paragraph in `repohealth.ts`' header: this is repo-supplied code run by the
+  daemon, the same trust a repo's own `tools/repohealth.mjs` and its build commands already get.
+  Declaration read out of the commit (only committed words run), argv only, cwd the measured
+  worktree, a minimal env (no key the daemon holds), nothing from a request in the argv.
+- **The phone names provenance once per group, as a heading** (`RepoHealthOwn.tsx`, its states in
+  `repoHealthWords`' `ownShow`) — "waterplane's readings — measured the
+  same way in every repo", "<repo>'s own readings — declared in <file>" — never a badge per tile.
+  An own tile carries the repo's `means` and the direction the REPO says it wants ("usmc aims for this
+  to rise"), never the sheet's verdict. A repo declaring nothing gets ONE line naming the file; an
+  engine sending no `own` block (older, or a repo's older copy) gets nothing, because absent is not
+  "declares none". The index's caption says it is built from the engine's five only.
+
+### A repo's say over the central readings — disable or override one, never fork the engine
+
+A repo that disagreed with ONE of the five index readings used to have one exit: ship its own
+`tools/repohealth.mjs`, which replaces the whole engine (rule 1 above, still honoured) and freezes the
+repo on the day it forked. The same committed `health.json` now carries a `central` object keyed by
+index entry (`size`, `retouch`, `hatches`, `context`, `untested`; `tools/repohealth/central.mjs`):
+`{ "disable": true, "why": "…" }` or `{ "run": [argv…], "why": "…", "means"?: "…" }`.
+
+- **`why` is required.** Without it — or with an unknown key, both verbs, neither, a bad argv — the entry
+  is IGNORED and the sentence lands in `central.problems` on the row and the plot, the way an own reading
+  with a bad field is listed absent with its reason.
+- **Disable** runs nothing and is honoured per commit from that commit's own declaration (the file is
+  read only at the commits that touched it, `declarationsByIndex`). The reading is still measured and
+  drawn; it leaves the index mean, and the baseline needs only the entries still enabled (all five
+  disabled = no index, never 100).
+- **Override** runs in `own.mjs`'s sandbox and prints the number in the central reading's OWN unit,
+  lower = healthier (`UNITS`: `retouch`/`untested` a fraction 0–1 — over 1 is refused, not clipped).
+  **HEAD only**, like own readings: no history before its first measurement, and a recut restarts it
+  at one point. Older rows keep the engine's value; the central value is measured beside the override
+  on HEAD too, so dropping the override has history to fall back to.
+- **The fingerprint makes a tweak a carried week, never a move.** Each row holding the field carries
+  `central.fp` over what was APPLIED (disabled keys + overrides that RAN, with argv); `healthIndex`
+  carries a link whose two weeks differ in it exactly as for a prereg change (`gapReason: "central"`).
+  Fixture: `central` is stripped like `own`.
+- **Wire**: each central plot series may carry `variant` — `{kind:"disabled", why}` or
+  `{kind:"override", why, means, unit, points, last, since, absent?}`, `points` non-null only where
+  the same argv ran — plus a document-level `central: {file, problems?}`. Trust: the paragraph in
+  `repohealth.ts`' header, the same as own readings.
+
+### What `2026-10-16a` changed in the definitions
+
+One prereg bump carrying two definition changes, so the chain broke once:
+
+- **hatches**: every occurrence is classified (`metrics/hatches.mjs`, per pack `hatchExplain`): a
+  TO-DO (`TODO`, `FIXME`, Kotlin's `TODO(` stub — counted once per position), EXPLAINED (the reason on
+  the same line after the mark — ESLint's ` -- why`, words after `@ts-expect-error`, `# noqa: X -- why`,
+  a trailing comment after `as any`/`!!` — or a comment line with words directly above that is not
+  itself an escape), or UNEXPLAINED. The index and the `hatches.perKloc` tile read the unexplained per
+  kLOC; `value` keeps every kind's total (the new-kind tripwire), and `split` carries
+  `{explained, unexplained, todo, byKind}` as detail.
+- **retouch**: a pair that fires a clock counts only when the later commit REMOVES OR CHANGES a line
+  the earlier one ADDED — its `-` ranges overlap the earlier `+` ranges, exact because the earlier
+  commit is the file's previous first-parent touch. A registry only ever appended to stops reading as
+  churn; those pairs are `appends`. Cost: one `git log -p -U0` walk per `update` with rows to measure
+  (`git.readHunks`, bytes scanned by hunk count; ~120 MB / ~1.5 s for git on this repo's 1,400 commits).
+- **Tile detail, never index**: `size.nearMax` (files within 10% of the largest — the shelf under a lint
+  cap), `context.skillBodyChars` (the on-demand bodies beside the always-on chars), `retouch.appends`,
+  `hatches.split`. Index points carry `tree: {files, loc}`, `spanDays` (Monday to Monday since the
+  previous measured week — a link over 7 spans weeks nobody measured), `gapReason`, the repo's
+  `central` fingerprint, `disabled`, `overridden`; `healthIndexVs(points)` is the pure "vs 12 weeks
+  ago" (`ratio`, `delta`, the two points, `weeks` between them): the latest measured week AT LEAST 12 back, however far, and the phone names that week; null only when none is that old.
+- **On the phone**: a `variant` is said ON its tile (`repoHealthWordsCentral.ts`) — a disabled reading
+  draws no curve, only *Disabled here — <why>*; an override prints the repo's own value beside the
+  engine's curve with its `means`, `since` and `why` — and `plot.central` is one line under the central
+  heading plus one per ignored entry. The index caption counts the basket (*Built from 4 of the 5
+  readings; Untested modules is disabled here*) off the latest point and then drops "compares across
+  repos". A link with `spanDays > 7` is dashed and its readout says how many weeks it spans; a carried
+  week says which of the three `gapReason`s. "This week" is claimed only when the latest MEASURED week
+  is the phone's current ISO week (`healthWeekWhen`/`weekWhenWords`) — a repo with no commits this
+  week otherwise read "+3 this week" about a month-old week. The two asks (`healthAskPrompts.ts`)
+  carry the basket, the carried-by-config weeks, the engine's detail sentences verbatim and the
+  vs-12-weeks figure with the week it used.
+- **The chip follows the file** (`healthwatch.ts`): `summaryFor` re-derives when the series file's
+  mtime+size moved since the cache was filled — the file is also rewritten by a CLI re-cut or the
+  VS Code extension, and the chip once read 112 beside an index view computing 98.
+
 ### `repohealth.ts` and `repohealthread.ts` in shared — one subject, two failure modes
 
 The phone and this module read the same stdout, so the parsing lives once, in `packages/shared`.
@@ -6435,6 +6606,26 @@ would look right. `narrate.mjs` already carries the scar — its own injected `r
 with `series.mjs`'s and produced zero rank events for the life of the series, which is why there is
 now one `reading()` and a fallback that catches a second opinion. The tool states, the phone draws,
 and the phone's `detail` sentence is the tool's sentence.
+
+### The health index, kept current by `healthwatch.ts`
+
+`shared/healthindex.ts` turns the series into ONE chained weekly number (lower is better per metric,
+geometric mean of the links, baseline 100 at the first week with every enabled reading, `CLAUDE.md` floored
+at half the context-weight threshold). The one layer that takes a side, owner-approved 2026-10-15.
+`healthwatch.ts` is the plumbing, and only that:
+
+- **An hourly sweep** (unref'd; `WATERPLANE_HEALTH_SWEEP_MS`) re-runs `refreshRepoHealth` for repos that
+  already have a `repohealth.jsonl` and whose last host refresh is over 7 days old (absent = due),
+  **one repo at a time** and never two engines at once. A repo with no series is never started; a failed
+  run waits 6 h. `WATERPLANE_HEALTH_WEEKLY=0` stops the refresh and the push, not the reading.
+- **Boot computes without refreshing**, so the chip has a value at once; a manual
+  `POST …/repohealth/refresh` that succeeds stamps `lastRefresh` and recomputes.
+- **`/api/repos` reads the cache only** (`RepoTarget.healthIndex`); unknown is absent, never 0.
+  `GET /api/repos/:id/healthindex` answers `HealthIndexResponse` (`{series, move, words, lastRefresh,
+  reason?}`) from the file on demand, a pure read.
+- **One push per repo per week:** kind `health`, tag `health:<repoId>`, title prefixed with the repo name.
+  `(week, kind)` last notified is written BEFORE the push to `<STATE_DIR>/healthindex.json` (with
+  `lastRefresh`), so a restart loses a push rather than repeating one. Errors log once and push nothing.
 
 ## A clock may name a session, because the CONVERSATION outlives it
 
@@ -6858,6 +7049,27 @@ by construction, so re-validating the one cached file against itself is a
 real check. A `tmuxName`-less lookup always rescans the whole directory,
 which is the only way that "exactly one" guard can see every candidate.
 
+## `askrules.ts` (host + shared) — ask rules: a box before an irreversible command
+
+Agent authority is what an agent may CAUSE; the vault guards what it may READ. The one thing that
+stops an effect before it happens is the argv of the `claude` this host starts, so the list of
+rules (`<state>/askrules.json`, pure parsing in `shared/askrules.ts`) goes in as `permissions.ask`
+in the `--settings` blob `backends/claude.ts` already passes.
+
+- **A flag outranks the repo.** Measured on Claude Code 2.1.301: a flag-passed ask rule stops the
+  command under `default`, `auto` and `bypassPermissions`, beats `--allowedTools`, and beats
+  anything the agent writes into the repo's `.claude/settings*.json`. That measurement is why this
+  is not a hook or a broker.
+- **Empty list, byte-identical argv.** With no rule (or every rule off for the repo) nothing is
+  added, so an install that never opens the section launches exactly as before.
+- **The change needs an `Origin`** (`confirmgate.ts`'s rule (a)): `PUT /api/askrules` from an
+  Origin-less `curl` is refused, so an agent cannot quietly delete the rule that stops it. The tap
+  itself is person-only through `answergate.isBlocked`.
+- **Applies to sessions started after the change**, and to claude only; other backends take no rule.
+- **Honest reach: it stops the accident, not the adversary.** A rule sees the words typed, so a
+  wrapper script, an alias or a bare `git push` on a branch tracking `main` is not caught. The
+  suggested list is offered, never applied. Plan: `docs/plans/agent-authority.md`.
+
 ## Claude never updates itself under the daemon (`DISABLE_AUTOUPDATER`)
 
 Measured 2026-09-30 on the npm-global install route: every `claude` start — a tab, a reopen, the
@@ -7002,7 +7214,7 @@ A fork that wants its own wording for the daemon's unattended model calls drops 
 or `<PREFIX>CONFIG_DIR`). `promptText(name, fallback)` returns the file when it holds anything, else the
 pinned default, which stays byte for byte what ships. Names: `commit-message` (`commitmsg.ts` system
 prompt), `tab-name` (`naming.ts`, the backlog-row headline pass — the name predates the session tab's),
-`smartpick` (`smartpick.ts`), `review-check`, `review-check-diff`, `review-validate`,
+`review-check`, `review-check-diff`, `review-validate`,
 `review-validate-diff` (`review.ts`: the instruction paragraph above the task), `session-title-system`,
 `session-title`, `session-rename` (`sessions/record.ts`: the session tab title's system prompt, its
 wording, and the hand-asked rename's wording — the opening/recent-prompt blocks after it are code) and
@@ -7019,7 +7231,7 @@ automatic-spenders rule).
   logged once per name. A name outside `[a-z0-9-]+` is refused (no path walking out of `prompts/`).
 - **Only the wording is yours; the contracts stay in code.** The JSON shapes the parsers read
   (`VERDICT_CONTRACT`, `VALIDATE_CONTRACT`, the task and diff blocks) are appended after the override. An
-  override of `smartpick` or `tab-name` must still say what the pinned text says about the JSON answer,
+  override of `tab-name` must still say what the pinned text says about the JSON answer,
   and should keep "answer straight away": the cost of those calls is thinking (CLAUDE.md's flags rule).
 - `overriddenPrompts()` lists the names currently overridden — the doctor's `overlays` row reads it.
 
@@ -7089,3 +7301,81 @@ reads the file, the phone re-cleans what it is served.
 - **Doctor**: one `overlays` row — `ok` listing what is active (`prompts/ (…)`, `models.json (+n / −m)`,
   `theme.json (…)`, icons by slot), or `none … upstream defaults`; `warn` naming any file ignored whole,
   entry dropped, or icon refused (with why: outside the config dir, not found, not a PNG, …).
+
+
+## `billing.ts` + `periodspend.ts` + `server/billingwire.ts` — an account that has no weekly window
+
+Plan: `docs/plans/billing-periods.md`. A subscription has two scraped windows; an API-key or
+Bedrock/Vertex account has none, and what it answers to is dollars per governed period (a calendar
+month, often anchored on a billing day). The host's half of that, with the rules that are not obvious:
+
+- **The profile is probed once and `unknown` until then.** `billing.ts` reads the environment
+  (`ANTHROPIC_API_KEY`, `CLAUDE_CODE_USE_BEDROCK/_VERTEX/_FOUNDRY`), `apiKeyHelper` in claude's
+  `settings.json`, and runs `claude auth status` once at boot with a timeout; `shared/billing.ts`
+  classifies. Answering `api` for the seconds before the auth text arrived would stop the `/usage` poll
+  a subscription host needs, so the gap reads `unknown`, which keeps today's behaviour. A key beside a
+  claude.ai login is `unknown` too (which one the CLI bills depends on state not read). The person's
+  override (`billing.set`, kept in `billing.json`) wins; `null` hands it back to the probe.
+- **A known non-subscription profile stops the `/usage` poll** (`main.ts`'s `syncUsagePolling`) and
+  empties the `session`/`weekly` periods from `budget.state.periods`. `unknown` and `subscription`
+  are exactly the old host.
+- **Spend is a cache, because the verdict is synchronous.** `periodspend.ts` folds
+  `tokenStats.costWindow` (hour buckets) over each dollar period every minute. The 35-day read cap is
+  `GET /api/costwindow`'s, not the fold's, so a month needs no lift. Three rules keep the cache from
+  becoming a wrong number: an entry belongs to the period START it was measured for (past the reset
+  the cap reads absent and releases with no event and no refresh); an entry older than 10 minutes is
+  absent (a stopped refresh fails open like a stale `/usage`); a ledger that was never scanned is
+  absent, never $0. The figure is this desktop at list price, never the invoice; a period edge off
+  the hour (a half-hour zone) is read from the hour it falls in.
+- **A dollar cap holds automatic work only**, through the unchanged ladder: `budgetBlocked`/`budgetOver`
+  now come from `budgetVerdict(…, spend)`, so rung 2 holds `auto` rows and a hand-sent prompt never
+  asks the verdict. A `window` schedule rule on a period with no edge (`rolling30d`) is refused in
+  words on `schedule.save` (`windowRuleRefusal`); a calendar or span period supplies its reset to the
+  rule through `usageWindows().periodResetAt`.
+- **"$ vs pace"** (`burnwatch.ts`'s `createPaceWatch`): with no weekly percentage to climb, one `burn`
+  push per period start when the straight-line projection ends past the cap. Words only.
+
+## `halt.ts` + `sessions/haltall.ts` — the emergency halt: a latch, then a kill
+
+One tap on the phone (launcher **Halt**, or a session's ☰ **halt all AI**, behind a confirm) stops
+every AI process this host started and keeps it stopped. Asked for 2026-10-15 as "an emergency all AI
+off button that uses hard process kills".
+
+**Why a latch and not a kill.** This host brings work back by itself: the limit-resume queue reopens
+conversations with `--continue`, schedules / launches / the backlog fire on the intent tick, and the
+sidecar spends on events. A kill with no hold is undone within minutes. So `halt.json` (in the state
+dir, `writeJsonAtomic`) is a flag every spawn path asks, and the kill is what happens when it is set.
+A file that is present but does not parse reads as **halted** — the person asked for everything to
+stop, and a torn write must not be what starts it again. Absent is off. A restart comes back halted.
+
+**The gates** (each refuses with `HALT_REFUSAL`, `shared/halt.ts`):
+- `create()` through `openRefusal` — BEFORE the backend's `launchArgs`, because opencode's starts an
+  `opencode serve` there. Every create caller (a person, `doResurrect`, the intent tick, the backlog,
+  fan-out) already turns a throw into a refusal. Shell sessions are not AI and still open.
+- The intent ladder's `pass` returns at once, and `runNow` refuses: a row that fired and was refused
+  would be SPENT, so rows are held, untouched, until the lift.
+- `runHeadlessClaude` answers a failed run without spawning; `chatCompletion` answers `""` — the
+  shapes every sidecar caller already reads as failure, so no caller learned a new verdict.
+- `UsageChecker.refresh` keeps the last reading instead of spawning its `claude` probe.
+
+**The kill** (`haltSessions`). Every agent session, in the map (running, or exited and waiting to be
+reopened) or only in tmux (detached, a `live/` record). Order is behaviour: each mapped session is
+marked `killed` FIRST, so a CLI exiting on the SIGTERM is read as a close and never as a limit exit to
+resurrect. Then each pane's process tree (`tmux list-panes` → `ps -Ao pid,ppid,lstart`) gets SIGTERM,
+and after one second SIGKILL goes to whichever of THOSE processes is still there. Identity is pid AND
+start time, so a pid recycled during the grace is never ours. The second of grace lets the CLI flush
+its transcript, so `--continue` still works after the lift. Then the ordinary teardown: `kill()`, or
+for a detached pane kill-session plus the live record (no boot re-attaches it). Live headless runs
+and the `/usage` probe register with `trackRun` and get the same TERM-then-KILL to their group.
+
+**What it does not reach**, and the receipt says so: `claude`/`codex` started outside waterplane (a
+tier-2 scan of the process table is the open follow-up, matched on the executable or `argv[1]`, never
+a substring — Claude.app and IDE extension hosts must not match), cloud sessions, and tokens already
+spent. An OpenAI-compatible completion already in flight is not aborted (it is bounded by its own
+timeout and has no tools).
+
+**Lifting** only clears the flag and kicks the tick. Nothing that was killed comes back by itself.
+The wire is `host.halt { on }` (no ackId: setting a latch is idempotent; the phone sends it live-only,
+never queued) and `halt.state` on hello and on every change. Pinned by `host/test/halt.test.mjs`
+(latch, torn file, tree walk, forced kill, refused headless run) and `scripts/e2e-halt.mjs` (a
+TERM-ignoring stub forced, refusal, the latch across a restart, the lift).

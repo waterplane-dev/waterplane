@@ -11,7 +11,7 @@
  */
 import { useEffect, useState } from "react";
 import { AlertTriangle, Gauge, Hourglass } from "lucide-react";
-import { budgetReasonText, type UsageBudget } from "@waterplane/shared";
+import { budgetReasonText, hasScrapedWindows, type UsageBudget } from "@waterplane/shared";
 import { useCore } from "../../sdk";
 import { SetSlider, SetSwitch, SetWarn } from "../../SettingsKit";
 import { hhmm } from "../../format";
@@ -22,6 +22,9 @@ import { useLimitAuto } from "./store";
 export function LimitSettings() {
   const c = useCore();
   const limitAuto = useLimitAuto();
+  // An API-key or cloud account has no 5-hour or weekly window to cap: its caps are the dollar periods
+  // (features/tokens BillingSettings), so the percent rows are ABSENT there, not shown against nothing.
+  const windows = hasScrapedWindows(c.world.billing?.profile);
   const held = c.world.budget;
   // What the slider shows while a drag is in flight; dropped the moment the
   // host says what it saved.
@@ -50,7 +53,7 @@ export function LimitSettings() {
           track("action:budget.toggle");
           c.conn.liveSend({ t: "budget.set", budget: { ...budget.budget, enabled: !budget.budget.enabled } }, `usage budget ${budget.budget.enabled ? "off" : "on"}`);
         }}
-        note="Pause queued sends and automatic backlog starts once the 5-hour window is this far used."
+        note={windows ? "Pause queued sends and automatic backlog starts once the 5-hour window is this far used." : "Pause queued sends and automatic backlog starts once a dollar period reaches its cap."}
         more={<p>It starts again by itself when the window resets — nothing is lost, the queue just waits. An explicit <strong>send now</strong>, an answer to a question box, and file uploads are never held back.</p>}
       >
         {/* What it says RIGHT NOW, in the host's own words — the same
@@ -68,7 +71,7 @@ export function LimitSettings() {
       {/* Whole numbers, coarse steps: this is a reserve, not a dial —
           and a slider is the one control that works with a thumb on a
           phone without a keyboard opening over the sheet. */}
-      {budget && (
+      {budget && windows && (
         <SetSlider
           id="budget-session" label="session ceiling"
           min={50} max={100} step={5} value={budget.budget.sessionMax}
@@ -78,7 +81,7 @@ export function LimitSettings() {
         />
       )}
 
-      {budget && (
+      {budget && windows && (
         <SetSwitch
           id="budget-weekly" label="weekly ceiling" icon={Gauge}
           on={budget.budget.weeklyMax != null}
@@ -90,6 +93,25 @@ export function LimitSettings() {
           {budget.budget.weeklyMax != null && (
             <input type="range" className="set-range" min={50} max={100} step={5} value={budget.budget.weeklyMax}
               onChange={(e) => setDraft({ ...budget.budget, weeklyMax: Number(e.target.value) })}
+              onPointerUp={() => save(budget.budget)}
+              onKeyUp={() => save(budget.budget)} />
+          )}
+        </SetSwitch>
+      )}
+
+      {/* Absent on a host from before the leftover ceiling: nothing to set. */}
+      {budget && windows && budget.budget.leftoverMax !== undefined && (
+        <SetSwitch
+          id="budget-leftover" label="leftovers in a new week" icon={Gauge}
+          on={budget.budget.leftoverMax != null}
+          state={budget.budget.leftoverMax == null ? "off" : `under ${budget.budget.leftoverMax}%`}
+          onChange={() => c.conn.liveSend({ t: "budget.set", budget: { ...budget.budget, leftoverMax: budget.budget.leftoverMax == null ? 20 : null } }, budget.budget.leftoverMax == null ? "leftover ceiling on" : "leftover ceiling off")}
+          note="Work let past last week's budget that did not start before the reset runs only while the new week is under this."
+          more={<p>Rows timed before the weekly reset, and rows you let past the weekly ceiling, are there to use up what is left of a week. One still waiting when the week resets would otherwise start at once on the new week. It counts everything the week has used, your own sends included. Letting such a row past the budget again lifts it.</p>}
+        >
+          {budget.budget.leftoverMax != null && (
+            <input type="range" className="set-range" min={5} max={50} step={5} value={budget.budget.leftoverMax}
+              onChange={(e) => setDraft({ ...budget.budget, leftoverMax: Number(e.target.value) })}
               onPointerUp={() => save(budget.budget)}
               onKeyUp={() => save(budget.budget)} />
           )}

@@ -37,7 +37,7 @@ export const MEDIA_SIZES = {
   [FILES.picker]: 6080,
   [FILES.grouped]: 6142,
   [FILES.sorted]: 31628,
-  [FILES.html]: 847,
+  [FILES.html]: 852,
   [FILES.md]: 430,
   [FILES.ridge]: 4174,
   [FILES.sketch]: 2169,

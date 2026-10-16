@@ -47,11 +47,15 @@ export const claudeBin = (): string => env("CLAUDE_BIN") || claudeBinResolution(
 // Hooks are ADDITIVE across settings sources, so the user's own hooks still run.
 // Delivery is best-effort (curl, short timeout, `|| true` so it never blocks a
 // turn); if it never arrives the session degrades to the old silence heuristics.
-export function hookSettingsArg(port: number): string {
+export function hookSettingsArg(port: number, askRules: readonly string[] = []): string {
   const url = `http://127.0.0.1:${port}/api/hook`;
   const cmd = `curl -sS -m 2 -X POST ${url} -H 'content-type: application/json' --data-binary @- >/dev/null 2>&1 || true`;
   const h = [{ hooks: [{ type: "command", command: cmd, timeout: 5 }] }];
-  return JSON.stringify({ hooks: { SessionStart: h, UserPromptSubmit: h, Stop: h, Notification: h, SessionEnd: h } });
+  const hooks = { SessionStart: h, UserPromptSubmit: h, Stop: h, Notification: h, SessionEnd: h };
+  // Ask rules (agent-authority §2): a flag-passed `permissions.ask` stops the matching
+  // command under every permission mode, `bypassPermissions` included, and outranks the
+  // repo's own settings files. No rules ⇒ no key, so the blob is exactly what it was.
+  return JSON.stringify(askRules.length ? { hooks, permissions: { ask: [...askRules] } } : { hooks });
 }
 
 /**
@@ -98,7 +102,7 @@ const PERMISSION_MODES: readonly PermissionMode[] =
  * this is what lets several conversations per repo restore independently.
  */
 function launchArgs(req: LaunchRequest): LaunchPlan {
-  const { resumeMode, resumeSessionId: rid, launch, hookPort } = req;
+  const { resumeMode, resumeSessionId: rid, launch, hookPort, askRules } = req;
   const args: string[] =
     resumeMode === "pick" ? ["--resume"]
     : resumeMode === "fork" ? (rid ? ["--resume", rid, "--fork-session"] : ["--continue", "--fork-session"])
@@ -118,7 +122,7 @@ function launchArgs(req: LaunchRequest): LaunchPlan {
   if (launch.remoteControlled) args.push("--remote-control");
   // Report hook lifecycle events back to the host (turn boundaries + conversation
   // id). Additive to the user's settings; a stub binary (e2e) just ignores it.
-  args.push("--settings", hookSettingsArg(hookPort));
+  args.push("--settings", hookSettingsArg(hookPort, askRules));
   // Make the repo aware of the product: the core's repo-facing skill, as a plugin dir
   // (`reposkill.ts`). Absent when it could not be written — help, not a
   // precondition.

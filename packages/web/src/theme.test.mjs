@@ -180,7 +180,7 @@ test("light states no token dark has never heard of", () => {
 /** Hues used as TEXT (a tag, a chip label, a status word). 4.5:1 or it is not
  *  text, it is decoration. */
 const TEXT_HUES = ["--accent", "--ok", "--dead", "--warn", "--star", "--limit", "--ask", "--pair",
-  "--purple", "--sched", "--defer", "--ctx-low", "--fg", "--muted"];
+  "--purple", "--sched", "--defer", "--ctx-low", "--fu-agent", "--fg", "--muted"];
 
 for (const [name, vars] of [["dark", DARK], ["light", LIGHT]]) {
   test(`${name}: every text hue clears 4.5:1 on --panel, --bg and --well`, () => {

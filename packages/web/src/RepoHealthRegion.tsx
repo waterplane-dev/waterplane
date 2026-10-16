@@ -20,29 +20,36 @@ import {
   recutCommandOf, repoHealthAvailability, repoHealthPlotAvailability,
   repoHealthPlotUnavailableText, repoHealthUnavailableText,
 } from "@waterplane/shared";
-import type { RepoHealthPlotSeries, RepoHealthView, RepoTarget } from "@waterplane/shared";
+import { BRAND, type RepoHealthPlotSeries, type RepoHealthView, type RepoTarget } from "@waterplane/shared";
 import { api, copyText } from "./api";
 import { track } from "./usage";
 import { useRemoteResource } from "./useRemoteResource";
 import { useNow } from "./useNow";
 import { ago } from "./format";
 import { Empty } from "./Empty";
+import { Explain } from "./Explain";
+import { HealthIndexSection } from "./HealthIndexSection";
+import { FilterChip } from "./kit/FilterChip";
 import { CantInline } from "./Unavailable";
 import { Markdown } from "./Markdown";
-import { seriesAbsenceWords, seriesAllRemedyPrompt, seriesRemedyPrompt } from "./setupRemedy";
+import {
+  healthAskContextOf, healthIndexRemedyPrompt, healthTrendRemedyPrompt, seriesAbsenceWords, seriesAllRemedyPrompt, seriesRemedyPrompt,
+  type IndexTrendWeek, type IndexVsSubject, type IndexWeekSubject,
+} from "./setupRemedy";
 import { AreaSpread, SeriesTile, WeightStack } from "./RepoHealthTiles";
 import { LongestFiles } from "./RepoHealthLongest";
 import { Magnitudes } from "./RepoHealthMags";
 import { ReadingsTable } from "./RepoHealthTable";
+import { OwnReadings } from "./RepoHealthOwn";
 import { HintChip } from "./HintChip";
-import { CLAUDE_MD_KEY, DESC_KEY } from "./SetupSheet";
+import { CLAUDE_MD_KEY, DESC_KEY } from "./repoHealthPlot";
 import {
-  SCOPE_ALL_LABEL, SERIES_ASK_ALL_LABEL, SERIES_ASK_LABEL, drawnPageWords, emptySeriesWords, engineLineWords, lastCommitWords,
+  SCOPE_ALL_LABEL, SERIES_ASK_ALL_LABEL, SERIES_ASK_LABEL, centralFileLines, centralHeadWords, drawnPageWords, emptySeriesWords, engineLineWords, lastCommitWords,
   mixedPlotWords, mixedVersionWords, narrativeWrittenWords, notPlottedWords, outcomeWords,
   plotAxisWords, rankBasisWords, rankSentence, readFailedWords, refreshBusyLabel,
   refreshFailedWords, refreshLabel, runningWords, seriesAskNoteWords, seriesHeadWords,
   scopeChoiceHeadWords, scopeEmptyWords, scopeHeadWords, scopePickWords,
-  seriesSizeWords, seriesValueWords, staleRowsWords, stalenessWords,
+  seriesSizeWords, seriesStatusWords, seriesValueWords, staleRowsWords, stalenessWords,
   warningsWords,
 } from "./repoHealthWords";
 import { splitNarrativeDays } from "./narrativeDays";
@@ -190,12 +197,14 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
     }
   }
 
-  const stale = stalenessWords({
+  const staleness = {
     behind: view?.behind,
     lastSha: series?.lastSha,
     lastDay: series?.lastDay,
     headSha: view?.head?.sha,
-  });
+  };
+  const stale = stalenessWords(staleness);
+  const status = seriesStatusWords({ ...staleness, rows: series?.rows, days: series?.days });
   const measure = view?.measure ?? null;
   // The re-cut line is the ENGINE's, for the root it measured. The constant
   // this replaced named `tools/repohealth.mjs` relative to a repo most repos
@@ -289,6 +298,21 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
     onRemedy(seriesRemedyPrompt(subjectOf(s), repo.repoName, scope), repo, s.label.toLowerCase());
   };
 
+  const askIndex = (w: IndexWeekSubject, vs: IndexVsSubject | null) => {
+    if (!onRemedy || !repo) return;
+    track("action:repohealth.askindex");
+    // The baseline only decides the tree-growth line, which this prompt does not carry.
+    onRemedy(healthIndexRemedyPrompt(w, repo.repoName, healthAskContextOf(plot, view?.engine?.kind, "", vs)), repo, `the health index, week of ${w.week}`);
+  };
+
+  const askTrend = (weeks: IndexTrendWeek[], baselineWeek: string, vs: IndexVsSubject | null) => {
+    if (!onRemedy || !repo) return;
+    track("action:repohealth.asktrend");
+    onRemedy(
+      healthTrendRemedyPrompt(weeks, baselineWeek, repo.repoName, healthAskContextOf(plot, view?.engine?.kind, baselineWeek, vs)),
+      repo, "the health index trend");
+  };
+
   // Every reading in the order the sheet drew them, with the engine line — see
   // `seriesAllRemedyPrompt` for why the narrative stays out of it.
   const askAll = () => {
@@ -301,11 +325,43 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
     );
   };
 
+  // What the status line folds: the intro, both commits with the two ages and
+  // the definition, and which engine read the tree in what packs. Four grey
+  // paragraphs stood above the first number; every fact is still here, one tap
+  // away. Before the first row the intro IS the head, so it is not said twice.
+  // The engine line stays reachable with no series: it is what makes a later
+  // absence ("no parser for kotlin") legible.
+  const details = status || engineLine ? (
+    <>
+      {status ? <p>{seriesHeadWords()}</p> : null}
+      {stale ? (
+        <p>
+          {stale}
+          {narrative ? <> · {narrativeWrittenWords(ago(narrative.mtime))}</> : null}
+          {view?.head ? <> · {lastCommitWords(ago(view.head.ts))}</> : null}
+          {sizeWords ? <> · {sizeWords}</> : null}
+        </p>
+      ) : null}
+      {engineLine ? <p>{engineLine}</p> : null}
+    </>
+  ) : null;
+
+  // The status line and its verb share ONE row: the words wrap beside the
+  // button instead of pushing it onto a row of its own. Whichever comes last
+  // before the button (the `?`, else the words) takes the row's slack, so the
+  // button sits at the row's end — and where it truly cannot fit, it wraps and
+  // starts at the left like any other line.
+  const refreshable = !!repo && !noEngine;
   return (
     <>
-      <div className="section-head">
-        <span className="section section-hint">{seriesHeadWords()}</span>
-        {repo && !noEngine ? (
+      {/* The index leads: one number first, the readings it is built from below. The whole tree only — a scope has no index. */}
+      {repo && !scope && !noEngine ? <HealthIndexSection repoId={repo.id} onAsk={onRemedy ? askIndex : undefined} onAskTrend={onRemedy ? askTrend : undefined} /> : null}
+      <div className="section-head rh-head">
+        <span className={`section section-hint rh-status${refreshable ? " rh-beside" : ""}${details ? "" : " rh-push"}`}>
+          {status ?? seriesHeadWords()}
+        </span>
+        {details ? <Explain of="this series">{details}</Explain> : null}
+        {refreshable ? (
           <button className="key" onClick={() => void refresh()}>
             <RefreshCw size={ICON} className={busy ? "spin" : undefined} />
             {busy ? refreshBusyLabel(series, now - startedAt) : refreshLabel(series)}
@@ -319,25 +375,28 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
           scope on screen must always carry the way back to the whole tree.
           A chip is a filter in this repo's sense: the tap does not narrow what
           is drawn, it loads a different series, and the sentence under it says
-          which. */}
+          which. The kit's `FilterChip`s, tinted when lit: exactly one reading is
+          always chosen, so no ×, and `break down…` opens the picker rather than
+          cutting anything — it was a second solid fill beside the lit scope. */}
       {repo && !noEngine && (scopes.length || candidates.length) ? (
         <>
-          <div className="ts-filter" role="group" aria-label="which part of the repo">
+          <div className="fchips wrap rh-scope" role="group" aria-label="which part of the repo">
             <span className="ctx-stackpick-lab">reading of</span>
-            <button className={`key${scope === null ? " active" : ""}`} onClick={() => onScope(null)}>
+            <FilterChip on={scope === null} clears={false} onClick={() => onScope(null)}>
               {SCOPE_ALL_LABEL}
-            </button>
+            </FilterChip>
             {scopes.map((sc) => (
-              <button key={sc} className={`key${scope === sc ? " active" : ""}`}
+              <FilterChip key={sc} on={scope === sc} clears={false}
                 onClick={() => { track("action:repohealth.scope"); onScope(sc); }}>
                 {sc}
-              </button>
+              </FilterChip>
             ))}
-            {candidates.length ? (
-              <button className={`key${picking ? " active" : ""}`} onClick={() => setPicking((v) => !v)}>
+            {candidates.length ? <>
+              <span className="fchips-gap" aria-hidden />
+              <FilterChip on={picking} clears={false} onClick={() => setPicking((v) => !v)}>
                 <FolderTree size={12} /> break down…
-              </button>
-            ) : null}
+              </FilterChip>
+            </> : null}
           </div>
           {scope ? <div className="section section-hint">{scopeHeadWords(scope)}</div> : null}
           {picking ? (
@@ -363,13 +422,6 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
           ) : null}
         </>
       ) : null}
-
-      {/* Which engine read this tree and what it found the tree to be written
-          in. Under the head rather than in it: it is a fact about THIS read,
-          it changes between repos, and it is what makes the absences further
-          down legible — "duplication absent, no parser" is only readable
-          beside "kotlin". */}
-      {engineLine ? <div className="section section-hint">{engineLine}</div> : null}
 
       {/* The series' OWN nothings, and its own age line. `empty` explicit so
           the cached-age line stands above a document that DOES have rows.
@@ -397,14 +449,6 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
           does not enforce it. */}
       {mixed ? <div className="section section-hint">{mixed}</div> : null}
 
-      {stale ? (
-        <div className="section section-hint">
-          {stale}
-          {narrative ? <> · {narrativeWrittenWords(ago(narrative.mtime))}</> : null}
-          {view?.head ? <> · {lastCommitWords(ago(view.head.ts))}</> : null}
-          {sizeWords ? <> · {sizeWords}</> : null}
-        </div>
-      ) : null}
       {staleRows ? <div className="section section-hint">{staleRows}</div> : null}
       {running ? <div className="section section-hint">{running}</div> : null}
 
@@ -437,6 +481,12 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
             {mixedPlotWords(series?.versions) ? (
               <div className="rh-cap">{mixedPlotWords(series?.versions)}</div>
             ) : null}
+
+            {/* WHOSE readings these are, once, as a heading — never a badge per
+                tile. Everything from here to the repo's own block below is
+                the engine's; the repo's own, if any, are named apart. */}
+            <div className="section rh-prov">{centralHeadWords(BRAND.displayName)}</div>
+            {centralFileLines(plot.central).map((l) => <div key={l} className="rh-cap">{l}</div>)}
 
             {/* FIRST: one file taking an ever larger share of the tree is the
                 shape this sheet most needs to show, and it used to sit under
@@ -520,6 +570,17 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
 
             <div className="rh-cap">{notPlottedWords()}</div>
             <div className="rh-cap">{drawnPageWords(!!view?.page)}</div>
+
+            {/* The repo's OWN readings, apart from everything above and from
+                the index: one line on how to add one where it declares none. */}
+            {repo ? (
+              <OwnReadings plot={plot} repoName={repo.repoName} width={width}
+                actionsFor={onRemedy ? (s) => (
+                  <button className="key" onClick={() => askAbout({ ...s, detail: s.means })}>
+                    <Send size={12} /> {SERIES_ASK_LABEL}…
+                  </button>
+                ) : undefined} />
+            ) : null}
           </>
         ) : null}
       </div>

@@ -19,7 +19,7 @@ visible, and make the app do the thing on first launch, not after setup.
 ./gradlew --console=plain assembleDebug     # -> app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Both are already configured as builds for the phone's Build sheet (`{{state}}/builds.json`).
+Both are already configured as builds for the phone's Build sheet (`{{shared}}/builds.json`).
 After a build, waterplane copies the APK into `.claude/outbox/` under a versioned name and the
 phone downloads and installs it. Bump `versionCode` in `app/build.gradle.kts` for every change
 the person should get: Android refuses to install an update with the same or a lower
@@ -41,6 +41,7 @@ the person should get: Android refuses to install an update with the same or a l
 - **`.claude/outbox/`** is where anything a human should LOOK at goes: screenshots, reports, the
   built APK. A new file there notifies the phone. Name a file by its full path when you mention it.
 - **`.claude/inbox/`** holds images uploaded from the phone; prompts reference them by path.
-- **`{{state}}/`** is per-repo daemon state (builds, backlog). Don't hand-edit.
+- **`{{state}}/`** is per-repo daemon state (backlog, this desktop's own build overrides), gitignored. Don't hand-edit.
+- **`{{shared}}/builds.json`** is the phone's build buttons, committed so every checkout gets them.
 
 All three are gitignored. Prefer writing a file over printing a wall of terminal output.

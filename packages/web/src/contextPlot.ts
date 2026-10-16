@@ -59,3 +59,4 @@ export * from "./contextPlot/cplotModels.ts";
 export * from "./contextPlot/cplotAgents.ts";
 export * from "./contextPlot/cplotSpark.ts";
 export * from "./contextPlot/cplotWords.ts";
+export * from "./contextPlot/cplotCompactSet.ts";

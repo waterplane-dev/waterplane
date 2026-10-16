@@ -117,3 +117,108 @@ export function notModified(
 export function statTag(size: number, mtimeMs: number): string {
   return `W/"${size.toString(36)}-${Math.floor(mtimeMs).toString(36)}"`;
 }
+
+// ── JSON request bodies ─────────────────────────────────────────────
+
+/**
+ * A request body that is not the JSON its route reads: unparsable (usually a
+ * body cut off on the way), not an object, missing where the route needs one,
+ * or over the route's cap. Thrown by `readJsonBody` and answered in ONE place
+ * per HTTP edge (`api.ts`'s `handleApi`, `server/http.ts`'s error path) as
+ * `{ ok: false, error }` with `status` — so the phone reads "the body was bad",
+ * not a downstream refusal about a field that was never really absent.
+ * Before this, every such body read as `{}`.
+ */
+export class BadBody extends Error {
+  readonly status: 400 | 413;
+  constructor(message: string, status: 400 | 413 = 400) {
+    super(message);
+    this.name = "BadBody";
+    this.status = status;
+  }
+}
+
+export interface ReadJsonOpts {
+  /** Byte cap on the raw body (default 1 MB). Past it ⇒ `BadBody` 413. */
+  limit?: number;
+  /** An EMPTY body reads as `{}` — for a route whose every field is optional.
+   *  Never covers a malformed one: empty is "nothing to say", garbage is not. */
+  optional?: boolean;
+  /** Accept any JSON value, not only an object/array (a plugin's own payload). */
+  anyJson?: boolean;
+}
+
+const NOTHING_DONE = "nothing was done with it";
+
+function sizeWords(n: number): string {
+  return n >= 1_000_000 ? `${Math.round(n / 100_000) / 10} MB` : `${Math.round(n / 1000)} kB`;
+}
+
+/** Collect the body up to `limit`. Past it the stream is PAUSED, not destroyed,
+ *  so the 413 can still be written (the reply asks for `connection: close`). */
+function collect(req: IncomingMessage, limit: number): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    if (req.readableEnded) { resolve(Buffer.alloc(0)); return; }
+    const chunks: Buffer[] = [];
+    let total = 0;
+    let settled = false;
+    const done = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      req.off("data", onData); req.off("end", onEnd); req.off("error", onError); req.off("close", onClose);
+      fn();
+    };
+    const onData = (c: Buffer) => {
+      total += c.length;
+      if (total > limit) {
+        req.pause();
+        done(() => reject(new BadBody(`the request body is over ${sizeWords(limit)}; ${NOTHING_DONE}`, 413)));
+        return;
+      }
+      chunks.push(c);
+    };
+    const onEnd = () => done(() => resolve(Buffer.concat(chunks)));
+    const onError = (e: Error) => done(() => reject(e));
+    const onClose = () => done(() => reject(new Error("request closed before its body arrived")));
+    req.on("data", onData); req.on("end", onEnd); req.on("error", onError); req.on("close", onClose);
+  });
+}
+
+/**
+ * Read a JSON request body, or throw `BadBody`. Returns `any` on purpose:
+ * the ~45 routes destructure what they read and check each field themselves;
+ * this guarantees only that what they destructure is a JSON object that
+ * arrived whole.
+ */
+export async function readJsonBody(req: IncomingMessage, opts: ReadJsonOpts = {}): Promise<any> {
+  const buf = await collect(req, opts.limit ?? 1_000_000);
+  if (!buf.length) {
+    if (opts.optional) return {};
+    throw new BadBody(`this request needs a JSON body and arrived with none; ${NOTHING_DONE}`);
+  }
+  let v: unknown;
+  try {
+    v = JSON.parse(buf.toString("utf8"));
+  } catch {
+    throw new BadBody(`malformed JSON body — it may have been cut off on the way; ${NOTHING_DONE}`);
+  }
+  if (!opts.anyJson && (v === null || typeof v !== "object")) {
+    throw new BadBody(`the request body must be a JSON object; ${NOTHING_DONE}`);
+  }
+  return v;
+}
+
+/** The reply for a `BadBody`; `false` (nothing written) for any other error.
+ *  `headers` carries what the caller's edge adds (CORS on the auth path). */
+export function answerBadBody(res: ServerResponse, err: unknown, headers: Record<string, string> = {}): boolean {
+  if (!(err instanceof BadBody)) return false;
+  if (res.headersSent) { res.end(); return true; }
+  const body = Buffer.from(JSON.stringify({ ok: false, error: err.message }), "utf8");
+  res.writeHead(err.status, {
+    "content-type": "application/json", "content-length": String(body.length), ...headers,
+    // An over-cap body was left unread: this connection cannot carry another request.
+    ...(err.status === 413 ? { connection: "close" } : {}),
+  });
+  res.end(body);
+  return true;
+}

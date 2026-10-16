@@ -206,7 +206,11 @@ const sumValues = (rec) => {
  * denominator is not a small rate.
  */
 function hatchesPerKloc(row) {
-  const total = sumValues(row?.hatches?.value);
+  // The UNEXPLAINED escapes where the row classified them (`hatches.split`,
+  // since 2026-10-16a) — the number the index reads; every occurrence on an
+  // older row, which is what that row's definition was.
+  const split = row?.hatches?.split;
+  const total = split && typeof split.unexplained === "number" ? split.unexplained : sumValues(row?.hatches?.value);
   const loc = row?.classics?.value?.loc;
   if (typeof total !== "number" || typeof loc !== "number" || !(loc > 0)) return null;
   return total / (loc / 1000);
@@ -231,9 +235,12 @@ function retouchDetail(row, prereg) {
         .map((o) => `${o.path} at ${plural(o.n, "re-touch", "re-touches")}`)
         .join(", ")}.`
     : "";
+  const appended = typeof v.appends === "number"
+    ? ` ${plural(v.appends, "nearby touch", "nearby touches")} only added lines and ${v.appends === 1 ? "is" : "are"} not counted.`
+    : "";
   return ` ${plural(v.retouches, "re-touch", "re-touches")} out of ${plural(v.touches, "touch", "touches")} over ${nf(
     prereg.RETOUCH_WINDOW_DAYS,
-  )} days.${who}`;
+  )} days.${appended}${who}`;
 }
 
 /** A rate needs the two numbers it came from, here as well. */
@@ -241,14 +248,91 @@ function hatchDetail(row) {
   const total = sumValues(row?.hatches?.value);
   const loc = row?.classics?.value?.loc;
   if (typeof total !== "number" || typeof loc !== "number") return "";
-  return ` ${plural(total, "occurrence")} over ${plural(loc, "line")}.`;
+  const sp = row?.hatches?.split;
+  if (!sp || typeof sp.unexplained !== "number") return ` ${plural(total, "occurrence")} over ${plural(loc, "line")}.`;
+  return ` ${nf(sp.unexplained)} unexplained of ${plural(sp.explained + sp.unexplained, "escape")} over ${plural(loc, "line")}` +
+    ` (${nf(sp.explained)} carry their reason); ${plural(sp.todo, "TODO/FIXME mark")} reported apart, never counted.`;
 }
 
-/** A count of modules needs the module count it is a part of. */
-function untestedDetail(row) {
+/** The shelf under the largest file — tile detail, never an index input. */
+function sizeDetail(row, prereg) {
+  const v = row?.size?.value;
+  if (typeof v?.nearMax !== "number" || typeof v?.max !== "number") return "";
+  return ` ${plural(v.nearMax, "file")} within ${nf(Math.round((1 - prereg.SIZE_NEAR_MAX_FRAC) * 100))}% of the largest (${plural(v.max, "line")}).`;
+}
+
+/** The on-demand half beside the always-on one. */
+function descDetail(row) {
+  const v = row?.context?.value;
+  const b = v?.skillBodyChars;
+  if (typeof b !== "number" || typeof v?.skillCount !== "number") return "";
+  return ` ${plural(v.skillCount, "skill")}; their bodies, loaded only when one is invoked, are ${plural(b, "char")} more.`;
+}
+
+/**
+ * What moved a list between two rows, as counts — the part of a level that a
+ * level cannot say.
+ *
+ * "854, rising" over a window in which one file was split into 811 is a
+ * sentence that sends somebody to look for lost coverage that was never lost.
+ * The two rows hold the list on both days, so the split is arithmetic:
+ *
+ *   - `joined`: on the list now and not then;
+ *   - `lost`, the part of `joined` the earlier row could SEE reached — it was
+ *     on that row's `unnamed` list, so it existed and a test reached it, and
+ *     no test does now. The rest of `joined` was on neither of that row's
+ *     lists: a new file, or one a test named then. A row cannot tell those two
+ *     apart and this does not guess;
+ *   - `left`: on the list then and not now — reached since, or deleted. Again
+ *     the row cannot say which, and the sentence says so instead.
+ *
+ * `null` when either row lacks the lists, which every row written before
+ * `unnamed` existed does: a count over a missing list is not a zero.
+ *
+ * @returns {{joined: number, lost: number, left: number} | null}
+ */
+export function listMoves(from, to) {
+  const a = from?.untested;
+  const b = to?.untested;
+  if (!Array.isArray(a?.value) || !Array.isArray(b?.value) || !Array.isArray(a?.unnamed)) return null;
+  const had = new Set(a.value);
+  const now = new Set(b.value);
+  const wasReached = new Set(a.unnamed);
+  let joined = 0;
+  let lost = 0;
+  for (const p of b.value) {
+    if (had.has(p)) continue;
+    joined++;
+    if (wasReached.has(p)) lost++;
+  }
+  let left = 0;
+  for (const p of a.value) if (!now.has(p)) left++;
+  return { joined, lost, left };
+}
+
+/**
+ * A count of modules needs the module count it is a part of, the count the
+ * headline left out, and — given the row it is compared with — what moved it.
+ *
+ * `since` is optional because one reader has no earlier row to offer. When it
+ * is the row itself, or carries no lists, the clause is dropped rather than
+ * printed as "+0".
+ */
+function untestedDetail(row, _prereg, since) {
   const files = row?.classics?.value?.files;
   const n = row?.untested?.value?.length;
-  return typeof files === "number" && typeof n === "number" ? ` ${nf(n)} of ${plural(files, "module")} in the tree.` : "";
+  if (typeof files !== "number" || typeof n !== "number") return "";
+  const u = row?.untested?.unnamed;
+  const via = Array.isArray(u)
+    ? ` A further ${nf(u.length)} ${u.length === 1 ? "is" : "are"} reached by a test only through another module's imports.`
+    : "";
+  const m = since && since !== row ? listMoves(since, row) : null;
+  const moved = m
+    ? ` Since ${since.day}: ${nf(m.joined)} joined the list${
+        m.joined ? ` (${nf(m.lost)} of them reached by a test on that day)` : ""
+      } and ${nf(m.left)} left it (reached since, or deleted).`
+    : "";
+  return ` ${nf(n)} of ${plural(files, "module")} in the tree.${via}${moved}`;
 }
 
 /**
@@ -282,7 +366,7 @@ function untestedDetail(row) {
  * second list that goes stale the first time one is added here.
  */
 export const SERIES = Object.freeze([
-  { key: "size.p95", label: "p95 file length", unit: "lines", get: (r) => r.size?.value?.p95 ?? null },
+  { key: "size.p95", label: "p95 file length", unit: "lines", get: (r) => r.size?.value?.p95 ?? null, detail: sizeDetail },
   {
     key: "retouch.rate",
     label: "the re-touch rate",
@@ -290,13 +374,14 @@ export const SERIES = Object.freeze([
     get: (r) => r.retouch?.value?.rate ?? null,
     detail: retouchDetail,
   },
-  { key: "hatches.perKloc", label: "escape hatches per kLOC", unit: "", get: hatchesPerKloc, detail: hatchDetail },
+  { key: "hatches.perKloc", label: "unexplained escape hatches per kLOC", unit: "", get: hatchesPerKloc, detail: hatchDetail },
   { key: "context.claudeMdChars", label: "CLAUDE.md", unit: "chars", get: (r) => r.context?.value?.claudeMdChars ?? null },
   {
     key: "context.descChars",
     label: "the always-on skill descriptions",
     unit: "chars",
     get: (r) => r.context?.value?.descChars ?? null,
+    detail: descDetail,
     // A family that WAS read, holding a series with no value — and the metric
     // already knows why. `metrics/context.mjs` writes `skillsReason` beside
     // the two nulls precisely so "no `.claude/skills` at this commit" and
@@ -322,7 +407,7 @@ export const SERIES = Object.freeze([
   },
   {
     key: "untested.count",
-    label: "the count of modules no test names",
+    label: "the count of modules no test reaches",
     unit: "",
     get: (r) => r.untested?.value?.length ?? null,
     detail: untestedDetail,

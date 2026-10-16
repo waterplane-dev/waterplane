@@ -37,7 +37,7 @@
  * (`boot/brandMigrate.ts`, run first by `hostBoot.ts`).
  */
 import {
-  BRAND_MIGRATED_KEY, HOST_PARK_PREFIX, LEGACY_STORAGE_PREFIXES, SYNCED_SETTING_KEYS, lsKey,
+  BRAND_MIGRATED_KEY, SYNCED_SETTING_KEYS, lsKey,
 } from "@waterplane/shared";
 
 /**
@@ -62,6 +62,8 @@ export const LS = {
   launch: lsKey("launch"),
   /** Ask which backend and model to run every time, rather than using `launch`. */
   launchAsk: lsKey("launchAsk"),
+  /** The spend warnings' orange/red thresholds (`shared/spendwarn.ts`). */
+  spendWarn: lsKey("spendWarn"),
   /** The prompt pad — untargeted drafts, written on one device, sent from another. */
   pad: lsKey("pad"),
   /** Repos hidden from the launcher list. */
@@ -82,6 +84,9 @@ export const LS = {
   annKnobs: lsKey("annKnobs"),
   /** Annotator toolbar: shown controls, order, rail or row (`annLayout.ts`). Synced. */
   annTools: lsKey("annTools"),
+  /** Annotator: the session's prompt shown above the picture (phone; a wide
+   *  window draws the session beside it instead). Per device, never synced. */
+  annPrompt: lsKey("annPrompt"),
   /** Button hints: the mode, and which explanations have been dismissed. */
   hints: lsKey("hints"),
   /**
@@ -93,11 +98,11 @@ export const LS = {
   repoColors: lsKey("repoColors"),
   /** Packages a downloaded build may install by itself (`installPolicy.ts`). */
   installAllow: lsKey("installAllow"),
-  /** Close an AUTOMATIC session (`backlog · <repo> · <label>`) once its work
-   *  is done — `"1"` on, else OFF. The HOST reads it (`closeWhenDoneSetting`
-   *  in `shared/settings.ts` is the one parse); a row's own `closeWhenDone`
-   *  overrides it either way. Synced. */
+  /** Close an AUTOMATIC session once its work is done — `"1"` on, else OFF. The HOST reads it
+   *  (`closeWhenDoneSetting`); a row's own `closeWhenDone` overrides it either way. Synced. */
   closeWhenDone: lsKey("backlog.closeWhenDone"),
+  /** LOCAL-model sessions working at once; `"0"` no cap, absent = desktop default (host: `localSessionsSetting`). Synced. */
+  localSessions: lsKey("local.maxSessions"),
 
   // ── This device's identity and its pairing ─────────────────────────────
   /** What makes this device this device, in the usage/netlog docs. */
@@ -148,7 +153,7 @@ export const LS = {
    * as `Authorization: Bearer` / the `<protocol>-tok.` subprotocol (`deviceToken.ts`).
    * HOST-scoped: a token is one desktop's ledger row, parked with its host.
    */
-  deviceToken: lsKey("deviceToken"),
+  deviceToken: lsKey("deviceToken"), passive: lsKey("passive"), // "1": that token is a passive one (`passiveMode.ts`)
   /**
    * The active host's LAN identity `{hostId, secret}` (`GET /api/lan/identity`,
    * read over the tailnet) — what a LAN address must prove it knows before this
@@ -157,8 +162,8 @@ export const LS = {
   lanIdentity: lsKey("lanIdentity"),
 
   // ── Properties of the LINK (never synced — see SYNCED_SETTING_KEYS) ────
-  /** Data saver: skip thumbnails and prefetch. */
-  dataSaver: lsKey("dataSaver"),
+  /** Data saver: skip thumbnails and prefetch. `bgFresh`: the hidden app's catch-up (`core/term/bgFresh.ts`). */
+  dataSaver: lsKey("dataSaver"), bgFresh: lsKey("bgFresh"),
   /** Long edge an upload is re-encoded to before it goes up. */
   uploadScale: lsKey("uploadScale"),
   /** Measured uplink, used to size the send queue's receipt deadlines. */
@@ -180,7 +185,7 @@ export const LS = {
    * person. `always` by default so a new device sees the runner without hunting
    * for the row; one tap turns it off where it is noise.
    */
-  localRtBar: lsKey("localRtBar"),
+  localRtBar: lsKey("localRtBar"), unfoldToEnd: lsKey("unfoldToEnd") /* launcher unfold → last row */, repoSort: lsKey("repoSort") /* launcher repo order */,
   /**
    * The SESSION-TAB strip: on or off, how many tabs fit the screen, and whether
    * the order is the sequence they were opened in or the ones opened most.
@@ -205,7 +210,7 @@ export const LS = {
    * that has been up for months does not carry a count per archived
    * conversation.
    */
-  tabOpens: lsKey("sessionTabs.opens"),
+  tabOpens: lsKey("sessionTabs.opens"), tabFiles: lsKey("sessionTabs.files"), // pinned files: a choice, never in UI_RESET_KEYS
   /**
    * The last local-runner reading this phone was told, so an offline open can
    * say "last seen: qwen3-coder:30b holding 18.2 GB, 2h ago" instead of nothing.
@@ -315,12 +320,15 @@ export const LS = {
    *  resurrecting notes the user has since dealt with. Written only after the
    *  pad write SUCCEEDED, so a quota refusal retries on the next boot. */
   padRescueMigrated: lsKey("padRescue.migrated"),
-  /** Star presses made with no link, replayed on reconnect. */
-  pendingStars: lsKey("pendingStars"),
+  /** Star and follow-up flag presses made with no link, replayed on reconnect (`pendingMarks.ts`). */
+  pendingStars: lsKey("pendingStars"), pendingFollowUps: lsKey("pendingFollowUps"),
   /** The download queue's own state. */
   pullState: lsKey("pull.state"),
-  /** Per-repo auto-download rules. */
+  /** This WebView's auto-download master switch (`autoPull()`), "0" = off. */
   pullAuto: lsKey("pull.auto"),
+  /** "1" once this browser answered whether the APK on the same phone should be
+   *  the only one fetching automatically (`browserPullAsk`). */
+  pullBrowserAsk: lsKey("pull.browserask"),
   /**
    * Put every finished download into the phone's Downloads without a tap.
    *
@@ -401,8 +409,6 @@ export const LS = {
   /** Manual session row order, and which repo groups are folded away. */
   sessionOrder: lsKey("sessionOrder"),
   collapsedRepos: lsKey("collapsedRepos"),
-  /** Session header folded. */
-  headerCollapsed: lsKey("headerCollapsed"),
   /** Terminal toolbar strip revealed (the burger in the session header). Off by
    *  default: on a phone that row is a whole line of screen spent on verbs the
    *  header can pin. */
@@ -426,11 +432,11 @@ export const LS = {
    * button, and both are spelled out on its face; a schedule is recalled onto
    * the SHEET, which draws the rule and says it was recalled.
    *
-   * Per device, NOT synced: queueing a run of prompts the same way is a fact
-   * about the sitting you are in, and a tablet inheriting a phone's half-hour-
-   * ago clock would arm it for work nobody is watching.
+   * Per device, NOT synced: queueing a run of prompts the same way is a fact about the sitting
+   * you are in, and a tablet inheriting a phone's half-hour-ago clock would arm it for work nobody is watching.
    */
   sendMemory: lsKey("sendMemory"),
+  slotAskOff: lsKey("slotAskOff"), // repos (worktree paths) where the slot check's ask is OFF (`slotAskStore.ts`); per host, not synced
   /**
    * The backend+model pair last answered to the per-launch ask
    * (`LaunchAskSheet`), so the sheet re-opens where you left it.
@@ -452,8 +458,19 @@ export const LS = {
    *  (the on-screen keyboard is up). Per device, NOT synced: it is a fact about
    *  how much screen THIS device has left once its keyboard opens. */
   typingRoom: lsKey("typingRoom"),
-  /** Drop the phone keyboard once a message has been sent. */
-  closeKbOnSend: lsKey("closeKbOnSend"),
+  /** The `?` explain-mode chip in the launcher and session headers:
+   *  "" (never asked) · "asked" (kept after the one-time ask) · "hidden". */
+  hintChip: lsKey("hintChip"),
+  termCornerPos: lsKey("termCornerPos"), // corner group's dragged offset (`useCornerDrag.ts`), per device
+  /** The wide layout's sidebar width in CSS px, dragged by its edge (`core/layout/sideWidth.ts`).
+   *  Per device: it is about this screen's width, not the person. */
+  wideSideW: lsKey("wideSideW"),
+  wideBesideW: lsKey("wideBesideW"), // the annotator column beside the session (`BesideGrip.tsx`), px; absent = half the room
+  widePanelW: lsKey("widePanelW"), // the wide side panel (`.ws-panel`, `BesideGrip.tsx`), px; absent = CSS default
+  /** Drop the keyboard after a send · the hold card (`ShortcutCard.tsx`): "0" off, absent = on + toast unsaid. */
+  closeKbOnSend: lsKey("closeKbOnSend"), shortcutCard: lsKey("shortcutCard"),
+  busySend: lsKey("busySend"), // Send on a working session: "" ask, else the remembered "now"/"idle"
+  btwToCli: lsKey("btwToCli"), // after a /btw from the reader: "" ask to switch to the CLI, else the remembered "switch"/"stay"
   /** Light, dark, or follow the OS (`theme.ts`). Per device — see
    *  `shared/settings.ts` for why this one is not a fact about the person. */
   theme: lsKey("theme"),
@@ -531,6 +548,10 @@ export const LS = {
    * travels; the shortcut to writing the next one does not.
    */
   schedPctLeft: lsKey("schedPctLeft"),
+  /** The last lead time typed into *how long before*'s *another…* field, in
+   *  minutes — offered as a chip beside the presets. Device-local for the same
+   *  reason as `schedPctLeft`. */
+  schedLeadMin: lsKey("schedLeadMin"),
   /**
    * RETIRED — which ONE clock the bulk-close cutoff measured: how long a
    * session had been QUIET, or how long it had EXISTED. `CloseSheet.tsx`
@@ -555,6 +576,8 @@ export const LS = {
   /** Fan-out sheet: the composed sweep, kept across a close. */
   fanoutText: lsKey("fanout.text"),
   fanoutSel: lsKey("fanout.sel"),
+  /** Fan-out sheet: the model a sweep launches with, when it is not the new-session default. */
+  fanoutModel: lsKey("fanout.model"),
   /** Collage sheet: gutter width, and whether panels are numbered. */
   collageGap: lsKey("collageGap"),
   collageLabels: lsKey("collageLabels"),
@@ -598,13 +621,23 @@ export const LS = {
    *  `AGENT_LARGE_TOK` (`costNotice.ts`'s `shouldNoticeAgent`). Not synced for
    *  the reason `costNoticed` is not. Bounded on write. */
   agentNoticed: lsKey("agentNoticed"),
+  /** Per session, the spend mark last announced (`shouldNoticeSpend`); as `agentNoticed`. */
+  spendNoticed: lsKey("spendNoticed"),
 
   // ── This browser's history with its own banners ────────────────────────
   /** The insecure-origin banner is snoozed a week, not dismissed. */
   dismissInsecure: lsKey("dismissInsecure"),
   /** Phone-setup banner snoozed until (ms). Per device: it is about THIS phone. */
   dismissPhoneSetup: lsKey("dismissPhoneSetup"),
+  /** The code-folder dialog's "later": the guesses it was dismissed on, as `<picked>:<root>`
+   *  (`features/codeFolder/logic.ts`). Per device; a host that guesses differently asks again. */
+  codeFolderLater: lsKey("codeFolderLater"),
   dismissedUpdate: lsKey("dismissedUpdate"), annHintHidden: lsKey("annHintHidden"),
+  /** Strips folded into the session's status line (`stow.ts`): `<slot>|<content key>` → when.
+   *  Per device; a NEW content key unfolds by itself. Bounded on write. */
+  stowed: lsKey("stowed"),
+  /** The first fold said where folded strips go; once per device. */
+  stowTold: lsKey("stowTold"),
   /** The watchdog reload's own loop guard. */
   lastForcedReload: lsKey("lastForcedReload"),
   /** Web bundle staged for the next start, and whether to take it unasked. */
@@ -615,6 +648,9 @@ export const LS = {
    *  reloading the app every time it is put down. */
   webUpdateApply: lsKey("webUpdate.apply"),
   webUpdateApplyTries: lsKey("webUpdate.applyTries"),
+  /** The last native fallback (`lastRecoveryAt`) this phone has already been
+   *  told about, so the "did not start" toast is said once per fallback. */
+  webUpdateRecoverySeen: lsKey("webUpdate.recoverySeen"),
   /** The staged-build banner, hidden for a few hours rather than for this page
    *  life only. Per build, with an end (`updateSnooze.ts`). */
   webUpdateSnooze: lsKey("webUpdate.snooze"),
@@ -627,6 +663,13 @@ export const LS = {
    */
   routeLast: lsKey("route.last"),
   routeResume: lsKey("route.resume"),
+  /**
+   * Which contributed session views (the live desktop) have a tab in the
+   * session header (`core/session/headerViews.ts`): one is added when the view
+   * is opened from the ☰ menu and removed by its tab's ×. The host's, like the
+   * desktop it shows.
+   */
+  headerViews: lsKey("headerViews"),
   /**
    * The brand migration's two marks (`boot/brandMigrate.ts`): that this phone's
    * localStorage was copied from an older prefix (`shared/brandmigrate.ts`
@@ -680,6 +723,14 @@ export const TR_SEEN_PREFIX = lsKey("trSeen.");
 export const trSeenKey = (sessionId: string): string => `${TR_SEEN_PREFIX}${sessionId}`;
 
 /**
+ * An in-repo EXTENSION's own corner (`sdk/extStorage.ts`): `<prefix>ext.<pluginId>.<name>`. Built
+ * rather than listed for `trSeenKey`'s reason — the names are the extension's — and HOST-scoped
+ * (`HOST_KEY_PREFIXES`), so a remembered choice is per desktop and parks with it on a switch.
+ */
+export const EXT_PREFIX = lsKey("ext.");
+export const extKey = (pluginId: string, name: string): string => `${EXT_PREFIX}${pluginId}.${name}`;
+
+/**
  * The demo's persisted fake desktop, one key per scenario (`demo/transport.ts`).
  *
  * In **sessionStorage**, never localStorage — so it is not in `KEY_SCOPE` and a
@@ -712,49 +763,50 @@ export type KeyScope = "device" | "host";
 export const KEY_SCOPE = {
   // synced — the settings document is per host
   snippets: "host", headerCmds: "host", fanoutPresets: "host", toolbar: "host", launch: "host",
-  launchAsk: "host", pad: "host", hiddenRepos: "host", enterSends: "host", dictateTerms: "host",
-  autoSend: "host", serialSessions: "host", confirmQueue: "host", readerTools: "host", annKnobs: "host", annTools: "host",
-  hints: "host", repoColors: "host", installAllow: "host", closeWhenDone: "host", syncTs: "host",
+  launchAsk: "host", spendWarn: "host", pad: "host", hiddenRepos: "host", enterSends: "host", dictateTerms: "host",
+  autoSend: "host", serialSessions: "host", confirmQueue: "host", readerTools: "host", annKnobs: "host", annTools: "host", annPrompt: "device",
+  hints: "host", repoColors: "host", installAllow: "host", closeWhenDone: "host", localSessions: "host", syncTs: "host",
   // identity and the host list itself
   deviceId: "device", deviceName: "device", hostBase: "device", hosts: "device", hostActive: "device",
   hostSwitch: "device", hostsGone: "device",
   // that host's ledger row and LAN identity: parked with it
-  deviceToken: "host", lanIdentity: "host",
+  deviceToken: "host", lanIdentity: "host", passive: "host",
   // what that host's install log last said
   installLog: "host",
   // the link: the phone's own switches are device, what was MEASURED against a host is host
-  dataSaver: "device", uploadScale: "device", netPulse: "device", localRtBar: "device",
+  dataSaver: "device", bgFresh: "device", uploadScale: "device", netPulse: "device", localRtBar: "device", unfoldToEnd: "device", repoSort: "device",
   upKbps: "host", netlog: "host", netTraffic: "host", netSync: "host", localRt: "host",
   // the session tab strip: its SHAPE is this screen's, its open counts are that host's sessions
-  sessionTabs: "device", sessionTabsCount: "device", sessionTabsOrder: "device", sessionTabsLimit: "device", tabOpens: "host",
+  sessionTabs: "device", sessionTabsCount: "device", sessionTabsOrder: "device", sessionTabsLimit: "device", tabOpens: "host", tabFiles: "host",
   // work in flight: that host's words, that host's queue
   outbox: "host", compose: "host", composeDrafts: "host", composeOutbox: "host", composeSheets: "host",
-  deadUploads: "host", dictations: "host", pendingStars: "host", backlogDraft: "host",
+  deadUploads: "host", dictations: "host", pendingStars: "host", pendingFollowUps: "host", backlogDraft: "host",
   // the language spoken into THIS phone (the vocabulary, `dictateTerms`, is the person's and synced)
   dictateLang: "device", dictateLangs: "device",
-  fanoutText: "host", fanoutSel: "host", backlogRepo: "host", backlogShowArchived: "host",
+  fanoutText: "host", fanoutSel: "host", fanoutModel: "host", backlogRepo: "host", backlogShowArchived: "host",
   // retired stores, read once by a migration: never moved, so the migration finds them
   giveups: "device", giveupsMigrated: "device", padRescue: "device", padRescueMigrated: "device",
   activityDismissed: "host", activityConfirmedDone: "host",
-  pullState: "host", pullAuto: "host", pullAutoSave: "host",
+  pullState: "host", pullAuto: "host", pullBrowserAsk: "host", pullAutoSave: "host",
   // what that host last said, cached for an offline cold start
   snapSessions: "host", snapRepos: "host", snapReposAt: "host", snapRecent: "host", snapClosed: "host",
   snapBacklog: "host", snapHistory: "host", snapBuilds: "host", snapCapture: "host", snapSchedules: "host",
   snapCliHealth: "host", snapAt: "host", themeOverlay: "host", themeOverlayCss: "host", slashCache: "host", fileMtimes: "host", artMarks: "host", fileRemarks: "host",
   newImages: "host", cmdHistory: "host", usage: "host", notifSeen: "host",
-  costNoticed: "host", agentNoticed: "host",
-  sessionOrder: "host", collapsedRepos: "host", sendMemory: "host", launchLast: "host", wheelHidden: "host",
+  costNoticed: "host", agentNoticed: "host", spendNoticed: "host",
+  sessionOrder: "host", collapsedRepos: "host", sendMemory: "host", slotAskOff: "host", launchLast: "host", wheelHidden: "host",
   // how this phone is held and read
-  headerCollapsed: "device", toolbarOpen: "device", readMode: "device", cliMode: "device", termCostOpen: "device",
-  typingRoom: "device", closeKbOnSend: "device", theme: "device", textScale: "device", iconScale: "device", termZoom: "device",
+  toolbarOpen: "device", readMode: "device", cliMode: "device", termCostOpen: "device",
+  typingRoom: "device", hintChip: "device", termCornerPos: "device", wideSideW: "device", wideBesideW: "device", widePanelW: "device", closeKbOnSend: "device", shortcutCard: "device", busySend: "device", btwToCli: "device", theme: "device", textScale: "device", iconScale: "device", termZoom: "device",
   readerZoom: "device", scrollZoom: "device", gitZoom: "device", textDumpWrap: "device", closeCustomH: "device",
-  schedPctLeft: "device", closeBy: "device", closeKeepStar: "device", collageGap: "device",
+  schedPctLeft: "device", schedLeadMin: "device", closeBy: "device", closeKeepStar: "device", collageGap: "device",
   collageLabels: "device", toastLog: "device", hostedAck: "device",
   // dismissals and the app's own update machinery
-  dismissInsecure: "device", dismissPhoneSetup: "device", dismissedUpdate: "device", annHintHidden: "device",
-  lastForcedReload: "device",
+  dismissInsecure: "device", dismissPhoneSetup: "device", codeFolderLater: "device", dismissedUpdate: "device", annHintHidden: "device",
+  stowed: "device", stowTold: "device",
+  lastForcedReload: "device", webUpdateRecoverySeen: "device",
   webUpdateStaged: "host", webUpdateAuto: "host", webUpdateApply: "host", webUpdateApplyTries: "host",
-  webUpdateSnooze: "host", routeLast: "host", routeResume: "host",
+  webUpdateSnooze: "host", routeLast: "host", routeResume: "host", headerViews: "host",
   // the brand migration's marks: about this phone's storage, never parked
   brandMigrated: "device", brandStores: "device",
   // the demo switch: about this phone, never parked with a host
@@ -769,53 +821,7 @@ export const DEVICE_KEYS: ReadonlySet<string> = new Set(
 );
 
 /** Built keys (not in `LS`) and whom they follow. Every one is a host's. */
-export const HOST_KEY_PREFIXES: readonly string[] = [TR_SEEN_PREFIX];
-
-/**
- * What `BootGuard`'s hard reset leaves in localStorage, by prefix.
- *
- * The reset drops the service-worker caches and the device-local view state,
- * and deliberately NOT the send outbox or the prompt pad — unsent text is the
- * one thing here that cannot be re-fetched from the host — nor the bookkeeping
- * that decides whether those survive the next sync. Here rather than in
- * `BootGuard.tsx` so a node test can hold it (`boot/brandMigrate.test.mjs`).
- */
-export const RESET_KEEP_PREFIXES: readonly string[] = [
-  LS.outbox, LS.pad, LS.compose,
-  // Remarks written on a file and not yet sent: typed words, the only copy.
-  LS.fileRemarks,
-  // The RETIRED pad rescue store, and the mark that says it has been read.
-  // `LS.pad` already covers both by prefix; named anyway, because until
-  // `migratePadRescue` has run this holds the last copy of notes the old
-  // whole-list merge dropped — and a crash recovery is exactly when that
-  // migration has not happened yet. A rename would silently take it off the
-  // list.
-  LS.padRescue, LS.padRescueMigrated,
-  // The RETIRED give-ups ledger. Nothing writes it any more — a failed send
-  // keeps its own queue row, with its full words — but a device that has not
-  // yet run `migrateGiveUps` still has the only copy of some words in here, and
-  // a crash recovery is exactly when that migration has not happened yet.
-  LS.giveups, LS.giveupsMigrated,
-  // The sync bookkeeping, which is not view state.
-  //
-  // Dropping it made this reset a silent pad delete: with no recorded write
-  // times every remote value is newer than everything local, so the next
-  // `settings.all` replaces the pad (and the snippets, and the presets) with
-  // whatever the host last heard from any device — including a copy from before
-  // the notes on this phone were written. The one store a crash must not touch
-  // was being emptied by the crash recovery.
-  LS.syncTs,
-  // The desktops this phone knows, and EVERY other host's parked keys — their
-  // drafts, queue and pad under `<prefix>h.<id>.`. A reset that dropped them
-  // would delete the words of every host but the one that crashed. `hostBase`
-  // is rewritten from the list at the next boot, so it need not be kept.
-  LS.hosts, LS.hostActive, LS.hostSwitch, LS.hostsGone, HOST_PARK_PREFIX,
-  // Everything under an OLDER brand's prefix, and the marks that say it was
-  // copied. Until the copy has run, a legacy key is the only copy of a draft;
-  // after it, dropping the mark would run the copy again and bring back a
-  // draft the person had cleared since.
-  ...LEGACY_STORAGE_PREFIXES, LS.brandMigrated, LS.brandStores,
-];
+export const HOST_KEY_PREFIXES: readonly string[] = [TR_SEEN_PREFIX, EXT_PREFIX];
 
 /** The predicate `planHostSwitch` is handed. An UNREGISTERED prefixed key (an
  *  older build's, a built one) is a host key: parked, never lost. */
@@ -879,18 +885,12 @@ export function lsBool(key: string, fallback = false): boolean {
   return v === null ? fallback : v === "1" || v === "true";
 }
 
-export function lsSetBool(key: string, value: boolean): void {
-  lsSet(key, value ? "1" : "0");
-}
+export function lsSetBool(key: string, value: boolean): void { lsSet(key, value ? "1" : "0"); }
 
 /**
- * A finite number, or the fallback. A hand-edited key reads as unset.
- *
- * The `null` check is load-bearing and was missing: `Number(null)` is 0, and 0
- * is finite — so an UNSET key answered zero rather than the caller's default,
- * which is the one case a default exists for. Invisible at the only call site
- * that had one (`snapReposAt`, whose fallback is 0), and wrong the moment a
- * setting whose default is not zero is read this way.
+ * A finite number, or the fallback. A hand-edited key reads as unset. The
+ * `null` check is load-bearing: `Number(null)` is 0, so an UNSET key once
+ * answered zero rather than the caller's default.
  */
 export function lsNum(key: string, fallback: number): number {
   const raw = lsGet(key);

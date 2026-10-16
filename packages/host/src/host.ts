@@ -4,6 +4,7 @@ import os from "node:os";
 import { spawn } from "node:child_process";
 import type { HostStat } from "@waterplane/shared";
 import { execFileP as pexecFile } from "./proc.js";
+import { encodePs, isWsl, psQuote } from "./ocrlocal.js";
 
 
 /** CPU/memory/load snapshot of this machine. Cheap, synchronous, no shell. */
@@ -75,11 +76,18 @@ export async function readGpuStat(): Promise<GpuStat | null> {
 /**
  * Capture the whole desktop screen to `destPath` (a .png). Platform-specific;
  * throws if no capture tool is available. macOS uses the built-in
- * `screencapture`; Linux tries common tools in turn.
+ * `screencapture`; a host in WSL asks Windows (PowerShell, the primary display,
+ * DPI-aware so a scaled display is not captured at its logical size); other Linux
+ * tries common tools in turn.
  */
 export async function takeScreenshot(destPath: string): Promise<void> {
   if (process.platform === "darwin") {
     await pexecFile("screencapture", ["-x", destPath]); // -x = silent (no shutter)
+    return;
+  }
+  if (process.platform === "linux" && isWsl()) {
+    const { stdout } = await pexecFile("wslpath", ["-w", destPath], { timeout: 5000 });
+    await pexecFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encodePs(windowsScreenshotScript(stdout.trim()))], { timeout: 30_000 });
     return;
   }
   if (process.platform === "linux") {
@@ -95,6 +103,21 @@ export async function takeScreenshot(destPath: string): Promise<void> {
     throw new Error(`no screenshot tool (install gnome-screenshot/scrot/imagemagick): ${String(lastErr)}`);
   }
   throw new Error(`screenshot unsupported on ${process.platform}`);
+}
+
+/** PowerShell 5.1: the primary display at its real pixel size, as a PNG at `winPath`. */
+export function windowsScreenshotScript(winPath: string): string {
+  return `$ErrorActionPreference = 'Stop'
+Add-Type -TypeDefinition 'using System.Runtime.InteropServices; public static class WpDpi { [DllImport("user32.dll")] public static extern bool SetProcessDPIAware(); }'
+$null = [WpDpi]::SetProcessDPIAware()
+Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+$b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+$bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+$g = [System.Drawing.Graphics]::FromImage($bmp)
+$g.CopyFromScreen($b.Left, $b.Top, 0, 0, $bmp.Size)
+$bmp.Save(${psQuote(winPath)}, [System.Drawing.Imaging.ImageFormat]::Png)
+$g.Dispose(); $bmp.Dispose()
+`;
 }
 
 /**

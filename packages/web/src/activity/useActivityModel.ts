@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import {
-  activityCounts, activityHeadline, activityRows, dismissBlocker, groupActivity, isActivityDebris, matchesFilter,
+  activityCounts, activityHeadlineCut, activityRows, dismissBlocker, groupActivity, isActivityDebris, matchesFilter,
   partitionBulk, refireBlocker, sortActivity,
   type ActivityFilter, type ActivityGroup, type ActivitySort,
 } from "../activityRows";
@@ -85,7 +85,12 @@ export function useActivityModel(p: ActivitySheetProps) {
   const debrisCount = useMemo(() => inFilter.filter(isActivityDebris).length, [inFilter]);
   const shown = useMemo(() => (hideDebris ? inFilter.filter((r) => !isActivityDebris(r)) : inFilter), [inFilter, hideDebris]);
   const groups = useMemo(() => groupActivity(shown, rows, { group: grouped }), [shown, rows, grouped]);
-  const headline = activityHeadline(rows, p.online);
+  // Under a shortlist the sentence counts the shortlist: "2 need you" over rows
+  // that are not on screen is a number nobody can find. Off a shortlist it is a
+  // tap onto exactly the rows it counted — unless that chip is already the view.
+  const head = activityHeadlineCut(focus ? inFilter : rows, p.online);
+  const headline = head?.text ?? null;
+  const headlineCut = head && !focus && head.cut !== filter ? head.cut : null;
   const PeerJobs = usePeerJobsSection();
 
   // ── Selection ──
@@ -118,7 +123,7 @@ export function useActivityModel(p: ActivitySheetProps) {
 
   return {
     filter, setFilter, focus, setFocus, selecting, setSelecting, selected, setSelected, grouped, setGrouped,
-    hideDebris, setHideDebris, sort, setSort, now, rows, counts, shown, groups, headline, PeerJobs, debrisCount,
+    hideDebris, setHideDebris, sort, setSort, now, rows, counts, shown, groups, headline, headlineCut, PeerJobs, debrisCount,
     focusMissing, pickedRows, toggleRow, toggleGroup, selectVisible, clearSelection, refire, file, restorable,
   };
 }

@@ -28,8 +28,8 @@ import type { CliHealthStore } from "../clihealth.js";
 import type { TokenStatsStore } from "../tokenstats.js";
 import type { UiStats } from "../uistats.js";
 import type { UsageLog } from "../usagelog.js";
-import type { SmartPick } from "../smartpick.js";
 import type { ExecutorResult } from "../intents/manager.js";
+import type { HealthWatch } from "../healthwatch.js";
 import type { PeerStore } from "../peers/store.js";
 
 /** A file a scan found — the shape `scanOutboxDocs`/`scanPullCandidates` answer. */
@@ -48,6 +48,8 @@ export interface ServerCtx extends HostCtx {
   readonly push: PushManager;
   /** Read by sessionEvents, http. */
   readonly setupWatch: SetupWatcher;
+  /** The health index cache + weekly refresh. Read by http (`/api/repos`, `healthindex`). */
+  readonly healthWatch: HealthWatch;
   /** The peer ledger (`peers/store.ts`). Read by http (`/api/peers*`, `/api/peer/*`). */
   readonly peers: PeerStore;
   /** The first-app onboarding job. Read by http (`/api/onboard*`). */
@@ -60,8 +62,6 @@ export interface ServerCtx extends HostCtx {
   readonly uiStats: UiStats;
   /** Read by http, shutdown. */
   readonly usageLog: UsageLog;
-  /** Read by intentDeps, intentEvents, http. Defined AFTER the deps literal. */
-  readonly smartpick: SmartPick;
   /** Read by intentDeps. Defined AFTER the deps literal. */
   readonly assessExecutor: (i: Intent) => Promise<ExecutorResult>;
 
@@ -92,13 +92,13 @@ export interface ServerCtx extends HostCtx {
   /** Read by intentEvents (`settled` of a build row). */
   announceBuild(run: BuildRun): void;
   /** Read by sessionEvents. */
-  scanImages(cwd: string): NewImage[];
+  scanImages(cwd: string): Promise<NewImage[]>;
   /** Read by sessionEvents. */
   scanOutboxDocs(cwd: string): ScannedFile[];
   /** Read by sessionEvents. */
-  scanPullCandidates(cwd: string, scope: "outbox" | "repo"): ScannedFile[];
+  scanPullCandidates(cwd: string, scope: "outbox" | "repo"): Promise<ScannedFile[]>;
   /** Read by sessionEvents. */
-  pullNewFiles(id: string, cwd: string): void;
+  pullNewFiles(id: string, cwd: string): Promise<void>;
   /** Read by sessionEvents. */
   fmtSize(b: number): string;
 

@@ -84,13 +84,11 @@ export function intentReasonText(reason: BlockReason, detail?: string): string {
       // automatic sessions at a time and 3 are busy"), exactly the arrangement
       // `budgetDetail` has: the specific sentence when somebody knows it, this
       // one when nobody does, and never a plausible number nobody measured.
-      return "waiting for a free slot — every automatic session this desktop runs at a time is open";
-    case "picking":
-      // No numbers and no model name here, for `noSlot`'s reason: which model
-      // the pass runs on and how long its watchdog is are the HOST's facts, and
-      // a sentence that named "haiku, 20 s" would be wrong on any desktop that
-      // set `WATERPLANE_SMARTPICK_MODEL`. "A few seconds" is what is true everywhere.
-      return "looking over this repo's waiting items before picking the next one — a few seconds";
+      return "waiting for a free slot — every automatic session this desktop runs at a time is working";
+    case "localModel":
+      // The host replaces this with its own numbers (`localSlotWaitText`) or
+      // the loading sentence; this is what is true when nobody said which.
+      return "waiting for the local model — another local session is working, or the model is still loading";
   }
 }
 
@@ -110,35 +108,76 @@ export function closeWhenDoneOf(row: { closeWhenDone?: boolean } | undefined | n
 /**
  * The automatic-session cap as FACTS, for the `noSlot` sentence and for the
  * phone's "close one to make room": the ceiling, and every automatic session
- * open right now with whether it will close itself. A fact, never an action —
- * closing one stays a person's tap on the ordinary session close.
+ * open right now with whether it is WORKING and whether it will close itself.
+ * A fact, never an action — closing one stays a person's tap on the ordinary
+ * session close.
+ *
+ * **Only a working session holds a slot** (R-automation-042). The cap bounds
+ * how many agents RUN at once; an idle automatic session left open — the
+ * default, close-when-done is off — is a conversation waiting to be read, and
+ * it used to hold its slot until a person closed it, so a desktop with three
+ * finished items open fired nothing more, timed rows included.
  */
 export interface AutoSlotFacts {
-  /** `WATERPLANE_BACKLOG_SESSIONS` — how many automatic sessions may be alive at once. */
+  /** `WATERPLANE_BACKLOG_SESSIONS` — how many automatic sessions may WORK at once. */
   max: number;
-  /** Every running automatic session (`backlog · …`), oldest first. */
-  open: { id: string; closeWhenDone: boolean }[];
+  /** Every running automatic session (`backlog · …`), oldest first. `busy`
+   *  absent is an older host, which counted every open one: read as busy. */
+  open: { id: string; closeWhenDone: boolean; busy?: boolean }[];
+}
+
+/** The open automatic sessions that hold a slot — the working ones. */
+export function autoSlotsBusy(f: AutoSlotFacts): AutoSlotFacts["open"] {
+  return f.open.filter((s) => s.busy !== false);
 }
 
 /**
  * The `noSlot` wait in the host's own numbers — `undefined` while a slot is
  * free (the cap is not what holds the row, so there is nothing to say).
  *
- * When NONE of the open automatic sessions closes itself, nothing will free a
- * slot but a person, and the sentence says exactly that: "waiting for a free
- * slot — 3 automatic sessions open (close one to make room)". When some do,
- * the old wording stands (they free a slot once they have lingered), plus how
- * many of them will not.
+ * Every session it counts is WORKING, so a slot frees itself when one of them
+ * goes idle; closing one by hand is the way to make room sooner, and it stops
+ * that session's work.
  */
 export function autoSlotsWaitText(f: AutoSlotFacts): string | undefined {
-  const live = f.open.length;
-  if (live < f.max) return undefined;
+  const busy = autoSlotsBusy(f).length;
+  if (busy < f.max) return undefined;
   const sessions = (n: number): string => `${n} automatic session${n === 1 ? "" : "s"}`;
-  const closing = f.open.filter((s) => s.closeWhenDone).length;
-  if (closing === 0) return `waiting for a free slot — ${sessions(live)} open (close one to make room)`;
-  const kept = live - closing;
-  return `waiting for a free slot — this desktop runs ${sessions(f.max)} at a time and ${live} ${live === 1 ? "is" : "are"} busy`
-    + (kept > 0 ? `; ${kept} of them stay${kept === 1 ? "s" : ""} open until closed by hand` : "");
+  return `waiting for a free slot — this desktop runs ${sessions(f.max)} at a time and ${busy} ${busy === 1 ? "is" : "are"} working; a slot frees when one goes idle`;
+}
+
+/**
+ * The local-model cap as FACTS: the ceiling (`null` = no cap) and the local
+ * sessions counted as working right now, oldest first.
+ */
+export interface LocalSlotFacts {
+  max: number | null;
+  working: { id: string; name?: string }[];
+}
+
+/**
+ * The `localModel` wait in the host's numbers — `undefined` while a local turn
+ * may start (the cap is not what holds the row). One wording for both ends:
+ * "waiting for the local model — 1 local session is working".
+ */
+export function localSlotWaitText(f: LocalSlotFacts): string | undefined {
+  const n = f.working.length;
+  if (f.max == null || n < f.max) return undefined;
+  const lead = `waiting for the local model — ${n} local session${n === 1 ? " is" : "s are"} working`;
+  const named = f.working.length === 1 && f.working[0].name ? ` (${f.working[0].name})` : "";
+  return `${lead}${named}; this desktop runs ${f.max} at a time`;
+}
+
+/**
+ * What a person's own start is TOLD when it goes past the cap — never a
+ * refusal (nothing refuses; an explicit start beats a hold). `undefined` when
+ * the cap is not exceeded. `working` excludes the session being started.
+ */
+export function localSlotOverText(f: LocalSlotFacts): string | undefined {
+  const n = f.working.length;
+  if (f.max == null || n < f.max) return undefined;
+  const named = n === 1 && f.working[0].name ? ` (${f.working[0].name})` : "";
+  return `another local-model session is working${named} — this desktop runs ${f.max} at a time, so they share the local model and turns may be slower`;
 }
 
 /**
@@ -153,11 +192,7 @@ export function autoSlotsWaitText(f: AutoSlotFacts): string | undefined {
  * because it is the only one that never clears on its own.
  */
 export const INTENT_BLOCK_ORDER: readonly BlockReason[] = [
-  // `picking` sits immediately before `sessionBusy`, at the bottom with the
-  // other two waits nobody can act on: it clears itself within seconds, and a
-  // list that led with it would be announcing the machinery rather than the
-  // reason the user's work is not moving.
-  "offline", "gate", "budget", "sessionBudget", "sessionGone", "limit", "awaitingAnswer", "notYet", "filesMissing", "serial", "hostBusy", "noSlot", "picking", "sessionBusy",
+  "offline", "gate", "budget", "sessionBudget", "sessionGone", "limit", "awaitingAnswer", "notYet", "filesMissing", "serial", "hostBusy", "localModel", "noSlot", "sessionBusy",
 ];
 
 /**
@@ -243,7 +278,7 @@ export function missedText(_due: number, graceMin: number): string {
  *
  * Same rule as `missedText` about what it may claim: the clock, and nothing
  * about the cause. Which rung held it (a busy repo, a full desktop, a paused
- * account, a smart pick that never answered) is said on the row while it waits,
+ * account, a local model still loading) is said on the row while it waits,
  * by `intentReasonText` — this line must not guess at it hours later.
  */
 export function heldOutText(graceMin: number, deadlineMs: number): string {

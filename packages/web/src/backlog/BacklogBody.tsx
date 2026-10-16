@@ -8,9 +8,9 @@
 import type { BacklogModel } from "./backlogTypes";
 import { RepoBar } from "./RepoBar";
 import { AutoOffNote, HereNotice, StrandedDraft } from "./Notices";
-import { SmartPickNotes } from "./SmartPickNotes";
 import { BacklogFilterBar, CutBar } from "./BacklogFilterBar";
 import { BulkBars } from "./BulkBars";
+import { PickBars } from "./PickBars";
 import { BacklogList } from "./BacklogList";
 
 /**
@@ -29,10 +29,10 @@ export function BacklogBody({ m }: { m: BacklogModel }) {
         <>
           <CutBar m={m} />
           <AutoOffNote m={m} />
+          <PickBars m={m} />
           <BacklogList m={m} />
           <BulkBars m={m} />
           <RepoBar m={m} />
-          <SmartPickNotes m={m} />
           <StrandedDraft m={m} />
           <HereNotice m={m} />
           <BacklogFilterBar m={m} />
@@ -41,10 +41,10 @@ export function BacklogBody({ m }: { m: BacklogModel }) {
         <>
           <RepoBar m={m} />
           <AutoOffNote m={m} />
-          <SmartPickNotes m={m} />
           <StrandedDraft m={m} />
           <HereNotice m={m} />
           <BacklogFilterBar m={m} />
+          <PickBars m={m} />
           <BulkBars m={m} />
           <BacklogList m={m} />
         </>

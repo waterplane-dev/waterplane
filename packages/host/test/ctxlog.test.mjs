@@ -21,7 +21,7 @@ import assert from "node:assert/strict";
 import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { agentCumOf, agentEnvelope, agentUsage, liveAgentOf, downsample, projectContextLog, readContextLog, sparkOf, updateContextLog, withAgentRuns } from "../dist/ctxlog.js";
+import { agentCumOf, agentEnvelope, agentSpendAt, agentUsage, liveAgentOf, downsample, projectContextLog, readContextLog, sparkOf, updateContextLog, withAgentRuns } from "../dist/ctxlog.js";
 
 const DIR = mkdtempSync(join(tmpdir(), "waterplane-ctxlog-"));
 // The >24 MB read-cap fixtures leave ~100 MB here; never keep it past the file.
@@ -366,6 +366,22 @@ test("the log names the model the window is derived from", () => {
     rejection(T0 + 1_000, T0 + 3_600_000),  // `<synthetic>` must not win
   ]), null);
   assert.equal(cur.model, "claude-opus-5");
+});
+
+test("the effort is the newest turn's, off the same record as its model", () => {
+  // `SessionInfo.turnEffort`: an `/effort high` typed after launch shows here
+  // and nowhere else. A record without one CLEARS it — never the previous
+  // turn's effort beside this turn's model.
+  const cur = updateContextLog(logFile([
+    turn(T0, "e1", 30_000, { effort: "xhigh" }),
+    turn(T0 + 1_000, "e2", 31_000, { effort: "high" }),
+  ]), null);
+  assert.equal(cur.effort, "high");
+  const bare = updateContextLog(logFile([
+    turn(T0, "e3", 30_000, { effort: "xhigh" }),
+    turn(T0 + 1_000, "e4", 31_000),
+  ]), null);
+  assert.equal(bare.effort, null);
 });
 
 test("a spark carries the known window and the observed compact point, unchanged", () => {
@@ -1008,6 +1024,20 @@ test("the agents' running total ends EXACTLY at agentTok, overlaps added", () =>
   assert.deepEqual(cum.map(([t]) => t), [T0, T0 + 10_000, T0 + 20_000, T0 + 30_000, T0 + 60_000]);
   assert.equal(cum[1][1], 40_300 + 9_300, "the second agent's first request is ADDED to the first's");
   for (let i = 1; i < cum.length; i++) assert.ok(cum[i][1] >= cum[i - 1][1], "a running total never falls");
+});
+
+test("the agents' spend lands on the spark's readings, the last one being the total", () => {
+  const use = agentUsage(agentDir({
+    "agent-a.jsonl": [agentTurn(T0, "a1", 40_000), agentTurn(T0 + 60_000, "a3", 42_000)],
+    "agent-b.jsonl": [agentTurn(T0 + 10_000, "b1", 9_000)],
+  }), null);
+  const cum = agentCumOf(use);
+  const at = agentSpendAt([T0 - 1, T0 + 15_000, T0 + 30_000], use);
+  assert.equal(at[0], 0, "nothing spent before the first agent ran");
+  assert.equal(at[1], cum[1][1], "step-held at the running total");
+  assert.equal(at[2], use.tok, "spend after the newest reading still lands on the last one");
+  for (let i = 1; i < at.length; i++) assert.ok(at[i] >= at[i - 1]);
+  assert.equal(agentSpendAt([T0], agentUsage(agentDir({}), null)), null, "no agent spend ⇒ absent");
 });
 
 test("an undated record is counted at its log's next dated one, an undated log at the end", () => {

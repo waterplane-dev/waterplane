@@ -68,3 +68,11 @@ A plugin may add a backend (a CLI the launcher spawns) that it declares in its m
 A session still running in tmux on a plugin's backend survives a host restart: it is held until that plugin registers the backend and then taken back, and meanwhile listed as a closed, still-alive row that names the plugin it waits for.
 - asked: 2026-10-01 (backends design, docs/analysis/backends-design.md §3 "Boot order", WP3a)
 - shipped: this change (`sessions/tmux.ts` `parkedLive`)
+### R-plugins-015 · requested
+Repo-specific tooling lives in a private plugin, and nothing private is in the public repository.
+- asked: 2026-10-07
+
+### R-plugins-016 · requested
+The vault plugin has its own visible repo, like the other plugins.
+- asked: 2026-10-11
+

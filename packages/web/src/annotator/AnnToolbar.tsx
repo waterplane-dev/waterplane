@@ -54,7 +54,7 @@ export function AnnToolbar({ m }: { m: AnnModel }) {
           ),
           moveMode && (
             <button key="knobs" className={`key ${knobs ? "active" : ""}`} onClick={toggleKnobs} aria-pressed={knobs}
-              title="knobs: move, size and turn a mark by knobs on strings, instead of dragging from anywhere"
+              title="knobs: move, size and turn a mark (or drag an arrow's ends) by knobs on strings, instead of dragging from anywhere"
               aria-label="knobs on the selected mark">knobs</button>
           ),
         ];

@@ -1,5 +1,6 @@
 /** The When row: now / when it's free, the anchors, after-another, wait-until-free. Split from `SendSheet.tsx` (docs/notes/send-architecture.md). */
 import { CalendarClock, ChevronDown, ChevronRight, Files, Gauge, Hourglass, Link2 } from "lucide-react";
+import { RadioRows } from "../kit";
 import { intentTitle } from "../activityRows";
 import { CHAIN_EMPTY, CHAIN_NOTE, chainOkWords, RETIME_NOW_SEG, whenWords } from "../sendIntent";
 import { Empty } from "../Empty";
@@ -27,12 +28,13 @@ export function WhenSection({ m }: { m: SendSheetModel }) {
               pick an ANCHOR, a clock time or a usage reset. Splitting them
               onto two rows says that out loud rather than presenting four
               peers where two of them do not belong to the same question. */}
-          <div className="segmented">
-            <button className={`seg${when.kind === "now" ? " on" : ""}`} onClick={() => leaveAt({ kind: "now" })}>{retime ? RETIME_NOW_SEG : "now"}</button>
-            <button className={`seg${when.kind === "idle" ? " on" : ""}`}
-              title="hold it until the target can take it — turn ended, no question open, no usage-limit block"
-              onClick={() => leaveAt({ kind: "idle" })}>when it&apos;s free</button>
-          </div>
+          <RadioRows<"now" | "idle"> label="When to run it"
+            value={when.kind === "now" || when.kind === "idle" ? when.kind : null}
+            options={[
+              { key: "now", label: retime ? RETIME_NOW_SEG : "now" },
+              { key: "idle", label: "when it's free", title: "hold it until the target can take it — turn ended, no question open, no usage-limit block" },
+            ]}
+            onChange={(k) => leaveAt({ kind: k })} />
           {/* A re-time with no clock MOVES the rows: off the clock list, onto
               the repo's ⌛ chip. Said here, before the tap, and again in the
               receipt — rows that vanish from where you were looking read as lost. */}
@@ -63,35 +65,14 @@ export function WhenSection({ m }: { m: SendSheetModel }) {
                   : "Turn ended, no question open, no usage-limit block. The desktop holds it, so this phone can be shut."}
             </div>
           )}
-          <div className="segmented" style={{ marginTop: 6 }}>
-            <button className={`seg${when.kind === "at" && anchor === "clock" ? " on" : ""}`}
-              onClick={() => setAnchor("clock")}>
-              <CalendarClock size={13} /> at a time
-            </button>
-            {/* Promoted out from under "at a time": a usage reset is not a
-                third kind of clock-time, it is the OTHER thing a schedule
-                can anchor to, and it recurs on a schedule nobody sets — the
-                reset slides with whenever the window was last opened. */}
-            <button className={`seg${when.kind === "at" && anchor === "window" ? " on" : ""}`}
-              title="anchor this to a usage window resetting, rather than to a time of day"
-              onClick={() => setAnchor("window")}>
-              <Gauge size={13} /> a usage window
-            </button>
-            {/* The third thing a send can be anchored to, and the one the
-                other two could not express: another piece of work finishing.
-                It sits on THIS row rather than the one above because it is an
-                anchor — "not yet, and here is what decides" — while `now` and
-                `when it's free` are instructions about a live target. People
-                were writing this as a clock guess far enough out, which is
-                either wasteful or silently wrong in the direction of
-                reviewing a half-finished migration. */}
-            <button className={`seg${when.kind === "after" ? " on" : ""}`}
-              title="wait for another item to finish, rather than for a time"
-              onClick={setAfter}>
-              <Link2 size={13} /> after another…
-            </button>
-          </div>
-
+          <RadioRows<"clock" | "window" | "after"> label="What it waits for"
+            value={when.kind === "at" ? (anchor === "window" ? "window" : "clock") : when.kind === "after" ? "after" : null}
+            options={[
+              { key: "clock", label: <><CalendarClock size={13} /> at a time</> },
+              { key: "window", label: <><Gauge size={13} /> a usage window</>, title: "anchor this to a usage window resetting, rather than to a time of day" },
+              { key: "after", label: <><Link2 size={13} /> after another…</>, title: "wait for another item to finish, rather than for a time" },
+            ]}
+            onChange={(k) => { if (k === "after") setAfter(); else setAnchor(k); }} />
           {when.kind === "after" && (
             <>
               <div className="pad-pick">

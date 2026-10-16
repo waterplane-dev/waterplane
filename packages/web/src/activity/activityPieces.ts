@@ -4,23 +4,6 @@ import type { ActivityAction, ActivityActionId } from "./activityTypes.ts";
 // ── Small shared pieces ─────────────────────────────────────────────────────
 
 /**
- * What the smart pick stamps on a row it wrote (`smartpick:<passId>`).
- *
- * A PREFIX and not an exact string, because the pass id is part of it — the
- * host needs to be able to tell which look produced a row, and the phone only
- * needs to know that a look did. Exported so the Backlog sheet reads the same
- * marker: two literals would be two answers to "did a person write this?", and
- * the one that drifted would be the one that stopped saying so.
- *
- * Deliberately not in `@waterplane/shared` beside `ORIGIN_FANOUT_*`: a fan-out row is
- * CLASSIFIED by its origin (`isFanoutRow`), so that marker is part of the
- * shared model. This one changes nothing about what the row IS — a smart-picked
- * item is an ordinary work item — it only changes what the row SAYS, which is
- * this side's business.
- */
-export const SMARTPICK_ORIGIN = "smartpick:";
-
-/**
  * Enough to recognise which prompt this was, on a phone.
  *
  * The full words go in `fullText` and the sheet expands to them on a tap. What

@@ -5,6 +5,7 @@ import type { OutboxEntry } from "./outbox";
 import { track } from "./usage";
 import { ago } from "./format";
 import { PromptAnswer } from "./PromptAnswer";
+import { CliSuggestion } from "./CliSuggestion";
 import { SheetHead } from "./Sheet";
 import { Empty } from "./Empty";
 
@@ -35,6 +36,9 @@ interface Props {
    * for a screen nobody is looking at any more.
    */
   onAck: (session: SessionInfo) => void;
+  /** Send the CLI's own proposal (`SessionInfo.cliSuggestion`) as that
+   *  session's next prompt — the durable compose path, queued offline. */
+  onSendSuggestion: (session: SessionInfo, text: string) => void;
   onClose: () => void;
 }
 
@@ -61,7 +65,7 @@ interface Props {
  * only difference offline is the age of what it is showing, which is said out
  * loud rather than left to be inferred from stale-looking text.
  */
-export function QuestionsSheet({ sessions, outbox, online, seenAt, onAnswer, onOpen, onAck, onClose }: Props) {
+export function QuestionsSheet({ sessions, outbox, online, seenAt, onAnswer, onOpen, onAck, onSendSuggestion, onClose }: Props) {
   // Parsed questions first (they are answerable here), then the dialogs
   // `prompt.ts` could not read into options — those can only be pointed at.
   const asked = sessions.filter((s) => s.running && s.prompt);
@@ -194,6 +198,12 @@ export function QuestionsSheet({ sessions, outbox, online, seenAt, onAnswer, onO
                   </button>
                 : <span className="approve-hint">no link — “handled” needs the host, it is not queued</span>}
             </div>
+            {/* What the CLI itself proposes typing next — often the answer to
+                the question above ("push it"). Queued like any prompt, so it
+                works with no link, and it is the words, not a summary. */}
+            {s.cliSuggestion && (outbox.some((e) => e.sessionId === s.id && e.text === s.cliSuggestion && e.status !== "failed")
+              ? <div className="approve-hint">queued: “{s.cliSuggestion}” — sent when the link is back</div>
+              : <CliSuggestion text={s.cliSuggestion} onSend={(t) => onSendSuggestion(s, t)} ev="questions" />)}
           </div>
         ))}
       </div>

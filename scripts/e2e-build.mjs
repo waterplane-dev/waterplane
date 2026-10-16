@@ -13,12 +13,12 @@
 // working setup looked like it had produced nothing at all.
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
 import { bootWait } from "./lib-e2e.mjs";
-import { E, SLUG, rootEnv } from "./lib-brand.mjs";
+import { E, SHARED, SLUG, STATE, rootEnv } from "./lib-brand.mjs";
 
 const PORT = 8802;
 const ROOT = mkdtempSync(join(tmpdir(), `${SLUG}-build-`));
@@ -56,6 +56,13 @@ bootWait(PORT, 800, async () => {
     } else if (m.t === "build.list" && m.repoDir === wt) {
       if (phase === 1) {
         if (m.builds.length !== 1 || m.builds[0].id !== "b1" || m.builds[0].cmd !== CMD) fail("saved config not returned: " + JSON.stringify(m.builds));
+        // A new entry with no `local` goes to the COMMITTED shared file, so the run
+        // below is a shared-only entry running.
+        let onDisk = null;
+        try { onDisk = JSON.parse(readFileSync(join(wt, SHARED, "builds.json"), "utf8")); } catch { /* checked below */ }
+        if (!Array.isArray(onDisk) || onDisk[0]?.id !== "b1") fail("a new build must land in the shared file: " + JSON.stringify(onDisk));
+        if (existsSync(join(wt, STATE, "builds.json"))) fail("a new build must not be written to this desktop's own file");
+        if (!Array.isArray(m.localIds) || m.localIds.length) fail("build.list must say no entry is local: " + JSON.stringify(m.localIds));
         if (!fired) { fired = true; send({ t: "build.run", repoDir: wt, buildId: "b1" }); }
       } else if (!firedNoop) {
         firedNoop = true;
@@ -89,15 +96,18 @@ bootWait(PORT, 800, async () => {
     } else if (m.t === "build.run" && m.run.buildId === "b2" && (m.run.status === "done" || m.run.status === "failed")) {
       const r = m.run;
       if (r.status !== "done" || r.exitCode !== 0) fail("no-op build did not succeed: " + JSON.stringify(r));
-      // The collected copy and the build's own output are the same bytes (a
-      // hard link), so they are ONE artifact here too — offered under the name
-      // that says which build it is, and flagged as not written by this run.
-      const art = (r.artifacts || []).find((a) => /^buildrepo-e2e-/.test(a.name));
-      if (!art) fail("a build that wrote nothing must still offer the artifact already there: " + JSON.stringify(r.artifacts));
+      // The fallback offers what THIS build left in its own tree, never the
+      // outbox copy: `.claude/` holds what every build collected, so a file
+      // there is no evidence this build is up to date (ea7bea26). One entry,
+      // flagged as not written by this run, and nothing re-collected.
+      const arts = r.artifacts || [];
+      const art = arts.find((a) => a.name === "app-e2e.apk");
+      if (!art) fail("a build that wrote nothing must still offer the artifact already there: " + JSON.stringify(arts));
+      if (art.relPath !== "build/out/app-e2e.apk") fail("the stale artifact is the build's own output: " + JSON.stringify(art));
       if (art.stale !== true) fail("a pre-existing artifact must be flagged stale (the run did not write it): " + JSON.stringify(art));
       if (!art.mtime) fail("a stale artifact must carry its mtime: " + JSON.stringify(art));
-      if ((r.artifacts || []).some((a) => a.name === "app-e2e.apk")) fail("the same bytes under two names must be offered once: " + JSON.stringify(r.artifacts));
-      console.log("PASS: an up-to-date build offers the existing artifact, flagged stale, folded to one name");
+      if (arts.length !== 1) fail("a no-op build offers its own output once, nothing from the outbox: " + JSON.stringify(arts));
+      console.log("PASS: an up-to-date build offers its own existing output once, flagged stale, never the outbox copy");
 
       // ── Phase 3: what this repo says it can build ──────────────────────
       // Files a real repo would have, written now so the scan has something

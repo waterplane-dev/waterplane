@@ -68,6 +68,7 @@ export function useGalleryListing({ repoId, repos, initialScope, initialAllTime,
     // stale in-flight fetch (e.g. inbox) could land AFTER a newer one (outbox)
     // and overwrite the grid — switching tabs looked like it did nothing.
     let cancelled = false;
+    const ac = new AbortController();
     // Whether the LIVE listing has landed. The cache read races it (IndexedDB is
     // fast, but it is not ordered against fetch), and a cached listing painting
     // over the fresh one would be the same bug in a new place.
@@ -142,12 +143,13 @@ export function useGalleryListing({ repoId, repos, initialScope, initialAllTime,
         sinceSeconds: since,
         repoIds: repoKey ? repoKey.split(",") : undefined,
         limit,
+        signal: ac.signal,
       }).then((d) => apply(d.hits, d.truncated)).catch(fail);
     } else if (scope === "inbox") {
       // Opening the inbox marks it read. Separate from the listing GET because
       // it writes — the host only accepts it as a POST.
       api.markInboxSeen(repoId!);
-      api.inbox(repoId!).then((f) => {
+      api.inbox(repoId!, ac.signal).then((f) => {
         // The inbox listing is one small dir: the host sends all of it and the
         // filtering/paging is client-side — through the same rules the offline
         // path uses, so a chip can't mean two different things.
@@ -159,9 +161,11 @@ export function useGalleryListing({ repoId, repos, initialScope, initialAllTime,
       // Opening the outbox marks it read — same split as the inbox: the badge
       // reset is a POST, not a side effect of the listing GET.
       if (scope === "outbox") api.markOutboxSeen(repoId!);
-      api.artifacts(repoId!, scope, since, { query, kind, limit }).then((d) => apply(d.files, d.truncated)).catch(fail);
+      api.artifacts(repoId!, scope, since, { query, kind, limit, signal: ac.signal }).then((d) => apply(d.files, d.truncated)).catch(fail);
     }
-    return () => { cancelled = true; };
+    // ABORTED, not only ignored: under the APK's HTTP/1.1 a running request holds
+    // one of the WebView's six sockets to the host; a few keystrokes filled them.
+    return () => { cancelled = true; ac.abort(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the listing's own key parts; `coverage` and `scopeKey` are derived from them
   }, [repoId, repoKey, scope, since, kind, query, reload, limit]);
 

@@ -8,7 +8,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { detectContext } from "../dist/context.js";
+import { contextMeterRow, detectContext } from "../dist/context.js";
 
 test("nothing on screen means no reading, not zero", () => {
   const c = detectContext("just some output\nand more of it");
@@ -49,4 +49,12 @@ test("an impossible ratio is ignored rather than believed", () => {
 
 test("a percent outside 0..100 is refused", () => {
   assert.equal(detectContext("Context left until auto-compact: 420%").leftPct, null);
+});
+
+test("the meter gate ignores prose ABOUT the context window", () => {
+  // A real false alarm: the agent's own line filed 18 "misses" on the health board.
+  assert.equal(contextMeterRow('⏺ I moved the /compact button onto the "Context window" title row'), null);
+  assert.equal(contextMeterRow("the Context window title row has no number on it"), null);
+  assert.equal(contextMeterRow("Context left until auto-compact: 42%"), "Context left until auto-compact: 42%");
+  assert.equal(contextMeterRow("ctx 120k used of the context window"), "ctx 120k used of the context window");
 });

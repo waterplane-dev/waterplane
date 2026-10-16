@@ -90,9 +90,8 @@ const fakeIntents = () => ({ kick: () => {}, emitChanged: () => {}, list: () => 
 test("the backlog's config reaches disk by tmp+rename, never a truncate-in-place", () => {
   // It was a bare `writeFileSync`, and a torn one is silent in the worst
   // possible way: `init()` reads the file inside `try { … } catch { /* fresh */ }`,
-  // so half a JSON document comes back as `auto: false` with no repo ticked —
-  // auto-fire off and every smart-pick tick off, on the next boot, with nothing
-  // said. "Half a JSON document where a backlog used to be" is this repo's
+  // so half a JSON document comes back as `auto: false` — auto-fire off on the
+  // next boot, with nothing said. "Half a JSON document where a backlog used to be" is this repo's
   // recorded failure for exactly this.
   //
   // The observable difference is the INODE: a truncate-in-place keeps it, a
@@ -103,13 +102,12 @@ test("the backlog's config reaches disk by tmp+rename, never a truncate-in-place
 
   b.setAuto(true);
   const first = statSync(path).ino;
-  b.setSmartPick("/tmp/waterplane-blcfg-repo", true);
+  b.setAuto(false);
   const second = statSync(path).ino;
 
   assert.notEqual(second, first, "the file was replaced, not overwritten in place");
   const cfg = JSON.parse(readFileSync(path, "utf8"));
-  assert.equal(cfg.auto, true, "and both settings travelled together, which is why they share one file");
-  assert.ok(cfg.smartPick["/tmp/waterplane-blcfg-repo"]);
+  assert.equal(cfg.auto, false);
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -126,7 +124,7 @@ test("`backlog · ` is stripped from a title that came off the wire", () => {
 
 test("a session REOPENED from Recently closed is not counted, reaped or lingered as machinery's", () => {
   // The prefix is the only mark: it is what `autoSessionCount()` counts against
-  // the cap, what `reapAutoSession` may close to make room and what
+  // the cap and what
   // `lingerSweep` retires after ten minutes. A finished item's session is closed
   // WITH its title, so it sits in *Recently closed* still called `backlog · myapp
   // · …` — and the reopen button sends that very title back. The session the
@@ -186,48 +184,4 @@ test("a scratch root is left clean", () => {
   assert.equal(statSync(join(root, ".waterplane", "backlog-config.json")).isFile(), true);
   assert.throws(() => statSync(join(root, ".waterplane", "backlog-config.json.tmp")));
   rmSync(root, { recursive: true, force: true });
-});
-
-// ── 4. what a `backlog.unmerge` tap answers, on the wire ───────────────────
-
-const unmergeRoute = (await import("../dist/routes/work.js")).workRoutes["backlog.unmerge"];
-
-/** The four things that route touches, and nothing else. */
-function fakeCtx(unmerge) {
-  const sent = [];
-  const broadcast = [];
-  return {
-    sent, broadcast,
-    a: {
-      msg: { t: "backlog.unmerge", id: "mgabc123" },
-      ws: {},
-      c: {
-        backlog: { unmerge },
-        send: (_ws, m) => sent.push(m),
-        broadcast: (m) => broadcast.push(m),
-        backlogSnapshot: () => ({ t: "backlog.list", items: [] }),
-      },
-    },
-  };
-}
-
-test("a successful put-back says out loud WHAT it did, because the same tap means two things", () => {
-  // The web draws the button on any merged row and never greys it out; the host
-  // decides what the tap does and answers in words. "Your 2 originals are back
-  // and will run again" and "put back, they never ran" are the difference a
-  // person has to be told, and a toast is the only place it can be told.
-  const f = fakeCtx(() => ({ ok: true, ran: true, detail: "the merged item already ran — your 2 originals are back in the list and will run as they were" }));
-  unmergeRoute(f.a);
-  assert.equal(f.sent.length, 1);
-  assert.equal(f.sent[0].t, "toast");
-  assert.match(f.sent[0].text, /will run as they were/);
-  assert.equal(f.broadcast.length, 1, "…and the list everyone is looking at is refreshed");
-  assert.equal(f.broadcast[0].t, "backlog.list");
-});
-
-test("a refusal is still a toast carrying the host's own sentence, and changes no list", () => {
-  const f = fakeCtx(() => ({ ok: false, reason: "that row was not made by the smart pick, so there is nothing to put back" }));
-  unmergeRoute(f.a);
-  assert.match(f.sent[0].text, /not made by the smart pick/);
-  assert.equal(f.broadcast.length, 0);
 });

@@ -3,11 +3,12 @@
  * docs/notes/host-architecture.md): which tmux server and session name a
  * session lives under, how its backend is spawned inside tmux, how a
  * pane that outlived the daemon is re-attached, the tmux.conf, the `live/`
- * records that let a restart find its sessions again, and the boot-time sweep of
- * the per-session stores those records protect.
+ * records that let a restart find its sessions again, the boot-time reclaim of
+ * records whose pane is provably gone, and the boot-time sweep of the
+ * per-session stores those records protect.
  *
  * Stateless: every function that needs the manager takes `core` first. The
- * facade re-exports `tmuxEnvPrefix` and `sweepSessionStores` from here. The
+ * facade re-exports `tmuxEnvPrefix`, `sweepSessionStores` and `staleLiveIds` from here. The
  * tmux server and session-name constants live in `knobs.ts`, beside the other env-derived knobs so every slice may import them.
  */
 import { execFileSync } from "node:child_process";
@@ -20,12 +21,12 @@ import { cleanSessionBudget, logTag, sessionBudgetVerdict } from "@waterplane/sh
 import { hostStateDir } from "../branddirs.js";
 import { spawnFailure } from "../ptycap.js";
 import { ptyEnv } from "../ptyenv.js";
-import { inCopyMode } from "../tmuxscroll.js";
+import { inCopyModeSync } from "../tmuxscroll.js";
 import { knownBackend, resolveBackend, type BackendDescriptor } from "../backends/index.js";
 import type { LiveMeta, SessionCore } from "./core.js";
-import { ORPHAN_MAX_AGE_MS, ORPHAN_SWEEP_DELAY_MS, STORE_FILE_RE, TMUX_SERVER, tmuxName } from "./knobs.js";
+import { ORPHAN_MAX_AGE_MS, ORPHAN_SWEEP_DELAY_MS, STALE_LIVE_MIN_AGE_MS, STORE_FILE_RE, TMUX_SERVER, TMUX_SOCKET_DEFAULT, TMUX_SOCKET_ID, tmuxName } from "./knobs.js";
 import { tmuxRefusal } from "../tmuxreq.js";
-import { writeJsonAtomic } from "../jsonstore.js";
+import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
 
 /**
  * The `env(1)` prefix that carries a backend's `spawnEnv` into the tmux PANE.
@@ -118,6 +119,97 @@ export function sweepSessionStores(
   return { deleted, kept, skipped: false };
 }
 
+/** What `staleLiveIds` needs to know about one `live/` record: when it was last
+ *  written, and which tmux server its pane was started on (absent = unstamped). */
+export interface LiveRecordFacts { mtimeMs: number; tmuxSocket?: string }
+
+/**
+ * The `live/` records whose tmux session is PROVABLY gone — the ids the boot
+ * reclaim deletes.
+ *
+ * A record is how a restart finds a pane again, and until this existed it was
+ * only ever deleted while the daemon watched the session end (`kill`, `remove`,
+ * the exit path). A pane that ended while the daemon was down — a reboot, a
+ * crash, a `tmux kill-session` at the desk — left its record behind for good,
+ * and `aliveSessionIds` reads every record as a session, so the orphan sweep
+ * could never reclaim that session's history and summary either. Measured on
+ * this desktop: 162 of 277 records with no tmux session, the oldest seven weeks
+ * old.
+ *
+ * "Provably" is every condition below, and each one keeps on doubt:
+ * - `tmuxNames` is a SUCCESSFUL `tmux ls` of this host's server. Null is "the
+ *   question could not be asked" (no server, a socket error, a timeout) and
+ *   reclaims nothing — the same rule `sweepSessionStores` holds for its alive
+ *   set, and for the same reason: this function's answer gets deleted.
+ * - the id is a bare `<id>` (the store-file rule); anything else is refused.
+ * - the id is not held by this host (`keep`: the session map, the parked set).
+ * - the record was written on THIS server (`tmuxSocket` equal to `server.socket`),
+ *   or is unstamped and this host runs on the default socket
+ *   (`TMUX_SOCKET_DEFAULT` says why that is the only reading of an unstamped
+ *   record that is safe). A listing of one server says nothing about another.
+ * - the record has gone unwritten for longer than `minAgeMs` — a spawn whose
+ *   record is on disk while its `new-session` is still in flight.
+ * - facts were read at all; a record that could not be stat'ed or parsed is kept.
+ *
+ * Pure — ids, a listing and facts in, ids out — so every one of those rules is
+ * pinned without a tmux server (`packages/host/test/sweepstores.test.mjs`).
+ */
+export function staleLiveIds(
+  liveIds: Iterable<string>,
+  tmuxNames: ReadonlySet<string> | null,
+  now: number,
+  facts: ReadonlyMap<string, LiveRecordFacts>,
+  minAgeMs: number,
+  server: { socket: string; isDefault: boolean } = { socket: TMUX_SOCKET_ID, isDefault: TMUX_SOCKET_DEFAULT },
+  keep: ReadonlySet<string> = new Set(),
+): string[] {
+  if (!tmuxNames) return [];
+  const out: string[] = [];
+  for (const id of liveIds) {
+    if (!STORE_FILE_RE.test(`${id}.json`)) continue;
+    if (keep.has(id) || tmuxNames.has(tmuxName(id))) continue;
+    const f = facts.get(id);
+    if (!f || !Number.isFinite(f.mtimeMs) || now - f.mtimeMs <= minAgeMs) continue;
+    if (f.tmuxSocket ? f.tmuxSocket !== server.socket : !server.isDefault) continue;
+    out.push(id);
+  }
+  return out;
+}
+
+/**
+ * `rediscover()`'s reclaim, given the listing it already holds: read each
+ * record's mtime and stamp, ask `staleLiveIds`, delete what it names, say so in
+ * one log line. Returns the ids deleted. A record is read with a plain parse rather than `loadLive`,
+ * whose guard renames a corrupt file aside — a side effect that would take the
+ * record out of `aliveSessionIds` without anyone having decided it was dead.
+ */
+export function reclaimStaleLive(core: SessionCore, tmuxNames: ReadonlySet<string>, now = Date.now()): string[] {
+  let files: string[];
+  try { files = readdirSync(liveDir(core)); } catch { return []; }   // no store, or unreadable: nothing to judge
+  const ids: string[] = [];
+  const facts = new Map<string, LiveRecordFacts>();
+  for (const f of files) {
+    const m = STORE_FILE_RE.exec(f);
+    if (!m) continue;
+    const id = m[1];
+    ids.push(id);
+    try {
+      const p = livePath(core, id);
+      const st = statSync(p);
+      if (!st.isFile()) continue;
+      const rec = JSON.parse(readFileSync(p, "utf8")) as unknown;
+      if (!rec || typeof rec !== "object" || Array.isArray(rec)) continue;
+      const sock = (rec as LiveMeta).tmuxSocket;
+      facts.set(id, { mtimeMs: st.mtimeMs, ...(typeof sock === "string" && sock ? { tmuxSocket: sock } : {}) });
+    } catch { /* unreadable or unparseable ⇒ no facts ⇒ kept */ }
+  }
+  const keep = new Set<string>([...core.sessions.keys(), ...parkState(core).map.keys()]);
+  const stale = staleLiveIds(ids, tmuxNames, now, facts, STALE_LIVE_MIN_AGE_MS, undefined, keep);
+  for (const id of stale) deleteLive(core, id);
+  if (stale.length) console.log(`${logTag} swept ${stale.length} stale live record(s) — no tmux session left for them, kept ${ids.length - stale.length}`);
+  return stale;
+}
+
 // ── tmux substrate: spawn / re-attach / discover ────────────────────
 
 /** What the binary must be spawned WITH: the descriptor's `spawnEnv`, then this launch's (`LaunchPlan.env`) over it. */
@@ -205,6 +297,18 @@ export function paneCwd(id: string): string | null {
   } catch { return null; }
 }
 
+/** Whether reattach may move a record's cwd/title to the pane's. ONLY a record
+ *  showing the legacy orphan-rediscover corruption (cwd missing or gone, title
+ *  the id or empty) is healed: a healthy record keeps its home even when the
+ *  pane has `cd`'d elsewhere — a shell's pane path is wherever the person last
+ *  went, and adopting it moved the session into a fake repo named after the
+ *  subfolder. Pure, so `test/paneheal.test.mjs` can pin it. */
+export function healFromPane(m: Pick<LiveMeta, "id" | "cwd" | "title">, realCwd: string | null, cwdExists: boolean): { cwd: string; title: string } {
+  const corrupt = !m.cwd || !cwdExists || !m.title || m.title === m.id;
+  if (!corrupt || !realCwd || realCwd === m.cwd) return { cwd: m.cwd, title: m.title };
+  return { cwd: realCwd, title: (m.title === m.id || !m.title) ? basename(realCwd) : m.title };
+}
+
 /** Re-attach a client to a still-alive tmux session found on boot. */
 export function reattach(core: SessionCore, m: LiveMeta): void {
   if (core.sessions.has(m.id)) return;
@@ -212,13 +316,11 @@ export function reattach(core: SessionCore, m: LiveMeta): void {
   const env = ptyEnv();
   // Self-heal legacy corruption: an old orphan-rediscover bug persisted some
   // records with cwd=<root> and title=<id>, so those sessions render ungrouped
-  // under a raw hex id. The tmux pane's own cwd is ground truth for where claude
-  // runs — prefer it over a meta cwd that no longer points at the real repo, and
-  // re-derive a title when the saved one is just the id. Corrected values are
-  // re-persisted below so the bad record is fixed on disk for good.
-  const realCwd = paneCwd(m.id);
-  const cwd = realCwd ?? m.cwd;
-  const title = (realCwd && realCwd !== m.cwd && (m.title === m.id || !m.title)) ? basename(realCwd) : m.title;
+  // under a raw hex id. Only such a record takes the tmux pane's cwd
+  // (`healFromPane`) — a healthy one keeps its own, because the pane's path is
+  // wherever the person last `cd`'d. Corrected values are re-persisted below
+  // so the bad record is fixed on disk for good.
+  const { cwd, title } = healFromPane(m, paneCwd(m.id), !!m.cwd && existsSync(m.cwd));
   if (cwd !== m.cwd || title !== m.title) {
     persistLive(core, { ...m, cwd, title });
   }
@@ -259,13 +361,14 @@ export function reattach(core: SessionCore, m: LiveMeta): void {
   // one ordinary restart: four panes. So it is asked, once, here — one cheap
   // tmux query per re-attached session, on a path that already runs several.
   const re = core.sessions.get(m.id);
-  if (re) re.copyMode = inCopyMode(TMUX_SERVER, tmuxName(m.id));
+  if (re) re.copyMode = inCopyModeSync(TMUX_SERVER, tmuxName(m.id));
   // How it was opened survives the restart for its closed row (`closedRowOf`).
   if (re && m.origin) re.origin = m.origin;
   if (re && m.origin?.companionOf) re.info.companionOf = m.origin.companionOf;
   // …and so does the budget's latch: a session already told it is over is not
   // told, or interrupted, again because the daemon restarted.
   if (re && budget && m.budgetTripped) re.budgetTripped = true;
+  if (re && budget && m.budgetEscOwed) re.budgetEscOwed = true;
   // The record carries the LAUNCH model — often an alias ("opus") — and the
   // hooks that read the running one back only fire on the next turn. Every
   // idle session came back from a restart wearing the alias beside siblings
@@ -305,20 +408,30 @@ export function ensureTmuxConf(core: SessionCore): string {
 
 function liveDir(core: SessionCore): string { return join(hostStateDir(core.root), "live"); }
 export function livePath(core: SessionCore, id: string): string { return join(liveDir(core), `${id}.json`); }
+let lastLiveWarnAt = 0;
 export function persistLive(core: SessionCore, m: LiveMeta): void {
   // The budget is taken off the LIVE session whenever there is one: several
   // writers rebuild this record field by field (`convid.ts`), and a field they
   // do not name would otherwise be deleted by the next id adoption. Before the
   // session is registered (`create`), the record's own value stands.
   const live = core.sessions.get(m.id);
+  // The server stamp is THIS process's, always: every writer is either creating
+  // the session on this host's server or rewriting one this host holds, so the
+  // stamp is a fact about the pane — what the boot reclaim (`staleLiveIds`)
+  // checks before it believes a listing that lacks the name.
   const rec: LiveMeta = live
-    ? { ...m, budget: live.info.budget?.cfg, budgetTripped: live.budgetTripped ? true : undefined }
-    : m;
-  try { mkdirSync(liveDir(core), { recursive: true }); writeJsonAtomic(livePath(core, m.id), rec); } catch { /* non-fatal */ }
+    ? { ...m, budget: live.info.budget?.cfg, budgetTripped: live.budgetTripped ? true : undefined, budgetEscOwed: live.budgetEscOwed ? true : undefined, tmuxSocket: TMUX_SOCKET_ID }
+    : { ...m, tmuxSocket: TMUX_SOCKET_ID };
+  try { mkdirSync(liveDir(core), { recursive: true }); writeJsonAtomic(livePath(core, m.id), rec); } catch (e) {
+    // Non-fatal, but not silent: a record that never lands is a session that
+    // cannot be re-attached after a restart. One line per 60 s, not per call.
+    const now = Date.now();
+    if (now - lastLiveWarnAt > 60_000) { lastLiveWarnAt = now; console.error(`[tmux] could not persist live record ${m.id}: ${(e as Error).message}`); }
+  }
 }
 export function loadLive(core: SessionCore, id: string): LiveMeta | null {
-  try { const p = livePath(core, id); if (existsSync(p)) return JSON.parse(readFileSync(p, "utf8")) as LiveMeta; } catch { /* corrupt/missing */ }
-  return null;
+  // Guarded: a corrupt record is kept as `.corrupt-*` and logged, not silently dropped.
+  return readJsonGuarded<LiveMeta | null>(livePath(core, id), null, (v) => typeof v === "object" && v !== null && !Array.isArray(v));
 }
 export function deleteLive(core: SessionCore, id: string): void { try { rmSync(livePath(core, id), { force: true }); } catch { /* non-fatal */ } }
 
@@ -331,6 +444,9 @@ export function deleteLive(core: SessionCore, id: string): void { try { rmSync(l
  * boot happened not to re-attach (server slow, `reattach` threw) out of the
  * orphan set. Deliberately not a second list maintained alongside: a store
  * that had to be kept in step would be wrong exactly when the sweep is asked.
+ * What keeps `live/` itself honest is `reclaimStaleLive`, run by `rediscover()`
+ * before this is asked: a record whose pane is provably gone is deleted there,
+ * so its session's files become orphans here like any other.
  */
 export function aliveSessionIds(core: SessionCore): Set<string> | null {
   const alive = new Set<string>(core.sessions.keys());

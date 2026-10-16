@@ -1,7 +1,7 @@
 // FIRST, before any other module is evaluated: finish a pending host switch
 // and migrate the one-host storage (`hostBoot.ts` says why it must be first).
 import "./hostBoot";
-import { StrictMode, useEffect, useState } from "react";
+import { StrictMode, useEffect, useRef, useState } from "react";
 import type { PairTarget } from "@waterplane/shared";
 import { createRoot } from "react-dom/client";
 import { installUiScale } from "./uiScale";
@@ -13,9 +13,14 @@ import { startLocalRtWatch } from "./localRt";
 import { startInstallLog } from "./installLog";
 import { HintLayer } from "./HintLayer";
 import { ToastLayer } from "./ToastLayer";
+import { SlotAskLayer } from "./SlotAskLayer";
 import { ConfirmHost } from "./Confirm";
 import { AskTextHost } from "./AskText";
+import { AskRepoHost, registerAskRepoShortcuts } from "./AskRepo";
+import { ShortcutCardHost, installShortcutCard } from "./ShortcutCard";
+import { registerComposeShortcut } from "./core/compose/composeShortcut";
 import { UpdateBanner } from "./UpdateBanner";
+import { HaltBanner } from "./core/Banners";
 import { installLinkMeters, startLinkProbes } from "./link";
 import { makeConnection } from "./ws";
 import { startLanRoute } from "./lanLink";
@@ -25,6 +30,7 @@ import { BootGuard, armBootTrap } from "./BootGuard";
 import { HostSetup } from "./HostSetup";
 import { hostConfigured, installHostRouting, isNativeShell } from "./hostUrl";
 import { installHints } from "./hints";
+import { installPrimaryKey } from "./core/layout/primaryKey";
 import { installDownloads } from "./download";
 import { installDictations } from "./dictateQueue";
 import { installShellBridge, onShellPair } from "./shellLink";
@@ -33,6 +39,9 @@ import { requestPersistence } from "./persist";
 import { installTheme } from "./theme";
 import { applyCachedThemeOverlay, refreshThemeOverlay } from "./themeOverlay";
 import { bgJson } from "./api";
+import { PassiveScreen, UnlockedBar } from "./PassiveScreen";
+import { passiveApi } from "./passiveApi";
+import { bootMode, cachedPassive, rememberPassive, type BootMode } from "./passiveMode";
 import { SHELL_NUDGE_EVENT } from "./shellLink";
 import { updateSupported, updates } from "./webUpdate";
 import { takeResumeRoute } from "./resumeRoute";
@@ -155,6 +164,13 @@ syncInstallAllow();
 // anything else that renders above `App`, and so no future sheet has to opt in.
 installHints();
 
+// Ctrl/Cmd+Return answers the open dialog with its blue button (physical keyboard).
+installPrimaryKey();
+// The shortcut card (hold Ctrl/⌘/Alt alone) and the chords core owns on it.
+installShortcutCard();
+registerComposeShortcut();
+registerAskRepoShortcuts();
+
 /**
  * Decides whether the app can mount at all.
  *
@@ -174,6 +190,27 @@ function Root() {
   const [pairLink, setPairLink] = useState<PairTarget | null>(null);
   useEffect(() => (setup ? onShellPair(setPairLink) : undefined), [setup]);
 
+  // A passive device (the kids' phone, `passiveMode.ts`) gets ONE screen and
+  // never the socket. The remembered mark decides the first paint, the host's
+  // status the rest; an app already drawn for a token the host now calls
+  // passive reloads rather than keep a socket the host will refuse.
+  const [mode, setMode] = useState<BootMode>(() => (hostConfigured() ? bootMode(cachedPassive(), null) : "full"));
+  const drewApp = useRef(mode === "full");
+  const [unlockedUntil, setUnlockedUntil] = useState<number | null>(null);
+  useEffect(() => {
+    if (setup) return;
+    let live = true;
+    void passiveApi.status().then((st) => {
+      if (!live || !st) return;
+      rememberPassive(st);
+      const next = bootMode(cachedPassive(), st);
+      setUnlockedUntil(next === "full" && st.scope === "passive" && st.unlockedUntil ? st.unlockedUntil : null);
+      if (next === "passive" && drewApp.current) { window.location.reload(); return; }
+      setMode(next);
+    });
+    return () => { live = false; };
+  }, [setup]);
+
   // Settings → Paired host reopens it (hostUrl.requestHostSetup).
   useEffect(() => {
     const open = () => setSetup(true);
@@ -191,7 +228,9 @@ function Root() {
   useEffect(() => {
     if (!updateSupported()) return;
     void updates.markHealthy().then(() => updates.check());
-    const t = setInterval(() => { void updates.check(); }, UPDATE_POLL_MS);
+    // Visible only: hidden, a check is a radio wake for a bundle nobody can
+    // apply yet, and the wake below asks the moment the phone is picked up.
+    const t = setInterval(() => { if (document.visibilityState === "visible") void updates.check(); }, UPDATE_POLL_MS);
     // Picking the phone up. A backgrounded shell is frozen (`shellLink.ts`), so
     // the interval above did not run while it was away — the wake is not an
     // extra check, it is the FIRST one since whenever the freezer took hold.
@@ -260,6 +299,17 @@ function Root() {
       </>
     );
   }
+  if (mode === "passive") {
+    // The OTA update (the effect above, `/api/webbundle`) still runs: it is on
+    // the host's passive allowlist, and it is how this screen itself updates.
+    return (
+      <>
+        <ToastLayer />
+        <UpdateBanner />
+        <PassiveScreen onUnlocked={(until) => { setUnlockedUntil(until); drewApp.current = true; setMode("full"); }} />
+      </>
+    );
+  }
   // The permanent connection strip lives OUTSIDE `App` for the same reason the
   // hint layer does: `App` returns early from a dozen places (every sheet is its
   // own `return`), so a strip mounted inside it would have to be added to each
@@ -302,6 +352,10 @@ function Root() {
           every sentence a sheet fired — a queue row refusing to send, a save
           declined — was painted for nobody. State lives in `toast.ts`. */}
       <ToastLayer />
+      {/* The slot check's ask after a timed send (`slotAskStore.ts`) — beside
+          the toast for the toast's reason, and not a modal: nothing under it
+          is blocked. */}
+      <SlotAskLayer />
       {/* The in-app replacement for `window.confirm` (`Confirm.tsx`). Mounted
           here for the third time for the same reason: the questions it asks
           come from a host frame or from a failed request, which can land while
@@ -310,14 +364,22 @@ function Root() {
       <ConfirmHost />
       {/* `window.prompt`'s replacement, mounted here for `ConfirmHost`'s reason. */}
       <AskTextHost />
+      {/* "Which repo?" for a keyboard (`AskRepo.tsx`), same reason. */}
+      <AskRepoHost />
+      <ShortcutCardHost />
       {/* Fourth time, fourth subsystem, same hole: a staged build is ready
           whichever screen you are on, and the one thing left to do about it was
           a button on a settings page nobody opens. `App` returns early per
           overlay, so this cannot live in it. */}
       <UpdateBanner />
+      {/* The halt latch, for the same reason: it explains why nothing starts,
+          on whichever screen you are looking at (`features/halt`). */}
+      <HaltBanner />
       {/* Fifth, and the one that must never be missing: it is what says the
           whole screen is pretend. Renders nothing outside the demo. */}
       <DemoLine />
+      {/* A passive device unlocked by its PIN says until when, and how to lock. */}
+      {unlockedUntil && <UnlockedBar until={unlockedUntil} />}
     </>
   );
 }

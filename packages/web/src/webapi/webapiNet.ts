@@ -102,7 +102,8 @@ export const netApi = {
 
   // Pairing another phone, and the device ledger (`host/pair.ts`, `host/authroutes.ts`).
   pair: {
-    mint: () => jpostOk<PairMintResponse>("/api/pair/mint", {}),
+    /** `passive`: the code pairs a kids'-phone device (`shared/passive.ts`). */
+    mint: (passive = false) => jpostOk<PairMintResponse>("/api/pair/mint", passive ? { passive: true } : {}),
     /** To an ABSOLUTE base — the desktop being paired, which need not be the
      *  one in force. Resolves with the status and whatever body came back;
      *  `pairRedeem.readRedeemReply` reads it. Rejects only on transport. */

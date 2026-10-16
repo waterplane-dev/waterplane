@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
 import { E, SLUG, rootEnv } from "./lib-brand.mjs";
+import { waitForHost } from "./lib-e2e.mjs";
 // A phone's bare `/fork [title]` is answered by the HOST, never typed: from CLI
 // 2.1.291 the CLI's own `/fork` hands the branch to its background daemon, in
 // no tmux this host owns, so the phone never sees it. Over a real daemon and a
@@ -27,7 +28,7 @@ const b64 = (s) => Buffer.from(s, "base64").toString("utf8");
 const finish = () => { host.kill(); setTimeout(() => process.exit(failed ? 1 : 0), 100); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-setTimeout(async () => {
+waitForHost(PORT).then(async () => {
   const repo = await fetch(`${base}/api/repo`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "sf" }) }).then((r) => r.json());
   const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
   const seen = [];
@@ -63,7 +64,9 @@ setTimeout(async () => {
     check(fork.title === "try the other schema", "the title after /fork names the tab: " + fork.title);
     check(fork.cwd === repo.path && fork.model === "opus", "same cwd, same launch flags");
     check((await focus).id === fork.id, "the asking socket is focused on the new tab");
-    for (let i = 0; i < 40 && !(pty.get(fork.id) ?? "").includes("ARGS:"); i++) await sleep(100);
+    // The fork's own CLI (tmux, then the stub) prints its argv once it is up: a 4 s wait missed it
+    // under a loaded parallel suite, so wait to a deadline instead.
+    for (let i = 0; i < 150 && !(pty.get(fork.id) ?? "").includes("ARGS:"); i++) await sleep(100);
     const line = (pty.get(fork.id) ?? "").split("\n").find((l) => l.includes("ARGS:")) ?? "";
     check(line.includes(`--resume ${src.claudeSessionId} --fork-session`), "the fork resumes exactly the source conversation (--resume <its id> --fork-session)"
       + (line ? "" : " — no ARGS line was printed"));
@@ -88,5 +91,5 @@ setTimeout(async () => {
   }
   ws.close();
   finish();
-}, 900);
-setTimeout(() => { console.log("FAIL: timeout"); host.kill(); process.exit(1); }, 25000);
+});
+setTimeout(() => { console.log("FAIL: timeout"); host.kill(); process.exit(1); }, 60000);

@@ -150,7 +150,7 @@ const PINS = [
     re: /\bsetInterval\(/g,
     today: {
       "intents/manager.ts": 1, "localrt.ts": 1, "main.ts": 1, "opendeliveries.ts": 1,
-      "server/sessionEvents.ts": 1, "sessions.ts": 1, "sessions/sidechannel.ts": 1, "setupwatch.ts": 1, "update.ts": 3, "usage.ts": 2,
+      "server/billingwire.ts": 1, "server/sessionEvents.ts": 1, "server/wsops.ts": 1, "sessions.ts": 1, "sessions/sidechannel.ts": 1, "setupwatch.ts": 1, "healthwatch.ts": 1, "update.ts": 3, "usage.ts": 3, "usagesources.ts": 1,
     },
     why: "an interval left in the facade AND its slice ticks twice",
   },
@@ -158,7 +158,7 @@ const PINS = [
     name: "timeouts in the three files and their slices (setTimeout)",
     re: /\bsetTimeout\(/g,
     scope: (f) => BIG3(f) || f.startsWith("sessions/") || f.startsWith("server/") || INTENTS(f),
-    today: { "main.ts": 2, "server/http.ts": 1, "sessions/boxes.ts": 4, "sessions/convid.ts": 4, "sessions/drive.ts": 1, "sessions/links.ts": 1, "sessions/resume.ts": 3, "sessions/tmux.ts": 1, "sessions/turn.ts": 2, "sessions/wall.ts": 3 },
+    today: { "main.ts": 2, "server/http.ts": 1, "sessions/boxes.ts": 3, "sessions/convid.ts": 4, "sessions/drive.ts": 1, "sessions/links.ts": 1, "sessions/livemode.ts": 1, "sessions/resume.ts": 3, "sessions/tmux.ts": 1, "sessions/turn.ts": 2, "sessions/wall.ts": 3 },
   },
   {
     name: "summary spends (runSummaryTask calls)",
@@ -184,6 +184,8 @@ const PINS = [
   {
     name: "intent block calls",
     re: /\b(?:this|core)\.block\(/g, scope: INTENTS,
+    // 3: `nonGo`, the sweep pool's `serial` and `localModel` (the model-load hold).
+    // `picking` went with the smart pick (2026-10-16).
     today: { "intents/ladder.ts": 3 },
   },
   {
@@ -204,7 +206,8 @@ const PINS = [
   {
     name: "sessions emits",
     re: /\b(?:this|core)\.emit\(\s*"/g, scope: SESSIONS,
-    today: { "sessions.ts": 9, "sessions/boxes.ts": 6, "sessions/budgetwatch.ts": 3, "sessions/convid.ts": 4, "sessions/drive.ts": 3, "sessions/links.ts": 1, "sessions/record.ts": 6, "sessions/ctxseries.ts": 2, "sessions/resume.ts": 6, "sessions/roster.ts": 8, "sessions/sidechannel.ts": 2, "sessions/turn.ts": 10, "sessions/wall.ts": 18 },
+    today: { "sessions.ts": 9, "sessions/boxes.ts": 6, "sessions/budgetwatch.ts": 4, "sessions/convid.ts": 5, "sessions/drive.ts": 3, "sessions/links.ts": 1, "sessions/livemode.ts": 2, "sessions/record.ts": 6, "sessions/ctxseries.ts": 2, "sessions/resume.ts": 6, "sessions/roster.ts": 11, "sessions/sidechannel.ts": 2, "sessions/turn.ts": 11, "sessions/wall.ts": 18 },
+    // turn.ts 10 → 11: `setCliSuggestion` is a NEW fact (the CLI's next-prompt proposal), its own emit, not a copy.
     // claude onto the sources seam (design §10): the pipe-live emit moved turn.ts → sidechannel.ts, and
     // UserPromptSubmit's idle-clear emit was the SAME line as `sourceTurn`'s started edge — one path now, one site.
     why: "an emit doubled or dropped is a session.updated frame the phone gets twice or never",
@@ -212,7 +215,7 @@ const PINS = [
   {
     name: "main's subscriptions (sessions.on)",
     re: /\bsessions\.on\(\s*"/g, scope: MAIN,
-    today: { "server/sessionEvents.ts": 17 },
+    today: { "server/sessionEvents.ts": 19 },
     why: "a listener registered twice runs twice",
   },
   {
@@ -235,7 +238,10 @@ const PINS = [
     // `ctx.notify(` as well: a `server/` factory reaches notify through the
     // record (`server/ctx.ts`), and a move must not make its calls invisible.
     re: /(?<![.\w])(?:ctx\.)?notify\(/g, def: defs("notify"), scope: MAIN,
-    today: { "main.ts": 5, "server/deliveries.ts": 4, "server/intentEvents.ts": 8, "server/scan.ts": 3, "server/sessionEvents.ts": 11 },
+    // +2 (2026-10-08): a store whose writes stopped reaching the disk is TOLD — the ack
+    // ledger's `onWriteError` (main.ts) and the intent store's (server/intentDeps.ts).
+    // −1 (2026-10-16): the smart pick's *Backlog groomed* alert (main.ts) went with it.
+    today: { "main.ts": 5, "server/billingwire.ts": 1, "server/deliveries.ts": 4, "server/intentDeps.ts": 1, "server/intentEvents.ts": 8, "server/scan.ts": 3, "server/sessionEvents.ts": 13 },
   },
   {
     name: "singleton registrations",
@@ -295,7 +301,7 @@ const ORDERED = [
   {
     name: "sessions.on registration order (server/sessionEvents.ts)",
     file: "server/sessionEvents.ts", re: /\bsessions\.on\(\s*"(\w+)"/g,
-    today: ["turnEnded", "exit", "updateBanner", "data", "exit", "closed", "updated", "history", "created", "exit", "awaiting", "prompt", "limitQueue", "limit", "idle", "budgetTripped", "created"],
+    today: ["turnEnded", "exit", "updateBanner", "data", "exit", "closed", "updated", "followUp", "history", "created", "exit", "awaiting", "prompt", "limitQueue", "limit", "idle", "budgetTripped", "budgetEscDue", "created"],
   },
   {
     name: "intents.on registration order (server/intentEvents.ts)",
@@ -305,7 +311,7 @@ const ORDERED = [
   {
     name: "SIGTERM/SIGINT flush order (server/shutdown.ts)",
     file: "server/shutdown.ts", re: /\bctx\.(\w+)\.flush\w*\(/g,
-    today: ["acks", "cliHealthStore", "sentLogStore", "installLog", "netstats", "sessions", "tokenStats", "usageLog", "settings", "openDeliveries", "intents"],
+    today: ["acks", "cliHealthStore", "sentLogStore", "installLog", "netstats", "sessions", "tokenStats", "usageLog", "usageSources", "settings", "openDeliveries", "intents"],
   },
 ];
 

@@ -26,7 +26,7 @@ export function LimitToggle({ active, label, dismiss }: { active: SessionInfo | 
       title={`auto-continue after a usage-limit reset: ${state} · ${src}${lim.blocked ? `\ncurrently limit-blocked${lim.nextAttemptAt ? ` — continue fires ~${hhmm(lim.nextAttemptAt)}` : ""}` : ""}\ntap to cycle: inherit → on → off`}
       onClick={() => { dismiss(); cycleSessionOverride(active.id, next); }}
     >
-      <Hourglass size={ICON} />{label && <> {lim.blocked ? (lim.nextAttemptAt ? `limit · ${hhmm(lim.nextAttemptAt)}` : "limit") : `auto-cont ${state}${lim.autoContinueOverride != null ? "*" : ""}`}</>}
+      <Hourglass size={ICON} />{label && <> {lim.blocked ? (lim.spend && !lim.nextAttemptAt ? "spend limit" : lim.nextAttemptAt ? `${lim.spend ? "spend" : "limit"} · ${hhmm(lim.nextAttemptAt)}` : "limit") : `auto-cont ${state}${lim.autoContinueOverride != null ? "*" : ""}`}</>}
     </button>
   );
 }

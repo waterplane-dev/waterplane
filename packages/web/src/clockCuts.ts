@@ -28,7 +28,8 @@
  * second count that agrees — it IS `standingTotal`.
  */
 import type { Intent, ScheduleEntry, HorizonBucket, ScheduleHorizon } from "@waterplane/shared";
-import { horizonBucket, isStandingSchedule, isTimedWorkRow, ruleRecurs } from "@waterplane/shared";
+import { horizonBucket, isStandingSchedule, isTimedWorkRow, ruleRecurs, typedName } from "@waterplane/shared";
+import { intentProse, intentTitle } from "./activity/activityIntentWords.ts";
 
 /**
  * **A one-off aimed at ONE place is not a card — it is a backlog row.**
@@ -129,8 +130,13 @@ export interface ClockCuts {
   kinds: { rules: number; timed: number };
   /** `cards + live + pending` — this sheet's header, and `horizon.total`. */
   standingTotal: number;
-  /** The same, under whatever cut the sheet was opened on. */
+  /** The same, under whatever cut the sheet was opened on — before the search. */
+  cutTotal: number;
+  /** …and after the search too: what is actually on screen. */
   shownTotal: number;
+  /** `pending`, minus what the search does not match. The horizon still counts
+   *  `pending` whole: the launcher chip has no search box. */
+  shownPending: PendingClock[];
 }
 
 /**
@@ -157,20 +163,24 @@ export function clockCuts(o: {
   pending: readonly PendingClock[];
   focus: HorizonBucket | null;
   focusIds: { ids: string[] } | null;
+  /** The sheet's search box. Narrows ON TOP of the cut, never instead of it. */
+  text?: string;
   now: number;
 }): ClockCuts {
   const { focus, focusIds, now } = o;
+  const q = (o.text ?? "").trim().toLowerCase();
   const all = o.intents.filter((i) => isTimedWorkRow(i) && !i.archived);
   const live = all
     .filter((i) => isStandingClock(i, now))
     .sort((a, b) => (a.nextAt ?? Infinity) - (b.nextAt ?? Infinity));
   const liveIds = new Set(live.map((i) => i.id));
   const gone = all.filter((i) => !liveIds.has(i.id) && !i.dismissedAt);
-  const shown = focusIds
+  const cutLines = focusIds
     ? all.filter((i) => focusIds.ids.includes(i.id))
     : focus
       ? live.filter((i) => horizonBucket(i.nextAt, now) === focus)
       : live;
+  const shown = q ? cutLines.filter((i) => intentMatches(i, q)) : cutLines;
   const goneByRepo: Array<[string, Intent[]]> = [];
   for (const i of gone) {
     const g = goneByRepo.find(([dir]) => dir === i.cwd);
@@ -206,11 +216,13 @@ export function clockCuts(o: {
   // horizon bucket rather than compounding with it: the two are different taps,
   // and a link followed into a list that had a bucket on would show the reader
   // a rule they asked for minus a window they did not.
-  const shownCards = focusIds
+  const cutCards = focusIds
     ? allCards.filter((e) => focusIds.ids.includes(e.id))
     : focus
       ? cards.filter((e) => horizonBucket(e.nextAt, now) === focus)
       : cards;
+  const shownCards = q ? cutCards.filter((e) => entryMatches(e, q)) : cutCards;
+  const shownPending = q ? pending.filter((p) => entryMatches(p.entry, q)) : pending;
 
   // ── The number ─────────────────────────────────────────────────────────
   // One pass over exactly the pool above. `horizon.total` is `standingTotal`
@@ -226,11 +238,26 @@ export function clockCuts(o: {
 
   return {
     cards, spentCards, shownCards, pendingCards,
-    live, gone, shown, pending, goneByRepo,
+    live, gone, shown, pending, shownPending, goneByRepo,
     horizon, kinds,
     standingTotal: horizon.total,
-    shownTotal: shownCards.length + shown.length + pending.length,
+    cutTotal: cutCards.length + cutLines.length + pending.length,
+    shownTotal: shownCards.length + shown.length + shownPending.length,
   };
+}
+
+/**
+ * The search box's one reading of a row: the words drawn on it (its title, its
+ * prompt) and the repo it lives in, case-folded. The repo is its folder NAME,
+ * never the path — `dev` would otherwise match every row on this desktop.
+ */
+const baseName = (dir: string): string => dir.split("/").filter(Boolean).pop() ?? "";
+function intentMatches(i: Intent, q: string): boolean {
+  return `${intentTitle(i)}\n${intentProse(i) ?? ""}\n${baseName(i.cwd)}`.toLowerCase().includes(q);
+}
+function entryMatches(e: ScheduleEntry, q: string): boolean {
+  const text = e.action.text;
+  return `${typedName(e.name, text) ?? ""}\n${text}\n${entryDirs(e).map(baseName).join(" ")}`.toLowerCase().includes(q);
 }
 
 /**

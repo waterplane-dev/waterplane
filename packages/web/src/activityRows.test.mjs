@@ -29,7 +29,7 @@ import { describeRule } from "@waterplane/shared";
 import {
   ACTIVITY_FILTERS,
   activityCounts,
-  activityHeadline,
+  activityHeadlineCut,
   activityRows,
   activityTextKey,
   bulkLines,
@@ -513,8 +513,7 @@ test("a one-off aimed at ONE repo is WORK with a clock — work verbs, and the r
    * reports success having moved nothing.
    *
    * Measured on this desktop when it was written: nine live `at` rows, all
-   * one-off, seven of them `failed` — in no backlog, with no work verbs, and
-   * invisible to the smart pick, which only ever looks at backlog rows.
+   * one-off, seven of them `failed` — in no backlog, with no work verbs.
    */
   const RULE = { kind: "once", at: NOW - 3600e3 };
   const timed = (over = {}) => intent({
@@ -954,9 +953,21 @@ test("counts cover every chip, and every chip has a filter that agrees with them
 });
 
 test("the headline stays silent rather than inventing reassurance", () => {
-  assert.equal(activityHeadline([], true), null);
+  assert.equal(activityHeadlineCut([], true), null);
   const rows = activityRows(input({ online: false, outbox: [entry()] }));
-  assert.match(activityHeadline(rows, false), /still on this phone/);
+  assert.match(activityHeadlineCut(rows, false).text, /still on this phone/);
+});
+
+test("the headline's number is its cut: the chip it names holds exactly the rows it counted", () => {
+  const fake = (bucket, dismissedAt = null) => ({ bucket, dismissedAt, blockReason: null });
+  const rows = [fake("needsYou"), fake("needsYou"), fake("needsYou", 1), fake("failed"), fake("done")];
+  const h = activityHeadlineCut(rows, true);
+  assert.deepEqual(h, { text: "2 rows need a decision from you", cut: "needsYou" });
+  assert.equal(rows.filter((r) => r.dismissedAt == null && r.bucket === h.cut).length, 2);
+  assert.equal(activityHeadlineCut([fake("failed")], true).cut, "failed");
+  // An offline hold is no chip's set, so it is no tap.
+  const held = activityHeadlineCut([{ bucket: "waiting", dismissedAt: null, blockReason: "offline" }], false);
+  assert.equal(held.cut, null);
 });
 
 // ── `held` names WHICH of laneBusy's three facts it is ──────────────────────
@@ -1133,7 +1144,7 @@ test("counts still agree with the filters once something is filed", () => {
 
 test("the standing sentence stops counting rows the user has dealt with", () => {
   const rows = activityRows(input({ outbox: [dead()], dismissed: new Map([["queue:g1", NOW]]) }));
-  assert.equal(activityHeadline(rows, true), null);
+  assert.equal(activityHeadlineCut(rows, true), null);
 });
 
 test("a filed row is not evidence that anything ran", () => {
@@ -1320,63 +1331,25 @@ test("a row aimed at a live session names the session, not its repo", () => {
   assert.equal(r.where, "in fix-e2e");
 });
 
-// ── The smart pick: a row held for a look, and a row a look wrote ────────────
-//
-// The feature applies itself — sort, merge and pick, with no approval step —
-// which the user chose with the two CLAUDE.md rules it cuts against in view.
-// What the rules still buy is that nothing is destroyed and that every row says
-// what happened to it, and this screen is half of the second half: Activity is
-// where a person looks when something is taking longer than they expected, and
-// the two questions it has to answer are "why is this one not running" and "did
-// I write these words".
+// ── A retired reason, and an origin that is no longer special ────────────────
 
-test("a row held for the look is `picking`, with the shared sentence and nothing to press", () => {
-  // The sentence is `@waterplane/shared`'s (`intentReasonText`), not a second copy
-  // here: the host writes the same words into the backlog sheet's `waiting`
-  // map, and two of them is two chances for one to stop being true.
+test("a row an older host holds `picking` says the host's own sentence, and waits", () => {
+  // `picking` was the smart pick's wait (removed 2026-10-16). A phone on this
+  // bundle may still talk to an older host that writes it; that host always
+  // sends its sentence in `blockDetail`, which is what the row says.
+  const said = "looking over this repo's waiting items before picking the next one — a few seconds";
   const r = only(activityRows(input({
-    intents: [intent({ id: "p1", state: "blocked", blockReason: "picking" })],
+    intents: [intent({ id: "p1", state: "blocked", blockReason: "picking", blockDetail: said })],
   })));
-  assert.equal(r.blockReason, "picking");
-  assert.match(r.verdict, /looking over this repo's waiting items before picking the next one/);
-  // A WAIT, not a decision waiting on a person: the look releases the row
-  // itself, on its own watchdog, and there is nothing on this screen to press.
+  assert.equal(r.verdict, said);
   assert.equal(r.bucket, "waiting");
 });
 
-test("`picking` sorts below every wait a person could act on, and above none", () => {
-  // The shared ladder is ordered by what the user can DO about it, and this is
-  // the bottom of it: a row held for a two-second look is the least interesting
-  // waiting row on the screen.
-  const rows = sortActivity(activityRows(input({
-    intents: [
-      intent({ id: "p1", state: "blocked", blockReason: "picking" }),
-      intent({ id: "p2", state: "blocked", blockReason: "serial" }),
-    ],
-  })));
-  assert.deepEqual(rows.map((r) => r.id), ["p2", "p1"]);
-});
-
-test("a row the smart pick wrote says so, beside where it is going", () => {
-  // Same place `resume` puts its fragment, and for the same reason: this is a
-  // fact about where the WORDS came from. It is deliberately not in the title —
-  // the title is the item's own prose, and a machine's sentence with a label
-  // stuck on the front reads as a person's.
+test("an old `smartpick:` origin is credited to nobody", () => {
   const r = only(activityRows(input({
     intents: [intent({ origin: "smartpick:pass7", target: { kind: "repo", fresh: true } })],
   })));
-  assert.equal(r.where, "myapp · in a new session · written by the smart pick");
-  assert.equal(r.title, "add the export button");
-});
-
-test("an ordinary item is not credited to the smart pick, and neither is a fan-out child", () => {
-  const plain = only(activityRows(input({ intents: [intent({ target: { kind: "repo", fresh: true } })] })));
-  assert.equal(plain.where, "myapp · in a new session");
-  // `origin` is a busy field — fan-out, rescue, retry, schedule all write it —
-  // so the marker is matched as a PREFIX of its own and never as "has an
-  // origin at all".
-  const swept = activityRows(input({ intents: sweep([{ cwd: "/dev/other", title: "other", state: "queued" }]) }));
-  for (const r of swept) assert.ok(!/written by the smart pick/.test(r.where ?? ""), r.where);
+  assert.equal(r.where, "myapp · in a new session");
 });
 
 // ── *run it now* on a rule that QUEUES a backlog item ────────────────────────

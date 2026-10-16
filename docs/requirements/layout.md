@@ -42,3 +42,16 @@ Upper header section with menu and repo title is space-optimized.
 - asked: 2026-09-21
 - shipped: b44385a
 
+### R-layout-012 · requested
+The mobile layout uses screen space efficiently.
+- asked: 2026-10-05
+
+### R-layout-013 · shipped
+On a wide desktop window the sidebar's top bar sits on one line and session cards keep their chart on the right, aligned as on mobile.
+- asked: 2026-10-10
+- shipped: afa77b14, 8507dcb9
+
+### R-layout-014 · requested
+The bottom-left area of the screen uses less space so more content fits.
+- asked: 2026-10-10
+

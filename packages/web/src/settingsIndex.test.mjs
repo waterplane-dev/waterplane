@@ -17,7 +17,8 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 import {
-  SETTING_GROUPS, SETTING_ROWS, filterSummary, groupShown, rowMatches, rowShown, settingRow,
+  SETTING_GROUPS, SETTING_ROWS, addSettingRows, filterSummary, groupMatches, groupShown, rowMatches, rowShown, settingRow,
+  nestedMatches, setRowWords, wordsMatch,
 } from "./settingsIndex.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -131,7 +132,7 @@ test("a group's own words never match its rows wholesale", () => {
   // plugin now, whose one catalogued row is `plugins`).
   const hits = (q) => SETTING_ROWS.filter((r) => rowMatches(r.id, q)).map((r) => r.id);
   for (const id of hits("gemini")) assert.equal(id, "plugins", `"gemini" matched ${id}`);
-  for (const id of hits("battery")) assert.equal(id, "notif-shell-battery");
+  for (const id of hits("battery")) assert.ok(["notif-shell-battery", "bg-fresh"].includes(id), `"battery" matched ${id}`);
   assert.ok(!SETTING_GROUPS.some((g) => "keywords" in g), "a group with keywords matches every row under it");
 });
 
@@ -269,4 +270,71 @@ test("every openSettingsAt names a catalogued row", () => {
     }
   }
   assert.ok(n > 0, "no doors found — the scan is looking in the wrong place");
+});
+
+// ── rows the catalogue file cannot name ──────────────────────────────────
+// An extension's row and an installed plugin's section were on screen and
+// gone under any query: "vaul" read "nothing matches" with the vault row right
+// there, because its group matched no catalogued row and hid it whole.
+
+test("an extension's catalogued row is found, and keeps its group's heading up", () => {
+  addSettingRows([{ id: "test-ext-vault", group: "tools", label: "vault", keywords: "secret fingerprint" }]);
+  assert.equal(rowMatches("test-ext-vault", "vaul"), true);
+  assert.equal(rowMatches("test-ext-vault", "fingerprint"), true);
+  assert.equal(groupMatches("tools", "vaul"), true);
+  assert.equal(groupMatches("sessions", "vaul"), false);
+  // A core id is never overridden by an extension claiming it.
+  addSettingRows([{ id: "theme", group: "tools", label: "not the theme" }]);
+  assert.equal(settingRow("theme").group, "appearance");
+});
+
+test("run-time words find the plugins row, and are replaced whole", () => {
+  assert.equal(rowMatches("plugins", "sensors"), false);
+  setRowWords("plugins", "Mac sensors CPU/GPU temperature");
+  assert.equal(rowMatches("plugins", "sensors"), true);
+  assert.equal(groupMatches("tools", "mac sens"), true);
+  setRowWords("plugins", "");
+  assert.equal(rowMatches("plugins", "sensors"), false);
+});
+
+test("every extension settings row is catalogued in its manifest", () => {
+  const extDir = join(here, "..", "..", "extensions");
+  const problems = [];
+  let decls = 0;
+  // Manifests that mention settings at all. Counted, not fixed at 2: the extensions that declare
+  // rows today are private, so the public snapshot has none, and that is no parse failure.
+  let mentions = 0;
+  for (const name of readdirSync(extDir).sort()) {
+    const idx = join(extDir, name, "web", "index.ts");
+    if (!existsSync(idx)) continue;
+    const src = readFileSync(idx, "utf8");
+    if (/\bsettings\s*:/.test(src)) mentions++;
+    const at = src.search(/\bsettings:\s*\[/);
+    if (at < 0) continue;
+    const block = src.slice(at, src.indexOf("\n  ],", at) + 1 || undefined);
+    const declared = new Set([...block.matchAll(/\bid:\s*"([a-z0-9-]+)"/g)].map((m) => m[1]));
+    for (const [, comp] of block.matchAll(/createElement\((\w+)\)/g)) {
+      decls++;
+      const file = join(extDir, name, "web", `${comp}.tsx`);
+      if (!existsSync(file)) { problems.push(`${name}: ${comp}.tsx not found beside index.ts`); continue; }
+      const ids = [...readFileSync(file, "utf8").matchAll(/\bid="([a-z0-9-]+)"/g)].map((m) => m[1]);
+      if (!ids.length) problems.push(`${name}: ${comp} draws no row id — search will hide it under any query`);
+      for (const id of ids) if (!declared.has(id)) problems.push(`${name}: ${comp} draws "${id}", not in its manifest's rows`);
+    }
+  }
+  assert.ok(decls >= mentions, `read only ${decls} extension settings declarations from ${mentions} manifests that have settings — has the manifest shape changed?`);
+  assert.deepEqual(problems, []);
+});
+
+test("a nested section shows whole under its parent's catalogued words, else only when its own words match", () => {
+  assert.ok(nestedMatches("plugins", "Notary", ""), "no query: everything");
+  assert.ok(nestedMatches("plugins", "Notary", "plugin"), "searching the row's own words shows every section");
+  assert.ok(nestedMatches("plugins", "Notary sign", "notar"));
+  assert.ok(!nestedMatches("plugins", "Decision oracle", "notar"), "the plugin beside it steps aside");
+  // Run-time words on the parent (`setRowWords`) do not count as the parent's own:
+  // they are the sections' words, and would show every section for any one name.
+  setRowWords("plugins", "Notary Decision oracle");
+  assert.ok(!nestedMatches("plugins", "Decision oracle", "notar"));
+  setRowWords("plugins", "");
+  assert.ok(wordsMatch("Open The Notary", "notary open"), "case-insensitive, AND, substring");
 });

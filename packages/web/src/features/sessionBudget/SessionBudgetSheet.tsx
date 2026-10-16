@@ -74,7 +74,8 @@ export function SessionBudgetSheet({ subject, title }: { subject: SessionInfo; t
           <div className="budget-who">{title}</div>
           <div className="ctx-cost budget-now">
             <div className="ctx-cost-head"><Wallet size={14} /><span>{cur ? `budget ${sessionBudgetLabel(cur.cfg)}` : "no budget"}</span></div>
-            <div className="ctx-cost-note">{budgetStateLine(cur, now)}</div>
+            {/* No budget: the head already says "no budget", and the line said it again. */}
+            {cur && <div className="ctx-cost-note">{budgetStateLine(cur, now)}</div>}
           </div>
           {asked && late && <div className="set-note warn">{BUDGET_UNCONFIRMED}</div>}
           <div className="set-note">

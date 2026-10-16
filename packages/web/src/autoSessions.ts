@@ -18,7 +18,7 @@
  * person's tap (`nav.closeSession`). A count on the control that offers it is
  * the list it opens: exactly the sessions `autoSlotSessions` returns.
  */
-import type { AutoSlotFacts, SessionInfo } from "@waterplane/shared";
+import { autoSlotsBusy, type AutoSlotFacts, type SessionInfo } from "@waterplane/shared";
 
 /** The three answers a row can carry. `inherit` is the absent field. */
 export type CloseChoice = "inherit" | "keep" | "close";
@@ -87,6 +87,16 @@ export function closeChipWords(v: boolean | undefined | null): string | null {
 export const opensOwnSession = (it: { targetSessionId?: string }): boolean => !it.targetSessionId;
 
 /**
+ * **May this row's session budget still be set from the row?** Only while the
+ * session it will open does not exist yet: it opens its own (`opensOwnSession`)
+ * and has not started (`queued` — a clocked row waiting on its instant is
+ * `queued` too). A row aimed at a live session shows nothing: that session's
+ * budget is set on the session.
+ */
+export const budgetEditable = (it: { targetSessionId?: string; status: string }): boolean =>
+  opensOwnSession(it) && it.status === "queued";
+
+/**
  * **Is this row held because every automatic slot is taken?** The host's own
  * facts (`autoSlots` full) AND the row's own wait sentence naming a slot — the
  * sentence is what says THIS row is the one held on it, the facts say a slot
@@ -94,7 +104,7 @@ export const opensOwnSession = (it: { targetSessionId?: string }): boolean => !i
  */
 export function slotHeld(wait: string | undefined | null, slots: AutoSlotFacts | null | undefined): boolean {
   if (!wait || !slots) return false;
-  return slots.open.length >= slots.max && /free slot/i.test(wait);
+  return autoSlotsBusy(slots).length >= slots.max && /free slot/i.test(wait);
 }
 
 export interface AutoSlotSession {
@@ -104,15 +114,17 @@ export interface AutoSlotSession {
 }
 
 /**
- * The open automatic sessions a person could close to make room: the host's
- * snapshot (oldest first) INTERSECTED with the live session list, so a session
- * closed since the snapshot is never offered. The order is the host's.
+ * The open automatic sessions a person could close to make room: the WORKING
+ * ones in the host's snapshot (oldest first; only a working session holds a
+ * slot, so closing an idle one frees nothing — R-automation-042) INTERSECTED
+ * with the live session list, so a session closed since the snapshot is never
+ * offered. The order is the host's.
  */
 export function autoSlotSessions(slots: AutoSlotFacts | null | undefined, sessions: readonly SessionInfo[]): AutoSlotSession[] {
   if (!slots) return [];
   const live = new Map(sessions.map((s) => [s.id, s]));
   const out: AutoSlotSession[] = [];
-  for (const o of slots.open) {
+  for (const o of autoSlotsBusy(slots)) {
     const s = live.get(o.id);
     if (s && s.running) out.push({ s, closeWhenDone: o.closeWhenDone });
   }
@@ -121,7 +133,7 @@ export function autoSlotSessions(slots: AutoSlotFacts | null | undefined, sessio
 
 /** The control's label — its count IS the list it opens. */
 export function closeOneLabel(n: number): string {
-  return `close one to make room — ${n} open`;
+  return `close one to make room — ${n} working`;
 }
 
 /** What a slot session is doing, in words: the row's second line. */

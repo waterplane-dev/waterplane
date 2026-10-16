@@ -396,6 +396,20 @@ test("a dialog the channel can SEE but not pose keeps the screen reader on duty,
   assert.equal(boxes.screenReaderOff(h.s), true);
 });
 
+test("with no screen reader, a dialog the channel sees but cannot pose marks the session waiting on you", async () => {
+  const f = fakeSources();
+  const awaiting = [];
+  const h = harness({ sources: f.sources, promptBoxes: false });
+  h.core.setAwaiting = (s, on) => { awaiting.push(on); };
+  h.slice.attach(h.s);
+  await flush();
+  f.st.dialogOn.unposed(1);
+  f.st.dialogOn.unposed(1);
+  f.st.dialogOn.unposed(0);
+  assert.deepEqual(awaiting, [true, false], "on while one is open, off once answered; a repeat count changes nothing");
+  assert.deepEqual(h.armed, [], "no screen reader to arm");
+});
+
 test("sweep: every backend with sources.sweep is asked, with alive = a held session (or a live pane)", async () => {
   const { registerBackend, unregisterBackend } = await import("../dist/backends/index.js");
   const { pluginDescriptor } = await import("../dist/plugins/pluginapi.js");

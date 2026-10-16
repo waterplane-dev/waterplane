@@ -113,8 +113,30 @@
  * are the same lines — but rows written before it carry no `types` at all,
  * and a plot cannot tell that apart from a tree with no source in it without
  * this bump saying which vintage a row is.
+ *
+ * `2026-10-15a` changes what `untested` MEANS, and both halves move. The
+ * headline list is now the modules no test names AND none reaches through
+ * imports; the named-only remainder travels beside it as `unnamed`
+ * (`metrics/untested.mjs` argues the choice). The pack half moves with it:
+ * `typescript@3` accepts every extension it claims in a reference — the
+ * literal `tsx|ts|js` had silently stayed behind when `.mjs` became source —
+ * and answers for an `index` under its directory; `python@2` and `kotlin@2`
+ * gain `imports`. Every past row's `untested` is a different number under
+ * this version, so a series on disk is re-measured, never continued.
+ *
+ * `2026-10-16a` moves two definitions at once, so the chain breaks once and
+ * not twice. `hatches` now CLASSIFIES every occurrence — to-do, explained
+ * (the reason on the same line or a comment line directly above), or
+ * unexplained — and the index reads only the unexplained ones; the pack
+ * halves move with it (`common@3`, `typescript@5`, `python@3`, `kotlin@3`
+ * gain `hatchExplain`). `retouch` counts a pair only when the later commit
+ * removes or changes a line the earlier one ADDED, so a registry that is only
+ * ever appended to stops reading as churn (`metrics/retouch.mjs`). Rows also
+ * gain tile detail — `size.nearMax`, `context.skillBodyChars`,
+ * `retouch.appends`, `hatches.split` — and, where a repo declares one, a
+ * `central` field naming which of these readings it disabled or overrode.
  */
-export const PREREG_VERSION = "2026-09-22a";
+export const PREREG_VERSION = "2026-10-16a";
 
 export const PREREG = Object.freeze({
   // ── what counts as source ────────────────────────────────────────────────
@@ -294,6 +316,14 @@ export const PREREG = Object.freeze({
   // ── tripwires: events, never plotted ─────────────────────────────────────
   LINES_TRIPWIRE: 2000,
 
+  // ── size: tile detail ────────────────────────────────────────────────────
+  /**
+   * `size.nearMax` counts the files at or above this fraction of the largest
+   * file's line count. Detail beside p95, never an index input — a shelf of
+   * files cut just under a lint cap is what p95 and max both hide.
+   */
+  SIZE_NEAR_MAX_FRAC: 0.9,
+
   // ── how a value is read ──────────────────────────────────────────────────
   /**
    * Rank is the percentile of today's value among the trailing 60 days of the
@@ -340,10 +370,10 @@ export const PREREG = Object.freeze({
   // globs are a pack's, `census.mjs` unions them into `SRC.testGlobs`, and
   // both readers compile that one list: `source.mjs` to keep tests out of the
   // measured population, `snapshot.mjs` to collect the corpus `untested`
-  // reads. Likewise the form a mention takes (`NAME.ts`, `NAME.tsx`,
-  // `NAME.js` — the host tests import `../dist/echo.js` — or the closing
-  // quote of an extensionless specifier), which is an import syntax and
-  // therefore a language's.
+  // reads. Likewise the form a mention takes (`NAME` plus any extension the
+  // pack claims or a build emits — the host tests import `../dist/echo.js` —
+  // or the closing quote of an extensionless specifier) and what an import
+  // statement looks like, which are syntax and therefore a language's.
   //
   // What stays here is the rule that survives translation: a mention is a
   // PATH reference and never a bare identifier, because `git`, `api` and

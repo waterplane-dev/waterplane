@@ -156,7 +156,7 @@ test("an author is one of three or nobody, because `hand` is what makes a title 
   for (const a of NAME_AUTHORS) assert.equal(cleanAuthor(a), a);
   assert.deepEqual([...NAME_AUTHORS], ["hand", "assess", "name"]);
   assert.equal(cleanAuthor("user"), undefined);
-  assert.equal(cleanAuthor("smartpick"), undefined);
+  assert.equal(cleanAuthor("machine"), undefined);
   assert.equal(cleanAuthor(true), undefined);
 });
 

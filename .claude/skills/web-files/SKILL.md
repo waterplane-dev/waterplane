@@ -34,17 +34,23 @@ Everything that moves or stores bytes on this side: downloads and pulls, the APK
   through the SAME `annClip.ts` rules a fresh draw does, and one leaving nothing on the picture is
   REFUSED, never a silent delete. **Knob mode (`annKnobs.ts`, pure, node-tested) is the OPT-IN
   alternative** (`knobs` in the move row, `waterplane.annKnobs`, synced): move · size · turn knobs on
-  strings — every mark turns but the highlight band (a box-like gains `Mark.angle`; a turned blur
+  strings — every mark turns but the highlight band, and an arrow/line wears a knob per END instead
+  of size + turn (owner, 2026-10-15) (a box-like gains `Mark.angle`; a turned blur
   pixelates the box AROUND it, clipped), sized in screen px, working off the total
   delta from `base` and settling through `settleMove`. Relative drag stays the default.
 - `collage.ts` + `CollageSheet.tsx` — more than one image picked: one picture, or several? Declining
   is one tap. Combining produces ONE picked file, so everything downstream is the single-image path.
   Decodes ONCE; paranoid encode (size ladder, `toDataURL` fallback, canvases zeroed).
   **Falling back is REPORTED, never silent.**
-- `installLog.ts` + the Apps sheet's `installed` pane — **which version of what is on which phone.** One host, MANY clients: the install happens on a phone with the app closed, so the log lives on the desktop (`host/installlog.ts`). **The report is a RE-STATEMENT** — the whole history on every `welcome`, merged on a reproducible key, never queued and no ackId. **The phone's own clock or nothing** (`installedAt` off the shell; absent ⇒ the row says *reported*). Only TERMINAL outcomes (`asked` is a person being waited on). **The device NAME must never sync** — its job is to differ per phone. Attached in `main.tsx`; no `App.tsx` branch.
+- `installLog.ts` + the Apps sheet's `installed` pane — **which version of what is on which phone.** One host, MANY clients: the install happens on a phone with the app closed, so the log lives on the desktop (`host/installlog.ts`). **The report is a RE-STATEMENT** — the whole history on every `welcome`, merged on a reproducible key, never queued and no ackId. **The phone's own clock or nothing** (`installedAt` off the shell; absent ⇒ the row says *reported*); merge rules are `shared`'s `installlog.ts`. **The device NAME must never sync** — its job is to differ per phone. Attached in `main.tsx`; no `App.tsx` branch.
 - `pull.ts` / `PullSheet.tsx` — download queue with three engines: Background Fetch, the **native
   engine** (APK), and the chunked Range loop. Saving out is `nativeSave.ts` — a WebView drops a
   `blob:` anchor download SILENTLY.
+  **The auto-download switch is per WebView** (`pull.auto`, never synced): a browser tab and the APK
+  on one phone each have their own, so both fetched every build. A browser cannot see the APK, so it
+  ASKS once (`browserPullAsk` → `PullBrowserAsk` under the strip; Android, not the shell, auto on, an
+  automatic row on its way). With the switch off, the strip and the menu chip count only what moves
+  or was tapped (`stripRows`) — a file waiting for a tap is the sheet's, not a standing bar.
 - `installPolicy.ts` + `nativeInstall.ts` + `AppsSheet.tsx` — **the APK that installs itself.** The transport already
   put a fresh build on the phone; what was left was four taps per build, per app. **One dialog per
   app, EVER**: the FIRST install of any package always shows the system installer (no flag removes
@@ -76,6 +82,12 @@ Everything that moves or stores bytes on this side: downloads and pulls, the APK
   (`quietOwnerText`, with the uninstall-once remedy and its data cost). Unknown (old shell, not
   installed) is ABSENT, never "not ours". `QUIET_INSTALL_RULES` is the whole list, said once on the
   sheet; the repo half is the setup row `apk-install` (`host/apkcheck.ts`, advisory).
+  **The `setup` pane (`AppsSetupPane.tsx` over `appReady.ts`, pure, node-tested) is the whole chain per
+  app**: the desktop's facts (`GET /api/apps/readiness`, `host/appready.ts` → `apkRepoFacts`) joined
+  on the package — a flavor's `applicationIdSuffix` included — with this phone's half; the first `no`
+  is the BLOCKER, `unknown` blocks nothing, the last attempt is THIS phone's (another's success says
+  nothing about this one), and `failureText` turns Play Protect's `VERIFICATION_FAILURE` and an
+  abandoned session into sentences. Its two chips are one `readinessCut`.
   **All of that is the `dev` flavor.** The `play` shell (Google Play) answers `distribution:"play"` +
   `self` in `ShellInstall.status()` (`shellDistribution`; ABSENT ⇒ inherit dev): it never installs
   itself (`isPlaySelf` ⇒ `PLAY_SELF_TEXT`, refused natively in `Installs.refusal` too), has no
@@ -89,8 +101,7 @@ Everything that moves or stores bytes on this side: downloads and pulls, the APK
   privileges, each earned by a failure: created with **no `pull.add`**, never withdrawn by `sync()`,
   and pumped **with the auto-download switch off**. **One tap, one file** (`autoSave` +
   `installDownloads()` in `main.tsx`). **The folder is ASKED, not remembered**; **`savedPresent`
-  undefined is not `false`**. `downloadState.ts` is the pure half. **Never another `<a download>`** —
-  `local/no-anchor-download`.
+  undefined is not `false`**. `downloadState.ts` is the pure half. One button: `local/no-anchor-download`.
 - `storagePlan.ts` + `storageAudit.ts` + `StorageSheet.tsx` — **what this phone is HOLDING, and
   getting some of it back.** `SweepSheet` for the desktop's transport dirs; this is the same question
   about the device, where `used 340 MB` was a dead stat on a screen somebody had opened looking for
@@ -139,9 +150,9 @@ Everything that moves or stores bytes on this side: downloads and pulls, the APK
   plans, says so, and a person taps twice — no timer, and deliberately **no auto-clean switch**.
   **The chip IS the filter** (`27 · 3.9 GB` opens exactly those 27; one `planSweep` feeds both) and
   **every count carries its bytes** — 27 of 31 files reads as "most", and was 97% of the size.
-  `sweepKeepText` says what STAYS. **The list is the contract, never the age.** Outbox and inbox are
+  `sweepKeepText` says what STAYS (plan-is-the-contract: `shared`'s `sweep.ts`). Outbox and inbox are
   separate scopes with **no "both"** (one is re-derivable, one may be a photo's only copy). `now` is
-  FROZEN per plan. `ConfirmButton`, never `window.confirm`; an empty cut is a SENTENCE, not a dimmed
+  FROZEN per plan. `ConfirmButton`; an empty cut is a SENTENCE, not a dimmed
   button; after a run it RE-READS rather than editing rows out, and "already gone" is said apart from
   "could not be removed".
 - `shared/sweepfamilies.ts` + `SweepSheet`'s second chip row — **the cut that is not an age.** 33 of
@@ -162,7 +173,10 @@ Everything that moves or stores bytes on this side: downloads and pulls, the APK
   mtime is 0, so every rewrite of one path files under one key — read AND write are skipped, fresh
   bytes or nothing. **A viewer opened straight at a file closes the GALLERY** (`directRef`,
   `showFile` the one writer of `open`), honouring `returnTo` — × on a browse-then-open still means
-  back to the grid.
+  back to the grid. **Combine** is a pick MODE with its own bar (`useGalleryPick`, `GalleryPickBar`),
+  never a hidden long-press: pictures in TAP order (the panel numbers), one repo only, then the same
+  collage sheet every multi-image pick gets and the annotator (`GalleryEntry.tsx` fetches the bytes
+  through `api.fileBlob`; a failed fetch is said, nothing half-combined goes on).
 - `FileReview.tsx` + `fileRemarks.ts` — **remarks on a text file**, the annotator's round trip for a
   file being READ: mark lines (source) or blocks (rendered markdown, via `Markdown`'s opt-in
   `lineTag`, which names SOURCE lines), say what should change, send every remark as ONE message

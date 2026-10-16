@@ -39,10 +39,13 @@ import {
   isAgentPosted,
   itemHeadline,
   whenWords,
+  windowRuleRefusal,
   type BacklogItem,
+  type BudgetPeriod,
   type Intent,
   type IntentDraft,
   type IntentTrigger,
+  type LaunchOpts,
   type SessionBudget,
   type WhenShape,
 } from "@waterplane/shared";
@@ -86,9 +89,11 @@ export async function postClientDraft(deps: ClientPostDeps, raw: IntentDraft, op
   if (draft.headline) draft.headlineBy = "hand"; else delete draft.headlineBy;
   if (draft.category) draft.categoryBy = "hand"; else delete draft.categoryBy;
   // …and never a way past the BUDGET: `pastBudget` is `intent.waive`'s and
-  // `budgetPass` is stamped by `workItemInherits`. Both are the host's.
+  // `budgetPass` is stamped by `workItemInherits`, `leftoverOf` by the tick.
+  // All three are the host's.
   delete draft.pastBudget;
   delete draft.budgetPass;
+  delete draft.leftoverOf;
   // …and never the AGENT mark: it is written by the agent route and nowhere
   // else, so the person can trust it both ways.
   if (opts.origin) draft.origin = opts.origin;
@@ -108,13 +113,13 @@ export async function addClientBacklogItem(
   deps: { containRepoDir(dir: unknown): Promise<string | null>; backlog: Pick<BacklogManager, "add"> },
   p: {
     repoDir: unknown; text: string; label?: string; targetSessionId?: string; autoFire?: boolean;
-    steps?: readonly string[]; resume?: boolean; closeWhenDone?: boolean; budget?: SessionBudget; id?: string; origin?: string; manual?: boolean;
+    steps?: readonly string[]; resume?: boolean; closeWhenDone?: boolean; flagWhenDone?: boolean; budget?: SessionBudget; launch?: LaunchOpts; id?: string; origin?: string; manual?: boolean;
   },
 ): Promise<{ ok: false; refusedCwd: true } | { ok: true; item: BacklogItem }> {
   const repoDir = await deps.containRepoDir(p.repoDir);
   if (!repoDir) return { ok: false, refusedCwd: true };
   const item = deps.backlog.add(p.text, repoDir, p.label, p.targetSessionId, p.autoFire,
-    { steps: p.steps, resume: p.resume, closeWhenDone: p.closeWhenDone, budget: p.budget, id: p.id, origin: p.origin, manual: p.manual });
+    { steps: p.steps, resume: p.resume, closeWhenDone: p.closeWhenDone, flagWhenDone: p.flagWhenDone, budget: p.budget, launch: p.launch, id: p.id, origin: p.origin, manual: p.manual });
   return { ok: true, item };
 }
 
@@ -178,6 +183,8 @@ export interface DraftFacts {
   sessionCwd(id: string): string | null;
   /** A row in the store — the chain's predecessor. */
   intent(id: string): Intent | undefined;
+  /** The configured budget periods, so a `window` trigger may name one by id. */
+  periods?(): readonly BudgetPeriod[];
 }
 
 /**
@@ -242,13 +249,15 @@ export function agentDraftFrom(body: any, f: DraftFacts): { draft: IntentDraft }
     if (at <= f.now) return { refused: "that instant has passed — use {\"kind\":\"now\"}" };
     trigger = { kind: "at", rule: cleanRule({ kind: "once", at }), graceMin: w.graceMin == null ? DEFAULT_GRACE_MIN : grace(w.graceMin) };
   } else if (w.kind === "window") {
-    if (w.window !== "session" && w.window !== "weekly") return { refused: "`when.window` is \"session\" or \"weekly\"" };
+    if (typeof w.window !== "string" || !w.window.trim()) return { refused: "`when.window` is \"session\", \"weekly\" or the id of a configured budget period" };
+    const periodRefusal = windowRuleRefusal(w.window, f.periods?.());
+    if (periodRefusal) return { refused: `\`when.window\`: ${periodRefusal}` };
     if (w.oneShot === false) return { refused: "an agent posts one-offs only — a standing rule is the person's to set on the phone" };
     const lead = Math.round(Number(w.leadMin ?? 0));
     if (!Number.isFinite(lead) || lead < 0 || lead > 1440) return { refused: "`when.leadMin` is 0-1440 minutes before the reset" };
     trigger = {
       kind: "at",
-      rule: cleanRule({ kind: "window", window: w.window, edge: "before", offsetMin: -lead, oneShot: true }),
+      rule: cleanRule({ kind: "window", window: w.window === "weekly" ? "weekly" : "session", ...(w.window === "session" || w.window === "weekly" ? {} : { periodId: w.window }), edge: "before", offsetMin: -lead, oneShot: true }),
       graceMin: w.graceMin == null ? DEFAULT_GRACE_MIN : grace(w.graceMin),
     };
   } else if (w.kind === "after") {
@@ -277,6 +286,7 @@ export function agentDraftFrom(body: any, f: DraftFacts): { draft: IntentDraft }
         serial: true, resume: b.resume === true || undefined,
         // Only where it opens a session; a boolean or nothing (follow the person's setting).
         ...(typeof b.closeWhenDone === "boolean" ? { closeWhenDone: b.closeWhenDone } : {}),
+        ...(b.flagWhenDone === true ? { flagWhenDone: true } : {}),
         // …and the budget that session is born with, refused whole if garbage.
         ...(cleanSessionBudget(b.budget) ? { budget: cleanSessionBudget(b.budget)! } : {}),
       }),
@@ -292,7 +302,7 @@ export function agentDraftFrom(body: any, f: DraftFacts): { draft: IntentDraft }
  */
 export function agentBacklogFrom(body: any, f: DraftFacts):
   | { refused: string }
-  | { add: { id: string; repoDir: string; text: string; steps: string[]; label?: string; targetSessionId?: string; resume?: boolean; closeWhenDone?: boolean; budget?: SessionBudget } } {
+  | { add: { id: string; repoDir: string; text: string; steps: string[]; label?: string; targetSessionId?: string; resume?: boolean; closeWhenDone?: boolean; flagWhenDone?: boolean; budget?: SessionBudget } } {
   const basics = agentBasics(body, f);
   if ("refused" in basics) return basics;
   const { b, key, steps, cwd, sessionId, label } = basics;
@@ -302,6 +312,7 @@ export function agentBacklogFrom(body: any, f: DraftFacts):
       id: agentIntentId(key), repoDir: cwd, text: steps[0], steps, label,
       targetSessionId: sessionId, resume: !sessionId && b.resume === true ? true : undefined,
       ...(!sessionId && typeof b.closeWhenDone === "boolean" ? { closeWhenDone: b.closeWhenDone } : {}),
+      ...(!sessionId && b.flagWhenDone === true ? { flagWhenDone: true } : {}),
       ...(!sessionId && cleanSessionBudget(b.budget) ? { budget: cleanSessionBudget(b.budget)! } : {}),
     },
   };
@@ -331,6 +342,7 @@ export function agentRowView(i: Intent) {
     target: i.target.kind === "session" ? { session: i.target.sessionId } : { newSession: true },
     label: i.label,
     ...(typeof i.closeWhenDone === "boolean" ? { closeWhenDone: i.closeWhenDone } : {}),
+    ...(i.flagWhenDone ? { flagWhenDone: true } : {}),
     ...(i.budget ? { budget: i.budget } : {}),
     steps: i.payload.kind === "prompt" ? i.payload.steps : [],
     ...(i.blockDetail ? { waiting: i.blockDetail } : {}),
@@ -339,11 +351,51 @@ export function agentRowView(i: Intent) {
   };
 }
 
+/**
+ * **The run order an agent may read and set** — every waiting row, whoever
+ * wrote it, because the person asks for it by prompt: "run the migration
+ * first, the docs pass last". Waiting means not settled, not started and not
+ * set aside; started work has no seat left to move.
+ */
+const waiting = (i: Intent): boolean => !isTerminal(i) && i.state !== "starting" && i.state !== "running" && !i.archived;
+const slotOf = (i: Intent): number => i.order ?? i.createdAt;
+
+/** The queue in the order the tick reads it (`ladder.ts`: `order ?? createdAt`). */
+export function agentQueue(rows: Intent[], cwd: string | null) {
+  return rows.filter((i) => waiting(i) && (!cwd || i.cwd === cwd))
+    .sort((a, b) => slotOf(a) - slotOf(b))
+    .map((i, n) => ({
+      seat: n + 1,
+      ...agentRowView(i),
+      title: itemHeadline({ label: i.label, text: i.payload.kind === "prompt" ? i.payload.steps[0] ?? "" : "", headline: i.headline }) ?? i.title ?? undefined,
+      shownAs: isAgentPosted(i) ? AGENT_POSTED_WORDS : "the person's",
+    }));
+}
+
+/** `ids` for a reorder, or the sentence saying why not. Two or more, each a
+ *  waiting row this host holds, none twice. */
+export function agentOrderIds(body: any, get: (id: string) => Intent | undefined): { ids: string[] } | { refused: string } {
+  const raw = body?.ids;
+  if (!Array.isArray(raw) || raw.length < 2 || raw.length > 200 || !raw.every((x) => typeof x === "string" && x.trim())) {
+    return { refused: "`ids` is a list of 2-200 intent ids, first to run first (GET /api/agent/queue lists them)" };
+  }
+  const ids = raw.map((x: string) => x.trim());
+  if (new Set(ids).size !== ids.length) return { refused: "an id is listed twice — each row has one seat" };
+  for (const id of ids) {
+    const row = get(id);
+    if (!row) return { refused: `no such intent: ${id} — nothing was moved` };
+    if (!waiting(row)) return { refused: `${id} is ${row.archived ? "archived" : row.state} — only waiting rows have a seat; nothing was moved` };
+  }
+  return { ids };
+}
+
 // ── The route ───────────────────────────────────────────────────────────────
 
 export interface AgentRouteDeps extends ClientPostDeps {
   intents: Pick<IntentManager, "post" | "get" | "list" | "cancel">;
-  backlog: Pick<BacklogManager, "add">;
+  backlog: Pick<BacklogManager, "add" | "reorder">;
+  /** The configured budget periods (`window` triggers may name one). */
+  periods?: () => readonly BudgetPeriod[];
   sessionCwd(id: string): string | null;
   /** A repo id (from `/api/repos`) → its worktree, or null. */
   repoDir(id: string): Promise<string | null>;
@@ -353,10 +405,12 @@ export interface AgentRouteDeps extends ClientPostDeps {
 
 const BASE = "/api/agent/intents";
 const BACKLOG = "/api/agent/backlog";
+const QUEUE = "/api/agent/queue";
+const ORDER = "/api/agent/queue/order";
 
 /** `true` when the request was this route's (answered, or refused). */
 export async function handleAgentIntents(req: IncomingMessage, res: ServerResponse, path: string, url: URL, d: AgentRouteDeps): Promise<boolean> {
-  if (path !== BASE && !path.startsWith(BASE + "/") && path !== BACKLOG) return false;
+  if (path !== BASE && !path.startsWith(BASE + "/") && path !== BACKLOG && path !== QUEUE && path !== ORDER) return false;
   const method = req.method ?? "GET";
   const refusal = agentCallerRefusal(req.socket.remoteAddress, req.headers);
   if (refusal) { d.json(res, { ok: false, error: refusal }, 403); return true; }
@@ -372,6 +426,31 @@ export async function handleAgentIntents(req: IncomingMessage, res: ServerRespon
     return typeof dir === "string" && dir.trim() ? d.containRepoDir(dir) : null;
   };
 
+  // ── The run order: read it, and set it when the person asked ──────────
+  // `reorder` is the drag's own verb: the listed rows trade their own slots,
+  // so a row not listed keeps its seat, and each is stamped `handOrdered` —
+  // the person decided it, through their agent, exactly as a drag is.
+  if (path === QUEUE) {
+    if (method !== "GET") { d.json(res, { ok: false, error: `GET ${QUEUE} reads the order; POST ${ORDER} sets it` }, 405); return true; }
+    const cwd = await cwdOf(url.searchParams.get("repo"), url.searchParams.get("dir"));
+    if (cwd === "unknown-repo") { d.json(res, { ok: false, error: "unknown repo" }, 404); return true; }
+    d.json(res, { ok: true, queue: agentQueue(d.intents.list(), cwd) });
+    return true;
+  }
+  if (path === ORDER) {
+    if (method !== "POST") { d.json(res, { ok: false, error: `POST ${ORDER} with {"ids":[…]}` }, 405); return true; }
+    const made = agentOrderIds(await d.readJson(req), (x) => d.intents.get(x));
+    if ("refused" in made) { d.json(res, { ok: false, error: made.refused }, 400); return true; }
+    d.backlog.reorder(made.ids);
+    const rows = made.ids.map((x) => d.intents.get(x)).filter((r): r is Intent => !!r);
+    d.json(res, {
+      ok: true,
+      order: agentQueue(rows, null).map((r) => ({ id: r.id, title: r.title, fires: r.fires })),
+      note: "these run in this order among themselves; rows not listed kept their seats, and each still waits for its own clock, the auto-fire switch and the budget",
+    });
+    return true;
+  }
+
   // ── An item on the person's list, never started ──────────────────────
   if (path === BACKLOG) {
     if (method !== "POST") { d.json(res, { ok: false, error: `POST ${BACKLOG} adds; GET/DELETE ${BASE}[/<id>] list and call off` }, 405); return true; }
@@ -379,7 +458,7 @@ export async function handleAgentIntents(req: IncomingMessage, res: ServerRespon
     const cwd = await cwdOf(body?.repo, body?.dir);
     if (cwd === "unknown-repo") { d.json(res, { ok: false, error: "unknown repo — ids come from GET /api/repos" }, 404); return true; }
     if ((body?.repo || body?.dir) && !cwd) { d.json(res, { ok: false, error: "that folder is outside the configured root — nothing was written down" }, 400); return true; }
-    const made = agentBacklogFrom(body, { now: Date.now(), cwd, sessionCwd: d.sessionCwd, intent: (x) => d.intents.get(x) });
+    const made = agentBacklogFrom(body, { now: Date.now(), cwd, sessionCwd: d.sessionCwd, intent: (x) => d.intents.get(x), periods: d.periods });
     if ("refused" in made) { d.json(res, { ok: false, error: made.refused }, 400); return true; }
     // Read AFTER every await: the add below is synchronous, so a racing twin
     // either finds this row here or is found by `post()`'s own id guard.
@@ -405,7 +484,7 @@ export async function handleAgentIntents(req: IncomingMessage, res: ServerRespon
     if (cwd === "unknown-repo") { d.json(res, { ok: false, error: "unknown repo — ids come from GET /api/repos" }, 404); return true; }
     const hadDir = body?.repo || body?.dir;
     if (hadDir && !cwd) { d.json(res, { ok: false, error: "that folder is outside the configured root — nothing was written down" }, 400); return true; }
-    const made = agentDraftFrom(body, { now: Date.now(), cwd, sessionCwd: d.sessionCwd, intent: (x) => d.intents.get(x) });
+    const made = agentDraftFrom(body, { now: Date.now(), cwd, sessionCwd: d.sessionCwd, intent: (x) => d.intents.get(x), periods: d.periods });
     if ("refused" in made) { d.json(res, { ok: false, error: made.refused }, 400); return true; }
     const r = await postClientDraft(d, made.draft, { origin: ORIGIN_AGENT });
     if (!r.ok) {

@@ -88,8 +88,13 @@ export const SESSION_ROUTES: readonly ApiEntry[] = [
     return true;
   }),
 
-  route("GET", "/api/slash", ({ res, url }, ctx) => {
-    const cwd = url.searchParams.get("cwd") || ctx.root;
+  // `<cwd>/.claude/commands/**` is a directory listing under whatever path the
+  // query names, so `cwd` goes through the one gate (`containRepoDir`) like every
+  // other directory a client names. A refused or absent one falls back to the
+  // root — today's default — not to a 4xx: the composer's `/` list must keep
+  // working, and the phone would have to word the refusal.
+  route("GET", "/api/slash", async ({ res, url }, ctx) => {
+    const cwd = (await ctx.containRepoDir(url.searchParams.get("cwd"))) ?? ctx.root;
     json(res, { commands: listSlashCommands(cwd) });
     return true;
   }),

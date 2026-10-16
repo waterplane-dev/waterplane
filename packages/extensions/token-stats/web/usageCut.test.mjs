@@ -14,7 +14,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { zeroCost, zeroTotals, tokenTotal } from "@waterplane/shared";
 import {
-  LIVE_WINDOWS, cutRefusalText, cutSpan, heatFrac, heatStep, hourFloor, isCut,
+  LIVE_WINDOWS, cutRefusalText, cutSpan, heatFrac, heatStep, isCut, leadClause,
   seriesCut, windowCut, windowGrid, windowSpecs, windowWhen,
 } from "./usageCut.ts";
 
@@ -66,18 +66,47 @@ const usageOf = (sessionResetAt, weeklyResetAt = null) => ({
 
 // ── the edge ──────────────────────────────────────────────────────────────
 
-test("the cut starts at the TOP of the hour the window opened in, and says how much wider that is", () => {
-  // A window resetting at 06:59 opened at 01:59. The finest bucket on record
-  // is an hour, so the honest cut is 01:00 — wider than the window, stated,
-  // rather than approximately the window and silent about it.
+test("a window opening at :59 starts at the NEXT hour, and says the minute it left out", () => {
+  // A window resetting at 06:59 opened at 01:59. The finest bucket on record is an hour, and
+  // the floor (01:00) counted 59 minutes of the PREVIOUS window — the measured weekly over-count
+  // (Thu 18:59 reset: ≈ 4 points). The nearest hour is 02:00: one minute short, stated.
   const now = new Date(2026, 8, 20, 6, 40, 0, 0).getTime();
   const reset = new Date(2026, 8, 20, 6, 59, 0, 0).getTime();
-  const c = windowCut(SESSION, docOf([hour(now - HOUR, 10, 1)]), usageOf(reset), now);
+  const hours = [hour(new Date(2026, 8, 20, 1, 30).getTime(), 100, 10), hour(now - HOUR, 10, 1)];
+  const c = windowCut(SESSION, docOf(hours), usageOf(reset), now);
   assert.ok(isCut(c));
   assert.equal(c.openedAt, new Date(2026, 8, 20, 1, 59, 0, 0).getTime());
-  assert.equal(c.fromHour, new Date(2026, 8, 20, 1, 0, 0, 0).getTime());
-  assert.equal(c.leadMs, 59 * 60_000);
-  assert.match(cutSpan(c, now), /59 minutes more than the window/);
+  assert.equal(c.fromHour, new Date(2026, 8, 20, 2, 0, 0, 0).getTime());
+  assert.equal(c.leadMs, -60_000);
+  // The 01:00 hour is the previous window's and is not in this one.
+  assert.equal(tokenTotal(c.totals), 10);
+  assert.match(cutSpan(c, now), /the first minute of the window falls before the first hour bucket and is left out/);
+});
+
+test("a window opening at :20 starts at the top of its own hour, the first hour counted whole", () => {
+  const now = new Date(2026, 8, 20, 6, 40, 0, 0).getTime();
+  const reset = new Date(2026, 8, 20, 7, 20, 0, 0).getTime();
+  const c = windowCut(SESSION, docOf([hour(now - HOUR, 10, 1)]), usageOf(reset), now);
+  assert.ok(isCut(c));
+  assert.equal(c.fromHour, new Date(2026, 8, 20, 2, 0, 0, 0).getTime());
+  assert.equal(c.leadMs, 20 * 60_000);
+  assert.match(cutSpan(c, now), /the first hour is counted whole, 20 min wider than the window/);
+});
+
+test("the week resetting Thu 18:59 starts at 19:00 — the measured over-count", () => {
+  const reset = new Date(2026, 9, 8, 18, 59, 0, 0).getTime(); // a Thursday
+  const now = reset - 3 * 24 * HOUR;
+  const opened = reset - 7 * 24 * HOUR;
+  const hours = [
+    hour(new Date(2026, 9, 1, 18, 10).getTime(), 999, 40), // last week's 18:00 hour
+    hour(new Date(2026, 9, 1, 19, 10).getTime(), 5, 1),
+  ];
+  const c = windowCut(WEEK, docOf(hours), usageOf(null, reset), now);
+  assert.ok(isCut(c));
+  assert.equal(c.openedAt, opened);
+  assert.equal(c.fromHour, new Date(2026, 9, 1, 19, 0, 0, 0).getTime());
+  assert.equal(tokenTotal(c.totals), 5);
+  assert.ok(Math.abs(c.cost.total - 1) < 1e-9);
 });
 
 test("a window opening exactly on the hour claims no extra minutes", () => {
@@ -86,12 +115,15 @@ test("a window opening exactly on the hour claims no extra minutes", () => {
   const c = windowCut(SESSION, docOf([hour(now, 10, 1)]), usageOf(reset), now);
   assert.ok(isCut(c));
   assert.equal(c.leadMs, 0);
-  assert.doesNotMatch(cutSpan(c, now), /minutes more/);
+  assert.doesNotMatch(cutSpan(c, now), /counted whole|left out/);
 });
 
-test("hourFloor keeps the hour and drops everything under it", () => {
-  const t = new Date(2026, 8, 20, 1, 59, 59, 999).getTime();
-  assert.equal(hourFloor(t), new Date(2026, 8, 20, 1, 0, 0, 0).getTime());
+test("the edge clause: wider, narrower, singular, none", () => {
+  assert.equal(leadClause(0, "week", "the first column"), null);
+  assert.equal(leadClause(20_000, "week", "the first column"), null); // under half a minute
+  assert.equal(leadClause(59 * 60_000, "week", "the first column"), "the first hour is counted whole, 59 min wider than the week");
+  assert.equal(leadClause(-60_000, "week", "the first column"), "the first minute of the week falls before the first column and is left out");
+  assert.equal(leadClause(-11 * 60_000, "window", "the first hour bucket"), "the first 11 minutes of the window fall before the first hour bucket and are left out");
 });
 
 // ── what is in the cut ────────────────────────────────────────────────────
@@ -280,6 +312,22 @@ test("a past window is cut from the grid, with its own span sentence", () => {
   const span = cutSpan(c, anchor);
   assert.ok(!span.includes("to now"), "a window that closed did not run until now");
   assert.ok(span.includes("Counted from"));
+});
+
+test("a past window opening mid-hour is cut on the nearest hours at BOTH ends, so neighbours tile", () => {
+  // Reset 17:20: window 1 ran [07:20, 12:20) and is counted [07:00, 12:00) — the 12:00 hour is
+  // window 0's, whose cut starts there. The sentence prints the span it actually counted.
+  const anchor = new Date(2026, 8, 20, 17, 20, 0, 0).getTime();
+  const g = grid(anchor, 5 * HOUR, [win(1, 60, 6)], anchor - 30 * HOUR);
+  const c = seriesCut(SESSION, g, 1, []);
+  assert.ok(isCut(c));
+  assert.equal(c.fromHour, new Date(2026, 8, 20, 7, 0, 0, 0).getTime());
+  assert.equal(c.leadMs, 20 * 60_000);
+  const at = (t) => new Date(t).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  const span = cutSpan(c, anchor);
+  assert.ok(span.includes(`to ${at(new Date(2026, 8, 20, 12, 0, 0, 0).getTime())}, 5 hours of hour buckets`), span);
+  const next = seriesCut(SESSION, g, 0, []);
+  assert.equal(next.fromHour, new Date(2026, 8, 20, 12, 0, 0, 0).getTime());
 });
 
 test("a window older than the record is REFUSED, not answered with zero", () => {

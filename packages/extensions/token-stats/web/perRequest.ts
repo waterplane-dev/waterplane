@@ -107,6 +107,12 @@ export function clipRuns(runs: readonly ReqPoint[][], lo: number, hi: number): R
   return runs.map((r) => r.filter((p) => p.t >= lo && p.t <= hi)).filter((r) => r.length > 0);
 }
 
+/** A day key's local midnight — `dayToMs`'s rule, kept here so this file stays import-light. */
+function dayMsOf(key: string): number {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, (m || 1) - 1, d || 1).getTime();
+}
+
 /** Sum of a span of day rows. */
 function spanSum(rows: readonly ReqDay[], from: string, to: string): { usd: number; priced: number; turns: number } {
   let usd = 0, priced = 0, turns = 0;
@@ -144,10 +150,17 @@ export interface RepoReqRow {
  */
 export function repoPerRequest(
   days: readonly TokenDay[], repos: readonly Pick<TokenGroup, "key" | "label">[], now: number, min = PER_REQ_MIN,
+  /** The token sheet's span, as inclusive day keys: compared against the equally long run of days
+   *  before it (2026-10-15, the one-span filter). Absent = the last 7 days against the 7 before. */
+  span?: { from: string; to: string },
 ): { rows: RepoReqRow[]; hidden: number } {
   const today = new Date(now); today.setHours(0, 0, 0, 0);
   const back = (n: number) => { const d = new Date(today); d.setDate(d.getDate() - n); return keyOf(d.getTime()); };
-  const k0 = back(0), k7 = back(7), k14 = back(14);
+  const shift = (key: string, n: number) => { const d = new Date(dayMsOf(key)); d.setDate(d.getDate() - n); return keyOf(d.getTime()); };
+  const len = span ? Math.round((dayMsOf(span.to) - dayMsOf(span.from)) / 86_400_000) + 1 : 0;
+  const k0 = span ? span.to : back(0);
+  const k7 = span ? shift(span.from, 1) : back(7);
+  const k14 = span ? shift(span.from, 1 + len) : back(14);
   const keys = new Set<string>();
   for (const d of days) for (const r of d.byRepo ?? []) keys.add(r.repo);
   const label = new Map(repos.map((r) => [r.key, r.label]));

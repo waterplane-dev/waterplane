@@ -5,6 +5,36 @@ version — so entries are grouped by the release they shipped in.
 
 ## Unreleased
 
+- **Windows from a Windows checkout.** Build in PowerShell, and `npm run
+  restart` / `stop` / `start` / `doctor` / `dev` run the host inside WSL2 from
+  the same checkout (`scripts/windows/host.mjs`): `setup` turns on mirrored
+  networking and installs the pinned Node and a Linux `claude` in the distro
+  without sudo; a hidden PowerShell keeper restarts a crashed host;
+  `autostart` starts it at every logon. Under WSL a Windows-style
+  `WATERPLANE_ROOT` (`c:/dev`) is its `/mnt/c` mount, and the Windows
+  `tailscale.exe` is found through interop (MagicDNS name, `tailscale serve`).
+  `npm run restart` run inside WSL (a session on the phone) hands off to
+  Windows, and a restart never leaves two keepers starting two daemons.
+  See `docs/notes/distribution.md`.
+
+- **The host no longer freezes for minutes on a slow disk.** On WSL reading a
+  Windows drive, three paths held the event loop on synchronous file and git
+  calls: the setup sweep's git probes and folder walks (Android, APK, build
+  scan — and every restart re-checking every repo), the artifact walk behind the gallery search and each turn end's
+  new-image scan, and a `git status` per repo on every listing. All three now
+  run in the background or are reused while fresh. The boot doctor no longer
+  reports a slow `claude`/`git`/`curl` lookup as "not found".
+
+- **The usage gauge reads again in an untrusted folder.** claude 2.1.293's
+  unnumbered trust box made the usage probe press "No, exit", so the phone
+  showed `? / ? wk`. The probe now walks to "Yes". The phone's answer card no
+  longer highlights "No, exit" as the primary button on that box.
+
+- **`WATERPLANE_ROOT` and `WATERPLANE_STATE_DIR` in `.env` are honoured.** They
+  were read from the process environment only — a root set in the repo `.env`,
+  as `.env.example` said to, was silently ignored. The repo and per-user `.env`
+  now count for both.
+
 - **Installable without a checkout.** `npm run release:build` makes one
   platform-independent tarball (production deps, all node-pty prebuilds) plus an
   npm package; `deploy/install.sh.tmpl` renders the `curl | sh` installer, which

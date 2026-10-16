@@ -38,15 +38,14 @@ export const BACKLOG_SESSIONS_MAX = Math.max(1, Number(env("BACKLOG_SESSIONS") |
 export const BACKLOG_LINGER_MS = Math.max(0, Number(env("BACKLOG_LINGER_MS") || 10 * 60_000));
 
 /**
- * How quiet a session has to have been before it may be reaped EARLY to free a
- * slot for the next item.
+ * How quiet a session WITHOUT a hook pipe has to have been before the slot
+ * count (`slotBusy`) reads it as idle — the silence fallback `autoFireBlocker`
+ * applies when there is no `Stop` to go by.
  *
- * A minute, and it is the crudest of the three exemptions on purpose: a session
- * with a row `starting`/`running` in it and a session somebody has open on their
- * phone are both excluded by facts, while "it stopped printing a minute ago" is
- * the only guard there is against closing a session whose agent is between two
- * tool calls. A knob because the e2e that pins the reap cannot wait a minute
- * three times over; nothing else should ever set it.
+ * A minute: "it stopped printing a minute ago" is the only guard there is,
+ * on such a session, against reading an agent between two tool calls as done.
+ * A knob because the tests that pin the count cannot wait a minute three times
+ * over; nothing else should ever set it.
  */
 export const REAP_IDLE_MS = Math.max(0, Number(env("BACKLOG_REAP_IDLE_MS") || 60_000));
 

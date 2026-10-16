@@ -22,8 +22,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
 import { E, SLUG, rootEnv } from "./lib-brand.mjs";
+import { waitForHost } from "./lib-e2e.mjs";
 
-const PORT = 8812;
+// One literal port per host, each its own: `run-e2e.mjs` learns a script's ports by reading
+// the literals in its source (`portsOf`), so a host on `PORT + 1` was on a port the runner
+// never knew about. It was the port four other scripts declare — and `e2e-restore`, running
+// beside this one, restarted its host into the gap and read ANOTHER root's recent list
+// ("survives restart … (got 0)"). Never derive a port by arithmetic here.
+const PORT = 8812, PORT_BLIND = 8826, PORT_DEAF = 8827;
 const ROOT = mkdtempSync(join(tmpdir(), `${SLUG}-blecho-`));
 const STUB = process.cwd() + "/scripts/claude-stub-tui.mjs";
 let failed = false;
@@ -59,7 +65,7 @@ async function run(mode, port, extraEnv = {}) {
   const host = spawn("node", ["packages/host/dist/main.js"], { env, stdio: ["ignore", "pipe", "pipe"] });
   host.stderr.on("data", (d) => process.stderr.write(`[host:${mode}] ` + d));
   const base = `http://127.0.0.1:${port}`;
-  await sleep(900);
+  await waitForHost(port);
 
   const repo = await fetch(`${base}/api/repo`, {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "echo" }),
@@ -99,12 +105,12 @@ const repaint = await run("repaint", PORT);
 check(repaint.copies === 1, `repaint TUI: instruction written exactly once (copies: ${repaint.copies})`);
 check(repaint.item?.status === "done", `repaint TUI: item delivered and completed (status: ${repaint.item?.status}, error: ${repaint.item?.error || "-"})`);
 
-const blind = await run("blind", PORT + 1);
+const blind = await run("blind", PORT_BLIND);
 check(blind.copies === 1, `unreadable screen: instruction written at most once, never re-hammered (copies: ${blind.copies})`);
 check(blind.item?.status === "failed", `unreadable screen: item flagged, not silently retried (status: ${blind.item?.status})`);
 check(/not confirmed/i.test(blind.item?.error || ""), `unreadable screen: error names the ambiguity (error: ${JSON.stringify(blind.item?.error)})`);
 
-const deaf = await run("deaf", PORT + 2, { STUB_HOOKS: "1" });
+const deaf = await run("deaf", PORT_DEAF, { STUB_HOOKS: "1" });
 check(deaf.copies === 1, `swallowed Return: instruction still written exactly once (copies: ${deaf.copies})`);
 check(deaf.item?.status === "failed", `swallowed Return: item is NOT reported as running/done (status: ${deaf.item?.status})`);
 check(/Return/.test(deaf.item?.error || ""), `swallowed Return: error says the prompt is sitting unsent (error: ${JSON.stringify(deaf.item?.error)})`);

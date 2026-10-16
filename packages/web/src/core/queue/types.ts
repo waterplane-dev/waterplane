@@ -8,7 +8,7 @@
  */
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import type {
-  BudgetVerdict, HostMessage, LaunchIntent, OpenDelivery, RepoTarget, SendBlockReason, SerialWatch, SessionInfo, UsageBudget,
+  BudgetVerdict, HostMessage, PeriodState, LaunchIntent, OpenDelivery, RepoTarget, SendBlockReason, SerialWatch, SessionInfo, UsageBudget,
 } from "@waterplane/shared";
 import type { OutboxEntry } from "../../outbox";
 import type { HostConnection } from "../../ws";
@@ -18,7 +18,7 @@ import type { DurableOp, QueueBacklogOpts, UploadBuf, UploadProgress } from "../
 
 type Ref<T> = { readonly current: T };
 type Msg<T extends HostMessage["t"]> = Extract<HostMessage, { t: T }>;
-export type BudgetState = { budget: UsageBudget; verdict: BudgetVerdict } | null;
+export type BudgetState = { budget: UsageBudget; verdict: BudgetVerdict; periods?: PeriodState[] } | null;
 
 /** What App hands the queue: the socket, this render's lists and view, and the
  *  compose box it restores into. Everything the queue can own or derive — the
@@ -106,7 +106,7 @@ export interface QueueRefs {
   queueBlockedRef: MutableRefObject<ReadonlyMap<string, SendBlockReason>>;
   /** The store half of `queueBlockedRef` (`blockedStore.set`). */
   setQueueBlocked(m: ReadonlyMap<string, SendBlockReason>): void;
-  pendingKept: MutableRefObject<Map<string, { cwd: string; title: string; ts: number }>>;
+  pendingKept: MutableRefObject<Map<string, PendingKept>>;
   pendingEntry: OutboxEntry | null;
   up: UploadState;
 }
@@ -149,6 +149,8 @@ export interface SendFns {
 export interface PendingFns {
   enterPending(createAck: string): void;
   enterOldestPending(cwd: string): void;
+  /** `+ later`: the session screen for words whose session starts when their backlog item runs. */
+  enterLater(cwd: string): void;
   retryPendingCreate(): void;
   adoptPendingSession(createAck: string, sessionId: string): void;
   queueSessionPrompt(cwd: string, text: string, createAck: string, kind?: "prompt" | "command"): void;
@@ -188,3 +190,8 @@ export interface UploadFns {
 
 export type QueueCtx = QueueEnv & QueueRefs & CoreFns & SendFns & PendingFns & VerbFns & UploadFns;
 export type { Msg };
+
+/** What a pending screen was opened FOR — keyed by its create's ackId, and
+ *  after adoption by the session id it was named (`adoptedAt` set) until the
+ *  session list has it. */
+export interface PendingKept { cwd: string; title: string; ts: number; adoptedAt?: number }

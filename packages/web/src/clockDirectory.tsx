@@ -6,12 +6,11 @@
  * A one-off aimed at one place is waiting work whose WHEN happens to be an
  * instant — spent by its one run, with nothing left to arm afterwards — so it
  * is a ROW in its repo's backlog, with every verb a piece of waiting work has:
- * drag, merge, smart pick, re-fire, *drop the clock*.
+ * drag, re-fire, *drop the clock*.
  *
  * Measured on this desktop when this was written: nine live `at` rows, every
  * one of them a one-off, zero recurring — seven of them `failed`, in no
- * backlog, and invisible to the smart pick, which only ever looks at backlog
- * rows. That is the whole reason the rows moved.
+ * backlog, where nobody grooming the list ever saw them. That is the whole reason the rows moved.
  *
  * Moving them leaves one thing behind that nowhere else in the app can do:
  * Schedules was the only host-wide view of everything with a clock on it, and a
@@ -53,6 +52,8 @@ interface DirProps {
   onOpen?: (repoDir: string, ids: string[], label: string) => void;
   /** The When editor for the ticked lines. Absent or offline ⇒ no pick list. */
   renderRetime?: RenderRetime;
+  /** False when this is the sheet's only section: the sheet head already says the count. */
+  counted?: boolean;
 }
 
 /**
@@ -156,7 +157,7 @@ function PendingClockLine({ p, repoName, online }: { p: PendingClock; repoName: 
  * one-offs are not cards here needs to know where they went AND that this is
  * the door rather than a second copy of them.
  */
-export function ClockDirectory({ rows, pending, repoName, online, onOpen, renderRetime }: DirProps) {
+export function ClockDirectory({ rows, pending, repoName, online, onOpen, renderRetime, counted = true }: DirProps) {
   const [picking, setPicking] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(() => new Set());
   const [choosing, setChoosing] = useState(false);
@@ -173,12 +174,14 @@ export function ClockDirectory({ rows, pending, repoName, online, onOpen, render
   }
   return (<>
     <div className="sched-head">
-      <CalendarClock size={13} /> On a clock · {rows.length + pending.length}
+      <CalendarClock size={13} /> On a clock{counted ? <> · {rows.length + pending.length}</> : null}
       <span className="sched-head-note">waiting in their backlogs — the row is there, this is the door</span>
     </div>
     {canPick && !open && eligible.length > 0 && (
-      <div className="annot-tools wrap bl-filters">
-        <button className="key" title="tick the lines you want — in any repo — and move them all to one new time"
+      <div className="bl-bulk">
+        {/* The backlog's own "pick to re-time" is this same plain verb (BulkBars.tsx): a framed
+            `.key` in its own panel here was a second look for one verb. */}
+        <button className="link-btn" title="tick the lines you want — in any repo — and move them all to one new time"
           onClick={() => { track("action:schedule.retime.pick"); setPicking(true); }}>
           <ListChecks size={14} /> {RETIME_PICK_LABEL}
         </button>

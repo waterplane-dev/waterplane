@@ -24,8 +24,10 @@
  * about work in flight.
  */
 import { createPrefs, flagText, onIfOne, onUnlessZero, sameList, type PrefDef } from "./prefStore.ts";
-import { LS, lsBool, lsGet, lsSet, lsSetBool } from "../storage.ts";
+import { LS, lsBool, lsDel, lsGet, lsJson, lsSet, lsSetBool, lsSetJson } from "../storage.ts";
+import { cleanSpendWarn, type SpendWarnCfg } from "@waterplane/shared";
 import { dataSaver, setDataSaver } from "../media.ts";
+import { bgFresh, setBgFresh, type BgFresh } from "./term/bgFresh.ts";
 import { setThemeChoice, themeChoice, type ThemeChoice } from "../theme.ts";
 import { iconScale, readerZoom, setIconScale, setReaderZoom, setTermZoom, setTextScale, termZoom, textScale } from "../uiScale.ts";
 import { pulseEnabled, setPulseEnabled } from "../link.ts";
@@ -38,11 +40,14 @@ import {
   subscribeDictateLang,
 } from "../dictateLang.ts";
 import { onSettingsChange } from "../settings.ts";
+import type { RepoOrder } from "./launcher/model.ts";
 import { track } from "../usage.ts";
 
 export interface DevicePrefs {
   /** Data saver: smaller images, slower polling (`media.ts`). Per device. */
   saver: boolean;
+  /** What the open terminal does while the app is hidden (`core/term/bgFresh.ts`). Per device. */
+  bgFresh: BgFresh;
   /** Drain the send queue by itself when the link returns. Default ON, synced. */
   autoSend: boolean;
   /** Queued opens for one repo run one session at a time. Default ON, synced. */
@@ -51,27 +56,42 @@ export interface DevicePrefs {
   confirmQueue: boolean;
   /** Ask backend + model before every fresh launch. Default OFF, synced. */
   launchAsk: boolean;
+  /** The spend marks' thresholds (`shared/spendwarn.ts`). Default ON at 2%/5% of a week, synced. */
+  spendWarn: SpendWarnCfg;
   /** Close an automatic session once its work is done. Default OFF, synced —
    *  read by the HOST; a backlog row's own answer overrides it. */
   closeWhenDone: boolean;
+  /** The local-model session cap as its raw synced string — `""` is the
+   *  desktop's own default, `"0"` no cap. Read by the HOST. */
+  localSessions: string;
   /** Return sends (vs inserts a newline). Default ON, synced. */
   enterSends: boolean;
   /** The compose box is a raw key pipe. Per device, never synced. */
   cliMode: boolean;
   /** Button hints: the mode, and how many have been dismissed. */
   hints: { mode: HintMode; seen: number };
-  /** The session header collapsed to give the terminal its rows. */
-  headerCollapsed: boolean;
   /** Hide the chrome above the compose box while typing. */
   typingRoom: boolean;
   /** Close the keyboard after a send. Default ON, per device. */
   closeKbOnSend: boolean;
+  /** Hold Ctrl/⌘/Alt alone → the shortcut card (`ShortcutCard.tsx`). Default ON, per device. */
+  shortcutCard: boolean;
+  /** After a `/btw` sent from the reader: ask, or the remembered answer. Per device. */
+  btwToCli: "" | "switch" | "stay";
+  /** Send tapped while the session works: ask, or the remembered answer. Per device. */
+  busySend: "" | "now" | "idle";
+  /** The `?` chip: "" never asked, "asked" kept, "hidden" removed (`HintToggle`). */
+  hintChip: "" | "asked" | "hidden";
   /** The update-bar signature dismissed on this device. */
   dismissedUpdate: string;
   /** The connection strip. Per device. */
   netPulse: boolean;
   /** The local-runner strip's mode. Per device. */
   localRtBar: LocalRtMode;
+  /** Unfolding a launcher repo scrolls to its last row. Default ON, per device. */
+  unfoldToEnd: boolean;
+  /** The launcher's repo order (`core/launcher/model.ts`). Default by name, per device. */
+  repoSort: RepoOrder;
   /** The session-tab strip: on, how many fit, which order, how many drawn. Per device. */
   tabsOn: boolean;
   tabsN: number;
@@ -111,15 +131,29 @@ function loadTypingRoom(): boolean {
 
 export const prefs = createPrefs<DevicePrefs>({
   saver: { load: dataSaver, save: setDataSaver },
+  bgFresh: { load: bgFresh, save: setBgFresh },
   autoSend: flag(LS.autoSend, onUnlessZero, true),
   serialSessions: flag(LS.serialSessions, onUnlessZero, true),
   confirmQueue: flag(LS.confirmQueue, onUnlessZero, true),
   // Default OFF, so `lsBool` and not `!== "0"`: a device that has never heard
   // of this key must not read its absence as "ask me".
   launchAsk: { load: () => lsBool(LS.launchAsk), save: (v) => lsSetBool(LS.launchAsk, v), keys: [LS.launchAsk] },
+  spendWarn: {
+    load: () => cleanSpendWarn(lsJson<unknown>(LS.spendWarn, null)),
+    save: (v) => lsSetJson(LS.spendWarn, v),
+    keys: [LS.spendWarn],
+    same: (a, b) => JSON.stringify(a) === JSON.stringify(b),
+  },
   // Default OFF for `launchAsk`'s reason: absent must read as "keep them open",
   // the default the person chose (`closeWhenDoneSetting` reads it the same way).
   closeWhenDone: { load: () => lsBool(LS.closeWhenDone), save: (v) => lsSetBool(LS.closeWhenDone, v), keys: [LS.closeWhenDone] },
+  // Absent is the DESKTOP's default (`WATERPLANE_LOCAL_SESSIONS`, else 1), so
+  // choosing "desktop default" deletes the key rather than writing a number.
+  localSessions: {
+    load: () => lsGet(LS.localSessions) ?? "",
+    save: (v) => (v ? lsSet(LS.localSessions, v) : lsDel(LS.localSessions)),
+    keys: [LS.localSessions],
+  },
   enterSends: flag(LS.enterSends, onUnlessZero, true),
   cliMode: flag(LS.cliMode, onIfOne),
   hints: {
@@ -131,12 +165,26 @@ export const prefs = createPrefs<DevicePrefs>({
     keys: [LS.hints],
     same: (a, b) => a.mode === b.mode && a.seen === b.seen,
   },
-  headerCollapsed: flag(LS.headerCollapsed, onIfOne),
   closeKbOnSend: flag(LS.closeKbOnSend, onUnlessZero),
+  shortcutCard: flag(LS.shortcutCard, onUnlessZero),
+  btwToCli: {
+    load: () => { const v = lsGet(LS.btwToCli); return v === "switch" || v === "stay" ? v : ""; },
+    save: (v) => { if (v) lsSet(LS.btwToCli, v); else lsDel(LS.btwToCli); },
+  },
+  busySend: {
+    load: () => { const v = lsGet(LS.busySend); return v === "now" || v === "idle" ? v : ""; },
+    save: (v) => { if (v) lsSet(LS.busySend, v); else lsDel(LS.busySend); },
+  },
+  hintChip: {
+    load: () => { const v = lsGet(LS.hintChip); return v === "asked" || v === "hidden" ? v : ""; },
+    save: (v) => { if (v) lsSet(LS.hintChip, v); else lsDel(LS.hintChip); },
+  },
   typingRoom: { load: loadTypingRoom, save: (v) => lsSet(LS.typingRoom, flagText(v)) },
   dismissedUpdate: { load: () => lsGet(LS.dismissedUpdate) || "", save: (v) => lsSet(LS.dismissedUpdate, v) },
   netPulse: { load: pulseEnabled, save: setPulseEnabled },
   localRtBar: { load: localRtMode, save: setLocalRtMode },
+  unfoldToEnd: flag(LS.unfoldToEnd, onUnlessZero),
+  repoSort: { load: () => lsGet(LS.repoSort) === "sessions" ? "sessions" : "name", save: (v) => { if (v === "sessions") lsSet(LS.repoSort, v); else lsDel(LS.repoSort); } },
   tabsOn: { load: tabsEnabled, save: setTabsEnabled },
   tabsN: { load: tabsCount, save: setTabsCount },
   tabsSort: { load: tabsOrder, save: setTabsOrder },

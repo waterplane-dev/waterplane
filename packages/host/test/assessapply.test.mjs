@@ -25,8 +25,7 @@
  *     kick runs a pass synchronously as far as its first `await`, so the
  *     nineteen-row apply this feature was written for fired its FIRST revived
  *     row before the other eighteen revives and the whole rank loop had
- *     happened — with neither the approved order on the rows nor a candidate
- *     list the smart pick would look at (`hold()` refuses a list of one).
+ *     happened — without the approved order on the rows.
  *  6. **"Still failed" is not the same failure.** `state` is a state, not an
  *     event: a row can fail, be put back by hand, run, and fail again in the
  *     twenty minutes a proposal sits on a sheet. `AssessItem.failedAt` is which
@@ -224,9 +223,8 @@ test("a failed row with a verdict nobody ticked is left alone", () => {
 test("N re-queues ask the ladder to look ONCE, after the approved ranks are written", () => {
   // The nineteen-row apply, in miniature. Every `requeueFailed` used to kick on
   // its way out; a kick runs a pass synchronously as far as its first `await`,
-  // so row 1 was fired with rows 2 and 3 still terminal, its own rank unwritten,
-  // and a candidate list of ONE — which `smartpick.hold()` refuses to think
-  // about, so the pick the repo is ticked for never happened either.
+  // so row 1 was fired with rows 2 and 3 still terminal and its own rank
+  // unwritten.
   const run = runOver(
     [item("f1", "failed"), item("f2", "failed"), item("f3", "failed")],
     [wanted("f1", 3), wanted("f2", 1), wanted("f3", 2)],

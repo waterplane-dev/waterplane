@@ -19,7 +19,7 @@ import type { BacklogItem, BacklogStatus } from "@waterplane/shared";
  * ladder never looks at it again, and the only things this sheet offered were
  * `re-fire` (which starts an agent THIS SECOND, past every rung) and the
  * archive. On the desktop this was written on that was 0 queued rows against 19
- * failed — so the list the smart pick is fed from was empty while nineteen
+ * failed — so the queue auto is fed from was empty while nineteen
  * pieces of live work sat one state away from it, and the assessment's *still
  * wanted* verdict, applied, did nothing at all.
  *
@@ -72,15 +72,14 @@ export function runAgainRowNote(it: Pick<BacklogItem, "targetSessionId">): strin
   // A row aimed at a live session: the queue it goes back into is that
   // session's, auto fires it there when the conversation next goes quiet, and
   // saying "a session of its own" here would describe the one thing that will
-  // not happen. The smart pick is left out on purpose — what a person can rely
-  // on for this row is auto and that session, and a verb must not name a
-  // mechanism to make a sentence rhyme with its sibling.
+  // not happen. What a person can rely on for this row is auto and that
+  // session.
   if (it.targetSessionId) {
     return `${head}in the session it is aimed at, as soon as that session is free — auto takes it from there. `
       + `It does not open a session of its own.${tail}`;
   }
   return `${head}in a new session of its own when its turn comes, `
-    + `where auto and the smart pick take it from there.${tail}`;
+    + `where auto takes it from there.${tail}`;
 }
 /**
  * **…and what a failed row aimed at a session that has CLOSED says instead —
@@ -243,7 +242,7 @@ export function runAgainNote(n: number, shown: number, aimed = 0): string {
   // parallel, so that clause is a scheduling promise the host contradicts the
   // moment the cut is mixed.
   const where = aimed === 0
-    ? "They run again one at a time in this repo, each in a session of its own, as their turns come — auto and the smart pick take it from there"
+    ? "They run again one at a time in this repo, each in a session of its own, as their turns come — auto takes it from there"
     : aimed === n
       ? `They run again in the session${n === 1 ? "" : "s"} they are aimed at, as ${n === 1 ? "it comes" : "those come"} free — auto takes ${n === 1 ? "it" : "them"} from there`
       : `${n - aimed} run again in a session of its own, one at a time in this repo, and ${aimed} in the session${aimed === 1 ? "" : "s"} `

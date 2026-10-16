@@ -20,8 +20,15 @@ const SRC = "packages/shared/src/plugin.ts";
 const OUT = "docs/plugins-api.md";
 const check = process.argv.includes("--check");
 
-const text = fs.readFileSync(path.join(ROOT, SRC), "utf8");
-const sf = ts.createSourceFile(SRC, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+/** A source file to document. plugin.ts's `export * from "./x.js"` siblings are documented in place. */
+function load(rel) {
+  const t = fs.readFileSync(path.join(ROOT, rel), "utf8");
+  return { text: t, sf: ts.createSourceFile(rel, t, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS) };
+}
+let text, sf;
+const use = (c) => { ({ text, sf } = c); };
+const main = load(SRC);
+use(main);
 const printer = ts.createPrinter({ removeComments: true, newLine: ts.NewLineKind.LineFeed });
 const print = (node) => printer.printNode(ts.EmitHint.Unspecified, node, sf).trim();
 
@@ -78,13 +85,28 @@ out.push("");
 out.push(`<!-- GENERATED from ${SRC} by scripts/gen-plugin-docs.mjs — do not edit by hand. -->`);
 out.push(`<!-- Rewrite with \`npm run docs:plugins\`; \`tools/plugindocs.test.mjs\` fails when this is stale. -->`);
 out.push("");
+// The product's name, read off brand.ts's source like everything else here (no build needed).
+const brandName = fs.readFileSync(path.join(ROOT, "packages/shared/src/brand.ts"), "utf8").match(/^\s*name: "([^"]+)",/m)?.[1];
+if (!brandName) { console.error("gen-plugin-docs: no BRAND.name in packages/shared/src/brand.ts"); process.exit(2); }
+const topic = `${brandName}-plugin`;
+out.push("Start a new plugin from `examples/plugin-template/`; installing one and the list of plugins are in");
+out.push(`\`docs/plugins.md\`. **Publishing yours? Tag its GitHub repo with the \`${topic}\` topic**, so`);
+out.push(`it shows up at https://github.com/topics/${topic}. A plugin is not a fork, so that topic is`);
+out.push("the only place it is counted.");
+out.push("");
 
 let intro = "";
 let version = null;
 const sections = [];
-for (const st of sf.statements) {
+for (const st of main.sf.statements) {
   if (ts.isImportDeclaration(st)) {
     if (!intro) intro = docOf(st);
+    continue;
+  }
+  // `export * from "./x.js"`: the sibling's exports are part of the contract, listed here.
+  if (ts.isExportDeclaration(st) && !st.exportClause && st.moduleSpecifier && ts.isStringLiteral(st.moduleSpecifier)) {
+    const sib = load(path.join(path.dirname(SRC), st.moduleSpecifier.text.replace(/\.js$/, ".ts")));
+    for (const s of sib.sf.statements) if (isExported(s)) sections.push({ st: s, c: sib });
     continue;
   }
   if (!isExported(st)) continue;
@@ -93,7 +115,7 @@ for (const st of sf.statements) {
       if (d.name.getText(sf) === "PLUGIN_API_VERSION" && d.initializer && ts.isStringLiteral(d.initializer)) version = d.initializer.text;
     }
   }
-  sections.push(st);
+  sections.push({ st, c: main });
 }
 if (!version) { console.error(`gen-plugin-docs: no string PLUGIN_API_VERSION in ${SRC}`); process.exit(2); }
 
@@ -105,7 +127,8 @@ if (intro) { out.push("## Overview"); out.push(""); out.push(intro); out.push(""
 
 out.push("## Contents");
 out.push("");
-for (const st of sections) {
+for (const { st, c } of sections) {
+  use(c);
   const n = nameOf(st);
   out.push(`- [\`${n}\`](#${anchor(n)}) — ${kindOf(st)}`);
 }
@@ -113,7 +136,8 @@ out.push("");
 
 function anchor(n) { return n.toLowerCase().replace(/[^a-z0-9_ -]/g, "").replace(/ /g, "-"); }
 
-for (const st of sections) {
+for (const { st, c } of sections) {
+  use(c);
   const n = nameOf(st);
   out.push(`## ${n}`);
   out.push("");

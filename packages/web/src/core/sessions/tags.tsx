@@ -146,7 +146,7 @@ export function shellsTag(s: SessionInfo, onOpen: () => void): ReactNode {
   const list = s.shellList;
   if (!list?.length) return null;
   const sum = shellsSummary(list, Date.now());
-  const cls = sum.working + sum.waiting > 0 ? "coding" : "idle";
+  const cls = sum.working > 0 ? "coding" : "idle";
   return (
     <span className={`tag ${cls} tag-filter`} role="button" tabIndex={0}
       title="tap to see what each background shell is doing"

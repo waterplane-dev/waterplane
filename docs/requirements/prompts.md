@@ -41,3 +41,8 @@ Prompts show when they were posted and when implementation finished.
 - asked: 2026-09-30
 - shipped: 9e440b5
 
+### R-prompts-010 · shipped
+The workspace trust prompt offers tap buttons to answer it.
+- asked: 2026-10-08
+- shipped: 1359faff
+

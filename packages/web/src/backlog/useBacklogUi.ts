@@ -1,6 +1,6 @@
 /**
  * The sheet's folds and pick lists: the re-time pick list and its When editor,
- * the smart pick's three disclosures, and the per-row open sets. All of it
+ * and the per-row open sets. All of it
  * closes with the sheet — none of it is a setting.
  */
 import { useState } from "react";
@@ -18,15 +18,6 @@ export function useBacklogUi() {
   const [picked, setPicked] = useState<Set<string>>(() => new Set());
   /** The When editor is open over the list. */
   const [choosing, setChoosing] = useState(false);
-  /** The pass notes, folded by default: twenty refusals under a repo bar is a
-   *  scroll nobody finishes, and the headline sentence is the thing to read. */
-  const [passNotes, setPassNotes] = useState(false);
-  /** The smart pick's explainer, folded: it was six lines of wall above the
-   *  list, on a phone. One sentence stays; the rest is a tap. */
-  const [smartMore, setSmartMore] = useState(false);
-  /** …and its SECOND home: which repos have it on, across the whole desktop.
-   *  Folded because the number is the answer most of the time. */
-  const [smartWhere, setSmartWhere] = useState(false);
   const [openDetail, setOpenDetail] = useState<Set<string>>(new Set());
   const toggleDetail = (id: string) => setOpenDetail((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const [openValidate, setOpenValidate] = useState<Set<string>>(new Set());
@@ -36,6 +27,9 @@ export function useBacklogUi() {
   const [openText, setOpenText] = useState<Set<string>>(new Set());
   // Which held rows have their *close one to make room* list open.
   const [slotOpen, setSlotOpen] = useState<Set<string>>(new Set());
+  // Which rows have their session-budget editor open (`RowBudgetEdit`).
+  const [budgetOpen, setBudgetOpen] = useState<Set<string>>(new Set());
+  const toggleBudget = (id: string) => setBudgetOpen((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const toggleText = (id: string) => setOpenText((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   return {
     picking,
@@ -44,12 +38,6 @@ export function useBacklogUi() {
     setPicked,
     choosing,
     setChoosing,
-    passNotes,
-    setPassNotes,
-    smartMore,
-    setSmartMore,
-    smartWhere,
-    setSmartWhere,
     openDetail,
     toggleDetail,
     openValidate,
@@ -58,5 +46,7 @@ export function useBacklogUi() {
     toggleText,
     slotOpen,
     setSlotOpen,
+    budgetOpen,
+    toggleBudget,
   };
 }

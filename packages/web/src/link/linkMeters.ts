@@ -165,5 +165,7 @@ let reporting = false;
 export function startLinkReporting(): void {
   if (reporting) return;
   reporting = true;
-  window.setInterval(post, FLUSH_MS);
+  // Hidden, nothing on screen reads it and each post wakes the radio; the
+  // roll-up keeps counting and goes up with the first visible tick.
+  window.setInterval(() => { if (document.visibilityState === "visible") post(); }, FLUSH_MS);
 }

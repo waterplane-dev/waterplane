@@ -64,7 +64,7 @@ export function useRepoColors(): RepoColors {
     const fn = (c: RepoColors) => setV(c);
     listeners.add(fn);
     return () => { listeners.delete(fn); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only subscription; `v` is compared once to catch a copy adopted before the effect ran
   }, []);
   return v;
 }

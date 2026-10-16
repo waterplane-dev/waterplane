@@ -58,6 +58,55 @@
 import { tapeLines, tapePaths } from "./metrics/classics.mjs";
 import { SERIES, reading } from "./readings.mjs";
 import { readRank } from "./series.mjs";
+import { OWN_FILE } from "./own.mjs";
+import { UNITS } from "./central.mjs";
+
+/**
+ * Which plotted series each index entry is drawn as — the tiles a repo's
+ * `central` disable or override (`central.mjs`) is written on. `context` is
+ * two series and the index reads their sum, so both carry the variant.
+ */
+const ENTRY_OF_SERIES = Object.freeze({
+  "size.p95": "size",
+  "retouch.rate": "retouch",
+  "hatches.perKloc": "hatches",
+  "context.claudeMdChars": "context",
+  "context.descChars": "context",
+  "untested.count": "untested",
+});
+
+/**
+ * The latest row's disable or override of the entry a series draws, as the
+ * series' `variant`. An override carries its OWN points, index for index with
+ * the series', non-null only on rows that ran the same argv as the latest —
+ * a row that ran a different command, or none (anything before the override
+ * was first measured), is a cut, never the central value under another name.
+ */
+function variantOf(rows, key) {
+  const entry = ENTRY_OF_SERIES[key];
+  const cen = rows[rows.length - 1]?.central;
+  if (!entry || !cen || typeof cen !== "object") return undefined;
+  const dis = cen.disabled?.[entry];
+  if (dis && typeof dis.why === "string") return { kind: "disabled", why: dis.why };
+  const ov = cen.override?.[entry];
+  if (!ov || typeof ov.why !== "string") return undefined;
+  const argv = JSON.stringify(ov.run ?? null);
+  const pts = rows.map((r) => {
+    const o = r?.central?.override?.[entry];
+    return { day: r.day, sha7: short(r.sha), v: o && JSON.stringify(o.run ?? null) === argv ? num(o.value) : null };
+  });
+  const first = pts.find((p) => p.v !== null);
+  return {
+    kind: "override",
+    why: ov.why,
+    means: typeof ov.means === "string" ? ov.means : "",
+    unit: UNITS[entry],
+    points: pts,
+    last: pts.length ? pts[pts.length - 1].v : null,
+    since: first ? first.day : null,
+    ...(num(ov.value) === null ? { absent: typeof ov.reason === "string" && ov.reason ? ov.reason : "the override printed no number" } : {}),
+  };
+}
 
 /** Seven characters of sha beside every point. The CLI shortens its own for
  *  `status`; neither spelling is a definition anything else reads back. */
@@ -82,7 +131,7 @@ function absenceOf(row, family) {
  * The day-rows, shaped. `preregVersion` is the fallback the document reports
  * when the latest row does not carry one of its own.
  */
-export function buildPlot({ rows, prereg, preregVersion, scope = null }) {
+export function buildPlot({ rows, prereg, preregVersion, scope = null, ownDeclared = false }) {
   const last = rows[rows.length - 1];
 
   // One point per day-row for every series, absences included as `v: null`:
@@ -110,26 +159,37 @@ export function buildPlot({ rows, prereg, preregVersion, scope = null }) {
     // explain a number nothing tried to read.
     const own = s.absentOf && pts[pts.length - 1]?.v == null ? s.absentOf(last) : null;
     const absent = absenceOf(last, family) ?? own ?? undefined;
+    // The window is the READINGS, not the calendar days: the absences are
+    // dropped before `reading` cuts to `RANK_WINDOW_DAYS`, exactly as
+    // `narrate.mjs` does it, because that is the same function.
+    // The series DEFINITION goes in with the points: a `plain` one comes
+    // back unranked with the tool's own reason, decided in `readings.mjs`
+    // beside the rest of the reading rather than subtracted here.
+    const read = reading(
+      readRank,
+      pts.filter((p) => p.v !== null).map((p) => ({ day: p.day, v: p.v })),
+      prereg,
+      s,
+    );
+    // The row the window opens on, handed to `detail` so a sentence that
+    // reports a level can also say what moved it across exactly the window
+    // the rank was read over — "since 2026-06-18" names the same day `from`
+    // does, never a second one.
+    const opens = read.from ? rows.find((r) => r.day === read.from) ?? null : null;
     return {
       key: s.key,
+      // Every series in this list is waterplane's: the same definition in
+      // every repo, the ones the index is built from. A repo's own readings
+      // are `own.series` below and say `repo`.
+      source: "central",
       label: s.label,
       unit: s.unit,
       points: pts,
       last: pts.length ? pts[pts.length - 1].v : null,
-      // The window is the READINGS, not the calendar days: the absences are
-      // dropped before `reading` cuts to `RANK_WINDOW_DAYS`, exactly as
-      // `narrate.mjs` does it, because that is the same function.
-      // The series DEFINITION goes in with the points: a `plain` one comes
-      // back unranked with the tool's own reason, decided in `readings.mjs`
-      // beside the rest of the reading rather than subtracted here.
-      reading: reading(
-        readRank,
-        pts.filter((p) => p.v !== null).map((p) => ({ day: p.day, v: p.v })),
-        prereg,
-        s,
-      ),
-      detail: (s.detail ? s.detail(last, prereg) : "").trim(),
+      reading: read,
+      detail: (s.detail ? s.detail(last, prereg, opens) : "").trim(),
       ...(absent === undefined ? {} : { absent }),
+      ...(variantOf(rows, s.key) ? { variant: variantOf(rows, s.key) } : {}),
     };
   });
 
@@ -309,7 +369,19 @@ export function buildPlot({ rows, prereg, preregVersion, scope = null }) {
     ...(absenceOf(last, "classics") === undefined ? {} : { absent: absenceOf(last, "classics") }),
   };
 
+  // The declaration's own complaints, and the overrides a backfill could not
+  // run — once for the document, beside the variants they explain.
+  const cen = last?.central;
+  const central = !scope && cen && typeof cen === "object"
+    ? {
+        file: typeof cen.file === "string" ? cen.file : OWN_FILE,
+        ...(Array.isArray(cen.problems) && cen.problems.length ? { problems: cen.problems.filter((p) => typeof p === "string") } : {}),
+      }
+    : null;
+
   return {
+    ...(scope ? {} : { own: buildOwn(rows, prereg, ownDeclared) }),
+    ...(central ? { central } : {}),
     // The subtree these rows are about, or null for the whole repo. It travels
     // because every PATH below is relative to it — a scoped row's longest file
     // is `src/App.tsx` and the repo's is `apps/ba3-web/src/App.tsx`, and a
@@ -327,4 +399,64 @@ export function buildPlot({ rows, prereg, preregVersion, scope = null }) {
     classics,
     longest,
   };
+}
+
+/**
+ * The repo's OWN readings (`own.mjs`), shaped like the series above and
+ * marked `source: "repo"`.
+ *
+ * Which readings exist is the NEWEST row carrying an `own` field: that is the
+ * declaration as it last ran, and a key it no longer names is not a tile on
+ * today's sheet (its history stays in the rows it was taken in). Each row
+ * without that key — before it was declared, or measured before `own` existed
+ * — is a hole, never a zero: nothing was run there.
+ *
+ * `declared` is whether HEAD's tree holds the file, read by the caller from the
+ * commit — the one fact that tells "this repo declares nothing" (one line on
+ * the phone saying how to) from "declared, not measured yet".
+ *
+ * Whole-tree only: a scope's plot carries no `own` key at all.
+ */
+function buildOwn(rows, prereg, declared) {
+  let latest = null;
+  for (let i = rows.length - 1; i >= 0; i--) {
+    if (rows[i]?.own && typeof rows[i].own === "object") { latest = rows[i].own; break; }
+  }
+  const out = { file: OWN_FILE, declared: !!declared, series: [] };
+  if (latest && typeof latest.refused === "string") {
+    out.absent = latest.refused;
+    return out;
+  }
+  const decls = Array.isArray(latest?.readings) ? latest.readings : [];
+  const last = rows[rows.length - 1];
+  for (const d of decls) {
+    if (typeof d?.key !== "string") continue;
+    const at = (r) => (Array.isArray(r?.own?.readings) ? r.own.readings.find((x) => x?.key === d.key) : undefined);
+    const pts = rows.map((r) => ({ day: r.day, sha7: short(r.sha), v: num(at(r)?.value) }));
+    const today = at(last);
+    // The reason for TODAY's hole, in the reading's own words where it ran
+    // and failed, else the plain fact that the latest row took none.
+    const absent = pts.length && pts[pts.length - 1].v === null
+      ? (typeof today?.reason === "string" && today.reason) || "not taken on the latest day"
+      : undefined;
+    const read = reading(readRank, pts.filter((p) => p.v !== null).map((p) => ({ day: p.day, v: p.v })), prereg, {});
+    out.series.push({
+      key: d.key,
+      source: "repo",
+      label: typeof d.name === "string" && d.name ? d.name : d.key,
+      unit: typeof d.unit === "string" ? d.unit : "",
+      means: typeof d.means === "string" ? d.means : "",
+      better: d.better === "lower" || d.better === "higher" ? d.better : null,
+      points: pts,
+      last: pts.length ? pts[pts.length - 1].v : null,
+      reading: read,
+      detail: "",
+      ...(absent === undefined ? {} : { absent }),
+    });
+  }
+  if (Array.isArray(latest?.problems) && latest.problems.length) {
+    out.problems = latest.problems.filter((p) => typeof p === "string");
+  }
+  if (declared && !latest) out.absent = "declared, not measured yet — the next refresh that measures a new commit takes the first reading";
+  return out;
 }

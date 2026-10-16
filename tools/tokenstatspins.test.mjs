@@ -51,14 +51,15 @@ test("P1: `usage.refresh` is sent from exactly these sites", () => {
 
 // ── P2: the four host reads and the phone's own caches ───────────────────────
 test("P2: each ledger read is made once, and the caches are touched only by sdk/ledgers and offlineCache", () => {
-  for (const call of ["api.tokenStats(", "api.usageLog(", "api.tokenWindows("]) {
+  for (const call of ["api.tokenStats(", "api.usageLog(", "api.tokenWindows(", "api.costWindow("]) {
     assert.deepEqual(counts(call), { "web/src/sdk/ledgers.ts": 1 }, call);
   }
   const READ_SITE = {
     "ledgers.tokenStats.read(": "TokenStatsSheet.tsx",
     // A contributed ledger view's document (`LedgerViewDef`), one `GuestRead` per view.
     "ledgers.viewDoc(": "TokenStatsSheet.tsx",
-    "ledgers.usageLog(": "LimitWindows.tsx",
+    // 2026-10-09: lifted into the body — the week card's points calibrate off the same readings.
+    "ledgers.usageLog(": "TokenStatsBody.tsx",
     "ledgers.tokenWindows(": "TokenStatsBody.tsx",
   };
   // Outside the screen: the week-share calibration (features/tokens) folds ONE
@@ -67,6 +68,13 @@ test("P2: each ledger read is made once, and the caches are touched only by sdk/
   for (const [call, file] of Object.entries(READ_SITE)) {
     assert.deepEqual(counts(call), { [`extensions/token-stats/web/${file}`]: 1, ...ALSO[call] }, call);
   }
+  // The cost window (2026-10-09): the body reads the week (`weekcost:`) and the cut's span
+  // (`costwindow:`); the fan-out sheet reads the last similar run for its cost hint.
+  // 2026-10-15: the body's third read is the dollar period's (`periodcost:`, the month card).
+  assert.deepEqual(counts("ledgers.costWindow("), {
+    "extensions/token-stats/web/TokenStatsBody.tsx": 3,
+    "web/src/features/fanout/FanoutCostHint.tsx": 1,
+  });
   const cache = {};
   for (const f of FILES) {
     const n = [...f.text.matchAll(/\b(getTokenStatsAt|putTokenStats|getLedgerDocAt|putLedgerDoc)\b/g)].length;
@@ -99,20 +107,27 @@ const HOOKS = {
     "useRemoteResource", "useEffect",
   ],
   LimitWindows: [
-    "useEffect", "useRemoteResource",
+    // 2026-10-09: the usagelog read moved up into TokenStatsBody.
+    "useEffect",
   ],
   TokenStatsBody: [
     // Local-model split: the first useState + useMemo are `allModels` and the
     // Anthropic-only cut (`localSplit.ts`), ahead of everything that reads `doc`.
     "useState", "useMemo",
-    // WP6: the fourth useState is the generic backend-ledger tab (`extraId`).
-    // 2026-10-02: the useRemoteResource after it is the local runner's ledger (`/api/localusage`),
-    // read beside `extraId` because whether its tab exists depends on the answer.
-    "useState", "useState", "useState", "useRemoteResource", "useState", "useCallback", "useState", "useState", "useState", "useState",
-    "useState", "useState", "useState", "useBoxWidth", "useMemo", "useEffect", "useMemo", "useMemo",
-    "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo",
-    "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useRemoteResource", "useMemo",
-    "useMemo", "useMemo",
+    // WP6: the fourth useState is the generic backend-ledger tab (`extraId`); the
+    // useRemoteResource after it is the local runner's ledger (`/api/localusage`).
+    // 2026-10-15: the fifth is `on`, the tapped source the `all` button clears (a prop would not move).
+    "useState", "useState", "useState", "useState", "useRemoteResource", "useState", "useCallback", "useState", "useState", "useState", "useState",
+    // 2026-10-15: ONE `span` state replaced `range`, `scope` and the calendar week's `weekAt` (and
+    // its seeding effect); the day and hour derivations moved below `active`, which they now read.
+    "useState", "useBoxWidth",
+    // the two live cuts, the specs, then the tokenwindows, usagelog and week cost-window reads, the
+    // dollar period's memo and its read, the grids and `picked`
+    "useMemo", "useMemo", "useRemoteResource", "useRemoteResource", "useRemoteResource", "useMemo", "useRemoteResource", "useMemo", "useMemo",
+    // range, days, daily, running, trend, mixRows, bands, agentDays, hourRows, hourly, the three fills
+    "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo",
+    // the span's own cost window and its repos; the calibration, the calendar cut, the clock, insights
+    "useRemoteResource", "useMemo", "useMemo", "useMemo", "useMemo", "useMemo",
   ],
 };
 
@@ -131,6 +146,8 @@ test("P4: each resource key is written once across the viewer", () => {
     "`ledgerview:${def.id}:${fresh}`",
     "`usagelog:${usage?.checkedAt ?? 0}`",
     "`tokenwindows:${",
+    "`weekcost:${",
+    "`costwindow:${",
   ]) {
     const c = counts(key);
     assert.equal(Object.values(c).reduce((a, b) => a + b, 0), 1, `${key}: ${JSON.stringify(c)}`);

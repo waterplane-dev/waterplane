@@ -12,15 +12,17 @@ thin composer over `src/backlog/` (state hooks, regions, the grouped `BacklogPro
 
 **Owns** (`store.ts`; one writer, `actions.ts`):
 
-- `backlog` — the host's `backlog.list` as one value. `items/auto/smartPick/passes/snapAt` are
+- `backlog` — the host's `backlog.list` as one value. `items/auto/snapAt` are
   seeded from `waterplane.snap.backlog` so the sheet renders offline; `waiting`/`naming`/`autoSlots` are
   facts about this second and are never snapshotted (`autoSlots` feeds a slot-held row's *close one
-  to make room*, intersected with live sessions in `autoSessions.ts`). `smartPick: null` ≠ `[]` (an old host has no switch).
+  to make room*, intersected with live sessions in `autoSessions.ts`).
 - `backlogScope` / `backlogFocus` — which repo the sheet opens on, and the ids cut it was opened
   on (a count is a filter; `onLeave` drops the cut).
 - `assessRuns` (per repo, `assess.state`, never persisted), `assessRepo`, `assessScope`, and
   `assessBusy` — **ref-authoritative** (a store's `get()` is synchronous): ackId → the pad notes
   an apply owes, cleared on the RECEIPT (`onAssessAck`), only `ticked ∩ msg.filed`, never on the tap.
+- `assessSlot` — what `assessScope`'s ids ARE when the sheet was opened as a slot check, so *run
+  again* sends the slot too; cleared with the sheet.
 
 **Sheets**: `backlog` (persisted), `assess` (not; null without a repo). **Messages**: `welcome`
 (asks `assess.state`), `backlog.list`, `assess.state` — a chatty push, kept at `prev` unless the
@@ -38,4 +40,7 @@ it was last left on), `files.editBacklogImage/openFileFrom`. The sheet's row fil
 
 **Exports for App**: `useBacklog()` (compose strip, badges, fire-nav), `openBacklogFor(repo)`,
 `openBacklogIn(cwd)`, `openBacklogCut(cwd, ids, label)` (App binds `nav.openBacklogCut` to it),
-`openAssessFor(repo, ids)`, and `onAssessAck(ackId, ok, filed, removePadNotes)` for App's `op.ack`.
+`openAssessFor(repo, ids)`, `openSlotCheck(check)` (the slot check — `slotCheck.ts`; also registered at
+boot as `slotAskStore`'s opener, because the ask card beside the toast cannot import a feature), and
+`onAssessAck(ackId, ok, filed, removePadNotes)` for App's `op.ack`. `onBacklogList` feeds every list
+to `onSlotAskList`.

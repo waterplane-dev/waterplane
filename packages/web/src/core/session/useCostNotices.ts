@@ -10,7 +10,8 @@
  */
 import { useEffect, useRef } from "react";
 import { liveAgentText, sessionCostOf, type SessionInfo } from "@waterplane/shared";
-import { shouldNotice, shouldNoticeAgent } from "../../costNotice";
+import { shouldNotice, shouldNoticeAgent, shouldNoticeSpend } from "../../costNotice";
+import { useSpendWarn } from "../sessions/spendWarn";
 import { showToast } from "../../toast";
 import { LS, lsJson, lsSetJson } from "../../storage";
 import { budgetToast, shouldNoticeBudget } from "../../features/sessionBudget";
@@ -73,6 +74,27 @@ export function useCostNotices(active: SessionInfo | null | undefined): void {
     if (next !== seen) { agentNoticedRef.current = next; lsSetJson(LS.agentNoticed, next); }
     if (notice && text) showToast(text);
   }, [active]);
+
+  /** Which sessions have already been told they passed a spend mark. */
+  const spendNoticedRef = useRef<Record<string, string> | null>(null);
+  const spendWarnOf = useSpendWarn();
+  const spendWarn = spendWarnOf(active);
+  /**
+   * Say once when the session on screen passes the person's orange or red
+   * spend mark (Settings › Sessions). The triangle on the Σ figure is the
+   * standing readout; this is the moment it appears, worded, with where the
+   * marks are set. Once per level step up, only for the session on screen. It
+   * stops nothing.
+   */
+  useEffect(() => {
+    if (!active || !spendWarn) return;
+    const seen = spendNoticedRef.current ??= lsJson<Record<string, string>>(LS.spendNoticed, {});
+    const { notice, next } = shouldNoticeSpend(active.id, spendWarn.level, seen);
+    if (!notice) return;
+    spendNoticedRef.current = next;
+    lsSetJson(LS.spendNoticed, next);
+    showToast(`${spendWarn.text} Marks are set in Settings › Sessions › spend marks. Nothing was stopped.`);
+  }, [active, spendWarn]);
 
   /** Which sessions have already been told they are over their own budget. In
    *  memory on purpose: it is a CROSSING, and a reload that finds a session still

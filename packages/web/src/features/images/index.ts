@@ -4,20 +4,22 @@
  * tree and the sweep. README.md says what it owns and what it reads from core.
  */
 import { createElement } from "react";
-import type { FeatureManifest } from "../../sdk";
-import { ann, collage, swipe, sweepFor } from "./store";
-import { bootImages, inActiveRepo, onSessionImages, openBrowseHere, openGalleryHere, pickFileFor, pickImageFor } from "./actions";
+import { core, type FeatureManifest } from "../../sdk";
+import { ann, browseAim, collage, swipe, sweepFor } from "./store";
+import { bootImages, inActiveRepo, openBrowseAt, onSessionImages, openBrowseHere, openGalleryHere, pickFileFor, pickImageFor } from "./actions";
 import { CombineSheet, MarkUpSheet, ViewerSheet } from "./ImageSheets";
 import { FileTreeSheet, GallerySheet, SweepEntrySheet } from "./GalleryEntry";
 import { InboxToolbarItem } from "./NewImages";
+import { TAB_FILE_EVENT, type FileTab } from "../../sessionTabs";
 
 export {
-  annotate, annotateUrl, annotatorBusy, attachForInbox, backlogEditImage, downloadArtifact, openArtifact, openBrowseAt,
+  annotate, annotateUrl, annotatorBusy, appendToBatch, attachForInbox, backlogEditImage, downloadArtifact, openArtifact, openBrowseAt,
   openBrowseFor, openFileRef, openGalleryFor, openGalleryForSend, openNewImages, openOutboxFor, openSweep, pickFileFor,
   pickImageFor, routeFiles, seedFromRoute, viewImage,
 } from "./actions";
+export { useAnnBeside } from "./ImageSheets";
 export { NewImagesStrip, NewImagesTag } from "./NewImages";
-export { galleryCtxForFile, type GalleryCtx } from "./logic";
+export { galleryCtxForFile, pasteRoute, type GalleryCtx } from "./logic";
 
 export const manifest: FeatureManifest = {
   id: "images",
@@ -52,5 +54,19 @@ export const manifest: FeatureManifest = {
       },
     },
   ],
-  boot: bootImages,
+  boot: () => {
+    const offImages = bootImages();
+    // A pinned file's tab (`sessionTabs.ts` `FileTab`): the strip is mounted
+    // beside App and says the tap as an event. Closing returns to the screen it
+    // was tapped from — or, from inside the file viewer, to where THAT viewer
+    // would have returned, so Back never lands on the file just left.
+    const onFileTab = (e: Event) => {
+      const f = (e as CustomEvent<FileTab>).detail;
+      if (!f) return;
+      const here = core().nav.overlay;
+      openBrowseAt(f.repoId, f.path, here === "browse" ? browseAim.get()?.back ?? null : here);
+    };
+    window.addEventListener(TAB_FILE_EVENT, onFileTab);
+    return () => { offImages(); window.removeEventListener(TAB_FILE_EVENT, onFileTab); };
+  },
 };

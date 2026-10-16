@@ -183,7 +183,7 @@ export function useAnnotator({ source, repoId, index, total, facts, onUploaded, 
     };
     load();
     return () => { cancelled = true; if (revoked) URL.revokeObjectURL(revoked); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload per image; `redraw` reads everything it needs through refs
   }, [source]);
 
   // This screen has no text field, so a keyboard on it is one the previous

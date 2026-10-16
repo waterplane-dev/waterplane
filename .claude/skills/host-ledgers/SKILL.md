@@ -1,6 +1,6 @@
 ---
 name: host-ledgers
-description: waterplane host ledgers (packages/host/src): everything this desktop counts and keeps on disk. ctxlog.ts (window, spend, split, per-record cost, cold-start rebuilds, compactions, off the CLI's DATED log), ctxwindow.ts, tokenstats.ts (+ rate-limit windowSeries), budget.ts, sessionbudget.ts (dollars per window point), usagelog.ts, and how a second backend's store reader (opencode's, an extension) is asked for its transcript, context series, conversation id and ledger. Load BEFORE changing any token, context, cost, budget or limit number the host reads off disk, or adding a reader of either CLI's logs or store. A reading here degrades to ABSENT, never to a wrong number.
+description: waterplane host ledgers (packages/host/src): everything this desktop counts and keeps on disk. ctxlog.ts (window, spend, split, per-record cost, cold-start rebuilds, compactions, off the CLI's DATED log), ctxwindow.ts, tokenstats.ts (+ rate-limit windowSeries), budget.ts, sessionbudget.ts (dollars per window point), usagelog.ts, costwindow.ts (any-span cost), burnwatch.ts (burn push), and how a second backend's store reader (opencode's, an extension) is asked for its transcript, context series, conversation id and ledger. Load BEFORE changing any token, context, cost, budget or limit number the host reads off disk, or adding a reader of either CLI's logs or store. A reading here degrades to ABSENT, never to a wrong number.
 ---
 
 # waterplane host — the ledgers
@@ -50,24 +50,16 @@ The counted half of the host: every token, context, cost and limit figure this d
   rate, and **the curve cannot show it** — the window is the same size either side. Recognised by
   `shared/sessioncost.ts`'s `isColdRebuild` and priced per record like everything else here, with
   the PREMIUM over re-reading kept apart from what the writes cost (only the premium is money the
-  clock spent rather than the work). Two traps, both of which fake a WARM reading and both of which
-  are defended twice: a **compaction in the gap** (the boundary flag AND the arithmetic — 31,579
-  written against 347,182 carried-and-not-read is not a re-write of that window), and
-  **`write > read`, which is the WRONG test** — a cold resume still reads the 32.5-36.8k
-  tools-and-system preamble, so a 66k conversation comes back reading 36,770 and writing 30,638.
-  The test is whether the read covered what was CARRIED (`REBUILD_READ` 0.8). **A rebuild is NOT a
+  clock spent rather than the work). The two traps that fake WARM (a compaction in the gap;
+  `write > read` as the test) and `REBUILD_READ`: rule in the `shared` skill, `sessioncost.ts`; here
+  the compaction one is defended twice — the boundary flag AND the arithmetic. **A rebuild is NOT a
   spark mark and not a tick on any chart**: there is nothing at that x for a rule to point at, and
   the two event colours are a validated pair whose red one means the ACCOUNT refused a request.
   Measured through this reader: **387 re-writes, 80M tokens, $712 above what re-reading would have
   cost**, on one desktop.
-  **And what the COMPACTIONS did** (`compaction`, the same pass): shed = `Σ pre − post` (exact, and
-  it CHAINS — each drop is measured against what the last one left); **saved = the shed × every
-  REQUEST since, never per compaction** (one boundary shedding 173k with seven turns after it saved
-  1.2M — the per-compaction reading understates a long conversation by the number of turns in it);
-  rebuild = the cache write on the FIRST request after the boundary and no other. Priced per record
-  like everything else here, the saving **as CACHE READS** and the rebuild as the WHOLE first write:
-  both err AGAINST compacting looking worthwhile, deliberately, because the panel is read to decide
-  whether to keep doing it. **The summarisation request is NOT in the log** (measured: no assistant
+  **And what the COMPACTIONS did** (`compaction`, the same pass): shed/saved/rebuild and why each is
+  priced to err AGAINST compacting — rule in the `shared` skill, `sessioncost.ts`; here it is priced
+  per record like everything else. **The summarisation request is NOT in the log** (measured: no assistant
   record between the boundary and the next prompt; the summary is a `user` row with no usage), so
   the cost is a floor and nothing subtracts the two sides into a net. A boundary missing either end
   of the drop OR its trigger goes to `unmeasured` and enters no row — `count + unmeasured` minus the
@@ -110,6 +102,7 @@ The counted half of the host: every token, context, cost and limit figure this d
   a LIST: the opening hour is in that cell and the one before it. A window with no row RAN NOTHING;
   `oldestHour` is what tells that apart from a window the record does not reach.
   `packages/host/test/tokenwindows.test.mjs`.
+- `billing.ts` · `periodspend.ts` · `billingwire.ts` — **the account model beside the budget.** `billing.ts`: which kind of account claude bills to (`shared/billing.ts` is the classification) — env + `apiKeyHelper` + `claude auth status`, probed ONCE at boot with a timeout, **`unknown` until that probe has finished** (a guess in the gap would stop the `/usage` poll a subscription needs), a person's override in `billing.json` wins, a failure is `unknown`. `periodspend.ts`: period-to-date DOLLARS folded from `tokenStats.costWindow` (hour buckets, so a month needs no raise of the 35-day read cap — that cap guards the HTTP route only), cached because the verdict is synchronous; an entry belongs to the period START it was measured for, so **past the computed reset a cap reads absent and releases with no event**, a stale entry (10 min) is absent, an unscanned ledger is absent, never $0. Labelled "this desktop, list price". `server/billingwire.ts`: the factory that wires them, owns the minute-timer (only while a dollar period exists), `publishBudget` (carries `periods`) and the "$ vs pace" push (`burnwatch.ts` `createPaceWatch`, once per period start, api/cloud only). A known non-subscription profile stops the `/usage` poll; `unknown` polls as before.
 - `budget.ts` — the ceiling before the wall. The ONE place that asks `shared/budget.ts`. **An explicit
   send, an ANSWER to a live box, and UPLOADS are never held** — the budget stops unattended work.
 - `sessionbudget.ts` — **the per-session budget's calibrator**: one `windowSeries` per `/usage`
@@ -133,3 +126,19 @@ The counted half of the host: every token, context, cost and limit figure this d
   5-hour window rolling over is otherwise indistinguishable from usage being refunded. A failed probe
   is DROPPED, not recorded as two nulls; an unchanged reading is kept every `REPEAT_MS` anyway,
   because "flat for four hours" and "nobody looked" are opposite facts.
+- `usagesources.ts` — usage readings PER SOURCE beside claude's `UsageInfo` (which stays, untouched, for budget/ladder/burn/plugin API): claude adapted FIRST via `claudeReading`, then each `api.usageProbe` (Copilot's extension, any plugin). A null answer is ABSENT, a throw/timeout keeps the last reading until its reset, every answer vetted (identity is the definition's, out-of-range dropped); one probe in flight, fresh asks behind claude's TTL, polling only by `syncUsagePolling`'s predicate; ONE publisher (`createUsageSources().publish`). Why: host.md.
+- `usagesourcelog.ts` — `usagelog.ts`'s rules per source in `usagelog-<source>.jsonl` (claude's file untouched, no migration); `GET /api/usagelog/:source`; a disk row keeps unit+count for the boot `remembered` re-offer.
+- `costwindow.ts` — the token store folded over ANY `[from,to)` (`GET /api/costwindow`): by hour,
+  repo and conversation, priced per model×day exactly as `aggregate()` (the e2e pins them equal to
+  the cent). **A window's edge is the phone's `windowStartHour`** (shared, the nearest hour — `windowCells` uses it
+  too), sent on the hour so the fold's floor is the identity;
+  unpriced tokens are COUNTED, never zero-charged; a subagent folds into its parent. `costMeta`
+  JOINS titles (roster, then closed stack) and launches (`itemId.split("#")[0]` = fan-out run);
+  a lookup that throws leaves the field ABSENT, and a conversation nobody can name is still a row.
+  **Past `COST_CONVOS_CAP` conversations fold into `rest`** (repo × launch, no ids) — every total,
+  hour and `byRepo` still counts them.
+- `burnwatch.ts` — one `burn` push when the weekly figure climbs past `WATERPLANE_BURN_PTS_PER_HOUR`
+  (4; 0 = off), rule in `shared/burn.ts`. **Pushes, never holds; no timer** (`UsageChecker`'s
+  callback drives it, and `syncUsagePolling` keeps that poll on while `armed()` and `burn` is
+  unmuted); `burnwatch.json` is written BEFORE the push (lose one, never repeat one);
+  a cost fold that fails costs the "dearest in it" line, not the push. Why: host.md.

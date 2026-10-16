@@ -12,8 +12,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  noteLocalWrite, noteSuperseded, noteSynced, outstandingSync, queueSync, resetSyncState,
-  setSyncOnline, syncChipWord, syncSentence, syncStateOf, worstSync,
+  noteLocalWrite, noteSuperseded, noteSynced, outstandingSync, queueSync, resetSyncState, rowChipWord,
+  setSyncOnline, syncChipWord, syncSentence, syncStateOf, syncSummary, worstSync,
 } from "./syncState.ts";
 
 const K = "myapp.pad";
@@ -175,6 +175,38 @@ test("a queued EDIT of a stored row still reads as not-yet-there", () => {
   // The host listing carries the pre-edit copy; what is on screen is the edit,
   // and the edit is only on this phone.
   assert.equal(queueSync({ queued: true, onHost: true, online: true }), "pending");
+});
+
+// ── A list that says the good case ONCE, at its head ─────────────────────────
+
+test("a row drops ONLY the green chip, and only when its list's head says it", () => {
+  // Without a head the row keeps its "on desktop": a row is never silent about
+  // where it is. With one, the exceptions are all a row draws.
+  assert.equal(rowChipWord("synced"), "on desktop");
+  assert.equal(rowChipWord("synced", true), null);
+  for (const p of ["pending", "offline", "superseded", "failed"]) {
+    assert.equal(rowChipWord(p, true), syncChipWord(p), p);
+  }
+  assert.equal(rowChipWord("unknown", true), null);
+});
+
+test("the head's word claims ALL only when all are there, and counts otherwise", () => {
+  assert.equal(syncSummary(["synced", "synced", "synced"]).word, "on desktop");
+  // One row stuck on this phone: a bare "on desktop" over it would be the green
+  // light this store was written to retire.
+  assert.equal(syncSummary(["synced", "pending", "synced", "synced"]).word, "3 of 4 on desktop");
+  // `unknown` has no honest answer, so it is counted neither way.
+  assert.equal(syncSummary(["synced", "unknown"]).word, "on desktop");
+  // No synced row: the head says nothing, the rows' chips are the story.
+  assert.equal(syncSummary(["pending", "failed"]), null);
+  assert.equal(syncSummary([]), null);
+});
+
+test("the head's title agrees in number with what it counts", () => {
+  assert.match(syncSummary(["synced"]).title, /the one row here is on more than this phone/);
+  assert.match(syncSummary(["synced", "synced"]).title, /all 2 rows here are on more than this phone/);
+  assert.match(syncSummary(["synced", "pending", "offline"]).title, /1 of the 3 rows here is on more/);
+  assert.match(syncSummary(["synced", "synced", "failed"]).title, /2 of the 3 rows here are on more/);
 });
 
 test("the chip sentence agrees in number with its caller", () => {

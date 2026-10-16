@@ -46,6 +46,7 @@
 /packages/web/src/features/activity/ @johanneshoh
 /packages/web/src/features/queue/ @johanneshoh
 /packages/web/src/features/setup/ @johanneshoh
+/packages/web/src/features/askRules/ @johanneshoh
 /packages/web/src/features/hostTools/ @johanneshoh
 /packages/web/src/features/hosts/ @johanneshoh
 /packages/web/src/features/pad/ @johanneshoh
@@ -55,6 +56,7 @@
 /packages/web/src/features/shellLogins/ @johanneshoh
 /packages/web/src/features/sessionBudget/ @johanneshoh
 /packages/web/src/features/onboard/ @johanneshoh
+/packages/web/src/features/newSession/ @johanneshoh
 
 # In-repo extensions.
 /packages/extensions/token-stats/ @johanneshoh

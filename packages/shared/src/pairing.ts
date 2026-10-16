@@ -138,8 +138,16 @@ export interface TailnetPeersResponse {
 }
 
 /** `POST /api/pair/mint` (trusted, authenticated caller) → */
+/** `POST /api/pair/mint` body. `passive`: the device this code pairs gets a
+ *  passive token (`passive.ts`), and redeeming it switches "gate Tailscale" on. */
+export interface PairMintRequest {
+  passive?: boolean;
+}
+
 export interface PairMintResponse {
   code: string;
+  /** The code pairs a passive device. */
+  passive?: boolean;
   expiresAt: number;
   /** What the QR encodes. */
   landingUrl: string;
@@ -178,6 +186,8 @@ export type PairRedeemResponse =
       lanIdentity?: { hostId: string; secret: string };
       /** A sentence for the phone when it got no token (no password set). */
       note?: string;
+      /** The token is a passive one (`passive.ts`). */
+      scope?: "passive";
     }
   | { ok: false; error: PairRedeemError; message: string };
 

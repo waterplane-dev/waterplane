@@ -3,7 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { addCost, addTotals, costOf, tokenTotal, zeroCost, zeroTotals } from "@waterplane/shared";
-import { demoTokenStats, demoTokenWindows, demoTopConvos, demoUsageLog, parseWindowSpecs, windowCells } from "./ledger.ts";
+import { demoCostWindow, demoTokenStats, demoTokenWindows, demoTopConvos, demoUsageLog, parseWindowSpecs, windowCells } from "./ledger.ts";
 import { demoHttp } from "./demohttp.ts";
 
 const NOW = new Date(2026, 9, 2, 15, 20).getTime();
@@ -151,4 +151,41 @@ test("HTTP: opt-in only; repeated w= params reach the grid; no usage reading mea
   on.numbers.usage = { ok: true, sessionPct: 10, weeklyPct: 20, checkedAt: NOW, sessionResetAt: NOW + HOUR, weeklyResetAt: NOW + 48 * HOUR };
   const u = JSON.parse(get(on, "/api/usagelog", { hours: "12" }).body);
   assert.ok(u.samples.length > 0 && u.samples.every((s) => s.t >= NOW - 12 * HOUR));
+});
+
+test("costwindow: the host's fold over the same records — the whole record is the ledger, a week is a cut of it", () => {
+  const d = demoTokenStats(NOW);
+  const whole = demoCostWindow(NOW, NOW - 30 * 24 * HOUR, NOW + HOUR);
+  sameT(whole.totals, d.totals, "whole record");
+  sameC(whole.cost, d.cost, "whole record");
+  sameT(whole.agentTotals, d.subagents, "the agents' slice");
+  sameC(whole.agentCost, d.subagentCost, "the agents' slice");
+  assert.equal(whole.convos.length, d.conversations);
+  assert.equal(whole.convos.reduce((a, c) => a + c.agents, 0), d.subagentLogs);
+  // A week from mid-hour: it starts on the hour that instant is in, and every way of cutting it adds up.
+  const from = NOW - 7 * 24 * HOUR + 20 * 60_000;
+  const fromHour = new Date(from).setMinutes(0, 0, 0);
+  const wk = demoCostWindow(NOW, from, NOW);
+  assert.equal(wk.fromHour, fromHour);
+  sameT(sumT(d.hours.filter((h) => hourMs(h.hour) >= fromHour && hourMs(h.hour) < NOW)), wk.totals, "the ledger's hours in the span");
+  for (const [name, rows] of [["hours", wk.hours], ["convos", wk.convos], ["byRepo", wk.hours.flatMap((h) => h.byRepo)], ["byModel", wk.hours.flatMap((h) => h.byModel)]]) {
+    sameT(sumT(rows.map((r) => r.totals)), wk.totals, name);
+    sameC(sumC(rows.map((r) => r.cost)), wk.cost, name);
+  }
+  sameT(sumT(wk.convos.map((c) => c.agentTotals)), wk.agentTotals, "the agents' slice, per conversation");
+  for (const c of wk.convos) {
+    assert.ok(c.byHour.every((h) => hourMs(h.hour) >= fromHour && hourMs(h.hour) < NOW), `${c.id} has an hour outside the span`);
+    near(c.byHour.reduce((a, h) => a + h.usd, 0), c.cost.total, `${c.id} by hour`);
+    assert.ok(tokenTotal(c.agentTotals) <= tokenTotal(c.totals) && c.firstAt <= c.lastAt && c.title);
+  }
+  assert.deepEqual(wk.convos.map((c) => c.cost.total), wk.convos.map((c) => c.cost.total).sort((a, b) => b - a), "dearest first");
+  assert.ok(wk.convos.length > 40 && wk.cost.total < whole.cost.total);
+  finite(wk);
+  // Over HTTP, for every scenario, as the host: a malformed span or no ledger is an empty document, never a 404.
+  const get = (m, query) => JSON.parse(demoHttp(m, NOW, { method: "GET", path: "/api/costwindow", query }).body);
+  assert.deepEqual(get({ numbers: { ledger: true } }, { from: String(from), to: String(NOW) }), wk);
+  for (const [m, query] of [[{ numbers: { ledger: true } }, {}], [{ numbers: { ledger: true } }, { from: String(NOW), to: String(from) }], [{ numbers: {} }, { from: String(from), to: String(NOW) }]]) {
+    const empty = get(m, query);
+    assert.equal(empty.hours.length + empty.convos.length + tokenTotal(empty.totals), 0, JSON.stringify(query));
+  }
 });

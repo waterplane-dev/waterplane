@@ -21,6 +21,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
 import { E, SLUG, rootEnv } from "./lib-brand.mjs";
+import { waitForHost } from "./lib-e2e.mjs";
 
 const PORT = 8814;
 const ROOT = mkdtempSync(join(tmpdir(), `${SLUG}-fanout-`));
@@ -49,7 +50,7 @@ const startHost = () => {
 };
 let host = startHost();
 const base = `http://127.0.0.1:${PORT}`;
-await sleep(900);
+await waitForHost(PORT);
 
 const mk = (name) => fetch(`${base}/api/repo`, {
   method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name }),
@@ -145,7 +146,7 @@ await sleep(1200);
 // keep this section's subject — the sessions the targets went into are gone.
 killTmuxServers();
 host = startHost();
-await sleep(1800);
+await waitForHost(PORT);
 
 const ws2 = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
 let after = null;

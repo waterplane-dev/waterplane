@@ -8,7 +8,7 @@ import type { RepoTarget } from "@waterplane/shared";
 import { budgetReasonText } from "@waterplane/shared";
 import { AssessSheet } from "../../AssessSheet";
 import { useCore, useQueueEntries, useStore } from "../../sdk";
-import { assessBusy, assessRuns, assessScope, backlog } from "./store";
+import { assessBusy, assessRuns, assessScope, assessSlot, backlog } from "./store";
 import { applyAssessment, closeAssess, openBacklogCut, runAssessment } from "./actions";
 
 export function AssessmentSheet({ repo }: { repo: RepoTarget }) {
@@ -19,6 +19,7 @@ export function AssessmentSheet({ repo }: { repo: RepoTarget }) {
   const run = useStore(assessRuns).get(dir) ?? null;
   const busy = useStore(assessBusy);
   const scope = useStore(assessScope);
+  const slot = useStore(assessSlot);
   const items = useStore(backlog).items;
   const outbox = useQueueEntries();
   return <AssessSheet
@@ -36,7 +37,17 @@ export function AssessmentSheet({ repo }: { repo: RepoTarget }) {
     // The host's own sentence, verbatim — the budget is the host's rule.
     budgetNote={budget?.verdict.blocked ? budgetReasonText(budget.verdict) : null}
     scope={scope}
-    onRun={() => runAssessment(dir, scope ?? undefined)}
+    slot={slot}
+    onRun={() => runAssessment(dir, scope ?? undefined, slot)}
+    // A conflict card's two verbs on a row — the backlog's own: `when`'s Send
+    // sheet (the same row, re-decided) and archive (words kept).
+    onEditItem={(id) => {
+      const i = core.world.intents.find((x) => x.id === id);
+      if (!i) { core.say.toast("that row is gone"); return; }
+      core.nav.openSend(core.send.seedFromIntent(i));
+    }}
+    onDropItem={(id) => liveSend({ t: "backlog.archive", id, archived: true }, "archived — its words are kept; the backlog's archived cut brings it back",
+      "no connection — archiving waits for the link")}
     // Durable on the wire, live on this side (`applyAssessment`).
     onApply={(choices) => { if (run) applyAssessment(run, choices); }}
     onDiscard={() => liveSend({ t: "assess.discard", runId: run?.runId ?? "" }, "proposal discarded — nothing was applied",

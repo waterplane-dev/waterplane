@@ -36,7 +36,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
-import { readIntents } from "./lib-e2e.mjs";
+import { readIntents, waitForHost } from "./lib-e2e.mjs";
 import { E, SLUG, STATE, rootEnv } from "./lib-brand.mjs";
 
 const PORT = 8861;
@@ -115,7 +115,7 @@ const connect = () => new Promise((resolve) => {
 
 // ── 0. A repo to aim at ──────────────────────────────────────────────────
 let host = boot();
-await sleep(1000);
+await waitForHost(PORT);
 const repo = await fetch(`${base}/api/repo`, {
   method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "alpha" }),
 }).then((r) => r.json());
@@ -166,7 +166,7 @@ rmSync(ACKS, { force: true });
 check(!existsSync(ACKS), "the ack ledger is gone — the fast path has forgotten every verdict");
 
 host = boot();
-await sleep(1400);
+await waitForHost(PORT);
 ws = await connect();
 ws.send(JSON.stringify({ t: "intent.list" }));
 await waitFor(() => intents.length > 0, 8000);

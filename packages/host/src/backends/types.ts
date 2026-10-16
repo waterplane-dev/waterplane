@@ -241,6 +241,13 @@ export interface LaunchRequest {
    * fork-at-turn is a file copy done before the launch and never reaches here.
    */
   readonly forkAtTurn?: string;
+  /**
+   * Claude Code permission rules this launch must ASK before running
+   * (`shared/askrules.ts`, already cut for this repo). Only the claude backends
+   * read it (`permissions.ask` in the `--settings` blob); absent/empty ⇒ the
+   * launch is byte-identical to one made before ask rules existed.
+   */
+  readonly askRules?: readonly string[];
 }
 
 export interface LaunchPlan {
@@ -382,6 +389,12 @@ export interface BackendModels {
    * runner is not reachable). The backend is LISTED with it, never hidden.
    */
   readonly unavailable?: string;
+  /**
+   * A sentence about the LIST itself, drawn under the model picker — the
+   * backend still launches ("Copilot lists only Auto for this account").
+   * Never a reason the backend cannot start; that is `unavailable`.
+   */
+  readonly note?: string;
 }
 
 export interface BackendDescriptor {
@@ -413,6 +426,15 @@ export interface BackendDescriptor {
    * model id is a spawn that fails minutes later with nothing to read.
    */
   models(): Promise<BackendModels>;
+  /**
+   * The LOCAL runner this backend's models always run on, when it has one —
+   * data, so the local-model gate (`localslot.ts`) can count its sessions
+   * against the local cap and load the model before an automatic start
+   * without naming a backend id. `"ollama"` = `localrt.ts`'s `ollamaUrl()`,
+   * local exactly when that URL is loopback. Absent = locality is per model
+   * (`models.where`), and nothing is loaded on its behalf.
+   */
+  readonly localRunner?: "ollama";
   /**
    * May `clihealth.ts` file observations about sessions on this backend?
    *

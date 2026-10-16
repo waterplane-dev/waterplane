@@ -15,8 +15,8 @@ const box = (s) => ({
 const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} ≉ ${b}`);
 
 test("a mark gets only the knobs it can use", () => {
-  assert.deepEqual(knobsFor("arrow"), ["move", "size", "turn"]);
-  assert.deepEqual(knobsFor("line"), ["move", "size", "turn"]);
+  assert.deepEqual(knobsFor("arrow"), ["move", "tail", "head"]);
+  assert.deepEqual(knobsFor("line"), ["move", "tail", "head"]);
   assert.deepEqual(knobsFor("rect"), ["move", "size", "turn"]);
   assert.deepEqual(knobsFor("circle"), ["move", "size", "turn"]);
   assert.deepEqual(knobsFor("marker"), ["move", "size"]);
@@ -82,13 +82,33 @@ test("size never shrinks a box below a visible span", () => {
   assert.equal(out.y1 - out.y0, MIN_SPAN_PX);
 });
 
-test("size on an arrow changes its length about the middle and keeps its direction", () => {
-  const s = m("arrow", 100, 100, 200, 100);
+test("size on a highlight band changes its length about the middle and keeps its direction", () => {
+  const s = m("marker", 100, 100, 200, 100);
   const out = applyKnob("size", s, { x: 0, y: 0 }, { x: 10, y: 50 }, 1); // only the along-line part counts
   assert.deepEqual([out.x0, out.y0, out.x1, out.y1], [90, 100, 210, 100]);
 });
 
-test("turn swings an arrow about its middle and keeps its length", () => {
+test("an arrow's end knobs each drag their own end freely and hold the other", () => {
+  const s = m("arrow", 100, 100, 200, 100);
+  assert.deepEqual(applyKnob("head", s, { x: 0, y: 0 }, { x: 30, y: 40 }, 1), m("arrow", 100, 100, 230, 140));
+  assert.deepEqual(applyKnob("tail", s, { x: 0, y: 0 }, { x: -20, y: 60 }, 1), m("arrow", 80, 160, 200, 100));
+});
+
+test("an end pulled onto the other stops a visible span short of it", () => {
+  const s = m("line", 100, 100, 200, 100);
+  const out = applyKnob("head", s, { x: 0, y: 0 }, { x: -99, y: 0 }, 1);
+  near(Math.hypot(out.x1 - out.x0, out.y1 - out.y0), MIN_SPAN_PX);
+  assert.equal(out.x0, 100);
+});
+
+test("an arrow's end knobs hang past their own ends", () => {
+  const s = m("arrow", 300, 500, 600, 500);
+  const places = knobPlaces(s, box(s), 1, 1000, 1000);
+  assert.ok(places.find((p) => p.knob === "head").x > 600);
+  assert.ok(places.find((p) => p.knob === "tail").x < 300);
+});
+
+test("turn swings a segment about its middle and keeps its length", () => {
   const s = m("arrow", 100, 100, 200, 100); // centre 150,100
   const out = applyKnob("turn", s, { x: 150, y: 50 }, { x: 200, y: 100 }, 1); // a quarter-turn clockwise
   near(out.x0, 150); near(out.y0, 50); near(out.x1, 150); near(out.y1, 150);
@@ -99,9 +119,9 @@ test("turn holds still when the finger is on top of the middle", () => {
   assert.deepEqual(applyKnob("turn", s, { x: 150, y: 100 }, { x: 152, y: 99 }, 1), s);
 });
 
-test("every mark with an area can be turned; only the highlight band cannot", () => {
-  for (const t of ["rect", "circle", "blur", "text", "arrow", "line"]) assert.ok(knobsFor(t).includes("turn"), t);
-  assert.ok(!knobsFor("marker").includes("turn"));
+test("every mark with an area can be turned; a segment turns by its ends, the band never", () => {
+  for (const t of ["rect", "circle", "blur", "text"]) assert.ok(knobsFor(t).includes("turn"), t);
+  for (const t of ["arrow", "line", "marker"]) assert.ok(!knobsFor(t).includes("turn"), t);
 });
 
 test("turning a box keeps its points and gives it an angle about its middle", () => {
@@ -142,7 +162,7 @@ function corner(s, sx, sy) {
 
 test("the hint names exactly the knobs the mark wears", () => {
   assert.equal(knobHint("rect"), "Blue moves · orange sizes · green turns");
-  assert.equal(knobHint("arrow"), "Blue moves · orange sets the length · green turns");
+  assert.equal(knobHint("arrow"), "Blue moves · orange drags that end");
   assert.equal(knobHint("marker"), "Blue moves · orange sets the length");
   assert.equal(knobHint("text"), "Blue moves · green turns");
 });

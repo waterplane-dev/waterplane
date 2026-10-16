@@ -55,4 +55,4 @@ export type { ContextLog, SeriesCursor } from "./ctxlog/ctxcursor.js";
 export { updateContextLog } from "./ctxlog/ctxupdate.js";
 export { SPARK_MARKS, SPARK_POINTS, projectContextLog, readContextLog, sparkOf } from "./ctxlog/ctxproject.js";
 export type { AgentFile, AgentRunRaw, AgentUsage } from "./ctxlog/ctxagents.js";
-export { agentCumOf, agentEnvelope, agentUsage, liveAgentOf, thinMax, withAgentRuns } from "./ctxlog/ctxagents.js";
+export { agentCumOf, agentEnvelope, agentSpendAt, agentUsage, liveAgentOf, thinMax, withAgentRuns } from "./ctxlog/ctxagents.js";

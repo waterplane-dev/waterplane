@@ -28,9 +28,27 @@
  * degrades to null by design and therefore fails in silence, which is how a 22%
  * delivery-confirmation failure ran for a week with nobody told. This is the
  * telling.
+ *
+ * `burn` sits right after `limit` because it is the limit's early warning: the
+ * weekly figure is climbing faster than a threshold (`shared/burn.ts`). Default
+ * ON — it fires at most once per cooldown and never twice for one stretch, so
+ * it is not `idle`'s class — and it is words only: nothing is paused.
+ *
+ * `approval` sits right after `prompt` because it is the same class: a plugin's
+ * request a person must approve NOW (a vault fingerprint), urgent like a waiting
+ * question. It is its own kind and not `plugin` so the phone can give it the
+ * loud channel while a plugin's ordinary "FYI" stays quiet. Default ON.
+ *
+ * `followup` sits right after `backlog`: a session was flagged for follow up
+ * WITHOUT a tap — its launch option on finishing, or its own agent with a
+ * reason (`followup.ts`). Default ON; a flag set by hand sends none.
+ *
+ * `health` sits after `followup`: a repo's health index (`healthindex.ts`)
+ * made a move unusual for that repo's own past. Default ON — it fires on a
+ * called move only, at most one per repo per week — and words only.
  */
 export const NOTIFICATION_KINDS = [
-  "prompt", "limit", "cli", "undelivered", "backlog", "artifact", "image", "plugin", "autofire", "idle", "info",
+  "prompt", "approval", "limit", "burn", "cli", "undelivered", "backlog", "followup", "health", "artifact", "image", "plugin", "autofire", "idle", "info",
 ] as const;
 
 /** Kind of in-app notification (drives the icon shown). */
@@ -111,4 +129,10 @@ export interface NotificationItem {
    * the sentence and the cut the tap opens come from one place.
    */
   backlog?: { cwd: string; ids: string[] };
+  /**
+   * The id of the plugin that posted this. Filled by the HOST from the
+   * registry entry, never taken from the plugin's own words. A tap opens that
+   * plugin's screen (a vault ask has no session to focus).
+   */
+  plugin?: string;
 }

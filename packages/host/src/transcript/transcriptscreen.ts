@@ -14,7 +14,7 @@ export const CHROME = [
   /^[\s]*[─━—=]{5,}[\s]*$/,          // the composer's own rules
   /^[\s]*[❯>][\s]*$/,                // the empty composer
   /^[\s]*\[[A-Z0-9 _-]{2,}\][\s]*$/, // status tags the statusline draws
-  /^[\s]*(⏵⏵|⏵)\s/,                  // permission-mode line
+  /^[\s]*(⏵⏵|⏵|⏸)\s/,                // permission-mode line (⏸ = plan / manual; permmode.ts)
   /to scroll|to copy|to fork|to close|to expand|to cycle|to interrupt/i,
   /^[\s]*$/,
 ];

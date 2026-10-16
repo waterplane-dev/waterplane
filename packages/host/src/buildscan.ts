@@ -27,6 +27,7 @@
  * read, parsed by nobody and quietly ignored — the two lists widen together.
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readFile as readFileAsync, readdir as readdirAsync, stat as statAsync } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import type { BuildCandidate, BuildConfig, ScannedFile } from "@waterplane/shared";
 import { SKIP_DIRS, scanCandidates } from "@waterplane/shared";
@@ -104,6 +105,45 @@ function collect(repoDir: string): ScannedFile[] {
 }
 
 /**
+ * `collect` without holding the event loop — the same walk, caps and files, every call awaited.
+ * For the unattended setup sweep (`compliance.ts`' `inspectRepoAsync`): 400 synchronous listings
+ * over 9P (WSL reading a Windows drive) held the loop for seconds per big repo.
+ */
+async function collectAsync(repoDir: string): Promise<ScannedFile[]> {
+  const out: ScannedFile[] = [];
+  let dirs = 0;
+  const push = async (abs: string) => {
+    try {
+      if ((await statAsync(abs)).size > MAX_FILE) return;
+      out.push({ path: relative(repoDir, abs).split(sep).join("/"), text: await readFileAsync(abs, "utf8") });
+    } catch { /* as in `collect` */ }
+  };
+  const walk = async (abs: string, depth: number): Promise<void> => {
+    if (dirs++ >= MAX_DIRS) return;
+    let entries: import("node:fs").Dirent[];
+    try { entries = await readdirAsync(abs, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (e.isDirectory()) {
+        if (SKIP_DIRS.has(e.name) || e.name.startsWith(".")) continue;
+        if (depth < MAX_DEPTH) await walk(join(abs, e.name), depth + 1);
+        continue;
+      }
+      if (!e.isFile() && !e.isSymbolicLink()) continue;
+      if (MANIFESTS.has(e.name)) await push(join(abs, e.name));
+      else if (isScript(e.name) && (depth === 0 || abs.endsWith(`${sep}scripts`) || abs.endsWith(`${sep}bin`))) await push(join(abs, e.name));
+    }
+  };
+  await walk(repoDir, 0);
+  try {
+    const wf = join(repoDir, ".github", "workflows");
+    for (const e of await readdirAsync(wf, { withFileTypes: true })) {
+      if (e.isFile() && /\.ya?ml$/.test(e.name)) await push(join(wf, e.name));
+    }
+  } catch { /* no CI here */ }
+  return out;
+}
+
+/**
  * What this repo describes, as candidates for the Build sheet's editor.
  *
  * `existing` only marks rows that are already configured — it never removes
@@ -111,4 +151,9 @@ function collect(repoDir: string): ScannedFile[] {
  */
 export function scanRepoBuilds(repoDir: string, existing: BuildConfig[] = []): { candidates: BuildCandidate[]; total: number } {
   return scanCandidates(collect(repoDir), existing);
+}
+
+/** `scanRepoBuilds` off `collectAsync`: the same answer, the loop never held for the walk. */
+export async function scanRepoBuildsAsync(repoDir: string, existing: BuildConfig[] = []): Promise<{ candidates: BuildCandidate[]; total: number }> {
+  return scanCandidates(await collectAsync(repoDir), existing);
 }

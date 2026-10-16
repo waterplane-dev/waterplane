@@ -19,6 +19,8 @@ import {
   type NotificationItem,
   type NotificationKind,
   type PeerKind,
+  type ClientRole,
+  roleAllows,
 } from "@waterplane/shared";
 import type { ServerCtx } from "./ctx.js";
 import { WIRE, recordWireFrame } from "../wirerecord.js";
@@ -42,6 +44,9 @@ export function createClients(deps: ClientsDeps) {
   /** The ledger device a socket authenticated as (only when it presented a
    *  valid token), so a revoke can close exactly that device's sockets. */
   const wsDevice = new WeakMap<WebSocket, string>();
+  /** A socket's declared role (`shared/wire/notifylink.ts`): set at the upgrade
+   *  off the User-Agent, overridden by `hello.role`. Absent ⇒ a full client. */
+  const wsRole = new WeakMap<WebSocket, ClientRole>();
 
   function authStateFor(kind: PeerKind): AuthState {
     return { enabled: auth.isEnabled(), gateTailscale: auth.gateTailscale(), canManage: auth.canManage(kind) };
@@ -99,8 +104,7 @@ export function createClients(deps: ClientsDeps) {
   /**
    * Is anybody looking at this session right now?
    *
-   * The exemption that matters for both automatic closes (`reapAutoSession`,
-   * `lingerSweep`): a session with a socket on it is a session somebody has on
+   * The exemption that matters for the automatic close (`lingerSweep`): a session with a socket on it is a session somebody has on
    * screen, and nothing this host does on its own initiative may close one. Asked
    * fresh each time rather than cached — attachments change with every tap.
    */
@@ -108,7 +112,11 @@ export function createClients(deps: ClientsDeps) {
     return attachedIds().has(id);
   }
 
+  /** THE filter for a notify link: every frame to every socket passes here, so
+   *  the background link is sent its allow-list and nothing else — no call site
+   *  has to remember it. Each frame dropped is a radio wakeup the phone keeps. */
   function send(ws: WebSocket, msg: HostMessage): void {
+    if (!roleAllows(wsRole.get(ws), msg.t)) return;
     if (ws.readyState === ws.OPEN) { if (WIRE) recordWireFrame("out", msg); ws.send(encode(msg)); }
   }
 
@@ -120,7 +128,7 @@ export function createClients(deps: ClientsDeps) {
   const notifications: NotificationItem[] = [];
   /** Fire a notification: record it in-app, broadcast it, AND send an OS push.
    *  The in-app feed is the source of truth; OS push is best-effort on top. */
-  function notify(kind: NotificationKind, p: { title: string; body: string; sessionId?: string; tag?: string; image?: { repoId: string; relPath: string }; file?: { repoId: string; relPath: string; name: string; size: number; mtime?: number }; pull?: string; backlog?: { cwd: string; ids: string[] } }): void {
+  function notify(kind: NotificationKind, p: { title: string; body: string; sessionId?: string; tag?: string; image?: { repoId: string; relPath: string }; file?: { repoId: string; relPath: string; name: string; size: number; mtime?: number }; pull?: string; backlog?: { cwd: string; ids: string[] }; plugin?: string }): void {
     // A muted kind is dropped WHOLE: no feed row, no broadcast, no push. Recording
     // it and hiding it client-side would still buzz the phone, and would still
     // bury the two kinds a person actually has to answer.
@@ -130,15 +138,19 @@ export function createClients(deps: ClientsDeps) {
     // Fetch from the push handler with the app closed, so dropping it would
     // silently turn auto-pull off for anyone who muted "artifact".
     if (!p.pull && !notifyPrefs.enabled(kind)) return;
-    const item: NotificationItem = { id: randomUUID().slice(0, 8), ts: Date.now(), kind, title: p.title, body: p.body, sessionId: p.sessionId, image: p.image, file: p.file, backlog: p.backlog };
+    const item: NotificationItem = { id: randomUUID().slice(0, 8), ts: Date.now(), kind, title: p.title, body: p.body, sessionId: p.sessionId, image: p.image, file: p.file, backlog: p.backlog, plugin: p.plugin };
     notifications.unshift(item);
     if (notifications.length > 100) notifications.length = 100;
     broadcast({ t: "notification", item });
     void push.notify(p);
   }
 
+  // A passive device's PIN unlock ending (expiry, "Lock now") closes its
+  // sockets, so an open WebSocket never outlives the unlock (`passive.ts`).
+  auth.passive.onRelock = (id) => { closeDevice(id); };
+
   return {
-    attached, clients, wsKind, wsToken, wsDevice, closeDevice,
+    attached, clients, wsKind, wsToken, wsDevice, wsRole, closeDevice,
     authStateFor, enforceAuth, broadcastAuthState, recomputeWatched,
     attachedIds, isAttachedToSomeone,
     send, broadcast,

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ledgerBackends, kindRows, ledgerHero, ledgerAbsent, unitHero, recentDays, dayWords, turnsWords, scopeWords, costLines } from "./backendLedger.ts";
+import { ledgerBackends, kindRows, tokenDayPoints, unitDayPoints, modelRows, ledgerHero, ledgerAbsent, unitHero, recentDays, dayWords, turnsWords, scopeWords, costLines } from "./backendLedger.ts";
 
 const doc = (over = {}) => ({
   available: true, totals: { kinds: { input: 30, output: 10, cacheRead: 60 }, turns: 4 },
@@ -114,4 +114,24 @@ test("money: one total per currency, a loopback zero says it runs here, an unpri
   assert.match(c.lines[2].text, /runs on this machine/);
   assert.deepEqual(c.lines[3], { key: "q", text: "q: no price — add …", priced: false });
   assert.deepEqual(c.problems, ["\"x\": bad"]);
+});
+
+test("day points are the per-day totals of the kinds, oldest first, on local midnight", () => {
+  const pts = tokenDayPoints(doc({ days: [
+    { day: "2026-10-02", kinds: { input: 1, output: 2 }, turns: 1 },
+    { day: "2026-10-01", kinds: {}, turns: 0 },
+  ] }));
+  assert.deepEqual(pts.map((p) => [p.day, p.v]), [["2026-10-01", 0], ["2026-10-02", 3]]);
+  assert.equal(pts[0].t, new Date(2026, 9, 1).getTime());
+  assert.deepEqual(unitDayPoints([{ day: "2026-10-15", n: 5 }, { day: "2026-10-02", n: 0 }]).map((p) => p.v), [0, 5]);
+});
+
+test("model rows: one bar per model by its token sum, largest first, empty models dropped", () => {
+  const rows = modelRows(doc({ models: [
+    { key: "a", label: "small", kinds: { input: 10 }, turns: 1 },
+    { key: "b", label: "big", kinds: { input: 30, output: 60 }, turns: 2 },
+    { key: "c", label: "idle", kinds: {}, turns: 0 },
+  ] }));
+  assert.deepEqual(rows.map((r) => [r.kind, r.n]), [["big", 90], ["small", 10]]);
+  assert.equal(rows[0].share, 0.9);
 });

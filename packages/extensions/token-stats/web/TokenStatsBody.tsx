@@ -1,12 +1,14 @@
 /** Everything the screen draws, given a document: all of the sheet's state and derivations, the skeleton, and the contributed tabs. */
-import { Headline } from "./Headline.tsx";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { BarChart3, Loader, RefreshCw } from "lucide-react";
 import {
-  coldStartText, type CostBreakdown, cumulative, dayToMs, hourToMs,
+  coldStartText, type CostBreakdown, type CostWindowDoc, cumulative, dayToMs, hourToMs, ptsCalibration, ptsText,
+  rankRepos, repoRowAsGroup, weekUsdPerPct,
   type TokenConvo, type TokenStatsDoc, tokenTotal, type TokenTotals, type TokenWindowsDoc,
   type TokenWindowSeries, type UsageHistoryDoc, type UsageInfo, zeroCost, zeroTotals, fmtCount,
+  hasScrapedWindows, periodStates, windowStartHour, type BillingProfile, type PeriodState, type UsageBudget,
 } from "@waterplane/shared";
+import { periodCap, periodReadSpan, primaryUsdPeriod } from "@waterplane/sdk";
 import { InsightsPanel, ScopeCard, ScopeTag } from "./TokenInsights.tsx";
 import { statsInsights } from "./statsInsights.ts";
 import {
@@ -16,10 +18,16 @@ import {
 import { ledgers, type LedgerViewParts } from "@waterplane/sdk";
 import {
   type DayPoint, Empty, fillMix, fillSeries, HOUR_MS, hourPoints, modelBands, type ResourceState,
-  rollingMean, SheetHead, shiftWeek, useBoxWidth, useRemoteResource, weekBounds, type WeekDay,
-  weekDays, weekStart, weekTotals,
+  rollingMean, SheetHead, useBoxWidth, useRemoteResource,
 } from "@waterplane/kit";
-import { type RangeId, RANGES, type SourceId, TREND_DAYS } from "./constants.ts";
+import { FETCH_HOURS, type SourceId, TREND_DAYS } from "./constants.ts";
+import {
+  clockOf, COST_WINDOW_DAYS, dayKeyOf, daysCut, hoursCover, isLiveSpan, spanDayCount, spanDays, spanHours, spanRange,
+  SPANS, type SpanSel,
+} from "./span.ts";
+import { WeekCard } from "./WeekCard.tsx";
+import { PeriodCard } from "./PeriodCard.tsx";
+import { convoInWeek, docFor, foldStateText, scopeSpan, weekSpan } from "./weekBands.ts";
 import { type WindowScope } from "./WindowHeats.tsx";
 import { LimitWindows } from "./LimitWindows.tsx";
 import { BackendLedgerView } from "./BackendLedgerView.tsx";
@@ -29,7 +37,9 @@ import { TotalsCard } from "./TotalsCard.tsx";
 import { AllBackendsView } from "./AllBackendsView.tsx";
 import { LocalRunnerView } from "./LocalRunnerView.tsx";
 import { showRunnerTab } from "./localRunner.ts";
-import type { LocalUsageDoc } from "@waterplane/shared";
+import { readingAfterResets, type LocalUsageDoc, type UsageReading } from "@waterplane/shared";
+import { SourceWindows } from "./SourceWindows.tsx";
+import { openedOnFor, openedTarget, READING_TAB, readingChips, readingForLedger } from "./sourceWords.ts";
 import { allNoteText, splitLocal, splitNoteText } from "./localSplit.ts";
 
 /** The overview's key on the ledger-tab state — not a backend id (those match `^[a-z]`). */
@@ -38,8 +48,28 @@ const ALL_TAB = "*all";
 const RUNNER_TAB = "*runner";
 import { OverTimeCard } from "./OverTimeCard.tsx";
 
+/**
+ * Scrolls the source row so a lit chip is in sight. The row scrolls rather than wraps, so a tap that
+ * opened the sheet on a source far down it (Copilot, past three Claude chips) lit a chip off the
+ * right edge. A stable callback ref — no hook (the order is pinned) — runs when a chip BECOMES lit;
+ * only the row moves, never the page.
+ */
+const revealChip = (el: HTMLButtonElement | null) => {
+  const row = el?.parentElement;
+  if (!el || !row) return;
+  const l = el.offsetLeft - row.offsetLeft;
+  if (l < row.scrollLeft || l + el.offsetWidth > row.scrollLeft + row.clientWidth) row.scrollLeft = Math.max(0, l - 16);
+};
+
 /** This sheet's own widgets, lent to every contributed tab (`LedgerViewParts`). */
 const PARTS: LedgerViewParts = { DayChart, ScopeCard, ScopeTag };
+
+/** What the core knows about the account's billing: the profile, and the budget with its dollar periods. */
+export interface SpendView {
+  profile: BillingProfile | null;
+  budget: UsageBudget | null;
+  periods: PeriodState[] | null;
+}
 
 /**
  * Everything the screen DRAWS, given a document.
@@ -54,7 +84,13 @@ const PARTS: LedgerViewParts = { DayChart, ScopeCard, ScopeTag };
  * that can be skipped on a chart — three real bugs in this app's other chart
  * were found by exactly that and by nothing else.
  */
-export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, usageHistory, online = true, onRefreshUsage, onClose, onRescan, initialRange = "30", initialSource = "claude", ledgerTabs = [], fresh = 0, nameOf, onExplain, isLive, onOpenConvo }: {
+export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, usageHistory, online = true, onRefreshUsage, onClose, onRescan, initialSpan = { id: "week", back: 0 }, initialSource = "claude", ledgerTabs = [], fresh = 0, nameOf, onExplain, isLive, onOpenConvo, readings, openedOn = null, onClearOn }: {
+  /** The usage readings per source (`world.usageReadings`): a source with one and no ledger gets a chip (`SourceWindows`). */
+  readings?: readonly UsageReading[];
+  /** The source the launcher chip's tap filtered this sheet to; null for a lone-claude tap or a plain open. */
+  openedOn?: string | null;
+  /** The `all` button: forget `openedOn` (the core's `clearTokensOn`). */
+  onClearOn?: () => void;
   doc: TokenStatsDoc | null;
   /** Just enough of the read for `Empty` to word itself; a preview passes a
    *  settled one — which is why `inflight` is optional here and absent means
@@ -69,6 +105,8 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, usageHist
   /** Both live windows, or null when nothing has been scraped yet. Optional so
    *  a static render of the charts needs no host snapshot. */
   usage?: UsageInfo | null;
+  /** The billing profile and dollar periods. Absent (a static render, an older core) = a subscription's screen as ever. */
+  spend?: SpendView;
   /** A kept-readings history to draw instead of reading one — static renders
    *  only, same reason as `initialRange`. */
   usageHistory?: UsageHistoryDoc | null;
@@ -81,7 +119,7 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, usageHist
   /** Which window the charts open on. Only a static render passes it — the
    *  "render it and look at it" step cannot click a filter chip, and a chart
    *  nobody can see rendered is a chart nobody checked. */
-  initialRange?: RangeId;
+  initialSpan?: SpanSel;
   /** Which source the screen opens on. Same reason as `initialRange`, and the
    *  same rule: nothing in the app passes it, so every real open starts on
    *  Claude. */
@@ -141,7 +179,15 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, usageHist
    * silently showing a different ledger than the one whose numbers you remember
    * is a screen you cannot trust at a glance.
    */
-  const [source, setSource] = useState<SourceId>(initialSource);
+  // Reading-only sources (a quota with no ledger): one chip each, only while the reading exists.
+  const chips = readingChips(readings, [...guests.map((g) => g.def.id), ...ledgerTabs.map((t) => t.id)]);
+  // Where the tap that opened this sheet lands — a guest view, a ledger tab or a reading chip (`openedTarget`).
+  // Pure and re-derived each render (no hook of its own — the hook order is pinned); only the initializers read it.
+  const target = openedTarget(openedOn, {
+    guests: guests.map((g) => g.def.id), ledgers: ledgerTabs.map((t) => t.id), chips: chips.map((c) => c.source),
+    backendOf: (readings ?? []).find((r) => r.source === openedOn)?.backend ?? null,
+  });
+  const [source, setSource] = useState<SourceId>(() => (initialSource !== "claude" ? initialSource : target.source));
   /**
    * Whether the choice exists at all.
    *
@@ -161,8 +207,19 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, usageHist
   const view: SourceId = guest ? source : "claude";
   // A generic backend ledger, picked by id. Its own state beside `source`
   // because SourceId is a closed pair; a tab that left the list falls back.
-  const [extraId, setExtraId] = useState<string | null>(null);
+  const [extraId, setExtraId] = useState<string | null>(target.extraId);
   const extra = ledgerTabs.find((t) => t.id === extraId) ?? null;
+  // A reading chip that vanished under the view falls back to Claude, like a guest that went away.
+  const readingChip = extraId?.startsWith(READING_TAB) ? chips.find((c) => READING_TAB + c.source === extraId) ?? null : null;
+  const viewing: string | null = readingChip ? readingChip.source
+    // A ledger tab the tap opened is "viewing" the tapped SOURCE (source and backend may be named apart).
+    : extra ? (extra.id === target.extraId && openedOn ? openedOn : extra.id) : extraId ? null : guest ? source : "claude";
+  const readingRaw = readingChip ? (readings ?? []).find((r) => r.source === readingChip.source) : undefined;
+  const readingNow = readingRaw ? readingAfterResets(readingRaw, Date.now()) : null;
+  // The tapped source, held HERE: `all` must take the line away at once, and the prop is a snapshot
+  // the core does not re-render this sheet for (a stale prop kept the line up after the tap).
+  const [on, setOn] = useState<string | null>(openedOn ?? null);
+  const onText = openedOnFor(on, viewing, readings);
   /** The "All backends" overview rides on the same id state, under a key no
    *  backend can have (ids are `^[a-z]`). */
   const overview = extraId === ALL_TAB;
@@ -172,7 +229,7 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, usageHist
   const runnerRes = useRemoteResource<LocalUsageDoc>(`localusage:${fresh}`, () => ledgers.localUsage(), { offline: !online });
   const showRunner = showRunnerTab(runnerRes.data);
   const runner = extraId === RUNNER_TAB && showRunner;
-  const showPicker = showSource || ledgerTabs.length > 0 || showRunner;
+  const showPicker = showSource || ledgerTabs.length > 0 || showRunner || chips.length > 0;
   /**
    * Tokens or money. One switch for the whole screen rather than a second set
    * of charts: they answer the same questions of the same data, and the two
@@ -224,88 +281,154 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, usageHist
    */
   const [dayShape, setDayShape] = useState<"bars" | "area">("bars");
   const [hourShape, setHourShape] = useState<"bars" | "area">("bars");
-  const [range, setRange] = useState<RangeId>(initialRange);
   /**
-   * Which LIVE rate-limit window the READOUTS are cut to — a different
-   * decision from `range`, which scopes the time charts, and deliberately a
-   * different control.
+   * The ONE span every section under the sticky bar follows (2026-10-15, `span.ts`): a live
+   * rate-limit window (stepped back with `back`), a run of calendar days ending today, or all time.
+   * It replaced the Totals box's live-window chips, the Over time box's calendar chips and week
+   * stepper, and the all-time-only sections — about eight frames on one screen, which the owner
+   * could not read against each other. The limit bars and the week's hour chart above the bar
+   * are the one exception: they are always now.
    *
-   * State and not persisted, the same rule the rest of this screen follows: a
-   * scope is the tap, not a setting made days ago and shown nowhere. It
-   * matters more here than anywhere else on the screen, because a hero figure
-   * silently standing for five hours instead of four months is the most
-   * misleading thing this file can print.
-   *
-   * It carries WHICH window as well as which kind (`back`, 0 being the one
-   * running now), because the heat grids below scope to a window that closed
-   * days ago and every sentence under the hero has to know which one it is
-   * describing. `null` is all time — an absent scope rather than a magic
-   * string, so a new window kind cannot be spelled two ways.
+   * State and not persisted, the rule every scope here follows: a scope is the tap, not a setting
+   * made days ago and shown nowhere. It OPENS on the week since its reset — "where did the week
+   * go" is the question this screen is opened with; a week that cannot be cut falls to all time.
    */
-  const [scope, setScope] = useState<WindowScope>(null);
-  // Which week the week view is looking at, as the Monday's local midnight.
-  // Null until the scan lands, because the sensible opening week is the last
-  // one with anything in it — a screen that opens on an empty current week
-  // reads as "nothing was ever recorded" on a Monday morning.
-  const [weekAt, setWeekAt] = useState<number | null>(null);
+  const [span, setSpan] = useState<SpanSel>(initialSpan);
+  /** The live window the span names, in the shape the heat grids and the stepper speak. */
+  const scope: WindowScope = isLiveSpan(span.id) ? { id: span.id, back: span.back } : null;
+  const setScope = (x: WindowScope) => setSpan(x ? { id: x.id, back: x.back } : { id: "all", back: 0 });
 
   const [width, boxRef] = useBoxWidth();
 
-  // The filter row scopes the TIME charts only. It is applied by dropping days
-  // off the front, so the cumulative curve inside a window starts at that
-  // window's own zero — a running total that began before the left edge would
-  // draw a cliff at the first point and mean nothing.
-  const allDays = doc?.days ?? [];
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on `doc`: `allDays` is `doc?.days ?? []`, a new array each render when absent
-  const bounds = useMemo(() => weekBounds(allDays, Date.now()), [doc]);
-  // The opening week: the last one that had activity, clamped into the range
-  // the stepper can reach. Re-seeded only while unset, so a rescan does not
-  // yank the view back off the week being read.
-  const week = weekAt ?? (doc?.lastAt != null ? weekStart(doc.lastAt) : bounds.last);
-  useEffect(() => {
-    if (weekAt == null && doc) setWeekAt(week);
-  }, [doc, weekAt, week]);
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on `doc`: `allDays` is `doc?.days ?? []`, a new array each render when absent
-  const weekRows: WeekDay[] = useMemo(() => weekDays(allDays, week), [doc, week]);
-  const wTotals = useMemo(() => weekTotals(weekRows), [weekRows]);
-  const prevTotals = useMemo(
-    () => weekTotals(weekDays(allDays, shiftWeek(week, -1))),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on `doc`: `allDays` is `doc?.days ?? []`, a new array each render when absent
-    [doc, week],
+  /**
+   * Both live windows, cut out of the hour buckets — or the reason each cannot
+   * be. Computed once here and handed BOTH to the limit rows (which print the
+   * figure) and to the scope chips (which take the cut), so the number on the
+   * control and the view it opens are one call to `windowCut`.
+   *
+   * `Date.now()` is read INSIDE, once, so the rollover test compares both
+   * windows against one instant. The deps are the two things that can move it:
+   * a rescan and a fresh `/usage` scrape.
+   */
+  const cuts = useMemo(() => new Map<LiveWindowId, WindowCut | CutRefusal>(
+    LIVE_WINDOWS.map((w) => [w.id, windowCut(w, doc, usage ?? null, Date.now())]),
+  ), [doc, usage]);
+  /**
+   * The cut on screen, or null. A chip whose window stopped being answerable
+   * under it — a rescrape that rolled over, a rescan against a host with no
+   * hours — falls back to all-time rather than painting an empty readout that
+   * cannot be left, exactly as `view` does for a source that went away.
+   */
+  /**
+   * The grids of PAST windows, folded by the host.
+   *
+   * A second read, and the reason is in `usageCut.ts`: the document carries a
+   * bounded fortnight of hour buckets, so this side can cut the window running
+   * now and nothing older, while the host keeps every hour it ever saw. The
+   * grid goes UP (the anchors are the scraped reset instants, the lengths are
+   * `LIVE_WINDOWS`') so the two windows' semantics stay in one place.
+   *
+   * Re-read when a scrape moves an anchor — a rolled-over window is a different
+   * grid, not the same one shifted — and skipped entirely with no anchors or a
+   * dead socket, where it could only time out.
+   */
+  const specs = useMemo(() => windowSpecs(usage ?? null), [usage]);
+  const hist = useRemoteResource<TokenWindowsDoc>(
+    `tokenwindows:${specs.map((sp) => `${sp.id}@${sp.anchor}`).join(",")}:${doc?.scannedAt ?? 0}`,
+    () => ledgers.tokenWindows(specs),
+    { enabled: specs.length > 0, offline: !online },
   );
+  // The kept `/usage` readings: one read for the limit charts AND the week card's calibration
+  // (two reads of one log are two instants drawn as one). Re-read when a new scrape lands.
+  const usageRead = useRemoteResource<UsageHistoryDoc>(
+    `usagelog:${usage?.checkedAt ?? 0}`,
+    () => ledgers.usageLog(FETCH_HOURS),
+    { enabled: !usageHistory, offline: !online },
+  );
+  const history = usageHistory ?? usageRead.data;
+  // The week since its reset, folded by the host (`/api/costwindow`) — the week card, the
+  // calibration and, under the live week, the Totals box's repo split all read this one document.
+  const wk = weekSpan(usage, Date.now());
+  const weekRead = useRemoteResource<CostWindowDoc>(
+    `weekcost:${wk?.key ?? "none"}:${fresh}`,
+    () => ledgers.costWindow(wk!.from, Date.now(), fresh > 0),
+    { enabled: !!wk, offline: !online },
+  );
+  const weekDoc = docFor(weekRead.data, wk?.from ?? null);
+  // An account with no weekly window (API key, Bedrock, Vertex) has no week to explain and no limit
+  // bars to draw; its screen leads with the dollar period instead. Any host with a dollar period
+  // configured gets that card too, beside the week's.
+  const scraped = hasScrapedWindows(spend?.profile);
+  const periodNow = Date.now();
+  const periodState: PeriodState | null = useMemo(() => {
+    const configured = primaryUsdPeriod(spend?.periods, spend?.budget);
+    if (configured || scraped) return configured;
+    // Nothing configured on such an account: the calendar month, so the card has an answer before
+    // the person has set anything up (no cap, and no chip — the chip needs a measured period).
+    return periodStates([{ id: "month", kind: "calendar", unit: "usd", cycle: "month", anchorDay: 1, tz: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC" }], periodNow)[0];
+  }, [spend?.periods, spend?.budget, scraped, Math.floor(periodNow / 60_000)]); // eslint-disable-line react-hooks/exhaustive-deps -- the minute is the fact; `periodNow` is rebuilt each render
+  const periodSpan = periodState ? periodReadSpan(periodState, periodNow) : null;
+  const periodFrom = periodSpan && "from" in periodSpan ? windowStartHour(periodSpan.from) : null;
+  const periodRead = useRemoteResource<CostWindowDoc>(
+    `periodcost:${periodState?.period.id ?? "none"}:${periodFrom ?? "none"}:${fresh}`,
+    () => ledgers.costWindow(periodFrom!, Date.now(), fresh > 0),
+    { enabled: periodFrom != null, offline: !online },
+  );
+  const periodDoc = docFor(periodRead.data, periodFrom);
+  /** One grid per window kind, by id — absent for a host too old to know the
+   *  route, which leaves the screen exactly as it was before this existed. */
+  const grids = useMemo(() => new Map<LiveWindowId, TokenWindowSeries>(
+    (hist.data?.series ?? [])
+      .filter((se): se is TokenWindowSeries & { id: LiveWindowId } => se.id === "session" || se.id === "week")
+      .map((se) => [se.id, se]),
+  ), [hist.data]);
 
-  const days = useMemo(() => {
-    const all = doc?.days ?? [];
-    // `src` carries the per-model split and the subagent launches through the
-    // week view; a day the scan never saw has neither, stated as empty.
-    if (range === "week") {
-      return weekRows.map((d) => ({
-        day: d.day, ...d.totals, cost: d.cost,
-        byModel: d.src?.byModel ?? [], agents: d.src?.agents ?? [],
-      }));
-    }
-    const n = RANGES.find((r) => r.id === range)?.days ?? 0;
-    return n > 0 ? all.slice(-n) : all;
-  }, [doc, range, weekRows]);
+  /**
+   * The cut on screen, or null.
+   *
+   * A window the host folded is preferred for EVERY box including the live one,
+   * so the grid and the readouts under it cannot answer differently about the
+   * box they share; they agree by construction anyway (the host folds under the
+   * same hour rule this side applies), and the fallback is what keeps an older
+   * host drawing the live window exactly as it did.
+   *
+   * A scope whose window stopped being answerable under it — a rescrape that
+   * rolled over, a rescan against a host with no hours — falls back to all-time
+   * rather than painting an empty readout that cannot be left, exactly as
+   * `view` does for a source that went away.
+   */
+  const picked = useMemo(() => {
+    if (!isLiveSpan(span.id)) return undefined;
+    const spec = LIVE_WINDOWS.find((w) => w.id === span.id);
+    if (!spec) return undefined;
+    const grid = grids.get(span.id) ?? null;
+    const fromGrid = grid ? seriesCut(spec, grid, span.back, doc?.models ?? []) : null;
+    if (fromGrid && isCut(fromGrid)) return fromGrid;
+    return span.back === 0 ? cuts.get(span.id) : (fromGrid ?? undefined);
+  }, [span, grids, cuts, doc]);
+  const active = picked && isCut(picked) ? picked : null;
+  /**
+   * What the span covers. A live span that cannot be cut (no reset instant, a rolled-over scrape,
+   * an hour record too short) has no instants and falls to ALL TIME — the limit block above says
+   * why in a sentence, and the bar lights the chip that is actually in force.
+   */
+  const effId = isLiveSpan(span.id) && !active ? "all" : span.id;
+  const range = useMemo(() => spanRange({ id: effId, back: span.back }, active, Date.now()), [effId, span.back, active]);
+  /** The day rows the span touches — calendar days, its first and last counted whole. */
+  const days = useMemo(() => spanDays(doc?.days ?? [], range), [doc, range]);
+  const calDays = spanDayCount(effId);
 
   const daily: DayPoint[] = useMemo(
     () => days.map((d) => ({ day: d.day, t: dayToMs(d.day), v: valueOf(d) })),
     [days, valueOf],
   );
-  // A running total is only drawn over days that have HAPPENED. In week mode
-  // the seven columns run to Sunday whether or not the week is over — the
-  // frame is the point — but carrying the cumulative line flat across days
-  // still in the future states that nothing was used on them, which is a
-  // reading of the data rather than the absence of one.
-  const running: DayPoint[] = useMemo(() => {
-    const today = weekStart(Date.now()) === week && range === "week"
-      ? new Date(new Date().setHours(0, 0, 0, 0)).getTime()
-      : Infinity;
-    const past = daily.filter((d) => d.t <= today);
-    return cumulative(past.map((d) => ({ day: d.day, total: d.v })))
-      .map((d) => ({ day: d.day, t: dayToMs(d.day), v: d.sum }));
-  }, [daily, range, week]);
+  // The running total starts at the span's own zero — a total that began before the left edge
+  // would draw a cliff at the first point and mean nothing.
+  const running: DayPoint[] = useMemo(
+    () => cumulative(daily.map((d) => ({ day: d.day, total: d.v })))
+      .map((d) => ({ day: d.day, t: dayToMs(d.day), v: d.sum })),
+    [daily],
+  );
 
   /**
    * The 7-day mean, computed over the WHOLE day series and clipped to the
@@ -357,29 +480,15 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, usageHist
   );
 
   /**
-   * The hours to draw, scoped by the SAME filter row as everything else.
-   *
-   * The host only ships a recent window of hours (`hoursFrom`), so a range the
-   * window does not reach back to is answered with a sentence rather than with
-   * a chart of the part it happens to have — a 90-day chip showing 14 days of
-   * hours would be a chart lying about its own extent.
+   * The hours inside the span, cut exactly. The host keeps a bounded window of hours
+   * (`hoursFrom`), so a span reaching further back is drawn from where the record starts AND says
+   * so (`hourNote`) — never a chart quietly narrower than its tag.
    */
-  const hourRows = useMemo(() => {
-    const all = doc?.hours ?? [];
-    if (!all.length) return [];
-    if (range === "week") {
-      const keys = new Set(weekRows.map((d) => d.day));
-      return all.filter((h) => keys.has(h.hour.slice(0, 10)));
-    }
-    // The same window as every other chart in its box: the day chips cut the
-    // hours too, so a chip in the box's head never leaves one chart unmoved.
-    const n = RANGES.find((r) => r.id === range)?.days ?? 0;
-    if (n > 0 && days.length) {
-      const from = days[0].day;
-      return all.filter((h) => h.hour.slice(0, 10) >= from);
-    }
-    return all;
-  }, [doc, range, weekRows, days]);
+  const hourRows = useMemo(() => spanHours(doc?.hours ?? [], range, hourToMs), [doc, range]);
+  const hoursWhole = hoursCover(doc?.hoursFrom, range);
+  const hoursFromWords = doc?.hoursFrom != null
+    ? new Date(doc.hoursFrom).toLocaleDateString(undefined, { day: "numeric", month: "short" })
+    : null;
 
   const hourly: DayPoint[] = useMemo(
     () => hourPoints(hourRows, (h) => valueOf(h), hourToMs),
@@ -414,92 +523,52 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, usageHist
   const dayArea = dayShape === "area" && dayAreaOk;
   const hourArea = hourShape === "area" && !!hourlyFilled;
 
-  /**
-   * Both live windows, cut out of the hour buckets — or the reason each cannot
-   * be. Computed once here and handed BOTH to the limit rows (which print the
-   * figure) and to the scope chips (which take the cut), so the number on the
-   * control and the view it opens are one call to `windowCut`.
-   *
-   * `Date.now()` is read INSIDE, once, so the rollover test compares both
-   * windows against one instant. The deps are the two things that can move it:
-   * a rescan and a fresh `/usage` scrape.
-   */
-  const cuts = useMemo(() => new Map<LiveWindowId, WindowCut | CutRefusal>(
-    LIVE_WINDOWS.map((w) => [w.id, windowCut(w, doc, usage ?? null, Date.now())]),
-  ), [doc, usage]);
-  /**
-   * The cut on screen, or null. A chip whose window stopped being answerable
-   * under it — a rescrape that rolled over, a rescan against a host with no
-   * hours — falls back to all-time rather than painting an empty readout that
-   * cannot be left, exactly as `view` does for a source that went away.
-   */
-  /**
-   * The grids of PAST windows, folded by the host.
-   *
-   * A second read, and the reason is in `usageCut.ts`: the document carries a
-   * bounded fortnight of hour buckets, so this side can cut the window running
-   * now and nothing older, while the host keeps every hour it ever saw. The
-   * grid goes UP (the anchors are the scraped reset instants, the lengths are
-   * `LIVE_WINDOWS`') so the two windows' semantics stay in one place.
-   *
-   * Re-read when a scrape moves an anchor — a rolled-over window is a different
-   * grid, not the same one shifted — and skipped entirely with no anchors or a
-   * dead socket, where it could only time out.
-   */
-  const specs = useMemo(() => windowSpecs(usage ?? null), [usage]);
-  const hist = useRemoteResource<TokenWindowsDoc>(
-    `tokenwindows:${specs.map((sp) => `${sp.id}@${sp.anchor}`).join(",")}:${doc?.scannedAt ?? 0}`,
-    () => ledgers.tokenWindows(specs),
-    { enabled: specs.length > 0, offline: !online },
-  );
-  /** One grid per window kind, by id — absent for a host too old to know the
-   *  route, which leaves the screen exactly as it was before this existed. */
-  const grids = useMemo(() => new Map<LiveWindowId, TokenWindowSeries>(
-    (hist.data?.series ?? [])
-      .filter((se): se is TokenWindowSeries & { id: LiveWindowId } => se.id === "session" || se.id === "week")
-      .map((se) => [se.id, se]),
-  ), [hist.data]);
-
-  /**
-   * The cut on screen, or null.
-   *
-   * A window the host folded is preferred for EVERY box including the live one,
-   * so the grid and the readouts under it cannot answer differently about the
-   * box they share; they agree by construction anyway (the host folds under the
-   * same hour rule this side applies), and the fallback is what keeps an older
-   * host drawing the live window exactly as it did.
-   *
-   * A scope whose window stopped being answerable under it — a rescrape that
-   * rolled over, a rescan against a host with no hours — falls back to all-time
-   * rather than painting an empty readout that cannot be left, exactly as
-   * `view` does for a source that went away.
-   */
-  const picked = useMemo(() => {
-    if (!scope) return undefined;
-    const spec = LIVE_WINDOWS.find((w) => w.id === scope.id);
-    if (!spec) return undefined;
-    const grid = grids.get(scope.id) ?? null;
-    const fromGrid = grid ? seriesCut(spec, grid, scope.back, doc?.models ?? []) : null;
-    if (fromGrid && isCut(fromGrid)) return fromGrid;
-    return scope.back === 0 ? cuts.get(scope.id) : (fromGrid ?? undefined);
-  }, [scope, grids, cuts, doc]);
-  const active = picked && isCut(picked) ? picked : null;
   const scopeOn: "all" | LiveWindowId = active && active.back === 0 ? active.id : "all";
-  /** The windows there is a chip for at all. A window that cannot be cut has
-   *  no chip — the reason is a sentence in the limit block above, and a dead
-   *  chip would be the greyed control this app does not draw. */
-  const scopable = LIVE_WINDOWS.filter((w) => isCut(cuts.get(w.id)!));
+  // The span's repos and conversations: an hour bucket and a day row have none, so the host folds
+  // the span (`/api/costwindow`). The live week IS the week card's document ("week"); any other
+  // live cut or a calendar span up to the host's 35 days is its own read, keyed to stay put. A
+  // longer calendar span has no fold, and says so (`reposRefusal`).
+  const liveSS = scopeSpan(active, wk);
+  const calSS = !active && calDays != null && calDays <= COST_WINDOW_DAYS && range
+    ? { from: range.from, toHour: Infinity, key: `${range.from}:d${calDays}` }
+    : null;
+  const ss = liveSS ?? calSS;
+  const ssOwn = ss && ss !== "week" ? ss : null;
+  const scopeRead = useRemoteResource<CostWindowDoc>(
+    `costwindow:${ssOwn?.key ?? "none"}:${fresh}`,
+    () => ledgers.costWindow(ssOwn!.from, Math.min(ssOwn!.toHour, Date.now()), fresh > 0),
+    { enabled: !!ssOwn, offline: !online },
+  );
+  const scopeDoc = ss === "week" ? weekDoc : docFor(scopeRead.data, ssOwn?.from ?? null);
+  const scopeRes = ss === "week" ? weekRead : scopeRead;
+  const scopeRepos = useMemo(() => (scopeDoc ? rankRepos(scopeDoc.convos, scopeDoc.rest).map(repoRowAsGroup) : null), [scopeDoc]);
+  const reposRefusal = !active && calDays != null && calDays > COST_WINDOW_DAYS
+    ? `The desktop folds repos over at most ${COST_WINDOW_DAYS} days, so ${calDays} days has no repo split — 30 days and all time do.`
+    : null;
+  /** Dollars per weekly point — ONE calibration for the whole screen (the week card and the
+   *  costliest list), off the week's readings against its ledger. Readings are INSTANTS, so they
+   *  are cut at the reset itself (`openedAt`), not at the hour the ledger's cut starts on: a
+   *  stretch never spans the reset either way (`usageStretches` cuts there). */
+  const weekCal = useMemo(() => (weekDoc && wk
+    ? ptsCalibration((history?.samples ?? []).filter((x) => x.t >= wk.openedAt), weekDoc.hours, weekUsdPerPct(weekDoc.cost.total, usage?.weeklyPct))
+    : null), [weekDoc, wk?.openedAt, history, usage?.weeklyPct]); // eslint-disable-line react-hooks/exhaustive-deps -- `wk` is rebuilt each render; its `openedAt` is the fact
+  /** The live windows there is a chip for at all. A window that cannot be cut has no chip — the
+   *  reason is a sentence in the limit block above, and a dead chip would be the greyed control
+   *  this app does not draw. The one picked stays lit while it is a past window the grid reached. */
+  const scopable = LIVE_WINDOWS.filter((w) => isCut(cuts.get(w.id)!) || active?.id === w.id);
+  /** The span filter's calendar days, cut by day — null under a live window or all time. */
+  const dcut = useMemo(() => (!active && calDays != null ? daysCut(days, doc?.models ?? []) : null), [active, calDays, days, doc]);
 
   const totals = doc?.totals;
   const grand = totals ? tokenTotal(totals) : 0;
   /** What the readouts are actually counting. One pair of values feeding the
    *  hero, the strip, the caveat and the cache verdict, so no two of them can
    *  end up describing different spans. */
-  const shownTotals = active ? active.totals : totals;
+  const shownTotals = active ? active.totals : dcut ? dcut.totals : totals;
   // The expired-cache re-writes across every conversation on this desktop —
   // the ONE wording, shared with the context sheet and the launcher row.
   const coldNote = coldStartText(doc?.coldStarts, "corpus");
-  const shownCost = active ? active.cost : doc?.cost;
+  const shownCost = active ? active.cost : dcut ? dcut.cost : doc?.cost;
   const shownTok = shownTotals ? tokenTotal(shownTotals) : 0;
 
   /**
@@ -508,16 +577,47 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, usageHist
    * box, shared by its caption and its sections.
    */
   const fmtDay = (d?: string) => d ? new Date(dayToMs(d)).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : "";
-  const rangeWords = range === "week"
-    ? `week of ${fmtDay(weekRows[0]?.day)}`
-    : range === "all" ? "all time" : `last ${RANGES.find((r) => r.id === range)?.days} days`;
-  const rangeCaption = days.length
-    ? <>{range === "week" ? "One calendar week" : range === "all" ? "Every day on record" : `The last ${RANGES.find((r) => r.id === range)?.days} days`}, {fmtDay(days[0]?.day)} – {fmtDay(days[days.length - 1]?.day)}.</>
-    : <>No days in this window.</>;
-  const scopeWords = active ? active.long : "all time";
-  const hourWords = doc?.hoursFrom != null && days.length && dayToMs(days[0].day) < doc.hoursFrom
-    ? `${rangeWords}, from ${new Date(doc.hoursFrom).toLocaleDateString(undefined, { day: "numeric", month: "short" })}`
-    : rangeWords;
+  const scopeWords = active ? active.long : calDays != null ? `the last ${calDays} days` : "all time";
+  const rangeWords = scopeWords;
+  const dayEdges = days.length ? `${fmtDay(days[0]?.day)} – ${fmtDay(days[days.length - 1]?.day)}` : "";
+  const rangeCaption = !days.length
+    ? "No days in this span."
+    : active
+      ? `Days touching ${active.long}, ${dayEdges}: the day charts count its first and last day whole, the hour chart is cut to the hour.`
+      : calDays != null
+        ? `The last ${calDays} calendar days, ${range ? new Date(range.from).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : ""} – today.`
+        : `Every day on record, ${dayEdges}.`;
+  const hourNote = range && !hoursWhole && hoursFromWords
+    ? `Hourly detail is kept from ${hoursFromWords} on, so the hours here start there rather than at the start of the span.`
+    : !range && hoursFromWords
+      ? `Hourly detail is kept from ${hoursFromWords} on; everything before that is in the day charts only.`
+      : null;
+  const hourWords = hourNote && hoursFromWords ? `${rangeWords}, from ${hoursFromWords}` : rangeWords;
+  /** The clock face: the span's hours where the record reaches its start; else every hour on record, said so. */
+  const clockSlots = useMemo(() => (range && hoursWhole ? clockOf(hourRows) : null), [range, hoursWhole, hourRows]);
+  const clock = clockSlots
+    ? { slots: clockSlots, tag: scopeWords }
+    : {
+      slots: doc?.hourOfDay ?? [], tag: "all time",
+      note: range ? `The hour record starts ${hoursFromWords ?? "later than this span"}, so this clock counts every hour on record rather than ${scopeWords}.` : undefined,
+    };
+  /** The costliest conversations for the span: the host's fold of it (cost INSIDE the span) where
+   *  there is one, the all-time list at all time, and for a span with no fold the all-time list's
+   *  rows that ran in it — whole-conversation cost, and said so. */
+  const top: { rows: TokenConvo[]; total: number; tag: string; note?: string } = (() => {
+    if (!doc) return { rows: [], total: 0, tag: "" };
+    if (!range) return { rows: doc.top ?? [], total: doc.cost.total, tag: "all time · in money" };
+    if (ss) {
+      if (!scopeDoc) return { rows: [], total: 0, tag: `${scopeWords} · in money`, note: foldStateText(scopeRes, "window") };
+      const rows = [...scopeDoc.convos].sort((x, y) => y.cost.total - x.cost.total);
+      return { rows, total: scopeDoc.cost.total, tag: `${scopeWords} · in money · cost inside the span` };
+    }
+    const rows = (doc.top ?? []).filter((c) => c.lastAt != null && c.lastAt >= range.from);
+    return {
+      rows, total: doc.cost.total, tag: `${scopeWords} · in money · whole-conversation cost`,
+      note: `Of the ${doc.top?.length ?? 0} dearest conversations on record, the ones that ran in ${scopeWords} — each at its whole cost, and its share is of all time.`,
+    };
+  })();
   const insights = useMemo(() => (doc ? statsInsights(doc, Date.now()) : []), [doc]);
 
   /**
@@ -576,37 +676,43 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, usageHist
         </button>
       </SheetHead>
 
-      {/* ONE scroll region for the whole screen, not a pinned head over a
-          scrolling tail. The live windows used to sit outside `.list` — the
-          only scroller `.sheet` has — so "RIGHT NOW" held a third of the phone
-          permanently and the history under it read through a slot. Nothing here
-          is worth pinning: both percentages carry their own reset instant in
-          text, so they say the same thing scrolled past as they do on screen. */}
+      {/* ONE scroll region for the whole screen. Since 2026-10-15 ONE row in it is pinned: the
+          span filter, because it reaches every box under it and a switch scrolled out of sight is
+          a switch nobody connects to the number it changed. The "now" block above it scrolls
+          away — both percentages carry their own reset instant in text. */}
       <div className="sheet-scroll">
-        {/* The source picker: two chips, and only when there is a second
-            source to pick. NOT a filter — no count rides on it, because a
-            number on a control means "tap here and see exactly these", and
-            these two chips swap the whole document rather than cutting one.
-            Ranged above everything, because it scopes the entire screen.
-            `ts-filter`'s row is reused rather than given a class of its own:
-            it is the one chip-row rule this screen has, and a second one would
-            be two answers to the question of how a chip row looks. */}
+        {/* The source picker: one chip per ledger, only when there is a second to pick. NOT a
+            filter — no count rides on it: these chips swap the whole document rather than
+            cutting one. One line that SCROLLS rather than wraps (it took three rows of a phone). */}
         {showPicker && (
-          <div className="ts-filter">
-            <button className={`key${!extra && !overview && view === "claude" ? " active" : ""}`}
+          <div className="ts-filter ts-src" role="group" aria-label="ledger">
+            <button className={`key${!extra && !overview && !readingChip && view === "claude" ? " active" : ""}`}
               onClick={() => { setExtraId(null); setSource("claude"); }}>Claude Code</button>
             {shown.map((g) => (
-              <button key={g.def.id} className={`key${!extra && !overview && view === g.def.id ? " active" : ""}`}
+              <button key={g.def.id} ref={!extra && !overview && !readingChip && view === g.def.id ? revealChip : undefined} className={`key${!extra && !overview && !readingChip && view === g.def.id ? " active" : ""}`}
                 onClick={() => { setExtraId(null); setSource(g.def.id); }}>{g.def.label}</button>
             ))}
+            {chips.map((c) => (
+              <button key={c.source} ref={readingChip?.source === c.source ? revealChip : undefined} className={`key${readingChip?.source === c.source ? " active" : ""}`}
+                onClick={() => setExtraId(READING_TAB + c.source)}>{c.label}</button>
+            ))}
             {ledgerTabs.map((t) => (
-              <button key={t.id} className={`key${extra?.id === t.id ? " active" : ""}`}
+              <button key={t.id} ref={extra?.id === t.id ? revealChip : undefined} className={`key${extra?.id === t.id ? " active" : ""}`}
                 onClick={() => setExtraId(t.id)}>{t.label}</button>
             ))}
             {showRunner && (
               <button className={`key${runner ? " active" : ""}`} onClick={() => setExtraId(RUNNER_TAB)}>Local runner</button>
             )}
             <button className={`key${overview ? " active" : ""}`} onClick={() => setExtraId(ALL_TAB)}>All backends</button>
+          </div>
+        )}
+
+        {/* The filtered view says what it hides, with a clear: a tap on one source of several opened
+            this sheet on it, and the others' quotas are not here. Gone once the view moves off it. */}
+        {onText && (
+          <div className="ts-filter" role="group" aria-label="opened on">
+            <span className="empty ts-caveat">{onText}</span>
+            <button className="key" onClick={() => { setOn(null); onClearOn?.(); setExtraId(null); setSource("claude"); }}>all</button>
           </div>
         )}
 
@@ -621,12 +727,54 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, usageHist
             }} />
         ) : runner ? (
           <LocalRunnerView res={runnerRes} />
+        ) : readingChip ? (
+          <SourceWindows reading={readingNow} online={online} />
         ) : extra ? (
-          <BackendLedgerView id={extra.id} label={extra.label} online={online} fresh={fresh} />
+          <BackendLedgerView id={extra.id} label={extra.label} online={online} fresh={fresh} table={table} onTable={setTable}
+            reading={(() => { const r = readingForLedger(readings, extra.id); return r ? readingAfterResets(r, Date.now()) : null; })()} />
         ) : view === "claude" ? <>
+          {/* ── NOW: the one exception to the span filter ──────────────────
+              The two limit windows and the week's hours, compact, because they are what the
+              launcher chip that leads here is about and only they have a clock on them. Rendered
+              outside `Empty`, so a desktop with no conversation logs still answers "when do my
+              limits reset". A figure under a bar is a filter: it sets the span below. */}
+          <div className="ts-now">
+          {scraped && <LimitWindows usage={usage ?? null} onRefresh={onRefreshUsage}
+            history={history} compact
+            cuts={cuts} scope={scopeOn}
+            onScope={(x) => setSpan(x === "all" ? { id: "all", back: 0 } : { id: x, back: 0 })} />}
+          {doc && grand > 0 && scraped && <WeekCard doc={weekDoc} res={weekRead} openedAt={wk?.openedAt ?? null} samples={history?.samples ?? []}
+            everyMs={history?.everyMs ?? 0} cal={weekCal} compact
+            nameOf={nameOf} onExplain={onExplain} isLive={isLive} onOpenConvo={onOpenConvo} />}
+          {doc && grand > 0 && periodState && <PeriodCard state={periodState} cap={periodCap(spend?.budget, periodState.period.id)} doc={periodDoc} res={periodRead}
+            refusal={periodSpan && "refusal" in periodSpan ? periodSpan.refusal : null} now={periodNow} />}
+          </div>
+
+          {/* ── The span filter, pinned: it reaches EVERYTHING below ──────
+              One span, the metric and the form — two short rows, so it costs the screen little.
+              Stepping back through past windows is the Totals box's stepper and heat grids. */}
+          {doc && grand > 0 && (
+            <div className="ts-global">
+              <div className="ts-filter" role="group" aria-label="span">
+                {SPANS.filter((x) => !isLiveSpan(x.id) || scopable.some((w) => w.id === x.id)).map((x) => (
+                  <button key={x.id} className={`key${effId === x.id ? " active" : ""}`}
+                    onClick={() => setSpan({ id: x.id, back: 0 })}>{x.label}</button>
+                ))}
+              </div>
+              <div className="ts-filter" role="group" aria-label="count in">
+                <span className="ctx-stackpick-lab">count in</span>
+                <button className={`key${!money ? " active" : ""}`} onClick={() => setMetric("tokens")}>tokens</button>
+                <button className={`key${money ? " active" : ""}`} onClick={() => setMetric("cost")}>cost</button>
+                <span className="ts-seg-sep" aria-hidden="true" />
+                <span className="ctx-stackpick-lab">show as</span>
+                <button className={`key${!table ? " active" : ""}`} onClick={() => setTable(false)}>chart</button>
+                <button className={`key${table ? " active" : ""}`} onClick={() => setTable(true)}>values</button>
+              </div>
+            </div>
+          )}
+
           {/* The scope sentence, drawn only where the switch is — with one
-              source there is nothing for "only" to be exclusive of, and the
-              screen must read exactly as it did before. */}
+              source there is nothing for "only" to be exclusive of. */}
           {showSource && (
             <div className="empty ts-caveat">
               {claudeOnlyText(shown)}
@@ -644,19 +792,6 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, usageHist
               </button>
             </div>
           )}
-          {/* The live windows come FIRST, above the history, because they are what
-              the launcher chip that leads here is about: the history says how much
-              has ever been spent, and only these two say whether anything can be
-              spent in the next hour. Rendered outside `Empty`, so a desktop with
-              no conversation logs at all still answers "when do my limits reset". */}
-          {/* The headline LEADS: one number for the last seven days, never
-              without its split and its money (`Headline.tsx`). It obeys none of
-              the switches below it, and says so. */}
-          {doc && grand > 0 && <Headline doc={doc} />}
-          <LimitWindows usage={usage ?? null} onRefresh={onRefreshUsage}
-            online={online} history={usageHistory}
-            cuts={cuts} scope={scopeOn}
-            onScope={(x) => setScope(x === "all" ? null : { id: x, back: 0 })} />
 
           <Empty res={res} empty={!doc || !grand} thing="the token statistics" noun="scan"
             note="These are read out of the CLI’s own conversation logs, so a machine that has not run it yet has nothing to count.">
@@ -667,41 +802,26 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, usageHist
 
           {doc && grand > 0 && (
             <div className="list ts-list">
-
-              {/* ── The two switches that reach EVERYTHING below ──────────────
-                  Pinned while the screen scrolls, because they change every
-                  box under them and a switch scrolled out of sight is a switch
-                  nobody connects to the number it changed. The filters that
-                  reach only PART of the screen are not here: each one is the
-                  head of the box it filters (`ScopeCard`). */}
-              <div className="ts-global">
-                <div className="ts-filter" role="group" aria-label="count in">
-                  <span className="ctx-stackpick-lab">count in</span>
-                  <button className={`key${!money ? " active" : ""}`} onClick={() => setMetric("tokens")}>tokens</button>
-                  <button className={`key${money ? " active" : ""}`} onClick={() => setMetric("cost")}>cost</button>
-                  <span className="ts-seg-sep" aria-hidden="true" />
-                  <span className="ctx-stackpick-lab">show as</span>
-                  <button className={`key${!table ? " active" : ""}`} onClick={() => setTable(false)}>chart</button>
-                  <button className={`key${table ? " active" : ""}`} onClick={() => setTable(true)}>values</button>
-                </div>
-              </div>
-
               <InsightsPanel items={insights} />
 
-              <TotalsCard doc={doc} money={money} table={table} active={active} scopable={scopable} scopeOn={scopeOn}
+              <TotalsCard doc={doc} money={money} table={table} active={active}
+                dcut={dcut && calDays != null ? { cut: dcut, calendarDays: calDays, caption: rangeCaption } : null}
                 scope={scope} setScope={setScope} grids={grids} hist={hist} shownTotals={shownTotals} shownCost={shownCost}
                 shownTok={shownTok} coldNote={coldNote} scopeWords={scopeWords} bands={bands} canModel={canModel}
-                days={days} nameOf={nameOf} onExplain={onExplain} isLive={isLive} onOpenConvo={onOpenConvo} />
+                days={days} nameOf={nameOf} onExplain={onExplain} isLive={isLive} onOpenConvo={onOpenConvo}
+                scopeRepos={scopeRepos} scopeRes={scopeRes} reposRefusal={reposRefusal} top={top}
+                weekTwin={ss === "week" && !!weekDoc}
+                pts={(usd, c) => (convoInWeek(c, wk?.from) ? ptsText(usd, weekCal) : null)} />
 
-              <OverTimeCard doc={doc} money={money} table={table} range={range} setRange={setRange}
-                rangeCaption={rangeCaption} rangeWords={rangeWords} week={week} bounds={bounds} setWeekAt={setWeekAt}
-                wTotals={wTotals} prevTotals={prevTotals} weekRows={weekRows} boxRef={boxRef} width={width}
+              <OverTimeCard doc={doc} money={money} table={table} dayCharts={effId !== "session"} narrow={days.length <= 14}
+                rangeCaption={rangeCaption} rangeWords={rangeWords} clock={clock} hourNote={hourNote}
+                reqSpan={range ? { from: dayKeyOf(range.from), to: dayKeyOf(Math.max(range.from, range.to - 1)) } : null}
+                boxRef={boxRef} width={width}
                 running={running} dayView={dayView} setDayView={setDayView} canModel={canModel} mixBy={mixBy}
                 setMixBy={setMixBy} dayArea={dayArea} setDayShape={setDayShape} dayAreaOk={dayAreaOk}
                 dailyFilled={dailyFilled} daily={daily} trend={trend} mixFilled={mixFilled} mixRows={mixRows}
                 bands={bands} days={days} agentDays={agentDays} hourWords={hourWords} hourRows={hourRows}
                 hourArea={hourArea} setHourShape={setHourShape} hourlyFilled={hourlyFilled} hourly={hourly} />
-
 
               <div className="empty ts-foot">
                 {doc.scannedAt

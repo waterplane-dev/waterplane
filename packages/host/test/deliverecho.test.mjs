@@ -24,9 +24,10 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { deliverPrompt } from "../dist/deliver.js";
 import { CliHealthStore, setCliHealth } from "../dist/clihealth.js";
 import { noteDeliveryEnded, noteDeliveryStarted } from "../dist/opendeliveries.js";
@@ -228,6 +229,30 @@ test("a composer sixteen rows above the bottom of the render is still the compos
   assert.ok(!sessions.state.writes.includes("\x1b"), "and nothing swept a composer that was plainly fine");
 });
 
+test("our words drawn DIM in an empty box are the CLI's proposal, not a copy already typed", async () => {
+  // The first live tap of the phone's "Claude proposes" button: claude draws
+  // its proposal for the next prompt dim in the EMPTY composer, the phone sends
+  // exactly those words, and the plain render read them as `exact` — so the
+  // delivery typed nothing and pressed Return into an empty box. The prompt
+  // never ran. The dim-blanked read says the box is empty: type.
+  const h = store();
+  const sessions = fakeSessions({ hooked: true });
+  let hint = TEXT; // drawn until the first keystroke, as the CLI does
+  const shown = () => sessions.state.composer || hint;
+  sessions.screenText = async () => tornScreen(shown());
+  sessions.screenCells = async () => {
+    const plain = tornScreen(shown()).split("\n");
+    const lit = tornScreen(sessions.state.composer).split("\n");
+    return plain.map((text, i) => ({ text, spans: [], undimmed: lit[i] }));
+  };
+  const write = sessions.write;
+  sessions.write = (id, data) => { if (data !== "\r") hint = ""; write(id, data); };
+  const result = await deliverPrompt(sessions, "s1", TEXT, "prompt", { watch: false });
+  assert.equal(result, "ok");
+  assert.equal(sessions.state.writes.filter((w) => w === TEXT).length, 1, "the words were TYPED, not assumed");
+  assert.ok(h.echo(), "and the echo of what was typed was seen");
+});
+
 test("a composer that already holds text we cannot tell from ours records NOTHING", async (t) => {
   // A rival delivery into the same session whose text shares our fourteen-
   // character head — which is what a re-send looks like. The verdict is
@@ -420,4 +445,51 @@ test("the submitted-prompt match normalises a terminal round trip and nothing el
   assert.equal(samePromptText(TEXT, TEXT.slice(0, 40)), false, "a PREFIX is not a match — a re-send of a shorter prompt would claim it");
   assert.equal(samePromptText(`${TEXT} and one more thing`, TEXT), false, "…and neither is a superset");
   assert.equal(samePromptText("", ""), false, "an empty payload proves nothing");
+});
+
+/**
+ * **A pasted prompt is named back in the CLI's envelope** — the hook payload
+ * measured on 2.1.301 (one 1745-char write, read in two pieces: the first
+ * wrapped, the rest plain) and the log's shape on 2.1.300 (a 5045-char write,
+ * five wrapped chunks, each seam cutting mid-word). Both are the very words
+ * typed; before this rule both read as "something other than your text", and
+ * every such delivery whose echo the screen missed came back `unconfirmed`
+ * though it ran.
+ */
+test("the submitted-prompt match reads the CLI's paste envelope, and only as the whole text", () => {
+  const LONG = "Implement the plan in docs/plan.md — all of it.\n\nRun one subagent per package (WP1 first).\n- Commit after each package.\n- At the end: npm test, then write the report.";
+  const at = 40; // a seam cutting mid-word, as the CLI's ~1 KB reads do
+  const hookShape = `\n\n<pasted_content id="7ed2">\n${LONG.slice(0, at)}\n</pasted_content id="7ed2">\n\n${LONG.slice(at)}`;
+  const logShape = `\n\n<pasted_content id="550a">\n${LONG.slice(0, at)}\n</pasted_content id="550a">\n\n\n<pasted_content id="550a">\n${LONG.slice(at)}\n</pasted_content id="550a">\n`;
+  assert.equal(samePromptText(hookShape, LONG), true, "the hook's shape: one chunk wrapped, the rest plain");
+  assert.equal(samePromptText(logShape, LONG), true, "the log's shape: every chunk wrapped");
+  assert.equal(samePromptText(`\n\n<pasted_content id="1">\n${LONG.slice(0, 60)}\n</pasted_content id="1">\n`, LONG), false, "a PREFIX in an envelope is still a prefix");
+  assert.equal(samePromptText(logShape, LONG.slice(0, 60)), false, "…and a superset still a superset");
+  assert.equal(samePromptText(logShape.replace("WP1", "WP2"), LONG), false, "another prompt in the same envelope is another prompt");
+  assert.equal(samePromptText(logShape, LONG.toLowerCase()), false, "case is not whitespace");
+  assert.equal(samePromptText(LONG.replace(/\n+/g, " "), LONG), false, "no envelope, no whitespace blindness: the strict rule stands");
+  assert.equal(samePromptText('<pasted_content id="1"></pasted_content id="1">', ""), false, "an empty envelope proves nothing");
+});
+
+/**
+ * **The 2026-10-15 backlog failure, at the level a person saw it.** A real
+ * 2.1.301 grid of a long prompt collapsed into five chits with nothing else in
+ * the box (`fixtures/screens/paste-chain.txt`). The echo used to read `none`,
+ * the delivery fell to the hook as its last proof, and with no hook it came
+ * back `unconfirmed` though the words were one Return from running.
+ */
+test("a long paste the CLI drew as a run of chits is an echo, confirmed by the screen", async () => {
+  const FX = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "screens");
+  const grid = readFileSync(join(FX, "paste-chain.txt"), "utf8");
+  const text = readFileSync(join(FX, "paste-chain.prompt"), "utf8");
+  const rows = grid.split("\n");
+  const at = rows.findIndex((r) => r.startsWith("❯"));
+  const close = rows.findIndex((r, i) => i > at && /^─{20,}$/.test(r.trim()));
+  const empty = [...rows.slice(0, at), "❯ ", ...rows.slice(close)].join("\n");
+  const h = store();
+  const sessions = fakeSessions({ hooked: true, render: (c) => (c ? grid : empty) });
+  const result = await deliverPrompt(sessions, "s1", text, "prompt", { watch: false });
+  assert.equal(result, "ok");
+  assert.equal(h.echo().window.at(-1).ok, true, "the echo rule ANSWERED — no fallback, no hook needed");
+  assert.equal(sessions.state.writes.filter((w) => w === "\r").length, 1, "one Return");
 });

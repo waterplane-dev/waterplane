@@ -18,6 +18,12 @@
  * not. Heads that all close the same way (`SlashSheet`'s unsupported branch)
  * are one screen drawn two ways, not a step.
  *
+ * ONE head whose `onClose` is itself a choice (`cut ? closeVault : goBack`)
+ * is the same shape folded into one tag: the arrow does two different things,
+ * so some screen behind it is not a route — the vault's sub-screens shipped
+ * exactly that way, arrow fine and swipe out of the whole vault. The
+ * extensions' web halves are scanned too; they are sheets like any other.
+ *
  * Read as TEXT: no build, no import, no DOM.
  */
 import test from "node:test";
@@ -27,6 +33,10 @@ import { join, relative } from "node:path";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const SRC = join(ROOT, "packages", "web", "src");
+const EXT = join(ROOT, "packages", "extensions");
+/** packages/web/src, then every extension's web half — keyed relative to `packages/`. */
+const ROOTS = [SRC, ...readdirSync(EXT).map((d) => join(EXT, d, "web")).filter((d) => { try { return statSync(d).isDirectory(); } catch { return false; } })];
+const PKGS = join(ROOT, "packages");
 
 /** Files whose sub-view Back deliberately does NOT step out of — with why. */
 const EXEMPT = {
@@ -34,7 +44,7 @@ const EXEMPT = {
   // the draft). Wiring the gesture to it would turn a swipe into a delete of
   // typed words; as it is, the swipe leaves the sheet and the stashed draft
   // re-opens the editor next time (`local/no-draft-clobber`).
-  "PadSheet.tsx": "arrow discards the draft",
+  "web/src/PadSheet.tsx": "arrow discards the draft",
 };
 
 function tsxFiles(dir) {
@@ -54,13 +64,16 @@ function headCloses(src) {
   return closes;
 }
 
+/** Two heads that close differently, or one whose close is a choice. */
+const hasSubView = (closes) => new Set(closes).size >= 2 || closes.some((c) => /\?[^?]*:/.test(c.replace(/\?\./g, "")));
+
 test("a sheet with a sub-view of its own gives it a Back step", () => {
   const missing = [];
-  for (const f of tsxFiles(SRC)) {
-    const rel = relative(SRC, f);
+  for (const f of ROOTS.flatMap(tsxFiles)) {
+    const rel = relative(PKGS, f);
     const src = readFileSync(f, "utf8");
     const closes = headCloses(src);
-    if (closes.length < 2 || new Set(closes).size < 2) continue;
+    if (!hasSubView(closes)) continue;
     if (/\buseBackStep\(/.test(src) || EXEMPT[rel]) continue;
     missing.push(`${rel} (${closes.join(" | ")})`);
   }
@@ -69,9 +82,9 @@ test("a sheet with a sub-view of its own gives it a Back step", () => {
 
 test("every exemption still names a file that would otherwise fail", () => {
   for (const rel of Object.keys(EXEMPT)) {
-    const src = readFileSync(join(SRC, rel), "utf8");
+    const src = readFileSync(join(PKGS, rel), "utf8");
     const closes = headCloses(src);
-    assert.ok(closes.length >= 2 && new Set(closes).size >= 2, `${rel} no longer has a sub-view head — drop its exemption`);
+    assert.ok(hasSubView(closes), `${rel} no longer has a sub-view head — drop its exemption`);
     assert.ok(!/\buseBackStep\(/.test(src), `${rel} uses useBackStep now — drop its exemption`);
   }
 });

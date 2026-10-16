@@ -4,7 +4,7 @@
 import { BRAND, resolveEnv } from "@waterplane/shared";
 
 /** The unattended calls this daemon makes, one routing knob each. */
-export type SidecarTask = "summary" | "assess" | "review" | "smartpick" | "name" | "commit";
+export type SidecarTask = "summary" | "assess" | "review" | "name" | "commit";
 
 /** How a completion is obtained. */
 export type SidecarEngine = "claude-p" | "openai-compat";
@@ -14,7 +14,6 @@ export const SIDECAR_ENV: Readonly<Record<SidecarTask, string>> = {
   summary: `${BRAND.envPrefix}SIDECAR_SUMMARY`,
   assess: `${BRAND.envPrefix}SIDECAR_ASSESS`,
   review: `${BRAND.envPrefix}SIDECAR_REVIEW`,
-  smartpick: `${BRAND.envPrefix}SIDECAR_SMARTPICK`,
   name: `${BRAND.envPrefix}SIDECAR_NAME`,
   commit: `${BRAND.envPrefix}SIDECAR_COMMIT`,
 };
@@ -24,17 +23,12 @@ export const SIDECAR_ENV: Readonly<Record<SidecarTask, string>> = {
  *
  * The one fact that decides whether the toolless local engine is even
  * admissible. `summary` is false by construction — see the header.
- *
- * `smartpick` is false for exactly the summary's reason and no weaker one: the
- * backlog items it grooms and the repo facts it grooms them against are IN the
- * prompt. It never reads a file, never opens the repo, and is forbidden from
- * typing into a session at all.
+
  */
 const NEEDS_TOOLS: Readonly<Record<SidecarTask, boolean>> = {
   summary: false,
   assess: true,
   review: true,
-  smartpick: false,
   // `name` is on the summary's side of the line and for the summary's reason,
   // not a weaker one: a naming pass is handed the items' own words and is asked
   // what to CALL them. It opens no file, runs no git, and could not use a tool

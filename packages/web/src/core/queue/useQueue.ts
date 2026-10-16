@@ -203,7 +203,7 @@ export function useQueue(input: QueueDeps): QueueApi {
    * synchronously (often inside another write) and the sheet renders.
    */
   const queueBlockedRef = useRef<ReadonlyMap<string, SendBlockReason>>(new Map());
-  const { pendingKept, pendingEntry, pendingSession } = usePendingState(given.activeId, outbox);
+  const { pendingKept, pendingEntry, pendingSession } = usePendingState(given.activeId, outbox, sessions);
   const up = useUploadState();
 
   // ── The environment every file of the core reads (`QueueEnv`) ──
@@ -535,7 +535,7 @@ export function useQueue(input: QueueDeps): QueueApi {
       const total = outboxRef.current.filter((e) => e.status !== "failed").length;
       showToast(total > n ? `sending ${total} queued messages…` : `sent ${n} queued message${n > 1 ? "s" : ""}`);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the drain runs on a status edge only; every queue fact is read through a ref (the header's "timers read refs")
   }, [status]);
   // The question is answered once nothing it was about is parked any more —
   // released, edited away, or pulled back into a compose box. Recomputed from
@@ -547,7 +547,7 @@ export function useQueue(input: QueueDeps): QueueApi {
     if (!reconnectAsk || parkedSends.length) return;
     holdQueueRef.current = false;
     setReconnectAsk(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setters and `holdQueueRef` are stable
   }, [reconnectAsk, parkedSends.length]);
   // The socket went away with sends still `pending`. Put them back NOW rather
   // than letting each one sit out its receipt deadline: a `submit` window is 90 s
@@ -575,14 +575,14 @@ export function useQueue(input: QueueDeps): QueueApi {
       // failing, and the reconnect flush is the moment it should go out.
       ? { ...e, status: "queued" as const, attempts: Math.max(0, (e.attempts ?? 1) - 1), retryAt: undefined, waitReason: undefined }
       : e));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- on a status edge only; `writeOutbox` and the timers are ref-backed
   }, [status]);
   // Backstop sweep: catches an entry queued during the handshake, and re-times
   // anything the ack-timeout path put back.
   useEffect(() => {
     const t = window.setInterval(() => { flushOutbox(); }, FLUSH_SWEEP_MS);
     return () => window.clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only sweep; `flushOutbox` reads the queue through refs
   }, []);
   // WHERE THE SETTLE SWEEP USED TO BE.
   //
@@ -704,7 +704,7 @@ export function useQueue(input: QueueDeps): QueueApi {
     const live = new Set(sessions.map((s) => s.id));
     for (const id of prev.keys()) if (!live.has(id)) prev.delete(id);
     if (finished || released) flushOutbox();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- on a session-list change only; `flushOutbox` and the lane sets are refs
   }, [sessions]);
   /**
    * The strip's other half of the same question: how much this phone is still
@@ -762,7 +762,7 @@ export function useQueue(input: QueueDeps): QueueApi {
     writeOutbox(migrateGiveUps(next));
     const back = migratePadRescue();
     if (back) showToast(padMigratedToast(back));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only recovery of the previous tab's rows, read off `outboxRef`
   }, []);
 
   const fns = c;
@@ -772,7 +772,7 @@ export function useQueue(input: QueueDeps): QueueApi {
     ...pick("retainUploadBytes", "ackWindowFor", "nextRound", "armAckTimeout", "goneLanes", "flushOutbox", "idleReason",
       "releaseLane", "uploadRefusal", "guardUploadRefs", "guardChain", "submitInput", "queueOp", "queueImageUpload",
       "runUpload", "rewriteQueuedPath", "armLane", "queueBacklog", "answerPrompt"),
-    ...pick("enterPending", "enterOldestPending", "retryPendingCreate", "adoptPendingSession", "queueSessionPrompt",
+    ...pick("enterPending", "enterOldestPending", "enterLater", "retryPendingCreate", "adoptPendingSession", "queueSessionPrompt",
       "holdForLaunch", "failPendingCreates", "failDependentUploads"),
     ...pick("restoreOutbox", "dismissOutbox", "editQueued", "retargetQueued", "handToDesktop", "toggleHoldQueued",
       "toggleSerialQueued", "scheduleQueueRows", "dropScheduleQueue", "removeQueued", "addPromptToQueuedCreate",

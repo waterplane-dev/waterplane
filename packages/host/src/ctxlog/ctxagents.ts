@@ -389,6 +389,29 @@ export function agentCumOf(use: AgentUsage, max = AGENT_CUM_POINTS): [number, nu
 }
 
 /**
+ * The agents' spend placed on a spark's readings (`ContextSpark.agentUsedPts`):
+ * what ALL the subagents had spent by each reading's instant, index-for-index
+ * with `times`, off the same merged running total as `agentCumOf` (unthinned).
+ * The LAST reading carries `use.tok` exactly — spend after the parent's newest
+ * reading, and spend no record dated, still belongs to the session, and the
+ * miniature's top edge must be the total printed beside it. Null when no agent
+ * spent anything.
+ */
+export function agentSpendAt(times: number[], use: AgentUsage): number[] | null {
+  if (!times.length || !(use.tok > 0)) return null;
+  const cum = agentCumOf(use, Number.POSITIVE_INFINITY) ?? [];
+  const out: number[] = [];
+  let j = 0;
+  let run = 0;
+  for (const t of times) {
+    while (j < cum.length && cum[j][0] <= t) run = cum[j++][1];
+    out.push(run);
+  }
+  out[out.length - 1] = use.tok;
+  return out;
+}
+
+/**
  * The RUNNING agent with the largest current window (`ContextSpark.liveAgentTok`):
  * among the logs whose newest dated request is within `AGENT_LIVE_MS` of `now`,
  * the one whose newest request carried the most. Current, not peak — an agent

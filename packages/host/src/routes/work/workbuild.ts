@@ -10,10 +10,10 @@ import type { Route, RouteSpec, RouteTable } from "../types.js";
 const onBuildList: Route<"build.list"> = (a) => {
     // Contained like its `build.save` sibling. A read, not a spawn — but the
     // directory is still one the CLIENT named, and unguarded it reads back
-    // `<any absolute path>/.waterplane/builds.json`. The gate is the gate.
+    // `<any absolute path>/.waterplane{,-shared}/builds.json`. The gate is the gate.
     void a.c.containRepoDir(a.msg.repoDir).then((repoDir) => {
       if (!repoDir) return;
-      a.c.send(a.ws, { t: "build.list", repoDir, builds: a.c.builds.list(repoDir), runs: a.c.builds.runsFor(repoDir) });
+      a.c.send(a.ws, { t: "build.list", repoDir, builds: a.c.builds.list(repoDir), runs: a.c.builds.runsFor(repoDir), localIds: a.c.builds.localIds(repoDir) });
       // Seed the retained output tail for each run so a reconnect / fresh open
       // sees the in-progress log, not just future deltas.
       for (const r of a.c.builds.runsFor(repoDir)) {
@@ -26,8 +26,9 @@ const onBuildList: Route<"build.list"> = (a) => {
 const onBuildSave: Route<"build.save"> = (a) => {
     void a.c.containRepoDir(a.msg.repoDir).then((repoDir) => {
       if (!repoDir) { a.c.send(a.ws, { t: "toast", text: "that folder is outside the configured root" }); return; }
-      const saved = a.c.builds.save(repoDir, a.msg.builds);
-      a.c.broadcast({ t: "build.list", repoDir, builds: saved, runs: a.c.builds.runsFor(repoDir) });
+      const local = Array.isArray(a.msg.local) ? a.msg.local.filter((x): x is string => typeof x === "string") : undefined;
+      const saved = a.c.builds.save(repoDir, a.msg.builds, local);
+      a.c.broadcast({ t: "build.list", repoDir, builds: saved, runs: a.c.builds.runsFor(repoDir), localIds: a.c.builds.localIds(repoDir) });
     });
 };
 

@@ -1,5 +1,6 @@
 /** How often, the once and weekly fields, the next-fire line and the week bar. Split from `SendSheet.tsx` (docs/notes/send-architecture.md). */
 import { DAY_LABELS, composeRule, describeRule } from "@waterplane/shared";
+import { RadioRows } from "../kit";
 import { ScheduleWeekBar } from "../ScheduleWeekBar";
 import { DEVICE_TZ, fmtWhen, inWords, quickTimes, toLocalInput } from "../sendIntent";
 import type { SendSheetModel } from "./useSendSheet";
@@ -27,18 +28,13 @@ export function RuleEditor({ m }: { m: SendSheetModel }) {
           usage-window anchor there is only the one field shape, so
           this directly toggles whether it recurs. */}
       <div className="section section-head"><span>How often</span></div>
-      <div className="segmented">
-        <button className={`seg${(anchor === "window" ? !recurs : rule.kind === "once") ? " on" : ""}`}
-          title="fire the next one and stop"
-          onClick={() => { setQuickKey(null); replaceRule(composeRule(anchor, false, rule, Date.now(), DEVICE_TZ)); }}>
-          once
-        </button>
-        <button className={`seg${(anchor === "window" ? recurs : rule.kind === "weekly") ? " on" : ""}`}
-          title={anchor === "window" ? "every time that window resets" : "every week, on the days below"}
-          onClick={() => { setQuickKey(null); replaceRule(composeRule(anchor, true, rule, Date.now(), DEVICE_TZ)); }}>
-          repeating
-        </button>
-      </div>
+      <RadioRows<"once" | "repeating"> label="How often"
+        value={(anchor === "window" ? recurs : rule.kind === "weekly") ? "repeating" : "once"}
+        options={[
+          { key: "once", label: "once", title: "fire the next one and stop" },
+          { key: "repeating", label: "repeating", title: anchor === "window" ? "every time that window resets" : "every week, on the days below" },
+        ]}
+        onChange={(k) => { setQuickKey(null); replaceRule(composeRule(anchor, k === "repeating", rule, Date.now(), DEVICE_TZ)); }} />
 
       {/* The chips come FIRST: they are the answer most of the time,
           and a `datetime-local` under them is the escape hatch rather

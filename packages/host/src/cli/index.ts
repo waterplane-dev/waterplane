@@ -6,7 +6,8 @@
  * written by other packages and loaded lazily: a build without them says so
  * in one line instead of failing to start.
  *
- * Dev checkouts keep `npm run start/doctor/restart`; those never come here.
+ * Dev checkouts keep `npm run start/doctor/restart`; those never come here. On win32 every
+ * command goes to `windows.ts`, which runs the host inside WSL.
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -49,6 +50,12 @@ export function identity(root: string = ROOT_DIR): Identity {
   return { name: str(pkg?.name) ?? BRAND.slug, version: str(pkg?.version) ?? "unknown", commit, source: "checkout" };
 }
 
+/** The one line `version` prints, on every platform (the Windows launcher prints it too). */
+export function versionLine(root: string = ROOT_DIR): string {
+  const id = identity(root);
+  return `${id.name} ${id.version}${id.commit ? ` (${id.commit})` : ""}${id.source === "checkout" ? " [dev checkout]" : ""}`;
+}
+
 const HELP = `${BRAND.slug} — ${BRAND.tagline}
 
 usage: ${BRAND.slug} <command>
@@ -88,15 +95,14 @@ async function lazy(file: string, what: string, args: string[]): Promise<number>
 }
 
 export async function main(argv: string[]): Promise<number> {
+  // Native Windows cannot run the host (sessions need tmux): every command goes to the launcher,
+  // which runs it inside WSL from this same install (`windows.ts`).
+  if (process.platform === "win32") return (await import("./windows.js")).run(argv);
   const [cmd = "start", ...rest] = argv;
   switch (cmd) {
     case "start": return runDaemon([]);
     case "doctor": return runDaemon(["--doctor", ...rest.filter((a) => a === "--json")]);
-    case "version": case "--version": case "-v": {
-      const id = identity();
-      console.log(`${id.name} ${id.version}${id.commit ? ` (${id.commit})` : ""}${id.source === "checkout" ? " [dev checkout]" : ""}`);
-      return 0;
-    }
+    case "version": case "--version": case "-v": console.log(versionLine()); return 0;
     case "service": return lazy("./service.js", "service", rest);
     case "pair": return lazy("./pair.js", "pair", rest);
     case "update": return lazy("./selfupdate.js", "update", rest);

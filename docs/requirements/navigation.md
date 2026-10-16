@@ -25,3 +25,13 @@ Back navigation returns to the previous screen, not the main view.
 - asked: 2026-09-28
 - shipped: 3d62f7f
 
+### R-navigation-007 · shipped
+A links sheet lists every app running on the host and every deployed frontend, with pins, a search box, filter chips and grouping by repo, environment or place; it is a plugin, opened from the menu.
+- asked: 2026-10-10, 2026-10-11, 2026-10-11
+- shipped: 5b2f2767, 51b17fae, 461e8522
+
+### R-navigation-008 · shipped
+A repo card shows a found chip with its discovered link count; tapping it opens the links sheet filtered to that repo.
+- asked: 2026-10-11
+- shipped: c1af892a
+

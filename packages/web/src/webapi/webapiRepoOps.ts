@@ -1,7 +1,15 @@
-import { SLOW_OP_TIMEOUT_MS } from "@waterplane/shared";
-import type { ComplianceFixResult, ComplianceIgnoreResult, ComplianceLimitsResult, ComplianceReport, ContextWeightLimits, GitBranch, RepoHealthView } from "@waterplane/shared";
+import { SLOW_OP_TIMEOUT_MS, cleanOptInRow } from "@waterplane/shared";
+import type { OptInChoice, OptInChoiceResult, OptInReport, OptInRow } from "@waterplane/shared";
+import type { ComplianceFixResult, ComplianceIgnoreResult, ComplianceLimitsResult, ComplianceReport, ContextWeightLimits, GitBranch, HealthIndexResponse, HostSetupFixResult, HostSetupReport, RepoHealthView } from "@waterplane/shared";
 import { nfetch, jget, jpost } from "./webapiFetch";
 import type { EnvFileInfo, SecretResult, WriteTarget } from "./webapiTypes";
+
+/** An opt-ins report off the wire, every row through `cleanOptInRow`: a row
+ *  this phone cannot read is dropped, never rounded into an offer. */
+function cleanOptInReport(r: OptInReport): OptInReport {
+  const rows = Array.isArray(r?.rows) ? r.rows : [];
+  return { ...r, rows: rows.map(cleanOptInRow).filter((x): x is OptInRow => !!x) };
+}
 
 /** Branches, secrets, setup compliance and repo health. One slice of `api` (see api.ts). */
 export const repoOpsApi = {
@@ -39,8 +47,17 @@ export const repoOpsApi = {
   // Ignore (or stop ignoring) one advisory row in one repo.
   complianceIgnore: (repoId: string, id: string, ignore: boolean) =>
     jpost<ComplianceIgnoreResult>(`/api/repos/${repoId}/compliance/ignore`, { id, ignore }),
+  // Opt-ins (`shared/optins.ts`): optional things a repo can turn on, counted
+  // in nothing. `choice: null` clears what the person said.
+  optIns: (repoId: string) =>
+    jget<OptInReport>(`/api/repos/${repoId}/optins`).then(cleanOptInReport),
+  optInChoice: (repoId: string, id: string, choice: OptInChoice | null) =>
+    jpost<OptInChoiceResult>(`/api/repos/${repoId}/optins/choice`, { id, choice })
+      .then((r) => (r.report ? { ...r, report: cleanOptInReport(r.report) } : r)),
   // The auto-compact window the checklist writes, host-wide. `null` = back to
   // the shipped default.
+  hostSetup: () => jget<HostSetupReport>("/api/host/setup"),
+  hostSetupFix: (fixes: string[]) => jpost<HostSetupFixResult>("/api/host/setup/fix", { fixes }),
   setupPrefs: () => jget<{ ok: boolean; autoCompactDefault: string; chosen: boolean }>("/api/host/setupprefs"),
   setSetupPrefs: (autoCompactDefault: string | null) =>
     jpost<{ ok: boolean; error?: string; autoCompactDefault?: string; chosen?: boolean }>("/api/host/setupprefs", { autoCompactDefault }),
@@ -53,6 +70,9 @@ export const repoOpsApi = {
   // against the worktree before it ever reaches a spawn.
   repoHealth: (repoId: string, scope?: string | null) =>
     jget<RepoHealthView>(`/api/repos/${repoId}/repohealth${scope ? `?scope=${encodeURIComponent(scope)}` : ""}`),
+  /** The chained weekly health index (`shared/healthindex.ts`) for the whole repo. */
+  healthIndex: (repoId: string) =>
+    jget<HealthIndexResponse>(`/api/repos/${repoId}/healthindex`),
   /** Which subtrees this repo measures separately. The answer is what was
    *  STORED, which is not always what was asked for — a scope that no longer
    *  names a directory is dropped, and a client that kept drawing it would be

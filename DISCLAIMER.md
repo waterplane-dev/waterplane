@@ -91,6 +91,19 @@ Everyone who can reach a waterplane daemon gets the same, complete access to eve
 root. There are no accounts, no roles, and no audit trail of who did what. The LAN password gate is
 a gate, not an identity system.
 
+## 7. Your provider's terms are yours to keep
+
+waterplane drives the CLI you installed, signed in to your own account. It holds no account, no
+key and no agreement with any model provider, and it is not affiliated with, endorsed by or
+supported by Anthropic or any other provider. Claude and Claude Code are trademarks of Anthropic;
+other names are trademarks of their owners.
+
+Some features start a session without you at the keyboard: a queued or scheduled prompt, a backlog
+item, a session resumed after a usage limit resets. Whether your plan permits that kind of use is
+set by your provider's terms, not by waterplane, and those terms change. Read them for the plan
+you are on, and turn off what they do not allow. A suspended account is between you and the
+provider.
+
 ---
 
 ## If you are redistributing waterplane

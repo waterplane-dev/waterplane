@@ -28,6 +28,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
 import { E, SLUG, STATE, rootEnv } from "./lib-brand.mjs";
+import { waitForHost } from "./lib-e2e.mjs";
 
 const PORT = 8871;
 const ROOT = mkdtempSync(join(tmpdir(), `${SLUG}-notifyprefs-`));
@@ -53,7 +54,7 @@ function boot() {
 const stop = async () => { host?.kill(); await sleep(700); };
 
 boot();
-await sleep(900);
+await waitForHost(PORT);
 
 async function connect(label) {
   const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
@@ -132,7 +133,7 @@ const onDisk = JSON.parse(readFileSync(join(ROOT, STATE, "notify.json"), "utf8")
 check(onDisk.info === false, "the mute is on disk, not just in memory");
 await stop();
 boot();
-await sleep(1000);
+await waitForHost(PORT);
 const d = await connect("D");
 check(d.prefs?.info === false, "the mute survives a host restart");
 
@@ -149,7 +150,7 @@ d.close();
 await stop();
 writeFileSync(join(ROOT, STATE, "notify.json"), JSON.stringify({ idle: true, nonsense: false, prompt: "yes" }));
 boot();
-await sleep(1000);
+await waitForHost(PORT);
 const e = await connect("E");
 check(JSON.stringify(e.prefs) === '{"idle":true}', `a hand-edited store is cleaned on the way in (${JSON.stringify(e.prefs)})`);
 e.close();

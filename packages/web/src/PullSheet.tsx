@@ -1,23 +1,25 @@
 import { useEffect, useState } from "react";
 import {
   Boxes, Check, CloudDownload, CloudOff, Download, Loader, PackageCheck, PackagePlus, Pause, Play, Plus,
-  RotateCw, Save, Settings, Trash2, TriangleAlert, X,
+  RotateCw, Save, Settings, Smartphone, Trash2, TriangleAlert, X,
 } from "lucide-react";
-import { DEFAULT_AUTOPULL, type AutoPullConfig, type RepoTarget } from "@waterplane/shared";
+import { BRAND, DEFAULT_AUTOPULL, type AutoPullConfig, type RepoTarget } from "@waterplane/shared";
 import { autoPull, pulls, setAutoPull, type PullRecord } from "./pull";
 import { autoSaveOutPref, saveNow, setAutoSaveOut } from "./download";
-import { downloadAction, downloadStatus } from "./downloadState";
+import { browserPullAsk, downloadAction, downloadStatus, stripRows } from "./downloadState";
 import { nativeSaveSupported } from "./nativeSave";
 import { fmtSize } from "./format";
 import { track } from "./usage";
 import { SheetHead } from "./Sheet";
+import { RadioRows } from "./kit";
 import { Empty } from "./Empty";
-import { hostBase } from "./hostUrl";
+import { hostBase, isNativeShell } from "./hostUrl";
+import { LS, lsGet, lsSet } from "./storage";
 import { nativePullSupported } from "./nativePull";
 import { ConfirmButton } from "./Confirm";
 import { showToast } from "./toast";
 import {
-  allowToggle, autoInstallText, installIntroText, installOffer, installStatusText, installVerbText,
+  allowToggle, autoInstallText, cleanedText, installIntroText, installOffer, installStatusText, installVerbText,
   NO_INSTALL, toggleAllow, type InstallCaps,
 } from "./installPolicy";
 import {
@@ -320,6 +322,7 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
           </button>
           <span className="set-note">
             The master switch. Off, nothing is fetched without a tap — whatever the per-repo rules below say.
+            {isNativeShell() ? "" : ` It is this browser's own: the ${BRAND.displayName} app keeps a separate one, so with the app on this phone too, off here means each file downloads once — in the app.`}
           </span>
         </div>
 
@@ -378,8 +381,12 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
           </div>
 
           <div className="set-row">
-            <button className={`key ${cfg.scope === "outbox" ? "active" : ""}`} onClick={() => patch({ scope: "outbox" })}>outbox only</button>
-            <button className={`key ${cfg.scope === "repo" ? "active" : ""}`} onClick={() => patch({ scope: "repo" })}>whole repo</button>
+            <RadioRows
+              label="what auto-download watches"
+              options={[{ key: "outbox", label: "outbox only" }, { key: "repo", label: "whole repo" }]}
+              value={cfg.scope}
+              onChange={(k) => patch({ scope: k })}
+            />
             <span className="set-note">
               The outbox (<span className="mono">.claude/outbox</span>) is the curated repo→phone drop. Whole-repo
               catches files an agent wrote anywhere, and is noisier by exactly that much.
@@ -503,7 +510,9 @@ function PullRow({ rec, repos, onDismiss, caps, allow, onAllow }: {
     // One vocabulary for "where is this file", shared with every download button
     // in the app (`downloadState.ts`) — including the two sentences only the
     // folder can answer: it is in Downloads, or it was and is not any more.
-    status = evicted
+    status = evicted && rec.cleanedAt
+      ? `installed · ${cleanedText(rec)}`
+      : evicted
       ? "downloaded before · bytes cleared to save space · tap to fetch again"
       : downloadStatus(rec).detail;
   } else if (state === "failed") {
@@ -700,7 +709,7 @@ function PullRow({ rec, repos, onDismiss, caps, allow, onAllow }: {
  * nobody sees it.
  */
 export function PullBar({ records, onOpen }: { records: PullRecord[]; onOpen: () => void }) {
-  const active = records.filter((r) => r.state !== "done");
+  const active = stripRows(records, autoPull());
   const now = useTick(active.length > 0);
   if (!active.length) return null;
   const running = active.find((r) => r.state === "downloading");
@@ -749,6 +758,52 @@ export function PullBar({ records, onOpen }: { records: PullRecord[]; onOpen: ()
               : `${active.length} file${active.length > 1 ? "s" : ""} to download${queueTail}`}
       </span>
       <button className="key" onClick={onOpen}><Download size={14} /> Downloads</button>
+    </div>
+  );
+}
+
+const onAndroid = () => typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
+
+/**
+ * The one-time question a browser tab asks when it starts fetching on its own:
+ * is the app on this phone too? Each WebView keeps its own auto-download
+ * switch, so a browser and the APK side by side both fetch every build — and
+ * the browser cannot see the APK, so it asks (`browserPullAsk`). Rendered under
+ * the download strip, where the doubled transfer is already on screen.
+ *
+ * *app only* turns auto-download off HERE and pauses the automatic transfer
+ * already running here (the switch alone would let it finish). Either answer
+ * is final, and both toasts name where the switch lives.
+ */
+export function PullBrowserAsk({ records }: { records: PullRecord[] }) {
+  const [answered, setAnswered] = useState(() => lsGet(LS.pullBrowserAsk) === "1");
+  if (!browserPullAsk({ native: isNativeShell(), android: onAndroid(), auto: autoPull(), answered, records })) return null;
+  const answer = (appOnly: boolean) => {
+    lsSet(LS.pullBrowserAsk, "1");
+    setAnswered(true);
+    if (!appOnly) {
+      track("action:pull.browserask.keep");
+      showToast("Auto-download stays on in this browser. Downloads › rules has the switch.");
+      return;
+    }
+    track("action:pull.browserask.apponly");
+    const running = records.filter((r) => !r.local && r.state === "downloading");
+    setAutoPull(false);
+    for (const r of running) pulls.pause(r.item.id);
+    showToast(`Auto-download is off in this browser${running.length ? ` and ${running.length === 1 ? running[0].item.name : `${running.length} downloads`} paused here` : ""} — the app fetches them. Downloads › rules turns it back on.`);
+  };
+  return (
+    <div className="outbox-recover ask">
+      <Smartphone size={14} />
+      <span>Auto-download in this browser too? If the {BRAND.displayName} app is on this phone, it already fetches these — keep both on and every file downloads twice.</span>
+      <button className="key" onClick={() => answer(true)}
+        title="turn auto-download off in this browser only — the app keeps fetching">
+        <Smartphone size={14} /> off — app has it
+      </button>
+      <button className="key" onClick={() => answer(false)}
+        title="keep auto-download on in this browser">
+        <Download size={14} /> keep on — no app
+      </button>
     </div>
   );
 }

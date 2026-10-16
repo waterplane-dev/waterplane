@@ -65,14 +65,17 @@
  *   2026-09-19, cross-checked against the `claude-api` skill's model table;
  *   Opus 5.5 added 2026-09-24 from that skill's table — $4/$20, cache read
  *   $0.20 — when sessions started logging `claude-opus-5-5` and every one of
- *   them fell back to a token total beside priced siblings).
+ *   them fell back to a token total beside priced siblings; Haiku 5.5 added
+ *   2026-10-09 from the same skill's table and its migration notes — $0.10/
+ *   $0.50 at a prompt of 100K tokens or fewer, cache at the multipliers —
+ *   after 1.1M of its tokens sat unpriced in one week).
  *   `PRICES_AS_OF` is carried to the UI so the screen can say how old the
  *   table is rather than implying it is current.
  */
 
 /** When this table was taken. Shown, so a stale rate is visible rather than
  *  silently authoritative. */
-export const PRICES_AS_OF = "2026-09-28";
+export const PRICES_AS_OF = "2026-10-09";
 
 /** Multipliers on a model's INPUT rate. */
 export const CACHE_READ_MULT = 0.1;
@@ -130,6 +133,13 @@ export const PRICES: Record<string, PriceEntry> = {
   "claude-sonnet-5": { input: 2, output: 10 },
   "claude-sonnet-4-6": { input: 3, output: 15 },
   "claude-sonnet-4-5": { input: 3, output: 15 },
+  // Two published cards, chosen by PROMPT length: $0.10/$0.50 up to a 100K-token
+  // prompt, $0.50/$2.50 above it. This table prices buckets, not requests, so
+  // it carries the short card and a longer prompt is UNDER-priced (5×) — the
+  // fast-mode stance, and measured 0 of 106 haiku-5-5 requests here past 100K
+  // (2026-10-09). Splitting the long card out needs the scan to tally those
+  // requests under their own key; until then this is the one known floor.
+  "claude-haiku-5-5": { input: 0.1, output: 0.5 },
   "claude-haiku-4-5": { input: 1, output: 5 },
 };
 

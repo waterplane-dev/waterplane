@@ -45,7 +45,10 @@
  *     result is the same duplicate sweep the file exists to prevent.
  *
  * Persistence is best-effort throughout — a read or write that fails degrades to
- * the old in-memory behaviour and must never throw into the request path.
+ * the old in-memory behaviour and must never throw into the request path. But a
+ * failed WRITE is not silent: it is logged, kept (`lastWriteError()`) and told
+ * once (`onWriteError` → a feed row and a doctor row), because a receipt that
+ * never reached the disk is a retry a restart lets run twice.
  *
  * A file that is PRESENT and does not parse is not "start empty" any more: it is
  * moved aside (`jsonstore.ts`, `acks.json.corrupt-<ts>`), logged, and the loss
@@ -132,9 +135,42 @@ export function lostLedgerNotice(lost: NonNullable<AckLedger["lost"]>): { title:
   };
 }
 
+/** The words a person reads when receipts stop reaching the disk — the feed row and the log line say the same thing. */
+export const ACK_WRITE_FAILED = "receipts not reaching disk — a retry after a restart may run twice";
+
+/**
+ * The feed row for a ledger that can no longer be WRITTEN (`onWriteError`,
+ * wired in `main.ts`). Not a refusal: the op it was remembering has already
+ * run and cannot be un-run, so its verdict still goes out — what changes is
+ * that a restart forgets it, and that is what a person has to hear.
+ */
+export function ackWriteNotice(message: string): { title: string; body: string; tag: string } {
+  return {
+    title: "Host cannot save its record of sends",
+    body: `${ACK_WRITE_FAILED[0]!.toUpperCase()}${ACK_WRITE_FAILED.slice(1)} (${message}). ` +
+      "Until it can, check a session before re-sending anything after a host restart; check free disk space and that the host's state folder is writable.",
+    tag: "acks-write",
+  };
+}
+
+/** How often a STILL-failing write is logged again, and the floor between two feed rows. */
+const WRITE_ERROR_LOG_MS = 10 * 60_000;
+const WRITE_ERROR_NOTICE_MS = 30 * 60_000;
+
 export class AckLedger {
   private path: string;
   private acks = new Map<string, AckRecord>();
+  /** Why the last write failed (null once one landed). See `persist()`. */
+  private writeError: { at: number; message: string } | null = null;
+  private writeErrorLoggedAt = 0;
+  private writeErrorToldAt = 0;
+  /**
+   * Told when the ledger stops reaching the disk — once per failing streak and
+   * never twice inside `WRITE_ERROR_NOTICE_MS` (a nearly-full disk flaps).
+   * `main.ts` turns it into a feed row (`ackWriteNotice`). Never throws into
+   * the request path: a listener's failure is swallowed.
+   */
+  onWriteError: ((message: string) => void) | null = null;
   private timer: NodeJS.Timeout | null = null;
 
   /** Set when the persisted ledger was present but unreadable at boot: when,
@@ -214,11 +250,14 @@ export class AckLedger {
     }
   }
 
-  /** Write any debounced changes now. */
-  flush(): void {
+  /** Write any debounced changes now. `false` ⇒ the write failed (`lastWriteError()`). */
+  flush(): boolean {
     if (this.timer) { clearTimeout(this.timer); this.timer = null; }
-    this.persist();
+    return this.persist();
   }
+
+  /** Why the last write failed, or null when it landed (or none was tried). */
+  lastWriteError(): string | null { return this.writeError?.message ?? null; }
 
   private schedulePersist(): void {
     if (this.timer) return;
@@ -230,13 +269,41 @@ export class AckLedger {
    * Atomic write (`writeJsonAtomic`: tmp + fsync + rename). A plain
    * `writeFileSync` truncates first, so a SIGTERM landing mid-write leaves half
    * a JSON document — exactly the loss this file exists to prevent.
+   *
+   * A failed write still never breaks a send — the op it records has already
+   * RUN by the time `remember` is called, and refusing its verdict cannot
+   * un-run it — but it is no longer silent: the reason is kept
+   * (`lastWriteError()`), logged once per streak (then every
+   * `WRITE_ERROR_LOG_MS`), and handed to `onWriteError` so a person hears that
+   * a restart will forget these receipts. Answers whether the bytes landed.
    */
-  private persist(): void {
+  private persist(): boolean {
     try {
       const doc: AckDoc = { updatedAt: Date.now(), acks: Object.fromEntries(this.acks) };
       writeJsonAtomic(this.path, doc);
-    } catch {
-      // best effort — a failed write must never break a send.
+    } catch (e) {
+      this.noteWriteFailed(String((e as Error)?.message ?? e));
+      return false;
+    }
+    if (this.writeError) {
+      console.log(`[acks] ${this.path} is being written again (it had failed since ${new Date(this.writeError.at).toISOString()}: ${this.writeError.message})`);
+      this.writeError = null;
+      this.writeErrorLoggedAt = 0;
+    }
+    return true;
+  }
+
+  private noteWriteFailed(message: string): void {
+    const now = Date.now();
+    const first = !this.writeError;
+    this.writeError = { at: this.writeError?.at ?? now, message };
+    if (first || now - this.writeErrorLoggedAt >= WRITE_ERROR_LOG_MS) {
+      this.writeErrorLoggedAt = now;
+      console.error(`[acks] could not write ${this.path} (${message}): ${ACK_WRITE_FAILED}`);
+    }
+    if (first && this.onWriteError && (this.writeErrorToldAt === 0 || now - this.writeErrorToldAt >= WRITE_ERROR_NOTICE_MS)) {
+      this.writeErrorToldAt = now;
+      try { this.onWriteError(message); } catch { /* telling must never break a send */ }
     }
   }
 }

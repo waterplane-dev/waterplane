@@ -40,9 +40,20 @@ export function wheelSpokes(cat: { aliases: string[]; ids: string[] }, current?:
   return out;
 }
 
-/** Spoke label: the window suffix as a word a phone has room for. */
+/** Spoke label: the window suffix as a word a phone has room for, and no
+ *  `claude-` prefix — a full id on the left spoke ran out of the drawing. */
 export function spokeLabel(model: string): string {
-  return model.replace(/\[1m\]$/i, " 1M");
+  return model.replace(/^claude-/i, "").replace(/\[1m\]$/i, " 1M");
+}
+
+/**
+ * Where the floating wheel's top goes, in viewport px: just under the button
+ * that opened it while the whole popover fits below, slid up until it does
+ * when not (a short phone, the chrome showing), never above `margin`. Past a
+ * full viewport the CSS max-height caps it and it scrolls.
+ */
+export function wheelTop(anchorBottom: number, popH: number, viewH: number, margin = 8): number {
+  return Math.max(margin, Math.min(anchorBottom + 6, viewH - popH - margin));
 }
 
 export interface WheelGeom {
@@ -134,12 +145,58 @@ export function planPick(
  * runs who knows what — null, never a guess.
  */
 export function pricedId(model: string | undefined, ids: string[]): string | null {
+  const id = aliasTarget(model, ids);
+  return id && rateFor(id) ? id : null;
+}
+
+/** `pricedId` without the price: the versioned id a model name stands for
+ *  (an id as itself, a family alias as the newest id of that family), window
+ *  suffix dropped, or null when that cannot be said. */
+function aliasTarget(model: string | undefined, ids: string[]): string | null {
   if (!model) return null;
   const m = model.replace(/\[1m\]$/i, "");
-  if (m.startsWith("claude-")) return rateFor(m) ? m : null;
+  if (m.startsWith("claude-")) return m;
   if (!/^(opus|sonnet|haiku|fable)$/.test(m)) return null;
-  const id = ids.map((i) => i.replace(/\[1m\]$/i, "")).find((i) => i.startsWith(`claude-${m}-`));
-  return id && rateFor(id) ? id : null;
+  return ids.map((i) => i.replace(/\[1m\]$/i, "")).find((i) => i.startsWith(`claude-${m}-`)) ?? null;
+}
+
+/**
+ * Where the session IS, for the wheel: what its newest turn ran on
+ * (`turnModel`/`turnEffort`, off the conversation log), else the launch flags.
+ * A `/model` typed since launch moves the first and never the second — read
+ * from the launch flags alone, the wheel offered the same switch again after
+ * it had already landed, and it was sent five times.
+ *
+ * The log names a full id; the spokes are aliases. So the id goes back on the
+ * spoke that stands for it: the launch model when it resolves to that id (which
+ * keeps `opus[1m]`, a window the log does not record), else the catalogue's
+ * alias that does, else the id itself. `from` says which source answered.
+ */
+export function wheelNow(
+  cur: { model?: string; effort?: Effort; turnModel?: string; turnEffort?: Effort },
+  cat: { aliases: string[]; ids: string[] },
+): { model?: string; effort?: Effort; from: "turn" | "launch" } {
+  if (!cur.turnModel) return { model: cur.model, effort: cur.effort, from: "launch" };
+  const t = cur.turnModel;
+  const spoke = aliasTarget(cur.model, cat.ids) === t ? cur.model
+    : cat.aliases.find((a) => !/\[1m\]$/i.test(a) && aliasTarget(a, cat.ids) === t) ?? t;
+  return { model: spoke, effort: cur.turnEffort ?? cur.effort, from: "turn" };
+}
+
+/**
+ * Whether a switch sent from the wheel shows in the log yet: the newest turn
+ * ran on the picked model (same string, or both resolve to one id) and at the
+ * picked effort. Only a TURN reading can say so — the launch flags never move.
+ */
+export function wheelLanded(
+  sent: { model?: string; effort?: Effort },
+  now: { model?: string; effort?: Effort; from: "turn" | "launch" },
+  ids: string[],
+): boolean {
+  if (now.from !== "turn") return false;
+  const modelOk = !sent.model || sent.model === now.model
+    || (aliasTarget(sent.model, ids) != null && aliasTarget(sent.model, ids) === aliasTarget(now.model, ids));
+  return modelOk && (!sent.effort || sent.effort === now.effort);
 }
 
 export interface SwitchCostIn {

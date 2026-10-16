@@ -226,3 +226,50 @@ export function WindowTiles({ cut, money = false }: { cut: WindowCut; money?: bo
     </div>
   );
 }
+
+/**
+ * The KPI row for a run of CALENDAR days (the span filter's 30 / 90 days) — `Tiles` cut to what
+ * day rows can answer. The subagent slice is left out: a `TokenDay` counts launches, not the
+ * agents' tokens, and a corpus figure under a 30-day heading is a number about something else.
+ */
+export function DaysTiles({ days, totals, cost, calendarDays, money = false }: {
+  days: TokenStatsDoc["days"];
+  totals: TokenStatsDoc["totals"];
+  cost: CostBreakdown;
+  /** How many calendar days the span covers, today counted as one. */
+  calendarDays: number;
+  money?: boolean;
+}) {
+  const t = totals;
+  const hit = cacheHitPct(t);
+  const per = perTurn(t);
+  const busiest = [...days].sort((a, b) => tokenTotal(b) - tokenTotal(a))[0];
+  const dearest = [...days].sort((a, b) => b.cost.total - a.cost.total)[0];
+  const date = (day: string) => new Date(dayToMs(day)).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  const tiles: { label: string; value: string; note?: string; title?: string }[] = money
+    ? [
+      { label: "Per turn", value: fmtUsd(t.turns ? cost.total / t.turns : 0), note: `over ${fmtCount(t.turns)} turns` },
+      { label: "Per active day", value: fmtUsd(days.length ? cost.total / days.length : 0), note: `over ${days.length} days` },
+      ...(dearest ? [{ label: "Dearest day", value: fmtUsd(dearest.cost.total), note: date(dearest.day) }] : []),
+      { label: "Output", value: fmtUsd(cost.output), note: shareNote(cost.output, cost.total) },
+      { label: "Cache", value: fmtUsd(cost.cacheRead + cost.cacheWrite), note: shareNote(cost.cacheRead + cost.cacheWrite, cost.total) },
+    ]
+    : [
+      { label: "Turns", value: fmtCount(t.turns), note: `${fmtCount(per ?? 0)} per turn`, title: `${fmtExact(t.turns)} assistant turns` },
+      { label: "Active days", value: String(days.length), note: `of ${calendarDays}` },
+      { label: "Served from cache", value: hit == null ? "—" : `${hit.toFixed(1)}%`, note: "of everything sent in" },
+      ...(busiest ? [{ label: "Busiest day", value: fmtCount(tokenTotal(busiest)), note: date(busiest.day) }] : []),
+      { label: "Output", value: fmtCount(t.output), note: "what the model wrote" },
+    ];
+  return (
+    <div className="ts-tiles">
+      {tiles.map((x) => (
+        <div key={x.label} className="ts-tile" title={x.title}>
+          <div className="ts-tile-v">{x.value}</div>
+          <div className="ts-tile-l">{x.label}</div>
+          {x.note && <div className="ts-tile-n">{x.note}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}

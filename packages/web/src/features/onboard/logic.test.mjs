@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   NAME_WORDS, BROWSER_CANT_INSTALL, aboutBytes, answersFrom, artifactFile, checklist, clockText, consentRows, consentToSend,
-  defaultPath, firstRunCard, fixLabel, goBlocker, handOff, initialTicks, plannedSteps, progressHead, questionsBlocker,
+  defaultPath, existingReposLine, firstRunCard, fixLabel, neverRanSession, goBlocker, handOff, initialTicks, plannedSteps, progressHead, questionsBlocker,
   suggestName, withAllowed,
 } from "./logic.ts";
 
@@ -21,6 +21,8 @@ const job = (over = {}) => ({
 test("the first-run card: only a host that never opened a session, online, outside the demo", () => {
   assert.equal(firstRunCard(facts()), "first-run");
   assert.equal(firstRunCard(facts({ sessions: 1 })), "none");
+  assert.equal(neverRanSession({ sessions: 0, recent: 0, closed: 0 }), true);
+  assert.equal(neverRanSession({ sessions: 0, recent: 0, closed: 1 }), false);
   assert.equal(firstRunCard(facts({ recent: 3 })), "none", "a recent conversation means a session was opened");
   assert.equal(firstRunCard(facts({ closed: 1 })), "none");
   assert.equal(firstRunCard(facts({ online: false })), "none", "every verb on it needs the desktop");
@@ -153,4 +155,10 @@ test("the artifact is a gallery file of the new repo", () => {
   assert.deepEqual(artifactFile(job({ repoId: "r1", artifact: ".claude/outbox/hello-otter.html" })),
     { repoId: "r1", relPath: ".claude/outbox/hello-otter.html", name: "hello-otter.html" });
   assert.equal(artifactFile(job({ artifact: "x.apk" })), null, "no repo id, nothing to open");
+});
+
+test("existingReposLine: repos listed below are pointed at in words, with their count; none means no line", () => {
+  assert.equal(existingReposLine(0), null);
+  assert.equal(existingReposLine(1), "Or tap + now on one of your 1 repo below to open a session in it.");
+  assert.match(existingReposLine(34), /34 repos below/);
 });

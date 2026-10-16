@@ -164,8 +164,10 @@ export function wireFns(c: QueueCtx): WireFns {
       // Backed off like any other requeue: "the session never reached its
       // prompt" is a condition that needs TIME to change, and re-firing on
       // the lane-release timer is a busy-loop that holds the lane.
+      // The host's reason rides as `waitReason` — "the shell is running
+      // `vim`" is the one thing that tells the person what to do.
       writeOutbox(outboxRef.current.map((e) =>
-        e.ackId === msg.ackId && e.status === "pending" ? requeue(e, false) : e));
+        e.ackId === msg.ackId && e.status === "pending" ? { ...requeue(e, false), waitReason: msg.reason || undefined } : e));
       releaseLane();
     } else if (msg.state === "rescued") {
       // The session was gone and the host KEPT the words: they are a work
@@ -237,8 +239,9 @@ export function wireFns(c: QueueCtx): WireFns {
     flushOutbox();
   }
   function onBudget(msg: Msg<"budget.state">): void {
-    deps.setBudget({ budget: msg.budget, verdict: msg.verdict });
-    deps.budgetRef.current = { budget: msg.budget, verdict: msg.verdict }; // the flusher below reads the ref
+    const next = { budget: msg.budget, verdict: msg.verdict, ...(msg.periods ? { periods: msg.periods } : {}) };
+    deps.setBudget(next);
+    deps.budgetRef.current = next; // the flusher below reads the ref
     // The gate may have just LIFTED — a window reset, or the ceiling was
     // raised. Nothing else would notice: the queue's own sweep is on a
     // timer, and this is the moment the answer changed.

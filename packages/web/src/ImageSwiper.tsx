@@ -55,7 +55,8 @@ export function ImageSwiper({ items, index, onIndex, onAnnotate, onReference, on
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "ArrowRight") nav(1);
       else if (e.key === "ArrowLeft") nav(-1);
-      else if (e.key === "Escape") onClose();
+      // preventDefault: answered here, so `core/layout/escape.ts` adds no second Back.
+      else if (e.key === "Escape") { e.preventDefault(); onClose(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

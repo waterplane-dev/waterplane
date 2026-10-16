@@ -1,0 +1,34 @@
+# gitleaks config (https://github.com/gitleaks/gitleaks): the default rules, minus the files below.
+#
+# Every entry is a test fixture that gitleaks reads as a key and a person has read: an invented
+# value, never a credential. Allowlisted by FILE, so a new fixture in these files needs no edit;
+# a real secret committed anywhere else is still found. Add a path only after reading the hit
+# (`gitleaks detect --redact --no-banner -v`), with the reason on the line above it. Never paste
+# the fixture's value here. The `(?:^|/)` start is deliberate: a history scan reports repo-relative
+# paths, the public snapshot's `--no-git` scan reports absolute ones.
+#
+# Hits in files outside the public tree are fingerprinted in .gitleaksignore, which is not published.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "test fixtures: invented keys, passwords and model ids"
+paths = [
+  # A dated model id that the generic-api-key rule reads as a key.
+  '''(?:^|/)packages/extensions/token-stats/web/usageCut\.test\.mjs$''',
+  # The same model id, in the file this test moved from.
+  '''(?:^|/)packages/web/src/usageCut\.test\.mjs$''',
+  # An invented plain password: the value the wire recorder must redact from its log.
+  '''(?:^|/)packages/host/test/wirerecord\.test\.mjs$''',
+  # An invented host id and pairing secret (base64 of a repeated word) for the LAN route tests.
+  '''(?:^|/)packages/web/src/lanRoute\.test\.mjs$''',
+  # An invented Google-shaped key the secret-write e2e sends, then checks is never read back.
+  '''(?:^|/)scripts/e2e-secret\.mjs$''',
+  # An invented Google-shaped key in the redaction e2e, in a file since removed.
+  '''(?:^|/)scripts/e2e-oracle\.mjs$''',
+  # Invented key shapes (counting digits, alphabet runs) that the demo-scenario leak check must catch.
+  '''(?:^|/)tools/demo-scenario\.test\.mjs$''',
+  # An invented JWT (payload sub 1234567890, signature abcdefghij1234) the release scanner is tested on.
+  '''(?:^|/)scripts/release/public-lib\.test\.mjs$''',
+]

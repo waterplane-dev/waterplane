@@ -1,7 +1,7 @@
 /** A slice of assess.ts — moved whole from assess.ts, see docs/notes/shared-architecture.md. */
 import type { Lifecycle } from "../intent.js";
 import type { ItemCategory } from "../naming.js";
-import { type AssessSource, type AssessVerdict } from "./sassvocab.js";
+import { type AssessScope, type AssessSource, type AssessVerdict } from "./sassvocab.js";
 
 // ── What goes in ─────────────────────────────────────────────────────────────
 
@@ -103,6 +103,9 @@ export interface AssessInput {
    * second opinion about the same question.
    */
   scopedIds?: string[];
+  /** **What the scoped ids ARE**, when they are a slot — rows that fire
+   *  together (`AssessScope`). Absent on every other run. */
+  scope?: AssessScope;
 }
 
 // ── What comes out ───────────────────────────────────────────────────────────
@@ -211,11 +214,52 @@ export interface AssessNew {
   fromNote?: string;
 }
 
+/**
+ * **Two or more rows that contradict each other** — opposite changes to one
+ * thing, or one depending on a row that runs LATER.
+ *
+ * Words, never a mutation: there is no choice that approves a conflict and
+ * `applyAssessment` never reads this list. The phone offers *edit*, *drop one*
+ * and *ignore* as the person's own separate verbs on the rows it names.
+ */
+export interface AssessConflict {
+  cid: string;
+  /** 2..MAX_CONFLICT_IDS assessable ids, distinct. */
+  ids: string[];
+  /** One sentence: what contradicts what. Never empty. */
+  why: string;
+}
+
+/**
+ * **One row that is two jobs** — the two texts it should become.
+ *
+ * Approving it posts both texts on the ORIGINAL row's clock and archives (not
+ * cancels) the original (`AssessMutations.split`). Intent rows only, and the
+ * two texts together still name every file the original named
+ * (`transportPaths`) — a split that loses a path is refused by
+ * `cleanAssessment`, because a picture somebody attached must not fall off
+ * the work it was attached to.
+ */
+export interface AssessSplit {
+  sid: string;
+  /** The row being split. */
+  id: string;
+  /** Exactly `SPLIT_PARTS` non-empty texts, in run order. Never clipped. */
+  texts: string[];
+  /** Why this is two jobs. */
+  rationale: string;
+}
+
 /** The whole proposal: what a person is being asked to approve. */
 export interface AssessProposal {
   rows: AssessRow[];
   merges: AssessMerge[];
   news: AssessNew[];
+  /** Contradictions the run found — words only. Absent on every proposal
+   *  written before the slot check (2026-10-16). */
+  conflicts?: AssessConflict[];
+  /** Rows the run would split in two. Absent as above. */
+  splits?: AssessSplit[];
   /**
    * What the pure layer refused, one sentence each.
    *

@@ -9,6 +9,7 @@ import type { ComposerAnchors, EchoRule } from "../echo.js";
 import {
   FALLBACK_ROWS,
   PASTE_CHIT,
+  pastedNewlines,
   pasteCollapsible,
   ROW_WINDOW,
   composerEcho,
@@ -78,6 +79,27 @@ export async function foreignInComposer(
   if (!theirs) return null;
   if (theirs.length >= OURS_MIN && mine.includes(theirs)) return null;
   return held.length > QUOTE_MAX ? `${held.slice(0, QUOTE_MAX - 1)}…` : held;
+}
+
+/**
+ * Is the live composer holding ONLY dim text — a hint, not typing?
+ *
+ * claude proposes the next prompt in an EMPTY composer, drawn dim
+ * (`clisuggest.ts`), and the phone offers that proposal as one tap — so the
+ * words about to be delivered are, letter for letter, the words already drawn
+ * in the box. On the plain render that reads as `exact`, "already typed", and
+ * the delivery typed nothing and pressed Return into an empty composer: the
+ * prompt never ran (measured, the first live tap). The same two reads
+ * `foreignInComposer` makes: words on the plain render, none once dim cells
+ * are blanked ⇒ the box is empty. False whenever either read cannot place a box.
+ */
+export async function composerHoldsOnlyHint(sessions: SessionManager, sessionId: string): Promise<boolean> {
+  const anchors = composerAnchorsOf(sessions, sessionId);
+  if (!anchors || typeof sessions.screenCells !== "function") return false;
+  const cells = await sessions.screenCells(sessionId, ROW_WINDOW);
+  const plain = composerHeld(cells.map((r) => r.text), anchors);
+  if (!plain) return false;
+  return composerHeld(cells.map((r) => r.undimmed), anchors) === "";
 }
 
 /**
@@ -214,6 +236,13 @@ export function makeScreenReader(
     const rows = raw.slice(-FALLBACK_ROWS).map(squash);
     let hit = -1;
     for (let i = rows.length - 1; i >= 0; i--) if (rows[i].includes(probe)) { hit = i; break; }
+    // A backend with no composer at all (a shell) draws the line it is given
+    // HARD-WRAPPED at the terminal's width, after a prompt of any length — so
+    // the probe's fourteen characters straddle a row boundary whenever the
+    // wrap falls inside them (measured: `…news % cd /Users/joha` | `nnes/…` at
+    // 70 cols, `unconfirmed`, no Return, for a command plainly on screen).
+    // Asked of the joined rows, and only where no box exists to be torn across.
+    if (hit < 0 && !anchors) hit = wrappedHit(rows, probe);
     if (hit < 0) return pastedNearBottom(rows) ? "paste" : "none";
     // Corroborate before deciding, and corroborate from the hit DOWNWARDS: the
     // composer holds the text wrapped over consecutive rows, so joining from
@@ -298,9 +327,10 @@ export function makeScreenReader(
     for (let i = rows.length - 1; i >= 0; i--) if (PASTE_CHIT.test(rows[i])) { hit = i; break; }
     if (hit < 0) return false;
     if (rows.length - 1 - hit > composerRows) return false;
-    // An absent count is the CLI saying ZERO newlines, not saying nothing.
-    const clause = rows[hit].match(PASTE_CHIT)![1];
-    const hidden = clause === undefined ? 0 : Number(clause);
+    // The whole run of chits, not the first one (`echo.ts`'s `pastedNewlines`):
+    // one write is several pastes, and a chit wraps across rows (`+2` / `lines]`),
+    // so the count is read off the joined rows down to the newest chit.
+    const hidden = pastedNewlines(rows.slice(Math.max(0, hit - composerRows), hit + 1).join("")) ?? 0;
     if (hidden > pasteLines + 1) return false;        // far more than we ever wrote
     if (hidden >= pasteLines - 1) return true;        // it swallowed the lot
     return rows.join("").includes(tail);
@@ -340,4 +370,19 @@ export function makeScreenReader(
     }
   };
   return { screen, probe, placeEcho, proven, snapshot, waitForEcho };
+}
+
+/** The row the NEWEST occurrence of `probe` starts on, searching the rows as
+ *  one hard-wrapped line (squashed rows joined with nothing between); -1 if
+ *  absent. Only for a screen with no composer box — see `placeEcho`. */
+export function wrappedHit(rows: readonly string[], probe: string): number {
+  if (!probe) return -1;
+  const at = rows.join("").lastIndexOf(probe);
+  if (at < 0) return -1;
+  let off = 0;
+  for (let i = 0; i < rows.length; i++) {
+    off += rows[i].length;
+    if (at < off) return i;
+  }
+  return -1;
 }

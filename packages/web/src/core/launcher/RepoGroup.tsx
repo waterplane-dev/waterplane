@@ -3,14 +3,10 @@
  * repo verb, the "⋯" menu), its worktrees as start-point rows, and — unless
  * collapsed — its live sessions, each followed by the agent worktrees it made.
  */
-import { Fragment } from "react";
-import {
-  CalendarClock, Camera, Check, ChevronDown, ChevronRight, CircleDot, CircleSlash, ClipboardCheck, Download, ExternalLink,
-  EyeOff, FileDiff, FolderTree, GitBranch, Hammer, Hourglass, Images, ListChecks, ListTodo, Loader, MoreHorizontal, Plus,
-  ScanEye, SendHorizontal, Sparkles, Star, Terminal, X,
-} from "lucide-react";
+import { Fragment, useLayoutEffect, useRef, useState } from "react";
+import { ArrowDown, ArrowUp, CalendarClock, Camera, Check, ChevronDown, ChevronRight, CircleDot, CircleSlash, ClipboardCheck, CloudOff, Download, ExternalLink, EyeOff, FileDiff, Flag, FolderTree, GitBranch, Hammer, HeartPulse, Hourglass, Images, ListChecks, ListTodo, Loader, Minus, MoreHorizontal, Plus, ScanEye, SendHorizontal, Star, Terminal, X } from "lucide-react";
 import type { SessionInfo } from "@waterplane/shared";
-import { branchLabel, horizonWords, repoBranchLabel } from "@waterplane/shared";
+import { branchLabel, horizonWords, isoWeekOf, repoBranchLabel } from "@waterplane/shared";
 import { repoAccentStyle } from "../../format";
 import { isBudgetHeld } from "../../sendIntent";
 import { intentRowKey } from "../../activityRows";
@@ -18,15 +14,18 @@ import { queuedChipHeld } from "../../backlogFilter";
 import { repoClocksLabel } from "../../clockCuts";
 import { isNativeShell } from "../../hostUrl";
 import { RepoHealthMenuItem } from "../../RepoHealthRegion";
-import { showToast } from "../../toast";
+import { OptInMenuItem } from "../../OptInRegion";
+import { gitPending, gitSyncText, gitTitle, noOrigin } from "../../gitCounts";
 import { track } from "../../usage";
+import { prefRef } from "../prefs";
 import { openBuildFor } from "../../features/build";
 import { openCaptureFor } from "../../features/capture";
 import { openPullRules } from "../../features/pull";
 import { openScheduleCut } from "../../features/schedule";
-import { openAssessFor, openBacklogCut, openBacklogFor, useBacklog } from "../../features/backlog";
+import { openAssessFor, openBacklogCut, openBacklogFor } from "../../features/backlog";
 import { openActivity } from "../../features/activity";
 import { openRepoHealth, openSetup } from "../../features/setup";
+import { healthChip } from "../../healthIndexWords";
 import { openBrowseFor, openGalleryFor, openOutboxFor, pickImageFor } from "../../features/images";
 import type { LauncherProps } from "./types";
 import type { LauncherModel } from "./useLauncherModel";
@@ -37,25 +36,25 @@ import { shellBackend } from "../../backendCaps";
 import { repoActions, repoChips } from "../extensionPoints";
 import { ExtRepoChip } from "./ExtRepoChip";
 import { LeftoverHead, LeftoverLine, LeftoverRemove, useLeftovers } from "./LeftoverWorktrees";
+import { flaggedChipTitle } from "../sessions/followUpFacts";
 
 const ICON = 16;
 
 export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
   p: LauncherProps; m: LauncherModel; repoName: string; sessions: SessionInfo[];
 }) {
-  const { intents, openGitFor, openSend } = p;
+  const { intents, openGitFor } = p;
   const { focusRepo, setOverlay } = p.route;
   const { toggleHideRepo, openingCwds } = p.view;
   const { openRepo, openShell, setBranchPick, refreshRepos } = p.launchCore;
   // Drawn only when this desktop lists a shell backend — an older host has none.
   const canShell = !!shellBackend(p.backends);
-  const { enterOldestPending } = p.queue;
+  const { enterOldestPending, enterLater } = p.queue;
   const {
-    primaryRepo, worktreesOf, attentionByRepo, statusFilter, collapsedRepos, toggleRepoCollapsed, clearFocus, openFocusWindow,
-    statusFilterActive, toggleStatusFilter, waitingRepliesByRepo, queuedByRepo, intentById, clocksPerRepo, starredByRepo,
+    primaryRepo, worktreesOf, attentionByRepo, statusFilter, textOn, collapsedRepos, toggleRepoCollapsed, openFocusWindow,
+    statusFilterActive, toggleStatusFilter, waitingRepliesByRepo, queuedByRepo, intentById, clocksPerRepo, starredByRepo, flaggedByRepo,
     repoMenu, setRepoMenu, setCloseAllPick,
   } = m;
-  const bl = useBacklog();
   const n = groupSessions.length;
   const main = primaryRepo(repoName);
   const wts = worktreesOf(repoName);
@@ -69,32 +68,115 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
   // A filter is an explicit "show me these", so it wins over a collapsed
   // group: leaving the group collapsed would answer the tap by hiding
   // exactly the rows it counted.
-  const collapsed = !statusFilter && collapsedRepos.has(repoName);
-  // A repo with nothing running is a ONE-LINE row, not a header.
-  // Given the full header treatment it took three lines — name,
-  // then seven 42px buttons wrapped onto their own line, then the
-  // branch chip right-aligned under those — and sixteen of those is
-  // a wall in which the repo that has twelve sessions looks exactly
-  // like the fourteen that have none. `idle` keeps the same markup
-  // (one row per repo, same accent, same verbs) and lets the CSS put
-  // the chips back on the name line at row height.
+  // A repo with nothing running wears the SAME header as one with twelve
+  // sessions — chevron, band, type, buttons. It used to be a slimmer chevron-less
+  // row, and the owner read that difference as "this repo can do less" (it
+  // cannot: same verbs). It stays one line only because it has no chip row.
   const idle = n + wt === 0;
+  // An idle repo's fold is NOT the persisted collapsed set: that set defaults to
+  // open, and sixteen sessionless repos each opened onto a "no session" line is
+  // the wall the slim row was made to avoid. So it starts folded and opening it
+  // lasts this screen only — what it reveals is a pointer, not rows to keep.
+  const [idleOpen, setIdleOpen] = useState(false);
+  // A filter (chip or typed words) shows the rows it found, folded or not.
+  const collapsed = idle ? !idleOpen : !statusFilter && !textOn && collapsedRepos.has(repoName);
+  // A fold or unfold moves the list to this repo's header. Unfolding left the
+  // revealed rows wherever the header happened to sit — often one row above the
+  // bottom edge, so the tap seemed to do nothing. Folding from deep inside the
+  // group (the header is sticky, so it is tappable there) dropped the rows above
+  // the viewport and left the reader at some later repo with the header gone.
+  // The header itself is sticky, so its rect is where it is PINNED, not where it
+  // lives: the zero-height anchor before it marks the real position.
+  // Unfolding goes further (setting `unfoldToEnd`, default on): to the END of
+  // what it revealed, so the last row sits at the bottom edge (the sticky header
+  // stays pinned above a long group). A group whose end is already on screen is
+  // left where it is.
+  const anchorRef = useRef<HTMLSpanElement | null>(null);
+  const endRef = useRef<HTMLSpanElement | null>(null);
+  const scrollOnFold = useRef(false);
+  useLayoutEffect(() => {
+    if (!scrollOnFold.current) return;
+    scrollOnFold.current = false;
+    const a = anchorRef.current;
+    const list = a?.closest<HTMLElement>(".list");
+    if (!a || !list) return;
+    const listTop = list.getBoundingClientRect().top;
+    const e = endRef.current;
+    if (!collapsed && e && prefRef("unfoldToEnd").current) {
+      const end = e.getBoundingClientRect().top - listTop;
+      if (end > list.clientHeight) list.scrollTo({ top: list.scrollTop + end - list.clientHeight, behavior: "smooth" });
+      return;
+    }
+    const top = a.getBoundingClientRect().top - listTop + list.scrollTop;
+    list.scrollTo({ top, behavior: "smooth" });
+  }, [collapsed]);
+  const foldToggle = () => {
+    scrollOnFold.current = true;
+    if (idle) { track("action:repo.collapse"); setIdleOpen((v) => !v); } else toggleRepoCollapsed(repoName);
+  };
   const groupHead = (
     <div className={`section repo-group${idle ? " idle" : ""}`} style={repoAccentStyle(repoName)}>
-      {/* The chevron is drawn only when there is something under
-          the header: a repo with no session and no worktree
-          expands into nothing, and an arrow that opens an empty
-          space reads as a list that failed to load. */}
-      {/* Never `disabled`: an idle repo has nothing to fold, so a tap SAYS so
-          rather than being a dead control whose reason lives in a `title`. */}
+      {/* Every header folds, idle or not: an idle one opens onto a line that
+          SAYS nothing is running and points at the "+" (see `idleEmpty`). */}
+      {/* Name + the wrapping verbs share one line box; ⋯ and × sit OUTSIDE it
+          (`.repo-group-pin`) so a long name or big type moves files/git/build
+          onto a second line while those two stay top-right. */}
+      <div className="repo-group-line">
       <button className="repo-group-toggle"
-        title={idle ? `${repoName} — no session open; use the buttons to start one`
+        title={idle ? `${collapsed ? "show" : "hide"} — no session open in ${repoName}`
           : collapsed ? `show ${n} session${n === 1 ? "" : "s"}${wt > 0 ? ` and ${wt} worktree${wt === 1 ? "" : "s"}` : ""}`
           : `hide ${n} session${n === 1 ? "" : "s"}${wt > 0 ? ` and ${wt} worktree${wt === 1 ? "" : "s"}` : ""}`}
-        onClick={() => idle ? showToast(`${repoName} — no session open; use the buttons to start one`) : toggleRepoCollapsed(repoName)}>
-        {idle ? <span className="repo-group-nub" /> : collapsed ? <ChevronRight size={17} /> : <ChevronDown size={17} />}
+        onClick={foldToggle}>
+        {collapsed ? <ChevronRight size={17} /> : <ChevronDown size={17} />}
         <span>{repoName}</span>
       </button>
+      <span className="repo-group-acts">
+        {/* Repo-level affordances, mirrored from where they already live: the
+            inbox/untracked count badges the live rows carry, and the build
+            button from the "Repos & worktrees" rows. With the group collapsed
+            the header stands in for every row, so it has to answer "is there
+            anything in the inbox?" and "build it" without expanding first. */}
+        {main && (
+          // A count on a button is a promise about what opening it shows. The
+          // gallery's own default is the outbox in the last 4h, so tapping "42"
+          // landed on an empty grid — the badge said 42, the sheet said 0.
+          // Carry the scope AND the window the number came from.
+          <button className={`focus-btn${main.outboxCount > 0 ? " count" : ""}`}
+            title={main.outboxCount > 0 ? `${main.outboxCount} new outbox file${main.outboxCount > 1 ? "s" : ""} since last opened — open files` : `files in ${repoName}`}
+            onClick={() => { track("action:repo.files.header"); main.outboxCount > 0 ? openOutboxFor(main.id) : openGalleryFor(main.id); }}>
+            <Images size={15} />{main.outboxCount > 0 && main.outboxCount}
+          </button>
+        )}
+        {/* Always drawn: the git view is where a PUSH lives, and commits waiting
+            to go out leave the tree clean — gating on changed files hid it
+            exactly then. The counts are files, then ↑out ↓in. */}
+        {main && (
+          <button className={`focus-btn${gitPending(main) ? " count" : ""}`} title={gitTitle(main)}
+            onClick={() => openGitFor(main.id)}>
+            <FileDiff size={13} />{main.changedCount > 0 && main.changedCount}
+            {gitSyncText(main) && <span className="git-ab">{gitSyncText(main)}</span>}
+            {noOrigin(main) && <span className="git-ab no-origin"><CloudOff size={12} />no remote</span>}
+          </button>
+        )}
+        {/* Build stays ON the header. It is the rate-limit escape
+            hatch — the thing you reach for when a session cannot
+            run — so it may not be a tap deeper behind "⋯". Camera,
+            first prompt, focus, branch and hide are: seven
+            always-on 42px buttons need ~300px, which on a phone
+            left no room for the name and broke the strip onto a
+            line of its own under every header. */}
+        {main && <button className="focus-btn" title={`build ${repoName} (run a build command, no tokens)`} onClick={() => { track("action:repo.build.header"); openBuildFor(main); }}><Hammer size={17} /></button>}
+      </span>
+      </div>
+      <span className="repo-group-pin">
+        <button className={`focus-btn${repoMenu === repoName ? " on" : ""}`} aria-label="more actions" aria-expanded={repoMenu === repoName}
+          title="more actions" onClick={() => { track("action:repo.more"); setRepoMenu((v) => (v === repoName ? null : repoName)); }}><MoreHorizontal size={17} /></button>
+        {n > 0 && (
+          <button className="focus-btn danger"
+            title={`close sessions in ${repoName} — review the ${n} here, cut by state, idle time, or what is still running underneath`}
+            onClick={() => setCloseAllPick(repoName)}><X size={18} /></button>
+        )}
+      </span>
       {/* Status roll-up: what the rows under this header are doing, in
           the same order and with the same wording as the row badges.
           `waiting` keeps the pulse (it is the one that wants you); the
@@ -115,29 +197,48 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
           collapse the group on the way past). The total focuses the repo
           and the worktree chip cuts to the worktree rows. */}
       <span className="repo-group-stats">
+        {/* **Start something here: now, or later.** The two ways a repo
+            begins work, worded and side by side under its name. They were a
+            bare "+" among five header icons (found only with a first-run
+            word on it) and `send…` one tap deep in "⋯" — so the verb a
+            person opens the launcher FOR was the least visible one on it.
+            `now` is the empty session, opened at once. `later` is the SAME
+            session screen (`enterLater`) with the terminal swapped for the
+            sentence that it starts only when its backlog item runs, and the
+            compose bar aimed at a new session *when it's free* — the one
+            prompt box, paste and drop included, never a second one in a
+            sheet. Works with the tunnel down: Send is a backlog row, and
+            the chevron's *elsewhere or later…* puts it on a clock.
+            Always a "+", never a spinner: what is already in flight is on
+            the chip below (see openingCwds); `now` can always start the
+            NEXT one. An opened idle repo's empty line points here, so
+            `now` is outlined to be found (`.lead`). */}
+        {main && (() => {
+          const opening = openingCwds.get(main.worktreePath);
+          return (
+            <span className="repo-start">
+              <button className={`repo-start-btn${idle && !collapsed ? " lead" : ""}`}
+                title={opening ? `new session in ${repoName} · ${main.branch}, another one now — ${openingTitle(opening)}`
+                  : `new session in ${repoName} · ${main.branch}, opened now`}
+                onClick={() => { track("action:repo.new.header"); openRepo(main); }}>
+                <Plus size={15} />now
+              </button>
+              <button className="repo-start-btn"
+                title={`words for a new session in ${repoName} — held until the repo is free, or on a clock you pick`}
+                onClick={() => { track("action:repo.send"); enterLater(main.worktreePath); }}>
+                <Plus size={15} />later
+              </button>
+            </span>
+          );
+        })()}
         {/* The branch is what the repo row used to say under the
             name, and it is the one fact a repo with nothing
             running still has. With sessions it is redundant — each
-            row is titled by its own branch — so it steps aside for
-            the count rather than sitting beside it. */}
-        {/* **A count on a control is a filter**, and this was the
-            one count in the header that was not one. Every chip
-            beside it — waiting, working, idle, at the limit — cuts
-            the list to exactly what it counts; the total sat there
-            as plain text saying "31" with no way to get to the 31.
-            Its cut is the repo itself: focus, which is the route
-            that shows this repo's rows and nothing else. */}
-        {n > 0
-          ? <button className={`repo-group-count${focusRepo === repoName ? " on" : ""}`}
-              title={focusRepo === repoName
-                ? `showing only ${repoName} — tap to go back to every repo`
-                : `${n} live session${n > 1 ? "s" : ""} — tap to show only ${repoName}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                track("action:repo.focus.count");
-                if (focusRepo === repoName) clearFocus(); else openFocusWindow(repoName);
-              }}>{n}</button>
-          : main && branchLabel(main) && <span className="repo-group-branch" title={`${repoBranchLabel(main)} — nothing running`}>{branchLabel(main)}</span>}
+            row is titled by its own branch — so it steps aside.
+            There is no session-total chip: the owner cut it as not
+            worth its width — the status chips beside it already
+            split the same rows, and focus is in the ··· menu. */}
+        {n === 0 && main && branchLabel(main) && <span className="repo-group-branch" title={`${repoBranchLabel(main)} — nothing running`}>{branchLabel(main)}</span>}
         {/* A count on a control is a filter: the worktree rows under this
             header, plus any session running in one, and nothing else. */}
         {wt > 0 && (
@@ -166,24 +267,21 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
             has nothing to badge and still has a checklist to open,
             so the two are not alternatives and neither replaces the
             other. */}
-        {/* **The smart pick, visible without opening anything.**
-            It was a toggle inside one repo's backlog sheet and
-            nowhere else, so the only way to learn which repos
-            groom themselves before each item was to open each
-            backlog in turn — for a feature that APPLIES ITSELF and
-            spends money doing it. This is a readout of the same
-            `smartPick` array the toggle is drawn from (never a
-            second source of truth: the switch stays where it is),
-            and the tap opens that repo's backlog, which is where
-            the switch is. Absent on a host that has never heard of
-            the feature — `undefined` is not `[]`. */}
-        {main && bl.smartPick?.includes(main.worktreePath) && (
-          <button className="repo-group-stat smart"
-            title={`${repoName} takes a look over its waiting items before each one starts — open its backlog, where the switch is`}
-            onClick={() => { track("action:repo.smartpick"); openBacklogCut(main.worktreePath); }}>
-            <Sparkles size={13} />
-          </button>
-        )}
+        {(() => {
+          // The health index, one chained weekly number. ABSENT on the wire =
+          // no chip (never `Health 0`). A called drop wears the warn colour, a
+          // called rise the calm one; otherwise it is a plain readout. The tap
+          // opens the readings sheet, whose first section is this number.
+          const hc = main ? healthChip(main.healthIndex, repoName, isoWeekOf(new Date().toISOString().slice(0, 10))) : null;
+          if (!main || !hc) return null;
+          const Arrow = hc.arrow === "down" ? ArrowDown : hc.arrow === "up" ? ArrowUp : hc.arrow === "flat" ? Minus : null;
+          return (
+            <button className={`repo-group-stat health${hc.tone ? ` ${hc.tone}` : ""}`} title={hc.title}
+              onClick={() => { track("action:repo.healthindex"); openRepoHealth(main); }}>
+              <HeartPulse size={13} />{hc.label}{Arrow ? <Arrow size={12} /> : null}{hc.delta}
+            </button>
+          );
+        })()}
         {main?.setup && main.setup.issues > 0 && (
           <button className={`repo-group-stat ${!main.setup.ok ? "bad" : "warn"}`} title={setupTitle(main.setup)}
             onClick={() => { track("action:repo.setup"); openSetup(main.id, { focus: "findings" }); }}>
@@ -334,58 +432,19 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
             </button>
           );
         })()}
-      </span>
-      <span className="repo-group-acts">
-        {/* Repo-level affordances, mirrored from where they already live: the
-            inbox/untracked count badges the live rows carry, and the build
-            button from the "Repos & worktrees" rows. With the group collapsed
-            the header stands in for every row, so it has to answer "is there
-            anything in the inbox?" and "build it" without expanding first. */}
-        {main && (
-          // A count on a button is a promise about what opening it shows. The
-          // gallery's own default is the outbox in the last 4h, so tapping "42"
-          // landed on an empty grid — the badge said 42, the sheet said 0.
-          // Carry the scope AND the window the number came from.
-          <button className={`focus-btn${main.outboxCount > 0 ? " count" : ""}`}
-            title={main.outboxCount > 0 ? `${main.outboxCount} new outbox file${main.outboxCount > 1 ? "s" : ""} since last opened — open files` : `files in ${repoName}`}
-            onClick={() => { track("action:repo.files.header"); main.outboxCount > 0 ? openOutboxFor(main.id) : openGalleryFor(main.id); }}>
-            <Images size={15} />{main.outboxCount > 0 && main.outboxCount}
-          </button>
-        )}
-        {main && main.changedCount > 0 && (
-          <button className="focus-btn count" title={`${main.changedCount} changed file${main.changedCount > 1 ? "s" : ""} — open git`}
-            onClick={() => openGitFor(main.id)}><FileDiff size={13} />{main.changedCount}</button>
-        )}
-        {main && (() => {
-          // Always a "+", never a spinner. What is already in
-          // flight is on the chip above (see openingCwds); this
-          // button's only job is starting the NEXT one, and it
-          // can always do that.
-          const opening = openingCwds.get(main.worktreePath);
+        {(() => {
+          // Beside the star chip, for the reason the flag sits beside the
+          // star: the other mark a row carries. The count IS the cut.
+          const fl = flaggedByRepo.get(repoName);
+          if (!fl) return null;
           return (
-            <button className="focus-btn"
-              title={opening ? `another session in ${repoName} · ${main.branch} — ${openingTitle(opening)}`
-                : `new session in ${repoName} · ${main.branch}`}
-              onClick={() => { track("action:repo.new.header"); openRepo(main); }}>
-              <Plus size={19} />
+            <button className={`repo-group-stat fu-${fl.tone}${statusFilterActive("followup", repoName) ? " on" : ""}`}
+              data-hint="session.followup" title={flaggedChipTitle(fl.n, repoName)}
+              onClick={() => toggleStatusFilter("followup", repoName)}>
+              <Flag size={12} fill="currentColor" />{fl.n}
             </button>
           );
         })()}
-        {/* Build stays ON the header. It is the rate-limit escape
-            hatch — the thing you reach for when a session cannot
-            run — so it may not be a tap deeper behind "⋯". Camera,
-            first prompt, focus, branch and hide are: seven
-            always-on 42px buttons need ~300px, which on a phone
-            left no room for the name and broke the strip onto a
-            line of its own under every header. */}
-        {main && <button className="focus-btn" title={`build ${repoName} (run a build command, no tokens)`} onClick={() => { track("action:repo.build.header"); openBuildFor(main); }}><Hammer size={17} /></button>}
-        <button className={`focus-btn${repoMenu === repoName ? " on" : ""}`} aria-label="more actions" aria-expanded={repoMenu === repoName}
-          title="more actions" onClick={() => { track("action:repo.more"); setRepoMenu((v) => (v === repoName ? null : repoName)); }}><MoreHorizontal size={17} /></button>
-        {n > 0 && (
-          <button className="focus-btn danger"
-            title={`close sessions in ${repoName} — review the ${n} here, cut by state, idle time, or what is still running underneath`}
-            onClick={() => setCloseAllPick(repoName)}><X size={18} /></button>
-        )}
       </span>
       {repoMenu === repoName && (
         <div className="row-more">
@@ -393,28 +452,6 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
               without reading the whole menu. */}
           {main && canShell && <button className="more-act" title="a plain terminal on the desktop in this repo — no Claude"
             onClick={() => { setRepoMenu(null); openShell(main); }}><Terminal size={ICON} />open a shell here</button>}
-          {/* `send image` is GONE from this menu. It was "a new
-              session in this repo, with a picture", i.e. `send…`
-              with one of its own attach buttons already pressed —
-              and the repo's worktree rows under this header carry
-              the same camera. Five controls meant "a new session
-              in this repo"; the empty one (`+`) and the one that
-              carries words (`send…`) are genuinely different, and
-              this was neither. */}
-          {/* One verb, the app's own: SEND. It was called *first
-              prompt*, which named the mechanism (words that exist
-              before the session does — still the only way to
-              queue work for a repo while the tunnel is down, since
-              an unborn session has no id a `session.input` could
-              name) rather than what a person wants, and it was one
-              of five spellings of "run these words in a new
-              conversation here". It also shared the pad's
-              NotebookPen, so two different things wore one icon. */}
-          {main && <button className="more-act" onClick={() => { track("action:repo.send"); setRepoMenu(null); openSend({
-            target: { kind: "repo", cwd: main.worktreePath },
-            cwdHint: main.worktreePath, repoId: main.id,
-            origin: repoBranchLabel(main),
-          }); }}><SendHorizontal size={ICON} />send…</button>}
           {!focusRepo && <button className="more-act" data-hint="repo.focus" onClick={() => { track("action:repo.focus"); setRepoMenu(null); openFocusWindow(repoName); }}><ExternalLink size={ICON} />{isNativeShell() ? "focus this repo" : "focus window"}</button>}
           {/* The repo TREE, the one entry point that does not need a
               live session: the toolbar's `browse` is derived from the
@@ -448,6 +485,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
           {main && <button className="more-act" onClick={() => { track("action:repo.branch"); setRepoMenu(null); setBranchPick(main); setOverlay("branches"); }}><GitBranch size={ICON} />branch</button>}
           {main && <button className="more-act" data-hint="repo.hide" onClick={() => { track("action:repo.hide"); setRepoMenu(null); toggleHideRepo(main.id); }}><EyeOff size={ICON} />hide</button>}
           {main && <RepoHealthMenuItem repo={main} onOpen={() => { setRepoMenu(null); openRepoHealth(main); }} />}
+          {main && <OptInMenuItem onOpen={() => { track("action:repo.optins"); setRepoMenu(null); openSetup(main.id, { region: "optins" }); }} />}
         </div>
       )}
     </div>
@@ -483,9 +521,12 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
             <button className="row-chip" title={`${t.outboxCount} new outbox file${t.outboxCount > 1 ? "s" : ""} since last opened — open gallery`}
               onClick={(e) => { e.stopPropagation(); track("action:repo.inbox"); openOutboxFor(t.id); }}><Images size={12} />{t.outboxCount}</button>
           )}
-          {t.changedCount > 0 && (
-            <button className="row-chip" title={`${t.changedCount} changed file${t.changedCount > 1 ? "s" : ""} — open git`}
-              onClick={(e) => { e.stopPropagation(); track("action:repo.git"); openGitFor(t.id); }}><FileDiff size={12} />{t.changedCount}</button>
+          {gitPending(t) && (
+            <button className="row-chip" title={gitTitle(t)}
+              onClick={(e) => { e.stopPropagation(); track("action:repo.git"); openGitFor(t.id); }}>
+              <FileDiff size={12} />{t.changedCount > 0 && t.changedCount}
+              {gitSyncText(t) && <span className="git-ab">{gitSyncText(t)}</span>}
+            </button>
           )}
           {/* Same split as the repo-group chip above: `issues > 0` gates,
               `!ok` styles — `failing` is gone from the wire. */}
@@ -501,11 +542,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
           was the worktree's copy of *first prompt*, wearing the
           pad's NotebookPen. The pad keeps that icon to itself now. */}
       <button className="row-act" title="send words to a new session here — works offline"
-        onClick={() => { track("action:repo.send"); openSend({
-          target: { kind: "repo", cwd: t.worktreePath },
-          cwdHint: t.worktreePath, repoId: t.id,
-          origin: repoBranchLabel(t),
-        }); }}><SendHorizontal size={ICON} /></button>
+        onClick={() => { track("action:repo.send"); enterLater(t.worktreePath); }}><SendHorizontal size={ICON} /></button>
       <button className={`row-act${repoMenu === t.id ? " on" : ""}`} aria-label="more actions" aria-expanded={repoMenu === t.id}
         title="more actions" onClick={() => { track("action:repo.more"); setRepoMenu((v) => (v === t.id ? null : t.id)); }}><MoreHorizontal size={ICON} /></button>
       {repoMenu === t.id && (
@@ -525,7 +562,14 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
   );
   return (
     <Fragment>
+      <span ref={anchorRef} className="repo-group-anchor" aria-hidden />
       {groupHead}
+      {idle && !collapsed && (
+        <div className="repo-group-empty" style={repoAccentStyle(repoName)}>
+          {main ? <>No active session — start one with <Plus size={15} aria-label="plus" />now under the name above.</>
+            : "No active session."}
+        </div>
+      )}
       {!collapsed && <LeftoverHead wts={orphans} readings={leftovers} onChanged={leftoverChanged} />}
       {!collapsed && loose.map(wtRow)}
       {!collapsed && groupSessions.map((s) => (
@@ -534,6 +578,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
           {ownedBy(s.id).map(wtRow)}
         </Fragment>
       ))}
+      <span ref={endRef} className="repo-group-anchor" aria-hidden />
     </Fragment>
   );
 }

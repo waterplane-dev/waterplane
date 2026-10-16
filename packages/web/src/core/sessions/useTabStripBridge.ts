@@ -56,8 +56,8 @@ export function useTabStripBridge(ctx: UseTabStripBridgeCtx) {
       }),
       activeId,
     );
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- `sessionRepoName` is a per-render closure; re-run is driven by sessions, activeId, repos and tabsOn
-  }, [sessions, activeId, repos, tabsOn]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `sessionRepoName` is a per-render closure over `repos`; re-run is driven by sessions, activeId, repos, backends and tabsOn
+  }, [sessions, activeId, repos, backends, tabsOn]);
   /**
    * What a tab's tap does. Two verbs, and they are the launcher's own — the
    * strip decides nothing: `attach` is the same function a session row calls,

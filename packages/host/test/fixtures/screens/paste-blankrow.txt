@@ -1,0 +1,29 @@
+
+ ▐▛███▛█   Claude Code v2.1.301
+▝▜██████▀  Opus 5.5 with medium effort · Claude Max
+ ▝▝   ▝▝   /tmp/wp301
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                         ctrl+g to edit in Vim
+────────────────────────────────────────────────────────────────────────────────
+❯ [Pasted text #1 +2 lines][Pasted text #2 +2 lines][Pasted text #3 +2
+  lines]ike xray oscar india xray charlie foxtrot oscar yankee bravo kilo
+  unif.
+
+  Commit by explicit path. Finish with a review of the whole diff.
+
+  STEP LAST put the report in the outbox, then list what was cut and why.
+────────────────────────────────────────────────────────────────────────────────
+  [CAVEMAN]
+  paste again to expand

@@ -8,6 +8,7 @@ import { assessCounts, assessNameCount, type AssessItem, type AssessVerdict } fr
 import { assessApplyBlocker, assessApplyLabel, assessApplySummary, assessBulkLines, assessGroups, assessGuide, assessMergeLines, assessPickedCount, assessRunBlocker, assessWatch, assessReadyCut, type AssessBulkWords, type AssessGroup, type AssessMergeCard } from "../assessRows";
 import { dropPicks, loadPicks, savePicks } from "../assessPicks";
 import { askConfirm } from "../Confirm";
+import { assessChoicesOf, assessConflictCards, assessSlotIntro, assessSplitCards, slotRunLabel, splitConfirmLines, type SplitCard } from "../slotCheck";
 import { track } from "../usage";
 import { useNow } from "../useNow";
 import type { ResourceState } from "../useRemoteResource";
@@ -47,6 +48,8 @@ export function useAssessSheet(p: AssessSheetProps) {
   const [pickedMerges, setPickedMerges] = useState<ReadonlySet<string>>(() => new Set(loadPicks(runId ?? "")?.merges ?? []));
   const [pickedNews, setPickedNews] = useState<ReadonlySet<number>>(() => new Set(loadPicks(runId ?? "")?.news ?? []));
   const [rejected, setRejected] = useState<ReadonlySet<string>>(() => new Set(loadPicks(runId ?? "")?.rejected ?? []));
+  /** Approved splits — a slot check's tickable card; `rejected` holds `split:<sid>`. */
+  const [pickedSplits, setPickedSplits] = useState<ReadonlySet<string>>(() => new Set(loadPicks(runId ?? "")?.splits ?? []));
   /** Strips the user has toggled away from their default. Not remembered: it is
    *  where you are looking, not anything you decided. */
   const [flipped, setFlipped] = useState<ReadonlySet<AssessVerdict>>(() => new Set<AssessVerdict>());
@@ -71,6 +74,7 @@ export function useAssessSheet(p: AssessSheetProps) {
     setPickedMerges(new Set<string>());
     setPickedNews(new Set<number>());
     setRejected(new Set<string>());
+    setPickedSplits(new Set<string>());
     setFlipped(new Set<AssessVerdict>());
   }, [runId]);
 
@@ -79,6 +83,9 @@ export function useAssessSheet(p: AssessSheetProps) {
     [proposal, items],
   );
   const counts = useMemo(() => (proposal ? assessCounts(proposal) : null), [proposal]);
+  /** A slot check's two cards: conflicts (words, no choice) and splits. */
+  const conflicts = useMemo(() => assessConflictCards(proposal, items), [proposal, items]);
+  const splits = useMemo(() => assessSplitCards(proposal, items), [proposal, items]);
   const itemsById = useMemo(() => {
     const m = new Map<string, AssessItem>();
     for (const it of items) if (it?.id) m.set(it.id, it);
@@ -102,7 +109,7 @@ export function useAssessSheet(p: AssessSheetProps) {
   const [logOpen, setLogOpen] = useState(false);
   const pastSteps = run && run.status !== "running" ? run.progress : undefined;
 
-  const picked = assessPickedCount({ rows: pickedRows, merges: pickedMerges, news: pickedNews });
+  const picked = assessPickedCount({ rows: pickedRows, merges: pickedMerges, news: pickedNews, splits: pickedSplits });
   /**
    * **How this screen works, said before anybody taps.**
    *
@@ -150,9 +157,7 @@ export function useAssessSheet(p: AssessSheetProps) {
    * Not persisted and not a setting, for the reason every filter in this app is
    * cleared with its overlay: it is a decision about THIS ordering, made by
    * somebody who has just read it. A remembered answer would apply an old
-   * judgement to a proposal they have not seen yet — and the expensive
-   * direction (silently freezing a repo the smart pick is grooming) is exactly
-   * the one a stale default would pick.
+   * judgement to a proposal they have not seen yet.
    *
    * It starts on `true`: the person is about to approve this order row by row,
    * so "it stays" is the reading of the tap they are making. The alternative is
@@ -196,9 +201,9 @@ export function useAssessSheet(p: AssessSheetProps) {
     if (!runId) return;
     savePicks(runId, {
       rows: [...pickedRows], merges: [...pickedMerges], news: [...pickedNews],
-      rejected: [...rejected], pinRanks, writeNames,
+      rejected: [...rejected], pinRanks, writeNames, ...(pickedSplits.size ? { splits: [...pickedSplits] } : {}),
     });
-  }, [runId, pickedRows, pickedMerges, pickedNews, rejected, pinRanks, writeNames]);
+  }, [runId, pickedRows, pickedMerges, pickedNews, rejected, pinRanks, writeNames, pickedSplits]);
 
   const toggleRow = (id: string) => {
     setPickedRows((s) => { const n = new Set(s); if (!n.delete(id)) n.add(id); return n; });
@@ -285,25 +290,41 @@ export function useAssessSheet(p: AssessSheetProps) {
     })();
   };
 
+  /** A split replaces somebody's words with two texts the run wrote — the
+   *  merge's danger, so the merge's confirm, with both texts in full. */
+  const toggleSplit = (sid: string) => {
+    setPickedSplits((s) => { const n = new Set(s); if (!n.delete(sid)) n.add(sid); return n; });
+    setRejected((s) => { const n = new Set(s); n.delete(`split:${sid}`); return n; });
+  };
+  const acceptSplit = (card: SplitCard) => {
+    track("action:assess.split");
+    if (pickedSplits.has(card.sid)) { toggleSplit(card.sid); return; }
+    void (async () => {
+      const ok = await askConfirm({ title: "Split this item in two?", lines: splitConfirmLines(card, p.repoName), confirmLabel: "Approve the split" });
+      if (ok) toggleSplit(card.sid);
+    })();
+  };
+
   const apply = () => {
     track("action:assess.apply");
     // `pinRanks` only when this apply actually writes an order — otherwise the
     // flag would be an answer to a question nobody was asked.
-    p.onApply({
-      rows: [...pickedRows], merges: [...pickedMerges], news: [...pickedNews],
+    // Approved splits ride in `splits`; a conflict has no field (`assessChoicesOf`).
+    p.onApply(assessChoicesOf({
+      rows: pickedRows, merges: pickedMerges, news: pickedNews, splits: pickedSplits,
       pinRanks: rankedN > 0 ? pinRanks : undefined,
       // `pinRanks`' rule: an answer only where the question was asked. With
       // nothing named, the flag would be an answer nobody was offered — and
       // absent is what every apply sent before the question existed.
       writeNames: nameCount > 0 ? writeNames : undefined,
-    });
+    }));
     // The ticks have become facts about the backlog. Keeping them would offer
     // the same decision a second time on the next open of this run.
     if (runId) dropPicks(runId);
   };
 
   const res = p.res ?? { state: (p.online ? (run ? "fresh" : "loading") : "offline") as ResourceState };
-  const nothing = !proposal || !(proposal.rows.length + proposal.merges.length + proposal.news.length);
+  const nothing = !proposal || !(proposal.rows.length + proposal.merges.length + proposal.news.length + splits.length + conflicts.length);
   const finishedAt = run?.finishedAt ?? run?.startedAt;
   const planPath = run?.planPath;
   /**
@@ -329,7 +350,7 @@ export function useAssessSheet(p: AssessSheetProps) {
    * decision at all.
    */
   const applyLabel = applySummary
-    ? assessApplyLabel(applySummary, p.repoName, { writeNames: nameCount > 0 && writeNames, ranked: rankedN, pinRanks })
+    ? assessApplyLabel(applySummary, p.repoName, { writeNames: nameCount > 0 && writeNames, ranked: rankedN, pinRanks, splits: pickedSplits.size })
     : "";
   /**
    * **What the apply left waiting, and therefore what the route opens.**
@@ -347,9 +368,14 @@ export function useAssessSheet(p: AssessSheetProps) {
   );
   /** The scope the run button is about, as words — used twice: on the button,
    *  and as the label of the sentence that replaces it when it cannot run. */
-  const runLabel = scopeN
-    ? `${run ? "run again on" : "assess"} ${scopeN === 1 ? "this one" : `these ${scopeN}`}`
-    : run ? "run again" : "assess";
+  const runLabel = scopeN && p.slot
+    ? slotRunLabel(scopeN, !!run)
+    : scopeN
+      ? `${run ? "run again on" : "assess"} ${scopeN === 1 ? "this one" : `these ${scopeN}`}`
+      : run ? "run again" : "assess";
+  /** What a slot run is — the RUN's own scope, so the sentence is about the
+   *  proposal on screen, not about the next run. */
+  const slotIntro = assessSlotIntro(run?.scope, run?.scopedIds?.length, now);
   /** What the screen itself is for, from `assessRows.ts`. The count it leads
    *  with is the run's own `assessableCount`, falling back to the rows actually
    *  on screen — a guide that says "0 items" over a list of sixty is worse than
@@ -364,7 +390,7 @@ export function useAssessSheet(p: AssessSheetProps) {
     named: nameCount,
   });
 
-  return { p, run, proposal, items, runId, pickedRows, setPickedRows, pickedMerges, setPickedMerges, pickedNews, setPickedNews, rejected, setRejected, flipped, setFlipped, seeded, groups, counts, itemsById, now, watch, logOpen, setLogOpen, pastSteps, picked, guideOpen, setGuideOpen, applyBlocked, runBlocked, scopeN, rankedN, pinRanks, setPinRanks, nameCount, writeNames, setWriteNames, toggleRow, toggleMerge, toggleNew, toggleReject, bulkGroup, acceptMerge, apply, res, nothing, finishedAt, planPath, applySummary, applyLabel, ready, runLabel, guide };
+  return { conflicts, splits, pickedSplits, setPickedSplits, acceptSplit, slotIntro, p, run, proposal, items, runId, pickedRows, setPickedRows, pickedMerges, setPickedMerges, pickedNews, setPickedNews, rejected, setRejected, flipped, setFlipped, seeded, groups, counts, itemsById, now, watch, logOpen, setLogOpen, pastSteps, picked, guideOpen, setGuideOpen, applyBlocked, runBlocked, scopeN, rankedN, pinRanks, setPinRanks, nameCount, writeNames, setWriteNames, toggleRow, toggleMerge, toggleNew, toggleReject, bulkGroup, acceptMerge, apply, res, nothing, finishedAt, planPath, applySummary, applyLabel, ready, runLabel, guide };
 }
 
 /** What every region component reads. */

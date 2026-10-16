@@ -1,0 +1,30 @@
+{
+  "_about": "Which REAL captured CLI output each clihealth signal (packages/shared/src/clihealth/healthcatalog.ts) is tested against. Read by tools/screenfixtures.mjs. A path is relative to this folder; a `*` matches within one folder. `cli` names the CLI version the capture came from when the file has no `Claude Code vX.Y.Z` banner to read it off. `role`: `match` = a test asserts the reader FINDS its thing on this screen; `guard` = a test asserts it does NOT misfire on it. Hand-typed strings inside a test file are not fixtures and are never listed here.",
+  "signals": {
+    "prompt.box": [
+      { "path": "permmode/trust-box.txt", "role": "match", "test": "packages/host/test/trustbox.test.mjs" },
+      { "path": "permmode/*.txt", "role": "guard", "test": "packages/host/test/trustbox.test.mjs" },
+      { "path": "screens/checkbox-*.txt", "role": "match", "test": "packages/host/test/screens.test.mjs", "cli": "2.1.301" },
+      { "path": "screens/slash-*.txt", "role": "guard", "test": "packages/host/test/screens.test.mjs", "cli": "2.1.301" },
+      { "path": "screens/context-view.txt", "role": "guard", "test": "packages/host/test/screens.test.mjs", "cli": "2.1.301" }
+    ],
+    "prompt.submit": [
+      { "path": "screens/checkbox-*.txt", "role": "match", "test": "packages/host/test/screens.test.mjs", "cli": "2.1.301" }
+    ],
+    "deliver.echo": [
+      { "path": "screens/paste-*.txt", "role": "match", "test": "packages/host/test/screens.test.mjs", "cli": "2.1.301" }
+    ],
+    "context.meter": [
+      { "path": "screens/context-view.txt", "role": "match", "test": "packages/host/test/screens.test.mjs", "cli": "2.1.301" }
+    ],
+    "slash.local": [
+      { "path": "screens/slash-*.txt", "role": "match", "test": "packages/host/test/screens.test.mjs", "cli": "2.1.301" },
+      { "path": "screens/context-view.txt", "role": "match", "test": "packages/host/test/screens.test.mjs", "cli": "2.1.301" }
+    ],
+    "limit.reset": [
+      { "path": "screens/slash-usage-*.txt", "role": "guard", "test": "packages/host/test/screens.test.mjs", "cli": "2.1.301" },
+      { "path": "screens/context-view.txt", "role": "guard", "test": "packages/host/test/screens.test.mjs", "cli": "2.1.301" },
+      { "path": "screens/checkbox-submit.txt", "role": "guard", "test": "packages/host/test/screens.test.mjs", "cli": "2.1.301" }
+    ]
+  }
+}

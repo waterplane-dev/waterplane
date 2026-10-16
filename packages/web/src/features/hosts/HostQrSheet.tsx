@@ -13,8 +13,8 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import qrcode from "qrcode-generator";
-import { PAIR_TTL_MS, formatPairCode, type PairMintResponse } from "@waterplane/shared";
-import { Clock, ExternalLink, Loader2, QrCode, RotateCw, Smartphone } from "lucide-react";
+import { PASSIVE_PAIR_NOTE, PAIR_TTL_MS, formatPairCode, type PairMintResponse } from "@waterplane/shared";
+import { Baby, Clock, ExternalLink, Loader2, QrCode, RotateCw, Smartphone } from "lucide-react";
 import { Sheet } from "../../Sheet";
 import { api } from "../../api";
 import { isNativeShell } from "../../hostUrl";
@@ -64,11 +64,15 @@ export function HostQrSheet() {
   const c = useCore();
   const [minted, setMinted] = useState<Minted>({ s: "busy" });
   const [now, setNow] = useState(() => Date.now());
+  // "Passive device": the phone this code pairs gets app updates and nothing
+  // else until the PIN unlocks it (`shared/passive.ts`). A new code per flip —
+  // the scope is the code's, decided when it is minted.
+  const [passive, setPassive] = useState(false);
 
-  async function mint(): Promise<void> {
+  async function mint(asPassive = passive): Promise<void> {
     setMinted({ s: "busy" });
     try {
-      const m = await api.pair.mint();
+      const m = await api.pair.mint(asPassive);
       setMinted({ s: "ok", m, until: Date.now() + PAIR_TTL_MS });
     } catch (e) {
       setMinted({ s: "bad", why: (e as Error)?.message || "no answer" });
@@ -89,6 +93,13 @@ export function HostQrSheet() {
   return (
     <Sheet title="Pair another phone" icon={<QrCode size={ICON} />} onClose={() => c.nav.close("pairqr")}>
       <div className="sheet-body pair-sheet">
+        <section className="pair-card">
+          <label className="pair-passive" title="the new phone gets app updates only; a PIN unlocks the rest for 30 minutes">
+            <input type="checkbox" checked={passive} onChange={(e) => { const on = e.target.checked; setPassive(on); c.say.track("action:hosts.pairPassive"); void mint(on); }} />
+            <Baby size={15} /> Passive device — app updates only
+          </label>
+          {passive && <div className="set-note">{PASSIVE_PAIR_NOTE} Nothing else works on it until it is unlocked with the PIN (Settings › Connection › Paired devices sets the PIN).</div>}
+        </section>
         {minted.s === "busy" && (
           <div className="pair-state"><Loader2 size={18} className="spin" /> asking the desktop for a code…</div>
         )}
@@ -134,6 +145,10 @@ export function HostQrSheet() {
         )}
         <div className="pair-foot">
           <div className="set-note">The new phone needs Tailscale signed in to the same tailnet.</div>
+          <div className="set-note">
+            No app needed: the QR opens a page with "use web version" — that address is the whole app,
+            and on your tailnet it needs no code. The code is for the Android app's "pair with code".
+          </div>
           <button className="key" onClick={() => { if (!openExternal(TAILSCALE_ANDROID)) c.say.toast("could not open the link"); }}>
             <ExternalLink size={13} /> Tailscale for Android
           </button>

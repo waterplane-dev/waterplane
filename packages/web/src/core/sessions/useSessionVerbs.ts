@@ -8,13 +8,14 @@
  * The BULK close is the launcher's alone (`core/launcher/CloseAllPicker.tsx`).
  *
  * Called in App right where `sessions` is derived: the pending stars ARE part
- * of that list (`applyPendingStars`), so this hook runs before it.
+ * of that list (`applyPendingMarks`), so this hook runs before it.
  */
 import { useEffect, useRef, useState } from "react";
-import type { HostMessage, SessionInfo } from "@waterplane/shared";
+import type { ClientMessage, HostMessage, SessionInfo } from "@waterplane/shared";
 import { shellCloseWords, shellsSummary } from "@waterplane/shared";
 import type { Connection } from "../conn/useConnection";
-import { type PendingStars, loadPendingStars, reconcileStars, savePendingStars } from "../../localState";
+import { PENDING_FOLLOWUPS_KEY, PENDING_STARS_KEY, loadPendingMarks, savePendingMarks } from "../../localState";
+import { FOLLOWUP_MARK, STAR_MARK, reconcileMarks, type PendingMarks, type SessionMark } from "../../pendingMarks";
 import { askConfirm } from "../../Confirm";
 import { showToast } from "../../toast";
 import { track } from "../../usage";
@@ -34,25 +35,11 @@ export function archivedToast(title: string, n = 1): string {
  *                    never closed over (a host answer lands renders later)
  */
 export function useSessionVerbs(conn: Connection, getSessions: () => SessionInfo[]) {
-  const { connRef, status, send, liveSend, liveAsk } = conn;
-  // Stars pressed before the host could be told. Held here (and in localStorage)
-  // so the button paints instantly with no link, survives the watchdog's reload,
-  // and is re-sent on reconnect — see localState.ts. Cleared per session the
-  // moment a live row shows the host holding the same value.
-  const [pendingStars, setPendingStars] = useState<PendingStars>(loadPendingStars);
-  const pendingStarsRef = useRef(pendingStars);
-  pendingStarsRef.current = pendingStars;
-
-  // Stars pressed while the link was down. Re-sent on every reconnect because
-  // the socket's in-memory queue does not survive a reload, and the frame is
-  // idempotent set-state — sending one the host already has costs nothing. The
-  // `session.list` that follows the handshake is what retires them.
-  useEffect(() => {
-    if (status !== "open") return;
-    for (const [id, starred] of Object.entries(pendingStarsRef.current)) {
-      connRef.current.send({ t: "session.star", id, starred });
-    }
-  }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { connRef, send, liveSend, liveAsk } = conn;
+  // Stars and follow-up flags pressed before the host could be told — ONE
+  // mechanism (`usePendingMark`), two keys.
+  const stars = usePendingMark(conn, PENDING_STARS_KEY, STAR_MARK, (id, on) => ({ t: "session.star", id, starred: on }));
+  const followUps = usePendingMark(conn, PENDING_FOLLOWUPS_KEY, FOLLOWUP_MARK, (id, on) => ({ t: "session.followup", id, on }));
 
   /**
    * Archive one session: end the CLI process AND take the row off the list, in
@@ -137,24 +124,63 @@ export function useSessionVerbs(conn: Connection, getSessions: () => SessionInfo
    */
   function toggleStar(id: string, starred: boolean) {
     track("action:session.star");
-    const next = { ...pendingStarsRef.current, [id]: starred };
-    pendingStarsRef.current = next;
-    setPendingStars(next);
-    savePendingStars(next);
-    send({ t: "session.star", id, starred });
+    stars.press(id, starred);
   }
-  /** Drop the presses the host has confirmed. `authoritative` = a full
-   *  `session.list`, the only kind that can also retire a press for a session
-   *  that no longer exists. */
+  /**
+   * Flag a session for follow up, or clear its flag (R-sessions-041) — the
+   * star's mechanism exactly: on:true sets it as the person's, on:false clears
+   * it whoever set it. A closed row has no live row to paint, so its "done"
+   * is a plain `liveSend` (`ClosedRows.tsx`), answered by a fresh closed list.
+   */
+  function toggleFollowUp(id: string, on: boolean) {
+    track("action:session.followup");
+    followUps.press(id, on);
+  }
+  /** Drop the presses the host has confirmed — stars and flags alike.
+   *  `authoritative` = a full `session.list`, the only kind that can also
+   *  retire a press for a session that no longer exists. */
   function settleStars(live: SessionInfo[], authoritative: boolean) {
-    const next = reconcileStars(pendingStarsRef.current, live, authoritative);
-    if (!next) return;
-    pendingStarsRef.current = next;
-    setPendingStars(next);
-    savePendingStars(next);
+    stars.settle(live, authoritative);
+    followUps.settle(live, authoritative);
   }
 
-  return { pendingStars, toggleStar, settleStars, closeSession, archivedToast, clearExited, onCloseCheck };
+  return {
+    pendingStars: stars.pending, toggleStar, pendingFollowUps: followUps.pending, toggleFollowUp,
+    settleStars, closeSession, archivedToast, clearExited, onCloseCheck,
+  };
 }
 
 export type SessionVerbs = ReturnType<typeof useSessionVerbs>;
+
+/**
+ * One hand-set mark held for a link that is down (`pendingMarks.ts`): painted
+ * at once, kept in localStorage so it survives the watchdog's reload, re-sent
+ * on every reconnect (idempotent set-state — re-sending one the host already
+ * has costs nothing), and retired per session the moment a live row shows the
+ * host holding the same value. The `session.list` after the handshake is what
+ * retires most of them.
+ */
+function usePendingMark(conn: Connection, key: string, mark: SessionMark,
+  frame: (id: string, on: boolean) => ClientMessage) {
+  const { connRef, status, send } = conn;
+  const [pending, setPending] = useState<PendingMarks>(() => loadPendingMarks(key));
+  const ref = useRef(pending);
+  ref.current = pending;
+  useEffect(() => {
+    if (status !== "open") return;
+    for (const [id, on] of Object.entries(ref.current)) connRef.current.send(frame(id, on));
+  }, [status]); // eslint-disable-line react-hooks/exhaustive-deps -- re-sent on a connect only; the marks are read through `ref`, `frame` is a pure message builder
+  function write(next: PendingMarks) {
+    ref.current = next;
+    setPending(next);
+    savePendingMarks(key, next);
+  }
+  return {
+    pending,
+    press(id: string, on: boolean) { write({ ...ref.current, [id]: on }); send(frame(id, on)); },
+    settle(live: SessionInfo[], authoritative: boolean) {
+      const next = reconcileMarks(ref.current, live, authoritative, mark);
+      if (next) write(next);
+    },
+  };
+}

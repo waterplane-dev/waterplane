@@ -7,7 +7,8 @@ import { useMemo } from "react";
 import type { BuildArtifact, RepoTarget } from "@waterplane/shared";
 import { useCore, useStore } from "../../sdk";
 import { BuildSheet } from "../../BuildSheet";
-import { artifactPolicies, buildCands, buildOpts, builds } from "./store";
+import { buildLogSeed } from "../../buildLogPrompt";
+import { artifactPolicies, buildCands, buildLocalIds, buildOpts, builds } from "./store";
 import { askOptions, cancelBuild, runBuild, saveBuilds, savePolicy, scanRepo, setupBuilds } from "./actions";
 
 export function BuildButtonsSheet({ repo }: { repo: RepoTarget }) {
@@ -18,6 +19,7 @@ export function BuildButtonsSheet({ repo }: { repo: RepoTarget }) {
   const outTick = useStore(builds.outTick);
   const cands = useStore(buildCands).get(dir);
   const opts = useStore(buildOpts).get(dir);
+  const localIds = useStore(buildLocalIds).get(dir);
   const policy = useStore(artifactPolicies).get(dir);
   const runs = useMemo(() => allRuns.filter((r) => r.repoDir === dir), [allRuns, dir]);
   return (
@@ -30,11 +32,13 @@ export function BuildButtonsSheet({ repo }: { repo: RepoTarget }) {
       output={builds.output}
       outTick={outTick}
       online={core.conn.status === "open"}
-      onSave={(b) => saveBuilds(dir, b)}
+      localIds={localIds}
+      onSave={(b, local) => saveBuilds(dir, b, local)}
       onRun={(id, params) => runBuild(dir, id, params)}
       onCancel={cancelBuild}
       onDownload={(a: BuildArtifact) => core.files.downloadArtifact(a)}
       onSetup={(prompt) => setupBuilds(repo, prompt)}
+      onSendLog={(r, log, took) => core.nav.openSend(buildLogSeed(r, log, repo, took))}
       candidates={cands?.list ?? null}
       candidatesTotal={cands?.total ?? 0}
       paramOptions={opts}

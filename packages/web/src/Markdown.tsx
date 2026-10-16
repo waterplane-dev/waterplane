@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Copy, FileText } from "lucide-react";
-import { FILE_REF_SRC, bareFileRef, docImageRef, parseFileRef, wholeFileRef, type FileRef } from "./fileRefs";
+import { FILE_REF_SRC, bareFileRef, docImageRef, linkedImages, parseFileRef, wholeFileRef, type FileRef } from "./fileRefs";
 import { pickThumbWidth, viewerWidth } from "./media";
 import { useFileMtime } from "./fileMtime";
 import { cacheThumb } from "./thumbCache";
@@ -150,6 +150,8 @@ function linkNode(href: string, label: string, q: string, key: string): JSX.Elem
   if (/^(?:https?:|mailto:)/i.test(href)) {
     return <a key={key} href={href} target="_blank" rel="noreferrer">{hl(label, q)}</a>;
   }
+  // [SECURITY.md](SECURITY.md): the label already IS the path — print it once.
+  if (label.trim() === href.trim()) return <code key={key}>{hl(href, q)}</code>;
   return <span key={key}>{hl(label, q)}{" "}<code>{href}</code></span>;
 }
 
@@ -214,23 +216,27 @@ function inline(text: string, q: string, key: string, files?: FileRefCtx): (stri
   return out;
 }
 
-// `[![alt](a.gif)](a.mp4)` in a document: a README's looping gif whose tap
-// opens the whole film. Drawn as the picture; the tap opens the link's target
-// when it is a picture or a video of this repo (the viewer plays it with
-// controls), the picture itself otherwise. Split out before `inline` because
-// its link pattern would take the outer brackets for a label.
-const LINKED_IMG_RE = /\[!\[([^\]]*)\]\(([^)\s]+)\)\]\(([^)\s]+)\)/g;
+// `[![alt](a.gif)](a.mp4)` — or its sized HTML spelling, `<a href><img width></a>`
+// (`linkedImages`) — in a document: a README's looping gif whose tap opens the
+// whole film — and a bare `<img>`, its tap opening the picture. Drawn as the
+// picture; the tap opens the link's target when it is a picture or a video of
+// this repo (the viewer plays it with controls), the picture itself otherwise.
+// Split out before `inline` because its link pattern would take the outer
+// brackets for a label, and it prints HTML tags as text. The layout tags a
+// README wraps them in (`<p align="center">`, `<div>`, `<br>`) say nothing on a
+// phone and are dropped, never printed.
 function inlineDoc(text: string, q: string, key: string, files?: FileRefCtx): (string | JSX.Element)[] {
-  if (files?.docPath == null || !text.includes("[![")) return inline(text, q, key, files);
+  if (files?.docPath == null || !/\[!\[|<(?:a|img|p|div|br|center)\b|<\/(?:p|div|center)>/i.test(text)) return inline(text, q, key, files);
+  text = text.replace(/<\/?(?:p|div|center)\b[^>]*>|<br\s*\/?>/gi, " ").trim();
   const out: (string | JSX.Element)[] = [];
   let last = 0, n = 0;
-  for (const m of text.matchAll(LINKED_IMG_RE)) {
-    const img = docImageRef(m[2], files.docPath);
-    if (!img?.image) continue;
-    if (m.index! > last) out.push(...inline(text.slice(last, m.index), q, `${key}l${n}`, files));
-    const target = docImageRef(m[3], files.docPath);
-    out.push(<FileRefNode key={`${key}v${n++}`} fref={{ ...img, raw: m[1] }} ctx={files} q={q} wide opens={target?.relPath} />);
-    last = m.index! + m[0].length;
+  for (const m of linkedImages(text)) {
+    const img = docImageRef(m.src, files.docPath);
+    if (!img?.image || m.at < last) continue;
+    if (m.at > last) out.push(...inline(text.slice(last, m.at), q, `${key}l${n}`, files));
+    const target = docImageRef(m.href, files.docPath);
+    out.push(<FileRefNode key={`${key}v${n++}`} fref={{ ...img, raw: m.alt }} ctx={files} q={q} wide opens={target?.relPath} />);
+    last = m.end;
   }
   if (last < text.length) out.push(...inline(text.slice(last), q, `${key}l${n}`, files));
   return out;
@@ -418,8 +424,19 @@ export function Markdown({ src, q, onCopy, files, lineTag }: {
         list.at.push(li);
         list.to.push(li);
       } else if (quote) {
+        // A run of `>` lines is ONE quote, its body markdown of its own — a
+        // README hard-wraps its callouts, and a quote per line drew every
+        // wrapped line as a separate boxed paragraph.
         flushPara(`p${k}`); flushList(`l${k}`);
-        nodes.push(<blockquote {...tag(start + li, start + li, "tr-quote")} key={`q${k}`}>{inline(quote[1], q, `q${k}`, files)}</blockquote>);
+        const body = [quote[1]];
+        let j = li + 1;
+        for (let m; j < lines.length && (m = /^>\s?(.*)$/.exec(lines[j].replace(/\s+$/, ""))); j++) body.push(m[1]);
+        nodes.push(
+          <blockquote {...tag(start + li, start + j - 1, "tr-quote")} key={`q${k}`}>
+            <Markdown src={body.join("\n")} q={q} onCopy={onCopy} files={files} />
+          </blockquote>,
+        );
+        li = j - 1;
       } else if (!line.trim()) {
         flushPara(`p${k}`); flushList(`l${k}`);
       } else if (list && /^\s/.test(line)) {

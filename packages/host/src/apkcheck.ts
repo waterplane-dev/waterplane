@@ -16,9 +16,10 @@
  * Read-only. Every reading degrades to ABSENT — a `targetSdk` pulled from a
  * variable is "not read", never a number.
  */
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync, type Dirent } from "node:fs";
+import { readdir as readdirAsync, readFile as readFileAsync, stat as statAsync } from "node:fs/promises";
 import { join, relative } from "node:path";
-import type { ComplianceCheck } from "@waterplane/shared";
+import type { AppRepoFacts, AutoPullConfig, BuildConfig, ComplianceCheck } from "@waterplane/shared";
 import { OUTBOX_SUBDIRS } from "./files.js";
 import { BRAND } from "@waterplane/shared";
 import { findKey, readLink } from "./signkey.js";
@@ -30,14 +31,23 @@ export const APK_TARGET_SDK_LINE = 33;
 
 const SKIP = new Set(["node_modules", "build", "dist", ".git", ".gradle", ".idea"]);
 
+/** Directories visited before the search stops — `buildscan.ts`' cap, for the same reason. */
+const MAX_DIRS = 400;
+
 /** Gradle files of Android APP modules, at most four directories deep
- *  (`packages/app/android/app` is four). */
+ *  (`packages/app/android/app` is four). Runs in the setup checklist, on the loop pumping every
+ *  PTY: an entry's kind comes from its listing (a `statSync` per entry was a 9P round trip each on
+ *  WSL, minutes in a vcpkg checkout), and the walk stops after `MAX_DIRS` — a module past that is
+ *  not found, so the row is absent rather than wrong. */
 function appModules(root: string): string[] {
   const out: string[] = [];
+  let dirs = 0;
   const walk = (dir: string, depth: number) => {
-    let names: string[];
-    try { names = readdirSync(dir); } catch { return; }
-    for (const n of names) {
+    if (dirs++ >= MAX_DIRS) return;
+    let ents: Dirent[];
+    try { ents = readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of ents) {
+      const n = e.name;
       if (n === "build.gradle" || n === "build.gradle.kts") {
         const p = join(dir, n);
         const text = readOrEmpty(p);
@@ -46,10 +56,41 @@ function appModules(root: string): string[] {
       }
       if (depth >= 4 || n.startsWith(".") || SKIP.has(n)) continue;
       const p = join(dir, n);
-      try { if (statSync(p).isDirectory()) walk(p, depth + 1); } catch { /* vanished */ }
+      let isDir = e.isDirectory();
+      if (e.isSymbolicLink()) { try { isDir = statSync(p).isDirectory(); } catch { /* dangling */ } }
+      if (isDir) walk(p, depth + 1);
     }
   };
   walk(root, 0);
+  return out;
+}
+
+/** `appModules` without holding the event loop — the same walk and cap, every call awaited. For
+ *  the unattended setup sweep (`compliance.ts`' `inspectRepoAsync`). */
+export async function appModulesAsync(root: string): Promise<string[]> {
+  const out: string[] = [];
+  let dirs = 0;
+  const walk = async (dir: string, depth: number): Promise<void> => {
+    if (dirs++ >= MAX_DIRS) return;
+    let ents: Dirent[];
+    try { ents = await readdirAsync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of ents) {
+      const n = e.name;
+      if (n === "build.gradle" || n === "build.gradle.kts") {
+        const p = join(dir, n);
+        let text = "";
+        try { text = await readFileAsync(p, "utf8"); } catch { /* unreadable: not a module */ }
+        if (/com\.android\.application|applicationId/.test(text)) out.push(p);
+        continue;
+      }
+      if (depth >= 4 || n.startsWith(".") || SKIP.has(n)) continue;
+      const p = join(dir, n);
+      let isDir = e.isDirectory();
+      if (e.isSymbolicLink()) { try { isDir = (await statAsync(p)).isDirectory(); } catch { /* dangling */ } }
+      if (isDir) await walk(p, depth + 1);
+    }
+  };
+  await walk(root, 0);
   return out;
 }
 
@@ -70,8 +111,8 @@ export function readGradle(text: string): { pkg?: string; targetSdk?: number; re
 }
 
 /** APKs in the repo's outbox dirs (and one level under them), newest first. */
-function outboxApks(root: string): { rel: string; mtime: number }[] {
-  const out: { rel: string; mtime: number }[] = [];
+function outboxApks(root: string): { rel: string; mtime: number; size: number }[] {
+  const out: { rel: string; mtime: number; size: number }[] = [];
   const scan = (dir: string, depth: number) => {
     let names: string[];
     try { names = readdirSync(dir); } catch { return; }
@@ -80,7 +121,7 @@ function outboxApks(root: string): { rel: string; mtime: number }[] {
       let st;
       try { st = statSync(p); } catch { continue; }
       if (st.isDirectory()) { if (depth < 1) scan(p, depth + 1); continue; }
-      if (n.toLowerCase().endsWith(".apk")) out.push({ rel: relative(root, p), mtime: st.mtimeMs });
+      if (n.toLowerCase().endsWith(".apk")) out.push({ rel: relative(root, p), mtime: st.mtimeMs, size: st.size });
     }
   };
   for (const sub of OUTBOX_SUBDIRS) {
@@ -91,8 +132,9 @@ function outboxApks(root: string): { rel: string; mtime: number }[] {
 }
 
 /** The row, or null for a repo that builds no Android app. */
-export function apkInstallCheck(worktree: string): ComplianceCheck | null {
-  const mods = appModules(worktree);
+export function apkInstallCheck(worktree: string, modules?: string[]): ComplianceCheck | null {
+  // `modules`: already found by `appModulesAsync` (the sweep), else walked here.
+  const mods = modules ?? appModules(worktree);
   if (!mods.length) return null;
   const g = readGradle(readOrEmpty(mods[0]));
   const apks = outboxApks(worktree);
@@ -116,7 +158,8 @@ export function apkInstallCheck(worktree: string): ComplianceCheck | null {
   }
   // A module that reads keystore.properties (the templates do) but has no pointer yet: the
   // `signing-key` fix creates-or-links the desktop key (`signkey.ts`, a confirm-gated fix).
-  const wantsLink = /keystore\.properties/.test(readOrEmpty(mods[0]));
+  const gradleText = readOrEmpty(mods[0]);
+  const wantsLink = /keystore\.properties/.test(gradleText);
   const linked = wantsLink ? readLink(worktree) : null;
   let fix: string | null = null;
   if (wantsLink && !linked) {
@@ -145,4 +188,64 @@ export function apkInstallCheck(worktree: string): ComplianceCheck | null {
     detail: `${name}: ${[...problems, ...facts].join(" ")} ${phone}`,
     fix,
   };
+}
+
+/** Which key signs a module's builds — `AppRepoFacts.key`, the same reading the row above words. */
+export function keyKind(worktree: string, gradleText: string): AppRepoFacts["key"] {
+  if (/keystore\.properties/.test(gradleText)) return readLink(worktree) ?? "missing";
+  return readGradle(gradleText).repoKey ? "repo" : "debug-default";
+}
+
+/** A build command that reads like one producing an APK. A LABEL on the phone's checklist,
+ *  never a filter: a script called `phone-build.sh` may well make one. */
+export function looksLikeApkBuild(b: Pick<BuildConfig, "name" | "cmd">): boolean {
+  return /\bapk\b/i.test(b.name) || /\bassemble\w*|\bbundle(Debug|Release)\b|build\s+apk|\.apk\b|\bapk\b/i.test(b.cmd);
+}
+
+/**
+ * The structured half of `apkInstallCheck`, one per app module, for the phone's Apps screen
+ * (`GET /api/apps/readiness`). Facts only — the phone words them beside its own half. The
+ * build list and the auto-download rule are passed in: they belong to their managers.
+ */
+export async function apkRepoFacts(
+  repo: { id: string; repoName: string; worktreePath: string },
+  builds: BuildConfig[],
+  pull: AutoPullConfig,
+  matches: (cfg: AutoPullConfig, f: { name: string; relPath: string; size: number }) => boolean,
+): Promise<AppRepoFacts[]> {
+  const root = repo.worktreePath;
+  const mods = await appModulesAsync(root);
+  if (!mods.length) return [];
+  const apks = outboxApks(root);
+  const newest = apks[0];
+  const buildRows = builds.map((b) => ({ id: b.id, name: b.name, apk: looksLikeApkBuild(b) }));
+  const read = mods.map((m) => ({ m, text: readOrEmpty(m) })).map((r) => ({ ...r, g: readGradle(r.text) }));
+  // A module with no package BESIDE one with a package is the root build file's
+  // `apply false` plugin line or a template, not a second app: dropped. Alone it stays —
+  // a package behind a variable is still an app, just one the phone cannot join.
+  const named = read.filter((r) => r.g.pkg);
+  return (named.length ? named : read).map(({ m, text, g }) => {
+    const suffixes = [...text.matchAll(/applicationIdSuffix\s*=?\s*["']([\w.]+)["']/g)].map((x) => x[1]);
+    return {
+      repoId: repo.id,
+      repoName: repo.repoName,
+      repoDir: root,
+      pkg: g.pkg,
+      ...(g.pkg && suffixes.length ? { variants: [...new Set(suffixes.map((x) => g.pkg + (x.startsWith(".") ? x : "." + x)))] } : {}),
+      module: relative(root, m),
+      targetSdk: g.targetSdk,
+      key: keyKind(root, text),
+      apks: apks.length,
+      newestApk: newest,
+      builds: buildRows,
+      autoPull: {
+        enabled: pull.enabled,
+        builds: pull.builds,
+        maxBytes: pull.maxBytes,
+        newestMatches: newest
+          ? matches(pull, { name: newest.rel.split("/").pop() ?? newest.rel, relPath: newest.rel, size: newest.size })
+          : undefined,
+      },
+    };
+  });
 }

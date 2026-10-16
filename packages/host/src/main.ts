@@ -5,13 +5,13 @@ import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { WebSocketServer, type WebSocket } from "ws";
 import { 
-  type ClientMessage, logTag, envName } from "@waterplane/shared";
+  type ClientMessage, logTag, envName, notifyEnabled } from "@waterplane/shared";
 import { tailscaleIp, tailscaleBin, tailscaleDnsName, serveHttpsUrl, lanIps } from "./net.js";
 import { configureOrigins } from "./origin.js";
 import { printBootSummary, printReport, reportJson, runChecks } from "./doctor.js";
 import { AuthManager, authLostNotice, selectWsProtocol } from "./auth.js";
 import { SessionManager } from "./sessions.js";
-import { AckLedger, lostLedgerNotice } from "./acks.js";
+import { AckLedger, ackWriteNotice, lostLedgerNotice } from "./acks.js";
 import { BacklogManager, BACKLOG_LINGER_MS } from "./backlog.js";
 import { BuildManager } from "./builds.js";
 import { createFirstApp } from "./server/firstapp.js";
@@ -22,7 +22,6 @@ import { FanoutManager } from "./fanout.js";
 import { IntentManager } from "./intents/manager.js";
 import { launchesToDrafts, schedulesToDrafts } from "./intents/adapters.js";
 import { ReviewManager, ReviewStore } from "./review.js";
-import { SmartPick } from "./smartpick.js";
 import { NamingManager } from "./naming.js";
 import { OpenDeliveries, setOpenDeliveries } from "./opendeliveries.js";
 import { CliHealthStore, setCliHealth } from "./clihealth.js";
@@ -33,32 +32,35 @@ import { SettingsStore } from "./settings.js";
 import { PushManager } from "./push.js";
 import { NotifyPrefsStore } from "./notifyprefs.js";
 import { UpdateChecker } from "./update.js";
-import { SetupWatcher } from "./setupwatch.js";
+import { SetupWatcher } from "./setupwatch.js"; import { createHealthWatch } from "./healthwatch.js";
 import { NetStats } from "./netstats.js";
 import { DecisionLog } from "./decisionlog.js";
 import { PluginRegistry } from "./plugins/pluginregistry.js";
 import { hostSecretDir } from "./secrets.js"; import { createPeerStore } from "./peers/store.js"; import { startPeerJobs } from "./peers/agentpeer.js"; import { setPeerServe, setPeerSelfAddr } from "./peers/routes.js"; import { createPeerServe } from "./peers/serve.js";
 import { Meter } from "./meter.js";
 import { UiStats } from "./uistats.js";
-import { UsageChecker } from "./usage.js";
+import { UsageChecker } from "./usage.js"; import { createUsageSources } from "./usagesources.js";
 import { UsageLog } from "./usagelog.js";
+import { createBurnWatch } from "./burnwatch.js"; import { costMeta } from "./costwindow.js"; import { hostStateDir } from "./branddirs.js";
 import { BudgetStore } from "./budget.js";
+import { setSpendPeriodSource } from "./spendwall.js";
+import { createBillingWire } from "./server/billingwire.js";
 import { backendInfos, claudeBackend, primeBackendModels } from "./backends/index.js";
 import { initThumbs } from "./thumbs.js";
 import { dispatch } from "./routes/index.js";
-import { installChecklistStores } from "./setupprefs.js";
+import { installChecklistStores } from "./setupprefs.js"; import { AskRulesStore, setAskRulesStore } from "./askrules.js";
 import { installSessionModels } from "./localrt.js";
 import { startLocalUsage } from "./localusage.js";
 import { createClients } from "./server/clients.js";
 import { createDeliveries } from "./server/deliveries.js";
-import type { ServerCtxDraft } from "./server/ctx.js";
+import type { ServerCtxDraft } from "./server/ctx.js"; import { assertCtxComplete } from "./server/ctxseal.js";
 import { makeIntentDeps } from "./server/intentDeps.js";
 import { createSnapshots, wireIntentEvents } from "./server/intentEvents.js";
 import { createScan } from "./server/scan.js";
 import { wireSessionEvents } from "./server/sessionEvents.js";
 import { createHttp } from "./server/http.js";
 import { installShutdown } from "./server/shutdown.js";
-import { createWsOps } from "./server/wsops.js";
+import { createWsOps, WS_MAX_PAYLOAD } from "./server/wsops.js";
 
 const PORT = Number(env("PORT") || 8770);
 /**
@@ -93,12 +95,12 @@ ctx.ROOT = ROOT; ctx.BOOT_ID = BOOT_ID; ctx.PORT = PORT; ctx.DOCTOR = DOCTOR;
 
 // The intent store as the phone sees it — `server/intentEvents.ts`. Nothing is
 // read until a snapshot is CALLED, so the construction callbacks below may hold
-// them long before `intents`, `backlog`, `smartpick` or `naming` exist.
+// them long before `intents`, `backlog` or `naming` exist.
 const { scheduleSnapshot, launchSnapshot, intentSnapshot, assessSnapshot, backlogSnapshot, ...snap } = createSnapshots(ctx);
 ctx.scheduleSnapshot = scheduleSnapshot; ctx.launchSnapshot = launchSnapshot; ctx.intentSnapshot = intentSnapshot;
 ctx.assessSnapshot = assessSnapshot; ctx.backlogSnapshot = backlogSnapshot; ctx.padNotesFor = snap.padNotesFor;
 
-const sessions = new SessionManager(ROOT, PORT);
+setAskRulesStore(new AskRulesStore(ROOT)); const sessions = new SessionManager(ROOT, PORT); // ask rules first: `create` reads them per launch
 ctx.sessions = sessions;
 // Live sessions per resident model (`localrt.ts`'s `installSessionModels`, a closure called
 // fresh on every sample), and the runner's own ledger (`localusage.ts`).
@@ -129,12 +131,12 @@ installChecklistStores(ROOT);
  *  auth re-evaluation, the watched set, the notification feed and `notify()`.
  *  See `server/clients.ts`. */
 const {
-  attached, clients, wsKind, wsToken, wsDevice, closeDevice,
+  attached, clients, wsKind, wsToken, wsDevice, wsRole, closeDevice,
   authStateFor, enforceAuth, broadcastAuthState, recomputeWatched, isAttachedToSomeone,
   send, broadcast, notifications, notify,
-} = createClients({ auth, notifyPrefs, push, sessions });
+} = createClients({ auth, notifyPrefs, push, sessions }); ctx.healthWatch = createHealthWatch(ROOT, notify);
 Object.assign(ctx, {
-  attached, clients, wsKind, wsToken, wsDevice, closeDevice,
+  attached, clients, wsKind, wsToken, wsDevice, wsRole, closeDevice,
   authStateFor, enforceAuth, broadcastAuthState, recomputeWatched, isAttachedToSomeone,
   send, broadcast, notifications, notify,
 });
@@ -220,60 +222,20 @@ ctx.intents = intents;
  */
 const reviewStore = new ReviewStore(ROOT, () => broadcast(backlogSnapshot()));
 /**
- * The look a repo takes before its next backlog item fires.
- *
- * Built BEFORE the backlog it reads from, and it works for the same reason the
- * executors above do: every dep it is handed is a closure, called long after
- * these lines have run. `isOn` reaches into `backlog` (which does not exist
- * yet on this line and does by the time anything asks), and `backlog` is handed
- * this object for the one thing its list needs — which of its rows a merge made
- * and which a merge folded away.
- *
- * The intent slice is deliberately narrow (`SmartPickIntents`): no `cancel`, no
- * `markDone`, no `dismiss`. A merge sets its originals ASIDE, and any of those
- * three would make it a retirement instead.
- */
-const smartpick: SmartPick = new SmartPick({
-  root: ROOT,
-  intents,
-  isOn: (cwd): boolean => backlog.smartPickEnabled(cwd),
-  onChange: () => broadcast(backlogSnapshot()),
-  // ONE notification, and only for a pass that MERGED something: a merge is the
-  // verb that rewrote somebody's words and is the one worth interrupting them
-  // for. A pass that only sorted and picked notifies nothing — a phone that
-  // buzzes before every item this desktop runs is noise, and the strip under the
-  // repo bar already says what happened. Failures notify nothing either: the
-  // item fired anyway, which is the whole promise.
-  onApplied: ({ cwd, summary, mergedRowIds }) => notify("backlog", {
-    title: `Backlog groomed · ${cwd.split("/").filter(Boolean).pop() || cwd}`,
-    // "put them back", not "undo": the 30-second undo window
-    // (`MERGE_HOLD_MS`) is over long before anybody reads a notification, and
-    // the button on the row at that point says *put them back*. Promising
-    // `undo` alone was promising a door that had already shut.
-    body: `merged ${summary.merged} into ${mergedRowIds.length}${summary.picked ? ` · picked “${summary.picked}”` : ""} — undo / put them back is on the row`,
-    tag: "backlog",
-    // WHICH repo and WHICH rows, so the tap opens exactly the cut this sentence
-    // is about. The phone was matching the repo by basename out of the title,
-    // which is a guess the moment two roots hold a `waterplane`.
-    backlog: { cwd, ids: [...mergedRowIds] },
-  }),
-});
-ctx.smartpick = smartpick;
-/**
  * What the repo's untitled rows should be CALLED.
  *
  * The cheapest thing this daemon buys — toolless, no repo read, one small
  * completion per batch — and the one with the narrowest store slice of any of
  * them: `list` and `name`, which between them cannot run, move, retire or
- * re-word anything. Built here beside `smartpick` and for the same closure
- * reason; `onChange` is the same broadcast, because the rows a pass is working
+ * re-word anything. Built here before the backlog, for the closure reason
+ * the executors above rely on; `onChange` is the same broadcast, because the rows a pass is working
  * on ride the backlog snapshot as a transient.
  */
 const naming = new NamingManager({
   intents,
   onChange: () => broadcast(backlogSnapshot()),
 });
-const backlog: BacklogManager = new BacklogManager(ROOT, sessions, intents, reviewStore, smartpick);
+const backlog: BacklogManager = new BacklogManager(ROOT, sessions, intents, reviewStore);
 const review = new ReviewManager(sessions, intents, reviewStore);
 const fanout = new FanoutManager(ROOT, sessions, intents);
 ctx.naming = naming; ctx.backlog = backlog; ctx.review = review; ctx.fanout = fanout;
@@ -337,8 +299,8 @@ if (BACKLOG_LINGER_MS > 0) {
 // Every `sessions.on(…)` main registers — the turnEnded/exit → intents pair
 // FIRST, then the broadcasts, the scan baselines, the prompt, the limit log and
 // idle, fifteen in all and in that order, are `server/sessionEvents.ts`. Wired here, at the position of the first one, and
-// before the intent store's own listeners below.
-wireSessionEvents(ctx);
+// before the intent store's own listeners below. Its `ptyHeld` is the plugin streams' PTY-first check.
+const ptyFanout = wireSessionEvents(ctx);
 
 // The four `intents.on(…)` blocks (settled, requeued, skipped, missed, in that
 // order) are `server/intentEvents.ts`; registered here, after the store exists
@@ -425,16 +387,16 @@ ctx.uiStats = uiStats;
  * see `usagelog.ts`.
  */
 const usageLog = new UsageLog(ROOT);
+const burnWatch = createBurnWatch({ usageLog, costWindow: (a, b) => tokenStats.costWindow(a, b, costMeta(sessions, intents), 60_000), notify, stateDir: hostStateDir(ROOT) });
 const usage = new UsageChecker(ROOT, (u) => {
   usageLog.note(u);
-  broadcast({ t: "usage.status", usage: u });
-  // A fresh reading can flip the budget in either direction — over the ceiling,
-  // or back under it after a reset. Publishing it HERE (rather than only when
-  // someone changes the setting) is what makes the phone's queue rows explain
-  // themselves without asking.
-  publishBudget();
+  void burnWatch.observe(u);
+  usageSources.publish(); // `usage` + every source's `readings` (usagesources.ts)
+  // A fresh reading can flip the budget either way (over, or back under after a
+  // reset): publishing it HERE makes the phone's queue rows explain themselves unasked.
+  ctx.publishBudget();
 });
-ctx.usageLog = usageLog; ctx.usage = usage;
+const usageSources = createUsageSources(ROOT, () => usage.get(), broadcast); ctx.usageLog = usageLog; ctx.usage = usage; ctx.usageSources = usageSources;
 /**
  * The usage budget's gate. Reads the checker's cache — never triggers a scrape
  * itself, because it is asked several times a second by the backlog tick and by
@@ -452,15 +414,10 @@ ctx.usageLog = usageLog; ctx.usage = usage;
  * marks the reading `remembered` — see `usage.ts`.
  */
 usage.seed(usageLog.last());
-const budget = new BudgetStore(ROOT, () => usage.get());
-ctx.budget = budget;
-/** Tell clients the verdict, but only when it actually moved. */
-function publishBudget(force = false): void {
-  const v = budget.verdict();
-  if (!budget.changed(v) && !force) return;
-  broadcast({ t: "budget.state", budget: budget.get(), verdict: v });
-}
-ctx.publishBudget = publishBudget;
+// Billing profile + dollar-period spend (server/billingwire.ts); the budget reads them.
+const billingWire = createBillingWire(ctx); ctx.billing = billingWire.billing;
+const budget: BudgetStore = new BudgetStore(ROOT, () => usage.get(), () => billingWire.spend(), () => billingWire.scraped()); ctx.budget = budget; setSpendPeriodSource(() => budget.usdPeriods());
+ctx.publishBudget = billingWire.publishBudget; // tells clients the verdict, only when it moved
 // Keep usage warm only when something GATES on it (each poll spawns claude).
 function syncUsagePolling() {
   // Poll when a plugin could answer a box unattended (its per-session switch
@@ -472,9 +429,13 @@ function syncUsagePolling() {
   // that quietly does nothing, which is the worst way for a safety setting to
   // fail. A budget watching nothing does not poll; a session's percent budget does (its calibration).
   const cfg = budget.get();
-  const forBudget = cfg.enabled && (cfg.sessionMax < 100 || (cfg.weeklyMax != null && cfg.weeklyMax < 100));
-  if (forPlugins || forBudget || sessions.wantsBudgetUsage()) usage.startPolling();
-  else usage.stopPolling();
+  const forBudget = cfg.enabled && (cfg.sessionMax < 100 || (cfg.weeklyMax != null && cfg.weeklyMax < 100) || (cfg.leftoverMax != null && cfg.leftoverMax < 100));
+  billingWire.syncSpendFold();
+  const forBurn = burnWatch.armed() && notifyEnabled(notifyPrefs.get(), "burn"); // the burn push only sees polled readings
+  // A known non-subscription account has no /usage screen worth a `claude` spawn; `unknown` polls as before.
+  const gated = forPlugins || forBudget || forBurn || sessions.wantsBudgetUsage(); usageSources.setPolling(gated); // other sources: same predicate, not claude's billing gate
+  if (!billingWire.scraped()) usage.stopPolling();
+  else if (gated) usage.startPolling(); else usage.stopPolling();
 }
 ctx.syncUsagePolling = syncUsagePolling;
 /**
@@ -485,13 +446,15 @@ const plugins = new PluginRegistry({
   root: ROOT, configDir: hostSecretDir(), sessions, host: ctx, // `host`: handToAgent's backlog add
   decision: (row) => decisionLog.add(row), meter: (e) => meter.record(e),
   notify, usage: () => usage.get(), push: (plugin, event, data) => broadcast({ t: "plugin.push", plugin, event, data }),
-  changed: () => broadcast({ t: "plugin.list", plugins: plugins.views() }), hookPort: PORT,
+  changed: () => broadcast({ t: "plugin.list", plugins: plugins.views() }), hookPort: PORT, streamSink: () => ({ sendJson: (ws, msg) => send(ws as WebSocket, msg), ptyHeld: (ws) => ptyFanout.ptyHeld(ws as WebSocket) }), usageProbe: (_plugin, def) => usageSources.register(def), // `api.stream`, `api.usageProbe`
 });
 ctx.plugins = plugins;
 if (!DOCTOR) void plugins.loadBuiltins().then(() => plugins.loadAll()).then(() => { sessions.parked((b) => plugins.backendOwner(b)); syncUsagePolling(); });
 // Unconditional in the daemon: the budget is armed by default.
 // Never in a doctor run — each poll is a `claude` in a PTY (see `DOCTOR`).
 if (!DOCTOR) syncUsagePolling();
+// The billing probe: once at boot (a spawn), never per request; a change re-syncs via onChange.
+if (!DOCTOR) void billingWire.billing.refresh();
 {
   const b = budget.get();
   if (b.enabled && b.sessionMax < 100) console.log(`${logTag} usage budget: automatic work pauses at ${b.sessionMax}% of the session window.`);
@@ -510,6 +473,7 @@ const http = createHttp(ctx);
  */
 const acks = new AckLedger(ROOT);
 ctx.acks = acks; if (acks.lost) notify("undelivered", lostLedgerNotice(acks.lost)); // a lost ledger is TOLD (acks.ts)
+acks.onWriteError = (message) => notify("undelivered", ackWriteNotice(message)); // …and so is one that stopped reaching the disk
 // So is a lost password file (auth.ts: fails closed) and an unreadable or newer intent store (intents/disk.ts).
 if (auth.lost) notify("info", authLostNotice(auth.lost));
 { const n = intents.storeNotice(); if (n) notify("backlog", n); }
@@ -635,7 +599,7 @@ async function main(): Promise<void> {
   // needs git — and before `listen()`, so reconciliation sees the imported rows.
   await Promise.all([backlog.init(), plugins.builtinsLoaded]); // extensions: rows in the first checklist
   updates.start();
-  setupWatch.start();     // repo setup checklist, swept rather than waited for
+  setupWatch.start(); if (!DOCTOR) void ctx.healthWatch.start(); // setup checklist swept; health index cached, engine re-run weekly
 
   const attachWs = (server: ReturnType<typeof createServer>) => {
     // permessage-deflate: the socket carries base64'd PTY output, and a claude
@@ -647,7 +611,7 @@ async function main(): Promise<void> {
     // which is nothing for the handful of tabs this daemon serves.
     // WATERPLANE_WS_COMPRESS=0 turns it off.
     const wss = new WebSocketServer({
-      server,
+      server, maxPayload: WS_MAX_PAYLOAD, // 16 MiB, not ws's 100 MiB default — why in wsops.ts
       path: "/ws", handleProtocols: selectWsProtocol, // token rides as `waterplane-tok.<tok>`; only the base protocol is echoed
       perMessageDeflate: env("WS_COMPRESS") === "0" ? false : {
         threshold: 256,
@@ -657,7 +621,7 @@ async function main(): Promise<void> {
     });
     wsops.wireWsConnections(wss, { ip, tsBin, tsDns, httpsUrl, boundLan });
   };
-
+  assertCtxComplete(ctx); // every ctx member assigned, or the boot fails naming it
   for (const host of binds) {
     const httpServer = createServer(http.handler);
     attachWs(httpServer);

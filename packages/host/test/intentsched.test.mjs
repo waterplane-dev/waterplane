@@ -14,8 +14,8 @@
  *  3. a row written by the OLD lifecycle is corrected on the way in, since
  *     nothing else will ever look at it again;
  *  4. automatic work opens a session PER ITEM, bounded by a cap the ladder
- *     reads as a rung, and the cap frees itself by reaping — never by running
- *     the item twice, and never by closing a session with work in it.
+ *     reads as a rung, counting only WORKING sessions — never running the item
+ *     twice, and never closing a session to make room.
  *
  * Fake deps and a temp root: the store is the thing under test, and every fact
  * it reads is a function it was handed.
@@ -44,9 +44,6 @@ function makeStore(over = {}) {
     backlogSession: null,
     /** Sessions machinery may still open — `IntentFacts.autoSlotsFree`. */
     slots: 3,
-    /** What `reapAutoSession` answers, and how many times it was asked. */
-    reapable: null,
-    reaps: 0,
     /** Executor calls, in order. */
     ran: [],
     /** What every executor answers. */
@@ -61,15 +58,6 @@ function makeStore(over = {}) {
     repoAnySession: (cwd) => state.sessions.some((s) => s.running !== false && s.cwd === cwd),
     autoSlotsFree: () => state.slots,
     autoSlotsDetail: () => (state.slots > 0 ? undefined : "waiting for a free slot — this desktop runs 1 automatic session at a time and 1 is busy"),
-    reapAutoSession: () => {
-      state.reaps++;
-      if (!state.reapable) return null;
-      const id = state.reapable;
-      state.reapable = null;
-      state.sessions = state.sessions.filter((x) => x.id !== id);
-      state.slots += 1;
-      return id;
-    },
     revivedSessionFor: () => null,
     diedAtLimit: () => false,
     stopCount: () => 0,
@@ -424,7 +412,52 @@ test("re-saving with budget: null CLEARS the cap; through schedule.save's own sh
   rmSync(root, { recursive: true, force: true });
 });
 
-test("the cap blocks the next item, says so in the host's numbers, and asks for a reap ONCE", async () => {
+// ── A later "new session" carries the model a person picked on the send sheet ──
+
+test("a repo-target row hands its launch to the executor; one aimed at a live session never carries one", async () => {
+  const seen = [];
+  const launch = { model: "sonnet", effort: "high" };
+  const { store, root } = makeStore();
+  store.deps.executors.freshSession = async (i) => { seen.push(i.launch); return { ok: true, detail: "delivered" }; };
+  await store.reconcile();
+  store.post(backlogDraft({ id: "ln1", cwd: REPO, text: "fix it", order: 1, autoFire: true, launch }));
+  store.kick();
+  await settle();
+  assert.deepEqual(seen, [launch], "the session the row opens starts on the row's launch");
+  assert.equal(backlogDraft({ id: "ln2", cwd: REPO, text: "x", order: 2, targetSessionId: "s1", launch }).launch, undefined,
+    "a live session is already running whatever it runs");
+  store.stop();
+  rmSync(root, { recursive: true, force: true });
+});
+
+test("a launch is stored as cleanLaunchOpts' shape, and a patch's null clears it back to the defaults", async () => {
+  const { store, root } = makeStore();
+  await store.reconcile();
+  store.post(workItem("ln3", { manual: true, launch: { model: "opus", effort: "turbo", rogue: 1 } }));
+  assert.deepEqual(store.get("ln3").launch, { model: "opus" }, "an effort the CLI has no word for and an unknown key are dropped, never guessed");
+  assert.equal(store.update("ln3", { launch: { model: "haiku" } }).ok, true);
+  assert.deepEqual(store.get("ln3").launch, { model: "haiku" });
+  assert.equal(store.update("ln3", { launch: null }).ok, true);
+  assert.equal(store.get("ln3").launch, undefined, "null = the desktop's new-session defaults");
+  store.stop();
+  rmSync(root, { recursive: true, force: true });
+});
+
+test("a schedule's backlog action carries its launch both ways and on to each occurrence's item", () => {
+  const launch = { model: "sonnet", backend: "claude" };
+  const weekly = { id: "sch-ln", name: "groom", enabled: true, graceMin: 120, createdAt: Date.now() - HOUR,
+    rule: { kind: "weekly", days: [1], hour: 3, minute: 0 },
+    action: { kind: "backlog", repoDir: REPO, text: "groom the notes", autoFire: true, launch } };
+  const draft = scheduleToIntent(weekly, Date.now());
+  assert.deepEqual(draft.launch, launch);
+  const row = { ...draft, state: "queued", createdAt: Date.now(), nextAt: Date.now() + HOUR };
+  assert.deepEqual(intentToSchedule(row).action.launch, launch, "renaming the rule must not drop the model");
+  assert.deepEqual(workItemInherits(row).launch, launch, "the occurrence's item is what opens the session");
+  const bare = scheduleToIntent({ ...weekly, action: { ...weekly.action, launch: undefined } }, Date.now());
+  assert.equal(bare.launch, undefined, "absent = the desktop's defaults, as it always was");
+});
+
+test("the cap blocks the next item and says so in the host's numbers", async () => {
   const { store, state, root } = makeStore();
   state.slots = 0;
   await store.reconcile();
@@ -437,53 +470,30 @@ test("the cap blocks the next item, says so in the host's numbers, and asks for 
   assert.equal(row.blockReason, "noSlot");
   assert.match(row.blockDetail, /1 automatic session at a time/,
     "the numbers are the HOST's — the pure rule is handed the difference, never the ceiling");
-  assert.equal(state.reaps, 1, "asked once per pass, however many rows are holding");
+  assert.doesNotMatch(row.blockDetail, /closing/, "nothing is closed to make room — an idle session holds no slot (R-automation-042)");
   store.stop();
   rmSync(root, { recursive: true, force: true });
 });
 
-test("the slot a reap frees goes to the row that ASKED, never to the one behind it", async () => {
-  // `SKILL.md`'s "the freed slot is NOT claimed by the pass that freed it", and
-  // the test below is NAMED for it — but it has one row, so it could not see the
-  // other half. `base.autoSlotsFree += 1` handed the freed slot to every LATER
-  // `go` row in the same pass, and the row that asked was `continue`d straight
-  // past. Reproduced with a cap of 1: A (order 0) blocks `noSlot … closing an
-  // idle one to make room` while B (order 1, another repo) takes A's slot and
-  // runs; with three repos the inversion holds for as long as anything is
-  // queued behind. The user's order is the whole of what makes a queue a queue.
-  // The reap CLOSES a session, so the host's live count really does drop the
-  // moment it succeeds — modelled here, because a fake that keeps answering
-  // zero would hide the bug behind the re-read the pick hold does.
-  const { store, state, root } = makeStore({
-    reapAutoSession: () => { state.reaps++; if (!state.reapable) return null; state.slots += 1; return state.reapable; },
-  });
+test("a slot freed by a session going idle goes to the FIRST row in order, never to the one behind it", async () => {
+  // Only a WORKING automatic session holds a slot (R-automation-042), so a slot
+  // frees itself when one goes idle and the host's count drops. The next pass's
+  // fresh `autoSlotsFree()` hands it out in the user's order — the order is the
+  // whole of what makes a queue a queue.
+  const { store, state, root } = makeStore();
   state.slots = 0;
-  state.reapable = null;
-  state.sessions.push({ id: "s-idle", cwd: "/tmp/waterplane-sched-other", running: true });
   await store.reconcile();
   store.post(workItem("front", { order: 0 }));
   store.post(workItem("behind", { cwd: "/tmp/waterplane-sched-b", order: 1 }));
-  // Both rows have to be in the list BEFORE the reaping pass — a `post` kicks
-  // the tick itself, so a pass that ran between the two would only ever see one
-  // of them, which is the shape that hid this.
   await settle();
   assert.deepEqual(state.ran.map((r) => r.id), [], "nothing has a slot yet");
-
-  // …and now there is an idle session to close.
-  state.reapable = "s-idle";
-  store.kick();
-  await settle();
-
-  assert.deepEqual(state.ran.map((r) => r.id), [], "nothing ran in the pass that reaped");
   assert.equal(store.get("front").blockReason, "noSlot");
-  assert.match(store.get("front").blockDetail, /closing an idle one to make room/);
-  assert.notEqual(store.get("behind").state, "starting", "and the row behind did not take it either");
 
-  // The next tick's FRESH count hands it to the first row in order.
-  state.reapable = null;
+  state.slots = 1;   // a working session went idle
   store.kick();
   await settle();
   assert.deepEqual(state.ran.map((r) => r.id), ["front"]);
+  assert.notEqual(store.get("behind").state, "starting", "the row behind did not take it");
   store.stop();
   rmSync(root, { recursive: true, force: true });
 });
@@ -517,24 +527,6 @@ test("a row following a resurrection asks about the SESSION that died, never abo
   assert.ok(asked.every((id) => id === "s-item"), `asked about ${JSON.stringify(asked)} — a cwd is not a session`);
   assert.equal(store.get("rev1").state, "running", "held, following its own session and nobody else's");
   assert.notEqual(store.get("rev1").sessionId, "s-hand", "the person's session was NOT handed the row");
-  store.stop();
-  rmSync(root, { recursive: true, force: true });
-});
-
-test("a reap frees a slot, and the row runs on the NEXT tick rather than on the one that reaped", async () => {
-  const { store, state, root } = makeStore();
-  state.slots = 0;
-  state.reapable = "s-idle";
-  state.sessions.push({ id: "s-idle", cwd: "/tmp/waterplane-sched-other", running: true });
-  await store.reconcile();
-  store.post(workItem("reap1"));
-  store.kick();
-  await settle();
-  assert.equal(state.ran.length, 0, "the slot it just freed is not claimed by the pass that freed it");
-  assert.match(store.get("reap1").blockDetail, /closing an idle one to make room/);
-  store.kick();
-  await settle();
-  assert.deepEqual(state.ran.map((r) => r.name), ["freshSession"]);
   store.stop();
   rmSync(root, { recursive: true, force: true });
 });
@@ -1646,8 +1638,7 @@ test("a ONE-OFF with the same origin runs itself, and makes no child at all", as
   // The failure this is the fix for: one piece of one-off work was TWO rows,
   // and the first could fail at rung 3 (its grace missed) before the second
   // existed — which is how seven items on this desktop ended up `failed`, in no
-  // repo's backlog, and invisible to the smart pick, whose candidates are
-  // backlog rows. A one-off has nothing to outlive; it runs itself.
+  // repo's backlog. A one-off has nothing to outlive; it runs itself.
   const { store, root, added, ran } = childMakingStore();
   await store.reconcile();
   store.post(onceAt("sch-once", Date.now() - 60_000, { origin: "schedule:work" }));
@@ -2819,6 +2810,26 @@ test("a recurring rule's child inherits closeWhenDone, and the backlog row shows
   assert.equal(workItemInherits(store.get("sch-rt")).closeWhenDone, false);
   store.post(draft);
   assert.equal(intentToBacklogItem(store.get("b1")).closeWhenDone, false);
+  store.stop();
+  rmSync(root, { recursive: true, force: true });
+});
+
+test("flagWhenDone: upsert carries it when the draft is silent, edit true sets and false/null clear, the item inherits it", async () => {
+  const { store, root } = makeStore();
+  store.post(scheduleToIntent(entry({ action: { kind: "backlog", repoDir: REPO, text: "groom", autoFire: true, flagWhenDone: true } }), Date.now()));
+  assert.equal(store.get("sch-rt").flagWhenDone, true);
+  store.upsert(scheduleToIntent(entry({ name: "renamed" }), Date.now()));
+  assert.equal(store.get("sch-rt").flagWhenDone, true, "a re-save that never heard of the flag keeps it");
+  assert.equal(workItemInherits(store.get("sch-rt")).flagWhenDone, true, "each occurrence's item inherits it");
+  assert.equal(intentToSchedule(store.get("sch-rt")).action.flagWhenDone, true, "and it survives the way back to the wire");
+  store.get("sch-rt").state = "running";
+  assert.equal(store.edit("sch-rt", { flagWhenDone: false }).ok, true);
+  assert.equal(store.get("sch-rt").flagWhenDone, undefined, "false clears (absent = off)");
+  assert.equal(store.get("sch-rt").state, "running", "an edit about the flag never re-queues the work");
+  store.edit("sch-rt", { flagWhenDone: true });
+  assert.equal(store.get("sch-rt").flagWhenDone, true);
+  store.edit("sch-rt", { flagWhenDone: null });
+  assert.equal(store.get("sch-rt").flagWhenDone, undefined, "null clears too");
   store.stop();
   rmSync(root, { recursive: true, force: true });
 });

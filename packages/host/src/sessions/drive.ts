@@ -19,8 +19,8 @@ import { ptySize, SCREENLOG_MAX_LINES, sessionWall } from "@waterplane/shared";
 import { namesStoreReader } from "../backends/index.js";
 import { readCliRecord } from "../agents.js";
 import { renderCapture, renderCells, type RenderRow } from "../render.js";
-import { foregroundWrapperPids, killShellGroup, readPsTable, readShellDetail, readShellList, shellsUnder, type PsRow } from "../shells.js";
-import { exitCopyMode as tmuxExitCopyMode, paneWantsMouse, parseWheel, scroll as tmuxScroll } from "../tmuxscroll.js";
+import { foregroundWrapperPids, killShellGroup, readPsTable, readPsTableAsync, readShellDetail, readShellList, shellsUnder, type PsRow } from "../shells.js";
+import { exitCopyMode as tmuxExitCopyMode, exitCopyModeSync as tmuxExitCopyModeSync, paneWantsMouse, parseWheel, scroll as tmuxScroll } from "../tmuxscroll.js";
 import type { Session, SessionCore } from "./core.js";
 import { TMUX_SERVER, tmuxName } from "./knobs.js";
 
@@ -93,7 +93,11 @@ export async function killOneShell(core: SessionCore, id: string, pid: number, s
   try { record = readCliRecord(s.info.id, tmuxName(id), s.info.claudeSessionId); } catch { record = null; }
   if (!record) return { ok: false, reason: "no CLI record for this session — nothing to stop" };
   let list: SessionShell[] | undefined;
-  try { list = readShellList(record.pid, s.info.cwd, s.info.claudeSessionId, record.status); } catch { list = undefined; }
+  // This lookup only decides "is it the turn's own foreground command", so the
+  // memoised async table will do; the kill below takes its own FRESH reading.
+  try {
+    list = readShellList(record.pid, s.info.cwd, s.info.claudeSessionId, record.status, Date.now(), await readPsTableAsync());
+  } catch { list = undefined; }
   const target = list?.find((sh) => sh.pid === pid);
   if (target?.foreground) {
     return { ok: false, reason: "that is the running turn's own command — not a background shell" };
@@ -150,6 +154,7 @@ export function input(core: SessionCore, id: string, data: string): boolean {
     leaveCopyMode(s);
     clearReplySuggestion(core, s);
     core.setAsking(s, null); // the prose question just got its answer typed
+    s.hintRead = null; core.setCliSuggestion(s, null); // …and the composer is taking typing, not showing a proposal
     s.idleNotified = false; // real input → new turn → re-arm the turn-finished ping
     markSubmitted(core, s, data);
     // The box may have just been answered away. Nothing else clears it now, so
@@ -182,11 +187,11 @@ function panHistory(s: Session, data: string, dir: "up" | "down", n: number): vo
   const target = tmuxName(s.info.id);
   s.scrollChain = s.scrollChain
     .then(async () => {
-      if (paneWantsMouse(TMUX_SERVER, target)) {
+      if (await paneWantsMouse(TMUX_SERVER, target)) {
         // A pane left in copy-mode would read the wheel as pager input and
         // the program behind it would never see the pan, so the mode goes
         // first — the same rule the typing path has.
-        leaveCopyMode(s);
+        await leaveCopyModeAsync(s);
         s.proc.write(data);
         return;
       }
@@ -206,7 +211,22 @@ function panHistory(s: Session, data: string, dir: "up" | "down", n: number): vo
 function leaveCopyMode(s: Session): void {
   if (!s.copyMode) return;
   s.copyMode = false;
-  tmuxExitCopyMode(TMUX_SERVER, tmuxName(s.info.id));
+  // Sync on purpose: `input` / `write` type on the very next line and return a
+  // boolean, so an await here would reorder the keystroke against the cancel.
+  // Only reached while the pane is believed to be scrolled back, never per pan.
+  tmuxExitCopyModeSync(TMUX_SERVER, tmuxName(s.info.id));
+}
+
+/**
+ * The same, from inside the scroll chain (`panHistory`), where awaiting is
+ * free. The belief is dropped only AFTER the cancel has landed: while it is in
+ * flight the pane is still in copy-mode, and a keystroke typed in that window
+ * must still see `copyMode === true` and run the sync cancel itself.
+ */
+async function leaveCopyModeAsync(s: Session): Promise<void> {
+  if (!s.copyMode) return;
+  await tmuxExitCopyMode(TMUX_SERVER, tmuxName(s.info.id));
+  s.copyMode = false;
 }
 
 /** Automation write — bypasses remoteControl (for backlog firing). */
@@ -216,6 +236,7 @@ export function write(core: SessionCore, id: string, data: string): boolean {
   leaveCopyMode(s);
   clearReplySuggestion(core, s);
   core.setAsking(s, null); // the prose question just got its answer typed
+    s.hintRead = null; core.setCliSuggestion(s, null); // …and the composer is taking typing, not showing a proposal
   s.idleNotified = false; // real input → new turn → re-arm the turn-finished ping
   markSubmitted(core, s, data);
   core.armPromptCheck(s, 250); // same as input(): the write may have answered a box

@@ -36,7 +36,7 @@
  * neither loses nor re-counts a request.
  */
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { open, rename, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, extname, join } from "node:path";
@@ -46,6 +46,7 @@ import {
 } from "@waterplane/shared";
 import { env } from "./env.js";
 import { hostStateDir } from "./branddirs.js";
+import { readJsonGuarded } from "./jsonstore.js";
 import { localRuntimeEnabled, ollamaUrl, parsePs } from "./localrt.js";
 import { sampleMemory } from "./sysstat.js";
 
@@ -442,16 +443,16 @@ export class LocalUsageLedger {
   constructor(root: string, private readonly intervalMs = localUsageIntervalMs(), private readonly fetchPs: () => Promise<unknown> = defaultFetchPs) {
     const dir = hostStateDir(root);
     this.path = join(dir, "localusage.json");
-    try {
-      const p = JSON.parse(readFileSync(this.path, "utf8")) as Persisted;
-      if (p?.v === 1) {
-        if (Number.isFinite(p.since)) this.since = p.since;
-        if (p.cursor && typeof p.cursor.id === "string" && Number.isFinite(p.cursor.offset)) this.cursor = p.cursor;
-        if (p.drain && typeof p.drain.id === "string" && Number.isFinite(p.drain.offset)) this.drain = p.drain;
-        if (Array.isArray(p.days)) this.days = p.days.filter((d) => d && typeof d.day === "string" && Array.isArray(d.models));
-        if (Array.isArray(p.unresolved)) { this.unresolved = p.unresolved; this.capUnresolved(); }
-      }
-    } catch { /* first run, or unreadable: start a fresh ledger */ }
+    // Absent is a first run. A file that is there and is not a v1 ledger (torn, hand-edited, or a
+    // newer build's) is moved aside rather than left for the first save to overwrite.
+    const p = readJsonGuarded<Persisted | null>(this.path, null, (v) => !!v && typeof v === "object" && (v as Persisted).v === 1);
+    if (p) {
+      if (Number.isFinite(p.since)) this.since = p.since;
+      if (p.cursor && typeof p.cursor.id === "string" && Number.isFinite(p.cursor.offset)) this.cursor = p.cursor;
+      if (p.drain && typeof p.drain.id === "string" && Number.isFinite(p.drain.offset)) this.drain = p.drain;
+      if (Array.isArray(p.days)) this.days = p.days.filter((d) => d && typeof d.day === "string" && Array.isArray(d.models));
+      if (Array.isArray(p.unresolved)) { this.unresolved = p.unresolved; this.capUnresolved(); }
+    }
   }
 
   start(): void {

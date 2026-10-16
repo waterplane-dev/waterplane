@@ -3,7 +3,7 @@ import { statSync } from "node:fs";
 import type { TokenTotals } from "@waterplane/shared";
 import { addCost, addTotals, costOf, isColdRebuild, normalizeModel, tokenTotal, zeroCost, zeroTotals } from "@waterplane/shared";
 import { localDay, stamp, toMs } from "../convlog.js";
-import { opensTurn } from "../transcript.js";
+import { opensTurn } from "../transcript/transcriptlog.js";
 import { RAW_CAP, EVENT_CAP, readRange, num, blankCold, blankCompaction, addSaved, remember, blank } from "./ctxcursor.js";
 import type { SeriesCursor } from "./ctxcursor.js";
 
@@ -42,7 +42,7 @@ export function updateContextLog(path: string, prev?: SeriesCursor | null): Seri
     cur.compaction = blankCompaction(); cur.shedAuto = 0; cur.shedManual = 0;
     cur.pendingRebuild = null;
     cur.prevTok = 0; cur.prevAt = 0; cur.cold = blankCold();
-    cur.autoCompactTok = null; cur.model = null; cur.truncated = false;
+    cur.autoCompactTok = null; cur.model = null; cur.effort = null; cur.truncated = false;
     cur.seen.clear(); cur.seenOrder.length = 0;
   }
 
@@ -130,6 +130,9 @@ export function updateContextLog(path: string, prev?: SeriesCursor | null): Seri
     const usage = msg.usage;
     if (!usage || typeof usage !== "object") continue;
     if (typeof msg.model === "string") cur.model = msg.model; // newest wins
+    // Off the same record, so the pair always names one turn: a record with
+    // no effort clears it rather than leaving the previous turn's beside it.
+    cur.effort = typeof row.effort === "string" ? row.effort : null;
     if (typeof msg.id === "string" && !remember(cur, msg.id)) continue;
     const tok = num(usage.input_tokens) + num(usage.cache_read_input_tokens) + num(usage.cache_creation_input_tokens);
     // What the request sent AND what it wrote back. Counted before the `tok`

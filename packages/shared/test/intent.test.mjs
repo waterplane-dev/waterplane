@@ -32,12 +32,16 @@ import {
   serialGroup,
   budgetPassAt,
   budgetPassOf,
+  budgetLeftoverOf,
+  budgetAfterResetOf,
+  cleanBudgetWaiver,
+  describeRule,
   budgetWaived,
   budgetWaiverUntil,
   RESET_MATCH_MS,
   MANUAL_HOLD_TEXT,
   isAgentPosted,
-  autoSlotsWaitText,
+  autoSlotsBusy, autoSlotsWaitText,
   closeWhenDoneOf,
   closeWhenDoneSetting,
 } from "../dist/index.js";
@@ -763,7 +767,7 @@ test("a stored blockReason is accepted exactly when the order knows it", () => {
 });
 
 test("intentReasonText answers every reason, and a finished sentence survives it", () => {
-  for (const r of ["offline", "gate", "budget", "sessionBusy", "sessionGone", "awaitingAnswer", "limit", "filesMissing", "notYet", "serial", "hostBusy", "noSlot", "picking"]) {
+  for (const r of ["offline", "gate", "budget", "sessionBusy", "sessionGone", "awaitingAnswer", "limit", "filesMissing", "notYet", "serial", "hostBusy", "noSlot", "localModel"]) {
     assert.equal(typeof intentReasonText(r), "string");
     assert.ok(intentReasonText(r).length > 10, `${r} needs a real sentence`);
   }
@@ -774,31 +778,6 @@ test("intentReasonText answers every reason, and a finished sentence survives it
   // The offline sentence is the phone's, and it must promise the one thing the
   // old queue could not: nothing expires.
   assert.match(intentReasonText("offline"), /nothing expires/);
-});
-
-test("`picking` is a wait a row can wear, and it sits with the ones nobody can act on", () => {
-  // The smart pick holds the row that is about to fire while a cheap pass looks
-  // over the repo's other waiting items. Three things have to be true of it and
-  // none of them is provable from the host side, where it is a string:
-  //
-  //  1. it is a real reason with a real sentence (a reason the union knows and
-  //     `intentReasonText` does not is a blocked row wearing "undefined");
-  //  2. it is ordered immediately BEFORE `sessionBusy` — at the bottom, with the
-  //     other waits that clear themselves. A list led by it would be announcing
-  //     the machinery instead of the reason the user's work is not moving;
-  //  3. its sentence promises the one thing a person needs to hear, which is
-  //     that this is seconds and not a state they have to do something about.
-  assert.ok(INTENT_BLOCK_ORDER.includes("picking"), "picking is in the precedence order at all");
-  assert.equal(
-    INTENT_BLOCK_ORDER.indexOf("picking") + 1,
-    INTENT_BLOCK_ORDER.indexOf("sessionBusy"),
-    "picking sits immediately before sessionBusy",
-  );
-  assert.match(intentReasonText("picking"), /a few seconds/);
-  // No model name and no timeout in it: which model and how long are the HOST's
-  // facts, and a sentence naming "haiku" would be wrong on a desktop that set
-  // WATERPLANE_SMARTPICK_MODEL. Same arrangement `noSlot` has with its numbers.
-  assert.doesNotMatch(intentReasonText("picking"), /haiku|\d+ ?s\b/);
 });
 
 
@@ -868,21 +847,20 @@ test("cleanIntentRow defaults the harmless things and enforces blocked's iff", (
   assert.equal(blocked.blockDetail, intentReasonText("serial"));
 });
 
-test("a blocked row may be `picking` on the way in, and a near-spelling is not a reason", () => {
-  // The on-the-way-in allow-list is a SEPARATE list from the precedence order,
-  // and a reason added to one and not the other loads as a blocked row with no
-  // reason at all — which renders as a row waiting for nothing in particular.
+test("a blocked row persisted as `picking` loads with no reason, and the ladder re-asks it", () => {
+  // `picking` was the smart pick's wait (removed 2026-10-16). A row an older
+  // host wrote to disk while one was running must load as a blocked row with
+  // no reason — the next tick re-judges it — never as a reason nothing words.
   const row = cleanIntentRow(raw({ state: "blocked", blockReason: "picking" }), NOW);
-  assert.equal(row.blockReason, "picking");
-  assert.equal(row.blockDetail, intentReasonText("picking"));
-  assert.equal(cleanIntentRow(raw({ state: "blocked", blockReason: "pickings" }), NOW).blockReason, undefined);
+  assert.equal(row.blockReason, undefined);
+  assert.ok(!INTENT_BLOCK_ORDER.includes("picking"));
 });
 
 test("cleanIntentRow keeps handOrdered only when it is literally true", () => {
   // This flag is a claim that a PERSON placed the row, and it is the one thing
   // standing between an automatic sort and somebody's explicit drag. A truthy
   // value off the wire or out of a hand-edited file is not that claim: a row
-  // wrongly marked hand-placed is a row the smart pick will never move again.
+  // wrongly marked hand-placed tells its reader a person put it there.
   assert.equal(cleanIntentRow(raw({ handOrdered: true }), NOW).handOrdered, true);
   for (const v of ["yes", 1, "true", {}, [], "false", 0, null, undefined]) {
     assert.equal(
@@ -1664,8 +1642,7 @@ test("a chained prompt is WORK, not a schedule", () => {
 // waiting work whose WHEN happens to be an instant: spent by its one run, with
 // no recurrence left to arm, pause or skip. Measured, on the desktop this was
 // written for: 9 live `at` rows, every one one-off, zero recurring — a second
-// backlog with clocks on it, whose rows the smart pick could never see because
-// its candidates are backlog rows.
+// backlog with clocks on it, which nobody grooming the list ever saw.
 
 /** A row with a clock, aimed at one repo unless told otherwise. */
 const timed = (rule, over = {}) => cleanIntentRow(raw({ trigger: { kind: "at", rule, graceMin: 120 }, ...over }), NOW);
@@ -1731,7 +1708,7 @@ test("the classification is DERIVED, so an edit of the rule moves the row with n
 });
 
 test("timedWorkKey is equality for `the same clock`, and absent for a row without one", () => {
-  // The smart pick may fold two rows into one only when doing so decides no
+  // Anything folding two rows into one must do so only when it decides no
   // clock — so "same clock" has to be one expression, not a comparison spelled
   // out at each call site.
   const rule = { kind: "once", at: NOW + 3600e3 };
@@ -1802,7 +1779,7 @@ test("a schedule's item names the rule that wrote it, and the rule's OWN row doe
   assert.equal(scheduleIdFromOrigin("schedule:work"), undefined);
   assert.equal(scheduleIdFromOrigin("schedule:sweep"), undefined);
   // And everything else is absent, never guessed.
-  assert.equal(scheduleIdFromOrigin("smartpick:abc"), undefined);
+  assert.equal(scheduleIdFromOrigin("assess:abc"), undefined);
   assert.equal(scheduleIdFromOrigin("schedule:"), undefined);
   assert.equal(scheduleIdFromOrigin(undefined), undefined);
   // It survives the round trip to disk like any other origin.
@@ -1834,7 +1811,7 @@ test("an author with nothing to be the author OF is a stamp on a row nobody name
 
 test("an author this app does not know is not an author, and takes the title with it", () => {
   // Defaulting it either way would be a claim about who typed something.
-  const row = cleanIntentRow(raw({ headline: "Uploader drops big files", headlineBy: "smartpick" }), NOW);
+  const row = cleanIntentRow(raw({ headline: "Uploader drops big files", headlineBy: "machine" }), NOW);
   assert.equal(row.headline, undefined);
   assert.equal(row.headlineBy, undefined);
 });
@@ -2095,7 +2072,8 @@ test("cleanIntentRow keeps a well-formed budgetPass and drops everything else", 
   const good = { window: "weekly", from: NOW, until: NOW + 60 * MIN };
   assert.deepEqual(cleanIntentRow(raw({ budgetPass: good }), NOW).budgetPass, good);
   assert.equal(cleanIntentRow(raw({ budgetPass: { ...good, until: NOW } }), NOW).budgetPass, undefined);
-  assert.equal(cleanIntentRow(raw({ budgetPass: { ...good, window: "month" } }), NOW).budgetPass, undefined);
+  assert.deepEqual(cleanIntentRow(raw({ budgetPass: { ...good, window: "month" } }), NOW).budgetPass, { ...good, window: "month" }, "any period id");
+  assert.equal(cleanIntentRow(raw({ budgetPass: { ...good, window: "" } }), NOW).budgetPass, undefined);
   assert.equal(cleanIntentRow(raw({ budgetPass: { ...good, from: "1" } }), NOW).budgetPass, undefined);
   assert.equal(cleanIntentRow(raw({ budgetPass: true }), NOW).budgetPass, undefined);
 });
@@ -2121,18 +2099,20 @@ test("cleanIntentRow keeps closeWhenDone false as false — it is an answer, not
   assert.equal(cleanIntentRow({ ...base, closeWhenDone: "yes" }, NOW).closeWhenDone, undefined);
 });
 
-test("noSlot in words: nothing closes itself ⇒ say a person must close one", () => {
-  const open = (n, close = false) => Array.from({ length: n }, (_, i) => ({ id: `s${i}`, closeWhenDone: close }));
+test("noSlot in words: only WORKING sessions fill the cap, and a slot frees when one goes idle (R-automation-042)", () => {
+  const open = (n, busy = true) => Array.from({ length: n }, (_, i) => ({ id: `s${i}`, closeWhenDone: false, busy }));
   assert.equal(autoSlotsWaitText({ max: 3, open: open(2) }), undefined, "a free slot: the cap is not what holds anything");
+  assert.equal(autoSlotsWaitText({ max: 3, open: [...open(2), ...open(5, false)] }), undefined,
+    "five idle sessions left open hold no slot");
   assert.equal(autoSlotsWaitText({ max: 3, open: open(3) }),
-    "waiting for a free slot — 3 automatic sessions open (close one to make room)");
+    "waiting for a free slot — this desktop runs 3 automatic sessions at a time and 3 are working; a slot frees when one goes idle");
   assert.equal(autoSlotsWaitText({ max: 1, open: open(1) }),
-    "waiting for a free slot — 1 automatic session open (close one to make room)");
-  assert.equal(autoSlotsWaitText({ max: 3, open: open(3, true) }),
-    "waiting for a free slot — this desktop runs 3 automatic sessions at a time and 3 are busy");
-  assert.equal(autoSlotsWaitText({ max: 2, open: [{ id: "a", closeWhenDone: true }, { id: "b", closeWhenDone: false }] }),
-    "waiting for a free slot — this desktop runs 2 automatic sessions at a time and 2 are busy; 1 of them stays open until closed by hand");
-  assert.match(intentReasonText("noSlot"), /every automatic session .* is open/);
+    "waiting for a free slot — this desktop runs 1 automatic session at a time and 1 is working; a slot frees when one goes idle");
+  assert.equal(autoSlotsWaitText({ max: 1, open: [{ id: "old", closeWhenDone: false }] }),
+    "waiting for a free slot — this desktop runs 1 automatic session at a time and 1 is working; a slot frees when one goes idle",
+    "no `busy` is an older host, which counted every open one");
+  assert.deepEqual(autoSlotsBusy({ max: 3, open: [{ id: "a", closeWhenDone: false, busy: false }, { id: "b", closeWhenDone: true, busy: true }] }).map((s) => s.id), ["b"]);
+  assert.match(intentReasonText("noSlot"), /every automatic session .* is working/);
 });
 
 // ── a session's OWN budget ───────────────────────────────────────────────────
@@ -2153,4 +2133,72 @@ test("cleanIntentRow round-trips a budget and drops garbage", () => {
   const b = { unit: "usd", max: 2, interrupt: false };
   assert.deepEqual(cleanIntentRow(intent({ budget: b }), NOW).budget, b);
   assert.equal(cleanIntentRow(intent({ budget: { unit: "usd", max: -1 } }), NOW).budget, undefined);
+});
+
+// ── Leftovers of a reset week ────────────────────────────────────────────────
+//
+// A row let past last week's budget — a weekly before-reset pass, or a person's
+// weekly waiver — that was still waiting when the week reset. A new week reads
+// 0%, so without its own ceiling every leftover started at once and spent the
+// new week on work only ever worth the old week's spare.
+
+const leftoverCap = (over = {}) => ({ which: "weekly", pct: 25, max: 20, resetAt: R + 7 * 24 * 60 * MIN, ...over });
+
+test("a weekly before-reset child still waiting past the reset is a leftover; a session one is not", () => {
+  const weekly = intent({ auto: true, target: { kind: "repo", fresh: true }, trigger: { kind: "idle" }, budgetPass: { window: "weekly", from: R - 60 * MIN, until: R } });
+  const session = intent({ auto: true, target: { kind: "repo", fresh: true }, trigger: { kind: "idle" }, budgetPass: { window: "session", from: R - 60 * MIN, until: R } });
+  assert.equal(budgetLeftoverOf(weekly, R - MIN), null, "inside its own lift it is not left over yet");
+  assert.equal(budgetLeftoverOf(weekly, R), R);
+  assert.equal(budgetLeftoverOf(session, R + MIN), null, "weekly only — a session window refills in hours");
+  assert.equal(budgetLeftoverOf(intent({ auto: true }), NOW), null);
+  assert.equal(budgetLeftoverOf(intent({ auto: true, leftoverOf: R }), NOW), R, "the expired waiver's stamp");
+});
+
+test("the leftover ceiling holds a leftover, and only a leftover, and only an auto one", () => {
+  const base = { auto: true, target: { kind: "repo", fresh: true }, trigger: { kind: "idle" } };
+  const left = intent({ ...base, leftoverOf: R });
+  const v = intentVerdict(left, facts({ leftoverOver: leftoverCap() }), R + MIN);
+  assert.equal(v.reason, "budget");
+  assert.match(v.detail, /leftover from a week that has reset .* under 20% \(25% used\)/);
+  assert.equal(intentVerdict(left, facts({ leftoverOver: null }), R + MIN).kind, "go", "under the ceiling it runs");
+  assert.equal(intentVerdict(left, facts({}), R + MIN).kind, "go", "absent = nobody said = no hold");
+  assert.equal(intentVerdict(intent(base), facts({ leftoverOver: leftoverCap() }), R + MIN).kind, "go", "ordinary work is not held by it");
+  assert.equal(intentVerdict(intent({ ...base, auto: false, leftoverOf: R }), facts({ leftoverOver: leftoverCap() }), R + MIN).kind, "go", "a person's tap never");
+});
+
+test("a row timed for right AFTER the weekly reset is held by the leftover ceiling, not before it and not days in", () => {
+  const at = (rule) => intent({ auto: true, target: { kind: "repo", fresh: true }, trigger: { kind: "at", rule }, nextAt: R + Math.max(0, (rule.offsetMin ?? 0)) * MIN });
+  const after30 = at({ kind: "window", window: "weekly", edge: "after", offsetMin: 30 });
+  assert.equal(budgetAfterResetOf(after30, R - MIN), null, "never before the reset");
+  assert.equal(budgetLeftoverOf(after30, R + 30 * MIN), R, "the reset it starts right after");
+  assert.equal(budgetLeftoverOf(at({ kind: "window", window: "weekly", offsetMin: 0 }), R), R, "at the reset counts");
+  assert.equal(budgetLeftoverOf(at({ kind: "window", window: "weekly", edge: "after", offsetMin: 2 * 24 * 60 }), R + 3 * 24 * 60 * MIN), null, "two days in is not right after");
+  assert.equal(budgetLeftoverOf(at({ kind: "window", window: "session", edge: "after", offsetMin: 30 }), R + 30 * MIN), null, "weekly only");
+  const v = intentVerdict(after30, facts({ leftoverOver: leftoverCap() }), R + 30 * MIN);
+  assert.equal(v.reason, "budget");
+  assert.match(v.detail, /^timed for right after the weekly reset, so it starts only while the new week is under 20% \(25% used\)/);
+  assert.equal(intentVerdict(after30, facts({ leftoverOver: null }), R + 30 * MIN).kind, "go", "under the ceiling it runs");
+});
+
+test("a waiver given in the new week lifts a leftover — the newer answer", () => {
+  const left = intent({ auto: true, target: { kind: "repo", fresh: true }, trigger: { kind: "idle" }, leftoverOf: R, pastBudget: { until: R + 7 * 24 * 60 * MIN, weekly: true } });
+  assert.equal(intentVerdict(left, facts({ leftoverOver: leftoverCap() }), R + MIN).kind, "go");
+});
+
+test("cleanIntentRow keeps leftoverOf as one finite instant, and a waiver's weekly mark", () => {
+  assert.equal(cleanIntentRow(raw({ leftoverOf: R }), NOW).leftoverOf, R);
+  assert.equal(cleanIntentRow(raw({ leftoverOf: "1" }), NOW).leftoverOf, undefined);
+  assert.equal(cleanIntentRow(raw({ leftoverOf: Infinity }), NOW).leftoverOf, undefined);
+  assert.deepEqual(cleanBudgetWaiver({ until: R, weekly: true }), { until: R, weekly: true });
+  assert.deepEqual(cleanBudgetWaiver({ until: R, weekly: "yes" }), { until: R });
+});
+
+test("a budgetPass and a waiver keep a configured period id; a wordy window rule names it", () => {
+  const row = cleanIntentRow(intent({ budgetPass: { window: "month", from: 1000, until: 2000 }, pastBudget: { until: 5000, periodId: "month" } }), NOW);
+  assert.deepEqual(row.budgetPass, { window: "month", from: 1000, until: 2000 });
+  assert.deepEqual(row.pastBudget, { until: 5000, periodId: "month" });
+  assert.equal(cleanIntentRow(intent({ budgetPass: { window: "", from: 1, until: 2 } }), NOW).budgetPass, undefined);
+  assert.deepEqual(cleanBudgetWaiver({ until: 5, weekly: true }), { until: 5, weekly: true }, "an old waiver is unchanged");
+  assert.match(describeRule({ kind: "window", window: "session", periodId: "month", edge: "before", offsetMin: -60 }), /month period resets/);
+  assert.match(describeRule({ kind: "window", window: "weekly", edge: "before", offsetMin: -60 }), /weekly window resets/);
 });

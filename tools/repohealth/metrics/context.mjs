@@ -283,7 +283,15 @@ export function measureContext(snapshot, history, index, prereg) {
   // counted skill the sum is an empty one and is NOT published — `counted`
   // decides that at the bottom, where the absence gets its reason.
   let descChars = 0;
-  for (const s of skills) descChars += s.descriptionChars;
+  // The on-demand half, beside the always-on half: every counted skill's BODY.
+  // Never in the index (a body costs only when invoked, which is the point of
+  // the split), but a split that moves prose out of CLAUDE.md into bodies
+  // should be visible as a move, not as a disappearance.
+  let skillBodyChars = 0;
+  for (const s of skills) {
+    descChars += s.descriptionChars;
+    skillBodyChars += s.bodyChars ?? 0;
+  }
 
   const byName = new Map(skills.map((s) => [s.name, s]));
   // Read only inside the area loop below, which cannot run without a router
@@ -359,7 +367,7 @@ export function measureContext(snapshot, history, index, prereg) {
     value: {
       claudeMdChars,
       ...(counted
-        ? { descChars, skillCount: skills.length }
+        ? { descChars, skillCount: skills.length, skillBodyChars }
         : { descChars: null, skillCount: null, skillsReason: skillsAbsent(all, prereg) }),
       areas,
       // Present only when there is nothing to read — see "Absence" above on

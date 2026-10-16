@@ -15,7 +15,7 @@
  * for a plugin the person switched off.
  */
 import { execFileSync } from "node:child_process";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, realpathSync } from "node:fs";
 import { join, relative } from "node:path";
 import { randomUUID } from "node:crypto";
 import { BRAND, pluginValues, PLUGIN_EVENT_RE, PLUGIN_HOOK_HOLD_DEFAULT_MS, PLUGIN_HOOK_HOLD_MAX_MS, PLUGIN_PUSH_MAX } from "@waterplane/shared";
@@ -25,6 +25,7 @@ import { registerBackend, registerScreenReader, registerStoreReader, unregisterB
 import { readInlineImages } from "../files.js";
 import { isSecretFile } from "../git.js";
 import { contained, inRoot } from "../paths.js";
+import { targetId } from "../repos.js";
 import { stripAnsi } from "../prompt.js";
 import { registerThermalReader } from "../sysstat.js";
 import type { PluginEntry, PluginRegistry } from "./pluginregistry.js";
@@ -47,6 +48,25 @@ const gitOut = (wt: string, args: string[]): string | null => {
 };
 
 /** One repo for a plugin to look at. Every path through `contained` + `inRoot`, never a secret. */
+/**
+ * A repo by id, or — when the argument starts with `/` — by its worktree path, compared by realpath
+ * (`/var` → `/private/var`). Ids stay `sha1(worktreePath)[:10]` (`repos.ts: targetId`), so the path is
+ * turned into the candidate ids of its spellings and the hit must still realpath-equal the path.
+ */
+export async function repoByIdOrPath(reg: Pick<PluginRegistry, "findRepo" | "findRepoByPath">, repoId: string): Promise<RepoTarget | null> {
+  if (!repoId.startsWith("/")) return reg.findRepo(repoId);
+  const real = (p: string): string | null => { try { return realpathSync(p); } catch { return null; } };
+  const want = real(repoId);
+  if (!want) return null;
+  for (const spelling of new Set([repoId.replace(/\/+$/, "") || "/", want])) {
+    const t = await reg.findRepo(targetId(spelling));
+    if (t && real(t.worktreePath) === want) return t;
+  }
+  // The id was made from a spelling the caller did not use (`/tmp` vs `/private/tmp`, a symlinked
+  // root): the list itself, realpath-compared — still only a repo the host lists.
+  return reg.findRepoByPath(want);
+}
+
 export function repoScope(t: RepoTarget): PluginRepoScope {
   const wt = t.worktreePath;
   const inside = (rel: unknown): string | null => {
@@ -161,6 +181,7 @@ export function pluginDescriptor(def: PluginBackendDef, pluginName: string, opts
         ...(Array.isArray(m.zeroCost) ? { zeroCost: strList(m.zeroCost) } : {}),
         ...(win && Object.keys(win).length ? { contextWindow: win } : {}),
         ...(typeof m.unavailable === "string" && m.unavailable ? { unavailable: m.unavailable.slice(0, 300) } : {}),
+        ...(typeof m.note === "string" && m.note.trim() ? { note: m.note.trim().slice(0, 300) } : {}),
       };
     },
     healthScope: false,
@@ -319,16 +340,18 @@ export function makeApi(reg: PluginRegistry, e: PluginEntry, gen: number): HostP
     },
     notify: (n) => {
       if (!live()) return;
-      reg.deps.notify("plugin", { title: String(n.title).slice(0, 200), body: String(n.body).slice(0, 1000), ...(n.sessionId ? { sessionId: n.sessionId } : {}), tag: `plugin-${id}-${n.sessionId ?? "all"}` });
+      reg.deps.notify(n.urgent ? "approval" : "plugin", { plugin: id, title: String(n.title).slice(0, 200), body: String(n.body).slice(0, 1000), ...(n.sessionId ? { sessionId: n.sessionId } : {}), tag: `plugin-${id}-${n.sessionId ?? "all"}` });
     },
     claudeUsage: () => {
       const u = reg.deps.usage();
       return u?.ok ? { sessionPct: u.sessionPct, weeklyPct: u.weeklyPct } : null;
     },
 
+    // By id, or by an absolute worktree path realpath-compared against core's list (`repoByIdOrPath`,
+    // as `handToAgent` already does): a CLI names its repo by path. Still only a repo core knows.
     repo: async (repoId) => {
       if (typeof repoId !== "string" || !repoId) return null;
-      const t = await reg.findRepo(repoId);
+      const t = await repoByIdOrPath(reg, repoId);
       return t ? repoScope(t) : null;
     },
     setupCheck: (fn) => {
@@ -361,7 +384,7 @@ export function makeApi(reg: PluginRegistry, e: PluginEntry, gen: number): HostP
     handToAgent: async (repoId, prompt, opts = {}): Promise<HandToAgentResult> => {
       if (!live()) return { ok: false, reason: `${e.manifest.name} is not running` };
       if (typeof prompt !== "string" || !prompt.trim()) return { ok: false, reason: "nothing to hand over — the prompt is empty" };
-      const t = typeof repoId === "string" && repoId ? await reg.findRepo(repoId) : null;
+      const t = typeof repoId === "string" && repoId ? await repoByIdOrPath(reg, repoId) : null;
       if (!t) return { ok: false, reason: `no repo "${String(repoId)}" under this host's root` };
       if (!live()) return { ok: false, reason: `${e.manifest.name} is not running` };
       // A key makes the add at-most-once in the STORE (the agent route's rule);
@@ -416,6 +439,17 @@ export function makeApi(reg: PluginRegistry, e: PluginEntry, gen: number): HostP
       e.readers.add(off);
       return () => { if (e.readers.delete(off)) off(); };
     },
+    // One account's quota beside claude's (`usagesources.ts`); unregistered with this activation
+    // like the readers, and a probe asked after a switch-off answers nothing.
+    usageProbe: (def) => {
+      if (!live()) throw new Error(`${e.manifest.name} is not running`);
+      if (!reg.deps.usageProbe) throw new Error(`${e.manifest.name}: this host has no usage registry`);
+      if (!def || typeof def.probe !== "function") throw new Error(`${e.manifest.name}: api.usageProbe needs a probe() function`);
+      const probe = def.probe;
+      const off = reg.deps.usageProbe(id, { ...def, probe: async () => (live() ? probe.call(def) : null) });
+      e.readers.add(off);
+      return () => { if (e.readers.delete(off)) off(); };
+    },
     hookSink: () => `http://127.0.0.1:${reg.hookPort()}/api/plugin/${id}/hook`,
     onHook: (fn, opts = {}) => {
       if (!live() || typeof fn !== "function") return () => {};
@@ -434,6 +468,18 @@ export function makeApi(reg: PluginRegistry, e: PluginEntry, gen: number): HostP
       const r = makePluginRoute(method, pattern, fn);
       e.routes.push(r);
       return () => { const i = e.routes.indexOf(r); if (i >= 0) e.routes.splice(i, 1); };
+    },
+    // Since 1.4: binary frames to the ONE socket that opened the stream (`pluginstreams.ts`).
+    // A bad or taken name throws its sentence; the returned function ends every open sub.
+    stream: (name, handlers) => {
+      if (!live()) throw new Error(`${e.manifest.name} is not running`);
+      return reg.streams.serve(id, e.manifest.name, name, handlers);
+    },
+    // Since 1.5: one file from its own dataDir to the phone's download path, deleted by the core
+    // once fetched or at its TTL (`pluginfiles.ts`). Outside dataDir, a symlink, a bad name: throws.
+    offerFile: (file, opts) => {
+      if (!live()) throw new Error(`${e.manifest.name} is not running`);
+      return reg.files.offer(id, e.manifest.name, api.dataDir, file, opts);
     },
   };
   return api;

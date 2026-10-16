@@ -1,16 +1,29 @@
 /**
  * Per-repo build commands, runnable from the phone WITHOUT a claude session —
  * the token-limit escape hatch. You wire named build commands into the UI once
- * (persisted in <repoDir>/<state dir>/builds.json); tapping one spawns a plain shell
+ * (persisted in <repoDir>/<shared dir>/builds.json, see below); tapping one spawns a plain shell
  * in the repo, streams its output to the phone like a session, and surfaces the
  * produced artifact (APK/zip/…) for download. No tokens are spent — this is the
  * fallback when Claude itself is rate-limited.
  *
+ * Two files, one list. `<repoDir>/<shared dir>/builds.json` is COMMITTED with the
+ * repo, so every clone and every desktop gets the same buttons; the gitignored
+ * `<repoDir>/<state dir>/builds.json` holds what is true of THIS desktop only (a
+ * JAVA_HOME path, a local SDK). `list()` is shared then local, and a local entry
+ * with a shared entry's id REPLACES it in place — a machine override, never a
+ * second button. `save()` partitions the phone's whole list back over the two
+ * (`local` ids named by the caller, else wherever an id lives today, else shared),
+ * keeps a shadowed shared entry as it is, and writes a file only when its content
+ * changed so a no-op save never dirties the working tree.
+ *
  * Trust model: same as spawning `claude` — the daemon already runs arbitrary
  * code on the host, and Tailscale network identity is the only boundary. The
- * commands come solely from the local <state dir>/builds.json (which the phone edits
- * over Tailscale); the optional per-build working dir is traversal-guarded to
- * the repo.
+ * shared file is part of the checkout and exactly as trusted as the checkout
+ * itself (whose `package.json` scripts and gradle files the same buttons run
+ * anyway); the local one is what the phone edits over Tailscale. A run is a
+ * SNAPSHOT of the command at fire time, so a later pull changes the next run,
+ * never one already recorded. The optional per-build working dir is
+ * traversal-guarded to the repo.
  *
  * ── What is here, and what is the store's ──────────────────────────────────
  *
@@ -27,8 +40,8 @@
  * daemon died is a row that says so, rather than a run nobody can account for.
  */
 import { EventEmitter } from "node:events";
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, extname, join, relative, resolve, sep } from "node:path";
+import { existsSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { extname, join, relative, resolve, sep } from "node:path";
 import { randomUUID } from "node:crypto";
 import * as pty from "node-pty";
 import type { IPty } from "node-pty";
@@ -38,7 +51,7 @@ import {
   applyParams, buildRunTitle, cleanBuildParams, missingParamsText, paramEnv, parseParamOptions,
   resolveParamValues, logTag,
 } from "@waterplane/shared";
-import { repoStateDir } from "./branddirs.js";
+import { repoSharedDir, repoStateDir } from "./branddirs.js";
 import { targetId } from "./repos.js";
 import type { ExecutorResult, IntentManager } from "./intents/manager.js";
 import { intentToBuildRun, isBuildRow } from "./intents/adapters.js";
@@ -63,10 +76,20 @@ const BUILD_ART_EXT = new Set([
   ".tar", ".gz", ".tgz", ".msi", ".pkg", ".whl", ".appimage",
   // Garmin Connect IQ: .iq is the store package, .prg the sideload build.
   ".iq", ".prg",
+  // A VS Code extension package (`vsce package`).
+  ".vsix",
 ]);
 /** Dirs never worth descending for build outputs. NOTE: unlike the artifact
  *  gallery we DO descend into build/dist/target — that's where outputs land. */
-const SKIP = new Set([".git", "node_modules", ".dart_tool", "__pycache__", ".venv", "venv", ".gradle"]);
+const SKIP = new Set([".git", "node_modules", ".dart_tool", "__pycache__", ".venv", "venv", ".gradle",
+  // Gradle's scratch: `R.jar`, classes jars, merged-dex zips. Every one has a
+  // deliverable extension and none is a deliverable — a docs run that built no
+  // APK was offered `R.jar` from here as its "already up to date" output.
+  "intermediates"]);
+/** Files with a deliverable extension that are SOURCE, not output: the gradle
+ *  wrapper is checked into every Android repo and was the other half of that
+ *  offer. Matched on the name, so it is skipped wherever it sits. */
+const NOT_ARTIFACT = new Set(["gradle-wrapper.jar"]);
 
 /** Dir names that usually hold build output — visited FIRST, so a repo with a
  *  huge data/asset tree can't burn the walk budget before reaching the APK. */
@@ -86,9 +109,20 @@ const ART_DIRS = new Set(["build", "dist", "out", "outputs", "target", "bin", "r
  * (the old `statSync` did, so a self-referential link was a walk cycle bounded
  * only by the budget).
  */
-export function detectArtifacts(repoDir: string, root: string, sinceMs: number): BuildArtifact[] {
+export function detectArtifacts(repoDir: string, root: string, sinceMs: number, buildDir?: string): BuildArtifact[] {
   const repoId = targetId(repoDir);
   const out: BuildArtifact[] = [];
+  /**
+   * Where a STALE file may come from. The fallback below claims "this build's
+   * output, already up to date" — so it must be a file this build could have
+   * written: under its own `dir` when it has one, and never in `.claude/`,
+   * where the outbox holds what EVERY build collected. A VS Code install run
+   * in `packages/vscode` was offered three Android APKs from the outbox, days
+   * old, as its own unchanged output.
+   */
+  const transport = join(root, ".claude") + sep;
+  const scope = buildDir && resolve(buildDir) !== resolve(root) ? resolve(buildDir) + sep : null;
+  const staleOk = (full: string) => !full.startsWith(transport) && (!scope || full.startsWith(scope));
   /**
    * Deliverables the run did NOT touch — the fallback, see below.
    *
@@ -130,14 +164,14 @@ export function detectArtifacts(repoDir: string, root: string, sinceMs: number):
         } else stack.push(full);
         continue;
       }
-      if (!ent.isFile() || !BUILD_ART_EXT.has(extname(name).toLowerCase())) continue;
+      if (!ent.isFile() || !BUILD_ART_EXT.has(extname(name).toLowerCase()) || NOT_ARTIFACT.has(name)) continue;
       let st;
       try { st = statSync(full); } catch { continue; }
       const art: BuildArtifact = {
         repoId, name, relPath: relative(root, full).split(sep).join("/"), size: st.size, mtime: st.mtimeMs,
       };
       if (st.mtimeMs >= sinceMs - 1000) out.push(art);
-      else if (untouched.length < 400) untouched.push({ ...art, stale: true });
+      else if (untouched.length < 400 && staleOk(full)) untouched.push({ ...art, stale: true });
     }
     for (const h of hot) stack.push(h); // pushed last ⇒ popped first
   }
@@ -174,6 +208,49 @@ function cleanConfig(v: any, i: number): BuildConfig | null {
   };
 }
 
+/** One builds file's cleaned entries, or null when it is absent or not a JSON list. */
+export function readBuildsFile(path: string): BuildConfig[] | null {
+  try {
+    const arr = JSON.parse(readFileSync(path, "utf8"));
+    if (Array.isArray(arr)) return arr.map(cleanConfig).filter((b): b is BuildConfig => b !== null);
+  } catch { /* no file / bad json → none */ }
+  return null;
+}
+
+/** Shared then local; a local entry with a shared id takes that entry's place. */
+export function mergeBuilds(shared: BuildConfig[], local: BuildConfig[]): BuildConfig[] {
+  const over = new Map(local.map((b) => [b.id, b]));
+  const out = shared.map((b) => over.get(b.id) ?? b);
+  const seen = new Set(out.map((b) => b.id));
+  for (const b of local) if (!seen.has(b.id)) { out.push(b); seen.add(b.id); }
+  return out;
+}
+
+/**
+ * Split the phone's whole list back over the two files. An id in `local` (or,
+ * with no `local`, an id the local file holds today) goes local; everything
+ * else goes shared. A local entry that shadows a shared one leaves the shared
+ * entry exactly as it is — overriding on this desktop never edits what every
+ * other checkout runs. An id absent from `list` is gone from both.
+ */
+export function partitionBuilds(list: BuildConfig[], curShared: BuildConfig[], curLocal: BuildConfig[], local?: string[]): { shared: BuildConfig[]; local: BuildConfig[] } {
+  const localSet = new Set(Array.isArray(local) ? local.filter((x) => typeof x === "string") : curLocal.map((b) => b.id));
+  const sharedById = new Map(curShared.map((b) => [b.id, b]));
+  const shared: BuildConfig[] = [], loc: BuildConfig[] = [];
+  for (const b of list) {
+    if (localSet.has(b.id)) {
+      loc.push(b);
+      const kept = sharedById.get(b.id);
+      if (kept) shared.push(kept);
+    } else shared.push(b);
+  }
+  return { shared, local: loc };
+}
+
+function sameList(a: BuildConfig[], b: BuildConfig[] | null): boolean {
+  return b !== null && JSON.stringify(a) === JSON.stringify(b);
+}
+
 /** How long a parameter's `optionsCmd` may take before the form gives up on it
  *  and says so. It is a listing — `ls`, a `find`, a `jq` over a manifest — and a
  *  person is waiting on a phone with the keyboard already up. */
@@ -192,26 +269,49 @@ export class BuildManager extends EventEmitter {
 
   constructor(private intents: IntentManager) { super(); }
 
-  private configPath(repoDir: string): string { return join(repoStateDir(repoDir), "builds.json"); }
+  private sharedPath(repoDir: string): string { return join(repoSharedDir(repoDir), "builds.json"); }
+  private localPath(repoDir: string): string { return join(repoStateDir(repoDir), "builds.json"); }
 
-  /** A repo's configured builds (empty if none/unreadable). */
+  /** A repo's configured builds (empty if none/unreadable): the shared file's
+   *  entries, then the local file's — a local entry with a shared id replaces
+   *  that entry where it stands (a machine override). */
   list(repoDir: string): BuildConfig[] {
-    try {
-      const arr = JSON.parse(readFileSync(this.configPath(repoDir), "utf8"));
-      if (Array.isArray(arr)) return arr.map(cleanConfig).filter((b): b is BuildConfig => b !== null);
-    } catch { /* no file / bad json → none */ }
-    return [];
+    return mergeBuilds(readBuildsFile(this.sharedPath(repoDir)) ?? [], readBuildsFile(this.localPath(repoDir)) ?? []);
   }
 
-  /** Persist a repo's whole build list; returns the cleaned list actually written. */
-  save(repoDir: string, builds: BuildConfig[]): BuildConfig[] {
+  /** The ids the LOCAL (this-desktop-only) file holds — what the phone shows as
+   *  "this desktop only" and sends back as `local` on a save. */
+  localIds(repoDir: string): string[] {
+    return (readBuildsFile(this.localPath(repoDir)) ?? []).map((b) => b.id);
+  }
+
+  /**
+   * Persist a repo's whole build list over the two files; returns the merged
+   * list as it now reads. `local` names the ids that belong in the local file;
+   * absent, an id stays where it lives today and a new one goes to the SHARED
+   * file (the point of the shared file is that a new button reaches every
+   * checkout). A file is written only when its content changes; an emptied
+   * local file is deleted; a shared file is never created to hold nothing.
+   */
+  save(repoDir: string, builds: BuildConfig[], local?: string[]): BuildConfig[] {
     const clean = (Array.isArray(builds) ? builds : []).map(cleanConfig).filter((b): b is BuildConfig => b !== null);
+    const sharedP = this.sharedPath(repoDir), localP = this.localPath(repoDir);
+    const curShared = readBuildsFile(sharedP), curLocal = readBuildsFile(localP);
+    const plan = partitionBuilds(clean, curShared ?? [], curLocal ?? [], local);
+    // A file that exists but does not parse is somebody's hand edit mid-way:
+    // never overwritten (or deleted) from here — the list just reads without it.
+    const sharedBroken = curShared === null && existsSync(sharedP);
+    const localBroken = curLocal === null && existsSync(localP);
     try {
-      const path = this.configPath(repoDir);
-      mkdirSync(dirname(path), { recursive: true });
-      writeJsonAtomic(path, clean, { space: 2 });
+      if (!sharedBroken && !sameList(plan.shared, curShared) && (plan.shared.length || curShared !== null)) {
+        writeJsonAtomic(sharedP, plan.shared, { space: 2, newline: true });
+      }
+      if (!localBroken) {
+        if (!plan.local.length) { if (curLocal !== null) rmSync(localP, { force: true }); }
+        else if (!sameList(plan.local, curLocal)) writeJsonAtomic(localP, plan.local, { space: 2 });
+      }
     } catch { /* best-effort */ }
-    return clean;
+    return this.list(repoDir);
   }
 
   /**
@@ -383,7 +483,7 @@ export class BuildManager extends EventEmitter {
           // (`artifacts.ts`, both halves). Every line of it goes into this
           // run's own output — a file appearing in the outbox and an older one
           // ceasing to exist must both be sentences somebody can read.
-          artifacts: this.finishArtifacts(runId, i.cwd, root, startedAt),
+          artifacts: this.finishArtifacts(runId, i.cwd, root, startedAt, cwd),
         });
       });
     });
@@ -397,8 +497,8 @@ export class BuildManager extends EventEmitter {
    * vanished between the walk and the link is a build that still succeeded and
    * still has an artifact to offer.
    */
-  private finishArtifacts(runId: string, repoDir: string, root: string, startedAt: number): BuildArtifact[] {
-    const found = detectArtifacts(repoDir, root, startedAt);
+  private finishArtifacts(runId: string, repoDir: string, root: string, startedAt: number, buildDir: string): BuildArtifact[] {
+    const found = detectArtifacts(repoDir, root, startedAt, buildDir);
     try {
       return collectArtifacts(repoDir, found, artifactPolicy(repoDir), (line) => {
         this.append(runId, line);

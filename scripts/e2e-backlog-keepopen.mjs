@@ -1,21 +1,19 @@
-// Automatic sessions STAY OPEN by default — and a full cap then waits for a
-// person, saying so.
+// Automatic sessions STAY OPEN by default — and an open IDLE one holds no slot.
 //
 // The other half of `e2e-backlog-slots.mjs`. There the synced *close automatic
-// sessions when done* setting is switched on and the reap frees the slot; here
-// it is left at its default (off), which is what the person chose: nothing
-// closes a session a fired item opened, neither the linger sweep nor the slot
-// reap. Four facts:
+// sessions when done* setting is switched on; here it is left at its default
+// (off): nothing closes a session a fired item opened. And since
+// R-automation-042 that no longer stops queued work — only a WORKING automatic
+// session holds a slot. Four facts:
 //
-//  1. with ONE slot and two items in two repos, the first runs, finishes — and
-//     its session is NOT closed, however idle (the reap floor here is 600 ms);
-//  2. the second WAITS, and its sentence says why in words a person can act on:
-//     "1 automatic session open (close one to make room)";
-//  3. `backlog.list` carries the cap as facts (`autoSlots`): the ceiling and the
-//     open session's id with `closeWhenDone: false` — what the phone offers
-//     "close one" from. A fact, never an action;
-//  4. a person's ordinary close (`session.remove`) frees the slot and the second
-//     item runs.
+//  1. with ONE slot and two items in two repos, the first runs and the second
+//     WAITS while it works, saying so in this desktop's numbers;
+//  2. the first finishes — and its session is NOT closed, however idle (the
+//     linger here is 1.5 s);
+//  3. the second item then runs with nobody closing anything: the idle open
+//     session freed its slot by going idle;
+//  4. `backlog.list` carries the cap as facts (`autoSlots`): the open session's
+//     id with `closeWhenDone: false` and `busy: false`. A fact, never an action.
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -56,7 +54,6 @@ bootWait(PORT, 900, async () => {
   /** When the first item settled `done` — the waiting clock starts there. */
   let firstDoneAt = 0;
   let firstSid = "";
-  let closedByUs = false;
   let finished = false;
   let closedIds = [];
   let sawWaitWords = "";
@@ -76,42 +73,28 @@ bootWait(PORT, 900, async () => {
     const items = m.items.filter((i) => dirs.includes(i.repoDir));
     if (items.length < 2) return;
     const done1 = items.find((i) => i.status === "done");
-    const other = items.find((i) => i !== done1);
     if (done1 && !firstDoneAt) { firstDoneAt = Date.now(); firstSid = done1.sessionId; }
-    const why = other && (m.waiting || {})[other.id];
-    if (why && /free slot/i.test(why)) sawWaitWords = why;
-    if (m.autoSlots?.open?.length) sawFacts = m.autoSlots;
-  });
-
-  // Poll rather than react: the facts that matter are what has NOT happened
-  // after the linger and the reap floor have both long passed.
-  const poll = setInterval(() => {
-    if (finished || !firstDoneAt) return;
-    if (!closedByUs && Date.now() - firstDoneAt > 4000) {
-      check(!!firstSid && !closedIds.includes(firstSid),
-        `the finished item's session is still open well past the linger and the reap floor (${firstSid})`);
-      check(/1 automatic session open \(close one to make room\)/.test(sawWaitWords),
-        `the second item says it is waiting for a person to close one (${JSON.stringify(sawWaitWords)})`);
-      check(sawFacts?.max === 1 && sawFacts.open.some((s) => s.id === firstSid && s.closeWhenDone === false),
-        `backlog.list carries the open session as a fact, not set to close (${JSON.stringify(sawFacts)})`);
-      closedByUs = true;
-      ws.send(JSON.stringify({ t: "session.remove", id: firstSid }));
-      // …and the second item now gets the slot.
-      const waitRun = setInterval(() => {
-        ws.send(JSON.stringify({ t: "backlog.list" }));
-      }, 500);
-      ws.on("message", (raw) => {
-        const m = JSON.parse(raw.toString());
-        if (m.t !== "backlog.list" || finished) return;
-        const items = m.items.filter((i) => dirs.includes(i.repoDir));
-        if (items.length === 2 && items.every((i) => i.status === "done")) {
-          finished = true;
-          clearInterval(waitRun); clearInterval(poll); clearTimeout(bail);
-          check(true, "a person's close freed the slot and the second item ran");
-          ws.close();
-          done();
-        }
-      });
+    for (const i of items) {
+      const why = (m.waiting || {})[i.id];
+      if (why && /free slot/i.test(why)) sawWaitWords = why;
     }
-  }, 250);
+    if (firstSid && m.autoSlots?.open?.some((s) => s.id === firstSid && s.busy === false)) sawFacts = m.autoSlots;
+    if (!finished && items.every((i) => i.status === "done")) {
+      finished = true;
+      clearTimeout(bail);
+      // Past the linger, so a session still open is open because nothing is
+      // ALLOWED to close it — not because nothing got round to it.
+      setTimeout(() => {
+        check(!!firstSid && !closedIds.includes(firstSid),
+          `the finished item's session is still open well past the linger (${firstSid})`);
+        check(/1 automatic session at a time and 1 is working/.test(sawWaitWords),
+          `the second item said it waited on a WORKING session (${JSON.stringify(sawWaitWords)})`);
+        check(true, "the second item ran with nobody closing anything — an idle open session holds no slot");
+        check(sawFacts?.max === 1 && sawFacts.open.some((s) => s.id === firstSid && s.closeWhenDone === false && s.busy === false),
+          `backlog.list carries the open session as a fact: kept open, not working (${JSON.stringify(sawFacts)})`);
+        ws.close();
+        done();
+      }, 2500);
+    }
+  });
 });

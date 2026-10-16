@@ -45,8 +45,8 @@ export function activate(api: HostPluginApi): void {
       const s = await scope(a);
       const wt = s.worktree;
       if (!isSetUp(wt)) throw new Error(`the requirements list is not set up in ${s.name} — set it up first (two files, no model call)`);
-      if (!existsSync(UPDATE_SCRIPT)) throw new Error(requirementsCheck(wt).detail);
-      const brief = updateBrief({ repoName: s.name, detail: requirementsCheck(wt).detail, cmd: UPDATE_CMD });
+      if (!existsSync(UPDATE_SCRIPT)) throw new Error(requirementsCheck(wt)?.detail ?? `cannot find the build script at ${UPDATE_SCRIPT}`);
+      const brief = updateBrief({ repoName: s.name, detail: requirementsCheck(wt)?.detail ?? "", cmd: UPDATE_CMD });
       const lastRun = readState(wt)?.lastRun ?? null;
       // One waiting update per build state. If the agent's run never wrote `.state.json`, the state never
       // moves — so a row that is OVER (done/failed/dropped) must not answer every later tap: the next

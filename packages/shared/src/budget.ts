@@ -40,6 +40,23 @@
  * and `npm run test:unit` can pin the rule with no host to boot.
  */
 import type { UsageInfo } from "./index.js";
+import { cleanPeriods, periodBounds, ROLLING_30D_ID, SESSION_PERIOD_ID, WEEKLY_PERIOD_ID, type BudgetPeriod, type PeriodId, type PeriodUnit } from "./period.js";
+
+/**
+ * One ceiling: `max` of `unit` on the period `periodId`. `pct` is percent of a
+ * scraped window (`session`, `weekly`); `usd` is period-to-date dollars from the
+ * local ledger. The list on `UsageBudget.ceilings` is the truth; `sessionMax` /
+ * `weeklyMax` are its mirrors for readers that predate periods (see `budgetLimits`).
+ */
+export interface BudgetLimit {
+  periodId: PeriodId;
+  max: number;
+  unit: PeriodUnit;
+}
+
+/** Period-to-date USD spend by period id, supplied by the caller (the host's
+ *  ledger fold). A missing or null entry is "nobody measured": never a trip, never 0. */
+export type BudgetSpend = Record<PeriodId, number | null | undefined>;
 
 /** The two ceilings, and the switch. Persisted host-side (`.waterplane/budget.json`). */
 export interface UsageBudget {
@@ -63,9 +80,37 @@ export interface UsageBudget {
    * choice worth making explicitly, never one to inherit from a default.
    */
   weeklyMax: number | null;
+  /**
+   * The LEFTOVER ceiling, percent of the NEW weekly window, or null for off.
+   *
+   * A row let past last week's ceiling — timed before the weekly reset
+   * (`BudgetPass`) or waived by a person while the weekly cap held it — exists
+   * to spend allowance that would otherwise be thrown away at the reset. One
+   * that did not get to start before the reset (serial, slots)
+   * would otherwise fall to the ordinary ceilings, and a week that has just
+   * reset reads 0%: every leftover runs at once, spending the new week on work
+   * that was only ever worth the old week's spare. Such a row (`leftoverOf` in
+   * `intent.ts`) starts only while the week is under THIS, and otherwise waits
+   * for the next week's start or the next before-reset lift.
+   *
+   * Measured against the whole week's reading — a person's own sends count —
+   * because that is the number on the usage screen, and a person working by
+   * hand is the work the new week is for. Default 20.
+   */
+  leftoverMax: number | null;
+  /**
+   * The ceilings as a list over periods - the canonical shape. Absent on a
+   * budget written before periods existed; `cleanBudget` fills it from
+   * `sessionMax`/`weeklyMax` and writes BOTH shapes, so an older reader keeps
+   * working. Use `budgetLimits` to read it, `withLimit`/`withoutLimit` to edit it.
+   */
+  ceilings?: BudgetLimit[];
+  /** Configured periods beyond the built-in `session`/`weekly` (month, week,
+   *  day, rolling30d, span). The definitions `ceilings` refer to by id. */
+  periods?: BudgetPeriod[];
 }
 
-export const DEFAULT_USAGE_BUDGET: UsageBudget = { enabled: true, sessionMax: 90, weeklyMax: null };
+export const DEFAULT_USAGE_BUDGET: UsageBudget = { enabled: true, sessionMax: 90, weeklyMax: null, leftoverMax: 20 };
 
 /**
  * How old a usage reading may be and still be acted on.
@@ -97,8 +142,11 @@ export interface BudgetVerdict {
   blocked: boolean;
   state: BudgetState;
   /** Which ceiling was tripped, or which one is closest when `ok`. */
-  which?: "session" | "weekly";
-  /** The reading and the ceiling behind the verdict, for the UI's sentence. */
+  which?: PeriodId;
+  /** Unit of `pct`/`max`: absent = percent of a scraped window. */
+  unit?: PeriodUnit;
+  /** The reading and the ceiling behind the verdict, for the UI's sentence
+   *  (`pct` holds dollars when `unit` is `usd`). */
   pct?: number;
   max?: number;
   /**
@@ -118,10 +166,13 @@ export interface BudgetVerdict {
  * by a weekly one that is also over (`intent.ts`'s `budgetHold`).
  */
 export interface BudgetCeiling {
-  which: "session" | "weekly";
+  which: PeriodId;
+  /** The reading, in `unit` (percent used, or dollars spent). */
   pct: number;
   max: number;
   resetAt: number | null;
+  /** Absent = percent of a scraped window (every ceiling before periods). */
+  unit?: PeriodUnit;
 }
 
 /**
@@ -130,31 +181,112 @@ export interface BudgetCeiling {
  * fail-open reading `budgetVerdict` makes, because `budgetVerdict`'s `over`
  * branch IS this list's first entry.
  */
-export function budgetCeilings(cfg: UsageBudget, usage: UsageInfo | null | undefined, now: number): BudgetCeiling[] {
+export function budgetCeilings(cfg: UsageBudget, usage: UsageInfo | null | undefined, now: number, spend?: BudgetSpend): BudgetCeiling[] {
   if (!cfg.enabled) return [];
-  const watchSession = cfg.sessionMax > 0 && cfg.sessionMax < 100;
-  const watchWeekly = cfg.weeklyMax != null && cfg.weeklyMax > 0 && cfg.weeklyMax < 100;
-  if (!watchSession && !watchWeekly) return [];
-  if (!usage || !usage.ok || !usage.checkedAt || now - usage.checkedAt > BUDGET_STALE_MS) return [];
-
-  const over = (pct: number | null, max: number | null, resetAt: number | null): boolean => {
-    if (pct == null || max == null) return false;
-    // Past the reset the cached percentage is about a window that has ENDED.
-    // This is the whole auto-continue: no fresh scrape has to land, no event has
-    // to be delivered, and a reset that happened while the host was asleep is
-    // resolved by the first tick after it wakes.
-    if (resetAt != null && now >= resetAt) return false;
-    return pct >= max;
-  };
+  const limits = activeLimits(cfg);
+  if (!limits.length) return [];
+  const usageOk = !!usage && usage.ok && !!usage.checkedAt && now - usage.checkedAt <= BUDGET_STALE_MS;
 
   const out: BudgetCeiling[] = [];
-  if (watchSession && over(usage.sessionPct, cfg.sessionMax, usage.sessionResetAt)) {
-    out.push({ which: "session", pct: usage.sessionPct!, max: cfg.sessionMax, resetAt: usage.sessionResetAt ?? null });
+  for (const l of limits) {
+    if (l.unit === "pct") {
+      // Only the two scraped windows have a percentage; fails open on a stale reading.
+      if (!usageOk || !usage) continue;
+      const session = l.periodId === SESSION_PERIOD_ID;
+      if (!session && l.periodId !== WEEKLY_PERIOD_ID) continue;
+      const pct = session ? usage.sessionPct : usage.weeklyPct;
+      const resetAt = (session ? usage.sessionResetAt : usage.weeklyResetAt) ?? null;
+      if (pct == null) continue;
+      // Past the reset the cached percentage is about a window that has ENDED.
+      // This is the whole auto-continue: no fresh scrape has to land, no event has
+      // to be delivered, and a reset that happened while the host was asleep is
+      // resolved by the first tick after it wakes.
+      if (resetAt != null && now >= resetAt) continue;
+      if (pct >= l.max) out.push({ which: l.periodId, pct, max: l.max, resetAt });
+    } else {
+      const usd = spend?.[l.periodId];
+      if (typeof usd !== "number" || !Number.isFinite(usd)) continue; // nobody measured: never a trip
+      const period = periodOf(cfg, l.periodId);
+      const bounds = period ? periodBounds(period, now) : null;
+      if (period && bounds && !bounds.active) continue; // a span that is not running
+      if (usd >= l.max) out.push({ which: l.periodId, pct: usd, max: l.max, resetAt: bounds?.resetAt ?? null, unit: "usd" });
+    }
   }
-  if (watchWeekly && over(usage.weeklyPct, cfg.weeklyMax, usage.weeklyResetAt)) {
-    out.push({ which: "weekly", pct: usage.weeklyPct!, max: cfg.weeklyMax!, resetAt: usage.weeklyResetAt ?? null });
-  }
+  // The scraped windows first, session before weekly (the one that clears
+  // soonest), then the rest in the order they were configured.
+  const rank = (w: PeriodId): number => (w === SESSION_PERIOD_ID ? 0 : w === WEEKLY_PERIOD_ID ? 1 : 2);
+  return out.map((c, i) => ({ c, i })).sort((x, y) => rank(x.c.which) - rank(y.c.which) || x.i - y.i).map((x) => x.c);
+}
+
+const periodOf = (cfg: UsageBudget, id: PeriodId): BudgetPeriod | undefined => cfg.periods?.find((p) => p.id === id);
+
+/**
+ * The ceilings as a list, one reading. The `session`/`weekly` entries are built
+ * from the mirrors `sessionMax`/`weeklyMax`, which are ALWAYS present and
+ * therefore always the truth for those two: a reader that predates the list can
+ * only edit the mirrors, and losing its edit to a stale list entry would be the
+ * worse failure. Every other entry (the dollar ceilings) comes from `ceilings`.
+ * Writers use `withLimit`/`withoutLimit`, which keep both shapes in step.
+ */
+export function budgetLimits(cfg: UsageBudget): BudgetLimit[] {
+  const out: BudgetLimit[] = [{ periodId: SESSION_PERIOD_ID, max: cfg.sessionMax, unit: "pct" }];
+  if (cfg.weeklyMax != null) out.push({ periodId: WEEKLY_PERIOD_ID, max: cfg.weeklyMax, unit: "pct" });
+  for (const l of cfg.ceilings ?? []) if (l.periodId !== SESSION_PERIOD_ID && l.periodId !== WEEKLY_PERIOD_ID) out.push(l);
   return out;
+}
+
+/** The limits that watch anything: a percent strictly inside 1..99, a dollar cap above 0. */
+function activeLimits(cfg: UsageBudget): BudgetLimit[] {
+  return budgetLimits(cfg).filter((l) => (l.unit === "pct" ? l.max > 0 && l.max < 100 : l.max > 0 && Number.isFinite(l.max)));
+}
+
+/** Set (or replace) one ceiling, keeping the legacy mirrors in step. */
+export function withLimit(cfg: UsageBudget, limit: BudgetLimit): UsageBudget {
+  const rest = budgetLimits(cfg).filter((l) => l.periodId !== limit.periodId);
+  const next = [...rest, limit];
+  return mirrored(cfg, next);
+}
+
+/** Remove one ceiling (session: back to 100 = unwatched; weekly: null). */
+export function withoutLimit(cfg: UsageBudget, periodId: PeriodId): UsageBudget {
+  const next = budgetLimits(cfg).filter((l) => l.periodId !== periodId);
+  return mirrored(cfg, periodId === SESSION_PERIOD_ID ? [...next, { periodId, max: 100, unit: "pct" }] : next);
+}
+
+function mirrored(cfg: UsageBudget, ceilings: BudgetLimit[]): UsageBudget {
+  const s = ceilings.find((l) => l.periodId === SESSION_PERIOD_ID);
+  const w = ceilings.find((l) => l.periodId === WEEKLY_PERIOD_ID);
+  return { ...cfg, ceilings, sessionMax: s ? s.max : 100, weeklyMax: w ? w.max : null };
+}
+
+/**
+ * The LEFTOVER ceiling, when it is tripped: the week's reading at or over
+ * `leftoverMax`. `null` when it is off, the budget is off, the reading is
+ * unreadable or stale, or the week has reset since the reading — the same
+ * fail-open posture as `budgetCeilings`, and for the same reason: a row this
+ * holds runs anyway under the wall, so a parse bug must not freeze it.
+ *
+ * Never part of `budgetCeilings`: it holds only rows `leftoverOf` names, so it
+ * is not a reason for the account to read as paused.
+ */
+export function leftoverCeiling(cfg: UsageBudget, usage: UsageInfo | null | undefined, now: number): BudgetCeiling | null {
+  if (!cfg.enabled || cfg.leftoverMax == null || !(cfg.leftoverMax > 0 && cfg.leftoverMax < 100)) return null;
+  if (!usage || !usage.ok || !usage.checkedAt || now - usage.checkedAt > BUDGET_STALE_MS) return null;
+  if (usage.weeklyPct == null) return null;
+  const resetAt = usage.weeklyResetAt ?? null;
+  if (resetAt != null && now >= resetAt) return null;
+  return usage.weeklyPct >= cfg.leftoverMax ? { which: "weekly", pct: usage.weeklyPct, max: cfg.leftoverMax, resetAt } : null;
+}
+
+/** The sentence a leftover row wears while the leftover ceiling holds it. LEADS
+ *  with why this row and not the rest: every other row is running under the
+ *  ordinary ceilings, so a bare "paused" would read as the account's. */
+export function budgetLeftoverText(c: BudgetCeiling, now: number, afterReset = false): string {
+  const why = afterReset
+    ? "timed for right after the weekly reset, so it starts only while the new week is under"
+    : "leftover from a week that has reset — it was let past that week's budget and did not start in time, so it runs only while this week is under";
+  return `${why} ${c.max}% (${c.pct}% used)`
+    + budgetResumesText(c.resetAt, now).replace(" — resumes", " — next chance");
 }
 
 /**
@@ -164,29 +296,39 @@ export function budgetCeilings(cfg: UsageBudget, usage: UsageInfo | null | undef
  * soonest: if both are over, the sentence a human wants is "back in 40
  * minutes", not "back on Thursday".
  */
-export function budgetVerdict(cfg: UsageBudget, usage: UsageInfo | null | undefined, now: number): BudgetVerdict {
+export function budgetVerdict(cfg: UsageBudget, usage: UsageInfo | null | undefined, now: number, spend?: BudgetSpend): BudgetVerdict {
   if (!cfg.enabled) return { blocked: false, state: "off" };
-  const watchSession = cfg.sessionMax > 0 && cfg.sessionMax < 100;
-  const watchWeekly = cfg.weeklyMax != null && cfg.weeklyMax > 0 && cfg.weeklyMax < 100;
-  if (!watchSession && !watchWeekly) return { blocked: false, state: "unset" };
-  if (!usage || !usage.ok || !usage.checkedAt || now - usage.checkedAt > BUDGET_STALE_MS) {
-    return { blocked: false, state: "unknown" };
-  }
+  const limits = activeLimits(cfg);
+  if (!limits.length) return { blocked: false, state: "unset" };
+  const usageOk = !!usage && usage.ok && !!usage.checkedAt && now - usage.checkedAt <= BUDGET_STALE_MS;
+  const hasUsd = limits.some((l) => l.unit === "usd");
+  if (!usageOk && !hasUsd) return { blocked: false, state: "unknown" };
 
   // One computation of "over", shared with the ladder's per-window reading.
-  const first = budgetCeilings(cfg, usage, now)[0];
+  const first = budgetCeilings(cfg, usage, now, spend)[0];
   if (first) {
-    return { blocked: true, state: "over", which: first.which, pct: first.pct, max: first.max, resumeAt: first.resetAt };
+    return {
+      blocked: true, state: "over", which: first.which, pct: first.pct, max: first.max, resumeAt: first.resetAt,
+      ...(first.unit ? { unit: first.unit } : {}),
+    };
   }
 
-  // Under the ceiling — name the one with the least headroom, so the UI can say
+  // Under the ceiling - name the one with the least headroom, so the UI can say
   // how much room is left without deciding which number matters itself.
-  const room: { which: "session" | "weekly"; pct: number; max: number }[] = [];
-  if (watchSession && usage.sessionPct != null) room.push({ which: "session", pct: usage.sessionPct, max: cfg.sessionMax });
-  if (watchWeekly && usage.weeklyPct != null) room.push({ which: "weekly", pct: usage.weeklyPct, max: cfg.weeklyMax! });
+  const room: { which: PeriodId; pct: number; max: number; unit?: PeriodUnit }[] = [];
+  for (const l of limits) {
+    if (l.unit === "pct") {
+      if (!usageOk || !usage) continue;
+      const v = l.periodId === SESSION_PERIOD_ID ? usage.sessionPct : l.periodId === WEEKLY_PERIOD_ID ? usage.weeklyPct : null;
+      if (v != null) room.push({ which: l.periodId, pct: v, max: l.max });
+    } else {
+      const usd = spend?.[l.periodId];
+      if (typeof usd === "number" && Number.isFinite(usd)) room.push({ which: l.periodId, pct: usd, max: l.max, unit: "usd" });
+    }
+  }
   const tightest = room.sort((a, b) => (b.pct / b.max) - (a.pct / a.max))[0];
   return tightest
-    ? { blocked: false, state: "ok", which: tightest.which, pct: tightest.pct, max: tightest.max }
+    ? { blocked: false, state: "ok", which: tightest.which, pct: tightest.pct, max: tightest.max, ...(tightest.unit ? { unit: tightest.unit } : {}) }
     : { blocked: false, state: "unknown" };
 }
 
@@ -195,7 +337,19 @@ export function budgetVerdict(cfg: UsageBudget, usage: UsageInfo | null | undefi
  * `waiting()` and the usage sheet all say the same thing about the same fact —
  * the rule this file exists to keep (see `blockedReasonText`).
  */
+/** The word a period goes by in a sentence. */
+export function periodWord(id: PeriodId | undefined): string {
+  return id === ROLLING_30D_ID ? "rolling 30 days" : id === WEEKLY_PERIOD_ID ? "weekly window" : !id || id === SESSION_PERIOD_ID ? "session window" : id;
+}
+
+const usd = (n: number | undefined): string => (n == null ? "?" : `$${n >= 100 ? Math.round(n) : n.toFixed(2).replace(/\.00$/, "")}`);
+
 export function budgetReasonText(v: BudgetVerdict): string {
+  if (v.unit === "usd") {
+    const w = periodWord(v.which);
+    if (v.state === "ok") return v.pct != null ? `${usd(v.pct)} spent this ${w} (budget ${usd(v.max)})` : "under the usage budget";
+    if (v.state === "over") return `paused - ${usd(v.pct)} spent this ${w}, over the ${usd(v.max)} budget`;
+  }
   const window = v.which === "weekly" ? "weekly" : "session";
   switch (v.state) {
     case "off": return "usage budget is off";
@@ -220,23 +374,30 @@ export function budgetResumesText(resetAt: number | null | undefined, now: numbe
   return sameDay ? ` — resumes ${time}` : ` — resumes ${at.toLocaleDateString([], { weekday: "short" })} ${time}`;
 }
 
+const ceilingVerdict = (c: BudgetCeiling): BudgetVerdict =>
+  ({ blocked: true, state: "over", which: c.which, pct: c.pct, max: c.max, resumeAt: c.resetAt, ...(c.unit ? { unit: c.unit } : {}) });
+
 /** The sentence a budget-held row wears for one tripped ceiling — the `over`
  *  wording plus when it lifts. One of the three wordings of a budget hold. */
 export function budgetHoldText(c: BudgetCeiling, now: number): string {
-  return budgetReasonText({ blocked: true, state: "over", which: c.which, pct: c.pct, max: c.max, resumeAt: c.resetAt })
-    + budgetResumesText(c.resetAt, now);
+  return budgetReasonText(ceilingVerdict(c)) + budgetResumesText(c.resetAt, now);
 }
 
 /** A row timed BEFORE a reset its pass covers this ceiling for, and not yet at
  *  its time: held now, and told it will not be held then. `passWindow` is the
- *  window the row is timed ahead of — a weekly pass also covers the session cap. */
-export function budgetPassPendingText(c: BudgetCeiling, now: number, passWindow: "session" | "weekly" = c.which): string {
+ *  window the row is timed ahead of — a weekly pass also covers the session cap.
+ *  LEADS with the lift and carries no *resumes …* clause: read on a phone, a
+ *  sentence opening "paused … resumes Thu 18:59" said the row would wait for the
+ *  reset, when it runs at its own time, BEFORE it. `now` is kept for the
+ *  signature the other two wordings share. */
+export function budgetPassPendingText(c: BudgetCeiling, _now: number, passWindow: PeriodId = c.which): string {
   const which = passWindow === c.which ? "that window" : `the ${passWindow} window`;
-  return `${budgetHoldText(c, now)} · lifted for this row at its time — it is timed before ${which} resets, and a ceiling only saves allowance for later in the window; there is no later`;
+  const over = budgetReasonText(ceilingVerdict(c)).replace(/^paused — /, "");
+  return `lifted for this row at its time — it is timed before ${which} resets, and a ceiling only saves allowance for later in the window; there is no later · held only until then: ${over}`;
 }
 
 /** A row exempt from ONE window's ceiling, held by the OTHER window's. */
-export function budgetOtherCapText(c: BudgetCeiling, passWindow: "session" | "weekly", now: number): string {
+export function budgetOtherCapText(c: BudgetCeiling, passWindow: PeriodId, now: number): string {
   return `${budgetHoldText(c, now)} · exempt from the ${passWindow} ceiling, not from this one`;
 }
 
@@ -254,9 +415,35 @@ export function cleanBudget(raw: unknown): UsageBudget {
     if (!Number.isFinite(n)) return fallback;
     return Math.min(100, Math.max(1, Math.round(n)));
   };
-  return {
+  const periods = cleanPeriods(r.periods);
+  // The list, read strictly: a known period and a sane number, or dropped.
+  // A $ ceiling on a period nobody defines (or `session`/`weekly` in dollars) is dropped.
+  const known = new Set(periods.map((p) => p.id));
+  const fromList: BudgetLimit[] = [];
+  if (Array.isArray(r.ceilings)) {
+    for (const l of r.ceilings as Partial<BudgetLimit>[]) {
+      if (!l || typeof l.periodId !== "string" || fromList.some((x) => x.periodId === l.periodId)) continue;
+      const n = Number(l.max);
+      if (!Number.isFinite(n)) continue;
+      if (l.periodId === SESSION_PERIOD_ID || l.periodId === WEEKLY_PERIOD_ID) {
+        if (l.unit === "pct") fromList.push({ periodId: l.periodId, max: pct(n, 100), unit: "pct" });
+      } else if (l.unit === "usd" && known.has(l.periodId) && n > 0) {
+        fromList.push({ periodId: l.periodId, max: Math.round(n * 100) / 100, unit: "usd" });
+      }
+    }
+  }
+  const sessionMax = pct(r.sessionMax, fromList.find((l) => l.periodId === SESSION_PERIOD_ID)?.max ?? DEFAULT_USAGE_BUDGET.sessionMax);
+  const weeklyFromList = fromList.find((l) => l.periodId === WEEKLY_PERIOD_ID)?.max ?? null;
+  const out: UsageBudget = {
     enabled: typeof r.enabled === "boolean" ? r.enabled : DEFAULT_USAGE_BUDGET.enabled,
-    sessionMax: pct(r.sessionMax, DEFAULT_USAGE_BUDGET.sessionMax),
-    weeklyMax: r.weeklyMax == null ? null : pct(r.weeklyMax, 100),
+    sessionMax,
+    weeklyMax: r.weeklyMax === undefined ? weeklyFromList : r.weeklyMax === null ? null : pct(r.weeklyMax, 100),
+    // Absent is a file from before this existed => the default; an explicit
+    // `null` is somebody switching it off, and stays off.
+    leftoverMax: r.leftoverMax === undefined ? DEFAULT_USAGE_BUDGET.leftoverMax
+      : r.leftoverMax === null ? null : pct(r.leftoverMax, DEFAULT_USAGE_BUDGET.leftoverMax ?? 20),
   };
+  // Write the new shape too, with the mirrors reconciled by `budgetLimits`.
+  const merged: UsageBudget = { ...out, ceilings: fromList, periods };
+  return { ...out, ceilings: budgetLimits(merged), periods };
 }

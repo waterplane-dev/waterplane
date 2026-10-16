@@ -81,10 +81,3 @@ export function inWords(at: number, now: number): string {
   if (h < 24) return m % 60 ? `in ${h}h ${m % 60}m` : `in ${h}h`;
   return `in ${Math.floor(h / 24)}d`;
 }
-
-export function bytes(n: number): string {
-  if (n >= 1e9) return `${(n / 1e9).toFixed(1)} GB`;
-  if (n >= 1e6) return `${(n / 1e6).toFixed(1)} MB`;
-  if (n >= 1e3) return `${Math.round(n / 1e3)} kB`;
-  return `${n} B`;
-}

@@ -64,6 +64,8 @@ export function openNotif(n: NotificationItem): void {
   if (n.file && viewerHandles(n.file.relPath)) { c.files.openArtifact(n.file); return; }
   if (n.file) { c.files.downloadArtifact(n.file); return; } // keep the feed open — more files may follow
   c.nav.close("notifications");
+  // A plugin's alert with nothing else to land on (a vault ask): open that plugin's screen.
+  if (n.plugin && !n.sessionId && !n.image) { c.nav.openPlugin(n.plugin); return; }
   if (n.image) { c.files.viewImage(n.image, n.sessionId); return; }
   if (n.sessionId) {
     const s = c.world.sessions.find((x) => x.id === n.sessionId);
@@ -77,10 +79,9 @@ export function openNotif(n: NotificationItem): void {
   /**
    * **"undo is on the row" has to land on a row.**
    *
-   * The *Backlog groomed* alert is the one the smart pick's whole safety case
-   * rests on: it wakes somebody to say a machine rewrote two of their items,
-   * and the undo is on the row it names. It carried no `sessionId`, no `file`
-   * and no `image`, so tapping it did LITERALLY NOTHING — the feed closed and
+   * A backlog alert with no `sessionId`, no `file` and no `image` (the removed
+   * smart pick's *Backlog groomed* was the first) did LITERALLY NOTHING when
+   * tapped — the feed closed and
    * the reader was left to find the repo, the menu, the backlog and the row
    * by hand, at whatever hour the pass ran.
    *

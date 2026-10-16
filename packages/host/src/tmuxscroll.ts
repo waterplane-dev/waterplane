@@ -59,6 +59,18 @@
  * would be a guess about a binary that moves weekly.
  */
 import { execFile, execFileSync } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileP = promisify(execFile);
+
+/** One tmux query, async, stdout back — a failure (pane gone, server gone) is
+ *  the caller's `catch`. Everything on the scroll path goes through this and
+ *  not `execFileSync`: ONE event loop pumps every PTY, and a pan fires one of
+ *  these per wheel report at ~6 ms of blocked loop each. */
+async function tmuxOut(server: string, args: string[]): Promise<string> {
+  const { stdout } = await execFileP("tmux", ["-L", server, ...args], { encoding: "utf8" });
+  return stdout;
+}
 
 /** One SGR wheel report: `ESC [ < 64 ; col ; row M` (64 = up, 65 = down). */
 const WHEEL_ONE = /\x1b\[<(64|65);\d+;\d+M/y;
@@ -88,8 +100,20 @@ export function parseWheel(data: string): { dir: "up" | "down"; n: number } | nu
   return { dir, n };
 }
 
-/** Is the pane in a mode (copy-mode, view-mode)? Sync: one cheap tmux query. */
-export function inCopyMode(server: string, target: string): boolean {
+/** Is the pane in a mode (copy-mode, view-mode)? One cheap tmux query. */
+export async function inCopyMode(server: string, target: string): Promise<boolean> {
+  try {
+    return (await tmuxOut(server, ["display-message", "-p", "-t", target, "#{pane_in_mode}"])).trim() === "1";
+  } catch { return false; }
+}
+
+/**
+ * The same question, blocking. Kept for exactly one caller: the boot-time
+ * re-attach (`sessions/tmux.ts`), a synchronous sequence that has to know the
+ * answer before it registers the session and runs once per session per daemon
+ * start, not per event. The scroll path uses `inCopyMode`.
+ */
+export function inCopyModeSync(server: string, target: string): boolean {
   try {
     const out = execFileSync("tmux", ["-L", server, "display-message", "-p", "-t", target, "#{pane_in_mode}"],
       { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
@@ -119,24 +143,38 @@ export function wantsMouse(report: string): boolean {
   return report.trim().includes("1");
 }
 
-/** Ask tmux what the pane's own program has turned on. Sync: one cheap query,
- *  on the scroll path only (the typing path never asks). */
-export function paneWantsMouse(server: string, target: string): boolean {
+/** Ask tmux what the pane's own program has turned on. Async: it runs on every
+ *  pan, and the typing path never asks. */
+export async function paneWantsMouse(server: string, target: string): Promise<boolean> {
   try {
-    const out = execFileSync("tmux", ["-L", server, "display-message", "-p", "-t", target, MOUSE_FLAGS_FMT],
-      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
-    return wantsMouse(out);
+    return wantsMouse(await tmuxOut(server, ["display-message", "-p", "-t", target, MOUSE_FLAGS_FMT]));
   } catch { return false; }
+}
+
+/**
+ * Leave copy-mode from INSIDE the scroll chain, where a pan has already
+ * decided the pane wants its wheel bytes passed through. Async, because
+ * `sessions/drive.ts`'s `panHistory` is an async chain and a blocking tmux call
+ * there is the per-wheel-event cost the scroll half of this module avoids.
+ */
+export async function exitCopyMode(server: string, target: string): Promise<void> {
+  try {
+    await execFileP("tmux", ["-L", server, "send-keys", "-t", target, "-X", "cancel"]);
+  } catch { /* not in a mode any more — that is the state we wanted */ }
 }
 
 /**
  * Leave copy-mode, so the next keystroke reaches claude and not the pager.
  *
- * Sync, and called on the typing path: it runs only when the session is BELIEVED
- * to be in copy-mode (a flag the scroll path sets), so the common send pays
- * nothing, and a stale belief costs one failed tmux call we ignore.
+ * Deliberately SYNC, and only for the typing path (`sessions/drive.ts`'s
+ * `input` / `write`): those return a boolean and write the bytes on the very
+ * next line, so awaiting here would reorder the keystroke against the cancel
+ * (and drag `deliver.ts`'s ordering into it). It runs only when the session is
+ * BELIEVED to be in copy-mode (a flag the scroll path sets), so the common send
+ * pays nothing, and a stale belief costs one failed tmux call we ignore. The
+ * cost worth removing is on the scroll path, one call per wheel event.
  */
-export function exitCopyMode(server: string, target: string): void {
+export function exitCopyModeSync(server: string, target: string): void {
   try {
     execFileSync("tmux", ["-L", server, "send-keys", "-t", target, "-X", "cancel"], { stdio: "ignore" });
   } catch { /* not in a mode any more — that is the state we wanted */ }
@@ -159,6 +197,6 @@ export function scroll(server: string, target: string, dir: "up" | "down", n: nu
     // A downward pan never ENTERS one: there is nothing below the live screen.
     if (dir === "up") await tmux(["copy-mode", "-e", "-t", target]);
     await tmux(["send-keys", "-t", target, "-X", "-N", String(n), dir === "up" ? "scroll-up" : "scroll-down"]);
-    return inCopyMode(server, target);
+    return await inCopyMode(server, target);
   })();
 }

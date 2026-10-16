@@ -37,7 +37,7 @@ One or two sentences: observable behaviour, from the user's side, as an end stat
 
 ## Who updates it
 
-`node /Users/me/dev/usmc/scripts/requirements/update.mjs .` reads the prompts and commits since
+`node scripts/requirements/update.mjs .` reads the prompts and commits since
 `docs/requirements/.state.json` — a cheap model extracts, a stronger one merges
 as add/amend/status operations — and leaves an **uncommitted diff** for a
 person to review. It preserves every item it was not told to change, byte for

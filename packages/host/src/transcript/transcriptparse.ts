@@ -208,6 +208,12 @@ export function parseTranscript(
         t.blocks.push({ kind: "thinking", text: String(p.thinking).slice(0, TEXT_CAP) });
       } else if (p?.type === "tool_use") {
         const name = String(p.name ?? "tool");
+        // The plan an `ExitPlanMode` call put to you is PROSE, the very thing a
+        // reader opens the conversation to read — not a tool input to fold away
+        // behind a row (a `lite` document would not even carry it).
+        if (name === "ExitPlanMode" && typeof p.input?.plan === "string" && p.input.plan.trim()) {
+          t.blocks.push({ kind: "text", text: String(p.input.plan).slice(0, TEXT_CAP) });
+        }
         let input: string | undefined;
         if (!lite) {
           try {

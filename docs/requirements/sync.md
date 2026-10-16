@@ -5,3 +5,7 @@ App keeps syncing and running, including session information updates, even when 
 - asked: 2026-09-25
 - shipped: c0a8666, 21e97b0
 
+### R-sync-002 · requested
+Pushing to the remote from the app succeeds, and a refusal says why.
+- asked: 2026-10-08
+

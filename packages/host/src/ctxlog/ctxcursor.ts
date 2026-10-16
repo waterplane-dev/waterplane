@@ -246,6 +246,9 @@ export interface SeriesCursor {
   autoCompactTok: number | null;
   /** Newest non-synthetic `message.model`. See `ContextLog.model`. */
   model: string | null;
+  /** The same record's top-level `effort` — what that turn ran at. Null when
+   *  the CLI did not write one. Feeds `SessionInfo.turnEffort`. */
+  effort: string | null;
   truncated: boolean;
   /** Recent `message.id`s, for the streaming-duplicate rule. Bounded — the
    *  duplicates are adjacent, so a short memory is enough and an unbounded Set
@@ -342,7 +345,7 @@ export function blank(path: string): SeriesCursor {
     cost: zeroCost(), unpriced: 0, models: [], modelTok: [], cum: zeroTotals(),
     compaction: blankCompaction(), shedAuto: 0, shedManual: 0, pendingRebuild: null,
     prevTok: 0, prevAt: 0, cold: blankCold(),
-    autoCompactTok: null, model: null, truncated: false,
+    autoCompactTok: null, model: null, effort: null, truncated: false,
     seen: new Set(), seenOrder: [],
   };
 }

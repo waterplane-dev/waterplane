@@ -124,6 +124,33 @@
  * a client may name, it widens what the host may run against what the client
  * could already name.
  *
+ * ── Trust: a repo's own readings run the repo's code ───────────────────────
+ *
+ * Said plainly, because it is the sentence a reader looks for: **an `update`
+ * runs code the repo supplies, from this daemon.** A repo may declare its own
+ * readings in its committed `.waterplane-shared/health.json`
+ * (`REPOHEALTH_OWN_FILE`) as argv lists, and the engine spawns each one at
+ * HEAD (`tools/repohealth/own.mjs`). That is the SAME trust a repo's own
+ * `tools/repohealth.mjs` already gets here — rule 1 above runs a repo's copy
+ * of the whole engine — and the same its build commands get; it is not a new
+ * kind. What bounds it: the declaration is read out of the COMMIT, never off
+ * the disk, so only committed words run; argv only, no shell; cwd is the
+ * measured worktree verbatim (the `--root=` above), never a path the file
+ * names; a minimal environment, so no key this daemon holds rides along; a
+ * per-reading timeout and output cap, under this module's group kill; at most
+ * eight. **Nothing from a client request reaches that argv** — the request
+ * carries a repo id and nothing else, and this module neither reads nor
+ * forwards the declaration. A refresh is a person's tap or the weekly
+ * refresh, the same trigger as before.
+ *
+ * The same file's `central` block may OVERRIDE one of waterplane's five index
+ * readings with a command of the repo's (`tools/repohealth/central.mjs`) —
+ * the same trust, run in the same sandbox, at HEAD only, with the same bounds
+ * — or DISABLE one, which runs nothing. Either way the index carries the
+ * week the repo's config changed instead of reading it as a move, and the
+ * phone gets each series' `variant` through `parseRepoHealthPlot` untouched:
+ * this module adds no field and decides nothing about it.
+ *
  * Everything else in the header still holds and holds harder: no metric is
  * re-implemented here, the engine is never `import()`ed into this process, the
  * process GROUP is killed on a timeout, there is one promise per worktree, and

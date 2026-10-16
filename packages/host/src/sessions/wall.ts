@@ -4,6 +4,7 @@ import type { LimitResumeMode, SessionLimit } from "@waterplane/shared";
 import { stripAnsi } from "../prompt.js";
 import { detectLimitText, STOP_WAIT_RE } from "../limit.js";
 import { readLimitLog, type LimitLogVerdict } from "../limitlog.js";
+import { spendRetry } from "../spendwall.js";
 import { logMtime, transcriptPath } from "../transcript.js";
 import { recordSent } from "../sentlog.js";
 import { adoptCarriedBlock, nextLimitAttempt } from "../limitretry.js";
@@ -237,9 +238,9 @@ export class WallSlice {
       // Its `resetAt` is an INSTANT off the CLI's own record: no zone, no date
       // guessed from a bare clock time.
       // The LOG dated this one, so its instant is kept even for a weekly wall.
-      this.markLimitBlocked(s, log.resetAt, log.weekly, scan.slice(-600), true);
+      this.markLimitBlocked(s, log.resetAt, log.weekly, scan.slice(-600), true, log.spend);
     } else if (det.blocked && !logSpeaksOfAWall && !servingNow) {
-      this.markLimitBlocked(s, det.resetAt, det.weekly, scan.slice(-600));
+      this.markLimitBlocked(s, det.resetAt, det.weekly, scan.slice(-600), false, det.spend);
     } else if (lim?.blocked && !attemptOwed && (log.state === "clear" || lim.attempts > 0 || (s.info.turnStartedAt ?? 0) > lim.blockedSince)) {
       // No live wall, AND some positive proof: the log says the account served
       // us since the rejection, or we attempted a continue, or a TURN HAS
@@ -267,7 +268,7 @@ export class WallSlice {
    * screen false-positives the very detector the sample documents. Nothing in
    * `clihealth.ts` writes to a session; keep it that way.
    */
-  markLimitBlocked(s: Session, resetAt: number | null, weekly = false, sample?: string, dated = false): void {
+  markLimitBlocked(s: Session, resetAt: number | null, weekly = false, sample?: string, dated = false, spend = false): void {
     const lim = s.info.limit;
     if (!lim) return;
     const was = lim.blocked;
@@ -278,6 +279,7 @@ export class WallSlice {
     const parsedReset = resetAt != null;
     lim.blocked = true;
     lim.weekly = weekly;
+    if (spend) lim.spend = true; else delete lim.spend;
     // A weekly banner's bare time lands on the wrong DAY — don't surface it as a
     // countdown, and don't wait for it; the backoff carries that wait instead
     // (`limitretry.ts`).
@@ -309,11 +311,16 @@ export class WallSlice {
       // than once per sweep. Without an instant the session has nothing to
       // resume at and waits on a blind re-scan instead, which is what makes a
       // parse failure here worth a word.
-      this.core.noteFor(s, "limit.reset", parsedReset ? "good" : "fallback", {
+      // A spend wall with no printed instant is the rule answering correctly:
+      // there is no clock in it to parse, so it is neither a miss nor a good.
+      if (!spend || parsedReset) this.core.noteFor(s, "limit.reset", parsedReset ? "good" : "fallback", {
         ...(parsedReset ? {} : { via: "a periodic re-scan with no scheduled resume" }),
         ...(sample ? { raw: sample } : {}),
       });
     }
+    // A spend wall lifts at the dollar period's reset if one is configured -
+    // never at a time anybody invented. No period: resetAt stays null.
+    if (spend && resetAt == null) resetAt = spendRetry(Date.now()).resetAt;
     if (resetAt != null && resetAt !== lim.resetAt) { lim.resetAt = resetAt; if (was) this.core.emit("updated", s.info); }
     this.refreshLimit(s);
     if (!was) {
@@ -416,7 +423,7 @@ export class WallSlice {
     if (this.core.isResuming(s.info.id) || this.core.resumeQueue().includes(s.info.id)) return;
     const now = Date.now();
     let at: number;
-    if (atOverride != null) {
+    if (atOverride != null && !lim.spend) {
       at = Math.max(atOverride, this.core.resumeHoldUntil());
     } else {
       // One rule for every window, weekly included (`limitretry.ts`): one early
@@ -427,13 +434,17 @@ export class WallSlice {
       // The hold-off travels IN rather than being clamped on after: a resume
       // that came back still blocked is evidence about the ACCOUNT, so no
       // session's next attempt may precede it.
-      const next = this.limitRetry(s, now);
+      // A SPEND wall (`spendwall.ts`) takes one attempt at a reset somebody can
+      // name, never a probe or a backoff: the wall is a balance, so typing into
+      // it earlier changes nothing. No reset, or the attempt failed: it needs
+      // the person, and `noteGaveUp` says so.
+      const next = lim.spend ? spendRetry(now, lim.resetAt, lim.attempts, LIMIT_RESET_BUFFER_MS) : this.limitRetry(s, now);
       if (next.kind === "giveup") {
         if (lim.nextAttemptAt != null) { lim.nextAttemptAt = null; this.core.emit("updated", s.info); }
         this.noteGaveUp(s, next.why);
         return;
       }
-      at = next.at;
+      at = lim.spend ? Math.max(next.at, atOverride ?? 0, this.core.resumeHoldUntil()) : next.at;
     }
     lim.nextAttemptAt = at;
     s.limitTimer = setTimeout(() => { this.onLimitDue(s); }, Math.max(50, at - now));

@@ -84,6 +84,9 @@ export interface IntentFacts {
    * `budgetBlocked` is true is read the same way.
    */
   budgetOver?: readonly BudgetCeiling[];
+  /** The LEFTOVER ceiling when it is tripped (`leftoverCeiling`), else absent.
+   *  Holds only rows `budgetLeftoverOf` names — never a reason for the rest. */
+  leftoverOver?: BudgetCeiling | null;
   /** The global auto-fire switch. */
   autoFire: boolean;
   /** Directories a sweep may legally name — `discoverTargets()`'s answer.
@@ -119,6 +122,23 @@ export interface IntentFacts {
    * one tick open min(5, free) sessions rather than five.
    */
   autoSlotsFree: number;
+  /**
+   * The local-model cap (rung 4.55, `localModel`), as the host measured it.
+   *
+   * `rows` is every pending AUTOMATIC intent id (an `auto` row, or one target
+   * of a sweep) whose run would start a turn on a LOCAL model (its own launch,
+   * or the local session it is aimed at) — locality is a backend's fact, so
+   * only the host can say it, and a person's own tap is never in it. `free` is how many more
+   * local turns may start right now (cap minus local sessions mid-turn and
+   * local rows starting/running), decremented per fire within a pass exactly
+   * like `autoSlotsFree`. `busy` is the local sessions counted as working, so a
+   * row aimed at one of THEM waits on its own session (rung 5) instead of on
+   * the cap it is itself filling.
+   *
+   * ABSENT means the host did not say — the rung is skipped, which is the
+   * whole of the old behaviour.
+   */
+  local?: { free: number; rows: ReadonlySet<string>; busy: ReadonlySet<string> };
 
   // ── What the `after` trigger reads ───────────────────────────────────────
   //

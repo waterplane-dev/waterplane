@@ -146,6 +146,12 @@ export interface BackendInfo {
      * no conversation on this model was found, never estimated.
      */
     overheadTok?: Record<string, number>;
+    /**
+     * A sentence the backend says about this LIST, drawn under the model
+     * picker ("Copilot lists only Auto for this account"). The backend still
+     * launches — a reason it cannot is `unavailable`. Absent = nothing to say.
+     */
+    note?: string;
   };
   /**
    * The backend's context-window size in tokens, when it is a known, fixed

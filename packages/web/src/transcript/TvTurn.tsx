@@ -1,10 +1,11 @@
 import { Clock, Copy, CornerDownRight, FoldVertical, GitFork, Terminal as TerminalIcon, Wrench } from "lucide-react";
-import { nextTurnText, type TranscriptTurn } from "@waterplane/shared";
+import { answeredOnlyInCli, nextTurnText, type TranscriptTurn } from "@waterplane/shared";
 import { Markdown } from "../Markdown";
 import { CostFold } from "../TurnCostCard";
 import { ForkTurnRow } from "../ForkTurn";
 import { clock, turnText, turnTs } from "../transcriptUtil";
 import { stamp, took } from "../turnWhen";
+import { track } from "../usage";
 import { TvBlocks } from "./TvBlocks";
 import type { TvModel } from "./useTranscriptView";
 
@@ -13,7 +14,7 @@ export function TvTurn({ m, t }: { m: TvModel; t: TranscriptTurn }) {
   const {
     turns, seenMark, newIdx, unread, markRead, copy, fork, forkTurn, setForkTurn, doc, files, q, stillGoing,
     whyTurnId, costLastOpen, costOpen, toggleCost, mixSlotsDoc, agentsSoFar, usdPerWeekPct, weekIncl,
-    onOpenCost, nextTurn,
+    onOpenCost, nextTurn, onShowCli, today,
   } = m;
           const isNew = seenMark > 0 && turnTs(t) > seenMark;
           const firstNew = isNew && newIdx !== -1 && turns[newIdx]?.id === t.id;
@@ -94,7 +95,7 @@ export function TvTurn({ m, t }: { m: TvModel; t: TranscriptTurn }) {
       {t.prompt && (
         <div className="tr-you">
           <Markdown src={t.prompt} q={q} onCopy={copy} files={files} />
-          {t.sentAt ? <div className="tr-when">posted {stamp(t.sentAt)}</div> : null}
+          {t.sentAt && new Date(t.sentAt).toDateString() !== today ? <div className="tr-when">posted {stamp(t.sentAt)}</div> : null}
         </div>
       )}
       {/* …and the empty body under it is SAID, never left blank: a turn
@@ -114,6 +115,22 @@ export function TvTurn({ m, t }: { m: TvModel; t: TranscriptTurn }) {
         <div className="tr-status tr-note">
           <CornerDownRight size={13} />
           <span className="tr-live-what">the CLI took this into the turn it was already running · the answer above may be replying to both</span>
+        </div>
+      )}
+      {/* `/btw`: the CLI answers in an overlay of its own and writes it
+          nowhere, and copying it off the screen kept breaking — so the
+          reader stopped trying (host `screenCommandTurns`). The empty body
+          says where the answer is instead of looking like silence. */}
+      {t.local === "screen" && answeredOnlyInCli(t.prompt) && (
+        <div className="tr-status tr-note">
+          <TerminalIcon size={13} />
+          <span className="tr-live-what">
+            the CLI answers {t.prompt.trim().split(/\s+/)[0]} in an overlay of its own and keeps no record of it,
+            so the reader does not copy it · read it in the CLI while the overlay is up — once closed (Esc) it is gone
+          </span>
+          <button className="key" onClick={() => { track("action:read.btwToCli"); onShowCli(); }}>
+            <TerminalIcon size={13} /> open the CLI
+          </button>
         </div>
       )}
       <TvBlocks m={m} t={t} />

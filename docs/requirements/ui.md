@@ -289,6 +289,145 @@ All text is visible in the main view, none missing.
 - asked: 2026-10-04
 
 
-### R-ui-073 · requested
-On a window at least 1024px wide the app is a two-pane workspace — repos and sessions in a left sidebar, the live session with its composer on the right, sheets opening as side panels — and the phone layout is unchanged.
-- asked: 2026-10-07 — plan: docs/analysis/desktop-workspace-plan.md
+### R-ui-073 · shipped
+On a window at least 1024px wide the app is a two-pane workspace — repos and sessions in a left sidebar, the live session with its composer on the right, sheets opening as side panels — and the phone layout is unchanged; the web app looks good in a desktop browser as well as on mobile.
+- asked: 2026-10-07 — plan: docs/analysis/desktop-workspace-plan.md, 2026-10-07
+- shipped: fd8cc502, 41a0931a, 57a3510b, 75352f87, f7f79edd
+
+### R-ui-074 · requested
+On a desktop window the keyboard drives the CLI: a key typed while no field has focus reaches the terminal (which then keeps the keyboard), and the terminal says when it has it — not only the on-screen key buttons.
+- asked: 2026-10-08 — plan: docs/analysis/desktop-workspace-plan.md §5
+
+### R-ui-075 · requested
+A side panel on a desktop window can always be closed with a visible control: its head sits below the top strips and never scrolls away.
+- asked: 2026-10-08 — plan: docs/analysis/desktop-workspace-plan.md §3
+### R-ui-076 · requested
+The UI never greys out a button; when an action is unavailable it explains why in text. Confirmations never use the browser's window.confirm, and icons contain no emoji.
+- asked: 2026-10-04, 2026-10-06
+
+### R-ui-077 · shipped
+The All chip and the worktree chip have the same size and style.
+- asked: 2026-10-05
+- shipped: 2f56055d
+
+### R-ui-078 · requested
+On iOS, web controls for features the native shell lacks are hidden or explained in a sentence, never shown as dead buttons.
+- asked: 2026-10-06
+
+### R-ui-079 · requested
+Alternative views exist that the user can switch between with a toggle.
+- asked: 2026-10-07
+
+### R-ui-080 · shipped
+The app has an icon that works well in light mode, and the icon is the same size as the button it sits in, never larger.
+- asked: 2026-10-07
+- shipped: af03b451, 4d73eecc, eaeff300
+
+### R-ui-081 · shipped
+The full-screen toggle works whenever a session is on screen.
+- asked: 2026-10-07
+- shipped: e62ded58
+
+### R-ui-082 · shipped
+The ? help button, on the main screen and in the session header alike, shows its message first and then asks once whether to remove the button to save space; removing it hides it in all views, and Settings brings it back.
+- asked: 2026-10-07
+- shipped: edc40bd5
+
+### R-ui-083 · shipped
+Chrome that changes itself (a label retiring, a button removed) says so when it happens and names the way back, consistently for the + and the ? buttons.
+- asked: 2026-10-08
+- shipped: df830262, edc40bd5
+
+### R-ui-084 · shipped
+After dragging the terminal's corner group, its drag handle is not shown in blue.
+- asked: 2026-10-08
+- shipped: 9a9b415f
+
+
+### R-ui-085 · shipped
+On a desktop browser a picture or file pasted with Cmd/Ctrl+V into the session's prompt box (or with no field focused) attaches to the session the way the paperclip does — a picture opens the annotator.
+- asked: 2026-10-10
+
+### R-ui-086 · shipped
+On a desktop browser files dragged from the file system onto the prompt box upload to the repo's inbox the way the paperclip does; a drop beside the box never navigates the tab away.
+- asked: 2026-10-10
+
+### R-ui-087 · shipped
+On a desktop window with room, the annotator for the session on screen opens as a column to the right of the session, so the prompt can be typed while the picture is marked; with too little room it takes the main pane as before.
+- asked: 2026-10-10
+
+### R-ui-088 · shipped
+On a phone the session's prompt can be shown, and edited, above the picture while it is being marked.
+- asked: 2026-10-10
+
+### R-ui-089 · shipped
+The session tab strip is on by default and is drawn on a desktop window too, beneath the top status strips.
+- asked: 2026-10-10
+
+### R-ui-090 · shipped
+On a desktop Cmd/Ctrl+Return in the prompt box sends it, whatever Enter is set to do.
+- asked: 2026-10-10
+
+### R-ui-091 · shipped
+The annotator column beside the session on a desktop window can be resized by dragging its left edge, and has a full-screen toggle (Esc steps back); switching never loses the marks.
+- asked: 2026-10-10
+
+### R-ui-092 · shipped
+A picture pasted or dropped while another is being marked asks each time whether to append it; yes adds it to the batch after the current one, no leaves everything as it was.
+- asked: 2026-10-10
+
+### R-ui-093 · shipped
+The sessions list has separate expand-all and collapse-all buttons for the repo groups.
+- asked: 2026-10-10
+
+### R-ui-094 · shipped
+The sessions list has an always-visible quick filter that narrows the rows to those whose shown text (title, prompts, repo, branch) contains every typed word, saying "n of N"; the full transcript search sits at the end of the same line.
+- asked: 2026-10-10
+
+### R-ui-095 · shipped
+With a picture open on the annotator beside the session, Send in the session's prompt box asks whether the picture goes too; yes sends it with the message (its marks included), no sends the words alone and leaves the picture open.
+- asked: 2026-10-10
+### R-ui-096 · shipped
+Floating controls over the terminal have a clearly visible edge in dark mode.
+- asked: 2026-10-09
+- shipped: df14356a
+
+### R-ui-097 · shipped
+The fan-out sheet picks its launch with the same backend, model and effort controls as the main start-with sheet.
+- asked: 2026-10-09
+- shipped: cce74b6b
+
+### R-ui-098 · shipped
+Strips above the prompt bar can be folded away through one reusable component, take no visible space when folded, and come back from a chip in the status line.
+- asked: 2026-10-09
+- shipped: b8221c01
+
+### R-ui-099 · shipped
+Any horizontally scrollable strip that hides content shows a clearly visible chevron and fade at the edge with more past it, and nothing when everything fits.
+- asked: 2026-10-10
+- shipped: afe65dd2, 0dbdd2d2
+
+### R-ui-100 · shipped
+Expanding or collapsing a repo group scrolls the list so its header and revealed content are visible.
+- asked: 2026-10-11
+- shipped: 9e2321e3
+
+### R-ui-101 · shipped
+The context sheet has a /compact button at the end of the Context window title row.
+- asked: 2026-10-11
+- shipped: 9b085576, 463c8abe
+
+### R-ui-102 · shipped
+Screens such as the inbox, outbox, backlog and activity look plainly designed: fewer fat chips, each fact said once, no generated-looking decoration.
+- asked: 2026-10-12
+- shipped: cbe100c3, 938faf36, 2994113e, 53b4df7f, 0dd2d2e2
+
+### R-ui-103 · shipped
+The VS Code extension has a sidebar view and shows subagent lanes.
+- asked: 2026-10-11
+- shipped: c4b2f739
+
+### R-ui-104 · requested
+Filtered gallery views look the same as the unfiltered view, with the same styling and layout.
+- asked: 2026-10-12
+

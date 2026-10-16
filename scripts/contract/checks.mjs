@@ -113,7 +113,11 @@ export const CHECKS = [
       // a number that means something else.
       assert.ok(h.ptys === null || (Number.isInteger(h.ptys?.masters) && Number.isInteger(h.ptys?.slaves)),
         `ptys is {masters, slaves} or null (${JSON.stringify(h.ptys)})`);
-      const keys = Object.keys(h).sort().join(",");
+      // `loopDelayP99Ms` is a gauge of the real daemon's event loop (stalls from a
+      // blocking call); the demo has no loop worth timing, so it is optional.
+      assert.ok(h.loopDelayP99Ms === undefined || Number.isInteger(h.loopDelayP99Ms),
+        `loopDelayP99Ms is whole ms when present (${h.loopDelayP99Ms})`);
+      const keys = Object.keys(h).filter((k) => k !== "loopDelayP99Ms").sort().join(",");
       assert.equal(keys, "ok,protocol,ptys,root,sessions", "no field one desktop has and the other lacks");
     },
   },

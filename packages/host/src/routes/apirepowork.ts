@@ -8,15 +8,19 @@
 import { extname } from "node:path";
 import { logTag, type SessionInfo } from "@waterplane/shared";
 import { suggestCommitMessage } from "../commitmsg.js";
-import { gitBranches, gitCheckout, gitCommit, gitCreateBranch, gitDeleteBranch, gitBlob, gitDiff, gitPush, gitStage, gitStatus, isSecretFile, readTextFile } from "../git.js";
+import { gitBranches, gitCheckout, gitCommit, gitCreateBranch, gitDeleteBranch, gitBlob, gitDiff, gitPull, gitStage, gitStatus, isSecretFile, pushState, readTextFile, startPush } from "../git.js";
+import { gitFetch, gitLog, gitShow } from "../gitlog.js";
 import { confirmGate, fixGateRefusal, withFixConfirms } from "../confirmgate.js";
 import { checkRepoCompliance, fixRepoCompliance, setCheckIgnored, setRepoContextLimits } from "../compliance.js";
+import { inspectOptIns, standingPromptsOf } from "../optins.js";
+import { setOptInChoice } from "../setupprefs.js";
+import type { OptInChoice, OptInReport, RepoTarget } from "@waterplane/shared";
 import { REPOHEALTH_TIMEOUT_MS, readRepoHealth, refreshRepoHealth } from "../repohealth.js";
 import { cleanScope, writeScopes } from "../repohealthscopes.js";
 import { removeLeftover, worktreeLeftover, type LeftoverInput } from "../worktreeleftover.js";
 import { worktreeOwners } from "../worktreeowner.js";
 import { MIME, json, readJson, serveRange } from "./apiio.js";
-import { route, type ApiEntry, type RepoReq } from "./apitable.js";
+import { route, type ApiCtx, type ApiEntry, type RepoReq } from "./apitable.js";
 
 /**
  * How long `POST /api/repos/:id/capture/run` with `{"wait":true}` holds the
@@ -64,7 +68,7 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
   // it: a caller that concluded "the capture failed" would be wrong, and a
   // promise of five minutes that delivered ninety seconds would be worse.
   route<RepoReq>("POST", "capture/run/*", async ({ req, res, wt }, ctx) => {
-    const body = await readJson(req);
+    const body = await readJson(req, { optional: true });
     // No `watch` here, deliberately: watch mode runs for up to ten minutes
     // and emits a frame per change, which is the phone's mode. An agent asks
     // for ONE picture of the screen it just changed.
@@ -164,6 +168,21 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
     return true;
   }),
 
+  // ── Opt-ins: offers, never findings (`optins.ts`) ──────────────────
+  // Nothing here touches the setup checklist, its badge or the sweep's store.
+  // The mutation is a POST because it writes (origin.ts: no /api GET may change state).
+  route<RepoReq>("GET", "optins/*", ({ res, rest, target }, ctx) => {
+    if (rest[0]) return false;
+    json(res, optInReport(target, ctx));
+    return true;
+  }),
+  route<RepoReq>("POST", "optins/choice/*", async ({ req, res, target }, ctx) => {
+    const body = await readJson(req);
+    const r = setOptInChoice(target.worktreePath, String(body?.id ?? ""), (body?.choice ?? null) as OptInChoice | null);
+    json(res, r.ok ? { ok: true, report: optInReport(target, ctx) } : { ok: false, error: r.error }, r.ok ? 200 : 400);
+    return true;
+  }),
+
   // ── The repo-health series: /api/repos/:id/repohealth ──────────────
   //
   // GET reads and spawns only the tool's `status` subcommand, which touches
@@ -209,19 +228,25 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
   // answer is what was actually STORED — a scope the client asked for and
   // this dropped (renamed away, outside the tree, past the cap) is a row it
   // would otherwise keep drawing against a series nobody is measuring.
+  // The chained health index (`healthwatch.ts`): computed from the series file on
+  // demand, no engine run — a pure read, so GET.
+  route<RepoReq>("GET", "healthindex", ({ res, wt }, ctx) => {
+    json(res, ctx.health ? ctx.health.respond(wt) : { series: null, move: null, words: null, lastRefresh: null, reason: "health index unavailable" });
+    return true;
+  }),
   route<RepoReq>("POST", "repohealth/scopes", async ({ req, res, wt }) => {
     const body = await readJson(req) as { scopes?: unknown } | null;
     const asked = Array.isArray(body?.scopes) ? body.scopes : [];
     json(res, { ok: true, scopes: writeScopes(wt, asked) });
     return true;
   }),
-  route<RepoReq>("POST", "repohealth/refresh", async ({ req, res, wt }) => {
+  route<RepoReq>("POST", "repohealth/refresh", async ({ req, res, wt }, ctx) => {
     // READ, not merely drained: the body may name a scope, which is the one
     // thing a caller chooses here. It must be consumed either way — a body
     // left unread is still a body, and node answers and then destroys the
     // socket, which the NEXT request on that pooled connection fails on
     // ("other side closed") with nothing in this daemon's log to explain it.
-    const body = await readJson(req) as { scope?: unknown } | null;
+    const body = await readJson(req, { optional: true }) as { scope?: unknown } | null;
     const askedScope = typeof body?.scope === "string" ? body.scope : null;
     const scope = askedScope ? cleanScope(wt, askedScope) : null;
     if (askedScope && !scope) {
@@ -257,6 +282,8 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
       json(res, { ok: false, error: waited.error ?? "the repo-health run did not answer" }, 200);
       return true;
     }
+    // A repo-level run that finished moves the index: recompute the cache and stamp the refresh.
+    if (!scope && waited.view.last?.ok === true) ctx.health?.refreshed(wt);
     json(res, { ok: waited.view.last?.ok === true, ...waited.view }, 200);
     return true;
   }),
@@ -331,8 +358,43 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
     json(res, await suggestCommitMessage(wt));
     return true;
   }),
-  route<RepoReq>("POST", "git/push/*", async ({ res, wt }) => {
-    const r = await gitPush(wt);
+  // A pull is seconds (a fetch and a fast-forward or rebase, no hook), so it
+  // is one held request, not a job like the push below.
+  route<RepoReq>("POST", "git/pull/*", async ({ res, wt }) => {
+    const r = await gitPull(wt);
+    json(res, r, r.ok ? 200 : 400);
+    return true;
+  }),
+  // `{ background: true }` starts the push (or joins the running one) and
+  // answers at once with its state; the phone then asks GET until it ends.
+  // Without it the request is held open until the push ends — what a bundle
+  // from before the job asks for, and it waits on the SAME job.
+  route<RepoReq>("POST", "git/push/*", async ({ req, res, wt }) => {
+    const body = await readJson(req, { optional: true }) as { background?: unknown } | null;
+    const job = startPush(wt);
+    if (body?.background === true) { json(res, pushState(wt)); return true; }
+    const r = await job.done;
+    json(res, r, r.ok ? 200 : 400);
+    return true;
+  }),
+  route<RepoReq>("GET", "git/push/*", async ({ res, wt }) => {
+    json(res, { push: pushState(wt) });
+    return true;
+  }),
+  // The branch against its upstream: incoming, outgoing, shared history.
+  route<RepoReq>("GET", "git/log/*", async ({ res, wt }) => {
+    json(res, await gitLog(wt));
+    return true;
+  }),
+  route<RepoReq>("GET", "git/show/*", async ({ res, url, wt }) => {
+    const body = await gitShow(wt, url.searchParams.get("sha") || "");
+    if (body == null) return json(res, { error: "no such commit" }, 404), true;
+    json(res, { body });
+    return true;
+  }),
+  // POST: it moves remote-tracking refs (never the branch or the tree).
+  route<RepoReq>("POST", "git/fetch/*", async ({ res, wt }) => {
+    const r = await gitFetch(wt);
     json(res, r, r.ok ? 200 : 400);
     return true;
   }),
@@ -381,3 +443,10 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
     return true;
   }),
 ];
+
+function optInReport(target: RepoTarget, ctx: ApiCtx): OptInReport {
+  const rows = inspectOptIns(target.worktreePath, {
+    standingPrompts: (wt) => { try { return standingPromptsOf(ctx.intents.list(), wt); } catch { return null; } },
+  });
+  return { repoId: target.id, repoName: target.repoName, rows, checkedAt: Date.now() };
+}

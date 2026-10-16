@@ -36,6 +36,13 @@ const LOCAL_ONLY = new Set([
   "/resume", "/rewind", "/clear", "/export", "/memory", "/bashes",
   "/remote-control", "/ide", "/upgrade", "/bug", "/feedback",
   "/privacy-settings", "/login", "/logout",
+  // Settings the CLI applies in place (`local-jsx` in its own command table,
+  // checked on the installed build 2026-10-15). `/effort high` was missing: it
+  // set the effort, printed its confirmation, and the host — waiting for a
+  // `UserPromptSubmit` a local command never fires — pressed Return five times
+  // and filed it as "typed, but Return was swallowed".
+  "/effort", "/fast", "/theme", "/color", "/keybindings", "/skills", "/plugin",
+  "/version", "/diff", "/copy",
 ]);
 
 /** True when `text` is one of the TUI-local commands above (args ignored).
@@ -79,6 +86,19 @@ const NO_TURN_ONLY = new Set(["/btw"]);
 export function startsNoTurn(text: string): boolean {
   const head = text.trim().split(/\s+/)[0] ?? "";
   return LOCAL_ONLY.has(head) || NO_TURN_ONLY.has(head);
+}
+
+/**
+ * True when `text` is answered ONLY in an overlay of the CLI's own and written
+ * to no record — `/btw` is the whole of it. **The reader does not try to copy
+ * that answer**: it is said to a working agent by design, so the capture it
+ * would be read from is the running turn's screen with the overlay painted over
+ * it, and every rule written to cut one out of the other (echo seams, repaint
+ * folding, the mid-turn guard) shipped and then missed again. The row says where
+ * the answer is and opens the CLI instead.
+ */
+export function answeredOnlyInCli(text: string): boolean {
+  return NO_TURN_ONLY.has(text.trim().split(/\s+/)[0] ?? "");
 }
 
 /**

@@ -86,7 +86,7 @@ export function shapeOf(text: string): string {
   const lines = text.split("\n");
   let longest = 0;
   for (const l of lines) if (l.length > longest) longest = l.length;
-  return `${lines.length} lines, ${text.length} chars, longest line ${longest}`;
+  return `${lines.length} line${lines.length === 1 ? "" : "s"}, ${text.length} chars, longest line ${longest}`;
 }
 
 /** Home directories, so a sample never carries the account name. */

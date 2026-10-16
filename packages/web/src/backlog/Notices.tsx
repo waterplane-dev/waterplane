@@ -9,6 +9,7 @@
  */
 import { SendHorizontal, X } from "lucide-react";
 import { ConfirmButton } from "../Confirm";
+import { Explain } from "../Explain";
 import type { BacklogModel } from "./backlogTypes";
 
 export function AutoOffNote({ m }: { m: BacklogModel }) {
@@ -30,10 +31,16 @@ export function AutoOffNote({ m }: { m: BacklogModel }) {
           sentence goes `null` whenever nothing in the cut was going to start,
           and dropping the banner on the cut alone would take the fact off the
           screen entirely. */}
+      {/* **…and the sheet's head already says it** (`auto off`, where the switch
+          is), so the fact is not drawn a second time: what is left of the
+          sentence is what the head cannot hold — how far the switch reaches —
+          and it sits behind a `?`, closed. */}
       {!p.auto && !focusWords && (
         <div className="form"><div className="form-hint">
-          <b>auto</b> is off on this desktop: nothing queued anywhere runs until you turn it back on or
-          fire an item by hand.
+          <Explain of="auto off" label="what does auto off stop?">
+            <b>auto</b> is off on this desktop: nothing queued anywhere runs until you turn it back on or
+            fire an item by hand.
+          </Explain>
         </div></div>
       )}
     </>

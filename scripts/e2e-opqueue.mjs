@@ -15,12 +15,13 @@
 // Asserted end to end against real stub sessions: the stub logs everything
 // typed into it, so "how many copies of the follow-up landed" is countable.
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
 import { E, SLUG, rootEnv } from "./lib-brand.mjs";
+import { waitForHost } from "./lib-e2e.mjs";
 
 const PORT = 8815;
 const ROOT = mkdtempSync(join(tmpdir(), `${SLUG}-opqueue-`));
@@ -41,14 +42,23 @@ const env = {
   [E.CLAUDE_BIN]: STUB, [E.IDLE_MS]: "1500",
   STUB_MODE: "repaint", STUB_LOG: LOG,
 };
+// A host that dies, or a socket that drops, mid-test used to read as a long run
+// of FAILs with nothing behind them: every ack after it simply never came. One
+// such run under heavy memory pressure could not be told apart from a host
+// whose event loop was blocked, so both are now said out loud — the exit or
+// close the moment it happens, and a liveness probe where a wait gives up.
+let expectExit = false;
 const startHost = () => {
   const h = spawn("node", ["packages/host/dist/main.js"], { env, stdio: ["ignore", "pipe", "pipe"] });
   h.stderr.on("data", (d) => process.stderr.write("[host] " + d));
+  h.on("exit", (code, signal) => {
+    if (h === host && !expectExit) check(false, `the host exited mid-test (code ${code}, signal ${signal})`);
+  });
   return h;
 };
 let host = startHost();
 const base = `http://127.0.0.1:${PORT}`;
-await sleep(900);
+await waitForHost(PORT);
 
 const mk = (name) => fetch(`${base}/api/repo`, {
   method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name }),
@@ -63,7 +73,9 @@ const copies = (probe) => logText().split(probe).length - 1;
 // ── One socket, one collector for everything the host says back ──
 const state = { acks: [], sessions: new Map(), runs: [], buildRuns: [], builds: [] };
 let ws;
+let expectClose = false;
 function connect() {
+  expectClose = false;
   state.acks = [];
   state.sessions = new Map();
   state.runs = [];
@@ -79,6 +91,8 @@ function connect() {
     if (m.t === "build.list") { state.builds = m.builds; state.buildRuns = m.runs; }
   });
   ws.on("error", (e) => { console.log("FAIL: ws error " + e.message); failed = true; });
+  const mine = ws;
+  ws.on("close", (code) => { if (ws === mine && !expectClose) check(false, `the host closed the socket mid-test (code ${code})`); });
   return new Promise((resolve) => {
     ws.on("open", () => { ws.send(JSON.stringify({ t: "hello", protocol: 1 })); setTimeout(resolve, 600); });
   });
@@ -90,6 +104,21 @@ const waitFor = async (pred, ms = 30000) => {
   while (Date.now() < until) { if (pred()) return true; await sleep(200); }
   return false;
 };
+/** Where a wait gave up: is the host still answering at all? An HTTP probe
+ *  separates "slow" from "event loop blocked", and the process state separates
+ *  blocked (S/U, sitting in a call) from spinning (R) from gone. */
+async function diagnose(what) {
+  let http;
+  try {
+    const r = await fetch(`${base}/api/health`, { signal: AbortSignal.timeout(3000) });
+    http = `answers HTTP ${r.status}`;
+  } catch (e) { http = `does NOT answer HTTP within 3 s (${e.name})`; }
+  let proc = "gone";
+  try {
+    proc = execFileSync("ps", ["-o", "stat=,%cpu=,etime=", "-p", String(host.pid)], { encoding: "utf8", timeout: 3000 }).trim() || "gone";
+  } catch { /* not running */ }
+  console.log(`# after ${what}: host pid ${host.pid} ${http}; ps stat,%cpu,etime: ${proc}; socket readyState ${ws.readyState}`);
+}
 
 await connect();
 
@@ -130,7 +159,9 @@ const settledTargets = () => {
   const ts = state.runs.find((r) => r.id === acksFor("op-fan-1")[0]?.runId)?.targets ?? [];
   return ts.length === 2 && ts.every((t) => t.sessionId && (t.status === "running" || t.status === "done" || t.status === "failed"));
 };
-check(await waitFor(settledTargets, 100000),
+const settled = await waitFor(settledTargets, 100000);
+if (!settled) await diagnose("the fan-out never settled");
+check(settled,
   `both fan-out targets got a session and settled their delivery (${JSON.stringify(state.runs[0]?.targets?.map((t) => [t.status, !!t.sessionId]))})`);
 send({ t: "fanout.run", dirs: [a.path, b.path], text: TEXT, cols: 80, rows: 24, ackId: "op-fan-1" });
 await waitFor(() => acksFor("op-fan-1").length >= 3, 10000);
@@ -259,11 +290,13 @@ send({ t: "session.input", id: newSolo, data: PERSIST_MARK, ackId: "op-input-1" 
 // had even READ the message, and then "ok:false on replay" is the correct
 // answer to a send that never happened, not a lost ledger entry.
 check(await waitFor(() => acksFor("op-input-1").length >= 1, 8000), "the input was acked before the restart");
+expectClose = true; expectExit = true;
 try { ws.close(); } catch { /* already closing */ }
 host.kill();
 await sleep(1200);
+expectExit = false;
 host = startHost();
-await sleep(1500);
+await waitForHost(PORT);
 await connect();
 const sessionsAfterBoot = state.sessions.size;
 send({ t: "fanout.run", dirs: [a.path, b.path], text: TEXT, cols: 80, rows: 24, ackId: "op-fan-1" });
@@ -291,6 +324,7 @@ check(replayed?.ok === true,
   `an input receipt still debounced when the SIGTERM landed was flushed and is replayed ok (${JSON.stringify(replayed)})`);
 check(copies(PERSIST_MARK) === 1, `and the text was never typed twice (copies: ${copies(PERSIST_MARK)})`);
 
+expectClose = true; expectExit = true;
 try { ws.close(); } catch { /* already closing */ }
 host.kill();
 await sleep(200);

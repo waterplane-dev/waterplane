@@ -5,8 +5,8 @@
  * learns about the product. It goes stale silently: a new per-repo file lands in the
  * host, nobody thinks of the other repos' agents, and they never hear of it.
  * So this reads the host's source for every file it reads or writes under a
- * REPO's state dir (a `join(<repo dir>, state dir, "<name>")` — `root` and friends
- * are the host's own store, not the repo's) and fails when the skill never
+ * REPO's state dir or its committed shared dir (a `join(<repo dir>, state dir, "<name>")`
+ * — `root` and friends are the host's own store, not the repo's) and fails when the skill never
  * names one, unless it is listed below with the reason the agent need not know.
  *
  * The skill reaches every session the host spawns via `--plugin-dir`
@@ -42,13 +42,13 @@ function repoStateFiles() {
   const out = new Map();
   for (const f of files(SRC)) {
     const src = readFileSync(f, "utf8");
-    for (const m of src.matchAll(/join\(([\w.]+), (?:"\.(?:myapp|waterplane)"|BRAND\.stateDirName), "([^"]+)"/g)) {
+    for (const m of src.matchAll(/join\(([\w.]+), (?:"\.(?:myapp|waterplane)(?:-shared)?"|BRAND\.(?:stateDirName|sharedDirName)), "([^"]+)"/g)) {
       if (HOST_ROOTS.has(m[1])) continue;
       out.set(m[2], f.slice(ROOT.length));
     }
     // `branddirs.ts`' resolver: `join(repoStateDir(x), "<file>")` is per-repo
     // by name (the global one is `hostStateDir`), so no HOST_ROOTS check is needed.
-    for (const m of src.matchAll(/join\(repoStateDir\([\w.]+\), "([^"]+)"/g)) {
+    for (const m of src.matchAll(/join\(repo(?:State|Shared)Dir\([\w.]+\), "([^"]+)"/g)) {
       out.set(m[1], f.slice(ROOT.length));
     }
   }

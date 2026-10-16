@@ -6,9 +6,9 @@
  * This is the whole of the correctness of the past-window grids: the fold is a
  * sum, and every way a heat grid can be wrong is a bucket landing in the wrong
  * box. Three things are pinned here — that a cell is the window it says it is,
- * that the hour a window OPENED in is shared with the cell before it (the price
- * of an hour being the finest bucket on record, and the same rule the live cut
- * states on screen), and that nothing lands in a cell that does not exist.
+ * that a window opening mid-hour starts at the NEAREST hour (`windowStartHour`,
+ * the rule the live cut states on screen) so the cells TILE with no hour in two,
+ * and that nothing lands in a cell that does not exist.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -30,19 +30,34 @@ test("a window anchored on the hour claims each bucket exactly once", () => {
   assert.deepEqual(windowCells(at(6), onHour, 5 * HOUR), [2]);
 });
 
-test("the hour a window OPENED in is in that window AND in the one before it", () => {
-  // Cell 0 is [12:30, 17:30) and counts from the top of 12:00; cell 1 is
-  // [07:30, 12:30) and runs through it. That overlap is the stated price of an
-  // hour bucket, and it is the same rule the live readout applies.
-  assert.deepEqual(windowCells(at(12), offHour, 5 * HOUR), [0, 1]);
+test("a window opening mid-hour starts at the NEAREST hour, and the cells tile", () => {
+  // Reset at 17:30: cell 0 is [12:30, 17:30), cell 1 [07:30, 12:30). Each edge rounds to the
+  // nearest hour (a tie to the later one): cell 0 counts [13:00, 18:00), cell 1 [08:00, 13:00).
+  // Flooring put 12:00 in BOTH — and 59 minutes of last week into a week resetting at 18:59.
+  assert.deepEqual(windowCells(at(12), offHour, 5 * HOUR), [1]);
   assert.deepEqual(windowCells(at(13), offHour, 5 * HOUR), [0]);
-  assert.deepEqual(windowCells(at(7), offHour, 5 * HOUR), [1, 2]);
+  assert.deepEqual(windowCells(at(7), offHour, 5 * HOUR), [2]);
+  assert.deepEqual(windowCells(at(8), offHour, 5 * HOUR), [1]);
+  // Reset at :59 — the measured weekly case, one level down: the opening hour is the PREVIOUS
+  // window's, and this one starts at the top of the next.
+  const late = at(17, 59);
+  assert.deepEqual(windowCells(at(12), late, 5 * HOUR), [1]);
+  assert.deepEqual(windowCells(at(13), late, 5 * HOUR), [0]);
+  // Reset at :20 — rounds DOWN: the opening hour belongs to this window, the closing one to the next.
+  const early = at(17, 20);
+  assert.deepEqual(windowCells(at(12), early, 5 * HOUR), [0]);
+  assert.deepEqual(windowCells(at(16), early, 5 * HOUR), [0]);
+  assert.deepEqual(windowCells(at(17), early, 5 * HOUR), []);
+  // Every hour across three windows lands in exactly one cell.
+  for (const anchor of [onHour, offHour, late, early]) {
+    for (let h = at(3); h < at(17); h += HOUR) assert.equal(windowCells(h, anchor, 5 * HOUR).length, 1, new Date(h).toString());
+  }
 });
 
 test("an hour after the anchor is in no cell — a window that has not closed is not a past one", () => {
   assert.deepEqual(windowCells(at(18), onHour, 5 * HOUR), []);
   assert.deepEqual(windowCells(at(17), onHour, 5 * HOUR), []);
-  // …but 17:00 IS inside a window that resets at 17:30.
+  // …but 17:00 IS inside a window that resets at 17:30 (its close rounds up to 18:00).
   assert.deepEqual(windowCells(at(17), offHour, 5 * HOUR), [0]);
 });
 

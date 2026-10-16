@@ -929,8 +929,8 @@ test("the apply label carries the ranking answer whenever there is an order to h
   // The regression this pins: the two questions live at the END OF THE SCROLL,
   // so they can be scrolled past. The footer cannot be, and it restated the
   // naming answer and said nothing at all about pin-ranks — a person could
-  // Apply having never met the decision about whether the smart pick may
-  // re-sort this repo.
+  // Apply having never met the decision about whether the order is marked as
+  // theirs.
   const s = { retire: 0, keep: 3, requeue: 0, post: 1, name: 0 };
   assert.equal(
     assessApplyLabel(s, "myapp", { ranked: 4, pinRanks: true }),

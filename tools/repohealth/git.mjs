@@ -216,6 +216,28 @@ export function listHeadPaths(root) {
 }
 
 /**
+ * One COMMITTED file's text at `sha`, or null when that tree has no blob at
+ * `path` (absent, a directory, or a sha git does not know).
+ *
+ * Exists for `own.mjs`: a repo's own readings are declared in a committed file,
+ * and reading that declaration out of the commit — never off the disk — is what
+ * makes "only a committed declaration runs" true. An uncommitted edit to it in
+ * a shared working tree is somebody's half-finished work, not a definition.
+ *
+ * @param {string} root
+ * @param {string} sha
+ * @param {string} path repo-relative, forward slashes
+ * @returns {string | null}
+ */
+export function readFileAt(root, sha, path) {
+  try {
+    return gitText(root, ["cat-file", "blob", `${sha}:${path}`]);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Blob contents, by oid, in one batch — see the header for why the stream is
  * sliced by the byte length in each header rather than split on newlines.
  *
@@ -342,4 +364,99 @@ export function readHistory(root, prereg) {
   // are read anyway, throwing them away would mean a second log to get them
   // back, and a metric that wants churn has nowhere else to find it.
   return { commits, touches, batch, lines };
+}
+
+/** `@@ -a[,b] +c[,d] @@` — the omitted count is 1. */
+const HUNK_HEAD = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
+
+/** `--- a/<path>` / `+++ b/<path>`, quoted when git had to. */
+function headerPath(line) {
+  let p = line.slice(4);
+  if (p === "/dev/null") return null;
+  if (p.startsWith('"') && p.endsWith('"')) p = p.slice(1, -1);
+  return p.startsWith("a/") || p.startsWith("b/") ? p.slice(2) : p;
+}
+
+/**
+ * Line-level history: for every first-parent commit, every file's hunks as
+ * flat `[start, len, start, len, …]` ranges — `add` in the commit's POST-image
+ * line numbers, `del` in its PRE-image. What `metrics/retouch.mjs` needs to
+ * tell REWORK (a later commit removing or changing lines an earlier one added)
+ * from an append.
+ *
+ * One `log -p -U0` walk, parsed as BYTES and never held as one string: only
+ * the commit separators, the `---`/`+++` file headers and the `@@` hunk heads
+ * are decoded, and every content line is skipped BY COUNT off its hunk head —
+ * a removed line whose text is `-- a/x` would otherwise read as a header.
+ * Measured on this repo (1,399 first-parent commits): ~120 MB of patch text,
+ * ~1.5 s for git, a fraction of that to scan. It scales with the history's
+ * total churn, so `update` reads it only when there is a row to measure, and
+ * `MAX_BUFFER` is the cap past which this throws rather than truncates.
+ *
+ * Same pinned flags as `readHistory` (no rename detection, first-parent
+ * merges, no external diff or colour), so the paths here are the paths there.
+ *
+ * @param {string} root
+ * @returns {Map<string, Map<string, {add: number[], del: number[]}>>}
+ */
+export function readHunks(root) {
+  const res = spawnSync(
+    "git",
+    [
+      "-c", "diff.renames=false", "-c", "core.quotePath=false",
+      "log", "--first-parent", "--diff-merges=first-parent",
+      "-p", "-U0", "--no-ext-diff", "--no-color", "--format=%x00%H",
+    ],
+    { cwd: root, maxBuffer: MAX_BUFFER, stdio: ["ignore", "pipe", "pipe"] },
+  );
+  if (res.status !== 0) {
+    throw new Error(`git log -p failed: ${res.stderr?.toString("utf8") || res.error}`);
+  }
+  const buf = res.stdout;
+  /** @type {Map<string, Map<string, {add: number[], del: number[]}>>} */
+  const out = new Map();
+  let files = null;
+  let cur = null;
+  let oldPath = null;
+  let skip = 0;
+  let pos = 0;
+  while (pos < buf.length) {
+    let nl = buf.indexOf(0x0a, pos);
+    if (nl < 0) nl = buf.length;
+    const b0 = buf[pos];
+    if (skip > 0) {
+      // Content of the current hunk. `\ No newline at end of file` is not
+      // counted in a hunk's lengths, so it does not consume one.
+      if (b0 !== 0x5c) skip--;
+      pos = nl + 1;
+      continue;
+    }
+    if (b0 === 0x00) {
+      files = new Map();
+      out.set(buf.toString("utf8", pos + 1, nl), files);
+      cur = null;
+    } else if (b0 === 0x64 /* d */ && files) {
+      cur = null;
+      oldPath = null;
+    } else if (b0 === 0x2d /* - */ && files && buf[pos + 1] === 0x2d && buf[pos + 2] === 0x2d && buf[pos + 3] === 0x20) {
+      oldPath = headerPath(buf.toString("utf8", pos, nl));
+    } else if (b0 === 0x2b /* + */ && files && buf[pos + 1] === 0x2b && buf[pos + 2] === 0x2b && buf[pos + 3] === 0x20) {
+      const path = headerPath(buf.toString("utf8", pos, nl)) ?? oldPath;
+      if (path) {
+        cur = files.get(path);
+        if (!cur) files.set(path, (cur = { add: [], del: [] }));
+      }
+    } else if (b0 === 0x40 /* @ */ && cur) {
+      const m = HUNK_HEAD.exec(buf.toString("utf8", pos, Math.min(nl, pos + 200)));
+      if (m) {
+        const delLen = m[2] === undefined ? 1 : Number(m[2]);
+        const addLen = m[4] === undefined ? 1 : Number(m[4]);
+        if (delLen > 0) cur.del.push(Number(m[1]), delLen);
+        if (addLen > 0) cur.add.push(Number(m[3]), addLen);
+        skip = delLen + addLen;
+      }
+    }
+    pos = nl + 1;
+  }
+  return out;
 }

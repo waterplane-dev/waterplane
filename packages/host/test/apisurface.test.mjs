@@ -1,7 +1,7 @@
 // What `api.ts` exports — names AND value/type — pinned off the type checker,
 // so moving its routes into `routes/api*.ts` cannot quietly add, drop or
 // retype an export `server/http.ts` and the host tests import
-// (`handleApi`, `answerPreflight`, `isLoopbackAddr`). The shape of
+// (`handleApi`, `answerPreflight`). The shape of
 // packages/shared/test/intentsurface.test.mjs; reasoning in
 // docs/notes/host-architecture.md, "api.ts — the HTTP routes as tables".
 import test from "node:test";
@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
 const FILE = fileURLToPath(new URL("../src/api.ts", import.meta.url));
-const SURFACE = ["answerPreflight:value", "handleApi:value", "isLoopbackAddr:value"];
+const SURFACE = ["answerPreflight:value", "handleApi:value"];
 
 test("api.ts exports exactly its pinned surface", () => {
   const program = ts.createProgram([FILE], {

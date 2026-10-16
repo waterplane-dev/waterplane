@@ -95,6 +95,25 @@ export function readSpawnVersion(core: SessionCore, s: Session | undefined): voi
   });
 }
 
+/**
+ * `SessionInfo.cliSetup`: a fresh claude spawn on a desktop where claude is NOT signed in
+ * opens on the CLI's own first-launch setup (theme, sign-in, trust) — keys and a sign-in link,
+ * nothing the reader can show — so the phone keeps the terminal up until it is through.
+ *
+ * Set only on `claude auth status` saying "out" (cached in `doctor.ts`; a stub or a signed-in
+ * desktop never sets it), only on a create, and only while no hook has reported. Cleared by the
+ * first hook (`sidechannel.ts`): `SessionStart` fires once the CLI reaches its prompt, which is
+ * the end of setup. Imported lazily: `doctor.ts` pulls half the host in at import.
+ */
+export function readSignInAtSpawn(core: SessionCore, s: Session | undefined): void {
+  if (!s || s.backend.caps.transcript !== "claude-jsonl") return;
+  void import("../doctor.js").then(({ claudeSignInState }) => claudeSignInState(s.backend.bin())).then((state) => {
+    if (state !== "out" || s.info.hooked || !s.info.running || core.sessions.get(s.info.id) !== s) return;
+    s.info.cliSetup = true;
+    core.emit("updated", s.info);
+  }).catch(() => { /* unreadable ⇒ absent, never a guess */ });
+}
+
 // ── Claude conversation id detection ────────────────────────────────
 // Sessions spawned with --continue / the picker / --fork-session (and tmux
 // re-attaches of pre-upgrade sessions) don't know their conversation UUID up

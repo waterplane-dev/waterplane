@@ -155,10 +155,10 @@ const LIVE_FILES = new Set([
   // `oracle.json` is the retired in-core oracle's config: kept, because the
   // oracle PLUGIN reads it once to seed its own settings.
   "acks.json", "assess.json", "auth.json", "backend-catalogue.json", "backlog-config.json", "backlog.json",
-  "budget.json", "clihealth.json", "closed.json", "contextlimits.json", "ctxwindow.json",
+  "budget.json", "burnwatch.json", "clihealth.json", "closed.json", "contextlimits.json", "ctxwindow.json",
   "installs.json", "intents-archive.jsonl", "intents.json", "launches.json", "limit.json",
   "notify.json", "oracle.json", "peer-jobs.json", "plugins.json", "pulls.json", "push-subs.json", "reviews.json",
-  "schedules.json", "sessions.json", "settings.json", "setup.json", "smartpick.json",
+  "schedules.json", "sessions.json", "settings.json", "setup.json",
   "stars.json", "tmux.conf", "vapid.json",
 ]);
 

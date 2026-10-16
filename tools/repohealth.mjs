@@ -83,6 +83,8 @@ import { measureCochange } from "./repohealth/metrics/cochange.mjs";
 import { measureDups } from "./repohealth/metrics/dups.mjs";
 import { measureDeadExports } from "./repohealth/metrics/deadexports.mjs";
 import { measureTripwires } from "./repohealth/metrics/tripwires.mjs";
+import { declaresOwn, measureOwn } from "./repohealth/own.mjs";
+import { declarationsByIndex, measureCentral } from "./repohealth/central.mjs";
 
 /**
  * ── The measured root and the engine's own root are different things ───────
@@ -309,7 +311,8 @@ const CHUNK = 25;
 function update({ fixture }) {
   const started = Date.now();
   const CFG = cfg();
-  const history = scopeHistory(git.readHistory(ROOT, CFG), SCOPE, CFG);
+  const raw = git.readHistory(ROOT, CFG);
+  let history = scopeHistory(raw, SCOPE, CFG);
   if (SCOPE && !history.commits.length) {
     throw new Error(`no first-parent commit touches ${SCOPE} — there is nothing to measure under that scope.`);
   }
@@ -325,6 +328,16 @@ function update({ fixture }) {
   const { rows, stale } = staleRows(onDisk, history.commits);
   const missing = new Set(missingShas(rows, history.commits));
   const known = new Map(rows.map((r) => [r.sha, r]));
+  // Line-level history, for `retouch`'s rework test — the one expensive git
+  // read, so only when there is a row to measure (`git.readHunks` states the
+  // cost). Attached to the unscoped history and re-scoped with it.
+  if (missing.size) {
+    raw.hunks = git.readHunks(ROOT);
+    history = scopeHistory(raw, SCOPE, CFG);
+  }
+  // The health.json in force at each commit, for `central` — whole tree only,
+  // like the repo's own readings: the declaration is about the repo's index.
+  const decls = !SCOPE && missing.size ? declarationsByIndex(ROOT, history, git) : null;
 
   const fresh = [];
   /** Rows measured since the last append. See `CHUNK` — a backfill that is cut
@@ -355,6 +368,21 @@ function update({ fixture }) {
       classics: measureClassics(snap, history, index, CFG),
       ...tripwireFields(measureTripwires(snap, history, index, CFG, prevRow)),
     };
+    // The repo's OWN readings (`own.mjs`): HEAD only, the whole tree only. Not
+    // one of the measurements above — no definition here moves when a repo
+    // declares one, and nothing that reads the five index entries reads this.
+    if (!SCOPE && index === history.commits.length - 1) {
+      const own = measureOwn(ROOT, commit.sha, git);
+      if (own) row.own = own;
+    }
+    // The repo's say over the CENTRAL readings (`central.mjs`): a disable is
+    // honoured on every commit that declared it, an override RUNS at HEAD only
+    // — so an override's series starts at its first measurement, and the
+    // fingerprint on the row is what carries the index across that start.
+    if (decls) {
+      const central = measureCentral(ROOT, decls[index], { atHead: index === history.commits.length - 1 });
+      if (central) row.central = central;
+    }
     fresh.push(row);
     pending.push(row);
     prevRow = row;
@@ -386,7 +414,11 @@ function update({ fixture }) {
   }
 
   if (fixture) {
-    const days = perDay(all);
+    // Without `own` or `central`: the fixture pins waterplane's definitions,
+    // which a row can be recomputed into from its sha alone. A repo's own
+    // reading — and an override of a central one — ran a program against a
+    // checkout at one moment and cannot be.
+    const days = perDay(all).map(({ own: _own, central: _central, ...r }) => r);
     writeFixture(FIXTURE, { prereg: CFG.VERSION, lastSha: last.sha, rows: days });
     console.log(`repohealth: wrote tools/repohealth/fixture.json — ${days.length} per-day rows.`);
   }
@@ -649,7 +681,11 @@ async function plot({ fixture }) {
   const rows = plotRows({ fixture });
   const { buildPlot } = await import("./repohealth/plot.mjs");
   const CFG = cfg();
-  const doc = buildPlot({ rows, prereg: CFG, preregVersion: CFG.VERSION, scope: SCOPE });
+  // Whether HEAD declares own readings — a read of one committed blob, nothing
+  // run. The fixture is waterplane's own pin and declares nothing.
+  const head = fixture || SCOPE ? null : git.listCommits(ROOT).at(-1);
+  const ownDeclared = head ? declaresOwn(ROOT, head.sha, git) : false;
+  const doc = buildPlot({ rows, prereg: CFG, preregVersion: CFG.VERSION, scope: SCOPE, ownDeclared });
   process.stdout.write(JSON.stringify(doc) + "\n");
 }
 

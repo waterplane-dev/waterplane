@@ -10,8 +10,8 @@
  */
 import type { ComponentType, ReactNode } from "react";
 import type {
-  AuthState, BackendInfo, BacklogItem, BudgetVerdict, ClientMessage, ClosedSession, HostMessage, Intent, LaunchIntent, LaunchOpts,
-  MeterSummary, RecentSession, RepoTarget, ScheduleEntry, SessionBudget, SendBlockReason, SessionInfo, SweepScope, UpdateInfo, UsageBudget, UsageInfo,
+  AuthState, BackendInfo, BacklogItem, BillingStatus, BudgetVerdict, PeriodState, ClientMessage, ClosedSession, HostMessage, Intent, LaunchIntent, LaunchOpts,
+  MeterSummary, RecentSession, RepoTarget, ScheduleEntry, SessionBudget, SendBlockReason, SessionInfo, SweepScope, UpdateInfo, UsageBudget, UsageInfo, UsageReading,
 } from "@waterplane/shared";
 import type { OutboxEntry } from "../outbox.ts";
 import type { ResourceState } from "../useRemoteResource.ts";
@@ -81,6 +81,10 @@ export type { SettingsGroupId };
 
 /** What the phone knows about how it reached the desktop — the welcome frame's
  *  facts, for the Connection settings and the host tools. */
+/** What `compose.seedDraft` did: `already` — the words were in the draft, nothing added;
+ *  `leftCli` — CLI mode was on and is now off, so the box (and the words) show. */
+export interface SeedOutcome { leftCli: boolean; already: boolean }
+
 export interface ConnInfo {
   tailscaleIp: string | null;
   tailscaleBin: string | null;
@@ -110,9 +114,18 @@ export interface QueueBacklogOpts {
   /** The item's own *close its session when done*; absent follows the global
    *  setting (`Intent.closeWhenDone`), `false` is a real "keep it open". */
   closeWhenDone?: boolean;
+  /** "Flag for follow up when done" (`BacklogItem.flagWhenDone`); absent = off. */
+  flagWhenDone?: boolean;
   /** The budget the session this item opens is BORN with (`BacklogItem.budget`).
    *  Absent is none; it is not part of the launch options. */
   budget?: SessionBudget;
+  /** The model/effort/backend the session this item opens starts with
+   *  (`Intent.launch`) — already through `wireLaunch`. Absent = the desktop's
+   *  new-session defaults. */
+  launch?: LaunchOpts;
+  /** Let this one row past the usage budget as it is added (`intent.waive`'s
+   *  waiver, granted by the host). Absent = it waits for the budget. */
+  pastBudget?: boolean;
 }
 
 /** Ordered background-upload buffer for the session image-annotate flow. */
@@ -168,6 +181,14 @@ export interface UploadApi {
  * name in `App.tsx`, not a wrapper around it — which is what keeps "one socket",
  * "one send path" and "one download button" true with features in the tree.
  */
+/** A one-tap way back to the place a person left for a shell (`launch.focusShell`'s `back`). */
+export interface ReturnTo {
+  /** The place, as the chip says it after "back to" — the sheet's own name, lower case. */
+  label: string;
+  /** Re-open that place (a sheet's own opener, which restores its own state). */
+  open(): void;
+}
+
 export interface CoreApi {
   conn: {
     /** The socket's own status, read live — never a copy taken at render. */
@@ -263,6 +284,9 @@ export interface CoreApi {
     /** The backlog, scoped to one worktree — and, with `ids`, cut to exactly
      *  those rows under `label` (a count is a filter). */
     openBacklogCut(cwd: string, ids?: string[], label?: string): void;
+    /** A tapped alert from this plugin: opens its first launcher item (the vault's home shows live
+     *  asks). Unknown id = nothing. */
+    openPlugin(pluginId: string): void;
     /** Schedules, cut to exactly these rules under `label`. */
     openScheduleCut(ids: string[], label: string): void;
     /** A backlog row was fired by hand: jump to the session it lands in once
@@ -278,6 +302,9 @@ export interface CoreApi {
     openActivity(cut?: { entries: readonly OutboxEntry[]; label: string } | { keys: readonly string[]; label: string }): void;
     /** The git screen (working tree) of one repo. */
     openGit(repoId: string): void;
+    /** The capture sheet for one repo (`features/capture`'s `openCaptureFor`) —
+     *  for a feature that is not the capture feature. */
+    openCapture(repo: RepoTarget): void;
   };
   /** Session launch options and the one way to open a session in a folder. */
   launch: {
@@ -293,6 +320,20 @@ export interface CoreApi {
     /** Kill this session and start it again on `patch`, as ONE durable
      *  `session.create` with `replaceSessionId` — the model sheet's relaunch. */
     relaunch(s: SessionInfo, patch: Partial<LaunchOpts>): void;
+    /**
+     * Switch to a plain shell tab on the desktop — for a sheet whose job is half on the phone and
+     * half at a prompt (a command to run, a code to confirm). `key` is the caller's own name for
+     * "its" shell: the tab it went to last is REUSED while alive, else a running shell in `cwd`
+     * (default: the host root), else a fresh one is opened. `back` puts a one-tap "back to
+     * <label>" on THAT shell's screen only, which calls `back.open()` — so a sheet and its shell
+     * are one tap apart both ways. Never asks which model. Returns the shell's session id
+     * (`pending:<ack>` while its open is still queued) — hand it to `compose.seedDraft(id, …)` to put
+     * a line in that shell's box; null, with a toast, when this desktop has no shell (`shellCant`
+     * says so ahead of the tap).
+     */
+    focusShell(key: string, opts?: { cwd?: string; title?: string; back?: ReturnTo }): string | null;
+    /** Why this desktop cannot open a shell, as a sentence for `Unavailable` — or null. */
+    shellCant(): string | null;
   };
   /** The terminal on screen. */
   term: {
@@ -311,8 +352,17 @@ export interface CoreApi {
     /** Add to session `sid`'s draft — the box if it is on screen, else its
      *  stored draft, read when that screen comes up. Use it after a navigation
      *  (`nav.attach`, `launch.openCwd`), where `insert` would type into the box
-     *  being left and the incoming draft would replace it. Appends. */
-    seedDraft(sid: string, text: string): void;
+     *  being left and the incoming draft would replace it. Appends; the same
+     *  words already there are not added twice (`already`). Leaves CLI mode,
+     *  whose pad hides the box (`leftCli` — say so where it matters). */
+    seedDraft(sid: string, text: string): SeedOutcome;
+    /** Grow the box from exactly `from` to `to` — the demo's typing, one key at
+     *  a time. Refuses (false, nothing changed) when the box no longer holds
+     *  `from`: someone typed, and their words are the last copy. */
+    typeOn(from: string, to: string): boolean;
+    /** The compose bar's Send, as a tap on it: the box's words to the session on
+     *  screen, now. Reads the box as of the last render. */
+    send(): void;
     /** The live terminal grid as text; "" when no xterm is mounted (reader
      *  view, a sheet on top). Read it BEFORE opening a sheet, which unmounts it. */
     gridText(): string;
@@ -339,10 +389,18 @@ export interface CoreApi {
     readonly closed: ClosedSession[];
     readonly intents: Intent[];
     readonly launches: LaunchIntent[];
-    readonly budget: { budget: UsageBudget; verdict: BudgetVerdict } | null;
+    readonly budget: { budget: UsageBudget; verdict: BudgetVerdict; periods?: PeriodState[] } | null;
+    /** Which billing profile the desktop's claude runs under (`billing.status`); null until the host says. */
+    readonly billing: BillingStatus | null;
     readonly meter: MeterSummary | null;
     /** The last `/usage` reading (features/tokens owns it); null until the host has said. */
     readonly usage: UsageInfo | null;
+    /** One reading per usage SOURCE with something to say (claude first); empty until the host has said. */
+    readonly usageReadings: UsageReading[];
+    /** The source a tap on a usage-chip segment asked the token statistics to open on; null = unfiltered. */
+    readonly tokensOpenOn: string | null;
+    /** The token statistics' `all` button and its close: forget `tokensOpenOn`. */
+    clearTokensOn(): void;
     /** The launcher's current default launch options. */
     readonly launch: LaunchOpts;
     readonly update: UpdateInfo | null;
@@ -365,15 +423,19 @@ export interface CoreApi {
   };
   files: {
     /** The ONE download path (`download.ts`'s queue) — never an `<a download>`. */
-    downloadArtifact(f: { repoId: string; relPath: string; name: string; size?: number; mtime?: number }): void;
+    /** `src`: a file a plugin offered outside every repo (`api.offerFile`'s `path`) — fetched from
+     *  there; `repoId`/`relPath` then only name the Downloads row (e.g. the plugin id and the file name). */
+    downloadArtifact(f: { repoId: string; relPath: string; name: string; size?: number; mtime?: number; src?: string }): void;
     openArtifact(f: { repoId: string; relPath: string; name?: string; size?: number; mtime?: number }): void;
     viewImage(im: { repoId: string; relPath: string }, sessionId?: string): void;
-    /** Upload straight to the repo's inbox; resolves to the refs that landed. */
-    attachForInbox(repo: RepoTarget, files: File[]): Promise<string[]>;
+    /** Upload straight to the repo's inbox; resolves to the refs that landed.
+     *  `lane` defaults to the repo's `create:` lane (the Start sheet's). */
+    attachForInbox(repo: RepoTarget, files: File[], lane?: string): Promise<string[]>;
     /** Attach files to the session ON SCREEN as the compose bar's paperclip
      *  does: pictures through the annotator, the rest uploaded with their paths
-     *  in its box. */
-    attachFiles(files: File[], repoId: string): void;
+     *  in its box. `annotate: false` skips the annotator: every file goes
+     *  straight up, its path in the box. */
+    attachFiles(files: File[], repoId: string, opts?: { annotate?: boolean }): void;
     /** Open the annotator; the result lands back in the send or pad sheet. */
     annotate(repo: RepoTarget, files: File[], returnTo: "send" | "pad"): void;
     /** The outbox/inbox sweep for one repo; its × comes back to `back`. */
@@ -450,6 +512,10 @@ export interface SettingsRowsDef {
   group: SettingsGroupId;
   order: number;
   render: (core: CoreApi) => ReactNode;
+  /** An EXTENSION's catalogue entries for the row ids `render` draws (in
+   *  `group`): it cannot add lines to `settingsIndex.ts`, and a row drawn
+   *  without one is hidden by every search. In-repo features use the file. */
+  rows?: readonly { id: string; label: string; keywords?: string }[];
 }
 
 /**
@@ -538,6 +604,89 @@ export interface FeatureManifest {
   pushes?: Record<string, (data: unknown, core: CoreApi) => void>;
   /** Token ledgers drawn inside the token statistics sheet, one tab each (`LedgerViewDef`). */
   ledgerViews?: readonly LedgerViewDef<any>[];
+  /** Segments in the session header beside `[Claude | Shell]` (`SessionViewDef`). */
+  sessionViews?: readonly SessionViewDef[];
+  /** Lines in the launcher's ☰ menu (`LauncherItemDef`). */
+  launcherItems?: readonly LauncherItemDef[];
+  /** Lines in a session's ☰ menu that join its catalog (`MenuItemDef`). */
+  menuItems?: readonly MenuItemDef[];
+}
+
+/** An icon a contribution draws — wide enough for a lucide-react icon's own propTypes. */
+export type ContributionIcon = ComponentType<{ size?: number | string }>;
+
+/**
+ * Whether a contributed view or item can open right now: `true`, or the SENTENCE why not ("Live
+ * desktop needs macOS for now"). An unavailable entry is still DRAWN, looking like any other — its tap
+ * shows the sentence. A greyed-out control is never the message (CLAUDE.md). Called on every render
+ * of the header or launcher, so keep it a cheap read of state you already hold; a throw drops the
+ * entry and is said once.
+ */
+export type Availability = true | string;
+
+/**
+ * A view of a session that is not its terminal (the first: the live desktop), drawn as a segment in
+ * the session header beside `[Claude | Shell]` — only once it was opened from the session's ☰ menu
+ * (core draws that menu line), and its tab carries an × that takes it down again
+ * (`core/session/headerViews.ts`). With no companion shell, the session's own tab is
+ * drawn lit before it (`[Claude | Desktop]`, `[Shell | Desktop]`); with no view contributed at all
+ * the header is exactly what it was. A view is not a session: no PTY, no tab of its own.
+ */
+export interface SessionViewDef {
+  id: string;
+  /** The segment's word. Short: it shares the title row. */
+  label: string;
+  icon: ContributionIcon;
+  /** Lower first, then registry order. Default 0. */
+  order?: number;
+  /** Absent = always available. */
+  available?(core: CoreApi): Availability;
+  /** The tap, when available: usually `core.nav.open` of the extension's own (full) sheet. */
+  open(core: CoreApi, ctx: { sessionId: string }): void;
+}
+
+/** A button in the launcher's header row ("Desktop", one tap from home). No live thumbnail: a
+ *  readout there would spend bandwidth on a screen nobody opened. */
+export interface LauncherItemDef {
+  id: string;
+  /** The button's word, beside its icon. One word. */
+  label: string;
+  icon: ContributionIcon;
+  /** Lower first, then registry order. Default 0. */
+  order?: number;
+  /** Absent = always available. */
+  available?(core: CoreApi): Availability;
+  open(core: CoreApi): void;
+  /**
+   * A HOOK, called once per render by the core's launcher components: what is waiting behind this
+   * item (the vault's asks). n > 0 draws a counted badge on the menu line AND lifts the item out of
+   * the hidden menu into the header row beside the bell, so waiting work is never two taps from
+   * being seen. A count is a filter: `open` must land on exactly what `n` counts. Absent, null or
+   * n <= 0 = the plain menu line.
+   */
+  useCount?(): LauncherItemCount | null;
+}
+
+/** What `LauncherItemDef.useCount` says is waiting. `title` is the long reading; the badge is the number. */
+export interface LauncherItemCount { n: number; title: string }
+
+/**
+ * A line in a session's ☰ menu, joining the menu's catalog like a core line: the customize sheet
+ * orders and hides it, and it can be pinned into the session header. Its id there is
+ * `<manifest id>:<id>` and it is PERSISTED in every device's toolbar config, so renaming either
+ * loses that device's placement. A core line never needs this: core lines are `toolbar.ts`'s catalog.
+ */
+export interface MenuItemDef {
+  id: string;
+  /** The menu line's words, beside its icon. Short. */
+  label: string;
+  icon: ContributionIcon;
+  /** Lower first among the contributed lines, then registry order. Default 0. They follow the core
+   *  lines until a device reorders them. */
+  order?: number;
+  /** Absent = always available. */
+  available?(core: CoreApi): Availability;
+  open(core: CoreApi, ctx: { active: SessionInfo }): void;
 }
 
 /**

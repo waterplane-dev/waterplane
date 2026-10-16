@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { BRAND, HOST_PARK_PREFIX, LEGACY, SYNCED_SETTING_KEYS, isHostScopedKey, parkedKeyFor } from "@waterplane/shared";
 
 import { DEVICE_KEYS, HOST_KEY_PREFIXES, KEY_SCOPE, LS, TR_SEEN_PREFIX, isDeviceKey, trSeenKey } from "./storage.ts";
+import { UI_RESET_KEYS } from "./resetKeys.ts";
 
 test("every registry key is classified, and nothing else is", () => {
   assert.deepEqual(Object.keys(KEY_SCOPE).sort(), Object.keys(LS).sort());
@@ -38,7 +39,7 @@ test("the plan's device keys are device keys", () => {
     "hosts", "hostActive", "hostBase", "deviceId", "deviceName", "theme", "textScale", "iconScale", "termZoom",
     "readerZoom", "scrollZoom", "gitZoom", "dataSaver", "netPulse", "localRtBar", "sessionTabs", "sessionTabsCount",
     "sessionTabsOrder", "dictateLang", "dictateLangs", "cliMode", "typingRoom", "readMode", "toolbarOpen",
-    "headerCollapsed", "closeBy", "closeKeepStar", "closeCustomH", "schedPctLeft", "collageGap", "collageLabels",
+    "closeBy", "closeKeepStar", "closeCustomH", "schedPctLeft", "collageGap", "collageLabels",
     "dismissInsecure", "dismissPhoneSetup", "dismissedUpdate", "lastForcedReload", "toastLog", "hostedAck",
     "giveups", "giveupsMigrated", "padRescue", "padRescueMigrated",
   ];
@@ -71,4 +72,13 @@ test("an unregistered prefixed key is a host key (parked, never lost); a foreign
   // An older brand's key is nobody's to a host switch: it is the migration's
   // source, left exactly where it is.
   for (const l of LEGACY) assert.equal(isHostScopedKey(`${l.storagePrefix}pad`, isDeviceKey), false);
+});
+
+test("the UI reset forgets only this device's look — never words, never a synced choice", () => {
+  const synced = new Set(SYNCED_SETTING_KEYS);
+  for (const k of UI_RESET_KEYS) {
+    assert.equal(KEY_SCOPE[k], "device", k);
+    assert.ok(!synced.has(LS[k]), k);
+  }
+  assert.equal(new Set(UI_RESET_KEYS).size, UI_RESET_KEYS.length);
 });

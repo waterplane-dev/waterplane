@@ -321,6 +321,7 @@ export class WatchSlice {
     const fail = (detail: string): void => {
       // The start may have happened, so the waiver it was for is spent.
       row.pastBudget = undefined;
+      row.leftoverOf = undefined;
       const result: IntentResult = { at: now, ok: false, detail, occurrence: row.lastOccurrence };
       if (isRecurring(row)) {
         // Standing policy again: record the occurrence as failed, keep the row.
@@ -405,6 +406,7 @@ export class WatchSlice {
         this.core.readopted.add(row.id);
         row.state = "running";
         row.pastBudget = undefined;
+        row.leftoverOf = undefined;
         row.blockReason = undefined;
         row.blockDetail = "the host restarted after this was delivered — its session came back, so it is being watched for the turn to end";
         return;
@@ -430,6 +432,7 @@ export class WatchSlice {
       row.startedAt = undefined;
       // The occurrence the waiver was for is lost; the next one waits.
       row.pastBudget = undefined;
+      row.leftoverOf = undefined;
       row.result = { at: now, ok: false, detail: "the host restarted before this occurrence was typed — nothing ran, and the next one is armed", occurrence: row.lastOccurrence };
       return;
     }

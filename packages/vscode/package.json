@@ -1,0 +1,166 @@
+{
+  "name": "waterplane",
+  "displayName": "waterplane: Cost & Context for Claude Code",
+  "publisher": "waterplane-dev",
+  "version": "0.2.0",
+  "description": "What each prompt cost, the context window over time, the token split and what your CLAUDE.md costs on every turn — read from Claude Code's own logs on this machine. No telemetry, no network.",
+  "license": "MIT",
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/waterplane-dev/waterplane"
+  },
+  "homepage": "https://waterplane.dev",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "claude code",
+    "tokens",
+    "cost",
+    "context window",
+    "claude.md"
+  ],
+  "extensionKind": [
+    "workspace",
+    "ui"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "waterplane.open",
+        "title": "Open cost & context",
+        "category": "waterplane",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "waterplane.rescan",
+        "title": "Re-read Claude Code logs",
+        "category": "waterplane",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "waterplane.show",
+        "title": "Show a view in the panel",
+        "category": "waterplane"
+      },
+      {
+        "command": "waterplane.pickSession",
+        "title": "Show a session in the panel",
+        "category": "waterplane"
+      },
+      {
+        "command": "waterplane.pickFolder",
+        "title": "Switch folder",
+        "category": "waterplane"
+      },
+      {
+        "command": "waterplane.copyPrompt",
+        "title": "Copy an optimisation prompt",
+        "category": "waterplane"
+      },
+      {
+        "command": "waterplane.healthRefresh",
+        "title": "Measure repo health from git history",
+        "category": "waterplane"
+      }
+    ],
+    "configuration": {
+      "title": "waterplane",
+      "properties": {
+        "waterplane.statusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the current session's cost and context in the status bar."
+        },
+        "waterplane.pollSeconds": {
+          "type": "number",
+          "default": 5,
+          "minimum": 2,
+          "description": "How often the active session log is re-checked when file watching misses a write."
+        },
+        "waterplane.claudeConfigDir": {
+          "type": "string",
+          "default": "",
+          "description": "Override the claude CLI's config dir (else CLAUDE_CONFIG_DIR, else ~/.claude)."
+        },
+        "waterplane.healthSeconds": {
+          "type": "number",
+          "default": 600,
+          "minimum": 10,
+          "description": "How long one repo-health step (reading git history) may run before it is stopped. Rows measured so far are kept."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "waterplane",
+          "title": "waterplane",
+          "icon": "media/activity.svg"
+        }
+      ]
+    },
+    "views": {
+      "waterplane": [
+        {
+          "id": "waterplane.sidebar",
+          "name": "Cost & context",
+          "contextualTitle": "waterplane",
+          "icon": "media/activity.svg"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "waterplane.rescan",
+          "when": "view == waterplane.sidebar",
+          "group": "navigation@2"
+        },
+        {
+          "command": "waterplane.open",
+          "when": "view == waterplane.sidebar",
+          "group": "navigation@1"
+        }
+      ],
+      "commandPalette": [
+        { "command": "waterplane.show", "when": "false" },
+        { "command": "waterplane.pickSession", "when": "false" }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.webview.json --noEmit",
+    "test": "npm run build && node --test --test-timeout=120000 \"test/*.test.mjs\"",
+    "test:integration": "node test/integration/run.mjs",
+    "package": "npm run build -- --release && vsce package --no-dependencies -o waterplane-0.2.0.vsix && node scripts/check-vsix.mjs waterplane-0.2.0.vsix",
+    "check": "npm run typecheck && npm test && npm run package",
+    "publish:vsce": "vsce publish -i waterplane-0.2.0.vsix",
+    "publish:ovsx": "ovsx publish waterplane-0.2.0.vsix"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.21",
+    "@types/react": "18.3.31",
+    "@types/react-dom": "18.3.7",
+    "@types/vscode": "1.90.0",
+    "@vscode/vsce": "4.0.0",
+    "esbuild": "0.28.1",
+    "lucide-react": "1.21.0",
+    "ovsx": "1.2.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "typescript": "5.9.3"
+  },
+  "dependencies": {}
+}

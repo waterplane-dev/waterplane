@@ -53,11 +53,13 @@ import { basename, join } from "node:path";
 import { 
   PRICES_AS_OF, addCost, addTotals, costOf, dayToMs, isPriced, normalizeModel, tokenTotal, zeroCost, zeroTotals,
   type CostBreakdown, type ModelSlice, type TokenDay, type TokenGroup, type TokenHour, type TokenHourSlot,
-  type TokenConvo, type TokenStatsDoc, type TokenTotals, type TokenWindow, type TokenWindowSeries, type TokenWindowsDoc } from "@waterplane/shared";
+  type TokenConvo, type TokenStatsDoc, type TokenTotals, type TokenWindow, type TokenWindowSeries, type TokenWindowsDoc,
+  type CostWindowDoc, windowStartHour } from "@waterplane/shared";
 import { claudeConfigDir } from "./claudeconfig.js";
 import { env } from "./env.js";
 import { CROSS, type FileSummary, localHour, summarizeLog, type Tally, walkLogs } from "./tokenscan.js";
 import { hostStateDir } from "./branddirs.js";
+import { foldCostWindow, repoOfWorktree, type CostMeta } from "./costwindow.js";
 import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
 
 /** A single log this big is not read. Nothing observed comes near it; the cap
@@ -79,16 +81,9 @@ const VERSION = 5;
 /** How many conversations `TokenStatsDoc.top` names. */
 const TOP_CONVOS = 12;
 
-/**
- * The repo a worktree belongs to. An agent worktree the CLI makes under
- * `<repo>/.claude/worktrees/<name>` is that repo's work — counted apart it
- * printed `agent-aae5b06d449c4da1a` as a repo of its own in the by-repo list,
- * beside the repo it was spending for. Exported for its test.
- */
-export function repoOfWorktree(w: string): string {
-  const i = w.indexOf("/.claude/worktrees/");
-  return i > 0 ? w.slice(0, i) : w;
-}
+/** Moved to `costwindow.ts` (one import direction between the two); re-exported
+ *  so `packages/host/test/*` and every caller keep importing it from here. */
+export { repoOfWorktree } from "./costwindow.js";
 
 const HOURS_DAYS = Math.max(1, Number(env("TOKENSTATS_HOUR_DAYS") || 14));
 
@@ -142,44 +137,39 @@ function hourToMs(hour: string): number {
   return new Date(y, (mo || 1) - 1, d || 1, h || 0, 0, 0, 0).getTime();
 }
 
-/** Epoch ms of the top of the local hour `t` falls in. */
-function hourFloorMs(t: number): number {
-  const d = new Date(t);
-  d.setMinutes(0, 0, 0);
-  return d.getTime();
-}
-
 /**
  * Which cells of a window grid an hour bucket belongs to.
  *
  * A cell `k` is the window `[anchor - (k+1)*lenMs, anchor - k*lenMs)`, and an
  * hour counts in it under exactly the rule the LIVE cut states on screen
- * (`web/usageCut.ts`): from the top of the hour the window opened in, through
- * to the instant it resets. That rule is deliberate — the finest bucket on
- * record is an hour, so the honest move is to state a slightly wider span
- * exactly rather than to be approximately right about the window — and it is
- * repeated here rather than re-decided, so cell 0 of a grid and the phone's own
- * reading of the window running now are the same number and not two.
+ * (`web/usageCut.ts`): from `windowStartHour(opened)` — the NEAREST hour
+ * boundary to the instant the window opened — up to `windowStartHour(closes)`,
+ * which is the next window's start. The finest bucket on record is an hour, so
+ * the honest move is to state a span off by at most half an hour at each edge
+ * exactly, rather than to be approximately right about the window; the rule is
+ * shared (`shared/costwindow.ts`), never re-decided here, so cell 0 of a grid
+ * and the phone's own reading of the window running now are the same number.
  *
- * Its price is that the hour a window OPENED in is in that cell and in the one
- * before it, which is why this answers a LIST. At most two cells can hold one
- * hour (every window here is hours long), and the caller says so where the grid
- * is drawn rather than quietly summing them into a total they do not add up to.
+ * Flooring the start used to put the hour a window OPENED in into two cells
+ * (and 59 minutes of last week into a week resetting at 18:59). Rounding both
+ * edges makes the cells TILE: every hour is in exactly one. Still a LIST, so
+ * an empty answer (before the grid, after the anchor) needs no sentinel.
  *
  * Exported for `packages/host/test/tokenwindows.test.mjs`: the arithmetic is
  * the whole of the correctness and it needs no store, no files and no clock.
  */
 export function windowCells(hourMs: number, anchor: number, lenMs: number): number[] {
   if (!Number.isFinite(hourMs) || !Number.isFinite(anchor) || !(lenMs > 0)) return [];
-  // The highest cell whose window has not yet closed at this hour. Cells run
-  // BACKWARDS, so "not closed yet" bounds the index from above.
+  // The cell whose RAW window holds this hour. Cells run BACKWARDS; rounding
+  // can only move an hour into the NEXT-NEWER cell (an hour at or after a
+  // rounded-down close), never an older one, so these two are every candidate.
   const hi = Math.ceil((anchor - hourMs) / lenMs) - 1;
   const out: number[] = [];
   for (const k of [hi - 1, hi]) {
     if (k < 0) continue;
     const opened = anchor - (k + 1) * lenMs;
     const closes = anchor - k * lenMs;
-    if (hourMs >= hourFloorMs(opened) && hourMs < closes) out.push(k);
+    if (hourMs >= windowStartHour(opened) && hourMs < windowStartHour(closes)) out.push(k);
   }
   return out;
 }
@@ -386,6 +376,8 @@ export class TokenStatsStore {
     /** conversation id → its spend, agents folded in. Keyed by slug too: two
      *  project directories never share a conversation, but nothing enforces it. */
     const convos = new Map<string, TokenConvo & { first: string; last: string }>();
+    /** conversation key → the agents' slice by model ("Opus subagents: N% of this session's cost"). */
+    const agentModel = new Map<string, Map<string, { totals: TokenTotals; cost: CostBreakdown }>>();
 
     for (const [slug, files] of Object.entries(this.store)) {
       for (const [fileKey, sum] of Object.entries(files)) {
@@ -473,6 +465,8 @@ export class TokenStatsStore {
           addTotals(nest(repoModel, repoKey, model, zeroTotals), v);
           addTotals(cv.totals, v);
           if (sum.sub) addTotals(cv.agentTotals, v);
+          const am = sum.sub ? nest(agentModel, cKey, model, () => ({ totals: zeroTotals(), cost: zeroCost() })) : null;
+          if (am) addTotals(am.totals, v);
           if (hour) {
             if (!cv.first || hour < cv.first) cv.first = hour;
             if (!cv.last || hour > cv.last) cv.last = hour;
@@ -482,6 +476,7 @@ export class TokenStatsStore {
           if (dr) { dr.pricedTurns += v.turns; dr.usd += c.total; }
           addCost(cv.cost, c);
           if (sum.sub) addCost(cv.agentCost, c);
+          if (am) addCost(am.cost, c);
           if (day) addCost(nest(dayModelCost, day, model, zeroCost), c);
           if (hour) addCost(nest(hourModelCost, hour, model, zeroCost), c);
           addCost(nest(repoModelCost, repoKey, model, zeroCost), c);
@@ -498,13 +493,21 @@ export class TokenStatsStore {
 
     // Ranked by money, tokens breaking ties and standing in where nothing was
     // priced — an unpriced conversation is not a free one.
-    const top: TokenConvo[] = [...convos.values()]
-      .filter((c) => tokenTotal(c.totals) > 0)
-      .sort((a, b) => (b.cost.total - a.cost.total) || (tokenTotal(b.totals) - tokenTotal(a.totals)))
+    const top: TokenConvo[] = [...convos.entries()]
+      .filter(([, c]) => tokenTotal(c.totals) > 0)
+      .sort(([, a], [, b]) => (b.cost.total - a.cost.total) || (tokenTotal(b.totals) - tokenTotal(a.totals)))
       .slice(0, TOP_CONVOS)
-      .map(({ first, last, ...c }) => ({
-        ...c, firstAt: first ? hourToMs(first) : null, lastAt: last ? hourToMs(last) : null,
-      }));
+      .map(([cKey, { first, last, ...c }]) => {
+        // Absent, not `[]`, on a conversation with no agents.
+        const am = agentModel.get(cKey);
+        return {
+          ...c, firstAt: first ? hourToMs(first) : null, lastAt: last ? hourToMs(last) : null,
+          ...(am?.size ? {
+            agentByModel: [...am.entries()].map(([model, b]) => ({ model, totals: b.totals, cost: b.cost }))
+              .sort((x, y) => tokenTotal(y.totals) - tokenTotal(x.totals)),
+          } : {}),
+        };
+      });
 
     const dayRows: TokenDay[] = [...days.entries()]
       .map(([day, t]) => ({
@@ -722,6 +725,19 @@ export class TokenStatsStore {
     }));
 
     return { series, scannedAt: this.lastScan };
+  }
+
+  /**
+   * The same store folded over an arbitrary `[from, to)` — `GET /api/costwindow`,
+   * the "where did this week go" read. The fold and its edge rule are
+   * `costwindow.ts`'s; this only brings the store up to date first.
+   */
+  async costWindow(from: number, to: number, meta: CostMeta, maxAgeMs = 15_000): Promise<CostWindowDoc> {
+    if (Date.now() - this.lastScan > maxAgeMs) {
+      this.inFlight ??= this.refresh().finally(() => { this.inFlight = null; });
+      try { await this.inFlight; } catch { /* fold what we already have */ }
+    }
+    return foldCostWindow(this.store, from, to, meta, this.lastScan);
   }
 
   private schedule(): void {

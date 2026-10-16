@@ -156,6 +156,71 @@ export interface UsageHistoryDoc {
   everyMs: number;
 }
 
+/**
+ * Which account a usage reading is about: `"claude"`, `"copilot"`,
+ * `"<plugin>:<provider>"`, or a plugin's own id. Short, lowercase,
+ * `[a-z0-9:_-]` (`isUsageSourceId` in `usagesources.ts`).
+ */
+export type UsageSourceId = string;
+
+/**
+ * One rate-limit window of one source. `pct` is USED (0..100), like
+ * `UsageInfo`'s two percentages.
+ */
+export interface UsageWindow {
+  /** Stable per source: claude `"session"` | `"week"`; copilot `"chat"` | `"premium"`. */
+  id: string;
+  /** At most 3 chars, TEXT for the chip: `"5h"`, `"wk"`, `"mo"`. */
+  unit: string;
+  /** 0..100 used, or null when the source did not print it — then `used`/`limit` must be present. */
+  pct: number | null;
+  /** The count form, when the source bills in units: 9 / 200 "credits". Absent = percent only. */
+  used?: number;
+  limit?: number;
+  unitName?: string;
+  /** Epoch ms, null = the source named none. `UsageInfo`'s rule: a wrong day is worse than null. */
+  resetAt: number | null;
+}
+
+/**
+ * One source's reading, as the meter draws it. Additive beside `UsageInfo`:
+ * claude's reading is DERIVED from it (`claudeReading`), never a second scrape,
+ * so every host consumer of `UsageInfo` keeps its object.
+ *
+ * A source with nothing to say is ABSENT from the list — never a reading of
+ * empty windows, never a `pct: null` placeholder.
+ */
+export interface UsageReading {
+  source: UsageSourceId;
+  /** As drawn: `"Claude"`, `"Copilot"`. */
+  label: string;
+  /** Backend id this source is the account of (claude → `"claude"`). Absent = account-only. */
+  backend?: string;
+  /** Epoch ms of the probe. */
+  checkedAt: number;
+  /** `UsageInfo.remembered`'s rule, per source: re-offered from disk at boot, not probed. */
+  remembered?: boolean;
+  /** Natural order short → long. Empty and no `usd` ⇒ the host must not send the reading at all. */
+  windows: UsageWindow[];
+  /** A dollar period instead of / beside windows (a future api-billed provider). */
+  usd?: { periodId: string; label: string; spentUsd: number; capUsd: number | null; resetAt: number | null };
+}
+
+/** One kept reading of a non-claude source (claude keeps `UsageSample` / usagelog.jsonl verbatim). */
+export interface UsageSourceSample {
+  t: number;
+  w: { id: string; pct: number | null; resetAt: number | null }[];
+}
+
+/** `GET /api/usagelog/<source>` — `UsageHistoryDoc`'s posture for one non-claude source. */
+export interface UsageSourceHistoryDoc {
+  source: UsageSourceId;
+  samples: UsageSourceSample[];
+  keptFrom: number | null;
+  cap: number;
+  retainMs: number;
+}
+
 /** Resource snapshot of the desktop host running the daemon. */
 export interface HostStat {
   platform: string;
@@ -369,6 +434,8 @@ export interface TokenConvo {
   /** Premium over re-reading paid for expired-cache rebuilds, USD; absent when
    *  there were none. */
   coldUsd?: number;
+  /** The agents' slice by model, descending by tokens. Absent on an older host. */
+  agentByModel?: ModelSlice[];
 }
 
 export interface TokenGroup extends TokenTotals {

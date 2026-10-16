@@ -6,6 +6,7 @@
  */
 import type { RepoTarget, SessionInfo } from "@waterplane/shared";
 import { repoBranchLabel } from "@waterplane/shared";
+import { copyText } from "../../api";
 import { onShellShare, type SharedItems } from "../../shellShare";
 import type { Overlay } from "../../routing";
 import { core } from "../../sdk";
@@ -40,8 +41,13 @@ export function dropShare(): void {
 }
 
 /** Where a share goes: a session that exists (the one on screen or another),
- *  or a new session in a repo. */
-export type ShareTarget = { kind: "session"; sessionId: string } | { kind: "new"; repo: RepoTarget };
+ *  a new session in a repo, or no session at all — just the repo's
+ *  `.claude/inbox/`. `annotate` is whether pictures open in the annotator
+ *  first (a session only); off, every file goes straight up. */
+export type ShareTarget =
+  | { kind: "session"; sessionId: string; annotate: boolean }
+  | { kind: "new"; repo: RepoTarget; annotate: boolean }
+  | { kind: "inbox"; repo: RepoTarget };
 
 async function readShared(s: SharedItems): Promise<{ files: File[]; failed: number }> {
   const files: File[] = [];
@@ -89,6 +95,7 @@ export async function shareTo(t: ShareTarget): Promise<void> {
   }
   const { files, failed } = await readShared(s);
   if (failed && !files.length && !s.text) { c.say.toast("couldn't read what was shared — share it again"); return; }
+  if (t.kind === "inbox") { await shareToInbox(t.repo, s, files, failed); return; }
   shared.set(null);
   goTo(null);
   c.say.track(t.kind === "new" ? "action:share.new" : "action:share.session");
@@ -122,7 +129,33 @@ export async function shareTo(t: ShareTarget): Promise<void> {
     // The launch question answered: this screen's box is the one to fill.
     if (!sid && s.text) core().compose.insert(s.text);
     if (!files.length) { if (s.text) core().say.toast("shared text is in the prompt — read it over, then send"); return; }
-    core().files.attachFiles(files, repoId);
+    core().files.attachFiles(files, repoId, { annotate: t.annotate });
   };
   land();
+}
+
+/**
+ * No session: the files are parked in the send queue for the repo's
+ * `.claude/inbox/` and go up in the background (the queue bar shows them).
+ * Their own lane — not the repo's `create:` lane, which a Start sheet's
+ * session would queue behind. Shared text has no box to land in, so it goes
+ * to the clipboard, and the toast says so.
+ */
+async function shareToInbox(repo: RepoTarget, s: SharedItems, files: File[], failed: number): Promise<void> {
+  const c = core();
+  c.say.track("action:share.inbox");
+  if (files.length > 3) c.say.toast(`preparing ${files.length} files…`);
+  const refs = await c.files.attachForInbox(repo, files, `inbox:${repo.worktreePath}`);
+  if (!refs.length) { c.say.toast("couldn't queue the files — share them again"); return; }
+  shared.set(null);
+  goTo(null);
+  if (s.text) await copyText(s.text);
+  const n = refs.length;
+  const parts = [
+    `${n} file${n === 1 ? "" : "s"} → ${repo.repoName}/.claude/inbox`,
+    c.conn.status === "open" ? "uploading" : "they upload when the link is back",
+  ];
+  if (failed) parts.push(`${failed} couldn't be read`);
+  if (s.text) parts.push("text copied");
+  c.say.toast(parts.join(" · "));
 }

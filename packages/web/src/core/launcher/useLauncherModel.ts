@@ -22,17 +22,21 @@ import { baseName } from "../../format";
 import { isNativeShell } from "../../hostUrl";
 import { api } from "../../api";
 import { track } from "../../usage";
+import { usePref } from "../prefs";
 import { LS, lsBool, lsDel, lsSetJson } from "../../storage";
 import { useClocks } from "../../features/schedule";
 import { useActivityConfirmedDone, useActivityFiled } from "../../features/activity";
 import { pullSummary, usePullRecords } from "../../features/pull";
+import { autoPull } from "../../pull";
+import { stripRows } from "../../downloadState";
 import { appRows, buildsOf, NO_INSTALL, readyApps } from "../../installPolicy";
 import type { LauncherProps } from "./types";
 import {
-  type StatusFilter, dragOrder, filterSessions, nextSessionOrder, queuedKeysByRepo, repoGroupsOf,
+  type StatusFilter, dragOrder, filterSessions, matchesText, nextSessionOrder, openCountByRepo, queuedKeysByRepo, repoGroupsOf,
   repoOfCwd, rollupByRepo, rollupTotal, sessionRepoLabelIn, sessionRepoNameIn, sessionRowBranchIn, sessionRowTitleIn,
-  sortSessions, starredByRepoOf,
+  sessionNumbersOf, sortSessions, starredByRepoOf,
 } from "./model";
+import { flaggedByRepoOf, flaggedTotalOf } from "../sessions/followUpFacts";
 
 // ── The stores ─────────────────────────────────────────────────────────────
 // Every status badge in the launcher is a FILTER, because every one of them is
@@ -40,6 +44,8 @@ import {
 // sessions across four repos, "2 waiting" on a header was a fact you then had
 // to go and find by hand, scrolling past nine rows that are not it.
 const statusFilterStore = createStore<StatusFilter<SessionFilter> | null>(null);
+/** The always-visible quick filter's words (`matchesText`). Per page, never stored. */
+const textQueryStore = createStore<string>("");
 const collapsedStore = createStore<Set<string>>(loadCollapsedRepos());
 const orderStore = createStore<string[]>(loadSessionOrder());
 /** Which list is showing: this app's sessions, or `claude` processes outside it. */
@@ -96,6 +102,8 @@ export function useLauncherModel(p: LauncherProps) {
   const { focusRepo, setFocusRepo } = p.route;
 
   const [statusFilter, setStatusFilter] = useSlot(statusFilterStore);
+  const [textQuery, setTextQuery] = useSlot(textQueryStore);
+  const textOn = textQuery.trim() !== "";
   const [collapsedRepos, setCollapsedRepos] = useSlot(collapsedStore);
   const [sessionOrder, setSessionOrder] = useSlot(orderStore);
   const [tab, setTab] = useSlot(tabStore);
@@ -117,9 +125,9 @@ export function useLauncherModel(p: LauncherProps) {
   const sessionRowBranch = (s: SessionInfo) => sessionRowBranchIn(repos, s);
   const sessionRowTitle = (s: SessionInfo) => sessionRowTitleIn(repos, s);
 
-  const visibleSessions = useMemo(() => sessions.filter((s) => !hiddenRepoPaths.has(s.cwd) && cwdInFocus(s.cwd)), [sessions, hiddenRepoPaths, focusRepo, repos]); // eslint-disable-line react-hooks/exhaustive-deps
-  const hiddenSessions = useMemo(() => sessions.filter((s) => hiddenRepoPaths.has(s.cwd) && cwdInFocus(s.cwd)), [sessions, hiddenRepoPaths, focusRepo, repos]); // eslint-disable-line react-hooks/exhaustive-deps
-  const sortedSessions = useMemo(() => sortSessions(visibleSessions, sessionOrder, sessionRepoName), [visibleSessions, sessionOrder, repos]); // eslint-disable-line react-hooks/exhaustive-deps
+  const visibleSessions = useMemo(() => sessions.filter((s) => !hiddenRepoPaths.has(s.cwd) && cwdInFocus(s.cwd)), [sessions, hiddenRepoPaths, focusRepo, repos]); // eslint-disable-line react-hooks/exhaustive-deps -- `cwdInFocus` is a per-render closure over `focusRepo` + `repos`, both listed
+  const hiddenSessions = useMemo(() => sessions.filter((s) => hiddenRepoPaths.has(s.cwd) && cwdInFocus(s.cwd)), [sessions, hiddenRepoPaths, focusRepo, repos]); // eslint-disable-line react-hooks/exhaustive-deps -- `cwdInFocus` is a per-render closure over `focusRepo` + `repos`, both listed
+  const sortedSessions = useMemo(() => sortSessions(visibleSessions, sessionOrder, sessionRepoName), [visibleSessions, sessionOrder, repos]); // eslint-disable-line react-hooks/exhaustive-deps -- `sessionRepoName` is a per-render closure over `repos`
 
   /** Tap a badge: filter to it, tap the same one again: clear. */
   function toggleStatusFilter(status: SessionFilter, repo?: string) {
@@ -136,9 +144,12 @@ export function useLauncherModel(p: LauncherProps) {
   // list on purpose: a chip that recounted itself against the filter it just
   // applied would read "1" for the group you are looking at and hide the fact
   // that the other repos still have work waiting.
+  // The quick filter cuts AFTER the status chip, so the two compose ("waiting"
+  // and "garmin"), and "n of N" under it counts against the same unfiltered list.
   const shownSessions = useMemo(
-    () => filterSessions(sortedSessions, statusFilter, (s, k) => k === "worktrees" ? repoForCwd(s.cwd)?.isPrimary === false : matchesFilterKind(s, k, p.backends), sessionRepoName),
-    [sortedSessions, statusFilter, repos], // eslint-disable-line react-hooks/exhaustive-deps
+    () => filterSessions(sortedSessions, statusFilter, (s, k) => k === "worktrees" ? repoForCwd(s.cwd)?.isPrimary === false : matchesFilterKind(s, k, p.backends), sessionRepoName)
+      .filter((s) => !textOn || matchesText(textQuery, [s.tabTitle, s.title, s.firstPrompt, s.lastPrompt, s.pinnedPrompt, sessionRepoName(s), sessionRowBranch(s)])),
+    [sortedSessions, statusFilter, repos, textQuery, p.backends], // eslint-disable-line react-hooks/exhaustive-deps -- `repoForCwd`/`sessionRepoName`/`sessionRowBranch` are per-render closures over `repos`
   );
 
   // ── Live-session repo groups: collapse state + per-group counts ───────────
@@ -149,7 +160,7 @@ export function useLauncherModel(p: LauncherProps) {
   // exclusive because they come from `sessionStatus()` — the same call the row
   // badge and the status filter make — so the header counts always add up to the
   // row count and can never disagree with the badge a row shows.
-  const attentionByRepo = useMemo(() => rollupByRepo(sortedSessions, (s) => sessionStatus(s, p.backends), sessionRepoName), [sortedSessions, repos, p.backends]); // eslint-disable-line react-hooks/exhaustive-deps
+  const attentionByRepo = useMemo(() => rollupByRepo(sortedSessions, (s) => sessionStatus(s, p.backends), sessionRepoName), [sortedSessions, repos, p.backends]); // eslint-disable-line react-hooks/exhaustive-deps -- `sessionRepoName` is a per-render closure over `repos`
   const waitingTotal = useMemo(() => rollupTotal(attentionByRepo, "wait"), [attentionByRepo]);
   /**
    * **Which sessions already have words on a clock aimed at them.**
@@ -172,7 +183,7 @@ export function useLauncherModel(p: LauncherProps) {
       m.set(sessionRepoName(s), true);
     }
     return m;
-  }, [sortedSessions, repliesBySession, repos]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sortedSessions, repliesBySession, repos, p.backends]); // eslint-disable-line react-hooks/exhaustive-deps -- `sessionRepoName` is a per-render closure over `repos`
   const waitingRepliesTotal = useMemo(
     () => anyScheduledReply(sortedSessions.filter((s) => sessionStatus(s, p.backends) === "wait").map((s) => s.id), repliesBySession),
     [sortedSessions, repliesBySession, p.backends],
@@ -189,8 +200,13 @@ export function useLauncherModel(p: LauncherProps) {
   // is orthogonal to what a session is doing (a starred session is also working,
   // or waiting, or exited). Counted here so the header chip can offer the filter
   // without the roll-up starting to over-count.
-  const starredByRepo = useMemo(() => starredByRepoOf(sortedSessions, sessionRepoName), [sortedSessions, repos]); // eslint-disable-line react-hooks/exhaustive-deps
+  const starredByRepo = useMemo(() => starredByRepoOf(sortedSessions, sessionRepoName), [sortedSessions, repos]); // eslint-disable-line react-hooks/exhaustive-deps -- `sessionRepoName` is a per-render closure over `repos`
+  const sessionNumbers = useMemo(() => sessionNumbersOf(sortedSessions, sessionRepoName), [sortedSessions, repos]); // eslint-disable-line react-hooks/exhaustive-deps -- `sessionRepoName` is a per-render closure over `repos`
   const starredTotal = useMemo(() => [...starredByRepo.values()].reduce((n, c) => n + c, 0), [starredByRepo]);
+  // Follow-up flags per repo — the star's own map for the star's reason, plus
+  // the colour its chip wears (`followUpFacts.ts`: one setter, or mixed).
+  const flaggedByRepo = useMemo(() => flaggedByRepoOf(sortedSessions, sessionRepoName), [sortedSessions, repos]); // eslint-disable-line react-hooks/exhaustive-deps -- `sessionRepoName` is a per-render closure over `repos`
+  const flaggedTotal = useMemo(() => flaggedTotalOf(flaggedByRepo), [flaggedByRepo]);
   // Sessions carrying a `shellList` at all, whatever it says — its own count
   // for the same reason `starredTotal` is its own: orthogonal to
   // `sessionStatus` (a session with only quiet shells reads `done`, one with a
@@ -229,7 +245,7 @@ export function useLauncherModel(p: LauncherProps) {
   const activityConfirmedDone = useActivityConfirmedDone();
   const queuedByRepo = useMemo(
     () => queuedKeysByRepo(outbox, intents, activityFiled, (cwd) => repoForCwd(cwd)?.repoName ?? baseName(cwd)),
-    [outbox, intents, repos, activityFiled], // eslint-disable-line react-hooks/exhaustive-deps
+    [outbox, intents, repos, activityFiled], // eslint-disable-line react-hooks/exhaustive-deps -- `repoForCwd` is a per-render closure over `repos`
   );
   /** The store by id — what `isBudgetHeld` reads a chain's predecessor off. */
   const intentById = useMemo(() => new Map<string, Intent>(intents.map((i) => [i.id, i])), [intents]);
@@ -262,23 +278,32 @@ export function useLauncherModel(p: LauncherProps) {
    * disagreed about the same repo: two headers, two accents, two counts.
    *
    * So the group header is now the repo's row, sessions or none, and it holds
-   * every verb. Order: repos with live sessions first, in the session list's own
-   * order (which the drag reordering owns and this must not re-sort), then the
-   * rest alphabetically as the repo listing gives them.
+   * every verb. Order: repos alphabetically, live or idle, so a repo never jumps
+   * when a session starts or ends — unless the person chose `repoSort:
+   * "sessions"` (most open first), which trades that stillness for ranking; the drag reordering owns the session order
+   * INSIDE a group (it never crosses repos) and that is not re-sorted.
    *
    * A status filter is an explicit "show me these SESSIONS", so it drops the
    * sessionless repos entirely — a repo with nothing running cannot match
    * "waiting" or "coding", and listing it under a filter would answer the tap
    * with rows it did not ask for.
    */
+  const repoSort = usePref("repoSort");
+  const openByRepo = useMemo(() => repoSort === "sessions" ? openCountByRepo(sortedSessions, sessionRepoName) : undefined,
+    [repoSort, sortedSessions, repos]); // eslint-disable-line react-hooks/exhaustive-deps -- `sessionRepoName` is a per-render closure over `repos`
   const repoGroups = useMemo(
     // The worktree cut keeps its repo's group even with no session in any of
     // them: the rows it counted are the worktree rows under that header.
-    () => repoGroupsOf(shownSessions, visibleRepos, !!statusFilter, sessionRepoName,
-      statusFilter?.status === "worktrees" && statusFilter.repo ? [statusFilter.repo] : []),
-    [shownSessions, visibleRepos, statusFilter, repos], // eslint-disable-line react-hooks/exhaustive-deps
+    // Under the quick filter alone, a repo with no matching session still shows
+    // when its own NAME matches — "garmin" finds the repo, not only its rows.
+    () => repoGroupsOf(shownSessions, visibleRepos, !!statusFilter || textOn, sessionRepoName,
+      statusFilter?.status === "worktrees" && statusFilter.repo ? [statusFilter.repo]
+        : textOn && !statusFilter ? visibleRepos.filter((r) => matchesText(textQuery, [r.repoName, r.branch])).map((r) => r.repoName) : [],
+      openByRepo),
+    [shownSessions, visibleRepos, statusFilter, repos, textQuery, openByRepo], // eslint-disable-line react-hooks/exhaustive-deps -- `sessionRepoName` closes over `repos`, `textOn` derives from `textQuery`
   );
   const allReposCollapsed = repoGroups.length > 0 && repoGroups.every((g) => collapsedRepos.has(g.repoName));
+  const noRepoCollapsed = repoGroups.every((g) => !collapsedRepos.has(g.repoName));
 
   // ── Long-press to drag a session row ──────────────────────────────────────
   // A tap opens the session, so reordering must not be a plain drag: press and
@@ -348,15 +373,15 @@ export function useLauncherModel(p: LauncherProps) {
       window.removeEventListener("pointerup", end);
       window.removeEventListener("pointercancel", end);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-bound per drag and list; `sessionRepoName` is a per-render closure over `repos`, and `saveSessionOrder` reads `sessions`, which moves with `sortedSessions`
   }, [dragSid, sortedSessions]);
 
   // Refresh external `claude` processes when viewing that tab (and on connect).
   useEffect(() => {
     if (tab !== "external") return;
     api.external().then(setExternal).catch(() => setExternal([]));
-  }, [tab, p.conn.status]); // eslint-disable-line react-hooks/exhaustive-deps
-  const visibleExternal = useMemo(() => external.filter((e) => cwdInFocus(e.cwd)), [external, focusRepo, repos]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tab, p.conn.status]); // eslint-disable-line react-hooks/exhaustive-deps -- `setExternal` is a module store's setter (stable); `p.conn.status` is listed so a reconnect re-reads
+  const visibleExternal = useMemo(() => external.filter((e) => cwdInFocus(e.cwd)), [external, focusRepo, repos]); // eslint-disable-line react-hooks/exhaustive-deps -- `cwdInFocus` is a per-render closure over `focusRepo` + `repos`, both listed
 
   /**
    * Scope the view to one repo.
@@ -419,7 +444,7 @@ export function useLauncherModel(p: LauncherProps) {
    */
   const clocksPerRepo = useMemo(
     () => clocksByRepo({ cuts: clocks, repoOf: (d) => repoForCwd(d)?.repoName ?? (baseName(d) || null), now: Date.now() }),
-    [clocks, repos, nowTick], // eslint-disable-line react-hooks/exhaustive-deps
+    [clocks, repos, nowTick], // eslint-disable-line react-hooks/exhaustive-deps -- `repoForCwd` closes over `repos`; `nowTick` stands in for the `Date.now()` read
   );
   /**
    * The bucket the chip's leading number counts — what a tap filters the list
@@ -487,7 +512,9 @@ export function useLauncherModel(p: LauncherProps) {
   /** The download queue at a glance, for the menu chip and the menu's own
    *  entry — bytes, not files (`features/pull`'s `pullSummary`). */
   const pullRecords = usePullRecords();
-  const dl = pullSummary(pullRecords);
+  // The strip's cut: rows waiting for a tap with auto-download off here are
+  // in the sheet, not in the menu's progress (`stripRows`).
+  const dl = pullSummary(stripRows(pullRecords, autoPull()));
   /** Apps with a build here that has not gone on — the apps screen's `ready`
    *  pane, through the same function, so the count opens exactly its rows. */
   const appsReady = readyApps(appRows(buildsOf(pullRecords), [], NO_INSTALL)).length;
@@ -515,7 +542,7 @@ export function useLauncherModel(p: LauncherProps) {
 
   return {
     // state
-    statusFilter, setStatusFilter, toggleStatusFilter, statusFilterActive,
+    statusFilter, setStatusFilter, toggleStatusFilter, statusFilterActive, textQuery, setTextQuery, textOn,
     collapsedRepos, persistCollapsedRepos, toggleRepoCollapsed,
     sessionOrder, saveSessionOrder, resetSessionOrder, dragSid, dragRef, armRowDrag,
     tab, setTab, repoMenu, setRepoMenu, navMenu, setNavMenu, showHidden, setShowHidden, shotPick, setShotPick,
@@ -523,9 +550,9 @@ export function useLauncherModel(p: LauncherProps) {
     // names
     repoForCwd, sessionRepo, sessionRepoName, sessionRepoLabel, sessionRowBranch, sessionRowTitle,
     // the list
-    visibleSessions, hiddenSessions, sortedSessions, shownSessions, repoGroups, allReposCollapsed, primaryRepo, worktreesOf,
+    visibleSessions, hiddenSessions, sortedSessions, shownSessions, repoGroups, allReposCollapsed, noRepoCollapsed, primaryRepo, worktreesOf,
     attentionByRepo, waitingTotal, repliesBySession, waitingRepliesByRepo, waitingRepliesTotal, limitTotal, codingTotal,
-    starredByRepo, starredTotal, shellsTotal, queuedByRepo, intentById,
+    starredByRepo, starredTotal, flaggedByRepo, flaggedTotal, sessionNumbers, shellsTotal, queuedByRepo, intentById,
     visibleExternal, openFocusWindow, clearFocus,
     // chips
     scheduleWords, scheduleLead, scheduleTitle, clocksPerRepo, activityBadge, dl, appsReady,

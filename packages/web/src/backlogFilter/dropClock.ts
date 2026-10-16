@@ -67,7 +67,7 @@ export const HOLD_FOR_HOST_TITLE =
  */
 export function dropClockTitle(status: "queued" | "failed"): string {
   return status === "failed"
-    ? "its instant has passed — drop the clock and it waits its turn like any other item (auto and the smart pick take it from there)"
+    ? "its instant has passed — drop the clock and it waits its turn like any other item (auto takes it from there)"
     : "run it in turn instead of at its time — the clock goes, the words and their place in the list stay";
 }
 /**
@@ -76,7 +76,7 @@ export function dropClockTitle(status: "queued" | "failed"): string {
  *
  * `dropClockTitle` is a `title`, and a title is invisible on a phone. The
  * clause it carried that a person cannot work out for themselves is what
- * happens AFTER the tap — *auto and the smart pick take it from there* — which
+ * happens AFTER the tap — *auto takes it from there* — which
  * is the entire answer to "how do I run the seven that were skipped". Said in a
  * title, on this device, it was not said.
  *
@@ -85,7 +85,7 @@ export function dropClockTitle(status: "queued" | "failed"): string {
  */
 export function dropClockNote(status: "queued" | "failed"): string {
   return status === "failed"
-    ? "its instant has passed and a one-off cannot be re-armed — drop the clock and it waits its turn, where auto and the smart pick take it from there"
+    ? "its instant has passed and a one-off cannot be re-armed — drop the clock and it waits its turn, where auto takes it from there"
     : "drop the clock and it runs in turn instead of at its time — the words and their place in the list stay";
 }
 /** What the row says back when the desktop takes it. Not "it is running": the
@@ -136,11 +136,10 @@ export function dropClocksNote(n: number, shown: number): string {
     : `${n === 1 ? "one row" : `${n} rows`} of the ${shown} shown carr${n === 1 ? "ies" : "y"} a clock — the rest have none and are left alone`;
   // **The two sentences that were only ever in `title` attributes.**
   // A title is invisible on a phone, and these are the two things a person
-  // needs before tapping: what becomes of the words (the queue, then auto and
-  // the smart pick), and what the tap does NOT take away (the host-wide hold,
+  // needs before tapping: what becomes of the words (the queue, then auto), and what the tap does NOT take away (the host-wide hold,
   // which is a thing they asked for about these words and not a property of the
   // instant). This is the visible home for both — the bulk path is the
   // documented six-tap journey, and it walked past both of them unsaid.
   return `${head}. Dropping a clock leaves the words where they are: they wait their turn, `
-    + "auto and the smart pick take it from there, and any that hold until the desktop is free keep doing so.";
+    + "auto takes it from there, and any that hold until the desktop is free keep doing so.";
 }

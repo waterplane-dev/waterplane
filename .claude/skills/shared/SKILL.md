@@ -5,8 +5,7 @@ description: waterplane @waterplane/shared (packages/shared/src): the wire DTOs 
 
 # waterplane shared package
 
-  `shared/dist` is node-runnable so e2e can pin it. Reasoning:
-  [host.md](docs/notes/host.md#packagesshared).
+  Reasoning: [host.md](docs/notes/host.md#packagesshared).
   `index.ts` is an INDEX, not the protocol: DTOs live in `wire/` (`session` `backend` `oracle`
   `telemetry` `notify` `work` `repo` `transcript`), the two unions in `wire/messages.ts`, all
   re-exported, so no import site names a file. **Add a message ⇒ `wire/messages.ts`; add a field ⇒
@@ -69,7 +68,7 @@ description: waterplane @waterplane/shared (packages/shared/src): the wire DTOs 
     in, so a one-off is a backlog row (with `BacklogItem.at` on the wire) and only a standing rule or
     a one-off SWEEP (`repos`, no single backlog to live in) is `isScheduleRow`. **Derived, never
     stored**, so editing *once* → *weekly* moves the row with no migration; `timedWorkKey` is the
-    "same clock" equality the smart pick's merge rule needs. Rung 5's `repo` case asks `fresh`
+    "same clock" equality. Rung 5's `repo` case asks `fresh`
     BEFORE `facts.repoSession`: opening the session IS the work, so a repo whose last item's session
     is still lingering must not gate the next one on it (`repoAnySession` and the two
     shared-backlog-conversation refusals went with that branch).
@@ -150,6 +149,15 @@ description: waterplane @waterplane/shared (packages/shared/src): the wire DTOs 
     `$0`** — a zero beside a session that ran reads as free — so the row falls through to the token
     chip, and `costText` never states a figure without saying it is a list-price COUNTERFACTUAL and
     naming what no rate covered.
+  - `costwindow.ts` + `burn.ts` — **one week, read one way on both ends** (`wire/costwindow.ts` is the
+    DTO). `weekCut` is the ONE bucketing function: the figure on an hour and the list that hour opens
+    are the same predicate over `CostConvo.byHour` (a count on a control is a filter). `foldLaunches`
+    makes a fan-out run ONE row; `rankRepos`, `agentModelInsight`, `pickSimilarRun`/`fanoutHintText`.
+    **`ptsCalibration` REFUSES, with a sentence per reason, rather than guess** (reset-bounded
+    stretches of 6 h and 5 points, spread under 35%, within 40% of the per-reading level rate) and
+    `ptsText` is absent on a refusal. `burn.ts` owns `usageSegments` (lifted out of `splotUsage.ts`,
+    which re-exports it, so chart and push cut a rollover alike), `burnStretch`/`burnVerdict` and
+    `burnPushText`, which always ends "Nothing was paused." Reasoning: host.md `costwindow.ts`.
   - `ctxwindow.ts` — how big a model's window is; the number every context graph calls 100%.
     **Not a table keyed on the id** — the CLI's log records the BASE id even for a 1M conversation
     (measured: `claude-opus-5` at 998,242 tokens with no `[1m]`), and a 200k table drew those at five
@@ -157,8 +165,10 @@ description: waterplane @waterplane/shared (packages/shared/src): the wire DTOs 
     up `WINDOW_LADDER`, then the id, then null; `windowFrom` travels with the number.
   - `budget.ts` — the usage BUDGET. **FAILS OPEN** on an unreadable or stale reading, and clears past
     a known reset on the CLOCK alone. `budgetCeilings` is the per-window truth `budgetVerdict` is the
-    first line of; `budgetHoldText`/`budgetPassPendingText`/`budgetOtherCapText` are the only
-    wordings of a budget hold.
+    first line of; `budgetHoldText`/`budgetPassPendingText`/`budgetOtherCapText`/`budgetLeftoverText` are the only
+    wordings of a budget hold. `leftoverCeiling` (`leftoverMax`, default 20) is NOT an account pause:
+    it holds only rows `budgetLeftoverOf` names — a weekly pass or weekly waiver that outlived its
+    reset unstarted ([host.md](docs/notes/host.md#what-a-lift-leaves-behind-after-the-reset--leftoverof-and-the-leftover-ceiling)).
   - `sessionbudget.ts` — the per-session budget ([host.md](docs/notes/host.md#sessionbudgetts--a-sessions-own-budget)) — **a cap on ONE session** (tokens, dollars, or ≈% of the 5-hour/weekly window), spend being the session's own `ContextSpark` total, subagents inside it. **Unknown never trips**: a stale/missing reading, an uncalibrated window or an unpriced model is a verdict of `unknown` with a `why`, and `sessionBudgetHeld` — the ONE predicate, phone queue (`budgetHeldLanes`) and intent ladder (`budgetHeldSessions`, reason `sessionBudget`) alike — is true only for `over`. Percent units reuse `weekUsdPerPct` and `BUDGET_STALE_MS`; the account's `budget.ts` is a separate thing.
   - `assess.ts` — **what an assessment is ALLOWED to conclude.** Every cap is on a COUNT, a citation
     or a label, **never on the words**: prose past `MAX_PROMPT_CHARS` is DROPPED with a note. A run
@@ -185,22 +195,8 @@ description: waterplane @waterplane/shared (packages/shared/src): the wire DTOs 
     as `usmc · main`, so no persisted title — least of all a hand-typed one — is ever rewritten.
     `GitView` and `BranchPicker` never call these: on the screen you switch branches from, the
     current branch is a fact, not clutter.
-  - `smartpick.ts` — **the look a repo takes before its next backlog item fires**: pick, merge,
-    sort, and no fourth verb. `cleanSmartPick` is `cleanAssessment`'s posture on an answer that
-    APPLIES with no approval: unknown ids dropped never spawned, an unmentioned item keeps its
-    place, a bare array is `null`, and a merge dies unless it keeps **every** transport/image path
-    its members named. `applySmartPick` returns a PLAN and re-assigns the EXISTING slot values —
-    **a `handOrdered` slot is never taken**. **A CLOCK is pinned by that same mechanism and is never
-    the pass's to decide** (`SmartPickCandidate.atKey`, the host's `timedWorkKey`): a timed row's
-    slot is its trigger's, a pick naming one is CORRECTED to the first item without one, and a merge
-    survives only when every member's key is identical — mixed, or two clocks, is refused in words
-    rather than merged by guessing which time wins. **`holdForHost` is asked BESIDE the key, not
-    inside it**: the key carries the hold only for a row that HAS a clock, and *drop the clock* keeps
-    the hold on a row that has not — two of those compared equal at `""` and the merged row came out
-    holding nothing, firing while another repo's item was mid-turn. Refused on a disagreement, carried
-    when they agree, and in the fingerprint. `smartpickFingerprint` is sync FNV-1a; a collision
-    costs one skipped pass, never a wrong mutation. `smartpickOutcomeText` is the string contract,
-    and everything but `applied`/`noop` ends *fired in the order you had*.
+  - `itempaths.ts` — `imagePaths`/`transportPaths` (`IMG_RE`/`TRANSPORT_RE`): the image and `.claude/outbox|inbox` paths a work item's words name.
+  - `intent/slot.ts` — **which waiting timed rows fire TOGETHER**: `slotsOf`/`slotMates` (the ONE bucketing function — count and cut), `findSlot` (key matched with `RESET_MATCH_MS` tolerance, never as a string), `latestClock` (a merge carries the latest member clock; near-tie of different rules ⇒ null). Feeds `assess.run`'s optional `scope`; assessment `conflict` is words with no mutation, `split` is refused if it loses a `transportPaths` path. [host.md](docs/notes/host.md#the-slot-check--sharedintentslotts-and-the-assessments-conflictsplit).
   - `schedule.ts` (wall-clock rules, `nextFireAt`, `isSpentOnce` — a spent `once` is not a schedule
     somebody switched off. **`hours` places nothing and `nextFireAt` never reads it**: the anchor
     says when work becomes worth doing, quiet hours are a policy over every anchor, and the ladder
@@ -253,7 +249,7 @@ description: waterplane @waterplane/shared (packages/shared/src): the wire DTOs 
     1.25×/2× by TTL and the 1-hour tier is READ. **A cached table rots**: Sonnet 5 sat at an
     `intro` $2/$10 "until 2026-08-31" over a $3/$15 base that the list does not have, so every
     sonnet reading after 1 September was half again too dear. Fast mode is knowingly absent — the
-    log does not record the speed) · `ctxwindow.ts` ·
+    log does not record the speed) ·
     `ptysize.ts` (**a grid too small for the CLI to draw a composer in is not a viewport** — the
     client withholds a fit measured on a collapsed container, the host CLAMPS one; a session left at
     `54x3` made every delivery into it unreadable, so unconfirmable, for forty minutes) ·
@@ -270,7 +266,6 @@ description: waterplane @waterplane/shared (packages/shared/src): the wire DTOs 
     convention). Adding a field ⇒ name it in the parser AND type it; the test runs the real engine
     and asserts every key path it emits survives the parse. Reasoning:
     [host.md](docs/notes/host.md#repohealthts-and-repohealthreadts-in-shared--one-subject-two-failure-modes).
-    Build before host/web.
   - `hosts.ts` — the multi-host DTO and its pure rules: `SavedHost`, `HostLan`, `cleanSavedHost`,
     `planHostMigration` (one legacy `hostBase` → the first entry, idempotent), `planHostSwitch`
     (which keys a switch parks/restores and in what order — every copy lands before the bare key it

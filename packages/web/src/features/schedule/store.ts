@@ -54,6 +54,6 @@ export function useClocks(intents: readonly Intent[], outbox: readonly OutboxEnt
   const pending = useMemo(() => pendingSchedulesOf(outbox), [outbox]);
   return useMemo(
     () => clockCuts({ intents, entries, pending, focus: null, focusIds: null, now: Date.now() }),
-    [intents, entries, pending, nowTick], // eslint-disable-line react-hooks/exhaustive-deps
+    [intents, entries, pending, nowTick], // eslint-disable-line react-hooks/exhaustive-deps -- `nowTick` is listed in place of the `Date.now()` it stands for, so the horizon moves with the clock
   );
 }

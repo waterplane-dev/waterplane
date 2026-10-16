@@ -253,12 +253,49 @@ function opened(h) {
   return ack.sessionId;
 }
 
-test("hello sends the host's unasked snapshot, and no frame for a number the scenario does not carry", () => {
-  const h = harness(desk());
+test("hello sends the host's unasked snapshot, and no frame for a number the scenario does not carry — except usage", () => {
+  const sc = desk();
+  const h = harness(sc);
   h.conn.receive({ t: "hello", protocol: PROTOCOL_VERSION });
   const ts = h.frames().map((m) => m.t);
   for (const t of ["welcome", "session.list", "backlog.list", "schedule.list", "intent.list", "delivery.list", "settings.all"]) assert.ok(ts.includes(t), t);
-  for (const t of ["usage.status", "meter.status", "budget.state", "clihealth"]) assert.ok(!ts.includes(t), `${t} is absent, never invented`);
+  for (const t of ["meter.status", "budget.state", "clihealth"]) assert.ok(!ts.includes(t), `${t} is absent, never invented`);
+  // The app asks for usage on every screen and draws "? / ? wk" without it, so the demo desktop always holds one.
+  const usage = h.frames().find((m) => m.t === "usage.status").usage;
+  assert.deepEqual([usage.sessionPct, usage.weeklyPct], [42, 61]);
+  assert.ok(usage.sessionResetAt > sc.clock.start && usage.checkedAt < sc.clock.start, "a reading taken a moment ago, a window that has not rolled over");
+});
+
+test("usage.refresh and usage.get answer the held reading, quietly — never a toast about the demo", () => {
+  const h = harness(desk());
+  h.conn.receive({ t: "hello", protocol: PROTOCOL_VERSION });
+  const held = h.frames().find((m) => m.t === "usage.status").usage;
+  for (const t of ["usage.refresh", "usage.get"]) {
+    const before = h.frames().length;
+    h.conn.receive({ t });
+    const got = h.frames().slice(before);
+    assert.deepEqual(got.map((m) => m.t), ["usage.status"], t);
+    assert.deepEqual(got[0].usage, held, t);
+  }
+});
+
+test("a scenario's own usage wins over the default", () => {
+  const own = { ok: true, sessionPct: 7, weeklyPct: 9, sessionResetAt: null, weeklyResetAt: null, checkedAt: 1 };
+  const sc = desk();
+  sc.state.model.numbers = { usage: own };
+  const h = harness(sc);
+  h.conn.receive({ t: "hello", protocol: PROTOCOL_VERSION });
+  assert.deepEqual(h.frames().find((m) => m.t === "usage.status").usage, own);
+});
+
+test("localrt.watch is answered at once with the host's own 'not polled here' frame, never silence", () => {
+  const h = harness(desk());
+  h.conn.receive({ t: "localrt.watch" });
+  const f = h.frames().filter((m) => m.t === "localrt.sample");
+  assert.equal(f.length, 1);
+  assert.equal(f[0].disabled, true, "the demo desktop polls nothing: the phone words that quietly, not as 'no answer'");
+  assert.equal(f[0].sample.reachable, false);
+  assert.deepEqual(f[0].sample.models, []);
 });
 
 test("session.create → op.ack with its id; attach replays in full, a current resume point replays nothing", () => {

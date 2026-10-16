@@ -8,14 +8,32 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  closeScope, dragOrder, filterSessions, nextSessionOrder, openingText, openingTitle,
-  queuedChipCut, queuedKeysByRepo, repoGroupsOf, rollupByRepo, rollupTotal, sessionRowTitleIn, setupMenuLabel, sortSessions, starredByRepoOf,
-  starredSpared,
+  closeScope, dragOrder, repoOfCwd, sessionRepoNameIn, filterSessions, nextSessionOrder, openingText, openingTitle,
+  openCountByRepo, queuedChipCut, queuedKeysByRepo, repoGroupsOf, rollupByRepo, rollupTotal, sessionRowTitleIn, setupMenuLabel, sessionNumbersOf, sortSessions, starredByRepoOf,
+  starredSpared, closeMarked, isCloseSpared, markedWords,
 } from "./model.ts";
 
 const repoOf = (s) => s.cwd.split("/").pop();
 const ses = (id, cwd, createdAt, o = {}) => ({ id, cwd, createdAt, title: id, running: true, ...o });
 const repo = (repoName, worktreePath, o = {}) => ({ id: worktreePath, repoName, worktreePath, branch: "main", isPrimary: true, ...o });
+
+test("repoOfCwd: exact, nested subdir, deepest worktree wins, sibling prefix and outside are not inside", () => {
+  const app = repo("app", "/dev/app");
+  const wt = repo("app", "/dev/app-worktrees/feat", { branch: "feat", isPrimary: false });
+  const nested = repo("app", "/dev/app/.claude/worktrees/x", { branch: "x", isPrimary: false });
+  const trading = repo("trading", "/dev/trading");
+  const repos = [app, wt, nested, trading];
+  assert.equal(repoOfCwd(repos, "/dev/app"), app);
+  assert.equal(repoOfCwd(repos, "/dev/trading/backend"), trading);
+  assert.equal(repoOfCwd(repos, "/dev/trading/backend/src"), trading);
+  assert.equal(repoOfCwd(repos, "/dev/app/.claude/worktrees/x/packages"), nested);
+  assert.equal(repoOfCwd(repos, "/dev/app-worktrees/feat"), wt);
+  assert.equal(repoOfCwd([app], "/dev/app-worktrees/feat"), null);
+  assert.equal(repoOfCwd([app], "/dev/appx"), null);
+  assert.equal(repoOfCwd(repos, "/var/folders/T/tmp.1/smctemp"), null);
+  assert.equal(sessionRepoNameIn(repos, { cwd: "/dev/trading/backend" }), "trading");
+  assert.equal(sessionRepoNameIn(repos, { cwd: "/tmp/smctemp" }), "smctemp");
+});
 
 test("rows sort by creation time and a repo's rows stay contiguous at its oldest session", () => {
   const list = [ses("b1", "/r/b", 2), ses("a1", "/r/a", 1), ses("b2", "/r/b", 4), ses("a2", "/r/a", 3)];
@@ -63,11 +81,30 @@ test("stars are their own count, never a roll-up bucket", () => {
   assert.equal(m.get("b"), 1);
 });
 
-test("the one list: live repos first, then the idle ones — and a filter drops the idle ones", () => {
+test("open sessions are numbered per repo from 0; a closed one takes no number", () => {
+  const sorted = [ses("a1", "/r/a", 1), ses("b1", "/r/b", 2), ses("a2", "/r/a", 3, { running: false }), ses("a3", "/r/a", 4)];
+  const m = sessionNumbersOf(sorted, repoOf);
+  assert.equal(m.get("a1"), 0);
+  assert.equal(m.get("a3"), 1);
+  assert.equal(m.get("b1"), 0);
+  assert.equal(m.has("a2"), false);
+});
+
+test("the one list: repos alphabetically, live or idle — and a filter drops the idle ones", () => {
   const shown = [ses("b1", "/r/b", 1)];
-  const repos = [repo("a", "/r/a"), repo("b", "/r/b"), repo("c", "/r/c")];
-  assert.deepEqual(repoGroupsOf(shown, repos, false, repoOf).map((g) => `${g.repoName}:${g.sessions.length}`), ["b:1", "a:0", "c:0"]);
+  const repos = [repo("c", "/r/c"), repo("b", "/r/b"), repo("a", "/r/a")];
+  assert.deepEqual(repoGroupsOf(shown, repos, false, repoOf).map((g) => `${g.repoName}:${g.sessions.length}`), ["a:0", "b:1", "c:0"]);
   assert.deepEqual(repoGroupsOf(shown, repos, true, repoOf).map((g) => g.repoName), ["b"]);
+});
+
+test("most open sessions first, ties alphabetically, counted off live sessions only", () => {
+  const shown = [ses("b1", "/r/b", 1), ses("c1", "/r/c", 2), ses("c2", "/r/c", 3), ses("a1", "/r/a", 4, { running: false })];
+  const repos = [repo("d", "/r/d"), repo("c", "/r/c"), repo("b", "/r/b"), repo("a", "/r/a")];
+  const open = openCountByRepo(shown, repoOf);
+  assert.equal(open.has("a"), false);
+  assert.deepEqual(repoGroupsOf(shown, repos, false, repoOf, [], open).map((g) => g.repoName), ["c", "b", "a", "d"]);
+  // Without the count it is the alphabetical list it always was.
+  assert.deepEqual(repoGroupsOf(shown, repos, false, repoOf).map((g) => g.repoName), ["a", "b", "c", "d"]);
 });
 
 test("the worktree cut keeps its repo's group even when no session runs in a worktree", () => {
@@ -126,6 +163,20 @@ test("bulk close: a star is a SCOPE — every count and the spared number read o
   assert.equal(closeScope(visible, undefined, true, repoOf).length, 2);
 });
 
+test("bulk close: a follow-up flag is spared like a star, by the same toggle and one predicate", () => {
+  const flag = { by: "agent", at: 1, reason: "read it" };
+  const visible = [ses("a1", "/r/a", 1, { starred: true }), ses("a2", "/r/a", 2, { followUp: flag }),
+    ses("a3", "/r/a", 3, { starred: true, followUp: { by: "hand", at: 2 } }), ses("a4", "/r/a", 4)];
+  assert.deepEqual(visible.filter(isCloseSpared).map((s) => s.id), ["a1", "a2", "a3"]);
+  assert.deepEqual(closeScope(visible, "a", true, repoOf).map((s) => s.id), ["a4"]);
+  assert.equal(starredSpared(visible, "a", true, repoOf), 3, "a session carrying both counts once");
+  const c = closeMarked(visible, "a", repoOf);
+  assert.deepEqual(c, { n: 3, starred: 2, flagged: 2 });
+  assert.equal(markedWords(c), "3 starred & flagged");
+  assert.equal(markedWords(closeMarked([visible[1]], "a", repoOf)), "1 flagged");
+  assert.equal(markedWords(closeMarked([visible[0]], "a", repoOf)), "1 starred");
+});
+
 test("an in-flight open always says how many, one included", () => {
   assert.equal(openingText({ status: "queued", n: 1 }), "queued 1");
   assert.equal(openingText({ status: "pending", n: 2 }), "opening… 2");
@@ -142,4 +193,15 @@ test("a row title outside the list is never empty", () => {
   const repos = [repo("myapp", "/r/myapp")];
   assert.equal(sessionRowTitleIn(repos, ses("x", "/r/myapp", 1, { tabTitle: "fix the tabs" })), "fix the tabs");
   assert.equal(sessionRowTitleIn([], ses("x", "/r/elsewhere", 1)), "elsewhere");
+});
+
+test("the quick filter wants every typed word, anywhere in what the row shows", async () => {
+  const { matchesText } = await import("./model.ts");
+  const f = ["Red edge for overdue", "make overdue tasks show a red edge", "todo-garden"];
+  assert.equal(matchesText("", f), true);
+  assert.equal(matchesText("   ", f), true);
+  assert.equal(matchesText("OVERDUE", f), true);
+  assert.equal(matchesText("garden red", f), true, "words across fields, any order");
+  assert.equal(matchesText("garden blue", f), false, "every word must match");
+  assert.equal(matchesText("x", [undefined, null, ""]), false);
 });

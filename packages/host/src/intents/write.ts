@@ -10,6 +10,9 @@
  * `core.rows()` and replaced through `core.setRows()`, never cached.
  */
 import {
+  BUDGET_NOT_HOLDING,
+  budgetLeftoverOf,
+  budgetWaiverPeriod,
   budgetWaiverUntil,
   categoryRefusedText,
   cleanCategory,
@@ -26,8 +29,19 @@ import {
   type ItemCategory,
   type ItemName,
   type NameAuthor,
+  type SessionBudget,
 } from "@waterplane/shared";
 import { isTerminal, PENDING_MAX, type IntentCore } from "./contract.js";
+
+/**
+ * The refusal for a row that could not be written, worded for a person: what
+ * failed, in the error's own words, and that nothing was queued — so the words
+ * are still theirs to keep. `readOnly()` is asked first because a read-only
+ * store writes nothing by design and already has its own sentence.
+ */
+export function notSavedText(core: Pick<IntentCore, "readOnly" | "lastWriteError">): string {
+  return core.readOnly() ?? `could not save to disk: ${core.lastWriteError() ?? "the write failed"} — nothing was queued`;
+}
 
 export class WriteSlice {
   constructor(private readonly core: IntentCore) {}
@@ -80,7 +94,14 @@ export class WriteSlice {
     if (row.trigger.kind === "at") row.nextAt = this.core.armNew(row, now);
     this.snapshotConv(row);
     this.core.rows().push(row);
-    this.core.persist();
+    // `ok` is a statement about the disk, so a write that did not land is a
+    // REFUSAL, and the row comes back out of memory before anything could fire
+    // it: nothing has run, only been queued, so refusing is the honest answer —
+    // and an `ok` here, written nowhere, is a prompt a restart lets run twice.
+    if (!this.core.persist()) {
+      this.core.setRows(this.core.rows().filter((r) => r !== row));
+      return { ok: false, reason: notSavedText(this.core) };
+    }
     // Do not wait for the tick: everything a `now` trigger needs may already be
     // true, and a create that could have been instant must not pay two seconds
     // for the privilege of being durable. It is kicked BEFORE the broadcast so
@@ -153,8 +174,15 @@ export class WriteSlice {
    * "the client did not say, so nobody said" field in this file.
    */
   upsert(draft: IntentDraft, now = Date.now()): Intent | null {
+    const r = this.upsertResult(draft, now);
+    return r.ok ? r.intent : null;
+  }
+
+  /** `upsert`, saying WHY when it wrote nothing (`reason` absent ⇒ the draft named nothing runnable). */
+  upsertResult(draft: IntentDraft, now = Date.now()): { ok: true; intent: Intent } | { ok: false; reason?: string } {
     // Read-only (a newer host's file): nothing could be saved, so nothing is.
-    if (this.core.readOnly()) return null;
+    const ro = this.core.readOnly();
+    if (ro) return { ok: false, reason: ro };
     const prev = this.core.rows().find((r) => r.id === (draft.id ?? "").trim());
     const row = cleanIntentRow({
       ...draft,
@@ -190,39 +218,49 @@ export class WriteSlice {
       // stamp, and a re-save from the phone never states it — so it is
       // carried, or re-titling a child re-exposes it to the cap it was exempt from.
       budgetPass: draft.budgetPass ?? prev?.budgetPass,
+      // The tick's stamp, like `budgetPass`: a re-save never states it.
+      leftoverOf: draft.leftoverOf ?? prev?.leftoverOf,
       // A person's answer about the session this row opens. `schedule.save`
       // rebuilds the row from a draft, and a draft that is silent about it
       // (an older bundle, a re-time) must not turn "keep this one open" back
       // into "follow the global".
       closeWhenDone: draft.closeWhenDone ?? prev?.closeWhenDone,
+      flagWhenDone: draft.flagWhenDone ?? prev?.flagWhenDone,
       // The budget the session this row opens is born with — the same answer,
       // the same rule: a re-time from a bundle that never heard of it must not
       // delete the cap somebody set. A draft that SAYS `null` is a person
       // clearing it, which only an explicit value can express.
       budget: draft.budget === null ? undefined : draft.budget ?? prev?.budget,
     }, now);
-    if (!row) return null;
+    if (!row) return { ok: false };
     // A draft cannot say which conversation a session is in, so re-saving one
     // would DELETE the snapshot the row was written with — `revivedShape`'s
     // rule, and the whole reason every host-only field above is carried.
     this.snapshotConv(row, prev);
-    if (!prev && this.core.pending().length >= PENDING_MAX) return null;
+    if (!prev && this.core.pending().length >= PENDING_MAX) {
+      return { ok: false, reason: `this host is already holding ${PENDING_MAX} intents that have not run — clear some before adding more` };
+    }
     if (row.trigger.kind === "at") {
       row.nextAt = row.nextAt === null ? null
         : row.lastOccurrence != null ? this.core.armFrom(row, row.lastOccurrence, now)
           : this.core.armNew(row, now);
     }
     this.core.setRows(prev ? this.core.rows().map((r) => (r.id === row.id ? row : r)) : [...this.core.rows(), row]);
-    this.core.persist();
+    // `post()`'s rule: a write that did not land is a refusal, and memory goes
+    // back to what the disk still says — the previous row, or no row.
+    if (!this.core.persist()) {
+      this.core.setRows(prev ? this.core.rows().map((r) => (r === row ? prev : r)) : this.core.rows().filter((r) => r !== row));
+      return { ok: false, reason: notSavedText(this.core) };
+    }
     this.core.kick();
     this.core.deps.onChange(row);
-    return row;
+    return { ok: true, intent: row };
   }
 
   /**
    * Lift ONE rung for one row — `intent.waive`. Today only the budget: the row
-   * gets `pastBudget` and still waits behind `serial`, `holdForHost`, the slots
-   * and the smart pick, which is what the re-time sheet's *let past the budget*
+   * gets `pastBudget` and still waits behind `serial`, `holdForHost` and the
+   * slots, which is what the re-time sheet's *let past the budget*
    * promises and what sending `intent.run` per row (the old bulk path, into
    * `runNow`, which skips the whole ladder) could not keep.
    *
@@ -248,18 +286,23 @@ export class WriteSlice {
     if (on) {
       if (row.archived) return { ok: false, reason: "it is set aside — put it back on the list first" };
       const now = Date.now();
-      const until = budgetWaiverUntil(this.core.deps.budgetOver?.(), now);
+      // The leftover ceiling holds a row exactly as a tripped cap does, so a
+      // person may let a leftover past it — the waiver is then about THIS week.
+      const leftover = budgetLeftoverOf(row, now) !== null ? this.core.deps.leftoverOver?.() : null;
+      const over = [...(this.core.deps.budgetOver?.() ?? []), ...(leftover ? [leftover] : [])];
+      const until = budgetWaiverUntil(over, now);
       if (until == null) {
         return {
           ok: false,
-          reason: this.core.deps.budgetOver?.().length
+          reason: over.length
             ? "the usage reading does not say when that budget window resets, so there is no window to let it past for"
-            : "the budget is not holding anything right now",
+            : BUDGET_NOT_HOLDING,
         };
       }
-      next = { until };
+      const periodId = budgetWaiverPeriod(over, until);
+      next = { until, ...(over.some((c) => c.which === "weekly") ? { weekly: true as const } : {}), ...(periodId ? { periodId } : {}) };
     }
-    if (row.pastBudget?.until === next?.until) return { ok: true };
+    if (row.pastBudget?.until === next?.until && row.pastBudget?.weekly === next?.weekly && row.pastBudget?.periodId === next?.periodId) return { ok: true };
     row.pastBudget = next;
     this.core.persist();
     this.core.deps.onChange(row);
@@ -452,6 +495,10 @@ export class WriteSlice {
      *  global setting. Any state, a running row included — it is about the
      *  session, not the work, and the session is open right now. */
     closeWhenDone?: boolean | null;
+    flagWhenDone?: boolean | null;
+    /** The cap the session this row OPENS is born with; `null` CLEARS it. Only a
+     *  row that has not started: a started row's session is already born. */
+    budget?: SessionBudget | null;
   }): { ok: boolean; refused?: string } {
     const row = this.core.get(id);
     if (!row) return { ok: false };
@@ -469,6 +516,8 @@ export class WriteSlice {
     if (typeof patch.label === "string") row.label = patch.label.slice(0, 80) || undefined;
     if (typeof patch.closeWhenDone === "boolean") row.closeWhenDone = patch.closeWhenDone;
     else if (patch.closeWhenDone === null) row.closeWhenDone = undefined;
+    if (patch.flagWhenDone === true) row.flagWhenDone = true;
+    else if (patch.flagWhenDone === false || patch.flagWhenDone === null) row.flagWhenDone = undefined;
 
     // ── The name, as a PERSON set it ──────────────────────────────────────
     //
@@ -506,6 +555,15 @@ export class WriteSlice {
         if (c) { row.category = c; row.categoryBy = "hand"; }
         else refusals.push(categoryRefusedText(patch.category));
       }
+    }
+    // **The session budget of a row still waiting** — `null` clears, an object
+    // sets (already cleaned by the caller). A row that has started opened its
+    // session with whatever it had: the refusal says so rather than writing a
+    // cap onto a session that is already running, or already gone.
+    if (patch.budget !== undefined) {
+      if (row.state !== "queued" && row.state !== "blocked") refusals.push("its session is already open, so its budget is set on the session");
+      else if (patch.budget === null) row.budget = undefined;
+      else row.budget = patch.budget;
     }
     // Setting one aside clears the sentence explaining what it was waiting for:
     // it is not waiting for that any more, it is waiting for a person.

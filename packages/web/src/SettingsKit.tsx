@@ -52,7 +52,8 @@ import { createContext, useContext, type ReactNode } from "react";
 import { ChevronRight, Loader, Minus, Plus, Search, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-import { filterSummary, groupShown, rowShown } from "./settingsIndex";
+import { RadioRows } from "./kit/RadioRows";
+import { filterSummary, groupShown, nestedMatches, rowShown } from "./settingsIndex";
 
 /** Matches `App.tsx`'s own constant; the icon SCALE setting is applied in CSS
  *  off the `width` attribute, so this is a base size and not a final one. */
@@ -106,6 +107,18 @@ function useRowVisible(id: string | undefined): boolean {
   const ok = rowShown(id, ctx.query, ctx.only);
   if (ok) ctx.shown.push(id);
   return ok;
+}
+
+/**
+ * Whether a piece NESTED inside row `parentId` (one plugin's section inside
+ * `plugins`) survives the query: all of them when the parent's catalogued
+ * words answer it, else only the ones whose `words` do (`nestedMatches`).
+ * Neither counted nor pinned on its own — its parent already was.
+ */
+export function useNestedShown(parentId: string, words: string): boolean {
+  const ctx = useContext(Ctx);
+  if (!ctx || ctx.only) return true;
+  return nestedMatches(parentId, words, ctx.query);
 }
 
 /* ── prose ───────────────────────────────────────────────────────────── */
@@ -252,10 +265,13 @@ export interface ChoiceOption<T> {
  * state pill beside the label, which is the same fact twice and the first thing
  * to go stale when somebody adds an option.
  */
-export function SetChoice<T extends string | number>({ id, label, icon: Icon, value, options, onChange, note, more, children }: RowBase & {
+export function SetChoice<T extends string | number>({ id, label, icon: Icon, value, options, onChange, note, more, radio, children }: RowBase & {
   value: T;
   options: ChoiceOption<T>[];
   onChange: (v: T) => void;
+  /** WORDED options, exactly one chosen: draw radio rows (a dot and a sentence) instead of chips.
+   *  Opt-in per row — bare numbers, units and previews (text size) stay chips. */
+  radio?: boolean;
 }) {
   if (!useRowVisible(id)) return null;
   return (
@@ -264,6 +280,14 @@ export function SetChoice<T extends string | number>({ id, label, icon: Icon, va
         {Icon && <Icon size={ICON} className="set-ico" />}
         <span className="set-lbl">{label}</span>
       </div>
+      {radio ? (
+        <RadioRows<string>
+          label={typeof label === "string" ? label : undefined}
+          value={String(value)}
+          options={options.map((o) => ({ key: String(o.value), label: o.label, title: o.title }))}
+          onChange={(k) => { const o = options.find((x) => String(x.value) === k); if (o) onChange(o.value); }}
+        />
+      ) : (
       <div className="set-chips">
         {options.map((o) => (
           <button
@@ -277,6 +301,7 @@ export function SetChoice<T extends string | number>({ id, label, icon: Icon, va
           </button>
         ))}
       </div>
+      )}
       <SetNote more={more}>{note}</SetNote>
       {children}
     </div>

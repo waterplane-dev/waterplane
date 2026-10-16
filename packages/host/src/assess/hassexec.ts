@@ -1,8 +1,8 @@
 /** A slice of assess.ts — moved whole from assess.ts, see docs/notes/assess-architecture.md (host). */
 import { randomUUID } from "node:crypto";
 import { basename } from "node:path";
-import type { AssessNote, Intent, IntentDraft, ItemName } from "@waterplane/shared";
-import { ASSESS_PLAN_FILE } from "@waterplane/shared";
+import type { AssessNote, AssessPayload, Intent, IntentDraft, ItemName, SlotRow } from "@waterplane/shared";
+import { ASSESS_PLAN_FILE, cleanAssessScope, findSlot, slotRowOfIntent } from "@waterplane/shared";
 import type { ExecutorResult } from "../intents/manager.js";
 import { AssessStore } from "./hassstore.js";
 import { runAssessment } from "./hassrun.js";
@@ -47,7 +47,9 @@ export function makeAssessExecutor(deps: AssessDeps): (i: Intent) => Promise<Exe
     // that is exactly the window somebody is watching it in to see whether it
     // is doing what they asked.
     const scopedIds = i.payload.kind === "assess" && i.payload.ids?.length ? i.payload.ids : undefined;
-    deps.store.set(i.id, { runId: i.id, repoDir: i.cwd, status: "running", startedAt, scopedIds });
+    // A slot scope only ever rides beside ids (`cleanIntentPayload`).
+    const scope = i.payload.kind === "assess" && scopedIds ? i.payload.scope : undefined;
+    deps.store.set(i.id, { runId: i.id, repoDir: i.cwd, status: "running", startedAt, scopedIds, ...(scope ? { scope } : {}) });
     try {
       // Watched: what it is doing goes to memory and the socket as it happens
       // (`setLive`), and the last reading is persisted below with the settled
@@ -55,6 +57,7 @@ export function makeAssessExecutor(deps: AssessDeps): (i: Intent) => Promise<Exe
       const res = await runAssessment(
         i.cwd, deps.intents(), deps.notes(i.cwd), startedAt, scopedIds,
         (p) => deps.store.setLive(i.id, { progress: p }),
+        scope,
       );
       const assessable = res.input.items.filter((x) => !x.context).length;
       deps.store.set(i.id, {
@@ -104,12 +107,14 @@ export function makeAssessExecutor(deps: AssessDeps): (i: Intent) => Promise<Exe
  */
 export interface AssessIntents {
   get(id: string): Intent | undefined;
+  /** Every row — read-only, and read only to re-derive a SLOT from the live
+   *  rows (`startAssessment` with a slot scope; a merge's member clocks). */
+  list(): readonly Intent[];
   post(draft: IntentDraft): { ok: boolean; intent?: Intent; reason?: string };
   cancel(id: string, reason?: string): boolean;
   dismiss(id: string): boolean;
   /** `handOrdered` is the host's own field (a client cannot set it) and marks a
-   *  position a PERSON decided — a drag, or an assessment ranking they approved.
-   *  `smartpick.ts` widens the same slice for the same reason. */
+   *  position a PERSON decided — a drag, or an assessment ranking they approved. */
   edit(id: string, patch: { order?: number; archived?: boolean; label?: string; handOrdered?: boolean }): { ok: boolean; refused?: string };
   /**
    * Put a FAILED row back in the queue — the `still wanted` half a rank cannot
@@ -162,10 +167,8 @@ export interface AssessIntents {
    * assessment may decide: every `requeueFailed` used to kick on its way out, a
    * kick runs a pass synchronously as far as its first `await`, and so applying
    * nineteen verdicts fired the FIRST revived row while eighteen re-queues and
-   * the entire rank loop had still to happen. The pass saw one candidate, so
-   * `smartpick.hold()` — which refuses to think about a list of one — returned
-   * null, and the row went with neither the approved order nor the pick applied
-   * to it. The person's ranking was written a moment after the only fire it was
+   * the entire rank loop had still to happen, so the row went without the
+   * approved order applied to it. The person's ranking was written a moment after the only fire it was
    * supposed to govern.
    *
    * So the loop passes `kick: false` and this is called after the ranks. It
@@ -194,9 +197,49 @@ export function startAssessment(
   repoDir: string,
   /** The cut the caller is asking about; absent is the whole repo. */
   ids?: readonly string[],
+  /** A slot check (`AssessScope`): `ids` must then all still sit in that slot. */
+  slotScope?: unknown,
 ): { runId: string } | { error: string } {
   const busy = store.running(repoDir);
   if (busy) return { error: "an assessment is already running for this repo — two of them would propose different verdicts on one list" };
+  /**
+   * **A slot check judges exactly the rows the person was shown — or nothing.**
+   *
+   * The phone's `ids` are what the person saw when they tapped; the host's rows
+   * are what will fire. The key is matched back against the live rows
+   * (`findSlot`, tolerant — the two ends read one reset a minute apart) only to
+   * CONFIRM the caller's list, never to replace it: `slotsOf` clusters greedily
+   * from the earliest row, so one row posted since (an agent's `new` two
+   * minutes before `a`) moves the cut, and a run over the host's slot judged a
+   * row nobody saw and dropped one they did. So every id sent must still be
+   * waiting and still sit in the host's slot, and at least two must — else the
+   * check is REFUSED in a sentence, with no model call. A key that names
+   * nothing any more, or a slot down to one row, is refused the same way:
+   * a check of one row against itself buys nothing, and widening to the repo is
+   * the most expensive wrong answer available. Rows in the slot that were not
+   * sent are never judged.
+   */
+  const slot = cleanAssessScope(slotScope);
+  if (slotScope !== undefined && !slot) return { error: "that slot check names no slot — nothing was run" };
+  if (slot) {
+    const rows = intents.list()
+      .filter((i) => i.cwd === repoDir && i.payload.kind === "prompt" && ASSESSABLE_STATES.has(i.state))
+      .map(slotRowOfIntent)
+      .filter((r): r is SlotRow => !!r);
+    const found = findSlot(rows, slot.key);
+    if (!found) {
+      return { error: "those rows no longer fire together — they ran, were moved, or the reset they waited for has changed; nothing was run" };
+    }
+    if (found.ids.length < 2) {
+      return { error: "only one row fires at that time now, so there is nothing to check together; nothing was run" };
+    }
+    const sent = [...new Set((ids ?? []).filter((x) => typeof x === "string"))];
+    const inSlot = new Set(found.ids);
+    if (sent.length < 2 || !sent.every((x) => inSlot.has(x))) {
+      return { error: `the slot changed since you looked — it now holds ${found.ids.length}; open the check again. Nothing was run` };
+    }
+    return postRun(intents, repoDir, { kind: "assess", ids: sent, scope: slot });
+  }
   /**
    * **A scope is checked HERE, while there is still a socket to refuse on.**
    *
@@ -225,11 +268,16 @@ export function startAssessment(
         + "and these rows are finished, running, or not this repo's",
     };
   }
+  return postRun(intents, repoDir, scope ? { kind: "assess", ids: scope } : { kind: "assess" });
+}
+
+/** The run row itself — one tap, one durable row. */
+function postRun(intents: AssessIntents, repoDir: string, payload: AssessPayload): { runId: string } | { error: string } {
   const runId = "as_" + randomUUID().slice(0, 8);
   const posted = intents.post({
     id: runId,
     cwd: repoDir,
-    payload: scope ? { kind: "assess", ids: scope } : { kind: "assess" },
+    payload,
     // `builds.ts`' shape, and for its four properties: on disk before the tap
     // returns, visible while it works, budget-gated, at-most-once by intent id
     // across a restart.

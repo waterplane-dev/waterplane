@@ -2,6 +2,7 @@
  * Every writer of the repo-readings feature's stores, and its doors.
  */
 import type { RepoTarget } from "@waterplane/shared";
+import type { SendSeed } from "../../sendIntent";
 import { core } from "../../sdk";
 import { REPO_HEALTH_EVENT } from "../../demoEntry";
 import { aimAfterFile, remedySeed } from "./logic";
@@ -27,11 +28,25 @@ export function openRepoHealth(repo: RepoTarget): void {
  * nothing.
  */
 export function remedy(prompt: string, repo: RepoTarget, label: string): void {
-  const c = core();
-  c.say.track("action:setup.remedy");
+  core().say.track("action:setup.remedy");
+  seedSend(remedySeed(prompt, repo, label));
+}
+
+/**
+ * `remedy`'s opener for a seed built whole elsewhere — region 3's opt-ins,
+ * whose schedule offer carries a clock and a model as well as words. The
+ * Send sheet opens on it; nothing is sent by the tap.
+ */
+export function seedSend(seed: SendSeed): void {
   setupRepo.set(null);
   healthRepo.set(null);
-  c.nav.openSend(remedySeed(prompt, repo, label));
+  core().nav.openSend(seed);
+}
+
+/** Region 3's `open captures` — the capture sheet is another feature's, so it
+ *  is reached through the core. */
+export function openCaptureFromReadings(repo: RepoTarget): void {
+  core().nav.openCapture(repo);
 }
 
 /** A file from the readings (the longest-files tape), whose close comes back

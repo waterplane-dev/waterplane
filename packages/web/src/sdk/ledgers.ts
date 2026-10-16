@@ -11,7 +11,7 @@
  * registry imports every extension and every extension imports this SDK: built at module load that
  * is a cycle reading an undefined list.
  */
-import type { BackendTokensDoc, LocalUsageDoc, PeerJobLedgerRow, TokenStatsDoc, TokenWindowsDoc, UsageHistoryDoc } from "@waterplane/shared";
+import type { BackendTokensDoc, CostWindowDoc, LocalUsageDoc, PeerJobLedgerRow, TokenStatsDoc, TokenWindowsDoc, UsageHistoryDoc, UsageSourceHistoryDoc } from "@waterplane/shared";
 import { api } from "../api";
 import { core } from "../core/api";
 import { getLedgerDocAt, getTokenStatsAt, putLedgerDoc, putTokenStats } from "../offlineCache";
@@ -40,7 +40,11 @@ export const ledgers: {
   /** The local runner's own ledger — compute time, tokens, memory per model per day. */
   localUsage(): Promise<LocalUsageDoc>;
   usageLog(hours: number): Promise<UsageHistoryDoc>;
+  /** A non-claude source's kept readings, or null on any failure (older host, no route, bad shape) — absent, never a guess. */
+  sourceHistory(source: string): Promise<UsageSourceHistoryDoc | null>;
   tokenWindows(specs: { id: string; anchor: number; lenMs: number }[], fresh?: boolean): Promise<TokenWindowsDoc>;
+  /** The cost window over `[from, to)`: conversations by hour, repo and launch (`GET /api/costwindow`). Uncached — an older host 404s. */
+  costWindow(from: number, to: number, fresh?: boolean): Promise<CostWindowDoc>;
   /** What this desktop handed to peer desktops, with each job's cost there (`GET /api/peerjobs`). */
   peerJobs(): Promise<PeerJobLedgerRow[]>;
   refreshUsage(quiet?: boolean): void;
@@ -56,7 +60,14 @@ export const ledgers: {
   backendTokens: (id, fresh) => api.backendTokens(id, fresh),
   localUsage: () => api.localUsage(),
   usageLog: (hours) => api.usageLog(hours),
+  sourceHistory: async (source) => {
+    try {
+      const d = await api.usageLogSource(source);
+      return d && Array.isArray(d.samples) ? d : null;
+    } catch { return null; }
+  },
   tokenWindows: (specs, fresh) => api.tokenWindows(specs, fresh),
+  costWindow: (from, to, fresh) => api.costWindow(from, to, fresh),
   /**
    * Re-scrape `/usage` on the desktop.
    *

@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { MAX_SPOKES, nodeAt, nodeXY, planPick, pricedId, spokeLabel, switchCostText, wheelCandidates, wheelSpokes } from "./modelWheel.ts";
+import { MAX_SPOKES, nodeAt, nodeXY, planPick, pricedId, spokeLabel, switchCostText, wheelCandidates, wheelLanded, wheelNow, wheelSpokes, wheelTop } from "./modelWheel.ts";
 
 const G = { spokes: 8, rings: 5, rIn: 40, rOut: 112 };
 
@@ -40,6 +40,8 @@ test("spokes: a hidden model leaves the wheel, the current one never does", () =
 test("spoke label names the 1M window in words", () => {
   assert.equal(spokeLabel("opus[1m]"), "opus 1M");
   assert.equal(spokeLabel("haiku"), "haiku");
+  assert.equal(spokeLabel("claude-opus-5-5"), "opus-5-5");
+  assert.equal(spokeLabel("claude-opus-5-5[1m]"), "opus-5-5 1M");
 });
 
 test("hit test: every drawn node maps back to itself", () => {
@@ -145,4 +147,34 @@ test("switch cost: a cache that already expired makes the switch free of extra",
   const t = switchCostText({ ...SW, cold: true, from: { model: "opus" }, to: { model: "haiku", effort: null } });
   assert.match(t, /adds nothing/);
   assert.doesNotMatch(t, /\$/);
+});
+
+test("wheelTop: under the button when it fits, slid up when not, never off the top", () => {
+  assert.equal(wheelTop(300, 400, 900), 306);
+  assert.equal(wheelTop(600, 500, 900), 392);
+  assert.equal(wheelTop(600, 1200, 900), 8);
+});
+
+test("now: the last turn's model and effort beat the launch flags, put back on their spoke", () => {
+  const cat = { aliases: ["opus", "fable", "opus[1m]"], ids: ["claude-opus-5-5", "claude-fable-5-1"] };
+  // Launched on fable at xhigh; `/model opus` + `/effort high` have landed since.
+  const cur = { model: "claude-fable-5-1", effort: "xhigh", turnModel: "claude-opus-5-5", turnEffort: "high" };
+  assert.deepEqual(wheelNow(cur, cat), { model: "opus", effort: "high", from: "turn" });
+  // So the switch that already happened is no longer offered.
+  assert.deepEqual(planPick(wheelNow(cur, cat), { model: "opus", effort: "high" }, LIVE), { kind: "none" });
+  // The launch model wins when it names the same id: the log cannot say 1M.
+  assert.equal(wheelNow({ model: "opus[1m]", turnModel: "claude-opus-5-5" }, cat).model, "opus[1m]");
+  // An id no alias stands for stays itself; no turn yet ⇒ the launch flags.
+  assert.equal(wheelNow({ turnModel: "claude-haiku-9" }, cat).model, "claude-haiku-9");
+  assert.deepEqual(wheelNow({ model: "fable", effort: "max" }, cat), { model: "fable", effort: "max", from: "launch" });
+  // No logged effort ⇒ the launch effort, not a blank.
+  assert.equal(wheelNow({ effort: "low", turnModel: "claude-opus-5-5" }, cat).effort, "low");
+});
+
+test("landed: only a turn reading can confirm a sent switch", () => {
+  const ids = ["claude-opus-5-5", "claude-fable-5-1"];
+  assert.equal(wheelLanded({ model: "opus", effort: "high" }, { model: "opus", effort: "high", from: "turn" }, ids), true);
+  assert.equal(wheelLanded({ model: "opus" }, { model: "claude-opus-5-5", from: "turn" }, ids), true);
+  assert.equal(wheelLanded({ model: "opus", effort: "high" }, { model: "opus", effort: "xhigh", from: "turn" }, ids), false);
+  assert.equal(wheelLanded({ model: "opus" }, { model: "opus", from: "launch" }, ids), false);
 });

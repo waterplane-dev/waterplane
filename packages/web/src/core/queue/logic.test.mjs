@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  ACK_TIMEOUT_MS, OP_ACK_TIMEOUT_MS, SUBMIT_ACK_TIMEOUT_MS, PENDING_PREFIX, ackWindow, goneLanesOf, isPendingId,
+  ACK_TIMEOUT_MS, OP_ACK_TIMEOUT_MS, SUBMIT_ACK_TIMEOUT_MS, PENDING_PREFIX, ackWindow, goneLanesOf, isLaterId, isPendingId, laterId,
   budgetHeldLaneSet, budgetReleased, entryFrame, laneFor, laneLabelOf, markAttempt, pendingLaneId, requeue, sendingLabel, serialStates, unpark, whichWords,
 } from "./logic.ts";
 
@@ -18,6 +18,17 @@ test("the pending id is the create's own ackId behind one prefix", () => {
   assert.equal(isPendingId("s1"), false);
   assert.equal(isPendingId(null), false);
   assert.equal(isPendingId(undefined), false);
+});
+
+test("a `+ later` screen is a pending id per repo, so every host guard keeps it off the wire", () => {
+  const id = laterId("~/dev/myapp");
+  assert.equal(isPendingId(id), true);
+  assert.equal(isLaterId(id), true);
+  assert.equal(laterId("~/dev/myapp"), id); // per repo, so its draft is found again
+  // A create's own pending screen is never a later one.
+  assert.equal(isLaterId(pendingLaneId("abc")), false);
+  assert.equal(isLaterId("s1"), false);
+  assert.equal(isLaterId(null), false);
 });
 
 test("a pending screen's lane is its create's, a real session's is its id", () => {

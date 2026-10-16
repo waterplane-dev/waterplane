@@ -18,6 +18,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
 import { E, SLUG, rootEnv } from "./lib-brand.mjs";
+import { waitForHost } from "./lib-e2e.mjs";
 const PORT = 8806;
 const ROOT = mkdtempSync(join(tmpdir(), `${SLUG}-mf-`));
 const env = { ...process.env, [E.PREFLIGHT]: "0", [E.PORT]: String(PORT), [E.HOST]: "127.0.0.1", ...rootEnv(ROOT), [E.CLAUDE_BIN]: process.cwd() + "/scripts/claude-stub.sh" };
@@ -25,7 +26,7 @@ const host = spawn("node", ["packages/host/dist/main.js"], { env, stdio: ["ignor
 host.stderr.on("data", d=>process.stderr.write("[host] "+d));
 const base=`http://127.0.0.1:${PORT}`;
 let failed=false; const check=(c,l)=>{console.log(`${c?"PASS":"FAIL"}: ${l}`); if(!c)failed=true;};
-setTimeout(async()=>{
+waitForHost(PORT).then(async () => {
   const repo = await fetch(`${base}/api/repo`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({name:"mf"})}).then(r=>r.json());
   const ws=new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
   let added=false, opened=false, fired=false, repoSid=null, itemSid=null;
@@ -50,5 +51,5 @@ setTimeout(async()=>{
     check(itemSid!==repoSid, `the tap opened a session FOR the item, never the one already open (item ${itemSid} vs open ${repoSid})`);
     try{host.kill();}catch{}; setTimeout(()=>process.exit(failed?1:0),100);
   }, 6000);
-},900);
+});
 setTimeout(()=>{console.log("FAIL: timeout");host.kill();process.exit(1);},12000);

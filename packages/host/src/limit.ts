@@ -45,6 +45,13 @@ const WEEKLY_RE = /\bweekly limit\b/i;
 export interface LimitDetection {
   /** A blocked-on-usage-limit banner is present in the text. */
   blocked: boolean;
+  /**
+   * The wall is a SPEND wall (API-key / cloud accounts: credits exhausted, or a
+   * workspace / organisation / gateway spend limit), not a plan window. Always
+   * false for a subscription banner. `resetAt` is then only ever an instant the
+   * text PRINTED in full (date and UTC time), never a guessed clock time.
+   */
+  spend: boolean;
   /** Parsed expected reset time (epoch ms), or null when the text doesn't say. */
   resetAt: number | null;
   /** The block is a WEEKLY limit (bare-time banner, unreliable reset). */
@@ -58,8 +65,67 @@ export function detectLimitText(cleanText: string, now = Date.now()): LimitDetec
     if (WARNING_RE.test(line)) continue;
     if (BLOCKED_RES.some((re) => re.test(line)) || STOP_WAIT_RE.test(line)) { blocked = true; break; }
   }
+  // A plan banner outranks: subscription behaviour is exactly what it was.
+  if (!blocked) {
+    const spend = detectSpendText(cleanText);
+    if (spend.spend) return { blocked: true, spend: true, resetAt: spend.resetAt, weekly: false };
+  }
   const weekly = blocked && WEEKLY_RE.test(cleanText);
-  return { blocked, resetAt: blocked ? parseResetTime(cleanText, now) : null, weekly };
+  return { blocked, spend: false, resetAt: blocked ? parseResetTime(cleanText, now) : null, weekly };
+}
+
+/**
+ * The SPEND walls: what the API says when an API-key / cloud account has no
+ * money to spend. Three families, all matched by SHAPE and line-anchored (the
+ * line starts with the message, or is an API-error line carrying it) so that a
+ * transcript merely DISCUSSING the error does not read as one.
+ *
+ * Wording measured in the installed CLI bundle (2.1.300): the credit message
+ * its error mapper emits and the API's own sentence it matches; a gateway's
+ * billing error naming a period and a UTC reset. The workspace-limit sentence
+ * is the API's documented one and is NOT in the bundle (the CLI passes the
+ * server's text through), so it is the least certain.
+ *
+ * Source below is written so no pattern's own text matches what it matches
+ * (`\s+` between words, optional groups) - same rule as BLOCKED_RES.
+ */
+const SPEND_RES: RegExp[] = [
+  /^(?:your\s+)?credit\s+balance\s+(?:is\s+)?too\s+low\b/i,
+  /^spend\s+limit\s+reach\w*/i,
+  /^(?:you\s+have\s+)?reach\w*\s+your\s+(?:specified\s+)?workspace\s+API\s+usage\s+limits?\b/i,
+];
+/** An API-error line wraps the message (JSON body, status prefix): look inside it. */
+const SPEND_INNER_RES: RegExp[] = [
+  /credit\s+balance\s+(?:is\s+)?too\s+low\b/i,
+  /spend\s+limit\s+reach\w*/i,
+  /workspace\s+API\s+usage\s+limits?\b/i,
+];
+/** "resets 2026-11-01 00:00 UTC" / "regain access on 2026-11-01 at 00:00 UTC". */
+const SPEND_RESET_RE = /(?:resets?|regain\s+access\s+on)\s+(\d{4})-(\d{2})-(\d{2})(?:\s+at)?[ T]+(\d{2}):(\d{2})\s*UTC/i;
+
+/** One line: is it a spend-wall message? */
+export function isSpendLine(line: string): boolean {
+  const t = line.replace(/^[^A-Za-z]{0,8}/, "");
+  if (SPEND_RES.some((re) => re.test(t))) return true;
+  return /^API\s+Error\b/i.test(t) && SPEND_INNER_RES.some((re) => re.test(t));
+}
+
+/** The printed reset instant of a spend message, or null. Never guessed. */
+export function spendResetOf(text: string): number | null {
+  const m = SPEND_RESET_RE.exec(text);
+  if (!m) return null;
+  const at = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
+  return Number.isFinite(at) ? at : null;
+}
+
+/** Scan ANSI-stripped text (or one log message's text) for a spend wall. */
+export function detectSpendText(text: string): { spend: boolean; resetAt: number | null } {
+  const lines = text.split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (!isSpendLine(lines[i])) continue;
+    return { spend: true, resetAt: spendResetOf(lines.slice(i, i + 3).join("\n")) };
+  }
+  return { spend: false, resetAt: null };
 }
 
 const WEEKDAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
@@ -188,6 +254,7 @@ function envelopeResult(stdout: string): string {
  */
 export function limitNote(det: LimitDetection, verb: string, now = Date.now()): string {
   const until = det.resetAt ? ` until ${clockOf(det.resetAt, now)}` : "";
+  if (det.spend) return `Nothing was ${verb} — the account has no spend allowance left${until || " and no reset is known"}.`;
   const window = det.weekly ? " (weekly window)" : "";
   return `Nothing was ${verb} — the account is out of quota${until}${window}.`;
 }

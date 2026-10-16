@@ -1,5 +1,5 @@
 /** The props of the send sheet. Split from `SendSheet.tsx` (docs/notes/send-architecture.md). */
-import type { Intent, RepoTarget, SessionInfo, WindowResets } from "@waterplane/shared";
+import type { BackendInfo, Intent, LaunchOpts, RepoTarget, SessionInfo, WindowResets } from "@waterplane/shared";
 import { type OutboxEntry } from "../outbox";
 import { type SendIntent, type SendResume, type SendSeed } from "../sendIntent";
 
@@ -26,6 +26,12 @@ export interface SendSheetProps {
    * exist. Empty is a real answer and is WORDED — the segment is never dimmed.
    */
   intents: Intent[];
+  /** What this host said it can launch (null: it never said) and the stored
+   *  new-session defaults — what the *model* row's picker starts from. Optional
+   *  only for re-time mode, which draws no *To* row (absent reads as an
+   *  undescribed host and Claude Code's own defaults). */
+  backends?: BackendInfo[] | null;
+  launchDefaults?: LaunchOpts;
   /** What a build id is called, for a seeded shell target. */
   buildName: (cwd: string, buildId: string) => string;
   /** Park picked files in a repo's inbox; resolves to the path each WILL have. */

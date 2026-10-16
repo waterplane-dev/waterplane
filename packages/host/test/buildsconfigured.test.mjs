@@ -1,6 +1,7 @@
 /**
  * The `builds-configured` setup row and its fix: a buildable repo with no builds.json warns and
- * the fix writes the file from `buildscan`; an existing file passes and is never overwritten;
+ * the fix writes the SHARED (committed) file from `buildscan`; this desktop's own file alone also
+ * passes, and the fix then writes nothing; an existing file passes and is never overwritten;
  * a repo with nothing buildable has no row (absent, not an agent remedy: there is nothing to
  * configure); an unparsable file is a fix-less warn, an agent's job.
  */
@@ -27,7 +28,8 @@ function repo(files = {}) {
 const GRADLE = { "app/build.gradle": "plugins { id 'com.android.application' }\n", "gradlew": "#!/bin/sh\n" };
 const target = (dir) => ({ id: "t", repoName: "demo", branch: "main", isPrimary: true, worktreePath: dir, outboxCount: 0, changedCount: 0 });
 const row = (dir) => inspectRepo(dir).find((c) => c.id === "builds-configured");
-const file = (dir) => join(dir, BRAND.stateDirName, "builds.json");
+const file = (dir) => join(dir, BRAND.sharedDirName, "builds.json");
+const localFile = (dir) => join(dir, BRAND.stateDirName, "builds.json");
 
 test("the fix id is a core id", () => assert.ok(CORE_FIX_IDS.includes("builds-configured")));
 
@@ -50,7 +52,7 @@ test("gradle repo without builds.json: warn naming what was found; the fix write
 
 test("with a parsable builds.json: pass, and the fix never overwrites it", () => {
   const dir = repo(GRADLE);
-  mkdirSync(join(dir, BRAND.stateDirName), { recursive: true });
+  mkdirSync(join(dir, BRAND.sharedDirName), { recursive: true });
   const mine = '[{"id":"mine","name":"Mine","cmd":"echo hi"}]';
   writeFileSync(file(dir), mine);
   assert.equal(row(dir).status, "pass");
@@ -61,7 +63,7 @@ test("with a parsable builds.json: pass, and the fix never overwrites it", () =>
 
 test("an unparsable builds.json: warn with no fix (an agent's job), file untouched even if the fix is forced", () => {
   const dir = repo(GRADLE);
-  mkdirSync(join(dir, BRAND.stateDirName), { recursive: true });
+  mkdirSync(join(dir, BRAND.sharedDirName), { recursive: true });
   writeFileSync(file(dir), "{ not json");
   const r = row(dir);
   assert.equal(r.status, "warn");
@@ -76,4 +78,25 @@ test("nothing buildable: no row at all, and a forced fix writes nothing", () => 
   const out = fixRepoCompliance(target(dir), ["builds-configured"]);
   assert.deepEqual(out.applied, []);
   assert.ok(!existsSync(file(dir)));
+});
+
+test("only this desktop's own builds.json: pass (the merged list), and the fix writes no shared file", () => {
+  const dir = repo(GRADLE);
+  mkdirSync(join(dir, BRAND.stateDirName), { recursive: true });
+  writeFileSync(localFile(dir), '[{"id":"mine","name":"Mine","cmd":"echo hi"}]');
+  const r = row(dir);
+  assert.equal(r.status, "pass");
+  assert.match(r.detail, /this desktop only/);
+  const out = fixRepoCompliance(target(dir), ["builds-configured"]);
+  assert.deepEqual(out.applied, []);
+  assert.ok(!existsSync(file(dir)));
+});
+
+test("both files: the count is the merged list, a local override not counted twice", () => {
+  const dir = repo(GRADLE);
+  mkdirSync(join(dir, BRAND.stateDirName), { recursive: true });
+  mkdirSync(join(dir, BRAND.sharedDirName), { recursive: true });
+  writeFileSync(file(dir), '[{"id":"a","name":"A","cmd":"echo a"},{"id":"b","name":"B","cmd":"echo b"}]');
+  writeFileSync(localFile(dir), '[{"id":"b","name":"B here","cmd":"echo b2"},{"id":"c","name":"C","cmd":"echo c"}]');
+  assert.match(row(dir).detail, /^3 build commands/);
 });

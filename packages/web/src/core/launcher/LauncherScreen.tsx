@@ -9,34 +9,34 @@
  * its index; the launcher's own state is `useLauncherModel`'s.
  */
 import { useLayoutEffect, useRef } from "react";
-import {
-  Archive, Bell, Boxes, CalendarClock, Camera, ChevronsDownUp, ChevronsUpDown, CircleDot, Clock, CloudOff,
-  Download, Eraser, Gauge, Hourglass, Images, ListOrdered, ListRestart, ListTodo, Loader, Menu, MessageSquare, NotebookPen,
-  Plus, RotateCw, ScrollText, Search, Settings, ShieldAlert, Split, SquareTerminal, Star, Terminal as TerminalIcon, Waypoints, X,
-} from "lucide-react";
+import { useBackStep } from "../../backStep";
+import { Archive, Bell, Boxes, CalendarClock, Camera, ChevronsDownUp, ChevronsUpDown, CircleDot, CloudOff, Download, Eraser, Flag, Gauge, Hourglass, Images, ListOrdered, ListRestart, ListTodo, Loader, Menu, MessageSquare, NotebookPen, Plus, RotateCw, ScrollText, Search, Settings, ShieldAlert, Split, SquareTerminal, Star, Terminal as TerminalIcon, Waypoints, X } from "lucide-react";
 import { BRAND, branchLabel } from "@waterplane/shared";
 import { Empty } from "../../Empty";
 import { Logo } from "../Logo";
 import { NetActivity } from "../../NetActivity";
 import { HintToggle } from "../../HintLayer";
-import { ago, baseName, hhmm, repoAccentStyle, usageTitle } from "../../format";
+import { ago, baseName, repoAccentStyle } from "../../format";
 import { STATUS_LABEL } from "../../sessionFacts";
+import { flaggedChipTitle } from "../sessions/followUpFacts";
 import { nativeInstallSupported } from "../../nativeInstall";
 import { openAppsOnReady } from "../../appsPane";
 import { showToast } from "../../toast";
 import { track } from "../../usage";
 import { RISKY_PERM_MODES } from "../settings/permModes";
 import { CliHealthChip } from "../../features/cliHealth";
-import { useUsage } from "../../features/tokens";
+import { useUsageFace } from "../../features/tokens";
+import { UsageChip } from "./UsageChip";
 import { badgeText, openNotifs, useUnread } from "../../features/notifications";
 import { openDecisions } from "../../features/plugins";
 import { openSentLog } from "../../features/sentLog";
+import { DemoStartCue } from "../../features/demoTour";
 import { openSearch } from "../../features/search";
 import { openSchedules } from "../../features/schedule";
 import { openActivity } from "../../features/activity";
 import { pickImageFor } from "../../features/images";
 import { takeShot, useHostPush } from "../../features/hostTools";
-import { HostMenuItem } from "../../features/hosts";
+import { HostMenuItem, HostSwitchKey } from "../../features/hosts";
 import { FirstRunCard } from "../../features/onboard";
 import { enterDemo, isDemo } from "../../demo/mode";
 import { isNativeShell } from "../../hostUrl";
@@ -45,6 +45,7 @@ import { launcherScroll, useLauncherModel } from "./useLauncherModel";
 import { RepoGroup } from "./RepoGroup";
 import { ClosedRows } from "./ClosedRows";
 import { CloseSheet } from "./CloseSheet";
+import { LauncherItemKeys, LauncherItems, LauncherMenuBadge } from "./LauncherItems";
 
 export type { LauncherProps } from "./types";
 export { openShotPick } from "./useLauncherModel";
@@ -80,12 +81,15 @@ export function LauncherScreen(p: LauncherProps) {
   const { clearExited } = p.verbs;
   const {
     tab, setTab, navMenu, setNavMenu, dl, appsReady, activityBadge, visibleSessions, visibleExternal, clearFocus, repoGroups,
-    sessionOrder, resetSessionOrder, waitingTotal, waitingRepliesTotal, limitTotal, codingTotal, starredTotal, shellsTotal,
+    sessionOrder, resetSessionOrder, waitingTotal, waitingRepliesTotal, limitTotal, codingTotal, starredTotal, flaggedTotal, shellsTotal,
     statusFilter, setStatusFilter, statusFilterActive, toggleStatusFilter, shownSessions, sortedSessions,
+    textQuery, setTextQuery, textOn, noRepoCollapsed,
     allReposCollapsed, persistCollapsedRepos, scheduleWords, scheduleLead, scheduleTitle, setCloseAllPick,
     shotPick, setShotPick, repoForCwd,
   } = m;
-  const usage = useUsage(); // the last `/usage` reading (features/tokens)
+  // The screenshot repo picker: Back shuts it, never exits the app from under it.
+  useBackStep(shotPick, () => setShotPick(false));
+  const face = useUsageFace(); // windows (subscription) / dollars (api, cloud) / a bare door
   const unreadNotifs = useUnread();
   const push = useHostPush();
 
@@ -104,7 +108,7 @@ export function LauncherScreen(p: LauncherProps) {
     if (!row) return;
     const er = el.getBoundingClientRect(), rr = row.getBoundingClientRect();
     if (rr.top < er.top || rr.bottom > er.bottom) row.scrollIntoView({ block: "center" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only: restore the scroll once when the list mounts, not as rows move
   }, []);
 
   return (
@@ -147,6 +151,10 @@ export function LauncherScreen(p: LauncherProps) {
             explain mode every button is intercepted, and a container control
             that explained itself instead of opening would put the explain
             toggle it holds out of reach. The items inside stay explainable. */}
+        {/* Explain mode is global — the same `?` the session header carries,
+            ON the bar (it was inside the menu) so the two screens match, and
+            gone from both once the one-time ask is answered "remove it". */}
+        <HintToggle compact />
         <button className={`key nav-key${navMenu ? " on" : ""}`} data-nohint
           aria-label="menu" aria-expanded={navMenu}
           title={`menu — new, pad, activity, search, files, downloads, archive, logs, local/external${tab === "external" ? "\nshowing: external processes" : ""}`}
@@ -177,14 +185,13 @@ export function LauncherScreen(p: LauncherProps) {
             </span>
           )}
           {/* The counts follow their buttons in: a badge that only exists
-              while the menu is open is a badge nobody sees. */}
-          {activityBadge > 0 && <span className="mic-badge">{activityBadge}</span>}
+              while the menu is open is a badge nobody sees. Summed over every
+              counted line inside (activity, apps ready, extension items); the
+              inventories (local/external, files on the phone) are not news. */}
+          <LauncherMenuBadge base={activityBadge + (nativeInstallSupported() ? appsReady : 0)} />
         </button>
         {navMenu && (
           <div className="row-more nav-more">
-            {/* Explain mode is global — one entry point on each of the two bars
-                that stay on screen whatever sheet is open. */}
-            <HintToggle />
             {isNativeShell() && <HostMenuItem size={ICON} onOpen={() => setNavMenu(false)} />}
             <button className="more-act" onClick={() => { setNavMenu(false); setOverlay("new"); }}><Plus size={ICON} />new</button>
             <button className="more-act" title="prompt pad — write a thought now, decide where it goes later"
@@ -282,32 +289,29 @@ export function LauncherScreen(p: LauncherProps) {
               onClick={() => { setNavMenu(false); setTab("external"); }}>
               <TerminalIcon size={ICON} />external {visibleExternal.length ? `(${visibleExternal.length})` : ""}
             </button>
+            {/* What extensions put on the home menu (Desktop, Links, Vault). None ⇒ nothing drawn. */}
+            <LauncherItems size={ICON} onOpen={() => setNavMenu(false)} />
           </div>
         )}
-        <button
-          className={`key usage-key ${(usage?.sessionPct ?? 0) >= 80 || (usage?.weeklyPct ?? 0) >= 80 ? "danger" : ""}`}
-          title={`${usageTitle(usage)}\ntap for both windows, their reset times and the token history`}
-          onClick={() => { track("overlay:tokens"); setOverlay("tokens"); }}
-        >
-          {/* Both windows: the 5-hour one paces the next hour, the weekly one
-              is what actually strands you for days — showing only the former
-              hid a 90% week behind a comfortable-looking 11%. */}
-          <Gauge size={ICON} />
-          <span className={(usage?.sessionPct ?? 0) >= 80 ? "usage-hot" : ""}>{usage?.sessionPct != null ? `${usage.sessionPct}%` : "?"}</span>
-          {/* The number alone doesn't say whether to wait or to stop: the
-              5-hour window's reset is the one you can actually sit out, so it
-              rides on the chip — right after THAT number, never after "wk",
-              where it read as the week's — and the weekly one stays in the
-              tooltip. */}
-          {usage?.sessionResetAt != null && (
-            <span className="usage-unit usage-reset"><Clock size={11} /> {hhmm(usage.sessionResetAt)}</span>
-          )}
-          <span className="usage-sep">/</span>
-          <span className={(usage?.weeklyPct ?? 0) >= 80 ? "usage-hot" : ""}>{usage?.weeklyPct != null ? `${usage.weeklyPct}%` : "?"}</span>
-          <span className="usage-unit">wk</span>
-        </button>
+        {face.kind === "windows" ? (
+          <UsageChip sessions={sessions} />
+        ) : (
+          /* An account with no 5-hour or weekly window: dollars for its period, or the gauge alone
+             (a door into token statistics) when none is measured — never a `?`. */
+          <button
+            className={`key usage-key ${face.kind === "usd" && face.chip.hot ? "danger" : ""}`}
+            aria-label={face.kind === "usd" ? face.chip.text : "token statistics"}
+            title={`${face.kind === "usd" ? face.chip.title : "Spend on this desktop"}\ntap for the token history`}
+            onClick={() => { track("overlay:tokens"); setOverlay("tokens"); }}
+          >
+            <Gauge size={ICON} />
+            {face.kind === "usd" && <span className={face.chip.hot ? "usage-hot" : ""}>{face.chip.text}</span>}
+          </button>
+        )}
         {/* The unprompted mark for Decision 8 — why it is here: features/cliHealth. */}
         <CliHealthChip />
+        {/* An extension item with something waiting (the vault's asks), out of the ☰ menu while it waits. */}
+        <LauncherItemKeys size={ICON} />
         <button className="key notif-btn" title="notifications" onClick={openNotifs}>
           <Bell size={ICON} />{unreadNotifs > 0 && <span className="notif-badge">{badgeText(unreadNotifs)}</span>}
         </button>
@@ -317,6 +321,10 @@ export function LauncherScreen(p: LauncherProps) {
           title="settings — notifications, launch defaults, plugins, tools"
           onClick={() => setOverlay("settings")}
         ><Settings size={ICON} /></button>
+        {/* With a second desktop saved, which one this is becomes a reading
+            and switching a habit: a split key — toggle to the next desktop /
+            open the switcher — sized to fit beside the cog. One host ⇒ none. */}
+        <HostSwitchKey />
         {/* No connection readout here. "open · 100.x.y.z" was a permanent
             green label restating what the net-pulse strip already shows live
             and what the floating `conn-banner` says the moment it stops being
@@ -360,7 +368,7 @@ export function LauncherScreen(p: LauncherProps) {
           {/* A host that has never opened a session: three ways in (features/onboard). */}
           <FirstRunCard repos={repos.length} demo={isDemo()} onDemo={() => enterDemo("first-look")} />
           {repoGroups.length > 0 && (
-            <div className="section section-head">
+            <div className="section section-head launcher-head">
               {/* One head for one list. It used to say "Live sessions" and a
                   second head further down said "Repos & worktrees"; the age of
                   the repo listing was stated there, and it is stated here now
@@ -432,6 +440,16 @@ export function LauncherScreen(p: LauncherProps) {
                   <Star size={13} fill="currentColor" />{starredTotal}
                 </button>
               )}
+              {flaggedTotal && (
+                // The follow-up flags, beside the star they sit beside on
+                // every row: the tap is the cut (R-sessions-045), coloured by
+                // who set them, or the text colour when that is several.
+                <button className={`repo-group-stat fu-${flaggedTotal.tone}${statusFilterActive("followup") ? " on" : ""}`}
+                  data-hint="session.followup" title={flaggedChipTitle(flaggedTotal.n)}
+                  onClick={() => toggleStatusFilter("followup")}>
+                  <Flag size={13} fill="currentColor" />{flaggedTotal.n}
+                </button>
+              )}
               {shellsTotal > 0 && (
                 // Sessions running background shells — a session with only
                 // quiet ones reads `done` (`sessionStatus`), so this is its
@@ -444,14 +462,17 @@ export function LauncherScreen(p: LauncherProps) {
                 </button>
               )}
               {sessionOrder.length > 0 && <button className="head-act" aria-label="reset order" title="reset order — drop the custom order and go back to creation order" onClick={() => { track("action:session.order.reset"); resetSessionOrder(); showToast("order reset to oldest-first"); }}><ListRestart size={ICON} /></button>}
-              <button className="head-act"
-                aria-label={allReposCollapsed ? "expand all repo groups" : "collapse all repo groups"}
-                title={allReposCollapsed ? "expand all — every repo group opens" : "collapse all — headers stay, session and worktree rows hide"}
-                onClick={() => {
-                  track(allReposCollapsed ? "action:repo.expand.all" : "action:repo.collapse.all");
-                  persistCollapsedRepos(allReposCollapsed ? new Set() : new Set(repoGroups.map((g) => g.repoName)));
-                }}>
-                {allReposCollapsed ? <ChevronsUpDown size={ICON} /> : <ChevronsDownUp size={ICON} />}
+              {/* Two verbs, not one toggle: a single icon that flips between
+                  ⇕ and ⇳ read as one control with a state nobody could see. */}
+              <button className="head-act" aria-label="expand all repo groups"
+                title={noRepoCollapsed ? "expand all — every repo group is already open" : "expand all — every repo group opens"}
+                onClick={() => { track("action:repo.expand.all"); persistCollapsedRepos(new Set()); }}>
+                <ChevronsUpDown size={ICON} />
+              </button>
+              <button className="head-act" aria-label="collapse all repo groups"
+                title={allReposCollapsed ? "collapse all — every repo group is already folded" : "collapse all — headers stay, session and worktree rows hide"}
+                onClick={() => { track("action:repo.collapse.all"); persistCollapsedRepos(new Set(repoGroups.map((g) => g.repoName))); }}>
+                <ChevronsDownUp size={ICON} />
               </button>
               {/* The three verbs that are about the SET of repos, not one of
                   them — they headed the repos section that this list absorbed,
@@ -484,6 +505,26 @@ export function LauncherScreen(p: LauncherProps) {
               </span>
             </div>
           )}
+          {(repoGroups.length > 0 || textOn) && (
+            // The quick filter: always on screen, filters the rows by what they
+            // SHOW. Searching what the sessions SAID is the search sheet,
+            // one tap at its end — the two searches side by side.
+            <div className="section quick-filter">
+              <Search size={14} className="quick-filter-icon" />
+              <input type="search" value={textQuery} placeholder="filter sessions & repos"
+                aria-label="filter sessions and repos by the text on their rows"
+                onChange={(e) => setTextQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Escape" && textQuery) { e.preventDefault(); e.stopPropagation(); setTextQuery(""); } }} />
+              {textOn && <span className="quick-filter-n">{shownSessions.length} of {sortedSessions.length}</span>}
+              {textOn && (
+                <button className="head-act" aria-label="clear the filter" title="clear the filter — every row again"
+                  onClick={() => setTextQuery("")}><X size={ICON} /></button>
+              )}
+              <button className="head-act" aria-label="search what sessions said"
+                title="search what the sessions SAID — every transcript, on the desktop"
+                onClick={() => { track("action:launcher.search"); openSearch(null); }}><ScrollText size={ICON} /></button>
+            </div>
+          )}
           {statusFilter && (
             // Says what is being hidden and why, because the alternative
             // reading of a short list is "my sessions are gone". Counts come
@@ -495,6 +536,7 @@ export function LauncherScreen(p: LauncherProps) {
                   ? <>{" · "}{m.worktreesOf(statusFilter.repo).length} worktree{m.worktreesOf(statusFilter.repo).length === 1 ? "" : "s"}, {shownSessions.length} of {sortedSessions.length} sessions</>
                   : <>{" · "}{shownSessions.length} of {sortedSessions.length}</>}
                 {shownSessions.length === 0 && statusFilter.status !== "worktrees" && (statusFilter.status === "starred" ? " — nothing is starred any more"
+                  : statusFilter.status === "followup" ? " — nothing is flagged any more"
                   : statusFilter.status === "shells" ? " — no session is running one any more"
                   : " — nothing is in that state any more")}
               </span>
@@ -506,6 +548,7 @@ export function LauncherScreen(p: LauncherProps) {
             <RepoGroup key={`g:${repoName}`} p={p} m={m} repoName={repoName} sessions={groupSessions} />
           ))}
           {repos.length === 0 && <Empty>No repos under host root.</Empty>}
+          {textOn && repoGroups.length === 0 && <Empty>No session or repo shows “{textQuery.trim()}”. The search at the end of the filter looks through what sessions said.</Empty>}
 
           <ClosedRows p={p} m={m} />
         </div>
@@ -552,6 +595,8 @@ export function LauncherScreen(p: LauncherProps) {
         </div>
       )}
       <NetActivity />
+      {/* The demo's first cue (features/demoTour): nothing outside the demo's first minute. */}
+      <DemoStartCue />
     </div>
   );
 }

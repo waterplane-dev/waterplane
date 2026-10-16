@@ -209,5 +209,6 @@ export const claudeLocalBackend: BackendDescriptor = {
     remoteControl: false,
   },
   models,
+  localRunner: "ollama",
   healthScope: false,
 };

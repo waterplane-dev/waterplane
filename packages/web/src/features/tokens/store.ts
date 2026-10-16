@@ -5,9 +5,9 @@
  * Only the reading lives here. The usage BUDGET (`budget.state`) stays in App:
  * its handler flushes the send queue when the gate lifts, and the queue is App's.
  */
-import type { UsageInfo } from "@waterplane/shared";
-import { createStore, useStore } from "../../sdk";
-import { weekCalKey } from "./logic";
+import type { BillingStatus, UsageInfo, UsageReading, UsageSourceId } from "@waterplane/shared";
+import { core, createStore, useCore, useStore } from "../../sdk";
+import { usageFace, weekCalKey, type UsageFace } from "./logic";
 
 export const usage = createStore<UsageInfo | null>(null);
 
@@ -46,4 +46,48 @@ export function useWeekIncl(): string | null {
   const r = useStore(weekRate);
   if (!r?.incl || !u || weekCalKey(u, Date.now()) == null) return null;
   return Math.abs(r.resetAt - u.weeklyResetAt!) < SAME_WEEK_MS ? r.incl : null;
+}
+
+/** Which billing profile the desktop reports (`billing.status`); null until it does. ONE writer: that handler. */
+export const billing = createStore<BillingStatus | null>(null);
+
+/**
+ * One reading per usage SOURCE that has something to say (claude, copilot, a
+ * plugin's own) — `usage.status`'s `readings`, or claude's derived from `usage`
+ * when the host is older. ONE writer: this feature's `usage.status` handler
+ * (cleared by `welcome`). `usage` above stays the claude scrape the decisions read.
+ */
+export const readings = createStore<UsageReading[]>([]);
+
+export const useUsageReadings = (): UsageReading[] => useStore(readings);
+
+/**
+ * Which source the token statistics should open on — set by a tap on a chip
+ * segment, read and cleared by the token-stats sheet. Null = no filter: the
+ * sheet opens as it always has. Writers: `openTokensOn` and `clearTokensOn`.
+ */
+export const tokensOpenOn = createStore<UsageSourceId | null>(null);
+
+export const useTokensOpenOn = (): UsageSourceId | null => useStore(tokensOpenOn);
+
+/** Snapshot reads for `core().world` (App re-renders with every `usage.status`, so a getter there is fresh). */
+export const readingsNow = (): UsageReading[] => readings.get();
+export const tokensOpenOnNow = (): UsageSourceId | null => tokensOpenOn.get();
+
+/** A tap on a usage segment: remember the source (null = nothing to filter), then open the screen. */
+export function openTokensOn(source: UsageSourceId | null): void {
+  tokensOpenOn.set(source);
+  core().nav.open("tokens");
+}
+
+/** The sheet's `all` button, and its close. */
+export const clearTokensOn = (): void => tokensOpenOn.set(null);
+
+export const useBilling =(): BillingStatus | null => useStore(billing);
+
+/** What the launcher and session chips draw (`usageFace`): the budget and its periods are the queue's, read through the core. */
+export function useUsageFace(): UsageFace {
+  const status = useStore(billing);
+  const budget = useCore().world.budget;
+  return usageFace(status, budget, Date.now());
 }

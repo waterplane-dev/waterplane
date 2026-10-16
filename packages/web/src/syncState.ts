@@ -243,10 +243,18 @@ export function queueSync(o: {
  * same ten lines of prose ten times over.
  *
  * The sentence still exists: it is the chip's `title`, and on the screens that
- * have room `SyncMark` prints it. What a row cannot do is say nothing in the
+ * have room `SyncMark` prints it. What a LIST cannot do is say nothing in the
  * good case — that silence is the entire complaint this whole file answers, and
  * a list is exactly where it bit: a schedule that had reached the desktop and
  * one that was stuck in a phone rendered identically.
+ *
+ * Saying it on EVERY row was the other failure: ten cards each wearing "on
+ * desktop" is one fact printed ten times, and a chip that never changes is a
+ * chip the eye stops reading — so the one row NOT on the desktop looked like the
+ * rest. A list may therefore say the good case ONCE, at its head
+ * (`syncSummary`), and a row then wears a chip only when it is the exception
+ * (`rowChipWord(phase, true)`). Never silence on both: a list that drops the
+ * row's green chip must draw the head.
  */
 export function syncChipWord(phase: SyncPhase): string | null {
   switch (phase) {
@@ -257,6 +265,43 @@ export function syncChipWord(phase: SyncPhase): string | null {
     case "failed": return "not sent";
     default: return null;
   }
+}
+
+/**
+ * A row's chip word on a list whose HEAD already says the good case
+ * (`saidAbove`): the exceptions only. Without `saidAbove` it is
+ * `syncChipWord`, unchanged — a list with no head summary keeps its green
+ * chips, because a row may never be silent about where it is.
+ */
+export function rowChipWord(phase: SyncPhase, saidAbove = false): string | null {
+  return saidAbove && phase === "synced" ? null : syncChipWord(phase);
+}
+
+/**
+ * The good case of a whole list, said once at its head — what lets its rows
+ * drop the green chip (`rowChipWord(phase, true)`).
+ *
+ * The word is `syncChipWord("synced")`: the same claim at a third size. It says
+ * a bare "on desktop" only when EVERY row with an answer is there; otherwise it
+ * COUNTS ("3 of 4 on desktop"), because a bare "on desktop" over a list holding
+ * one queued row is the green light this file was written to retire — the
+ * exception still wears its own chip below. `unknown` rows are counted neither
+ * way (no honest answer, so no claim), and with no synced row at all the head
+ * says nothing: the rows' own chips are then the whole story.
+ */
+export function syncSummary(phases: readonly SyncPhase[]): { word: string; title: string } | null {
+  const known = phases.filter((p) => p !== "unknown").length;
+  const synced = phases.filter((p) => p === "synced").length;
+  if (synced === 0) return null;
+  const on = syncChipWord("synced")!;
+  const all = synced === known;
+  const rows = all
+    ? known === 1 ? "the one row here" : `all ${known} rows here`
+    : `${synced} of the ${known} rows here`;
+  return {
+    word: all ? on : `${synced} of ${known} ${on}`,
+    title: syncSentence({ phase: "synced", wroteAt: null, ackedAt: null }, rows, all ? known !== 1 : synced !== 1)!,
+  };
 }
 
 /**

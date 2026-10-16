@@ -238,6 +238,7 @@ function knownPaths(row) {
     if (typeof p === "string" && p.includes("/")) out.add(p.split("#")[0]);
   };
   for (const p of row?.untested?.value ?? []) add(p);
+  for (const p of row?.untested?.unnamed ?? []) add(p);
   for (const e of deadExportEntries(row) ?? []) add(e);
   for (const t of row?.classics?.value?.tape ?? []) add(t?.path);
   for (const h of row?.cochange?.value?.hotspots ?? []) add(h?.path);
@@ -549,7 +550,7 @@ function pairEvents(a, b, prereg) {
 }
 
 /**
- * A module that a test used to name and none names today.
+ * A module that a test used to reach and none reaches today.
  *
  * The old sentence was "N modules no test names any more", and it was false on
  * nearly every line it printed: those modules were new files nothing had ever
@@ -577,9 +578,9 @@ function untestedEvents(a, b) {
       "untested",
       lost.join("|"),
       b,
-      `${list3(lost)} ${lost.length === 1 ? "was" : "were"} named by a test on ${a.day} and ${
+      `${list3(lost)} ${lost.length === 1 ? "was" : "were"} reached by a test on ${a.day} and ${
         lost.length === 1 ? "is" : "are"
-      } named by none today — ${nf(bv.length)}${denominator} modules are unmentioned, ${nf(av.length)} on ${a.day}.`,
+      } reached by none today — ${nf(bv.length)}${denominator} modules are unreached, ${nf(av.length)} on ${a.day}.`,
     ),
   ];
 }
@@ -609,7 +610,7 @@ function seriesEvents(a, b, i, windowFor, readRank, prereg) {
       typeof av === "number" && Number.isFinite(av)
         ? `was ${withUnit(av, s.unit)} on ${a.day}`
         : `no reading on ${a.day}, so ${nf(rb.n)} of the last ${nf(prereg.RANK_WINDOW_DAYS)} readings carry one`;
-    const detail = s.detail ? s.detail(b, prereg) : "";
+    const detail = s.detail ? s.detail(b, prereg, a) : "";
 
     const qb = quartile(rb.rank);
     const qa = quartile(ra.rank);

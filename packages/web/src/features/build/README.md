@@ -1,6 +1,8 @@
 # build
 
-Build buttons: a repo's sessionless build commands (`.waterplane/builds.json` on the desktop), the runs
+Build buttons: a repo's sessionless build commands (`.waterplane-shared/builds.json`, committed so every checkout
+has them, plus this desktop's own overrides in `.waterplane/builds.json` — `build.list`'s `localIds` says
+which is which, `build.save`'s `local` puts them back), the runs
 they start and the output they stream. Reached from a repo row's `⋯ → build`, the launcher repo
 header's hammer and the `build` toolbar item; the sheet itself is the flat `BuildSheet.tsx`, whose
 rules are in the `web-work` skill (three answers to an empty field, a tap that FILLS and never

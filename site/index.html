@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>waterplane: drive Claude Code on your desktop from your phone</title>
+<meta name="description" content="waterplane drives the real Claude Code CLI on your own desktop from your phone, over Tailscale, with files, diffs, builds, screenshots, a queue and what every turn costs around it.">
+<meta name="theme-color" content="#eef1f6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
+<meta property="og:title" content="waterplane">
+<meta property="og:description" content="The real Claude Code CLI on your desktop, driven from your phone over Tailscale.">
+<meta property="og:image" content="https://waterplane.dev/assets/og.png">
+<meta property="og:image:width" content="1600">
+<meta property="og:image:height" content="900">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:url" content="https://waterplane.dev/">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <img src="assets/icon.svg" width="28" height="28" alt="">
+  <a class="wordmark" href="./">waterplane<span>_</span></a>
+</header>
+
+<!--
+  Every section below is GENERATED from README.md: edit the README, then `npm run site`.
+  The README marks what appears here with "site:NAME" comment pairs; tools/site.test.mjs
+  fails when this page is behind it. Only the order of the slots, and what is outside
+  them, is written here. How it works: scripts/site/site-lib.mjs.
+-->
+<main>
+
+<!-- readme:intro -->
+<section class="row hero" id="intro">
+  <div class="text">
+<h1>An IDE, rethought for the phone in the age of agentic coding.</h1>
+<p class="lede">The agent writes the code; what you need in your hand is the steering. waterplane drives the real Claude Code CLI on your own desktop, from the next room or, over Tailscale, from anywhere, and puts the workbench around it: files and diffs, commits and builds, the screenshots it makes, a queue and a schedule, and what every turn costs. And it is made to be customized: a plugin adds the button, switch or status line your way of working needs.</p>
+<p class="links"><a href="https://waterplane-dev.github.io/demo/">Try the demo</a><span class="sep">·</span><a href="#install">Install</a><span class="sep">·</span><a href="#how-it-compares">How it compares</a><span class="sep">·</span><a href="https://github.com/waterplane-dev/waterplane/blob/main/SECURITY.md">Security</a><span class="sep">·</span><a href="https://github.com/waterplane-dev/waterplane/blob/main/LICENSE">MIT</a><span class="sep">·</span>macOS, Linux, Windows via WSL2<span class="sep">·</span>Android app or web app, no iOS app yet</p>
+  </div>
+  <figure class="phone"><img src="assets/first-look.gif" width="540" height="1280" fetchpriority="high" alt="A session starts from the phone; Claude Code on the desktop builds the app and screenshots it in the iOS simulator and the Android emulator; the two screenshots are combined, the clipped Android button circled and sent back; Claude fixes it, re-checks both, and the debug APK arrives as a download for the real phone"></figure>
+</section>
+<!-- /readme:intro -->
+
+<!-- readme:how-it-works -->
+<section class="row" id="how-it-works">
+  <div class="text">
+<h2>How it works</h2>
+<figure class="diagram"><img src="assets/flow.svg" width="900" height="640" loading="lazy" alt="Your phone talks to your own desktop over Tailscale: the waterplane daemon runs the real claude CLI in a terminal on your repos and streams the screen back; screenshots arrive as images, a scheduled job fires while the phone sleeps, and a push wakes it when the job is done"></figure>
+<p>A small Node daemon on your machine spawns the real <code>claude</code> binary in a pseudo-terminal and bridges it to a phone app (a web app you add to the home screen, or an Android app). Because it drives the actual binary rather than re-implementing it, every slash command, <code>/btw</code>, the context meter, plan and trust prompts and <code>--continue</code> work as they do at the desk. It drives Claude Code first and foremost (opencode support is experimental). The packages and the plugin mechanism: <a href="https://github.com/waterplane-dev/waterplane/blob/main/docs/notes/architecture.md">docs/notes/architecture.md</a>.</p>
+  </div>
+</section>
+<!-- /readme:how-it-works -->
+
+<!-- readme:outbox -->
+<section class="row" id="what-claude-made-on-your-phone">
+  <div class="text">
+<h2>What Claude made, on your phone</h2>
+<p>What Claude leaves in <code>.claude/outbox/</code> appears on the phone as a picture or a file, with a badge on the repo and a notification. Open it full size, draw a circle or a box on it, type what to change, and the marked-up image goes back into the prompt (it lands in <code>.claude/inbox/</code>). Swipe a highlighter over a line of text in a screenshot and, if you have set a Gemini key, the words are read out of the crop so the prompt carries them verbatim.</p>
+  </div>
+  <figure class="phone"><img src="assets/gallery-and-files.png" width="896" height="1282" loading="lazy" alt="The gallery lists what Claude left in the outbox: a markdown file, a live HTML page and a screenshot open on the phone"></figure>
+</section>
+<!-- /readme:outbox -->
+
+<!-- readme:limit -->
+<section class="row" id="when-the-usage-limit-hits-it-carries-on">
+  <div class="text">
+<h2>When the usage limit hits, it carries on</h2>
+<p>When a session hits a Claude usage limit, the host notices, waits for the reset and continues it, reopening the conversation with <code>--continue</code> if the CLI exited. Bounded retries, and an off switch per session and for the desktop. To stop before the wall instead, give a session a budget (tokens, dollars, or a share of the 5-hour or weekly window): the next send is held when it is reached, with your words kept and the reason said.</p>
+  </div>
+  <figure class="phone"><img src="assets/limit-and-budget.gif" width="540" height="1280" loading="lazy" alt="Claude stops at the 5-hour usage wall; at the reset waterplane types continue and the turn finishes"></figure>
+</section>
+<!-- /readme:limit -->
+
+<!-- readme:queue -->
+<section class="row" id="queue-it-now-or-schedule-it-against-the-usage-windows">
+  <div class="text">
+<h2>Queue it now, or schedule it against the usage windows</h2>
+<p>A prompt sent while you are offline or while the session is busy waits in a queue and is typed in exactly once. Or post a prompt for later: at a time, when the session goes quiet, after another one finishes, or anchored to a usage-limit reset ("right after the weekly window comes back", "two hours before the reset, spend what is left"). The Backlog holds a repo's work that nobody has started.</p>
+  </div>
+  <figure class="phone"><img src="assets/queue-and-schedule.gif" width="540" height="1280" loading="lazy" alt="A prompt queued behind a running turn starts by itself when the turn ends; schedules wait for a time or for the weekly window"></figure>
+</section>
+<!-- /readme:queue -->
+
+<!-- readme:cost -->
+<section class="row" id="know-what-it-costs">
+  <div class="text">
+<h2>Know what it costs</h2>
+<p>Every finished turn says what it cost: tokens in, out and cached, and dollars at list price, plus what the <em>next</em> turn will cost compared with a fresh session. The token ledger splits every total by day, repo and model; the header carries the 5-hour and weekly usage windows with their resets; each session has a context sheet showing how full the window was over time and where it compacted. A per-repo check weighs <code>CLAUDE.md</code> and skill descriptions, the part every turn pays for again. All read off the CLI's own logs and screens; where there is nothing to read, nothing is shown rather than a guess.</p>
+  </div>
+  <figure class="phone"><img src="assets/numbers.gif" width="420" height="996" loading="lazy" alt="A week of heavy use priced at API list price, what drives the cost, and when a fresh session would be cheaper"></figure>
+</section>
+<!-- /readme:cost -->
+
+<!-- readme:health -->
+<section class="row" id="repo-health-so-the-vibe-coding-stays-maintainable">
+  <div class="text">
+<h2>Repo health, so the vibe coding stays maintainable</h2>
+<p>Vibe coding drifts into a mess quietly: a <code>CLAUDE.md</code> that only ever grows, a file that passes a thousand lines, the same three files edited on every turn. Each of those makes every later request cost more, because every turn pays to read them again. A repo's health tiles track, commit by commit: the p95 file length, how often the same files are touched again, escape hatches (suppressions such as <code>eslint-disable</code> or <code>as any</code>), untested modules and the <code>CLAUDE.md</code> weight, each with its trend, so you see the drift while it is small and keep the per-request cost flat. The numbers are only readings: nothing changes code on its own.</p>
+  </div>
+</section>
+<!-- /readme:health -->
+
+<!-- readme:plugins -->
+<section class="row" id="your-own-buttons-plugins">
+  <div class="text">
+<h2>Your own buttons: plugins</h2>
+<p>When the built-in buttons do not fit how you work, add your own. A plugin is a small folder outside this repo (<code>~/.config/waterplane/plugins/</code>) with a manifest and a <code>host.mjs</code>; it declares action buttons (in its Settings section or a session's menu), settings fields, per-session switches, a badge or a status line, and the app draws them with its own components. No fork, no core edit, and it keeps pulling upstream. How to install one, the template to start from and the list of plugins: <a href="https://github.com/waterplane-dev/waterplane/blob/main/docs/plugins.md">docs/plugins.md</a>; every published plugin is under the <a href="https://github.com/topics/waterplane-plugin"><code>waterplane-plugin</code> topic</a>. The contract: <a href="https://github.com/waterplane-dev/waterplane/blob/main/docs/plugins-api.md">docs/plugins-api.md</a>; why it is shaped this way: <a href="https://github.com/waterplane-dev/waterplane/blob/main/docs/notes/plugins.md">docs/notes/plugins.md</a>.</p>
+  </div>
+</section>
+<!-- /readme:plugins -->
+
+<!-- readme:apk -->
+<section class="row" id="build-an-apk-and-other-phones-install-it-by-themselves">
+  <div class="text">
+<h2>Build an APK, and other phones install it by themselves</h2>
+<p><em>Android app developers only (optional).</em></p>
+<p>Save a build command per repo and run it from the phone without a Claude session, so it spends no tokens; it is the way out when you are rate limited and still need a build. Produced files are detected and downloadable. With the developer build of the Android app, a phone you opt in installs each new APK of your app by itself.</p>
+  </div>
+  <figure class="phone"><img src="assets/apk-install.png" width="768" height="1002" loading="lazy" alt="Phone one circles a spot on a screenshot of the app, Claude Code adds a logo there, the build runs, phone two's notifications say the build succeeded and the update is ready to install, one tap on Install updates it, and it opens with the logo in the circled spot"></figure>
+</section>
+<!-- /readme:apk -->
+
+<!-- readme:install -->
+<section class="row" id="install">
+  <div class="text">
+<h2>Install</h2>
+<div class="note">
+<p><strong>Read this before you install it.</strong></p>
+<p>The daemon spawns <code>claude</code>, which can <strong>read, edit, and execute files</strong> on your machine. There is <strong>no app-level login by default</strong>: the security boundary is the network. Anyone who can reach the daemon can, in effect, use your computer.</p>
+<p>By default it binds only <strong>loopback and your Tailscale IP</strong>, and refuses to bind LAN or public addresses unless you explicitly set <code>WATERPLANE_ALLOW_PUBLIC=1</code> (which then requires a password for LAN devices). Keep it that way. Point it only at code you trust. <a href="https://github.com/waterplane-dev/waterplane/blob/main/SECURITY.md">SECURITY.md</a> has the full threat model, and <a href="https://github.com/waterplane-dev/waterplane/blob/main/DISCLAIMER.md">DISCLAIMER.md</a> covers what else you are agreeing to: arbitrary code execution, what leaves the machine when you pick a hosted model, and what a free tier is actually paid with.</p>
+</div>
+<div class="note">
+<p><strong>Unofficial.</strong></p>
+<p>Not affiliated with, endorsed by, or supported by Anthropic. This project ships no Anthropic code: it invokes the <code>claude</code> CLI you installed and are logged into. It works by wrapping that CLI's terminal, which means it reads TUI output with regexes and uses flags that <strong>change between Claude Code versions</strong>. Expect it to need updates when <code>claude</code> updates. Currently tested against <code>claude</code> <strong>2.1.x</strong>.</p>
+<p>You use your own account, under your provider's terms. Queued, scheduled and resumed-after-limit runs start sessions without you at the keyboard; whether your plan allows that is between you and the provider — see <a href="https://github.com/waterplane-dev/waterplane/blob/main/DISCLAIMER.md#7-your-providers-terms-are-yours-to-keep">DISCLAIMER.md</a>.</p>
+<p>Claude and Claude Code are trademarks of Anthropic, used here only to name the CLI waterplane drives. waterplane is unrelated to any organisation of a similar name.</p>
+</div>
+<p>You need:</p>
+<ul>
+  <li><strong><a href="https://claude.com/claude-code">Claude Code</a> installed and signed in.</strong> Run <code>claude</code> once in a terminal and complete the login first.</li>
+  <li><strong>A way for the phone to reach the desktop.</strong> Recommended: <strong><a href="https://tailscale.com">Tailscale</a></strong> on both, on the same tailnet. It works from anywhere, its device sign-in is the gate, and its HTTPS gives the phone push, install and clipboard. From the same Wi-Fi or over a VPN of your own, a password does the gating instead: <a href="https://github.com/waterplane-dev/waterplane/blob/main/docs/install.md#without-tailscale-same-wi-fi-or-your-own-vpn">without Tailscale</a>. With neither, the daemon binds loopback only and is reachable just from the desktop.</li>
+  <li><strong>tmux</strong> 3.3 or newer. Every session runs inside it so it survives a host restart; the installer offers to install it.</li>
+  <li><strong>Node ≥ 20.12</strong> for a source checkout. The installer brings its own.</li>
+</ul>
+<p>The installer (macOS, Linux, WSL2) brings its own pinned Node, verifies checksums, and adds a <code>waterplane</code> command with <code>start</code>, <code>doctor</code>, <code>service</code>, <code>update</code> and <code>pair</code>:</p>
+<pre><code>curl -fsSL https://github.com/waterplane-dev/waterplane/releases/latest/download/install.sh | sh</code></pre>
+<p>Or from source (the doctor builds what it checks, so it runs before the build):</p>
+<pre><code>git clone https://github.com/waterplane-dev/waterplane.git
+cd waterplane
+npm ci             # installs the lockfile exactly; runs no dependency install scripts
+npm run doctor     # checks claude login, node-pty, tmux, Tailscale, HTTPS, port
+npm run build
+npm start</code></pre>
+<p><code>npm run doctor</code> (or <code>waterplane doctor</code>) is the first thing to re-run when something misbehaves: it names what is wrong and what to type. The host lists the git repos under <code>~/dev</code> (or <code>WATERPLANE_ROOT</code>; the doctor says which folder) and prints its address. Plain <code>http://100.x.y.z:8770</code> works for a first look; for install, push and clipboard on the phone, enable HTTPS + MagicDNS in the tailnet admin console once, then open <code>https://&lt;machine&gt;.&lt;tailnet&gt;.ts.net</code>:</p>
+<pre><code>tailscale serve --bg --https=443 http://127.0.0.1:8770</code></pre>
+<p>Or use the Android app, which needs no HTTPS: the APK is on the <a href="https://github.com/waterplane-dev/waterplane/releases/latest">latest release</a>.</p>
+<p>Windows, Docker, agent install, notifications, a second phone or desktop, the background service, updating and every environment variable: <a href="https://github.com/waterplane-dev/waterplane/blob/main/docs/install.md">docs/install.md</a>.</p>
+  </div>
+  <figure class="phone"><img src="assets/setup.gif" width="540" height="1280" loading="lazy" alt="The desktop builds and starts the host; on the phone the app lists the repo, + now starts claude in it, and its trust question is answered with a tap"></figure>
+</section>
+<!-- /readme:install -->
+
+<!-- readme:compare -->
+<section class="row" id="how-it-compares">
+  <div class="text">
+<h2>How it compares</h2>
+<p>Anthropic's own Remote Control now drives a local Claude Code session from the Claude app, and Happy, Paseo and Orca put coding agents on a phone too. Reaching your agent from a phone is not what is different here. What is: the real terminal plus a reader, no vendor or relay in the path, the build and artifact loop back to the phone (marked-up screenshots into the prompt, verified simulator and device screenshots, APKs onto your own phone), schedules against usage windows with an exactly-once queue, token and cost history with the next turn's price, repo health that keeps that price flat, and plugins for the buttons nobody else ships.</p>
+<p>Nor is it a chat agent. OpenClaw and similar assistants can run Claude Code for you headless and report back in a message, which is enough for "go do X". waterplane is the more comfortable path, with more control where you want it: drive the session yourself (the live terminal, the boxes it asks, the diff before the commit) or leave it to the queue and the schedule. And because every turn's cost is in front of you, it is where you save tokens, time and money when you want to.</p>
+<p>It is not either/or with Remote Control. Turn on the launch option "Remote Control" and every session waterplane starts is also reachable from the Claude app: waterplane to start sessions on any repo, read, build and schedule; the Claude app for a quick look when it is the app already open.</p>
+<p>The short table is <a href="https://github.com/waterplane-dev/waterplane/blob/main/docs/notes/compare-table.md">docs/notes/compare-table.md</a>; the long, cited version is <a href="https://github.com/waterplane-dev/waterplane/blob/main/docs/notes/vs-competitors.md">docs/notes/vs-competitors.md</a>. Where waterplane loses, plainly:</p>
+<ul>
+  <li><strong>No native iOS app yet.</strong> iPhone gets the web app (not yet tested on a real iPhone); Android gets a native app as well.</li>
+  <li><strong>One user.</strong> No team, no shared sessions.</li>
+  <li><strong>Away from home it needs a tailnet, or a VPN of your own.</strong> Tailscale is the recommended path and the one the setup assumes; the same Wi-Fi works with a password, minus push and install.</li>
+  <li><strong>Anthropic ships more of the phone surface every release</strong>, and the TUI it reads can change.</li>
+</ul>
+  </div>
+</section>
+<!-- /readme:compare -->
+
+</main>
+
+<footer>
+  <p>We built waterplane to work on our own repos away from the desk. MIT licensed.</p>
+  <p><a href="privacy.html">Privacy</a><span class="sep"> · </span>Claude and Claude Code are
+  trademarks of Anthropic, used here only to name the CLI waterplane drives.</p>
+</footer>
+
+</div>
+</body>
+</html>

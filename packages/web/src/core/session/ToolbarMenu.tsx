@@ -9,19 +9,25 @@
  * (`featureToolbarItem` — `plugins` is one), and the generic labelled button.
  */
 import { Fragment, type ReactNode } from "react";
-import { FileDiff, RotateCw, Settings, Smartphone, Star, type LucideIcon } from "lucide-react";
+import { FileDiff, RotateCw, Settings, Smartphone, Star } from "lucide-react";
 import type { RepoTarget, SessionInfo } from "@waterplane/shared";
 import type { Overlay } from "../../routing";
 import type { PendingStars } from "../../localState";
+import { FOLLOWUP_CLEAR, FOLLOWUP_SET, FlagIcon, followUpButtonTitle, followUpClass } from "../sessions/followUp";
 import { HINTS } from "../../hints";
 import { shortModel } from "../../sessionFacts";
 import { isShellBackend, shellBackend, type BackendList } from "../../backendCaps";
-import { orderedToolbarItems, type ToolbarCfg } from "../../toolbar";
+import { orderedToolbarItems, type ToolbarCfg, type ToolbarItem } from "../../toolbar";
 import { Unavailable } from "../../Unavailable";
 import { featureToolbarItem } from "../toolbarItems";
+import { menuItems, sessionViews } from "../extensionPoints";
+import { pinHeaderView } from "./headerViews";
 import { tallyTitle, turnTally } from "../sessions/tags";
 import { closeToolbarMenu } from "../../features/toolbarCfg";
+import { showToast } from "../../toast";
+import { track } from "../../usage";
 import type { Connection } from "../conn/useConnection";
+import { gitPending, gitSyncText, gitTitle } from "../../gitCounts";
 
 const ICON = 16;
 
@@ -34,6 +40,8 @@ export interface ToolbarCtx {
   toolbarCfg: ToolbarCfg;
   pendingStars: PendingStars;
   toggleStar(id: string, starred: boolean): void;
+  pendingFollowUps: PendingStars;
+  toggleFollowUp(id: string, on: boolean): void;
   setOverlay(o: Overlay): void;
   /** App's command switch (`runToolbar`). */
   runToolbar(id: string): void;
@@ -47,8 +55,8 @@ export interface ToolbarCtx {
  * with their own click behavior; everything else is a generic runToolbar button.
  * Returns null when the item is hidden or not applicable right now.
  */
-export function renderToolbarItem(c: ToolbarCtx, t: { id: string; name: string; Icon: LucideIcon }, compact = false): ReactNode {
-  const { active, pending, status, activeRepo, toolbarCfg, pendingStars, toggleStar, setOverlay, runToolbar, backends } = c;
+export function renderToolbarItem(c: ToolbarCtx, t: ToolbarItem, compact = false): ReactNode {
+  const { active, pending, status, activeRepo, toolbarCfg, pendingStars, toggleStar, pendingFollowUps, toggleFollowUp, setOverlay, runToolbar, backends } = c;
   // `compact` = rendered in the session header as a PIN: always icon-only (the
   // row shares one line with the title), and NOT subject to `hidden` — hiding
   // an action from the menu is a normal thing to do once it is pinned above.
@@ -72,8 +80,8 @@ export function renderToolbarItem(c: ToolbarCtx, t: { id: string; name: string; 
   if (t.id === "companion" && (isShell || pending || !shellBackend(backends))) return null;
   switch (t.id) {
     case "untracked":
-      if (!activeRepo || activeRepo.changedCount <= 0) return null;
-      return <button key="untracked" className="key count" title={`${activeRepo.changedCount} changed file${activeRepo.changedCount > 1 ? "s" : ""} — open git`} onClick={() => { dismiss(); setOverlay("git"); }}><FileDiff size={ICON} /> {activeRepo.changedCount}</button>;
+      if (!activeRepo || !gitPending(activeRepo)) return null;
+      return <button key="untracked" className="key count" title={gitTitle(activeRepo)} onClick={() => { dismiss(); setOverlay("git"); }}><FileDiff size={ICON} /> {activeRepo.changedCount > 0 && activeRepo.changedCount}{gitSyncText(activeRepo) && <span className="git-ab"> {gitSyncText(activeRepo)}</span>}</button>;
     // The star is stateful, so it is not the generic button: it says whether
     // this session IS starred (filled) and whether the desktop has agreed yet
     // (`star-pending`'s dotted underline). Absent on a queued open — there is
@@ -92,7 +100,35 @@ export function renderToolbarItem(c: ToolbarCtx, t: { id: string; name: string; 
         </button>
       );
     }
+    // The follow-up flag, the star's twin: its state drawn (filled, in the
+    // colour of who set it) and its press held offline the star's way.
+    case "followup": {
+      if (!active || pending) return null;
+      const on = !!active.followUp;
+      return (
+        <button key="followup" className={`key fu-btn${followUpClass(active.followUp)}${active.id in pendingFollowUps ? " star-pending" : ""}`}
+          data-hint="session.followup" aria-pressed={on}
+          title={followUpButtonTitle(active, active.id in pendingFollowUps, status === "open")}
+          onClick={() => { dismiss(); toggleFollowUp(active.id, !on); }}>
+          <FlagIcon on={on} size={ICON} />{label && <> {on ? FOLLOWUP_CLEAR : FOLLOWUP_SET}</>}
+        </button>
+      );
+    }
     default: {
+      // An extension's own line (`MenuItemDef`): its words and its open, under the catalog's
+      // order/hide/pin like any other. Unavailable is the sentence on the tap, never a grey line.
+      const ext = menuItems(active).find((e) => e.key === t.id);
+      if (ext) return (
+        <button key={t.id} className="key" title={ext.unavailable ?? ext.label}
+          onClick={() => {
+            dismiss();
+            track(`toolbar:${t.id}`);
+            if (ext.unavailable) { showToast(ext.unavailable); return; }
+            ext.open();
+          }}>
+          <ext.icon size={ICON} />{label && <> {ext.label}</>}
+        </button>
+      );
       const own = featureToolbarItem(t.id, { label, dismiss, active });
       if (own !== undefined) return <Fragment key={t.id}>{own}</Fragment>;
       // The toolbar is the worst offender the hints exist for: icons-only by
@@ -142,6 +178,21 @@ export function ToolbarMenu({ c, usedOrder, refreshTerminal }: {
       <button className="key" title="refresh terminal" onClick={() => { closeToolbarMenu(); refreshTerminal(); }}><RotateCw size={ICON} /> refresh</button>
       {active.remoteUrl && <button className="key" onClick={() => { closeToolbarMenu(); window.open(active.remoteUrl, "_blank"); }} title="open in app"><Smartphone size={ICON} /> open in app</button>}
       {orderedToolbarItems(toolbarCfg, usedOrder).map((t) => renderToolbarItem(c, t))}
+      {/* Contributed session views (the live desktop): opening one here is what
+          gives it a tab in the header (`headerViews.ts`); the tab's × takes it
+          down. Unavailable is the sentence on the tap, never a grey line. */}
+      {sessionViews(active.id).map((v) => (
+        <button key={v.key} className="key" title={v.unavailable ?? `open ${v.label} — adds its tab to the header`}
+          onClick={() => {
+            closeToolbarMenu();
+            track(`action:view.${v.key}.menu`);
+            if (v.unavailable) { showToast(v.unavailable); return; }
+            pinHeaderView(v.key);
+            v.open();
+          }}>
+          <v.icon size={ICON} /> {v.label}
+        </button>
+      ))}
       <button className="key" title="customize toolbar" onClick={() => { closeToolbarMenu(); setOverlay("toolbar"); }}><Settings size={ICON} /> customize</button>
     </div>
   );

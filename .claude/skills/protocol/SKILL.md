@@ -20,14 +20,12 @@ than paragraphs: [testing-and-ops.md](docs/notes/testing-and-ops.md#why-these-ru
 
 Wire:
 
-- One WebSocket per tab carries everything; PTY bytes are base64 in `{t:"pty",id,dataB64}`. Don't
-  add a second socket. permessage-deflate is on (context takeover is the point).
+- One WebSocket per tab carries everything; PTY bytes are base64 in `{t:"pty",id,dataB64}`. permessage-deflate is on (context takeover is the point).
 - Sockets attach/detach explicitly; frames go only to attached sockets. Every frame carries `seq`;
   `session.attach` may carry `resumeSeq` + `resumeBoot` ⇒ delta replay, else `full: true` and the
   client resets its terminal. Boot mismatch ⇒ full replay (tmux sessions outlive the daemon).
 - **Every retry path goes through an ackId.** `input.ack` / `backlog.ack` / `op.ack` are idempotent
-  against the persisted ledger; a repeat is re-acked, never re-executed. Never add a send path that
-  bypasses the queue, and never retry without an ackId.
+  against the persisted ledger; a repeat is re-acked, never re-executed.
   **A LOST ledger fails closed** (shared `preLossRefusal`; why in its header): every ackId'd
   durable message carries optional `firstSentAt` (the queue's `firstTryAt`, unchanged on every retry; `retargetEntry` drops
   it with the old id) + `sentAt` (stamped at the write in `ws.ts`). Inside `acks.lost`'s window an
@@ -39,7 +37,7 @@ Wire:
   `op.ack` with `launchId` — and `intentId`, the same string — and **no** `sessionId`; a client must
   never read that absence as "the session was never named". The waiting is the host's from that
   moment: the phone may close.
-- **The `intent.*` messages are additive and `PROTOCOL_VERSION` stays 1.** `intent.post` (durable —
+- **The `intent.*` messages are additive (no `PROTOCOL_VERSION` bump).** `intent.post` (durable —
   and its `ok` means the row is on DISK, not merely accepted), `intent.run`/`update`/`retarget`
   (durable), **`intent.waive`** (durable: lifts ONE rung — `budget` — for one row, until the host-stamped reset of the window it lands in, `on:false` the undo; an old host ignores it, so rows stay held), **`intent.requeue`** (durable: a FAILED row back in the queue keeping its words, its
   place and the failure it had. **`failed` is a STATE, not an event** — a row revived and failed
@@ -77,13 +75,13 @@ Wire:
   fork re-acks and writes nothing. One gap, stated: a crash BETWEEN the file write and the ack
   replays into a second orphan jsonl — an extra archive row, deletable, never a second claude, which
   is `starting`-row semantics exactly.
-- **`session.name` is additive and `PROTOCOL_VERSION` stays 1.** *Name this conversation now* —
+- **`session.name` is additive (no bump).** *Name this conversation now* —
   the host re-derives the summary and the ≤4-word `tabTitle` off it (`sessions.nameNow`) and
   answers `session.named` with the NAME or the SENTENCE saying why there is none, never neither.
   It SPENDS two cheap toolless calls, so it is never queued offline, never retried and never
   automatic: a name delivered an hour late is a name for a screen nobody is looking at
   (`intent.cancel`'s reason). The rename itself reaches every phone on the session list.
-- **`schedule.skipNext` is additive and `PROTOCOL_VERSION` stays 1.** Not durable and never queued
+- **`schedule.skipNext` is additive (no bump).** Not durable and never queued
   offline, for `intent.cancel`'s reason: a skip delivered an hour late spends an occurrence that has
   already run.
 - `session.input` carries `submit?` — **the submitting Return lives on the HOST** (`deliverPrompt`),
@@ -117,7 +115,7 @@ Wire:
   whatever settled while the tab was gone.
 - **`PROTOCOL_VERSION` is 2** (deliberate): `plugin.call` → `plugin.reply` (asking socket only) and broadcast `plugin.push` are the generic extension channel. `plugin.call` is a live question — NOT durable, never queued, not in the ack ledger; its ackId addresses the reply, the host's in-memory ledger de-duplicates it, and the client re-sends only `read()` calls (same ackId). A write that must be at-most-once across a restart goes through `handToAgent`'s `key`. An older host ignores it; the call times out and says so.
 - `pull.*`, `settings.*`, `notify.prefs.*` and `budget.*` are additive and not in the durable-op set.
-  `PROTOCOL_VERSION` stays 1 — bump deliberately. **`pull.add` is legacy**: a download is a LOCAL
+  No bump — bump deliberately. **`pull.add` is legacy**: a download is a LOCAL
   queue record now (`web/download.ts`) and the client sends nothing; the route stays for an APK
   pinned to an old bundle, and `e2e-autopull.mjs` still pins it.
 

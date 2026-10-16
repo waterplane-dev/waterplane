@@ -28,7 +28,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
-import { readIntents } from "./lib-e2e.mjs";
+import { readIntents, waitForHost } from "./lib-e2e.mjs";
 import { E, SLUG, STATE, rootEnv } from "./lib-brand.mjs";
 
 const PORT = 8853;
@@ -111,7 +111,7 @@ const connect = () => new Promise((resolve) => {
 
 // ── 0. A repo to aim at ──────────────────────────────────────────────────
 host = boot();
-await sleep(1000);
+await waitForHost(PORT);
 const repo = await fetch(`${base}/api/repo`, {
   method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "alpha" }),
 }).then((r) => r.json());
@@ -136,7 +136,7 @@ writeFileSync(join(STORE_DIR, "launches.json"), JSON.stringify([{
 }], null, 2));
 
 host = boot();
-await sleep(1200);
+await waitForHost(PORT);
 ws = await connect();
 ws.send(JSON.stringify({ t: "launch.list" }));
 await waitFor(() => launches.length > 0, 6000);
@@ -202,7 +202,7 @@ check(survived?.payload?.steps?.[0] === MINE_TEXT, "…with its words, un-clippe
 // at-most-once cannot rest on it, and this deletes it outright to prove that.
 rmSync(join(STORE_DIR, "acks.json"), { force: true });
 host = boot();
-await sleep(1200);
+await waitForHost(PORT);
 ws = await connect();
 ws.send(JSON.stringify({ t: "intent.list" }));
 await waitFor(() => intents.length > 0, 6000);
@@ -248,7 +248,7 @@ kept.push({
 writeFileSync(INTENTS, JSON.stringify(kept, null, 2));
 
 host = boot();
-await sleep(1500);
+await waitForHost(PORT);
 ws = await connect();
 await sleep(2500); // several ticks: a re-fire would have happened by now
 check(count(SPENT_PROBE) === 0, `an occurrence spent before the crash is NOT run again (copies: ${count(SPENT_PROBE)})`);

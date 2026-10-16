@@ -34,6 +34,7 @@ Then each plot is split by subject; the original path is a facade of `export *`:
 | `cplotAgents.ts` | subagent swim lanes and lines, their sentences |
 | `cplotSpark.ts` | the two row miniatures |
 | `cplotWords.ts` | event labels, the axis note, the series summary |
+| `cplotCompactSet.ts` | the auto-compact SETTING line's label and caption |
 
 | `kit/chart/stats/` | holds |
 | --- | --- |

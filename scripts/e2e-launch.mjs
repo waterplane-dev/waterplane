@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
 import { E, SLUG, rootEnv } from "./lib-brand.mjs";
+import { waitForHost } from "./lib-e2e.mjs";
 const PORT = 8801;
 const ROOT = mkdtempSync(join(tmpdir(), `${SLUG}-l-`));
 // Self-contained stub `claude` that prints its args then blocks — lets us
@@ -18,7 +19,7 @@ host.stderr.on("data", d=>process.stderr.write("[host] "+d));
 const base=`http://127.0.0.1:${PORT}`;
 let failed=false; const check=(c,l)=>{console.log(`${c?"PASS":"FAIL"}: ${l}`); if(!c)failed=true;};
 const b64=s=>Buffer.from(s,"base64").toString("utf8");
-setTimeout(async()=>{
+waitForHost(PORT).then(async () => {
   const repo=await fetch(`${base}/api/repo`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({name:"l"})}).then(r=>r.json());
   const ws=new WebSocket(`ws://127.0.0.1:${PORT}/ws`); let sid=null,cap="";
   ws.on("open",()=>ws.send(JSON.stringify({t:"hello",protocol:1})));
@@ -32,5 +33,5 @@ setTimeout(async()=>{
         ws.close(); host.kill(); setTimeout(()=>process.exit(failed?1:0),100);
       }}
   });
-},900);
+});
 setTimeout(()=>{console.log("FAIL: timeout");host.kill();process.exit(1);},12000);

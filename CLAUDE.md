@@ -48,8 +48,8 @@ Demo mode + fake host: `docs/notes/testing-and-ops.md`.
   exactly one media file by that name, and never in prose.
 
 Here and not in a skill, deliberately: it applies whenever anything is written for a person to look
-at, which is not confined to one area of the code — and a convention only loaded while editing
-`packages/host` is one the agent will not know about while writing a report.
+at — and a convention only loaded while editing `packages/host` is one the agent will not know about
+while writing a report.
 
 ## Plugins, and what a repo is told — two things, kept apart
 
@@ -61,6 +61,8 @@ at, which is not confined to one area of the code — and a convention only load
 - **What a driven repo's agent learns about waterplane is core, never a plugin:** `reposkilltext.ts`,
   handed to every spawned `claude` via `--plugin-dir` (`reposkill.ts`). A new repo-facing
   capability is a paragraph there.
+- **Live desktop** (`packages/extensions/desktop`, macOS): control is off by default, gated on the
+  host, never from a peer or job; a helper rebuild resets its macOS grants. ⇒ [desktop.md](docs/notes/desktop.md)
 
 - **Peer desktops** (`docs/notes/host.md`, `peers/`): a paired host runs a job and
   reports back as one prompt. A peer token unlocks only `/api/peer/*` (never a device token); a job
@@ -82,6 +84,7 @@ holds your module's rules. Load the router, then that sub-skill — never the wh
 | adding a message, an ack/retry path, `PROTOCOL_VERSION`, tmux | `protocol` |
 | `prompt.ts` / `question.ts` / `limit.ts` / `context.ts` / `clihealth.ts` | `heuristics` |
 | writing or changing a test | `testing` |
+| a label, hint, toast or first-run aid | `ux` |
 | docs gifs, demo scenarios, diagrams | `docs-media` |
 | splitting a big file | `refactoring` |
 
@@ -97,20 +100,20 @@ npm run doctor       # preflight only (claude login, Tailscale, secure context)
 npm test             # lint, test:unit, test:host, then run-e2e.mjs — needs `npm run build` first
 ```
 
-- **`npm run restart` is mandatory.** It builds first (failing loudly without taking the host down),
-  then `launchctl kickstart -k`s the launchd service if installed, else kills + waits for :8770 to
-  free + starts detached. Hand-killing races launchd's KeepAlive. **Host/shared edits
+- **`npm run restart` is mandatory.** It builds first (a bad build leaves the host up), then
+  `launchctl kickstart -k`s the launchd service if installed, else kills + waits for :8770 to free +
+  starts detached; Windows: the host in WSL (`scripts/windows/`). Hand-killing races launchd's
+  KeepAlive. **Host/shared edits
   reach the running service only via this.**
 - **`.env.example` is the complete list of env knobs — keep it current when adding one.** Most-used:
-  `WATERPLANE_ROOT` (~/dev), `WATERPLANE_PORT` (8770), `WATERPLANE_HOST`, `WATERPLANE_ALLOW_PUBLIC`,
-  `WATERPLANE_PREFLIGHT`, `GEMINI_API_KEY`. Full table:
+  `WATERPLANE_ROOT`, `WATERPLANE_PORT`, `WATERPLANE_HOST`, `WATERPLANE_ALLOW_PUBLIC`. Full table:
   [testing-and-ops.md](docs/notes/testing-and-ops.md).
 - Tests: `npm run test:unit` (pure logic, no host) · `npm run test:host` (regex heuristics,
   no daemon) · `node scripts/run-e2e.mjs <filter>`. Details ⇒ skill `testing`.
 
 ## Never do these
 
-Short on purpose: each has caused a real failure here and is invisible in review unless you know it.
+Each has caused a real failure here and is invisible in review unless you know it.
 
 - **Never bind a public interface, and never reintroduce `access-control-allow-origin: *`.** The
   daemon spawns `claude`. See the security model below — it is the one section that is never a skill.
@@ -150,11 +153,9 @@ average of 312k per turn, and a 1M window never compacts itself.
   is warm; past ~3 turns that don't need the window, a fresh session wins.
 - **Prefer a subagent for fan-out reading** — it burns the dumps in its own window and returns the
   conclusion. Not for a known-file lookup: a fresh baseline costs more than a `grep`.
-- **A repo's always-on weight is checked, not remembered.** The repo-setup sheet's `context-weight`
-  row measures `CLAUDE.md` + skill descriptions and warns past `WATERPLANE_CONTEXT_WARN_CHARS`; skill
-  BODIES are on-demand and never count. The line is per repo (the row's *thresholds* control, over
-  env, over the default) — a setting, not a restart. It never edits anything: the *groom CLAUDE.md*
-  preset is the fix.
+- **A repo's always-on weight is checked, not remembered.** The setup sheet's `context-weight` row
+  measures `CLAUDE.md` + skill descriptions (bodies never count) against a per-repo threshold
+  (`WATERPLANE_CONTEXT_WARN_CHARS`); the *groom CLAUDE.md* preset is the fix.
 - **The automatic spenders are cheap on purpose and must stay so.** `sessions/record.ts`'s tab-name call
   (`nameTab`, once per session, off the first prompt only) runs on `SUMMARY_MODEL` with
   `--setting-sources user --tools ""` and its own system prompt (83k tokens → 1.9k), and its result

@@ -1,6 +1,7 @@
 import { createSocket } from "node:dgram";
 import { access, constants } from "node:fs/promises";
 import { hostname, networkInterfaces } from "node:os";
+import { RUNNING_IN_WSL } from "./branddirs.js";
 import { execFileP } from "./proc.js";
 
 
@@ -56,6 +57,20 @@ export function localProcessRefusal(remoteAddress: string | undefined, headers: 
   if (peerKind(remoteAddress) !== "loopback") return "local only — this route answers a process on this desktop";
   if (PROXY_HEADERS.some((h) => headers[h] !== undefined)) return "local only — a proxied request is not a process on this desktop";
   return null;
+}
+
+/**
+ * The trust tier of a REQUEST, not just its socket: a loopback socket carrying
+ * a proxy header came through `tailscale serve` from another tailnet device,
+ * so it is `tailscale` — gated when "gate Tailscale" is on, which before this
+ * never applied to anyone using the https address. Only ever a DOWNGRADE from
+ * loopback (a local process adding the header loses its exemption, nothing
+ * more), and never touches a non-loopback peer. The token gate (`server/http.ts`,
+ * `server/wsops.ts`) asks this; `localProcessRefusal` keeps its own stricter test.
+ */
+export function requestPeerKind(remoteAddress: string | undefined | null, headers: Readonly<Record<string, string | string[] | undefined>>): PeerKind {
+  const kind = peerKind(remoteAddress);
+  return kind === "loopback" && PROXY_HEADERS.some((h) => headers[h] !== undefined) ? "tailscale" : kind;
 }
 
 /** This desktop's name as a person would call it: the OS hostname, minus the
@@ -134,7 +149,30 @@ export async function tailscaleBin(): Promise<string | null> {
     return `"${bundled}"`;
   } catch { /* not a Mac GUI install */ }
 
+  // WSL with mirrored networking: Tailscale runs on Windows, and its CLI is reachable through
+  // interop as `tailscale.exe` — on the Windows PATH WSL appends, else at its install path.
+  if (RUNNING_IN_WSL) {
+    let p = "";
+    try { p = (await execFileP("/bin/sh", ["-c", "command -v tailscale.exe"])).stdout.trim(); } catch { /* Windows PATH not appended */ }
+    const win = "/mnt/c/Program Files/Tailscale/tailscale.exe";
+    if (!p) { try { await access(win, constants.X_OK); p = win; } catch { /* no Windows Tailscale */ } }
+    // Found is not runnable: with WSL interop off, `command -v` and X_OK still pass and every .exe
+    // then dies with "Exec format error". A CLI that cannot be run is no CLI (the doctor's
+    // `wsl-interop` row says why).
+    if (p && (await windowsExeRuns(p))) return `"${p}"`;
+  }
+
   return null;
+}
+
+/** Whether a Windows `.exe` actually RUNS from here, remembered a minute per path (interop can come back without a restart). */
+const exeRuns = new Map<string, { ok: boolean; at: number }>();
+async function windowsExeRuns(p: string): Promise<boolean> {
+  const seen = exeRuns.get(p);
+  if (seen && Date.now() - seen.at < 60_000) return seen.ok;
+  const ok = await execFileP(p, ["version"], { timeout: 5000 }).then(() => true, () => false);
+  exeRuns.set(p, { ok, at: Date.now() });
+  return ok;
 }
 
 /**

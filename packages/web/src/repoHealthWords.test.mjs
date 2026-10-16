@@ -37,14 +37,15 @@ import { KPI_MEANING, rankChipWords, kpiMeaning,
   refreshFailedWords,
   refreshLabel,
   runningWords,
-  scrubHintWords,
   seriesHeadWords,
   seriesSizeWords,
+  seriesStatusWords,
   stackReadoutWords,
   stalenessWords,
   staleRowsWords,
   warningsWords,
 } from "./repoHealthWords.ts";
+import { SCRUB_HINT } from "./kit/chart/chartWords.ts";
 import { joinNarrativeDays, splitNarrativeDays } from "./narrativeDays.ts";
 
 const NARRATIVE = fileURLToPath(new URL("../../../.claude/outbox/repohealth.md", import.meta.url));
@@ -77,6 +78,25 @@ test("behind null is its own sentence and never a zero", () => {
 
 test("no last row means no staleness band at all — that case is the empty state", () => {
   assert.equal(stalenessWords({ behind: null, lastSha: null }), null);
+});
+
+test("the status line: distance in commits and the size of the history, nothing else", () => {
+  // The head's one line. Both shas, the ages and the definition fold under it
+  // (`stalenessWords` and `seriesSizeWords` above, unchanged), so it is pinned
+  // to say neither — and to be absent exactly where the band is.
+  const base = { lastSha: "a1b2c3d9f", lastDay: "2026-09-19", headSha: "e4f5a6b0c", rows: 84, days: 24 };
+  assert.equal(seriesStatusWords({ ...base, behind: 0 }), "up to date · 84 commits measured over 24 days");
+  assert.equal(seriesStatusWords({ ...base, behind: 3 }), "3 commits since the last reading · 84 commits measured over 24 days");
+  assert.equal(seriesStatusWords({ ...base, behind: 1, rows: 1, days: 1 }), "1 commit since the last reading · 1 commit measured over 1 day");
+  const unknown = seriesStatusWords({ ...base, behind: null });
+  assert.match(unknown, /^could not tell how far behind · /);
+  assert.doesNotMatch(unknown, /up to date|\b0 commits since/, "an unknown distance is never a zero");
+  assert.equal(seriesStatusWords({ ...base, behind: 0, rows: 0 }), "up to date", "no size clause without rows");
+  assert.equal(seriesStatusWords({ ...base, behind: 0, days: null }), "up to date · 84 commits measured");
+  for (const s of [seriesStatusWords({ ...base, behind: 2 }), seriesStatusWords({ ...base, behind: 0 })]) {
+    assert.doesNotMatch(s, /a1b2c3d|e4f5a6b|HEAD|definition|ago/, "the shas, ages and definition are the folded line's");
+  }
+  assert.equal(seriesStatusWords({ behind: 0, lastSha: null, rows: 84, days: 24 }), null);
 });
 
 test("HEAD is never given a calendar day", () => {
@@ -490,6 +510,9 @@ test("no verdict word appears in anything this module can produce", () => {
     stalenessWords({ behind: 2, lastSha: "aaaaaaa", lastDay: "2026-09-19", headSha: "bbbbbbb" }),
     stalenessWords({ behind: 0, lastSha: "aaaaaaa", lastDay: "2026-09-19", headSha: "aaaaaaa" }),
     stalenessWords({ behind: null, lastSha: "aaaaaaa", lastDay: "2026-09-19", headSha: null }),
+    seriesStatusWords({ behind: 2, lastSha: "aaaaaaa", rows: 84, days: 24 }),
+    seriesStatusWords({ behind: 0, lastSha: "aaaaaaa", rows: 84, days: 24 }),
+    seriesStatusWords({ behind: null, lastSha: "aaaaaaa", rows: 84, days: 24 }),
     mixedVersionWords(VERSIONS, "2026-09-21c"),
     mixedVersionWords(VERSIONS, "2026-09-21c", RECUT),
     outcomeWords({ ok: true, ms: 18_400, added: 7 }),
@@ -711,22 +734,28 @@ test("the magnitudes lead is absent rather than zeroed", () => {
 });
 
 test("the tape's two figures are words, because a dashed rule means a threshold", () => {
-  const s = tapeWords(50, 16_236, 1_352, 325);
-  assert.match(s, /longest 16,236 lines/);
-  assert.match(s, /p95 1,352 lines/);
-  assert.match(s, /the other 275 files in the tree are not in this row/);
-  assert.match(s, /a dashed line means a threshold on every other chart here/);
+  const { lead, more } = tapeWords(50, 16_236, 1_352, 325);
+  assert.match(lead, /longest 16,236 lines/);
+  assert.match(lead, /p95 1,352 lines/);
+  assert.match(lead, /the other 275 files in the tree are not in this row/);
+  // WHY they are words folds: a reason about the drawing, not a reading.
+  assert.doesNotMatch(lead, /dashed/);
+  assert.match(more, /a dashed line means a threshold on every other chart here/);
   // The tape's length is the tool's decision; no cap is written down here, so
   // an uncapped tape says nothing about a rest that does not exist.
-  assert.doesNotMatch(tapeWords(325, 16_236, 1_352, 325), /not in this row/);
-  assert.doesNotMatch(tapeWords(50, 16_236, 1_352, null), /not in this row/);
+  assert.doesNotMatch(tapeWords(325, 16_236, 1_352, 325).lead, /not in this row/);
+  assert.doesNotMatch(tapeWords(50, 16_236, 1_352, null).lead, /not in this row/);
   // The longest file's PATH, when the wire carries one: a length nobody can
   // act on becomes a file somebody can open, and it is the figure the drawn
   // HTML page had and this screen did not.
-  assert.match(tapeWords(50, 16_236, 1_352, 325, "packages/web/src/App.tsx"), /longest 16,236 lines — packages\/web\/src\/App\.tsx/);
+  assert.match(tapeWords(50, 16_236, 1_352, 325, "packages/web/src/App.tsx").lead, /longest 16,236 lines — packages\/web\/src\/App\.tsx/);
   // A name with no length is nothing to hang it on, so the clause is the
-  // length's and never its own.
-  assert.doesNotMatch(tapeWords(50, null, 1_352, 325, "packages/web/src/App.tsx"), /App\.tsx/);
+  // length's and never its own — which is also how the longest is said ONCE:
+  // with the tile's value line above the tape, the caller passes no length.
+  const once = tapeWords(50, null, 1_352, 325, "packages/web/src/App.tsx");
+  assert.doesNotMatch(once.lead, /App\.tsx|longest \d/);
+  assert.match(once.lead, /p95 1,352 lines/);
+  assert.match(once.more, /Neither the longest file nor p95/, "the reason still names both figures");
 });
 
 test("the dependency count says what it is not counting", () => {
@@ -815,16 +844,16 @@ test("no verdict word appears anywhere in region 2 either", () => {
     magnitudeLeadWords(325, 143_176),
     magnitudesNoteWords(),
     packageStackWords(),
-    tapeWords(50, 16_236, 1_352, 325),
-    tapeWords(50, 16_236, 1_352, 325, "packages/web/src/App.tsx"),
+    ...Object.values(tapeWords(50, 16_236, 1_352, 325)),
+    ...Object.values(tapeWords(50, 16_236, 1_352, 325, "packages/web/src/App.tsx")),
     depsWords(13),
     longestPickWords({ day: "2026-09-22", sha7: "683bffa", v: 16351 }, "packages/web/src/App.tsx", true),
     longestPickWords({ day: "2026-09-22", v: 16351 }, null, true),
     holderWords({ path: "packages/web/src/App.tsx", readings: 23 }, "2026-06-18", "2026-09-22", 23),
     holderWords({ path: "src/a.ts", readings: 3 }, "2026-06-18", "2026-06-21", 23),
-    longestCaptionWords({ handovers: 0, folded: 0, unnamed: false, named: true }),
-    longestCaptionWords({ handovers: 3, folded: 1, unnamed: true, named: true }),
-    longestCaptionWords({ handovers: 0, folded: 0, unnamed: true, named: false }),
+    ...Object.values(longestCaptionWords({ handovers: 0, folded: 0, unnamed: false, named: true })).filter(Boolean),
+    ...Object.values(longestCaptionWords({ handovers: 3, folded: 1, unnamed: true, named: true })).filter(Boolean),
+    ...Object.values(longestCaptionWords({ handovers: 0, folded: 0, unnamed: true, named: false })).filter(Boolean),
     notPlottedWords(),
     readingsTableWords(14, 157),
     mixedPlotWords([{ version: "a", rows: 3 }, { version: "b", rows: 5 }]),
@@ -838,7 +867,7 @@ test("no verdict word appears anywhere in region 2 either", () => {
     // where a verdict would be easiest to slip in — it is the sentence that
     // appears when somebody points at a number.
     axisDayWords("2026-06-18"), axisDayWords("whatever"),
-    scrubHintWords(),
+    SCRUB_HINT,
     pointReadoutWords({ day: "2026-08-16", sha7: "3e9f1a2", v: 1352 }, "lines"),
     pointReadoutWords({ day: "2026-08-16", sha7: "3e9f1a2", v: null }, "lines"),
     stackReadoutWords(
@@ -942,7 +971,11 @@ test("a missing term in a sum is printed, never silently dropped", () => {
 test("the readout line says how to use it before anything is touched", () => {
   // There is no hover on a phone, so a crosshair nobody is told about is a
   // crosshair nobody finds.
-  assert.match(scrubHintWords(), /drag/);
+  // The tiles draw the kit's one wording (`SCRUB_HINT`): it was spelled three ways
+  // on three charts (here, the context sheet, the limit windows), which reads as
+  // three gestures. It lives in the kit, not in these pure slices, because the
+  // slices import only each other (webclientpins).
+  assert.match(SCRUB_HINT, /drag/);
 });
 
 test("the magnitudes say they are not readings, so a missing rank reads as the point", () => {
@@ -1016,8 +1049,15 @@ test("the longest file's readout names the file, and says so when it cannot", ()
   assert.match(longestPickWords({ day: "d", v: 1 }, null, true), /no file named that day/);
   assert.doesNotMatch(longestPickWords({ day: "d", v: 1 }, null, false), /named/);
   assert.match(holderWords({ path: "a", readings: 5 }, "x", "y", 5), /every one of the 5 readings/);
-  assert.match(longestCaptionWords({ handovers: 2, folded: 0, unnamed: false, named: true }), /changed hands 2 times/);
-  assert.match(longestCaptionWords({ handovers: 0, folded: 0, unnamed: false, named: false }), /cannot be told/);
+  // The method folds (`more`); only what is MISSING is drawn in the open (`lead`).
+  const plain = longestCaptionWords({ handovers: 2, folded: 0, unnamed: false, named: true });
+  assert.match(plain.more, /changed hands 2 times/);
+  assert.equal(plain.lead, null, "nothing missing, nothing in the open");
+  const noNames = longestCaptionWords({ handovers: 0, folded: 0, unnamed: false, named: false });
+  assert.match(noNames.lead, /cannot be told/, "no names on the wire is an absence, never folded");
+  const gaps = longestCaptionWords({ handovers: 1, folded: 0, unnamed: true, named: true });
+  assert.match(gaps.lead, /no legend entry/);
+  assert.doesNotMatch(gaps.more, /no legend entry/, "said once");
 });
 
 test("the rank chip converts like the sentence and never prints a 0th for a missing rank", () => {
@@ -1032,4 +1072,66 @@ test("every tile the sheet draws has a one-line meaning; an unknown key has none
     assert.ok(kpiMeaning(k), k);
   }
   assert.equal(kpiMeaning("dups.pairsPerKloc"), null);
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// Whose reading: waterplane's, or the repo's own.
+// ───────────────────────────────────────────────────────────────────────────
+
+test("own readings: nothing on the wire says nothing; nothing declared is ONE line naming the file; a declaration is drawn", async () => {
+  const { ownShow, ownNoneWords } = await import("./repoHealthWords.ts");
+  const file = ".waterplane-shared/health.json";
+  assert.deepEqual(ownShow(null), { kind: "none" });
+  assert.deepEqual(ownShow({ scope: null }), { kind: "none" }, "an older engine sends no block, and absent is not 'none declared'");
+  assert.deepEqual(ownShow({ scope: "apps/x", own: { file, declared: true, series: [] } }), { kind: "none" }, "a scope has no own readings");
+  assert.deepEqual(ownShow({ scope: null, own: { file, declared: false, series: [] } }), { kind: "add", file });
+  assert.match(ownNoneWords(file), new RegExp(file.replace(/\./g, "\\.")), "the line says WHERE, not just that you could");
+  const pending = { file, declared: true, series: [], absent: "declared, not measured yet" };
+  assert.equal(ownShow({ scope: null, own: pending }).kind, "drawn", "declared and not yet measured is said, not hidden behind the add line");
+  const gone = { file, declared: false, series: [{ key: "k" }] };
+  assert.equal(ownShow({ scope: null, own: gone }).kind, "drawn", "a reading with history still draws after the file went");
+});
+
+test("provenance words: each group is named once, the repo's aim is the repo's, and no sentence takes a side", async () => {
+  const { centralHeadWords, ownHeadWords, ownAimWords, ownApartWords, ownNoneWords } = await import("./repoHealthWords.ts");
+  const { indexExplainWords } = await import("./healthIndexWords.ts");
+  assert.match(centralHeadWords("waterplane"), /^waterplane's readings/);
+  assert.equal(ownHeadWords("acme", ".waterplane-shared/health.json"), "acme's own readings — declared in .waterplane-shared/health.json");
+  assert.equal(ownAimWords("higher", "acme"), "acme aims for this to rise.");
+  assert.equal(ownAimWords("lower", "acme"), "acme aims for this to fall.");
+  assert.equal(ownAimWords(null, "acme"), null, "no declared direction, no sentence — never a guessed one");
+  assert.match(ownApartWords("waterplane"), /Not part of the health index, which is built from waterplane's readings only/);
+  assert.match(indexExplainWords("2026-06-01", "waterplane"), /waterplane's five readings — never a repo's own/);
+  const everything = [centralHeadWords("p"), ownHeadWords("r", "f"), ownAimWords("higher", "r"), ownAimWords("lower", "r"),
+    ownApartWords("p"), ownNoneWords("f")].join("\n");
+  for (const word of ["score", "grade", "healthy", "unhealthy", "good", "bad", "should", "worse", "better", "improve", "regress"]) {
+    assert.doesNotMatch(everything, new RegExp(`\\b${word}\\b`, "i"), `"${word}" is a verdict; a repo's direction is reported as the repo's`);
+  }
+});
+
+test("a repo's disable or override is said on the tile, attributed, and a disabled tile draws no chart", async () => {
+  const { variantWords, variantHidesChart, centralFileLines } = await import("./repoHealthWords.ts");
+  const dis = { kind: "disabled", why: "tests live in a separate repo" };
+  assert.equal(variantWords(dis).lead, "Disabled here — tests live in a separate repo. Still measured; the health index leaves it out.");
+  assert.equal(variantHidesChart(dis), true);
+  const ov = {
+    kind: "override", why: "generated files dominate", means: "p95 over hand-written files only.", unit: "lines",
+    points: [], last: 412, since: "2026-10-16",
+  };
+  const w = variantWords(ov);
+  assert.equal(w.lead, "This repo's own version — p95 over hand-written files only; since 2026-10-16. The index reads 412 lines from it, not the curve below.");
+  assert.equal(w.why, "The repo's reason: generated files dominate.");
+  assert.equal(w.absent, null);
+  assert.equal(variantHidesChart(ov), false);
+  assert.equal(variantHidesChart(undefined), false);
+  assert.match(variantWords({ ...ov, last: null, since: null, absent: "exit 2" }).lead, /not measured yet\.$/);
+  assert.equal(variantWords({ ...ov, absent: "exit 2" }).absent, "On the latest day it printed no number: exit 2.");
+  assert.deepEqual(centralFileLines(null), []);
+  const lines = centralFileLines({ file: "cfg/health.json", problems: ["`foo` is not one of the five readings"] });
+  assert.equal(lines.length, 2);
+  assert.match(lines[0], /cfg\/health\.json/);
+  assert.equal(lines[1], "Ignored in cfg/health.json: `foo` is not one of the five readings.");
+  for (const word of ["score", "grade", "healthy", "good", "bad", "should", "worse", "better"]) {
+    assert.doesNotMatch([w.lead, w.why, variantWords(dis).lead, ...lines].join(" "), new RegExp(`\\b${word}\\b`, "i"), word);
+  }
 });

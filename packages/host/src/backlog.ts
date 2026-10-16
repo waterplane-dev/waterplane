@@ -16,10 +16,10 @@
  * What is left is what could not move:
  *
  *   • **the sessions** — `openItemSession` opens ONE session per fired item,
- *     `autoSessionCount` says how many of those are alive (the cap the ladder's
- *     `noSlot` rung subtracts from), `reapAutoSession` closes the oldest idle
- *     one when a slot is needed and `lingerSweep` closes them all once they have
- *     been sat on long enough to look at. `ensureRepoSession` /
+ *     `autoSessionCount` says how many of those are WORKING (the cap the ladder's
+ *     `noSlot` rung subtracts from — an idle one left open holds no slot) and
+ *     `lingerSweep` closes the ones set to close when done once they have been
+ *     sat on long enough to look at. `ensureRepoSession` /
  *     `resolveRepoSession` remain for the two things that still ask about a
  *     repo's session rather than an item's: the sheet's own button, and a hand
  *     fire on a row old enough to predate `fresh`.
@@ -65,7 +65,7 @@
  * session that picks up the repo's last conversation (`resume`, i.e.
  * `claude --continue`).
  */
-import type { AutoSlotFacts, BacklogItem, BudgetPass, BudgetWaiver, Intent, SessionBudget } from "@waterplane/shared";
+import type { AutoSlotFacts, BacklogItem, BudgetPass, BudgetWaiver, Intent, LaunchOpts, SessionBudget } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
 import type { SessionManager } from "./sessions.js";
 import type { IntentManager, ExecutorResult } from "./intents/manager.js";
@@ -78,6 +78,7 @@ import * as store from "./backlog/backlogstore.js";
 import * as edits from "./backlog/backlogedits.js";
 import type { BacklogUpdatePatch } from "./backlog/backlogedits.js";
 import * as sess from "./backlog/backlogsessions.js";
+import { followUpSweep } from "./backlog/backlogfollowup.js";
 
 // The slices, re-exported so no importer changes (`backlog/backlog*.ts`).
 export { BACKLOG_LINGER_MS, BACKLOG_SESSIONS_MAX, REAP_CEILING_MS } from "./backlog/backlogknobs.js";
@@ -93,15 +94,12 @@ export class BacklogManager {
     sessions: SessionManager,
     intents: IntentManager,
     reviews: ReviewStore,
-    smartpick?: BacklogCore["smartpick"],
     public idleMs = DEFAULT_IDLE_MS,
   ) {
     this.core = {
-      root, sessions, intents, reviews, smartpick,
+      root, sessions, intents, reviews,
       autoPath: join(hostStateDir(root), "backlog-config.json"),
       auto: false,
-      smartPickOn: new Set(),
-      smartPickAt: new Map(),
       repoSessions: new Map(),
       openedBy: new Map(),
       closeDefault: () => false,
@@ -119,12 +117,10 @@ export class BacklogManager {
   rows(): Intent[] { return store.backlogRows(this.core); }
 
   list(): BacklogItem[] {
-    // Two sidecars merged at render, both keyed by intent id and neither of them
-    // lifecycle: the review verdicts (`review.ts`) and what a merge did to this
-    // row (`smartpick.ts`). Same seam, same reason — a fact that outlives the
-    // run it describes does not belong on the `Intent`, and the wire DTO still
-    // has to carry it exactly where `BacklogItem` does.
-    return this.rows().map((i) => intentToBacklogItem(i, this.core.reviews.get(i.id), this.core.smartpick?.rowFacts(i.id)));
+    // The review verdicts (`review.ts`) are a sidecar merged at render, keyed by
+    // intent id: a fact that outlives the run it describes does not belong on
+    // the `Intent`, and the wire DTO still has to carry it on `BacklogItem`.
+    return this.rows().map((i) => intentToBacklogItem(i, this.core.reviews.get(i.id)));
   }
 
   /**
@@ -151,46 +147,10 @@ export class BacklogManager {
 
   setAuto(enabled: boolean): void { store.setAuto(this.core, enabled); }
 
-  // ── The smart pick's tick ───────────────────────────────────────────────
-
-  /**
-   * Is this worktree's *smart pick* on? — the first rung of the pass's guard
-   * ladder, and the whole of what an un-ticked repo costs.
-   *
-   * A `Set` membership test, called before any git spawn, any fingerprint and
-   * any file read. Everything about the feature being free when it is off rests
-   * on this being the cheapest possible question.
-   */
-  smartPickEnabled(cwd: string): boolean { return this.core.smartPickOn.has(cwd); }
-
-  /** The ticked worktrees, for `backlog.list`. */
-  smartPickList(): string[] { return [...this.core.smartPickOn].sort(); }
-
-  /** Turn it on or off for one worktree (`backlog/backlogstore.ts`). */
-  setSmartPick(cwd: string, enabled: boolean): void { store.setSmartPick(this.core, cwd, enabled); }
-
-  /**
-   * Put a merge's originals back — the merged row's *put them back*.
-   *
-   * It answers a SENTENCE either way, and the caller says that sentence out
-   * loud. Never a dimmed button: `Unavailable.tsx`'s rule is that a control the
-   * user cannot use has to say why, and a `title` is invisible on a phone.
-   *
-   * It is no longer refused once the merged row has run — `smartpick.ts`'s
-   * `undo` explains what it does instead, and `detail` is the honest account of
-   * it ("the merged item already ran — your 2 originals are back in the list and
-   * will run again as they were"). `ran` is there so a caller can tell the two
-   * apart without reading the prose.
-   */
-  unmerge(id: string): { ok: boolean; reason?: string; detail?: string; ran?: boolean } {
-    if (!this.core.smartpick) return { ok: false, reason: "this host is not running the smart pick" };
-    return this.core.smartpick.undo(id);
-  }
-
   // ── Mutations (each one a store write) — `backlog/backlogedits.ts` ──────
 
   add(text: string, repoDir: string, label?: string, targetSessionId?: string, autoFire?: boolean,
-    opts?: { steps?: readonly string[]; resume?: boolean; closeWhenDone?: boolean; budget?: SessionBudget; holdForHost?: boolean; pastBudget?: BudgetWaiver; budgetPass?: BudgetPass; origin?: string; id?: string; manual?: boolean }): BacklogItem {
+    opts?: { steps?: readonly string[]; resume?: boolean; closeWhenDone?: boolean; flagWhenDone?: boolean; budget?: SessionBudget; launch?: LaunchOpts; holdForHost?: boolean; pastBudget?: BudgetWaiver; budgetPass?: BudgetPass; origin?: string; id?: string; manual?: boolean }): BacklogItem {
     return edits.add(this.core, text, repoDir, label, targetSessionId, autoFire, opts);
   }
 
@@ -223,9 +183,11 @@ export class BacklogManager {
   /** The session ONE fired item runs in. */
   openItemSession(i: Intent): string { return sess.openItemSession(this.core, i); }
 
-  lingerSweep(isAttached: (id: string) => boolean): string[] { return sess.lingerSweep(this.core, isAttached); }
+  /** Flags first (`followUpSweep`), so a session that wants one is never closed ahead of it. */
+  lingerSweep(isAttached: (id: string) => boolean): string[] { followUpSweep(this.core); return sess.lingerSweep(this.core, isAttached); }
 
-  reapAutoSession(isAttached: (id: string) => boolean): string | null { return sess.reapAutoSession(this.core, isAttached); }
+  /** Flag for follow up the sessions whose item said so and finished ok — once per row. */
+  followUpSweep(): string[] { return followUpSweep(this.core); }
 
   ensureRepoSession(repoDir: string): string { return sess.ensureRepoSession(this.core, repoDir); }
 

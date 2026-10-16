@@ -17,7 +17,7 @@ import { SecretSheet } from "../../SecretSheet";
 import { SheetHead } from "../../Sheet";
 import { SpeedTestSheet } from "../../SpeedTestSheet";
 import { StorageSheet } from "../../StorageSheet";
-import { TOOLBAR_ITEMS } from "../../toolbar";
+import { toolbarItems } from "../../toolbar";
 import { UsageSheet } from "../../UsageSheet";
 import { archiveStartRepo, knownFeatureIds, liveConversationIds } from "./logic";
 import { localRtFocus, netFocus } from "./store";
@@ -39,7 +39,7 @@ export function RepoColorToolSheet() {
 
 export function FeaturesToolSheet() {
   const core = useCore();
-  const known = useMemo(() => knownFeatureIds(TOOLBAR_ITEMS.map((t) => t.id)), []);
+  const known = useMemo(() => knownFeatureIds(toolbarItems().map((t) => t.id)), []);
   return <UsageSheet knownIds={known} onClose={() => core.nav.close("features")} onToast={core.say.toast} />;
 }
 

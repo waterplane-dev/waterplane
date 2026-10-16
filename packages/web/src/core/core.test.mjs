@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 
 import {
   createFeatureRunner, createRepoActionTable, createRepoChipList, createSettingsRowTable, createSheetTable, createToolbarItemTable, setupRowDefs,
+  availabilityText, createLauncherItemTable, createMenuItemTable, createSessionViewTable, menuItemCatalog,
 } from "./featureRun.ts";
 
 function fakeCore() {
@@ -239,4 +240,93 @@ test("repo chips keep registry order; setup rows concatenate", () => {
   ];
   assert.deepEqual(createRepoChipList(feats).map((c) => c.key), ["a:x"]);
   assert.deepEqual(setupRowDefs(feats).map((d) => d.check), ["c1", "c2", "c3"]);
+});
+
+test("session views: none contributed is an empty list, so the header is unchanged", () => {
+  const t = createSessionViewTable([{ id: "a" }, { id: "b", repoActions: [] }], () => { throw new Error("core read"); });
+  assert.deepEqual(t.views("s1"), []);
+  assert.deepEqual(createLauncherItemTable([{ id: "a" }], () => { throw new Error("core read"); }).items(), []);
+});
+
+test("session views: order then registry order; unavailable keeps the entry and carries the sentence", async () => {
+  const { core, toasts } = fakeCore();
+  const icon = () => null;
+  const opened = [];
+  const t = createSessionViewTable([
+    { id: "a", sessionViews: [
+      { id: "late", label: "Late", icon, order: 5, open: () => opened.push("late") },
+      { id: "desk", label: "Desktop", icon, available: () => "Live desktop needs macOS for now", open: () => opened.push("desk") },
+    ] },
+    { id: "b", sessionViews: [
+      { id: "bad", label: "Bad", icon, available: () => { throw new Error("x"); }, open: () => {} },
+      { id: "first", label: "First", icon, order: -1, available: () => true, open: (c, ctx) => opened.push(["first", ctx.sessionId, c === core]) },
+      { id: "boom", label: "Boom", icon, open: () => { throw new Error("open"); } },
+    ] },
+  ], () => core);
+  let views;
+  const errors = quietly(() => { views = t.views("s9"); });
+  await tick();
+  assert.deepEqual(views.map((v) => [v.key, v.label, v.unavailable]), [
+    ["b:first", "First", null],
+    ["a:desk", "Desktop", "Live desktop needs macOS for now"],
+    ["b:boom", "Boom", null],
+    ["a:late", "Late", null],
+  ]);
+  assert.equal(errors, 1);
+  assert.deepEqual(toasts, ["b stopped handling session view bad"]);
+  views[0].open();
+  assert.deepEqual(opened, [["first", "s9", true]], "open gets the session it was drawn for");
+  quietly(() => views[2].open());
+  await tick();
+  assert.deepEqual(toasts.at(-1), "b stopped handling session view boom");
+});
+
+test("launcher items resolve the same way; a non-sentence refusal still reads as words", () => {
+  const { core } = fakeCore();
+  const icon = () => null;
+  const ran = [];
+  const t = createLauncherItemTable([
+    { id: "d", launcherItems: [
+      { id: "desk", label: "Desktop", icon, open: (c) => ran.push(c === core) },
+      { id: "odd", label: "Odd", icon, available: () => false, open: () => {} },
+    ] },
+  ], () => core);
+  const items = t.items();
+  assert.deepEqual(items.map((i) => [i.key, i.unavailable]), [["d:desk", null], ["d:odd", "Odd is not available here"]]);
+  items[0].open();
+  assert.deepEqual(ran, [true]);
+  assert.equal(availabilityText(true, "X"), null);
+  assert.equal(availabilityText("  needs macOS  ", "X"), "needs macOS");
+  assert.equal(availabilityText("", "X"), "X is not available here");
+});
+
+test("launcher items pass their count hook through untouched, and only theirs", () => {
+  const { core } = fakeCore();
+  const icon = () => null;
+  const useCount = () => ({ n: 2, title: "2 asks" });
+  const items = createLauncherItemTable([
+    { id: "v", launcherItems: [{ id: "vault", label: "Vault", icon, open: () => {}, useCount }] },
+    { id: "d", launcherItems: [{ id: "desk", label: "Desktop", icon, open: () => {} }] },
+  ], () => core).items();
+  assert.equal(items.find((i) => i.key === "v:vault").useCount, useCount);
+  assert.equal(items.find((i) => i.key === "d:desk").useCount, undefined);
+});
+
+test("menu items: catalog ids are namespaced, ordered, and open with the active session", () => {
+  const { core } = fakeCore();
+  const icon = () => null;
+  const opened = [];
+  const features = [
+    { id: "a" },
+    { id: "links", menuItems: [
+      { id: "late", label: "late", icon, order: 5, open: () => {} },
+      { id: "links", label: "links", icon, open: (c, ctx) => opened.push([ctx.active.id, c === core]) },
+    ] },
+  ];
+  assert.deepEqual(menuItemCatalog(features).map((t) => [t.id, t.name]), [["links:links", "links"], ["links:late", "late"]]);
+  const items = createMenuItemTable(features, () => core).items({ id: "s1" });
+  assert.deepEqual(items.map((e) => e.key), ["links:links", "links:late"]);
+  items[0].open();
+  assert.deepEqual(opened, [["s1", true]]);
+  assert.deepEqual(menuItemCatalog([{ id: "a" }]), []);
 });

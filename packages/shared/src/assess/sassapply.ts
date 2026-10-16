@@ -84,11 +84,33 @@ export interface AssessName {
   category?: ItemCategory;
 }
 
+/**
+ * **Replace one row with two** — an approved `AssessSplit`.
+ *
+ * The host performs it as one unit: post `texts[0]` and `texts[1]` as ordinary
+ * work carrying the ORIGINAL row's trigger (clock, grace, hold — the same slot
+ * it was in) and `origin`, then ARCHIVE the original (never cancel: archived
+ * keeps its words and can be brought back) with `assessSplitReason`. If either
+ * post fails, the original is not archived. Not in `dismiss`, and the row loop
+ * neither ranks nor re-queues the id: the row is going away.
+ */
+export interface AssessSplitApply {
+  sid: string;
+  /** The row being replaced. */
+  id: string;
+  texts: string[];
+  origin: string;
+  rationale: string;
+}
+
 /** Everything applying does. The host performs these; nothing else. */
 export interface AssessMutations {
   dismiss: AssessDismiss[];
   rank: AssessRank[];
   post: AssessPost[];
+  /** Approved splits (`AssessChoices.splits`). Conflicts never appear in the
+   *  mutations at all — they are words. */
+  split: AssessSplitApply[];
   /**
    * **Ids of settled rows the approved verdict puts back in the queue** — the
    * `still wanted` half that a rank cannot express.
@@ -219,6 +241,20 @@ export function applyAssessment(
     }
   }
 
+  // Splits next, for the same reason: an approved split replaces the row, so
+  // its own verdict (a rank, a re-queue) must not also be carried out on it.
+  // `cleanAssessment` already refused a split beside a retiring outcome; the
+  // `done` check is the second lock for a proposal that did not come through it.
+  const okSplits = new Set(choices.splits ?? []);
+  const split: AssessSplitApply[] = [];
+  for (const s of proposal.splits ?? []) {
+    if (!okSplits.has(s.sid) || done.has(s.id)) continue;
+    const it = src.get(s.id);
+    if (!it || it.context || it.source !== "intent") continue;
+    done.add(s.id);
+    split.push({ sid: s.sid, id: s.id, texts: [...s.texts], origin, rationale: s.rationale });
+  }
+
   for (const r of proposal.rows) {
     if (!okRows.has(r.id) || done.has(r.id)) continue;
     const it = src.get(r.id);
@@ -277,5 +313,5 @@ export function applyAssessment(
     }
   }
 
-  return { dismiss, rank, post, requeue, pinRanks: choices.pinRanks === true, name };
+  return { dismiss, rank, post, split, requeue, pinRanks: choices.pinRanks === true, name };
 }

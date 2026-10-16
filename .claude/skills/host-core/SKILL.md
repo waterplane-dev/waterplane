@@ -32,11 +32,9 @@ One live PTY session, end to end: which binary it drives, how words get typed in
   `SessionStart`/`UserPromptSubmit`/`Stop`/`Notification`/`SessionEnd` hooks that curl
   `POST /api/hook` — the positive turn-boundary signal; no pipe ⇒ silence heuristics. Meaning: `backends/claude-sources.ts`. Limit-exit
   resurrection is `resume.ts`. **`drive.ts`'s `resize()` and the facade's `create()` FLOOR the
-  client's geometry** (`shared/ptysize.ts`): a grid the CLI cannot draw its composer in is a grid no
-  delivery can be read back from, and a phone that measured a collapsed container reported `54x3` —
-  28 straight echo misses and five stacked copies of one prompt. Clamped, never refused, and the
+  client's geometry** (rule: `shared` skill, `ptysize.ts`). Clamped, never refused, and the
   clamp is what heals a session already stuck small.
-- `sessions/core.ts` + `sessions/knobs.ts` + `sessions/tmux.ts` + `sessions/convid.ts` + `sessions/health.ts` + `sessions/ctxseries.ts` + `sessions/roster.ts` + `sessions/wall.ts` + `sessions/resume.ts` + `sessions/turn.ts` + `sessions/boxes.ts` + `sessions/drive.ts` + `sessions/record.ts` + `sessions/links.ts` — the first cut of `sessions.ts` into slices
+- `sessions/core.ts` + `sessions/knobs.ts` + `sessions/tmux.ts` + `sessions/convid.ts` + `sessions/health.ts` + `sessions/ctxseries.ts` + `sessions/roster.ts` + `sessions/wall.ts` + `sessions/resume.ts` + `sessions/turn.ts` + `sessions/boxes.ts` + `sessions/drive.ts` + `sessions/record.ts` + `sessions/links.ts` + `sessions/livemode.ts` — the first cut of `sessions.ts` into slices
   ([host-architecture.md](docs/notes/host-architecture.md)). `core.ts` is TYPES ONLY: `Session`,
   `LiveMeta`, `ClosedRow`/`RecentRow`, and **`SessionCore` — the one way a `sessions/` slice reaches
   shared state or another slice**. The facade implements it as a PRIVATE object literal whose every
@@ -47,6 +45,8 @@ One live PTY session, end to end: which binary it drives, how words get typed in
   import; safe because nothing assigns `process.env` at import — `hostshape` checks that.
   `tmux.ts` (S2) is the substrate (the only one): spawn inside tmux, re-attach, `tmux.conf`, the `live/`
   records and the orphan sweep; the tmux server/name constants are knobs so any slice may use them.
+  `rediscover()` deletes a `live/` record only past a SUCCESSFUL `tmux ls` (`staleLiveIds`: absent
+  from it, stamped with THIS server, older than 1 h, not held) — a failed listing is never an empty one.
   `convid.ts` (S3) finds which conversation a session is in (claude's project dir, opencode's
   store — exactly one candidate or none) and the running model; `health.ts` (S3) holds `noteFor`,
   the ONE direct `noteHealth` under `sessions/`, gated on `healthScope`.
@@ -78,8 +78,7 @@ One live PTY session, end to end: which binary it drives, how words get typed in
   summary** (removed 2026-10-01: it was the biggest unattended cost). **`nameTab()` is the ≤4-word
   name a phone TAB wears** (and the session header shows in FULL) (`SessionInfo.tabTitle`): its ONLY
   input is the session's FIRST PROMPT (`firstPromptOf`, `history[0].text`, ≤1000 chars) — never the
-  screen, a summary or a later prompt. Cheapest possible call (`SUMMARY_MODEL`, `--setting-sources
-  user`, `--tools ""`, own system prompt, no thinking), gated on the field being ABSENT so it fires
+  screen, a summary or a later prompt. Its flags are CLAUDE.md's (no thinking too), gated on the field being ABSENT so it fires
   once per session ever (the first `idle` after a prompt exists; `s.nameAsked` stops a refusal being
   re-bought) — a tab that renames itself cannot be learned — persisted as `{tab}` in
   `<state dir>/summaries/<id>.json` (old files' `text`/`len` ignored; a restart must never rename every
@@ -101,6 +100,11 @@ One live PTY session, end to end: which binary it drives, how words get typed in
   `awaitingCode`); a newline ⇒ one bracketed paste for zsh/fish, refused for anything else. A
   shell's create needs `origin.kind: "hand"` (`shellOpenRefusal`), its pane drops the daemon's
   `*_API_KEY`/`*_KEY_FILE`/`*_KEYCHAIN` (`LaunchPlan.dropEnv`), and it writes no prompt history.
+  `livemode.ts` is stateless functions: `SessionInfo.liveMode`/`.ultracode` off `permmode.ts`
+  (`checkMode` on `markIdle`'s quiet tick; a null reading DELETES `liveMode`, `ultracode` is sticky;
+  memory only) and `setMode` (`session.mode`): one shift+tab via `write`, re-read the LIVE grid until
+  the footer changes, stop on the target / a repeat (not in the cycle) / 6 presses; refused in words
+  with a box open or the footer unreadable; serialised per session (`modeChain`). Never counts positions.
   Stateful slices are built right after the hub, which is built first in the constructor.
 - `deliver.ts` + `deliver/deliverrun.ts` + `deliver/deliverreturn.ts` + `deliver/deliverknobs.ts` + `deliver/delivertypes.ts` + `deliver/deliverscreen.ts` + `deliver/deliverproof.ts` + `echo.ts` — **the one implementation** of "type into a live session like a human, and confirm".
   `deliver.ts` is the facade and the ONLY way in (`local/host-boundary` refuses a `deliver/*` import from outside the folder); `deliver/` holds its halves, MOVED, never copied — `runDelivery` to the echo verdict, its submit tail, the knobs, the types, the composer reader, the log/hook proof ([host-architecture.md](docs/notes/host-architecture.md), "The deliver slices").
@@ -132,7 +136,7 @@ One live PTY session, end to end: which binary it drives, how words get typed in
   PREFIX, so a match is evidence only if nothing else could have produced it** (`echo.ts`:
   `screenEcho` says WHICH rule matched, `echoAmbiguous` asks whether another open delivery shares the
   head; ambiguous ⇒ `retry` saying so, and NO health observation — nothing was typed, so no echo
-  was owed). **Don't fork this file.**
+  was owed).
 - `settle.ts` — what became of an unconfirmable delivery, asked LATER, from the CLI's log + screen:
   `landed` / `composer` / `absent` / `unknown`. **Read-only: it types nothing, ever.** **`absent`
   REQUIRES the log** and authorises a re-send, so a log turn is evidence for exactly ONE delivery
@@ -222,11 +226,15 @@ One live PTY session, end to end: which binary it drives, how words get typed in
   interrupt-once latch. Judged at the end of every `refreshSpark`, on `setSessionBudget`, and on
   `setBudgetCal`. **Only the crossing into `over` emits `budgetTripped`**; the latch clears on `ok`
   or a new cap, never on `unknown`, and **unknown never trips**. The crossing's notify + ONE Esc is
-  `server/sessionEvents.ts`'s, gated by `budgetEscBlocker` (interrupt on, env knob, hooked,
-  `turnFromHook` never `turnActive`, no box, no unconfirmed delivery) and then `budgetEscScreenBlocker`
+  `server/sessionEvents.ts`'s, gated by `budgetEscBlocker` (interrupt on, env knob, running, no box,
+  no unconfirmed delivery — NOT the hooks: agent-driven and post-restart turns never have a hook
+  turn) and then `budgetEscScreenBlocker`
   on the LIVE grid in the write's own tick (`workingLine` now, no box on it) — a raw
   `sessions.write`, never a `deliver.ts` fork. Flipping only `interrupt` keeps the latch.
+  **The Esc is OWED** (`budgetEscOwed`, persisted): retried on every judge while over
+  (`budgetEscDue`) until sent; a person's send, `interrupt` off, a new cap or `ok` settles it.
   `packages/host/test/sessionbudget.test.mjs`.
+- `halt.ts` + `sessions/haltall.ts` — the emergency halt: latch first, then kill. New spawn path ⇒ ask `haltRefusal()`.
 - `sessionSearch.ts` — a decision core lifted OUT of `SessionManager` so it can be asserted without a
   PTY. Hits are capped but keep being COUNTED.
 - `answergate.ts` — **the one way anything but a person's tap answers a choice box**
@@ -266,6 +274,10 @@ One live PTY session, end to end: which binary it drives, how words get typed in
   `repo(id)` reads through `contained` + `inRoot`, never a secret. `setupCheck`/`setupFix` are the
   ONLY way a setup row gets in (`compliance.ts` asks `setupcontrib.ts`); a core fix id is refused.
   `handle()` answers the registry's `call()` — what the generic `plugin.call` will route to.
+  **`api.stream` (1.4, `pluginstreams.ts`) is live binary on the ONE socket**: frames only to the socket
+  that sent `stream.open`, never durable/acked/retried, a dead socket or a plugin switched off ends its
+  subs; droppable frames skip past the backlog line, the key ask (and the key ending an episode) waits for the drain, and EVERY frame
+  waits while that socket's PTY is held (`liveness.ts`'s `ptyHoldsStreams`). `pluginstreams.test.mjs` · `e2e-stream.mjs`.
   **`handToAgent()` is the backlog add (`agentintents.ts`'s `handToAgentVia`), never a side door**:
   waits for a tap unless `fire`. In-repo extensions (`packages/extensions/<id>/`, `builtin.ts`) get
   the same API, load first, always on, compiled by `tsconfig.extensions.json` into `dist/extensions/`

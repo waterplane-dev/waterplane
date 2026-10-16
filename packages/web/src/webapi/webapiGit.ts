@@ -1,19 +1,23 @@
-import { SLOW_OP_TIMEOUT_MS, type GitStatus } from "@waterplane/shared";
-import { jget, jpost, nfetch } from "./webapiFetch";
+import { FETCH_TIMEOUT_MS, SLOW_OP_TIMEOUT_MS, type GitLog, type GitPushState, type GitStatus } from "@waterplane/shared";
+import { jget, jpost, jpostOk, nfetch } from "./webapiFetch";
+import { readBodyFused } from "./webapiBody";
 
-async function gitSide(url: string, path: string, side: "old" | "new", staged: boolean): Promise<Response | null> {
+async function gitSide(url: string, path: string, side: "old" | "new", staged: boolean, ms = SLOW_OP_TIMEOUT_MS): Promise<Response | null> {
   const q = new URLSearchParams({ path, side });
   if (staged) q.set("staged", "1");
-  const r = await nfetch(`${url}?${q}`, undefined, SLOW_OP_TIMEOUT_MS);
+  const r = await nfetch(`${url}?${q}`, undefined, ms);
   if (r.status === 404) return null;
   if (r.ok) return r;
   const body = await r.json().catch(() => null) as { error?: string } | null;
   throw new Error(body?.error || `the desktop answered ${r.status}`);
 }
 
-/** Git review (status, diff, stage, commit, push). One slice of `api` (see api.ts). */
+/** A media side's body may take a while on a thin link; what it may not do is
+ *  stop arriving. This long without a single byte is a dead transfer. */
+const BLOB_STALL_MS = 20000;
+
+/** Git review (status, diff, stage, commit, pull, push). One slice of `api` (see api.ts). */
 export const gitApi = {
-  // Git review (Tier 3)
   gitStatus: (repoId: string) => jget<GitStatus>(`/api/repos/${repoId}/git/status`),
   gitDiff: (repoId: string, path?: string, staged?: boolean) => {
     const q = new URLSearchParams();
@@ -27,8 +31,16 @@ export const gitApi = {
    * `gitText` a text file whole. `null` = that side has no such file (added /
    * deleted); any other refusal throws with the host's words.
    */
-  gitBlob: async (repoId: string, path: string, side: "old" | "new", staged: boolean): Promise<Blob | null> =>
-    (await gitSide(`/api/repos/${repoId}/git/blob`, path, side, staged))?.blob() ?? null,
+  gitBlob: async (
+    repoId: string, path: string, side: "old" | "new", staged: boolean,
+    onProgress?: (got: number, total: number) => void,
+  ): Promise<Blob | null> => {
+    // Headers take the generic fuse (the host answers in milliseconds); the
+    // body, megabytes of gif, takes a stall fuse (webapiBody.ts).
+    const r = await gitSide(`/api/repos/${repoId}/git/blob`, path, side, staged, FETCH_TIMEOUT_MS);
+    if (!r) return null;
+    return readBodyFused(r, BLOB_STALL_MS, onProgress);
+  },
   gitText: async (repoId: string, path: string, side: "old" | "new", staged: boolean) =>
     (await gitSide(`/api/repos/${repoId}/git/text`, path, side, staged))?.json() as Promise<{ body: string; truncated: boolean }> | null,
   gitStage: (repoId: string, path: string, unstage: boolean) =>
@@ -45,6 +57,18 @@ export const gitApi = {
    */
   gitMessage: (repoId: string) =>
     jpost<{ message?: string; reason?: string; limited?: boolean }>(`/api/repos/${repoId}/git/message`, {}, SLOW_OP_TIMEOUT_MS),
-  gitPush: (repoId: string) =>
-    jpost<{ ok: boolean; output?: string; error?: string }>(`/api/repos/${repoId}/git/push`, {}, SLOW_OP_TIMEOUT_MS),
+  /** The branch against its upstream — incoming, outgoing, the shared history (host `gitlog.ts`). */
+  gitLog: (repoId: string) => jget<GitLog>(`/api/repos/${repoId}/git/log`),
+  /** One commit's message and file stat. */
+  gitShow: (repoId: string, sha: string) =>
+    jget<{ body: string }>(`/api/repos/${repoId}/git/show?${new URLSearchParams({ sha })}`).then((r) => r.body),
+  /** `git fetch` of the upstream's remote — refs only, never the branch or the tree. */
+  gitFetch: (repoId: string) =>
+    jpost<{ ok: boolean; error?: string }>(`/api/repos/${repoId}/git/fetch`, {}, SLOW_OP_TIMEOUT_MS),
+  /** Fetch, then fast-forward (or replay local commits when both sides moved). Lands whole or changes nothing; a refusal is the host's sentence. */
+  gitPull: (repoId: string) =>
+    jpost<{ ok: boolean; output?: string; error?: string }>(`/api/repos/${repoId}/git/pull`, {}, SLOW_OP_TIMEOUT_MS),
+  /** Start (or join) the desktop's push JOB — its pre-push hook runs for minutes, never one held request — then ask after it (`null` = none since the desktop started). */
+  gitPush: (repoId: string) => jpostOk<GitPushState>(`/api/repos/${repoId}/git/push`, { background: true }),
+  gitPushState: (repoId: string) => jget<{ push: GitPushState | null }>(`/api/repos/${repoId}/git/push`).then((r) => r.push),
 };

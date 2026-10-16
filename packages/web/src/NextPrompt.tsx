@@ -23,16 +23,20 @@
  * reader, whose working line is its own strip. One mount, because the session
  * screen is one screen with two faces.
  */
-import { Hourglass, ListOrdered, ListTodo, Zap } from "lucide-react";
+import { Gauge, Hourglass, ListOrdered, ListTodo, Zap } from "lucide-react";
 import type { NextPromptView } from "./nextPromptState";
-import { skipQueueNote } from "./sendIntent";
+import { pastBudgetLabel, skipQueueNote } from "./sendIntent";
+import { Stowable, StowButton } from "./Stowable";
 
 const ICON = 14;
 
-export function NextPrompt({ view, onSendNow, onHold, onOpenQueue, onOpenBacklog, keepFocus }: {
+export function NextPrompt({ view, onSendNow, onPastBudget, onHold, onOpenQueue, onOpenBacklog, keepFocus }: {
   view: NextPromptView | null;
   /** The phone's ackId or the desktop's item id — `view.holder` says which. */
   onSendNow: (id: string, holder: "phone" | "desktop") => void;
+  /** *let it past the budget* on a desktop-held row the budget holds
+   *  (`view.budgetHeld`): `intent.waive` for that row id. */
+  onPastBudget: (id: string) => void;
   /**
    * *when it's free* on a phone-held entry. App decides which machine ends up
    * holding it: a live session's entry is re-aimed into the DESKTOP's queue
@@ -51,6 +55,9 @@ export function NextPrompt({ view, onSendNow, onHold, onOpenQueue, onOpenBacklog
 }) {
   if (!view) return null;
   return (
+    // Folded for THIS entry: the next one in line is a new decision and shows.
+    <Stowable slot="next-prompt" stowKey={`${view.holder}:${view.id}`} label="next prompt"
+      detail={view.behind > 0 ? `+${view.behind}` : undefined} icon={view.held ? Hourglass : Zap}>
     <div className={`nextp${view.held ? " nextp-held" : ""}`}>
       <span className="nextp-mark">{view.held ? <Hourglass size={ICON} /> : <Zap size={ICON} />}</span>
       <span className="nextp-body">
@@ -64,14 +71,25 @@ export function NextPrompt({ view, onSendNow, onHold, onOpenQueue, onOpenBacklog
             single-row skip-the-queue verb makes (`skipQueueNote`). Only where
             the button is drawn. */}
         {view.held && !view.wall && <span className="nextp-why">{skipQueueNote(false)}</span>}
+        {/* The milder verb's promise, beside it: only the budget is lifted. */}
+        {view.budgetHeld && !view.wall && <span className="nextp-why">past the budget: it still waits for this turn to end</span>}
       </span>
       {view.held ? (
         view.wall
           // Not a disabled button. The sentence IS the control's absence.
           ? <span className="nextp-cant">{view.wall}</span>
-          : <button className="key" data-hint="queue.sendnow" onPointerDown={keepFocus}
-              title={skipQueueNote(false)}
-              onClick={() => onSendNow(view.id, view.holder)}><Zap size={ICON} /> send now</button>
+          : <>
+              <button className="key" data-hint="queue.sendnow" onPointerDown={keepFocus}
+                title={skipQueueNote(false)}
+                onClick={() => onSendNow(view.id, view.holder)}><Zap size={ICON} /> send now</button>
+              {/* The budget is the wait, not the turn: lift that one rung for
+                  this row and leave *when it's free* standing. */}
+              {view.budgetHeld && (
+                <button className="key" onPointerDown={keepFocus}
+                  title="lifts the usage budget for this prompt only — it still goes in when this session is free"
+                  onClick={() => onPastBudget(view.id)}><Gauge size={ICON} /> {pastBudgetLabel(1)}</button>
+              )}
+            </>
       ) : (
         // Only ever offered on a PHONE-held entry: the park is this tab's, so
         // putting one on is something this tab can do. A desktop-held item is
@@ -99,6 +117,8 @@ export function NextPrompt({ view, onSendNow, onHold, onOpenQueue, onOpenBacklog
         <button className="key" onPointerDown={keepFocus} title="the whole queue for every session"
           onClick={onOpenQueue}><ListOrdered size={ICON} /> queue</button>
       )}
+      <StowButton className="key" />
     </div>
+    </Stowable>
   );
 }

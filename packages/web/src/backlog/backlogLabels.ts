@@ -1,13 +1,13 @@
 /**
  * The backlog sheet's tables, as DATA: what each verdict is called and which
- * icon it wears, the engine words of the last-look strip, the closed-target
+ * icon it wears, the closed-target
  * group key, and the one edge that decides which rows offer *drop the clock*.
  * No React here beyond the icon components themselves — `ActivitySheet` and
  * `AssessSheet` import the verdict and kind tables from this file, so a verdict
  * reads the same on every screen. Shape: docs/notes/backlog-architecture.md.
  */
 import { Bug, Check, CircleDashed, CircleHelp, Hourglass, Lightbulb, Loader, TrendingUp, TriangleAlert, Wrench, X, type LucideIcon } from "lucide-react";
-import type { BacklogCheckStatus, BacklogItem, BacklogValidateStatus, ItemCategory, SmartPickSummary } from "@waterplane/shared";
+import type { BacklogCheckStatus, BacklogItem, BacklogValidateStatus, ItemCategory } from "@waterplane/shared";
 
 /**
  * **Which rows offer *drop the clock*, in one place.**
@@ -21,25 +21,6 @@ import type { BacklogCheckStatus, BacklogItem, BacklogValidateStatus, ItemCatego
  * re-time.
  */
 export const dropOffered = (it: BacklogItem): boolean => it.status === "queued" || it.status === "failed";
-
-/**
- * The sentences a merged ROW says are `backlogFilter.ts`'s, beside the filter
- * rules — pure, and therefore pinned by `backlogFilter.test.mjs`. Only the
- * sheet knows which side of a merge is on screen, but the words themselves are
- * the deliverable and belong where a test can read them.
- *
- * The STRIP's wording is `@waterplane/shared`'s (`smartpickOutcomeText`) and is never
- * restated here either — the host writes the same sentence into its record and
- * its notification, and a second copy on the phone is a third chance for one of
- * them to stop being true.
- */
-/** What ran the pass, when the engine did not name a model. `claude-p` and
- *  `openai-compat` are wire words, not English, and the strip is read by a
- *  person deciding whether to leave an automatic spender switched on. */
-export const ENGINE_LABEL: Record<SmartPickSummary["engine"], string> = {
-  "claude-p": "claude, headless",
-  "openai-compat": "the local runner",
-};
 
 /**
  * The check verdicts, in words. Exported because `ActivitySheet` renders the

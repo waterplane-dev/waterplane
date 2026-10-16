@@ -11,6 +11,7 @@ import { refreshJob, takeJob } from "./actions";
 export { FirstRunCard } from "./FirstRunCard";
 export { openOnboard } from "./actions";
 export { useOnboardJob } from "./store";
+export { neverRanSession } from "./logic";
 
 export const manifest: FeatureManifest = {
   id: "onboard",

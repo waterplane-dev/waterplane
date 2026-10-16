@@ -41,6 +41,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
 import { E, SLUG, rootEnv } from "./lib-brand.mjs";
+import { waitForHost } from "./lib-e2e.mjs";
 
 const STUB = process.cwd() + "/scripts/claude-stub-tui.mjs";
 let failed = false;
@@ -94,7 +95,7 @@ async function boot(mode, port, extraEnv = {}) {
   });
   host.stderr.on("data", (d) => process.stderr.write(`[host:${mode}] ` + d));
   const base = `http://127.0.0.1:${port}`;
-  await sleep(900);
+  await waitForHost(port);
 
   const repo = await fetch(`${base}/api/repo`, {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "set" }),

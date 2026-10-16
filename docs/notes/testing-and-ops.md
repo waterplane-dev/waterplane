@@ -45,6 +45,7 @@ node scripts/e2e-ptyleak.mjs     # `main.js --doctor` exits on its own; stub ses
 node scripts/e2e-pin.mjs         # overview label: recorded prompts fill firstPrompt/lastPrompt; session.pin overrides the "last" slot + persists to .waterplane/pins.json
 node scripts/e2e-transcript.mjs  # reader view: /api/transcript parses the claude conversation log into turns/blocks (tools, results, thinking), outline fields, 204-on-unchanged, history fallback. A LOCAL command (`/context` + its `<local-command-stdout>`) is a turn of its own, `local: "log"`, its answer a `screen` block — while genuinely synthetic records still open nothing
 node scripts/e2e-search.mjs      # session.search: recent-scope (rendered PTY output) + history-scope (recorded prompts, turn-labelled) find; per-session vs all-sessions scoping
+node scripts/e2e-usagesources.mjs # usage readings per source: readings list (claude first), null probe absent, throw keeps until reset, plugin off drops it, /api/usagelog/:source
 node scripts/e2e-uiusage.mjs     # UI feature-usage counters: POSTed deltas merge + persist to .waterplane/ui-usage.json, junk ids/counts rejected, GET/DELETE
 node scripts/e2e-scaffold.mjs   # new project: repo on main + first commit, gitignore/README/CLAUDE.md, inbox+outbox+.waterplane dirs, setup:false stays bare, name traversal contained
 node scripts/e2e-backlog-echo.mjs # backlog delivery types the instruction EXACTLY ONCE: repaint-heavy TUI (composer buried behind trailing bytes) still delivers; an unreadable screen fails the item instead of re-hammering it; a TUI that echoes the text but SWALLOWS Return (hooked, so the missing turn is provable) fails saying the prompt is sitting unsent
@@ -56,11 +57,12 @@ node scripts/e2e-manualfire.mjs # a hand fire opens a session FOR the item — n
 node scripts/e2e-onesession.mjs # the INVERSION its name predates: two items for the same repo get TWO conversations, one at a time, in order (`sessioncost.ts` is why — see the script's own header)
 node scripts/e2e-backlog-keepopen.mjs # close-when-done OFF (the default): with one slot, a finished item's session is NOT closed by the linger or the reap, the next item waits saying "1 automatic session open (close one to make room)", backlog.list carries the open id as a fact, and a person's session.remove lets it run
 node scripts/e2e-backlog-slots.mjs # (with close-when-done switched ON) WATERPLANE_BACKLOG_SESSIONS as a RUNG: with one slot, three items in three repos run one at a time, each in its own session, the blocked ones say they are waiting for a slot, and a finished session is reaped to make room
-node scripts/e2e-smartpick.mjs  # the per-repo *smart pick*, the one feature in the backlog that APPLIES ITSELF — so what it pins is mostly the promises it makes to somebody who is asleep. Six repos groomed six different ways off one booted host, through a stub `claude` that dispatches on its own argv (a bash shell for the sessions the fired items run in, `e2e-assess.mjs`'s node answerer for the `-p` pass) and counts, per repo, how many completions it was asked for. An un-ticked repo buys ZERO — counted, not asserted to be small, and the counter deliberately ignores every `-p` that is not the pass (a fired item's own per-turn `summarize()` runs one too, in the same worktree; `--thinking disabled` is the flag only the pass carries). EVERY FAILURE FIRES THE ORDER THE REPO ALREADY HAD: an answer that is not JSON records `failed` and the item runs anyway, a pass that outlives its 800 ms watchdog records `timeout` and the item runs anyway, and NEITHER is bought a second time on the next tick — the fingerprint of the state the failure was recorded against is what makes a failure terminal. The answer that then arrives two seconds late is recorded `late` and applied to nothing, which is checked against a list it proposed to REVERSE. NOTHING IS DESTROYED: a merge's originals are archived, still listed, with their own words, each saying what replaced it; the merged text still names both `.claude/inbox/` paths its members pointed at; `undo` puts them back at the positions they had, re-points the row chained behind one of them, and the same merge is never proposed again. A DRAG IS NEVER RE-PLACED — the pass picks the third item, the second one stays where the person put it and runs first, and the strip says so. And a restart with an unchanged backlog re-derives NOTHING: the item fires off a fingerprint read from disk, having bought no second look. Under all of it, the pass types into nothing: the interactive half of the stub is counted separately, and it is at zero while the repo is being looked at. Found one thing nothing else could have: `intents.post()` kicks the tick SYNCHRONOUSLY, so posting a merged row re-entered the guard ladder between that post and the archive of its originals and bought a second pass against a half-applied list — two merged rows for one pair (`SmartPick.applying`)
 node scripts/e2e-resurrect-item.mjs # a backlog item whose own session exits at the usage limit FOLLOWS the revival instead of being requeued — the words run exactly once, and the row says what it is following while it waits
 node scripts/e2e-secret.mjs     # write-only secret setter: host + repo scope, gitignore gate (auto-add, refuse-on-tracked), masking, no read path
 node scripts/e2e-setup.mjs      # repo compliance checklist + idempotent auto-fixes (gitignore inbox/outbox, CLAUDE.md section); no gemini row any more
 node scripts/e2e-plugin.mjs     # plugins end to end: the fixture (scripts/fixtures/plugin-echo) listed active from a temp plugin-paths.json and a broken one listed with its reason, an out-of-range setting refused in words, an action answered, the plugin's suggestion on SessionInfo, and its answers held to the core's gate — refused with the session switch off, typed through the tap's path once on, refused for a blocked box
+node scripts/e2e-stream.mjs     # plugin streams (api.stream, 1.4): the fixture (scripts/fixtures/plugin-stream) opened over a real ws — binary frames decode, seq increases, params re-steer and one input reach the plugin once, a refusal in its words, close stops frames, a killed socket ends the sub (cause socket), and a socket that never opened one gets zero binary frames
+node scripts/e2e-desktop.mjs    # the live desktop (packages/extensions/desktop) end to end, SYNTHETIC only (WATERPLANE_DESKTOP_SYNTHETIC=1: test pattern, --no-capture, --dry-input): the first probe builds the real helper, an H.264 key decodes, a params change shrinks the picture, a crop brings a key, input is dropped with control off and logged as dry-input with it on, Auto reports its pick, close stops the helper. SKIPs off a Mac or without swiftc. Details: [desktop.md](desktop.md)
 node scripts/e2e-intentnodrop.mjs # the complaint's pin: post ten intents, kill the host, wind every clock this design deleted past its limit on disk (the phone's 30-minute TTL, its hour-long retire, the ack ledger's 45 minutes — that file is DELETED, which is what its own expiry does to a verdict), reboot, and assert all ten rows are still there with their prompts byte-identical, that none was given up on for waiting, that nothing in the store says "queued too long", and that re-posting the same intent ids past the wiped ledger UPSERTS onto the same ten rows rather than making ten more — the guard that made deleting the client TTL safe. Then fires one of them by hand, because "nothing was lost" has to mean the work still runs and not merely that the bytes are on disk
 node scripts/e2e-queue.mjs      # offline send queue: the per-session lane rules (one delivery in flight per session, queue order within a lane, an expired head doesn't block what's behind it, reorder stays inside the lane), a re-sent ackId is re-ACKed but NOT retyped (dedupe is per-ackId, not per-text), a gone session stays ok:false on retry, the full offline → reconnect → deliver → ack-gated Return path actually SUBMITS, and a re-sent `backlog.add` ackId adds the work item exactly once, plus the ANSWER rules: where a tapped answer is inserted (ahead of the lane's prose so it is not typed into the open dialog, behind an answer already queued so a checkbox box's toggles keep their order, never overtaking a pending entry) and that an answer can never be re-aimed at another session, plus the SERIAL rules (one member of a repo's group leaves per pass, an open still on the wire holds its group and not just its lane, and `busySerialGroups`: a repo is busy on the same three `laneBusy` facts, a just-created session holds it through `SERIAL_STARTUP_MS` before it reports anything, and a session that never came up stops holding it). **And the deletion this suite exists to guard**: nothing expires for waiting. A message ten hours old is still the head of its lane, a week down a dead tunnel changes nothing, a serial or budget hold that lasts all day is still a hold — the only give-up left is `maxAttempts`, i.e. a host that answered and said no
 node scripts/e2e-opqueue.mjs    # durable OPS: `session.create` (plain and in its `replaceSessionId` relaunch form)/`fanout.run`/`fanout.followup`/`build.run` carrying an ackId execute EXACTLY ONCE — a duplicate racing the first delivery (in-flight map) and a duplicate after it settled (persisted ledger) both re-ack without re-executing, a follow-up for an unknown run is refused instead of spawning, a relaunch kills the replaced session exactly once (and succeeds when its target is already gone), and the dedupe survives a host RESTART
@@ -71,6 +73,7 @@ node scripts/e2e-autopull.mjs # auto-download: the per-repo rule (glob patterns,
 node scripts/e2e-docs.mjs      # any-KIND file transport: pdf/zip/docx/audio/unknown-extension uploads round-trip byte-exact with the right content-type, a percent-encoded umlaut filename decodes back, `.env` is refused on both transport routes, and widening the SERVE gate did not widen DISCOVERY (a repo walk still skips source/config files while the curated outbox lists them)
 node scripts/e2e-limitrepaint.mjs # a REPAINT after a resume is not a new wall: blocked at boot, one continue resumes it, then a resize (a full tmux redraw with the old banner still on screen above the echo) and several idle passes — still not blocked, attempts still 1. Fails on the byte-stream rule: "after the last continue echo" is asked of the rendered grid, and still after the block cleared
 node scripts/e2e-tmux.mjs       # tmux sessions survive a HARD-KILLED host: rediscovered on boot, same id, still alive; and a row delivered before the kill whose turn is still running (a busy loop, its words in a fabricated conversation log) is RE-ADOPTED `running`, settles `done` only after the loop ends and the 3 s silence passes, and is never typed again
+node scripts/e2e-livereclaim.mjs # a `live/` record whose tmux session died while the host was down is deleted at the next boot — old, stamped with this server, absent from a SUCCESSFUL `tmux ls` — while a record whose session is alive, one younger than the age gate (30 s here via `WATERPLANE_STALE_LIVE_MIN_AGE_MS`) and an UNSTAMPED old one on a non-default socket are all kept, the live one is still rediscovered, and the host says so in one line
 node scripts/e2e-termqueries.mjs # the tmux client's start-up terminal queries are the HOST's to answer (`termqueries.ts`): with NO phone a session draws no full repaint at the client's ~5 s timeout and an Esc reaches the CLI at once; with a fake phone attached from the first byte no query reaches it, so nothing answers twice, and no reply leaks into the pane as text
 node packages/extensions/opencode/e2e/e2e-tmuxenv.mjs    # a backend's `spawnEnv` reaches the BINARY when the tmux server ALREADY EXISTS — the normal case, and the one the first version got wrong: merged into the tmux CLIENT's environment the variable is dropped, because tmux builds a pane's environment from the SERVER's plus `update-environment` once the server is up. For opencode that variable is `OPENCODE_DISABLE_AUTOUPDATE=1`, without which the CLI opens an update modal that swallows typed text and whose FOCUSED button is `Confirm` — so a blind "type, press Return" delivery upgrades the user's install. The script starts the server FIRST from an environment with the guard explicitly unset, then boots the daemon onto that socket, and reads the value back off the SPAWNED PROCESS's own screen; the control is a claude session, whose empty `spawnEnv` must leave its argv byte-identical (private socket, throwaway root)
 node scripts/e2e-webbundle.mjs  # the bundle the Android shell updates itself from: the manifest describes exactly the tree the daemon serves (build id = dist/build-id.txt, per-file sha256, sizes that add up), every file comes back byte-identical to its advertised hash, and a path from the phone cannot climb out of the bundle (`..`, absolute, a directory) — what these routes hand over becomes the app the phone RUNS
@@ -94,6 +97,8 @@ node scripts/e2e-prompt.mjs      # the choice-box detector against a REAL screen
 node scripts/e2e-promptlive.mjs  # a box being REDRAWN stays published: only the strict verifier retires a prompt, never output — dropping prompt state on every byte and rebuilding after 600 ms of quiet made the answer panel blink in and out about once a second, too briefly to read and impossible to tap. A box that really goes away still clears, under the same repaint stream
 node scripts/e2e-askprose.mjs  # a turn that ENDS ON A QUESTION is published as one, with no GEMINI_API_KEY set — the heuristic used to live inside the oracle's gate, so without a key nothing ever read the tail and a decision handed back in prose ("Want 2 implemented, or leave it at 1?") reached the phone as "Turn finished" on a row badged `done`. Pins that `session.asking` carries the agent's own words, that it is NOT a dialog (`prompt`/`awaitingInput` stay empty — nothing is blocked in the CLI), that a re-idle on the same unanswered question does not restart its clock, and that typing retires it. 6 assertions
 node scripts/e2e-checkbox.mjs    # the Submit row of a MULTI-SELECT box, which is not a keystroke: a bare Return TOGGLES whatever the cursor sits on (option 1, where it starts and where a digit does not move it), so the phone's Submit button re-flipped the user's first pick and left the box open, looking like it worked. `promptSubmit` walks the cursor onto the unnumbered `Submit` row against the RENDERED screen, and the SET submitted is the one that was ticked
+node scripts/e2e-trustbox.mjs    # claude 2.1.293's first-launch trust box (`STUB_MODE=welcome STUB_TRUST=1`): UNNUMBERED rows, cursor on "No, exit" — once read as nothing, so a new user's first session sat waiting with no buttons. Published as a `nav` trust box; the phone's `promptChoice` walks the cursor Down onto "Yes" against the rendered screen (`chooseClaudeNavBox`) and presses Return only there; the session is let in and the box retires. Detection and the walk's refusals: `packages/host/test/trustbox.test.mjs`
+node scripts/e2e-permmode.mjs    # the phone's mode picker, host half (`STUB_MODE=permmode` draws 2.1.293's footer and cycles it on shift+tab): `session.mode` reaches its target in exactly the presses the cycle needs, presses NOTHING when already there, goes round once and says so in words for a mode the cycle lacks, serialises two quick taps, and `liveMode` follows a raw shift+tab on the quiet tick — presses counted off the stub's input log
 node scripts/e2e-login.mjs       # `/login` from a phone: the CLI's 300-character OAuth URL, hard-wrapped by the GRID into six rows with nothing joining them — untappable, unselectable, untypeable. The host REJOINS it and publishes it on the session (one string, right down to the last row), says separately that the CLI is waiting for the code (a different next action), takes the code on the RAW path (text and Return as two writes — the verified path would wait for a turn a login never starts), and RETIRES the link once it is used, because a stale sign-in URL opens a page that refuses for no stated reason. Stub `STUB_MODE=login`
 node scripts/e2e-askbox.mjs      # the question as the CLI WROTE it, not as the terminal cut it: `AskUserQuestion` is a tool call, so its question and full per-option descriptions are in the conversation jsonl before anyone answers, while the screen's copy is truncated at the right edge, cut again by the preview pane and scrolled off on a tall box. Only a PENDING call counts (a `tool_result` means that box is gone), matching is by LABEL and never by index (the TUI appends its own rows and a truncated box starts above 1), a cut label is a PREFIX so containment runs one way only, and an unrecognised box is never claimed
 node scripts/e2e-pastechit.mjs   # a long prompt the TUI COLLAPSES is still confirmed AND fired, in BOTH of the collapse's shapes — by newlines, and by LENGTH alone (>800 chars), where the placeholder is bare `[Pasted text #1]` with no clause, no head and no tail, which is what every long message typed on a phone draws: the host writes it in one chunk, which is a paste, and the composer shows `[Pasted text #1 +11 lines]` — hiding exactly the head `echoProbe` looks for, so the Build sheet's 15-line "set up" prompt echoed perfectly, came back `unconfirmed` (the verdict that is never auto-retried) and sat one keypress from running behind a gravestone. The placeholder counts as the echo when it can be tied to THIS text; the whole contract is pinned at once — written exactly ONCE, Return after it, item completes
@@ -116,7 +121,7 @@ The e2e scripts are the SLOWEST of four layers, and the only ones that need a da
 of `SessionManager`, no daemon), and only then `run-e2e.mjs`. The e2e layer requires `npm run build`
 first; the other three do not need `packages/host/dist` to exist.
 
-**E2E runner:** `npm test` runs `scripts/run-e2e.mjs`, which DISCOVERS every `scripts/e2e-*.mjs` and runs them sequentially with a per-script timeout. A new script needs no registration — the old hand-maintained list in `package.json` silently drifted until two thirds of the suite never ran in CI. `node scripts/run-e2e.mjs git origin` filters by substring.
+**E2E runner:** `npm test` runs `scripts/run-e2e.mjs`, which DISCOVERS every `scripts/e2e-*.mjs` and runs them in a worker pool (`--jobs N` / `E2E_JOBS`, default 60% of the cores capped at 10; `--jobs 1` is the old one-at-a-time run with live output) with a per-script timeout. A new script needs no registration — the old hand-maintained list in `package.json` silently drifted until two thirds of the suite never ran in CI. `node scripts/run-e2e.mjs git origin` filters by substring. Why the pool is safe, and the serial list: [Parallel e2e](#parallel-e2e).
 
 **Stub TUI modes** (`scripts/claude-stub-tui.mjs`, `STUB_MODE`): `repaint` (composer visible behind KBs of repaint churn), `blind` (input never echoes), `deaf` (text echoes, every Return swallowed), `login` (the `/login` screen: an OAuth URL hard-wrapped into fixed-width ROWS the way a grid wraps one, the paste-the-code input, the dialog footer — and a code that signs in and clears the screen, so a test can also assert the published link retires). `STUB_HOOKS=1` makes the stub POST a `SessionStart` hook so the session counts as `hooked` — the tests that want the silence fallback leave it off, and only `deaf` needs it (a swallowed Return is only provable with the hook pipe live).
 
@@ -132,7 +137,7 @@ New host-spawning e2e scripts MUST keep both.
 
 The host also exits cleanly on `EADDRINUSE` (no half-bound zombie). After editing host/shared code, `npm run restart` is what loads the new build into the launchd service.
 
-Env knobs: `WATERPLANE_ROOT` (repo scan dir, default `~/dev`), `WATERPLANE_STATE_DIR` (the daemon's own global state — acks, sessions, settings, intents, keys, ledgers — default `$XDG_STATE_HOME/waterplane`, else `~/.local/state/waterplane`; outside the code root, moved there once at boot from `<ROOT>/.waterplane`; read from the process env only. **Every e2e host pins it to `<root>/.waterplane` through `lib-brand.mjs`' `rootEnv(root)`**, and `run-e2e.mjs` gives each script its own `XDG_STATE_HOME` as the belt, so no test host can touch the developer's real state), `WATERPLANE_PORT` (8770), `WATERPLANE_HOST` (bind addr; default Tailscale IP then loopback), `WATERPLANE_CLAUDE_BIN` (`claude`), `WATERPLANE_IDLE_MS` (backlog idle threshold, 10000), `WATERPLANE_IDLE_PING_MS` (turn-finished notification threshold, 4000), `WATERPLANE_STOP_VERIFY_MS` (how long a `Stop` hook is settled against the screen before it is believed, 1200 — `0` believes it at once), `WATERPLANE_AGENT_POLL_MS` (how often a session's running-agent list is re-read while any agent is running, 5 s — armed only while there is one) / `WATERPLANE_AGENT_STALE_MS` (how long an agent log may be quiet and still count as running when no task-notification has retired it, 10 min), `WATERPLANE_MAX_UPLOAD` (bytes, 64 MB default), `WATERPLANE_LIMIT_RETRY_MS` (auto-continue retry cadence when the banner has no reset time, 10 min), `WATERPLANE_LIMIT_RESET_BUFFER_MS` (delay after a parsed reset before continuing, 2 min), `WATERPLANE_LIMIT_MAX_ATTEMPTS` (24), `WATERPLANE_LIMIT_SWEEP_MS` (silent-session limit sweep, 60 s), `WATERPLANE_LIMIT_RESUME_GAP_MS` (breath between two queued resumes, 8 s) / `WATERPLANE_LIMIT_RESUME_SETTLE_MS` (how long the queue waits for a resumed session's verdict before releasing anyway, 90 s), `WATERPLANE_ALLOWED_HOSTS` / `WATERPLANE_ALLOWED_ORIGINS` (extra names/origins for the same-origin guard — a reverse proxy or custom alias), `WATERPLANE_SETUP_WATCH` / `WATERPLANE_SETUP_SWEEP_MS` (10 min) / `WATERPLANE_SETUP_RECHECK_MS` (6 h) / `WATERPLANE_SETUP_SWEEP_BATCH` (12) (the host-side repo setup sweep — `0` on the first stops it), `WATERPLANE_FANOUT_CONCURRENCY` (repos started+fed concurrently in a fan-out, 6), `WATERPLANE_PREFLIGHT` (`0` disables the boot doctor run), `WATERPLANE_VAPID_CONTACT` (VAPID subject for Web Push), `WATERPLANE_TMUX_SERVER` (tmux `-L` socket name; sessions always run inside tmux, a missing binary refuses every session in words (`tmuxreq.ts`) and fails the doctor's `tmux` row; the old `WATERPLANE_TMUX` knob is ignored and the doctor's `tmux-knob` row says so), `WATERPLANE_ALLOW_PUBLIC` (`1` binds the LAN interface — turns on the password gate), `WATERPLANE_THUMBS` / `WATERPLANE_COMPRESS` / `WATERPLANE_WS_COMPRESS` (`0` disables image thumbnails / HTTP br+gzip / WebSocket permessage-deflate — all on by default), `WATERPLANE_MAX_DEPTH` (repo-scan recursion depth), `WATERPLANE_CONFIG_DIR` (host-scope secret store; tests override it), `WATERPLANE_USAGE_TTL_MS` (`/usage` scrape cache, 8 min), `WATERPLANE_METER` (`0` stops recording LLM cost), `GEMINI_API_KEY` + `WATERPLANE_ORACLE` (`0` off) / `WATERPLANE_ORACLE_MODEL` / `WATERPLANE_ORACLE_AUTOFIRE` / `WATERPLANE_ORACLE_CONFIDENCE` / `WATERPLANE_ORACLE_SESSION_MAX` / `WATERPLANE_ORACLE_WEEKLY_MAX` (decision oracle), `WATERPLANE_OCR` (`0` off) / `WATERPLANE_OCR_MODEL` (the phone highlighter's image-text reader — same key, hand-asked, decides nothing). `.env.example` is the complete, user-facing list — keep it current when adding a knob.
+Env knobs: `WATERPLANE_ROOT` (repo scan dir, default `~/dev`), `WATERPLANE_STATE_DIR` (the daemon's own global state — acks, sessions, settings, intents, keys, ledgers — default `$XDG_STATE_HOME/waterplane`, else `~/.local/state/waterplane`; outside the code root, moved there once at boot from `<ROOT>/.waterplane`; read from the process env, the repo `.env` or the per-user `.env`, never the state dir's own — so an e2e host must pin it in its env, which beats every file. **Every e2e host pins it to `<root>/.waterplane` through `lib-brand.mjs`' `rootEnv(root)`**, and `run-e2e.mjs` gives each script its own `XDG_STATE_HOME` as the belt, so no test host can touch the developer's real state), `WATERPLANE_WSL_DISTRO` (Windows launcher only: the distro the host runs in, default WSL's default), `WATERPLANE_PORT` (8770), `WATERPLANE_HOST` (bind addr; default Tailscale IP then loopback), `WATERPLANE_CLAUDE_BIN` (`claude`), `WATERPLANE_IDLE_MS` (backlog idle threshold, 10000), `WATERPLANE_IDLE_PING_MS` (turn-finished notification threshold, 4000), `WATERPLANE_STOP_VERIFY_MS` (how long a `Stop` hook is settled against the screen before it is believed, 1200 — `0` believes it at once), `WATERPLANE_AGENT_POLL_MS` (how often a session's running-agent list is re-read while any agent is running, 5 s — armed only while there is one) / `WATERPLANE_AGENT_STALE_MS` (how long an agent log may be quiet and still count as running when no task-notification has retired it, 10 min), `WATERPLANE_MAX_UPLOAD` (bytes, 64 MB default), `WATERPLANE_LIMIT_RETRY_MS` (auto-continue retry cadence when the banner has no reset time, 10 min), `WATERPLANE_LIMIT_RESET_BUFFER_MS` (delay after a parsed reset before continuing, 2 min), `WATERPLANE_LIMIT_MAX_ATTEMPTS` (24), `WATERPLANE_LIMIT_SWEEP_MS` (silent-session limit sweep, 60 s), `WATERPLANE_LIMIT_RESUME_GAP_MS` (breath between two queued resumes, 8 s) / `WATERPLANE_LIMIT_RESUME_SETTLE_MS` (how long the queue waits for a resumed session's verdict before releasing anyway, 90 s), `WATERPLANE_ALLOWED_HOSTS` / `WATERPLANE_ALLOWED_ORIGINS` (extra names/origins for the same-origin guard — a reverse proxy or custom alias), `WATERPLANE_SETUP_WATCH` / `WATERPLANE_SETUP_SWEEP_MS` (10 min) / `WATERPLANE_SETUP_RECHECK_MS` (6 h) / `WATERPLANE_SETUP_SWEEP_BATCH` (12) (the host-side repo setup sweep — `0` on the first stops it), `WATERPLANE_FANOUT_CONCURRENCY` (repos started+fed concurrently in a fan-out, 6), `WATERPLANE_PREFLIGHT` (`0` disables the boot doctor run), `WATERPLANE_VAPID_CONTACT` (VAPID subject for Web Push), `WATERPLANE_TMUX_SERVER` (tmux `-L` socket name; sessions always run inside tmux, a missing binary refuses every session in words (`tmuxreq.ts`) and fails the doctor's `tmux` row; the old `WATERPLANE_TMUX` knob is ignored and the doctor's `tmux-knob` row says so), `WATERPLANE_ALLOW_PUBLIC` (`1` binds the LAN interface — turns on the password gate), `WATERPLANE_THUMBS` / `WATERPLANE_COMPRESS` / `WATERPLANE_WS_COMPRESS` (`0` disables image thumbnails / HTTP br+gzip / WebSocket permessage-deflate — all on by default), `WATERPLANE_MAX_DEPTH` (repo-scan recursion depth), `WATERPLANE_CONFIG_DIR` (host-scope secret store; tests override it), `WATERPLANE_USAGE_TTL_MS` (`/usage` scrape cache, 8 min), `WATERPLANE_METER` (`0` stops recording LLM cost), `GEMINI_API_KEY` + `WATERPLANE_ORACLE` (`0` off) / `WATERPLANE_ORACLE_MODEL` / `WATERPLANE_ORACLE_AUTOFIRE` / `WATERPLANE_ORACLE_CONFIDENCE` / `WATERPLANE_ORACLE_SESSION_MAX` / `WATERPLANE_ORACLE_WEEKLY_MAX` (decision oracle), `WATERPLANE_OCR` (`0` off) / `WATERPLANE_OCR_MODEL` (the phone highlighter's image-text reader — same key, hand-asked, decides nothing). `.env.example` is the complete, user-facing list — keep it current when adding a knob.
 
 **Older names (waterplane was formerly USMC).** Every knob is also read under its old `USMC_` prefix: `env()` prefers `WATERPLANE_X`, falls back to `USMC_X`, and the host reports a legacy-named knob once at boot with the name to use instead. The same fallback applies to the config dir (`~/.config/usmc` → `~/.config/waterplane`, renamed at boot with a symlink left behind), the state dir (`<root>/.usmc` → `.waterplane`; a repo's own `.usmc/` is read as-is until its setup row is tapped), the plugin manifest (`usmc-plugin.json`), the LAN cookie and WebSocket subprotocol, the `usmc://` pairing scheme, and the phone's `usmc.*` storage keys (copied, never moved). All of it comes from `LEGACY` in `packages/shared/src/brand.ts`; the cleanup release that drops a legacy entry removes the fallbacks with it.
 
@@ -294,6 +299,27 @@ step) and `freePort()` kills whatever holds them — **but only a process whose 
 `packages/host/dist/main.js`**, and never `WATERPLANE_PORT`/8770, so the runner can never take down the
 daemon the developer is using or a stranger's process that happens to hold 8813.
 
+**…and it may clear a port only once it OWNS it.** `freePort()` cannot tell a stale host of this run
+from a LIVE host of another run — both are `dist/main.js` on the port — and two `git push`es run two
+full suites at once. Suite B starting `e2e-submit` (8836) SIGKILLed suite A's host mid
+`e2e-smartpick` (8836 too; since removed): A reported 123/124, B passed, and it read as that script being flaky under
+load. So each script first takes `/tmp/<slug>-e2e-ports/<port>.lock` (pid inside, `wx`) for every
+declared port, ascending, and releases them all before the next script asks — no run holds a port
+while waiting for another, so two runs cannot deadlock. The other run is WAITED for, never killed; a
+lock whose pid is no longer a `run-e2e` is taken over, so a crashed run never wedges the next.
+
+**…and a takeover has exactly one winner** (`scripts/lib-portlock.mjs`, pinned by
+`tools/portlock.test.mjs`). The first version unlinked a stale lock and retried `wx`: two runs reading
+the same dead pid both unlinked — the second one removing the FIRST one's fresh, live lock — and both
+held the port. And `wx` is create-then-write, so a reader in between read an empty file as "no owner"
+and removed a lock a microsecond old. Now a lock is created only by `link(tmp, lock)` (the pid is in it
+before the name exists), and a stale one is removed only inside an exclusive `mkdir` takeover mutex,
+after its owner is read again there — nothing else ever removes another run's lock, so the file that
+re-read judged is the file the unlink removes. `ps` failing to spawn (a machine out of processes)
+reads as ALIVE: a wrong "dead" is a live host killed, a wrong "alive" is a wait. The test forces both
+interleavings through hooks and then has eight processes take over a dead run's lock at once, three
+rounds; the old algorithm fails that in round 0.
+
 **Reaping is not enough on its own — the runner WAITS for the group to be gone.** Killing is
 asynchronous, and the e2e ports are hand-assigned and SHARED: five scripts sit on 8796
 (`uiusage`, `hook`, `images`, `backlog-prompt`, `tmux`). That is fine for a sequential runner, and
@@ -309,6 +335,197 @@ the hosts it spawned. They survive holding their ports — the very failure the 
 fix, arriving through the other door, and it was observed within minutes of the change. Hence
 `liveGroups` and the `SIGINT`/`SIGTERM`/`SIGHUP` handlers: interrupting the runner reaps every group
 it still has open.
+
+## Parallel e2e
+
+The suite ran one script at a time: 125 scripts, 1317 s of a 1420 s pre-push. Almost all of that is
+WAITING (a host booting, a settle window, a stub's turn), not CPU, so `run-e2e.mjs` now runs a pool.
+Measured 2026-10-08 on the 16-core desktop with other sessions loading it (load average ~15–20):
+**219–223 s at `--jobs 6`** for all 125 (two runs on `1a470120`; 250–390 s in runs where something
+else spiked the load past 140). The default went from 6 to 10 on 2026-10-16: the gate showed 20%
+CPU at 6, and a simulation off `e2e-times.json` put 10 at ~150 s against ~220 s. Wider buys
+nothing until two scripts stop sharing a port — `e2e-settle` and `e2e-settlesweep` both own 8861,
+~140 s back to back. What makes running side by side safe:
+
+- **Ports serialize inside a run.** The port lock is owned by a PID, and every worker of one run is
+  the same PID — `tryAcquire` hands a port back to its own owner, so the lock cannot keep two workers
+  apart. The scheduler does: `nextRunnable` starts a queued script only when none of its declared
+  ports (`portsOf`, the same 8xxx literals) is held by a running sibling, and skips ahead to one
+  that is free. The five scripts on 8796 still run one after another, never into each other's bind.
+  **So every port is a LITERAL**: `hiddenPortsOf` refuses a script that derives one (`PORT + 1`).
+  `e2e-backlog-echo` booted hosts on 8812+1 and +2, the scheduler knew only 8812, and its retrying
+  bind took 8813 in `e2e-restore`'s restart gap — restore's second host locked out, its requests
+  answered by the wrong host ("recent list … got 0", 2 of 16 under load, 2026-10-16).
+  Across RUNS the lock files work as before, and each script still takes them ascending, so two
+  pools cannot deadlock either.
+- Scripts that boot through `bootHost`/`freePort()` get an OS-assigned ephemeral port (49152+),
+  outside the 8790–8960 range the literals live in.
+- **Every per-user dir is per SCRIPT now**: config dir, `XDG_DATA_HOME` and `XDG_STATE_HOME` under
+  the run's sandbox, named after the script. The config dir used to be one for the whole run — fine
+  serially, one script's secrets and plugins in another's host in parallel.
+- tmux was already per script (`TMUX_TMPDIR`, `lib-tmuxiso.mjs`); TMPDIR is the run's one
+  `with-tmp.mjs` dir, inside which every script `mkdtemp`s its own names. The scripts that read
+  `~/.claude/projects` build a scratch HOME of their own. A full run was checked for writes under
+  the real `$HOME` outside the runner's own `~/.cache/<slug>/e2e-times.json`: none.
+- **Output stays readable**: each script's stdout+stderr go into ONE buffer in arrival order and are
+  printed whole, with the verdict, when it ends. The child's `exit` (not `close`) ends a script: a
+  host spawned with inherited stdio holds the pipe until the reap kills it, so `close` would wait
+  for the timeout.
+- **Longest first.** `~/.cache/<slug>/e2e-times.json` keeps each script's last duration and the
+  pool starts the slowest first (`intentnodrop` 140 s, `intent` 92 s, `settle` 88 s), so a long
+  script never starts last with five idle workers. It only orders; `E2E_TIMES=0` turns it off.
+
+**The serial list** (`SERIAL` in `run-e2e.mjs`) is for a script that cannot share the machine for a
+reason its own source cannot fix without weakening an assertion; each entry carries its reason and
+they run alone after the pool drains. **It is empty.** `e2e-restore` and `e2e-backlog-echo` were in it
+for one day: they booted a second (and third) host and sent it a request after a fixed `sleep(900)`,
+and beside five other boots that host had not bound yet — `ECONNREFUSED` in most parallel runs, a
+pass every time alone. That is the race `bootWait` removed from 47 scripts, and its fix is in the
+script (`waitForHost(port)`, landed for 33 scripts in `1a470120`), so they came back out. Nothing
+has ever been in the list for a CONCURRENCY reason: no script failed on a port, a dir or a tmux
+server another one held. And a flake is not a reason either: `e2e-search` ("a token only in the
+turn's OUTPUT is found", one search after a fixed 1600 ms sleep for an async render) failed once in
+six parallel runs — and twice in five runs ALONE, so the pool did not cause it and `SERIAL` would
+not cure it; the fix is to poll that search to a deadline.
+
+**A load throttle, for the same race arriving from outside.** One run was made while something
+else drove the machine to a load average of 159: 14 scripts failed, every one on `ECONNREFUSED`
+against a host booted with a fixed sleep. So the pool starts no NEW script while the 1-minute load
+average is above twice the cores (`E2E_MAX_LOAD`, `0` = off) — one always keeps running, so it
+degrades toward serial, never to a stop — and says so when it throttles and when it resumes.
+
+## The pre-push gate
+
+The hook is local CI generated from `~/.local-ci/` (`prelude.sh` + `steps/usmc.steps`, concatenated
+into `.git/hooks/pre-push` by `install.sh usmc`; shared with other repos, whose hooks call none of
+the helpers below). What it does for this repo:
+
+- **It tests the PUSHED commit, in a clean detached worktree under `/tmp`** with this clone's
+  `node_modules` symlinked in (as `scripts/verify-rev.sh` does) — never the working tree. It used
+  to run `npm run build` and `npm test` in `~/dev/usmc` itself, i.e. on whatever several sessions
+  had half-edited at that moment, and it rebuilt `packages/web/dist` (the bundle phones pull over
+  the air) from that tree. `GIT_DIR` & co. are unset first: from a linked worktree git exports an
+  absolute one, and tests that `git init` a temp dir then write into the real repo.
+- **A result cache keyed on the tree**: `sha256(git rev-parse <sha>^{tree}, the installed hook's
+  own bytes, node -v, tmux -V, node_modules/.package-lock.json)`. The deps are the INSTALLED
+  lockfile because the run borrows `node_modules`; the tree's lockfile is already in the tree hash;
+  the hook's bytes cover the prelude and the steps. A green run appends its mode to
+  `~/.local-ci/cache/usmc/pass/<key>`; a push whose tree already passed in a mode at least as strong
+  (`full` ⊇ `fast` ⊇ `docs`) prints one line and skips. `LOCAL_CI_NOCACHE=1` runs anyway.
+- **One suite per repo at a time**: a `flock` held by a small perl process that exits when the hook
+  does (even on `kill -9`). A second push waits, then usually hits the cache the first one wrote.
+- **Scoping**: the files `git diff --name-only <remote sha> <pushed sha>` lists. When every one is
+  docs — `docs/**`, top-level `*.md`, `.claude/skills/**/*.md`, any `README*` — the run is
+  `npm run build` (~15 s: `tools/hostrestpins.test.mjs` in `test:unit` imports `packages/host/dist`),
+  lint, `test:unit` and `test:host`: no audit, no e2e. `test:host`
+  stays because `packages/host/test/nodepin.test.mjs` reads README/CONTRIBUTING/SECURITY/
+  `docs/guide.md`; `tools/claudemd.test.mjs` (CLAUDE.md and the skills) and the diagram/brand/
+  release tests are in `test:unit`. Skills count as docs because nothing builds or ships them and
+  every check over them is in `tools/`. Markdown that is NOT docs: `packages/*/templates/**`
+  (scaffolded into new repos, asserted by host tests and e2e), `packages/web/public/**` (ships),
+  `**/fixtures/**`, `deploy/**`. A new branch (no remote ref), a remote sha this clone does not
+  have, or an empty diff gets the full run. The chosen mode and its reason are printed.
+- **The checks between the build and e2e run AT ONCE** (`usmc_checks` → `step_group` in
+  `prelude.sh`): lint, `test:unit`, `test:host`, audit and the VS Code leg. One after another they
+  were ~107 s; together `test:host` (~67 s) is the whole wait. They call `test:unit:only` and
+  `test:host:only` — the same tests without their own rebuild of shared/host, which the build step
+  just did, and which two at once would race on one `dist/`. Each step's output goes to a file and
+  prints as ONE block in `step()`'s exact format when it ends (finish order), because
+  `packages/host/src/pushprogress.ts` reads `> name` … `ok (Ns)` line by line; every step runs to the
+  end so one push reports every failure. Each job has its own process group, so Ctrl-C kills them
+  all (a non-interactive shell's background jobs ignore SIGINT). A tree without the `:only` scripts
+  (an old branch) gets the old serial run.
+- **The VS Code extension leg** (`npm run test:vscode` → `scripts/vscode-check.mjs` →
+  `packages/vscode`'s `check`: typecheck, tests, `.vsix` package check; ~8 s) runs on every
+  non-docs push, beside `test:host`. The extension bundles host and web modules from SOURCE — one
+  copy of the code, no shared npm package — so a change to `tokenscan`, `ctxlog/*`, a chart
+  component or `tools/repohealth*` can break it while every root test is green: esbuild does not
+  typecheck. It runs on every non-docs push rather than on a list of watched paths, because that
+  list is exactly what would go stale. Its deps are its own lockfile (`npm ci --prefix
+  packages/vscode`), symlinked into the worktree like the root's; when they are not installed the
+  leg is skipped loudly, and their lockfile is in the cache key.
+- `LOCAL_CI_FAST=1` (no e2e), `SKIP_LOCAL_CI=1` and `--no-verify` work as before.
+
+## Guards before the push
+
+The pre-push gate is the net, and it was the only place the cheap guards ran. On 2026-10-09 a
+commit added a `web-work` skill bullet naming `gitFailPrompt.ts`: the skill went 407 chars over its
+cap and the module was described nowhere in `docs/notes/`. Both are `tools/claudemd.test.mjs`
+checks that take 0.3 s — and they were reported at a push three commits and one other session's
+commit later, on a phone, as the tail of a 45-second log. The session that wrote the bullet had
+long moved on. So every guard in `tools/*.test.mjs` now also runs at the EARLIEST moment its cost
+and inputs allow, and `scripts/guards/guards.mjs` says which (`GUARDS`, one row per guard file;
+`tools/guards.test.mjs` fails on a guard file with no row, so a new guard is a decision about
+when it runs, never a default):
+
+| tier | when | may | measured (16 cores) |
+|---|---|---|---|
+| `edit` | Claude `PostToolUse` on Edit/Write/MultiEdit (`.claude/settings.json` → `edit-hook.mjs`) | read files only — no npm deps, no build, no git | 0.2–0.4 s per file; the whole tier in parallel 0.4 s; an edit matching no guard 0.07 s |
+| `commit` | git `pre-commit` (`precommit.mjs`, installed from `~/.local-ci/steps/usmc.pre-commit`) | + `typescript`/`eslint`, spawn node | every edit+commit guard 3.5 s; the replayed skill commit 0.6 s with the export |
+| `push` | the pre-push gate only | needs a built `dist/` or git history | — (activitypins, plotpins, annotatorpins, webclientpins, hostrestpins, demo-scenario, repohealth*, brand, publictree) |
+
+Each row lists the repo paths its guard reads, and only guards whose paths the edit (or the staged
+change) touches run.
+
+**A guard the allow-list keeps private is absent from the public tree, and that is fine.** `GUARDS`
+lists every `tools/*.test.mjs`, including those `deploy/public-allowlist.txt` withholds
+(`uicaptions`, `uipace`, `uiteaser`, `uiencode`, `uifilm`, `stublogo`). `tools/guards.test.mjs` tolerates a listed but
+missing guard only when `classify()` (`scripts/release/public-lib.mjs`) says its path is not public —
+the allow-list stays the one record of what is private, and a public guard that goes missing still
+fails; "every guard on disk has a row" stays strict. `guardsFor(changed, tier, root)` drops a guard
+whose file is not under `root`, so an edit in the public tree never hands `node --test` a missing file. A Bash-tool edit (sed, a heredoc) is not an Edit and is not seen at edit time;
+the commit tier catches it.
+
+**The working tree is shared, so a failure is blamed, not just reported.** A guard reads the whole
+tree, so it also fails on another session's half-written file — and an agent told "your edit broke
+this" would go and fix a file somebody else is in the middle of writing. The edit hook BLOCKS (exit
+2, stderr to the agent) only when the failure names this edit (`blames` / `editTokens`): its path,
+its file name, its skill (`web-work:`, how the claudemd guards list one), or a module the NEW text
+names — which is how the bullet naming `gitFailPrompt.ts` owns "gitFailPrompt.ts is described
+nowhere" though that failure never mentions SKILL.md. An offender list (`actual`, what the
+deepEqual guards fail with) is matched on its own, because the prose around it names `CLAUDE.md`
+in every message. Any other failure is said ONCE per session as context, explicitly as probably
+someone else's. The pre-commit side needs no blame: it never reads the working tree. It exports the
+index (`git checkout-index` honours the `GIT_INDEX_FILE` git sets for `commit -a` and partial
+commits) to a temp dir, borrows `node_modules`, and strips every `GIT_*` variable so nothing inside
+can reach the real repo — the same reason the pre-push gate unsets them.
+
+**Room before the cap.** Editing `CLAUDE.md` or a capped skill within 5% of its cap says how much
+room is left, once per session, with the caps read out of `claudemd.test.mjs` (one copy of each
+number). The fix for the failure above landed `web-work` at exactly 28,000 of 28,000; the next
+bullet fails, and now the agent adding it hears that before writing it rather than after.
+
+**Output is context, so it is short.** A hook's words are re-sent on every later turn: a pass
+prints nothing, a failure prints the test name and its message (capped), never a stack.
+`WATERPLANE_EDIT_GUARDS=0` (read through `envName`, so a rebrand renames it) turns the edit tier off for a session; `--no-verify` / `SKIP_LOCAL_CI=1`
+skip the commit tier. Two traps found building it: `node --test` with NO files discovers every test
+under cwd (so an empty list returns before spawning), and a `node --test` started from inside a
+test run inherits `NODE_TEST_CONTEXT` and streams to the parent runner instead of to the reporter
+(`scripts/guards/reporter.mjs`, one JSON line per failure).
+
+## The real-CLI smoke (`scripts/smoke-real-cli.mjs`)
+
+Every e2e script drives `claude-stub-tui.mjs`, so a CLI release that moves a box, renames a flag
+or reshapes its log passes `npm test` untouched — the stub is the one thing guaranteed not to have
+changed. `smoke-real-cli.mjs` is the opposite test: the built daemon driving the REAL binary (real
+HOME for the login; temp root, own state dir, private tmux socket dir) through one Haiku session —
+boot under our flags, `cliVersion`, the trust box detected and tapped, a Bash permission box
+(`mkdir`, because a read-only `echo` is approved without asking) detected and tapped, the tool
+result read back off the transcript, hooks, the context ledger, the `clihealth` rollup. A step the
+detector misses is stepped past with the keys a person would press, so one run names every broken
+step. `--json <file>` writes the report. Opt-in, not in `run-e2e`: it spends a few cents and needs
+a signed-in `claude`.
+
+First run, 2026-10-07 on 2.1.293, found two regressions the stub suite could not: the Bash box's
+command framed in `╌` rules that filled the question and lost "Do you want to proceed?" (fixed in
+`prompt.ts`, pinned in `prompt.test.mjs`), and a trust box drawn with NO numbers and the cursor on
+"No, exit" (fixed: `readNavBox`, answered by walking — `trustbox.test.mjs`, `e2e-trustbox.mjs`).
+The smoke answers each box as the phone does: the option that says yes, by `promptChoice` on a
+`nav` box (a digit there types nothing), its digit otherwise. The same box broke the usage probe
+(`usage.ts`, `trustKeys`): its `1⏎` pressed "No, exit" and the gauge read `? / ? wk`.
+
+`E2E_BOOT_MS` lengthens `waitForHost`'s 20 s (every `bootHost`): a host booted from a Windows
+checkout inside WSL loads its modules over 9P and needs 28–44 s.
 
 ## The rough map, and the three scripts described nowhere else
 
@@ -327,7 +544,7 @@ What each pins: the per-script sections above. Rough map —
 `backlog*`/`manualfire`/`onesession`/`fanout` work delivery · `agentintent` an agent's loopback post for later (one row per key, the mark, browsers/proxies refused) · `queue`/`opqueue`/`ack`/`submit`/
 `answer`/`startprompt` the offline send queue and at-most-once rules ·
 `autopull`/`netfuse`/`netstats` download queue + link telemetry ·
-`hook`/`limit`/`limitqueue`/`resurrect`/`resume`/`restore`/`tmux` session lifecycle ·
+`hook`/`limit`/`limitqueue`/`resurrect`/`resume`/`restore`/`tmux`/`livereclaim` session lifecycle ·
 `fanout` also pins that a sweep SURVIVES a restart mid-run and reconciles, rather than losing its
 run record entirely ·
 `notifyprefs` which alert kinds may fire at all ·
@@ -347,6 +564,7 @@ honest: an unreadable box IS a miss, prose that merely says the footer's words r
 `echo-stream` the composer found by its BOX through a torn render, with no Esc into the live turn ·
 `settle` re-deciding a delivery whose verdict was ambiguous, from the CLI's own log ·
 `transcript`/`search`/`pin`/`star`/`sent`/`settings`/`hints`/`uiusage` UI-facing state ·
+`usagesources` one usage reading per source (claude first, Copilot's quota off a stub gh, a plugin's `api.usageProbe`): null = absent, a throw keeps the last reading until its reset, a switched-off plugin loses its source, `/api/usagelog/:source` ·
 `screenlog` the locally rebuilt terminal scrollback (the pan that needs no socket) ·
 `gallery` which cached file listing may answer which question with the link down ·
 `tree` browsing the worktree and the rules a file SAVE obeys (base-sha or nothing) ·
@@ -355,10 +573,6 @@ honest: an unreadable box IS a miss, prose that merely says the footer's words r
 `--fork-session` on top, which opens a third conversation), the source log untouched, a refusal that
 is a refusal rather than a session on the whole conversation, and a replayed ackId spawning nothing ·
 `assess` (in flight) the repo assessment: a proposal is a diff, and nothing applies itself ·
-`smartpick` the look a repo takes before its next item fires — the one thing here that APPLIES
-ITSELF, so: un-ticked costs zero completions (counted), every failure fires the order that was
-already there and is not retried, a merge archives its originals and `undo` puts them back, a drag
-is never re-placed, and a restart re-derives nothing ·
 `capture` the verified capture loop, driven through `scripts/capture-stub.mjs` (a fake ciqkit — the
 only backend of the four a build machine can run): the frame AND its sidecar under
 `.claude/outbox/`, both served by the artifact route; the verdict line asserted as a GRAMMAR rather
@@ -449,6 +663,20 @@ already runs strict with `noUnusedLocals`/`noUnusedParameters`/`noFallthroughCas
 
 `tools/diagrams.test.mjs` keeps the hand-drawn `docs/assets/architecture*.svg` honest: every path or module file a `<text>` names must exist under an explicit list of search roots (a few non-repo names are allowed, each with a reason), the architecture note links every picture, and the README links the note. A diagram that names something gone fails with "update the picture in the same commit as the code".
 
+`tools/importcycles.test.mjs` holds `packages/{shared,host,web}/src` to ZERO runtime import cycles
+(Tarjan's SCCs over the TypeScript parser's imports; `import type`, `export type` and all-`type`
+brace lists are erased and skipped, web's `@waterplane/sdk`/`kit` aliases resolved). In an ESM ring the
+module evaluated first depends on which file was ENTERED first, so a top-level read of an import — a
+cache, a store, a table built at load — works from `main` and is `undefined` from a test that enters
+mid-ring. Six rings were cut when it landed: the ledger readers (`agents.ts` reads `claudeconfig.ts`,
+`ctxlog/ctxupdate.ts` reads `transcript/transcriptlog.ts`, not the barrel), the HTTP client ↔ link
+store (`webapiFetch.ts` reads `link/linkOps.ts`), the link store's slices (emit/invalidate in the leaf
+`link/linkBus.ts`, the snapshot builder handed in), the activity selector ↔ row builders
+(`activity/activityBucket.ts`), `Repo readings`' two regions (the weight-stack keys in
+`repoHealthPlot.ts`) and `SetupSheet` ↔ the registry reader (`setupRemedy.ts`'s `bindSetupRows`,
+`sdk/ledgers.ts`'s shape). A new ring is cut, never exempted: a leaf both sides import, the slice
+instead of its barrel, or a dependency handed in.
+
 ### CLAUDE.md has a budget because it had a sentence
 
 `tools/claudemd.test.mjs` checks three things about `CLAUDE.md`: total size, per-entry size, and that
@@ -534,11 +762,31 @@ the tree unless the bullet says DELETED, the way the `giveups.ts` tombstone does
 One piece of debt recorded rather than fixed: `entries()` above measures per-entry length only
 under a `## ` heading, and every skill file uses a single `#`, so the 1,000-char entry cap does not
 currently apply to them. **37 bullets across all skills, 70,811 chars, would fail it if it did** —
-`ctxlog.ts` at 6.2k, `smartpick.ts` at 5.0k, `SendSheet.tsx` at 3.7k. That is a real backlog of
+`ctxlog.ts` at 6.2k, `smartpick.ts` (since removed) at 5.0k, `SendSheet.tsx` at 3.7k. That is a real backlog of
 entries that have started explaining themselves, and the fix is to move the story to these notes,
 not to add the headings and then argue for exemptions. (An earlier draft of this paragraph said 32
 and 62k: it had counted only the two split skills, and counted them before the fold. Regenerate the
 number with `entries()`'s own filter before quoting it.)
+
+## The traffic archive (`scripts/traffic-archive.mjs`)
+
+GitHub keeps clones and views for 14 days and release downloads only as a running total, and
+plugins mean the fork count undersells adoption anyway. `node scripts/traffic-archive.mjs` appends
+`gh api repos/waterplane-dev/waterplane/traffic/{clones,views}` and every release asset's
+`download_count` to `<state dir>/traffic/github.jsonl` (default
+`~/.local/state/waterplane/traffic/github.jsonl`) — outside the repo, so it is never committed or
+mirrored. One row per repo, kind and UTC day (per asset for downloads); a traffic day is written
+only once it is over, and a day already in the file is never rewritten, so a re-run adds nothing.
+`--repo o/r` (repeatable) archives other repos, `--out` moves the file. Pinned by
+`tools/trafficarchive.test.mjs`.
+
+**Weekly, by launchd, never by GitHub Actions** (off repo-wide): `node scripts/traffic-archive.mjs
+--install-launchd` writes `~/Library/LaunchAgents/dev.waterplane.traffic-archive.plist` (Mondays
+10:00, `StartCalendarInterval` so a sleeping Mac runs it after wake, with `gh`'s directory on an
+explicit `PATH`) and bootstraps it; logs go to `~/Library/Logs/waterplane/`. It runs this checkout's
+copy of the script, so moving the checkout means installing again. Weekly sits well inside the
+14 days, so a missed week or two loses nothing. Needs `gh` signed in with push access: the traffic
+API answers nobody else.
 
 ## Publishing the public repo
 
@@ -661,3 +909,18 @@ box's selected `❯ 1.` row, which uses the same glyph.
 Films also seed the console one zoom step down (`scripts/ui/lib.mjs`, only under `--media`) and run
 at a Pixel 8 Pro's 448 x 998 viewport — the APK film's emulators are Pixel 8 Pro AVDs too — so the
 grid is ~60 columns rather than ~45 columns of oversized text.
+
+## Docs gifs are sized in HTML
+
+R-demo-028. Markdown cannot say how wide to show a picture, and a 540 x 1280 phone film at its
+natural size is taller than a laptop screen — the owner could not see one whole. So the README and
+the guide embed each film as `<a href="x.mp4"><img src="x.gif" width="270" alt="…"></a>`: 270 is
+half its pixels, so it stays sharp on a 2x display (the 768-wide APK film gets 490). The tap still
+opens the whole video, on GitHub and in the phone's reader.
+
+That one HTML shape is a contract with two readers. The phone's markdown reader finds it with
+`fileRefs.ts` `linkedImages` (which also still reads the older `[![alt](x.gif)](x.mp4)` spelling)
+and draws it with `Markdown.tsx` `inlineDoc`, ignoring the width — the phone draws the picture its
+own size. The public release's link checker and hosted-link rewriter (`scripts/release/public-lib.mjs`)
+read the `href`/`src` inside `<a>`/`<img>` tags. Any other HTML in those lines, `<sub>` included, the
+phone prints as text.

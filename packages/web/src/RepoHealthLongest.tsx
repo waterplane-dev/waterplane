@@ -19,9 +19,11 @@ import {
 } from "./RepoHealthTiles";
 import { Tape } from "./RepoHealthMags";
 import { holderWords, longestCaptionWords, longestPickWords, tapeWords } from "./repoHealthStackWords";
-import { scrubHintWords, seriesValueWords } from "./repoHealthWords";
+import { seriesValueWords } from "./repoHealthWords";
+import { ScrubHint } from "./kit/chart/ScrubHint";
 import { SLOT } from "./kit/chart/TokenComposition";
 import { HintChip } from "./HintChip";
+import { Explain } from "./Explain";
 
 /** Twice a tile's height: this is the chart the region opens on, and a
  *  handover's step needs the room to read as a step and not a kink. */
@@ -67,6 +69,7 @@ function LongestCurve({ longest, width }: { longest: RepoHealthLongest; width: n
   const folded = h.holders.filter((x) => x.slot === FOLDED_SLOT).length;
   const readings = g.readings;
   const label = "the longest file over time";
+  const cap = longestCaptionWords({ handovers: h.handovers.length, folded, unnamed: h.unnamed, named: !!paths });
 
   return (
     <div className="rh-chart">
@@ -118,7 +121,7 @@ function LongestCurve({ longest, width }: { longest: RepoHealthLongest; width: n
         <XAxis points={points} w={plotW} y={LONGEST_H + TICK_BASELINE} gutter={gutter} />
         {at ? <Crosshair at={at} h={LONGEST_H} gutter={gutter} /> : null}
       </svg>
-      <div className="rh-scrub">{readout ?? scrubHintWords()}</div>
+      <div className="rh-scrub">{readout ?? <ScrubHint />}</div>
       {h.holders.length ? (
         <ul className="rh-legend rh-legend-rows">
           {h.holders.map((x) => (
@@ -130,8 +133,11 @@ function LongestCurve({ longest, width }: { longest: RepoHealthLongest; width: n
           ))}
         </ul>
       ) : null}
+      {/* An absence in the open; the method behind a closed `Explain` — it
+          was four sentences on every visit beside a `?` that names the hues. */}
+      {cap.lead ? <div className="rh-cap">{cap.lead}</div> : null}
       <div className="rh-cap">
-        {longestCaptionWords({ handovers: h.handovers.length, folded, unnamed: h.unnamed, named: !!paths })}
+        <Explain of="the longest-file chart" label="how it is drawn">{cap.more}</Explain>
       </div>
     </div>
   );
@@ -169,9 +175,12 @@ export function LongestFiles({ longest, classics, p95, width, onOpenFile }: {
         </div>
       ) : null}
       {curve && longest ? <LongestCurve longest={longest} width={width} /> : null}
+      {/* The longest file is said ONCE: on the value line above when there is
+          one, so the tape's caption leaves it out; only with no value line
+          does the caption carry it. */}
       {tape ? (
         <Tape tape={tape} paths={classics.tapePaths ?? null} width={width} onOpenFile={onOpenFile}
-          caption={tapeWords(tape.length, tape[0] ?? null, p95, files, longest?.path ?? null)} />
+          caption={tapeWords(tape.length, last != null ? null : tape[0] ?? null, p95, files, longest?.path ?? null)} />
       ) : null}
     </div>
   );

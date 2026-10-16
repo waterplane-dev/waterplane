@@ -30,8 +30,17 @@ bootWait(PORT, 800, async () => {
   const searchFor = async (query, scope, id) => {
     lastResults = null;
     ws.send(JSON.stringify({ t: "session.search", query, scope, id }));
-    for (let i = 0; i < 30 && lastResults == null; i++) await sleep(100);
-    return lastResults;
+    const mine = () => lastResults && lastResults.query === query && lastResults.scope === scope && lastResults.id === id;
+    for (let i = 0; i < 30 && !mine(); i++) await sleep(100);
+    return mine() ? lastResults : null;
+  };
+  // A positive search asks again until the text has landed (PTY echo, idle render), up to a
+  // deadline: under a loaded suite a fixed nap before ONE search read an empty scrollback.
+  const searchUntil = async (query, scope, id, ok, ms = 15000) => {
+    const deadline = Date.now() + ms;
+    let r = await searchFor(query, scope, id);
+    while (!(r && ok(r)) && Date.now() < deadline) { await sleep(250); r = await searchFor(query, scope, id); }
+    return r;
   };
   try {
     await new Promise((res, rej) => { ws.on("open", res); ws.on("error", rej); });
@@ -54,8 +63,7 @@ bootWait(PORT, 800, async () => {
 
     // ── Recent scope: echo a marker into A's terminal, then find it. ──
     ws.send(JSON.stringify({ t: "session.input", id: sidA, data: "echo apricotmarker_recent\n" }));
-    await sleep(600); // let the PTY echo + command output land in scrollback
-    let r = await searchFor("apricotmarker_recent", "recent", sidA);
+    let r = await searchUntil("apricotmarker_recent", "recent", sidA, (x) => x.results.length >= 1);
     check(r != null && r.results.length >= 1 && r.results[0].id === sidA, "recent: token found in session A");
     const hitA = r?.results?.[0];
     check(!!hitA && hitA.total >= 1 && hitA.matches.length >= 1, "recent: hit carries matches + total");
@@ -68,8 +76,7 @@ bootWait(PORT, 800, async () => {
 
     // ── History scope: record a prompt, then find it with a turn label. ──
     ws.send(JSON.stringify({ t: "session.record", id: sidB, text: "please add a bananamarker_history export", kind: "prompt" }));
-    await sleep(300);
-    r = await searchFor("bananamarker_history", "history", sidB);
+    r = await searchUntil("bananamarker_history", "history", sidB, (x) => x.results.length >= 1);
     check(r != null && r.results.length === 1 && r.results[0].id === sidB, "history: recorded prompt found in session B");
     const hitB = r?.results?.[0]?.matches?.[0];
     check(!!hitB && hitB.turn && hitB.turn.kind === "prompt", "history: hit carries the turn label (kind=prompt)");
@@ -80,12 +87,13 @@ bootWait(PORT, 800, async () => {
     // "history" must find it and "prompts" must not, or the scope is a label
     // over the same search.
     ws.send(JSON.stringify({ t: "session.input", id: sidB, data: "echo cherrymarker_out\n" }));
-    await sleep(1600); // let the turn go idle (the idle knob) + the async render land on the entry
-    r = await searchFor("bananamarker_history", "prompts", sidB);
-    check(r != null && r.results.length === 1 && r.results[0].matches[0].turn?.kind === "prompt", "prompts: the recorded prompt is found, with its turn label");
-    r = await searchFor("cherrymarker_out", "history", sidB);
+    // The output lands on the entry once the turn goes idle (the idle knob) and its async render
+    // finishes: wait for THAT, then ask the prompts scope the same question.
+    r = await searchUntil("cherrymarker_out", "history", sidB, (x) => x.results.length >= 1);
     const outInHistory = r != null && r.results.length === 1;
     check(outInHistory, "history: a token only in the turn's OUTPUT is found");
+    r = await searchFor("bananamarker_history", "prompts", sidB);
+    check(r != null && r.results.length === 1 && r.results[0].matches[0].turn?.kind === "prompt", "prompts: the recorded prompt is found, with its turn label");
     r = await searchFor("cherrymarker_out", "prompts", sidB);
     check(r != null && r.results.length === 0, "prompts: that same output token is NOT found");
 

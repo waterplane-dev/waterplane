@@ -1,7 +1,7 @@
 import { LS, lsBool, lsSetBool } from "../storage";
 import type { LinkStatus, PulseSample } from "./linkTypes";
 import { noteLinkStatus, status } from "./linkStatus";
-import { emit, invalidate } from "./linkStore";
+import { emit, invalidate } from "./linkBus";
 
 /**
  * Round-trip time, sampled continuously and kept as a short rolling window so it

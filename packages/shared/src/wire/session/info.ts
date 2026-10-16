@@ -38,6 +38,32 @@ export interface SessionInfo {
   model?: string;
   effort?: Effort;
   permissionMode?: PermissionMode;
+  /**
+   * The permission mode the CLI's footer shows NOW (`⏵⏵ accept edits on`,
+   * `⏸ plan mode on`, …; no label under the prompt box = `default`). Read off
+   * the rendered screen, so it follows a shift+tab typed anywhere. Absent =
+   * cannot tell (a box covers the footer, a non-claude backend, an old host) —
+   * never a guess; the phone then falls back to `permissionMode` and says so.
+   */
+  liveMode?: PermissionMode;
+  /**
+   * The model and effort the NEWEST turn actually ran on, read off the CLI's
+   * conversation log (`message.model` and the record's `effort`). `model` and
+   * `effort` above are the launch flags; a `/model` or `/effort` typed since
+   * moves these and never those. Absent = no turn written yet, a backend with
+   * no claude log, or a CLI that does not record it — the phone then falls
+   * back to the launch flags and says "started on". `turnModel` is a full id
+   * (`claude-opus-5-5`); a `[1m]` window is not in the log.
+   */
+  turnModel?: string;
+  turnEffort?: Effort;
+  /**
+   * Ultracode (`/effort ultracode on|off`, this session only) as the CLI last
+   * CONFIRMED it on screen ("Ultracode on …" / "Ultracode off"). Absent = never
+   * seen either line — which a fresh session reads as off, but the phone says
+   * "not set from here" rather than claiming it.
+   */
+  ultracode?: boolean;
   /** True if launched with --remote-control (mirrored to claude.ai). */
   remoteControlled?: boolean;
   /** claude.ai/code session URL, parsed from the Remote Control banner. */
@@ -46,6 +72,13 @@ export interface SessionInfo {
   prompt?: DetectedPrompt | null;
   /** A sign-in link the CLI printed, and whether it is waiting for the code. */
   login?: SessionLogin | null;
+  /**
+   * The CLI is in its own first-launch setup (theme, sign-in, trust) and has not reached its
+   * prompt: a fresh claude spawn on a desktop where `claude auth status` says signed out. The
+   * phone keeps the TERMINAL up while it is set, whatever the reader preference, and says so.
+   * Cleared by the first hook. Absent = not in setup, or cannot tell (older host, other backend).
+   */
+  cliSetup?: boolean;
   /**
    * Links a SHELL session wants opened (`ShellLink`), newest last. Absent/null
    * on every claude-shaped session and whenever none is live — never an empty
@@ -82,6 +115,18 @@ export interface SessionInfo {
    * is the same question with buttons.
    */
   asking?: SessionAsk | null;
+  /**
+   * The CLI's OWN proposal for the next prompt — the dim text claude draws in
+   * an EMPTY composer after a turn ("watch CI and report when it finishes"),
+   * the one Tab accepts at the desk. Verbatim off the rendered grid (host
+   * `clisuggest.ts`), published only while the composer holds nothing but
+   * it, so the phone can offer it as one tap.
+   *
+   * Absent = no reader for this backend or nothing proposed; cleared when a
+   * turn starts, when anything is typed, and when the composer stops showing
+   * it. A proposal is never sent by itself — a person taps it.
+   */
+  cliSuggestion?: string | null;
   /** A plugin's suggested answer for the current question (`plugin.ts`). */
   suggestion?: AnswerSuggestion | null;
   /** Per-plugin per-session switches the person flipped (plugin id → toggle
@@ -291,6 +336,14 @@ export interface SessionInfo {
    */
   newActivity?: boolean;
   /**
+   * "Flag for follow up" — a one-shot mark that this session has something the
+   * person should come back and read (R-sessions-041). Unlike `newActivity`,
+   * attaching never clears it: only the person's explicit `session.followup`
+   * with `on:false` does. Kept per conversation (`followup.ts`), so it survives
+   * a restart, a resume and a close. `by` says who set it; absent = not flagged.
+   */
+  followUp?: FollowUp;
+  /**
    * This session handed a job to a peer desktop and is waiting for its report
    * (`peer.ts`). Additive: an older phone draws no tag. Absent = not waiting.
    */
@@ -316,4 +369,25 @@ export interface SessionInfo {
    * worktree's marker, so it is true of any session opened there. Absent = not a job's session.
    */
   peerJob?: PeerJobOrigin;
+}
+
+/**
+ * Who set a follow-up flag (R-sessions-042) — a CLOSED set, and an unknown
+ * value is dropped by `cleanFollowUp`, never rounded to one of these:
+ * - `hand`   — the person tapped the flag.
+ * - `launch` — the person ticked "flag for follow up when done" on the work that
+ *              opened this session, and it finished.
+ * - `agent`  — the session's own agent raised it, with a one-line `reason`.
+ */
+export type FollowUpBy = "hand" | "launch" | "agent";
+
+/** A follow-up flag on a conversation. See `SessionInfo.followUp`. */
+export interface FollowUp {
+  by: FollowUpBy;
+  /** When it was set (host clock, ms). */
+  at: number;
+  /** `agent`: the agent's own one line on what to read; clipped (`FOLLOWUP_REASON_CAP`). */
+  reason?: string;
+  /** `launch`: the label of the item that asked for it, so the row can say which. */
+  item?: string;
 }

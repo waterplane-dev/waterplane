@@ -49,7 +49,7 @@
  *                                two metrics need BEHAVIOUR and not just
  *                                data: `dups`/`deadExports` need the pack's
  *                                `analyzer()`, `untested` needs its
- *                                `mentions`/`keysFor`, and routing a file to
+ *                                `mentions`/`keysFor`/`imports`, and routing a file to
  *                                the pack that can read it needs its `exts`.
  */
 
@@ -282,10 +282,13 @@
  *   measurement could not cost. Almost every row of this repo's own history
  *   is the first of those, and on a chart `{}` alone is indistinguishable
  *   from a repo that does not work that way.
- * @property {Measured<string[]>} untested
- *   The modules no test NAMES, over the files whose language an active pack
- *   can read a reference in. Absent with a reason where none can: "every
- *   module is untested" is what a tree nothing parsed would otherwise report.
+ * @property {Measured<string[]> & {unnamed?: string[]}} untested
+ *   The modules no test NAMES and none REACHES through imports, over the
+ *   files whose language an active pack can read a reference in; `unnamed`
+ *   beside it is the ones reached and never named (absent on rows written
+ *   before it existed). Absent with a reason where no pack can read a
+ *   reference: "every module is untested" is what a tree nothing parsed
+ *   would otherwise report.
  * @property {Measured<string[]>} deadExports
  *   `path#name` for every value export no other blob names, from the same
  *   per-pack analyzer `dups` uses, and absent with the same reason where no

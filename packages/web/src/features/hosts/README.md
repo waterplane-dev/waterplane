@@ -20,6 +20,11 @@ Several desktops on one phone (Android shell only). Storage, parking and the boo
   edited or removed like a desktop. Settings has one row: `demo`.
 - `HostMenuItem.tsx` — the launcher menu's host row in the shell: host name (+ route once set),
   a tap opens the switcher. Not in the topbar: a long name took the whole bar.
+- `HostSwitchKey.tsx` — the launcher bar's SPLIT host key, last on the bar, only with two or more
+  of the person's own desktops (demo excluded): the wide half toggles straight to the next one
+  (`nextHostId`: two flip, three go round — park + reload like the switcher), showing a swap glyph
+  over the in-use host's ≤6-char name (`shortHostName`); the chevron opens the switcher. Sized to fit
+  beside the cog — the word + icon version wrapped onto its own row.
 - `HostNameTag.tsx` — the session header's host name, only when more than one host is saved.
 - Sheet `pairqr` (`HostQrSheet.tsx`, not persisted): "pair another phone". Mints a single-use code
   on the host IN USE (`POST /api/pair/mint`), draws the landing URL as an inline-SVG QR
@@ -50,9 +55,11 @@ Several desktops on one phone (Android shell only). Storage, parking and the boo
   `main.tsx`'s setup screen takes the link instead. The form and the redeem are `../../PairForm.tsx`
   + `../../pairRedeem.ts` (token + LAN identity stored bare for the active host, parked for another).
 - `HostsSettings.tsx` — Connection, order -20: the `hosts` row (shell only), which replaced "paired
-  host", then `pair-phone` and `paired-devices` (shell and browser).
+  host", then `web-desktops` (browser only: how a second desktop or phone is reached with no app —
+  one address each, no code on the tailnet; the README's table says the same), then `pair-phone` and
+  `paired-devices` (shell and browser). The QR sheet's foot says the no-app route too.
 - `logic.ts` — `countHostWords`, `wordsText`, `removeLines`, `hostAddress`, `showHostName`,
-  `hostRows`, and for pairing `qrPath`, `codeLeftText`, `deviceRouteText`, `seenAgo`,
+  `hostRows`, `shortHostName`, `nextHostId`, and for pairing `qrPath`, `codeLeftText`, `deviceRouteText`, `seenAgo`,
   `revokeLines`, `devicesEmptyText`; node-tested in `logic.test.mjs`.
 
 **Reads from core**: `nav.open/close`, `conn.info.lanIps` (LAN address suggestions for the active

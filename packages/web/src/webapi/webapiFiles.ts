@@ -1,10 +1,10 @@
-import type { HostStoreOutcome, HostStoreReport, TransportSurvey, SweepAge, SweepResult, SweepScope, SweepTally } from "@waterplane/shared";
+import type { AppReadinessReport, HostStoreOutcome, HostStoreReport, TransportSurvey, SweepAge, SweepResult, SweepScope, SweepTally } from "@waterplane/shared";
 import { nfetch, jget, jpost } from "./webapiFetch";
 import type { FileEntry, ArtifactKind, SearchHit, UploadError } from "./webapiTypes";
 
 /** Inbox, outbox, uploads, sweep and the host store. One slice of `api` (see api.ts). */
 export const filesApi = {
-  inbox: (repoId: string) => jget<{ files: FileEntry[] }>(`/api/repos/${repoId}/inbox`).then((d) => d.files),
+  inbox: (repoId: string, signal?: AbortSignal) => jget<{ files: FileEntry[] }>(`/api/repos/${repoId}/inbox`, undefined, signal).then((d) => d.files),
 
   /** Clear the inbox unread badge. Best-effort — a failure must not break the view. */
   markInboxSeen: (repoId: string) =>
@@ -15,23 +15,23 @@ export const filesApi = {
   markOutboxSeen: (repoId: string) =>
     fetch(`/api/repos/${repoId}/artifacts/seen`, { method: "POST" }).catch(() => undefined),
 
-  artifacts: (repoId: string, scope: "repo" | "outbox", sinceSeconds?: number, opts?: { query?: string; kind?: ArtifactKind; limit?: number }) => {
+  artifacts: (repoId: string, scope: "repo" | "outbox", sinceSeconds?: number, opts?: { query?: string; kind?: ArtifactKind; limit?: number; signal?: AbortSignal }) => {
     const q = new URLSearchParams({ scope });
     if (sinceSeconds) q.set("since", String(sinceSeconds));
     if (opts?.query) q.set("q", opts.query);
     if (opts?.kind && opts.kind !== "all") q.set("kind", opts.kind);
     if (opts?.limit) q.set("limit", String(opts.limit));
-    return jget<{ files: FileEntry[]; truncated: boolean }>(`/api/repos/${repoId}/artifacts?${q}`);
+    return jget<{ files: FileEntry[]; truncated: boolean }>(`/api/repos/${repoId}/artifacts?${q}`, undefined, opts?.signal);
   },
 
-  search: (opts: { query?: string; kind?: ArtifactKind; scope?: "repo" | "outbox"; sinceSeconds?: number; repoIds?: string[]; limit?: number }) => {
+  search: (opts: { query?: string; kind?: ArtifactKind; scope?: "repo" | "outbox"; sinceSeconds?: number; repoIds?: string[]; limit?: number; signal?: AbortSignal }) => {
     const q = new URLSearchParams({ scope: opts.scope ?? "repo" });
     if (opts.query) q.set("q", opts.query);
     if (opts.kind && opts.kind !== "all") q.set("kind", opts.kind);
     if (opts.sinceSeconds) q.set("since", String(opts.sinceSeconds));
     if (opts.repoIds?.length) q.set("repos", opts.repoIds.join(","));
     if (opts.limit) q.set("limit", String(opts.limit));
-    return jget<{ hits: SearchHit[]; truncated: boolean }>(`/api/search?${q}`);
+    return jget<{ hits: SearchHit[]; truncated: boolean }>(`/api/search?${q}`, undefined, opts.signal);
   },
 
   /**
@@ -94,6 +94,8 @@ export const filesApi = {
     xhr.send(file);
   }),
 
+  /** The bytes behind an `artifactUrl`, for a picture the phone draws itself (the gallery's combine). Throws on a refusal. */
+  fileBlob: (url: string) => nfetch(url).then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.blob(); }),
   deleteInbox: (repoId: string, name: string) =>
     nfetch(`/api/repos/${repoId}/inbox/${encodeURIComponent(name)}`, { method: "DELETE" }).then((r) => r.json()),
   /** Delete an outbox/repo artifact by worktree-relative path (host guards it to inbox/outbox). */
@@ -131,6 +133,10 @@ export const filesApi = {
    * so a row and the sheet it opens cannot disagree.
    */
   transportSurvey: () => nfetch("/api/storage/transport").then((r) => r.json() as Promise<TransportSurvey>),
+
+  /** Every Android app the desktop's repos build, as facts — the repo half of the
+   *  Apps screen's setup checklist (`appReady.ts`). */
+  appReadiness: () => nfetch("/api/apps/readiness").then((r) => r.json() as Promise<AppReadinessReport>),
 
   /** What the daemon's own store holds, by owner and by bound. */
   hostStore: () => nfetch("/api/storage/host").then((r) => r.json() as Promise<HostStoreReport>),

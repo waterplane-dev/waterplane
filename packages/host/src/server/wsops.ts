@@ -15,9 +15,9 @@
 import type { IncomingMessage } from "node:http";
 import { existsSync } from "node:fs";
 import type { WebSocket, WebSocketServer } from "ws";
-import { PROTOCOL_VERSION, decode, type ClientMessage, type SendStamp, logTag, envName } from "@waterplane/shared";
+import { PROTOCOL_VERSION, decode, isClientFrame, type SendStamp, logTag, envName, roleFromUserAgent } from "@waterplane/shared";
 import { WIRE, recordWireFrame } from "../wirerecord.js";
-import { peerKind } from "../net.js";
+import { requestPeerKind } from "../net.js";
 import { checkRequestOrigin } from "../origin.js";
 import { tokenFromRequest } from "../auth.js";
 import { lanIdentity } from "../lanid.js";
@@ -27,6 +27,8 @@ import { inRoot, realResolve } from "../scaffold.js";
 import { backendInfos, recheckUnavailableBackends } from "../backends/index.js";
 import type { InputVerdict, OpVerdict } from "../routes/types.js";
 import type { ServerCtx } from "./ctx.js";
+import { envInt } from "../env.js";
+import { pingTick } from "./liveness.js";
 
 /** What `main()` learned about this machine's addresses before binding, and
  *  hands every socket in `welcome`. */
@@ -37,6 +39,31 @@ export interface WelcomeNet {
   httpsUrl: string | null;
   boundLan: string[];
 }
+
+/**
+ * The largest client→host frame `main()`'s `WebSocketServer` accepts (ws
+ * enforces it on the INFLATED size, so a deflate bomb is bounded too; past it
+ * the socket closes 1009). The biggest legitimate frame is `settings.set` at
+ * `MAX_SETTING_BYTES` (1 MiB), at most ~6 MiB even if every byte were
+ * `\u`-escaped; files and audio go over HTTP. 16 MiB is that with headroom —
+ * ws's own default is 100 MiB, buffered whole and then `JSON.parse`d.
+ */
+export const WS_MAX_PAYLOAD = 16 * 1024 * 1024;
+
+/**
+ * How often the host pings each socket at the protocol level (`liveness.ts`):
+ * a socket that answers neither of two pings in a row is terminated, so a dead
+ * phone is let go within two to three of these. 0 turns the ping off.
+ * `WATERPLANE_WS_PING_MS`; the liveness e2e boots with a few hundred ms.
+ */
+export const WS_PING_MS = Math.max(0, envInt("WS_PING_MS", 20_000));
+/**
+ * Send-buffer depth past which a socket gets no more PTY deltas, only one full
+ * replay once it drains (`liveness.ts`'s `ptyFrameAction`). 1 MiB is dozens of
+ * deflated repaints — far more than a live phone ever has in flight.
+ * `WATERPLANE_WS_PTY_BACKLOG_BYTES`; 0 turns the guard off.
+ */
+export const WS_PTY_BACKLOG_BYTES = Math.max(0, envInt("WS_PTY_BACKLOG_BYTES", 1024 * 1024));
 
 export function createWsOps(ctx: ServerCtx) {
   /** In-flight durable ops, keyed by ackId. The ledger only learns the verdict
@@ -172,7 +199,7 @@ export function createWsOps(ctx: ServerCtx) {
         try { ws.close(1008, "origin not allowed"); } catch { /* already closing */ }
         return;
       }
-      const kind = peerKind(req.socket.remoteAddress);
+      const kind = requestPeerKind(req.socket.remoteAddress, req.headers);
       // Cookie (browser), else the `waterplane-tok.<tok>` subprotocol (the Android
       // shell, whose cross-site cookie is withheld) — `tokenFromRequest`.
       const tok = tokenFromRequest(req.headers);
@@ -184,12 +211,25 @@ export function createWsOps(ctx: ServerCtx) {
         try { ws.close(); } catch { /* already closing */ }
         return;
       }
+      // A passive token never gets the socket (`passive.ts`): everything it may
+      // do is on the HTTP allowlist. Closed with a reason, not `authRequired` —
+      // a password would not help, the PIN does.
+      if (ctx.auth.passive.restricted(device)) {
+        try { ws.close(4403, "passive device"); } catch { /* already closing */ }
+        return;
+      }
       ctx.clients.add(ws);
       ctx.netstats.noteSocketOpen(ws, kind);
       ctx.attached.set(ws, new Set());
       ctx.wsKind.set(ws, kind);
       if (tok) ctx.wsToken.set(ws, tok);
       if (device) ctx.wsDevice.set(ws, device.id);
+      // The APK's background link (OkHttp) is sent only what it acts on — from
+      // the very first frame, so `welcome` below is already filtered for it.
+      // An explicit `hello.role` overrides this; it is the fallback for APKs
+      // already installed, which declare nothing.
+      const role = roleFromUserAgent(req.headers["user-agent"]);
+      if (role) ctx.wsRole.set(ws, role);
       // `hostId` is the LAN identity's, so a phone can tell which desktop a
       // socket landed on; `deviceId` only when this socket IS a ledger device.
       let hostId: string | undefined;
@@ -211,18 +251,38 @@ export function createWsOps(ctx: ServerCtx) {
       void recheckUnavailableBackends(10_000).then((changed) => { if (changed) ctx.broadcast({ t: "backends", list: backendInfos() }); });
       ws.on("message", (raw) => {
         try {
-          const msg = decode<ClientMessage>(raw.toString());
+          const msg = decode<unknown>(raw.toString());
           if (WIRE) recordWireFrame("in", msg);
+          // `null`, a string, `{}` — answered in words, never thrown at `msg.t`.
+          // An unknown but well-formed `t` passes: the router ignores it.
+          if (!isClientFrame(msg)) {
+            ctx.send(ws, { t: "error", message: "not a client frame: expected a JSON object with a string \"t\"", context: "message" });
+            return;
+          }
           ctx.handleClientMessage(ws, msg);
         } catch (err) {
           ctx.send(ws, { t: "error", message: String(err), context: "message" });
         }
       });
+      // The host's own liveness check (`liveness.ts`): a protocol-level ping the
+      // phone's browser answers by itself, and `terminate()` — not `close()`,
+      // whose handshake a dead peer never completes — once two in a row go
+      // unanswered. That fires the close handler below, so the socket leaves
+      // `clients` and stops counting as somebody watching its sessions.
+      let missed = 0;
+      ws.on("pong", () => { missed = 0; });
+      const pinger = WS_PING_MS > 0 ? setInterval(() => {
+        const tick = pingTick(missed);
+        missed = tick.missed;
+        if (tick.action === "terminate") { clearInterval(pinger); ws.terminate(); return; }
+        try { ws.ping(); } catch { /* not open any more; close/error clears this */ }
+      }, WS_PING_MS) : undefined;
       // Close code first: 1006 (abnormal, no close frame) is the tunnel dying
       // under the socket, 1001 is the phone backgrounding it. They look the same
       // from the app and mean opposite things about the link.
-      ws.on("close", (code: number) => { ctx.netstats.noteSocketClose(ws, code); ctx.clients.delete(ws); ctx.recomputeWatched(); });
-      ws.on("error", () => { ctx.clients.delete(ws); ctx.recomputeWatched(); });
+      // Its plugin streams end with it (cause "socket", nothing sent): the phone reopens on reconnect.
+      ws.on("close", (code: number) => { clearInterval(pinger); ctx.netstats.noteSocketClose(ws, code); ctx.clients.delete(ws); ctx.plugins.streams.socketGone(ws); ctx.recomputeWatched(); });
+      ws.on("error", () => { clearInterval(pinger); ctx.clients.delete(ws); ctx.plugins.streams.socketGone(ws); ctx.recomputeWatched(); });
     });
   }
 

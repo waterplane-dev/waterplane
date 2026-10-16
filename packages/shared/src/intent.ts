@@ -45,7 +45,7 @@
  *
  * This file is the BARREL: the one door into the intent model. The code is in
  * `intent/` — `types`, `row`, `facts`, `words`, `budgetpass`, `kind`, `target`,
- * `verdict`, `clean` — and every importer names `./intent.js` (or
+ * `verdict`, `clean`, `slot` — and every importer names `./intent.js` (or
  * `@waterplane/shared`), never a slice. The lists below are explicit because a
  * slice also exports helpers its siblings need (the ladder's own sentences,
  * `budgetHold`, `targetVerdict`) that are not part of this module's surface,
@@ -70,13 +70,14 @@ export { intentVerdict } from "./intent/verdict.js";
 export { liveConvSession, needsSlot, reopensConversation } from "./intent/target.js";
 
 export {
-  RESET_MATCH_MS, budgetPassAt, budgetPassOf, budgetWaived, budgetWaiverUntil, cleanBudgetWaiver,
+  AFTER_RESET_LEFTOVER_MS, BUDGET_NOT_HOLDING, RESET_MATCH_MS, budgetAfterResetOf, budgetLeftoverOf, budgetPassAt, budgetPassOf, budgetWaived, budgetWaiverPeriod, budgetWaiverUntil, cleanBudgetWaiver,
 } from "./intent/budgetpass.js";
 
-export type { AutoSlotFacts } from "./intent/words.js";
-export { INTENT_BLOCK_ORDER, autoSlotsWaitText, closeWhenDoneOf, intentReasonText } from "./intent/words.js";
+export type { AutoSlotFacts, LocalSlotFacts } from "./intent/words.js";
+export { INTENT_BLOCK_ORDER, autoSlotsBusy, autoSlotsWaitText, closeWhenDoneOf, intentReasonText, localSlotOverText, localSlotWaitText } from "./intent/words.js";
 
 export { cleanIntentRow } from "./intent/clean.js";
+export { type ClockMember, type Slot, type SlotRow, findSlot, latestClock, parseSlotKey, slotMates, slotOf, slotOthersText, slotRowOfIntent, slotRowOfItem, slotsOf } from "./intent/slot.js";
 
 export type { IntentKind } from "./intent/kind.js";
 export {

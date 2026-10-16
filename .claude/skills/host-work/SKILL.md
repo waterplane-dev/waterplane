@@ -7,7 +7,7 @@ description: waterplane host — durable work that outlives a session (packages/
 
 Work that survives the process and the session that ran it: intents on disk, the tick that decides what fires, the backlog they are shown as, and the conversations they leave behind. Router: `host`. Reasoning: [host.md](docs/notes/host.md).
 
-- `backlog.ts` (a facade: `BacklogManager` over `backlog/backlogcore.ts` the shared state type, `backlog/backlogknobs.ts` the env knobs, `backlog/backlogwording.ts` the delivery sentences, `backlog/backlogtitles.ts` the title mark, `backlog/backlogstore.ts` config + boot + the switches, `backlog/backlogedits.ts` the row verbs, `backlog/backlogsessions.ts` the per-item sessions, cap, linger/reap and `deliver`) — a VIEW of `intents/`, plus the prompt executor and the sessions work runs in.
+- `backlog.ts` (a facade: `BacklogManager` over `backlog/backlogcore.ts` the shared state type, `backlog/backlogknobs.ts` the env knobs, `backlog/backlogwording.ts` the delivery sentences, `backlog/backlogtitles.ts` the title mark, `backlog/backlogstore.ts` config + boot + the switches, `backlog/backlogedits.ts` the row verbs, `backlog/backlogsessions.ts` the per-item sessions, cap, linger/reap and `deliver`, `backlog/backlogfollowup.ts` the flag-when-done sweep) — a VIEW of `intents/`, plus the prompt executor and the sessions work runs in.
   **EVERY FIRED ITEM GETS ITS OWN CONVERSATION** (`openItemSession`, titled `backlog · <repo> ·
   <label>`, `{kind:"repo", fresh:true}`) — the one shared `backlog · <repo>` session per repo is
   RETIRED, for a number this repo already had: `sessioncost.ts` puts break-even at ~3 turns for a
@@ -23,19 +23,23 @@ Work that survives the process and the session that ran it: intents on disk, the
   session never does, and the held row carries the holder's id (`holderSessionId`).
   `ensureRepoSession`/`resolveRepoSession` survive only for the sheet's "open a session here" button (its bare `backlog · <repo>` title never closes — `closesWhenDone`)
   and a hand fire on a pre-`fresh` row; **automatic work adopts nothing.** `autoSessionCount()` is the
-  cap's input, counted off the SESSIONS never a map. Sessions END two ways, both
-  **`sessions.remove()` and NEVER `kill()`** (kill has no closed-row on the other side of it):
-  `lingerSweep` (`WATERPLANE_BACKLOG_LINGER_MS`, 10 min — so "open the session" is there when somebody
-  presses it; `remove(…, "auto-done")`) and `reapAutoSession` (oldest idle one, when a `noSlot` row
-  needs the room; `remove(…, "auto-slot")` — the closed row's `closedBy`, `docs/notes/host.md`) — **and
-  BOTH only for a session whose item said close-when-done** (`closesWhenDone` → shared
+  cap's input, counted off the SESSIONS never a map — **and only the WORKING ones** (`slotBusy`,
+  R-automation-042: a row `starting`/`running` in it, a background shell `working`/`serverLike`, a
+  background agent, or `autoFireBlocker` non-null — a turn, a box, a limit wall — overruled only by
+  `REAP_CEILING_MS` of PTY silence). An idle session left open holds NO slot, so **nothing is ever
+  closed to make room** (`reapAutoSession` is gone; `closedBy: "auto-slot"` survives only on old
+  closed rows). Sessions END one automatic way, **`sessions.remove()` and NEVER `kill()`** (kill has
+  no closed-row on the other side of it): `lingerSweep` (`WATERPLANE_BACKLOG_LINGER_MS`, 10 min — so
+  "open the session" is there when somebody presses it; `remove(…, "auto-done")`) — **only for a
+  session whose item said close-when-done** (`closesWhenDone` → shared
   `closeWhenDoneOf`: the opener row's `Intent.closeWhenDone`, found by `openItemSession`'s mark or
   the earliest row with that `sessionId`, else the synced global `CLOSE_WHEN_DONE_KEY`
-  `waterplane.backlog.closeWhenDone`, **OFF by default**). Off ⇒ NOTHING closes it; a `noSlot` row WAITS
-  and says a person must close one (`autoSlotsWaitText`, "1 automatic session open (close one to
-  make room)"), and `backlog.list.autoSlots` carries the open ids as FACTS for the phone's tap.
-  The per-item value is carried by `upsert()`, both adapters, `workItemInherits`, the smart-pick
-  merge (keep-open wins) and the agent route; it is edited through `edit()` (any state, `null` =
+  `waterplane.backlog.closeWhenDone`, **OFF by default**). Off ⇒ NOTHING closes it, and that stops no queued
+  work; a `noSlot` row waits only while `max` sessions are WORKING (`autoSlotsWaitText`, "… and 1 is
+  working; a slot frees when one goes idle"), and `backlog.list.autoSlots` carries every open id with
+  `busy` as FACTS (`busy` absent = an older host = busy; the phone offers only the busy ones).
+  The per-item value is carried by `upsert()`, both adapters, `workItemInherits`
+  and the agent route; it is edited through `edit()` (any state, `null` =
   inherit), never `update()`, so flipping it never re-queues. **Never attached, never a
   row `starting`/`running` in it, and never one the CLI says is BUSY —
   `sessions.autoFireBlocker(id, idleFor) === null` is the free test** (hook-, box- and
@@ -73,6 +77,7 @@ Work that survives the process and the session that ran it: intents on disk, the
   and nothing more, and an ungated shortcut settled a three-turn item `done` with two turns never
   typed. `backlogstore.test.mjs`.
   `backlogsessions.test.mjs`, `scripts/e2e-backlog-slots.mjs`, `scripts/e2e-resurrect-item.mjs`.
+  **Flag for follow up when done** (`Intent.flagWhenDone`, absent = off, no global; threaded exactly like `closeWhenDone`, merged rows flag if ANY member did): `backlog/backlogfollowup.ts` `followUpSweep` flags the session a row OPENED (`openerRow`, shared with `closesWhenDone`) with `{by:"launch", item}` ONCE per row, only when the row is `done`+ok and `slotBusy` is false — a failed or limit-stopped row never. Applied row ids persist (`followup-launched.json`, capped) so a cleared flag does not return and a restart does not re-flag. `BacklogManager.lingerSweep` runs it FIRST, so nothing closes a session ahead of its flag; fan-out children carry the flag from the run, and the same sweep flags them. `followupsweep.test.mjs`.
 - `agentintents.ts` — **later work an AGENT posts**: `POST|GET|DELETE /api/agent/intents[/<id>]`,
   loopback-only, never a browser (`Origin`/`Sec-Fetch-Site`), never proxied (`tailscale serve`
   forwards to 127.0.0.1 — the forwarding headers refuse it). **`postClientDraft` is the ONE client
@@ -114,16 +119,12 @@ Work that survives the process and the session that ran it: intents on disk, the
   `workItemInherits` stamps `budgetPass` from `lastOccurrence`, so a recurring before-reset rule's
   child is not re-held by the cap its parent was exempt from.
   **The cap on automatic sessions is a RUNG, not a side door** (`noSlot`): `IntentDeps.autoSlotsFree()`
-  + `autoSlotsDetail()` (the numbers, like `budgetDetail`) + `reapAutoSession()`, asked **once per
-  pass**, and `base.autoSlotsFree` is **decremented per fire within a pass** (the `hostBusy`/`busyCwds`
+  + `autoSlotsDetail()` (the numbers, like `budgetDetail`), and `base.autoSlotsFree` is **decremented per fire within a pass** (the `hostBusy`/`busyCwds`
   trick — a fresh repo target passes rung 5 unconditionally, so five rows in five repos would each
-  read the cap as untouched). **The freed slot is NOT claimed by the pass that freed it — nor by the
-  rows BEHIND it**: `base.autoSlotsFree` is not incremented on a reap, or the row that asked starves
-  while every later `go` row in the same pass takes what it freed. **The whole ladder is re-asked on
-  the far side of `pickHold`** — `busyCwds`, `busySessions`, `hostBusy` and the cap were all read
-  before that `await`, and a real hold spawns git, which is a window a `runNow` fits through: the
-  held row fired on the stale verdict and put two agents in one worktree. The re-read is MONOTONIC. `openFor` /
-  `opened` / one-repo-per-pass are GONE. **`IntentDeps.pickHold` is rung 4.7** — asked after the whole ladder and the fan-out pool, immediately before the `go` claims: a sentence BLOCKS the row `picking`, `null` fires it, and **nothing is claimed while it holds** (not `busyCwds`, not `hostBusy`, not a slot), so one repo thinking cannot stop another. Optional, and absent is exactly the old behaviour. **The manager does not de-dupe it and must not** — whether two calls are one "pick" is a fingerprint this module has never heard of, and `serial` only bites after a claim, so the same repo's second row is asked too and the DEP answers both from one per-cwd entry. `runNow` never asks: a tap is not a pick. `<state dir>/intents.json` is **schema 2** (`{schema, intents}`)
+  read the cap as untouched). **A freed slot is never handed out mid-pass** — the next tick's fresh
+  `autoSlotsFree()` gives it to the first row in order, never to the rows behind it. **The whole ladder is re-asked after
+  ONE microtask yield (`await Promise.resolve()`) before each `go` claim** — a kick runs the pass synchronously only that far, so a synchronous batch of writes lands before any claim (~30 host tests pin that batching); busy facts are re-read and the ladder re-asked, MONOTONICALLY. `openFor` /
+  `opened` / one-repo-per-pass are GONE. **`localslot.ts` is rung 4.55 `localModel`** (R-intent-local-001): automatic local-model rows wait while `IntentFacts.local.free <= 0` (a local TURN working, or a local row `starting`/`running`; synced cap, default 1) and `localHold(row)` — synchronous, claims nothing — holds until Ollama has the model loaded, never a fallback model; a person's start is told, never refused ([host.md](docs/notes/host.md#the-local-model-gate--rung-455-localmodel)). `<state dir>/intents.json` is **schema 2** (`{schema, intents}`)
   with a `*.bak` beside it — both shapes read; the number records that every repo target has been
   re-read as `fresh`. `noteSession(id, sid)` is how an executor that OPENS a session names it on the
   row before the delivery finishes proving itself (and takes the completion baseline there).

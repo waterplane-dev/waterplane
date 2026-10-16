@@ -318,10 +318,12 @@ check_prereqs() {
     say "found claude at $CLAUDE_BIN"
   fi
 
-  if ! has tailscale && ! [ -d /Applications/Tailscale.app ]; then
+  # On WSL the Windows client counts (reached through interop as tailscale.exe): with mirrored
+  # networking its 100.x is this distro's too. Whether it is mirrored is the doctor's wsl-tailscale row.
+  if ! has tailscale && ! has tailscale.exe && ! [ -d /Applications/Tailscale.app ]; then
     warn "Tailscale was not found. Your phone reaches this machine over your tailnet; install it: $TAILSCALE_DL"
     if [ "$IS_WSL" = 1 ]; then
-      warn "  On WSL install it INSIDE this distro ($TAILSCALE_DL/linux): Tailscale on Windows does not reach into the WSL VM."
+      warn "  On WSL: install it on Windows and turn on mirrored networking ([wsl2] networkingMode=mirrored in %UserProfile%\\.wslconfig, then wsl --shutdown), or install it inside this distro ($TAILSCALE_DL/linux)."
     fi
   fi
   has git || warn "git was not found; repo discovery, diffs and commits need it."

@@ -10,7 +10,7 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { corsHeaders } from "./origin.js";
-import { isLoopbackAddr, json } from "./routes/apiio.js";
+import { answerBadBody, json } from "./routes/apiio.js";
 import { dispatchApi, type ApiCtx } from "./routes/apitable.js";
 import { API_ROUTES } from "./routes/apiroutes.js";
 
@@ -48,9 +48,6 @@ export function answerPreflight(req: IncomingMessage, res: ServerResponse): void
   res.end();
 }
 
-/** Is this socket peer the machine itself? The one predicate behind both hook sinks (`routes/apiio.ts`). */
-export { isLoopbackAddr };
-
 export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: ApiCtx): Promise<boolean> {
   const url = new URL(req.url ?? "/", "http://localhost");
   const path = url.pathname;
@@ -66,8 +63,8 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, ctx: 
 
   if (method === "OPTIONS") { answerPreflight(req, res); return true; }
 
-  // Every route, first match wins (`routes/apitable.ts`); none ⇒ the 404 it always was.
-  if (await dispatchApi(API_ROUTES, { req, res, url, path, method }, path.split("/"), ctx)) return true;
+  // Every route, first match wins (`routes/apitable.ts`); none ⇒ the 404 it always was. A body that is not the JSON its route reads (`readJson` → `BadBody`) is answered HERE, once, in words — never a 500.
+  if (await dispatchApi(API_ROUTES, { req, res, url, path, method }, path.split("/"), ctx).catch((err: unknown) => { if (answerBadBody(res, err)) return true; throw err; })) return true;
 
   json(res, { error: "not found" }, 404);
   return true;

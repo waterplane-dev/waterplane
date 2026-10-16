@@ -9,11 +9,12 @@
 
 import { hoursOpenFrom, inHours, nextFireAt, ruleRecurs } from "../schedule.js";
 import { serialGroup, serialLead, serialWaitText } from "../queue.js";
+import { budgetLeftoverText } from "../budget.js";
 import type { Intent } from "./row.js";
 import { HELD_MAX_MS, ON_TIME_MS } from "./row.js";
 import type { IntentFacts, IntentVerdict } from "./facts.js";
 import { CHAIN_LOOP, CHAIN_PREDECESSOR_CANCELED, CHAIN_PREDECESSOR_FAILED, chainGoneText, chainLoops, chainMissedText, chainRecurringText, chainSetAsideText, chainWaitText, filesGaveUp, filesWaiting, heldOutText, missedText, notYetText, outsideHoursText, wait } from "./words.js";
-import { budgetHold, budgetWaived } from "./budgetpass.js";
+import { budgetAfterResetOf, budgetHold, budgetLeftoverOf, budgetWaived } from "./budgetpass.js";
 import { MANUAL_HOLD_TEXT } from "./kind.js";
 import { needsSlot, targetVerdict } from "./target.js";
 
@@ -95,6 +96,16 @@ export function intentVerdict(i: Intent, facts: IntentFacts, now: number): Inten
   if (facts.budgetBlocked && i.auto) {
     const held = budgetHold(i, facts, now);
     if (held !== null) return wait("budget", held);
+  }
+  // A row let past LAST week's budget that did not start before the reset:
+  // it waits for the leftover ceiling, not the ordinary one, so a week that
+  // has just reset is not spent on it at once. A person's waiver given since
+  // is a newer answer and lifts it.
+  // A row timed for right AFTER the weekly reset is held by the same ceiling
+  // (`budgetAfterResetOf`) — the burst it stops, from the other side.
+  if (facts.leftoverOver && i.auto && !budgetWaived(i, now) && budgetLeftoverOf(i, now) !== null) {
+    const after = typeof i.leftoverOf !== "number" && budgetAfterResetOf(i, now) !== null;
+    return wait("budget", budgetLeftoverText(facts.leftoverOver, now, after));
   }
 
   // ── 3. trigger ───────────────────────────────────────────────────────────
@@ -214,7 +225,7 @@ export function intentVerdict(i: Intent, facts: IntentFacts, now: number): Inten
       // Every tick re-runs this arm from scratch, and the clock keeps moving
       // while a row is held by a rung BELOW it. So a row that passed here
       // legitimately — due, inside its grace — and was then held by `serial`,
-      // `holdForHost`, `noSlot`, `picking` or a busy target spent its deadline
+      // `holdForHost`, `noSlot`, `localModel` or a busy target spent its deadline
       // on the waits it was TOLD to perform, and this rung failed it for
       // obeying. That is not a hypothetical: `Intent.clearedOccurrence` carries
       // the real case, a user's weekly *wait until free* rule failed after a
@@ -385,6 +396,21 @@ export function intentVerdict(i: Intent, facts: IntentFacts, now: number): Inten
   // one is scoped to the whole host. Checked after `serial` so a row that is
   // already waiting on its own repo reports THAT reason, the more specific one.
   if (i.holdForHost && facts.hostBusy) return held(wait("hostBusy"));
+
+  // ── 4.55 the local model ─────────────────────────────────────────────────
+  // One GPU, one runner: two local coding turns at once is two models fighting
+  // for the same memory (a swap mid-turn) or one model serving two agents at
+  // half speed each. The owner's rule (2026-10-13): one ACTIVE local coding
+  // session at a time by default, a setting to change it. "Active" is a turn
+  // running — an idle local session that is merely open does not hold it.
+  // Only AUTOMATIC starts, rung 4.6's exemption shape — which rows those are
+  // (auto rows, and each target of a sweep) is the host's call, made when it
+  // builds `local.rows`: a person's tap is told, not held. Before `noSlot`
+  // because it is the more specific of the two.
+  if (facts.local && facts.local.rows.has(i.id) && facts.local.free <= 0
+    && !(i.target.kind === "session" && facts.local.busy.has(i.target.sessionId))) {
+    return held(wait("localModel"));
+  }
 
   // ── 4.6 a free slot ──────────────────────────────────────────────────────
   // Every backlog item now opens its OWN session, so the bound on how many

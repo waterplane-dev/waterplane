@@ -114,4 +114,16 @@ export interface DetectedPrompt {
    * re-derive a different id on every box a log read could not reach.
    */
   askId?: string;
+  /**
+   * The plan a plan-approval box asks you to approve — the plan FILE's markdown
+   * (host `planbox.ts`), because the `ExitPlanMode` call is not in the log until
+   * the box is answered and the terminal shows it only as rows scrolled far above
+   * the box. Without it the card is "ready to execute — proceed?" with the thing
+   * being approved nowhere on the phone.
+   *
+   * `path` is where the CLI keeps it; `cut` says `text` stopped at the host's cap.
+   * Outside `promptFingerprint` for `desc`'s reason: it changes nothing about what
+   * a keystroke means, and a plan edited mid-box must not stale a queued answer.
+   */
+  plan?: { text: string; path: string; cut?: boolean };
 }

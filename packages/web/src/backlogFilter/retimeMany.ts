@@ -5,6 +5,7 @@
  * imports carry `.ts` because `node --test` loads it straight off the source.
  */
 import type { BacklogItem } from "@waterplane/shared";
+import { describeRule } from "@waterplane/shared";
 
 // ── Re-time many ──────────────────────────────────────────────────────
 
@@ -74,4 +75,29 @@ export function retimeOffClockNote(n: number): string {
 export function queuedChipHeld(n: number, held: number): string {
   if (held <= 0) return "";
   return held >= n ? " · budget" : ` · ${held} budget`;
+}
+/**
+ * **The rows on ONE clock, as one pick** — "move every one of the 20 waiting
+ * for the reset past it" was 20 ticks. A count on a control is a filter: the
+ * number on the button is exactly the ids the tap ticks, read as the clock
+ * group (`clockGroups`, run order) cut to what is ON SCREEN and `retimeEligible`
+ * — never the group's full size, which may hold rows a filter hides or a
+ * running one the host refuses. A clock with fewer than two such rows is not
+ * offered: one row is its own tick.
+ */
+export interface ClockPick { key: string; rule: string; ids: string[] }
+export function clockPicks(groups: readonly { key: string; items: readonly BacklogItem[] }[],
+  retimeable: readonly BacklogItem[]): ClockPick[] {
+  const on = new Set(retimeable.map((it) => it.id));
+  const out: ClockPick[] = [];
+  for (const g of groups) {
+    const ids = g.items.filter((it) => on.has(it.id)).map((it) => it.id);
+    if (ids.length < 2 || !g.items[0].at) continue;
+    out.push({ key: g.key, rule: describeRule(g.items[0].at.rule), ids });
+  }
+  return out;
+}
+/** The button: what it ticks, by the clock's own words (`describeRule`). */
+export function clockPickLabel(c: ClockPick): string {
+  return `re-time the ${c.ids.length} on “${c.rule}”`;
 }

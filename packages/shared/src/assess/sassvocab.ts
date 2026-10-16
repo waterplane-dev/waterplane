@@ -103,3 +103,48 @@ export const MAX_ASSESS_NOTES = 40;
 export const ASSESS_IN_FILE = stateRel("assess-in.json");
 export const ASSESS_OUT_FILE = stateRel("assess-out.json");
 export const ASSESS_PLAN_FILE = stateRel("plan.md");
+
+// ── Two string helpers every cleaner slice uses (not on the barrel) ──────────
+
+/** A trimmed string, or "" for anything that is not one. */
+export const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+/** A LABEL clipped to `n` — never applied to a prompt (see `MAX_PROMPT_CHARS`). */
+export const clip = (s: string, n: number): string => (s.length > n ? s.slice(0, n) : s);
+
+// ── The slot check's two proposal kinds (2026-10-16) ─────────────────────────
+
+/**
+ * How many contradictions one run may name. A conflict is WORDS — it changes
+ * no row, ever — so the cap is only about a sheet staying readable.
+ */
+export const MAX_CONFLICTS = 10;
+
+/** How many rows a conflict may name. Two is the usual case; past six it is a
+ *  theme, not a contradiction a person can resolve by editing one row. */
+export const MAX_CONFLICT_IDS = 6;
+
+/** How many splits one run may propose. */
+export const MAX_SPLITS = 10;
+
+/** A split is exactly this many texts: one row that is two jobs. A three-way
+ *  split is two splits, approved one at a time. */
+export const SPLIT_PARTS = 2;
+
+/**
+ * **What a run was scoped to, beyond its ids** — absent is a plain run.
+ *
+ * `slot`: the ids are one slot (`intent/slot.ts`) — rows that fire together at
+ * one reset or instant — so the prompt can say "these fire together at X" and
+ * a `wanted` rank is the order WITHIN the slot. `key` is `Slot.key`; the host
+ * re-derives the slot with `findSlot` (tolerant: the phone may have read the
+ * reset a minute apart) and never trusts the phone's membership over its own.
+ */
+export type AssessScope = { kind: "slot"; key: string };
+
+/** `AssessScope` off the wire or disk: the one shape, else undefined. */
+export function cleanAssessScope(v: unknown): AssessScope | undefined {
+  if (!v || typeof v !== "object") return undefined;
+  const r = v as Record<string, unknown>;
+  if (r.kind !== "slot" || typeof r.key !== "string" || !r.key.trim() || r.key.length > 200) return undefined;
+  return { kind: "slot", key: r.key.trim() };
+}

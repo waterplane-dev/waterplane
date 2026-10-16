@@ -19,15 +19,21 @@
  * position of today's first one, keeps every session listener's relative order.
  */
 import { randomUUID } from "node:crypto";
-import { appendFileSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, statSync } from "node:fs";
+import { keepLastLines } from "../jsonstore.js";
 import { basename, join } from "node:path";
-import type { DetectedPrompt, HistoryEntry, HostMessage, SessionInfo } from "@waterplane/shared";
-import { readsInline } from "../files.js";
+import type { DetectedPrompt, FollowUp, HistoryEntry, HostMessage, SessionInfo } from "@waterplane/shared";
+import { followUpPushText } from "@waterplane/shared";
+import { isMarkdownPath, readsInline } from "../files.js";
+import { stripFresh } from "./scan.js";
 import { forgetRules } from "../answergate.js";
 import { targetId } from "../repos.js";
 import { detectPrompt, dialogEvidence, dialogStillUp, stripAnsi } from "../prompt.js";
 import { looksLikeQuestion, questionText } from "../question.js";
+import type { WebSocket } from "ws";
 import type { ServerCtx } from "./ctx.js";
+import { ptyFrameAction, ptyHoldsStreams } from "./liveness.js";
+import { WS_PTY_BACKLOG_BYTES } from "./wsops.js";
 import { env } from "../env.js";
 import { logTag, envName, sessionBudgetText, workingLine } from "@waterplane/shared";
 import { openDeliveries } from "../opendeliveries.js";
@@ -50,11 +56,30 @@ export function wireSessionEvents(ctx: ServerCtx) {
   // immediately, even while the Homebrew cask still lags the npm release.
   ctx.sessions.on("updateBanner", (latest?: string) => ctx.updates.noteBanner(latest));
 
-  // PTY output goes only to sockets attached to that session.
+  // PTY output goes only to sockets attached to that session — and not into a
+  // socket whose send buffer is already past `WS_PTY_BACKLOG_BYTES`
+  // (`liveness.ts`): its deltas are dropped, the session marked starved for
+  // that socket, and the first frame after it drains is ONE full replay
+  // (`routes/session.ts`'s attach shape) in place of the delta. `seq` already
+  // counts this chunk when `data` fires, so the replay's `seq` is this frame's.
+  // Only here: every other frame type is sent as before, whatever the buffer.
+  const starved = new WeakMap<WebSocket, Set<string>>();
   ctx.sessions.on("data", (id: string, chunk: string, seq: number) => {
-    const frame: HostMessage = { t: "pty", id, dataB64: Buffer.from(chunk, "utf8").toString("base64"), seq };
+    let frame: HostMessage | null = null;
     for (const ws of ctx.clients) {
-      if (ctx.attached.get(ws)?.has(id)) ctx.send(ws, frame);
+      if (!ctx.attached.get(ws)?.has(id)) continue;
+      const mine = starved.get(ws);
+      const action = ptyFrameAction(ws.bufferedAmount, WS_PTY_BACKLOG_BYTES, !!mine?.has(id));
+      if (action === "skip") {
+        if (mine) mine.add(id); else starved.set(ws, new Set([id]));
+      } else if (action === "resync") {
+        mine?.delete(id);
+        const rep = ctx.sessions.attachReplay(id, undefined);
+        if (rep) ctx.send(ws, { t: "pty", id, dataB64: Buffer.from(rep.data, "utf8").toString("base64"), seq: rep.seq, full: rep.full });
+      } else {
+        frame ??= { t: "pty", id, dataB64: Buffer.from(chunk, "utf8").toString("base64"), seq };
+        ctx.send(ws, frame);
+      }
     }
   });
   ctx.sessions.on("exit", (id: string, code: number | null) => {
@@ -64,6 +89,12 @@ export function wireSessionEvents(ctx: ServerCtx) {
   });
   ctx.sessions.on("closed", (closed) => ctx.broadcast({ t: "closed.list", closed }));
   ctx.sessions.on("updated", (info: SessionInfo) => ctx.broadcast({ t: "session.updated", session: info }));
+  // A follow-up flag nobody tapped (a launch option on finishing, or the session's
+  // agent): one push saying who and why. A hand flag never gets here (`roster.ts`).
+  ctx.sessions.on("followUp", (info: SessionInfo, f: FollowUp) => {
+    const p = followUpPushText(f, info.tabTitle || info.title);
+    if (p) ctx.notify("followup", { ...p, sessionId: info.id, tag: `followup-${info.id}` });
+  });
   // History updates stream only to sockets viewing that session (like PTY frames).
   ctx.sessions.on("history", (id: string, entries: HistoryEntry[]) => {
     const frame: HostMessage = { t: "session.history", id, entries };
@@ -79,14 +110,22 @@ export function wireSessionEvents(ctx: ServerCtx) {
     ctx.broadcast({ t: "session.created", session: info });
     ctx.broadcast({ t: "recent.list", recent: ctx.sessions.listRecent() });
     // Snapshot pre-existing images/outbox files so they aren't reported as "new".
-    ctx.imgSeen.set(info.id, new Set(ctx.scanImages(info.cwd).map((i) => i.relPath)));
+    // The two repo-wide walks run in the background (a sync walk froze the host on WSL), so each
+    // lands only if nothing seeded that baseline meanwhile (a turn end re-seeds a missing pull
+    // snapshot itself) and the session is still there to own it.
+    const live = () => ctx.sessions.list().some((s) => s.id === info.id);
+    void ctx.scanImages(info.cwd).then((imgs) => {
+      if (live() && !ctx.imgSeen.has(info.id)) ctx.imgSeen.set(info.id, new Map(imgs.map((i) => [i.relPath, i.mtime])));
+    }, () => {});
     // Only when the repo has no baseline yet. A second session opening in a
     // checkout must not RE-seed it: that would mark anything produced since the
     // first session opened as already seen, and swallow the notification for a
     // file nobody has been told about.
     if (!ctx.outSeen.has(info.cwd)) ctx.outSeen.set(info.cwd, new Set(ctx.scanOutboxDocs(info.cwd).map((f) => f.relPath)));
     const pullCfg = ctx.autopull.config(info.cwd);
-    ctx.pullSeen.set(info.id, { scope: pullCfg.scope, paths: new Set(ctx.scanPullCandidates(info.cwd, pullCfg.scope).map((f) => f.relPath)) });
+    void ctx.scanPullCandidates(info.cwd, pullCfg.scope).then((found) => {
+      if (live() && !ctx.pullSeen.has(info.id)) ctx.pullSeen.set(info.id, { scope: pullCfg.scope, paths: new Set(found.map((f) => f.relPath)) });
+    }, () => {});
     // Opening a session is the moment a repo starts being driven from the phone —
     // and the moment its wiring starts to matter. Re-check it here as well as on
     // the sweep, so a repo created between two sweeps is never driven unchecked.
@@ -142,8 +181,7 @@ export function wireSessionEvents(ctx: ServerCtx) {
       appendFileSync(LIMIT_LOG, JSON.stringify(e) + "\n");
       // Rotate: keep the newest ~500 events once the file grows past 256 KB.
       if (statSync(LIMIT_LOG).size > 256 * 1024) {
-        const lines = readFileSync(LIMIT_LOG, "utf8").trimEnd().split("\n");
-        writeFileSync(LIMIT_LOG, lines.slice(-500).join("\n") + "\n");
+        keepLastLines(LIMIT_LOG, 500);
       }
     } catch { /* logging must never break the host */ }
   }
@@ -257,7 +295,7 @@ export function wireSessionEvents(ctx: ServerCtx) {
     // queued for the phone to fetch on its own. Runs before the notification scans
     // below and off its own baseline, so it is never limited by their caps or by
     // which of them happens to cover a given file type.
-    ctx.pullNewFiles(id, info.cwd);
+    void ctx.pullNewFiles(id, info.cwd).catch(() => {});
 
     // Detect new outbox deliverables (non-image: APK, zip, pdf …) → one
     // notification per file whose tap downloads it.
@@ -286,22 +324,28 @@ export function wireSessionEvents(ctx: ServerCtx) {
       freshDocs.slice(5).forEach((f) => oSeen.add(f.relPath)); // count them seen, no spam
     }
 
-    // Detect images the agent produced this turn → surface + notify.
-    const seen = ctx.imgSeen.get(id);
-    if (!seen) return;
-    const fresh = ctx.scanImages(info.cwd).filter((i) => !seen.has(i.relPath));
-    if (!fresh.length) return;
-    fresh.forEach((i) => seen.add(i.relPath));
-    const repoId = targetId(info.cwd);
-    ctx.broadcast({ t: "session.images", id, repoId, images: fresh });
-    const names = fresh.slice(0, 3).map((f) => f.name).join(", ");
-    ctx.notify("image", {
-      title: `New image${fresh.length > 1 ? `s (${fresh.length})` : ""} · ${info.title}`,
-      body: names + (fresh.length > 3 ? "…" : ""),
-      sessionId: id,
-      tag: `image-${id}`,
-      image: { repoId, relPath: fresh[0].relPath },
-    });
+    // Detect images the agent produced this turn, and markdown it wrote or rewrote → the
+    // session's strip; images also notify. A repo-wide walk, so in the background; the baseline
+    // is read when it lands, so two overlapping turn ends never both claim a file.
+    if (!ctx.imgSeen.has(id)) return;
+    void ctx.scanImages(info.cwd).then((imgs) => {
+      const seen = ctx.imgSeen.get(id);
+      if (!seen) return;
+      const fresh = stripFresh(seen, imgs);
+      if (!fresh.length) return;
+      const repoId = targetId(info.cwd);
+      ctx.broadcast({ t: "session.images", id, repoId, images: fresh });
+      const pics = fresh.filter((f) => !isMarkdownPath(f.relPath));
+      if (!pics.length) return;
+      const names = pics.slice(0, 3).map((f) => f.name).join(", ");
+      ctx.notify("image", {
+        title: `New image${pics.length > 1 ? `s (${pics.length})` : ""} · ${info.title}`,
+        body: names + (pics.length > 3 ? "…" : ""),
+        sessionId: id,
+        tag: `image-${id}`,
+        image: { repoId, relPath: pics[0].relPath },
+      });
+    }, () => {});
   });
 
   // A session's own budget was crossed (`sessions/budgetwatch.ts` emits this
@@ -309,32 +353,54 @@ export function wireSessionEvents(ctx: ServerCtx) {
   // ends; this says so, and — when every gate below agrees — writes ONE Esc
   // into the running turn. Never through `deliver.ts`: an Esc is not a prompt,
   // there is nothing to echo or confirm, and the gates ARE the safety.
-  ctx.sessions.on("budgetTripped", (id: string, info: SessionInfo) => {
+  //
+  // The Esc is OWED until it goes out: a crossing with no turn to interrupt
+  // right then (between turns, after a limit resume, across a restart) is
+  // retried on every judge while still over (`budgetEscDue`), quietly — the
+  // person was told at the crossing — and said once when it lands.
+  const tryBudgetEsc = (id: string, info: SessionInfo): { sent: boolean; why: string } => {
     const b = info.budget;
-    if (!b) return;
     const blocker = budgetEscBlocker({
-      interrupt: b.cfg.interrupt,
+      interrupt: !!b?.cfg.interrupt,
       envOff: env("SESSION_BUDGET_INTERRUPT") === "0",
       running: info.running,
-      hooked: ctx.sessions.isHooked(id),
-      // The HOOK's turn, never the screen's: `turnActive` is also set off the
-      // working line (/compact, a turn nobody announced), and that is evidence
-      // the CLI is busy, not that a turn is ours to interrupt.
-      hookTurn: ctx.sessions.turnFromHook(id),
       prompt: !!info.prompt,
       awaitingInput: !!info.awaitingInput,
       openDelivery: (openDeliveries()?.open() ?? []).some((d) => d.sessionId === id),
     });
+    if (blocker) return { sent: false, why: blocker };
     // `prompt`/`awaitingInput` are the detector's LAST reading, and a box
     // painted inside its debounce window is on screen and not yet in them — so
     // the live grid is read in the same tick as the write, and must show the
     // CLI working NOW with no box anywhere on it.
-    const esc = blocker ?? budgetEscScreenBlocker(ctx.sessions.liveGrid(id))
-      ?? (ctx.sessions.write(id, "\x1b") ? "The running turn was interrupted (one Esc)." : "No Esc was sent: the session would not take input.");
-    console.log(`${logTag} session budget hit · ${id} · ${esc}`);
+    const screen = budgetEscScreenBlocker(ctx.sessions.liveGrid(id));
+    if (screen) return { sent: false, why: screen };
+    if (!ctx.sessions.write(id, "\x1b")) return { sent: false, why: "No Esc was sent: the session would not take input." };
+    ctx.sessions.settleBudgetEsc(id);
+    return { sent: true, why: "The running turn was interrupted (one Esc)." };
+  };
+  ctx.sessions.on("budgetTripped", (id: string, info: SessionInfo) => {
+    const b = info.budget;
+    if (!b) return;
+    const esc = tryBudgetEsc(id, info);
+    const owed = !esc.sent && b.cfg.interrupt && env("SESSION_BUDGET_INTERRUPT") !== "0" && info.running;
+    const tail = owed ? " It will be interrupted once a running turn shows on its screen." : "";
+    console.log(`${logTag} session budget hit · ${id} · ${esc.why}${owed ? " (owed — retried while over)" : ""}`);
     ctx.notify("limit", {
       title: `Session budget hit · ${info.title}`,
-      body: `${sessionBudgetText(b.verdict)}. Further sends to it are held until you raise or clear the budget. ${esc}`,
+      body: `${sessionBudgetText(b.verdict)}. Further sends to it are held until you raise or clear the budget. ${esc.why}${tail}`,
+      sessionId: id, tag: `session-budget:${id}`,
+    });
+  });
+  ctx.sessions.on("budgetEscDue", (id: string, info: SessionInfo) => {
+    const b = info.budget;
+    if (!b) return;
+    const esc = tryBudgetEsc(id, info);
+    if (!esc.sent) return;
+    console.log(`${logTag} session budget hit · ${id} · ${esc.why} (owed Esc, sent late)`);
+    ctx.notify("limit", {
+      title: `Session budget · ${info.title} interrupted`,
+      body: `${sessionBudgetText(b.verdict)}. ${esc.why} Further sends to it are held until you raise or clear the budget.`,
       sessionId: id, tag: `session-budget:${id}`,
     });
   });
@@ -361,6 +427,10 @@ export function wireSessionEvents(ctx: ServerCtx) {
     ctx.sessions.parked();
     void primeNewBackendModels().then((asked) => { if (asked) ctx.broadcast({ t: "backends", list: backendInfos() }); });
   });
+  // PTY first (`liveness.ts`'s `ptyHoldsStreams`): what the plugin streams ask before every frame.
+  return {
+    ptyHeld: (ws: WebSocket): boolean => ptyHoldsStreams(ws.bufferedAmount, WS_PTY_BACKLOG_BYTES, (starved.get(ws)?.size ?? 0) > 0),
+  };
 }
 
 /** How often the session-budget calibrator looks at the usage cache. */
@@ -368,26 +438,29 @@ const BUDGET_CAL_EVERY_MS = 60_000;
 
 /** The facts the budget's one Esc is gated on (`budgetTripped` above). */
 export interface BudgetEscFacts {
-  interrupt: boolean; envOff: boolean; running: boolean; hooked: boolean;
-  /** A turn the HOOKS announced (`sessions.turnFromHook`), never one read off the screen. */
-  hookTurn: boolean; prompt: boolean; awaitingInput: boolean; openDelivery: boolean;
+  interrupt: boolean; envOff: boolean; running: boolean;
+  prompt: boolean; awaitingInput: boolean; openDelivery: boolean;
 }
 
 /**
  * Why NOT to write the Esc, as the sentence the notification carries — or
- * null, which is the only answer that types it. An Esc is only ever safe into
- * a turn this host can PROVE is running (a hooked session's own flag), with
- * nothing on screen it would answer instead (a choice box or a dialog: Esc
- * there DECLINES, which is a decision nobody made), and no delivery still
- * unconfirmed in it (an Esc at a composer holding those words could clear them,
- * the loss `deliver.ts`'s miss sweep is forbidden too).
+ * null, which lets `budgetEscScreenBlocker` have the last word. An Esc is only
+ * ever safe into a turn that is running, with nothing on screen it would answer
+ * instead (a choice box or a dialog: Esc there DECLINES, which is a decision
+ * nobody made), and no delivery still unconfirmed in it (an Esc at a composer
+ * holding those words could clear them, the loss `deliver.ts`'s miss sweep is
+ * forbidden too).
+ *
+ * The running turn is proven on the LIVE grid (the CLI's own working line), not
+ * by the hooks. It used to need a hook-announced turn, and that never came for
+ * the turns that overspend most: one driven by background agents' task
+ * notifications (no `UserPromptSubmit`), and one already running when the
+ * daemon restarted — a session at $178 of a $150 cap kept working because of it.
  */
 export function budgetEscBlocker(f: BudgetEscFacts): string | null {
   if (!f.interrupt) return "No Esc was sent: this budget is set not to interrupt.";
   if (f.envOff) return `No Esc was sent: interrupting is turned off on this desktop (${envName("SESSION_BUDGET_INTERRUPT")}=0).`;
   if (!f.running) return "No Esc was sent: the session is not running.";
-  if (!f.hooked) return "No Esc was sent: without the hook pipe a running turn cannot be proven, and an Esc at anything else is a keypress nobody chose.";
-  if (!f.hookTurn) return "No Esc was sent: no turn announced by the hooks was running, so there was no turn to interrupt.";
   if (f.prompt || f.awaitingInput) return "No Esc was sent: a question is on screen, and Esc would answer it.";
   if (f.openDelivery) return "No Esc was sent: a prompt sent to it is still unconfirmed, and Esc could clear it from the composer.";
   return null;

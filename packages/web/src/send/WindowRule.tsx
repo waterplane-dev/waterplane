@@ -1,6 +1,8 @@
 /** The usage-window rule's fields. Split from `SendSheet.tsx` (docs/notes/send-architecture.md). */
+import { RadioRows } from "../kit";
 import { LS, lsSet } from "../storage";
-import { GUARD_LABEL, LEADS, guardWords, pctChoices, pctOk, pctWords } from "../sendIntent";
+import { GUARD_LABEL, guardWords, pctChoices, pctOk, pctWords } from "../sendIntent";
+import { LeadPick } from "./LeadPick";
 import type { SendSheetModel } from "./useSendSheet";
 
 export function WindowRule({ m }: { m: SendSheetModel }) {
@@ -11,37 +13,31 @@ export function WindowRule({ m }: { m: SendSheetModel }) {
   return (
     <>
       <>
-        <div className="segmented">
-          <button className={`seg${(rule.window ?? "session") === "session" ? " on" : ""}`}
-            onClick={() => patchRule({ window: "session" })}>session window</button>
-          <button className={`seg${rule.window === "weekly" ? " on" : ""}`}
-            onClick={() => patchRule({ window: "weekly" })}>weekly window</button>
-        </div>
-        <div className="segmented">
-          <button className={`seg${(rule.edge ?? "before") === "before" ? " on" : ""}`}
-            title="spend what is left before the window rolls over"
-            onClick={() => patchRule({ edge: "before", offsetMin: Math.min(0, rule.offsetMin ?? -60) })}>before it resets</button>
-          {/* The condition is no longer cleared on the way in.
-              `right after it resets` used to wipe `minPctLeft`,
-              because a condition on a window that has JUST reset can
-              only ever mean "never run" — true of that window, and
-              only that one. A guard naming the OTHER meter asks a
-              question with a real answer at exactly that instant,
-              which is the whole reason `guardWindow` exists. */}
-          <button className={`seg${rule.edge === "after" ? " on" : ""}`}
-            title="start the moment the allowance is back"
-            onClick={() => patchRule({ edge: "after", offsetMin: 0 })}>right after it resets</button>
-        </div>
+        <RadioRows<"session" | "weekly"> label="Which usage window"
+          value={rule.window === "weekly" ? "weekly" : "session"}
+          options={[{ key: "session", label: "session window" }, { key: "weekly", label: "weekly window" }]}
+          onChange={(k) => patchRule({ window: k })} />
+        <RadioRows<"before" | "after"> label="When in the window"
+          value={rule.edge === "after" ? "after" : "before"}
+          onChange={(k) => patchRule(k === "before"
+            ? { edge: "before", offsetMin: Math.min(0, rule.offsetMin ?? -60) }
+            : { edge: "after", offsetMin: 0 })}
+          options={[
+            { key: "before", label: "before it resets", title: "spend what is left before the window rolls over" },
+            { key: "after", label: "right after it resets", title: "start the moment the allowance is back" },
+          ]} />
+        {/* The condition is no longer cleared on the way in.
+            `right after it resets` used to wipe `minPctLeft`,
+            because a condition on a window that has JUST reset can
+            only ever mean "never run" — true of that window, and
+            only that one. A guard naming the OTHER meter asks a
+            question with a real answer at exactly that instant,
+            which is the whole reason `guardWindow` exists. */}
 
         {(rule.edge ?? "before") === "before" && (
           <>
             <div className="section section-head"><span>How long before</span></div>
-            <div className="sched-days">
-              {LEADS.filter((m) => m > 0).map((m) => (
-                <button key={m} className={`row-chip${(rule.offsetMin ?? 0) === -m ? " on" : ""}`}
-                  onClick={() => patchRule({ offsetMin: -m })}>{m < 60 ? `${m}m` : `${m / 60}h`}</button>
-              ))}
-            </div>
+            <LeadPick m={m} />
           </>
         )}
 
@@ -114,18 +110,13 @@ export function WindowRule({ m }: { m: SendSheetModel }) {
             <div className="section section-head">
               <span>…in which window <span className="section-hint">· the meter it reads, not the reset it waits for</span></span>
             </div>
-            <div className="segmented">
-              {(["session", "weekly"] as const).map((w) => (
-                <button key={w} className={`seg${guardW === w ? " on" : ""}`}
-                  // Naming the rule's OWN window is not a guard at
-                  // all, and `cleanRule` drops it — so the control
-                  // stores exactly what the host would keep. One
-                  // way to say each thing.
-                  onClick={() => patchRule({ guardWindow: w === anchorW ? undefined : w })}>
-                  {GUARD_LABEL[w]}
-                </button>
-              ))}
-            </div>
+            {/* Naming the rule's OWN window is not a guard at all, and
+                `cleanRule` drops it — so the control stores exactly what
+                the host would keep. One way to say each thing. */}
+            <RadioRows<"session" | "weekly"> label="Which meter the condition reads"
+              value={guardW}
+              options={(["session", "weekly"] as const).map((w) => ({ key: w, label: GUARD_LABEL[w] }))}
+              onChange={(w) => patchRule({ guardWindow: w === anchorW ? undefined : w })} />
             {/* Not a dimmed control and never a refusal, in any of
                 the three cases: the rule is savable exactly as
                 written and `guardWords` says what it will DO. */}

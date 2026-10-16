@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-const { apkInstallCheck, readGradle } = await import("../dist/apkcheck.js");
+const { apkInstallCheck, apkRepoFacts, looksLikeApkBuild, readGradle } = await import("../dist/apkcheck.js");
 
 const repo = (gradle, apks = []) => {
   const d = mkdtempSync(join(tmpdir(), "apkcheck-"));
@@ -58,4 +58,55 @@ test("an old targetSdk warns; a variable is not read as a number", () => {
   assert.equal(readGradle("targetSdkVersion rootProject.ext.targetSdkVersion").targetSdk, undefined);
   assert.equal(readGradle("targetSdkVersion 34").targetSdk, 34);
   assert.equal(readGradle(`signingConfig = signingConfigs.getByName("release")`).repoKey, true);
+});
+
+const PULL = { enabled: true, scope: "outbox", match: [], maxBytes: 256 * 1024 * 1024, builds: true, supersede: true };
+const anyMatch = (cfg, f) => !(cfg.maxBytes > 0 && f.size > cfg.maxBytes);
+
+test("facts: the repo half as data — package, key, outbox, builds, the auto-download rule", async () => {
+  const d = repo(KTS, ["tiptoi-debug-1.apk"]);
+  try {
+    const builds = [{ id: "debug-apk", name: "Debug APK", cmd: "./gradlew assembleDebug" }, { id: "lint", name: "Lint", cmd: "npm run lint" }];
+    const [f] = await apkRepoFacts({ id: "r1", repoName: "Tiptoi", worktreePath: d }, builds, PULL, anyMatch);
+    assert.equal(f.pkg, "de.hoh.tiptoi");
+    assert.equal(f.targetSdk, 35);
+    assert.equal(f.key, "debug-default");
+    assert.equal(f.apks, 1);
+    assert.equal(f.newestApk.rel, ".claude/outbox/tiptoi-debug-1.apk");
+    assert.deepEqual(f.builds.map((b) => b.apk), [true, false]);
+    assert.deepEqual(f.autoPull, { enabled: true, builds: true, maxBytes: PULL.maxBytes, newestMatches: true });
+  } finally { rmSync(d, { recursive: true }); }
+});
+
+test("facts: no APK ⇒ newestMatches ABSENT, never false; a module reading keystore.properties without one ⇒ missing", async () => {
+  const d = repo(KTS + `\nval p = rootProject.file("keystore.properties")`);
+  try {
+    const [f] = await apkRepoFacts({ id: "r1", repoName: "x", worktreePath: d }, [], { ...PULL, enabled: false }, anyMatch);
+    assert.equal(f.apks, 0);
+    assert.equal(f.autoPull.newestMatches, undefined);
+    assert.equal(f.key, "missing");
+  } finally { rmSync(d, { recursive: true }); }
+});
+
+test("facts: a repo with no app module answers no rows", async () => {
+  const d = repo(null);
+  try { assert.deepEqual(await apkRepoFacts({ id: "r", repoName: "x", worktreePath: d }, [], PULL, anyMatch), []); }
+  finally { rmSync(d, { recursive: true }); }
+});
+
+test("an APK build is read off the name or the command, and is only a label", () => {
+  assert.equal(looksLikeApkBuild({ name: "Debug APK", cmd: "bash phone-build-debug.sh" }), true);
+  assert.equal(looksLikeApkBuild({ name: "Release", cmd: "flutter build apk --release" }), true);
+  assert.equal(looksLikeApkBuild({ name: "x", cmd: "./gradlew assembleRelease" }), true);
+  assert.equal(looksLikeApkBuild({ name: "Tests", cmd: "npm test" }), false);
+});
+
+test("facts: a package-less module beside a named one is dropped; suffixes become variants", async () => {
+  const d = repo(KTS.replace("targetSdk = 35", `targetSdk = 35 }; buildTypes { debug { applicationIdSuffix = ".dev" }`));
+  writeFileSync(join(d, "build.gradle.kts"), `plugins { id("com.android.application") version "8" apply false }`);
+  try {
+    const fs = await apkRepoFacts({ id: "r", repoName: "x", worktreePath: d }, [], PULL, anyMatch);
+    assert.equal(fs.length, 1);
+    assert.deepEqual(fs[0].variants, ["de.hoh.tiptoi.dev"]);
+  } finally { rmSync(d, { recursive: true }); }
 });

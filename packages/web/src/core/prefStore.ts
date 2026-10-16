@@ -107,7 +107,7 @@ export function createPrefs<P extends object>(defs: PrefDefs<P>): Prefs<P> {
  *  the key keeps the default (`autoSend`, `serialSessions`, `confirmQueue`,
  *  `enterSends`). */
 export const onUnlessZero = (raw: string | null): boolean => raw !== "0";
-/** Default OFF: only an explicit `"1"` is on (`cliMode`, `headerCollapsed`). */
+/** Default OFF: only an explicit `"1"` is on (`cliMode`). */
 export const onIfOne = (raw: string | null): boolean => raw === "1";
 /** How both are written. */
 export const flagText = (on: boolean): "1" | "0" => (on ? "1" : "0");

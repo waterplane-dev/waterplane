@@ -72,30 +72,36 @@ This desktop as a resource the phone reaches: its files and worktrees, its build
   `baseSha`** (the second writer is an AGENT in the same repo); mismatch ⇒ `stale` (409), nothing
   written. **A body we could not show in full carries NO `sha`.** Creates nothing, refuses `.env` both
   ways, tmp+rename carrying the original mode.
-- `builds.ts` — per-repo build commands without a session; the rate-limit escape hatch. The config is
+- `builds.ts` — per-repo build commands without a session; the rate-limit escape hatch. **Two files, one
+  list**: `.waterplane-shared/builds.json` is COMMITTED (every checkout), `.waterplane/builds.json` is this
+  desktop's own; `list()` = shared then local, local REPLACING a shared id in place; `save(repo, list, local?)`
+  partitions back (no `local` ⇒ where it lives, new ⇒ shared), keeps a shadowed shared entry untouched,
+  writes a file ONLY when its content changed (git), never overwrites one that does not parse. A desktop
+  path (JAVA_HOME) is always a LOCAL override. `buildsmerge.test.mjs`. The config is
   SNAPSHOTTED onto the row at fire time. Artifacts are "written since the run started", so a run that
   touched nothing falls back to the newest deliverables **flagged `stale`**.
-  **An entry may ASK before it runs** (`shared/buildparams.ts`, one implementation for the form and
-  the shell): values substituted VERBATIM at `{{id}}` in `cmd` AND `dir` (`apps/{{app}}` — substituted
-  BEFORE `contained()`, so the guard still holds), exported as `WATERPLANE_PARAM_<ID>` as well, ONE LINE
-  each; **an undeclared placeholder is LEFT AS WRITTEN** (an empty substitution builds the wrong thing
-  successfully); **a parameter with no value and no default REFUSES the run by name**, synchronously,
-  beside "unknown build" — that refusal is what an unattended fire and an older bundle hit, and the
-  alternative runs on whatever was last picked at 3 a.m. and reports success. A choice's options may be
+  **An entry may ASK before it runs** (rules: `shared` skill, `buildparams.ts`, one implementation
+  for the form and the shell): `dir` is substituted BEFORE `contained()`, so the guard still holds,
+  and the missing-value refusal is synchronous, beside "unknown build" — what an unattended fire and
+  an older bundle hit. A choice's options may be
   READ (`optionsCmd`, `build.options`, repo ROOT never the parameterised `dir`, **async** — it runs on
   the loop pumping every PTY); a failure is a SENTENCE per parameter, never an empty list. Values are
   snapshotted onto the payload (the executor still needs the env after a restart) and into the TITLE.
   `scripts/e2e-buildparams.mjs`.
   A benchmark a backend extension ships (its own `scripts/`, run as a build) is a build command in
   exactly this sense: measured, no session, nothing applies itself — the rules live with it.
+- `appready.ts` + `apkcheck.ts`' `apkRepoFacts` — **the repo half of every app's quiet install, as
+  DATA** (`GET /api/apps/readiness`): package (+ suffix variants), key kind, targetSdk, outbox APKs,
+  APK-ish build commands (a LABEL, never a filter), and whether the auto-download rule takes the
+  newest APK. Primary checkouts only, one repo at a time; a package-less module beside a named one is
+  a root `apply false` line or a template and is dropped. Facts, never a verdict — the phone words them.
 - `installlog.ts` — **which version of what is on which phone.** The one asymmetric question in the download path: one host, many devices, and an install that happens with the app closed. `settings.ts`' storage posture (`.waterplane/installs.json`, tmp+rename, debounced, flushed, re-cleaned on the way IN). **RECORDS, never decides.** A report is a RE-STATEMENT (whole history per `hello`), so the merge is keyed — `<deviceId>:<pullId>:<at>`, the `at` in it so a re-install is a second entry — and the route is QUIET when nothing changed, or every handshake broadcasts the whole log for no news. **The host stamps only `reportedAt`**; an absent `at` stays absent. Devices are DERIVED per read. Rules in `@waterplane/shared`'s `installlog.ts`; `installlog.test.mjs` both sides.
-- `artifacts.ts` — **what a build LEAVES BEHIND, and what it is called.** Rules in
-  `@waterplane/shared`'s twin (pure, phone-shared, `familyKey` MOVED there so the prune and the download
-  queue cannot disagree); disk here. After every run: FOLD the same bytes under two names into one
+- `artifacts.ts` — **what a build LEAVES BEHIND, and what it is called.** Rules (naming, `familyKey`,
+  policy defaults): `shared` skill, `artifacts.ts`; disk here. After every run: FOLD the same bytes under two names into one
   artifact (size **and** a head+tail fingerprint — two ABI splits are bytes apart), COLLECT what is
   not already in `.claude/outbox/` under `<repo>-<variant>-<version|sha|stamp>`, PRUNE older builds
   of **exactly what this run produced** (newest `keep`, `deleteArtifact` never a second `rmSync`).
-  **A name that already says which build it is, is KEPT.** **A COW clone, never a hard link** — the
+  **A COW clone, never a hard link** — the
   next build rewrites its output in place and a link puts those bytes inside the PREVIOUS build's
   collected copy. Per-repo policy in `<repoDir>/.waterplane/artifacts.json`, on by default, `artifacts.get`/
   `.save` → `artifacts.config` (broadcast, contained, `pull.save`'s shape). **Never fails a build**,
@@ -105,9 +111,8 @@ This desktop as a resource the phone reaches: its files and worktrees, its build
   the Build sheet's "set up", for adding one command without spending a turn on it. The walk is here
   (bounded: depth 3, 400 dirs, 256 KB/file, `SKIP_DIRS` pruned BEFORE descending — this runs on a
   phone's frame in the process pumping every PTY); every RULE is `@waterplane/shared`'s `buildscan.ts`, so
-  it is pinned with no disk. **It invents nothing** — a gradle task is offered only where the build
-  file gives evidence for it. A publishing command is FLAGGED, never filtered; an already-configured
-  one stays in the list, marked. A failed scan answers an EMPTY list, never silence.
+  it is pinned with no disk (what may be offered, flagged or marked: `shared` skill). A failed scan
+  answers an EMPTY list, never silence.
 - `capture.ts` (a facade: the manager, over `capture/capturekit.ts` the knobs and backend table, `capture/captureverdict.ts` the pure ladder/verdict/emit gate, `capture/captureconfig.ts` target cleaning + overlay + probe, `capture/capturehelpers.ts` anchors/lease/sidecar/run rendering, `capture/capturesettle.ts` SETTLE, `capture/capturepass.ts` one run's passes + watch loop) — the verified screenshot loop: targets in `<repo>/.waterplane/capture.json` (`builds.ts`'
   shape), a run IS an intent, and it goes **verify → settle → diff → emit**. **Settle is
   frame-stability, `settleMs` a CAP not a sleep**; the diff gate is TOKEN hygiene, not disk — an
@@ -121,14 +126,13 @@ This desktop as a resource the phone reaches: its files and worktrees, its build
   where a target exists.
 - `reposkill.ts` + `reposkilltext.ts` — **making a driven repo waterplane-aware**: the `waterplane` skill,
   generated into `<config dir>/claude-plugin/` and passed to every spawned `claude` with
-  `--plugin-dir` — never written into a repo, so never stale. Not a waterplane plugin. **A new
-  repo-facing capability is a paragraph in `reposkilltext.ts`** — `tools/reposkill.test.mjs` fails
-  on a per-repo `.waterplane/` file the text never names.
+  `--plugin-dir` — never written into a repo, so never stale (the rule itself: CLAUDE.md).
+  `tools/reposkill.test.mjs` fails on a per-repo `.waterplane/` file the text never names.
 - `autopull.ts` · `readtext.ts`: `readImageText` + `POST /api/host/readtext` (**the phone highlighter's text reader** — `GEMINI_API_KEY`, the `postGemini` transport; the decision oracle that shared them is now a plugin outside this repo; it **decides nothing**: hand-asked, one crop per mark, transcription only, a long answer REFUSED, every failure its own sentence at **200**. Off without a key or with `WATERPLANE_OCR=0`; metered `kind: "ocr"`) · `meter.ts` /
   `usage.ts` (**the `/usage` capture is RENDERED before it is parsed** — the TUI's gaps are cursor
   jumps, not spaces) · `render.ts` (**the ONE headless VT replay**) · `context.ts` ·
   `compliance.ts` (fixes only ever ADD; plugin rows via `setupcontrib.ts`) · the requirements row, now an in-repo extension (`packages/extensions/requirements/host/requirements.mts`, pinned by `requirementsrow.test.mjs`): not set up
-  is a PASS carrying `fix: "requirements"`, never a warn on every repo; counts prompts by reading
+  is NO ROW (the offer is the Opt-ins region's, which runs the same `requirements` fix), never a warn on every repo; counts prompts by reading
   only the bytes appended since the last sweep; **never runs the build** — it quotes
   `scripts/requirements/update.mjs` for the phone to hand to the repo's agent) · `setupwatch.ts` (**never writes into a repo**; **absent ≠
   clean**; host-scope checks excluded) · `compliance.ts`'s **`context-weight`** row (what a repo costs
@@ -155,6 +159,7 @@ This desktop as a resource the phone reaches: its files and worktrees, its build
   ones the CLI never writes down, e.g. `/btw` — and merging RENUMBERS) · `slash.ts` · `thumbs.ts` (**null ⇒ serve original**) · `httpio.ts` (never on 206) ·
   `update.ts` · `host.ts` · `auth.ts` · `webbundle.ts` · `net.ts` · `origin.ts` · `doctor.ts` ·
   `speedtest.ts` · `uistats.ts` · `netstats.ts`.
+- `optins.ts` + `setupprefs.ts`' `optInChoices` — **offers, not findings**: one row per shared `OPT_INS` entry, answered by filesystem + local-repo probes only (never paid, never the network, never the repo's code), `unknown` rather than a guess, and never in the setup checklist, its badge or `summarize()`. `GET`/`POST /api/repos/:id/optins[/choice]`. `optins.test.mjs`.
 - `dictate.ts` — **speech the phone recorded, words back, on this desktop** (whisperd first, `whisper-cli` fallback; `WATERPLANE_DICTATE_KEEP=1` is the opt-in exception that keeps clips). `readImageText`'s posture: it DECIDES nothing, writes nothing, has no repo, and the audio lives only in a buffer plus a `tmpdir()` file removed in a `finally` — and the failure log carries the duration, NEVER the words. Local because it was MEASURED first (28.6 s of German in 0.95 s, `large-v3-turbo`, Metal; 5.6 s CPU-only), not because it is cheap — the paid APIs are pennies a month at this volume and still lose on latency and on a prompt full of source code leaving the machine. **The phone writes 16 kHz mono WAV so the host needs NO transcoder** (ffmpeg was broken here while everything else worked). `dictateStatus()` is asked BEFORE the mic opens, and every no-engine case is its own SENTENCE at a 200; `doctor.ts`'s line is always `ok` for `checkCapture`'s reason. Model in XDG, turbo preferred, `WATERPLANE_WHISPER_MODEL` taken as said including its absence; language `auto` or whisper TRANSLATES the other one. `dictate.test.mjs`.
 - `repohealth.ts` — **the zero-token metric series over git history, reached from the phone**
   (`GET /api/repos/:id/repohealth`, `POST …/repohealth/refresh`, running `update` → `narrate` →
@@ -185,4 +190,11 @@ This desktop as a resource the phone reaches: its files and worktrees, its build
   constants and the fixture that re-derives them, and a second copy on the phone would drift
   silently. **A failed `plot` is `plot: null` with `series` intact** — one reader falling over is an
   absent field, never a failed view — and neither read may appear in a refresh's three steps.
+  **A repo's OWN readings run the repo's code** (`.waterplane-shared/health.json`, `tools/repohealth/own.mjs`,
+  the trust paragraph in this module's header): the same trust a repo's own engine already gets —
+  declaration read out of the COMMIT, argv only, cwd the worktree, minimal env, HEAD only, absent
+  with a reason never 0, and nothing from a request ever reaches the argv. They never enter the index. The same file's
+  `central` may DISABLE or OVERRIDE one of the five index readings (`tools/repohealth/central.mjs`,
+  same trust, override HEAD-only, `why` required); a change of it is a CARRIED index week (`central.fp`),
+  and the phone gets it as each series' `variant` — the host adds nothing.
   `scripts/e2e-repohealth.mjs`.

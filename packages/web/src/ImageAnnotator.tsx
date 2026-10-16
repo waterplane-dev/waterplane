@@ -1,6 +1,8 @@
-import { SlidersHorizontal, ZoomIn } from "lucide-react";
 import { SheetHead } from "./Sheet";
+import { useBackStep } from "./backStep";
 import { AnnBars } from "./annotator/AnnBars";
+import { AnnHeadKeys } from "./annotator/AnnHeadKeys";
+import { AnnPrompt } from "./annotator/AnnPrompt";
 import { AnnSendBar } from "./annotator/AnnSendBar";
 import { AnnStage } from "./annotator/AnnStage";
 import { AnnTextOnly } from "./annotator/AnnTextOnly";
@@ -20,19 +22,18 @@ export type { AnnDispatch, AnnSend, AnnSource } from "./annotator/annTypes";
  */
 export function ImageAnnotator(props: AnnotatorProps) {
   const m = useAnnotator(props);
-  const { view, fitRef, zoomed, resetZoom, configOpen, setConfigOpen } = m;
+  // Text only replaces the marking bars: Back returns to the picture (the draft stays), not out of the annotator.
+  useBackStep(m.ocr !== null, m.closeOcr);
   const { index, total, onClose } = props;
   return (
     <div className="sheet">
       <SheetHead onClose={onClose}
         title={total && total > 1 ? `Mark & send · ${index ?? 1}/${total}` : "Mark & send image"}>
-        <button className={`key ${zoomed ? "active" : ""}`} onClick={resetZoom} title="reset zoom" aria-label="reset zoom"><ZoomIn size={16} /> {(view.k / (fitRef.current.k || 1)).toFixed(1)}×</button>
-        <button className={`key ${configOpen ? "active" : ""}`} onClick={() => setConfigOpen((v) => !v)} aria-pressed={configOpen}
-          title="customize the toolbar" aria-label="customize the toolbar"><SlidersHorizontal size={16} /></button>
+        <AnnHeadKeys m={m} />
       </SheetHead>
 
+      {props.prompt && <AnnPrompt prompt={props.prompt} />}
       <AnnStage m={m} />
-
       {m.ocr ? <AnnTextOnly m={m} /> : <><AnnBars m={m} /><AnnSendBar m={m} /></>}
     </div>
   );

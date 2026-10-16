@@ -56,3 +56,12 @@ Prompts and commands accept both "waterplane" and "WP" as names for the product.
 - asked: 2026-10-01
 - shipped: eb7757f
 
+### R-commands-014 · requested
+Commands shown in the app are copy-paste ready.
+- asked: 2026-10-06
+
+### R-commands-015 · shipped
+After a slash command the reader cannot show, the app asks whether to switch to the CLI, with a don't-ask-again option kept per device and set in Settings.
+- asked: 2026-10-11
+- shipped: 09841249
+

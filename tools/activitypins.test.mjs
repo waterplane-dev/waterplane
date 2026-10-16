@@ -29,8 +29,8 @@ const SURFACE = [
   "ACTIVITY_FILTERS:value", "ActivityAction:type", "ActivityActionId:type", "ActivityBucket:type",
   "ActivityDeps:type", "ActivityFilter:type", "ActivityGroup:type", "ActivityInput:type",
   "ActivityKind:type", "ActivityRow:type", "ActivitySort:type", "ActivitySource:type",
-  "ActivitySubject:type", "ActivityTarget:type", "DeliveryTruth:type", "SMARTPICK_ORIGIN:value",
-  "activityCounts:value", "activityHeadline:value", "activityRows:value", "activityTextKey:value",
+  "ActivitySubject:type", "ActivityTarget:type", "DeliveryTruth:type",
+  "activityCounts:value", "activityHeadlineCut:value", "activityRows:value", "activityTextKey:value",
   "bulkLines:value", "compareActivity:value", "dismissBlocker:value", "entryProse:value",
   "groupActivity:value", "intentRowKey:value", "intentTitle:value", "isActivityDebris:value",
   "matchesFilter:value", "onlyUploadsFailed:value", "partitionBulk:value", "queueRowKey:value",
@@ -99,7 +99,7 @@ function matrix() {
       }
   const intents = [];
   const states = ["queued", "blocked", "starting", "running", "done", "failed", "canceled"];
-  const reasons = [undefined, "offline", "gate", "budget", "sessionBudget", "sessionBusy", "sessionGone", "awaitingAnswer", "limit", "filesMissing", "notYet", "serial", "hostBusy", "noSlot", "picking"];
+  const reasons = [undefined, "offline", "gate", "budget", "sessionBudget", "sessionBusy", "sessionGone", "awaitingAnswer", "limit", "filesMissing", "notYet", "serial", "hostBusy", "noSlot"];
   const payloads = [
     { kind: "prompt", steps: ["add the export button", "then test it"] },
     { kind: "build", buildId: "b", name: "Release APK", cmd: "gradle", cwd: "/dev/r1" },
@@ -118,7 +118,7 @@ function matrix() {
       ...(state === "blocked" && blockReason ? { blockReason, blockDetail: `why ${blockReason}` } : {}),
       ...(k % 3 === 0 ? { label: `label ${k}` } : {}), ...(k % 5 === 0 ? { headline: `headline ${k}` } : {}),
       ...(k % 4 === 0 ? { nextAt: NOW + k * 1000 } : {}),
-      ...(k % 7 === 0 ? { origin: "smartpick:1" } : {}), ...(k % 9 === 0 ? { origin: "agent" } : {}),
+      ...(k % 7 === 0 ? { origin: "assess:1" } : {}), ...(k % 9 === 0 ? { origin: "agent" } : {}),
       ...(settled ? { settledAt: NOW - k * 100, result: { at: NOW, ok: state === "done", detail: `result ${k}`, exitCode: state === "done" ? 0 : 1, artifacts: [] } } : {}),
       ...(state === "running" ? { sessionId: "s1" } : {}),
       ...(k % 10 === 0 ? { requeues: [{ at: NOW, by: "run" }] } : {}),
@@ -155,8 +155,8 @@ function observe() {
     const tag = `${online ? "on" : "off"}${withExtras ? "+x" : ""}`;
     out[`rows:${tag}`] = rows;
     out[`counts:${tag}`] = R.activityCounts(rows);
-    out[`headline:${tag}`] = R.activityHeadline(rows, online);
-    out[`headline-empty:${tag}`] = R.activityHeadline([], online);
+    out[`headline:${tag}`] = R.activityHeadlineCut(rows, online)?.text ?? null;
+    out[`headline-empty:${tag}`] = R.activityHeadlineCut([], online)?.text ?? null;
     out[`debris:${tag}`] = rows.map((r) => R.isActivityDebris(r));
     out[`textkey:${tag}`] = rows.map((r) => R.activityTextKey(r));
     out[`refire:${tag}`] = rows.map((r) => R.refireBlocker(r));
@@ -177,7 +177,7 @@ function observe() {
     out[`partition:${tag}`] = R.partitionBulk(rows, R.refireBlocker);
   }
   out.titles = m.intents.map((i) => R.intentTitle(i));
-  out.keys = [R.queueRowKey("x"), R.intentRowKey("y"), R.SMARTPICK_ORIGIN, R.ACTIVITY_FILTERS];
+  out.keys = [R.queueRowKey("x"), R.intentRowKey("y"), R.ACTIVITY_FILTERS];
   out.restorable = [
     R.restorableFailed([{ status: "failed", mode: "upload" }, { status: "failed" }]),
     R.onlyUploadsFailed([{ status: "failed", mode: "upload" }]), R.onlyUploadsFailed([{ status: "failed" }]),

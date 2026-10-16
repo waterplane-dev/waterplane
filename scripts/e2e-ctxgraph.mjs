@@ -31,6 +31,7 @@ import { contextWindowFor, windowContaining } from "../packages/shared/dist/ctxw
 import { costChip, sessionCostOf } from "../packages/shared/dist/sessioncost.js";
 import { costOf } from "../packages/shared/dist/pricing.js";
 import { E, SLUG, rootEnv } from "./lib-brand.mjs";
+import { waitForHost } from "./lib-e2e.mjs";
 
 const STUB = process.cwd() + "/scripts/claude-stub-tui.mjs";
 let failed = false;
@@ -154,7 +155,7 @@ const host = spawn("node", ["packages/host/dist/main.js"], {
   stdio: ["ignore", "pipe", "pipe"],
 });
 host.stderr.on("data", (d) => process.stderr.write("[host] " + d));
-await sleep(1200);
+await waitForHost(PORT);
 
 const repo = await fetch(`${base}/api/repo`, {
   method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "ctx" }),
@@ -415,6 +416,12 @@ try {
         `...and snapped to a real window, not to its own peak (got ${big?.windowTok})`);
       check(Math.max(...(big?.samples ?? [{ tok: 0 }]).map((s) => s.tok)) <= big?.windowTok,
         "...which contains every reading, so nothing is drawn over 100%");
+      // The graph read above ADVANCED the session's shared cursor to the new
+      // log. The sweep used to judge "nothing moved" off that cursor, so the
+      // header's spark (and its Σ cost) stayed on the old conversation for as
+      // long as anyone kept the graph open — $3.42 under a $6.34 prompt.
+      const caught = await until(() => session?.contextSpark?.peak === 580_000, 8000);
+      check(caught, `a graph read does not freeze the header's miniature (peak ${session?.contextSpark?.peak})`);
     }
 
     // ── 5. a session that never goes quiet still draws ────────────────────

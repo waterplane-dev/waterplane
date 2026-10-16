@@ -47,3 +47,44 @@ with a revoke action that ends that device's access immediately.
 - asked: 2026-09-27 (user request)
 - shipped: e8ac50d
 
+### R-connection-008 · shipped
+The web page offers a connect link that opens the Android app and pairs it without the user typing anything.
+- asked: 2026-10-05
+- shipped: 914f2c2f
+
+### R-connection-009 · shipped
+The pairing screen in the Android app looks polished and finished.
+- asked: 2026-10-05
+- shipped: 0a7c1e3b
+
+### R-connection-010 · shipped
+The host accepts the iOS shell's connection by allowing only its exact origin, capacitor://localhost, and no other origin is widened.
+- asked: 2026-10-06
+- shipped: be49c5ea
+
+
+### R-connection-011 · requested
+Pairing a new device offers "Passive device". A passive device's token gets only the automatic app
+download/install path (health, the web-bundle update, the Apps/install manifest and the artifact
+downloads auto-install and autopull use) and the unlock route; every other request — the WebSocket
+included — is refused by the host. A route nobody put on that list is refused. Tokens paired before
+this exist keep full scope.
+- asked: owner, 2026-10-14
+
+### R-connection-012 · requested
+A passive device has no tokenless path on any network: pairing one switches "gate Tailscale" on (the
+pairing sheet says so in one sentence), so the phone gets nothing more with Tailscale on than on home
+wifi. No Tailscale tags, whois or ACLs are configured for it.
+- asked: owner, 2026-10-14
+
+### R-connection-013 · requested
+A passive device unlocks with a PIN the host checks (rate-limited, stored hashed, set only from a
+trusted device, never from a passive one). A correct PIN lifts that device to full scope for 30
+minutes, held on the host, so a killed app or reboot comes back locked. The phone shows "Unlocked
+until HH:MM · Lock now", and drops back to passive when the time runs out.
+- asked: owner, 2026-10-14
+
+### R-connection-014 · requested
+With a passive token the app shows one screen: its apps with their update/install status, the last
+check, and a small "Unlock" link. No burger menu, no settings, no sessions.
+- asked: owner, 2026-10-14

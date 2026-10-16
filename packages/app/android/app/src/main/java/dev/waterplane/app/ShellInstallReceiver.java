@@ -87,6 +87,21 @@ public class ShellInstallReceiver extends BroadcastReceiver {
             ShellPullService.noteInstall(ctx, id, "installed", "", session, name);
             cancelReady(ctx, name, id);
             announce(ctx, id, name != null ? name : "The app", "installed", null);
+            // The opt-in clean-up: the APK is not needed once it is on. File and
+            // MediaStore work, so off the main thread.
+            if (ShellPullService.cleanEnabled(ctx)) {
+                final String rowId = id;
+                final PendingResult pending = goAsync();
+                new Thread(() -> {
+                    try {
+                        ShellPullService.cleanAfterInstall(ctx, rowId);
+                    } catch (RuntimeException e) {
+                        Log.w(TAG, "clean-up after install: " + e);
+                    } finally {
+                        pending.finish();
+                    }
+                }, "shell-install-clean").start();
+            }
             return;
         }
         String why = Installs.failureText(status, message);

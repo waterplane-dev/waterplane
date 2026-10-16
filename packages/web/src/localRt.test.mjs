@@ -29,7 +29,10 @@ import { AUTO_LINGER_MS, SERIES_GAP_MS, barVisible, heldUntil,
   freshSample, gbText, gpuSeries, heldBytes, heldSeries, isResident,
   localRtState, modelBaseName, seriesCeiling,
   cpuBusyPct, cpuSeries, machineText, memAvailBytes, memTight, memUsedSeries,
+  localRtMode, readLocalRtMode,
 } from "./localRt.ts";
+import { setDemoActive } from "./demo/mode.ts";
+import { LS } from "./storage.ts";
 
 const GB = 2 ** 30;
 const NOW = 1_700_000_000_000;
@@ -340,4 +343,30 @@ test("the machine sentence says available, names the GPU only when read, and kee
   assert.equal(machineText(sample(), false), "CPU 12% busy, 20.0 GB of 64.0 GB available.");
   assert.equal(machineText(sample({ gpuPct: 41.6 }), false), "CPU 12% busy, GPU 42%, 20.0 GB of 64.0 GB available.");
   assert.match(machineText(sample({ memFree: 2 * GB }), true), /^Last seen: .* — memory is tight\.$/);
+});
+
+// ── The strip's mode when nobody picked one ───────────────────────────────
+
+test("an unpicked strip mode is always — except in the demo, which has no runner and so shows no strip; a picked one is read as picked", () => {
+  const store = new Map();
+  const had = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => { store.set(k, String(v)); } },
+  });
+  try {
+    assert.equal(readLocalRtMode(), "always", "the real app's default is unchanged");
+    assert.equal(localRtMode(), "always");
+    setDemoActive("first-look");
+    assert.equal(readLocalRtMode(), "auto", "in the demo it is read when asked, not fixed at import");
+    assert.equal(localRtMode(), "auto");
+    assert.equal(barVisible(localRtMode(), { holding: false, lastHeldAt: null, now: NOW }), false, "and `auto` with no model resident draws nothing");
+    store.set(LS.localRtBar, JSON.stringify("always"));
+    assert.equal(readLocalRtMode(), "always", "a mode somebody picked stays theirs, demo or not");
+    store.set(LS.localRtBar, JSON.stringify("off"));
+    assert.equal(readLocalRtMode(), "off");
+  } finally {
+    setDemoActive(null);
+    if (had) Object.defineProperty(globalThis, "localStorage", had); else delete globalThis.localStorage;
+  }
 });

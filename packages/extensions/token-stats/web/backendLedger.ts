@@ -12,7 +12,7 @@
  * Kinds are never folded into one another and never summed with another
  * backend's document: this module only ever sees one.
  */
-import type { BackendTokensDoc } from "@waterplane/shared";
+import { dayToMs, type BackendTokensDoc } from "@waterplane/shared";
 
 export type AvailableLedger = Extract<BackendTokensDoc, { available: true }>;
 
@@ -125,4 +125,27 @@ export function costLines(doc: AvailableLedger, fmt: (n: number, currency: strin
 export function ledgerBackends(list: readonly { id: string; label: string }[] | null | undefined, viewIds: readonly string[] = []): { id: string; label: string }[] {
   if (!list) return [];
   return list.filter((b) => b.id !== "claude" && !viewIds.includes(b.id)).map((b) => ({ id: b.id, label: b.label }));
+}
+
+/** A day series as the shared `DayChart` draws it (`{t, v, day}`), oldest first. */
+export interface LedgerPoint { t: number; v: number; day: string }
+
+/**
+ * Tokens per day — the same columns the Claude Code tab draws, so a second ledger reads in the same
+ * shape. A day the ledger kept with nothing counted is a 0 (it was scanned); a day it never kept is
+ * not a point (the chart's gap fill is the caller's).
+ */
+export function tokenDayPoints(doc: AvailableLedger): LedgerPoint[] {
+  return doc.days.map((d) => ({ t: dayToMs(d.day), day: d.day, v: kindsTotal(d.kinds) }))
+    .sort((a, b) => a.t - b.t);
+}
+
+/** The unit per day (premium requests, AI credits, …), the same shape. */
+export function unitDayPoints(days: readonly { day: string; n: number }[]): LedgerPoint[] {
+  return days.map((d) => ({ t: dayToMs(d.day), day: d.day, v: d.n })).sort((a, b) => a.t - b.t);
+}
+
+/** The models as split rows (largest first, share of the sum) — the bars the Claude Code tab's by-model readout draws. */
+export function modelRows(doc: AvailableLedger): KindRow[] {
+  return kindRows(Object.fromEntries(doc.models.map((m) => [m.label || m.key, kindsTotal(m.kinds)])));
 }

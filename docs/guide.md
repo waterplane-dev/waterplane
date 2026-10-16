@@ -3,7 +3,8 @@
 ![Your phone talks to your own desktop over Tailscale: the waterplane daemon runs the real claude CLI in a terminal on your repos, and sends the screen, screenshots and builds back](assets/flow.svg)
 
 What the app does, one feature at a time, with a short film of each. Your phone reaches your own
-desktop over Tailscale, with no waterplane server and no account; on the desktop, the waterplane daemon runs the
+desktop, over Tailscale from anywhere (recommended) or on your own network, with nothing hosted and
+no account; on the desktop, the waterplane daemon runs the
 real `claude` CLI in a terminal on your repos and sends the screen, screenshots and builds back.
 
 **Every image here is made by a script, from fictional data**, and redrawn from the current code,
@@ -18,13 +19,13 @@ features, one plain sentence each.
 
 ## The first minute
 
-[![The real claude terminal on a phone, mid-turn; a screenshot arrives, is circled and sent back, and Claude fixes what was circled](media/first-look.gif)](https://waterplane-dev.github.io/media/first-look-ef0a8d56b4.mp4)
+<a href="https://waterplane-dev.github.io/media/first-look-74e5d8de68.mp4"><img src="media/first-look.gif" width="270" alt="The real claude terminal on a phone works a typed prompt; a screenshot arrives, is circled and sent back, and the after screenshot shows the fix"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/first-look-ef0a8d56b4.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/first-look-74e5d8de68.mp4), with pause and seek.*
 
-1. **A live session.** The real `claude` terminal in a fictional repo is mid-turn: tool lines
-   stream and the context meter ticks. It is the actual CLI, so every slash command and dialog is
-   there.
+1. **A live session.** The real `claude` terminal in a fictional repo; the demo types a prompt
+   into the compose box and sends it, then tool lines stream and the context meter ticks. It is the
+   actual CLI, so every slash command and dialog is there.
 2. **The reader.** One tap turns the same session into a reader: markdown rendered, tool calls
    folded, an outline of the turns. Another tap goes back to the terminal.
 3. **A screenshot arrives.** Claude says it saved a screenshot; a notification comes up and the
@@ -41,11 +42,23 @@ typing a number into a terminal.
 
 Try it: `?demo=first-look`
 
-## Screenshot, mark it up, send it back
+## Your first app
 
-[![Tap the new-file count: the gallery lists what Claude made, and a markdown file, a live HTML page and a screenshot open on the phone](media/gallery-and-files.gif)](https://waterplane-dev.github.io/media/gallery-and-files-d96756c1ea.mp4)
+On a desktop that has never run a session from the phone, the first-run card builds a hello-world
+page: three questions, a list of what it will create, one Go.
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/gallery-and-files-d96756c1ea.mp4), with pause and seek.*
+<a href="https://waterplane-dev.github.io/media/first-app-e0059d61e8.mp4"><img src="media/first-app.gif" width="270" alt="A fresh desktop's first-run card; a plan listing what will be created; Go copies a template and builds a page you open and tap on the phone"></a>
+
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/first-app-e0059d61e8.mp4), with pause and seek.*
+
+The page it builds lands in `.claude/outbox/` and opens on the phone; the session then opens with a
+suggested first prompt in the box. It needs a connected desktop, so there is no demo for it.
+
+## What Claude made, on your phone
+
+<a href="https://waterplane-dev.github.io/media/gallery-and-files-b24fb6b37c.mp4"><img src="media/gallery-and-files.gif" width="270" alt="The gallery lists what Claude left in the outbox: a markdown file, a live HTML page and a screenshot open on the phone"></a>
+
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/gallery-and-files-b24fb6b37c.mp4), with pause and seek.*
 
 Whatever Claude leaves in `.claude/outbox/` shows up on the phone as a picture or a file, with a
 badge on the repo that has something new. You can open it full size, mark it up and send the note
@@ -57,9 +70,9 @@ Try it: `?demo=gallery-and-files`
 
 *Android app developers only (optional).*
 
-[![Phone one circles a spot on a screenshot of the app, Claude Code adds a logo there, the build runs, phone two's notifications say the build succeeded and the update is ready to install, one tap on Install updates it, and it opens with the logo in the circled spot](media/apk-install.gif)](https://waterplane-dev.github.io/media/apk-install-cd81f3614e.mp4)
+<a href="https://waterplane-dev.github.io/media/apk-install-1485857c9a.mp4"><img src="media/apk-install.gif" width="490" alt="Phone one circles a spot on a screenshot of the app, Claude Code adds a logo there, the build runs, phone two's notifications say the build succeeded and the update is ready to install, one tap on Install updates it, and it opens with the logo in the circled spot"></a>
 
-*Loops. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/apk-install-cd81f3614e.mp4), with pause and seek.*
+*Loops. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/apk-install-1485857c9a.mp4), with pause and seek.*
 
 A build command saved for a repo runs from the phone without a Claude session, so it spends no
 tokens. When it produces an APK, every phone running the developer build of the Android app that
@@ -70,11 +83,11 @@ screenshot of the app is marked up in the annotator and sent as the prompt; the 
 there is a scripted stand-in (no model, no tokens) that places the logo at the circle's position, and
 the build, the download and the install are the real ones.
 
-## Usage limit and session budget
+## When the usage limit hits, it carries on
 
-[![The session hits the 5-hour usage wall and is parked; at the reset it continues and the held prompt runs once](media/limit-and-budget.gif)](https://waterplane-dev.github.io/media/limit-and-budget-f2a9c7fca8.mp4)
+<a href="https://waterplane-dev.github.io/media/limit-and-budget-cb1eaddfe7.mp4"><img src="media/limit-and-budget.gif" width="270" alt="Claude stops at the 5-hour usage wall; at the reset waterplane types continue and the turn finishes"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/limit-and-budget-f2a9c7fca8.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/limit-and-budget-cb1eaddfe7.mp4), with pause and seek.*
 
 Give a session a budget and, once it is reached, the next send is held before the usage wall: your
 words are kept and the reason is said. When a session does hit a Claude usage limit, the host waits
@@ -86,11 +99,11 @@ a plain Send goes straight into the session, budget or not, because you asked fo
 
 Try it: `?demo=limit-and-budget`
 
-## Schedule against the week
+## Queue it now, or schedule it against the usage windows
 
-[![Tap the waiting count: the queued prompt waits behind a running turn, then runs by itself](media/queue-and-schedule.gif)](https://waterplane-dev.github.io/media/queue-and-schedule-84fab1746e.mp4)
+<a href="https://waterplane-dev.github.io/media/queue-and-schedule-e8d13afb25.mp4"><img src="media/queue-and-schedule.gif" width="270" alt="A prompt queued behind a running turn starts by itself when the turn ends; schedules wait for a time or for the weekly window"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/queue-and-schedule-84fab1746e.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/queue-and-schedule-e8d13afb25.mp4), with pause and seek.*
 
 A prompt sent while the session is busy is queued and says why it waits. When the turn ends it is
 typed into the same session, and its row in Activity goes from waiting to running to done. It never
@@ -99,13 +112,15 @@ right after the weekly window comes back, or two hours before it resets to spend
 Schedules shows what is due soon and what is paused, and the Backlog holds work for a repo that
 nobody has started yet.
 
+Schedules shows what is due soon and which reset each rule tracks.
+
 Try it: `?demo=queue-and-schedule`
 
 ## What it costs
 
-[![Two weeks of heavy use priced at API list price, and what drives the cost](media/numbers.gif)](https://waterplane-dev.github.io/media/numbers-b168ebe603.mp4)
+<a href="https://waterplane-dev.github.io/media/numbers-af88500f21.mp4"><img src="media/numbers.gif" width="270" alt="A week of heavy use priced at API list price, what drives the cost, and when a fresh session would be cheaper"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/numbers-b168ebe603.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/numbers-af88500f21.mp4), with pause and seek.*
 
 The header carries the two usage windows, the 5-hour session and the week, with when each resets.
 The budget setting reads the same figures and says in words what they mean for you. Each session
@@ -137,9 +152,9 @@ servers; waterplane's own does not.
 
 ## The demo tour
 
-[![The More to try list, and three of its rows: token ledger, context window, notifications](media/demo-tour.gif)](https://waterplane-dev.github.io/media/demo-tour-6995511f9e.mp4)
+<a href="https://waterplane-dev.github.io/media/demo-tour-8532c7b936.mp4"><img src="media/demo-tour.gif" width="270" alt="The More to try list, and three of its rows: token ledger, notifications, context window"></a>
 
-*Loops. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/demo-tour-6995511f9e.mp4), with pause and seek.*
+*Loops. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/demo-tour-8532c7b936.mp4), with pause and seek.*
 
 The demo line has a **More to try** button, and the first minute's closing card links to it. It opens a list of the app's headline features, one
 plain sentence each, grouped by what you want to do: drive a session, leave work running, see what

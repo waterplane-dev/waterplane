@@ -12,7 +12,7 @@
  * and standalone via `npm run doctor`.
  */
 import { createServer } from "node:net";
-import { existsSync, readFileSync } from "node:fs";
+import { accessSync, constants, existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tailscaleBin, serveHttpsUrl, lanIps } from "./net.js";
 import { probeCaptureBackends } from "./capture.js";
@@ -23,11 +23,13 @@ import { lanIdentityPresent } from "./lanid.js";
 import { env } from "./env.js";
 import { logTag, BRAND, envName, claudeNewerThanTested, claudeConfigDirFromEnv, NODE_MIN, nodeMeetsMin } from "@waterplane/shared";
 import { homedir, release } from "node:os";
-import { wslChecks } from "./doctorwsl.js";
+import { findKeepTask, INTEROP_PROBE, interopFromProbe, isWsl, keepAliveCommand, nativeWindowsCheck, wslChecks } from "./doctorwsl.js";
+export { nativeWindowsCheck } from "./doctorwsl.js";
 import { claudeBinResolution, tilde } from "./claudebin.js";
 import { probeAndroidEnv, type AndroidEnvReport } from "./androidenv.js";
 import { compareVersions, currentMode, currentSigPolicy, latestRelease, releaseSource, SignatureRefused } from "./cli/selfupdate.js";
-import { hostStateDir, resolveStateDir, stateDirReport } from "./branddirs.js";
+import { hostStateDir, resolveStateDir, stateDirReport, type RootPicked } from "./branddirs.js";
+import { rootChoicePath } from "./rootchoice.js";
 import { installedServiceEnv } from "./cli/service.js";
 import { onPath, tmuxChecks, tmuxInstallCommand } from "./tmuxreq.js";
 import { overlaysCheck } from "./themeoverlay.js";
@@ -50,8 +52,8 @@ export interface DoctorInput {
   root: string;
   /** True when nobody named the root and it was derived (`env.ts`' `ROOT_DEFAULTED`). */
   rootDefaulted?: boolean;
-  /** How a defaulted root was derived (`env.ts`' `ROOT_PICKED`): `found` an existing usual folder, `fallback` `~/dev`. */
-  rootPicked?: "named" | "found" | "fallback";
+  /** How the root came about (`env.ts`' `ROOT_PICKED`): `named` the knob, `chosen` on the phone, `found` an existing usual folder, `fallback` `~/dev`. */
+  rootPicked?: RootPicked;
   port: number;
   claudeBin: string;
   /**
@@ -81,11 +83,20 @@ async function run(cmd: string, args: string[], timeout = 8000): Promise<{ out: 
   }
 }
 
+const WHICH_TIMEOUT_MS = 8000;
+
 async function which(bin: string): Promise<string | null> {
   // An absolute/relative path (WATERPLANE_CLAUDE_BIN often is one) isn't on PATH.
   if (bin.includes("/")) return existsSync(bin) ? bin : null;
-  const { out, ok } = await run("/bin/sh", ["-c", `command -v ${JSON.stringify(bin)}`]);
-  return ok && out ? out.split("\n")[0].trim() : null;
+  const began = Date.now();
+  const { out, ok } = await run("/bin/sh", ["-c", `command -v ${JSON.stringify(bin)}`], WHICH_TIMEOUT_MS);
+  if (ok && out) return out.split("\n")[0].trim();
+  // An answer that took the whole leash is no answer: with the event loop held up (WSL reading a
+  // Windows drive), the timer fires on an exited child and its stdout comes back EMPTY, which read
+  // as "not found" for a claude, git and curl that were all there. Ask the PATH directly instead —
+  // a file scan, no timer to lose against.
+  if (Date.now() - began >= WHICH_TIMEOUT_MS * 0.9) return onPath(bin);
+  return null;
 }
 
 function portFree(port: number, host = "127.0.0.1"): Promise<boolean> {
@@ -372,7 +383,21 @@ async function checkGit(): Promise<Check> {
  * phone would show an EMPTY repo list with no reason — so that case says it was
  * a guess, and how to name the real one.
  */
-export function checkRoot(root: string, defaulted = false, picked?: "named" | "found" | "fallback"): Check {
+export function checkRoot(root: string, defaulted = false, picked?: RootPicked, choicePath: string = rootChoicePath()): Check {
+  if (picked === "chosen") {
+    return existsSync(root)
+      ? {
+        id: "root",
+        status: "ok",
+        detail: `code root ${tilde(root, homedir())} (chosen on the phone, kept in ${tilde(choicePath, homedir())}; ${envName("ROOT")} overrides it) — everything under here is reachable from the phone`,
+      }
+      : {
+        id: "root",
+        status: "fail",
+        detail: `the code folder chosen on the phone, ${root}, does not exist`,
+        fix: `Choose another in the phone's Settings → Code folder, or delete ${choicePath} to go back to the automatic pick.`,
+      };
+  }
   if (defaulted && picked === "found" && existsSync(root)) {
     const home = homedir();
     const shown = root.startsWith(home) ? `~${root.slice(home.length)}` : root;
@@ -390,7 +415,8 @@ export function checkRoot(root: string, defaulted = false, picked?: "named" | "f
         detail: `no code folder found — ${envName("ROOT")} is unset and none of the usual ones (~/dev, ~/code, ~/src, ~/projects, …) exists, so the phone would list no repos`,
         fix: `Create ${root} and clone your repos into it (\`mkdir ${root}\`), or name another folder: ` +
           `\`${BRAND.slug} service install --force --env ${envName("ROOT")}=/path/to/code\` ` +
-          `(or export ${envName("ROOT")} in the shell that starts the host) — it is read from the environment, not from a .env file.`,
+          `(or export ${envName("ROOT")} in the shell that starts the host) — it is read from the environment, not from a .env file. ` +
+          `Or choose it on the phone: Settings → Code folder.`,
       }
       : {
         id: "root",
@@ -429,6 +455,19 @@ export function checkState(root: string): Check {
       detail: `state is in ${r.live} (${why}), but ${r.old} still holds entries that were ALSO in it — left there untouched and unused (the boot log named them)`,
       fix: `Compare each with its namesake in ${r.live}, keep the one you want there, then rename or delete ${r.old}.`,
     };
+  }
+  // Only LOOKS (an access check, never a write): a state dir the host cannot
+  // write is one whose receipts and scheduled work never reach the disk — new
+  // work is refused (`intents/disk.ts`) and a retry after a restart may run
+  // twice (`acks.ts`). A dir that does not exist yet is the boot's to create.
+  if (existsSync(r.live)) {
+    try { accessSync(r.live, constants.W_OK); } catch (e) {
+      return {
+        id: "state", status: "fail",
+        detail: `host state in ${r.live} (${why}) is not writable (${(e as NodeJS.ErrnoException).code ?? (e as Error).message}): new work would be refused, and receipts not reaching disk mean a retry after a restart may run twice`,
+        fix: `Make ${r.live} writable by the user the host runs as (or point ${envName("STATE_DIR")} at a folder that is), then restart the host.`,
+      };
+    }
   }
   return { id: "state", status: "ok", detail: `host state in ${r.live} (${why})` };
 }
@@ -667,13 +706,23 @@ async function checkPort(port: number): Promise<Check> {
 async function checkWsl(i: DoctorInput): Promise<Check[]> {
   if (process.platform !== "linux") return [];
   const read = (p: string): string | null => { try { return readFileSync(p, "utf8"); } catch { return null; } };
+  const procVersion = read("/proc/version");
+  if (!isWsl(procVersion, release())) return [];
+  const mode = currentMode();
   return wslChecks({
-    procVersion: read("/proc/version"),
+    procVersion,
     release: release(),
     pid1Comm: read("/proc/1/comm"),
     tailscaleIp: i.tailscaleIp,
     root: i.root,
     claudePath: await which(i.claudeBin),
+    // `schtasks /query /tn` exits 0 for a task, 1 for none; anything else is "could not ask".
+    keepTask: await findKeepTask(async (bin, name) => {
+      try { await execFileP(bin, ["/query", "/tn", name], { timeout: 5000 }); return "yes"; } catch (err: any) { return err?.code === 1 ? "no" : "unknown"; }
+    }),
+    keepAliveCmd: keepAliveCommand(mode.kind, mode.root),
+    // EXECUTE a Windows program: a binfmt entry's name or a PATH hit says nothing about whether one runs.
+    interop: await execFileP(INTEROP_PROBE, ["/d", "/c", "exit 0"], { timeout: 5000 }).then(() => interopFromProbe({ ok: true }), interopFromProbe),
   });
 }
 
@@ -750,6 +799,8 @@ export function androidChecks(r: AndroidEnvReport = probeAndroidEnv()): Check[] 
  * (`<slug> doctor`), it runs.
  */
 export async function runChecks(i: DoctorInput, skipPort = false, skipCapture = false, skipNetwork = false): Promise<Check[]> {
+  const native = nativeWindowsCheck(process.platform);
+  if (native) return [native];
   const [node, ptyc, ptycap, claude, builtins, curl, git, tmux, capture, dictate, tskey, secure, port, wsl, selfUpdate] = await Promise.all([
     checkNode(),
     checkPty(),

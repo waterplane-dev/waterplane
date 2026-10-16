@@ -18,6 +18,7 @@
 import type { AssessPayload, BudgetPass, BudgetWaiver, BuildPayload, CapturePayload, IntentPayload, IntentTarget, IntentTrigger } from "../intent.js";
 import type { ItemCategory, NameAuthor } from "../naming.js";
 import type { SessionBudget } from "../sessionbudget.js";
+import type { LaunchOpts } from "./session.js";
 
 /**
  * A new intent, as posted.
@@ -41,8 +42,8 @@ export interface IntentDraft {
    *  is starting or running. */
   holdForHost?: boolean;
   /** See `Intent.pastBudget` — a person already let this past the budget, until
-   *  the reset of the window they did it in. The HOST posts it (a smart-pick
-   *  merge, a recurring rule's child); a client lifts the budget with
+   *  the reset of the window they did it in. The HOST posts it (a recurring rule's
+   *  child); a client lifts the budget with
    *  `intent.waive`, never by posting it — `intent.post` strips it off the wire.
    *  Not on `IntentPatch`: a waiver is not an edit to the row. */
   pastBudget?: BudgetWaiver;
@@ -50,6 +51,9 @@ export interface IntentDraft {
    *  is minted with. The HOST posts it (`workItemInherits`); cleaned strictly
    *  by `cleanIntentRow`. */
   budgetPass?: BudgetPass;
+  /** See `Intent.leftoverOf` — only the HOST may post it; a client never
+   *  does, and `intent.post` strips it. */
+  leftoverOf?: number;
   auto?: boolean;
   /** Aimed at one session by hand — exempt from the global auto-fire switch,
    *  never from the account's budget. See `Intent.pinned`. */
@@ -62,6 +66,8 @@ export interface IntentDraft {
    *  or — absent — follow the person's global setting. See
    *  `Intent.closeWhenDone`. */
   closeWhenDone?: boolean;
+  /** Flag the session this opens for follow up once done. See `Intent.flagWhenDone`. */
+  flagWhenDone?: boolean;
   /** Set aside on arrival — kept in full, never run until brought back. */
   archived?: boolean;
   /** Waits for a person's tap — see `Intent.manual`. */
@@ -171,4 +177,13 @@ export interface IntentPatch {
    * `false`, because `false` is itself an answer ("keep this one open").
    */
   closeWhenDone?: boolean | null;
+  /** `Intent.flagWhenDone`: `true` sets it, `false`/`null` clears it, absent leaves it alone. */
+  flagWhenDone?: boolean | null;
+  /**
+   * The launch the session this row OPENS starts with (`Intent.launch`) — the
+   * send sheet's *model* row, re-decided on a row that is still waiting.
+   * `null` CLEARS it back to the desktop's new-session defaults; absent leaves
+   * it alone. An old host never reads it, and the row keeps the launch it had.
+   */
+  launch?: LaunchOpts | null;
 }

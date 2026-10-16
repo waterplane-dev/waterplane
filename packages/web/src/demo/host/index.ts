@@ -7,7 +7,7 @@
 import { PROTOCOL_VERSION } from "@waterplane/shared";
 import type { ClientMessage, HostMessage } from "@waterplane/shared";
 import { fireDue, nextDue, openBox, runStep, schedule, updateSession } from "./desk.ts";
-import { HANDLERS, helloFrames } from "./handlers.ts";
+import { demoUsage, HANDLERS, helloFrames } from "./handlers.ts";
 import { demoHttp, healthCounts } from "./demohttp.ts";
 import { modelOf } from "./model.ts";
 import type { Desk } from "./model.ts";
@@ -59,6 +59,10 @@ function build(scenario: DemoScenario, clock: DemoClock, s: DemoSnapshot): DemoH
   if (scenario.meta.protocol !== PROTOCOL_VERSION) {
     throw new Error(`demo scenario "${scenario.meta.id}" was recorded at protocol ${scenario.meta.protocol}, this build speaks ${PROTOCOL_VERSION}`);
   }
+  // Every demo desktop holds a usage reading (see `demoUsage`); a scenario's own wins. Written into
+  // the state so the snapshot, a reload and the `usage.*` handlers all see the one reading.
+  const held = modelOf(s.state);
+  if (held && !held.numbers?.usage) (held.numbers ??= {}).usage = demoUsage(s.startedAt);
   const sinks = new Set<DemoSink>();
   /** Per socket: the sessions it is attached to. Transient like the socket —
    *  a reconnecting client re-attaches, as it does against the real host. */

@@ -8,12 +8,14 @@
  * this phone out. With no host password there is no ledger to list — said as a
  * sentence (`devicesEmptyText`), never as a greyed control.
  */
-import { cleanDeviceRow, sortDevices, type DeviceRow } from "@waterplane/shared";
-import { KeyRound, Loader2, RotateCw, Smartphone, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { PIN_MAX, PIN_MIN, cleanDeviceRow, normalizePin, sortDevices, type DeviceRow } from "@waterplane/shared";
+import { Baby, KeyRound, Loader2, Lock, RotateCw, Smartphone, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Sheet } from "../../Sheet";
 import { Empty } from "../../Empty";
 import { askConfirm } from "../../Confirm";
+import { askText } from "../../AskText";
+import { passiveApi } from "../../passiveApi";
 import { api } from "../../api";
 import { dropDeviceToken } from "../../deviceToken";
 import { useRemoteResource } from "../../useRemoteResource";
@@ -35,6 +37,29 @@ export function PairedDevicesSheet() {
   const passwordSet = c.conn.info.auth.enabled;
   const rows = res.data ?? [];
   const now = Date.now();
+  // The passive devices' unlock PIN: `undefined` = not asked yet.
+  const [pinSet, setPinSet] = useState<boolean | undefined>(undefined);
+  useEffect(() => { void passiveApi.status().then((st) => { if (st) setPinSet(!!st.pinSet); }); }, []);
+  const anyPassive = rows.some((d) => d.scope === "passive");
+
+  async function setPin(): Promise<void> {
+    const raw = await askText({
+      title: pinSet ? "Change the unlock PIN" : "Set the unlock PIN",
+      placeholder: `${PIN_MIN}–${PIN_MAX} digits`, okLabel: "Save",
+      note: "A passive device unlocks the full app for 30 minutes with this PIN. Changing it locks every unlocked one.",
+    });
+    if (raw === null) return;
+    const pin = normalizePin(raw);
+    if (!pin) { c.say.toast(`not saved: a PIN is ${PIN_MIN}–${PIN_MAX} digits`); return; }
+    c.say.track("action:devices.pin");
+    try {
+      const r = await passiveApi.setPin(pin);
+      setPinSet(r.pinSet);
+      c.say.toast("unlock PIN saved");
+    } catch (e) {
+      c.say.toast(`PIN not saved: ${(e as Error)?.message || "no answer"}`);
+    }
+  }
 
   async function revoke(row: DeviceRow): Promise<void> {
     const ok = await askConfirm({ title: `Revoke ${row.name}?`, lines: revokeLines(row), confirmLabel: "Revoke" });
@@ -72,7 +97,7 @@ export function PairedDevicesSheet() {
           {rows.map((d) => (
             <div key={d.id} className="row-wrap">
               <div className="row grow">
-                <span className="row-title"><Smartphone size={12} /> {d.name}{d.current ? " · this phone" : ""}</span>
+                <span className="row-title">{d.scope === "passive" ? <Baby size={12} /> : <Smartphone size={12} />} {d.name}{d.current ? " · this phone" : ""}{d.scope === "passive" ? " · passive" : ""}</span>
                 <span className="row-sub dim">
                   paired {new Date(d.createdAt).toLocaleDateString()} · last seen {seenAgo(Math.max(0, now - d.lastSeenAt))} · {deviceRouteText(d.lastKind)}
                 </span>
@@ -93,6 +118,20 @@ export function PairedDevicesSheet() {
           <div className="form-hint">No host password is set right now, so these rows cannot sign in until one is.</div>
           <div className="set-row">
             <button className="key" onClick={() => openSettingsAt("lan-password")}><KeyRound size={ICON} /> set the LAN password</button>
+          </div>
+        </>
+      )}
+      {(anyPassive || pinSet) && (
+        <>
+          <div className="form-hint">
+            {pinSet === undefined ? "Asking the desktop whether an unlock PIN is set…"
+              : pinSet ? "Passive devices get app updates only; the unlock PIN opens the full app on one for 30 minutes."
+              : "No unlock PIN is set, so a passive device cannot be unlocked."}
+          </div>
+          <div className="set-row">
+            <button className="key" title="the PIN a passive device unlocks with" onClick={() => void setPin()}>
+              <Lock size={ICON} /> {pinSet ? "change the unlock PIN" : "set the unlock PIN"}
+            </button>
           </div>
         </>
       )}

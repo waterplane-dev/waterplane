@@ -180,6 +180,10 @@ export class DemoSocket {
   private readonly host: DemoHost;
   private conn: DemoConnection | null = null;
   private timers = new Set<ReturnType<typeof setTimeout>>();
+  /** True while the host handles a `session.attach` (see `send`). */
+  private attaching = false;
+  /** PTY frames scheduled and not yet delivered. */
+  private ptyQueued = 0;
 
   constructor(host: DemoHost, url: string) {
     this.host = host;
@@ -198,7 +202,17 @@ export class DemoSocket {
     const sink = (out: DemoOut) => {
       // An offline fault closes from INSIDE `connect`, before there is a socket to open.
       if (this.readyState === CONNECTING) { if (out.kind === "close") shut = out; return; }
-      this.later(out.afterMs ?? 0, () => this.deliver(out));
+      // The first keyframe of a session being opened is handed over before `send` returns: the tap that
+      // opened it then renders ONE screen with the terminal already filled, never the "no output yet"
+      // card for the moment a network hop would take. Only a full replay, only with no PTY frame still queued
+      // (it would land after the keyframe and be appended twice), never one a fault delays.
+      const pty = out.kind === "frame" && out.msg.t === "pty" ? out.msg : null;
+      if (pty?.full && this.attaching && out.kind === "frame" && out.afterMs == null && this.ptyQueued === 0) {
+        this.deliver(out);
+        return;
+      }
+      if (pty) this.ptyQueued++;
+      this.later(out.afterMs ?? 0, () => { if (pty) this.ptyQueued--; this.deliver(out); });
     };
     const conn = this.host.connect(sink);
     const early = shut as DemoOut | null;
@@ -228,7 +242,8 @@ export class DemoSocket {
     if (this.readyState !== OPEN || !this.conn) return;
     let msg: ClientMessage;
     try { msg = decode<ClientMessage>(data); } catch { return; }
-    this.conn.receive(msg);
+    this.attaching = msg.t === "session.attach";
+    try { this.conn.receive(msg); } finally { this.attaching = false; }
   }
 
   close(code = 1000, reason = ""): void {

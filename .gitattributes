@@ -1,0 +1,17 @@
+# LF everywhere, on every checkout. A Windows clone with core.autocrlf turned scripts/*.sh into
+# CRLF and bash died on line 1 (`set -uo pipefail\r`: "invalid option name"). Binaries untouched.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.gif binary
+*.webp binary
+*.mp4 binary
+*.ico binary
+*.jar binary
+*.keystore binary
+*.jks binary
+*.woff2 binary
+*.ttf binary
+*.zip binary
+*.bat -text
+*.cmd -text

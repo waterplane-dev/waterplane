@@ -29,7 +29,7 @@ import type {
   ClientMessage, Intent, IntentDraft, IntentPatch, IntentTarget, LaunchOpts, RepoTarget, ScheduleEntry, SessionBudget, SessionInfo, UsageInfo,
 } from "@waterplane/shared";
 import {
-  RETIME_NOW_SEG, WHEN_PATCH_OFFLINE, budgetHeldIds, fmtWhen, onceIn, pastBudgetToast, previewOf, seedAfterRescue,
+  RETIME_NOW_SEG, WHEN_PATCH_OFFLINE, budgetHeldIds, flagWhenDoneOf, fmtWhen, onceIn, pastBudgetToast, previewOf, seedAfterRescue,
   SEND_DRAFT, whenPatchToast, whenRoute, whenWords, type SendIntent, type SendResume, type SendSeed, type SendTarget, type SendWhen,
 } from "../../sendIntent";
 import { SendSheet } from "../../SendSheet";
@@ -43,6 +43,7 @@ import { effectiveMaxWidth, scaleForUpload } from "../../uploadScale";
 import { baseName } from "../../format";
 import { LS, lsJson, lsSetJson } from "../../storage";
 import { showToast } from "../../toast";
+import { expectSlotAsk } from "../../slotAskStore";
 import { track } from "../../usage";
 import type { Overlay } from "../../routing";
 import type { HostConnection } from "../../ws";
@@ -161,6 +162,11 @@ export function useSend(deps: SendDeps) {
     const held = budget?.verdict.blocked && budgetHeldIds(ids, intents).length > 0
       ? (budget.verdict.resumeAt ? fmtWhen(budget.verdict.resumeAt) : "it clears") : null;
     const toast = w.kind === "at" ? retimeToast(ids.length, words) : retimeQueuedToast(ids.length, words, repoNames, held);
+    // The slot check's ask: once the list carries the new clock, the moved rows
+    // may run beside others (`slotAskStore.ts`). They share one clock, so the
+    // first row's slot is all of theirs.
+    const firstCwd = w.kind === "at" ? intents.find((x) => x.id === ids[0])?.cwd : undefined;
+    if (firstCwd) expectSlotAsk(ids[0], firstCwd);
     return liveSendAll(
       ids.map((id) => ({
         t: "intent.update", id,
@@ -196,7 +202,7 @@ export function useSend(deps: SendDeps) {
           : null}
         // The one way past the BUDGET, and only the budget: `intent.waive` for
         // exactly the rows it holds, so they still run in turn — one at a time
-        // per repo, behind the slots and the smart pick. A bulk verb never
+        // per repo, behind the slots. A bulk verb never
         // sends `intent.run`: `runNow` skips the whole ladder, and four rows in
         // one checkout once started at the same second that way. Live-only —
         // "the budget holds these" is a live fact. One receipt for the tap.
@@ -240,8 +246,8 @@ export function useSend(deps: SendDeps) {
       prompts: steps.length ? [...steps] : [text],
       // The row's own close-when-done answer comes in with it, so the patch
       // (which carries it absolutely) re-sends it rather than clearing it.
-      target: sweep && i.target.kind === "repos" ? { kind: "repos", dirs: i.target.dirs, ...(i.budget ? { budget: i.budget } : {}) }
-        : { kind: "repo", cwd: i.cwd, ...(typeof i.closeWhenDone === "boolean" ? { closeWhenDone: i.closeWhenDone } : {}), ...(i.budget ? { budget: i.budget } : {}) },
+      target: sweep && i.target.kind === "repos" ? { kind: "repos", dirs: i.target.dirs, ...(i.budget ? { budget: i.budget } : {}), ...(i.launch ? { launch: i.launch as LaunchOpts } : {}), ...(i.flagWhenDone ? { flagWhenDone: true } : {}) }
+        : { kind: "repo", cwd: i.cwd, ...(typeof i.closeWhenDone === "boolean" ? { closeWhenDone: i.closeWhenDone } : {}), ...(i.flagWhenDone ? { flagWhenDone: true } : {}), ...(i.budget ? { budget: i.budget } : {}), ...(i.launch ? { launch: i.launch } : {}) },
       // Only a name somebody TYPED is carried into the editor. `title` is the
       // host's `text.slice(0, 120)` whenever nobody typed one, and seeding it
       // round-trips a derivation back as a decision.
@@ -265,8 +271,8 @@ export function useSend(deps: SendDeps) {
       // seed produced, so seeding one turn of a three-turn rule would delete the
       // other two. `[a.text]` is what a rule with no chain means.
       prompts: a.kind === "backlog" && a.steps?.length ? [...a.steps] : [a.text],
-      target: a.kind === "fanout" ? { kind: "repos", dirs: a.dirs, ...(a.budget ? { budget: a.budget } : {}) }
-        : { kind: "repo", cwd: a.repoDir, ...(typeof a.closeWhenDone === "boolean" ? { closeWhenDone: a.closeWhenDone } : {}), ...(a.budget ? { budget: a.budget } : {}) },
+      target: a.kind === "fanout" ? { kind: "repos", dirs: a.dirs, ...(a.budget ? { budget: a.budget } : {}), ...(a.launch ? { launch: a.launch } : {}) }
+        : { kind: "repo", cwd: a.repoDir, ...(typeof a.closeWhenDone === "boolean" ? { closeWhenDone: a.closeWhenDone } : {}), ...(a.kind === "backlog" && a.flagWhenDone ? { flagWhenDone: true } : {}), ...(a.budget ? { budget: a.budget } : {}), ...(a.kind === "backlog" && a.launch ? { launch: a.launch } : {}) },
       // `seedFromIntent`'s rule, on the DTO: `e.name` is the host's derived
       // slice unless a person typed one.
       when: {
@@ -381,11 +387,18 @@ export function useSend(deps: SendDeps) {
         // Absolute like every field here: `null` is "follow the global" — the
         // seed carried the row's own answer in, so an untouched choice re-sends it.
         closeWhenDone: i.target.kind === "repo" ? i.target.closeWhenDone ?? null : undefined,
+        // Absolute too: `null` clears a tick the seed carried in and was taken off.
+        flagWhenDone: i.target.kind === "repo" ? flagWhenDoneOf(i.target, i.when) ?? null : undefined,
+        // The *model* row, absolute like the rest: `null` is "back on the
+        // defaults", and the seed carried the row's own launch in, so an
+        // untouched choice re-sends it. Gated like every create (`wireLaunch`).
+        launch: i.target.kind === "repo" ? (i.target.launch ? wireLaunch(i.target.launch) : null) : undefined,
         holdForHost: i.when.kind === "at" ? !!i.when.waitUntilFree : undefined,
         label,
       };
       track("action:send.retime");
       if (!liveSend({ t: "intent.update", id: editing.id, patch }, whenPatchToast(i.when), WHEN_PATCH_OFFLINE)) return false;
+      if (i.when.kind === "at" && editing.cwd) expectSlotAsk(editing.id, editing.cwd);
       return true;
     }
 
@@ -416,6 +429,7 @@ export function useSend(deps: SendDeps) {
       track("action:send.clockSession");
       if (!guardUploadRefs(steps.join("\n"), t.sessionId)) return false;
       const offline = queueOp({ t: "intent.post", intent: draft }, t.sessionId, first, { cwd: t.cwd });
+      expectSlotAsk(draft.id, t.cwd);
       const chain = steps.length > 1 ? ` · ${steps.length} turns` : "";
       const at = previewOf(i.when, usage ?? undefined);
       const when = at != null ? fmtWhen(at) : "when its window opens";
@@ -435,12 +449,19 @@ export function useSend(deps: SendDeps) {
       const cleared = editing?.budget && !(i.target.kind === "repo" || i.target.kind === "repos" ? i.target.budget : undefined)
         ? { budget: null } : {};
       const action: ScheduleEntry["action"] = i.target.kind === "repos"
-        ? { kind: "fanout", dirs: i.target.dirs, text: first, ...(i.target.kind === "repos" && i.target.budget ? { budget: i.target.budget } : cleared) }
+        ? { kind: "fanout", dirs: i.target.dirs, text: first, ...(i.target.kind === "repos" && i.target.budget ? { budget: i.target.budget } : cleared),
+            // The sweep's own model (the fan-out sheet's row) rides on the rule;
+            // absent is written absent, which is how an edit clears it.
+            ...(i.target.launch ? { launch: wireLaunch(i.target.launch) } : {}) }
         // The WHOLE chain travels; `steps` only when there is more than one turn,
         // so a one-turn rule is written exactly as it always was.
         : { kind: "backlog", repoDir: i.target.cwd, text: first, autoFire: true, ...(steps.length > 1 ? { steps } : {}),
             ...(i.target.kind === "repo" && typeof i.target.closeWhenDone === "boolean" ? { closeWhenDone: i.target.closeWhenDone } : {}),
-            ...(i.target.kind === "repo" && i.target.budget ? { budget: i.target.budget } : cleared) };
+            ...(flagWhenDoneOf(i.target, i.when) ? { flagWhenDone: true } : {}),
+            ...(i.target.kind === "repo" && i.target.budget ? { budget: i.target.budget } : cleared),
+            // The model each occurrence's session starts on — the sweep arm's
+            // rule above: absent is written absent, which is how an edit clears it.
+            ...(i.target.kind === "repo" && i.target.launch ? { launch: wireLaunch(i.target.launch) } : {}) };
       const entry: ScheduleEntry = {
         id: seed.scheduleId ?? `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
         name: (i.when.name ?? "").trim() || first.split("\n")[0].slice(0, 60),
@@ -465,6 +486,9 @@ export function useSend(deps: SendDeps) {
        */
       const timed = i.target.kind === "repo" && !ruleRecurs(i.when.rule);
       const where = timed ? ` in ${repoForCwd(i.target.kind === "repo" ? i.target.cwd : "")?.repoName ?? "that repo"}` : "";
+      // A timed one-off is a backlog row under the entry's own id: once the list
+      // holds it, the slot check may ask about the rows it runs beside.
+      if (timed && i.target.kind === "repo") expectSlotAsk(entry.id, i.target.cwd);
       if (i.target.kind === "repos" && steps.length > 1) showToast(`scheduled the first step — a sweep is ONE prompt, so the other ${steps.length - 1} were dropped`);
       else if (timed) showToast(offline
         ? `queued${chain} — it is saved to the backlog when the link is back`
@@ -510,8 +534,10 @@ export function useSend(deps: SendDeps) {
         pinned: i.target.kind === "session" ? true : undefined,
         resume: i.target.kind === "repo" ? i.target.resume : undefined,
         closeWhenDone: i.target.kind === "repo" ? i.target.closeWhenDone : undefined,
+        flagWhenDone: flagWhenDoneOf(i.target, i.when),
         // Born with its cap (`Intent.budget`); a session target has no field for one.
         budget: i.target.kind === "repo" || i.target.kind === "repos" ? i.target.budget : undefined,
+        ...((i.target.kind === "repos" || i.target.kind === "repo") && i.target.launch ? { launch: wireLaunch(i.target.launch) } : {}),
         label,
       };
       track("action:send.after");
@@ -575,7 +601,13 @@ export function useSend(deps: SendDeps) {
            * rescue re-opens it on exactly these steps — without the seed's
            * `ackId`/`padId`, which `retireSendSource` has already retired.
            */
-          startSessionWithPrompt(cwd, repo ? repoBranchLabel(repo) : baseName(cwd), steps, i.sequential, undefined, i.target.resume,
+          // **The sheet's *model* row replaces the launch ask.** A launch handed
+          // over as an override is never asked about again (`shouldAskLaunch`);
+          // the hosted-model gate and the dead-backend refusal still run on it.
+          // Untouched, a sheet send runs the new-session defaults; a send that
+          // did not come from the sheet passes nothing and keeps the switch.
+          const chosen = i.target.launch ?? (i.launchChosen ? launch : undefined);
+          startSessionWithPrompt(cwd, repo ? repoBranchLabel(repo) : baseName(cwd), steps, i.sequential, chosen, i.target.resume,
             () => {
               openSend({ prompts: steps, target: i.target, cwdHint: cwd, repoId: seed.repoId, origin: seed.origin });
               showToast("nothing was started — your words are back in the send sheet");
@@ -584,6 +616,8 @@ export function useSend(deps: SendDeps) {
         }
         const q = queueBacklog({
           text: first, steps, repoDir: cwd, label, autoFire: true, resume: i.target.resume, closeWhenDone: i.target.closeWhenDone, budget: i.target.budget,
+          flagWhenDone: flagWhenDoneOf(i.target, i.when),
+          ...(i.target.launch ? { launch: wireLaunch(i.target.launch) } : {}),
         });
         if (q === null) return false;
         const chain = steps.length > 1 ? ` · ${steps.length} turns` : "";
@@ -599,7 +633,7 @@ export function useSend(deps: SendDeps) {
           const offline = queueOp(
             // Gated like every create (`createOp`): a sweep is N spawns, so an
             // ungated stale `backend` here is the wrong binary N times.
-            { t: "fanout.run", dirs: i.target.dirs, text: first, launch: wireLaunch(launch), ...(i.target.budget ? { budget: i.target.budget } : {}), cols: geomRef.current.cols, rows: geomRef.current.rows },
+            { t: "fanout.run", dirs: i.target.dirs, text: first, launch: wireLaunch(i.target.launch ?? launch), ...(i.target.budget ? { budget: i.target.budget } : {}), ...(flagWhenDoneOf(i.target, i.when) ? { flagWhenDone: true } : {}), cols: geomRef.current.cols, rows: geomRef.current.rows },
             "fanout", first,
           );
           if (steps.length > 1) showToast(`a sweep is ONE prompt — the other ${steps.length - 1} steps were dropped`);
@@ -609,7 +643,8 @@ export function useSend(deps: SendDeps) {
         // One item per REPO, each carrying the whole chain — not one per step.
         let added = 0, offline = false;
         for (const dir of i.target.dirs) {
-          const q = queueBacklog({ text: first, steps, repoDir: dir, label, autoFire: true, budget: i.target.budget });
+          const q = queueBacklog({ text: first, steps, repoDir: dir, label, autoFire: true, budget: i.target.budget, flagWhenDone: flagWhenDoneOf(i.target, i.when),
+            ...(i.target.launch ? { launch: wireLaunch(i.target.launch) } : {}) });
           if (q === null) { showToast("part of that sweep could not be queued — its words are still in the box"); return false; }
           offline = offline || q;
           added++;

@@ -290,11 +290,12 @@ export function closeFootLabel(n: number, shells: number): string {
  * host's `session.closed` — see `features/shells/actions.ts`). Claiming the
  * past tense here is the same defect as a "stopped" toast that fires before
  * the kill: it says something happened that has not happened yet. */
-export function closeToast(n: number, shells: number, sparedStars: number, repo?: string): string {
+export function closeToast(n: number, shells: number, spared: number | string, repo?: string): string {
   const base = `archived ${n} session${n === 1 ? "" : "s"}${repo ? ` in ${repo}` : ""}`;
   const bits = [
     shells > 0 ? `stopping ${shells} background shell${shells === 1 ? "" : "s"}` : "",
-    sparedStars > 0 ? `kept ${sparedStars} starred` : "",
+    // A number is starred-only (the old shape); words are `markedWords`'.
+    typeof spared === "string" ? (spared ? `kept ${spared}` : "") : spared > 0 ? `kept ${spared} starred` : "",
   ].filter(Boolean).join(", ");
   return `${base}${bits ? `, ${bits}` : ""} — the conversation${n === 1 ? " is" : "s are"} kept: reopen under `
     + `"Recently closed" or Archive`;

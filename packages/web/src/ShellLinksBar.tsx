@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Copy, ExternalLink, Link2, ClipboardPaste, ChevronDown, ChevronUp, BookKey } from "lucide-react";
 import type { ShellLink } from "@waterplane/shared";
 import { ago } from "./format";
+import { Stowable, StowButton } from "./Stowable";
 import {
   AWAITING_CODE_HINT, LOCAL_LINK_NOTE, SUSPICIOUS_LINK_NOTE, copyCodeLabel, hasUserinfo, linkSummary, orderLinks, sourceLabel,
 } from "./shellLinks";
@@ -36,11 +37,18 @@ export function ShellLinksBar({ links, awaitingCode, onOpen, onCopy, onCopyCode,
   const [shown, setShown] = useState<string | null>(null);
   const [typeBy, setTypeBy] = useState<string | null>(null);
   const rows = orderLinks(links);
+  const title = rows.length > 1 ? "links from the shell" : "link from the shell";
+  // Folded for exactly these links and codes: a new one, or the shell starting
+  // to wait for a code, is something to read and comes back up by itself.
+  const stowKey = [awaitingCode ? "await" : "", ...rows.map((l) => `${l.url} ${l.code ?? ""}`)].join("\n");
+  const code = rows.find((l) => l.code)?.code;
   return (
+    <Stowable slot="shell-links" stowKey={stowKey} label={title} detail={code} icon={Link2}>
     <div className="approve login shell-links">
       <div className="login-head">
-        <span className="login-title"><Link2 size={14} /> {rows.length > 1 ? "links from the shell" : "link from the shell"}</span>
+        <span className="login-title"><Link2 size={14} /> {title}</span>
         <button className="approve-esc" onClick={onLogins}><BookKey size={12} /> logins</button>
+        <StowButton />
       </div>
       {rows.map((l) => {
         const label = sourceLabel(l);
@@ -94,5 +102,6 @@ export function ShellLinksBar({ links, awaitingCode, onOpen, onCopy, onCopyCode,
         </>
       )}
     </div>
+    </Stowable>
   );
 }

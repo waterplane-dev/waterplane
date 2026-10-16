@@ -215,7 +215,7 @@ function Row({ sig, now }: { sig: SignalRecord; now: number }) {
         <div className={viaPast ? "cli-via cli-past" : "cli-via"}>
           {viaPast ? <>Fell back to <b>{sig.via}</b></> : <>Falling back to <b>{sig.via}</b></>}
           {sig.lastFallbackAt != null && <> · last {agoText(now - sig.lastFallbackAt)} ago</>}
-          {viaPast && <> · confirmed working since</>}
+          {viaPast && <> · working again since then</>}
         </div>
       )}
 
@@ -227,7 +227,7 @@ function Row({ sig, now }: { sig: SignalRecord; now: number }) {
         <pre className={samplePast ? "cli-sample cli-past" : "cli-sample"}>
           {sig.sample}
           {sig.sampleAt != null && (
-            <span className="cli-sample-at">  ({agoText(now - sig.sampleAt)} ago{samplePast ? ", confirmed working since" : ""})</span>
+            <span className="cli-sample-at">  ({agoText(now - sig.sampleAt)} ago{samplePast ? ", working again since then" : ""})</span>
           )}
         </pre>
       )}

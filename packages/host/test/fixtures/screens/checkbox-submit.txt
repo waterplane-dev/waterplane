@@ -1,0 +1,30 @@
+
+ ▐▛███▛█   Claude Code v2.1.301
+▝▜██████▀  Haiku 5.5 · Claude Max
+ ▝▝   ▝▝   /tmp/wp301
+
+
+❯ Call the AskUserQuestion tool exactly once, with one question "Which fruits should go in the
+  salad?" header "Fruits", multiSelect true, options Apple, Banana, Cherry (each with a short
+  description). Do nothing else.
+────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☐ Fruits  ✔ Submit  →
+
+Which fruits should go in the salad?
+
+❯ 1. [ ] Apple
+         Crisp and sweet, holds its texture well in a salad
+  2. [ ] Banana
+         Soft and mellow, adds creaminess; best added just before serving
+  3. [ ] Cherry
+         Tart-sweet bursts of flavor; pit them first
+  4. [ ] Type something
+     Submit
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  5. Chat about this
+
+Enter to select · ↑/↓ to navigate · Esc to cancel
+
+
+
+

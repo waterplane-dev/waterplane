@@ -103,6 +103,15 @@
   --ask: rgb(var(--ask-rgb));
   --purple: #c98bff;         /* backlog / plugin / image kinds */
   --sched: #a371f7;          /* armed for a wall-clock time */
+  /* The follow-up flag, coloured by WHO set it (R-sessions-042) — never the
+     star's gold, which is the other mark beside it. You by hand: the accent.
+     A launch you ticked ("flag for follow up when done"): the schedule purple,
+     because it is the same kind of standing instruction. The session's own
+     agent: a teal of its own, apart from `--ok`'s green and the accent. */
+  --fu-agent-rgb: 45 196 196;
+  --fu-agent: rgb(var(--fu-agent-rgb));
+  --fu-hand: var(--accent);
+  --fu-launch: var(--sched);
   --defer: #e3b341;          /* a plugin left a box for you */
   --ctx-low: #e06c5a;        /* the context window is nearly full */
 
@@ -130,6 +139,10 @@
   --accent-edge-hi: rgb(var(--accent-rgb) / .35);
   --ok-wash: rgb(var(--ok-rgb) / .07);
   --ok-edge: rgb(var(--ok-rgb) / .40);
+  /* "this option is the chosen one" — a light green, never the accent fill,
+     which means "tap here next". Interim until selection becomes radio rows. */
+  --pick-fill: rgb(var(--ok-rgb) / .22);
+  --pick-edge: rgb(var(--ok-rgb) / .55);
   --dead-wash: rgb(var(--dead-rgb) / .10);
   --dead-tint: rgb(var(--dead-rgb) / .14);
   --dead-edge: rgb(var(--dead-rgb) / .40);
@@ -161,6 +174,11 @@
   --panel-veil: rgba(20, 24, 29, .85);
   --panel-veil-hi: rgba(20, 24, 29, .92);
   --bg-veil: rgba(11, 13, 16, .78);
+  /* The edge of a control floating over content (the terminal's corner group,
+     an overlay chip, a viewer's close). `--line` is drawn for a panel sitting on
+     `--bg`; over live output it is the same grey as the text behind it, and the
+     owner could not find the corner group in dark. Lifted, not hued. */
+  --float-edge: rgba(255, 255, 255, .24);
 
   /* ── Scrims and shadows ─────────────────────────────────────────────────
      `--scrim-media` and `--scrim-label` sit over PHOTOS and stay dark in both
@@ -272,6 +290,9 @@
   --ask-rgb: 128 98 0;           /* #806200 */
   --purple: #7532c8;
   --sched: #6a2fc4;
+  --fu-agent-rgb: 0 112 120;     /* #007078 */
+  --fu-hand: var(--accent);
+  --fu-launch: var(--sched);
   --defer: #7d5900;
   --ctx-low: #a83c28;
 
@@ -295,6 +316,8 @@
   --accent-edge-hi: rgb(var(--accent-rgb) / .40);
   --ok-wash: rgb(var(--ok-rgb) / .07);
   --ok-edge: rgb(var(--ok-rgb) / .35);
+  --pick-fill: rgb(var(--ok-rgb) / .14);
+  --pick-edge: rgb(var(--ok-rgb) / .45);
   --dead-wash: rgb(var(--dead-rgb) / .07);
   --dead-tint: rgb(var(--dead-rgb) / .10);
   --dead-edge: rgb(var(--dead-rgb) / .32);
@@ -321,6 +344,7 @@
   --panel-veil: rgba(255, 255, 255, .90);
   --panel-veil-hi: rgba(255, 255, 255, .96);
   --bg-veil: rgba(238, 241, 246, .86);
+  --float-edge: rgba(16, 24, 38, .22);
 
   --scrim: rgba(16, 24, 38, .38);
   /* `--scrim-media` and `--scrim-label` are NOT re-stated: they are read
@@ -416,11 +440,24 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
 .brand { display: flex; align-items: center; gap: 9px; font-weight: 600; flex: 0 0 auto; }
 /* The launcher menu's host row (features/hosts/HostMenuItem.tsx): a long
    desktop name ellipsizes instead of widening the row. */
+/* Settings → another desktop, without the app (features/hosts/HostsSettings.tsx). */
+.web-pair-steps { margin: 4px 0 0; padding-left: 18px; }
+.web-pair-steps li { margin: 4px 0; }
+.web-pair-steps code { overflow-wrap: anywhere; }
+/* The launcher bar's split host switch (features/hosts/HostSwitchKey.tsx):
+   one bordered key, two buttons — swap glyph over a ≤6-char name, then a
+   narrow chevron. Stacked so it fits beside the cog on a phone-width bar. */
+.host-key { flex: 0 0 auto; display: inline-flex; align-items: stretch; min-height: 40px; background: var(--raise); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.host-key > button { background: none; border: none; color: var(--fg); cursor: pointer; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.host-key > button:active { background: var(--accent); }
+.host-key-flip { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 2px 4px; }
+.host-key-name { font-size: calc(9px * var(--ui-font, 1)); line-height: 1.1; white-space: nowrap; }
+.host-key > .host-key-menu { display: inline-flex; align-items: center; padding: 0 2px; border-left: 1px solid var(--line); }
 .host-item-name { max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* "Pair another phone" (features/hosts/HostQrSheet.tsx): the QR is dark on
    paper in both themes — an inverted code does not scan everywhere. */
 .pair-qr { display: block; width: min(64vw, 240px); height: auto; margin: 4px auto 14px; border-radius: 10px; }
-.pair-code { text-align: center; font-family: ui-monospace, monospace; font-size: calc(28px * var(--ui-font, 1)); letter-spacing: .14em; font-weight: 600; margin-bottom: 6px; user-select: text; -webkit-user-select: text; }
+.pair-code { text-align: center; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(28px * var(--ui-font, 1)); letter-spacing: .14em; font-weight: 600; margin-bottom: 6px; user-select: text; -webkit-user-select: text; }
 
 /* Pairing: the "pair another phone" sheet and the app's pair screen. */
 .pair-sheet { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; }
@@ -451,18 +488,12 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
 .pair-confirm-q { font-size: calc(14px * var(--ui-font, 1)); color: var(--muted); }
 .pair-confirm-host { margin-top: 4px; font-size: calc(19px * var(--ui-font, 1)); font-weight: 600; overflow-wrap: anywhere; }
 .pair-confirm-code { margin-top: 8px; font-size: calc(13px * var(--ui-font, 1)); color: var(--muted); }
-.pair-confirm-code code { margin-left: 4px; padding: 2px 8px; background: var(--well); border: 1px solid var(--line); border-radius: 6px; font-family: ui-monospace, monospace; letter-spacing: .08em; color: var(--fg); }
+.pair-confirm-code code { margin-left: 4px; padding: 2px 8px; background: var(--well); border: 1px solid var(--line); border-radius: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; color: var(--fg); }
 .pair-confirm-note { margin-top: 14px; text-align: left; }
 .key.pair-link-btn { margin-top: 10px; background: none; border-color: transparent; color: var(--accent); }
 /* `.set-note` is `flex-basis: 100%` for wrapping rows; in these COLUMNS that is a full height. */
 :is(.pair-sheet, .pair-card, .pair-confirm, .pair-demo, .pair-foot, .pair-state) > .set-note { flex-basis: auto; }
 .brand span { white-space: nowrap; letter-spacing: 0.02em; }
-/* Collapsed header: force a single line. The brand grows to fill the row (which
-   pushes the collapse toggle to the far right) and truncates the title with an
-   ellipsis; the model subtext is dropped so the title itself keeps its room. */
-.topbar.collapsed { flex-wrap: nowrap; }
-.topbar.collapsed .brand { display: block; flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.topbar.collapsed .brand .row-sub { display: none; }
 /* The desktop's own ≤4-word name for this session (`SessionInfo.tabTitle`).
    WRAPS rather than clipping — the tab strip is where this name is abbreviated,
    and this is the place it is read whole. `white-space: normal` restates the
@@ -480,8 +511,6 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
    Only in a header: `.brand` is also a sheet head, which has no second line to
    give. */
 .topbar .brand { flex-wrap: wrap; }
-.topbar.collapsed .brand .brand-name { display: none; }
-.topbar.collapsed .collapse-btn { flex: 0 0 auto; }
 
 /* ── A session's header, not the launcher's ──────────────────────────
    It carries the repo's own hue as a left edge — the same `--repo-accent` its
@@ -507,7 +536,22 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
    breaks. From zero it takes the row that is left beside the back button and
    wraps within it, which is what makes the name below a second LINE rather
    than a second row of the header. */
-.sess-top .brand { flex: 1 1 0; min-width: 0; gap: 6px; font-size: calc(15px * var(--ui-font, 1)); }
+/* …but never from LESS than 13em: below that the view switch beside it
+   (`.hdr-view`) breaks onto a line of its own instead of the title breaking
+   into a column one word wide. The 1000 grow is so that while the two DO share
+   a line, the title takes the slack and the switch keeps its natural width. */
+.sess-top .brand { flex: 1000 1 13em; min-width: 0; gap: 6px; font-size: calc(15px * var(--ui-font, 1)); }
+/* [Claude | Shell | Desktop] + the two name buttons — one child, so the line
+   breaks before the group and never inside it. Grow 1 against the title's 1000
+   is ~nothing beside the title; alone on its line it is all of it, and the
+   tabs stretch into a full-width segmented control. */
+.hdr-view { flex: 1 0 auto; display: flex; align-items: center; gap: 6px; }
+.hdr-view > .pair-tabs { flex: 1 0 auto; }
+.hdr-view .pair-tab { flex: 1 0 auto; justify-content: center; }
+/* A contributed view's tab and its × (`headerViews.ts`): one segment, the ×
+   narrow and never stretched — it takes the tab down, the ☰ menu brings it back. */
+.pair-view { display: inline-flex; align-items: stretch; flex: 1 0 auto; }
+.hdr-view .pair-tab.pair-view-x { flex: 0 0 auto; padding: 0 6px; }
 /* The desktop's name for this session flows INLINE here rather than claiming a
    row of its own (`.brand-name`'s 100% basis, which is right in the launcher's
    header). It still wraps and is still never clipped — what four words are for
@@ -534,7 +578,10 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
    buys the row back. Both headers: the launcher's is the one that wrapped, the
    session's is the one this change is about. */
 /* 40px is also the launcher logo's size (LauncherScreen): change both together. */
-.topbar > .key, .hdr-ctl > .key, .hdr-pin > .key { min-width: 40px; min-height: 40px; padding: 7px 9px; }
+/* The usage meter's segments (`.usage-multi`, two sources or more) are header keys too: without
+   this they took `.key`'s 46×44 and 8/12 padding, so claude's own segment widened and the row grew
+   4px the moment a second source appeared. */
+.topbar > .key, .hdr-ctl > .key, .hdr-pin > .key, .topbar > .usage-multi > .key { min-width: 40px; min-height: 40px; padding: 7px 9px; }
 /* ── Header command chips ────────────────────────────────────────────
    One-tap user-configured commands, between the session title and the view
    controls. The row is the flexible element (the title shrinks first): a chip
@@ -568,12 +615,6 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
 .pin-head { margin-top: 10px; font-size: calc(12px * var(--ui-font, 1)); color: var(--muted); }
 .pin-cloud { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .pin-cloud .key { display: inline-flex; align-items: center; gap: 4px; }
-/* Collapsed header: the title gives up its room to the chips + view controls. */
-.topbar.collapsed .brand { flex: 0 1 auto; }
-/* Collapsed is ONE row by definition, so the second row stops being one: it
-   takes its natural width beside the title and the header is a single strip. */
-.sess-top.collapsed .hdr-row2 { flex: 1 1 auto; }
-.sess-top.collapsed .brand { flex: 0 1 auto; }
 /* The model line may break at its own spaces in the session header: beside
    the [Claude | Shell] tabs the title has ~120px on a 390px phone, and a
    nowrap "opus-5-5 · medium" was CLIPPED there rather than wrapped. */
@@ -649,6 +690,10 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
    it carried the repo verbs too — seven 40px buttons left ~85px, and "Sessions &
    repos · 35 live in 15 repos" came out seven lines tall. */
 .section-head > :first-child { min-width: 0; flex: 1 1 12em; }
+/* An opened `?` inside a head wraps to its own line; inset it like the `.section`
+   label above it, or its prose runs flush against the screen edge. */
+.section-head > .explain-body { padding: 0 14px 6px; line-height: 1.45; }
+.section-head > .explain-body > p { margin: 0 0 6px; }
 /* A standing preference with three values, drawn as all three rather than as
    one button cycling through them: a cycle shows only the state you are in, so
    the two you are not in are invisible and unreachable by looking. Wraps —
@@ -687,6 +732,18 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
    .head-acts down to a single button's width and stack the rest under it. The
    label span has min-width:0 and takes the squeeze instead. */
 .head-acts.tight { column-gap: 6px; flex: none; flex-wrap: nowrap; }
+/* Except the launcher's head: its row is not two or three icons but up to a
+   dozen controls (waiting, limit, star, flag, shell counts, the schedule
+   horizon's words, clear, close), and on a phone that ran past the right edge
+   and dragged the whole page sideways. It wraps, right-aligned, only when it
+   does not fit. Its icon buttons give up most of the -8px vertical margin
+   (-3px here): a wrapped last row holds only icon buttons, and at -8px each
+   hung 8px out of the head — past its 7px bottom padding, into the quick
+   filter's search button under it, which then covered the close-all X. At
+   -3px a row's line is 34px, taller than the 30px chips, so nothing hangs out
+   of any row; the row gap pays those 6px back plus 8px air. */
+.launcher-head > .head-acts.tight { flex: 0 1 auto; min-width: 0; max-width: 100%; flex-wrap: wrap; row-gap: 14px; }
+.launcher-head > .head-acts.tight > .head-act { margin: -3px 0; }
 /* Section-head action as an ICON BUTTON. A .link-btn is 11.5px text with a 12px
    glyph — well under a fingertip, and four of them wrap the head onto two rows
    on a phone. These are square, thumb-sized targets; the label lives in
@@ -702,6 +759,23 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
 .head-act:active { background: var(--raise); }
 .head-act.danger { color: var(--dead); border-color: var(--dead-edge); }
 .empty { padding: 12px 14px; color: var(--muted); }
+/* `Empty.tsx`'s sentence: what a list says with no rows, in all four states.
+   ONE centred, muted sentence in the space the rows would take. Top-left at
+   body size, under the 20px glyph some callers stack over it, every empty
+   sheet read as a stub. A caller's icon is quiet, and centred on its own line
+   when block text follows it (an inline icon leading a sentence stays inline);
+   a caller's second, `.muted` line is set smaller under the first. Not `.empty`
+   as a whole: that class is also prose on several sheets (the context notes, a
+   chart's caveat), and the age line `.empty-stale` stands above a list WITH
+   rows, so it keeps the list's left edge. */
+.empty.empty-msg {
+  max-width: 36em; margin-inline: auto; padding: 24px 20px;
+  text-align: center; text-wrap: pretty;
+  font-size: calc(14px * var(--ui-font, 1)); line-height: 1.5; color: var(--muted);
+}
+.empty.empty-msg > svg { opacity: .6; }
+.empty.empty-msg > svg:first-child:has(+ div) { display: block; margin: 0 auto 8px; }
+.empty.empty-msg > .muted { margin-top: 4px; font-size: calc(12.5px * var(--ui-font, 1)); }
 .row {
   display: flex; align-items: center; gap: 10px; width: 100%; flex-wrap: wrap;
   text-align: left; background: var(--panel); color: var(--fg);
@@ -884,6 +958,8 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
 }
 /* Group header left half: tap target that collapses/expands the repo's session
    rows. Carries the name plus the live-session and worktree counts. */
+/* RepoGroup's scroll target: the header is sticky, this marks where it really is. */
+.repo-group-anchor { display: block; height: 0; }
 .repo-group-toggle {
   /* NEVER wraps internally. It holds a chevron and the repo name and nothing
      else (every chip is in .repo-group-stats), so an internal wrap can only ever
@@ -910,28 +986,12 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
    header; the 7em floor is what stops a name being squeezed to two characters to
    make room for something. */
 .repo-group-toggle > span:first-of-type { flex: 0 1 auto; min-width: 7em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.repo-group-count {
-  display: inline-flex; align-items: center; justify-content: center; flex: none; min-height: 30px;
-  font-size: calc(12.5px * var(--ui-font, 1)); font-weight: 600; padding: 3px 10px; border-radius: 999px;
-  border: 1px solid currentColor; opacity: .8;
-}
-/* The total is a control now (it focuses the repo), so it has to stop looking
-   like the text beside it: it takes the button reset the other header chips
-   take, and the same `.on` treatment when its cut is the one in force. */
-button.repo-group-count {
-  background: none; color: inherit; font-family: inherit; cursor: pointer;
-}
-button.repo-group-count.on {
-  opacity: 1;
-  background: color-mix(in srgb, currentColor 22%, transparent);
-  box-shadow: 0 0 0 1px currentColor;
-}
 /* Every header chip is ONE pill: same height, padding, border weight and
-   opacity — total, worktrees, smart pick, setup, the roll-up. They differed
-   (a faint accent ring on two, solid currentColor on the rest, a white ring on
-   the smart pick, an 11px-padded waiting pill) and the row read as six kinds
-   of thing instead of one cluster of counts. Colour is the only difference. */
-.repo-group-stat.wt, .repo-group-stat.smart { color: inherit; }
+   opacity — total, worktrees, setup, the roll-up. They differed (a faint
+   accent ring on two, solid currentColor on the rest, an 11px-padded waiting
+   pill) and the row read as kinds of thing instead of one cluster of counts.
+   Colour is the only difference. */
+.repo-group-stat.wt { color: inherit; }
 /* ALL header chips (session count, worktrees, status roll-up) share one row of
    their own — flex-basis 100% forces the break, so the repo name keeps the line
    above to itself. Inline, the chips wrapped at whatever column the name left
@@ -951,6 +1011,16 @@ button.repo-group-count.on {
    left under the name. */
 .repo-group-toggle { order: 0; }
 .repo-group-acts { order: 1; flex: none; margin-left: auto; display: flex; align-items: center; gap: 2px; }
+/* ⋯ and × are PINNED top-right: they sit outside `.repo-group-line`, which holds
+   the name plus files/git/build and is the only part that wraps. Before, the whole
+   strip dropped under a long name and the close button wandered to the second
+   line with it — the one control you reach for by position. Now the line box
+   wraps internally (verbs right-aligned under the name, same edge as the pin),
+   and the pin stays on the name's row. `align-self: flex-start` keeps it on the
+   FIRST line when the line box is two tall. */
+.repo-group-line { order: 0; flex: 1 1 0; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; row-gap: 0; }
+.repo-group-pin { order: 1; flex: none; align-self: flex-start; display: flex; align-items: center; gap: 2px; }
+.repo-group.idle .repo-group-line { justify-content: flex-start; }
 /* Right-aligned: the chip row is the header's LAST line and the line above it ends
    in the action buttons, so a left-aligned cluster left a hole under the icons and
    read as unrelated to them. Ending both lines at the same edge makes the header
@@ -977,6 +1047,20 @@ button.repo-group-count.on {
    rather than as separate full-height row cells: the files button is ALWAYS
    there, the number only appears when there is one. */
 .repo-group .focus-btn.count { min-width: 40px; padding: 0 9px; gap: 4px; font-size: calc(14px * var(--ui-font, 1)); color: var(--repo-accent, var(--accent)); opacity: 1; }
+/* "+ now" / "+ later": the pair that starts work in a repo, first on the chip row
+   so it sits right under the name, LEFT, while the counts stay right-aligned
+   (`margin-right: auto` splits the row). Worded, not icons: it is the verb a
+   person opens the launcher for. Outlined in the repo accent like the chips, so
+   it reads as part of the header, not as a second toolbar. */
+.repo-start { display: flex; gap: 6px; margin-right: auto; }
+.repo-start-btn {
+  display: flex; align-items: center; gap: 3px; height: 34px; padding: 0 11px 0 8px;
+  border-radius: 10px; border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
+  background: none; color: var(--repo-accent, var(--accent)); font: inherit; font-weight: 600;
+  font-size: calc(14px * var(--ui-font, 1)); cursor: pointer;
+}
+.repo-start-btn:active { background: color-mix(in srgb, var(--repo-accent, var(--fg)) 16%, transparent); }
+.repo-start-btn.lead { border-color: currentColor; }
 /* "Open a repo-focused window" affordance on group headers — inherits the repo
    accent, quiet until tapped. */
 .focus-btn { background: none; border: none; color: inherit; opacity: .65; cursor: pointer; padding: 2px 4px; display: flex; align-items: center; }
@@ -987,42 +1071,21 @@ button.repo-group-count.on {
    absorbed them: the line it opens is full-width under the header, so the state
    has to be visible on the button that opened it. */
 .focus-btn.on { opacity: 1; background: color-mix(in srgb, var(--repo-accent, var(--fg)) 16%, transparent); }
-/* A repo with NOTHING RUNNING is one row, not a header. The full treatment gave
-   it three lines — name, then the action strip wrapped onto its own line, then
-   the branch chip right-aligned under that — and a launcher listing sixteen
-   repos was a wall in which the repo with twelve sessions read exactly like the
-   fourteen with none. Same markup, same accent, same verbs; the chips come back
-   onto the name line (`order`, not `flex-basis: 100%`) and the type steps down,
-   so an idle repo costs one row and the groups that have sessions keep the
-   visual weight. */
-.repo-group.idle {
-  padding: 7px 10px 7px 12px; font-size: calc(14px * var(--ui-font, 1)); font-weight: 550;
-  background: none; /* the tinted band is for a group that HAS rows under it */
-  /* A run of idle repos has no session rows between them to separate one from
-     the next, so the rule the rows carry has to come from the header itself. */
-  border-bottom: 1px solid var(--line);
-  /* NOT docked, for the same reason it is not a header: docking keeps a name
-     above the rows it belongs to, and this one has no rows. Pinned it would
-     also be pinned TRANSPARENT — `background: none` above is deliberate — and
-     the session rows of the group below would scroll through its own name. */
-  position: static;
-}
-/* Name, branch, then the buttons at the right edge. `space-between` with three
-   items would scatter them and (with the chips claiming the free space) pushed
-   the repo NAME into the middle of the row. */
+/* A repo with NOTHING RUNNING wears the same header as one with sessions — same
+   type, band, chevron, docking and button size. A slimmer, band-less, chevron-less
+   row read as a different KIND of repo, one that could do less, and it could not.
+   It used to pull its branch chip up onto the name line to save an empty second
+   line; that line now carries "+ now / + later", so the branch sits beside them. */
 .repo-group.idle { justify-content: flex-start; }
-.repo-group.idle .repo-group-stats { order: 1; flex: 0 1 auto; margin-top: 0; margin-left: 8px; }
-.repo-group.idle .repo-group-acts { order: 2; margin-left: auto; }
-.repo-group.idle .focus-btn { min-width: 36px; height: 36px; }
 .repo-group.idle .repo-group-toggle { flex: 0 1 auto; }
-/* A repo with nothing under it does not collapse, so its header has no chevron —
-   but it still lines up with the ones that do. An unaligned name column reads as
-   a different KIND of row, which is exactly what this list stopped having. */
-/* Selector matches `> span:first-of-type` above, which is written for the NAME
-   (the chevron beside it is an <svg>, not a span) and hands it a 7em floor. With
-   the nub present that rule lands on the NUB, so the name started 98px into its
-   own header. Same specificity, stated after, so this wins for the nub alone. */
-.repo-group-toggle > span.repo-group-nub { display: inline-block; width: 17px; min-width: 0; flex: none; }
+/* What an opened idle repo holds: one line saying nothing runs, pointing at the
+   header's "+ now". Carries the rows' left stripe so it reads as under its header. */
+.repo-group-empty {
+  display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+  padding: 12px 12px 12px 34px; color: var(--muted); font-size: calc(14px * var(--ui-font, 1));
+  border-bottom: 1px solid var(--line); border-left: 3px solid var(--repo-accent, transparent);
+}
+.repo-group-empty svg { color: var(--repo-accent, var(--accent)); }
 .repo-group-toggle:disabled { cursor: default; }
 /* The branch a sessionless repo is on: the one fact its old row carried under
    the name. Quiet — it is identification, not a count. */
@@ -1107,6 +1170,8 @@ button.repo-group-count.on {
    the compose bar: two live tap targets under someone else's pixels. Clipping
    costs nothing when the space is there and is the whole fix when it is not. */
 .term-area { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+/* `+ later`: no terminal, the sentence is the view (`TermArea`). */
+.term-area.term-later { position: relative; }
 .term-wrap { flex: 1; min-height: 0; background: var(--term-bg); padding: 4px 6px; }
 
 .keys {
@@ -1119,16 +1184,24 @@ button.repo-group-count.on {
      row. 42px is the fingertip; the label keeps its own width. */
   flex: 0 0 auto; min-width: 46px; min-height: 44px; padding: 8px 12px;
   background: var(--raise); color: var(--fg); border: 1px solid var(--line);
-  border-radius: 8px; font-size: calc(14px * var(--ui-font, 1)); font-family: ui-monospace, monospace; cursor: pointer;
+  border-radius: 8px; font-size: calc(14px * var(--ui-font, 1)); font-family: inherit; cursor: pointer;
 }
+/* Monospace says "this is a key or a command" (docs/notes/web.md). `.key` started as the
+   terminal key bar's class and became every button in the app, so every button read as a
+   terminal key. The bar under the terminal keeps the face; everything else is the UI font. */
+.keys .key { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .key:active { background: var(--accent); }
 
 /* New-image strip (agent-produced images this turn) */
-.newimg-strip { display: flex; align-items: center; gap: 8px; padding: 8px; overflow-x: auto; background: var(--panel); border-top: 1px solid var(--accent); }
-.newimg-label { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; font-size: calc(11px * var(--ui-font, 1)); color: var(--accent); }
+.newimg-strip { display: flex; align-items: center; gap: 8px; padding: 6px 8px; overflow-x: auto; background: var(--panel); border-top: 1px solid var(--accent); }
+.newimg-ctl { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.newimg-ctl-btns { display: flex; gap: 2px; }
+.newimg-label { flex: 0 0 auto; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; font-size: calc(11px * var(--ui-font, 1)); color: var(--accent); }
 .newimg { flex: 0 0 auto; display: flex; flex-direction: column; gap: 2px; align-items: stretch; }
 .newimg-thumb { position: relative; width: 56px; height: 56px; padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--media-bg); cursor: pointer; }
 .newimg-thumb img, .newimg-thumb video { width: 100%; height: 100%; object-fit: cover; }
+.newimg-doc { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 2px; padding: 6px 3px 14px; color: var(--muted); background: var(--raise); }
+.newimg-doc-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: calc(8px * var(--ui-font, 1)); color: var(--fg); }
 /* File-type badge so a PNG vs GIF vs MP4 artifact is obvious at a glance. */
 .newimg-type { position: absolute; left: 2px; bottom: 2px; padding: 0 3px; font-size: calc(8px * var(--ui-font, 1)); font-weight: 600; line-height: 12px; letter-spacing: .3px; color: var(--on-media); background: var(--scrim-label); border-radius: 3px; pointer-events: none; }
 .newimg-ref { font-size: calc(10px * var(--ui-font, 1)); padding: 2px 0; background: var(--raise); color: var(--muted); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
@@ -1369,6 +1442,17 @@ html[data-typing="1"] .screen { padding-top: env(safe-area-inset-top); }
    fill, `flex: 1` + an 8.5em floor is just a fixed 8.5em box. */
 .promptc-inline { flex: none; min-height: 0; overflow: visible; }
 .promptc-inline > .promptc-area { flex: none; min-height: 0; }
+/* The annotator's prompt row (phone): the session's draft above the picture.
+   Capped so a long draft scrolls instead of squeezing the canvas away. */
+/* A file dragged over the compose box (useFileDrop.ts): the box says it will take it. */
+.compose.drop-over { outline: 2px dashed var(--accent); outline-offset: -4px; background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.ann-prompt { flex: none; padding: 0 10px; border-bottom: 1px solid var(--line); }
+.ann-prompt .promptc-area { max-height: 30vh; margin: 0 0 6px; }
+.ann-prompt-fold {
+  display: flex; align-items: center; gap: 6px; width: 100%; min-height: 36px; padding: 6px 0;
+  background: none; border: 0; color: var(--muted); text-align: left; font: inherit; font-size: calc(13px * var(--ui-font, 1));
+}
+.ann-prompt-gist { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .promptc-step { display: flex; flex-direction: column; gap: 8px; padding: 0 10px 4px; }
 .promptc-step .search { margin: 0; }
 .promptc-add { padding: 4px 10px 12px; }
@@ -1641,26 +1725,33 @@ html[data-typing="1"] .screen { padding-top: env(safe-area-inset-top); }
 html[data-typing="1"] .term-zoom { top: calc(env(safe-area-inset-top) + 48px); }
 .term-zoom .key {
   min-width: 0; padding: 4px 6px;
-  background: var(--panel-veil-hi);
+  background: var(--panel-veil-hi); border-color: var(--float-edge);
+  box-shadow: 0 1px 6px var(--shadow);
 }
 /* The readout rides over live output, so it gets the same veil the buttons have
    — muted text straight on a repainting TUI is unreadable half the time. */
 .term-zoom .term-zoom-px {
   padding: 3px 6px; border-radius: 8px;
-  background: var(--panel-veil-hi); border: 1px solid var(--line);
+  background: var(--panel-veil-hi); border: 1px solid var(--float-edge);
 }
-/* The model wheel (`ModelWheel.tsx`): floats under the corner group for the
-   same reason the group floats — in flow it would refit the PTY. The scrim is
-   transparent; it only catches the tap that closes it. */
-.model-wheel-scrim { position: absolute; inset: 0; z-index: 6; }
+/* The model wheel (`ModelWheel.tsx`): floats for the same reason the corner
+   group floats — in flow it would refit the PTY. Fixed to the VIEWPORT (and
+   portalled to <body>), not the terminal box: on a small phone with the chrome
+   showing that box was too short and cut the wheel off. `--mw-top` is
+   `wheelTop`'s: under the button, slid up to fit. Above the chrome strips (60–65),
+   under the hint card (70). The scrim is transparent; it only catches the tap
+   that closes it. */
+.model-wheel-scrim { position: fixed; inset: 0; z-index: 66; }
+.model-wheel-place {
+  position: fixed; z-index: 67; right: 8px; width: min(360px, calc(100vw - 16px));
+  top: max(calc(env(safe-area-inset-top) + 8px), var(--mw-top, 8px));
+}
 .model-wheel-pop {
-  position: absolute; top: 46px; right: 8px; z-index: 7;
-  width: min(360px, calc(100% - 16px)); max-height: calc(100% - 54px); overflow-y: auto;
+  max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px); overflow-y: auto;
   display: flex; flex-direction: column; gap: 6px; padding: 8px 10px 10px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
   box-shadow: 0 6px 24px var(--shadow);
 }
-html[data-typing="1"] .model-wheel-pop { top: calc(env(safe-area-inset-top) + 88px); }
 /* Nothing in the column may shrink: with the cost line and Apply showing, the
    column outgrows max-height and flex squeezed the SVG (height: auto) down to
    an untappable thumbnail. Full size, and the popover scrolls instead. */
@@ -1699,8 +1790,38 @@ html[data-typing="1"] .model-wheel-pop { top: calc(env(safe-area-inset-top) + 88
 .mw-models-head { font-size: calc(12px * var(--ui-font, 1)); }
 .mw-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .mw-chips .row-chip { min-height: 32px; padding: 4px 10px; }
-.mw-chips .row-chip.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
-.key.active { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.mw-chips .row-chip.on { background: var(--pick-fill); color: var(--fg); border-color: var(--pick-edge); }
+/* The wheel button's mode glyph (`badgeMode`): a second, smaller icon inside
+   the same key, so the corner group grows by one glyph, not one button. */
+.term-zoom .key.mw-badged { display: inline-flex; align-items: center; gap: 2px; }
+.term-zoom .term-zoom-outline { display: inline-flex; align-items: center; gap: 3px; }
+.term-zoom .term-zoom-count { font-size: 12px; font-variant-numeric: tabular-nums; }
+.mw-badge { display: inline-flex; color: var(--accent); }
+.key.active .mw-badge { color: inherit; }
+/* The popover's mode half (`ModeSection.tsx`): the desktop's mode menu as rows
+   — icon, title, one-line description, a check on the live mode. Each row is
+   ONE target, full width, so nothing scrolls sideways on a 360px phone. */
+.mode-sec { display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--line); padding-top: 8px; }
+.mode-head { font-size: calc(12px * var(--ui-font, 1)); }
+.mode-now { margin: 0; }
+.mode-rows { display: flex; flex-direction: column; gap: 2px; }
+.mode-row, .mode-ultra {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px;
+  padding: 6px 8px; border-radius: 8px; text-align: left;
+  background: none; border: 1px solid transparent; color: var(--fg); font: inherit;
+}
+.mode-row:active { background: var(--panel-veil-hi); }
+.mode-row.cur { border-color: var(--line); }
+.mode-ico { flex: 0 0 auto; display: inline-flex; color: var(--muted); }
+.mode-row.cur .mode-ico, .mode-row.cur .mode-mark { color: var(--accent); }
+.mode-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.mode-title { font-size: calc(14px * var(--ui-font, 1)); }
+.mode-desc { font-size: calc(12px * var(--ui-font, 1)); line-height: 1.3; }
+.mode-mark { flex: 0 0 auto; display: inline-flex; font-size: calc(11px * var(--ui-font, 1)); }
+.mode-ultra { border-top: 1px solid var(--line); border-radius: 0; margin-top: 4px; padding-top: 8px; }
+.mode-acts { flex: 0 0 auto; display: flex; gap: 4px; }
+.mode-acts .key { min-width: 0; padding: 4px 8px; font-size: calc(12px * var(--ui-font, 1)); }
+.key.active { background: var(--pick-fill); color: var(--fg); border-color: var(--pick-edge); }
 /* "you already have this" — a positive state, not an action. */
 .key.ok { color: var(--ok); border-color: var(--ok); }
 .key.danger { color: var(--dead); }
@@ -1716,6 +1837,23 @@ html[data-typing="1"] .model-wheel-pop { top: calc(env(safe-area-inset-top) + 88
   background: var(--well); color: var(--fg); border: 1px solid var(--line); border-radius: 8px;
 }
 .auth-input:focus { outline: none; border-color: var(--accent); }
+
+/* Passive device (the kids' phone): one screen, and the unlocked strip. */
+.pair-passive { display: flex; align-items: center; gap: 8px; min-height: 44px; font-weight: 600; }
+.passive-row { padding: 10px 0; border-top: 1px solid var(--line); }
+.passive-name { font-weight: 600; overflow-wrap: anywhere; }
+.passive-foot { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+.passive-foot .link-btn { margin-left: auto; min-height: 44px; }
+.passive-unlock { margin-top: 18px; min-height: 44px; color: var(--muted); }
+.passive-pin { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.passive-pin .auth-input { flex: 1 1 100%; letter-spacing: 0.3em; }
+.passive-pin .key { min-height: 44px; }
+.passive-bar {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(8px + env(safe-area-inset-bottom, 0px)); z-index: 60;
+  display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+  background: var(--panel); border: 1px solid var(--line); font-size: calc(12.5px * var(--ui-font, 1)); white-space: nowrap;
+}
+.passive-bar .link-btn { min-height: 32px; }
 
 /* There is no desktop rail any more. It existed to make the horizontal strip
    vertical on a wide screen, where a column beside the terminal cost no rows —
@@ -1752,7 +1890,7 @@ html[data-typing="1"] .model-wheel-pop { top: calc(env(safe-area-inset-top) + 88
 /* The action bar's snippet picker floats above the bar, like the compose bar's. */
 .sheet-actions { position: relative; }
 .sheet-actions .snippet-pop { bottom: 100%; }
-.sheet-actions .key.on { color: var(--accent); border-color: var(--accent-edge); background: var(--accent-tint); }
+.sheet-actions .key.on { color: var(--fg); border-color: var(--pick-edge); background: var(--pick-fill); }
 /* The mark sheet's send row stays ONE line: wrapped, `Send to repo` — the
    action the sheet exists for — dropped alone onto a second row under a tall
    gap. Every button shrinks from its content width and its LABEL wraps inside
@@ -1787,7 +1925,7 @@ select.search { appearance: none; }
 /* "Text only": the desktop's reading of the whole picture, editable, under it. */
 .annot-ocr { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px 0; background: var(--panel); border-top: 1px solid var(--line); }
 .annot-ocr .annot-hint { padding: 0; text-align: left; }
-.annot-ocr-text { width: 100%; box-sizing: border-box; min-height: 28vh; max-height: 45vh; resize: vertical; font: 13px/1.4 ui-monospace, Menlo, monospace; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+.annot-ocr-text { width: 100%; box-sizing: border-box; min-height: 28vh; max-height: 45vh; resize: vertical; font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
 .annot-hint-x > span { flex: 1; }
 .annot-hint-x > .key { padding: 2px 6px; flex: none; }
 .annot-crop-bar .annot-hint { flex: 1; padding: 0; text-align: left; }
@@ -1816,7 +1954,7 @@ select.search { appearance: none; }
 .btw { width: 100%; text-align: left; padding: 12px; border-radius: 10px; border: 1px solid var(--accent); background: var(--accent-tint); color: var(--fg); font-size: calc(14px * var(--ui-font, 1)); cursor: pointer; }
 .cmd-row { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
 .cmd-name { display: flex; align-items: center; gap: 8px; background: none; border: none; color: var(--fg); cursor: pointer; }
-.mono { font-family: ui-monospace, monospace; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .muted { color: var(--muted); opacity: .55; }
 .cmd-desc { flex: 1; color: var(--muted); font-size: calc(12px * var(--ui-font, 1)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .src { font-size: calc(10px * var(--ui-font, 1)); padding: 1px 6px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
@@ -1838,6 +1976,14 @@ select.search { appearance: none; }
    grid column and wraps to one word per line. */
 .grid > .empty { grid-column: 1 / -1; }
 .thumb-wrap { position: relative; }
+/* Picking pictures to combine (gallery/GalleryGrid.tsx): the tap order as a number on the tile. */
+.thumb-wrap.picked > .thumb { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.thumb-pick {
+  position: absolute; top: 6px; left: 6px; z-index: 1; min-width: 24px; height: 24px; padding: 0 6px;
+  display: inline-flex; align-items: center; justify-content: center; border-radius: 12px;
+  background: var(--accent); color: var(--on-accent-strong); font-weight: 700; font-size: calc(13px * var(--ui-font, 1)); pointer-events: none;
+}
+.gallery-pick { flex-wrap: wrap; align-items: center; }
 .thumb { display: flex; flex-direction: column; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px; cursor: pointer; overflow: hidden; width: 100%; }
 .thumb-del {
   position: absolute; top: 4px; right: 4px; width: 28px; height: 28px;
@@ -1859,7 +2005,8 @@ select.search { appearance: none; }
    a page that states no background of its own must not read as a hole in the
    viewer, and it is the THEME's paper, not white. */
 .viewer-html { width: 100%; height: 70vh; border: none; border-radius: 6px; background: var(--card); }
-.thumb .doc { height: 84px; display: flex; align-items: center; justify-content: center; color: var(--muted); font-family: ui-monospace, monospace; }
+.thumb .doc { height: 84px; display: flex; flex-direction: column; gap: 5px; align-items: center; justify-content: center; color: var(--muted); border-radius: 4px; background: var(--well); }
+.thumb .doc-ext { font-size: calc(10px * var(--ui-font, 1)); letter-spacing: .04em; opacity: .8; }
 .thumb-name { font-size: calc(10px * var(--ui-font, 1)); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .thumb-date { font-size: calc(9px * var(--ui-font, 1)); color: var(--muted); opacity: 0.7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Size rides in the same line as the age — the grid is the one place you can
@@ -1896,7 +2043,8 @@ select.search { appearance: none; }
   color: var(--muted);
   border: 1px solid var(--line);
 }
-.thumb-mark.new { background: var(--accent); border-color: var(--accent); color: var(--on-accent-strong); }
+/* The unread mark: a dot, ringed so it holds on a light screenshot and a dark one. */
+.thumb-mark.new { width: 8px; height: 8px; padding: 0; background: var(--accent); border: 2px solid var(--bg); box-sizing: content-box; }
 .thumb-mark.downloaded { color: var(--ok); }
 /* Bytes on THIS phone (auto-download), deliberately not the eye/read vocabulary:
    "read it" and "have it" are different, and confusing the two costs a 90 MB
@@ -1904,6 +2052,53 @@ select.search { appearance: none; }
 .thumb-pull.done { color: var(--ok); border-color: var(--ok); }
 .thumb-pull.downloading { color: var(--accent); border-color: var(--accent); }
 .thumb-pull.failed { color: var(--dead); border-color: var(--dead); }
+
+/* Gallery chrome. WHERE is the app's segmented control (one lit tab); WHAT is a row of
+   the kit's filter chips under it. */
+.segmented.gallery-scope { gap: 4px; padding: 6px 10px 8px; border-bottom: 0; }
+.gallery-scope .seg { min-width: 0; min-height: 40px; padding: 6px 4px; font-size: calc(14px * var(--ui-font, 1)); white-space: nowrap; }
+.fchips.gallery-filters { padding: 0 6px 2px; background: var(--panel); border-bottom: 1px solid var(--line); }
+
+/* The kit's FilterChip (kit/FilterChip.tsx): a 30px pill in a 44px touch box, so a filter row
+   reads as filters rather than as a second row of buttons, and only a lit one is coloured —
+   tinted, because the solid accent fill is a sheet's one primary verb. `.fchips` is the row. */
+.fchips { display: flex; align-items: center; gap: 0; padding: 0 6px; overflow-x: auto; scrollbar-width: none; }
+.fchips::-webkit-scrollbar { display: none; }
+.fchips.wrap { flex-wrap: wrap; overflow-x: visible; }
+/* Unlit text is --fg, not --muted: a muted chip beside white buttons read as greyed out. */
+.fchip { flex: none; min-height: 44px; padding: 0 3px; display: inline-flex; align-items: center; background: none; border: 0; color: var(--fg); font: inherit; cursor: pointer; }
+.fchip-pill {
+  display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 12px; border-radius: 999px;
+  border: 1px solid var(--line); font-size: calc(13px * var(--ui-font, 1)); white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.fchip.on .fchip-pill { color: var(--accent); background: var(--accent-tint); border-color: var(--accent-edge); }
+.fchip.on .fchip-pill:has(.fchip-x) { padding-right: 9px; }
+.fchip:active .fchip-pill { background: var(--raise); }
+/* A choice among worded options (`kit/RadioRows.tsx`): a round dot on the left,
+   filled when chosen, and the label as a full wrapping sentence. Never a fill —
+   the solid accent means "tap here next" and nothing else (owner, 2026-10-13). */
+.radio-rows { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 100%; }
+.radio-row {
+  display: flex; align-items: flex-start; gap: 10px; width: 100%; min-height: 44px; padding: 10px 6px;
+  background: none; border: 0; border-radius: 8px; color: var(--fg); font: inherit; text-align: left;
+  font-size: calc(15px * var(--ui-font, 1)); line-height: 1.35; cursor: pointer;
+}
+.radio-row:active { background: var(--raise); }
+.radio-row:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.radio-dot {
+  flex: none; display: grid; place-items: center; box-sizing: border-box;
+  width: calc(20px * var(--ui-font, 1)); height: calc(20px * var(--ui-font, 1));
+  border: 2px solid var(--muted); border-radius: 50%;
+}
+.radio-row.on .radio-dot { border-color: var(--ok); }
+.radio-row.on .radio-dot::after { content: ""; width: 50%; height: 50%; border-radius: 50%; background: var(--ok); }
+.radio-label { flex: 1; min-width: 0; white-space: normal; overflow-wrap: break-word; }
+.radio-note { display: block; margin-top: 2px; color: var(--muted); font-size: calc(13px * var(--ui-font, 1)); }
+.fchips-gap { flex: none; width: 1px; height: 20px; margin: 0 5px; background: var(--line); }
+.gallery-head-btn { min-width: 44px; padding: 8px; color: var(--muted); background: none; border-color: transparent; }
+/* Words for a screen reader that the picture already says (the unread dot). */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .viewer { position: fixed; inset: 0; background: var(--scrim-media); display: flex; align-items: center; justify-content: center; z-index: 10; }
 .viewer-body { width: 100vw; height: 100dvh; display: flex; flex-direction: column; gap: 8px; }
 /* The pinch/pan stage fills all space above the path + action row. */
@@ -1922,7 +2117,7 @@ select.search { appearance: none; }
   position: absolute; left: 12px; bottom: 12px; z-index: 11;
   display: inline-flex; align-items: center; gap: 6px;
   padding: 6px 10px; border-radius: 999px;
-  background: var(--panel-veil); color: var(--fg); border: 1px solid var(--line);
+  background: var(--panel-veil); color: var(--fg); border: 1px solid var(--float-edge);
   font-size: calc(12px * var(--ui-font, 1)); font-variant-numeric: tabular-nums; cursor: pointer;
 }
 .viewer-body > a { margin: auto; }
@@ -1958,7 +2153,7 @@ select.search { appearance: none; }
 .viewer-doc-pre {
   flex: 1; min-height: 0; margin: 0; overflow: auto; -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain; padding: 10px 14px 24px;
-  font-family: ui-monospace, monospace; font-size: calc(12.5px * var(--ui-font, 1)); line-height: 1.5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(12.5px * var(--ui-font, 1)); line-height: 1.5;
   white-space: pre-wrap; word-break: break-word;
 }
 /* An <a> styled as a key button (the download link) must line up with buttons. */
@@ -1979,7 +2174,7 @@ select.search { appearance: none; }
 .text-dump-lines.nowrap .tdl-row { width: max-content; min-width: 100%; }
 .text-dump-lines.nowrap .tdl-text { flex: none; white-space: pre; overflow-wrap: normal; }
 .text-dump-bar { display: flex; justify-content: flex-end; margin: 6px 10px 0; }
-.text-dump-bar .key.on { color: var(--accent); border-color: var(--accent-edge); background: var(--accent-tint); }
+.text-dump-bar .key.on { color: var(--fg); border-color: var(--pick-edge); background: var(--pick-fill); }
 .text-dump-ticked { display: flex; align-items: center; gap: 8px; margin: 6px 10px 0; font-size: 13px; color: var(--muted); }
 .text-dump-ticked span { flex: 1; }
 /* The viewer is a full-bleed overlay, not a `.screen`/`.sheet`, so it gets no
@@ -1989,7 +2184,7 @@ select.search { appearance: none; }
 .viewer-close {
   position: absolute; top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pulse-h, 0px) + var(--ui-localrt-h, 0px) + var(--ui-tabs-h, 0px) + 10px); right: 12px;
   width: 40px; height: 40px; border-radius: 50%;
-  background: var(--panel-veil); color: var(--fg); border: 1px solid var(--line);
+  background: var(--panel-veil); color: var(--fg); border: 1px solid var(--float-edge);
   display: inline-flex; align-items: center; justify-content: center;
   cursor: pointer; z-index: 11;
 }
@@ -2052,10 +2247,9 @@ select.search { appearance: none; }
    them does not shimmer as the clock ticks. */
 .bl-age { font-variant-numeric: tabular-nums; }
 /* **The repo bar is a BAR.** It carried no rule of its own, so it inherited
-   `.form`'s column and drew its three controls — the repo, `assess`, the smart
-   pick tick — as three full-width blocks stacked down the phone, ~200px of
-   chrome before a single item. They are one row: the repo grows, the two verbs
-   take their own width, and a narrow screen wraps rather than scrolls. */
+   `.form`'s column and drew its controls — the repo and `assess` — as full-width
+   blocks stacked down the phone, chrome before a single item. They are one
+   row: the repo grows, the verbs take their own width, and a narrow screen wraps rather than scrolls. */
 .bl-repobar { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px; }
 .bl-repobar > .search { flex: 1 1 160px; min-width: 0; margin: 0; }
 /* A `.rc` pill is a STATE and a `.key` is a VERB — the shapes stay apart. But
@@ -2064,15 +2258,11 @@ select.search { appearance: none; }
 .bl-repobar > .key, .bl-repobar > .rc { flex: 0 0 auto; }
 .bl-repobar > .rc { min-height: 44px; }
 .bl-repobar > .form-hint { flex: 1 1 100%; padding: 0; }
-/* The status/age chips. `annot-tools` already wraps and scrolls; this only keeps
-   the two rows' numbers from being mistaken for part of the label next to them. */
-.bl-filters .key { font-variant-numeric: tabular-nums; }
-/* Two axes, two rows — and the break is the `.spacer` doing what it already did
-   in a row that could not wrap. With `overflow-x: auto` the age chips sat past
-   the right edge behind a gesture nobody discovers on a phone, with a blank
-   stretch where the spacer had pushed them; wrapped, the whole cut is readable
-   and the spacer is what puts the two kinds on lines of their own. */
-.bl-filters .spacer { flex: 1 0 100%; height: 0; }
+/* The backlog's filter chips (`BacklogFilterBar.tsx`): the kit's `.fchips` rows (status + clock,
+   age, kind), stacked in one panel. A row wraps, because a chip past the right edge behind a
+   gesture nobody discovers on a phone does not exist; the row is as tall as its chips, so a
+   cut that hides an axis (`drawnChips`) takes its whole row away. */
+.bl-fchips { background: var(--panel); border-bottom: 1px solid var(--line); padding: 2px 0; }
 /* Search and the archived cut are ONE row: `show archived (10)` was a
    full-width button of its own between the query and the chips, in a sheet
    whose list starts below the fold. */
@@ -2082,7 +2272,20 @@ select.search { appearance: none; }
 /* The icon's 20px cleared the field's own 10px side margin, which this row
    takes off — it would otherwise float clear of the text it belongs to. */
 .bl-searchrow .bl-search-icon { left: 10px; }
-.bl-searchrow > .key { flex: 0 0 auto; align-self: center; }
+.bl-searchrow > .fchip { align-self: center; margin-right: -3px; }
+/* The bulk bars' rows (`BulkBars.tsx`, `clockDirectory.tsx`) still wear `.bl-filters`; their
+   `.key`s keep their numbers from reading as part of the label beside them. */
+.bl-filters .key { font-variant-numeric: tabular-nums; }
+/* The backlog's own bulk verbs (`backlog/BulkBars.tsx`): `.link-btn`s, no panel and no frame,
+   on the left edge the chips above them start at (`.bl-fchips > .fchips` 6px + `.fchip` 3px).
+   They were a `.key` each in an `.annot-tools` panel, which read as a second row of primary
+   buttons under the slim filters and began at 8, 22 and 10px. The 44px row is the fingertip
+   (the negative margin `.sheet .link-btn` takes would overlap the row above); a bar's note
+   shares the verb's edge. */
+.bl-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 0 18px; padding: 0 9px; }
+.sheet .bl-bulk .link-btn { min-height: 44px; margin: 0; padding: 0; font-variant-numeric: tabular-nums; }
+.bl-bulk > .act-cants { padding: 10px 0; }
+.bl-bulk-bar > .form-hint { padding: 8px 9px 2px; }
 /* The inline disclosures under the repo bar — *how it works* · *on in N repos*.
    They were two `.form` blocks in a column; they are one line of two links. */
 .bl-notelinks { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 4px; }
@@ -2159,6 +2362,10 @@ button.bl-check { cursor: pointer; }
 /* The re-time pick list's tick: a real button with a phone-sized target, and
    only drawn on rows `retimeEligible` lets move — the rest say why in the bar. */
 .bl-pick { flex: none; background: none; border: 0; padding: 0 2px; margin: -2px 0 0; min-width: 32px; min-height: 32px; color: var(--accent); display: inline-flex; align-items: flex-start; justify-content: center; cursor: pointer; }
+/* The pick list's bar stays on screen while ticking down a long list: the tick
+   on row 25 and the button that sends it are one screen. Above the sticky
+   group heads (z 1). */
+.bl-pick-bar { position: sticky; top: 0; z-index: 2; background: var(--bg); }
 .bl-num { flex: none; min-width: 18px; text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); font-size: calc(13px * var(--ui-font, 1)); padding-top: 1px; }
 .bl-search { position: relative; display: flex; align-items: flex-end; gap: 8px; }
 .bl-search-icon { position: absolute; left: 20px; bottom: 14px; color: var(--muted); pointer-events: none; }
@@ -2190,32 +2397,10 @@ button.bl-check { cursor: pointer; }
 .tag-running { color: var(--accent); }
 .tag-done { color: var(--ok); }
 .tag-failed { color: var(--dead); }
-/* ── The smart pick: the look a repo takes before its next item fires ───────
-   The strip under the repo bar is the ONE window onto a spender that runs
-   whether or not this phone is awake, so it is drawn as a panel and not as
-   another muted line in the meta row — and its outcome word is coloured by
-   what happened, because "timed out" and "merged 2 → 1" are not the same news.
-   Every colour is a token: there is no literal colour anywhere in this file
-   (`theme.test.mjs` parses it), and a pass that fails is the ordinary
-   `--warn`, never `--dead` — nothing broke, the backlog simply fired in the
-   order it already had. */
-.bl-pass { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
-.bl-pass-head { font-size: calc(11px * var(--ui-font, 1)); color: var(--muted); }
-.bl-pass-said { font-size: calc(12.5px * var(--ui-font, 1)); color: var(--fg); }
-.bl-pass-applied { color: var(--ok); }
-.bl-pass-noop, .bl-pass-skipped, .bl-pass-late { color: var(--muted); }
-.bl-pass-failed, .bl-pass-timeout { color: var(--warn); }
-/* An at-limit pass wears the same colour the launcher and the session header
-   use for the same fact — a quota that lifts by itself is not a failure. */
-.bl-pass-limited { color: var(--limit); }
-.bl-pass-why { font-size: calc(12px * var(--ui-font, 1)); color: var(--muted); }
-.bl-pass-cost { font-size: calc(11px * var(--ui-font, 1)); color: var(--muted); font-variant-numeric: tabular-nums; }
-.bl-pass-notes { align-self: flex-start; padding: 0; border: none; background: none; font: inherit; font-size: calc(11px * var(--ui-font, 1)); color: var(--muted); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
-.bl-pass-notelist { margin: 2px 0 0; padding-left: 18px; font-size: calc(11px * var(--ui-font, 1)); color: var(--muted); }
 /* A row's own chips. `bl-chip` is `bl-next`'s shape without its claim: `next`
    is the accent because it is the thing about to happen, these are facts about
-   what already happened to the row. `bl-merged` is a BUTTON (the count is the
-   filter); `bl-hand` is not, because "you placed this" is nothing to tap. */
+   what already happened to the row. `bl-merged` (the schedule link) is a
+   BUTTON; `bl-hand` is not, because "you placed this" is nothing to tap. */
 .bl-chip { margin-left: 8px; font-size: calc(11px * var(--ui-font, 1)); border-radius: 6px; padding: 1px 6px; border: 1px solid var(--line); background: none; color: var(--muted); font: inherit; font-size: calc(11px * var(--ui-font, 1)); }
 button.bl-chip { cursor: pointer; }
 .bl-merged { color: var(--purple); border-color: var(--purple); }
@@ -2251,9 +2436,9 @@ button.bl-chip { cursor: pointer; }
    on a phone leave the list a slit. */
 .bl-clock-head { position: static; background: none; border-top: 1px solid var(--line); padding-top: 10px; }
 .bl-clock-head .bl-group-title { color: var(--sched); white-space: normal; }
-/* What a machine wrote, and whether the undo is still there — the sentence that
-   replaces a dimmed button once it is too late. Same weight and colour as
-   `bl-waiting`: both are the row explaining itself, not warning about itself. */
+/* What wrote a row (an agent), and what an offered verb does — the sentence
+   that replaces a dimmed button. Same weight and colour as `bl-waiting`: both
+   are the row explaining itself, not warning about itself. */
 .bl-smart-note { display: block; font-size: calc(11px * var(--ui-font, 1)); color: var(--muted); margin-top: 2px; }
 .bl-next { margin-left: 8px; font-size: calc(11px * var(--ui-font, 1)); font-weight: 600; color: var(--accent); border: 1px solid var(--accent); border-radius: 6px; padding: 1px 6px; }
 .bl-row:has(.bl-next) { box-shadow: inset 3px 0 0 var(--accent); }
@@ -2378,7 +2563,20 @@ button.bl-chip { cursor: pointer; }
 .row-wrap[data-sid] > .row, .row-wrap[data-sid] > .row-acts { display: contents; }
 .row-wrap[data-sid] .row-head { grid-area: head; display: flex; align-items: center; gap: 10px; min-width: 0; }
 .row-wrap[data-sid] .row-head > .row-title, .row-wrap[data-sid] .row-head > .row-name { flex: 0 1 auto; }
-.row-wrap[data-sid] .row-head > .row-meta { flex: 0 0 auto; width: auto; margin-left: auto; }
+/* The session's number among its repo's open ones: a small fixed-width
+   chip leading the title line, so a column of them lines up down the list. */
+.row-wrap[data-sid] .row-head > .row-num {
+  flex: 0 0 auto; min-width: 1.6em; padding: 0 5px; border-radius: 6px; text-align: center;
+  font-size: calc(12px * var(--ui-font, 1)); font-weight: 600; font-variant-numeric: tabular-nums;
+  color: var(--muted); border: 1px solid var(--line);
+}
+/* The title line WRAPS: the head is the grid's `minmax(0, 1fr)` column, and a
+   meta that never shrinks ("opus-5-5 · medium · 26m") on a line that never
+   wraps ran straight out of it, under the status pill beside it. Now it drops
+   to its own line, still right-aligned, and if even that is too narrow it
+   shrinks and wraps its own facts instead of overflowing. */
+.row-wrap[data-sid] .row-head { flex-wrap: wrap; row-gap: 2px; }
+.row-wrap[data-sid] .row-head > .row-meta { flex: 0 1 auto; min-width: 0; width: auto; margin-left: auto; }
 .row-wrap[data-sid] .row-gist { grid-area: gist; }
 .row-wrap[data-sid] .row-stat { grid-area: stat; justify-self: end; align-self: center; display: flex; }
 .row-wrap[data-sid] .row-ctl { grid-area: ctl; justify-self: end; align-self: start; margin: 0; }
@@ -2528,6 +2726,15 @@ button.bl-chip { cursor: pointer; }
    so it cannot be mistaken for the one-tap `fix` beside the label — one patches,
    one opens a prompt for you to read. */
 .check-acts { display: flex; justify-content: flex-end; margin-top: 6px; }
+/* Repo readings, region 3 (`OptInRegion.tsx`): offers, counted in nothing —
+   so `.check-row` with NO status modifier (its left border stays transparent:
+   no stripe, no pass/warn/fail hue). The verbs wrap at 320px and at a large
+   `--ui-font`; the folded heads are buttons dressed as section heads, the
+   count being the list they open. */
+.optin-acts { flex-wrap: wrap; gap: 6px; }
+.optin-acts .key { flex: 0 1 auto; min-width: 0; max-width: 100%; white-space: normal; }
+.optin-acts .key > svg { flex: none; }
+.optin-fold { display: flex; align-items: center; gap: 4px; width: 100%; background: none; border: 0; text-align: left; cursor: pointer; }
 /* The per-repo context-weight thresholds, under the one row that quotes a
    number (ContextLimits.tsx). Its own block rather than a `.check-acts`
    override: that class is a right-aligned button strip, and a form inside one
@@ -2607,6 +2814,16 @@ button.bl-chip { cursor: pointer; }
 .reply-text { width: 100%; resize: vertical; min-height: 70px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--accent); background: var(--bg); color: var(--fg); font: inherit; font-size: calc(15px * var(--ui-font, 1)); line-height: 1.45; }
 .reply-text:focus { outline: none; box-shadow: 0 0 0 2px var(--accent-edge); }
 .approve.reply .approve-opts { margin-top: 8px; }
+/* The CLI's own next-prompt proposal (`CliSuggestion.tsx`): the words ARE the
+   button — one tap sends exactly what is printed, nothing hidden behind a label. */
+.cli-sug { padding: 6px 12px 8px; border-top: 1px solid var(--accent-edge); background: var(--accent-wash); }
+.q-card .cli-sug { margin-top: 8px; border: 1px solid var(--accent-edge); border-radius: 10px; }
+.cli-sug-head { display: flex; align-items: center; gap: 6px; font-size: calc(11.5px * var(--ui-font, 1)); color: var(--accent); margin-bottom: 4px; }
+.cli-sug-head > span { flex: 1; min-width: 0; }
+.cli-sug-x { flex: none; background: none; border: 0; color: var(--muted); padding: 2px 4px; }
+.cli-sug-send { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--accent); background: var(--bg); color: var(--fg); font: inherit; }
+.cli-sug-text { flex: 1; min-width: 0; font-size: calc(14px * var(--ui-font, 1)); line-height: 1.4; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.cli-sug-send svg { flex: none; color: var(--accent); }
 /* Sign-in bar. Calm like the reply card, not the alarm-red prompt bar: nothing
    is blocked and nothing is wrong — there is a link to open. Amber rather than
    the reply's blue so the two are not the same card with different words. */
@@ -2690,8 +2907,9 @@ button.bl-chip { cursor: pointer; }
    answer looks and behaves the same wherever it is given. */
 .q-card { padding: 12px 14px; border-bottom: 1px solid var(--line); background: var(--panel); }
 /* WRAPS. `.row-title` holds a 7em floor and the trailing pills are content-sized,
-   so a long name beside two of them (a sync chip AND a next-run time, which is
-   the schedule row since the chip was added) overflowed the card at phone width
+   so a long name beside two of them (a sync chip AND a next-run time, as the
+   schedule row once was — its name has a line of its own now, `.sched-title`)
+   overflowed the card at phone width
    rather than reflowing. Wrapping engages only on overflow and is strictly
    better than a card wider than the screen; the spacer keeps the pills right. */
 .q-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; }
@@ -2705,12 +2923,26 @@ button.bl-chip { cursor: pointer; }
 /* Segmented filter (local vs external) */
 .segmented { display: flex; gap: 6px; padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
 .seg { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 46px; padding: 8px; font-size: calc(15px * var(--ui-font, 1)); background: var(--raise); color: var(--muted); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
-.seg.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.seg.on { background: var(--pick-fill); color: var(--fg); border-color: var(--pick-edge); }
 .tag.rc-tag { color: var(--accent); border: 1px solid var(--accent); }
 
 /* Prima-interest star + "new since you left" annotation */
 .row-act.starred { color: var(--star); }
 .star-btn.starred { color: var(--star); }
+/* The follow-up flag (`core/sessions/followUp.tsx`): one colour per setter, on
+   the toggle, the line under a row and the count chip alike — two classes deep
+   so `.row-act`'s muted and `.repo-group-stat`'s inherit cannot win. */
+.fu-hand, .fu-btn.fu-hand, .repo-group-stat.fu-hand { color: var(--fu-hand); }
+.fu-launch, .fu-btn.fu-launch, .repo-group-stat.fu-launch { color: var(--fu-launch); }
+.fu-agent, .fu-btn.fu-agent, .repo-group-stat.fu-agent { color: var(--fu-agent); }
+/* Flags from more than one setter in one count: none of the three colours
+   would be true of all of them, so the chip says it in the text colour. */
+.repo-group-stat.fu-mixed { color: var(--fg); }
+.fu-line {
+  display: flex; align-items: flex-start; gap: 5px; margin-top: 4px;
+  font-size: calc(12.5px * var(--ui-font, 1)); line-height: 1.35;
+}
+.fu-line > svg { flex: none; margin-top: 2px; }
 .tag.newact { color: var(--star); border: 1px solid var(--star-edge-hi); animation: newact-pulse 1.8s ease-in-out infinite; }
 @keyframes newact-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
@@ -2723,11 +2955,17 @@ button.bl-chip { cursor: pointer; }
 /* Git review */
 .git-bar { display: flex; gap: 10px; align-items: center; padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--line); font-size: calc(13px * var(--ui-font, 1)); color: var(--muted); }
 .git-ab { color: var(--accent); }
+.git-ab.no-origin { color: var(--warn); }
 /* The review's file list scrolls sideways instead of ellipsizing a path: two
    files under one long directory read identically when both are cut at the
    same width. The row takes its content's width; the stage button is sticky
    at the right edge so it is reachable at any scroll position. */
-.git-files { overflow-x: auto; }
+/* The list has a FLOOR. `.list` is `flex: 1` — a basis of 0 — so it only ever
+   got the space left over, and under a failed push's 40vh hook log beside the
+   commit form (a short desktop window) that was one 20px strip holding nothing
+   but its sideways scrollbar. The log and the progress scroll on their own and
+   give way to this, never the other way round. */
+.git-files { overflow-x: auto; min-height: min(10rem, 30vh); }
 .git-files > .row-wrap { width: max-content; min-width: 100%; }
 .git-files > .row-wrap > .row.grow { flex: 1 0 auto; flex-wrap: nowrap; }
 .git-files .row-title { flex: none; overflow: visible; text-overflow: clip; }
@@ -2739,7 +2977,7 @@ button.bl-chip { cursor: pointer; }
 .g-added { color: var(--ok); border-color: var(--ok); }
 .g-renamed { color: var(--muted); }
 .row-act.on { color: var(--ok); }
-.diff { flex: 1; margin: 0; overflow: auto; padding: 8px; font-family: ui-monospace, monospace; font-size: calc(12px * var(--ui-font, 1)); line-height: 1.45; background: var(--well); }
+.diff { flex: 1; margin: 0; overflow: auto; padding: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(12px * var(--ui-font, 1)); line-height: 1.45; background: var(--well); }
 .diff > div { white-space: pre; padding: 0 4px; }
 .d-add { color: var(--ok); background: var(--ok-wash); }
 /* GitMediaDiff — a changed image/video/audio as before and after, stacked. */
@@ -2782,7 +3020,7 @@ button.bl-chip { cursor: pointer; }
 .update-log {
   margin: 0; padding: 6px 12px; max-height: 140px; overflow: auto;
   background: var(--well); border-bottom: 1px solid var(--line);
-  color: var(--muted); font-family: ui-monospace, monospace; font-size: calc(11px * var(--ui-font, 1));
+  color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(11px * var(--ui-font, 1));
   line-height: 1.4; white-space: pre-wrap; word-break: break-all;
 }
 /* A repo-health refusal is ~10 lines and ends in the remedy: never clipped. */
@@ -2794,13 +3032,32 @@ button.bl-chip { cursor: pointer; }
    never squeeze the run buttons out of existence. */
 .build-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
 .build-body > .list, .build-body .build-run > .list { flex: 0 0 auto; overflow: visible; }
-.build-run { display: flex; flex-direction: column; flex: 0 0 auto; }
+.build-run { display: flex; flex-direction: column; flex: 0 0 auto; box-shadow: inset 3px 0 0 var(--accent); }
+/* A build row's command: two lines, then an ellipsis. A shell script as a
+   subtitle made one row a whole screen; the full text is in the editor.
+   `.row-sub.build-cmd`, not `.build-cmd`: the later `.row-sub { display:
+   inline-flex }` has the same specificity and wins on order, which silently
+   un-clamped every command back to its full length. */
+.row-sub.build-cmd {
+  flex-basis: 100%; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; word-break: break-all;
+}
+/* A run row: its name on a line of its own (it was cut to "Public mirror
+   (wat…" by the meta beside it), the fold chevron at the end, the meta under. */
+.build-runs .row-title { flex: 1 1 0; min-width: 0; white-space: normal; }
+.build-runs .row > .row-sub { order: 2; }
+.build-run-fold { order: 1; flex: none; color: var(--muted); }
+/* The open run and its detail read as ONE block: same stripe down both. */
+.build-runs .row.active { background: var(--accent-wash); box-shadow: inset 3px 0 0 var(--accent); }
+/* Copy / send-to-session over an open run's log. Mid-list, not a sheet foot, so no
+   home-indicator inset. */
+.sheet-actions.build-log-acts { padding: 6px 12px; }
 .build-log {
   /* Fixed share of the viewport with its own scroll: tall enough to read,
      bounded so the controls above it stay one short scroll away. */
   margin: 0; padding: 8px 12px; flex: 0 0 auto; height: 45vh; min-height: 160px; overflow: auto;
   background: var(--well); border-top: 1px solid var(--line);
-  color: var(--fg); font-family: ui-monospace, monospace; font-size: calc(11px * var(--ui-font, 1));
+  color: var(--fg); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(11px * var(--ui-font, 1));
   line-height: 1.4; white-space: pre-wrap; word-break: break-all;
 }
 
@@ -2854,6 +3111,19 @@ button.bl-chip { cursor: pointer; }
   font-family: inherit; line-height: 1.45; text-align: left; white-space: pre-wrap; word-break: break-word; cursor: pointer;
 }
 .toast:active { background: var(--panel); }
+/* The slot check's ask (`SlotAskLayer.tsx`): above the toast's spot, never a
+   scrim — nothing under it is blocked. Words wrap; buttons wrap to a second row. */
+.slot-ask {
+  position: fixed; left: 50%; bottom: calc(150px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  width: min(520px, calc(100vw - 24px)); z-index: 19;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  padding: 10px 12px; box-shadow: 0 8px 28px var(--shadow);
+  font-size: calc(13px * var(--ui-font, 1)); line-height: 1.45;
+}
+.slot-ask-what { display: flex; align-items: flex-start; gap: 6px; color: var(--fg); }
+.slot-ask-what svg { flex: none; margin-top: 3px; }
+.slot-ask-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.slot-ask-acts .key { flex: 0 1 auto; min-width: 0; white-space: normal; }
 
 /* ── lucide icon alignment ─────────────────────────────────────────── */
 .key, .send, .rc, .back, .row-act, .run, .approve-btn, .btw { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
@@ -2887,6 +3157,20 @@ svg.lucide { flex: 0 0 auto; }
 /* Reset clock rides right after the 5-hour number it belongs to: same muted weight as "wk", with the
    icon baseline-nudged so the row height doesn't change. */
 .usage-key .usage-reset { display: inline-flex; align-items: center; gap: 2px; margin-left: 2px; }
+/* ── WP3 usage-sources BEGIN (self-contained patch block) ─────────────────────
+   One segment per usage source (core/launcher/UsageChip.tsx). A lone claude
+   segment is the plain `.usage-key` above — none of these rules touch it. */
+/* Metrics are `.topbar > .key`'s (the rule at the header keys); the 44px touch floor is the row's.
+   In the topbar the group goes LAST: claude alone (171px measured, with its reset clock) already
+   leaves the 360px launcher bar two rows; in source order a second segment (≈109px) pushed the
+   group onto row 2 and settings onto a THIRD. Last, the icons keep row 1 and the meter takes a
+   line of its own (claude + one ≈ 284px of the 340 a 360px bar holds) — two rows at 360 and 390,
+   as with claude alone. A third segment wraps INSIDE the group rather than past the screen. */
+.usage-multi { display: inline-flex; align-items: stretch; gap: 4px; flex: none; min-width: 0; }
+.topbar > .usage-multi { order: 10; flex: 0 1 auto; flex-wrap: wrap; }
+.usage-key .usage-label { color: var(--muted); font-size: calc(11px * var(--ui-font, 1)); }
+html[data-layout="wide"] .ws-side .topbar > .usage-multi { order: 10; flex: 1 0 auto; justify-content: center; }
+/* ── WP3 usage-sources END ─────────────────────────────────────────────────── */
 .oracle-warn { color: var(--dead) !important; flex-basis: 100%; }
 
 
@@ -2960,6 +3244,11 @@ button.notif-dl:active { background: var(--raise); border-radius: 8px; }
 /* The rows of one group. `gap` rather than margins so an absent row leaves no
    hole — a good third of them are conditional on the host or the shell. */
 .set-item { display: flex; flex-direction: column; gap: 4px; }
+/* `.set-note`'s `flex-basis: 100%` is for wrapping rows; in this COLUMN it is a
+   full height, and a `.list` child (`flex: 1; min-height: 0`) is squeezed to
+   nothing beside it — the phone-setup checklist drew a screen of blank. */
+.set-item > .set-note { flex-basis: auto; }
+.set-item > .list { flex: none; overflow-y: visible; }
 
 /* A group whose rows all turned out to be absent draws nothing — not even its
    heading. The catalogue decides visibility under a query and cannot know what
@@ -3102,6 +3391,17 @@ button.notif-dl:active { background: var(--raise); border-radius: 8px; }
    they are indented under it rather than floating beside it. */
 .set-kinds { display: flex; flex-direction: column; gap: 6px; padding-left: 10px; border-left: 2px solid var(--line); }
 .set-kinds .set-note { font-size: calc(11.5px * var(--ui-font, 1)); }
+/* Ask rules (Settings › Sessions › ask before, and Repo readings): a rule is a command, so mono. */
+.askrule-list { display: flex; flex-direction: column; gap: 8px; }
+.askrule { display: flex; flex-direction: column; gap: 4px; padding: 6px 0 6px 10px; border-left: 2px solid var(--line); }
+.askrule-top { display: flex; align-items: center; gap: 8px; }
+.askrule-rule { flex: 1; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(12.5px * var(--ui-font, 1)); word-break: break-all; }
+.askrule-add { display: flex; gap: 8px; align-items: center; }
+.askrule-add > input { flex: 1; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.askrule-suggest { margin: 4px 0; padding-left: 18px; }
+.askrule-suggest code { font-size: calc(12px * var(--ui-font, 1)); }
+.askrule-here { margin: 4px 14px 10px; }
+.askrule-here .set-lbl { min-width: 0; }
 
 /* A rack of doors. Nine diagnostics, each of which is a whole other screen —
    full-width rows with a paragraph each is the shape this change is against,
@@ -3184,25 +3484,29 @@ button.notif-dl:active { background: var(--raise); border-radius: 8px; }
 .guardrail-text { width: 100%; box-sizing: border-box; background: var(--well); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: calc(13px * var(--ui-font, 1)); line-height: 1.45; font-family: inherit; resize: vertical; }
 
 /* Decision log sheet (plugin decisions + usage-limit events; features/plugins). */
-.olog-kinds { margin: 10px 10px 0; }
-/* Badge styles live in ONE place (below, next to the card border-left colours).
+/* The source / who chips are the kit's (`kit/FilterChip.tsx`, `.fchips`); the row ends in a rule so the header block reads apart from the rows. */
+.fchips.olog-kinds { padding-bottom: 2px; border-bottom: 1px solid var(--line); }
+/* Badge styles live in ONE place (below, next to the row rules).
    A second, filled variant here used to set only `background` — the later rules
    overrode `color` but not it, so "auto-continue" rendered accent-on-lilac and
    "error" red-on-red: both unreadable. */
 .tag.oracle-choice { color: var(--accent); border: 1px solid var(--accent); }
 .oracle-rationale { font-size: calc(12px * var(--ui-font, 1)); color: var(--accent); margin: 4px 0; line-height: 1.4; }
-/* Oracle log — structured, readable cards. */
+/* The decision log's and the sent log's rows: divided, like the Notifications feed (`.notif-row`), not
+   bordered cards. A row's outcome is said ONCE, by its pill (`.tag.oracle-*`); the 3px coloured
+   left stripe that used to say it again is gone with the card. `.olog-card` below is the Archive
+   sheet's own and keeps its look. */
+.olog-row { padding: 12px 14px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
 .olog-card { padding: 12px 14px; margin: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--line); border-radius: 10px; display: flex; flex-direction: column; gap: 8px; }
-.olog-card.outcome-sug { border-left-color: var(--ok); }
-.olog-card.outcome-fire { border-left-color: var(--accent); }
-.olog-card.outcome-err { border-left-color: var(--dead); }
-.olog-card.outcome-defer { border-left-color: var(--defer); }
 .tag.oracle-defer { color: var(--defer); border: 1px solid var(--defer); }
 .tag.oracle-sug { color: var(--ok); border: 1px solid var(--ok); }
 .tag.oracle-fire { color: var(--accent); border: 1px solid var(--accent); }
 .tag.oracle-err { color: var(--dead); border: 1px solid var(--dead); }
 .tag.oracle-muted { color: var(--muted); border: 1px solid var(--line); }
-.olog-card.archived { opacity: .55; }
+.olog-row.archived { opacity: .55; }
+/* A divided row has no card under it, so `.row-act`'s panel fill drew small grey boxes that read
+   as disabled: bare icons in a full fingertip box instead. */
+.olog-row .hist-acts .row-act { background: none; min-width: 44px; min-height: 40px; display: inline-flex; align-items: center; justify-content: center; }
 .olog-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .olog-sess { font-size: calc(12px * var(--ui-font, 1)); color: var(--accent); font-weight: 500; }
 .olog-time { margin-left: auto; }
@@ -3213,22 +3517,22 @@ button.notif-dl:active { background: var(--raise); border-radius: 8px; }
 .olog-conf { color: var(--accent); letter-spacing: 0; text-transform: none; font-weight: 500; }
 .olog-q { font-size: calc(14px * var(--ui-font, 1)); color: var(--fg); white-space: pre-wrap; word-break: break-word; max-height: 4.5em; overflow: hidden; line-height: 1.5; }
 .olog-q.open { max-height: none; }
-.olog-answer { font-size: calc(14px * var(--ui-font, 1)); color: var(--fg); line-height: 1.5; white-space: pre-wrap; word-break: break-word; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.olog-answer { font-size: calc(14px * var(--ui-font, 1)); color: var(--fg); line-height: 1.5; white-space: pre-wrap; word-break: break-word; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
 .olog-rationale { font-size: calc(12px * var(--ui-font, 1)); color: var(--muted); line-height: 1.45; font-style: italic; }
 .olog-meta { font-size: calc(11px * var(--ui-font, 1)); color: var(--muted); }
 .oracle-detail { display: flex; flex-direction: column; gap: 8px; margin-top: 2px; }
-.olog-card .hist-out { max-height: 240px; overflow: auto; }
+.olog-row .hist-out { max-height: 240px; overflow: auto; background: var(--panel); }
 .oracle-opts { display: flex; flex-wrap: wrap; gap: 6px; }
 .oracle-opt { font-size: calc(12px * var(--ui-font, 1)); color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; }
 .oracle-opt.chosen { color: var(--accent); border-color: var(--accent); }
 
-/* Sent-command log — same card shell as the activity log, but the row's own
+/* Sent-command log — the decision log's divided row, but the row's own
    subject is the TEXT that was typed, so it gets a monospace block that clamps
    to one line until tapped (a queued /init and a 40-line prompt must not make
    the list unscannable). */
 .olog-when { margin-left: auto; font-size: calc(11px * var(--ui-font, 1)); color: var(--muted); white-space: nowrap; }
 .olog-body { background: none; border: 0; padding: 0; margin: 0; text-align: left; width: 100%; cursor: pointer; }
-.sent-text { display: block; font-size: calc(13px * var(--ui-font, 1)); line-height: 1.45; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sent-text { display: block; font-size: calc(13px * var(--ui-font, 1)); line-height: 1.45; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sent-text.open { white-space: pre-wrap; word-break: break-word; overflow: visible; }
 .olog-why { font-size: calc(12px * var(--ui-font, 1)); color: var(--muted); line-height: 1.45; font-style: italic; }
 .olog-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -3256,8 +3560,33 @@ button.notif-dl:active { background: var(--raise); border-radius: 8px; }
 .git-draft { border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--well); display: flex; flex-direction: column; gap: 6px; }
 .git-draft-msg {
   margin: 0; white-space: pre-wrap; overflow-wrap: anywhere;
-  font-family: ui-monospace, monospace; font-size: calc(12px * var(--ui-font, 1)); line-height: 1.45;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(12px * var(--ui-font, 1)); line-height: 1.45;
   color: var(--fg);
+}
+/* The push's note holds the pre-push hook's own lines when it refuses — kept
+   as written (line breaks matter in a test log) and scrollable, never clipped. */
+.git-note { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 40vh; overflow-y: auto; }
+/* A running push's steps and latest lines, under the note. */
+/* Scrolls on its own — the sheet does not, and a hook's steps run past a
+   phone screen. Half the height beside a file list; the rest of the sheet
+   when the tree is clean and there is nothing else to show. */
+.git-push-progress {
+  padding: 4px 12px calc(env(safe-area-inset-bottom) + 12px); display: flex; flex-direction: column; gap: 4px;
+  font-size: calc(13px * var(--ui-font, 1));
+  flex: 0 1 auto; min-height: 0; max-height: 50vh; overflow-y: auto; overscroll-behavior: contain;
+}
+.git-push-progress.fill { flex: 1 1 auto; max-height: none; }
+.git-push-progress > * { flex: none; }
+.git-push-step { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.git-push-step svg { flex: none; }
+.git-push-step.running { color: var(--fg); }
+.git-push-step.ok svg { color: var(--ok); }
+.git-push-step.failed { color: var(--dead); }
+.git-push-step-aside { margin-left: auto; text-align: right; font-variant-numeric: tabular-nums; min-width: 0; overflow-wrap: anywhere; }
+.git-push-tail {
+  margin: 4px 0 0; padding: 6px 8px; border-radius: 6px; background: var(--well); color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(11px * var(--ui-font, 1)); line-height: 1.4;
+  white-space: pre-wrap; overflow-wrap: anywhere;
 }
 .git-branches { border-bottom: 1px solid var(--line); background: var(--panel); }
 .git-branches .row.grow:disabled { opacity: .6; }
@@ -3335,7 +3664,7 @@ button.notif-dl:active { background: var(--raise); border-radius: 8px; }
 .tr-status.tr-note > svg { flex: 0 0 auto; margin-top: 2px; }
 .tr-status.tr-note .tr-live-what { flex: 1 1 auto; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .tr-live-line {
-  flex: 1 1 auto; min-width: 0; font-family: ui-monospace, monospace; font-size: calc(11.5px * var(--ui-font, 1));
+  flex: 1 1 auto; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(11.5px * var(--ui-font, 1));
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .tr-live-ago { flex: 0 0 auto; margin-left: auto; opacity: .8; font-variant-numeric: tabular-nums; }
@@ -3409,8 +3738,8 @@ button.notif-dl:active { background: var(--raise); border-radius: 8px; }
 .tr-ol-head { display: flex; align-items: center; gap: 6px; }
 .tr-ol-prompt { font-size: calc(13.5px * var(--ui-font, 1)); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tr-ol-sum { font-size: calc(12px * var(--ui-font, 1)); color: var(--muted); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tr-ol-files { font-size: calc(11px * var(--ui-font, 1)); color: var(--muted); opacity: .8; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, monospace; }
-.tr-n { font-size: calc(11px * var(--ui-font, 1)); font-family: ui-monospace, monospace; color: var(--accent); }
+.tr-ol-files { font-size: calc(11px * var(--ui-font, 1)); color: var(--muted); opacity: .8; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.tr-n { font-size: calc(11px * var(--ui-font, 1)); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); }
 
 .tr-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 6px 10px 20px; }
 .tr-more { display: block; width: 100%; margin: 6px 0 10px; padding: 8px; font-size: calc(12px * var(--ui-font, 1)); color: var(--muted); background: var(--raise); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
@@ -3424,7 +3753,6 @@ button.notif-dl:active { background: var(--raise); border-radius: 8px; }
 }
 .tr-newmark::after { content: ""; flex: 1; height: 1px; background: var(--ok); opacity: 0.45; order: 1; }
 .tr-newmark .key { order: 2; min-width: 0; padding: 2px 6px; font-size: calc(11px * var(--ui-font, 1)); text-transform: none; letter-spacing: 0; }
-.tr-newbtn { color: var(--ok); border-color: var(--ok-edge); }
 .tag.new { color: var(--ok); border-color: var(--ok-edge); }
 .tr-turn-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
 .tr-turn-head .key { min-width: 0; padding: 3px 6px; margin-left: auto; }
@@ -3463,6 +3791,8 @@ button.notif-dl:active { background: var(--raise); border-radius: 8px; }
 .tr-list { margin: 6px 0; padding-left: 20px; }
 .tr-list li { margin: 3px 0; }
 .tr-quote { margin: 8px 0; padding: 2px 10px; color: var(--muted); border-left: 2px solid var(--line); }
+.tr-quote > :first-child { margin-top: 0; }
+.tr-quote > :last-child { margin-bottom: 0; }
 /* Tables scroll inside their own box — a wide table must never scroll the page. */
 .tr-table-wrap { margin: 8px 0; overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--line); border-radius: 8px; }
 .tr-table { border-collapse: collapse; width: 100%; font-size: calc(13px * var(--ui-font, 1)); }
@@ -3470,7 +3800,7 @@ button.notif-dl:active { background: var(--raise); border-radius: 8px; }
 .tr-table th { font-weight: 600; background: var(--panel); position: sticky; top: 0; }
 .tr-table tr:last-child td { border-bottom: 0; }
 .tr-say a, .tr-you a { color: var(--accent); }
-.tr-say code, .tr-you code { font-family: ui-monospace, monospace; font-size: calc(12.5px * var(--ui-font, 1)); padding: 1px 4px; background: var(--raise); border-radius: 4px; }
+.tr-say code, .tr-you code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(12.5px * var(--ui-font, 1)); padding: 1px 4px; background: var(--raise); border-radius: 4px; }
 .tr-code { margin: 8px 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .tr-code-head { display: flex; align-items: center; justify-content: space-between; padding: 3px 8px; font-size: calc(11px * var(--ui-font, 1)); color: var(--muted); background: var(--panel); }
 .tr-code-head .key { min-width: 0; padding: 2px 6px; font-size: calc(11px * var(--ui-font, 1)); }
@@ -3499,6 +3829,10 @@ button.notif-dl:active { background: var(--raise); border-radius: 8px; }
    point. `0 0 100%` puts it on its own line under the status text. */
 .pull-bar { display: block; flex: 0 0 100%; height: 3px; margin-top: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
 .pull-bar-fill { display: block; height: 100%; background: var(--accent); transition: width 200ms linear; }
+/* Fan-out kickoff strip: pinned above the Run bar, because the run's own rows
+   sit below the whole repo checklist. Words first, the bar on its own line. */
+.fanout-kick { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 12px; background: var(--panel); border-top: 1px solid var(--line); font-size: calc(13px * var(--ui-font, 1)); color: var(--fg); }
+.fanout-kick .grow { flex: 1; min-width: 0; }
 /* A bar that is merely PARKED at 63% and one that is filling both render as a
    static bar — the difference is the whole question on a bad link, so the live
    one carries a moving sheen. */
@@ -3508,14 +3842,21 @@ button.notif-dl:active { background: var(--raise); border-radius: 8px; }
 .row-sub.dim { opacity: .7; font-size: calc(12px * var(--ui-font, 1)); }
 .form-hint.warn { color: var(--warn); }
 /* What every build in a repo does with what it produces (BuildSheet's
-   ArtifactPolicyRow). The chips WRAP and each may shrink: at a large
-   `--ui-font` "collect + name: on" beside "remove older: on" is wider than a
-   320px screen, and a strip that cannot wrap puts the keep-count off it. */
-.artifact-policy { display: flex; flex-direction: column; gap: 6px; }
-.ap-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-.ap-chips .key { flex: 0 1 auto; min-width: 0; max-width: 100%; white-space: normal; }
-/* The count is a READOUT between two steppers, not a third button. */
-.ap-keep { cursor: default; color: var(--muted); }
+   ArtifactPolicyRow): a section head with its `?`, then the Settings kit's
+   switch rows, full width, so the state is the `on`/`off` at the edge and never
+   words glued to a button. The head is a `.section`, so the sentence its `?`
+   opens is put back into sentence case. */
+.artifact-policy { display: flex; flex-direction: column; gap: 6px; padding: 0 12px 10px; }
+.artifact-policy > .form-hint { padding: 0 2px; }
+.ap-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0 6px; padding: 15px 2px 1px; }
+.ap-head .explain-body { text-transform: none; letter-spacing: 0; line-height: 1.45; }
+/* "keep − 3 +" on ONE line, under the switch it belongs to. The count is a
+   READOUT between two steppers, plain text and never a third button. */
+.ap-keep {
+  display: flex; align-items: center; gap: 8px; padding: 0 2px 0 14px; flex-wrap: nowrap;
+  font-size: calc(14px * var(--ui-font, 1)); color: var(--muted);
+}
+.ap-keep-n { min-width: 2ch; text-align: center; color: var(--fg); font-variant-numeric: tabular-nums; }
 
 .upscale { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 4px 8px; }
 /* 2px of vertical padding put these chips at ~20px tall — under the 24x24 CSS px
@@ -3529,7 +3870,7 @@ button.notif-dl:active { background: var(--raise); border-radius: 8px; }
 .fileref {
   display: inline-flex; align-items: center; gap: 4px; vertical-align: middle;
   max-width: 100%; margin: 0 2px; padding: 1px 6px;
-  font-family: ui-monospace, monospace; font-size: calc(12.5px * var(--ui-font, 1)); color: var(--accent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(12.5px * var(--ui-font, 1)); color: var(--accent);
   background: var(--raise); border: 1px solid var(--line); border-radius: 4px;
   overflow-wrap: anywhere; text-align: left;
 }
@@ -3552,7 +3893,7 @@ button.notif-dl:active { background: var(--raise); border-radius: 8px; }
 .tr-you > .tr-p:first-child, .tr-you > .tr-h:first-child { margin-top: 0; }
 .tr-you > .tr-p:last-child { margin-bottom: 0; }
 .tr-code pre, .tr-pre {
-  margin: 0; padding: 8px 10px; font-family: ui-monospace, monospace; font-size: calc(12px * var(--ui-font, 1)); line-height: 1.45;
+  margin: 0; padding: 8px 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(12px * var(--ui-font, 1)); line-height: 1.45;
   white-space: pre; overflow-x: auto; -webkit-overflow-scrolling: touch;
 }
 .tr-pre { background: var(--well); border: 1px solid var(--line); border-radius: 6px; margin: 4px 0; max-height: 320px; overflow-y: auto; }
@@ -3574,7 +3915,7 @@ button.notif-dl:active { background: var(--raise); border-radius: 8px; }
 .tr-collapse:not(.open) > .tr-collapse-head:has(.tr-tools-head) {
   border-color: var(--line); border-style: dashed;
 }
-.tr-tool-label { font-family: ui-monospace, monospace; font-size: calc(11.5px * var(--ui-font, 1)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tr-tool-label { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(11.5px * var(--ui-font, 1)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tr-think { color: var(--muted); font-size: calc(13px * var(--ui-font, 1)); font-style: italic; }
 /* Terminal text inside the reader: a local command's own output, verbatim.
    Monospace and horizontally scrollable IN ITS OWN BOX — the capture carries
@@ -3585,7 +3926,7 @@ button.notif-dl:active { background: var(--raise); border-radius: 8px; }
 .tr-screen {
   margin: 8px 0; padding: 8px 10px; border-radius: 8px;
   background: var(--panel); border: 1px solid var(--line);
-  font-family: ui-monospace, monospace; font-size: calc(12px * var(--ui-font, 1));
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(12px * var(--ui-font, 1));
   line-height: 1.4; color: var(--fg);
   white-space: pre; overflow-x: auto; -webkit-overflow-scrolling: touch;
 }
@@ -3632,6 +3973,9 @@ button.notif-dl:active { background: var(--raise); border-radius: 8px; }
 }
 .tr-ask .approve-opts { max-height: none; overflow: visible; }
 .tr-ask .approve-q { margin: 6px 0 8px; font-size: calc(14px * var(--ui-font, 1)); }
+.approve-plan { margin: 6px 0 8px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+.approve-plan > summary { cursor: pointer; font-size: calc(12px * var(--ui-font, 1)); font-weight: 600; color: var(--muted); }
+.approve-plan-body { font-size: calc(13px * var(--ui-font, 1)); overflow-wrap: anywhere; }
 
 /* Repo group header (live sessions): attention that a COLLAPSED group would
    otherwise hide — the header stands in for its rows, so it has to carry the
@@ -3656,6 +4000,27 @@ button.notif-dl:active { background: var(--raise); border-radius: 8px; }
   min-height: 30px; border: 1px solid currentColor; opacity: .8;
 }
 .repo-group-stat.limit { color: var(--limit); }
+/* The health index chip: plain ink by default; a CALLED drop takes the warn
+   colour, a called rise the calm one (the same --ok the done chip uses). */
+.repo-group-stat.health { color: inherit; }
+.repo-group-stat.health.warn { color: var(--warn); }
+.repo-group-stat.health.calm { color: var(--ok); }
+/* Health index section of the readings sheet. */
+.hix { padding-top: 4px; }
+.hix-name { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.hix-delta { color: var(--muted); font-size: calc(13px * var(--ui-font, 1)); }
+.hix-bars { padding-top: 6px; }
+.hix-bar-rows { font-size: calc(12px * var(--ui-font, 1)); }
+.hix-bar-row { display: grid; grid-template-columns: minmax(0, 9.5em) 1fr 3em; gap: 0 8px; align-items: center; min-height: 24px; }
+.hix-barname { color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hix-barval { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+/* The track is the whole row's height so the zero lines join into one axis. */
+.hix-track { position: relative; align-self: stretch; }
+.hix-track::before { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; border-left: 1px solid currentColor; opacity: .25; }
+.hix-bar { position: absolute; top: 50%; height: 8px; margin-top: -4px; min-width: 2px; border-radius: 2px; background: currentColor; opacity: .5; }
+.hix-bar-axis { min-height: 18px; }
+.hix-axis-words { display: flex; justify-content: space-between; color: var(--muted); font-size: calc(11px * var(--ui-font, 1)); }
+.hix-box { border-bottom: 1px solid var(--line); padding-bottom: 8px; }
 /* The launcher's "N at limit" chip. Same pill as "N waiting" but in the limit
    colour and NOT pulsing: a blocked session is not asking for you, it is telling
    you what it will do by itself — a pulse there is an alarm for a queue that is
@@ -3687,19 +4052,19 @@ button.notif-dl:active { background: var(--raise); border-radius: 8px; }
    down, costs no height in a row that has none to give, and survives being read
    at a glance. Without it the row's status pill had been a filter for its whole
    life and looked exactly like the plain one the search sheet renders. */
-button.repo-group-stat, button.repo-group-wait, button.repo-group-count, .tag-filter { cursor: pointer; }
+button.repo-group-stat, button.repo-group-wait, .tag-filter { cursor: pointer; }
 button.repo-group-stat > *, button.repo-group-wait > *, .tag-filter > * { vertical-align: middle; }
-.tag-filter, button.repo-group-stat, button.repo-group-wait, button.repo-group-count {
+.tag-filter, button.repo-group-stat, button.repo-group-wait {
   text-decoration: underline dotted;
   text-decoration-color: color-mix(in srgb, currentColor 55%, transparent);
   text-underline-offset: 3px;
 }
 /* Once its cut IS the one in force the mark has done its job — the filled
    background says it now, and an underline under that reads as a defect. */
-.tag-filter.on, button.repo-group-stat.on, button.repo-group-wait.on, button.repo-group-count.on {
+.tag-filter.on, button.repo-group-stat.on, button.repo-group-wait.on {
   text-decoration: none;
 }
-button.repo-group-stat:active, button.repo-group-wait:active, button.repo-group-count:active, .tag-filter:active { opacity: 1; }
+button.repo-group-stat:active, button.repo-group-wait:active, .tag-filter:active { opacity: 1; }
 button.repo-group-stat.on, button.repo-group-wait.on, .tag.tag-filter.on {
   opacity: 1;
   background: color-mix(in srgb, currentColor 22%, transparent);
@@ -3707,6 +4072,14 @@ button.repo-group-stat.on, button.repo-group-wait.on, .tag.tag-filter.on {
 }
 /* Filter bar: what the list is hiding, and the way out. Sits directly under the
    "Live sessions" head so a filtered list can never look like a lost one. */
+/* The launcher's quick filter (LauncherScreen): always on screen under the
+   list's head. One line: icon, the box, "n of N", clear, the full search. */
+.section.quick-filter { text-transform: none; letter-spacing: 0; display: flex; align-items: center; gap: 6px; padding: 4px 10px 6px; }
+.quick-filter-icon { flex: none; color: var(--muted); }
+.quick-filter input { flex: 1 1 auto; min-width: 0; height: 32px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--well); color: var(--fg); font: inherit; font-size: calc(14px * var(--ui-font, 1)); }
+.quick-filter input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.quick-filter input::-webkit-search-cancel-button { display: none; }
+.quick-filter-n { flex: none; text-transform: none; letter-spacing: 0; color: var(--muted); font-size: calc(12px * var(--ui-font, 1)); font-variant-numeric: tabular-nums; }
 .filter-bar {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   text-transform: none; letter-spacing: 0; font-weight: 500;
@@ -3724,6 +4097,13 @@ button.repo-group-stat.on, button.repo-group-wait.on, .tag.tag-filter.on {
   background: none; border: 1px solid currentColor; color: inherit; cursor: pointer;
 }
 .filter-bar-clear:active { background: color-mix(in srgb, currentColor 18%, transparent); }
+/* "back to <sheet>" on a shell a sheet sent you to (core/session/ReturnChip.tsx):
+   the filter bar's look, the whole left part one fingertip-sized target. */
+.return-bar { flex: none; padding-top: 3px; padding-bottom: 3px; }
+.return-go {
+  flex: 1; min-width: 0; min-height: 36px; display: inline-flex; align-items: center; gap: 6px;
+  background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left;
+}
 
 /* Legacy alias — kept so any stale markup keeps its colour. */
 .repo-group-limit {
@@ -3773,11 +4153,22 @@ button.repo-group-stat.on, button.repo-group-wait.on, .tag.tag-filter.on {
   pointer-events: auto;
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
   color: var(--fg); font-size: calc(13px * var(--ui-font, 1)); line-height: 1.45;
-  background: var(--panel-veil-hi); border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel-veil-hi); border: 1px solid var(--float-edge); border-radius: 10px;
 }
 /* Chip: there IS output on screen, so the note sits out of the way and never
    covers what you came to read. */
 .term-overlay.as-chip { bottom: 8px; }
+/* The trust box's tap card over the terminal (`termAnswers.ts`): the reader's `tr-ask` look,
+   pinned to the bottom of the grid where the CLI draws the same box. Its own scroll, so the PTY is
+   never resized to make room for it. */
+.term-answer {
+  position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 3;
+  max-height: 60%; overflow-y: auto; padding: 10px 12px; border-radius: 10px;
+  background: var(--bg); border: 1px solid var(--ask); box-shadow: 0 4px 18px rgba(0, 0, 0, .35);
+}
+.term-answer .approve-opts { max-height: none; overflow: visible; }
+.term-answer .approve-q { margin: 0 0 8px; font-size: calc(14px * var(--ui-font, 1)); }
+
 .term-overlay.as-chip .term-overlay-box { padding: 6px 10px; max-width: 92%; font-size: calc(12px * var(--ui-font, 1)); }
 /* Card: the terminal would otherwise be blank, so the explanation IS the view. */
 .term-overlay.as-card { top: 0; bottom: 0; align-items: center; }
@@ -4041,6 +4432,14 @@ button.repo-group-stat.on, button.repo-group-wait.on, .tag.tag-filter.on {
 /* .list.hist already carries 24px of its own; keep it, add the inset. */
 .sheet > .list.hist:last-child { padding-bottom: calc(env(safe-area-inset-bottom) + 24px); }
 
+/* `<Sheet full>`: a body that FILLS the rest of the sheet, edge to edge, and never scrolls — a
+   canvas (the live desktop) sizes itself to this box. Positioned so a child can be `inset: 0`;
+   the safe area is padded rather than drawn under. */
+.sheet-full-body {
+  flex: 1 1 auto; min-height: 0; position: relative; overflow: hidden;
+  padding: 0 0 env(safe-area-inset-bottom); overscroll-behavior: contain; touch-action: none;
+}
+
 /* Sheet head: a long title must shrink, never push the actions off-screen.
    `.brand` is flex:0 0 auto, so "Sent commands · <long session title>" was
    sliding the refresh and clear buttons past the right edge. */
@@ -4226,7 +4625,7 @@ button.repo-group-stat.on, button.repo-group-wait.on, .tag.tag-filter.on {
 .hint-mode-bar > span { flex: 1; }
 .hint-mode-bar > svg { color: var(--accent); }
 
-.hint-toggle.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.hint-toggle.on { background: var(--pick-fill); color: var(--fg); border-color: var(--pick-edge); }
 
 .hint-modes { display: flex; gap: 6px; flex-wrap: wrap; }
 
@@ -4235,7 +4634,7 @@ button.repo-group-stat.on, button.repo-group-wait.on, .tag.tag-filter.on {
    you think you didn't pick. */
 .sched-days { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 10px; }
 .sched-days .row-chip { padding: 4px 10px; font-size: calc(13px * var(--ui-font, 1)); min-height: 32px; }
-.sched-days .row-chip.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.sched-days .row-chip.on { background: var(--pick-fill); color: var(--fg); border-color: var(--pick-edge); }
 /* The editor's own rows: on a phone the anchor time and its zone do not fit on
    one line, and a non-wrapping flex row pushed the zone field off the edge of a
    container that (before the scroll fix) could not be scrolled to. */
@@ -4479,9 +4878,10 @@ button.repo-group-stat.on, button.repo-group-wait.on, .tag.tag-filter.on {
   padding-left: calc(env(safe-area-inset-left) + 6px);
   padding-right: calc(env(safe-area-inset-right) + 6px);
   background: var(--bg); border-bottom: 1px solid var(--line);
-  /* Sideways, and only sideways. `--stab-n` sizes each tab to a share of the
-     strip so exactly that many fill it; the rest are still there, one flick
-     away. Momentum scrolling on iOS, no scrollbar eating a row this short. */
+  /* Sideways, and only sideways. `--stab-n` is the narrowest a tab gets, a
+     share of the strip so exactly that many fill it; the rest are still there,
+     one flick away. Momentum scrolling on iOS, no scrollbar eating a row this
+     short. */
   overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch;
   scrollbar-width: none; user-select: none;
 }
@@ -4494,10 +4894,19 @@ button.repo-group-stat.on, button.repo-group-wait.on, .tag.tag-filter.on {
 
    Rounded at the TOP only, sitting on the strip's baseline — the shape says
    which edge the tab belongs to, and it is the cheapest way to stop four
-   coloured rectangles reading as a chart. */
+   coloured rectangles reading as a chart.
+
+   As wide as its NAME, never narrower than `1/--stab-n` of the strip. It was
+   exactly that share, which with one or two open cut "Red edge f…" off beside
+   an empty half strip. Now spare room goes to the labels: a tab grows to its
+   whole name, and shrinks (label first, the dot and the × keep their size)
+   only once the names together overflow. At N open the floors fill the strip
+   by themselves, so a full strip is the same N equal tabs it always was and
+   the rest scroll; the setting still says how many fit. */
 .stab {
-  flex: 0 0 calc((100% - (var(--stab-n, 3) - 1) * 4px) / var(--stab-n, 3));
-  min-width: 0; display: flex; align-items: center; gap: 6px;
+  flex: 0 1 auto;
+  min-width: calc((100% - (var(--stab-n, 3) - 1) * 4px) / var(--stab-n, 3));
+  display: flex; align-items: center; gap: 6px;
   height: 27px; padding: 0 3px 0 8px;
   border-radius: 10px 10px 0 0;
   background: var(--repo-fill);
@@ -4534,7 +4943,10 @@ button.repo-group-stat.on, button.repo-group-wait.on, .tag.tag-filter.on {
    must not paint one session two ways. The tab used to hold booleans of its
    own, so "waiting for your answer" and "at the usage limit" both drew as the
    same quiet grey dot as "nothing left to do". */
-.stab-led { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; background: var(--muted); }
+/* The dot sits in the SAME 11px slot the spinner does (2.5px each side), so a
+   turn starting or ending does not change the tab's width — with tabs sized to
+   their names, a 5px step would move every tab to its right mid-glance. */
+.stab-led { width: 6px; height: 6px; margin: 0 2.5px; border-radius: 50%; flex: 0 0 auto; background: var(--muted); }
 .stab[data-state="done"] .stab-led { background: var(--dim); }
 .stab[data-state="wait"] .stab-led { background: var(--dead); }
 .stab[data-state="limit"] .stab-led { background: var(--limit); }
@@ -4564,6 +4976,13 @@ button.repo-group-stat.on, button.repo-group-wait.on, .tag.tag-filter.on {
 }
 .stab-x:active { background: var(--hover-hi); color: var(--fg); }
 .stab:active { filter: brightness(1.08); }
+/* A pinned FILE, not a session: the same repo tint, a DASHED edge where a
+   session's is solid, and a file icon in the state-mark slot (11px, the
+   spinner's) — a file has no state to report. */
+.stab-file { box-shadow: none; outline: 1px dashed var(--repo-edge); outline-offset: -1px; }
+.stab-file.on { box-shadow: inset 0 2px 0 var(--repo-accent, var(--accent)); }
+.stab-fico { flex: 0 0 auto; color: var(--muted); }
+.stab-file.on .stab-fico { color: var(--fg); }
 /* What "most tabs shown" cut, counted at the strip's end. Text, not a tab. */
 .stab-more {
   flex: 0 0 auto; align-self: center; padding: 0 10px;
@@ -4743,7 +5162,7 @@ button.attach-thumb.tap:active { opacity: .7; }
 .attach-noimg { color: var(--muted); }
 .attach-body { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 3px; }
 .attach-name {
-  font-family: ui-monospace, monospace; font-size: calc(12px * var(--ui-font, 1)); color: var(--fg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(12px * var(--ui-font, 1)); color: var(--fg);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .attach-state { display: flex; align-items: center; gap: 4px; font-size: calc(11.5px * var(--ui-font, 1)); color: var(--muted); }
@@ -4785,7 +5204,7 @@ button.attach-thumb.tap:active { opacity: .7; }
 .code-view, .code-edit {
   flex: 1; margin: 0; min-height: 0; width: 100%;
   padding: 8px; background: var(--well); color: var(--fg);
-  font-family: ui-monospace, monospace; font-size: calc(12px * var(--ui-font, 1)); line-height: 1.45;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(12px * var(--ui-font, 1)); line-height: 1.45;
   border: 0; overflow: auto;
 }
 .code-view { white-space: pre; }
@@ -4875,7 +5294,8 @@ button.attach-thumb.tap:active { opacity: .7; }
 
    And a `done` row is DIMMED, never hidden. The whole claim of this screen is
    that a row never vanishes on a state change — it changes verdict — so the
-   finished ones have to stay where they were, just quieter. */
+   finished ones have to stay where they were, just quieter. Its WORDS dim, never
+   its buttons: a whole row at .62 made a working "save to phone" look dead. */
 .act-list { padding-bottom: 8px; }
 .act-row {
   border-bottom: 1px solid var(--line);
@@ -4887,7 +5307,8 @@ button.attach-thumb.tap:active { opacity: .7; }
 .act-running  { border-left-color: var(--accent); }
 .act-waiting  { border-left-color: var(--dim); }
 .act-scheduled{ border-left-color: var(--sched); }
-.act-done     { border-left-color: var(--ok); opacity: .62; }
+.act-done     { border-left-color: var(--ok); }
+.act-done .act-body { opacity: .62; }
 .act-row.act-aiming { background: var(--accent-wash); }
 
 .act-body {
@@ -4930,6 +5351,15 @@ button.attach-thumb.tap:active { opacity: .7; }
 
 .act-acts { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 12px 4px; }
 .act-acts-more { padding-top: 0; }
+/* A row's verbs wrap among themselves; `more` sits beside the group, never in its line.
+   A basis of 0 means the group never pushes `more` onto a row of its own: it takes what
+   is left of the FIRST line and wraps its own buttons inside that. */
+.act-acts-verbs { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 0; min-width: 0; }
+.act-acts > .act-more { flex: none; align-self: flex-start; }
+/* …and a verb wider than what is left (a long one at a large `--ui-font`) wraps its WORDS
+   inside its button rather than painting over `more` — `.assess-sheet .act-acts`'s rule. */
+.act-acts-verbs > .key { flex: 0 1 auto; min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: break-word; }
+.act-acts-verbs > .key > svg { flex: none; }
 /* What the row CANNOT do — deliberately nothing like a button.
    A disabled `.key` keeps its border, its icon and its size and differs only by
    `opacity: .4`, which on a phone (no hover, no cursor) is not a signal, it is a
@@ -4951,11 +5381,13 @@ button.attach-thumb.tap:active { opacity: .7; }
 .act-aim .form-hint { padding-left: 0; }
 .act-filters { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
 .act-count { color: var(--muted); font-size: calc(11px * var(--ui-font, 1)); }
-/* ...but not inside a FILLED chip. `--muted` is chosen against a panel, and on
-   an accent fill it measures 1.1:1 — the count on the lit "all 160" filter was
-   not dim, it was gone. A count is secondary to the word beside it, but it may
-   not be LESS readable than it, so it takes the chip's own ink. */
-.key.active .act-count, .key.primary .act-count, .seg.on .act-count { color: inherit; }
+/* Activity's head: the kit's filter chips (one always lit), the line that NAMES the empty
+   buckets instead of drawing a chip reading 0, and the triage toggles. `.act-hint` only carries
+   a catalog hint for long press; it must not become a flex item of its own. */
+.fchips.act-fchips { padding: 2px 6px 0; }
+.act-none { padding: 0 12px 4px; color: var(--muted); font-size: calc(12px * var(--ui-font, 1)); }
+.fchips.act-toggles { padding: 0 6px 2px; border-bottom: 1px solid var(--line); }
+.act-hint { display: contents; }
 
 /* ── Triage: eighty-four rows, a couple of minutes ──────────────────────
    The strip under the chips. Its four controls all HIDE or REORDER rows, so
@@ -4990,8 +5422,12 @@ button.attach-thumb.tap:active { opacity: .7; }
 .act-pick.on { color: var(--accent); }
 
 /* A filed row is DIMMED and marked, never hidden from its own chip: "dismiss
-   is not delete" has to be visible on the row, not only in a tooltip. */
-.act-filed { opacity: .7; }
+   is not delete" has to be visible on the row, not only in a tooltip. Its words
+   dim; its "bring back" stays a button that looks like one. */
+.act-filed .act-body { opacity: .7; }
+/* The assessment's proposal cards borrow the class and have no `.act-body`: they keep the
+   whole-card dim until that sheet splits its words from its buttons too. */
+.q-card.act-filed { opacity: .7; }
 .act-filed-note { display: flex; align-items: center; gap: 5px; font-size: calc(12px * var(--ui-font, 1)); color: var(--muted); }
 
 /* The schedule list's two kinds. A repeating rule and a one-off are read for
@@ -5002,6 +5438,22 @@ button.attach-thumb.tap:active { opacity: .7; }
   display: flex; align-items: center; gap: 6px;
   padding: 10px 12px 4px 12px; font-size: calc(12px * var(--ui-font, 1)); color: var(--muted);
 }
+
+/* A schedule card's typed name: a line of its own, WRAPPED. As a `.row-title`
+   beside two pills it was clipped mid-word ("Spend what i…"). It breaks only
+   between words, unless one word alone is wider than the card. */
+.sched-title {
+  margin-bottom: 4px; font-size: calc(16px * var(--ui-font, 1)); font-weight: 600; line-height: 1.3;
+  overflow-wrap: break-word;
+}
+
+/* A card's quieter verbs (the link to its work, skip next, pause, delete), under its two
+   buttons: plain text-buttons, so the weight says which two the card is opened for. Quieter
+   in paint, never in reach — each is still a 44 px target, and none is greyed. */
+.sched-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 0 16px; margin-top: 2px; }
+.sched-acts:empty { display: none; }
+.sched-acts .link-btn { min-height: 44px; padding: 0 2px; margin: 0; font-size: calc(13px * var(--ui-font, 1)); }
+.sched-acts-hint { display: contents; }
 
 /* The one-offs that are over: a SENTENCE at the foot of the list, not a section
    of rows. It sits apart from the last card so it is not read as one. */
@@ -5070,6 +5522,7 @@ button.sched-clock:active { background: var(--raise); }
    tap it, and "file away" is not. */
 .act-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; width: 100%; }
 .act-bulk-n { flex: 0 0 auto; color: var(--muted); font-size: calc(12px * var(--ui-font, 1)); margin-right: 2px; }
+.act-bulk .act-cants { flex: 0 0 100%; padding: 0; }
 /* **A label that states the whole decision has to WRAP — never clip, never
    scroll.** `.key` is `flex: 0 0 auto` with `white-space: normal` unused, so a
    button here was always its max-content width: `Apply in <repo> — retire 2 ·
@@ -5164,7 +5617,11 @@ button.sched-clock:active { background: var(--raise); }
 .ask-text-input { width: 100%; box-sizing: border-box; font: inherit; font-size: 16px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); }
 .ask-text-note { margin-top: 6px; font-size: calc(12px * var(--ui-font, 1)); color: var(--muted); line-height: 1.4; }
 .confirm-lines { margin: 0; padding-left: 18px; font-size: calc(12.5px * var(--ui-font, 1)); color: var(--muted); line-height: 1.5; }
+.confirm-remember { display: flex; align-items: center; gap: 8px; margin-top: 10px; min-height: 44px; font-size: calc(13px * var(--ui-font, 1)); color: var(--fg); }
+.confirm-remember input { width: 20px; height: 20px; margin: 0; }
 .confirm-go { background: var(--dead); border-color: var(--dead); color: var(--on-dead); }
+/* An `info` ask loses nothing either way: its yes is the ordinary primary, not the red of a delete. */
+.confirm-go.info { background: var(--accent); border-color: var(--accent); color: var(--on-accent, #fff); }
 
 /* The cached-age line an empty state carries above it (`Empty.tsx`). Set
    apart from the sentence under it, because "this is old" and "this is
@@ -5245,6 +5702,12 @@ button.sched-clock:active { background: var(--raise); }
   display: inline-flex; align-items: center; gap: 2px;
   font-size: 11px; font-variant-numeric: tabular-nums; color: var(--muted); opacity: 0.8;
 }
+/* Past the person's spend marks (`shared/spendwarn.ts`, Settings › Sessions):
+   orange, then red — the owner asked for red at the second mark, so this is
+   the one cost readout that uses `--dead`. Text colour plus a triangle glyph,
+   never colour alone. */
+.spend-warn-warn { color: var(--warn); opacity: 1; font-weight: 600; }
+.spend-warn-high { color: var(--dead); opacity: 1; font-weight: 600; }
 /* Inside the stacked tile the two figures are a COLUMN, so they get a column's
    width: right-aligned in a fixed gutter, which is what leaves the two curves
    flush with each other on the left. Without it `339k` and `Σ 38M` set their own
@@ -5275,12 +5738,30 @@ button.sched-clock:active { background: var(--raise); }
 .ctx-chart-title {
   padding: 16px 12px 0; font-size: calc(15px * var(--ui-font, 1)); font-weight: 600; color: var(--fg);
 }
-/* The bulk-close dialog's two clocks. A segmented pair, not a dropdown: both
-   readings have to be visible at once or "quiet for" and "open for" read as the
-   same sweep with different words. */
-.bl-modal-seg { display: flex; gap: 6px; }
-.bl-modal-seg .key { flex: 1 1 0; justify-content: center; }
-.bl-modal-seg .key.on { color: var(--accent); border-color: var(--accent-edge); background: var(--accent-tint); }
+/* The close sheet's facets (`CloseSheet.tsx`'s `FacetRow`): the label, then its
+   chips BESIDE it, then the options nobody answers as one lower-case line. The
+   body's 14em basis is how the chips drop under the label on a phone too narrow
+   for both (a wrapping flex line breaks on BASE sizes before it shrinks), and
+   the pill may wrap its own words at a large `--ui-font` rather than run off a
+   320px screen. Never inside `.section`: its uppercase shouted the zeros. */
+.close-facets { padding: 6px 0 4px; }
+.close-facet { display: flex; flex-wrap: wrap; align-items: flex-start; column-gap: 6px; padding: 0 10px 0 14px; }
+.close-facet-label {
+  flex: 0 0 7.5em; min-height: 44px; display: flex; align-items: center;
+  font-size: calc(13px * var(--ui-font, 1)); color: var(--muted);
+}
+.close-facet-body { flex: 1 1 14em; min-width: 0; }
+.close-facet-body > .fchips { padding: 0; margin-left: -3px; }
+.close-facet .fchip { flex: 0 1 auto; min-width: 0; max-width: 100%; }
+.close-facet .fchip-pill { height: auto; min-height: 30px; white-space: normal; }
+.close-facet-none { padding: 0 0 8px; font-size: calc(12px * var(--ui-font, 1)); color: var(--muted); }
+/* No chip at all: the line stands in the chip row's place, level with the label. */
+.close-facet-none:first-child { min-height: 44px; display: flex; align-items: center; padding: 0; }
+.close-facets > .form-hint { padding: 0 14px 6px; }
+/* The list's heading is a `.section` for its spacing, but `.section` uppercases and tracks its
+   text: the facet labels above are sentence case, and "THE CUT" shouted over them. Scoped to this
+   sheet; every other `.section` keeps its uppercase. */
+.close-cut { text-transform: none; letter-spacing: 0; }
 
 /* ── What a turn in this session costs ────────────────────────────────────
    A panel, never a banner and never a dialog: it explains and it offers the
@@ -5319,6 +5800,14 @@ button.sched-clock:active { background: var(--raise); }
    breathing room back. */
 .ctx-method { padding-top: 4px; }
 
+/* `/compact` at the end of the context chart's name: the title row holds the
+   name left and the one verb right, so no row of its own floats between charts. */
+.ctx-chart-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ctx-chart-title-row .key {
+  min-height: 40px; display: inline-flex; align-items: center; gap: 4px;
+  font-size: calc(13px * var(--ui-font, 1)); font-weight: 400;
+}
+
 /* A grouped readout: a heading and its sentences inside one frame.
 
    `.ctx-cost`'s frame without its warn variants, and deliberately without a
@@ -5352,6 +5841,11 @@ button.sched-clock:active { background: var(--raise); }
   min-height: 18px; padding: 4px 12px; font-size: calc(12.5px * var(--ui-font, 1)); color: var(--fg);
   font-variant-numeric: tabular-nums;
 }
+/* The kit's `ScrubHint`: the instruction a readout slot holds until a finger is
+   down, in every chart's slot (`.ctx-readout`, `.ts-spark-scrub`, `.rh-scrub`).
+   The slot is --fg so a picked value reads at the data's weight; the hint in
+   that colour was brighter than the chart's own lines. Muted, like a caption. */
+.scrub-hint { color: var(--muted); }
 
 /* The legend is always present for the event kinds — the dependable identity
    channel. Each entry is a mark plus a word, so colour never carries it alone. */
@@ -5408,6 +5902,11 @@ button.sched-clock:active { background: var(--raise); }
    total) whose own 4px gap already separates the two, so the 2px above would
    be a second, different gutter inside one readout. */
 .sess-status button.row-sub .ctx-spark-pair .ctx-spark { margin-right: 0; }
+/* The readout's "% free" wears the context pill's warm colours: where the
+   readout says the share in words the pill is not drawn (one number, said
+   once), and "running low" must not leave with it. */
+.sess-status .ctx-free.ctx-mid { color: var(--star); }
+.sess-status .ctx-free.ctx-low { color: var(--ctx-low); }
 
 /* ── Token statistics ──────────────────────────────────────────────────
    The dashboard behind Settings → Usage. Marks are coloured in
@@ -5563,11 +6062,13 @@ button.ts-lim-used { cursor: pointer; }
    reading's figure — there is no values table beside this chart — so the line
    says how to use the gesture when nothing is picked rather than appearing out
    of nowhere once something is. `min-height` and not a height, because at a
-   large UI scale it wraps and a clipped readout is worse than a taller row. */
+   large UI scale it wraps and a clipped readout is worse than a taller row.
+   The 80% is on the COLOUR, not an `opacity` on the box: the muted hint inside
+   (`.scrub-hint`) would otherwise land at 80% of --muted, under AA. */
 .ts-spark-scrub {
   min-height: 17px; margin-top: 2px;
   font-size: calc(12px * var(--ui-font, 1)); line-height: 1.4;
-  color: var(--fg); opacity: .8; font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--fg) 80%, transparent); font-variant-numeric: tabular-nums;
 }
 .ts-spark-scrub b { font-weight: 600; opacity: 1; }
 .ts-spark-sub, .ts-spark-none {
@@ -5830,6 +6331,13 @@ button.ts-lim-used { cursor: pointer; }
    one line, so the bar WRAPS while they are open rather than squeezing the text
    out — and the chips carry the numbers, tabular so 5m/1h/4h/1d line up. */
 .staged-bar { flex-wrap: wrap; }
+/* The halt latch (`features/halt`): the same bar, at the TOP so it never sits on
+   the update bar, and in the warning colour because it explains why nothing starts. */
+.staged-bar.halt-bar {
+  top: calc(env(safe-area-inset-top) + 8px); bottom: auto;
+  border-color: var(--warn);
+  color: var(--warn);
+}
 .staged-bar-span {
   flex: 0 0 auto;
   padding: 4px 8px;
@@ -5908,10 +6416,11 @@ svg.lucide[width="28"] { width: calc(28px * var(--ui-icon, 1)); height: calc(28p
 
 /* ── The model picker's where-filter (`ModelField.tsx`) ──────────────────────
    Thirty ids in one alphabetical drop-down is a list nobody reads to the end.
-   The chips split it by where the model RUNS, and the row wraps because two or
-   three chips carrying counts do not fit a phone's width beside a label. */
+   The chips (the kit's `FilterChip`s) split it by where the model RUNS, and the row wraps because two or
+   three chips carrying counts do not fit a phone's width beside a label. The negative margin
+   lines the first pill up with the select below it (a chip's touch box is 3px wider each side). */
 .model-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.model-where { display: flex; flex-wrap: wrap; gap: 6px; }
+.fchips.model-where { padding: 0; margin: 0 -3px; }
 /* The select must never push the row wider than the screen — an id here can be
    `lmstudio-local/google/gemma-4-31b` and the row it sits in is a flex child. */
 .model-field select { max-width: 100%; }
@@ -5964,7 +6473,7 @@ svg.lucide[width="28"] { width: calc(28px * var(--ui-icon, 1)); height: calc(28p
 .assess-log {
   display: flex; flex-direction: column; gap: 3px;
   max-height: 210px; overflow-y: auto;
-  font-family: ui-monospace, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: calc(11px * var(--ui-font, 1)); line-height: 1.4;
 }
 .assess-step { display: flex; align-items: flex-start; gap: 5px; color: var(--muted); }
@@ -5996,7 +6505,7 @@ svg.lucide[width="28"] { width: calc(28px * var(--ui-icon, 1)); height: calc(28p
    that class is wrong here in two ways that only show up on a real phone: it is
    `overflow: visible`, so nothing clips what escapes, and the `.key`s inside it
    are `flex: 0 0 auto` — always their max-content width, never able to shrink.
-   At a larger `--ui-font` `the smart pick may re-sort` therefore painted over
+   At a larger `--ui-font` the free-order label therefore painted over
    the question beside it and `leave the rows as they are` ran off the right edge
    of the screen: unreadable and untappable, on the last decision before Apply.
 
@@ -6190,6 +6699,27 @@ svg.lucide[width="28"] { width: calc(28px * var(--ui-icon, 1)); height: calc(28p
    `--dead` and no band anywhere in this block. The one accent is the end dot
    on a curve, which marks WHERE the series is, not what it means. */
 
+/* The head: ONE status line, its `?` beside the words (not out by the button,
+   where it would read as explaining the refresh), the verb at the END of that
+   same row, and the folded details on a line of their own under all three —
+   `order` puts the `Explain` body last.
+   A flex line breaks on BASE sizes before it shrinks anything, and the words'
+   base is their whole unwrapped length — so beside the verb they are capped to
+   what the row leaves (`?` + button + gaps ≈ 16em, all scaling with --ui-font)
+   and wrap inside it; the verb wrapped onto a row of its own, pushed right with
+   empty space beside it. Under 9em of words the row truly cannot hold both and
+   the verb wraps. The slack goes to whichever sits last BEFORE the verb, never
+   to the verb's own left, so a wrapped verb starts at the gutter like any line. */
+.rh-head { justify-content: flex-start; padding: 10px 14px 6px; }
+.rh-head > .rh-status { flex: 0 1 auto; padding: 0; }
+.rh-head > .rh-beside { max-width: max(9em, 100% - 16.5em); }
+.rh-head > .rh-push, .rh-head > .explain-chip { margin-right: auto; }
+.rh-head > .explain-body { order: 1; }
+.rh-head > .explain-body > p { margin: 0 0 6px; }
+/* The scope row: the kit's chips on the sheet's 14px gutter (pill = row 11 + chip 3). */
+.fchips.rh-scope { padding: 0 11px; }
+.rh-scope > .ctx-stackpick-lab { padding: 0 3px; }
+
 /* The measured box. Its own side padding is the gutter every other row in the
    sheet has, and `SeriesRegion` subtracts it before drawing — `clientWidth` is
    the padding box, and an SVG drawn at that width pushes its right-hand marks
@@ -6218,6 +6748,9 @@ svg.lucide[width="28"] { width: calc(28px * var(--ui-icon, 1)); height: calc(28p
    sheet read as one list. */
 .rh-chart-head { display: flex; align-items: baseline; gap: 6px; margin: 0 0 4px; }
 .rh-chart-label { font-weight: 600; min-width: 0; }
+/* Whose readings follow: waterplane's, or the repo's own. Said once per group,
+   as a heading, never as a badge on each tile. */
+.rh-prov { margin: 14px 0 6px; }
 /* The `?` itself.
    The glyph is 13px and the TARGET is 26 — above WCAG 2.5.8's 24px floor and
    in reach of a thumb, which is the whole point: it exists because the
@@ -6277,6 +6810,14 @@ svg.lucide[width="28"] { width: calc(28px * var(--ui-icon, 1)); height: calc(28p
 }
 /* What the tile measures, in one plain line, under its name. */
 .rh-tile-mean { font-size: calc(12.5px * var(--ui-font, 1)); line-height: 1.35; color: var(--muted); margin-top: -2px; }
+/* A repo's disable or override of this reading: an ink rule at the left, no
+   colour — it is the repo's say, reported, not news about the reading. */
+.rh-tile-variant {
+  font-size: calc(12.5px * var(--ui-font, 1)); line-height: 1.4; color: var(--fg);
+  border-left: 2px solid var(--line); padding: 1px 0 1px 8px; margin: 2px 0 4px; word-break: break-word;
+}
+/* A link over weeks with no row, and the readout line under the index. */
+.hix-vs { font-size: calc(12px * var(--ui-font, 1)); color: var(--muted); }
 .rh-tile .rh-tile-label { font-size: calc(13px * var(--ui-font, 1)); letter-spacing: .01em; }
 .rh-tile-read, .rh-tile-detail, .rh-tile-absent, .rh-cap, .rh-lead {
   font-size: calc(12px * var(--ui-font, 1)); line-height: 1.4; color: var(--muted);
@@ -6347,11 +6888,13 @@ svg.lucide[width="28"] { width: calc(28px * var(--ui-icon, 1)); height: calc(28p
    That is why the line is always present and says how to use it: a fact
    reachable only by a gesture must at least announce the gesture. Everything
    a reader needs to ACT on — the latest value, the rank, the slope — is in the
-   tile above and needs no touching. */
+   tile above and needs no touching. The hint itself is muted (`.scrub-hint`),
+   so the 80% is on the colour, never an `opacity` on the box: that dimmed the
+   muted hint below AA, and the tape pick's *open* button with it. */
 .rh-scrub {
   min-height: 17px; padding-top: 2px;
   font-size: calc(12px * var(--ui-font, 1)); line-height: 1.4;
-  color: var(--fg); opacity: .8; font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--fg) 80%, transparent); font-variant-numeric: tabular-nums;
   word-break: break-word;
 }
 /* The tape's pick: the file under the finger and its *open* verb on one line,
@@ -6412,7 +6955,7 @@ svg.lucide[width="28"] { width: calc(28px * var(--ui-icon, 1)); height: calc(28p
    accent, not by contrast. */
 .rh-filter { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 6px 0 2px; }
 .rh-filter .key { min-width: 0; min-height: 34px; padding: 5px 9px; font-size: calc(12px * var(--ui-font, 1)); }
-.rh-filter .key.on { color: var(--accent); border-color: var(--accent-edge); background: var(--accent-tint); }
+.rh-filter .key.on { color: var(--fg); border-color: var(--pick-edge); background: var(--pick-fill); }
 .rh-types .rh-cap .key { min-height: 30px; padding: 3px 8px; font-size: calc(12px * var(--ui-font, 1)); vertical-align: middle; }
 
 /* The context sheet's prose lines. `.empty` is the LIST empty-state and sets
@@ -6479,12 +7022,31 @@ svg.lucide[width="28"] { width: calc(28px * var(--ui-icon, 1)); height: calc(28p
 .ts-convo-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
 .ts-convo-acts .key { display: inline-flex; align-items: center; gap: 4px; min-height: 34px; }
 .ts-convos-more { align-self: flex-start; }
+/* "Where the week went" (WeekCard.tsx). The chart box is measured (`useBoxWidth`), so it carries
+   the side gutter and nothing else. A row head is the tap target that lists its sessions — the
+   chevron says it opens, and the sessions sit indented under it so they read as its parts. */
+.ts-week-chart { padding: 6px 12px 0; min-height: 1px; }
+.ts-week-filter { padding-top: 8px; padding-bottom: 2px; font-size: calc(12.5px * var(--ui-font, 1)); color: var(--fg); }
+.ts-week-filter .key { display: inline-flex; align-items: center; gap: 4px; }
+.ts-week-rowhead { cursor: pointer; }
+.ts-week-chev { vertical-align: -3px; margin-left: 6px; color: var(--muted); }
+.ts-week-sessions { margin-top: 8px; padding-left: 10px; border-left: 2px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+.ts-week-session .ts-barhead { font-size: calc(12.5px * var(--ui-font, 1)); }
+.ts-week-live { padding: 0 6px; font-size: calc(11px * var(--ui-font, 1)); color: var(--accent); border: 1px solid var(--accent); }
 /* One row on a 360px phone: pinned chrome that wraps is a third of the
    screen spent on two switches. */
 .ts-global .ts-filter { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 4px 10px 0; gap: 4px; }
 .ts-global .ts-filter::-webkit-scrollbar { display: none; }
 .ts-global .key { flex: 0 0 auto; padding: 3px 7px; font-size: calc(12px * var(--ui-font, 1)); min-height: 30px; }
 .ts-global .ctx-stackpick-lab { flex: 0 0 auto; }
+/* The token sheet's "now" block above the span filter: never shrunk by the scroller's flex column. */
+.ts-now { flex-shrink: 0; }
+/* The token sheet's ledger picker: one line that scrolls rather than three rows that wrap.
+   `flex-shrink: 0` is load-bearing: `overflow-x: auto` turns the row's min-height into 0, so the
+   scroller's flex column squeezed it to the bottom few pixels of its chips. */
+.ts-src { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; flex-shrink: 0; }
+.ts-src::-webkit-scrollbar { display: none; }
+.ts-src .key { flex: 0 0 auto; }
 
 /* The phone's recogniser is listening, not whisper (`DictateFallbackPill.tsx`):
    the language pill's shape, in the warn hue — it is the worse engine, and a
@@ -6659,7 +7221,7 @@ button.ts-perreq-row { cursor: pointer; }
 .decide-a input { flex: 1; min-width: 0; min-height: 40px; font-size: 16px; padding: 6px 10px; }
 .decide-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .decide-chips .key { min-height: 34px; }
-.decide-chips .key.on { color: var(--accent); border-color: var(--accent-edge); background: var(--accent-tint); }
+.decide-chips .key.on { color: var(--fg); border-color: var(--pick-edge); background: var(--pick-fill); }
 /* …and in the reader (`useReaderPick.tsx`): every block is pickable, a ticked
    one is tinted with a tick in its left margin. */
 .tpick-reading :is(.tr-p, .tr-list > li, .tr-h, .tr-quote, .tr-code) {
@@ -6679,8 +7241,6 @@ button.ts-perreq-row { cursor: pointer; }
    elsewhere, where the gutter is the container's. */
 .budget-field { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .form > .budget-field { padding: 0 12px; }
-.segmented.budget-units { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 0; background: none; border-bottom: 0; }
-.budget-units .seg { min-height: 44px; font-size: calc(14px * var(--ui-font, 1)); }
 .budget-spent {
   padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--well);
   font-size: calc(13px * var(--ui-font, 1)); line-height: 1.45; color: var(--fg); font-variant-numeric: tabular-nums;
@@ -6698,7 +7258,7 @@ button.ts-perreq-row { cursor: pointer; }
 .budget-input input::placeholder { color: var(--muted); opacity: 1; }
 .budget-affix { flex: none; color: var(--muted); font-size: calc(15px * var(--ui-font, 1)); }
 .budget-presets .row-chip { min-height: 36px; padding: 4px 14px; font-variant-numeric: tabular-nums; }
-.budget-presets .row-chip.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.budget-presets .row-chip.on { background: var(--pick-fill); color: var(--fg); border-color: var(--pick-edge); }
 .budget-presets .budget-blank { flex: 1 1 auto; text-align: right; }
 .budget-preview { font-size: calc(14px * var(--ui-font, 1)); font-weight: 600; color: var(--fg); font-variant-numeric: tabular-nums; }
 .budget-who { font-size: calc(14px * var(--ui-font, 1)); font-weight: 600; color: var(--fg); overflow-wrap: anywhere; }
@@ -6766,6 +7326,8 @@ button.ts-perreq-row { cursor: pointer; }
   background: var(--panel); color: var(--fg); border: 1px solid var(--accent); border-radius: 10px;
   box-shadow: 0 6px 18px rgba(0, 0, 0, .35); font-size: calc(13px * var(--ui-font, 1)); line-height: 1.35;
 }
+/* The start cue on the repo list: the same note, fixed to the viewport under todo-garden's `+ now`. */
+.demo-start-cue { position: fixed; z-index: 30; }
 .demo-hook-arrow {
   position: absolute; top: -7px; width: 12px; height: 12px; background: var(--panel);
   border-left: 1px solid var(--accent); border-top: 1px solid var(--accent); transform: rotate(45deg);
@@ -6950,7 +7512,7 @@ button.onb-card-head { width: 100%; background: none; border: 0; padding: 0; tex
 .rv-hint { flex: 0 0 auto; }
 .rv-src {
   flex: 1; min-height: 0; overflow: auto; background: var(--well); color: var(--fg);
-  font-family: ui-monospace, monospace; font-size: calc(12px * var(--ui-font, 1)); line-height: 1.6;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(12px * var(--ui-font, 1)); line-height: 1.6;
   padding: 4px 0;
 }
 .rv-line {
@@ -7054,7 +7616,8 @@ button.onb-card-head { width: 100%; background: none; border: 0; padding: 0; tex
 .upscale-change { color: var(--accent); }
 /* `Explain.tsx`: the `?` that opens a screen's own sentence in place. The
    chip's box is `.hint-chip`'s; a label beside the icon reads as one target. */
-.explain-chip { gap: 4px; padding: 0 4px; }
+/* -3px, not the hint chip's -7px: after a sentence the ? sat 4px under the line. */
+.explain-chip { gap: 4px; padding: 0 4px; vertical-align: -3px; }
 .explain-chip.open { color: var(--fg); }
 .explain-label { font-size: calc(12px * var(--ui-font, 1)); line-height: 1.2; }
 .explain-body { flex-basis: 100%; font-size: calc(12px * var(--ui-font, 1)); color: var(--muted); margin-top: 4px; }
@@ -7073,22 +7636,42 @@ button.onb-card-head { width: 100%; background: none; border: 0; padding: 0; tex
    badges on one line while leaving 1120px of a 1440 window to the terminal
    (about 150 columns). Fixed, never a percentage, so the terminal's fit does
    not move when the window is dragged. No transition on it: a width tween
-   would refit the PTY every frame. */
+   would refit the PTY every frame.
+   The person may drag it (`SideGrip.tsx` writes `--ws-side-w`); the clamp's
+   numbers are `sideWidth.ts`'s, held against the live viewport here. */
+html[data-layout="wide"] {
+  --ws-side: clamp(240px, min(var(--ws-side-w, 320px), 100vw - 600px), 760px);
+}
 html[data-layout="wide"] #root {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: var(--ws-side) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
 }
 /* The sidebar is a column of its own. Its `.screen` already carries the strip
    offsets in its padding-top, so the aside itself adds none (the main pane does
    the same through its own `.screen`/`.sheet`). */
 html[data-layout="wide"] .ws-side {
+  position: relative;
   min-width: 0; min-height: 0; height: 100%;
   overflow: hidden;
   display: flex; flex-direction: column;
   background: var(--bg);
   border-right: 1px solid var(--line);
 }
+/* The sidebar's right edge as a handle: a 7px strip along the border, the
+   border lighting up under the pointer or focus. While dragging, the whole
+   page shows the resize cursor and selects no text. */
+html[data-layout="wide"] .ws-side-grip {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 7px; z-index: 5;
+  cursor: col-resize; touch-action: none; outline: none;
+}
+html[data-layout="wide"] .ws-side-grip::after {
+  content: ""; position: absolute; top: 0; bottom: 0; right: 0; width: 2px;
+  background: transparent;
+}
+html[data-layout="wide"] .ws-side-grip:is(:hover, :focus-visible)::after,
+html.ws-resizing .ws-side-grip::after { background: var(--accent); }
+html.ws-resizing, html.ws-resizing * { cursor: col-resize !important; user-select: none; }
 html[data-layout="wide"] .ws-side > .screen {
   position: static; flex: 1 1 auto; min-height: 0; height: auto; width: 100%;
   overflow-y: auto; overscroll-behavior: contain;
@@ -7105,5 +7688,348 @@ html[data-layout="wide"] .screen.ws-empty {
   align-items: center; justify-content: center; text-align: center;
   color: var(--muted);
 }
-/* Decision O3 (no tab strip in wide) is SessionTabsBar's: it renders nothing and publishes
-   `--ui-tabs-h: 0px` there (`tabStripHeight`), so no rule here. */
+/* The tab strip in wide: a share of 1400 px per tab is a 460 px floor under a
+   tab with four words in it. The floor is as wide as a phone's tab would be;
+   a longer name still grows past it while there is room, and the rest scroll. */
+html[data-layout="wide"] .stab { min-width: clamp(140px, calc((100% - (var(--stab-n, 3) - 1) * 4px) / var(--stab-n, 3)), 240px); }
+
+/* ── Desktop workspace, phase 2 (P2c): the side panel, and the 320px sidebar ──
+   DOM contract: Workspace.tsx. A sheet opened from the wide layout is the LAST
+   child of `#root`, in `div.ws-panel`. It OVERLAYS the main pane: fixed, so it
+   takes no grid cell (an auto-placed third child would otherwise open a second
+   row) and the main pane — hence the terminal and its PTY geometry — never
+   changes width when a sheet opens. `#root > .ws-side + *` is adjacent to the
+   sidebar only, so it cannot match this panel.
+   `#root` is NOT below the fixed strips (z 60-63, outside `#root`): it starts
+   at `--app-top`, the visual viewport's offset, and every `.screen`/`.sheet`
+   in it pads the strips' heights itself. So the panel starts at `--app-top`
+   PLUS those heights (`--ws-strips`) and is that much shorter than `--app-h`.
+   It was at `--app-top` alone, which put the sheet's head — its only close
+   button — under the network and machine strips: a panel nobody could shut
+   without knowing Esc.
+   z-index 15: above the main pane's own floating bits (the terminal's corner
+   group is 11, the viewer 10) and below `.toast` (20), the modal backdrops (30)
+   and the strips (60+). No transition: a slide-in is a per-frame layout cost
+   for no information. */
+html[data-layout="wide"] {
+  --ws-strips: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pulse-h, 0px) + var(--ui-localrt-h, 0px) + var(--ui-tabs-h, 0px));
+}
+html[data-layout="wide"] .ws-panel {
+  position: fixed; top: calc(var(--app-top, 0px) + var(--ws-strips)); right: 0;
+  height: calc(var(--app-h, 100dvh) - var(--ws-strips));
+  /* Dragged by its left edge (BesideGrip.tsx writes `--ws-panel-w`); the
+     default stays 40vw up to 520px, never so wide the session goes under 360px. */
+  width: clamp(440px, var(--ws-panel-w, min(40vw, 520px)), max(440px, 100vw - var(--ws-side) - 360px));
+  z-index: 15; overflow: hidden;
+  display: flex; flex-direction: column;
+  background: var(--bg);
+  border-left: 1px solid var(--line);
+  box-shadow: -6px 0 24px var(--shadow-soft);
+}
+/* The strips are already above this panel, so the sheet's own offset for them
+   would be a dead band at the top. It scrolls itself, never the page. */
+html[data-layout="wide"] .ws-panel > .sheet {
+  padding-top: 0; height: 100%; min-height: 0; width: 100%;
+  overflow-y: auto; overscroll-behavior: contain;
+}
+
+/* BESIDE (Workspace.tsx): the annotator for the session on screen as a third
+   grid column, so the session's compose box stays in reach while marking. It
+   takes its width FROM the main pane — a panel over the session would cover
+   that box. Half of what the sidebar leaves, never so much that the session
+   drops under ~520px, never under 440px (the annotator's own floor). */
+html[data-layout="wide"] #root:has(> .ws-beside) {
+  --ws-beside: clamp(440px, var(--ws-beside-w, (100vw - var(--ws-side)) / 2), max(440px, 100vw - var(--ws-side) - 360px));
+  grid-template-columns: var(--ws-side) minmax(0, 1fr) var(--ws-beside);
+}
+html[data-layout="wide"] .ws-beside {
+  min-width: 0; min-height: 0; height: 100%;
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column;
+  background: var(--bg);
+  border-left: 1px solid var(--line);
+}
+html[data-layout="wide"] .ws-beside > .sheet {
+  height: 100%; min-height: 0; width: 100%;
+}
+/* Its left edge is the resize handle (BesideGrip.tsx), SideGrip's look. */
+html[data-layout="wide"] :is(.ws-beside-grip, .ws-panel-grip) {
+  position: absolute; top: 0; left: 0; bottom: 0; width: 7px; z-index: 5;
+  cursor: col-resize; touch-action: none; outline: none;
+}
+html[data-layout="wide"] :is(.ws-beside-grip, .ws-panel-grip)::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 2px; background: transparent;
+}
+html[data-layout="wide"] :is(.ws-beside-grip, .ws-panel-grip):is(:hover, :focus-visible)::after,
+html.ws-resizing :is(.ws-beside-grip, .ws-panel-grip)::after { background: var(--accent); }
+/* Full screen: the SAME element laid over the window below the strips — the
+   grid keeps its column, so the session under it keeps its width. */
+html[data-layout="wide"] .ws-beside.full {
+  position: fixed; z-index: 20; left: 0; right: 0;
+  top: calc(var(--app-top, 0px) + var(--ws-strips)); height: calc(var(--app-h, 100dvh) - var(--ws-strips));
+  border-left: 0;
+}
+html[data-layout="wide"] .ws-beside.full > .sheet { padding-top: 0; }
+/* The annotator's `place-auto` bar picks rail-or-row by the WINDOW (above),
+   which here is wide while the column is not: a dozen 44 px keys in a row ran
+   off the column's edge. Decide by the column instead. */
+html[data-layout="wide"] .ws-beside { container: beside / inline-size; }
+@container beside (max-width: 760px) {
+  .annot-body.place-auto { flex-direction: row; }
+  .annot-body.place-auto > .annot-tools {
+    flex-direction: column; flex-wrap: nowrap; overflow-x: hidden; overflow-y: auto;
+    padding: 6px; gap: 6px; border-bottom: 0; border-right: 1px solid var(--line); flex: 0 0 auto;
+  }
+  .annot-body.place-auto > .annot-tools > .key { padding: 0; width: 44px; }
+}
+
+/* The launcher in a 320px column. Its rows were drawn for a phone and clip at
+   the right edge: the section head's all-icon row (`.head-acts.tight`) is
+   no-wrap, so the filter chips and refresh ran off the edge. Wrap it, left
+   aligned, on a line of its own; and a chip may shrink and ellipsise rather
+   than push its row wider than the column. */
+html[data-layout="wide"] .ws-side .head-acts.tight {
+  flex: 1 1 100%; flex-wrap: wrap; justify-content: flex-start; min-width: 0;
+}
+/* Wrapped, the head's icon buttons cannot keep their -8px vertical margins
+   (sized for ONE row inside a short head): the second row rode up over the
+   first. Real margins in the sidebar, at the mouse size. */
+html[data-layout="wide"] .ws-side :is(.head-acts.tight, .quick-filter) .head-act { margin: 0; height: 32px; min-width: 32px; width: auto; padding: 0 6px; }
+html[data-layout="wide"] .ws-side :is(.row-chip, .row-act.count) {
+  flex: 0 1 auto; min-width: 0; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+html[data-layout="wide"] .ws-side :is(.row-meta, .repo-sub, .row-tags) { min-width: 0; flex-wrap: wrap; }
+/* The corner group's grip (`useCornerDrag`): the browser must not pan or
+   scroll the terminal under a finger that is dragging the group. */
+.term-zoom .term-zoom-grip { touch-action: none; cursor: grab; padding: 4px 2px; }
+.term-zoom .term-zoom-grip:active { cursor: grabbing; }
+
+/* ── Desktop workspace, phase 3 (P3c): the wide window finished ───────────
+   Still all under `html[data-layout="wide"]`; phone never matches.
+
+   A sheet's head is its close button, so it never scrolls away: the panel and
+   a `WIDE_FULL` sheet both scroll the WHOLE sheet (P2c), and a sheet that
+   jumps to a focused section (`LocalRtSheet`'s `focus`) scrolled its head out
+   of reach. The full sheet pads the strips inside its own scroller, so its head
+   sticks below them, not under them — with `top: 0`: a sticky offset counts
+   from the scroller's CONTENT edge, inside that padding. `top: var(--ws-strips)`
+   counted the strips twice and pushed the head 62px down over the sheet's
+   first row (the annotator's whole toolbar). */
+html[data-layout="wide"] .ws-panel > .sheet > .sheet-head { position: sticky; top: 0; z-index: 3; }
+html[data-layout="wide"] #root > .ws-side + .sheet > .sheet-head { position: sticky; top: 0; z-index: 3; }
+
+/* The sidebar's session card is the PHONE's card (the grid in the base
+   rules: prompt left; verbs, outline and chart stacked on the right; chips
+   under the prompt) — the owner asked for the two to look alike, and every
+   re-flow tried here read worse. Two adjustments for 320px only:
+   - the title line WRAPS: its facts (`default`, the age) are `flex: 0 0 auto`
+     by design (web-chrome: the meta never shrinks), so in 320px they ran out
+     of their grid cell and were drawn THROUGH the status pill beside it;
+   - a card with NO prompt (a fresh session) would be the right-hand column
+     alone, 220px tall over an empty left half: its outline and chart sit on
+     one line beside the verbs instead. */
+html[data-layout="wide"] .ws-side .row-wrap[data-sid] .row-head { flex-wrap: wrap; row-gap: 2px; }
+html[data-layout="wide"] .ws-side .row-wrap[data-sid]:has(.row-gist:empty) {
+  grid-template-areas: "head stat" "side ctl" "tags tags"; grid-template-rows: auto;
+}
+html[data-layout="wide"] .ws-side .row-wrap[data-sid]:has(.row-gist:empty) .row-side {
+  justify-self: start; flex-direction: row; flex-wrap: wrap; align-items: center;
+}
+html[data-layout="wide"] .ws-side .row-wrap[data-sid] .row-gist:empty { display: none; }
+/* The sidebar's top bar: logo and the icon keys first, the usage meter LAST.
+   Left in source order it wrapped after the meter, stranding bell, settings
+   and Desktop on a ragged second row. Last, at its content basis and free to
+   grow: when the sidebar is wide enough (it is resizable) the meter fills the
+   rest of the icons' line; when it is not, it wraps alone and grows to a full
+   line of its own. A forced 100% basis put it on a second row even with room
+   to spare beside the icons. */
+html[data-layout="wide"] .ws-side .topbar > .usage-key { order: 10; flex: 1 0 auto; justify-content: center; }
+
+/* An answer bar's buttons are as wide as their words. `flex: 1 1 auto` shares
+   a phone's 400px fairly; across a 1100px pane it drew a 500px "Open sign-in
+   page" slab. The rich (described) list keeps its own full-width rows. */
+html[data-layout="wide"] .approve-btn { flex: 0 1 auto; }
+
+/* The request chip belongs to the sidebar column: centred on the window it
+   sat in the middle of the session's header. */
+html[data-layout="wide"] .net-activity { right: auto; width: var(--ws-side); }
+
+/* A grid capped at `MAX_PTY_COLS` sits left with margin to its right; the
+   margin is the terminal's own ground, never the page's. Typing is the
+   terminal's when it has focus — said in words in its corner, because a ring
+   alone does not tell anyone what the keys will do. */
+html[data-layout="wide"] .term-canvas { position: relative; }
+html[data-layout="wide"] .term-canvas .xterm-screen { cursor: text; }
+html[data-layout="wide"] .term-canvas:has(.xterm.focus) { box-shadow: inset 0 0 0 1px var(--accent-edge-hi); }
+html[data-layout="wide"] .term-canvas:has(.xterm.focus)::after {
+  content: "typing goes to the CLI \00B7  Ctrl+C on a selection copies";
+  position: absolute; right: 8px; bottom: 6px; pointer-events: none;
+  padding: 2px 8px; border-radius: 999px;
+  font-size: calc(11px * var(--ui-font, 1)); color: var(--muted);
+  background: var(--panel); border: 1px solid var(--line);
+}
+
+/* The reader at a reading measure: a 1100px line of prose is not read, it is
+   tracked. Padding, not max-width, so the scrollbar stays at the pane's edge. */
+html[data-layout="wide"] .tr-body { padding-inline: max(10px, calc((100% - 92ch) / 2)); }
+
+/* Scrollbars a desktop draws are thin and in the palette. ZERO specificity
+   (`:where`): at `html[…] *` it outranked every strip's own
+   `scrollbar-width: none`, and a thin bar inside the 34px tab strip pushed
+   the tabs up and cut their labels off. */
+html[data-layout="wide"] { scrollbar-color: var(--line) transparent; }
+:where(html[data-layout="wide"] *) { scrollbar-width: thin; }
+
+/* A MOUSE, not a finger: every control here was sized to a 44px fingertip, and
+   on a desktop that made the window read as a phone blown up. Gated on the
+   pointer as well as the width (plan §5) — a 1366px tablet is wide and still
+   a finger. Sizes only; nothing appears, disappears or moves. */
+@media (pointer: fine) {
+  html[data-layout="wide"] .key { min-height: 32px; min-width: 36px; padding: 4px 10px; }
+  html[data-layout="wide"] :is(.topbar > .key, .hdr-ctl > .key, .hdr-pin > .key, .topbar > .usage-multi > .key) { min-width: 32px; min-height: 32px; padding: 5px 7px; }
+  html[data-layout="wide"] .keys { padding: 4px 8px; gap: 4px; }
+  html[data-layout="wide"] .row-acts .row-act { width: 30px; height: 30px; border-radius: 7px; }
+  /* The tally and the two counts hold digits: a fixed 30px drew "≡ 9" with the
+     9 outside its own border and clipped "14" to "1". */
+  html[data-layout="wide"] .row-acts .row-act:is(.tally, .count) { width: auto; min-width: 30px; padding: 0 7px; }
+  html[data-layout="wide"] .mic { width: 34px; height: 34px; font-size: calc(15px * var(--ui-font, 1)); }
+  html[data-layout="wide"] .approve-btn { padding: 6px 12px; font-size: calc(14px * var(--ui-font, 1)); }
+  html[data-layout="wide"] .compose { padding: 6px 8px; gap: 6px; }
+  html[data-layout="wide"] .compose textarea { min-height: 40px; padding: 8px 10px; font-size: calc(15px * var(--ui-font, 1)); }
+}
+
+/* Folding a strip (`Stowable.tsx`). The control sits at the end of the strip's
+   head; the chip it leaves behind rides the session status line at that
+   line's own 12px, with its touch target grown past the drawn pill so a
+   compact line does not mean a 20px tap. */
+.login-head .stow-btn { flex: none; padding: 6px 10px; display: inline-flex; align-items: center; gap: 4px; }
+.nextp .stow-btn { flex: none; }
+.sess-status button.stow-chip {
+  position: relative; display: inline-flex; align-items: center; gap: 4px;
+  background: transparent; border: 1px solid var(--line); border-radius: 999px;
+  padding: 1px 8px; margin: 0; font-family: inherit; color: var(--fg); cursor: pointer;
+}
+.sess-status button.stow-chip::after { content: ""; position: absolute; inset: -8px -2px; }
+/* "mark handled" beside the red "asked you" pill (`SessionHeader.tsx`): a
+   real button face — raised fill, border, the fg colour — so it reads as a
+   thing to press and not as one more status fact. Later than, and as specific
+   as, `.sess-status button.row-sub`, whose chrome reset it undoes. */
+.sess-status button.ack-asking {
+  position: relative; background: var(--raise); border: 1px solid var(--line);
+  border-radius: 8px; padding: 2px 10px; color: var(--fg); font-weight: 600;
+}
+.sess-status button.ack-asking:active { background: var(--line); }
+.sess-status button.ack-asking::after { content: ""; position: absolute; inset: -8px -2px; }
+
+/* GitView's ↑N ↓M — each count a tap target that opens its own commits (GitLogView). */
+.git-ab-n {
+  font: inherit; color: inherit; background: none; cursor: pointer;
+  border: 1px solid color-mix(in srgb, currentColor 40%, transparent); border-radius: 8px;
+  min-height: 32px; padding: 0 10px;
+}
+.git-ab-n:active { background: color-mix(in srgb, currentColor 18%, transparent); }
+.git-log-fresh { padding: 8px 14px 0; display: flex; align-items: center; gap: 6px; }
+.git-commit-row { flex-direction: column; align-items: stretch; gap: 2px; text-align: left; }
+.git-commit-subject { font-size: calc(15px * var(--ui-font, 1)); font-weight: 600; overflow-wrap: anywhere; }
+.git-commit-body {
+  margin: 0 14px 10px; padding: 8px 10px; background: var(--panel); border-radius: 8px;
+  font-size: calc(12px * var(--ui-font, 1)); white-space: pre-wrap; overflow-wrap: anywhere;
+}
+
+/* Scroll cue: a strip that scrolls sideways shows an accent chevron over a
+   fade at whichever edge still has buttons past it, so a cut-off chip reads as
+   "more this way" and not as the end of the row. Every scrollbar-less strip is
+   listed — the scrollbar was the only other sign, and these hide it to save a
+   row. A fade alone was too faint to notice even knowing it was there.
+
+   Pure CSS. The chevrons are sticky pseudo-elements: `::before` is the first
+   flex item stuck to the left edge, `::after` the last stuck to the right,
+   each with a negative margin so it takes no room in the row. A scroll-driven
+   animation sets their opacity from the scroll position. A strip that does not
+   overflow has an INACTIVE timeline, so the animation never applies and both
+   stay at 0 — no chevron where nothing is hidden. An engine without
+   `animation-timeline` gets no cue at all, never one over a row that fits.
+
+   `--xcue-bg` is the strip's own ground, so the fade melts into it; `--xcue-gap`
+   is its flex gap, which the pseudo-elements would otherwise add to each end;
+   `--xcue-pad` its side padding — a sticky box stops at the padding edge, so
+   the inset is negative by that much or a sliver of the row shows past it. */
+@property --xcue-l { syntax: "<number>"; inherits: true; initial-value: 0; }
+@property --xcue-r { syntax: "<number>"; inherits: true; initial-value: 0; }
+@keyframes xcue {
+  0%   { --xcue-l: 0; --xcue-r: 1; }
+  4%   { --xcue-l: 1; }
+  96%  { --xcue-r: 1; }
+  100% { --xcue-l: 1; --xcue-r: 0; }
+}
+.hdr-cmds, .keys, .compose-scroll, .sess-tabs, .tr-bar, .crumbs,
+.collage-strip, .ctx-stackpick, .ts-seg-chips, .ts-global .ts-filter,
+.annot-tools, .newimg-strip { --xcue-bg: var(--panel); --xcue-gap: 6px; --xcue-pad: 8px; }
+.sess-tabs, .crumbs, .collage-strip, .ctx-stackpick, .ts-seg-chips,
+.ts-global .ts-filter { --xcue-bg: var(--bg); }
+.compose-scroll, .collage-strip, .newimg-strip { --xcue-gap: 8px; }
+.sess-tabs, .ts-seg-chips, .ts-global .ts-filter { --xcue-gap: 4px; }
+.crumbs { --xcue-gap: 2px; }
+.hdr-cmds, .compose-scroll { --xcue-pad: 0px; }
+.tr-bar { --xcue-pad: 6px; }
+.crumbs, .collage-strip, .ts-global .ts-filter { --xcue-pad: 10px; }
+.ctx-stackpick { --xcue-pad: 12px; }
+.ts-seg-chips { --xcue-pad: 0px; }
+.sess-tabs { --xcue-pad: 6px; }
+@supports (animation-timeline: scroll()) {
+  .hdr-cmds, .keys, .compose-scroll, .sess-tabs, .tr-bar, .crumbs,
+  .collage-strip, .ctx-stackpick, .ts-seg-chips, .ts-global .ts-filter,
+  .annot-tools, .newimg-strip {
+    animation: xcue linear both;
+    animation-timeline: scroll(self x);
+  }
+  :is(.hdr-cmds, .keys, .compose-scroll, .sess-tabs, .tr-bar, .crumbs,
+      .collage-strip, .ctx-stackpick, .ts-seg-chips, .ts-global .ts-filter,
+      .annot-tools, .newimg-strip)::before,
+  :is(.hdr-cmds, .keys, .compose-scroll, .sess-tabs, .tr-bar, .crumbs,
+      .collage-strip, .ctx-stackpick, .ts-seg-chips, .ts-global .ts-filter,
+      .annot-tools, .newimg-strip)::after {
+    position: sticky; z-index: 2; box-sizing: border-box; flex: 0 0 40px; width: 40px; align-self: stretch;
+    display: flex; align-items: center; pointer-events: none;
+    font: 700 28px/1 system-ui, sans-serif; color: var(--accent);
+  }
+  :is(.hdr-cmds, .keys, .compose-scroll, .sess-tabs, .tr-bar, .crumbs,
+      .collage-strip, .ctx-stackpick, .ts-seg-chips, .ts-global .ts-filter,
+      .annot-tools, .newimg-strip)::before {
+    content: "\2039"; order: -9999; left: calc(-1 * var(--xcue-pad)); justify-content: flex-start; padding-left: 2px;
+    margin-right: calc(-40px - var(--xcue-gap));
+    background: linear-gradient(to right, var(--xcue-bg) 50%, transparent);
+    opacity: var(--xcue-l);
+  }
+  :is(.hdr-cmds, .keys, .compose-scroll, .sess-tabs, .tr-bar, .crumbs,
+      .collage-strip, .ctx-stackpick, .ts-seg-chips, .ts-global .ts-filter,
+      .annot-tools, .newimg-strip)::after {
+    content: "\203A"; order: 9999; right: calc(-1 * var(--xcue-pad)); justify-content: flex-end; padding-right: 2px;
+    margin-left: calc(-40px - var(--xcue-gap));
+    background: linear-gradient(to left, var(--xcue-bg) 50%, transparent);
+    opacity: var(--xcue-r);
+  }
+}
+/* The keyboard repo question (`AskRepo.tsx`). */
+.ask-repo-modal { max-width: 420px; }
+.ask-repo-list { display: flex; flex-direction: column; max-height: min(50vh, 360px); overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; }
+.ask-repo-row { border-radius: 0; }
+.ask-repo-row.on { background: var(--accent-wash); }
+/* The shortcut card (`ShortcutCard.tsx`): hold Ctrl/⌘/Alt alone. Above every
+   sheet and dialog, never a pointer target, never focus. */
+.shortcut-card {
+  position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 22vh); transform: translateX(-50%);
+  z-index: 80; pointer-events: none; width: max-content; max-width: calc(100vw - 32px);
+  background: var(--raise); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px;
+  box-shadow: 0 10px 40px var(--shadow); color: var(--fg); font-size: calc(13px * var(--ui-font, 1));
+}
+.shortcut-card-head { color: var(--muted); font-size: calc(11px * var(--ui-font, 1)); margin-bottom: 6px; }
+.shortcut-card-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.shortcut-card-row { display: flex; align-items: baseline; gap: 10px; }
+.shortcut-card-row .kbd {
+  min-width: 2.2em; text-align: center; padding: 1px 6px; border: 1px solid var(--line); border-bottom-width: 2px;
+  border-radius: 5px; background: var(--panel); font-family: inherit; font-size: calc(12px * var(--ui-font, 1));
+}
+.shortcut-card-what { display: flex; flex-direction: column; }
+.shortcut-card-note { color: var(--muted); font-size: calc(11px * var(--ui-font, 1)); }

@@ -12,7 +12,7 @@
  * Lifted out of App's session screen unchanged. The desktop's half is read
  * from `features/backlog` (`useBacklog`), the phone's half from the queue core.
  */
-import { describeRule, type ClientMessage, type SessionInfo } from "@waterplane/shared";
+import { describeRule, type ClientMessage, type Intent, type SessionInfo } from "@waterplane/shared";
 import type { OutboxEntry } from "../../outbox";
 import { NextPrompt } from "../../NextPrompt";
 import { nextPromptView, tieNote } from "../../nextPromptState";
@@ -24,6 +24,7 @@ import { track } from "../../usage";
 import { openBacklogIn, useBacklog } from "../../features/backlog";
 import { keepFocus } from "./ComposeBar";
 import { BL_OFFLINE } from "../../backlogFilter";
+import { isBudgetHeld, pastBudgetToast } from "../../sendIntent";
 
 export interface NextPromptStripProps {
   active: SessionInfo;
@@ -38,11 +39,15 @@ export interface NextPromptStripProps {
   handToDesktop(ackId: string): void;
   liveSend(frame: ClientMessage, done: string, blocked?: string): boolean;
   setOverlay(o: Overlay): void;
+  /** The intent store — what `isBudgetHeld` reads a pinned row's verdict off. */
+  intents: readonly Intent[];
 }
 
 export function NextPromptStrip(p: NextPromptStripProps) {
   const { active, outboxRef, isPendingId, sendQueuedNow, toggleHoldQueued, handToDesktop, liveSend, setOverlay } = p;
   const { items: backlogItems, waiting: backlogWaiting, snapAt: backlogSnapAt } = useBacklog();
+  const intentById = new Map(p.intents.map((i) => [i.id, i]));
+  const now = Date.now();
   return (
     <NextPrompt
       view={nextPromptView({
@@ -71,6 +76,8 @@ export function NextPromptStrip(p: NextPromptStripProps) {
           // populated while online, which is exactly when it is a fact.
           .map((it) => ({
             id: it.id, words: it.text, why: backlogWaiting[it.id],
+            // The re-time sheet's test, so the strip and the ⌛ count agree.
+            budgetHeld: (() => { const i = intentById.get(it.id); return !!i && isBudgetHeld(i, now, intentById); })(),
             // A clock row says when, and whether closing this session loses it.
             tie: it.at
               ? tieNote(it.at.nextAt != null ? `${hhmm(it.at.nextAt)} (${describeRule(it.at.rule)})` : describeRule(it.at.rule), !!it.reopensConv)
@@ -87,6 +94,12 @@ export function NextPromptStrip(p: NextPromptStripProps) {
         // deliberately not durable, like every other backlog mutation: "run it
         // now" delivered an hour late is about a turn that ended long ago.
         liveSend({ t: "backlog.fire", id }, "running it now…", BL_OFFLINE);
+      }}
+      onPastBudget={(id) => {
+        track("action:nextprompt.pastbudget");
+        // `intent.waive` and never `backlog.fire`: only the budget is lifted,
+        // the row still waits for this turn. Live-only, as the re-time sheet's.
+        liveSend({ t: "intent.waive", id, rung: "budget", on: true }, pastBudgetToast(1), BL_OFFLINE);
       }}
       onHold={(ackId) => {
         track("action:nextprompt.hold");

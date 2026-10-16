@@ -11,6 +11,10 @@ import { LS, lsBool, lsSetBool } from "../storage";
 import type { DetailState, TranscriptViewProps } from "./tvTypes";
 import { BUSY_POLL_MS, PAGE, POLL_MS, SAVER_POLL_FACTOR } from "./tvRows";
 import { liveReading } from "./tvLive";
+import { readThrough } from "./readThrough";
+import { takeVerb } from "./spentVerb";
+
+const READ_SETTLE_MS = 1200;  // a turn's end must stay on screen this long to count as read
 
 /**
  * Every piece of state, ref, effect and handler of the reader, in the order the
@@ -334,6 +338,29 @@ export function useTranscriptView(p: TranscriptViewProps) {
     writeSeen(sessionId, m);
     setSeenMark(m);
   }, [turns, sessionId, seenMark]);
+
+  // A turn whose END stayed on screen a moment is read, and all before it
+  // (`readThrough`); the bottom-only rules missed reading a turn at a time.
+  // Re-run on turns: a live turn ENDING in view gets a newer stamp.
+  const readTimer = useRef<ReturnType<typeof setTimeout>>();
+  const noteRead = useCallback(() => {
+    clearTimeout(readTimer.current);
+    readTimer.current = setTimeout(() => {
+      const el = bodyRef.current;
+      // A hidden reader (outline, CLI view) has all-zero rects: "scrolled past".
+      if (!el?.clientHeight || seenRef.current !== sessionId || document.visibilityState !== "visible") return;
+      const view = el.getBoundingClientRect().bottom;
+      const edges = turnsRef.current.flatMap((t) => {
+        const r = document.getElementById(`tr-turn-${t.n}`)?.getBoundingClientRect();
+        return r?.height ? [{ ts: turnTs(t), bottom: r.bottom }] : [];
+      });
+      const m = readThrough(edges, view);
+      if (m > readSeen(sessionId)) { writeSeen(sessionId, m); setSeenMark(m); }
+    }, READ_SETTLE_MS);
+  }, [sessionId]);
+  useEffect(() => { noteRead(); }, [turns, noteRead]);
+  useEffect(() => () => clearTimeout(readTimer.current), [sessionId]);
+
   const outlineTurns = useMemo(
     () => (q ? turns.filter((t) => matches(turnText(t), q)) : turns),
     [turns, q],
@@ -375,14 +402,13 @@ export function useTranscriptView(p: TranscriptViewProps) {
     }, 30);
   };
 
-  // A jump requested from the outline sheet. Deliberately keyed on `jumpTo.key`
-  // only: the turns may still be loading when the sheet closes, so re-running on
-  // every doc change would yank the scroll position on each poll.
+  // A jump from the outline sheet, keyed on `jumpTo.key` only: re-running on every
+  // doc change would yank the scroll on each poll. Once per tap (`spentVerb.ts`).
   const jumpKey = jumpTo?.key ?? 0;
   useEffect(() => {
-    if (!jumpTo || !turns.length) return;
+    if (!jumpTo || !turns.length || !takeVerb(jumpTo)) return;
     goTurn(jumpTo.n);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `jumpTo` moves with `jumpKey` (a new object per tap); `goTurn` is a per-render closure
   }, [jumpKey, turns.length > 0]);
 
   // A verb fired from the toolbar. Keyed on `cmd.key` alone for `jumpTo`'s
@@ -392,21 +418,15 @@ export function useTranscriptView(p: TranscriptViewProps) {
   // that the field only exists while it is open.
   const cmdKey = cmd?.key ?? 0;
   useEffect(() => {
-    if (!cmd || !cmdKey) return;
+    if (!cmd || !cmdKey || !takeVerb(cmd)) return;
     if (cmd.kind === "outline") { track("action:read.outline"); setOutline((v) => !v); }
     else if (cmd.kind === "find") setFindOpen((v) => { if (v) setQ(""); return !v; });
     else void load(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `cmd` moves with `cmdKey` (a new object per tap) and `load` is a per-render closure; the setters are stable
   }, [cmdKey]);
 
   const markRead = () => { const m = newestTs(turns); writeSeen(sessionId, m); setSeenMark(m); };
 
-  const goNew = () => {
-    track("action:read.new");
-    if (unread > limit) setLimit(unread + PAGE);
-    setOutline(false);
-    setTimeout(() => document.getElementById("tr-newmark")?.scrollIntoView({ block: "start", behavior: "smooth" }), 30);
-  };
 
   const toggleBlock = (id: string) =>
     setOpenBlocks((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -471,8 +491,8 @@ export function useTranscriptView(p: TranscriptViewProps) {
     ...p, ...lv,
     doc, err, loading, q, setQ, outline, findOpen, setFindOpen, limit, setLimit, openBlocks, details,
     hitIdx, setHitIdx, hitCount, seenMark, setSeenMark, offlineAt, cachedAt, probing,
-    bodyRef, stickRef, seenRef, turnsRef, mixSlotsDoc, whyTurnId, costLastOpen, costOpen, toggleCost,
-    agentsSoFar, turns, emptyNow, peek, setPeek, newIdx, unread, shown, outlineTurns, jump, goTurn, goNew,
+    bodyRef, stickRef, seenRef, turnsRef, noteRead, mixSlotsDoc, whyTurnId, costLastOpen, costOpen, toggleCost,
+    agentsSoFar, turns, emptyNow, peek, setPeek, newIdx, unread, shown, outlineTurns, jump, goTurn,
     markRead, toggleBlock, loadDetails, copy, forkTurn, setForkTurn, asking, busy,
   };
 }

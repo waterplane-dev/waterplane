@@ -119,6 +119,7 @@ import { AsxActions } from "./assess/AsxActions";
 import { AsxFooter } from "./assess/AsxFooter";
 import { AsxHead } from "./assess/AsxHead";
 import { AsxNews } from "./assess/AsxNews";
+import { AsxSlotCards } from "./assess/AsxSlotCards";
 import { AsxStrips } from "./assess/AsxStrips";
 import { AsxTail } from "./assess/AsxTail";
 import { AsxTop } from "./assess/AsxTop";
@@ -168,6 +169,7 @@ export function AssessSheet(p: AssessSheetProps) {
       <div className="sheet-scroll">
         <AsxTop m={m} />
         <div className="list act-list">
+          <AsxSlotCards m={m} />
           <AsxStrips m={m} />
           <AsxNews m={m} />
           <AsxTail m={m} />

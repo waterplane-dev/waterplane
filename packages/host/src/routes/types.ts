@@ -20,7 +20,7 @@
  * four values, which with positional parameters means either underscore-prefixed
  * noise on every second handler or turning the check off.
  */
-import type { ClientMessage, HostMessage, NotificationItem, NotificationKind, PeerKind, PullItem, SendStamp, SendView, AuthState } from "@waterplane/shared";
+import type { ClientMessage, HostMessage, NotificationItem, NotificationKind, PeerKind, PullItem, SendStamp, SendView, AuthState, ClientRole } from "@waterplane/shared";
 import type { WebSocket } from "ws";
 import type { SessionManager } from "../sessions.js";
 import type { BacklogManager } from "../backlog.js";
@@ -43,7 +43,9 @@ import type { NotifyPrefsStore } from "../notifyprefs.js";
 import type { AuthManager } from "../auth.js";
 import type { Meter } from "../meter.js";
 import type { UsageChecker } from "../usage.js";
+import type { UsageSourceRegistry } from "../usagesources.js";
 import type { BudgetStore } from "../budget.js";
+import type { BillingStore } from "../billing.js";
 import type { AckLedger } from "../acks.js";
 import type { NetStats } from "../netstats.js";
 
@@ -129,7 +131,11 @@ export interface HostCtx {
   readonly auth: AuthManager;
   readonly meter: Meter;
   readonly usage: UsageChecker;
+  /** Usage readings per source (`usagesources.ts`): claude adapted first, then each contributed probe. */
+  readonly usageSources: UsageSourceRegistry;
   readonly budget: BudgetStore;
+  /** Which kind of account claude bills to (`billing.ts`). */
+  readonly billing: BillingStore;
   readonly acks: AckLedger;
   readonly netstats: NetStats;
 
@@ -137,16 +143,19 @@ export interface HostCtx {
   readonly attached: WeakMap<WebSocket, Set<string>>;
   readonly clients: Set<WebSocket>;
   readonly wsKind: WeakMap<WebSocket, PeerKind>;
+  /** A socket's role (`notify` = the APK's background link, sent only its
+   *  allow-list by `send`). Set at the upgrade, overridden by `hello.role`. */
+  readonly wsRole: WeakMap<WebSocket, ClientRole>;
 
   /** The in-app notification feed, newest first. */
   readonly notifications: NotificationItem[];
-  /** Per-repo memory of which produced images have already been announced. */
-  readonly imgSeen: Map<string, Set<string>>;
+  /** Per-session memory of the strip's files already announced: relPath → mtime. */
+  readonly imgSeen: Map<string, Map<string, number>>;
   readonly pullSeen: Map<string, { scope: "outbox" | "repo"; paths: Set<string> }>;
   /** Apply a just-saved auto-download rule to what is already on disk — bounded,
    *  because a rule is usually switched on while looking at the file it is for
    *  (`autopull.ts`, `catchUpCandidates`). Returns what it queued. */
-  pullCatchUp(cwd: string): PullItem[];
+  pullCatchUp(cwd: string): Promise<PullItem[]>;
   /** Deliveries running right now, so a retry that races the first one joins it
    *  rather than typing a second copy. Memory only, on purpose. */
   readonly inputsInFlight: Map<string, Promise<InputVerdict>>;
@@ -158,6 +167,8 @@ export interface HostCtx {
     image?: { repoId: string; relPath: string };
     file?: { repoId: string; relPath: string; name: string; size: number; mtime?: number };
     pull?: string;
+    /** Id of the plugin that posted it (host-filled); a tap opens that plugin. */
+    plugin?: string;
   }): void;
 
   backlogSnapshot(): HostMessage;

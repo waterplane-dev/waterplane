@@ -84,13 +84,27 @@ test("a real prompt after a local command opens its own turn", () => {
 
 test("screenCommandTurns carries the commands the log never wrote down", () => {
   const entries = [
-    { id: "h1", kind: "command", text: "/btw which skills are these?", sentAt: T, output: "  /btw which skills are these?\n\n    artifact-design and artifact-diagramming.", outputAt: T + 5000 },
+    { id: "h1", kind: "command", text: "/usage today", sentAt: T, output: "  /usage today\n\n    artifact-design and artifact-diagramming.", outputAt: T + 5000 },
   ];
   const [turn] = screenCommandTurns(entries, []);
   assert.equal(turn.local, "screen");
-  assert.equal(turn.prompt, "/btw which skills are these?");
+  assert.equal(turn.prompt, "/usage today");
   assert.equal(turn.blocks[0].kind, "screen");
   assert.match(turn.blocks[0].text, /artifact-diagramming/);
+});
+
+test("/btw is a ROW with no body: the reader points at the CLI instead of copying the overlay", () => {
+  // Typed into a running turn (its whole purpose) the capture is the turn's
+  // screen with the overlay painted over it, and cutting one out of the other
+  // kept breaking. The row stays, so the question is still in the reader.
+  const clean = [{ id: "h1", kind: "command", text: "/btw which skills are these?", sentAt: T, output: "  /btw which skills are these?\n\n    artifact-design.", outputAt: T + 5000 }];
+  const [idle] = screenCommandTurns(clean, []);
+  assert.equal(idle.local, "screen");
+  assert.equal(idle.prompt, "/btw which skills are these?");
+  assert.deepEqual(idle.blocks, []);
+  const logged = [{ id: "x", n: 1, prompt: "work", promptLabel: "work", sentAt: T - 60_000, endedAt: T + 600_000, blocks: [], toolCount: 0, files: [], sidechains: 0 }];
+  const [mid] = screenCommandTurns([{ ...clean[0], output: undefined, outputAt: undefined }], logged);
+  assert.deepEqual(mid.blocks, []);
 });
 
 test("a command the LOG already carries is never added a second time", () => {
@@ -171,7 +185,7 @@ test("a command typed into a running turn does not take that turn's screen as it
   assert.doesNotMatch(echoed.blocks[0].text, /background agents/);
   // Typed into an IDLE session, an echo-less capture is still the only record.
   const [idle] = screenCommandTurns(
-    [{ id: "h3", kind: "command", text: "/btw x", sentAt: T + 40 * 60_000, output: "just output", outputAt: T + 41 * 60_000 }],
+    [{ id: "h3", kind: "command", text: "/usage x", sentAt: T + 40 * 60_000, output: "just output", outputAt: T + 41 * 60_000 }],
     logged,
   );
   assert.equal(idle.blocks[0].text, "just output");
@@ -183,7 +197,7 @@ test("a capture the CLI could scroll is MARKED as partial, not passed off as who
   // painted, so they are in no capture, no scrollback and no log. A block that
   // does not say so reads as the complete answer.
   const panel = [
-    "  /btw which skills are these?",
+    "  /usage which skills are these?",
     "",
     "    artifact-design then artifact-diagramming.",
     "",
@@ -193,7 +207,7 @@ test("a capture the CLI could scroll is MARKED as partial, not passed off as who
     "❯ ",
   ].join("\n");
   const [turn] = screenCommandTurns(
-    [{ id: "h1", kind: "command", text: "/btw which skills are these?", sentAt: T, output: panel, outputAt: T + 1000 }],
+    [{ id: "h1", kind: "command", text: "/usage which skills are these?", sentAt: T, output: panel, outputAt: T + 1000 }],
     [],
   );
   assert.equal(turn.blocks[0].scrollable, true);

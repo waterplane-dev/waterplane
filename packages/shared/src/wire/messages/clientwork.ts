@@ -1,7 +1,7 @@
 // Client → host: work the host runs — builds, artifacts, captures, assessments, fan-out, pulls, schedules, intents. Member list of `ClientMessage` in `../messages.ts`. 
 
 import type { ArtifactPolicy } from "../../artifacts.js";
-import type { AssessChoices } from "../../assess.js";
+import type { AssessChoices, AssessScope } from "../../assess.js";
 import type { IntentTarget } from "../../intent.js";
 import type { IntentDraft, IntentPatch } from "../intent.js";
 import type { SessionBudget } from "../../sessionbudget.js";
@@ -15,8 +15,11 @@ export type ClientWorkMsg =
   // ── Build buttons (run a repo build command without a claude session) ──
   /** Fetch a repo's configured builds + its recent runs (host replies build.list + build.output tails). */
   | { t: "build.list"; repoDir: string }
-  /** Persist a repo's whole build list (add/edit/delete/reorder). */
-  | { t: "build.save"; repoDir: string; builds: BuildConfig[] }
+  /** Persist a repo's whole build list (add/edit/delete/reorder). `local`: the ids to keep
+   *  in this desktop's own (gitignored) file; every other entry goes to the committed
+   *  shared file. Absent (an older bundle): each id stays where it lives, a new one goes
+   *  shared. */
+  | { t: "build.save"; repoDir: string; builds: BuildConfig[]; local?: string[] }
   /** Run one configured build now — spawns a shell, streams output, no tokens spent.
    *  `ackId` (optional): durable-op receipt — see `op.ack`.
    *
@@ -140,8 +143,14 @@ export type ClientWorkMsg =
    * A scope naming nothing this repo can assess is refused `ok:false` with a
    * sentence — never silently widened to the repo, which is the one failure
    * that would spend an agent on nine times the question asked.
+   *
+   * `scope` (optional, additive — an older host ignores it and runs the plain
+   * scoped check): the ids are ONE SLOT (`AssessScope`), so the prompt says
+   * they fire together and `wanted` ranks are the order within it. The host
+   * re-derives the slot from its own rows with `findSlot` and refuses in words
+   * when the key names no slot any more.
    */
-  | ({ t: "assess.run"; repoDir: string; ids?: string[]; ackId?: string } & SendStamp)
+  | ({ t: "assess.run"; repoDir: string; ids?: string[]; scope?: AssessScope; ackId?: string } & SendStamp)
   /**
    * Apply exactly these approvals. Durable, and the ackId is doing real work
    * here: applying a merge POSTS a prompt, and a replay that posted it twice
@@ -168,7 +177,7 @@ export type ClientWorkMsg =
    *  into each. `dirs` are worktree paths; the host only accepts discovered repos.
    *  `ackId` (optional): durable-op receipt — see `op.ack`. The one message where
    *  a duplicate is most expensive: a re-send would spawn the whole sweep twice. */
-  | ({ t: "fanout.run"; dirs: string[]; text: string; launch?: LaunchOpts; budget?: SessionBudget; cols?: number; rows?: number; ackId?: string } & SendStamp)
+  | ({ t: "fanout.run"; dirs: string[]; text: string; launch?: LaunchOpts; budget?: SessionBudget; flagWhenDone?: boolean; cols?: number; rows?: number; ackId?: string } & SendStamp)
   /** Send another instruction into the sessions a run already spawned. `dirs`
    *  narrows it to a subset of the run's targets (omitted = every target whose
    *  session is still alive). NEVER spawns anything — a dead target is skipped.
@@ -298,7 +307,7 @@ export type ClientWorkMsg =
   /**
    * Lift ONE rung of the ladder for one row — today only `budget`
    * (`Intent.pastBudget`): the row still waits its turn behind `serial`,
-   * `holdForHost`, the automatic-session slots and the smart pick. The bulk
+   * `holdForHost` and the automatic-session slots. The bulk
    * *let past the budget* sent `intent.run` per row once, and `runNow` skips
    * the whole ladder, so four rows in one worktree started in parallel.
    *

@@ -38,7 +38,7 @@ export interface SparkGeom {
 /**
  * The row miniature's geometry.
  *
- * The SAME fixed axis as the chart — 0 to 100% of the model's window — which
+ * A fixed axis — the auto-compact setting, else 0-100% of the window — which
  * is the entire reason it is worth putting a curve on a list row. Scaled to
  * each row's own peak instead, a session at 8% and one at 94% draw the identical
  * shape, and the miniature becomes decoration. A row whose window is unknown
@@ -49,7 +49,8 @@ export function sparkGeom(spark: ContextSpark, w: number, h: number): SparkGeom 
   const pts = spark.pts;
   if (!pts.length) return null;
   const ref = spark.autoCompactTok ?? null;
-  const yMax = spark.windowTok
+  // The auto-compact SETTING where set: the session never grows past it.
+  const yMax = spark.autoCompactSetTok ? Math.max(spark.autoCompactSetTok, spark.peak, ...pts) : spark.windowTok
     ? pctScale(spark.windowTok, Math.max(spark.peak, ref ?? 0)).top
     : Math.max(spark.peak, ref ?? 0, ...pts, 1);
   const px = (i: number) => (pts.length === 1 ? w : (i / (pts.length - 1)) * w);
@@ -91,6 +92,9 @@ export interface SpendSparkGeom {
    *  the curve. Null when there is no separate total to draw, which is both
    *  "no agents" and "no host total at all". */
   totalY: number | null;
+  /** The agents' spend STACKED on the curve (`agentUsedPts`): band + top edge,
+   *  which IS the total. Null without one ⇒ the dashed `totalY`, as before. */
+  agentBand: { area: string; top: string } | null;
   /** What the top of the box stands for, in tokens. The title quotes it,
    *  because this axis is the row's own and not the shared one. */
   top: number;
@@ -104,23 +108,18 @@ export interface SpendSparkGeom {
  *
  * ── Why this axis is NOT the fixed one ──────────────────────────────────────
  *
- * The context miniature's whole argument is a shared 0–100% axis, so two rows
- * can be compared at a glance. There is no equivalent ceiling for a bill: no
- * model, plan or window says what a session is allowed to spend, and any
- * constant picked here (10M? 100M?) would draw nine rows out of ten as a flat
- * line on the floor. So this one is fitted to its own session — exactly what
- * `SpendChart` does with the full series — and the magnitude is carried by the
- * figure beside it, which is the part that has to be read anyway. The two
- * miniatures are visibly different kinds of readout, which is the rule: a
- * curve that cannot fall, under a curve that drops every compaction.
+ * No model, plan or window says what a session may spend, and any constant
+ * (10M? 100M?) would draw nine rows in ten as a flat line on the floor. So it
+ * is fitted to its own session, like `SpendChart`, and the figure beside it
+ * carries the magnitude. A curve that cannot fall, under one that drops at
+ * every compaction: visibly two different readouts.
  *
- * ── Why the total is a line and not the end of the curve ────────────────────
+ * ── The agents ──────────────────────────────────────────────────────────────
  *
- * `usedPts` is the main conversation. The agents' spend IS dated, but the spark
- * carries no series of it (sixteen more numbers on every row, for a curve the
- * sheet already draws), so here the gap between the curve's end and the dashed
- * line is their share — and on a fan-out session that gap is most of the
- * picture.
+ * `usedPts` is the main conversation; `agentUsedPts` is STACKED on it, the
+ * sheet's spend chart in miniature — alone, a fan-out parent was a line on the
+ * floor under a total at the top, which read as a broken scale. From an older
+ * host the gap up to the dashed line is the agents' share.
  */
 export function spendSparkGeom(spark: ContextSpark, w: number, h: number): SpendSparkGeom | null {
   const pts = spark.usedPts;
@@ -129,14 +128,16 @@ export function spendSparkGeom(spark: ContextSpark, w: number, h: number): Spend
   // A curve that never left the floor is not a measurement of a cheap session;
   // it is a backend that records no output tokens. Absent, never a flat line.
   if (!(end > 0)) return null;
-  // The host's own total, and only when it CONTAINS the curve — a total below
-  // the line drawn over it would render as a reference under the last point,
-  // i.e. a chart contradicting itself. Same guard as `spendFacts`.
+  // The host's total, only when it CONTAINS the curve (`spendFacts`' guard).
   const total = spark.usageTok != null && spark.usageTok >= end ? spark.usageTok : null;
-  // Drawn only where it says something the curve does not: with no agents the
-  // total IS the end of the curve, and a dashed line lying on the end dot reads
-  // as a threshold nobody set.
+  // With no agents the total IS the curve's end: a dash there reads as a threshold.
   const apart = total != null && spark.agentTok != null && spark.agentTok > 0 ? total : null;
+  // Stacked only when aligned and not past the host's total (the chip beside it).
+  const ag = spark.agentUsedPts;
+  const stacked = apart != null && ag && ag.length === pts.length && ag.every((v) => Number.isFinite(v) && v >= 0)
+    ? pts.map((v, i) => v + ag[i])
+    : null;
+  const stack = stacked && stacked[stacked.length - 1] <= apart! * 1.001 ? stacked : null;
   const top = Math.max(end, apart ?? 0, 1);
   // Half a pixel of headroom at each edge, so the 1.5 px line at the very top
   // and the baseline at the very bottom are both fully drawn.
@@ -149,30 +150,33 @@ export function spendSparkGeom(spark: ContextSpark, w: number, h: number): Spend
     area: closedArea(line, "0", f1(px(pts.length - 1)), h),
     endX: px(pts.length - 1),
     endY: py(end),
-    totalY: apart != null ? py(apart) : null,
+    // The stack's top edge IS the total: no dashed line on top of it.
+    totalY: apart != null && !stack ? py(apart) : null,
+    agentBand: stack ? stackBand(pts, stack, px, py) : null,
     top,
     end,
   };
 }
 
+/** The band between the parent's curve and the stacked one, and its top edge. */
+function stackBand(lo: number[], hi: number[], px: (i: number) => number, py: (v: number) => number): { area: string; top: string } {
+  const top = polyline(hi, (_v, i) => px(i), (v) => py(v));
+  const back = lo.map((v, i) => [px(i), py(v)] as const).reverse().map(([x, y]) => `L${f1(x)},${f1(y)}`).join("");
+  return { area: `${top}${back}Z`, top };
+}
+
 /**
- * What the spend miniature says when there is nowhere to draw it — the row's
- * title text, and the only place its axis is named.
- *
- * A row is scanned, not studied, so the whole readout goes here: what the
- * conversation itself has spent, what its agents added, and what the top of the
- * box stands for. The last clause is not decoration: a curve at half height
- * means nothing until you know whether the top is 400k or forty million, and
- * unlike the context miniature this axis is not shared with the row above it.
+ * The spend miniature's title — the only place its axis is named: what the
+ * conversation spent, what its agents added, and what the top of the box is
+ * (a curve at half height means nothing until you know if the top is 400k or
+ * forty million, and this axis is not shared with the row above).
  */
 export function spendSparkTitle(spark: ContextSpark, g: SpendSparkGeom): string {
   const agents = spark.agentTok != null && spark.agentTok > 0 ? spark.agentTok : null;
   return [
     `spent: ${fmtTokens(g.end)} in this conversation so far`,
-    agents != null ? `${fmtTokens(agents)} more in its subagents — the dashed line` : null,
-    // The chip beside this curve is MONEY, so the tokens it used to print live
-    // here — and so does the sentence that keeps a dollar figure from being
-    // read as a bill. `costText` is the one wording, shared with the sheet.
+    agents != null ? `${fmtTokens(agents)} more in its subagents — ${g.agentBand ? "the grey band stacked on top" : "the dashed line"}` : null,
+    // The chip is MONEY, so the tokens live here, with `costText` (the one wording).
     spark.costUsd != null
       ? costText(spark.costUsd, spark.agentCostUsd ?? null, spark.unpricedTok ?? null)
       : null,

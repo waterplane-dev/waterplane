@@ -85,12 +85,12 @@ const count = (re) => [...sheet().matchAll(re)].length;
 test("P2: the sheet's side-effect sites are counted once", () => {
   assert.equal(count(/\bsavePicks\(/g), 1, "the one write-back effect");
   assert.equal(count(/\bdropPicks\(/g), 2, "a retired run's picks, and the apply");
-  assert.equal(count(/\bloadPicks\(/g), 6, "rows, merges, news, rejected, and the pin and naming answers");
+  assert.equal(count(/\bloadPicks\(/g), 7, "rows, merges, news, rejected, the pin and naming answers, and the splits");
   assert.equal(count(/\buseEffect\(/g), 2);
-  assert.equal(count(/\baskConfirm\(/g), 2, "the bulk strip confirm and the merge confirm");
+  assert.equal(count(/\baskConfirm\(/g), 3, "the bulk strip confirm, the merge confirm and the split confirm");
   assert.equal(count(/\bp\.onApply\(/g), 1, "the one place an apply is sent");
   assert.equal(count(/\bp\.onRun\(/g), 1);
-  assert.equal(count(/\btrack\(/g), 21);
+  assert.equal(count(/\btrack\(/g), 27, "+6: the slot check's split approve/leave and the conflict open/edit/drop/ignore");
   assert.equal(count(/\bopenSettingsAt\(/g), 1);
   assert.equal(count(/^export function AssessSheet\(/gm), 1);
 });

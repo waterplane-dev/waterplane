@@ -1,7 +1,7 @@
 // **A bulk verb never skips the queue.**
 //
 // `intent.run` and `backlog.fire` both reach the host's `runNow`, which skips
-// the WHOLE ladder — the budget, the smart pick, one at a time per repo, wait
+// the WHOLE ladder — the budget, one at a time per repo, wait
 // until free. That is right for one row a person tapped, and it is how the
 // re-time sheet's *run all 4 now, past the budget* once started four agents in
 // one worktree at the same second: it sent `intent.run` in a loop. The bulk

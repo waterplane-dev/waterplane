@@ -43,14 +43,30 @@
  * it learned here — measured, the pane now gets `rgb:0b0b/0d0d/1010` where it
  * used to get nothing before tmux's timeout. Those queries never reach the
  * client's output. A pane program that WRAPS a query in tmux passthrough does
- * reach it, byte-identical to tmux's own; it is answered like one, and the
- * reply lands in tmux's input exactly where a phone's reply always landed.
+ * reach it, byte-identical to tmux's own; a colour, scheme or size query is
+ * answered like one, and the reply lands in tmux's input exactly where a
+ * phone's reply always landed. A wrapped DA1/DA2/XTVERSION falls under the
+ * start-up deadline below like tmux's own — and loses nothing by it: tmux sets
+ * its HAVEDA/DA2/XDA flags on the FIRST such reply or at its start timer and
+ * forwards any later one to the pane as keys, so a late passthrough reply was
+ * never consumable, and stripping it is strictly better than typing it.
+ *
+ * **A start-up reply has a deadline.** DA1, DA2 and XTVERSION are asked once, when the client
+ * starts, and tmux waits ~5 s for them; a reply arriving after that is no longer read as a reply
+ * but forwarded to the pane as KEYS — `1;2c0;276;0c:>|xterm.js(6.0.0)^[\\` typed in front of
+ * whatever comes next (measured on tmux 3.4 and 3.6b: answered at 4.8 s, consumed; at 5.6 s,
+ * typed). The host answers the moment it READS the query, so a late answer means the host read it
+ * late — a boot re-attaching every live session in one synchronous pass over a slow `/mnt/c`
+ * did that on a WSL desktop. Past `STARTUP_REPLY_MS` of the client's life these three are
+ * stripped and NOT answered: tmux then gives up at 5 s exactly as it did before this module
+ * existed, which costs a repaint, where a late answer costs words in the composer. The colour,
+ * scheme and size replies are read at any time (same measurement) and are always answered.
  *
  * A chunk may end part-way into a query: the possible prefix (≤ 9 bytes) is
  * held for the next chunk and released by `flush()` if none comes (the caller's
  * short timer), so a held tail is never stranded.
  */
-import { TERM_COLORS, type TermColors } from "@waterplane/shared";
+import { logTag, TERM_COLORS, type TermColors } from "@waterplane/shared";
 
 /** Nominal pixel cell for the 14t answer. */
 export const CELL_PX = { w: 9, h: 18 } as const;
@@ -60,7 +76,13 @@ export interface QueryFacts {
   cols(): number;
   rows(): number;
   colors?(): TermColors;
+  /** How long ago this tmux client started, ms. Absent ⇒ every query is answered. */
+  ageMs?(): number;
 }
+
+/** Past this age of the client, a start-up-only query goes unanswered (tmux stops waiting at ~5 s). */
+export const STARTUP_REPLY_MS = 4000;
+const STARTUP_ONLY: ReadonlySet<string> = new Set(["da1", "da2", "xtversion"]);
 
 const ESC = "\x1b";
 const ST = `${ESC}\\`;
@@ -115,6 +137,8 @@ export interface Fed {
   out: string;
   /** The answers, concatenated in the order asked — written to the PTY. */
   replies: string;
+  /** Start-up queries stripped UNANSWERED because the client was past `STARTUP_REPLY_MS`. */
+  late: number;
 }
 
 export class TermQueryResponder {
@@ -130,16 +154,18 @@ export class TermQueryResponder {
   feed(chunk: string): Fed {
     const s = this.held + chunk;
     this.held = "";
-    if (!s.includes(ESC)) return { out: s, replies: "" };
+    if (!s.includes(ESC)) return { out: s, replies: "", late: 0 };
     let out = "";
     let replies = "";
+    let late = 0;
     let from = 0;
     let i = s.indexOf(ESC);
     while (i !== -1) {
       const hit = FORMS.find(([f]) => s.startsWith(f, i));
       if (hit) {
         out += s.slice(from, i);
-        replies += answer(hit[1], hit[0], this.facts);
+        if (STARTUP_ONLY.has(hit[1]) && (this.facts.ageMs?.() ?? 0) > STARTUP_REPLY_MS) late++;
+        else replies += answer(hit[1], hit[0], this.facts);
         from = i + hit[0].length;
         i = s.indexOf(ESC, from);
         continue;
@@ -149,12 +175,12 @@ export class TermQueryResponder {
       if (rest.length < 10 && couldBecomeQuery(rest)) {
         out += s.slice(from, i);
         this.held = rest;
-        return { out, replies };
+        return { out, replies, late };
       }
       i = s.indexOf(ESC, i + 1);
     }
     out += s.slice(from);
-    return { out, replies };
+    return { out, replies, late };
   }
 }
 
@@ -175,13 +201,16 @@ export interface QueryPty {
  * PTY. The ONE place a tmux client's output enters the host (`sessions.ts`'s
  * `register`), so no consumer can see a query and none can be skipped.
  */
-export function answerTermQueries(proc: QueryPty, onChunk: (chunk: string) => void, facts?: Partial<QueryFacts>): { dispose(): void } {
-  const responder = new TermQueryResponder({ cols: () => proc.cols, rows: () => proc.rows, ...facts });
+export function answerTermQueries(proc: QueryPty, onChunk: (chunk: string) => void, facts?: Partial<QueryFacts>, onLate?: (n: number, ageMs: number) => void): { dispose(): void } {
+  // Called right after the spawn, in the same tick: the client's age is counted from here.
+  const startedAt = Date.now();
+  const responder = new TermQueryResponder({ cols: () => proc.cols, rows: () => proc.rows, ageMs: () => Date.now() - startedAt, ...facts });
   let timer: ReturnType<typeof setTimeout> | null = null;
   proc.onData((raw) => {
     if (timer) { clearTimeout(timer); timer = null; }
-    const { out, replies } = responder.feed(raw);
+    const { out, replies, late } = responder.feed(raw);
     if (replies) { try { proc.write(replies); } catch { /* exited */ } }
+    if (late) onLate?.(late, Date.now() - startedAt);
     if (out) onChunk(out);
     if (responder.holding()) {
       timer = setTimeout(() => { timer = null; const t = responder.flush(); if (t) onChunk(t); }, HOLD_MS);
@@ -190,4 +219,10 @@ export function answerTermQueries(proc: QueryPty, onChunk: (chunk: string) => vo
   // Disposed on exit: only the timer goes (a chunk node-pty hands over after
   // the exit event is still delivered, as it always was).
   return { dispose() { if (timer) { clearTimeout(timer); timer = null; } } };
+}
+
+/** `answerTermQueries`' `onLate` for a session: one line naming it, the count and the age. */
+export function lateQueryLog(id: string, title?: string): (n: number, ageMs: number) => void {
+  return (n, ageMs) => console.log(`${logTag} ${title || id} (${id}): ${n} start-up terminal ${n === 1 ? "query" : "queries"} read `
+    + `${(ageMs / 1000).toFixed(1)} s after its tmux client started — left unanswered: tmux had stopped waiting, and the reply would have been typed into the pane`);
 }

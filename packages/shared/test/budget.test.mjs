@@ -21,6 +21,7 @@ import {
   budgetResumesText,
   budgetVerdict,
   cleanBudget,
+  leftoverCeiling,
 } from "../dist/budget.js";
 
 const NOW = 1_700_000_000_000;
@@ -182,11 +183,39 @@ test("budgetHoldText is the over sentence plus when it lifts; the other two buil
   assert.match(hold, /^paused — 97% of the weekly window used, over the 75% budget — resumes /);
   assert.equal(budgetHoldText({ ...c, resetAt: null }, NOON), "paused — 97% of the weekly window used, over the 75% budget");
   const pending = budgetPassPendingText(c, NOON);
-  assert.ok(pending.startsWith(hold));
-  assert.match(pending, /lifted for this row at its time/);
-  assert.match(pending, /there is no later$/);
+  // Leads with the lift and names no reset time — "paused … resumes Thu" read
+  // as "waits for the reset" for a row that runs before it.
+  assert.match(pending, /^lifted for this row at its time/);
+  assert.match(pending, /there is no later · held only until then: 97% of the weekly window used, over the 75% budget$/);
+  assert.doesNotMatch(pending, /resumes|paused/);
   assert.match(pending, /timed before that window resets/);
   assert.match(budgetPassPendingText({ ...c, which: "session" }, NOON, "weekly"), /timed before the weekly window resets/);
   const other = budgetOtherCapText(c, "session", NOON);
   assert.equal(other, `${hold} · exempt from the session ceiling, not from this one`);
+});
+
+// ── The leftover ceiling ─────────────────────────────────────────────────────
+
+test("leftover ceiling: on at 20% by default, tripped at or over it, fails open", () => {
+  assert.equal(DEFAULT_USAGE_BUDGET.leftoverMax, 20);
+  assert.deepEqual(leftoverCeiling(CFG, u({ weeklyPct: 20 }), NOW), { which: "weekly", pct: 20, max: 20, resetAt: u().weeklyResetAt });
+  assert.equal(leftoverCeiling(CFG, u({ weeklyPct: 19 }), NOW), null);
+  assert.equal(leftoverCeiling({ ...CFG, leftoverMax: null }, u({ weeklyPct: 90 }), NOW), null, "off");
+  assert.equal(leftoverCeiling({ ...CFG, enabled: false }, u({ weeklyPct: 90 }), NOW), null, "master switch");
+  assert.equal(leftoverCeiling(CFG, u({ weeklyPct: 90, checkedAt: NOW - BUDGET_STALE_MS - 1 }), NOW), null, "stale");
+  assert.equal(leftoverCeiling(CFG, u({ weeklyPct: 90, weeklyResetAt: NOW - 1 }), NOW), null, "a reading from before the reset");
+  assert.equal(leftoverCeiling(CFG, u({ weeklyPct: null }), NOW), null);
+  assert.equal(leftoverCeiling(CFG, null, NOW), null);
+});
+
+test("leftover ceiling is not an account pause: budgetCeilings and the verdict ignore it", () => {
+  assert.deepEqual(budgetCeilings(CFG, u({ weeklyPct: 60 }), NOW), []);
+  assert.equal(budgetVerdict(CFG, u({ weeklyPct: 60 }), NOW).blocked, false);
+});
+
+test("cleanBudget: an absent leftoverMax is the default, an explicit null stays off", () => {
+  assert.equal(cleanBudget({}).leftoverMax, 20);
+  assert.equal(cleanBudget({ leftoverMax: null }).leftoverMax, null);
+  assert.equal(cleanBudget({ leftoverMax: 35 }).leftoverMax, 35);
+  assert.equal(cleanBudget({ leftoverMax: "x" }).leftoverMax, 20);
 });

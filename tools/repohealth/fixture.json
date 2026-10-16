@@ -1,5 +1,5 @@
 {
-  "prereg": "2026-09-22a+1647a16d",
+  "prereg": "2026-10-16a+ccb88b7e",
   "lastSha": "683bffaf98736fb2e4ecbd9fce2bd412f0b5bde3",
   "rows": [
     {
@@ -7,37 +7,102 @@
       "day": "2026-06-18",
       "ts": 1781815749,
       "batch": false,
-      "prereg": "2026-09-22a+1647a16d",
+      "prereg": "2026-10-16a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 383,
           "max": 383,
           "maxPath": "packages/web/src/App.tsx",
+          "nearMax": 1,
           "p95": 291
         }
       },
       "retouch": {
         "value": {
+          "appends": 3,
           "offenders": [
             {
               "n": 3,
               "path": "packages/web/src/App.tsx"
             },
             {
-              "n": 2,
-              "path": "packages/shared/src/index.ts"
+              "n": 1,
+              "path": "packages/host/src/main.ts"
             },
             {
               "n": 1,
-              "path": "packages/host/src/api.ts"
+              "path": "packages/host/src/repos.ts"
             }
           ],
-          "rate": 0.8888888888888888,
-          "retouches": 16,
+          "rate": 0.7222222222222222,
+          "retouches": 13,
           "touches": 18
         }
       },
       "hatches": {
+        "split": {
+          "byKind": {
+            "asAny": {
+              "explained": 0,
+              "unexplained": 1
+            },
+            "asUnknownAs": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "colonAny": {
+              "explained": 0,
+              "unexplained": 8
+            },
+            "eslintDisable": {
+              "explained": 0,
+              "unexplained": 4
+            },
+            "ktNotNull": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppress": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppressLint": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyAny": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyBareExcept": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyNoqa": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyTypeIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsExpectError": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsNocheck": {
+              "explained": 0,
+              "unexplained": 0
+            }
+          },
+          "explained": 0,
+          "todo": 0,
+          "unexplained": 13
+        },
         "value": {
           "asAny": 1,
           "asUnknownAs": 0,
@@ -48,6 +113,10 @@
           "ktSuppress": 0,
           "ktSuppressLint": 0,
           "ktTodoStub": 0,
+          "pyAny": 0,
+          "pyBareExcept": 0,
+          "pyNoqa": 0,
+          "pyTypeIgnore": 0,
           "todo": 0,
           "tsExpectError": 0,
           "tsIgnore": 0,
@@ -122,6 +191,7 @@
         "value": null
       },
       "untested": {
+        "unnamed": [],
         "value": [
           "packages/host/src/api.ts",
           "packages/host/src/backlog.ts",
@@ -368,37 +438,102 @@
       "day": "2026-06-19",
       "ts": 1781891397,
       "batch": false,
-      "prereg": "2026-09-22a+1647a16d",
+      "prereg": "2026-10-16a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 676,
           "max": 676,
           "maxPath": "packages/web/src/App.tsx",
+          "nearMax": 1,
           "p95": 325
         }
       },
       "retouch": {
         "value": {
+          "appends": 23,
           "offenders": [
             {
-              "n": 10,
+              "n": 6,
               "path": "packages/web/src/App.tsx"
             },
             {
-              "n": 6,
-              "path": "packages/shared/src/index.ts"
+              "n": 3,
+              "path": "packages/host/src/main.ts"
             },
             {
-              "n": 5,
-              "path": "packages/host/src/main.ts"
+              "n": 3,
+              "path": "packages/web/src/Gallery.tsx"
             }
           ],
-          "rate": 0.8928571428571429,
-          "retouches": 50,
+          "rate": 0.48214285714285715,
+          "retouches": 27,
           "touches": 56
         }
       },
       "hatches": {
+        "split": {
+          "byKind": {
+            "asAny": {
+              "explained": 0,
+              "unexplained": 1
+            },
+            "asUnknownAs": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "colonAny": {
+              "explained": 0,
+              "unexplained": 10
+            },
+            "eslintDisable": {
+              "explained": 0,
+              "unexplained": 4
+            },
+            "ktNotNull": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppress": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppressLint": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyAny": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyBareExcept": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyNoqa": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyTypeIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsExpectError": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsNocheck": {
+              "explained": 0,
+              "unexplained": 0
+            }
+          },
+          "explained": 0,
+          "todo": 0,
+          "unexplained": 15
+        },
         "value": {
           "asAny": 1,
           "asUnknownAs": 0,
@@ -409,6 +544,10 @@
           "ktSuppress": 0,
           "ktSuppressLint": 0,
           "ktTodoStub": 0,
+          "pyAny": 0,
+          "pyBareExcept": 0,
+          "pyNoqa": 0,
+          "pyTypeIgnore": 0,
           "todo": 0,
           "tsExpectError": 0,
           "tsIgnore": 0,
@@ -489,6 +628,7 @@
         }
       },
       "untested": {
+        "unnamed": [],
         "value": [
           "packages/host/src/api.ts",
           "packages/host/src/backlog.ts",
@@ -765,37 +905,102 @@
       "day": "2026-06-20",
       "ts": 1781986706,
       "batch": false,
-      "prereg": "2026-09-22a+1647a16d",
+      "prereg": "2026-10-16a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 1088,
           "max": 1088,
           "maxPath": "packages/web/src/App.tsx",
+          "nearMax": 1,
           "p95": 524
         }
       },
       "retouch": {
         "value": {
+          "appends": 38,
           "offenders": [
             {
-              "n": 13,
+              "n": 9,
               "path": "packages/web/src/App.tsx"
             },
             {
-              "n": 9,
+              "n": 5,
               "path": "packages/host/src/main.ts"
             },
             {
-              "n": 9,
-              "path": "packages/shared/src/index.ts"
+              "n": 5,
+              "path": "packages/web/src/Gallery.tsx"
             }
           ],
-          "rate": 0.8876404494382022,
-          "retouches": 79,
+          "rate": 0.4606741573033708,
+          "retouches": 41,
           "touches": 89
         }
       },
       "hatches": {
+        "split": {
+          "byKind": {
+            "asAny": {
+              "explained": 0,
+              "unexplained": 1
+            },
+            "asUnknownAs": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "colonAny": {
+              "explained": 0,
+              "unexplained": 13
+            },
+            "eslintDisable": {
+              "explained": 0,
+              "unexplained": 6
+            },
+            "ktNotNull": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppress": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppressLint": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyAny": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyBareExcept": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyNoqa": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyTypeIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsExpectError": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsNocheck": {
+              "explained": 0,
+              "unexplained": 0
+            }
+          },
+          "explained": 0,
+          "todo": 0,
+          "unexplained": 20
+        },
         "value": {
           "asAny": 1,
           "asUnknownAs": 0,
@@ -806,6 +1011,10 @@
           "ktSuppress": 0,
           "ktSuppressLint": 0,
           "ktTodoStub": 0,
+          "pyAny": 0,
+          "pyBareExcept": 0,
+          "pyNoqa": 0,
+          "pyTypeIgnore": 0,
           "todo": 0,
           "tsExpectError": 0,
           "tsIgnore": 0,
@@ -886,6 +1095,7 @@
         }
       },
       "untested": {
+        "unnamed": [],
         "value": [
           "packages/host/src/api.ts",
           "packages/host/src/backlog.ts",
@@ -1183,37 +1393,102 @@
       "day": "2026-06-21",
       "ts": 1782067638,
       "batch": false,
-      "prereg": "2026-09-22a+1647a16d",
+      "prereg": "2026-10-16a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 1300,
           "max": 1300,
           "maxPath": "packages/web/src/App.tsx",
+          "nearMax": 1,
           "p95": 452
         }
       },
       "retouch": {
         "value": {
+          "appends": 61,
           "offenders": [
             {
-              "n": 20,
+              "n": 11,
               "path": "packages/web/src/App.tsx"
             },
             {
-              "n": 13,
-              "path": "packages/host/src/main.ts"
+              "n": 7,
+              "path": "packages/web/src/Backlog.tsx"
             },
             {
-              "n": 13,
-              "path": "packages/shared/src/index.ts"
+              "n": 5,
+              "path": "packages/host/src/main.ts"
             }
           ],
-          "rate": 0.8702290076335878,
-          "retouches": 114,
+          "rate": 0.40458015267175573,
+          "retouches": 53,
           "touches": 131
         }
       },
       "hatches": {
+        "split": {
+          "byKind": {
+            "asAny": {
+              "explained": 0,
+              "unexplained": 1
+            },
+            "asUnknownAs": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "colonAny": {
+              "explained": 0,
+              "unexplained": 14
+            },
+            "eslintDisable": {
+              "explained": 0,
+              "unexplained": 7
+            },
+            "ktNotNull": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppress": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppressLint": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyAny": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyBareExcept": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyNoqa": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyTypeIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsExpectError": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsNocheck": {
+              "explained": 0,
+              "unexplained": 0
+            }
+          },
+          "explained": 0,
+          "todo": 0,
+          "unexplained": 22
+        },
         "value": {
           "asAny": 1,
           "asUnknownAs": 0,
@@ -1224,6 +1499,10 @@
           "ktSuppress": 0,
           "ktSuppressLint": 0,
           "ktTodoStub": 0,
+          "pyAny": 0,
+          "pyBareExcept": 0,
+          "pyNoqa": 0,
+          "pyTypeIgnore": 0,
           "todo": 0,
           "tsExpectError": 0,
           "tsIgnore": 0,
@@ -1304,6 +1583,7 @@
         }
       },
       "untested": {
+        "unnamed": [],
         "value": [
           "packages/host/src/api.ts",
           "packages/host/src/backlog.ts",
@@ -1615,37 +1895,102 @@
       "day": "2026-06-25",
       "ts": 1782415053,
       "batch": false,
-      "prereg": "2026-09-22a+1647a16d",
+      "prereg": "2026-10-16a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 1300,
           "max": 1300,
           "maxPath": "packages/web/src/App.tsx",
+          "nearMax": 1,
           "p95": 452
         }
       },
       "retouch": {
         "value": {
+          "appends": 61,
           "offenders": [
             {
-              "n": 20,
+              "n": 11,
               "path": "packages/web/src/App.tsx"
             },
             {
-              "n": 13,
-              "path": "packages/host/src/main.ts"
+              "n": 7,
+              "path": "packages/web/src/Backlog.tsx"
             },
             {
-              "n": 13,
-              "path": "packages/shared/src/index.ts"
+              "n": 5,
+              "path": "packages/host/src/main.ts"
             }
           ],
-          "rate": 0.8636363636363636,
-          "retouches": 114,
+          "rate": 0.4015151515151515,
+          "retouches": 53,
           "touches": 132
         }
       },
       "hatches": {
+        "split": {
+          "byKind": {
+            "asAny": {
+              "explained": 0,
+              "unexplained": 1
+            },
+            "asUnknownAs": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "colonAny": {
+              "explained": 0,
+              "unexplained": 14
+            },
+            "eslintDisable": {
+              "explained": 0,
+              "unexplained": 7
+            },
+            "ktNotNull": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppress": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppressLint": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyAny": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyBareExcept": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyNoqa": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyTypeIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsExpectError": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsNocheck": {
+              "explained": 0,
+              "unexplained": 0
+            }
+          },
+          "explained": 0,
+          "todo": 0,
+          "unexplained": 22
+        },
         "value": {
           "asAny": 1,
           "asUnknownAs": 0,
@@ -1656,6 +2001,10 @@
           "ktSuppress": 0,
           "ktSuppressLint": 0,
           "ktTodoStub": 0,
+          "pyAny": 0,
+          "pyBareExcept": 0,
+          "pyNoqa": 0,
+          "pyTypeIgnore": 0,
           "todo": 0,
           "tsExpectError": 0,
           "tsIgnore": 0,
@@ -1736,6 +2085,7 @@
         }
       },
       "untested": {
+        "unnamed": [],
         "value": [
           "packages/host/src/api.ts",
           "packages/host/src/backlog.ts",
@@ -2047,37 +2397,102 @@
       "day": "2026-08-16",
       "ts": 1786892228,
       "batch": false,
-      "prereg": "2026-09-22a+1647a16d",
+      "prereg": "2026-10-16a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 3217,
           "max": 3217,
           "maxPath": "packages/web/src/App.tsx",
+          "nearMax": 1,
           "p95": 1017
         }
       },
       "retouch": {
         "value": {
+          "appends": 9,
           "offenders": [
             {
               "n": 2,
-              "path": "packages/host/src/api.ts"
+              "path": "packages/host/src/origin.ts"
             },
             {
-              "n": 2,
+              "n": 1,
               "path": "packages/host/src/git.ts"
             },
             {
-              "n": 2,
-              "path": "packages/host/src/origin.ts"
+              "n": 1,
+              "path": "packages/web/src/ImageAnnotator.tsx"
             }
           ],
-          "rate": 0.9333333333333333,
-          "retouches": 14,
+          "rate": 0.3333333333333333,
+          "retouches": 5,
           "touches": 15
         }
       },
       "hatches": {
+        "split": {
+          "byKind": {
+            "asAny": {
+              "explained": 0,
+              "unexplained": 1
+            },
+            "asUnknownAs": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "colonAny": {
+              "explained": 6,
+              "unexplained": 23
+            },
+            "eslintDisable": {
+              "explained": 1,
+              "unexplained": 20
+            },
+            "ktNotNull": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppress": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppressLint": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyAny": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyBareExcept": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyNoqa": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyTypeIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsExpectError": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsNocheck": {
+              "explained": 0,
+              "unexplained": 0
+            }
+          },
+          "explained": 7,
+          "todo": 0,
+          "unexplained": 44
+        },
         "value": {
           "asAny": 1,
           "asUnknownAs": 0,
@@ -2088,6 +2503,10 @@
           "ktSuppress": 0,
           "ktSuppressLint": 0,
           "ktTodoStub": 0,
+          "pyAny": 0,
+          "pyBareExcept": 0,
+          "pyNoqa": 0,
+          "pyTypeIgnore": 0,
           "todo": 0,
           "tsExpectError": 0,
           "tsIgnore": 0,
@@ -2185,6 +2604,7 @@
         }
       },
       "untested": {
+        "unnamed": [],
         "value": [
           "packages/host/src/api.ts",
           "packages/host/src/auth.ts",
@@ -2585,37 +3005,102 @@
       "day": "2026-08-21",
       "ts": 1787300703,
       "batch": false,
-      "prereg": "2026-09-22a+1647a16d",
+      "prereg": "2026-10-16a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 3322,
           "max": 3322,
           "maxPath": "packages/web/src/App.tsx",
+          "nearMax": 1,
           "p95": 1066
         }
       },
       "retouch": {
         "value": {
+          "appends": 10,
           "offenders": [
             {
-              "n": 3,
-              "path": "packages/web/src/App.tsx"
+              "n": 2,
+              "path": "packages/host/src/origin.ts"
             },
             {
-              "n": 2,
-              "path": "packages/host/src/api.ts"
-            },
-            {
-              "n": 2,
+              "n": 1,
               "path": "packages/host/src/git.ts"
+            },
+            {
+              "n": 1,
+              "path": "packages/web/src/ImageAnnotator.tsx"
             }
           ],
-          "rate": 0.42857142857142855,
-          "retouches": 15,
+          "rate": 0.14285714285714285,
+          "retouches": 5,
           "touches": 35
         }
       },
       "hatches": {
+        "split": {
+          "byKind": {
+            "asAny": {
+              "explained": 0,
+              "unexplained": 1
+            },
+            "asUnknownAs": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "colonAny": {
+              "explained": 6,
+              "unexplained": 23
+            },
+            "eslintDisable": {
+              "explained": 1,
+              "unexplained": 21
+            },
+            "ktNotNull": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppress": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppressLint": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyAny": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyBareExcept": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyNoqa": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyTypeIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsExpectError": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsNocheck": {
+              "explained": 0,
+              "unexplained": 0
+            }
+          },
+          "explained": 7,
+          "todo": 3,
+          "unexplained": 45
+        },
         "value": {
           "asAny": 1,
           "asUnknownAs": 0,
@@ -2626,6 +3111,10 @@
           "ktSuppress": 0,
           "ktSuppressLint": 0,
           "ktTodoStub": 0,
+          "pyAny": 0,
+          "pyBareExcept": 0,
+          "pyNoqa": 0,
+          "pyTypeIgnore": 0,
           "todo": 3,
           "tsExpectError": 0,
           "tsIgnore": 0,
@@ -2723,6 +3212,7 @@
         }
       },
       "untested": {
+        "unnamed": [],
         "value": [
           "packages/host/src/api.ts",
           "packages/host/src/auth.ts",
@@ -2783,7 +3273,6 @@
           "packages/web/src/useViewport.ts",
           "packages/web/src/useVoice.ts",
           "packages/web/vite.config.ts",
-          "scripts/claude-stub-tui.mjs",
           "scripts/fix-node-pty.mjs",
           "scripts/run-e2e.mjs"
         ]
@@ -3084,7 +3573,7 @@
       },
       "tripwires": [
         {
-          "detail": "`\\bTODO\\b` went 0 → 3 occurrences; 4 of 13 hatch kinds are now in use",
+          "detail": "`\\bTODO\\b` went 0 → 3 occurrences; 4 of 17 hatch kinds are now in use",
           "kind": "hatch-kind-appeared",
           "subject": "todo"
         }
@@ -3124,37 +3613,102 @@
       "day": "2026-08-30",
       "ts": 1788117111,
       "batch": false,
-      "prereg": "2026-09-22a+1647a16d",
+      "prereg": "2026-10-16a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 6514,
           "max": 6514,
           "maxPath": "packages/web/src/App.tsx",
+          "nearMax": 1,
           "p95": 882
         }
       },
       "retouch": {
         "value": {
+          "appends": 7,
           "offenders": [
             {
-              "n": 2,
+              "n": 1,
               "path": "packages/host/src/backlog.ts"
             },
             {
-              "n": 2,
+              "n": 1,
               "path": "packages/web/src/App.tsx"
             },
             {
-              "n": 2,
+              "n": 1,
               "path": "packages/web/src/Backlog.tsx"
             }
           ],
-          "rate": 0.36666666666666664,
-          "retouches": 11,
+          "rate": 0.13333333333333333,
+          "retouches": 4,
           "touches": 30
         }
       },
       "hatches": {
+        "split": {
+          "byKind": {
+            "asAny": {
+              "explained": 0,
+              "unexplained": 2
+            },
+            "asUnknownAs": {
+              "explained": 1,
+              "unexplained": 5
+            },
+            "colonAny": {
+              "explained": 10,
+              "unexplained": 27
+            },
+            "eslintDisable": {
+              "explained": 1,
+              "unexplained": 25
+            },
+            "ktNotNull": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppress": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppressLint": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyAny": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyBareExcept": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyNoqa": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyTypeIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsExpectError": {
+              "explained": 1,
+              "unexplained": 0
+            },
+            "tsIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsNocheck": {
+              "explained": 0,
+              "unexplained": 0
+            }
+          },
+          "explained": 13,
+          "todo": 6,
+          "unexplained": 59
+        },
         "value": {
           "asAny": 2,
           "asUnknownAs": 6,
@@ -3165,6 +3719,10 @@
           "ktSuppress": 0,
           "ktSuppressLint": 0,
           "ktTodoStub": 0,
+          "pyAny": 0,
+          "pyBareExcept": 0,
+          "pyNoqa": 0,
+          "pyTypeIgnore": 0,
           "todo": 5,
           "tsExpectError": 1,
           "tsIgnore": 0,
@@ -3277,6 +3835,9 @@
         }
       },
       "untested": {
+        "unnamed": [
+          "packages/host/src/git.ts"
+        ],
         "value": [
           "packages/app/capacitor.config.ts",
           "packages/app/scripts/build-web.mjs",
@@ -3291,7 +3852,6 @@
           "packages/host/src/discover.ts",
           "packages/host/src/doctor.ts",
           "packages/host/src/fanout.ts",
-          "packages/host/src/git.ts",
           "packages/host/src/host.ts",
           "packages/host/src/httpio.ts",
           "packages/host/src/meter.ts",
@@ -3374,7 +3934,6 @@
           "packages/web/src/useVoice.ts",
           "packages/web/src/webUpdate.ts",
           "packages/web/vite.config.ts",
-          "scripts/claude-stub-tui.mjs",
           "scripts/fix-node-pty.mjs",
           "scripts/run-e2e.mjs"
         ]
@@ -3685,17 +4244,17 @@
       },
       "tripwires": [
         {
-          "detail": "`\\bas unknown as\\b` went 0 → 6 occurrences; 7 of 13 hatch kinds are now in use",
+          "detail": "`\\bas unknown as\\b` went 0 → 6 occurrences; 7 of 17 hatch kinds are now in use",
           "kind": "hatch-kind-appeared",
           "subject": "asUnknownAs"
         },
         {
-          "detail": "`\\bFIXME\\b` went 0 → 1 occurrences; 7 of 13 hatch kinds are now in use",
+          "detail": "`\\bFIXME\\b` went 0 → 1 occurrences; 7 of 17 hatch kinds are now in use",
           "kind": "hatch-kind-appeared",
           "subject": "fixme"
         },
         {
-          "detail": "`@ts-expect-error\\b` went 0 → 1 occurrences; 7 of 13 hatch kinds are now in use",
+          "detail": "`@ts-expect-error\\b` went 0 → 1 occurrences; 7 of 17 hatch kinds are now in use",
           "kind": "hatch-kind-appeared",
           "subject": "tsExpectError"
         }
@@ -3742,37 +4301,102 @@
       "day": "2026-09-02",
       "ts": 1788361830,
       "batch": false,
-      "prereg": "2026-09-22a+1647a16d",
+      "prereg": "2026-10-16a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 7853,
           "max": 7853,
           "maxPath": "packages/web/src/App.tsx",
+          "nearMax": 1,
           "p95": 865
         }
       },
       "retouch": {
         "value": {
+          "appends": 9,
           "offenders": [
             {
-              "n": 2,
+              "n": 1,
               "path": "packages/host/src/backlog.ts"
             },
             {
-              "n": 2,
-              "path": "packages/shared/src/index.ts"
+              "n": 1,
+              "path": "packages/web/src/App.tsx"
             },
             {
-              "n": 2,
-              "path": "packages/shared/src/queue.ts"
+              "n": 1,
+              "path": "packages/web/src/Backlog.tsx"
             }
           ],
-          "rate": 0.18309859154929578,
-          "retouches": 13,
+          "rate": 0.056338028169014086,
+          "retouches": 4,
           "touches": 71
         }
       },
       "hatches": {
+        "split": {
+          "byKind": {
+            "asAny": {
+              "explained": 0,
+              "unexplained": 3
+            },
+            "asUnknownAs": {
+              "explained": 1,
+              "unexplained": 8
+            },
+            "colonAny": {
+              "explained": 12,
+              "unexplained": 35
+            },
+            "eslintDisable": {
+              "explained": 2,
+              "unexplained": 26
+            },
+            "ktNotNull": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppress": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppressLint": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyAny": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyBareExcept": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyNoqa": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyTypeIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsExpectError": {
+              "explained": 1,
+              "unexplained": 0
+            },
+            "tsIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsNocheck": {
+              "explained": 0,
+              "unexplained": 0
+            }
+          },
+          "explained": 16,
+          "todo": 6,
+          "unexplained": 72
+        },
         "value": {
           "asAny": 3,
           "asUnknownAs": 9,
@@ -3783,6 +4407,10 @@
           "ktSuppress": 0,
           "ktSuppressLint": 0,
           "ktTodoStub": 0,
+          "pyAny": 0,
+          "pyBareExcept": 0,
+          "pyNoqa": 0,
+          "pyTypeIgnore": 0,
           "todo": 5,
           "tsExpectError": 1,
           "tsIgnore": 0,
@@ -3904,6 +4532,9 @@
         }
       },
       "untested": {
+        "unnamed": [
+          "packages/host/src/git.ts"
+        ],
         "value": [
           "packages/app/capacitor.config.ts",
           "packages/app/scripts/build-web.mjs",
@@ -3918,7 +4549,6 @@
           "packages/host/src/discover.ts",
           "packages/host/src/doctor.ts",
           "packages/host/src/fanout.ts",
-          "packages/host/src/git.ts",
           "packages/host/src/host.ts",
           "packages/host/src/httpio.ts",
           "packages/host/src/launch.ts",
@@ -4015,8 +4645,6 @@
           "packages/web/src/useVoice.ts",
           "packages/web/src/webUpdate.ts",
           "packages/web/vite.config.ts",
-          "scripts/claude-stub-limit.mjs",
-          "scripts/claude-stub-tui.mjs",
           "scripts/fix-node-pty.mjs",
           "scripts/run-e2e.mjs"
         ]
@@ -4375,37 +5003,102 @@
       "day": "2026-09-04",
       "ts": 1788559156,
       "batch": false,
-      "prereg": "2026-09-22a+1647a16d",
+      "prereg": "2026-10-16a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 9631,
           "max": 9631,
           "maxPath": "packages/web/src/App.tsx",
+          "nearMax": 1,
           "p95": 883
         }
       },
       "retouch": {
         "value": {
+          "appends": 38,
           "offenders": [
             {
-              "n": 4,
+              "n": 3,
               "path": "packages/web/src/App.tsx"
             },
             {
-              "n": 3,
-              "path": "packages/host/src/main.ts"
+              "n": 2,
+              "path": "packages/host/src/deliver.ts"
             },
             {
-              "n": 3,
-              "path": "packages/shared/src/index.ts"
+              "n": 2,
+              "path": "packages/host/src/main.ts"
             }
           ],
-          "rate": 0.5454545454545454,
-          "retouches": 72,
+          "rate": 0.25757575757575757,
+          "retouches": 34,
           "touches": 132
         }
       },
       "hatches": {
+        "split": {
+          "byKind": {
+            "asAny": {
+              "explained": 0,
+              "unexplained": 3
+            },
+            "asUnknownAs": {
+              "explained": 1,
+              "unexplained": 9
+            },
+            "colonAny": {
+              "explained": 12,
+              "unexplained": 37
+            },
+            "eslintDisable": {
+              "explained": 8,
+              "unexplained": 24
+            },
+            "ktNotNull": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppress": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppressLint": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyAny": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyBareExcept": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyNoqa": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyTypeIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsExpectError": {
+              "explained": 1,
+              "unexplained": 0
+            },
+            "tsIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsNocheck": {
+              "explained": 0,
+              "unexplained": 0
+            }
+          },
+          "explained": 22,
+          "todo": 6,
+          "unexplained": 73
+        },
         "value": {
           "asAny": 3,
           "asUnknownAs": 10,
@@ -4416,6 +5109,10 @@
           "ktSuppress": 0,
           "ktSuppressLint": 0,
           "ktTodoStub": 0,
+          "pyAny": 0,
+          "pyBareExcept": 0,
+          "pyNoqa": 0,
+          "pyTypeIgnore": 0,
           "todo": 5,
           "tsExpectError": 1,
           "tsIgnore": 0,
@@ -4573,6 +5270,18 @@
         }
       },
       "untested": {
+        "unnamed": [
+          "packages/host/src/git.ts",
+          "packages/host/src/transcript.ts",
+          "packages/shared/src/wire/messages.ts",
+          "packages/shared/src/wire/notify.ts",
+          "packages/shared/src/wire/oracle.ts",
+          "packages/shared/src/wire/repo.ts",
+          "packages/shared/src/wire/session.ts",
+          "packages/shared/src/wire/telemetry.ts",
+          "packages/shared/src/wire/transcript.ts",
+          "packages/shared/src/wire/work.ts"
+        ],
         "value": [
           "eslint.config.js",
           "packages/app/capacitor.config.ts",
@@ -4589,7 +5298,6 @@
           "packages/host/src/discover.ts",
           "packages/host/src/doctor.ts",
           "packages/host/src/fanout.ts",
-          "packages/host/src/git.ts",
           "packages/host/src/host.ts",
           "packages/host/src/httpio.ts",
           "packages/host/src/intents/adapters.ts",
@@ -4615,20 +5323,11 @@
           "packages/host/src/setupwatch.ts",
           "packages/host/src/speedtest.ts",
           "packages/host/src/thumbs.ts",
-          "packages/host/src/transcript.ts",
           "packages/host/src/tree.ts",
           "packages/host/src/uistats.ts",
           "packages/host/src/update.ts",
           "packages/host/src/webbundle.ts",
           "packages/shared/src/wire/intent.ts",
-          "packages/shared/src/wire/messages.ts",
-          "packages/shared/src/wire/notify.ts",
-          "packages/shared/src/wire/oracle.ts",
-          "packages/shared/src/wire/repo.ts",
-          "packages/shared/src/wire/session.ts",
-          "packages/shared/src/wire/telemetry.ts",
-          "packages/shared/src/wire/transcript.ts",
-          "packages/shared/src/wire/work.ts",
           "packages/web/src/ActivitySheet.tsx",
           "packages/web/src/App.tsx",
           "packages/web/src/AppUpdate.tsx",
@@ -4714,8 +5413,6 @@
           "packages/web/src/useVoice.ts",
           "packages/web/src/webUpdate.ts",
           "packages/web/vite.config.ts",
-          "scripts/claude-stub-limit.mjs",
-          "scripts/claude-stub-tui.mjs",
           "scripts/fix-node-pty.mjs",
           "scripts/run-e2e.mjs",
           "tools/eslint/rules.js"
@@ -5087,37 +5784,102 @@
       "day": "2026-09-05",
       "ts": 1788635625,
       "batch": false,
-      "prereg": "2026-09-22a+1647a16d",
+      "prereg": "2026-10-16a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 10303,
           "max": 10303,
           "maxPath": "packages/web/src/App.tsx",
+          "nearMax": 1,
           "p95": 892
         }
       },
       "retouch": {
         "value": {
+          "appends": 77,
           "offenders": [
             {
-              "n": 9,
+              "n": 5,
               "path": "packages/web/src/App.tsx"
             },
             {
-              "n": 6,
-              "path": "packages/host/src/main.ts"
+              "n": 3,
+              "path": "packages/host/src/deliver.ts"
             },
             {
-              "n": 5,
-              "path": "packages/host/src/routes/session.ts"
+              "n": 3,
+              "path": "packages/host/src/main.ts"
             }
           ],
-          "rate": 0.6368159203980099,
-          "retouches": 128,
+          "rate": 0.2537313432835821,
+          "retouches": 51,
           "touches": 201
         }
       },
       "hatches": {
+        "split": {
+          "byKind": {
+            "asAny": {
+              "explained": 0,
+              "unexplained": 3
+            },
+            "asUnknownAs": {
+              "explained": 1,
+              "unexplained": 9
+            },
+            "colonAny": {
+              "explained": 13,
+              "unexplained": 38
+            },
+            "eslintDisable": {
+              "explained": 8,
+              "unexplained": 24
+            },
+            "ktNotNull": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppress": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppressLint": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyAny": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyBareExcept": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyNoqa": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyTypeIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsExpectError": {
+              "explained": 1,
+              "unexplained": 0
+            },
+            "tsIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsNocheck": {
+              "explained": 0,
+              "unexplained": 0
+            }
+          },
+          "explained": 23,
+          "todo": 6,
+          "unexplained": 74
+        },
         "value": {
           "asAny": 3,
           "asUnknownAs": 10,
@@ -5128,6 +5890,10 @@
           "ktSuppress": 0,
           "ktSuppressLint": 0,
           "ktTodoStub": 0,
+          "pyAny": 0,
+          "pyBareExcept": 0,
+          "pyNoqa": 0,
+          "pyTypeIgnore": 0,
           "todo": 5,
           "tsExpectError": 1,
           "tsIgnore": 0,
@@ -5300,6 +6066,19 @@
         }
       },
       "untested": {
+        "unnamed": [
+          "packages/host/src/git.ts",
+          "packages/host/src/opendeliveries.ts",
+          "packages/host/src/sentlog.ts",
+          "packages/shared/src/wire/messages.ts",
+          "packages/shared/src/wire/notify.ts",
+          "packages/shared/src/wire/oracle.ts",
+          "packages/shared/src/wire/repo.ts",
+          "packages/shared/src/wire/session.ts",
+          "packages/shared/src/wire/telemetry.ts",
+          "packages/shared/src/wire/transcript.ts",
+          "packages/shared/src/wire/work.ts"
+        ],
         "value": [
           "eslint.config.js",
           "packages/app/capacitor.config.ts",
@@ -5316,7 +6095,6 @@
           "packages/host/src/discover.ts",
           "packages/host/src/doctor.ts",
           "packages/host/src/fanout.ts",
-          "packages/host/src/git.ts",
           "packages/host/src/host.ts",
           "packages/host/src/httpio.ts",
           "packages/host/src/intents/adapters.ts",
@@ -5325,7 +6103,6 @@
           "packages/host/src/net.ts",
           "packages/host/src/netstats.ts",
           "packages/host/src/notifyprefs.ts",
-          "packages/host/src/opendeliveries.ts",
           "packages/host/src/oraclelog.ts",
           "packages/host/src/push.ts",
           "packages/host/src/repos.ts",
@@ -5336,7 +6113,6 @@
           "packages/host/src/routes/types.ts",
           "packages/host/src/routes/work.ts",
           "packages/host/src/secrets.ts",
-          "packages/host/src/sentlog.ts",
           "packages/host/src/sessions.ts",
           "packages/host/src/settings.ts",
           "packages/host/src/setupwatch.ts",
@@ -5347,14 +6123,6 @@
           "packages/host/src/update.ts",
           "packages/host/src/webbundle.ts",
           "packages/shared/src/wire/intent.ts",
-          "packages/shared/src/wire/messages.ts",
-          "packages/shared/src/wire/notify.ts",
-          "packages/shared/src/wire/oracle.ts",
-          "packages/shared/src/wire/repo.ts",
-          "packages/shared/src/wire/session.ts",
-          "packages/shared/src/wire/telemetry.ts",
-          "packages/shared/src/wire/transcript.ts",
-          "packages/shared/src/wire/work.ts",
           "packages/web/src/ActivitySheet.tsx",
           "packages/web/src/AppUpdate.tsx",
           "packages/web/src/ArchiveSheet.tsx",
@@ -5442,8 +6210,6 @@
           "packages/web/src/useVoice.ts",
           "packages/web/src/webUpdate.ts",
           "packages/web/vite.config.ts",
-          "scripts/claude-stub-limit.mjs",
-          "scripts/claude-stub-tui.mjs",
           "scripts/fix-node-pty.mjs",
           "scripts/run-e2e.mjs",
           "tools/eslint/rules.js"
@@ -5823,37 +6589,102 @@
       "day": "2026-09-06",
       "ts": 1788725333,
       "batch": false,
-      "prereg": "2026-09-22a+1647a16d",
+      "prereg": "2026-10-16a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 10897,
           "max": 10897,
           "maxPath": "packages/web/src/App.tsx",
+          "nearMax": 1,
           "p95": 892
         }
       },
       "retouch": {
         "value": {
+          "appends": 91,
           "offenders": [
             {
-              "n": 11,
+              "n": 5,
               "path": "packages/web/src/App.tsx"
             },
             {
-              "n": 6,
-              "path": "packages/host/src/main.ts"
+              "n": 3,
+              "path": "packages/host/src/deliver.ts"
             },
             {
-              "n": 6,
-              "path": "packages/host/src/sessions.ts"
+              "n": 3,
+              "path": "packages/host/src/main.ts"
             }
           ],
-          "rate": 0.6574074074074074,
-          "retouches": 142,
+          "rate": 0.2361111111111111,
+          "retouches": 51,
           "touches": 216
         }
       },
       "hatches": {
+        "split": {
+          "byKind": {
+            "asAny": {
+              "explained": 0,
+              "unexplained": 3
+            },
+            "asUnknownAs": {
+              "explained": 1,
+              "unexplained": 11
+            },
+            "colonAny": {
+              "explained": 13,
+              "unexplained": 36
+            },
+            "eslintDisable": {
+              "explained": 8,
+              "unexplained": 25
+            },
+            "ktNotNull": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppress": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppressLint": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyAny": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyBareExcept": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyNoqa": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyTypeIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsExpectError": {
+              "explained": 1,
+              "unexplained": 0
+            },
+            "tsIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsNocheck": {
+              "explained": 0,
+              "unexplained": 0
+            }
+          },
+          "explained": 23,
+          "todo": 6,
+          "unexplained": 75
+        },
         "value": {
           "asAny": 3,
           "asUnknownAs": 12,
@@ -5864,6 +6695,10 @@
           "ktSuppress": 0,
           "ktSuppressLint": 0,
           "ktTodoStub": 0,
+          "pyAny": 0,
+          "pyBareExcept": 0,
+          "pyNoqa": 0,
+          "pyTypeIgnore": 0,
           "todo": 5,
           "tsExpectError": 1,
           "tsIgnore": 0,
@@ -6046,6 +6881,21 @@
         }
       },
       "untested": {
+        "unnamed": [
+          "packages/host/src/convlog.ts",
+          "packages/host/src/git.ts",
+          "packages/host/src/opendeliveries.ts",
+          "packages/host/src/paths.ts",
+          "packages/host/src/sentlog.ts",
+          "packages/shared/src/wire/messages.ts",
+          "packages/shared/src/wire/notify.ts",
+          "packages/shared/src/wire/oracle.ts",
+          "packages/shared/src/wire/repo.ts",
+          "packages/shared/src/wire/session.ts",
+          "packages/shared/src/wire/telemetry.ts",
+          "packages/shared/src/wire/transcript.ts",
+          "packages/shared/src/wire/work.ts"
+        ],
         "value": [
           "eslint.config.js",
           "packages/app/capacitor.config.ts",
@@ -6059,12 +6909,10 @@
           "packages/host/src/budget.ts",
           "packages/host/src/builds.ts",
           "packages/host/src/compliance.ts",
-          "packages/host/src/convlog.ts",
           "packages/host/src/ctxwindow.ts",
           "packages/host/src/discover.ts",
           "packages/host/src/doctor.ts",
           "packages/host/src/fanout.ts",
-          "packages/host/src/git.ts",
           "packages/host/src/host.ts",
           "packages/host/src/httpio.ts",
           "packages/host/src/intents/adapters.ts",
@@ -6072,9 +6920,7 @@
           "packages/host/src/net.ts",
           "packages/host/src/netstats.ts",
           "packages/host/src/notifyprefs.ts",
-          "packages/host/src/opendeliveries.ts",
           "packages/host/src/oraclelog.ts",
-          "packages/host/src/paths.ts",
           "packages/host/src/push.ts",
           "packages/host/src/repos.ts",
           "packages/host/src/review.ts",
@@ -6084,7 +6930,6 @@
           "packages/host/src/routes/types.ts",
           "packages/host/src/routes/work.ts",
           "packages/host/src/secrets.ts",
-          "packages/host/src/sentlog.ts",
           "packages/host/src/sessions.ts",
           "packages/host/src/settings.ts",
           "packages/host/src/setupwatch.ts",
@@ -6096,14 +6941,6 @@
           "packages/host/src/update.ts",
           "packages/host/src/webbundle.ts",
           "packages/shared/src/wire/intent.ts",
-          "packages/shared/src/wire/messages.ts",
-          "packages/shared/src/wire/notify.ts",
-          "packages/shared/src/wire/oracle.ts",
-          "packages/shared/src/wire/repo.ts",
-          "packages/shared/src/wire/session.ts",
-          "packages/shared/src/wire/telemetry.ts",
-          "packages/shared/src/wire/transcript.ts",
-          "packages/shared/src/wire/work.ts",
           "packages/web/src/ActivitySheet.tsx",
           "packages/web/src/AppUpdate.tsx",
           "packages/web/src/ArchiveSheet.tsx",
@@ -6198,8 +7035,6 @@
           "packages/web/src/useVoice.ts",
           "packages/web/src/webUpdate.ts",
           "packages/web/vite.config.ts",
-          "scripts/claude-stub-limit.mjs",
-          "scripts/claude-stub-tui.mjs",
           "scripts/fix-node-pty.mjs",
           "scripts/run-e2e.mjs",
           "tools/eslint/rules.js"
@@ -6579,37 +7414,102 @@
       "day": "2026-09-07",
       "ts": 1788814506,
       "batch": true,
-      "prereg": "2026-09-22a+1647a16d",
+      "prereg": "2026-10-16a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 11582,
           "max": 11582,
           "maxPath": "packages/web/src/App.tsx",
+          "nearMax": 1,
           "p95": 928
         }
       },
       "retouch": {
         "value": {
+          "appends": 91,
           "offenders": [
             {
-              "n": 11,
+              "n": 5,
               "path": "packages/web/src/App.tsx"
             },
             {
-              "n": 6,
-              "path": "packages/host/src/main.ts"
+              "n": 3,
+              "path": "packages/host/src/deliver.ts"
             },
             {
-              "n": 6,
-              "path": "packages/host/src/sessions.ts"
+              "n": 3,
+              "path": "packages/host/src/main.ts"
             }
           ],
-          "rate": 0.6574074074074074,
-          "retouches": 142,
+          "rate": 0.2361111111111111,
+          "retouches": 51,
           "touches": 216
         }
       },
       "hatches": {
+        "split": {
+          "byKind": {
+            "asAny": {
+              "explained": 0,
+              "unexplained": 3
+            },
+            "asUnknownAs": {
+              "explained": 1,
+              "unexplained": 14
+            },
+            "colonAny": {
+              "explained": 13,
+              "unexplained": 36
+            },
+            "eslintDisable": {
+              "explained": 9,
+              "unexplained": 25
+            },
+            "ktNotNull": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppress": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppressLint": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyAny": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyBareExcept": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyNoqa": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyTypeIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsExpectError": {
+              "explained": 1,
+              "unexplained": 0
+            },
+            "tsIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsNocheck": {
+              "explained": 0,
+              "unexplained": 0
+            }
+          },
+          "explained": 24,
+          "todo": 6,
+          "unexplained": 78
+        },
         "value": {
           "asAny": 3,
           "asUnknownAs": 15,
@@ -6620,6 +7520,10 @@
           "ktSuppress": 0,
           "ktSuppressLint": 0,
           "ktTodoStub": 0,
+          "pyAny": 0,
+          "pyBareExcept": 0,
+          "pyNoqa": 0,
+          "pyTypeIgnore": 0,
           "todo": 5,
           "tsExpectError": 1,
           "tsIgnore": 0,
@@ -6807,6 +7711,23 @@
         }
       },
       "untested": {
+        "unnamed": [
+          "packages/host/src/convlog.ts",
+          "packages/host/src/git.ts",
+          "packages/host/src/opendeliveries.ts",
+          "packages/host/src/paths.ts",
+          "packages/host/src/render.ts",
+          "packages/host/src/sentlog.ts",
+          "packages/shared/src/fanoutruns.ts",
+          "packages/shared/src/wire/messages.ts",
+          "packages/shared/src/wire/notify.ts",
+          "packages/shared/src/wire/oracle.ts",
+          "packages/shared/src/wire/repo.ts",
+          "packages/shared/src/wire/session.ts",
+          "packages/shared/src/wire/telemetry.ts",
+          "packages/shared/src/wire/transcript.ts",
+          "packages/shared/src/wire/work.ts"
+        ],
         "value": [
           "eslint.config.js",
           "packages/app/capacitor.config.ts",
@@ -6820,12 +7741,10 @@
           "packages/host/src/budget.ts",
           "packages/host/src/builds.ts",
           "packages/host/src/compliance.ts",
-          "packages/host/src/convlog.ts",
           "packages/host/src/ctxwindow.ts",
           "packages/host/src/discover.ts",
           "packages/host/src/doctor.ts",
           "packages/host/src/fanout.ts",
-          "packages/host/src/git.ts",
           "packages/host/src/host.ts",
           "packages/host/src/httpio.ts",
           "packages/host/src/intents/adapters.ts",
@@ -6833,11 +7752,8 @@
           "packages/host/src/net.ts",
           "packages/host/src/netstats.ts",
           "packages/host/src/notifyprefs.ts",
-          "packages/host/src/opendeliveries.ts",
           "packages/host/src/oraclelog.ts",
-          "packages/host/src/paths.ts",
           "packages/host/src/push.ts",
-          "packages/host/src/render.ts",
           "packages/host/src/repos.ts",
           "packages/host/src/review.ts",
           "packages/host/src/routes/index.ts",
@@ -6846,7 +7762,6 @@
           "packages/host/src/routes/types.ts",
           "packages/host/src/routes/work.ts",
           "packages/host/src/secrets.ts",
-          "packages/host/src/sentlog.ts",
           "packages/host/src/sessions.ts",
           "packages/host/src/settings.ts",
           "packages/host/src/setupwatch.ts",
@@ -6857,16 +7772,7 @@
           "packages/host/src/uistats.ts",
           "packages/host/src/update.ts",
           "packages/host/src/webbundle.ts",
-          "packages/shared/src/fanoutruns.ts",
           "packages/shared/src/wire/intent.ts",
-          "packages/shared/src/wire/messages.ts",
-          "packages/shared/src/wire/notify.ts",
-          "packages/shared/src/wire/oracle.ts",
-          "packages/shared/src/wire/repo.ts",
-          "packages/shared/src/wire/session.ts",
-          "packages/shared/src/wire/telemetry.ts",
-          "packages/shared/src/wire/transcript.ts",
-          "packages/shared/src/wire/work.ts",
           "packages/web/src/ActivitySheet.tsx",
           "packages/web/src/AppUpdate.tsx",
           "packages/web/src/ArchiveSheet.tsx",
@@ -6962,10 +7868,7 @@
           "packages/web/src/useVoice.ts",
           "packages/web/src/webUpdate.ts",
           "packages/web/vite.config.ts",
-          "scripts/claude-stub-limit.mjs",
-          "scripts/claude-stub-tui.mjs",
           "scripts/fix-node-pty.mjs",
-          "scripts/lib-e2e.mjs",
           "scripts/run-e2e.mjs",
           "tools/eslint/rules.js"
         ]
@@ -7344,37 +8247,102 @@
       "day": "2026-09-09",
       "ts": 1788947322,
       "batch": false,
-      "prereg": "2026-09-22a+1647a16d",
+      "prereg": "2026-10-16a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 11582,
           "max": 11582,
           "maxPath": "packages/web/src/App.tsx",
+          "nearMax": 1,
           "p95": 928
         }
       },
       "retouch": {
         "value": {
+          "appends": 94,
           "offenders": [
             {
-              "n": 11,
+              "n": 5,
               "path": "packages/web/src/App.tsx"
             },
             {
-              "n": 6,
-              "path": "packages/host/src/main.ts"
+              "n": 3,
+              "path": "packages/host/src/deliver.ts"
             },
             {
-              "n": 6,
-              "path": "packages/host/src/sessions.ts"
+              "n": 3,
+              "path": "packages/host/src/main.ts"
             }
           ],
-          "rate": 0.6590909090909091,
-          "retouches": 145,
+          "rate": 0.2318181818181818,
+          "retouches": 51,
           "touches": 220
         }
       },
       "hatches": {
+        "split": {
+          "byKind": {
+            "asAny": {
+              "explained": 0,
+              "unexplained": 3
+            },
+            "asUnknownAs": {
+              "explained": 1,
+              "unexplained": 15
+            },
+            "colonAny": {
+              "explained": 13,
+              "unexplained": 36
+            },
+            "eslintDisable": {
+              "explained": 9,
+              "unexplained": 25
+            },
+            "ktNotNull": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppress": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppressLint": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyAny": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyBareExcept": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyNoqa": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyTypeIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsExpectError": {
+              "explained": 1,
+              "unexplained": 0
+            },
+            "tsIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsNocheck": {
+              "explained": 0,
+              "unexplained": 0
+            }
+          },
+          "explained": 24,
+          "todo": 6,
+          "unexplained": 79
+        },
         "value": {
           "asAny": 3,
           "asUnknownAs": 16,
@@ -7385,6 +8353,10 @@
           "ktSuppress": 0,
           "ktSuppressLint": 0,
           "ktTodoStub": 0,
+          "pyAny": 0,
+          "pyBareExcept": 0,
+          "pyNoqa": 0,
+          "pyTypeIgnore": 0,
           "todo": 5,
           "tsExpectError": 1,
           "tsIgnore": 0,
@@ -7572,6 +8544,23 @@
         }
       },
       "untested": {
+        "unnamed": [
+          "packages/host/src/convlog.ts",
+          "packages/host/src/git.ts",
+          "packages/host/src/opendeliveries.ts",
+          "packages/host/src/paths.ts",
+          "packages/host/src/render.ts",
+          "packages/host/src/sentlog.ts",
+          "packages/shared/src/fanoutruns.ts",
+          "packages/shared/src/wire/messages.ts",
+          "packages/shared/src/wire/notify.ts",
+          "packages/shared/src/wire/oracle.ts",
+          "packages/shared/src/wire/repo.ts",
+          "packages/shared/src/wire/session.ts",
+          "packages/shared/src/wire/telemetry.ts",
+          "packages/shared/src/wire/transcript.ts",
+          "packages/shared/src/wire/work.ts"
+        ],
         "value": [
           "eslint.config.js",
           "packages/app/capacitor.config.ts",
@@ -7585,12 +8574,10 @@
           "packages/host/src/budget.ts",
           "packages/host/src/builds.ts",
           "packages/host/src/compliance.ts",
-          "packages/host/src/convlog.ts",
           "packages/host/src/ctxwindow.ts",
           "packages/host/src/discover.ts",
           "packages/host/src/doctor.ts",
           "packages/host/src/fanout.ts",
-          "packages/host/src/git.ts",
           "packages/host/src/host.ts",
           "packages/host/src/httpio.ts",
           "packages/host/src/intents/adapters.ts",
@@ -7598,11 +8585,8 @@
           "packages/host/src/net.ts",
           "packages/host/src/netstats.ts",
           "packages/host/src/notifyprefs.ts",
-          "packages/host/src/opendeliveries.ts",
           "packages/host/src/oraclelog.ts",
-          "packages/host/src/paths.ts",
           "packages/host/src/push.ts",
-          "packages/host/src/render.ts",
           "packages/host/src/repos.ts",
           "packages/host/src/review.ts",
           "packages/host/src/routes/index.ts",
@@ -7611,7 +8595,6 @@
           "packages/host/src/routes/types.ts",
           "packages/host/src/routes/work.ts",
           "packages/host/src/secrets.ts",
-          "packages/host/src/sentlog.ts",
           "packages/host/src/sessions.ts",
           "packages/host/src/settings.ts",
           "packages/host/src/setupwatch.ts",
@@ -7622,16 +8605,7 @@
           "packages/host/src/uistats.ts",
           "packages/host/src/update.ts",
           "packages/host/src/webbundle.ts",
-          "packages/shared/src/fanoutruns.ts",
           "packages/shared/src/wire/intent.ts",
-          "packages/shared/src/wire/messages.ts",
-          "packages/shared/src/wire/notify.ts",
-          "packages/shared/src/wire/oracle.ts",
-          "packages/shared/src/wire/repo.ts",
-          "packages/shared/src/wire/session.ts",
-          "packages/shared/src/wire/telemetry.ts",
-          "packages/shared/src/wire/transcript.ts",
-          "packages/shared/src/wire/work.ts",
           "packages/web/src/ActivitySheet.tsx",
           "packages/web/src/AppUpdate.tsx",
           "packages/web/src/ArchiveSheet.tsx",
@@ -7728,10 +8702,7 @@
           "packages/web/src/useVoice.ts",
           "packages/web/src/webUpdate.ts",
           "packages/web/vite.config.ts",
-          "scripts/claude-stub-limit.mjs",
-          "scripts/claude-stub-tui.mjs",
           "scripts/fix-node-pty.mjs",
-          "scripts/lib-e2e.mjs",
           "scripts/run-e2e.mjs",
           "tools/eslint/rules.js"
         ]
@@ -8110,37 +9081,102 @@
       "day": "2026-09-11",
       "ts": 1789160326,
       "batch": true,
-      "prereg": "2026-09-22a+1647a16d",
+      "prereg": "2026-10-16a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 12294,
           "max": 12294,
           "maxPath": "packages/web/src/App.tsx",
+          "nearMax": 1,
           "p95": 968
         }
       },
       "retouch": {
         "value": {
+          "appends": 101,
           "offenders": [
             {
-              "n": 14,
+              "n": 5,
               "path": "packages/web/src/App.tsx"
             },
             {
-              "n": 7,
-              "path": "packages/host/src/sessions.ts"
+              "n": 3,
+              "path": "packages/host/src/deliver.ts"
             },
             {
-              "n": 6,
+              "n": 3,
               "path": "packages/host/src/main.ts"
             }
           ],
-          "rate": 0.6567796610169492,
-          "retouches": 155,
+          "rate": 0.2288135593220339,
+          "retouches": 54,
           "touches": 236
         }
       },
       "hatches": {
+        "split": {
+          "byKind": {
+            "asAny": {
+              "explained": 0,
+              "unexplained": 3
+            },
+            "asUnknownAs": {
+              "explained": 1,
+              "unexplained": 16
+            },
+            "colonAny": {
+              "explained": 14,
+              "unexplained": 40
+            },
+            "eslintDisable": {
+              "explained": 10,
+              "unexplained": 26
+            },
+            "ktNotNull": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppress": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppressLint": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyAny": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyBareExcept": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyNoqa": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyTypeIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsExpectError": {
+              "explained": 1,
+              "unexplained": 0
+            },
+            "tsIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsNocheck": {
+              "explained": 0,
+              "unexplained": 0
+            }
+          },
+          "explained": 26,
+          "todo": 6,
+          "unexplained": 85
+        },
         "value": {
           "asAny": 3,
           "asUnknownAs": 17,
@@ -8151,6 +9187,10 @@
           "ktSuppress": 0,
           "ktSuppressLint": 0,
           "ktTodoStub": 0,
+          "pyAny": 0,
+          "pyBareExcept": 0,
+          "pyNoqa": 0,
+          "pyTypeIgnore": 0,
           "todo": 5,
           "tsExpectError": 1,
           "tsIgnore": 0,
@@ -8347,10 +9387,29 @@
           "areasReason": "no skill in this tree routes to another (no `<router>-*` convention)",
           "claudeMdChars": 11239,
           "descChars": 2775,
+          "skillBodyChars": 68394,
           "skillCount": 6
         }
       },
       "untested": {
+        "unnamed": [
+          "packages/host/src/convlog.ts",
+          "packages/host/src/ctxwindow.ts",
+          "packages/host/src/git.ts",
+          "packages/host/src/paths.ts",
+          "packages/host/src/render.ts",
+          "packages/host/src/sentlog.ts",
+          "packages/host/src/update.ts",
+          "packages/shared/src/fanoutruns.ts",
+          "packages/shared/src/wire/messages.ts",
+          "packages/shared/src/wire/notify.ts",
+          "packages/shared/src/wire/oracle.ts",
+          "packages/shared/src/wire/repo.ts",
+          "packages/shared/src/wire/session.ts",
+          "packages/shared/src/wire/telemetry.ts",
+          "packages/shared/src/wire/transcript.ts",
+          "packages/shared/src/wire/work.ts"
+        ],
         "value": [
           ".tsview.tsx",
           "eslint.config.js",
@@ -8366,12 +9425,9 @@
           "packages/host/src/builds.ts",
           "packages/host/src/buildscan.ts",
           "packages/host/src/compliance.ts",
-          "packages/host/src/convlog.ts",
-          "packages/host/src/ctxwindow.ts",
           "packages/host/src/discover.ts",
           "packages/host/src/doctor.ts",
           "packages/host/src/fanout.ts",
-          "packages/host/src/git.ts",
           "packages/host/src/host.ts",
           "packages/host/src/httpio.ts",
           "packages/host/src/intents/adapters.ts",
@@ -8380,9 +9436,7 @@
           "packages/host/src/netstats.ts",
           "packages/host/src/notifyprefs.ts",
           "packages/host/src/oraclelog.ts",
-          "packages/host/src/paths.ts",
           "packages/host/src/push.ts",
-          "packages/host/src/render.ts",
           "packages/host/src/repos.ts",
           "packages/host/src/review.ts",
           "packages/host/src/routes/index.ts",
@@ -8391,7 +9445,6 @@
           "packages/host/src/routes/types.ts",
           "packages/host/src/routes/work.ts",
           "packages/host/src/secrets.ts",
-          "packages/host/src/sentlog.ts",
           "packages/host/src/settings.ts",
           "packages/host/src/setupwatch.ts",
           "packages/host/src/speedtest.ts",
@@ -8399,18 +9452,8 @@
           "packages/host/src/tokenstats.ts",
           "packages/host/src/tree.ts",
           "packages/host/src/uistats.ts",
-          "packages/host/src/update.ts",
           "packages/host/src/webbundle.ts",
-          "packages/shared/src/fanoutruns.ts",
           "packages/shared/src/wire/intent.ts",
-          "packages/shared/src/wire/messages.ts",
-          "packages/shared/src/wire/notify.ts",
-          "packages/shared/src/wire/oracle.ts",
-          "packages/shared/src/wire/repo.ts",
-          "packages/shared/src/wire/session.ts",
-          "packages/shared/src/wire/telemetry.ts",
-          "packages/shared/src/wire/transcript.ts",
-          "packages/shared/src/wire/work.ts",
           "packages/web/src/ActivitySheet.tsx",
           "packages/web/src/AppUpdate.tsx",
           "packages/web/src/ArchiveSheet.tsx",
@@ -8512,10 +9555,7 @@
           "packages/web/src/useVoice.ts",
           "packages/web/src/webUpdate.ts",
           "packages/web/vite.config.ts",
-          "scripts/claude-stub-limit.mjs",
-          "scripts/claude-stub-tui.mjs",
           "scripts/fix-node-pty.mjs",
-          "scripts/lib-e2e.mjs",
           "scripts/run-e2e.mjs"
         ]
       },
@@ -8901,37 +9941,102 @@
       "day": "2026-09-12",
       "ts": 1789246550,
       "batch": false,
-      "prereg": "2026-09-22a+1647a16d",
+      "prereg": "2026-10-16a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 12802,
           "max": 12802,
           "maxPath": "packages/web/src/App.tsx",
+          "nearMax": 1,
           "p95": 994
         }
       },
       "retouch": {
         "value": {
+          "appends": 101,
           "offenders": [
             {
-              "n": 14,
+              "n": 5,
               "path": "packages/web/src/App.tsx"
             },
             {
-              "n": 7,
-              "path": "packages/host/src/sessions.ts"
+              "n": 3,
+              "path": "packages/host/src/deliver.ts"
             },
             {
-              "n": 6,
+              "n": 3,
               "path": "packages/host/src/main.ts"
             }
           ],
-          "rate": 0.6567796610169492,
-          "retouches": 155,
+          "rate": 0.2288135593220339,
+          "retouches": 54,
           "touches": 236
         }
       },
       "hatches": {
+        "split": {
+          "byKind": {
+            "asAny": {
+              "explained": 0,
+              "unexplained": 3
+            },
+            "asUnknownAs": {
+              "explained": 1,
+              "unexplained": 16
+            },
+            "colonAny": {
+              "explained": 14,
+              "unexplained": 45
+            },
+            "eslintDisable": {
+              "explained": 10,
+              "unexplained": 26
+            },
+            "ktNotNull": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppress": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppressLint": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyAny": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyBareExcept": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyNoqa": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyTypeIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsExpectError": {
+              "explained": 1,
+              "unexplained": 0
+            },
+            "tsIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsNocheck": {
+              "explained": 0,
+              "unexplained": 0
+            }
+          },
+          "explained": 26,
+          "todo": 6,
+          "unexplained": 90
+        },
         "value": {
           "asAny": 3,
           "asUnknownAs": 17,
@@ -8942,6 +10047,10 @@
           "ktSuppress": 0,
           "ktSuppressLint": 0,
           "ktTodoStub": 0,
+          "pyAny": 0,
+          "pyBareExcept": 0,
+          "pyNoqa": 0,
+          "pyTypeIgnore": 0,
           "todo": 5,
           "tsExpectError": 1,
           "tsIgnore": 0,
@@ -9150,10 +10259,30 @@
           "areasReason": "no skill in this tree routes to another (no `<router>-*` convention)",
           "claudeMdChars": 11377,
           "descChars": 2775,
+          "skillBodyChars": 80008,
           "skillCount": 6
         }
       },
       "untested": {
+        "unnamed": [
+          "packages/host/src/backends/types.ts",
+          "packages/host/src/convlog.ts",
+          "packages/host/src/ctxwindow.ts",
+          "packages/host/src/git.ts",
+          "packages/host/src/paths.ts",
+          "packages/host/src/render.ts",
+          "packages/host/src/sentlog.ts",
+          "packages/host/src/update.ts",
+          "packages/shared/src/fanoutruns.ts",
+          "packages/shared/src/wire/messages.ts",
+          "packages/shared/src/wire/notify.ts",
+          "packages/shared/src/wire/oracle.ts",
+          "packages/shared/src/wire/repo.ts",
+          "packages/shared/src/wire/telemetry.ts",
+          "packages/shared/src/wire/transcript.ts",
+          "packages/shared/src/wire/work.ts",
+          "packages/web/src/storage.ts"
+        ],
         "value": [
           ".tsview.tsx",
           "eslint.config.js",
@@ -9164,19 +10293,15 @@
           "packages/host/src/archive.ts",
           "packages/host/src/assess.ts",
           "packages/host/src/auth.ts",
-          "packages/host/src/backends/types.ts",
           "packages/host/src/backlog.ts",
           "packages/host/src/budget.ts",
           "packages/host/src/builds.ts",
           "packages/host/src/buildscan.ts",
           "packages/host/src/compliance.ts",
           "packages/host/src/contextlimits.ts",
-          "packages/host/src/convlog.ts",
-          "packages/host/src/ctxwindow.ts",
           "packages/host/src/discover.ts",
           "packages/host/src/doctor.ts",
           "packages/host/src/fanout.ts",
-          "packages/host/src/git.ts",
           "packages/host/src/host.ts",
           "packages/host/src/httpio.ts",
           "packages/host/src/intents/adapters.ts",
@@ -9185,9 +10310,7 @@
           "packages/host/src/netstats.ts",
           "packages/host/src/notifyprefs.ts",
           "packages/host/src/oraclelog.ts",
-          "packages/host/src/paths.ts",
           "packages/host/src/push.ts",
-          "packages/host/src/render.ts",
           "packages/host/src/repos.ts",
           "packages/host/src/review.ts",
           "packages/host/src/routes/index.ts",
@@ -9196,7 +10319,6 @@
           "packages/host/src/routes/types.ts",
           "packages/host/src/routes/work.ts",
           "packages/host/src/secrets.ts",
-          "packages/host/src/sentlog.ts",
           "packages/host/src/settings.ts",
           "packages/host/src/setupwatch.ts",
           "packages/host/src/speedtest.ts",
@@ -9204,17 +10326,8 @@
           "packages/host/src/tokenstats.ts",
           "packages/host/src/tree.ts",
           "packages/host/src/uistats.ts",
-          "packages/host/src/update.ts",
           "packages/host/src/webbundle.ts",
-          "packages/shared/src/fanoutruns.ts",
           "packages/shared/src/wire/intent.ts",
-          "packages/shared/src/wire/messages.ts",
-          "packages/shared/src/wire/notify.ts",
-          "packages/shared/src/wire/oracle.ts",
-          "packages/shared/src/wire/repo.ts",
-          "packages/shared/src/wire/telemetry.ts",
-          "packages/shared/src/wire/transcript.ts",
-          "packages/shared/src/wire/work.ts",
           "packages/web/src/ActivitySheet.tsx",
           "packages/web/src/AppUpdate.tsx",
           "packages/web/src/ArchiveSheet.tsx",
@@ -9302,7 +10415,6 @@
           "packages/web/src/sessionFacts.tsx",
           "packages/web/src/settings.ts",
           "packages/web/src/shellLink.ts",
-          "packages/web/src/storage.ts",
           "packages/web/src/termTheme.ts",
           "packages/web/src/theme.ts",
           "packages/web/src/toolbar.ts",
@@ -9317,10 +10429,7 @@
           "packages/web/src/useVoice.ts",
           "packages/web/src/webUpdate.ts",
           "packages/web/vite.config.ts",
-          "scripts/claude-stub-limit.mjs",
-          "scripts/claude-stub-tui.mjs",
           "scripts/fix-node-pty.mjs",
-          "scripts/lib-e2e.mjs",
           "scripts/run-e2e.mjs"
         ]
       },
@@ -9721,37 +10830,102 @@
       "day": "2026-09-14",
       "ts": 1789406877,
       "batch": true,
-      "prereg": "2026-09-22a+1647a16d",
+      "prereg": "2026-10-16a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 13977,
           "max": 13977,
           "maxPath": "packages/web/src/App.tsx",
+          "nearMax": 1,
           "p95": 998
         }
       },
       "retouch": {
         "value": {
+          "appends": 95,
           "offenders": [
             {
-              "n": 13,
+              "n": 4,
               "path": "packages/web/src/App.tsx"
             },
             {
-              "n": 6,
-              "path": "packages/host/src/sessions.ts"
+              "n": 3,
+              "path": "packages/host/src/deliver.ts"
             },
             {
-              "n": 5,
+              "n": 3,
               "path": "packages/host/src/main.ts"
             }
           ],
-          "rate": 0.6415929203539823,
-          "retouches": 145,
+          "rate": 0.22123893805309736,
+          "retouches": 50,
           "touches": 226
         }
       },
       "hatches": {
+        "split": {
+          "byKind": {
+            "asAny": {
+              "explained": 0,
+              "unexplained": 3
+            },
+            "asUnknownAs": {
+              "explained": 1,
+              "unexplained": 17
+            },
+            "colonAny": {
+              "explained": 14,
+              "unexplained": 57
+            },
+            "eslintDisable": {
+              "explained": 11,
+              "unexplained": 26
+            },
+            "ktNotNull": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppress": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppressLint": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyAny": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyBareExcept": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyNoqa": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyTypeIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsExpectError": {
+              "explained": 1,
+              "unexplained": 0
+            },
+            "tsIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsNocheck": {
+              "explained": 0,
+              "unexplained": 0
+            }
+          },
+          "explained": 27,
+          "todo": 6,
+          "unexplained": 103
+        },
         "value": {
           "asAny": 3,
           "asUnknownAs": 18,
@@ -9762,6 +10936,10 @@
           "ktSuppress": 0,
           "ktSuppressLint": 0,
           "ktTodoStub": 0,
+          "pyAny": 0,
+          "pyBareExcept": 0,
+          "pyNoqa": 0,
+          "pyTypeIgnore": 0,
           "todo": 5,
           "tsExpectError": 1,
           "tsIgnore": 0,
@@ -9995,70 +11173,28 @@
           "areasReason": "no skill in this tree routes to another (no `<router>-*` convention)",
           "claudeMdChars": 11591,
           "descChars": 2775,
+          "skillBodyChars": 110310,
           "skillCount": 6
         }
       },
       "untested": {
-        "value": [
-          ".tsview.tsx",
-          "eslint.config.js",
-          "packages/app/capacitor.config.ts",
-          "packages/app/scripts/build-web.mjs",
-          "packages/host/src/acks.ts",
-          "packages/host/src/api.ts",
-          "packages/host/src/archive.ts",
-          "packages/host/src/assess.ts",
-          "packages/host/src/auth.ts",
+        "unnamed": [
           "packages/host/src/backends/types.ts",
-          "packages/host/src/backlog.ts",
-          "packages/host/src/budget.ts",
-          "packages/host/src/builds.ts",
-          "packages/host/src/buildscan.ts",
           "packages/host/src/capture/android.ts",
           "packages/host/src/capture/pixels.ts",
-          "packages/host/src/capture/types.ts",
           "packages/host/src/capture/web.ts",
-          "packages/host/src/compliance.ts",
-          "packages/host/src/contextlimits.ts",
           "packages/host/src/convlog.ts",
           "packages/host/src/ctxwindow.ts",
-          "packages/host/src/discover.ts",
-          "packages/host/src/doctor.ts",
-          "packages/host/src/fanout.ts",
           "packages/host/src/git.ts",
           "packages/host/src/host.ts",
-          "packages/host/src/httpio.ts",
-          "packages/host/src/intents/adapters.ts",
-          "packages/host/src/meter.ts",
-          "packages/host/src/net.ts",
-          "packages/host/src/netstats.ts",
-          "packages/host/src/notifyprefs.ts",
           "packages/host/src/ocdb.ts",
-          "packages/host/src/oraclelog.ts",
           "packages/host/src/paths.ts",
-          "packages/host/src/push.ts",
           "packages/host/src/render.ts",
           "packages/host/src/repos.ts",
-          "packages/host/src/review.ts",
-          "packages/host/src/routes/index.ts",
-          "packages/host/src/routes/session.ts",
-          "packages/host/src/routes/system.ts",
-          "packages/host/src/routes/types.ts",
-          "packages/host/src/routes/work.ts",
-          "packages/host/src/secrets.ts",
           "packages/host/src/sentlog.ts",
-          "packages/host/src/settings.ts",
-          "packages/host/src/setupwatch.ts",
-          "packages/host/src/speedtest.ts",
-          "packages/host/src/thumbs.ts",
-          "packages/host/src/tokenstats.ts",
-          "packages/host/src/tree.ts",
-          "packages/host/src/uistats.ts",
           "packages/host/src/update.ts",
-          "packages/host/src/webbundle.ts",
           "packages/shared/src/fanoutruns.ts",
           "packages/shared/src/wire/capture.ts",
-          "packages/shared/src/wire/intent.ts",
           "packages/shared/src/wire/localrt.ts",
           "packages/shared/src/wire/messages.ts",
           "packages/shared/src/wire/notify.ts",
@@ -10069,6 +11205,52 @@
           "packages/shared/src/wire/transcript.ts",
           "packages/shared/src/wire/work.ts",
           "packages/shared/src/working.ts",
+          "packages/web/src/storage.ts"
+        ],
+        "value": [
+          ".tsview.tsx",
+          "eslint.config.js",
+          "packages/app/capacitor.config.ts",
+          "packages/app/scripts/build-web.mjs",
+          "packages/host/src/acks.ts",
+          "packages/host/src/api.ts",
+          "packages/host/src/archive.ts",
+          "packages/host/src/assess.ts",
+          "packages/host/src/auth.ts",
+          "packages/host/src/backlog.ts",
+          "packages/host/src/budget.ts",
+          "packages/host/src/builds.ts",
+          "packages/host/src/buildscan.ts",
+          "packages/host/src/capture/types.ts",
+          "packages/host/src/compliance.ts",
+          "packages/host/src/contextlimits.ts",
+          "packages/host/src/discover.ts",
+          "packages/host/src/doctor.ts",
+          "packages/host/src/fanout.ts",
+          "packages/host/src/httpio.ts",
+          "packages/host/src/intents/adapters.ts",
+          "packages/host/src/meter.ts",
+          "packages/host/src/net.ts",
+          "packages/host/src/netstats.ts",
+          "packages/host/src/notifyprefs.ts",
+          "packages/host/src/oraclelog.ts",
+          "packages/host/src/push.ts",
+          "packages/host/src/review.ts",
+          "packages/host/src/routes/index.ts",
+          "packages/host/src/routes/session.ts",
+          "packages/host/src/routes/system.ts",
+          "packages/host/src/routes/types.ts",
+          "packages/host/src/routes/work.ts",
+          "packages/host/src/secrets.ts",
+          "packages/host/src/settings.ts",
+          "packages/host/src/setupwatch.ts",
+          "packages/host/src/speedtest.ts",
+          "packages/host/src/thumbs.ts",
+          "packages/host/src/tokenstats.ts",
+          "packages/host/src/tree.ts",
+          "packages/host/src/uistats.ts",
+          "packages/host/src/webbundle.ts",
+          "packages/shared/src/wire/intent.ts",
           "packages/web/src/ActivitySheet.tsx",
           "packages/web/src/AppUpdate.tsx",
           "packages/web/src/ArchiveSheet.tsx",
@@ -10159,7 +11341,6 @@
           "packages/web/src/sessionFacts.tsx",
           "packages/web/src/settings.ts",
           "packages/web/src/shellLink.ts",
-          "packages/web/src/storage.ts",
           "packages/web/src/termTheme.ts",
           "packages/web/src/theme.ts",
           "packages/web/src/toolbar.ts",
@@ -10174,11 +11355,7 @@
           "packages/web/src/useVoice.ts",
           "packages/web/src/webUpdate.ts",
           "packages/web/vite.config.ts",
-          "scripts/capture-stub.mjs",
-          "scripts/claude-stub-limit.mjs",
-          "scripts/claude-stub-tui.mjs",
           "scripts/fix-node-pty.mjs",
-          "scripts/lib-e2e.mjs",
           "scripts/run-e2e.mjs"
         ]
       },
@@ -10588,37 +11765,102 @@
       "day": "2026-09-16",
       "ts": 1789540610,
       "batch": false,
-      "prereg": "2026-09-22a+1647a16d",
+      "prereg": "2026-10-16a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 13975,
           "max": 13975,
           "maxPath": "packages/web/src/App.tsx",
+          "nearMax": 1,
           "p95": 998
         }
       },
       "retouch": {
         "value": {
+          "appends": 103,
           "offenders": [
             {
-              "n": 14,
+              "n": 4,
               "path": "packages/web/src/App.tsx"
             },
             {
-              "n": 6,
-              "path": "packages/host/src/main.ts"
+              "n": 3,
+              "path": "packages/host/src/deliver.ts"
             },
             {
-              "n": 6,
-              "path": "packages/host/src/sessions.ts"
+              "n": 3,
+              "path": "packages/host/src/main.ts"
             }
           ],
-          "rate": 0.6465863453815262,
-          "retouches": 161,
+          "rate": 0.23293172690763053,
+          "retouches": 58,
           "touches": 249
         }
       },
       "hatches": {
+        "split": {
+          "byKind": {
+            "asAny": {
+              "explained": 1,
+              "unexplained": 3
+            },
+            "asUnknownAs": {
+              "explained": 1,
+              "unexplained": 17
+            },
+            "colonAny": {
+              "explained": 14,
+              "unexplained": 57
+            },
+            "eslintDisable": {
+              "explained": 11,
+              "unexplained": 26
+            },
+            "ktNotNull": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppress": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppressLint": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyAny": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyBareExcept": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyNoqa": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyTypeIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsExpectError": {
+              "explained": 1,
+              "unexplained": 0
+            },
+            "tsIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsNocheck": {
+              "explained": 0,
+              "unexplained": 0
+            }
+          },
+          "explained": 28,
+          "todo": 6,
+          "unexplained": 103
+        },
         "value": {
           "asAny": 4,
           "asUnknownAs": 18,
@@ -10629,6 +11871,10 @@
           "ktSuppress": 0,
           "ktSuppressLint": 0,
           "ktTodoStub": 0,
+          "pyAny": 0,
+          "pyBareExcept": 0,
+          "pyNoqa": 0,
+          "pyTypeIgnore": 0,
           "todo": 5,
           "tsExpectError": 1,
           "tsIgnore": 0,
@@ -10862,69 +12108,29 @@
           "areasReason": "no skill in this tree routes to another (no `<router>-*` convention)",
           "claudeMdChars": 11591,
           "descChars": 2775,
+          "skillBodyChars": 110310,
           "skillCount": 6
         }
       },
       "untested": {
-        "value": [
-          ".tsview.tsx",
-          "eslint.config.js",
-          "packages/app/capacitor.config.ts",
-          "packages/app/scripts/build-web.mjs",
-          "packages/host/src/acks.ts",
-          "packages/host/src/api.ts",
-          "packages/host/src/archive.ts",
-          "packages/host/src/assess.ts",
-          "packages/host/src/auth.ts",
+        "unnamed": [
           "packages/host/src/backends/types.ts",
-          "packages/host/src/backlog.ts",
-          "packages/host/src/budget.ts",
-          "packages/host/src/buildscan.ts",
           "packages/host/src/capture/android.ts",
           "packages/host/src/capture/pixels.ts",
-          "packages/host/src/capture/types.ts",
           "packages/host/src/capture/web.ts",
-          "packages/host/src/compliance.ts",
-          "packages/host/src/contextlimits.ts",
           "packages/host/src/convlog.ts",
           "packages/host/src/ctxwindow.ts",
-          "packages/host/src/discover.ts",
-          "packages/host/src/doctor.ts",
-          "packages/host/src/fanout.ts",
           "packages/host/src/git.ts",
           "packages/host/src/host.ts",
-          "packages/host/src/httpio.ts",
           "packages/host/src/intents/adapters.ts",
-          "packages/host/src/meter.ts",
-          "packages/host/src/net.ts",
-          "packages/host/src/netstats.ts",
-          "packages/host/src/notifyprefs.ts",
           "packages/host/src/ocdb.ts",
-          "packages/host/src/oraclelog.ts",
           "packages/host/src/paths.ts",
-          "packages/host/src/push.ts",
           "packages/host/src/render.ts",
           "packages/host/src/repos.ts",
-          "packages/host/src/review.ts",
-          "packages/host/src/routes/index.ts",
-          "packages/host/src/routes/session.ts",
-          "packages/host/src/routes/system.ts",
-          "packages/host/src/routes/types.ts",
-          "packages/host/src/routes/work.ts",
-          "packages/host/src/secrets.ts",
           "packages/host/src/sentlog.ts",
-          "packages/host/src/settings.ts",
-          "packages/host/src/setupwatch.ts",
-          "packages/host/src/speedtest.ts",
-          "packages/host/src/thumbs.ts",
-          "packages/host/src/tokenstats.ts",
-          "packages/host/src/tree.ts",
-          "packages/host/src/uistats.ts",
           "packages/host/src/update.ts",
-          "packages/host/src/webbundle.ts",
           "packages/shared/src/fanoutruns.ts",
           "packages/shared/src/wire/capture.ts",
-          "packages/shared/src/wire/intent.ts",
           "packages/shared/src/wire/localrt.ts",
           "packages/shared/src/wire/messages.ts",
           "packages/shared/src/wire/notify.ts",
@@ -10935,6 +12141,50 @@
           "packages/shared/src/wire/transcript.ts",
           "packages/shared/src/wire/work.ts",
           "packages/shared/src/working.ts",
+          "packages/web/src/storage.ts"
+        ],
+        "value": [
+          ".tsview.tsx",
+          "eslint.config.js",
+          "packages/app/capacitor.config.ts",
+          "packages/app/scripts/build-web.mjs",
+          "packages/host/src/acks.ts",
+          "packages/host/src/api.ts",
+          "packages/host/src/archive.ts",
+          "packages/host/src/assess.ts",
+          "packages/host/src/auth.ts",
+          "packages/host/src/backlog.ts",
+          "packages/host/src/budget.ts",
+          "packages/host/src/buildscan.ts",
+          "packages/host/src/capture/types.ts",
+          "packages/host/src/compliance.ts",
+          "packages/host/src/contextlimits.ts",
+          "packages/host/src/discover.ts",
+          "packages/host/src/doctor.ts",
+          "packages/host/src/fanout.ts",
+          "packages/host/src/httpio.ts",
+          "packages/host/src/meter.ts",
+          "packages/host/src/net.ts",
+          "packages/host/src/netstats.ts",
+          "packages/host/src/notifyprefs.ts",
+          "packages/host/src/oraclelog.ts",
+          "packages/host/src/push.ts",
+          "packages/host/src/review.ts",
+          "packages/host/src/routes/index.ts",
+          "packages/host/src/routes/session.ts",
+          "packages/host/src/routes/system.ts",
+          "packages/host/src/routes/types.ts",
+          "packages/host/src/routes/work.ts",
+          "packages/host/src/secrets.ts",
+          "packages/host/src/settings.ts",
+          "packages/host/src/setupwatch.ts",
+          "packages/host/src/speedtest.ts",
+          "packages/host/src/thumbs.ts",
+          "packages/host/src/tokenstats.ts",
+          "packages/host/src/tree.ts",
+          "packages/host/src/uistats.ts",
+          "packages/host/src/webbundle.ts",
+          "packages/shared/src/wire/intent.ts",
           "packages/web/src/ActivitySheet.tsx",
           "packages/web/src/AppUpdate.tsx",
           "packages/web/src/ArchiveSheet.tsx",
@@ -11025,7 +12275,6 @@
           "packages/web/src/sessionFacts.tsx",
           "packages/web/src/settings.ts",
           "packages/web/src/shellLink.ts",
-          "packages/web/src/storage.ts",
           "packages/web/src/termTheme.ts",
           "packages/web/src/theme.ts",
           "packages/web/src/toolbar.ts",
@@ -11040,11 +12289,7 @@
           "packages/web/src/useVoice.ts",
           "packages/web/src/webUpdate.ts",
           "packages/web/vite.config.ts",
-          "scripts/capture-stub.mjs",
-          "scripts/claude-stub-limit.mjs",
-          "scripts/claude-stub-tui.mjs",
           "scripts/fix-node-pty.mjs",
-          "scripts/lib-e2e.mjs",
           "scripts/run-e2e.mjs"
         ]
       },
@@ -11448,37 +12693,102 @@
       "day": "2026-09-18",
       "ts": 1789758585,
       "batch": false,
-      "prereg": "2026-09-22a+1647a16d",
+      "prereg": "2026-10-16a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 15599,
           "max": 15599,
           "maxPath": "packages/web/src/App.tsx",
+          "nearMax": 1,
           "p95": 1291
         }
       },
       "retouch": {
         "value": {
+          "appends": 114,
           "offenders": [
             {
-              "n": 16,
+              "n": 4,
               "path": "packages/web/src/App.tsx"
             },
             {
-              "n": 6,
-              "path": "packages/host/src/main.ts"
+              "n": 3,
+              "path": "packages/host/src/deliver.ts"
             },
             {
-              "n": 6,
-              "path": "packages/host/src/sessions.ts"
+              "n": 3,
+              "path": "packages/host/src/main.ts"
             }
           ],
-          "rate": 0.7709251101321586,
-          "retouches": 175,
+          "rate": 0.2687224669603524,
+          "retouches": 61,
           "touches": 227
         }
       },
       "hatches": {
+        "split": {
+          "byKind": {
+            "asAny": {
+              "explained": 4,
+              "unexplained": 4
+            },
+            "asUnknownAs": {
+              "explained": 1,
+              "unexplained": 18
+            },
+            "colonAny": {
+              "explained": 15,
+              "unexplained": 58
+            },
+            "eslintDisable": {
+              "explained": 12,
+              "unexplained": 26
+            },
+            "ktNotNull": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppress": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppressLint": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyAny": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyBareExcept": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyNoqa": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyTypeIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsExpectError": {
+              "explained": 1,
+              "unexplained": 0
+            },
+            "tsIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsNocheck": {
+              "explained": 0,
+              "unexplained": 0
+            }
+          },
+          "explained": 33,
+          "todo": 6,
+          "unexplained": 106
+        },
         "value": {
           "asAny": 8,
           "asUnknownAs": 19,
@@ -11489,6 +12799,10 @@
           "ktSuppress": 0,
           "ktSuppressLint": 0,
           "ktTodoStub": 0,
+          "pyAny": 0,
+          "pyBareExcept": 0,
+          "pyNoqa": 0,
+          "pyTypeIgnore": 0,
           "todo": 5,
           "tsExpectError": 1,
           "tsIgnore": 0,
@@ -11742,62 +13056,27 @@
           "areasReason": "no skill in this tree routes to another (no `<router>-*` convention)",
           "claudeMdChars": 11591,
           "descChars": 2775,
+          "skillBodyChars": 174718,
           "skillCount": 6
         }
       },
       "untested": {
-        "value": [
-          ".tsview.tsx",
-          "eslint.config.js",
-          "packages/app/capacitor.config.ts",
-          "packages/app/scripts/build-web.mjs",
-          "packages/host/src/acks.ts",
-          "packages/host/src/api.ts",
-          "packages/host/src/archive.ts",
-          "packages/host/src/auth.ts",
+        "unnamed": [
           "packages/host/src/backends/types.ts",
-          "packages/host/src/budget.ts",
           "packages/host/src/buildscan.ts",
           "packages/host/src/capture/android.ts",
           "packages/host/src/capture/pixels.ts",
-          "packages/host/src/capture/types.ts",
           "packages/host/src/capture/web.ts",
-          "packages/host/src/compliance.ts",
-          "packages/host/src/contextlimits.ts",
           "packages/host/src/convlog.ts",
           "packages/host/src/ctxwindow.ts",
-          "packages/host/src/discover.ts",
-          "packages/host/src/doctor.ts",
-          "packages/host/src/fanout.ts",
           "packages/host/src/git.ts",
-          "packages/host/src/httpio.ts",
-          "packages/host/src/meter.ts",
-          "packages/host/src/net.ts",
-          "packages/host/src/netstats.ts",
-          "packages/host/src/notifyprefs.ts",
           "packages/host/src/ocdb.ts",
-          "packages/host/src/oraclelog.ts",
           "packages/host/src/paths.ts",
-          "packages/host/src/push.ts",
           "packages/host/src/repos.ts",
-          "packages/host/src/review.ts",
-          "packages/host/src/routes/index.ts",
-          "packages/host/src/routes/system.ts",
-          "packages/host/src/routes/types.ts",
-          "packages/host/src/secrets.ts",
           "packages/host/src/sentlog.ts",
-          "packages/host/src/settings.ts",
-          "packages/host/src/setupwatch.ts",
-          "packages/host/src/speedtest.ts",
-          "packages/host/src/thumbs.ts",
-          "packages/host/src/tokenstats.ts",
-          "packages/host/src/tree.ts",
-          "packages/host/src/uistats.ts",
           "packages/host/src/update.ts",
-          "packages/host/src/webbundle.ts",
           "packages/shared/src/fanoutruns.ts",
           "packages/shared/src/wire/capture.ts",
-          "packages/shared/src/wire/intent.ts",
           "packages/shared/src/wire/localrt.ts",
           "packages/shared/src/wire/messages.ts",
           "packages/shared/src/wire/notify.ts",
@@ -11809,6 +13088,45 @@
           "packages/shared/src/wire/transcript.ts",
           "packages/shared/src/wire/work.ts",
           "packages/shared/src/working.ts",
+          "packages/web/src/storage.ts"
+        ],
+        "value": [
+          ".tsview.tsx",
+          "eslint.config.js",
+          "packages/app/capacitor.config.ts",
+          "packages/app/scripts/build-web.mjs",
+          "packages/host/src/acks.ts",
+          "packages/host/src/api.ts",
+          "packages/host/src/archive.ts",
+          "packages/host/src/auth.ts",
+          "packages/host/src/budget.ts",
+          "packages/host/src/capture/types.ts",
+          "packages/host/src/compliance.ts",
+          "packages/host/src/contextlimits.ts",
+          "packages/host/src/discover.ts",
+          "packages/host/src/doctor.ts",
+          "packages/host/src/fanout.ts",
+          "packages/host/src/httpio.ts",
+          "packages/host/src/meter.ts",
+          "packages/host/src/net.ts",
+          "packages/host/src/netstats.ts",
+          "packages/host/src/notifyprefs.ts",
+          "packages/host/src/oraclelog.ts",
+          "packages/host/src/push.ts",
+          "packages/host/src/review.ts",
+          "packages/host/src/routes/index.ts",
+          "packages/host/src/routes/system.ts",
+          "packages/host/src/routes/types.ts",
+          "packages/host/src/secrets.ts",
+          "packages/host/src/settings.ts",
+          "packages/host/src/setupwatch.ts",
+          "packages/host/src/speedtest.ts",
+          "packages/host/src/thumbs.ts",
+          "packages/host/src/tokenstats.ts",
+          "packages/host/src/tree.ts",
+          "packages/host/src/uistats.ts",
+          "packages/host/src/webbundle.ts",
+          "packages/shared/src/wire/intent.ts",
           "packages/web/src/ActivitySheet.tsx",
           "packages/web/src/AppUpdate.tsx",
           "packages/web/src/ArchiveSheet.tsx",
@@ -11901,7 +13219,6 @@
           "packages/web/src/sessionFacts.tsx",
           "packages/web/src/settings.ts",
           "packages/web/src/shellLink.ts",
-          "packages/web/src/storage.ts",
           "packages/web/src/termTheme.ts",
           "packages/web/src/theme.ts",
           "packages/web/src/toolbar.ts",
@@ -11917,12 +13234,7 @@
           "packages/web/src/useVoice.ts",
           "packages/web/src/webUpdate.ts",
           "packages/web/vite.config.ts",
-          "scripts/bench-local.mjs",
-          "scripts/capture-stub.mjs",
-          "scripts/claude-stub-limit.mjs",
-          "scripts/claude-stub-tui.mjs",
           "scripts/fix-node-pty.mjs",
-          "scripts/lib-e2e.mjs",
           "scripts/run-e2e.mjs"
         ]
       },
@@ -12393,37 +13705,102 @@
       "day": "2026-09-19",
       "ts": 1789852256,
       "batch": false,
-      "prereg": "2026-09-22a+1647a16d",
+      "prereg": "2026-10-16a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 15723,
           "max": 15723,
           "maxPath": "packages/web/src/App.tsx",
+          "nearMax": 1,
           "p95": 1285
         }
       },
       "retouch": {
         "value": {
+          "appends": 53,
           "offenders": [
             {
-              "n": 10,
-              "path": "packages/web/src/App.tsx"
+              "n": 1,
+              "path": "packages/host/src/compliance.ts"
             },
             {
-              "n": 3,
-              "path": "packages/host/src/sessions.ts"
+              "n": 1,
+              "path": "packages/host/src/localrt.ts"
             },
             {
-              "n": 3,
-              "path": "packages/shared/src/wire/messages.ts"
+              "n": 1,
+              "path": "packages/host/src/routes/system.ts"
             }
           ],
-          "rate": 0.7555555555555555,
-          "retouches": 68,
+          "rate": 0.16666666666666666,
+          "retouches": 15,
           "touches": 90
         }
       },
       "hatches": {
+        "split": {
+          "byKind": {
+            "asAny": {
+              "explained": 4,
+              "unexplained": 4
+            },
+            "asUnknownAs": {
+              "explained": 1,
+              "unexplained": 17
+            },
+            "colonAny": {
+              "explained": 15,
+              "unexplained": 62
+            },
+            "eslintDisable": {
+              "explained": 14,
+              "unexplained": 26
+            },
+            "ktNotNull": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppress": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppressLint": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyAny": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyBareExcept": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyNoqa": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyTypeIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsExpectError": {
+              "explained": 1,
+              "unexplained": 0
+            },
+            "tsIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsNocheck": {
+              "explained": 0,
+              "unexplained": 0
+            }
+          },
+          "explained": 35,
+          "todo": 6,
+          "unexplained": 109
+        },
         "value": {
           "asAny": 8,
           "asUnknownAs": 18,
@@ -12434,6 +13811,10 @@
           "ktSuppress": 0,
           "ktSuppressLint": 0,
           "ktTodoStub": 0,
+          "pyAny": 0,
+          "pyBareExcept": 0,
+          "pyNoqa": 0,
+          "pyTypeIgnore": 0,
           "todo": 5,
           "tsExpectError": 1,
           "tsIgnore": 0,
@@ -12691,62 +14072,27 @@
           "areasReason": "no skill in this tree routes to another (no `<router>-*` convention)",
           "claudeMdChars": 11591,
           "descChars": 3191,
+          "skillBodyChars": 201382,
           "skillCount": 7
         }
       },
       "untested": {
-        "value": [
-          ".tsview.tsx",
-          "eslint.config.js",
-          "packages/app/capacitor.config.ts",
-          "packages/app/scripts/build-web.mjs",
-          "packages/host/src/acks.ts",
-          "packages/host/src/api.ts",
-          "packages/host/src/archive.ts",
-          "packages/host/src/auth.ts",
+        "unnamed": [
           "packages/host/src/backends/types.ts",
-          "packages/host/src/budget.ts",
           "packages/host/src/buildscan.ts",
           "packages/host/src/capture/android.ts",
           "packages/host/src/capture/pixels.ts",
-          "packages/host/src/capture/types.ts",
           "packages/host/src/capture/web.ts",
-          "packages/host/src/compliance.ts",
-          "packages/host/src/contextlimits.ts",
           "packages/host/src/convlog.ts",
           "packages/host/src/ctxwindow.ts",
-          "packages/host/src/discover.ts",
-          "packages/host/src/doctor.ts",
-          "packages/host/src/fanout.ts",
           "packages/host/src/git.ts",
-          "packages/host/src/httpio.ts",
-          "packages/host/src/meter.ts",
-          "packages/host/src/net.ts",
-          "packages/host/src/netstats.ts",
-          "packages/host/src/notifyprefs.ts",
           "packages/host/src/ocdb.ts",
-          "packages/host/src/oraclelog.ts",
           "packages/host/src/paths.ts",
-          "packages/host/src/push.ts",
           "packages/host/src/repos.ts",
-          "packages/host/src/review.ts",
-          "packages/host/src/routes/index.ts",
-          "packages/host/src/routes/system.ts",
-          "packages/host/src/routes/types.ts",
-          "packages/host/src/secrets.ts",
           "packages/host/src/sentlog.ts",
-          "packages/host/src/settings.ts",
-          "packages/host/src/setupwatch.ts",
-          "packages/host/src/speedtest.ts",
-          "packages/host/src/thumbs.ts",
-          "packages/host/src/tokenstats.ts",
-          "packages/host/src/tree.ts",
-          "packages/host/src/uistats.ts",
           "packages/host/src/update.ts",
-          "packages/host/src/webbundle.ts",
           "packages/shared/src/fanoutruns.ts",
           "packages/shared/src/wire/capture.ts",
-          "packages/shared/src/wire/intent.ts",
           "packages/shared/src/wire/localrt.ts",
           "packages/shared/src/wire/messages.ts",
           "packages/shared/src/wire/notify.ts",
@@ -12758,6 +14104,45 @@
           "packages/shared/src/wire/transcript.ts",
           "packages/shared/src/wire/work.ts",
           "packages/shared/src/working.ts",
+          "packages/web/src/storage.ts"
+        ],
+        "value": [
+          ".tsview.tsx",
+          "eslint.config.js",
+          "packages/app/capacitor.config.ts",
+          "packages/app/scripts/build-web.mjs",
+          "packages/host/src/acks.ts",
+          "packages/host/src/api.ts",
+          "packages/host/src/archive.ts",
+          "packages/host/src/auth.ts",
+          "packages/host/src/budget.ts",
+          "packages/host/src/capture/types.ts",
+          "packages/host/src/compliance.ts",
+          "packages/host/src/contextlimits.ts",
+          "packages/host/src/discover.ts",
+          "packages/host/src/doctor.ts",
+          "packages/host/src/fanout.ts",
+          "packages/host/src/httpio.ts",
+          "packages/host/src/meter.ts",
+          "packages/host/src/net.ts",
+          "packages/host/src/netstats.ts",
+          "packages/host/src/notifyprefs.ts",
+          "packages/host/src/oraclelog.ts",
+          "packages/host/src/push.ts",
+          "packages/host/src/review.ts",
+          "packages/host/src/routes/index.ts",
+          "packages/host/src/routes/system.ts",
+          "packages/host/src/routes/types.ts",
+          "packages/host/src/secrets.ts",
+          "packages/host/src/settings.ts",
+          "packages/host/src/setupwatch.ts",
+          "packages/host/src/speedtest.ts",
+          "packages/host/src/thumbs.ts",
+          "packages/host/src/tokenstats.ts",
+          "packages/host/src/tree.ts",
+          "packages/host/src/uistats.ts",
+          "packages/host/src/webbundle.ts",
+          "packages/shared/src/wire/intent.ts",
           "packages/web/src/ActivitySheet.tsx",
           "packages/web/src/AppUpdate.tsx",
           "packages/web/src/ArchiveSheet.tsx",
@@ -12851,7 +14236,6 @@
           "packages/web/src/sessionFacts.tsx",
           "packages/web/src/settings.ts",
           "packages/web/src/shellLink.ts",
-          "packages/web/src/storage.ts",
           "packages/web/src/termTheme.ts",
           "packages/web/src/theme.ts",
           "packages/web/src/toolbar.ts",
@@ -12867,13 +14251,7 @@
           "packages/web/src/useVoice.ts",
           "packages/web/src/webUpdate.ts",
           "packages/web/vite.config.ts",
-          "scripts/bench-local.mjs",
-          "scripts/bench/sweep.mjs",
-          "scripts/capture-stub.mjs",
-          "scripts/claude-stub-limit.mjs",
-          "scripts/claude-stub-tui.mjs",
           "scripts/fix-node-pty.mjs",
-          "scripts/lib-e2e.mjs",
           "scripts/run-e2e.mjs"
         ]
       },
@@ -13344,37 +14722,102 @@
       "day": "2026-09-20",
       "ts": 1789915560,
       "batch": false,
-      "prereg": "2026-09-22a+1647a16d",
+      "prereg": "2026-10-16a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 16081,
           "max": 16081,
           "maxPath": "packages/web/src/App.tsx",
+          "nearMax": 1,
           "p95": 1308
         }
       },
       "retouch": {
         "value": {
+          "appends": 71,
           "offenders": [
             {
-              "n": 15,
-              "path": "packages/web/src/App.tsx"
+              "n": 2,
+              "path": "packages/web/src/TokenStatsSheet.tsx"
             },
             {
-              "n": 6,
-              "path": "packages/host/src/sessions.ts"
+              "n": 1,
+              "path": "packages/host/src/compliance.ts"
             },
             {
-              "n": 3,
-              "path": "packages/host/src/api.ts"
+              "n": 1,
+              "path": "packages/host/src/localrt.ts"
             }
           ],
-          "rate": 0.7301587301587301,
-          "retouches": 92,
+          "rate": 0.16666666666666666,
+          "retouches": 21,
           "touches": 126
         }
       },
       "hatches": {
+        "split": {
+          "byKind": {
+            "asAny": {
+              "explained": 4,
+              "unexplained": 4
+            },
+            "asUnknownAs": {
+              "explained": 1,
+              "unexplained": 17
+            },
+            "colonAny": {
+              "explained": 15,
+              "unexplained": 62
+            },
+            "eslintDisable": {
+              "explained": 14,
+              "unexplained": 26
+            },
+            "ktNotNull": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppress": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "ktSuppressLint": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyAny": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyBareExcept": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyNoqa": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyTypeIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsExpectError": {
+              "explained": 1,
+              "unexplained": 0
+            },
+            "tsIgnore": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "tsNocheck": {
+              "explained": 0,
+              "unexplained": 0
+            }
+          },
+          "explained": 35,
+          "todo": 6,
+          "unexplained": 109
+        },
         "value": {
           "asAny": 8,
           "asUnknownAs": 18,
@@ -13385,6 +14828,10 @@
           "ktSuppress": 0,
           "ktSuppressLint": 0,
           "ktTodoStub": 0,
+          "pyAny": 0,
+          "pyBareExcept": 0,
+          "pyNoqa": 0,
+          "pyTypeIgnore": 0,
           "todo": 5,
           "tsExpectError": 1,
           "tsIgnore": 0,
@@ -13647,62 +15094,28 @@
           "areasReason": "no skill in this tree routes to another (no `<router>-*` convention)",
           "claudeMdChars": 11591,
           "descChars": 3191,
+          "skillBodyChars": 220187,
           "skillCount": 7
         }
       },
       "untested": {
-        "value": [
-          ".tsview.tsx",
-          "eslint.config.js",
-          "packages/app/capacitor.config.ts",
-          "packages/app/scripts/build-web.mjs",
-          "packages/host/src/acks.ts",
-          "packages/host/src/api.ts",
-          "packages/host/src/archive.ts",
-          "packages/host/src/auth.ts",
+        "unnamed": [
           "packages/host/src/backends/types.ts",
-          "packages/host/src/budget.ts",
           "packages/host/src/buildscan.ts",
           "packages/host/src/capture/android.ts",
           "packages/host/src/capture/pixels.ts",
-          "packages/host/src/capture/types.ts",
           "packages/host/src/capture/web.ts",
-          "packages/host/src/compliance.ts",
-          "packages/host/src/contextlimits.ts",
           "packages/host/src/convlog.ts",
           "packages/host/src/ctxwindow.ts",
-          "packages/host/src/discover.ts",
-          "packages/host/src/doctor.ts",
-          "packages/host/src/fanout.ts",
           "packages/host/src/git.ts",
-          "packages/host/src/httpio.ts",
-          "packages/host/src/meter.ts",
-          "packages/host/src/net.ts",
-          "packages/host/src/netstats.ts",
-          "packages/host/src/notifyprefs.ts",
           "packages/host/src/ocdb.ts",
-          "packages/host/src/oraclelog.ts",
           "packages/host/src/paths.ts",
-          "packages/host/src/push.ts",
           "packages/host/src/repos.ts",
-          "packages/host/src/review.ts",
-          "packages/host/src/routes/index.ts",
-          "packages/host/src/routes/system.ts",
-          "packages/host/src/routes/types.ts",
           "packages/host/src/screenlog.ts",
-          "packages/host/src/secrets.ts",
           "packages/host/src/sentlog.ts",
-          "packages/host/src/settings.ts",
-          "packages/host/src/setupwatch.ts",
-          "packages/host/src/speedtest.ts",
-          "packages/host/src/thumbs.ts",
-          "packages/host/src/tree.ts",
-          "packages/host/src/uistats.ts",
           "packages/host/src/update.ts",
-          "packages/host/src/webbundle.ts",
           "packages/shared/src/fanoutruns.ts",
           "packages/shared/src/wire/capture.ts",
-          "packages/shared/src/wire/intent.ts",
           "packages/shared/src/wire/localrt.ts",
           "packages/shared/src/wire/messages.ts",
           "packages/shared/src/wire/notify.ts",
@@ -13714,6 +15127,44 @@
           "packages/shared/src/wire/transcript.ts",
           "packages/shared/src/wire/work.ts",
           "packages/shared/src/working.ts",
+          "packages/web/src/storage.ts"
+        ],
+        "value": [
+          ".tsview.tsx",
+          "eslint.config.js",
+          "packages/app/capacitor.config.ts",
+          "packages/app/scripts/build-web.mjs",
+          "packages/host/src/acks.ts",
+          "packages/host/src/api.ts",
+          "packages/host/src/archive.ts",
+          "packages/host/src/auth.ts",
+          "packages/host/src/budget.ts",
+          "packages/host/src/capture/types.ts",
+          "packages/host/src/compliance.ts",
+          "packages/host/src/contextlimits.ts",
+          "packages/host/src/discover.ts",
+          "packages/host/src/doctor.ts",
+          "packages/host/src/fanout.ts",
+          "packages/host/src/httpio.ts",
+          "packages/host/src/meter.ts",
+          "packages/host/src/net.ts",
+          "packages/host/src/netstats.ts",
+          "packages/host/src/notifyprefs.ts",
+          "packages/host/src/oraclelog.ts",
+          "packages/host/src/push.ts",
+          "packages/host/src/review.ts",
+          "packages/host/src/routes/index.ts",
+          "packages/host/src/routes/system.ts",
+          "packages/host/src/routes/types.ts",
+          "packages/host/src/secrets.ts",
+          "packages/host/src/settings.ts",
+          "packages/host/src/setupwatch.ts",
+          "packages/host/src/speedtest.ts",
+          "packages/host/src/thumbs.ts",
+          "packages/host/src/tree.ts",
+          "packages/host/src/uistats.ts",
+          "packages/host/src/webbundle.ts",
+          "packages/shared/src/wire/intent.ts",
           "packages/web/src/ActivitySheet.tsx",
           "packages/web/src/AppUpdate.tsx",
           "packages/web/src/ArchiveSheet.tsx",
@@ -13808,7 +15259,6 @@
           "packages/web/src/sessionFacts.tsx",
           "packages/web/src/settings.ts",
           "packages/web/src/shellLink.ts",
-          "packages/web/src/storage.ts",
           "packages/web/src/termTheme.ts",
           "packages/web/src/theme.ts",
           "packages/web/src/toolbar.ts",
@@ -13824,13 +15274,7 @@
           "packages/web/src/useVoice.ts",
           "packages/web/src/webUpdate.ts",
           "packages/web/vite.config.ts",
-          "scripts/bench-local.mjs",
-          "scripts/bench/sweep.mjs",
-          "scripts/capture-stub.mjs",
-          "scripts/claude-stub-limit.mjs",
-          "scripts/claude-stub-tui.mjs",
           "scripts/fix-node-pty.mjs",
-          "scripts/lib-e2e.mjs",
           "scripts/run-e2e.mjs"
         ]
       },
@@ -14301,37 +15745,102 @@
       "day": "2026-09-21",
       "ts": 1790023093,
       "batch": false,
-      "prereg": "2026-09-22a+1647a16d",
+      "prereg": "2026-10-16a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 16343,
           "max": 16343,
           "maxPath": "packages/web/src/App.tsx",
+          "nearMax": 1,
           "p95": 1264
         }
       },
       "retouch": {
         "value": {
+          "appends": 166,
           "offenders": [
             {
-              "n": 33,
-              "path": "packages/web/src/App.tsx"
-            },
-            {
-              "n": 10,
+              "n": 5,
               "path": "tools/repohealth.mjs"
             },
             {
-              "n": 8,
-              "path": "packages/host/src/sessions.ts"
+              "n": 4,
+              "path": "packages/web/src/App.tsx"
+            },
+            {
+              "n": 3,
+              "path": "packages/host/src/repohealth.ts"
             }
           ],
-          "rate": 0.6818181818181818,
-          "retouches": 270,
+          "rate": 0.26262626262626265,
+          "retouches": 104,
           "touches": 396
         }
       },
       "hatches": {
+        "split": {
+          "byKind": {
+            "asAny": {
+              "explained": 8,
+              "unexplained": 6
+            },
+            "asUnknownAs": {
+              "explained": 2,
+              "unexplained": 20
+            },
+            "colonAny": {
+              "explained": 22,
+              "unexplained": 62
+            },
+            "eslintDisable": {
+              "explained": 16,
+              "unexplained": 31
+            },
+            "ktNotNull": {
+              "explained": 1,
+              "unexplained": 0
+            },
+            "ktSuppress": {
+              "explained": 1,
+              "unexplained": 5
+            },
+            "ktSuppressLint": {
+              "explained": 1,
+              "unexplained": 5
+            },
+            "pyAny": {
+              "explained": 0,
+              "unexplained": 3
+            },
+            "pyBareExcept": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyNoqa": {
+              "explained": 0,
+              "unexplained": 3
+            },
+            "pyTypeIgnore": {
+              "explained": 0,
+              "unexplained": 3
+            },
+            "tsExpectError": {
+              "explained": 2,
+              "unexplained": 2
+            },
+            "tsIgnore": {
+              "explained": 4,
+              "unexplained": 4
+            },
+            "tsNocheck": {
+              "explained": 1,
+              "unexplained": 2
+            }
+          },
+          "explained": 58,
+          "todo": 36,
+          "unexplained": 146
+        },
         "value": {
           "asAny": 14,
           "asUnknownAs": 22,
@@ -14342,6 +15851,10 @@
           "ktSuppress": 6,
           "ktSuppressLint": 6,
           "ktTodoStub": 2,
+          "pyAny": 3,
+          "pyBareExcept": 0,
+          "pyNoqa": 3,
+          "pyTypeIgnore": 3,
           "todo": 22,
           "tsExpectError": 4,
           "tsIgnore": 8,
@@ -14632,64 +16145,29 @@
           },
           "claudeMdChars": 11955,
           "descChars": 10277,
+          "skillBodyChars": 262577,
           "skillCount": 19
         }
       },
       "untested": {
-        "value": [
-          ".tsview.tsx",
-          "eslint.config.js",
-          "packages/app/capacitor.config.ts",
-          "packages/app/scripts/build-web.mjs",
-          "packages/host/src/acks.ts",
-          "packages/host/src/api.ts",
-          "packages/host/src/archive.ts",
-          "packages/host/src/auth.ts",
+        "unnamed": [
           "packages/host/src/backends/types.ts",
-          "packages/host/src/budget.ts",
           "packages/host/src/buildscan.ts",
           "packages/host/src/capture/android.ts",
           "packages/host/src/capture/pixels.ts",
-          "packages/host/src/capture/types.ts",
           "packages/host/src/capture/web.ts",
-          "packages/host/src/commitmsg.ts",
-          "packages/host/src/compliance.ts",
-          "packages/host/src/contextlimits.ts",
           "packages/host/src/convlog.ts",
           "packages/host/src/ctxwindow.ts",
-          "packages/host/src/discover.ts",
-          "packages/host/src/doctor.ts",
-          "packages/host/src/fanout.ts",
           "packages/host/src/git.ts",
-          "packages/host/src/httpio.ts",
-          "packages/host/src/meter.ts",
-          "packages/host/src/net.ts",
-          "packages/host/src/netstats.ts",
-          "packages/host/src/notifyprefs.ts",
           "packages/host/src/ocdb.ts",
-          "packages/host/src/oraclelog.ts",
           "packages/host/src/paths.ts",
-          "packages/host/src/push.ts",
           "packages/host/src/repos.ts",
-          "packages/host/src/review.ts",
-          "packages/host/src/routes/index.ts",
-          "packages/host/src/routes/system.ts",
-          "packages/host/src/routes/types.ts",
           "packages/host/src/screenlog.ts",
-          "packages/host/src/secrets.ts",
           "packages/host/src/sentlog.ts",
-          "packages/host/src/settings.ts",
-          "packages/host/src/setupwatch.ts",
-          "packages/host/src/speedtest.ts",
-          "packages/host/src/thumbs.ts",
-          "packages/host/src/tree.ts",
-          "packages/host/src/uistats.ts",
           "packages/host/src/update.ts",
-          "packages/host/src/webbundle.ts",
           "packages/shared/src/fanoutruns.ts",
           "packages/shared/src/wire/capture.ts",
           "packages/shared/src/wire/install.ts",
-          "packages/shared/src/wire/intent.ts",
           "packages/shared/src/wire/localrt.ts",
           "packages/shared/src/wire/messages.ts",
           "packages/shared/src/wire/notify.ts",
@@ -14700,6 +16178,47 @@
           "packages/shared/src/wire/transcript.ts",
           "packages/shared/src/wire/work.ts",
           "packages/shared/src/working.ts",
+          "packages/web/src/storage.ts",
+          "tools/repohealth/lang/typescript-ast.mjs",
+          "tools/repohealth/types.mjs"
+        ],
+        "value": [
+          ".tsview.tsx",
+          "eslint.config.js",
+          "packages/app/capacitor.config.ts",
+          "packages/app/scripts/build-web.mjs",
+          "packages/host/src/acks.ts",
+          "packages/host/src/api.ts",
+          "packages/host/src/archive.ts",
+          "packages/host/src/auth.ts",
+          "packages/host/src/budget.ts",
+          "packages/host/src/capture/types.ts",
+          "packages/host/src/commitmsg.ts",
+          "packages/host/src/compliance.ts",
+          "packages/host/src/contextlimits.ts",
+          "packages/host/src/discover.ts",
+          "packages/host/src/doctor.ts",
+          "packages/host/src/fanout.ts",
+          "packages/host/src/httpio.ts",
+          "packages/host/src/meter.ts",
+          "packages/host/src/net.ts",
+          "packages/host/src/netstats.ts",
+          "packages/host/src/notifyprefs.ts",
+          "packages/host/src/oraclelog.ts",
+          "packages/host/src/push.ts",
+          "packages/host/src/review.ts",
+          "packages/host/src/routes/index.ts",
+          "packages/host/src/routes/system.ts",
+          "packages/host/src/routes/types.ts",
+          "packages/host/src/secrets.ts",
+          "packages/host/src/settings.ts",
+          "packages/host/src/setupwatch.ts",
+          "packages/host/src/speedtest.ts",
+          "packages/host/src/thumbs.ts",
+          "packages/host/src/tree.ts",
+          "packages/host/src/uistats.ts",
+          "packages/host/src/webbundle.ts",
+          "packages/shared/src/wire/intent.ts",
           "packages/web/src/ActivitySheet.tsx",
           "packages/web/src/AppUpdate.tsx",
           "packages/web/src/AppsSheet.tsx",
@@ -14806,7 +16325,6 @@
           "packages/web/src/sessionFacts.tsx",
           "packages/web/src/settings.ts",
           "packages/web/src/shellLink.ts",
-          "packages/web/src/storage.ts",
           "packages/web/src/termTheme.ts",
           "packages/web/src/theme.ts",
           "packages/web/src/toolbar.ts",
@@ -14822,48 +16340,8 @@
           "packages/web/src/useVoice.ts",
           "packages/web/src/webUpdate.ts",
           "packages/web/vite.config.ts",
-          "scripts/bench-local.mjs",
-          "scripts/bench/sweep.mjs",
-          "scripts/capture-stub.mjs",
-          "scripts/claude-stub-limit.mjs",
-          "scripts/claude-stub-tui.mjs",
           "scripts/fix-node-pty.mjs",
-          "scripts/lib-e2e.mjs",
-          "scripts/run-e2e.mjs",
-          "tools/repohealth.mjs",
-          "tools/repohealth/census.mjs",
-          "tools/repohealth/constants.mjs",
-          "tools/repohealth/git.mjs",
-          "tools/repohealth/html.mjs",
-          "tools/repohealth/judge.mjs",
-          "tools/repohealth/lang/typescript-ast.mjs",
-          "tools/repohealth/metrics/classics.mjs",
-          "tools/repohealth/metrics/cochange.mjs",
-          "tools/repohealth/metrics/context.mjs",
-          "tools/repohealth/metrics/deadexports.mjs",
-          "tools/repohealth/metrics/dups.mjs",
-          "tools/repohealth/metrics/hatches.mjs",
-          "tools/repohealth/metrics/retouch.mjs",
-          "tools/repohealth/metrics/route.mjs",
-          "tools/repohealth/metrics/size.mjs",
-          "tools/repohealth/metrics/tripwires.mjs",
-          "tools/repohealth/metrics/untested.mjs",
-          "tools/repohealth/narrate.mjs",
-          "tools/repohealth/packs/c.mjs",
-          "tools/repohealth/packs/common.mjs",
-          "tools/repohealth/packs/dart.mjs",
-          "tools/repohealth/packs/index.mjs",
-          "tools/repohealth/packs/kotlin.mjs",
-          "tools/repohealth/packs/python.mjs",
-          "tools/repohealth/packs/shell.mjs",
-          "tools/repohealth/packs/typescript.mjs",
-          "tools/repohealth/plot.mjs",
-          "tools/repohealth/readings.mjs",
-          "tools/repohealth/series.mjs",
-          "tools/repohealth/snapshot.mjs",
-          "tools/repohealth/source.mjs",
-          "tools/repohealth/types.mjs",
-          "tools/skillmap.mjs"
+          "scripts/run-e2e.mjs"
         ]
       },
       "classics": {
@@ -15182,34 +16660,49 @@
       },
       "tripwires": [
         {
-          "detail": "`@ts-ignore\\b` went 0 → 5 occurrences; 9 of 13 hatch kinds are now in use",
+          "detail": "`@ts-ignore\\b` went 0 → 5 occurrences; 9 of 17 hatch kinds are now in use",
           "kind": "hatch-kind-appeared",
           "subject": "tsIgnore"
         },
         {
-          "detail": "`@ts-nocheck\\b` went 0 → 2 occurrences; 9 of 13 hatch kinds are now in use",
+          "detail": "`@ts-nocheck\\b` went 0 → 2 occurrences; 9 of 17 hatch kinds are now in use",
           "kind": "hatch-kind-appeared",
           "subject": "tsNocheck"
         },
         {
-          "detail": "`(?<=[\\w$)\\]}])!!(?![\\w$\"'])` went 0 → 1 occurrences; 13 of 13 hatch kinds are now in use",
+          "detail": "`(?<=[\\w$)\\]}])!!(?![\\w$\"'])` went 0 → 1 occurrences; 16 of 17 hatch kinds are now in use",
           "kind": "hatch-kind-appeared",
           "subject": "ktNotNull"
         },
         {
-          "detail": "`@Suppress\\b` went 0 → 5 occurrences; 13 of 13 hatch kinds are now in use",
+          "detail": "`@Suppress\\b` went 0 → 5 occurrences; 16 of 17 hatch kinds are now in use",
           "kind": "hatch-kind-appeared",
           "subject": "ktSuppress"
         },
         {
-          "detail": "`@SuppressLint\\b` went 0 → 6 occurrences; 13 of 13 hatch kinds are now in use",
+          "detail": "`@SuppressLint\\b` went 0 → 6 occurrences; 16 of 17 hatch kinds are now in use",
           "kind": "hatch-kind-appeared",
           "subject": "ktSuppressLint"
         },
         {
-          "detail": "`\\bTODO\\s*\\(` went 0 → 2 occurrences; 13 of 13 hatch kinds are now in use",
+          "detail": "`\\bTODO\\s*\\(` went 0 → 2 occurrences; 16 of 17 hatch kinds are now in use",
           "kind": "hatch-kind-appeared",
           "subject": "ktTodoStub"
+        },
+        {
+          "detail": "`(?:->|:)\\s*Any\\b` went 0 → 3 occurrences; 16 of 17 hatch kinds are now in use",
+          "kind": "hatch-kind-appeared",
+          "subject": "pyAny"
+        },
+        {
+          "detail": "`#\\s*noqa\\b` went 0 → 3 occurrences; 16 of 17 hatch kinds are now in use",
+          "kind": "hatch-kind-appeared",
+          "subject": "pyNoqa"
+        },
+        {
+          "detail": "`#\\s*type:\\s*ignore\\b` went 0 → 2 occurrences; 16 of 17 hatch kinds are now in use",
+          "kind": "hatch-kind-appeared",
+          "subject": "pyTypeIgnore"
         }
       ],
       "tripwireState": {
@@ -15223,6 +16716,9 @@
           "ktSuppress",
           "ktSuppressLint",
           "ktTodoStub",
+          "pyAny",
+          "pyNoqa",
+          "pyTypeIgnore",
           "todo",
           "tsExpectError",
           "tsIgnore",
@@ -15370,37 +16866,102 @@
       "day": "2026-09-22",
       "ts": 1790061039,
       "batch": false,
-      "prereg": "2026-09-22a+1647a16d",
+      "prereg": "2026-10-16a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 16351,
           "max": 16351,
           "maxPath": "packages/web/src/App.tsx",
+          "nearMax": 1,
           "p95": 1264
         }
       },
       "retouch": {
         "value": {
+          "appends": 175,
           "offenders": [
             {
-              "n": 35,
-              "path": "packages/web/src/App.tsx"
-            },
-            {
-              "n": 10,
+              "n": 5,
               "path": "tools/repohealth.mjs"
             },
             {
-              "n": 8,
-              "path": "packages/host/src/sessions.ts"
+              "n": 4,
+              "path": "packages/web/src/App.tsx"
+            },
+            {
+              "n": 3,
+              "path": "packages/host/src/repohealth.ts"
             }
           ],
-          "rate": 0.6887254901960784,
-          "retouches": 281,
+          "rate": 0.25980392156862747,
+          "retouches": 106,
           "touches": 408
         }
       },
       "hatches": {
+        "split": {
+          "byKind": {
+            "asAny": {
+              "explained": 8,
+              "unexplained": 6
+            },
+            "asUnknownAs": {
+              "explained": 2,
+              "unexplained": 20
+            },
+            "colonAny": {
+              "explained": 22,
+              "unexplained": 62
+            },
+            "eslintDisable": {
+              "explained": 16,
+              "unexplained": 31
+            },
+            "ktNotNull": {
+              "explained": 1,
+              "unexplained": 0
+            },
+            "ktSuppress": {
+              "explained": 1,
+              "unexplained": 5
+            },
+            "ktSuppressLint": {
+              "explained": 1,
+              "unexplained": 5
+            },
+            "pyAny": {
+              "explained": 0,
+              "unexplained": 3
+            },
+            "pyBareExcept": {
+              "explained": 0,
+              "unexplained": 0
+            },
+            "pyNoqa": {
+              "explained": 0,
+              "unexplained": 3
+            },
+            "pyTypeIgnore": {
+              "explained": 0,
+              "unexplained": 3
+            },
+            "tsExpectError": {
+              "explained": 2,
+              "unexplained": 2
+            },
+            "tsIgnore": {
+              "explained": 4,
+              "unexplained": 4
+            },
+            "tsNocheck": {
+              "explained": 1,
+              "unexplained": 2
+            }
+          },
+          "explained": 58,
+          "todo": 36,
+          "unexplained": 146
+        },
         "value": {
           "asAny": 14,
           "asUnknownAs": 22,
@@ -15411,6 +16972,10 @@
           "ktSuppress": 6,
           "ktSuppressLint": 6,
           "ktTodoStub": 2,
+          "pyAny": 3,
+          "pyBareExcept": 0,
+          "pyNoqa": 3,
+          "pyTypeIgnore": 3,
           "todo": 22,
           "tsExpectError": 4,
           "tsIgnore": 8,
@@ -15701,64 +17266,29 @@
           },
           "claudeMdChars": 11955,
           "descChars": 10277,
+          "skillBodyChars": 262577,
           "skillCount": 19
         }
       },
       "untested": {
-        "value": [
-          ".tsview.tsx",
-          "eslint.config.js",
-          "packages/app/capacitor.config.ts",
-          "packages/app/scripts/build-web.mjs",
-          "packages/host/src/acks.ts",
-          "packages/host/src/api.ts",
-          "packages/host/src/archive.ts",
-          "packages/host/src/auth.ts",
+        "unnamed": [
           "packages/host/src/backends/types.ts",
-          "packages/host/src/budget.ts",
           "packages/host/src/buildscan.ts",
           "packages/host/src/capture/android.ts",
           "packages/host/src/capture/pixels.ts",
-          "packages/host/src/capture/types.ts",
           "packages/host/src/capture/web.ts",
-          "packages/host/src/commitmsg.ts",
-          "packages/host/src/compliance.ts",
-          "packages/host/src/contextlimits.ts",
           "packages/host/src/convlog.ts",
           "packages/host/src/ctxwindow.ts",
-          "packages/host/src/discover.ts",
-          "packages/host/src/doctor.ts",
-          "packages/host/src/fanout.ts",
           "packages/host/src/git.ts",
-          "packages/host/src/httpio.ts",
-          "packages/host/src/meter.ts",
-          "packages/host/src/net.ts",
-          "packages/host/src/netstats.ts",
-          "packages/host/src/notifyprefs.ts",
           "packages/host/src/ocdb.ts",
-          "packages/host/src/oraclelog.ts",
           "packages/host/src/paths.ts",
-          "packages/host/src/push.ts",
           "packages/host/src/repos.ts",
-          "packages/host/src/review.ts",
-          "packages/host/src/routes/index.ts",
-          "packages/host/src/routes/system.ts",
-          "packages/host/src/routes/types.ts",
           "packages/host/src/screenlog.ts",
-          "packages/host/src/secrets.ts",
           "packages/host/src/sentlog.ts",
-          "packages/host/src/settings.ts",
-          "packages/host/src/setupwatch.ts",
-          "packages/host/src/speedtest.ts",
-          "packages/host/src/thumbs.ts",
-          "packages/host/src/tree.ts",
-          "packages/host/src/uistats.ts",
           "packages/host/src/update.ts",
-          "packages/host/src/webbundle.ts",
           "packages/shared/src/fanoutruns.ts",
           "packages/shared/src/wire/capture.ts",
           "packages/shared/src/wire/install.ts",
-          "packages/shared/src/wire/intent.ts",
           "packages/shared/src/wire/localrt.ts",
           "packages/shared/src/wire/messages.ts",
           "packages/shared/src/wire/notify.ts",
@@ -15769,6 +17299,47 @@
           "packages/shared/src/wire/transcript.ts",
           "packages/shared/src/wire/work.ts",
           "packages/shared/src/working.ts",
+          "packages/web/src/storage.ts",
+          "tools/repohealth/lang/typescript-ast.mjs",
+          "tools/repohealth/types.mjs"
+        ],
+        "value": [
+          ".tsview.tsx",
+          "eslint.config.js",
+          "packages/app/capacitor.config.ts",
+          "packages/app/scripts/build-web.mjs",
+          "packages/host/src/acks.ts",
+          "packages/host/src/api.ts",
+          "packages/host/src/archive.ts",
+          "packages/host/src/auth.ts",
+          "packages/host/src/budget.ts",
+          "packages/host/src/capture/types.ts",
+          "packages/host/src/commitmsg.ts",
+          "packages/host/src/compliance.ts",
+          "packages/host/src/contextlimits.ts",
+          "packages/host/src/discover.ts",
+          "packages/host/src/doctor.ts",
+          "packages/host/src/fanout.ts",
+          "packages/host/src/httpio.ts",
+          "packages/host/src/meter.ts",
+          "packages/host/src/net.ts",
+          "packages/host/src/netstats.ts",
+          "packages/host/src/notifyprefs.ts",
+          "packages/host/src/oraclelog.ts",
+          "packages/host/src/push.ts",
+          "packages/host/src/review.ts",
+          "packages/host/src/routes/index.ts",
+          "packages/host/src/routes/system.ts",
+          "packages/host/src/routes/types.ts",
+          "packages/host/src/secrets.ts",
+          "packages/host/src/settings.ts",
+          "packages/host/src/setupwatch.ts",
+          "packages/host/src/speedtest.ts",
+          "packages/host/src/thumbs.ts",
+          "packages/host/src/tree.ts",
+          "packages/host/src/uistats.ts",
+          "packages/host/src/webbundle.ts",
+          "packages/shared/src/wire/intent.ts",
           "packages/web/src/ActivitySheet.tsx",
           "packages/web/src/AppUpdate.tsx",
           "packages/web/src/AppsSheet.tsx",
@@ -15875,7 +17446,6 @@
           "packages/web/src/sessionFacts.tsx",
           "packages/web/src/settings.ts",
           "packages/web/src/shellLink.ts",
-          "packages/web/src/storage.ts",
           "packages/web/src/termTheme.ts",
           "packages/web/src/theme.ts",
           "packages/web/src/toolbar.ts",
@@ -15891,48 +17461,8 @@
           "packages/web/src/useVoice.ts",
           "packages/web/src/webUpdate.ts",
           "packages/web/vite.config.ts",
-          "scripts/bench-local.mjs",
-          "scripts/bench/sweep.mjs",
-          "scripts/capture-stub.mjs",
-          "scripts/claude-stub-limit.mjs",
-          "scripts/claude-stub-tui.mjs",
           "scripts/fix-node-pty.mjs",
-          "scripts/lib-e2e.mjs",
-          "scripts/run-e2e.mjs",
-          "tools/repohealth.mjs",
-          "tools/repohealth/census.mjs",
-          "tools/repohealth/constants.mjs",
-          "tools/repohealth/git.mjs",
-          "tools/repohealth/html.mjs",
-          "tools/repohealth/judge.mjs",
-          "tools/repohealth/lang/typescript-ast.mjs",
-          "tools/repohealth/metrics/classics.mjs",
-          "tools/repohealth/metrics/cochange.mjs",
-          "tools/repohealth/metrics/context.mjs",
-          "tools/repohealth/metrics/deadexports.mjs",
-          "tools/repohealth/metrics/dups.mjs",
-          "tools/repohealth/metrics/hatches.mjs",
-          "tools/repohealth/metrics/retouch.mjs",
-          "tools/repohealth/metrics/route.mjs",
-          "tools/repohealth/metrics/size.mjs",
-          "tools/repohealth/metrics/tripwires.mjs",
-          "tools/repohealth/metrics/untested.mjs",
-          "tools/repohealth/narrate.mjs",
-          "tools/repohealth/packs/c.mjs",
-          "tools/repohealth/packs/common.mjs",
-          "tools/repohealth/packs/dart.mjs",
-          "tools/repohealth/packs/index.mjs",
-          "tools/repohealth/packs/kotlin.mjs",
-          "tools/repohealth/packs/python.mjs",
-          "tools/repohealth/packs/shell.mjs",
-          "tools/repohealth/packs/typescript.mjs",
-          "tools/repohealth/plot.mjs",
-          "tools/repohealth/readings.mjs",
-          "tools/repohealth/series.mjs",
-          "tools/repohealth/snapshot.mjs",
-          "tools/repohealth/source.mjs",
-          "tools/repohealth/types.mjs",
-          "tools/skillmap.mjs"
+          "scripts/run-e2e.mjs"
         ]
       },
       "classics": {
@@ -16261,6 +17791,9 @@
           "ktSuppress",
           "ktSuppressLint",
           "ktTodoStub",
+          "pyAny",
+          "pyNoqa",
+          "pyTypeIgnore",
           "todo",
           "tsExpectError",
           "tsIgnore",

@@ -10,7 +10,7 @@ import { createReadStream } from "node:fs";
 import { extname } from "node:path";
 import { readInTree, resolveInTree, statInTree, type TreeReadOpts } from "../files.js";
 import { WIRE, recordWireHttp } from "../wirerecord.js";
-import { sendBody, notModified, statTag } from "../httpio.js";
+import { sendBody, notModified, statTag, readJsonBody, BadBody, answerBadBody, type ReadJsonOpts } from "../httpio.js";
 import { canThumb, thumbnail, thumbWidth } from "../thumbs.js";
 import { env } from "../env.js";
 
@@ -301,18 +301,20 @@ export async function readBody(req: IncomingMessage, max = MAX_UPLOAD): Promise<
   return Buffer.concat(chunks);
 }
 
-export async function readJson(req: IncomingMessage, limit = 1_000_000): Promise<any> {
-  // JSON control bodies are tiny; cap independently of the file-upload limit.
-  // The one exception is a file save (tree write), which carries up to
-  // MAX_EDIT_BYTES of source — and JSON escaping can multiply that.
-  const buf = await readBody(req, limit);
-  if (!buf.length) return {};
-  try {
-    return JSON.parse(buf.toString("utf8"));
-  } catch {
-    return {};
-  }
+/**
+ * A route's JSON body, or a thrown `BadBody` (malformed, not an object, over
+ * the cap, or EMPTY unless `optional`) that `handleApi` answers 400/413 in
+ * words. A malformed body used to read as `{}`, so the phone got a downstream
+ * refusal ("paths must be an array…") for a request that never arrived whole.
+ *
+ * JSON control bodies are tiny; capped independently of the file-upload limit.
+ * The one exception is a file save (tree write), which carries up to
+ * MAX_EDIT_BYTES of source — and JSON escaping can multiply that.
+ */
+export function readJson(req: IncomingMessage, opts: number | ReadJsonOpts = {}): Promise<any> {
+  return readJsonBody(req, typeof opts === "number" ? { limit: opts } : opts);
 }
+export { BadBody, answerBadBody };
 
 // ── Minimal multipart/form-data parser (file parts only) ──────────────
 export function parseMultipart(body: Buffer, contentType: string): { filename: string; data: Buffer }[] {
@@ -339,10 +341,4 @@ export function parseMultipart(body: Buffer, contentType: string): { filename: s
     start = next;
   }
   return out;
-}
-
-/** Is this socket peer the machine itself? The one predicate behind both hook sinks. */
-export function isLoopbackAddr(ra: string | undefined): boolean {
-  const a = ra || "";
-  return a === "127.0.0.1" || a === "::1" || a === "::ffff:127.0.0.1" || a.startsWith("127.");
 }

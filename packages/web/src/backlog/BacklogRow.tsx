@@ -10,10 +10,8 @@
 import { Fragment } from "react";
 import { ArrowDown, ArrowUp, CalendarClock, GripVertical, Sparkles } from "lucide-react";
 import type { BacklogItem } from "@waterplane/shared";
-import type { UndoOffer } from "../backlogFilter";
 import { isAgentPosted, imagePaths, itemHeadline } from "@waterplane/shared";
-import { SMARTPICK_ORIGIN } from "../activityRows";
-import { clockGroupWords, itemClockKey, realLabel, undoOfferFor, retimeEligible } from "../backlogFilter";
+import { clockGroupWords, itemClockKey, realLabel, retimeEligible } from "../backlogFilter";
 import { PickBox, toggled } from "../RetimeBar";
 import type { BacklogModel } from "./backlogTypes";
 import { RowActions } from "./RowActions";
@@ -26,8 +24,7 @@ import type { BLGroup } from "./useBacklogCuts";
 export interface RowFacts {
   it: BacklogItem; idx: number; g: BLGroup;
   up: string | undefined; down: string | undefined;
-  mergedFrom: string[]; smartWritten: boolean; agentPosted: boolean;
-  undoOffer: UndoOffer; mergedTimed: boolean;
+  agentPosted: boolean;
 }
 
 export function BacklogRow({ m, g, it, idx }: { m: BacklogModel; g: BLGroup; it: BacklogItem; idx: number }) {
@@ -37,51 +34,10 @@ export function BacklogRow({ m, g, it, idx }: { m: BacklogModel; g: BLGroup; it:
   } = m;
     const up = g.items[idx - 1]?.id;
     const down = g.items[idx + 1]?.id;
-    /** The three smart-pick facts this row carries. `mergedFrom` is the
-     *  count AND the cut its chip opens — one array, so the number on the
-     *  control cannot describe a different list than the tap. */
-    const mergedFrom = it.mergedFrom ?? [];
-    const smartWritten = it.origin?.startsWith(SMARTPICK_ORIGIN) ?? false;
     /** Posted by an agent through the host's loopback route — said as
      *  TEXT on the row, so the person can tell it from what they typed. */
     const agentPosted = isAgentPosted(it);
-    /**
-     * Which verb this merged row offers, and it is the row's STATE that
-     * decides — never a dimmed control, in any of the three cases.
-     *
-     *  - `undo` while it is still waiting: the row goes, the originals
-     *    come back where they were, nothing ran.
-     *  - `put them back` once it has STARTED — running, done or failed:
-     *    the merged words have been typed and cannot be untyped, so this
-     *    is not an undo. It archives the row the pass wrote and queues the
-     *    originals again, as they were. While it runs the host does NOT
-     *    stop the session, and the row's note says so rather than the
-     *    sheet refusing the tap: the phone used to answer "come back once
-     *    it has finished", which on a phone is the words staying archived
-     *    for ever, and which the host would never have said.
-     *
-     * Offline it is `null` and the row only says what wrote it — the
-     * sheet's one offline line already says every mutation is read-only,
-     * and a sentence promising a button that is not drawn is worse than
-     * no sentence.
-     */
-    const undoOffer = undoOfferFor({ mergedFrom: mergedFrom.length, status: it.status, online: p.online });
-    /**
-     * **Did any of the originals carry a clock?**
-     *
-     * `undo` restores each one with the `nextAt` it had, so a pair merged
-     * on *tonight 21:00* and put back tomorrow comes back to a ladder
-     * that fails them with *"that instant has passed"*. The receipt said
-     * they "will run as they were", which for those rows is a promise
-     * about a run that cannot happen.
-     *
-     * Read off the ORIGINALS in the list (they are archived, not gone —
-     * that is what `merged from N` opens). An original the store no
-     * longer carries answers `undefined`, so the clause is simply absent:
-     * this degrades to saying less, never to saying something wrong.
-     */
-    const mergedTimed = mergedFrom.some((id) => !!p.items.find((x) => x.id === id)?.at);
-    const row: RowFacts = { it, idx, g, up, down, mergedFrom, smartWritten, agentPosted, undoOffer, mergedTimed };
+    const row: RowFacts = { it, idx, g, up, down, agentPosted };
     if (editingId === it.id) return <RowEditor m={m} it={it} />;
     /**
      * **The head over each clock's rows, and only inside the clock cut.**

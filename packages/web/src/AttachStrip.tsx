@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, CircleHelp, CloudUpload, FileText, ImageOff, Paperclip, RotateCw, Trash2, X } from "lucide-react";
-import type { AttachStatus } from "@waterplane/shared";
+import { sendingUploadsKey, type AttachStatus } from "@waterplane/shared";
 import { api } from "./api";
 import { attachLabel, checkAttachments, localPreview, requestAttachOpen } from "./attachments";
 import { useFileMtime } from "./fileMtime";
@@ -150,6 +150,7 @@ export function AttachStrip({ text, repoId, outbox, online, nonce, onStates, onR
   const urls = useRef<string[]>([]);
   const [srcs, setSrcs] = useState<Record<string, string>>({});
 
+  const sendingKey = sendingUploadsKey(outbox);
   useEffect(() => {
     let dead = false;
     void (async () => {
@@ -174,12 +175,13 @@ export function AttachStrip({ text, repoId, outbox, online, nonce, onStates, onR
       setSrcs(next);
     })();
     return () => { dead = true; };
-    // `outbox` is intentionally not a dependency: it re-identifies on every
-    // queue write (a progress tick, another lane's ack) and re-running the host
-    // listing on each would turn a visible sheet into a poller. `nonce` is how a
-    // caller asks for a fresh look.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settled, repoId, online, nonce]);
+    // `outbox` itself is not a dependency: it re-identifies on every queue write
+    // (a progress tick, another lane's ack) and re-running the host listing on
+    // each would turn a visible sheet into a poller. `sendingKey` is the one
+    // queue fact the verdict reads — it moves when an upload is queued, lands or
+    // dies — and `nonce` is how a caller asks for a fresh look.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `outbox` is read only through `sendingKey`
+  }, [settled, repoId, online, nonce, sendingKey]);
 
   useEffect(() => () => { urls.current.forEach((u) => URL.revokeObjectURL(u)); }, []);
 

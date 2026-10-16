@@ -49,11 +49,11 @@
  * than an instruction that never ran.
  */
 
-export { ASSESS_VERDICTS, CITING_VERDICTS, MIN_MERGE_SIZE, MAX_MERGE_SIZE, MAX_MERGE_GROUPS, MAX_NEW, MAX_EVIDENCE_CHARS, MAX_RATIONALE_CHARS, MAX_PROMPT_CHARS, MAX_RANK, MAX_ASSESS_NOTES, ASSESS_IN_FILE, ASSESS_OUT_FILE, ASSESS_PLAN_FILE } from "./assess/sassvocab.js";
-export type { AssessSource, AssessVerdict } from "./assess/sassvocab.js";
-export type { AssessItem, AssessNote, AssessInput, AssessDowngrade, AssessRow, AssessMerge, AssessNew, AssessProposal } from "./assess/sassio.js";
+export { ASSESS_VERDICTS, CITING_VERDICTS, MIN_MERGE_SIZE, MAX_MERGE_SIZE, MAX_MERGE_GROUPS, MAX_NEW, MAX_EVIDENCE_CHARS, MAX_RATIONALE_CHARS, MAX_PROMPT_CHARS, MAX_RANK, MAX_ASSESS_NOTES, ASSESS_IN_FILE, ASSESS_OUT_FILE, ASSESS_PLAN_FILE, MAX_CONFLICTS, MAX_CONFLICT_IDS, MAX_SPLITS, SPLIT_PARTS, cleanAssessScope } from "./assess/sassvocab.js";
+export type { AssessSource, AssessVerdict, AssessScope } from "./assess/sassvocab.js";
+export type { AssessItem, AssessNote, AssessInput, AssessDowngrade, AssessRow, AssessMerge, AssessNew, AssessProposal, AssessConflict, AssessSplit } from "./assess/sassio.js";
 export { cleanAssessment } from "./assess/sassclean.js";
-export { assessVerdictLabel, downgradeText, assessRowSentence, assessDismissReason, assessCounts, assessNameCount, assessPinQuestion, ASSESS_PIN_KEEP, ASSESS_PIN_FREE, assessPinNote, assessNameQuestion, ASSESS_NAME_WRITE, ASSESS_NAME_SKIP, assessNameNote } from "./assess/sasswords.js";
+export { assessVerdictLabel, downgradeText, assessRowSentence, assessDismissReason, assessCounts, assessNameCount, assessPinQuestion, ASSESS_PIN_KEEP, ASSESS_PIN_FREE, assessPinNote, assessNameQuestion, ASSESS_NAME_WRITE, ASSESS_NAME_SKIP, assessNameNote, assessConflictSentence, assessSplitSentence, assessSplitReason } from "./assess/sasswords.js";
 export type { AssessChoices } from "./assess/sasswords.js";
 export { assessOrigin, applyAssessment } from "./assess/sassapply.js";
-export type { AssessApplyContext, AssessDismiss, AssessRank, AssessPost, AssessName, AssessMutations } from "./assess/sassapply.js";
+export type { AssessApplyContext, AssessDismiss, AssessRank, AssessPost, AssessName, AssessMutations, AssessSplitApply } from "./assess/sassapply.js";

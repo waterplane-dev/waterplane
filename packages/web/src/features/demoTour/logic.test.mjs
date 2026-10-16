@@ -8,8 +8,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
-  EMPTY_TOUR, HOOK_SCENARIO, TOUR, TOUR_ROWS, TOUR_SESSION, cardShown, hintShown, loopDone, markHook, markSeen, needsSession,
-  parseTourState, progressText, shouldOpenHook, tourProgress, tourSession,
+  EMPTY_TOUR, HOOK_PROMPT, HOOK_SCENARIO, TOUR, TOUR_ROWS, TOUR_SESSION, cardShown, claimHook, claimsHook, cueShown, hintShown, loopDone, shouldTypeHook, markHook, markSeen, needsSession,
+  parseTourState, progressText, tourProgress, tourSession,
 } from "./logic.ts";
 
 /** The string literals of `routing.ts`'s `Overlay` union — the route stack's own list. */
@@ -71,42 +71,64 @@ test("progress counts seen rows and says so in words", () => {
 test("parseTourState: malformed reads as fresh, stale ids dropped, duplicates folded", () => {
   assert.deepEqual(parseTourState(null), EMPTY_TOUR);
   assert.deepEqual(parseTourState("x"), EMPTY_TOUR);
-  assert.deepEqual(parseTourState({ opened: "yes", seen: "live" }), EMPTY_TOUR);
-  assert.deepEqual(parseTourState({ opened: true, read: true, seen: ["live", "gone", 3, "live"] }),
-    { seen: ["live"], opened: true, read: true, closed: false });
+  assert.deepEqual(parseTourState({ opened: "yes", seen: "live", sid: 3 }), EMPTY_TOUR);
+  assert.deepEqual(parseTourState({ opened: true, read: true, seen: ["live", "gone", 3, "live"], sid: "demo-7" }),
+    { seen: ["live"], opened: true, read: true, closed: false, typed: false, sid: "demo-7" });
   // A record from before the hook (`shown`) reads as a fresh hook, its rows kept.
   assert.deepEqual(parseTourState({ shown: true, seen: ["live"] }), { ...EMPTY_TOUR, seen: ["live"] });
 });
 
 const HOOK = { demo: true, scenario: HOOK_SCENARIO };
+const GARDEN = { id: "demo-7", cwd: "~/dev/todo-garden" };
 
-test("the hook opens its session once, in its scenario, only over nothing", () => {
-  assert.equal(shouldOpenHook(EMPTY_TOUR, { ...HOOK, active: false }), true);
-  assert.equal(shouldOpenHook(markHook(EMPTY_TOUR, "opened"), { ...HOOK, active: false }), false);
-  assert.equal(shouldOpenHook(EMPTY_TOUR, { ...HOOK, active: true }), false, "a restored route is not taken over");
-  assert.equal(shouldOpenHook(EMPTY_TOUR, { demo: true, scenario: "numbers", active: false }), false);
-  assert.equal(shouldOpenHook(EMPTY_TOUR, { demo: false, scenario: HOOK_SCENARIO, active: false }), false);
-  const o = markHook(EMPTY_TOUR, "opened");
-  assert.equal(markHook(o, "opened"), o, "same object back");
+test("the demo opens on the repo list: the start cue stands until a session is started or put away", () => {
+  assert.equal(cueShown(EMPTY_TOUR, { ...HOOK, active: false }), true);
+  assert.equal(cueShown(EMPTY_TOUR, { ...HOOK, active: true }), false, "never over a session");
+  assert.equal(cueShown(markHook(EMPTY_TOUR, "opened"), { ...HOOK, active: false }), false, "its X");
+  assert.equal(cueShown(claimHook(EMPTY_TOUR, "demo-7"), { ...HOOK, active: false }), false, "a session was started");
+  assert.equal(cueShown(EMPTY_TOUR, { demo: true, scenario: "numbers", active: false }), false);
+  assert.equal(cueShown(EMPTY_TOUR, { demo: false, scenario: HOOK_SCENARIO, active: false }), false);
 });
 
-test("the reader hint stands on the hook session until the reader was opened", () => {
-  assert.equal(hintShown(EMPTY_TOUR, { ...HOOK, activeId: TOUR_SESSION }), true);
-  assert.equal(hintShown(EMPTY_TOUR, { ...HOOK, activeId: "demo-n1" }), false);
-  assert.equal(hintShown(markHook(EMPTY_TOUR, "read"), { ...HOOK, activeId: TOUR_SESSION }), false);
-  assert.equal(hintShown(EMPTY_TOUR, { demo: true, scenario: "gallery-and-files", activeId: TOUR_SESSION }), false);
+test("the first FRESH session in the tour's repo is the hook's, once", () => {
+  assert.equal(claimsHook(EMPTY_TOUR, { ...HOOK, session: GARDEN }), true);
+  assert.equal(claimsHook(EMPTY_TOUR, { ...HOOK, session: { id: "demo-8", cwd: "~/dev/pocket-notes" } }), false, "another repo");
+  assert.equal(claimsHook(EMPTY_TOUR, { ...HOOK, session: { id: "demo-g1", cwd: "~/dev/todo-garden", firstPrompt: "make overdue tasks show a red edge" } }), false, "the older session there");
+  const claimed = claimHook(EMPTY_TOUR, "demo-7");
+  assert.deepEqual(claimed, { ...EMPTY_TOUR, sid: "demo-7", opened: true });
+  assert.equal(claimHook(claimed, "demo-7"), claimed, "same object back");
+  assert.equal(claimsHook(claimed, { ...HOOK, session: { ...GARDEN, id: "demo-9" } }), false, "never a second one");
+  assert.equal(claimsHook(markHook(EMPTY_TOUR, "typed"), { ...HOOK, session: GARDEN }), false, "a spent hook takes none");
+  assert.equal(claimsHook(EMPTY_TOUR, { demo: true, scenario: "numbers", session: GARDEN }), false);
 });
 
-test("the closing card: after the annotate-and-send-back turn has ENDED, until put away", () => {
-  const working = { id: TOUR_SESSION, turnActive: true, lastPrompt: ".claude/inbox/x.png make this bigger" };
+test("the first prompt is typed once, into the session the cued tap started, into an empty box only", () => {
+  const s = claimHook(EMPTY_TOUR, "demo-7");
+  const at = { ...HOOK, activeId: "demo-7", draft: "" };
+  assert.equal(shouldTypeHook(s, at), true);
+  assert.equal(shouldTypeHook(EMPTY_TOUR, at), false, "no session claimed");
+  assert.equal(shouldTypeHook(markHook(s, "typed"), at), false, "once per visit");
+  assert.equal(shouldTypeHook(s, { ...at, draft: "my own words" }), false, "never into a person's words");
+  assert.equal(shouldTypeHook(s, { ...at, activeId: "demo-g1" }), false, "not the older session");
+  assert.equal(shouldTypeHook(s, { ...at, scenario: "numbers" }), false);
+});
+
+test("the reader hint and the closing card wait for the loop to END, on the hook's session", () => {
+  const s = markHook(claimHook(EMPTY_TOUR, "demo-7"), "typed");
+  const working = { id: "demo-7", turnActive: true, lastPrompt: ".claude/inbox/collage-2-marked.png make ② look like ①" };
   const done = { ...working, turnActive: false };
   assert.equal(loopDone(working), false);
   assert.equal(loopDone(done), true);
-  assert.equal(loopDone({ turnActive: false, lastPrompt: "add a quick-add bar above the task list" }), false);
-  assert.equal(cardShown(EMPTY_TOUR, { ...HOOK, session: done }), true);
-  assert.equal(cardShown(EMPTY_TOUR, { ...HOOK, session: working }), false);
-  assert.equal(cardShown(markHook(EMPTY_TOUR, "closed"), { ...HOOK, session: done }), false);
-  assert.equal(cardShown(EMPTY_TOUR, { ...HOOK, session: { ...done, id: "demo-n1" } }), false);
+  assert.equal(loopDone({ turnActive: false, lastPrompt: HOOK_PROMPT }), false, "the first turn is not the loop");
+  assert.equal(hintShown(s, { ...HOOK, session: done }), true);
+  assert.equal(hintShown(s, { ...HOOK, session: working }), false, "never over the work");
+  assert.equal(hintShown(markHook(s, "read"), { ...HOOK, session: done }), false);
+  assert.equal(hintShown(s, { ...HOOK, session: { ...done, id: "demo-g1" } }), false);
+  assert.equal(cardShown(s, { ...HOOK, session: done }), true);
+  assert.equal(cardShown(s, { ...HOOK, session: working }), false);
+  assert.equal(cardShown(markHook(s, "closed"), { ...HOOK, session: done }), false);
+  assert.equal(cardShown(s, { ...HOOK, session: { ...done, id: "demo-n1" } }), false);
+  assert.equal(cardShown(EMPTY_TOUR, { ...HOOK, session: done }), false, "no hook session, no card");
 });
 
 test("tourSession: the scenario's id, else its repo, else none", () => {

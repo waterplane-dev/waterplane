@@ -187,21 +187,51 @@ test("the usage poll is wanted only for a RUNNING session with a percent cap", (
 
 // ── the Esc gate ─────────────────────────────────────────────────────────────
 
-const go = { interrupt: true, envOff: false, running: true, hooked: true, hookTurn: true, prompt: false, awaitingInput: false, openDelivery: false };
+const go = { interrupt: true, envOff: false, running: true, prompt: false, awaitingInput: false, openDelivery: false };
 
-test("the Esc is written only into a PROVEN running turn with nothing on screen and nothing unconfirmed", () => {
+test("the Esc is written only with nothing on screen to answer and nothing unconfirmed (the running turn is the grid's to prove)", () => {
   assert.equal(budgetEscBlocker(go), null);
-  for (const [k, v] of [["interrupt", false], ["envOff", true], ["running", false], ["hooked", false], ["hookTurn", false], ["prompt", true], ["awaitingInput", true], ["openDelivery", true]]) {
+  for (const [k, v] of [["interrupt", false], ["envOff", true], ["running", false], ["prompt", true], ["awaitingInput", true], ["openDelivery", true]]) {
     const why = budgetEscBlocker({ ...go, [k]: v });
     assert.equal(typeof why, "string", `${k}=${v} must block the Esc`);
     assert.match(why, /\.$/, "and say why, as a sentence");
   }
 });
 
-test("a turn read off the SCREEN is not one the Esc may interrupt — only the hooks' turn", () => {
-  // `sessionEvents.ts` feeds `hookTurn` from `sessions.turnFromHook`, which is
-  // false for a /compact or a turn nobody announced even while `turnActive` is set.
-  assert.match(budgetEscBlocker({ ...go, hookTurn: false }), /no turn announced by the hooks/);
+test("the crossing OWES the Esc and every judge while still over asks for it again, until it is settled", () => {
+  const { slice, s, events } = makeSlice({ usageTok: 1, costUsd: 0.6 });
+  slice.judge(s);
+  assert.equal(s.budgetEscOwed, true, "an interrupting budget owes its Esc from the crossing");
+  slice.judge(s);
+  slice.judge(s);
+  assert.equal(events.filter((e) => e === "budgetEscDue").length, 2, "no turn to interrupt at the crossing is not the end of it");
+  slice.settleEsc("s1");
+  assert.equal(s.budgetEscOwed, undefined);
+  slice.judge(s);
+  assert.equal(events.filter((e) => e === "budgetEscDue").length, 2, "settled — sent, or a person sent by hand — is never asked again");
+});
+
+test("nothing is owed by a budget that does not interrupt, and switching interrupt off drops what was owed", () => {
+  const quiet = makeSlice({ usageTok: 1, costUsd: 0.6 }, { unit: "usd", max: 0.5, interrupt: false });
+  quiet.slice.judge(quiet.s);
+  quiet.slice.judge(quiet.s);
+  assert.equal(quiet.s.budgetEscOwed, undefined);
+  assert.ok(!quiet.events.includes("budgetEscDue"));
+  const { slice, s, events } = makeSlice({ usageTok: 1, costUsd: 0.6 });
+  slice.judge(s);
+  slice.set("s1", { unit: "usd", max: 0.5, interrupt: false });
+  assert.equal(s.budgetEscOwed, undefined);
+  slice.set("s1", { unit: "usd", max: 0.5, interrupt: true });
+  assert.equal(s.budgetEscOwed, undefined, "switching it back on is not a crossing: no late Esc");
+  assert.ok(!events.includes("budgetEscDue"));
+});
+
+test("back under the cap settles what was owed", () => {
+  const { slice, s } = makeSlice({ usageTok: 1, costUsd: 0.6 });
+  slice.judge(s);
+  slice.set("s1", { unit: "usd", max: 5, interrupt: true });
+  assert.equal(s.info.budget.verdict.state, "ok");
+  assert.equal(s.budgetEscOwed, undefined);
 });
 
 // ── the live grid, read in the write's own tick ──────────────────────────────

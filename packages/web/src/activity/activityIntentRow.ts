@@ -17,10 +17,10 @@ import {
   intentProse,
   intentTitle,
   intentVerdictText,
+  resultSaysPlace,
   spentOnce,
 } from "./activityIntentWords.ts";
 import {
-  SMARTPICK_ORIGIN,
   act,
   baseName,
   clip,
@@ -29,7 +29,7 @@ import {
 } from "./activityPieces.ts";
 import {
   bucketOf,
-} from "./activitySelect.ts";
+} from "./activityBucket.ts";
 import type { ActivityAction, ActivityInput, ActivityRow } from "./activityTypes.ts";
 
 export function intentRow(i: Intent, input: ActivityInput, run: FanoutRun | null): ActivityRow {
@@ -79,49 +79,40 @@ export function intentRow(i: Intent, input: ActivityInput, run: FanoutRun | null
    * `session` wins wherever there IS one: a running row has a real session and
    * naming it is what makes the row tappable through to a terminal. The
    * fragments below are what a row says before that — which is most of the life
-   * of a queued one, and the whole life of one that never ran.
+   * of a queued one, and the whole life of one that never ran. And never what the
+   * RESULT beside it already says: once a fresh row has run, its result names the
+   * repo and the session it opened (`resultSaysPlace`), and the line read
+   * `todo-garden · in a new session` over `ran in todo-garden · a session of its
+   * own`. *picking up the last conversation* stays: no result sentence says it.
    */
-  /**
-   * …and, on a row the smart pick wrote, that a machine wrote it.
-   *
-   * Same place `resume` puts its fragment and for the same reason: this is a
-   * fact about WHERE the words came from, which belongs beside where they are
-   * going rather than in the title — the title is the item's own prose, and
-   * prefixing it would make a machine-written sentence look like a person's
-   * with a label stuck on. The Backlog sheet says the fuller version (with the
-   * count and the undo); Activity only has to stop the reader believing they
-   * typed this.
-   */
-  const smartFragment = kind === "work" && i.origin?.startsWith(SMARTPICK_ORIGIN) ? " · written by the smart pick" : "";
   /** …and, on a row an AGENT posted through the host's loopback route, that an
    *  agent did (`AGENT_POSTED_WORDS`, the backlog row's words too). */
-  const agentFragment = isAgentPosted(i) ? ` · ${AGENT_POSTED_WORDS}` : "";
+  const agentFragment = isAgentPosted(i) ? AGENT_POSTED_WORDS : "";
   /**
-   * …and, on a one-off with a CLOCK, what that clock is.
-   *
-   * Such a row is `work` now — recurrence, not trigger kind, decides which list
-   * a row lives in — so it wears work verbs and is titled by its own prose, and
-   * without this fragment the one thing that makes it different from every
-   * other queued item (it is not waiting for its turn, it is waiting for
-   * Saturday) appeared nowhere on the row. Its bucket already says *scheduled*
-   * and sorts by `dueAt`; this says WHY.
-   *
-   * `describeRule` is `@waterplane/shared`'s, never re-worded here: the backlog chip,
-   * the Schedules directory line and this fragment are one rule said one way.
+   * …and, on a one-off with a CLOCK, what that clock is. Such a row is `work`
+   * (recurrence, not trigger kind, decides the list): work verbs, titled by its
+   * prose, and without this the one thing that sets it apart — it waits for
+   * Saturday, not for its turn — was nowhere on the row. Its bucket says
+   * *scheduled* and sorts by `dueAt`; this says WHY. `describeRule` is shared,
+   * never re-worded: the backlog chip, the Schedules directory line and this
+   * fragment are one rule said one way.
    */
-  const clockFragment = isTimedWorkRow(i) && i.trigger.kind === "at" ? ` · ${describeRule(i.trigger.rule)}` : "";
-  const where = (i.target.kind === "repos" ? `${i.target.dirs.length} ${i.target.dirs.length === 1 ? "repo" : "repos"}`
+  const clockFragment = isTimedWorkRow(i) && i.trigger.kind === "at" ? describeRule(i.trigger.rule) : "";
+  const repo = deps.repoName(i.cwd);
+  const placeSaid = i.target.kind === "repo" && resultSaysPlace(i.result?.detail, repo);
+  const place = i.target.kind === "repos" ? `${i.target.dirs.length} ${i.target.dirs.length === 1 ? "repo" : "repos"}`
     : i.target.kind === "sessions" ? `${i.target.sessionIds.length} sessions`
     : session?.title
       ?? (i.target.kind === "repo"
-        ? `${deps.repoName(i.cwd)} · ${i.resume ? "picking up the last conversation" : "in a new session"}`
+        ? i.resume ? `${placeSaid ? "" : `${repo} · `}picking up the last conversation` : placeSaid ? "" : `${repo} · in a new session`
         // A row aimed at a live session it has not reached yet: name the
         // session it is WAITING for, not the repo it happens to be in. `in <x>`
         // rather than the bare title, because the repo name is already the
         // reader's anchor and a lone title reads as a second repo.
         : i.target.kind === "session"
-          ? `in ${input.sessions?.find((s) => s.id === (i.target as { sessionId: string }).sessionId)?.title ?? deps.repoName(i.cwd)}`
-          : deps.repoName(i.cwd))) + smartFragment + agentFragment + clockFragment;
+          ? `in ${input.sessions?.find((s) => s.id === (i.target as { sessionId: string }).sessionId)?.title ?? repo}`
+          : repo);
+  const where = [place, agentFragment, clockFragment].filter(Boolean).join(" · ");
 
   const needs = i.trigger.kind === "files" ? i.trigger.needs : null;
   const fu = run?.followUps;
@@ -230,6 +221,8 @@ export function intentRow(i: Intent, input: ActivityInput, run: FanoutRun | null
     }));
   }
 
+  const verdict = intentVerdictText(i, kind, now, run);
+  const said = !!i.result?.detail && verdict.includes(i.result.detail);
   return {
     key: intentRowKey(i.id),
     id: i.id,
@@ -239,7 +232,7 @@ export function intentRow(i: Intent, input: ActivityInput, run: FanoutRun | null
     state: i.state,
     bucket: bucketOf(i.state, reason),
     blockReason: reason,
-    verdict: intentVerdictText(i, kind, now, run),
+    verdict,
     ...head,
     fullText: prose,
     // A shell command is not prose: it names build outputs at most, and those
@@ -248,7 +241,8 @@ export function intentRow(i: Intent, input: ActivityInput, run: FanoutRun | null
     where,
     cwd: i.cwd || null,
     sessionId: i.sessionId ?? null,
-    delivery: i.state === "done" && KIND_ACTIVITY[kind] === "prompt" ? "landed" : null,
+    // None, even done: `done` IS "it reached the session", which sat under "ran in …" — twice.
+    delivery: null,
     at: i.settledAt ?? i.startedAt ?? i.createdAt,
     createdAt: i.createdAt,
     dueAt: i.trigger.kind === "at" ? i.nextAt ?? null
@@ -272,10 +266,14 @@ export function intentRow(i: Intent, input: ActivityInput, run: FanoutRun | null
     // parent row's own result: the follow-ups are children folded into the run
     // (`fanoutRuns`), so without this the one row that represents them says
     // nothing about them at all.
+    //
+    // …and never the row's own result said again. A settled row's verdict IS `result.detail`,
+    // or quotes it (an old failure, framed so its errand is not re-issued — unframed here, it
+    // was), and its head carries the age: the words drop off, the line too unless `(late)`.
     lastRun: lastFollowUp
       ? { at: lastFollowUp.at, ok: true, detail: `follow-up sent to ${lastFollowUp.dirs.length} of them` }
-      : i.result
-        ? { at: i.result.at, ok: i.result.ok, detail: i.result.detail, late: i.result.late }
+      : i.result && !(said && terminal && !i.result.late)
+        ? { at: i.result.at, ok: i.result.ok, detail: said ? "" : i.result.detail, late: i.result.late }
         : null,
     attempts: i.attempts ?? 0,
     actions,

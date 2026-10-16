@@ -34,6 +34,7 @@ runs as plain node). Order, leaves first:
 | `target.ts` | rung 5 (`targetVerdict`, the session blocker) and the predicates both ends ask about a target (`needsSlot`, `reopensConversation`, `liveConvSession`) | row, facts, words |
 | `verdict.ts` | **`intentVerdict`, the ONE ladder**, rungs 1–4.6 in their order | row, facts, words, budgetpass, kind, target |
 | `clean.ts` | `cleanIntentRow` and its per-field cleaners — the one way a row comes off disk or the wire | types, row, words, budgetpass |
+| `slot.ts` | **which waiting timed rows fire TOGETHER** (`slotsOf`/`slotOf`/`slotMates`, `findSlot` by key with tolerance, `latestClock` for a merge across clocks) — the slot check's one bucketing function, over `SlotRow` built from an `Intent` or a `BacklogItem` | row, budgetpass, kind |
 
 The ladder's ORDER is the specification (`intentVerdict`'s own comment); it stays in one function
 in one file. Its helpers move to their slice but are called from the same lines in the same order.

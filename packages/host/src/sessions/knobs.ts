@@ -13,7 +13,7 @@
 import { createHash } from "node:crypto";
 import { realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import type { LimitLogVerdict } from "../limitlog.js";
 import { BRAND } from "@waterplane/shared";
 import { ROOT, env } from "../env.js";
@@ -128,6 +128,12 @@ export const SUBMIT_NAV_TRIES = 6;
 export const SUBMIT_NAV_MAX_KEYS = 8;
 export const SUBMIT_NAV_LINES = 60;
 export const SUBMIT_NAV_SETTLE_MS = 160;
+// `session.mode` (livemode.ts): shift+tabs per walk — the measured cycle is at most
+// five modes long — how long one press may take to move the footer, and how
+// often the live grid is re-read meanwhile (a buffer read, not a replay).
+export const MODE_MAX_PRESSES = 6;
+export const MODE_PRESS_WAIT_MS = 1500;
+export const MODE_POLL_MS = 60;
 /**
  * Placing the selection on an UNNUMBERED option (`choosePromptBox`), and the
  * rows an attributed replay reads back for it.
@@ -210,7 +216,7 @@ export const HEALTH_SAMPLE_ROWS = 6;
 export const LIMIT_RETRY_MS = Number(env("LIMIT_RETRY_MS") || 10 * 60_000);
 export const LIMIT_RESET_BUFFER_MS = Number(env("LIMIT_RESET_BUFFER_MS") || 2 * 60_000);
 /** The verdict when there is nothing to read — never a claim, see `limitlog.ts`. */
-export const LIMIT_LOG_UNKNOWN: LimitLogVerdict = { state: "unknown", rejectedAt: null, resetAt: null, weekly: false, servedAt: null, clearedBy: null };
+export const LIMIT_LOG_UNKNOWN: LimitLogVerdict = { state: "unknown", rejectedAt: null, resetAt: null, weekly: false, spend: false, servedAt: null, clearedBy: null };
 /**
  * Churn guard, and ONLY that.
  *
@@ -343,6 +349,38 @@ function defaultTmuxServer(): string {
 export const TMUX_SERVER = defaultTmuxServer();
 export const TMUX_PREFIX = `${BRAND.tmuxServer}_`;                // session-name prefix we own
 export const tmuxName = (id: string) => TMUX_PREFIX + id;
+/**
+ * Which tmux server a `live/` record's pane was started on, as a string this
+ * host can compare against its own: the socket directory tmux itself would use
+ * (`$TMUX_TMPDIR`, else `/tmp`, then `tmux-<uid>`) and the `-L` name. Stamped on
+ * every record by `persistLive` so the boot reclaim (`staleLiveIds`) only ever
+ * judges a record against a listing of the server that record belongs to.
+ * It never has to equal tmux's own spelling of the path — only itself: a
+ * differently spelled but identical directory reads as a DIFFERENT server, and
+ * a record on a different server is kept.
+ */
+export const TMUX_SOCKET_ID = join(resolve(process.env.TMUX_TMPDIR || "/tmp"), `tmux-${process.getuid?.() ?? ""}`, TMUX_SERVER);
+/**
+ * True when nothing overrides the socket this host would pick by itself — no
+ * `WATERPLANE_TMUX_SERVER`, no `TMUX_TMPDIR`. A record written before records
+ * were stamped (`LiveMeta.tmuxSocket` absent) can only be judged under this
+ * condition: the one way such a record's pane lives on ANOTHER server is a host
+ * that once ran with an override, and a host that runs with one now cannot tell
+ * that history from its own. So an unstamped record is reclaimable only by a
+ * default host, and kept by any other.
+ */
+export const TMUX_SOCKET_DEFAULT = !env("TMUX_SERVER") && !process.env.TMUX_TMPDIR;
+/**
+ * How long a `live/` record must have gone unwritten before the boot reclaim may
+ * delete it for having no tmux session (`staleLiveIds`). `create()` writes the
+ * record and starts the tmux client in the same tick, but the `new-session` that
+ * makes the name appear in `tmux ls` runs in the tmux CLIENT, asynchronously — so
+ * a second host process booting on the same state dir (a dev host beside the
+ * service, a doctor run) can list the server between the two. An hour is many
+ * orders of magnitude past that window and costs nothing: a record young enough
+ * to be spared is reclaimed by a later boot. Only e2e shortens it.
+ */
+export const STALE_LIVE_MIN_AGE_MS = Math.max(0, Number(env("STALE_LIVE_MIN_AGE_MS") || 60 * 60_000));
 
 /** How often a backend's `sources.sweep` is asked to reap what a gone session left behind
  *  (`sidechannel.ts`; opencode's seat servers and records). Also run once when plugins settle. */

@@ -15,15 +15,17 @@ test("a model's slot is its family's, whatever else ran and however much", () =>
     turn([{ id: "claude-opus-5-5", tok: 1000, costUsd: 1 }, { id: "claude-sonnet-5", tok: 10, costUsd: 0.01 }]),
   ];
   const s = mixSlots(turns);
-  assert.equal(s.of.get("claude-opus-5-5"), 0);
-  assert.equal(s.of.get("claude-sonnet-5"), 1);
-  assert.equal(turnMix(turns[0], s).parts[0].slot, 1);
+  assert.equal(s.of.get("claude-opus-5-5"), 3);
+  assert.equal(s.of.get("claude-sonnet-5"), 2);
+  assert.equal(turnMix(turns[0], s).parts[0].slot, 2);
   assert.equal(s.rest, null);
   // Sonnet out-spending opus does not swap their colours.
   const flipped = mixSlots([turn([{ id: "claude-sonnet-5", tok: 9000 }, { id: "claude-opus-5-5", tok: 1 }])]);
-  assert.equal(flipped.of.get("claude-opus-5-5"), 0);
-  assert.equal(flipped.of.get("claude-sonnet-5"), 1);
-  assert.equal(mixSlots([turn([{ id: "claude-fable-5-1", tok: 1 }])]).of.get("claude-fable-5-1"), 3);
+  assert.equal(flipped.of.get("claude-opus-5-5"), 3);
+  assert.equal(flipped.of.get("claude-sonnet-5"), 2);
+  // The redder the dearer: fable wears the red slot, haiku the blue one.
+  assert.equal(mixSlots([turn([{ id: "claude-fable-5-1", tok: 1 }])]).of.get("claude-fable-5-1"), 1);
+  assert.equal(mixSlots([turn([{ id: "claude-haiku-4-5", tok: 1 }])]).of.get("claude-haiku-4-5"), 0);
 });
 
 test("models no family owns fold into ONE grey part, never a generated hue", () => {
@@ -31,7 +33,7 @@ test("models no family owns fold into ONE grey part, never a generated hue", () 
   const s = mixSlots(turns);
   assert.equal(s.rest, REST_SLOT);
   const parts = turnMix(turns[0], s).parts;
-  assert.deepEqual(parts.map((p) => [p.slot, p.name, p.tok]), [[0, "opus-5-5", 50], [REST_SLOT, "3 more", 30]]);
+  assert.deepEqual(parts.map((p) => [p.slot, p.name, p.tok]), [[3, "opus-5-5", 50], [REST_SLOT, "3 more", 30]]);
   // A second model of an owned family is the tail too: two bands in one hue read as one model.
   const two = mixSlots([turn([{ id: "claude-opus-5-5", tok: 50 }, { id: "claude-opus-4-7", tok: 5 }])]);
   assert.equal(two.of.get("claude-opus-4-7"), undefined);

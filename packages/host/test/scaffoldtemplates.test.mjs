@@ -39,7 +39,7 @@ test("android-hello: files, package id, signing fallback, builds", async () => {
     "gradlew", "gradlew.bat", "gradle/wrapper/gradle-wrapper.jar", "gradle/wrapper/gradle-wrapper.properties",
     "settings.gradle.kts", "build.gradle.kts", "app/build.gradle.kts", "app/src/main/AndroidManifest.xml",
     `app/src/main/kotlin/${pkg.split(".").join("/")}/MainActivity.kt`, "CLAUDE.md", ".gitignore", "README.md",
-    `${BRAND.stateDirName}/builds.json`, `${BRAND.stateDirName}/artifacts.json`,
+    `${BRAND.sharedDirName}/builds.json`, `${BRAND.stateDirName}/artifacts.json`,
   ]) assert.ok(existsSync(join(d, f)), `missing ${f}`);
   assert.ok(res.files.includes("gradlew"));
   assert.ok(statSync(join(d, "gradlew")).mode & 0o100, "gradlew stays executable");
@@ -56,7 +56,7 @@ test("android-hello: files, package id, signing fallback, builds", async () => {
   }
   assert.ok(!existsSync(join(d, "keystore.properties")), "no key material is ever seeded");
 
-  const builds = JSON.parse(read(d, `${BRAND.stateDirName}/builds.json`));
+  const builds = JSON.parse(read(d, `${BRAND.sharedDirName}/builds.json`));
   assert.deepEqual(builds.map((b) => b.id), ["release", "debug"]);
   assert.ok(builds[0].cmd.includes("assembleRelease") && builds[1].cmd.includes("assembleDebug"));
   const policy = JSON.parse(read(d, `${BRAND.stateDirName}/artifacts.json`));
@@ -73,7 +73,7 @@ test("web-hello: one page, publish build copies to the outbox", async () => {
   assert.ok(existsSync(join(d, "index.html")));
   assert.ok(existsSync(join(d, ".claude/outbox")));
   assert.match(read(d, "CLAUDE.md"), /Storage does not work/);
-  const builds = JSON.parse(read(d, `${BRAND.stateDirName}/builds.json`));
+  const builds = JSON.parse(read(d, `${BRAND.sharedDirName}/builds.json`));
   assert.equal(builds.length, 1);
   assert.ok(builds[0].cmd.includes(".claude/outbox/my-page.html"));
   // The build, run as the host would run it, leaves the page where the gallery looks.

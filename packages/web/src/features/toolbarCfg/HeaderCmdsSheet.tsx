@@ -6,7 +6,7 @@ import { Pin } from "lucide-react";
 import { useCore } from "../../sdk";
 import { backendMark } from "../../backendCaps";
 import { SnippetSheet } from "../../SnippetSheet";
-import { TOOLBAR_ITEMS } from "../../toolbar";
+import { toolbarItems } from "../../toolbar";
 import { resetHeaderCmdsToDefault, toggleToolbarPin, writeHeaderCmds } from "./actions";
 import { useHeaderCmds, useHeaderSplit, useToolbarCfg } from "./store";
 
@@ -43,7 +43,7 @@ export function HeaderCmdsSheet() {
             in the collapsed layout. */}
         <div className="pin-head">Pin toolbar actions into the header</div>
         <div className="pin-cloud">
-          {TOOLBAR_ITEMS.map((t) => {
+          {toolbarItems().map((t) => {
             const on = (toolbarCfg.pinned ?? []).includes(t.id);
             return (
               <button key={t.id} className={`key hdr-cmd ${on ? "active" : ""}`}

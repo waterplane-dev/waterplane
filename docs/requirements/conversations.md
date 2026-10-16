@@ -24,3 +24,7 @@ option or per-shell keep.
 - asked: 2026-09-28
 - shipped: this change (`core/launcher/CloseSheet.tsx` + `closeModel.ts`)
 
+### R-conversations-005 · requested
+Compacting a conversation keeps the text the user had entered before the compact.
+- asked: 2026-10-06
+

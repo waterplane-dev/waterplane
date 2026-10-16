@@ -9,10 +9,11 @@
  */
 import { SOURCE_KEYS_MAX, type DetectedPrompt, type PluginScreenBox, type PluginScreenReader, type SourceKeys } from "@waterplane/shared";
 import { screenReaderFor } from "../backends/readers.js";
-import { detectPrompt, dialogStillUp, dialogEvidence, hasDialogFooter, isDialogFooterRow, MAX_BOX_OPTIONS, mergeBox, navToSubmit, sameBox, samePrompt, stripAnsi } from "../prompt.js";
+import { detectPrompt, dialogStillUp, dialogEvidence, hasDialogFooter, isDialogFooterRow, MAX_BOX_OPTIONS, mergeBox, navToSubmit, readNavBox, sameBox, samePrompt, stripAnsi } from "../prompt.js";
 import { descFor, pendingAskQuestions, pickAsk, recoverHead, type AskQuestion } from "../askbox.js";
+import { isPlanBox, planPathFor, readPlan } from "../planbox.js";
 import { detectLimitText, STOP_WAIT_RE } from "../limit.js";
-import { detectLogin, sameLogin, type DetectedLogin } from "../login.js";
+import { detectLogin, loginCandidate, sameLogin, type DetectedLogin } from "../login.js";
 import { logMtime, transcriptPath } from "../transcript.js";
 import { recordSent } from "../sentlog.js";
 import { rememberRule } from "../answergate.js";
@@ -147,8 +148,9 @@ function checkPrompt(core: SessionCore, s: Session): void {
   // A regex over 12 KB every 600 ms of quiet costs nothing; missing the gate
   // costs the whole feature. Stale bytes here only buy a render whose STRICT
   // pass then publishes null, so a wide gate can't invent a phantom prompt.
-  const tail = stripAnsi(s.scrollback.slice(-PROMPT_GATE_BYTES));
-  const candidate = !!detectPrompt(s.scrollback.slice(-PROMPT_GATE_BYTES), { lenient: true });
+  const rawTail = s.scrollback.slice(-PROMPT_GATE_BYTES);
+  const tail = stripAnsi(rawTail);
+  const candidate = !!detectPrompt(rawTail, { lenient: true });
   // A gate miss retires a prompt only when there is no PUBLISHED box to lose.
   //
   // "Only the strict verifier clears it" is the rule the miss counter below
@@ -160,7 +162,9 @@ function checkPrompt(core: SessionCore, s: Session): void {
   // through to the render and let the strict pass decide instead; a box that is
   // genuinely gone leaves a screen carrying no dialog footer, which clears it on
   // that same pass with no added latency.
-  if (!candidate && !hasDialogFooter(tail) && !s.info.prompt && !s.info.login) {
+  // A sign-in link opens the gate on its own shape: claude 2.1.293's sign-in
+  // screen draws no dialog footer (`login.ts`'s `loginCandidate`).
+  if (!candidate && !hasDialogFooter(tail) && !s.info.prompt && !s.info.login && !loginCandidate(rawTail, tail)) {
     s.promptGen++; // invalidates any render still in flight — the box is gone
     s.promptMisses = 0;
     s.promptPending = null;
@@ -175,8 +179,8 @@ function checkPrompt(core: SessionCore, s: Session): void {
     .then((screen) => {
       if (!s.info.running || s.promptGen !== gen) return;
       // The sign-in link rides on THIS render rather than paying for one of
-      // its own: the login screen carries a dialog footer, so the gate below
-      // has already bought the replay every time there is a link to find.
+      // its own: the gate above opens on the link's shape (`loginCandidate`),
+      // so the replay is bought every time there is a link to find.
       applyLogin(core, s, detectLogin(screen, s.scrollback));
       const parsed = detectPrompt(screen);
       if (parsed) {
@@ -293,6 +297,9 @@ function readTwice(s: Session, read: DetectedPrompt): boolean {
   return agreed;
 }
 
+/** A settle between a walk's keystroke and its re-read — the box walks' one wait. */
+const pause = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
 /** A contributed reader's answer, or `fallback` when it threw: a throw reads as "no box". */
 function safe<T>(fn: () => T, fallback: T): T {
   try { return fn(); } catch { return fallback; }
@@ -392,6 +399,7 @@ export async function choosePromptBox(core: SessionCore, id: string, choice: num
   if (!s || !s.info.running) return { ok: false, reason: "session not available" };
   const reader = screenReaderFor(s.backend.caps);
   if (!reader) {
+    if (s.backend.caps.promptBoxes === "claude-numbered" && s.info.prompt?.nav) return chooseClaudeNavBox(core, id, choice);
     return { ok: false, reason: "this backend's boxes are answered with a keystroke, not a selection" };
   }
   let box: PluginScreenBox | null = null;
@@ -410,7 +418,7 @@ export async function choosePromptBox(core: SessionCore, id: string, choice: num
     if (!core.input(id, nav.dir === "right" ? "\x1b[C" : "\x1b[D")) {
       return { ok: false, reason: "session not available" };
     }
-    await new Promise((r) => setTimeout(r, CHOOSE_NAV_SETTLE_MS));
+    await pause(CHOOSE_NAV_SETTLE_MS);
   }
   if (!box || box.armed !== choice) {
     return { ok: false, reason: "could not place the selection on that option — answer it in the terminal" };
@@ -422,6 +430,43 @@ export async function choosePromptBox(core: SessionCore, id: string, choice: num
   // answered on the user's behalf and never shown, so the log is the only
   // place it is visible at all.
   return { ok: core.input(id, "\r") };
+}
+
+/**
+ * The same walk for claude's own UNNUMBERED box (2.1.293's first-launch trust
+ * box, `prompt.ts`'s `readNavBox`): the rows are a vertical list, so Up/Down
+ * rather than Left/Right, one key per pass and a RE-READ between, and Return
+ * only once the "❯" is on the option asked for.
+ *
+ * Not a digit, though the old numbered trust box took one: nothing measured
+ * says a digit answers this box, and a digit that does not is a stray
+ * character in the composer of the session it lets in. The arrows are what
+ * the box's own footer offers.
+ *
+ * Refuses rather than guessing, as the reader's walk does — and also when the
+ * box on screen no longer carries the label that was tapped at that index:
+ * that is a different box, and "Yes" by position on it is a guess.
+ */
+async function chooseClaudeNavBox(core: SessionCore, id: string, choice: number): Promise<{ ok: boolean; reason?: string }> {
+  const want = core.sessions.get(id)?.info.prompt?.options.find((o) => o.index === choice)?.label;
+  let cursor = 0;
+  for (let i = 0; i < CHOOSE_NAV_TRIES; i++) {
+    const read = readNavBox(await core.screenText(id, 60));
+    if (!read) return { ok: false, reason: "that question is no longer readable on screen" };
+    const target = read.prompt.options.find((o) => o.index === choice);
+    if (!target) return { ok: false, reason: `this box has ${read.prompt.options.length} options, not ${choice}` };
+    if (want !== undefined && target.label !== want) {
+      return { ok: false, reason: "the box on screen is not the one that was answered — answer it in the terminal" };
+    }
+    cursor = read.cursor;
+    if (cursor === choice) break;
+    if (!core.input(id, choice > cursor ? "\x1b[B" : "\x1b[A")) return { ok: false, reason: "session not available" };
+    await pause(CHOOSE_NAV_SETTLE_MS);
+  }
+  if (cursor !== choice) {
+    return { ok: false, reason: "could not place the selection on that option — answer it in the terminal" };
+  }
+  return core.input(id, "\r") ? { ok: true } : { ok: false, reason: "session not available" };
 }
 
 /** Is the published box the side channel's, or is the channel reconciled and
@@ -575,6 +620,12 @@ function enrichPrompt(s: Session, p: DetectedPrompt): DetectedPrompt {
   s.enrich = null;
   const cid = s.info.claudeSessionId;
   if (!cid) return p;
+  // A plan approval is never an `AskUserQuestion`, so it is done and returned
+  // here: the card gets the plan it is asking about, or nothing extra.
+  if (isPlanBox(p.ask ?? p.question)) {
+    const plan = pendingPlanFor(s, cid);
+    return plan ? { ...p, plan } : p;
+  }
   let asks: AskQuestion[];
   try {
     const mtime = logMtime(transcriptPath(s.info.cwd, cid)) ?? 0;
@@ -619,8 +670,26 @@ function enrichPrompt(s: Session, p: DetectedPrompt): DetectedPrompt {
   return { ...p, options, ask: ask.question, askId: ask.id };
 }
 
+/**
+ * The plan file behind a plan-approval box (`planbox.ts`), cached on the log's
+ * mtime and the file's: the strict pass runs about twice a second while the box
+ * is up, and neither moves in that time unless somebody edits the plan.
+ */
+function pendingPlanFor(s: Session, cid: string): DetectedPrompt["plan"] | undefined {
+  try {
+    const logM = logMtime(transcriptPath(s.info.cwd, cid)) ?? 0;
+    const c = s.planCache;
+    const path = c && c.logMtime === logM ? c.path : planPathFor(s.info.cwd, cid);
+    const fileM = path ? logMtime(path) ?? 0 : 0;
+    if (c && c.logMtime === logM && c.path === path && c.fileMtime === fileM) return c.plan ?? undefined;
+    const plan = path && fileM ? readPlan(path) : null;
+    s.planCache = { logMtime: logM, path, fileMtime: fileM, plan };
+    return plan ?? undefined;
+  } catch { return undefined; }
+}
+
 /** Publish the "unparsable dialog on screen" fallback flag. */
-function setAwaiting(core: SessionCore, s: Session, on: boolean, screen?: string): void {
+export function setAwaiting(core: SessionCore, s: Session, on: boolean, screen?: string): void {
   if (!!s.info.awaitingInput === on) return;
   s.info.awaitingInput = on || undefined;
   core.emit("updated", s.info);
@@ -786,7 +855,7 @@ export async function submitPromptBox(core: SessionCore, id: string): Promise<{ 
     if (!core.input(id, key.repeat(Math.min(Math.abs(nav.steps), SUBMIT_NAV_MAX_KEYS)))) {
       return { ok: false, placed: false };
     }
-    await new Promise((r) => setTimeout(r, SUBMIT_NAV_SETTLE_MS));
+    await pause(SUBMIT_NAV_SETTLE_MS);
   }
   // One observation per answered box — this is a user's tap, not a poll.
   // `placed` is the only outcome in which the Return that follows means

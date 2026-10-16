@@ -4,7 +4,8 @@
  * Three things this daemon can do on a person's behalf are consent, not convenience: accept
  * Google's Android SDK licence and download a toolchain (`android-toolchain`), make a signing key
  * (`signing-key`), write a repo's Claude settings (`auto-compact`) — the `CONFIRM_GATED_FIXES` —
- * and start or widen the first-app job (`POST /api/onboard`, `/resume` with consent). The phone
+ * and start or widen the first-app job (`POST /api/onboard`, `/resume` with consent) — and replace
+ * the ask-rule list (`PUT /api/askrules`, bound to the list's rev so a stale copy is refused). The phone
  * asks for them with a two-tap confirm or a consent screen; before this gate, the HOST took the
  * caller's word for it. Any Origin-less POST (curl, the `claude` agent this daemon spawns, a
  * plugin's script) could tick the box.
@@ -95,6 +96,8 @@ export function gateRefusal(req: Pick<IncomingMessage, "headers">, token: unknow
 export const FIX_SCOPE = "fix";
 export const ONBOARD_START_SCOPE = "onboard.start";
 export const ONBOARD_RESUME_SCOPE = "onboard.resume";
+/** `PUT /api/askrules`, bound to the list's `rev` (`askrules.ts`). */
+export const ASK_RULES_SCOPE = "askrules";
 export const fixBind = (worktree: string, fixId: string) => `${worktree}\0${fixId}`;
 
 /** A report the phone will draw: one token per confirm-gated fix it offers, for that worktree. */

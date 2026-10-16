@@ -139,6 +139,10 @@ export function scopeHistory(history, scope, prereg) {
   const touches = new Map();
   const batch = new Set();
   const lines = new Map();
+  // Line ranges re-rooted the same way, when the caller read them — see
+  // `git.mjs`'s `readHunks`. A range is a fact about one file, so cutting the
+  // path is the whole translation.
+  const hunks = history.hunks ? new Map() : undefined;
   for (const c of history.commits) {
     const paths = (history.touches?.get(c.sha) ?? c.filesTouched ?? [])
       .filter((p) => p.startsWith(pre))
@@ -154,8 +158,14 @@ export function scopeHistory(history, scope, prereg) {
       for (const [p, v] of num) if (p.startsWith(pre)) m.set(p.slice(pre.length), v);
       lines.set(c.sha, m);
     }
+    const h = hunks && history.hunks.get(c.sha);
+    if (h) {
+      const m = new Map();
+      for (const [p, v] of h) if (p.startsWith(pre)) m.set(p.slice(pre.length), v);
+      hunks.set(c.sha, m);
+    }
   }
-  return { commits, touches, batch, lines };
+  return { commits, touches, batch, lines, ...(hunks ? { hunks } : {}) };
 }
 
 /**

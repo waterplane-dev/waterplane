@@ -6,6 +6,7 @@ import { track } from "./usage";
 import { RepoSelect } from "./RepoPicker";
 import { useRemoteResource } from "./useRemoteResource";
 import { SheetHead } from "./Sheet";
+import { RadioRows } from "./kit";
 
 interface Props {
   repos: RepoTarget[];
@@ -95,10 +96,11 @@ export function SecretSheet({ repos, onClose }: Props) {
     <div className="sheet">
       <SheetHead title={"Set secret"} onClose={onClose} />
 
-      <div className="annot-tools">
-        <button className={`key ${scope === "host" ? "active" : ""}`} onClick={() => setScope("host")}>this host</button>
-        <button className={`key ${scope === "repo" ? "active" : ""}`} onClick={() => setScope("repo")}>a repo</button>
-      </div>
+      <RadioRows
+        label="where the secret applies"
+        options={[{ key: "host", label: "this host" }, { key: "repo", label: "a repo" }]}
+        value={scope}
+        onChange={setScope} />
 
       <div className="form">
         <div className="form-hint">

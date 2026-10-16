@@ -31,7 +31,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, realpathSync, symlinkSyn
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
-  chatCompletion, claudeConfigPath, completionText, parseSidecarSpec, runSummaryTask, runToolTask, sidecarPlan, SIDECAR_ENV,
+  chatCompletion, claudeConfigPath, completionText, parseSidecarSpec, runNameTask, runSummaryTask, runToolTask, sidecarPlan, SIDECAR_ENV,
   trustRefusal, workspaceTrust,
 } from "../dist/sidecar.js";
 
@@ -99,7 +99,6 @@ test("an unset task is claude even when a SIBLING task is routed elsewhere", () 
   const env = { WATERPLANE_SIDECAR_SUMMARY: "openai-compat:http://localhost:11434/v1|gemma4:e4b" };
   assert.equal(sidecarPlan("assess", env).engine, "claude-p");
   assert.equal(sidecarPlan("review", env).engine, "claude-p");
-  assert.equal(sidecarPlan("smartpick", env).engine, "claude-p");
   assert.equal(sidecarPlan("name", env).engine, "claude-p");
 });
 
@@ -134,32 +133,6 @@ test("a naming spec that cannot be read is refused BY NAME, never run as claude"
     const p = sidecarPlan("name", { WATERPLANE_SIDECAR_NAME: spec });
     assert.equal(p.engine, "refused", `${spec} is refused`);
     assert.ok(p.reason.includes("WATERPLANE_SIDECAR_NAME"), "the refusal names the variable a person can unset");
-  }
-});
-
-test("the smart pick may take the toolless engine — its items are IN the prompt", () => {
-  // It sits on the summary's side of the line and for the summary's reason, not
-  // a weaker one: the backlog items and the repo facts it grooms them against
-  // are in the prompt, it reads no file, and `--tools ""` is also the mechanical
-  // guarantee behind the harder rule — a pass with no tools cannot type into a
-  // session, which this feature must never do.
-  const env = { WATERPLANE_SIDECAR_SMARTPICK: "openai-compat:http://localhost:11434/v1|gemma4:e4b" };
-  const p = sidecarPlan("smartpick", env);
-  assert.equal(p.engine, "openai-compat");
-  assert.equal(p.model, "gemma4:e4b");
-  // …and it does not drag the tool-using tasks across with it.
-  assert.equal(sidecarPlan("assess", env).engine, "claude-p");
-});
-
-test("a smart-pick spec that cannot be read is refused BY NAME, never run as claude", () => {
-  // The knob exists to stop a call going to Anthropic. A typo that quietly sent
-  // it there anyway would defeat the only thing it was for, and the person who
-  // set the variable is the only one who can unset it — so the sentence has to
-  // name it.
-  for (const spec of ["ollama", "openai-compat", "openai-compat:", "openai-compat:http://localhost:11434:m"]) {
-    const p = sidecarPlan("smartpick", { WATERPLANE_SIDECAR_SMARTPICK: spec });
-    assert.equal(p.engine, "refused", `${spec} is refused`);
-    assert.ok(p.reason.includes("WATERPLANE_SIDECAR_SMARTPICK"), "the refusal names the variable a person can unset");
   }
 });
 
@@ -321,6 +294,19 @@ test("an errored envelope is no summary — its result is the error, not a name"
 test("a binary that fails outright is no summary either", async () => {
   const out = await withBin(join(BIN_DIR, "does-not-exist"), () => runSummaryTask({ cwd: BIN_DIR, prompt: "p", system: "s", model: "haiku" }));
   assert.equal(out, "");
+});
+
+test("runNameTask: persist:false adds --no-session-persistence, and only then", async () => {
+  // A stub that answers with its own argv, one per line, so the flags are read off the result.
+  const p = join(BIN_DIR, "claude-argv");
+  writeFileSync(p, `#!/bin/sh\ncat >/dev/null\nfor a in "$@"; do printf '%s\\n' "$a"; done\n`);
+  chmodSync(p, 0o755);
+  const req = { cwd: BIN_DIR, prompt: "p", system: "s", model: "haiku", timeoutMs: 10_000 };
+  const off = await withBin(p, () => runNameTask({ ...req, persist: false }));
+  const on = await withBin(p, () => runNameTask(req));
+  assert.ok(off.text.split("\n").includes("--no-session-persistence"), off.text);
+  assert.ok(!on.text.split("\n").includes("--no-session-persistence"), "absent = the default, a transcript as before");
+  for (const f of ["--setting-sources", "--tools", "--thinking"]) assert.ok(off.text.split("\n").includes(f), f);
 });
 
 test("a raw (un-enveloped) line still comes through, squashed to one line", async () => {

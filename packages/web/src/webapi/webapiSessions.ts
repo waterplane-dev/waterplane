@@ -1,6 +1,7 @@
 import { timedFetch, TRANSCRIPT_TIMEOUT_MS } from "@waterplane/shared";
 import type { ContextSeriesDoc, ExternalSession, RepoTarget, SessionShellDetail, TranscriptDoc, TranscriptToolDetail } from "@waterplane/shared";
 import { nfetch, jget } from "./webapiFetch";
+import { readJsonFused } from "./webapiBody";
 import type { SlashCommand } from "./webapiTypes";
 
 /** Sessions, transcripts and the reader's reads. One slice of `api` (see api.ts). */
@@ -27,10 +28,11 @@ export const sessionsApi = {
     // NetActivity bar (see the note on nfetch). The FUSE, though, is not
     // optional here — this is the request whose hang leaves the reader on
     // "loading transcript…" instead of falling back to the cached document.
+    // It covers the headers only, so the body takes a stall fuse of its own.
     const r = await timedFetch(`/api/transcript?${q}`, undefined, TRANSCRIPT_TIMEOUT_MS);
     if (r.status === 204) return null; // unchanged since `since`
     if (!r.ok) throw new Error(`${r.status} transcript`);
-    return r.json() as Promise<TranscriptDoc>;
+    return readJsonFused<TranscriptDoc>(r, TRANSCRIPT_TIMEOUT_MS);
   },
 
   /**
@@ -51,7 +53,7 @@ export const sessionsApi = {
   scrollback: async (sessionId: string): Promise<{ lines: string[]; history: boolean; bounded: boolean; at: number }> => {
     const r = await nfetch(`/api/scrollback?id=${encodeURIComponent(sessionId)}`, undefined, TRANSCRIPT_TIMEOUT_MS);
     if (!r.ok) throw new Error(`${r.status} scrollback`);
-    const d = (await r.json()) as { lines?: string[]; history?: boolean; bounded?: boolean; at?: number };
+    const d = await readJsonFused<{ lines?: string[]; history?: boolean; bounded?: boolean; at?: number }>(r, TRANSCRIPT_TIMEOUT_MS);
     // `history` absent is a host one version behind, and the honest reading of
     // that is "it did not say" — which must not be taken as a promise, because
     // the caller decides whether to DROP this device's own archive for it.
@@ -65,7 +67,7 @@ export const sessionsApi = {
     const q = new URLSearchParams({ id: sessionId, turn: turnId });
     const r = await timedFetch(`/api/transcript/tools?${q}`, undefined, TRANSCRIPT_TIMEOUT_MS);
     if (!r.ok) throw new Error(`${r.status} tool details`);
-    const d = (await r.json()) as { tools?: Record<string, TranscriptToolDetail> };
+    const d = await readJsonFused<{ tools?: Record<string, TranscriptToolDetail> }>(r, TRANSCRIPT_TIMEOUT_MS);
     return d.tools ?? {};
   },
 
@@ -80,7 +82,7 @@ export const sessionsApi = {
       const d = (await r.json().catch(() => ({}))) as { error?: string };
       throw new Error(d.error || `${r.status} shell`);
     }
-    return (await r.json()) as SessionShellDetail & { at: number };
+    return readJsonFused<SessionShellDetail & { at: number }>(r, TRANSCRIPT_TIMEOUT_MS);
   },
 
   /**
@@ -98,6 +100,6 @@ export const sessionsApi = {
     const r = await nfetch(`/api/context?${q}`, undefined, TRANSCRIPT_TIMEOUT_MS);
     if (r.status === 204) return null; // unchanged since `since`
     if (!r.ok) throw new Error(`${r.status} context series`);
-    return r.json() as Promise<ContextSeriesDoc>;
+    return readJsonFused<ContextSeriesDoc>(r, TRANSCRIPT_TIMEOUT_MS);
   },
 };

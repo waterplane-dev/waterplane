@@ -68,3 +68,22 @@ The per-prompt cost section is one component shared by CLI and GUI modes, collap
 - asked: 2026-10-04, 2026-10-04, 2026-10-04
 - shipped: f61cced, 83a6fda
 
+### R-metrics-015 · requested
+Graphs are placed on the relevant screen and are improved in readability and information shown.
+- asked: 2026-10-07
+
+### R-metrics-016 · shipped
+The VS Code extension shows repo health metrics over time.
+- asked: 2026-10-11
+- shipped: c4b2f739
+
+
+### R-metrics-017 · shipped
+Each repo has a weekly health index: five metrics, each read as lower-is-better, chained by geometric mean week over week from a baseline of 100 at the first full week; the CLAUDE.md reading is floored at half the context-weight threshold; an unusual move against the repo's own noise warns (drop) or praises (rise); every repo is notified, and a chip shows in the main view.
+- asked: 2026-10-15 (owner)
+- shipped: healthwatch.ts (host); chip in packages/web
+
+### R-metrics-018 · shipped
+A repo can declare readings of its own in a committed `.waterplane-shared/health.json` (argv run at HEAD, one number out, absent with a reason otherwise); they are stored in the series beside waterplane's but never enter the health index, and every reading on the phone says whose it is — waterplane's (the same for every repo) or the repo's own — with one line on how to add one where a repo has none.
+- asked: 2026-10-16 (owner)
+- shipped: tools/repohealth/own.mjs; RepoHealthOwn.tsx in packages/web

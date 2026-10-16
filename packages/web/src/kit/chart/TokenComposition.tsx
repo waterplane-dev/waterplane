@@ -48,7 +48,13 @@ export const SLOT = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(
 /** A MODEL's colour, by `modelHue.ts`'s fixed family slot: the four hues above,
  *  plus one grey at `REST_SLOT` for everything no family owns. The grey is not
  *  a fifth hue — it is the fold, and it reads as "the rest" in either theme. */
-export const MODEL_SLOT = [...SLOT, "var(--muted)"];
+export const MODEL_SLOT = [...SLOT, "var(--muted)",
+  // Older versions of a family (`modelHue.ts`'s `TINT_STEP`): the family's own
+  // hue mixed toward the surface, so a second opus is still read as opus and
+  // the warm-is-dear order holds. Lightness, not a new hue — no fifth colour.
+  ...[65, 40].flatMap((pct) => [
+    ...SLOT.map((c) => `color-mix(in srgb, ${c} ${pct}%, var(--panel))`), "var(--muted)",
+  ])];
 
 /** One series → the same blue the context graph uses. Two chart families in one
  *  app wearing two different "this is the data" colours is one too many. */

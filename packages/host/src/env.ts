@@ -29,7 +29,9 @@
 import { realpathSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { logTag, makeEnvReader, nodeMeetsMin, nodeTooOldSentence, resolveEnv } from "@waterplane/shared";
-import { bindHostStateDir, liveStateDir, migrateHostDirs, migrateStateDir, pendingStateMove, resolveRoot, resolveStateDir, stateMoveRefusedSentence } from "./branddirs.js";
+import { homedir } from "node:os";
+import { bindHostStateDir, liveStateDir, migrateHostDirs, migrateStateDir, pendingStateMove, realRootFs, resolveRoot, resolveStateDir, stateMoveRefusedSentence } from "./branddirs.js";
+import { readChosenRoot } from "./rootchoice.js";
 import { loadEnvFiles } from "./envfiles.js";
 import { hostSecretEnvPath } from "./secrets.js";
 
@@ -41,12 +43,21 @@ if (!nodeMeetsMin(process.versions.node)) {
   process.exit(1);
 }
 
-const rootPick = resolveRoot(process.env);
-/** The code root: `<PREFIX>ROOT`, else the first usual code folder that exists, else `~/dev` (`branddirs.ts`' `resolveRoot`). */
+/** The files that may name the root and the state dir, into a scratch copy. The
+ *  root decides the state dir, which decides the first `.env`, so that one file
+ *  can never name either; the other two can, and until 2026-10-07 neither was
+ *  read before `resolveRoot` ran: a `<PREFIX>ROOT` set only in the repo `.env`
+ *  (what `.env.example` tells you to do) was silently ignored for the root. */
+const bootEnv: NodeJS.ProcessEnv = { ...process.env };
+loadHostEnv(null, bootEnv);
+
+// The knob, then the folder chosen in the phone's dialog (`rootchoice.ts`), then the guess.
+const rootPick = resolveRoot(bootEnv, homedir(), realRootFs, readChosenRoot());
+/** The code root: `<PREFIX>ROOT`, else the folder chosen on the phone, else the first usual code folder that exists, else `~/dev` (`branddirs.ts`' `resolveRoot`). */
 export const ROOT = rootPick.root;
-/** True when nobody named the root and it was derived (found or assumed) — the doctor says so. */
+/** True when nobody named or chose the root and it was derived (found or assumed) — the doctor says so. */
 export const ROOT_DEFAULTED = rootPick.defaulted;
-/** How the root came about: `named` (the knob), `found` (an existing usual folder) or `fallback` (`~/dev`, which may not exist). */
+/** How the root came about: `named` (the knob), `chosen` (`rootchoice.ts`), `found` (an existing usual folder) or `fallback` (`~/dev`, which may not exist). */
 export const ROOT_PICKED = rootPick.picked;
 
 /**
@@ -66,10 +77,12 @@ function isDaemonEntry(): boolean {
 
 /** THE `.env` load, in its one precedence order — for real below, and into a
  *  scratch copy by the boot-move guard, which needs the port before the state
- *  dir (and so the first file) is final. A function so the order exists once. */
-function loadHostEnv(stateDir: string, target: NodeJS.ProcessEnv, origins?: Map<string, string>): void {
+ *  dir (and so the first file) is final, and by the root pick above, which runs
+ *  before there is a state dir at all (`null`: that file is skipped). A function
+ *  so the order exists once. */
+function loadHostEnv(stateDir: string | null, target: NodeJS.ProcessEnv, origins?: Map<string, string>): void {
   loadEnvFiles([
-    join(stateDir, ".env"),
+    ...(stateDir === null ? [] : [join(stateDir, ".env")]),
     resolve(import.meta.dirname, "../../../.env"),
     hostSecretEnvPath(),
   ], target, origins);
@@ -107,7 +120,7 @@ async function otherDaemonFor(root: string, oldState: string): Promise<string | 
 if (process.argv.includes("--doctor") && process.argv.includes("--json")) {
   console.log = console.info = console.error;
 }
-const statePick = resolveStateDir(process.env);
+const statePick = resolveStateDir(bootEnv);
 let stateDir: string;
 if (isDaemonEntry()) {
   for (const r of migrateHostDirs(ROOT)) if (r.note) console.log(`${logTag} ${r.note}`);

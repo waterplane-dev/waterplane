@@ -18,6 +18,11 @@ on this document, the APK's background link) and the ways to reach this host (`s
   drawn), and not at all elsewhere.
 - `logic.ts` — `hostStatText`, `serveCmd`, `endpoints`, `loginCodeProblem`, node-tested.
 
+**Desktop setup** (`DesktopSetupSettings.tsx`, Tools, order -30): the host's `scope: "host"` rows
+(`GET /api/host/setup`, today the live desktop's grants), which no repo's checklist lists. Absent
+until there is a row. A fix's own words (`notes`) are drawn under the rows, because these fixes act
+on the desktop's screen and a re-drawn, unchanged row read as a dead button.
+
 **Settings rows** (`HostSettings.tsx`): `HostNotifySettings` (Notifications, order 20 —
 `notif-push`, `notif-shell-link`, `notif-shell-battery`) and `HostConnectionSettings` (Connection,
 order -10 — `app-version`, `endpoints`; the host list itself is `features/hosts`' `hosts` row at -20). The two doors

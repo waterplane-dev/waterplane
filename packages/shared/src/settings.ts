@@ -79,6 +79,13 @@ export const SYNCED_SETTING_KEYS = [
    * not would make the same tap mean two different things.
    */
   lsKey("launchAsk"),
+  /**
+   * The spend warnings' thresholds (`spendwarn.ts`): orange and red as a share
+   * of the week, and in dollars where no week is calibrated. How much one
+   * session may spend before it is worth a mark is the person's budget, not a
+   * fact about the phone it was set on.
+   */
+  lsKey("spendWarn"),
   /** The prompt pad — untargeted drafts, written on one device, sent from another. */
   lsKey("pad"),
   /** Repos hidden from the launcher list. */
@@ -171,7 +178,34 @@ export const SYNCED_SETTING_KEYS = [
    * one place it acts, whichever device said it.
    */
   lsKey("backlog.closeWhenDone"),
+  /**
+   * How many LOCAL-model coding sessions may be working at once on this
+   * desktop (`LOCAL_SESSIONS_KEY`, read by the HOST — `localSessionsSetting` is
+   * the one parse). A whole number; `"0"` is no cap; absent is the desktop's
+   * own default (`WATERPLANE_LOCAL_SESSIONS`, else 1). Synced because the cap
+   * acts on the desktop whichever device set it.
+   */
+  lsKey("local.maxSessions"),
 ] as const satisfies readonly string[];
+
+/** The synced key the host reads for the local-model session cap. */
+export const LOCAL_SESSIONS_KEY = lsKey("local.maxSessions");
+
+/** The biggest cap a person may type; anything above is "no cap" in practice. */
+export const LOCAL_SESSIONS_MAX = 16;
+
+/**
+ * The local-model cap off its raw string: a whole number 1..16 is that cap,
+ * `"0"` is NO cap (`null`), and absent, empty or garbage is `fallback` — the
+ * desktop's own default, never a guessed number.
+ */
+export function localSessionsSetting(raw: string | undefined | null, fallback: number | null): number | null {
+  const v = (raw ?? "").trim();
+  if (!/^\d{1,2}$/.test(v)) return fallback;
+  const n = Number(v);
+  if (n === 0) return null;
+  return n <= LOCAL_SESSIONS_MAX ? n : fallback;
+}
 
 /** The synced key the host reads for the global close-when-done default. */
 export const CLOSE_WHEN_DONE_KEY = lsKey("backlog.closeWhenDone");

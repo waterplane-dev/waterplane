@@ -28,6 +28,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
 import { E, SLUG, STATE, rootEnv } from "./lib-brand.mjs";
+import { waitForHost } from "./lib-e2e.mjs";
 
 if (spawnSync("tmux", ["-V"]).status !== 0) { console.log("SKIP: tmux not installed"); process.exit(0); }
 
@@ -95,7 +96,7 @@ const withWs = (fn) => new Promise((resolve) => {
 
 (async () => {
   host = bootHost();
-  await sleep(1200);
+  await waitForHost(PORT);
 
   // Create a repo + session, capture its id, and round-trip an echo.
   const repo = await fetch(`http://127.0.0.1:${PORT}/api/repo`, {
@@ -180,7 +181,7 @@ const withWs = (fn) => new Promise((resolve) => {
 
   // Fresh host, same root — must rediscover the tmux session.
   host = bootHost();
-  await sleep(1500);
+  await waitForHost(PORT);
 
   // Watch the busy session from the moment the host is back: every intent
   // frame (the row's transitions), every session it creates (a re-run would

@@ -2,7 +2,7 @@ import { lsGet, lsSet } from "../storage";
 import type { LinkLog } from "./linkTypes";
 import { DEVICE_KEY, SAMPLE_CAP, blankLog, doc, persist, persistNow } from "./linkDoc";
 import { status } from "./linkStatus";
-import { emit, invalidate } from "./linkStore";
+import { emit, invalidate } from "./linkBus";
 import { buckets } from "./linkTraffic";
 
 /**

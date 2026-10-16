@@ -6,6 +6,15 @@
 # Either way: build first, fail loudly on a broken build (don't take the host
 # down), then health-check.
 set -uo pipefail
+# Native Windows has no tmux, so no session could run here. `npm run restart` on Windows never gets
+# here (scripts/oswrap.mjs sends it to scripts/windows/host.mjs, which runs the host in WSL); this
+# is for someone running the script by hand from Git Bash/MSYS: say the route that works instead of
+# failing halfway through a launchd/kill dance that cannot exist here.
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*)
+    echo "[restart] refused: native Windows cannot run the host. From PowerShell: npm run restart (it runs the host in WSL2 from this checkout; first time: node scripts/windows/host.mjs setup)." >&2
+    exit 1;;
+esac
 ORIG_PWD="$PWD"
 cd "$(dirname "$0")/.."
 # A delegated peer job's worktree never restarts or installs the daemon (peers/serve.ts writes the
@@ -14,6 +23,25 @@ cd "$(dirname "$0")/.."
 if compgen -G "$PWD/.*/peer-job.json" >/dev/null || compgen -G "$ORIG_PWD/.*/peer-job.json" >/dev/null; then
   echo "[restart] refused: this is a delegated job's worktree; it never restarts or installs the peer's daemon." >&2
   exit 1
+fi
+
+# WSL running a Windows checkout (/mnt/<drive>/…): that host is built on Windows (node_modules holds
+# the Windows esbuild/rollup) and kept up by scripts/windows/keeper.ps1. A restart from in here — a
+# session on the phone, say — hands the whole job to the Windows side: building here would fail, and
+# a copy started with nohup would be one the keeper does not hold, so nothing keeps WSL itself up.
+if grep -qi microsoft /proc/version 2>/dev/null; then
+  case "$PWD" in
+    /mnt/[a-z]/*)
+      # RUN it, not `command -v`: with interop gone from the running distro cmd.exe is still on PATH,
+      # and the `exec` below then died with "Exec format error".
+      if ! cmd.exe /d /c exit 0 >/dev/null 2>&1; then
+        echo "[restart] refused: this checkout's host is run from Windows, and WSL interop is off here (Windows programs cannot be run from this distro). From PowerShell in the checkout: npm run restart. To get interop back: \`wsl --shutdown\` from Windows (every WSL session stops), or as root in this distro: sudo sh -c 'echo :WSLInterop:M::MZ::/init:PF > /proc/sys/fs/binfmt_misc/register'" >&2
+        exit 1
+      fi
+      echo "[restart] Windows checkout — handing the restart to Windows (scripts/windows/host.mjs)…"
+      exec cmd.exe /d /c "npm run restart"
+      ;;
+  esac
 fi
 
 UID_NUM="$(id -u)"

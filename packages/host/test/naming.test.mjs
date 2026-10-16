@@ -53,7 +53,6 @@ function makeStore() {
     repoAnySession: () => false,
     autoSlotsFree: () => 0,
     autoSlotsDetail: () => undefined,
-    reapAutoSession: () => null,
     revivedSessionFor: () => null,
     diedAtLimit: () => false,
     stopCount: () => 0,

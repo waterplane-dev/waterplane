@@ -33,6 +33,11 @@ import {
   type IntentCore,
 } from "./contract.js";
 
+/** How often a STILL-failing write is logged again (the first failure always is). */
+const WRITE_ERROR_LOG_MS = 10 * 60_000;
+/** How soon a NEW failing streak tells a person again — a nearly-full disk flaps, and each flap is a feed row plus a push. */
+const WRITE_ERROR_NOTICE_MS = 30 * 60_000;
+
 export class DiskSlice {
   /** The `schema` the file on disk carried, or today's for a host with no file
    *  yet — see `STORE_SCHEMA` and `foldLegacyWorkParents()`. */
@@ -469,9 +474,35 @@ export class DiskSlice {
     } catch { /* best-effort: losing the archive must never block the live write */ }
   }
 
-  persist(): void {
+  /**
+   * Why the last write to `intents.json` failed, or null once one landed.
+   *
+   * A failed write used to be swallowed whole, and `post()`'s promise — *`ok`
+   * means on DISK* — rested on it anyway: a full disk or a read-only state dir
+   * acked rows that were never written, and after a restart a retry inside the
+   * ack TTL ran the prompt again. Now `persist()` answers whether it wrote and
+   * this keeps the reason, for the callers that can still refuse in words
+   * (`write.ts`'s `post`/`upsert`, `fire.ts`'s `starting`). Every caller that
+   * cannot take its write back (a settle, a tick's re-arm) keeps the old
+   * posture: the in-memory rows still work for this boot.
+   */
+  private writeError: { at: number; message: string } | null = null;
+  /** When the failure was last LOGGED: once per failing streak, then at most every `WRITE_ERROR_LOG_MS`. */
+  private writeErrorLoggedAt = 0;
+  /** When a person was last TOLD (`onWriteError`): once per streak, and never twice within `WRITE_ERROR_NOTICE_MS`. */
+  private writeErrorToldAt = 0;
+
+  /** The reason the last write failed, or null when the last write landed (or none was tried). */
+  lastWriteError(): string | null { return this.writeError?.message ?? null; }
+
+  /**
+   * The ONE write to `intents.json`. `true` when the rows are on disk; `false`
+   * when nothing was written — read-only this boot (`readOnly()` says why) or
+   * the write failed (`lastWriteError()` says why). Never throws.
+   */
+  persist(): boolean {
     // Never downgrade a newer host's file (see `bootProblem`).
-    if (this.readOnly()) return;
+    if (this.readOnly()) return false;
     try {
       mkdirSync(this.dir, { recursive: true });
       // `{ schema, intents }` rather than the bare array v1 wrote — see `load()`
@@ -481,7 +512,34 @@ export class DiskSlice {
       if (this.compact(body)) body = envelope();
       if (this.core.deps.files) this.core.deps.files.writeText(this.path, body);
       else { const tmp = this.path + ".tmp"; writeFileSync(tmp, body); renameSync(tmp, this.path); }
-    } catch { /* best-effort — the in-memory list still works for this boot */ }
+    } catch (e) {
+      this.noteWriteFailed(String((e as Error)?.message ?? e));
+      return false;
+    }
+    if (this.writeError) {
+      console.log(`${logTag} intents.json is being written again (it had failed since ${new Date(this.writeError.at).toISOString()}: ${this.writeError.message})`);
+      this.writeError = null;
+      this.writeErrorLoggedAt = 0;
+    }
+    return true;
+  }
+
+  private noteWriteFailed(message: string): void {
+    const now = Date.now();
+    const first = !this.writeError;
+    this.writeError = { at: this.writeError?.at ?? now, message };
+    if (first || now - this.writeErrorLoggedAt >= WRITE_ERROR_LOG_MS) {
+      this.writeErrorLoggedAt = now;
+      console.error(`${logTag} could not write ${this.path} (${message}); new work is refused and nothing new starts until it can`);
+    }
+    // A person is told once per failing streak, never once per tick — and a
+    // streak that starts again within the floor (a flapping disk) is not news.
+    // Guarded: this can run inside the constructor's boot conversions, before
+    // the daemon's notify is wired, and telling must never break a write path.
+    if (first && (this.writeErrorToldAt === 0 || now - this.writeErrorToldAt >= WRITE_ERROR_NOTICE_MS)) {
+      this.writeErrorToldAt = now;
+      try { this.core.deps.onWriteError?.(message); } catch { /* the log line above stands */ }
+    }
   }
 
   /** Write now, whatever a debounce would have said. Called on SIGTERM. */

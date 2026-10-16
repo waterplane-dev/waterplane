@@ -208,21 +208,37 @@ Details that are deliberate:
 - **localStorage and IndexedDB survive an update** — the origin is
   `http://localhost` either way — so the send queue, drafts, the paired host and
   cached transcripts all carry across.
-- **Installing a new APK wins.** Capacitor drops the stored bundle path when the
-  binary version changes, so a sideloaded build is never shadowed by an older
-  download.
+- **Installing a new APK wins.** The shell drops the stored bundle path when the
+  APK's install time changes (`ShellUpdatePlugin`, `apkInstalledAt`), so a
+  sideloaded build is never shadowed by an older download. Capacitor's own
+  version of this keys on `versionCode`/`versionName`, which `build.gradle` never
+  changes — so it never fired, and reinstalling was no way out of a bad bundle.
 
 ### If a bundle is bad
 
-Two independent recoveries, neither needing the network:
+Recoveries, none needing the network:
 
-1. **Automatic.** Every launch increments a counter that the web app zeroes once
-   it has actually rendered. Three launches that never get there and the native
-   side drops the stored path, so the next start comes up on the bundle inside
-   the APK.
-2. **Manual.** Settings → App version → *use the build inside the APK*.
+1. **A deadline per page load.** A page served from a downloaded bundle has 15 s
+   of *on-screen* time to call `markHealthy` (the web app does so from its first
+   committed render, before pairing or any network). If it does not, the shell
+   switches to the bundle inside the APK there and then — no relaunch needed —
+   and says so in a toast. Time in a pocket does not count, because the
+   auto-restart starts new builds exactly then.
+2. **A launch counter.** Every launch increments a counter that the web app
+   zeroes once it has rendered. Three launches that never get there and the
+   native side drops the stored path before the bridge comes up. A stored path
+   whose `index.html` is missing is dropped the same way, at once.
+3. **The failed build is remembered.** Without this, falling back did not stick:
+   the APK's own bundle asked the desktop what it was serving, got the same
+   build, downloaded it and restarted into it the next time the phone was put
+   down — a white screen again. `stage`/`applyNow` refuse that build id
+   (`BAD_BUILD`) unless the person retries it by hand from Settings → App
+   version; the desktop's next *different* build is taken as usual.
+4. **Manual.** Settings → App version → *use the build inside the APK*.
 
-The APK's own copy is never deleted, so the floor is always there.
+The APK's own copy is never deleted, so the floor is always there. These
+recoveries live in the native shell, so they need an APK that has them — an
+older install keeps only the launch counter.
 
 ## Where the system bar ends
 
@@ -591,7 +607,10 @@ row the user is already looking at is noise.
   rather than fighting it: the host decides what may be published at all, the
   phone decides how loudly each kind lands. A kind this APK has never heard of —
   a host newer than the binary — gets its own channel named after itself rather
-  than being dropped.
+  than being dropped. `approval` (a plugin's must-approve-now request, e.g. a vault
+  fingerprint) is HIGH on its own id `kind.approval.high`, because channel importance
+  is immutable and an older APK would have created `kind.approval` at DEFAULT; an alert
+  with a `plugin` and no session opens that plugin via `shellOpen("plugin:<id>")`.
 - **Replacement is by tag.** `NotificationItem` carries no `tag` field yet (that
   is a separate, additive host+`shared` change), so one is derived here —
   `kind|sessionId`, falling back to the item id — and `item.tag` is preferred the
@@ -788,6 +807,53 @@ await K.wrap({alias: "t", dataB64: "AA=="}).catch(e => e.code);  // tap Cancel �
 await K.remove({alias: "t"}); await K.has({alias: "t"});        // {exists: false}
 ```
 
+## Permissions, and what each one is for
+
+The manifest is long for an app that shows a terminal, and read cold it looks like a lot of reach.
+Here is every line with the feature behind it. Two facts frame the list:
+
+- **The app talks to one address: the desktop you enter or pair with.** There is no waterplane
+  server, no Google Play Services or Firebase in the build, and no analytics. The UI it runs comes
+  from inside the APK or from your own desktop's update (see *The UI updates itself*), never from us.
+- **Nothing that prompts is asked for at first launch.** Each runtime permission is requested when
+  you turn on the feature that needs it. Deny it and that feature says why it is off; the rest of the
+  app works.
+
+**Asked at run time, when you use the feature**
+
+| permission | feature | asked when | if you say no |
+|---|---|---|---|
+| `POST_NOTIFICATIONS` | a waiting question, a usage limit or a finished build reaches you while the app is closed; download progress | you switch on the background link | the link and downloads still run; you see nothing until you open the app |
+| `RECORD_AUDIO` (+ `MODIFY_AUDIO_SETTINGS`, no prompt) | push-to-talk dictation | your first press on the mic | dictation says the app has no microphone permission; typing is unaffected |
+| `ACCESS_FINE_LOCATION` + `ACCESS_COARSE_LOCATION` | reading the **Wi-Fi name**, which Android counts as location, so the app can switch to a desktop's LAN address at home | you turn on LAN switching for a desktop | the LAN route never auto-selects; Tailscale is used. The name is compared on the phone and never sent anywhere. No GPS, no location history |
+| `WRITE_EXTERNAL_STORAGE` (Android 9 and older only) | saving a downloaded file into Downloads | your first save | the file stays in the app. Android 10+ needs no permission for this and is never asked |
+
+**Switches only you can flip in Android Settings**
+
+| permission | feature | note |
+|---|---|---|
+| `REQUEST_INSTALL_PACKAGES` | installing an APK **your own repo** just built on your desktop (the build sheet's *install*) | inert until you allow *install unknown apps* for this app. Every install shows Android's own confirm dialog, except as below |
+| `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | letting the background link restart after Doze or a reboot | offered on a Settings screen, never the direct-grant dialog. Without it notifications arrive at the next Doze window instead of at once |
+
+**Granted at install, no prompt**
+
+| permission | feature |
+|---|---|
+| `INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_WIFI_STATE` | reaching your desktop; noticing the network changed so the link reconnects; the Wi-Fi name on Android 11 and older |
+| `FOREGROUND_SERVICE`, `_SPECIAL_USE`, `_DATA_SYNC` | the background link (one WebSocket to your desktop) and the download engine. Each shows its own ongoing notification while it runs, and the link runs only after you switch it on |
+| `RECEIVE_BOOT_COMPLETED` | restarting the background link after a reboot. It does nothing unless you switched the link on |
+| `USE_BIOMETRIC` | a fingerprint-locked key for an extension's secrets (`ShellKeystorePlugin`). The public build's own screens never call it |
+| `UPDATE_PACKAGES_WITHOUT_USER_ACTION` (**`dev` flavor only**) | after the first confirmed install of an app, its later builds update without a dialog (the README's *other phones install it by themselves*). The `play` build does not declare it |
+
+**Not a permission, but visible:** `<queries>` for launcher activities lets the app see which
+apps with a home-screen icon are installed. It is used for one question: whether the build you are
+about to install is already on the phone (a first install versus an update). It is narrower than
+`QUERY_ALL_PACKAGES`, and the list is never sent anywhere.
+
+**The flavors differ only in installing:** `dev` may update itself from a downloaded APK and may
+update other apps quietly; `play` does neither. The permissions are otherwise identical. Details
+under *Two flavors* below.
+
 ## Build
 
 Requires a JDK 21 and an Android SDK (`compileSdk 36`).
@@ -818,7 +884,7 @@ One codebase, two distributions, **two different signing keys**:
 | who it is for | the owner's own phone, sideloaded | everybody, through Google Play |
 | shell updates itself from a downloaded APK | yes | **never** — refused natively (`Installs.refusal`); the page says *this build updates through Google Play* |
 | quiet updates of other apps (`UPDATE_PACKAGES_WITHOUT_USER_ACTION`, `USER_ACTION_NOT_REQUIRED`, update ownership) | yes (`src/dev/AndroidManifest.xml`) | **never** — not declared; every install shows the system's confirm dialog; auto-install is unavailable and the page says why |
-| signed with | `keystore-dev.properties` if present, else the debug key | release: the Play **upload** key (build fails without it); debug: the debug key |
+| signed with | `keystore-dev.properties` if present, else `DEV_STORE_FILE` & co. in the environment, else the debug key | release: the Play **upload** key (build fails without it); debug: the debug key |
 | output | `app/build/outputs/apk/dev/{debug,release}/app-dev-*.apk` | `app/build/outputs/bundle/playRelease/app-play-release.aab` |
 
 The flavor reaches the page at **run time**: `ShellInstall.status()` answers
@@ -838,12 +904,74 @@ keyAlias=…
 keyPassword=…
 ```
 
-The Play upload key can come from the environment instead of a file: Gradle
-properties `playUploadStoreFile`, `playUploadStorePassword`, `playUploadKeyAlias`,
-`playUploadKeyPassword` (`-P…` or `ORG_GRADLE_PROJECT_…`), or plain env
-`PLAY_UPLOAD_STORE_FILE`, `PLAY_UPLOAD_STORE_PASSWORD`, `PLAY_UPLOAD_KEY_ALIAS`,
-`PLAY_UPLOAD_KEY_PASSWORD`. `bundlePlayRelease` / `assemblePlayRelease` without
-any of them stops with a message naming all of this — never an unsigned artifact.
+Either key can come from the environment instead of a file (the properties file
+still wins when it exists):
+
+| key | Gradle properties (`-P…` or `ORG_GRADLE_PROJECT_…`) | plain env |
+|---|---|---|
+| dev | `devStoreFile`, `devStorePassword`, `devKeyAlias`, `devKeyPassword` | `DEV_STORE_FILE`, `DEV_STORE_PASSWORD`, `DEV_KEY_ALIAS`, `DEV_KEY_PASSWORD` |
+| Play upload | `playUploadStoreFile`, `playUploadStorePassword`, `playUploadKeyAlias`, `playUploadKeyPassword` | `PLAY_UPLOAD_STORE_FILE`, `PLAY_UPLOAD_STORE_PASSWORD`, `PLAY_UPLOAD_KEY_ALIAS`, `PLAY_UPLOAD_KEY_PASSWORD` |
+
+A store file set without the other three stops the build naming the missing
+ones, and a store file that is not a regular file stops it too — never a value
+in a message. `bundlePlayRelease` / `assemblePlayRelease` without any Play key
+stops with a message naming all of this — never an unsigned artifact.
+
+**Keys from the vault (`wp-secret`, the private vault extension).** No key or
+password then sits on disk in clear: the keystore and its passwords are vaulted,
+and released per build with a fingerprint on the phone.
+
+```bash
+# once: store them (one fingerprint each), with the lease policy you want
+wp-secret put waterplane-dev-jks --kind file --file ~/keys/waterplane-dev.jks --label "dev signing key" --lease 8h
+wp-secret put waterplane-dev-store-pw --label "dev keystore password" --lease 8h
+wp-secret put waterplane-dev-key-pw --label "dev key password" --lease 8h
+wp-secret put play-upload-jks --kind file --file ~/keys/play-upload.jks --label "Play upload key" --no-lease
+wp-secret put play-upload-store-pw --no-lease
+wp-secret put play-upload-key-pw --no-lease
+
+# a dev release build: one fingerprint, then 8 h of builds from this folder without asking
+DEV_KEY_ALIAS=waterplane-dev wp-secret exec --as-file DEV_STORE_FILE=waterplane-dev-jks --as-tmpfile \
+  --secret DEV_STORE_PASSWORD=waterplane-dev-store-pw --secret DEV_KEY_PASSWORD=waterplane-dev-key-pw \
+  -- npm run apk:dev-release
+
+# the Play bundle: never kept, so every build asks
+PLAY_UPLOAD_KEY_ALIAS=upload wp-secret exec --as-file PLAY_UPLOAD_STORE_FILE=play-upload-jks --as-tmpfile \
+  --secret PLAY_UPLOAD_STORE_PASSWORD=play-upload-store-pw --secret PLAY_UPLOAD_KEY_PASSWORD=play-upload-key-pw \
+  -- npm run aab:play
+```
+
+An alias is not a secret: set it plainly in front of `wp-secret`, whose
+environment the command inherits (not `-- env NAME=… npm …`: a lease is keyed to
+the command's basename, and `env` would be one key for every command). Without
+`--ttl` each secret is kept as its own policy says — the dev lease is keyed to
+`npm`, this folder and this tmux pane, so any `npm …` asking for those ids there
+gets them for 8 h; revoke it from the phone when done. `wp-secret policy <id>
+--lease 8h` / `--no-lease` changes a policy later without re-entering the value
+(one fingerprint).
+
+Why this works with Gradle:
+
+- **`--as-file … --as-tmpfile`, never `--as-file` alone.** Gradle opens the
+  keystore more than once (validating the signing config, then signing each
+  output). With `--as-tmpfile` the file is a regular 0600 file in a 0700 temp
+  dir, deleted when the command exits; a bare `--as-file` is a FIFO, which the
+  build refuses by name.
+- **The Gradle daemon gets the environment per build.** `./gradlew` is a client;
+  it hands its own environment to the (possibly long-running) daemon with every
+  build, so a daemon started earlier still sees this build's `DEV_STORE_FILE`
+  and passwords, and the next build without `wp-secret exec` does not. The
+  values are read at configuration time; the configuration cache is off here (Gradle's
+  default; `android/gradle.properties` does not enable it) — turning it on would write those inputs into
+  `android/.gradle/configuration-cache/`, so keep it off for signed builds.
+
+What vaulting buys, honestly: the **debug** keystore's password is public
+(`android`) and its key signs nothing anyone trusts — vaulting it buys nothing.
+The owner's **dev** key matters because the `dev` shell **updates itself** from a
+downloaded APK: whoever holds that key can build an update the owner's phone
+accepts as the same app. Hence a long lease for it (a working day of builds,
+one fingerprint) but no file on disk; and **never kept** for the Play upload key
+(a lost one is a Play support case) — every Play build asks.
 
 **Once you sign `dev` with your own key, keep it.** A build signed with the debug
 key cannot update one signed with yours (and the reverse), so a second machine

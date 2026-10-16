@@ -27,11 +27,12 @@
  * `packages/extensions/<id>/` (the static registry, always on) — one object
  * shape for both, so moving an extension out of the repo is a folder move.
  */
+import type { PluginStreamHandlers } from "./stream.js";
 import type { ComplianceCheck } from "./wire/repo.js";
 import type { ContextEvent, ContextSample, DetectedPrompt, LaunchOpts, PermissionMode } from "./wire/session.js";
 import type { TranscriptDoc, TranscriptToolDetail } from "./wire/transcript.js";
 import type { BackendSources } from "./backendsources.js";
-import type { FanRow } from "./wire/sysstat.js";
+import type { PluginThermalReader, PluginUsageProbe } from "./pluginreadings.js";
 import { BRAND, LEGACY } from "./brand.js";
 
 /**
@@ -60,7 +61,7 @@ import { BRAND, LEGACY } from "./brand.js";
  * - PATCH: wording, documentation and fixes that change no shape — nothing a plugin
  *   can observe through types.
  */
-export const PLUGIN_API_VERSION = "1.3.0";
+export const PLUGIN_API_VERSION = "1.7.0";
 
 /** A parsed `MAJOR.MINOR.PATCH`. */
 export interface PluginApiVersion { major: number; minor: number; patch: number }
@@ -376,11 +377,11 @@ export interface HostPluginApi {
   decision(row: Omit<DecisionLogEntry, "id" | "ts" | "source" | "plugin" | "sessionTitle"> & { sessionTitle?: string }): void;
   /** Record a paid model call, so it shows in the phone's usage numbers. */
   meter(call: { service: string; model: string; inTok: number; outTok: number }): void;
-  notify(n: { title: string; body: string; sessionId?: string }): void;
+  /** `urgent` (since 1.6): a request a person must approve now; lands on the loud "approval" kind. Use for nothing else. */ notify(n: { title: string; body: string; sessionId?: string; urgent?: boolean }): void;
   /** The Claude plan usage (5-hour / weekly %), or null when unknown. */
   claudeUsage(): { sessionPct: number | null; weeklyPct: number | null } | null;
 
-  /** One repo by its id (the ids `GET /api/repos` hands out); null when unknown or outside the root. */
+  /** One repo by its id (`GET /api/repos`) or absolute worktree path (realpath); null when unknown or outside the root. */
   repo(repoId: string): Promise<PluginRepoScope | null>;
   /**
    * Contribute a row to every repo's setup checklist. Called on each check of
@@ -444,13 +445,18 @@ export interface HostPluginApi {
   /**
    * Contribute a THERMAL reader under `name` (since 1.3): temperature and fan speed for the
    * machine readout, where the core has no reader of its own (macOS keeps the SMC behind root).
-   * Asked on the readout's slow cadence, before the core's own sysfs reader; the first reading
-   * wins. A reading the core cannot vouch for (a non-finite figure, a temperature outside
-   * 1..149 °C, a negative rpm) is DROPPED, never shown — answer null rather than guess. A note
+   * Asked on the readout's slow cadence, before the core's own sysfs reader; the first reading wins. A reading
+   * the core cannot vouch for (non-finite, outside 1..149 °C, a negative rpm) is DROPPED — answer null. A note
    * (`{ note, fix? }`) is shown only when nothing reads. A throw or an answer slower than
    * `PLUGIN_THERMAL_TIMEOUT_MS` counts as no reading. Same naming rules as `screenReader`.
    */
   thermalReader(name: string, reader: PluginThermalReader): () => void;
+  /**
+   * Contribute a USAGE PROBE (since 1.7): one account's quota as its own segment beside claude's on
+   * the usage chip. `claude` or a taken `source` throws. Null = ABSENT; a throw or timeout keeps
+   * the last reading until its reset; an unvouchable window is dropped. Returns an unregister.
+   */
+  usageProbe(def: PluginUsageProbe): () => void;
   /**
    * The loopback URL this plugin's hooks POST to:
    * `http://127.0.0.1:<port>/api/plugin/<id>/hook`. Loopback only, like the
@@ -482,6 +488,12 @@ export interface HostPluginApi {
    * function earlier.
    */
   route(method: PluginHttpMethod, pattern: string, fn: (req: PluginHttpRequest) => PluginHttpReply | Promise<PluginHttpReply>): () => void;
+  /** Since 1.4. Serve live stream `name` to the sockets that open it: binary frames on the one
+   *  socket, never durable or retried (`shared/stream.ts` has the whole contract). THROWS on a bad
+   *  name or one already served. The returned function ends every open subscription. */
+  stream(name: string, handlers: PluginStreamHandlers): () => void;
+  /** Since 1.5: ONE `dataDir` file to the phone's download path, deleted once fetched or at its TTL (`pluginfile.ts`). */
+  offerFile(file: string, opts: import("./pluginfile.js").PluginFileOfferOpts): import("./pluginfile.js").PluginFileOffer;
 }
 
 // ── plugin HTTP routes (`api.route`, since 1.2) ─────────────────────────────
@@ -605,6 +617,8 @@ export interface PluginBackendDef {
     aliases: string[]; ids: string[];
     where?: Record<string, "local" | "hosted">; zeroCost?: string[];
     contextWindow?: Record<string, number>; unavailable?: string;
+    /** A sentence about the list, under the picker; the backend still launches. */
+    note?: string;
   }>;
   /** A source per fact beside the screen readers (`backendsources.ts`). */
   sources?: BackendSources;
@@ -721,26 +735,9 @@ export interface PluginStoreReader {
   ledger?(maxAgeMs: number | undefined): Promise<unknown>;
 }
 
+export * from "./pluginreadings.js";
+
 /** One line of the preflight report a builtin's `doctor` contributes. */
-/** How long the core waits for a contributed thermal reader before it counts as no reading. */
-export const PLUGIN_THERMAL_TIMEOUT_MS = 8_000;
-
-/**
- * What a contributed thermal reader answers (since 1.3). A READING carries what it read and
- * which tool read it (`source`, shown beside the figures — the numbers are that tool's); a
- * NOTE says why there is none and, optionally, shell commands that would fill it in (drawn as
- * copy blocks); null is "nothing to say".
- */
-export type PluginThermalReading =
-  | { cpuTempC?: number; gpuTempC?: number; fans: FanRow[]; source: string }
-  | { note: string; fix?: string[] }
-  | null;
-
-/** A thermal reader (`api.thermalReader`). */
-export interface PluginThermalReader {
-  read(): Promise<PluginThermalReading>;
-}
-
 export interface PluginDoctorCheck {
   /** Short stable name, e.g. `opencode-binary`. */
   id: string;

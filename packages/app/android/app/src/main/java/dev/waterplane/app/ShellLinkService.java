@@ -428,7 +428,7 @@ public class ShellLinkService extends Service {
                 .setSilent(true)
                 .setPriority(NotificationCompat.PRIORITY_MIN)
                 .setCategory(NotificationCompat.CATEGORY_SERVICE)
-                .setContentIntent(openAppIntent(null, STATUS_NOTIFICATION_ID))
+                .setContentIntent(openAppIntent(null, null, STATUS_NOTIFICATION_ID))
                 .build();
     }
 
@@ -471,16 +471,29 @@ public class ShellLinkService extends Service {
      */
     private String channelFor(String kind) {
         String id = CHANNEL_KIND_PREFIX + kind;
+        // Channel importance is immutable once created. An older APK fed a newer
+        // host would have created `kind.approval` at DEFAULT (an unknown kind is
+        // not "urgent" there), and it could never be raised. So approval lives on
+        // its own id, created HIGH, and the stale one is dropped best-effort.
+        if ("approval".equals(kind)) id = id + ".high";
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return id;
         NotificationManager nm = getSystemService(NotificationManager.class);
         if (nm == null) return id;
+        if ("approval".equals(kind)) {
+            try { nm.deleteNotificationChannel(CHANNEL_KIND_PREFIX + kind); } catch (RuntimeException ignored) { /* best effort */ }
+        }
         if (nm.getNotificationChannel(id) != null) return id;
-        boolean urgent = "prompt".equals(kind) || "limit".equals(kind)
-                || "cli".equals(kind) || "undelivered".equals(kind);
+        boolean urgent = isUrgent(kind);
         NotificationChannel ch = new NotificationChannel(id, labelFor(kind),
                 urgent ? NotificationManager.IMPORTANCE_HIGH : NotificationManager.IMPORTANCE_DEFAULT);
         nm.createNotificationChannel(ch);
         return id;
+    }
+
+    /** Kinds a person must act on: heads-up channel, and PRIORITY_HIGH before Android 8. */
+    private static boolean isUrgent(String kind) {
+        return "prompt".equals(kind) || "approval".equals(kind) || "limit".equals(kind)
+                || "cli".equals(kind) || "undelivered".equals(kind);
     }
 
     /** Human names for the host's `NOTIFICATION_KINDS`. An unknown kind — a host
@@ -489,10 +502,14 @@ public class ShellLinkService extends Service {
     private static String labelFor(String kind) {
         switch (kind) {
             case "prompt": return "Waiting questions";
+            case "approval": return "Approval requests";
             case "limit": return "Usage limits";
+            case "burn": return "Usage burn";
+            case "plugin": return "Plugins";
             case "cli": return "CLI health";
             case "undelivered": return "Undelivered prompts";
             case "backlog": return "Backlog";
+            case "followup": return "Follow up";
             case "artifact": return "Artifacts";
             case "image": return "Images";
             case "oracle": return "Oracle";
@@ -560,9 +577,13 @@ public class ShellLinkService extends Service {
                 backoffMs = BACKOFF_MIN_MS;
                 refreshStatus();
                 // The one frame this side sends. The version is the web layer's,
-                // handed over at `start()` — see the class comment.
+                // handed over at `start()` — see the class comment. `role:notify`
+                // asks the host to send this link only the frames `onFrame` reads
+                // (`shared/wire/notifylink.ts`); every other frame is a radio
+                // wakeup thrown away. A host also infers it from OkHttp's UA, which
+                // is what covers an APK built before this line.
                 int protocol = prefs(ShellLinkService.this).getInt(KEY_PROTOCOL, 1);
-                ws.send("{\"t\":\"hello\",\"protocol\":" + protocol + "}");
+                ws.send("{\"t\":\"hello\",\"protocol\":" + protocol + ",\"role\":\"notify\"}");
                 reportQueueBacklog();
             });
         }
@@ -785,6 +806,9 @@ public class ShellLinkService extends Service {
         String title = item.optString("title", "waterplane");
         String body = item.optString("body", "");
         String sessionId = item.optString("sessionId", null);
+        // Filled by the host; a tap on an alert with no session opens this plugin's
+        // screen (a vault fingerprint ask has no session to focus).
+        String plugin = item.optString("plugin", null);
         String tag = item.optString("tag", null);
         if (tag == null || tag.isEmpty()) {
             String key = sessionId != null && !sessionId.isEmpty() ? sessionId : item.optString("id", "");
@@ -798,7 +822,8 @@ public class ShellLinkService extends Service {
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
                 .setAutoCancel(true)
                 .setWhen(item.optLong("ts", System.currentTimeMillis()))
-                .setContentIntent(openAppIntent(sessionId, id))
+                .setPriority(isUrgent(kind) ? NotificationCompat.PRIORITY_HIGH : NotificationCompat.PRIORITY_DEFAULT)
+                .setContentIntent(openAppIntent(sessionId, plugin, id))
                 .build();
         NotificationManager nm = getSystemService(NotificationManager.class);
         if (nm == null) return;
@@ -848,12 +873,19 @@ public class ShellLinkService extends Service {
      * one {@code PendingIntent} and hand the second one's tap the first one's
      * session.
      */
-    private PendingIntent openAppIntent(@Nullable String sessionId, int requestCode) {
+    private PendingIntent openAppIntent(@Nullable String sessionId, @Nullable String plugin, int requestCode) {
         Intent i = new Intent(this, MainActivity.class)
                 .setAction(Intent.ACTION_MAIN)
                 .addCategory(Intent.CATEGORY_LAUNCHER)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        if (sessionId != null && !sessionId.isEmpty()) i.putExtra(MainActivity.EXTRA_OPEN_SESSION, sessionId);
+        if (sessionId != null && !sessionId.isEmpty()) {
+            i.putExtra(MainActivity.EXTRA_OPEN_SESSION, sessionId);
+        } else if (plugin != null && !plugin.isEmpty()) {
+            // MainActivity hands the extra to window.shellOpen unchanged; the web side reads
+            // "plugin:<id>" as a plugin's screen (session ids never contain ':'). An older
+            // web bundle finds no session by that name, which is harmless.
+            i.putExtra(MainActivity.EXTRA_OPEN_SESSION, "plugin:" + plugin);
+        }
         // IMMUTABLE unconditionally: `minSdk` is 24, and nothing here wants the
         // receiver to be able to fill in fields of this intent.
         return PendingIntent.getActivity(this, requestCode, i,

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle, Check, CloudOff, Download, Hammer, HelpCircle, Loader, Minus, Package, Pencil, Play,
-  Plus, Search, Square, Trash2, Wand2, X,
+  Plus, Search, Square, Trash2, Wand2, X, ChevronDown, ChevronUp,
 } from "lucide-react";
 import type { ArtifactPolicy, BuildArtifact, BuildCandidate, BuildConfig, BuildParam, BuildRun, RepoTarget } from "@waterplane/shared";
 import {
@@ -17,9 +17,15 @@ import { DownloadButton } from "./DownloadButton";
 import { track } from "./usage";
 import { ago, durSpan, fmtSize, seqId, stripAnsi, when } from "./format";
 import { SheetHead } from "./Sheet";
+import { BuildRunLog } from "./BuildRunLog";
+import { ConfirmButton } from "./Confirm";
 import { useBackStep } from "./backStep";
 import { Empty } from "./Empty";
 import { Unavailable } from "./Unavailable";
+import { Explain } from "./Explain";
+import { SetSwitch } from "./SettingsKit";
+import { BUILD_LOCAL_ROW, localAfterSave } from "./buildScope";
+import { BuildScopeChoice } from "./BuildScopeChoice";
 
 interface Props {
   repo: RepoTarget;
@@ -27,7 +33,10 @@ interface Props {
   runs: BuildRun[];                       // this repo's runs, newest first
   output: ReadonlyMap<string, string>;    // runId → retained output
   outTick: number;                        // bumps when `output` mutates (force re-render)
-  onSave: (next: BuildConfig[]) => void;
+  /** `local`: ids to keep in this desktop's file; only when the host sent `localIds`. */
+  onSave: (next: BuildConfig[], local?: string[]) => void;
+  /** `build.list`'s `localIds`; `undefined` = older host: no scope control, no attribution. */
+  localIds?: string[];
   /** Start a build, with whatever its parameters were answered with. App routes
    *  it through the durable send queue, so a tap on a dead tunnel is kept and
    *  started on reconnect (and never run twice). */
@@ -60,6 +69,8 @@ interface Props {
   /** Open a session in this repo and hand it `SETUP_PROMPT` — the one-tap way to
    *  fill an empty sheet without typing a build command on a phone keyboard. */
   onSetup: (prompt: string) => void;
+  /** A run's log to a new session here, via a Send-sheet seed (`buildLogSeed`). */
+  onSendLog?: (r: BuildRun, log: string, took: string) => void;
   /**
    * What this repo already describes, off its own manifests (`build.scan`).
    *
@@ -98,30 +109,41 @@ interface Props {
  * claude session (works when you're rate-limited), watch live output, and
  * download the produced artifact (APK/zip/…).
  */
-export function BuildSheet({ repo, builds, runs, output, outTick, onSave, onRun, onCancel, onDownload, onSetup, onScan, onAskOptions, onClose, candidates = null, candidatesTotal = 0, paramOptions, online = true, listAt = 0, policy, onSavePolicy }: Props) {
+export function BuildSheet({ repo, builds, runs, output, outTick, onSave, localIds, onRun, onCancel, onDownload, onSetup, onSendLog, onScan, onAskOptions, onClose, candidates = null, candidatesTotal = 0, paramOptions, online = true, listAt = 0, policy, onSavePolicy }: Props) {
   const [editing, setEditing] = useState<BuildConfig | null>(null);
   /* The build whose questions are being answered. A tap on a parameterised
      button opens this instead of running — the values ARE part of the command,
      so there is no honest way to start without them. */
   const [asking, setAsking] = useState<BuildConfig | null>(null);
-  // Which run's output to show; defaults to the newest run.
+  /* Which run is open: `null` = the newest (so a run just started is the one
+     you see), `""` = none, because the open run's detail sits UNDER its own
+     row now and a person who has read it should be able to fold it away.
+     It used to be a pane at the foot of the list, attached to nothing: a
+     screen of eight runs and three files below them did not say which run
+     the files were from. */
   const [sel, setSel] = useState<string | null>(null);
-  const selRun = runs.find((r) => r.runId === sel) ?? runs[0] ?? null;
+  const selRun = sel === "" ? null : runs.find((r) => r.runId === sel) ?? runs[0] ?? null;
   const logRef = useRef<HTMLPreElement>(null);
+  const openRef = useRef<HTMLDivElement>(null);
 
   // Follow the tail of the live log.
   useEffect(() => {
     const el = logRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [outTick, selRun?.runId]);
+  // A tap that opens a run (its row, or a running build's row above) brings
+  // its detail into view — the runs list can be below the fold.
+  useEffect(() => {
+    if (sel) openRef.current?.scrollIntoView({ block: "nearest" });
+  }, [sel]);
 
-  function remove(id: string) { onSave(builds.filter((b) => b.id !== id)); }
-  function upsert(b: BuildConfig) {
+  function remove(id: string) { const next = builds.filter((b) => b.id !== id); onSave(next, localAfterSave(localIds, next)); setEditing(null); }
+  function upsert(b: BuildConfig, local = false) {
     const cmd = b.cmd.trim();
     if (!cmd) { setEditing(null); return; }
     const clean: BuildConfig = { ...b, cmd, name: b.name.trim() || "build", dir: b.dir?.trim() || undefined };
-    onSave(builds.some((x) => x.id === b.id) ? builds.map((x) => (x.id === b.id ? clean : x)) : [...builds, clean]);
-    setEditing(null);
+    const next = builds.some((x) => x.id === b.id) ? builds.map((x) => (x.id === b.id ? clean : x)) : [...builds, clean];
+    onSave(next, localAfterSave(localIds, next, { id: b.id, local })); setEditing(null);
   }
 
   /* The scan is asked for when the editor OPENS, not when the sheet does. It
@@ -154,7 +176,8 @@ export function BuildSheet({ repo, builds, runs, output, outTick, onSave, onRun,
   if (editing) {
     return <BuildEditor draft={editing} candidates={candidates} candidatesTotal={candidatesTotal} online={online}
       saved={builds.some((b) => b.id === editing.id)}
-      onAssist={(seed: BuildDraftSeed) => { track("action:build.one"); onSetup(oneBuildPrompt(seed, repo.repoName)); }}
+      scope={localIds ? { local: localIds.includes(editing.id) } : null}
+      onDelete={() => remove(editing.id)} onAssist={(seed: BuildDraftSeed) => { track("action:build.one"); onSetup(oneBuildPrompt(seed, repo.repoName)); }}
       onCancel={() => setEditing(null)} onSave={upsert} />;
   }
 
@@ -173,22 +196,27 @@ export function BuildSheet({ repo, builds, runs, output, outTick, onSave, onRun,
         {/* Writing the list is `build.save`, a live-only frame: it edits a file
             on the desktop and there is no honest way to hold one. Opening the
             editor offline would take a typed-out gradle line and answer it with
-            a toast, so the door is shut where it can still say why. */}
-        <button className="key" disabled={!online}
-          title={online ? "add a build command" : "no connection — build commands live on the desktop and can only be edited there"}
-          onClick={() => openEditor({ id: seqId("b"), name: "", cmd: "", dir: "" })}><Plus size={16} /> new</button>
+            a toast — so offline the verb is ABSENT and the hint below says
+            why, never a dimmed button whose reason lives in a `title`. */}
+        {online && <button className="key" title="add a build command"
+          onClick={() => openEditor({ id: seqId("b"), name: "", cmd: "", dir: "" })}><Plus size={16} /> new</button>}
       </SheetHead>
+      {/* One line, and the rest behind a `?`: three always-on paragraphs
+          stood between the head and the first build. */}
       <div className="form-hint">
-        Run a build without spending tokens — the escape hatch when Claude is rate-limited. Commands run in a shell at the repo root (or a sub-dir). The produced APK/zip is offered for download when it finishes.
-        {!online && " No connection right now: a tap is queued and the build starts once the link is back."}
+        Runs in a shell on the desktop, no tokens spent{" "}
+        <Explain of="the build sheet">Works while Claude is rate-limited. What it produces is offered for download under its run.</Explain>
       </div>
-      <ArtifactPolicyRow policy={policy} online={online} onSave={onSavePolicy} />
-      {/* Offline the rows above came off this device, not the host. Say so, and
-          say when — the commands are cached, the RUN is what needed the link. */}
-      {!online && builds.length > 0 && (
+      {/* Offline is never folded: it is why `new` and the pencils are absent.
+          The second line says the rows came off this device, not the host, and
+          when — the commands are cached, the RUN is what needed the link. */}
+      {!online && (
         <div className="form-hint">
           <CloudOff size={13} style={{ verticalAlign: "-2px" }} />{" "}
-          {listAt ? `these commands are this device's copy, last confirmed ${ago(listAt)} ago` : "these commands are this device's copy"} — editing needs the desktop, running one does not.
+          No connection: a tap is queued and the build starts once the link is back. Adding, editing or deleting a command needs the link.
+          {builds.length > 0 && (listAt
+            ? ` These commands are this device's copy, last confirmed ${ago(listAt)} ago.`
+            : " These commands are this device's copy.")}
         </div>
       )}
 
@@ -210,18 +238,25 @@ export function BuildSheet({ repo, builds, runs, output, outTick, onSave, onRun,
               <div key={b.id} className="row-wrap">
                 <button className="row grow" title={b.cmd} onClick={() => { if (running) setSel(running.runId); else fire(b); }}>
                   <span className="row-title">{b.name}{running ? <> <Loader size={12} className="spin" /></> : null}</span>
-                  <span className="row-sub mono">{b.dir ? `${b.dir}$ ` : ""}{b.cmd}</span>
+                  {/* Two lines, then an ellipsis: a forty-line shell script
+                      as a row's subtitle was a whole screen of one row. The
+                      full command is one tap away, on the pencil. */}
+                  <span className="row-sub mono build-cmd">{b.dir ? `${b.dir}$ ` : ""}{b.cmd}</span>
                   {/* A button that ASKS is visibly one, before it is tapped. The
                       placeholders are in the command line above, but `{{app}}`
                       in a monospace line is not a promise a reader can act on —
                       this is. */}
                   {b.params?.length ? <span className="row-sub">{paramsRowNote(b)}</span> : null}
+                  {localIds?.includes(b.id) ? <span className="row-sub">{BUILD_LOCAL_ROW}</span> : null}
                 </button>
                 {running
                   ? <button className="key danger" title="cancel build" onClick={() => onCancel(running.runId)}><Square size={16} /></button>
                   : <button className="key" title={b.params?.length ? "run build — it asks first" : "run build"} onClick={() => fire(b)}><Play size={16} /></button>}
-                <button className="key" disabled={!online} title={online ? "edit" : "no connection — build commands can only be edited on the desktop"} onClick={() => openEditor(b)}><Pencil size={16} /></button>
-                <button className="key danger" disabled={!online} title={online ? "delete" : "no connection — build commands can only be deleted on the desktop"} onClick={() => remove(b.id)}><Trash2 size={16} /></button>
+                {/* Delete lives in the editor, behind a confirm: a red bin on
+                    every row, one thumb-width from Run, was a one-tap way to
+                    lose a command somebody wrote. Offline the pencil is absent
+                    and the hint above says why. */}
+                {online && <button className="key" title="edit or delete" onClick={() => openEditor(b)}><Pencil size={16} /></button>}
               </div>
             );
           })}
@@ -234,7 +269,10 @@ export function BuildSheet({ repo, builds, runs, output, outTick, onSave, onRun,
               tunnel is down. */}
           {builds.length === 0 && (online ? (
             <Empty>
-              No build commands yet. Tap “set up” to open a session that reads the repo and writes them for you — do it while Claude still has tokens, since this sheet is what you fall back to when it doesn’t. Or tap “new” — e.g. name “Release APK”, cmd <span className="mono">./gradlew assembleRelease</span>.
+              No build commands yet — tap “set up” or “new”.{" "}
+              <Explain of="the two ways to add one" label="what do those do?">
+                “set up” opens a session that reads the repo and writes them for you — do it while Claude still has tokens, since this sheet is what you fall back to when it doesn’t. “new” writes one yourself.
+              </Explain>
             </Empty>
           ) : (
             <Empty>
@@ -243,12 +281,20 @@ export function BuildSheet({ repo, builds, runs, output, outTick, onSave, onRun,
           ))}
         </div>
 
+        <ArtifactPolicyRow policy={policy} online={online} onSave={onSavePolicy} />
+
         {runs.length > 0 && (
           <>
             <div className="section">Runs</div>
             <div className="list build-runs">
-              {runs.slice(0, 8).map((r) => (
-                <button key={r.runId} className={`row ${selRun?.runId === r.runId ? "active" : ""}`} onClick={() => setSel(r.runId)}>
+              {runs.slice(0, 8).map((r) => {
+                const text = stripAnsi(output.get(r.runId) ?? "");
+                const log = selRun?.runId === r.runId
+                  && <BuildRunLog r={r} text={text} logRef={logRef} onSendLog={onSendLog} />;
+                return (
+                <div key={r.runId} className="build-run-item">
+                <button className={`row ${selRun?.runId === r.runId ? "active" : ""}`}
+                  onClick={() => setSel(selRun?.runId === r.runId ? "" : r.runId)}>
                   <span className="row-title">
                     {r.status === "running" ? <Loader size={12} className="spin" /> : null} {r.name}
                     {" "}<span className={`tag ${r.status === "done" ? "idle" : r.status === "running" ? "coding" : "dead"}`}>{r.status}{r.exitCode ? ` ${r.exitCode}` : ""}</span>
@@ -269,26 +315,31 @@ export function BuildSheet({ repo, builds, runs, output, outTick, onSave, onRun,
                     <span className="row-sub mono">{Object.entries(r.params).map(([k, v]) => `${k}=${v}`).join(" · ")}</span>
                   )}
                   <span className="row-sub">{when(r.finishedAt ?? r.startedAt)} · {durSpan(r.startedAt, r.finishedAt)}{r.artifacts?.length ? ` · ${r.artifacts.length} artifact${r.artifacts.length > 1 ? "s" : ""}` : ""}</span>
+                  {selRun?.runId === r.runId ? <ChevronUp size={16} className="build-run-fold" /> : <ChevronDown size={16} className="build-run-fold" />}
                 </button>
-              ))}
+                {selRun?.runId === r.runId && (
+                  <div className="build-run" ref={openRef}>
+                    {/* Failed/running is opened for its LOG: right under the row,
+                        not after the artifacts. Done is opened for its files. */}
+                    {r.status !== "done" && log}
+                    {r.artifacts && r.artifacts.length > 0 && (
+                      <div className="list">
+                        {r.artifacts.map((a) => (
+                          <ArtifactRow key={a.relPath} a={a} repoDir={repo.worktreePath} repoName={repo.repoName} onDownload={onDownload} />
+                        ))}
+                      </div>
+                    )}
+                    {r.status === "done" && !r.artifacts?.length && (
+                      <Empty>Build finished, no downloadable file found (nothing matching apk/aab/zip/… in the repo).</Empty>
+                    )}
+                    {r.status === "done" && log}
+                  </div>
+                )}
+                </div>
+                );
+              })}
             </div>
           </>
-        )}
-
-        {selRun && (
-          <div className="build-run">
-            {selRun.artifacts && selRun.artifacts.length > 0 && (
-              <div className="list">
-                {selRun.artifacts.map((a) => (
-                  <ArtifactRow key={a.relPath} a={a} repoDir={repo.worktreePath} repoName={repo.repoName} onDownload={onDownload} />
-                ))}
-              </div>
-            )}
-            {selRun.status === "done" && !selRun.artifacts?.length && (
-              <Empty>Build finished, no downloadable file found (nothing matching apk/aab/zip/… in the repo).</Empty>
-            )}
-            <pre className="build-log" ref={logRef}>{stripAnsi(output.get(selRun.runId) ?? "") || "(no output yet)"}</pre>
-          </div>
         )}
       </div>
     </div>
@@ -321,7 +372,7 @@ export function BuildSheet({ repo, builds, runs, output, outTick, onSave, onRun,
  *    yet gets a different one — an empty list and an unanswered one are not the
  *    same claim.
  */
-function BuildEditor({ draft, candidates, candidatesTotal, online, saved, onAssist, onCancel, onSave }: {
+function BuildEditor({ draft, candidates, candidatesTotal, online, saved, scope, onAssist, onDelete, onCancel, onSave }: {
   draft: BuildConfig;
   candidates: BuildCandidate[] | null;
   candidatesTotal: number;
@@ -330,13 +381,18 @@ function BuildEditor({ draft, candidates, candidatesTotal, online, saved, onAssi
    *  this id in place" or "add one entry" off exactly this, and getting it
    *  wrong is how a sheet ends up with two buttons called "Release APK". */
   saved: boolean;
+  /** Where this entry lives now; `null` = older host (no `localIds`), no control. */
+  scope: { local: boolean } | null;
   /** Spend ONE agent turn on THIS entry, seeded with whatever is typed. The
    *  sheet's other wand reads the whole repo; this one is the right size for
    *  "the same as the release APK but for the other flavour". */
   onAssist: (seed: BuildDraftSeed) => void;
+  /** Remove this entry from the repo's builds file. Drawn only for a `saved` one. */
+  onDelete: () => void;
   onCancel: () => void;
-  onSave: (b: BuildConfig) => void;
+  onSave: (b: BuildConfig, local: boolean) => void;
 }) {
+  const [local, setLocal] = useState(scope?.local ?? false);
   const [name, setName] = useState(draft.name);
   const [cmd, setCmd] = useState(draft.cmd);
   const [dir, setDir] = useState(draft.dir ?? "");
@@ -494,10 +550,18 @@ function BuildEditor({ draft, candidates, candidatesTotal, online, saved, onAssi
         </div>
       )}
 
+      {scope && <BuildScopeChoice local={local} wasShared={saved && !scope.local} onChange={setLocal} />}
+
       <div className="sheet-actions">
         <button className="key" onClick={onCancel}><X size={16} /> cancel</button>
+        {/* Delete is here and not on the sheet's rows: you are looking at the
+            whole command you are about to lose, and it takes two taps. */}
+        {saved && (
+          <ConfirmButton title="delete this build command" confirm={<><Trash2 size={16} /> delete it?</>}
+            onConfirm={() => { track("action:build.delete"); onDelete(); }}><Trash2 size={16} /> delete</ConfirmButton>
+        )}
         <span className="spacer" />
-        <button className="send" disabled={!cmd.trim()} onClick={() => { track("action:build.save"); onSave({ ...draft, name, cmd, dir, params: cleanBuildParams(params) }); }}>Save</button>
+        <button className="send" disabled={!cmd.trim()} onClick={() => { track("action:build.save"); onSave({ ...draft, name, cmd, dir, params: cleanBuildParams(params) }, local); }}>Save</button>
       </div>
     </div>
   );
@@ -622,14 +686,20 @@ function ParamsEditor({ params, cmd, dir, unknown, onChange }: {
  * What becomes of what a build produces — the two switches, and the number.
  *
  * It is here rather than in a settings screen because it is read in the second
- * before a build is tapped, and because what it governs is visible nowhere
- * else: a name in the download list, and files that stop existing. The
- * sentence above the chips says what the next build will do, in full, so a
- * switch never has to be decoded from its own label.
+ * before a build is tapped — right under the commands it governs — and because
+ * what it governs is visible nowhere else: a name in the download list, and
+ * files that stop existing.
  *
- * Offline it is the sentence and nothing else. The policy lives with the
- * project on the desktop; a chip that cannot save is not drawn as a dimmed
- * chip (a `title` is invisible on a phone) — the reason is said instead.
+ * The two switches are the Settings kit's `SetSwitch`, so the state is the
+ * `on`/`off` at the row's edge and never a sentence on a button ("✓ collect +
+ * name: on"). What the next build will do, in full, is one tap away behind the
+ * head's `?`, so a switch never has to be decoded from its own label. The keep
+ * count is a stepper on ONE line: the number is prose between two buttons, not
+ * a third button, and a button at an end of the ladder is absent, never dimmed.
+ *
+ * Offline it is the sentence, drawn, and nothing else. The policy lives with
+ * the project on the desktop; a switch that cannot save is not drawn as a
+ * dimmed one (a `title` is invisible on a phone) — the reason is said instead.
  */
 function ArtifactPolicyRow({ policy, online, onSave }: {
   policy?: ArtifactPolicy;
@@ -638,33 +708,47 @@ function ArtifactPolicyRow({ policy, online, onSave }: {
 }) {
   if (!policy || !onSave) return null;
   const set = (patch: Partial<ArtifactPolicy>) => onSave({ ...policy, ...patch });
+  const sentence = <>Every build here: {artifactPolicyText(policy)}.</>;
   return (
-    <div className="form-hint artifact-policy">
-      <div><Package size={13} style={{ verticalAlign: "-2px" }} /> Every build here: {artifactPolicyText(policy)}.</div>
+    <div className="artifact-policy">
+      <div className="section ap-head">
+        What a build leaves
+        {online && (
+          <Explain of="what a build leaves">
+            {sentence} <b>collect + name</b> copies what a build produces into .claude/outbox under a name carrying
+            the repo, the variant and the version; <b>remove older</b> then deletes older builds of the same artifact
+            from the outbox — never anything else.
+          </Explain>
+        )}
+      </div>
       {online ? (
-        <div className="ap-chips">
-          <button className="key" title="copy what a build produces into .claude/outbox under a name carrying the repo, the variant and the version"
-            onClick={() => { track("action:build.collect"); set({ collect: !policy.collect }); }}>
-            {policy.collect ? <Check size={14} /> : <X size={14} />} collect + name: {policy.collect ? "on" : "off"}
-          </button>
+        <>
+          <SetSwitch label="collect + name" icon={Package} on={policy.collect}
+            onChange={() => { track("action:build.collect"); set({ collect: !policy.collect }); }} />
           {policy.collect && (
-            <button className="key" title="after collecting, delete older builds of the same artifact from the outbox — never anything else"
-              onClick={() => { track("action:build.prune"); set({ prune: !policy.prune }); }}>
-              {policy.prune ? <Check size={14} /> : <X size={14} />} remove older: {policy.prune ? "on" : "off"}
-            </button>
+            <SetSwitch label="remove older" icon={Trash2} on={policy.prune}
+              onChange={() => { track("action:build.prune"); set({ prune: !policy.prune }); }} />
           )}
           {policy.collect && policy.prune && (
-            <>
-              <button className="key" title="keep one fewer build of each artifact"
-                onClick={() => set({ keep: Math.max(1, policy.keep - 1) })}><Minus size={14} /></button>
-              <span className="key ap-keep">keep {policy.keep}</span>
-              <button className="key" title="keep one more build of each artifact"
-                onClick={() => set({ keep: Math.min(MAX_ARTIFACT_KEEP, policy.keep + 1) })}><Plus size={14} /></button>
-            </>
+            <div className="ap-keep">
+              keep
+              {policy.keep > 1 && (
+                <button className="key" aria-label="keep one fewer" title="keep one fewer build of each artifact"
+                  onClick={() => set({ keep: policy.keep - 1 })}><Minus size={14} /></button>
+              )}
+              <span className="ap-keep-n" aria-live="polite">{policy.keep}</span>
+              {policy.keep < MAX_ARTIFACT_KEEP && (
+                <button className="key" aria-label="keep one more" title="keep one more build of each artifact"
+                  onClick={() => set({ keep: policy.keep + 1 })}><Plus size={14} /></button>
+              )}
+            </div>
           )}
-        </div>
+        </>
       ) : (
-        <div><CloudOff size={13} style={{ verticalAlign: "-2px" }} /> this is this device's copy — changing it needs the desktop, where the policy lives with the project.</div>
+        <div className="form-hint">
+          <div><Package size={13} style={{ verticalAlign: "-2px" }} /> {sentence}</div>
+          <div><CloudOff size={13} style={{ verticalAlign: "-2px" }} /> this is this device's copy — changing it needs the desktop, where the policy lives with the project.</div>
+        </div>
       )}
     </div>
   );

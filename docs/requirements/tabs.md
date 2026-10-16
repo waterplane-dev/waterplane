@@ -24,8 +24,8 @@ Each session tab has a close button (X), positioned at the left of the tab, that
 - asked: 2026-09-20, 2026-09-21
 
 ### R-tabs-006 · shipped
-Tabs can be ordered by open sequence, by frequency (most-opened first), or by recency (last-opened first).
-- asked: 2026-09-20
+Tabs can be ordered by open sequence, by frequency (most-opened first), or by recency (last-opened first); the default is last-opened first.
+- asked: 2026-09-20, 2026-10-05
 - shipped: d44506e
 
 ### R-tabs-007 · requested
@@ -33,8 +33,8 @@ Light-mode tab colors are higher intensity than the main screen's repo colors.
 - asked: 2026-09-20
 
 ### R-tabs-008 · shipped
-Number of visible tabs is user-configurable, defaulting to 3.
-- asked: 2026-09-20
+Number of visible tabs is user-configurable, defaulting to 10.
+- asked: 2026-09-20, 2026-10-05
 - shipped: e031cf2
 
 ### R-tabs-009 · shipped
@@ -56,3 +56,8 @@ Tabs show a busy indicator while code generation is ongoing in that session.
 - asked: 2026-09-21
 - shipped: 9d32436
 
+
+### R-tabs-013 · shipped
+A file open in the file viewer can be pinned to the tab strip from the viewer's header; pinned files sit after the sessions, marked as files (file icon, dashed edge), open the viewer on tap, and unpin from their ×.
+- asked: 2026-10-15
+- shipped: 2026-10-15

@@ -13,6 +13,7 @@
 import type {
   RepoHealthPlot, RepoHealthPlotSeries, RepoHealthPoint, RepoHealthReading, RepoHealthView,
 } from "@waterplane/shared";
+import { REPOHEALTH_OWN_FILE } from "@waterplane/shared";
 
 const DAY = 86_400_000;
 const WINDOW_READINGS = 60;
@@ -171,7 +172,7 @@ export function demoRepoHealth(repoName: string, now: number): RepoHealthView | 
 
   const last = n - 1;
   const mk = (key: string, label: string, unitName: string, vals: number[], detail: string, plain = false): RepoHealthPlotSeries => ({
-    key, label, unit: unitName, points: pts((i) => vals[i]), last: vals[last], reading: readingOf(vals, plain), detail,
+    key, source: "central", label, unit: unitName, points: pts((i) => vals[i]), last: vals[last], reading: readingOf(vals, plain), detail,
   });
   const retouchTop = p.offenders.map((o) => `${o.path} at ${plural(o.n, "re-touch", "re-touches")}`).join(", ");
   const series: RepoHealthPlotSeries[] = [
@@ -183,7 +184,7 @@ export function demoRepoHealth(repoName: string, now: number): RepoHealthView | 
     mk("context.claudeMdChars", "CLAUDE.md", "chars", claudeMd, ""),
     mk("context.descChars", "the always-on skill descriptions", "chars", desc, ""),
     mk("context.skillCount", "the count of skills", "", skills, "", true),
-    mk("untested.count", "the count of modules no test names", "", untested,
+    mk("untested.count", "the count of modules no test reaches", "", untested,
       ` ${untested[last].toLocaleString("en-US")} of ${plural(files[last], "module", "modules")} in the tree.`),
   ];
 
@@ -220,6 +221,8 @@ export function demoRepoHealth(repoName: string, now: number): RepoHealthView | 
       path: holders[last].path,
       day: days[last],
     },
+    // A demo repo declares no readings of its own: the sheet's one line on how to add one.
+    own: { file: REPOHEALTH_OWN_FILE, declared: false, series: [] },
   };
 
   const lastTs = today.getTime() - 40 * 60_000;

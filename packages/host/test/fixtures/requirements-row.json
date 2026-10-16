@@ -1,13 +1,7 @@
 {
   "notSetUp": {
-    "row": {
-      "id": "requirements",
-      "label": "Requirements list",
-      "status": "pass",
-      "fix": "requirements",
-      "detail": "Optional, not set up. The fix writes .claude/skills/requirements/SKILL.md and docs/requirements/README.md and spends nothing. After that this row counts your prompts since the list was last built and gives the build to this repo's agent: a cheap model extracts requirements from your prompts, a stronger one merges them with the commits, and it leaves an uncommitted diff for you to review."
-    },
-    "before": "env-gitignored",
+    "row": null,
+    "before": null,
     "after": null
   },
   "neverBuilt": {

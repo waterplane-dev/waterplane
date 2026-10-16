@@ -9,3 +9,8 @@ Token type shows as a stacked chart in the default view.
 - asked: 2026-10-03
 - shipped: e821180
 
+### R-token-stats-003 · shipped
+The context chart draws the currently set auto-compact window as a line, and says why when none can be drawn.
+- asked: 2026-10-11
+- shipped: 0153deae
+

@@ -3,7 +3,7 @@
  */
 import { namingStartedNote } from "../../naming.js";
 import { addClientBacklogItem } from "../../agentintents.js";
-import { cleanSessionBudget } from "@waterplane/shared";
+import { BUDGET_NOT_HOLDING, cleanLaunchOpts, cleanSessionBudget } from "@waterplane/shared";
 import type { Route, RouteSpec, RouteTable } from "../types.js";
 
 const onFanoutList: Route<"fanout.list"> = (a) => {
@@ -24,7 +24,7 @@ const onFanoutRun: RouteSpec<"fanout.run"> = {
     const { text, dirs, cols, rows, launch } = a.msg;
     // Each target's session is born with this budget (refused whole if garbage).
     const budget = cleanSessionBudget(a.msg.budget) ?? undefined;
-    return a.c.fanout.start(dirs, text, { launch, budget, cols, rows }).then((r) => {
+    return a.c.fanout.start(dirs, text, { launch, budget, flagWhenDone: a.msg.flagWhenDone === true, cols, rows }).then((r) => {
       if ("error" in r) { a.c.send(a.ws, { t: "toast", text: `fan-out: ${r.error}` }); return { ok: false, reason: r.error }; }
       return { ok: true, runId: r.id };
     });
@@ -112,8 +112,11 @@ const onBacklogAdd: Route<"backlog.add"> = (a) => {
       autoFire: a.msg.autoFire, steps: a.msg.steps, resume: a.msg.resume,
       // Strictly a boolean: absent follows the global close-when-done setting.
       closeWhenDone: typeof a.msg.closeWhenDone === "boolean" ? a.msg.closeWhenDone : undefined,
+      flagWhenDone: a.msg.flagWhenDone === true ? true : undefined,
       // The budget the item's session is born with; garbage is no budget.
       budget: cleanSessionBudget(a.msg.budget) ?? undefined,
+      // The model its session starts with; garbage fields are dropped, never guessed.
+      launch: cleanLaunchOpts(a.msg.launch),
     }).then((added) => {
       if (!added.ok) {
         // The sentence rides ON the receipt (and in the ledger, so a replay
@@ -128,6 +131,14 @@ const onBacklogAdd: Route<"backlog.add"> = (a) => {
       }
       const item = added.item;
       if (a.msg.fire) void a.c.backlog.fire(item.id);
+      // *Past the budget* asked as the prompt was queued: the same waiver
+      // `intent.waive` grants, on the row that now exists. Nothing tripped is
+      // nothing to lift — the row runs when free anyway, so that refusal is
+      // silent; any other one is said, because the row WILL wait.
+      if (a.msg.pastBudget === true) {
+        const w = a.c.intents.waive(item.id, "budget", true);
+        if (!w.ok && w.reason !== BUDGET_NOT_HOLDING) a.c.send(a.ws, { t: "toast", text: `queued, but not past the budget — ${w.reason ?? "the desktop refused"}` });
+      }
       const verdict = { ok: true, itemId: item.id };
       // Remembered BEFORE the ack goes out, so a retry that arrives with the
       // receipt still in flight reads the ledger rather than the empty gap.
@@ -171,7 +182,14 @@ const onBacklogUpdate: Route<"backlog.update"> = (a) => {
       // wire says nothing, and nothing must not clear the override.
       ...(a.msg.closeWhenDone === true || a.msg.closeWhenDone === false || a.msg.closeWhenDone === null
         ? { closeWhenDone: a.msg.closeWhenDone } : {}),
+      ...(a.msg.flagWhenDone === true || a.msg.flagWhenDone === false || a.msg.flagWhenDone === null
+        ? { flagWhenDone: a.msg.flagWhenDone } : {}),
+      // The session budget of a still-waiting row: `null` clears; an object is
+      // CLEANED here (never trust the wire shape) and garbage says nothing.
+      ...(a.msg.budget === null ? { budget: null } : {}),
+      ...(a.msg.budget ? (() => { const b = cleanSessionBudget(a.msg.budget); return b ? { budget: b } : {}; })() : {}),
     };
+    if (a.msg.budget && !cleanSessionBudget(a.msg.budget)) a.c.send(a.ws, { t: "toast", text: "backlog: that budget was not a cap this desktop understands, so it was left as it was" });
     // A title this app would not write is SAID, the way `intent.requeue` says
     // its refusal. The rest of the edit landed, so this is not a failed op and
     // nothing here is `ok: false` — it is the one half that did not, and
@@ -195,13 +213,9 @@ const onBacklogUpdate: Route<"backlog.update"> = (a) => {
  * Title this repo's untitled rows.
  *
  * `contain` because the message names a DIRECTORY the client chose and the
- * handler spawns a completion with that directory as its cwd — `backlog.
- * setSmartPick`'s gate, for the same reason, one step further along: this one
- * spawns something immediately rather than writing a key a later pass spawns
- * from.
+ * handler spawns a completion with that directory as its cwd.
  *
- * **Durable**, unlike the smart-pick tick-box, and that is not symmetry for its
- * own sake: this op SPENDS a completion. A phone that queued the tap while the
+ * **Durable**, because this op SPENDS a completion. A phone that queued the tap while the
  * tunnel was down and re-sent it on reconnect would otherwise buy the same
  * titles twice — and the second pass, arriving after the first has written, is
  * a pass over a list where every row it was asked about now has a name, so it
@@ -279,51 +293,6 @@ const onBacklogOpenRepoSession: Route<"backlog.openRepoSession"> = (a) => {
     });
 };
 
-/**
- * Turn this repo's *smart pick* on or off.
- *
- * `contain` because the message names a DIRECTORY the client chose and this
- * writes it into host state that a later pass then spawns `claude -p` in. It is
- * the same gate `build.list` takes for a read, and for the stronger of its two
- * reasons: an unguarded key here would let a phone name `/anywhere` and have the
- * host run a grooming pass there the next time something fired.
- *
- * Not durable: the message is idempotent by construction (a boolean set to what
- * it already is writes nothing and kicks nothing), so an ackId would be
- * protecting against a repeat that costs nothing.
- */
-const onBacklogSetSmartPick: RouteSpec<"backlog.setSmartPick"> = {
-  contain: "repoDir",
-  refusal: "that folder is outside the configured root",
-  run: (a) => {
-    a.c.backlog.setSmartPick(a.dir, a.msg.enabled);
-    a.c.broadcast(a.c.backlogSnapshot());
-  },
-};
-
-/**
- * Put a merge's originals back — before OR after the merged row has run.
- *
- * No `contain` — it names a ROW, not a directory, and the row's own `cwd` is the
- * host's. Not durable and never queued offline, for `intent.cancel`'s reason: an
- * undo delivered an hour late calls back words that have since run.
- *
- * **Both answers are a TOAST carrying the host's own sentence**, and the success
- * one is not a nicety: the same tap means two different things depending on
- * whether the merged row got there first, and the difference — *"your 2
- * originals are back and will run again"* versus *"put back, they never ran"* —
- * is exactly what the person needs told. The client draws the button on any
- * merged row, whatever its state, and never greys it out; the host decides what
- * the tap does and says so. `Unavailable.tsx`'s rule, applied to a verb rather
- * than a control.
- */
-const onBacklogUnmerge: Route<"backlog.unmerge"> = (a) => {
-    const res = a.c.backlog.unmerge(a.msg.id);
-    if (!res.ok) { a.c.send(a.ws, { t: "toast", text: res.reason || "that merge could not be undone" }); return; }
-    if (res.detail) a.c.send(a.ws, { t: "toast", text: res.detail });
-    a.c.broadcast(a.c.backlogSnapshot());
-};
-
 const onBacklogArchive: Route<"backlog.archive"> = (a) => {
     a.c.backlog.archive(a.msg.id, a.msg.archived);
 };
@@ -357,9 +326,7 @@ export const workbacklogRoutes: RouteTable = {
   "backlog.swap": onBacklogSwap,
   "backlog.reorder": onBacklogReorder,
   "backlog.setAuto": onBacklogSetAuto,
-  "backlog.setSmartPick": onBacklogSetSmartPick,
   "backlog.name": onBacklogName,
-  "backlog.unmerge": onBacklogUnmerge,
   "backlog.openRepoSession": onBacklogOpenRepoSession,
   "backlog.archive": onBacklogArchive,
   "backlog.check": onBacklogCheck,

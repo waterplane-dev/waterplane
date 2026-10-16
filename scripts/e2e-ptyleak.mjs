@@ -21,7 +21,7 @@ import { WebSocket } from "ws";
 import { bootWait } from "./lib-e2e.mjs";
 import { E, SLUG, rootEnv } from "./lib-brand.mjs";
 
-const PORT = 8901;
+const PORT = 8901, PORT_DOCTOR = 8902;
 const ROOT = mkdtempSync(join(tmpdir(), `${SLUG}-ptyleak-`));
 const env = {
   ...process.env,
@@ -38,7 +38,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const DOCTOR_BOUND_MS = 60_000;
 await new Promise((resolve) => {
   const t0 = Date.now();
-  const d = spawn("node", ["packages/host/dist/main.js", "--doctor"], { env: { ...env, [E.PORT]: String(PORT + 1) }, stdio: ["ignore", "pipe", "pipe"] });
+  const d = spawn("node", ["packages/host/dist/main.js", "--doctor"], { env: { ...env, [E.PORT]: String(PORT_DOCTOR) }, stdio: ["ignore", "pipe", "pipe"] });
   let out = "";
   d.stdout.on("data", (b) => (out += b));
   d.stderr.on("data", (b) => (out += b));

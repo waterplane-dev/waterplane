@@ -14,7 +14,8 @@
  * reason in reverse — a stale pin from an older build must not render an empty
  * slot in the header.
  */
-import { BookKey, Brain, Camera, CircleDollarSign, ClipboardPaste, Copy, Cpu, FileDiff, FolderTree, GalleryVerticalEnd, Gauge, GitBranch, GitFork, Hammer, History, Hourglass, Images, List, ListChecks, ListTodo, MessageSquare, MessageSquareReply, Monitor, Paperclip, Puzzle, Radio, RotateCw, ScrollText, Search, Slash, SquareTerminal, Star, Waypoints, type LucideIcon } from "lucide-react";
+import { BookKey, Brain, Camera, CircleDollarSign, ClipboardPaste, Copy, Cpu, FileDiff, Flag, FolderTree, GalleryVerticalEnd, Gauge, GitBranch, GitFork, Hammer, History, Hourglass, Images, List, ListChecks, ListTodo, MessageSquare, MessageSquareReply, Monitor, Paperclip, Puzzle, Radio, RotateCw, ScrollText, Search, Slash, SquareTerminal, Star, Waypoints, type LucideIcon } from "lucide-react";
+import type { ComponentType } from "react";
 import { usageCount } from "./usage";
 import { LS, lsGet, lsSetJson } from "./storage";
 
@@ -55,7 +56,7 @@ export const SCROLLBACK_TOOLBAR_ID = "scrollback";
 export const BROWSE_TOOLBAR_ID = "browse";
 /**
  * The star, which used to be a fixed button of the session header — and one
- * that `headerCollapsed` removed. A star means "come back to this", so the
+ * that the (since removed) header collapse hid. A star means "come back to this", so the
  * layout you read a long turn in is exactly where you decide to mark it, and
  * that layout was the one with no star at all; the only other button is the
  * launcher row, i.e. leave the session to mark the session. It is an ordinary
@@ -64,7 +65,16 @@ export const BROWSE_TOOLBAR_ID = "browse";
  * dotted while this phone's star is unconfirmed) rather than the generic icon.
  */
 export const STAR_TOOLBAR_ID = "star";
-export const TOOLBAR_ITEMS: { id: string; name: string; Icon: LucideIcon }[] = [
+/**
+ * The follow-up flag (R-sessions-041), beside the star and for the star's
+ * reason: the layout you read a long turn in is where you decide "come back to
+ * this", and where you mark it read. Pinned out of the box right after the
+ * star, and it renders its own state (filled, in the colour of who set it).
+ */
+export const FOLLOWUP_TOOLBAR_ID = "followup";
+/** One line of the catalog — a core line below, or one an extension contributed (`MenuItemDef`). */
+export interface ToolbarItem { id: string; name: string; Icon: LucideIcon | ComponentType<{ size?: number | string }> }
+export const TOOLBAR_ITEMS: ToolbarItem[] = [
   // id stays "inbox" — it is persisted in every device's toolbar order/hidden
   // config; only what it counts (the outbox) and how it reads changed.
   { id: "inbox", name: "new files", Icon: Images },
@@ -112,7 +122,23 @@ export const TOOLBAR_ITEMS: { id: string; name: string; Icon: LucideIcon }[] = [
   // `companionOf`). Not drawn on a shell session, nor where the host has no shell.
   { id: "companion", name: "companion shell", Icon: SquareTerminal },
   { id: "star", name: "star", Icon: Star },
+  { id: "followup", name: "flag for follow up", Icon: Flag },
 ];
+
+let contributed: () => readonly ToolbarItem[] = () => [];
+/**
+ * The extensions' ☰ lines (`MenuItemDef`), bound by `core/extensionPoints.ts`. A binding and not an
+ * import: the registry's own features import this module, so importing the registry here is a cycle.
+ * Their ids are `<manifest id>:<id>` — a colon no core id has, so the two can never collide.
+ */
+export function bindMenuCatalog(source: () => readonly ToolbarItem[]): void {
+  contributed = source;
+}
+/** The whole catalog: the core lines, then every contributed one. */
+export const toolbarItems = (): ToolbarItem[] => [...TOOLBAR_ITEMS, ...contributed()];
+/** A contributed line's id: kept through `loadToolbarCfg` even when the binding is not made yet (the
+ *  config store loads at import), and simply drawn as nothing if that extension is gone. */
+const isContributedId = (id: string) => id.includes(":");
 
 export interface ToolbarCfg {
   /**
@@ -126,8 +152,8 @@ export interface ToolbarCfg {
   iconsOnly?: boolean; hidden: string[]; order: string[]; sort?: "manual" | "used";
   /**
    * Toolbar actions ALSO pinned into the session header (order = this array).
-   * The header is the only bar that survives `headerCollapsed` and reader view,
-   * so a collapsed session used to lose every action — `files` above all, which
+   * The header is the only bar that survives reader view (and, once,
+   * the header collapse), so a collapsed session used to lose every action — `files` above all, which
    * is how you get at what the agent just produced. A pin is independent of
    * `hidden`: pinning an action to the header is a fine reason to drop it from
    * the terminal toolbar, so a pinned item renders in the header even when it
@@ -153,6 +179,9 @@ export interface ToolbarCfg {
    *  placement argument again — and here the fold is what keeps the button a
    *  device already had, so it must not re-run and undo an unpin. */
   starPin?: 1;
+  /** Set once `followup` has been folded into `pinned` (FOLLOWUP_TOOLBAR_ID) —
+   *  `starPin`'s reason, so an unpin sticks. */
+  followupPin?: 1;
 }
 /**
  * TOOLBAR_ITEMS in display order. "manual" = cfg.order (unlisted items keep
@@ -163,12 +192,12 @@ export interface ToolbarCfg {
 export function orderedToolbarItems(cfg: ToolbarCfg, usedOrder?: string[]) {
   const keys = cfg.sort === "used" && usedOrder?.length ? usedOrder : cfg.order;
   const rank = (id: string) => { const i = keys.indexOf(id); return i === -1 ? Number.MAX_SAFE_INTEGER : i; };
-  return TOOLBAR_ITEMS.map((t, i) => ({ t, i })).sort((a, b) => rank(a.t.id) - rank(b.t.id) || a.i - b.i).map((x) => x.t);
+  return toolbarItems().map((t, i) => ({ t, i })).sort((a, b) => rank(a.t.id) - rank(b.t.id) || a.i - b.i).map((x) => x.t);
 }
 /** The toolbar actions pinned into the session header, in the pinned order. */
 export function pinnedToolbarItems(cfg: ToolbarCfg) {
-  const byId = new Map(TOOLBAR_ITEMS.map((t) => [t.id, t]));
-  return (cfg.pinned ?? []).map((id) => byId.get(id)).filter((t): t is (typeof TOOLBAR_ITEMS)[number] => !!t);
+  const byId = new Map(toolbarItems().map((t) => [t.id, t]));
+  return (cfg.pinned ?? []).map((id) => byId.get(id)).filter((t): t is ToolbarItem => !!t);
 }
 /** Toolbar ids, most-used first; never-used items fall back to the manual order. */
 export function usedToolbarRank(cfg: ToolbarCfg): string[] {
@@ -183,11 +212,11 @@ export function loadToolbarCfg(): ToolbarCfg {
     // `files` is pinned out of the box: a collapsed header is exactly when you
     // want at the artifacts the agent just produced, and it is the one action
     // there is no other way to reach from that layout.
-    const cfg = { iconsOnly: false, hidden: [], order: [], sort: "manual", pinned: ["files", BROWSE_TOOLBAR_ID, ...READER_TOOLBAR_IDS, SCROLLBACK_TOOLBAR_ID, STAR_TOOLBAR_ID], ...JSON.parse(lsGet(LS.toolbar) || "{}") } as ToolbarCfg;
+    const cfg = { iconsOnly: false, hidden: [], order: [], sort: "manual", pinned: ["files", BROWSE_TOOLBAR_ID, ...READER_TOOLBAR_IDS, SCROLLBACK_TOOLBAR_ID, STAR_TOOLBAR_ID, FOLLOWUP_TOOLBAR_ID], ...JSON.parse(lsGet(LS.toolbar) || "{}") } as ToolbarCfg;
     // Drop ids from an older build that no longer exist, so a stale pin can't
     // render an empty slot in the header.
     const known = new Set(TOOLBAR_ITEMS.map((t) => t.id));
-    cfg.pinned = (Array.isArray(cfg.pinned) ? cfg.pinned : []).filter((id) => known.has(id));
+    cfg.pinned = (Array.isArray(cfg.pinned) ? cfg.pinned : []).filter((id) => known.has(id) || isContributedId(id));
     // Migrate older saved orders: the dynamic chips used to be pinned right.
     // Prepend any that aren't in the saved order so they default to the LEFT.
     if (cfg.order.length) {
@@ -225,6 +254,17 @@ export function loadToolbarCfg(): ToolbarCfg {
       cfg.starPin = 1;
       lsSetJson(LS.toolbar, cfg);
     }
+    // And for the follow-up flag, placed right after the star wherever the
+    // star is pinned (the two are one pair of marks).
+    if (cfg.followupPin !== 1) {
+      if (!cfg.pinned!.includes(FOLLOWUP_TOOLBAR_ID)) {
+        const at = cfg.pinned!.indexOf(STAR_TOOLBAR_ID);
+        cfg.pinned = at === -1 ? [...cfg.pinned!, FOLLOWUP_TOOLBAR_ID]
+          : [...cfg.pinned!.slice(0, at + 1), FOLLOWUP_TOOLBAR_ID, ...cfg.pinned!.slice(at + 1)];
+      }
+      cfg.followupPin = 1;
+      lsSetJson(LS.toolbar, cfg);
+    }
     return cfg;
-  } catch { return { iconsOnly: false, hidden: [], order: [], sort: "manual", pinned: ["files", BROWSE_TOOLBAR_ID, ...READER_TOOLBAR_IDS, SCROLLBACK_TOOLBAR_ID, STAR_TOOLBAR_ID], readerPins: 1, scrollbackPin: 1, browsePin: 1, starPin: 1 }; }
+  } catch { return { iconsOnly: false, hidden: [], order: [], sort: "manual", pinned: ["files", BROWSE_TOOLBAR_ID, ...READER_TOOLBAR_IDS, SCROLLBACK_TOOLBAR_ID, STAR_TOOLBAR_ID, FOLLOWUP_TOOLBAR_ID], readerPins: 1, scrollbackPin: 1, browsePin: 1, starPin: 1, followupPin: 1 }; }
 }

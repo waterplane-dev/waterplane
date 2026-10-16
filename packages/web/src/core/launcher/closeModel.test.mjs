@@ -173,6 +173,8 @@ test("the toast names shells STOPPING (not stopped — nothing has been killed y
   assert.match(closeToast(3, 5, 0), /archived 3 sessions.*stopping 5 background shells/);
   assert.doesNotMatch(closeToast(3, 5, 0), /stopped/);
   assert.match(closeToast(1, 0, 2), /kept 2 starred/);
+  assert.match(closeToast(1, 0, "3 starred & flagged"), /kept 3 starred & flagged/);
+  assert.doesNotMatch(closeToast(1, 0, ""), /kept \d/);
   assert.match(closeToast(1, 0, 0, "myapp"), /archived 1 session in myapp/);
   // Nothing was running underneath and nothing starred was spared — the
   // toast says only the standard "conversations are kept" line, never a

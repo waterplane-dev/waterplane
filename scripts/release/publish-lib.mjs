@@ -80,6 +80,8 @@ export function verifyReleaseBytes(files, publicKey, { slug, version }) {
  *   remoteShaMatches: bool | null   (release exists with a .sha256: same build as dist-release?)
  *   missingLocal: string[], byteProblems: string[], releaseCommit, head,
  *   npmHasShrinkwrap: bool, ghAuth: bool, npmUser: string|null, changelog: string|null,
+ *   npmFromDesktop: bool (--npm-from-desktop: this desktop publishes, WITHOUT provenance),
+ *   actionsEnabled: bool | null  (Actions on the public repo: the npm-publish workflow runs there),
  *   publicClone: { given, ok, why } | null,
  *   mediaClone: { ok, why } | null   (null: no deploy/public-media.json, or the release exists),
  *   assets: releaseAssets() (an APK there = release.json names one), noApk: bool (--no-apk)
@@ -124,7 +126,12 @@ export function preflight(f) {
   }
   add("CHANGELOG.md entry", !!f.changelog, `CHANGELOG.md has no "## ${v}" section: write one (it becomes the release notes) — "Unreleased" does not count`);
   add("gh auth status", f.ghAuth, "gh is not logged in (gh auth login)");
-  add("npm whoami", !!f.npmUser, "npm is not logged in (npm login)");
+  // The npm half runs in the PUBLIC repo's Actions (.github/workflows/npm-publish.yml), started by
+  // the undraft below: this desktop needs no npm login for it, but the workflow needs Actions on.
+  if (f.npmFromDesktop) add("npm whoami", !!f.npmUser, "npm is not logged in (npm login) — --npm-from-desktop publishes from here");
+  else if (!f.npmPublished) add("Actions on the public repo", f.actionsEnabled === true, f.actionsEnabled === false
+    ? "GitHub Actions are disabled on the public repo, so its npm-publish workflow would never run after the undraft: enable them (Settings → Actions), or pass --npm-from-desktop to publish from here WITHOUT provenance"
+    : "could not read whether GitHub Actions are enabled on the public repo (gh api repos/<org>/<slug>/actions/permissions): the npm half runs there");
   if (f.publicClone) add("public clone", f.publicClone.ok, f.publicClone.why);
   if (f.mediaClone) add("media clone", f.mediaClone.ok, f.mediaClone.why);
   return { checks, refused: checks.some((c) => !c.ok) };
@@ -132,7 +139,8 @@ export function preflight(f) {
 
 /**
  * The steps of a publish and which of them a re-run skips. Each step: { id, title, cmds: string[][]
- * (argv), skip: string|null (why it is already done), refuse?: string (why it must not run) }. The order is the order they run in; a
+ * (argv), skip: string|null (why it is already done), refuse?: string (why it must not run),
+ * hint?: string (what to do when it fails) }. The order is the order they run in; a
  * failure stops the run, and the next run starts at the first step not yet done.
  *
  * state: { tag: "absent"|"head", tagPushed, release: "absent"|"draft"|"published",
@@ -140,7 +148,9 @@ export function preflight(f) {
  * ctx:   { slug, name, version, repo ("<org>/<slug>"), pkg, assets (releaseAssets()), build,
  *          buildArgs: string[], publicClone, mediaClone (null: nothing hosted), accept, notesFile,
  *          dir ("dist-release"),
- *          noApk (--no-apk: undraft without an APK asset, on purpose) }
+ *          noApk (--no-apk: undraft without an APK asset, on purpose),
+ *          npmFromDesktop (--npm-from-desktop: `npm publish` here, WITHOUT provenance, instead of
+ *          waiting for the public repo's npm-publish workflow), npmWaitSeconds (default 900) }
  */
 export function planSteps(state, ctx) {
   const tag = tagOf(ctx.version);
@@ -199,16 +209,86 @@ export function planSteps(state, ctx) {
     skip: state.release === "published" ? "the release is already published" : null,
     ...(noApkAsset && state.release !== "published" ? { refuse: "no APK asset: undrafting needs one, or --no-apk on purpose" } : {}),
   });
-  steps.push({
-    id: "npm", title: `npm publish ${ctx.pkg}@${ctx.version}`,
+  // npm: the undraft fires the public repo's npm-publish workflow (`release: published`), which
+  // builds the .tgz from the tag and publishes it WITH a provenance attestation (trusted publishing,
+  // OIDC — a desktop has no such identity). This run only waits for it. --npm-from-desktop is the
+  // escape hatch: today's desktop publish of dist-release's .tgz, which carries no provenance.
+  const npmSkip = state.npmPublished ? `${ctx.pkg}@${ctx.version} is already on npm` : null;
+  if (ctx.npmFromDesktop) steps.push({
+    id: "npm", title: `npm publish ${ctx.pkg}@${ctx.version} from this desktop, WITHOUT provenance (--npm-from-desktop)`,
     cmds: [["npm", "publish", at(npmTarballName(ctx.slug, ctx.version)), "--access", "public"]],
-    skip: state.npmPublished ? `${ctx.pkg}@${ctx.version} is already on npm` : null,
+    skip: npmSkip,
+  });
+  else steps.push({
+    id: "npm-wait", title: `wait for github.com/${ctx.repo}'s npm-publish workflow to publish ${ctx.pkg}@${ctx.version} with provenance`,
+    cmds: [["node", "scripts/release/npm-verify.mjs", ctx.pkg, ctx.version, "--wait", String(ctx.npmWaitSeconds ?? NPM_WAIT_SECONDS), "--repo", ctx.repo]],
+    skip: npmSkip,
+    hint: `the release is out on GitHub; only npm is missing. Its runs: https://github.com/${ctx.repo}/actions/workflows/${NPM_WORKFLOW} — ` +
+      `start one again ON the tag with \`gh workflow run ${NPM_WORKFLOW} --repo ${ctx.repo} --ref ${tag} -f tag=${tag}\`, then re-run this to wait for it. ` +
+      `Last resort: --npm-from-desktop publishes from here WITHOUT provenance`,
   });
   return steps;
 }
 
 /** A command as one line a person can paste: arguments with shell-special characters quoted. */
 export const shellLine = (argv) => argv.map((a) => (/^[\w@%+=:,./-]+$/.test(a) ? a : `'${String(a).replace(/'/g, `'\\''`)}'`)).join(" ");
+
+/** How long `release:publish` waits for the npm-publish workflow (a cold run is ~5 min). */
+export const NPM_WAIT_SECONDS = 900;
+
+/** The public repo's workflow that publishes to npm with provenance (.github/workflows/). */
+export const NPM_WORKFLOW = "npm-publish.yml";
+
+/** What `npm view <pkg>@<v> version` printed: does it list `version`? (One line, or several quoted.) */
+export const readNpmHasVersion = (stdout, version) =>
+  String(stdout ?? "").split("\n").map((s) => s.trim().replace(/^'|'$/g, "")).includes(String(version));
+
+/**
+ * One turn of `npm-verify`'s wait loop, decided from values. `answer` is what the last `npm view`
+ * said (true = there, false = not on npm, null = could not ask); `streak` the consecutive null
+ * answers before this one; `expired` whether the wait is spent; `elapsed` a printable duration.
+ * Returns the new streak and `stop`: null = sleep and ask again, else `{ code, text }` — the exit
+ * code (0 = there · 3 = asked, and it is not on npm · 1 = never got an answer) and the sentence to
+ * print. A last answer of null is NEVER a 3: "not on npm" is a claim only an answer can make.
+ */
+export function npmWaitDecision({ answer, streak = 0, expired, wait = 0, elapsed = "", spec }) {
+  if (answer === true) return { streak: 0, stop: { code: 0, text: `${spec} is on npm (${elapsed}).` } };
+  if (answer === null) {
+    const n = streak + 1;
+    if (n >= 3) return { streak: n, stop: { code: 1, text: `could not ask npm about ${spec} (npm view failed three times in a row)` } };
+    if (expired) return { streak: n, stop: { code: 1, text: `could not ask npm about ${spec} (the last npm view failed, and the wait is spent)` } };
+    return { streak: n, stop: null };
+  }
+  if (!expired) return { streak: 0, stop: null };
+  return { streak: 0, stop: { code: 3, text: wait > 0 ? `${spec} is not on npm after ${elapsed}.` : `${spec} is not on npm.` } };
+}
+
+/**
+ * What `npm view <pkg>@<v> dist.attestations --json` printed, read as a verdict: true (a SLSA
+ * provenance attestation is there), false (none: the field is absent, npm prints nothing), or null
+ * (unreadable — never read as either).
+ */
+export function readProvenance(stdout) {
+  const s = String(stdout ?? "").trim();
+  if (s === "" || s === "undefined") return false;
+  let j;
+  try { j = JSON.parse(s); } catch { return null; }
+  if (j === null || typeof j !== "object" || Array.isArray(j)) return null;
+  return /^https:\/\/slsa\.dev\/provenance\//.test(String(j.provenance?.predicateType ?? ""));
+}
+
+/**
+ * The newest npm-publish run for `tag`, out of `gh run list --workflow <NPM_WORKFLOW> --json
+ * headBranch,status,conclusion,url` (newest first; a release-triggered or tag-dispatched run's
+ * headBranch is the tag). null when there is none or the output is unreadable.
+ */
+export function readWorkflowRun(stdout, tag) {
+  let runs;
+  try { runs = JSON.parse(String(stdout ?? "")); } catch { return null; }
+  if (!Array.isArray(runs)) return null;
+  const r = runs.find((x) => x && x.headBranch === tag);
+  return r ? { status: String(r.status ?? ""), conclusion: String(r.conclusion ?? ""), url: String(r.url ?? "") } : null;
+}
 
 /** What `npm view <pkg>@<v> _hasShrinkwrap` printed, read as a verdict: true, false, or null (unknown). */
 export function readHasShrinkwrap(stdout) {

@@ -40,7 +40,17 @@ Mobile image annotation avoids finger obscuring small objects being repositioned
 - shipped: bc83b7f, 2bb41d4
 
 ### R-images-009 · shipped
-The annotator offers knob mode as an option: move, size and turn knobs on strings (adult-sized), every mark turnable except the highlight band, and whether knobs are on is remembered across devices.
+The annotator offers knob mode as an option: move, size and turn knobs on strings (adult-sized), every mark turnable except the highlight band; an arrow or line instead gets a knob on each end that drags that end freely (no turn knob), and whether knobs are on is remembered across devices.
 - asked: 2026-09-24
 - shipped: 2bb41d4, 2bac688
+
+### R-images-010 · shipped
+The image editor's tip banner has an x button that dismisses it to free up screen space.
+- asked: 2026-10-06
+- shipped: d06313ef
+
+### R-images-011 · shipped
+Image annotation offers an option to run OCR on the whole image on the backend and send only the extracted text, which the user can review and edit before it is sent.
+- asked: 2026-10-07
+- shipped: f1e91658
 

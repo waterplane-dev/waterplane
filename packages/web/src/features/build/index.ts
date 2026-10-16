@@ -7,7 +7,7 @@ import type { FeatureManifest } from "../../sdk";
 import { b64ToStr } from "../../format";
 import { BuildButtonsSheet } from "./BuildButtonsSheet";
 import { buildRepo, builds } from "./store";
-import { onArtifactsConfig, onBuildCandidates, onBuildOptions, onBuildRun, openBuildFor, resyncBuild } from "./actions";
+import { onArtifactsConfig, onBuildLocalIds, onBuildCandidates, onBuildOptions, onBuildRun, openBuildFor, resyncBuild } from "./actions";
 
 export { buildNameOf, useBuildNames } from "./store";
 export { openBuildFor } from "./actions";
@@ -31,7 +31,7 @@ export const manifest: FeatureManifest = {
     // retained tail (`full: true`) and the chunks sent into the gap are not lost.
     welcome: () => resyncBuild(),
     "artifacts.config": (msg) => onArtifactsConfig(msg.repoDir, msg.policy),
-    "build.list": (msg) => builds.onList(msg.repoDir, msg.builds, msg.runs),
+    "build.list": (msg) => { builds.onList(msg.repoDir, msg.builds, msg.runs); onBuildLocalIds(msg.repoDir, msg.localIds); },
     "build.options": (msg) => onBuildOptions(msg.repoDir, msg.buildId, msg.options),
     "build.candidates": (msg) => onBuildCandidates(msg.repoDir, msg.candidates, msg.total),
     "build.run": (msg, c) => onBuildRun(msg.run, c),

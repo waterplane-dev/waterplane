@@ -6,9 +6,10 @@ import type { LaunchIntent } from "../../launch.js";
 import type { SentCommand } from "../sent.js";
 import type { DecisionLogEntry, PluginView } from "../../plugin.js";
 import type { UpdateInfo } from "../repo.js";
-import type { ClosedSession, HistoryEntry, NewImage, OpenDelivery, RecentSession, SessionInfo, SessionSearchResult, SessionSearchScope, SessionShell } from "../session.js";
-import type { UsageInfo } from "../telemetry.js";
-import type { BacklogItem, SmartPickSummary } from "../work.js";
+import type { ClosedSession, HistoryEntry, NewImage, OpenDelivery, PermissionMode, RecentSession, SessionInfo, SessionSearchResult, SessionSearchScope, SessionShell } from "../session.js";
+import type { StreamEndCause } from "../../stream.js";
+import type { UsageInfo, UsageReading } from "../telemetry.js";
+import type { BacklogItem } from "../work.js";
 
 /** Trust tier of a socket's remote address (see host `net.peerKind`). */
 export type PeerKind = "loopback" | "tailscale" | "lan" | "public" | "unknown";
@@ -236,6 +237,14 @@ export type HostCoreMsg =
    * is what actually redraws the tab.
    */
   | { t: "session.named"; id: string; name?: string; reason?: string }
+  /**
+   * Reply to `session.mode`: `mode` is what the footer shows AFTER the host
+   * stopped pressing — the target on success, else wherever the cycle left it
+   * (normally where it started) — and `reason` is set exactly when that is not
+   * the mode asked for, as a sentence. `mode` absent = the footer could not be
+   * read at all. The new mode also arrives as `liveMode` on the session list.
+   */
+  | { t: "session.moded"; id: string; mode?: PermissionMode; reason?: string }
   /** Results for a session.search request (echoes query/scope/id). */
   | { t: "session.searchResults"; query: string; scope: SessionSearchScope; id?: string; results: SessionSearchResult[] }
   | {
@@ -262,12 +271,6 @@ export type HostCoreMsg =
        */
       autoSlots?: AutoSlotFacts;
       /**
-       * The worktrees whose *smart pick* tick is on. Absent (or empty) means no
-       * repo has it on, which is also what a host that predates the feature
-       * sends — the tick renders off, nothing else changes.
-       */
-      smartPick?: string[];
-      /**
        * The rows a naming pass is working on RIGHT NOW, by id.
        *
        * Transient, exactly like `waiting`: it is a fact about this second, never
@@ -276,19 +279,14 @@ export type HostCoreMsg =
        * being named, which is also what a host predating the feature sends.
        */
       naming?: string[];
-      /**
-       * The last pass per ticked repo, keyed by worktree path. Absent until a
-       * repo has ever run one; a repo that is ticked but has never fired an item
-       * has no entry, and the strip is simply not drawn.
-       *
-       * Additive like `waiting` above and for the same reason it rides beside
-       * the items rather than on one: it is a fact about the repo's machinery,
-       * not about any row.
-       */
-      passes?: Record<string, SmartPickSummary>;
     }
   | { t: "update.status"; info: UpdateInfo }
-  | { t: "usage.status"; usage: UsageInfo }
+  /**
+   * `readings` is one entry per usage SOURCE that has something to say, claude
+   * first (derived from `usage`, never a second scrape). Additive: absent means
+   * an older host, and the phone derives `[claudeReading(usage)]` itself.
+   */
+  | { t: "usage.status"; usage: UsageInfo; readings?: UsageReading[] }
   /** Every installed plugin, on connect and after any change. */
   | { t: "plugin.list"; plugins: PluginView[] }
   /** The answer to one `plugin.action` tap, by its `reqId`. */
@@ -299,6 +297,14 @@ export type HostCoreMsg =
   | { t: "plugin.reply"; ackId: string; plugin: string; method: string; ok: boolean; result?: unknown; error?: string }
   /** A plugin's `api.push` — broadcast. */
   | { t: "plugin.push"; plugin: string; event: string; data: unknown }
+  /** `stream.open` accepted. Binary frames for `streamId` follow on this socket only. */
+  | { t: "stream.opened"; reqId: string; streamId: number; plugin: string; name: string }
+  /** `stream.open` refused, in words (no such plugin or stream, the plugin said no, too many open). */
+  | { t: "stream.refused"; reqId: string; reason: string }
+  /** The plugin's own JSON about one stream (`sub.status`): what it picked, a permission it lacks. */
+  | { t: "stream.status"; streamId: number; data: unknown }
+  /** The stream is over. Nothing more arrives for `streamId`. `reason` is the sentence. */
+  | { t: "stream.ended"; streamId: number; cause: StreamEndCause; reason: string }
   /** The decision log, newest first. `sessionId` set when filtered to one session. */
   | { t: "decisions.log"; entries: DecisionLogEntry[]; sessionId?: string }
   /** The sent-command log, newest first. `sessionId` echoes the filter asked for. */

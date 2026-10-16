@@ -10,7 +10,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  autoSlotSessions, closeChipWords, closeChoiceDraft, closeChoiceLabel, closeChoiceOf, closeChoicePatch,
+  autoSlotSessions, budgetEditable, closeChipWords, closeChoiceDraft, closeChoiceLabel, closeChoiceOf, closeChoicePatch,
   closeChoiceToast, closeEffectWords, closeOneLabel, opensOwnSession, slotHeld, slotSessionState,
 } from "./autoSessions.ts";
 
@@ -57,11 +57,17 @@ test("only a row that opens its own session is asked", () => {
   assert.equal(opensOwnSession({ targetSessionId: "s1" }), false);
 });
 
+test("a budget is editable only on a queued row that opens its own session", () => {
+  assert.equal(budgetEditable({ status: "queued" }), true, "a clocked row is queued too");
+  assert.equal(budgetEditable({ status: "queued", targetSessionId: "s1" }), false, "a live session's budget is set on the session");
+  for (const status of ["running", "done", "failed"]) assert.equal(budgetEditable({ status }), false, status);
+});
+
 const facts = (max, ids) => ({ max, open: ids.map((id, n) => ({ id, closeWhenDone: n === 0 })) });
 const sess = (id, extra = {}) => ({ id, cwd: "/r", title: `backlog · r · ${id}`, remoteControl: true, running: true, createdAt: 1, ...extra });
 
 test("held on a slot: the host's cap is full AND the row's sentence names the slot", () => {
-  const wait = "waiting for a free slot — 3 automatic sessions open (close one to make room)";
+  const wait = "waiting for a free slot — this desktop runs 3 automatic sessions at a time and 3 are working; a slot frees when one goes idle";
   assert.equal(slotHeld(wait, facts(3, ["a", "b", "c"])), true);
   assert.equal(slotHeld(wait, facts(3, ["a", "b"])), false, "a slot is free: the cap is not what holds it");
   assert.equal(slotHeld("waiting — one at a time in this repo", facts(3, ["a", "b", "c"])), false);
@@ -77,7 +83,15 @@ test("the list is the snapshot intersected with LIVE sessions, in the host's ord
   assert.equal(got[1].closeWhenDone, false);
   assert.deepEqual(autoSlotSessions(null, live), []);
   // The count on the control is that list's length — the tap opens exactly those.
-  assert.equal(closeOneLabel(got.length), "close one to make room — 2 open");
+  assert.equal(closeOneLabel(got.length), "close one to make room — 2 working");
+});
+
+test("only WORKING sessions hold a slot: idle ones are neither counted nor offered (R-automation-042)", () => {
+  const f = { max: 2, open: [{ id: "a", closeWhenDone: false, busy: false }, { id: "b", closeWhenDone: false, busy: true }, { id: "c", closeWhenDone: false, busy: false }] };
+  const wait = "waiting for a free slot — this desktop runs 2 automatic sessions at a time and 2 are working";
+  assert.equal(slotHeld(wait, f), false, "one working of two: a slot is free, whatever the sentence said");
+  assert.deepEqual(autoSlotSessions(f, [sess("a"), sess("b"), sess("c")]).map((x) => x.s.id), ["b"],
+    "closing an idle one frees nothing, so it is not offered");
 });
 
 test("a slot session's state line", () => {

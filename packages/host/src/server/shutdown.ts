@@ -43,6 +43,7 @@ export function installShutdown(ctx: ServerCtx): void {
       try { ctx.sessions.flushContextWindows(); } catch { /* shutdown must never throw */ }
       try { ctx.tokenStats.flush(); } catch { /* shutdown must never throw */ }
       try { ctx.usageLog.flush(); } catch { /* shutdown must never throw */ }
+      try { ctx.usageSources.flush(); } catch { /* shutdown must never throw */ }
       try { ctx.settings.flush(); } catch { /* shutdown must never throw */ }
       // Open questions are debounced nowhere — but a row created in the last
       // milliseconds before a restart is exactly the one whose answer nobody has
@@ -54,6 +55,9 @@ export function installShutdown(ctx: ServerCtx): void {
       // it is safe to keep, and why `e2e-intent.mjs` uses `kill -9`, which would
       // skip it, rather than a signal this handler could paper over.
       try { ctx.intents.flush(); } catch { /* shutdown must never throw */ }
+      // Every plugin stream ends first (cause "socket", nothing sent — the sockets go with the
+      // process), so a producer hears `close` before its plugin's `deactivate()`.
+      try { ctx.plugins.streams.endAll(); } catch { /* shutdown must never throw */ }
       // Plugins' `deactivate()` — started, never awaited: a plugin cannot hold
       // the exit, and anything it must keep it writes as it goes.
       try { ctx.plugins.deactivateAll(); } catch { /* shutdown must never throw */ }

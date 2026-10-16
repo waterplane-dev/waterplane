@@ -26,9 +26,11 @@
  * a JSX component cannot be imported into.
  */
 
-import { BRAND, paramEnvName, stateRel, type BuildConfig } from "@waterplane/shared";
+import { BRAND, paramEnvName, sharedRel, stateRel, type BuildConfig } from "@waterplane/shared";
 
-const BUILDS_FILE = stateRel("builds.json");
+const BUILDS_FILE = sharedRel("builds.json");
+/** This desktop's own copy — for an entry that names a path only this machine has. */
+const LOCAL_BUILDS_FILE = stateRel("builds.json");
 
 /**
  * The file format, written once.
@@ -38,6 +40,7 @@ const BUILDS_FILE = stateRel("builds.json");
  * monorepo, which is exactly the thing parameters exist to stop.
  */
 export const BUILDS_SCHEMA = `\`${BUILDS_FILE}\` is a JSON array of objects \`{ "id", "name", "cmd", "dir", "params" }\`:
+- It is COMMITTED with the repo, so every checkout gets the buttons. An entry whose command names a path that exists on this desktop alone (a \`JAVA_HOME\`, a local SDK) goes in \`${LOCAL_BUILDS_FILE}\` instead — same shape, gitignored; there an entry with a shared entry's \`id\` replaces it on this desktop only.
 - \`id\`: short unique slug. If the file already exists, KEEP the ids that are there.
 - \`name\`: short button label, e.g. "Release APK". It is read on a phone, so keep it short.
 - \`cmd\`: ONE shell command line, run by the login shell.

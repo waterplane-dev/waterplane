@@ -26,7 +26,10 @@
  * count and the predicate behind this sheet's cut have to be the same
  * function, or a badge reading 3 opens a list of 4.
  */
-import { AUTO_COMPACT_SUGGESTED, BRAND, CONFIRM_GATED_FIXES, SIGNING_KEY_CONSENT, androidToolchainConsent, isSetupFinding, stateRel, type ComplianceCheck } from "@waterplane/shared";
+import {
+  AUTO_COMPACT_SUGGESTED, BRAND, CONFIRM_GATED_FIXES, SIGNING_KEY_CONSENT, androidToolchainConsent, isSetupFinding,
+  sharedRel, type ComplianceCheck,
+} from "@waterplane/shared";
 import type { SetupRowDef } from "./sdk/types.ts";
 
 /**
@@ -60,11 +63,11 @@ const GUIDANCE: Record<string, string> = {
     "repo's. Otherwise set `\"autoCompactWindow\": \"400k\"` in `.claude/settings.json`, keeping every other key.",
   "apk-install":
     "Make the Android build leave its APK in `.claude/outbox/` with a dated or commit-stamped name (a copy task " +
-    `at the end of the build, or the build command in \`${stateRel("builds.json")}\`), and keep one signing key for every ` +
+    `at the end of the build, or the build command in \`${sharedRel("builds.json")}\`), and keep one signing key for every ` +
     "build of the app. If targetSdk is flagged, raise it and say what the raise needs (API changes, permissions). " +
     `The phone half — first install through ${BRAND.displayName} — is the person's to do; say so rather than attempting it.`,
   "builds-configured":
-    `Read the repo's own manifests and CI, then write \`${stateRel("builds.json")}\` as a JSON list of ` +
+    `Read the repo's own manifests and CI, then write \`${sharedRel("builds.json")}\` as a JSON list of ` +
     "`{id, name, cmd, dir?}` — one entry per command a person would tap (build, test, a debug APK). Leave " +
     "publishing and deploying commands out unless asked, and keep any existing entries.",
   "gitignore-transport":
@@ -102,6 +105,22 @@ export interface SetupRowLookup {
 }
 
 export const NO_ROWS: SetupRowLookup = { byCheck: () => undefined, byFix: () => undefined, refused: [] };
+
+let rowSource: () => SetupRowLookup = () => NO_ROWS;
+
+/**
+ * `core/extensionPoints.ts`'s, once: where `setupRows()` reads the contributed rows from. Bound
+ * rather than imported — `SetupSheet` reads them, `features/setup` draws `SetupSheet`, and the
+ * registry imports `features/setup`, so `SetupSheet` importing the registry reader was an import
+ * cycle (`sdk/ledgers.ts`'s `bindLedgerViews`, the same shape). The launcher imports that reader,
+ * so it is bound before any sheet renders.
+ */
+export function bindSetupRows(source: () => SetupRowLookup): void {
+  rowSource = source;
+}
+
+/** The contributed setup-row words, as bound — `NO_ROWS` until then. */
+export const setupRows = (): SetupRowLookup => rowSource();
 
 /** The fix ids the core's own rows carry — an extension's row may not take them over. */
 const CORE_FIXES = ["gitignore", "claude-md", "visual-check", "auto-compact", "state-dir", "android-toolchain", "signing-key", "builds-configured"];
@@ -183,7 +202,7 @@ export function fixConfirmWords(fix: string, size: string = AUTO_COMPACT_SUGGEST
  */
 export function fixVerb(fix: string, size: string = AUTO_COMPACT_SUGGESTED, rows: SetupRowLookup = NO_ROWS): string {
   if (fix === "auto-compact") return `set ${size} in this repo's .claude/settings.json`;
-  if (fix === "builds-configured") return `write ${stateRel("builds.json")} from what this repo builds`;
+  if (fix === "builds-configured") return `write ${sharedRel("builds.json")} from what this repo builds`;
   if (fix === "android-toolchain") return "install the Android build tools (JDK and SDK) on this desktop";
   if (fix === "signing-key") return "create or link the desktop signing key";
   return rows.byFix(fix)?.fixVerb ?? "fix";
@@ -541,3 +560,6 @@ Read them together: they are one tree on one day, so say which of them move for 
 
 "It is serving you; change nothing" is a complete answer for any of these, and so is "this one is an artefact of how it is measured" — say which ones, and stop there on those. This is not a brief and it is not a finding: the tool holds no threshold, so there is no line any of these numbers is on the wrong side of, and nothing above says any of them is too much or too little. A judgment you form by reading this repo is a different thing, and it is exactly what is being asked for — say what each one rests on, and keep it about this repo rather than repos in general. Change no file, run no fix, commit nothing. Finish with the options as you see them, in order of what each would cost.`;
 }
+
+// The health-index asks live in their own module; re-exported so callers keep one import.
+export * from "./healthAskPrompts.ts";

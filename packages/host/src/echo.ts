@@ -114,11 +114,23 @@ export const SLICE_MIN = 40;
  * prompt is ever sent again. Being wrong in that direction loses the words
  * silently; being wrong in the other costs a settle pass that was going to run
  * anyway.
+ *
+ * **…and a PASTED prompt comes back in its envelope** (2.1.300/2.1.301, the
+ * hook's own payload): `<pasted_content id="7ed2">` chunks, one per ~1 KB piece
+ * the CLI read the write in, seams cutting mid-word with varying newlines.
+ * `logEcho` learned this on 2026-10-06, this rule did not: 12 of 12 such
+ * deliveries that ran were reported `unconfirmed`. So tags come off both sides
+ * and the compare is whitespace-blind — still the WHOLE text, case-exact,
+ * equality; a payload with no tag never reaches this branch.
  */
 export function samePromptText(hookPrompt: string, ours: string): boolean {
   const norm = (t: string) => t.replace(/\r\n?/g, "\n").replace(/[ \t]+$/gm, "").trim();
   const a = norm(hookPrompt), b = norm(ours);
-  return a.length > 0 && a === b;
+  if (a.length > 0 && a === b) return true;
+  if (!hookPrompt.includes("<pasted_content")) return false;
+  const bare = (t: string) => unwrapPasted(t).replace(/\s+/g, "");
+  const x = bare(hookPrompt);
+  return x.length > 0 && x === bare(ours);
 }
 
 /**
@@ -210,6 +222,29 @@ export const pasteCollapsible = (text: string): boolean =>
   text.length > PASTE_MIN_CHARS || text.split("\n").length >= 3;
 
 /**
+ * How many newlines the NEWEST run of placeholders is hiding, or null for none.
+ *
+ * **One write can be several pastes.** The CLI collapses each ~1 KB piece on
+ * its own, so a 5 KB prompt draws `[Pasted text #1 +2 lines]…[Pasted text #5]`
+ * (2.1.301, `fixtures/screens/paste-chain.txt`); the first chit alone said
+ * "2 of 11 lines". The pieces cut mid-line, so the run's clauses SUM to every
+ * newline. A run is chits touching in the squashed haystack, and only the last
+ * one counts — the live composer is the bottom of the screen.
+ *
+ * `haystack` must already be `squash`ed.
+ */
+export function pastedNewlines(haystack: string): number | null {
+  const chit = new RegExp(PASTE_CHIT.source, "g");
+  let sum: number | null = null, end = -1;
+  for (const m of haystack.matchAll(chit)) {
+    const n = m[1] === undefined ? 0 : Number(m[1]);
+    sum = m.index === end && sum !== null ? sum + n : n;
+    end = m.index + m[0].length;
+  }
+  return sum;
+}
+
+/**
  * Does this haystack hold THIS text as a collapsed paste?
  *
  * A write of several lines — or of one long one — in a single chunk is
@@ -228,13 +263,9 @@ export const pasteCollapsible = (text: string): boolean =>
  */
 export function collapsedPasteEcho(haystack: string, text: string): boolean {
   if (!pasteCollapsible(text)) return false;
-  const m = haystack.match(PASTE_CHIT);
-  if (!m) return false;
+  const hidden = pastedNewlines(haystack);
+  if (hidden === null) return false;
   const lines = text.split("\n").length;
-  // No clause at all is the CLI saying zero newlines — not the CLI saying
-  // nothing. Reading an absent capture as `NaN` is what made every bare
-  // placeholder fall out of the bound below and answer "not there".
-  const hidden = m[1] === undefined ? 0 : Number(m[1]);
   if (hidden > lines + 1) return false;     // far more than we ever wrote
   if (hidden >= lines - 1) return true;     // it swallowed the lot
   const tail = tailProbe(text);
@@ -362,6 +393,24 @@ const bareRow = (row: string): string =>
 const isRuleRow = (row: string, rule: RegExp = COMPOSER_RULE_RE): boolean => rule.test(row.trim());
 
 /**
+ * From a blank row inside a frame, the index of the rule that closes the box,
+ * or -1 when nothing does: a `❯` row first (the next frame), the end of the
+ * screen, or a rule that OPENS a frame (a `❯` row is its next non-blank row).
+ */
+function closingRuleAfter(rawRows: readonly string[], from: number, cursor: RegExp, rule: RegExp): number {
+  for (let k = from; k < rawRows.length; k++) {
+    const row = rawRows[k];
+    if (!row.trim()) continue;
+    if (cursor.test(bareRow(row))) return -1;
+    if (!isRuleRow(row, rule)) continue;
+    let next = k + 1;
+    while (next < rawRows.length && !rawRows[next].trim()) next++;
+    return next < rawRows.length && cursor.test(bareRow(rawRows[next])) ? -1 : k;
+  }
+  return -1;
+}
+
+/**
  * Every composer frame drawn on this rendered screen, top to bottom.
  *
  * **Why this exists at all: the bottom of the render is not the bottom of the
@@ -381,8 +430,9 @@ const isRuleRow = (row: string, rule: RegExp = COMPOSER_RULE_RE): boolean => rul
  * are load-bearing: the rule above is what stops a `❯` cursor drawn by one
  * of the CLI's inline pickers from reading as a composer, and the rule below is
  * what stops the span from running on into whatever the turn is printing under
- * the box. Blank rows are skipped looking upward only because the replay
- * squeezes runs of them, never because a composer has a gap in it.
+ * the box. Blank rows are skipped looking upward because the replay squeezes
+ * runs of them; looking DOWN a blank row is the text's own blank line, kept
+ * only while a rule still closes the box below it (`closingRuleAfter`).
  *
  * Structural, so it degrades the safe way: an upstream redraw this does not
  * recognise yields NO spans, and every caller falls back to what it did before.
@@ -405,7 +455,18 @@ export function composerSpans(
     const rows: string[] = [head.replace(cursor, "")];
     for (let j = i + 1; j < rawRows.length; j++) {
       const row = rawRows[j];
-      if (!row.trim()) break;                              // the box has no gaps in it
+      if (!row.trim()) {
+        // A blank row is INSIDE the box when the text has a blank line in it
+        // (measured on 2.1.301, `fixtures/screens/paste-blankrow.txt`): stopping
+        // here dropped the tail, the one thing tying a placeholder to its text.
+        // It is believed only when the rows after it still CLOSE this box — a
+        // rule that is not the top of another frame — so a frame torn open at
+        // the bottom never runs on into the turn printing under it.
+        const close = closingRuleAfter(rawRows, j, cursor, rule);
+        if (close < 0) break;
+        for (; j < close; j++) rows.push(bareRow(rawRows[j]));
+        break;
+      }
       if (isRuleRow(row, rule)) break;                     // the rule that closes it
       if (cursor.test(bareRow(row))) break;                // the next frame, not this one
       rows.push(bareRow(row));

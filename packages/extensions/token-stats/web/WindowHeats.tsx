@@ -128,9 +128,10 @@ export function WindowHeats({ grids, res, money, scope, onScope }: {
           two never share a scale, because a week holds about thirty-four five-hour
           windows. The scale is square-rooted, so a box twice as dark is rather more
           than twice as busy.
-          {" "}Each box counts from the top of the hour its window opened in — the same
-          rule the live readout above states — so two neighbours can share that hour,
-          and the boxes therefore do not sum.
+          {" "}Each box counts from the hour nearest the moment its window opened to the
+          hour nearest its reset — the same rule the live readout above states — so every
+          hour is in exactly one box, and a box is off its window by at most half an hour
+          at each end.
         </p>
       </details>
     </div>

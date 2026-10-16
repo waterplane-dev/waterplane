@@ -55,7 +55,7 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 import {
-  Activity, AlertTriangle, Check, EyeOff, Lightbulb, ListChecks, RefreshCw, Send, Wrench, X,
+  Activity, AlertTriangle, Check, EyeOff, Lightbulb, ListChecks, RefreshCw, Send, ToggleRight, Wrench, X,
 } from "lucide-react";
 import { isSetupConsider, isSetupFinding } from "@waterplane/shared";
 import type {
@@ -69,15 +69,21 @@ import { Sheet } from "./Sheet";
 import { Empty } from "./Empty";
 import { loadPresets, remedyFor, type Preset } from "./presets";
 import {
-  agentFindings, agentVerb, bulkLabel, bulkNote, findingsCutWords, fixConfirmWords, fixNeedsConfirm, fixVerb, patchFindings, patchIds, remedyPrompt,
+  agentFindings, agentVerb, bulkLabel, bulkNote, findingsCutWords, fixConfirmWords, fixNeedsConfirm, fixVerb, patchFindings, patchIds, remedyPrompt, setupRows,
 } from "./setupRemedy";
 import { ConfirmButton } from "./Confirm";
 import { ContextLimitsEditor } from "./ContextLimits";
+import { AskRulesHere } from "./AskRulesHere";
 import { SeriesSpark } from "./RepoHealthTiles";
 import { SeriesRegion } from "./RepoHealthRegion";
+import { OptInRegion } from "./OptInRegion";
+import { OPTINS_REGION_WORDS } from "./optInSeed";
+import type { SendSeed } from "./sendIntent";
+import { CLAUDE_MD_KEY, DESC_KEY } from "./repoHealthPlot";
 import { bothClocksWords, rankSentence, regionWords, seriesValueWords } from "./repoHealthWords";
-import { setupRows } from "./core/extensionPoints";
 import { core } from "./core/api";
+import { Explain } from "./Explain";
+import { FilterChip } from "./kit/FilterChip";
 import type { CoreApi } from "./sdk/types";
 import { showToast } from "./toast";
 
@@ -87,13 +93,11 @@ const STATUS_ICON = {
   fail: <X size={16} color="var(--dead)" />,
 } as const;
 
-export type ReadingsRegion = "setup" | "series";
+/** `optins` is region 3 (`OptInRegion.tsx`): offers, not readings — counted in nothing. */
+export type ReadingsRegion = "setup" | "series" | "optins";
 
-/** The two series the always-on weight stack is made of, by the tool's own
- *  keys. Named here rather than matched on a label: a label is prose the tool
- *  is free to reword, a key is its identifier. */
-export const CLAUDE_MD_KEY = "context.claudeMdChars";
-export const DESC_KEY = "context.descChars";
+// `CLAUDE_MD_KEY` / `DESC_KEY` (the weight stack's two series) live in
+// `repoHealthPlot.ts`, a leaf both regions read, so region 2 never imports this sheet back.
 
 interface Props {
   repos: RepoTarget[];
@@ -135,11 +139,15 @@ interface Props {
   /** Open a repo file from the readings (the longest-files tape). The caller
    *  owns where Back from that file lands. */
   onOpenFile?: (repoId: string, relPath: string) => void;
+  /** Region 3: open the Send sheet on a seed an opt-in built (nothing sent). */
+  onSeed?: (seed: SendSeed) => void;
+  /** Region 3: open the capture sheet for this repo. */
+  onCapture?: (repo: RepoTarget) => void;
   onClose: () => void;
 }
 
 export function SetupSheet({
-  repos, initialRepoId, initialRegion = "setup", focus, onRemedy, onOpenFile, onClose,
+  repos, initialRepoId, initialRegion = "setup", focus, onRemedy, onOpenFile, onSeed, onCapture, onClose,
 }: Props) {
   const primaryRepos = repos.filter((r) => r.isPrimary);
   // A worktree can be badged too, so the picker (primaries only) may not list
@@ -159,6 +167,10 @@ export function SetupSheet({
    *  not be read" and "the fix failed" ended up sharing one `error` string. */
   const [busy, setBusy] = useState(false);
   const [fixError, setFixError] = useState<string | null>(null);
+  /** What the last fix said it did, in its own words (`ComplianceFixResult.notes`). A fix whose
+   *  effect is elsewhere — a dialog on the desktop's screen, a job in the background — left the
+   *  rows exactly as they were, and a tap with no visible answer read as a dead button. */
+  const [fixNotes, setFixNotes] = useState<string[]>([]);
   // The user's own list, so an edited preset edits the remedy — and a deleted
   // one removes the button rather than sending words that are no longer theirs.
   const [presets] = useState<Preset[]>(loadPresets);
@@ -189,6 +201,7 @@ export function SetupSheet({
     track(ignore ? "action:setup.ignore" : "action:setup.unignore");
     setBusy(true);
     setFixError(null);
+    setFixNotes([]);
     try {
       const r = await api.complianceIgnore(repoId, id, ignore);
       if (r.ok && r.report) checkRes.set(r.report);
@@ -213,6 +226,7 @@ export function SetupSheet({
       // The fix returns the re-run report, so the list updates without a second
       // round trip. `set` deliberately does not touch the resource's state:
       // what is on screen is exactly as fresh as it was a moment ago.
+      if (r.ok) setFixNotes(r.notes ?? []);
       if (r.ok && r.report) { checkRes.set(r.report); return r.report; }
       if (!r.ok) setFixError(r.error || "fix failed");
     } catch (e) {
@@ -283,10 +297,9 @@ export function SetupSheet({
 
           {/* A body-changing choice: a labelled row of chips, directly above
               the first thing it changes (`ContextSheet.tsx`'s grammar, written
-              above both its returns). `.key.active` is the lit class that
-              actually has a rule — `.key.on` has none outside `.bl-modal-seg`,
-              and a class name is a claim about `styles.css` that nothing
-              checks. */}
+              above both its returns). The kit's FilterChips, like the repo-health
+              scope row right under it: a solid `.key.active` here stacked two
+              chip styles on one screen. One of the two is always lit, so no ×. */}
           <div className="ts-filter" role="group" aria-label="reading">
             <span className="ctx-stackpick-lab">reading</span>
             {/* Back to the repo's own reading with the region. The checklist
@@ -294,18 +307,21 @@ export function SetupSheet({
                 CLAUDE.md series is a different claim about a different file —
                 so the scope is dropped rather than left to leak into a region
                 that has no picker to say it is on. */}
-            <button className={`key${region === "setup" ? " active" : ""}`}
+            <FilterChip on={region === "setup"} clears={false}
               onClick={() => { setRegion("setup"); setScope(null); }}>
               <ListChecks size={14} /> set-up
-            </button>
-            <button className={`key${region === "series" ? " active" : ""}`}
-              onClick={() => setRegion("series")}>
+            </FilterChip>
+            <FilterChip on={region === "series"} clears={false} onClick={() => setRegion("series")}>
               <Activity size={14} /> over time
-            </button>
+            </FilterChip>
+            <FilterChip on={region === "optins"} clears={false}
+              onClick={() => { setRegion("optins"); setScope(null); }}>
+              <ToggleRight size={14} /> opt-ins
+            </FilterChip>
+            <Explain of="what this region compares">{region === "optins" ? OPTINS_REGION_WORDS : regionWords(region)}</Explain>
           </div>
-          <div className="form-hint">{regionWords(region)}</div>
 
-          {region === "setup" ? (
+          {region === "setup" ? (<>
             <SetupRegion
               repoId={repoId}
               repo={repo}
@@ -317,6 +333,7 @@ export function SetupSheet({
               onClearCut={() => setCut(false)}
               busy={busy}
               fixError={fixError}
+              fixNotes={fixNotes}
               presets={presets}
               canAsk={canAsk}
               bulkCount={bulkCount}
@@ -329,6 +346,12 @@ export function SetupSheet({
               claudeMdSeries={claudeMdSeries}
               descSeries={plot?.series.find((s) => s.key === DESC_KEY) ?? null}
             />
+            {/* Not a check — a choice about this repo, kept beside the checklist
+                because this is the screen a repo's own settings are on. */}
+            {repo && <AskRulesHere repo={repo} say={showToast} />}
+          </>) : region === "optins" ? (
+            <OptInRegion repo={repo} onSeed={onSeed} onCapture={onCapture}
+              onSeries={() => setRegion("series")} onChecklist={(r) => checkRes.set(r)} />
           ) : (
             <SeriesRegion
               repo={repo}
@@ -351,7 +374,7 @@ export function SetupSheet({
 // ───────────────────────────────────────────────────────────────────────────
 
 function SetupRegion({
-  repoId, repo, res, report, rows, allRows, cut, onClearCut, busy, fixError, presets, canAsk,
+  repoId, repo, res, report, rows, allRows, cut, onClearCut, busy, fixError, fixNotes, presets, canAsk,
   bulkCount, patchable, forAgent, onFix, onIgnore, onFixAll, onRemedy, claudeMdSeries, descSeries,
 }: {
   repoId: string;
@@ -364,6 +387,7 @@ function SetupRegion({
   onClearCut: () => void;
   busy: boolean;
   fixError: string | null;
+  fixNotes: string[];
   presets: Preset[];
   canAsk: boolean;
   bulkCount: number;
@@ -398,6 +422,7 @@ function SetupRegion({
         Nothing in this checklist applies to this repo yet.
       </Empty>
       {fixError && <div className="form-hint" style={{ color: "var(--dead)" }}>Fix failed: {fixError}</div>}
+      {fixNotes.map((n, i) => <div key={i} className="form-hint">{n}</div>)}
 
       {report && (
         <>

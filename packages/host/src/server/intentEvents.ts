@@ -6,7 +6,7 @@
  * Moved verbatim out of `main.ts` (M4 of the host split, see
  * docs/notes/host-architecture.md). Every manager is read as `ctx.<x>` at CALL
  * time: the snapshots are handed to constructions that run long before
- * `backlog`/`smartpick`/`naming` exist in boot order, and are only invoked
+ * `backlog`/`naming` exist in boot order, and are only invoked
  * later.
  *
  * `createSnapshots(ctx)` registers nothing and reads nothing at creation, so
@@ -109,11 +109,6 @@ export function createSnapshots(ctx: ServerCtx) {
       // whether it closes itself — so a row held on `noSlot` can offer "close
       // one to make room" as a person's tap. Never an action.
       autoSlots: ctx.backlog.autoSlotFacts(),
-      // Both additive, both absent on a host that has never seen the feature, and
-      // both facts about the repo's MACHINERY rather than about any row — which is
-      // why they ride beside the items exactly as `waiting` does.
-      smartPick: ctx.backlog.smartPickList(),
-      passes: ctx.smartpick.summaries(),
       // The rows a naming pass is titling RIGHT NOW. Transient like `waiting`:
       // memory only, gone with a restart, and absent (rather than `[]`) on a host
       // where nothing is running, so a client can tell "no pass" from "a pass

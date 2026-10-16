@@ -17,7 +17,8 @@ export function createFirstApp(ctx: ServerCtx): OnboardManager {
     stateDir: hostStateDir(ctx.ROOT),
     builds: {
       list: (r) => ctx.builds.list(r),
-      save: (r, b) => ctx.builds.save(r, b),
+      save: (r, b, local) => ctx.builds.save(r, b, local),
+      localIds: (r) => ctx.builds.localIds(r),
       run: (r, id) => ctx.builds.run(r, id),
     },
     intents: {

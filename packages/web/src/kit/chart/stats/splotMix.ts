@@ -8,7 +8,7 @@
 import {
   type TokenTotals,
 } from "@waterplane/shared";
-import { familySlots, REST_SLOT } from "../../../modelHue.ts";
+import { byPrice, familyTintSlots, newestFirst, REST_SLOT } from "../../../modelHue.ts";
 import { f1, bandOutline } from "../chartPath.ts";
 import { DAY_MS, type DayPlot, type DayPoint } from "./splotDay.ts";
 import { dayKey } from "./splotWeeks.ts";
@@ -236,13 +236,18 @@ export function modelBands(models: { key: string; label: string }[]): {
   }
   // FIXED family slots (`modelHue.ts`), so a model is one colour here, in the
   // reader and on the context sheet — never re-ranked by this corpus's volume.
-  const of = familySlots(seen);
+  // Within a family the NEWEST version wears the full hue and older ones its
+  // tints: ranked by all-time volume, opus-5 kept the amber while this week's
+  // opus-5-5 — 83% of the window on screen — sat in a grey "6 more".
+  const of = familyTintSlots(newestFirst(seen));
   const named = seen.filter((a) => of.has(a));
-  const more = seen.length - named.length;
+  const rest = seen.filter((a) => !of.has(a)).map((a) => a.replace(/^claude-/, ""));
   return {
-    bands: named.map((alias) => ({ alias, slot: of.get(alias)! })).sort((x, y) => x.slot - y.slot),
-    restSlot: more > 0 ? REST_SLOT : null,
-    restName: `${more} more`,
+    bands: named.map((alias) => ({ alias, slot: of.get(alias)! })).sort((x, y) => byPrice(x.slot, y.slot)),
+    restSlot: rest.length > 0 ? REST_SLOT : null,
+    // The grey band NAMES what it holds — "6 more" was a count with no way
+    // to find out which six.
+    restName: rest.join(", "),
   };
 }
 

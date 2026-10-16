@@ -20,10 +20,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { ADVISORY_CHECKS, isSetupConsider, isSetupFinding } from "@waterplane/shared";
+import { HEALTH_ENTRY_MEASURE } from "./healthIndexWords.ts";
 import {
   agentFindings, agentVerb, bulkLabel, bulkNote, findingsCutWords, fixConfirmWords, fixNeedsConfirm, fixVerb,
   patchFindings, patchIds,
-  remedyPrompt, setupRowLookup, seriesAbsenceWords, seriesAllRemedyPrompt, seriesRemedyPrompt,
+  healthAskContextOf, healthIndexRemedyPrompt, healthTrendRemedyPrompt, remedyPrompt, setupRowLookup, seriesAbsenceWords, seriesAllRemedyPrompt, seriesRemedyPrompt,
 } from "./setupRemedy.ts";
 
 const check = (o) => ({ id: "x", label: "L", detail: "D", status: "warn", fix: null, ...o });
@@ -488,3 +489,192 @@ test("the toolchain and the signing key are core fixes behind their own consent 
   assert.deepEqual(rows.refused, ["x", "y"], "an extension may not take either fix over");
 });
 
+
+const INDEX_WEEK = {
+  week: "2026-10-12", prevWeek: "2026-10-05", index: 130.4, delta: 3.1,
+  movers: [
+    { key: "size", name: "File length", points: 0 },
+    { key: "retouch", name: "Re-touched files", points: 2.8 },
+    { key: "hatches", name: "Escape hatches", points: 0.1 },
+    { key: "untested", name: "Untested modules", points: -0.2 },
+  ],
+};
+
+test("the health-index ask is about the picked week's commits, biggest mover first", () => {
+  const p = healthIndexRemedyPrompt(INDEX_WEEK, "myapp");
+  assert.match(p, /was 130 in the week of 2026-10-12 \(\+3\.1 against the week before\)/);
+  assert.match(p, /between the week of 2026-10-05 and the week of 2026-10-12/);
+  // The opening question is about what happened in the repo, never the arithmetic.
+  assert.match(p, /What happened in myapp .* that moved these readings/);
+  const order = ["Re-touched files", "Untested modules", "Escape hatches", "File length"].map((n) => p.indexOf(`- ${n}`));
+  assert.deepEqual([...order].sort((a, b) => a - b), order, "movers are listed biggest first");
+  assert.match(p, /Re-touched files \(`retouch`\): \+2\.8 — pushed it up \(that reading shrank\)\. It is a rate over the last 14 days/);
+  assert.match(p, /Untested modules \(`untested`\): −0\.2 — pulled it down \(that reading grew\)\. It is a share/);
+  assert.match(p, /File length \(`size`\): ±0\.0 — barely moved it/);
+});
+
+test("the health-index ask offers 'nothing to do' and applies nothing", () => {
+  const p = healthIndexRemedyPrompt(INDEX_WEEK, "myapp");
+  assert.match(p, /nothing needs doing" is a complete answer/);
+  assert.ok(p.indexOf("complete answer") < p.indexOf("Finish with the options"));
+  assert.match(p, /Change no file, run no fix, commit nothing\./);
+});
+
+test("a week with no link states no delta and no span it does not have", () => {
+  const p = healthIndexRemedyPrompt({ ...INDEX_WEEK, prevWeek: null, delta: null }, "myapp");
+  assert.doesNotMatch(p, /against the week before/);
+  assert.match(p, /What happened in myapp in the week of 2026-10-12 that moved/);
+});
+
+const TREND = [
+  { week: "2026-08-17", index: 100, gap: false, lnLink: null, contributions: {} },
+  { week: "2026-08-24", index: 97, gap: false, lnLink: -0.03, contributions: { size: -2, retouch: -1 } },
+  { week: "2026-08-31", index: 97, gap: true, lnLink: null, contributions: {} },
+  { week: "2026-09-07", index: 104, gap: false, lnLink: 0.07, contributions: { size: 1, retouch: 6 } },
+];
+
+test("the trend ask lists every week, the gaps as gaps, and each reading's total", () => {
+  const p = healthTrendRemedyPrompt(TREND, "2026-08-17", "myapp");
+  assert.match(p, /went from 100 in the week of 2026-08-17 to 104 in the week of 2026-09-07/);
+  assert.match(p, /- 2026-08-17: 100 — baseline/);
+  assert.match(p, /- 2026-08-24: 97 \(−3\.0\) — File length −2\.0, Re-touched files −1\.0/);
+  assert.match(p, /- 2026-08-31: 97 — carried over/);
+  assert.match(p, /Re-touched files \(`retouch`\): \+5\.0 over 2 weeks/);
+  assert.doesNotMatch(p, /Escape hatches \(`hatches`\)/, "a reading with no contribution has no total, not a zero");
+});
+
+test("the trend ask offers advice instead of giving it, and says the readings may miss the lever", () => {
+  const p = healthTrendRemedyPrompt(TREND, "2026-08-17", "myapp");
+  assert.match(p, /Is myapp getting healthier\?/);
+  assert.ok(p.indexOf("getting healthier?") < p.indexOf("offer advice"), "the trend is read before advice is offered");
+  assert.match(p, /do not give it yet\. Give it only if the person asks for it/);
+  assert.match(p, /may move none of them/);
+  assert.match(p, /propose one of this repo's own/);
+  assert.match(p, /Change no file, run no fix, commit nothing\./);
+});
+
+/* ── what the two index prompts say about the tree beside the numbers ── */
+
+const pt = (day, v) => ({ day, sha7: "abc1234", v });
+const PLOT = {
+  classics: { loc: [], deps: [], packages: [], files: [pt("2026-08-16", 30), pt("2026-08-17", 35), pt("2026-08-25", null), pt("2026-09-08", 1500)] },
+  own: {
+    file: ".waterplane-shared/health.json", declared: true,
+    series: [
+      { key: "fixtures", source: "repo", label: "Screen fixtures", unit: "", last: 5, reading: { rank: null, n: 0 }, detail: "",
+        means: "Signals with a real capture.", better: "higher", points: [pt("2026-09-07", null), pt("2026-09-08", 5)] },
+      { key: "never", source: "repo", label: "Never read", unit: "", last: null, reading: { rank: null, n: 0 }, detail: "",
+        means: "x", better: null, points: [pt("2026-09-08", null)] },
+    ],
+  },
+};
+
+test("the engine is named from the wire: own copy, bundled, or nothing at all", () => {
+  const own = healthTrendRemedyPrompt(TREND, "2026-08-17", "myapp", { engine: "repo" });
+  assert.match(own, /measured by this repo's own tools\/repohealth\.mjs/);
+  assert.doesNotMatch(own, /not part of this repo|do not go hunting/);
+  const bundled = healthIndexRemedyPrompt(INDEX_WEEK, "myapp", { engine: "bundled" });
+  assert.match(bundled, /measured by \S+'s bundled engine.*it is not part of this repo/);
+  for (const p of [healthTrendRemedyPrompt(TREND, "2026-08-17", "myapp"), healthIndexRemedyPrompt(INDEX_WEEK, "myapp")]) {
+    assert.doesNotMatch(p, /engine|tools\/repohealth|not part of this repo|probably not in this repo/, "absent engine says nothing about where it is");
+  }
+});
+
+test("a link across weeks with no row says how many, and the backlog commit is named", () => {
+  const weeks = [...TREND, { week: "2026-10-26", index: 110, gap: false, lnLink: 0.05, contributions: { size: 6 } }];
+  const p = healthTrendRemedyPrompt(weeks, "2026-08-17", "myapp");
+  assert.match(p, /- 2026-10-26: 110 \(\+6\.0\) \(one link over 7 weeks with no measured week between\) — File length \+6\.0/);
+  assert.doesNotMatch(p, /2026-09-07: 104 \(\+7\.0\) \(one link/, "a link two weeks after a CARRIED week is still one week from its row");
+  assert.match(p, /single commit carries most of it before attributing/);
+  const w = healthIndexRemedyPrompt({ ...INDEX_WEEK, prevWeek: "2026-08-24" }, "myapp");
+  assert.match(w, /and the week of 2026-10-12 \(one link over 7 weeks with no measured week between\)/);
+  assert.doesNotMatch(healthIndexRemedyPrompt(INDEX_WEEK, "myapp"), /one link over/);
+});
+
+test("every listed reading says what kind of number it is, from the one table", () => {
+  const p = healthTrendRemedyPrompt(TREND, "2026-08-17", "myapp");
+  assert.ok(p.includes(`File length (\`size\`): −1.0 over 2 weeks. It is ${HEALTH_ENTRY_MEASURE.size}.`));
+  assert.ok(p.includes(HEALTH_ENTRY_MEASURE.retouch));
+  assert.match(HEALTH_ENTRY_MEASURE.hatches, /density: UNEXPLAINED.*per 1,000 source lines.*carry no reason.*explained ones and TODO\/FIXME marks are reported apart and never counted/);
+  assert.match(HEALTH_ENTRY_MEASURE.retouch, /REWORK.*change or remove lines it added.*only adds lines.*never counted/);
+  assert.match(HEALTH_ENTRY_MEASURE.context, /CLAUDE\.md plus every skill's description; skill bodies.*not counted/);
+  assert.match(HEALTH_ENTRY_MEASURE.untested, /share.*imported is not covered/);
+  assert.match(HEALTH_ENTRY_MEASURE.size, /95th-percentile.*length cap/);
+});
+
+test("the tree's growth from the baseline week is said only when the files series carries both ends", () => {
+  const ctx = healthAskContextOf(PLOT, "repo", "2026-08-17");
+  assert.deepEqual(ctx.tree, { baselineFiles: 35, nowFiles: 1500 }, "the baseline week's LAST reading, the latest non-null now");
+  assert.match(healthTrendRemedyPrompt(TREND, "2026-08-17", "myapp", ctx), /The tree went from 35 source files at the baseline to 1,500 now/);
+  const none = healthAskContextOf(PLOT, null, "2026-07-06");
+  assert.equal(none.tree, undefined);
+  assert.equal(none.engine, undefined);
+  assert.doesNotMatch(healthTrendRemedyPrompt(TREND, "2026-08-17", "myapp", none), /The tree went from/);
+});
+
+test("the repo's own readings are listed apart, and the advice starts from them", () => {
+  const ctx = healthAskContextOf(PLOT, "repo", "2026-08-17");
+  assert.deepEqual(ctx.own.readings.map((r) => r.key), ["fixtures"], "a reading with no value is not listed as one");
+  const p = healthTrendRemedyPrompt(TREND, "2026-08-17", "myapp", ctx);
+  assert.match(p, /This repo's own readings, declared in \.waterplane-shared\/health\.json — not part of the index/);
+  assert.match(p, /- Screen fixtures \(`fixtures`\): 5 on 2026-09-08 \(its only reading so far\); the repo wants it higher\. Signals with a real capture\./);
+  assert.match(p, /- Start from this repo's own readings above: say whether they moved/);
+  assert.ok(p.indexOf("Start from this repo's own") < p.indexOf("Say plainly that the five"));
+  assert.doesNotMatch(p, /no slot for one/);
+  assert.match(healthIndexRemedyPrompt(INDEX_WEEK, "myapp", ctx), /This repo's own readings, declared in/);
+});
+
+test("a repo declaring none is told the slot exists; no own block on the wire says nothing", () => {
+  const none = healthAskContextOf({ ...PLOT, own: { file: ".waterplane-shared/health.json", declared: false, series: [] } }, null, "2026-08-17");
+  const p = healthTrendRemedyPrompt(TREND, "2026-08-17", "myapp", none);
+  assert.match(p, /This repo declares no readings of its own; \.waterplane-shared\/health\.json is where one would be declared/);
+  assert.match(p, /this repo has none of its own yet, propose one of this repo's own .* offer to declare it in \.waterplane-shared\/health\.json with a script that prints it\. Do not write it unless asked\./);
+  assert.doesNotMatch(p, /Start from this repo's own/);
+  const old = healthTrendRemedyPrompt(TREND, "2026-08-17", "myapp", healthAskContextOf({ classics: PLOT.classics }, null, "2026-08-17"));
+  assert.doesNotMatch(old, /declares no readings|own readings, declared/);
+  assert.match(old, /offer to declare it in \S+health\.json/);
+});
+
+test("the index prompts name the repo's disables and overrides, the engine's detail, and the vs-weeks figure", () => {
+  const plot = {
+    classics: null, own: undefined,
+    central: { file: ".cfg/health.json" },
+    series: [
+      { key: "size.p95", label: "p95 file length", detail: "3 files within 10% of the largest (900 lines).", points: [], unit: "lines",
+        variant: { kind: "override", why: "generated code", means: "p95 of hand-written files", unit: "lines", points: [], last: 300, since: "2026-10-12" } },
+      { key: "hatches.perKloc", label: "unexplained escape hatches per kLOC", detail: "20 unexplained of 30 escapes over 9,000 lines (10 carry their reason); 4 TODO/FIXME marks reported apart, never counted.", points: [], unit: "" },
+      { key: "context.claudeMdChars", label: "CLAUDE.md", detail: "", points: [], unit: "chars" },
+      { key: "context.descChars", label: "the always-on skill descriptions", detail: "2 skills; their bodies, loaded only when one is invoked, are 9,000 chars more.", points: [], unit: "chars" },
+      { key: "untested.count", label: "untested", detail: "", points: [], unit: "",
+        variant: { kind: "disabled", why: "tests are in another repo" } },
+      { key: "context.skillCount", label: "skills", detail: "not an index reading", points: [], unit: "" },
+    ],
+  };
+  const ctx = healthAskContextOf(plot, null, "2026-08-17", { delta: 18.4, thenWeek: "2026-06-22", weeks: 14 });
+  assert.deepEqual(ctx.variants.map((v) => [v.key, v.kind]), [["size", "override"], ["untested", "disabled"]]);
+  assert.deepEqual(ctx.details.map((d) => d.key), ["size", "hatches", "context"], "only index readings, only with a sentence");
+  const weeks = [
+    { week: "2026-08-17", index: 100, gap: false, lnLink: null, contributions: {} },
+    { week: "2026-10-12", index: 101, gap: true, lnLink: null, contributions: {}, gapReason: "central" },
+    { week: "2026-10-19", index: 103, gap: false, lnLink: 0.02, contributions: { size: 2 } },
+  ];
+  const trend = healthTrendRemedyPrompt(weeks, "2026-08-17", "myapp", ctx);
+  const week = healthIndexRemedyPrompt({ week: "2026-10-19", prevWeek: "2026-10-12", index: 103, delta: 2, movers: [{ key: "size", name: "File length", points: 2 }] }, "myapp", ctx);
+  for (const p of [trend, week]) {
+    assert.ok(p.includes("Built from 4 of"), p);
+    assert.ok(p.includes("Untested modules is disabled here; File length reads this repo's own version."));
+    assert.ok(p.includes("in .cfg/health.json (`central`)"));
+    assert.ok(p.includes("- Untested modules (`untested`): disabled — still measured, left out of the index. The repo's reason: tests are in another repo"));
+    assert.ok(p.includes("the index reads this repo's own command instead of the engine's reading — p95 of hand-written files; first measured 2026-10-12"));
+    assert.ok(p.includes("not comparable across a change of that config"));
+    assert.ok(p.includes("20 unexplained of 30 escapes"));
+    assert.ok(p.includes("3 files within 10% of the largest"));
+    assert.ok(p.includes("their bodies, loaded only when one is invoked, are 9,000 chars more"));
+    assert.ok(p.includes("Against the week of 2026-06-22, 14 weeks earlier, it was"), p);
+  }
+  assert.ok(trend.includes("- 2026-10-12: 101 — carried over: this repo changed which readings it overrides or disables"));
+  assert.ok(trend.includes("Weeks carried (not measured) because this repo changed which readings it overrides or disables: 2026-10-12."));
+  // Nothing on the wire: none of it is said.
+  const bare = healthTrendRemedyPrompt(weeks.slice(0, 1).concat(weeks[2]), "2026-08-17", "myapp", healthAskContextOf({ classics: null }, null, "2026-08-17"));
+  for (const s of ["Built from", "central", "verbatim", "Against the week of"]) assert.ok(!bare.includes(s), s);
+});

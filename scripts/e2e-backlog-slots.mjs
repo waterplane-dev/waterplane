@@ -1,4 +1,5 @@
-// The cap on automatic sessions, as a rung — and how it frees itself.
+// The cap on automatic sessions, as a rung — and how it frees itself: a working
+// session going idle (R-automation-042). Nothing is closed to make room.
 //
 // Every fired work item opens a session of its own now, which means the bound on
 // how many `claude` processes machinery may have running is the difference
@@ -17,18 +18,13 @@
 //  2. each of them still gets its own conversation;
 //  3. the ones that are waiting SAY they are waiting for a slot, with the
 //     desktop's real numbers in the sentence;
-//  4. with *close automatic sessions when done* ON (the synced setting; off
-//     by default), the slot frees itself: a finished item's idle session is reaped when the
-//     next item needs the room, and it lands under *Recently closed* —
-//     `sessions.remove()`, never `kill()`, because a conversation that just ran
-//     has to be reopenable;
-//  5. …and they run IN THE ORDER THEY WERE ADDED. This one is new, and it is
-//     the fact a cap test that only counts is blind to: the pass that reaps a
-//     session used to hand the freed slot to the rows BEHIND the one that asked
-//     for it (`base.autoSlotsFree += 1`), so the front item starved for as long
-//     as anything was queued behind it and the list ran backwards. The slot goes
-//     back to the NEXT TICK's fresh count, which hands it to the first row in
-//     order.
+//  4. the slot frees itself when the working session goes IDLE — with *close
+//     automatic sessions when done* ON and a ten-minute linger, a closed
+//     session here could only be a reap made to free a slot, and there is none:
+//     an idle session holds no slot, so closing one would free nothing;
+//  5. …and they run IN THE ORDER THEY WERE ADDED: the freed slot goes to the
+//     NEXT TICK's fresh count, which hands it to the first row in order, never
+//     to the rows behind it.
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -49,9 +45,9 @@ const env = {
   // wait on but the cap.
   [E.BACKLOG_SESSIONS]: "1",
   [E.IDLE_MS]: "1200",
-  // The reap floor is a minute in production; a test cannot sit out three of
-  // them. The linger is left long so that what closes a session here is provably
-  // the reap and not the sweep.
+  // The no-hook silence floor is a minute in production; a test cannot sit out
+  // three of them. The linger is left long, so a session closed here could only
+  // have been closed to make room — which must not happen.
   [E.BACKLOG_REAP_IDLE_MS]: "600",
   [E.BACKLOG_LINGER_MS]: "600000",
 };
@@ -79,8 +75,6 @@ bootWait(PORT, 900, async () => {
   const slotReasons = new Set();
   /** Session ids the host has listed as recently closed. */
   let closedIds = [];
-  /** …and the rows themselves, for what they SAY about why they closed. */
-  let closedRows = [];
   /** The order the three items actually STARTED in — a cap test that only
    *  counts cannot see an inverted queue. */
   const runOrder = [];
@@ -88,14 +82,13 @@ bootWait(PORT, 900, async () => {
   ws.on("open", () => ws.send(JSON.stringify({ t: "hello", protocol: 1 })));
   ws.on("message", (raw) => {
     const m = JSON.parse(raw.toString());
-    if (m.t === "closed.list") { closedRows = m.closed; closedIds = m.closed.map((c) => c.id); return; }
+    if (m.t === "closed.list") { closedIds = m.closed.map((c) => c.id); return; }
     if (m.t !== "backlog.list") return;
     if (!added) {
       added = true;
-      // The reap closes only sessions set to close when done, and the global
-      // default is OFF (a person closes them) — `e2e-backlog-keepopen.mjs` is
-      // that half. This script is the close-when-done half, so it switches the
-      // synced setting on first, exactly as the phone would.
+      // The close-when-done half (`e2e-backlog-keepopen.mjs` is the default,
+      // off): switched on first, exactly as the phone would, so that a reap —
+      // if anything still made one — would be allowed to close these.
       ws.send(JSON.stringify({ t: "settings.set", key: `${LS}backlog.closeWhenDone`, value: "1", ts: Date.now(), device: "e2e" }));
       ws.send(JSON.stringify({ t: "backlog.setAuto", enabled: true }));
       dirs.forEach((dir, i) => ws.send(JSON.stringify({ t: "backlog.add", text: `echo SLOT_${i}`, repoDir: dir, label: `item ${i}` })));
@@ -120,19 +113,11 @@ bootWait(PORT, 900, async () => {
       check(said.length > 0, `the waiting items said what they were waiting for (${JSON.stringify(said)})`);
       check(said.some((r) => /1 automatic session at a time/i.test(r)),
         `…with THIS desktop's numbers in it, not a guess at the default (${JSON.stringify(said)})`);
-      // The first two sessions can only have been closed to make room: the
-      // linger window here is ten minutes and the run is seconds.
-      const reaped = [...sids].filter((id) => closedIds.includes(id));
-      check(reaped.length >= 2,
-        `the finished sessions were reaped to free the slot (${reaped.length} of 3 are under Recently closed)`);
-      check(closedIds.length > 0, "…and reaped means ARCHIVED — they are reopenable, not killed");
-      const reapedRows = closedRows.filter((c) => sids.has(c.id));
-      check(reapedRows.length > 0 && reapedRows.every((c) => c.closedBy === "auto-slot"),
-        `a slot reap says so on its closed row (${JSON.stringify(reapedRows.map((c) => c.closedBy))})`);
-      check(reapedRows.every((c) => c.kind === "backlog" && typeof c.itemId === "string" && /^item \d$/.test(c.itemLabel ?? "")),
-        `…and names the item it was opened for (${JSON.stringify(reapedRows.map((c) => [c.kind, c.itemLabel]))})`);
-      check(reapedRows.every((c) => typeof c.openedAt === "number" && c.openedAt <= c.closedAt),
-        "…and when it was opened, so a duration can be shown");
+      // The linger window here is ten minutes and the run is seconds, so a
+      // closed session could only have been closed to make room.
+      const closed = [...sids].filter((id) => closedIds.includes(id));
+      check(closed.length === 0,
+        `nothing was closed to make room — the slot freed itself when the working session went idle (${closed.length} closed)`);
       check(runOrder.join(" → ") === "item 0 → item 1 → item 2",
         `…and they ran in the order they were added, not backwards (${runOrder.join(" → ")})`);
       ws.close();

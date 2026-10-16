@@ -66,6 +66,12 @@ export interface PullRecord {
   installAuto?: boolean;
   /** "Later" on the shell's ready-to-install notification: when it returns. */
   installSnoozedUntil?: number;
+  /** The shell's opt-in clean-up deleted this build's APK after it installed,
+   *  and how much that gave back. `evicted` says the bytes are gone; this says
+   *  WHY, so the row does not blame the seven-day eviction. */
+  cleanedAt?: number;
+  cleanedBytes?: number;
+  cleanNote?: string;
   /**
    * The bytes were handed to the phone's own Downloads and it has not said
    * where they went yet.
@@ -141,6 +147,9 @@ export interface LocalPull {
   repoName?: string;
   size?: number;
   mtime?: number;
+  /** Fetch from this app-relative path instead of the repo artifact route: a file a plugin offered
+   *  outside every repo (`api.offerFile`). Kept on the record (`PullItem.src`). */
+  src?: string;
 }
 
 /** What a save attempt did, for the caller to put in front of the user. */
