@@ -441,7 +441,13 @@ export class CtxSlice {
         // The roster and the model table are resolved TOGETHER: an agent's
         // model need not be one the conversation itself ever ran, so the index
         // it travels under can only be assigned where both halves are in hand.
-        const { models, agents } = withAgentRuns(parsed.models, use.runs);
+        const { models, agents: runs } = withAgentRuns(parsed.models, use.runs);
+        // Which of them are still RUNNING, by the same list the session row
+        // publishes (`checkAgents` → `readRunningAgents`), so the lane strip
+        // and the "agents running" line cannot disagree. A log's last record
+        // is not an end — an agent sitting in a long `npm test` writes nothing.
+        const live = new Set((log.live?.info.agents ?? []).map((a) => a.id));
+        const agents = live.size ? runs.map((a) => (live.has(a.id) ? { ...a, running: true as const } : a)) : runs;
         // What the agents had spent by each instant — the band the spend
         // chart stacks on the parent's curve. Its last point IS `agentTok`.
         const agentCum = agentCumOf(use);

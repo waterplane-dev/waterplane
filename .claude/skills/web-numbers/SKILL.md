@@ -85,8 +85,11 @@ Context, tokens and money as things a person reads: the context window as a shap
   is ONE grey band), never a volume rank. **A band with nothing in it is dropped, and so is its legend entry**
   (the table spans the conversation AND its agents). **Subagents are SWIM LANES on the same axis**
   (`agentLanes`): one bar per agent from `at` to `endAt`, first-fit packed in PIXELS (the axis is
-  piecewise) into the fewest lanes, coloured by `modelSlots`, dearest outlined, a tap answering in a
-  TEXT line under the strip (`agentReadout`). Their SPEND is the grey band on the spend chart
+  piecewise) into the fewest lanes, coloured by `modelSlots`, dearest outlined in ink and the PICKED bar ringed in `--accent`
+  (two ink outlines read as two dearest), a tap answering in a
+  TEXT line under the strip (`agentReadout`). A `running` agent (host: the live session's own
+  running-agent list, never the log's last write) runs to the right edge and FADES there, is out of
+  the median, and is concurrent with everything after it. Their SPEND is the grey band on the spend chart
   (`agentSpendBand` over the host's `agentCum`, step-held, top edge = the dashed total; absent ⇒ the
   gap as before), and the row spark draws `agentEnv` as a faint area BEHIND the line, clamped at the
   axis top. An undated agent is in the totals and off the chart, and `agentUndatedText` SAYS so in

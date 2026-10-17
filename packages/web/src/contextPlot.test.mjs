@@ -1059,3 +1059,29 @@ test("auto-compact setting: a size is a labelled line, auto/unset say why there 
   assert.match(autoCompactSetText({ tokens: null, source: "user", raw: "auto" }), /"auto" in ~\/\.claude\/settings\.json/);
   assert.match(autoCompactSetText({ tokens: null, source: "local", raw: "lots" }), /not a size/);
 });
+
+test("a running agent is open: it runs to the right edge, whatever its log last wrote", () => {
+  const p = lanePlot();
+  const live = run(T0, 0, { endAt: T0 + 10_000, running: true });
+  const done = run(T0 + 1, 0, { endAt: T0 + 10_000 });
+  const { bars } = agentLanes(p, [live, done], null);
+  const by = new Map(bars.map((x) => [x.run.id, x]));
+  assert.equal(by.get(live.id).open, true);
+  assert.ok(Math.abs(by.get(live.id).x + by.get(live.id).w - (p.x + p.w)) < 1e-9);
+  assert.equal(by.get(done.id).open, false);
+});
+
+test("a running agent overlaps everything after it, and is out of the median", () => {
+  assert.equal(agentConcurrency([run(0, 0, { endAt: 5, running: true }), run(10, 0, { endAt: 20 })]), 2);
+  const text = agentSummary([
+    run(T0, 0, { endAt: T0 + 60_000 }),
+    run(T0 + 1, 0, { endAt: T0 + 3_600_000, running: true }),
+  ], ["claude-opus-5"]);
+  assert.match(text, /2 subagents · 1 still running \(fading out at the right\) · up to 2 at once · median 1 min each/);
+});
+
+test("a running agent's readout says it is still running, not when it ended", () => {
+  const text = agentReadout(run(T0, 0, { endAt: T0 + 600_000, running: true }), ["claude-opus-5"], 3_600_000);
+  assert.match(text, /started .* · still running, last wrote /);
+  assert.doesNotMatch(text, /\(10 min\)/);
+});

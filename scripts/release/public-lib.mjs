@@ -380,6 +380,13 @@ export function hostedName(path, sha256hex) {
   return dot > 0 ? `${base.slice(0, dot)}-${sha256hex.slice(0, 10)}${base.slice(dot)}` : `${base}-${sha256hex.slice(0, 10)}`;
 }
 
+// --------------------------------------------------------------------- target
+
+// The target's own git metadata, which a write never deletes or walks into. `.git` at the root is
+// a directory in a clone but a FILE in a linked worktree (`gitdir: …`); both are the repo, so it
+// is matched by name, never by type. A nested `.git` (`a/.git`) is snapshot content like any other.
+export const isTargetGit = (rel) => rel === ".git" || rel.startsWith(".git/");
+
 // ------------------------------------------------------------------- grouping
 
 /** Group a path list for a report: one row per two-level prefix. */

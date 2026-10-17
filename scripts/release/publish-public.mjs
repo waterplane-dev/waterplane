@@ -7,7 +7,8 @@
 //
 //   --tag <tag>      what to publish (default HEAD, with a warning: releases are tags)
 //   --to <path>      a local clone of the public repo; may be empty (git init'ed on --commit)
-//   --write          copy the snapshot over --to's working tree (never touches its .git)
+//   --write          copy the snapshot over --to's working tree (never touches its .git, the
+//                    directory of a clone or the file of a linked worktree)
 //   --commit         --write, then make the commit. "Initial public release" if the target has
 //                    no commits, else "Release <version>" with that CHANGELOG section as body.
 //   --accept <file>  reviewed false positives, one `path:line:hash` per line (the report prints each)
@@ -32,7 +33,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   buildContext, checkLinks, classify, dirsOf, extractChangelogSection, groupPaths, hitToken, hostedName, parseAccept,
-  parseAllowlist, rewriteHostedLinks, scanPath, scanText, stripSessionIds, topDir,
+  isTargetGit, parseAllowlist, rewriteHostedLinks, scanPath, scanText, stripSessionIds, topDir,
 } from "./public-lib.mjs";
 
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -75,7 +76,9 @@ function walk(root) {
   const rec = (dir) => {
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       const abs = join(dir, e.name);
-      if (e.isDirectory()) { if (!(dir === root && e.name === ".git")) rec(abs); } else out.push(relative(root, abs).split(sep).join("/"));
+      const rel = relative(root, abs).split(sep).join("/");
+      if (isTargetGit(rel)) continue;
+      if (e.isDirectory()) rec(abs); else out.push(rel);
     }
   };
   rec(root);
@@ -87,7 +90,7 @@ function pruneEmptyDirs(root) {
     let kept = 0;
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       const abs = join(dir, e.name);
-      if (e.isDirectory() && !(dir === root && e.name === ".git")) { if (rec(abs)) kept++; } else kept++;
+      if (e.isDirectory() && !isTargetGit(relative(root, abs).split(sep).join("/"))) { if (rec(abs)) kept++; } else kept++;
     }
     if (kept === 0 && dir !== root) { rmdirSync(dir); return false; }
     return true;

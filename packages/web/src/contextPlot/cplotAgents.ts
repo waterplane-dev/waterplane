@@ -5,10 +5,7 @@
  * facade that re-exports every module in `contextPlot/`.
  */
 
-import {
-  fmtUsd,
-  type AgentRun,
-} from "@waterplane/shared";
+import { fmtUsd, type AgentRun } from "@waterplane/shared";
 import { fmtTokens, fmtAxisTime } from "../kit/chart/chartFmt.ts";
 import { f1 } from "../kit/chart/chartPath.ts";
 import { type Plot, fmtGap } from "./cplotAxis.ts";
@@ -43,6 +40,8 @@ export interface AgentLane {
   slot: number;
   /** The agent that spent the most — outlined, and named by the summary. */
   dearest: boolean;
+  /** Still running: to the right edge, faded — its last record is not an end. */
+  open: boolean;
 }
 
 /** Narrowest bar drawn, and the clear space packing keeps between two bars
@@ -65,10 +64,11 @@ export function agentLanes(p: Plot, agents: AgentRun[], slots: ModelSlots | null
   for (const run of [...agents].sort((a, b) => a.at - b.at || a.endAt - b.endAt)) {
     // Clamped into the plot: an agent before the first reading still draws.
     const x0 = Math.max(p.x, Math.min(p.x + p.w - LANE_MIN_W, p.px(run.at)));
-    const x1 = Math.min(p.x + p.w, Math.max(x0 + LANE_MIN_W, p.px(Math.max(run.at, run.endAt))));
+    const x1 = run.running ? p.x + p.w // no end yet: the newest instant drawn
+      : Math.min(p.x + p.w, Math.max(x0 + LANE_MIN_W, p.px(Math.max(run.at, run.endAt))));
     let lane = ends.findIndex((e) => e + LANE_GAP <= x0);
     if (lane < 0) { lane = ends.length; ends.push(x1); } else ends[lane] = x1;
-    bars.push({ run, x: x0, w: x1 - x0, lane, slot: slots ? slots.slotOf(run.model) : 0, dearest: run === dear });
+    bars.push({ run, x: x0, w: x1 - x0, lane, slot: slots ? slots.slotOf(run.model) : 0, dearest: run === dear, open: !!run.running });
   }
   return { bars, lanes: ends.length };
 }
@@ -96,11 +96,10 @@ export function agentAtPoint(bars: AgentLane[], laneH: number, plotY: number, x:
   return pool.reduce((m, b) => (dist(b) < dist(m) ? b : m), pool[0]);
 }
 
-/** Most agents running at the same instant — the concurrency a lane count
- *  approximates in pixels, measured in time. An end and a start at one instant
- *  are not concurrent. */
+/** Most agents running at the same instant, measured in time (a lane count
+ *  is pixels). A hand-over is not concurrent; a running agent has not ended. */
 export function agentConcurrency(agents: AgentRun[]): number {
-  const ev = agents.flatMap((a) => [[a.at, 1], [Math.max(a.at, a.endAt), -1]] as [number, number][])
+  const ev = agents.flatMap((a) => [[a.at, 1], [a.running ? Infinity : Math.max(a.at, a.endAt), -1]] as [number, number][])
     .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   let now = 0, max = 0;
   for (const [, d] of ev) { now += d; if (now > max) max = now; }
@@ -113,7 +112,9 @@ export function agentReadout(a: AgentRun, models: string[] | undefined, span: nu
   return [
     a.type ?? "agent",
     who ? modelLabel(who) : null,
-    `${fmtAxisTime(a.at, span)}–${fmtAxisTime(a.endAt, span)} (${fmtGap(Math.max(0, a.endAt - a.at))})`,
+    a.running
+      ? `started ${fmtAxisTime(a.at, span)} · still running, last wrote ${fmtAxisTime(a.endAt, span)}`
+      : `${fmtAxisTime(a.at, span)}–${fmtAxisTime(a.endAt, span)} (${fmtGap(Math.max(0, a.endAt - a.at))})`,
     `${fmtTokens(a.tok)} spent`,
     a.peakTok ? `window peaked at ${fmtTokens(a.peakTok)}` : null,
     a.costUsd != null ? fmtUsd(a.costUsd) : null,
@@ -126,9 +127,12 @@ export function agentReadout(a: AgentRun, models: string[] | undefined, span: nu
  */
 export function agentSummary(agents: AgentRun[], models: string[] | undefined): string {
   if (!agents.length) return "No subagents — every turn here ran in this conversation.";
-  const spans = agents.filter((a) => a.endAt > a.at);
+  // A running agent's span so far is not its length: finished ones only.
+  const spans = agents.filter((a) => !a.running && a.endAt > a.at);
   const busiest = agents.reduce((m, a) => (a.tok > m.tok ? a : m), agents[0]);
   const parts = [`${agents.length} subagent${agents.length > 1 ? "s" : ""}`];
+  const live = agents.filter((a) => a.running).length;
+  if (live) parts.push(`${live === agents.length && live > 1 ? "all" : live} still running (fading out at the right)`);
   const most = agentConcurrency(agents);
   if (most > 1) parts.push(`up to ${most} at once`);
   if (spans.length) {

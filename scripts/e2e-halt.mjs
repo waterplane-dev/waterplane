@@ -61,7 +61,11 @@ bootWait(PORT, 800, async () => {
     check(!!done, "the halt finishes with a receipt");
     check(done?.halt.receipt.sessions === 2, `receipt counts both sessions (${done?.halt.receipt.sessions})`);
     check((done?.halt.receipt.forced ?? 0) >= 1, `the TERM-ignoring stub was forced (${done?.halt.receipt.forced})`);
-    await sleep(300);
+    // `ours()` also counts the tmux server and the pty's tmux clients (their
+    // command lines carry the stub path), and those exit only once kill-session's
+    // teardown lands — a fixed 300 ms lost that race under a full parallel suite.
+    // A process that truly survived the SIGKILL is still there at the deadline.
+    for (let t = 0; t < 3000 && ours(); t += 100) await sleep(100);
     if (ours()) console.log(execFileSync("sh", ["-c", `ps -Ao pid,ppid,stat,command | grep -F "${STUB}" | grep -v grep`], { encoding: "utf8" }));
     check(ours() === 0, `no stub process survives the halt (${ours()})`);
 

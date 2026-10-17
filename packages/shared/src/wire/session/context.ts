@@ -112,8 +112,14 @@ export interface AgentRun {
   id: string;
   /** Its first record: when the agent started. The x of the bar it draws. */
   at: number;
-  /** Its last record. Equal to `at` for an agent that wrote once. */
+  /** Its last record. Equal to `at` for an agent that wrote once. For a
+   *  `running` agent this is only how far its log has got, not an end. */
   endAt: number;
+  /** Still running when the document was read: the host's own running-agent
+   *  list (`agents.ts`, the parent's task-notifications) still holds it. Only
+   *  a LIVE session can say so; absent means not running OR nobody asked — a
+   *  closed session's agents are all over, and an older host never says. */
+  running?: true;
   /** Which model ran it — an index into `ContextSeriesDoc.models`, the same
    *  table the samples index. Absent when no record named one. */
   model?: number;

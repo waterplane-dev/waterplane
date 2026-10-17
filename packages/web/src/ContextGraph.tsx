@@ -662,7 +662,10 @@ export function StackLegend({ p, samples, series, fmt = fmtTokens }: {
  * the model, from the screen's one `modelSlots`. A tap or drag picks the
  * nearest bar and reports it UP as a line of text under the strip — never a
  * floating box; the pick survives lifting the finger, and a tap on the picked
- * bar lets go.
+ * bar lets go. The picked bar is ringed in `--accent`, never in the dearest
+ * bar's ink: two ink outlines a half pixel apart read as two dearest agents.
+ * A still-RUNNING agent runs to the right edge and fades out there — its last
+ * record is how far its log has got, and a hard end would claim it finished.
  */
 export function AgentLanesChart({ samples, events, agents, slots, width, onPick, picked }: {
   samples: ContextSample[];
@@ -674,6 +677,7 @@ export function AgentLanesChart({ samples, events, agents, slots, width, onPick,
   picked?: AgentRun | null;
 }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const fade = paintId(useId());
   const top = 6;
   // The x axis is the plot's; the lane packing needs only `px`, so the height
   // follows from how many lanes it took.
@@ -708,15 +712,30 @@ export function AgentLanesChart({ samples, events, agents, slots, width, onPick,
         </g>
       ))}
       <line x1={p.x} x2={p.x + p.w} y1={top + plotH + 0.5} y2={top + plotH + 0.5} stroke="var(--line)" strokeWidth={1} />
-      {bars.map((b) => {
+      {bars.map((b, i) => {
         const on = picked?.id === b.run.id;
+        const hue = SLOT[b.slot] ?? MODEL_SLOT[REST_SLOT];
+        // The fade covers the last 24 units (or the whole of a short bar), in
+        // user space so every open bar fades over the same distance.
+        const fadeW = Math.min(24, b.w);
         return (
-          <rect key={b.run.id} x={b.x} y={top + b.lane * laneH + (laneH - barH) / 2} width={b.w} height={barH}
-            rx={Math.min(2, barH / 2)} fill={SLOT[b.slot] ?? MODEL_SLOT[REST_SLOT]}
-            fillOpacity={picked && !on ? 0.55 : 0.9}
-            stroke={on || b.dearest ? "var(--fg)" : "none"} strokeWidth={on ? 1.5 : 1}>
-            <title>{`${b.run.type ?? "agent"} · ${fmtTokens(b.run.tok)}`}</title>
-          </rect>
+          <g key={b.run.id}>
+            {b.open && (
+              <defs>
+                <linearGradient id={`${fade}-${i}`} gradientUnits="userSpaceOnUse" x1={b.x + b.w - fadeW} x2={b.x + b.w} y1={0} y2={0}>
+                  <stop offset="0" stopColor={hue} />
+                  <stop offset="1" stopColor={hue} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+            )}
+            <rect x={b.x} y={top + b.lane * laneH + (laneH - barH) / 2} width={b.w} height={barH}
+              rx={b.open ? 0 : Math.min(2, barH / 2)} fill={b.open ? `url(#${fade}-${i})` : hue}
+              fillOpacity={picked && !on ? 0.55 : 0.9}
+              stroke={on ? "var(--accent)" : b.dearest ? "var(--fg)" : "none"} strokeWidth={on ? 2 : 1}
+              strokeOpacity={b.open && !on ? 0.5 : 1}>
+              <title>{`${b.run.type ?? "agent"} · ${fmtTokens(b.run.tok)}${b.run.running ? " · still running" : ""}`}</title>
+            </rect>
+          </g>
         );
       })}
       {xTicks.map((t, i) => (

@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import {
   buildContext, checkLinks, classify, dirsOf, extractChangelogSection, groupPaths, hitToken, hostedName, parseAccept,
   rewriteHostedLinks, stripSessionIds,
-  npmTarballProblems, parseAllowlist, resolveRel, scanPath, scanText, verifySteps,
+  isTargetGit, npmTarballProblems, parseAllowlist, resolveRel, scanPath, scanText, verifySteps,
 } from "./public-lib.mjs";
 
 const inc = (rules, p) => classify(p, parseAllowlist(rules)).included;
@@ -288,4 +288,10 @@ test("verify-public-tree rehearses CI's tarball: release:build --unsigned, then 
   assert.match(npmTarballProblems({ ...ok, pkgJson: '{"name":"waterplane","version":"1.2.2"}' })[0], /waterplane@1\.2\.2, not waterplane@1\.2\.3/);
   assert.match(npmTarballProblems({ ...ok, pkgJson: null })[0], /missing or unreadable/);
   assert.equal(npmTarballProblems({ ...ok, listing: [], pkgJson: "nope" }).length, 2, "every failure is listed");
+});
+
+test("isTargetGit: the root .git is the target's, as a clone's directory or a worktree's file; nothing else is", () => {
+  assert.equal(isTargetGit(".git"), true, "a linked worktree's .git FILE is never deleted");
+  assert.equal(isTargetGit(".git/HEAD"), true);
+  for (const p of [".gitignore", ".gitattributes", ".github/workflows/ci.yml", "a/.git", "a/.git/HEAD", ".gitx"]) assert.equal(isTargetGit(p), false, p);
 });
