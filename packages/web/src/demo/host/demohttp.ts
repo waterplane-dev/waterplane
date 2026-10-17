@@ -173,7 +173,7 @@ export function demoHttp(m: DemoModel, now: number, req: DemoHttpRequest): DemoH
     return json(view);
   }
 
-  // The health index: the same fictional repos, chained through the real shared arithmetic.
+  // The health index: the same fictional repos, scored through the real shared arithmetic.
   const hix = /^\/api\/repos\/([^/]+)\/healthindex$/.exec(path);
   if (hix && method === "GET" && m.numbers?.repoHealth) {
     const id = decodeURIComponent(hix[1]);

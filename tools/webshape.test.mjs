@@ -823,12 +823,14 @@ const PULLLINK_SPLIT_FILES = {
   "link/linkMeters.ts": 175,
   "link/linkOps.ts": 85,
   "link/linkPulse.ts": 165,
+  "link/linkStalls.ts": 180, // the stall record: context, fetch/XHR register, the socket sender
   "link/linkStatus.ts": 80,
   "link/linkStore.ts": 120,
   "link/linkSync.ts": 90,
   "link/linkTraffic.ts": 125,
   "link/linkTypes.ts": 200,
   "link/linkVerdict.ts": 105,
+  "link/stallRecorder.ts": 150, // the stall record's pure half
   "pull/pullBgFetch.ts": 240,
   "pull/pullConsts.ts": 100,
   "pull/pullEngine.ts": 170,
@@ -980,7 +982,7 @@ const WEBCLIENT_SPLIT_FILES = {
   "webapi/webapiBody.ts": 50, // a body read with a stall fuse + progress, and JSON under it
   "webapi/webapiClipboard.ts": 25,
   "webapi/webapiFetch.ts": 105,
-  "webapi/webapiFiles.ts": 152, // +fileBlob, the gallery combine's bytes
+  "webapi/webapiFiles.ts": 153, // +fileBlob, the gallery combine's bytes; +abortXhr, the stall record
   "webapi/webapiGit.ts": 75, // +pull, +log/show/fetch, +blob progress
   "webapi/webapiHost.ts": 150, // +on-device whole-picture OCR
   "webapi/webapiNet.ts": 155,

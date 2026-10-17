@@ -16,6 +16,7 @@ import { galleryAndFiles } from "./gallery-and-files.ts";
 import { limitAndBudget } from "./limit-and-budget.ts";
 import { numbers } from "./numbers.ts";
 import { queueAndSchedule } from "./queue-and-schedule.ts";
+import { repoHealth } from "./repo-health.ts";
 
 export const DEMO_SCENARIOS: Readonly<Record<string, DemoScenario>> = {
   "first-look": firstLook(Date.now()),
@@ -23,4 +24,5 @@ export const DEMO_SCENARIOS: Readonly<Record<string, DemoScenario>> = {
   "gallery-and-files": galleryAndFiles(Date.now()),
   numbers: numbers(Date.now()),
   "limit-and-budget": limitAndBudget(Date.now()),
+  "repo-health": repoHealth(Date.now()),
 };

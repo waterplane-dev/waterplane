@@ -93,6 +93,12 @@ export class DeviceLedger {
     return hit ? publicRow(hit) : null;
   }
 
+  /** The public row for an id, or null. */
+  get(id: string): DeviceRow | null {
+    const r = this.rows.find((x) => x.id === id);
+    return r ? publicRow(r) : null;
+  }
+
   /** Note that a device was just seen; writes at most once per throttle window. */
   touch(id: string, kind: PeerKind, now = Date.now()): boolean {
     const r = this.rows.find((x) => x.id === id);

@@ -39,6 +39,7 @@
     "release:install-sh": "npm run build:shared && node scripts/release/render-install.mjs",
     "stop": "node scripts/oswrap.mjs stop -- \"pkill -f packages/host/dist/main.js || true\"",
     "doctor": "node scripts/oswrap.mjs doctor -- npm run doctor:posix --",
+    "netstalls": "node scripts/netstalls.mjs",
     "health:fixtures": "npm run build:shared --silent && node tools/screenfixtures.mjs",
     "doctor:posix": "npm run build:shared --silent && npm run build -w @waterplane/host --silent && node packages/host/dist/main.js --doctor",
     "lint": "eslint .",

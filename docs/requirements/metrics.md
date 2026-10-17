@@ -79,9 +79,9 @@ The VS Code extension shows repo health metrics over time.
 
 
 ### R-metrics-017 · shipped
-Each repo has a weekly health index: five metrics, each read as lower-is-better, chained by geometric mean week over week from a baseline of 100 at the first full week; the CLAUDE.md reading is floored at half the context-weight threshold; an unusual move against the repo's own noise warns (drop) or praises (rise); every repo is notified, and a chip shows in the main view.
-- asked: 2026-10-15 (owner)
-- shipped: healthwatch.ts (host); chip in packages/web
+Each repo has a health score, 0 to 100, read week by week from five readings (size, rework, escape hatches, context weight, untested files), each against a fixed good value and read as lower-is-better; the score is the geometric mean of the five, but never more than 30 above the worst one, and the phone says which reading holds it down. A reading under 50 raises a warn alert and under 25 a severe one, each naming the offender (the longest file by path); the week-over-week trend sits second, and an unusual move against the score's own noise warns (drop) or praises (rise). Every repo is notified of a called move, and once more when a reading newly turns severe (never on a repo's first scored week, nor for one that was severe already); a chip shows in the main view. The good values are provisional.
+- asked: 2026-10-15 (owner); reworked to an absolute score with cap, alerts and trend 2026-10-17 (owner); push on a new severe alert 2026-10-17 (owner)
+- shipped: healthwatch.ts (host); chip in packages/web; healthindex.ts (shared); Health view in packages/vscode
 
 ### R-metrics-018 · shipped
 A repo can declare readings of its own in a committed `.waterplane-shared/health.json` (argv run at HEAD, one number out, absent with a reason otherwise); they are stored in the series beside waterplane's but never enter the health index, and every reading on the phone says whose it is — waterplane's (the same for every repo) or the repo's own — with one line on how to add one where a repo has none.

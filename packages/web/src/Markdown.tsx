@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Copy, FileText } from "lucide-react";
-import { FILE_REF_SRC, bareFileRef, docImageRef, linkedImages, parseFileRef, wholeFileRef, type FileRef } from "./fileRefs";
+import { FILE_REF_SRC, bareFileRef, docImageRef, docLinkTarget, headingSlug, linkedImages, parseFileRef, stripHtmlComments, wholeFileRef, type FileRef } from "./fileRefs";
 import { pickThumbWidth, viewerWidth } from "./media";
 import { useFileMtime } from "./fileMtime";
 import { cacheThumb } from "./thumbCache";
@@ -59,6 +59,10 @@ export interface FileRefCtx {
    *  picture at reading width (`docImageRef`); omitted, only transport paths
    *  turn into pictures, which is right for a transcript. */
   docPath?: string;
+  /** The heading anchors of that document (`headingSlug`), set by `Markdown`
+   *  itself when `docPath` is: a `[x](#slug)` becomes a jump only when its
+   *  heading exists, never a tap that does nothing. */
+  slugs?: ReadonlySet<string>;
 }
 
 /** CSS width of an inline thumbnail. Small enough to sit in a paragraph,
@@ -145,14 +149,36 @@ const INLINE_RE = new RegExp(
  * reference (`.claude/…` paths already take that branch above). Anything else
  * stays as the label plus the path in a code span — visible, copyable, and
  * incapable of navigating anywhere.
+ *
+ * Except in a DOCUMENT (`docPath`), where a relative link has a right place to
+ * go without navigating: `#install` scrolls to that heading, `SECURITY.md`
+ * opens in the viewer (`docLinkTarget`). Both are buttons, not anchors.
  */
-function linkNode(href: string, label: string, q: string, key: string): JSX.Element {
+function linkNode(href: string, label: string, q: string, key: string, files?: FileRefCtx): JSX.Element {
   if (/^(?:https?:|mailto:)/i.test(href)) {
     return <a key={key} href={href} target="_blank" rel="noreferrer">{hl(label, q)}</a>;
+  }
+  const doc = files?.docPath != null ? docLinkTarget(href, files.docPath) : null;
+  if (doc?.kind === "file" && files) {
+    const rel = doc.relPath;
+    return <button key={key} type="button" className="md-link" title={rel} onClick={() => files.open(rel)}>{hl(label, q)}</button>;
+  }
+  if (doc?.kind === "anchor" && files?.slugs?.has(doc.slug)) {
+    return <button key={key} type="button" className="md-link" onClick={(e) => jumpToHeading(e.currentTarget, doc.slug)}>{hl(label, q)}</button>;
   }
   // [SECURITY.md](SECURITY.md): the label already IS the path — print it once.
   if (label.trim() === href.trim()) return <code key={key}>{hl(href, q)}</code>;
   return <span key={key}>{hl(label, q)}{" "}<code>{href}</code></span>;
+}
+
+/** Scroll to the heading `slug` nearest the tapped link — the nearest ancestor
+ *  holding one, so a second document on screen is never the one that moves. */
+function jumpToHeading(from: HTMLElement, slug: string) {
+  const sel = `[data-slug="${CSS.escape(slug)}"]`;
+  for (let el = from.parentElement; el; el = el.parentElement) {
+    const hit = el.querySelector(sel);
+    if (hit) { hit.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+  }
 }
 
 function inline(text: string, q: string, key: string, files?: FileRefCtx): (string | JSX.Element)[] {
@@ -200,7 +226,7 @@ function inline(text: string, q: string, key: string, files?: FileRefCtx): (stri
       const img = !asFile && bang && files?.docPath != null ? docImageRef(m[5], files.docPath) : null;
       out.push(asFile ? asFile.node
         : img && files ? <FileRefNode key={`${key}f${n++}`} fref={{ ...img, raw: m[4] }} ctx={files} q={q} wide />
-        : linkNode(m[5], m[4], q, `${key}a${n++}`));
+        : linkNode(m[5], m[4], q, `${key}a${n++}`, files));
     }
     else if (m[6] !== undefined) out.push(<a key={`${key}u${n++}`} href={m[6]} target="_blank" rel="noreferrer">{hl(m[6], q)}</a>);
     else {
@@ -300,6 +326,16 @@ function MdSnippet({ src, q, onCopy, files }: { src: string; q: string; onCopy: 
   );
 }
 
+/** Every heading anchor in a document's prose parts (fenced code skipped). */
+function docSlugs(parts: string[]): Set<string> {
+  const out = new Set<string>();
+  parts.forEach((p, i) => {
+    if (i % 2) return;
+    for (const m of p.matchAll(/^#{1,6}\s+(.*?)\s*$/gm)) out.add(headingSlug(m[1]));
+  });
+  return out;
+}
+
 /** What a block tagged with its source lines also carries (`lineTag`). */
 export interface LineTag {
   className?: string;
@@ -325,7 +361,9 @@ export function Markdown({ src, q, onCopy, files, lineTag }: {
   lineTag?: (l0: number, l1: number) => LineTag;
 }) {
   const nodes: JSX.Element[] = [];
-  const parts = src.split(/```/);
+  // HTML comments are hidden, as on GitHub — outside fenced code only.
+  const parts = src.split(/```/).map((p, i) => i % 2 ? p : stripHtmlComments(p));
+  if (files?.docPath != null && !files.slugs) files = { ...files, slugs: docSlugs(parts) };
   /** 0-based line the current part starts on. The fences hold no newline, so
    *  counting the part's own is the whole bookkeeping. */
   let base = 0;
@@ -413,7 +451,7 @@ export function Markdown({ src, q, onCopy, files, lineTag }: {
       const quote = /^>\s?(.*)$/.exec(line);
       if (head) {
         flushPara(`p${k}`); flushList(`l${k}`);
-        nodes.push(<div {...tag(start + li, start + li, `tr-h tr-h${head[1].length}`)} key={`h${k}`}>{inline(head[2], q, `h${k}`, files)}</div>);
+        nodes.push(<div {...tag(start + li, start + li, `tr-h tr-h${head[1].length}`)} data-slug={files?.slugs ? headingSlug(head[2]) : undefined} key={`h${k}`}>{inline(head[2], q, `h${k}`, files)}</div>);
       } else if (bullet || ordered) {
         flushPara(`p${k}`);
         const isOrdered = !!ordered;

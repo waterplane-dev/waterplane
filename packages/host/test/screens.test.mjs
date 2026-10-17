@@ -26,7 +26,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { detectPrompt, navToSubmit, dialogEvidence, samePrompt } from "../dist/prompt.js";
+import { detectPrompt, navToSubmit, dialogEvidence, mergeBox, sameBox, samePrompt } from "../dist/prompt.js";
 import { detectContext } from "../dist/context.js";
 import { detectLimitText } from "../dist/limit.js";
 import { startsNoTurn, isLocalCommand } from "../dist/slash.js";
@@ -57,7 +57,21 @@ test("2.1.301 checkbox box: the footer is still read as a footer once the cursor
 });
 
 test("2.1.301 checkbox box: ticking a row is the SAME box (labels are the fingerprint)", () => {
-  assert.ok(samePrompt(detectPrompt(screen("checkbox-submit")), detectPrompt(screen("checkbox-toggled"))));
+  const fresh = detectPrompt(screen("checkbox-submit")), ticked = detectPrompt(screen("checkbox-toggled"));
+  assert.ok(sameBox(fresh, ticked));
+  assert.ok(samePrompt(fresh, ticked, "ignore"), "same apart from the tick: no new push");
+  assert.equal(samePrompt(fresh, ticked), false, "the tick itself is a change the phone must redraw");
+});
+
+test("2.1.301 checkbox box: each row's tick is published, the free rows carry none", () => {
+  const ticks = (name) => detectPrompt(screen(name)).options.map((o) => o.checked);
+  assert.deepEqual(ticks("checkbox-submit"), [false, false, false, false, undefined]);
+  for (const name of ["checkbox-toggled", "checkbox-on-submit", "checkbox-46col"])
+    assert.deepEqual(ticks(name), [false, true, false, false, undefined], name);
+  // The merge keeps the published labels but takes the FRESHEST tick, both ways.
+  const fresh = detectPrompt(screen("checkbox-submit")), ticked = detectPrompt(screen("checkbox-toggled"));
+  assert.equal(mergeBox(fresh, ticked).options[1].checked, true);
+  assert.equal(mergeBox(ticked, fresh).options[1].checked, false);
 });
 
 test("2.1.301 checkbox box: the walk to Submit is measured in selectable rows", () => {

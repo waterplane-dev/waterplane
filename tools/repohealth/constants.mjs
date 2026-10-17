@@ -135,8 +135,14 @@
  * gain tile detail — `size.nearMax`, `context.skillBodyChars`,
  * `retouch.appends`, `hatches.split` — and, where a repo declares one, a
  * `central` field naming which of these readings it disabled or overrode.
+ *
+ * `2026-10-17a` adds one field: `size.lineMean`, the line-weighted mean file
+ * length (Σ loc² / Σ loc). The health index now reads it — the index became an
+ * absolute score against fixed good values, and its size entry blends
+ * `lineMean` with `max`. Nothing else moves, but rows written before it carry
+ * no `lineMean`, so a series on disk is re-measured, never continued.
  */
-export const PREREG_VERSION = "2026-10-16a";
+export const PREREG_VERSION = "2026-10-17a";
 
 export const PREREG = Object.freeze({
   // ── what counts as source ────────────────────────────────────────────────

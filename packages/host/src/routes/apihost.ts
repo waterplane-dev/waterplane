@@ -15,7 +15,7 @@ import { dictateStatusLive, transcribe } from "../dictate.js";
 import { readImageText } from "../readtext.js";
 import { ocrStatus, readImageLocal } from "../ocrlocal.js";
 import { cloneRepo, newFolder, newRepo, newWorktree, type TemplateId } from "../scaffold.js";
-import { changedCountsWithin } from "../git.js";
+import { changedCountsWithin, gitRunningIn } from "../git.js";
 import { listWriteTargets, setSecret } from "../secrets.js";
 import { setupPrefsStore } from "../setupprefs.js";
 import { askRulesStore } from "../askrules.js";
@@ -208,6 +208,8 @@ export const HOST_ROUTES: readonly ApiEntry[] = [
       if (c.ahead !== undefined) { t.ahead = c.ahead; t.behind = c.behind; }
       if (c.hasOrigin !== undefined) t.hasOrigin = c.hasOrigin;
     }
+    // A push or pull in flight, off the jobs' own maps — no subprocess.
+    for (const t of targets) { const g = gitRunningIn(t.worktreePath); if (g) t.gitRunning = g; }
     json(res, { targets });
     return true;
   }),

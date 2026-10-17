@@ -19,6 +19,8 @@
  *    no engine run).
  *  - **One push per repo per week**: `(week, kind)` last notified is persisted
  *    in `<STATE_DIR>/healthindex.json`, so a restart does not re-fire.
+ *  - **A NEW severe alert pushes once** (see `maybeNotifySevere`): keyed
+ *    `(week, alert:subject)` in the same state file, written before the push.
  *  - Failures degrade to absent + a reason, logged once; no push on error.
  *  - `WATERPLANE_HEALTH_WEEKLY=0` stops the refresh and the push (the chip and
  *    the route still read whatever series exists).
@@ -42,6 +44,9 @@ export const HEALTH_REFRESH_MS = 7 * 24 * 60 * 60_000;
 /** After a refresh that did not succeed, wait this long before trying that repo again. */
 const RETRY_MS = 6 * 60 * 60_000;
 export const SERIES_FILE = "repohealth.jsonl";
+/** Rows exist and size was measured, but none carries `lineMean`: an older engine wrote the series. */
+export const STALE_ENGINE_REASON =
+  `this series was measured by an older engine (size has no line-weighted mean) and needs re-measuring: rm <repo>/${BRAND.stateDirName}/repohealth.jsonl && node tools/repohealth.mjs update --root=<repo>`;
 
 export interface HealthWatchDeps {
   root: string;
@@ -64,7 +69,7 @@ export interface HealthWatchDeps {
   statePath?: string;
 }
 
-interface Stored { lastRefresh?: number; notified?: string }
+interface Stored { lastRefresh?: number; notified?: string; /** `<week>:alert:<subject>` keys already pushed (current week only). */ alerted?: string[] }
 
 /** The series file for a worktree: current state dir name first, then each legacy one. */
 export function seriesPathOf(wt: string): string | null {
@@ -121,6 +126,7 @@ export class HealthWatch {
       this.state.set(wt, {
         lastRefresh: Number.isFinite(v.lastRefresh) ? v.lastRefresh : undefined,
         notified: typeof v.notified === "string" ? v.notified : undefined,
+        alerted: Array.isArray(v.alerted) ? v.alerted.filter((x: unknown) => typeof x === "string") : undefined,
       });
     }
   }
@@ -163,8 +169,17 @@ export class HealthWatch {
     try {
       const text = this.text(wt);
       if (text === null) return { series: null, move: null, words: null, lastRefresh, reason: "this repo has no repo-health series yet" };
-      const series = healthIndex(parseRows(text), this.deps.warnChars(wt));
-      if (!series) return { series: null, move: null, words: null, lastRefresh, reason: "no week has every enabled reading yet, so there is no baseline" };
+      const rows = parseRows(text);
+      const series = healthIndex(rows, this.deps.warnChars(wt));
+      if (!series) {
+        // Size is scored on `lineMean` (engine 2026-10-17a on). Rows where size WAS measured
+        // but none carries it are an older engine's series: name the fix, not the symptom.
+        const measured = rows.filter((r) => r.size?.value && typeof r.size.value === "object");
+        if (measured.length > 0 && !measured.some((r) => typeof (r.size!.value as { lineMean?: unknown }).lineMean === "number")) {
+          return { series: null, move: null, words: null, lastRefresh, reason: STALE_ENGINE_REASON };
+        }
+        return { series: null, move: null, words: null, lastRefresh, reason: "no week has every enabled reading yet, so there is no scored week" };
+      }
       const move = assessHealthMove(series.points);
       return { series, move, words: healthMoveWords(series.points, move, isoWeekOf(new Date(this.now()).toISOString().slice(0, 10))), lastRefresh };
     } catch (e) {
@@ -185,19 +200,67 @@ export class HealthWatch {
     return r;
   }
 
+  /**
+   * One push when the latest scored week has a severe alert subject the previous
+   * scored week did not. Silent on the first scored week (no previous point) and
+   * for a repo severe all along (the previous point is computed from the same
+   * rows, so a re-measured history never reads as news). Sent together with a
+   * move in the same sweep (`maybeNotify`); worst first.
+   */
+  private maybeNotifySevere(wt: string, r: HealthIndexResponse): { title: (name: string) => string; texts: string[] } | null {
+    if (!this.weekly() || !r.series) return null;
+    const pts = r.series.points;
+    const last = pts[pts.length - 1];
+    const prev = pts[pts.length - 2];
+    if (!last || !prev) return null;
+    // A gap week is a central or prereg definition change: its alerts are the new
+    // definition's first reading, not news about the repo.
+    if (last.gap) return null;
+    const was = new Set(prev.alerts.filter((a) => a.level === "severe").map((a) => a.subject));
+    const k = keyOf(wt);
+    const st = this.state.get(k) ?? {};
+    const done = new Set((st.alerted ?? []).filter((x) => x.startsWith(`${last.week}:`)));
+    const fresh = last.alerts
+      .filter((a) => a.level === "severe" && !was.has(a.subject) && !done.has(`${last.week}:alert:${a.subject}`))
+      .sort((a, b) => a.score - b.score);
+    if (!fresh.length) return null;
+    // Remember BEFORE sending: a crash between the two loses a push, never repeats one.
+    for (const a of fresh) done.add(`${last.week}:alert:${a.subject}`);
+    this.state.set(k, { ...st, alerted: [...done] });
+    this.persist();
+    return { title: (name) => `${name}: severe health warning`, texts: fresh.map((a) => a.text) };
+  }
+
+  /**
+   * ONE push per repo per sweep, because both kinds share a tag and the later
+   * would silently replace the earlier. A new severe alert leads (title, its
+   * texts), and a called move's body follows it; either alone is sent as itself.
+   */
   private maybeNotify(wt: string, repoId: string, repoName: string, r: HealthIndexResponse): void {
-    if (!this.weekly() || !r.series || !r.move?.kind || !r.words) return;
+    const move = this.maybeNotifyMove(wt, repoName, r);
+    const severe = this.maybeNotifySevere(wt, r);
+    const tag = `health:${repoId}`;
+    if (severe) {
+      const body = [...severe.texts, ...(move ? [move.body] : [])].join("\n");
+      this.deps.notify("health", { title: severe.title(repoName), body, tag });
+    } else if (move) {
+      this.deps.notify("health", { title: move.title, body: move.body, tag });
+    }
+  }
+
+  private maybeNotifyMove(wt: string, repoName: string, r: HealthIndexResponse): { title: string; body: string } | null {
+    if (!this.weekly() || !r.series || !r.move?.kind || !r.words) return null;
     const week = r.series.points[r.series.points.length - 1]?.week;
-    if (!week) return;
+    if (!week) return null;
     const k = keyOf(wt);
     const mark = `${week}:${r.move.kind}`;
     const st = this.state.get(k) ?? {};
-    if (st.notified === mark) return;
+    if (st.notified === mark) return null;
     // Remember BEFORE sending: a crash between the two loses a push, never repeats one.
     this.state.set(k, { ...st, notified: mark });
     this.persist();
     const title = r.words.title.includes(repoName) ? r.words.title : `${repoName}: ${r.words.title}`;
-    this.deps.notify("health", { title, body: r.words.body, tag: `health:${repoId}` });
+    return { title, body: r.words.body };
   }
 
   /** Whether a repo with a series is due its weekly engine run. */

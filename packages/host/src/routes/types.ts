@@ -143,6 +143,8 @@ export interface HostCtx {
   readonly attached: WeakMap<WebSocket, Set<string>>;
   readonly clients: Set<WebSocket>;
   readonly wsKind: WeakMap<WebSocket, PeerKind>;
+  /** The ledger device id a token-authenticated socket is (absent: no token). */
+  readonly wsDevice: WeakMap<WebSocket, string>;
   /** A socket's role (`notify` = the APK's background link, sent only its
    *  allow-list by `send`). Set at the upgrade, overridden by `hello.role`. */
   readonly wsRole: WeakMap<WebSocket, ClientRole>;

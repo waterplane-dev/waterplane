@@ -1,6 +1,6 @@
 /**
- * The health index for the Health view — the same chained weekly number the phone draws above the
- * readings (`shared/healthindex.ts`), derived here from the series file the view already read.
+ * The health index for the Health view — the same absolute 0-100 score (capped by its worst entry, trend second)
+ * the phone draws above the readings (`shared/healthindex.ts`), derived here from the series file the view already read.
  * Mirrors the host's `healthwatch.ts` `respond()` minus everything that host does on a clock:
  * there is no weekly refresh, no push and no stored notification mark here, so `lastRefresh` is
  * always null. PURE apart from reading the one file.
@@ -28,12 +28,12 @@ export function parseHealthRows(text: string): HealthSeriesRow[] {
   return rows;
 }
 
-/** The index over a series' text. `series: null` + a reason when there is no baseline — never a made-up 100. */
+/** The index over a series' text. `series: null` + a reason when there is no scored week — never a made-up number. */
 export function healthIndexOf(text: string | null, now: number, warnChars: number = DEFAULT_CONTEXT_LIMITS.maxChars): HealthIndexResponse {
   const none = { series: null, move: null, words: null, lastRefresh: null };
   if (text === null) return { ...none, reason: "this folder has no repo-health series yet" };
   const series = healthIndex(parseHealthRows(text), warnChars);
-  if (!series) return { ...none, reason: "no week has every enabled reading yet, so there is no baseline" };
+  if (!series) return { ...none, reason: "no week has every enabled reading yet, so there is no scored week" };
   const move = assessHealthMove(series.points);
   return { series, move, words: healthMoveWords(series.points, move, isoWeekOf(new Date(now).toISOString().slice(0, 10))), lastRefresh: null };
 }

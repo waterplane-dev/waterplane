@@ -4,7 +4,7 @@
  * DEL, and anything quoted from the series (a file path) is scrubbed in both. Each returns "" when
  * nothing in the reading qualifies; `render` turns that into a sentence.
  */
-import { BRAND, fmtCount } from "@waterplane/shared";
+import { BRAND, HEALTH_GOOD, fmtCount } from "@waterplane/shared";
 import type { RepoHealthPlotSeries, RepoHealthPoint } from "@waterplane/shared";
 import type { HealthDoc } from "../protocol.js";
 import { formJoin, scrub } from "../data/promptform.js";
@@ -35,6 +35,7 @@ export function splitLongest(h: HealthDoc | null, form: PromptForm): string {
     `The longest source file in this repo is ${path}, at ${fmtCount(now.v)} lines on ${scrub(now.day)}.`,
     then ? `${back} reading${back === 1 ? "" : "s"} earlier (${scrub(then.day)}) the longest file was ${fmtCount(then.v)} lines.` : null,
     p95?.last != null ? `For comparison, 95% of the repo's source files (tests excluded) are at most ${withUnit(p95.last, p95.unit)}.` : null,
+    `The repo's health score counts a longest file over ${fmtCount(HEALTH_GOOD.max)} lines as a problem: the score halves each time that file doubles past it.`,
     `These figures come from the repo-health series the ${BRAND.name} VS Code extension measures from git history.`,
   ].filter((x): x is string => !!x);
   return formJoin([

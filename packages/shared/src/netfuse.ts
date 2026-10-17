@@ -84,7 +84,10 @@ export async function timedFetch(
     if (outer.aborted) ac.abort();
     else outer.addEventListener("abort", onOuterAbort, { once: true });
   }
-  const timer = setTimeout(() => ac.abort(), ms);
+  // The reason is the `TimeoutError` itself, so a layer UNDER this one (the
+  // phone's stall record, `web/link/linkStalls.ts`) can tell the fuse from a
+  // caller's cancel. What this function throws is unchanged either way.
+  const timer = setTimeout(() => ac.abort(new TimeoutError(url, ms)), ms);
   try {
     return await doFetch(url, { ...init, signal: ac.signal });
   } catch (e) {

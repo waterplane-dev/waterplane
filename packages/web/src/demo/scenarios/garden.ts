@@ -33,7 +33,7 @@ export const tool = (name: string, arg: string, res: string) => `${B}● ${name}
 /** The three repos; `outbox`/`changed` differ per scenario. */
 export function repos(o: { outbox?: Partial<Record<"r1" | "r2" | "r3", number>>; healthIndex?: number } = {}): NonNullable<DemoModel["repos"]> {
   const n = (id: "r1" | "r2" | "r3") => o.outbox?.[id] ?? 0;
-  // `healthIndex: <now>` = the scenarios that serve the repo-health routes also send the chained index
+  // `healthIndex: <now>` = the scenarios that serve the repo-health routes also send the health score
   // (`demo/host/healthindex.ts`), so the launcher chip appears; trail-log has none, to show the absent case.
   const hi = (name: string) => (o.healthIndex ? { healthIndex: demoRepoHealthIndex(name, o.healthIndex) } : {});
   return [

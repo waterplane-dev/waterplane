@@ -42,6 +42,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { hostStateDir } from "./branddirs.js";
 import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
+import { mergeStalls, type ClientStalls } from "@waterplane/shared";
 
 /** How far a verified compose delivery got — mirrors deliver.ts's result. */
 export type DeliveryOutcome = "ok" | "retry" | "unconfirmed" | "unsubmitted";
@@ -77,6 +78,10 @@ export interface ClientReport {
   queuedMaxMs?: number;
   /** Whatever the client calls itself — a label, not an identity. */
   ua?: string;
+  /** HTTP stalls (`shared/netstall.ts`): counts, shares and the last events.
+   *  Arrives over the socket (`net.stalls`), not with this roll-up, and is
+   *  carried across a new roll-up rather than replaced by it. */
+  stalls?: ClientStalls;
 }
 
 export interface NetStatsDoc {
@@ -126,6 +131,10 @@ function emptyDoc(now: number): NetStatsDoc {
 function num(v: unknown, max: number): number | undefined {
   if (typeof v !== "number" || !Number.isFinite(v)) return undefined;
   return Math.max(0, Math.min(max, Math.round(v)));
+}
+
+function cleanId(deviceId: unknown): string {
+  return String(deviceId || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32);
 }
 
 export class NetStats {
@@ -207,7 +216,7 @@ export class NetStats {
   /** Store one phone's roll-up. Newest wins; devices beyond the cap are dropped
    *  oldest-report-first, so an occasional visitor can't evict the daily driver. */
   putClientReport(deviceId: string, raw: unknown): void {
-    const id = String(deviceId || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32);
+    const id = cleanId(deviceId);
     if (!id) return;
     const r = (raw ?? {}) as Record<string, unknown>;
     const now = Date.now();
@@ -230,13 +239,37 @@ export class NetStats {
       queuedMaxMs: num(r.queuedMaxMs, 86_400_000),
       ua: typeof r.ua === "string" ? r.ua.slice(0, 120) : undefined,
     };
+    const stalls = this.doc.clients[id]?.stalls;
+    if (stalls) rep.stalls = stalls;
     this.doc.clients[id] = rep;
+    this.capClients();
+    this.schedule();
+  }
+
+  /**
+   * Fold one phone's stall report in (`net.stalls`). Merged, never replaced:
+   * the phone re-sends its ring and a reload empties it, so replacing would
+   * forget every stall before the reload. A device with no roll-up yet gets a
+   * row holding only this — its `at`/`since` are then the host's own stamp.
+   */
+  putClientStalls(deviceId: string, raw: unknown): void {
+    const id = cleanId(deviceId);
+    if (!id) return;
+    const now = Date.now();
+    const cur: ClientReport = this.doc.clients[id] ?? { at: now, since: now };
+    cur.stalls = mergeStalls(cur.stalls, raw, now);
+    this.doc.clients[id] = cur;
+    this.capClients();
+    this.schedule();
+  }
+
+  /** Devices beyond the cap are dropped oldest-report-first. */
+  private capClients(): void {
     const ids = Object.keys(this.doc.clients);
     if (ids.length > MAX_CLIENTS) {
       ids.sort((a, b) => (this.doc.clients[a].at ?? 0) - (this.doc.clients[b].at ?? 0));
       for (const drop of ids.slice(0, ids.length - MAX_CLIENTS)) delete this.doc.clients[drop];
     }
-    this.schedule();
   }
 
   flush(): void {

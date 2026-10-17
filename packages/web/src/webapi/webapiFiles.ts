@@ -1,5 +1,6 @@
 import type { AppReadinessReport, HostStoreOutcome, HostStoreReport, TransportSurvey, SweepAge, SweepResult, SweepScope, SweepTally } from "@waterplane/shared";
 import { nfetch, jget, jpost } from "./webapiFetch";
+import { abortXhr } from "../link/linkStalls";
 import type { FileEntry, ArtifactKind, SearchHit, UploadError } from "./webapiTypes";
 
 /** Inbox, outbox, uploads, sweep and the host store. One slice of `api` (see api.ts). */
@@ -61,7 +62,7 @@ export const filesApi = {
     xhr.setRequestHeader("content-type", file.type || "application/octet-stream");
     xhr.withCredentials = true; // the LAN gate's token cookie
     if (onProgress) xhr.upload.onprogress = (e) => onProgress(e.loaded, e.lengthComputable ? e.total : file.size);
-    const onAbort = () => xhr.abort();
+    const onAbort = () => abortXhr(xhr, signal?.reason); // keeps a fuse's reason for the stall record
     signal?.addEventListener("abort", onAbort, { once: true });
     const done = () => signal?.removeEventListener("abort", onAbort);
     xhr.onload = () => {

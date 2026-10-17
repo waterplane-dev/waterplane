@@ -99,8 +99,9 @@
 <section class="row" id="repo-health-so-the-vibe-coding-stays-maintainable">
   <div class="text">
 <h2>Repo health, so the vibe coding stays maintainable</h2>
-<p>Vibe coding drifts into a mess quietly: a <code>CLAUDE.md</code> that only ever grows, a file that passes a thousand lines, the same three files edited on every turn. Each of those makes every later request cost more, because every turn pays to read them again. A repo's health tiles track, commit by commit: the p95 file length, how often the same files are touched again, escape hatches (suppressions such as <code>eslint-disable</code> or <code>as any</code>), untested modules and the <code>CLAUDE.md</code> weight, each with its trend, so you see the drift while it is small and keep the per-request cost flat. The numbers are only readings: nothing changes code on its own.</p>
+<p>Vibe coding drifts into a mess quietly, and a steady number does not mean a healthy repo. Each repo gets one health score out of 100, measured against fixed good values: file length, files reworked right after an edit, unexplained escape hatches (<code>eslint-disable</code>, <code>as any</code>), untested modules and the <code>CLAUDE.md</code> weight. The worst reading caps the score, so one giant file cannot hide behind four quiet readings, and each warning names the file behind it. The trend since the first week comes second. A push arrives when a reading newly turns severe. The film shows the shape of a real app vibe-coded for months with none of this: one file grew to 8,397 lines, and the score says 46. These are readings only: nothing changes code on its own.</p>
   </div>
+  <figure class="phone"><img src="assets/repo-health.gif" width="420" height="996" loading="lazy" alt="A repo vibe-coded for eight months scores 46 out of 100: one 8,397-line file caps the score, two severe warnings name it, and the trend slides from 100 in February"></figure>
 </section>
 <!-- /readme:health -->
 
@@ -120,7 +121,7 @@
 <p><em>Android app developers only (optional).</em></p>
 <p>Save a build command per repo and run it from the phone without a Claude session, so it spends no tokens; it is the way out when you are rate limited and still need a build. Produced files are detected and downloadable. With the developer build of the Android app, a phone you opt in installs each new APK of your app by itself.</p>
   </div>
-  <figure class="phone"><img src="assets/apk-install.png" width="768" height="1002" loading="lazy" alt="Phone one circles a spot on a screenshot of the app, Claude Code adds a logo there, the build runs, phone two's notifications say the build succeeded and the update is ready to install, one tap on Install updates it, and it opens with the logo in the circled spot"></figure>
+  <figure class="phone"><img src="assets/apk-install.png" width="768" height="1002" loading="lazy" alt="Your phone circles a spot on a screenshot of the app, Claude Code adds a logo there, the build runs, the notifications on the phone with the app (a second one here, or the same one) say the build succeeded and the update is ready to install, one tap on Install updates it, and it opens with the logo in the circled spot"></figure>
 </section>
 <!-- /readme:apk -->
 
@@ -143,12 +144,10 @@
 <ul>
   <li><strong><a href="https://claude.com/claude-code">Claude Code</a> installed and signed in.</strong> Run <code>claude</code> once in a terminal and complete the login first.</li>
   <li><strong>A way for the phone to reach the desktop.</strong> Recommended: <strong><a href="https://tailscale.com">Tailscale</a></strong> on both, on the same tailnet. It works from anywhere, its device sign-in is the gate, and its HTTPS gives the phone push, install and clipboard. From the same Wi-Fi or over a VPN of your own, a password does the gating instead: <a href="https://github.com/waterplane-dev/waterplane/blob/main/docs/install.md#without-tailscale-same-wi-fi-or-your-own-vpn">without Tailscale</a>. With neither, the daemon binds loopback only and is reachable just from the desktop.</li>
-  <li><strong>tmux</strong> 3.3 or newer. Every session runs inside it so it survives a host restart; the installer offers to install it.</li>
-  <li><strong>Node ≥ 20.12</strong> for a source checkout. The installer brings its own.</li>
 </ul>
 <p>The installer (macOS, Linux, WSL2) brings its own pinned Node, verifies checksums, and adds a <code>waterplane</code> command with <code>start</code>, <code>doctor</code>, <code>service</code>, <code>update</code> and <code>pair</code>:</p>
 <pre><code>curl -fsSL https://github.com/waterplane-dev/waterplane/releases/latest/download/install.sh | sh</code></pre>
-<p>Or from source (the doctor builds what it checks, so it runs before the build):</p>
+<p>Or from source, which also needs <strong>Node ≥ 20.12</strong> and <strong>tmux 3.3+</strong> (every session runs inside it, so it survives a host restart; the installer handles both). The doctor builds what it checks, so it runs before the build:</p>
 <pre><code>git clone https://github.com/waterplane-dev/waterplane.git
 cd waterplane
 npm ci             # installs the lockfile exactly; runs no dependency install scripts

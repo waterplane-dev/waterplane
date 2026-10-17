@@ -2881,6 +2881,7 @@ button.bl-chip { cursor: pointer; }
 .approve-opts.rich { flex-direction: column; }
 .approve-opts.rich .approve-btn { flex: 0 0 auto; width: 100%; max-height: none; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .approve-lbl { display: block; }
+.approve-tick { vertical-align: -3px; margin-right: 6px; flex: none; }
 .approve-desc {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
   font-size: calc(12.5px * var(--ui-font, 1)); font-weight: 400; line-height: 1.4; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere;
@@ -3786,6 +3787,13 @@ button.notif-dl:active { background: var(--raise); border-radius: 8px; }
 .tr-say { font-size: calc(14.5px * var(--ui-font, 1)); line-height: 1.5; overflow-wrap: anywhere; }
 .tr-p { margin: 8px 0; white-space: pre-wrap; }
 .tr-h { font-weight: 650; margin: 12px 0 4px; }
+/* A document's relative link (Markdown.tsx `linkNode`): a heading jump or a
+   file opened in the viewer. A button, never a relative <a>, drawn as the link
+   it reads as, inline in the sentence. */
+.md-link {
+  background: none; border: none; padding: 0; margin: 0; font: inherit; color: var(--accent);
+  text-decoration: underline; text-underline-offset: 2px; cursor: pointer; text-align: inherit;
+}
 .tr-h1, .tr-h2 { font-size: calc(16px * var(--ui-font, 1)); }
 .tr-h3, .tr-h4, .tr-h5, .tr-h6 { font-size: calc(14.5px * var(--ui-font, 1)); color: var(--fg); }
 .tr-list { margin: 6px 0; padding-left: 20px; }
@@ -4004,6 +4012,7 @@ button.notif-dl:active { background: var(--raise); border-radius: 8px; }
    colour, a called rise the calm one (the same --ok the done chip uses). */
 .repo-group-stat.health { color: inherit; }
 .repo-group-stat.health.warn { color: var(--warn); }
+.repo-group-stat.health.severe { color: var(--dead); }
 .repo-group-stat.health.calm { color: var(--ok); }
 /* Health index section of the readings sheet. */
 .hix { padding-top: 4px; }
@@ -4011,8 +4020,9 @@ button.notif-dl:active { background: var(--raise); border-radius: 8px; }
 .hix-delta { color: var(--muted); font-size: calc(13px * var(--ui-font, 1)); }
 .hix-bars { padding-top: 6px; }
 .hix-bar-rows { font-size: calc(12px * var(--ui-font, 1)); }
-.hix-bar-row { display: grid; grid-template-columns: minmax(0, 9.5em) 1fr 3em; gap: 0 8px; align-items: center; min-height: 24px; }
+.hix-bar-row { display: grid; grid-template-columns: minmax(0, 8.5em) 1fr 2em 3em; gap: 0 8px; align-items: center; min-height: 24px; }
 .hix-barname { color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hix-barscore { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 .hix-barval { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
 /* The track is the whole row's height so the zero lines join into one axis. */
 .hix-track { position: relative; align-self: stretch; }
@@ -6729,7 +6739,7 @@ svg.lucide[width="28"] { width: calc(28px * var(--ui-icon, 1)); height: calc(28p
 /* `touch-action: pan-y` and not `none`: a horizontal drag scrubs the curve,
    a vertical one still scrolls the sheet the chart is halfway down. `none`
    here traps the page under six of these. */
-.rh-spark { display: block; overflow: visible; color: var(--fg); touch-action: pan-y; }
+.rh-spark { display: block; margin-top: 10px; overflow: visible; color: var(--fg); touch-action: pan-y; }
 
 /* One column, always. The sparkline is drawn at the MEASURED width of the box
    above, so a media query that made this two columns would halve the space
@@ -6817,7 +6827,13 @@ svg.lucide[width="28"] { width: calc(28px * var(--ui-icon, 1)); height: calc(28p
   border-left: 2px solid var(--line); padding: 1px 0 1px 8px; margin: 2px 0 4px; word-break: break-word;
 }
 /* A link over weeks with no row, and the readout line under the index. */
-.hix-vs { font-size: calc(12px * var(--ui-font, 1)); color: var(--muted); }
+.hix-cap { font-size: calc(13px * var(--ui-font, 1)); padding-top: 4px; }
+.hix-alerts { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; font-size: calc(13px * var(--ui-font, 1)); }
+.hix-alert { display: flex; gap: 6px; align-items: flex-start; }
+.hix-alert svg { flex: none; margin-top: 2px; }
+.hix-alert.severe { color: var(--dead); }
+.hix-alert.warn { color: var(--warn); }
+.hix-vs { padding-top: 4px; font-size: calc(12px * var(--ui-font, 1)); color: var(--muted); }
 .rh-tile .rh-tile-label { font-size: calc(13px * var(--ui-font, 1)); letter-spacing: .01em; }
 .rh-tile-read, .rh-tile-detail, .rh-tile-absent, .rh-cap, .rh-lead {
   font-size: calc(12px * var(--ui-font, 1)); line-height: 1.4; color: var(--muted);

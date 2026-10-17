@@ -145,6 +145,7 @@ const CLIENT_T = [
   "localrt.evict",
   "localrt.watch",
   "meter.get",
+  "net.stalls",
   "notification.clear",
   "notification.get",
   "notify.prefs.set",
@@ -330,7 +331,7 @@ test("wire/messages.ts exports exactly its pinned surface, values and types alik
 test("ClientMessage carries exactly the pinned message types", () => {
   const { tags: got, members } = tags("ClientMessage");
   assert.deepEqual(got, [...CLIENT_T].sort());
-  assert.equal(members, 140, "a member was added or merged");
+  assert.equal(members, 141, "a member was added or merged");
 });
 
 test("HostMessage carries exactly the pinned message types", () => {

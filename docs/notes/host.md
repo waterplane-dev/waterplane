@@ -351,7 +351,7 @@ Plus a fourth package that is deliberately **not** a workspace:
   - **tmux is required, and it is the ONE substrate** (`tmuxreq.ts`, pure but for a PATH scan). History: `<PREFIX>TMUX` was opt-in and set only by the dev-checkout `deploy/install-service.sh`, so a release install lost every live session on each restart and self-update; then it was on unless exactly `0`, keeping the direct-PTY spawn as a test/dev escape hatch that every e2e host pinned. **The direct path is removed** (owner decision: tmux on macOS/Linux/WSL2, native Windows unsupported) — no `USE_TMUX`, no branch in `spawnBackend`/`persistLive`/`hasLiveTmux`/`rediscover`/`detach`/`kill`/`remove`/the pan, and `welcome.tmux` is always `true` (kept on the wire for old clients). The knob is IGNORED: `tmuxKnobSet` only lets `doctor` say so. With no `tmux` on PATH, `sessions/tmux.ts`'s `spawnBackend` THROWS `tmuxRefusal()`'s sentence (no session started, the install command for the package manager that is here) — asked per spawn, uncached, so installing tmux needs no restart. Doctor rows: `tmux-knob` — WARN "ignored" while the old knob is still set; `tmux` — FAIL when missing (with the command), WARN when older than 3.3 (the generated `tmux.conf` sets `allow-passthrough`, added in 3.3; an older server shows the config error in the first pane, in view mode, where typed text goes nowhere), else the version; `tmux-locale` — the UTF-8 trap (`protocol-and-security.md`): clients run `-u` and `ptyEnv()` supplies a UTF-8 `LANG` when NO locale is set (`en_US.UTF-8` on macOS, `C.UTF-8` on Linux, where `en_US` is often not generated), so the one visible failure is a locale that is SET and not UTF-8 (`LC_ALL` > `LC_CTYPE` > `LANG`), which the panes inherit. The login service bakes no tmux knob. **Tests isolate by socket DIRECTORY** (`scripts/lib-tmuxiso.mjs`: a private `TMUX_TMPDIR`, `TMUX` deleted, every server in it killed on exit; `run-e2e.mjs` hands each script its own) — a `-L` name is only a name, a directory is a boundary the owner's live server cannot be reached across. `packages/host/test/tmuxreq.test.mjs`.
 - `speedtest.ts` — bidirectional throughput probe + connection diagnostics behind three non-repo-scoped endpoints (`/api/speedtest/{download,upload,debug}`). Download streams a preallocated **random** block (incompressible so nothing inflates the rate) with backpressure + a 256 MB ceiling; upload drains + times the body server-side. **`debug` is the useful bit:** classifies the client IP the socket sees (tailscale 100.x / lan / loopback / public), and for a Tailscale client runs `tailscale ping --until-direct=false` against that exact peer to report **direct vs DERP relay** — the usual cause of a slow same-WiFi transfer — plus the host's LAN IPs so the phone can be told to hit `http://<lanIp>:8770` and skip the tunnel. Surfaced in `SpeedTestSheet.tsx` (Settings → Tools → speed test). All shell probes are best-effort/independently guarded.
 - `uistats.ts` — **UI feature-usage counters**, the "what do I actually use?" ledger. The phone `track()`s every feature entry point locally and flushes deltas to `POST /api/ui-usage`; this merges them into `<STATE_DIR>/ui-usage.json` (`{ updatedAt, since, features: { "toolbar:diff": { count, first, last } } }`). Ids are opaque namespaced strings the client invents (`toolbar:<id>`, `overlay:<name>`, `action:<name>`) — adding a `track()` call needs no host change — but they're sanity-capped (length/charset/per-flush increment, 1000 distinct ids) so a buggy client can't grow the file. `GET` returns the doc (the Settings viewer), `DELETE` resets the window. Writes are debounced 3 s. Purely local: nothing is sent anywhere, and the point of the file is that a coding agent can read it and prune what never fires. Verified by `e2e-uiusage.mjs`.
-- `netstats.ts` — **connectivity + delivery telemetry**, the "where did my prompt go?" record. Everything else reports the link as it is RIGHT NOW (`speedtest.ts` when asked, `NetActivity` while a request is in flight, the reconnect banner while it is down) and none of it survives the moment — but the failures that matter here are only noticed afterwards. Persisted to `<STATE_DIR>/netstats.json` (tmp+rename, debounced, flushed on SIGTERM), holding three populations kept deliberately apart. **Host facts**: sockets opened/closed with the CLOSE CODE (1006 = the tunnel dying under the socket, 1001 = the phone backgrounding it — identical from the app, opposite meanings), the peer's trust tier, and each closed socket's lifetime (a handful of sub-second opens means the handshake is failing, which looks nothing like a slow link). **Delivery outcomes** per `deliver.ts` verdict — it already knew "the turn started" from "the Return was swallowed"; nothing was keeping score, so a phone losing a prompt a day had no way to show it was happening, let alone which of the three it was. **Ack REPLAYS**, the single most useful number: a retry that found the work already done means the receipt never made it back, which neither end can see alone (the host thinks it answered, the client thinks it was ignored). Plus the newest **client roll-up per device** (`web/link.ts`), never merged — two phones on one host have genuinely different links and averaging them hides the bad one. Bounded and sanitised on the way in (a buggy client can't grow the file or poison the readout); `GET`/`POST`/`DELETE /api/netstats`. Nothing leaves the machine. Verified by `e2e-netstats.mjs`.
+- `netstats.ts` — **connectivity + delivery telemetry**, the "where did my prompt go?" record. Everything else reports the link as it is RIGHT NOW (`speedtest.ts` when asked, `NetActivity` while a request is in flight, the reconnect banner while it is down) and none of it survives the moment — but the failures that matter here are only noticed afterwards. Persisted to `<STATE_DIR>/netstats.json` (tmp+rename, debounced, flushed on SIGTERM), holding three populations kept deliberately apart. **Host facts**: sockets opened/closed with the CLOSE CODE (1006 = the tunnel dying under the socket, 1001 = the phone backgrounding it — identical from the app, opposite meanings), the peer's trust tier, and each closed socket's lifetime (a handful of sub-second opens means the handshake is failing, which looks nothing like a slow link). **Delivery outcomes** per `deliver.ts` verdict — it already knew "the turn started" from "the Return was swallowed"; nothing was keeping score, so a phone losing a prompt a day had no way to show it was happening, let alone which of the three it was. **Ack REPLAYS**, the single most useful number: a retry that found the work already done means the receipt never made it back, which neither end can see alone (the host thinks it answered, the client thinks it was ignored). Plus the newest **client roll-up per device** (`web/link.ts`), never merged — two phones on one host have genuinely different links and averaging them hides the bad one. Bounded and sanitised on the way in (a buggy client can't grow the file or poison the readout); `GET`/`POST`/`DELETE /api/netstats`. Nothing leaves the machine. Verified by `e2e-netstats.mjs`. **HTTP stalls** (`shared/netstall.ts`, `web/link/stallRecorder.ts` + `linkStalls.ts`) land in `clients[id].stalls`: the phone records every request that hit its fuse or stayed in flight past `NET_STALL_MS` (12 s, the `NetActivity` chip's moment) with what was true AT the stall — how many HTTP requests were in flight and which (six or more = Chromium's HTTP/1.1 per-host pool full), the WebSocket's last pong, visibility and how long since it changed, `navigator.onLine`, upload bytes sent. That tells a half-open keep-alive socket after Doze (WS healthy, few in flight, right after wake) from a full pool (many in flight). It travels over the SOCKET (`net.stalls`), never a POST, because the pool is what is stuck; the host merges on each event's key (counts outlive the 50-event ring, the `open` list replaces) and carries it across a new roll-up. Diagnostics only: nothing changes how a request is made. Read it with `npm run netstalls`.
 
 
 ## `routes/` — the client-message table
@@ -6517,9 +6517,9 @@ index entry (`size`, `retouch`, `hatches`, `context`, `untested`; `tools/repohea
   **HEAD only**, like own readings: no history before its first measurement, and a recut restarts it
   at one point. Older rows keep the engine's value; the central value is measured beside the override
   on HEAD too, so dropping the override has history to fall back to.
-- **The fingerprint makes a tweak a carried week, never a move.** Each row holding the field carries
+- **The fingerprint makes a tweak a gap week (score measured, move not compared), never a move.** Each row holding the field carries
   `central.fp` over what was APPLIED (disabled keys + overrides that RAN, with argv); `healthIndex`
-  carries a link whose two weeks differ in it exactly as for a prereg change (`gapReason: "central"`).
+  marks a gap where a week's fingerprint differs from the one before, exactly as for a prereg change (`gapReason: "central"`).
   Fixture: `central` is stripped like `own`.
 - **Wire**: each central plot series may carry `variant` — `{kind:"disabled", why}` or
   `{kind:"override", why, means, unit, points, last, since, absent?}`, `points` non-null only where
@@ -6553,7 +6553,7 @@ One prereg bump carrying two definition changes, so the chain broke once:
   engine's curve with its `means`, `since` and `why` — and `plot.central` is one line under the central
   heading plus one per ignored entry. The index caption counts the basket (*Built from 4 of the 5
   readings; Untested modules is disabled here*) off the latest point and then drops "compares across
-  repos". A link with `spanDays > 7` is dashed and its readout says how many weeks it spans; a carried
+  repos". A link with `spanDays > 7` is dashed and its readout says how many weeks it spans; a gap
   week says which of the three `gapReason`s. "This week" is claimed only when the latest MEASURED week
   is the phone's current ISO week (`healthWeekWhen`/`weekWhenWords`) — a repo with no commits this
   week otherwise read "+3 this week" about a month-old week. The two asks (`healthAskPrompts.ts`)
@@ -6607,11 +6607,29 @@ with `series.mjs`'s and produced zero rank events for the life of the series, wh
 now one `reading()` and a fallback that catches a second opinion. The tool states, the phone draws,
 and the phone's `detail` sentence is the tool's sentence.
 
-### The health index, kept current by `healthwatch.ts`
+### The health score, kept current by `healthwatch.ts`
 
-`shared/healthindex.ts` turns the series into ONE chained weekly number (lower is better per metric,
-geometric mean of the links, baseline 100 at the first week with every enabled reading, `CLAUDE.md` floored
-at half the context-weight threshold). The one layer that takes a side, owner-approved 2026-10-15.
+`shared/healthindex.ts` turns the series into ONE number per week, 0 to 100, against fixed good values
+(`HEALTH_GOOD`: line-weighted mean file 500, longest file 1,000, rework 0.15, unexplained hatches 2 per
+kLOC, untested share 0.2, context half the repo's warn line): an entry scores `100 · min(1, good / value)`.
+The headline is `min(geometric mean of the five, worst entry + 30)`; the trend (week and month moves) is
+read off that score and said second. The one layer that takes a side, owner-approved 2026-10-15, and
+reworked 2026-10-17, each reason measured:
+
+- **Why absolute.** The first version chained ratios from 100 at a repo's first full week, so it measured
+  a repo against itself. picture-app was already bad at its own baseline (a 4,764-line file in
+  2026-05-25) and by October that file was 8,397 lines, yet the headline read 95. A number that calls the
+  worst file on the desktop "about as healthy as ever" is not a health number.
+- **Why the cap.** Averaging five buried the giant file: before the cap picture-app scored 66 and this
+  repo 63, so the repo with the 8,397-line file looked the healthier. No score now sits more than 30
+  above its worst entry, and `cappedBy` names that entry so the reader is told what holds it down.
+- **Size reads the giant files.** Size is the geometric blend of the line-weighted mean file length
+  (`lineMean`) and the longest file (`max`), not the p95, which is blind to a single huge file.
+- **Alerts.** An entry (or size sub-reading) under 50 is a `warn`, under 25 `severe`, one sentence each
+  worded in shared so phone and VS Code say it alike; the longest-file alert names the path.
+- **The good values are provisional**: chosen by the owner from the repos on this desktop, `retouch` least
+  certain. A repo overrides the value it is compared with via `central`, never the constants.
+
 `healthwatch.ts` is the plumbing, and only that:
 
 - **An hourly sweep** (unref'd; `WATERPLANE_HEALTH_SWEEP_MS`) re-runs `refreshRepoHealth` for repos that
@@ -6626,6 +6644,16 @@ at half the context-weight threshold). The one layer that takes a side, owner-ap
 - **One push per repo per week:** kind `health`, tag `health:<repoId>`, title prefixed with the repo name.
   `(week, kind)` last notified is written BEFORE the push to `<STATE_DIR>/healthindex.json` (with
   `lastRefresh`), so a restart loses a push rather than repeating one. Errors log once and push nothing.
+- **A new severe alert pushes once more** (owner 2026-10-17): when the latest scored week has a severe
+  alert subject the previous scored week did not, one push `<repo>: severe health warning`, body the alert
+  sentences worst first, same tag `health:<repoId>`. A move and a severe alert in the SAME sweep are ONE push (the
+  later would silently replace the earlier): severe title, severe texts, then the move's body. Never on a gap week
+  (`last.gap`: a definition change is not news about the repo). A series whose rows have no `size.lineMean` (older
+  engine) answers with a reason naming the re-measure command. Key
+  `(week, "alert:"+subject)` is written BEFORE the push. Silent on the first scored week and for a repo
+  severe all along: the previous point is computed from the same rows, so a re-measured history (prereg
+  bump) or the first refresh after this shipped reads no repo as news. Same `WATERPLANE_HEALTH_WEEKLY`
+  switch and notify gate as the move push; it only informs.
 
 ## A clock may name a session, because the CONVERSATION outlives it
 

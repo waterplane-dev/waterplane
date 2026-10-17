@@ -233,7 +233,7 @@
  *                                 computed under — the engine version and the
  *                                 active packs, so a mixed series says which
  *                                 of the two moved.
- * @property {Measured<{p95: number, max: number, maxPath: string, appTsx: number|null}>} size
+ * @property {Measured<{p95: number, max: number, maxPath: string, appTsx: number|null, nearMax?: number, lineMean?: number}>} size
  * @property {Measured<{rate: number, touches: number, retouches: number, offenders: {path: string, n: number}[]}>} retouch
  *   `rate` never travels without `touches`. A rate of 1.000 over 6 touches and
  *   one of 0.69 over 216 are different claims, and the bare proportion cannot

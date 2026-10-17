@@ -34,7 +34,7 @@
 import { mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { BRAND, cleanPluginValue, PLUGIN_MANIFEST, promptFingerprint, pluginValues, PLUGIN_ARGS_MAX } from "@waterplane/shared";
-import type { PluginCallResult, PluginUsageProbe } from "@waterplane/shared";
+import type { PluginCaller, PluginCallResult, PluginUsageProbe } from "@waterplane/shared";
 import { createCallLedger } from "./pluginrpc.js";
 import type {
   AnswerSuggestion, ComplianceCheck, DecisionLogEntry, DetectedPrompt, HandToAgentResult, HostPluginModule,
@@ -59,6 +59,8 @@ import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
 
 const ACTIVATE_MS = 10_000;
 const ACTION_MS = 90_000;
+/** An in-process call (core asking a plugin): no socket, no device — and no route, so "unknown", never read as a local browser. */
+const IN_PROCESS_CALLER: PluginCaller = { kind: "unknown", deviceId: null, deviceName: null };
 /** A `call()` answer is data for the phone, not a transfer channel. */
 const CALL_RESULT_MAX = 512 * 1024;
 
@@ -91,7 +93,7 @@ export interface PluginEntry {
   /** Contributed fixes by fix id — the ids its rows name in `fix`. */
   setupFixes: Map<string, (s: SetupSubject) => SetupFixOutcome>;
   /** `handle(method, fn)` — what `call()` routes to. */
-  methods: Map<string, (args: unknown) => unknown>;
+  methods: Map<string, (args: unknown, caller: PluginCaller) => unknown>;
   /** Backend ids this activation registered (`api.backend`) — unregistered when it is switched off. */
   backends: Set<string>;
   /** Unregisters for the readers this activation contributed (`api.screenReader` / `api.storeReader` / `api.thermalReader`). */
@@ -611,14 +613,14 @@ export class PluginRegistry {
    * the generic `plugin.call` wire message routes to; nothing else reaches a
    * handler. Every failure is a sentence, never a throw.
    */
-  async call(pluginId: string, method: string, args: unknown): Promise<PluginCallResult> {
+  async call(pluginId: string, method: string, args: unknown, caller: PluginCaller = IN_PROCESS_CALLER): Promise<PluginCallResult> {
     const e = this.byId(pluginId);
     if (!e) return { ok: false, error: `no plugin "${pluginId}" is installed` };
     if (e.state !== "active") return { ok: false, error: `${e.manifest.name} is ${e.state === "off" ? "turned off" : `not running: ${e.error ?? "error"}`}` };
     const fn = e.methods.get(method);
     if (!fn) return { ok: false, error: `${e.manifest.name} has no method "${method}"` };
     try {
-      const result = await within(fn(args), ACTION_MS, `${e.manifest.name} "${method}"`);
+      const result = await within(fn(args, caller), ACTION_MS, `${e.manifest.name} "${method}"`);
       let size = 0;
       try { size = Buffer.byteLength(JSON.stringify(result ?? null), "utf8"); } catch { return { ok: false, error: `${e.manifest.name} "${method}" answered something that is not JSON` }; }
       if (size > CALL_RESULT_MAX) return { ok: false, error: `${e.manifest.name} "${method}" answered ${Math.round(size / 1024)} KB — over the ${CALL_RESULT_MAX / 1024} KB a call may carry` };
@@ -630,11 +632,11 @@ export class PluginRegistry {
   }
 
   /** `call` through the ledger: a repeated ackId runs the handler once. Args must be JSON and small. */
-  callOnce(ackId: string, pluginId: string, method: string, args: unknown): Promise<PluginCallResult> {
+  callOnce(ackId: string, pluginId: string, method: string, args: unknown, caller: PluginCaller = IN_PROCESS_CALLER): Promise<PluginCallResult> {
     let bytes = 0;
     try { bytes = Buffer.byteLength(JSON.stringify(args ?? null), "utf8"); } catch { return Promise.resolve({ ok: false, error: "the arguments are not JSON" }); }
     if (bytes > PLUGIN_ARGS_MAX) return Promise.resolve({ ok: false, error: `the arguments are ${Math.round(bytes / 1024)} KB — over the ${PLUGIN_ARGS_MAX / 1024} KB a call may carry` });
-    return this.ledger.run(ackId, `${pluginId}\0${method}`, () => this.call(pluginId, method, args));
+    return this.ledger.run(ackId, `${pluginId}\0${method}`, () => this.call(pluginId, method, args, caller));
   }
 
   // ── events from the core ────────────────────────────────────────────────

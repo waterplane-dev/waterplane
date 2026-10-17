@@ -38,7 +38,7 @@ store listing's app-access note tells them how.
 Every user journey in the docs has a gif or screenshot produced from the demo by a script, so the
 docs' media is regenerated rather than hand-recorded.
 - asked: 2026-10-01 (demo-mode plan, docs/analysis/demo-mode-plan.md)
-- shipped: `docs/guide.md` embeds one `--media` gif per journey (`first-look`, `queue-and-schedule`, `gallery-and-files`, `numbers`, `demo-tour`); `first-app` needs a real host and keeps its own gif
+- shipped: `docs/guide.md` embeds one `--media` gif per journey (`first-look`, `queue-and-schedule`, `gallery-and-files`, `numbers`, `repo-health`, `demo-tour`); `first-app` needs a real host and keeps its own gif
 
 ### R-demo-008 · shipped
 One contract test suite runs against both the real host and the demo's fake host, and fails when
@@ -239,3 +239,16 @@ film, as the app shows it. Hiding it over the terminal (cb918424, 2026-10-11) to
 picture that a viewer should see.
 - asked: 2026-10-16 (user, inbox `.claude/inbox/1000079074-marked-mvawpwf39f5e50.png`: "in the gif I miss the marked controls")
 - shipped: `scripts/ui/filmaids.mjs` and `lib.mjs` no longer hide `.term-zoom`
+
+### R-demo-035 · shipped
+The README's and waterplane.dev's "Repo health" section has its own gif and video, and it tells
+the health index's current story: a steady number does not mean a healthy repo. The example is the
+shape of a real app vibe-coded for months without the readings (fictional name and paths,
+R-demo-018): `photo-shelf`, one file grown from 1,020 lines in February to 8,397. The film shows
+one score out of 100 against fixed good values (46), capped by its worst entry (file length, 16),
+two severe warnings naming the offender, the trend second (100 in February, sliding since), every
+entry's own score, and the longest file under it still climbing; the ask button is shown drafting a
+prompt that changes nothing. A push on a reading newly turning severe is said in the prose, not
+filmed. Readings only: nothing changes code on its own.
+- asked: 2026-10-17 (owner: "repo health section does not have a gif and video yet … it needs to tell the right story"; the photo-app shape the same day)
+- shipped: `demo/scenarios/repo-health.ts`, `demo/host/healthindex.ts` + `repohealth.ts` (photo-shelf profiles), `scripts/ui/journey-repo-health.mjs` (`teaser`), README `site:health`, `docs/guide.md` "Repo health"

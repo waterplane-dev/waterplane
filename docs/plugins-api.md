@@ -8,7 +8,7 @@ Start a new plugin from `examples/plugin-template/`; installing one and the list
 it shows up at https://github.com/topics/waterplane-plugin. A plugin is not a fork, so that topic is
 the only place it is counted.
 
-**API version: `1.7.0`** (`PLUGIN_API_VERSION`). A manifest's `apiVersion` loads when it has the
+**API version: `1.8.0`** (`PLUGIN_API_VERSION`). A manifest's `apiVersion` loads when it has the
 same major and a minor no newer than this one; the rules for what bumps which number are under
 `PLUGIN_API_VERSION` below. Why the API looks the way it does: `docs/notes/plugins.md`.
 
@@ -45,6 +45,7 @@ shape for both, so moving an extension out of the repo is a folder move.
 ## Contents
 
 - [`PLUGIN_API_VERSION`](#plugin_api_version) — const
+- [`PluginCaller`](#plugincaller) — interface
 - [`PluginApiVersion`](#pluginapiversion) — interface
 - [`parsePluginApiVersion`](#parsepluginapiversion) — function
 - [`pluginApiProblem`](#pluginapiproblem) — function
@@ -138,8 +139,25 @@ A bare number (`"apiVersion": 1`, every manifest written before semver) means `1
   can observe through types.
 
 ```ts
-export const PLUGIN_API_VERSION = "1.7.0";
+export const PLUGIN_API_VERSION = "1.8.0";
 ```
+
+## PluginCaller
+
+*interface*
+
+Who a `handle` method was called by (since 1.8): the socket's trust tier, and the paired
+ device's id/name (null: no token, or an in-process call). Never a proof beyond pairing.
+
+```ts
+export interface PluginCaller { … }
+```
+
+| member | signature | notes |
+|---|---|---|
+| `kind` | `kind: PeerKind` |  |
+| `deviceId` | `deviceId: string \| null` |  |
+| `deviceName` | `deviceName: string \| null` |  |
 
 ## PluginApiVersion
 
@@ -614,7 +632,7 @@ export interface HostPluginApi { … }
 | `repo` | `repo(repoId: string): Promise<PluginRepoScope \| null>` | One repo by its id (`GET /api/repos`) or absolute worktree path (realpath); null when unknown or outside the root. |
 | `setupCheck` | `setupCheck(fn: (repo: SetupSubject) => ComplianceCheck \| null): () => void` | Contribute a row to every repo's setup checklist. Called on each check of each repo, so keep it cheap; null = no row for this repo. A throw drops the row and becomes the plugin's status line. Returns an unregister. |
 | `setupFix` | `setupFix(id: string, fn: (repo: SetupSubject) => SetupFixOutcome): () => void` | Handle the fix a contributed row names in `fix`. Ids the core owns (`gitignore`, `claude-md`, …) or another plugin already took are refused: the call throws, saying which. Returns an unregister. |
-| `handle` | `handle(method: string, fn: (args: unknown) => unknown \| Promise<unknown>): () => void` | Answer `method` when the phone (or core) calls this plugin — the registry's `call(pluginId, method, args)`. One handler per method; a second replaces the first. A throw is the caller's `{ ok:false, error }` and the plugin's status line. Returns an unregister. |
+| `handle` | `handle(method: string, fn: (args: unknown, caller: PluginCaller) => unknown \| Promise<unknown>): () => void` | Answer `method` when the phone (or core) calls this plugin — the registry's `call(pluginId, method, args)`. One handler per method; a second replaces the first. The second argument (since 1.8) says who asked: the socket's trust tier and, when it presented a paired device's token, that device's id and name. A handler that ignores it is unchanged. A throw is the caller's `{ ok:false, error }` and the plugin's status line. Returns an unregister. |
 | `push` | `push(event: string, data?: unknown): string \| null` | Broadcast `event` to every phone as `plugin.push` (the web half's `pushes`). Returns null when sent, or a refusal in words (bad event name, not JSON, over PLUGIN_PUSH_MAX, this plugin not running). |
 | `handToAgent` | `handToAgent(repoId: string, prompt: string, opts?: { label?: string; key?: string; fire?: boolean; }): Promise<HandToAgentResult>` | Put `prompt` in that repo's backlog for its agent — the SAME path the phone's and an agent's backlog adds take (`addClientBacklogItem`), so it is contained, persisted, at-most-once by `key`, and fired by the intent ladder. It waits for a person's tap unless `fire` is set, and even then it runs only when the ladder lets it. Never types into a session directly. |
 | `backend` | `backend(def: PluginBackendDef): () => void` | Register a backend (a CLI the launcher may spawn). THROWS a sentence — and the plugin is listed broken when that escapes `activate()` — when the id is not in the manifest's `backends`, is already taken, or `caps` names a reader this host does not have. Unregistered when the plugin is switched off; the returned function unregisters it earlier. |
@@ -1132,7 +1150,7 @@ Args arrive from the wire UNCHECKED — the types are a convenience, each handle
 
 ```ts
 export function handleAll<M extends PluginMethods>(api: Pick<HostPluginApi, "handle">, fns: {
-    [K in keyof M & string]: (args: M[K]["args"]) => M[K]["result"] | Promise<M[K]["result"]>;
+    [K in keyof M & string]: (args: M[K]["args"], caller: PluginCaller) => M[K]["result"] | Promise<M[K]["result"]>;
 }): () => void;
 ```
 

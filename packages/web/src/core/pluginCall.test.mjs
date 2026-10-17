@@ -100,3 +100,13 @@ test("a read is re-asked only of the host it asked; after a host switch it settl
   assert.deepEqual(await moved, { ok: false, error: "the desktop changed before it answered — ask again" });
   assert.equal(r.calls.pending(), 0);
 });
+
+test("a sent WRITE keeps no args in its pending entry; a read keeps its frame for the re-send", () => {
+  const r = rig();
+  void r.calls.call("req", "put", { secret: "hunter2" }, false);
+  assert.equal(r.calls.pending(), 1);
+  assert.equal(r.calls.framesHeld(), 0);
+  void r.calls.call("req", "list", { a: 1 }, true);
+  assert.equal(r.calls.pending(), 2);
+  assert.equal(r.calls.framesHeld(), 1);
+});

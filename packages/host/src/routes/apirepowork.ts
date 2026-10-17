@@ -228,7 +228,7 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
   // answer is what was actually STORED — a scope the client asked for and
   // this dropped (renamed away, outside the tree, past the cap) is a row it
   // would otherwise keep drawing against a series nobody is measuring.
-  // The chained health index (`healthwatch.ts`): computed from the series file on
+  // The health score (`healthwatch.ts`): computed from the series file on
   // demand, no engine run — a pure read, so GET.
   route<RepoReq>("GET", "healthindex", ({ res, wt }, ctx) => {
     json(res, ctx.health ? ctx.health.respond(wt) : { series: null, move: null, words: null, lastRefresh: null, reason: "health index unavailable" });

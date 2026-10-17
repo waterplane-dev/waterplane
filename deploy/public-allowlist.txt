@@ -113,6 +113,10 @@ deploy/release-pubkey.pem
 # list) stays PRIVATE (owner decision, 2026-10-10): a tool for this machine's projects.
 # Public code names none of it (links/publictree.json).
 !packages/extensions/links/**
+# The permissions extension (which Claude Code permission rules apply in a repo, read-only)
+# stays PRIVATE (owner decision, 2026-10-17): not shipped until it has been used.
+# Public code names none of it (permissions/publictree.json).
+!packages/extensions/permissions/**
 # The media tooling stays PRIVATE (owner decision, 2026-10-06): the Playwright journeys
 # that film the demo, the gif/svg/apk recorders, their tests and the skill that drives
 # them. The pictures they make are public (docs/media above); how they are made is not.

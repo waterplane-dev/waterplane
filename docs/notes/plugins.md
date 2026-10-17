@@ -135,6 +135,8 @@ external plugin needs UI. The contract as requirements: `docs/requirements/plugi
 | `hookSink()` / `onHook()` | the loopback route `POST /api/plugin/<id>/hook` (`routes/apisystem.ts`) → `PluginRegistry.hook`, the response HELD while the handler's promise is pending (see **Backends**) |
 | `route(method, pattern, fn)` (1.2) | `* /api/plugin/<id>/*` in `routes/apisystem.ts` → `PluginRegistry.route`, matched with the core's own `matchSegs` (`routes/apitable.ts`). Namespaced under the plugin's id and served by `handleApi`, so it is behind the SAME origin/Host and token gates as every core route — not loopback-only, not in `OPAQUE_READ_ROUTES`. JSON in (≤ `PLUGIN_ROUTE_BODY_MAX`, else 413) and out. `hook…` is refused (the sink's), and so is a duplicate method + pattern; a path no plugin route matches is the core's plain 404. Unregistered on switch-off |
 
+**Who called (`handle`'s second argument, since 1.8).** `fn(args, caller)` gets `caller: PluginCaller = { kind, deviceId, deviceName }`: `kind` is the socket's trust tier (`loopback`/`tailscale`/`lan`/...), `deviceId`/`deviceName` are the paired device's from the device ledger (`routes/system.ts`'s `callerOf`), null for a socket with no token (a tailscale-trusted browser) and for an in-process call, whose `kind` is `unknown` (never `loopback`: no socket, so never a local browser). It is never a proof beyond pairing: a name the person typed at pairing, on a tier the network decided. A handler that ignores it is unchanged.
+
 ## Contributed readers (`api.screenReader`, `api.storeReader`, since 1.1)
 
 A reader used to be core's alone ("a plugin that wants a new reader contributes it to core"). That

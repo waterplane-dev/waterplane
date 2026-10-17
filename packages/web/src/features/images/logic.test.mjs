@@ -114,6 +114,8 @@ test("a pasted file goes to the session only from its own box or from nowhere ed
   assert.equal(pasteRoute({ ...base, repoId: null }), "ignore");
   // A picture being marked is never replaced by the next paste: append or leave it.
   assert.equal(pasteRoute({ ...base, inCompose: true, editable: true, annotating: true }), "ask");
+  // The compose box's own onPaste took it first: never a second copy.
+  assert.equal(pasteRoute({ ...base, editable: true, inCompose: true, handled: true }), "ignore");
 });
 
 test("a rewritten markdown file moves to the strip's end; a rewritten picture stays one thumb", () => {

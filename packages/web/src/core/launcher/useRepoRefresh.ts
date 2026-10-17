@@ -1,9 +1,10 @@
 import { useEffect, type MutableRefObject } from "react";
-import type { SessionInfo } from "@waterplane/shared";
+import type { RepoTarget, SessionInfo } from "@waterplane/shared";
 import type { useBacklog } from "../../features/backlog";
 import type { Connection } from "../conn/useConnection";
 import type { Launch } from "../launch/useLaunch";
 import type { TermFeed } from "../term/useTermFeed";
+import { useGitBusyRefresh } from "./useGitBusyRefresh";
 
 export interface UseRepoRefreshCtx {
   status: Connection["status"];
@@ -15,6 +16,8 @@ export interface UseRepoRefreshCtx {
   bl: ReturnType<typeof useBacklog>;
   sessions: SessionInfo[];
   attach: TermFeed["attach"];
+  repos: RepoTarget[];
+  overlay: string | null;
 }
 
 /**
@@ -23,7 +26,7 @@ export interface UseRepoRefreshCtx {
  * Three of App's effects, verbatim and in their order.
  */
 export function useRepoRefresh(ctx: UseRepoRefreshCtx) {
-  const { status, refreshRepos, activeId, active, wantNavRef, firedIdRef, bl, sessions, attach } = ctx;
+  const { status, refreshRepos, activeId, active, wantNavRef, firedIdRef, bl, sessions, attach, repos, overlay } = ctx;
   // eslint-disable-next-line react-hooks/exhaustive-deps -- re-list on a connect (status) only; `refreshRepos` is not guaranteed stable
   useEffect(() => { refreshRepos(); }, [status]);
   // Keep inbox/untracked counts fresh for the open session: refetch on open and
@@ -35,6 +38,7 @@ export function useRepoRefresh(ctx: UseRepoRefreshCtx) {
   // re-read where it is looked at rather than left at the last session's turn.
   // eslint-disable-next-line react-hooks/exhaustive-deps -- re-list on reaching the launcher only; `refreshRepos` is not guaranteed stable
   useEffect(() => { if (!activeId) refreshRepos(); }, [activeId]);
+  useGitBusyRefresh({ refreshRepos, activeId, repos, overlay });
   useEffect(() => {
     if (activeId) return;
     const onVis = () => { if (document.visibilityState === "visible") refreshRepos(); };

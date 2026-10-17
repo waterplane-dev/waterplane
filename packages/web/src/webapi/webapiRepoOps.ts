@@ -70,7 +70,7 @@ export const repoOpsApi = {
   // against the worktree before it ever reaches a spawn.
   repoHealth: (repoId: string, scope?: string | null) =>
     jget<RepoHealthView>(`/api/repos/${repoId}/repohealth${scope ? `?scope=${encodeURIComponent(scope)}` : ""}`),
-  /** The chained weekly health index (`shared/healthindex.ts`) for the whole repo. */
+  /** The weekly health score (`shared/healthindex.ts`) for the whole repo. */
   healthIndex: (repoId: string) =>
     jget<HealthIndexResponse>(`/api/repos/${repoId}/healthindex`),
   /** Which subtrees this repo measures separately. The answer is what was

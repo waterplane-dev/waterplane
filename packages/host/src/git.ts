@@ -642,6 +642,12 @@ export function pushState(wt: string): GitPushState | null {
 /** Worktrees with a pull in flight — a second tap joins nothing, it is refused in words. */
 const pulling = new Set<string>();
 
+/** The git job running in `wt` right now, for the repo listing's busy chip. */
+export function gitRunningIn(wt: string): "push" | "pull" | undefined {
+  if (pushes.get(wt)?.running) return "push";
+  return pulling.has(wt) ? "pull" : undefined;
+}
+
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
 
 /**

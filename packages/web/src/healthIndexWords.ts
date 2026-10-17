@@ -2,8 +2,9 @@
  * The health index on the phone: the launcher chip's words and the sheet
  * section's geometry and sentences, pure (`healthIndexWords.test.mjs`).
  *
- * `shared/healthindex.ts` is the one layer that takes a side (lower readings
- * raise the index) and owns the arithmetic and the called move. Nothing here
+ * `shared/healthindex.ts` is the one layer that takes a side (a reading past
+ * its fixed good value costs points) and owns the arithmetic, the cap, the
+ * alerts and the called move. Nothing here
  * computes an index, a move or a percentile: it rounds what the wire carries,
  * turns it into pixels, and words it. Absent stays absent — `healthIndex`
  * missing from a RepoTarget draws NO chip, never `Health 0`.
@@ -35,6 +36,19 @@ export const HEALTH_ENTRY_OF_SERIES: Readonly<Record<string, HealthEntry>> = {
 };
 
 /**
+ * The fixed good values the score is read against — `shared/healthindex.ts`'s
+ * `HEALTH_GOOD`, restated so this file carries no value import (a test pins
+ * them equal). At or under its good value an entry scores 100.
+ */
+export const HEALTH_GOOD_WORDS: Record<HealthEntry, string> = {
+  size: "the average line in a file under 500 lines and the longest file under 1,000",
+  retouch: "under 15% of recent file edits reworking the edit before",
+  hatches: "under 2 unexplained escape hatches per 1,000 lines",
+  context: "CLAUDE.md + skill descriptions under half the repo's warn line (8,000 characters by default)",
+  untested: "under 20% of source files with no test reaching them",
+};
+
+/**
  * What each basket COUNTS, what kind of number it is, and what it cannot see —
  * one clause each, for the agent the index prompts hand a repo to. Without it
  * an agent rediscovers by digging that `hatches` is a density (the count can
@@ -43,7 +57,7 @@ export const HEALTH_ENTRY_OF_SERIES: Readonly<Record<string, HealthEntry>> = {
  * (`shared/healthindex.ts`'s `healthEntryValues`); change them together.
  */
 export const HEALTH_ENTRY_MEASURE: Record<HealthEntry, string> = {
-  size: "a level: the 95th-percentile length in lines of the source files (tests excluded) — files held just under a length cap pin it at the cap, and one huge file barely moves it",
+  size: "a blend of two levels, in lines, over the source files (tests excluded): the line-weighted mean file length (the length of the file the average line lives in, which one giant file drags up) and the longest file; the two scores are blended geometrically, and each can raise an alert by itself",
   retouch: "a rate over the last 14 days: the share of source-file edits that REWORK the previous edit of that file — change or remove lines it added, under 48 hours (or 2 commits) after it; an edit that only adds lines near the last one (an append to a registry) is reported apart and never counted — it reads the latest fortnight's work, not the tree",
   hatches: "a density: UNEXPLAINED escape hatches per 1,000 source lines — casts, lint and type-check disables that carry no reason on the line or in a comment directly above; the explained ones and TODO/FIXME marks are reported apart and never counted, and the count can rise while the density falls if the code grows faster",
   context: "an absolute size: the characters always loaded — CLAUDE.md plus every skill's description; skill bodies, loaded on demand, are not counted",
@@ -64,8 +78,8 @@ export interface HealthChipView {
   delta: string | null;
   /** Which arrow glyph; null where there is no delta to state. */
   arrow: "up" | "down" | "flat" | null;
-  /** `warn` = a called drop, `calm` = a called rise, null = neither. */
-  tone: "warn" | "calm" | null;
+  /** `severe` = an entry under the severe line, `warn` = one under the warn line or a called drop, `calm` = a called rise, null = none. */
+  tone: "severe" | "warn" | "calm" | null;
   /** Long-press words. */
   title: string;
 }
@@ -88,22 +102,26 @@ export function healthChip(hi: RepoHealthIndex | null | undefined, repoName: str
   const d = hi.deltaWeek;
   const hasDelta = typeof d === "number" && Number.isFinite(d);
   const r = hasDelta ? Math.round(d) : 0;
-  const arrow = !hasDelta ? null : r === 0 ? "flat" : r < 0 ? "down" : "up";
-  const tone = hi.move === "drop" ? "warn" : hi.move === "rise" ? "calm" : null;
+  // A week delta that rounds to 0 states nothing: a drop arrow beside "0" would
+  // contradict it (the arrow of a called month move is the title's to say).
+  const arrow = !hasDelta || r === 0 ? null : r < 0 ? "down" : "up";
+  // `alert` is optional on the wire (a host from before the absolute score
+  // never sends it): absent says nothing, never "no alert".
+  const tone = hi.alert === "severe" ? "severe" : hi.alert === "warn" || hi.move === "drop" ? "warn" : hi.move === "rise" ? "calm" : null;
   const when = weekWhenWords(hi.week, currentWeek);
   const called = hi.move === "drop"
     ? " The latest week's move is unusual for this repo's own past: it slipped."
     : hi.move === "rise" ? " The latest week's move is unusual for this repo's own past: it rose." : "";
   return {
     label: `Health ${value}`,
-    delta: hasDelta && r !== 0 ? String(Math.abs(r)) : hasDelta ? "0" : null,
+    delta: hasDelta && r !== 0 ? String(Math.abs(r)) : null,
     arrow,
     tone,
     title:
       `${repoName}: health index ${value}${hasDelta ? ` (${signedWhole(d)} ${when})` : ""}` +
       `${when === "this week" || !hasDelta ? `, week of ${hi.week}` : ""}. ` +
-      `One number chained week over week from five readings of the repo; 100 is its first complete week, ` +
-      `and it climbs when those readings shrink.${called} Tap to open the readings.`,
+      `A score out of 100 against fixed good values for five readings of the repo, held within 30 of its worst one.` +
+      `${hi.alertText ? ` ${hi.alertText}.` : ""}${called} Tap to open the readings.`,
   };
 }
 
@@ -135,31 +153,46 @@ export function indexBasketWords(basket: IndexBasket | null | undefined, product
   return `${parts.join("; ")}.`;
 }
 
-/** The sentence under the section, naming the baseline week — and whose five
+/** The sentence under the section: what the score is read against, whose five
  *  readings it is built from (`product` is `BRAND.displayName`, passed in so
- *  this module stays free of value imports). With the repo's disables or
- *  overrides on the latest week, it says which readings it is built from, and
- *  drops the claim that it compares across repos as it stands. */
-export function indexExplainWords(baselineWeek: string, product: string, basket?: IndexBasket | null): string {
+ *  this module stays free of value imports) and what the second line is.
+ *  With the repo's disables or overrides on the latest week it says which
+ *  readings it is built from, and drops the claim that it compares across
+ *  repos as it stands. `firstWeek` is the first scored week. */
+export function indexExplainWords(firstWeek: string, product: string, basket?: IndexBasket | null): string {
   const changed = indexBasketWords(basket, product);
-  if (!changed) {
-    return `100 = baseline week ${baselineWeek}. Each week the index moves by the average change of ${product}'s five readings — never a repo's own, so it compares across repos: when they shrink it climbs, when they grow it drops.`;
-  }
-  return `100 = baseline week ${baselineWeek}. ${changed} Each week the index moves by the average change of the readings it is built from: when they shrink it climbs, when they grow it drops. Beside another repo's index it compares like with like only on the readings both read the same way.`;
+  const good = HEALTH_ENTRY_ORDER.map((e) => HEALTH_GOOD_WORDS[e]).join("; ");
+  const read = `A score out of 100 for ${product}'s five readings — never a repo's own — against fixed good values: ${good}. At a good value an entry scores 100, and it halves as the reading doubles past it. The score is the average of the entries' scores, and it stays within 30 of its worst entry, so one reading on fire cannot hide behind four quiet ones.`;
+  const trend = `The second line is the trend: the score now against the first scored week, ${firstWeek}, and against last week.`;
+  if (!changed) return `${read} ${trend} The good values are the same in every repo, so it compares across repos.`;
+  return `${read} ${changed} ${trend} Beside another repo's score it compares like with like only on the readings both read the same way.`;
 }
 
-/** What a week drawn off the line means. */
+/**
+ * Does this series come from a host that predates the absolute score? Its
+ * points then carry a CHAINED value (baseline 100), not a score out of 100, and
+ * lack `mean`/`scores`/`alerts` (the phone updates over the air, the desktop
+ * does not). The test is the field, never a version: absent = that host did not say.
+ */
+export function olderHostSeries(points: ReadonlyArray<{ mean?: unknown }> | null | undefined): boolean {
+  const last = points?.[points.length - 1];
+  return !!last && typeof last.mean !== "number";
+}
+
+export const olderHostWords = (product: string): string => `This desktop runs an older ${product} — restart it to see the score.`;
+
+/** What a week whose move is not compared means. */
 export function gapWords(count: number): string {
   return count === 1
-    ? "One week is drawn apart from the line: the index was carried over it, not measured — put the line on it to read why."
-    : `${count} weeks are drawn apart from the line: the index was carried over each, not measured — put the line on one to read why.`;
+    ? "One week's move is not compared with the week before: the engine's or this repo's definition changed that week. Its score is still measured — put the line on it to read why."
+    : `${count} weeks' moves are not compared with the week before: the engine's or this repo's definition changed in each. Their scores are still measured — put the line on one to read why.`;
 }
 
-/** Why a week was carried, as the readout says it. */
+/** Why a week's move is not compared, as the readout says it. */
 export function carriedWords(gapReason: "prereg" | "central" | "nothing" | null | undefined): string {
-  if (gapReason === "central") return "carried: this repo changed which readings it overrides or disables";
-  if (gapReason === "prereg") return "carried: the engine's definitions changed, so the weeks either side are not comparable";
-  return "carried: nothing comparable with the week before";
+  if (gapReason === "central") return "move not compared: this repo changed which readings it overrides or disables that week";
+  if (gapReason === "prereg") return "move not compared: the engine's definitions changed that week";
+  return "move not compared with the week before";
 }
 
 /** A link over weeks nobody measured (no commits): null for an ordinary week. */
@@ -175,9 +208,9 @@ export function weekChangeWords(delta: number | null, week?: string | null, curr
   return `${signedWhole(delta)} ${when}`;
 }
 
-/** `+12 since baseline`. */
-export function sinceBaselineWords(index: number, base = 100): string {
-  return `${signedWhole(index - base)} since baseline`;
+/** `−5 since 2026-08-03`: the score now against the first scored week, named. */
+export function sinceBaselineWords(index: number, firstIndex: number, firstWeek: string): string {
+  return `${signedWhole(index - firstIndex)} since ${firstWeek}`;
 }
 
 /** `+18 vs week of 2026-06-22` — the week actually compared with, named; null = say nothing. */
@@ -188,7 +221,7 @@ export function indexVsWords(vs: { delta: number; then: { week: string } } | nul
 
 const nfWhole = (n: number): string => Math.round(n).toLocaleString("en-US");
 
-/** The tree's growth since the baseline week, so a move can be weighed against it; null without both readings. */
+/** The tree's growth since the first scored week, so a move can be weighed against it; null without both readings. */
 export function treeGrowthWords(
   base: { files: number; loc: number } | null | undefined,
   now: { files: number; loc: number } | null | undefined,
@@ -199,7 +232,7 @@ export function treeGrowthWords(
     const r = Math.round(((b - a) / a) * 100);
     return r === 0 ? "±0%" : r > 0 ? `+${r}%` : `−${-r}%`;
   };
-  return `The tree: ${nfWhole(now.files)} source files and ${nfWhole(now.loc)} lines, against ${nfWhole(base.files)} and ${nfWhole(base.loc)} in the baseline week ${baselineWeek} (${pct(base.files, now.files)} files, ${pct(base.loc, now.loc)} lines).`;
+  return `The tree: ${nfWhole(now.files)} source files and ${nfWhole(now.loc)} lines, against ${nfWhole(base.files)} and ${nfWhole(base.loc)} in the first scored week ${baselineWeek} (${pct(base.files, now.files)} files, ${pct(base.loc, now.loc)} lines).`;
 }
 
 /* ── the line ────────────────────────────────────────────────────────────── */
@@ -216,8 +249,9 @@ export interface IndexLineGeom {
   pts: { i: number; x: number; y: number }[];
   endX: number;
   endY: number;
-  /** y of the 100 line. */
-  baseY: number;
+  /** The fixed axis rules (0, 50, 100), top first, each with its y. */
+  rules: { v: number; y: number }[];
+  /** The data's own extremes, for the aria label only. */
   lo: number;
   hi: number;
   gaps: number;
@@ -225,9 +259,9 @@ export interface IndexLineGeom {
 
 /**
  * x = the week's position in the series (weeks with a row, not the calendar),
- * y fitted to the data AND the 100 baseline so the baseline is always on the
- * chart. A `gap` week starts a new run: the index was carried, not measured,
- * so no line joins it to the week before.
+ * y a FIXED 0–100 axis, never fitted: a score against fixed good values means
+ * the same height in every repo and every week. A `gap` week starts a new
+ * run: its move is not compared, so no line joins it to the week before.
  */
 export function indexLineGeom(
   points: readonly (Pick<HealthIndexPoint, "index" | "gap"> & { spanDays?: number | null })[],
@@ -236,18 +270,15 @@ export function indexLineGeom(
 ): IndexLineGeom | null {
   const n = points.length;
   if (n < 1 || !(w > 0) || !(h > 0)) return null;
-  let lo = 100;
-  let hi = 100;
+  let lo = Infinity;
+  let hi = -Infinity;
   for (const p of points) {
     if (!Number.isFinite(p.index)) return null;
     if (p.index < lo) lo = p.index;
     if (p.index > hi) hi = p.index;
   }
-  const pad = hi === lo ? 1 : (hi - lo) * 0.08;
-  const top = hi + pad;
-  const bot = lo - pad;
   const px = (i: number) => (n === 1 ? w : (i / (n - 1)) * w);
-  const py = (v: number) => (h - 0.5) - ((v - bot) / (top - bot)) * (h - 1);
+  const py = (v: number) => (h - 0.5) - (Math.max(0, Math.min(100, v)) / 100) * (h - 1);
   const runs: string[] = [];
   const dashed: string[] = [];
   const dots: { x: number; y: number }[] = [];
@@ -276,7 +307,7 @@ export function indexLineGeom(
   }
   flush();
   const last = pts[pts.length - 1];
-  return { d: runs.join(""), dashed: dashed.join(""), dots, pts, endX: last.x, endY: last.y, baseY: py(100), lo, hi, gaps };
+  return { d: runs.join(""), dashed: dashed.join(""), dots, pts, endX: last.x, endY: last.y, rules: [100, 50, 0].map((v) => ({ v, y: py(v) })), lo, hi, gaps };
 }
 
 /* ── the bars ────────────────────────────────────────────────────────────── */
@@ -328,7 +359,24 @@ export function signedTenths(n: number): string {
 }
 
 export function barsCaptionWords(week: string): string {
-  return `What moved the index in the week of ${week}, in index points. A bar to the right pushed the index up (that reading shrank); a bar to the left pulled it down (that reading grew).`;
+  return `Each reading's score in the week of ${week}, out of 100, and what it added to the score that week, in points. A bar to the right pushed the score up (that reading shrank); a bar to the left pulled it down (that reading grew).`;
+}
+
+/**
+ * The trend, the second line under the headline: `−5 since 2026-08-03, ±0
+ * this week`. The first scored week is named; a lone week has no trend to
+ * state (null). "This week" only where the latest point IS the current week.
+ */
+export function trendWords(
+  index: number,
+  first: { index: number; week: string },
+  isFirst: boolean,
+  delta: number | null,
+  week?: string | null,
+  currentWeek?: string | null,
+): string | null {
+  if (isFirst) return null;
+  return `${sinceBaselineWords(index, first.index, first.week)}, ${weekChangeWords(delta, week, currentWeek)}`;
 }
 
 /** The ask under the bars: names the week it sends, because the line can be on

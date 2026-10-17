@@ -10,7 +10,7 @@
  */
 import {
   adoptReferencedUploads, applyRelease, busySerialGroups, danglingUploadRefs, isLocalCommand, promptFingerprint,
-  queueIdleReason, roundDelay, MIN_TRY_MS, selectSendable, sendEligible, serialGroup, uploadAttemptWasted,
+  queueIdleReason, roundDelay, MIN_TRY_MS, selectSendable, sendEligible, serialGroup, uploadAttemptWasted, TimeoutError,
   type ClientMessage, type SessionInfo,
 } from "@waterplane/shared";
 import {
@@ -607,7 +607,9 @@ export function sendFns(c: QueueCtx): SendFns {
     let stall = 0;
     const armStall = () => {
       window.clearTimeout(stall);
-      stall = window.setTimeout(() => { stalled = true; ctrl.abort(); }, UPLOAD_STALL_MS);
+      // The reason names the fuse, so the stall record (`link/linkStalls.ts`) can
+      // tell it from a cancel; this path reads `stalled`, not the reason.
+      stall = window.setTimeout(() => { stalled = true; ctrl.abort(new TimeoutError("upload", UPLOAD_STALL_MS)); }, UPLOAD_STALL_MS);
     };
     armStall();
     try {

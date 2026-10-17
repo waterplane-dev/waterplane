@@ -2,7 +2,8 @@
  * The demo's health index: a fictional series per demo repo, run through the
  * REAL `healthIndex()` / `assessHealthMove()` / `healthMoveWords()` so the
  * chip, the line and the bars are what a host would send. Deterministic: ten
- * weekly rows ending on the Monday of `now`'s week; no clock, no randomness.
+ * weekly rows (a profile may ask for more) ending on the Monday of `now`'s week;
+ * no clock, no randomness.
  */
 import {
   assessHealthMove, healthIndex, healthMoveWords, isoWeekOf, repoHealthIndexOf,
@@ -12,10 +13,36 @@ import {
 const DAY = 86_400_000;
 const WEEKS = 10;
 
-/** Per repo: p95 length, re-touch rate, hatches per kLOC share, CLAUDE.md chars, untested count, at the first and last week. */
-const PROFILES: Record<string, { size: [number, number]; retouch: [number, number]; hatches: [number, number]; md: [number, number]; untested: [number, number] }> = {
-  "todo-garden": { size: [210, 318], retouch: [0.22, 0.34], hatches: [8, 14], md: [14_000, 17_500], untested: [8, 12] },
-  "pocket-notes": { size: [260, 205], retouch: [0.4, 0.27], hatches: [12, 7], md: [16_000, 13_000], untested: [14, 9] },
+/**
+ * Per repo, first and last week: line-weighted mean file length, longest file,
+ * re-touch rate, unexplained hatches per kLOC, CLAUDE.md chars (+ `desc` of skill
+ * descriptions, 1,200 when absent), untested files (of `files`, 120 when absent).
+ * `weeks` rows (10 when absent), over a tree of `loc` lines (40,000 when absent).
+ *
+ * todo-garden tells the alarm story: one file (`maxPath`) grows to 5,200 lines,
+ * the other four entries stay near their good values, and the cap — not the
+ * average — sets the score, with a severe alert naming the file. pocket-notes
+ * is the other way round: every reading comes back under its good line.
+ *
+ * photo-shelf (scenario `repo-health`) is the shape of a real app vibe-coded for
+ * eight months with no readings: from February to October one file climbs from
+ * 1,020 to 8,397 lines, the tree from 13,000 to 80,000 lines and 146 source
+ * files, the average line ends up in a 2,235-line file — and everything else
+ * stays fine. The score starts near 100 and slides every week the file grows.
+ */
+type Pair = [number, number];
+const PROFILES: Record<string, {
+  lineMean: Pair; max: Pair; maxPath: string;
+  retouch: Pair; hatches: Pair; md: Pair; untested: Pair;
+  desc?: number; files?: Pair; loc?: Pair; weeks?: number;
+}> = {
+  "todo-garden": { lineMean: [420, 900], max: [1_300, 5_200], maxPath: "src/garden/planner.ts", retouch: [0.14, 0.22], hatches: [1.2, 2.4], md: [6_500, 7_800], untested: [20, 29] },
+  "pocket-notes": { lineMean: [640, 430], max: [1_700, 980], maxPath: "src/notes/sync.ts", retouch: [0.3, 0.16], hatches: [4, 1.8], md: [11_000, 7_000], untested: [30, 22] },
+  "photo-shelf": {
+    lineMean: [420, 2_235], max: [1_020, 8_397], maxPath: "lib/services/sync_backend.dart",
+    retouch: [0.06, 0.07], hatches: [0.3, 0.4], md: [3_800, 9_000], desc: 1_200, untested: [5, 25],
+    files: [38, 146], loc: [13_000, 80_000], weeks: 35,
+  },
 };
 
 function mondayOf(now: number): number {
@@ -28,20 +55,23 @@ function rowsFor(repoName: string, now: number): HealthSeriesRow[] | null {
   const p = PROFILES[repoName];
   if (!p) return null;
   const monday = mondayOf(now);
+  const weeks = p.weeks ?? WEEKS;
   const rows: HealthSeriesRow[] = [];
-  for (let w = 0; w < WEEKS; w++) {
-    const t = w / (WEEKS - 1);
-    const lerp = (a: [number, number]) => a[0] + (a[1] - a[0]) * t;
-    const ts = monday - (WEEKS - 1 - w) * 7 * DAY + 2 * DAY;
+  for (let w = 0; w < weeks; w++) {
+    const t = w / (weeks - 1);
+    const lerp = (a: Pair) => a[0] + (a[1] - a[0]) * t;
+    const ts = monday - (weeks - 1 - w) * 7 * DAY + 2 * DAY;
     const day = new Date(ts).toISOString().slice(0, 10);
+    const loc = Math.round(p.loc ? lerp(p.loc) : 40_000);
+    const files = Math.round(p.files ? lerp(p.files) : 120);
     rows.push({
       day, ts, prereg: "demo-1",
-      size: { value: { p95: lerp(p.size) } },
+      size: { value: { lineMean: lerp(p.lineMean), max: lerp(p.max), maxPath: p.maxPath } },
       retouch: { value: { rate: lerp(p.retouch) } },
-      hatches: { value: { a: Math.round(lerp(p.hatches) * 40) } },
-      context: { value: { claudeMdChars: lerp(p.md), descChars: 1_200 } },
+      hatches: { value: { a: Math.round(lerp(p.hatches) * (loc / 1000)) } },
+      context: { value: { claudeMdChars: lerp(p.md), descChars: p.desc ?? 1_200 } },
       untested: { value: new Array(Math.round(lerp(p.untested))).fill("x") },
-      classics: { value: { loc: 40_000, files: 120 } },
+      classics: { value: { loc, files } },
     });
   }
   return rows;

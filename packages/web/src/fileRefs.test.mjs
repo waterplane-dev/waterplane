@@ -14,7 +14,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { bareFileRef, docImageRef, dropFileRef, linkedImages, parseFileRef, refsIn, wholeFileRef } from "./fileRefs.ts";
+import { bareFileRef, docImageRef, docLinkTarget, dropFileRef, headingSlug, linkedImages, parseFileRef, refsIn, stripHtmlComments, wholeFileRef } from "./fileRefs.ts";
 
 const OUTBOX = [
   ".claude/outbox/boulder-10-flow.gif",
@@ -112,4 +112,40 @@ test("dropFileRef takes out exactly the one mention and tidies the hole", () => 
   assert.equal(dropFileRef(`${p} then ${p} again`, p), "then again");
   // Nothing to drop is the text unchanged, untrimmed.
   assert.equal(dropFileRef("  hi  ", p), "  hi  ");
+});
+
+test("stripHtmlComments hides a README's site markers and keeps the line count", () => {
+  const src = "# waterplane\n\n<!-- site:intro -->\n**An IDE.** Text\n<!-- /site:intro -->\n";
+  const out = stripHtmlComments(src);
+  assert.equal(out, "# waterplane\n\n\n**An IDE.** Text\n\n");
+  assert.equal(out.split("\n").length, src.split("\n").length);
+  // multi-line comment keeps its newlines; inline one leaves the words around it
+  assert.equal(stripHtmlComments("a <!-- x\ny --> b"), "a \n b");
+  // a comment inside a code span is text, an unclosed one is left alone
+  assert.equal(stripHtmlComments("write `<!-- site:x -->` to mark"), "write `<!-- site:x -->` to mark");
+  assert.equal(stripHtmlComments("a <!-- never closed"), "a <!-- never closed");
+});
+
+test("docLinkTarget: a README's link row resolves to headings and repo files", () => {
+  assert.deepEqual(docLinkTarget("#install", "README.md"), { kind: "anchor", slug: "install" });
+  assert.deepEqual(docLinkTarget("SECURITY.md", "README.md"), { kind: "file", relPath: "SECURITY.md" });
+  assert.deepEqual(docLinkTarget("LICENSE", "README.md"), { kind: "file", relPath: "LICENSE" });
+  assert.deepEqual(docLinkTarget("docs/install.md#without-tailscale", "README.md"), { kind: "file", relPath: "docs/install.md" });
+  assert.deepEqual(docLinkTarget("../README.md", "docs/guide.md"), { kind: "file", relPath: "README.md" });
+  assert.deepEqual(docLinkTarget("/SECURITY.md", "docs/guide.md"), { kind: "file", relPath: "SECURITY.md" });
+  // never a URL, a folder, or a climb out of the repo
+  assert.equal(docLinkTarget("https://x.dev/a", "README.md"), null);
+  assert.equal(docLinkTarget("javascript:alert(1)", "README.md"), null);
+  assert.equal(docLinkTarget("//evil.dev/a", "README.md"), null);
+  assert.equal(docLinkTarget("packages/app/", "README.md"), null);
+  assert.equal(docLinkTarget("../../etc/passwd", "docs/a.md"), null);
+  assert.equal(docLinkTarget("#", "README.md"), null);
+});
+
+test("headingSlug matches GitHub's anchors for this README's headings", () => {
+  assert.equal(headingSlug("Install"), "install");
+  assert.equal(headingSlug("How it compares"), "how-it-compares");
+  assert.equal(headingSlug("Your own buttons: plugins"), "your-own-buttons-plugins");
+  assert.equal(headingSlug("Repo health, so the vibe coding stays maintainable"), "repo-health-so-the-vibe-coding-stays-maintainable");
+  assert.equal(headingSlug("The `npm run` [build](x.md) **step**"), "the-npm-run-build-step");
 });

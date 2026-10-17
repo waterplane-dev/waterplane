@@ -5,7 +5,7 @@
  */
 import { PLUGIN_ACK_RE, PROTOCOL_VERSION, haltReceiptWords, logTag, roleAfterHello } from "@waterplane/shared";
 import { haltState, isHalted, setHalted, stopRuns } from "../halt.js";
-import type { HostMessage } from "@waterplane/shared";
+import type { HostMessage, PeerKind, PluginCaller } from "@waterplane/shared";
 import type { WebSocket } from "ws";
 import { cliHealth } from "../clihealth.js";
 import { backendInfos, recheckUnavailableBackends } from "../backends/index.js";
@@ -240,10 +240,17 @@ const onPluginAction: Route<"plugin.action"> = (a) => {
 };
 
 // NOT durable, not contained: a live question, answered to the asking socket only (`pluginrpc.ts`).
+/** Who sent a `plugin.call`: the socket's tier, and the paired device's name when its token named one. */
+export function callerOf(kind: PeerKind | undefined, deviceId: string | undefined | null, ledger: { get(id: string): { name: string } | null }): PluginCaller {
+  const id = deviceId ?? null;
+  return { kind: kind ?? "unknown", deviceId: id, deviceName: id ? ledger.get(id)?.name ?? null : null };
+}
+
 const onPluginCall: Route<"plugin.call"> = (a) => {
     const { ackId, plugin, method, args } = a.msg;
     if (typeof ackId !== "string" || !PLUGIN_ACK_RE.test(ackId)) return;
-    void a.c.plugins.callOnce(ackId, String(plugin), String(method), args).then((r) =>
+    void a.c.plugins.callOnce(ackId, String(plugin), String(method), args,
+      callerOf(a.c.wsKind.get(a.ws), a.c.wsDevice.get(a.ws), a.c.auth.devices)).then((r) =>
       a.c.send(a.ws, { t: "plugin.reply", ackId, plugin, method, ...r }));
 };
 
@@ -348,6 +355,12 @@ const onInstallGet: Route<"install.get"> = (a) => {
 const onInstallReport: Route<"install.report"> = (a) => {
     const changed = a.c.installLog.report(a.msg.device ?? { id: "" }, a.msg.entries ?? []);
     if (changed.added || changed.updated) a.c.broadcast({ t: "install.log", doc: a.c.installLog.doc() });
+};
+
+/** The phone's HTTP stalls — over the socket, because the HTTP pool is the
+ *  thing that is stuck (`shared/netstall.ts`). A record: nothing is sent back. */
+const onNetStalls: Route<"net.stalls"> = (a) => {
+    a.c.netstats.putClientStalls(String(a.msg.deviceId ?? ""), a.msg.report);
 };
 
 const onMeterGet: Route<"meter.get"> = (a) => {
@@ -472,6 +485,7 @@ export const systemRoutes: RouteTable = {
   "sent.clear": onSentClear,
   "install.get": onInstallGet,
   "install.report": onInstallReport,
+  "net.stalls": onNetStalls,
   "settings.get": onSettingsGet,
   "settings.set": onSettingsSet,
   "meter.get": onMeterGet,

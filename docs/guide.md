@@ -70,9 +70,9 @@ Try it: `?demo=gallery-and-files`
 
 *Android app developers only (optional).*
 
-<a href="https://waterplane-dev.github.io/media/apk-install-1485857c9a.mp4"><img src="media/apk-install.gif" width="490" alt="Phone one circles a spot on a screenshot of the app, Claude Code adds a logo there, the build runs, phone two's notifications say the build succeeded and the update is ready to install, one tap on Install updates it, and it opens with the logo in the circled spot"></a>
+<a href="https://waterplane-dev.github.io/media/apk-install-91d521e613.mp4"><img src="media/apk-install.gif" width="490" alt="Your phone circles a spot on a screenshot of the app, Claude Code adds a logo there, the build runs, the notifications on the phone with the app (a second one here, or the same one) say the build succeeded and the update is ready to install, one tap on Install updates it, and it opens with the logo in the circled spot"></a>
 
-*Loops. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/apk-install-1485857c9a.mp4), with pause and seek.*
+*Loops. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/apk-install-91d521e613.mp4), with pause and seek.*
 
 A build command saved for a repo runs from the phone without a Claude session, so it spends no
 tokens. When it produces an APK, every phone running the developer build of the Android app that
@@ -118,9 +118,9 @@ Try it: `?demo=queue-and-schedule`
 
 ## What it costs
 
-<a href="https://waterplane-dev.github.io/media/numbers-af88500f21.mp4"><img src="media/numbers.gif" width="270" alt="A week of heavy use priced at API list price, what drives the cost, and when a fresh session would be cheaper"></a>
+<a href="https://waterplane-dev.github.io/media/numbers-99e8e4d318.mp4"><img src="media/numbers.gif" width="270" alt="A week of heavy use priced at API list price, what drives the cost, and when a fresh session would be cheaper"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/numbers-af88500f21.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/numbers-99e8e4d318.mp4), with pause and seek.*
 
 The header carries the two usage windows, the 5-hour session and the week, with when each resets.
 The budget setting reads the same figures and says in words what they mean for you. Each session
@@ -135,11 +135,21 @@ Try it: `?demo=numbers`
 
 ## Repo health
 
-Each repo has health tiles, one reading per commit: the p95 file length, how often the same files
-are touched again, escape hatches, untested modules and the weight of `CLAUDE.md`, each with its
-trend. They are readings only; nothing changes code because of them.
+<a href="https://waterplane-dev.github.io/media/repo-health-f7095e59da.mp4"><img src="media/repo-health.gif" width="270" alt="A repo vibe-coded for eight months scores 46 out of 100: one 8,397-line file caps the score, two severe warnings name it, and the trend slides from 100 in February"></a>
 
-Try it: `?demo=first-look`, then open a repo's health.
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/repo-health-f7095e59da.mp4), with pause and seek.*
+
+Each repo has one health score out of 100, against fixed good values for five readings: file length
+(the longest file and the file the average line sits in), files reworked right after an edit,
+unexplained escape hatches, untested modules and the weight of `CLAUDE.md` plus skill descriptions.
+The repo list wears it as a chip; a tap opens **Repo readings** on **over time**. The score stays
+within 30 of its worst entry, so one reading on fire caps it, and every warning (severe or warn)
+names its offender. The trend against the first scored week comes second, then every entry's own
+score, then the readings themselves: the longest file, the longest files, the re-touch rate and the
+rest, one point per day. A push arrives when a reading newly turns severe. They are readings only;
+the ask buttons draft a prompt and nothing changes code because of them.
+
+Try it: `?demo=repo-health`, then tap photo-shelf's health chip.
 
 ## Alongside the Claude app
 

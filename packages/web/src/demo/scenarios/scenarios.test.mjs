@@ -19,6 +19,7 @@ import { HOOK_REPLY_MATCH, HOOK_PROMPT as TYPED_PROMPT } from "../../features/de
 import { queueAndSchedule, QUEUED_PROMPT, TURN_END } from "./queue-and-schedule.ts";
 import { galleryAndFiles, MEDIA_SIZES as FILE_SIZES } from "./gallery-and-files.ts";
 import { numbers, LAST_TOK, WINDOW_TOK } from "./numbers.ts";
+import { repoHealth } from "./repo-health.ts";
 import { findLeaks } from "../../../../../tools/demo-scenario.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -28,7 +29,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9, `${msg}: ${a} vs $
 
 test("every bundled scenario is shippable, current and clean", () => {
   const ids = Object.keys(DEMO_SCENARIOS);
-  for (const id of ["first-look", "queue-and-schedule", "gallery-and-files", "numbers"]) assert.ok(ids.includes(id), `${id} is registered`);
+  for (const id of ["first-look", "queue-and-schedule", "gallery-and-files", "numbers", "repo-health"]) assert.ok(ids.includes(id), `${id} is registered`);
   for (const id of ids) {
     const sc = DEMO_SCENARIOS[id];
     assert.equal(sc.meta.id, id, "the registry key is the scenario's id");
@@ -64,7 +65,7 @@ test("every gallery and inbox file is bundled under public/demo/media/<repoId>/ 
 });
 
 test("timestamps follow `now`, so the demo never ages", () => {
-  for (const build of [firstLook, queueAndSchedule, galleryAndFiles, numbers]) {
+  for (const build of [firstLook, queueAndSchedule, galleryAndFiles, numbers, repoHealth]) {
     const a = build(CLOCK_START).state.model.sessions[0].createdAt;
     const b = build(CLOCK_START + 1000).state.model.sessions[0].createdAt;
     assert.equal(b - a, 1000, build.name);

@@ -779,6 +779,9 @@ export function applyPrompt(core: SessionCore, s: Session, prompt: DetectedPromp
   // after every merge reported a change for a card that had not moved — one
   // broadcast, one push and one plugin event per box, bought with nothing.
   const changed = !samePrompt(prompt, s.info.prompt ?? null);
+  // A tick toggled on a checkbox box is the box being answered, not a new
+  // question: the phone redraws it, nobody is pushed "needs you" per tap.
+  const ticked = changed && samePrompt(prompt, s.info.prompt ?? null, "ignore");
   const had = !!s.info.prompt;
   if (changed) {
     s.info.prompt = prompt;
@@ -787,7 +790,7 @@ export function applyPrompt(core: SessionCore, s: Session, prompt: DetectedPromp
     const sug = s.info.suggestion;
     if (!prompt && sug && sug.choice != null) s.info.suggestion = null;
     core.emit("updated", s.info);
-    if (prompt) core.emit("prompt", s.info.id, prompt);
+    if (prompt && !ticked) core.emit("prompt", s.info.id, prompt);
     // A box became published where none was — the one edge on which the
     // choice-box detector has provably worked. Not on every `changed`: a box
     // whose cursor moves republishes several times while it is up, and the

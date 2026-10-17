@@ -184,15 +184,81 @@ export function docImageRef(href: string, docPath: string): FileRef | null {
   const name = decoded.split("/").pop() || "";
   const image = IMAGE_RE.test(name), video = VIDEO_RE.test(name);
   if (!image && !video) return null;
-  const base = decoded.startsWith("/") ? [] : docPath.split("/").slice(0, -1);
-  const parts = [...base];
+  const relPath = resolveDocPath(decoded, docPath);
+  return relPath == null ? null : { raw: href, relPath, name, image, video };
+}
+
+/** A decoded relative path, resolved against the folder of `docPath` (a
+ *  leading `/` is the repo root). null when a `..` climbs out of the repo. */
+function resolveDocPath(decoded: string, docPath: string): string | null {
+  const parts = decoded.startsWith("/") ? [] : docPath.split("/").slice(0, -1);
   for (const seg of decoded.split("/")) {
     if (!seg || seg === ".") continue;
     if (seg === "..") { if (!parts.length) return null; parts.pop(); continue; }
     parts.push(seg);
   }
-  if (!parts.length) return null;
-  return { raw: href, relPath: parts.join("/"), name, image, video };
+  return parts.length ? parts.join("/") : null;
+}
+
+/** Where a document's own non-URL link points: a heading in this document
+ *  (`#install`) or another file in the repo (`SECURITY.md`, `docs/x.md#y`). */
+export type DocLink = { kind: "anchor"; slug: string } | { kind: "file"; relPath: string };
+
+/**
+ * A relative markdown link in a DOCUMENT, resolved the way GitHub resolves it.
+ *
+ * The reader never emits a relative `<a href>` (Markdown.tsx's `linkNode` says
+ * why: in the APK that replaces the app with a 404). But a README's link row —
+ * `[Install](#install) · [Security](SECURITY.md)` — drew as label plus a code
+ * span of the target, which reads as broken. In a document there is a right
+ * thing to do with each: scroll to the heading, or open the file in the viewer.
+ *
+ * null for a URL, a scheme, a folder (trailing `/`: the viewer opens files), or
+ * a `..` that climbs out of the repo — the caller keeps the old rendering.
+ */
+export function docLinkTarget(href: string, docPath: string): DocLink | null {
+  if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("//")) return null;
+  if (href.startsWith("#")) {
+    let slug: string;
+    try { slug = decodeURIComponent(href.slice(1)); } catch { return null; }
+    return slug ? { kind: "anchor", slug: slug.toLowerCase() } : null;
+  }
+  const target = href.replace(/[?#].*$/, "");
+  if (!target || target.endsWith("/")) return null;
+  let decoded: string;
+  try { decoded = decodeURIComponent(target); } catch { return null; }
+  const relPath = resolveDocPath(decoded, docPath);
+  return relPath == null ? null : { kind: "file", relPath };
+}
+
+/**
+ * GitHub's anchor for a heading: the TEXT (link targets, backticks and
+ * emphasis markers gone), lower-cased, punctuation dropped, spaces to hyphens.
+ * "Your own buttons: plugins" → `your-own-buttons-plugins`. Duplicate headings
+ * get no `-1` suffix here; a link to one finds the first.
+ */
+export function headingSlug(text: string): string {
+  return text
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/[`*]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s_-]/gu, "")
+    .replace(/\s/g, "-");
+}
+
+/**
+ * HTML comments out of markdown, the way GitHub hides them. A README carries
+ * `<!-- site:intro -->` markers for the site build (scripts/site/), and the
+ * reader drew them as text. Each comment keeps only its NEWLINES, so a
+ * comment on its own line becomes a blank line (it is an HTML block, which
+ * ends the paragraph above) and the line numbers a review remark names stay
+ * true. A comment inside a code span is text and stays; an unclosed one stays.
+ * Fenced code is the caller's to skip.
+ */
+export function stripHtmlComments(text: string): string {
+  if (!text.includes("<!--")) return text;
+  return text.replace(/(`+)[\s\S]*?\1|<!--[\s\S]*?-->/g, (m, tick) => tick ? m : m.replace(/[^\n]/g, ""));
 }
 
 /** One picture, wrapped in a link or not, as `linkedImages` finds it; `href` is `src` for a bare one. */

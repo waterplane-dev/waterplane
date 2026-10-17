@@ -222,8 +222,7 @@ export function HealthView({ folder, doc, why, run, prompts, terminal, post }: {
 
       {plotMissing ? <div className="section section-hint">{plotMissing}</div> : null}
 
-      {/* The one number that takes a side, above the readings it is chained from, as on the phone.
-          No ask buttons: the phone's index prompts are not among this panel's ready-made ones. */}
+      {/* The one number that takes a side — score, cap and alerts are drawn by the phone's own chart. */}
       {doc.index ? (
         <HealthIndexChart view={doc.index} empty={doc.index.series ? null : <Absent>No health index yet: {doc.index.reason}.</Absent>} />
       ) : null}

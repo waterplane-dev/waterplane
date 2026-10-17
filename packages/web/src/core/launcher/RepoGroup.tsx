@@ -151,9 +151,12 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
             to go out leave the tree clean — gating on changed files hid it
             exactly then. The counts are files, then ↑out ↓in. */}
         {main && (
-          <button className={`focus-btn${gitPending(main) ? " count" : ""}`} title={gitTitle(main)}
+          <button className={`focus-btn${gitPending(main) ? " count" : ""}`}
+            title={main.gitRunning ? `${main.gitRunning === "push" ? "a push" : "a pull"} is running on the desktop — open git to follow it` : gitTitle(main)}
             onClick={() => openGitFor(main.id)}>
-            <FileDiff size={13} />{main.changedCount > 0 && main.changedCount}
+            {/* A push runs the pre-push checks for minutes; the spinner says so
+                here, so the row is not read as "22 still to push, nothing doing". */}
+            {main.gitRunning ? <Loader size={13} className="spin" /> : <FileDiff size={13} />}{main.changedCount > 0 && main.changedCount}
             {gitSyncText(main) && <span className="git-ab">{gitSyncText(main)}</span>}
             {noOrigin(main) && <span className="git-ab no-origin"><CloudOff size={12} />no remote</span>}
           </button>
@@ -268,9 +271,10 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
             so the two are not alternatives and neither replaces the
             other. */}
         {(() => {
-          // The health index, one chained weekly number. ABSENT on the wire =
-          // no chip (never `Health 0`). A called drop wears the warn colour, a
-          // called rise the calm one; otherwise it is a plain readout. The tap
+          // The health score, one weekly number out of 100. ABSENT on the wire =
+          // no chip (never `Health 0`). An entry under the severe line wears the
+          // danger colour, one under the warn line or a called drop the warn
+          // colour, a called rise the calm one; otherwise a plain readout. The tap
           // opens the readings sheet, whose first section is this number.
           const hc = main ? healthChip(main.healthIndex, repoName, isoWeekOf(new Date().toISOString().slice(0, 10))) : null;
           if (!main || !hc) return null;

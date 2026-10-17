@@ -127,7 +127,7 @@ export interface HealthDoc {
   /** Why `plot` is null when the ENGINE is the reason; null otherwise. */
   plotError: string | null;
   /**
-   * The chained weekly index over the whole-repo series that was read (`healthindexdoc.ts`), as the
+   * The weekly health score over the whole-repo series that was read (`healthindexdoc.ts`), as the
    * phone draws it above the readings; null for a scope (the index is the repo's) or before a read.
    */
   index: HealthIndexResponse | null;

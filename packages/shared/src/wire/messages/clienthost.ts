@@ -3,6 +3,7 @@
 import type { UsageBudget } from "../../budget.js";
 import type { InstallReportEntry, InstallReporter } from "../install.js";
 import type { NotifyPrefs } from "../notify.js";
+import type { StallReport } from "../../netstall.js";
 import type { PluginValue } from "../../plugin.js";
 import type { LimitResumeMode } from "../session.js";
 
@@ -81,6 +82,15 @@ export type ClientHostMsg =
    * repeat what the next `hello` says anyway.
    */
   | { t: "install.report"; device: InstallReporter; entries: InstallReportEntry[] }
+  /**
+   * The phone's HTTP stalls (`shared/netstall.ts`): the evidence for WHY a
+   * request hung while this socket stayed healthy. Over the socket, never a
+   * POST, because the thing being measured is the HTTP pool being stuck. A
+   * RE-STATEMENT like `install.report` — the whole ring each time, merged on
+   * each event's key — so not durable and never queued. Additive: an older
+   * host ignores the unknown `t`.
+   */
+  | { t: "net.stalls"; deviceId: string; report: StallReport }
   /** LAN password gate (managed only from the trusted loopback/Tailscale path). */
   | { t: "auth.set"; password: string }
   | { t: "auth.clear" }

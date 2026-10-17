@@ -226,12 +226,13 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
         return s.weight ? `~${fmtCount(s.weight.reading.alwaysOnTokens)} tokens every turn` : "nothing measured";
       case "health": {
         if (s.healthRunning) return "measuring…";
-        // The index leads, as on the phone's launcher chip; the p95 line stands in where there is none.
+        // The score leads, as on the phone's launcher chip (trend second, the worst alert level named);
+        // the p95 line stands in only where there is no scored week.
         const hi = repoHealthIndexOf(s.health?.index?.series ?? null, s.health?.index?.move);
         if (hi) {
           const d = hi.deltaWeek;
           const when = weekWhenWords(hi.week, isoWeekOf(new Date().toISOString().slice(0, 10)));
-          return `index ${Math.round(hi.value)}${d !== null && Number.isFinite(d) ? ` · ${signedWhole(d)} ${when}` : ""}`;
+          return `score ${Math.round(hi.value)}${hi.alert ? ` · ${hi.alert}` : ""}${d !== null && Number.isFinite(d) ? ` · ${signedWhole(d)} ${when}` : ""}`;
         }
         const p95 = s.health?.plot?.series.find((x) => x.key === "size.p95") ?? null;
         if (p95) return `${p95.label} ${seriesValueWords(p95.last, p95.unit)}`;

@@ -1,16 +1,17 @@
 {
-  "prereg": "2026-10-16a+ccb88b7e",
-  "lastSha": "683bffaf98736fb2e4ecbd9fce2bd412f0b5bde3",
+  "prereg": "2026-10-17a+ccb88b7e",
+  "lastSha": "f1cca7237bc1f6f1393dc762e1e281748cb2e8cd",
   "rows": [
     {
       "sha": "c76164278f475b9706171f57e34fbe638d3803ef",
       "day": "2026-06-18",
       "ts": 1781815749,
       "batch": false,
-      "prereg": "2026-10-16a+ccb88b7e",
+      "prereg": "2026-10-17a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 383,
+          "lineMean": 178,
           "max": 383,
           "maxPath": "packages/web/src/App.tsx",
           "nearMax": 1,
@@ -438,10 +439,11 @@
       "day": "2026-06-19",
       "ts": 1781891397,
       "batch": false,
-      "prereg": "2026-10-16a+ccb88b7e",
+      "prereg": "2026-10-17a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 676,
+          "lineMean": 258,
           "max": 676,
           "maxPath": "packages/web/src/App.tsx",
           "nearMax": 1,
@@ -905,10 +907,11 @@
       "day": "2026-06-20",
       "ts": 1781986706,
       "batch": false,
-      "prereg": "2026-10-16a+ccb88b7e",
+      "prereg": "2026-10-17a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 1088,
+          "lineMean": 399,
           "max": 1088,
           "maxPath": "packages/web/src/App.tsx",
           "nearMax": 1,
@@ -1393,10 +1396,11 @@
       "day": "2026-06-21",
       "ts": 1782067638,
       "batch": false,
-      "prereg": "2026-10-16a+ccb88b7e",
+      "prereg": "2026-10-17a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 1300,
+          "lineMean": 481,
           "max": 1300,
           "maxPath": "packages/web/src/App.tsx",
           "nearMax": 1,
@@ -1895,10 +1899,11 @@
       "day": "2026-06-25",
       "ts": 1782415053,
       "batch": false,
-      "prereg": "2026-10-16a+ccb88b7e",
+      "prereg": "2026-10-17a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 1300,
+          "lineMean": 480,
           "max": 1300,
           "maxPath": "packages/web/src/App.tsx",
           "nearMax": 1,
@@ -2397,10 +2402,11 @@
       "day": "2026-08-16",
       "ts": 1786892228,
       "batch": false,
-      "prereg": "2026-10-16a+ccb88b7e",
+      "prereg": "2026-10-17a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 3217,
+          "lineMean": 1052,
           "max": 3217,
           "maxPath": "packages/web/src/App.tsx",
           "nearMax": 1,
@@ -3005,10 +3011,11 @@
       "day": "2026-08-21",
       "ts": 1787300703,
       "batch": false,
-      "prereg": "2026-10-16a+ccb88b7e",
+      "prereg": "2026-10-17a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 3322,
+          "lineMean": 1046,
           "max": 3322,
           "maxPath": "packages/web/src/App.tsx",
           "nearMax": 1,
@@ -3613,10 +3620,11 @@
       "day": "2026-08-30",
       "ts": 1788117111,
       "batch": false,
-      "prereg": "2026-10-16a+ccb88b7e",
+      "prereg": "2026-10-17a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 6514,
+          "lineMean": 1707,
           "max": 6514,
           "maxPath": "packages/web/src/App.tsx",
           "nearMax": 1,
@@ -4301,10 +4309,11 @@
       "day": "2026-09-02",
       "ts": 1788361830,
       "batch": false,
-      "prereg": "2026-10-16a+ccb88b7e",
+      "prereg": "2026-10-17a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 7853,
+          "lineMean": 1866,
           "max": 7853,
           "maxPath": "packages/web/src/App.tsx",
           "nearMax": 1,
@@ -5003,10 +5012,11 @@
       "day": "2026-09-04",
       "ts": 1788559156,
       "batch": false,
-      "prereg": "2026-10-16a+ccb88b7e",
+      "prereg": "2026-10-17a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 9631,
+          "lineMean": 2020,
           "max": 9631,
           "maxPath": "packages/web/src/App.tsx",
           "nearMax": 1,
@@ -5784,10 +5794,11 @@
       "day": "2026-09-05",
       "ts": 1788635625,
       "batch": false,
-      "prereg": "2026-10-16a+ccb88b7e",
+      "prereg": "2026-10-17a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 10303,
+          "lineMean": 2102,
           "max": 10303,
           "maxPath": "packages/web/src/App.tsx",
           "nearMax": 1,
@@ -6589,10 +6600,11 @@
       "day": "2026-09-06",
       "ts": 1788725333,
       "batch": false,
-      "prereg": "2026-10-16a+ccb88b7e",
+      "prereg": "2026-10-17a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 10897,
+          "lineMean": 2165,
           "max": 10897,
           "maxPath": "packages/web/src/App.tsx",
           "nearMax": 1,
@@ -7414,10 +7426,11 @@
       "day": "2026-09-07",
       "ts": 1788814506,
       "batch": true,
-      "prereg": "2026-10-16a+ccb88b7e",
+      "prereg": "2026-10-17a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 11582,
+          "lineMean": 2310,
           "max": 11582,
           "maxPath": "packages/web/src/App.tsx",
           "nearMax": 1,
@@ -8247,10 +8260,11 @@
       "day": "2026-09-09",
       "ts": 1788947322,
       "batch": false,
-      "prereg": "2026-10-16a+ccb88b7e",
+      "prereg": "2026-10-17a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 11582,
+          "lineMean": 2305,
           "max": 11582,
           "maxPath": "packages/web/src/App.tsx",
           "nearMax": 1,
@@ -9081,10 +9095,11 @@
       "day": "2026-09-11",
       "ts": 1789160326,
       "batch": true,
-      "prereg": "2026-10-16a+ccb88b7e",
+      "prereg": "2026-10-17a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 12294,
+          "lineMean": 2375,
           "max": 12294,
           "maxPath": "packages/web/src/App.tsx",
           "nearMax": 1,
@@ -9941,10 +9956,11 @@
       "day": "2026-09-12",
       "ts": 1789246550,
       "batch": false,
-      "prereg": "2026-10-16a+ccb88b7e",
+      "prereg": "2026-10-17a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 12802,
+          "lineMean": 2428,
           "max": 12802,
           "maxPath": "packages/web/src/App.tsx",
           "nearMax": 1,
@@ -10830,10 +10846,11 @@
       "day": "2026-09-14",
       "ts": 1789406877,
       "batch": true,
-      "prereg": "2026-10-16a+ccb88b7e",
+      "prereg": "2026-10-17a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 13977,
+          "lineMean": 2539,
           "max": 13977,
           "maxPath": "packages/web/src/App.tsx",
           "nearMax": 1,
@@ -11765,10 +11782,11 @@
       "day": "2026-09-16",
       "ts": 1789540610,
       "batch": false,
-      "prereg": "2026-10-16a+ccb88b7e",
+      "prereg": "2026-10-17a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 13975,
+          "lineMean": 2531,
           "max": 13975,
           "maxPath": "packages/web/src/App.tsx",
           "nearMax": 1,
@@ -12693,10 +12711,11 @@
       "day": "2026-09-18",
       "ts": 1789758585,
       "batch": false,
-      "prereg": "2026-10-16a+ccb88b7e",
+      "prereg": "2026-10-17a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 15599,
+          "lineMean": 2762,
           "max": 15599,
           "maxPath": "packages/web/src/App.tsx",
           "nearMax": 1,
@@ -13705,10 +13724,11 @@
       "day": "2026-09-19",
       "ts": 1789852256,
       "batch": false,
-      "prereg": "2026-10-16a+ccb88b7e",
+      "prereg": "2026-10-17a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 15723,
+          "lineMean": 2738,
           "max": 15723,
           "maxPath": "packages/web/src/App.tsx",
           "nearMax": 1,
@@ -14722,10 +14742,11 @@
       "day": "2026-09-20",
       "ts": 1789915560,
       "batch": false,
-      "prereg": "2026-10-16a+ccb88b7e",
+      "prereg": "2026-10-17a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 16081,
+          "lineMean": 2800,
           "max": 16081,
           "maxPath": "packages/web/src/App.tsx",
           "nearMax": 1,
@@ -15745,10 +15766,11 @@
       "day": "2026-09-21",
       "ts": 1790023093,
       "batch": false,
-      "prereg": "2026-10-16a+ccb88b7e",
+      "prereg": "2026-10-17a+ccb88b7e",
       "size": {
         "value": {
           "appTsx": 16343,
+          "lineMean": 2558,
           "max": 16343,
           "maxPath": "packages/web/src/App.tsx",
           "nearMax": 1,
@@ -16862,23 +16884,24 @@
       }
     },
     {
-      "sha": "683bffaf98736fb2e4ecbd9fce2bd412f0b5bde3",
+      "sha": "f1cca7237bc1f6f1393dc762e1e281748cb2e8cd",
       "day": "2026-09-22",
-      "ts": 1790061039,
+      "ts": 1790110804,
       "batch": false,
-      "prereg": "2026-10-16a+ccb88b7e",
+      "prereg": "2026-10-17a+ccb88b7e",
       "size": {
         "value": {
-          "appTsx": 16351,
-          "max": 16351,
+          "appTsx": 16389,
+          "lineMean": 2519,
+          "max": 16389,
           "maxPath": "packages/web/src/App.tsx",
           "nearMax": 1,
-          "p95": 1264
+          "p95": 1244
         }
       },
       "retouch": {
         "value": {
-          "appends": 175,
+          "appends": 206,
           "offenders": [
             {
               "n": 5,
@@ -16886,16 +16909,16 @@
             },
             {
               "n": 4,
-              "path": "packages/web/src/App.tsx"
+              "path": "packages/host/src/repohealth.ts"
             },
             {
-              "n": 3,
-              "path": "packages/host/src/repohealth.ts"
+              "n": 4,
+              "path": "packages/web/src/App.tsx"
             }
           ],
-          "rate": 0.25980392156862747,
-          "retouches": 106,
-          "touches": 408
+          "rate": 0.2510460251046025,
+          "retouches": 120,
+          "touches": 478
         }
       },
       "hatches": {
@@ -16987,27 +17010,30 @@
           "degenerateBuckets": 0,
           "pairs": [
             {
-              "a": "packages/host/src/oracle.ts#Oracle.ask@402",
-              "b": "packages/host/src/oracle.ts#Oracle.askReply@365",
+              "a": "packages/host/src/oracle.ts#Oracle.ask@406",
+              "b": "packages/host/src/oracle.ts#Oracle.askReply@369",
               "sim": 0.859
             },
             {
-              "a": "packages/web/src/BuildSheet.tsx#ArtifactRow@741",
+              "a": "packages/web/src/BuildSheet.tsx#ArtifactRow@805",
               "b": "packages/web/src/CaptureSheet.tsx#FrameRow@543",
               "sim": 0.844
             }
           ],
-          "pairsPerKloc": 0.0122
+          "pairsPerKloc": 0.012
         }
       },
       "deadExports": {
         "value": [
           "packages/host/src/acks.ts#ACK_TTL_MS",
+          "packages/host/src/artifacts.ts#gitStamp",
           "packages/host/src/assess.ts#ASSESS_CONTEXT_MAX",
           "packages/host/src/assess.ts#ASSESS_MAX_RUNS",
           "packages/host/src/assess.ts#ASSESS_PROGRESS_MS",
           "packages/host/src/assess.ts#ASSESS_TIMEOUT_MS",
           "packages/host/src/auth.ts#AUTH_COOKIE",
+          "packages/host/src/autopull.ts#CATCHUP_AGE_MS",
+          "packages/host/src/autopull.ts#CATCHUP_MAX",
           "packages/host/src/backends/index.ts#knownBackend",
           "packages/host/src/clihealth.ts#noteCliVersionSeen",
           "packages/host/src/compliance.ts#contextLimitsFor",
@@ -17052,6 +17078,9 @@
           "packages/host/src/tree.ts#extOf",
           "packages/host/src/tree.ts#inTree",
           "packages/host/src/visualskill.ts#visualSkillText",
+          "packages/shared/src/artifacts.ts#NAME_SEP",
+          "packages/shared/src/artifacts.ts#isVariableToken",
+          "packages/shared/src/artifacts.ts#stampOf",
           "packages/shared/src/assess.ts#CITING_VERDICTS",
           "packages/shared/src/assess.ts#MAX_ASSESS_NOTES",
           "packages/shared/src/assess.ts#MAX_MERGE_GROUPS",
@@ -17096,7 +17125,8 @@
           "packages/web/src/ContextGraph.tsx#CTX_SERIES",
           "packages/web/src/DownloadButton.tsx#useDownloadRecord",
           "packages/web/src/LocalRtBar.tsx#shortReading",
-          "packages/web/src/RepoHealthTiles.tsx#PackageStack",
+          "packages/web/src/RepoHealthMags.tsx#PackageStack",
+          "packages/web/src/RepoHealthMags.tsx#TypeStack",
           "packages/web/src/RepoPicker.tsx#orderRepos",
           "packages/web/src/RepoPicker.tsx#repoBranchLine",
           "packages/web/src/RepoPicker.tsx#repoOptionLabel",
@@ -17188,12 +17218,12 @@
           "tools/repohealth/html.mjs#OUTBOX_HTML",
           "tools/repohealth/html.mjs#htmlDoc",
           "tools/repohealth/html.mjs#packageSeries",
-          "tools/repohealth/judge.mjs#OUTBOX_DIR",
           "tools/repohealth/lang/typescript-ast.mjs#clearTsCaches",
           "tools/repohealth/metrics/route.mjs#sourcePacks",
           "tools/repohealth/narrate.mjs#HEADER",
           "tools/repohealth/narrate.mjs#LEDGER",
           "tools/repohealth/narrate.mjs#OUTBOX_MD",
+          "tools/repohealth/scope.mjs#scopeCandidates",
           "tools/repohealth/series.mjs#stringifyFixture",
           "tools/repohealth/series.mjs#stringifyRow",
           "tools/repohealth/snapshot.mjs#countLoc",
@@ -17204,7 +17234,7 @@
         "value": {
           "hotspots": [
             {
-              "median": 1.5,
+              "median": 2,
               "path": "packages/host/src/sessions.ts"
             },
             {
@@ -17224,15 +17254,15 @@
               "path": "packages/web/src/App.tsx"
             },
             {
-              "median": 3.5,
-              "path": "packages/web/src/PullSheet.tsx"
-            },
-            {
               "median": 3,
               "path": "packages/web/src/RepoHealthTiles.tsx"
             },
             {
-              "median": 3,
+              "median": 4,
+              "path": "packages/web/src/SetupSheet.tsx"
+            },
+            {
+              "median": 3.5,
               "path": "packages/web/src/repoHealthWords.ts"
             },
             {
@@ -17240,7 +17270,7 @@
               "path": "packages/web/src/storage.ts"
             },
             {
-              "median": 4,
+              "median": 4.5,
               "path": "tools/repohealth.mjs"
             }
           ]
@@ -17250,23 +17280,23 @@
         "value": {
           "areas": {
             "usmc-host": {
-              "ceiling": 123156,
-              "commits": 62,
-              "expected": 51281.5,
-              "p90": 71217,
+              "ceiling": 124335,
+              "commits": 66,
+              "expected": 51340.5,
+              "p90": 71595,
               "subs": 7
             },
             "usmc-web": {
-              "ceiling": 145734,
-              "commits": 103,
-              "expected": 59566,
-              "p90": 93301,
+              "ceiling": 148330,
+              "commits": 111,
+              "expected": 61571,
+              "p90": 95309,
               "subs": 7
             }
           },
           "claudeMdChars": 11955,
-          "descChars": 10277,
-          "skillBodyChars": 262577,
+          "descChars": 10322,
+          "skillBodyChars": 267002,
           "skillCount": 19
         }
       },
@@ -17282,6 +17312,7 @@
           "packages/host/src/git.ts",
           "packages/host/src/ocdb.ts",
           "packages/host/src/paths.ts",
+          "packages/host/src/ptyenv.ts",
           "packages/host/src/repos.ts",
           "packages/host/src/screenlog.ts",
           "packages/host/src/sentlog.ts",
@@ -17357,6 +17388,7 @@
           "packages/web/src/ContextGraph.tsx",
           "packages/web/src/ContextLimits.tsx",
           "packages/web/src/ContextSheet.tsx",
+          "packages/web/src/DictateLangPill.tsx",
           "packages/web/src/DownloadButton.tsx",
           "packages/web/src/Empty.tsx",
           "packages/web/src/FanoutSheet.tsx",
@@ -17389,6 +17421,7 @@
           "packages/web/src/QuestionsSheet.tsx",
           "packages/web/src/QueueSheet.tsx",
           "packages/web/src/RepoColorSheet.tsx",
+          "packages/web/src/RepoHealthMags.tsx",
           "packages/web/src/RepoHealthRegion.tsx",
           "packages/web/src/RepoHealthTable.tsx",
           "packages/web/src/RepoHealthTiles.tsx",
@@ -17405,6 +17438,7 @@
           "packages/web/src/SlashSheet.tsx",
           "packages/web/src/SnippetSheet.tsx",
           "packages/web/src/SpeedTestSheet.tsx",
+          "packages/web/src/StorageSheet.tsx",
           "packages/web/src/SweepSheet.tsx",
           "packages/web/src/SyncMark.tsx",
           "packages/web/src/ToastLayer.tsx",
@@ -17425,6 +17459,7 @@
           "packages/web/src/cliKeys.ts",
           "packages/web/src/clockDirectory.tsx",
           "packages/web/src/collage.ts",
+          "packages/web/src/dictateLang.ts",
           "packages/web/src/dictateQueue.ts",
           "packages/web/src/download.ts",
           "packages/web/src/hints.ts",
@@ -17446,6 +17481,7 @@
           "packages/web/src/sessionFacts.tsx",
           "packages/web/src/settings.ts",
           "packages/web/src/shellLink.ts",
+          "packages/web/src/storageAudit.ts",
           "packages/web/src/termTheme.ts",
           "packages/web/src/theme.ts",
           "packages/web/src/toolbar.ts",
@@ -17498,8 +17534,8 @@
             "deps": 13,
             "devDeps": 15
           },
-          "files": 393,
-          "loc": 163648,
+          "files": 405,
+          "loc": 167303,
           "packages": [
             {
               "files": 2,
@@ -17517,18 +17553,18 @@
               "pkg": "packages/app"
             },
             {
-              "files": 103,
-              "loc": 47445,
+              "files": 106,
+              "loc": 48275,
               "pkg": "packages/host"
             },
             {
-              "files": 54,
-              "loc": 22571,
+              "files": 55,
+              "loc": 23130,
               "pkg": "packages/shared"
             },
             {
-              "files": 183,
-              "loc": 80487,
+              "files": 190,
+              "loc": 82387,
               "pkg": "packages/web"
             },
             {
@@ -17537,34 +17573,34 @@
               "pkg": "scripts"
             },
             {
-              "files": 35,
-              "loc": 10540,
+              "files": 36,
+              "loc": 10906,
               "pkg": "tools"
             }
           ],
           "tape": [
             {
-              "loc": 16351,
+              "loc": 16389,
               "path": "packages/web/src/App.tsx"
             },
             {
-              "loc": 5375,
+              "loc": 5356,
               "path": "packages/host/src/sessions.ts"
+            },
+            {
+              "loc": 3083,
+              "path": "packages/web/src/TokenStatsSheet.tsx"
             },
             {
               "loc": 3074,
               "path": "packages/host/src/intents/manager.ts"
             },
             {
-              "loc": 3073,
-              "path": "packages/web/src/TokenStatsSheet.tsx"
-            },
-            {
               "loc": 2422,
               "path": "packages/shared/src/intent.ts"
             },
             {
-              "loc": 2338,
+              "loc": 2392,
               "path": "packages/host/src/main.ts"
             },
             {
@@ -17580,12 +17616,12 @@
               "path": "packages/web/src/assessRows.ts"
             },
             {
-              "loc": 1580,
-              "path": "packages/web/src/AssessSheet.tsx"
+              "loc": 1620,
+              "path": "packages/web/src/pull.ts"
             },
             {
-              "loc": 1576,
-              "path": "packages/web/src/pull.ts"
+              "loc": 1580,
+              "path": "packages/web/src/AssessSheet.tsx"
             },
             {
               "loc": 1551,
@@ -17596,12 +17632,12 @@
               "path": "packages/host/src/smartpick.ts"
             },
             {
-              "loc": 1470,
-              "path": "packages/web/src/link.ts"
+              "loc": 1486,
+              "path": "packages/host/src/api.ts"
             },
             {
-              "loc": 1457,
-              "path": "packages/host/src/api.ts"
+              "loc": 1470,
+              "path": "packages/web/src/link.ts"
             },
             {
               "loc": 1371,
@@ -17624,12 +17660,12 @@
               "path": "packages/web/src/contextPlot.ts"
             },
             {
-              "loc": 1236,
-              "path": "packages/host/src/deliver.ts"
+              "loc": 1244,
+              "path": "packages/shared/src/wire/messages.ts"
             },
             {
-              "loc": 1229,
-              "path": "packages/shared/src/wire/messages.ts"
+              "loc": 1236,
+              "path": "packages/host/src/deliver.ts"
             },
             {
               "loc": 1161,
@@ -17640,7 +17676,7 @@
               "path": "packages/host/src/capture.ts"
             },
             {
-              "loc": 1126,
+              "loc": 1138,
               "path": "packages/web/src/SendSheet.tsx"
             },
             {
@@ -17668,16 +17704,16 @@
               "path": "packages/web/src/statsPlot.ts"
             },
             {
+              "loc": 994,
+              "path": "packages/host/src/routes/work.ts"
+            },
+            {
               "loc": 984,
               "path": "packages/shared/src/sessioncost.ts"
             },
             {
               "loc": 967,
               "path": "packages/web/src/Gallery.tsx"
-            },
-            {
-              "loc": 950,
-              "path": "packages/host/src/routes/work.ts"
             },
             {
               "loc": 940,
@@ -17692,6 +17728,10 @@
               "path": "packages/host/src/transcript.ts"
             },
             {
+              "loc": 921,
+              "path": "packages/web/src/sendIntent.ts"
+            },
+            {
               "loc": 912,
               "path": "packages/host/src/octranscript.ts"
             },
@@ -17700,24 +17740,24 @@
               "path": "packages/web/src/ActivitySheet.tsx"
             },
             {
-              "loc": 900,
-              "path": "packages/web/src/sendIntent.ts"
-            },
-            {
-              "loc": 888,
-              "path": "packages/web/src/repoHealthWords.ts"
+              "loc": 878,
+              "path": "packages/web/src/api.ts"
             },
             {
               "loc": 866,
               "path": "packages/web/src/ContextSheet.tsx"
             },
             {
-              "loc": 865,
-              "path": "packages/web/src/api.ts"
+              "loc": 849,
+              "path": "packages/web/src/repoHealthWords.ts"
             },
             {
-              "loc": 840,
-              "path": "packages/web/src/RepoHealthTiles.tsx"
+              "loc": 847,
+              "path": "packages/host/src/repohealth.ts"
+            },
+            {
+              "loc": 830,
+              "path": "packages/web/src/BuildSheet.tsx"
             },
             {
               "loc": 825,
@@ -17737,10 +17777,6 @@
             },
             {
               "loc": 766,
-              "path": "packages/web/src/BuildSheet.tsx"
-            },
-            {
-              "loc": 766,
               "path": "packages/web/src/outbox.ts"
             }
           ],
@@ -17754,8 +17790,8 @@
             },
             {
               "ext": ".mjs",
-              "files": 43,
-              "loc": 12228,
+              "files": 44,
+              "loc": 12594,
               "pack": "typescript"
             },
             {
@@ -17766,14 +17802,14 @@
             },
             {
               "ext": ".ts",
-              "files": 254,
-              "loc": 101039,
+              "files": 262,
+              "loc": 103620,
               "pack": "typescript"
             },
             {
               "ext": ".tsx",
-              "files": 87,
-              "loc": 49221,
+              "files": 90,
+              "loc": 49929,
               "pack": "typescript"
             }
           ]
@@ -17801,7 +17837,7 @@
         ],
         "near": [
           {
-            "loc": 1457,
+            "loc": 1486,
             "path": "packages/host/src/api.ts"
           },
           {
@@ -17825,11 +17861,11 @@
             "path": "packages/host/src/intents/manager.ts"
           },
           {
-            "loc": 2338,
+            "loc": 2392,
             "path": "packages/host/src/main.ts"
           },
           {
-            "loc": 5375,
+            "loc": 5356,
             "path": "packages/host/src/sessions.ts"
           },
           {
@@ -17861,7 +17897,7 @@
             "path": "packages/shared/src/smartpick.ts"
           },
           {
-            "loc": 1229,
+            "loc": 1244,
             "path": "packages/shared/src/wire/messages.ts"
           },
           {
@@ -17869,7 +17905,7 @@
             "path": "packages/shared/src/wire/session.ts"
           },
           {
-            "loc": 16351,
+            "loc": 16389,
             "path": "packages/web/src/App.tsx"
           },
           {
@@ -17885,11 +17921,11 @@
             "path": "packages/web/src/ImageAnnotator.tsx"
           },
           {
-            "loc": 1126,
+            "loc": 1138,
             "path": "packages/web/src/SendSheet.tsx"
           },
           {
-            "loc": 3073,
+            "loc": 3083,
             "path": "packages/web/src/TokenStatsSheet.tsx"
           },
           {
@@ -17917,7 +17953,7 @@
             "path": "packages/web/src/link.ts"
           },
           {
-            "loc": 1576,
+            "loc": 1620,
             "path": "packages/web/src/pull.ts"
           },
           {

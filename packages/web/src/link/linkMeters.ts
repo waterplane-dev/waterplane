@@ -2,6 +2,7 @@ import { api } from "../api";
 import { FLUSH_MS, persistNow } from "./linkDoc";
 import { noteTraffic } from "./linkTraffic";
 import { deviceId, rollup } from "./linkLog";
+import { installStallMeters } from "./linkStalls";
 
 /** Best-effort size of a request body. `null` = we cannot know (a stream, a
  *  FormData with files), which is counted as nothing rather than as a guess. */
@@ -116,6 +117,7 @@ export function installLinkMeters(): void {
   } catch { /* best effort */ }
 
   installResourceMeter();
+  installStallMeters(); // every request, for the HTTP stall record (linkStalls.ts)
 
   // ONE write-through, for all four sections. The debounced write is a lost
   // write if the phone is backgrounded first, and backgrounding is how this app

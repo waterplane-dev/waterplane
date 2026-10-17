@@ -19,7 +19,7 @@ const DAY = 86_400_000;
 const T0 = Date.UTC(2026, 0, 5); // a Monday
 const row = (w, f) => ({
   day: new Date(T0 + w * 7 * DAY).toISOString().slice(0, 10), ts: T0 + w * 7 * DAY, prereg: "p1",
-  size: { value: { p95: 100 * f } }, retouch: { value: { rate: 0.5 * f } },
+  size: { value: { p95: 100 * f, lineMean: 400 * f, max: 900 * f, maxPath: "src/big.ts" } }, retouch: { value: { rate: 0.5 * f } },
   hatches: { value: { a: 10 * f } }, context: { value: { claudeMdChars: 10_000 * f, descChars: 0 } },
   untested: { value: Array(Math.round(10 * f)).fill("x") }, classics: { value: { loc: 1000, files: 40 } },
 });
@@ -45,7 +45,7 @@ function make(over = {}) {
   return { deps, log, text, mk: () => new HealthWatch(deps), setNow: (t) => { now = t; } };
 }
 
-test("a series with no baseline or no file is absent, with a reason", () => {
+test("a series with no scored week or no file is absent, with a reason", () => {
   const m = make({ text: { v: null } });
   const w = m.mk();
   const r = w.recompute("/nonexistent/demo");
@@ -53,7 +53,7 @@ test("a series with no baseline or no file is absent, with a reason", () => {
   assert.match(r.reason, /no repo-health series/);
   assert.equal(w.summaryFor("/nonexistent/demo"), undefined);
   m.text.v = asText([row(0, 1)].map((x) => ({ ...x, size: null })));
-  assert.match(w.respond("/nonexistent/demo").reason, /baseline/);
+  assert.match(w.respond("/nonexistent/demo").reason, /no scored week/);
 });
 
 test("boot computes the chip from the series without running the engine", async () => {
@@ -62,7 +62,7 @@ test("boot computes the chip from the series without running the engine", async 
   await w.start();
   w.stop();
   const s = w.summaryFor("/nonexistent/demo");
-  assert.ok(s && s.value < 100, "slipped below the baseline");
+  assert.ok(s && s.value < 100, "slipped below 100");
   assert.equal(s.move, "drop");
 });
 
@@ -94,19 +94,21 @@ test("one push per (week, kind), and not again after a restart", async () => {
   const w = m.mk();
   await w.sweep();
   await w.sweep();
-  assert.equal(m.log.notify.length, 1);
-  const [kind, p] = m.log.notify[0];
+  // The fixture's week is also a new severe alert: one combined push, never two.
+  const moves = () => m.log.notify;
+  assert.equal(moves().length, 1);
+  const [kind, p] = moves()[0];
   assert.equal(kind, "health");
   assert.equal(p.tag, "health:r1");
   assert.match(p.title, /demo/);
   assert.ok(p.body.length > 0);
   const again = m.mk(); // the restart: state is read back from the file
   await again.sweep();
-  assert.equal(m.log.notify.length, 1);
+  assert.equal(moves().length, 1);
   // next week's drop is a new (week, kind)
   m.text.v = asText([...slipping(), row(11, 2.6)]);
   await again.sweep();
-  assert.equal(m.log.notify.length, 2);
+  assert.equal(moves().length, 2);
   assert.ok(JSON.parse(readFileSync(m.deps.statePath, "utf8")).repos);
 });
 
@@ -151,7 +153,7 @@ test("the chip follows the series file when it is rewritten from outside (stamp 
   assert.equal(w.summaryFor("/nonexistent/demo").value, before.value, "an unchanged stamp is served from the cache");
   stamp.v = "2:180";
   const after = w.summaryFor("/nonexistent/demo");
-  assert.ok(after.value > 100, `re-derived from the rewritten file: ${after.value}`);
+  assert.ok(after.value > before.value, `re-derived from the rewritten file: ${after.value}`);
   assert.equal(after.value, repoValue(w.respond("/nonexistent/demo")), "chip and index view agree");
   assert.equal(m.log.refresh.length, 1, "only the boot sweep ran the engine");
   // The file going away takes the chip with it.
@@ -159,4 +161,91 @@ test("the chip follows the series file when it is rewritten from outside (stamp 
   assert.equal(w.summaryFor("/nonexistent/demo"), undefined);
 });
 
+// Healthy rows (every entry near its good line) with the longest file set per week: lines 1000 = fine,
+// 3000 = warn (score 33), 6000 = severe (score 17).
+const healthy = (w, maxLines) => ({
+  ...row(w, 1), size: { value: { p95: 100, lineMean: 300, max: maxLines, maxPath: "src/big.ts" } },
+  retouch: { value: { rate: 0.1 } }, hatches: { value: { a: 1 } }, untested: { value: Array(5).fill("x") },
+});
+const sev = (w, f) => healthy(w, f);
+const severeKind = (m) => m.log.notify.filter(([, p]) => /severe health warning/.test(p.title));
+
+test("a NEW severe alert pushes once; the same week again, and a restart, do not", async () => {
+  const flat = Array.from({ length: 10 }, (_, i) => healthy(i, 1000));
+  const m = make({ text: { v: asText([...flat, sev(10, 6000)]) } });
+  const w = m.mk();
+  await w.sweep();
+  const s1 = severeKind(m);
+  assert.equal(s1.length, 1);
+  assert.equal(s1[0][1].tag, "health:r1");
+  assert.equal(s1[0][1].title, "demo: severe health warning");
+  assert.match(s1[0][1].body, /severe/);
+  await w.sweep();
+  await m.mk().sweep();
+  assert.equal(severeKind(m).length, 1);
+});
+
+test("severe all along: no push", async () => {
+  const rows = Array.from({ length: 12 }, (_, i) => healthy(i, 6000));
+  const m = make({ text: { v: asText(rows) } });
+  await m.mk().sweep();
+  assert.equal(severeKind(m).length, 0);
+});
+
+test("warn to severe pushes", async () => {
+  const pre = Array.from({ length: 10 }, (_, i) => healthy(i, 3000));
+  const probe = make({ text: { v: asText([...pre, healthy(10, 3000)]) } }).mk().respond("/nonexistent/demo");
+  assert.ok(probe.series.points.at(-1).alerts.some((a) => a.level === "warn"), "setup is warn-level");
+  const m = make({ text: { v: asText([...pre, healthy(10, 6000)]) } });
+  await m.mk().sweep();
+  assert.equal(severeKind(m).length, 1);
+});
+
+test("the first scored week stays silent", async () => {
+  const m = make({ text: { v: asText([healthy(0, 6000)]) } });
+  await m.mk().sweep();
+  assert.equal(severeKind(m).length, 0);
+});
+
 function repoValue(r) { return r.series.points[r.series.points.length - 1].index; }
+
+test("a series measured before lineMean says to re-measure, naming the command", () => {
+  const old = Array.from({ length: 3 }, (_, i) => {
+    const r = row(i, 1);
+    delete r.size.value.lineMean;
+    return r;
+  });
+  const w = make({ text: { v: asText(old) } }).mk();
+  const r = w.respond("/nonexistent/demo");
+  assert.equal(r.series, null);
+  assert.match(r.reason, /older engine/);
+  assert.match(r.reason, /rm <repo>\/\.waterplane\/repohealth\.jsonl && node tools\/repohealth\.mjs update --root=<repo>/);
+  // a series that simply lacks another reading keeps the generic reason
+  const other = make({ text: { v: asText([row(0, 1)].map((x) => ({ ...x, retouch: { value: null, reason: "x" } }))) } }).mk();
+  assert.match(other.respond("/nonexistent/demo").reason, /no week has every enabled reading/);
+});
+
+test("a move and a severe alert in one sweep are ONE push: severe title, severe texts then the move body", async () => {
+  const flat = Array.from({ length: 10 }, (_, i) => healthy(i, 1000));
+  const m = make({ text: { v: asText([...flat, sev(10, 6000)]) } });
+  const probe = m.mk().respond("/nonexistent/demo");
+  assert.ok(probe.move?.kind, "setup: the week is also a called move");
+  await m.mk().sweep();
+  assert.equal(m.log.notify.length, 1);
+  const [, p] = m.log.notify[0];
+  assert.equal(p.title, "demo: severe health warning");
+  assert.equal(p.tag, "health:r1");
+  const lines = p.body.split("\n");
+  assert.match(lines[0], /severe/);
+  assert.ok(p.body.endsWith(probe.words.body), p.body);
+});
+
+test("no severe push on a gap week (a definition change), however bad the new reading", async () => {
+  const flat = Array.from({ length: 10 }, (_, i) => healthy(i, 1000));
+  const gapRow = { ...sev(10, 6000), prereg: "p2" };
+  const m = make({ text: { v: asText([...flat, gapRow]) } });
+  const r = m.mk().respond("/nonexistent/demo");
+  assert.equal(r.series.points.at(-1).gap, true, "setup: last week is a gap");
+  await m.mk().sweep();
+  assert.equal(severeKind(m).length, 0);
+});

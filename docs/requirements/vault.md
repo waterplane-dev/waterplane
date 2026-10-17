@@ -199,3 +199,18 @@ The owner exports every login as a real login item to KeePass (KDBX, with the ot
 A "step by step" screen lists every secret a migration concerns — each stored secret with an origin, and each row of the last scan not yet in the vault — under to do, waiting for a session, done and set aside, each with the step it is at in one line. Opening one shows its five steps (move it in, find who reads it, decide each program, try the vault copy, remove the plain-text original) with the button for the current one; the step is derived from what the desktop reports, so leaving at any step and coming back resumes there. Programs are decided before the original is removed, and an original already removed while a program still reads it is listed first and says so. "Set aside" moves a secret to its own list (kept on the desktop, ids only, a history row each time), from which "bring back" returns it; a set-aside secret is not the home's next step.
 - asked: 2026-10-16 (owner: "a per secret stepped setup wizard … resume per secret and see it easily at a glance where every secret stands and if it is in scope for such a migration or by user set to the other list from which it can also be removed again")
 - shipped: 343f8254
+
+### R-vault-041 · shipped
+Adding a secret is one tap from the vault home, in every state where a put is possible (the desktop connected, the vault made, no enrol running), on the phone and in a laptop's browser; when it is not possible the home says why in words.
+- asked: 2026-10-17 (owner: "that MUST be super easy for the user!!!")
+- shipped: adac8cc4
+
+### R-vault-042 · shipped
+For the known kinds (npm token, GitHub token, environment variable, file) the add-a-secret screen fills the id, kind and label, so the person types a name and a value. An npm token also offers the `~/.npmrc` `${NPM_TOKEN}` line on the SAME fingerprint card, which names every file change; a line already holding another literal token is refused in words.
+- asked: 2026-10-17 (owner: "that MUST be super easy for the user!!!")
+- shipped: adac8cc4 f26ac238
+
+### R-vault-043 · shipped
+A value typed in another client's browser (a laptop's, or the desktop's own) travels to the desktop over the one WebSocket, waits in memory only until the phone approves, and is dropped on deny, timeout or restart. The phone's card names the paired device it came from (or a browser that is not a paired device) and its route; the desktop's own browser behind `tailscale serve` reads as Tailscale, loopback only at plain http://127.0.0.1. A device that is not the phone can at most propose a put: it cannot read or release anything.
+- asked: 2026-10-17 (owner: "that MUST be super easy for the user!!!")
+- shipped: a5a6d749 f26ac238 adac8cc4

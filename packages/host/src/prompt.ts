@@ -49,8 +49,7 @@ const OPTION_RE = /^\s*(?:(\S)\s+)?(\d+)\.\s+(.+?)\s*$/;
  * "New Files sheet     \u250c\u2500\u2500\u2500\u2510".
  */
 const SIDE_PANEL_RE = /\s{2,}[\u2500-\u257f].*$/;
-/** Multi-select rows carry their own checkbox: "1. [ ] Prose questions". A TICKED row is drawn
- *  "[✔]" (U+2714, 2.1.301), not "[✓]": missed, the mark stayed in the label and toggling relabelled the box. */
+/** Multi-select rows carry a checkbox, "1. [ ] Prose"; TICKED is "[✔]" (U+2714, 2.1.301), published as `checked`. */
 const CHECKBOX_RE = /^\[( |x|X|\u2713|\u2714)\]\s*/;
 /** Real option labels are short. Anything longer is prose that happens to be numbered. */
 const MAX_LABEL = 160;
@@ -543,7 +542,7 @@ export function detectPrompt(rawTail: string, opts: DetectOpts = {}): DetectedPr
       let label = m[3].replace(SIDE_PANEL_RE, "").trim();
       const box = CHECKBOX_RE.exec(label);
       if (box) { multi = true; label = label.slice(box[0].length).trim(); }
-      options.unshift({ index: idx, label });
+      options.unshift(box ? { index: idx, label, checked: box[1] !== " " } : { index: idx, label });
       gap = 0;
       boxSeen = true;
       continue;
@@ -803,10 +802,10 @@ const GENERIC_ROW_RE = /^(other|chat about this|type something\.?|none of these)
  * Do two published boxes say the same thing? Field by field, because
  * `JSON.stringify` also compares KEY ORDER — and the merge builds its object in
  * its own order, so a byte comparison reported a change on the pass after every
- * merge: one more broadcast, one more push, one more plugin event per box, for a
- * card that had not moved.
+ * merge: one more broadcast, push and plugin event per box, for a card that had not
+ * moved. `ticks: "ignore"` asks "same apart from checkbox ticks" (a toggle: no push).
  */
-export function samePrompt(a: DetectedPrompt | null, b: DetectedPrompt | null): boolean {
+export function samePrompt(a: DetectedPrompt | null, b: DetectedPrompt | null, ticks?: "ignore"): boolean {
   if (!a || !b) return a === b || (!a && !b);
   if (a.kind !== b.kind || a.question !== b.question) return false;
   if (!!a.multi !== !!b.multi || !!a.nav !== !!b.nav || !!a.truncated !== !!b.truncated) return false;
@@ -815,8 +814,8 @@ export function samePrompt(a: DetectedPrompt | null, b: DetectedPrompt | null): 
   if ((a.submitLabel ?? "") !== (b.submitLabel ?? "")) return false;
   if ((a.plan?.text ?? "") !== (b.plan?.text ?? "") || !!a.plan?.cut !== !!b.plan?.cut) return false;
   if (a.options.length !== b.options.length) return false;
-  return a.options.every((o, i) =>
-    o.index === b.options[i].index && o.label === b.options[i].label && (o.desc ?? "") === (b.options[i].desc ?? ""));
+  return a.options.every((o, i) => o.index === b.options[i].index && o.label === b.options[i].label &&
+    (o.desc ?? "") === (b.options[i].desc ?? "") && (ticks === "ignore" || o.checked === b.options[i].checked));
 }
 
 /**
@@ -842,10 +841,11 @@ export function mergeBox(published: DetectedPrompt, parsed: DetectedPrompt): Det
     // makes an answer queued against it stale, which is the whole thing this
     // merge exists to stop; and a garbled read that happens to be longer (a
     // panel border the side-panel cut missed) then wins permanently, since
-    // the correct shorter read can never take it back. A label the terminal cut
-    // is a label the card shows cut — and `desc`/`ask`, which carry the CLI's
-    // own full words, are what make that readable anyway.
-    if (!byIndex.has(o.index)) byIndex.set(o.index, o);
+    // the correct shorter read can never take it back (`desc`/`ask` carry the
+    // full words). Ticks are the one row field where the FRESHEST read wins.
+    const had = byIndex.get(o.index);
+    if (!had) byIndex.set(o.index, o);
+    else if (o.checked !== undefined) byIndex.set(o.index, { ...had, checked: o.checked });
   }
   // Lowest indices first and capped there: the head is the half that scrolled
   // away, so if anything has to go it is the tail — which is on screen.

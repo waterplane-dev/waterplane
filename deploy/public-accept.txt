@@ -73,3 +73,8 @@ packages/host/test/pluginstreams.test.mjs:493:c362911efb  # tailscale-ip fixture
 packages/web/src/features/hosts/logic.test.mjs:89:0251066234  # ts-net-name fixture
 scripts/e2e-passive.mjs:116:239cdea170  # tailscale-ip fixture
 scripts/release/public-lib.test.mjs:215:422e825151  # session-url fixture
+# The one real address allowed here, on purpose: owner decision 2026-10-17, the privacy pages
+# name the owner's personal email as the GDPR Art. 13 contact (a public issue is not a private
+# channel). Nowhere else; SECURITY.md stays address-free.
+site/game-privacy.html:43:2bf2ef5834  # personal-email, privacy contact (owner decision)
+site/privacy.html:115:2bf2ef5834  # personal-email, privacy contact (owner decision)

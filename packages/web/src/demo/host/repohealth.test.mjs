@@ -6,7 +6,7 @@ import { demoRepoHealth, hasDemoRepoHealth } from "./repohealth.ts";
 import { demoHttp } from "./demohttp.ts";
 
 const NOW = new Date(2026, 9, 2, 15, 20).getTime();
-const NAMES = ["todo-garden", "pocket-notes", "trail-log"];
+const NAMES = ["todo-garden", "pocket-notes", "trail-log", "photo-shelf"];
 const vals = (pts) => pts.map((p) => p.v);
 
 test("shape: the real host's plot reader accepts every demo repo's plot, whole", () => {

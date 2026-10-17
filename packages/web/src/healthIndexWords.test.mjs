@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   healthChip, indexLineGeom, contributionBars, signedWhole, signedTenths, indexExplainWords, gapWords,
-  barsCaptionWords, weekChangeWords, HEALTH_ENTRY_NAME, HEALTH_ENTRY_MEASURE,
+  barsCaptionWords, weekChangeWords, HEALTH_ENTRY_NAME, HEALTH_ENTRY_MEASURE, HEALTH_GOOD_WORDS, trendWords,
   weekWhenWords, indexBasketWords, carriedWords, linkSpanWords, sinceBaselineWords, indexVsWords, treeGrowthWords, indexAskLabel,
 } from "./healthIndexWords.ts";
 
@@ -11,6 +11,15 @@ test("absent healthIndex draws no chip, never Health 0", () => {
   assert.equal(healthChip(undefined, "r"), null);
   assert.equal(healthChip(null, "r"), null);
   assert.equal(healthChip({ value: NaN, deltaWeek: 1, week: "2026-10-12", move: null }, "r"), null);
+});
+
+test("chip tone follows the alert first (severe, then warn), a called move second; absent alert says nothing", () => {
+  const sev = healthChip({ value: 62, deltaWeek: 0, week: "w", move: "rise", alert: "severe", alertText: "severe: src/a.ts is 5,200 lines (good: under 1,000)" }, "r");
+  assert.equal(sev.tone, "severe");
+  assert.match(sev.title, /severe: src\/a\.ts is 5,200 lines/);
+  assert.equal(healthChip({ value: 62, deltaWeek: 0, week: "w", move: null, alert: "warn" }, "r").tone, "warn");
+  assert.equal(healthChip({ value: 90, deltaWeek: 0, week: "w", move: "rise", alert: null }, "r").tone, "calm");
+  assert.equal(healthChip({ value: 90, deltaWeek: 0, week: "w", move: null }, "r").tone, null, "an older host's missing alert is not a verdict either way");
 });
 
 test("chip rounds, arrows follow the sign, tone follows the called move only", () => {
@@ -31,7 +40,12 @@ test("chip rounds, arrows follow the sign, tone follows the called move only", (
   assert.equal(carried.delta, null);
   assert.equal(carried.arrow, null);
   const flat = healthChip({ value: 100, deltaWeek: 0.2, week: "w", move: null }, "r");
-  assert.equal(flat.arrow, "flat");
+  assert.equal(flat.arrow, null, "a delta that rounds to 0 shows neither arrow nor number");
+  assert.equal(flat.delta, null);
+  const calledZero = healthChip({ value: 46, deltaWeek: 0, week: "w", move: "drop", alert: "severe" }, "r");
+  assert.equal(calledZero.arrow, null);
+  assert.equal(calledZero.delta, null);
+  assert.equal(calledZero.tone, "severe");
   assert.match(drop.title, /Tap to open the readings/);
 });
 
@@ -42,21 +56,24 @@ test("signed numbers use a real minus", () => {
   assert.equal(signedTenths(1.44), "+1.4");
 });
 
-test("line: baseline always inside the box, a gap breaks the run", () => {
+test("line: a fixed 0-100 axis (no baseline pin), a gap breaks the run", () => {
   const pts = [
     { index: 100, gap: false }, { index: 104, gap: false }, { index: 104, gap: true }, { index: 98, gap: false },
   ];
   const g = indexLineGeom(pts, 300, 60);
-  assert.ok(g.baseY >= 0 && g.baseY <= 60);
+  assert.deepEqual(g.rules.map((r) => r.v), [100, 50, 0]);
+  assert.ok(g.rules[0].y < g.rules[1].y && g.rules[1].y < g.rules[2].y, "100 is at the top, 0 at the bottom");
   assert.equal((g.d.match(/M/g) ?? []).length, 2, "the carried week starts a new run");
   assert.equal(g.gaps, 1);
   assert.equal(g.pts.length, 4);
   assert.equal(g.endX, 300);
-  // Baseline stays on the chart even when every point is above 100.
-  const up = indexLineGeom([{ index: 110, gap: false }, { index: 120, gap: false }], 100, 40);
-  assert.ok(up.baseY > 0 && up.baseY <= 40);
+  // The axis is not fitted: the same score sits at the same height whatever else is plotted.
+  const a = indexLineGeom([{ index: 40, gap: false }, { index: 42, gap: false }], 100, 40);
+  const b = indexLineGeom([{ index: 40, gap: false }, { index: 90, gap: false }], 100, 40);
+  assert.equal(a.pts[0].y, b.pts[0].y);
+  assert.ok(a.pts[1].y > b.pts[1].y, "a higher score is drawn higher");
   assert.equal(indexLineGeom([], 100, 40), null);
-  // A flat series at 100 does not produce NaN.
+  // A flat series does not produce NaN.
   const flat = indexLineGeom([{ index: 100, gap: false }, { index: 100, gap: false }], 100, 40);
   assert.doesNotMatch(flat.d, /NaN/);
 });
@@ -76,7 +93,7 @@ test("bars: one scale, fixed order, plain names, absent entries absent", () => {
   assert.equal(HEALTH_ENTRY_NAME.context, "CLAUDE.md + skills");
 });
 
-test("sentences name the baseline and avoid verdict words", () => {
+test("sentences name the first scored week and avoid verdict words", () => {
   const all = [
     indexExplainWords("2026-08-03", "waterplane"), gapWords(1), gapWords(3), barsCaptionWords("2026-10-12"),
     indexExplainWords("2026-08-03", "waterplane", { disabled: ["untested"], overridden: ["size"] }),
@@ -87,10 +104,33 @@ test("sentences name the baseline and avoid verdict words", () => {
     healthChip({ value: 110, deltaWeek: 4, week: "w", move: "rise" }, "r").title,
     ...Object.values(HEALTH_ENTRY_NAME), ...Object.values(HEALTH_ENTRY_MEASURE),
   ].join("\n");
-  assert.match(indexExplainWords("2026-08-03", "waterplane"), /baseline week 2026-08-03/);
-  for (const word of ["score", "grade", "healthy", "unhealthy", "good", "bad", "should", "worse", "better"]) {
+  const explain = indexExplainWords("2026-08-03", "waterplane");
+  assert.match(explain, /first scored week, 2026-08-03/);
+  assert.match(explain, /out of 100/);
+  assert.match(explain, /within 30 of its worst entry/);
+  assert.doesNotMatch(explain, /baseline|chained|carried|average change/i);
+  // "score" and "good" are the intended words now; the rest stay banned.
+  for (const word of ["grade", "healthy", "unhealthy", "bad", "should", "worse", "better"]) {
     assert.doesNotMatch(all, new RegExp(`\\b${word}\\b`, "i"), word);
   }
+});
+
+test("the explain sentence lists every fixed good value, pinned to shared's HEALTH_GOOD", async () => {
+  const { HEALTH_GOOD, HEALTH_CONTEXT_GOOD_SHARE, HEALTH_SCORE_CAP_GAP, HEALTH_INDEX_DEFAULT_WARN_CHARS } = await import("@waterplane/shared");
+  const n = (x) => x.toLocaleString("en-US");
+  assert.match(HEALTH_GOOD_WORDS.size, new RegExp(`under ${HEALTH_GOOD.lineMean} lines.*under ${n(HEALTH_GOOD.max)}`));
+  assert.match(HEALTH_GOOD_WORDS.retouch, new RegExp(`under ${Math.round(HEALTH_GOOD.retouch * 100)}%`));
+  assert.match(HEALTH_GOOD_WORDS.hatches, new RegExp(`under ${HEALTH_GOOD.hatches} `));
+  assert.match(HEALTH_GOOD_WORDS.untested, new RegExp(`under ${Math.round(HEALTH_GOOD.untested * 100)}%`));
+  assert.match(HEALTH_GOOD_WORDS.context, new RegExp(`${n(HEALTH_CONTEXT_GOOD_SHARE * HEALTH_INDEX_DEFAULT_WARN_CHARS)} characters`));
+  assert.match(indexExplainWords("w", "p"), new RegExp(`within ${HEALTH_SCORE_CAP_GAP} of its worst`));
+});
+
+test("the trend line: since the first scored week, then this week; a lone week has none", () => {
+  const first = { index: 70, week: "2026-08-03" };
+  assert.equal(trendWords(65, first, false, 0, "2026-10-12", "2026-10-12"), "−5 since 2026-08-03, ±0 this week");
+  assert.equal(trendWords(65, first, false, null, "2026-10-05", "2026-10-12"), "−5 since 2026-08-03, no change to state in the week of 2026-10-05");
+  assert.equal(trendWords(70, first, true, null), null);
 });
 
 test("'this week' only when the latest measured week IS the current one; otherwise the week is named", () => {
@@ -121,22 +161,29 @@ test("the basket sentence counts what the repo disabled and names what it overro
   assert.doesNotMatch(cap, /compares across repos/, "a changed basket does not claim cross-repo comparability");
 });
 
-test("carried weeks say why; a link over silent weeks says how many", () => {
-  assert.equal(carriedWords("central"), "carried: this repo changed which readings it overrides or disables");
-  assert.match(carriedWords("prereg"), /definitions changed/);
-  assert.match(carriedWords(undefined), /nothing comparable/);
+test("the size entry says it blends the average line's file with the longest file", () => {
+  assert.match(HEALTH_ENTRY_MEASURE.size, /line-weighted mean file length.*longest file/);
+  assert.doesNotMatch(HEALTH_ENTRY_MEASURE.size, /percentile/);
+});
+
+test("weeks whose move is not compared say why; a link over silent weeks says how many", () => {
+  assert.equal(carriedWords("central"), "move not compared: this repo changed which readings it overrides or disables that week");
+  assert.match(carriedWords("prereg"), /definitions changed that week/);
+  assert.match(carriedWords(undefined), /not compared with the week before/);
+  assert.match(gapWords(1), /definition changed that week.*score is still measured/);
+  assert.doesNotMatch(gapWords(2) + carriedWords("prereg"), /carried|not measured/);
   assert.equal(linkSpanWords(7), null);
   assert.equal(linkSpanWords(null), null);
   assert.equal(linkSpanWords(21), "one link over 3 weeks with no measured week between");
 });
 
 test("since baseline, vs a named week, and the tree's growth", () => {
-  assert.equal(sinceBaselineWords(112.4), "+12 since baseline");
+  assert.equal(sinceBaselineWords(52.4, 40, "2026-08-03"), "+12 since 2026-08-03");
   assert.equal(indexVsWords({ delta: 18.2, then: { week: "2026-06-22" } }), "+18 vs week of 2026-06-22");
   assert.equal(indexVsWords(null), null);
   assert.equal(
     treeGrowthWords({ files: 100, loc: 10_000 }, { files: 150, loc: 9_000 }, "2026-08-03"),
-    "The tree: 150 source files and 9,000 lines, against 100 and 10,000 in the baseline week 2026-08-03 (+50% files, −10% lines).");
+    "The tree: 150 source files and 9,000 lines, against 100 and 10,000 in the first scored week 2026-08-03 (+50% files, −10% lines).");
   assert.equal(treeGrowthWords(null, { files: 1, loc: 1 }, "w"), null);
 });
 
@@ -156,4 +203,13 @@ test("line: a link over more than one week is DASHED, never a measured run, and 
   assert.deepEqual(lone.dots, []);
   // Without spanDays (an older caller) nothing is dashed.
   assert.equal(indexLineGeom([{ index: 100, gap: false }, { index: 101, gap: false }], 100, 40).dashed, "");
+});
+
+test("a series from a host before the absolute score is recognised by the missing mean, never drawn as a score", async () => {
+  const { olderHostSeries, olderHostWords } = await import("./healthIndexWords.ts");
+  assert.equal(olderHostSeries([{ index: 100 }, { index: 96 }]), true);
+  assert.equal(olderHostSeries([{ index: 70, mean: 72 }]), false);
+  assert.equal(olderHostSeries([]), false);
+  assert.equal(olderHostSeries(undefined), false);
+  assert.match(olderHostWords("Acme"), /older Acme.*restart/);
 });

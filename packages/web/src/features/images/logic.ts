@@ -240,13 +240,17 @@ export function outboxCut(r: { outboxSeenAt?: number | null; outboxCount: number
  * route (the pad, the Send sheet), and a picture routed past that sheet into
  * the session would land somewhere the person was not looking. A picture
  * already on the annotator is the last copy of its marks, so a second paste
- * never replaces it: `ask` — append it to the batch, or leave it.
+ * never replaces it: `ask` — append it to the batch, or leave it. A paste
+ * some nearer handler already took (`handled`: the compose box's own onPaste
+ * ran first and called preventDefault) is never taken a second time — that
+ * was two copies of every Ctrl+V'd screenshot.
  */
 export type PasteRoute = "route" | "ask" | "ignore";
 export function pasteRoute(p: {
   files: number; editable: boolean; inCompose: boolean; sheet: boolean; annotating: boolean; repoId: string | null;
+  handled?: boolean;
 }): PasteRoute {
-  if (!p.files || !p.repoId) return "ignore";
+  if (p.handled || !p.files || !p.repoId) return "ignore";
   if (p.editable && !p.inCompose) return "ignore";
   if (p.annotating) return "ask";
   if (p.sheet && !p.inCompose) return "ignore";

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, TriangleAlert } from "lucide-react";
+import { NET_STALL_MS } from "@waterplane/shared";
 import { useLink } from "./link";
 
 /**
@@ -33,7 +34,9 @@ import { useLink } from "./link";
  */
 const SHOW_MS = 400;
 const WORDS_MS = 2000;
-const STALL_MS = 12000;
+/** One number with the stall record (`shared/netstall.ts`), so "the chip said
+ *  stalled" and "a stall was recorded" are the same moment. */
+const STALL_MS = NET_STALL_MS;
 /** How long the strip stays up after the last request settles, so back-to-back
  *  calls read as one wait instead of a stutter. */
 const LINGER_MS = 400;

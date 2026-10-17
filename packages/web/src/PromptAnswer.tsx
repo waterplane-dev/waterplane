@@ -1,4 +1,4 @@
-import { Bot, CloudOff, ScrollText } from "lucide-react";
+import { Bot, CloudOff, ScrollText, Square, SquareCheck } from "lucide-react";
 import type { AnswerSuggestion, DetectedPrompt } from "@waterplane/shared";
 import { copyText } from "./api";
 import { Markdown } from "./Markdown";
@@ -114,6 +114,7 @@ export function PromptAnswer({ prompt: p, queued, suggestion, onAnswer, ev }: Pr
           return (
             <button
               key={o.index}
+              {...(o.checked === undefined ? {} : { role: "checkbox", "aria-checked": o.checked })}
               // Option 1 is the CLI's own first choice on a numbered box ("Yes"); a `nav` box keeps
               // no such order — claude 2.1.293's trust box lists "No, exit" first — so none is primary.
               className={`approve-btn ${o.index === 1 && !p.multi && !p.nav ? "primary" : ""} ${suggested ? "suggested" : ""}`}
@@ -135,7 +136,15 @@ export function PromptAnswer({ prompt: p, queued, suggestion, onAnswer, ev }: Pr
               }}
             >
               <span className="approve-lbl">
-                {suggested ? <Bot size={13} style={{ verticalAlign: "-2px", marginRight: 3 }} /> : null}{p.nav ? "" : `${o.index}. `}{o.label}
+                {suggested ? <Bot size={13} style={{ verticalAlign: "-2px", marginRight: 3 }} /> : null}
+                {/* The tick the TUI drew on this row (host `prompt.ts`), so the card
+                    says which are already on before a tap toggles one OFF. No box
+                    when the host could not read one: an empty box would claim "not
+                    ticked" about a row nobody saw. */}
+                {o.checked === undefined ? null : o.checked
+                  ? <SquareCheck size={16} aria-label="ticked" className="approve-tick" />
+                  : <Square size={16} aria-label="not ticked" className="approve-tick" />}
+                {p.nav ? "" : `${o.index}. `}{o.label}
               </span>
               {o.desc && <span className="approve-desc">{o.desc}</span>}
               {/* A tap here makes a standing rule (host `answergate.ts`): said on the

@@ -448,6 +448,8 @@ export const HANDLERS = {
   // A device's own install log, reported at boot: nothing to keep in a demo, and
   // a toast for it would greet every first look.
   "install.report": { tier: "A", run: () => {} },
+  // The HTTP stall record: nothing to keep in a demo.
+  "net.stalls": { tier: "A", run: () => {} },
   "intent.cancel": RUNS,
   "intent.requeue": RUNS,
   "intent.retarget": RUNS,

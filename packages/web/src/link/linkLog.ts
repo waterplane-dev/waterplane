@@ -4,6 +4,7 @@ import { DEVICE_KEY, SAMPLE_CAP, blankLog, doc, persist, persistNow } from "./li
 import { status } from "./linkStatus";
 import { emit, invalidate } from "./linkBus";
 import { buckets } from "./linkTraffic";
+import { noteStallPong } from "./linkStalls";
 
 /**
  * The phone's half of `host/netstats.ts`.
@@ -52,7 +53,7 @@ export function deviceId(): string {
 
 /** A heartbeat pong came back. NOT the pulse probe — see the pulse section's
  *  second rule; these are what deadlines are sized from. */
-export function noteRtt(ms: number): void { sample(doc.log.rtt, ms); persist(); }
+export function noteRtt(ms: number): void { sample(doc.log.rtt, ms); noteStallPong(ms); persist(); }
 
 /** The `ws.ts` watchdog is about to hard-reload the page. Recorded BEFORE the
  *  reload, and written through synchronously — a debounced write would not

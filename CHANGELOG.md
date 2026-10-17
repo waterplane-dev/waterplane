@@ -3,7 +3,74 @@
 Notable changes. This project has no release branches — `main` is the supported
 version — so entries are grouped by the release they shipped in.
 
-## Unreleased
+## 0.1.0 — first public release
+
+Everything below already existed privately; this is what the first public
+version contains, plus the work done to make it fit to publish.
+
+### Features
+
+- **Sessions** — spawn and attach real `claude` CLI sessions per repo, worktree
+  or branch over one WebSocket; model / effort / permission mode per session;
+  fork a session; adopt sessions started in your own terminal; survive a host
+  restart via `--continue`, or live inside tmux with `USMC_TMUX=1`.
+- **Reader view** — a plain-DOM alternative to the terminal for the same
+  session, parsed from Claude's own conversation log, with an outline, find bar
+  and an unread watermark.
+- **Backlog** — queued instructions that fire into fresh worktrees (parallel) or
+  one session (queue), with turn boundaries taken from Claude's hooks.
+- **Usage-limit auto-continue** — detect the limit, resume at the reset time,
+  and reopen the conversation with `--continue` when the CLI exited outright.
+- **Builds** — saved shell build commands runnable from the phone with no Claude
+  session, so a rate limit doesn't stop you shipping an APK.
+- **Git** — diffs, stage/unstage, commit, branch create/switch/delete, push.
+- **Images and files** both directions, with annotation, zoom and swipe.
+- **Prompt detection and one-tap approve**, Web Push notifications, voice
+  dictation, slash palette, search, speed test, usage meter, LAN password gate,
+  write-only secret entry.
+- **Decision oracle** (optional, off by default) — a second model suggests an
+  answer to routine prompts; never for permission, destructive or plan prompts.
+
+### Security
+
+- **Same-origin guard on `/api/*` and the WebSocket.** Previously the WS had no
+  `Origin` check and the API answered `access-control-allow-origin: *`. Since
+  loopback and Tailscale peers are trusted without a password, any web page open
+  in a browser on the host — or on any tailnet device — could open a socket,
+  spawn a session and execute code, without ever being on the tailnet. Both
+  `Origin` and `Host` (DNS rebinding) are now checked, with `Sec-Fetch-Site` as
+  the backstop for cross-origin GETs, and no `/api` GET mutates state.
+- **Worktree containment.** `newWorktree` accepted a `basePath` off the request
+  body with no guard; it is now confined to the scan root, and the containment
+  check compares realpath-resolved paths.
+- LAN password minimum raised from 4 to 8 characters.
+- The file viewer no longer renders dotenv files, so the secret sheet's "never
+  shown back" promise holds for the app's own surfaces.
+
+### Safety
+
+- `bypassPermissions` and `dontAsk` require an explicit confirmation, mark the
+  control as dangerous, and show a standing indicator while armed.
+- `install-service.sh` warns before baking an inherited `USMC_ALLOW_PUBLIC=1`
+  into a service that then runs on every login, and ships an uninstaller.
+
+### First run
+
+- **`npm run doctor`** — preflight for the failures that are otherwise silent:
+  logged-out `claude`, missing `node-pty`, no Tailscale IP, no secure context,
+  busy port. Also runs at boot; `USMC_PREFLIGHT=0` opts out.
+
+### Project
+
+- `npm test` runs every `e2e-*.mjs` via `scripts/run-e2e.mjs`; the previous
+  hand-maintained list had drifted to a third of the suite. CI runs the full
+  suite on Linux and macOS.
+- README rewritten against the code, `.env.example` completed, and SECURITY.md,
+  NOTICES.md, CONTRIBUTING.md, issue/PR templates added.
+- Public name is **UNSUCK AMC**. `usmc` remains only as an internal identifier
+  (`USMC_*` env vars, the `.usmc/` state directory, npm workspace names).
+
+### Since the first private snapshot (2026-10-07)
 
 - **Windows from a Windows checkout.** Build in PowerShell, and `npm run
   restart` / `stop` / `start` / `doctor` / `dev` run the host inside WSL2 from
@@ -954,70 +1021,3 @@ version — so entries are grouped by the release they shipped in.
   `.claude/inbox` / `.claude/outbox` / `.usmc` dirs. An optional one-line
   description seeds the README/CLAUDE.md; a "set up for phone use" toggle falls
   back to the old bare `git init`.
-
-## 0.1.0 — first public release
-
-Everything below already existed privately; this is what the first public
-version contains, plus the work done to make it fit to publish.
-
-### Features
-
-- **Sessions** — spawn and attach real `claude` CLI sessions per repo, worktree
-  or branch over one WebSocket; model / effort / permission mode per session;
-  fork a session; adopt sessions started in your own terminal; survive a host
-  restart via `--continue`, or live inside tmux with `USMC_TMUX=1`.
-- **Reader view** — a plain-DOM alternative to the terminal for the same
-  session, parsed from Claude's own conversation log, with an outline, find bar
-  and an unread watermark.
-- **Backlog** — queued instructions that fire into fresh worktrees (parallel) or
-  one session (queue), with turn boundaries taken from Claude's hooks.
-- **Usage-limit auto-continue** — detect the limit, resume at the reset time,
-  and reopen the conversation with `--continue` when the CLI exited outright.
-- **Builds** — saved shell build commands runnable from the phone with no Claude
-  session, so a rate limit doesn't stop you shipping an APK.
-- **Git** — diffs, stage/unstage, commit, branch create/switch/delete, push.
-- **Images and files** both directions, with annotation, zoom and swipe.
-- **Prompt detection and one-tap approve**, Web Push notifications, voice
-  dictation, slash palette, search, speed test, usage meter, LAN password gate,
-  write-only secret entry.
-- **Decision oracle** (optional, off by default) — a second model suggests an
-  answer to routine prompts; never for permission, destructive or plan prompts.
-
-### Security
-
-- **Same-origin guard on `/api/*` and the WebSocket.** Previously the WS had no
-  `Origin` check and the API answered `access-control-allow-origin: *`. Since
-  loopback and Tailscale peers are trusted without a password, any web page open
-  in a browser on the host — or on any tailnet device — could open a socket,
-  spawn a session and execute code, without ever being on the tailnet. Both
-  `Origin` and `Host` (DNS rebinding) are now checked, with `Sec-Fetch-Site` as
-  the backstop for cross-origin GETs, and no `/api` GET mutates state.
-- **Worktree containment.** `newWorktree` accepted a `basePath` off the request
-  body with no guard; it is now confined to the scan root, and the containment
-  check compares realpath-resolved paths.
-- LAN password minimum raised from 4 to 8 characters.
-- The file viewer no longer renders dotenv files, so the secret sheet's "never
-  shown back" promise holds for the app's own surfaces.
-
-### Safety
-
-- `bypassPermissions` and `dontAsk` require an explicit confirmation, mark the
-  control as dangerous, and show a standing indicator while armed.
-- `install-service.sh` warns before baking an inherited `USMC_ALLOW_PUBLIC=1`
-  into a service that then runs on every login, and ships an uninstaller.
-
-### First run
-
-- **`npm run doctor`** — preflight for the failures that are otherwise silent:
-  logged-out `claude`, missing `node-pty`, no Tailscale IP, no secure context,
-  busy port. Also runs at boot; `USMC_PREFLIGHT=0` opts out.
-
-### Project
-
-- `npm test` runs every `e2e-*.mjs` via `scripts/run-e2e.mjs`; the previous
-  hand-maintained list had drifted to a third of the suite. CI runs the full
-  suite on Linux and macOS.
-- README rewritten against the code, `.env.example` completed, and SECURITY.md,
-  NOTICES.md, CONTRIBUTING.md, issue/PR templates added.
-- Public name is **UNSUCK AMC**. `usmc` remains only as an internal identifier
-  (`USMC_*` env vars, the `.usmc/` state directory, npm workspace names).

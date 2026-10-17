@@ -43,20 +43,43 @@ interface Profile {
 
 const PROFILES: Profile[] = [
   {
+    // The same repo the health index tells its alarm story about (`healthindex.ts`): one file,
+    // src/garden/planner.ts, climbing past 5,000 lines in a 40,000-line tree, the other readings
+    // near the index's own profile for these four weeks — so the score's cap and the longest-file
+    // chart under it name the same file and the same size.
     name: "todo-garden",
-    groups: [{ pkg: "app", start: 2_950, end: 4_380 }, { pkg: "lib", start: 710, end: 1_090 }, { pkg: ".", start: 64, end: 72 }],
+    groups: [{ pkg: "app", start: 24_000, end: 24_900 }, { pkg: "lib", start: 9_000, end: 9_300 }, { pkg: "src", start: 4_800, end: 5_800 }, { pkg: ".", start: 64, end: 72 }],
     types: [{ ext: ".tsx", pack: "TypeScript", share: 0.46 }, { ext: ".ts", pack: "TypeScript", share: 0.44 }, { ext: ".mjs", pack: "JavaScript", share: 0.1 }],
-    files: [34, 47], deps: [6, 8], hatches: [9, 12], claudeMd: [2_150, 3_240], desc: [640, 990], skills: [2, 4],
-    untested: [11, 8], retouch: [0.31, 0.22], touches: [38, 52], commits: 211,
+    files: [114, 120], deps: [6, 8], hatches: [80, 96], claudeMd: [7_350, 7_800], desc: [1_150, 1_200], skills: [2, 4],
+    untested: [26, 29], retouch: [0.19, 0.22], touches: [38, 52], commits: 211,
     top: [
-      { path: "app/store.ts", start: 292, end: 318 }, { path: "app/GardenView.tsx", start: 140, end: 344 },
-      { path: "app/PlantSheet.tsx", start: 168, end: 281 }, { path: "lib/watering.ts", start: 150, end: 236 },
-      { path: "app/App.tsx", start: 122, end: 214 }, { path: "lib/schedule.ts", start: 118, end: 187 },
-      { path: "app/Reminders.tsx", start: 71, end: 171 }, { path: "app/sync.ts", start: 104, end: 152 },
-      { path: "lib/seasons.ts", start: 96, end: 131 }, { path: "app/theme.ts", start: 88, end: 119 },
-      { path: "app/Settings.tsx", start: 52, end: 108 }, { path: "lib/format.ts", start: 70, end: 94 },
+      { path: "src/garden/planner.ts", start: 3_900, end: 5_200 }, { path: "app/GardenView.tsx", start: 900, end: 1_140 },
+      { path: "app/store.ts", start: 820, end: 880 }, { path: "app/PlantSheet.tsx", start: 700, end: 760 },
+      { path: "lib/watering.ts", start: 610, end: 650 }, { path: "app/App.tsx", start: 560, end: 600 },
+      { path: "lib/schedule.ts", start: 520, end: 545 }, { path: "app/Reminders.tsx", start: 480, end: 505 },
+      { path: "app/sync.ts", start: 450, end: 470 }, { path: "lib/seasons.ts", start: 420, end: 430 },
+      { path: "app/theme.ts", start: 390, end: 400 }, { path: "app/Settings.tsx", start: 360, end: 372 },
     ],
-    offenders: [{ path: "app/GardenView.tsx", n: 6 }, { path: "app/store.ts", n: 4 }, { path: "app/PlantSheet.tsx", n: 3 }],
+    offenders: [{ path: "src/garden/planner.ts", n: 7 }, { path: "app/GardenView.tsx", n: 4 }, { path: "app/store.ts", n: 3 }],
+  },
+  {
+    // Scenario `repo-health`: the shape of a real app vibe-coded for months with no readings
+    // (`healthindex.ts` has the same repo's weekly index, February to October). These four weeks
+    // are the tail of it: one file past 8,000 lines and still climbing, a second past 5,000.
+    name: "photo-shelf",
+    groups: [{ pkg: "lib", start: 70_500, end: 74_200 }, { pkg: "functions", start: 3_600, end: 4_000 }, { pkg: "tool", start: 1_700, end: 1_800 }],
+    types: [{ ext: ".dart", pack: "Dart", share: 0.93 }, { ext: ".ts", pack: "TypeScript", share: 0.05 }, { ext: ".sh", pack: null, share: 0.02 }],
+    files: [142, 146], deps: [28, 31], hatches: [30, 32], claudeMd: [8_600, 9_000], desc: [1_180, 1_200], skills: [5, 6],
+    untested: [23, 25], retouch: [0.08, 0.07], touches: [70, 84], commits: 1_140,
+    top: [
+      { path: "lib/services/sync_backend.dart", start: 7_750, end: 8_397 }, { path: "lib/screens/library_screen.dart", start: 5_050, end: 5_400 },
+      { path: "lib/services/album_store.dart", start: 3_300, end: 3_560 }, { path: "lib/screens/editor_screen.dart", start: 2_900, end: 3_120 },
+      { path: "lib/widgets/photo_grid.dart", start: 2_600, end: 2_780 }, { path: "lib/services/upload_queue.dart", start: 2_350, end: 2_510 },
+      { path: "lib/screens/settings_screen.dart", start: 2_150, end: 2_270 }, { path: "lib/models/photo.dart", start: 1_950, end: 2_089 },
+      { path: "lib/services/exif_reader.dart", start: 1_700, end: 1_820 }, { path: "lib/widgets/share_sheet.dart", start: 1_500, end: 1_640 },
+      { path: "functions/src/index.ts", start: 1_250, end: 1_390 }, { path: "lib/main.dart", start: 1_100, end: 1_210 },
+    ],
+    offenders: [{ path: "lib/services/sync_backend.dart", n: 4 }, { path: "lib/screens/library_screen.dart", n: 2 }, { path: "lib/services/album_store.dart", n: 2 }],
   },
   {
     name: "pocket-notes",
@@ -239,7 +262,8 @@ export function demoRepoHealth(repoName: string, now: number): RepoHealthView | 
     },
     measure: {
       commits: p.commits,
-      packs: [{ name: "TypeScript", version: "2", files: types.reduce((s, t) => (t.pack === "TypeScript" ? s + t.files : s), 0) }],
+      packs: [...new Set(types.map((t) => t.pack).filter((x): x is string => !!x))]
+        .map((name) => ({ name, version: "2", files: types.reduce((s, t) => (t.pack === name ? s + t.files : s), 0) })),
       groups: p.groups.map((gr) => gr.pkg),
       engineVersion: "3",
       recut: null,

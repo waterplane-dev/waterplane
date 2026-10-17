@@ -533,12 +533,27 @@ const TREND = [
   { week: "2026-09-07", index: 104, gap: false, lnLink: 0.07, contributions: { size: 1, retouch: 6 } },
 ];
 
+test("both asks carry the cap and the alerts when there are some, and the new scoring words, never the old ones", () => {
+  const alerts = ["severe: src/a.ts is 5,200 lines (good: under 1,000)"];
+  const cap = "Capped at 62 by file length (32 of 100): the entries average 67, and the score stays within 30 of its worst entry.";
+  const week = healthIndexRemedyPrompt({ ...INDEX_WEEK, alerts, cap }, "myapp");
+  const trend = healthTrendRemedyPrompt(TREND, "2026-08-17", "myapp", { now: { alerts, cap } });
+  for (const p of [week, trend]) {
+    assert.match(p, /What is holding the score down/);
+    assert.ok(p.includes(alerts[0]) && p.includes(cap));
+    assert.match(p, /score out of 100 against fixed good values/);
+    assert.doesNotMatch(p, /chained|baseline week|100 is the|Weeks carried/);
+  }
+  assert.doesNotMatch(healthIndexRemedyPrompt(INDEX_WEEK, "myapp"), /holding the score down/, "nothing to say, nothing said");
+  assert.doesNotMatch(healthTrendRemedyPrompt(TREND, "2026-08-17", "myapp"), /holding the score down/);
+});
+
 test("the trend ask lists every week, the gaps as gaps, and each reading's total", () => {
   const p = healthTrendRemedyPrompt(TREND, "2026-08-17", "myapp");
   assert.match(p, /went from 100 in the week of 2026-08-17 to 104 in the week of 2026-09-07/);
-  assert.match(p, /- 2026-08-17: 100 — baseline/);
+  assert.match(p, /- 2026-08-17: 100 — first scored week/);
   assert.match(p, /- 2026-08-24: 97 \(−3\.0\) — File length −2\.0, Re-touched files −1\.0/);
-  assert.match(p, /- 2026-08-31: 97 — carried over/);
+  assert.match(p, /- 2026-08-31: 97 — move not compared/);
   assert.match(p, /Re-touched files \(`retouch`\): \+5\.0 over 2 weeks/);
   assert.doesNotMatch(p, /Escape hatches \(`hatches`\)/, "a reading with no contribution has no total, not a zero");
 });
@@ -599,13 +614,13 @@ test("every listed reading says what kind of number it is, from the one table", 
   assert.match(HEALTH_ENTRY_MEASURE.retouch, /REWORK.*change or remove lines it added.*only adds lines.*never counted/);
   assert.match(HEALTH_ENTRY_MEASURE.context, /CLAUDE\.md plus every skill's description; skill bodies.*not counted/);
   assert.match(HEALTH_ENTRY_MEASURE.untested, /share.*imported is not covered/);
-  assert.match(HEALTH_ENTRY_MEASURE.size, /95th-percentile.*length cap/);
+  assert.match(HEALTH_ENTRY_MEASURE.size, /line-weighted mean file length.*longest file/);
 });
 
 test("the tree's growth from the baseline week is said only when the files series carries both ends", () => {
   const ctx = healthAskContextOf(PLOT, "repo", "2026-08-17");
   assert.deepEqual(ctx.tree, { baselineFiles: 35, nowFiles: 1500 }, "the baseline week's LAST reading, the latest non-null now");
-  assert.match(healthTrendRemedyPrompt(TREND, "2026-08-17", "myapp", ctx), /The tree went from 35 source files at the baseline to 1,500 now/);
+  assert.match(healthTrendRemedyPrompt(TREND, "2026-08-17", "myapp", ctx), /The tree went from 35 source files at the first scored week to 1,500 now/);
   const none = healthAskContextOf(PLOT, null, "2026-07-06");
   assert.equal(none.tree, undefined);
   assert.equal(none.engine, undefined);
@@ -672,8 +687,8 @@ test("the index prompts name the repo's disables and overrides, the engine's det
     assert.ok(p.includes("their bodies, loaded only when one is invoked, are 9,000 chars more"));
     assert.ok(p.includes("Against the week of 2026-06-22, 14 weeks earlier, it was"), p);
   }
-  assert.ok(trend.includes("- 2026-10-12: 101 — carried over: this repo changed which readings it overrides or disables"));
-  assert.ok(trend.includes("Weeks carried (not measured) because this repo changed which readings it overrides or disables: 2026-10-12."));
+  assert.ok(trend.includes("- 2026-10-12: 101 — move not compared: this repo changed which readings it overrides or disables"));
+  assert.ok(trend.includes("Weeks whose move is not compared (their scores are still measured) because this repo changed which readings it overrides or disables: 2026-10-12."));
   // Nothing on the wire: none of it is said.
   const bare = healthTrendRemedyPrompt(weeks.slice(0, 1).concat(weeks[2]), "2026-08-17", "myapp", healthAskContextOf({ classics: null }, null, "2026-08-17"));
   for (const s of ["Built from", "central", "verbatim", "Against the week of"]) assert.ok(!bare.includes(s), s);

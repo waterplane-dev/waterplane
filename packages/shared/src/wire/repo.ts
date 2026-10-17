@@ -1,5 +1,6 @@
 /** A repo or worktree: its git state, its setup verdict, and the CLI install behind it. */
 import type { ContextLimitsView } from "../contextweight.js";
+import type { RepoHealthIndex } from "../healthindex.js";
 
 /**
  * How this desktop's `claude` got onto the PATH, which is the ONLY thing that
@@ -163,6 +164,10 @@ export interface RepoTarget {
    *  = local only, nothing to push to (the launcher says so). ABSENT = not known
    *  (an older host, or a count not taken yet) — never drawn as "no remote". */
   hasOrigin?: boolean;
+  /** A git job the desktop is running in this worktree right now — a push (its
+   *  pre-push checks take minutes) or a pull — so the launcher's git button can
+   *  spin while it runs. ABSENT = none running (or an older host). */
+  gitRunning?: "push" | "pull";
   /** What the host's own setup sweep last concluded about this worktree, when it
    *  has looked at all. Absent = never checked (a repo discovered seconds ago,
    *  or a host with the watcher switched off) — which is NOT the same as clean,
@@ -199,13 +204,14 @@ export interface RepoTarget {
    */
   ownerSessionId?: string;
   /**
-   * The repo's health index (`shared/healthindex.ts`): one chained number over
-   * the repo-health series, baseline 100, every metric read lower-is-better.
-   * `deltaWeek` is null on a carried (gap) or baseline week; `move` is a CALLED
-   * move only (`assessHealthMove`). Absent = unknown — no series, no baseline,
-   * or an older host — never 0.
+   * The repo's health score (`shared/healthindex.ts`): one number out of 100
+   * over the repo-health series, against fixed good values, every metric read
+   * lower-is-better. `deltaWeek` is null on a gap or first scored week; `move`
+   * is a CALLED move only (`assessHealthMove`); `mean`, `cappedBy` and `alert`
+   * are absent from a host older than the absolute score. Absent = unknown —
+   * no series or an older host — never 0.
    */
-  healthIndex?: { value: number; deltaWeek: number | null; week: string; move: "drop" | "rise" | null };
+  healthIndex?: RepoHealthIndex;
 }
 
 /**

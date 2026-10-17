@@ -115,6 +115,7 @@ test("split-longest-file quotes the scrubbed path, the latest length, an earlier
     assert.match(r.text, /at 50 lines on 2026-05-05/);
     assert.match(r.text, /4 readings earlier \(2026-01-01\) the longest file was 10 lines/);
     assert.match(r.text, /at most 50 lines/);
+    assert.match(r.text, /longest file over 1k lines as a problem/);
     assert.match(r.text, /apply nothing until I say so/);
     if (form === "terminal") assert.ok(!C0.test(r.text));
   }

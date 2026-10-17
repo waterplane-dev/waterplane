@@ -34,7 +34,7 @@ import { CantInline } from "./Unavailable";
 import { Markdown } from "./Markdown";
 import {
   healthAskContextOf, healthIndexRemedyPrompt, healthTrendRemedyPrompt, seriesAbsenceWords, seriesAllRemedyPrompt, seriesRemedyPrompt,
-  type IndexTrendWeek, type IndexVsSubject, type IndexWeekSubject,
+  type IndexNow, type IndexTrendWeek, type IndexVsSubject, type IndexWeekSubject,
 } from "./setupRemedy";
 import { AreaSpread, SeriesTile, WeightStack } from "./RepoHealthTiles";
 import { LongestFiles } from "./RepoHealthLongest";
@@ -305,11 +305,11 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
     onRemedy(healthIndexRemedyPrompt(w, repo.repoName, healthAskContextOf(plot, view?.engine?.kind, "", vs)), repo, `the health index, week of ${w.week}`);
   };
 
-  const askTrend = (weeks: IndexTrendWeek[], baselineWeek: string, vs: IndexVsSubject | null) => {
+  const askTrend = (weeks: IndexTrendWeek[], baselineWeek: string, vs: IndexVsSubject | null, now?: IndexNow) => {
     if (!onRemedy || !repo) return;
     track("action:repohealth.asktrend");
     onRemedy(
-      healthTrendRemedyPrompt(weeks, baselineWeek, repo.repoName, healthAskContextOf(plot, view?.engine?.kind, baselineWeek, vs)),
+      healthTrendRemedyPrompt(weeks, baselineWeek, repo.repoName, { ...healthAskContextOf(plot, view?.engine?.kind, baselineWeek, vs), now: now ?? null }),
       repo, "the health index trend");
   };
 

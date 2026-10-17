@@ -11,6 +11,7 @@ import { LocalRtBar } from "./LocalRtBar";
 import { SessionTabsBar } from "./SessionTabsBar";
 import { startLocalRtWatch } from "./localRt";
 import { startInstallLog } from "./installLog";
+import { startNetStalls } from "./link/linkStalls";
 import { HintLayer } from "./HintLayer";
 import { ToastLayer } from "./ToastLayer";
 import { SlotAskLayer } from "./SlotAskLayer";
@@ -21,7 +22,7 @@ import { ShortcutCardHost, installShortcutCard } from "./ShortcutCard";
 import { registerComposeShortcut } from "./core/compose/composeShortcut";
 import { UpdateBanner } from "./UpdateBanner";
 import { HaltBanner } from "./core/Banners";
-import { installLinkMeters, startLinkProbes } from "./link";
+import { deviceId, installLinkMeters, startLinkProbes } from "./link";
 import { makeConnection } from "./ws";
 import { startLanRoute } from "./lanLink";
 import { installShellNet } from "./shellNet";
@@ -401,6 +402,8 @@ function PulseProbe() {
     // `welcome`, and an overlay that returns early must not be able to switch
     // that off. One host, many phones — see `installLog.ts`.
     try { startInstallLog(makeConnection()); } catch { /* no host paired — nothing to report to */ }
+    // HTTP stall diagnostics, over the same socket (`shared/netstall.ts`).
+    try { startNetStalls(makeConnection(), deviceId); } catch { /* no host paired — nothing to report to */ }
     // The LAN route (APK) / the route chip (browser), on the same socket: it
     // re-runs on every reopen, and an overlay must not be able to stop that.
     try { startLanRoute(makeConnection()); } catch { /* no host paired — no route to choose */ }

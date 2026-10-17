@@ -70,6 +70,7 @@ export function useFileDrop(): {
         sheet: c.nav.overlay != null,
         annotating: annotatorBusy(),
         repoId: c.world.activeRepo?.id ?? null,
+        handled: e.defaultPrevented,
       });
       if (route === "ignore") return;
       e.preventDefault();

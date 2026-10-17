@@ -27,6 +27,7 @@
  * `packages/extensions/<id>/` (the static registry, always on) — one object
  * shape for both, so moving an extension out of the repo is a folder move.
  */
+import type { PeerKind } from "./wire/messages.js";
 import type { PluginStreamHandlers } from "./stream.js";
 import type { ComplianceCheck } from "./wire/repo.js";
 import type { ContextEvent, ContextSample, DetectedPrompt, LaunchOpts, PermissionMode } from "./wire/session.js";
@@ -61,7 +62,11 @@ import { BRAND, LEGACY } from "./brand.js";
  * - PATCH: wording, documentation and fixes that change no shape — nothing a plugin
  *   can observe through types.
  */
-export const PLUGIN_API_VERSION = "1.7.0";
+export const PLUGIN_API_VERSION = "1.8.0";
+
+/** Who a `handle` method was called by (since 1.8): the socket's trust tier, and the paired
+ *  device's id/name (null: no token, or an in-process call). Never a proof beyond pairing. */
+export interface PluginCaller { kind: PeerKind; deviceId: string | null; deviceName: string | null }
 
 /** A parsed `MAJOR.MINOR.PATCH`. */
 export interface PluginApiVersion { major: number; minor: number; patch: number }
@@ -398,10 +403,12 @@ export interface HostPluginApi {
   /**
    * Answer `method` when the phone (or core) calls this plugin — the registry's
    * `call(pluginId, method, args)`. One handler per method; a second replaces
-   * the first. A throw is the caller's `{ ok:false, error }` and the plugin's
+   * the first. The second argument (since 1.8) says who asked: the socket's trust tier and, when
+   * it presented a paired device's token, that device's id and name. A handler that ignores it is
+   * unchanged. A throw is the caller's `{ ok:false, error }` and the plugin's
    * status line. Returns an unregister.
    */
-  handle(method: string, fn: (args: unknown) => unknown | Promise<unknown>): () => void;
+  handle(method: string, fn: (args: unknown, caller: PluginCaller) => unknown | Promise<unknown>): () => void;
   /**
    * Broadcast `event` to every phone as `plugin.push` (the web half's `pushes`).
    * Returns null when sent, or a refusal in words (bad event name, not JSON, over
@@ -824,9 +831,9 @@ export interface HostPluginModule {
  */
 export function handleAll<M extends PluginMethods>(
   api: Pick<HostPluginApi, "handle">,
-  fns: { [K in keyof M & string]: (args: M[K]["args"]) => M[K]["result"] | Promise<M[K]["result"]> },
+  fns: { [K in keyof M & string]: (args: M[K]["args"], caller: PluginCaller) => M[K]["result"] | Promise<M[K]["result"]> },
 ): () => void {
-  const offs = Object.keys(fns).map((k) => api.handle(k, (a) => (fns as Record<string, (x: unknown) => unknown>)[k]!(a)));
+  const offs = Object.keys(fns).map((k) => api.handle(k, (a, c) => (fns as Record<string, (x: unknown, c: PluginCaller) => unknown>)[k]!(a, c)));
   return () => { for (const off of offs) off(); };
 }
 

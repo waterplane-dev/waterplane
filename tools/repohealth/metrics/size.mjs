@@ -19,6 +19,14 @@
  * tell you nothing about the other 324 files, and one that only said "p95"
  * would never mention the monolith at all.
  *
+ * The line-weighted mean, `lineMean`, is the one summary that does not ignore
+ * the tail without being eaten by it: Σ loc² / Σ loc, "the length of the file
+ * the average LINE lives in". A p95 never sees what the top 5% holds; this
+ * does, so giants dominate it — which is the point, because most lines live in
+ * them. And splitting one giant in two does not make it jump the way `max`
+ * does: the lines move into two smaller files and the mean falls by what they
+ * were actually worth. The health index reads it beside `max`.
+ *
  * `appTsx` is `null`, never 0, at shas predating the file. A repo with no
  * `App.tsx` and a repo with an empty `App.tsx` are different repos.
  *
@@ -62,7 +70,7 @@ function nearestRankP95(ascending) {
  * @param {import("../types.mjs").History} history
  * @param {number} index
  * @param {object} prereg
- * @returns {import("../types.mjs").Measured<{p95: number, max: number, maxPath: string, appTsx: number|null}>}
+ * @returns {import("../types.mjs").Measured<{p95: number, max: number, maxPath: string, appTsx: number|null, nearMax: number, lineMean: number}>}
  */
 export function measureSize(snapshot, history, index, prereg) {
   const files = snapshot.files ?? [];
@@ -90,6 +98,15 @@ export function measureSize(snapshot, history, index, prereg) {
   let nearMax = 0;
   for (const f of files) if (f.loc >= nearCut) nearMax++;
 
+  // Σ loc² / Σ loc. When every file is empty Σ loc is 0 and there is no line
+  // to live in a file: 0, the same answer p95 and max give for an all-empty tree.
+  let sumLoc = 0;
+  let sumSq = 0;
+  for (const f of files) {
+    sumLoc += f.loc;
+    sumSq += f.loc * f.loc;
+  }
+
   return {
     value: {
       p95: nearestRankP95(ascending),
@@ -97,6 +114,7 @@ export function measureSize(snapshot, history, index, prereg) {
       maxPath: max.path,
       appTsx: app ? app.loc : null,
       nearMax,
+      lineMean: sumLoc === 0 ? 0 : Math.round(sumSq / sumLoc),
     },
   };
 }

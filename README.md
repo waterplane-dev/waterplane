@@ -41,9 +41,9 @@ waterplane is the workbench around it:
   own phone.
 - **Your own buttons.** A small folder outside the repo, no fork to keep up:
   [how a plugin works](#your-own-buttons-plugins).
-- **Repo health against the vibe-coding mess.** Ever-growing `CLAUDE.md` files and thousand-line
-  files are tracked commit by commit, so the repo stays maintainable and a request stays as cheap as
-  it was.
+- **Repo health against the vibe-coding mess.** One score out of 100 against fixed good values,
+  capped by the worst reading, with the offending file named and a push when something turns
+  severe, so the repo stays maintainable and a request stays as cheap as it was.
 - Sessions on any repo, schedules against the usage windows, and the cost of every turn.
 
 **Why not Claude Code in the cloud?** A cloud session runs in a Linux sandbox: no iOS Simulator, no
@@ -104,9 +104,6 @@ You need:
   gives the phone push, install and clipboard. From the same Wi-Fi or over a VPN of your own, a
   password does the gating instead: [without Tailscale](docs/install.md#without-tailscale-same-wi-fi-or-your-own-vpn).
   With neither, the daemon binds loopback only and is reachable just from the desktop.
-- **tmux** 3.3 or newer. Every session runs inside it so it survives a host restart; the installer
-  offers to install it.
-- **Node ≥ 20.12** for a source checkout. The installer brings its own.
 
 The installer (macOS, Linux, WSL2) brings its own pinned Node, verifies checksums, and adds a
 `waterplane` command with `start`, `doctor`, `service`, `update` and `pair`:
@@ -115,7 +112,9 @@ The installer (macOS, Linux, WSL2) brings its own pinned Node, verifies checksum
 curl -fsSL https://github.com/waterplane-dev/waterplane/releases/latest/download/install.sh | sh
 ```
 
-Or from source (the doctor builds what it checks, so it runs before the build):
+Or from source, which also needs **Node ≥ 20.12** and **tmux 3.3+** (every session runs inside it,
+so it survives a host restart; the installer handles both). The doctor builds what it checks, so it
+runs before the build:
 
 ```bash
 git clone https://github.com/waterplane-dev/waterplane.git
@@ -193,9 +192,9 @@ before the reset, spend what is left"). The Backlog holds a repo's work that nob
 <!-- site:cost -->
 ### Know what it costs
 
-<a href="https://waterplane-dev.github.io/media/numbers-af88500f21.mp4"><img src="docs/media/numbers.gif" width="270" alt="A week of heavy use priced at API list price, what drives the cost, and when a fresh session would be cheaper"></a>
+<a href="https://waterplane-dev.github.io/media/numbers-99e8e4d318.mp4"><img src="docs/media/numbers.gif" width="270" alt="A week of heavy use priced at API list price, what drives the cost, and when a fresh session would be cheaper"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/numbers-af88500f21.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/numbers-99e8e4d318.mp4), with pause and seek.*
 
 Every finished turn says what it cost: tokens in, out and cached, and dollars at list price, plus
 what the *next* turn will cost compared with a fresh session. The token ledger splits every total by
@@ -209,13 +208,18 @@ than a guess.
 <!-- site:health -->
 ### Repo health, so the vibe coding stays maintainable
 
-Vibe coding drifts into a mess quietly: a `CLAUDE.md` that only ever grows, a file that passes a
-thousand lines, the same three files edited on every turn. Each of those makes every later request
-cost more, because every turn pays to read them again. A repo's health tiles track, commit by
-commit: the p95 file length, how often the same files are touched again, escape hatches
-(suppressions such as `eslint-disable` or `as any`), untested modules and the `CLAUDE.md` weight,
-each with its trend, so you see the drift while it is small and keep the per-request cost flat. The
-numbers are only readings: nothing changes code on its own.
+<a href="https://waterplane-dev.github.io/media/repo-health-f7095e59da.mp4"><img src="docs/media/repo-health.gif" width="270" alt="A repo vibe-coded for eight months scores 46 out of 100: one 8,397-line file caps the score, two severe warnings name it, and the trend slides from 100 in February"></a>
+
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/repo-health-f7095e59da.mp4), with pause and seek.*
+
+Vibe coding drifts into a mess quietly, and a steady number does not mean a healthy repo. Each repo
+gets one health score out of 100, measured against fixed good values: file length, files reworked
+right after an edit, unexplained escape hatches (`eslint-disable`, `as any`), untested modules and
+the `CLAUDE.md` weight. The worst reading caps the score, so one giant file cannot hide behind four
+quiet readings, and each warning names the file behind it. The trend since the first week comes
+second. A push arrives when a reading newly turns severe. The film shows the shape of a real app
+vibe-coded for months with none of this: one file grew to 8,397 lines, and the score says 46.
+These are readings only: nothing changes code on its own.
 <!-- /site:health -->
 
 <!-- site:plugins -->
@@ -236,9 +240,9 @@ why it is shaped this way: [docs/notes/plugins.md](docs/notes/plugins.md).
 
 *Android app developers only (optional).*
 
-<a href="https://waterplane-dev.github.io/media/apk-install-1485857c9a.mp4"><img src="docs/media/apk-install.png" width="490" alt="Phone one circles a spot on a screenshot of the app, Claude Code adds a logo there, the build runs, phone two's notifications say the build succeeded and the update is ready to install, one tap on Install updates it, and it opens with the logo in the circled spot"></a>
+<a href="https://waterplane-dev.github.io/media/apk-install-91d521e613.mp4"><img src="docs/media/apk-install.png" width="490" alt="Your phone circles a spot on a screenshot of the app, Claude Code adds a logo there, the build runs, the notifications on the phone with the app (a second one here, or the same one) say the build succeeded and the update is ready to install, one tap on Install updates it, and it opens with the logo in the circled spot"></a>
 
-*[The walkthrough as a video](https://waterplane-dev.github.io/media/apk-install-1485857c9a.mp4).*
+*[The walkthrough as a video](https://waterplane-dev.github.io/media/apk-install-91d521e613.mp4).*
 
 Save a build command per repo and run it from the phone without a Claude session, so it spends no
 tokens; it is the way out when you are rate limited and still need a build. Produced files are

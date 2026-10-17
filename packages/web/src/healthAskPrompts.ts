@@ -18,7 +18,7 @@ export interface IndexMoverSubject {
   key: string;
   /** The phone's plain name for it. */
   name: string;
-  /** Its share of the week's move, in index points; negative = the reading grew. */
+  /** Its share of the week's move, in score points; negative = the reading grew. */
   points: number;
 }
 
@@ -29,10 +29,20 @@ export interface IndexWeekSubject {
   /** The week it was linked to, or null where there is none. */
   prevWeek: string | null;
   index: number;
-  /** The move against `prevWeek` in index points, or null where the week has no link. */
+  /** The move against `prevWeek` in score points, or null where the week has no link. */
   delta: number | null;
   /** Every basket that contributed, in the index's order. */
   movers: readonly IndexMoverSubject[];
+  /** The alert sentences on that week, worst first; absent/empty = none. */
+  alerts?: readonly string[];
+  /** The cap sentence where the cap set that week's score. */
+  cap?: string | null;
+}
+
+/** What holds the latest score down, handed to the trend ask beside its weeks. */
+export interface IndexNow {
+  alerts: readonly string[];
+  cap: string | null;
 }
 
 /** "Vs N weeks ago" as the prompts state it: the week actually compared with, named. */
@@ -100,6 +110,8 @@ export interface HealthAskContext {
   details?: readonly { key: HealthEntry; label: string; detail: string }[];
   /** "Vs 12 weeks ago" at the week the prompt is about; absent = none that old. */
   vs?: IndexVsSubject | null;
+  /** The latest score's cap and alerts, for the trend prompt; absent = none stated. */
+  now?: IndexNow | null;
 }
 
 /** The last measured point of a series inside one ISO week, or null. */
@@ -228,11 +240,11 @@ function variantBlock(ctx: HealthAskContext, carried: readonly string[] = []): s
     return `- ${name}: the index reads this repo's own command instead of the engine's reading${means}${since}. The repo's reason: ${why}`;
   });
   const weeks = carried.length
-    ? `\nWeeks carried (not measured) because this repo changed which readings it overrides or disables: ${carried.join(", ")}.`
+    ? `\nWeeks whose move is not compared (their scores are still measured) because this repo changed which readings it overrides or disables: ${carried.join(", ")}.`
     : "";
   return `${vs.length ? `This repo changes what the index is built from, in ${file} (\`central\`):\n\n${lines.join("\n")}\n\n` : ""}` +
-    "The index is not comparable across a change of that config: the week it lands is carried, not measured, so a move " +
-    "there is not one; and an index built from a different set of readings does not compare with another repo's on those readings." +
+    "The score is not comparable across a change of that config: the week it lands is scored as measured, but its move is not compared " +
+    "with the week before, so a jump there is not a move; and a score built from a different set of readings does not compare with another repo's on those readings." +
     weeks;
 }
 
@@ -241,6 +253,12 @@ function detailBlock(ctx: HealthAskContext): string | null {
   const d = ctx.details ?? [];
   if (!d.length) return null;
   return `What the engine says beside the readings on the latest day, verbatim:\n\n${d.map((x) => `- ${x.label} (\`${x.key}\`): ${x.detail}`).join("\n")}`;
+}
+
+/** What holds a score down — the cap and the alerts, verbatim — or "" where nothing does. */
+function holdingWords(alerts: readonly string[] | undefined, cap: string | null | undefined): string {
+  const lines = [...(cap ? [cap] : []), ...(alerts ?? []).map((a) => `- ${a}`)];
+  return lines.length ? `\nWhat is holding the score down (the alarm the person sees first; name the offenders when you answer):\n${lines.join("\n")}\n` : "";
 }
 
 /** "Vs 12 weeks ago", naming the week compared with, or "". */
@@ -281,8 +299,8 @@ export function healthIndexRemedyPrompt(w: IndexWeekSubject, repoName: string, c
     `${BRAND.displayName}'s health index for ${repoName} was ${Math.round(w.index)} in the week of ${w.week}` +
     `${w.delta !== null ? ` (${signedTenths(w.delta)} against the week before)` : ""}; each week is the ISO week starting that Monday.` +
     `${vsLine(ctx.vs, w.index)} ` +
-    `It is one number chained week over week from five readings of the repo, and it climbs when they shrink and drops when they grow.${basketHead(ctx)} ` +
-    "That week's move split across the readings like this, in index points, biggest first:";
+    `It is a score out of 100 against fixed good values for five readings of the repo, held within 30 points of its worst one, and it falls when a reading grows past its good value.${basketHead(ctx)} ` +
+    "That week's move split across the readings like this, in score points, biggest first:";
   const own = ownBlock(ctx.own);
   const engine = engineWords(ctx.engine);
   const variants = variantBlock(ctx);
@@ -290,7 +308,7 @@ export function healthIndexRemedyPrompt(w: IndexWeekSubject, repoName: string, c
   return `${head}
 
 ${items.join("\n")}
-${details ? `\n${details}\n` : ""}${variants ? `\n${variants}\n` : ""}${own ? `\n${own}\n` : ""}
+${holdingWords(w.alerts, w.cap)}${details ? `\n${details}\n` : ""}${variants ? `\n${variants}\n` : ""}${own ? `\n${own}\n` : ""}
 What happened in ${repoName} ${span} that moved these readings, and is it work you would keep? Answer it about the commits and the files — use the git history for that span — starting with the reading that moved the index most, and the second one if it moved it by a comparable amount. Name the commits and files behind each, and say whether the change is the repo getting healthier, a cost worth paying for what the work bought, or something to undo. ${BACKLOG_COMMIT}
 
 ${engine ? `${engine} ` : ""}A small move is often nothing: "this was ordinary work and nothing needs doing" is a complete answer, and so is "this is an artefact of how it is measured" — say which, and stop there.
@@ -303,10 +321,10 @@ export interface IndexTrendWeek {
   week: string;
   index: number;
   gap: boolean;
-  /** Null on the baseline and on a carried week. */
+  /** Null on the first scored week and on a gap week (its move is not compared). */
   lnLink: number | null;
   contributions: Partial<Record<string, number>>;
-  /** Why a carried week was carried; absent on an older host. */
+  /** Why a gap week was marked; absent on an older host. */
   gapReason?: "prereg" | "central" | "nothing";
 }
 
@@ -330,7 +348,7 @@ export interface IndexTrendWeek {
  */
 export function healthTrendRemedyPrompt(
   weeks: readonly IndexTrendWeek[],
-  baselineWeek: string,
+  _baselineWeek: string,
   repoName: string,
   ctx: HealthAskContext = {},
 ): string {
@@ -338,9 +356,9 @@ export function healthTrendRemedyPrompt(
     const prev = i > 0 ? weeks[i - 1] : null;
     if (w.lnLink === null) {
       const why = w.gapReason === "central"
-        ? "carried over: this repo changed which readings it overrides or disables"
-        : w.gapReason === "prereg" ? "carried over: the engine's definitions changed" : "carried over: nothing comparable with the week before";
-      return `- ${w.week}: ${Math.round(w.index)} — ${w.gap ? why : "baseline"}`;
+        ? "move not compared: this repo changed which readings it overrides or disables"
+        : w.gapReason === "prereg" ? "move not compared: the engine's definitions changed" : "move not compared with the week before";
+      return `- ${w.week}: ${Math.round(w.index)} — ${w.gap ? why : "first scored week"}`;
     }
     const parts = HEALTH_ENTRY_ORDER
       .filter((k) => typeof w.contributions[k] === "number")
@@ -360,7 +378,7 @@ export function healthTrendRemedyPrompt(
   const first = weeks[0];
   const last = weeks[weeks.length - 1];
   const tree = ctx.tree
-    ? `\nThe tree went from ${nf(ctx.tree.baselineFiles)} source files at the baseline to ${nf(ctx.tree.nowFiles)} now — weigh "healthier than the baseline" accordingly.\n`
+    ? `\nThe tree went from ${nf(ctx.tree.baselineFiles)} source files at the first scored week to ${nf(ctx.tree.nowFiles)} now — weigh "healthier than then" accordingly.\n`
     : "";
   const own = ownBlock(ctx.own);
   const engine = engineWords(ctx.engine);
@@ -374,10 +392,10 @@ export function healthTrendRemedyPrompt(
     `- Where that lever has no measure${ctx.own && !hasOwn ? " — this repo has none of its own yet" : ""}, propose one of this repo's own — what it would count and why it tracks the thing that matters — and offer to declare it in ${ownFile} with a script that prints it. Do not write it unless asked.`,
     "- Order the advice by what each change would cost and what it would buy, and keep it about this repo rather than repos in general.",
   ];
-  return `${BRAND.displayName}'s health index for ${repoName} went from ${Math.round(first.index)} in the week of ${first.week} to ${Math.round(last.index)} in the week of ${last.week}. 100 is the baseline week ${baselineWeek}.${vsLine(ctx.vs, last.index)} It is one number chained week over week from five readings of the repo — file length, re-touched files, escape hatches, CLAUDE.md + skills, untested modules — and it climbs when they shrink and drops when they grow.${basketHead(ctx)} Each week, with what each reading added or took away in index points:
+  return `${BRAND.displayName}'s health index for ${repoName} went from ${Math.round(first.index)} in the week of ${first.week} to ${Math.round(last.index)} in the week of ${last.week}.${vsLine(ctx.vs, last.index)} It is a score out of 100 against fixed good values for five readings of the repo — file length, re-touched files, escape hatches, CLAUDE.md + skills, untested modules — held within 30 points of its worst entry, and it falls when a reading grows past its good value.${basketHead(ctx)} Each week, with what each reading added or took away in score points:
 
 ${rows.join("\n")}
-
+${holdingWords(ctx.now?.alerts, ctx.now?.cap)}
 Each reading's total over the whole series, and what kind of number it is:
 
 ${sums.join("\n")}

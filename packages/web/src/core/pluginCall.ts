@@ -31,7 +31,8 @@ interface Pending {
   read: boolean;
   /** The host that answered the last welcome when this went out (null: none seen / an old host). */
   hostId: string | null;
-  frame: ClientMessage;
+  /** Reads only: re-sent on reconnect. A write's frame (its args may be a secret) is dropped once sent. */
+  frame: ClientMessage | null;
   timer: unknown;
   resolve(r: PluginCallResult): void;
 }
@@ -62,7 +63,9 @@ export function createPluginCalls(d: PluginCallDeps, timeoutMs = PLUGIN_CALL_TIM
           settle(ackId, { ok: false, error: `could not reach the desktop: ${e instanceof Error ? e.message : String(e)}` });
           return;
         }
-        if (!sent) settle(ackId, noConn);
+        if (!sent) { settle(ackId, noConn); return; }
+        // A write is never re-sent, so nothing needs its args any more: don't keep them in memory.
+        if (!read) { const p = pending.get(ackId); if (p) p.frame = null; }
       });
     },
     onFrame(msg: HostMessage): void {
@@ -76,12 +79,14 @@ export function createPluginCalls(d: PluginCallDeps, timeoutMs = PLUGIN_CALL_TIM
         hostId = msg.hostId ?? null;
         for (const [ackId, p] of [...pending]) {
           if (p.read && p.hostId !== hostId) settle(ackId, { ok: false, error: "the desktop changed before it answered — ask again" });
-          else if (p.read) { try { d.trySend(p.frame); } catch { /* the timeout still answers it */ } }
+          else if (p.read && p.frame) { try { d.trySend(p.frame); } catch { /* the timeout still answers it */ } }
           else settle(ackId, { ok: false, error: `the link dropped before ${p.plugin} answered — it may have run; look before trying again` });
         }
       }
     },
     pending: () => pending.size,
+    /** How many pending calls still hold their frame (reads only; a sent write holds none). */
+    framesHeld: () => [...pending.values()].filter((p) => p.frame !== null).length,
   };
 }
 

@@ -272,7 +272,7 @@ export function App() {
     connRef, setBackends, setSessions, setRecent, setClosed, setUpdate, setMeter, setIntents, updateResultSeenRef, wantNavRef,
   });
   // Repos re-listed on connect and on a turn's end; a manual fire followed (`core/launcher`).
-  useRepoRefresh({ status, refreshRepos, activeId, active, wantNavRef, firedIdRef, bl, sessions, attach });
+  useRepoRefresh({ status, refreshRepos, activeId, active, wantNavRef, firedIdRef, bl, sessions, attach, repos, overlay });
   // The two "worth saying once" toasts — the cost level and a large running subagent.
   useCostNotices(active);
   // The PWA install offer: its state and the prompt capture (`core/settings`).

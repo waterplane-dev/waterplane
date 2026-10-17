@@ -266,6 +266,12 @@ description: waterplane @waterplane/shared (packages/shared/src): the wire DTOs 
     convention). Adding a field ⇒ name it in the parser AND type it; the test runs the real engine
     and asserts every key path it emits survives the parse. Reasoning:
     [host.md](docs/notes/host.md#repohealthts-and-repohealthreadts-in-shared--one-subject-two-failure-modes).
+  - `healthindex.ts` — the health SCORE: absolute 0–100 vs fixed `HEALTH_GOOD` values, headline
+    `min(geomean of five entry scores, worst + 30)` with `cappedBy` and `alerts` (each worded here),
+    trend second. The one layer that takes a side. **Wire fields added after the score
+    (`mean`, `cappedBy`, `alert`, `alertText`) are optional: the phone updates over the air, absent =
+    that host did not say.** Good values are provisional; why absolute and why capped:
+    [host.md](docs/notes/host.md#the-health-score-kept-current-by-healthwatchts).
   - `hosts.ts` — the multi-host DTO and its pure rules: `SavedHost`, `HostLan`, `cleanSavedHost`,
     `planHostMigration` (one legacy `hostBase` → the first entry, idempotent), `planHostSwitch`
     (which keys a switch parks/restores and in what order — every copy lands before the bare key it

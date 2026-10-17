@@ -1,5 +1,6 @@
 import { FETCH_TIMEOUT_MS, TimeoutError, timedFetch } from "@waterplane/shared";
 import { labelForUrl, netBegin } from "../link/linkOps";
+import { noteBodyTimeout } from "../link/linkStalls";
 
 /**
  * `fetch` for the JSON API, with the two things every call here needs: it is
@@ -55,9 +56,11 @@ export async function bgJson<T>(url: string, init?: RequestInit, ms?: number): P
  *  tunnel that stalled after the status line left `r.json()` pending for ever
  *  (Files: "Reading this folder…" while the host answered in 50 ms). A stall
  *  now rejects as a `TimeoutError`, which every caller reads as offline. */
-function fusedJson<T>(r: Response, url: string, ms = FETCH_TIMEOUT_MS): Promise<T> {
+function fusedJson<T>(r: Response, url: string, ms = FETCH_TIMEOUT_MS, method = "GET"): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const fuse = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new TimeoutError(url, ms)), ms); });
+  const fuse = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => { noteBodyTimeout(url, method, ms); reject(new TimeoutError(url, ms)); }, ms);
+  });
   return Promise.race([r.json() as Promise<T>, fuse]).finally(() => clearTimeout(timer));
 }
 
@@ -85,7 +88,7 @@ export async function jpostOk<T>(url: string, body: unknown, ms?: number): Promi
     } catch { /* no body */ }
     throw new Error(why);
   }
-  return fusedJson<T>(r, url, ms);
+  return fusedJson<T>(r, url, ms, "POST");
 }
 
 export async function jpost<T>(url: string, body: unknown, ms?: number): Promise<T> {
@@ -94,7 +97,7 @@ export async function jpost<T>(url: string, body: unknown, ms?: number): Promise
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   }, ms);
-  return fusedJson<T>(r, url, ms);
+  return fusedJson<T>(r, url, ms, "POST");
 }
 
 export async function jdel(url: string): Promise<void> {

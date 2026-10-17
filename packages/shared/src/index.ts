@@ -121,6 +121,8 @@ export * from "./hints.js";
 /** The HTTP fuse (see netfuse.ts) — here, not in `web`, so a node e2e can point
  *  it at a server that never answers and prove the client gives up. */
 export * from "./netfuse.js";
+/** What the phone records when an HTTP request stalls (see netstall.ts). */
+export * from "./netstall.js";
 
 /** Scheduled prompts — a wall-clock rule, its zone, and the lead time before an
  *  anchor (the weekly usage reset) that the rule is actually tracking. */
@@ -302,7 +304,7 @@ export * from "./repohealth.js";
  *  the one file was at the lint cap. */
 export * from "./repohealthread.js";
 /** The health index: the one layer over the repo-health series that takes a
- *  side (lower-is-better), chained weekly, with its move test and wording. */
+ *  side (an absolute 0–100 score per week), with its move test and wording. */
 export * from "./healthindex.js";
 /** A repo's requirements list: the prompt filter, the item format, the preset. */
 export * from "./requirements.js";

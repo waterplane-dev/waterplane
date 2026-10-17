@@ -25,6 +25,15 @@ export interface PromptOption {
    * Additive (PROTOCOL_VERSION stays 2); outside `promptFingerprint` for `desc`'s reason.
    */
   remembers?: { label: string };
+  /**
+   * A checkbox box's tick on this row, as the TUI drew it (`[✔]` vs `[ ]`) on the
+   * newest strict read. ABSENT means unknown — a single-choice box, or a row the
+   * log recovered after the screen scrolled it away — and the phone then draws no
+   * box at all rather than an empty one, which would read as "not ticked".
+   * Outside `promptFingerprint`: a tap toggles it, and a toggle must not stale the
+   * next queued tap or re-open a hidden card.
+   */
+  checked?: boolean;
 }
 
 /** One standing rule, on the wire: what it allows, when a person made it, how often it answered. */
