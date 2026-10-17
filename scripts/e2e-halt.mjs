@@ -28,9 +28,16 @@ const boot = () => {
 };
 let host = boot();
 let failed = false;
-const check = (c, l) => { console.log(`${c ? "PASS" : "FAIL"}: ${l}`); if (!c) failed = true; };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ours = () => { try { return execFileSync("pgrep", ["-f", STUB], { encoding: "utf8" }).trim().split("\n").filter(Boolean).length; } catch { return 0; } };
+// This only flakes under the full parallel suite, where the run's log is all
+// there is — so every FAIL prints what of ours is still running, and when.
+const t0 = Date.now();
+const psOurs = () => { try { return execFileSync("sh", ["-c", `ps -Ao pid,ppid,stat,etime,command | grep -F "${STUB}" | grep -v grep || true`], { encoding: "utf8" }); } catch { return ""; } };
+const check = (c, l) => {
+  console.log(`${c ? "PASS" : "FAIL"}: ${l}`);
+  if (!c) { failed = true; console.log(`  at +${Date.now() - t0} ms; processes on the stub path:\n${psOurs() || "  (none)"}`); }
+};
 
 async function connect() {
   const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
@@ -38,7 +45,10 @@ async function connect() {
   ws.on("message", (raw) => frames.push(JSON.parse(raw.toString())));
   await new Promise((res, rej) => { ws.on("open", res); ws.on("error", rej); });
   ws.send(JSON.stringify({ t: "hello", protocol: 1 }));
-  const until = async (pred, ms = 6000) => {
+  // Generous: under the full parallel suite (Gradle beside nine other scripts) a
+  // tmux-backed create or the halt's grace-then-SIGKILL can take several seconds;
+  // a passing run returns as soon as the frame lands.
+  const until = async (pred, ms = 20000) => {
     for (let t = 0; t < ms; t += 50) { const f = frames.find(pred); if (f) return f; await sleep(50); }
     return null;
   };
@@ -53,7 +63,7 @@ bootWait(PORT, 800, async () => {
     const repo = await fetch(`http://127.0.0.1:${PORT}/api/repo`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "halt" }) }).then((r) => r.json());
     for (const ackId of ["c1", "c2"]) c.send({ t: "session.create", cwd: repo.path, cols: 80, rows: 24, ackId });
     check(!!(await c.until((f) => f.t === "op.ack" && f.ackId === "c2" && f.ok)), "two sessions created");
-    for (let i = 0; i < 40 && ours() < 2; i++) await sleep(100);
+    for (let i = 0; i < 150 && ours() < 2; i++) await sleep(100);
     check(ours() >= 2, `the stubs are running (${ours()})`);
 
     c.send({ t: "host.halt", on: true });
@@ -63,10 +73,10 @@ bootWait(PORT, 800, async () => {
     check((done?.halt.receipt.forced ?? 0) >= 1, `the TERM-ignoring stub was forced (${done?.halt.receipt.forced})`);
     // `ours()` also counts the tmux server and the pty's tmux clients (their
     // command lines carry the stub path), and those exit only once kill-session's
-    // teardown lands — a fixed 300 ms lost that race under a full parallel suite.
+    // teardown lands — a fixed 300 ms lost that race under a full parallel suite,
+    // and 3 s was still tight beside a Gradle build.
     // A process that truly survived the SIGKILL is still there at the deadline.
-    for (let t = 0; t < 3000 && ours(); t += 100) await sleep(100);
-    if (ours()) console.log(execFileSync("sh", ["-c", `ps -Ao pid,ppid,stat,command | grep -F "${STUB}" | grep -v grep`], { encoding: "utf8" }));
+    for (let t = 0; t < 10000 && ours(); t += 100) await sleep(100);
     check(ours() === 0, `no stub process survives the halt (${ours()})`);
 
     c.send({ t: "session.create", cwd: repo.path, cols: 80, rows: 24, ackId: "c3" });

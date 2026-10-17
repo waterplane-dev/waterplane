@@ -51,7 +51,7 @@ function stampBrand(): Plugin {
         const path = (req.url || "").split("?")[0].replace(/^\//, "");
         if (!STAMPED_PUBLIC.includes(path)) { next(); return; }
         try {
-          const body = stampBrandText(readFileSync(join(__dirname, "public", path), "utf8"));
+          const body = stampBrandText(readFileSync(join(import.meta.dirname, "public", path), "utf8"));
           res.setHeader("content-type", path.endsWith(".js") ? "text/javascript" : "application/manifest+json");
           res.end(body);
         } catch { next(); }
@@ -92,7 +92,7 @@ function buildStamp(): Plugin {
   // build, so the previous id has to be captured while it still exists.
   let previousId: string | null = null;
   // The build's real outDir: a scratch `--outDir` check is stamped (and read) there, never in dist/.
-  let outDir = join(__dirname, "dist");
+  let outDir = join(import.meta.dirname, "dist");
   return {
     name: "build-stamp",
     apply: "build",
@@ -189,14 +189,14 @@ function walk(dir: string): string[] {
 function sourceHash(): string {
   const h = createHash("sha256");
   const roots = [
-    join(__dirname, "src"),
-    join(__dirname, "public"),
-    join(__dirname, "..", "shared", "dist"),
+    join(import.meta.dirname, "src"),
+    join(import.meta.dirname, "public"),
+    join(import.meta.dirname, "..", "shared", "dist"),
   ];
   // An extension's web half (and what it shares with its host half) is bundle source too: without
   // it an extension edit would not change BUILD_ID and the APK shell would never re-download.
   try {
-    const ext = join(__dirname, "..", "extensions");
+    const ext = join(import.meta.dirname, "..", "extensions");
     for (const f of walk(ext).sort()) {
       if (!/[\\/](web|shared)[\\/]/.test(f.slice(ext.length))) continue;
       h.update(f.slice(ext.length));
@@ -212,7 +212,7 @@ function sourceHash(): string {
     }
   }
   for (const f of ["index.html", "package.json"]) {
-    try { h.update(readFileSync(join(__dirname, f))); } catch { /* optional */ }
+    try { h.update(readFileSync(join(import.meta.dirname, f))); } catch { /* optional */ }
   }
   return h.digest("hex").slice(0, 8);
 }
@@ -241,6 +241,9 @@ const BUILD_ID = sourceHash();
  * app's own offline story wants them present. This changes only how they are
  * PACKAGED.
  */
+// Every name vendorChunk returns, highest claim first (see `codeSplitting` below).
+const CHUNK_ORDER = ["react", "xterm", "icons", "vendor", "shared", "demo", "sheets"];
+
 function vendorChunk(id: string): string | undefined {
   // The demo (demo-mode-plan.md §4): the fake desktop, its transport and the
   // scenarios. Its own chunk, statically imported like everything else — it
@@ -280,16 +283,30 @@ export default defineConfig({
   define: { __BUILD_ID__: JSON.stringify(BUILD_ID) },
   resolve: {
     alias: {
-      "@waterplane/sdk": join(__dirname, "src", "sdk", "index.ts"),
-      "@waterplane/kit": join(__dirname, "src", "kit", "index.ts"),
+      "@waterplane/sdk": join(import.meta.dirname, "src", "sdk", "index.ts"),
+      "@waterplane/kit": join(import.meta.dirname, "src", "kit", "index.ts"),
       // The logo master SVGs live at the repo root (brand/), inlined by core/Logo.tsx.
-      "@brand": join(__dirname, "..", "..", "brand"),
+      "@brand": join(import.meta.dirname, "..", "..", "brand"),
     },
     dedupe: ["react", "react-dom"],
   },
   plugins: [react(), stampBrand(), buildStamp()],
   build: {
-    rollupOptions: { output: { manualChunks: vendorChunk } },
+    // Rolldown (Vite 8) captures a group's dependencies with it: as one `manualChunks`
+    // function the demo swallowed most of `shared` again. One group per chunk name, in
+    // priority order, lets the libraries and `shared` claim their modules before `demo`
+    // and `sheets` reach them.
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: CHUNK_ORDER.map((name, i) => ({
+            name,
+            test: (id: string) => vendorChunk(id) === name,
+            priority: CHUNK_ORDER.length - i,
+          })),
+        },
+      },
+    },
     // The sheets chunk is one big static chunk on purpose (see vendorChunk); Vite's
     // default 500 kB warning then fires on every build and reads like a fault to
     // someone installing for the first time. The limit sits just above today's size,

@@ -77,7 +77,7 @@ export function foldCorpus(files: Files, now: number, scan?: ScanStats): CorpusD
   const dayModel = new Map<string, Map<string, TokenTotals>>();
   const dayModelCost = new Map<string, Map<string, CostBreakdown>>();
   const dayAgents = new Map<string, Map<string, number>>();
-  const dayRepo = new Map<string, Map<string, { turns: number; pricedTurns: number; usd: number }>>();
+  const dayRepo = new Map<string, Map<string, { turns: number; pricedTurns: number; usd: number; ctxTok: number }>>();
   const hours = new Map<string, TokenTotals>();
   const hourCost = new Map<string, CostBreakdown>();
   const hourModel = new Map<string, Map<string, TokenTotals>>();
@@ -148,8 +148,9 @@ export function foldCorpus(files: Files, now: number, scan?: ScanStats): CorpusD
         if (sum.sub) addTotals(subagents, v);
         if (day) addTotals(nest(dayModel, day, model, zeroTotals), v);
         addTotals(nest(repoModel, repoKey, model, zeroTotals), v);
-        const dr = day ? nest(dayRepo, day, repoKey, () => ({ turns: 0, pricedTurns: 0, usd: 0 })) : null;
-        if (dr) dr.turns += v.turns;
+        const dr = day ? nest(dayRepo, day, repoKey, () => ({ turns: 0, pricedTurns: 0, usd: 0, ctxTok: 0 })) : null;
+        // The context those requests sent, as the host's ledger counts it: the health score's spend line reads it.
+        if (dr) { dr.turns += v.turns; dr.ctxTok += v.input + v.cacheRead + v.cacheWrite; }
         const c = costOf(v, model, day || undefined);
         if (!c) { addTotals(unpriced, v); continue; }
         if (dr) { dr.pricedTurns += v.turns; dr.usd += c.total; }

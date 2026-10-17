@@ -49,6 +49,7 @@ import {
  * in flight stay here.
  */
 export const LS = {
+  healthAxis: lsKey("healthAxis"),
   // ── Authored content and preferences (all synced) ──────────────────────
   /** Reusable prompt text the compose box appends — "prompt templates". */
   snippets: lsKey("snippets"),
@@ -103,6 +104,7 @@ export const LS = {
   closeWhenDone: lsKey("backlog.closeWhenDone"),
   /** LOCAL-model sessions working at once; `"0"` no cap, absent = desktop default (host: `localSessionsSetting`). Synced. */
   localSessions: lsKey("local.maxSessions"),
+  /** Parallel-agent count's amber/red marks (`agentCount.ts`). Synced. */ agentWarn: lsKey("agentWarn"),
 
   // ── This device's identity and its pairing ─────────────────────────────
   /** What makes this device this device, in the usage/netlog docs. */
@@ -765,9 +767,9 @@ export const KEY_SCOPE = {
   snippets: "host", headerCmds: "host", fanoutPresets: "host", toolbar: "host", launch: "host",
   launchAsk: "host", spendWarn: "host", pad: "host", hiddenRepos: "host", enterSends: "host", dictateTerms: "host",
   autoSend: "host", serialSessions: "host", confirmQueue: "host", readerTools: "host", annKnobs: "host", annTools: "host", annPrompt: "device",
-  hints: "host", repoColors: "host", installAllow: "host", closeWhenDone: "host", localSessions: "host", syncTs: "host",
-  // identity and the host list itself
-  deviceId: "device", deviceName: "device", hostBase: "device", hosts: "device", hostActive: "device",
+  hints: "host", repoColors: "host", installAllow: "host", closeWhenDone: "host", localSessions: "host", agentWarn: "host", syncTs: "host",
+  // identity and the host list itself; healthAxis is this screen's choice
+  healthAxis: "device", deviceId: "device", deviceName: "device", hostBase: "device", hosts: "device", hostActive: "device",
   hostSwitch: "device", hostsGone: "device",
   // that host's ledger row and LAN identity: parked with it
   deviceToken: "host", lanIdentity: "host", passive: "host",
@@ -829,14 +831,8 @@ export function isDeviceKey(key: string): boolean {
   return DEVICE_KEYS.has(key);
 }
 
-/**
- * The synced half, as a set, checked against the shared allow-list at load.
- *
- * The check is the point: the allow-list is the contract both ends read, and a
- * key renamed here but not there syncs nothing while looking like it does. In
- * dev this is loud; in production it degrades to the same silent local-only
- * behaviour that a missing key already has.
- */
+/** The synced half, as a set, checked against the shared allow-list at load: a key renamed here
+ *  but not there syncs nothing while looking like it does. Loud in dev, silent local-only in prod. */
 export const SYNCED = new Set<string>(SYNCED_SETTING_KEYS);
 if (import.meta.env?.DEV) {
   const known = new Set<string>(Object.values(LS));
@@ -898,3 +894,7 @@ export function lsNum(key: string, fallback: number): number {
   const n = Number(raw);
   return Number.isFinite(n) ? n : fallback;
 }
+/** The repo-readings x axis: a reading per ISO week or per commit. Default weeks. */
+export type HealthAxis = "weeks" | "commits";
+export const readHealthAxis = (): HealthAxis => (lsGet(LS.healthAxis) === "commits" ? "commits" : "weeks");
+export const writeHealthAxis = (v: HealthAxis): void => lsSet(LS.healthAxis, v === "commits" ? "commits" : "weeks");

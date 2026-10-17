@@ -46,7 +46,10 @@ import { KPI_MEANING, rankChipWords, kpiMeaning,
   warningsWords,
 } from "./repoHealthWords.ts";
 import { SCRUB_HINT } from "./kit/chart/chartWords.ts";
+import { SCRUB_HINT as REGION_SCRUB_HINT, axisModeWords, commitsAbsentWords, thinnedWords } from "./healthIndexWords.ts";
+import { middleEllipsis } from "./repoHealthWords/repoHealthWordsFmt.ts";
 import { joinNarrativeDays, splitNarrativeDays } from "./narrativeDays.ts";
+import * as tileWords from "./repoHealthTileWords.ts";
 
 const NARRATIVE = fileURLToPath(new URL("../../../.claude/outbox/repohealth.md", import.meta.url));
 
@@ -526,6 +529,9 @@ test("no verdict word appears in anything this module can produce", () => {
     refreshFailedWords("timeout"),
     ...Object.values(KPI_MEANING),
     rankChipWords({ rank: 0.38, n: 24, slope: "falling" }),
+    tileWords.TILE_FOLD_LABEL, tileWords.TILES_MORE_SUMMARY, tileWords.OWN_MORE_SUMMARY,
+    tileWords.tileToggleTitle("p95 file size", false), tileWords.tileToggleTitle("p95 file size", true),
+    tileWords.areaAbsentWords({ areas: {}, absent: "x" }), tileWords.areaAbsentWords({ areas: {}, areasAbsent: "y" }),
   ].join("\n");
 
   // The same list `tools/repohealth.test.mjs` holds the narrative to, plus the
@@ -550,6 +556,8 @@ const {
   bothClocksWords,
   mixedPlotWords,
   notPlottedWords,
+  notesSummaryWords,
+  plotAxisModeWords,
   plotAxisWords,
   rankBasisWords,
   rankSentence,
@@ -834,6 +842,11 @@ test("no verdict word appears anywhere in region 2 either", () => {
     tileAbsentWords({ readings: 0 }),
     tileAbsentWords({ readings: 1, minToDraw: 2 }),
     plotAxisWords(22, "2026-06-18", "2026-09-21"),
+    ...Object.values(plotAxisModeWords("weeks", 14, "2026-06-18", "2026-09-21")),
+    ...Object.values(plotAxisModeWords("commits", 1, null, null)),
+    notesSummaryWords(1), notesSummaryWords(12),
+    axisModeWords("weeks"), axisModeWords("commits"),
+    thinnedWords(142, 1526) ?? "", commitsAbsentWords("waterplane"), REGION_SCRUB_HINT,
     rankBasisWords(60, 14),
     bothClocksWords(22_400, 22_101, "bba067c"),
     bothClocksWords(22_400, null, null),
@@ -1134,4 +1147,36 @@ test("a repo's disable or override is said on the tile, attributed, and a disabl
   for (const word of ["score", "grade", "healthy", "good", "bad", "should", "worse", "better"]) {
     assert.doesNotMatch([w.lead, w.why, variantWords(dis).lead, ...lines].join(" "), new RegExp(`\\b${word}\\b`, "i"), word);
   }
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// The redesign's region words: the x-axis mode line, the notes row, the path.
+// ───────────────────────────────────────────────────────────────────────────
+
+test("the axis line names the mode in its one open sentence and folds the method", () => {
+  const w = plotAxisModeWords("weeks", 14, "2026-06-18", "2026-09-21");
+  assert.equal(w.lead, "Each tile plots 14 weeks, one point per week — its last day-reading, 2026-06-18 to 2026-09-21, spaced by position in the series, not by date.");
+  assert.match(w.more, /NO TILE STARTS AT ZERO/);
+  const c = plotAxisModeWords("commits", 1, null, null);
+  assert.match(c.lead, /^Each tile plots 1 day-reading, one per day the series has — that day's last commit, spaced/);
+  assert.doesNotMatch(w.lead + w.more + c.lead, /[Dd]rag/, "the drag instruction is said once per region, not here");
+  assert.match(plotAxisWords(22, "a", "b"), /Drag across a curve/, "the old export still says what it said");
+});
+
+test("the notes row counts days", () => {
+  assert.equal(notesSummaryWords(12), "daily notes (12 days)");
+  assert.equal(notesSummaryWords(1), "daily notes (1 day)");
+});
+
+test("a path is shortened in the middle, the filename kept whole", () => {
+  const p = "packages/web/src/extensions/chart/day-notes.mjs";
+  assert.equal(middleEllipsis(p, 100), p);
+  assert.equal(middleEllipsis(p, 24), "packages/…/day-notes.mjs");
+  assert.equal(middleEllipsis(p, 30), "packages/…/chart/day-notes.mjs");
+  assert.equal(middleEllipsis(p, 16), "…/day-notes.mjs");
+  const long = middleEllipsis("a/an-extremely-long-file-name-indeed.ts", 15);
+  assert.equal(long.length, 15);
+  assert.match(long, /^an-extr….*\.ts$/);
+  assert.equal(middleEllipsis("abcdefghij", 5), "ab…ij");
+  for (const n of [5, 10, 20, 30, 44]) assert.ok(middleEllipsis(p, n).length <= n, `fits ${n}`);
 });

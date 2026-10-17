@@ -54,7 +54,11 @@ export function StorageToolSheet() {
 export function LocalRtToolSheet() {
   const core = useCore();
   const focus = useStore(localRtFocus);
-  return <LocalRtSheet focus={focus} onClose={() => core.nav.close("localrt")} />;
+  return <LocalRtSheet focus={focus} onClose={() => core.nav.close("localrt")}
+    onOpenSession={(id) => {
+      const s = core.world.sessions.find((x) => x.id === id);
+      if (s) { core.nav.close("localrt"); core.nav.attach(s); } else core.say.toast("that session is no longer open");
+    }} />;
 }
 
 export function NetHealthToolSheet() {

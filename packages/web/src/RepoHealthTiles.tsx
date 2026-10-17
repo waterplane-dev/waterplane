@@ -45,9 +45,9 @@
  * to the tool.
  */
 import { useRef, useState, type ReactNode } from "react";
-import { Minus, TrendingDown, TrendingUp } from "lucide-react";
+import { ChevronUp, Minus, Send, TrendingDown, TrendingUp } from "lucide-react";
 import type {
-  RepoHealthArea, RepoHealthPlotSeries, RepoHealthPoint,
+  RepoHealthArea, RepoHealthPlotContext, RepoHealthPlotSeries, RepoHealthPoint,
 } from "@waterplane/shared";
 import {
   MIN_READINGS, dumbbellGeom, indexTicks, nearestPlotted, sparkGeom, stackGeom,
@@ -56,8 +56,12 @@ import {
 import {
   areaRowWords, areaSpreadWords, axisDayWords, pointReadoutWords, rankSentence, rankChipWords, kpiMeaning,
   seriesValueWords, slopeWords, stackReadoutWords, tileAbsentWords, variantHidesChart, variantWords,
+  SERIES_ASK_ALL_LABEL, SERIES_ASK_LABEL, plotAxisModeWords, rankBasisWords, seriesAskNoteWords,
 } from "./repoHealthWords";
-import { ScrubHint } from "./kit/chart/ScrubHint";
+import { useBoxWidth } from "./kit/chart/useBoxWidth";
+import { latestIndex, openAmong, sparkAreaPath, toggleOpen } from "./repoHealthTileGeom";
+import { TILES_MORE_SUMMARY, TILE_FOLD_LABEL, areaAbsentWords, tileToggleTitle } from "./repoHealthTileWords";
+import type { HealthAxisMode } from "./healthIndexWords";
 import { weightStackWords } from "./repoHealthStackWords";
 import { SLOT } from "./kit/chart/TokenComposition";
 import { HintChip } from "./HintChip";
@@ -68,6 +72,8 @@ export const CURVE_OPACITY = 0.55;
 /** The height of a tile's sparkline. Two more pixels than it needs, so the end
  *  dot's ring is fully inside the box at either extreme. */
 const SPARK_H = 32;
+/** An open tile's curve: room for the crosshair ring and the day ticks. */
+const SPARK_OPEN_H = 48;
 export const DOT_R = 2.5;
 
 export const values = (points: readonly RepoHealthPoint[]): (number | null)[] => points.map((p) => p.v);
@@ -180,7 +186,7 @@ const fillFor = (slot: number) => (slot >= 0 && slot < SLOT.length ? SLOT[slot] 
  * words instead, because an empty box with an axis is a chart claiming to show
  * a series that was never measured.
  */
-export function SeriesSpark({ points, width, height = SPARK_H, label, unit = "", axes = false, onPick }: {
+export function SeriesSpark({ points, width, height = SPARK_H, label, unit = "", axes = false, bounds = false, area = false, onPick }: {
   points: readonly RepoHealthPoint[];
   width: number;
   height?: number;
@@ -200,6 +206,15 @@ export function SeriesSpark({ points, width, height = SPARK_H, label, unit = "",
    * be three unreadable labels claiming to be a scale.
    */
   axes?: boolean;
+  /**
+   * Print the fitted low and high up the left WITHOUT the day ticks or the
+   * crosshair — the compact grid tile. A fitted axis with no labels reads as a
+   * zero-based one, so even the smallest tile that is a chart says its range;
+   * it takes no pointer, because the tap there opens the tile.
+   */
+  bounds?: boolean;
+  /** The wash under the curve (`sparkAreaPath`): none for a flat series. */
+  area?: boolean;
   /**
    * The reading under the crosshair, reported UP.
    *
@@ -237,7 +252,8 @@ export function SeriesSpark({ points, width, height = SPARK_H, label, unit = "",
   const yLabels = !probe ? []
     : probe.flat ? [seriesValueWords(probe.hi)]
     : [seriesValueWords(probe.hi), seriesValueWords(probe.lo)];
-  const gutter = axes && probe ? gutterFor(yLabels) : 0;
+  const showY = axes || bounds;
+  const gutter = showY && probe ? gutterFor(yLabels) : 0;
   // ONE plot width, shared by the geometry, the floor and the ticks. Computed
   // twice it is a clamp in one place and a negative number in the other, and
   // the two disagree exactly where a box is narrower than its own gutter.
@@ -296,7 +312,7 @@ export function SeriesSpark({ points, width, height = SPARK_H, label, unit = "",
           a claim that they are comparable. Which is exactly why the two
           numbers are PRINTED: a fitted axis with no labels reads as a
           zero-based one, and every rise on it looks like a doubling. */}
-      {axes && !g.flat ? (
+      {showY && !g.flat ? (
         <>
           <line x1={gutter} x2={width} y1={g.hiY} y2={g.hiY}
             stroke="currentColor" strokeOpacity={0.1} strokeWidth={1} />
@@ -310,7 +326,7 @@ export function SeriesSpark({ points, width, height = SPARK_H, label, unit = "",
       ) : null}
       {/* A flat series has ONE value, so it gets one label on the line it sits
           on. Two identical numbers on two edges would read as a span. */}
-      {axes && g.flat ? (
+      {showY && g.flat ? (
         <text className="rh-tick" x={gutter - 5} y={g.hiY + 3.5} textAnchor="end">{yLabels[0]}</text>
       ) : null}
 
@@ -319,6 +335,9 @@ export function SeriesSpark({ points, width, height = SPARK_H, label, unit = "",
             and an empty box look the same at 32 px tall. */}
         <line x1={0} x2={plotW} y1={height - 0.5} y2={height - 0.5}
           stroke="currentColor" strokeOpacity={0.14} strokeWidth={1} />
+        {area && g.d ? (
+          <path d={sparkAreaPath(g.d, height - 0.5, g.flat)} fill="currentColor" fillOpacity={0.07} stroke="none" />
+        ) : null}
         {g.d ? (
           <path d={g.d} fill="none" stroke="currentColor" strokeOpacity={CURVE_OPACITY}
             strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
@@ -354,53 +373,105 @@ function Slope({ slope }: { slope: RepoHealthPlotSeries["reading"]["slope"] }) {
 /**
  * One stat tile: the value, the trend, and what the tool reads into it.
  *
- * `actions` is a slot rather than a handler, so this file knows nothing about
- * sending: the sheet puts its *ask the agent about this…* button there, and a
- * chart module that cannot reach a send path cannot become one that applies
- * itself.
+ * Two shapes, one component, so a reading is drawn one way wherever it is.
+ * Given `onToggle` it is a GRID tile: COMPACT until opened — label and `?`,
+ * the value, the slope, a 32px curve with its fitted range printed and NO
+ * pointer handlers (the tap opens the tile; a scrub there would fight it) —
+ * then spanning both columns with the full anatomy below. Without `onToggle`
+ * it is always the full tile: the VS Code view and any single-column caller.
+ *
+ * Each tile measures its OWN plot box (`useBoxWidth`, content box): a grid
+ * column is not the region's width. `width` is only the first paint's guess.
+ * `actions` is a slot, so this file knows nothing about sending — a chart
+ * module that cannot reach a send path cannot become one that applies itself.
  */
-export function SeriesTile({ s, width, actions, means }: {
+export function SeriesTile({ s, width, actions, means, open, onToggle }: {
   s: RepoHealthPlotSeries;
-  width: number;
+  width?: number;
   actions?: ReactNode;
   /** A repo's OWN reading: its declared sentence stands where waterplane's
    *  catalog meaning and `?` would, since the catalog knows nothing about it. */
   means?: string;
+  /** Grid tiles only: whether this one is the open one (state in the grid). */
+  open?: boolean;
+  onToggle?: () => void;
+  /** The region's x mode, for wording only — the caller hands the points
+   *  already folded (weeks) or whole (commits); nothing here re-folds them. */
+  axis?: HealthAxisMode;
 }) {
+  const [boxW, boxRef] = useBoxWidth();
+  const w = boxW || width || 0;
   // The INDEX the crosshair is on, resolved against `s.points` on the same
   // render the ring is drawn from — see `SeriesSpark`'s `onPick`.
   const [pickedIndex, setPickedIndex] = useState<number | null>(null);
-  const picked = pickedIndex == null ? null : s.points[pickedIndex] ?? null;
-  const readings = s.points.reduce((n, p) => (p.v == null ? n : n + 1), 0);
-  // `sparkGeom` returns null on exactly this condition, so the tile knows
-  // whether a curve exists WITHOUT a second geometry pass — and the readout
-  // line below is gated on the same fact. A hint inviting a drag across a
-  // chart that was never drawn is an invitation to touch nothing.
+  const grid = !!onToggle;
+  const vals = values(s.points);
+  const readings = vals.reduce<number>((n, v) => (v == null ? n : n + 1), 0);
   // A reading the repo DISABLED says so where its curve would be, and draws
   // none: a chart under "left out of the index" invites reading it as an input.
   const variant = s.variant ? variantWords(s.variant) : null;
-  const drawn = width > 0 && readings >= MIN_READINGS && !variantHidesChart(s.variant);
-  const absent = variantHidesChart(s.variant) ? null : tileAbsentWords({
-    absent: s.absent,
-    readings,
-    minToDraw: MIN_READINGS,
-  });
+  const hidden = variantHidesChart(s.variant);
+  // `sparkGeom` returns null on exactly this condition, so the tile knows
+  // whether a curve exists WITHOUT a second geometry pass.
+  const canDraw = readings >= MIN_READINGS && !hidden;
+  const drawn = canDraw && w > 0;
+  const absent = hidden ? null : tileAbsentWords({ absent: s.absent, readings, minToDraw: MIN_READINGS });
+  const toggle = () => { setPickedIndex(null); onToggle?.(); };
+
+  // The head: in the grid the NAME is the toggle (`aria-expanded`), and in a
+  // compact tile its hit area is stretched over the whole tile by CSS — the
+  // `?` sits beside it, never inside (a button in a button is invalid).
+  const head = (
+    <div className="rh-tile-head">
+      {grid ? (
+        <button type="button" className="rh-tile-toggle" aria-expanded={!!open}
+          title={tileToggleTitle(s.label, !!open)} onClick={toggle}>
+          <span className="rh-tile-label">{s.label}</span>
+        </button>
+      ) : <span className="rh-tile-label">{s.label}</span>}
+      {means === undefined ? <HintChip id={hintOf(s.key)} of={s.label} /> : null}
+    </div>
+  );
+  // The plot box exists whenever a curve CAN be drawn: it is what is measured,
+  // so gating it on the measurement would leave the width 0 for ever.
+  const plot = (axes: boolean) => canDraw ? (
+    <div className="rh-tile-plot" ref={boxRef}>
+      {drawn ? (axes
+        ? <SeriesSpark points={s.points} width={w} height={SPARK_OPEN_H} label={s.label} unit={s.unit} axes area
+            onPick={setPickedIndex} />
+        : <SeriesSpark points={s.points} width={w} label={s.label} unit={s.unit} bounds area />) : null}
+    </div>
+  ) : null;
+
+  if (grid && !open) {
+    return (
+      <li className="rh-tile">
+        {head}
+        <div className="rh-tile-valrow">
+          <span className="rh-tile-val">{seriesValueWords(s.last, s.unit)}</span>
+          <Slope slope={s.reading.slope} />
+        </div>
+        {plot(false)}
+        {/* Absences never fold: a compact tile still says why it has no curve. */}
+        {hidden && variant ? <div className="rh-tile-variant">{variant.lead}</div> : null}
+        {absent ? <div className="rh-tile-absent">{absent}</div> : null}
+      </li>
+    );
+  }
+
   // The rank rides beside the value as a chip; the SENTENCE survives only
   // where there is no rank, because then it is the tool's reason and the
   // chip has nothing honest to say.
   const chip = rankChipWords(s.reading);
   const reading = chip ? null : rankSentence(s.reading);
   const meaning = means ?? kpiMeaning(s.key);
+  // Untouched, the readout names the LATEST reading; the one drag instruction
+  // is the region's (`SCRUB_HINT`, printed once above every chart).
+  const shownIndex = pickedIndex ?? latestIndex(vals);
+  const shown = shownIndex == null ? null : s.points[shownIndex] ?? null;
   return (
-    <li className="rh-tile">
-      {/* Hierarchy, top down: WHAT it is (label + `?`, then one plain line),
-          the VALUE with its trend and rank beside it, then the curve. A
-          newcomer reads the first two lines and has the tile. */}
-      <div className="rh-tile-head">
-        {/* The chip sits INSIDE the label, not after it, so it reads as
-            belonging to the name and not to anything at the far right. */}
-        <span className="rh-tile-label">{s.label}{means === undefined ? <> <HintChip id={hintOf(s.key)} of={s.label} /></> : null}</span>
-      </div>
+    <li className={grid ? "rh-tile open" : "rh-tile"}>
+      {head}
       {meaning ? <div className="rh-tile-mean">{meaning}</div> : null}
       {/* The repo's say over this reading, ON its tile, attributed to the repo
           — once here, never as a badge. */}
@@ -416,24 +487,108 @@ export function SeriesTile({ s, width, actions, means }: {
         <Slope slope={s.reading.slope} />
         {chip ? <span className="rh-rank">{chip}</span> : null}
       </div>
-      {drawn ? (
-        <SeriesSpark points={s.points} width={width} label={s.label} unit={s.unit} axes
-          onPick={setPickedIndex} />
-      ) : null}
+      {plot(true)}
       {/* The crosshair's answer, in words, in a line that is ALWAYS there.
           Fixed by its own rule in CSS rather than by its content, so dragging
-          across a curve does not shuffle the lines and the send button under
-          it up and down. Before anything is touched it says how to. */}
-      {drawn ? (
-        <div className="rh-scrub">{pointReadoutWords(picked, s.unit) ?? <ScrubHint />}</div>
-      ) : null}
-      {/* The absence, where there is one, sits where the curve would have been
-          — never a blank strip, and never a dimmed anything. */}
+          across a curve does not shuffle the lines and the verbs under it. */}
+      {drawn ? <div className="rh-scrub">{pointReadoutWords(shown, s.unit)}</div> : null}
+      {/* The absence sits where the curve would have been, never dimmed. */}
       {absent ? <div className="rh-tile-absent">{absent}</div> : null}
       {reading ? <div className="rh-tile-read">{reading}</div> : null}
       {s.detail ? <div className="rh-tile-detail">{s.detail.trim()}</div> : null}
-      {actions ? <div className="rh-tile-acts">{actions}</div> : null}
+      {actions || grid ? (
+        <div className="rh-tile-acts">
+          {actions}
+          {grid ? (
+            <button type="button" className="key rh-verb" onClick={toggle}>
+              <ChevronUp size={12} aria-hidden /> {TILE_FOLD_LABEL}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </li>
+  );
+}
+
+/**
+ * The tiles as a two-column grid, ONE open at a time (`toggleOpen`): the open
+ * tile spans both columns, the rest stay compact. The state is here and not
+ * in a tile, because "one at a time" is a fact about the set.
+ */
+export function TileGrid<T extends RepoHealthPlotSeries>({ series, actionsFor, meansFor, axis }: {
+  series: readonly T[];
+  actionsFor?: (s: T) => ReactNode;
+  /** A repo's own `means` per tile (see `SeriesTile`). */
+  meansFor?: (s: T) => string | undefined;
+  axis?: HealthAxisMode;
+}) {
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const keys = series.map((s) => s.key);
+  const open = openAmong(openKey, keys);
+  return (
+    <ul className="rh-tiles rh-grid">
+      {series.map((s) => (
+        <SeriesTile key={s.key} s={s} axis={axis} means={meansFor?.(s)}
+          open={open === s.key}
+          onToggle={() => setOpenKey((k) => toggleOpen(openAmong(k, keys), s.key))}
+          actions={actionsFor?.(s)} />
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * The tiles card (jump-nav target `#rh-tiles`): the grid, then ONE open line
+ * naming the x mode with its `?`, the ask-all verb, and the method — the
+ * mode's long form, the rank basis, what the verbs are — folded.
+ *
+ * `series` arrive as the region draws them: folded to weeks by the caller in
+ * weeks mode, whole in commits mode. Without `axis` the points are per day,
+ * which is what the commits wording says.
+ */
+export function TilesCard({ series, windowReadings, minReadings, axis, onAsk, onAskAll, actionsFor, after, title }: {
+  series: readonly RepoHealthPlotSeries[];
+  windowReadings: number;
+  minReadings: number;
+  axis?: HealthAxisMode;
+  /** Absent = no verb, never a dimmed one (no send path, no repo). */
+  onAsk?: (s: RepoHealthPlotSeries) => void;
+  onAskAll?: () => void;
+  /** A surface's own verbs: per tile in place of `onAsk`'s, and card-wide under the tiles (VS Code's prompts). */
+  actionsFor?: (s: RepoHealthPlotSeries) => ReactNode; after?: ReactNode;
+  title?: ReactNode;
+}) {
+  if (!series.length) return null;
+  const pts = series.reduce<readonly RepoHealthPoint[]>((a, s) => (s.points.length > a.length ? s.points : a), series[0].points);
+  const mode = plotAxisModeWords(axis ?? "commits", pts.length, pts[0]?.day, pts[pts.length - 1]?.day);
+  return (
+    <div className="rh-card" id="rh-tiles">
+      {title ? <h3 className="rh-h">{title}</h3> : null}
+      <TileGrid series={series} axis={axis}
+        actionsFor={actionsFor ?? (onAsk ? (s) => (
+          <button type="button" className="key rh-verb" onClick={() => onAsk(s)}>
+            <Send size={12} aria-hidden /> {SERIES_ASK_LABEL}…
+          </button>
+        ) : undefined)} />
+      <div className="rh-cap">
+        {mode.lead} <HintChip id="repohealth.reading" of="the percentile and the arrow" />
+      </div>
+      {/* Under the tiles: it sends what they say, so it comes after them. */}
+      {onAskAll ? (
+        <div className="rh-tile-acts">
+          <button type="button" className="key rh-verb" onClick={onAskAll}>
+            <Send size={12} aria-hidden /> {SERIES_ASK_ALL_LABEL}…
+          </button>
+        </div>
+      ) : null}
+      {after}
+      <details className="hint-more rh-more">
+        <summary>{TILES_MORE_SUMMARY}</summary>
+        <p>{mode.more}</p>
+        <p>{rankBasisWords(windowReadings, minReadings)}</p>
+        {onAsk || onAskAll ? <p>{seriesAskNoteWords()}</p> : null}
+      </details>
+    </div>
   );
 }
 
@@ -454,7 +609,7 @@ const STACK_H = 96;
  * The axis is ZERO-BASED, unlike a tile's, because the quantity IS a total:
  * a fitted floor would cut the bottom band off.
  */
-export function StackChart({ inputs, points, unit, totalLabel, label, width, caption, hint }: {
+export function StackChart({ inputs, points, unit, totalLabel, label, width, caption, more, hint }: {
   inputs: readonly StackInput[];
   /** The x axis and the crosshair's day and sha. Every `values` array is the
    *  same length as this by construction — one row per reading. */
@@ -468,6 +623,9 @@ export function StackChart({ inputs, points, unit, totalLabel, label, width, cap
   label: string;
   width: number;
   caption?: ReactNode;
+  /** Method prose: folded into `details.hint-more` under the legend. An
+   *  absence never goes here — that is `caption`, in the open. */
+  more?: ReactNode;
   hint: string;
 }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -502,11 +660,14 @@ export function StackChart({ inputs, points, unit, totalLabel, label, width, cap
   const at = pickedIndex == null ? null : g.pts.find((q) => q.i === pickedIndex) ?? null;
   const total = g.totals[g.totals.length - 1];
   const boxH = STACK_H + TICK_H;
-  const readout = at
+  // Untouched, the readout names the LATEST column; the drag instruction is
+  // the region's, printed once (`SCRUB_HINT`).
+  const shown = at ?? g.pts[g.pts.length - 1] ?? null;
+  const readout = shown
     ? stackReadoutWords(
-        points[at.i],
-        inputs.map((b) => ({ label: b.label, v: b.values[at.i] ?? null })),
-        g.totals[at.i] ?? null,
+        points[shown.i],
+        inputs.map((b) => ({ label: b.label, v: b.values[shown.i] ?? null })),
+        g.totals[shown.i] ?? null,
         unit,
       )
     : null;
@@ -559,7 +720,7 @@ export function StackChart({ inputs, points, unit, totalLabel, label, width, cap
         <XAxis points={points} w={plotW} y={STACK_H + TICK_BASELINE} gutter={gutter} />
         {at ? <Crosshair at={at} h={STACK_H} gutter={gutter} /> : null}
       </svg>
-      <div className="rh-scrub">{readout ?? <ScrubHint />}</div>
+      <div className="rh-scrub">{readout}</div>
       <ul className="rh-legend">
         {g.bands.map((b) => (
           <li key={b.key}>
@@ -573,6 +734,12 @@ export function StackChart({ inputs, points, unit, totalLabel, label, width, cap
         </li>
       </ul>
       {caption ? <div className="rh-cap">{caption}</div> : null}
+      {more ? (
+        <details className="hint-more rh-more">
+          <summary>{TILES_MORE_SUMMARY}</summary>
+          {more}
+        </details>
+      ) : null}
     </div>
   );
 }
@@ -605,7 +772,7 @@ export function WeightStack({ claudeMd, descriptions, width }: {
       totalLabel="the total"
       label="always-on weight"
       width={width}
-      caption={weightStackWords()}
+      more={weightStackWords()}
       hint="repohealth.weight"
     />
   );
@@ -694,12 +861,40 @@ export function AreaSpread({ areas, width }: {
         <li><span className="rh-swatch rh-swatch-hollow" aria-hidden />what a change there usually carries</li>
         <li><span className="rh-swatch rh-swatch-dot" style={{ background: "var(--chart-1)" }} aria-hidden />with every one of its bodies loaded</li>
       </ul>
-      <ul className="rh-rows">
-        {keys.map((k) => (
-          <li key={k}><span className="rh-rows-key">{k}</span> {areaRowWords(areas[k])}</li>
-        ))}
-      </ul>
-      <div className="rh-cap">{areaSpreadWords()}</div>
+      {/* Rows in words + method fold; each row's words are also its mark's title. */}
+      <details className="hint-more rh-more">
+        <summary>{TILES_MORE_SUMMARY}</summary>
+        <ul className="rh-rows">
+          {keys.map((k) => (
+            <li key={k}><span className="rh-rows-key">{k}</span> {areaRowWords(areas[k])}</li>
+          ))}
+        </ul>
+        <p>{areaSpreadWords()}</p>
+      </details>
+    </div>
+  );
+}
+
+/**
+ * The weight card (jump-nav target `#rh-weight`): the always-on weight stack,
+ * then the per-area spread — or, in the OPEN, why there is none
+ * (`areaAbsentWords`, three states). Measures its own content box, so the
+ * caller passes data and no width.
+ */
+export function WeightCard({ claudeMd, descriptions, context, width }: {
+  claudeMd: RepoHealthPlotSeries | null;
+  descriptions: RepoHealthPlotSeries | null;
+  context: RepoHealthPlotContext;
+  /** First paint's guess only; the card measures itself. */
+  width?: number;
+}) {
+  const [boxW, boxRef] = useBoxWidth();
+  const w = boxW || width || 0;
+  const absent = areaAbsentWords(context);
+  return (
+    <div className="rh-card" id="rh-weight" ref={boxRef}>
+      <WeightStack claudeMd={claudeMd} descriptions={descriptions} width={w} />
+      {absent ? <div className="rh-cap">{absent}</div> : <AreaSpread areas={context.areas} width={w} />}
     </div>
   );
 }

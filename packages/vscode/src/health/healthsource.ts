@@ -6,11 +6,15 @@
  * ever see them (`healthstate.ts` shim, `READ_FROM`), `update` and `mendTail` stay on our own file.
  *
  * The rule: when both exist, the one whose last row is the newer commit wins (`ts`); a tie or a
- * last row that cannot be read goes to the folder's, which the host keeps fresh. A scope has no
+ * last row that cannot be read goes to the folder's, which the host keeps fresh. One exception
+ * comes first: a folder series an older engine wrote (no line-weighted mean, `isStaleEngineSeries`)
+ * scores nothing, so ours wins whenever ours is not — else measuring again here could never take
+ * its place (a repo's own older `tools/repohealth.mjs` keeps writing such rows on the desktop). A scope has no
  * series of our own, so it is only ever read from the folder.
  */
 import { closeSync, existsSync, fstatSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { isStaleEngineSeries, type HealthSeriesRow } from "@waterplane/shared";
 import { STATE_DIRS } from "../shims/healthstate.js";
 // @ts-expect-error -- plain JS with no declarations; esbuild bundles it (as healthworker.ts does the engine).
 import { normalizeScope, slugFor } from "../../../../tools/repohealth/scope.mjs";
@@ -71,8 +75,8 @@ export function readScopes(folder: string): string[] {
   return [];
 }
 
-/** `ts` (unix seconds) of the file's last whole row, or null. Reads the tail only. */
-export function lastRowTs(file: string): number | null {
+/** The file's last whole row, parsed, or null. Reads the tail only. */
+function lastRow(file: string): Record<string, unknown> | null {
   let fd: number;
   try { fd = openSync(file, "r"); } catch { return null; }
   try {
@@ -88,8 +92,8 @@ export function lastRowTs(file: string): number | null {
       const last = usable.map((l) => l.trim()).filter(Boolean).pop();
       if (last !== undefined) {
         try {
-          const ts = (JSON.parse(last) as { ts?: unknown }).ts;
-          return typeof ts === "number" && Number.isFinite(ts) ? ts : null;
+          const r: unknown = JSON.parse(last);
+          return r && typeof r === "object" && !Array.isArray(r) ? r as Record<string, unknown> : null;
         } catch { return null; }
       }
       if (len === size || want >= TAIL_CAP) return null;
@@ -98,6 +102,18 @@ export function lastRowTs(file: string): number | null {
   } finally {
     closeSync(fd);
   }
+}
+
+/** `ts` (unix seconds) of the file's last whole row, or null. Reads the tail only. */
+export function lastRowTs(file: string): number | null {
+  const ts = lastRow(file)?.ts;
+  return typeof ts === "number" && Number.isFinite(ts) ? ts : null;
+}
+
+/** Whether the file's last row is an older engine's (measured size, no line-weighted mean); null = unreadable. */
+function staleTail(file: string): boolean | null {
+  const r = lastRow(file);
+  return r ? isStaleEngineSeries([r as unknown as HealthSeriesRow]) : null;
 }
 
 /**
@@ -113,6 +129,7 @@ export function chooseSource(folder: string, ownFile: string, scope: string | nu
   if (dir) {
     const file = join(dir, seriesName(null));
     if (nonEmpty(ownFile)) {
+      if (staleTail(file) === true && staleTail(ownFile) === false) return { kind: "own", file: ownFile, dir: null, scope: null };
       const theirs = lastRowTs(file), mine = lastRowTs(ownFile);
       if (theirs !== null && mine !== null && mine > theirs) return { kind: "own", file: ownFile, dir: null, scope: null };
     }

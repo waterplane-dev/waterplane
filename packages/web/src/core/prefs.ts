@@ -42,6 +42,7 @@ import {
 import { onSettingsChange } from "../settings.ts";
 import type { RepoOrder } from "./launcher/model.ts";
 import { track } from "../usage.ts";
+import { loadAgentWarn, saveAgentWarn, type AgentWarnCfg } from "../agentCount.ts";
 
 export interface DevicePrefs {
   /** Data saver: smaller images, slower polling (`media.ts`). Per device. */
@@ -64,6 +65,8 @@ export interface DevicePrefs {
   /** The local-model session cap as its raw synced string — `""` is the
    *  desktop's own default, `"0"` no cap. Read by the HOST. */
   localSessions: string;
+  /** The parallel-agent count's marks (`agentCount.ts`). Default 10 / 30, synced. */
+  agentWarn: AgentWarnCfg;
   /** Return sends (vs inserts a newline). Default ON, synced. */
   enterSends: boolean;
   /** The compose box is a raw key pipe. Per device, never synced. */
@@ -153,6 +156,12 @@ export const prefs = createPrefs<DevicePrefs>({
     load: () => lsGet(LS.localSessions) ?? "",
     save: (v) => (v ? lsSet(LS.localSessions, v) : lsDel(LS.localSessions)),
     keys: [LS.localSessions],
+  },
+  agentWarn: {
+    load: loadAgentWarn,
+    save: saveAgentWarn,
+    keys: [LS.agentWarn],
+    same: (a, b) => a.warn === b.warn && a.alarm === b.alarm,
   },
   enterSends: flag(LS.enterSends, onUnlessZero, true),
   cliMode: flag(LS.cliMode, onIfOne),

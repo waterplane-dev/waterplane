@@ -139,3 +139,14 @@ test("spans: the span filter's 30 and 90 calendar days, each folded from local m
   const later = data.foldCorpus(store.files, Date.UTC(2027, 1, 1), store.stats);
   assert.equal(tokenTotal(later.spans[90].totals), 0, "Oct 1 is outside the 90 days before Feb 1");
 });
+
+test("each day's repo rows carry the context they sent — the health score's spend line folds it", async () => {
+  const store = await scanned();
+  const doc = data.foldCorpus(store.files, NOW, store.stats);
+  for (const d of doc.days) {
+    const ctx = d.byRepo.reduce((n, r) => n + r.ctxTok, 0);
+    assert.equal(ctx, d.input + d.cacheRead + d.cacheWrite, "input + cache read + cache write, output left out");
+  }
+  const turns = doc.days.reduce((n, d) => n + d.byRepo.reduce((m, r) => m + r.turns, 0), 0);
+  assert.equal(turns, doc.totals.turns);
+});

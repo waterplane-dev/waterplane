@@ -186,6 +186,13 @@ export const SYNCED_SETTING_KEYS = [
    * acts on the desktop whichever device set it.
    */
   lsKey("local.maxSessions"),
+  /**
+   * The parallel-agent marks (`web/agentCount.ts`): above `warn` the strip's
+   * count turns amber, above `alarm` red, each rise one toast. Synced: how many
+   * agents at once is "too many" is the person's answer about their own desktop
+   * and account, not a fact about the phone it was set on.
+   */
+  lsKey("agentWarn"),
 ] as const satisfies readonly string[];
 
 /** The synced key the host reads for the local-model session cap. */

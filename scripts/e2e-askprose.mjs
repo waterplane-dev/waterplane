@@ -11,7 +11,7 @@
 // case this script runs in — the tail was never even looked at.
 //
 // Pinned here: the fact reaches the WIRE (`session.asking`), it carries the
-// question's own words, and typing retires it.
+// question's own words, typing retires it, and "handled" survives a restart.
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -34,8 +34,12 @@ const env = {
   [E.IDLE_MS]: "700", [E.IDLE_PING_MS]: "700",
   GEMINI_API_KEY: "", // the point: no oracle on duty
 };
-const host = spawn("node", ["packages/host/dist/main.js"], { env, stdio: ["ignore", "pipe", "pipe"] });
-host.stderr.on("data", (d) => process.stderr.write("[host] " + d));
+const boot = () => {
+  const h = spawn("node", ["packages/host/dist/main.js"], { env, stdio: ["ignore", "pipe", "pipe"] });
+  h.stderr.on("data", (d) => process.stderr.write("[host] " + d));
+  return h;
+};
+let host = boot();
 const base = `http://127.0.0.1:${PORT}`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -45,16 +49,21 @@ bootWait(PORT, 900, async () => {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "ask" }),
     }).then((r) => r.json());
 
-    const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
     let sid = null, info = null;
-    ws.on("message", (raw) => {
-      const m = JSON.parse(raw.toString());
-      if (m.t === "session.created") sid = m.session.id;
-      if ((m.t === "session.created" || m.t === "session.updated") && (!sid || m.session.id === sid)) info = m.session;
-    });
-    await new Promise((r) => ws.on("open", r));
-    ws.send(JSON.stringify({ t: "hello", protocol: 1 }));
-    await sleep(200);
+    const connect = async () => {
+      const w = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
+      w.on("message", (raw) => {
+        const m = JSON.parse(raw.toString());
+        if (m.t === "session.created") sid = m.session.id;
+        if ((m.t === "session.created" || m.t === "session.updated") && (!sid || m.session.id === sid)) info = m.session;
+        if (m.t === "session.list" && sid) info = m.sessions.find((x) => x.id === sid) ?? info;
+      });
+      await new Promise((r) => w.on("open", r));
+      w.send(JSON.stringify({ t: "hello", protocol: 1 }));
+      await sleep(200);
+      return w;
+    };
+    let ws = await connect();
     ws.send(JSON.stringify({ t: "session.create", cwd: repo.path, cols: 80, rows: 24 }));
 
     const until = async (cond, ms = 8000) => {
@@ -96,6 +105,19 @@ bootWait(PORT, 900, async () => {
     check(acked, "acknowledging retires the question without typing");
     await sleep(1500);
     check(!info?.asking, "and it stays retired across re-idles — the tail has not changed");
+
+    // …and across a RESTART. The pane outlives the daemon and its tail still
+    // ends on the question, so an acknowledgement kept only in memory came
+    // back on every `npm run restart` — taps that "did nothing", measured.
+    ws.close();
+    await new Promise((r) => { host.once("exit", r); host.kill(); });
+    host = boot();
+    await new Promise((r) => bootWait(PORT, 900, r));
+    info = null;
+    ws = await connect();
+    await until(() => info?.running, 6000);
+    await sleep(2500); // re-attach repaints and re-idles; give the tail its read
+    check(info?.running && !info?.asking, `an acknowledged question stays retired across a host restart (got ${JSON.stringify(info?.asking)})`);
 
     // A DIFFERENT question is a different decision and raises the badge again.
     ws.send(JSON.stringify({ t: "session.input", id: sid, data: "echo 'Ship it now, or wait for review?'\r" }));

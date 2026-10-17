@@ -866,6 +866,10 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
   color: var(--muted); font-weight: 400;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
 }
+/* The fold "Closed & recent" sits behind (`ClosedRows.tsx`): a whole-width
+   header button, shut by default. */
+.section.closed-fold { background: none; border: 0; width: 100%; text-align: left; cursor: pointer; color: inherit; font: inherit; }
+.section.closed-fold > span > svg { vertical-align: -3px; }
 /* "Recently closed" rows (`core/launcher/ClosedRows.tsx`, words from
    `closedRowWords.ts`). A row the HOST closed on its own carries a bordered pill
    with an icon AND words on its own line under the headline — never colour
@@ -4856,6 +4860,17 @@ button.repo-group-stat.on, button.repo-group-wait.on, .tag.tag-filter.on {
 .localrt-bar .lrt-lead-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Memory tight: a word of colour, not a block — the title says why. */
 .localrt-bar .lrt-mem.lrt-tight { color: var(--warn); }
+/* The parallel-agent count (agentCount.ts): centred in the gap between the
+   lead's graph and the right-hand numbers; amber/red past the person's marks. */
+.localrt-bar .lrt-agents { margin-left: auto; display: flex; align-items: center; gap: 3px; white-space: nowrap; flex: 0 0 auto; }
+.localrt-bar .lrt-agents svg { opacity: .65; flex: 0 0 auto; }
+.localrt-bar .lrt-agents + .lrt-right { margin-left: auto; }
+.localrt-bar .lrt-agents-warn { color: var(--warn); font-weight: 600; }
+.localrt-bar .lrt-agents-alarm { color: var(--dead); font-weight: 700; }
+.localrt-bar.lrt-agents-only .lrt-agents { margin-left: 0; }
+.localrt-bar .lrt-agents-words { margin-right: auto; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.localrt-bar .lrt-close { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; min-width: 28px; height: 18px; margin: 0 -6px 0 2px; padding: 0; background: none; border: 0; color: var(--muted); }
+.localrt-bar .lrt-agents-warn svg, .localrt-bar .lrt-agents-alarm svg { opacity: 1; }
 /* Each reading is its own tap target, so each gets its own touch slop — the gap
    between them IS the separation at this height, and a segment with no padding
    is an 11 px line to hit with a thumb. */
@@ -5042,6 +5057,12 @@ button.repo-group-stat.on, button.repo-group-wait.on, .tag.tag-filter.on {
 /* A resident model is the hero of the desktop sheet: the one section with the
    accent edge, so it reads first without being the loudest block. */
 .set-group.lrt-hero { border-left: 3px solid var(--accent); }
+/* The agents section (AgentsSection.tsx): each row is a door into its session. */
+.lrt-agent-row { width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.lrt-agent-row .lrt-agent-go { color: var(--muted); align-self: center; }
+.lrt-agents-verdict { display: block; margin: 0 0 8px; }
+.lrt-agents-verdict.lrt-agents-warn { color: var(--warn); }
+.lrt-agents-verdict.lrt-agents-alarm { color: var(--dead); }
 .lrt-rows { display: flex; flex-direction: column; gap: 8px; }
 .lrt-row {
   display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px;
@@ -6834,6 +6855,8 @@ svg.lucide[width="28"] { width: calc(28px * var(--ui-icon, 1)); height: calc(28p
 .hix-alert.severe { color: var(--dead); }
 .hix-alert.warn { color: var(--warn); }
 .hix-vs { padding-top: 4px; font-size: calc(12px * var(--ui-font, 1)); color: var(--muted); }
+.hix-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; padding-top: 6px; font-size: calc(11px * var(--ui-font, 1)); color: var(--muted); }
+.hix-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .rh-tile .rh-tile-label { font-size: calc(13px * var(--ui-font, 1)); letter-spacing: .01em; }
 .rh-tile-read, .rh-tile-detail, .rh-tile-absent, .rh-cap, .rh-lead {
   font-size: calc(12px * var(--ui-font, 1)); line-height: 1.4; color: var(--muted);

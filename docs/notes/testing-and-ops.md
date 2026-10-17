@@ -743,8 +743,8 @@ median non-batch web commit would load **58,818** against 122,662 before, p90 **
 of web commits touch three or more sub-skills, which is where that p90 comes from. The trade pays
 as long as web/host turns are more than about a tenth of all turns; `/usage` says they are a fifth.
 Two costs stay on the record: every turn that touches NEITHER package pays the +7,143 anyway, and
-19 skills is over the `maxSkills: 12` in `shared/contextweight.ts`, so this repo's own
-context-weight row now reads heavy. That is the row doing its job, and the answer is a per-repo
+19 skills was over the `maxSkills: 12` then in `shared/contextweight.ts`, so this repo's own
+context-weight row read heavy (the default is 30 since 2026-10-17). That is the row doing its job, and the answer is a per-repo
 threshold — a setting, argued once, not a default anyone should move.
 
 Three checks hold the shape, because each of them is a failure that is invisible in a diff:
@@ -924,3 +924,92 @@ and draws it with `Markdown.tsx` `inlineDoc`, ignoring the width — the phone d
 own size. The public release's link checker and hosted-link rewriter (`scripts/release/public-lib.mjs`)
 read the `href`/`src` inside `<a>`/`<img>` tags. Any other HTML in those lines, `<sub>` included, the
 phone prints as text.
+
+## Moved out of CLAUDE.md (2026-10-17)
+
+_Verbatim from CLAUDE.md as of 2026-10-17; CLAUDE.md is the rule — where this text disagrees, CLAUDE.md wins._
+
+### Token discipline — the measurement behind the rules
+
+Measured on this desktop: 124 conversations out of 8,968 in a fortnight grew past 200k of context,
+and those 124 were **76% of every token spent**. Turns at index 80+ were 54% of the total at an
+average of 312k per turn, and a 1M window never compacts itself.
+
+### `sessions/record.ts` `nameTab` — the automatic spender, in full
+
+`sessions/record.ts`'s tab-name call
+  (`nameTab`, once per session, off the first prompt only) runs on `SUMMARY_MODEL` with
+  `--setting-sources user --tools ""` and its own system prompt (83k tokens → 1.9k), and its result
+  is persisted so a restart re-derives nothing. Any new
+  unattended `claude -p` starts from those flags and justifies every one it drops.
+
+## Moved out of skill `testing` (2026-10-17)
+
+_Verbatim from the skill as of 2026-10-17; the skill is the rule — where this text disagrees, the skill wins._
+
+### Host heuristics tests — the file-by-file enumeration
+
+**`packages/host/test/*.test.mjs`** (`npm run test:host`, over `host/dist`) is the same idea for the
+daemon's **regex heuristics** — `prompt` (the choice-box detector), `limit` (banner + reset parsing), `usage` (the `/usage` screen's two windows, resets included),
+`context` (the meter), `slash` (`isLocalCommand`), `origin` (the browser half of the security
+boundary), `login` (the sign-in link, rejoined off a wrapped screen), `ptycap` (what a failed pty spawn may
+SAY), `headlesslimit` (the same banner read off a `claude -p` ENVELOPE), the two decision cores lifted
+out of `SessionManager` (`sessionSearch`), `answergate` (every gate refusal in words, and the tap's keystrokes when accepted), `plugins` (every broken plugin LISTED with its reason, settings refused whole), `decisionlog` (the one-time `oracle-log.json` migration), `intentsched` (what a schedule may CLAIM
+about itself — armed vs spent, a hand run that must not consume it — and where automatic work with
+no session goes, both over a real store with fake deps), `convfork` (the cut-and-rewrite as pure fs:
+fixture in, prefix out, source byte-identical afterwards) and `lastturn` (what a conversation log may be asked about its last real TURN, against bookkeeping rows that move the file's mtime without being one), `ptyleak` (an ended PTY leaves no ptmx master or slave fd in this process — over node-pty and `ownPtys()`, SKIPPING in words when the table is already full), `sweepstores` (which per-session files a boot sweep may delete: never a live id, never before the age gate, never a traversal-shaped name), `deliversubmit` (what a delivery is
+entitled to SAY about the submit proof) and `deliverecho` (what it may DO when it thinks the screen
+never showed the text — never an Esc into a live turn, never a bare Return at a box it only
+believes is full — and what it may RECORD: one health observation per delivery, counted not
+last-read). Fixture in, verdict out: when upstream changes its wording,
+"this line no longer matches" is the sentence worth having, where e2e can only report "the session
+never published a prompt".
+
+### The e2e suite — the name list the skill used to carry
+
+The suite, so a name here is a name on disk: `ack` `agentintent` `answer` `api` `archive` `askbox` `askprose` `attach`
+`autopull` `backlog` `backlog-echo` `backlog-keepopen` `backlog-prompt` `backlog-slots` `backlog-wait` `budget` `build` `capture` `checkbox`
+`buildparams` `clihealth` `ctxgraph` `echo-stream` `docs` `fanout` `fork` `forkfrom` `gallery` `git` `hints` `hook` `hosturl` `images`
+`intent` `intentnodrop` `launch` `launchwait` `livereclaim` `limit` `limitbusy` `limitparallel` `limitrepaint` `limitqueue` `limitreset` `limitstuck`
+`login` `manualfire` `netfuse` `netstats` `notifyprefs` `offlinelists` `onesession` `opqueue`
+`origin` `outbox` `outboxbadge` `pastechit` `permmode` `pin` `plugin` `prompt` `promptlive` `ptyleak` `queue` `restore`
+`resume` `resurrect` `resurrect-item` `rootguard` `scaffold` `schedule` `screenlog` `scrollcomposer` `search` `secret` `sent`
+`settings` `settle` `settlesweep` `setup` `setupwatch` `statedir` `sidecar` `slashlocal` `smoke` `speedtest` `star` `stophook`
+`termqueries` `tokenstats` `trustbox`
+`startprompt` `submit` `thumbs` `tier12` `tmux` `transcript` `tree` `uiusage` `webbundle` `assess`
+(opencode's `backend` `ocserve` `ocservetmux` `tmuxenv`: `packages/extensions/opencode/e2e/`).
+
+## Moved out of skill `docs-media` (2026-10-17)
+
+_Verbatim from the skill as of 2026-10-17; the skill is the rule — where this text disagrees, the skill wins._
+
+### Filmed sharp, encoded once (R-demo-022)
+
+- **Filmed sharp, encoded once** (R-demo-022): a journey is filmed by CDP screencast at 2x
+  (896 x 1996 PNG frames — a Pixel 8 Pro's 448 x 998 viewport), never Playwright's `recordVideo` (VP8 ~1 Mbit — the old blur).
+  `scripts/ui/encode.mjs`: frames → lossless master → captioned master → gif AND mp4 (H.264 crf 18,
+  full size, uncapped). No blank frames: the flat ones a film opens on are dropped, a flat one after
+  its first picture is a cut that landed on nothing (a WARNING naming its time until
+  `STRICT.flatFrames`, then a failed run), and `loopFilm` refuses a stretch that opens on one.
+  Around a reload or a `goto`, `await j.holdPaint(go, drawn)` (lib.mjs) keeps the screen that was up until the new document has drawn — not a render-blocking init script: Chromium paints past it (measured).
+
+### The gif is a short loop, the mp4 the whole film (R-demo-025)
+
+- **The gif is a short loop, the mp4 the whole film** (R-demo-025): a gif has no controls, so a
+  minute-long one is watched from wherever the viewer lands. A journey's `export const teaser`
+  (`{ from, to }` caption prefixes, or a list joined in order — `first-look` loops exactly its seven beats,
+  R-demo-033) picks the stretch; `loopFilm` adds the orange progress bar along the bottom and holds the
+  last picture 1.5 s. A reworded caption FAILS the media run (`teaserWindows`), never teases the wrong
+  bit; so does a caption whose screen is not in the stretch (WARNING until `STRICT.teaserReferents`). Docs embed `<a href="x.mp4"><img src="x.gif" width="270" alt="…"></a>` (APK film: 490) + an
+  italic line linking the video; the alt says what the LOOP shows. Only that HTML shape: the phone
+  (`linkedImages`) and the release (`public-lib.mjs`) read no other, and print `<sub>` as text.
+  [Why the width](testing-and-ops.md#docs-gifs-are-sized-in-html).
+
+### Paced after the run (R-demo-023)
+
+- **Paced after the run, by one rule** (R-demo-023, `scripts/ui/pace.mjs`): motion at real speed, a
+  settled picture held 1.2–2.5 s, a caption's last picture held for its reading time (1.5 s + 15
+  chars/s, at most 4 s: `PACE.readMax`), no lead: a caption snaps to the first visible change at or after its mark, so it arrives
+  WITH the screen it describes (`snapMarks`; none before the next caption = it stays put). A blinking
+  cursor or spinner is not a change (thumbnail diff in `encode.mjs`). So a journey's `beat()`s only need to let the app settle — never tune pace
+  there; tune `PACE`. Longer caption = longer screen, so keep captions short.

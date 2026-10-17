@@ -474,3 +474,34 @@ button.ts-perreq-row { cursor: pointer; }
 }
 .act-cant svg { flex: 0 0 auto; margin-top: 2px; opacity: .8; }
 .act-cant-inline { padding: 0 2px; }
+
+/* ── ported: the kit's FilterChip row (.fchip*, used by the x-axis row, the scope row and the type
+   chips), the index's alerts, legend and caption, from packages/web/src/styles.css. The chip's
+   box is 36px here, not the phone's 44px touch target: a webview is pointed at with a mouse. ── */
+.fchips { display: flex; align-items: center; gap: 0; padding: 0 6px; overflow-x: auto; scrollbar-width: none; }
+.fchips::-webkit-scrollbar { display: none; }
+.fchips.wrap { flex-wrap: wrap; overflow-x: visible; }
+.fchips.rh-scope { padding: 0 11px; }
+.fchips-gap { flex: none; width: 1px; height: 20px; margin: 0 5px; background: var(--line); }
+.fchip { flex: none; min-height: 36px; padding: 0 3px; display: inline-flex; align-items: center; background: none; border: 0; color: var(--fg); font: inherit; cursor: pointer; }
+.fchip-pill {
+  display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 11px; border-radius: 999px;
+  border: 1px solid var(--line); font-size: calc(13px * var(--ui-font, 1)); white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.fchip.on .fchip-pill { color: var(--accent); background: var(--accent-tint); border-color: var(--accent-edge); }
+.fchip.on .fchip-pill:has(.fchip-x) { padding-right: 9px; }
+.fchip:active .fchip-pill { background: var(--raise); }
+.act-cants { display: flex; flex-direction: column; gap: 2px; padding: 0 12px 6px; }
+.hix-cap { font-size: calc(13px * var(--ui-font, 1)); padding-top: 4px; }
+.hix-alerts { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; font-size: calc(13px * var(--ui-font, 1)); }
+.hix-alert { display: flex; gap: 6px; align-items: flex-start; }
+.hix-alert svg { flex: none; margin-top: 2px; }
+.hix-alert.severe { color: var(--dead); }
+.hix-alert.warn { color: var(--warn); }
+.hix-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; padding-top: 6px; font-size: calc(11px * var(--ui-font, 1)); color: var(--muted); }
+.hix-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.hix-barscore { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+/* A tile's prompt block is a paragraph with its buttons, not one more verb: it takes the whole
+   row of the tile's action strip, and the tile's `fold` wraps under it. */
+.rh-region .rh-tile-acts > .rh-ask { flex: 1 1 100%; }

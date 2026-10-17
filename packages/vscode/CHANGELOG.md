@@ -2,7 +2,10 @@
 
 ## Unreleased
 
-- Repo health leads with the health index, as the phone does: one number chained week over week from the five readings (100 = the first complete week), its line, and the picked week's contributions. Derived from the series the view already read; the tree's Repo health row shows it. Not drawn for a scope.
+- A fresh install from the desktop app's install build loads itself: every open window restarts its extensions once, a few seconds after the install (the build's `restart` option, on by default). No more hand reload.
+- Repo health is laid out as the phone's: one status line with its details behind a `?`, a sticky jump bar with the refresh button, one weeks | commits x-axis choice for every chart (kept across reloads), and a card per section — score, longest file, the tiles as a two-column grid that opens one tile at a time, always-on weight, size, the table, the repo's own readings.
+- Repo health leads with the health score, as the phone does: an absolute 0–100 per week held down by its worst reading, the alert that names it, its line, and the picked week's contributions. Derived from the series the view already read, by the same code the desktop app serves it with — including the per-commit series and the older-engine reason. The tree's Repo health row shows it. Not drawn for a scope.
+- Beside the score, a dotted context-per-request line per week, folded off the All sessions log scan once it has run (nothing is scanned for it).
 - The tree's Sessions section stays collapsed once you collapse it (a live log write used to re-open it), across reloads too.
 - The tree no longer lists Optimisation prompts; the prompts stay beside the views they quote.
 

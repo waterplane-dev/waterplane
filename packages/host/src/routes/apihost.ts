@@ -210,6 +210,8 @@ export const HOST_ROUTES: readonly ApiEntry[] = [
     }
     // A push or pull in flight, off the jobs' own maps — no subprocess.
     for (const t of targets) { const g = gitRunningIn(t.worktreePath); if (g) t.gitRunning = g; }
+    // A build command in flight, off the intent rows that are its runs.
+    for (const t of targets) { const b = ctx.builds?.runningIn(t.worktreePath); if (b) t.buildRunning = b; }
     json(res, { targets });
     return true;
   }),

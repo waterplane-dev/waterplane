@@ -3,7 +3,7 @@
 Downloads on this phone: the Downloads sheet (the transfer queue plus each repo's auto-download
 rules), the list of apps that install themselves, and the mirror of `pull.ts`'s records that App's
 strip, menu chip and activity screen read. The transfers themselves — retries, resume offsets, the
-Background Fetch / native / chunked engines — stay in `pull.ts`; this feature only wires them to the
+Background Fetch / native / chunked engines — stay in `pull/` (`pull.ts` is its facade); this feature only wires them to the
 socket and the screens. Rules for all of it: skill `web-files` (`pull.ts`, `nativePull.ts`,
 `installPolicy.ts`, `AppsSheet.tsx`).
 

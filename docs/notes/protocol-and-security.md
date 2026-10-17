@@ -208,3 +208,228 @@ CLAUDE.md keeps the rule under Heuristics; this is the argument, with both false
   `continue` was ever typed and the prompt that hit the wall never ran. `e2e-limitstuck.mjs`.
   Blocked sessions are silent, so a
   `WATERPLANE_LIMIT_SWEEP_MS` server-side sweep re-scans them with no client attached.
+
+## Moved out of CLAUDE.md (2026-10-17)
+
+_Verbatim from CLAUDE.md as of 2026-10-17; CLAUDE.md is the rule — where this text disagrees, CLAUDE.md wins._
+
+### `OPAQUE_READ_ROUTES` — why exactly two
+
+From the Security model bullet on browsers (`origin.ts`), verbatim:
+
+Missing `Origin` is allowed (curl, e2e, hook sink). **Never reintroduce `access-control-allow-origin: *`**, never
+  widen `*.ts.net` past the MagicDNS fallback, never reinstate `*.local`. Side-effecting endpoints
+  must not be GET (`/api/host/screenshot` is POST for this). That backstop exempts exactly two
+  read-only routes (`OPAQUE_READ_ROUTES`: artifact + inbox file, safe methods only) because the
+  Android shell loads them as `<img src>`/`<a download>` — no `Origin`, `Sec-Fetch-Site:
+  cross-site` — and refusing them killed every thumbnail and every download in the APK. Widen that
+  list only for another route that is loaded outside a transport, i.e. one `api.ts` builds with
+  `abs()`.
+
+### Secure context — the longer form
+
+Plain `http://100.x` is not a secure context ⇒ no service worker, no push, no install, no clipboard
+— and **any navigation while the tunnel is down loses the whole app** (no cached shell). Hence the
+insecure-origin banner with a one-tap switch, snoozed a week not dismissed, and the double health
+probe before the watchdog reload. Fix: `tailscale serve --bg --https=443
+http://127.0.0.1:8770`. **The serve port is discovered, never assumed** (`serveHttpsUrl` matches the
+proxy target); a front door on another port needs `WATERPLANE_ALLOWED_HOSTS`/`_ORIGINS` *with* the port.
+
+## Moved out of skill `protocol` (2026-10-17)
+
+_Verbatim from the skill as of 2026-10-17; the skill is the rule — where this text disagrees, the skill wins._
+
+Prose verbatim as it stood in the skill; the rule stays there.
+
+### `intent.*` — how the client came to READ the store
+
+delivered an hour late calls off work that has since run), `intent.list`; back come `intent.list`
+and `intent.changed`. Every OLD message keeps working through `intents/adapters.ts`, so the store
+ships with no client change and the APK may pin an old bundle.
+**The client READS the store now**: `intent.list` on hello and on a bare `onChange` (a row LEAVING
+is not expressible as a changed row), `intent.changed` per transition — where `onChange` used to
+broadcast the WHOLE store to every phone on every transition. `intent.retarget` carries an optional
+`cwd`, because a re-aim across REPOS is one decision (`backlog.update` always carried `repoDir`).
+**`intent.dismiss` is the one the client must actually SEND** (`features/activity/actions.ts`'s `dismissOnHost`, off
+Activity's file-away): `Intent.dismissedAt` is the gate a terminal row passes before `compact()`
+may ever evict it, and while nothing sent it every `failed` intent stayed in the live
+`<state dir>/intents.json` for ever — the file only grew. Safe to fire and forget, because the host's
+`dismiss()` refuses anything not terminal and anything already dismissed, so an armed schedule, a
+running item and a double tap are all no-ops. Not undone by Activity's *restore*: there is no
+un-dismiss message, and a restored row may later be compacted — which appends every word to
+
+### `session.create` fork — the one stated gap
+
+thing — reopen via `session.create` with `resumeSessionId`. **Forking is not a new message
+either**: `session.create` gains `forkAtTurn?` and `"fork"` joins `resumeMode`, so the file write
+(`convfork.ts`) inherits `durable: true`, `contain: "cwd"` and at-most-once by ackId — a retried
+fork re-acks and writes nothing. One gap, stated: a crash BETWEEN the file write and the ack
+replays into a second orphan jsonl — an extra archive row, deletable, never a second claude, which
+is `starting`-row semantics exactly.
+
+### The tmux locale trap — what it cost
+
+Substrate: tmux is REQUIRED and the ONE substrate (no direct-PTY mode; the old `WATERPLANE_TMUX` knob is ignored and doctor says so; a missing binary refuses the spawn in words, `tmuxreq.ts`). The private server, the `-u` client, the UTF-8 `LANG` from `ptyEnv()` and the minimal-env `client_utf8` check are in [the tmux substrate section](#the-tmux-substrate-and-the-locale-that-broke-prompt-detection).
+
+### Panning — the translation that was unconditional until 2026-09
+
+**A pan is routed by the PANE, never by a version** (`tmuxscroll.ts`, `sessions.panHistory`): the
+phone's flick arrives as one SGR wheel write, and where `#{mouse_any_flag}`/`_button_`/`_standard_`
+says the program asked for the mouse the bytes are PASSED THROUGH to it — claude ≥ 2.1 enables
+`?1003h`+`?1006h` and scrolls itself — otherwise they are translated into tmux `copy-mode` +
+`scroll-up`. Exactly one of the two, read fresh per pan. The translation was unconditional until
+2026-09 and by then claude also ran in the ALTERNATE screen, where a pane has no history
+(`history_size=0`), so every pan in every session silently did nothing.
+[Both measurements.](protocol-and-security.md#panning-the-tui-who-gets-the-wheel-and-why-the-answer-changed)
+
+### Second trim pass (skills review, 2026-10-17) — sentences moved verbatim out of the `protocol` skill
+
+- `no-silent-send` has eight (grep `eslint-disable.*no-silent-send`: `core/session/TermArea.tsx`'s `onResize`, seven in `features/**` — `build` ×3, `capture`, `backlog`, `search`, `hostTools`).
+- `input.settle`: asking was the wrong end of the wire (a phone, three tries, over a live socket, about rows that retired an hour later).
+
+## Moved out of skill `heuristics` (2026-10-17)
+
+_Verbatim from the skill as of 2026-10-17; the skill is the rule — where this text disagrees, the skill wins._
+
+Prose verbatim as it stood in the skill; the rules stay there.
+
+### The Stop hook and `/compact` — the long form
+
+- **A `Stop` hook is the CLI ASKING to end the turn, not the answer — and a hook may answer no.** A
+  hook that blocks (`decision: block` — every keep-going loop: a `/goal` hook, a checklist driver)
+  sends the reason back in and the CLI carries straight on with **no `UserPromptSubmit`**: the
+  continuation is a meta message in the conversation, invisible on the wire. So a live turn
+  published `turnActive: false`, the reader said "idle — nothing running" over
+  "✻ Crafting… (9m 35s)", and the queue typed into it. The exact signal is therefore held against
+  the screen before it is believed (`sessions.ts`:
+  `armTurnWatch`/`checkTurnWatch`/`settleStop`, `WATERPLANE_STOP_VERIFY_MS`, 1.2 s): the CLI's own
+  working line (`shared/working.ts` — ONE matcher, the matcher the phone's reader shares) printed
+  AFTER the Stop is the one thing that may contradict it. Each pass scans only the bytes printed
+  since the last one (`seq` delta, no render), the hold is **re-earned every pass** so a
+  continuation that ends without a second Stop cannot strand the session busy, and everything else
+  settles immediately. `settleStop` is the one end-of-turn path (flag, `stopCount`, capture seal,
+  ping, `turnEnded`), idempotent. **Records no health observation** — the hook was answered, not
+  broken. `e2e-stophook.mjs`.
+- **…and `/compact` announces NOTHING** — no `UserPromptSubmit`, no `Stop` — while grinding for
+  minutes ("Compacting conversation… (35s)"). **The same watch covers work that announces nothing
+  at all**, armed on OUTPUT for a hooked session with no turn believed: a working line with no turn
+  believed publishes one (`setTurn(…, {fromScreen:true})`), retired when the line stops and retired
+  QUIETLY — no `stopCount`, no push, no `turnEnded`, because nothing finished a turn.
+  **`deliver.ts`'s submit proof reads `turnFromHook()`, never this**: a
+  spinner the host inferred is evidence the CLI is busy, never evidence about a Return
+  (`e2e-submit.mjs`'s `deaf` case is the pin) — **EXCEPT for the one command that can be proved no
+  other way.** `/compact` fires no hook, and the log is silent about slash commands, so the ladder
+  filed a compaction at 15% as *"typed, but Return was swallowed"*, the one sentence written to be
+  acted on by hand. `shared/slash.ts`'s **`worksUnannounced`** (a set of ONE, held apart from
+  `isLocalCommand` — the phone's *is this a modal?* — and `startsNoTurn` — *is there a turn to wait
+  for?*) admits `turnFromScreen()` as the bottom rung, **guarded by a snapshot taken BEFORE the
+  keystroke** so a session already spinning proves nothing; 3 s per press and two presses, because
+  the screen proof lands a window after the paint starts; audit row `submit: "screen-turn"`, kept
+  apart because it is weaker. Widening that set hands a command the weakest proof in the file.
+  **And the watch reads the RENDERED GRID, never the raw bytes** (`screenlog.ts`'s `gridText()` —
+  the live VT the recorder already feeds, a buffer read and not a replay): the byte delta is only
+  the cheap GATE, because a repaint interleaves cursor moves and charset escapes and the compaction
+  line arrives as `C\x1b(Bo\x1b(Bm\x1b(Bp…` spliced through the previous frame — on screen for two
+  minutes, matching nothing. **`shared/working.ts` also reads the PROGRESS ROW as the measurement**
+  (block glyphs + a percentage + nothing else, on the row below the phrase): the parenthetical
+  arrives half a minute in, and the first seconds are the whole delivery window. A stub cannot
+  surface either — both were measured against the binary. The Esc-sweep interlock keeps reading
+  plain `turnActive` — an Esc into a compaction interrupts it. `scripts/e2e-stophook.mjs`
+  (`STUB_MODE=goal`, which now paints the scattered bytes and ignores a Return at an empty
+  composer), `scripts/e2e-submit.mjs` case 7.
+
+### `question.ts` — a box is not the only question
+
+- **A box is not the only question.** `prompt.ts` answers "is the CLI blocked on a dialog";
+  `question.ts` answers "did the TURN END ON A QUESTION TO YOU" — the question with NO BOX, the
+  commonest way work stops here, and the one that published nothing for the longest. The agent ends
+  on "Want 2 implemented, or leave it at 1?" and returns to its composer: nothing is blocked in the
+  CLI, so `prompt`/`awaitingInput` are empty, the session reads `done`, the push says "Turn
+  finished", and a decision sat unasked. The heuristic existed; it lived inside
+  the retired in-core oracle gating a Gemini call, so the detection was conditional on `GEMINI_API_KEY` and with
+  no key the tail was never read. Now `sessions.checkAsking()` runs it on the turn-end transition
+  and publishes `SessionInfo.asking`. A parsed `prompt` outranks it, a limit block is a clock not a
+  question, and any keystroke or a turn STARTING retires it (so a reply typed at the desk clears
+  the phone's badge too). The `at` stamp survives re-idles — idle re-enters per repaint, and a
+  restarted clock reads "asked 0s ago" for ever. **It is a signal, never an interlock; it blocks
+  nothing**: `sessionWall`/`laneBusy` are untouched, because typing into that session is the correct
+  move and prose is not a box a queued prompt can fall into.
+  `packages/host/test/question.test.mjs`, `e2e-askprose.mjs`.
+
+### Health record — what is and is not a miss
+
+- **An observation is a miss only if the primary rule was the RIGHT RULE and failed** (the health
+  record, `shared/clihealth.ts`). A rule correctly declining to fire is a good outcome and records
+  NOTHING — not a miss, which turns a working heuristic into a permanent amber chip nobody reads any
+  more, and not a `good` either, which fills the twenty-slot window with successes and makes the real
+  misses arithmetically invisible. **Record where the fallback is TAKEN, never wherever a flag
+  happens to be false**; **ONE observation per EVENT** — a rescue that notes its `fallback` and then
+  falls through to a trailing `good` files a miss AND a success for one delivery, which is a rate
+  about nothing and a `good` claiming something nobody saw (`deliver.ts`'s echo path, fixed by
+  gating the `good` on the echo actually having been seen). And where one code path covers three different events, ask which event this
+  is before writing the record: a hooked session with a turn ALREADY running is a person interjecting
+  (`DeliverOpts.interactive` — records nothing), a pipe the host has not yet HEARD FROM is the
+  primary rule answering late (ask again first), and only no pipe at all is a fallback worth a word.
+  The CLI's own inline pickers are that trap from the other side: `/effort` and the slash menus draw a
+  REAL footer row and a `❯` cursor with NO numbered options, so footer-plus-cursor filed a miss per
+  visit to a menu that was never a question. `dialogEvidence.composer` separates them — the composer's
+  STATUS LINE inside the box's span means the CLI still takes typing, and a modal box never draws it.
+  Only that line counts: the `❯` INPUT row cannot, since an upstream renumber (`1)`) leaves `❯ 1) Yes`,
+  which reads as a composer and is the one miss this signal exists for. **The INTERLOCK is unchanged** —
+  a picker taking keystrokes is still a session not to type a prompt into.
+  `e2e-clihealth.mjs`, `packages/host/test/deliversubmit.test.mjs`. The false alarms in full:
+  [protocol-and-security.md](protocol-and-security.md#what-counts-as-a-miss-in-full).
+
+### Limit recovery — the long form
+
+- Limit recovery is verified on idle: only banner text at/after the last `continue` echo counts —
+  asked of the RENDERED GRID (rows below the echo row), and still after the block has CLEARED
+  (`attempts > 0`), because a repaint redraws the old banner above the echo and tmux repaints on
+  every resize and re-attach (its 5 s start-up redraw is gone, `termqueries.ts`): read off the bytes, that redraw re-blocked a
+  session that had just resumed (`e2e-limitrepaint.mjs`). And
+  **a block clears only after an attempt or a TURN STARTING** (`turnStartedAt`) — never on the banner
+  merely scrolling out of the scan window, and never on "real user input": an Esc, an arrow or a
+  digit runs no turn and proves nothing about the account, yet one of them landing while the session
+  waited in the resume queue cleared the block with attempts still 0, so no `continue` was ever typed
+  and the prompt that hit the wall never ran. `e2e-limitstuck.mjs`. Blocked sessions are silent, so a
+  `WATERPLANE_LIMIT_SWEEP_MS` server-side sweep re-scans them with no client attached — **and that sweep
+  must not skip a blocked session for being mid-turn**, which is the mirror bug: both paths into
+  `checkLimit` hung off silence (`markIdle` at `WATERPLANE_IDLE_PING_MS`, the sweep skipping anything
+  newer than that), so a session that came back at the reset and worked for an hour straight, spinner
+  repainting every frame, was never quiet enough to be re-asked and wore "at limit" the whole time
+  while visibly running. A turn STARTING on a session believed blocked asks directly too
+  (`setTurn`), that being the earliest moment the belief can be shown wrong.
+- **A turn IN FLIGHT outranks a banner still on screen** (`servingNow`,
+  `WATERPLANE_LIMIT_SERVING_MS`). Running `checkLimit` more often fixes nothing on its own: the screen
+  branch re-marks the block while `det.blocked` holds, and when `limitlog.ts` answers `unknown` —
+  no conversation id, no file, a tail with nothing parseable — there is no dated source at all, so
+  the wall sits in the rendered tail for the life of the session and shadows the clearing gate for
+  ever. Not "a turn started at some point": `blockedSince` is stamped on the `!was` edge ONLY, so a
+  failed auto-continue leaves `turnStartedAt > blockedSince` true for the rest of a block that is
+  entirely real. **DURATION is what separates them** — a rejected turn dies in seconds, the banner
+  being the CLI's answer to it — and a resume in flight is excluded outright, that window belonging
+  to `releaseResume`'s verdict. `e2e-limitbusy.mjs` pins both rules, with the banner deliberately
+  left ON SCREEN: scrolling it off passes for the easy reason.
+
+### One at-limit fact, one colour
+
+- **One at-limit fact, one colour** (`--limit`, web `styles.css`). The same three blocked sessions
+  read as starred (`.tag.limit-auto` in the star's gold), waiting (`.tag.wait`'s red fill, for the
+  manual case), broken (`.repo-group-stat.limit` in `--dead`) and blocked (`.head-wait.limit`'s
+  orange) depending on which line of the launcher you looked at, plus a red `.key.danger` in the
+  session toolbar beside the kill button. All five are `var(--limit)` now; only the manual one is
+  filled, because it is the only one that needs a hand.
+
+### `claudeversion.ts` — the build the heuristics were last verified against
+
+`TESTED_CLAUDE_VERSION` is the newest `claude` build a person last checked the screen-reading heuristics against (what `claude --version` said on the dev desktop). Bump it when you re-verify. `claudeNewerThanTested(raw)` returns a warning sentence only when the installed build is NEWER; older is never warned (no minimum is claimed, the launch flags have no recorded first-supported version) and an unparsable version is absent, not a warning about nothing. It never refuses a session.
+
+### `clisuggest.ts` — the CLI's proposal for the next prompt
+
+After a turn claude draws a suggested next prompt in its EMPTY composer in DIM (SGR 2). The host publishes it as `SessionInfo.cliSuggestion` and the phone offers it as one tap. Two reads of the same composer decide it: the PLAIN render holds the words, the render with dim cells blanked (`RenderRow.undimmed`) holds nothing; words that survive the blanking were typed and are never a proposal. The first-run placeholder `Try "how does <filepath> work?"` is refused by shape. `CLI_SUGGESTION_MAX` caps a misread. Null on any doubt.
+
+### Second trim pass (skills review, 2026-10-17) — sentences moved verbatim out of the `heuristics` skill
+
+- `askbox.ts` `pickAsk`: two sharing "Yes"/"No" gave question 1's id, descriptions and head to a screen showing question 2.
+- `/compact` watch: A stub cannot surface either; both were measured against the binary.
+- health record: A rule correctly declining to fire is a good outcome and records NOTHING — not a miss, and not a `good` either, which fills the twenty-slot window with successes and makes the real misses invisible. ONE observation per EVENT — a rescue that notes its `fallback` and then falls through to a trailing `good` files a miss AND a success for one delivery (`deliver/deliverrun.ts`'s echo path: gate the `good` on the echo actually having been seen). Where one code path covers three events, ask which this is first: a hooked session with a turn ALREADY running is a person interjecting (`DeliverOpts.interactive` — records nothing), a pipe the host has not yet HEARD FROM is the primary rule answering late (ask again first), and only no pipe at all is a fallback worth a word. `dialogEvidence.composer` separates the inline pickers — the composer's STATUS LINE inside the box's span means the CLI still takes typing; the `❯` INPUT row cannot count (an upstream renumber `1)` leaves `❯ 1) Yes`).

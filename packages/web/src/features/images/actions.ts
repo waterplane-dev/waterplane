@@ -844,9 +844,9 @@ export function afterSweep(): void {
   core().world.refreshRepos();
 }
 
-/** The file tree for a repo named on the launcher. */
-export function openBrowseFor(repoId: string): void {
-  browseRepoId.set(repoId);
+/** The file tree for a repo; closing it returns to `back` (the launcher's: none). */
+export function openBrowseFor(repoId: string, back: Overlay = null): void {
+  browseRepoId.set(repoId); if (back) browseAim.set({ file: "", back });
   core().nav.open("browse");
 }
 /** The file tree, straight on one file; closing returns to `back`. */

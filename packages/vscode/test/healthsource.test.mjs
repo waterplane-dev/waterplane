@@ -65,6 +65,22 @@ test("chooseSource: the folder's series unless ours has a strictly newer last ro
   assert.equal(data.chooseSource(f, join(tmp("hsrc-none"), "repohealth.jsonl"), null).kind, "own", "neither exists: ours, to be measured");
 });
 
+test("chooseSource: a folder series an older engine wrote yields to ours, even at the same or a newer commit", () => {
+  const sized = (ts, value) => JSON.stringify({ sha: "a".repeat(40), ts, size: { value } }) + "\n";
+  const f = tmp("hsrc-stale");
+  const dir = join(f, ".waterplane");
+  put(dir, "repohealth.jsonl", sized(300, { max: 9 }));
+  const own = put(tmp("hsrc-stale-own"), "repohealth.jsonl", sized(300, { max: 9, lineMean: 4 }));
+  assert.equal(data.chooseSource(f, own, null).kind, "own", "same commit: theirs scores nothing");
+  put(dir, "repohealth.jsonl", sized(900, { max: 9 }));
+  assert.equal(data.chooseSource(f, own, null).kind, "own", "theirs newer but stale");
+  put(own.slice(0, -"/repohealth.jsonl".length), "repohealth.jsonl", sized(300, { max: 9 }));
+  assert.equal(data.chooseSource(f, own, null).kind, "repo", "both stale: the ts rule decides");
+  put(dir, "repohealth.jsonl", sized(300, { max: 9, lineMean: 4 }));
+  put(own.slice(0, -"/repohealth.jsonl".length), "repohealth.jsonl", sized(300, { max: 9, lineMean: 4 }));
+  assert.equal(data.chooseSource(f, own, null).kind, "repo", "both current: a tie still goes to the folder's");
+});
+
 test("chooseSource: a scope is only ever the folder's, and falls back to the whole repo without a series", () => {
   const f = tmp("hsrc-legacy");
   const own = put(tmp("hsrc-own2"), "repohealth.jsonl", row(999));

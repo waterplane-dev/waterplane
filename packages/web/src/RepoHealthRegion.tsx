@@ -14,8 +14,8 @@
  * stripe, a status colour or a verdict word. `repoHealthWords.ts`'s own tests
  * hold that ban, and `repoHealthPlot.ts` computes no rank.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Activity, FolderTree, RefreshCw, Send } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Activity, FolderTree, Send } from "lucide-react";
 import {
   recutCommandOf, repoHealthAvailability, repoHealthPlotAvailability,
   repoHealthPlotUnavailableText, repoHealthUnavailableText,
@@ -36,23 +36,28 @@ import {
   healthAskContextOf, healthIndexRemedyPrompt, healthTrendRemedyPrompt, seriesAbsenceWords, seriesAllRemedyPrompt, seriesRemedyPrompt,
   type IndexNow, type IndexTrendWeek, type IndexVsSubject, type IndexWeekSubject,
 } from "./setupRemedy";
-import { AreaSpread, SeriesTile, WeightStack } from "./RepoHealthTiles";
+import { TilesCard, WeightCard } from "./RepoHealthTiles";
 import { LongestFiles } from "./RepoHealthLongest";
 import { Magnitudes } from "./RepoHealthMags";
 import { ReadingsTable } from "./RepoHealthTable";
 import { OwnReadings } from "./RepoHealthOwn";
-import { HintChip } from "./HintChip";
 import { CLAUDE_MD_KEY, DESC_KEY } from "./repoHealthPlot";
 import {
-  SCOPE_ALL_LABEL, SERIES_ASK_ALL_LABEL, SERIES_ASK_LABEL, centralFileLines, centralHeadWords, drawnPageWords, emptySeriesWords, engineLineWords, lastCommitWords,
+  SCOPE_ALL_LABEL, SERIES_ASK_LABEL, centralFileLines, centralHeadWords, drawnPageWords, emptySeriesWords, engineLineWords, lastCommitWords,
   mixedPlotWords, mixedVersionWords, narrativeWrittenWords, notPlottedWords, outcomeWords,
-  plotAxisWords, rankBasisWords, rankSentence, readFailedWords, refreshBusyLabel,
-  refreshFailedWords, refreshLabel, runningWords, seriesAskNoteWords, seriesHeadWords,
+  rankSentence, readFailedWords, refreshBusyLabel,
+  refreshFailedWords, refreshLabel, runningWords, seriesHeadWords,
   scopeChoiceHeadWords, scopeEmptyWords, scopeHeadWords, scopePickWords,
   seriesSizeWords, seriesStatusWords, seriesValueWords, staleRowsWords, stalenessWords,
   warningsWords,
 } from "./repoHealthWords";
 import { splitNarrativeDays } from "./narrativeDays";
+import { foldPlot } from "./repoHealthFoldPlot";
+import { readHealthAxis, writeHealthAxis } from "./storage";
+import type { HealthAxisMode } from "./healthIndexWords";
+import { AxisRow, HealthNav, RefreshKey, SectionCard, navKeysOf, shownSections } from "./RepoHealthCards";
+import { DailyNotes } from "./RepoHealthNotes";
+import "./repohealth.css";
 
 /** The size every button in the repo's action row uses. `ICON` is App-local
  *  (`App.tsx`, `const ICON = 16`) and `App.tsx` is not ours to import from, so
@@ -123,34 +128,22 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
     return () => window.clearInterval(t);
   }, [hostRunning, reload]);
 
-  // The SVGs are drawn at a MEASURED width rather than stretched to fit: a
-  // viewBox scaled to a box distorts the stroke and the text along with the
-  // curve, and a phone rotating is the common case here. Measured through a
-  // CALLBACK REF, never `useRef` + a mount effect — the box lives inside a
-  // conditional and the series arrives asynchronously, so on the first commit
-  // there is no node to observe and an effect with `[]` deps would never look
-  // again (`ContextSheet.tsx`'s header: `width` stayed 0 for the life of the
-  // sheet and both charts rendered nothing).
-  const roRef = useRef<ResizeObserver | null>(null);
-  const [width, setWidth] = useState(0);
-  const boxRef = useCallback((el: HTMLDivElement | null) => {
-    roRef.current?.disconnect();
-    roRef.current = null;
-    if (!el) return;
-    // `clientWidth` is the PADDING box; this box carries the gutter every other
-    // row in the sheet has, and drawing at the padded width pushes a
-    // right-anchored mark past the visible edge.
-    const contentWidth = (node: HTMLDivElement) => {
-      const cs = getComputedStyle(node);
-      return Math.max(0, node.clientWidth - parseFloat(cs.paddingLeft || "0") - parseFloat(cs.paddingRight || "0"));
-    };
-    setWidth(contentWidth(el));
-    if (typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => setWidth(contentWidth(el)));
-    ro.observe(el);
-    roRef.current = ro;
-  }, []);
-  useEffect(() => () => roRef.current?.disconnect(), []);
+  // The SVGs are drawn at a MEASURED width, and every card measures its OWN
+  // content box (`SectionCard`, `useBoxWidth`): a card is narrower than the
+  // region by its padding, and a grid tile narrower still.
+
+  // The region's ONE x-axis choice, per device. `weeks` folds every per-day
+  // series to each week's last day; `commits` draws them whole. The index
+  // card gets the choice as given and reports whether the desktop sends a
+  // commit series at all (`onCommits`), which decides whether the chip exists.
+  const [axis, setAxisState] = useState<HealthAxisMode>(readHealthAxis);
+  const setAxis = (m: HealthAxisMode) => { track(`action:repohealth.axis.${m}`); writeHealthAxis(m); setAxisState(m); };
+  const [commits, setCommits] = useState<"absent" | "none" | "present" | null>(null);
+  const onCommits = useCallback((a: typeof commits) => setCommits(a), []);
+  // A stored `commits` on a desktop that sends none is drawn as weeks, and the
+  // row says why — never a lit chip for a mode that is not on screen.
+  const drawnAxis: HealthAxisMode = axis === "commits" && commits === "absent" ? "weeks" : axis;
+  const drawn = useMemo(() => (plot ? foldPlot(plot, drawnAxis) : null), [plot, drawnAxis]);
 
   // The subtrees this repo measures, and the ones it could. `scopes` is the
   // host's stored list; the candidates are the engine's own derived groups, so
@@ -252,12 +245,6 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
   const plotMissing = view?.tool && series
     ? repoHealthPlotUnavailableText(plotState, view?.plotError ?? null)
     : null;
-  // Every `points` array in one plot is exactly `days` long by construction, so
-  // ANY series gives the x axis — but an empty `series` gives none, and
-  // `plot.series[0].points.length` inside an optional chain is still evaluated.
-  const axisPoints = plot?.series[0]?.points ?? [];
-  const firstDay = axisPoints[0]?.day ?? null;
-  const lastDay = axisPoints[axisPoints.length - 1]?.day ?? null;
   const p95 = plot?.series.find((s) => s.key === "size.p95")?.last ?? null;
 
   // Why a series has no number, in one sentence — the same three cases the
@@ -346,27 +333,27 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
     </>
   ) : null;
 
-  // The status line and its verb share ONE row: the words wrap beside the
-  // button instead of pushing it onto a row of its own. Whichever comes last
-  // before the button (the `?`, else the words) takes the row's slack, so the
-  // button sits at the row's end — and where it truly cannot fit, it wraps and
-  // starts at the left like any other line.
+  // The head is the status line and its `?` only; the refresh verb lives at
+  // the end of the sticky jump bar, in reach from every card.
   const refreshable = !!repo && !noEngine;
+  const refreshKey = refreshable ? (
+    <RefreshKey busy={busy} onClick={() => void refresh()}
+      label={busy ? refreshBusyLabel(series, now - startedAt) : refreshLabel(series)} />
+  ) : null;
+
+  // Which cards are drawn, in screen order — the jump bar names exactly these
+  // (a section that is not on screen has no chip, never a dimmed one).
+  const indexShown = !!repo && !scope && !noEngine;
+  const shown = shownSections({ index: indexShown, drawn, plot, own: !!repo });
+  const navKeys = navKeysOf(shown);
+
   return (
-    <>
-      {/* The index leads: one number first, the readings it is built from below. The whole tree only — a scope has no index. */}
-      {repo && !scope && !noEngine ? <HealthIndexSection repoId={repo.id} onAsk={onRemedy ? askIndex : undefined} onAskTrend={onRemedy ? askTrend : undefined} /> : null}
+    <div className="rh-region">
       <div className="section-head rh-head">
-        <span className={`section section-hint rh-status${refreshable ? " rh-beside" : ""}${details ? "" : " rh-push"}`}>
+        <span className={`section section-hint rh-status${details ? "" : " rh-push"}`}>
           {status ?? seriesHeadWords()}
         </span>
         {details ? <Explain of="this series">{details}</Explain> : null}
-        {refreshable ? (
-          <button className="key" onClick={() => void refresh()}>
-            <RefreshCw size={ICON} className={busy ? "spin" : undefined} />
-            {busy ? refreshBusyLabel(series, now - startedAt) : refreshLabel(series)}
-          </button>
-        ) : null}
       </div>
 
       {/* WHICH READING, above everything it changes.
@@ -375,9 +362,8 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
           scope on screen must always carry the way back to the whole tree.
           A chip is a filter in this repo's sense: the tap does not narrow what
           is drawn, it loads a different series, and the sentence under it says
-          which. The kit's `FilterChip`s, tinted when lit: exactly one reading is
-          always chosen, so no ×, and `break down…` opens the picker rather than
-          cutting anything — it was a second solid fill beside the lit scope. */}
+          which. Exactly one reading is always chosen, so no ×, and
+          `break down…` opens the picker rather than cutting anything. */}
       {repo && !noEngine && (scopes.length || candidates.length) ? (
         <>
           <div className="fchips wrap rh-scope" role="group" aria-label="which part of the repo">
@@ -402,21 +388,18 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
           {picking ? (
             <div className="section section-hint">
               <div>{scopeChoiceHeadWords(candidates.length)}</div>
-              <ul className="rh-filter">
+              {/* A measured subtree is a lit chip whose tap takes it away —
+                  the kit's ×, never the old solid `.key.on`. */}
+              <div className="fchips wrap rh-filter-chips" role="group" aria-label="subtrees to measure">
                 {candidates.map((g) => (
-                  <li key={g}>
-                    <button
-                      className={scopes.includes(g) ? "key on" : "key"}
-                      aria-pressed={scopes.includes(g)}
-                      onClick={() => void setScopes(
-                        scopes.includes(g) ? scopes.filter((x) => x !== g) : [...scopes, g],
-                      )}
-                    >
-                      {g}
-                    </button>
-                  </li>
+                  <FilterChip key={g} on={scopes.includes(g)} busy={savingScopes && scopes.includes(g)}
+                    onClick={() => void setScopes(
+                      scopes.includes(g) ? scopes.filter((x) => x !== g) : [...scopes, g],
+                    )}>
+                    {g}
+                  </FilterChip>
                 ))}
-              </ul>
+              </div>
               <div>{scopePickWords()}</div>
             </div>
           ) : null}
@@ -445,8 +428,8 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
 
       {/* BEFORE the tap, not after it: a mixed series makes the next refresh
           exit 3, and the evidence for that is the per-version row counts. The
-          button above stays pressable — this sheet predicts the refusal, it
-          does not enforce it. */}
+          button stays pressable — this sheet predicts the refusal, it does
+          not enforce it. */}
       {mixed ? <div className="section section-hint">{mixed}</div> : null}
 
       {staleRows ? <div className="section section-hint">{staleRows}</div> : null}
@@ -459,158 +442,116 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
           {/* VERBATIM, trailing newline and all. It is not a stack trace: it is
               the argument for the refusal plus the one command that re-cuts the
               history, and that command deletes the series. `.update-log` is
-              borrowed rather than re-declared — it is this app's one
-              pre-wrapped, bounded, scrollable quote block — UNBOUNDED here
-              (`.rh-refusal`): its last line is the remedy, and a 140px box hid
-              exactly that line behind an inner scroll nobody finds on a phone. */}
+              borrowed rather than re-declared — UNBOUNDED here (`.rh-refusal`):
+              its last line is the remedy, and a 140px box hid exactly that
+              line behind an inner scroll nobody finds on a phone. */}
           {last.refused ? <pre className="update-log rh-refusal">{last.refused.text}</pre> : null}
           {warnings ? <div>{warnings}</div> : null}
         </div>
       ) : null}
 
       {runError ? <div className="section section-hint">{refreshFailedWords(runError)}</div> : null}
-
-      {/* THE CHARTS LEAD, and each caption sits under the chart it is about
-          (`ContextSheet.tsx`'s rule). The bands above are the clock they are
-          read at, which is why they are the one thing that comes first. */}
       {plotMissing ? <div className="section section-hint">{plotMissing}</div> : null}
 
-      <div className="rh-box" ref={boxRef}>
-        {plot ? (
-          <>
-            {mixedPlotWords(series?.versions) ? (
-              <div className="rh-cap">{mixedPlotWords(series?.versions)}</div>
-            ) : null}
+      {/* The jump bar sticks under the sheet head while the cards scroll. It
+          is drawn even with no card yet: the refresh verb is in it. */}
+      {navKeys.length || refreshKey ? <HealthNav keys={navKeys} refresh={refreshKey} /> : null}
 
-            {/* WHOSE readings these are, once, as a heading — never a badge per
-                tile. Everything from here to the repo's own block below is
-                the engine's; the repo's own, if any, are named apart. */}
-            <div className="section rh-prov">{centralHeadWords(BRAND.displayName)}</div>
-            {centralFileLines(plot.central).map((l) => <div key={l} className="rh-cap">{l}</div>)}
+      {indexShown || drawn ? <AxisRow axis={drawnAxis} onAxis={setAxis} commits={commits} /> : null}
 
-            {/* FIRST: one file taking an ever larger share of the tree is the
-                shape this sheet most needs to show, and it used to sit under
-                every tile and every stack. */}
-            <LongestFiles longest={plot.longest} classics={plot.classics} p95={p95} width={width}
-              // Every path in the plot is relative to ITS scope, so a scoped
-              // reading's `src/App.tsx` is re-rooted before it leaves here.
-              onOpenFile={repo && onOpenFile
-                ? (p) => onOpenFile(repo.id, plot.scope ? `${plot.scope.replace(/\/+$/, "")}/${p}` : p)
-                : undefined} />
+      {/* The index leads: one number first, the readings it is built from below. The whole tree only — a scope has no index. */}
+      {indexShown && repo ? (
+        <HealthIndexSection repoId={repo.id} axis={drawnAxis} onCommits={onCommits}
+          seriesStamp={`${series?.lastSha ?? ""}:${series?.rows ?? 0}`}
+          onAsk={onRemedy ? askIndex : undefined} onAskTrend={onRemedy ? askTrend : undefined} />
+      ) : null}
 
-            <ul className="rh-tiles">
-              {plot.series.map((s) => (
-                <SeriesTile
-                  key={s.key}
-                  s={s}
-                  width={width}
-                  actions={onRemedy && repo ? (
-                    <button className="key" onClick={() => askAbout(s)}>
-                      <Send size={12} /> {SERIES_ASK_LABEL}…
-                    </button>
-                  ) : null}
-                />
-              ))}
-            </ul>
-            <div className="rh-cap">{plotAxisWords(plot.days, firstDay, lastDay)}</div>
-            <div className="rh-cap">
-              {rankBasisWords(plot.windowReadings, plot.minReadings)}{" "}
-              <HintChip id="repohealth.reading" of="the percentile and the arrow" />
-            </div>
-            {/* Under the tiles rather than in the head: it carries what the
-                tiles say, so a tap before they are drawn would send a set
-                nobody has seen. Beside the note that says what both verbs
-                are — and it is absent, never dimmed, where there is no send
-                path or no repo to send to. */}
-            {onRemedy && repo && plot.series.length ? (
-              <div className="rh-tile-acts">
-                <button className="key" onClick={askAll}>
-                  <Send size={12} /> {SERIES_ASK_ALL_LABEL}…
-                </button>
-              </div>
-            ) : null}
-            <div className="rh-cap">{seriesAskNoteWords()}</div>
-
-            <WeightStack
-              claudeMd={plot.series.find((s) => s.key === CLAUDE_MD_KEY) ?? null}
-              descriptions={plot.series.find((s) => s.key === DESC_KEY) ?? null}
-              width={width}
-            />
-
-            {/* Three states, and until now two of them drew nothing at all.
-                The family unread on the latest day is one sentence. A family
-                that WAS read and yielded no areas is a different one — most
-                repos on this desktop have no `<router>-*` convention, so this
-                is their normal state, and a chart that simply is not there
-                reads as a chart that failed. The tool states which; where it
-                did not, the panel still says there are no per-area readings
-                rather than leaving the gap to be interpreted. */}
-            {plot.context.absent ? (
-              <div className="rh-cap">
-                The per-area reading was not taken on the latest day — {plot.context.absent}
-              </div>
-            ) : Object.keys(plot.context.areas).length === 0 ? (
-              <div className="rh-cap">
-                No per-area reading here{plot.context.areasAbsent ? <> — {plot.context.areasAbsent}</> : null}.
-                The always-on weight above is the whole tree's and is unaffected.
-              </div>
-            ) : (
-              <AreaSpread areas={plot.context.areas} width={width} />
-            )}
-
-            <Magnitudes classics={plot.classics} width={width} />
-
-            {/* Last, because it is the same figures the charts above already
-                drew — the picture first, the numbers for whoever wants to
-                check one. It used to be the one card on the separately
-                generated page that this sheet had no copy of, which is what
-                kept an *open the drawn page* button alive down here after the
-                sheet had absorbed every other card on it. */}
-            <ReadingsTable plot={plot} />
-
-            <div className="rh-cap">{notPlottedWords()}</div>
-            <div className="rh-cap">{drawnPageWords(!!view?.page)}</div>
-
-            {/* The repo's OWN readings, apart from everything above and from
-                the index: one line on how to add one where it declares none. */}
-            {repo ? (
-              <OwnReadings plot={plot} repoName={repo.repoName} width={width}
-                actionsFor={onRemedy ? (s) => (
-                  <button className="key" onClick={() => askAbout({ ...s, detail: s.means })}>
-                    <Send size={12} /> {SERIES_ASK_LABEL}…
-                  </button>
-                ) : undefined} />
-            ) : null}
-          </>
-        ) : null}
-      </div>
-
-
-      {split && split.preamble ? (
+      {drawn && plot ? (
         <>
-          {/* Folded, because it is the tool's standing explanation of how to
-              read a row and does not change between runs — but reachable,
-              because without it "37th percentile of the last 15 readings" is
-              a number with no stated basis. */}
-          <details className="hint-more" open={showPreamble}
-            onToggle={(e) => setShowPreamble((e.currentTarget as HTMLDetailsElement).open)}>
-            <summary>how to read this</summary>
-            <div className="tr-say rh-doc">
-              <Markdown src={split.preamble} q="" onCopy={(t) => void copyText(t)} />
-            </div>
-          </details>
+          {mixedPlotWords(series?.versions) ? (
+            <div className="rh-cap rh-gutter">{mixedPlotWords(series?.versions)}</div>
+          ) : null}
+
+          {/* WHOSE readings these are, once, as a heading — never a badge per
+              card. Everything from here to the repo's own card is the
+              engine's; the repo's own, if any, are named apart. */}
+          <div className="section rh-prov">{centralHeadWords(BRAND.displayName)}</div>
+          {centralFileLines(plot.central).map((l) => <div key={l} className="rh-cap rh-gutter">{l}</div>)}
+
+          {/* FIRST: one file taking an ever larger share of the tree is the
+              shape this sheet most needs to show. */}
+          {shown.longest ? (
+            <SectionCard id="longest">
+              {(w) => (
+                <LongestFiles longest={drawn.longest} classics={drawn.classics} p95={p95} width={w}
+                  // Every path in the plot is relative to ITS scope, so a scoped
+                  // reading's `src/App.tsx` is re-rooted before it leaves here.
+                  onOpenFile={repo && onOpenFile
+                    ? (p) => onOpenFile(repo.id, plot.scope ? `${plot.scope.replace(/\/+$/, "")}/${p}` : p)
+                    : undefined} />
+              )}
+            </SectionCard>
+          ) : null}
+
+          <TilesCard series={drawn.series} windowReadings={plot.windowReadings} minReadings={plot.minReadings}
+            axis={drawnAxis}
+            onAsk={onRemedy && repo ? askAbout : undefined}
+            onAskAll={onRemedy && repo && plot.series.length ? askAll : undefined} />
+
+          <WeightCard
+            claudeMd={drawn.series.find((s) => s.key === CLAUDE_MD_KEY) ?? null}
+            descriptions={drawn.series.find((s) => s.key === DESC_KEY) ?? null}
+            context={plot.context} />
+
+          <SectionCard id="size">{(w) => <Magnitudes classics={drawn.classics} width={w} />}</SectionCard>
+
+          {/* Last, because it is the same figures the charts above already
+              drew — the picture first, the numbers for whoever wants to check
+              one. The readings as they were taken, in either x mode. */}
+          {shown.table ? (
+            <SectionCard id="table">
+              {() => (
+                <>
+                  <ReadingsTable plot={plot} />
+                  <details className="hint-more rh-more">
+                    <summary>not drawn here</summary>
+                    <p>{notPlottedWords()}</p>
+                    <p>{drawnPageWords(!!view?.page)}</p>
+                  </details>
+                </>
+              )}
+            </SectionCard>
+          ) : null}
+
+          {/* The repo's OWN readings, apart from everything above and from
+              the index: one line on how to add one where it declares none. */}
+          {repo ? (
+            <OwnReadings plot={plot} repoName={repo.repoName} series={drawn.own?.series} axis={drawnAxis}
+              actionsFor={onRemedy ? (s) => (
+                <button type="button" className="key rh-verb" onClick={() => askAbout({ ...s, detail: s.means })}>
+                  <Send size={12} aria-hidden /> {SERIES_ASK_LABEL}…
+                </button>
+              ) : undefined} />
+          ) : null}
         </>
       ) : null}
 
-      {days.map((d) => (
-        <div className="tr-say rh-doc" key={d.day}>
-          {/* The day's own heading and body, re-joined exactly as the tool
-              wrote them, so the sheet shows the words and not a re-rendering
-              of what they were taken to mean. */}
-          <Markdown src={`## ${d.day}${d.body}`} q="" onCopy={(t) => void copyText(t)} />
-        </div>
-      ))}
-    </>
+      {split && split.preamble ? (
+        // Folded, because it is the tool's standing explanation of how to read
+        // a row and does not change between runs — but reachable, because
+        // without it "37th percentile of the last 15 readings" is a number
+        // with no stated basis.
+        <details className="hint-more rh-notes" open={showPreamble}
+          onToggle={(e) => setShowPreamble((e.currentTarget as HTMLDetailsElement).open)}>
+          <summary>how to read this</summary>
+          <div className="tr-say rh-doc">
+            <Markdown src={split.preamble} q="" onCopy={(t) => void copyText(t)} />
+          </div>
+        </details>
+      ) : null}
+
+      <DailyNotes days={days} />
+    </div>
   );
 }
 

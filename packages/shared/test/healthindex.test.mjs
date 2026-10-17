@@ -50,7 +50,7 @@ function row(w, o = {}) {
     retouch: o.retouch === null ? { value: null, reason: "x" } : { value: { rate: o.retouch ?? 0.3 } },
     hatches: o.hatches === null ? { value: null, reason: "x" } : { value: { todo: o.hatches ?? 400 } },
     context: o.context === null ? { value: null, reason: "x" }
-      : { value: { claudeMdChars: o.md ?? 12_000, descChars: o.desc === undefined ? 4_000 : o.desc } },
+      : { value: { claudeMdChars: o.md ?? 24_000, descChars: o.desc === undefined ? 8_000 : o.desc } },
     untested: o.untested === null ? { value: null, reason: "x" } : { value: Array.from({ length: o.untested ?? 400 }, (_, i) => `m${i}`) },
     classics: { value: { loc: o.loc ?? 100_000, files: o.files ?? 1000 } },
   };
@@ -72,7 +72,7 @@ const PHOTO_APP = {
   classics: { value: { loc: 40_000, files: 146 } },
 };
 
-/** the monorepo, 2026-10-17: nothing on fire, a heavy CLAUDE.md + skill descriptions. */
+/** the monorepo, 2026-10-17: nothing on fire, a CLAUDE.md + skill descriptions. */
 const MONOREPO = {
   sha: "us", day: "2026-10-14", ts: Date.parse("2026-10-14T12:00:00Z"), prereg: PREREG,
   size: { value: { p95: 574, max: 1865, maxPath: "tools/release/publish.mjs", lineMean: 360 } },
@@ -83,7 +83,7 @@ const MONOREPO = {
   classics: { value: { loc: 312_308, files: 1716 } },
 };
 
-test("the photo app: mean ≈66, but the cap holds it at ≈46 by size, and the longest file is named", () => {
+test("the photo app: mean ≈70, but the cap holds it at ≈46 by size, and the longest file is named", () => {
   const s = healthIndex([PHOTO_APP], 16_000);
   const p = s.points[0];
   near(p.sizeParts.lineMean.score, 100 * 500 / 2235);
@@ -94,9 +94,9 @@ test("the photo app: mean ≈66, but the cap holds it at ≈46 by size, and the 
   assert.equal(Math.round(p.scores.size), 16);
   assert.equal(p.scores.retouch, 100);
   assert.equal(p.scores.hatches, 100);
-  assert.equal(Math.round(p.scores.context), 78);
+  assert.equal(Math.round(p.scores.context), 100);
   assert.equal(p.scores.untested, 100);
-  assert.equal(Math.round(p.mean), 66);
+  assert.equal(Math.round(p.mean), 70);
   near(p.index, p.scores.size + HEALTH_SCORE_CAP_GAP);
   assert.equal(Math.round(p.index), 46);
   assert.equal(p.cappedBy, "size");
@@ -104,7 +104,7 @@ test("the photo app: mean ≈66, but the cap holds it at ≈46 by size, and the 
   assert.equal(p.alerts[0].text, "severe: lib/services/android_backend.dart is 8,397 lines (good: under 1,000)");
   assert.equal(p.alerts[0].path, "lib/services/android_backend.dart");
   assert.equal(healthCapWords({ value: p.index, mean: p.mean, cappedBy: p.cappedBy }),
-    "Capped at 46 by file length (16 of 100): the entries average 66, and the score stays within 30 of its worst entry.");
+    "Capped at 46 by file length (16 of 100): the entries average 70, and the score stays within 30 of its worst entry.");
   const wire = repoHealthIndexOf(s, null);
   assert.equal(wire.cappedBy, "size");
   assert.equal(wire.alert, "severe");
@@ -112,21 +112,21 @@ test("the photo app: mean ≈66, but the cap holds it at ≈46 by size, and the 
   near(wire.mean, p.mean);
 });
 
-test("the monorepo: mean ≈63, capped at ≈61 by context — and lower than the photo app is no longer higher", () => {
+test("the monorepo: ≈73, uncapped — and still above the photo app", () => {
   const p = healthIndex([MONOREPO], 16_000).points[0];
   assert.equal(p.sizeParts.lineMean.score, 100);
   assert.equal(Math.round(p.sizeParts.max.score), 54);
   assert.equal(Math.round(p.scores.size), 73);
   assert.equal(Math.round(p.scores.retouch), 77);
   assert.equal(p.scores.hatches, 100);
-  assert.equal(Math.round(p.scores.context), 31);
+  assert.equal(Math.round(p.scores.context), 62);
   assert.equal(Math.round(p.scores.untested), 59);
-  assert.equal(Math.round(p.mean), 63);
-  assert.equal(Math.round(p.index), 61);
-  assert.equal(p.cappedBy, "context");
-  assert.deepEqual(p.alerts.map((a) => [a.subject, a.level]), [["context", "warn"]]);
-  assert.equal(p.alerts[0].text, "warn: CLAUDE.md + skill descriptions are 25,957 chars (good: under 8,000)");
-  // Before the cap the giant-file repo out-scored this one (66 vs 63); after it, not.
+  assert.equal(Math.round(p.mean), 73);
+  assert.equal(Math.round(p.index), 73);
+  // 25,957 chars is over the 16,000 line, so context scores 62 — yet it is the worst entry but one, so no cap bites (worst untested 59 + 30 = 89).
+  assert.equal(p.cappedBy, null);
+  assert.deepEqual(p.alerts, []);
+  // The giant-file repo does not out-score this one: 46 vs 73.
   assert.ok(healthIndex([PHOTO_APP], 16_000).points[0].index < p.index);
 });
 
@@ -154,10 +154,10 @@ test("an entry scores 100·min(1, good/value); at or under 0 is 100", () => {
   assert.equal(z.scores.untested, 100);
 });
 
-test("context's good line is half the repo's own warn line", () => {
+test("context's good line is the repo's own warn line", () => {
+  near(healthIndex([row(0, { md: 16_000, desc: 0 })], null).points[0].scores.context, 100);
   near(healthIndex([row(0, { md: 8000, desc: 0 })], 32_000).points[0].scores.context, 100);
-  near(healthIndex([row(0, { md: 8000, desc: 0 })], null).points[0].scores.context, 100);
-  near(healthIndex([row(0, { md: 16_000, desc: null })], null).points[0].scores.context, 50);
+  near(healthIndex([row(0, { md: 32_000, desc: null })], null).points[0].scores.context, 50);
   assert.equal(healthEntryValues(row(0, { md: 9000, desc: 3000 })).context, 12_000);
 });
 
@@ -187,7 +187,7 @@ test("size needs lineMean AND max: rows from before the engine bump score nothin
 test("the cap: the headline never sits more than 30 above the worst entry", () => {
   // Four perfect entries and one at 10 average 63; the cap makes it 40.
   const r = row(0, { lineMean: 100, max: 100, retouch: 0.0, hatches: 0, md: 0, desc: 0, untested: 0 });
-  r.context = { value: { claudeMdChars: 80_000, descChars: 0 } }; // 8,000 / 80,000 → 10
+  r.context = { value: { claudeMdChars: 160_000, descChars: 0 } }; // 16,000 / 160,000 → 10
   const p = healthIndex([r], null).points[0];
   near(p.scores.context, 10);
   near(p.mean, Math.exp((4 * Math.log(100) + Math.log(10)) / 5));
@@ -278,7 +278,7 @@ test("a prereg or central change marks the gap, but the score is shown as measur
 });
 
 test("contributions: log points of the mean, negative where an entry's score fell, summing exactly", () => {
-  const s = healthIndex([row(0), row(1, { lineMean: 1100, retouch: 0.25, hatches: 440, md: 12_500, untested: 410 })], null);
+  const s = healthIndex([row(0), row(1, { lineMean: 1100, retouch: 0.25, hatches: 440, md: 25_000, untested: 410 })], null);
   const p = s.points[1];
   const sum = Object.values(p.contributions).reduce((a, b) => a + b, 0);
   near(sum, 50 * Math.log(p.mean / 50), 1e-9);
@@ -437,4 +437,67 @@ test("a size override with no engine lineMean still reads the engine's max; with
   delete noMax.size.value.max;
   assert.equal(healthEntryValues(noMax).size, undefined, "no override: no max, no size");
   assert.equal(healthEntryValues(withCentral(noMax, ov)).size, undefined, "an override cannot invent the longest file");
+});
+
+// ── the commits axis ───────────────────────────────────────────────────────
+
+import {
+  healthCommitsAvailability,
+  healthIndexCommits,
+  healthRowScore,
+  thinCommitPoints,
+} from "../dist/index.js";
+
+/** 10 weeks x 6 commits a week, untested wobbling so scores differ row to row. */
+const manyRows = () => Array.from({ length: 60 }, (_, i) => row(Math.floor(i / 6), {
+  day: dayOf(Math.floor(i / 6), i % 6), untested: 200 + ((i * 37) % 300), ts: Date.UTC(2026, 0, 5) + i * 3_600_000 * 20,
+}));
+
+test("a week's last row scores exactly that week's index", () => {
+  const rows = manyRows();
+  const series = healthIndex(rows, null);
+  for (const { week, row: last } of healthWeeks(rows)) {
+    const s = healthRowScore(last, null);
+    near(s.index, series.points.find((p) => p.week === week).index);
+  }
+});
+
+test("healthRowScore is null on a row missing an enabled entry", () => {
+  assert.equal(healthRowScore(row(0, { retouch: null }), null), null);
+});
+
+test("commit points: one per scorable row, sha7, week, gap on a prereg change", () => {
+  const rows = [row(0), row(1), row(2, { prereg: "other" }), row(3, { retouch: null })];
+  const c = healthIndexCommits(rows, null);
+  assert.equal(c.total, 3);
+  assert.equal(c.thinned, false);
+  assert.deepEqual(c.points.map((p) => p.gap), [false, false, true]);
+  assert.equal(c.points[0].sha7, "s0");
+  assert.equal(c.points[0].week, isoWeekOf(c.points[0].day));
+  assert.equal(healthIndexCommits([row(0, { retouch: null })], null), null);
+});
+
+test("thinning keeps every week's last row, is deterministic and bounded", () => {
+  const all = healthIndexCommits(manyRows(), null, 1000);
+  assert.equal(all.points.length, 60);
+  const a = healthIndexCommits(manyRows(), null, 12);
+  const b = healthIndexCommits(manyRows(), null, 12);
+  assert.deepEqual(a, b);
+  assert.equal(a.thinned, true);
+  assert.equal(a.total, 60);
+  assert.ok(a.points.length < 60 && a.points.length <= 2 * 12 + 10);
+  const kept = new Set(a.points.map((p) => p.ts));
+  for (const w of healthWeeks(manyRows())) assert.ok(kept.has(w.row.ts), `week ${w.week} last kept`);
+  const ts = a.points.map((p) => p.ts);
+  assert.deepEqual(ts, [...ts].sort((x, y) => x - y));
+  assert.equal(new Set(ts).size, ts.length);
+  assert.deepEqual(thinCommitPoints(all.points, 100), all.points);
+});
+
+test("healthCommitsAvailability has three states", () => {
+  assert.equal(healthCommitsAvailability(null), "absent");
+  assert.equal(healthCommitsAvailability({}), "absent");
+  assert.equal(healthCommitsAvailability({ commits: null }), "none");
+  assert.equal(healthCommitsAvailability({ commits: { points: [], total: 0, thinned: false } }), "none");
+  assert.equal(healthCommitsAvailability({ commits: healthIndexCommits([row(0)], null) }), "present");
 });

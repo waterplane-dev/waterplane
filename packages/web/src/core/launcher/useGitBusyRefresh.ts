@@ -13,7 +13,9 @@ const GIT_BUSY_POLL_MS = 10_000;
  */
 export function useGitBusyRefresh(ctx: { refreshRepos: Launch["refreshRepos"]; activeId: string | null; repos: RepoTarget[]; overlay: string | null }) {
   const { refreshRepos, activeId, repos, overlay } = ctx;
-  const gitBusy = repos.some((r) => r.gitRunning);
+  // A build seeded off this list (`buildRunning`) is re-read on the same beat:
+  // a tab that missed the run's settled frame would otherwise spin until reopened.
+  const gitBusy = repos.some((r) => r.gitRunning || r.buildRunning);
   useEffect(() => {
     if (activeId || !gitBusy) return;
     const t = setInterval(refreshRepos, GIT_BUSY_POLL_MS);

@@ -71,8 +71,13 @@ writeFileSync(join(dir, ".pid"), String(process.pid));
 const swept = join(dir, ".swept");
 const env = { ...process.env, TMPDIR: dir, TEMP: dir, TMP: dir, WP_TMP_SWEPT: swept };
 
-/** `waterplane-ctxlog-AbC123` -> `waterplane-ctxlog-` */
-const prefixOf = (n) => n.replace(/[A-Za-z0-9]{6}$/, "").replace(/-?$/, "-");
+/** `waterplane-ctxlog-AbC123` -> `waterplane-ctxlog-`. A runtime's extracted
+ *  native lib (`.3bdfde8f0577dff0-00000000.dylib`, one per process that loads
+ *  it — no test of ours makes these) is hash-named, so it buckets by extension
+ *  or a single run lists hundreds of one-offs. */
+const prefixOf = (n) => /^\.[0-9a-f]{16}-[0-9a-f]{8}\.\w+$/.test(n)
+  ? n.replace(/^\.[^.]+/, ".<hash>")
+  : n.replace(/[A-Za-z0-9]{6}$/, "").replace(/-?$/, "-");
 function tally(names) {
   const m = new Map();
   for (const n of names) m.set(prefixOf(n), (m.get(prefixOf(n)) || 0) + 1);

@@ -6,11 +6,14 @@
  * no clock, no randomness.
  */
 import {
-  assessHealthMove, healthIndex, healthMoveWords, isoWeekOf, repoHealthIndexOf,
+  assessHealthMove, healthIndex, healthIndexCommits, healthMoveWords, isoWeekOf, repoHealthIndexOf,
   type HealthIndexResponse, type HealthSeriesRow, type RepoHealthIndex,
 } from "@waterplane/shared";
 
 const DAY = 86_400_000;
+const COMMITS_PER_WEEK = 4;
+/** A stable fake 40-hex sha per demo commit. */
+const demoSha = (n: number): string => ((n * 2654435761) >>> 0).toString(16).padStart(8, "0").repeat(5);
 const WEEKS = 10;
 
 /**
@@ -61,18 +64,24 @@ function rowsFor(repoName: string, now: number): HealthSeriesRow[] | null {
     const t = w / (weeks - 1);
     const lerp = (a: Pair) => a[0] + (a[1] - a[0]) * t;
     const ts = monday - (weeks - 1 - w) * 7 * DAY + 2 * DAY;
-    const day = new Date(ts).toISOString().slice(0, 10);
     const loc = Math.round(p.loc ? lerp(p.loc) : 40_000);
     const files = Math.round(p.files ? lerp(p.files) : 120);
-    rows.push({
-      day, ts, prereg: "demo-1",
-      size: { value: { lineMean: lerp(p.lineMean), max: lerp(p.max), maxPath: p.maxPath } },
-      retouch: { value: { rate: lerp(p.retouch) } },
-      hatches: { value: { a: Math.round(lerp(p.hatches) * (loc / 1000)) } },
-      context: { value: { claudeMdChars: lerp(p.md), descChars: p.desc ?? 1_200 } },
-      untested: { value: new Array(Math.round(lerp(p.untested))).fill("x") },
-      classics: { value: { loc, files } },
-    });
+    // A few commits per week so the commits axis has something to draw: the
+    // earlier ones wobble around the week's value, the LAST is the week's row
+    // exactly, so the weekly series is unchanged.
+    for (let c = COMMITS_PER_WEEK - 1; c >= 0; c--) {
+      const k = c === 0 ? 1 : 1 + 0.06 * Math.sin(w * 7 + c * 3);
+      rows.push({
+        sha: demoSha(w * COMMITS_PER_WEEK + (COMMITS_PER_WEEK - 1 - c)),
+        day: new Date(ts - c * DAY / 2).toISOString().slice(0, 10), ts: ts - c * DAY / 2, prereg: "demo-1",
+        size: { value: { lineMean: lerp(p.lineMean) * k, max: lerp(p.max), maxPath: p.maxPath } },
+        retouch: { value: { rate: lerp(p.retouch) * k } },
+        hatches: { value: { a: Math.round(lerp(p.hatches) * (loc / 1000)) } },
+        context: { value: { claudeMdChars: lerp(p.md), descChars: p.desc ?? 1_200 } },
+        untested: { value: new Array(Math.round(lerp(p.untested))).fill("x") },
+        classics: { value: { loc, files } },
+      });
+    }
   }
   return rows;
 }
@@ -83,7 +92,10 @@ export function demoHealthIndex(repoName: string, now: number): HealthIndexRespo
   const series = healthIndex(rows, null);
   if (!series) return null;
   const move = assessHealthMove(series.points, { minWeeks: 4, minMonthWindows: 99 });
-  return { series, move, words: healthMoveWords(series.points, move, isoWeekOf(new Date(now).toISOString().slice(0, 10))), lastRefresh: null };
+  return {
+    series, move, words: healthMoveWords(series.points, move, isoWeekOf(new Date(now).toISOString().slice(0, 10))), lastRefresh: null,
+    commits: healthIndexCommits(rows, null),
+  };
 }
 
 /** What `RepoTarget.healthIndex` carries for a demo repo; undefined = no chip. */

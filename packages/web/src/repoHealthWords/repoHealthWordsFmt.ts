@@ -47,3 +47,37 @@ export function ordinal(n: number): string {
 export function nf(n: number): string {
   return Math.round(n).toLocaleString();
 }
+
+/**
+ * A path shortened in the MIDDLE to at most `max` characters, keeping the
+ * filename whole when it fits: `packages/…/wp-secret.mjs`. The first directory
+ * is kept next (where in the tree), then the directories nearest the file,
+ * then more from the front. A filename too long by itself is cut in its own
+ * middle; a string with no `/` is cut in the middle. The caller puts the full
+ * string in a `title`, since this drops words.
+ */
+export function middleEllipsis(s: string, max: number): string {
+  if (s.length <= max) return s;
+  const cut = (t: string): string => {
+    if (t.length <= max) return t;
+    if (max < 2) return "…".slice(0, Math.max(0, max));
+    const keep = max - 1;
+    const front = Math.ceil(keep / 2);
+    return `${t.slice(0, front)}…${t.slice(t.length - (keep - front))}`;
+  };
+  const segs = s.split("/");
+  if (segs.length < 2) return cut(s);
+  const file = segs[segs.length - 1];
+  if (`…/${file}`.length > max) return cut(file);
+  const dirs = segs.slice(0, -1);
+  const head: string[] = [];
+  const tail: string[] = [];
+  const fits = (h: readonly string[], t: readonly string[]) =>
+    h.map((x) => `${x}/`).join("").length + 2 + [...t, file].join("/").length <= max;
+  let hi = 0;
+  let ti = dirs.length - 1;
+  if (fits([dirs[0]], [])) { head.push(dirs[0]); hi = 1; }
+  while (ti >= hi && fits(head, [dirs[ti], ...tail])) { tail.unshift(dirs[ti]); ti--; }
+  while (hi <= ti && fits([...head, dirs[hi]], tail)) { head.push(dirs[hi]); hi++; }
+  return `${head.map((x) => `${x}/`).join("")}…/${[...tail, file].join("/")}`;
+}

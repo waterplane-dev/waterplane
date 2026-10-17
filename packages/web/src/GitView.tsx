@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowDownToLine, ArrowDownUp, ArrowUpFromLine, Check, History, Copy, SquareTerminal, GitBranch as GitBranchIcon, Loader, Minus, Plus, RotateCw, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowDownToLine, ArrowDownUp, ArrowUpFromLine, Check, History, Copy, FolderTree, SquareTerminal, GitBranch as GitBranchIcon, Loader, Minus, Plus, RotateCw, Sparkles, Trash2, X } from "lucide-react";
 import type { GitBranch, GitFile, GitPushProgress, GitPushState, GitStatus } from "@waterplane/shared";
 import { api, copyText } from "./api";
 import { track } from "./usage";
@@ -24,6 +24,8 @@ interface Props {
    * by the tap. Absent ⇒ the button is absent.
    */
   onAskAgent?: (f: GitFailure) => void;
+  /** The repo's file tree; closing it lands back here. Absent ⇒ no button. */
+  onBrowse?: () => void;
   onClose: () => void;
 }
 
@@ -106,7 +108,7 @@ function PushProgressView({ p, fill }: { p: GitPushProgress; fill: boolean }) {
 }
 
 /** Review changed files, view diffs, stage, commit, pull and push from the phone. */
-export function GitView({ repoId, onAskAgent, onClose }: Props) {
+export function GitView({ repoId, onAskAgent, onBrowse, onClose }: Props) {
   const [openFile, setOpenFile] = useState<GitFile | null>(null);
   const [diff, setDiff] = useState<string>("");
   const [message, setMessage] = useState("");
@@ -443,6 +445,7 @@ export function GitView({ repoId, onAskAgent, onClose }: Props) {
   return (
     <div className="sheet">
       <SheetHead title={<>Review · {status?.branch ?? "…"}</>} onClose={onClose}>
+        {onBrowse && <button className="key" title="browse files" onClick={() => { track("action:git.browse"); onBrowse(); }}><FolderTree size={16} /></button>}
         <button className="key" title="history — incoming, not pushed, and what both have" onClick={() => { track("action:git.log"); setLogFocus("all"); }}><History size={16} /></button>
         <button className={`key ${showBranches ? "active" : ""}`} title="branches" onClick={toggleBranches}><GitBranchIcon size={16} /></button>
         <button className="key" onClick={refresh}><RotateCw size={16} /></button>

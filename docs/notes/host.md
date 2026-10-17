@@ -6611,7 +6611,7 @@ and the phone's `detail` sentence is the tool's sentence.
 
 `shared/healthindex.ts` turns the series into ONE number per week, 0 to 100, against fixed good values
 (`HEALTH_GOOD`: line-weighted mean file 500, longest file 1,000, rework 0.15, unexplained hatches 2 per
-kLOC, untested share 0.2, context half the repo's warn line): an entry scores `100 · min(1, good / value)`.
+kLOC, untested share 0.2, context the repo's warn line): an entry scores `100 · min(1, good / value)`.
 The headline is `min(geometric mean of the five, worst entry + 30)`; the trend (week and month moves) is
 read off that score and said second. The one layer that takes a side, owner-approved 2026-10-15, and
 reworked 2026-10-17, each reason measured:
@@ -6629,6 +6629,13 @@ reworked 2026-10-17, each reason measured:
   worded in shared so phone and VS Code say it alike; the longest-file alert names the path.
 - **The good values are provisional**: chosen by the owner from the repos on this desktop, `retouch` least
   certain. A repo overrides the value it is compared with via `central`, never the constants.
+- **Context's good line is the warn line, not half of it** (2026-10-17). `HEALTH_CONTEXT_GOOD_SHARE` was 0.5,
+  so the index said "good: under 8,000" while the setup sheet (`contextweight.ts`) calibrated its 16,000 warn
+  line so a well-organised repo is NOT flagged: this repo read lean at 12.4k in one and warn in the other. Two
+  instruments disagreed about one number. Now 1.0 (warn at 32k, severe at 64k); the monorepo's 25,957 scores
+  62, the index 73 uncapped. `maxSkills` went 12 → 30 in the same pass: descriptions are already counted in
+  `maxChars`, so the count only trips a listing that is itself a page, and a router-plus-sub-skills split is the
+  shape the chars rule asks for.
 
 `healthwatch.ts` is the plumbing, and only that:
 
@@ -6654,6 +6661,17 @@ reworked 2026-10-17, each reason measured:
   severe all along: the previous point is computed from the same rows, so a re-measured history (prereg
   bump) or the first refresh after this shipped reads no repo as news. Same `WATERPLANE_HEALTH_WEEKLY`
   switch and notify gate as the move push; it only informs.
+
+**One derivation for every surface: `healthindexresponse.ts` in shared** (2026-10-17). The route's
+whole answer — parse the series file (`parseHealthRows`, a torn line one missing reading), score it,
+call the move, word it, attach the per-commit series, or say why there is no score — is
+`healthIndexResponseOf`. `healthwatch.ts` `respond()` adds only what it alone knows (`lastRefresh`
+from its weekly clock; the route adds `spend` off the token ledger), and the extension's `healthindexdoc.ts` calls
+the same function on the series its Health view read. The extension used to carry its own copy, and it had
+already drifted: no `commits` (so the x-axis row could never offer per-commit), and no older-engine
+reason (a series from before `lineMean` read as "no scored week yet", which names no fix). The
+older-engine sentence stays the caller's, because the remedy differs: a command on the desktop, a
+re-measure in the extension, which never quotes the desktop's `rm`.
 
 ## A clock may name a session, because the CONVERSATION outlives it
 
@@ -7407,3 +7425,684 @@ The wire is `host.halt { on }` (no ackId: setting a latch is idempotent; the pho
 never queued) and `halt.state` on hello and on every change. Pinned by `host/test/halt.test.mjs`
 (latch, torn file, tree walk, forced kill, refused headless run) and `scripts/e2e-halt.mjs` (a
 TERM-ignoring stub forced, refusal, the latch across a restart, the lift).
+
+
+## Moved out of skill `host-core` (2026-10-17)
+
+_Verbatim from the skill as of 2026-10-17; the skill is the rule — where this text disagrees, the skill wins._
+
+The skill keeps the rules; this is the narrative and the per-slice inventory it carried, verbatim.
+
+### `sessions/` slices — the per-slice ownership inventory
+
+The `host-core` bullet as it stood, including the `(S2)…(S11)` plan labels:
+
+- `sessions/core.ts` + `sessions/knobs.ts` + `sessions/tmux.ts` + `sessions/convid.ts` + `sessions/health.ts` + `sessions/ctxseries.ts` + `sessions/roster.ts` + `sessions/wall.ts` + `sessions/resume.ts` + `sessions/turn.ts` + `sessions/boxes.ts` + `sessions/drive.ts` + `sessions/record.ts` + `sessions/links.ts` + `sessions/livemode.ts` — the first cut of `sessions.ts` into slices
+  ([host-architecture.md](host-architecture.md)). `core.ts` is TYPES ONLY: `Session`,
+  `LiveMeta`, `ClosedRow`/`RecentRow`, and **`SessionCore` — the one way a `sessions/` slice reaches
+  shared state or another slice**. The facade implements it as a PRIVATE object literal whose every
+  member is an arrow delegating at CALL time (another slice's state is an accessor, never a captured
+  field — `resumeWaiting` and `recentlyClosed` are reassigned); a slice never imports a slice or the
+  facade, and a missing member is added to `core.ts` in review. `knobs.ts` is every module constant
+  and `WATERPLANE_*` read, imported after the facade's own flat imports and before the modules only slices
+  import; safe because nothing assigns `process.env` at import — `hostshape` checks that.
+  `tmux.ts` (S2) is the substrate (the only one): spawn inside tmux, re-attach, `tmux.conf`, the `live/`
+  records and the orphan sweep; the tmux server/name constants are knobs so any slice may use them.
+  `rediscover()` deletes a `live/` record only past a SUCCESSFUL `tmux ls` (`staleLiveIds`: absent
+  from it, stamped with THIS server, older than 1 h, not held) — a failed listing is never an empty one.
+  `convid.ts` (S3) finds which conversation a session is in (claude's project dir, opencode's
+  store — exactly one candidate or none) and the running model; `health.ts` (S3) holds `noteFor`,
+  the ONE direct `noteHealth` under `sessions/`, gated on `healthScope`.
+  `ctxseries.ts` (S8) is a CLASS (`CtxSlice`, owns `ctxWindows`): the context gauge, the row's
+  spark, the per-model window, and the context-series/tool-detail documents (`host-ledgers`).
+  `roster.ts` (S9) is a CLASS (`RosterSlice`): the recent shortlist, the reopen stack (each row built by
+  `closedRowOf` — **`closedBy` is named by whoever calls `remove`/`kill` (`s.closeBy`), the exit path
+  only infers `limit`/`exited` for a session nobody killed; every fact optional, absent = unknown**), stars, pins and
+  the prompt labels, the watched ids and the per-session plugin state (toggles, the "let <plugin> answer" switch — memory only, so a restart puts it back OFF — and badges), `rename`; it reads its four files
+  in the constructor, which is why the hub exists before it (the closed rows ask `hasLiveTmux`).
+  `wall.ts` (S6) is a CLASS (`WallSlice`, owns `autoContinueOn`, `limitCfgPath`, `resumeMode`): the
+  auto-continue config, reading a block off screen + log (`checkLimit`) and the continue ladder; the
+  resume queue's state is reached only through `core`. It reads `limit.json` LAST of the files.
+  `resume.ts` (S7) is a CLASS (`ResumeSlice`, owns the `resume*` state bar `resumeMode`, the guard and
+  gap timers, and the revived pairings): the resume queue, resurrection of a limit-exited session and
+  `revivedSessionFor`. It reads `revived.json` after the roster's files and before `limit.json`.
+  `turn.ts` (S5) is stateless functions over the `Session` record: the turn flag (`setTurn`/`markIdle`),
+  the hook lifecycle (`onHookEvent`, `routeHook`, the turn watch and Stop verify), the prose
+  question and the agents underneath, the submits ring and the turn queries.
+  `boxes.ts` (S4) is stateless functions: the choice box — when to look (`scheduleChecks`, the
+  earliest-wins `armPromptCheck`), reading it (claude's and opencode's), publishing it, the
+  sign-in link, `awaitingInput`, and the two answer walks (`choosePromptBox`, `submitPromptBox`).
+  `drive.ts` (S10) is stateless functions: the public verbs — typing in (`input`, `write`, the tmux
+  pan and copy-mode exit), readiness for automation (`waitReady`, `autoFireBlocker`), `resize`,
+  `kill`/`detach`/`reattachById`/`remove`, and reading the screen back (`scrollback`…`idleMs`).
+  `record.ts` (S11) is stateless functions: the prompt history and its capture, the reader's
+  transcript, search, the tab name (`nameTab`/`nameNow` — the one unattended `claude -p` spend here,
+  `host-spenders`), the `history/`+`summaries/` files, `lastTurnOf`. **There is NO per-turn AI
+  summary** (removed 2026-10-01: it was the biggest unattended cost). **`nameTab()` is the ≤4-word
+  name a phone TAB wears** (and the session header shows in FULL) (`SessionInfo.tabTitle`): its ONLY
+  input is the session's FIRST PROMPT (`firstPromptOf`, `history[0].text`, ≤1000 chars) — never the
+  screen, a summary or a later prompt. Its flags are CLAUDE.md's (no thinking too), gated on the field being ABSENT so it fires
+  once per session ever (the first `idle` after a prompt exists; `s.nameAsked` stops a refusal being
+  re-bought) — a tab that renames itself cannot be learned — persisted as `{tab}` in
+  `<state dir>/summaries/<id>.json` (old files' `text`/`len` ignored; a restart must never rename every
+  tab), and refusing through `shared/naming.ts`'s `cleanTabTitle` rather than guessing.
+  **`nameNow()` is `nameTab` asked BY HAND** (`session.name`): one call off the first prompt PLUS the last 4 non-command prompts (`recentPromptsOf`; the automatic pass stays first-prompt-only),
+  holding `s.naming` so the automatic pass cannot land behind it; no prompt yet ⇒ a sentence, and
+  every failure is a SENTENCE and the existing name STAYS.
+  `lastTurnAt` (`lastTurnOf`) is read from the CLI's own OUTPUT, never the log's mtime and never
+  `idleSince`. Both per-session stores (`history/`, `summaries/`) are unwritten by `remove()` and
+  otherwise ONLY by `tmux.ts`'s `sweepSessionStores`: orphans **older than 7 days**, armed once off
+  `rediscover()`.
+  `links.ts` is stateless functions: a SHELL session's `links` (`ShellLink`) — `addBrowserLink`
+  (the `$BROWSER` shim via `POST /api/shell/open`, kept 10 min) and `setScreenLinks` (the screen
+  reader's list, `at` kept per URL; `armLinksCheck` reads `shelllinks.ts` on the quiet tick) merged in ONE place; only for `caps.turns === false`, emit on a
+  change only, absent when empty. A shell (`backends/shell.ts`, `caps.turns: false`) has no idle
+  ping, no model-made tab name (static `shell · <repo>`) and gets ONE Return per delivery. Before
+  typing, `deliverrun.ts` asks `shellLineFacts` (tmux `pane_current_command`, by NAME — the PTY's
+  `?2004h` is tmux's own, never the pane's): a program in front ⇒ `retry` naming it (unless
+  `awaitingCode`); a newline ⇒ one bracketed paste for zsh/fish, refused for anything else. A
+  shell's create needs `origin.kind: "hand"` (`shellOpenRefusal`), its pane drops the daemon's
+  `*_API_KEY`/`*_KEY_FILE`/`*_KEYCHAIN` (`LaunchPlan.dropEnv`), and it writes no prompt history.
+  `livemode.ts` is stateless functions: `SessionInfo.liveMode`/`.ultracode` off `permmode.ts`
+  (`checkMode` on `markIdle`'s quiet tick; a null reading DELETES `liveMode`, `ultracode` is sticky;
+  memory only) and `setMode` (`session.mode`): one shift+tab via `write`, re-read the LIVE grid until
+  the footer changes, stop on the target / a repeat (not in the cycle) / 6 presses; refused in words
+  with a box open or the footer unreadable; serialised per session (`modeChain`). Never counts positions.
+  Stateful slices are built right after the hub, which is built first in the constructor.
+
+### `shells.ts` — the full discriminator and kill walk-through
+
+- `shells.ts` — what each background shell is actually DOING, off `ps -axo
+  pid=,ppid=,pgid=,etime=,time=,command=` (memoised 2s). **The discriminator**
+  (`isShellWrapper`): a direct child of the CLI's pid, in its OWN process
+  group, running the CLI's own shell-snapshot wrapper — `pgid !== cliPid`
+  alone is what keeps MCP servers and `caffeinate` out, since both are CLI
+  children too but share its pgid. `shellsUnder` walks each wrapper's
+  descendants that stay inside its OWN pgid; `workers` is that group minus the
+  sleep/pipeline utilities (`sleep`, `tail`, `head`, `zsh`, `sh`, `bash`,
+  `cat`, `grep`, `wc`, `cut`) — zero means the shell is, right now, only
+  waiting on something. `evalText` unescapes and caps the eval'd command at
+  240 chars; the transcript join (`shellTranscriptFacts`/`joinShellFact`,
+  reusing `agents.ts`'s `readTail` over the tail 512 KB of the conversation
+  log) matches a wrapper's command against a Bash tool call's own by
+  whitespace-normalised equality to recover `description`/`taskId`/`launch` —
+  no match ⇒ those fields stay absent, never guessed. `shellOutputStat` only
+  fills `outputAt`/`outputBytes` past 0 bytes: most of these commands redirect
+  their own output, so an empty file is silence by design. CPU movement is
+  tracked per WRAPPER pid across polls (`trackCpu`/`pruneCpuTrack`) —
+  `cpuMovedAt` is absent on a shell's first ever reading, the honest "can't
+  tell yet" `@waterplane/shared`'s `shellBucket` reads off it (`workers === 0` wins
+  there BEFORE the CPU-moved check, or a real wait loop's own `sleep`/`pgrep`
+  tick reads `working` for the whole quiet window). **Any throw anywhere
+  in `readShellList` degrades the WHOLE list to absent**, never a partial one
+  with a wrong-looking row. **`isShellWrapper`'s shape also matches a LIVE
+  FOREGROUND Bash call** — same ppid, same own-pgid, same wrapper — so
+  `SessionShell.foreground` is set whenever the transcript join could not
+  PROVE this was ever launched to the background and the CLI's own record
+  still says `"busy"` (idle, `"shell"`, means every wrapper left is a
+  survivor); `foregroundWrapperPids` is the same call without the
+  CPU-tracking/output-stat/cap work, for a KILL pass that only needs the
+  pids. `killShellGroup` (driven by WP3's `shell.kill` route and by
+  `drive.ts`'s close path) takes an injectable `KillShellDeps`
+  (`rows`/`readPs`/`kill`/`sleep` — real `ps`/`process.kill` by default) so a
+  test can drive its whole refusal ladder with no OS process tree, and so
+  `stopShellsUnder` can share ONE fresh precondition read across a whole
+  close pass instead of one per group; it re-checks every precondition
+  (still a wrapper under this cli, still its own group leader, its start
+  time still within 2s of the one the caller last saw) before signalling:
+  SIGTERM, then SIGKILL after 3s for whatever in the group is still alive —
+  re-checking `ppid` again right before that SIGKILL — and **a survivor
+  after the SIGKILL is `ok: false, reason: "that shell did not stop"`**,
+  never a false `ok: true`. `packages/host/test/shells.test.mjs`.
+
+### `screenlog.ts` — the measured case
+
+- `screenlog.ts` — **the desktop's scrollback, RECORDED, because it cannot be read back.** Measured
+  on 2.1.267: every pane is `history_size=0 alternate_on=1`, so the CLI draws in the ALTERNATE
+  screen, which keeps no scrollback — a replay of the whole ring answers with ONE SCREEN (a session
+  of hours came back as 31 lines), and tmux's `capture-pane -S -` says the same. One live headless
+  VT per session, fed as the bytes arrive, its grid diffed on a settle with `@waterplane/shared`'s
+  `absorbScreen` — the SAME rule the phone uses; what differs is the vantage point, and that IS the
+  fix (no gaps ⇒ no unanchorable jumps ⇒ no screens archived twice). **`history` is the honest half**:
+  false means nothing beyond the current grid yet, and the phone must then keep its own archive.
+  `e2e-screenrec.mjs`.
+
+### `deliver.ts` — the composer viewport, measured
+
+**The composer is a VIEWPORT, not a field**: it is
+  sized off the TERMINAL's height and the text scrolls inside it, so a prompt longer than the box
+  draws only its TAIL (measured on 2.1.267 at 56 cols: 3 rows at a terminal height of 12, 5 at 20,
+  all 14 at 40) and the head every rule asks for is off the top — 45% of every delivery between 300
+  and 800 chars came back `unconfirmed` against 17% of the short ones, and under 800 there is no
+  placeholder to rescue it. A box whose WHOLE contents are a window onto the text is an echo
+  (`echo.ts`'s `scrolled`, `SLICE_MIN` 40), asked as a SUBSTRING not a suffix because `settle.ts`
+  asks minutes later at whatever scroll the reader left. `e2e-scrollcomposer.mjs`. 
+
+### Second trim pass: clauses with a measured number or a story and no imperative (verbatim)
+
+- Stateful slices (`ctxseries.ts`, `roster.ts`, `wall.ts`, `resume.ts` are classes) are built right after the hub, which is built first in the constructor; `turn.ts`, `boxes.ts`, `drive.ts`, `record.ts`, `links.ts`, `livemode.ts` are stateless functions. `knobs.ts` is every module constant and `WATERPLANE_*` read, imported after the facade's own flat imports and before the modules only slices import; safe because nothing assigns `process.env` at import — `hostshape` checks that.
+- A shell (`backends/shell.ts`, `caps.turns: false`) has no idle ping, no model-made tab name (static `shell · <repo>`) and gets ONE Return per delivery.
+- The miss sweep sends no Esc and no ctrl-U while a turn is active — it was interrupting the turn and deleting the interjection that had landed.
+- the replay TEARS mid-turn and strands the live composer above stale rows, which cost ~30% of deliveries.
+- at the OLD DEPTH (`FALLBACK_ROWS` 40, not the anchor's `ROW_WINDOW` 100: its slash allowance accepts a hit at any height, and `/` starts every path in every tool result).
+- **The composer is a VIEWPORT, not a field**: a prompt longer than the box draws only its TAIL, so the head every rule asks for is off the top — a box whose WHOLE contents are a window onto the text is an echo (`echo.ts`'s `scrolled`, `SLICE_MIN` 40), asked as a SUBSTRING not a suffix because `settle.ts` asks minutes later at whatever scroll the reader left.
+- (… the same `ROW_WINDOW` as `deliver.ts` — a narrower one here made a tear confirmable there and invisible here) — this CLI scrolls, so a prompt that already RAN sits in the visible tail verbatim.
+- but reaching that verdict after a full opencode store read is a fold per settled session on the loop that pumps every PTY.
+- …read off the CLI's own logs (`subagents/agent-*.jsonl` + its `.meta.json`), because a BACKGROUND agent outlives the turn that launched it and the reader called that state "idle — nothing running".
+- `readCliStatus` is a thin wrapper over it kept for its existing callers.
+- The CLI draws in the ALTERNATE screen, which keeps no scrollback (a replay answers with ONE SCREEN; `capture-pane -S -` says the same).
+- …the SAME rule the phone uses; what differs is the vantage point, and that IS the fix (no gaps ⇒ no unanchorable jumps ⇒ no screens archived twice).
+- (… no unconfirmed delivery — NOT the hooks: agent-driven and post-restart turns never have a hook turn)
+- the old 24-attempt cap gave up in under 4 h against a window that resets days later.
+- never `isBlocked` wording (the retired oracle's blocklist, core's now)
+- its measured rules are in the opencode extension's README (`packages/extensions/opencode/`, private, not in the public tree).
+- Injects `SessionStart`/`UserPromptSubmit`/`Stop`/`Notification`/`SessionEnd` hooks that curl `POST /api/hook` — the positive turn-boundary signal; no pipe ⇒ silence heuristics.
+- Clamped, never refused, and the clamp is what heals a session already stuck small.
+- There is NO per-turn AI summary (it was the biggest unattended cost).
+- Polled, never evented (no hook fires for an agent, and the parent log is asleep while one runs)
+- (the ONE copy, persisted to `live/` by `persistLive` off the LIVE session so a field-by-field rewrite cannot drop it)
+- …compiled by `tsconfig.extensions.json` into `dist/extensions/` so `dist/main.js` never moves
+- Loader: `<config dir>/plugins/*/` + `plugin-paths.json` `{paths}` (`~` expanded, deduped by realpath),
+- Enabled flags in `<state dir>/plugins.json` (absent ⇒ on), values in `<state dir>/plugins/<id>/settings.json`, a `plugin.set` refused WHOLE in words.
+- `handle()` answers the registry's `call()` — what the generic `plugin.call` will route to.
+
+## Moved out of skill `host-spenders` (2026-10-17)
+
+_Verbatim from the skill as of 2026-10-17; the skill is the rule — where this text disagrees, the skill wins._
+
+### `sidecar.ts` — the full bullet before the trim
+
+- `sidecar.ts` + `sidecarroute.ts` + `sidecarclaude.ts` + `sidecartrust.ts` + `sidecaropenai.ts` + `sidecartasks.ts` + `sidecarname.ts` — (`sidecar.ts` is the facade over `sidecar/`: routing, the claude engine and its flags, the folder-trust refusal, the local engine, summary, naming+commit) the ONE place an UNATTENDED completion is bought: engines `claude-p` (today's
+  headless call, moved verbatim — envelope, timeouts and `detectHeadlessLimit` unchanged) and
+  `openai-compat` (one toolless POST to a local `{baseURL}/chat/completions`). Per-task routing via
+  `WATERPLANE_SIDECAR_SUMMARY`/`_ASSESS`/`_REVIEW`/`_NAME`, **every one defaulting to
+  claude**. Only a task whose contract ALREADY forbids tools may take the local engine — the
+  summary and `naming.ts` by construction (their input is all IN the prompt); assess
+  and review READ a repo, so they refuse it **in words naming the variable**, and a malformed spec
+  refuses too, never falls back to claude (spending the token is the thing the knob exists to stop).
+  **Every failure is the empty result the callers already treat as "no summary / no verdict"** —
+  a refused route, a dead server, a non-2xx, a half-written body, or a reasoning model that spent
+  its budget thinking and returned an empty `content` (measured: 421 of 451 tokens). Thinking is
+  never the answer: `reasoning_content` is not read and `<think>` blocks are stripped. Generous
+  `max_tokens` and a 120 s timeout because **ollama cold-loads an idle model**. **No limit phrase
+  matching for the local engine** — it has no account. `runNameTask`/`runCommitTask` share `runTextTask`, which carries the measured argv
+  (`--thinking disabled` included; the measurement table is a comment in `sidecarname.ts`) and drops none of `runSummaryTask`'s (the tab-name call's).
+  **`runToolTask` refuses a folder Claude Code does not trust** (`workspaceTrust`): a tool task keeps
+  project settings, and `claude -p` loads a repo's hooks WITHOUT the trust dialog (measured 2.1.289).
+  It READS `.claude.json` (`CLAUDE_CONFIG_DIR` honoured — tests point it at a fixture), never writes
+  it; folder or any ancestor `true` = trusted, unreadable = refused. Never add a bypass knob.
+  `packages/host/test/sidecar.test.mjs`, `scripts/e2e-sidecar.mjs` (a ten-line HTTP stub; CI needs
+  no ollama).
+
+### `assess.ts` — the apply and receipt narrative, and the slot-check passage
+
+- `assess.ts` — "of the work still standing, what is still worth doing?" **The contract is a FILE both
+  ways.** `claude -p` is the completion signal and error channel, **never the content**.
+  `assess-out.json` is **deleted before the run**; **fresh session**; `--permission-mode acceptEdits`.
+  **Nothing here decides** — `shared/assess.ts` holds the verdicts. **Applying `still wanted` to a
+  FAILED row PUTS IT BACK** (`requeueFailed`, BEFORE the ranks, then ONE `kick()` — a kick per row
+  fired row 1 before the ranks or a pick existed); a refusal, and a `settledAt` ≠ the `failedAt` this
+  run stamped, are uncounted and never fail the apply. **EVERY run is STREAMED** — unwatched too, or
+  `maxBuffer` kills it for succeeding loudly. `AssessProgress` is a READING: live ones memory+socket
+  only (`setLive`), the last persists; its throttle has a TRAILING EDGE. A timeout ANSWERS at the
+  deadline and kills the process **GROUP** — an orphan outlives `rmSync` and writes a STALE out file.
+  **The prompt's naming caps are INTERPOLATED** from `naming.ts`'s constants. Existing rows are
+  titled only under `writeNames`, through `intents.name(…, "assess")`, which REFUSES a `hand` field;
+  `counts.named` is what was WRITTEN, not offered. A POSTED row is titled whatever the answer was
+  (its prompt is the run's own words) and no longer wears a `merge of N: …` label — that was machine
+  bookkeeping in `label`, which means "the name a person gave this"; existing rows keep theirs, no
+  migration. **A `wanted` PAD NOTE is now OFFERED as a post carrying its own words** — synthesised by
+  `cleanAssessment` from the item's own `text` (`AssessNew.fromNote`), never read off the CLI's `new`
+  (a `new` repeating a note verbatim is DROPPED), exempt from `MAX_NEW`, and posted with **NO
+  `label`** (`from an assessment` over a person's own sentence is a lie `itemHeadline` would show
+  above it). Detail says `N filed from the pad` beside `N pad note(s) judged and left on the pad`.
+  **The host still never reads or writes `waterplane.pad`** — `fromNote` travels so the PHONE clears the
+  note on the receipt, and **the receipt NAMES which ones landed** (`AssessApplyOutcome.filed` →
+  `op.ack`'s `filed?: string[]`, remembered in `acks.ts` so a replay says the same). `intents.post`
+  refuses on its own (`PENDING_MAX`, an unrunnable draft) and the loop `continue`s, so `ok:true` was
+  true of an apply that posted NOTHING — three ticked offers, three notes tombstoned, no row
+  anywhere. This is the one pad delete taken on a REMOTE receipt instead of a durable local copy,
+  which is why it is the one that loses words. The phone clears `ticked ∩ filed`; **absent means
+  this host cannot tell you, so assume nothing was filed**, while `[]` is the opposite claim (it
+  can, and nothing was). **Slot check** ([host.md](host.md#the-slot-check--sharedintentslotts-and-the-assessments-conflictsplit)):
+  a slot run judges ONLY the caller's ids, each confirmed in `findSlot`'s LIVE slot (else, or <2,
+  refused, nothing bought). A split posts both halves (ids hashed from run+sid) on the
+  original's trigger, THEN ARCHIVES it, never cancels — refused if a row chains `after` it; any stop
+  sets every unstarted half aside; a slot merge sits at its members' lowest seat; a conflict has no apply branch; a merge
+  carries `latestClock` of its one-off members or is refused in words; a slot's order is
+  `backlogedits.reorder`. The assess argv has NO `--thinking disabled` — unmeasured for a tool run.
+
+### `naming.ts` — the detached pass
+
+- `naming.ts` — what an untitled backlog row is CALLED: one toolless pass (`WATERPLANE_NAME_MODEL`,
+  `--thinking disabled`) writing a 3–8 word headline and one of four kinds. **A name a PERSON typed
+  is NEVER replaced** — `name()` refuses a `hand` field PER HALF (a hand title still takes a missing
+  kind), and a typed `label` IS a title (`itemHeadline`'s own test), so nothing is bought for a row
+  the display rule would never show it on. `edit()`'s `""` clears value AND author ("nobody has
+  said"); a title the cleaner REFUSES writes nothing and **SAYS so** — dropping typed words in
+  silence is the quiet half of the same rule. **Words go in WHOLE** — an over-budget item is a batch
+  of ONE: a title off a clip is the truncation `cleanHeadline` refuses. **`begin()` acks, the pass
+  runs DETACHED** — 10 batches × 120 s against a 20 s ack deadline is a working pass shown as failed.
+  One pass per repo, refusals in WORDS, `running` is TRANSIENT and locks nothing. Every failure is
+  the empty result. `naming.test.mjs` · `scripts/e2e-naming.mjs`.
+
+### Second trim pass: clauses with a measured number or a story and no imperative (verbatim)
+
+- `assess.ts` is a 61-line facade
+- (`requeueFailed`, BEFORE the ranks, then ONE `kick()` — a kick per row fired row 1 before the ranks or a pick existed)
+- `scripts/e2e-sidecar.mjs` (a ten-line HTTP stub; CI needs no ollama)
+- `assess/hassstore.ts` (`AssessStore`): the store under the assess executor. `setLive(runId, patch)` keeps live progress (memory + socket only) and silently ignores an unknown run id, because a run that is gone has nothing to be a reading of.
+
+## Moved out of skill `host` (2026-10-17)
+
+_Verbatim from the skill as of 2026-10-17; the skill is the rule — where this text disagrees, the skill wins._
+
+### `server/` — the per-factory inventory, as the router carried it
+
+The table in [host-architecture.md](host-architecture.md#server--the-host-routers-frame) is the maintained inventory; this is the prose the router used to hold.
+
+- `server/` (`ctx.ts`, `clients.ts`, `intentDeps.ts`, `intentEvents.ts`, `billingwire.ts`, `scan.ts`, `deliveries.ts`, `wsops.ts`, `liveness.ts`, `sessionEvents.ts`, `http.ts`, `shutdown.ts`, `firstapp.ts`, `ctxseal.ts`) — `main.ts`'s pieces, factories over `ServerCtx`
+  (`ctx.ts`, types only). A factory reads `ctx.<x>` at CALL time, never destructures it at
+  construction, and registers nothing at import; `main.ts` assigns every member right after its
+  definition. `clients.ts`: sockets, `send`/`broadcast`, the watched set,
+  the notification feed, `notify()`.
+  `intentDeps.ts`: `makeIntentDeps(ctx)`, the `IntentManager` deps literal with the executors and
+  the sweep-dirs cache as closure state; `main.ts` keeps `new IntentManager(makeIntentDeps(ctx))`.
+  `intentEvents.ts`: `createSnapshots(ctx)` (the store's snapshots, `padNotesFor`) and
+  `wireIntentEvents(ctx)` (the four `intents.on`). `scan.ts`: `createScan(ctx)`, the outbox/image/
+  auto-pull baselines and scanners, `announceBuild`, and the `autopull.on("item")` it registers —
+  called right after `new AutoPullManager`, which stays in `main.ts`.
+  `deliveries.ts`: `createDeliveries(ctx)` — `startPrompt` (types a create's first prompt; only a
+  provably-`retry` failure may be re-queued), `deliverChain`, `deliverInput`, the
+  open-delivery re-send callback, `wireDeliverySettled()` and `deliverySnapshot`; `new OpenDeliveries`,
+  `setOpenDeliveries` and the `DOCTOR`-gated `.start()` stay in `main.ts` around the wire call.
+  `wsops.ts`: `createWsOps(ctx)` — the in-flight maps, `sendOpAck`, `durableOp`, `containRepoDir`
+  and each `/ws` server's connection handler. **`containRepoDir()` is the ONE gate on a
+  client-named directory** — inside `ROOT` or a discovered worktree, else refuse, never guess.
+  `durableOp()` = at-most-once per ackId; **thrown ⇒ not remembered, `ok:false` ⇒ remembered**;
+  `new WebSocketServer` stays in `main()`'s `attachWs`.
+  `http.ts`: `createHttp(ctx)` — `MIME`, the auth endpoints, `serveStatic`, the per-bind request
+  `handler` (origin/Host gate first) and `listenWithRetry`;
+  the public-bind refusal and `createServer` stay in `main()`. `shutdown.ts`: `installShutdown(ctx)`
+  — the SIGTERM/SIGINT flush (its ORDER is behaviour, pinned by `hostpins`) and the two process-error handlers.
+  `firstapp.ts`: `createFirstApp(ctx)` — the first-app job (`onboard.ts`, persisted, `onboard.progress` frames), called AFTER
+  `intents.start()` so a job resumes into a running store; never under `DOCTOR`.
+
+### Second trim pass: clauses with a measured number or a story and no imperative (verbatim)
+
+- `env.ts`: … the merge is `envfiles.ts`: the shell beats every file, a later file beats an earlier one (per-user config > repo `.env` > legacy).
+- `acks.ts`: Restarts are routine.
+- `routes/`: Everything a handler may reach for is `HostCtx`. An unknown `t` is ignored, never thrown — the wire is versioned.
+- `main.ts` — the entry point: every construction in boot order with its singleton registration and `DOCTOR` gate, the `ctx` assignments, `handleClientMessage`, `main()` (bind selection, the public-bind refusal). It exports nothing; its functions live in `server/`.
+
+## Modules the grooming of the host skills named for the first time (2026-10-17)
+
+### `rootchoice.ts` — the code root a person chose
+
+`<config dir>/root.json`, written by the phone's one-time "which folder holds your repos?" dialog or Settings. Precedence: `WATERPLANE_ROOT` in the environment, then this file, then the automatic pick; the file only replaces the GUESS. It lives in the per-user config dir (not the state dir, not a `.env`: `POST /api/secret` has no tier gate and the root decides what the phone can reach), is read ONCE at boot before any `.env` loads and before the legacy `<ROOT>/.waterplane` state move, so it stays env-free (node, `branddirs`, `jsonstore` only). A change takes a restart (under launchd/systemd the route exits and the supervisor restarts). Only the trusted path writes it (`AuthManager.canManage`: loopback + Tailscale, never LAN).
+
+### `claudebin.ts` — where the `claude` binary is
+
+Pure, every fact injected (`exists`, `onPath`, `readdir`), synchronous, no child process. Order: the knob `WATERPLANE_CLAUDE_BIN`, then `claude` on PATH, then the usual install locations (the native installer drops it in `~/.local/bin`, which a fresh shell or a launchd service may not list), then plain `claude` with the list of what was tried. Under WSL a Windows-side install is reported as `windowsSide`, never used as `bin`. Called from `backends/claude.ts` and `doctor.ts`; pinned by `claudebin.test.mjs`.
+
+### `pluginroutes.ts` — a plugin's own HTTP routes
+
+Registration with its refusals (`pluginRouteProblem`: methods GET/POST/PUT/DELETE, literal / `:name` / trailing `*` segments, never `hook`, no duplicates) and the runner `* /api/plugin/<id>/*` (`routes/apisystem.ts`) hands a request to. Matched with the core's `matchSegs`; served by `handleApi`, behind the origin/Host gate and the token gate like every core route, so nothing here can widen either. See [plugins.md](plugins.md), the API table.
+
+### `hassrun.ts` — the assessment run
+
+`assess/hassrun.ts` (a slice of `assess.ts`, moved whole; see [assess-architecture.md](assess-architecture.md)) runs `claude -p` for one assessment: stream-json with `--permission-mode acceptEdits`, a fresh session, `assess-out.json` deleted BEFORE the run, the buffer capped (`ASSESS_MAX_BUFFER`), progress folded by `hassprogress.ts`, and a timeout that answers at the deadline and kills the process GROUP. `ok` means a proposal was READ, never that anybody approved it. The apply is `hassapply.ts`, the executor `hassexec.ts`, the prompt and input document `hassinput.ts`.
+
+### `pluginfile.ts` and `pluginreadings.ts` (shared) — plugin contract types
+
+`shared/pluginfile.ts` holds `api.offerFile`'s options and offer (plugin API 1.5): one file a plugin wrote into its own `dataDir`, handed to the phone's one download path and deleted once fetched or at its TTL; the host half is `plugins/pluginfiles.ts`. `shared/pluginreadings.ts` holds the readings a plugin contributes to the machine and account readouts (`api.thermalReader`, `api.usageProbe`) and the 8 s wait the core gives a thermal reader. Both are re-exported from `plugin.ts`; reasoning in [plugins.md](plugins.md).
+## Moved out of skill `shared` (2026-10-17)
+
+_Verbatim from the skill as of 2026-10-17; the skill is the rule — where this text disagrees, the skill wins._
+
+The `shared` skill keeps the rules; the measurements, incidents and design history that used to sit inside its bullets are here, prose verbatim as it stood. Sections for modules the skill newly names follow.
+
+### `intent.ts` — the requeue count and the released-rung stamp (failures behind the rules)
+
+`Intent.budgetPass`. Also owns **`intentKind` + the classifiers** — one classification for BOTH ends. `cleanIntentRow` caps counts and labels and
+**NEVER the words**. **`IntentRequeue` is one record per time a SETTLED row was put back**
+(`REQUEUE_KEEP`, newest last, oldest dropped): it carries the `result` the row had, because
+the next run overwrites `Intent.result` and losing why it failed last time loses the only
+reason a person had to think twice — capped by COUNT, never by the words inside an entry, and
+an entry that cannot say when or WHO is dropped rather than defaulted. `by` is THREE taps:
+`assess` (a verdict applied), `hand` (the row's own *run it again*, which leaves it WAITING) and
+`run` (the first half of *run it now* — already going, so "put back in the queue" must not be
+drawn over it). **The LIST is the capped words; `Intent.requeueCount` is the uncapped NUMBER** —
+`requeues.length` froze at 5 and said *(5th time)* on the ninth, a reading degrading to a WRONG
+number. The count is cleaned strictly (a real, whole, positive number) and absent means NOBODY
+COUNTED, which is also how *never put back* is spelled. **A row rung 3 has RELEASED is never re-judged by rung 3** (`clearedOccurrence`, persisted): every
+tick re-runs the ladder from scratch, so a row held by a rung BELOW rung 3 used to spend its own
+`graceMin` on the waits it was told to perform and then be failed for it — a real `waits until
+free` rule died that way on a desktop that never stopped running, and the sentence blamed the
+machine. The stamp is per-OCCURRENCE; only `HELD_MAX_MS` (24 h, never < the grace) still expires
+one, in its own wording. Two OPT-IN rungs sit between serial and target readiness, most specific
+
+### `sessioncost.ts` — measurements behind the break-even and the cold-cache guard
+
+- `sessioncost.ts` — **what one more turn in THIS session costs, against a fresh one.** Denominator
+  is the session's own FIRST reading (a measured per-repo fact — baseline is mostly `CLAUDE.md` +
+  tools), never a constant; a truncated log yields NO baseline rather than a guess. `breakEvenTurns`
+  is derived from `pricing.ts`'s cache multipliers **at the 1-hour write tier** (measured: 8,160
+  of 8,160 main-conversation cache writes; only subagents write 5m, so a blended ratio is the
+  wrong input) — it read 1.25× and was ~65% low, the one number here that was WRONG and not
+  absent. That is why it can say *a quick question is still cheaper here* and mean it — **except
+  on a cache that has expired**, where re-READING becomes re-WRITING and that sentence is an
+  order of magnitude wrong: `cacheLikelyCold` is the guard, `true` only past the TTL PLUS
+  HALF AN HOUR (the hour is a 36%-wide coin toss at its edge and the log stamps generation END,
+  not request start). **Measuring this from logs has two traps that both fake WARM**: a compaction
+  inside the gap (excluded, never counted warm) and `write > read`, which is the wrong test — a
+  cold resume still reads the 32.5-36.8k preamble, so a 60k conversation comes back reading 36.8k
+  and writing 30.6k. Corrected: 89% cold by 70 min, 96% by 90, 100% (48/48) at 2-4 h, one warm in
+  118 past four (a fork continuing the prefix in another file). **Never mid-turn, no countdown, no
+  dollar figure**, and the clock is the PHONE's at
+  render — a host-computed flag is stale on arrival. **It produces sentences and never a refusal.** `seriesCostFields`
+  is the ONE derivation, so the host's spark and the sheet's full document cannot disagree.
+
+### `pricing.ts` — a cached table rots
+
+`pricing.ts` (**list prices, per model, asked for a DAY** — an unknown model prices to `null`
+never to a guess, `PRICES_AS_OF` rides to the UI. Cache read is 0.1× of input EXCEPT where the
+list publishes its own (`Rate.cacheRead`: Fable 5.1 at $0.25 against $10 input, 0.025× — and
+cache reads are 96% of the tokens, so the rule alone is 4× on the dominant line); writes are
+1.25×/2× by TTL and the 1-hour tier is READ. **A cached table rots**: Sonnet 5 sat at an
+`intro` $2/$10 "until 2026-08-31" over a $3/$15 base that the list does not have, so every
+sonnet reading after 1 September was half again too dear. Fast mode is knowingly absent — the
+log does not record the speed) ·
+
+### `ptysize.ts` — the grid that was not a viewport
+
+`ptysize.ts` (**a grid too small for the CLI to draw a composer in is not a viewport** — the
+client withholds a fit measured on a collapsed container, the host CLAMPS one; a session left at
+`54x3` made every delivery into it unreadable, so unconfirmable, for forty minutes) ·
+
+### `sendstamp.ts` — when was this ackId first put on the wire
+
+`SendStamp` is `{ firstSentAt?, sentAt? }`, mixed into every ackId-carrying durable client message (`& SendStamp`; see `wire/messages.ts`). `firstSentAt` is stamped once by the phone's queue and never changes on a retry; `sentAt` is stamped at the socket write in `web/ws.ts`. Both are the PHONE's clock, so the host uses the difference as an AGE on one clock and places the first send on its own clock as `receivedAt - age`; `LOST_LEDGER_MARGIN_MS` (5 s) covers transit. It lets a host whose ack ledger was lost fail CLOSED for a pre-loss retry instead of refusing every new send for the ack TTL. Optional and additive, so `PROTOCOL_VERSION` does not move. `preLossRefusal` holds the decision.
+
+### `clientframe.ts` — the one shape check on a decoded frame
+
+`isClientFrame(x)`: a non-null, non-array object with a string `t`. The host makes it on every WebSocket frame before dispatch, because `decode` is a cast and `null`, a string or `{}` used to throw at `msg.t`. It deliberately does not check that `t` is known: an unknown `t` is a versioned no-op (`routes/index.ts`), and each handler validates its own fields.
+
+### `stream.ts` — binary frames on the one socket
+
+Plugin live streams (plugin API 1.4, `api.stream`): the `stream.*` JSON messages open, steer and close a stream, and the bytes ride as binary WebSocket frames behind a 12-byte little-endian header (magic `0x57`, version, streamId, seq, kind, flags). Never durable, never ackId'd, never retried: an input event delivered late lands on a different screen, which is `intent.cancel`'s reasoning. A dead socket ends its streams; the client reopens them on reconnect. There is never a second socket (`local/no-second-socket`).
+
+### `envresolve.ts` and `nodemin.ts` — precedence helpers
+
+`resolveEnv(env, key)` reads a knob across renames: the current name wins, then each legacy name newest first; a legacy hit is REPORTED (once per name by the reader), not refused, so an old `.env` keeps working. The environment is a parameter, so tests hand it a plain object. `nodemin.ts` is the ONE Node floor (`NODE_MIN` 20.12.0): the root `package.json` `engines`, the doctor's `node` row and the early refusal in `env.ts` / `cli/index.ts` cannot disagree, and `packages/host/test/nodepin.test.mjs` holds `engines` to it. 20.12 because `.env` files are read with `util.parseEnv`.
+
+### `brandmigrate.ts` — localStorage across a rename
+
+The pure half over a Storage-shaped object: COPY (never move) legacy-prefixed keys to the current prefix, only if the new key is absent, once, marked. An older bundle (the APK rolls back to built-in assets after failed boots) still reads the legacy keys, a value under the new name is newer than any legacy one, and after the mark a key the person cleared must stay cleared.
+
+### `period.ts` — budget periods
+
+A subscription has two ROLLING periods read off `/usage` (`session` 5 h, `weekly` 7 d, unit `pct`); an API-key or cloud account is governed by spend per usd calendar period, often starting on the billing day. `periodBounds` is the only place a period's start and reset are decided; zone maths goes through `Intl` (kept local to avoid a cycle through `schedule.ts` and `budget.ts`). Pure, no clock, null when it cannot answer.
+
+### `transcriptfold.ts` — the caps and folds every conversation reader shares
+
+`MAX_TURNS` 500, `TOOL_INPUT_CAP`, `TOOL_RESULT_CAP`, `TEXT_CAP`, `LABEL_CAP`, `MAX_SAMPLES` 1200 and two pure folds. It is in shared and not the host because a second backend's store reader lives in an extension, which reaches core only through `@waterplane/shared`; the reader view and the context graph must cap and thin it by the same rule as claude's `host/transcript.ts` and `host/ctxlog.ts`. Moved verbatim; the host re-exports every name.
+
+### `followup.ts` — flag for follow up
+
+What a follow-up flag may say and the one wording of it (R-sessions-041..045). The host keeps flags per conversation and stamps `SessionInfo.followUp` / `ClosedSession.followUp`; both ends read through `cleanFollowUp` and word through `followUpText`. A reading list, not a status: it never changes what a session does and only a person's tap clears it.
+
+### `peer.ts` — the peer job contract
+
+Everything both ends must word and judge the same way for peer desktops, pure: the DTOs of `/api/peer/*` and the loopback `/api/agent/peer/<peer>/intents` twin, the `peers.json` row, the repo-identity key two clones are matched by, the address rule, the report prompt, the tag's words and the version-mismatch sentence. `PEER_API_VERSION` follows `PROTOCOL_VERSION`'s rule: an additive field never bumps it.
+
+### `spendwarn.ts` — spend warnings
+
+Orange and red marks a session wears past a threshold the person chose: percent of the weekly limit where a weekly calibration (`weekUsdPerPct`) exists, dollars otherwise (API key, or a week not yet calibrated). A readout like `sessionCostPill`: it disables, holds and refuses nothing; `sessionbudget.ts` is the thing that can hold a queue. The scale is decided per reading, never stored.
+
+### `healthindex.ts` and `contextweight.ts` — one number in two places
+
+The context entry's good line is `HEALTH_CONTEXT_GOOD_SHARE` × the repo's own warn line (`WATERPLANE_CONTEXT_WARN_CHARS`, else `DEFAULT_CONTEXT_LIMITS.maxChars` in `contextweight.ts`). `healthindex.ts` restates the default as `HEALTH_INDEX_DEFAULT_WARN_CHARS` because importing it would close an import cycle; a test pins the two equal, so changing the default means changing both. `HEALTH_ALERT_WARN` (50), `HEALTH_ALERT_SEVERE` (25), `HEALTH_SCORE_CAP_GAP` (30) and `HEALTH_INDEX_MIN_WEEKS` (8) live only in `healthindex.ts`.
+
+### Second trim pass (skills review, 2026-10-17) — sentences moved verbatim out of the `shared` skill
+
+Each sentence carried a measured number or an incident and no imperative; the rule beside it stayed in the skill.
+
+- `sendstamp`/`stream`: (12-byte header, never durable, never a second socket).
+- `queue.ts`: and a turn that ended asking in prose holds it as a question. / (there were FOUR hand-written copies and one had drifted).
+- `intent.ts`: (`REQUEUE_KEEP` 5, newest last, oldest dropped): it carries the `result` the row had, because the next run overwrites `Intent.result` and losing why it failed last time loses the only reason a person had to think twice — capped by COUNT, never by the words inside an entry. / `by` is THREE taps: `assess` (a verdict applied), `hand` (the row's own *run it again*, which leaves it WAITING) and `run` (the first half of *run it now* — already going, so "put back in the queue" must not be drawn over it). / (a reading degrading to a WRONG number otherwise). / every tick re-runs the ladder from scratch, so a row held by a rung BELOW rung 3 would spend its own `graceMin` on the waits it was told to perform and then be failed for it. The stamp is per-OCCURRENCE; only `HELD_MAX_MS` (24 h, never < the grace) still expires one, in its own wording. / `cleanTarget` ... the shared per-repo backlog conversation is RETIRED, and `sessioncost.ts` is why. / **Derived, never stored**, so editing *once* → *weekly* moves the row with no migration. / Rung 5's `repo` case asks `fresh` BEFORE `facts.repoSession`: opening the session IS the work, so a repo whose last item's session is still lingering must not gate the next one on it. / (`budgetWaived`: one start long, until the reset it was granted against — `budgetHold` asks it beside `budgetPass`) — nothing below rung 2 reads it.
+- `dictateterms.ts`: (what moves the SPELLING — a lone term is said twice, because `Kwixel.` alone was MEASURED to change nothing).
+- `tokens.ts`: (1,200 of them per document — the key names would be most of the bytes). 96% of all tokens are **cache reads**, so the four kinds are never merged.
+- `sessioncost.ts`: (a measured per-repo fact — mostly `CLAUDE.md` + tools). (main-conversation writes are 1 h; a blended ratio is the wrong input and read ~65% low — the one number here that was WRONG, not absent). (the hour is a coin toss at its edge; the log stamps generation END). `write > read` as the test (a cold resume still reads the 32.5–36.8k preamble). `REBUILD_WROTE` is measured against what the read LEFT OVER, never the whole window (that second half also catches a compaction nobody wrote down).
+- `ctxwindow.ts`: (`claude-opus-5` at 998,242 tokens with no `[1m]`), and a 200k table drew those at five times their real fullness.
+- `pricing.ts`: (`Rate.cacheRead`: Fable 5.1 at $0.25 against $10 input, 0.025× — and cache reads are 96% of the tokens, so the rule alone is 4× on the dominant line); writes are 1.25×/2× by TTL. **A cached table rots**: an `intro` rate "until <date>" left in past its date priced every later reading too low.
+- `naming.ts`: NOT `typedName`'s two-way rule, which refused every title that merely OPENED with a prompt under 40 chars.
+- `pad.ts`: or two clock-skewed phones push one tombstone back and forth once per debounce for the whole skew window.
+- `sessionbudget.ts`: Percent units reuse `weekUsdPerPct` and `BUDGET_STALE_MS`.
+
+## Moved out of skill `host-work` (2026-10-17)
+
+_Verbatim from the skill as of 2026-10-17; the skill is the rule — where this text disagrees, the skill wins._
+
+The rules stayed in the skill; the incident counts and design history that sat in its bullets are kept here, verbatim.
+
+### `backlog.ts` — why every fired item has its own conversation
+
+**EVERY FIRED ITEM GETS ITS OWN CONVERSATION** (`openItemSession`, titled `backlog · <repo> ·
+  <label>`, `{kind:"repo", fresh:true}`) — the one shared `backlog · <repo>` session per repo is
+  RETIRED, for a number this repo already had: `sessioncost.ts` puts break-even at ~3 turns for a
+  window at 5×, a shared backlog of unrelated items reaches 5× within a handful of them, and
+  `CLAUDE.md`'s measurement is 124 conversations out of 8,968 being 76% of a fortnight's tokens.
+
+(`reapAutoSession` is gone; `closedBy: "auto-slot"` survives only on old
+  closed rows)
+
+(hook-, box- and
+  silence-aware in one implementation; the old PTY-silence reading reaped live turns, and a turn
+  silent for 60 s is a permission box or an `AskUserQuestion`, i.e. a session waiting on a PERSON)
+
+an ungated shortcut settled a three-turn item `done` with two turns never
+  typed.
+
+### `intents/` — measurements and removed machinery
+
+so a synchronous batch of writes lands before any claim (~30 host tests pin that batching)
+
+`openFor` /
+  `opened` / one-repo-per-pass are GONE.
+
+(a parent that missed its grace made no child at all: 7 real rows, `failed`, in no
+  backlog)
+
+### Second trim pass: measurements and incident prose, verbatim
+
+Cut from the skill's bullets in the review pass; the rule each belonged to stayed in the skill.
+
+- (why: `sessioncost.ts` break-even, CLAUDE.md's measurement)
+- , and a slot held until restart is worse than a closed conversation
+- ; a turn silent for 60 s is a permission box or an `AskUserQuestion`, i.e. a session waiting on a PERSON
+- — the CLI's turn flag says nothing about a `run_in_background` Bash or a Monitor underneath, and closing one on a verdict is what CLAUDE.md forbids
+- — closing an orchestrator waiting on a subagent killed the subagent
+- : `autoFireBlocker` never reads `idleFor` on a hooked session, so without it the 10-min linger was the sweep's 1-min interval
+- , and a WEEKLY limit reopens after 5 s and re-hits the wall by construction, so every weekly wall is a two-wall sequence and the second one requeued
+- : the gap to the reset is HOURS, and a session a PERSON opened there was handed the row and completed it on their own Stop
+- , and *Recently closed* hands the title straight back to a session a person is now driving
+- (a Stop seen while step k was being delivered proves step 1 ran and nothing more)
+- — so "open the session" is there when somebody presses it
+- — a fresh repo target passes rung 5 unconditionally, so five rows in five repos would each read the cap as untouched
+- , against an ever-growing read on the loop that pumps every PTY
+- , so a 03:00 anchor behind a 07:00 window was never OFFERED rather than merely late
+- , so re-timing a backlog row in the send sheet DELETED the title somebody typed into it
+- a kicked pass settled the row failed and it fired anyway; the
+- , so supplying three of them makes every chain look patient and none of them is
+- — a judgement about rows a person may disagree with, so once ever,
+- , while Apply has said "they run again when their turn comes"; the ordinary waits (budget, slot, `serial`, hours, a live chain) are NOT refused, because they are what that sentence means
+
+## Moved out of skill `host-ledgers` (2026-10-17)
+
+_Verbatim from the skill as of 2026-10-17; the skill is the rule — where this text disagrees, the skill wins._
+
+Measurements and incident prose cut from the skill's bullets, verbatim.
+
+### `ctxlog.ts` — what was measured through the reader
+
+(a 246 MB agent log read from its tail showed 307M of 786M spent) — measured, 0 of 7,761 logs here carry an inline
+  sidechain, the agents are all in `<conversation>/subagents/agent-*.jsonl`, and one real session
+  read 271k in its window against 368M used, 355M of it in 19 agents.
+
+(measured: a 45 MB
+  opus-only parent with 34 fable/sonnet agents)
+
+Measured through this reader: **387 re-writes, 80M tokens, $712 above what re-reading would have
+  cost**, on one desktop.
+
+(measured: no assistant
+  record between the boundary and the next prompt; the summary is a `user` row with no usage)
+
+Measured over this desktop's 32 compacting
+  logs, read whole: **20 compactions and $984 saved** (a tail read had said 19 and $748 — three
+  logs past `MAX_READ` lost their earliest boundary). **Every log, parent and agent, is read WHOLE,
+  forward in `MAX_READ` chunks, never from its tail**: a tail is a total that starts in the middle
+  and looks complete, which is a wrong number, not a floor. One-time cost measured at 50-86 ms for
+  28-47 MB logs; the size check on each poll is a `stat`, never a read.
+
+at up to twenty times the read
+  rate
+
+(haiku is a fifth of opus, so a 5× error on the turns it
+  gets wrong)
+
+### `tokenstats.ts` — figures
+
+(70% inflation otherwise)
+
+**Yields to the event loop every 64 reads** — 7 s of `readFileSync` is an outage for every live session.
+
+(why two repos with equal tokens differ several-fold in cost — opus is 2.5× sonnet, 5× haiku)
+
+103 KB and
+  26 ms warm for 117 five-hour windows and 8 weeks, measured.
+
+### `turnagents.ts` — per-turn subagent spend
+
+The header's session total has always counted the subagents (`ctxlog.ts`'s `agentUsage`); the reader's per-turn footer never did, so one prompt that fanned out five agents read "$1.12 this prompt" under a header saying $9.22, and nothing on screen said which one was wrong. Neither was — they were two different sums with the same name. The CLI writes each agent's log beside the parent (`<conversation>/subagents/agent-<id>.jsonl`) with a `.meta.json` naming the `toolUseId` of the call that started it and, for an agent an agent started, the `parentAgentId`; attribution is a lookup. The spend is `agentUsage`'s per-file ledger, read and never re-tallied. A background agent's tool call returns at once, so a turn also says how many of its agents are still running (past `AGENT_LIVE_MS` of silence with no ending it is called ended). Degrades to absent.
+
+### Second trim pass: measurements and incident prose, verbatim
+
+Cut from the skill's bullets in the review pass; the rule each belonged to stayed in the skill.
+
+- — never a second tally, which would drift a few percent and be unarguable
+- (a `$0` chip reads as free, and the row falls back to tokens)
+- — a bill missing eight agents is worse than none
+- — both, because the spend chart is cumulative and a client-side cumsum over THINNED samples ends below the total printed above it
+- — the log spells one model several ways and raw ids band as two colours both reading `opus-5`; pricing still uses the RAW id
+- : there is nothing at that x for a rule to point at, and the two event colours are a validated pair whose red one means the ACCOUNT refused a request
+- **Every log, parent and agent, is read WHOLE, forward in `MAX_READ` chunks.**
+- : a reset instant is scraped off `/usage` and a length is a property of the plan, neither being a fact about a ledger of hours
+- — the header and the footer were once two sums with the same name
+- (a series that stamps unparseable records with the clock draws a cliff where the format shifted)
+- (hour buckets, so a month needs no raise of the 35-day read cap — that cap guards the HTTP route only)
+- , because "flat for four hours" and "nobody looked" are opposite facts
+- The reset instants ride along because a 5-hour window rolling over is otherwise indistinguishable from usage being refunded.
+- (the e2e pins them equal to the cent)
+
+## Moved out of skill `host-machine` (2026-10-17)
+
+_Verbatim from the skill as of 2026-10-17; the skill is the rule — where this text disagrees, the skill wins._
+
+Measurements and design prose cut from the skill's bullets, verbatim.
+
+### `transportsurvey.ts`, `sysstat.ts` — figures
+
+(7.5 GB over 14 repos was
+  the measurement)
+
+(23 `claude` processes holding 11.7 GB is
+  the answer; 23 rows is not)
+
+### `dictate.ts` — why local, why WAV
+
+Local because it was MEASURED first (28.6 s of German in 0.95 s, `large-v3-turbo`, Metal; 5.6 s CPU-only), not because it is cheap — the paid APIs are pennies a month at this volume and still lose on latency and on a prompt full of source code leaving the machine.
+
+**The phone writes 16 kHz mono WAV so the host needs NO transcoder** (ffmpeg was broken here while everything else worked).
+
+### `contextlimits.ts` — attribution history
+
+**The quoted number is ATTRIBUTED** — the row used to say "the 16k you asked to be warned at" about
+  a default nobody was offered.
+
+### `repohealth.ts` — status, plot, own and central readings
+
+**`status` carries what a phone needs before a repo has ever been measured** — commit count,
+  engine version, active language packs, derived source groups, the exact re-cut command — parsed
+  LENIENTLY, because a repo carrying an older copy of the tool prints none of them.
+
+**Staleness in COMMITS, never
+  wall-clock** — the series is per commit, and a repo is not worked on every day.
+
+A
+  status is what the series IS (every caller needs it, drawing or not); a plot is what it LOOKS
+  like, and it carries the TOOL'S OWN reading of each series — rank, slope, n, window start, reason
+  — plus its detail sentence, because that definition lives once beside the pre-registered
+  constants and the fixture that re-derives them, and a second copy on the phone would drift
+  silently.
+
+(`.waterplane-shared/health.json`, `tools/repohealth/own.mjs`,
+  the trust paragraph in this module's header)
+
+### Second trim pass: measurements and incident prose, verbatim
+
+Cut from the skill's bullets in the review pass; the rule each belonged to stayed in the skill.
+
+- , because the row is what a person TAPS to open that sweep and two sources would make the row and the sheet disagree
+- , which is what identifies `tokenstats.json` as the one with none
+- (the sweep sends rows because rows ARE the decision; nobody chooses which thumbnails to keep)
+- — "answered, holding nothing" and "nobody answered" are opposite facts
+- because the events are load/evict (`keep_alive` 5 min) and memory pressure
+- (many `claude` processes holding one big number is the answer; N rows is not)
+- (4096 Intel / 16384 Apple silicon — a 4× error on half the fleet)
+- — an absence a person cannot explain reads as a bug
+- (the executor still needs the env after a restart)
+- ; a package-less module beside a named one is a root `apply false` line or a template and is dropped
+- The one asymmetric question in the download path: one host, many devices, and an install that happens with the app closed.
+- , or every handshake broadcasts the whole log for no news
+- — two ABI splits are bytes apart
+- — the next build rewrites its output in place and a link puts those bytes inside the PREVIOUS build's collected copy
+- — this runs on a phone's frame in the process pumping every PTY
+- not disk — an emitted frame is one an agent may pay for on every later turn — and with
+- Local because latency and a prompt full of source code not leaving the machine beat the paid APIs.
+- `doctor.ts`'s line is always `ok` for `checkCapture`'s reason.
+- because a build is a CONFIGURED command in a PTY with guessed artifacts and this is three FIXED subcommands with known output paths — and because it must be
+- , the tool is idempotent by construction, and a refresh delivered an hour late measures a tree nobody is looking at
+- , and a non-2xx collapses the tool's own remedy line into the phone's generic error state
+- status carries what a phone needs before a repo has ever been measured, parsed LENIENTLY
+- , because `setupwatch.ts` inspects repos nobody has opened
+- , and freezing all three would hide a later change to a shipped default
+
+## Modules described for the skill grooming (2026-10-17)
+
+Two-to-six-line summaries of modules the groomed skills now name, taken from each file's header comment.
+
+### `agentfollowup.ts`
+
+`POST /api/agent/followup` — an agent flags ITS OWN session for follow up with a one-line reason (R-sessions-044). It can set the flag and never clear it: there is no DELETE, and an empty reason is refused, so the only way a flag goes away stays a person's tap. Same caller gate as `agentintents.ts` (`agentCallerRefusal`): loopback, not proxied, not a browser. The session is named by `session`, or found from the agent's `$PWD` (`resolveFollowUpSession`, pure, pinned without a daemon): the longest session cwd that is the dir or a parent of it.
+
+### `ocrlocal.ts`
+
+The whole picture's words, read ON THIS DESKTOP (`POST /api/host/ocr`) — the "send the text, not the photo" path of the annotator. Opposite by design to `readtext.ts`'s Gemini reader: a PHOTO of another screen may have a face or a room in it, and the picture must not leave the house. macOS: Apple Vision through a Swift helper compiled once with `swiftc` into the state dir (the interpreted script recompiled every call, ~29 s on a 1.4 MB photo). Windows: `Windows.Media.Ocr` through `powershell.exe`; elsewhere `tesseract`; none: a sentence naming what to install, as a 200. Decides nothing, writes only a `tmpdir()` file removed in a `finally`, never logs the words.
+
+### `repohealthscopes.ts`
+
+Which subtrees of a repo get their own health readings. Stored, not derived: the engine can measure any directory and offers candidates, but every scope is its own backfill, so a person picks (nothing applies itself). Kept in the repo's own state dir beside the series files it selects — a central file keyed by repo id would outlive a renamed repo — and not in the committed tree.
+
+### `worktreeleftover.ts` and `worktreeowner.ts`
+
+A worktree nobody is using, and whether it can go. They pile up because the orchestrating session that ran `git worktree add` died (a limit, a closed tab) before its cleanup. Removal is offered only when nothing lives only there; the remove re-derives the check and uses `git worktree remove` without `--force` and `git branch -d`. `worktreeowner.ts` names which live session made an agent worktree from `<project dir>/<conversation>/subagents/agent-<id>.meta.json`'s `worktreePath`, so the launcher can draw it under that session.
+
+### `gitlog.ts`
+
+What the git sheet's up-N down-M shows: the commits this worktree has that its upstream does not (outgoing) and the reverse (incoming), against the upstream as of now, so the one write it makes is a fetch (`FETCH_HEAD`'s mtime is the "last fetched" answer, absent if it never has). Each list is capped with its true total beside it.
+
+### `tailnetpeers.ts`
+
+Read-only discovery of other waterplane hosts on the tailnet for peer pairing: asks at most `DISCOVER_MAX_PEERS` (40) devices, never writes or pairs anything; a device that answers 401 with `authRequired` is listed as `gated` (a waterplane host, just not one this device may read).

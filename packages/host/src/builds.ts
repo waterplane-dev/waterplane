@@ -363,6 +363,12 @@ export class BuildManager extends EventEmitter {
     return this.intents.list().filter((i) => isBuildRow(i) && i.cwd === repoDir).slice(0, MAX_RUNS).map(intentToBuildRun);
   }
 
+  /** The newest run still going in this repo, for the launcher's spinner — no subprocess. */
+  runningIn(repoDir: string): { runId: string; name: string } | undefined {
+    const r = this.runsFor(repoDir).find((x) => x.status === "running");
+    return r && { runId: r.runId, name: r.name };
+  }
+
   getOutput(runId: string): string { return this.output.get(runId) ?? ""; }
 
   /**

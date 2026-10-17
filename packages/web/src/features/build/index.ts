@@ -9,7 +9,7 @@ import { BuildButtonsSheet } from "./BuildButtonsSheet";
 import { buildRepo, builds } from "./store";
 import { onArtifactsConfig, onBuildLocalIds, onBuildCandidates, onBuildOptions, onBuildRun, openBuildFor, resyncBuild } from "./actions";
 
-export { buildNameOf, useBuildNames } from "./store";
+export { buildNameOf, useBuildBusy, useBuildNames } from "./store";
 export { openBuildFor } from "./actions";
 export { buildLane, buildQueueTitle, buildQueuedToast } from "./logic";
 

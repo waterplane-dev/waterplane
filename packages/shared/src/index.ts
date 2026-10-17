@@ -306,6 +306,10 @@ export * from "./repohealthread.js";
 /** The health index: the one layer over the repo-health series that takes a
  *  side (an absolute 0–100 score per week), with its move test and wording. */
 export * from "./healthindex.js";
+/** The whole index answer from a series file, for the host route and the VS Code view alike. */
+export * from "./healthindexresponse.js";
+/** The context one request carried, per week, for the line beside the score. */
+export * from "./healthspend.js";
 /** A repo's requirements list: the prompt filter, the item format, the preset. */
 export * from "./requirements.js";
 /** Where the claude CLI keeps its private dir (CLAUDE_CONFIG_DIR) and its project-folder slug rule. */

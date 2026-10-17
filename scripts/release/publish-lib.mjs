@@ -180,8 +180,9 @@ export function planSteps(state, ctx) {
     cmds: [
       ["node", "scripts/release/publish-public.mjs", "--tag", tag, "--to", ctx.publicClone ?? "<public-clone>", "--commit",
         ...(ctx.mediaClone ? ["--media-to", ctx.mediaClone] : []), ...(ctx.accept ? ["--accept", ctx.accept] : [])],
-      ...(ctx.mediaClone ? [["git", "-C", ctx.mediaClone, "push", "origin", "main"]] : []),
-      ["git", "-C", ctx.publicClone ?? "<public-clone>", "push", "origin", "main"],
+      // HEAD:main, not main: the clone may be a detached worktree, where the commit is on HEAD only.
+      ...(ctx.mediaClone ? [["git", "-C", ctx.mediaClone, "push", "origin", "HEAD:main"]] : []),
+      ["git", "-C", ctx.publicClone ?? "<public-clone>", "push", "origin", "HEAD:main"],
     ],
     skip: released ? `the GitHub release ${tag} exists, so its snapshot was pushed` : null,
   });
@@ -216,7 +217,8 @@ export function planSteps(state, ctx) {
   const npmSkip = state.npmPublished ? `${ctx.pkg}@${ctx.version} is already on npm` : null;
   if (ctx.npmFromDesktop) steps.push({
     id: "npm", title: `npm publish ${ctx.pkg}@${ctx.version} from this desktop, WITHOUT provenance (--npm-from-desktop)`,
-    cmds: [["npm", "publish", at(npmTarballName(ctx.slug, ctx.version)), "--access", "public"]],
+    // "./" or npm reads "dist-release/x.tgz" as a GitHub owner/repo shorthand and git ls-remotes it.
+    cmds: [["npm", "publish", `./${at(npmTarballName(ctx.slug, ctx.version))}`, "--access", "public"]],
     skip: npmSkip,
   });
   else steps.push({

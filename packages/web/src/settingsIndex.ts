@@ -137,6 +137,8 @@ export const SETTING_ROWS: SettingRowMeta[] = [
   { id: "unfold-to-end", group: "appearance", label: "unfolding a repo shows its last row", keywords: "launcher expand collapse fold scroll bottom end list sessions chevron" },
   { id: "net-pulse", group: "appearance", label: "connection strip", keywords: "ping latency graph round trip bar link live network" },
   { id: "local-rt", group: "appearance", label: "desktop strip", keywords: "local runner ollama lm studio model loaded memory pressure cpu gpu utilization machine mac bar" },
+  { id: "agent-warn", group: "appearance", label: "warn above this many agents", keywords: "parallel subagents running at once count concurrent amber notice threshold" },
+  { id: "agent-alarm", group: "appearance", label: "alarm above this many agents", keywords: "parallel subagents running at once count concurrent red limit threshold too many" },
   { id: "ui-reset", group: "appearance", label: "reset UI settings to default", keywords: "restore defaults factory look layout hidden buttons theme size zoom tabs strips" },
 
   // ── Writing & reading ──────────────────────────────────────────────────

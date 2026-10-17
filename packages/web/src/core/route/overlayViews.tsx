@@ -8,7 +8,7 @@ import { OutlineSheet } from "../../OutlineSheet";
 import { SheetGuard } from "../../BootGuard";
 import { showToast } from "../../toast";
 import { track } from "../../usage";
-import { annotate, attachForInbox, openGalleryForSend } from "../../features/images";
+import { annotate, attachForInbox, openBrowseFor, openGalleryForSend } from "../../features/images";
 import { SettingsSheet } from "../settings/SettingsSheet";
 import { SendSheetEntry } from "../send/SendSheetEntry";
 import { featureSheets } from "../sheets";
@@ -147,6 +147,7 @@ export function overlayLayer(ctx: OverlayCtx): ReactNode | null {
           // A failed push/pull's log, as a seed for a new session in this repo:
           // the Send sheet opens on it and sends nothing. Back lands here again.
           onAskAgent={gitRepo ? (f) => sendCore.openSend(gitFailSeed(f, gitRepo)) : undefined}
+          onBrowse={() => openBrowseFor((gitRepoId ?? activeRepoId)!, "git")}
           onClose={() => { setGitRepoId(null); setOverlay(null); refreshRepos(); }} />;
     },
 

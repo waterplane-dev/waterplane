@@ -5,8 +5,10 @@
  * resolved the target first). Moved out of `api.ts` (host-architecture.md,
  * "api.ts — the HTTP routes as tables").
  */
+import { realpathSync } from "node:fs";
 import { extname } from "node:path";
-import { logTag, type SessionInfo } from "@waterplane/shared";
+import { healthSpendWeeks, logTag, type SessionInfo } from "@waterplane/shared";
+import { repoOfWorktree } from "../tokenstats.js";
 import { suggestCommitMessage } from "../commitmsg.js";
 import { gitBranches, gitCheckout, gitCommit, gitCreateBranch, gitDeleteBranch, gitBlob, gitDiff, gitPull, gitStage, gitStatus, isSecretFile, pushState, readTextFile, startPush } from "../git.js";
 import { gitFetch, gitLog, gitShow } from "../gitlog.js";
@@ -230,8 +232,18 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
   // would otherwise keep drawing against a series nobody is measuring.
   // The health score (`healthwatch.ts`): computed from the series file on
   // demand, no engine run — a pure read, so GET.
-  route<RepoReq>("GET", "healthindex", ({ res, wt }, ctx) => {
-    json(res, ctx.health ? ctx.health.respond(wt) : { series: null, move: null, words: null, lastRefresh: null, reason: "health index unavailable" });
+  // `spend` rides along off the token ledger (a warm read, never a rescan per
+  // request); a ledger that fails costs the line, never the score.
+  route<RepoReq>("GET", "healthindex", async ({ res, wt }, ctx) => {
+    const r = ctx.health ? ctx.health.respond(wt) : { series: null, move: null, words: null, lastRefresh: null, reason: "health index unavailable" };
+    let spend;
+    try {
+      let real = wt;
+      try { real = realpathSync(wt); } catch { /* the path as given */ }
+      const doc = await ctx.tokenStats.read(5 * 60_000);
+      spend = healthSpendWeeks(doc.days, [...new Set([wt, real].map(repoOfWorktree))]);
+    } catch { spend = undefined; }
+    json(res, spend ? { ...r, spend } : r);
     return true;
   }),
   route<RepoReq>("POST", "repohealth/scopes", async ({ req, res, wt }) => {

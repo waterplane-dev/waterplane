@@ -168,6 +168,11 @@ export interface RepoTarget {
    *  pre-push checks take minutes) or a pull — so the launcher's git button can
    *  spin while it runs. ABSENT = none running (or an older host). */
   gitRunning?: "push" | "pull";
+  /** A build command the desktop is running in this worktree right now (the
+   *  newest, when several are), so the launcher's build button can spin while
+   *  it runs. The live `build.run` frames take over once the phone has seen
+   *  this run settle. ABSENT = none running (or an older host). */
+  buildRunning?: { runId: string; name: string };
   /** What the host's own setup sweep last concluded about this worktree, when it
    *  has looked at all. Absent = never checked (a repo discovered seconds ago,
    *  or a host with the watcher switched off) — which is NOT the same as clean,

@@ -23,9 +23,8 @@ import {
   tapePickWords, typeChipWords, typeFilterWords, typeStackWords, typesAbsentWords,
 } from "./repoHealthStackWords";
 import { pointReadoutWords, seriesValueWords } from "./repoHealthWords";
-import { ScrubHint } from "./kit/chart/ScrubHint";
 import { HintChip } from "./HintChip";
-import { Explain } from "./Explain";
+import { FilterChip } from "./kit/FilterChip";
 
 const TAPE_H = 64;
 
@@ -33,6 +32,13 @@ const lastOf = (pts: readonly RepoHealthPoint[] | undefined): number | null => {
   if (!pts || !pts.length) return null;
   const v = pts[pts.length - 1].v;
   return v == null || !Number.isFinite(v) ? null : v;
+};
+
+/** The newest point that HAS a reading: what an untouched readout line says
+ *  (the drag instruction is the region's, said once — `SCRUB_HINT`). */
+const lastPoint = (pts: readonly RepoHealthPoint[]): RepoHealthPoint | null => {
+  for (let i = pts.length - 1; i >= 0; i--) if (pts[i].v != null) return pts[i];
+  return null;
 };
 
 /**
@@ -69,7 +75,7 @@ function MagnitudeCurve({ points, label, unit, width, hint }: {
           onPick={setPickedIndex} />
       ) : null}
       {drawn ? (
-        <div className="rh-scrub">{pointReadoutWords(picked, unit) ?? <ScrubHint />}</div>
+        <div className="rh-scrub">{pointReadoutWords(picked ?? lastPoint(points), unit)}</div>
       ) : null}
     </li>
   );
@@ -194,16 +200,12 @@ export function TypeStack({ classics, width }: {
       {/* The chips before the chart, because they are what the chart is OF.
           Every type is listed whether it is on or off — a filter that hides
           the thing it filters by is a filter with no way back. */}
-      <ul className="rh-filter">
+      <ul className="rh-filter rh-filter-chips">
         {all.map((t) => (
           <li key={t.ext}>
-            <button
-              className={off.has(t.ext) ? "key" : "key on"}
-              aria-pressed={!off.has(t.ext)}
-              onClick={() => toggle(t.ext)}
-            >
+            <FilterChip on={!off.has(t.ext)} clears={false} onClick={() => toggle(t.ext)}>
               {typeChipWords(t.ext, t.pack, lastOf(t.points))}
-            </button>
+            </FilterChip>
           </li>
         ))}
       </ul>
@@ -260,6 +262,9 @@ export function Magnitudes({ classics, width }: {
   const loc = lastOf(classics.loc);
   const deps = lastOf(classics.deps);
   const lead = magnitudeLeadWords(files, loc);
+  // The two curves sit side by side (`.rh-tiles-compact`, two tracks, 8px gap):
+  // each is drawn at its column's width, never the card's.
+  const half = Math.max(0, Math.floor((width - 8) / 2));
 
   return (
     <div className="rh-mags">
@@ -268,15 +273,18 @@ export function Magnitudes({ classics, width }: {
         <div className="rh-cap">This reading was not taken on the latest day — {classics.absent}</div>
       ) : null}
       {lead ? <div className="rh-lead">{lead}</div> : null}
-      <div className="rh-cap">{magnitudesNoteWords()}</div>
+      <details className="hint-more rh-more">
+        <summary>what these are</summary>
+        {magnitudesNoteWords()}
+      </details>
 
       <PackageStack classics={classics} width={width} />
       <TypeStack classics={classics} width={width} />
 
-      <ul className="rh-tiles">
-        <MagnitudeCurve points={classics.files} label="source files" unit="files" width={width}
+      <ul className="rh-tiles rh-tiles-compact">
+        <MagnitudeCurve points={classics.files} label="source files" unit="files" width={half}
           hint="repohealth.classics.files" />
-        <MagnitudeCurve points={classics.deps} label="production dependencies" unit="" width={width}
+        <MagnitudeCurve points={classics.deps} label="production dependencies" unit="" width={half}
           hint="repohealth.classics.deps" />
       </ul>
       {depsWords(deps) ? <div className="rh-cap">{depsWords(deps)}</div> : null}
@@ -296,13 +304,15 @@ export function Magnitudes({ classics, width }: {
  * vertical scroll over the row fires down-then-cancel), and a tap on the
  * picked bar lets go.
  */
-export function Tape({ tape, paths, width, caption, onOpenFile }: {
+export function Tape({ tape, paths, width, caption, onOpenFile, holderHue }: {
   tape: number[];
   paths: (string | null)[] | null;
   width: number;
   /** `tapeWords`' pair: `lead` drawn, `more` folded. */
   caption: { lead: string; more: string };
   onOpenFile?: (path: string) => void;
+  /** Hue of today's longest file (the current holder): bar 0 wears it; the rest are ink fading by rank. */
+  holderHue?: string;
 }) {
   const [picked, setPicked] = useState<number | null>(null);
   const gesture = useRef<{ start: number | null; moved: boolean } | null>(null);
@@ -349,8 +359,8 @@ export function Tape({ tape, paths, width, caption, onOpenFile }: {
         <title>the {tape.length} longest source files, biggest first</title>
         {cols.bars.map((b, i) => (
           <rect key={i} x={b.x} y={b.y} width={b.w} height={b.h} rx={1}
-            fill={i === picked ? "var(--accent)" : "currentColor"}
-            fillOpacity={i === picked ? 1 : 0.45} />
+            fill={i === picked ? "var(--accent)" : i === 0 && holderHue ? holderHue : "currentColor"}
+            fillOpacity={i === picked || (i === 0 && holderHue) ? 1 : 0.6 - 0.3 * (i / Math.max(1, tape.length - 1))} />
         ))}
       </svg>
       <div className="rh-scrub rh-tape-pick">
@@ -365,9 +375,11 @@ export function Tape({ tape, paths, width, caption, onOpenFile }: {
       </div>
       {/* The figures in the open; why they are words and not rules folds behind
           the `?` at the end of that line. */}
-      <div className="rh-cap">
-        {caption.lead} <Explain of="the longest-files caption">{caption.more}</Explain>
-      </div>
+      <div className="rh-cap">{caption.lead}</div>
+      <details className="hint-more rh-more">
+        <summary>why these are words</summary>
+        {caption.more}
+      </details>
     </div>
   );
 }

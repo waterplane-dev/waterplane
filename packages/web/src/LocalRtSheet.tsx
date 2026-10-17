@@ -7,6 +7,7 @@ import {
 } from "./localRt";
 import type { LocalRtFocus } from "./LocalRtBar";
 import { SysGraph } from "./SysGraph";
+import { AgentsSection } from "./AgentsSection";
 import { roomyCeiling } from "./graphGeom";
 import { useLink } from "./link";
 import { dur, hhmm, until } from "./format";
@@ -95,9 +96,11 @@ interface Props {
   onClose: () => void;
   /** Which strip reading sent the user here; scrolled to and flashed once. */
   focus?: LocalRtFocus;
+  /** A row in the agents section, tapped: that session. */
+  onOpenSession?: (id: string) => void;
 }
 
-export function LocalRtSheet({ onClose, focus }: Props) {
+export function LocalRtSheet({ onClose, focus, onOpenSession }: Props) {
   const s = useLocalRt<LocalRtSnapshot>((x) => x, true);
   const online = useLink((x) => x.online);
   // The sheet holds interest of its own: it may well be open with the strip
@@ -391,6 +394,7 @@ export function LocalRtSheet({ onClose, focus }: Props) {
 
     </>
   );
+  const agentsPart = <AgentsSection ref={focus === "agents" ? focusRef : undefined} onOpenSession={onOpenSession} />;
   const graphsPart = (
     <>
         <section className="set-group" ref={focus === "history" && models.length === 0 ? focusRef : undefined}>
@@ -670,6 +674,9 @@ export function LocalRtSheet({ onClose, focus }: Props) {
           </p>
         )}
 
+        {/* Arriving from the strip's agent count, the agents lead; otherwise
+            they sit after the machine they run on. */}
+        {focus === "agents" && agentsPart}
         {models.length > 0 ? (
           <>
             {modelsPart}
@@ -677,6 +684,7 @@ export function LocalRtSheet({ onClose, focus }: Props) {
             {gpuPart}
             {deskPart}
             {graphsPart}
+            {focus !== "agents" && agentsPart}
             {restPart}
             {notHerePart}
           </>
@@ -684,6 +692,7 @@ export function LocalRtSheet({ onClose, focus }: Props) {
           <>
             {deskPart}
             {graphsPart}
+            {focus !== "agents" && agentsPart}
             {gpuRead ? gpuPart : null}
             {restPart}
             {modelsPart}

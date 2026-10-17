@@ -150,6 +150,41 @@ export function seriesAskNoteWords(): string {
   );
 }
 
+/** The closed row the daily notes fold into: `daily notes (12 days)`. */
+export function notesSummaryWords(n: number): string {
+  return `daily notes (${nf(n)} day${n === 1 ? "" : "s"})`;
+}
+
+/**
+ * The x axis under the tiles, naming the region's x-axis choice — the
+ * mode-aware cut of `plotAxisWords` (which stays, for the VS Code view).
+ * `lead` is the ONE open line: which readings are drawn and that x is position,
+ * not date. `more` folds: the gaps, the day ticks, the fitted bounds. The drag
+ * instruction is not here — the region says it once, above every chart.
+ * `points` is how many points a tile draws in this mode.
+ */
+export function plotAxisModeWords(
+  mode: "weeks" | "commits",
+  points: number,
+  from: string | null | undefined,
+  to: string | null | undefined,
+): { lead: string; more: string } {
+  const span = from && to ? `, ${from} to ${to}` : "";
+  const what = mode === "weeks"
+    ? `${nf(points)} week${points === 1 ? "" : "s"}, one point per week — its last day-reading`
+    : `${nf(points)} day-reading${points === 1 ? "" : "s"}, one per day the series has — that day's last commit`;
+  return {
+    lead: `Each tile plots ${what}${span}, spaced by position in the series, not by date.`,
+    more:
+      "The history has gaps of weeks and a calendar axis would leave most of every tile empty. The dates " +
+      "under a tile are the days AT those positions, so the middle label is the middle reading and not the " +
+      "middle of the span. A missing reading cuts the line rather than joining across it. The figures up " +
+      "the left are that tile's own low and high, and NO TILE STARTS AT ZERO: each is fitted to its own " +
+      "range, so heights are not comparable between them. The stacked chart further down is the exception " +
+      "and says so with a zero of its own.",
+  };
+}
+
 /** The two regions, named by their COMPARATOR — which is the only thing that
  *  separates them, and the thing a reader has to have to read either. */
 export function regionWords(region: "setup" | "series"): string {

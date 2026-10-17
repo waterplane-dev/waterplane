@@ -43,7 +43,7 @@ function modRe(exts) {
       .sort((a, b) => b.length - a.length || (a < b ? -1 : 1))
       .map((e) => e.replace(/[.+?^${}()|[\]\\]/g, "\\$&"))
       .join("|");
-    re = new RegExp("`([A-Za-z][A-Za-z0-9_/.]*\\.(?:" + alt + "))`", "g");
+    re = new RegExp("`([A-Za-z][A-Za-z0-9_/.-]*\\.(?:" + alt + "))`", "g");
     MOD_CACHE.set(key, re);
   }
   return re;
@@ -104,6 +104,6 @@ export function descriptionModules(text) {
   const fm = /^---\n([\s\S]*?)\n---/.exec(text);
   const desc = fm ? (/^description:\s*(.+)$/m.exec(fm[1])?.[1] ?? "") : "";
   const out = new Set();
-  for (const m of desc.matchAll(/\b([A-Za-z][A-Za-z0-9_]*\.(?:ts|tsx))\b/g)) out.add(m[1]);
+  for (const m of desc.matchAll(/\b([A-Za-z][A-Za-z0-9_-]*\.(?:ts|tsx))\b/g)) out.add(m[1]);
   return out;
 }

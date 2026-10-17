@@ -1,67 +1,52 @@
 ---
 name: testing
-description: waterplane's three test layers and how to add to them: node --test over packages/shared and packages/web (pure logic, no host), packages/host/test (the regex heuristics, no daemon), and the scripts/e2e-*.mjs suite that needs a real host. Load BEFORE writing or changing a test, and when deciding which layer a new rule belongs in. Includes what every e2e script must pin (WATERPLANE_PREFLIGHT=0, a private tmux socket dir via lib-tmuxiso) and the stub TUI modes.
+description: waterplane's test layers and how to add to them: node --test over packages/shared, packages/web, packages/extensions/*/web and tools/ (pure logic and repo shape, no host), packages/host/test (the regex heuristics, no daemon), the scripts/e2e-*.mjs suite that needs a real host, plus test:contract, test:ui (Playwright journeys) and test:vscode. Load BEFORE writing or changing a test, deciding which layer a new rule belongs in, or adding a tools/*.test.mjs guard (it needs a tier in scripts/guards/guards.mjs); includes what every e2e script must pin and the stub TUI modes.
 ---
 
 # waterplane testing
 
+Layers, cheapest first. Pin a rule in the cheapest layer that can fail on it.
 
-Three layers. **`packages/shared/test/*.test.mjs`** (`npm run test:unit`, `node --test` over
-`shared/dist`) covers the pure logic — queue, schedule, gallery, attach, launch, screenlog, promptid,
-hosturl, collage, budget, urls, intent, clihealth, assess — in ~90 ms with no host and no build of
-one, so a rule can be pinned before there is anything to boot. The same command also runs
-**`packages/web/src/**/*.test.mjs`** (recursive) over the TypeScript itself (node's type stripping)
-for the web's own pure slices — `activityRows`, `assessRows`, `contextPlot`, `downloadState`,
-`ptyTail`, `fmtMeter`, `theme`, …; `sdk/sdk.test.mjs` (stores, `mapWith`, `cachedList`,
-`repoRunStore`); `core/core.test.mjs` (the feature runner over a fake registry: isolation, the
-once-per-key failure toast); `core/queue/queue.test.mjs` (where an ackId may be minted — every `newAckId` identifier, every
-`mintAckId(`, every `queueOp` handed an `ackId` — counted per file, and `writeOutbox` as the store's
-one writer) with the queue's pure half in `core/queue/logic.test.mjs`;
-`core/compose/compose.test.mjs` (every `setCompose("")` in the tree, each after the accept that took
-the words, and one textarea); `core/term/tail.test.mjs` (the PTY feed's pure half: frames, the
-cold-start seed, the offline sweep's order);
-`core/prefs.test.mjs` (the device-preference store: a default is never written back, the ref moves
-with the write, an adopted key re-reads only the prefs naming it, and every pref reaching a synced
-key lists it); `core/launcher/model.test.mjs` (the
-launcher's order, cuts and every count a control carries);
-and each feature's own `features/<x>/logic.test.mjs` — which have no
-DOM in them and therefore need no browser. A test imports siblings WITH `.ts`. And
-**`tools/*.test.mjs`**, which is the REPO rather than the code: `claudemd` holds this file to its
-budget, its one-line-per-subsystem rule and its write-the-note-first rule (see the top);
-`webshape` holds `App.tsx`'s ratchet and every feature folder's shape and layout;
-`featureboundary` and `nosilentsend` pin the two lint rules the feature split leans on, both ways.
+1. **`npm run test:unit`** — `node --test` over `packages/shared/test/*.test.mjs` (on `shared/dist`),
+   `packages/web/src/**/*.test.mjs` (the TypeScript itself via node's type stripping — a test imports
+   siblings WITH `.ts`), `packages/extensions/*/web/**/*.test.mjs`, `scripts/release/*.test.mjs` and
+   **`tools/*.test.mjs`**. No host, no DOM, no browser: a rule can be pinned before there is anything to
+   boot. Web examples: `sdk/sdk.test.mjs`, `core/core.test.mjs`, `core/queue/queue.test.mjs` (where an
+   ackId may be minted — counted per file — and `writeOutbox` as the store's one writer),
+   `core/compose/compose.test.mjs`, `core/prefs.test.mjs`, `core/launcher/model.test.mjs`, and each
+   feature's `features/<x>/logic.test.mjs`. `tools/*.test.mjs` is the REPO rather than the code:
+   `claudemd` (this file's budget and write-the-note-first rule), `webshape`/`hostshape` (ratchets and
+   layout), `featureboundary`/`nosilentsend` (the two lint rules, both ways), `guards`.
+2. **`npm run test:host`** — `packages/host/test/*.test.mjs` (+ `packages/extensions/*/test/*.test.mjs`)
+   over `host/dist`: the daemon's **regex heuristics** and pure decision cores, no daemon. **Fixture in,
+   verdict out**: when upstream changes its wording, "this line no longer matches" is the sentence
+   worth having, where e2e can only report "the session never published a prompt". Examples: `prompt`
+   (choice-box detector), `limit`, `usage`, `context`, `login`, `origin` (the browser half of the
+   security boundary), `answergate`, `convfork`, `ptyleak`, `deliversubmit`/`deliverecho`. The full
+   file-by-file list: [testing-and-ops.md](../../../docs/notes/testing-and-ops.md#moved-out-of-skill-testing-2026-10-17).
+3. **`node scripts/run-e2e.mjs [filter]`** — `scripts/e2e-*.mjs`, the only layer that boots a real
+   **host** (opencode's live in `packages/extensions/opencode/e2e/`). It DISCOVERS scripts, so a new one
+   needs no registration (a hand-kept list once drifted until two thirds never ran) and
+   `scripts/e2e-*.mjs` plus `packages/extensions/*/e2e/e2e-*.mjs` is the list; what each pins is the [rough map](../../../docs/notes/testing-and-ops.md#the-rough-map).
+4. Beside them: **`npm run test:contract`** (`scripts/run-contract.mjs`, checks in `scripts/contract/`:
+   the same protocol checks against the real host and the demo's fake, not yet in `npm test`),
+   **`npm run test:ui`** (`scripts/ui/run.mjs`: Playwright journeys with aria snapshots, scratch web build,
+   never `packages/web/dist`; the `journey-fault-*` ones are fault tests, not docs gifs),
+   **`npm run test:vscode`**, and **`scripts/smoke-real-cli.mjs`** (opt-in, spends cents: the daemon
+   against the REAL `claude`, since every e2e runs the stub). `npm test` = lint, `test:unit`, `test:host`,
+   `run-e2e.mjs`. `scripts/with-tmp.mjs` + `lib-testtmp.mjs` wrap every unit/host run in a private tmp dir.
 
-**`packages/host/test/*.test.mjs`** (`npm run test:host`, over `host/dist`) is the same idea for the
-daemon's **regex heuristics** — `prompt` (the choice-box detector), `limit` (banner + reset parsing), `usage` (the `/usage` screen's two windows, resets included),
-`context` (the meter), `slash` (`isLocalCommand`), `origin` (the browser half of the security
-boundary), `login` (the sign-in link, rejoined off a wrapped screen), `ptycap` (what a failed pty spawn may
-SAY), `headlesslimit` (the same banner read off a `claude -p` ENVELOPE), the two decision cores lifted
-out of `SessionManager` (`sessionSearch`), `answergate` (every gate refusal in words, and the tap's keystrokes when accepted), `plugins` (every broken plugin LISTED with its reason, settings refused whole), `decisionlog` (the one-time `oracle-log.json` migration), `intentsched` (what a schedule may CLAIM
-about itself — armed vs spent, a hand run that must not consume it — and where automatic work with
-no session goes, both over a real store with fake deps), `convfork` (the cut-and-rewrite as pure fs:
-fixture in, prefix out, source byte-identical afterwards) and `lastturn` (what a conversation log may be asked about its last real TURN, against bookkeeping rows that move the file's mtime without being one), `ptyleak` (an ended PTY leaves no ptmx master or slave fd in this process — over node-pty and `ownPtys()`, SKIPPING in words when the table is already full), `sweepstores` (which per-session files a boot sweep may delete: never a live id, never before the age gate, never a traversal-shaped name), `deliversubmit` (what a delivery is
-entitled to SAY about the submit proof) and `deliverecho` (what it may DO when it thinks the screen
-never showed the text — never an Esc into a live turn, never a bare Return at a box it only
-believes is full — and what it may RECORD: one health observation per delivery, counted not
-last-read). Fixture in, verdict out: when upstream changes its wording,
-"this line no longer matches" is the sentence worth having, where e2e can only report "the session
-never published a prompt".
-
-The `scripts/e2e-*.mjs` scripts are the only tests that need a **host**.
-`run-e2e.mjs` DISCOVERS them, so a new script needs no registration (a hand-maintained list once
-drifted until two thirds never ran). It runs them in a POOL (`--jobs N` / `E2E_JOBS`, default
-60% of cores capped at 10; `--jobs 1` streams live): **a new script must survive running beside others**
-— its fixed 8xxx ports are read from its source and two scripts sharing one never overlap, but
-anything it writes must be under its own `mkdtemp`, and a host it boots must be WAITED for
-(`waitForHost`/`bootWait`), never slept for: a fixed `sleep(900)` before the first request was the
-one failure the parallel runs found. A script that truly cannot share the machine goes in
-`SERIAL` in `run-e2e.mjs` with its reason. A new `tools/*.test.mjs` needs a tier row in
-`scripts/guards/guards.mjs` (`tools/guards.test.mjs` fails and says which); the edit hook and the
-pre-commit run the earlier tiers, and a failure the edit hook says is NOT yours is another session's: leave it
-([guards before the push](docs/notes/testing-and-ops.md#guards-before-the-push)).
-The pre-push hook tests the PUSHED tree in a clean
-worktree, caches a green tree, and runs only build+lint+unit+host for a docs-only push:
-[the pre-push gate](docs/notes/testing-and-ops.md#the-pre-push-gate).
+`run-e2e.mjs` runs scripts in a POOL (`--jobs N` / `E2E_JOBS`, default 60% of cores capped at 10;
+`--jobs 1` streams live): **a new script must survive running beside others**. Its fixed 8xxx ports are
+read from its source and two scripts sharing one never overlap, but anything it writes must be under its
+own `mkdtemp`, and a host it boots must be WAITED for (`waitForHost`/`bootWait`), never slept for: a fixed
+`sleep(900)` before the first request was the one failure the parallel runs found. A script that truly
+cannot share the machine goes in `SERIAL` in `run-e2e.mjs` with its reason. A new `tools/*.test.mjs`
+needs a tier row in `scripts/guards/guards.mjs` (`tools/guards.test.mjs` fails and says which); the edit
+hook and the pre-commit run the earlier tiers, and a failure the edit hook says is NOT yours is another
+session's: leave it ([guards before the push](../../../docs/notes/testing-and-ops.md#guards-before-the-push)).
+The pre-push hook tests the PUSHED tree in a clean worktree, caches a green tree, and runs only
+build+lint+unit+host for a docs-only push: [the pre-push gate](../../../docs/notes/testing-and-ops.md#the-pre-push-gate).
 
 **Every host-spawning e2e script MUST pin `WATERPLANE_PREFLIGHT: "0"` and import `./lib-tmuxiso.mjs`**
 (or boot through `bootHost`, which does both) — else the boot doctor prints into output the scripts
@@ -73,10 +58,10 @@ daemonizes out of the process group, so the group kill never reaches it). A host
 also derives its own `-L` name (`sessions/knobs.ts`), so two hosts in one script do not share a
 server's environment. A script that builds a MINIMAL env for its host must carry `TMUX_TMPDIR`
 across (`e2e-tmux.mjs`, opencode's `e2e-tmuxenv.mjs`). Host tests that start sessions import the same module.
-`packages/extensions/opencode/e2e/e2e-tmuxenv.mjs` is the only test of what the tmux PANE's environment actually contains: a backend's
-`spawnEnv` (opencode's auto-update guard) is exactly what a `-L` server that ALREADY EXISTS drops, so
+`packages/extensions/opencode/e2e/e2e-tmuxenv.mjs` is the only test of what the tmux PANE's
+environment actually contains: a backend's `spawnEnv` (opencode's auto-update guard) is exactly what a `-L` server that ALREADY EXISTS drops, so
 it names its own server and starts it itself from an environment with the guard unset, because a
-fresh-server run passes while the bug is still there. `e2e-tmux.mjs` and `e2e-ocservetmux.mjs` name
+fresh-server run passes while the bug is still there. `e2e-tmux.mjs` and opencode's `e2e-ocservetmux.mjs` name
 their OWN `-L` server too: a pane outliving the daemon is their subject.
 Stub TUI modes (`scripts/claude-stub-tui.mjs`, `STUB_MODE`, default `repaint`): `repaint` (echo far
 from the end of the raw bytes) / `blind` (input accepted, never displayed) / `menu` (a slash
@@ -101,15 +86,14 @@ extension's own stub draws its screen shape against this file's input handling, 
 delivery path is exercised against a second shape; `STUB_VARIANT=blind|deaf` re-uses those two
 failures against it) / `logo`
 (the apk-install gif's turn: reads a marked image's circle off the annotator note and really edits the
-sample app in the cwd — `scripts/media/tide-tables.mjs`, pinned by `tools/stublogo.test.mjs`). `STUB_HOOKS=1` makes the session count as `hooked`;
-`STUB_USAGE=<sess>,<week>` renders a `/usage` screen the budget scraper can parse.
+sample app in the cwd — `scripts/media/tide-tables.mjs`, pinned by `tools/stublogo.test.mjs`) / `demo` (the showcase script the demo scenarios are recorded from) / `welcome` (Claude Code's welcome header + an idle composer, scripted turns on `logo`'s pace: the `first-app` and `setup` gifs; `STUB_TRUST=1` opens on the workspace-trust box) / `answer` (a turn that really ANSWERS for `e2e-peer.mjs`: writes the conversation log, obeys `STUB_WRITE <relpath>` (under the cwd) / `STUB_RUN <cmd>` / `STUB_SAY <text>` lines in the prompt; needs `STUB_HOOKS=1`). `STUB_HOOKS=1` makes the session count as `hooked`; `STUB_USAGE=<sess>,<week>` renders a `/usage` screen the budget scraper can parse. The header comments of `claude-stub-tui.mjs` are the full catalogue.
+
 **A script whose subject is an unattended `claude -p` writes its own stub**, because
 `claude-stub.sh` `exec`s a shell and cannot answer one. The pattern is `e2e-assess.mjs`'s: a node
 script GENERATED by the script itself, spawned as `claude` through `WATERPLANE_CLAUDE_BIN`, reading its
 mode from a FILE on every invocation so one booted host can be driven through every answer — and
 answering on stdout with the real `--output-format json` envelope (`result`, plus `usage` /
-`total_cost_usd` where the caller reads them). A script whose subject is an unattended `claude -p`
-writes its own stub like this.
+`total_cost_usd` where the caller reads them).
 
 The capture suite has its own stub instead: `scripts/capture-stub.mjs` is a fake `ciqkit` — argv and,
 mainly, its EXIT CODES (0 captured / 1 failed / **3 captured but OCR contradicted the anchor**, the
@@ -119,31 +103,18 @@ one script needs both outcomes; `shot-score` answers only about a frame REALLY a
 handed, so asking it about a scratch dir the run already emptied fails the suite instead of
 answering `n/a` for ever — which is indistinguishable from an honest "nobody measured".
 
-What each pins, in full: [testing-and-ops.md](docs/notes/testing-and-ops.md), whose
-[rough map](docs/notes/testing-and-ops.md#the-rough-map) is the one-line-per-script index this file
-used to carry, and where the three it never described (`intent`, `offlinelists`, `settlesweep`) now
-are. The suite, so a name here is a name on disk: `ack` `agentintent` `answer` `api` `archive` `askbox` `askprose` `attach`
-`autopull` `backlog` `backlog-echo` `backlog-keepopen` `backlog-prompt` `backlog-slots` `backlog-wait` `budget` `build` `capture` `checkbox`
-`buildparams` `clihealth` `ctxgraph` `echo-stream` `docs` `fanout` `fork` `forkfrom` `gallery` `git` `hints` `hook` `hosturl` `images`
-`intent` `intentnodrop` `launch` `launchwait` `livereclaim` `limit` `limitbusy` `limitparallel` `limitrepaint` `limitqueue` `limitreset` `limitstuck`
-`login` `manualfire` `netfuse` `netstats` `notifyprefs` `offlinelists` `onesession` `opqueue`
-`origin` `outbox` `outboxbadge` `pastechit` `permmode` `pin` `plugin` `prompt` `promptlive` `ptyleak` `queue` `restore`
-`resume` `resurrect` `resurrect-item` `rootguard` `scaffold` `schedule` `screenlog` `scrollcomposer` `search` `secret` `sent`
-`settings` `settle` `settlesweep` `setup` `setupwatch` `statedir` `sidecar` `slashlocal` `smoke` `speedtest` `star` `stophook`
-`termqueries` `tokenstats` `trustbox`
-`startprompt` `submit` `thumbs` `tier12` `tmux` `transcript` `tree` `uiusage` `webbundle` `assess`
-(opencode's `backend` `ocserve` `ocservetmux` `tmuxenv`: `packages/extensions/opencode/e2e/`).
+What each script pins, in full: [testing-and-ops.md](../../../docs/notes/testing-and-ops.md), whose
+[rough map](../../../docs/notes/testing-and-ops.md#the-rough-map) is the one-line-per-script index.
 
 ## A hang is a failure, never a wait
 
 - **Close what a test opens on EVERY path.** A server, socket or child closed only on the line after
   the assertions stays open when an assertion throws, and the file's process never exits. Register
   the close in `after()`/`t.after()` or a `finally` (`vault/test/cli.test.mjs`'s `open` set). That
-  leak hung `npm run test:host` — and with it every pre-push — for over a day before anyone saw it.
+  leak hung `npm run test:host` — and every pre-push with it — for over a day.
 - `test:unit` and `test:host` run with `--test-timeout=120000` (slowest real test ~10 s): a test
-  that never settles goes RED after two minutes. **Never add `--test-force-exit`**: measured, it
-  silently dropped 27 of 3514 unit tests (3487 ran, all green). A count that shrinks with no
-  failure is worse than a hang, so a leaked handle is still a hang — which is why the first rule
-  above is the rule.
+  that never settles goes RED after two minutes. **Never add `--test-force-exit`**: it
+  silently dropped 27 of 3514 unit tests, all green. A count that shrinks with no failure is worse
+  than a hang, so a leaked handle is still a hang.
 - Prove a timing fix UNDER LOAD (`yes > /dev/null` on every core, several copies in parallel):
   passing alone says nothing about a race. an e2e script once failed 5/5 that way and passed alone.

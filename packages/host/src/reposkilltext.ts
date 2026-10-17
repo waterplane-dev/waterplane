@@ -58,9 +58,10 @@ repo's own meaning and say so in one line rather than guess.
   written by the person, at the time they wrote it.
 - **No interactive programs.** Nobody can drive an editor, a pager or a TUI
   through you. Use non-interactive flags (\`--yes\`, \`CI=1\`, \`git --no-pager\`).
-- **Secrets are written from the phone**, into a gitignored \`.env\` in this repo
-  (or the host's own env file). You never see the value and must never ask for
-  it in chat; ask the person to set KEY via the phone's secret sheet instead.
+- **Secrets never go into files, chat or commits by you.** You never see a value
+  and must never ask for one in chat; ask the person to set KEY from the phone.
+  If the desktop has a secrets tool and its skill is installed, follow that skill
+  for anything it covers (reading a key, using a login).
 
 ## Showing the person something: the outbox
 

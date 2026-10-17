@@ -350,7 +350,7 @@ export class TokenStatsStore {
     const dayAgents = new Map<string, Map<string, number>>();
     /** day → repo → requests (all, and priced) and money: the price per
      *  request over time, per repo. Same cross key, one more projection. */
-    const dayRepo = new Map<string, Map<string, { turns: number; pricedTurns: number; usd: number }>>();
+    const dayRepo = new Map<string, Map<string, { turns: number; pricedTurns: number; usd: number; ctxTok: number }>>();
     // repo → model → the same two tallies. The bar list says a repo is 42% of
     // the tokens and cannot say why it is 61% of the money; this is the answer,
     // and it is the same cross key the loop is already reading.
@@ -460,8 +460,9 @@ export class TokenStatsStore {
 
           if (day) addTotals(nest(dayModel, day, model, zeroTotals), v);
           if (hour) addTotals(nest(hourModel, hour, model, zeroTotals), v);
-          const dr = day ? nest(dayRepo, day, repoKey, () => ({ turns: 0, pricedTurns: 0, usd: 0 })) : null;
-          if (dr) dr.turns += v.turns;
+          const dr = day ? nest(dayRepo, day, repoKey, () => ({ turns: 0, pricedTurns: 0, usd: 0, ctxTok: 0 })) : null;
+          // `cacheWrite1h` is a SUBSET of `cacheWrite`, so it is not added again.
+          if (dr) { dr.turns += v.turns; dr.ctxTok += v.input + v.cacheRead + v.cacheWrite; }
           addTotals(nest(repoModel, repoKey, model, zeroTotals), v);
           addTotals(cv.totals, v);
           if (sum.sub) addTotals(cv.agentTotals, v);

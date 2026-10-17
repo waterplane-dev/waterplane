@@ -214,3 +214,50 @@ For the known kinds (npm token, GitHub token, environment variable, file) the ad
 A value typed in another client's browser (a laptop's, or the desktop's own) travels to the desktop over the one WebSocket, waits in memory only until the phone approves, and is dropped on deny, timeout or restart. The phone's card names the paired device it came from (or a browser that is not a paired device) and its route; the desktop's own browser behind `tailscale serve` reads as Tailscale, loopback only at plain http://127.0.0.1. A device that is not the phone can at most propose a put: it cannot read or release anything.
 - asked: 2026-10-17 (owner: "that MUST be super easy for the user!!!")
 - shipped: a5a6d749 f26ac238 adac8cc4
+
+### R-vault-044 · shipped
+A project has one repo view in the vault, reached from the project's own "⋯" menu, from a "vault" count chip on its row (the count = what needs a person there, and the tap opens exactly those) and from the vault home's projects list: its links, its secrets by phase, its logins, and what is missing. Reading it needs no fingerprint; every reveal or use is the one existing fingerprint card.
+- asked: 2026-10-17 (owner: "some kind of consolidated repo view.. where I have the link to the deployed thing, secrets relevant for dev, in prod at runtime, for deployment... And the accounts")
+- plan: packages/extensions/vault/docs/REPO-VIEW-PLAN.md §3
+- shipped: 42d3d866 a1e321ba
+
+### R-vault-045 · shipped
+The repo view lists where the project is served and deployed, each link with where it was read from (`tailscale serve` matched to a port the repo declares, a URL named in the repo's own config or docs with file:line, or a link a person or agent typed), and an "open" on each; a link that was never probed says "not checked", never a status it does not know.
+- asked: 2026-10-17 (owner: "the link to the deployed thing")
+- plan: REPO-VIEW-PLAN.md §3.3
+- shipped: 817d3ed8 42d3d866
+
+### R-vault-046 · shipped
+Each of a project's secrets sits under dev, runtime or deploy — stored when a person or agent set it, guessed from where it is referenced and its name when not, and "not sorted yet" when the guess would be a coin toss (never a wrong phase); the chips are filters over one list. Keys the project names that the vault lacks are listed as missing with a one-tap add; public-by-design names are counted apart, not listed as missing.
+- asked: 2026-10-17 (owner: "secrets relevant for dev, in prod at runtime, for deployment")
+- plan: REPO-VIEW-PLAN.md §3.4
+- shipped: de1c70bb 817d3ed8 42d3d866
+
+### R-vault-047 · shipped
+"Find logins" in a project proposes login candidates from seed scripts, fixtures, `.env*`, compose files, README and docs — role, username, email and the file:line of each, never a password, length or digest — and the ticked ones are stored with ONE fingerprint, create-only, bound to that project, the desktop reading each password from its file itself so no model, transcript, push or plan output ever carries it. The same from the CLI (`wp-secret find-logins --store`). Originals are not removed; the follow-up (let the seed read it from the vault) is offered as a sentence a person hands to the project's agent.
+- asked: 2026-10-17 (owner: "a button that helps to find and store … user login credentials … for this locally hosted page")
+- plan: REPO-VIEW-PLAN.md §4
+- shipped: 3802cdd0 817d3ed8 5adaecd8 5649140a
+
+### R-vault-048 · shipped
+A login has an email beside its username, end to end: the record (unsealed by default, sealable like the username), `account add --email`, `exec --as` handing the program `ID_EMAIL` (and `ID_USERNAME` falling back to the email when no username exists), the phone's form, list and shown login, and both export formats.
+- asked: 2026-10-17 (owner: "accounts with usernames and passwords and email")
+- plan: REPO-VIEW-PLAN.md §3.7
+- shipped: de1c70bb e97d3aa4 a1e321ba
+
+### R-vault-049 · shipped
+The accounts row is on the vault home in every state (not enrolled: it says "pair the phone first" and opens keys & backup); "+ login" is reachable from the accounts screen whenever a put is possible; the home and `wp-secret status` say whether agents have the vault rule (`~/.claude/skills/wp-secret`) and install it from the phone with one tap and no fingerprint, never over a file wp-secret did not write; a project's setup checklist carries the same row.
+- asked: 2026-10-17 (owner: "I don't see such a button yet and have no idea how to use it")
+- plan: REPO-VIEW-PLAN.md §5
+- shipped: 817d3ed8 e97d3aa4 a1e321ba
+
+### R-vault-050 · shipped
+Using a login on demand without autofill: on the phone, show (one fingerprint) gives email, username, password and "open <the project's link>" so copy → open → paste is the whole path, and the repo view names `wp-secret exec --as <this id>` per login for a terminal; no second fingerprint is asked on the same tap, and a login is never leased or windowed by the show.
+- asked: 2026-10-17 (owner: "on demand switch [and with a] fingerprint show user login credentials"; "probably with an additional fingerprint to see or use a secret")
+- plan: REPO-VIEW-PLAN.md §3.5–3.6
+- shipped: e97d3aa4 42d3d866
+
+### R-vault-051 · requested
+The vault's screens share one row grammar and the app's theme tokens: a fact is said once per screen, no pill per row, chips are tinted filters, one solid verb per screen or card, cards say what/to whom/until when with the rest folded, the fingerprint button is labelled with its verb, a card that was answered becomes its receipt in place, empties are one sentence with one verb, mono only for ids, keys, paths and commands, icons mapped once.
+- asked: 2026-10-17 (owner: "if you have good ideas on How to make the vault UI more intuitive and sexy. Do it!")
+- plan: REPO-VIEW-PLAN.md §10

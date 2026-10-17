@@ -67,6 +67,9 @@ these, explain the rule in one sentence and either reshape the request or stop:
 | a count on a control that does not filter | a count is a filter: tapping "2" opens exactly those two |
 | a second implementation of delivery, download, prompt box or VT replay | one of each, by rule |
 
+This table mirrors CLAUDE.md's *Never do these*; when that list changes, change this table in the same
+commit (no test ties them).
+
 Also flag, without refusing: anything new reaching the network, a new Android
 permission, a new unattended model call (costs the user tokens), anything that reads
 the CLI's screen with a regex (breaks on CLI updates).

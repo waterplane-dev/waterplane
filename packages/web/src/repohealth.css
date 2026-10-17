@@ -1,0 +1,218 @@
+/* ── Repo readings, region 2: the dashboard (RepoHealthRegion.tsx + RepoHealthCards.tsx) ──
+   Imported by RepoHealthRegion.tsx (and by the VS Code view, packages/vscode/webview/HealthView.tsx),
+   merged from the redesign's three hand-offs (score card, tiles grid, longest/size/table) plus the
+   region's frame. Tokens only — both themes inherit, and nothing here names --warn or --dead:
+   a reading compared to its own past has no side to be on (the index's alerts keep theirs in
+   styles.css).
+
+   EVERY rule is scoped under `.rh-region`. This sheet's place in the bundle relative to styles.css
+   is not guaranteed (a component's CSS can land before main.tsx's), so it wins on specificity,
+   never on order — which is also how it overrides the styles.css rules it supersedes (`.rh-tile`'s
+   border, `.hix-box`'s border, `.hix-barname`'s ellipsis, `.hix-bar`'s half-opacity fill,
+   `.rh-longest`/`.rh-mags` borders). */
+
+/* The contribution bars: the region's ONE hue exception. Aliases of two categorical slots that
+   already switch per theme, resolved where the theme attribute is (<html data-theme>). */
+:root, [data-theme] {
+  --hix-up: var(--chart-1);
+  --hix-down: var(--chart-4);
+}
+
+.rh-region { display: flex; flex-direction: column; }
+/* A caption that is not inside a card keeps the sheet's 14px gutter. */
+.rh-region .rh-gutter { padding-left: 14px; padding-right: 14px; }
+
+/* ── The head: the status line and its `?`; the refresh verb moved into the jump bar. ── */
+.rh-region .rh-head > .rh-status { max-width: none; }
+
+/* ── The sticky jump bar ─────────────────────────────────────────────────────
+   Navigation, not a filter: unlit kit pills that scroll sideways, the refresh verb pinned at the
+   end. Sticks to the top of the sheet's scroller; `--bg` behind it so a card never shows through. */
+.rh-region .rh-nav {
+  position: sticky; top: 0; z-index: 3;
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 10px 0 6px; margin: 4px 0 2px;
+  background: var(--bg); border-bottom: 1px solid var(--line);
+}
+.rh-region .rh-nav-chips {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; align-items: center; overflow-x: auto; scrollbar-width: none;
+}
+.rh-region .rh-nav-chips::-webkit-scrollbar { display: none; }
+.rh-region .key.rh-nav-refresh {
+  /* The chips scroll; the verb keeps its one line (wrapping to three made the bar 70px tall). */
+  flex: none; width: auto; min-height: 36px; padding: 4px 10px;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: inherit; white-space: nowrap;
+}
+.rh-region .key.rh-nav-refresh > svg { flex: none; }
+/* A card the bar jumped to lands under the bar, not behind it. */
+.rh-region .rh-card { scroll-margin-top: 56px; }
+
+/* ── The x-axis row and the one drag instruction under it ── */
+.rh-region .ts-filter.rh-axis { padding: 0 11px; gap: 0; }
+.rh-region .rh-axis > .ctx-stackpick-lab { padding: 0 3px; }
+.rh-region .rh-scrubhint { padding-top: 0; padding-bottom: 8px; }
+
+/* ── Cards ───────────────────────────────────────────────────────────────── */
+.rh-region .rh-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 0 10px 10px;
+  min-width: 0;
+}
+.rh-region .rh-h {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin: 0;
+  font-size: calc(17px * var(--ui-font, 1));
+  font-weight: 650;
+  color: var(--fg);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.rh-region .rh-card > .section-head { padding: 0 0 4px; }
+.rh-region .rh-prov { padding-top: 6px; }
+
+/* Folded method notes inside a card: no side padding of their own (the card pads). */
+.rh-region .hint-more.rh-more { padding: 0; margin-top: 6px; }
+.rh-region .hint-more.rh-more p { margin: 6px 0 0; font-size: calc(12px * var(--ui-font, 1)); color: var(--muted); }
+.rh-region .rh-more .rh-rows { margin: 6px 0 0; }
+
+/* Verbs: accent text + accent edge, no fill, their own width, in a wrapping row. */
+.rh-region .rh-tile-acts { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 6px; }
+.rh-region .key.rh-verb {
+  width: auto;
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent-edge);
+  font-family: inherit;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+
+/* ── Score card (HealthIndexChart.tsx) ───────────────────────────────────── */
+.rh-region .hix.rh-card { padding-top: 12px; }
+.rh-region .hix-box { border-bottom: 0; padding: 0; }
+.rh-region .hix-hero { display: flex; align-items: center; gap: 14px; padding: 4px 0 6px; }
+.rh-region .hix-ring { position: relative; flex: none; color: var(--fg); }
+.rh-region .hix-ring svg { display: block; overflow: visible; }
+.rh-region .hix-hero-n {
+  position: absolute; left: 0; right: 0;
+  transform: translateY(-50%);
+  text-align: center;
+  font-size: calc(56px * var(--ui-font, 1));
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: proportional-nums;
+  color: var(--fg);
+}
+/* No ring (non-finite score): the number sits in flow. */
+.rh-region .hix-ring:not([style]) .hix-hero-n { position: static; transform: none; }
+.rh-region .hix-hero-side { min-width: 0; display: grid; gap: 3px; }
+.rh-region .hix-of { color: var(--muted); font-size: calc(13px * var(--ui-font, 1)); }
+.rh-region .hix-hero-side .hix-vs { padding-top: 0; }
+.rh-region .hix-hero-side .hix-cap { padding-top: 0; font-size: calc(13px * var(--ui-font, 1)); color: var(--fg); }
+.rh-region .hix-chart { margin-top: 8px; }
+.rh-region .hix-bar { opacity: 1; background: currentColor; }
+.rh-region .hix-bar.up { background: var(--hix-up); }
+.rh-region .hix-bar.down { background: var(--hix-down); }
+/* Names wrap to two lines rather than ellipsising ("CLAUDE.md + skills"). */
+.rh-region .hix-bar-row { grid-template-columns: minmax(0, 7.5em) 1fr 2em 3em; min-height: 28px; }
+.rh-region .hix-barname { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.2; overflow-wrap: anywhere; }
+.rh-region .hix-bar-legend { padding-top: 2px; }
+.rh-region .hix-swatch { display: inline-block; width: 10px; height: 8px; border-radius: 2px; background: currentColor; }
+.rh-region .hix-swatch.up { background: var(--hix-up); }
+.rh-region .hix-swatch.down { background: var(--hix-down); }
+
+/* ── Longest card (RepoHealthLongest.tsx) ────────────────────────────────── */
+.rh-region .rh-longest { padding: 0; margin: 0; border: 0; }
+.rh-region #rh-longest .rh-longest > .rh-tile-head .rh-tile-label,
+.rh-region #rh-table .rh-chart-label,
+.rh-region #rh-size .rh-mags-head {
+  font-size: calc(15px * var(--ui-font, 1)); font-weight: 650; color: var(--fg); letter-spacing: 0;
+}
+.rh-region #rh-table > .rh-chart { padding-top: 0; }
+.rh-region #rh-size .rh-mags-head { padding: 0 0 2px; }
+.rh-region .rh-longest-path {
+  font-weight: 500;
+  color: var(--muted);
+  font-size: calc(13px * var(--ui-font, 1));
+  overflow-wrap: anywhere;
+}
+.rh-region .rh-legend-compact { margin: 4px 0 0; padding: 0; gap: 2px 12px; }
+.rh-region .rh-legend-compact li { font-size: calc(12px * var(--ui-font, 1)); line-height: 1.35; }
+
+/* ── Tiles card (RepoHealthTiles.tsx: TilesCard / TileGrid) ──────────────────
+   Two tracks that may shrink below the svg's drawn width — `minmax(0, 1fr)`, never `1fr`
+   (= minmax(auto, 1fr)), or a column holds its curve's width and the tile's ResizeObserver never
+   sees it narrow. */
+.rh-region .rh-tiles.rh-grid {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
+  list-style: none; margin: 0; padding: 0;
+}
+.rh-region .rh-grid > .rh-tile {
+  position: relative; min-width: 0;
+  border: 0; padding: 8px 0 6px; gap: 2px;
+}
+/* The open tile spans both columns with the full anatomy. */
+.rh-region .rh-grid > .rh-tile.open { grid-column: 1 / -1; padding: 8px 0 4px; gap: 4px; }
+/* The tile's name IS its toggle: a bare button in the label's own type, left-aligned. */
+.rh-region .rh-tile-toggle {
+  flex: 1 1 auto; min-width: 0; min-height: 26px;
+  display: inline-flex; align-items: center;
+  padding: 0; margin: 0; border: 0; background: none; color: inherit;
+  font: inherit; text-align: left; cursor: pointer;
+}
+.rh-region .rh-tile-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.rh-region .rh-grid .rh-tile-head { flex-wrap: nowrap; align-items: center; gap: 2px; }
+.rh-region .rh-grid .rh-tile-label { font-size: calc(12.5px * var(--ui-font, 1)); font-weight: 600; color: var(--fg); }
+/* A compact tile opens on a tap ANYWHERE: the toggle's hit area is stretched over the tile.
+   The `?` sits above it, so asking what a reading is never also opens it. */
+.rh-region .rh-grid > .rh-tile:not(.open) .rh-tile-toggle::after { content: ""; position: absolute; inset: 0; }
+.rh-region .rh-grid > .rh-tile:not(.open):active { background: var(--hover-soft); border-radius: 8px; }
+.rh-region .rh-grid .rh-tile-head .hint-chip { position: relative; z-index: 1; }
+/* Compact value 22px/650; the open tile keeps the 26px `.rh-tile-val`. */
+.rh-region .rh-grid > .rh-tile:not(.open) .rh-tile-val { font-size: calc(22px * var(--ui-font, 1)); }
+.rh-region .rh-grid > .rh-tile:not(.open) .rh-tile-valrow { margin-bottom: 0; gap: 2px 8px; }
+.rh-region .rh-grid > .rh-tile:not(.open) .rh-tile-absent,
+.rh-region .rh-grid > .rh-tile:not(.open) .rh-tile-variant { font-size: calc(11.5px * var(--ui-font, 1)); }
+/* The plot box each tile measures (content box). min-width 0 so it follows the track. */
+.rh-region .rh-tile-plot { min-width: 0; }
+.rh-region .rh-grid > .rh-tile:not(.open) .rh-tile-plot .rh-spark { margin-top: 4px; }
+.rh-region #rh-tiles > .rh-h { margin: 0 0 6px; }
+
+/* ── Weight card ──────────────────────────────────────────────────────────
+   Its first chart's name leads the card at a heading's weight (no separate title — the chart's
+   name and `?` would be the same words twice). */
+.rh-region #rh-weight .rh-chart:first-child { padding-top: 0; }
+.rh-region #rh-weight .rh-chart-label { font-size: calc(15px * var(--ui-font, 1)); font-weight: 650; color: var(--fg); }
+
+/* ── Size card (RepoHealthMags.tsx) ──────────────────────────────────────── */
+.rh-region .rh-mags { padding: 0; margin: 0; border: 0; }
+/* Type FilterChips (and the subtree picker's): a wrapping row, tight gaps. */
+.rh-region .rh-filter-chips { display: flex; flex-wrap: wrap; gap: 0 2px; margin: 0 0 6px; padding: 0; list-style: none; }
+/* The two magnitude curves as compact tiles side by side. */
+.rh-region .rh-tiles-compact { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 8px 0 0; padding: 0; list-style: none; }
+.rh-region .rh-tiles-compact .rh-tile { border: 0; padding: 0; min-width: 0; }
+.rh-region .rh-tiles-compact .rh-tile-val { font-size: calc(22px * var(--ui-font, 1)); font-weight: 650; }
+
+/* ── Table card (RepoHealthTable.tsx): scroll shadows, pure CSS ──────────────
+   Two cover gradients scroll with the content and hide the two fixed shadow gradients at the ends. */
+.rh-region .rh-fade {
+  background:
+    linear-gradient(to right, var(--panel) 30%, transparent) 0 0 / 28px 100% no-repeat local,
+    linear-gradient(to left, var(--panel) 30%, transparent) 100% 0 / 28px 100% no-repeat local,
+    linear-gradient(to right, color-mix(in srgb, currentColor 18%, transparent), transparent) 0 0 / 12px 100% no-repeat scroll,
+    linear-gradient(to left, color-mix(in srgb, currentColor 18%, transparent), transparent) 100% 0 / 12px 100% no-repeat scroll;
+}
+/* The odd-row tint would paint over the fades; the table reads fine without it inside a card. */
+.rh-region .rh-fade .rh-table tbody tr:nth-child(odd) { background: transparent; }
+
+/* ── Own card ── */
+.rh-region #rh-own > .rh-h { display: block; margin: 0 0 6px; font-size: calc(15px * var(--ui-font, 1)); }
+
+/* ── The two closed rows at the end: how to read this, and the daily notes ── */
+.rh-region .hint-more.rh-notes { padding: 0 14px 10px; }
+.rh-region .rh-notes > .rh-doc { padding: 0 0 6px; }

@@ -20,10 +20,10 @@ import {
 import { Tape } from "./RepoHealthMags";
 import { holderWords, longestCaptionWords, longestPickWords, tapeWords } from "./repoHealthStackWords";
 import { seriesValueWords } from "./repoHealthWords";
-import { ScrubHint } from "./kit/chart/ScrubHint";
+import { middleEllipsis } from "./repoHealthWords/repoHealthWordsFmt";
 import { SLOT } from "./kit/chart/TokenComposition";
 import { HintChip } from "./HintChip";
-import { Explain } from "./Explain";
+import { closedArea } from "./kit/chart/chartPath";
 
 /** Twice a tile's height: this is the chart the region opens on, and a
  *  handover's step needs the room to read as a step and not a kink. */
@@ -32,6 +32,13 @@ const LONGEST_H = 64;
 /** A folded or unnamed run is INK, like a stack's hueless remainder. */
 const strokeFor = (slot: number) => (slot >= 0 && slot < SLOT.length ? SLOT[slot] : "currentColor");
 const opacityFor = (slot: number) => (slot === FOLDED_SLOT ? CURVE_OPACITY : 1);
+
+/** The area under one run: its path closed to the floor. Null for a path that does not parse. */
+function runArea(d: string, base: number): string | null {
+  const m = /^M([\d.-]+),[\d.-]+/.exec(d);
+  const e = /L([\d.-]+),[\d.-]+$/.exec(d);
+  return m && e ? closedArea(d, m[1], e[1], base.toFixed(1)) : null;
+}
 
 function LongestCurve({ longest, width }: { longest: RepoHealthLongest; width: number }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -63,8 +70,10 @@ function LongestCurve({ longest, width }: { longest: RepoHealthLongest; width: n
   };
 
   const at = pickedIndex == null ? null : g.pts.find((q) => q.i === pickedIndex) ?? null;
-  const picked = at ? points[at.i] : null;
-  const readout = longestPickWords(picked, at && paths ? paths[at.i] : null, !!paths);
+  // Untouched, the line reads the LATEST reading: the drag instruction is the
+  // region's, said once above every chart (`SCRUB_HINT`).
+  const shown = at ?? g.pts[g.pts.length - 1] ?? null;
+  const readout = longestPickWords(shown ? points[shown.i] : null, shown && paths ? paths[shown.i] : null, !!paths);
   const boxH = LONGEST_H + TICK_H;
   const folded = h.holders.filter((x) => x.slot === FOLDED_SLOT).length;
   const readings = g.readings;
@@ -102,6 +111,10 @@ function LongestCurve({ longest, width }: { longest: RepoHealthLongest; width: n
             <line key={`s${s.i}`} x1={s.fromX} y1={s.fromY} x2={s.x} y2={s.y}
               stroke="currentColor" strokeOpacity={0.35} strokeWidth={1} />
           ))}
+          {h.runs.map((r, k) => {
+            const a = r.d ? runArea(r.d, LONGEST_H - 0.5) : null;
+            return a ? <path key={`a${k}`} d={a} fill={strokeFor(r.slot)} fillOpacity={0.07} stroke="none" /> : null;
+          })}
           {h.runs.map((r, k) => r.d ? (
             <path key={k} d={r.d} fill="none" stroke={strokeFor(r.slot)} strokeOpacity={opacityFor(r.slot)}
               strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
@@ -121,9 +134,9 @@ function LongestCurve({ longest, width }: { longest: RepoHealthLongest; width: n
         <XAxis points={points} w={plotW} y={LONGEST_H + TICK_BASELINE} gutter={gutter} />
         {at ? <Crosshair at={at} h={LONGEST_H} gutter={gutter} /> : null}
       </svg>
-      <div className="rh-scrub">{readout ?? <ScrubHint />}</div>
+      <div className="rh-scrub">{readout}</div>
       {h.holders.length ? (
-        <ul className="rh-legend rh-legend-rows">
+        <ul className="rh-legend rh-legend-rows rh-legend-compact">
           {h.holders.map((x) => (
             <li key={x.path}>
               <span className="rh-swatch rh-swatch-line"
@@ -136,9 +149,10 @@ function LongestCurve({ longest, width }: { longest: RepoHealthLongest; width: n
       {/* An absence in the open; the method behind a closed `Explain` — it
           was four sentences on every visit beside a `?` that names the hues. */}
       {cap.lead ? <div className="rh-cap">{cap.lead}</div> : null}
-      <div className="rh-cap">
-        <Explain of="the longest-file chart" label="how it is drawn">{cap.more}</Explain>
-      </div>
+      <details className="hint-more rh-more">
+        <summary>how it is drawn</summary>
+        {cap.more}
+      </details>
     </div>
   );
 }
@@ -171,7 +185,9 @@ export function LongestFiles({ longest, classics, p95, width, onOpenFile }: {
       {last != null ? (
         <div className="rh-tile-val">
           {seriesValueWords(last, "lines")}
-          {longest?.path ? <span className="rh-longest-path"> · {longest.path}</span> : null}
+          {longest?.path ? (
+            <span className="rh-longest-path" title={longest.path}> · {middleEllipsis(longest.path, 44)}</span>
+          ) : null}
         </div>
       ) : null}
       {curve && longest ? <LongestCurve longest={longest} width={width} /> : null}
@@ -180,6 +196,7 @@ export function LongestFiles({ longest, classics, p95, width, onOpenFile }: {
           does the caption carry it. */}
       {tape ? (
         <Tape tape={tape} paths={classics.tapePaths ?? null} width={width} onOpenFile={onOpenFile}
+          holderHue={classics.tapePaths ? SLOT[0] : undefined}
           caption={tapeWords(tape.length, last != null ? null : tape[0] ?? null, p95, files, longest?.path ?? null)} />
       ) : null}
     </div>

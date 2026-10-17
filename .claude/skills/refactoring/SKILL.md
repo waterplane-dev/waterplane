@@ -5,10 +5,10 @@ description: How big files are split in this repo without changing behaviour —
 
 # Refactoring a big file
 
-The why and the incidents behind every step: [refactoring.md](docs/notes/refactoring.md). The two
+The why and the incidents behind every step: [refactoring.md](../../../docs/notes/refactoring.md). The two
 finished splits are the worked examples: the web client's
-[web-architecture.md](docs/notes/web-architecture.md) and the host's
-[host-architecture.md](docs/notes/host-architecture.md) (its "Result" is the map; the "as landed"
+[web-architecture.md](../../../docs/notes/web-architecture.md) and the host's
+[host-architecture.md](../../../docs/notes/host-architecture.md) (its "Result" is the map; the "as landed"
 sections are what each package decided).
 
 ## Order of work
@@ -22,8 +22,8 @@ sections are what each package decided).
 3. **Guardrails before moves.**
    - A line ratchet on the file and a per-file cap on the new dirs (models: `tools/webshape.test.mjs`,
      `tools/hostshape.test.mjs`). Lower the ratchet in every commit that moves code out.
-   - Pin every site a copy-then-delete move could DUPLICATE: ack-id mints (`queue.test.mjs`), draft
-     clears, session creates (`createOp.test`), deliveries — and, where ORDER is behaviour (listener
+   - Pin every site a copy-then-delete move could DUPLICATE: ack-id mints (`core/queue/queue.test.mjs`), draft
+     clears, session creates (`packages/web/src/createOp.test.mjs`), deliveries — and, where ORDER is behaviour (listener
      registration, a shutdown flush), the order (model: `tools/hostpins.test.mjs`). Moving a pinned
      site edits the map in the same commit.
    - Boundaries as lint rules (`tools/eslint/`), not prose.
@@ -48,8 +48,6 @@ sections are what each package decided).
   Render-check after pruning; don't trust tsc for it.
 - **A failing test is run on the base commit before it is blamed** on the split.
 - **Concurrent e2e runs collide** (ports, tmux, `shared/dist`): re-run alone before believing.
-- **Shared working tree**: never `git stash`/`reset`/`checkout`; stage by explicit path; a shared
-  file with someone else's edit → commit your hunk via `git hash-object -w` +
-  `git update-index --cacheinfo`.
-- The never-fork list in CLAUDE.md (`deliver.ts`, `download.ts`, `PromptComposer.tsx`, `render.ts`)
-  holds during a split: MOVE them whole or not at all.
+- **Shared working tree** (CLAUDE.md has the rules): a shared file carrying someone else's edit →
+  commit your hunk via `git hash-object -w` + `git update-index --cacheinfo`.
+- CLAUDE.md's never-fork list holds during a split: MOVE those files whole or not at all.

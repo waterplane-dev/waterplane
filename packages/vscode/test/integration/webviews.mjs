@@ -67,17 +67,20 @@ export async function probeWebviews(port, want, timeoutMs = 20_000) {
  * Waits until the panel shows view `tabId` (picked by the suite through `waterplane.show`) and its
  * text contains every string in `needles`. Returns `{ ok, why, text }`, `text` as last seen.
  */
-export async function probePanelText(port, tabId, needles, _click = null, timeoutMs = 30_000) {
-  return probeRootText(port, "panel", tabId, needles, timeoutMs);
+export async function probePanelText(port, tabId, needles, click = null, timeoutMs = 30_000) {
+  return probeRootText(port, "panel", tabId, needles, timeoutMs, click);
 }
 
-async function probeRootText(port, mode, tabId, needles, timeoutMs) {
+/** `click`: a selector to open first (an Explain chip) — clicked only while not yet aria-expanded. */
+async function probeRootText(port, mode, tabId, needles, timeoutMs, click = null) {
   const end = Date.now() + timeoutMs;
   const expr = `(() => {
     const d = document.querySelector("iframe#active-frame")?.contentDocument;
     const r = d?.getElementById("root");
     if (!r || r.dataset.mode !== ${JSON.stringify(mode)}) return null;
     if (${JSON.stringify(tabId)} && !d.getElementById(${JSON.stringify("panel-" + tabId)})) return null;
+    const c = ${JSON.stringify(click)} && r.querySelector(${JSON.stringify(click)});
+    if (c && c.getAttribute("aria-expanded") !== "true") { c.click(); return null; }
     return r.innerText;
   })()`;
   let text = "";

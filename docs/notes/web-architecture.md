@@ -397,6 +397,7 @@ App's call sites keep their names; `bindCore` then binds `CoreApi` to those retu
 | `sessions/` | session verbs (close, star, the host's close check, stars held for a dead link) and the chips both screens draw (`tags.tsx`) | — |
 | `launcher/` | the launcher screen; its own state is module stores (it unmounts under every sheet, and a filter must survive the round trip) | `model.test.mjs` (order, cuts, roll-ups, bulk-close counts); `createOp.test.mjs` (reopen sites) |
 | `session/` | the session screen (`SessionScreen`, `SessionHeader`, `TermArea`, `ToolbarMenu`) and `useSessionChrome` — typing room and its peek, full screen, the dismissed reply: chrome state that must outlive the screen unmounting under every sheet, so a hook App calls once | — |
+| `layout/` | phone or wide: `layout.ts` is the one fact and one writer (`startLayout`'s media-query listener, width only), `Workspace.tsx` the frame that returns the same two-slot fragment at every width so the session screen never remounts across a crossing | `layout.test.mjs` |
 | `settings/` | the settings sheet (the aggregator, like `overlayViews`) | `settingsIndex.test.mjs` (ids both ways, and a feature row's group) |
 
 Single files at `core/`'s top are the feature runners (`api`, `dispatch`, `sheets`,

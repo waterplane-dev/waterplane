@@ -249,3 +249,13 @@ test("no severe push on a gap week (a definition change), however bad the new re
   await m.mk().sweep();
   assert.equal(severeKind(m).length, 0);
 });
+
+test("respond carries commits beside the series, and null without one — never omitted", () => {
+  const m = make();
+  const r = m.mk().respond("/nonexistent/demo");
+  assert.ok(r.commits && r.commits.total === 11 && r.commits.points.length === 11);
+  // An omitted key means an OLDER host (`healthCommitsAvailability` → "absent"), and the x-axis
+  // row then tells the person to restart the desktop: never true of a repo with no series yet.
+  const none = make({ text: { v: null } }).mk().respond("/nonexistent/demo");
+  assert.equal(none.commits, null);
+});

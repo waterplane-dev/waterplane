@@ -74,7 +74,7 @@ export function ReadingsTable({ plot }: { plot: RepoHealthPlot }) {
       </div>
       {/* Its own scroller: a table is the one thing on this sheet allowed to
           be wider than the phone, and only inside a box of its own. */}
-      <div className="rh-table-wrap">
+      <div className="rh-table-wrap rh-fade">
         <table className="rh-table">
           <thead>
             <tr>

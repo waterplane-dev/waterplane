@@ -44,7 +44,7 @@ export const HEALTH_GOOD_WORDS: Record<HealthEntry, string> = {
   size: "the average line in a file under 500 lines and the longest file under 1,000",
   retouch: "under 15% of recent file edits reworking the edit before",
   hatches: "under 2 unexplained escape hatches per 1,000 lines",
-  context: "CLAUDE.md + skill descriptions under half the repo's warn line (8,000 characters by default)",
+  context: "CLAUDE.md + skill descriptions under the repo's warn line (16,000 characters by default)",
   untested: "under 20% of source files with no test reaching them",
 };
 
@@ -308,6 +308,133 @@ export function indexLineGeom(
   flush();
   const last = pts[pts.length - 1];
   return { d: runs.join(""), dashed: dashed.join(""), dots, pts, endX: last.x, endY: last.y, rules: [100, 50, 0].map((v) => ({ v, y: py(v) })), lo, hi, gaps };
+}
+
+/**
+ * The area under the index line, closed to the floor (the 0 rule), one closed
+ * shape per solid run of two or more points — for either geometry
+ * (`indexLineGeom`, `indexCommitGeom`). A dashed link and a lone dot get no
+ * fill: the wash is under measured runs only. Empty string with nothing to fill.
+ */
+export function areaD(g: Pick<IndexLineGeom, "d" | "rules">): string {
+  const floor = g.rules.find((r) => r.v === 0)?.y;
+  if (!g.d || typeof floor !== "number") return "";
+  const fy = floor.toFixed(1);
+  return g.d
+    .split("M")
+    .filter(Boolean)
+    .map((run) => {
+      const pairs = run.split("L");
+      const firstX = pairs[0].split(",")[0];
+      const lastX = pairs[pairs.length - 1].split(",")[0];
+      return `M${firstX},${fy}L${run}L${lastX},${fy}Z`;
+    })
+    .join("");
+}
+
+/* ── commits mode ────────────────────────────────────────────────────────── */
+
+/**
+ * One scored commit as the commit-mode chart reads it — the structural part of
+ * `shared/healthindex.ts`'s `HealthCommitPoint` this module needs, declared
+ * locally so the words compile against any shared that has the series.
+ */
+export interface CommitPt {
+  sha7: string;
+  day: string;
+  week: string;
+  index: number;
+  gap: boolean;
+}
+
+export interface IndexCommitGeom extends IndexLineGeom {
+  /** A faint rule at the first point of each ISO week, the first week skipped
+   *  (its left edge is the frame). */
+  weekRules: { x: number; week: string }[];
+  /** Day labels at reading positions — first, middle, last (fewer when there
+   *  are fewer points) — so the middle label is the middle COMMIT, not the
+   *  middle of the span. */
+  ticks: { x: number; day: string; anchor: "start" | "middle" | "end" }[];
+}
+
+/**
+ * The index over commits: the same fixed 0–100 y and the same x rule as
+ * `indexLineGeom` (position in the series, `i / (n − 1) · w`), so the two modes
+ * read on one frame. A `gap` point (the engine's or the repo's definition
+ * changed there) starts a new run. No dashed links: a commit series has no
+ * weeks-with-no-row to bridge, only points that are or are not comparable.
+ */
+export function indexCommitGeom(points: readonly CommitPt[], w: number, h: number): IndexCommitGeom | null {
+  const base = indexLineGeom(points.map((p) => ({ index: p.index, gap: p.gap })), w, h);
+  if (!base) return null;
+  const weekRules: { x: number; week: string }[] = [];
+  for (let i = 1; i < points.length; i++) {
+    if (points[i].week !== points[i - 1].week) weekRules.push({ x: base.pts[i].x, week: points[i].week });
+  }
+  const n = points.length;
+  const at = n === 1 ? [0] : n === 2 ? [0, 1] : [0, Math.floor((n - 1) / 2), n - 1];
+  const ticks = at.map((i, k) => ({
+    x: base.pts[i].x,
+    day: points[i].day,
+    anchor: (n === 1 ? "end" : k === 0 ? "start" : k === at.length - 1 ? "end" : "middle") as "start" | "middle" | "end",
+  }));
+  return { ...base, weekRules, ticks };
+}
+
+/* ── the region's words for the x axis and the readout ───────────────────── */
+
+/** Which x the region draws: one point per ISO week, or one per commit. */
+export type HealthAxisMode = "weeks" | "commits";
+
+/**
+ * The readout's head for the picked point: `Week of 2026-09-28: 46` or
+ * `Commit a1b2c3d, 2026-09-28: 46`. The caller appends the rest (a carried
+ * move, the spend clause) after it.
+ */
+export function indexReadoutWords(
+  mode: HealthAxisMode,
+  at: { week: string; index: number; sha7?: string; day?: string },
+): string {
+  const v = Math.round(at.index);
+  if (mode === "commits" && at.sha7) return `Commit ${at.sha7}, ${at.day ?? at.week}: ${v}`;
+  return `Week of ${at.week}: ${v}`;
+}
+
+/** Said whenever the commit series was thinned to fit: `142 of 1,526 commits drawn`. Null when nothing was left out. */
+export function thinnedWords(kept: number, total: number): string | null {
+  if (!(total > kept)) return null;
+  return `${nfWhole(kept)} of ${nfWhole(total)} commits drawn`;
+}
+
+/** The sticky jump bar's chip labels, by section key. */
+export const NAV_LABELS = {
+  score: "Score",
+  longest: "Longest",
+  tiles: "Tiles",
+  weight: "Weight",
+  size: "Size",
+  table: "Table",
+  own: "Own",
+} as const;
+export type HealthNavKey = keyof typeof NAV_LABELS;
+
+/** The region's one drag instruction, above every chart it applies to. */
+export const SCRUB_HINT = "Drag across a chart to read a value.";
+
+/** What the x-axis choice means, for its `Explain` and the caption naming the mode. */
+export function axisModeWords(mode: HealthAxisMode): string {
+  return mode === "weeks"
+    ? "weeks: one point per week, its last reading"
+    : "commits: one point per scored commit, a faint rule where a new week starts; the tiles and stacks draw one point per day, its last commit";
+}
+
+/** An older desktop sends no commit series: the chip is not offered, and this says why. */
+export const commitsAbsentWords = (product: string): string =>
+  `This desktop runs an older ${product}, which sends the health index per week only — restart it to read it per commit.`;
+
+/** The contribution bars exist per week only; in commits mode one open line says so. */
+export function barsWeeksOnlyWords(week: string): string {
+  return `What moved the score is counted per week, so the bars show the week of ${week} in either mode.`;
 }
 
 /* ── the bars ────────────────────────────────────────────────────────────── */

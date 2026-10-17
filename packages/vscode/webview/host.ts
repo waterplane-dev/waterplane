@@ -15,12 +15,19 @@ const api: VsCodeApi = acquireVsCodeApi();
 
 export const post = (m: ToExtension): void => api.postMessage(m);
 
-/** The state this webview keeps across hides: the selected tab and nothing else. */
+/** The state this webview keeps across hides: the selected tab and the Health view's x axis. */
+interface Kept { tab?: string; healthAxis?: string }
+const kept = (): Kept => (api.getState() as Kept | undefined) ?? {};
+const keep = (k: Kept): void => api.setState({ ...kept(), ...k });
+
 export function loadTab<T extends string>(valid: readonly T[], fallback: T): T {
-  const s = api.getState() as { tab?: string } | undefined;
-  return valid.find((t) => t === s?.tab) ?? fallback;
+  return valid.find((t) => t === kept().tab) ?? fallback;
 }
-export const saveTab = (tab: string): void => api.setState({ tab });
+export const saveTab = (tab: string): void => keep({ tab });
+
+/** The repo-health x axis, as the phone keeps it per device (`healthAxis`): `weeks` unless chosen. */
+export const loadHealthAxis = (): "weeks" | "commits" => (kept().healthAxis === "commits" ? "commits" : "weeks");
+export const saveHealthAxis = (axis: "weeks" | "commits"): void => keep({ healthAxis: axis });
 
 // ── the extension's state, one subscription for the panel's App ──
 

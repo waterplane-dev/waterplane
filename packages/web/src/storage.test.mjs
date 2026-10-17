@@ -8,7 +8,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { BRAND, HOST_PARK_PREFIX, LEGACY, SYNCED_SETTING_KEYS, isHostScopedKey, parkedKeyFor } from "@waterplane/shared";
 
-import { DEVICE_KEYS, HOST_KEY_PREFIXES, KEY_SCOPE, LS, TR_SEEN_PREFIX, isDeviceKey, trSeenKey } from "./storage.ts";
+import { DEVICE_KEYS, HOST_KEY_PREFIXES, KEY_SCOPE, LS, TR_SEEN_PREFIX, isDeviceKey, readHealthAxis, trSeenKey } from "./storage.ts";
 import { UI_RESET_KEYS } from "./resetKeys.ts";
 
 test("every registry key is classified, and nothing else is", () => {
@@ -41,7 +41,7 @@ test("the plan's device keys are device keys", () => {
     "sessionTabsOrder", "dictateLang", "dictateLangs", "cliMode", "typingRoom", "readMode", "toolbarOpen",
     "closeBy", "closeKeepStar", "closeCustomH", "schedPctLeft", "collageGap", "collageLabels",
     "dismissInsecure", "dismissPhoneSetup", "dismissedUpdate", "lastForcedReload", "toastLog", "hostedAck",
-    "giveups", "giveupsMigrated", "padRescue", "padRescueMigrated",
+    "giveups", "giveupsMigrated", "padRescue", "padRescueMigrated", "healthAxis",
   ];
   for (const k of device) assert.ok(DEVICE_KEYS.has(LS[k]), k);
 });
@@ -81,4 +81,9 @@ test("the UI reset forgets only this device's look — never words, never a sync
     assert.ok(!synced.has(LS[k]), k);
   }
   assert.equal(new Set(UI_RESET_KEYS).size, UI_RESET_KEYS.length);
+});
+
+test("healthAxis is a device key and reads weeks when storage says nothing", () => {
+  assert.equal(KEY_SCOPE.healthAxis, "device");
+  assert.equal(readHealthAxis(), "weeks");
 });

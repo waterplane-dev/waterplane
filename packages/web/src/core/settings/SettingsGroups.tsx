@@ -5,9 +5,9 @@
  * `<SetGroup>` tags themselves stay in `SettingsSheet.tsx`, because the group
  * ORDER is that file's to say (`settingsIndex.test.mjs` reads it there).
  */
-import type { MutableRefObject } from "react";
+import type { MutableRefObject, ReactNode } from "react";
 import {
-  Activity, ArrowDownToLine, ArrowDownWideNarrow, BatteryMedium, BookOpen, Check, ChevronsDownUp, Command, CornerDownLeft, Cpu, HelpCircle, Images, Keyboard, Languages, Layers,
+  Activity, ArrowDownToLine, Bot, Siren, ArrowDownWideNarrow, BatteryMedium, BookOpen, Check, ChevronsDownUp, Command, CornerDownLeft, Cpu, HelpCircle, Images, Keyboard, Languages, Layers,
   ListOrdered, Moon, Palette, Radio, RotateCw, SendHorizontal, Smartphone, SpellCheck, Sun, SunMoon,
   Hourglass, Terminal as TerminalIcon, Type as TypeIcon, type LucideIcon,
 } from "lucide-react";
@@ -23,6 +23,7 @@ import { resolvedTheme, type ThemeChoice } from "../../theme.ts";
 import { ICON_STEPS, TEXT_STEPS, nextTermZoom, termFontPx } from "../../uiScale.ts";
 import { TAB_COUNT_MAX, TAB_COUNT_MIN, TAB_LIMIT_MAX, TAB_LIMIT_MIN, TAB_ORDERS, TAB_ORDER_LABEL } from "../../sessionTabs.ts";
 import { LOCAL_RT_MODES, LOCAL_RT_MODE_LABEL } from "../../localRt.ts";
+import { AGENT_WARN_STEPS, type AgentWarnCfg } from "../../agentCount.ts";
 import { REPO_ORDERS, REPO_ORDER_LABEL } from "../launcher/model.ts";
 import type { ReaderToolsMode } from "../../transcriptUtil.ts";
 import { hintSeenCount, resetHints, setExplainMode, type HintMode } from "../../hints.ts";
@@ -53,6 +54,7 @@ export function AppearanceRows() {
   const unfoldToEnd = usePref("unfoldToEnd");
   const repoSort = usePref("repoSort");
   const localRtBar = usePref("localRtBar");
+  const agentWarn = usePref("agentWarn");
   const smaller = nextTermZoom(tZoom, -1, txtScale);
   const bigger = nextTermZoom(tZoom, 1, txtScale);
   const setTabsN = (n: number) => { setPref("tabsN", n); showToast(`${n} tabs across the strip`); };
@@ -261,6 +263,19 @@ export function AppearanceRows() {
           <p>It exists for the one question a hosted model never raises and a local one raises constantly — “is the thing I am talking to still resident, or is the desktop swapping?” With no model loaded it is the machine itself — CPU, GPU, memory available, amber when memory is tight. Tap it for the full readout.</p>
         </>}
       />
+
+      {/* The parallel-agent count's two marks (`agentCount.ts`). Synced: how
+          many agents at once is too many is about the desktop and the
+          account, not this phone. Each mark steps through one ladder with
+          "off" past its top; a stepper end is ABSENT, never greyed. */}
+      <AgentMark id="agent-warn" label="warn above this many agents" icon={Bot} cfg={agentWarn} k="warn"
+        note={<>The desktop strip's agent count turns amber, and says so once, when more than this many agents run at once — sessions mid-turn plus their subagents.</>} />
+      <AgentMark id="agent-alarm" label="alarm above this many agents" icon={Siren} cfg={agentWarn} k="alarm"
+        note={<>…and red, with a second notice, above this many. Nothing is stopped or refused at either mark.</>}
+        more={<>
+          <p><b>What counts.</b> Every session on this desktop whose turn is running, plus every subagent (the Agent/Task tool) running under any session, background ones included. A session that is idle while its subagents work counts once per subagent, never also for itself.</p>
+          <p><b>Where it shows.</b> On the desktop strip, between the CPU and the GPU. Past a mark the strip shows itself even when it is switched off above; its × hides it until the count passes your next mark. Tap the number for the count over time and which sessions hold the agents.</p>
+        </>} />
 
       {/* One way back from every look-and-layout choice on this phone at
           once, for the switches that hide things (the `?` chip first among
@@ -654,5 +669,26 @@ export function OfflineRows({ install, reconnect }: { install: InstallFacts; rec
         more={<p>Battery against how recent the screen is that you can read with no signal. Left is fresher, right saves more. Takes effect the next time the app goes to the background. Per device.</p>}
       />
     </>
+  );
+}
+
+/** One of the parallel-agent marks as a stepper over `AGENT_WARN_STEPS`, with
+ *  "off" (0) past the top. */
+function AgentMark({ id, label, icon, cfg, k, note, more }: {
+  id: string; label: string; icon: LucideIcon; cfg: AgentWarnCfg; k: keyof AgentWarnCfg; note: ReactNode; more?: ReactNode;
+}) {
+  const steps: readonly number[] = [...AGENT_WARN_STEPS, 0];
+  const v = cfg[k];
+  let i = steps.indexOf(v);
+  if (i < 0) i = steps.findIndex((s) => s > v);
+  if (i < 0) i = steps.length - 2;
+  const set = (n: number) => { track(`action:agentWarn.${k}`); setPref("agentWarn", { ...cfg, [k]: n }); };
+  return (
+    <SetStepper id={id} label={label} icon={icon}
+      readout={v === 0 ? "off" : String(v)}
+      onLess={i > 0 ? () => set(steps[i - 1]) : null}
+      onMore={i >= 0 && i < steps.length - 1 ? () => set(steps[i + 1]) : null}
+      lessLabel="fewer" moreLabel={steps[i + 1] === 0 ? "off" : "more"}
+      note={note} more={more} />
   );
 }

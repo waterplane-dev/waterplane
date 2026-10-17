@@ -133,7 +133,7 @@ test("plan, first run: verify, tag, public snapshot, install.sh, draft release w
 test("plan: with hosted media, the snapshot gets --media-to and the media repo is pushed before the public one", () => {
   const cmds = planSteps(fresh, { ...ctx, mediaClone: "/c/media" }).find((s) => s.id === "public").cmds;
   assert.deepEqual(cmds[0], ["node", "scripts/release/publish-public.mjs", "--tag", "v1.2.3", "--to", "/c/pub", "--commit", "--media-to", "/c/media"]);
-  assert.deepEqual(cmds.slice(1), [["git", "-C", "/c/media", "push", "origin", "main"], ["git", "-C", "/c/pub", "push", "origin", "main"]]);
+  assert.deepEqual(cmds.slice(1), [["git", "-C", "/c/media", "push", "origin", "HEAD:main"], ["git", "-C", "/c/pub", "push", "origin", "HEAD:main"]]);
 });
 
 test("plan, resume after the GitHub release and before npm: only the npm wait runs (or the desktop publish, with the flag)", () => {
@@ -180,7 +180,7 @@ test("plan: --npm-from-desktop publishes dist-release's .tgz here, says WITHOUT 
   const steps = planSteps(fresh, { ...ctx, npmFromDesktop: true });
   assert.deepEqual(run(steps), ["verify", "tag", "public", "install-sh", "release", "undraft", "npm"]);
   const npm = steps.find((s) => s.id === "npm");
-  assert.deepEqual(npm.cmds, [["npm", "publish", "dist-release/waterplane-1.2.3.tgz", "--access", "public"]]);
+  assert.deepEqual(npm.cmds, [["npm", "publish", "./dist-release/waterplane-1.2.3.tgz", "--access", "public"]]);
   assert.match(npm.title, /WITHOUT provenance/);
   assert.ok(!steps.flatMap((s) => s.cmds).flat().includes("--provenance"), "a desktop has no OIDC identity: --provenance would fail there");
   assert.equal(steps.find((s) => s.id === "npm-wait"), undefined);

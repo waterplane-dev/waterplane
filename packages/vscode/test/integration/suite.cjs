@@ -101,7 +101,8 @@ async function run() {
 
   await check("the Health view shows the series the desktop app left in the folder, without measuring", async () => {
     await vscode.commands.executeCommand("waterplane.show", "health");
-    const v = await probe("health-repo", { tab: "health", needles: [
+    // The source sentence lives behind the status line's `?`, as on the phone.
+    const v = await probe("health-repo", { tab: "health", click: 'button[aria-label="what this series means"]', needles: [
       "Read from this folder's .waterplane/repohealth.jsonl", "measured by the waterplane desktop app", "The extension never writes it.",
     ] });
     assert.ok(v.ok, v.why);

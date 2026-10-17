@@ -5,7 +5,7 @@
  */
 import { Fragment, useLayoutEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, CalendarClock, Camera, Check, ChevronDown, ChevronRight, CircleDot, CircleSlash, ClipboardCheck, CloudOff, Download, ExternalLink, EyeOff, FileDiff, Flag, FolderTree, GitBranch, Hammer, HeartPulse, Hourglass, Images, ListChecks, ListTodo, Loader, Minus, MoreHorizontal, Plus, ScanEye, SendHorizontal, Star, Terminal, X } from "lucide-react";
-import type { SessionInfo } from "@waterplane/shared";
+import type { RepoTarget, SessionInfo } from "@waterplane/shared";
 import { branchLabel, horizonWords, isoWeekOf, repoBranchLabel } from "@waterplane/shared";
 import { repoAccentStyle } from "../../format";
 import { isBudgetHeld } from "../../sendIntent";
@@ -18,7 +18,7 @@ import { OptInMenuItem } from "../../OptInRegion";
 import { gitPending, gitSyncText, gitTitle, noOrigin } from "../../gitCounts";
 import { track } from "../../usage";
 import { prefRef } from "../prefs";
-import { openBuildFor } from "../../features/build";
+import { openBuildFor, useBuildBusy } from "../../features/build";
 import { openCaptureFor } from "../../features/capture";
 import { openPullRules } from "../../features/pull";
 import { openScheduleCut } from "../../features/schedule";
@@ -168,7 +168,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
             always-on 42px buttons need ~300px, which on a phone
             left no room for the name and broke the strip onto a
             line of its own under every header. */}
-        {main && <button className="focus-btn" title={`build ${repoName} (run a build command, no tokens)`} onClick={() => { track("action:repo.build.header"); openBuildFor(main); }}><Hammer size={17} /></button>}
+        {main && <BuildHeaderButton repo={main} repoName={repoName} />}
       </span>
       </div>
       <span className="repo-group-pin">
@@ -584,5 +584,18 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
       ))}
       <span ref={endRef} className="repo-group-anchor" aria-hidden />
     </Fragment>
+  );
+}
+
+/** The header's hammer. While a build runs in this repo it spins, as the git
+ *  button does for a push, so "nothing doing" is never read off a busy desktop. */
+function BuildHeaderButton({ repo, repoName }: { repo: RepoTarget; repoName: string }) {
+  const busy = useBuildBusy(repo);
+  return (
+    <button className="focus-btn"
+      title={busy ? `build “${busy.name}” is running on the desktop — open build to follow it` : `build ${repoName} (run a build command, no tokens)`}
+      onClick={() => { track("action:repo.build.header"); openBuildFor(repo); }}>
+      {busy ? <Loader size={17} className="spin" /> : <Hammer size={17} />}
+    </button>
   );
 }

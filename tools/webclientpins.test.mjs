@@ -203,8 +203,9 @@ const WORDS = join(SRC, process.env.WEBCLIENT_WORDS_FACADE || "repoHealthWords.t
 test("repoHealthWords.ts exports exactly its pinned surface (the five helpers stay private)", async () => {
   const names = surface("repoHealthWords.ts");
   // 49 at the split; the repo's own readings (whose each reading is) and its
-  // say over the central ones (repoHealthWordsCentral.ts) added the rest.
-  assert.equal(names.length, 60);
+  // say over the central ones (repoHealthWordsCentral.ts) added the rest; the
+  // redesign's new words (plotAxisModeWords, notesSummaryWords, middleEllipsis) took it to 62.
+  assert.equal(names.length, 62);
   const m = await import(pathToFileURL(WORDS).href);
   assert.deepEqual(Object.keys(m).sort(), names.filter((n) => n.endsWith(":value")).map((n) => n.split(":")[0]).sort());
   for (const priv of ["nf", "ordinal", "pctOf", "spanWords", "commitWords"]) assert.ok(!(priv in m), priv);

@@ -1,7 +1,7 @@
 /**
  * The health index for the Health view — the same absolute 0-100 score (capped by its worst entry, trend second)
  * the phone draws above the readings (`shared/healthindex.ts`), derived here from the series file the view already read.
- * Mirrors the host's `healthwatch.ts` `respond()` minus everything that host does on a clock:
+ * The derivation is the host's own (`shared/healthindexresponse.ts`), minus everything that host does on a clock:
  * there is no weekly refresh, no push and no stored notification mark here, so `lastRefresh` is
  * always null. PURE apart from reading the one file.
  *
@@ -10,32 +10,21 @@
  */
 import { readFileSync } from "node:fs";
 import {
-  DEFAULT_CONTEXT_LIMITS, assessHealthMove, healthIndex, healthMoveWords, isoWeekOf,
-  type HealthIndexResponse, type HealthSeriesRow,
+  DEFAULT_CONTEXT_LIMITS, healthIndexResponseOf, type HealthIndexResponse,
 } from "@waterplane/shared";
 
-/** One row per whole JSON line; a torn line is one missing reading, not a dead series. */
-export function parseHealthRows(text: string): HealthSeriesRow[] {
-  const rows: HealthSeriesRow[] = [];
-  for (const line of text.split("\n")) {
-    const l = line.trim();
-    if (!l) continue;
-    try {
-      const r: unknown = JSON.parse(l);
-      if (r && typeof r === "object") rows.push(r as HealthSeriesRow);
-    } catch { /* skip */ }
-  }
-  return rows;
-}
+export { parseHealthRows } from "@waterplane/shared";
 
-/** The index over a series' text. `series: null` + a reason when there is no scored week — never a made-up number. */
+/** The extension's remedy for an older engine's series: measure again, never the desktop's `rm` command. */
+export const STALE_ENGINE_WORDS =
+  "this series was measured by an older engine (size has no line-weighted mean), so it has no score until it is measured again under the bundled one";
+
+/** The index over a series' text — shared's `healthIndexResponseOf`, as the desktop app serves it, `commits` included. */
 export function healthIndexOf(text: string | null, now: number, warnChars: number = DEFAULT_CONTEXT_LIMITS.maxChars): HealthIndexResponse {
-  const none = { series: null, move: null, words: null, lastRefresh: null };
-  if (text === null) return { ...none, reason: "this folder has no repo-health series yet" };
-  const series = healthIndex(parseHealthRows(text), warnChars);
-  if (!series) return { ...none, reason: "no week has every enabled reading yet, so there is no scored week" };
-  const move = assessHealthMove(series.points);
-  return { series, move, words: healthMoveWords(series.points, move, isoWeekOf(new Date(now).toISOString().slice(0, 10))), lastRefresh: null };
+  return healthIndexResponseOf(text, {
+    warnChars, now, lastRefresh: null,
+    noSeries: "this folder has no repo-health series yet", staleEngine: STALE_ENGINE_WORDS,
+  });
 }
 
 /** `healthIndexOf` over a file; an unreadable file is a sentence, never an index. */

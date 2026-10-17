@@ -1,4 +1,4 @@
-import { Boxes, Cpu, Gpu, MemoryStick } from "lucide-react";
+import { Bot, Boxes, Cpu, Gpu, MemoryStick, X } from "lucide-react";
 import { useEffect } from "react";
 import {
   acquireLocalRtWatch, barVisible, cpuBusyPct, cpuSeries, gbText, heldBytes, heldSeries, heldUntil,
@@ -7,6 +7,9 @@ import {
 import type { LoadedModel } from "@waterplane/shared";
 import { useLink } from "./link";
 import { dur } from "./format";
+import { agentCountText, agentLevel, dismissAgentStrip, useAgentCount, useAgentForced } from "./agentCount";
+import { showToast } from "./toast";
+import { usePref } from "./core/prefs";
 
 /**
  * **The desktop strip** — how hard the machine is working (CPU, GPU, memory
@@ -50,7 +53,7 @@ import { dur } from "./format";
  */
 
 /** Which reading sent the user to the sheet. */
-export type LocalRtFocus = "models" | "history" | "cpu" | "memory";
+export type LocalRtFocus = "models" | "history" | "cpu" | "memory" | "agents";
 
 /** Samples drawn. Fewer than the ring the store keeps: 84 px cannot show a
  *  hundred and twenty marks without becoming a smear. */
@@ -172,7 +175,10 @@ export function LocalRtBar() {
       now: s.now,
     });
   }, mode !== "off");
-  const enabled = vis;
+  // Past a parallel-agent mark the strip shows itself whatever the mode, until
+  // the person closes it (`agentCount.ts`'s `stripForced`).
+  const forced = useAgentForced();
+  const enabled = vis || forced;
 
   // The strip's height, published as a CSS variable rather than measured by
   // every screen: `.screen` and `.sheet` add it to their top padding, so one
@@ -183,7 +189,10 @@ export function LocalRtBar() {
     return () => { document.documentElement.style.removeProperty("--ui-localrt-h"); };
   }, [enabled]);
 
-  return enabled ? <Strip /> : null;
+  // With the mode off nothing polls the machine, so the forced strip is the
+  // count alone — never a machine strip saying "not polled here".
+  if (!enabled) return null;
+  return mode === "off" ? <AgentOnlyStrip /> : <Strip closable={forced && !vis} />;
 }
 
 /**
@@ -206,7 +215,7 @@ export function LocalRtBar() {
  * is the headline; when there is none, "holding nothing" was a headline about
  * an absence, and the machine itself is the more useful line.
  */
-function Strip() {
+function Strip({ closable }: { closable: boolean }) {
   const s = useLocalRt<LocalRtSnapshot>((x) => x, true);
   // Online-ness comes from `link.ts`, the one store that owns it. Deriving it a
   // second time here is the bug class that file was written to end.
@@ -260,6 +269,7 @@ function Strip() {
           <HeldSpark series={series} ceiling={model ? seriesCeiling(series) : 100} w={model ? 56 : W} />
         </span>
       )}
+      <AgentCountReading />
       <span className="lrt-right">
         {/* Absent, not zero, when nothing has been measured — this app's
             standing rule for a reading it does not have. GPU first while a
@@ -282,6 +292,61 @@ function Strip() {
           </span>
         )}
       </span>
+      {closable && <CloseAgentStrip />}
     </div>
+  );
+}
+
+/**
+ * How many agents run on the desktop at once (`agentCount.ts`): sessions mid-
+ * turn plus the subagents under every session. Amber past the person's
+ * warning mark, red past their limit (Settings → Appearance). Absent until a
+ * session list has arrived, and absent at zero — a strip of zeros says nothing.
+ * Tapped, it opens *This desktop* at the agents: the count over time and
+ * which sessions hold them.
+ */
+function AgentCountReading() {
+  const c = useAgentCount();
+  const cfg = usePref("agentWarn");
+  if (!c || c.total === 0) return null;
+  const level = agentLevel(c.total, cfg);
+  const mark = level === "alarm" ? ` — more than your limit of ${cfg.alarm}` : level === "warn" ? ` — more than your warning of ${cfg.warn}` : "";
+  return (
+    <span className={`lrt-agents lrt-agents-${level}`} role="button" data-hint="localrt.agents"
+      title={`${agentCountText(c)}${mark}. Tap for which sessions and the count over time`}
+      onClick={(e) => openLocalRt("agents", e)}>
+      <Bot size={10} aria-hidden="true" /> {c.total}
+    </span>
+  );
+}
+
+/** The strip shown only because the count passed a mark, with the desktop
+ *  strip itself switched off: the count, its words, and the ×. */
+function AgentOnlyStrip() {
+  const c = useAgentCount();
+  return (
+    <div className="localrt-bar lrt-old lrt-agents-only" role="status" data-hint="localrt.agents"
+      onClick={() => openLocalRt("agents")}>
+      <span className="lrt-led" />
+      <AgentCountReading />
+      <span className="lrt-agents-words">{c ? `agents running at once` : ""}</span>
+      <CloseAgentStrip />
+    </div>
+  );
+}
+
+/** Hides the forced strip and says how it comes back — something that
+ *  disappears names the way back at that moment. */
+function CloseAgentStrip() {
+  return (
+    <button className="lrt-close" aria-label="hide the agent warning"
+      title="hide until the count climbs past your next mark"
+      onClick={(e) => {
+        e.stopPropagation();
+        dismissAgentStrip();
+        showToast("Agent warning hidden. It comes back if the count passes your next mark; Settings → Appearance → desktop strip keeps the strip on.");
+      }}>
+      <X size={12} aria-hidden="true" />
+    </button>
   );
 }

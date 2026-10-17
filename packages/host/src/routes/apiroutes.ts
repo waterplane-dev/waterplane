@@ -4,7 +4,7 @@
  * "api.ts — the HTTP routes as tables").
  *
  * Exact paths are disjoint, so between them order is not behaviour. What is:
- * the four mounts (inside `SYSTEM_ROUTES`, after the hook sinks, in their
+ * the five mounts (inside `SYSTEM_ROUTES`, after the hook sinks, in their
  * order), and the repo scope LAST — whatever it does not match is the
  * caller's 404.
  */

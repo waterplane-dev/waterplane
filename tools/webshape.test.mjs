@@ -1012,11 +1012,11 @@ const WEBCLIENT_SPLIT_FILES = {
   "gallery/useGalleryViewer.ts": 110,
   "repoHealthWords/repoHealthWordsCentral.ts": 70, // a repo's disable/override of a central reading, on its tile
   "repoHealthWords/repoHealthWordsEngine.ts": 115,
-  "repoHealthWords/repoHealthWordsFmt.ts": 50,
+  "repoHealthWords/repoHealthWordsFmt.ts": 85, // +middleEllipsis, the longest card's path
   "repoHealthWords/repoHealthWordsOwn.ts": 90,
   "repoHealthWords/repoHealthWordsPlot.ts": 155,
   "repoHealthWords/repoHealthWordsRank.ts": 125,
-  "repoHealthWords/repoHealthWordsRegion.ts": 160,
+  "repoHealthWords/repoHealthWordsRegion.ts": 195, // +notesSummaryWords, plotAxisModeWords (weeks | commits)
   "repoHealthWords/repoHealthWordsRun.ts": 110,
   "repoHealthWords/repoHealthWordsScope.ts": 60,
   "repoHealthWords/repoHealthWordsStale.ts": 130, // +seriesStatusWords, the one line over the series charts

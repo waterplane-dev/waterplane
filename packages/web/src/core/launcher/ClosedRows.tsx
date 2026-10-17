@@ -5,7 +5,7 @@
  */
 import { PromptPair } from "../../PromptPair";
 import { useState } from "react";
-import { Archive, Ban, Bot, Camera, CircleCheck, Eye, History, RotateCw, Trash2, X, XCircle } from "lucide-react";
+import { Archive, Ban, Bot, Camera, ChevronDown, ChevronRight, CircleCheck, Eye, History, RotateCw, Search, Trash2, X, XCircle } from "lucide-react";
 import { branchLabel, trimDefaultBranch } from "@waterplane/shared";
 import { ConfirmButton } from "../../Confirm";
 import { SessionName } from "../../SessionName";
@@ -19,6 +19,8 @@ import { statusTags } from "../sessions/tags";
 import type { LauncherProps } from "./types";
 import type { LauncherModel } from "./useLauncherModel";
 import { countBadges } from "./SessionRow";
+import { matchesText } from "./model";
+import { Empty } from "../../Empty";
 import { CountChips, FilterBar } from "../../kit";
 import { FOLLOWUP_CLEAR, FlagIcon, FollowUpLine, followUpClass } from "../sessions/followUp";
 import {
@@ -46,11 +48,51 @@ export function ClosedRows({ p, m }: { p: LauncherProps; m: LauncherModel }) {
   const reopenHint = (r: Parameters<typeof resumeIdOf>[0] & { launch?: { backend?: string } }) =>
     isShell(r) ? "starts a new shell in this folder — a shell has no conversation to continue" : resumeHint(!!resumeIdOf(r));
   const [closedFilter, setClosedFilter] = useState<ClosedFilter>(null);
+  // "Recently closed" and "Resume recent" sit folded behind one header, shut
+  // by default: two long lists under the repos pushed everything else off a
+  // phone screen. Ephemeral, like the filters — every launcher starts shut.
+  // The search inside cuts BOTH lists, and says "n of N" while it does.
+  const [foldOpen, setFoldOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const queryOn = query.trim() !== "";
+  const allClosed = m.reopenable;
+  const reopenable = queryOn
+    ? allClosed.filter((c) => matchesText(query, [c.title, closedHeadline(c), closedSubtitle(c), c.cwd, c.firstPrompt, c.lastPrompt]))
+    : allClosed;
+  const recentRows = queryOn
+    ? visibleRecent.filter((r) => matchesText(query, [r.title, r.cwd]))
+    : visibleRecent;
+  const foldTotal = allClosed.length + visibleRecent.length;
+  const foldShown = reopenable.length + recentRows.length;
   return (
     <>
-    {(() => {
+    {foldTotal > 0 && (
+      <button className="section section-head closed-fold" aria-expanded={foldOpen}
+        title={foldOpen ? "fold away recently closed and recent sessions" : "show recently closed and recent sessions, with a search"}
+        onClick={() => setFoldOpen((v) => !v)}>
+        <span>
+          {foldOpen ? <ChevronDown size={ICON} /> : <ChevronRight size={ICON} />} Closed & recent
+          <span className="section-hint"> · {allClosed.length} closed · {visibleRecent.length} recent</span>
+        </span>
+      </button>
+    )}
+    {foldOpen && foldTotal > 0 && (
+      <div className="section quick-filter">
+        <Search size={14} className="quick-filter-icon" />
+        <input type="search" value={query} placeholder="search closed & recent"
+          aria-label="search recently closed and recent sessions by title, folder and prompts"
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Escape" && query) { e.preventDefault(); e.stopPropagation(); setQuery(""); } }} />
+        {queryOn && <span className="quick-filter-n">{foldShown} of {foldTotal}</span>}
+        {queryOn && (
+          <button className="head-act" aria-label="clear the search" title="clear the search — every row again"
+            onClick={() => setQuery("")}><X size={ICON} /></button>
+        )}
+      </div>
+    )}
+    {foldOpen && queryOn && foldShown === 0 && <Empty>No closed or recent session shows “{query.trim()}”.</Empty>}
+    {foldOpen && (() => {
       // Sessions closed (incl. mis-tapped ×) whose conversation isn't already back open.
-      const reopenable = m.reopenable;
       if (!reopenable.length) return null;
       const autoCount = reopenable.filter(isAutoClosed).length;
       // A cut with nothing left in it falls back to the whole list rather
@@ -176,7 +218,7 @@ export function ClosedRows({ p, m }: { p: LauncherProps; m: LauncherModel }) {
       </>;
     })()}
 
-    {visibleRecent.length > 0 && (
+    {foldOpen && recentRows.length > 0 && (
       <div className="section section-head">
         <span>Resume recent</span>
         <span className="head-acts tight">
@@ -194,7 +236,7 @@ export function ClosedRows({ p, m }: { p: LauncherProps; m: LauncherModel }) {
         through it: keyed on `claudeSessionId` alone, two recent opencode
         conversations in one repo both fell back to `r.cwd` and React was
         handed the same key twice. */}
-    {visibleRecent.map((r) => (
+    {foldOpen && recentRows.map((r) => (
       <div key={resumeIdOf(r) ?? r.cwd} className="row-wrap" style={repoAccentStyle(repoForCwd(r.cwd)?.repoName ?? baseName(r.cwd))}>
         <button className="row grow" title={`${isShell(r) ? "open a new shell in" : "resume"} ${r.title} — ${reopenHint(r)}`} onClick={() => openCwd(r.cwd, r.title, true, "continue", r.launch, resumeIdOf(r))}>
           <span className="row-title">{r.title}</span>

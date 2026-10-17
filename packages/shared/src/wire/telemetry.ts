@@ -338,6 +338,9 @@ export interface RepoDaySlice {
   pricedTurns: number;
   /** List-price cost, the same counterfactual as every other figure here. */
   usd: number;
+  /** Input + cache read + cache write over `turns`: the context those requests
+   *  sent (`shared/healthspend.ts`). Absent on an older host. */
+  ctxTok?: number;
 }
 
 /**

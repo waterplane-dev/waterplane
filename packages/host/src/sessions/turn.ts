@@ -198,8 +198,12 @@ function publishAgents(
   // Keep polling while something runs underneath — and while the CLI still
   // says `busy` after our turn flag dropped: the Stop hook can land before the
   // CLI rewrites its record to `shell`, and reading once at that edge would
-  // miss every shell the turn left behind.
-  if (!rows.length && !shells && !(shellList && shellList.length) && !(cli === "busy" && !s.turnActive)) return;
+  // miss every shell the turn left behind. And while a TURN runs: a turn that
+  // starts with nothing under it and then fans out to N agents was read once at
+  // its start and never again, so the phone's parallel-agent count missed every
+  // agent launched mid-turn. The poll is a readdir per busy session plus the
+  // shared, memoised `ps`.
+  if (!rows.length && !shells && !(shellList && shellList.length) && cli !== "busy" && !s.turnActive) return;
   s.agentTimer = setTimeout(() => { s.agentTimer = null; checkAgents(core, s); }, AGENT_POLL_MS);
   s.agentTimer.unref?.();
 }
@@ -266,7 +270,7 @@ export function setTurn(core: SessionCore, s: Session, active: boolean, opts: { 
   if (active && s.info.asking) s.info.asking = null;
   // …and the memory of an acknowledged one goes with it: the next turn may
   // end on the same words for a new reason, and that is a fresh question.
-  if (active) s.askDismissed = null;
+  if (active && s.askDismissed) { s.askDismissed = null; persistAsk(core, s); }
   // The CLI's proposal was for the composer this turn just took.
   if (active) { s.hintRead = null; if (s.info.cliSuggestion) s.info.cliSuggestion = null; }
   // A turn STARTING on a session we believe is blocked is the earliest moment
@@ -818,7 +822,15 @@ export function ackAsking(core: SessionCore, id: string, text?: string): void {
   if (text != null && !sameAsk(text, cur)) return;
   s.askDismissed = { text: cur, stop: s.stopCount };
   s.info.asking = null;
+  persistAsk(core, s);
   core.emit("updated", s.info);
+}
+
+/** Rewrite the `live/` record so "handled" survives a restart — `persistLive`
+ *  takes `askDismissed` off the live session. */
+function persistAsk(core: SessionCore, s: Session): void {
+  const m = core.loadLive(s.info.id);
+  if (m) core.persistLive(m);
 }
 
 /**

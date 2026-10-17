@@ -1,25 +1,30 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { RefreshCw, Square, Trash2 } from "lucide-react";
-import { BRAND, repoHealthPlotAvailability, repoHealthPlotUnavailableText } from "@waterplane/shared";
+import { BRAND, healthCommitsAvailability, repoHealthPlotAvailability, repoHealthPlotUnavailableText } from "@waterplane/shared";
 import type { RepoHealthPlotSeries } from "@waterplane/shared";
-import { useBoxWidth } from "@waterplane/kit";
 import type { HealthDoc, HealthRunState, PromptDef, ToExtension } from "../src/protocol";
-import { AreaSpread, SeriesTile, WeightStack } from "../../web/src/RepoHealthTiles";
+import { TilesCard, WeightCard } from "../../web/src/RepoHealthTiles";
 import { LongestFiles } from "../../web/src/RepoHealthLongest";
 import { Magnitudes } from "../../web/src/RepoHealthMags";
 import { ReadingsTable } from "../../web/src/RepoHealthTable";
 import { OwnReadings } from "../../web/src/RepoHealthOwn";
 import { HealthIndexChart } from "../../web/src/HealthIndexChart";
-import { HintChip } from "./shims/HintChip";
+import { AxisRow, HealthNav, RefreshKey, SectionCard, navKeysOf, shownSections } from "../../web/src/RepoHealthCards";
+import { foldPlot } from "../../web/src/repoHealthFoldPlot";
+import { Explain } from "../../web/src/Explain";
+import { FilterChip } from "../../web/src/kit/FilterChip";
+import type { HealthAxisMode } from "../../web/src/healthIndexWords";
 import { CLAUDE_MD_KEY, DESC_KEY } from "../../web/src/repoHealthPlot";
 import {
   centralFileLines, centralHeadWords, emptySeriesWords, engineLineWords, lastCommitWords, notPlottedWords, outcomeWords, ownShow,
-  plotAxisWords, rankBasisWords, readFailedWords, refreshBusyLabel, refreshLabel, runningWords,
-  seriesHeadWords, seriesSizeWords, staleRowsWords, stalenessWords, warningsWords,
+  readFailedWords, refreshBusyLabel, refreshLabel, runningWords, seriesHeadWords, seriesSizeWords, seriesStatusWords,
+  staleRowsWords, stalenessWords, warningsWords,
 } from "../../web/src/repoHealthWords";
 import { SCOPE_ALL_LABEL, scopeHeadWords } from "../../web/src/repoHealthWords/repoHealthWordsScope";
 import { measureWords, notRunWords, ownAddNoteWords, ownMixedWords, repoMixedWords, sourceWords } from "../src/health/sourcewords";
 import { Absent } from "./Absent";
+import { loadHealthAxis, saveHealthAxis } from "./host";
+import "../../web/src/repohealth.css";
 import { PromptActions } from "./Actions";
 
 /** `3 min ago` style age, for the two timestamps this tab prints. Coarse on purpose. */
@@ -46,11 +51,15 @@ export function useNow(on: boolean, ms = 1000): number {
 }
 
 /**
- * The repo's shape over time, in the order the phone draws it (`RepoHealthRegion.tsx`) minus narrative
- * and the drawn page. The series is the extension's own copy, read by the bundled engine from git
- * history, or the one the waterplane desktop app left in the folder (read-only, with its scopes);
- * this view only draws what `healthdoc.ts` parsed. A reading that could not be
- * taken is a sentence, never a zero.
+ * The repo's shape over time, drawn as the phone draws it (`RepoHealthRegion.tsx`): one status
+ * line with its `?`, the sticky jump bar with the refresh verb, ONE x-axis row, then a card each —
+ * score, longest file, tiles, always-on weight, size, table, the repo's own — built from the
+ * phone's own card frame (`RepoHealthCards.tsx`) and chart modules. Minus the daily narrative and
+ * the drawn page, which the extension never writes.
+ *
+ * The series is the extension's own copy, read by the bundled engine from git history, or the one
+ * the waterplane desktop app left in the folder (read-only, with its scopes); this view only draws
+ * what `healthdoc.ts` parsed. A reading that could not be taken is a sentence, never a zero.
  */
 export function HealthView({ folder, doc, why, run, prompts, terminal, post }: {
   folder: string;
@@ -61,9 +70,11 @@ export function HealthView({ folder, doc, why, run, prompts, terminal, post }: {
   terminal: string | null;
   post: (m: ToExtension) => void;
 }) {
-  const [width, boxRef] = useBoxWidth();
   const [asking, setAsking] = useState(false);
   const now = useNow(!!run);
+  // The region's ONE x-axis choice, kept across hides as the phone keeps it per device.
+  const [axis, setAxisState] = useState<HealthAxisMode>(loadHealthAxis);
+  const setAxis = (m: HealthAxisMode) => { saveHealthAxis(m); setAxisState(m); };
 
   const refresh = () => post({ t: "healthRefresh", folder });
   const stop = () => post({ t: "healthCancel", folder });
@@ -74,40 +85,38 @@ export function HealthView({ folder, doc, why, run, prompts, terminal, post }: {
   const measure = doc?.measure ?? null;
   const last = doc?.last ?? null;
 
-  // The head: one refresh control, or — while a run is out — what it is doing and a stop.
-  const head = (
-    <div className="section-head">
-      <span className="section section-hint">{seriesHeadWords()}</span>
-      <span className="btn-row">
-        {run ? (
-          <>
-            <span className="rh-busy" role="status">
-              <RefreshCw size={14} className="spin" aria-hidden /> {refreshBusyLabel(series, now - run.startedAt)}
-            </span>
-            <button type="button" className="key" onClick={stop}><Square size={14} aria-hidden /> stop</button>
-          </>
-        ) : (
-          <button type="button" className="key" onClick={refresh}>
-            <RefreshCw size={14} aria-hidden /> {refreshLabel(series)}
-          </button>
-        )}
+  // `commits` is offered only where the index carries the per-commit series; a scope has no index,
+  // and its tiles' commit mode needs none, so unknown (null) still offers it — as on the phone.
+  const commits = doc?.index ? healthCommitsAvailability(doc.index) : null;
+  const drawnAxis: HealthAxisMode = axis === "commits" && commits === "absent" ? "weeks" : axis;
+  const drawn = useMemo(() => (plot ? foldPlot(plot, drawnAxis) : null), [plot, drawnAxis]);
+
+  // The refresh verb lives at the end of the jump bar; while a run is out, what it is doing and a stop.
+  const verb = run ? (
+    <>
+      <span className="rh-busy" role="status">
+        <RefreshCw size={14} className="spin" aria-hidden /> {refreshBusyLabel(series, now - run.startedAt)}
       </span>
-    </div>
+      <button type="button" className="key rh-nav-refresh" onClick={stop}><Square size={14} aria-hidden /> stop</button>
+    </>
+  ) : (
+    <RefreshKey busy={false} label={refreshLabel(series)} onClick={refresh} />
   );
 
   if (!doc) {
     return (
-      <>
-        {head}
+      <div className="rh-region">
+        <div className="section-head rh-head"><span className="section section-hint rh-status rh-push">{seriesHeadWords()}</span></div>
+        <HealthNav keys={[]} refresh={verb} />
         {run ? <div className="section section-hint" role="status">{runningWords(run, now)}</div> : null}
         <Absent>{why ?? "No repo-health reading has arrived for this folder yet."}</Absent>
-      </>
+      </div>
     );
   }
 
-  const stale = stalenessWords({
-    behind: doc.behind, lastSha: series?.lastSha, lastDay: series?.lastDay, headSha: doc.head?.sha,
-  });
+  const staleness = { behind: doc.behind, lastSha: series?.lastSha, lastDay: series?.lastDay, headSha: doc.head?.sha };
+  const stale = stalenessWords(staleness);
+  const status = seriesStatusWords({ ...staleness, rows: series?.rows, days: series?.days });
   // The folder's own series is the desktop app's: its re-cut command deletes THAT file, so it is
   // never quoted from here, and a refresh here would not touch it, so nothing "will refuse".
   // Our own copy's remedy is the forget button (offered below whenever this is said), never a
@@ -126,35 +135,56 @@ export function HealthView({ folder, doc, why, run, prompts, terminal, post }: {
   const plotMissing = series
     ? repoHealthPlotUnavailableText(repoHealthPlotAvailability(doc), doc.plotError)
     : null;
-  const axisPoints = plot?.series[0]?.points ?? [];
-  const firstDay = axisPoints[0]?.day ?? null;
-  const lastDay = axisPoints[axisPoints.length - 1]?.day ?? null;
   const p95 = plot?.series.find((s) => s.key === "size.p95")?.last ?? null;
 
   const canSplit = prompts.some((p) => p.id === "split-longest-file");
   const canExplain = prompts.some((p) => p.id === "explain-rising-metric");
   const rising = plot?.series.filter((s: RepoHealthPlotSeries) => s.reading?.slope === "rising").length ?? 0;
 
-  return (
+  // What the status line folds, as on the phone: the intro, both commits with the ages and the
+  // definition, whose file this is and where a measure writes, and which engine read the tree.
+  const details = (
     <>
-      {head}
-      <div className="section section-hint">{sourceWords({ ...doc, series })}</div>
-      {measureWords(doc) ? <div className="section section-hint">{measureWords(doc)}</div> : null}
+      {status ? <p>{seriesHeadWords()}</p> : null}
+      {stale ? (
+        <p>
+          {stale}
+          {doc.head ? <> · {lastCommitWords(ago(doc.head.ts, now))}</> : null}
+          {sizeWords ? <> · {sizeWords}</> : null}
+        </p>
+      ) : null}
+      <p>{sourceWords({ ...doc, series })}</p>
+      {measureWords(doc) ? <p>{measureWords(doc)}</p> : null}
+      {engineLine ? <p>{engineLine}</p> : null}
+    </>
+  );
+
+  // The cards drawn, in screen order — the jump bar names exactly these. The whole tree only has a score.
+  const shown = shownSections({ index: !!doc.index && !doc.scope, drawn, plot, own: true });
+
+  return (
+    <div className="rh-region">
+      <div className="section-head rh-head">
+        <span className="section section-hint rh-status">{status ?? seriesHeadWords()}</span>
+        <Explain of="this series">{details}</Explain>
+      </div>
+
+      {/* WHICH READING, above everything it changes — a chip loads a different series, and exactly
+          one is always chosen, so no ×. Scopes are the desktop app's; the extension only reads them. */}
       {doc.scopes.length ? (
         <>
-          <div className="btn-row" role="group" aria-label="which part of the repo">
+          <div className="fchips wrap rh-scope" role="group" aria-label="which part of the repo">
             <span className="ctx-stackpick-lab">reading of</span>
             {[null, ...doc.scopes].map((sc) => (
-              <button key={sc ?? "all"} type="button" className={doc.scope === sc ? "key active" : "key"} aria-pressed={doc.scope === sc}
+              <FilterChip key={sc ?? "all"} on={doc.scope === sc} clears={false}
                 onClick={() => post({ t: "healthScope", folder, scope: sc })}>
                 {sc ?? SCOPE_ALL_LABEL}
-              </button>
+              </FilterChip>
             ))}
           </div>
           {doc.scope ? <div className="section section-hint">{scopeHeadWords(doc.scope)}</div> : null}
         </>
       ) : null}
-      {engineLine ? <div className="section section-hint">{engineLine}</div> : null}
       {why ? <Absent>{why}</Absent> : null}
 
       {!series && !plot && !why ? (
@@ -172,14 +202,6 @@ export function HealthView({ folder, doc, why, run, prompts, terminal, post }: {
       ) : null}
 
       {mixed ? <div className="section section-hint">{mixed}</div> : null}
-
-      {stale ? (
-        <div className="section section-hint">
-          {stale}
-          {doc.head ? <> · {lastCommitWords(ago(doc.head.ts, now))}</> : null}
-          {sizeWords ? <> · {sizeWords}</> : null}
-        </div>
-      ) : null}
       {staleRows ? <div className="section section-hint">{staleRows}</div> : null}
       {run ? <div className="section section-hint" role="status">{running}</div> : null}
 
@@ -222,41 +244,42 @@ export function HealthView({ folder, doc, why, run, prompts, terminal, post }: {
 
       {plotMissing ? <div className="section section-hint">{plotMissing}</div> : null}
 
-      {/* The one number that takes a side — score, cap and alerts are drawn by the phone's own chart. */}
-      {doc.index ? (
-        <HealthIndexChart view={doc.index} empty={doc.index.series ? null : <Absent>No health index yet: {doc.index.reason}.</Absent>} />
+      {/* The jump bar sticks to the top of the view while the cards scroll; the refresh verb is in it. */}
+      <HealthNav keys={navKeysOf(shown)} refresh={verb} />
+
+      {shown.score || drawn ? <AxisRow axis={drawnAxis} onAxis={setAxis} commits={commits} /> : null}
+
+      {/* The one number that takes a side — score, cap, alerts and the spend line, drawn by the phone's own chart. */}
+      {shown.score && doc.index ? (
+        <HealthIndexChart view={doc.index} axis={drawnAxis}
+          empty={doc.index.series ? null : <Absent>No health index yet: {doc.index.reason}.</Absent>} />
       ) : null}
 
-      <div className="rh-box" ref={boxRef}>
-        {plot && width > 0 ? (
-          <>
-            {/* WHOSE readings these are, once, as a heading (as on the phone): everything down to
-                the repo's own block is the engine's; the repo's say over them is on their tiles. */}
-            <div className="section rh-prov">{centralHeadWords(BRAND.displayName)}</div>
-            {centralFileLines(plot.central).map((l) => <div key={l} className="rh-cap">{l}</div>)}
-            {notRunWords(plot) ? <div className="rh-cap">{notRunWords(plot)}</div> : null}
+      {drawn && plot ? (
+        <>
+          {/* WHOSE readings these are, once, as a heading (as on the phone): everything down to
+              the repo's own card is the engine's; the repo's say over them is on their tiles. */}
+          <div className="section rh-prov">{centralHeadWords(BRAND.displayName)}</div>
+          {centralFileLines(plot.central).map((l) => <div key={l} className="rh-cap rh-gutter">{l}</div>)}
+          {notRunWords(plot) ? <div className="rh-cap rh-gutter">{notRunWords(plot)}</div> : null}
 
-            <LongestFiles longest={plot.longest} classics={plot.classics} p95={p95} width={width}
-              onOpenFile={(p) => post({ t: "openFile", folder, path: plot.scope ? `${plot.scope.replace(/\/+$/, "")}/${p}` : p })} />
+          {shown.longest ? (
+            <SectionCard id="longest">
+              {(w) => (
+                <LongestFiles longest={drawn.longest} classics={drawn.classics} p95={p95} width={w}
+                  onOpenFile={(p) => post({ t: "openFile", folder, path: plot.scope ? `${plot.scope.replace(/\/+$/, "")}/${p}` : p })} />
+              )}
+            </SectionCard>
+          ) : null}
 
-            <ul className="rh-tiles">
-              {plot.series.map((s) => (
-                <SeriesTile key={s.key} s={s} width={width}
-                  actions={s.key === "size.p95" && canSplit ? (
-                    <div className="rh-ask">
-                      <div className="rh-cap">Ask Claude Code how to split the file that grew most, quoting its row.</div>
-                      <PromptActions id="split-longest-file" terminal={terminal} post={post} />
-                    </div>
-                  ) : null} />
-              ))}
-            </ul>
-            <div className="rh-cap">{plotAxisWords(plot.days, firstDay, lastDay)}</div>
-            <div className="rh-cap">
-              {rankBasisWords(plot.windowReadings, plot.minReadings)}{" "}
-              <HintChip id="repohealth.reading" of="the percentile and the arrow" />
-            </div>
-
-            {canExplain ? (
+          <TilesCard series={drawn.series} windowReadings={plot.windowReadings} minReadings={plot.minReadings} axis={drawnAxis}
+            actionsFor={(s) => (s.key === "size.p95" && canSplit ? (
+              <div className="rh-ask">
+                <div className="rh-cap">Ask Claude Code how to split the file that grew most, quoting its row.</div>
+                <PromptActions id="split-longest-file" terminal={terminal} post={post} />
+              </div>
+            ) : null)}
+            after={canExplain ? (
               rising > 0 ? (
                 <div className="rh-ask">
                   <div className="rh-cap">
@@ -265,39 +288,37 @@ export function HealthView({ folder, doc, why, run, prompts, terminal, post }: {
                   <PromptActions id="explain-rising-metric" terminal={terminal} post={post} />
                 </div>
               ) : (
-                <Absent>No metric in this folder’s series is rising right now, so there is nothing to ask about.</Absent>
+                <div className="rh-cap">No metric in this folder’s series is rising right now, so there is nothing to ask about.</div>
               )
-            ) : null}
+            ) : null} />
 
-            <WeightStack
-              claudeMd={plot.series.find((s) => s.key === CLAUDE_MD_KEY) ?? null}
-              descriptions={plot.series.find((s) => s.key === DESC_KEY) ?? null}
-              width={width}
-            />
+          <WeightCard
+            claudeMd={drawn.series.find((s) => s.key === CLAUDE_MD_KEY) ?? null}
+            descriptions={drawn.series.find((s) => s.key === DESC_KEY) ?? null}
+            context={plot.context} />
 
-            {plot.context.absent ? (
-              <div className="rh-cap">The per-area reading was not taken on the latest day — {plot.context.absent}</div>
-            ) : Object.keys(plot.context.areas).length === 0 ? (
-              <div className="rh-cap">
-                No per-area reading here{plot.context.areasAbsent ? <> — {plot.context.areasAbsent}</> : null}.
-                The always-on weight above is the whole tree’s and is unaffected.
-              </div>
-            ) : (
-              <AreaSpread areas={plot.context.areas} width={width} />
-            )}
+          <SectionCard id="size">{(w) => <Magnitudes classics={drawn.classics} width={w} />}</SectionCard>
 
-            <Magnitudes classics={plot.classics} width={width} />
-            <ReadingsTable plot={plot} />
-            <div className="rh-cap">{notPlottedWords()}</div>
+          {/* Last: the same figures the charts drew, as text, for whoever wants to check one. */}
+          {shown.table ? (
+            <SectionCard id="table">
+              {() => (
+                <>
+                  <ReadingsTable plot={plot} />
+                  <details className="hint-more rh-more">
+                    <summary>not drawn here</summary>
+                    <p>{notPlottedWords()}</p>
+                  </details>
+                </>
+              )}
+            </SectionCard>
+          ) : null}
 
-            {/* The repo's OWN readings, apart from everything above and from the index. */}
-            <OwnReadings plot={plot} repoName={repoName} width={width} />
-            {ownShow(plot).kind === "add" ? <div className="rh-cap">{ownAddNoteWords()}</div> : null}
-          </>
-        ) : null}
-      </div>
-      {plot && width === 0 ? <Absent>This view has no width to draw the charts in yet.</Absent> : null}
-    </>
+          {/* The repo's OWN readings, apart from everything above and from the index. */}
+          <OwnReadings plot={plot} repoName={repoName} series={drawn.own?.series} axis={drawnAxis} />
+          {ownShow(plot).kind === "add" ? <div className="rh-cap rh-gutter">{ownAddNoteWords()}</div> : null}
+        </>
+      ) : null}
+    </div>
   );
 }
-

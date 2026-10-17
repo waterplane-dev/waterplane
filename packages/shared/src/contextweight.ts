@@ -60,8 +60,10 @@ export interface ContextWeightLimits {
  * 148k (37k tokens a turn) that prompted any of this.
  *
  * `hardChars` 40,000 ≈ 10k tokens a turn, where the cost stops being a rounding
- * error on anything. `maxSkills` 12 is about descriptions, not bodies: past a
- * dozen, the always-on listing is itself a page.
+ * error on anything. `maxSkills` 30 is about descriptions, not bodies; they are
+ * already counted in `maxChars`, so the count trips only a listing that is itself
+ * a page — a router-plus-sub-skills split (24 here) is the shape the chars rule
+ * asks for.
  *
  * Override per host with `WATERPLANE_CONTEXT_WARN_CHARS` / `WATERPLANE_CONTEXT_HARD_CHARS` /
  * `WATERPLANE_CONTEXT_MAX_SKILLS`.
@@ -69,7 +71,7 @@ export interface ContextWeightLimits {
 export const DEFAULT_CONTEXT_LIMITS: ContextWeightLimits = {
   maxChars: 16_000,
   hardChars: 40_000,
-  maxSkills: 12,
+  maxSkills: 30,
 };
 
 export interface SkillWeight {

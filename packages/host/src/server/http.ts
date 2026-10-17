@@ -332,7 +332,7 @@ export function createHttp(ctx: ServerCtx) {
       // `launches` is the intent store: `api.ts` needs exactly one method of it —
       // "an upload landed in this worktree, re-ask the gate now".
       const handled = await handleApi(req, res, {
-        root: ctx.ROOT, push: ctx.push, sessions: ctx.sessions, uiStats: ctx.uiStats, netstats: ctx.netstats, setup: ctx.setupWatch, health: ctx.healthWatch, launches: ctx.intents,
+        root: ctx.ROOT, push: ctx.push, sessions: ctx.sessions, uiStats: ctx.uiStats, netstats: ctx.netstats, setup: ctx.setupWatch, health: ctx.healthWatch, builds: ctx.builds, launches: ctx.intents,
         periods: () => ctx.budget.get().periods ?? [], tokenStats: ctx.tokenStats, usageLog: ctx.usageLog, usageSources: ctx.usageSources, usagePollMs: USAGE_POLL_MS, capture: ctx.capture,
         intents: ctx.intents, acks: ctx.acks, backlog: ctx.backlog, containRepoDir: (d) => ctx.containRepoDir(d), onboard: ctx.onboard,
         appReadiness: () => appReadinessReport(ctx.ROOT, (d) => ctx.builds.list(d), (d) => ctx.autopull.config(d)),

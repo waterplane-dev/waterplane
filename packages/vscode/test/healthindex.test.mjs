@@ -48,3 +48,20 @@ test("read off a file; a missing file is the no-series sentence", () => {
   assert.equal(Math.round(data.healthIndexOfFile(f, NOW).series.points[1].index), 100);
   assert.match(data.healthIndexOfFile(join(d, "nope.jsonl"), NOW).reason, /no repo-health series/);
 });
+
+test("the per-commit series rides along, as the desktop app sends it — so the x axis can offer commits", () => {
+  const text = [row(0, 900), row(1, 900)].map((r) => JSON.stringify(r)).join("\n");
+  const r = data.healthIndexOf(text, NOW);
+  assert.equal(r.commits.points.length, 2);
+  assert.equal(r.commits.points[1].sha7, "s1");
+  assert.equal(data.healthIndexOf(null, NOW).commits, null, "no series: null, never absent (absent says an older desktop)");
+});
+
+test("an older engine's series names the re-measure, never the desktop's rm command", () => {
+  const old = { ...row(0, 900), size: { value: { p95: 400, max: 900, maxPath: "a.ts" } } };
+  const r = data.healthIndexOf(JSON.stringify(old), NOW);
+  assert.equal(r.series, null);
+  assert.match(r.reason, /older engine/);
+  assert.doesNotMatch(r.reason, /\brm\b/);
+  assert.equal(r.commits, null, "rows read, none scores: null, never absent (absent says an older desktop)");
+});

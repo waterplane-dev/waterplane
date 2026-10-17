@@ -72,7 +72,8 @@
      "repo": "/fx/repo-one",
      "turns": 5,
      "pricedTurns": 0,
-     "usd": 0
+     "usd": 0,
+     "ctxTok": 87766
     }
    ]
   },
@@ -117,7 +118,8 @@
      "repo": "/fx/repo-one",
      "turns": 2,
      "pricedTurns": 0,
-     "usd": 0
+     "usd": 0,
+     "ctxTok": 32110
     }
    ]
   },
@@ -180,7 +182,8 @@
      "repo": "/fx/repo-one",
      "turns": 138,
      "pricedTurns": 0,
-     "usd": 0
+     "usd": 0,
+     "ctxTok": 956153
     }
    ]
   },
@@ -243,13 +246,15 @@
      "repo": "/fx/repo-one",
      "turns": 205,
      "pricedTurns": 0,
-     "usd": 0
+     "usd": 0,
+     "ctxTok": 4971250
     },
     {
      "repo": "/fx/repo-two",
      "turns": 1,
      "pricedTurns": 0,
-     "usd": 0
+     "usd": 0,
+     "ctxTok": 900
     }
    ]
   },
@@ -312,7 +317,8 @@
      "repo": "/fx/repo-one",
      "turns": 57,
      "pricedTurns": 0,
-     "usd": 0
+     "usd": 0,
+     "ctxTok": 2136397
     }
    ]
   }

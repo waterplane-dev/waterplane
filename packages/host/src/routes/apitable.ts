@@ -39,6 +39,8 @@ export interface ApiCtx {
   setup: SetupWatcher;
   /** The health index cache (`healthwatch.ts`): `/api/repos` reads it, never runs the engine. */
   health?: import("../healthwatch.js").HealthWatch;
+  /** Build runs in flight — `/api/repos` marks a repo whose build is running. */
+  builds?: Pick<import("../builds.js").BuildManager, "runningIn">;
   /** Sessions parked until their files arrive. An inbox POST is the event that
    *  most often opens one, and waiting up to a tick for it would be latency
    *  nobody asked for — so the upload route kicks the gate directly. */

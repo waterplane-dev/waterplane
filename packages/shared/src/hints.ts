@@ -509,6 +509,11 @@ export const HINTS: Record<string, HintDef> = {
     what: "What a new program could actually get, from the operating system — the file cache counts as available, because it is handed back on demand. It is the number a second local model would have to fit into. Amber when less than a tenth is left or the swap file is nearly full.",
     when: "Good enough to warn on, nowhere near good enough to refuse work on, which is why nothing in this app ever blocks a launch over it.",
   },
+  "localrt.agents": {
+    title: "Agents running at once",
+    what: "Every session whose turn is running, plus every subagent running under any session on this desktop, added up. Amber past your warning mark, red past your limit — both set in Settings → Appearance (default 10 and 30). Crossing a mark on the way up also says so once.",
+    when: "Past a mark the strip shows itself even when it is switched off; its × hides it until the count passes your next mark. Tap for the count over time and which sessions hold the agents — a row opens that session. It only counts and colours: nothing here stops an agent or refuses a launch.",
+  },
   // ── The session-tab strip (`SessionTabsBar.tsx`) ────────────────────────
 
   "session.tabs": {

@@ -72,6 +72,10 @@ export interface LiveMeta {
   budgetTripped?: boolean;
   /** The crossing's one Esc, not yet sent (`Session.budgetEscOwed`). */
   budgetEscOwed?: boolean;
+  /** The prose question a person marked handled (`Session.askDismissed`'s
+   *  text). The screen tail still ends on it after a restart, so without this
+   *  every restart re-raised every acknowledged question with a fresh clock. */
+  askDismissed?: string;
   /** The tmux server the pane lives on (`knobs.ts`'s `TMUX_SOCKET_ID`), stamped
    *  by `persistLive` on every write. The boot reclaim (`staleLiveIds`) judges a
    *  record only against a listing of THIS server; absent on records written

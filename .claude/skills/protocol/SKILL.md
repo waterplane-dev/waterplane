@@ -5,22 +5,22 @@ description: waterplane wire protocol and the invariants that hold it together: 
 
 # waterplane wire protocol and invariants
 
-
 Some of these are now checked. `tools/eslint/rules.js` holds the repo-specific rules —
 `no-cors-wildcard`, `no-second-socket`, `no-functional-setoutbox`, `no-storage-key-literal`,
+`no-brand-literal`, `no-draft-clobber`, `no-raw-optional-cap`, `local/host-boundary`,
+`local/feature-boundary`, `local/extension-boundary`,
 **`no-silent-send`** (a socket write in an `on*` JSX handler must end in a toast or a queue entry;
 `liveSend`/`liveAsk` (`core/conn/useConnection.ts`, `core().conn` in a feature) are the receipt; in `features/**` every bare `conn.send` needs a
 receipt in its own function unless it is in `messages`/`boot`),
-**`no-anchor-download`** (an `<a download>` or an `a.download =` outside `pull.ts` — dead in the
-APK; downloads go through `download.ts`) — plus the `fetch` ban outside `api.ts`. A genuinely special case takes an inline
-`eslint-disable-next-line … -- reason`, so the exemption is visible where it is taken; `no-silent-send` has eight (grep
-`eslint-disable.*no-silent-send`: `core/session/TermArea.tsx`'s `onResize`, seven in `features/**` — `build` ×3, `capture`, `backlog`, `search`, `hostTools`). Generic presets are deliberately NOT pulled in — `tsc` already runs strict with
+**`no-anchor-download`** (an `<a download>`, or `a.download =` on a created anchor, outside `pull.ts`/`pull/pullSave.ts` — dead in the APK; downloads go through `download.ts`) — plus the `fetch` ban outside `api.ts`. A genuinely special case takes an inline
+`eslint-disable-next-line … -- reason`, so the exemption is visible where it is taken; Grep `eslint-disable.*no-silent-send` for
+the exemptions. Generic presets are deliberately NOT pulled in — `tsc` already runs strict with
 `noUnusedLocals`/`noUnusedParameters`/`noFallthroughCasesInSwitch`. Why these are lint rules rather
-than paragraphs: [testing-and-ops.md](docs/notes/testing-and-ops.md#why-these-rules-are-lint-rules-and-not-paragraphs).
+than paragraphs: [testing-and-ops.md](../../../docs/notes/testing-and-ops.md#why-these-rules-are-lint-rules-and-not-paragraphs).
 
 Wire:
 
-- One WebSocket per tab carries everything; PTY bytes are base64 in `{t:"pty",id,dataB64}`. permessage-deflate is on (context takeover is the point).
+- One WebSocket per tab carries everything (CLAUDE.md: never a second); PTY bytes are base64 in `{t:"pty",id,dataB64}`. permessage-deflate is on (context takeover is the point). `clientframe.ts` is the one shape check on a decoded frame; plugin `stream.ts` frames are binary on that same socket.
 - Sockets attach/detach explicitly; frames go only to attached sockets. Every frame carries `seq`;
   `session.attach` may carry `resumeSeq` + `resumeBoot` ⇒ delta replay, else `full: true` and the
   client resets its terminal. Boot mismatch ⇒ full replay (tmux sessions outlive the daemon).
@@ -28,9 +28,10 @@ Wire:
   against the persisted ledger; a repeat is re-acked, never re-executed.
   **A LOST ledger fails closed** (shared `preLossRefusal`; why in its header): every ackId'd
   durable message carries optional `firstSentAt` (the queue's `firstTryAt`, unchanged on every retry; `retargetEntry` drops
-  it with the old id) + `sentAt` (stamped at the write in `ws.ts`). Inside `acks.lost`'s window an
+  it with the old id) + `sentAt` (stamped at the write in `ws.ts`) — the `SendStamp` of `sendstamp.ts`,
+  which **a new durable message type must add (`& SendStamp`)**. Inside `acks.lost`'s window an
   UNKNOWN ackId whose AGE (`sentAt - firstSentAt`, one clock, so skew drops out) puts its first send
-  before the loss (+5 s transit margin) is refused in `LOST_LEDGER_REFUSAL`, never run, remembered.
+  before the loss (+5 s transit margin, `LOST_LEDGER_MARGIN_MS`) is refused in `LOST_LEDGER_REFUSAL`, never run, remembered.
   No `firstSentAt` ⇒ runs, as before. Additive; `PROTOCOL_VERSION` stays. `e2e-acklost.mjs`.
 - `session.create` carries `needs?` — the files its prompt must not run without. Present and absent
   on disk ⇒ the host PARKS the whole create (as a `files`-triggered intent, `intents/`) and answers
@@ -48,23 +49,20 @@ Wire:
   path needs the same fact per row: `AssessItem.failedAt`),
   `intent.cancel`/`dismiss` (deliberately NOT durable and never queued offline: a cancel
   delivered an hour late calls off work that has since run), `intent.list`; back come `intent.list`
-  and `intent.changed`. Every OLD message keeps working through `intents/adapters.ts`, so the store
-  ships with no client change and the APK may pin an old bundle.
-  **The client READS the store now**: `intent.list` on hello and on a bare `onChange` (a row LEAVING
-  is not expressible as a changed row), `intent.changed` per transition — where `onChange` used to
-  broadcast the WHOLE store to every phone on every transition. `intent.retarget` carries an optional
-  `cwd`, because a re-aim across REPOS is one decision (`backlog.update` always carried `repoDir`).
-  **`intent.dismiss` is the one the client must actually SEND** (`features/activity/actions.ts`'s `dismissOnHost`, off
-  Activity's file-away): `Intent.dismissedAt` is the gate a terminal row passes before `compact()`
-  may ever evict it, and while nothing sent it every `failed` intent stayed in the live
-  `<state dir>/intents.json` for ever — the file only grew. Safe to fire and forget, because the host's
-  `dismiss()` refuses anything not terminal and anything already dismissed, so an armed schedule, a
-  running item and a double tap are all no-ops. Not undone by Activity's *restore*: there is no
-  un-dismiss message, and a restored row may later be compacted — which appends every word to
-  `intents-archive.jsonl` rather than deleting it. **Note the arrow of the migration is INVERTED
-  from what it looks like**: the shipped web client sends no other `intent.*` message at all and
-  still speaks `launch.*`/`schedule.*`/`backlog.*`, so `adapters.ts` is not a legacy shim to be
-  deleted — it is the only path into the store, and the `intent.*` routes are the unshipped half.
+  and `intent.changed`. The client READS the store: `intent.list` on hello and on a bare `onChange`
+  (a row LEAVING is not expressible as a changed row), `intent.changed` per transition.
+  `intent.retarget` carries an optional `cwd`, because a re-aim across REPOS is one decision
+  (`backlog.update` always carried `repoDir`). **`intent.dismiss` must actually be SENT**
+  (`features/activity/actions.ts`'s `dismissOnHost`, off Activity's file-away): `Intent.dismissedAt`
+  is the gate a terminal row passes before `compact()` may ever evict it. Safe to fire and forget —
+  the host's `dismiss()` refuses anything not terminal or already dismissed. There is no
+  un-dismiss message; a restored row may later be compacted, which appends every word to
+  `intents-archive.jsonl` rather than deleting it.
+  **The web client speaks BOTH vocabularies**: it sends `intent.post/update/waive/run/cancel/retarget/requeue/dismiss`
+  (`core/send/useSend.tsx`, `core/compose/NextPromptStrip.tsx`, `features/backlog`, `features/activity`) and
+  receives `intent.list`/`intent.changed`, AND it still sends `backlog.*`/`schedule.*`/`launch.*` for the
+  sheets on them. So `intents/adapters.ts` stays: it serves the old messages and an APK
+  pinned to an old bundle — do not delete it.
 - `op.ack`'s `ok` means *accepted and started*, not finished. Ops: `session.create` (optional
   `prompt`, optional `replaceSessionId` so relaunch is ONE atomic op), `fanout.run`,
   `fanout.followup`, `build.run`, `schedule.save` (upsert on a client-minted id, so a replay
@@ -72,9 +70,8 @@ Wire:
   thing — reopen via `session.create` with `resumeSessionId`. **Forking is not a new message
   either**: `session.create` gains `forkAtTurn?` and `"fork"` joins `resumeMode`, so the file write
   (`convfork.ts`) inherits `durable: true`, `contain: "cwd"` and at-most-once by ackId — a retried
-  fork re-acks and writes nothing. One gap, stated: a crash BETWEEN the file write and the ack
-  replays into a second orphan jsonl — an extra archive row, deletable, never a second claude, which
-  is `starting`-row semantics exactly.
+  fork re-acks and writes nothing. One gap: a crash BETWEEN the file write and the ack replays into
+  a second orphan jsonl — an extra archive row, never a second claude.
 - **`session.name` is additive (no bump).** *Name this conversation now* —
   the host re-derives the summary and the ≤4-word `tabTitle` off it (`sessions.nameNow`) and
   answers `session.named` with the NAME or the SENTENCE saying why there is none, never neither.
@@ -108,8 +105,7 @@ Wire:
 - `input.settle` → `input.settled` is a read-only QUESTION about past deliveries, not a send: it
   types nothing, carries its own text (the host keeps no copy of an un-acked prompt) and is not in
   the durable-op set. **The web client no longer sends it** — the route stays for an APK pinned to an
-  old bundle, but asking was the wrong end of the wire (a phone, three tries, over a live socket,
-  about rows that retired an hour later). `delivery.list`/`delivery.settled` are the
+  old bundle, but asking was the wrong end of the wire. `delivery.list`/`delivery.settled` are the
   answer arriving unasked: `opendeliveries.ts` re-asks with nobody connected and broadcasts, the queue core (`core/queue/wire.ts`'s `onDeliverySettled`)
   applies it to the row by `ackId`, and `delivery.list` on hello is the reconciliation pass for
   whatever settled while the tab was gone.
@@ -121,25 +117,24 @@ Wire:
 
 Substrate: tmux is REQUIRED and the ONE substrate (no direct-PTY mode; the old `WATERPLANE_TMUX` knob is ignored and doctor says so; a missing binary refuses the spawn in words, `tmuxreq.ts`) — it runs each `claude` inside a **private** tmux server (`-L waterplane`), so it
 survives a host restart and `rediscover()` re-attaches on boot. The server is keyed by socket name,
-not `WATERPLANE_ROOT` — which is why e2e roots derive their own, and tests also get a private socket DIRECTORY (`scripts/lib-tmuxiso.mjs`). **Every tmux client is spawned `-u`, out
-of `ptyEnv()`, which also supplies a UTF-8 `LANG` when the environment has none**: launchd sets no
+not `WATERPLANE_ROOT` — which is why e2e roots derive their own, and tests also get a private socket DIRECTORY (`scripts/lib-tmuxiso.mjs`). **Every tmux client is spawned `-u`
+(`sessions/tmux.ts`), with `ptyenv.ts`'s `ptyEnv()` supplying a UTF-8 `LANG` when the environment has none**: launchd sets no
 locale, and a tmux client that cannot conclude its terminal is UTF-8 does not forward UTF-8, which
-cost prompt detection its `❯` and published nothing for a live choice box. `e2e-tmux.mjs` boots the
+costs prompt detection its `❯` (a live choice box published nothing). `e2e-tmux.mjs` boots the
 host in a deliberately MINIMAL env and asserts `client_utf8`.
-[protocol-and-security.md](docs/notes/protocol-and-security.md#the-tmux-substrate-and-the-locale-that-broke-prompt-detection).
+[protocol-and-security.md](../../../docs/notes/protocol-and-security.md#the-tmux-substrate-and-the-locale-that-broke-prompt-detection).
 
 **The tmux client's terminal queries are the HOST's to answer** (`termqueries.ts`, in front of
 `register`'s data handler): DA1/DA2/XTVERSION/OSC 10-11/`?996n`/14t/18t answered at once and
 STRIPPED before scrollback, recorder, echo or any phone — so a session behaves the same with the
 phone off, and no xterm.js answers twice (a duplicate reply is typed input). Never forward a query
 to phones; never intercept what the pane asks tmux. `e2e-termqueries.mjs`.
-[Why.](docs/notes/protocol-and-security.md#the-tmux-clients-terminal-queries-answered-by-the-host)
+[Why.](../../../docs/notes/protocol-and-security.md#the-tmux-clients-terminal-queries-answered-by-the-host)
 
-**A pan is routed by the PANE, never by a version** (`tmuxscroll.ts`, `sessions.panHistory`): the
+**A pan is routed by the PANE, never by a version** (`tmuxscroll.ts`, `sessions/drive.ts`'s `panHistory`): the
 phone's flick arrives as one SGR wheel write, and where `#{mouse_any_flag}`/`_button_`/`_standard_`
 says the program asked for the mouse the bytes are PASSED THROUGH to it — claude ≥ 2.1 enables
 `?1003h`+`?1006h` and scrolls itself — otherwise they are translated into tmux `copy-mode` +
-`scroll-up`. Exactly one of the two, read fresh per pan. The translation was unconditional until
-2026-09 and by then claude also ran in the ALTERNATE screen, where a pane has no history
-(`history_size=0`), so every pan in every session silently did nothing.
-[Both measurements.](docs/notes/protocol-and-security.md#panning-the-tui-who-gets-the-wheel-and-why-the-answer-changed)
+`scroll-up`. Exactly one of the two, read fresh per pan (claude also runs in the ALTERNATE screen,
+where a pane has no history).
+[Both measurements.](../../../docs/notes/protocol-and-security.md#panning-the-tui-who-gets-the-wheel-and-why-the-answer-changed)

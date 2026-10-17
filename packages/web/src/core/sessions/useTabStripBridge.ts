@@ -5,6 +5,7 @@ import { sessionStatus } from "../../sessionFacts";
 import type { BackendList } from "../../backendCaps";
 import type { TermFeed } from "../term/useTermFeed";
 import type { SessionVerbs } from "./useSessionVerbs";
+import { useAgentCountBridge } from "./useAgentCountBridge";
 
 interface UseTabStripBridgeCtx {
   tabsOn: boolean;
@@ -88,4 +89,7 @@ export function useTabStripBridge(ctx: UseTabStripBridgeCtx) {
       window.removeEventListener(TAB_CLOSE_EVENT, close);
     };
   });
+  // The desktop strip's parallel-agent count: the same session list, the
+  // other strip mounted beside App (`agentCount.ts`).
+  useAgentCountBridge({ sessions, backends, sessionRepoName });
 }

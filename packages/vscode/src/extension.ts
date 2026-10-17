@@ -13,11 +13,13 @@
  * synchronously, in bounded 24 MB chunks, so its cost is that one log's size, once; every later poll
  * reads only what was appended.
  */
+import { realpathSync } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { Worker } from "node:worker_threads";
 import * as vscode from "vscode";
-import { BRAND, fmtUsd } from "@waterplane/shared";
+import { BRAND, fmtUsd, healthSpendWeeks } from "@waterplane/shared";
+import { repoOfWorktree } from "../../host/src/costwindow.js";
 import {
   claudeConfigDir, listSessions, projectDirFor, recentRows, SessionLedger, weighFolder, WINDOW_MS,
 } from "./data/index.js";
@@ -27,7 +29,8 @@ import { NavTree, PICK, PICK_FOLDER, SHOW } from "./navtree.js";
 import type { NavState } from "./navtree.js";
 import { deliver, PROMPTS, render } from "./prompts.js";
 import type { ScanJob, ScanMsg } from "./scanworker.js";
-import type { CorpusDoc, PromptId, TabId, SessionDoc, SessionRow, SessionSummary, ToExtension, ToWebview, WeightDoc } from "./protocol.js";
+import type { CorpusDoc, HealthDoc, PromptId, TabId, SessionDoc, SessionRow, SessionSummary, ToExtension, ToWebview, WeightDoc } from "./protocol.js";
+import { RestartWatch } from "./restartwatch.js";
 import { StatusBar } from "./statusbar.js";
 import { LogWatch } from "./logwatch.js";
 
@@ -111,6 +114,7 @@ class Ext implements vscode.Disposable {
     ctx.subscriptions.push(
       this,
       this.tree,
+      new RestartWatch(ctx),
       vscode.commands.registerCommand(`${BRAND.slug}.open`, () => this.openCommand()),
       vscode.commands.registerCommand(SHOW, (tab: unknown) => this.showTab(isTab(tab) ? tab : "session")),
       vscode.commands.registerCommand(PICK, (id: unknown) => this.pickCommand(typeof id === "string" ? id : null)),
@@ -304,6 +308,8 @@ class Ext implements vscode.Disposable {
         this.scanning = null;
         this.statusBar.setScan(null);
         if (!this.disposed) this.post({ t: "corpus", ...this.corpus });
+        // The score's spend line is folded off this scan: the open folder's reading gains it now.
+        if (this.activeFolder) this.postHealth(this.activeFolder);
         resolve();
       };
       fs.mkdir(dir, { recursive: true }).then(() => {
@@ -327,6 +333,8 @@ class Ext implements vscode.Disposable {
         this.statusBar.setScan(null);
         this.corpus = { doc: this.corpus.doc, why: sentence(e) };
         if (!this.disposed) this.post({ t: "corpus", ...this.corpus });
+        // The score's spend line is folded off this scan: the open folder's reading gains it now.
+        if (this.activeFolder) this.postHealth(this.activeFolder);
         resolve();
       });
     });
@@ -383,7 +391,22 @@ class Ext implements vscode.Disposable {
   private postHealth(folder: string, to?: Origin): void {
     if (this.disposed) return;
     const st = this.health.state(folder);
-    this.post({ t: "health", folder, doc: st.doc, ...(st.why ? { why: st.why } : {}), run: st.run }, to);
+    this.post({ t: "health", folder, doc: this.withSpend(folder, st.doc), ...(st.why ? { why: st.why } : {}), run: st.run }, to);
+  }
+
+  /**
+   * The dotted context-per-request line beside the score, as the desktop app's route adds it
+   * (`apirepowork.ts` `healthindex`): folded off the log scan's day rows, never a scan of its own.
+   * Before the first scan — or for a scope, which has no score — `spend` stays ABSENT, so the chart
+   * draws no line and says nothing about one; an empty fold is the chart's own "no request" sentence.
+   */
+  private withSpend(folder: string, doc: HealthDoc | null): HealthDoc | null {
+    const days = this.corpus.doc?.days;
+    if (!doc?.index?.series || !days) return doc;
+    let real = folder;
+    try { real = realpathSync(folder); } catch { /* the path as given */ }
+    const spend = healthSpendWeeks(days, [...new Set([folder, real].map(repoOfWorktree))]);
+    return { ...doc, index: { ...doc.index, spend } };
   }
 
   private showTab(tab: TabId): void {

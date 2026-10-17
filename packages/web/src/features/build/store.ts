@@ -16,7 +16,7 @@ import type { ArtifactPolicy, BuildCandidate, BuildConfig, BuildRun, RepoTarget 
 import { useCallback } from "react";
 import { createStore, repoRunStore, useStore } from "../../sdk";
 import { loadBuildsSnap, saveBuildsSnap } from "../../localState";
-import { buildNameIn } from "./logic";
+import { buildBusyIn, buildNameIn } from "./logic";
 
 /** Per repo: the ids living in this desktop's own file (`build.list.localIds`).
  *  A repo with no entry, or an entry of `undefined`, is an older host: nothing
@@ -74,4 +74,9 @@ export function buildNameOf(cwd: string, id: string): string {
 export function useBuildNames(): (cwd: string, id: string) => string {
   const { lists } = useStore(builds.cfgs);
   return useCallback((cwd: string, id: string) => buildNameIn(lists, cwd, id), [lists]);
+}
+
+/** `buildBusyIn`, subscribed to the runs — the launcher's hammer spinner. */
+export function useBuildBusy(repo: Pick<RepoTarget, "worktreePath" | "buildRunning">): { name: string } | null {
+  return buildBusyIn(useStore(builds.runs), repo);
 }

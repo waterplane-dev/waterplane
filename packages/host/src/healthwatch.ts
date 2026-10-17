@@ -28,8 +28,8 @@
 import { existsSync, mkdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { join } from "node:path";
 import {
-  BRAND, LEGACY, assessHealthMove, healthIndex, healthMoveWords, isoWeekOf, logTag, repoHealthIndexOf,
-  type HealthIndexResponse, type HealthSeriesRow, type RepoHealthIndex,
+  BRAND, LEGACY, healthIndexResponseOf, logTag, repoHealthIndexOf,
+  type HealthIndexResponse, type RepoHealthIndex,
 } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
 import { contextLimitsFor } from "./compliance.js";
@@ -90,19 +90,6 @@ function seriesStampOf(wt: string): string | null {
   const p = seriesPathOf(wt);
   if (!p) return null;
   try { const st = statSync(p); return `${st.mtimeMs}:${st.size}`; } catch { return null; }
-}
-
-function parseRows(text: string): HealthSeriesRow[] {
-  const rows: HealthSeriesRow[] = [];
-  for (const line of text.split("\n")) {
-    const l = line.trim();
-    if (!l) continue;
-    try {
-      const r = JSON.parse(l);
-      if (r && typeof r === "object") rows.push(r as HealthSeriesRow);
-    } catch { /* a torn line is one missing reading, not a dead series */ }
-  }
-  return rows;
 }
 
 const keyOf = (wt: string): string => { try { return realpathSync(wt); } catch { return wt; } };
@@ -167,21 +154,10 @@ export class HealthWatch {
     const lr = this.state.get(keyOf(wt))?.lastRefresh;
     const lastRefresh = lr ? new Date(lr).toISOString() : null;
     try {
-      const text = this.text(wt);
-      if (text === null) return { series: null, move: null, words: null, lastRefresh, reason: "this repo has no repo-health series yet" };
-      const rows = parseRows(text);
-      const series = healthIndex(rows, this.deps.warnChars(wt));
-      if (!series) {
-        // Size is scored on `lineMean` (engine 2026-10-17a on). Rows where size WAS measured
-        // but none carries it are an older engine's series: name the fix, not the symptom.
-        const measured = rows.filter((r) => r.size?.value && typeof r.size.value === "object");
-        if (measured.length > 0 && !measured.some((r) => typeof (r.size!.value as { lineMean?: unknown }).lineMean === "number")) {
-          return { series: null, move: null, words: null, lastRefresh, reason: STALE_ENGINE_REASON };
-        }
-        return { series: null, move: null, words: null, lastRefresh, reason: "no week has every enabled reading yet, so there is no scored week" };
-      }
-      const move = assessHealthMove(series.points);
-      return { series, move, words: healthMoveWords(series.points, move, isoWeekOf(new Date(this.now()).toISOString().slice(0, 10))), lastRefresh };
+      return healthIndexResponseOf(this.text(wt), {
+        warnChars: this.deps.warnChars(wt), now: this.now(), lastRefresh,
+        noSeries: "this repo has no repo-health series yet", staleEngine: STALE_ENGINE_REASON,
+      });
     } catch (e) {
       this.logOnce(wt, e);
       return { series: null, move: null, words: null, lastRefresh, reason: "the series could not be read" };

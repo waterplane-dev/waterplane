@@ -369,6 +369,9 @@ export function reattach(core: SessionCore, m: LiveMeta): void {
   // told, or interrupted, again because the daemon restarted.
   if (re && budget && m.budgetTripped) re.budgetTripped = true;
   if (re && budget && m.budgetEscOwed) re.budgetEscOwed = true;
+  // …and so does "handled": the tail still ends on that question. The stop
+  // count is this process's, so only the words can match after a restart.
+  if (re && typeof m.askDismissed === "string" && m.askDismissed) re.askDismissed = { text: m.askDismissed, stop: -1 };
   // The record carries the LAUNCH model — often an alias ("opus") — and the
   // hooks that read the running one back only fire on the next turn. Every
   // idle session came back from a restart wearing the alias beside siblings
@@ -420,7 +423,7 @@ export function persistLive(core: SessionCore, m: LiveMeta): void {
   // stamp is a fact about the pane — what the boot reclaim (`staleLiveIds`)
   // checks before it believes a listing that lacks the name.
   const rec: LiveMeta = live
-    ? { ...m, budget: live.info.budget?.cfg, budgetTripped: live.budgetTripped ? true : undefined, budgetEscOwed: live.budgetEscOwed ? true : undefined, tmuxSocket: TMUX_SOCKET_ID }
+    ? { ...m, budget: live.info.budget?.cfg, budgetTripped: live.budgetTripped ? true : undefined, budgetEscOwed: live.budgetEscOwed ? true : undefined, askDismissed: live.askDismissed?.text, tmuxSocket: TMUX_SOCKET_ID }
     : { ...m, tmuxSocket: TMUX_SOCKET_ID };
   try { mkdirSync(liveDir(core), { recursive: true }); writeJsonAtomic(livePath(core, m.id), rec); } catch (e) {
     // Non-fatal, but not silent: a record that never lands is a session that

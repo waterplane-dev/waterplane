@@ -7589,6 +7589,41 @@ One consequence worth naming for the next reader who greps for `RepoHealthMenuIt
 somewhere new: the sheet it opens is still `SetupSheet.tsx`, at `initialRegion: "series"`. The
 button moved; the destination did not.
 
+#### `RepoHealthCards.tsx` + `repoHealthFoldPlot.ts` + `repohealth.css` — the region as a dashboard
+
+The owner's verdict on region 2 (2026-10-17) was that it read and looked boring: ~8,600 px of
+charts separated by hairlines, each with its own drag instruction, with a block per day of notes
+under all of it. The rework (`docs/analysis/repohealth-redesign.md`) made every section a CARD,
+and the frame those cards sit in is `RepoHealthCards.tsx`, apart so the region stays under the
+900-line cap:
+
+- **A sticky jump bar** (`HealthNav`): one chip per card that is DRAWN, in screen order, then the
+  refresh verb, which moved there from the head so it is in reach from any card. The chips are
+  navigation, so they carry no count and no lit state, and an absent section has no chip — the
+  same rule as a greyed button, applied to a jump.
+- **One x-axis row** (`AxisRow`): `weeks | commits`, kept per device (`healthAxis`). `weeks` folds
+  every per-day series to each ISO week's last reading through ONE function over the whole plot
+  (`foldPlot`, which also cuts the longest file's holder names by the same indices, so a name never
+  lands on another week's length); `commits` draws them whole. The readings table is never folded:
+  it prints the readings as taken. `commits` is not offered where the desktop sends no commit
+  series — the index section reports that up from its own read (`onCommits`), so the document is
+  not fetched twice — and the sentence saying why stands where the chip would be.
+- **The drag instruction once**, under that row. A readout line that nobody has touched now says
+  the latest reading instead of repeating how to use it.
+- **The daily notes as ONE closed row**, newest first when opened.
+- **One frame, two surfaces.** The VS Code Health view (`packages/vscode/webview/HealthView.tsx`)
+  draws its region from these same pieces — `HealthNav`, `AxisRow`, `SectionCard`, and
+  `shownSections`/`navKeysOf`, the ONE answer to which cards are drawn. So the frame imports no
+  `api.ts` and no `Markdown`: the daily notes moved to `RepoHealthNotes.tsx` (2026-10-17), because
+  the extension's webview has neither and writes no narrative. The x axis is kept in the webview's
+  own state there (`loadHealthAxis`), as `healthAxis` is per device here.
+
+The CSS lives in `repohealth.css` rather than `styles.css`, every rule scoped under `.rh-region`:
+a component's stylesheet is not guaranteed to land after `main.tsx`'s in the bundle, so the
+overrides of the old rules (the tile hairlines, the index box's border, the bar names' ellipsis)
+win on specificity, never on order. The VS Code view imports the same file and wraps itself in the
+same class.
+
 #### `OptInRegion.tsx` — region 3, offers that are counted in nothing
 
 `shared/optins.ts` is the catalog of advanced things a repo can turn on (a requirements list, the
@@ -8088,3 +8123,1102 @@ pixel for pixel; api/cloud draw the primary dollar period instead.
   what was detected) and the periods + caps form. Caps go out through `withLimit` / `withoutLimit` as a
   whole `budget.set`; a refusal is a sentence beside the field, never a clamp. The percent budget rows
   (session, weekly, leftovers) are absent on api/cloud. A cap holds automatic work only.
+
+
+## Moved out of skill `web-config` (2026-10-17)
+
+_Verbatim from the skill as of 2026-10-17; the skill is the rule — where this text disagrees, the skill wins._
+
+### LocalRtBar.tsx + sysStat.ts — the free-memory caption
+
+the caption **leads with AVAILABLE and still names FREE** (33 GB against the 1.1 GB that started this) with one wording per `source`
+
+### ModelField.tsx + LaunchAskSheet.tsx — why the ask gates every fresh start
+
+ — `openRepo` and `startSessionWithPrompt` build their own
+  create, and gating only `openCwd` left the switch doing nothing for the launcher row.
+
+### SettingsKit.tsx — the group that skipped its rows
+
+— one did, and the rows inside never counted
+  themselves, so the filter bar read **"1 of 8" on a screen holding 54**; only the SECTION hides
+
+### HintChip.tsx — why a visible chip beside the long press
+
+Long press is the right affordance for a
+  toolbar, where an icon you cannot guess is one you will probe, and the wrong one for a screen of
+  TERMS, where nothing suggests an explanation is there to hold down for. It carries
+
+### `CliHealthChip.tsx`, `ModelWheel.tsx`, `ModelSheet.tsx` and `SettingsGroups.tsx` — files the config skill now names
+
+- `features/cliHealth/CliHealthChip.tsx` is the launcher topbar chip over the health rollup; `healthy` and `unknown` render nothing (`chipShown`). It sits on the topbar, not beside "N at limit", because that chip lives inside a section that is absent when no session is live.
+- `core/session/ModelWheel.tsx` is the live session's model + effort wheel popover (Apply lands it; `planPick` types `/model` and `/effort` through the queue where the CLI has them, `launch.relaunch` only where it does not). `core/launch/ModelSheet.tsx` is the "Switch model" overlay for the session on screen, chosen by what the backend HAS.
+- `core/settings/SettingsGroups.tsx` holds the bodies of the three device-preference Settings groups (appearance, typing and reading, offline); the `<SetGroup>` tags and their ORDER stay in `SettingsSheet.tsx`, which `settingsIndex.test.mjs` reads.
+
+### `brandMigrate.ts` — the rename's one-shot copy
+
+`boot/brandMigrate.ts` runs first in `hostBoot.ts` (`runBrandMigration()`): every legacy-prefixed localStorage key is COPIED to the new prefix (never moved, never over a key the new name already has) and the `syncTs` stamps are rewritten to match; `copyLegacyStores()` does the same for the IndexedDB stores, awaited by `idb.ts` before it opens, and lists a target only after its copy finished so an interrupted run repeats safely. The copy itself is shared `brandmigrate.ts`.
+
+### `pqKem.ts`, `nativeKeystore.ts` and `PairForm.tsx` — pairing and keys
+
+`pqKem.ts` is ML-KEM-768 (FIPS 203), generic: key pair, encapsulate, decapsulate, knowing nothing about what the secret is for; the caller hybridises it with an ECDH exchange so the result holds while either holds. WebCrypto's own ML-KEM when the WebView has it (feature-detected by making a key), else `@noble/post-quantum`, evaluated lazily but packaged in the static vendor chunk so it is on the phone with the link gone. The private half stays in the closure. `nativeKeystore.ts` is the page half of `ShellKeystorePlugin`: an AES-256-GCM key in the Android Keystore bound per use to a strong biometric, wrap/unwrap bytes only; every refusal is a `KEYSTORE_CODES` word, and a browser or older APK says `unavailable`. `PairForm.tsx` is the form that redeems a pairing code (`pairRedeem.ts`) and switches to the new host.
+
+### `askRules.ts` and `AskRulesHere.tsx` — ask rules on the phone
+
+The list of ask rules lives on the desktop (`GET/PUT /api/askrules`; the PUT is bound to the list's `rev` and confirm-gated); the phone edits a copy and sends the whole list back. `askRules.ts` is the pure half: every function returns the NEXT list for a tap to send, and suggested rules are added only by a tap. `AskRulesHere.tsx` is the per-repo half in Repo readings (one on/off per rule, written as `offIn` with the repo's `worktreePath`). A running session keeps the rules it launched with, and a refusal is the host's sentence verbatim. Plan: docs/plans/agent-authority.md section 2.
+
+### Second trim pass: measured numbers and incident stories cut from the skill (verbatim)
+
+- SettingsKit.tsx (full original bullet): - `SettingsKit.tsx` + `settingsIndex.ts` — **the Settings screen: one component per KIND of   decision, and a catalogue of what is on it.** A boolean was once spelled eleven ways and picking one of N four ([web.md](web.md#moved-out-of-skill-web-config-2026-10-17)); and **an ACTION was   a bare `.key` — pixel-identical to a switch that is off**, so `token statistics` (a door) and   `data saver: off` (a switch) were the same rectangle. Now: `SetSwitch` (label left, `on`/`off`   pinned RIGHT, whole row the target) · `SetChoice` (chips, never a `<select>` — a drop-down hides   the alternatives, which is how `localRt`'s third mode was invisible) · `SetPick` (the ONE place a   `<select>` is right: a long or open list) · `SetMulti` (SEVERAL of a closed set — chips that latch; what an empty pick falls back to is in the NOTE, never a dimmed chip) · `SetStepper` (absent at the ends) · `SetSlider`   (always with its readout) · `SetCustom` (a body no kind fits; still a catalogued row) · `SetAction` (**never wears the accent** — that colour means *on* — and   a chevron ONLY when it opens another screen). `disabled` is gone from three rows: `cant` draws the   REASON where the button was (`Unavailable.tsx`), `busy` is a running verb in its own glyph.   **`SetNote` folds all but one line** into `hint-more`; **`SetWarn` never folds** — an absence and   a warning are what must be read unasked. **Search is `settingsIndex.ts`** — keywords carry the   words the LABELS do not; its matching rules (AND, substring, no group keywords, group title   matches) are pinned by `settingsIndex.test.mjs`.   **A group never skips rendering its rows** (one did, and the filter bar read "1 of 8" on a screen holding 54); only the SECTION hides   (`gone`, exact and `:has()`-free, plus a `:has()` rule for a group whose every row is absent).   **The counts are the RENDER's, never the catalogue's length** (a third of the rows are   conditional): rows push their ids into a tally, and `SetFilterBar` is drawn LAST and floated up   with `order: -1` so it reads this pass rather than trailing a `useEffect`. Screen ⇄ catalogue   ⇄ manifest group agreement is `settingsIndex.test.mjs`'s. The screen is SEVEN groups (`SETTING_GROUPS`; their ORDER is `core/settings/SettingsSheet.tsx`'s, which `settingsIndex.test.mjs` reads); the three always-on strips live in Appearance.   **`local-sessions`** (*local model sessions at once*: desktop default · 1 · 2 · 3 · no limit) writes the synced `LOCAL_SESSIONS_KEY` (`localSessionsSetting`, `""` deletes the key ⇒ the desktop's `WATERPLANE_LOCAL_SESSIONS`, else 1); the host's `localslot.ts` reads it.
+- LocalRtBar.tsx (full original bullet): - `LocalRtBar.tsx` + `localRt.ts` + `sysStat.ts` —   **the local runner as a strip**, the link store's shape: one store,   one writer, **observes and never steers**. **FIVE states worded apart, never collapsed** (holding ·   up-and-holding-nothing · did-not-answer · polling-off-here · this-desktop-never-answered); **misses   DRAWN never averaged or bridged**; **ring is MEMORY-ONLY**, only the last sample persists so an   offline open says its age. **THREE modes** (`off`/`while a model is loaded`/`always on`): `always`   is its OWN choice, not a stronger `auto` — auto's vanishing act makes watching a model NOT be there   impossible, and a bar that hides for both can only report good news; auto LINGERS past an eviction;   the row SAYS auto still polls. **Strip the provider prefix at the FIRST `/`** or the resident model   looks absent and the pressure note lies. The pressure note is a SENTENCE, never a block.   **Tokens/sec absent, no placeholder.** `sysStat.ts` is the DESKTOP half of the sheet   (`host/sysstat.ts` measures it): **the memory bar always adds up to the machine** — slices against   the total, remainder as one explicit *available*, an overshoot CLAMPED never drawn past the end —   **a slice nobody measured is not drawn** (no 0-byte row standing for an absent reader), the caption   **leads with AVAILABLE and still names FREE** with one   wording per `source`, **CPU busy and the load average are BOTH drawn and worded apart** (busy names   its interval; the first sample of a watch has no delta and falls back to load), **process rows are   a FOLD** (`23 processes`, never a pid standing for one) with `rssSumText` saying the column   overlaps, the slow readers **say their age** (`slowAgeSec`), and an absent temperature is a   SENTENCE naming the helper, never a blank. `sysStat.test.mjs`.
+- ModelField.tsx / LaunchAskSheet.tsx (full original bullet): - `ModelField.tsx` + `LaunchAskSheet.tsx` + `LaunchPicker.tsx` — **choosing a model, and choosing WHEN to be asked.**   (The live session's switch is `core/session/ModelWheel.tsx` and `core/launch/ModelSheet.tsx`.)   `LaunchPicker` is the backend/wheel/effort/version set, ONCE: the ask and the fan-out's sweep row   both draw it (they were two looks for one decision); the caller owns the pick and what is remembered.   `ModelField` is the one model control before a session exists (new-session defaults + the ask):   ONE drop-down with *Aliases* and *Versions*, the typed field only for a genuinely empty catalogue,   and **a stored id the catalogue does not name shown as ITSELF** — a `<select>` whose value matches   no option renders as the first, so it would otherwise read back as "default". `LaunchAskSheet` is   `waterplane.launchAsk` (synced, **off by default**): a fresh open stops and asks backend + model,   starting from the defaults. **The answer is for that launch only** — it never writes the defaults   back — **but it IS remembered**: `LS.launchLast` (per DESKTOP — class `host` in `storage.ts`, parked on a host switch — not synced) holds the last answered   pair and `launchAskStart` starts the controls on it, dropping it **as a pair** when the backend is   one this host does not describe (a `<select>` off its options renders as the FIRST, so the control   would say claude while the create carried opencode). Its controls are **`.set-row`, never a bare   `<label>`** — that class is where labelled-control styling lives and `.form` has no gutter.   **Never on a resume and never over a caller that already decided** (`shouldAskLaunch`, pure   and tested; a resumed conversation carries its recorded launch). **Nothing is queued while it is   up**, so closing starts nothing and the overlay is deliberately not reload-restored. **The gate is   EVERY fresh start's, not `openCwd`'s** (`openRepo` and `startSessionWithPrompt` build their own create). One helper   (`askLaunchFirst`), callers hand over the rest of their own tap; `createOp.test.mjs` fails by name   on a fourth start site. Fan-out is out of scope: a sweep is ONE decision over N repos.
+- resumeIdOf: read as `claudeSessionId` alone (all four taps were), an opencode row names no id, falls through to the directory's `--continue` and, with two closed conversations in one repo, the OLDER row reopens the NEWER one — silently.
+- PluginsSettings.tsx: a plugin's fields are dynamic, so a new catalogue row per plugin would fail `settingsIndex.test.mjs` and could never be searched.
+- ModelField disclaimer: the second trigger (the current value is hosted) is the case that matters; a restated third-party data policy changes, and the app would be asserting something untrue about code already sent.
+
+## Moved out of skill `web-files` (2026-10-17)
+
+_Verbatim from the skill as of 2026-10-17; the skill is the rule — where this text disagrees, the skill wins._
+
+### annKnobs.ts — provenance
+
+an arrow/line wears a knob per END instead of size + turn (owner, 2026-10-15)
+
+### installPolicy.ts — why it exists
+
+The transport already
+  put a fresh build on the phone; what was left was four taps per build, per app. **One dialog per
+  app, EVER**
+
+### installPolicy.ts — the platform mechanics
+
+ — API 31's `USER_ACTION_NOT_REQUIRED` + `UPDATE_PACKAGES_WITHOUT_USER_ACTION`, plus API 34's update
+  OWNERSHIP, which is requested on the loud install that buys it. **A refused silence is not a
+  failure** — it returns `STATUS_PENDING_USER_ACTION` carrying the same confirm intent, so asking can
+  never cost an install; a confirmation that cannot be raised from the background becomes a
+  NOTIFICATION and the row reads *waiting for you to confirm*, never *failed*.
+
+### storagePlan.ts — the dead stat
+
+`SweepSheet` for the desktop's transport dirs; this is the same question
+  about the device, where `used 340 MB` was a dead stat on a screen somebody had opened looking for
+  something to act on. **Two kinds
+
+### SweepSheet.tsx — the measurement behind it
+
+the
+  bulk answer to 6.8 GB of transport files across fourteen repos. **Nothing
+
+### SweepSheet.tsx — bytes beside counts
+
+ — 27 of 31 files reads as "most", and was 97% of the size
+
+### sweepfamilies.ts — the measurement
+
+33 of
+  one repo's 38 outbox files are APKs across 13 families; another holds ONE family of 72. `keep the
+  newest N of each`
+
+### `pasteImages.ts` — which pasted files are a picture someone meant to send
+
+Ctrl+V of a screenshot on a desktop takes the picker's route (`routeFiles`): one image to the annotator, several to the combine-or-not question. Text wins: Office and many editors put a rendered PNG of the selection on the clipboard beside its text, so any non-blank `text/plain` leaves the paste to the textarea and `pastedImages` returns nothing. `ComposeBar.tsx` is the caller.
+
+### `GalleryViewer.tsx` and `useGalleryOpen.ts` — the gallery's viewer half
+
+`gallery/useGalleryOpen.ts` holds the viewer's open file and its one writer (`showFile`), plus `directRef` (a viewer opened straight at a file closes the gallery on close and honours `returnTo`). `gallery/GalleryViewer.tsx` draws it; the rendered HTML branch frames the FILE in an `<iframe sandbox="allow-scripts">` with no `allow-same-origin`.
+
+Second trim pass (2026-10-17, review): sentences with a measured number or an incident story and no imperative, moved verbatim.
+
+- (an arc that moves the instant the finger lifts is worse than one that overhangs)
+- : clamping the origin alone kept the width, so a crop dragged in from off the left GREW as it went
+- (a box-like gains `Mark.angle`; a turned blur pixelates the box AROUND it, clipped), sized in screen px, working off the total delta from `base` and settling through `settleMove`
+- (Office puts a PNG beside the cells)
+- three repos here all build `app-debug.apk`;
+- , and the count said *2 apps install themselves* with nowhere to tap
+- (the thumb warmer's `queued` then refuses to refill what it just emptied, `screenlog`'s `logs` re-saves on the next beat, the dictation INDEX names blobs that are gone, the transcript prefetch thinks it is warm)
+- A repo's outbox can be mostly APK families.
+- (inbox photos are all-variable names ⇒ every file its own family ⇒ a control that can only select nothing)
+- ("14 of 38" could be one family or nineteen)
+- Not a policy control: prune is already on by default, so the recurrence lever is the scaffold `CLAUDE.md` line, not a switch.
+- Warm push, cold push and the row all take the same path; closing returns to the feed.
+- (a 4h listing may never answer "all time")
+- the text cache is keyed on `(repo, relPath, mtime)` and a seed with no mtime is 0, so every rewrite of one path files under one key —
+- (those return early when the page is not visible, which is exactly this case)
+- Replaces a hidden `<a download>` that did **nothing at all in the APK**.
+- — small text survives the mark and not the upload shrink, which is the whole reason
+- : a browser tab and the APK on one phone each have their own, so both fetched every build
+- ; an `.html` deck was written to be looked at, not read as tags
+- , because a thumb starting a box on the edge of a phone-sized image taps the edge instead of dragging from it
+- (a finger cannot land on them anyway)
+- `ImageAnnotator.tsx` is a 40-line composer.
+- — a WebView drops a `blob:` anchor download SILENTLY
+- (API 31 `USER_ACTION_NOT_REQUIRED`, API 34 update OWNERSHIP requested on the loud install)
+- , and `failureText` turns Play Protect's `VERIFICATION_FAILURE` and an abandoned session into sentences
+- — that verb lives on the queue screen with the words in front of you
+- : the service still runs and the queue still drains, there is simply nowhere for alerts to appear
+- `27 · 3.9 GB` opens exactly those 27;
+- Lifted out of `Gallery.tsx` because the notification feed decides before any viewer exists — a notification
+- Decodes ONCE; paranoid encode (size ladder, `toDataURL` fallback, canvases zeroed).
+- It is attached in `main.tsx` (`startInstallLog`); there is no `App.tsx` branch.
+- **Chromium freezes the DOCUMENT on its own, 300 s after `visibilitychange`**, so
+- A browser is told NOTHING (`installIntroText` → null);
+
+## Moved out of skill `web-send` (2026-10-17)
+
+_Verbatim from the skill as of 2026-10-17; the skill is the rule — where this text disagrees, the skill wins._
+
+### sendConfirm.ts — the red row
+
+
+  It went red seven seconds after Send while the host still had four re-sends to spend.
+
+### useVoice.ts — why the fallback is said
+
+ — Android's recogniser dictated garbage nobody could tell was not whisper's
+
+### useVoice.ts — the language incident
+
+ — it was `navigator.language`, and whisper told a language TRANSLATES every other one into it, so English spoken into a German phone arrived as fluent German prose
+
+### SendSheet.tsx — why one surface
+
+Four orthogonal decisions — WHAT, WHERE, WHEN, HOW MANY AT ONCE — that twelve sheets each hard-coded a different combination of.
+
+### composeSend.ts — the .send-more CSS aside
+
+ **`.send-more` restates `flex: 0 0 auto`**: `.row-more`'s
+  `flex: 0 0 100%` is a WIDTH in the launcher's row parent and a HEIGHT inside the compose COLUMN,
+  where it made every menu button as tall as the composer.
+
+### composeSend.ts — the sendMode post-mortem
+
+ The deleted
+  `waterplane.sendMode` armed this button with a wall CLOCK and said so nowhere: only `now`/`idle` are
+  ever recalled onto it
+
+### `ComposeBar.tsx`, `NextPromptStrip.tsx`, `useFileDrop.ts` and `SendSheetEntry.tsx` — the compose bar and the send overlay
+
+All four were lifted out of App unchanged. `ComposeBar.tsx` is the aim line, upload row, attach strip, split Send button's menu, snippet popover, the box and the button row (or CLI mode's bar in its place); everything it acts with is `useCompose`'s return. `NextPromptStrip.tsx` mounts `NextPrompt` above the queue bar on the session screen, reading both queues. `useFileDrop.ts` takes a desktop paste or drag onto the compose box through the paperclip's route and swallows a drop next to the box (the browser's default would navigate the tab to the file). `core/send/SendSheetEntry.tsx` is the `send` overlay over the one send surface: a `repair` seed turns on the file check, a `scheduleId` makes the save an upsert; what the sheet decides goes through `useSend`'s `dispatchIntent` and nowhere else.
+
+### `sendChain.ts` and the `sendIntent/` modules
+
+`sendIntent.ts` is a 39-line facade; the rules are `sendIntent/sendChain.ts` (the chain picker, `chainCandidates`, `ruleRecurs`), `sendClock.ts`, `sendRule.ts`, `sendRetime.ts`, `sendLead.ts`, `sendLaunch.ts`, `sendFlag.ts`, `sendLabels.ts` and `sendTypes.ts`. `sendIntent.test.mjs` pins every string.
+
+Second trim pass (2026-10-17, review): sentences with a measured number or an incident story and no imperative, moved verbatim.
+
+- (Web Speech — Google's cloud, the engine that was not good enough)
+- , toasted once per page too
+- The status read is ONE memoized promise per page.
+- Capture is 16 kHz mono PCM via `AudioContext({sampleRate})` so the host needs no transcoder, `ScriptProcessorNode` on purpose (an `AudioWorklet` needs a blob URL in the WebView), each callback COPYING its channel data.
+- , defaulting to three languages (`DICTATE_LANGS_DEFAULT`) because the pill is tapped one-handed mid-sentence
+- A long dictation is an untouched phone: the screen timed out, the WebView paused the `AudioContext`, and the button went on saying *listening* over audio that was never recorded.
+- : a minute of speech is 1.9 MB uploaded before the first response header, so a slow tunnel ABORTED it and the only copy was dropped
+- `seed.scheduleId` was read by the `at` arm alone, so choosing *now* / *when it's free* / *after…* on a live timed row posted a second row beside the armed one and the words ran twice.
+- — it was a dimmed segment whose reason lived in a `title`, and tapping it answered a REPO target (`firstSession` on an empty list), i.e. silently a different question
+- — a schedule set before attaching a picture silently reverted to *now*
+- and unrefused it dropped turns 2..n on the desktop silently
+- (the fields are 07:00–22:00 and the host reads them as the hours it MAY run, so the old labels made "not while I'm asleep" produce the opposite)
+- — queueing five prompts *when it's free* was five taps on the chevron
+- (the deleted `waterplane.sendMode` armed it with a wall CLOCK)
+- , which put the phone back in the holder's chair two taps from the composer that had just stopped doing it
+- , and hidden it left the whole screen silent about words that were certainly going to run
+- (`focusRef`, written on focus and read by `AttachButtons`, which is mounted in the action bar and cannot see focus itself)
+- , because the clipboard route needs a secure context and a plain `http://100.x` tunnel is not one
+- : while the phone's recogniser listens, a warn pill sits where the language pill would, its tap toasting WHY (plain http, no recording API, or the desktop's own `reason`)
+- (the words land ~1 s after you stop, and a button back at idle reads as a tap that did nothing)
+- ; a held clip lands minutes later and a stale base is a delete
+- — whisper told a language TRANSLATES every other one into it
+- — furniture the rest of the time, and the browser recogniser is given its language at the start, so there is nothing to change about a running one
+- (both chromes, one stored choice)
+- The button's clock (`Voice.heard`) counts FRAMES that arrived, so it freezes with the mic;
+- (a gap since the last frame, a lag against the wall clock since the open — a resumed context hides a hole in the middle — or an ended track)
+- (Android ends "continuous" sessions itself)
+- (a rescue that could not happen must not also be a delete)
+- — "held" when the PHONE is holding it is a promise about a locked screen it cannot keep
+- (plus `phoneHold`, because the two phone-held cases are two different promises)
+- so it does not wear the same two nouns as the anchor control ten lines above
+- (which METER the headroom condition reads, so *right after the session window resets, only if 30% of the week is left* is sayable)
+- Shell composers also drop autocapitalize/autocorrect.
+- : one phone has them, the source is read once and then marked
+- : `/usage` opens a VIEW and starts no turn, so a pinned item watching for one never settles
+- Pure half node-tested (`dictateHold.test.mjs`);
+- Pure half node-tested.
+- ; the phone's own lane goes first (it is the one a tap can still change)
+- Only `now`/`idle` are ever recalled onto it and `sendModeLabel` spells both out on the face,
+- (`SendResume` + `onDecide`, in `core/send`'s `sendResumeRef`, cleared with the seed)
+- `core/queue/pending.ts` holds the pending-create path of the queue: `retryPendingCreate` and `queueSessionPrompt`, two of the ten ackId mint sites `queue.test.mjs` pins (`QUEUE_SITES`).
+
+## Moved out of skill `web` (2026-10-17)
+
+_Verbatim from the skill as of 2026-10-17; the skill is the rule — where this text disagrees, the skill wins._
+
+Prose cut from `.claude/skills/web/SKILL.md` when it was groomed; the rule stays there, the story is here. Verbatim.
+
+### `Sheet.tsx` — the old back-button count
+
+`SheetHead`: 33 files hand-rolling a back button is 33 chances to get CLOSE wrong. (Today 49 `.tsx` files import `SheetHead`.)
+
+### `useRemoteResource.ts` — the `inflight` story
+
+`inflight` is a SIXTH fact, not a sixth state; the story is in [`useRemoteResource.ts` — one host read, told honestly](#useremoteresourcets--one-host-read-told-honestly).
+
+### `App.tsx` — chatty pushes and toasts
+
+**A chatty push nothing on screen reads keeps `prev`** — `build.output`, `capture.output` and `assess.state`'s 1.5 s progress frames all guard on the overlay, or a 20-minute run is ~800 whole-App renders on every phone; a status TRANSITION, a new id or a `null` is NEVER swallowed.
+
+**A toast's clock is the LENGTH of its words** (`toastMs`) and **every toast is also a ROW** in a bounded log (`ToastLog.tsx`, *On this phone*) apart from the host's alerts, and NEVER counted into the unread badge.
+
+### Sheets inventory (cut: no rule)
+
+Full-screen overlays with a `track()`ed entry point: `Backlog` `Gallery` `GitView` `SlashSheet` `NewMenu` `ImageAnnotator` `QueueSheet` `SendSheet` `ActivitySheet` `PadSheet` `FanoutSheet` `QuestionsSheet` `SnippetSheet` `BranchPicker` `HistorySheet` `SearchSheet` `OutlineSheet` `SecretSheet` `SetupSheet` `SentLogSheet` `BuildSheet` `UsageSheet` `SpeedTestSheet` `NetHealthSheet` `AppUpdate` `HostSetup` `PullSheet` `ImageSwiper` `ScheduleSheet` `ScrollbackSheet` `FilesSheet` `ArchiveSheet` `CliHealthSheet` `AssessSheet`. The live list is the `overlayViews` table.
+
+
+## Moved out of skill `web-chrome` (2026-10-17)
+
+_Verbatim from the skill as of 2026-10-17; the skill is the rule — where this text disagrees, the skill wins._
+
+Prose cut from `.claude/skills/web-chrome/SKILL.md` when it was groomed. Verbatim; the rules stay in the skill.
+
+### `link.ts` — it was six modules
+
+It was six modules with four independent derivations of "am I online". (`link.ts` is now a facade over `link/`; the store is `link/linkStatus.ts`.)
+
+### `giveups.ts` — the tombstone
+
+**`giveups.ts` — DELETED**, its localStorage key deliberately NOT: `migrateGiveUps` converts every
+  un-retried row into a `failed` queue row exactly once, with a **FRESH ackId always**. Its three jobs
+  are Activity's now, "have I dealt with this" included (`activityDismiss.ts` files a row without
+  deleting it).
+
+The queue's one-shot migrations (`migrateGiveUps` among them) are `core/queue/migrate.ts`; the rule's owner is `web-send`.
+
+### `SessionTabsBar.tsx` — the design-iteration prose
+
+`SessionTabsBar.tsx` + `sessionTabs.ts` — **the open sessions as a strip**, the THIRD always-on bar
+  and `link.ts`'s shape again: one store, ONE writer (`noteSessionTabs`, fed by `App`'s own render
+  data), taps leaving as EVENTS because the bar is mounted beside `App` and cannot call its setters —
+  the two verbs are `attach` and `closeSession`, unchanged, and **no new send path**. **The colour is
+  the repo's own** (`repoHue`) as a TINT under `--fg`, never repo-hued text on a repo-hued ground
+  (the one pairing the palette cannot hold at 4.5:1 across 360 hues); the selected tab is a STRONGER
+  MIX OF THE SAME HUE plus a cap of it on its top edge and three more pixels of HEIGHT (brightness
+  alone cannot say "front tab" — a vivid repo looks that way anyway), never the accent. **The tint is
+  the LAUNCHER's token over the LAUNCHER's surface** — `--repo-fill`/`--repo-fill-on` as ALPHAS, the
+  strip's ground `--bg` not `--panel` — so a tab and its group header are the same COLOUR, not the
+  same hue in two mixes tuned apart (`--tab-veil`/`--repo-veil`, which is what "the colours nearly
+  match" was). **Those three shapes are declared on the ELEMENTS carrying `--repo-accent`, NEVER at
+  `:root`**: a custom property resolves its `var()`s where it is DECLARED, so a root `--repo-fill`
+  computes to flat transparent and inherits colourlessness into every tab, with nothing in the
+  stylesheet looking wrong. **Light FILLS harder and WASHES lighter than dark** (46/10 against
+  40/18, the wash exactly where it shipped — it sits behind text of its own hue), the fill's ceiling measured in `theme.test.mjs`, never chosen. **`TAB_STRIP_H` and
+  `.sess-tabs`'s height are one number in two files**, pinned by `sessionTabs.test.mjs`.
+  **What a tab is DOING is `sessionStatus()`**, never booleans of the strip's own — the same five
+  buckets and the same five colours (`--accent`/`--dead`/`--limit`/`--muted`/`--dead`) the row badge,
+  the roll-up and the filter share, words from `STATUS_LABEL`; the two booleans it replaced drew
+  *waiting on you* and *at the limit* as the same grey dot as *nothing left to do*. **A running turn
+  SPINS** — `statusPill`'s own `Loader`, only while a turn runs, only on tabs running one, stilled by
+  `prefers-reduced-motion` into a spoked RING that is still not a dot.
+  **How many fit is a setting and NOT a limit** (`--stab-n` is a tab's floor, `1/N`; fewer open, a tab is as wide as its name; the rest scroll,
+  the active one is scrolled into view) — per device with `netPulse`'s argument, because three tabs
+  is a measurement of THIS screen; **default 3 because the names are up to FOUR words**. **How many
+  are DRAWN is a second setting that IS a limit** (`tabsLimit`, default 10, `limitTabs` pure/tested):
+  the open session is always drawn, and the cut is COUNTED at the strip's end (`+N`, words not a
+  control). **THREE orders** (`open` / `frequent` = the habit / `recent` = where was I, the only one
+  that MOVES under you — and the DEFAULT, by the owner's ask), and **the tie-break is always the open sequence** or tabs swap places on a publish that
+  changed nothing. The store is `{n, at}` per session, ONE store for both orders, `migrateOpens`
+  converting the old bare count rather than dropping it (**no instant reads as longest-ago, never as
+  just-now**); bumped when a session COMES ON SCREEN (`openOwed`, off the published active id — Back, hash, `session.focus` and a create all skip `attach`), **pruned on publish but NEVER
+  against an empty session list** (a cold start and a dead tunnel look identical). **The × asks**
+  (`Confirm.tsx`) and archives. **Nothing to show ⇒ nothing drawn**, height
+  published as 0. `tabLabel` is the one label rule: the host's ≤4-word `tabTitle`, else the title with
+  the repo prefix cut, never blank and never invented — and the SESSION HEADER draws that name in
+  FULL (`.brand-name`, wrapping, `Sparkles`), INLINE beside the branch, which is what four words are
+  for.
+
+### `repoColors.ts` — the golden-angle history
+
+`repoColors.ts` + `RepoColorSheet.tsx` (+ `shared/repocolor.ts`) — **which repo is which colour, as
+  a decision a person may take.** The hue was `hash * 137.508 % 360`, a golden-angle spread that
+  spreads CONSECUTIVE inputs and nothing else: two of sixteen repos here measured 9° apart — one
+  colour, twice. Now a RING of hues ≥24° apart indexed by the same hash, four rings to choose from
+  (one measured under simulated CVD in `theme.test.mjs`, because a hue GAP says nothing about that),
+  and **a hue a person may pin per repo — which SURVIVES a change of ring** (you chose a colour, not
+  a slot). **`format.ts`'s `repoHue` reads a MODULE value**, never a hook: ~30 call sites are a
+  `style=` mid-render and what a change needs is the RE-RENDER — `App` and the strip subscribe for
+  exactly that. **The count IS the filter** (*12 repos share a colour* opens those twelve);
+  **nothing applies itself** — *give them separate colours* moves only what collides, keeps a repo
+  already alone on its hue, and **NEVER moves a pinned one**; more repos than hues is a SENTENCE,
+  never a dimmed button. **Synced** (`waterplane.repoColors`) where `waterplane.theme` is not: the theme is a
+  fact about the device, which colour `waterplane` is, is a fact about the person. Only the HUE is ever
+  decided here — `--repo-sat`/`--repo-lit` per theme are swept over all 360 hues, so nothing
+  pickable can make a name unreadable.
+
+### The session header — the four-row history
+
+**The session header is TWO rows and the break is STATED** (`.hdr-row2`). It was four — title,
+  derived name, chips, and the five icon buttons that could not fit beside the chips — and that last
+  one is not a sizing accident: **a wrapping flex row breaks on BASE sizes before it shrinks
+  anything**, so a chip list wider than the row pushes the controls onto their own line however well
+  it scrolls. One child at a 100% basis can only ever start a line; `.hdr-cmds` sits at basis ZERO
+  inside it so a long list eats its OWN row; `.hdr-ctl` groups the buttons so the break never lands
+  between two of them. **The typing keeps stay DIRECT children** — `.screen.typing .topbar >
+  *:not(.hdr-typing-keep)` hides a nested one with its group. A header button is 40px, not `.key`'s
+  46×44: in a bar that already wraps, 4px is measured against a whole ROW. The header wears the
+  repo's hue as `.row-wrap`'s own 3px stripe — and drops it in typing room, where the bar is gone.
+
+### Typing room and the corner group — measurements and bug stories
+
+**Typing room** (`chromeMode.ts`, `uiScaleSteps.ts`) — while the caret is in the compose box the chrome ABOVE it is hidden and the
+  terminal keeps the rows (measured: all of it together left TWO lines). **The signal is FOCUS, not a
+  keyboard measurement** — but LEAVING is: Android's back gesture keeps the caret, so `trackKeyboard` blurs the box only when the viewport returns to its height AT FOCUS after provably dropping a keyboard's worth, held still `KEYBOARD_SETTLE_MS` ("grew back from the shortest" fired on the opening animation and shut the keyboard). CLI mode is excluded. What survives is the output and two buttons —
+  **outline** (which does not end typing mode) and **menu** (`typingPeek`, which brings the chrome back
+  without giving up the caret). The strip is absolute, never `fixed`. **Full screen is the same layout
+  asked for BY HAND** (`fullMode`, the terminal's own corner button, not persisted): same class so the
+  two never drift, drawn on BOTH surfaces (the exit must exist wherever the mode can be entered), and
+  the **special-key row STAYS** — with no keyboard those keys are the only way to answer the CLI.
+  **`chromeMode.ts` is the whole conjunction, pure and node-tested** — every bug here was a bug in
+  the conjunction. Three rules: **`onSessionScreen` gates BOTH hiders** (the strips it hides —
+  `.net-pulse`, `.localrt-bar` — are mounted OUTSIDE `App` and hidden by an attribute on `<html>`, so
+  an ungated mode took them off the launcher and every sheet; `composeFocused` survives the back
+  button, no blur fires on unmount) · **`fullScreen` resets on leaving the session** (a hidden header
+  you never asked for is the state bug, not its symptom) · **the peek suspends full screen too**, or
+  the ☰ asks one hider to let go while the other holds on and reads as dead. The corner button
+  carries `keepFocus`: without it the pointerdown blurs the box and the button moves out from under
+  the finger before its own click lands.
+- **The corner group** (`.term-zoom`, top right of the TERMINAL *and* the READER, floating for the
+  `conn-banner` reason — a strip in flow refits the grid and SIGWINCHes the PTY): the **reader/CLI
+  switch** (moved OFF the header — full screen hides that row, and this is the control you want most
+  in the layout you read a long turn in), the zoom pair, then **full screen LAST** — the group is
+  anchored RIGHT and grows leftward, so the right-most button is the only one that never moves when a
+  zoom button drops off its ladder. **It draws and toggles what is ON SCREEN (`chromeHidden`), never either switch**: drawn from `fullMode` it said *enter* while typing room hid the chrome; drawn from `fullScreen` it said *leave* over a header the ☰ peek had brought back — a dead tap both times. `fullScreenTap` (pure, tested) asks for the opposite of what is visible and moves BOTH the switch and the peek to agree. **Two stored zooms, one per surface** (`waterplane.termZoom` / `waterplane.readerZoom`): the
+  terminal is told to xterm as PIXELS, the reader is ONE `--ui-font` override on its subtree
+  (`readerScale`, clamped as a PRODUCT), wrapper `display: contents` so `.tr`'s height still resolves
+  (`uiScaleSteps.ts`'s `termFontPx`/`nextTermZoom`, a multiplier ON the text size — smaller font is a
+  BIGGER grid, and the refit's report is what resizes the PTY). **No px readout** over live output;
+  at an end of the ladder that button is ABSENT with the end named, never dimmed.
+
+### Second trim pass: measured numbers and incident stories cut from the skill (verbatim)
+
+- theme.test.mjs checks token parity, 4.5:1 text, 3:1 charts, CVD separability and all 360 repo hues.
+- routing.ts: unwinding INTO a transient overlay (hash) landed on the screen underneath (the annotator's return from `SendSheet`, prompt stranded in its draft); depth is pushed because Android 13+ asks at the START of a predictive-back swipe.
+- resumeRoute.ts: Every ordinary reload keeps the hash; the APK's update does not — Capacitor's `setServerBasePath` ends in `loadUrl(appUrl)`, the bare start URL, and so does the cold launch after a merely STAGED build.
+- resumeRoute.ts: storing `location.href` would carry a `dlPath` and re-open a download on the next restart.
+- Bundle chunking: one monolithic chunk re-sent ~1 MB for a one-line change.
+- Markdown.tsx: a relative href in the WebView replaces the whole app with a blank 404.
+- SessionTabsBar: repo-hued text on a repo-hued ground is a pairing the palette cannot hold at 4.5:1 across 360 hues; the selected tab also gets three more pixels of height.
+- SessionTabsBar: a root `--repo-fill` computed to flat transparent and inherited colourlessness into every tab with nothing in the stylesheet looking wrong.
+- SessionTabsBar: sessionStatus has five buckets and colours; the spinner is `statusPill`'s `Loader`, a spoked ring under `prefers-reduced-motion`.
+- Header: a chip list wider than the row pushes the controls onto their own line however well it scrolls; one child at a 100% basis can only ever start a line.
+- Header: in a bar that already wraps, 4px is measured against a whole ROW.
+- Typing room: every bug here was a bug in the conjunction.
+- Typing room: an ungated mode took `.net-pulse` and `.localrt-bar` off the launcher and every sheet.
+- Corner group: drawn from `fullMode` or `fullScreen` it said the wrong verb whenever typing room or the ☰ peek had changed what is visible — a dead tap.
+- LauncherScreen: with a second section below, WHICH half of a repo's verbs you got depended on whether it happened to have a session open.
+- Corner group zooms: the terminal is told to xterm as PIXELS, the reader is ONE `--ui-font` override on its subtree (`readerScale`, clamped as a PRODUCT), wrapper `display: contents` so `.tr`'s height still resolves.
+- ZoomableImage.tsx: clamped pan, GPU-derived scale ceiling, `will-change` only during a gesture.
+- themeOverlay.ts: the overlay style is cached and injected pre-bundle by `index.html` like the theme attribute.
+- ArchiveSheet.tsx: `session.kill` leaves the row `exited`, which then suppresses the "Recently closed" entry.
+- ArchiveSheet.tsx: its entry point is deliberately not the section header, which disappears when the shortlist empties.
+- repoColors.ts: `--repo-sat`/`--repo-lit` per theme are swept over all 360 hues.
+- headerCmds.ts: a `/compact` chip rendered beside "no slash commands" typed Claude's vocabulary at a backend that reads it as PROSE.
+- SessionTabsBar.tsx (full original bullet): - `SessionTabsBar.tsx` + `sessionTabs.ts` — **the open sessions as a strip**, the third always-on bar, in the link store's shape:   one store, ONE writer (`noteSessionTabs`, fed by `App`'s render data); taps leave as EVENTS (the bar is   mounted beside `App` and cannot call its setters) — `attach` and `closeSession`, **no new send path**.   **The colour is the repo's own** (`repoHue`) as a TINT under `--fg`, never repo-hued text on a repo-hued   ground; the selected tab is a stronger mix of the same hue plus a cap of it on its top edge, never the accent.   **The tint is the LAUNCHER's token over the LAUNCHER's surface** (`--repo-fill`/`--repo-fill-on` as   alphas, the strip's ground `--bg`), so a tab and its group header are the same colour.   **Declare those shapes on the ELEMENTS carrying `--repo-accent`, NEVER at `:root`**: a custom property   resolves its `var()`s where it is DECLARED, so a root `--repo-fill` computes to flat transparent. **Light FILLS   harder and WASHES lighter than dark** (ceiling measured in `theme.test.mjs`).   **`TAB_STRIP_H` and `.sess-tabs`'s height are one number in two files**, pinned by `sessionTabs.test.mjs`.   **What a tab is DOING is `sessionStatus()`** (`sessionFacts.tsx`), never booleans of the strip's own — the   row badge, the roll-up and the filter share it; words from `STATUS_LABEL`; a running turn SPINS (still under `prefers-reduced-motion`).   **How many FIT is a setting, not a limit** (`--stab-n`, per device, default 3); **how many are DRAWN is a limit** (`tabsLimit`, default 10, `limitTabs` pure/tested): the open   session is always drawn, the cut is COUNTED at the strip's end (`+N`, words not a control). **THREE   orders** (`open` / `frequent` / `recent` — the DEFAULT and the only one that MOVES under you), and   **the tie-break is always the open sequence**. The store is `{n, at}` per session; `migrateOpens` converts   the old bare count (**no instant reads as longest-ago**); bumped when a session COMES ON SCREEN   (`openOwed`, off the published active id), **pruned on publish but NEVER against an empty session list**   (a cold start and a dead tunnel look identical). **The × asks** (`Confirm.tsx`) and archives. **Nothing   to show ⇒ nothing drawn**, height published as 0. `tabLabel` is the one label rule: the host's ≤4-word   `tabTitle`, else the title with the repo prefix cut, never blank and never invented; the session header   draws that name in full.
+- Typing room (full original bullet): - **Typing room** (`chromeMode.ts`, `uiScaleSteps.ts`;   state in `core/session/useSessionChrome.ts`) — while the caret is in the compose box the chrome ABOVE it is hidden and the   terminal keeps the rows. **The signal is FOCUS, not a   keyboard measurement** — but LEAVING is: Android's back gesture keeps the caret, so `trackKeyboard` blurs the box only when the viewport returns to its height AT FOCUS after provably dropping a keyboard's worth, held still `KEYBOARD_SETTLE_MS`. CLI mode is excluded. What survives is the output and two buttons —   **outline** (which does not end typing mode) and **menu** (`typingPeek`, which brings the chrome back   without giving up the caret). The strip is absolute, never `fixed`. **Full screen is the same layout   asked for BY HAND** (`fullMode`, the terminal's own corner button, not persisted): same class so the   two never drift, drawn on BOTH surfaces (the exit must exist wherever the mode can be entered), and   the **special-key row STAYS** — with no keyboard those keys are the only way to answer the CLI.   **`chromeMode.ts` is the whole conjunction, pure and node-tested** . Three rules: **`onSessionScreen` gates BOTH hiders** (the strips it hides —   `.net-pulse`, `.localrt-bar` — are mounted OUTSIDE `App`, hidden by an attribute on `<html>`; `composeFocused` survives the back   button, no blur fires on unmount) · **`fullScreen` resets on leaving the session** (a hidden header you never asked for) · **the peek suspends full screen too**, or   the ☰ reads as dead. The corner button   carries `keepFocus`: without it the pointerdown blurs the box and the button moves out from under   the finger before its own click lands.
+- Corner group (full original bullet): - **The corner group** (drawn by the terminal area, web-term's `core/session/` file; `.term-zoom`, top right of the TERMINAL *and* the READER, floating for the   `conn-banner` reason — a strip in flow refits the grid and SIGWINCHes the PTY): the **reader/CLI   switch** (moved OFF the header — full screen hides that row), the zoom pair, then **full screen LAST** — anchored RIGHT, growing leftward, so the right-most button never moves. **It draws and toggles what is ON SCREEN (`chromeHidden`), never either switch**. `fullScreenTap` (pure, tested) asks for the opposite of what is visible and moves BOTH the switch and the peek to agree. **Two stored zooms, one per surface** (`waterplane.termZoom` / `waterplane.readerZoom`): (`uiScaleSteps.ts`'s `termFontPx`/`nextTermZoom`, a multiplier ON the text size — smaller font is a   BIGGER grid, and the refit's report is what resizes the PTY). **No px readout** over live output;   at an end of the ladder that button is ABSENT with the end named, never dimmed.
+- LauncherScreen.tsx (full original bullet): - `LauncherScreen.tsx` (`core/launcher/`) — **the launcher is ONE list**   (`repoGroups`, a memo in `useLauncherModel.ts` over `repoGroupsOf` in `model.ts`): a repo group header per repo whether or not it has a   live session, its sessions under it and its worktrees as start-point rows . A repo with nothing running is ONE ROW. **Launcher state is module stores: the screen unmounts under every sheet**, and a filter must survive the round trip. Session rows sort strictly by `createdAt` (status never enters the key), with a manual per-device   order, same-repo rows kept contiguous and a companion shell glued under its session (`glueCompanions`, applied in `model.ts`). The local/external switch is a menu entry, not   a segmented bar, but WHICH view is showing stays on screen. **A row opens into the READER too**   (`openReader`): read mode set BEFORE the attach (the ref moves by hand or the transcript is fetched   twice), outline fired after — and `attach` CLEARS `readerCmd`, or a verb fired in one session   re-fires over the next reader that mounts. (the reader ref moves by hand or the transcript is fetched twice)
+- CloseSheet.tsx (full original bullet): - **`CloseSheet.tsx` + `closeModel.ts`** (`core/launcher`, replacing the old single-cut close dialog) — the bulk   close as seven combinable FACETS (state, idle-for, open-for, underneath, words at stake, conversation,   repo) instead of five single-cut buttons: facets AND, options within one OR, every chip cross-counted   against the OTHER active facets (`facetCounts`'s `withoutFacet`, as `backlogFilter.ts`'s age/status pair). A full `Sheet` reached via `useBackStep`, never a route of   its own. The list under the chips is the actual rows (`SessionFacts`) with a per-row "keep" toggle; the   foot sends `session.remove` once per row still in and says `close N · stops M background shells`   before it stops them — "closing a session stops its shells, fully" (web.md; not in CLAUDE.md). `N = 0` is a sentence,   never a dimmed button. A session a TIMED prompt is aimed at starts KEPT (`isKept`) and `timedKeptNote` says so — never silently spared. Reasoning: [web.md](web.md#the-close-sheet-facets-that-combine-replacing-five-single-cut-buttons).
+
+
+## Moved out of skill `web-term` (2026-10-17)
+
+_Verbatim from the skill as of 2026-10-17; the skill is the rule — where this text disagrees, the skill wins._
+
+Prose cut from `.claude/skills/web-term/SKILL.md` when it was groomed. Verbatim.
+
+### `PromptAnswer.tsx` — the approve bar and the trust box
+
+`PromptAnswer.tsx` — **the one card a choice box is answered by tapping**, drawn by the reader's
+  `tr-ask` and by `QuestionsSheet`. The `approve` BAR under the terminal is GONE: it took its height
+  from the PTY, so it was capped, clamped and three-sized — and on a six-option box with a paragraph
+  each it still showed TWO, with four inside a scroll region Android draws no scrollbar on. In the
+  terminal view a box is answered the terminal's way (press the digit); a card there only covers the
+  CLI drawing the same question. So the surfaces that draw it are the two with a scroll of their own,
+  and nothing here is capped or clamped. **One exception, the trust box** (`termAnswers.ts`, kind
+  `trust` only): the terminal view draws this card as an OVERLAY at the grid's bottom (`.term-answer`,
+  its own scroll, never a PTY resize), because it is a new person's first box, before they know the
+  key bar, and 2.1.293 draws it unnumbered with the cursor on "No, exit". Widen that predicate only
+  for a box with the same argument. **The commit row is never inside the option list** (on a
+  multi-select Submit is the only control that answers). Every tap is still `answerPrompt` — durable,
+  fingerprinted, refused host-side once the box is gone — **no new send path**; sharing one body is
+  what stopped the sheet's copy sending a DIGIT at a `nav` box.
+
+### `screenlog.ts` — the scrollback sheet's zoom mechanism
+
+write. **It has the corner pair's zoom as a THIRD stored value** (`waterplane.scrollZoom`) — its lines
+  were wrapped once by an 80-column grid and a narrower phone wraps them again, so smaller text is
+  what puts a terminal line back on one line; never the CONSOLE's zoom (that reports new cols/rows
+  and resizes the live PTY — reading history must not reshape the session) and never the READER's
+  (prose that reflows is a different size question). Mechanism IS the reader's: one `--ui-font`
+  override on `.sb-body` over `nextReaderZoom`'s ladder, the pair anchored right on `margin-left:
+  auto` so the hits group appearing with a query cannot walk it under your finger.
+
+### `useLinger.ts` — where it is used
+
+`useLinger.ts` ("stay true for `ms` after `active` goes false") is used only by `core/queue/useQueue.ts` and `uploads.ts`, for the transient strips that are siblings of the terminal in one flex column: a mounted or unmounted strip changes the terminal's height, which refits the grid, SIGWINCHes the PTY and repaints the whole screen. `Terminal.tsx` itself reports geometry only when cols/rows changed.
+
+### Second trim pass: measured numbers and incident stories cut from the skill (verbatim)
+
+- TranscriptView.tsx / shared/working.ts: the old "esc to interrupt" anchor went stale and the reader said "working" for nine minutes with no sign it had stopped matching.
+
+## Modules named by the groomed web skills (2026-10-17)
+
+One short section per module that `web`, `web-chrome` or `web-term` now names and no note described before; the header comment of each file is the long form.
+
+### `layout.ts` — phone or wide
+
+`packages/web/src/core/layout/layout.ts`. The one store for "phone or wide", written only by the media-query listener `startLayout` installs and mirrored once to `<html data-layout="wide"|"phone">`, so CSS and the strips mounted beside `App` read the same fact. `WIDE_MIN_PX` is 1024 (a 300px sidebar plus an 80-column terminal); width only, pointer and hover decide affordances, never structure. No hysteresis: everything that must survive a crossing lives outside the frame. `layoutOf` is the query as a pure function, node-tested (`layout.test.mjs`); components read `useLayout()`/`useWide()`.
+
+### `Workspace.tsx` — the frame, phone or wide
+
+`core/layout/Workspace.tsx`. What `App` puts on screen: below 1024px exactly what App returned (sheet, else session, else launcher); at or above it a two-pane workspace with the launcher in `aside.ws-side`. Both layouts return the same two-slot fragment `[sidebar | null, main]`, so a crossing is a reflow and one debounced fit, never a new xterm.
+
+### `LauncherScreen.tsx` — the screen with no session
+
+`core/launcher/LauncherScreen.tsx`. Topbar, queue bars and banners, the ONE repo-grouped list, then recently-closed, recent and hidden lists, or the external `claude` processes when that view is chosen. Props are what App owns (`types.ts`); its own state is `useLauncherModel`'s module stores, which is why a filter survives the screen unmounting under every sheet.
+
+### `ToolbarMenu.tsx` — the burger's menu
+
+`core/session/ToolbarMenu.tsx`. How the terminal toolbar's items are DRAWN (stateful ones, a feature's own via `featureToolbarItem`, the generic labelled button) and the menu they make up. What a tap DOES stays App's `runToolbar`; a feature's command falls through it to `runFeatureCommand`.
+
+### `PassiveScreen.tsx` and `passiveMode.ts` — the kids' phone
+
+The one screen a passive device gets: its apps and how each update is going, when the desktop was last asked, and a small Unlock; no menu, no settings, no sessions, no socket. `passiveMode.ts`'s `bootMode` is pure: the host's answer when there is one, else the remembered mark (`LS.passive`), so a cold start with the desktop out of reach still opens passive. The host is the boundary (`host/passive.ts`); this is a courtesy (R-connection-011…014).
+
+### `chips.ts` — what a count chip says
+
+`kit/chips.ts`. `chipText(label, bucket)` is "label · 27 · 3.9 GB", `toggleChip` clears or moves the cut, `chipRows` makes one bucketing call per key. The number a chip shows and the cut a tap opens come from that one call (CLAUDE.md: a count on a control is a filter).
+### `ptyTail.ts` — the attached session's PTY tail
+
+`ptyTail.ts` holds the attached session's recent PTY bytes: `PTY_TAIL` (in memory) is what the reader's live status line reads, and `savePtyTail`/`loadPtyTails` persist it in IndexedDB so a cold start with no host paints the session instead of a black rectangle. It is IndexedDB and not localStorage because localStorage's quota belongs to the send outbox, which must never be evicted by our own growth. The stored `seq` is the load-bearing half: handed back as `resumeSeq` on the next `session.attach`, it lets a live host stitch only the delta onto the restored output; without it the attach goes out with `resumeSeq: undefined`, the host answers `full: true` and a whole scrollback is re-sent for nothing.
+
+### `resetKeys.ts` — what a reset forgets
+
+`resetKeys.ts` holds the two lists a RESET reads: what "reset UI settings to default" forgets (device keys only — how THIS phone draws the app) and what `BootGuard`'s hard reset keeps. A reset of the look must not delete anything a person wrote or chose for every device (header commands, pins, hint dismissals), and `storage.test.mjs` holds the list to that.
+
+### `CliPeek.tsx` — the reader's empty state
+
+`core/session/CliPeek.tsx` fills the reader's empty state with the TOP rows of the live screen (a fresh session opened in read mode has no turns, and "No turns recorded yet." over a blank screen read as broken while the CLI sat there with its welcome header). It is a DISPLAY, never a second terminal: no input, no fit and NO geometry report (the grid is sized to the geometry the PTY was last told, scaled with CSS to the column width — reporting a size from here would SIGWINCH the PTY). The first turn makes it fly into the CLI toggle.
+
+### `useReaderPick.tsx` + `useTermPick.tsx` — pick lines
+
+`core/session/useTermPick.tsx` picks lines ON the live terminal (ticks drawn over the CLI's own rows, the gutter inside the terminal's element so a pan still scrolls the TUI); `useReaderPick.tsx` is the same pick for the reader, whose lines are blocks (paragraph, list item, heading, quote, code block). Picks are held by their TEXT, not their row: after each repaint a pick is found again, and one that scrolled away is still picked and still quoted, the bar counting it as out of sight.
+
+## Moved out of skill `web-work` (2026-10-17)
+
+_Verbatim from the skill as of 2026-10-17; the skill is the rule — where this text disagrees, the skill wins._
+
+The long form of rules the skill now states in a line each. Text marked *full original* is the skill's prior wording,
+kept verbatim; the skill keeps the rule, this keeps the story and the measurements.
+
+### `BuildSheet.tsx` + `buildPrompt.ts` — the three answers to an empty field (full original)
+
+- `BuildSheet.tsx` + `buildPrompt.ts` — build buttons for one repo, and **three** answers to an empty field:
+  `set up` spends an agent turn on the whole repo; the EDITOR's suggest list is free
+  (`build.scan` → `shared/buildscan.ts`) — a rate-limited Claude is why you are here.
+  **A tap FILLS THE FIELDS and saves nothing.** The query is what you already typed, and only for a
+  NEW build. **The count on the control counts the FILTERED list.** One scroll region
+  (`.build-body`), because a build log is unbounded.
+  The third is the EDITOR's **`work it out`** (`buildPrompt.ts`, pinned): ONE agent turn on
+  ONE entry, seeded with what is typed — **the brief is asked for ON THE PHONE first**, nothing
+  sent until the button under it, and with nothing said the verb is a sentence not a dimmed
+  button. An existing entry names its id (*edit
+  that one in place*), and both prompts share ONE copy of the builds.json schema. **A parameterised build opens its form, never runs on a tap**
+  (`BuildRunAsk`): nothing is picked for you (a missing value REPLACES Run with the sentence, never
+  a dimmed button), a list that could not be read falls back to a typed field WITH the reason, and
+  the `optionsCmd` is shown because it RAN when the form opened. Seeded from the stored defaults and
+  **nothing else** — a remembered last value would make the form lie. The values ride into the queue
+  row's name (`buildRunTitle`) and onto the run row.
+  **What a build LEAVES BEHIND is a row here** (`ArtifactPolicyRow`, `shared/artifacts.ts`): collect
+  + name, remove older, keep N, per repo, ON BY DEFAULT; **`undefined` draws NO row**; both prompts
+  carry `ARTIFACT_RULES`.
+
+### `Backlog.tsx` + `backlogFilter.ts` — the list, the schedule seam, titles and kinds (full original)
+
+- `Backlog.tsx` + `backlogFilter.ts` — **a repo's waiting work: the LIST, never a place words are
+  "sent to".** Every item opens its own session when it fires — the shared `backlog · <repo>`
+  conversation is retired (`shared/sessioncost.ts` is why) — so group heads read *Each in a new
+  session* / *In <session title>* / *Aimed at a session that closed*. **That third group is not a
+  queue**: a `{kind:"session"}` row whose session went is held on `sessionGone` for ever, nothing
+  re-aims it, so it is out of `nextFireIds` and its chip reads *target closed — held* (it used to say
+  *"it runs in a new one instead"*, which the host has never done). **One WHEN, one name**: the row
+  verb is `when <session> is free` / `waits for <session>` with the composer's `Hourglass` — it was
+  `queue here`, a fourth spelling of the composer's `When free`, needing a paragraph and a dedicated
+  `open a session here` to give it a target; both are gone, the reason the verb is ABSENT stays. **It writes no prompts**: its add form was a fifth prompt
+  textarea and is now `send…` into `SendSheet` (seeded to this repo, WHEN = *when it's free*); the
+  leftover `waterplane.backlogDraft` is RESCUED and said, never dropped. **No phone-side batch runner**
+  (`queue mode` and the `⊕` staging buttons): the intent store serializes per repo on the HOST.
+  **`fire` is never gated on a session existing** — firing opens one; only the link refuses, in
+  words. A row shows its own TEXT (clamped to three lines), never `label`, which `add()` fills with
+  `text.slice(0, 40)`; `realLabel` tells a typed label from that truncation. Status + age chips are
+  a FILTER, cross-counted (`backlogCounts`): with an age on, the status chips count only that
+  window, and vice versa; the age windows NEST (one `ageBucket`/`withinAge`: `backlogpins` P2). Drag
+  works in any cut: `onReorder` sends the rows ON SCREEN and the host makes them trade their OWN
+  slots (`reorder`), so a hidden row keeps its seat — never renumber a subset 0..n. The filter
+  is the tap, not a setting. Ages tick (`useNow.ts`, shared with `ActivitySheet`).
+  **Schedules and this list are TWO sheets with the seam drawn in both directions** — a rule is a
+  clock listing every repo, an item is words waiting in ONE; the join was what was missing, not the
+  separation. A row a rule wrote wears `from the schedule “x”`; a schedule card's `backlog · 1 item`
+  opens that row. The link is `lastResult.childId` and therefore the LAST item per rule only —
+  never matched on the label, which a child inherits. Its three sentences are `backlogFilter.ts`'s
+  (`fromScheduleWords` / `scheduleRuleLabel` / `scheduleItemsLabel`), and `focusIds` is how any cut
+  opens this sheet from outside.
+  **A `running` row is never hidden by the archived cut** (`hiddenByArchive`, one predicate for the
+  sheet's base, the repo counts and the composer's badge). Nothing re-sorts rows on its own; a row
+  a drag (or a pinned assessment rank) placed is marked `handOrdered` and says so. `auto off` carries a sentence (it pauses every
+  deferred send in the app, not just this list) and the check/validate verdicts wear `CHECK_ICON`,
+  never the `⏳ ⚠ ✓ ✗` that were glued to their labels.
+  **A row's TITLE and its KIND are `shared/naming.ts`'s, and `label` (the person's) is never
+  replaced by `headline` (the machine's)** — `itemHeadline` is the ONE display rule on both ends and
+  `realLabel` is only its typed half; a derived title wears `Sparkles` and, expanded, says whose it
+  is (`HEADLINE_BY_WORDS`, TEXT never a `title`). **Absent category = NOBODY SAID**: no chip, no
+  default bucket; `categoryBucket` (`none` its own chip) is cross-counted with status and age. **No colour per kind** — a red `bug`
+  beside a red `failed` reads as a failure; `CATEGORY_ICON` is the difference. `name these N`
+  (`backlog.name`, DURABLE, `nameableInCut`/`nameNote`/`NAME_COST_NOTE`) is the one bulk verb here
+  that is not a `ConfirmButton`; while `naming` holds a row the button is ABSENT with
+  `NAME_RUNNING_NOTE` and the row wears `naming…`. Editing a suggestion SAVES IT AS YOURS (`hand`,
+  never overwritten again); clearing it puts the row back in reach of a pass. The edit form's two
+  hints are `headlineEditHint`'s, pinned — a promise about the host's `hand` stamp is not an inline
+  literal.
+
+### `clockDirectory.tsx` + `clockCuts.ts` — recurrence decides the list (full original)
+
+- `clockDirectory.tsx` + `clockCuts.ts` — **recurrence decides the list.** A one-off aimed at ONE
+  place (`isTimedWorkRow`) is a BACKLOG row wearing a clock, never a Schedules card: it is spent by
+  its one run, so there is nothing to arm, pause or skip — and filing it under Schedules took it off
+  the backlog list (measured: 9 live `at` rows, all one-off, 7 `failed`, in no
+  backlog). A recurring rule, and a one-off SWEEP (no single backlog to live in), stay cards. What
+  Schedules keeps is a read-only DIRECTORY, `On a clock · N`, one line per timed item with **exactly
+  ONE affordance** — open it where it lives; a line with verbs would be the second home this change
+  removes, which is why it is its own module. **`clockCuts()` is ONE call producing every list and
+  every number on this subject** — cards, lines, the spent foot, the horizon and the two kind counts
+  — and the launcher chip makes the SAME call over the same two lists as the sheet it opens, so
+  `horizon.total` IS the sheet's `standingTotal` rather than a second count that has to agree. Three
+  hand-rolled copies of the standing test said **13 · 8 · 2** about one set of rows (chip, chip's own
+  title, sheet): `isStandingClock` is the one predicate now — has a clock, not archived, **not
+  settled**, and not spent read **WITH `lastOccurrence`** (`isSpentOnce`'s `window`/`oneShot` branch
+  is only that field, so dropping it means no such row can ever read as spent). `horizonBucket` stays
+  the only home of the hour/day/week edges. **No cards but clocks ⇒ the directory IS the body**,
+  headed *Nothing repeats*; the `Empty` stays keyed on both together.
+
+### `drop the clock` and `run it again` — the `backlogFilter/` verbs (full original)
+
+- **`drop the clock`** (`backlogFilter.ts`: `clockWords`/`dropClockNote`/`dropClocksLabel`/
+  `dropClocksToast`/`holdChipWords`) — the verb that answers "run the ones that were skipped":
+  `intent.update` carrying a `trigger` of `idle`, a plain `liveSend`, taking the instant off and
+  leaving the words. A one-off cannot be re-armed, and `re-fire` beside it runs it THIS SECOND in a
+  session of its own (`runNow` skips the ladder) instead of putting it back in the queue. Two states, two different offers, never one sentence; the receipt names the CLOCK and never
+  a state (the host kicks synchronously — the row may already be `blocked` or firing).
+  **`holdForHost` survives it** — and that, plus *auto takes it from there*, are
+  **TEXT on the row, never a `title`** (invisible on a phone, the `Unavailable.tsx` rule): the hold
+  chip carries `· survives a dropped clock` where the verb is offered, `dropClockNote` is drawn under
+  the chips AND used as the button's title, so there is one string and not two copies of a claim.
+  `when` is the Send sheet, never an inline field. On the `failed` cut the bar grows `drop the clocks
+  on these N` (`ConfirmButton`): **the count is the cut on screen**, the note says what it left alone
+  (and says nothing about a rest when there is none), and **one tap is ONE receipt** — the wire has
+  no batch `intent.update`, so `liveSendAll` sends N frames and `dropClocksToast(n)` is said once;
+  the per-row loop toasted seven times and named the count never. `▶ next` skips a row whose instant
+  is still ahead — it is not next, its clock is. **Its sibling for the row with NO clock is `run it
+  again`** (`RUN_AGAIN_LABEL`/`runAgainRowNote`/`runAgainState`/`runAgainEligible`/`runAgainIds`/
+  `runAgainLabel`/`runAgainNote`/`runAgainAimedCount`/`runAgainClosedNote`/`runAgainToast`/
+  `requeuedWords`): a `failed` row is terminal, so nothing ever looks at it again
+  (measured: 0 queued, 19 failed) — `intent.requeue` puts it back with its words, its place and its
+  failure, and it is **the one backlog mutation that is DURABLE** (queued offline through `queueOp`
+  on an `intent:<id>` lane). **`failed` is a STATE, not an event**, so the tap carries the row's own
+  `finishedAt` as `failedAt` and the host refuses a row that settled AGAIN since — and **that refusal
+  is TOASTED** (`op.ack`'s `ok:false`, this op alone: its tap is on a row that does not change, so
+  silence read as yes). **ONE eligibility edge** (`runAgainState` → `offered`/`held-closed`/`none`,
+  never restated in the component): failed, no clock (that verb is *drop the clock*), not archived,
+  and **not aimed at a session that CLOSED** — nothing re-aims one, so a re-queue makes it wait for
+  ever; the verb is ABSENT and `runAgainClosedNote()` says why in TEXT, never a dimmed button.
+  **The promise is worded OFF THE ROW** (`targetSessionId`, the field the group heads read, never the
+  optional `fresh`): *a new session of its own* is true only of a fresh row, and the bulk note takes
+  `aimed` so a mixed cut is two clauses — only an all-fresh cut may say *one at a time in this repo*.
+  `re-fire` beside it is the other promise: this second, not in turn. The row's TEXT and the button's
+  title are ONE string, the bulk `run these N again` (`ConfirmButton`) counts the cut on screen with
+  one receipt for one tap, and a revived row draws `requeuedWords` — worded apart per state,
+  **`by:"run"` reads *started again*** (it was fired, not queued), `(2nd time)` **only when the host
+  sent a count** (`n` is optional; absent ⇒ NO ordinal, never `requeues.length`), the old failure
+  quoted only where the entry carried one.
+
+### The schedules chip's count (full original)
+
+- **The schedules chip's count** (`horizonBucket`/`horizonLead`/`HORIZON_LABEL` in
+  `shared/schedule.ts`, `ScheduleSheet`'s `focus`) follows CLAUDE.md's count-is-a-filter rule; the
+  filtered view is `.filter-bar`. **Empty states stay keyed on the unfiltered count** (a filter matching nothing must
+  not claim nothing is scheduled). **The filter is the tap, not a setting** — cleared when the
+  overlay closes. **The pool is two kinds and the chip's sentence says which** (`N rules · N on a
+  clock in a backlog`) — one `horizonBucket` over both, so the tap opens what it counted whichever
+  kind those rows are. **A spent one-off is not a schedule at all** (`isStandingSchedule`, same
+  function for the chip's count and `ScheduleSheet`'s list): it cannot be re-armed, so "not armed" named a
+  state with no way out. It is Activity's row, and the sheet's foot says how many and opens exactly
+  those. The one sentence both surfaces say about such a row is `SPENT_ONCE_TEXT`, and *run it now*
+  still WORKS on it (the host revives and fires it) — Activity used to refuse the tap the schedule
+  sheet offered.
+
+### `SetupSheet.tsx` + `setupRemedy.ts` — `Repo readings` (full original, written when it had two regions)
+
+- `SetupSheet.tsx` + `setupRemedy.ts` — **`Repo readings`: ONE sheet, two
+  regions, and the seam is the COMPARATOR, never time.** Against the conventions
+  (`ComplianceCheck`) = a fact against a line somebody chose, so it can be on the wrong side of it:
+  stripe, pass/warn/fail, counted in the badge, sometimes a `fix`. Against its own past (the
+  series, drawn in `RepoHealthRegion.tsx`) = no side to be on. **TWO
+  `useRemoteResource`s, two `Empty`s, two age lines, two write halves** — "the checklist could not
+  be read" and "the series could not be read" are different sentences.
+  The region switch is `ContextSheet.tsx`'s grammar (`.ts-filter` row, labelled `.key` chips lit
+  `.key.active`, above what it changes; the repo picker above THAT). `initialRegion` picks the
+  landing region.
+  **`context-weight` is the proof the merge is real** — the one subject measured both ways, agreeing
+  on the number and differing in CLOCK (working tree now vs last commit measured). It keeps its
+  stripe (it quotes a threshold, argued with in `ContextLimits.tsx`) and gains `WeightTwin`: both
+  halves' sparklines and the rank sentence. **Both figures are named by their clock and RECONCILED
+  BY NOTHING** (`bothClocksWords`) — an uncommitted CLAUDE.md edit is the gap a reader wants. The
+  working-tree figure is not a wire FIELD (it sits inside the check's prose), so the clause points
+  at the sentence above rather than regexing a number out of it.
+  Region 1 keeps its two answers: the host's idempotent `fix`, and for what a patch cannot close
+  **the finding as words for that repo's agent** via `SendSheet` — `remedyPrompt` **quotes the
+  check's own `detail`** (a paraphrase loses the file names) plus one line of guidance per id; the
+  bulk button hands over **what the RE-RUN report still shows**; a `CHECK_REMEDY` preset wins where
+  one exists. **`isSetupFinding` (`@waterplane/shared`) is the ONE spelling of the predicate** — there
+  were three, and `patchFindings` omitted host scope, so "Fix all" counted the daemon's Gemini row
+  beside a badge that never has. `focus: "findings"` cuts region 1 to those rows with a
+  `.filter-bar` saying `n of N` against the UNFILTERED list and a *clear*; **region 2 is untouched
+  and says nothing about it.**
+
+### `AssessSheet.tsx` + `assessRows.ts` + `assessPicks.ts` — the assessment as a diff (full original)
+
+- `AssessSheet.tsx` + `assessRows.ts` + `assessPicks.ts` — the assessment as a diff a person approves. Words IN FULL, **never clipped**; a merge is ONE decision about all N; confirms on the
+  BULK buttons. **A RUNNING run says what it is doing** (`assessWatch`; quiet is an AGE never
+  "stuck"). **`accept` names its EFFECT** (`assessAcceptWords`, per verdict AND store), TEXT never a
+  title. **A verb that does nothing is not drawn** — `unclear`, pad notes and merge members get a
+  `CantInline` sentence, never a greyed accept; ticks read FUTURE tense: only Apply acts.
+  **A `wanted` PAD NOTE is OFFERED, not just judged** — `cleanAssessment` copies the note's own text
+  into `proposal.news` with `AssessNew.fromNote` (verbatim by CONSTRUCTION, not by asking the CLI),
+  APPENDED after every CLI-written item so `choices.news` indices keep their meaning, ticked through
+  the same `pickedNews`. The row's refusal then POINTS at the offer (`ASSESS_NOTE_OFFERED`) instead
+  of closing. **It must not look like a new item**: `NotebookPen` + *from your pad*, `NOTE_ITEM_WORDS`
+  (*file it* / *will be filed*), `assessNoteItemNote`, `.asr-offer` — a person has to tell their own
+  words from the run's. **The note comes off the pad on the RECEIPT, never the tap** — and only on
+  PROOF: `assessBusy` is a **ref-authoritative** `Map<ackId, noteIds>`, `!ok` moves nothing, and
+  `ok` clears exactly `ticked ∩ msg.filed` (`assessFiledSplit`/`assessFiledWords`, one sentence per
+  outcome). `ok` is NOT proof a row posted — the host's loop carries on past a refusal and still
+  counts it — `[]` is the claim *nothing landed*, and `filed` ABSENT clears NOTHING and says the
+  notes were left on the pad, never worded as a failure. A socket dying in the gap leaves the row AND the note
+  — two visible copies, one tap to clear. Never a loss, never a silent one.
+  **A `still wanted` verdict on a FAILED row PUTS IT BACK IN THE QUEUE** (`AssessDisplayRow.failed`
+  off `AssessItem.state`, the host's own field): `assessRowPosition` replaces the inline *position N
+  in the order* literal, which on a terminal row named a place in a queue it is not in; the verb
+  becomes `put it back`; `assessApplySummary.requeue` is a fourth count DISJOINT from `keep` and
+  `assessApplyLabel` says *put N back in the queue* in full; `assessApplyNote(requeue)` drops the
+  flat *nothing is built or sent* it can no longer keep; and the bulk `keep all N` is the one place
+  this sheet ADDS a confirm, naming both numbers (*Keep N — put K back?*). **WHERE a put-back row
+  runs is `requeueWhereWords(one)`, ONE clause for the four strings that said it** (accept title,
+  `assessBulkLines`, bulk-keep title, `assessApplyNote`): *each in a session of its own* is false for
+  a row aimed at a session, `AssessItem` does not carry the target, so it names both outcomes and
+  lets the row decide rather than asserting the wrong one.
+  **The run's TITLES are a proposal like everything else** — the head draws the kind chip and the
+  title (`Sparkles` only when it is the run's, `assessRowHead`), and ONE switch BESIDE pin-ranks —
+  side by side, LAST IN THE SCROLL, never a band in the fixed footer (ONE measurement, 320×780 at
+  `--ui-font` 1: the list keeps 399 px, the pair is 314 px; at 400×850, 520/250) — decides whether
+  any of it is written (`assessNameQuestion`/`ASSESS_NAME_WRITE`/
+  `ASSESS_NAME_SKIP`/`assessNameNote`, default WRITE, kept in `assessPicks.ts`). A posted row's name
+  rides with its prompt regardless — it has no words of anybody's to sit on.
+  `AssessApplySummary.name` counts EXISTING rows only, un-gated by the switch and by the ticks.
+  **The scroll is where a question can be MISSED, so the footer restates BOTH answers**: with
+  `rankedN > 0` `assessApplyLabel` says `· order pinned`/`· order free` (unconditional on the
+  answer), and with the naming switch on, `· title N`. **The guide grows ONE line**, never a
+  paragraph — the head must not grow.
+  **`read the plan` OPENS `.waterplane/plan.md` in the viewer**, never the composer (`backlog.ts` retired
+  the one-session-per-plan shape; `news` is the route to work, no parser), **carrying
+  `run.planMtime`**: one path rewritten per run, un-versioned, is A's plan under B's verdicts;
+  absent stays absent. **A file the words name is DRAWN** (`AttachStrip compact`). Ticks survive a
+  side trip (`assessPicks.ts`).
+  **A COLUMN BASIS IN PIXELS IS A CLAIM ABOUT HOW WIDE WORDS ARE** — `.asr-asks > .asr-pin` is
+  `flex: 1 1 18ch` and `.asr-answer > .key` is `flex: 1 1 12ch; min-width: 0; white-space: normal`,
+  never the annotator's `.annot-tools tri` (`overflow: visible` over `flex: 0 0 auto` `.key`s, and a
+  36 px floor): a fixed `118px` column at a larger `--ui-font` painted a sentence over the question beside it and `leave the rows as they are` 347 px off the screen. `ch`
+  scales with the text, so the pair drops to ONE column where two would be narrower than the words,
+  with no media query — the threshold is the comfort, the no-overflow/no-overlap is `min-width: 0`
+  plus wrapping and holds past the 1.45 ceiling. **`18ch` is measured in `.form-hint`'s 13px sans,
+  NOT the `.key`'s 14px mono the overflowing words are in** — say what a basis is measured in or it
+  reads as a promise; and cite the SELECTOR of the 36px exception, never a line number.
+  **1.45 IS NOT THE CEILING** — Android multiplies px text by the SYSTEM font scale on top of
+  `--ui-font`, so ~1.9 is reachable: `.act-bulk .key`, **and `.assess-sheet`'s `.act-acts` /
+  `.section-head` / `.sheet-head` `.key`s**, are `flex: 0 1 auto; min-width: 0; max-width: 100%;
+  white-space: normal` with the icon `flex: none` — `approve the merge` and the step-log toggle were
+  each wider than a 320px screen in an `overflow: visible` strip.
+  **AFTER an apply the sheet has a ROUTE** — `open the backlog — N waiting in <repo>`
+  (`assessOpenBacklogLabel`), a count that IS the filter (`assessReadyCut` → ids → `openBacklogCut`,
+  bar labelled `assessCutLabel`). **The cut is EVERY non-archived `queued`/`blocked` row in the
+  repo** — that IS the groomed backlog. It was this run's share (`origin`/`wanted`) and said *4
+  waiting in usmc* over a repo with 7 waiting, because an `unclear` row is queued and excluded by
+  construction; the fix was the cut, never the wording. LIVE `backlogItems`, never the ticks
+  (`dropPicks` runs ON apply) and never `intents` (builds/launches/schedules are not backlog rows);
+  gated on `run.applied` IN the pure module; a ZERO count is dropped and its sentence is about the
+  REPO. **A route never clears `assessRepo`** — the cut is pushed OVER the sheet's history entry, so
+  nulling it made Back paint the launcher under `overlay === "assess"` and the next Back do nothing.
+  The cut it lands in says whether anything will run it — `focusRunWords(breakdown, auto)`,
+  fed a `FocusRunBreakdown` built off `nextFireIds`' own predicates, **never a count**: an ids base
+  holds ARCHIVED rows on purpose, so a cut of 3 was told "3" and claimed all four clauses. It
+  returns **`null` when nothing in the cut starts**; *a session of its own* only for FRESH rows,
+  *in <session>* for aimed; *one at a time in this repo* only with `aimed === 0` (one per GROUP
+  fires); *in the order you see*; what is not starting is COUNTED, not
+  diagnosed. **ONE COPY of "auto is off"** — the head banner is drawn exactly when that sentence is
+  not (keyed on the sentence, not on `filter.ids`), and the switch's title is `FOCUS_AUTO_ON_TITLE`.
+
+### `ScheduleWeekBar.tsx` + `scheduleWeekPlot.ts` — the schedule sheet's week bar
+
+The next seven days with the two usage windows on them and a numbered pin wherever a rule fires next. It computes no edge
+of its own: every fire instant is the host's `ScheduleEntry.nextAt` (the same `nextFireAt` the tick arms with) and every
+reset is the one usage reading through `windowResetAt`. A window that has not been read is ABSENT, never placed at a guess,
+and a later session window is never extrapolated (it opens whenever the next prompt is sent, which no clock knows).
+Read-only: the pins are pictures, the list under them says the same in words, every verb stays on the cards.
+
+### `fanoutKickoff.ts` — how far a sweep got
+
+Pure strip for `FanoutSheet.tsx` (`fanoutKickoff.test.mjs`): one sentence and one fraction over a run's targets, counting
+`pending` (not yet picked up), starting (spawning / typing), sent (turn still going) and kicked off (everything past
+starting, failures included, the bar's fill). A sweep is ONE prompt: the host's fan-out executor reads `steps[0]` and
+nothing else, so `sendIntent/sendLabels.ts` refuses a chain into several repos in words.
+
+### `buildScope.ts` + `BuildScopeChoice.tsx` — where a build entry lives
+
+The build editor's two-way choice: the committed `builds.json` every checkout shares, or this desktop's own file.
+`build.save`'s `local` lists which ids stay in THIS desktop's file after an edit (`localIds` from `build.list`; undefined =
+an older host with no such file: send nothing, draw nothing). The control is drawn only for a host that sent `localIds`.
+
+## Moved out of skill `web-numbers` (2026-10-17)
+
+_Verbatim from the skill as of 2026-10-17; the skill is the rule — where this text disagrees, the skill wins._
+
+Same convention as above: *full original* is the skill's prior wording, verbatim.
+
+### `ContextSheet.tsx` + `ContextGraph.tsx` + `contextPlot.ts` — the context window as a shape (full original)
+
+- `ContextSheet.tsx` + `ContextGraph.tsx` + `contextPlot.ts` — the context window as a SHAPE, geometry
+  and sentences pure and node-tested. **One y axis for every graph: 0 to 100% of the model's window**,
+  never re-fitted to the data, falling back to tokens **while saying so**. Row spark: top =
+  `autoCompactSetTok`. The TIME axis is piecewise
+  and the break is DRAWN. Colours are VALIDATED, not chosen; there is a table twin.
+  **ONE CONTROL GRAMMAR, shared with the all-sessions screen and written above both returns**: the
+  head holds chrome only (back, re-read) · a body-changing choice is a `.ts-filter` row of LABELLED
+  `.key` chips lit `.key.active`, directly above the first thing it changes · a
+  section-scoped choice is `.ts-seg-chips` in that `.section-head` · a running verb says so in its own
+  glyph, never `disabled`.
+  **The context sheet has NO `show as` / `stack by` rows**: one
+  chart view, areas ALWAYS stacked by token kind (flat only where the host sends no kinds), subagent
+  lanes and the agents' spend band unchanged. The by-model stack lives on the all-sessions screen.
+  **Long method prose FOLDS into `details.hint-more`; an ABSENCE never does** — a mean that is not
+  drawn, a chip that is not offered, a section that cannot be answered, an outlined box standing for
+  *nobody measured this*: `Unavailable.tsx`'s rule applied to prose. Restatements and reassurances are
+  cut. `axisNote` is the
+  caption, one per `windowFrom`: **`"config"` is ATTRIBUTED, never presented as a measurement** — it
+  is what the backend's configuration STATES, not something anybody watched, and a local runner may
+  hold less. The sheet is gated on derived `contextSeries`, not on the live gauge.
+  **CHARTS TOGETHER, then panels, then captions** — name → spend chart → context chart + summary + legends →
+  agent lanes + readout + legend →
+  composition strip → cost panel (one door) → expired cache → compactions → captions (truncated,
+  `axisNote`, gaps, *where these numbers come from*). The three charts share one `makePlot` x axis,
+  so a step in the grey band lines up with the agent bar that caused it; the
+  panels used to be interleaved under "their" chart, which put prose between charts read together.
+  Charts are NAMED (`.ctx-chart-title`).
+  Every sheet prose `.empty` also carries
+  `.ctx-note` — `.empty` sets no size, so a bare one rendered at the body's 15px between 12px lines.
+  **`/compact` is ONE door, on the context chart's name**: it keeps the conversation
+  and re-reads a summary of it, a fresh session keeps nothing, and the ledger six lines below already
+  prices the last one at 168× what it cost. Drawn ONLY where `sessionCan(subject, "slash")` —
+  `headerCmds.ts`'s bug verbatim — absent with its reason in TEXT, and **`costDoorsText(false)` is
+  NULL**: a sentence naming a door that is not on the screen is the same lie in prose. Sent through
+  `submitInput` with an ackId, aimed at the SUBJECT and never at the attached session.
+  **TWO doors, one subject** (`ctxSid`; null = the attached session, cleared on close and by the
+  header chip): a launcher row's cost tile is a CONTROL — `role="button"` + the stopPropagation
+  PAIR (click AND the `pointerdown` that arms the row drag; a nested `<button>` is invalid inside
+  the row) — and opens the graph for THAT row **without attaching it**, the series being read by id
+  over HTTP. Its affordance is the tile's own EDGE: never the dotted underline (that mark is for a
+  line of text, not a stack of two SVGs) and never a `title`.
+  **A TOTAL IS NEVER PRINTED WITHOUT ITS SPLIT** — 96% of every token here is a cache read, so
+  "16M spent" alone is out by two orders of magnitude on what somebody typed. `ContextSeriesDoc`'s
+  `split`/`agentSplit` are `TokenTotals` from host `ctxlog.ts`'s SAME pass (`tokenTotal(split)` IS
+  `usageTok`, tested — never a second tally), drawn by the SHARED `TokenComposition.tsx` so a kind
+  cannot change hue between this screen and the all-sessions one. **`split.turns` is REQUESTS, not
+  prompts** (the outline's `turns` stays what it is): `cacheReading` divides by it on both screens.
+  The bar folds the agents IN and says how much (`splitNote().lead`). Absent, never
+  zeros. `cacheReading(t, "session")` re-words the mean's caveat and drops the advice — the corpus
+  wording points at this very screen, and the cost panel above already has the buttons.
+  **The all-sessions screen stacks by model too, and its repo bars always do.** `MixSeries` grew a
+  value ACCESSOR so `stacks`/`stackAreas` serve kinds, models and agent COUNTS from one
+  implementation; **the readout and the legend follow the split** (a model stack under a kind legend
+  is four correct bands wearing four wrong names). Repo bars carry their model split inside their own
+  length — the answer to why equal-token repos differ in cost. One `ModelLegend` for all three, and
+  the chip row SCROLLS rather than wraps.
+  **The row's spend chip is MONEY, the sheet's headline leads with the same figure** (why, and
+  `costChip`/`costText`'s rules: `shared`'s `sessioncost.ts`): the chip is
+  `costChip(spark.costUsd) ?? usageChip(spark.usageTok) ?? fmtTokensFine(end)`, every rung ABSENT
+  rather than zero, so an unpriced model or an older host lands on the row that shipped before.
+  Tokens move into the title with `costText`. The curve stays in tokens — a second axis in dollars is the same shape twice.
+  **The two areas STACK by token kind, and a third chart counts the fan-out.** `stackBands` is the
+  geometry, and four rules hold it: the LINE stays and the stack's top edge IS it · the context chart stacks only the three
+  kinds that ARE context (output is not in the window until the turn after) · the spend chart stacks
+  `cum`, never a cumsum of `kinds` over THINNED samples · bands in palette order, bottom first,
+  accumulated in VALUE space. **A model's hue is FIXED app-wide by family** (`modelHue.ts`; the tail
+  is ONE grey band), never a volume rank. **A band with nothing in it is dropped, and so is its legend entry**
+  (the table spans the conversation AND its agents). **Subagents are SWIM LANES on the same axis**
+  (`agentLanes`): one bar per agent from `at` to `endAt`, first-fit packed in PIXELS (the axis is
+  piecewise) into the fewest lanes, coloured by `modelSlots`, dearest outlined in ink and the PICKED bar ringed in `--accent`
+  (two ink outlines read as two dearest), a tap answering in a
+  TEXT line under the strip (`agentReadout`). A `running` agent (host: the live session's own
+  running-agent list, never the log's last write) runs to the right edge and FADES there, is out of
+  the median, and is concurrent with everything after it. Their SPEND is the grey band on the spend chart
+  (`agentSpendBand` over the host's `agentCum`, step-held, top edge = the dashed total; absent ⇒ the
+  gap as before), and the row spark draws `agentEnv` as a faint area BEHIND the line, clamped at the
+  axis top. An undated agent is in the totals and off the chart, and `agentUndatedText` SAYS so in
+  the open. **Prose splits `{lead, more}`** (`spendNote`, `splitNote`): the lead is only absences
+  and where-the-agents-are; method folds.
+  **The `Expired cache` panel is what the GAPS cost** — beside the compaction panel because the two
+  are the same kind of fact (money no prompt asked for) and easy to confuse: compacting rebuilds a
+  window somebody threw away, this rebuilds one that went cold. One sentence from
+  `shared/sessioncost.ts`, drawn only when it happened (there is no zero row — "you never left this
+  session overnight" is not news), and the same wording appears on the all-sessions screen under the
+  whole-corpus cut ONLY, beside the unpriced and fast-mode clauses. **A rebuild is not drawn on any
+  chart** (the window does not move, and the two event colours are a validated pair) — in the values
+  view it wears the INK dot, never the usage-limit red, which would claim the account refused a
+  request.
+  **`CompactionPanel` is what the ticks DID** — two rows split by trigger, tokens AND money on each
+  side (a cache read against a cache write differ up to 20× in price, so the counts alone are not a
+  ratio). **`compactionMethodText()` FOLDS** into a `hint-more` disclosure — four sentences of method
+  under two numbers already on the rows — kept, never deleted: it is why the ratio errs against
+  compacting. The sentences' own rules (never-spent saving, `saved 0` refused, `compactionWindowText`,
+  `unmeasured`) are `shared`'s `sessioncost.ts`; here `compactionWindowText` sits DIRECTLY under the
+  multiple.
+
+### `RepoHealthTiles.tsx` + `RepoHealthLongest.tsx` + `repoHealthPlot.ts` + `repoHealthWords.ts` — the series as charts (full original)
+
+- `RepoHealthTiles.tsx` + `RepoHealthLongest.tsx` + `RepoHealthTable.tsx` + `repoHealthPlot.ts` + `repoHealthWords.ts` — **the repo-health series as
+  charts, in `SetupSheet.tsx`'s region 2** (the sheet itself ⇒ `web-work`). Hand-rolled SVG on
+  the `ContextGraph`/`contextPlot` pattern, **no charting library**: geometry pure in the `.ts`,
+  paint in the `.tsx`, every sentence in the words module. **The TOOL states, you draw** —
+  `repoHealthPlot.ts` has NO imports and `repoHealthPlot.test.mjs` asserts BY TEXT that it cannot
+  name a percentile, rank, slope, median, regression or `.sort()` (the guard shape
+  `tools/repohealth.test.mjs` uses on `judge.mjs`); a number a chart wants is added to the TOOL.
+  **Six stat tiles** (`size.p95`, `retouch.rate` **with its denominator beside it**,
+  `hatches.perKloc`, `context.claudeMdChars`, `context.descChars`, `untested.count`) — so the VALUE is the answer and a tile whose curve cannot
+  be drawn still prints its number. Full-width ~32px sparkline, **ink at reduced opacity, end dot in
+  `--accent` ringed in `var(--panel)` — never `--ctx-series`**, which means "this conversation's
+  tokens" everywhere else and would claim the wrong entity. **x is the READING INDEX, not the
+  calendar** (a 57-day hole would empty two thirds of every tile) and the caption says so — the
+  **day ticks are the days AT three positions in reading order** (`indexTicks`, `want` with NO
+  default: how many labels fit is the caller's fact), so the middle label is the middle READING and
+  not the middle of the span; **a null
+  CUTS the line** — never interpolated, never at zero — a lone reading is a dot and a lone stack
+  column a hairline; **a flat series draws at MID-height**, because `(v-lo)/(hi-lo)` is 0/0 and
+  paints `NaN`; **y is fitted per series** (six units, no shared axis) except the stack and the
+  dumbbell, which are zero-based magnitudes — and **both fitted bounds are PRINTED up the left**
+  (`hiY`/`loY` = `py(hi)`/`py(lo)`, so a label lands on the line it names; one label for a flat
+  series, since two identical numbers on two edges read as a span), because an unlabelled fitted
+  axis reads as a zero-based one and every rise on it looks like a doubling. **Crosshair: the
+  INDEX is state and the pixels are derived each render** — held as coordinates it outlives a
+  rotation and the ring then marks a different point than the words name; it snaps only to drawn
+  readings (holes are not in `pts`), and **its answer is a TEXT LINE under the chart** carrying day
+  · value · `sha7`, never a floating box. **On touch, lifting does not clear it** (`pointerleave`
+  fires when a touch pointer is destroyed, so one handler for both wipes the answer as the finger
+  moves off it) — `clearsOnLeave` is mouse-only, `pointercancel` RESTORES the pick the gesture
+  began with (a vertical scroll over a tile fires down-then-cancel and would otherwise re-pick
+  every chart it passed), and a second touch on the chosen reading lets go. This line is the ONLY
+  route to a past day's figure here — there is no values table as `ContextChart` has — so it is
+  always present and says how to use it. **Always-on weight = two stacked bands** in
+  `TokenComposition.tsx`'s validated `SLOT`, top edge = the total, two-entry legend: the one chart
+  here that prints a total, so it prints the split in the same mark; bands accumulate in VALUE space
+  and a column any band is missing is a hole in EVERY band. **Per-area `expected → ceiling`
+  dumbbell**, latest reading, ONE x scale (the comparison is between areas); `subs: 0` is one
+  number, not a zero-length bar. **Magnitudes in the OPEN, never behind a fold** — lines by package
+  as a STACK over time (top edge = the whole tree), source files and production deps as curves with
+  **no rank and no slope beside them** (nothing compares them to anything, and a tile's clothes
+  invite a reading nobody took), the longest-files tape as columns in the tool's order; **p95 and
+  the longest file are WORDS, not rules**, since a dash means a threshold on every other chart
+  here. `RepoHealthTable.tsx` prints the same figures as TEXT — last 14 readings, oldest first so a
+  row runs the direction the pixels above it do, packages folded by the same `foldPartSeries` the
+  stack uses — because two band hues are under 3:1 on light and a crosshair answers for ONE day.
+  **No *open the drawn page* button**: `.claude/outbox/repohealth.html` is still written and still
+  the better read on a desktop, but every card on it is on this sheet, so it is a SENTENCE naming
+  the full path (`drawnPageWords`) and not a control offering a second surface. **Every metric
+  carries a `?`** (`HintChip.tsx` → `showHint`, ids `repohealth.<series key>` in the shared
+  catalog): one explanation per subject, reachable by chip and by long press, never a second copy of
+  the words — and a missing entry is a failing test in `tools/repohealth.test.mjs` (text match) plus
+  a scan for `<HintChip id="…">` / `hint="…"` in `scripts/e2e-hints.mjs`, because a chip with no def
+  renders NOTHING and five explained tiles beside a bare sixth read as "that one is obvious". **No
+  coloured band, zone, grade or red region anywhere, and no `--warn`/`--dead`**: the slope is a
+  glyph in `currentColor` with its word beside it, because rising LOC and rising hatches are
+  opposite news. Four validated slots, **never a generated fifth** — `foldParts` folds the tail into
+  one hueless band, and a slot follows the ENTITY, not its size today. **Measured width prop**, like
+  `ContextChart`, via a CALLBACK ref (the box is conditional and the read async, so a `[]`-deps
+  effect leaves width at 0 for the life of the sheet). **Not plotted, and said so with the reason**:
+  tripwires (events, not series), the path lists (top three ride in the row's `detail`), and
+  `dups.pairsPerKloc`/`cochange`, which the tool reads with NO rank — a curve would invite one.
+  **The longest file LEADS the region** (`RepoHealthLongest.tsx`): its length over the series with
+  the tool's per-reading `longest.paths`, one run per HOLDER via `holderGeom` — **slots go to the
+  NEWEST holders** (today's file is always slot 0; past four the oldest fold to ink), a hole cuts a
+  run, and a handover is a solid ring in the new hue plus a thin ink step, **only between two NAMED
+  readings** (a missing name is not the file changing). No `paths` on the wire ⇒ one ink run and the
+  caption says a new holder cannot be told from growth. Today's tape sits under it.
+  `repoHealthWords.ts` is under a test banning verdict words AND status tokens: **`rankSentence` is
+  the ONE fraction→percentile conversion on this side** and **a null rank returns the tool's own reason, never a `0th`**; absences are a sentence
+  each — a family absent, under 2 readings, `plot` absent vs `null` vs an object
+  (`repoHealthPlotAvailability`, three states), and a mixed `PREREG_VERSION`, where the charts are
+  **still drawn** over the rows on disk while saying so, because refusing removes the only view of
+  the problem. **Every reading says WHOSE it is, once per group as a heading, never a badge per
+  tile**: the engine's (`source: "central"`, worded with `BRAND.displayName`) and the repo's own
+  (`plot.own`, `RepoHealthOwn.tsx`, `ownShow`'s three states): the repo's `means` on its tile, its
+  direction ATTRIBUTED to the repo, never the sheet's verdict; no `own` block on the wire says
+  nothing (absent ≠ declares none); a repo declaring nothing gets ONE line naming the file.
+
+### `TokenStatsSheet.tsx` + `usageCut.ts` — the token ledger screen (full original)
+
+- `TokenStatsSheet.tsx` + `TokenInsights.tsx` + `statsInsights.ts` + `statsPlot.ts` + `usageCut.ts` + `guests.ts` — **now `extensions/token-stats/web/`** (token-stats-architecture.md; plot + strip in `kit/chart/`). **SEVERAL ledgers, never one number.** A SOURCE PICKER (not a
+  filter ⇒ **no counts on the chips**): Claude's, plus one chip per CONTRIBUTED ledger view — an
+  extension's `ledgerViews` (`LedgerViewDef`, `@waterplane/sdk`; `guests.ts`), each drawn only when
+  its `hasData` says the host answered with something in it, else pixel-identical; never greyed;
+  resets each open. The sheet reads `/api/tokenstats/<id>`, caches it under the id, and LENDS the
+  view its widgets (`LedgerViewParts`); the guest's "All backends" card is its `summary`, totalled
+  and split HERE. **The docs never meet in one reducer** — different accounting, so a merged total
+  is the most convincing wrong number here.
+  **ONE STICKY SPAN for every box** (`span.ts`, R-usage-025, web.md); only the compact NOW block
+  above it is unfiltered. Calendar spans are CALENDAR days; what cannot be cut says so. Charts
+  measure the CONTENT box.
+  Insights (`statsInsights.ts`) are ABSENT unless measured and large, never a control; costliest
+  conversations are drawn IN MONEY. `LimitWindows`' refresh carries the WORD *re-read*. **`TableView` takes the
+  window CUT** — the twin once printed ALL-TIME lists under a live-window heading.
+  A contributed view owns its document's rules (its README); the sheet's rule it inherits is **no
+  price it cannot source** — `pricing.ts` is claude's table. The limit windows carry a CHART of the kept readings (`UsageSpark`) —
+  not a sparkline: 40px of unlabelled shape was read as one, its breaks meaningless. So the 0–100 axis is **fixed,
+  never fitted** AND **labelled on all three rules** (an unlabelled fixed axis reads as a fitted
+  one), there is a **time axis** under it (weekday only where it crosses midnight, or the labels
+  collide), and the reading under your finger is a **text line under the chart** on
+  `RepoHealthTiles.tsx`'s crosshair rules — the selection is the reading's own TIMESTAMP, since this
+  series grows at its end. **A gap is CUT, a rollover is CUT and drawn, and `usageMarksText` names
+  each mark ONLY where it was drawn.** A rollover is two signals, never the scraped reset alone:
+  the instant moved past `RESET_EPS_MS` (now `shared/burn.ts`; the CLI prints a wall-clock MINUTE and recomputes it as the
+  window slides, so `!==` marked dozens of rollovers that never happened), **or the figure FELL past
+  `DROP_EPS_PCT`** — the reading taken as a window rolls names no reset at all, so the instants
+  either side are compared against an unknown, and inside one window the count only goes up. The
+  burn rate / "full around" projection is **absent** rather than approximate. The per-day chart has
+  `total` / `mix` / `share` — `share` is the only reading that moves when the total does not — plus a
+  **7-day mean over CALENDAR days, computed over the whole series then clipped**. The time series
+  are **columns or an area** (separate chips): an area is drawn only over the GAP-FILLED series
+  (`fillSeries`/`fillMix`; measured zeros), a normalized stack stays **cut** at an empty bucket, and a
+  window too wide loses the chip rather than dimming it (web.md). `Per hour` is the
+  same chart with `stepMs`; the clock face is **categorical, all 24 slots drawn**. `LimitWindows` leads because only those two percentages have a CLOCK on them.
+  **The hero never appears without the split.** Prices exist on the CLAUDE view
+  ONLY and always as a labelled COUNTERFACTUAL off one dated table. A week is a WINDOW you step
+  through; inside one week gaps are FILLED, and the cumulative line stops at TODAY.
+  **Two KINDS of span, one control**: a live rate-limit window or calendar days. `usageCut.ts` is
+  the live cut, pure and
+  node-tested: a window is `resetAt − len`, and because the finest bucket on record is a `TokenHour`
+  the cut **starts at the NEAREST hour to the instant the window opened (`windowStartHour`, shared —
+  ONE helper for every window edge, host fold and phone alike) and SAYS which way it errs** (`cutSpan`,
+  `leadClause`: first hour counted whole / first minutes left out) — exact about a stated span, never
+  approximate about the window. The floor it replaced counted 59 min of last week into a Thu 18:59
+  week (≈ 4 pts on a 35% meter).
+  **Three refusals, three sentences, never a zero** (`cutRefusalText`): no reset instant · the
+  reading's window ALREADY RESET (a real scrape describing the previous five hours is the dangerous
+  one) · the hour record does not reach back. A refused window has **no chip**. The cut carries
+  tokens, cost and a model split (host `TokenHour.byModel`, `modelSplit` false on an older host ⇒ a
+  sentence, and **one EMPTY split is a quiet hour, not an old daemon**); it carries **no repos and no
+  conversation count** — an hour bucket has neither — so under a window *By repo* is the host's cost
+  window (a sentence while unread or 404) and the hero counts TURNS. `WindowTiles` is its own four tiles, not `Tiles` filtered: four of
+  those six are facts about the corpus. **One `windowCut` call feeds both** the figure under the
+  limit bar (`WindowUsed`, a full-width button — a figure on a control is a filter) and the chip's
+  cut.
+  **And every window BEFORE this one is a BOX** (`WindowHeats`/`WindowHeat`/`WindowStep`,
+  `usageCut.ts`'s `windowSpecs`/`windowGrid`/`seriesCut`/`heatFrac`/`heatStep`, host
+  `GET /api/tokenwindows`): 3% of a window has nothing to compare it against; the
+  only history was a 24-hour strip of scraped PERCENTAGES. **The host folds them**
+  — the document ships a fortnight of hours, so this side can cut the window running now and nothing
+  older — but **the GRID goes UP** (`anchor` is the scraped reset, `lenMs` is `LIVE_WINDOWS`'), so the
+  two windows' semantics stay in one table here. **The hour rule is repeated, never re-decided**: a
+  cell is `[windowStartHour(opened), windowStartHour(reset))`, so cell 0 and the line under the limit
+  bar cannot be two numbers about one five hours, and neighbours TILE — every hour in one box. **A window that ran nothing is a real empty box; one the
+  record does not reach is an OUTLINE** (`oldestHour` tells them apart, and the grid ENDS at the
+  record rather than drawing unknowns back to the epoch). **TWO grids, never one scale** (a week holds
+  ~34 five-hour windows), each legend naming its own busiest box; the ramp is **one hue at five
+  alphas off `--accent-rgb`**, never the categorical `--chart-*` slots (those mean identity), and
+  **square-rooted** with the caption saying so. A tap is the same `{id, back}` the stepper writes —
+  ONE idea of what is selected — and **both ends of the stepper are SENTENCES** (nothing newer has
+  happened · the record stops here), never a dimmed arrow. A past window is the SAME `WindowCut`, so
+  `cutSpan` counts to its own reset rather than "to now" and the tiles swap *Resets in* for *Ran
+  until*; **`hours` is OPTIONAL on a cut now** (absent = the host folded it, never "there were none")
+  and `isCut` keys on `openedAt`. An older host answers nothing and the screen is pixel-identical.
+
+### `RepoHealthMags.tsx` + `RepoHealthOwn.tsx` — magnitudes and the repo's own readings
+
+`RepoHealthMags.tsx` was split out of `RepoHealthTiles.tsx` past the 900-line cap along the line the sheet draws: the tiles are
+READINGS (a value against its own past, with a percentile and a slope), the magnitudes are not (a size, a split of a whole,
+a distribution of one day). Captions split the same way, `repoHealthWords.ts` and `repoHealthStackWords.ts`. The geometry is
+still `repoHealthPlot.ts` and the stack is still the tiles' `StackChart`: two implementations of "a stack whose top edge is the
+total" would disagree about a hole in a band. `RepoHealthOwn.tsx` draws a repo's OWN readings under the engine's, with the
+provenance said once in the heading (`ownShow`'s three states), using the same `SeriesTile`.
+
+### `HealthIndexChart.tsx` + `HealthIndexSection.tsx` + `healthIndexWords.ts` — the health score on the phone
+
+One weekly number out of 100 against fixed good values (`shared/healthindex.ts` is the one layer that takes a side and owns
+the arithmetic, the cap and the alerts), its trend, its line over weeks and the picked week's five entry scores with what
+each added — always in the open. `healthIndexWords.ts` is pure (`healthIndexWords.test.mjs`): it rounds what the wire carries,
+turns it into pixels and words it; it computes no index, move or percentile. `HealthIndexChart.tsx` paints a handed
+`HealthIndexResponse` and reaches no socket (the phone fetches it in `HealthIndexSection.tsx`, the VS Code panel derives it
+from the series file). Ink curve, accent end dot ringed in the panel colour, fixed 0-100 axis labelled on every rule; the one
+colour is the alerts' (`--dead` severe, `--warn` warn) with icon and level in words. `onAsk` is a slot for the week's subject,
+not a send path. Absent `healthIndex` on a RepoTarget draws NO chip, never `Health 0`.
+
+### `TurnCostCard.tsx` + `TermCostStrip.tsx` + `lastTurnCost.ts` + `turnMix.ts` + `NextTurnCost.tsx` — per-turn cost
+
+`TurnCostCard.tsx` is ONE component for both views: `CostFold` (one-line head, which prompt, chevron, the card under it) and
+`TurnCost` (the card). The reader draws a fold under every turn; `TermCostStrip.tsx` draws the newest turn WITH figures under
+the terminal in exactly two fixed heights (a resize repaints the whole PTY screen), found once stays found for the session,
+and it reads the same IndexedDB transcript copy the reader seeds from, refreshed by the turn-end `prefetchTranscript`, never
+per PTY byte. `lastTurnCost.ts` (pure) picks which turn the strip speaks for and says which prompt; a turn has FIGURES when
+there is a price, a context reading, a token split or a model, else the strip is absent, never a row of zeros. `turnMix.ts`
+makes the model donut and subagent chips as data; a model's hue is FIXED app-wide (`modelHue.ts`: four family slots and one
+grey tail). `NextTurnCost.tsx` (the next turn against a fresh session: a reading, never a gate) is shared with the VS Code
+session view; a shell with no doors passes `noDoors`.
+
+### `BudgetField.tsx` + `SessionBudgetSheet.tsx` + `budgetInput.ts` — the session budget
+
+`budgetInput.ts` (pure, `budgetInput.test.mjs`) is top-level because three screens that are not the feature draw the field
+(Send sheet, launch ask, context sheet panel) and a top-level module may not import a feature. It owns only what the host
+cannot say: how a typed string becomes a cap (four units, dollars first, with presets) and the calibration as a sentence;
+every verdict figure is `@waterplane/shared`'s (`sessionBudgetText`, `sessionBudgetChip`, `sessionBudgetLabel`,
+`sessionBudgetUnknownText`). `features/sessionBudget/SessionBudgetSheet.tsx` sets, changes or clears ONE session's cap in the
+Settings screen's layout: with no valid cap typed the set button is ABSENT and a sentence stands in its place, clear is a
+`ConfirmButton`, and "Set" is said only when the desktop answers with the cap (`budgetConfirmed`).
+
+### `kit/chart/chartWords.ts` — one line under every scrubbable chart
+
+The text under a chart before a finger is on it. It was spelled three ways on screens read one after another ("touch the chart
+for the reading under your finger", "drag across the curve for a day's reading", "drag across the chart to read a value"),
+which reads as three gestures for one; `SCRUB_HINT` is now the one wording. Pure and import-free so the repo-health words can
+re-export it under `node --test`, and an extension reaches it through `@waterplane/kit`.
+
+## Modules the `web-work` skill names that this file never covered (2026-10-17)
+
+### `backlogFilter/runAgain.ts` — the `run it again` verb and `requeuedWords`
+
+Part of the `backlogFilter.ts` barrel (pure, `.ts` specifiers so `node --test` loads it off the source). It holds the
+`runAgain*` family (`runAgainState`, `runAgainEligible`, `runAgainIds`, the label/note/toast words) and `requeuedWords`.
+A backlog has two kinds of dead row: a one-off stuck on its CLOCK (*drop the clock* takes the instant off) and a row that
+simply FAILED, which is terminal and has no clock; `run it again` is the second verb. The full rules are in the
+*`drop the clock` and `run it again`* section above.
+
+### `shared/schedule/schedfire.ts` + `schedhorizon.ts` — fire instant and horizon buckets
+
+Slices of the shared `schedule.ts` barrel (import the barrel, never a slice). `schedfire.ts`: `nextFireAt` (the next instant
+a rule fires, strictly after `after`, null when it never will again; the weekly search walks candidate anchor days, not fire
+days, because a negative offset lands the fire on the previous evening) and `isStandingSchedule` / `SPENT_ONCE_TEXT`.
+`schedhorizon.ts`: `horizonBucket` / `horizonLead` / `HORIZON_LABEL`, the schedules chip's count bucketed by how far out it
+is ("7 scheduled" means opposite things whether all seven fire tonight or the next is a fortnight away); the chip and the
+sheet's list call the same function so the tap opens what the number counted.

@@ -213,3 +213,83 @@ test("a series from a host before the absolute score is recognised by the missin
   assert.equal(olderHostSeries(undefined), false);
   assert.match(olderHostWords("Acme"), /older Acme.*restart/);
 });
+
+// ── commits mode, the area, and the region's axis words ─────────────────────
+
+import {
+  areaD, indexCommitGeom, indexReadoutWords, thinnedWords, NAV_LABELS, SCRUB_HINT, axisModeWords,
+  commitsAbsentWords, barsWeeksOnlyWords,
+} from "./healthIndexWords.ts";
+
+const cp = (sha7, day, week, index, gap = false) => ({ sha7, day, week, index, gap });
+const commits = [
+  cp("a000001", "2026-09-28", "2026-09-28", 40),
+  cp("a000002", "2026-09-30", "2026-09-28", 42),
+  cp("a000003", "2026-10-05", "2026-10-05", 44),
+  cp("a000004", "2026-10-06", "2026-10-05", 50, true),
+  cp("a000005", "2026-10-13", "2026-10-12", 52),
+];
+
+test("commit geometry: fixed 0–100 y, x by position, a gap starts a new run", () => {
+  const g = indexCommitGeom(commits, 400, 101);
+  assert.ok(g);
+  assert.deepEqual(g.rules.map((r) => r.v), [100, 50, 0]);
+  assert.equal(g.rules[0].y, 0.5);
+  assert.equal(g.rules[2].y, 100.5);
+  assert.deepEqual(g.pts.map((p) => p.x), [0, 100, 200, 300, 400]);
+  assert.equal((g.d.match(/M/g) ?? []).length, 2, "cut at the gap point");
+  assert.equal(g.dashed, "", "a commit series bridges nothing with dashes");
+  assert.equal(g.endX, 400);
+  assert.equal(g.gaps, 1);
+});
+
+test("commit geometry: a week rule at each new week's first point, the first week skipped", () => {
+  const g = indexCommitGeom(commits, 400, 100);
+  assert.deepEqual(g.weekRules, [{ x: 200, week: "2026-10-05" }, { x: 400, week: "2026-10-12" }]);
+});
+
+test("commit geometry: three day ticks at READING positions — first, middle, last", () => {
+  const g = indexCommitGeom(commits, 400, 100);
+  assert.deepEqual(g.ticks, [
+    { x: 0, day: "2026-09-28", anchor: "start" },
+    { x: 200, day: "2026-10-05", anchor: "middle" },
+    { x: 400, day: "2026-10-13", anchor: "end" },
+  ]);
+  assert.equal(indexCommitGeom(commits.slice(0, 2), 400, 100).ticks.length, 2);
+  assert.deepEqual(indexCommitGeom(commits.slice(0, 1), 400, 100).ticks, [{ x: 400, day: "2026-09-28", anchor: "end" }]);
+  assert.equal(indexCommitGeom([], 400, 100), null);
+  assert.equal(indexCommitGeom([cp("x", "d", "w", NaN)], 400, 100), null);
+});
+
+test("the area closes each solid run to the 0 rule; dots and dashes get none", () => {
+  const g = indexCommitGeom(commits, 400, 101);
+  const a = areaD(g);
+  assert.equal((a.match(/Z/g) ?? []).length, 2);
+  assert.match(a, /^M0\.0,100\.5L0\.0,[\d.]+L100\.0,[\d.]+L200\.0,[\d.]+L200\.0,100\.5Z/);
+  assert.doesNotMatch(a, /NaN|LM/);
+  const weeks = indexLineGeom([{ index: 50, gap: false }, { index: 60, gap: true }], 100, 50);
+  assert.equal(areaD(weeks), "", "two lone dots: nothing to fill");
+  assert.equal(areaD(indexLineGeom([{ index: 50, gap: false }, { index: 60, gap: false }], 100, 50)).split("Z").length, 2);
+});
+
+test("readout heads name the week or the commit, rounded", () => {
+  assert.equal(indexReadoutWords("weeks", { week: "2026-09-28", index: 45.6 }), "Week of 2026-09-28: 46");
+  assert.equal(indexReadoutWords("commits", { week: "2026-09-28", index: 46.2, sha7: "a1b2c3d", day: "2026-09-28" }), "Commit a1b2c3d, 2026-09-28: 46");
+  assert.equal(indexReadoutWords("commits", { week: "2026-09-28", index: 46 }), "Week of 2026-09-28: 46", "no sha: say the week, never an empty commit");
+});
+
+test("thinning is said with both counts; nothing left out says nothing", () => {
+  assert.equal(thinnedWords(142, 1526), "142 of 1,526 commits drawn");
+  assert.equal(thinnedWords(30, 30), null);
+});
+
+test("the region's fixed words", () => {
+  assert.deepEqual(Object.keys(NAV_LABELS), ["score", "longest", "tiles", "weight", "size", "table", "own"]);
+  for (const v of Object.values(NAV_LABELS)) assert.ok(v.length <= 8, `${v} fits a chip`);
+  assert.equal(SCRUB_HINT, "Drag across a chart to read a value.");
+  assert.equal(axisModeWords("weeks"), "weeks: one point per week, its last reading");
+  assert.match(axisModeWords("commits"), /^commits: /);
+  assert.match(axisModeWords("commits"), /per day, its last commit/);
+  assert.match(commitsAbsentWords("waterplane"), /older waterplane/);
+  assert.match(barsWeeksOnlyWords("2026-10-12"), /per week.*week of 2026-10-12/);
+});
