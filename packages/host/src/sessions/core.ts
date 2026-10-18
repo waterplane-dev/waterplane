@@ -461,6 +461,12 @@ export interface Session {
    *  switched off, or a verdict of `ok`. A turn that could not be interrupted at
    *  the crossing instant used to be left spending for good. */
   budgetEscOwed?: boolean;
+  /** HARD budget only: the `stopCount` at which the turn a person sent into
+   *  past the cap has ended (`BudgetSlice.settleEsc`). Turn ends below it are
+   *  that person's turn (or one still closing out ahead of it) and re-arm no
+   *  Esc. Memory only — a restart forgets the grant, and the next turn end
+   *  re-arms. */
+  budgetGrantStop?: number;
   /** The backend's side channel for this session (`sessions/sidechannel.ts`),
    *  present only when the descriptor has `sources`. Absent = today's session. */
   channel?: SessionChannel;

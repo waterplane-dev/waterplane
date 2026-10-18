@@ -89,9 +89,10 @@ test("the annotator's never-do list and tracked sends hold, file-agnostically", 
   assert.equal(count(text, /window\.(confirm|prompt)\s*\(/g), 0);
   assert.equal(count(text, /new WebSocket\(/g), 0);
   assert.equal(count(text, /track\("action:image\.queue"\)|track\(mode === "queue" \? "action:image\.queue" : "action:image\.send"\)/g), 2);
-  assert.equal(count(text, /track\("action:image\.readtext"\)/g), 1);
+  // The highlighter reads nothing by itself (2026-10-18): no call off the phone for a band.
+  assert.equal(count(text, /track\("action:image\.readtext"\)/g), 0);
   assert.equal(count(text, /api\.uploadInbox\(/g), 1);
-  assert.equal(count(text, /api\.readText\(/g), 1);
+  assert.equal(count(text, /api\.readText\(/g), 0);
   assert.equal(count(text, /lsSetBool\(LS\.annKnobs/g), 1);
   assert.equal(count(text, /new ResizeObserver\(/g), 1);
   assert.equal(count(text, /<UploadScalePicker/g), 1);

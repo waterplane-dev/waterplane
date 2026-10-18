@@ -12,7 +12,6 @@ import { discoverTargets, findTarget, listTargets } from "../repos.js";
 import { countOutbox, outboxSeenAt, discoverArtifactsAsync, newOutboxPath, type ArtifactKind } from "../files.js";
 import { hostStat, takeScreenshot, setHostClipboard } from "../host.js";
 import { dictateStatusLive, transcribe } from "../dictate.js";
-import { readImageText } from "../readtext.js";
 import { ocrStatus, readImageLocal } from "../ocrlocal.js";
 import { cloneRepo, newFolder, newRepo, newWorktree, type TemplateId } from "../scaffold.js";
 import { changedCountsWithin, gitRunningIn } from "../git.js";
@@ -31,10 +30,6 @@ import { cleanRootInput, hostSupervisor, readChosenRoot, rootCandidates, rootCho
 import { json, readBody, readJson } from "./apiio.js";
 import { route, type ApiEntry, type ApiHandler } from "./apitable.js";
 
-// One highlighted band of a screenshot, at the phone's own resolution — a few
-// hundred KB at worst. The ceiling is here so a mis-aimed POST cannot turn a
-// hand-drawn mark into a multi-megabyte call against the host's Gemini key.
-const MAX_OCR_BYTES = 8 * 1024 * 1024;
 /** How long the repo listing waits for its git counts before answering with the last ones. */
 const CHANGED_BUDGET_MS = 2500;
 /** …and when every worktree already has a count: long enough for a local disk's fresh answer. */
@@ -348,41 +343,11 @@ export const HOST_ROUTES: readonly ApiEntry[] = [
     return true;
   }),
 
-  // Read the words out of one image crop — what the phone's highlighter marks.
-  //
-  // POST for the same reason the screenshot route is (a side effect: it spends
-  // tokens against the host's Gemini key), and the bytes are the body because
-  // they exist NOWHERE but the phone's canvas at this point — the crop is cut
-  // from an image that has not been uploaded yet, and may never be.
-  //
-  // It writes nothing, anywhere. The answer is a sentence the person who drew
-  // the mark sees, edits or drops before it can reach an agent, which is why
-  // there is no repo in this route at all.
-  route("POST", "/api/host/readtext", async ({ req, res }, ctx) => {
-    if (Number(req.headers["content-length"] || 0) > MAX_OCR_BYTES) {
-      return json(res, { error: "that crop is too large to read" }, 413), true;
-    }
-    let body: Buffer;
-    try {
-      body = await readBody(req, MAX_OCR_BYTES);
-    } catch {
-      return json(res, { error: "that crop is too large to read" }, 413), true;
-    }
-    if (!body.length) return json(res, { error: "empty crop" }, 400), true;
-    const mime = String(req.headers["content-type"] || "image/png").split(";")[0].trim();
-    if (!/^image\//.test(mime)) return json(res, { error: "not an image" }, 400), true;
-    const r = await readImageText({ mime, dataB64: body.toString("base64") }, ctx.noteOcrUsage);
-    // A reason is a 200: "no key on this host" and "no words in that band" are
-    // answers the phone SHOWS, not transport failures it should retry.
-    json(res, r);
-    return true;
-  }),
-
   // The whole picture's words, read ON THIS DESKTOP (`ocrlocal.ts`) — the
   // annotator's "text only": a photo with a person in it goes no further than
   // this machine, and only the text the person then edits is ever sent. The GET
   // is asked before the verb is offered; the POST takes the bytes as the body
-  // for `readtext`'s reason, writes nothing, and every reason is a 200.
+  // because the picture may never be uploaded, writes nothing, and every reason is a 200.
   route("GET", "/api/host/ocr", async ({ res }) => {
     json(res, await ocrStatus());
     return true;
@@ -414,7 +379,7 @@ export const HOST_ROUTES: readonly ApiEntry[] = [
     json(res, await dictateStatusLive());
     return true;
   }),
-  // POST for the same reason `/api/host/readtext` is: the bytes exist NOWHERE
+  // POST for the same reason `/api/host/ocr` is: the bytes exist NOWHERE
   // but the phone's capture graph at this point, nothing is written anywhere,
   // and there is no repo in this route at all. A reason comes back as a 200 —
   // "install whisper-cpp" and "nothing was said" are answers the phone SHOWS.

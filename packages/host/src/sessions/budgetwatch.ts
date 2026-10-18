@@ -22,6 +22,13 @@
  * none there (the spend crossed between turns, after a limit resume, across a
  * daemon restart), left the next turn spending past the cap for good.
  *
+ * A HARD budget (`cfg.hard`) owes the Esc again at every turn END while still
+ * over (`turnEnded`), so each further turn gets one, not just the crossing's
+ * turn. The one exception is a turn a person sent into by hand (on the phone
+ * they were asked "send anyway?" first): `settleEsc` records a grant that runs
+ * until that turn has ended (`Session.budgetGrantStop`), counted in `stopCount`
+ * so a previous turn still closing out cannot spend it.
+ *
  * What the crossing DOES — the notification, the one Esc — is
  * `server/sessionEvents.ts`'s, where the delivery facts are. This file decides
  * and types nothing.
@@ -63,12 +70,36 @@ export class BudgetSlice {
   }
 
   /** The owed Esc is settled — it went out, or a person sent to the session by
-   *  hand and so chose to let it work past the cap. Never re-armed but by a new
-   *  crossing. */
-  settleEsc(id: string): void {
+   *  hand and so chose to let it work past the cap. Re-armed only by a new
+   *  crossing — or, under a HARD budget, a turn end (`turnEnded`). `byPerson`:
+   *  a person's own send, which under a HARD budget also grants that one turn
+   *  its run. */
+  settleEsc(id: string, byPerson = false): void {
     const s = this.core.sessions.get(id);
-    if (!s?.budgetEscOwed) return;
+    if (!s) return;
+    // Hard: the person's turn runs, and only it. Its end is the next `stopCount`
+    // — one later still if the previous turn's Stop is waiting to settle.
+    if (byPerson && s.info.budget?.cfg.hard) s.budgetGrantStop = s.stopCount + (s.stopPending ? 2 : 1);
+    if (!s.budgetEscOwed) return;
     s.budgetEscOwed = undefined;
+    this.persist(s);
+  }
+
+  /** A turn ended (`turnEnded`, after `stopCount` moved). A HARD budget still
+   *  over owes the next turn its Esc — unless a person's grant covers the turn
+   *  that ends, which then expires here. Soft budgets: nothing, ever. */
+  turnEnded(id: string): void {
+    const s = this.core.sessions.get(id);
+    const b = s?.info.budget;
+    if (!s || !b?.cfg.hard) return;
+    if (s.budgetGrantStop !== undefined) {
+      if (s.stopCount < s.budgetGrantStop) return;
+      s.budgetGrantStop = undefined;
+      // The granted turn itself is over: the turn after it is owed, exactly as
+      // any other — fall through.
+    }
+    if (b.verdict.state !== "over" || !s.budgetTripped || s.budgetEscOwed) return;
+    s.budgetEscOwed = true;
     this.persist(s);
   }
 
@@ -77,8 +108,8 @@ export class BudgetSlice {
    * `setSessionBudget`. Idempotent: the same cap again changes nothing and
    * keeps the latch. A different CAP — `unit` or `max` — starts a new account
    * (latch cleared), so raising one the session is still past is a new
-   * crossing and says so. Flipping only `interrupt` is not a new cap: the
-   * crossing already happened and was already told, and clearing the latch
+   * crossing and says so. Flipping only `interrupt` or `hard` is not a new
+   * cap: the crossing already happened and was already told, and clearing the latch
    * there would tell it twice — or send an Esc long after the crossing. Flipping
    * it OFF does drop an Esc still owed: that is exactly what the switch says.
    * Always answers with the session as it now stands (`updated` is emitted).
@@ -94,6 +125,7 @@ export class BudgetSlice {
       else delete s.info.budget;
       if (newCap) s.budgetTripped = undefined;
       if (newCap || !cfg?.interrupt) s.budgetEscOwed = undefined;
+      if (newCap || !cfg?.hard) s.budgetGrantStop = undefined;
       this.persist(s);
     }
     this.judge(s);

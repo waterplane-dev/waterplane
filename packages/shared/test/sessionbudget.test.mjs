@@ -35,6 +35,12 @@ test("cleanSessionBudget keeps a real cap and refuses everything else whole", ()
   assert.equal(cleanSessionBudget({ unit: "weeklyPct", max: 100 }).max, 100);
 });
 
+test("cleanSessionBudget: hard is opt-in, only `true` counts, and it always interrupts", () => {
+  assert.equal("hard" in cleanSessionBudget({ unit: "usd", max: 2 }), false, "absent = soft, the default");
+  assert.equal("hard" in cleanSessionBudget({ unit: "usd", max: 2, hard: "yes" }), false, "garbage is soft, never hard");
+  assert.deepEqual(cleanSessionBudget({ unit: "usd", max: 2, hard: true, interrupt: false }), { unit: "usd", max: 2, interrupt: true, hard: true });
+});
+
 test("windowUsdPerPct needs real money and a real percent", () => {
   assert.equal(windowUsdPerPct(10, 10), 1);
   assert.equal(windowUsdPerPct(0.5, 10), null, "under the dollar floor");

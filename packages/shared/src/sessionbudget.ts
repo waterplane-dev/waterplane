@@ -38,6 +38,12 @@ export interface SessionBudget {
   /** Write Esc once into the running turn when the cap is hit. Absent on the
    *  wire means true — `cleanSessionBudget` always writes it out. */
   interrupt: boolean;
+  /** The HARD variant (absent = soft, today's default): while over, a send a
+   *  person makes on the phone asks first ("send anyway?"), and EVERY turn
+   *  that person did not confirm gets one Esc — not just the crossing's. Implies
+   *  `interrupt`. Absent on the wire means soft; `cleanSessionBudget` writes it
+   *  only when true. */
+  hard?: true;
 }
 
 /** Why a verdict cannot say. Present iff `state === "unknown"`. */
@@ -84,6 +90,8 @@ export function cleanSessionBudget(raw: unknown): SessionBudget | null {
   const max = r.max;
   if (typeof max !== "number" || !Number.isFinite(max) || !(max > 0)) return null;
   if ((unit === "sessionPct" || unit === "weeklyPct") && max > 100) return null;
+  // Hard always interrupts: "Esc every turn" with interrupting off is no cap.
+  if (r.hard === true) return { unit, max, interrupt: true, hard: true };
   return { unit, max, interrupt: r.interrupt !== false };
 }
 
@@ -221,6 +229,14 @@ export function sessionBudgetText(v: SessionBudgetVerdict): string {
   const cap = isPct(v.unit) ? fmtIn(v.unit, v.max).replace("≈", "") : fmtIn(v.unit, v.max);
   const caveat = isPct(v.unit) ? ` (${SESSION_BUDGET_PCT_CAVEAT})` : "";
   return `${fmtIn(v.unit, v.spent)} so far${share} — ${v.state === "over" ? "over" : "within"} the ${cap} budget${caveat}`;
+}
+
+/** What being over DOES, by mode — one sentence for the host's notification
+ *  and the phone's sheet and chip, so the two cannot describe the cap apart. */
+export function sessionBudgetHoldText(cfg: Pick<SessionBudget, "hard">): string {
+  return cfg.hard
+    ? "Hard budget: queued and scheduled sends to this session are held, a send you make yourself asks you first, and every turn you did not send yourself is stopped with one Esc — until you raise or clear the budget."
+    : "Sends to this session are held until you raise or clear the budget — an explicit send, an answer to a question and an upload still go.";
 }
 
 /** `$0.52 / $0.50` — spend over cap, `?` where the spend is unknown. */

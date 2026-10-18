@@ -89,7 +89,6 @@
     "POST /api/folder": "not reachable in demo: creates a folder on a real desktop",
     "POST /api/host/clipboard": "not reachable in demo: writes the real desktop's clipboard",
     "POST /api/host/dictate": "not reachable in demo: dictation transcribes on the desktop",
-    "POST /api/host/readtext": "not reachable in demo: the highlighter's text reader runs on the desktop",
     "GET /api/host/ocr": "not reachable in demo: on-device text reading runs on the desktop",
     "POST /api/host/ocr": "not reachable in demo: on-device text reading runs on the desktop",
     "POST /api/host/root": "not reachable in demo: the demo has no code folder to check or save",

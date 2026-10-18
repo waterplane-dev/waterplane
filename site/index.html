@@ -45,6 +45,17 @@
 </section>
 <!-- /readme:intro -->
 
+<!-- readme:desk -->
+<section class="row" id="not-only-on-the-phone">
+  <div class="text">
+<h2>Not only on the phone</h2>
+<p>I wrote waterplane for the phone, and by now it is my preferred environment at the desk too, ahead of VS Code. Open it in a browser on a laptop and it drives Claude Code on a bigger machine elsewhere: the Mac Studio builds and runs the simulators while the notebook only shows the screen. The window gets a sidebar of repos, the session in the middle and a panel beside it, and it is the same sessions, queue and costs, so what you left on the laptop is waiting on the phone.</p>
+<figure class="wide"><img src="assets/desktop.gif" width="1080" height="752" loading="lazy" alt="The same app in a laptop's browser: repos in a sidebar, todo-garden's session started in the main pane, the prompt sent with Cmd+Return, Claude Code builds and checks the iOS simulator and the Android emulator, and the gallery opens as a panel beside the session with both screenshots"></figure>
+<p>Desktops can also work for each other. Pair two of them and an agent on one can hand a job to the other (run the Windows build, the tests on the bigger machine): the branch travels through your git remote, the job waits on the other desktop's own queue under its owner's switches, and its answer comes back into the asking session as one prompt.</p>
+  </div>
+</section>
+<!-- /readme:desk -->
+
 <!-- readme:how-it-works -->
 <section class="row" id="how-it-works">
   <div class="text">
@@ -59,7 +70,7 @@
 <section class="row" id="what-claude-made-on-your-phone">
   <div class="text">
 <h2>What Claude made, on your phone</h2>
-<p>What Claude leaves in <code>.claude/outbox/</code> appears on the phone as a picture or a file, with a badge on the repo and a notification. Open it full size, draw a circle or a box on it, type what to change, and the marked-up image goes back into the prompt (it lands in <code>.claude/inbox/</code>). Swipe a highlighter over a line of text in a screenshot and, if you have set a Gemini key, the words are read out of the crop so the prompt carries them verbatim.</p>
+<p>What Claude leaves in <code>.claude/outbox/</code> appears on the phone as a picture or a file, with a badge on the repo and a notification. Open it full size, draw a circle or a box on it, type what to change, and the marked-up image goes back into the prompt (it lands in <code>.claude/inbox/</code>). Highlight a line of text to point Claude at it.</p>
   </div>
   <figure class="phone"><img src="assets/gallery-and-files.png" width="896" height="1282" loading="lazy" alt="The gallery lists what Claude left in the outbox: a markdown file, a live HTML page and a screenshot open on the phone"></figure>
 </section>

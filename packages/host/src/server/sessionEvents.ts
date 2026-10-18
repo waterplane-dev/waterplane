@@ -35,7 +35,7 @@ import type { ServerCtx } from "./ctx.js";
 import { ptyFrameAction, ptyHoldsStreams } from "./liveness.js";
 import { WS_PTY_BACKLOG_BYTES } from "./wsops.js";
 import { env } from "../env.js";
-import { logTag, envName, sessionBudgetText, workingLine } from "@waterplane/shared";
+import { logTag, envName, sessionBudgetHoldText, sessionBudgetText, workingLine } from "@waterplane/shared";
 import { openDeliveries } from "../opendeliveries.js";
 import { peerJobOriginAt } from "../peers/serve.js";
 import { createBudgetCalibrator } from "../sessionbudget.js";
@@ -49,7 +49,9 @@ export function wireSessionEvents(ctx: ServerCtx) {
   // The ONE completion watcher. There used to be two of these — the backlog's and
   // the fan-out's — subscribing to the same two events and keeping the same two
   // maps; this is the commit that deletes one.
-  ctx.sessions.on("turnEnded", (id: string, stopCount: number) => ctx.intents.onTurnEnded(id, stopCount));
+  // …and a HARD session budget re-owes its Esc for the next turn while over
+  // (`sessions/budgetwatch.ts`; sent by the judge that sees it working).
+  ctx.sessions.on("turnEnded", (id: string, stopCount: number) => { ctx.intents.onTurnEnded(id, stopCount); ctx.sessions.budgetTurnEnded(id); });
   ctx.sessions.on("exit", (id: string) => ctx.intents.onSessionExit(id));
 
   // The CLI's own on-screen "Update available!" nag → surface the update button
@@ -388,7 +390,7 @@ export function wireSessionEvents(ctx: ServerCtx) {
     console.log(`${logTag} session budget hit · ${id} · ${esc.why}${owed ? " (owed — retried while over)" : ""}`);
     ctx.notify("limit", {
       title: `Session budget hit · ${info.title}`,
-      body: `${sessionBudgetText(b.verdict)}. Further sends to it are held until you raise or clear the budget. ${esc.why}${tail}`,
+      body: `${sessionBudgetText(b.verdict)}. ${sessionBudgetHoldText(b.cfg)} ${esc.why}${tail}`,
       sessionId: id, tag: `session-budget:${id}`,
     });
   });
@@ -400,7 +402,7 @@ export function wireSessionEvents(ctx: ServerCtx) {
     console.log(`${logTag} session budget hit · ${id} · ${esc.why} (owed Esc, sent late)`);
     ctx.notify("limit", {
       title: `Session budget · ${info.title} interrupted`,
-      body: `${sessionBudgetText(b.verdict)}. ${esc.why} Further sends to it are held until you raise or clear the budget.`,
+      body: `${sessionBudgetText(b.verdict)}. ${esc.why} ${sessionBudgetHoldText(b.cfg)}`,
       sessionId: id, tag: `session-budget:${id}`,
     });
   });

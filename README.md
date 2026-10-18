@@ -26,6 +26,25 @@ macOS, Linux, Windows via WSL2 · Android app or web app, no iOS app yet
   will and when a fresh session is cheaper; run a build without a session; queue prompts for after
   the reset and give a session a budget.
 
+<!-- site:desk -->
+### Not only on the phone
+
+I wrote waterplane for the phone, and by now it is my preferred environment at the desk too, ahead
+of VS Code. Open it in a browser on a laptop and it drives Claude Code on a bigger machine
+elsewhere: the Mac Studio builds and runs the simulators while the notebook only shows the screen.
+The window gets a sidebar of repos, the session in the middle and a panel beside it, and it is
+the same sessions, queue and costs, so what you left on the laptop is waiting on the phone.
+
+<a href="https://waterplane-dev.github.io/media/desktop-1f955e7fcf.mp4"><img src="docs/media/desktop.gif" width="720" alt="The same app in a laptop's browser: repos in a sidebar, todo-garden's session started in the main pane, the prompt sent with Cmd+Return, Claude Code builds and checks the iOS simulator and the Android emulator, and the gallery opens as a panel beside the session with both screenshots"></a>
+
+*A short loop. [The whole film as a video](https://waterplane-dev.github.io/media/desktop-1f955e7fcf.mp4).*
+
+Desktops can also work for each other. Pair two of them and an agent on one can hand a job to the
+other (run the Windows build, the tests on the bigger machine): the branch travels through your
+git remote, the job waits on the other desktop's own queue under its owner's switches, and its
+answer comes back into the asking session as one prompt.
+<!-- /site:desk -->
+
 **Why not let an agent such as OpenClaw run Claude Code for you?** That is enough for "go do X" and
 a message back. waterplane is the more comfortable path, with more control where you want it: the
 live session, its questions as buttons, its screenshots in a gallery, the diff before the commit.
@@ -157,9 +176,8 @@ updating and every environment variable: [docs/install.md](docs/install.md).
 
 What Claude leaves in `.claude/outbox/` appears on the phone as a picture or a file, with a badge on
 the repo and a notification. Open it full size, draw a circle or a box on it, type what to change,
-and the marked-up image goes back into the prompt (it lands in `.claude/inbox/`). Swipe a
-highlighter over a line of text in a screenshot and, if you have set a Gemini key, the words are read
-out of the crop so the prompt carries them verbatim.
+and the marked-up image goes back into the prompt (it lands in `.claude/inbox/`). Highlight a line
+of text to point Claude at it.
 <!-- /site:outbox -->
 
 <!-- site:limit -->

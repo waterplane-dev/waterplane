@@ -67,10 +67,6 @@ export interface ApiCtx {
    * image on every later turn of the conversation it is in.
    */
   capture: CaptureManager;
-  /** Tokens spent by a HAND-ASKED image read (the highlighter's text reader),
-   *  metered as kind `ocr` beside any plugin's Gemini calls (`plugin:<id>`) —
-   *  a spend nobody can see is one nobody can argue with. */
-  noteOcrUsage: (u: { model: string; inTok: number; outTok: number }) => void;
   /** The intent store and the containment gate, for the agent's loopback
    *  route (`agentintents.ts`) — the same `post` the phone's `intent.post`
    *  reaches, through the same `postClientDraft`. */

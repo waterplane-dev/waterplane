@@ -2,11 +2,9 @@
  * The whole picture's words, read ON THIS DESKTOP — the "send the text, not the
  * photo" path of the annotator (`POST /api/host/ocr`).
  *
- * ── Why this exists beside `readtext.ts` ────────────────────────────────────
+ * ── Why it is local ─────────────────────────────────────────────────────────
  *
- * The highlighter's reader (`readImageText`) sends one marked band to Gemini.
- * That is fine for a strip of a screenshot. It is the wrong tool for the case
- * that asked for this: a PHOTO of another screen — an error a person cannot
+ * The case that asked for this: a PHOTO of another screen — an error a person cannot
  * copy, on a machine they cannot screenshot — taken with their own face, room
  * or colleague in the frame. What they want an agent to see is the words; what
  * they do not want is the picture leaving the house, to an agent OR to a second
@@ -25,7 +23,7 @@
  *  - elsewhere, or when Windows OCR has no language: `tesseract` on PATH.
  *  - neither: a SENTENCE naming what to install, as a 200.
  *
- * Same posture as `readImageText` and `dictate.ts`: it DECIDES nothing. The text
+ * Same posture as `dictate.ts`: it DECIDES nothing. The text
  * goes back to the phone, which shows it in an editable box; the person edits or
  * drops it, and only what they then send reaches an agent. There is no repo in
  * this module, nothing is written anywhere but a `tmpdir()` file removed in a

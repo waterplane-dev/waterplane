@@ -95,6 +95,8 @@ figcaption { font-size: 14px; color: var(--muted); margin-top: 8px; }
 
 .diagram { margin: 1.4em 0 0; }
 .diagram img { width: 100%; max-width: 640px; }
+.wide { margin: 1.4em 0 0; }
+.wide img { width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--line, #30363d); }
 
 .note {
   border-left: 3px solid var(--accent);

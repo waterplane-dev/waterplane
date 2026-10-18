@@ -88,8 +88,9 @@ bootWait(PORT, 800, async () => {
     // over the same search.
     ws.send(JSON.stringify({ t: "session.input", id: sidB, data: "echo cherrymarker_out\n" }));
     // The output lands on the entry once the turn goes idle (the idle knob) and its async render
-    // finishes: wait for THAT, then ask the prompts scope the same question.
-    r = await searchUntil("cherrymarker_out", "history", sidB, (x) => x.results.length >= 1);
+    // finishes: wait for THAT, then ask the prompts scope the same question. 45 s: under the
+    // pre-push run's ten parallel scripts the idle + render took past the 15 s default.
+    r = await searchUntil("cherrymarker_out", "history", sidB, (x) => x.results.length >= 1, 45_000);
     const outInHistory = r != null && r.results.length === 1;
     check(outInHistory, "history: a token only in the turn's OUTPUT is found");
     r = await searchFor("bananamarker_history", "prompts", sidB);

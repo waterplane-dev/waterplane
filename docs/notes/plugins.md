@@ -461,9 +461,8 @@ It was the oracle's log, and it also held the usage-limit auto-continue events. 
 
 ## What the oracle left behind in core
 
-- **Kept:** the highlighter's text reader (`readtext.ts`: `postGemini` + `readImageText`), its own
-  key and kill switch (`WATERPLANE_OCR`); the Gemini price table in `meter.ts`, which it and any plugin
-  meter against.
+- **Kept:** the Gemini price table in `meter.ts`, which any plugin meters against. (The highlighter's
+  text reader, `readtext.ts`, was kept here too and removed on 2026-10-18: core makes no Gemini call.)
 - **Removed:** `oracle.ts`, `oracleFlags.ts`, the `oracle.*` wire messages, the per-session oracle
   counters in `sessions/roster.ts`, the `gemini` setup-checklist row and its `setup-gemini.sh` fix
   (a key the core no longer needs is not a finding), the oracle settings/toolbar/log UI.

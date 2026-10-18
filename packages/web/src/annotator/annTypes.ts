@@ -15,13 +15,10 @@ export interface Shape extends Mark {
   tool: Tool;
   factor: number; // stroke/text scale multiplier
   /** Stable from the moment the mark is placed. The array index is NOT: undo,
-   *  delete and clear all renumber it, and words read back off the host arrive
-   *  later — landing them by index puts one mark's sentence on another. */
+   *  delete and clear all renumber it, and words typed onto a band land after
+   *  it — landing them by index puts one mark's sentence on another. */
   id: number;
-  /** This band's words are being read on the host right now. */
-  reading?: boolean;
-  /** Why there are none — SAID, never silently absent, or the bar sits on
-   *  "reading…" for ever on a host that has no reader at all. */
+  /** Why a band carries no words (dropped, or typed empty) — SAID, never silently absent. */
   readErr?: string;
 }
 
@@ -93,24 +90,6 @@ export const COLORS = ["#ff2d2d", "#ffd400", "#3fb950", "#4c9aff", "#ffffff"];
  *  the tool would look broken. Yellow is what a highlighter is. */
 export const MARKER_DEFAULT = "#ffd400";
 
-/**
- * How long a send waits for a band still being read.
- *
- * Not zero: the tap that sends usually follows the tap that highlighted by about
- * a second, and dropping the words because the call had not landed yet would
- * make the feature a coin flip. Not unbounded either — the words are a bonus on
- * top of a mark that already says where to look, so a slow host delays a send by
- * seconds and never holds it.
- */
-export const READ_WAIT_MS = 6000;
-
-/** A band is cropped at the resolution this phone still holds and, when it is a
- *  thin strip of small text, drawn UP before it is sent — the alternative is
- *  asking a reader to read eight-pixel glyphs, which is the whole problem this
- *  feature exists for. */
-export const READ_MIN_HEIGHT = 64;
-export const READ_MAX_SCALE = 4;
-
 export const THICKS: { label: string; factor: number }[] = [
   { label: "S", factor: 0.6 },
   { label: "M", factor: 1 },
@@ -158,7 +137,7 @@ export interface AnnCtx {
   cropDrag: Ref<{ x0: number; y0: number; x1: number; y1: number } | null>;
   pendingText: { x: number; y: number } | null; setPendingText: Setter<{ x: number; y: number } | null>;
   textDraft: string; setTextDraft: Setter<string>; textInputRef: RefObject<HTMLInputElement>;
-  idRef: Ref<number>; readsRef: Ref<Map<number, Promise<void>>>; readTextRef: Ref<Map<number, string>>; genRef: Ref<number>;
+  idRef: Ref<number>; readTextRef: Ref<Map<number, string>>; genRef: Ref<number>;
   editRead: number | null; setEditRead: Setter<number | null>;
   readDraft: string; setReadDraft: Setter<string>; readInputRef: RefObject<HTMLInputElement>;
   setPaletteOpen: Setter<boolean>;

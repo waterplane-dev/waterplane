@@ -340,11 +340,6 @@ export function createHttp(ctx: ServerCtx) {
         pluginRoute: (id, method, parts) => ctx.plugins.route(id, method, parts),
         pluginFile: (id, token) => ctx.plugins.offeredFile(id, token),
         peers: ctx.peers, canManage: (k) => ctx.auth.canManage(k),
-        // A hand-asked image read spends the same key a plugin may, so it is
-        // metered the same way and kept apart by `kind` — "a plugin got
-        // expensive" and "I highlighted forty screenshots" are different facts.
-        noteOcrUsage: ({ model, inTok, outTok }) =>
-          ctx.meter.record({ service: "gemini", model, kind: "ocr", inTok, outTok, ts: Date.now() }),
       });
       if (!handled) await serveStatic(req, res);
     }

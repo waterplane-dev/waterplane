@@ -223,7 +223,7 @@ export function setSecret(opts: SetSecretOpts): SecretResult {
     if (/[\r\n]/.test(opts.value)) return { ok: false, error: "value must be a single line" };
     mkdirSync(resolve(target.path, ".."), { recursive: true, mode: 0o700 });
     const action = spliceWrite(target.path, key, opts.value);
-    // Hot-reload: the daemon reads process.env live (e.g. GEMINI_API_KEY for the text reader and plugins).
+    // Hot-reload: the daemon reads process.env live (e.g. GEMINI_API_KEY for a plugin).
     if (target.hotReload) process.env[key] = opts.value;
     return { ok: true, key, file: target.path, action, masked: maskSecret(opts.value), gitignored: true };
   }

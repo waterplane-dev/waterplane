@@ -15,10 +15,10 @@ Everything that moves or stores bytes on this side: downloads and pulls, the APK
   `markNote` and the canvas badges), exact twins collapse, a colour is said only when it
   distinguishes, typed and read-back words are never clipped. `withUploadSize` appends the grid the
   agent ACTUALLY receives, and only where that is a fact; `collagePanelNote` says what a combined
-  image IS. The highlighter swipes translucent ink (multiplied, so the words stay readable) and the
-  band is READ on the host (`api.readText` → `POST /api/host/readtext`) from the CLEAN image. **The read is shown
-  and editable before anything is sent**; it degrades to a sentence, never to a guess. The note is a
-  PROMISE as readily as a string, settled in `queueUpload` after the bytes are parked.
+  image IS. The highlighter swipes translucent ink (multiplied, so the words stay readable) and only POINTS:
+  **nothing reads a band** — no host or cloud call (removed 2026-10-18; the agent reads the picture).
+  Words a person TYPES onto a band are shown before anything is sent and quoted in the note. The note
+  is settled in `queueUpload` after the bytes are parked.
   **A mark may be STARTED OFF THE PICTURE** — the gesture is the WRAPPER's, not the canvas's.
   What overhangs is CUT on release (`annClip.ts`, node-tested), never sent: a BOX is clipped (its
   visible part cannot change — only the cut edge gains a stroke), a SEGMENT is clipped along its own

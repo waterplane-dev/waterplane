@@ -19,7 +19,7 @@ What this project is expected to do, as the person asked for it. Format and rule
 | [contributing](contributing.md) | 3 | 4 | 0 |
 | [conversations](conversations.md) | 1 | 4 | 0 |
 | [cost](cost.md) | 0 | 9 | 0 |
-| [demo](demo.md) | 1 | 31 | 0 |
+| [demo](demo.md) | 1 | 35 | 0 |
 | [desktop](desktop.md) | 0 | 12 | 0 |
 | [diagnostics](diagnostics.md) | 1 | 5 | 0 |
 | [distribution](distribution.md) | 10 | 11 | 0 |
@@ -27,7 +27,7 @@ What this project is expected to do, as the person asked for it. Format and rule
 | [feedback](feedback.md) | 0 | 2 | 0 |
 | [files](files.md) | 1 | 8 | 0 |
 | [git](git.md) | 0 | 10 | 0 |
-| [images](images.md) | 0 | 11 | 0 |
+| [images](images.md) | 0 | 12 | 0 |
 | [input](input.md) | 2 | 5 | 0 |
 | [instructions](instructions.md) | 1 | 2 | 0 |
 | [integrations](integrations.md) | 2 | 0 | 0 |

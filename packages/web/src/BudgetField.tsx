@@ -1,6 +1,8 @@
 /**
- * One control for "how much may this session spend": a unit, a number, and the
- * switch for what happens at the cap. Drawn by the budget sheet (live session),
+ * One control for "how much may this session spend": a unit, a number, and
+ * what happens at the cap — `soft` (the default: queued work waits, the
+ * person's own sends go, one optional Esc) or `hard` (the person's sends ask
+ * first, every other turn gets an Esc). Both rows carry their whole meaning. Drawn by the budget sheet (live session),
  * the Send sheet (a launch or a queued item) and the launch ask — one field, so
  * the three cannot word the same cap three ways (`ModelField`'s argument).
  *
@@ -21,7 +23,7 @@ import { useId, useState } from "react";
 import type { SessionBudget, SessionBudgetCal, SessionBudgetSpark, SessionBudgetUnit } from "@waterplane/shared";
 import { SetSwitch } from "./SettingsKit";
 import {
-  BUDGET_UNITS, budgetPreview, budgetSpentLine, budgetText, calibrationWords, isPctUnit, parseBudgetInput, presetLabel, unitInfo,
+  BUDGET_MODES, BUDGET_UNITS, type BudgetMode, budgetPreview, budgetSpentLine, budgetText, calibrationWords, isPctUnit, parseBudgetInput, presetLabel, unitInfo,
 } from "./budgetInput";
 
 export function BudgetField({ initial, cal, onChange, calFor, spark }: {
@@ -40,11 +42,13 @@ export function BudgetField({ initial, cal, onChange, calFor, spark }: {
   const [unit, setUnit] = useState<SessionBudgetUnit>(initial?.unit ?? "usd");
   const [text, setText] = useState(initial ? budgetText(initial) : "");
   const [interrupt, setInterrupt] = useState(initial?.interrupt ?? true);
+  const [mode, setMode] = useState<BudgetMode>(initial?.hard ? "hard" : "soft");
   const now = Date.now();
   const parsed = text.trim() ? parseBudgetInput(unit, text) : null;
-  const emit = (u: SessionBudgetUnit, t: string, i: boolean) => {
+  const emit = (u: SessionBudgetUnit, t: string, i: boolean, m: BudgetMode = mode) => {
     const p = t.trim() ? parseBudgetInput(u, t) : null;
-    onChange(p && p.ok ? { unit: u, max: p.max, interrupt: i } : null);
+    // Hard always interrupts (the host's `cleanSessionBudget` says the same).
+    onChange(p && p.ok ? (m === "hard" ? { unit: u, max: p.max, interrupt: true, hard: true } : { unit: u, max: p.max, interrupt: i }) : null);
   };
   const info = unitInfo(unit);
   const pct = isPctUnit(unit);
@@ -87,14 +91,21 @@ export function BudgetField({ initial, cal, onChange, calFor, spark }: {
       {parsed && !parsed.ok && <div className="set-note warn">{parsed.reason}</div>}
       {preview && <div className="budget-preview">{preview}</div>}
       {calWords && <div className="set-note">{calWords}</div>}
-      <SetSwitch label="interrupt the running turn when hit" on={interrupt}
-        onChange={() => { setInterrupt(!interrupt); emit(unit, text, !interrupt); }}
-        note={<>
-          {interrupt
-            ? "At the cap: sends to this session are held, you are told, and the turn that is running gets one Esc where it is safe to send one."
-            : "At the cap: sends to this session are held and you are told. The turn that is running is left to finish."}
-          {" "}Sends you arm by hand, answers to a question and uploads still go.
-        </>} />
+      <div className="set-item">
+        <div className="set-lead"><span className="set-lbl">at the cap</span></div>
+        <RadioRows
+          label="what happens at the cap"
+          options={BUDGET_MODES.map((m) => ({ key: m.key, label: m.label, note: m.note }))}
+          value={mode}
+          onChange={(m) => { setMode(m); emit(unit, text, interrupt, m); }} />
+      </div>
+      {mode === "soft" && (
+        <SetSwitch label="interrupt the running turn when hit" on={interrupt}
+          onChange={() => { setInterrupt(!interrupt); emit(unit, text, !interrupt); }}
+          note={interrupt
+            ? "The turn running when the cap is hit gets one Esc, where it is safe to send one."
+            : "The turn running when the cap is hit is left to finish."} />
+      )}
     </div>
   );
 }

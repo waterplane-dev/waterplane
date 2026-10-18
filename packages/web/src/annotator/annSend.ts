@@ -10,10 +10,10 @@ import { api } from "../api";
 import { track } from "../usage";
 import { encodeCanvas } from "../uploadScale";
 import { rememberMtime } from "../fileMtime";
-import { READ_WAIT_MS, sourceName, type AnnCtx, type AnnDispatch, type AnnSend } from "./annTypes";
+import { sourceName, type AnnCtx, type AnnDispatch, type AnnSend } from "./annTypes";
 
 export function sendActions(c: AnnCtx) {
-  const { source, repoId, facts, onUploaded, onDispatch, onPark, onSendAll, canvasRef, shapes, shapesRef, busy, setBusy, setErr, readsRef, readTextRef, redraw } = c;
+  const { source, repoId, facts, onUploaded, onDispatch, onPark, onSendAll, canvasRef, shapes, shapesRef, busy, setBusy, setErr, readTextRef, redraw } = c;
 
   /** Flatten the annotated canvas to a PNG blob + a name/note describing it.
    *  The name/note are derived SYNCHRONOUSLY; only the encode is async, and
@@ -43,25 +43,13 @@ export function sendActions(c: AnnCtx) {
   }
 
   /**
-   * The clause that rides beside the path, resolved as late as it can be.
-   *
-   * The marks are SNAPSHOTTED here and the words merged in afterwards, because
-   * both ends of this move: the sheet may advance to the next image of a batch
-   * (clearing `shapes`) while a band is still being read, and the read answers
-   * into a map keyed by mark id precisely so the snapshot can still collect it.
-   *
-   * A string whenever nothing is outstanding — the common case, and the one the
-   * synchronous hand-off was built for.
+   * The clause that rides beside the path: the marks SNAPSHOTTED now, with the
+   * words typed onto each band (keyed by mark id, so a batch moving on to the
+   * next image cannot put one mark's words on another).
    */
   function noteFor(w: number, h: number): string | Promise<string | undefined> | undefined {
     const snap = shapesRef.current.map((s) => ({ ...s }));
-    const build = () => markNote(snap.map((m) => ({ ...m, read: readTextRef.current.get(m.id) ?? m.read })), w, h, facts) || undefined;
-    const pending = [...readsRef.current.values()];
-    if (!pending.length) return build();
-    return Promise.race([
-      Promise.allSettled(pending),
-      new Promise((r) => setTimeout(r, READ_WAIT_MS)),
-    ]).then(build);
+    return markNote(snap.map((m) => ({ ...m, read: readTextRef.current.get(m.id) ?? m.read })), w, h, facts) || undefined;
   }
 
   /**

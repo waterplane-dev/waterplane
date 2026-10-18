@@ -9,7 +9,7 @@
  * `budget ?` says why in its own text and the sentence ends on "nothing is held".
  */
 import {
-  sessionBudgetChip, sessionBudgetText, sessionBudgetUnknownText,
+  sessionBudgetChip, sessionBudgetHoldText, sessionBudgetText, sessionBudgetUnknownText,
   type SessionBudget, type SessionBudgetInfo, type SessionBudgetUnknown,
 } from "@waterplane/shared";
 import { HELD_SENDS, budgetStateLine } from "../../budgetInput.ts";
@@ -40,7 +40,8 @@ export interface BudgetTagFacts {
  * The chip a session wears while it has a budget.
  *
  * ok ⇒ `$0.31 / $0.50`; over ⇒ `budget hit · $0.52 / $0.50 · sends held` (the
- * held-sends clause is in the chip's own words); unknown ⇒ `budget ? — <why>`.
+ * held-sends clause is in the chip's own words; a hard budget ends `· hard:
+ * asks before sends` instead); unknown ⇒ `budget ? — <why>`.
  * A session that is not running wears nothing: its verdict is `notRunning`
  * whatever it spent, and a chip saying so on every closed row is furniture.
  */
@@ -49,7 +50,10 @@ export function budgetTagFacts(s: { running?: boolean; budget?: SessionBudgetInf
   if (!b || !s.running) return null;
   const v = b.verdict;
   if (v.state === "over") {
-    return { cls: "ctx-low", text: `budget hit · ${sessionBudgetChip(v)} · sends held`, title: `${sessionBudgetText(v)}. ${HELD_SENDS}` };
+    // Hard says its mode in the chip: "sends held" would be untrue of the
+    // person's own sends, which ask instead.
+    const tail = b.cfg.hard ? "hard: asks before sends" : "sends held";
+    return { cls: "ctx-low", text: `budget hit · ${sessionBudgetChip(v)} · ${tail}`, title: `${sessionBudgetText(v)}. ${sessionBudgetHoldText(b.cfg)}` };
   }
   if (v.state === "unknown") {
     const age = v.why === "stale" && b.cal ? now - b.cal.checkedAt : undefined;
@@ -108,6 +112,6 @@ export const BUDGET_UNCONFIRMED =
 /** Did the session come back carrying exactly the cap that was asked for (null: cleared)? */
 export function budgetConfirmed(asked: SessionBudget | null, now: SessionBudget | null | undefined): boolean {
   if (!asked) return !now;
-  return !!now && now.unit === asked.unit && now.max === asked.max && now.interrupt === asked.interrupt;
+  return !!now && now.unit === asked.unit && now.max === asked.max && now.interrupt === asked.interrupt && !!now.hard === !!asked.hard;
 }
 export const BUDGET_OFFLINE_TOAST = "no connection — the desktop didn't get the budget. Try again when the link is back.";

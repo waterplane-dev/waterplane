@@ -12,7 +12,7 @@ import { normRect, shapeBBox, hitShapeOn } from "./annGeom";
 import { type AnnCtx, type Shape } from "./annTypes";
 import { placesFor as knobPlacesFor } from "./annDraw";
 
-export function pointerActions(c: AnnCtx, readBand: (s: Shape) => Promise<void>) {
+export function pointerActions(c: AnnCtx) {
   const { canvasRef, wrapRef, tool, color, factor, setShapes, shapesRef, dragRef, moveMode, setSelected, selectedRef, setTarget, targetRef, setMoveNote, knobsRef, moveRef, cropMode, setPendingCrop, cropDrag, setPendingText, setTextDraft, textInputRef, idRef, setView, viewRef, fitRef, pointers, gesture, redraw, clampToImage } = c;
   const hitShape = (s: Shape, x: number, y: number, tol: number) => hitShapeOn(canvasRef.current, s, x, y, tol);
   const placesFor = (canvas: HTMLCanvasElement, s: Shape) => knobPlacesFor(canvas, s, viewRef.current.k || 1);
@@ -235,11 +235,11 @@ export function pointerActions(c: AnnCtx, readBand: (s: Shape) => Promise<void>)
         if (refused) {
           // Nothing moved — `mark` is only `m.base`, a snapshot from before
           // the drag, and writing it back would clobber any field a
-          // concurrent `patchShape` (readBand) landed on this mark mid-drag.
+          // concurrent `patchShape` (typed words) landed on this mark mid-drag.
           redraw(); // clears the live overlay; not in the redraw effect's deps
         } else {
           // Merge geometry ONLY, onto the row as it stands NOW — the same
-          // reason: `read`/`reading` may have landed while this drag was live.
+          // reason: `read` may have landed while this drag was live.
           setShapes((prev) => prev.map((s, i) => (i === m.i ? { ...s, x0: mark.x0, y0: mark.y0, x1: mark.x1, y1: mark.y1, angle: mark.angle } : s)));
         }
         setMoveNote(refused ? "That would take it off the picture — left where it was." : null);
@@ -266,9 +266,6 @@ export function pointerActions(c: AnnCtx, readBand: (s: Shape) => Promise<void>)
       const s = canvas ? clipMark(raw, canvas.width, canvas.height) : raw;
       if (s && (Math.abs(s.x1 - s.x0) > 6 || Math.abs(s.y1 - s.y0) > 6)) {
         setShapes((prev) => [...prev, s]);
-        // The band is placed; ask the host what is under it. Fire and forget —
-        // the mark is already complete without an answer.
-        if (s.tool === "marker") void readBand(s);
       } else redraw();
     }
   }

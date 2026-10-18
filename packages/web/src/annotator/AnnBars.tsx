@@ -1,5 +1,5 @@
 /**
- * The bar under the picture: crop, hand-edited words, the label, move/knob hints, the band's reading, errors.
+ * The bar under the picture: crop, hand-edited words, the label, move/knob hints, the band's typed words, errors.
  *
  * Moved out of `ImageAnnotator.tsx` (docs/notes/charts-architecture.md); the sheet's behaviour is
  * unchanged and `ImageAnnotator.tsx` composes it.
@@ -12,7 +12,7 @@ import { knobHint } from "../annKnobs";
 import type { AnnModel } from "./useAnnotator";
 
 export function AnnBars({ m }: { m: AnnModel }) {
-  const { tool, shapes, moveMode, selected, target, setTarget, moveNote, knobs, err, cropMode, pendingCrop, pendingText, textDraft, setTextDraft, textInputRef, editRead, setEditRead, readDraft, setReadDraft, readInputRef, lastBand, applyCrop, toggleCrop, commitText, cancelText, readBand, startEditRead, commitRead, dropRead, hintHidden, hideHint } = m;
+  const { tool, shapes, moveMode, selected, target, setTarget, moveNote, knobs, err, cropMode, pendingCrop, pendingText, textDraft, setTextDraft, textInputRef, editRead, setEditRead, readDraft, setReadDraft, readInputRef, lastBand, applyCrop, toggleCrop, commitText, cancelText, startEditRead, commitRead, dropRead, hintHidden, hideHint } = m;
   return (
     <>
       {cropMode ? (
@@ -63,20 +63,17 @@ export function AnnBars({ m }: { m: AnnModel }) {
             : tool === "text"
               ? "Tap where the label goes, then type it · two fingers pinch-zoom & pan"
               : tool === "marker"
-                ? "Swipe along a line of text · the host reads the words and sends them with the mark"
+                ? "Swipe along a line of text to point at it · Claude reads the words off the picture"
                 : "One finger draws, from beside the picture too · two fingers pinch-zoom & pan · crop trims the image"}</span>
           <button className="key" onClick={hideHint} aria-label="hide this hint for good"><X size={14} aria-hidden /></button>
         </div>
       )}
-      {/* What the agent will be told this band says — shown BEFORE anything is
-          sent, because a transcription nobody checked is a sentence the prompt
-          asserts. It is editable for the same reason, and its failures are
-          words, not a spinner that never stops. */}
+      {/* What the agent will be told this band says, when someone typed it —
+          shown BEFORE anything is sent, and editable. Nothing reads the band
+          by itself: the agent reads the picture. */}
       {lastBand && !cropMode && pendingText == null && editRead == null && (
         <div className="annot-read">
-          {lastBand.reading ? (
-            <span className="annot-hint">reading the highlighted words…</span>
-          ) : lastBand.read ? (
+          {lastBand.read ? (
             <>
               <span className="annot-hint annot-read-text">reads: “{lastBand.read}”</span>
               <button className="key" onClick={() => startEditRead(lastBand)}>edit</button>
@@ -84,9 +81,8 @@ export function AnnBars({ m }: { m: AnnModel }) {
             </>
           ) : (
             <>
-              <span className="annot-hint">{lastBand.readErr ?? "no words read — the mark still says where to look"}</span>
-              <button className="key" onClick={() => void readBand(lastBand)}>read again</button>
-              <button className="key" onClick={() => startEditRead(lastBand)}>type it</button>
+              <span className="annot-hint">{lastBand.readErr ?? "the mark says where to look · its words are optional"}</span>
+              <button className="key" onClick={() => startEditRead(lastBand)}>type its words</button>
             </>
           )}
         </div>

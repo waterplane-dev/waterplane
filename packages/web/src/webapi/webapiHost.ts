@@ -14,27 +14,6 @@ export const hostApi = {
     const r = await nfetch(`/api/host/screenshot?repo=${encodeURIComponent(repoId)}`, { method: "POST" });
     return r.json() as Promise<{ file?: FileEntry; error?: string }>;
   },
-  /**
-   * The words inside one image crop, read on the host.
-   *
-   * The bytes go up as the BODY: the crop is cut from an image that has not been
-   * uploaded yet and may never be (it is a band of a photo somebody is still
-   * marking), so there is no path to name and nothing is written anywhere. A
-   * reason comes back as a 200 — "no key on this host" and "no words in that
-   * band" are answers to show, not failures to retry.
-   */
-  readText: async (crop: Blob): Promise<{ text: string } | { error: string }> => {
-    try {
-      const r = await nfetch("/api/host/readtext", {
-        method: "POST",
-        headers: { "content-type": crop.type || "image/png" },
-        body: crop,
-      });
-      return (await r.json()) as { text: string } | { error: string };
-    } catch {
-      return { error: "the host could not be reached" };
-    }
-  },
   /** Whether the desktop can read a whole picture ON-DEVICE (`ocrlocal.ts`). A
    *  reason, never a bare false — the annotator says it in place of the text. */
   ocrStatus: async (): Promise<{ available: true; engine: string } | { available: false; reason: string }> => {
@@ -48,8 +27,8 @@ export const hostApi = {
   },
   /**
    * Every word in one picture, read on the desktop and nowhere else — the
-   * annotator's "text only". The bytes are the body for `readText`'s reason
-   * (nothing is written, no repo), and the fuse is long: a phone photo is a
+   * annotator's "text only". The bytes are the body because the picture may
+   * never be uploaded (nothing is written, no repo), and the fuse is long: a phone photo is a
    * megabyte or two up a tunnel, and the desktop's first read may build its
    * reader. A reason is a 200, shown in place of the text.
    */
@@ -82,7 +61,7 @@ export const hostApi = {
   /**
    * One recording, transcribed on the desktop.
    *
-   * The bytes go up as the BODY for `readText`'s reason: the audio exists
+   * The bytes go up as the BODY, as `ocrImage`'s do: the audio exists
    * nowhere but the phone, nothing is written anywhere, and there is no repo in
    * the route. A reason comes back as a 200 — "nothing was said" and "no model
    * on that desktop" are answers to show, not failures to retry.

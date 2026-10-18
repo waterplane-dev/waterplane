@@ -91,7 +91,6 @@ export function useAnnotator({ source, repoId, index, total, facts, onUploaded, 
   // clears `shapes`) before a read lands, so the note is rebuilt from the
   // snapshot plus this map — never from state that has moved on.
   const idRef = useRef(1);
-  const readsRef = useRef<Map<number, Promise<void>>>(new Map());
   const readTextRef = useRef<Map<number, string>>(new Map());
   // Which image the marks belong to. A read that answers for the PREVIOUS image
   // of a batch must land nowhere.
@@ -134,7 +133,6 @@ export function useAnnotator({ source, repoId, index, total, facts, onUploaded, 
     setOcr(null);
     setOcrDraft("");
     genRef.current++;
-    readsRef.current = new Map(); // a read for the PREVIOUS image answers nobody
     setEditRead(null);
     setSelected(null);
     setTarget(null);
@@ -258,13 +256,13 @@ export function useAnnotator({ source, repoId, index, total, facts, onUploaded, 
     canvasRef, wrapRef, imgRef, tool, setTool, color, setColor, factor, shapes, setShapes, shapesRef, dragRef,
     moveMode, setMoveMode, selected, setSelected, selectedRef, target, setTarget, targetRef, setMoveNote,
     setKnobs, knobsRef, moveRef, busy, setBusy, setErr, cropMode, setCropMode, pendingCrop, setPendingCrop, cropDrag,
-    pendingText, setPendingText, textDraft, setTextDraft, textInputRef, idRef, readsRef, readTextRef, genRef,
+    pendingText, setPendingText, textDraft, setTextDraft, textInputRef, idRef, readTextRef, genRef,
     editRead, setEditRead, readDraft, setReadDraft, readInputRef, setPaletteOpen, setView, viewRef, fitRef,
     pointers, gesture, redraw, clampToImage,
   };
   const edit = editActions(ctx);
   const read = readActions(ctx);
-  const pointer = pointerActions(ctx, read.readBand);
+  const pointer = pointerActions(ctx);
   const { send, sendAll } = sendActions(ctx);
   const ocrAct = ocrActions({ canvasRef, genRef, redraw, setOcr, setOcrDraft, onText });
   const zoomed = view.k > fitRef.current.k * 1.02;

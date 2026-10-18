@@ -71,7 +71,6 @@ const ROUTES = [
   "GET /api/host/stat",
   "POST /api/host/screenshot",
   "POST /api/host/clipboard",
-  "POST /api/host/readtext",
   "GET /api/host/ocr",
   "POST /api/host/ocr",
   "GET /api/host/dictate",

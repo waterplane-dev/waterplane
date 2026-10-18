@@ -211,6 +211,63 @@ test("the crossing OWES the Esc and every judge while still over asks for it aga
   assert.equal(events.filter((e) => e === "budgetEscDue").length, 2, "settled — sent, or a person sent by hand — is never asked again");
 });
 
+test("SOFT: a turn end owes nothing — the crossing's one Esc is all it ever sends", () => {
+  const { slice, s } = makeSlice({ usageTok: 1, costUsd: 0.6 });
+  s.stopCount = 0;
+  slice.judge(s);
+  slice.settleEsc("s1");
+  s.stopCount = 1;
+  slice.turnEnded("s1");
+  assert.equal(s.budgetEscOwed, undefined);
+});
+
+test("HARD: every turn end while over owes the next turn its Esc", () => {
+  const { slice, s, events } = makeSlice({ usageTok: 1, costUsd: 0.6 }, { unit: "usd", max: 0.5, interrupt: true, hard: true });
+  s.stopCount = 0; s.stopPending = false;
+  slice.judge(s);
+  slice.settleEsc("s1"); // the crossing's Esc went out
+  assert.equal(s.budgetEscOwed, undefined);
+  s.stopCount = 1;
+  slice.turnEnded("s1");
+  assert.equal(s.budgetEscOwed, true, "the next turn — a task notification, a chain — is owed one");
+  slice.judge(s);
+  assert.equal(events.filter((e) => e === "budgetEscDue").length, 1);
+  slice.settleEsc("s1");
+  s.stopCount = 2;
+  slice.turnEnded("s1");
+  assert.equal(s.budgetEscOwed, true, "and the one after that");
+});
+
+test("HARD: a person's own send runs its turn — the grant ends with that turn, never earlier", () => {
+  const { slice, s } = makeSlice({ usageTok: 1, costUsd: 0.6 }, { unit: "usd", max: 0.5, interrupt: true, hard: true });
+  s.stopCount = 3; s.stopPending = true; // the previous turn's Stop has not settled yet
+  slice.judge(s);
+  slice.settleEsc("s1", true);
+  assert.equal(s.budgetEscOwed, undefined, "the person's send settles what was owed");
+  s.stopCount = 4; s.stopPending = false;
+  slice.turnEnded("s1");
+  assert.equal(s.budgetEscOwed, undefined, "the PREVIOUS turn closing out cannot spend the grant");
+  s.stopCount = 5;
+  slice.turnEnded("s1");
+  assert.equal(s.budgetEscOwed, true, "the granted turn is over: the next is owed");
+  assert.equal(s.budgetGrantStop, undefined);
+});
+
+test("HARD: under the cap, or switched back to soft, a turn end owes nothing", () => {
+  const { slice, s } = makeSlice({ usageTok: 1, costUsd: 0.2 }, { unit: "usd", max: 0.5, interrupt: true, hard: true });
+  s.stopCount = 1;
+  slice.judge(s);
+  slice.turnEnded("s1");
+  assert.equal(s.budgetEscOwed, undefined, "ok is not over");
+  s.info.contextSpark = { usageTok: 2, costUsd: 0.6 };
+  slice.judge(s);
+  slice.settleEsc("s1");
+  slice.set("s1", { unit: "usd", max: 0.5, interrupt: true });
+  s.stopCount = 2;
+  slice.turnEnded("s1");
+  assert.equal(s.budgetEscOwed, undefined);
+});
+
 test("nothing is owed by a budget that does not interrupt, and switching interrupt off drops what was owed", () => {
   const quiet = makeSlice({ usageTok: 1, costUsd: 0.6 }, { unit: "usd", max: 0.5, interrupt: false });
   quiet.slice.judge(quiet.s);

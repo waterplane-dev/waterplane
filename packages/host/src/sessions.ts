@@ -588,7 +588,7 @@ export class SessionManager extends EventEmitter {
   write(id: string, data: string): boolean { return drive.write(this.core, id, data); } shellLineFacts(id: string): Promise<drive.ShellLineFacts> { return drive.shellLineFacts(this.core, id, this.core.sessions.get(id)?.backend.bin()); } // ← a shell's line, for deliver.ts
   // ── budget (sessions/budgetwatch.ts): set/clear a session's cap, a new calibration, the poll's reason; the live grid its Esc reads (drive.ts).
   setSessionBudget(id: string, cfg: SessionBudget | null): SessionInfo | null { return this.budget.set(id, cfg); }
-  setBudgetCal(cal: SessionBudgetCal | null): void { this.budget.setCal(cal); } settleBudgetEsc(id: string): void { this.budget.settleEsc(id); }
+  setBudgetCal(cal: SessionBudgetCal | null): void { this.budget.setCal(cal); } settleBudgetEsc(id: string, byPerson = false): void { this.budget.settleEsc(id, byPerson); } budgetTurnEnded(id: string): void { this.budget.turnEnded(id); }
   wantsBudgetUsage(): boolean { return this.budget.wantsUsage(); }
   liveGrid(id: string): string { return drive.liveGrid(this.core, id); } setMode(id: string, m: PermissionMode): Promise<mode.ModeReply> { return mode.setMode(this.core, id, m); } // ← session.mode (sessions/livemode.ts)
   submitPromptBox(id: string): Promise<{ ok: boolean; placed: boolean }> { return boxes.submitPromptBox(this.core, id); }

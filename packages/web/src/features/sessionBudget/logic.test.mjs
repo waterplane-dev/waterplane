@@ -25,6 +25,14 @@ test("over says it is hit and that sends are held, in the chip's own text", () =
   assert.ok(f.title.includes(HELD_SENDS));
 });
 
+test("a HARD budget over says its mode in the chip, not \"sends held\" — the person's own sends ask instead", () => {
+  const hard = { ...info("over"), cfg: { ...cfg, interrupt: true, hard: true } };
+  const f = budgetTagFacts({ running: true, budget: hard }, 0);
+  assert.equal(f.text, "budget hit · $0.52 / $0.50 · hard: asks before sends");
+  assert.match(f.title, /^.*Hard budget: .*asks you first.*one Esc/);
+  assert.ok(!f.title.includes(HELD_SENDS));
+});
+
 test("unknown says why, never an amount, and the title ends on nothing being held", () => {
   for (const why of Object.keys(BUDGET_WHY_SHORT)) {
     const f = budgetTagFacts({ running: true, budget: info("unknown", { why }) }, 0);

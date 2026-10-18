@@ -21,12 +21,13 @@ import { besidePicture } from "../../besideRoom";
 import { askChoice, askConfirm, askConfirmRemember } from "../../Confirm";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ChangeEvent, KeyboardEvent as ReactKeyboardEvent, MutableRefObject } from "react";
-import { answeredOnlyInCli, budgetReasonText, isLocalCommand } from "@waterplane/shared";
+import { answeredOnlyInCli, budgetReasonText, isLocalCommand, sessionBudgetHeld, sessionBudgetText } from "@waterplane/shared";
 import type { ClientMessage, RepoTarget, SessionInfo } from "@waterplane/shared";
 import {
   PAD_EMPTY_TOAST, PAD_KEPT_TOAST, WHERE_UNPICKED_TOAST, sendModeToast, whereGoneToast, type SendMode, type SendWhere,
   busyPastBudgetToast, busySendAsk, busySendRememberedToast, busySendRoute,
 } from "../../composeSend";
+import { hardSendAsk } from "../../budgetInput";
 import { recallMode, recallWhen, recallWhere, recalledWhenNote } from "../../sendMemory";
 import type { SendTarget } from "../../sendIntent";
 import { addPadNote, loadDraft, padNoteId, saveDraft } from "../../outbox";
@@ -555,7 +556,7 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
    * (`/usage`) opens a view and starts no turn, so a pinned item watching for
    * one would never settle.
    */
-  function sendCompose(mode?: SendMode, pictureAsked = false, busyPick?: SendMode, pastBudget = false) {
+  function sendCompose(mode?: SendMode, pictureAsked = false, busyPick?: SendMode, pastBudget = false, budgetAsked = false) {
     // A picture open on the annotator beside this box: ask whether it goes
     // too, every time — sending the words alone and leaving the marked picture
     // behind is the mistake this exists for. Yes is the annotator's own Send &
@@ -602,6 +603,19 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
       return;
     }
     const how = mode ?? routed;
+    // A HARD session budget, past its cap: this person's own send asks first
+    // (`hardSendAsk`). Yes runs that one turn — the desktop grants it on
+    // delivery — and a tap outside keeps the words in the box. Soft budgets
+    // never ask; a local command starts no turn; `when it's free` is held by
+    // the desktop's budget rung already.
+    const budget = active.budget;
+    if (!budgetAsked && how === "now" && sendWhere === "this" && budget?.cfg.hard && sessionBudgetHeld(active) && !isLocalCommand(compose)) {
+      void askConfirm(hardSendAsk(sessionBudgetText(budget.verdict))).then((yes) => {
+        track(yes ? "action:compose.hardbudget.send" : "action:compose.hardbudget.keep");
+        if (yes) sendCompose(mode, true, how, pastBudget, true);
+      });
+      return;
+    }
     // What the button stays armed with afterwards: an answer to the busy ask
     // is about THIS message, never a new mode for the repo.
     const armed = mode ?? sendMode;

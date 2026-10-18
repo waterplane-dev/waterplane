@@ -13,7 +13,7 @@
  * typed string becomes a cap, and what the calibration is, as a sentence.
  */
 import {
-  BUDGET_STALE_MS, SESSION_BUDGET_PCT_CAVEAT, fmtCount, fmtUsd, sessionBudgetLabel, sessionBudgetText, sessionBudgetUnknownText, sessionSpend,
+  BUDGET_STALE_MS, SESSION_BUDGET_PCT_CAVEAT, fmtCount, fmtUsd, sessionBudgetHoldText, sessionBudgetLabel, sessionBudgetText, sessionBudgetUnknownText, sessionSpend,
   type SessionBudgetInfo, type SessionBudget, type SessionBudgetCal, type SessionBudgetSpark, type SessionBudgetUnit,
 } from "@waterplane/shared";
 
@@ -164,9 +164,43 @@ export function budgetPreview(cfg: Pick<SessionBudget, "unit" | "max">, spark: S
   return `${head} — ${used < 1 ? "under 1" : Math.round(used)}% used`;
 }
 
-/** What being over means for a person, said once. */
-export const HELD_SENDS =
-  "Sends to this session are held until you raise or clear the budget — an explicit send, an answer to a question and an upload still go.";
+export type BudgetMode = "soft" | "hard";
+
+/**
+ * What happens at the cap, as the field's two rows say it. Soft is today's
+ * behaviour and the default; hard is opt-in. Both rows carry their whole
+ * meaning, so the choice is read before it is made, not after.
+ */
+export const BUDGET_MODES: readonly { key: BudgetMode; label: string; note: string }[] = [
+  {
+    key: "soft",
+    label: "soft (default) — hold queued work, never block me",
+    note: "At the cap, queued and scheduled sends to this session wait and you are told. What you send yourself still goes, without a question. The switch below decides whether the turn running at that moment gets one Esc; later turns are left to run.",
+  },
+  {
+    key: "hard",
+    label: "hard — ask before my sends, stop every other turn",
+    note: "At the cap, queued and scheduled sends wait and you are told. Each send you make yourself asks “send anyway?” first, and that one turn then runs. Every turn you did not send yourself — a subagent reporting back, a chained prompt — is stopped with one Esc, turn after turn.",
+  },
+];
+
+/** The ask a hard budget puts in front of a person's own send, past the cap. */
+export function hardSendAsk(spent: string): { title: string; lines: string[]; confirmLabel: string; cancelLabel: string } {
+  return {
+    title: "Past this session's hard budget",
+    lines: [
+      `${spent}.`,
+      "Send anyway: this message goes and its turn runs to the end. Turns you did not send still get one Esc.",
+      "Keep it: the words stay in the box. Tap budget hit on the session to raise or clear the budget.",
+    ],
+    confirmLabel: "send anyway",
+    cancelLabel: "keep it",
+  };
+}
+
+/** What being over means for a person, said once — soft, the default. A
+ *  verdict at hand words its own mode with `sessionBudgetHoldText(cfg)`. */
+export const HELD_SENDS = sessionBudgetHoldText({});
 
 /** The state line for a session's budget, from the host's verdict: what it is
  *  doing now, in shared's own sentences. Used by the sheet and the context
@@ -192,7 +226,7 @@ export function budgetStateLine(b: SessionBudgetInfo | undefined, now: number, s
   }
   const v = b.verdict;
   if (v.state === "unknown") return sessionBudgetUnknownText(v.why ?? "noSpark", v.why === "stale" && b.cal ? now - b.cal.checkedAt : undefined);
-  return `${sessionBudgetText(v)}${v.state === "over" ? `. ${HELD_SENDS}` : "."}`;
+  return `${sessionBudgetText(v)}${v.state === "over" ? `. ${sessionBudgetHoldText(b.cfg)}` : "."}`;
 }
 
 /** The backlog row's chip: the cap as the person set it. */

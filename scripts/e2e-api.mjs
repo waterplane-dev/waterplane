@@ -11,9 +11,7 @@ import { E, SLUG, rootEnv } from "./lib-brand.mjs";
 const PORT = 8794;
 const ROOT = mkdtempSync(join(tmpdir(), `${SLUG}-root-`));
 const env = { ...process.env, [E.PREFLIGHT]: "0", [E.PORT]: String(PORT), [E.HOST]: "127.0.0.1", ...rootEnv(ROOT), [E.CLAUDE_BIN]: process.cwd() + "/scripts/claude-stub.sh", [E.IDLE_MS]: "1500",
-  // The image-text reader is asserted below on the case that must not break the
-  // phone: a host with no key. Blanked explicitly, or this suite would spend a
-  // real Gemini call (and answer differently) on whichever desktop runs it.
+  // Blanked so a key on this desktop cannot reach anything this suite runs.
   GEMINI_API_KEY: "" };
 const host = spawn("node", ["packages/host/dist/main.js"], { env, stdio: ["ignore", "pipe", "pipe"] });
 host.stderr.on("data", (d) => process.stderr.write("[host] " + d));
@@ -52,21 +50,9 @@ bootWait(PORT, 900, async () => {
     const up = await fetch(`${base}/api/repos/${id}/inbox`, { method: "POST", headers: { "x-file-name": "shot.png", "content-type": "image/png" }, body: png }).then((r) => r.json());
     check(up.saved?.[0]?.relPath === ".claude/inbox/shot.png", "upload returns inbox relpath");
 
-    // Reading the words out of one highlighted band. This root has no
-    // GEMINI_API_KEY, which is the case that matters here: the phone's marker
-    // must get a SENTENCE back, not a 500 and not a silent hang, or the bar it
-    // draws sits on "reading…" for ever. A reason is a 200 — it is an answer to
-    // show, not a transport failure to retry.
-    const ocr = await fetch(`${base}/api/host/readtext`, { method: "POST", headers: { "content-type": "image/png" }, body: png });
-    const ocrBody = await ocr.json();
-    check(ocr.status === 200 && /GEMINI_API_KEY/.test(ocrBody.error ?? "") && !("text" in ocrBody),
-      `readtext answers a reason naming what is missing: ${ocrBody.error}`);
-    // No bytes, no call: an empty POST is refused before anything is spent.
-    const ocrEmpty = await fetch(`${base}/api/host/readtext`, { method: "POST", headers: { "content-type": "image/png" } });
-    check(ocrEmpty.status === 400, "readtext refuses an empty crop");
-    // And it reads IMAGES only — a JSON body is a mistake, never a transcription.
-    const ocrJson = await fetch(`${base}/api/host/readtext`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
-    check(ocrJson.status === 400, "readtext refuses a non-image body");
+    // The highlighter reads nothing off the desktop any more: its route is gone.
+    const ocrGone = await fetch(`${base}/api/host/readtext`, { method: "POST", headers: { "content-type": "image/png" }, body: png });
+    check(ocrGone.status === 404, `the highlighter's old reader route is gone (got ${ocrGone.status})`);
 
     // list inbox
     const inbox = await j(`/api/repos/${id}/inbox`);

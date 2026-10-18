@@ -17,7 +17,7 @@
 // Everything outside the slots (the head, the wordmark, the footer, the section order) is the
 // site's own. Inside a block, the heading becomes the section's <h2> (a block with no heading
 // is the hero: its leading bold sentence becomes the <h1>), a phone picture moves to the
-// section's right-hand figure, a diagram (.svg) stays in the text, and the italic line under a
+// section's right-hand figure, a diagram (.svg) or a landscape picture stays in the text, and the italic line under a
 // picture (its video link, which the site does not host) is dropped.
 //
 // The markdown understood is the README's own subset: headings, paragraphs, `-` lists, `>`
@@ -175,6 +175,9 @@ export function renderSection(name, md, ctx, dims) {
         if (isCaption(list[k + 1])) k++;
         if (tok.src.endsWith(".svg")) {
           sink.push(`<figure class="diagram">${img(tok, 'loading="lazy"')}</figure>`);
+        } else if (dims(tok.src).width > dims(tok.src).height) {
+          // A desktop window's picture: landscape, so it stays in the text at its full width.
+          sink.push(`<figure class="wide">${img(tok, 'loading="lazy"')}</figure>`);
         } else if (!figure) {
           figure = `<figure class="phone">${img(tok, hero ? 'fetchpriority="high"' : 'loading="lazy"')}</figure>`;
         } else {

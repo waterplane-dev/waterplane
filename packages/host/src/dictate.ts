@@ -11,8 +11,7 @@
  * pay one; it also cannot be cheaper than free, and it is the only version
  * where a prompt full of somebody's source code does not leave the desktop.
  *
- * The same reasoning as `readtext.ts`'s `readImageText`, which this is modelled
- * on: it DECIDES nothing. The sentence it returns is shown to the person who
+ * The same reasoning as `ocrlocal.ts`' picture reader: it DECIDES nothing. The sentence it returns is shown to the person who
  * pressed the microphone, who edits or drops it before it can reach an agent.
  * There is no repo in this module, nothing is written anywhere, and the audio
  * exists only as a buffer and a file under `tmpdir()` that is removed in a

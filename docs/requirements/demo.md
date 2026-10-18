@@ -252,3 +252,13 @@ prompt that changes nothing. A push on a reading newly turning severe is said in
 filmed. Readings only: nothing changes code on its own.
 - asked: 2026-10-17 (owner: "repo health section does not have a gif and video yet … it needs to tell the right story"; the photo-app shape the same day)
 - shipped: `demo/scenarios/repo-health.ts`, `demo/host/healthindex.ts` + `repohealth.ts` (photo-shelf profiles), `scripts/ui/journey-repo-health.mjs` (`teaser`), README `site:health`, `docs/guide.md` "Repo health"
+
+### R-demo-036 · shipped
+The README's and waterplane.dev's "Not only on the phone" section shows the app at the desk: a
+laptop's browser (a 1440 x 900 window, a mouse) driving Claude Code on a bigger desktop. The film is
+filmed and encoded by the same pipeline as the phone's, at the window's own size: repos in the
+sidebar, a session started in the main pane, the prompt sent with ⌘↩, the build and both simulator
+checks, the gallery opening as a panel beside the session. The section also says, in prose, that
+two paired desktops can hand each other a job (R-peers-002).
+- asked: 2026-10-18 (owner: "I like it better than vscode by now and is my preferred environment on the desktop … especially when I run stuff from my notebook on another bigger machine like my Mac studio"; "you should add desktop screenshot material as well … Incorporate it in the automated screenshot and media generation")
+- shipped: `scripts/ui/journey-desktop.mjs` (`device: "desktop"`, `gif`, `captionScale`), `scripts/ui/lib.mjs` `filmOf`, `encode.mjs` `probeFor`, README `site:desk`, `site-lib.mjs` landscape figure

@@ -212,3 +212,7 @@ A count of flagged sessions shows on the repo group; tapping it shows exactly th
 An emergency halt stops every AI process waterplane started on the desktop (agent sessions, attached or detached, with their tools, and headless model runs) with a hard kill after a short grace, and latches: nothing automatic (schedules, backlog, limit resumes) starts again until the person lifts it, across host restarts. Processes started outside waterplane are not reached yet.
 - asked: 2026-10-15
 - shipped: 68ae6d70
+
+### R-sessions-048 · shipped
+A session budget can be set HARD instead of the default soft. Soft is R-sessions-027 unchanged. Hard, once over: queued and scheduled sends stay held, each send the person makes from the phone asks "send anyway?" first (yes runs that one turn, no keeps the words in the box), and every turn the person did not send — a subagent reporting back, a chained or resumed prompt — gets one Esc, turn after turn, not only at the crossing. The budget field shows both choices, each saying what it does, with soft preselected.
+- asked: 2026-10-18 — "A and b and make this optional as alternative "hard" behavior. Explain it clearly in the UI what both options do and have the current one be the default"
