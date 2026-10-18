@@ -577,6 +577,22 @@ test("a test file is a test in every shape the family writes, not just this repo
   }
 });
 
+test("typescript: .mts and .cts are source; their declarations and tests are not", () => {
+  // The hole this pins: until typescript@6 the pack claimed `.mjs` and `.cjs`
+  // but not their TypeScript twins, so every in-repo extension's host code —
+  // 95 files, the largest file in the tree among them — was measured by
+  // nothing. Literals, like the test above.
+  const cfg = configure("/nowhere", treeOf(["packages/extensions/demo/host/index.mts"]));
+  for (const path of ["packages/extensions/demo/host/index.mts", "packages/extensions/demo/shared/wire.mts", "src/legacy/config.cts"]) {
+    assert.equal(isSource(path, cfg), true, `${path} is a module and must be measured`);
+  }
+  for (const path of ["packages/extensions/demo/cli/strength.d.mts", "src/types.d.cts", "src/sock.test.mts", "src/sock.spec.cts"]) {
+    assert.equal(isSource(path, cfg), false, `${path} must not be in the measured population`);
+  }
+  assert.equal(isTestPath("src/sock.test.mts", cfg), true);
+  assert.equal(isTestPath("src/sock.spec.cts", cfg), true);
+});
+
 test("vendored code is not this project's code, whatever the tree calls the directory", () => {
   // Measured on `Tiptoi`: 71 of its 74 C files are under
   // `app/src/main/cpp/third_party/`, 61,782 lines of libvorbis and libogg

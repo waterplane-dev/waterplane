@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 
 import {
   createFeatureRunner, createRepoActionTable, createRepoChipList, createSettingsRowTable, createSheetTable, createToolbarItemTable, setupRowDefs,
-  availabilityText, createLauncherItemTable, createMenuItemTable, createSessionViewTable, menuItemCatalog,
+  availabilityText, countedN, createLauncherItemTable, createMenuItemTable, createSessionViewTable, menuBadgeTotal, menuItemCatalog,
 } from "./featureRun.ts";
 
 function fakeCore() {
@@ -310,6 +310,38 @@ test("launcher items pass their count hook through untouched, and only theirs", 
   ], () => core).items();
   assert.equal(items.find((i) => i.key === "v:vault").useCount, useCount);
   assert.equal(items.find((i) => i.key === "d:desk").useCount, undefined);
+});
+
+test("a counted launcher item's tap opens what it counted (openCount), contained; uncounted items have none", async () => {
+  const { core, toasts } = fakeCore();
+  const icon = () => null;
+  const ran = [];
+  const items = createLauncherItemTable([
+    { id: "v", launcherItems: [{ id: "vault", label: "Vault", icon, open: () => ran.push("home"), useCount: () => ({ n: 1, title: "1" }), openCount: (c) => ran.push(c === core ? "waiting" : "?") }] },
+    { id: "b", launcherItems: [{ id: "bad", label: "Bad", icon, open: () => {}, useCount: () => null, openCount: () => { throw new Error("boom"); } }] },
+    { id: "d", launcherItems: [{ id: "desk", label: "Desktop", icon, open: () => {}, openCount: () => ran.push("never") }] },
+  ], () => core).items();
+  const v = items.find((i) => i.key === "v:vault");
+  v.openCount(); v.open();
+  assert.deepEqual(ran, ["waiting", "home"]);
+  assert.equal(items.find((i) => i.key === "d:desk").openCount, undefined, "openCount without useCount is ignored");
+  assert.equal(quietly(() => items.find((i) => i.key === "b:bad").openCount()), 1);
+  await tick();
+  assert.equal(toasts.length, 1);
+});
+
+test("one reading of a count: the item's badge and the ☰ sum agree, and nothing waiting is 0", () => {
+  assert.equal(countedN(null), 0);
+  assert.equal(countedN(undefined), 0);
+  assert.equal(countedN({ n: 0, title: "" }), 0);
+  assert.equal(countedN({ n: -3, title: "" }), 0);
+  assert.equal(countedN({ n: NaN, title: "" }), 0);
+  assert.equal(countedN({ n: 2, title: "" }), 2);
+  // The ☰: the core's own counts (activity, apps ready) plus every counted line inside it.
+  assert.equal(menuBadgeTotal(0, []), 0);
+  assert.equal(menuBadgeTotal(0, [null, { n: 0, title: "" }]), 0);
+  assert.equal(menuBadgeTotal(1, [{ n: 2, title: "" }, null, { n: 3, title: "" }]), 6);
+  assert.equal(menuBadgeTotal(0, [{ n: 1, title: "re-arm" }]), 1, "one waiting vault card lights the closed menu");
 });
 
 test("menu items: catalog ids are namespaced, ordered, and open with the active session", () => {

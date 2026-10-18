@@ -6,7 +6,7 @@
 //  - lifting lets a create through again, and brings nothing back by itself
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn, execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, chmodSync } from "node:fs";
+import { mkdtempSync, readdirSync, writeFileSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
@@ -17,8 +17,14 @@ const PORT = 8958;
 const ROOT = mkdtempSync(join(tmpdir(), `${SLUG}-halt-`));
 // A stub whose path is unique to this run (so `pgrep -f` counts only ours) and
 // which ignores SIGTERM — inherited by the shell it runs, so only SIGKILL ends it.
+// A session's stub (launched with --session-id) drops a marker in READY once its
+// trap is set. `ours()` alone also counts the host's own probes of the stub
+// (`--version`, `auth status`, a headless run), and under the full parallel
+// suite those met the count while the panes' shells had not reached the trap
+// yet — the SIGTERM then ended them and nothing was forced.
 const STUB = join(ROOT, "claude-halt-stub.sh");
-writeFileSync(STUB, `#!/bin/sh\n[ "$1" = "--version" ] && { echo "2.1.0 (Claude Code)"; exit 0; }\ntrap '' TERM\n"${process.cwd()}/scripts/claude-stub.sh" "$@"\n`);
+const READY = mkdtempSync(join(tmpdir(), `${SLUG}-halt-ready-`));
+writeFileSync(STUB, `#!/bin/sh\n[ "$1" = "--version" ] && { echo "2.1.0 (Claude Code)"; exit 0; }\ntrap '' TERM\ncase "$*" in *--session-id*) : > "${READY}/$$";; esac\n"${process.cwd()}/scripts/claude-stub.sh" "$@"\n`);
 chmodSync(STUB, 0o755);
 const env = { ...process.env, [E.PREFLIGHT]: "0", [E.PORT]: String(PORT), [E.HOST]: "127.0.0.1", ...rootEnv(ROOT), [E.CLAUDE_BIN]: STUB, [E.IDLE_MS]: "600", [E.IDLE_PING_MS]: "400" };
 const boot = () => {
@@ -63,8 +69,9 @@ bootWait(PORT, 800, async () => {
     const repo = await fetch(`http://127.0.0.1:${PORT}/api/repo`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "halt" }) }).then((r) => r.json());
     for (const ackId of ["c1", "c2"]) c.send({ t: "session.create", cwd: repo.path, cols: 80, rows: 24, ackId });
     check(!!(await c.until((f) => f.t === "op.ack" && f.ackId === "c2" && f.ok)), "two sessions created");
-    for (let i = 0; i < 150 && ours() < 2; i++) await sleep(100);
-    check(ours() >= 2, `the stubs are running (${ours()})`);
+    const ready = () => readdirSync(READY).length;
+    for (let i = 0; i < 150 && ready() < 2; i++) await sleep(100);
+    check(ready() >= 2, `both sessions' stubs are running with TERM trapped (${ready()})`);
 
     c.send({ t: "host.halt", on: true });
     const done = await c.until((f) => f.t === "halt.state" && f.halt.on && f.halt.receipt);

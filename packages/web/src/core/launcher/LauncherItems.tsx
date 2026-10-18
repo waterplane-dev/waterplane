@@ -8,6 +8,8 @@
  * An item with something waiting (`useCount`, the vault's asks) carries the bell's counted badge on
  * its menu line, and `LauncherItemKeys` lifts it out of the hidden menu into the header row beside
  * the bell while the count is above zero — a fingerprint ask must not wait behind a ☰ nobody opened.
+ * While counted, a tap goes to `openCount` (exactly what the badge counts — a count is a filter), and
+ * every badge reads the number through ONE function (`countedN`; the ☰ sum is `menuBadgeTotal`).
  */
 import type { ReactNode } from "react";
 import { badgeText } from "../../features/notifications";
@@ -15,25 +17,27 @@ import { showToast } from "../../toast";
 import { track } from "../../usage";
 import { ExtBoundary } from "../ExtBoundary";
 import { launcherItems } from "../extensionPoints";
-import type { ContributedEntry } from "../featureRun";
+import { countedN, menuBadgeTotal, type ContributedEntry } from "../featureRun";
 
 const noCount = () => null;
 
-function tap(it: ContributedEntry, where: string, onOpen?: () => void) {
+/** A counted item's tap lands on exactly what the badge counts (`openCount`) — a count is a filter. */
+function tap(it: ContributedEntry, where: string, n: number, onOpen?: () => void) {
   track(`action:launcher.${where}${it.key}`);
   onOpen?.();
   if (it.unavailable) showToast(it.unavailable);
+  else if (n > 0 && it.openCount) it.openCount();
   else it.open();
 }
 
 function LauncherItem({ it, size, onOpen }: { it: ContributedEntry; size: number; onOpen: () => void }) {
   // A hook, called unconditionally: `useCount` is fixed per entry for the life of the bundle.
   const c = (it.useCount ?? noCount)();
-  const n = c && c.n > 0 ? c.n : 0;
+  const n = countedN(c);
   const Icon = it.icon;
   return (
     <button className={`more-act${n ? " notif-btn" : ""}`} title={it.unavailable ?? (n ? c!.title : `open ${it.label}`)}
-      onClick={() => tap(it, "", onOpen)}>
+      onClick={() => tap(it, "", n, onOpen)}>
       <Icon size={size} />{it.label}
       {n > 0 && <span className="notif-badge">{badgeText(n)}</span>}
     </button>
@@ -56,11 +60,12 @@ export function LauncherItems({ size, onOpen }: { size: number; onOpen: () => vo
 
 function LauncherItemKey({ it, size }: { it: ContributedEntry; size: number }) {
   const c = it.useCount!();
-  if (!c || !(c.n > 0)) return null;
+  const n = countedN(c);
+  if (!n) return null;
   const Icon = it.icon;
   return (
-    <button className="key notif-btn" aria-label={c.title} title={c.title} onClick={() => tap(it, "key.")}>
-      <Icon size={size} /><span className="notif-badge">{badgeText(c.n)}</span>
+    <button className="key notif-btn" aria-label={c!.title} title={c!.title} onClick={() => tap(it, "key.", n)}>
+      <Icon size={size} /><span className="notif-badge">{badgeText(n)}</span>
     </button>
   );
 }
@@ -82,8 +87,7 @@ export function LauncherItemKeys({ size }: { size: number }): ReactNode {
 
 function MenuCount({ items, base }: { items: ContributedEntry[]; base: number }) {
   // One hook per counted entry, in a fixed order: the entry list is fixed per bundle.
-  let n = base;
-  for (const it of items) { const c = it.useCount!(); if (c && c.n > 0) n += c.n; }
+  const n = menuBadgeTotal(base, items.map((it) => it.useCount!()));
   return n > 0 ? <span className="mic-badge">{badgeText(n)}</span> : null;
 }
 

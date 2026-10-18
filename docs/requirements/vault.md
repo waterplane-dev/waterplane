@@ -6,7 +6,7 @@ Plaintext credentials such as the gcloud login, Gemini API keys and Garmin sessi
 - shipped: 36b98edb, de056f3a, acee58dd
 
 ### R-vault-002 · shipped
-Access to a vault secret can be granted in advance for a defined purpose and time window so unattended jobs can use it; grants last at most 24 hours and have a use cap.
+Access to a vault secret can be granted in advance for a defined purpose and time window so unattended jobs can use it; a bounded grant lasts at most 24 hours and has a use cap; a standing grant (R-vault-052) is the one kind with no end until revoked.
 - asked: 2026-10-05
 - shipped: b1b78ee4
 
@@ -145,7 +145,7 @@ Every treatment (ask at start, ask on use, 8 h lease, keep plaintext, allow in a
 - shipped: c2171799 f430779c 2723cb65 887e6d05 2b6b079d
 
 ### R-vault-030 · shipped
-A fetch nobody answers is counted as denied after 90 s; "not now" on the card holds that request for a chosen time without further cards or notifications; repeated silence backs off; holds and backoffs are visible, liftable and in the decision log; simultaneous requests for one secret from one program make one card.
+A fetch nobody answers is counted as denied after 90 s (a program's ask; an ask a person started, R-vault-058, waits longer); "not now" on the card holds that request for a chosen time without further cards or notifications; repeated silence backs off; holds and backoffs are visible, liftable and in the decision log; simultaneous requests for one secret from one program make one card.
 - asked: 2026-10-12 (owner: ask at the point of use, per-reader advice)
 - shipped: c2171799 f430779c 2723cb65 887e6d05 2b6b079d
 
@@ -261,3 +261,69 @@ Using a login on demand without autofill: on the phone, show (one fingerprint) g
 The vault's screens share one row grammar and the app's theme tokens: a fact is said once per screen, no pill per row, chips are tinted filters, one solid verb per screen or card, cards say what/to whom/until when with the rest folded, the fingerprint button is labelled with its verb, a card that was answered becomes its receipt in place, empties are one sentence with one verb, mono only for ids, keys, paths and commands, icons mapped once.
 - asked: 2026-10-17 (owner: "if you have good ideas on How to make the vault UI more intuitive and sexy. Do it!")
 - plan: REPO-VIEW-PLAN.md §10
+
+### R-vault-052 · shipped
+A standing grant: "until I revoke" is the last entry of every release card's picker (never the default), also reachable from the CLI and the project window. It has no end until revoked from the phone or CLI; only its scope (never a value) is kept on disk, so after a desktop restart it is dormant and ONE re-arm card re-arms every dormant grant with one fingerprint. Every scope is visible and removable on that card before the fingerprint; a declined re-arm goes quiet (15 min) and the next request asks with an ordinary card; "lock now" ends standing grants for good.
+- asked: 2026-10-18 (owner: the trading service rang the phone 22 times in one morning)
+- plan: STANDING-GRANT-PLAN.md
+- shipped: 4d60c3f3 8b1eb9d9 a5d8ae71 6e69beb2 d3bd292a 6064f010
+
+### R-vault-053 · shipped
+One fingerprint for a whole project: a standing repo window over every secret the project uses (known readers, `wp-secret://` refs in its `.env` files, `allowRepos`), re-widened at each re-arm; a program not listed asks once and offers to join. A fetch release card with no known readers offers a one-program window.
+- asked: 2026-10-18 (owner decision 7)
+- plan: STANDING-GRANT-PLAN.md §3.4
+- shipped: a5d8ae71 d3bd292a 6064f010
+
+### R-vault-054 · shipped
+Boot unlock without the phone: per secret, opt-in, off by default, macOS only. A desktop-held copy of that secret alone, sealed under a key in the Keychain readable only by the vault's helper, lets a standing grant whose secrets are enabled re-arms (in part, per secret, R-vault-055) at boot with no card; the vault key is never on the desktop; the card states what is given up; a rebuilt helper never raises a dialog (boot unlock is off until switched on again).
+- asked: 2026-10-18 (owner decision 6)
+- plan: STANDING-GRANT-PLAN.md §5
+- shipped: 8b1eb9d9 3a741821 d3bd292a 6064f010
+
+### R-vault-055 · shipped
+A standing grant is armed per secret: at boot the boot-unlocked secrets of a dormant scope re-arm without the phone, the rest wait for the card, which lists only the waiting ones and says how many are already armed ("3 of 10 armed at boot"); one row, one fate — revoking any part ends the whole standing grant.
+- asked: 2026-10-18 (owner: the trading morning, follow-ups lesson 1)
+- plan: FOLLOWUPS-PLAN.md §1
+- shipped: 695184f7 cb01edb3 9ad5cc3f fbc2a492
+
+### R-vault-056 · shipped
+`npm run restart` does not drop armed standing grants: they cross it in memory through a short-lived, detached courier process (never a file, never the Keychain, never argv or the environment), taken by the new host once, ≤ 120 s, judged per secret against `standing.json`, and armed with no card and one decision row. A reboot, a crash, a missed window or `WP_VAULT_NO_HANDOFF=1` forgets them and the re-arm card asks; a refusal is said in words. Bounded grants and fetch leases are not handed over.
+- asked: 2026-10-18 (owner: the trading morning, follow-ups lesson 2)
+- plan: FOLLOWUPS-PLAN.md §2
+- shipped: 695184f7 cb01edb3
+
+### R-vault-057 · shipped
+A program started with `python -m X` is the program `X` (`uvicorn`, `backend`), not `__main__.py`: the vendored Python client (v2) reports the real module and the host names a `__main__.py` by its package directory. A stored `__main__.py` window entry is rewritten to its one reader's module name or dropped, said in words on the next card.
+- asked: 2026-10-18 (owner: the trading morning, follow-ups lesson 3)
+- plan: FOLLOWUPS-PLAN.md §3
+- shipped: 2ae10fea 695184f7 cb01edb3
+
+### R-vault-058 · shipped
+An ask a person started (`wp-secret grant`, boot unlock, re-arm, a login shown on the phone) waits until answered or cancelled (24 h cap), not 90 s; its card says "waiting for you · since 10:12" with no countdown and how it ends; Ctrl-C in the CLI withdraws it as "cancelled from the desktop" and exits 130, and the CLI prints the host's "still waiting" lines. A program's ask keeps 90 s and the backoff ladder.
+- asked: 2026-10-18 (owner: the trading morning, follow-ups lesson 4)
+- plan: FOLLOWUPS-PLAN.md §4
+- shipped: eab7d1d3 db8b2e05 cb01edb3 fbc2a492
+
+### R-vault-059 · shipped
+Once per host start, if a standing grant is still dormant after the hand-over and boot unlock, the host raises ONE re-arm card (a person wait, one notification) that says why it came (reboot, hand-over missed, partly armed); `wp-secret rearm` does it on request, joins a card already on the phone, and says "nothing is dormant" when there is none. Declined goes quiet as before.
+- asked: 2026-10-18 (owner: the trading morning, follow-ups lesson 5)
+- plan: FOLLOWUPS-PLAN.md §5
+- shipped: db8b2e05 cb01edb3 fbc2a492
+
+### R-vault-060 · shipped
+When the same secrets, project and program have asked three or more times in 24 h and the card offers "until I revoke", the card says so in one line with a verb that only picks that entry; nothing is ticked or approved by it. Known gap: the repo view's "asked N× today" line has no host field yet.
+- asked: 2026-10-18 (owner: the trading morning, follow-ups lesson 6)
+- plan: FOLLOWUPS-PLAN.md §6
+- shipped: cb01edb3 9ad5cc3f fbc2a492
+
+### R-vault-061 · shipped
+One Android notification per scope: a plugin's `notify({tag})` replaces an earlier notification with the same tag (namespaced per plugin); the vault tags release asks by secret set, project and program, so 22 asks from one program are one notification. A settled card does not clear its notification yet.
+- asked: 2026-10-18 (owner: 22 notifications in one morning)
+- plan: FOLLOWUPS-PLAN.md §7
+- shipped: eab7d1d3 4c7dc432 cb01edb3
+
+### R-vault-062 · shipped
+Demo mode shows the vault: a fixture of value-free cards (release with advice, grant, re-arm incl. a partly armed scope, boot unlock) and standing rows, whose verbs say "demo: nothing is released here" instead of pretending to work.
+- asked: 2026-10-18 (owner: follow-ups lesson 8)
+- plan: FOLLOWUPS-PLAN.md §8
+- shipped: eab7d1d3 c5f90c0f 9f5988f6

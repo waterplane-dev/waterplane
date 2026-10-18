@@ -8,7 +8,7 @@
  * handlers are installed.
  */
 import type { ServerCtx } from "./ctx.js";
-import { logTag } from "@waterplane/shared";
+import { logTag, envName } from "@waterplane/shared";
 
 export function installShutdown(ctx: ServerCtx): void {
   /**
@@ -75,7 +75,7 @@ export function installShutdown(ctx: ServerCtx): void {
     // A port we can't bind is fatal, not swallowable — exit cleanly so we never
     // linger as a half-bound zombie (the thing that broke restarts).
     if (err?.code === "EADDRINUSE") {
-      console.error(`${logTag} port ${ctx.PORT} already in use — exiting (run \`npm run restart\`).`);
+      console.error(`${logTag} port ${ctx.PORT} already in use — exiting. Another host already running? From a checkout: \`npm run restart\`; otherwise stop whatever holds the port, or set ${envName("PORT")} to a free one.`);
       process.exit(1);
     }
     console.error(`${logTag} uncaughtException`, err);

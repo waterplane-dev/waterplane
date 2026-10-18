@@ -19,9 +19,9 @@ features, one plain sentence each.
 
 ## The first minute
 
-<a href="https://waterplane-dev.github.io/media/first-look-74e5d8de68.mp4"><img src="media/first-look.gif" width="270" alt="The real claude terminal on a phone works a typed prompt; a screenshot arrives, is circled and sent back, and the after screenshot shows the fix"></a>
+<a href="https://waterplane-dev.github.io/media/first-look-e4639aabb9.mp4"><img src="media/first-look.gif" width="270" alt="The real claude terminal on a phone works a typed prompt; a screenshot arrives, is circled and sent back, and the after screenshot shows the fix"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/first-look-74e5d8de68.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/first-look-e4639aabb9.mp4), with pause and seek.*
 
 1. **A live session.** The real `claude` terminal in a fictional repo; the demo types a prompt
    into the compose box and sends it, then tool lines stream and the context meter ticks. It is the
@@ -47,18 +47,18 @@ Try it: `?demo=first-look`
 On a desktop that has never run a session from the phone, the first-run card builds a hello-world
 page: three questions, a list of what it will create, one Go.
 
-<a href="https://waterplane-dev.github.io/media/first-app-e0059d61e8.mp4"><img src="media/first-app.gif" width="270" alt="A fresh desktop's first-run card; a plan listing what will be created; Go copies a template and builds a page you open and tap on the phone"></a>
+<a href="https://waterplane-dev.github.io/media/first-app-3c894cd79d.mp4"><img src="media/first-app.gif" width="270" alt="A fresh desktop's first-run card; a plan listing what will be created; Go copies a template and builds a page you open and tap on the phone"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/first-app-e0059d61e8.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/first-app-3c894cd79d.mp4), with pause and seek.*
 
 The page it builds lands in `.claude/outbox/` and opens on the phone; the session then opens with a
 suggested first prompt in the box. It needs a connected desktop, so there is no demo for it.
 
 ## What Claude made, on your phone
 
-<a href="https://waterplane-dev.github.io/media/gallery-and-files-b24fb6b37c.mp4"><img src="media/gallery-and-files.gif" width="270" alt="The gallery lists what Claude left in the outbox: a markdown file, a live HTML page and a screenshot open on the phone"></a>
+<a href="https://waterplane-dev.github.io/media/gallery-and-files-ad78f0f43a.mp4"><img src="media/gallery-and-files.gif" width="270" alt="The gallery lists what Claude left in the outbox: a markdown file, a live HTML page and a screenshot open on the phone"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/gallery-and-files-b24fb6b37c.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/gallery-and-files-ad78f0f43a.mp4), with pause and seek.*
 
 Whatever Claude leaves in `.claude/outbox/` shows up on the phone as a picture or a file, with a
 badge on the repo that has something new. You can open it full size, mark it up and send the note
@@ -70,9 +70,9 @@ Try it: `?demo=gallery-and-files`
 
 *Android app developers only (optional).*
 
-<a href="https://waterplane-dev.github.io/media/apk-install-91d521e613.mp4"><img src="media/apk-install.gif" width="490" alt="Your phone circles a spot on a screenshot of the app, Claude Code adds a logo there, the build runs, the notifications on the phone with the app (a second one here, or the same one) say the build succeeded and the update is ready to install, one tap on Install updates it, and it opens with the logo in the circled spot"></a>
+<a href="https://waterplane-dev.github.io/media/apk-install-e275846493.mp4"><img src="media/apk-install.gif" width="490" alt="Your phone circles a spot on a screenshot of the app, Claude Code adds a logo there, the build runs, the notifications on the phone with the app (a second one here, or the same one) say the build succeeded and the update is ready to install, one tap on Install updates it, and it opens with the logo in the circled spot"></a>
 
-*Loops. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/apk-install-91d521e613.mp4), with pause and seek.*
+*Loops. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/apk-install-e275846493.mp4), with pause and seek.*
 
 A build command saved for a repo runs from the phone without a Claude session, so it spends no
 tokens. When it produces an APK, every phone running the developer build of the Android app that
@@ -85,9 +85,9 @@ the build, the download and the install are the real ones.
 
 ## When the usage limit hits, it carries on
 
-<a href="https://waterplane-dev.github.io/media/limit-and-budget-cb1eaddfe7.mp4"><img src="media/limit-and-budget.gif" width="270" alt="Claude stops at the 5-hour usage wall; at the reset waterplane types continue and the turn finishes"></a>
+<a href="https://waterplane-dev.github.io/media/limit-and-budget-b66509e306.mp4"><img src="media/limit-and-budget.gif" width="270" alt="Claude stops at the 5-hour usage wall; at the reset waterplane types continue and the turn finishes"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/limit-and-budget-cb1eaddfe7.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/limit-and-budget-b66509e306.mp4), with pause and seek.*
 
 Give a session a budget and, once it is reached, the next send is held before the usage wall: your
 words are kept and the reason is said. When a session does hit a Claude usage limit, the host waits
@@ -101,9 +101,9 @@ Try it: `?demo=limit-and-budget`
 
 ## Queue it now, or schedule it against the usage windows
 
-<a href="https://waterplane-dev.github.io/media/queue-and-schedule-e8d13afb25.mp4"><img src="media/queue-and-schedule.gif" width="270" alt="A prompt queued behind a running turn starts by itself when the turn ends; schedules wait for a time or for the weekly window"></a>
+<a href="https://waterplane-dev.github.io/media/queue-and-schedule-ed61261931.mp4"><img src="media/queue-and-schedule.gif" width="270" alt="A prompt queued behind a running turn starts by itself when the turn ends; schedules wait for a time or for the weekly window"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/queue-and-schedule-e8d13afb25.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/queue-and-schedule-ed61261931.mp4), with pause and seek.*
 
 A prompt sent while the session is busy is queued and says why it waits. When the turn ends it is
 typed into the same session, and its row in Activity goes from waiting to running to done. It never
@@ -118,9 +118,9 @@ Try it: `?demo=queue-and-schedule`
 
 ## What it costs
 
-<a href="https://waterplane-dev.github.io/media/numbers-99e8e4d318.mp4"><img src="media/numbers.gif" width="270" alt="A week of heavy use priced at API list price, what drives the cost, and when a fresh session would be cheaper"></a>
+<a href="https://waterplane-dev.github.io/media/numbers-099dcd5ceb.mp4"><img src="media/numbers.gif" width="270" alt="A week of heavy use priced at API list price, what drives the cost, and when a fresh session would be cheaper"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/numbers-99e8e4d318.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/numbers-099dcd5ceb.mp4), with pause and seek.*
 
 The header carries the two usage windows, the 5-hour session and the week, with when each resets.
 The budget setting reads the same figures and says in words what they mean for you. Each session
@@ -135,9 +135,9 @@ Try it: `?demo=numbers`
 
 ## Repo health
 
-<a href="https://waterplane-dev.github.io/media/repo-health-f7095e59da.mp4"><img src="media/repo-health.gif" width="270" alt="A repo vibe-coded for eight months scores 46 out of 100: one 8,397-line file caps the score, two severe warnings name it, and the trend slides from 100 in February"></a>
+<a href="https://waterplane-dev.github.io/media/repo-health-dd8eeb80e4.mp4"><img src="media/repo-health.gif" width="270" alt="A repo vibe-coded for eight months scores 46 out of 100: one 8,397-line file caps the score, two severe warnings name it, and the trend slides from 100 in February"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/repo-health-f7095e59da.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/repo-health-dd8eeb80e4.mp4), with pause and seek.*
 
 Each repo has one health score out of 100, against fixed good values for five readings: file length
 (the longest file and the file the average line sits in), files reworked right after an edit,
@@ -162,9 +162,9 @@ servers; waterplane's own does not.
 
 ## The demo tour
 
-<a href="https://waterplane-dev.github.io/media/demo-tour-8532c7b936.mp4"><img src="media/demo-tour.gif" width="270" alt="The More to try list, and three of its rows: token ledger, notifications, context window"></a>
+<a href="https://waterplane-dev.github.io/media/demo-tour-4533e8681f.mp4"><img src="media/demo-tour.gif" width="270" alt="The More to try list, and three of its rows: token ledger, notifications, context window"></a>
 
-*Loops. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/demo-tour-8532c7b936.mp4), with pause and seek.*
+*Loops. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/demo-tour-4533e8681f.mp4), with pause and seek.*
 
 The demo line has a **More to try** button, and the first minute's closing card links to it. It opens a list of the app's headline features, one
 plain sentence each, grouped by what you want to do: drive a session, leave work running, see what

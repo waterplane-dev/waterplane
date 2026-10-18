@@ -25,6 +25,8 @@ SDK owns it, `local/extension-boundary`).
 
 ## The helper, and why a rebuild forgets a grant
 
+(The vault extension's boot helper `wp-vault-boot` follows the same rules: rebuild only when `build.sh --hash` changes, identity handed in from `BRAND`, never read with a mismatched hash — `packages/extensions/vault/helper/PROTOCOL.md`.)
+
 - **Built on first use** by `swiftc` into `<state dir>/bin/wp-desktop`, ad-hoc signed; no Xcode
   command line tools means the sentence `xcode-select --install`, not a stack trace. Nothing builds at
   import or activate; one build at a time; a failed build is not retried for a minute.

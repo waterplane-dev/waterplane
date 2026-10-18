@@ -382,7 +382,7 @@ export interface HostPluginApi {
   decision(row: Omit<DecisionLogEntry, "id" | "ts" | "source" | "plugin" | "sessionTitle"> & { sessionTitle?: string }): void;
   /** Record a paid model call, so it shows in the phone's usage numbers. */
   meter(call: { service: string; model: string; inTok: number; outTok: number }): void;
-  /** `urgent` (since 1.6): a request a person must approve now; lands on the loud "approval" kind. Use for nothing else. */ notify(n: { title: string; body: string; sessionId?: string; urgent?: boolean }): void;
+  /** `urgent` (since 1.6): a request a person must approve now; lands on the loud "approval" kind. Use for nothing else. `tag` (optional, no version bump): a stable key, a later notification with the same tag replaces the earlier one in the OS tray; the host namespaces it per plugin. */ notify(n: { title: string; body: string; sessionId?: string; urgent?: boolean; tag?: string }): void;
   /** The Claude plan usage (5-hour / weekly %), or null when unknown. */
   claudeUsage(): { sessionPct: number | null; weeklyPct: number | null } | null;
 

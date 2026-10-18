@@ -42,15 +42,21 @@ try {
 
   const legacy = await connect({ "user-agent": "okhttp/4.12.0" }, { t: "hello", protocol: 1 });
   const declared = await connect({}, { t: "hello", protocol: 1, role: "notify" });
+  // Until its hello is handled the declared socket is a full client, so a broadcast
+  // landing in that gap (a usage.status publish, 2026-10-18 under a loaded suite)
+  // is correct, not a leak. A pong to a ping sent after the hello marks the moment
+  // the role took: frames are handled in order, so what follows it is what counts.
+  declared.send({ t: "ping" });
+  await waitFor(() => declared.frames.some((f) => f.t === "pong"));
+  declared.frames.length = 0;
   const browser = await connect({ "user-agent": "Mozilla/5.0 (Linux; Android 14) Chrome/129.0 Mobile Safari/537.36" }, { t: "hello", protocol: 1 });
 
   await waitFor(() => browser.frames.some((f) => f.t === "session.list"));
   await sleep(300);
   check(legacy.frames.length === 0, `an okhttp socket gets no welcome and no snapshots (${legacy.types().join(",") || "none"})`);
   // The declared one connected without the UA, so `welcome`/`backends` went out
-  // before its hello said what it was; nothing after the hello may.
-  const afterHello = declared.frames.filter((f) => f.t !== "welcome" && f.t !== "backends");
-  check(afterHello.length === 0, `hello.role notify gets no snapshots (${afterHello.map((f) => f.t).join(",") || "none"})`);
+  // before its hello said what it was (cleared above at the pong); nothing after may.
+  check(declared.frames.length === 0, `hello.role notify gets no snapshots (${declared.types().join(",") || "none"})`);
   check(browser.frames.some((f) => f.t === "welcome") && browser.frames.some((f) => f.t === "usage.status"), "a browser socket still gets welcome and the snapshots (control)");
 
   // A broadcast (the schedule list) and a notification: the one-shot schedule

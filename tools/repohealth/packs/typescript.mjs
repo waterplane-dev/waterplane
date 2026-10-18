@@ -26,7 +26,7 @@
  * ── The extensions were widened, deliberately, and this changed the count ───
  *
  * `SRC_EXT` was `[".ts", ".tsx"]`. This pack claims the whole family —
- * `.ts .tsx .js .jsx .mjs .cjs` — because a pack is supposed to describe a
+ * `.ts .tsx .js .jsx .mjs .cjs .mts .cts` — because a pack is supposed to describe a
  * language, and a repo that is half `.mjs` is not half unmeasured. It is also
  * what brings two more of the fleet into view at all: `Tiptoi` (32 `.js`, no
  * TypeScript anywhere) and `webcam` (16) activate no pack under a `.ts`-only
@@ -41,6 +41,14 @@
  * the honest one: those files are source, they are written by the same agents,
  * and a tool that exempted itself from its own size and duplicate rows would
  * be reporting on a tree it had quietly cut a hole in.
+ *
+ * `.mts` and `.cts` were missing from that list until `typescript@6`, and the
+ * hole was the size of a layer: every in-repo extension's host and shared code
+ * is `.mts` (95 files, 29,415 lines at waterplane's HEAD on 2026-10-18,
+ * among them the largest file in the tree at 5,790 lines). Size, hatches and
+ * untested never saw any of it; a test importing `../shared/skill.mts` named
+ * nothing. `.d.mts` / `.d.cts` are excluded beside `.d.ts`, and the test
+ * suffixes gained the two extensions, for the same reasons the others have them.
  *
  * It also makes the test exclusion in `source.mjs` load-bearing for the first
  * time. Under `[".ts", ".tsx"]` every `*.test.mjs` and every
@@ -117,7 +125,7 @@ import { NO_TYPESCRIPT, contentKey, identsOf, loadTypeScript, signedBlocks } fro
  * The source extensions this pack claims. Module-level rather than written
  * inline in the export, because `PATH_REF` below is BUILT from it — see there.
  */
-const EXTS = Object.freeze([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
+const EXTS = Object.freeze([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
 
 /**
  * What a build writes that a test may import IN PLACE of the source: the host
@@ -251,7 +259,8 @@ export default Object.freeze({
   // a directory's `index` answers to the directory, and `imports` exists.
   // 4: `import type` / `export type` are not edges — they load nothing.
   // 5: `hatchExplain` exists — which escapes carry their reason (see below).
-  version: "5",
+  // 6: `.mts` / `.cts` are source (and `.d.mts` / `.d.cts` are not) — see the header.
+  version: "6",
 
   /** Activates when the tree at HEAD carries one of these. See the header. */
   exts: EXTS,
@@ -260,11 +269,11 @@ export default Object.freeze({
   emits: EMITS,
 
   /**
-   * A `.d.ts` is a declaration emitted or hand-written to describe code that
+   * A `.d.ts` (or `.d.mts` / `.d.cts`) is a declaration emitted or hand-written to describe code that
    * lives somewhere else. Counting it as source double-counts every module it
    * describes and inflates the LOC total with lines nobody wrote by hand.
    */
-  excludeSuffixes: Object.freeze([".d.ts"]),
+  excludeSuffixes: Object.freeze([".d.ts", ".d.mts", ".d.cts"]),
 
   /**
    * What a test file looks like in this family — the family's conventions,
@@ -302,12 +311,16 @@ export default Object.freeze({
     "**/*.test.jsx",
     "**/*.test.mjs",
     "**/*.test.cjs",
+    "**/*.test.mts",
+    "**/*.test.cts",
     "**/*.spec.ts",
     "**/*.spec.tsx",
     "**/*.spec.js",
     "**/*.spec.jsx",
     "**/*.spec.mjs",
     "**/*.spec.cjs",
+    "**/*.spec.mts",
+    "**/*.spec.cts",
     "**/test/**/*",
     "**/tests/**/*",
     "**/__tests__/**/*",

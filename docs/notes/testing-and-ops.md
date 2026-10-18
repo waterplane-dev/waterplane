@@ -882,6 +882,11 @@ gifs; and the tests, for which it is the only host double. The rules it keeps:
   turns it on), not what was asked, so every guard (push, OTA, LAN probes, native workers) follows
   the transport. `?demo=` writes nothing, so a journey run on a real host's origin cannot leave it
   stuck in the demo; the button's choice is stored per device so a cold APK start returns to it.
+- **A plugin brings its own demo data** through the SDK seam `registerDemoPlugin(id, { calls, pushes })`
+  (`packages/web/src/sdk`): `pluginClient(id).call` consults it when `isDemo()`, and `demo/transport.ts`
+  replays the pushes of every registered plugin when the fake socket opens. No per-plugin code lives in
+  `demo/`; a build without the plugin registers nothing and replays nothing. The fixture and its pictures
+  live in the extension's own folder.
 - **Scenarios are recorded from the real host driving the stub TUI** (`WATERPLANE_WIRE_RECORD`,
   `scripts/e2e-demorecord.mjs`), never from a real `claude`, whose output drifts per version and
   carries real paths; the scrub fails closed.

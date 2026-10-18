@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Build the release artifacts into `dist-release/`. Layout and why: docs/notes/distribution.md.
 //
-//   node scripts/release/build.mjs [--no-build] [--allow-dirty] [--unsigned] [--apk=<file.apk>]
+//   node scripts/release/build.mjs [--no-build] [--allow-dirty] [--unsigned] [--private-tree] [--apk=<file.apk>]
 //
 //   <slug>-<version>.tar.gz          the platform-independent runtime tree (primary route)
 //   <slug>-<version>.tar.gz.sha256   sha256sum format
@@ -26,15 +26,27 @@ if (!existsSync(join(ROOT, "packages/shared/dist/brand.js"))) execFileSync("npm"
 const { E, SLUG } = await import("../lib-brand.mjs");
 const { verifyDevApk } = await import("./apk-lib.mjs");
 const { buildShrinkwrap } = await import("./shrinkwrap-lib.mjs");
+const { privateExtensions } = await import("./public-lib.mjs");
 const { PUBKEY_PATH, assertKeyMatches, defaultKeyPath, loadPrivateKey, signFile } = await import("./sign-lib.mjs");
 const OUT = join(ROOT, "dist-release");
 const args = new Set(process.argv.slice(2));
-for (const a of args) if (!["--no-build", "--allow-dirty", "--unsigned"].includes(a) && !a.startsWith("--apk=")) { console.error(`unknown flag ${a}`); process.exit(2); }
+for (const a of args) if (!["--no-build", "--allow-dirty", "--unsigned", "--private-tree"].includes(a) && !a.startsWith("--apk=")) { console.error(`unknown flag ${a}`); process.exit(2); }
 
 const sh = (cmd, a, opts = {}) => execFileSync(cmd, a, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"], ...opts }).trim();
 const readJson = (p) => JSON.parse(readFileSync(join(ROOT, p), "utf8"));
 
 // ── preconditions ──────────────────────────────────────────────────────────
+// A signed build is what users install, so it comes from the PUBLIC snapshot. In this tree the web
+// bundle globs every packages/extensions/*/web, ship.json or not: 0.1.0, signed here, carried the
+// private extensions' UI. Build in a `release:public` clone; --private-tree is for a desktop of your own.
+{
+  const allow = join(ROOT, "deploy/public-allowlist.txt");
+  const present = existsSync(allow) ? privateExtensions(readFileSync(allow, "utf8")).filter((id) => existsSync(join(ROOT, "packages/extensions", id))) : [];
+  if (present.length && !args.has("--unsigned") && !args.has("--private-tree")) {
+    console.error(`release: this tree holds private extensions (${present.join(", ")}), and the web bundle would carry them. Build the release in the public snapshot (node scripts/release/publish-public.mjs --to <public clone> --commit, then release:build there). --private-tree signs it anyway, for your own desktops only; --unsigned for a dev build.`);
+    process.exit(1);
+  }
+}
 const dirty = sh("git", ["status", "--porcelain"]);
 if (dirty && !args.has("--allow-dirty")) {
   console.error("release: the working tree is dirty (the commit is recorded in release.json). Commit, or pass --allow-dirty.\n" + dirty);
@@ -116,6 +128,11 @@ function shipBuiltins(ship) {
   // private ones out (`deploy/public-allowlist.txt`) while `ship.json` still names them. Not shipped,
   // said once; a misspelt id reads the same way, which is why the sentence names it.
   for (const id of Object.keys(decided)) if (!existsSync(join(extDir, id, BRAND_MANIFEST))) console.error(`release: deploy/ship.json names "${id}", which is not under packages/extensions/ in this tree — it does not ship.`);
+  // A private extension never ships, whatever its ship.json says: the 0.1.0 tarball carried
+  // opencode's compiled code because its own ship.json still said ship: true.
+  const allow = join(ROOT, "deploy/public-allowlist.txt");
+  const leaked = existsSync(allow) ? privateExtensions(readFileSync(allow, "utf8")).filter((id) => out[id]) : [];
+  if (leaked.length) { console.error(`release: ${leaked.join(", ")} ${leaked.length === 1 ? "is" : "are"} private (deploy/public-allowlist.txt) but set to ship. Set "ship": false in packages/extensions/<id>/ship.json.`); process.exit(1); }
   return out;
 }
 const dirName = `${SLUG}-${version}`;
@@ -215,8 +232,9 @@ cpSync(join(ROOT, "packages/shared/dist"), join(sharedDest, "dist"), { recursive
 
 const tarball = join(OUT, `${dirName}.tar.gz`);
 // COPYFILE_DISABLE keeps macOS from adding AppleDouble `._*` entries.
-// --no-mac-metadata (bsdtar): no LIBARCHIVE.xattr headers, which GNU tar warns about per file on Linux.
-execFileSync("tar", [...(process.platform === "darwin" ? ["--no-mac-metadata"] : []), "--uid", "0", "--gid", "0", "-czf", tarball, "-C", join(OUT, "stage"), dirName], { env: { ...process.env, COPYFILE_DISABLE: "1" } });
+// --no-mac-metadata --no-xattrs (bsdtar): no LIBARCHIVE.xattr headers, which GNU tar warns about per
+// file on Linux. --no-mac-metadata alone still carries com.apple.provenance (seen in the 0.1.0 tarball).
+execFileSync("tar", [...(process.platform === "darwin" ? ["--no-mac-metadata", "--no-xattrs"] : []), "--uid", "0", "--gid", "0", "-czf", tarball, "-C", join(OUT, "stage"), dirName], { env: { ...process.env, COPYFILE_DISABLE: "1" } });
 const sha = createHash("sha256").update(readFileSync(tarball)).digest("hex");
 writeFileSync(`${tarball}.sha256`, `${sha}  ${dirName}.tar.gz\n`);
 writeFileSync(join(OUT, "release.json"), JSON.stringify(releaseJson, null, 2) + "\n");

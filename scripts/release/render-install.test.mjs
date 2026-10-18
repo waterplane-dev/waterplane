@@ -87,6 +87,7 @@ test("builtinLines reads the in-repo extensions and marks an optional one", () =
       writeFileSync(join(root, "packages/extensions", id, MANIFEST), JSON.stringify({ id, ...(optional ? { optional: true } : {}) }));
     }
     assert.equal(builtinLines(root, MANIFEST), "core-one|0\noptbuiltin|1");
+    assert.equal(builtinLines(root, MANIFEST, ["optbuiltin"]), "core-one|0");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

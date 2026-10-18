@@ -40,6 +40,7 @@ import { demoSnapKey } from "../storage.ts";
 import { DEMO_SCENARIOS } from "./scenarios/index.ts";
 import { demoScenarioId, setDemoActive } from "./mode.ts";
 import { rememberDemoUpload } from "./media.ts";
+import { demoPluginReplay, demoPluginsOn } from "../sdk/demoPlugin.ts";
 export { DEMO_WS_URL } from "./mode.ts";
 
 /** How often the scenario script is asked whether anything is due. */
@@ -185,9 +186,13 @@ export class DemoSocket {
   /** PTY frames scheduled and not yet delivered. */
   private ptyQueued = 0;
 
-  constructor(host: DemoHost, url: string) {
+  /** The registered plugin pushes to replay once open (every registered demo plugin), as `plugin.push` frames. */
+  private readonly replay: () => Array<{ plugin: string; event: string; data: unknown }>;
+
+  constructor(host: DemoHost, url: string, replay: () => Array<{ plugin: string; event: string; data: unknown }> = () => []) {
     this.host = host;
     this.url = url;
+    this.replay = replay;
     this.later(0, () => this.open());
   }
 
@@ -220,6 +225,9 @@ export class DemoSocket {
     this.conn = conn;
     this.readyState = OPEN;
     this.onopen?.(new Event("open"));
+    for (const p of this.replay()) {
+      this.later(0, () => this.onmessage?.(new MessageEvent("message", { data: encode({ t: "plugin.push", ...p }) })));
+    }
   }
 
   private deliver(out: DemoOut): void {
@@ -384,7 +392,7 @@ export function createDemoTransport(cfg: DemoTransportConfig): DemoTransport {
 
   return {
     host,
-    dial: (url) => new DemoSocket(host, url) as unknown as WebSocket,
+    dial: (url) => new DemoSocket(host, url, demoPluginsOn(cfg.href) ? demoPluginReplay : undefined) as unknown as WebSocket,
     stop() { if (timer !== null) { clearInterval(timer); timer = null; } },
   };
 }

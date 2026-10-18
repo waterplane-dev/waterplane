@@ -66,6 +66,6 @@ What this project is expected to do, as the person asked for it. Format and rule
 | [updates](updates.md) | 2 | 5 | 0 |
 | [uploads](uploads.md) | 0 | 3 | 0 |
 | [usage](usage.md) | 8 | 18 | 0 |
-| [vault](vault.md) | 2 | 49 | 0 |
+| [vault](vault.md) | 2 | 60 | 0 |
 | [voice](voice.md) | 4 | 3 | 0 |
 | [voice-input](voice-input.md) | 0 | 4 | 0 |

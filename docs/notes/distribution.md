@@ -13,6 +13,16 @@ signature check in `cli/releasesig.ts`) are other packages; this note is the con
 `dist-release/` (gitignored). `--no-build` skips the build; a dirty tree is refused unless
 `--allow-dirty` (the commit is recorded, with a `-dirty` suffix then). Version = root `package.json`.
 
+**A signed build comes from the public snapshot, never from this tree.** The web bundle globs every
+`packages/extensions/*/web`, whatever `ship.json` says, so a build here carries the private
+extensions' UI: 0.1.0 did. `release:build` refuses a signed build in a tree that holds a private
+extension (`deploy/public-allowlist.txt`) unless `--private-tree` (your own desktops only, e.g. the
+wp-peer VM) or `--unsigned`. It also refuses to ship one by `ship.json`, and `install.sh` never names
+one. Route: `publish-public.mjs --to <public clone> --commit`, then `npm ci`, `build:shared`,
+`release:build` and `release:install-sh` inside that clone. `release:publish --build` still builds
+here and its preflight wants `release.json`'s commit to be this HEAD, so it does not fit that route
+yet: 0.1.1 went out by hand.
+
 **Signing.** The build signs the exact bytes of the `.sha256` and of `release.json` with the
 project's Ed25519 key (Node's own `crypto`, no minisign/cosign) into `<file>.sig`: one line, base64.
 The key is `WATERPLANE_RELEASE_KEY` (pkcs8 PEM), default

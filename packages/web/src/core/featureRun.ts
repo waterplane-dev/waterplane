@@ -250,6 +250,19 @@ export interface ContributedEntry {
   open(): void;
   /** A launcher item's count HOOK (`LauncherItemDef.useCount`), passed through as given. */
   useCount?(): LauncherItemCount | null;
+  /** A launcher item's tap while its count is above zero (`LauncherItemDef.openCount`), contained like `open`. */
+  openCount?(): void;
+}
+
+/** The ONE reading of a count hook's answer: the badge's number, 0 when nothing waits. Every badge
+ *  (the item's line, its header key, the ☰ sum) and the tap that picks `openCount` read it here. */
+export function countedN(c: LauncherItemCount | null | undefined): number {
+  return c && Number.isFinite(c.n) && c.n > 0 ? Math.floor(c.n) : 0;
+}
+
+/** The ☰ button's number: the core's own counts plus every counted item inside the menu. */
+export function menuBadgeTotal(base: number, counts: readonly (LauncherItemCount | null | undefined)[]): number {
+  return Math.max(0, base) + counts.reduce((n, c) => n + countedN(c), 0);
 }
 
 /** What `available` said, as the sentence or null. Anything but `true` or a non-empty string is a
@@ -301,9 +314,16 @@ export function createSessionViewTable(features: readonly FeatureManifest[], get
 /** Launcher header items, `order` then registry order, under the same containment. */
 export function createLauncherItemTable(features: readonly FeatureManifest[], getCore: () => CoreApi) {
   const t = contributionTable<LauncherItemDef, []>(features, (f) => f.launcherItems, "launcher item", getCore, (d, c) => d.open(c));
-  const counts = new Map<string, () => LauncherItemCount | null>();
-  for (const f of features) for (const d of f.launcherItems ?? []) if (typeof d.useCount === "function") counts.set(`${f.id}:${d.id}`, d.useCount);
-  return { items: () => t.entries().map((e) => (counts.has(e.key) ? { ...e, useCount: counts.get(e.key) } : e)) };
+  const counted = new Map<string, LauncherItemDef>();
+  for (const f of features) for (const d of f.launcherItems ?? []) if (typeof d.useCount === "function") counted.set(`${f.id}:${d.id}`, d);
+  const fail = createFailReporter(true);
+  const withCount = (e: ContributedEntry, d: LauncherItemDef): ContributedEntry => ({
+    ...e, useCount: d.useCount,
+    ...(typeof d.openCount === "function" ? {
+      openCount: () => { const c = getCore(); try { d.openCount!(c); } catch (err) { fail(e.feature, `launcher item ${d.id}`, err, c); } },
+    } : {}),
+  });
+  return { items: () => t.entries().map((e) => { const d = counted.get(e.key); return d ? withCount(e, d) : e; }) };
 }
 
 /** A contributed menu line's catalog id: namespaced, so it can never take a core line's id. */

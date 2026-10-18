@@ -99,10 +99,11 @@ async function which(bin: string): Promise<string | null> {
   return null;
 }
 
-function portFree(port: number, host = "127.0.0.1"): Promise<boolean> {
+/** `onlyInUse`: only EADDRINUSE counts as taken (an address this machine no longer has is not). */
+function portFree(port: number, host = "127.0.0.1", onlyInUse = false): Promise<boolean> {
   return new Promise((resolve) => {
     const s = createServer();
-    s.once("error", () => resolve(false));
+    s.once("error", (e: NodeJS.ErrnoException) => resolve(onlyInUse && e.code !== "EADDRINUSE"));
     s.once("listening", () => s.close(() => resolve(true)));
     s.listen(port, host);
   });
@@ -690,8 +691,11 @@ async function ourHostOn(port: number): Promise<boolean> {
   } catch { return false; }
 }
 
-async function checkPort(port: number): Promise<Check> {
-  if (await portFree(port)) return { id: "port", status: "ok", detail: `port ${port} is free` };
+async function checkPort(port: number, tailscaleIp: string | null): Promise<Check> {
+  // The host binds the Tailscale address too: another listener held only there (a second user's
+  // host on the same machine) leaves loopback free and still stops this one from starting.
+  const free = (await portFree(port)) && (!tailscaleIp || (await portFree(port, tailscaleIp, true)));
+  if (free) return { id: "port", status: "ok", detail: `port ${port} is free` };
   // Not a conflict when it is this host: the installer runs doctor just after starting the service.
   if (await ourHostOn(port)) return { id: "port", status: "ok", detail: `the ${BRAND.displayName} host is running on port ${port}` };
   return {
@@ -814,7 +818,7 @@ export async function runChecks(i: DoctorInput, skipPort = false, skipCapture = 
     checkDictate(),
     checkTailscaleKey(i),
     checkSecureContext(i),
-    skipPort ? Promise.resolve(null) : checkPort(i.port),
+    skipPort ? Promise.resolve(null) : checkPort(i.port, i.tailscaleIp),
     checkWsl(i),
     skipNetwork ? Promise.resolve(null) : checkSelfUpdate(),
   ]);

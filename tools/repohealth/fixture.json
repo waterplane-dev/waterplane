@@ -1,5 +1,5 @@
 {
-  "prereg": "2026-10-17a+ccb88b7e",
+  "prereg": "2026-10-17a+211c49d5",
   "lastSha": "f1cca7237bc1f6f1393dc762e1e281748cb2e8cd",
   "rows": [
     {
@@ -7,7 +7,7 @@
       "day": "2026-06-18",
       "ts": 1781815749,
       "batch": false,
-      "prereg": "2026-10-17a+ccb88b7e",
+      "prereg": "2026-10-17a+211c49d5",
       "size": {
         "value": {
           "appTsx": 383,
@@ -439,7 +439,7 @@
       "day": "2026-06-19",
       "ts": 1781891397,
       "batch": false,
-      "prereg": "2026-10-17a+ccb88b7e",
+      "prereg": "2026-10-17a+211c49d5",
       "size": {
         "value": {
           "appTsx": 676,
@@ -907,7 +907,7 @@
       "day": "2026-06-20",
       "ts": 1781986706,
       "batch": false,
-      "prereg": "2026-10-17a+ccb88b7e",
+      "prereg": "2026-10-17a+211c49d5",
       "size": {
         "value": {
           "appTsx": 1088,
@@ -1396,7 +1396,7 @@
       "day": "2026-06-21",
       "ts": 1782067638,
       "batch": false,
-      "prereg": "2026-10-17a+ccb88b7e",
+      "prereg": "2026-10-17a+211c49d5",
       "size": {
         "value": {
           "appTsx": 1300,
@@ -1899,7 +1899,7 @@
       "day": "2026-06-25",
       "ts": 1782415053,
       "batch": false,
-      "prereg": "2026-10-17a+ccb88b7e",
+      "prereg": "2026-10-17a+211c49d5",
       "size": {
         "value": {
           "appTsx": 1300,
@@ -2402,7 +2402,7 @@
       "day": "2026-08-16",
       "ts": 1786892228,
       "batch": false,
-      "prereg": "2026-10-17a+ccb88b7e",
+      "prereg": "2026-10-17a+211c49d5",
       "size": {
         "value": {
           "appTsx": 3217,
@@ -3011,7 +3011,7 @@
       "day": "2026-08-21",
       "ts": 1787300703,
       "batch": false,
-      "prereg": "2026-10-17a+ccb88b7e",
+      "prereg": "2026-10-17a+211c49d5",
       "size": {
         "value": {
           "appTsx": 3322,
@@ -3620,7 +3620,7 @@
       "day": "2026-08-30",
       "ts": 1788117111,
       "batch": false,
-      "prereg": "2026-10-17a+ccb88b7e",
+      "prereg": "2026-10-17a+211c49d5",
       "size": {
         "value": {
           "appTsx": 6514,
@@ -4309,7 +4309,7 @@
       "day": "2026-09-02",
       "ts": 1788361830,
       "batch": false,
-      "prereg": "2026-10-17a+ccb88b7e",
+      "prereg": "2026-10-17a+211c49d5",
       "size": {
         "value": {
           "appTsx": 7853,
@@ -5012,7 +5012,7 @@
       "day": "2026-09-04",
       "ts": 1788559156,
       "batch": false,
-      "prereg": "2026-10-17a+ccb88b7e",
+      "prereg": "2026-10-17a+211c49d5",
       "size": {
         "value": {
           "appTsx": 9631,
@@ -5794,7 +5794,7 @@
       "day": "2026-09-05",
       "ts": 1788635625,
       "batch": false,
-      "prereg": "2026-10-17a+ccb88b7e",
+      "prereg": "2026-10-17a+211c49d5",
       "size": {
         "value": {
           "appTsx": 10303,
@@ -6600,7 +6600,7 @@
       "day": "2026-09-06",
       "ts": 1788725333,
       "batch": false,
-      "prereg": "2026-10-17a+ccb88b7e",
+      "prereg": "2026-10-17a+211c49d5",
       "size": {
         "value": {
           "appTsx": 10897,
@@ -7426,7 +7426,7 @@
       "day": "2026-09-07",
       "ts": 1788814506,
       "batch": true,
-      "prereg": "2026-10-17a+ccb88b7e",
+      "prereg": "2026-10-17a+211c49d5",
       "size": {
         "value": {
           "appTsx": 11582,
@@ -8260,7 +8260,7 @@
       "day": "2026-09-09",
       "ts": 1788947322,
       "batch": false,
-      "prereg": "2026-10-17a+ccb88b7e",
+      "prereg": "2026-10-17a+211c49d5",
       "size": {
         "value": {
           "appTsx": 11582,
@@ -9095,7 +9095,7 @@
       "day": "2026-09-11",
       "ts": 1789160326,
       "batch": true,
-      "prereg": "2026-10-17a+ccb88b7e",
+      "prereg": "2026-10-17a+211c49d5",
       "size": {
         "value": {
           "appTsx": 12294,
@@ -9956,7 +9956,7 @@
       "day": "2026-09-12",
       "ts": 1789246550,
       "batch": false,
-      "prereg": "2026-10-17a+ccb88b7e",
+      "prereg": "2026-10-17a+211c49d5",
       "size": {
         "value": {
           "appTsx": 12802,
@@ -10846,7 +10846,7 @@
       "day": "2026-09-14",
       "ts": 1789406877,
       "batch": true,
-      "prereg": "2026-10-17a+ccb88b7e",
+      "prereg": "2026-10-17a+211c49d5",
       "size": {
         "value": {
           "appTsx": 13977,
@@ -11782,7 +11782,7 @@
       "day": "2026-09-16",
       "ts": 1789540610,
       "batch": false,
-      "prereg": "2026-10-17a+ccb88b7e",
+      "prereg": "2026-10-17a+211c49d5",
       "size": {
         "value": {
           "appTsx": 13975,
@@ -12711,7 +12711,7 @@
       "day": "2026-09-18",
       "ts": 1789758585,
       "batch": false,
-      "prereg": "2026-10-17a+ccb88b7e",
+      "prereg": "2026-10-17a+211c49d5",
       "size": {
         "value": {
           "appTsx": 15599,
@@ -13724,7 +13724,7 @@
       "day": "2026-09-19",
       "ts": 1789852256,
       "batch": false,
-      "prereg": "2026-10-17a+ccb88b7e",
+      "prereg": "2026-10-17a+211c49d5",
       "size": {
         "value": {
           "appTsx": 15723,
@@ -14742,7 +14742,7 @@
       "day": "2026-09-20",
       "ts": 1789915560,
       "batch": false,
-      "prereg": "2026-10-17a+ccb88b7e",
+      "prereg": "2026-10-17a+211c49d5",
       "size": {
         "value": {
           "appTsx": 16081,
@@ -15766,7 +15766,7 @@
       "day": "2026-09-21",
       "ts": 1790023093,
       "batch": false,
-      "prereg": "2026-10-17a+ccb88b7e",
+      "prereg": "2026-10-17a+211c49d5",
       "size": {
         "value": {
           "appTsx": 16343,
@@ -16888,7 +16888,7 @@
       "day": "2026-09-22",
       "ts": 1790110804,
       "batch": false,
-      "prereg": "2026-10-17a+ccb88b7e",
+      "prereg": "2026-10-17a+211c49d5",
       "size": {
         "value": {
           "appTsx": 16389,

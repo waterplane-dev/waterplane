@@ -3,6 +3,22 @@
 Notable changes. This project has no release branches — `main` is the supported
 version — so entries are grouped by the release they shipped in.
 
+## 0.1.1
+
+### Fixes
+
+- **The release tarball carried an extension that is not part of the open-source
+  project.** 0.1.0 was built with a private extension switched on; 0.1.1 ships
+  only what this repository contains. A release build now refuses an extension
+  the public tree leaves out, and the installer no longer names one.
+- **No more `tar: Ignoring unknown extended header keyword` lines on Linux.**
+  The tarball is built without macOS extended attributes.
+- **`waterplane doctor` sees a port taken on the Tailscale address.** It said
+  "port 8770 is free" while another host held it there, and the service then
+  restarted in a loop.
+- **The port-in-use exit no longer tells an installed user to run
+  `npm run restart`**, which only exists in a checkout.
+
 ## 0.1.0 — first public release
 
 Everything below already existed privately; this is what the first public

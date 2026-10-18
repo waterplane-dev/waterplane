@@ -111,6 +111,8 @@ self.addEventListener("push", (event) => {
     self.registration.showNotification(data.title, {
       body: data.body,
       tag: data.tag,
+      // Same tag replaces the earlier one in place and stays quiet (no second buzz): one notification per scope.
+      renotify: false,
       icon: "/assets/icon-192.png",
       badge: "/assets/icon-192.png",
       data: { sessionId: data.sessionId, plugin: data.plugin, image: data.image, file: data.file },

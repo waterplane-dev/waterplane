@@ -26,6 +26,8 @@ export type { CachedListStore, CachedLists } from "./cached.ts";
 export { repoRunStore, type RepoRunStore, type RunLike } from "./repoRun.ts";
 export { featureSheetId, type FeatureSheetId } from "../routing.ts";
 export { pluginClient, type PluginClient } from "./pluginClient.ts";
+/** The demo seam: `isDemo()` and a plugin's registered fixture (`registerDemoPlugin`; see `demoPlugin.ts`). */
+export { isDemo, registerDemoPlugin, demoPluginPushes, type DemoPlugin } from "./demoPlugin.ts";
 export { extStorage, type ExtStorage } from "./extStorage.ts";
 export type { PluginCallResult, PluginMethods } from "@waterplane/shared";
 export { openStream, type StreamCallbacks, type StreamHandle, type StreamState, type StreamStats, type StreamStopCause } from "./stream.ts";

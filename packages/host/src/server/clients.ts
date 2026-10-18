@@ -138,7 +138,7 @@ export function createClients(deps: ClientsDeps) {
     // Fetch from the push handler with the app closed, so dropping it would
     // silently turn auto-pull off for anyone who muted "artifact".
     if (!p.pull && !notifyPrefs.enabled(kind)) return;
-    const item: NotificationItem = { id: randomUUID().slice(0, 8), ts: Date.now(), kind, title: p.title, body: p.body, sessionId: p.sessionId, image: p.image, file: p.file, backlog: p.backlog, plugin: p.plugin };
+    const item: NotificationItem = { id: randomUUID().slice(0, 8), ts: Date.now(), kind, title: p.title, body: p.body, sessionId: p.sessionId, tag: p.tag, image: p.image, file: p.file, backlog: p.backlog, plugin: p.plugin };
     notifications.unshift(item);
     if (notifications.length > 100) notifications.length = 100;
     broadcast({ t: "notification", item });

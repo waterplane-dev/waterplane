@@ -135,4 +135,10 @@ export interface NotificationItem {
    * plugin's screen (a vault ask has no session to focus).
    */
   plugin?: string;
+  /**
+   * A stable key: a later notification with the same tag REPLACES the earlier one in the OS tray (the APK posts
+   * under `tag`; web push passes it to `showNotification`). A plugin's own tag is namespaced by the HOST
+   * (`plugin-<id>-<tag>`), so no plugin can replace another's. The in-app feed keeps every item.
+   */
+  tag?: string;
 }

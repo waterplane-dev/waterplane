@@ -22,6 +22,7 @@ import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileS
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { privateExtensions } from "./public-lib.mjs";
 import { PUBKEY_PATH, pubkeyLine } from "./sign-lib.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -75,8 +76,11 @@ export function catalogueLines(doc) {
   }).join("\n");
 }
 
-/** In-repo builtins as `id|optional(0/1)` lines, from each `packages/extensions/<id>/<manifest>`. */
-export function builtinLines(root = ROOT, manifest) {
+/**
+ * In-repo builtins as `id|optional(0/1)` lines, from each `packages/extensions/<id>/<manifest>`.
+ * `skip`: the private ones (`deploy/public-allowlist.txt`), which a published installer never names.
+ */
+export function builtinLines(root = ROOT, manifest, skip = []) {
   const dir = join(root, "packages/extensions");
   const out = [];
   for (const d of readdirSync(dir, { withFileTypes: true })) {
@@ -85,10 +89,17 @@ export function builtinLines(root = ROOT, manifest) {
     if (!existsSync(f)) continue;
     const m = JSON.parse(readFileSync(f, "utf8"));
     if (typeof m.id !== "string" || !PLUGIN_ID.test(m.id)) throw new Error(`render-install: ${f}: bad id`);
+    if (skip.includes(d.name)) continue;
     out.push(`${m.id}|${m.optional === true ? 1 : 0}`);
   }
   return out.sort().join("\n");
 }
+
+/** The extensions the public snapshot leaves out; none in a tree without the allow-list (the public one). */
+const privateIds = (root) => {
+  const f = join(root, "deploy/public-allowlist.txt");
+  return existsSync(f) ? privateExtensions(readFileSync(f, "utf8")) : [];
+};
 
 /** The placeholder values for this checkout. */
 export async function installVars({ root = ROOT, version } = {}) {
@@ -108,7 +119,7 @@ export async function installVars({ root = ROOT, version } = {}) {
     CONFIG_NAME: BRAND.configDirName,
     STATE_DIR: BRAND.stateDirName,
     CATALOGUE: catalogueLines(JSON.parse(readFileSync(join(root, "deploy/plugins.json"), "utf8"))),
-    BUILTINS: builtinLines(root, PLUGIN_MANIFEST),
+    BUILTINS: builtinLines(root, PLUGIN_MANIFEST, privateIds(root)),
     MANIFEST: PLUGIN_MANIFEST,
     RELEASE_PUBKEY: pubkeyLine(readFileSync(join(root, PUBKEY_PATH), "utf8")),
   };

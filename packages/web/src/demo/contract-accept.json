@@ -17,7 +17,6 @@
     "onboard.progress": "not reachable in demo: the first-app job is refused over HTTP, so no job ever progresses",
     "plugin.actionResult": "not reachable in demo: no plugins installed, plugin.action is refused",
     "plugin.error": "not reachable in demo: no plugins installed, plugin.set/enable are refused",
-    "plugin.push": "not reachable in demo: no plugins installed to push anything",
     "pull.config": "gap: pull.get is refused (tier B), so the auto-pull rule is never sent",
     "pull.new": "gap: the demo's pull queue is seeded only; nothing new is detected on a scenario desktop",
     "sent.new": "gap: the sent log is answered on request (sent.get) but not appended live",

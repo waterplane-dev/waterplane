@@ -340,7 +340,7 @@ export function makeApi(reg: PluginRegistry, e: PluginEntry, gen: number): HostP
     },
     notify: (n) => {
       if (!live()) return;
-      reg.deps.notify(n.urgent ? "approval" : "plugin", { plugin: id, title: String(n.title).slice(0, 200), body: String(n.body).slice(0, 1000), ...(n.sessionId ? { sessionId: n.sessionId } : {}), tag: `plugin-${id}-${n.sessionId ?? "all"}` });
+      reg.deps.notify(n.urgent ? "approval" : "plugin", { plugin: id, title: String(n.title).slice(0, 200), body: String(n.body).slice(0, 1000), ...(n.sessionId ? { sessionId: n.sessionId } : {}), tag: `plugin-${id}-${typeof n.tag === "string" && n.tag ? n.tag.slice(0, 120) : (n.sessionId ?? "all")}` });
     },
     claudeUsage: () => {
       const u = reg.deps.usage();

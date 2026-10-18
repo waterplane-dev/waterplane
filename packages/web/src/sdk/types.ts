@@ -665,6 +665,12 @@ export interface LauncherItemDef {
    * n <= 0 = the plain menu line.
    */
   useCount?(): LauncherItemCount | null;
+  /**
+   * The tap while `useCount` says n > 0 (the menu line and the header key alike): lands on EXACTLY
+   * what n counts — the vault's waiting cards, not its home. Absent = `open`, which must then land on
+   * them itself. Ignored without `useCount`.
+   */
+  openCount?(core: CoreApi): void;
 }
 
 /** What `LauncherItemDef.useCount` says is waiting. `title` is the long reading; the badge is the number. */
