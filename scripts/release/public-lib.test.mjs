@@ -280,7 +280,7 @@ test("the allow-list publishes .npmrc, so the public tree's npm ci keeps install
 });
 
 test("verify-public-tree rehearses CI's tarball: release:build --unsigned, then the .tgz is this version with its shrinkwrap", () => {
-  const wf = readFileSync(new URL("../../deploy/public-workflows/npm-publish.yml", import.meta.url), "utf8");
+  const wf = readFileSync(new URL("../../.github/workflows/npm-publish.yml", import.meta.url), "utf8");
   assert.match(wf, /run: npm run release:build -- --unsigned/, "the step being rehearsed is still the workflow's");
   const ok = { slug: "waterplane", version: "1.2.3", listing: ["package/package.json", "package/npm-shrinkwrap.json"], pkgJson: '{"name":"waterplane","version":"1.2.3"}' };
   assert.deepEqual(npmTarballProblems(ok), []);

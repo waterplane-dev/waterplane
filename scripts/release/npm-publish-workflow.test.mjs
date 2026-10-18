@@ -1,5 +1,5 @@
-// node --test: the properties of deploy/public-workflows/npm-publish.yml (parked; the public repo's
-// .github/workflows/npm-publish.yml once installed there) that a review would not catch —
+// node --test: the properties of .github/workflows/npm-publish.yml (live only in the public repo; the
+// job guard skips it here) that a review would not catch —
 // it can only run in the public repo the brand names, holds no more permission than OIDC needs,
 // publishes with provenance through trusted publishing (no token), builds the tarball from the tag
 // itself, and pins every action by commit. Read as text: no YAML parser is a dependency of this
@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 import { NPM_WORKFLOW } from "./publish-lib.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const yml = readFileSync(join(ROOT, "deploy/public-workflows", NPM_WORKFLOW), "utf8");
+const yml = readFileSync(join(ROOT, ".github/workflows", NPM_WORKFLOW), "utf8");
 const code = yml.split("\n").filter((l) => !/^\s*#/.test(l)).join("\n"); // comments may name anything
 const { BRAND } = await import(join(ROOT, "packages/shared/dist/brand.js"));
 

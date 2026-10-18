@@ -1,8 +1,5 @@
 name: npm publish
 
-# PARKED (2026-10-10): kept outside .github/workflows/ until reviewed for launch; install it into the
-# PUBLIC repo's .github/workflows/ by hand. Why: docs/notes/distribution.md, "Publishing a release".
-#
 # Publishes the npm package WITH a provenance attestation, from the PUBLIC repo only.
 #
 # Why here and not on the desktop: npm provenance is a signed statement, made by this CI run's OIDC

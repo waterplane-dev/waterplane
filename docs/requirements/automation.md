@@ -272,3 +272,8 @@ When more than three tool boxes in a day were answered by the person, a sentence
 ### R-automation-057 · requested
 When a timed item lands in a slot that already holds others (same usage-window reset, or the same instant), the person is asked whether to check them together — on the send receipt when they typed it, on the slot's group header (*check these N*, exactly those rows) when an agent posted it — and a per-repo switch turns the ask off. The check is the assessment scoped to that slot: it may propose merges (carrying the latest member's clock), an order within the slot, a split of one item into two (posted on the same clock, the original archived), and conflicts (words only, never resolved for the person); each change is approved one at a time and nothing applies itself. Replaces the smart pick (R-automation-013, R-automation-017).
 - asked: 2026-10-16 (owner, .claude/outbox/schedule-check-plan.md)
+
+### R-automation-058 · shipped
+One build entry ships the docs media end to end: re-cuts every gif and the APK film, rebuilds the site page from the README (its gif sizes follow the new films), commits only those files, pushes, then publishes the public mirror and its media repo. Any failed step stops it before anything is committed or pushed.
+- asked: 2026-10-18
+- shipped: build entry "Docs media: ship" in `.waterplane-shared/builds.json`

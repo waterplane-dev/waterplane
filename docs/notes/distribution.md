@@ -73,12 +73,11 @@ printed as `waived`, never as ok), `--no-apk` (publish without an Android APK, o
   names one, and `install.sh` → undraft (`--latest`) → **wait for npm** (below). A draft
   first so `releases/latest` never points at a release still missing its `.sig`.
 - **npm is published by the public repo's CI, with provenance.** The undraft makes the release
-  `published`, which starts `.github/workflows/npm-publish.yml` in `<org>/<slug>`. **Parked
-  (2026-10-10):** the file lives at `deploy/public-workflows/npm-publish.yml`, NOT under
-  `.github/workflows/`, so neither repo carries it as a live workflow yet — the owner wants to
-  review it on its own before launch, and pushing a workflow file needs a token with the `workflow`
-  scope. Until it is installed by hand into the public repo's `.github/workflows/`, a
-  `release:publish` will wait for an npm publish that never starts (use `--npm-from-desktop`). That job checks out the tag, stops
+  `published`, which starts `.github/workflows/npm-publish.yml` in `<org>/<slug>`. The file lives in
+  this repo's `.github/workflows/` too (it is how the public snapshot gets it); the job guard below
+  skips it here. Pushing a change to it needs the gh token's `workflow` scope. The npm half of the
+  trust is set once on npmjs.com (or `npm trust github waterplane --file npm-publish.yml --repo
+  waterplane-dev/waterplane`). That job checks out the tag, stops
   in words unless the run started ON the tag (`GITHUB_REF`) and `package.json`'s version is the tag,
   runs `npm ci` and `release:build -- --unsigned`, checks the `.tgz` is `<slug>@<version>` and
   carries `npm-shrinkwrap.json`, then `npm publish <tgz> --provenance --access public` through npm
