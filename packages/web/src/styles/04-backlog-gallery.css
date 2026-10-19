@@ -1,0 +1,476 @@
+/* 04-backlog-gallery.css: backlog rows and filters (.bl-*), thumbs, viewer, gallery, check rows, radios, text chips. */
+.thumb-wrap { position: relative; }
+/* Picking pictures to combine (gallery/GalleryGrid.tsx): the tap order as a number on the tile. */
+.thumb-wrap.picked > .thumb { border-color: var(--accent); box-shadow: var(--focus-ring); }
+.thumb-pick {
+  position: absolute; top: 6px; left: 6px; z-index: 1; min-width: 24px; height: 24px; padding: 0 var(--sp-6);
+  display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-12);
+  background: var(--accent); color: var(--on-accent-strong); font-weight: var(--fw-bold); font-size: calc(var(--fs-13) * var(--ui-font, 1)); pointer-events: none;
+}
+.gallery-pick { flex-wrap: wrap; align-items: center; }
+.thumb { display: flex; flex-direction: column; gap: var(--sp-4); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-8); padding: var(--sp-4); cursor: pointer; overflow: hidden; width: 100%; }
+.thumb-del {
+  position: absolute; top: 4px; right: 4px; width: 28px; height: 28px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--scrim-label); color: var(--on-media); border: none; border-radius: var(--r-6); cursor: pointer;
+}
+.thumb-del:active { background: var(--dead); }
+.thumb img, .thumb video { width: 100%; height: 84px; object-fit: cover; border-radius: var(--r-4); background: var(--media-bg); }
+/* The picture area while the device's thumbnail cache is being asked (a local
+   read, a frame or two). Same box as the image that replaces it, so a grid
+   resolving 60 tiles doesn't reflow under the thumb. */
+.thumb-blank { display: block; width: 100%; height: 84px; border-radius: var(--r-4); background: var(--media-bg); }
+.viewer-video { max-width: 100%; max-height: 78vh; border-radius: var(--r-6); background: var(--media-bg); }
+.viewer-audio { width: 100%; margin: var(--sp-12) 0; }
+/* A PDF needs real height to be readable on a phone — a shrink-to-fit frame
+   renders a stamp-sized page nobody can read. */
+.viewer-pdf { width: 100%; height: 70vh; border: none; border-radius: var(--r-6); background: var(--paper); }
+/* An HTML artifact painted in place. Same box as the PDF frame; `--card` because
+   a page that states no background of its own must not read as a hole in the
+   viewer, and it is the THEME's paper, not white. */
+.viewer-html { width: 100%; height: 70vh; border: none; border-radius: var(--r-6); background: var(--card); }
+.thumb .doc { height: 84px; display: flex; flex-direction: column; gap: var(--sp-6); align-items: center; justify-content: center; color: var(--muted); border-radius: var(--r-4); background: var(--well); }
+.thumb .doc-ext { font-size: calc(var(--fs-10) * var(--ui-font, 1)); letter-spacing: .04em; opacity: .8; }
+.thumb-name { font-size: calc(var(--fs-10) * var(--ui-font, 1)); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.thumb-date { font-size: calc(var(--fs-9) * var(--ui-font, 1)); color: var(--muted); opacity: 0.7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Size rides in the same line as the age — the grid is the one place you can
+   tell a 40 MB APK from a 200 KB one before starting the download. */
+.thumb-size { opacity: 0.85; }
+.thumb-repo { font-size: calc(var(--fs-9) * var(--ui-font, 1)); color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Badge stack, top-LEFT so it can't collide with the inbox delete button in the
+   opposite corner. Two badges that answer different questions: read state
+   (artifactMarks.ts) and auto-download state (pull.ts). */
+.thumb-badges {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-4);
+  pointer-events: none;
+  max-width: calc(100% - 16px);
+}
+.thumb-mark, .thumb-pull {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: 1px var(--sp-6);
+  border-radius: var(--r-pill);
+  font-size: calc(var(--fs-9) * var(--ui-font, 1));
+  line-height: 14px;
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  background: var(--bg-veil);
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+/* The unread mark: a dot, ringed so it holds on a light screenshot and a dark one. */
+.thumb-mark.new { width: 8px; height: 8px; padding: 0; background: var(--accent); border: 2px solid var(--bg); box-sizing: content-box; }
+.thumb-mark.downloaded { color: var(--ok); }
+/* Bytes on THIS phone (auto-download), deliberately not the eye/read vocabulary:
+   "read it" and "have it" are different, and confusing the two costs a 90 MB
+   re-download. */
+.thumb-pull.done { color: var(--ok); border-color: var(--ok); }
+.thumb-pull.downloading { color: var(--accent); border-color: var(--accent); }
+.thumb-pull.failed { color: var(--dead); border-color: var(--dead); }
+
+/* Gallery chrome. WHERE is the app's segmented control (one lit tab); WHAT is a row of
+   the kit's filter chips under it. */
+.segmented.gallery-scope { gap: var(--sp-4); padding: var(--sp-6) var(--sp-10) var(--sp-8); border-bottom: 0; }
+.gallery-scope .seg { min-width: 0; min-height: 40px; padding: var(--sp-6) var(--sp-4); font-size: calc(var(--fs-14) * var(--ui-font, 1)); white-space: nowrap; }
+.fchips.gallery-filters { padding: 0 var(--sp-6) var(--sp-2); background: var(--panel); border-bottom: 1px solid var(--line); }
+
+/* The kit's FilterChip (kit/FilterChip.tsx): a 30px pill in a 44px touch box, so a filter row
+   reads as filters rather than as a second row of buttons, and only a lit one is coloured —
+   tinted, because the solid accent fill is a sheet's one primary verb. `.fchips` is the row. */
+.fchips { display: flex; align-items: center; gap: 0; padding: 0 var(--sp-6); overflow-x: auto; scrollbar-width: none; }
+.fchips::-webkit-scrollbar { display: none; }
+.fchips.wrap { flex-wrap: wrap; overflow-x: visible; }
+/* Unlit text is --fg, not --muted: a muted chip beside white buttons read as greyed out. */
+.fchip { flex: none; min-height: 44px; padding: 0 3px; display: inline-flex; align-items: center; background: none; border: 0; color: var(--fg); font: inherit; cursor: pointer; }
+.fchip-pill {
+  display: inline-flex; align-items: center; gap: var(--sp-4); height: 30px; padding: 0 var(--sp-12); border-radius: var(--r-pill);
+  border: 1px solid var(--line); font-size: calc(var(--fs-13) * var(--ui-font, 1)); white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.fchip.on .fchip-pill { color: var(--accent); background: var(--accent-tint); border-color: var(--accent-edge); }
+.fchip.on .fchip-pill:has(.fchip-x) { padding-right: var(--sp-8); }
+.fchip:active .fchip-pill { background: var(--raise); }
+/* A choice among worded options (`kit/RadioRows.tsx`): a round dot on the left,
+   filled when chosen, and the label as a full wrapping sentence. Never a fill —
+   the solid accent means "tap here next" and nothing else (owner, 2026-10-13). */
+.radio-rows { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; flex: 1 1 100%; }
+.radio-row {
+  display: flex; align-items: flex-start; gap: var(--sp-10); width: 100%; min-height: 44px; padding: var(--sp-10) var(--sp-6);
+  background: none; border: 0; border-radius: var(--r-8); color: var(--fg); font: inherit; text-align: left;
+  font-size: calc(var(--fs-15) * var(--ui-font, 1)); line-height: var(--lh-14); cursor: pointer;
+}
+.radio-row:active { background: var(--raise); }
+.radio-row:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.radio-dot {
+  flex: none; display: grid; place-items: center; box-sizing: border-box;
+  width: calc(20px * var(--ui-font, 1)); height: calc(20px * var(--ui-font, 1));
+  border: 2px solid var(--muted); border-radius: var(--r-round);
+}
+.radio-row.on .radio-dot { border-color: var(--ok); }
+.radio-row.on .radio-dot::after { content: ""; width: 50%; height: 50%; border-radius: var(--r-round); background: var(--ok); }
+.radio-label { flex: 1; min-width: 0; white-space: normal; overflow-wrap: break-word; }
+.radio-note { display: block; margin-top: var(--sp-2); color: var(--muted); font-size: calc(var(--fs-13) * var(--ui-font, 1)); }
+.fchips-gap { flex: none; width: 1px; height: 20px; margin: 0 var(--sp-6); background: var(--line); }
+.gallery-head-btn { min-width: 44px; padding: var(--sp-8); color: var(--muted); background: none; border-color: transparent; }
+/* Words for a screen reader that the picture already says (the unread dot). */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.viewer { position: fixed; inset: 0; background: var(--scrim-media); display: flex; align-items: center; justify-content: center; z-index: 10; }
+.viewer-body { width: 100vw; height: 100dvh; display: flex; flex-direction: column; gap: var(--sp-8); }
+/* The pinch/pan stage fills all space above the path + action row. */
+.zoom-stage {
+  flex: 1; min-height: 0; overflow: hidden; position: relative;
+  display: flex; align-items: center; justify-content: center;
+  touch-action: none; overscroll-behavior: contain;
+}
+.zoom-stage img {
+  max-width: 100vw; max-height: 100%; object-fit: contain;
+  transform-origin: center center; touch-action: none;
+  -webkit-user-select: none; user-select: none; -webkit-user-drag: none;
+}
+/* Escape hatch out of a zoom (see ZoomableImage) — above the image, never under it. */
+.zoom-reset {
+  position: absolute; left: 12px; bottom: 12px; z-index: 11;
+  display: inline-flex; align-items: center; gap: var(--sp-6);
+  padding: var(--sp-6) var(--sp-10); border-radius: var(--r-pill);
+  background: var(--panel-veil); color: var(--fg); border: 1px solid var(--float-edge);
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); font-variant-numeric: tabular-nums; cursor: pointer;
+}
+.viewer-body > a { margin: auto; }
+/* A file this viewer cannot preview (an .apk, an archive). It has to GROW like
+   every other body — `.viewer-doc` and `.zoom-stage` do — or its content stacks
+   at the very top of a body that deliberately has no top padding, half of it
+   under the connection strip and the path lines under the close button. */
+.viewer-none {
+  flex: 1; min-height: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: var(--sp-10);
+  padding: 0 var(--sp-28); text-align: center; color: var(--muted); font-size: calc(var(--fs-13) * var(--ui-font, 1)); line-height: var(--lh-15);
+}
+.viewer-path { color: var(--muted); font-size: calc(var(--fs-12) * var(--ui-font, 1)); word-break: break-all; padding: 0 var(--sp-8); flex: 0 0 auto; }
+.viewer-count { color: var(--muted); font-size: calc(var(--fs-12) * var(--ui-font, 1)); font-variant-numeric: tabular-nums; align-self: center; }
+/* Inline document preview: an outbox .md/.txt is meant to be READ on the phone,
+   so the viewer renders it in place (markdown formatted, everything else as
+   monospace source) instead of handing off to a browser tab. */
+.viewer-doc { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--bg); }
+.viewer-doc-bar {
+  flex: 0 0 auto; display: flex; align-items: center; gap: var(--sp-8);
+  padding: var(--sp-6) var(--sp-10); border-bottom: 1px solid var(--line);
+}
+.viewer-doc-bar .key { min-width: 0; padding: var(--sp-4) var(--sp-8); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.viewer-doc-note { color: var(--muted); font-size: calc(var(--fs-11) * var(--ui-font, 1)); }
+.viewer-doc-body {
+  flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain; padding: var(--sp-10) var(--sp-14) var(--sp-24); font-size: calc(var(--fs-14) * var(--ui-font, 1)); line-height: var(--lh-15);
+}
+/* A document's soft line breaks are spaces (CommonMark): a README hard-wraps
+   at ~100 columns, and pre-wrap drew every wrap as a break. The transcript
+   keeps pre-wrap — a typed prompt's newlines are the person's. */
+.viewer-doc-body .tr-p, .viewer-doc-body .tr-list li { white-space: normal; }
+.viewer-doc-pre {
+  flex: 1; min-height: 0; margin: 0; overflow: auto; -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain; padding: var(--sp-10) var(--sp-14) var(--sp-24);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-15);
+  white-space: pre-wrap; word-break: break-word;
+}
+/* An <a> styled as a key button (the download link) must line up with buttons. */
+.sheet-actions a.key { text-decoration: none; }
+.text-dump {
+  flex: 1; min-height: 0; margin: var(--sp-10); padding: var(--sp-12);
+  background: var(--well); color: var(--fg); border: 1px solid var(--line); border-radius: var(--r-10);
+  font-size: calc(var(--fs-13) * var(--ui-font, 1)); line-height: var(--lh-14); white-space: pre; overflow: auto;
+  resize: none; -webkit-user-select: text; user-select: text;
+}
+/* The dump as tickable lines (`TextDumpLines.tsx`): one tick per line, wrap is a toggle. */
+.text-dump-lines { padding: var(--sp-6) var(--sp-8) var(--sp-6) 0; white-space: normal; }
+.tdl-row { display: flex; align-items: flex-start; border-radius: var(--r-6); }
+.tdl-row.on { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.tdl-tick { flex: none; width: 34px; min-height: 1.45em; display: flex; justify-content: center; padding-top: 1px; }
+.tdl-tick input { width: 18px; height: 18px; margin: 0; }
+.tdl-text { flex: 1; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.text-dump-lines.nowrap .tdl-row { width: max-content; min-width: 100%; }
+.text-dump-lines.nowrap .tdl-text { flex: none; white-space: pre; overflow-wrap: normal; }
+.text-dump-bar { display: flex; justify-content: flex-end; margin: var(--sp-6) var(--sp-10) 0; }
+.text-dump-bar .key.on { color: var(--fg); border-color: var(--pick-edge); background: var(--pick-fill); }
+.text-dump-ticked { display: flex; align-items: center; gap: var(--sp-8); margin: var(--sp-6) var(--sp-10) 0; font-size: var(--fs-13); color: var(--muted); }
+.text-dump-ticked span { flex: 1; }
+/* The viewer is a full-bleed overlay, not a `.screen`/`.sheet`, so it gets no
+   top padding from `--ui-pulse-h` — its close button has to clear the strip on
+   its own, or the connection bar sits across the top of the one control that
+   gets you out of a full-screen image. */
+.viewer-close {
+  position: absolute; top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pulse-h, 0px) + var(--ui-localrt-h, 0px) + var(--ui-tabs-h, 0px) + 10px); right: 12px;
+  width: 40px; height: 40px; border-radius: var(--r-round);
+  background: var(--panel-veil); color: var(--fg); border: 1px solid var(--float-edge);
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; z-index: 11;
+}
+
+/* Forms / backlog */
+.form { display: flex; flex-direction: column; gap: var(--sp-8); padding: var(--sp-4) 0; }
+.form .search, .form .send { margin: 0 var(--sp-10); }
+.check-list { list-style: none; margin: 0; padding: 0; }
+.check-row { display: flex; flex-direction: column; gap: var(--sp-4); padding: var(--sp-10) var(--sp-14); border-bottom: 1px solid var(--line); border-left: 3px solid transparent; }
+.check-row.check-fail { border-left-color: var(--dead); }
+.check-row.check-warn { border-left-color: var(--warn); }
+.check-row.check-pass { border-left-color: var(--ok); }
+.check-row.check-consider { border-left-color: var(--accent-edge-hi); }
+.check-row.check-ignored { border-left-color: var(--line); padding-top: var(--sp-6); padding-bottom: var(--sp-6); }
+.check-kind { font-weight: var(--fw-regular); color: var(--muted); }
+.check-detail-quiet { color: var(--dim); }
+.check-acts-split { justify-content: space-between; align-items: center; gap: var(--sp-8); flex-wrap: wrap; }
+.check-top { display: flex; align-items: center; gap: var(--sp-8); }
+.check-icon { display: inline-flex; flex: 0 0 auto; }
+.check-label { flex: 1; font-weight: var(--fw-semibold); min-width: 0; }
+.check-detail { color: var(--muted); font-size: calc(var(--fs-13) * var(--ui-font, 1)); line-height: var(--lh-14); padding-left: var(--sp-24); word-break: break-word; }
+.bl-row { display: flex; flex-direction: column; gap: var(--sp-8); padding: var(--sp-12); border-bottom: 1px solid var(--line); }
+.bl-head { display: flex; align-items: flex-start; gap: var(--sp-8); }
+.bl-main { flex: 1; display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
+/* Three lines closed, not two: the row shows the item's OWN text now (a label
+   is a 40-character truncation of it), and two lines of a phone-width column is
+   not enough to tell "add the age to each row" from "add the age to the header".
+   Open (`.open`) it is the whole instruction.
+
+   SHARED, not backlog-only: the schedule card's prompt block is this clamp and
+   this `.bl-text-btn` too. It used to be a character slice — `slice(0, 110)` —
+   which ended a card on "already fi", and the fix is not a second clamp that
+   happens to agree with this one today. One three-line prose clamp in the app;
+   a copy of it is how two screens drift a line apart and nobody notices which
+   one is right. */
+.bl-text { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; line-height: var(--lh-14); }
+/* An opened shell row (`features/shells/ShellsSheet.tsx`): the whole command,
+   wrapped and selectable, and the tail of its output in a scroll box of its own
+   so a long log never pushes the stop button off the screen. */
+.shell-detail { display: flex; flex-direction: column; gap: var(--sp-6); padding: var(--sp-4) var(--sp-14) var(--sp-14); background: var(--panel); border-bottom: 1px solid var(--line); }
+.shell-cmd, .shell-out {
+  margin: 0; padding: var(--sp-8) var(--sp-10); border-radius: var(--r-6); background: var(--raise);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14);
+  white-space: pre-wrap; overflow-wrap: anywhere; -webkit-user-select: text; user-select: text;
+}
+.shell-out { max-height: 55vh; overflow-y: auto; }
+.shell-path { overflow-wrap: anywhere; font-size: calc(var(--fs-11) * var(--ui-font, 1)); }
+/* A label somebody actually typed — above the text, quieter than it. */
+.bl-label { font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+/* …and the same line when a MACHINE wrote it. Not uppercased — a derived title
+   is a sentence somebody may want to read, where a typed label is a tag — and
+   carrying the `Sparkles` mark inline, which is the one thing a reader has to
+   see at a glance: whose words are at the top of their own list. Muted like its
+   twin, because it is still the quiet line above the words that matter. */
+.bl-headline { display: inline-flex; align-items: center; gap: var(--sp-4); text-transform: none; letter-spacing: 0; }
+/* What a spender costs, under the button that spends it. `bl-pass-cost`'s
+   weight, because it is the same fact about the same kind of call. */
+.bl-cost { font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); margin-top: var(--sp-4); }
+/* Ages sit in the meta line with the status tag; tabular figures so a column of
+   them does not shimmer as the clock ticks. */
+.bl-age { font-variant-numeric: tabular-nums; }
+/* **The repo bar is a BAR.** It carried no rule of its own, so it inherited
+   `.form`'s column and drew its controls — the repo and `assess` — as full-width
+   blocks stacked down the phone, chrome before a single item. They are one
+   row: the repo grows, the verbs take their own width, and a narrow screen wraps rather than scrolls. */
+.bl-repobar { flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--sp-6); padding: var(--sp-8) var(--sp-10); }
+.bl-repobar > .search { flex: 1 1 160px; min-width: 0; margin: 0; }
+/* A `.rc` pill is a STATE and a `.key` is a VERB — the shapes stay apart. But
+   a pill's own padding is a 26px target, which is not a fingertip beside a
+   44px button on the one device this sheet is used from. */
+.bl-repobar > .key, .bl-repobar > .rc { flex: 0 0 auto; }
+.bl-repobar > .rc { min-height: 44px; }
+.bl-repobar > .form-hint { flex: 1 1 100%; padding: 0; }
+/* The backlog's filter chips (`BacklogFilterBar.tsx`): the kit's `.fchips` rows (status + clock,
+   age, kind), stacked in one panel. A row wraps, because a chip past the right edge behind a
+   gesture nobody discovers on a phone does not exist; the row is as tall as its chips, so a
+   cut that hides an axis (`drawnChips`) takes its whole row away. */
+.bl-fchips { background: var(--panel); border-bottom: 1px solid var(--line); padding: var(--sp-2) 0; }
+/* Search and the archived cut are ONE row: `show archived (10)` was a
+   full-width button of its own between the query and the chips, in a sheet
+   whose list starts below the fold. */
+.bl-searchrow { flex-direction: row; align-items: flex-end; gap: var(--sp-8); padding: 0 var(--sp-10); }
+.bl-searchrow > .bl-search { flex: 1; min-width: 0; }
+.bl-searchrow > .bl-search .search { margin: 0; }
+/* The icon's 20px cleared the field's own 10px side margin, which this row
+   takes off — it would otherwise float clear of the text it belongs to. */
+.bl-searchrow .bl-search-icon { left: 10px; }
+.bl-searchrow > .fchip { align-self: center; margin-right: -3px; }
+/* The bulk bars' rows (`BulkBars.tsx`, `clockDirectory.tsx`) still wear `.bl-filters`; their
+   `.key`s keep their numbers from reading as part of the label beside them. */
+.bl-filters .key { font-variant-numeric: tabular-nums; }
+/* The backlog's own bulk verbs (`backlog/BulkBars.tsx`): `.link-btn`s, no panel and no frame,
+   on the left edge the chips above them start at (`.bl-fchips > .fchips` 6px + `.fchip` 3px).
+   They were a `.key` each in an `.annot-tools` panel, which read as a second row of primary
+   buttons under the slim filters and began at 8, 22 and 10px. The 44px row is the fingertip
+   (the negative margin `.sheet .link-btn` takes would overlap the row above); a bar's note
+   shares the verb's edge. */
+.bl-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--sp-16); padding: 0 var(--sp-8); }
+.sheet .bl-bulk .link-btn { min-height: 44px; margin: 0; padding: 0; font-variant-numeric: tabular-nums; }
+.bl-bulk > .act-cants { padding: var(--sp-10) 0; }
+.bl-bulk-bar > .form-hint { padding: var(--sp-8) var(--sp-8) var(--sp-2); }
+/* The inline disclosures under the repo bar — *how it works* · *on in N repos*.
+   They were two `.form` blocks in a column; they are one line of two links. */
+.bl-notelinks { display: flex; flex-wrap: wrap; gap: var(--sp-4) var(--sp-14); margin-top: var(--sp-4); }
+.bl-text-btn { background: none; border: none; padding: 0; margin: 0; font: inherit; color: inherit; text-align: left; width: 100%; cursor: pointer; }
+.bl-text-btn.open { -webkit-line-clamp: unset; }
+/* In a `.q-card` (the schedule sheet) the block it replaced was an
+   `.approve-hint`, which carries the card's 8px rhythm in its own margin; a
+   `.bl-text-btn` zeroes margins for the backlog's gap-driven column. Without this
+   the prompt sits flush against the row of buttons under it. */
+.q-card .bl-text-btn { margin: 0 0 var(--sp-8); }
+.bl-thumbs { display: flex; flex-wrap: wrap; gap: var(--sp-6); margin-top: var(--sp-4); }
+.bl-thumb { padding: 0; border: 1px solid var(--line); border-radius: var(--r-8); background: var(--panel); overflow: hidden; cursor: pointer; line-height: 0; }
+.bl-thumb img { width: 72px; height: 72px; object-fit: cover; display: block; }
+.bl-thumb:active { border-color: var(--accent); }
+.bl-meta { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); flex-wrap: wrap; }
+.bl-error { font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--dead); margin-top: var(--sp-2); }
+/* Why a queued item is still queued. Muted, not a warning colour: waiting for
+   the agent to finish a turn is the normal case, and painting it red would
+   make the ordinary state look like a fault. */
+.bl-waiting { display: block; font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); margin-top: var(--sp-2); }
+/* The reason is a BUTTON when it names something one tap fixes — today, the
+   one sentence left that does: a row aimed at a session by hand, whose session
+   is where you would go to look. Styled as the same line of text, underlined,
+   so it reads as an explanation you can act on rather than a second control. */
+.bl-waiting-act { padding: 0; border: none; background: none; font: inherit; font-size: calc(var(--fs-11) * var(--ui-font, 1)); text-align: left;
+  color: var(--muted); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.bl-check { display: block; font-size: calc(var(--fs-11) * var(--ui-font, 1)); margin-top: var(--sp-2); max-width: 100%; padding: 0; background: none; border: none; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: inherit; font-size: calc(var(--fs-11) * var(--ui-font, 1)); }
+button.bl-check { cursor: pointer; }
+.bl-check-done { color: var(--ok); }
+.bl-check-partial, .bl-check-questions { color: var(--warn); }
+.bl-check-not_done, .bl-check-error { color: var(--dead); }
+.bl-check-checking { color: var(--muted); }
+/* One at-limit fact, one colour — the same `--limit` the launcher and the session header use. */
+.bl-check-limited, .bl-validate-limited { color: var(--limit); }
+.bl-check-detail { margin-top: var(--sp-4); }
+/* A row's *its session once done* choice, and a slot-held row's *close one
+   to make room* list. Keys WRAP (`flex: 0 1 auto; min-width: 0; white-space:
+   normal`): `as set globally (currently: close when done)` is wider than a
+   320px screen at a large system font scale. */
+.bl-close-choice { margin-top: var(--sp-4); }
+.bl-close-chips, .bl-slots { display: flex; flex-wrap: wrap; gap: var(--sp-6); margin-top: var(--sp-4); }
+.bl-close-chips .key, .bl-slots > .key { flex: 0 1 auto; min-width: 0; max-width: 100%; white-space: normal; text-align: left; }
+.bl-slot-list { list-style: none; margin: 0; padding: 0; flex: 0 0 100%; display: flex; flex-direction: column; gap: var(--sp-4); }
+.bl-slot { display: flex; align-items: center; gap: var(--sp-8); padding: var(--sp-6) var(--sp-8); border: 1px solid var(--line); border-radius: var(--r-8); }
+.bl-slot > .key { flex: none; }
+.bl-slot-open { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2);
+  padding: 0; border: none; background: none; font: inherit; color: var(--fg); text-align: left; cursor: pointer; }
+.bl-slot-title { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bl-slot-sub { font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); }
+.bl-check-detail pre { margin: 0; padding: var(--sp-8) var(--sp-10); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-8); color: var(--fg); font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14); white-space: pre-wrap; word-break: break-word; max-height: 320px; overflow-y: auto; }
+.bl-check-when { display: block; margin-top: var(--sp-4); font-size: calc(var(--fs-10) * var(--ui-font, 1)); color: var(--muted); }
+.bl-validate-achieved { color: var(--ok); }
+.bl-validate-likely, .bl-validate-unclear { color: var(--warn); }
+.bl-validate-unlikely, .bl-validate-error { color: var(--dead); }
+.bl-validate-validating { color: var(--muted); }
+.bl-steps { margin-top: var(--sp-6); display: flex; flex-direction: column; gap: var(--sp-4); }
+.bl-steps-head { font-size: calc(var(--fs-10) * var(--ui-font, 1)); color: var(--muted); }
+.bl-step { justify-content: flex-start; white-space: normal; text-align: left; height: auto; }
+.bl-actions { display: flex; gap: var(--sp-6); flex-wrap: wrap; align-items: center; padding-left: var(--sp-24); }
+/* Natural widths, not `flex: 1 1 auto`. Stretched to fill, six verbs of very
+   different weight — a pencil, *when*, *drop the clock*, *fire*, archive,
+   remove — drew as one evenly-divided segmented control, which says they are
+   six equally likely answers to the same question. They are not: most rows
+   want none of them. At their own width the row reads as a toolbar, the long
+   labels are the ones that look long, and the wrap happens where the words
+   run out rather than where the justification decided. */
+.bl-actions .key { flex: 0 0 auto; min-width: 44px; padding: var(--sp-8) var(--sp-10); font-size: calc(var(--fs-13) * var(--ui-font, 1)); }
+/* Remove is pushed to the far edge, so the one irreversible button on the row
+   is never the neighbour of whichever verb happened to be drawn last. */
+.bl-actions .key.danger { margin-left: auto; }
+/* The group that is the session on screen. Accent, not a colour of its own:
+   this app already means "the thing you are pointed at" by it. */
+.bl-here { color: var(--accent); border: 1px solid var(--accent); font-size: calc(var(--fs-11) * var(--ui-font, 1)); padding: var(--sp-2) var(--sp-8); margin-left: var(--sp-8); vertical-align: 1px; }
+/* The re-time pick list's tick: a real button with a phone-sized target, and
+   only drawn on rows `retimeEligible` lets move — the rest say why in the bar. */
+.bl-pick { flex: none; background: none; border: 0; padding: 0 var(--sp-2); margin: -2px 0 0; min-width: 32px; min-height: 32px; color: var(--accent); display: inline-flex; align-items: flex-start; justify-content: center; cursor: pointer; }
+/* The pick list's bar stays on screen while ticking down a long list: the tick
+   on row 25 and the button that sends it are one screen. Above the sticky
+   group heads (z 1). */
+.bl-pick-bar { position: sticky; top: 0; z-index: 2; background: var(--bg); }
+.bl-num { flex: none; min-width: 18px; text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); font-size: calc(var(--fs-13) * var(--ui-font, 1)); padding-top: 1px; }
+.bl-search { position: relative; display: flex; align-items: flex-end; gap: var(--sp-8); }
+.bl-search-icon { position: absolute; left: 20px; bottom: 14px; color: var(--muted); pointer-events: none; }
+.bl-search .search { flex: 1; padding-left: var(--sp-32); }
+.bl-combo { resize: none; min-height: 42px; max-height: 140px; line-height: var(--lh-14); font-family: inherit; }
+.bl-search-clear { flex: 0 0 auto; align-self: center; background: none; border: 1px solid var(--line); border-radius: var(--r-8); color: var(--muted); display: flex; padding: var(--sp-8); }
+.gallery-meta { margin-left: auto; font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bl-order { display: flex; flex-direction: column; gap: var(--sp-2); flex: none; }
+.bl-order .key { padding: var(--sp-2) var(--sp-6); min-height: 22px; min-width: 34px; }
+.bl-edit { display: block; padding: var(--sp-12); }
+.bl-running { background: var(--accent-wash); }
+/* **A finished row is not a disabled one.** `.bl-done` was `opacity: .55` on
+   the whole `.bl-row`, and the row class is `bl-${status}` — so every done item
+   drew its words, its chips AND its six buttons at just over half strength,
+   next to a failed row at full. Every one of those buttons works on a done row:
+   `re-fire`, `check`, `validate`, the pencil, archive, remove. Dimming them
+   says "not clickable" about controls that are, which is the claim
+   `Unavailable.tsx` exists to stop being made in pixels instead of words — and
+   it said it about the row you are most likely to want to re-fire.
+   What a row's state is, the status word already says, in `--ok` or `--dead`.
+   What it gets here is an EDGE, the device `.bl-next` already uses: visible
+   down a scrolling list, and it touches neither legibility nor affordance.
+   `.bl-next`'s accent edge is below and wins — "auto runs this one next" is a
+   fact about the future and beats a fact about the past. */
+.bl-done { box-shadow: inset 3px 0 0 var(--ok); }
+.bl-failed { box-shadow: inset 3px 0 0 var(--dead); }
+.tag-queued { color: var(--muted); }
+.tag-running { color: var(--accent); }
+.tag-done { color: var(--ok); }
+.tag-failed { color: var(--dead); }
+/* A row's own chips. `bl-chip` is `bl-next`'s shape without its claim: `next`
+   is the accent because it is the thing about to happen, these are facts about
+   what already happened to the row. `bl-merged` (the schedule link) is a
+   BUTTON; `bl-hand` is not, because "you placed this" is nothing to tap. */
+.bl-chip { margin-left: var(--sp-8); font-size: calc(var(--fs-11) * var(--ui-font, 1)); border-radius: var(--r-6); padding: 1px var(--sp-6); border: 1px solid var(--line); background: none; color: var(--muted); font: inherit; font-size: calc(var(--fs-11) * var(--ui-font, 1)); }
+button.bl-chip { cursor: pointer; }
+.bl-merged { color: var(--purple); border-color: var(--purple); }
+/* **What KIND of thing a row is — a word and an icon, and NO colour of its
+   own.** The obvious design is a red `bug`, and it is wrong here for a reason
+   this list makes sharp: the `failed` tag two chips along is already red, so a
+   column of red bug chips reads as a column of failures. Colour in this sheet
+   belongs to what HAPPENED to a row; the kinds differ by word and glyph. */
+.bl-cat { display: inline-flex; align-items: center; gap: var(--sp-4); }
+/* A pass has this row in hand right now. Same shape, same muted colour: it is
+   the row saying what is being done to it, not a warning about it. */
+.bl-naming { display: inline-flex; align-items: center; gap: var(--sp-4); }
+.bl-hand { color: var(--star); border-color: var(--star-edge); }
+/* A row that waits on a CLOCK rather than on its turn. `--sched` is the token
+   this app already uses for "armed for a wall-clock time" (Activity's own
+   scheduled rail), so a timed backlog row and a timed Activity row are the same
+   colour — which is the whole point of moving the row here: it is one thing,
+   not two. The HOLD chip beside it is deliberately plain `bl-chip`: two
+   coloured chips on one line is two claims competing, and the clock is the one
+   that decides when anything happens. */
+.bl-clock { color: var(--sched); border-color: var(--sched); }
+/* **Where this row sits in the queue its clock makes**, with the two verbs that
+   move it there. Same colour family as `.bl-clock` beside it — it is the same
+   subject, said one step further — and the arrows are inside the chip so the
+   position and the way to change it are one control and not two things a reader
+   has to connect. The buttons are 24px of touch target inside an 11px chip:
+   below that nothing on a phone can be hit reliably. */
+.bl-clock-seat { color: var(--sched); border-color: var(--line); display: inline-flex; align-items: center; gap: var(--sp-4); }
+.bl-seat-move { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; min-height: 24px;
+  margin: -4px 0; padding: 0; border: none; background: none; color: var(--sched); cursor: pointer; }
+/* The head over one clock's rows inside the *on a clock* cut. Not sticky: the
+   session-group head above it already owns that position, and two sticky bars
+   on a phone leave the list a slit. */
+.bl-clock-head { position: static; background: none; border-top: 1px solid var(--line); padding-top: var(--sp-10); }
+.bl-clock-head .bl-group-title { color: var(--sched); white-space: normal; }
+/* What wrote a row (an agent), and what an offered verb does — the sentence
+   that replaces a dimmed button. Same weight and colour as `bl-waiting`: both
+   are the row explaining itself, not warning about itself. */
+.bl-smart-note { display: block; font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); margin-top: var(--sp-2); }
+.bl-next { margin-left: var(--sp-8); font-size: calc(var(--fs-11) * var(--ui-font, 1)); font-weight: var(--fw-semibold); color: var(--accent); border: 1px solid var(--accent); border-radius: var(--r-6); padding: 1px var(--sp-6); }
+.bl-row:has(.bl-next) { box-shadow: var(--stripe); }
+.bl-row.dragging { opacity: .5; background: var(--raise); }
+
+/* Session groups — each running session's queue within a repo */
+.bl-group { border-bottom: 2px solid var(--line); }
+.bl-group:last-child { border-bottom: none; }
+.bl-group-head { display: flex; align-items: center; gap: var(--sp-8); padding: var(--sp-8) var(--sp-12); background: var(--panel); position: sticky; top: 0; z-index: 1; }
+.bl-group-title { flex: 1; font-size: calc(var(--fs-12) * var(--ui-font, 1)); font-weight: var(--fw-semibold); color: var(--fg); display: inline-flex; align-items: center; gap: var(--sp-6); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bl-group-meta { display: inline-flex; align-items: center; gap: var(--sp-6); font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); }
+.bl-group-empty { padding: var(--sp-10) var(--sp-12); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); }

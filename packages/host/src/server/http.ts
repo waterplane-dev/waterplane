@@ -366,6 +366,7 @@ export function createHttp(ctx: ServerCtx) {
       // Re-attach any claude sessions that survived a restart in tmux.
       // Done after listen so the map is ready before clients connect.
       try { ctx.sessions.rediscover(); } catch (e) { console.error(`${logTag} rediscover failed`, e); }
+      markReady();
       // …and only THEN ask what the intents that were mid-flight when the last
       // process died actually mean. A tmux session outlives the daemon, so "is
       // that session still there" is not answerable until the map is rebuilt.
@@ -377,3 +378,17 @@ export function createHttp(ctx: ServerCtx) {
   return { handler, listenWithRetry };
 }
 
+/**
+ * When this process started, and when it could first answer: `readyAt` is
+ * stamped after `rediscover()` re-attached every surviving session, which is
+ * synchronous and blocks the event loop (~25 s with a hundred panes) — so no
+ * `welcome` can be sent before it, and the gap between the two is how long a
+ * restart kept the phone waiting. Both ride `welcome` (`host.restarting`).
+ */
+export const bootClock: { startedAt: number; readyAt?: number } = {
+  startedAt: Math.round(Date.now() - process.uptime() * 1000),
+};
+
+export function markReady(): void {
+  bootClock.readyAt ??= Date.now();
+}

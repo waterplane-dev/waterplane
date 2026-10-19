@@ -41,6 +41,10 @@ export interface SignalRecord {
    *  "this went red at the upgrade" is the sentence that names the cause. */
   priorVersion?: string | null;
   priorVerdict?: HealthVerdict;
+  /** The newest miss a PERSON has read and cleared (`clearSeen`). Nothing at
+   *  or before it counts against the signal any more, and only a good stamped
+   *  AFTER it may call the signal working again. */
+  clearedAt?: number | null;
 }
 
 export interface CliHealth {
@@ -278,6 +282,52 @@ export function noteCliVersion(
   return { changed: from !== null, from };
 }
 
+// ── A person clearing what they have read ───────────────────────────────
+
+/**
+ * Drop every miss at or before `through` — the newest miss the person was
+ * SHOWN when they tapped clear — and keep everything after it.
+ *
+ * Bounded by an instant the reader saw rather than by the moment the host
+ * receives the tap, so a clear that arrives late can only remove what was on
+ * the screen: a miss that landed after the board was drawn still counts, and
+ * still turns the row amber. What goes is the window's old misses, the streak,
+ * and the fallback/sample breadcrumbs stamped inside the cleared span; the
+ * all-time totals stay, because they were never a warning.
+ *
+ * After a clear the signal is NOT called working off a good that predates it —
+ * that good was already on the board beside the misses the person dismissed.
+ * Until a fresh good arrives the verdict is `unknown`, said as "cleared" in
+ * `healthSentence`; a clear is the person's call about what they read, never
+ * evidence that the heuristic works.
+ */
+export function clearSeen(sig: SignalRecord, through: number): SignalRecord {
+  if (!Number.isFinite(through)) return sig;
+  const window = sig.window.filter((o) => o.at > through);
+  let misses = sig.misses;
+  let missStreakSince = sig.missStreakSince;
+  if (sig.lastMissAt == null || sig.lastMissAt <= through) {
+    misses = 0;
+    missStreakSince = null;
+  } else if (missStreakSince != null && missStreakSince <= through) {
+    // The streak runs on past the cleared instant: keep only its tail.
+    let n = 0;
+    for (let i = window.length - 1; i >= 0 && !window[i].ok; i--) n++;
+    misses = n;
+    missStreakSince = n ? window[window.length - n].at : null;
+  }
+  const out: SignalRecord = {
+    ...sig,
+    window,
+    misses,
+    missStreakSince,
+    clearedAt: Math.max(sig.clearedAt ?? 0, through),
+  };
+  if (out.lastFallbackAt != null && out.lastFallbackAt <= through) { delete out.lastFallbackAt; delete out.via; }
+  if (out.sampleAt != null && out.sampleAt <= through) { delete out.sampleAt; delete out.sample; }
+  return out;
+}
+
 // ── The verdict ─────────────────────────────────────────────────────────
 
 /**
@@ -347,7 +397,7 @@ export function signalVerdict(sig: SignalRecord, now: number, override?: Partial
   if (rate != null && rate >= th.rateDegraded) {
     return { ...base, verdict: "degraded", because: "rate", since: oldestInWindow };
   }
-  if (sig.lastGoodAt != null) {
+  if (sig.lastGoodAt != null && sig.lastGoodAt > (sig.clearedAt ?? -Infinity)) {
     return { ...base, verdict: "healthy", because: "confirmed", since: sig.lastGoodAt };
   }
   // Seen only failing, but not often enough to call it. Not healthy — nothing
@@ -399,6 +449,9 @@ export function healthSentence(sig: SignalRecord, now: number): string {
     case "confirmed":
       return `${spec.name} is working — ${lastGood}.`;
     case "no-observations":
+      if (sig.clearedAt != null) {
+        return `${spec.name}: you cleared its misses up to ${agoText(now - sig.clearedAt)} ago, and it has not been seen working since — unknown until the next check.`;
+      }
       return sig.priorVersion
         ? `${spec.name} has not been checked since claude ${sig.version ?? "?"} — its history was cleared when the CLI changed from ${sig.priorVersion}.`
         : `${spec.name} has not been checked yet.`;

@@ -1,6 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
 import { ArrowDownToLine, type LucideIcon } from "lucide-react";
-import { isStowed, stow, stowVersion, subscribeStow, trayAdd, trayEntries, unstow } from "./stow";
+import { coveringKey, sharesFact, stow, stowVersion, subscribeStow, trayAdd, trayEntries, unstow } from "./stow";
 import { track } from "./usage";
 
 /**
@@ -14,8 +14,9 @@ import { track } from "./usage";
  * screen anyway, so a folded strip costs no height of its own.
  *
  * `stowKey` is the strip's CONTENT: what it shows that a person would want to
- * read again if it changed. Folding holds for that key only, so new content
- * comes back up unasked.
+ * read again if it changed, one fact per line. Folding holds while no fact is
+ * new, so new content comes back up unasked — and stays up: the fold it broke
+ * is dropped, never re-applied when the old content returns.
  */
 const FoldCtx = createContext<(() => void) | null>(null);
 
@@ -29,12 +30,22 @@ export function Stowable({ slot, stowKey, label, detail, icon, children }: {
   children: ReactNode;
 }) {
   useSyncExternalStore(subscribeStow, stowVersion);
-  const folded = isStowed(slot, stowKey);
+  const foldedAs = coveringKey(slot, stowKey);
+  const folded = foldedAs != null;
   const fold = useCallback(() => { track(`action:stow.${slot}`); stow(slot, stowKey); }, [slot, stowKey]);
+  const heldBy = useRef<string | null>(null);
   useEffect(() => {
-    if (!folded) return;
-    return trayAdd({ slot, label, detail, icon, unfold: () => { track(`action:unstow.${slot}`); unstow(slot, stowKey); } });
-  }, [folded, slot, stowKey, label, detail, icon]);
+    if (foldedAs != null) { heldBy.current = foldedAs; return; }
+    // Dropped only when the news grew out of what was folded (a fact shared):
+    // another session's strip at the same spot is not that fold's business.
+    const held = heldBy.current;
+    heldBy.current = null;
+    if (held != null && sharesFact(held, stowKey)) unstow(slot, held);
+  }, [slot, foldedAs, stowKey]);
+  useEffect(() => {
+    if (foldedAs == null) return;
+    return trayAdd({ slot, label, detail, icon, unfold: () => { track(`action:unstow.${slot}`); unstow(slot, foldedAs); } });
+  }, [foldedAs, slot, label, detail, icon]);
   if (folded) return null;
   return <FoldCtx.Provider value={fold}>{children}</FoldCtx.Provider>;
 }

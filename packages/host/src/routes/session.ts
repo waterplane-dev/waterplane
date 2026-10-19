@@ -17,6 +17,11 @@ import { withoutBacklogMark } from "../backlog.js";
 import { localStartNotice } from "../localslot.js";
 import type { InputVerdict, Route, RouteSpec, RouteTable } from "./types.js";
 
+/** Replaced session id → the session that replaced it, for this process's
+ *  life. In memory on purpose: the duplicate it stops arrives seconds after the
+ *  first, and a restart in between reattaches the replacement anyway. */
+const replacedBy = new Map<string, string>();
+
 const onSessionList: Route<"session.list"> = (a) => {
     a.c.send(a.ws, { t: "session.list", sessions: a.c.sessions.list() });
 };
@@ -87,6 +92,16 @@ const onSessionCreate: RouteSpec<"session.create"> = {
       // ordinary case (the upload won the race) and it must stay instant. Nor
       // is a create with no PROMPT — the store keeps words, and a create that
       // has none has nothing that can fail to find its files.
+      // A replace whose target this process has ALREADY replaced is a second
+      // tap, not a second relaunch: two restart taps each mint their own ackId,
+      // so the ledger cannot catch them, and the kill below is a no-op for the
+      // second — which then opened a SECOND claude on the same conversation in
+      // the same worktree. Answer with the replacement that exists instead.
+      const already = a.msg.replaceSessionId ? replacedBy.get(a.msg.replaceSessionId) : undefined;
+      if (already && a.c.sessions.get(already)) {
+        a.c.send(a.ws, { t: "toast", text: "already restarted — this is the restarted session" });
+        return { ok: true, sessionId: already };
+      }
       const needs = (a.msg.needs ?? []).filter((p) => safeRel(p));
       const absent = needs.filter((p) => !existsSync(join(cwd, p)));
       const first = a.msg.prompt?.trim();
@@ -203,7 +218,10 @@ const onSessionCreate: RouteSpec<"session.create"> = {
         // third id. `"fork"` on the wire names the user's verb, not the flag.
         resumeMode: serverFork ? "fork" : a.msg.forkAtTurn ? "continue" : a.msg.resumeMode,
         resumeSessionId, ...(serverFork ? { forkAtTurn: a.msg.forkAtTurn } : {}), launch: a.msg.launch, budget });
-      if (a.msg.replaceSessionId) a.c.sessions.repointCompanions(a.msg.replaceSessionId, info.id);
+      if (a.msg.replaceSessionId) {
+        a.c.sessions.repointCompanions(a.msg.replaceSessionId, info.id);
+        replacedBy.set(a.msg.replaceSessionId, info.id);
+      }
       // A person's own start past the local-model cap is TOLD, never refused
       // (`localslot.ts`): "another local-model session is working — …".
       const localOver = localStartNotice(a.msg.launch, { sessionId: info.id });

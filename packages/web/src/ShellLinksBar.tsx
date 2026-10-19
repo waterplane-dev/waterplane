@@ -38,9 +38,9 @@ export function ShellLinksBar({ links, awaitingCode, onOpen, onCopy, onCopyCode,
   const [typeBy, setTypeBy] = useState<string | null>(null);
   const rows = orderLinks(links);
   const title = rows.length > 1 ? "links from the shell" : "link from the shell";
-  // Folded for exactly these links and codes: a new one, or the shell starting
-  // to wait for a code, is something to read and comes back up by itself.
-  const stowKey = [awaitingCode ? "await" : "", ...rows.map((l) => `${l.url} ${l.code ?? ""}`)].join("\n");
+  // One fact per line: a link, a code, the shell waiting for one. A new fact
+  // comes back up by itself; a link the screen re-read or lost is not news.
+  const stowKey = [awaitingCode ? "await" : "", ...rows.flatMap((l) => [l.url, l.code ? `code ${l.code}` : ""])].join("\n");
   const code = rows.find((l) => l.code)?.code;
   return (
     <Stowable slot="shell-links" stowKey={stowKey} label={title} detail={code} icon={Link2}>

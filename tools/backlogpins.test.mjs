@@ -124,7 +124,7 @@ test("P4: every track(\"action:backlog.*\") id and data-hint keeps its count", (
 
 // ── P5: the three keys the sheet keeps, and their spelling ──────────────────
 test("P5: the sheet's localStorage keys are the registry's, spelled as they always were", () => {
-  const storage = readFileSync(join(SRC, "storage.ts"), "utf8");
+  const storage = ["storage.ts", "storage/keysPrefs.ts", "storage/keysWork.ts", "storage/keysView.ts"].map((f) => readFileSync(join(SRC, f), "utf8")).join("\n");
   assert.match(storage, /backlogRepo: lsKey\("backlogRepo"\)/);
   assert.match(storage, /backlogDraft: lsKey\("backlogDraft"\)/);
   assert.match(storage, /backlogShowArchived: lsKey\("backlogShowArchived"\)/);

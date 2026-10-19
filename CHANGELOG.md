@@ -3,6 +3,38 @@
 Notable changes. This project has no release branches — `main` is the supported
 version — so entries are grouped by the release they shipped in.
 
+## 0.1.2
+
+### New
+
+- **Edit or cancel a waiting prompt from the next-prompt strip.** A pencil opens
+  the prompt composer over the row's full words; cancel puts the words back on
+  the pad, so nothing typed is lost.
+- **Clear the health board's warnings you have read.** A two-tap "clear N
+  warnings" hides what you saw; the next new miss brings its row back.
+
+### Fixes
+
+- **Switching a session's model or effort no longer changes the defaults for
+  new sessions.** The model wheel, the model sheet and a relaunch only change
+  the session they act on; defaults are set in Settings. A launch with no model
+  set now starts on the account's default, not on whatever the CLI's own
+  `/model` last saved.
+- **One tap on the CLI-restart banner is one relaunch.** A double tap no longer
+  opens a second `claude` on the same conversation, a relaunch keeps the
+  session's own model, effort and mode, and the phone says when the desktop
+  restarts.
+- **Pasting a screenshot that is already open for marking no longer uploads it
+  twice.**
+- **A shell's link card stays folded** instead of flipping open and shut.
+- **The installer explains a missing `claude`.** It prints the install command,
+  says what `claude` needs (a paid plan, an API key, or a local Ollama model),
+  and offers to continue without it; a local-only setup is no longer reported
+  as broken.
+- **The npm package can be built on Linux.** The release build used a
+  macOS-only `tar` option, so 0.1.1 never reached npm; 0.1.2 is the first
+  version published there, by this repository's CI with provenance.
+
 ## 0.1.1
 
 ### Fixes

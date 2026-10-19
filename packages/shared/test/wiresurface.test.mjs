@@ -110,6 +110,7 @@ const CLIENT_T = [
   "capture.list",
   "capture.run",
   "capture.save",
+  "clihealth.clear",
   "clihealth.get",
   "closed.clear",
   "decisions.archive",
@@ -238,6 +239,7 @@ const HOST_T = [
   "fanout.list",
   "fanout.run",
   "halt.state",
+  "host.restarting",
   "input.ack",
   "input.settled",
   "install.log",
@@ -331,11 +333,11 @@ test("wire/messages.ts exports exactly its pinned surface, values and types alik
 test("ClientMessage carries exactly the pinned message types", () => {
   const { tags: got, members } = tags("ClientMessage");
   assert.deepEqual(got, [...CLIENT_T].sort());
-  assert.equal(members, 141, "a member was added or merged");
+  assert.equal(members, 142, "a member was added or merged");
 });
 
 test("HostMessage carries exactly the pinned message types", () => {
   const { tags: got, members } = tags("HostMessage");
   assert.deepEqual(got, [...HOST_T].sort());
-  assert.equal(members, 79, "a member was added or merged");
+  assert.equal(members, 80, "a member was added or merged");
 });

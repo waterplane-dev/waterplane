@@ -72,7 +72,7 @@ const SURFACES = {
     "RATE_WINDOW:value", "SAMPLE_CAP:value", "SIGNAL_FORGET_MS:value",
     "SampleMode:type", "SignalRecord:type", "VIA_CAP:value",
     "agoText:value", "blankSignal:value", "captureSample:value",
-    "cleanHealth:value", "emptyHealth:value", "healthRollup:value",
+    "cleanHealth:value", "clearSeen:value", "emptyHealth:value", "healthRollup:value",
     "healthSentence:value", "noteCliVersion:value", "observe:value",
     "rearmForVersion:value", "redactSample:value", "shapeOf:value",
     "signalSpec:value", "signalVerdict:value", "supersededByGood:value",

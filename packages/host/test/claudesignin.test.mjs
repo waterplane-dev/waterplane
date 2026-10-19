@@ -4,7 +4,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-const { classifyClaudeAuth, CLAUDE_SIGN_IN_FIX } = await import("../dist/doctor.js");
+const { classifyClaudeAuth, CLAUDE_SIGN_IN_FIX, signedOutStatus } = await import("../dist/doctor.js");
 const { handleOnboardRoutes } = await import("../dist/onboardroutes.js");
 
 test("auth status: signed in, signed out, and unreadable are three answers, never a guess", () => {
@@ -14,6 +14,15 @@ test("auth status: signed in, signed out, and unreadable are three answers, neve
   assert.equal(classifyClaudeAuth("Logged in as someone"), "in");
   assert.equal(classifyClaudeAuth("error: unknown command 'auth'"), null);
   assert.equal(classifyClaudeAuth(""), null);
+});
+
+test("signed out fails only when nothing says this desktop runs claude without an account", () => {
+  assert.equal(signedOutStatus([], ""), "fail");
+  assert.equal(signedOutStatus(["claude"], ""), "fail");
+  assert.equal(signedOutStatus(["claude", "claude-local"], ""), "warn", "a local session needs no login");
+  assert.equal(signedOutStatus(["claude-endpoint"], ""), "warn");
+  assert.equal(signedOutStatus([], "https://ollama.com"), "warn", "an endpoint configured");
+  assert.equal(signedOutStatus([], "  "), "fail");
 });
 
 test("the sign-in fix is the phone's route first, not a terminal", () => {

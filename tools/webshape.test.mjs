@@ -26,10 +26,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { warnLongFiles } from "./longfiles.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const SRC = join(ROOT, "packages", "web", "src");
 const FEATURES = join(SRC, "features");
+
+// Early warning (never fails): web files past 800 lines, under whatever cap applies.
+warnLongFiles("web", SRC);
 
 /**
  * The most lines `App.tsx` may have. **Lower it when you move code out**, in
@@ -358,6 +362,7 @@ const FEATURE_FILE_NAMES = [
   /^index\.ts$/,          // manifest + public API only, no logic
   /^store\.ts$/,          // createStore stores only, and their read hooks
   /^actions\.ts$/,        // functions that write stores / send frames
+  /^[a-z][A-Za-z0-9]*Actions\.ts$/, // a slice of actions.ts, re-exported by it (actions.ts stays the import point)
   /^logic\.ts$/,          // pure
   /^README\.md$/,
   /^[A-Z][A-Za-z0-9]*Sheet\.tsx$/, // the sheet component
@@ -376,7 +381,7 @@ test("every file in a feature folder has a prescribed name", () => {
   assert.deepEqual(
     bad, [],
     `A feature folder holds: index.ts (manifest + public API), store.ts (stores),\n` +
-    `actions.ts (writes stores / sends frames), logic.ts (pure) + logic.test.mjs,\n` +
+    `actions.ts (writes stores / sends frames; <name>Actions.ts slices re-exported by it), logic.ts (pure) + logic.test.mjs,\n` +
     `<Name>Sheet.tsx, other <Name>.tsx components, README.md. Rename the file to\n` +
     `the role it plays (docs/notes/web-architecture.md, "The feature layout").`,
   );
@@ -817,6 +822,7 @@ const PULLLINK_FACADES = {
   "link.ts": 70,
 };
 const PULLLINK_SPLIT_FILES = {
+  "link/hostRestart.ts": 130, // "the desktop is restarting": the three edges and the strip's words
   "link/linkBus.ts": 50,
   "link/linkDoc.ts": 135,
   "link/linkLog.ts": 190,

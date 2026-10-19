@@ -4,81 +4,28 @@
  * sweep entries and the "new N" strip. The upload BUFFER is not here — the
  * bytes are the send path, so it is the queue's (`core().queue.uploads`).
  */
-import type { BacklogItem, NewImage, RepoTarget, SweepScope } from "@waterplane/shared";
-import { repoBranchLabel } from "@waterplane/shared";
-import type { Overlay } from "../../routing";
+import type { BacklogItem, RepoTarget } from "@waterplane/shared";
 import type { AnnDispatch, AnnSend, AnnSource } from "../../ImageAnnotator";
 import type { AttachOpenDetail } from "../../attachments";
-import { ATTACH_OPEN_EVENT, localPreview } from "../../attachments";
+import { ATTACH_OPEN_EVENT } from "../../attachments";
 import { api, copyText } from "../../api";
-import { startDownload } from "../../download";
-import { ensureMtime, knownMtime } from "../../fileMtime";
-import { isAnnotatable, sized, viewerWidth } from "../../media";
+import { isAnnotatable } from "../../media";
 import { effectiveMaxWidth, scaleForUpload } from "../../uploadScale";
 import { LS, lsSetJson } from "../../storage";
 import { SEND_DRAFT } from "../../sendIntent";
-import { tabLabel } from "../../sessionTabs";
 import type { SwipeItem } from "../../ImageSwiper";
-import { core, type CoreApi } from "../../sdk";
+import { core } from "../../sdk";
 import {
-  ann, browseAim, browseRepoId, collage, flow, galleryCtx, minimizedNewImg, newImages, sweepFor, swipe,
+  ann, collage, flow, newImages, swipe,
 } from "./store";
 import {
-  annReturnOverlay, dropStrip, findInStrips, newFilesToast, viewableStrip, galleryCtxForFile, isVideoPath, isViewable, markedRef, mergeNewImages, ocrBlock, outboxCut,
-  parkLane, swapImageRef, trimNewImages, type GalleryCtx, type NewImg, type SwipeState,
+  annReturnOverlay, markedRef, ocrBlock, pasteRepeatsHeld,
+  parkLane, swapImageRef, trimNewImages, type NewImg,
 } from "./logic";
+import { goTo, insertPath } from "./navActions";
+import { setSwipe, closeSwipe, referenceNewImage, onAttachOpen } from "./viewerActions";
 
 
-
-/** Show `o`, or close whatever is on top when `o` is null (App's `setOverlay(o)`). */
-function goTo(o: Overlay): void {
-  const nav = core().nav;
-  if (o) nav.open(o);
-  else if (nav.overlay) nav.close(nav.overlay);
-}
-
-// ── Seeding (App, once) ──────────────────────────────────────────────
-
-/** One ad-hoc viewer row for a repo-relative file. */
-function swipeRow(repoId: string, relPath: string): SwipeItem {
-  const url = api.artifactUrl(repoId, relPath);
-  const video = isVideoPath(relPath);
-  // Versioned when this device has seen the file's mtime (fileMtime.ts) — the
-  // viewer opened from a tapped mention would otherwise be the one screen whose
-  // picture no cache is allowed to keep. `ensureMtime` learns it for next time.
-  ensureMtime(repoId, relPath);
-  const mtime = knownMtime(repoId, relPath);
-  return { name: relPath.split("/").pop() || relPath, relPath, url: video ? url : sized(url, viewerWidth(), mtime), fullUrl: url, video, repoId };
-}
-
-/**
- * The cold-start route: a notification tap that encoded a picture (→ the
- * viewer) or a file the viewer renders (→ the gallery, straight on it). App
- * calls this with its first `parseHash()`, before the first render reads
- * a sheet. The strip is persisted, so a cold start can still open the picture
- * at its place in that session's batch and swipe the rest. Once per page:
- * App calls it in render, and every render after the first is a no-op.
- */
-let seeded = false;
-export function seedFromRoute(r: { image?: { repoId: string; relPath: string }; file?: { repoId: string; relPath: string; name?: string; mtime?: number } }, fileViewable: boolean): void {
-  if (seeded) return;
-  seeded = true;
-  if (r.image) {
-    const hit = findInStrips(newImages.get(), r.image);
-    swipe.set(hit ?? { items: [swipeRow(r.image.repoId, r.image.relPath)], repoId: r.image.repoId, i: 0 });
-  }
-  if (r.file && fileViewable) galleryCtx.set(galleryCtxForFile(r.file));
-}
-
-/** The viewer's state, with the object URL it drew from released the moment it
- *  lets go of it — on close, on a swap to another file, alike. Keyed on the
- *  URL so no exit from the viewer can be the one that leaks. */
-export function setSwipe(next: SwipeState | null | ((cur: SwipeState | null) => SwipeState | null)): void {
-  const prev = swipe.get()?.revoke;
-  swipe.set(next);
-  const now = swipe.get()?.revoke;
-  if (prev && prev !== now) URL.revokeObjectURL(prev);
-}
 
 // ── Pickers ──────────────────────────────────────────────────────────
 
@@ -448,6 +395,21 @@ function annotateNewImage(im: NewImg): void {
 export function annotatorBusy(): boolean {
   return core().nav.overlay === "image" && ann.get() != null;
 }
+/** Whether `files` are all pictures the annotator already holds (the one on
+ *  screen or later in its batch) — `pasteRepeatsHeld` over the bytes. Sizes
+ *  first, so a different picture never reads its bytes. */
+export async function alreadyMarking(files: File[]): Promise<boolean> {
+  const a = ann.get();
+  if (!a || !files.length) return false;
+  const held = [a.source, ...(a.rest ?? [])].filter((s): s is File => s instanceof File);
+  const sizes = new Set(held.map((f) => f.size));
+  if (!files.every((f) => sizes.has(f.size))) return false;
+  const bytes = (f: File) => f.arrayBuffer().then((b) => new Uint8Array(b));
+  try {
+    const [p, h] = await Promise.all([Promise.all(files.map(bytes)), Promise.all(held.filter((f) => files.some((x) => x.size === f.size)).map(bytes))]);
+    return pasteRepeatsHeld(p, h);
+  } catch { return false; }
+}
 /** A paste or drop while marking, answered yes: pictures join the batch after the current one, the rest upload. */
 export function appendToBatch(files: File[]): void {
   const a = ann.get();
@@ -549,89 +511,6 @@ export function backlogEditImage(it: BacklogItem, relPath: string): void {
   annotateUrl(api.artifactUrl(id, relPath), relPath.split("/").pop() || "image", id);
 }
 
-// ── The viewer ───────────────────────────────────────────────────────
-
-/** Open an agent-produced image FULL-SCREEN (notification tap, cold-tap route,
- *  service-worker message). Viewing is what a "new screenshot" tap means; the
- *  viewer's `mark` button opens the annotator (and its send puts the marked copy
- *  back in `.claude/inbox`), so the previous straight-to-annotator jump only
- *  ever cost a step. When the file is part of a session's new-image batch, the
- *  whole batch is swipeable from it. */
-export function viewImage(im: { repoId: string; relPath: string }, sessionId?: string): void {
-  const hit = findInStrips(newImages.get(), im, sessionId);
-  ann.set(null);
-  setSwipe(hit ?? { items: [swipeRow(im.repoId, im.relPath)], repoId: im.repoId, i: 0 });
-  core().nav.open("swipe");
-}
-/** Tap on a row's new-image COUNT: the same full-screen batch, from the first
- *  one. The launcher row has no thumbs to aim at — the badge is the only thing
- *  there that says the pictures exist, so it has to be the way into them. */
-export function openNewImages(sessionId: string): void {
-  core().say.track("action:newimg.open");
-  setSwipe({ sessionId, i: 0 });
-  core().nav.open("swipe");
-}
-/** Tap on a strip thumb: open the session's new images full-screen, starting at
- *  this one, so the batch can be swiped through instead of open-close-open. */
-export function browseNewImages(sessionId: string, im: NewImg): void {
-  core().say.track("action:newimg.open");
-  const items = viewableStrip(newImages.get().get(sessionId) ?? []);
-  setSwipe({ sessionId, i: Math.max(0, items.findIndex((x) => x.relPath === im.relPath)) });
-  core().nav.open("swipe");
-}
-/** Tap on an `.claude/inbox` / `.claude/outbox` path mentioned in the reader
- *  view, or on a file a queued prompt names. Images (and videos) open in the
- *  full-screen viewer; everything else opens in the GALLERY's document viewer
- *  (`openArtifact`'s surface) — markdown rendered, text shown, and a download
- *  one tap away inside it for what has no preview. It used to download
- *  straight away, so tapping `.claude/outbox/plan.md` in a reply saved a file
- *  instead of showing it; before that it opened a tab, which in the Android
- *  shell opens nothing at all. `back` is the screen to return to when the
- *  viewer closes: the reader is not an overlay and passes none, a sheet passes
- *  its own, or the tap would close the sheet the file was tapped in. */
-export function openFileRef(repoId: string, relPath: string, back?: Overlay): void {
-  core().say.track("action:read.fileref");
-  if (isViewable(relPath)) {
-    setSwipe({ items: [swipeRow(repoId, relPath)], repoId, i: 0, back });
-    core().nav.open("swipe");
-    return;
-  }
-  // Not `openArtifact`: that counts a notification tap when handed no return.
-  galleryCtx.set(galleryCtxForFile({ repoId, relPath }, back));
-  core().nav.open("gallery");
-}
-
-/**
- * A file a queued prompt names, opened from wherever that prompt is shown
- * (`AttachStrip` → `requestAttachOpen`).
- *
- * Two copies can answer and they are not interchangeable. On the host it is the
- * ordinary viewer — screen-sized, full-res behind a tap, annotatable. Off it,
- * the only bytes that exist are this phone's own (a queued upload, or one kept
- * after the upload died), and those are precisely the pictures with no other
- * route to them: not in the gallery, not at any URL, gone the moment the ledger
- * drops them. So they open too, from a blob this state owns.
- */
-function onAttachOpen(d: AttachOpenDetail): void {
-  const back = core().nav.overlay;
-  if (d.state === "host" && d.repoId) { openFileRef(d.repoId, d.relPath, back); return; }
-  void localPreview(d.relPath, d.state, [...core().queue.entries]).then((url) => {
-    if (!url) { core().say.toast("no copy of this file on this phone"); return; }
-    core().say.track("action:attach.openlocal");
-    setSwipe({
-      items: [{ name: d.relPath.split("/").pop() || d.relPath, relPath: d.relPath, url, repoId: d.repoId ?? undefined }],
-      repoId: d.repoId ?? undefined, i: 0, back, revoke: url,
-    });
-    core().nav.open("swipe");
-  });
-}
-
-/** The viewer's close: back to the screen it was opened from. */
-export function closeSwipe(): void {
-  const back = swipe.get()?.back ?? null;
-  goTo(back);
-  setSwipe(null);
-}
 /** The viewer's `mark`. A session strip's picture annotates the original from
  *  its strip row; an ad-hoc one its full-res URL. */
 export function markFromSwipe(row: SwipeItem, strip: readonly NewImg[]): void {
@@ -654,228 +533,14 @@ export function refFromSwipe(row: SwipeItem, strip: readonly NewImg[]): void {
   closeSwipe();
 }
 
-/** A path into the compose box + the clipboard, said. */
-function insertPath(p: string): void {
-  core().compose.insert(p); void copyText(p); core().say.toast(`path copied: ${p}`);
-}
-
-// ── The "new N" strip ────────────────────────────────────────────────
-
-/** `session.images`: the files this turn produced join the session's strip,
- *  which unfolds if it was minimized — they are news. */
-export function onSessionImages(sessionId: string, repoId: string, images: readonly NewImage[]): void {
-  newImages.set((prev) => mergeNewImages(prev, sessionId, repoId, images));
-  restoreNewImages(sessionId);
-  core().say.toast(newFilesToast(images));
-}
-/** Reference a new image by path in the compose box without annotating. */
-export function referenceNewImage(im: NewImg): void {
-  core().say.track("action:newimg.ref");
-  insertPath(im.relPath);
-}
-export function dismissNewImages(sessionId: string): void {
-  newImages.set((prev) => dropStrip(prev, sessionId));
-  restoreNewImages(sessionId);
-}
-/** Fold the strip down to its "new N" pill without losing the images —
- *  unlike `dismissNewImages`, which deletes them. */
-export function minimizeNewImages(sessionId: string): void {
-  minimizedNewImg.set((prev) => (prev.has(sessionId) ? prev : new Set(prev).add(sessionId)));
-}
-export function restoreNewImages(sessionId: string): void {
-  minimizedNewImg.set((prev) => { if (!prev.has(sessionId)) return prev; const n = new Set(prev); n.delete(sessionId); return n; });
-}
-
-// ── Gallery, file tree, sweep ────────────────────────────────────────
-
-/** Open the gallery scoped to a repo (inbox/images count tap). */
-export function openGalleryFor(repoId: string, scope?: GalleryCtx["scope"], allTime?: boolean, newCut?: { since: number; count: number }): void {
-  galleryCtx.set({ repoId, scope, allTime, newCut });
-  core().nav.open("gallery");
-}
-/** Open the outbox from an unread count. The count is "since you last looked",
- *  so the tab's 4h default has to come off — otherwise the badge says 42 and
- *  the grid says nothing here. Carry the EDGE, not just the window: the grid
- *  opens on exactly the files the badge counted, says so, and offers "show
- *  everything". */
-export function openOutboxFor(repoId: string): void {
-  openGalleryFor(repoId, "outbox", true, outboxCut(core().world.repos.find((x) => x.id === repoId)));
-}
-/** Reference a file the repo ALREADY has, from the Send sheet. The gallery takes
- *  the overlay, `returnTo` brings the sheet back and `insertInto` puts the path
- *  into its draft — the same round trip the annotator makes, and a round trip
- *  rather than the clipboard because a plain `http://100.x` origin has none. */
-export function openGalleryForSend(repo: RepoTarget): void {
-  galleryCtx.set({ repoId: repo.id, scope: "outbox", allTime: true, returnTo: "send", insertInto: "send" });
-  core().nav.open("gallery");
-}
-
-/** Show an artifact in the gallery's viewer — the ONE thing in this app that
- *  renders a file, so there is no second markdown/PDF/image surface to keep in
- *  step with it. The download stays one tap away INSIDE the viewer. `returnTo`
- *  defaults to the notification feed when that is where the tap came from. */
-export function openArtifact(f: { repoId: string; relPath: string; name?: string; size?: number; mtime?: number }, returnTo?: Overlay): void {
-  // A caller naming its own return (the assessment's plan link) is not a
-  // notification tap, and App's inlined copy of it counted nothing.
-  if (returnTo === undefined) core().say.track("notif:open-file");
-  const back = returnTo ?? (core().nav.overlay === "notifications" ? "notifications" : undefined);
-  galleryCtx.set(galleryCtxForFile(f, back));
-  core().nav.open("gallery");
-}
-/**
- * Fetch a repo artifact to this device — through the ONE download path
- * (`download.ts`): the resumable queue, the Downloads sheet, and the device
- * hand-off that says where the file landed. Never a hidden `<a download>`,
- * which was nothing whatsoever in the APK.
- */
-export function downloadArtifact(f: { repoId: string; relPath: string; name: string; size?: number; mtime?: number; src?: string }): void {
-  startDownload(f);
-}
-
-export function closeGallery(): void {
-  const back = galleryCtx.get()?.returnTo ?? null;
-  galleryCtx.set(null);
-  goTo(back);
-  core().world.refreshRepos(); // inbox marked seen on open → refresh the unread badge
-}
-/** The gallery's and the tree's *insert path*: into whichever surface asked for
- *  it. The close fires right after and carries the overlay back (`returnTo`),
- *  so the sheet remounts and re-reads the draft with the path already in it. */
-export function insertFromGallery(pth: string): void {
-  if (galleryCtx.get()?.insertInto === "send") {
-    core().compose.appendSheetDraft(SEND_DRAFT, pth);
-    core().say.toast("added to the prompt");
-    return;
-  }
-  insertPath(pth);
-}
-/** The live sessions a gallery file can be sent to: the ones in its repo, the
- *  session on screen first. The viewer lists them by name and the person picks —
- *  "the first running one in this repo" was a session nobody chose. */
-export function liveSessionsIn(repoId: string): { id: string; label: string; onScreen: boolean }[] {
-  const c = core();
-  const repo = c.world.repos.find((r) => r.id === repoId);
-  if (!repo) return [];
-  const activeId = c.world.active?.id;
-  return c.world.sessions
-    .filter((s) => s.cwd === repo.worktreePath && s.running)
-    .sort((a, b) => Number(b.id === activeId) - Number(a.id === activeId))
-    .map((s) => ({ id: s.id, label: tabLabel(s, repo.repoName), onScreen: s.id === activeId }));
-}
-/** From the gallery viewer: pull a file into a coding session as context —
- *  the live session the person picked, or (`sessionId` null) a new one in the
- *  file's repo — with the path in that screen's compose box. */
-export function continueImageInSession(relPath: string, repoId: string, sessionId: string | null): void {
-  const c = core();
-  const repo = c.world.repos.find((r) => r.id === repoId);
-  if (!repo) { c.say.toast("unknown repo"); return; }
-  const existing = sessionId ? c.world.sessions.find((s) => s.id === sessionId && s.running) : undefined;
-  if (sessionId && !existing) { c.say.toast("that session has ended — pick another, or start a new one"); return; }
-  galleryCtx.set(null);
-  goTo(null);
-  void copyText(relPath);
-  // Seeded into the draft of the screen being OPENED (`compose.seedDraft`),
-  // never `insert` — that types into the box being left, and the incoming
-  // screen's own draft then replaced it: the path was lost while the toast
-  // named it. An APPEND either way (`local/no-draft-clobber`).
-  if (existing) {
-    c.nav.attach(existing);
-    c.compose.seedDraft(existing.id, relPath);
-    c.say.toast(`opened session · ${relPath}`);
-  } else {
-    const sid = c.launch.openCwd(repo.worktreePath, repoBranchLabel(repo));
-    // null: the tap waits on the launch question, and no screen was opened
-    // yet — the box on screen is still the one to add to.
-    if (sid) c.compose.seedDraft(sid, relPath); else c.compose.insert(relPath);
-    c.say.toast(`new session · ${relPath}`);
-  }
-}
-
-/**
- * Remarks on a file (`FileReview.tsx`) into the chat of the repo the file is
- * in: the session on screen if it is that repo's, else a live one there, else
- * a new one picking up its last conversation. Seeded into
- * the draft of the screen being opened (APPENDED, never sent): the person
- * reads the remarks over in the box and sends them like any prompt, which is
- * where *now* or *when it's free* is decided.
- */
-export function remarksToChat(repoId: string, text: string): boolean {
-  const c = core();
-  const repo = c.world.repos.find((r) => r.id === repoId);
-  if (!repo) { c.say.toast("unknown repo — the remarks are kept on the file"); return false; }
-  browseRepoId.set(null); browseAim.set(null);
-  goTo(null);
-  void copyText(text);
-  const here = [c.world.active, ...c.world.sessions].find((s) => s && s.cwd === repo.worktreePath && s.running);
-  if (here) {
-    if (here.id !== c.world.active?.id) c.nav.attach(here);
-    c.compose.seedDraft(here.id, text);
-    c.say.toast("remarks are in the prompt — read them over, then send");
-    return true;
-  }
-  const sid = c.launch.openCwd(repo.worktreePath, repoBranchLabel(repo), true);
-  if (sid) c.compose.seedDraft(sid, text); else c.compose.insert(text);
-  c.say.toast("new session · remarks are in the prompt");
-  return true;
-}
-
-/** Clear out a transport directory; `back` is the screen the sweep closes to. */
-export function openSweep(repoId: string, scope: SweepScope, back: Overlay): void {
-  core().say.track("overlay:sweep");
-  sweepFor.set({ repoId, scope, back });
-  core().nav.open("sweep");
-}
-/** The gallery's sweep: only where there IS one transport directory to clear. */
-export function sweepFromGallery(scope: SweepScope): void {
-  const id = galleryCtx.get()?.repoId ?? core().world.activeRepo?.id;
-  if (id) openSweep(id, scope, "gallery");
-}
-export function setSweepScope(scope: SweepScope): void {
-  sweepFor.set((cur) => (cur ? { ...cur, scope } : cur));
-}
-export function closeSweep(): void {
-  const back = sweepFor.get()?.back ?? null;
-  sweepFor.set(null);
-  goTo(back);
-}
-/** The sweep changed what the badges count, and the gallery underneath is
- *  holding a listing that now names files that are gone. */
-export function afterSweep(): void {
-  core().world.refreshRepos();
-}
-
-/** The file tree for a repo; closing it returns to `back` (the launcher's: none). */
-export function openBrowseFor(repoId: string, back: Overlay = null): void {
-  browseRepoId.set(repoId); if (back) browseAim.set({ file: "", back });
-  core().nav.open("browse");
-}
-/** The file tree, straight on one file; closing returns to `back`. */
-export function openBrowseAt(repoId: string, relPath: string, back: Overlay): void {
-  browseRepoId.set(repoId);
-  browseAim.set({ file: relPath, back });
-  core().nav.open("browse");
-}
-/** The toolbar's `files`: the gallery, on whatever it was last opened for. */
-export function openGalleryHere(): void {
-  core().nav.open("gallery");
-}
-/** A repo-scoped toolbar command; with no repo in context it says so. */
-export function inActiveRepo(run: (repoId: string) => void): (c: CoreApi) => void {
-  return (c) => {
-    const id = c.world.activeRepo?.id;
-    if (id) run(id); else c.say.toast("not a known repo");
-  };
-}
-/** The toolbar's `browse`: the repo in context, never a stale launcher pick. */
-export function openBrowseHere(): void {
-  browseRepoId.set(null);
-  core().nav.open("browse");
-}
-export function closeBrowse(): void {
-  const back = browseAim.get()?.back ?? null;
-  browseRepoId.set(null); browseAim.set(null);
-  goTo(back);
-}
+// The viewer and the strip live in viewerActions.ts.
+export {
+  seedFromRoute, setSwipe, viewImage, openNewImages, browseNewImages, openFileRef, closeSwipe, onSessionImages, referenceNewImage, dismissNewImages, minimizeNewImages, restoreNewImages,
+} from "./viewerActions";
+// The gallery / file tree / sweep writers live in galleryActions.ts; this file stays the one import point.
+export {
+  openGalleryFor, openOutboxFor, openGalleryForSend, openArtifact, downloadArtifact, closeGallery, insertFromGallery, liveSessionsIn, continueImageInSession, remarksToChat, openSweep, sweepFromGallery, setSweepScope, closeSweep, afterSweep, openBrowseFor, openBrowseAt, openGalleryHere, inActiveRepo, openBrowseHere, closeBrowse,
+} from "./galleryActions";
 
 // ── Boot ─────────────────────────────────────────────────────────────
 
@@ -897,4 +562,3 @@ export function bootImages(): () => void {
     if (u) URL.revokeObjectURL(u);
   };
 }
-

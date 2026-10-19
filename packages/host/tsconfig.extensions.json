@@ -5,6 +5,8 @@
     "rootDir": "../extensions",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    // a facade that node type stripping loads as source names its slices `.mts`; emit them as `.mjs`
+    "rewriteRelativeImportExtensions": true,
     "types": ["node"]
   },
   "include": ["../extensions/*/host/**/*.mts", "../extensions/*/shared/**/*.mts"]

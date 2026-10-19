@@ -31,8 +31,18 @@ export type HostCoreMsg =
   // `hostId`/`hostName` (optional, additive): which desktop this is, so a
   // multi-host phone can tell a socket landed on the host it meant; `deviceId`
   // is the paired-device ledger row this socket authenticated as. Absent on
-  // an older host — never inferred.
-  | { t: "welcome"; protocol: number; bootId: string; tailscaleIp: string | null; tailscaleBin: string | null; tailscaleDns: string | null; httpsUrl: string | null; lanIps: string[]; port: number; root: string; tmux: boolean; clientKind: PeerKind; auth: AuthState; hostId?: string; hostName?: string; deviceId?: string }
+  // an older host — never inferred. `startedAt`/`readyAt` (optional): see
+  // `host.restarting` below.
+  | { t: "welcome"; protocol: number; bootId: string; tailscaleIp: string | null; tailscaleBin: string | null; tailscaleDns: string | null; httpsUrl: string | null; lanIps: string[]; port: number; root: string; tmux: boolean; clientKind: PeerKind; auth: AuthState; hostId?: string; hostName?: string; deviceId?: string; startedAt?: number; readyAt?: number }
+  /**
+   * The daemon is going down (SIGTERM/SIGINT — `npm run restart` is one),
+   * broadcast before the flush. Additive: an old phone ignores it. With
+   * `welcome`'s `startedAt` (process start) and `readyAt` (sessions
+   * re-attached, the moment it can answer) the phone can say "the desktop is
+   * restarting", for how long, and when it was back — a restart is otherwise
+   * a few missed pings in a graph that has no time axis.
+   */
+  | { t: "host.restarting"; at: number }
   /** Sent to a gated socket that presented no valid token, right before close. */
   | { t: "authRequired"; enabled: boolean; kind: PeerKind }
   /** Current auth state (after a management change, or on request). */

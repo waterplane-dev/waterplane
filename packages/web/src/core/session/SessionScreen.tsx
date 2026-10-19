@@ -48,7 +48,7 @@ export interface SessionScreenProps {
   conn: TermAreaProps["conn"] & Pick<Connection, "liveSend" | "liveAsk" | "reconnectAsk" | "setReconnectAsk">;
   term: TermAreaProps["term"] & Pick<TermFeed, "refreshTerminal">;
   q: TermAreaProps["q"] & QueueBarsProps["q"] & Pick<QueueApi, "outboxRef" | "holdWall" | "isPendingId" | "sendQueuedNow"
-    | "toggleHoldQueued" | "handToDesktop" | "removeQueued" | "uploads">;
+    | "editQueued" | "toggleHoldQueued" | "handToDesktop" | "removeQueued" | "uploads">;
   compose: ComposeApi;
   launch: TermAreaProps["launch"] & Pick<Launch, "relaunch">;
   chrome: SessionChrome;
@@ -82,7 +82,7 @@ export function SessionScreen(p: SessionScreenProps): ReactNode {
   const { pendingStars, toggleStar, pendingFollowUps, toggleFollowUp, closeSession } = p.verbs;
   const { status, liveSend, liveAsk, reconnectAsk, setReconnectAsk } = conn;
   const outbox = q.entries;
-  const { pendingEntry, outboxRef, holdWall, isPendingId, sendQueuedNow, toggleHoldQueued, handToDesktop, removeQueued } = q;
+  const { pendingEntry, outboxRef, holdWall, isPendingId, sendQueuedNow, editQueued, toggleHoldQueued, handToDesktop, removeQueued } = q;
   const { uploading, parking, upProg, uploadPending, uploadRowLinger, cancelUploads } = q.uploads;
   const { chromeHidden, fullMode } = chrome;
   const activeRepoId = activeRepo?.id ?? null;
@@ -132,7 +132,7 @@ export function SessionScreen(p: SessionScreenProps): ReactNode {
         openOutline={(toolbarCfg.pinned ?? []).includes("outline") ? () => runToolbar("outline") : undefined} />
 
       <NextPromptStrip active={active} outbox={outbox} outboxRef={outboxRef} online={status === "open"} holdWall={holdWall}
-        isPendingId={isPendingId} sendQueuedNow={sendQueuedNow} toggleHoldQueued={toggleHoldQueued} handToDesktop={handToDesktop}
+        isPendingId={isPendingId} sendQueuedNow={sendQueuedNow} editQueued={editQueued} removeQueued={removeQueued} toggleHoldQueued={toggleHoldQueued} handToDesktop={handToDesktop}
         liveSend={liveSend} setOverlay={setOverlay} intents={p.intents} />
 
       <QueueBars q={q} status={status} reconnectAsk={reconnectAsk} setReconnectAsk={setReconnectAsk}

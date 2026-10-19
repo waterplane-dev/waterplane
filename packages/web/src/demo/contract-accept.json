@@ -1,6 +1,7 @@
 {
   "//": "What the demo deliberately does not do, one line of reason each. Read by contract.test.mjs: a host->client message type the demo never builds, or an /api route the phone calls that the demo answers with its fall-through 404, must be listed here. An entry the demo now handles, or that no longer exists, fails as stale.",
   "messages": {
+    "host.restarting": "not reachable in demo: the demo host lives in the page and never restarts, so there is no SIGTERM to announce",
     "billing.status": "not reachable in demo: a demo host has no billing profile to probe, so the phone reads its absence as unknown (billing.get is answered with nothing)",
     "authRequired": "not reachable in demo: there is no password gate, so no socket is ever refused for a missing token",
     "build.options": "not reachable in demo: builds are tier B (refused); build.list answers with no builds to take options for",

@@ -7,7 +7,7 @@ description: waterplane phone client — a repo's waiting work and the sheets ac
 
 The sheets a person grooms, fires and reviews a repo's work from: the backlog and its cuts, builds, schedules and the clock directory, activity, repo readings, assessments, fan-out and git. Router: `web`. Reasoning, and the long form of each bullet that says so: [web.md](../../../docs/notes/web.md) (*Moved out of skill `web-work`*). Where the code lives now: [backlog-architecture.md](../../../docs/notes/backlog-architecture.md), [activity-architecture.md](../../../docs/notes/activity-architecture.md), [assess-architecture.md](../../../docs/notes/assess-architecture.md).
 
-- `BuildSheet.tsx` + `buildPrompt.ts` — build buttons for one repo, and **three** answers to an empty field:
+- `BuildSheet.tsx` + `BuildEditor.tsx` + `BuildRunAsk.tsx` + `BuildArtifacts.tsx` + `buildPrompt.ts` — build buttons for one repo, and **three** answers to an empty field:
   `set up` spends an agent turn on the whole repo; the EDITOR's suggest list is free (`build.scan` →
   shared `buildscan.ts`) — a rate-limited Claude is why you are here; the EDITOR's **`work it out`**
   (`buildPrompt.ts`, pinned) is ONE agent turn on ONE entry, **the brief is asked for ON THE PHONE

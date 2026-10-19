@@ -52,7 +52,7 @@ const local = src("localState.ts");
 // owns it — a check that kept grepping the sheet would go green the moment a
 // property moved, which is the opposite of what this script is for.
 const cuts = src("clockCuts.ts");
-const storage = src("storage.ts");
+const storage = ["storage.ts", "storage/keysPrefs.ts", "storage/keysWork.ts", "storage/keysView.ts"].map(src).join("\n");
 
 // ── The keys exist, and only in the registry ────────────────────────
 check(/snapBuilds:\s*lsKey\("snap\.builds"\)/.test(storage) && /snapSchedules:\s*lsKey\("snap\.schedules"\)/.test(storage),

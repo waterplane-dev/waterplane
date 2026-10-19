@@ -38,9 +38,9 @@ const LEGACY_BLOB = `{"hooks":{"SessionStart":${HOOK_ENTRY},"UserPromptSubmit":$
 test("no rules ⇒ the argv and settings blob are exactly what they were before ask rules", () => {
   for (const askRules of [undefined, []]) {
     const { args, sessionId } = plan({ askRules });
-    assert.deepEqual(args.slice(0, 4), ["--session-id", sessionId, "--settings", LEGACY_BLOB]);
-    assert.equal(args[4], "--plugin-dir");
-    assert.equal(args.length, 6, "nothing else was added to the argv");
+    assert.deepEqual(args.slice(0, 6), ["--session-id", sessionId, "--model", "default", "--settings", LEGACY_BLOB]);
+    assert.equal(args[6], "--plugin-dir");
+    assert.equal(args.length, 8, "nothing else was added to the argv");
   }
   assert.equal(hookSettingsArg(PORT), LEGACY_BLOB);
 });

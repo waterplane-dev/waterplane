@@ -74,7 +74,7 @@ Fork freely; to keep pulling upstream, customise **from outside the core**:
     "icons":    { "favicon": "icons/mark.svg", "192": "icons/192.png", "512": "icons/512.png" } }
   ```
 
-  `colors` overrides the CSS custom properties on `:root` in `packages/web/src/styles.css`
+  `colors` overrides the CSS custom properties on `:root` in `packages/web/src/styles/00-tokens.css`
   (hex, `rgb()`, `hsl()`); `terminal` is the grid's background/foreground, which the host
   also tells tmux; `displayName` is what the running UI and the install manifest call
   themselves; `icons` (slots `favicon`, `apple-touch`, `192`, `512`, `maskable`) are PNG or

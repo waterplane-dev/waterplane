@@ -15,5 +15,7 @@ export function HealthBoardSheet() {
   const c = useCore();
   const f = useStore(filter);
   return <CliHealthSheet online={c.conn.status === "open"} request={requestCliHealth} onClose={() => c.nav.close("clihealth")}
-    filter={f} onClearFilter={() => filter.set(null)} />;
+    filter={f} onClearFilter={() => filter.set(null)}
+    onClearWarnings={(through, n) => c.conn.liveSend({ t: "clihealth.clear", through },
+      `Cleared ${n} warning${n === 1 ? "" : "s"} — a new miss brings ${n === 1 ? "it" : "them"} back.`)} />;
 }

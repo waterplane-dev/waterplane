@@ -1,5 +1,6 @@
-import { ArrowDown, ArrowUp, CircleCheck, CloudUpload, Globe, Router } from "lucide-react";
-import { useEffect } from "react";
+import { ArrowDown, ArrowUp, CircleCheck, CloudUpload, Globe, RefreshCcw, Router } from "lucide-react";
+import { useEffect, useSyncExternalStore } from "react";
+import { restartLine, restartView, subscribeRestart } from "./link/hostRestart";
 import {
   PULSE_CAP, fmtRate, fmtTotal, lastSyncEver, summarize, useLink, whenText,
   type LinkSnapshot, type LinkSync, type LinkTraffic, type PulseSample,
@@ -303,6 +304,9 @@ function Strip() {
   const s = useLink<LinkSnapshot>((x) => x, true);
   const { status, samples } = s.pulse;
   const sum = summarize(samples);
+  // A desktop restart outranks freshness: it is WHY nothing is syncing. The
+  // strip already ticks every second (`useLink(…, true)`), so the count runs.
+  const restart = restartLine(useSyncExternalStore(subscribeRestart, restartView), Date.now());
   const open = status === "open";
   const label = status === "open"
     ? (sum.last != null ? `${Math.round(sum.last)} ms` : sum.median != null ? `${Math.round(sum.median)} ms` : "…")
@@ -331,7 +335,11 @@ function Strip() {
         <span className="np-ms">{label}{sub ? <span className="np-med"> {sub}</span> : null}</span>
       </span>
       <RouteChip />
-      <Freshness s={s.sync} />
+      {restart
+        ? <span className={`np-restart${restart.slow ? " np-restart-slow" : ""}`}>
+            <RefreshCcw size={10} aria-hidden="true" /><span>{restart.text}</span>
+          </span>
+        : <Freshness s={s.sync} />}
       <span className="np-right">
         <Saved outstanding={s.outstanding} ever={s.everOutstanding} stuck={s.stuckSends} />
         <Stuck n={s.stuckSends} />

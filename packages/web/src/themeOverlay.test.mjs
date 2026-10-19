@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readAllCss } from "../../../tools/csssource.mjs";
 import { BRAND, TERM_COLORS, THEME_RGB_TOKENS, THEME_TOKENS } from "@waterplane/shared";
 
 // ── a document and a localStorage, just enough ─────────────────────────────
@@ -32,7 +33,7 @@ const { LS } = await import("./storage.ts");
 const { appName, applyCachedThemeOverlay, onThemeOverlay, refreshThemeOverlay, setDocTitle, setThemeOverlay, themeOverlay } = await import("./themeOverlay.ts");
 const { termTheme } = await import("./termTheme.ts");
 
-const CSS = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "styles.css"), "utf8");
+const CSS = readAllCss();
 function tokensOf(selector) {
   const at = CSS.indexOf(selector + " {");
   const body = CSS.slice(at + selector.length + 2, CSS.indexOf("\n}", at)).replace(/\/\*[\s\S]*?\*\//g, "");

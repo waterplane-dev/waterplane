@@ -2,6 +2,7 @@ import { setSyncOnline } from "../syncState";
 import type { LinkStatus } from "./linkTypes";
 import { doc, persist, persistNow } from "./linkDoc";
 import { emit, invalidate } from "./linkBus";
+import { noteSocketDown } from "./hostRestart";
 
 export let connectedSince: number | null = null;
 
@@ -22,6 +23,8 @@ export function noteLinkStatus(next: LinkStatus): void {
   const prev = status;
   status = next;
   const now = Date.now();
+  // A restart's clock starts at the drop when the host did not announce it.
+  if (prev === "open") noteSocketDown(now);
 
   // ── the offline clock (was `netlog.mark`) ──
   // Close off the stretch that just ended and start a new one, on EVERY edge, so

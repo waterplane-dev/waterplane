@@ -1,0 +1,515 @@
+/* 01-frame.css: base elements, VisualViewport shell, headers, header command chips, connection banner, row anatomy, host/pair screens. */
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  -webkit-text-size-adjust: 100%;
+  overflow: hidden;
+}
+
+/* Bound to the VisualViewport (see useViewport) so the keyboard can't cover
+   the compose bar. Falls back to 100dvh where VisualViewport is unavailable. */
+#root {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: var(--app-top, 0px);
+  height: var(--app-h, 100dvh);
+  overflow: hidden;
+}
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  /* `--ui-pulse-h` is 0 unless the permanent connection strip is switched on
+     (NetPulse sets it on <html>), and `--ui-localrt-h` is the same for the
+     local-runner strip below it (LocalRtBar). Adding them here and on `.sheet`
+     is what makes each one a bar rather than an overlay: every screen in the
+     app is one of those two, so no view — including ones written later — has to
+     know either exists in order to stay clear of them. A third always-on strip
+     adds its variable to the same calc sites and to nothing else. */
+padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pulse-h, 0px) + var(--ui-tabs-h, 0px) + 18px);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Both headers — the launcher's and a session's. The padding and the gap were
+   10/12 and 8: on the session screen that is four rows of chrome (title, the
+   derived name, the chip row, the control row) over the output you came to
+   read, and the slack between them was most of a fifth. What is below is the
+   same bar with the air taken out; what actually took the rows back is
+   `.hdr-ctl` sharing a row with the chips. */
+.topbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-6);
+  padding: var(--sp-6) var(--sp-10);
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: center; gap: var(--sp-8); font-weight: var(--fw-semibold); flex: 0 0 auto; }
+/* The launcher menu's host row (features/hosts/HostMenuItem.tsx): a long
+   desktop name ellipsizes instead of widening the row. */
+/* Settings → another desktop, without the app (features/hosts/HostsSettings.tsx). */
+.web-pair-steps { margin: var(--sp-4) 0 0; padding-left: var(--sp-16); }
+.web-pair-steps li { margin: var(--sp-4) 0; }
+.web-pair-steps code { overflow-wrap: anywhere; }
+/* The launcher bar's split host switch (features/hosts/HostSwitchKey.tsx):
+   one bordered key, two buttons — swap glyph over a ≤6-char name, then a
+   narrow chevron. Stacked so it fits beside the cog on a phone-width bar. */
+.host-key { flex: 0 0 auto; display: inline-flex; align-items: stretch; min-height: 40px; background: var(--raise); border: 1px solid var(--line); border-radius: var(--r-8); overflow: hidden; }
+.host-key > button { background: none; border: none; color: var(--fg); cursor: pointer; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.host-key > button:active { background: var(--accent); }
+.host-key-flip { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: var(--sp-2) var(--sp-4); }
+.host-key-name { font-size: calc(var(--fs-9) * var(--ui-font, 1)); line-height: var(--lh-12); white-space: nowrap; }
+.host-key > .host-key-menu { display: inline-flex; align-items: center; padding: 0 var(--sp-2); border-left: 1px solid var(--line); }
+.host-item-name { max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* "Pair another phone" (features/hosts/HostQrSheet.tsx): the QR is dark on
+   paper in both themes — an inverted code does not scan everywhere. */
+.pair-qr { display: block; width: min(64vw, 240px); height: auto; margin: var(--sp-4) auto var(--sp-14); border-radius: var(--r-10); }
+.pair-code { text-align: center; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(28px * var(--ui-font, 1)); letter-spacing: .14em; font-weight: var(--fw-semibold); margin-bottom: var(--sp-6); user-select: text; -webkit-user-select: text; }
+
+/* Pairing: the "pair another phone" sheet and the app's pair screen. */
+.pair-sheet { display: flex; flex-direction: column; gap: var(--sp-12); padding: var(--sp-14) var(--sp-16); }
+.pair-card { display: flex; flex-direction: column; gap: var(--sp-10); padding: var(--sp-16); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-12); }
+.pair-card-head { display: flex; align-items: center; gap: var(--sp-8); font-weight: var(--fw-semibold); font-size: calc(var(--fs-14) * var(--ui-font, 1)); }
+.pair-card-qr { align-items: center; }
+.pair-wide { width: 100%; min-height: 50px; font-size: calc(var(--fs-15) * var(--ui-font, 1)); }
+.pair-centre { text-align: center; }
+.pair-ttl { display: inline-flex; align-items: center; gap: var(--sp-6); padding: var(--sp-4) var(--sp-10); border-radius: var(--r-pill); background: var(--raise); color: var(--muted); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.pair-or { display: flex; align-items: center; gap: var(--sp-10); color: var(--muted); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.pair-or::before, .pair-or::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+.pair-state { display: flex; flex-direction: column; align-items: center; gap: var(--sp-14); padding: var(--sp-40) var(--sp-12); text-align: center; color: var(--muted); }
+.pair-foot { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-8); padding: var(--sp-4) var(--sp-2) 0; }
+.pair-copy-label { font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-top: var(--sp-4); }
+.pair-copy-label:not(:first-child) { margin-top: var(--sp-14); }
+.pair-copy-row { display: flex; align-items: center; gap: var(--sp-8); margin-top: var(--sp-6); }
+.pair-copy-row code { flex: 1; min-width: 0; padding: var(--sp-10) var(--sp-12); background: var(--well); border: 1px solid var(--line); border-radius: var(--r-8); font-size: calc(var(--fs-13) * var(--ui-font, 1)); }
+.pair-title { display: flex; align-items: center; gap: var(--sp-10); margin-bottom: var(--sp-16); }
+.pair-title-icon { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: var(--r-10); background: var(--raise); color: var(--accent); }
+.pair-modes { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-6); margin-bottom: var(--sp-16); }
+.pair-modes .seg { min-height: 44px; font-size: calc(var(--fs-13) * var(--ui-font, 1)); }
+.pair-steps { margin: 0 0 var(--sp-14); padding-left: var(--sp-20); color: var(--muted); font-size: calc(var(--fs-13) * var(--ui-font, 1)); line-height: var(--lh-15); }
+.pair-steps li + li { margin-top: var(--sp-4); }
+.pair-steps b { color: var(--fg); font-weight: var(--fw-semibold); }
+.pair-demo { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-8); margin-top: var(--sp-20); padding-top: var(--sp-16); border-top: 1px solid var(--line); }
+.pair-confirm { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.pair-confirm-icon { display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; border-radius: var(--r-16); background: var(--raise); color: var(--accent); margin-bottom: var(--sp-12); }
+.pair-confirm-q { font-size: calc(var(--fs-14) * var(--ui-font, 1)); color: var(--muted); }
+.pair-confirm-host { margin-top: var(--sp-4); font-size: calc(var(--fs-18) * var(--ui-font, 1)); font-weight: var(--fw-semibold); overflow-wrap: anywhere; }
+.pair-confirm-code { margin-top: var(--sp-8); font-size: calc(var(--fs-13) * var(--ui-font, 1)); color: var(--muted); }
+.pair-confirm-code code { margin-left: var(--sp-4); padding: var(--sp-2) var(--sp-8); background: var(--well); border: 1px solid var(--line); border-radius: var(--r-6); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; color: var(--fg); }
+.pair-confirm-note { margin-top: var(--sp-14); text-align: left; }
+.key.pair-link-btn { margin-top: var(--sp-10); background: none; border-color: transparent; color: var(--accent); }
+/* `.set-note` is `flex-basis: 100%` for wrapping rows; in these COLUMNS that is a full height. */
+:is(.pair-sheet, .pair-card, .pair-confirm, .pair-demo, .pair-foot, .pair-state) > .set-note { flex-basis: auto; }
+.brand span { white-space: nowrap; letter-spacing: 0.02em; }
+/* The desktop's own ≤4-word name for this session (`SessionInfo.tabTitle`).
+   WRAPS rather than clipping — the tab strip is where this name is abbreviated,
+   and this is the place it is read whole. `white-space: normal` restates the
+   wrap because `.brand span` is nowrap. In the session header it flows inline
+   beside the branch (see `.sess-top .brand-name`); everywhere else it keeps the
+   line of its own it has always had. */
+.brand-name {
+  flex: 1 1 100%; min-width: 0; max-width: 55vw;
+  display: inline-flex; align-items: center; gap: var(--sp-4);
+  white-space: normal; overflow-wrap: anywhere; letter-spacing: 0;
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); font-weight: var(--fw-medium); color: var(--muted);
+}
+.brand-name svg { flex: 0 0 auto; opacity: .75; }
+/* It may wrap onto a second line, so the brand has to be allowed to have rows.
+   Only in a header: `.brand` is also a sheet head, which has no second line to
+   give. */
+.topbar .brand { flex-wrap: wrap; }
+
+/* ── A session's header, not the launcher's ──────────────────────────
+   It carries the repo's own hue as a left edge — the same `--repo-accent` its
+   tab is filled with and its rows are striped with, so the screen you are on
+   and the tab you got there from are visibly one thing. 3px, exactly
+   `.row-wrap`'s stripe.
+
+   TWO rows, and the break is stated rather than discovered. It was four: the
+   title, the derived name under it, the chip strip, and the five icon buttons
+   that could not fit beside the chips. A wrapping flex row breaks wherever the
+   base sizes happen to say, so the fix is not a basis that works at this repo
+   name and this `--ui-font` — it is `.hdr-row2`, one child holding both of the
+   things that share the second row, with a 100% basis that can only ever start
+   a line. */
+.sess-top { border-left: 3px solid var(--repo-accent, transparent); padding-left: var(--sp-6); }
+/* The title takes the first row: it is the only thing up here worth a row, and
+   it is the one thing that wraps. (The launcher's `.brand` is a 40px logo that
+   must stay beside the menu, which is why this is `.sess-top` and not
+   `.topbar`.) */
+/* Basis ZERO so the title's own three parts wrap INSIDE it. With basis `auto`
+   the brand is as wide as its max-content — repo, branch, model and the derived
+   name all on one line, pushing each other along — and nothing inside it ever
+   breaks. From zero it takes the row that is left beside the back button and
+   wraps within it, which is what makes the name below a second LINE rather
+   than a second row of the header. */
+/* …but never from LESS than 13em: below that the view switch beside it
+   (`.hdr-view`) breaks onto a line of its own instead of the title breaking
+   into a column one word wide. The 1000 grow is so that while the two DO share
+   a line, the title takes the slack and the switch keeps its natural width. */
+.sess-top .brand { flex: 1000 1 13em; min-width: 0; gap: var(--sp-6); font-size: calc(var(--fs-15) * var(--ui-font, 1)); }
+/* [Claude | Shell | Desktop] + the two name buttons — one child, so the line
+   breaks before the group and never inside it. Grow 1 against the title's 1000
+   is ~nothing beside the title; alone on its line it is all of it, and the
+   tabs stretch into a full-width segmented control. */
+.hdr-view { flex: 1 0 auto; display: flex; align-items: center; gap: var(--sp-6); }
+.hdr-view > .pair-tabs { flex: 1 0 auto; }
+.hdr-view .pair-tab { flex: 1 0 auto; justify-content: center; }
+/* A contributed view's tab and its × (`headerViews.ts`): one segment, the ×
+   narrow and never stretched — it takes the tab down, the ☰ menu brings it back. */
+.pair-view { display: inline-flex; align-items: stretch; flex: 1 0 auto; }
+.hdr-view .pair-tab.pair-view-x { flex: 0 0 auto; padding: 0 var(--sp-6); }
+/* The desktop's name for this session flows INLINE here rather than claiming a
+   row of its own (`.brand-name`'s 100% basis, which is right in the launcher's
+   header). It still wraps and is still never clipped — what four words are for
+   — but a short one now costs nothing, and short is what a ≤4-word name usually
+   is. */
+.sess-top .brand-name { flex: 0 1 auto; max-width: 100%; }
+/* …and the title text itself may break: `.brand span` is nowrap, which is right
+   for the model chip and wrong for a two-part repo · branch on a 390px phone. */
+.sess-top .brand { white-space: normal; }
+/* The second row: the command chips and the icon buttons, together. A 100%
+   basis is what makes it a ROW rather than something that fits beside the title
+   when the title is short and does not when it is long. */
+.hdr-row2 { flex: 1 1 100%; min-width: 0; display: flex; align-items: center; gap: var(--sp-6); }
+/* The icon buttons, as ONE flex child of that row, pushed to its end — grouped
+   so the row can break between the chips and the controls and never between
+   the controls themselves, which is what made the fourth row. */
+.hdr-ctl { display: flex; align-items: center; gap: var(--sp-6); flex: 0 0 auto; margin-left: auto; }
+/* A header button is SMALLER than a button in a sheet, and only here. `.key`'s
+   46×44 is the fingertip it is right to spend in a menu or on a form; in a bar
+   that already wraps, every 4px of it is measured against a whole extra ROW of
+   the screen — six icon buttons at 46 wide plus the logo and the usage chip do
+   not fit a 390px phone, and the seventh lands on a line of its own with six
+   empty columns beside it. 40px is still a comfortable target and it is what
+   buys the row back. Both headers: the launcher's is the one that wrapped, the
+   session's is the one this change is about. */
+/* 40px is also the launcher logo's size (LauncherScreen): change both together. */
+/* The usage meter's segments (`.usage-multi`, two sources or more) are header keys too: without
+   this they took `.key`'s 46×44 and 8/12 padding, so claude's own segment widened and the row grew
+   4px the moment a second source appeared. */
+.topbar > .key, .hdr-ctl > .key, .hdr-pin > .key, .topbar > .usage-multi > .key { min-width: 40px; min-height: 40px; padding: var(--sp-6) var(--sp-8); }
+/* ── Header command chips ────────────────────────────────────────────
+   One-tap user-configured commands, between the session title and the view
+   controls. The row is the flexible element (the title shrinks first): a chip
+   list can be long, and pushing the reader/collapse buttons off the screen
+   would cost the two controls that get you out of here. */
+.hdr-cmds {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  /* Basis ZERO, not `auto`. A flex line is broken on BASE sizes before anything
+     is shrunk, so a chip list measuring wider than the row pushed the control
+     group onto a line of its own however well this scrolls. From zero it never
+     forces a break: it takes the room left beside the controls and scrolls
+     inside it, which is what it was always meant to do. */
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.hdr-cmds::-webkit-scrollbar { display: none; }
+.hdr-cmd {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: var(--sp-4);
+  min-width: 0; white-space: nowrap; font-size: calc(var(--fs-12) * var(--ui-font, 1)); padding: var(--sp-4) var(--sp-8);
+}
+.hdr-cmd-manage { color: var(--muted); }
+/* A pinned toolbar ACTION in the same row — same chip size as a command chip,
+   icon-only (renderToolbarItem is called with compact = true). */
+.hdr-pin { flex: 0 0 auto; display: inline-flex; align-items: center; gap: var(--sp-6); }
+.hdr-pin > .key, .hdr-pin .key { min-width: 0; padding: var(--sp-6) var(--sp-8); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+/* Pin picker inside the header-commands sheet. */
+.pin-head { margin-top: var(--sp-10); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); }
+.pin-cloud { display: flex; flex-wrap: wrap; gap: var(--sp-6); margin-top: var(--sp-6); }
+.pin-cloud .key { display: inline-flex; align-items: center; gap: var(--sp-4); }
+/* The model line may break at its own spaces in the session header: beside
+   the [Claude | Shell] tabs the title has ~120px on a 390px phone, and a
+   nowrap "opus-5-5 · medium" was CLIPPED there rather than wrapped. */
+.sess-top .brand > .row-sub { white-space: normal; }
+/* [Claude | Shell] (`SessionHeader` `PairTabsSeg`): the CLI ↔ companion-shell
+   pair as two tabs on the title row. One rounded track, the tab on screen lit
+   in the pair's orange — the hue the corner toggle it replaced wore. Its own
+   size, not `.key`'s: it sits beside a title that wraps, and 34px tall at 12px
+   text is what keeps it from costing the title a line on a 390px phone. Never
+   shrinks — a clipped "Sh…" is a tab nobody can read. */
+.pair-tabs {
+  flex: 0 0 auto; display: inline-flex; align-items: stretch; padding: var(--sp-2); gap: var(--sp-2);
+  border: 1px solid var(--line); border-radius: var(--r-8); background: var(--raise);
+}
+.pair-tab {
+  display: inline-flex; align-items: center; gap: var(--sp-4); min-height: 32px; padding: 0 var(--sp-8);
+  font: inherit; font-size: calc(var(--fs-12) * var(--ui-font, 1)); font-weight: var(--fw-semibold); white-space: nowrap;
+  color: var(--muted); background: none; border: 1px solid transparent; border-radius: var(--r-8); cursor: pointer;
+}
+.pair-tab.on {
+  cursor: default; color: var(--pair);
+  border-color: rgb(var(--pair-rgb) / .6); background: rgb(var(--pair-rgb) / .16);
+}
+.conn { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); }
+.conn-open { color: var(--ok); }
+.conn-closed, .conn-connecting { color: var(--dead); }
+
+/* In-session connection banner — surfaces a dropped/reconnecting socket while
+   you're inside a terminal (input won't reach the host until it's back). */
+.conn-banner {
+  padding: var(--sp-6) var(--sp-12);
+  font-size: calc(var(--fs-12) * var(--ui-font, 1));
+  font-weight: var(--fw-semibold);
+  text-align: center;
+  border-bottom: 1px solid var(--line);
+}
+/* Floating variant (inside the terminal stage): takes no layout height, so a
+   dropped tunnel does not resize the PTY. `pointer-events: none` because the
+   terminal underneath stays scrollable/tappable through it. */
+.conn-banner.floating {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 6;
+  pointer-events: none; border-bottom: none;
+  backdrop-filter: blur(2px);
+}
+.conn-banner.conn-closed { background: var(--dead-wash); color: var(--dead); }
+.conn-banner.conn-connecting { background: var(--ask-wash); color: var(--muted); }
+
+.back {
+  background: none; border: none; color: var(--accent);
+  font-size: calc(26px * var(--ui-font, 1)); line-height: var(--lh-1); padding: 0 var(--sp-8) 0 0; cursor: pointer;
+}
+/* Pill toggle (backlog "build a queue" / "auto"). */
+.rc {
+  border: 1px solid var(--line); border-radius: var(--r-pill);
+  padding: var(--sp-6) var(--sp-12); font-size: calc(var(--fs-12) * var(--ui-font, 1)); background: transparent; cursor: pointer;
+}
+.rc.on { color: var(--ok); border-color: var(--ok); }
+.rc.off { color: var(--muted); }
+
+.list { overflow-y: auto; flex: 1; min-height: 0; }
+/* Backlog: head fixed, everything below scrolls as one — landscape-safe. */
+.sheet-scroll { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.sheet-scroll .list { overflow-y: visible; flex: 1 0 auto; }
+.section { padding: var(--sp-14) var(--sp-14) var(--sp-6); font-size: calc(var(--fs-13) * var(--ui-font, 1)); text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.section-hint { text-transform: none; letter-spacing: 0; opacity: .7; }
+/* `gap` (not just space-between): the label span is allowed to shrink, so
+   without it a long hint runs straight into the action buttons. */
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-6) var(--sp-10); flex-wrap: wrap; }
+/* The label gets a 12em BASE, not just `min-width: 0`: a flex line breaks on base
+   sizes before it shrinks anything, so a head whose icon row cannot fit beside
+   the label drops the ICONS onto a line of their own instead of squeezing the
+   label into a one-word-per-line column. That is what the launcher head did once
+   it carried the repo verbs too — seven 40px buttons left ~85px, and "Sessions &
+   repos · 35 live in 15 repos" came out seven lines tall. */
+.section-head > :first-child { min-width: 0; flex: 1 1 12em; }
+/* An opened `?` inside a head wraps to its own line; inset it like the `.section`
+   label above it, or its prose runs flush against the screen edge. */
+.section-head > .explain-body { padding: 0 var(--sp-14) var(--sp-6); line-height: var(--lh-14); }
+.section-head > .explain-body > p { margin: 0 0 var(--sp-6); }
+/* A standing preference with three values, drawn as all three rather than as
+   one button cycling through them: a cycle shows only the state you are in, so
+   the two you are not in are invisible and unreachable by looking. Wraps —
+   three labels do not fit one phone line. */
+.mode-row { display: flex; flex-wrap: wrap; gap: var(--sp-6); padding: var(--sp-6) var(--sp-10) var(--sp-2); }
+.mode-row .key { flex: 1 1 auto; justify-content: center; }
+.link-btn {
+  background: none; border: none; color: var(--accent); font-size: calc(var(--fs-12) * var(--ui-font, 1));
+  text-transform: none; letter-spacing: 0; cursor: pointer;
+  /* inline-flex + nowrap so an icon+label link ("fan out", "rescan", "clear")
+     stays on ONE line — a plain inline button wraps between the <svg> and its
+     text as soon as the head is tight, which reads as a broken icon. */
+  display: inline-flex; align-items: center; gap: var(--sp-4); white-space: nowrap;
+  /* Padded for the finger, negative-margined so the layout is unchanged. */
+  padding: var(--sp-6) var(--sp-4); margin: -6px -4px;
+}
+.link-btn > svg { flex: none; }
+/* A link-btn that is a TOGGLE (e.g. fan-out's "worktrees") — underlined when on. */
+.link-btn.active { text-decoration: underline; }
+/* Destructive link-btn ("close all") — opens the bulk-close dialog. */
+.link-btn.danger { color: var(--dead); }
+/* Several link-btns on one section head — space-between would scatter them,
+   and the negative margins above cancel any inherited spacing, so adjacent
+   link-btns MUST sit in this wrapper or they run together as one word. */
+.head-acts {
+  display: flex; align-items: center; gap: var(--sp-6) var(--sp-16);
+  /* Wraps rather than squeezing: a head can carry four link-btns plus status
+     chips, which does not fit one phone row. */
+  flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end;
+}
+/* All-icon head: the negative margins that force 16px above are gone, so the
+   column gap is the real spacing. Icon buttons are 36px squares and a head
+   carries two or three of them — narrow enough to always fit ONE row, so this
+   variant neither shrinks nor wraps: a long section hint ("15 repos · 0
+   worktrees — tap to start new session") would otherwise squeeze the shrinkable
+   .head-acts down to a single button's width and stack the rest under it. The
+   label span has min-width:0 and takes the squeeze instead. */
+.head-acts.tight { column-gap: var(--sp-6); flex: none; flex-wrap: nowrap; }
+/* Except the launcher's head: its row is not two or three icons but up to a
+   dozen controls (waiting, limit, star, flag, shell counts, the schedule
+   horizon's words, clear, close), and on a phone that ran past the right edge
+   and dragged the whole page sideways. It wraps, right-aligned, only when it
+   does not fit. Its icon buttons give up most of the -8px vertical margin
+   (-3px here): a wrapped last row holds only icon buttons, and at -8px each
+   hung 8px out of the head — past its 7px bottom padding, into the quick
+   filter's search button under it, which then covered the close-all X. At
+   -3px a row's line is 34px, taller than the 30px chips, so nothing hangs out
+   of any row; the row gap pays those 6px back plus 8px air. */
+.launcher-head > .head-acts.tight { flex: 0 1 auto; min-width: 0; max-width: 100%; flex-wrap: wrap; row-gap: var(--sp-14); }
+.launcher-head > .head-acts.tight > .head-act { margin: -3px 0; }
+/* Section-head action as an ICON BUTTON. A .link-btn is 11.5px text with a 12px
+   glyph — well under a fingertip, and four of them wrap the head onto two rows
+   on a phone. These are square, thumb-sized targets; the label lives in
+   title/aria-label. Vertically negative-margined so the head doesn't grow by
+   the full 36px. */
+.head-act {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; padding: 0; margin: -8px 0;
+  background: none; border: 1px solid var(--line); border-radius: var(--r-8);
+  color: var(--accent); cursor: pointer;
+}
+.head-act > svg { flex: none; }
+.head-act:active { background: var(--raise); }
+.head-act.danger { color: var(--dead); border-color: var(--dead-edge); }
+.empty { padding: var(--sp-12) var(--sp-14); color: var(--muted); }
+/* `Empty.tsx`'s sentence: what a list says with no rows, in all four states.
+   ONE centred, muted sentence in the space the rows would take. Top-left at
+   body size, under the 20px glyph some callers stack over it, every empty
+   sheet read as a stub. A caller's icon is quiet, and centred on its own line
+   when block text follows it (an inline icon leading a sentence stays inline);
+   a caller's second, `.muted` line is set smaller under the first. Not `.empty`
+   as a whole: that class is also prose on several sheets (the context notes, a
+   chart's caveat), and the age line `.empty-stale` stands above a list WITH
+   rows, so it keeps the list's left edge. */
+.empty.empty-msg {
+  max-width: 36em; margin-inline: auto; padding: var(--sp-24) var(--sp-20);
+  text-align: center; text-wrap: pretty;
+  font-size: calc(var(--fs-14) * var(--ui-font, 1)); line-height: var(--lh-15); color: var(--muted);
+}
+.empty.empty-msg > svg { opacity: .6; }
+.empty.empty-msg > svg:first-child:has(+ div) { display: block; margin: 0 auto var(--sp-8); }
+.empty.empty-msg > .muted { margin-top: var(--sp-4); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.row {
+  display: flex; align-items: center; gap: var(--sp-10); width: 100%; flex-wrap: wrap;
+  text-align: left; background: var(--panel); color: var(--fg);
+  border: none; border-bottom: 1px solid var(--line);
+  /* A row is the app's main tap target on a phone held one-handed: the text is
+     sized to be read without leaning in, and the vertical padding is what keeps
+     two adjacent rows from being one 6mm fingertip apart. */
+  padding: var(--sp-16) var(--sp-14); font-size: calc(var(--fs-16) * var(--ui-font, 1)); cursor: pointer;
+}
+.row:active { background: var(--raise); }
+/* The session you last opened — makes it easy to find when you come back. */
+.row-wrap.row-recent { box-shadow: var(--stripe); }
+.row-wrap.row-recent .row { background: var(--accent-wash); }
+.row-wrap.row-recent .row:active { background: var(--raise); }
+.row.dragging { opacity: .5; background: var(--raise); }
+/* The target a pad note came from, first in its own picker. Marked rather than
+   preselected: the note may legitimately be re-aimed, and a list that acts on
+   its own is worse than one that guesses. */
+.row.home { box-shadow: var(--stripe); }
+/* Session row picked up by a long press: lifted look + no text selection /
+   iOS callout while the finger rests on it. */
+.row-wrap.row-dragging { outline: 1px dashed var(--accent); outline-offset: -1px; }
+.row-wrap[data-sid] .row { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.drag-handle { cursor: grab; color: var(--muted); }
+.drag-handle:active { cursor: grabbing; }
+.row-title { flex: 1; min-width: 7em; font-size: calc(var(--fs-16) * var(--ui-font, 1)); font-weight: var(--fw-semibold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row-launch { flex-basis: 100%; width: 100%; font-size: calc(var(--fs-13) * var(--ui-font, 1)); }
+/* The desktop's own ≤4-word name for a session (`SessionInfo.tabTitle`), on the
+   launcher row beside the branch. Muted and lighter than `.row-title`: the
+   branch is a fact about the checkout and this is a machine's reading of the
+   conversation, and the weight is what says which is which without a label.
+   CLIPPED rather than wrapped — a list row is scanned, and the header of the
+   session itself is where the name is read whole. Not an inline-flex, so the
+   ellipsis actually happens: a bare text node inside one is an anonymous flex
+   item and cannot be truncated. */
+.row-name {
+  flex: 1 1 auto; min-width: 0;
+  font-size: calc(var(--fs-13) * var(--ui-font, 1)); font-weight: var(--fw-medium); color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.row-name svg { vertical-align: -2px; opacity: .75; }
+/* The row's second line: launch label, age, anything else that is one short
+   fact. Each of those used to be its own `flex-basis: 100%` line, so a session
+   row spent two full lines on "default" and "2d" — 50px of a phone screen per
+   row to say almost nothing, pushing the prompt (the only part that identifies
+   the session) below the fold. One wrapping line, dotted apart by gap. */
+.row-meta { flex: 0 0 100%; display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4) var(--sp-12); }
+.row-meta > .row-launch { flex: 0 0 auto; width: auto; }
+/* ...and on a LIVE session row it does not get a line of its own either. The
+   title line is the repo name — one word, sometimes a branch and the desktop's short
+   name beside it — and then two thirds of a phone screen of nothing, with
+   `opus · 2d` on the line underneath doing the same thing again. Two nearly
+   empty lines, ~28px of every row, to say five characters.
+
+   So the facts move up to the RIGHT END of the title's line: the title reads
+   from the left, the launch and the age read from the right, and the space
+   between them is the space that was already there. `margin-left: auto` on a
+   `flex: 0 0 auto` item is what does it — the title and the derived name stop
+   claiming the slack (`flex: 0 1 auto`) so there is slack for the auto margin
+   to take, and the meta never SHRINKS, so a long branch pushes it onto its own
+   line rather than squeezing `opus` into two.
+
+   Scoped to `[data-sid]`: a closed/recent row is a different shape — one line,
+   no derived name, no gist — and its meta has nothing to sit beside. */
+.row-wrap[data-sid] > .row.grow > .row-title,
+.row-wrap[data-sid] > .row.grow > .row-name { flex: 0 1 auto; }
+.row-wrap[data-sid] > .row.grow > .row-meta { flex: 0 0 auto; width: auto; margin-left: auto; }
+/* The gist and the readout tile share one block, and the tile FLOATS in it: the
+   numbers sit at the right of text that was never going to fill the width, and
+   the prompt runs around them instead of starting a line below them.
+   `overflow: hidden` is doing two jobs — it makes this a block formatting
+   context, so the float is CONTAINED (a row with a one-word prompt comes out the
+   height of the tile rather than collapsing and letting it hang into the row
+   below), and it is what clips the clamped gist. A block, not a flex child:
+   `float` is ignored on flex items, and `.row` is a flex container. */
+.row-gist { flex-basis: 100%; width: 100%; display: block; overflow: hidden; }
+/* The prompt gist. Bigger, because it is what you actually read to pick a row —
+   and clamped, because one 400-character prompt otherwise makes a single row
+   taller than the three rows under it and the list stops being scannable.
+   It keeps `-webkit-line-clamp` now that the readout tile floats beside it —
+   checked rather than assumed, because a `-webkit-box` is the one clamp that
+   might have laid its lines out as flex items and ignored the float, which
+   would have put the text UNDER the tile. It does not: the lines wrap around it
+   and the third one still ends in the ellipsis a height clamp cannot draw.
+   No `flex-basis` any more — its parent is `.row-gist`, an ordinary block. */
+.row-summary {
+  font-size: calc(var(--fs-14) * var(--ui-font, 1)); line-height: var(--lh-14);
+  color: var(--muted); font-weight: var(--fw-regular);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+}
+/* The fold "Closed & recent" sits behind (`ClosedRows.tsx`): a whole-width
+   header button, shut by default. */
+.section.closed-fold { background: none; border: 0; width: 100%; text-align: left; cursor: pointer; color: inherit; font: inherit; }
+.section.closed-fold > span > svg { vertical-align: -3px; }
+/* "Recently closed" rows (`core/launcher/ClosedRows.tsx`, words from
+   `closedRowWords.ts`). A row the HOST closed on its own carries a bordered pill
+   with an icon AND words on its own line under the headline — never colour
+   alone, and never a left rule (`.row-recent` already means something there). The gist is two
+   lines, not the live list's three: these rows are a shortlist to pick from. */
+.closed-line { flex: 0 0 100%; width: 100%; }
+.tag.closed-auto { color: var(--accent); border: 1px solid var(--accent); display: inline-flex; align-items: center; gap: var(--sp-4); padding: var(--sp-2) var(--sp-8); }
+.tag.closed-kind { color: var(--muted); border: 1px solid var(--line); padding: 1px var(--sp-8); }
+.closed-note { color: var(--warn); }
+.closed-outcome { display: flex; align-items: flex-start; gap: var(--sp-4); }
+.closed-outcome svg { flex: 0 0 auto; margin-top: var(--sp-2); }
+.closed-outcome.ok { color: var(--ok); }
+.closed-outcome.bad { color: var(--dead); }
+/* First and latest prompt, verbatim (`PromptPair.tsx`): two stacked parts, the
+   start muted, the latest in full colour with an accent rule. */
+.prompt-pair { display: flex; flex-direction: column; gap: var(--sp-6); margin-top: var(--sp-2); min-width: 0; }
+.pp-part { display: flex; flex-direction: column; gap: 1px; padding-left: var(--sp-8); border-left: 2px solid var(--line); min-width: 0; }
+.pp-now { border-left-color: var(--accent); }
+.pp-label { display: inline-flex; align-items: center; gap: var(--sp-4); font-size: calc(var(--fs-11) * var(--ui-font, 1)); font-weight: var(--fw-semibold); letter-spacing: .02em; color: var(--muted); }
+.pp-now .pp-label { color: var(--accent); }
+.pp-text {
+  font-size: calc(var(--fs-13) * var(--ui-font, 1)); line-height: var(--lh-14); font-weight: var(--fw-regular);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere;
+}
+.pp-start .pp-text { color: var(--muted); }
+.pp-now .pp-text { color: var(--fg); }
+.closed-meta { font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.annot-tools.closed-chips { background: none; border-bottom: 0; padding: var(--sp-4) var(--sp-8); }

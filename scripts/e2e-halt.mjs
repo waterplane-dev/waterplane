@@ -35,7 +35,17 @@ const boot = () => {
 let host = boot();
 let failed = false;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const ours = () => { try { return execFileSync("pgrep", ["-f", STUB], { encoding: "utf8" }).trim().split("\n").filter(Boolean).length; } catch { return 0; } };
+// The host also runs the stub path for probes that are not AI and that the halt
+// rightly leaves alone: `which <stub>`, `<stub> --version` (the update checker at
+// every boot, so right after the restart below) and `<stub> auth status`. Under
+// the full parallel suite one of those was still in flight at a zero-count check
+// and failed it, so they are not ours to count; the diagnostics still list them.
+const PROBE = [`which ${STUB}`, `${STUB} --version`, `${STUB} auth status`];
+const ours = () => {
+  let out = "";
+  try { out = execFileSync("ps", ["-Ao", "command="], { encoding: "utf8" }); } catch { return 0; }
+  return out.split("\n").filter((l) => l.includes(STUB) && !PROBE.some((p) => l.includes(p))).length;
+};
 // This only flakes under the full parallel suite, where the run's log is all
 // there is — so every FAIL prints what of ours is still running, and when.
 const t0 = Date.now();

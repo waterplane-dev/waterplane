@@ -3,6 +3,7 @@ import { PROTOCOL_VERSION } from "@waterplane/shared";
 import { removePadNotes } from "../../outbox";
 import { saveSessionsSnap, saveSnap } from "../../localState";
 import { noteSynced } from "../../link";
+import { fmtSecs, noteHostRestarting, noteHostWelcome, restartView } from "../../link/hostRestart";
 import { applyRemoteSetting, mergeSettingsDoc } from "../../settings";
 import { pulls } from "../../pull";
 import { showToast } from "../../toast";
@@ -80,6 +81,14 @@ export function useHostFrames(latest: HostFrameLatest, sinks: HostFrameSinks) {
           // every call site has to remember to compare.)
           setBackends(null);
           conn.noteWelcome(msg);
+          {
+            // A new bootId is a desktop that restarted, not a tunnel that came
+            // back — say so, with how long it took (`link/hostRestart.ts`).
+            const back = noteHostWelcome(msg);
+            if (back) showToast(back.announced
+              ? `desktop restarted — back${back.downMs != null ? ` after ${fmtSecs(back.downMs)}` : ""}`
+              : `desktop restarted without warning (crash?)${back.downMs != null ? ` — back after ${fmtSecs(back.downMs)}` : ""}`);
+          }
           // The socket coming up is the best evidence the tunnel is back — far
           // better than `navigator.onLine`, which never went false. Anything a
           // dead link parked mid-transfer resumes from its stored offset here.
@@ -98,6 +107,13 @@ export function useHostFrames(latest: HostFrameLatest, sinks: HostFrameSinks) {
         case "backends":
           setBackends(msg.list);
           break;
+        // The host's SIGTERM handler, before it goes: the strip counts the wait.
+        case "host.restarting": {
+          noteHostRestarting();
+          const usual = restartView().usualMs;
+          showToast(`desktop is restarting${usual != null ? ` — usually back in ~${fmtSecs(usual)}` : ""}`);
+          break;
+        }
         case "auth.state":
           conn.setInfo({ auth: msg.auth });
           break;

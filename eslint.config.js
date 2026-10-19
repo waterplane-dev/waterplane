@@ -212,7 +212,7 @@ export default tseslint.config(
   // The registry declares the keys; shared/settings.ts is the allow-list they
   // are checked against. Both must name them literally.
   {
-    files: ["packages/web/src/storage.ts", "packages/shared/src/settings.ts"],
+    files: ["packages/web/src/storage.ts", "packages/web/src/storage/keys*.ts", "packages/shared/src/settings.ts"],
     rules: { "local/no-storage-key-literal": "off" },
   },
   // The one file allowed to spell the product's names, current and legacy —

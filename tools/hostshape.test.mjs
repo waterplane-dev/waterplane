@@ -26,6 +26,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
 import { headModules } from "./skillmap.mjs";
+import { warnLongFiles } from "./longfiles.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const PACKAGES = join(ROOT, "packages");
@@ -97,6 +98,9 @@ const SLICE_DIRS = {
 
 /** The ledger readers' slices are held to the split brief's cap, not the 900. */
 const LEDGER_SLICE_LINES = 500;
+
+// Early warning (never fails): host files past 800 lines, under whatever cap applies.
+warnLongFiles("host", SRC);
 
 const lines = (text) => text.split("\n").length - (text.endsWith("\n") ? 1 : 0);
 const read = (rel) => readFileSync(join(SRC, rel), "utf8");

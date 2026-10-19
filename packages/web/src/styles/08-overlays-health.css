@@ -1,0 +1,563 @@
+/* 08-overlays-health.css: terminal overlay, offline start, net activity, NetHealth (.nh-*), mobile pass, fingertip floor, button hints. */
+/* ── Terminal overlay: never a black rectangle with no explanation ──────────
+   An empty xterm is visually identical to a crash, which is what "the app went
+   black" reports kept turning out to be. The overlay states which harmless
+   reason applies (nothing printed yet / offline / session ended). `.term-wrap`
+   becomes the positioning context; `.term-canvas` carries the terminal so the
+   stale filter can dim IT without dimming the explanation on top. */
+.term-wrap { position: relative; }
+.term-stage { position: relative; width: 100%; height: 100%; }
+.term-canvas { width: 100%; height: 100%; }
+/* Restored-from-disk scrollback: real output, just not current. A CSS filter,
+   never injected ANSI — a replayed TUI re-sets its own SGR attributes within
+   bytes and would paint straight over any dim code we wrote. */
+.term-canvas.stale { filter: saturate(.5) opacity(.65); }
+
+.term-overlay {
+  position: absolute; left: 0; right: 0;
+  display: flex; justify-content: center;
+  pointer-events: none; /* the terminal underneath stays scrollable/tappable */
+}
+.term-overlay-box {
+  pointer-events: auto;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8);
+  color: var(--fg); font-size: calc(var(--fs-13) * var(--ui-font, 1)); line-height: var(--lh-14);
+  background: var(--panel-veil-hi); border: 1px solid var(--float-edge); border-radius: var(--r-10);
+}
+/* Chip: there IS output on screen, so the note sits out of the way and never
+   covers what you came to read. */
+.term-overlay.as-chip { bottom: 8px; }
+/* The trust box's tap card over the terminal (`termAnswers.ts`): the reader's `tr-ask` look,
+   pinned to the bottom of the grid where the CLI draws the same box. Its own scroll, so the PTY is
+   never resized to make room for it. */
+.term-answer {
+  position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 3;
+  max-height: 60%; overflow-y: auto; padding: var(--sp-10) var(--sp-12); border-radius: var(--r-10);
+  background: var(--bg); border: 1px solid var(--ask); box-shadow: 0 4px 18px rgba(0, 0, 0, .35);
+}
+.term-answer .approve-opts { max-height: none; overflow: visible; }
+.term-answer .approve-q { margin: 0 0 var(--sp-8); font-size: calc(var(--fs-14) * var(--ui-font, 1)); }
+
+.term-overlay.as-chip .term-overlay-box { padding: var(--sp-6) var(--sp-10); max-width: 92%; font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+/* Card: the terminal would otherwise be blank, so the explanation IS the view. */
+.term-overlay.as-card { top: 0; bottom: 0; align-items: center; }
+.term-overlay.as-card .term-overlay-box {
+  flex-direction: column; align-items: flex-start; text-align: left;
+  padding: var(--sp-14) var(--sp-16); max-width: min(420px, 88%);
+}
+.term-overlay-hint { color: var(--muted); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.term-overlay-acts { display: flex; gap: var(--sp-8); flex-wrap: wrap; }
+.term-overlay-acts .key { display: inline-flex; align-items: center; gap: var(--sp-6); font-size: calc(var(--fs-13) * var(--ui-font, 1)); }
+.term-overlay-ended .term-overlay-box { border-color: var(--dead-edge-hi); }
+.term-overlay-offline .term-overlay-box { border-color: var(--star-edge-hi); }
+/* A session on its way. Accent, not a warning colour: nothing is wrong — the
+   CLI is starting, or the link is down and the create is queued. It goes red
+   only when the create was actually refused (`.failed`). */
+.term-overlay-pending .term-overlay-box { border-color: var(--accent); }
+.term-overlay-pending.failed .term-overlay-box { border-color: var(--dead-edge-hi); }
+/* Where the toolbar would be: the verbs that need a PTY, as prose. Same border
+   as the toolbar so the row it replaces keeps its place in the column. */
+.toolbar-cants {
+  background: var(--panel); border-bottom: 1px solid var(--line);
+  padding: var(--sp-6) var(--sp-12);
+}
+/* The same sentence in the MENU's place — a queued open has no CLI to act on,
+   so the burger opens onto why rather than onto nothing. It takes the panel's
+   geometry (full-width child of the wrapping header, header padding cancelled)
+   so the menu and its stand-in occupy the same box. */
+.toolbar-cants-menu {
+  flex: 0 0 100%; box-sizing: border-box;
+  margin: var(--sp-10) -12px -10px; padding: var(--sp-8) var(--sp-12) var(--sp-10);
+  background: var(--sub); border-top: 1px solid var(--line); border-bottom: none;
+}
+
+/* ── Launcher: first-ever offline start ────────────────────────────────────
+   No snapshot to seed from and no socket ⇒ every section renders nothing and
+   the launcher looks broken. The card says so; the skeleton rows make the wait
+   read as "loading" rather than "empty". */
+.offline-card {
+  margin: var(--sp-10) var(--sp-12); padding: var(--sp-12) var(--sp-14);
+  background: var(--panel); border: 1px solid var(--star-edge); border-radius: var(--r-10);
+}
+.offline-card-head { display: flex; align-items: center; gap: var(--sp-8); font-size: calc(var(--fs-14) * var(--ui-font, 1)); font-weight: var(--fw-semibold); }
+.offline-card-body { margin-top: var(--sp-6); font-size: calc(var(--fs-13) * var(--ui-font, 1)); color: var(--fg); opacity: .85; line-height: var(--lh-15); }
+.offline-card-hints { margin: var(--sp-8) 0 0; padding-left: var(--sp-16); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); line-height: var(--lh-16); }
+.skel-row { display: block; padding: var(--sp-12); border-bottom: 1px solid var(--line); }
+.skel-bar { display: block; height: 10px; border-radius: var(--r-6); background: var(--line); animation: pulse var(--dur-pulse) ease-in-out infinite; }
+.skel-title { width: 45%; }
+.skel-sub { width: 28%; height: 8px; margin-top: var(--sp-8); }
+
+/* Image that failed to load (offline, evicted cache, host gone): a labelled
+   placeholder instead of the browser's broken-image glyph — or, in the
+   full-screen viewer, an all-black stage that reads as a crash. Keyed by src in
+   the component, so a retry loop can't spin. */
+.img-missing {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--sp-6);
+  width: 100%; height: 100%; min-height: 90px; padding: var(--sp-10);
+  color: var(--muted); font-size: calc(var(--fs-11) * var(--ui-font, 1)); text-align: center;
+  background: var(--panel); border: 1px dashed var(--line); border-radius: var(--r-8);
+}
+.img-missing .img-missing-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zoom-stage .img-missing { min-height: 160px; max-width: 320px; height: auto; margin: auto; }
+/* Match the grid cell the <img> would have filled, so a failed row keeps the
+   grid aligned instead of collapsing it. */
+.thumb .img-missing { height: 84px; min-height: 0; }
+
+/* Boot failure card (BootGuard). Rendered instead of an empty #root — a black
+   rectangle is indistinguishable from a crash, a hang, or a dead tunnel. */
+.boot-fail {
+  height: 100%;
+  overflow: auto;
+  padding: var(--sp-24) var(--sp-16) calc(24px + env(safe-area-inset-bottom));
+  padding-top: calc(24px + env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pulse-h, 0px) + var(--ui-localrt-h, 0px) + var(--ui-tabs-h, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-14);
+  background: var(--bg);
+  color: var(--fg);
+}
+.boot-fail h2 { margin: 0; font-size: calc(var(--fs-16) * var(--ui-font, 1)); color: var(--dead); }
+.boot-fail pre {
+  margin: 0;
+  padding: var(--sp-10) var(--sp-12);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-8);
+  font-size: calc(var(--fs-12) * var(--ui-font, 1));
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.boot-fail p { margin: 0; font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); }
+.boot-fail-acts { display: flex; gap: var(--sp-10); flex-wrap: wrap; }
+.boot-fail-acts button {
+  flex: 1 1 auto;
+  min-height: 44px;
+  padding: 0 var(--sp-16);
+  border-radius: var(--r-10);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--fg);
+  font-size: calc(var(--fs-14) * var(--ui-font, 1));
+}
+
+/* ── Network activity strip ────────────────────────────────────────────
+   Fixed at the very top, above every sheet and overlay: the question it
+   answers ("did my tap do anything?") is asked from whatever view the tap
+   was made in. Pointer-events off — it must never eat a tap of its own. */
+.net-activity {
+  position: fixed; top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pulse-h, 0px) + var(--ui-localrt-h, 0px) + var(--ui-tabs-h, 0px)); left: 0; right: 0; z-index: 60;
+  display: flex; flex-direction: column; align-items: center;
+  pointer-events: none;
+}
+.net-bar {
+  width: 100%; height: 2px; overflow: hidden;
+  background: var(--hover);
+}
+/* Indeterminate: there is no progress number for a plain JSON GET, and a fake
+   percentage that stalls at 90% is exactly the lie this strip exists to avoid. */
+.net-bar > span {
+  display: block; width: 40%; height: 100%;
+  background: var(--accent);
+  animation: net-slide 1.1s ease-in-out infinite;
+}
+@keyframes net-slide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+.net-chip {
+  margin-top: var(--sp-4); display: inline-flex; align-items: center; gap: var(--sp-6);
+  max-width: 92vw; padding: var(--sp-4) var(--sp-10);
+  font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted);
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-pill);
+  box-shadow: 0 4px 14px var(--shadow-soft);
+}
+.net-chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.net-activity.stalled .net-bar > span { background: var(--star); }
+.net-activity.stalled .net-chip { color: var(--star); border-color: var(--star-edge-hi); }
+
+/* ── Gallery: listing in flight / listing failed ───────────────────────── */
+/* The tapped chip keeps its highlight for as long as its listing is on the
+   wire. Without it the chip released back to plain the instant the finger
+   lifted, and on a slow link that IS the "nothing happened" reading. */
+.key.busy { opacity: .85; }
+/* Stale rows during a refetch: still readable and still tappable, visibly not
+   the answer to the filter you just tapped. */
+.grid.stale { opacity: .45; transition: opacity var(--dur-fast) ease; }
+.skel-thumb { height: 110px; background: var(--line); animation: pulse var(--dur-pulse) ease-in-out infinite; }
+.gallery-note {
+  display: flex; align-items: center; gap: var(--sp-8); flex-wrap: wrap;
+  padding: var(--sp-8) var(--sp-12); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted);
+  background: var(--panel); border-top: 1px solid var(--line);
+}
+.gallery-note.err { color: var(--star); border-top-color: var(--star-edge-hi); }
+
+/* ── Connection health (NetHealthSheet) ──────────────────────────────────
+   A stat grid rather than a table: on a phone a four-column table either
+   ellipsizes the labels away or scrolls sideways, and these numbers are only
+   useful if all of them are on screen at once — the verdict at the top is read
+   against the counters below it, not on its own. */
+.nh-verdict {
+  margin: 0; padding: var(--sp-12) var(--sp-16); font-size: calc(var(--fs-13) * var(--ui-font, 1)); line-height: var(--lh-15);
+  border-bottom: 1px solid var(--line);
+}
+.nh-verdict.nh-ok { color: var(--ok); }
+.nh-verdict.nh-warn { color: var(--warn); }
+.nh-verdict.nh-bad { color: var(--dead); }
+.nh-stats {
+  display: grid; gap: var(--sp-8);
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+.nh-stat {
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  padding: var(--sp-8) var(--sp-10); border: 1px solid var(--line); border-radius: var(--r-8);
+  background: var(--bg); min-width: 0;
+}
+.nh-stat-v { font-size: calc(var(--fs-16) * var(--ui-font, 1)); font-weight: var(--fw-semibold); color: var(--fg); font-variant-numeric: tabular-nums; }
+.nh-stat-l { font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); }
+/* The note is the part that stops a number being misread ("unsubmitted" means
+   nothing without "in the composer, Return swallowed"), so it wraps rather than
+   truncating. */
+.nh-stat-n { font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); opacity: .75; line-height: var(--lh-14); }
+/* A stat that is a door reads as one: same tile, left-aligned like its
+   siblings (a <button> centres its text), and an accent edge — so the one
+   tappable figure in a grid of read-outs is findable without a hover nobody
+   has on a phone. */
+.nh-stat-door {
+  font: inherit; text-align: left; cursor: pointer;
+  border-color: var(--accent, var(--line));
+}
+
+/* The named give-ups. A row is a target, not a reading — it goes to whichever of
+   the queue or the pad is holding those words — so it is a real button with the
+   text on top and everything that explains it underneath. The text is clamped:
+   the list is for recognising which prompt this was, and a full 200-character
+   head per row turns a list of nine into a page of prose. */
+.nh-gaves { display: flex; flex-direction: column; gap: var(--sp-6); margin: var(--sp-2) 0 var(--sp-10); }
+.nh-give {
+  display: flex; flex-direction: column; gap: var(--sp-4); width: 100%;
+  padding: var(--sp-8) var(--sp-10); border: 1px solid var(--line); border-radius: var(--r-8);
+  background: var(--bg); text-align: left; color: var(--fg); font: inherit;
+  border-left: 3px solid var(--dead);
+}
+.nh-give:active { background: var(--hover); }
+.nh-give[disabled] { opacity: .55; }
+.nh-give.risky { border-left-color: var(--warn); }
+.nh-give-t {
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14); min-width: 0;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.nh-give-m { font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); line-height: var(--lh-14); overflow-wrap: anywhere; }
+.nh-give-m.warn { color: var(--warn); }
+/* The row became a container the moment it carried an ACTION as well as a
+   destination: a button inside a button is invalid and, on a phone, unpressable
+   — the outer one swallows the tap. So the words are one button (go to where
+   they are kept) and "send again" is another, side by side. */
+.nh-give { flex-direction: row; align-items: center; gap: var(--sp-8); }
+.nh-give-open {
+  display: flex; flex-direction: column; gap: var(--sp-4); flex: 1; min-width: 0;
+  padding: 0; border: 0; background: none; text-align: left; color: var(--fg); font: inherit;
+}
+.nh-give-open[disabled] { opacity: .55; }
+.nh-give:active { background: var(--hover); }
+.nh-give-retry {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: var(--sp-4);
+  padding: var(--sp-8) var(--sp-10); min-height: 40px; border: 1px solid var(--line); border-radius: var(--r-6);
+  background: var(--hover-soft); color: var(--fg); font: inherit; font-size: calc(var(--fs-12) * var(--ui-font, 1));
+}
+.nh-give-retry:active { background: var(--hover-hi); }
+.nh-give-done { flex: 0 0 auto; font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); }
+/* A row plus, when its FILE is what is stuck, the picture that file is. The
+   strip is a sibling of the row rather than a child: the row is a flex ROW of
+   two buttons, and a thumbnail belongs under both, not beside either. */
+.nh-give-item { display: flex; flex-direction: column; gap: var(--sp-4); }
+.nh-give-files { padding: 0 var(--sp-10) var(--sp-2); }
+
+/* ── Mobile pass on the newer sheets ───────────────────────────────────────
+   These were built desktop-first-ish and each broke the same three ways on a
+   phone: controls under the fingertip floor, a scroll container that either
+   didn't exist or competed with two others, and content sitting under the home
+   indicator. Fixed here rather than per sheet so a NEW sheet inherits it. */
+
+/* The sheet's scrolling body. `.sheet-body` had no rule at all — NetHealthSheet
+   therefore rendered a fixed-height div inside a fixed-height flex column and
+   everything past the fold was unreachable, with no scrollbar to hint at it. */
+.sheet-body {
+  flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+/* Bottom safe area on whatever actually scrolls. `.sheet` only padded the TOP,
+   so the last row of any sheet without a `.sheet-actions` footer sat under the
+   home indicator: reachable by scrolling nowhere, because the scroller ended
+   exactly there. `:last-child` so a sheet WITH a footer (which carries its own
+   safe-area padding) doesn't grow a dead gap above it. */
+.sheet-body,
+.sheet > .list:last-child,
+.sheet > .sheet-scroll:last-child,
+.sheet > .tr-outline-full:last-child,
+.settings {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 20px);
+}
+/* .list.hist already carries 24px of its own; keep it, add the inset. */
+.sheet > .list.hist:last-child { padding-bottom: calc(env(safe-area-inset-bottom) + 24px); }
+
+/* `<Sheet full>`: a body that FILLS the rest of the sheet, edge to edge, and never scrolls — a
+   canvas (the live desktop) sizes itself to this box. Positioned so a child can be `inset: 0`;
+   the safe area is padded rather than drawn under. */
+.sheet-full-body {
+  flex: 1 1 auto; min-height: 0; position: relative; overflow: hidden;
+  padding: 0 0 env(safe-area-inset-bottom); overscroll-behavior: contain; touch-action: none;
+}
+
+/* Sheet head: a long title must shrink, never push the actions off-screen.
+   `.brand` is flex:0 0 auto, so "Sent commands · <long session title>" was
+   sliding the refresh and clear buttons past the right edge. */
+.sheet-head .brand { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+.sheet-head .brand > span, .sheet-head .brand { text-overflow: ellipsis; white-space: nowrap; }
+/* NetHealthSheet titles its head with an <h2> rather than a `.brand` span; give
+   it the same weight instead of the browser's 1.5em heading with margins. */
+.sheet-head h2 {
+  margin: 0; flex: 1; min-width: 0;
+  display: flex; align-items: center; gap: var(--sp-8);
+  font-size: calc(var(--fs-15) * var(--ui-font, 1)); font-weight: var(--fw-semibold);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ── Fingertip floor (WCAG 2.5.8 is 24px; a phone in one hand wants 44) ──── */
+/* `.key` is the workhorse button of every sheet and was ~35px tall / 42 wide.
+   Only the three places that had already been measured (sheet-actions, the
+   annotator strip, the upload-width chips) were exempt from that. */
+.sheet .key, .settings .key, .auth-card .key {
+  min-height: 44px; min-width: 44px;
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-4);
+}
+/* The two deliberate exceptions, re-asserted because they now lose on order. */
+.upscale .key { min-height: 32px; min-width: 0; padding: var(--sp-6) var(--sp-10); }
+.annot-tools.tri .key { min-height: 36px; min-width: 0; padding: var(--sp-8) var(--sp-10); }
+/* A text-labelled key ("send all", "another prompt") must not be forced square. */
+.sheet .key { padding: var(--sp-8) var(--sp-12); }
+/* Back chevron: a 26px glyph with no box was a ~26px target in the corner the
+   thumb reaches worst. Negative margins keep the head's geometry unchanged. */
+.back {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; padding: 0;
+  flex: 0 0 auto;
+}
+.sheet-head .back, .topbar .back { margin: -8px -6px -8px -6px; }
+/* Text links inside sheet rows ("resume all", "open the session") are 11.5px
+   glyphs — padded to a real target, negative-margined so nothing moves. */
+.sheet .link-btn { min-height: 40px; padding: var(--sp-10) var(--sp-6); margin: -10px -6px; }
+
+/* ── Queue-style rows: text above, actions below ──────────────────────────
+   `.queue-row` put the message and up to EIGHT icon buttons on one line. Eight
+   44px targets is 390px — the whole phone — so the text they describe was
+   squeezed to a couple of characters and the buttons were shrunk under the
+   floor to make room. Stacking is what makes both readable: full-width text,
+   then a wrapping action row that is allowed to take two lines. */
+.queue-row { flex-direction: column; align-items: stretch; gap: var(--sp-10); }
+.queue-row-acts { flex-wrap: wrap; justify-content: flex-end; gap: var(--sp-8); row-gap: var(--sp-8); }
+/* The meta line is a run of " · " facts; as a flex row it could not wrap and
+   ran off the edge. As a block it wraps like the sentence it is. */
+.queue-meta { display: block; line-height: var(--lh-15); }
+.queue-meta > svg { vertical-align: -2px; margin-right: var(--sp-4); }
+/* The row's own tap target ("tap to edit") keeps a comfortable body.
+   `flex: 1 1 240px` above is a WIDTH floor for the side-by-side layout — and
+   once the row stacks, flex-basis is measured on the main axis, which is now
+   the HEIGHT. Every queued row was silently 240px tall with the message
+   floating in the middle of a screen of nothing, worst on the short rows
+   (a file name) where there was no text to fill it. Stacked, the text sizes
+   itself. */
+.queue-text { flex: 0 0 auto; min-height: 44px; justify-content: center; }
+
+/* ── A message and the files it names ────────────────────────────────────
+   Three deliveries, one intent (see `grouped` in QueueSheet). The rows keep
+   their own status and their own buttons — one image failing must stay a
+   thing you can retry by itself — but a rule and an indent say they belong
+   together, so the queue stops reading as three unrelated entries. */
+.queue-bundle { border-left: 2px solid var(--line); margin-left: var(--sp-6); }
+.queue-bundle-head {
+  display: flex; align-items: center; gap: var(--sp-4);
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); padding: var(--sp-8) var(--sp-12) 0;
+}
+
+/* A long explanation belongs behind a disclosure, not above every list. */
+.hint-more { padding: 0 var(--sp-14) var(--sp-10); font-size: calc(var(--fs-13) * var(--ui-font, 1)); color: var(--muted); }
+.hint-more > summary {
+  cursor: pointer; color: var(--accent); font-size: calc(var(--fs-12) * var(--ui-font, 1));
+  padding: var(--sp-8) 0; min-height: 36px; display: flex; align-items: center;
+  list-style: none;
+}
+.hint-more > summary::-webkit-details-marker { display: none; }
+.hint-more > summary::after { content: " ›"; transform: rotate(90deg); display: inline-block; margin-left: var(--sp-4); }
+.hint-more[open] > summary::after { transform: rotate(-90deg); }
+.hint-more p { margin: 0 0 var(--sp-8); line-height: var(--lh-14); }
+
+/* Pairing screen: `min-height: 100vh` inside a keyboard-shrunk #root (which is
+   `overflow: hidden`) put the connect button below the clipping edge with no
+   way to scroll to it — on the one screen whose whole job is that button. */
+.auth-gate {
+  min-height: 0; height: 100%; overflow-y: auto;
+  align-items: flex-start;
+  padding: var(--sp-24) var(--sp-16) calc(24px + env(safe-area-inset-bottom));
+  padding-top: calc(24px + env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pulse-h, 0px) + var(--ui-localrt-h, 0px) + var(--ui-tabs-h, 0px));
+}
+.auth-card { margin: auto; }
+
+/* Questions sheet's empty state reads as a card, not a stray line of text. */
+.q-card + .q-card { margin-top: 0; }
+.sheet > .list > .empty > svg { vertical-align: -4px; margin-right: var(--sp-6); }
+/* The row's secondary actions, revealed under "⋯". Left-aligned and indented
+   so it reads as belonging to the row above rather than as a new row. */
+.queue-more { padding: 0 var(--sp-12) var(--sp-10); justify-content: flex-start; }
+/* A `.set-row` is only padded by the `.set-group` around it; inside a bare
+   `.form` (the auto-download pattern box) it was flush to the screen edge. */
+.form > .set-row { padding: 0 var(--sp-10); }
+/* `.form .search` carries its own 10px gutter for the case where it IS the
+   form's own child. Inside a `.set-row` that gutter is the row's already, and
+   the two stack into a field indented twice as far as the select beside it
+   (`ModelField`'s typed fallback, next to the backend drop-down). */
+.form > .set-row .search { margin: 0; }
+
+/* Reader status while the socket is down: the same line, visibly not live.
+   The pulsing dot is the part that lies — it reads as "something is happening
+   right now" on a screen whose every fact is minutes old. */
+.tr-status.tr-linkdown, .tr-turn.tr-inflight.tr-linkdown { color: var(--muted); }
+.tr-status.tr-linkdown .tr-live-dot,
+.tr-turn.tr-inflight.tr-linkdown .tr-live-dot { background: var(--muted); animation: none; }
+
+/* ── Button hints ─────────────────────────────────────────────────────
+   The app carried ~290 `title=` explanations that a phone has never once
+   rendered. `hints.ts` makes them reachable by long-press; this is what they
+   look like when they arrive. */
+
+/* A long-press on a button must open the card, not Android's text-selection
+   callout over the top of it. */
+.key, .send, .row-act, .more-act, .approve-btn, .link-btn, .mic {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* "Why is this greyed out?" is the question the hints most need to answer, and
+   a disabled control dispatches no pointer events at all — so the long-press
+   never starts. Re-enabling them costs nothing: `click` stays suppressed by the
+   engine, so the action still cannot fire. */
+.key:disabled, .send:disabled, .row-act:disabled, .more-act:disabled, .link-btn:disabled {
+  pointer-events: auto;
+  cursor: not-allowed;
+}
+
+.hint-backdrop {
+  /* Above everything, the net-activity strip (60) included: the card is a
+     modal answer to a tap that has just been withheld. */
+  position: fixed; inset: 0; z-index: 70;
+  display: flex; align-items: flex-end; justify-content: center;
+  background: var(--scrim);
+  padding: var(--sp-12) calc(12px + env(safe-area-inset-left)) calc(12px + env(safe-area-inset-bottom));
+  animation: hint-fade var(--dur-fast) ease-out;
+}
+@keyframes hint-fade { from { opacity: 0 } to { opacity: 1 } }
+
+.hint-card {
+  width: 100%; max-width: 520px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-12);
+  padding: var(--sp-14) var(--sp-16) var(--sp-12);
+  box-shadow: 0 12px 40px var(--shadow);
+  animation: hint-rise var(--dur-fast) ease-out;
+}
+@keyframes hint-rise { from { transform: translateY(10px) } to { transform: none } }
+.hint-card.danger { border-color: var(--dead); }
+
+.hint-card-head {
+  display: flex; align-items: center; gap: var(--sp-8);
+  font-size: calc(var(--fs-15) * var(--ui-font, 1)); font-weight: var(--fw-semibold); color: var(--fg);
+}
+.hint-card.danger .hint-card-head { color: var(--dead); }
+.hint-card-what { margin: var(--sp-10) 0 0; font-size: calc(var(--fs-14) * var(--ui-font, 1)); line-height: var(--lh-14); color: var(--fg); }
+.hint-card-when { margin: var(--sp-8) 0 0; font-size: calc(var(--fs-13) * var(--ui-font, 1)); line-height: var(--lh-14); color: var(--muted); }
+.hint-card-acts { display: flex; align-items: center; gap: var(--sp-8); margin-top: var(--sp-14); }
+.hint-card-acts .spacer { flex: 1; }
+.hint-card-acts .send.danger { background: var(--dead); border-color: var(--dead); }
+.hint-card-foot { margin-top: var(--sp-10); font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); }
+
+/* Explain mode is a mode: it has to be visibly ON, and leavable from anywhere.
+   Bottom of the viewport so it can't cover a sheet head. */
+.hint-mode-bar {
+  position: fixed; left: 8px; right: 8px; z-index: 65;
+  bottom: calc(8px + env(safe-area-inset-bottom));
+  display: flex; align-items: center; gap: var(--sp-8);
+  padding: var(--sp-8) var(--sp-10); font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14);
+  background: var(--panel); color: var(--fg);
+  border: 1px solid var(--accent); border-radius: var(--r-10);
+  box-shadow: var(--elev-2);
+}
+.hint-mode-bar > span { flex: 1; }
+.hint-mode-bar > svg { color: var(--accent); }
+
+.hint-toggle.on { background: var(--pick-fill); color: var(--fg); border-color: var(--pick-edge); }
+
+/* Schedules: rows of one-tap chips (weekdays, lead times, how late is still
+   worth running). They wrap rather than scroll — a day you can't see is a day
+   you think you didn't pick. */
+.sched-days { display: flex; flex-wrap: wrap; gap: var(--sp-6); padding: var(--sp-4) var(--sp-10); }
+.sched-days .row-chip { padding: var(--sp-4) var(--sp-10); font-size: calc(var(--fs-13) * var(--ui-font, 1)); min-height: 32px; }
+.sched-days .row-chip.on { background: var(--pick-fill); color: var(--fg); border-color: var(--pick-edge); }
+/* The editor's own rows: on a phone the anchor time and its zone do not fit on
+   one line, and a non-wrapping flex row pushed the zone field off the edge of a
+   container that (before the scroll fix) could not be scrolled to. */
+.sched-row { flex-wrap: wrap; row-gap: var(--sp-6); }
+.sched-row .search { flex: 1 1 9em; min-width: 9em; }
+/* Breathing room under the last control so it never sits flush against the
+   fixed action bar. */
+.sheet-scroll > .form { padding-bottom: var(--sp-16); }
+/* A picked repo in any target picker (`RepoPicker`) — same signal as the check
+   glyph, so the row reads as chosen at a glance on a phone. Deliberately not
+   scoped to `.grow`: the same component draws full-width rows in a sheet body
+   and plain rows inside a `.pad-pick`, and a highlight that appears in only one
+   of those is worse than none. */
+.row.sched-on { background: var(--accent-wash); }
+/* Why save is greyed out, in the action bar next to it. A disabled primary that
+   says nothing reads as a broken button, and this one has three separate
+   reasons (no prompt, no repo, a fire time already in the past). It takes the
+   whole first line of the wrapping bar so the buttons keep their own row. */
+.sheet-actions .sched-blocked { flex: 1 0 100%; margin: 0; padding: 0 var(--sp-2); color: var(--warn); }
+
+/* ── Local scrollback (ScrollbackSheet) ──────────────────────────────────────
+   Reconstructed terminal history, read as text rather than replayed into an
+   xterm: it has to scroll natively with no host on the other end, and it has to
+   WRAP — a phone is 40-odd columns and a clipped line offline is a line lost.
+   The terminal's own background so it still reads as terminal output. */
+.sb-body {
+  flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden;
+  background: var(--term-bg); padding: var(--sp-8) var(--sp-10) calc(env(safe-area-inset-bottom) + 24px);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14);
+  -webkit-user-select: text; user-select: text; overscroll-behavior: contain;
+}
+.sb-line { white-space: pre-wrap; word-break: break-word; min-height: 1.4em; color: var(--fg); }
+.sb-hit { background: var(--ask-tint-hi); border-radius: var(--r-2); }
+.sb-top { margin: 0 0 var(--sp-10); }
+.sb-hits { display: flex; align-items: center; gap: var(--sp-6); flex: 0 0 auto; }
+/* The scrollback's own zoom pair. `margin-left: auto` rather than an order in
+   the flex: the hits group between it and the find field comes and goes with
+   the query, and these two must not walk across the bar when it does. */
+.sb-zoom { display: flex; align-items: center; gap: var(--sp-6); flex: 0 0 auto; margin-left: auto; }
+.sb-zoom .key { min-width: 0; padding: var(--sp-6) var(--sp-6); }
+.sb-zoom .row-sub { font-size: calc(var(--fs-11) * var(--ui-font, 1)); }
+
+/* ── CLI mode: the compose box as a raw key pipe (cliKeys.ts) ───────── */
+/* The toggle sits at the end of the special-keys row, where the raw-input
+   affordances already are. Wider than the arrow keys so it reads as a MODE
+   rather than one more key that types something. */
+.cli-key { display: inline-flex; align-items: center; gap: var(--sp-6); }
+/* Typed characters live on the terminal above, not here — the box holds only
+   its pad, so the caret is the entire UI it needs to show. */
+.compose textarea.pipe {
+  min-height: 40px; color: transparent; caret-color: var(--accent);
+  border-color: var(--accent); background: var(--pipe-bg);
+}
+.cli-bar { gap: var(--sp-10); }
+.cli-note {
+  flex: 1 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: var(--sp-6);
+  font-size: calc(var(--fs-11) * var(--ui-font, 1)); line-height: var(--lh-13); color: var(--muted);
+}
+.cli-note.warn { color: var(--dead); }

@@ -75,8 +75,8 @@ Context, tokens, money and repo health as things a person reads: the context win
   `compactionMethodText()` FOLDS, kept, never deleted; `compactionWindowText` sits DIRECTLY under the
   multiple.
 - `PerRequestSection.tsx` + `perRequest.ts` — $/request: a RATIO OF SUMS (extension `token-stats/web/`).
-- `RepoHealthTiles.tsx` + `repoHealthPlot.ts` + `repoHealthWords.ts` —
-  (also `RepoHealthLongest.tsx`, `RepoHealthMags.tsx` — reuses `repoHealthPlot.ts` geometry and the tiles' `StackChart`, never a second top-edge-is-total stack — `RepoHealthOwn.tsx`, `RepoHealthTable.tsx`) **the repo-health series as charts**, in region 2 of the repo-readings sheet (the sheet ⇒ `web-work`).
+- `RepoHealthTiles.tsx` + `RepoHealthChartKit.tsx` + `RepoHealthStack.tsx` + `RepoHealthWeight.tsx` + `repoHealthPlot.ts` + `repoHealthWords.ts` —
+  (also `RepoHealthLongest.tsx`, `RepoHealthMags.tsx` — reuses `repoHealthPlot.ts` geometry and `RepoHealthStack.tsx`'s `StackChart`, never a second top-edge-is-total stack — `RepoHealthOwn.tsx`, `RepoHealthTable.tsx`) **the repo-health series as charts**, in region 2 of the repo-readings sheet (the sheet ⇒ `web-work`).
   Hand-rolled SVG on the `ContextGraph`/`contextPlot` pattern, **no charting library**: geometry
   pure in the `.ts`, paint in the `.tsx`, every sentence in the words module. **The TOOL states, you
   draw** — `repoHealthPlot.ts` has NO imports and `repoHealthPlot.test.mjs` asserts BY TEXT that it

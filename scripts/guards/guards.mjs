@@ -34,6 +34,7 @@ export const GUARDS = [
   // ── edit: pure file readers ────────────────────────────────────────────────
   { test: "claudemd", tier: "edit", paths: ["CLAUDE.md", ...SKILLS, "docs/notes/**", "tools/skillmap.mjs", "packages/host/src/visualskill.ts"] },
   { test: "webshape", tier: "edit", paths: [...WEB, ...EXT] },
+  { test: "cssshape", tier: "edit", paths: ["packages/web/src/styles.css", "packages/web/src/styles/**", "tools/csssource.mjs"] },
   { test: "backlogpins", tier: "edit", paths: WEB },
   { test: "backstep", tier: "edit", paths: WEB },
   { test: "trafficarchive", tier: "edit", paths: ["scripts/traffic-archive.mjs"] },

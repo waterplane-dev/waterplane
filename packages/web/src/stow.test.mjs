@@ -4,7 +4,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { STOW_KEEP_MS, isStowed, pruneStowed, stow, stowMark, trayAdd, trayEntries, unstow } from "./stow.ts";
+import { STOW_KEEP_MS, coveringKey, isStowed, sharesFact, pruneStowed, stow, stowMark, trayAdd, trayEntries, unstow } from "./stow.ts";
 
 test("pruneStowed drops marks past the keep window and keeps the newest under the cap", () => {
   const now = 10 * STOW_KEEP_MS;
@@ -28,4 +28,16 @@ test("a chip is up exactly while its strip says it is folded", () => {
   assert.deepEqual(trayEntries().map((e) => e.slot), ["next"]);
   down();
   assert.equal(trayEntries().length, 0);
+});
+
+test("a fold is a set of facts: a lost or reordered link is not news, a new one is", () => {
+  stow("shell-links", "\nhttps://x/a\nhttps://x/b\ncode AB-12");
+  assert.ok(isStowed("shell-links", "https://x/b\nhttps://x/a\ncode AB-12"), "order never counts");
+  assert.ok(isStowed("shell-links", "\nhttps://x/a\n"), "a link the screen lost is not news");
+  assert.ok(!isStowed("shell-links", "https://x/a\nhttps://x/c"), "a new link comes back up");
+  assert.ok(!isStowed("shell-links", "await\nhttps://x/a"), "waiting for a code comes back up");
+  assert.equal(coveringKey("shell-links", "https://x/a"), "\nhttps://x/a\nhttps://x/b\ncode AB-12");
+  assert.ok(sharesFact("https://x/a\nhttps://x/c", "https://x/a"));
+  assert.ok(!sharesFact("https://x/c", "https://x/a"), "another session's links are not this fold");
+  unstow("shell-links", "\nhttps://x/a\nhttps://x/b\ncode AB-12");
 });

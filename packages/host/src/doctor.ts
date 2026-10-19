@@ -21,11 +21,11 @@ import { builtinDoctorChecks } from "./plugins/builtin.js";
 import { ptyMax, ptyOpen } from "./ptycap.js";
 import { lanIdentityPresent } from "./lanid.js";
 import { env } from "./env.js";
-import { logTag, BRAND, envName, claudeNewerThanTested, claudeConfigDirFromEnv, NODE_MIN, nodeMeetsMin } from "@waterplane/shared";
+import { logTag, BRAND, envName, claudeConfigDirFromEnv, NODE_MIN, nodeMeetsMin } from "@waterplane/shared";
 import { homedir, release } from "node:os";
 import { findKeepTask, INTEROP_PROBE, interopFromProbe, isWsl, keepAliveCommand, nativeWindowsCheck, wslChecks } from "./doctorwsl.js";
 export { nativeWindowsCheck } from "./doctorwsl.js";
-import { claudeBinResolution, tilde } from "./claudebin.js";
+import { tilde } from "./claudebin.js";
 import { probeAndroidEnv, type AndroidEnvReport } from "./androidenv.js";
 import { compareVersions, currentMode, currentSigPolicy, latestRelease, releaseSource, SignatureRefused } from "./cli/selfupdate.js";
 import { hostStateDir, resolveStateDir, stateDirReport, type RootPicked } from "./branddirs.js";
@@ -34,6 +34,9 @@ import { installedServiceEnv } from "./cli/service.js";
 import { onPath, tmuxChecks, tmuxInstallCommand } from "./tmuxreq.js";
 import { overlaysCheck } from "./themeoverlay.js";
 import { execFileP } from "./proc.js";
+import { run, which } from "./doctorproc.js";
+import { checkClaude } from "./doctorclaude.js";
+export { CLAUDE_INSTALL_CMD, CLAUDE_SIGN_IN_FIX, NO_ACCOUNT_NOTE, classifyClaudeAuth, claudeSignInState, signedOutStatus } from "./doctorclaude.js";
 
 
 export type CheckStatus = "ok" | "warn" | "fail";
@@ -71,32 +74,6 @@ export interface DoctorInput {
   tailscaleIp: string | null;
   tailscaleDns: string | null;
   allowPublic: boolean;
-}
-
-/** Run `cmd args…` with a short leash; never throws. */
-async function run(cmd: string, args: string[], timeout = 8000): Promise<{ out: string; ok: boolean }> {
-  try {
-    const { stdout, stderr } = await execFileP(cmd, args, { timeout, encoding: "utf8" });
-    return { out: `${stdout}${stderr}`.trim(), ok: true };
-  } catch (err: any) {
-    return { out: String(err?.stdout ?? "" ) + String(err?.stderr ?? err?.message ?? err), ok: false };
-  }
-}
-
-const WHICH_TIMEOUT_MS = 8000;
-
-async function which(bin: string): Promise<string | null> {
-  // An absolute/relative path (WATERPLANE_CLAUDE_BIN often is one) isn't on PATH.
-  if (bin.includes("/")) return existsSync(bin) ? bin : null;
-  const began = Date.now();
-  const { out, ok } = await run("/bin/sh", ["-c", `command -v ${JSON.stringify(bin)}`], WHICH_TIMEOUT_MS);
-  if (ok && out) return out.split("\n")[0].trim();
-  // An answer that took the whole leash is no answer: with the event loop held up (WSL reading a
-  // Windows drive), the timer fires on an exited child and its stdout comes back EMPTY, which read
-  // as "not found" for a claude, git and curl that were all there. Ask the PATH directly instead —
-  // a file scan, no timer to lose against.
-  if (Date.now() - began >= WHICH_TIMEOUT_MS * 0.9) return onPath(bin);
-  return null;
 }
 
 /** `onlyInUse`: only EADDRINUSE counts as taken (an address this machine no longer has is not). */
@@ -196,95 +173,6 @@ async function checkPtyCapacity(): Promise<Check> {
   if (free <= 0) return { id: "pty-capacity", status: "fail", detail: `${detail} — no session or build can start`, fix };
   if (free < 32) return { id: "pty-capacity", status: "warn", detail, fix };
   return { id: "pty-capacity", status: "ok", detail };
-}
-
-/** How to sign in, said once for the doctor, the onboarding plan and a peer's row. */
-export const CLAUDE_SIGN_IN_FIX =
-  "Sign in from the phone: open any session on this desktop, tap its sign-in button, sign in in the browser, then tap paste code. (Or run `claude` once in a terminal here.) Sessions stop at the sign-in screen until then.";
-
-/** `claude auth status` output → signed in, signed out, or unreadable (null — never a guess). */
-export function classifyClaudeAuth(out: string): "in" | "out" | null {
-  const text = out.toLowerCase();
-  if (/loggedin["\s:]*false|not logged in|logged out|please run.*login/.test(text)) return "out";
-  if (/loggedin["\s:]*true|logged in|authenticated/.test(text)) return "in";
-  return null;
-}
-
-let authCache: { bin: string; at: number; state: "in" | "out" | null } | null = null;
-let authInflight: Promise<"in" | "out" | null> | null = null;
-
-/**
- * Is claude signed in on this desktop, for a request path (the onboarding plan, a peer's hello).
- * Cached — each read spawns `claude`: a yes for 5 minutes, a no or an unreadable answer for 15 s,
- * so signing in shows up on the next look. Never throws; a failure is null.
- */
-export async function claudeSignInState(bin: string, now = Date.now()): Promise<"in" | "out" | null> {
-  if (authCache && authCache.bin === bin && now - authCache.at < (authCache.state === "in" ? 300_000 : 15_000)) return authCache.state;
-  authInflight ??= (async () => {
-    try {
-      const resolved = await which(bin);
-      const state = resolved ? classifyClaudeAuth((await run(resolved, ["auth", "status"], 15000)).out) : null;
-      authCache = { bin, at: Date.now(), state };
-      return state;
-    } catch { return null; } finally { authInflight = null; }
-  })();
-  return authInflight;
-}
-
-async function checkClaude(bin: string): Promise<Check[]> {
-  const resolved = await which(bin);
-  const res = claudeBinResolution();
-  const home = homedir();
-  if (!resolved) {
-    const tried = res.tried.length ? ` Looked in: ${res.tried.map((t) => tilde(t, home)).join(", ")}.` : "";
-    const win = res.windowsSide
-      ? ` Claude is installed on the Windows side (${res.windowsSide}), but WSL cannot use that one — install it inside WSL too, in the WSL shell: \`npm i -g @anthropic-ai/claude-code\` or the native installer.`
-      : "";
-    return [{
-      id: "claude-binary",
-      status: "fail",
-      detail: `\`${bin}\` not found — ${BRAND.name} currently drives Claude Code primarily (other CLIs come as plugins)`,
-      fix: `Install Claude Code (https://docs.anthropic.com/en/docs/claude-code) or point ${envName("CLAUDE_BIN")} at the binary.${tried}${win}`,
-    }];
-  }
-  const out: Check[] = [];
-  const ver = await run(resolved, ["--version"]);
-  const verLine = ver.ok && ver.out ? ver.out.split("\n")[0] : "";
-  out.push({
-    id: "claude-binary",
-    status: "ok",
-    detail: bin === res.bin && res.source === "found"
-      ? `claude${verLine ? ` ${verLine}` : ""} at ${tilde(resolved, home)} (not on PATH — found in a usual install location)`
-      : `${resolved}${verLine ? ` (${verLine})` : ""}`,
-  });
-  // Newer than the build the heuristics were checked against: a warning with the
-  // remedy already in the product (clihealth), never a refusal. Absent when the
-  // version could not be read.
-  const newer = ver.ok ? claudeNewerThanTested(ver.out.split("\n")[0]) : null;
-  if (newer) out.push({ id: "claude-version", status: "warn", detail: newer });
-
-  // Sessions spawn fine when logged out — they just die on the login screen,
-  // which looks like "the app is broken" from the phone.
-  const auth = await run(resolved, ["auth", "status"], 15000);
-  const state = classifyClaudeAuth(auth.out);
-  if (state === "in") {
-    out.push({ id: "claude-login", status: "ok", detail: "claude is signed in" });
-  } else if (state === "out") {
-    out.push({
-      id: "claude-login",
-      status: "fail",
-      detail: "claude is not signed in",
-      fix: CLAUDE_SIGN_IN_FIX,
-    });
-  } else {
-    out.push({
-      id: "claude-login",
-      status: "warn",
-      detail: "couldn't read `claude auth status` (CLI output may have changed)",
-      fix: "Check from the phone: open a session on this desktop; if it shows a sign-in screen, use its sign-in button.",
-    });
-  }
-  return out;
 }
 
 /**
@@ -809,7 +697,7 @@ export async function runChecks(i: DoctorInput, skipPort = false, skipCapture = 
     checkNode(),
     checkPty(),
     checkPtyCapacity(),
-    checkClaude(i.claudeBin),
+    checkClaude(i.claudeBin, i.usedBackends ?? []),
     builtinDoctorChecks(i.usedBackends ?? []),
     checkCurl(),
     checkGit(),

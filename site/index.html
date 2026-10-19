@@ -153,7 +153,7 @@
 </div>
 <p>You need:</p>
 <ul>
-  <li><strong><a href="https://claude.com/claude-code">Claude Code</a> installed and signed in.</strong> Run <code>claude</code> once in a terminal and complete the login first.</li>
+  <li><strong><a href="https://claude.com/claude-code">Claude Code</a> installed</strong> (<code>curl -fsSL https://claude.ai/install.sh | bash</code>, or <code>npm install -g @anthropic-ai/claude-code</code>), and something for it to run on: a <strong>paid Claude plan</strong> (Pro, Max, Team) or an <strong>Anthropic API key</strong> — run <code>claude</code> once and sign in — or, with no account, a <strong>local model through Ollama</strong>. GitHub Copilot works too, as a plugin (<code>install.sh --with copilot</code>).</li>
   <li><strong>A way for the phone to reach the desktop.</strong> Recommended: <strong><a href="https://tailscale.com">Tailscale</a></strong> on both, on the same tailnet. It works from anywhere, its device sign-in is the gate, and its HTTPS gives the phone push, install and clipboard. From the same Wi-Fi or over a VPN of your own, a password does the gating instead: <a href="https://github.com/waterplane-dev/waterplane/blob/main/docs/install.md#without-tailscale-same-wi-fi-or-your-own-vpn">without Tailscale</a>. With neither, the daemon binds loopback only and is reachable just from the desktop.</li>
 </ul>
 <p>The installer (macOS, Linux, WSL2) brings its own pinned Node, verifies checksums, and adds a <code>waterplane</code> command with <code>start</code>, <code>doctor</code>, <code>service</code>, <code>update</code> and <code>pair</code>:</p>

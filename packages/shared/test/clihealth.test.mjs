@@ -23,6 +23,7 @@ import {
   agoText,
   blankSignal,
   captureSample,
+  clearSeen,
   cleanHealth,
   emptyHealth,
   healthRollup,
@@ -456,6 +457,39 @@ test("cleanHealth clamps rather than believes what came off disk", () => {
   assert.equal(c.signals["gone.away"], undefined);
   // A cleaned record is still gradeable, which is the point of cleaning it.
   assert.equal(signalVerdict(c.signals["prompt.box"], NOW).verdict, "broken");
+});
+
+test("clearSeen drops only the misses the reader saw, and a later miss still counts", () => {
+  const h = emptyHealth();
+  h.version = "2.1.0";
+  const id = "deliver.submit";
+  let t = 1_000_000;
+  // A degraded rate: misses mixed with goods, a fallback and a sample.
+  for (let i = 0; i < 12; i++) observe(h, id, i % 3 === 0 ? "fallback" : "good", { at: t += 1000, via: "press-and-look", raw: "x" });
+  observe(h, id, "good", { at: t += 1000 });
+  const seen = h.signals[id].lastMissAt;
+  assert.equal(signalVerdict(h.signals[id], t).verdict, "degraded");
+
+  const cleared = clearSeen(h.signals[id], seen);
+  assert.equal(cleared.misses, 0);
+  assert.ok(cleared.window.every((o) => o.at > seen), "nothing at or before the read miss survives");
+  assert.equal(cleared.via, undefined);
+  assert.equal(cleared.sample, undefined);
+  assert.equal(cleared.totalMiss, h.signals[id].totalMiss, "all-time totals are not a warning");
+  // A good after the cleared miss is real evidence: working.
+  assert.equal(signalVerdict(cleared, t).verdict, "healthy");
+
+  // Cleared through the newest good too ⇒ nothing seen working since: unknown, said as cleared.
+  const all = clearSeen(h.signals[id], t);
+  assert.equal(signalVerdict(all, t).verdict, "unknown");
+  assert.match(healthSentence(all, t + 60_000), /cleared its misses/);
+
+  // A miss landing after the board was drawn is not cleared by a late tap.
+  h.signals[id] = clearSeen(h.signals[id], seen);
+  observe(h, id, "miss", { at: t += 1000 });
+  const late = clearSeen(h.signals[id], seen);
+  assert.equal(late.misses, 1);
+  assert.equal(late.lastMissAt, t);
 });
 
 test("claudeNewerThanTested: warns only when NEWER than tested, absent when unparsable", async () => {

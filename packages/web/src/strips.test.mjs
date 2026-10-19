@@ -16,12 +16,13 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readAllCss } from "../../../tools/csssource.mjs";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const css = readFileSync(join(here, "styles.css"), "utf8")
+const css = readAllCss()
   // Comments hold braces and stray selectors; strip them before parsing.
   .replace(/\/\*[\s\S]*?\*\//g, "");
 

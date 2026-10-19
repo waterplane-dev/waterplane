@@ -116,7 +116,14 @@ function launchArgs(req: LaunchRequest): LaunchPlan {
   } else if (resumeMode === "continue" && rid) {
     sessionId = rid; // resuming keeps the id (--fork-session is what mints a new one)
   }
-  if (launch.model) args.push("--model", launch.model);
+  // Always pinned. Without a flag the CLI starts on `model` in
+  // ~/.claude/settings.json — which its own `/model` overwrites ("saved as your
+  // default for new sessions"), so one session's wheel switch would pick the
+  // next session's model. `default` is the CLI's own spelling for the
+  // account's built-in default, read past that file. Effort has no such
+  // spelling (`--effort` takes a level only), so an unset effort still follows
+  // the CLI's saved per-model level.
+  args.push("--model", launch.model || "default");
   if (launch.effort) args.push("--effort", launch.effort);
   if (launch.permissionMode) args.push("--permission-mode", launch.permissionMode);
   if (launch.remoteControlled) args.push("--remote-control");

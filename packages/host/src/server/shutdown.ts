@@ -29,6 +29,9 @@ export function installShutdown(ctx: ServerCtx): void {
    */
   for (const sig of ["SIGTERM", "SIGINT"] as const) {
     process.on(sig, () => {
+      // Tell every phone first, while the sockets are still up: without it a
+      // restart is a dropped socket that looks like the tunnel (`host.restarting`).
+      try { ctx.broadcast({ t: "host.restarting", at: Date.now() }); } catch { /* shutdown must never throw */ }
       try { ctx.acks.flush(); } catch { /* shutdown must never throw */ }
       // Debounced ~2 s, and `npm run restart` is routine — without this the last
       // observations before every restart die with the process, which for a record

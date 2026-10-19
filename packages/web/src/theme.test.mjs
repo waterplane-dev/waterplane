@@ -33,8 +33,9 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { REPO_PALETTES } from "@waterplane/shared";
+import { readAllCss } from "../../../tools/csssource.mjs";
 
-const CSS = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "styles.css"), "utf8");
+const CSS = readAllCss();
 
 // ── reading the stylesheet ────────────────────────────────────────────────
 

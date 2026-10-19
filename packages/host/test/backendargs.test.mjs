@@ -52,34 +52,34 @@ const plan = (req) => claudeBackend.launchArgs({ launch: {}, hookPort: PORT, ...
 test("a fresh conversation mints its own session id", () => {
   const { args, sessionId } = plan({});
   assert.match(sessionId, UUID_RE, "a fresh launch must mint an id, not leave it to detection");
-  assert.deepEqual(args, ["--session-id", sessionId, "--settings", HOOKS, ...PLUGIN]);
+  assert.deepEqual(args, ["--session-id", sessionId, "--model", "default", "--settings", HOOKS, ...PLUGIN]);
   // Two fresh launches are two conversations.
   assert.notEqual(plan({}).sessionId, sessionId);
 });
 
 test("continue resumes the directory's most recent conversation", () => {
   const { args, sessionId } = plan({ resumeMode: "continue" });
-  assert.deepEqual(args, ["--continue", "--settings", HOOKS, ...PLUGIN]);
+  assert.deepEqual(args, ["--continue", "--model", "default", "--settings", HOOKS, ...PLUGIN]);
   assert.equal(sessionId, undefined, "which conversation --continue lands on is not knowable here");
 });
 
 test("continue with a known id resumes THAT conversation, and keeps the id", () => {
   const rid = "11111111-2222-3333-4444-555555555555";
   const { args, sessionId } = plan({ resumeMode: "continue", resumeSessionId: rid });
-  assert.deepEqual(args, ["--resume", rid, "--settings", HOOKS, ...PLUGIN]);
+  assert.deepEqual(args, ["--resume", rid, "--model", "default", "--settings", HOOKS, ...PLUGIN]);
   assert.equal(sessionId, rid, "resuming keeps the id — only --fork-session mints a new one");
 });
 
 test("pick hands the choice to claude's own session picker", () => {
   const { args, sessionId } = plan({ resumeMode: "pick" });
-  assert.deepEqual(args, ["--resume", "--settings", HOOKS, ...PLUGIN]);
+  assert.deepEqual(args, ["--resume", "--model", "default", "--settings", HOOKS, ...PLUGIN]);
   assert.equal(sessionId, undefined);
 });
 
 test("fork branches the named conversation, and claims no id for the branch", () => {
   const rid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
   const { args, sessionId } = plan({ resumeMode: "fork", resumeSessionId: rid });
-  assert.deepEqual(args, ["--resume", rid, "--fork-session", "--settings", HOOKS, ...PLUGIN]);
+  assert.deepEqual(args, ["--resume", rid, "--fork-session", "--model", "default", "--settings", HOOKS, ...PLUGIN]);
   assert.equal(sessionId, undefined, "the fork's id is minted by the CLI and adopted from the log");
 });
 
@@ -87,7 +87,7 @@ test("fork without a known id falls back to the most recent conversation", () =>
   // Legacy sessions from before ids were minted at spawn. The fallback is what
   // keeps them forkable at all.
   const { args } = plan({ resumeMode: "fork" });
-  assert.deepEqual(args, ["--continue", "--fork-session", "--settings", HOOKS, ...PLUGIN]);
+  assert.deepEqual(args, ["--continue", "--fork-session", "--model", "default", "--settings", HOOKS, ...PLUGIN]);
 });
 
 test("launch flags are appended in a fixed order, and only when asked for", () => {
@@ -104,9 +104,11 @@ test("launch flags are appended in a fixed order, and only when asked for", () =
     ...PLUGIN,
   ]);
   // An unset flag is ABSENT, never passed empty — `--model ""` is not the same
-  // request as "whatever the CLI defaults to".
+  // request as "whatever the CLI defaults to". The model is the exception: an
+  // unset one is pinned to the CLI's `default`, never left to settings.json,
+  // which the CLI's own `/model` rewrites.
   const bare = plan({ launch: {} }).args;
-  assert.equal(bare.includes("--model"), false);
+  assert.equal(bare[bare.indexOf("--model") + 1], "default");
   assert.equal(bare.includes("--effort"), false);
   assert.equal(bare.includes("--permission-mode"), false);
   assert.equal(bare.includes("--remote-control"), false);

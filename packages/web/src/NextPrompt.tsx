@@ -23,15 +23,29 @@
  * reader, whose working line is its own strip. One mount, because the session
  * screen is one screen with two faces.
  */
-import { Gauge, Hourglass, ListOrdered, ListTodo, Zap } from "lucide-react";
+import { useState } from "react";
+import { Gauge, Hourglass, ListOrdered, ListTodo, Pencil, X, Zap } from "lucide-react";
 import type { NextPromptView } from "./nextPromptState";
 import { pastBudgetLabel, skipQueueNote } from "./sendIntent";
 import { Stowable, StowButton } from "./Stowable";
+import { PromptComposer } from "./PromptComposer";
 
 const ICON = 14;
 
-export function NextPrompt({ view, onSendNow, onPastBudget, onHold, onOpenQueue, onOpenBacklog, keepFocus }: {
+export function NextPrompt({ view, onSendNow, onPastBudget, onHold, onOpenQueue, onOpenBacklog, keepFocus, editableText, onEdit, onCancel }: {
   view: NextPromptView | null;
+  /** The full words of a row that can still be rewritten, or null — no pencil
+   *  is drawn for a row that cannot be (a sent one, an answer keystroke, a
+   *  desktop row with no link). */
+  editableText: (id: string, holder: "phone" | "desktop") => string | null;
+  /** Save a rewrite. `true` when the words landed somewhere (the row, or the
+   *  pad if the row went in meanwhile) and the editor may close; `false` keeps
+   *  it open over the words — the caller has said why. */
+  onEdit: (id: string, holder: "phone" | "desktop", text: string) => boolean;
+  /** Take the row out of line so it never goes in. Drawn only where the row
+   *  can still be rewritten (the same test as the pencil); the caller keeps
+   *  the words on the pad before the row goes. */
+  onCancel: (id: string, holder: "phone" | "desktop") => void;
   /** The phone's ackId or the desktop's item id — `view.holder` says which. */
   onSendNow: (id: string, holder: "phone" | "desktop") => void;
   /** *let it past the budget* on a desktop-held row the budget holds
@@ -53,7 +67,32 @@ export function NextPrompt({ view, onSendNow, onPastBudget, onHold, onOpenQueue,
    *  button on this bar takes. */
   keepFocus: (e: React.PointerEvent) => void;
 }) {
+  // The editor is keyed by the row it OPENED on, not by whatever the strip
+  // shows now: if that row goes in mid-edit, Save still reaches it and the
+  // caller rescues the words to the pad instead of this closing over them.
+  const [editing, setEditing] = useState<{ id: string; holder: "phone" | "desktop"; text: string } | null>(null);
+  if (editing) {
+    const save = () => {
+      const text = editing.text.trim();
+      if (!text) return;
+      if (onEdit(editing.id, editing.holder, text)) setEditing(null);
+    };
+    return (
+      <div className="nextp nextp-editing">
+        <div className="form" style={{ width: "100%" }}>
+          <PromptComposer inline rows={3} prompts={[editing.text]} autoFocus
+            onChange={(next) => setEditing({ ...editing, text: next[0] ?? "" })} placeholder="the next prompt…" />
+          {!editing.text.trim() && <div className="form-hint">Nothing to save — type the prompt, or cancel to keep it as it was.</div>}
+          <div className="row">
+            {editing.text.trim() && <button className="send" onClick={save}>Save</button>}
+            <button className="key" onClick={() => setEditing(null)}>Cancel</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (!view) return null;
+  const editText = editableText(view.id, view.holder);
   return (
     // Folded for THIS entry: the next one in line is a new decision and shows.
     <Stowable slot="next-prompt" stowKey={`${view.holder}:${view.id}`} label="next prompt"
@@ -104,6 +143,16 @@ export function NextPrompt({ view, onSendNow, onPastBudget, onHold, onOpenQueue,
         <button className="key" data-hint="queue.hold" onPointerDown={keepFocus}
           title="hand it to the desktop and let it go in when this session is free, instead of typing it in mid-turn"
           onClick={() => onHold(view.id)}><Hourglass size={ICON} /> when it&apos;s free</button>
+      )}
+      {/* Rewrite it while it has not gone in yet. Absent, not dimmed, on a row
+          that cannot be rewritten. */}
+      {editText != null && (
+        <button className="key" onPointerDown={keepFocus} title="rewrite this prompt before it goes in"
+          onClick={() => setEditing({ id: view.id, holder: view.holder, text: editText })}><Pencil size={ICON} /> edit</button>
+      )}
+      {editText != null && (
+        <button className="key" onPointerDown={keepFocus} title="don't send it — the words are kept on the pad"
+          onClick={() => onCancel(view.id, view.holder)}><X size={ICON} /> cancel</button>
       )}
       {/* Where the rest of them are — and they are in two different places, so
           the button goes to the one this row actually came out of. The phone's

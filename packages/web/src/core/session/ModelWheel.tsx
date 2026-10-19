@@ -35,7 +35,6 @@ export interface ModelWheelProps {
   backends: BackendInfo[] | null;
   canSlash: boolean;
   submitInput(id: string, cwd: string, text: string, kind: "prompt" | "command", holdUntilIdle?: boolean): boolean;
-  setLaunchOpt(patch: Partial<LaunchOpts>): void;
   relaunch(s: SessionInfo, patch: Partial<LaunchOpts>): void;
   /** `session.mode` is live only (`ModeSection`). */
   liveAsk(frame: ClientMessage, blocked?: string): boolean;
@@ -80,7 +79,7 @@ function Placed({ anchor, children }: { anchor: { current: HTMLElement | null };
   return <div ref={ref} className="model-wheel-place" style={{ ["--mw-top" as string]: `${top}px` }}>{children}</div>;
 }
 
-function WheelBody({ cur, backends, canSlash, submitInput, setLaunchOpt, relaunch, liveAsk, onClose }: ModelWheelProps): ReactNode {
+function WheelBody({ cur, backends, canSlash, submitInput, relaunch, liveAsk, onClose }: ModelWheelProps): ReactNode {
   const withMode = hasModeSection(backends, cur, canSlash);
   // The mode rows and ultracode: UNDER the chart and its Apply, ABOVE the model
   // chips — read after a pick, and out of the way of the dragging thumb.
@@ -149,7 +148,8 @@ function WheelBody({ cur, backends, canSlash, submitInput, setLaunchOpt, relaunc
       // as a paste). One per command, in order — the queue keeps that order.
       for (const c of plan.commands) submitInput(cur.id, cur.cwd, c, "command");
       sentSwitch.set(cur.id, { commands: plan.commands, model: plan.model, effort: plan.effort, at: Date.now() });
-      setLaunchOpt({ ...(plan.model ? { model: plan.model } : {}), ...(plan.effort ? { effort: plan.effort } : {}) });
+      // This session only: the new-session defaults are Settings' to change,
+      // never a side effect of switching the one in front of you.
       showToast(plan.commands.join(" · "));
     } else {
       relaunch(cur, plan.patch);

@@ -115,6 +115,7 @@ export function cleanHealth(raw: unknown): CliHealth {
     if (typeof s.sample === "string" && s.sample) rec.sample = redactSample(s.sample);
     if (num(s.sampleAt) != null) rec.sampleAt = num(s.sampleAt);
     if (typeof s.priorVersion === "string" && s.priorVersion) rec.priorVersion = s.priorVersion.slice(0, 40);
+    if (num(s.clearedAt) != null) rec.clearedAt = num(s.clearedAt);
     if (s.priorVerdict && ["healthy", "degraded", "broken", "unknown"].includes(s.priorVerdict)) {
       rec.priorVerdict = s.priorVerdict;
     }

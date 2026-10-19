@@ -95,14 +95,14 @@ const noSecondSocket = {
 const noStorageKeyLiteral = {
   meta: {
     type: "problem",
-    docs: { description: "localStorage keys come from the registry in storage.ts" },
+    docs: { description: "localStorage keys come from the registry in storage.ts (and its storage/keys*.ts slices)" },
     // `prefixes`: every storage prefix the app has had, current AND legacy
     // (`eslint.config.js` derives them from the brand words), so a key literal
     // under an old prefix is refused as firmly as one under the new.
     schema: [{ type: "object", properties: { prefixes: { type: "array", items: { type: "string" } } }, additionalProperties: false }],
     messages: {
       literal:
-        "`{{key}}` is a storage key literal. Keys live in `storage.ts`'s `LS` registry — " +
+        "`{{key}}` is a storage key literal. Keys live in `storage.ts`'s `LS` registry (declared in `storage/keys*.ts`) — " +
         "that is where a key's name, its group, and whether it follows the USER or the " +
         "DEVICE are stated together, and it is what stops a rename leaving the old " +
         "literal behind in the one file nobody grepped.",

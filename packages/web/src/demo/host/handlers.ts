@@ -347,6 +347,12 @@ export const HANDLERS = {
     tier: "A",
     run: (c) => { const h = m(c).numbers?.clihealth; if (h) c.reply({ t: "clihealth", health: h.health, rollup: h.rollup }); },
   },
+  // The demo board is a fixture: a clear is acknowledged with the board as it
+  // is, so the tap ends in its receipt and the rows read as staged.
+  "clihealth.clear": {
+    tier: "A",
+    run: (c) => { const h = m(c).numbers?.clihealth; if (h) c.reply({ t: "clihealth", health: h.health, rollup: h.rollup }); },
+  },
   "meter.get": { tier: "A", run: (c) => { const s = m(c).numbers?.meter; if (s) c.reply({ t: "meter.status", summary: s }); } },
   "artifacts.get": {
     tier: "A",

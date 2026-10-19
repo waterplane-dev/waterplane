@@ -101,7 +101,7 @@ export interface TermAreaProps {
     | "termNonce" | "readMode" | "setView" | "readerCmd" | "outlineJump" | "transcriptNonce">;
   q: Pick<QueueApi, "entries" | "pendingEntry" | "answerPrompt" | "retryPendingCreate" | "submitInput" | "blocked">;
   compose: Pick<ComposeApi, "cliMode" | "sendInput" | "focusPipe" | "toggleCliMode" | "noteCursorLine">;
-  launch: Pick<Launch, "sessionCan" | "openCwd" | "runForkRequest" | "relaunch" | "setLaunchOpt">;
+  launch: Pick<Launch, "sessionCan" | "openCwd" | "runForkRequest" | "relaunch">;
   chrome: SessionChrome;
   backends: BackendInfo[] | null;
   /** Whether the READER is the thing on screen (App's `readerShown`). */
@@ -159,7 +159,7 @@ function ScreenCorner({ zoom: zoomOn, active, pending, readerShown, readMode, se
   sessionCan: Launch["sessionCan"];
   chrome: SessionChrome;
   /** What the model wheel needs to land a pick — `ModelSheet`'s two paths. */
-  wheel: Pick<Launch, "relaunch" | "setLaunchOpt"> & Pick<QueueApi, "submitInput"> & Pick<Connection, "liveAsk">
+  wheel: Pick<Launch, "relaunch"> & Pick<QueueApi, "submitInput"> & Pick<Connection, "liveAsk">
     & { backends: BackendInfo[] | null };
 }): ReactNode {
   const [wheelOpen, setWheelOpen] = useState(false);
@@ -308,7 +308,7 @@ function ScreenCorner({ zoom: zoomOn, active, pending, readerShown, readMode, se
     </div>
     {wheelOpen && !pending && !isShellBackend(wheel.backends, active.backend) && (
       <ModelWheel cur={active} backends={wheel.backends} canSlash={sessionCan(active, "slash")}
-        submitInput={wheel.submitInput} setLaunchOpt={wheel.setLaunchOpt} relaunch={wheel.relaunch} liveAsk={wheel.liveAsk}
+        submitInput={wheel.submitInput} relaunch={wheel.relaunch} liveAsk={wheel.liveAsk}
         anchor={wheelBtn} onClose={() => setWheelOpen(false)} />
     )}
   </>);
@@ -378,7 +378,7 @@ export function TermArea(p: TermAreaProps): ReactNode {
   const corner = (zoom?: boolean) => (
     <ScreenCorner zoom={zoom} active={active} pending={pending} readerShown={readerShown} readMode={readMode}
       setView={setView} sessionCan={sessionCan} chrome={chrome} openOutline={openOutline}
-      wheel={{ backends, submitInput, relaunch: launch.relaunch, setLaunchOpt: launch.setLaunchOpt, liveAsk: conn.liveAsk }} />
+      wheel={{ backends, submitInput, relaunch: launch.relaunch, liveAsk: conn.liveAsk }} />
   );
   // `+ later` (`isLaterId`): there is no session and none is on its way, so
   // nothing here is a terminal — the one sentence is the view. The compose

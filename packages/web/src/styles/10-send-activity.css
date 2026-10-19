@@ -1,0 +1,508 @@
+/* 10-send-activity.css: SendSheet, Activity (.act-*), triage, CLI health, Confirm, launcher nav, context graph start. */
+/* ── The one send surface (`SendSheet`) ───────────────────────────────
+   Two collapsed rows, *To* and *When*, between the prompt box and the pinned
+   action bar. They are BUTTONS, full width, with the answer on the row itself:
+   a summary that does not state its own answer is a label, and the whole claim
+   this sheet makes is that four decisions fit on one screen. The expansion
+   opens IN PLACE (never a second sheet — that is the "complicated screen" this
+   replaced) and is inset with the same accent rule the pad's pickers use, so
+   "this belongs to the row above" needs no explaining. */
+.send-sum {
+  display: flex; align-items: center; gap: var(--sp-10); width: 100%;
+  min-height: 48px; padding: var(--sp-10) var(--sp-12); text-align: left;
+  background: var(--panel); color: var(--fg);
+  border: 0; border-top: 1px solid var(--line); cursor: pointer;
+}
+.send-sum-k { flex: 0 0 auto; color: var(--muted); font-size: calc(var(--fs-13) * var(--ui-font, 1)); min-width: 3.2em; }
+/* The answer takes the room and truncates rather than wrapping: a two-line
+   summary row is the same height as the picker it was meant to save. */
+.send-sum-v { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.send-exp {
+  padding: 0 var(--sp-12) var(--sp-10); border-left: 2px solid var(--accent); margin-left: var(--sp-12);
+}
+.send-exp .segmented { padding: var(--sp-8) 0; background: none; border-bottom: 0; }
+.send-exp .sched-days, .send-exp .form-hint, .send-exp .section { padding-left: 0; padding-right: 0; }
+.send-exp .row { padding-left: var(--sp-6); }
+/* The target and repo lists have to take their space out of the composer, or a
+   dozen repos push the send button off the bottom of the phone. */
+.send-exp .pad-pick, .send-exp .list { max-height: 42vh; overflow-y: auto; }
+
+/* ── Activity: every posted piece of work, one row for its whole life ──
+   Two rules here are load-bearing and should survive any restyling.
+
+   The bucket is the row's LEFT EDGE, not its background. Six tinted row
+   backgrounds in a scrolling list is a rainbow nobody reads and it costs the
+   prose its contrast; a 3 px rule at the margin is legible at a glance and
+   costs nothing.
+
+   And a `done` row is DIMMED, never hidden. The whole claim of this screen is
+   that a row never vanishes on a state change — it changes verdict — so the
+   finished ones have to stay where they were, just quieter. Its WORDS dim, never
+   its buttons: a whole row at .62 made a working "save to phone" look dead. */
+.act-list { padding-bottom: var(--sp-8); }
+.act-row {
+  border-bottom: 1px solid var(--line);
+  border-left: 3px solid transparent;
+  padding: var(--sp-2) 0 var(--sp-6);
+}
+.act-needsYou { border-left-color: var(--warn); }
+.act-failed   { border-left-color: var(--dead); }
+.act-running  { border-left-color: var(--accent); }
+.act-waiting  { border-left-color: var(--dim); }
+.act-scheduled{ border-left-color: var(--sched); }
+.act-done     { border-left-color: var(--ok); }
+.act-done .act-body { opacity: .62; }
+.act-row.act-aiming { background: var(--accent-wash); }
+
+.act-body {
+  display: flex; flex-direction: column; gap: var(--sp-4); width: 100%;
+  padding: var(--sp-8) var(--sp-12); text-align: left; background: none; border: 0; color: var(--fg); cursor: pointer;
+}
+.act-head { display: flex; align-items: center; gap: var(--sp-6); color: var(--muted); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.act-where { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-when { flex: 0 0 auto; }
+/* …except the ID, which is the one thing in this head that is neither prose nor
+   a clock (`assessRowHead`'s `head.id`). A backlog id is ~14 mono characters and
+   `0 0 auto` is a claim that they fit: at `--ui-font` 1.45 it hangs 135px off a
+   320px screen and at a forced 1.9 it drags the whole row into a sideways
+   scroll, taking the words on the left of it out of view. `0 1 auto` +
+   `min-width: 0` lets it ellipsis instead — a truncated id still reads as an
+   id, and the sentence beside it stays where a thumb can read it. */
+.act-when.mono { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Two lines, then a tap. "Is this the one I lost?" is unanswerable from one
+   clipped line, and sixty full prompts is a list nobody can scan. */
+.act-text {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; white-space: pre-wrap; word-break: break-word; font-size: calc(var(--fs-14) * var(--ui-font, 1));
+}
+.act-text-full { display: block; -webkit-line-clamp: unset; }
+.act-verdict, .act-delivery, .act-due, .act-last, .act-tries, .act-stale, .act-prog {
+  display: flex; align-items: center; gap: var(--sp-6); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted);
+}
+.act-stale { color: var(--warn); }
+.act-last-bad { color: var(--dead); }
+.act-bar { flex: 1 1 auto; height: 3px; background: var(--line); border-radius: var(--r-2); overflow: hidden; }
+.act-bar > i { display: block; height: 100%; background: var(--accent); }
+.act-prog-n { flex: 0 0 auto; }
+
+.act-targets { padding: 0 var(--sp-12) var(--sp-4) var(--sp-12); }
+.act-target { display: flex; align-items: center; gap: var(--sp-8); padding: var(--sp-4) 0; font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.act-target-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-target-state { flex: 0 0 auto; color: var(--muted); }
+.act-t-failed .act-target-state { color: var(--dead); }
+.act-t-done .act-target-state { color: var(--ok); }
+
+.act-acts { display: flex; flex-wrap: wrap; gap: var(--sp-6); padding: var(--sp-2) var(--sp-12) var(--sp-4); }
+.act-acts-more { padding-top: 0; }
+/* A row's verbs wrap among themselves; `more` sits beside the group, never in its line.
+   A basis of 0 means the group never pushes `more` onto a row of its own: it takes what
+   is left of the FIRST line and wraps its own buttons inside that. */
+.act-acts-verbs { display: flex; flex-wrap: wrap; gap: var(--sp-6); flex: 1 1 0; min-width: 0; }
+.act-acts > .act-more { flex: none; align-self: flex-start; }
+/* …and a verb wider than what is left (a long one at a large `--ui-font`) wraps its WORDS
+   inside its button rather than painting over `more` — `.assess-sheet .act-acts`'s rule. */
+.act-acts-verbs > .key { flex: 0 1 auto; min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: break-word; }
+.act-acts-verbs > .key > svg { flex: none; }
+/* What the row CANNOT do — deliberately nothing like a button.
+   A disabled `.key` keeps its border, its icon and its size and differs only by
+   `opacity: .4`, which on a phone (no hover, no cursor) is not a signal, it is a
+   riddle: "are these clickable or not — it looks not clickable but I think I
+   can". So: no border, no background, no min-height, muted text at the size of
+   the other explanation lines on the row, and NO hint of a target — the reason
+   is the whole content, which is what makes the fact readable instead of
+   guessable. Keep it that way; do not restyle these back into buttons. */
+.act-cants { display: flex; flex-direction: column; gap: var(--sp-2); padding: 0 var(--sp-12) var(--sp-6); }
+.act-cant {
+  display: inline-flex; align-items: flex-start; gap: var(--sp-6);
+  color: var(--muted); font-size: calc(var(--fs-11) * var(--ui-font, 1)); line-height: var(--lh-14);
+  background: none; border: 0; padding: 0; cursor: default;
+}
+.act-cant svg { flex: 0 0 auto; margin-top: var(--sp-2); opacity: .8; }
+.act-cant-inline { padding: 0 var(--sp-2); }
+.act-aim { padding: 0 var(--sp-12) var(--sp-10); border-left: 2px solid var(--accent); margin-left: var(--sp-12); }
+.act-aim .row { padding-left: var(--sp-6); }
+.act-aim .form-hint { padding-left: 0; }
+.act-filters { display: flex; flex-wrap: wrap; gap: var(--sp-6); padding: var(--sp-8) var(--sp-12); border-bottom: 1px solid var(--line); }
+.act-count { color: var(--muted); font-size: calc(var(--fs-11) * var(--ui-font, 1)); }
+/* Activity's head: the kit's filter chips (one always lit), the line that NAMES the empty
+   buckets instead of drawing a chip reading 0, and the triage toggles. `.act-hint` only carries
+   a catalog hint for long press; it must not become a flex item of its own. */
+.fchips.act-fchips { padding: var(--sp-2) var(--sp-6) 0; }
+.act-none { padding: 0 var(--sp-12) var(--sp-4); color: var(--muted); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.fchips.act-toggles { padding: 0 var(--sp-6) var(--sp-2); border-bottom: 1px solid var(--line); }
+.act-hint { display: contents; }
+
+/* ── Triage: eighty-four rows, a couple of minutes ──────────────────────
+   The strip under the chips. Its four controls all HIDE or REORDER rows, so
+   every one of them stays visibly lit while it is on: this is the screen a
+   person opens to find a prompt they think they lost, and a filter that is
+   quietly still on from last week is indistinguishable from the loss. */
+.act-triage {
+  display: flex; flex-wrap: wrap; gap: var(--sp-6); padding: var(--sp-6) var(--sp-12);
+  border-bottom: 1px solid var(--line);
+}
+
+/* "Showing only the ones you tapped Manage over."
+   The sheet may hold a caller's shortlist (App's `activityFocus`), and this is
+   the screen whose whole job is proving nothing was lost — so a subset is never
+   silent: accent-tinted, naming what it is showing, with the way out in the
+   same line. */
+.act-focus {
+  display: flex; align-items: center; gap: var(--sp-8); flex-wrap: wrap;
+  background: var(--accent-tint); border-bottom: 1px solid var(--line); color: var(--fg);
+}
+.act-focus .key { margin-left: auto; }
+
+/* The checkbox column. Only present in selection mode, which is why the row
+   becomes a flex container only then — an always-on 34 px gutter would cost
+   the prose a tenth of a phone's width for a mode nobody is in. */
+.act-row.act-picking { display: flex; align-items: flex-start; gap: 0; }
+.act-row.act-picking .act-rowmain { flex: 1 1 auto; min-width: 0; }
+.act-pick {
+  flex: 0 0 auto; background: none; border: 0; color: var(--muted);
+  padding: var(--sp-10) var(--sp-4) var(--sp-10) var(--sp-8); cursor: pointer;
+}
+.act-pick.on { color: var(--accent); }
+
+/* A filed row is DIMMED and marked, never hidden from its own chip: "dismiss
+   is not delete" has to be visible on the row, not only in a tooltip. Its words
+   dim; its "bring back" stays a button that looks like one. */
+.act-filed .act-body { opacity: .7; }
+/* The assessment's proposal cards borrow the class and have no `.act-body`: they keep the
+   whole-card dim until that sheet splits its words from its buttons too. */
+.q-card.act-filed { opacity: .7; }
+.act-filed-note { display: flex; align-items: center; gap: var(--sp-6); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); }
+
+/* The schedule list's two kinds. A repeating rule and a one-off are read for
+   different reasons, and a heading is the cheapest thing that can say which you
+   are looking at — the rows themselves render identically. Muted and small: it
+   is a divider, not a control. */
+.sched-head {
+  display: flex; align-items: center; gap: var(--sp-6);
+  padding: var(--sp-10) var(--sp-12) var(--sp-4) var(--sp-12); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted);
+}
+
+/* A schedule card's typed name: a line of its own, WRAPPED. As a `.row-title`
+   beside two pills it was clipped mid-word ("Spend what i…"). It breaks only
+   between words, unless one word alone is wider than the card. */
+.sched-title {
+  margin-bottom: var(--sp-4); font-size: calc(var(--fs-16) * var(--ui-font, 1)); font-weight: var(--fw-semibold); line-height: var(--lh-13);
+  overflow-wrap: break-word;
+}
+
+/* A card's quieter verbs (the link to its work, skip next, pause, delete), under its two
+   buttons: plain text-buttons, so the weight says which two the card is opened for. Quieter
+   in paint, never in reach — each is still a 44 px target, and none is greyed. */
+.sched-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--sp-16); margin-top: var(--sp-2); }
+.sched-acts:empty { display: none; }
+.sched-acts .link-btn { min-height: 44px; padding: 0 var(--sp-2); margin: 0; font-size: calc(var(--fs-13) * var(--ui-font, 1)); }
+.sched-acts-hint { display: contents; }
+
+/* The one-offs that are over: a SENTENCE at the foot of the list, not a section
+   of rows. It sits apart from the last card so it is not read as one. */
+.sched-spent { margin-top: var(--sp-10); }
+
+/* **The directory of clocks.** A one-off aimed at one place is a BACKLOG row —
+   recurrence decides the list — so these are not cards and must not look like
+   them: no border, no button row, one line each, and the whole line is the one
+   affordance it has. Deliberately quieter than `.q-card`: a card is something
+   you act on here, a line is a door to somewhere the acting happens. */
+.sched-head-note { margin-left: auto; font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--dim); }
+.sched-clocks { display: flex; flex-direction: column; }
+.sched-clocks-repo {
+  padding: var(--sp-6) var(--sp-12) var(--sp-2) var(--sp-12); font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--dim);
+}
+/* The When editor for a re-time, drawn OVER the list that asked, so a cancel
+   leaves that list's ticks and filter exactly where they were. */
+.retime-layer { position: fixed; inset: 0; z-index: 30; background: var(--bg); display: flex; flex-direction: column; }
+.retime-layer > .sheet { flex: 1 1 auto; min-height: 0; }
+
+/* The pick list's line: the tick, then the ordinary line inside it — so the
+   phone-width wrap below applies to the words and never strands the tick. */
+.sched-clock.sched-clock-pick { flex-wrap: nowrap; align-items: flex-start; }
+.sched-clock.sched-clock-inner { flex: 1 1 0; min-width: 0; padding: 0; border: 0; min-height: 0; }
+
+.sched-clock {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-8); width: 100%; text-align: left;
+  /* A fingertip row, not a line of text with a tap target somewhere in it. */
+  min-height: 40px; padding: var(--sp-8) var(--sp-12);
+  background: none; border: none; border-bottom: 1px solid var(--line);
+  font: inherit; font-size: calc(var(--fs-13) * var(--ui-font, 1)); color: var(--fg); cursor: pointer;
+}
+button.sched-clock:active { background: var(--raise); }
+.sched-clock-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sched-clock-when { flex: 0 1 auto; min-width: 0; font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--sched); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sched-clock-state { flex: none; font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); }
+.sched-clock-go { flex: none; color: var(--muted); }
+/* Why a waiting line waits — its own full-width line under the rest, after the
+   open icon too (`order`), so the sentence is read and not ellipsed. */
+.sched-clock-why { flex: 1 0 100%; order: 1; font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); white-space: normal; }
+/* At phone width the clock and the state drop under the words rather than
+   squeezing the one thing that tells two rows apart down to an ellipsis. */
+@media (max-width: 460px) {
+  .sched-clock { flex-wrap: wrap; align-items: flex-start; }
+  .sched-clock-name { flex: 1 0 100%; white-space: normal; }
+}
+
+/* A group of rows that say the same thing. The strip is the decision unit; the
+   rows under it keep every one of their own buttons. */
+.act-group { border-left: 0; }
+.act-group-head {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-8);
+  padding: var(--sp-6) var(--sp-12) 0 var(--sp-12); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted);
+}
+.act-group-head .act-pick { padding: 0 var(--sp-4) 0 0; }
+.act-group-n { display: flex; align-items: center; gap: var(--sp-4); color: var(--fg); }
+.act-group-span { flex: 0 0 auto; }
+/* The one fact that decides "already done". It is the only thing on this strip
+   that gets a colour, because it is the only one that changes the answer. */
+.act-group-ran { display: flex; align-items: center; gap: var(--sp-4); color: var(--ok); }
+.act-group-else { flex: 0 0 auto; }
+.act-group-more { margin-left: auto; }
+
+/* The bulk bar, pinned in `.sheet-actions`. It always states its counts on the
+   buttons themselves — "file 61 away" is a sentence you can check before you
+   tap it, and "file away" is not. */
+.act-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6); width: 100%; }
+.act-bulk-n { flex: 0 0 auto; color: var(--muted); font-size: calc(var(--fs-12) * var(--ui-font, 1)); margin-right: var(--sp-2); }
+.act-bulk .act-cants { flex: 0 0 100%; padding: 0; }
+/* **A label that states the whole decision has to WRAP — never clip, never
+   scroll.** `.key` is `flex: 0 0 auto` with `white-space: normal` unused, so a
+   button here was always its max-content width: `Apply in <repo> — retire 2 ·
+   post 3 new · order pinned` was cut off at the right edge of a phone, and that
+   sentence is the last thing read before the only irreversible tap on the
+   screen. It is deliberately a whole sentence rather than `Apply 4`, so
+   truncating it undoes the reason it exists.
+
+   `flex: 0 1 auto` and not `1 1`: these buttons may shrink and wrap, but a bar
+   of three short verbs must not stretch them across the row. The 44 px
+   fingertip floor is untouched — `min-width` is left alone on purpose, and
+   `max-width: 100%` is what a single over-wide button needs. */
+.act-bulk .key {
+  flex: 0 1 auto; max-width: 100%; text-align: center;
+  white-space: normal; overflow-wrap: break-word; word-break: normal;
+}
+
+/* ── CLI health (Decision 8) ─────────────────────────────────────────
+   The board that says what the app can still read off the CLI it drives.
+   Amber is the setupwatch colour on purpose: an amber chip in this app
+   already means "a check found something and nothing is broken yet". */
+/* The topbar chip is icon-only with a count badge, the bell's shape. Its own
+   class, NOT `.cli-key` — that one is the compose row's CLI-mode toggle, an
+   unrelated control that would inherit every rule written here. `danger` is
+   the generic `.key.danger`; only the amber half needs saying. */
+.cli-health-key { position: relative; }
+.cli-health-key.warn { color: var(--warn); border-color: var(--warn-edge); }
+/* Geometry is `.notif-badge`'s, the colours deliberately are not: `--dead` on
+   the bell means unread, and here it would paint an amber "degraded" chip in
+   the red that means broken. `currentColor` takes the severity the button is
+   already wearing, so the badge cannot disagree with the chip it sits on. */
+.cli-health-badge {
+  position: absolute; top: -4px; right: -4px; min-width: 16px; height: 16px; padding: 0 var(--sp-4);
+  box-sizing: border-box; background: var(--raise); color: inherit; box-shadow: 0 0 0 1px currentColor;
+  border-radius: var(--r-pill); font-size: calc(var(--fs-10) * var(--ui-font, 1)); line-height: 16px; text-align: center; font-weight: var(--fw-bold);
+}
+.cli-pill {
+  flex: 0 0 auto; font-size: calc(var(--fs-11) * var(--ui-font, 1)); text-transform: uppercase; letter-spacing: .04em;
+  padding: var(--sp-2) var(--sp-6); border-radius: var(--r-pill); border: 1px solid var(--line); color: var(--muted);
+}
+.cli-pill.cli-healthy { color: var(--ok); border-color: var(--ok-edge); }
+.cli-pill.cli-degraded { color: var(--warn); border-color: var(--warn-edge); }
+.cli-pill.cli-broken { color: var(--dead); border-color: var(--dead-edge); }
+
+.cli-summary {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8);
+  padding: var(--sp-10) var(--sp-14); border-bottom: 1px solid var(--line);
+}
+.cli-summary-txt { font-size: calc(var(--fs-13) * var(--ui-font, 1)); color: var(--fg); }
+.cli-summary-ver { flex: 1 1 100%; font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); }
+/* The re-arm note takes its own row: it is the most likely explanation for
+   everything under it, and a clause tucked after a version string reads as
+   metadata rather than as the cause. */
+.cli-rearm { flex: 1 1 100%; font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--warn); }
+.cli-clear { display: inline-flex; align-items: center; gap: var(--sp-4); }
+
+.cli-row { padding: var(--sp-10) var(--sp-14); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: var(--sp-6); }
+/* The verdict is the row's LEFT EDGE, not its background — the same call
+   `ActivitySheet` makes: a tinted row competes with the text it is about. */
+.cli-row.cli-degraded { border-left: 2px solid var(--warn); }
+.cli-row.cli-broken { border-left: 2px solid var(--dead); }
+.cli-row.cli-healthy, .cli-row.cli-unknown { border-left: 2px solid transparent; }
+.cli-row-top { display: flex; align-items: center; gap: var(--sp-8); }
+.cli-name { flex: 1 1 auto; min-width: 0; font-size: calc(var(--fs-13) * var(--ui-font, 1)); color: var(--fg); }
+.cli-say { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); line-height: var(--lh-14); }
+.cli-via { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--warn); }
+.cli-via b { font-weight: var(--fw-semibold); }
+/* A breadcrumb the primary rule has been confirmed over: same row, past tense,
+   and out of the alarm colour. Amber here is a claim that the app is standing
+   on its fallback right now, and a four-day-old one is not that. */
+.cli-via.cli-past { color: var(--muted); }
+.cli-sample.cli-past { color: var(--muted); }
+/* Wide by nature — a captured screen row is as long as the terminal was. It
+   scrolls inside itself rather than widening the sheet. */
+.cli-sample {
+  margin: 0; padding: var(--sp-6) var(--sp-8); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-6);
+  font-size: calc(var(--fs-11) * var(--ui-font, 1)); line-height: var(--lh-14); white-space: pre-wrap; word-break: break-word; overflow-x: auto; color: var(--fg);
+}
+.cli-sample-at { color: var(--muted); }
+.cli-means { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); }
+.cli-means > summary { cursor: pointer; color: var(--accent); list-style: none; }
+.cli-means > summary::-webkit-details-marker { display: none; }
+.cli-means > summary > svg { vertical-align: -2px; margin-right: var(--sp-4); }
+.cli-means > div { padding: var(--sp-6) 0 0; line-height: var(--lh-14); }
+.cli-means-fb { color: var(--warn); }
+.cli-stats { font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); }
+
+/* ── Confirm (Confirm.tsx) ───────────────────────────────────────────
+   The armed tap needs no rules of its own — it reuses whatever class the
+   button already had plus `.danger`, which is the point of it. Only the
+   dialog, which stands in for `window.confirm`, has a shape. */
+.confirm-modal { max-width: 340px; }
+.ask-text-input { width: 100%; box-sizing: border-box; font: inherit; font-size: var(--fs-16); padding: var(--sp-8) var(--sp-10); border: 1px solid var(--line); border-radius: var(--r-8); background: var(--bg); color: var(--fg); }
+.ask-text-note { margin-top: var(--sp-6); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); line-height: var(--lh-14); }
+.confirm-lines { margin: 0; padding-left: var(--sp-16); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); line-height: var(--lh-15); }
+.confirm-remember { display: flex; align-items: center; gap: var(--sp-8); margin-top: var(--sp-10); min-height: 44px; font-size: calc(var(--fs-13) * var(--ui-font, 1)); color: var(--fg); }
+.confirm-remember input { width: 20px; height: 20px; margin: 0; }
+.confirm-go { background: var(--dead); border-color: var(--dead); color: var(--on-dead); }
+/* An `info` ask loses nothing either way: its yes is the ordinary primary, not the red of a delete. */
+.confirm-go.info { background: var(--accent); border-color: var(--accent); color: var(--on-accent, #fff); }
+
+/* The cached-age line an empty state carries above it (`Empty.tsx`). Set
+   apart from the sentence under it, because "this is old" and "this is
+   empty" are two claims and reading them as one is how a stale list passes
+   for a current one. */
+.empty-stale { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--warn); padding-bottom: 0; }
+
+/* ── Launcher navigation menu ────────────────────────────────────────
+   The burger and its panel. The panel is a full-width flex child of the
+   topbar, not an absolutely-positioned popover: the topbar already wraps, so a
+   row is the one layout that cannot end up off-screen or under the segmented
+   tabs on a narrow phone. Same markup as the repo rows' "⋯" overflow
+   (`.row-more`/`.more-act`), so the two menus in this app behave alike. */
+.nav-more { margin: var(--sp-2) -12px -10px; }
+.nav-more .hint-toggle { padding: var(--sp-6) var(--sp-12); }
+.nav-key.on { background: var(--raise); }
+
+/* ── Context-window graph ──────────────────────────────────────────────
+   The row miniature, the chart, and the two lines under it. The MARKS are
+   coloured in `ContextGraph.tsx` — three validated hexes that must stay in one
+   place, since changing one means re-running the palette validator — so what
+   is here is layout and ink only. */
+
+/* The launcher row's two miniatures, as one floated tile.
+   Window curve + reading, spend curve + session total, cost multiple: three
+   short readouts STACKED, right-aligned, with the prompt wrapping around the
+   left of them. It was one inline row pushed right by `margin-left: auto` on the
+   meta line, which needed a line of its own on any phone and put the readings a
+   line away from the text they belong to.
+   Right edge first (`align-items: flex-end`), because that edge is the one that
+   never moves: the figures are tabular and the curves are a fixed 76px, so the
+   three rows line up into a column whatever the numbers do.
+   `shape-margin` is deliberately absent — the tile is a rectangle and the gutter
+   is plain `margin`, which every engine here honours. */
+.row-spark {
+  float: right; display: flex; flex-direction: column; align-items: flex-end;
+  /* The two curves need AIR between them. At 2px the spend curve's dashed total
+     sat a few pixels under the context line and the pair read as one chart with
+     two series — which is the one thing the two miniatures must never look like
+     (see `ContextGraph.tsx`'s header: they share a unit and nothing else). */
+  gap: var(--sp-6); margin: var(--sp-2) 0 var(--sp-2) var(--sp-10); color: var(--muted);
+}
+/* The tile OPENS the context sheet, so it has to look like a surface you can
+   press — and a phone shows neither a cursor nor a `title`. The dotted underline
+   every other tappable readout here wears is for a LINE OF TEXT; under a stack
+   of two SVGs it would draw a rule across the row. So the mark is the tile's own
+   edge: a hairline well, which is the same vocabulary the sheets use for "this
+   is a thing, not part of the paragraph".
+   The padding grows the FLOAT box, which is why the left margin drops by the
+   same 4px it adds — the gist wraps at exactly the column it did before. */
+.row-spark.tappable {
+  padding: var(--sp-4) var(--sp-6); margin-left: var(--sp-6); border-radius: var(--r-8);
+  border: 1px solid var(--line); background: var(--well); cursor: pointer;
+}
+/* Pressed state, not a hover one: touch has no hover, and the only moment a
+   phone can be told "yes, that" is while the finger is down. */
+.row-spark.tappable:active { background: var(--accent-tint); border-color: var(--accent-edge); }
+.row-spark.tappable:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* The multiple reads as a figure in the readout, not as a badge parked beside
+   one: same colours (they are what says "this is a warning"), tighter box, and
+   the meta line's type size rather than the badge line's. It leads the tile — it
+   is the one reading here that is a judgement — and gets a hair more air under
+   it than the two curves give each other, so it reads as the heading of the
+   group rather than as a third row of it. */
+.row-spark .tag { padding: 0 var(--sp-6); font-size: calc(var(--fs-11) * var(--ui-font, 1)); line-height: var(--lh-15); }
+.row-spark > .tag:first-child { margin-bottom: 1px; }
+.ctx-spark { display: block; overflow: visible; }
+/* Curve + its latest reading, one unit. The number is `tnum` so a row that
+   ticks from 9% to 10% does not shift the curve sideways, and it sits AFTER
+   the chart because the eye reads the shape first and the figure to settle
+   it. Not a control — it is inside the row button (see ContextSparkline). */
+.ctx-spark-pair { display: inline-flex; align-items: center; gap: var(--sp-4); }
+.ctx-spark-val { font-size: var(--fs-11); font-variant-numeric: tabular-nums; color: var(--muted); }
+/* What the session has USED in total, beside what its next turn re-reads. One
+   step quieter than the context reading: they share a line and the first one is
+   the one that changes with every turn. */
+.ctx-spark-use {
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  font-size: var(--fs-11); font-variant-numeric: tabular-nums; color: var(--muted); opacity: 0.8;
+}
+/* Past the person's spend marks (`shared/spendwarn.ts`, Settings › Sessions):
+   orange, then red — the owner asked for red at the second mark, so this is
+   the one cost readout that uses `--dead`. Text colour plus a triangle glyph,
+   never colour alone. */
+.spend-warn-warn { color: var(--warn); opacity: 1; font-weight: var(--fw-semibold); }
+.spend-warn-high { color: var(--dead); opacity: 1; font-weight: var(--fw-semibold); }
+/* Inside the stacked tile the two figures are a COLUMN, so they get a column's
+   width: right-aligned in a fixed gutter, which is what leaves the two curves
+   flush with each other on the left. Without it `339k` and `Σ 38M` set their own
+   widths and the two miniatures sit a few pixels out of line — a misalignment
+   that reads as two unrelated readouts rather than one tile. */
+.row-spark .ctx-spark-val, .row-spark .ctx-spark-use {
+  min-width: 3.6em; text-align: right; justify-content: flex-end;
+}
+
+/* The chart's box. It is `overflow-x: auto` because the SVG is drawn at a
+   MEASURED width: if the measurement is briefly stale (a rotation, a keyboard
+   opening) the chart scrolls inside its own box rather than widening the sheet
+   and giving the whole page a horizontal scrollbar. */
+.ctx-box { padding: var(--sp-8) var(--sp-12) 0; overflow-x: auto; }
+.ctx-chart { display: block; touch-action: pan-y; }
+/* Axis text wears INK, never the series colour — identity comes from the mark
+   beside it. Tabular figures because these are columns of numbers that align. */
+.ctx-tick { fill: var(--muted); font-size: calc(var(--fs-10) * var(--ui-font, 1)); font-variant-numeric: tabular-nums; }
+.ctx-ref { fill: var(--fg); fill-opacity: .7; font-size: calc(var(--fs-10) * var(--ui-font, 1)); }
+
+/* The headline over the chart: what it amounts to in one line. */
+.ctx-summary {
+  padding: var(--sp-10) var(--sp-12) var(--sp-2); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+/* A chart's NAME, above its headline: three charts share one axis and one
+   width, so without a name each reads as a continuation of the one above. */
+.ctx-chart-title {
+  padding: var(--sp-16) var(--sp-12) 0; font-size: calc(var(--fs-15) * var(--ui-font, 1)); font-weight: var(--fw-semibold); color: var(--fg);
+}
+/* The close sheet's facets (`CloseSheet.tsx`'s `FacetRow`): the label, then its
+   chips BESIDE it, then the options nobody answers as one lower-case line. The
+   body's 14em basis is how the chips drop under the label on a phone too narrow
+   for both (a wrapping flex line breaks on BASE sizes before it shrinks), and
+   the pill may wrap its own words at a large `--ui-font` rather than run off a
+   320px screen. Never inside `.section`: its uppercase shouted the zeros. */
+.close-facets { padding: var(--sp-6) 0 var(--sp-4); }
+.close-facet { display: flex; flex-wrap: wrap; align-items: flex-start; column-gap: var(--sp-6); padding: 0 var(--sp-10) 0 var(--sp-14); }
+.close-facet-label {
+  flex: 0 0 7.5em; min-height: 44px; display: flex; align-items: center;
+  font-size: calc(var(--fs-13) * var(--ui-font, 1)); color: var(--muted);
+}
+.close-facet-body { flex: 1 1 14em; min-width: 0; }
+.close-facet-body > .fchips { padding: 0; margin-left: -3px; }
+.close-facet .fchip { flex: 0 1 auto; min-width: 0; max-width: 100%; }
+.close-facet .fchip-pill { height: auto; min-height: 30px; white-space: normal; }
+.close-facet-none { padding: 0 0 var(--sp-8); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); }
+/* No chip at all: the line stands in the chip row's place, level with the label. */
+.close-facet-none:first-child { min-height: 44px; display: flex; align-items: center; padding: 0; }
+.close-facets > .form-hint { padding: 0 var(--sp-14) var(--sp-6); }
+/* The list's heading is a `.section` for its spacing, but `.section` uppercases and tracks its
+   text: the facet labels above are sentence case, and "THE CUT" shouted over them. Scoped to this
+   sheet; every other `.section` keeps its uppercase. */
+.close-cut { text-transform: none; letter-spacing: 0; }

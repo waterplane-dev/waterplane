@@ -157,6 +157,17 @@ export type ClientHostMsg =
    */
   | { t: "clihealth.get" }
   /**
+   * A person read the board's warnings and clears them: per signal, every miss
+   * at or before the instant given — the newest miss THAT board showed
+   * (`clearSeen`). Answered with `clihealth`.
+   *
+   * Additive and NOT durable: bounded by what the reader saw, so a late or
+   * repeated delivery removes nothing they did not read — there is nothing an
+   * ackId would protect. Never queued offline either; the button refuses in
+   * words instead.
+   */
+  | { t: "clihealth.clear"; through: Record<string, number> }
+  /**
    * Watch the local model runner — a LEASE, not a subscription.
    *
    * The route table has no socket-close hook, so watch state must not be able

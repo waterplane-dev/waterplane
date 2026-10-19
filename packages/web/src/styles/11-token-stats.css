@@ -1,0 +1,579 @@
+/* 11-token-stats.css: turn cost, context graph, token statistics (.ts-*), light-theme tweaks, heat grids, sync mark, staged-build banner. */
+/* ── What a turn in this session costs ────────────────────────────────────
+   A panel, never a banner and never a dialog: it explains and it offers the
+   doors next to the explanation. It sits UNDER the context chart, because the
+   chart is what the sheet was opened for — above it, this panel plus the
+   compaction ledger put about thirty lines of argument between the head and
+   the first pixel of the shape the sheet is named after.
+   Two weights of ONE amber and never `--dead`/`--limit` — both of those already
+   mean something is wrong or stopped, and an expensive session is neither. */
+.ctx-cost {
+  margin: var(--sp-8) var(--sp-12) var(--sp-4); padding: var(--sp-10) var(--sp-12); border-radius: var(--r-10);
+  border: 1px solid var(--line); background: var(--well);
+}
+.ctx-cost-warm { border-color: var(--line); }
+.ctx-cost-heavy { border-color: var(--warn-edge); background: var(--warn-wash); }
+.ctx-cost-steep { border-color: var(--warn); background: var(--warn-tint); }
+.ctx-cost-head {
+  display: flex; align-items: center; gap: var(--sp-6);
+  font-size: calc(var(--fs-13) * var(--ui-font, 1)); font-weight: var(--fw-semibold); color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.ctx-cost-heavy .ctx-cost-head, .ctx-cost-steep .ctx-cost-head { color: var(--warn); }
+.ctx-cost-note { margin-top: var(--sp-6); font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14); color: var(--fg); }
+/* The mechanism, once, in the smallest type on the panel: it is the sentence
+   that stops this reading as a scold and starts it reading as arithmetic. */
+.ctx-cost-why { margin-top: var(--sp-8); font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14); color: var(--muted); }
+.ctx-cost .sheet-actions { margin-top: var(--sp-8); padding: 0; border: 0; background: none; }
+/* Two doors that are not the same offer, so the recommended one carries the
+   weight. `.key.primary` is the app's one primary fill; the pair WRAPS
+   (`.sheet-actions` already does) rather than pushing the second off a
+   320px screen. */
+.ctx-cost .sheet-actions .key { flex: 0 1 auto; min-width: 0; white-space: normal; }
+.ctx-cost .act-cants { margin-top: var(--sp-8); }
+/* The ledger's methodology, folded. `.hint-more` already carries the same 14px
+   gutter as the `.empty` sentences it sits among, so it needs only its top
+   breathing room back. */
+.ctx-method { padding-top: var(--sp-4); }
+
+/* `/compact` at the end of the context chart's name: the title row holds the
+   name left and the one verb right, so no row of its own floats between charts. */
+.ctx-chart-title-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-8); }
+.ctx-chart-title-row .key {
+  min-height: 40px; display: inline-flex; align-items: center; gap: var(--sp-4);
+  font-size: calc(var(--fs-13) * var(--ui-font, 1)); font-weight: var(--fw-regular);
+}
+
+/* A grouped readout: a heading and its sentences inside one frame.
+
+   `.ctx-cost`'s frame without its warn variants, and deliberately without a
+   level: a cost panel is a reading that gets worse, while a panel like
+   `Expired cache` describes something that either happened or did not, so it
+   never changes colour. The frame exists because these panels sit between two
+   chart sections — unframed, "what the gaps cost" reads as one more paragraph
+   of the section above it rather than as its own fact.
+
+   The children give up their own gutters: `.ctx-summary`, `.form-hint` and
+   `.hint-more` each carry a 12–14px inset for the flat list they normally live
+   in, and inside a frame that already has one it indents the text off-centre.
+   `.form-hint`'s `break-all` goes too — that rule is for paths, and this is
+   prose. */
+.ctx-panel {
+  margin: var(--sp-8) var(--sp-12) var(--sp-4); padding: var(--sp-10) var(--sp-12); border-radius: var(--r-10);
+  border: 1px solid var(--line); background: var(--well);
+}
+.ctx-panel > .ctx-summary { padding: 0 0 var(--sp-4); color: var(--fg); font-weight: var(--fw-semibold); }
+.ctx-panel > .form-hint { padding: 0; word-break: normal; }
+.ctx-panel > .hint-more { padding: var(--sp-6) 0 0; }
+
+/* The row/header badge. Same two weights, tag-sized. */
+.tag.cost-warm { color: var(--muted); border: 1px solid var(--line); }
+.tag.cost-heavy { color: var(--warn); border: 1px solid var(--warn-edge); }
+.tag.cost-steep { color: var(--warn); background: var(--warn-tint); border: 1px solid var(--warn); }
+
+/* The crosshair readout. A fixed height on purpose: dragging across the chart
+   must not shuffle the legend and everything under it up and down. */
+.ctx-readout {
+  min-height: 18px; padding: var(--sp-4) var(--sp-12); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+/* The kit's `ScrubHint`: the instruction a readout slot holds until a finger is
+   down, in every chart's slot (`.ctx-readout`, `.ts-spark-scrub`, `.rh-scrub`).
+   The slot is --fg so a picked value reads at the data's weight; the hint in
+   that colour was brighter than the chart's own lines. Muted, like a caption. */
+.scrub-hint { color: var(--muted); }
+
+/* The legend is always present for the event kinds — the dependable identity
+   channel. Each entry is a mark plus a word, so colour never carries it alone. */
+.ctx-legend {
+  display: flex; flex-wrap: wrap; gap: var(--sp-6) var(--sp-14);
+  padding: var(--sp-2) var(--sp-12) var(--sp-12); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted);
+}
+.ctx-legend span { display: inline-flex; align-items: center; gap: var(--sp-6); }
+
+/* The stack's own legend. Its VALUES wear the ink colour like every other
+   number in the app — the swatch beside a name is what carries identity, and a
+   value tinted with its series is a number that changes meaning with the
+   palette. The share is one step quieter than the value: it is the same fact
+   divided, and two figures of equal weight per entry reads as four series. */
+.ctx-legend-stack { padding-top: var(--sp-6); }
+.ctx-legend-stack b {
+  font-weight: var(--fw-semibold); color: var(--fg); font-variant-numeric: tabular-nums;
+}
+.ctx-legend-pct { opacity: 0.65; font-variant-numeric: tabular-nums; }
+
+/* The "stack by" label (`.rh-scope`, the all-sessions filter row). */
+.ctx-stackpick-lab {
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); flex: 0 0 auto;
+}
+
+/* The table twin. Not tappable — these rows are values, not destinations — so
+   they get the row's layout without its affordance. */
+.ctx-row { cursor: default; }
+.ctx-row:active { background: var(--panel); }
+.ctx-row .row-title { font-weight: var(--fw-medium); font-size: calc(var(--fs-14) * var(--ui-font, 1)); }
+.ctx-val .row-title { font-variant-numeric: tabular-nums; }
+
+/* The context readout in the session header is a BUTTON (it opens the graph),
+   so it needs the UA's own chrome removed — otherwise the one status item that
+   does something is the one wearing a border. */
+.sess-status button.row-sub {
+  background: none; border: none; padding: 0; margin: 0;
+  font-family: inherit; color: var(--muted); cursor: pointer;
+}
+.sess-status button.row-sub .ctx-spark { margin-right: var(--sp-2); }
+/* The spend miniature on that same line comes as a PAIR (curve + its `Σ`
+   total) whose own 4px gap already separates the two, so the 2px above would
+   be a second, different gutter inside one readout. */
+.sess-status button.row-sub .ctx-spark-pair .ctx-spark { margin-right: 0; }
+/* The readout's "% free" wears the context pill's warm colours: where the
+   readout says the share in words the pill is not drawn (one number, said
+   once), and "running low" must not leave with it. */
+.sess-status .ctx-free.ctx-mid { color: var(--star); }
+.sess-status .ctx-free.ctx-low { color: var(--ctx-low); }
+
+/* ── Token statistics ──────────────────────────────────────────────────
+   The dashboard behind Settings → Usage. Marks are coloured in
+   `TokenStatsSheet.tsx` (a validated four-slot palette that must stay in one
+   place); everything here is layout and ink. The chart box, the crosshair
+   readout and the tick text are shared with the context graph on purpose —
+   two chart families in one app should not have two visual languages. */
+
+.ts-list { padding-bottom: var(--sp-24); }
+
+/* The hero. Proportional figures, not tabular: `tabular-nums` gives every
+   digit the width of a 0, which at display size makes "13.6B" look loose. */
+.ts-hero-wrap { padding: var(--sp-16) var(--sp-14) var(--sp-6); }
+.ts-hero {
+  font-size: calc(52px * var(--ui-font, 1)); line-height: var(--lh-1); font-weight: var(--fw-semibold); letter-spacing: -0.02em;
+  color: var(--fg); font-variant-numeric: proportional-nums;
+}
+.ts-hero-sub { margin-top: var(--sp-6); font-size: calc(var(--fs-13) * var(--ui-font, 1)); color: var(--muted); }
+
+/* The composition strip: one 100%-wide bar, four segments. Segments are
+   positioned rather than flexed so a 1.5% sliver keeps exactly the width
+   `compose()` computed for it — flex would round it away, which is the one
+   thing that function exists to prevent. */
+.ts-comp { padding: var(--sp-4) var(--sp-14) var(--sp-2); }
+.ts-bar {
+  position: relative; height: 14px; border-radius: var(--r-8); overflow: hidden;
+  background: var(--line);
+}
+.ts-seg { position: absolute; top: 0; bottom: 0; }
+/* No gap between segments and no border around them: at 0.007% a 2px spacer
+   would be wider than the segment it separates. The legend carries identity. */
+
+.ts-legend {
+  display: flex; flex-wrap: wrap; gap: var(--sp-6) var(--sp-16);
+  padding: var(--sp-10) 0 var(--sp-2); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted);
+}
+.ts-leg { display: inline-flex; align-items: baseline; gap: var(--sp-6); }
+.ts-leg i { width: 9px; height: 9px; border-radius: var(--r-2); flex: 0 0 auto; align-self: center; }
+.ts-leg b { font-weight: var(--fw-semibold); color: var(--fg); }
+.ts-leg em { font-style: normal; opacity: .75; }
+
+.ts-caveat { font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-15); padding-top: var(--sp-4); }
+.ts-caveat b { color: var(--fg); font-weight: var(--fw-semibold); }
+.ts-foot { font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-15); }
+
+/* KPI row. Wraps rather than scrolls: a horizontally scrolling strip of
+   numbers hides half of them on a phone with no affordance saying so. */
+.ts-tiles {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  gap: var(--sp-8); padding: var(--sp-10) var(--sp-14) var(--sp-4);
+}
+.ts-tile { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-10); padding: var(--sp-8) var(--sp-10); }
+.ts-tile-v { font-size: calc(var(--fs-20) * var(--ui-font, 1)); font-weight: var(--fw-semibold); color: var(--fg); }
+.ts-tile-l { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); margin-top: var(--sp-2); }
+.ts-tile-n { font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); opacity: .8; margin-top: 1px; }
+
+/* The one filter row, above everything it scopes. */
+.ts-filter { display: flex; align-items: center; gap: var(--sp-6); padding: var(--sp-4) var(--sp-14) 0; flex-wrap: wrap; }
+
+/* The week stepper. The arrows are real buttons or nothing at all — never a
+   dimmed one (`WeekNav`'s header, and `Unavailable.tsx`'s rule) — so the gap
+   holds their width open and the label does not jump as you cross an edge. */
+.ts-week { padding: var(--sp-8) var(--sp-14) var(--sp-2); }
+.ts-week-nav { display: flex; align-items: center; gap: var(--sp-8); }
+.ts-week-gap { flex: 0 0 auto; width: 32px; height: 1px; }
+.ts-week-label {
+  flex: 1 1 auto; min-width: 0; text-align: center;
+  font-size: calc(var(--fs-14) * var(--ui-font, 1)); font-weight: var(--fw-semibold); color: var(--fg);
+}
+.ts-week-sum { margin-top: var(--sp-6); font-size: calc(var(--fs-13) * var(--ui-font, 1)); color: var(--muted); }
+.ts-week-sum b { color: var(--fg); font-size: calc(var(--fs-16) * var(--ui-font, 1)); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; }
+/* The comparison sits after the total and is quieter than it: it is the second
+   reading in the pair, not a second headline. */
+.ts-week-delta { display: block; margin-top: var(--sp-2); }
+.ts-week-note { margin-top: var(--sp-6); font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-15); }
+.ts-week-note .linkish { margin-left: 0; }
+
+/* Horizontal bars. The label sits ABOVE its bar rather than beside it: a repo
+   name and a token count in one row leaves a phone about 40% of the width for
+   the bar, which is not enough to compare anything. */
+.ts-bars { padding: var(--sp-6) var(--sp-14) var(--sp-10); display: flex; flex-direction: column; gap: var(--sp-10); }
+.ts-barhead { display: flex; align-items: baseline; gap: var(--sp-10); font-size: calc(var(--fs-13) * var(--ui-font, 1)); }
+.ts-barlabel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
+.ts-barval { flex: 0 0 auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ts-barval em { font-style: normal; opacity: .65; margin-left: var(--sp-6); }
+.ts-bartrack { margin-top: var(--sp-4); height: 8px; border-radius: var(--r-4); background: var(--line); overflow: hidden; }
+.ts-barfill { display: block; height: 100%; border-radius: var(--r-4); background: var(--chart-1); }
+
+/* The same bar, split by the model that ran there. The rounded ends stay on
+   the FILL, so the bar keeps its shape and the segments inside it are square —
+   rounding each segment would put a notch between every pair and read as four
+   bars rather than one split one. The 1px surface seam is the spacer the mark
+   specs ask for between stacked segments; at 8px tall it is the smallest gap
+   that still separates two adjacent hues. */
+.ts-barfill-split { display: flex; background: none; overflow: hidden; }
+.ts-barseg { display: block; height: 100%; min-width: 1.5px; }
+.ts-barseg + .ts-barseg { border-left: 1px solid var(--panel); }
+
+/* The two live rate-limit windows, above the history. Same bar as the token
+   bars below — one chart family, one bar — but the fill turns `--limit` past
+   80%, which is the one at-limit colour this app owns (`--limit`, never a
+   fifth red). */
+.ts-lims { padding-bottom: var(--sp-4); }
+.ts-lim { padding: var(--sp-8) var(--sp-14) var(--sp-4); }
+.ts-lim + .ts-lim { padding-top: var(--sp-12); }
+.ts-lim .ts-barval.hot, .ts-lim .ts-barlabel { color: var(--fg); }
+.ts-lim .ts-barval.hot { color: var(--limit); font-weight: var(--fw-semibold); }
+.ts-lim .ts-barfill.hot { background: var(--limit); }
+.ts-lim .ts-bartrack { height: 10px; border-radius: var(--r-6); }
+.ts-lim-sub { margin-top: var(--sp-6); font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-15); color: var(--muted); }
+
+/* What the percentage above is a percentage OF: the tokens and the money the
+   window has actually taken. A full-width BUTTON rather than a caption,
+   because tapping it scopes every readout below to exactly those tokens — a
+   figure on a control is a filter.
+
+   Its lit state is a TINT plus an accent left edge, deliberately not the
+   `.key.active` accent fill every chip on this screen wears: this is a line of
+   running text a sentence wide, and a solid fill behind it reads as a banner
+   rather than as a control that is currently on. The edge is what makes it a
+   tap target with the keyboard away, so it is there in both states and only
+   its colour moves. Text wraps: at `--ui-font` 1.9 on a 320px screen this line
+   is three lines long, and a nowrap button that wide scrolls the sheet
+   sideways. */
+.ts-lim-used {
+  display: block; width: 100%; text-align: left; margin-top: var(--sp-8);
+  padding: var(--sp-6) var(--sp-8); border: 1px solid var(--line); border-left-width: 3px;
+  border-radius: var(--r-6); background: transparent; color: var(--muted);
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14);
+  white-space: normal; font-family: inherit;
+}
+button.ts-lim-used { cursor: pointer; }
+.ts-lim-used b { color: var(--fg); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; }
+.ts-lim-used.active { background: var(--accent-tint); border-left-color: var(--accent); }
+.ts-lim-used.none { border-style: dashed; }
+
+/* The recent readings under each limit bar.
+
+   It used to be 40px of unlabelled shape, and it was read exactly as that: a
+   strip you cannot get a number out of, whose breaks meant nothing to anybody
+   who had not read the source. So it is a CHART — a labelled 0–100 axis, time
+   under it, and a crosshair whose answer is the line below — and the
+   `touch-action` is `pan-y` so scrolling the sheet past it still scrolls the
+   sheet. */
+.ts-spark { margin-top: var(--sp-10); }
+.ts-spark svg { display: block; width: 100%; }
+.ts-spark-svg { touch-action: pan-y; }
+.ts-spark-ylab, .ts-spark-tick {
+  fill: var(--muted); font-size: calc(var(--fs-10) * var(--ui-font, 1));
+  font-variant-numeric: tabular-nums;
+}
+/* The crosshair's answer, ALWAYS present: this is the only route to a past
+   reading's figure — there is no values table beside this chart — so the line
+   says how to use the gesture when nothing is picked rather than appearing out
+   of nowhere once something is. `min-height` and not a height, because at a
+   large UI scale it wraps and a clipped readout is worse than a taller row.
+   The 80% is on the COLOUR, not an `opacity` on the box: the muted hint inside
+   (`.scrub-hint`) would otherwise land at 80% of --muted, under AA. */
+.ts-spark-scrub {
+  min-height: 17px; margin-top: var(--sp-2);
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14);
+  color: color-mix(in srgb, var(--fg) 80%, transparent); font-variant-numeric: tabular-nums;
+}
+.ts-spark-scrub b { font-weight: var(--fw-semibold); opacity: 1; }
+.ts-spark-sub, .ts-spark-none {
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); margin-top: var(--sp-2); line-height: var(--lh-14);
+}
+.ts-spark-none { min-height: 40px; display: flex; align-items: center; }
+.ts-spark-sub b { color: var(--fg); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; }
+
+/* The per-day chart's three questions, ON the section header they scope —
+   never in the range row above, which scopes something else entirely. */
+/* SCROLLS rather than wraps. The row grew a third decision (what the stack is
+   split by) and at phone width the last chip dropped onto a line of its own,
+   where it reads as a separate control rather than as the end of this one — and
+   the divider that tells the decisions apart lands at the wrap, saying nothing.
+   Scrolling keeps the row a row; the chips are small enough that the ones that
+   matter are visible without moving it. */
+.ts-seg-chips {
+  display: inline-flex; gap: var(--sp-4); max-width: 100%;
+  overflow-x: auto; scrollbar-width: none;
+}
+.ts-seg-chips::-webkit-scrollbar { display: none; }
+.ts-seg-chips .key, .ts-seg-chips .ts-seg-sep { flex: 0 0 auto; }
+.ts-seg-chips .key { text-transform: lowercase; padding: var(--sp-2) var(--sp-8); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+/* Two decisions in one chip row — WHICH question (total/mix/share) and which
+   FORM (bars/area) — so the row is divided rather than merely spaced: with a
+   gap alone the five chips read as one five-way choice, and two of them look
+   like questions the chart cannot answer. A rule, not a wider gap, because the
+   row wraps on a narrow phone and a gap that lands at the wrap says nothing. */
+.ts-seg-sep { width: 1px; align-self: stretch; margin: var(--sp-2) var(--sp-6); background: var(--muted); opacity: .4; }
+
+/* The table twin. Numbers align, so these DO get tabular figures. */
+.ts-numrow .row-title { flex: 1 1 auto; font-size: calc(var(--fs-14) * var(--ui-font, 1)); }
+.ts-num { font-variant-numeric: tabular-nums; font-size: calc(var(--fs-14) * var(--ui-font, 1)); color: var(--fg); }
+.ts-numrow .row-meta { gap: var(--sp-4) var(--sp-10); }
+.ts-numrow .row-sub { font-size: calc(var(--fs-12) * var(--ui-font, 1)); font-variant-numeric: tabular-nums; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   LIGHT-ONLY CORRECTIONS
+   ══════════════════════════════════════════════════════════════════════════
+
+   Rules that are not a colour swap. Everything else in this file is one
+   declaration reading a token that has two values; these are the few places
+   where the DARK rule itself only works because the surface is dark. */
+
+/* A disabled control fades to `opacity: .4`. On a dark page that dims a filled
+   button towards the background and its white label stays the brightest thing
+   in it; on a white page the same 40% turns the fill pale and drags the white
+   label down with it, and "Create project & open" becomes white-on-pale-blue —
+   a button whose words cannot be read at all, which is worse than one that
+   merely looks unavailable.
+   So in light a disabled FILLED button gives up its FILL and keeps its INK:
+   `--muted` on `--raise` measures ~5.9:1, i.e. still readable, still obviously
+   not the live control beside it.
+   This is a stopgap for a pattern the app is already moving away from — see
+   `.act-cants` and `Unavailable.tsx`, where a blocked verb is a SENTENCE and
+   not a dimmed button. Convert a call site rather than extending this list. */
+[data-theme="light"] .key:disabled,
+[data-theme="light"] .send:disabled,
+[data-theme="light"] .approve-btn:disabled {
+  opacity: 1;
+  background: var(--raise);
+  color: var(--muted);
+  border-color: var(--line);
+}
+
+/* The same argument, one step down: text held back with `opacity` rather than
+   with a colour. `--muted` is already the quiet ink, and 70% of it over a white
+   page measures 3.0:1 — under the line for 13px text. In dark the same
+   declaration lands at 3.2:1, which is no better, but changing it there is a
+   redesign of a screen nobody asked to change; here the theme is new and the
+   number is a choice being made for the first time. */
+[data-theme="light"] .section-hint { opacity: .92; }
+/* Same rule, same reason, for the other four places a secondary reading is
+   dimmed with `opacity` instead of given a colour. Each one lands between
+   2.7:1 and 4.0:1 on white; each is a NUMBER (a share, a per-turn figure)
+   rather than chrome, and a number that cannot be read is not a quieter
+   number. Raised only as far as it takes to clear 4.5:1 — they still read as
+   the secondary half of the pair they sit in. */
+[data-theme="light"] .ts-leg em,
+[data-theme="light"] .ts-barval em { opacity: .92; }
+[data-theme="light"] .ts-tile-n,
+[data-theme="light"] .nh-stat-n { opacity: 1; }
+
+/* ── Past rate-limit windows: the stepper and the two heat grids ───────────
+   One box per WINDOW, shaded by what went through it. The ramp is one hue at
+   five alphas over the surface — a sequential scale is one hue light to dark,
+   never the categorical slots, which mean identity and would read as four
+   kinds of window. Every value here is a token, so the palette stays checkable
+   and the light theme is not the dark one at lower contrast. */
+.ts-wstep {
+  display: flex; align-items: center; gap: var(--sp-8); flex-wrap: wrap;
+  padding: var(--sp-6) var(--sp-14) 0;
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted);
+}
+/* The window on screen, in words. It is the one part of this row that is a
+   FACT rather than a control, so it carries `--fg` and the arrows do not. */
+.ts-wstep-at { color: var(--fg); font-weight: var(--fw-semibold); }
+/* An end of the record is a SENTENCE, never a dimmed arrow — a `title` is
+   invisible on a phone and a greyed button states nothing at all. */
+.ts-wstep-end { opacity: .8; }
+
+.ts-heats { display: flex; flex-direction: column; gap: var(--sp-4); }
+.ts-heat { padding-top: var(--sp-4); }
+.ts-heat-n { color: var(--muted); font-weight: var(--fw-regular); text-transform: none; letter-spacing: 0; }
+/* The grid wraps rather than being laid out on a calendar: five hours does not
+   divide a day, so a column per day would put a different phase in every row
+   and invite reading one. Time runs left to right, top to bottom. */
+.ts-heat-grid {
+  display: flex; flex-wrap: wrap; gap: var(--sp-4);
+  padding: var(--sp-6) var(--sp-14) var(--sp-2);
+  --heat-box: 20px;
+}
+.ts-heat-grid.dense { --heat-box: 12px; gap: var(--sp-2); }
+.ts-heat-b {
+  width: var(--heat-box, 14px); height: var(--heat-box, 14px);
+  border-radius: var(--r-2); border: 1px solid transparent;
+  background: var(--well); padding: 0; cursor: pointer;
+  /* The box is the tap target and the mark at once, so it may not shrink on a
+     narrow screen — a heat grid whose boxes are 8px is a texture. */
+  flex: 0 0 auto;
+}
+/* Step 0 is a window that ran NOTHING — a reading, and drawn as one: the well
+   with an edge, so it is visibly a box and not a gap. */
+.ts-heat-b.s0 { background: var(--well); border-color: var(--line); }
+.ts-heat-b.s1 { background: rgb(var(--accent-rgb) / .20); }
+.ts-heat-b.s2 { background: rgb(var(--accent-rgb) / .40); }
+.ts-heat-b.s3 { background: rgb(var(--accent-rgb) / .65); }
+.ts-heat-b.s4 { background: rgb(var(--accent-rgb) / .95); }
+/* A window the hour record does not cover is UNKNOWN, which is not zero: no
+   fill at all and a dashed edge, so it cannot be read as a quiet night. */
+.ts-heat-b.unknown { background: transparent; border: 1px dashed var(--line); }
+/* The window running now, and the one the readouts are cut to. `--fg` for the
+   selection because it is the one ink that is far from every step of an accent
+   ramp in both themes. */
+.ts-heat-b.now { box-shadow: 0 0 0 1px var(--muted); }
+.ts-heat-b.on { box-shadow: 0 0 0 2px var(--fg); }
+
+.ts-heat-key {
+  display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap;
+  padding: var(--sp-2) var(--sp-14) 0;
+  --heat-box: 12px;
+}
+.ts-heat-key-l { font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); margin: 0 var(--sp-4); }
+.ts-heat-key .ts-heat-b { cursor: default; }
+
+/* Money in the table twin: a second aligned column beside the token count.
+   Tabular figures, because these are a column that must line up. */
+.ts-cost { color: var(--muted); font-variant-numeric: tabular-nums; margin-left: var(--sp-10); }
+/* A bar row's trailing note — a share, or "no list price" for a model the
+   table has no rate for. Never a $0, which reads as free. */
+.ts-barval em { white-space: nowrap; }
+
+/* ── "Is this anywhere but this phone?" (SyncMark.tsx) ────────────────────
+   One line, never a dot. A dot is the thing this replaces: the green light
+   beside a sheet that has not reached the desktop since Tuesday. The colours
+   are the app's existing semantic four, not new ones — a fifth palette for a
+   fifth subsystem is how "at limit" ended up being five different colours. */
+.sync-mark {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  padding: var(--sp-6) var(--sp-12);
+  font-size: calc(var(--fs-12) * var(--ui-font, 1));
+  line-height: var(--lh-14);
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+}
+.sync-mark svg { flex: 0 0 auto; }
+/* The good state says so OUT LOUD rather than by absence: the whole complaint
+   was a screen that looked identical either way, and silence is what it looked
+   like. GREEN, not muted — it was muted first, on the argument that a
+   reassurance should not shout, and that mistook the question. "Can I put the
+   phone down now" is answered yes or no, and a grey line beside grey prose is
+   what the eye skips on a screen being scanned for exactly one thing. `--ok` is
+   the colour this app already means "this happened and it worked" by. */
+.sync-synced { color: var(--ok); }
+.sync-pending { color: var(--accent); }
+.sync-offline { color: var(--dead); }
+/* Gave up. The only phase here that is an ACTION — the words are still on this
+   phone and nothing will move them without a tap. */
+.sync-failed { color: var(--dead); }
+/* Not a failure: a newer value from another device replaced this one, which is
+   the rule — and for the pad, the one key that cannot afford it, what arrives is
+   MERGED per note rather than adopted whole (`shared/pad.ts`). Amber, the colour
+   this app already uses for "worth knowing, nothing is broken". */
+.sync-superseded { color: var(--limit); }
+
+/* The same fact on a list row (SyncMark.tsx's `SyncChip`). A chip and not a
+   dot: it carries its word, and the sentence survives as the title. It borrows
+   `.tag`'s pill and only states the border, so the four colours above are the
+   single place any of this is decided. */
+.tag.sync-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-4);
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+/* A star this phone pressed that the desktop has not confirmed.
+   The STAR keeps its own colour — it is the same fact, and "one at-limit fact,
+   one colour" is the rule this app already learned the hard way. What changes
+   is a dotted underline: present, legible at a glance, and gone the moment
+   `reconcileStars` sees a live row holding the same value. Not a second icon
+   and not an opacity change — a dimmed control is how this app used to say
+   "not clickable", and this one very much is. */
+.star-pending {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+/* ── A staged build, said on whatever screen you are on (UpdateBanner.tsx) ──
+   `staged-bar`, NOT `update-bar`: this used to be called `.update-bar` too, and
+   silently restyled the OTHER bar of that name (App.tsx's desktop-CLI update /
+   insecure-HTTP strips, defined far above). Those are INLINE under the header;
+   the `position: fixed` below tore them out of the flow and dropped them on top
+   of the composer, while their `<pre>` log stayed behind at the top. Two bars,
+   two names — do not merge them back.
+
+   Anchored to the BOTTOM, above the safe area: the top of every screen is
+   already spoken for (the pulse strip, the sheet head, the session header), and
+   a bar that pushed those down would relayout the terminal — which repaints the
+   whole grid, the flicker `Terminal.tsx` exists to avoid. Floating over the
+   bottom costs no layout at all. */
+.staged-bar {
+  position: fixed;
+  left: 8px; right: 8px;
+  bottom: calc(env(safe-area-inset-bottom) + 8px);
+  z-index: 60;
+  display: flex; align-items: center; gap: var(--sp-8);
+  padding: var(--sp-8) var(--sp-10);
+  border-radius: var(--r-12);
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .35);
+  font-size: calc(var(--fs-13) * var(--ui-font, 1));
+  color: var(--fg);
+}
+.staged-bar > svg { flex: 0 0 auto; color: var(--accent); }
+.staged-bar-text { flex: 1 1 auto; min-width: 0; }
+.staged-bar-go { flex: 0 0 auto; white-space: nowrap; }
+/* The dismiss is deliberately quiet and deliberately PRESENT: the automatic
+   path still applies this once the phone is put down, so "not now" is a real
+   answer rather than a way to lose the update. */
+.staged-bar-x {
+  flex: 0 0 auto;
+  background: none; border: 0; padding: var(--sp-4);
+  color: var(--muted); cursor: pointer;
+}
+/* Snooze: the clock opens the spans, and must not read as a third way to
+   restart — as quiet as the ×, and accented while its chips are out, so the two
+   icon buttons beside each other are never the same guess twice. */
+.staged-bar-later {
+  flex: 0 0 auto;
+  background: none; border: 0; padding: var(--sp-4);
+  color: var(--muted); cursor: pointer;
+}
+.staged-bar-later[aria-expanded="true"] { color: var(--accent); }
+/* The spans themselves. A phone bar cannot fit four chips beside a sentence on
+   one line, so the bar WRAPS while they are open rather than squeezing the text
+   out — and the chips carry the numbers, tabular so 5m/1h/4h/1d line up. */
+.staged-bar { flex-wrap: wrap; }
+/* The halt latch (`features/halt`): the same bar, at the TOP so it never sits on
+   the update bar, and in the warning colour because it explains why nothing starts. */
+.staged-bar.halt-bar {
+  top: calc(env(safe-area-inset-top) + 8px); bottom: auto;
+  border-color: var(--warn);
+  color: var(--warn);
+}
+.staged-bar-span {
+  flex: 0 0 auto;
+  padding: var(--sp-4) var(--sp-8);
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); font-variant-numeric: tabular-nums;
+}
+
+/* The horizon on the schedules button: an icon-sized control grows to carry a
+   sentence, and only when there IS one. Not a separate chip — the count and the
+   thing it counts belong to the same tap. */
+.head-act-wide { width: auto; padding-left: var(--sp-8); padding-right: var(--sp-8); gap: var(--sp-6); }
+.head-act-n { font-size: calc(var(--fs-11) * var(--ui-font, 1)); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Waiting to run, as opposed to running. `--limit` because this app already
+   spent a round learning that one fact deserves one colour, and "work that
+   cannot start yet" is the family that colour names. */
+.repo-group-stat.queued { color: var(--limit); }

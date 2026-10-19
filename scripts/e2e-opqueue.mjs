@@ -232,6 +232,20 @@ check(!!newSolo && newSolo !== oldSolo, `the relaunch produced a new session (${
 check(liveSolo.length === 1 && liveSolo[0].id === newSolo,
   `the replaced session was killed once — exactly one live claude in that worktree (${JSON.stringify(liveSolo.map((s) => s.id))})`);
 
+// Two TAPS are two ackIds — the ledger cannot fold them — and the second's kill
+// is a no-op, so it used to open a SECOND claude on the same conversation. A
+// replace of a session this host already replaced answers with that replacement.
+send({ t: "session.create", cwd: solo.path, cols: 80, rows: 24, replaceSessionId: oldSolo, ackId: "op-relaunch-tap2" });
+await waitFor(() => acksFor("op-relaunch-tap2").length >= 1, 10000);
+await sleep(800);
+send({ t: "session.list" });
+await sleep(500);
+const tap2 = acksFor("op-relaunch-tap2")[0];
+const liveSolo2 = [...state.sessions.values()].filter((s) => s.cwd === solo.path && s.running);
+check(tap2?.ok === true && tap2.sessionId === newSolo,
+  `a second relaunch tap (new ackId) names the existing replacement (${JSON.stringify(tap2)})`);
+check(liveSolo2.length === 1, `…and opens nothing (${JSON.stringify(liveSolo2.map((s) => s.id))})`);
+
 // A target that is already gone is not an error: killing it was the intent, and
 // a retry arriving after the first attempt succeeded must still get a session.
 send({ t: "session.create", cwd: b.path, cols: 80, rows: 24, replaceSessionId: "no-such-session", ackId: "op-relaunch-2" });

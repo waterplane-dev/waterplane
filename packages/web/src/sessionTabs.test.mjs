@@ -10,6 +10,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readAllCss } from "../../../tools/csssource.mjs";
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -143,7 +144,7 @@ test("the height the strip publishes is the height it draws", () => {
   // and the bar either floats over the first row of whatever is under it or
   // leaves a band of empty panel above it — on every screen in the app, and
   // with nothing on any of them saying why.
-  const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "styles.css"), "utf8")
+  const css = readAllCss()
     .replace(/\/\*[\s\S]*?\*\//g, "");
   const at = css.indexOf(".sess-tabs {");
   assert.ok(at >= 0, "no .sess-tabs rule");
@@ -157,7 +158,7 @@ test("a tab is as wide as its name, with 1/N of the strip as its floor", () => {
   // A fixed `1/N` basis cut a four-word name off beside an empty half strip
   // whenever fewer than N were open. The name decides the width; `--stab-n`
   // is the FLOOR, which is what keeps a full strip at N equal tabs that scroll.
-  const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "styles.css"), "utf8")
+  const css = readAllCss()
     .replace(/\/\*[\s\S]*?\*\//g, "");
   const at = css.indexOf("\n.stab {");
   assert.ok(at >= 0, "no .stab rule");

@@ -12,7 +12,10 @@
  * says which state of it was folded (the link and code it showed). A fold holds
  * only while that state does: a new link, a new code or the CLI starting to wait
  * for one is a new thing to read, and it comes back up by itself rather than
- * waiting behind a chip nobody is looking at.
+ * waiting behind a chip nobody is looking at. Once news has unfolded a strip
+ * its old mark is DROPPED (`Stowable`): the strip's own height changes what a
+ * shell shows, so the old state returning must not fold it again — that was a
+ * card flipping open and shut forever (`npm login`, 2026-10-19).
  *
  * Marks persist per device (`LS.stowed`) so a reload — every OTA update is one —
  * does not undo a fold; bounded by age and count on every write.
@@ -25,6 +28,34 @@ export const STOW_KEEP_MS = 7 * 24 * 3600_000;
 export const STOW_MAX = 60;
 
 export const stowMark = (slot: string, key: string): string => `${slot}|${key}`;
+
+/**
+ * A content key is a set of FACTS, one per line (a link, a code, "await"). A
+ * fold holds while every fact on screen was there when it was folded: a fact
+ * gone since is not news, a fact the fold never saw is. Order never counts —
+ * the host reorders links when it re-reads them.
+ */
+const factsOf = (key: string): string[] => key.split("\n").filter(Boolean);
+
+/** Two content keys with a fact in common — the same strip, moved on. */
+export function sharesFact(a: string, b: string): boolean {
+  const had = new Set(factsOf(a));
+  return factsOf(b).some((f) => had.has(f));
+}
+
+/** The stored key whose fold covers `key` under `slot`, or null when nothing does. */
+export function coveringKey(slot: string, key: string): string | null {
+  const want = factsOf(key);
+  const pre = `${slot}|`;
+  for (const mark of Object.keys(load())) {
+    if (!mark.startsWith(pre)) continue;
+    const k = mark.slice(pre.length);
+    if (!want.length) { if (k === key) return k; continue; }
+    const had = new Set(factsOf(k));
+    if (want.every((f) => had.has(f))) return k;
+  }
+  return null;
+}
 
 /** Drop marks older than `keepMs`, then keep the newest `max`. Pure. */
 export function pruneStowed(
@@ -72,7 +103,7 @@ export const stowVersion = (): number => version;
 export const trayEntries = (): TrayEntry[] => trayView;
 
 export function isStowed(slot: string, key: string): boolean {
-  return load()[stowMark(slot, key)] != null;
+  return coveringKey(slot, key) != null;
 }
 
 /** First fold on this device says where the strip went; later ones are a receipt by sight. */

@@ -32,7 +32,7 @@
  * stays live.
  */
 import { useMemo } from "react";
-import { ChevronDown, Waypoints, X } from "lucide-react";
+import { Check, ChevronDown, Waypoints, X } from "lucide-react";
 import {
   CLI_SIGNALS,
   agoText,
@@ -46,7 +46,7 @@ import {
   type HealthVerdict,
   type SignalRecord,
 } from "@waterplane/shared";
-import { Empty, FilterBar, StaleHead, useRemoteResource } from "./kit";
+import { ConfirmButton, Empty, FilterBar, StaleHead, useRemoteResource } from "./kit";
 import { loadCliHealthSnap } from "./localState";
 
 export interface CliHealthDoc { health: CliHealth; rollup: HealthRollup }
@@ -66,7 +66,7 @@ const VERDICT_LABEL: Record<HealthVerdict, string> = {
   unknown: "unknown",
 };
 
-export function CliHealthSheet({ online, request, onClose, filter, onClearFilter }: {
+export function CliHealthSheet({ online, request, onClose, filter, onClearFilter, onClearWarnings }: {
   /** The socket's own verdict, not `navigator.onLine` — see the hook's note. */
   online: boolean;
   /** Ask the host and resolve on its answer. Owned by `App`, which is where
@@ -81,6 +81,9 @@ export function CliHealthSheet({ online, request, onClose, filter, onClearFilter
    *  (Settings' "open feed" opens whole, on purpose). */
   filter?: HealthVerdict[] | null;
   onClearFilter?: () => void;
+  /** Send the clear and say so; false when it could not go (the link). Per
+   *  signal, the newest miss THIS board showed — see `clearSeen`. */
+  onClearWarnings?: (through: Record<string, number>, count: number) => boolean;
 }) {
   const res = useRemoteResource<CliHealthDoc>("clihealth", request, {
     offline: !online,
@@ -110,6 +113,16 @@ export function CliHealthSheet({ online, request, onClose, filter, onClearFilter
   const rows = filter && filter.length > 0
     ? allRows.filter((sig) => filter.includes(signalVerdict(sig, now).verdict))
     : allRows;
+
+  // What the clear button clears: the rows in trouble on THIS render, each
+  // bounded by the newest miss it shows — so the tap can only remove what the
+  // reader had in front of them. Same verdict call as the filter above.
+  const warned = allRows.filter((sig) => {
+    const v = signalVerdict(sig, now).verdict;
+    return (v === "degraded" || v === "broken") && sig.lastMissAt != null;
+  });
+  const through: Record<string, number> = {};
+  for (const sig of warned) through[sig.id] = sig.lastMissAt!;
 
   const rollup = doc?.rollup;
   const changed = doc?.health.versionChangedAt ?? null;
@@ -149,6 +162,18 @@ export function CliHealthSheet({ online, request, onClose, filter, onClearFilter
                 The CLI changed {agoText(now - (changed ?? now))} ago — every signal’s history was cleared, so a
                 verdict here is about this version only.
               </span>
+            )}
+            {onClearWarnings && warned.length > 0 && (
+              // Two taps: a clear drops the captured sample and the fallback
+              // note too, the evidence a fix would start from. A miss after
+              // the board was drawn is never cleared, and the next one that
+              // tips a signal back into trouble brings its row and alert back.
+              <ConfirmButton className="key cli-clear"
+                title="you have read these: drop their misses so the board reads clean until something new fails"
+                confirm={<>clear {warned.length === 1 ? "it" : `all ${warned.length}`} — read?</>}
+                onConfirm={() => { if (onClearWarnings(through, warned.length)) res.reload(); }}>
+                <Check size={13} /> clear {warned.length} warning{warned.length === 1 ? "" : "s"}
+              </ConfirmButton>
             )}
           </div>
         )}

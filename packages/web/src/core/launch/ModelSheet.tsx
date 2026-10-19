@@ -20,14 +20,13 @@ export interface ModelSheetProps {
   modelInput: string;
   setModelInput(v: string): void;
   submitInput(id: string, cwd: string, text: string, kind: "prompt" | "command", holdUntilIdle?: boolean): boolean;
-  setLaunchOpt(patch: Partial<LaunchOpts>): void;
   relaunch(s: SessionInfo, patch: Partial<LaunchOpts>): void;
   sessionCan(s: { backend?: string } | null | undefined, cap: Parameters<typeof hasCap>[2]): boolean;
   sessionCant(s: { backend?: string } | null | undefined, cap: Parameters<typeof capReason>[2]): string | null;
   onClose(): void;
 }
 
-export function ModelSheet({ cur, backends, modelInput, setModelInput, submitInput, setLaunchOpt, relaunch, sessionCan, sessionCant, onClose }: ModelSheetProps) {
+export function ModelSheet({ cur, backends, modelInput, setModelInput, submitInput, relaunch, sessionCan, sessionCant, onClose }: ModelSheetProps) {
   // The catalogue is the BACKEND's, not this app's: claude's aliases are a
   // fallback for a host that never described one, and a backend whose
   // catalogue came back empty gets the typed field below and no list at
@@ -39,7 +38,7 @@ export function ModelSheet({ cur, backends, modelInput, setModelInput, submitInp
   // Via submitInput, NOT a raw one-chunk sendInput("…\r"): text+Return in one
   // write lands as a PASTE in claude's TUI (the \r stays literal, the command
   // never submits). submitInput splits the writes and tracks the ack.
-  const pickModel = (m: string) => { submitInput(cur.id, cur.cwd, `/model ${m}`, "command"); setLaunchOpt({ model: m }); onClose(); showToast(`/model ${m}`); };
+  const pickModel = (m: string) => { submitInput(cur.id, cur.cwd, `/model ${m}`, "command"); onClose(); showToast(`/model ${m}`); };
   const relaunchWith = (patch: Partial<LaunchOpts>) => relaunch(cur, patch);
   // Two ways to land a model, chosen by what the backend HAS rather than
   // offered side by side: `/model` mid-session where slash commands exist,
@@ -52,7 +51,7 @@ export function ModelSheet({ cur, backends, modelInput, setModelInput, submitInp
   const liveEffort = canSlash && backendIdOf(cur) === CLAUDE;
   const applyEffort = (e: (typeof efforts)[number]) => {
     if (!liveEffort) { relaunchWith({ effort: e }); return; }
-    submitInput(cur.id, cur.cwd, `/effort ${e}`, "command"); setLaunchOpt({ effort: e }); onClose(); showToast(`/effort ${e}`);
+    submitInput(cur.id, cur.cwd, `/effort ${e}`, "command"); onClose(); showToast(`/effort ${e}`);
   };
   return (
     <div className="sheet">

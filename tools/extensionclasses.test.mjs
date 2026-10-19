@@ -18,6 +18,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
+import { cssFiles } from "./csssource.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const EXT = join(ROOT, "packages", "extensions");
@@ -38,7 +39,7 @@ function walk(dir, out = []) {
 }
 
 const files = walk(EXT);
-const css = [join(ROOT, "packages", "web", "src", "styles.css"), ...files.filter((f) => f.endsWith(".css"))]
+const css = [...cssFiles(), ...files.filter((f) => f.endsWith(".css"))]
   .map((f) => readFileSync(f, "utf8")).join("\n");
 const defined = new Set([...css.matchAll(/\.([a-zA-Z_][\w-]*)/g)].map((m) => m[1]));
 

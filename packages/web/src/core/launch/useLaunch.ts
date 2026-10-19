@@ -616,8 +616,15 @@ export function useLaunch(deps: LaunchDeps) {
     // This session's own backend, not the launcher's current default: a
     // relaunch replaces THIS session, and swapping the binary under it
     // because the new-session picker has moved on since is not a relaunch.
-    const next: LaunchOpts = wireLaunch({ ...launch, backend: cur.backend, ...patch });
-    setLaunchOpt(patch);
+    // …and THIS session's own flags, not the new-session defaults either: a
+    // restart (`patch` empty) relaunched an effort-medium session on whatever
+    // Settings held (opus · max), which is a model switch nobody asked for.
+    const own: LaunchOpts = {
+      model: cur.model, effort: cur.effort, permissionMode: cur.permissionMode,
+      remoteControlled: cur.remoteControlled, backend: cur.backend,
+    };
+    const next: LaunchOpts = wireLaunch({ ...own, ...patch });
+    // The patch is for THIS session; the new-session defaults stay Settings'.
     // Kill + create as ONE durable op (`replaceSessionId`), never a bare
     // `session.kill` beside a queued create: the kill is a plain socket write
     // the ws layer DROPS while the tunnel is down, while the create survives
@@ -727,7 +734,7 @@ export function useLaunch(deps: LaunchDeps) {
     backends, launch, root: deps.root, repos: deps.repos, active: deps.active,
     launchAskFor, setLaunchAskFor, hostedAskFor, setHostedAskFor, branchPick, setBranchPick,
     modelInput, setModelInput, setOverlay, submitInput: deps.queue.submitInput,
-    refreshRepos, openCwd, pickBackend, setLaunchOpt, relaunch, sessionCan, sessionCant,
+    refreshRepos, openCwd, pickBackend, relaunch, sessionCan, sessionCant,
     recheckBackends: () => { core().conn.send({ t: "backends.recheck" }); },
   });
 

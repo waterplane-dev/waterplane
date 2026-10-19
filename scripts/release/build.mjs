@@ -234,7 +234,11 @@ const tarball = join(OUT, `${dirName}.tar.gz`);
 // COPYFILE_DISABLE keeps macOS from adding AppleDouble `._*` entries.
 // --no-mac-metadata --no-xattrs (bsdtar): no LIBARCHIVE.xattr headers, which GNU tar warns about per
 // file on Linux. --no-mac-metadata alone still carries com.apple.provenance (seen in the 0.1.0 tarball).
-execFileSync("tar", [...(process.platform === "darwin" ? ["--no-mac-metadata", "--no-xattrs"] : []), "--uid", "0", "--gid", "0", "-czf", tarball, "-C", join(OUT, "stage"), dirName], { env: { ...process.env, COPYFILE_DISABLE: "1" } });
+// Owner root:root in both dialects: bsdtar spells it --uid/--gid, GNU tar (the Linux CI runner) has
+// no --uid and spells it --owner/--group (the npm-publish run of v0.1.1 died on `--uid`).
+const gnuTar = execFileSync("tar", ["--version"], { encoding: "utf8" }).includes("GNU tar");
+const rootOwner = gnuTar ? ["--owner=0", "--group=0", "--numeric-owner"] : ["--uid", "0", "--gid", "0"];
+execFileSync("tar", [...(process.platform === "darwin" ? ["--no-mac-metadata", "--no-xattrs"] : []), ...rootOwner, "-czf", tarball, "-C", join(OUT, "stage"), dirName], { env: { ...process.env, COPYFILE_DISABLE: "1" } });
 const sha = createHash("sha256").update(readFileSync(tarball)).digest("hex");
 writeFileSync(`${tarball}.sha256`, `${sha}  ${dirName}.tar.gz\n`);
 writeFileSync(join(OUT, "release.json"), JSON.stringify(releaseJson, null, 2) + "\n");

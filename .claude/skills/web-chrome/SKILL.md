@@ -7,16 +7,23 @@ description: waterplane phone client — the frame around the content (packages/
 
 The chrome around whatever is on screen: theme, routing and Back, the link store, the header and its session tabs, the update banner, typing room, the wide layout and the launcher. Router: `web`. Reasoning: [web.md](../../../docs/notes/web.md); moved-out stories: [web.md](../../../docs/notes/web.md#moved-out-of-skill-web-chrome-2026-10-17).
 
-- `theme.ts` + `termTheme.ts` + `themeOverlay.ts` + the palette at the top of `styles.css` — light or dark as a setting
+- `theme.ts` + `termTheme.ts` + `themeOverlay.ts` + the palette in `styles/00-tokens.css` — light or dark as a setting (`styles.css` is only the `@import` index of `styles/NN-*.css`: ORDER is the cascade, cut at rule boundaries, wide layout last, ≤650 lines a slice, tests read it via `tools/csssource.mjs`: `cssshape.test.mjs`)
   (`system`/`light`/`dark`, **per device, not synced**: storage.ts `theme: "device"`; written to `<html data-theme>`). Three things are NOT CSS and are
   pushed: the `theme-color` meta, xterm's palette (light MUST state all sixteen), and the Android
   window's system bars. **`index.html` sets the attribute inline, before the bundle parses** — any
   import arrives too late to stop the cold-start flash. Light is not dark inverted: hues re-picked,
   DEPTH ORDER inverted, white-at-low-alpha overlays become black-at-low-alpha. **There is no literal
-  colour anywhere else in `styles.css`**, and `theme.test.mjs` parses the file to keep it that way
+  colour anywhere else in `styles/`**, and `theme.test.mjs` parses the slices to keep it that way
  . `themeOverlay.ts`: the
   host's `theme.json` becomes one `<style id="theme-overlay">`, the terminal palette, and `appName()`.
 - `routing.ts`'s `Overlay` also accepts `feature:<manifest id>/<sheet>` (an in-repo extension's sheet, `featureSheetId`) — never in `PERSISTED_OVERLAYS`.
+- `App.tsx` overlays and toasts (moved verbatim from the router): **it returns early once per overlay, so an always-on layer may not live
+  in it** (`HintLayer`, the toast: `main.tsx`). **A toast's clock is the LENGTH of its
+  words** (`toastMs`); every toast except a host alert also lands as a row in the bounded `ToastLog.tsx`, never counted into the unread badge.
+- `App.tsx` sends and overlay table (moved verbatim from the router): **An explicit send beats `holdUntilIdle`**; a busy TURN is not a wall, but a question
+  box, an unparsable dialog and a limit block are, and they get NAMED. **Which sheet is on top is a TABLE**
+  (`overlayViews`); a miss falls through. **A chatty push nothing on screen reads keeps
+  `prev`**; a status TRANSITION, a new id or a `null` is NEVER swallowed.
 - `toolbar.ts` / `routing.ts` / `format.ts` / `localState.ts` — slices lifted out of `App.tsx`.
   **Back is a history STACK, not a URL diff**: each screen pushes one entry keyed on `history.state`,
   landing on a screen already in the stack UNWINDS to it, and a document that BOOTS deep seeds its own
@@ -95,7 +102,7 @@ The chrome around whatever is on screen: theme, routing and Back, the link store
   on BASE sizes before it shrinks anything**: `.hdr-cmds` sits at basis ZERO so a long list eats its OWN row; `.hdr-ctl` groups the buttons
   so the break never lands between two of them. **The typing keeps stay DIRECT children** —
   `.screen.typing .topbar > *:not(.hdr-typing-keep)` hides a nested one with its group. A header button is
-  40px on the phone layout (32px under `html[data-layout="wide"]` with a fine pointer, `styles.css`), not
+  40px on the phone layout (32px under `html[data-layout="wide"]` with a fine pointer, `styles/`), not
   `.key`'s 46×44. The header wears the
   repo's hue as `.row-wrap`'s own 3px stripe — and drops it in typing room, where the bar is gone.
 - `ArchiveSheet.tsx` — the route back to a session you closed. The × is an ARCHIVE: it sends
@@ -157,6 +164,6 @@ The chrome around whatever is on screen: theme, routing and Back, the link store
   (slot + `stowKey` = its CONTENT, so new content unfolds by itself) and put `<StowButton />` in its head;
   the chip rides the session status line (`StowTray`), no row of its own. Used by `ShellLinksBar`,
   `LoginBar`, `NextPrompt`. Reasoning: [web.md](../../../docs/notes/web.md#a-strip-above-the-prompt-bar-folds-it-never-closes-stowabletsx--stowts).
-- `layout.ts` + `Workspace.tsx` (`core/layout/`) — **PHONE OR WIDE is one fact, one writer** (`startLayout`'s media-query listener; `WIDE_MIN_PX` 1024, **width ONLY** — pointer/hover decide affordances, never structure). **No hysteresis**: anything that must survive a crossing lives outside the frame (the draft in `App`, PTY bytes in `useTermFeed`, the overlay in the route); **never a remount** — both layouts return the same two-slot fragment, so the session screen sits at the same React position at every width. `html[data-layout="wide"]` carries the CSS (one block at the end of `styles.css`); the launcher moves to `aside.ws-side`. Read `useLayout()`/`useWide()`, never a second width test.
+- `layout.ts` + `Workspace.tsx` (`core/layout/`) — **PHONE OR WIDE is one fact, one writer** (`startLayout`'s media-query listener; `WIDE_MIN_PX` 1024, **width ONLY** — pointer/hover decide affordances, never structure). **No hysteresis**: anything that must survive a crossing lives outside the frame (the draft in `App`, PTY bytes in `useTermFeed`, the overlay in the route); **never a remount** — both layouts return the same two-slot fragment, so the session screen sits at the same React position at every width. `html[data-layout="wide"]` carries the CSS (one block, `styles/15-wide-layout.css`, last); the launcher moves to `aside.ws-side`. Read `useLayout()`/`useWide()`, never a second width test.
 - `PassiveScreen.tsx` + `passiveMode.ts` — the kids' phone: **the HOST is the boundary** 
   (`host/passive.ts` allows a passive token only what `passiveAllows` names — health, the web bundle the OTA update reads, the passive screen's own state, the theme, and the artifact download of an APK the auto-pull queue holds right now; the WebSocket is refused outright, `server/wsops.ts`); this is a courtesy. `bootMode` (pure) picks the one screen — the host's answer, else the remembered mark — and **a passive boot opens no socket**. Never widen what the passive screen can reach.

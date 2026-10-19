@@ -22,9 +22,19 @@ variable.
 
 ## Requirements, in detail
 
-The README lists the four things you need: Claude Code signed in, a way for the phone to reach the
-desktop (Tailscale recommended; [without it](#without-tailscale-same-wi-fi-or-your-own-vpn)), tmux
-and, for a source checkout, Node. The rest of the detail:
+The README lists the four things you need: Claude Code installed with something to run on, a way
+for the phone to reach the desktop (Tailscale recommended;
+[without it](#without-tailscale-same-wi-fi-or-your-own-vpn)), tmux and, for a source checkout, Node.
+The rest of the detail:
+
+- **Claude Code:** install it with Anthropic's installer, `curl -fsSL https://claude.ai/install.sh
+  | bash` (or `npm install -g @anthropic-ai/claude-code`). It needs one of: a **paid Claude plan**
+  (Pro, Max, Team), an **Anthropic API key** (pay per use), or — no account at all — a **local
+  model through Ollama** (`WATERPLANE_OLLAMA_URL`) or an endpoint of your own
+  (`WATERPLANE_CLAUDE_ENDPOINT_URL`); both run the same `claude` binary. Sign in by running `claude`
+  once, or later from the phone. The installer stops when `claude` is missing (with a terminal it
+  asks first); **GitHub Copilot** instead of Claude: `install.sh --with copilot`, which needs no
+  `claude`.
 
 - **macOS is first-class** (developed and used daily on a Mac); Linux works. Windows works through
   WSL2: the host always runs inside it, from a WSL clone or driven from a Windows checkout
@@ -111,8 +121,11 @@ to fix it:
                          → Sign in from the phone: open any session on this desktop, tap its
                            sign-in button, sign in in the browser, then tap paste code. (Or run
                            `claude` once in a terminal here.) Sessions stop at the sign-in
-                           screen until then.
+                           screen until then. …
 ```
+
+A signed-out `claude` is only a warning once this desktop runs a local or endpoint model
+(a recent session on one, or `WATERPLANE_CLAUDE_ENDPOINT_URL` set): those need no Claude account.
 
 The host prints the URL it is listening on. Plain `http://100.x.y.z:8770` over Tailscale works for
 a first look but is not a secure context (no install, push or clipboard), so set up the HTTPS

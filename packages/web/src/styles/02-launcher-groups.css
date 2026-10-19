@@ -1,0 +1,496 @@
+/* 02-launcher-groups.css: repo hue shapes, repo group headers, session history, status strip, terminal column, typing room, NextPrompt, outbox. */
+/* ── The three shapes a repo hue takes ─────────────────────────────────
+   `--repo-fill` is the wash a surface gets, `--repo-fill-on` the fill of the
+   one you are IN, `--repo-edge` the hue as a hairline. One definition, so the
+   launcher's group header and that repo's tab are not merely the same hue —
+   they are the same colour. They used to be two mixes with two numbers over two
+   different surfaces, tuned apart and drifting apart, which is what "the
+   colours nearly match" was.
+
+   Declared HERE, on the elements that carry `--repo-accent`, and NOT in
+   `:root` — which is where they were first written and where they are silently
+   wrong. A custom property's `var()` references are resolved on the element
+   that DECLARES it, so a `--repo-fill` written at the root resolves its accent
+   to the fallback, computes to a flat transparent and inherits that down to
+   every tab. The symptom is a strip of colourless blocks and nothing in the
+   stylesheet that looks wrong. */
+.repo-group, .row-wrap, .stab, .sess-top, .rc-row, .rc-swatch, .rc-dot {
+  --repo-fill: color-mix(in srgb, var(--repo-accent, transparent) var(--repo-veil), transparent);
+  --repo-fill-on: color-mix(in srgb, var(--repo-accent, transparent) var(--repo-veil-on), transparent);
+  --repo-edge: color-mix(in srgb, var(--repo-accent, transparent) 38%, transparent);
+}
+
+/* Repo identity color: --repo-accent is set inline per header/row from a hash
+   of the repo name (App.tsx repoAccent). Header gets colored text + a tinted
+   fade-out band; every row of that repo carries a matching left stripe — so
+   groups are telling apart mid-scroll, not only at the (easily missed) header. */
+.repo-group {
+  /* Wraps because .repo-group-stats is a sibling of the toggle (its chips are
+     filter BUTTONS — a button inside the toggle button is invalid markup), and
+     it claims a full row of its own below name + actions. */
+  /* ROW gap 0, deliberately. `gap: 8px` set both axes, and this container wraps
+     ONCE, on purpose (the chip row below name + actions) — so the row half of
+     that shorthand only ever bought empty space between the header's two lines.
+     It stacked with .repo-group-stats' own margin AND with the ~10px of slack
+     the 40px action buttons leave under a ~20px name, so every header carried a
+     ~23px blank band that read as a missing row. Column gap is still 8px: that
+     one separates the toggle from the action strip and is load-bearing. */
+  display: flex; align-items: center; justify-content: space-between;
+  column-gap: var(--sp-8); row-gap: 0; flex-wrap: wrap;
+  text-transform: none; letter-spacing: 0; font-weight: var(--fw-semibold); padding: var(--sp-12) var(--sp-10) var(--sp-8) var(--sp-12);
+  font-size: calc(var(--fs-15) * var(--ui-font, 1));
+  color: var(--repo-accent, var(--fg));
+  border-left: 3px solid var(--repo-accent, transparent);
+  /* DOCKED: a repo with twelve sessions is taller than the screen, so scrolling
+     into its rows scrolled its name away — and the rows are titled by their own
+     branch, so "main · done · 3h ago" three times over says nothing about WHICH
+     repo you are reading. The header stays until the next repo's header pushes
+     it out, which is also what makes the left stripe legible: the stripe says
+     "same repo as the header", and that only reads while the header is there.
+     Sticky, never fixed — `.list` is the scroller (see `.bl-group-head`), and a
+     fixed header would also outlive the launcher on every other screen.
+     Two background layers, not one: pinned over the rows the old single
+     gradient let row text show through its transparent 70%. The base is the
+     `--bg` the header always sat on, so unpinned it looks exactly as before.
+     The bottom line is the same 1px `--row` separator every row carries — with
+     nothing under it the pinned header and the first row read as one block. */
+  position: sticky; top: 0; z-index: 2;
+  border-bottom: 1px solid var(--line);
+  background:
+    linear-gradient(90deg, var(--repo-fill), transparent 70%),
+    var(--bg);
+}
+/* Group header left half: tap target that collapses/expands the repo's session
+   rows. Carries the name plus the live-session and worktree counts. */
+/* RepoGroup's scroll target: the header is sticky, this marks where it really is. */
+.repo-group-anchor { display: block; height: 0; }
+.repo-group-toggle {
+  /* NEVER wraps internally. It holds a chevron and the repo name and nothing
+     else (every chip is in .repo-group-stats), so an internal wrap can only ever
+     split those two — which is exactly what it did once the type got bigger:
+     six 42px action buttons leave ~120px beside them, `garmin-monorepo` needs
+     ~124px, and it dropped onto a line of its own UNDER its own chevron, with
+     the action icons stranded at the half-height of a two-line toggle. One name
+     in three broke and the rest did not, so the headers no longer read as a
+     column at all.
+     `nowrap` + `flex-basis: auto` moves that break outward: a flex container
+     breaks lines on base sizes BEFORE it shrinks anything, so a name that does
+     not fit beside the buttons pushes the BUTTONS onto the next line instead of
+     splitting itself. Short names are unaffected (still name + buttons on one
+     line); a long one gets the full width and stays whole. */
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: center; flex-wrap: nowrap; gap: var(--sp-6) var(--sp-8);
+  background: none; border: none; color: inherit; font: inherit; text-align: left;
+  /* Vertical padding is tap target, not decoration: the header row is one of the
+     most-tapped things in the app and used to be a ~20 px strip. */
+  padding: var(--sp-6) var(--sp-2); margin: -7px 0; cursor: pointer;
+}
+/* Basis auto (its own text), so the toggle's base size is the name's real width —
+   that is the measurement the wrap above is decided on. It shrinks only once it
+   is alone on its line, and ellipsizes only when the name is wider than the whole
+   header; the 7em floor is what stops a name being squeezed to two characters to
+   make room for something. */
+.repo-group-toggle > span:first-of-type { flex: 0 1 auto; min-width: 7em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Every header chip is ONE pill: same height, padding, border weight and
+   opacity — total, worktrees, setup, the roll-up. They differed (a faint
+   accent ring on two, solid currentColor on the rest, an 11px-padded waiting
+   pill) and the row read as kinds of thing instead of one cluster of counts.
+   Colour is the only difference. */
+.repo-group-stat.wt { color: inherit; }
+/* ALL header chips (session count, worktrees, status roll-up) share one row of
+   their own — flex-basis 100% forces the break, so the repo name keeps the line
+   above to itself. Inline, the chips wrapped at whatever column the name left
+   free: the split landed somewhere different per group (two chips beside the repo name
+   with a third under it, 1/2 for the next repo), header heights jumped, and the
+   counts stopped reading as one cluster. */
+/* `order` is what keeps this header TWO lines instead of three. The chip row is a
+   sibling BETWEEN the toggle and the action buttons in the DOM (its chips are
+   filter buttons, so they cannot live inside the toggle button), and its
+   flex-basis:100% breaks the line — which pushed the actions onto a third row of
+   their own, leaving the name line half empty above two stacked strips. Ordering
+   the actions before the stats puts them back beside the name and lets the chips
+   keep the one full-width row they need.
+   `margin-left: auto` is for the one case where they DON'T fit beside the name
+   (see the toggle's nowrap note): dropped onto a line of their own they stay at
+   the right edge, under the buttons' own column, instead of restarting at the
+   left under the name. */
+.repo-group-toggle { order: 0; }
+.repo-group-acts { order: 1; flex: none; margin-left: auto; display: flex; align-items: center; gap: var(--sp-2); }
+/* ⋯ and × are PINNED top-right: they sit outside `.repo-group-line`, which holds
+   the name plus files/git/build and is the only part that wraps. Before, the whole
+   strip dropped under a long name and the close button wandered to the second
+   line with it — the one control you reach for by position. Now the line box
+   wraps internally (verbs right-aligned under the name, same edge as the pin),
+   and the pin stays on the name's row. `align-self: flex-start` keeps it on the
+   FIRST line when the line box is two tall. */
+.repo-group-line { order: 0; flex: 1 1 0; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--sp-8); row-gap: 0; }
+.repo-group-pin { order: 1; flex: none; align-self: flex-start; display: flex; align-items: center; gap: var(--sp-2); }
+.repo-group.idle .repo-group-line { justify-content: flex-start; }
+/* Right-aligned: the chip row is the header's LAST line and the line above it ends
+   in the action buttons, so a left-aligned cluster left a hole under the icons and
+   read as unrelated to them. Ending both lines at the same edge makes the header
+   one block. Wrapping still goes left, so an overflowing chip set never hides
+   behind the edge. */
+/* No `margin-top`: the action buttons on the line above are 40px tall around a
+   ~20px name, so the chips already sit ~10px clear of it. Anything added here is
+   gap on top of gap. Row gap inside the cluster stays 5px — that one is between
+   chips that DID wrap. */
+.repo-group-stats { order: 2; flex: 1 0 100%; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--sp-6) var(--sp-6); }
+/* Group-header buttons sit next to each other AND next to a destructive one, so
+   they need real finger-sized boxes (44 px is the platform minimum) rather than
+   the icon's own bounds — mis-taps here close sessions. */
+/* 38, not 42: with the repo verbs on this header there are up to six of these,
+   and at 42 the strip needed 262px of a 390px row — a short name still fit, a
+   nine-character one pushed the whole strip onto a line of its own and every
+   header became three lines tall. */
+.repo-group .focus-btn {
+  min-width: 38px; height: 40px; justify-content: center; padding: 0;
+  border-radius: var(--r-10);
+}
+.repo-group .focus-btn:active { background: color-mix(in srgb, var(--repo-accent, var(--fg)) 16%, transparent); }
+/* Header counts (new inbox images, untracked files) ride ON the header buttons
+   rather than as separate full-height row cells: the files button is ALWAYS
+   there, the number only appears when there is one. */
+.repo-group .focus-btn.count { min-width: 40px; padding: 0 var(--sp-8); gap: var(--sp-4); font-size: calc(var(--fs-14) * var(--ui-font, 1)); color: var(--repo-accent, var(--accent)); opacity: 1; }
+/* "+ now" / "+ later": the pair that starts work in a repo, first on the chip row
+   so it sits right under the name, LEFT, while the counts stay right-aligned
+   (`margin-right: auto` splits the row). Worded, not icons: it is the verb a
+   person opens the launcher for. Outlined in the repo accent like the chips, so
+   it reads as part of the header, not as a second toolbar. */
+.repo-start { display: flex; gap: var(--sp-6); margin-right: auto; }
+.repo-start-btn {
+  display: flex; align-items: center; gap: var(--sp-4); height: 34px; padding: 0 var(--sp-10) 0 var(--sp-8);
+  border-radius: var(--r-10); border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
+  background: none; color: var(--repo-accent, var(--accent)); font: inherit; font-weight: var(--fw-semibold);
+  font-size: calc(var(--fs-14) * var(--ui-font, 1)); cursor: pointer;
+}
+.repo-start-btn:active { background: color-mix(in srgb, var(--repo-accent, var(--fg)) 16%, transparent); }
+.repo-start-btn.lead { border-color: currentColor; }
+/* "Open a repo-focused window" affordance on group headers — inherits the repo
+   accent, quiet until tapped. */
+.focus-btn { background: none; border: none; color: inherit; opacity: .65; cursor: pointer; padding: var(--sp-2) var(--sp-4); display: flex; align-items: center; }
+.focus-btn:active { opacity: 1; }
+/* Bulk-close in a repo group head — opens the bulk-close dialog. */
+.focus-btn.danger { color: var(--dead); }
+/* The "⋯" overflow, open. Same affordance the repo rows had before this list
+   absorbed them: the line it opens is full-width under the header, so the state
+   has to be visible on the button that opened it. */
+.focus-btn.on { opacity: 1; background: color-mix(in srgb, var(--repo-accent, var(--fg)) 16%, transparent); }
+/* A repo with NOTHING RUNNING wears the same header as one with sessions — same
+   type, band, chevron, docking and button size. A slimmer, band-less, chevron-less
+   row read as a different KIND of repo, one that could do less, and it could not.
+   It used to pull its branch chip up onto the name line to save an empty second
+   line; that line now carries "+ now / + later", so the branch sits beside them. */
+.repo-group.idle { justify-content: flex-start; }
+.repo-group.idle .repo-group-toggle { flex: 0 1 auto; }
+/* What an opened idle repo holds: one line saying nothing runs, pointing at the
+   header's "+ now". Carries the rows' left stripe so it reads as under its header. */
+.repo-group-empty {
+  display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap;
+  padding: var(--sp-12) var(--sp-12) var(--sp-12) var(--sp-32); color: var(--muted); font-size: calc(var(--fs-14) * var(--ui-font, 1));
+  border-bottom: 1px solid var(--line); border-left: 3px solid var(--repo-accent, transparent);
+}
+.repo-group-empty svg { color: var(--repo-accent, var(--accent)); }
+.repo-group-toggle:disabled { cursor: default; }
+/* The branch a sessionless repo is on: the one fact its old row carried under
+   the name. Quiet — it is identification, not a count. */
+.repo-group-branch {
+  flex: none; font-size: calc(var(--fs-12) * var(--ui-font, 1)); font-weight: var(--fw-medium); color: var(--muted);
+  max-width: 14em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Setup verdict on a header: amber, for the reason `.row-chip.warn` states — the
+   other chips here count things that are fine. */
+.repo-group-stat.warn { color: var(--warn); }
+/* The overflow line inside a group header. `order: 3` puts it after the chip row
+   (order 2); without it the line would land between the name and its chips and
+   push the header apart. Negative margins undo the header's own padding so the
+   line spans the full width, as it does under a row. */
+.repo-group .row-more { order: 3; flex: 1 0 100%; margin: var(--sp-8) -10px -9px -12px; }
+/* Focused-window topbar: brand shows the repo name in its accent + an exit ×. */
+.brand-focus span { color: var(--repo-accent, var(--fg)); overflow: hidden; text-overflow: ellipsis; max-width: 40vw; }
+.focus-clear { background: none; border: none; color: var(--muted); cursor: pointer; padding: var(--sp-2); display: flex; align-items: center; }
+.row-sub { color: var(--muted); font-size: calc(var(--fs-13) * var(--ui-font, 1)); }
+.tag { font-size: calc(var(--fs-12) * var(--ui-font, 1)); padding: var(--sp-4) var(--sp-10); border-radius: var(--r-pill); }
+.tag.ok { color: var(--ok); border: 1px solid var(--ok); }
+.tag.dead { color: var(--dead); border: 1px solid var(--dead); }
+
+/* ── Session history sheet ──────────────────────────────────────────── */
+.list.hist { padding: var(--sp-4) 0 var(--sp-24); }
+.hist-item { padding: var(--sp-12) var(--sp-14); border-bottom: 1px solid var(--line); }
+.hist-item.pinned { border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.tag.hist-pinned { color: var(--accent); border: 1px solid var(--accent); display: inline-flex; align-items: center; gap: var(--sp-4); }
+.hist-head { display: flex; align-items: center; gap: var(--sp-8); margin-bottom: var(--sp-6); }
+.hist-actions { margin-left: auto; display: inline-flex; gap: var(--sp-4); }
+.hist-actions .key { padding: var(--sp-4) var(--sp-6); }
+.hist-acts { margin-left: auto; display: inline-flex; gap: var(--sp-2); }
+.hist-acts .row-act { width: auto; padding: var(--sp-4) var(--sp-6); border-left: none; border-radius: var(--r-6); font-size: calc(var(--fs-13) * var(--ui-font, 1)); }
+.hist-acts .row-act:active { background: var(--raise); }
+.tag.hist-prompt { color: var(--accent); border: 1px solid var(--accent); display: inline-flex; align-items: center; gap: var(--sp-4); }
+.tag.hist-command { color: var(--ok); border: 1px solid var(--ok); display: inline-flex; align-items: center; gap: var(--sp-4); }
+.tag.hist-backlog { color: var(--purple); border: 1px solid var(--purple); display: inline-flex; align-items: center; gap: var(--sp-4); }
+.hist-prompt { font-size: calc(var(--fs-14) * var(--ui-font, 1)); color: var(--fg); white-space: pre-wrap; word-break: break-word; margin-bottom: var(--sp-6); }
+.hist-out { margin: 0; padding: var(--sp-8) var(--sp-10); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-8); color: var(--muted); font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14); white-space: pre-wrap; word-break: break-word; max-height: 180px; overflow: hidden; }
+.hist-out.open { max-height: none; }
+.hist-more { background: none; border: none; color: var(--accent); font-size: calc(var(--fs-12) * var(--ui-font, 1)); padding: var(--sp-4) 0 0; cursor: pointer; }
+.hist-pending { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); font-style: italic; }
+
+/* In-session status strip: usage-limit badge + context-window readout. */
+/* The status strip under the header, and the same argument as the header's own
+   padding: this is the upper chrome, it is on screen whenever the output is,
+   and every few pixels of air here is measured against the rows of terminal it
+   covers. The gap is asymmetric on purpose — the ROW gap is what stacks when
+   the chips wrap, which on a 390px phone they do. */
+.sess-status {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-6) var(--sp-8);
+  padding: var(--sp-6) var(--sp-10); background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.sess-status:empty { display: none; }
+.sess-status .row-sub { display: inline-flex; align-items: center; gap: var(--sp-4); }
+/* ONE text size for every item in the strip — chips, readouts, the context
+   button and the spend total inside it. Each used to bring its own (12.5 /
+   13.5 / the button's inherited body size / 11), so three lines of one strip
+   read as three different type scales. */
+.sess-status .row-sub, .sess-status .tag, .sess-status .ctx-spark-val {
+  font-size: calc(var(--fs-12) * var(--ui-font, 1));
+}
+/* The status pill is the tallest item in the strip; at the list's 4px padding
+   it alone set the first line's height. Here it only has to be as tall as the
+   text beside it. */
+.sess-status .tag { padding: 1px var(--sp-8); }
+.sess-status .usage-inline { cursor: pointer; }
+.sess-status .usage-inline.danger { color: var(--dead); }
+
+/* The terminal and what shares its column. The toolbar is NOT here any more —
+   it is the burger's menu, in the header. */
+/* `overflow: hidden` is load-bearing, and not for scrolling: this row is
+   `flex: 1` with `min-height: 0`, so when the column runs out of room — the
+   on-screen keyboard up, an expanded header, a grown compose box — it is the
+   item that shrinks, all the way to ZERO. Its descendants do not: the toolbar
+   and `.tr-status` carry a content-based minimum, and `.tr-body` keeps its own
+   26px of padding, so ~80px of terminal/reader kept being LAID OUT past the
+   bottom of a 0-tall parent. Nothing clipped it, and `.term-wrap` is
+   `position: relative` (see the overlay rules below) — which puts the spill in
+   the POSITIONED paint layer, i.e. on top of the in-flow siblings that follow.
+   The result on a phone was transcript text drawn over the special-keys row and
+   the compose bar: two live tap targets under someone else's pixels. Clipping
+   costs nothing when the space is there and is the whole fix when it is not. */
+.term-area { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+/* `+ later`: no terminal, the sentence is the view (`TermArea`). */
+.term-area.term-later { position: relative; }
+.term-wrap { flex: 1; min-height: 0; background: var(--term-bg); padding: var(--sp-4) var(--sp-6); }
+
+.keys {
+  display: flex; gap: var(--sp-6); padding: var(--sp-6) var(--sp-8); overflow-x: auto;
+  background: var(--panel); border-top: 1px solid var(--line);
+}
+.key {
+  /* min-height, not more padding: the header wraps to three rows on a phone, so
+     a taller chip costs 3 rows of screen while a wider one costs a whole extra
+     row. 42px is the fingertip; the label keeps its own width. */
+  flex: 0 0 auto; min-width: 46px; min-height: 44px; padding: var(--sp-8) var(--sp-12);
+  background: var(--raise); color: var(--fg); border: 1px solid var(--line);
+  border-radius: var(--r-8); font-size: calc(var(--fs-14) * var(--ui-font, 1)); font-family: inherit; cursor: pointer;
+}
+/* Monospace says "this is a key or a command" (docs/notes/web.md). `.key` started as the
+   terminal key bar's class and became every button in the app, so every button read as a
+   terminal key. The bar under the terminal keeps the face; everything else is the UI font. */
+.keys .key { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.key:active { background: var(--accent); }
+
+/* New-image strip (agent-produced images this turn) */
+.newimg-strip { display: flex; align-items: center; gap: var(--sp-8); padding: var(--sp-6) var(--sp-8); overflow-x: auto; background: var(--panel); border-top: 1px solid var(--accent); }
+.newimg-ctl { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); }
+.newimg-ctl-btns { display: flex; gap: var(--sp-2); }
+.newimg-label { flex: 0 0 auto; white-space: nowrap; display: inline-flex; align-items: center; gap: var(--sp-4); font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--accent); }
+.newimg { flex: 0 0 auto; display: flex; flex-direction: column; gap: var(--sp-2); align-items: stretch; }
+.newimg-thumb { position: relative; width: 56px; height: 56px; padding: 0; border: 1px solid var(--line); border-radius: var(--r-8); overflow: hidden; background: var(--media-bg); cursor: pointer; }
+.newimg-thumb img, .newimg-thumb video { width: 100%; height: 100%; object-fit: cover; }
+.newimg-doc { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: var(--sp-2); padding: var(--sp-6) var(--sp-4) var(--sp-14); color: var(--muted); background: var(--raise); }
+.newimg-doc-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: calc(var(--fs-9) * var(--ui-font, 1)); color: var(--fg); }
+/* File-type badge so a PNG vs GIF vs MP4 artifact is obvious at a glance. */
+.newimg-type { position: absolute; left: 2px; bottom: 2px; padding: 0 var(--sp-4); font-size: calc(var(--fs-9) * var(--ui-font, 1)); font-weight: var(--fw-semibold); line-height: 12px; letter-spacing: .3px; color: var(--on-media); background: var(--scrim-label); border-radius: var(--r-2); pointer-events: none; }
+.newimg-ref { font-size: calc(var(--fs-10) * var(--ui-font, 1)); padding: var(--sp-2) 0; background: var(--raise); color: var(--muted); border: 1px solid var(--line); border-radius: var(--r-6); cursor: pointer; }
+.newimg-x, .newimg-min { flex: 0 0 auto; background: none; border: none; color: var(--muted); cursor: pointer; padding: var(--sp-4); border-radius: var(--r-round); }
+.newimg-x:active, .newimg-min:active { background: var(--raise); }
+.newimg-pill { flex: 0 0 auto; display: inline-flex; align-items: center; gap: var(--sp-4); margin: var(--sp-8); padding: var(--sp-4) var(--sp-10); font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--accent); background: var(--panel); border: 1px solid var(--accent); border-radius: var(--r-pill); cursor: pointer; }
+.tag.img { color: var(--accent); border: 1px solid var(--accent); }
+/* Words already on a clock for this session. `--sched` is the same token the
+   backlog's clock rows wear (`.bl-clock`), so a chip here and the row it opens
+   are visibly the same fact rather than two colours for one subject. */
+.tag.sched { color: var(--sched); border: 1px solid var(--sched); }
+/* The DOT on the two *N waiting* pills — inherits their colour, so it reads as
+   part of the count it qualifies rather than as a second badge. */
+.wait-sched { margin-left: var(--sp-4); vertical-align: -1px; opacity: .85; }
+
+/* ── Typing room ──────────────────────────────────────────────────────
+   With the on-screen keyboard up, the session screen's chrome — header, status
+   line, toolbar, special-key row, the new-images strip and the download strip —
+   adds up to more height than the terminal has left, so the output you are
+   typing ABOUT is the part that is not on screen while you type. While the
+   caret is in the compose box (`typingMode` in App.tsx) all of it is hidden and
+   the terminal takes the rows back.
+
+   Two things survive. The OUTPUT, which is the point. And one button: the
+   outline, the one question worth asking mid-prompt ("where am I in this
+   session?"). The header keeps holding it — turned into a thin right-aligned
+   strip rather than removed from flow, so nothing is drawn over the output.
+
+   Not hidden, deliberately: the reply and sign-in bars, the send-queue bars (they carry Restore/Manage, and a receipt
+   you cannot see is the complaint `giveups.ts` existed for) and the insecure /
+   update banners. Only `pull-strip` goes, being progress with nothing to decide. */
+/* The header is taken OUT OF FLOW once it holds one button: kept in the column
+   it was still a row of mostly-empty panel above the output, which is the thing
+   typing room exists to give back. Positioned against `.screen` (relative only
+   in this mode, so nothing else in the app changes its containing block) rather
+   than `position: fixed`, which under an on-screen keyboard resolves against a
+   viewport this app has already re-anchored (`useViewport`).
+   It costs the top-right corner of the output — the `conn-banner` trade, and
+   the same reasoning: a corner for as long as the caret is in the box. */
+.screen.typing { position: relative; }
+.screen.typing .topbar {
+  position: absolute; z-index: 8;
+  top: calc(env(safe-area-inset-top) + 2px); right: 8px; left: auto;
+  padding: 0; background: transparent; border-bottom: none;
+  justify-content: flex-end; flex-wrap: nowrap;
+  /* The hue stripe goes with it: in this mode the header is two buttons
+     floating over the output, and a coloured edge down the side of the screen
+     is a bar drawing itself where the bar is gone. */
+  border-left: none; padding-left: 0;
+}
+.screen.typing .topbar > *:not(.hdr-typing-keep) { display: none; }
+.screen.typing .topbar { gap: var(--sp-6); }
+/* Opaque: they sit ON the output now, and a control you cannot read apart from
+   the text under it is not a control. */
+/* Full fingertip size: shrinking it bought nothing once the row left the flow
+   (the button floats over the output either way), and it is the only control
+   on screen above the box — the one that must not be missed. */
+.screen.typing .hdr-typing-keep {
+  min-width: 0; min-height: 40px; padding: var(--sp-8) var(--sp-12);
+  background: var(--panel); opacity: .92;
+}
+/* The reader's own two rows. `tr-bar` goes only when it is the unread jump —
+   an open find field keeps its box (`.tr-bar-find`), because a query still
+   narrowing the document with its own field hidden is a screen misrepresenting
+   what it shows. `tr-status.tr-live` is the busy/idle readout; the bare
+   `tr-status` below it is the cached-copy notice, which is an honesty marker
+   and stays up in every mode. */
+.screen.typing .tr-bar:not(.tr-bar-find),
+.screen.typing .tr-status.tr-live,
+.screen.typing .sess-status,
+/* `.toolbar` is not listed: it is a child of `.topbar` now, and the rule above
+   hides every child of that but the two typing-room keeps. */
+.screen.typing .toolbar-cants,
+.screen.typing .keys,
+.screen.typing .newimg-strip,
+.screen.typing .newimg-pill,
+.screen.typing .outbox-recover.pull-strip { display: none; }
+/* The always-on strips are mounted outside the screen tree and every screen
+   pads itself clear of them, so both halves have to go: `--ui-pulse-h` and
+   `--ui-localrt-h` are set inline on <html> by their own components and a
+   stylesheet cannot outbid that. Hiding one strip without resetting the padding
+   leaves a 22 px gap over the typing room those rows were taken back for. */
+/* Full screen by hand wears the same class — one layout, not two that drift —
+   but it is NOT the keyboard being up, and that one difference decides this
+   row. Typing room hides the special keys because the keyboard has replaced
+   them and they sit under the box you are typing in; in full screen there is no
+   keyboard, so Esc / Tab / the arrows are the ONLY way to answer a choice box
+   or interrupt a turn. Hiding them would make the mode read-only, which is not
+   what "give the rows to the output" was asking for. */
+/* The reader needs no exception here: those keys answer a CLI that is not on
+   screen, so `App.tsx` does not render the row there at all. */
+.screen.typing.fullscreen .keys { display: flex; }
+html[data-typing="1"] .net-pulse,
+html[data-typing="1"] .sess-tabs,
+html[data-typing="1"] .localrt-bar,
+html[data-typing="1"] .demo-line { display: none; }
+html[data-typing="1"] .screen { padding-top: env(safe-area-inset-top); }
+
+/* Recovery bar above the composer: unsent text that never reached a live PTY. */
+/* The min-height is one `.key` row plus the padding, and it is load-bearing:
+   the bar sits above the terminal in the same flex column, so any height change
+   refits the xterm grid and SIGWINCHes the PTY, and the claude TUI answers a
+   SIGWINCH by clearing and repainting the whole screen. A frame without buttons
+   (the "sent" linger) would otherwise be ~16px shorter than the one before it
+   and flicker the terminal on the way in and on the way out. */
+/* ── "What goes in after this turn" (NextPrompt.tsx) ──────────────────────
+   Sits directly above the queue bar and takes its shape, so the two read as
+   one stack rather than as a second floating thing: same panel, same top rule,
+   same `flex: 0 0 auto` (these live in the screen's flex COLUMN, where a stray
+   shorthand is a claim on the whole viewport height — see `.outbox-recover`).
+   Deliberately NOT tinted like the queued bar. That bar's amber means "this is
+   waiting and you may want to know"; this one is a READOUT of a decision that
+   is going perfectly well, and a permanently amber strip above the composer
+   while every turn runs is how a colour stops meaning anything. */
+.nextp {
+  display: flex; align-items: center; gap: var(--sp-8); flex-wrap: wrap;
+  flex: 0 0 auto;
+  padding: var(--sp-6) var(--sp-12); font-size: calc(var(--fs-13) * var(--ui-font, 1)); box-sizing: border-box;
+  background: var(--panel); border-top: 1px solid var(--line);
+  color: var(--muted);
+}
+/* The words and the reason are one block so the buttons stay on the right when
+   it wraps, and `min-width: 0` is what lets the words ellipsize rather than
+   pushing the buttons off a 360 px screen. */
+.nextp-body { display: flex; flex-direction: column; gap: 1px; flex: 1 1 auto; min-width: 0; }
+.nextp-words { color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nextp-why { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The tie sentence is the whole answer to "may I close this session?" — never clipped. */
+.nextp-tie { white-space: normal; overflow: visible; }
+.nextp-mark { flex: 0 0 auto; display: flex; color: var(--muted); }
+/* Parked is the state worth recognising at a glance — it is the one where a tap
+   changes when the prompt lands. Accent, the colour this app already means
+   "on its way / pointed at" by; never a fifth palette. */
+.nextp-held .nextp-mark { color: var(--accent); }
+/* A verb that cannot run is a SENTENCE, never a dimmed button (`Unavailable`). */
+.nextp-cant { flex: 1 1 100%; font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--warn); }
+
+.outbox-recover {
+  display: flex; align-items: center; gap: var(--sp-8); flex-wrap: wrap;
+  /* Sized by its content and nothing else. These bars sit in the screen's flex
+     COLUMN, where a stray `flex` shorthand from some other rule is not a width
+     but a claim on the whole viewport height — which is exactly what a class
+     collision with the 3px `.pull-bar` did to the launcher: the strip took the
+     screen and the repo list had nowhere to go. Stated here so the next one
+     cannot. */
+  flex: 0 0 auto;
+  padding: var(--sp-8) var(--sp-12); font-size: calc(var(--fs-13) * var(--ui-font, 1)); min-height: 51px; box-sizing: border-box;
+  background: var(--panel); border-top: 1px solid var(--line);
+}
+.outbox-recover.failed { color: var(--dead); background: var(--dead-tint); border-top-color: var(--dead); }
+.outbox-recover.sending { color: var(--muted); }
+/* Queued (offline) — informational, not an error: the text is safe and will go
+   out by itself. Amber rather than the failure red. */
+.outbox-recover.queued { color: var(--warn); background: var(--warn-tint); border-top-color: var(--warn); }
+/* Still being confirmed by the desktop — work in progress, which is what the
+   MUTED treatment says here (the same one `sending` uses). Deliberately not
+   amber and emphatically not the failure red: nothing has gone wrong yet, and
+   for the first minute of a send's life that colour was the whole complaint. */
+.outbox-recover.confirming { color: var(--muted); }
+.outbox-recover .key { margin-left: 0; }
+.outbox-recover.failed .key:first-of-type,
+.outbox-recover.confirming .key:first-of-type,
+.outbox-recover.queued .key:first-of-type,
+.outbox-recover.ask .key:first-of-type { margin-left: auto; }
+/* The reconnect question: a decision to make, so it reads as the live thing on
+   screen (accent, not the amber "parked" state of the queue bar under it). */
+.outbox-recover.ask {
+  color: var(--fg); background: var(--accent-tint);
+  border-top-color: var(--accent);
+}
+
+/* WHICH messages the failure bar is counting.
+   A count without names ("2 messages not delivered") is unanswerable from the
+   bar itself, so the rows are named under it: full width (`flex-basis: 100%`
+   inside the wrapping bar), one line each, ellipsised rather than wrapped — the
+   bar sits above the terminal and a growing bar is a resize, which repaints the
+   whole TUI. Each row is a tap into Activity showing that one row. */
+.outbox-which { flex: 1 0 100%; display: flex; flex-direction: column; gap: var(--sp-2); margin-top: var(--sp-2); }
+.outbox-which-row {
+  display: flex; align-items: baseline; gap: var(--sp-6); width: 100%;
+  background: none; border: 0; padding: var(--sp-2) 0; margin: 0;
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+  overflow: hidden;
+}
+.outbox-which-row:active { opacity: .6; }
+.outbox-which-where { flex: 0 0 auto; max-width: 40%; opacity: .75; font-size: calc(var(--fs-12) * var(--ui-font, 1)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.outbox-which-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.outbox-which-row.more { opacity: .8; text-decoration: underline; }

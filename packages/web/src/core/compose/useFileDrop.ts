@@ -11,7 +11,7 @@
  * app gone for a missed drop target.
  */
 import { useEffect, useState, type DragEvent } from "react";
-import { annotatorBusy, appendToBatch, pasteRoute } from "../../features/images";
+import { alreadyMarking, annotatorBusy, appendToBatch, pasteRoute } from "../../features/images";
 import { isAnnotatable } from "../../media";
 import { core } from "../../sdk";
 
@@ -39,17 +39,26 @@ function attach(files: File[], how: "paste" | "drop"): void {
     // Asked every time: the person may have meant this picture INSTEAD, and
     // the one on the annotator is the last copy of its marks — so it is never
     // replaced, and nothing is added without a yes.
-    const n = files.filter(isAnnotatable).length;
-    const what = n === files.length ? (n === 1 ? "this picture" : `these ${n} pictures`) : files.length === 1 ? "this file" : `these ${files.length} files`;
-    void c.say.confirm({
-      title: `Append ${what}?`,
-      lines: [n ? "Pictures are marked next, after the one on screen — its marks stay." : "Uploaded into the inbox, its path added to the message."],
-      confirmLabel: "Append", cancelLabel: "Leave it", tone: "info",
-    }).then((yes) => { if (yes) { c.say.track(`action:attach.${how}.append`); appendToBatch(files); } });
+    // …unless it is the picture already there: a repeat paste is said, not asked.
+    void alreadyMarking(files).then((dup) => {
+      if (dup) { c.say.track(`action:attach.${how}.repeat`); c.say.toast("That picture is already open for marking — not added twice"); return; }
+      askAppend(files, how);
+    });
     return;
   }
   c.say.track(`action:attach.${how}`);
   c.files.attachFiles(files, repoId);
+}
+
+function askAppend(files: File[], how: "paste" | "drop"): void {
+  const c = core();
+  const n = files.filter(isAnnotatable).length;
+  const what = n === files.length ? (n === 1 ? "this picture" : `these ${n} pictures`) : files.length === 1 ? "this file" : `these ${files.length} files`;
+  void c.say.confirm({
+    title: `Append ${what}?`,
+    lines: [n ? "Pictures are marked next, after the one on screen — its marks stay." : "Uploaded into the inbox, its path added to the message."],
+    confirmLabel: "Append", cancelLabel: "Leave it", tone: "info",
+  }).then((yes) => { if (yes) { c.say.track(`action:attach.${how}.append`); appendToBatch(files); } });
 }
 
 export function useFileDrop(): {

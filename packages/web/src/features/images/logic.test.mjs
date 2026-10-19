@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 
 import {
   NEWIMG_CAP, annReturnOverlay, dropStrip, findInStrips, galleryCtxForFile, isViewable, isVideoPath, markedRef,
-  mergeNewImages, newFilesToast, ocrBlock, outboxCut, parkLane, pasteRoute, swapImageRef, trimNewImages, viewableStrip,
+  mergeNewImages, newFilesToast, ocrBlock, outboxCut, parkLane, pasteRepeatsHeld, pasteRoute, swapImageRef, trimNewImages, viewableStrip,
 } from "./logic.ts";
 
 const im = (relPath, extra = {}) => ({ name: relPath.split("/").pop(), relPath, mtime: 1, ...extra });
@@ -140,4 +140,13 @@ test("the viewer swipes the strip's pictures only, and a notification finds its 
 test("a turn's toast counts pictures, new markdown and edited markdown apart", () => {
   assert.equal(newFilesToast([im("a.png"), im("b.png")]), "2 new images");
   assert.equal(newFilesToast([im("a.png"), im("n.md"), im("e.md", { changed: true })]), "1 new image · 1 new markdown · 1 markdown edited");
+});
+
+test("a paste of the picture already being marked is a repeat, never a second copy", () => {
+  const b = (...xs) => Uint8Array.from(xs);
+  assert.equal(pasteRepeatsHeld([b(1, 2, 3)], [b(1, 2, 3)]), true);
+  assert.equal(pasteRepeatsHeld([b(1, 2, 3)], [b(9), b(1, 2, 3)]), true, "anywhere in the batch");
+  assert.equal(pasteRepeatsHeld([b(1, 2, 4)], [b(1, 2, 3)]), false, "same size, other bytes");
+  assert.equal(pasteRepeatsHeld([b(1, 2, 3), b(7)], [b(1, 2, 3)]), false, "one new picture: still asked");
+  assert.equal(pasteRepeatsHeld([], [b(1)]), false);
 });

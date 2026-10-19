@@ -43,7 +43,7 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { 
-  cleanHealth, emptyHealth, healthRollup, healthSentence, noteCliVersion, observe, signalSpec, signalVerdict,
+  clearSeen, cleanHealth, emptyHealth, healthRollup, healthSentence, noteCliVersion, observe, signalSpec, signalVerdict,
   type CliHealth, type CliSignalId, type HealthOutcome, type HealthRollup, type HealthVerdict } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
 import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
@@ -178,6 +178,30 @@ export class CliHealthStore {
       body: `claude is now ${version}${from ? ` (was ${from})` : ""}. Every screen-reading heuristic has been re-armed: each one reads “not checked yet” until it has been seen to work against this build.`,
       tag: "clihealth-version",
     });
+  }
+
+  /**
+   * A person cleared the warnings they read: per signal, the newest miss their
+   * board showed (`clearSeen`). Unknown ids and non-numbers are ignored.
+   *
+   * The verdict it leaves is the new baseline for `lastVerdict`, so the next
+   * miss that tips a signal back into trouble alerts again — that is the way
+   * back, and it needs no button.
+   */
+  clear(through: Record<string, number>): void {
+    const now = Date.now();
+    let touched = false;
+    for (const [id, at] of Object.entries(through ?? {})) {
+      const sig = this.health.signals[id];
+      if (!sig || typeof at !== "number" || !Number.isFinite(at)) continue;
+      const next = clearSeen(sig, Math.min(at, now));
+      this.health.signals[id] = next;
+      this.lastVerdict.set(id, signalVerdict(next, now).verdict);
+      touched = true;
+    }
+    if (!touched) return;
+    this.schedulePersist();
+    this.scheduleChange();
   }
 
   /** Write now — SIGTERM, beside the other flushes. */

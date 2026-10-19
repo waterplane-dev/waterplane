@@ -42,6 +42,22 @@ export const onCliHealthGet = (a: { c: HostCtx; ws: WebSocket }): void => {
 };
 
 /**
+ * "I read those warnings — clear them." Answered with the board straight back
+ * to the asker, so the rows change under the tap rather than after the ~5 s
+ * broadcast debounce; every other device gets that broadcast.
+ *
+ * Not durable, no `contain`: `through` bounds the clear by what the reader was
+ * shown, so a repeat or a late delivery removes nothing they had not read.
+ */
+const onCliHealthClear: Route<"clihealth.clear"> = (a) => {
+  const store = cliHealth();
+  if (!store) return;
+  store.clear(a.msg.through);
+  const frame = cliHealthFrame();
+  if (frame) a.c.send(a.ws, frame);
+};
+
+/**
  * "Tell me what the local model runner is holding, and keep telling me."
  *
  * Not durable and no `contain`, for `clihealth.get`'s reasons exactly: it is a
@@ -494,6 +510,7 @@ export const systemRoutes: RouteTable = {
   "notify.prefs.set": onNotifyPrefsSet,
   "budget.get": onBudgetGet,
   "clihealth.get": onCliHealthGet,
+  "clihealth.clear": onCliHealthClear,
   "localrt.watch": onLocalRtWatch,
   "localrt.evict": onLocalRtEvict,
   "backends.recheck": onBackendsRecheck,

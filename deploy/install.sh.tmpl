@@ -8,7 +8,8 @@
 # it, then `sh install.sh`. What it does, in order:
 #
 #   1. checks the platform (macOS arm64/x64, Linux x64/arm64, Windows only
-#      inside WSL2), that `claude` (Claude Code) is installed, and that tmux is
+#      inside WSL2), that `claude` (Claude Code) is installed (unless --with
+#      copilot; asked when missing, a stop when it cannot ask), and that tmux is
 #      (required: sessions live in it). A missing tmux is offered for install
 #      through brew / apt / dnf / pacman, and only runs when you answer y;
 #   2. downloads Node @@NODE_VERSION@@ from nodejs.org and verifies it against
@@ -45,6 +46,7 @@ RELEASE_BASE='@@REPO_URL@@'
 ENV_PREFIX='@@ENV_PREFIX@@'
 NODE_MIRROR_DEFAULT='https://nodejs.org/dist'
 CLAUDE_DOCS='https://docs.anthropic.com/en/docs/claude-code'
+CLAUDE_INSTALL_CMD='curl -fsSL https://claude.ai/install.sh | bash'
 TAILSCALE_DL='https://tailscale.com/download'
 CONFIG_NAME='@@CONFIG_NAME@@'
 STATE_DIR='@@STATE_DIR@@'
@@ -85,6 +87,7 @@ usage: install.sh [options]
   --bin-dir <dir>      where to put the $SLUG command (default ~/.local/bin)
   --no-service         do not install the login service (start it with: $SLUG start)
   --skip-claude-check  continue even though claude (Claude Code) is not installed
+                       (not needed with --with copilot)
   --with <id>          also install this plugin (repeatable) from the catalogue below
   --without <id>       switch an optional built-in extension off for this install (repeatable)
   --uninstall          remove the program, the runtime, the service and the command
@@ -307,12 +310,24 @@ check_prereqs() {
   if [ -z "$CLAUDE_BIN" ]; then
     if [ "$SKIP_CLAUDE" = 1 ]; then
       warn "claude (Claude Code) is not installed; continuing because of --skip-claude-check."
+    elif with_copilot; then
+      warn "claude (Claude Code) is not installed; continuing because --with copilot drives the Copilot CLI instead."
     else
-      warn "claude (Claude Code) was not found."
-      warn "$NAME drives the claude CLI you already have (other CLIs come as plugins), so install"
-      warn "and sign in to Claude Code first: $CLAUDE_DOCS"
-      warn "Then re-run this. To install anyway, add --skip-claude-check."
-      exit 1
+      warn "claude (Claude Code) was not found. $NAME drives the claude CLI on this machine."
+      warn "Install it with Anthropic's installer:"
+      warn "  $CLAUDE_INSTALL_CMD"
+      warn "  (or: npm install -g @anthropic-ai/claude-code — docs: $CLAUDE_DOCS)"
+      warn "Claude Code runs on a paid Claude plan (Pro, Max, Team) or an Anthropic API key — or, with"
+      warn "no account, on a local model through Ollama. GitHub Copilot works too, as a plugin: --with copilot."
+      ANS=''
+      if can_ask; then
+        printf '[%s] Continue without claude (install it later)? [y/N] ' "$SLUG"
+        read -r ANS </dev/tty || ANS=''
+      fi
+      case "$ANS" in
+        y|Y|yes|YES) warn "continuing; sessions will not start until claude is on PATH." ;;
+        *) warn "Install it, then re-run this. To install anyway, add --skip-claude-check."; exit 1 ;;
+      esac
     fi
   else
     say "found claude at $CLAUDE_BIN"
@@ -526,6 +541,9 @@ tailnet_name() {
 }
 
 # can_ask: succeeds when a person can answer (a terminal exists, even under curl | sh).
+# with_copilot: --with copilot was given — that backend drives its own CLI, not claude.
+with_copilot() { case " $WITH_IDS " in *" copilot "*) return 0 ;; *) return 1 ;; esac; }
+
 can_ask() { [ -t 1 ] && { : </dev/tty; } 2>/dev/null; }
 
 # env_file_get FILE KEY: KEY's value in a .env file (last assignment wins, `export ` and

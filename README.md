@@ -116,8 +116,11 @@ here is made by a script, from fictional data.
 
 You need:
 
-- **[Claude Code](https://claude.com/claude-code) installed and signed in.** Run `claude` once in a
-  terminal and complete the login first.
+- **[Claude Code](https://claude.com/claude-code) installed**
+  (`curl -fsSL https://claude.ai/install.sh | bash`, or `npm install -g @anthropic-ai/claude-code`),
+  and something for it to run on: a **paid Claude plan** (Pro, Max, Team) or an **Anthropic API
+  key** — run `claude` once and sign in — or, with no account, a **local model through Ollama**.
+  GitHub Copilot works too, as a plugin (`install.sh --with copilot`).
 - **A way for the phone to reach the desktop.** Recommended: **[Tailscale](https://tailscale.com)**
   on both, on the same tailnet. It works from anywhere, its device sign-in is the gate, and its HTTPS
   gives the phone push, install and clipboard. From the same Wi-Fi or over a VPN of your own, a

@@ -714,6 +714,12 @@ So it is a FOLD, and it is written once:
 - **A fold is keyed by CONTENT**, not by the strip: slot + `stowKey`. A new link, a new code, the
   CLI starting to wait for a code, the next queued entry — each is a new thing to read and comes
   back up by itself. A fold keyed by slot alone would hide exactly the change that needed seeing.
+- **The key is a SET of facts, one per line, and news that breaks a fold drops it** (2026-10-19).
+  An exact-string key looped on a shell: folding the link card grows the pane, the host's re-read
+  of the taller screen published a different link set, the card came back, the pane shrank, the old
+  set returned — and matched the old mark, so it folded again, forever. Now a fold holds while no
+  fact on screen is new (a link lost or reordered is not news), and once a new fact unfolds it,
+  `Stowable` drops that mark so the old content returning cannot re-fold it.
 - **Marks persist per device** (`LS.stowed`, a week, 60 marks) because every OTA update is a
   reload, and a fold that came undone on each one would be a fold nobody trusts.
 - **The first fold says where the strip went** (`STOW_TOLD`, once per device, `LS.stowTold`) —
@@ -4123,6 +4129,8 @@ folded into `SendSeed`: a seed is where the send CAME from and is written once b
 sheet; this is what the person has since decided.
 
 ### `BuildSheet.tsx` — the third answer to an empty field, and the button that asks
+
+`BuildSheet.tsx` was split along the screens it draws: `BuildEditor.tsx` is the add/edit form with its free suggest list, `BuildRunAsk.tsx` the form between the tap and a parameterised run, and `BuildArtifacts.tsx` the `ArtifactPolicyRow` (collect, remove older, keep count) and `ArtifactRow` download rows.
 
 - **What a build LEAVES BEHIND is a row on this sheet** (`ArtifactPolicyRow`): *collect + name*,
   *remove older*, and the keep count, per repo, both switches ON by default. It is here rather than
@@ -9152,6 +9160,8 @@ a distribution of one day). Captions split the same way, `repoHealthWords.ts` an
 still `repoHealthPlot.ts` and the stack is still the tiles' `StackChart`: two implementations of "a stack whose top edge is the
 total" would disagree about a hole in a band. `RepoHealthOwn.tsx` draws a repo's OWN readings under the engine's, with the
 provenance said once in the heading (`ownShow`'s three states), using the same `SeriesTile`.
+
+`RepoHealthTiles.tsx` was split again: `RepoHealthChartKit.tsx` holds the shared marks (curve ink, `XAxis`, `Crosshair`, `gutterFor`, `plotX`; the tiles re-export them), `RepoHealthStack.tsx` the one `StackChart` and `WeightStack` (a stack whose top edge is the total), and `RepoHealthWeight.tsx` the per-area `AreaSpread` dumbbell and the `WeightCard`.
 
 ### `HealthIndexChart.tsx` + `HealthIndexSection.tsx` + `healthIndexWords.ts` — the health score on the phone
 

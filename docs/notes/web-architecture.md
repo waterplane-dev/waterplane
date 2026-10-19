@@ -54,7 +54,8 @@ Every `features/<x>/` has the same shape, so opening any feature is opening the 
 
 - `index.ts` — manifest + public API only, no logic
 - `store.ts` — createStore stores only, and their read hooks/selectors
-- `actions.ts` — functions that write stores / send frames
+- `actions.ts` — functions that write stores / send frames; when it nears the cap, `<name>Actions.ts`
+  slices (e.g. `galleryActions.ts`) that `actions.ts` re-exports — it stays the one import point
 - `logic.ts` — pure, tested by `logic.test.mjs`
 - `<Name>Sheet.tsx` — the sheet component
 - other components `<Name>.tsx`

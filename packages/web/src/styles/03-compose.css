@@ -1,0 +1,585 @@
+/* 03-compose.css: queue sheet, PromptComposer, send split-button, mic/dictation, toolbar menu, console zoom, model wheel, mode section, auth, passive, sheet head. */
+/* ── Queued-messages sheet ──────────────────────────────────────────── */
+.queue-lane { border-bottom: 1px solid var(--line); }
+.queue-lane-head {
+  display: flex; align-items: center; gap: var(--sp-8);
+  padding: var(--sp-8) var(--sp-12) var(--sp-4); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted);
+  text-transform: uppercase; letter-spacing: .04em;
+}
+.queue-lane-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queue-lane-count { margin-left: auto; opacity: .7; }
+/* The action buttons are seven icons (~38 px each): on a phone they claim the
+   whole row width, and a `flex: 1; min-width: 0` text column next to them
+   collapses to nothing — the queued prompt then wraps ONE WORD PER LINE, which
+   is unreadable exactly when reading it is the point (deciding whether to still
+   send it). So the row WRAPS: the text keeps a 240 px floor and the buttons
+   drop onto their own line below it when that no longer fits. */
+.queue-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--sp-8); padding: var(--sp-6) var(--sp-12) var(--sp-10); }
+.queue-row.pending { opacity: .65; }
+.queue-row.failed .queue-meta { color: var(--dead); }
+.queue-text {
+  flex: 1 1 240px; min-width: 0; text-align: left; background: none; border: 0; color: var(--fg);
+  font: inherit; padding: 0; display: flex; flex-direction: column; gap: var(--sp-4);
+}
+.queue-text:disabled { cursor: default; }
+/* Full text, wrapped — a queued prompt is the thing being judged; truncating it
+   to one line would make "is this still what I want to send?" unanswerable. */
+.queue-text-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.queue-meta { display: flex; align-items: center; gap: var(--sp-4); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); }
+.queue-row-acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6); flex: 0 0 auto; }
+/* Only in a ROW — the same class inside `.queue-edit` is a full-width
+   cancel/spacer/Save bar and must keep its stretch. */
+.queue-row > .queue-row-acts { margin-left: auto; }
+/* Icon-only in this row: the 42 px floor is sized for `.key`s with a word in
+   them, and seven of those do not fit a phone row at all. */
+.queue-row-acts .key { min-width: 0; }
+.queue-edit { display: flex; flex-direction: column; gap: var(--sp-8); padding: var(--sp-8) var(--sp-12) var(--sp-12); }
+
+/* The shared prompt surface (PromptComposer.tsx).
+
+   A prompt box has one right height: everything the sheet is not using. A fixed
+   `rows={N}` left the pad's note editor as a small box with half a phone screen
+   of black under it — so the primary box GROWS into the free space (`flex: 1 0
+   auto`) and the column scrolls only once chain steps push past the bottom.
+   `min-height` is the floor for when the steps do arrive. */
+.promptc { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.promptc-area { flex: 1 0 auto; min-height: 8.5em; }
+/* The same composer INSIDE something else (a queue row being rewritten, a
+   backlog item being edited): it must take the height it asked for and no more,
+   or it squeezes the fields it is sitting among — and with no flex parent to
+   fill, `flex: 1` + an 8.5em floor is just a fixed 8.5em box. */
+.promptc-inline { flex: none; min-height: 0; overflow: visible; }
+.promptc-inline > .promptc-area { flex: none; min-height: 0; }
+/* The annotator's prompt row (phone): the session's draft above the picture.
+   Capped so a long draft scrolls instead of squeezing the canvas away. */
+/* A file dragged over the compose box (useFileDrop.ts): the box says it will take it. */
+.compose.drop-over { outline: 2px dashed var(--accent); outline-offset: -4px; background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.ann-prompt { flex: none; padding: 0 var(--sp-10); border-bottom: 1px solid var(--line); }
+.ann-prompt .promptc-area { max-height: 30vh; margin: 0 0 var(--sp-6); }
+.ann-prompt-fold {
+  display: flex; align-items: center; gap: var(--sp-6); width: 100%; min-height: 36px; padding: var(--sp-6) 0;
+  background: none; border: 0; color: var(--muted); text-align: left; font: inherit; font-size: calc(var(--fs-13) * var(--ui-font, 1));
+}
+.ann-prompt-gist { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.promptc-step { display: flex; flex-direction: column; gap: var(--sp-8); padding: 0 var(--sp-10) var(--sp-4); }
+.promptc-step .search { margin: 0; }
+.promptc-add { padding: var(--sp-4) var(--sp-10) var(--sp-12); }
+
+.compose {
+  display: flex; flex-direction: column; gap: var(--sp-8); align-items: stretch;
+  padding: var(--sp-8); background: var(--panel); border-top: 1px solid var(--line);
+}
+/* Background image-upload progress; Send is disabled until it clears. */
+/* A COLUMN: the label line, then the two verbs, then the bar. It was a row with
+   `align-items: center`, which only looked right while the line and the 3px bar
+   were its only children — a third child would have been laid out beside them.
+   Stated rather than relied on, since the row below it is what this grew. */
+.upload-progress {
+  display: flex; flex-direction: column; align-items: stretch; gap: var(--sp-2);
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted);
+  padding: var(--sp-2) var(--sp-2) 0;
+}
+.upload-progress .spin { flex: 0 0 auto; }
+.upload-progress .upload-cancel { margin-left: auto; padding: var(--sp-2) var(--sp-8); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+/* Height is set from JS (App.tsx auto-grow, capped at COMPOSE_MAX_H — keep the
+   two in sync; the max-height here is the backstop if the effect never runs).
+   `box-sizing: border-box` so the measured height and the painted box agree —
+   see the border correction at the assignment. */
+.compose textarea {
+  width: 100%; resize: none; min-height: 48px; max-height: 200px;
+  box-sizing: border-box; overflow-y: auto;
+  background: var(--well); color: var(--fg);
+  border: 1px solid var(--line); border-radius: var(--r-10);
+  padding: var(--sp-10) var(--sp-12); font-size: calc(var(--fs-16) * var(--ui-font, 1)); font-family: inherit;
+}
+/* A password asked on screen: the masked field that replaces the draft box
+   (core/compose — never a draft, never history). Same well as the textarea. */
+.secret-ask { font-size: calc(var(--fs-13) * var(--ui-font, 1)); color: var(--accent); }
+.secret-ask svg { vertical-align: -2px; margin-right: var(--sp-4); }
+.secret-ask code { color: var(--fg); }
+.secret-row { display: flex; gap: var(--sp-8); align-items: center; }
+.secret-row input {
+  flex: 1 1 auto; min-width: 0; min-height: 48px; box-sizing: border-box;
+  background: var(--well); color: var(--fg);
+  border: 1px solid var(--line); border-radius: var(--r-10);
+  padding: var(--sp-10) var(--sp-12); font-size: calc(var(--fs-16) * var(--ui-font, 1)); font-family: inherit;
+}
+.secret-row .mic { flex: 0 0 auto; }
+.compose-bar .secret-other { margin-right: auto; }
+/* Action row beneath the full-width input: helpers left, Send right. */
+.compose-bar { display: flex; gap: var(--sp-8); align-items: center; }
+/* The helper buttons scroll horizontally (too many to fit); Send stays put. */
+.compose-scroll {
+  flex: 1 1 auto; min-width: 0; display: flex; gap: var(--sp-8); align-items: center;
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+  -webkit-overflow-scrolling: touch; padding: var(--sp-4) 0;
+}
+.compose-scroll::-webkit-scrollbar { display: none; }
+.compose-scroll .mic { flex: 0 0 auto; }
+.compose-bar .send-split { flex: 0 0 auto; }
+.compose-bar .show-backlog { position: relative; }
+.mic-badge {
+  position: absolute; top: -2px; right: -2px; min-width: 16px; height: 16px; padding: 0 var(--sp-4);
+  border-radius: var(--r-8); background: var(--accent); color: var(--on-accent);
+  font-size: calc(var(--fs-10) * var(--ui-font, 1)); font-weight: var(--fw-bold); line-height: 16px; text-align: center;
+}
+/* How long the open microphone has HEARD (`useVoice`'s `heard`), under the
+   glyph. Counted from audio that arrived, so a frozen clock is a stopped mic. */
+.mic-clock {
+  position: absolute; bottom: 1px; left: 50%; transform: translateX(-50%);
+  padding: 0 var(--sp-4); border-radius: var(--r-6); background: var(--dead); color: #fff;
+  font-size: calc(var(--fs-9) * var(--ui-font, 1)); font-weight: var(--fw-bold); line-height: 13px;
+  font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none;
+}
+.send {
+  background: var(--accent); color: var(--on-accent); border: none;
+  border-radius: var(--r-10); padding: var(--sp-10) var(--sp-16); font-size: calc(var(--fs-15) * var(--ui-font, 1)); font-weight: var(--fw-semibold); cursor: pointer;
+}
+.send:active { opacity: .85; }
+.send:disabled { opacity: .4; }
+/* Send as a split button: main action left, mode toggle attached right. */
+.send-split { display: flex; align-items: stretch; }
+.send-split .send { border-radius: var(--r-10) 0 0 var(--r-10); }
+.send-split .send-mode {
+  border-radius: 0 var(--r-10) var(--r-10) 0; padding: var(--sp-10) var(--sp-8);
+  border-left: 1px solid var(--on-accent-line);
+}
+/* Open: the chevron is a toggle for the strip above, so it has to look held
+   down while that strip is up — otherwise the only thing saying the menu
+   belongs to this button is its position. */
+.send-split .send-mode.on { background: var(--accent-press, var(--accent)); filter: brightness(.9); }
+/* The mode strip sits ABOVE the compose bar, in flow: a floating popover over a
+   phone keyboard is a coin toss about which one wins. `.row-more` already draws
+   this shape for the launcher's row menus. */
+/* **`flex: 0 0 100%` means WIDTH in a row and HEIGHT in a column.** `.row-more`
+   is written for the launcher's rows, whose parent is a wrapping ROW, so the
+   basis there is "the whole width, on a line of its own". `.compose` is a
+   flex COLUMN, so that same basis is read down the main axis and asked each
+   menu row to be as tall as the composer: three buttons ~140px high with their
+   labels floating in the middle, eating the terminal above them. The basis is
+   restated here rather than dropped from `.row-more`, which still needs it.
+
+   **Two classes, and `.row-more` is declared LATER in this file** — equal
+   specificity means source order decides, so a bare `.send-more` lost the
+   basis back to `flex: 0 0 100%` and the strip grew to the composer's whole
+   height again, taking the compose bar (and the chevron that closes it) off
+   the screen. The selector is compounded so it wins wherever either rule
+   moves. */
+.row-more.send-more { flex: 0 0 auto; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+/* And the buttons take their own height: a wrapping flex line stretches its
+   items to the tallest one by default, so a single tall row would drag the
+   other two up with it. */
+.send-more .more-act { align-self: center; }
+/* The way out, anchored right on the last line: the chevron that opened this
+   strip is the other one, and it is below the compose box — off screen the
+   moment anything grows. */
+.send-more .more-close { margin-left: auto; }
+
+/* **WHERE, on its own line above WHEN.** The two groups answer different
+   questions and a person picks one from each, so run together in one wrapping
+   flex line they read as seven alternatives of which exactly one is armed —
+   which is what the strip looked like before the rule underneath split them.
+   `flex: 0 0 100%` is a WIDTH here (the strip's own children lay out as a row,
+   whatever the composer column does around it — see the note above). */
+.send-where {
+  flex: 0 0 100%; display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6);
+  padding-bottom: var(--sp-8); border-bottom: 1px dashed var(--line);
+}
+.send-where-lead {
+  flex: 0 0 auto; font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted);
+}
+/* The pick `other` needs, in the strip rather than behind a sheet. Bounded and
+   scrollable: a desktop with twelve sessions open would otherwise push the
+   compose bar — and the chevron that closes this — off the bottom. */
+.send-where-pick {
+  flex: 0 0 100%; max-height: 32vh; overflow-y: auto;
+  margin: var(--sp-8) 0 0; border: 1px solid var(--line); border-radius: var(--r-10);
+}
+.send-where-pick .row { width: 100%; }
+
+/* **The armed aim, above the composer, for as long as it is not this session.**
+   In flow and not a badge on the button: the sentence says a NEGATIVE ("not
+   the conversation on screen") and carries the tap that undoes it, neither of
+   which fits in a label. Wraps — this is the one line standing between a
+   remembered aim and a prompt landing somewhere nobody looked. */
+.compose-aim {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6);
+  padding: var(--sp-6) var(--sp-12); background: var(--sub); border-top: 1px solid var(--line);
+  font-size: calc(var(--fs-13) * var(--ui-font, 1));
+}
+.compose-aim-what { flex: 1 1 12em; min-width: 0; color: var(--accent); }
+.compose-aim-what svg { vertical-align: -2px; margin-right: var(--sp-4); }
+
+/* Snippet picker popover — floats above the compose box. */
+.compose { position: relative; }
+.snippet-pop {
+  position: absolute; left: 8px; right: 8px; bottom: calc(100% - 4px);
+  max-height: 45vh; display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-12);
+  box-shadow: 0 -6px 24px var(--shadow); overflow: hidden; z-index: 20;
+}
+.snippet-pop-head {
+  display: flex; align-items: center; gap: var(--sp-8); padding: var(--sp-8) var(--sp-10);
+  border-bottom: 1px solid var(--line); font-weight: var(--fw-semibold); font-size: calc(var(--fs-14) * var(--ui-font, 1));
+}
+.snippet-pop-head span:first-child { flex: 1; }
+.snippet-pop-list { overflow-y: auto; padding: var(--sp-6); display: flex; flex-direction: column; gap: var(--sp-6); }
+.snippet-pop-item {
+  display: flex; flex-direction: column; gap: var(--sp-2); text-align: left;
+  background: var(--well); color: var(--fg); border: 1px solid var(--line);
+  border-radius: var(--r-10); padding: var(--sp-8) var(--sp-10); cursor: pointer;
+}
+.snippet-pop-item:active { opacity: .8; }
+.snippet-pop-title { font-weight: var(--fw-semibold); font-size: calc(var(--fs-14) * var(--ui-font, 1)); }
+.snippet-pop-preview { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.snippet-title { text-align: left; background: none; border: none; color: var(--fg); cursor: pointer; font: inherit; }
+
+.mic {
+  flex: 0 0 auto; width: 42px; height: 42px; border-radius: var(--r-round); position: relative;
+  background: var(--raise); color: var(--fg); border: 1px solid var(--line); font-size: calc(var(--fs-18) * var(--ui-font, 1)); cursor: pointer;
+}
+.mic.on { background: var(--dead); border-color: var(--dead); animation: pulse var(--dur-spin) infinite; }
+@keyframes pulse { 50% { opacity: .5; } }
+/* Recorded, and the desktop is reading it — a WAIT, not a recording, so it
+   is the warn hue and a slower breath rather than the mic's red pulse. */
+.mic.busy { background: var(--warn); border-color: var(--warn); animation: pulse 1.8s infinite; }
+
+/* ── Which language the mic is read as (`DictateLangPill.tsx`) ───────────────
+   A pill, not a circle: it carries WORDS (`auto`, `EN`, `DE`) and a circle
+   would either clip them or grow the whole row's height. The native `<select>`
+   lies over the whole pill at zero opacity — the element that opens Android's
+   language list is then the thing being tapped, at its full size, while the
+   face beside the icon stays ours. `appearance: none` on the select alone is
+   not enough: its own text would still be laid out inside the pill. */
+.dict-lang {
+  position: relative; flex: 0 0 auto; display: inline-flex; align-items: center; gap: var(--sp-4);
+  height: 42px; padding: 0 var(--sp-10); border-radius: 21px;
+  background: var(--raise); color: var(--muted); border: 1px solid var(--line);
+}
+.dict-lang-face { font-size: calc(var(--fs-12) * var(--ui-font, 1)); font-weight: var(--fw-semibold); letter-spacing: .02em; color: var(--fg); }
+.dict-lang select {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  opacity: 0; appearance: none; border: none; background: none; color: inherit;
+  font: inherit; cursor: pointer;
+}
+/* On a sheet's action bar the neighbours are `.key` buttons, which are shorter
+   and square-cornered — the pill matches them there rather than the 42px
+   circles of the compose row. */
+
+/* ── The toolbar, as the burger's menu ───────────────────────────────────
+   A full-width flex child of `.topbar` (which wraps), not an absolutely-
+   positioned popover — the argument `.nav-more` makes for the launcher's menu:
+   a row is the one layout that cannot end up off-screen on a narrow phone.
+   `margin` cancels the header's own padding so the panel meets both edges and
+   reads as a surface of its own rather than an indented afterthought.
+
+   It was a horizontal `overflow-x: auto` strip above the terminal. A column is
+   the whole point: a sideways strip gives no sign it continues, so every action
+   past the fourth chip was invisible unless you already knew it was there.
+
+   `max-height` + its own scroll because the catalog is thirty-odd items and a
+   menu that pushes the terminal off the bottom of the screen is the row-eating
+   strip again, worse. `50svh` and not `50vh`: with the on-screen keyboard up,
+   `vh` is still the un-shrunk viewport and the cap would let the panel cover
+   everything there is left. */
+.toolbar {
+  flex: 0 0 100%; box-sizing: border-box;
+  margin: var(--sp-10) -12px -10px; padding: var(--sp-8) var(--sp-12) var(--sp-10);
+  display: flex; flex-direction: column; align-items: stretch; gap: var(--sp-6);
+  max-height: 50vh; max-height: 50svh; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  background: var(--sub); border-top: 1px solid var(--line);
+}
+/* Line items, not chips: the icon is a fixed gutter and the label starts on one
+   left edge for every row, so the column scans as a list of names. `min-width`
+   is off the shared `.key` rule for the same reason — a 46px floor means
+   nothing to a row that is already full width. */
+.toolbar .key {
+  justify-content: flex-start; text-align: left;
+  min-width: 0; width: 100%; gap: var(--sp-8);
+  background: var(--panel);
+}
+/* The console-zoom readout: what the terminal is drawn at, sitting between the
+   two buttons that change it. Deliberately NOT `.key` — it is prose, and a span
+   wearing the button styling beside two real buttons is the confusion
+   `Unavailable.tsx` exists about. `nowrap` because "12px · smallest" breaking
+   across two lines pushes every button along. */
+.term-zoom-px {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: var(--sp-4);
+  white-space: nowrap; font-size: calc(var(--fs-12) * var(--ui-font, 1));
+}
+/* The same pair FLOATING in the terminal's top-right corner. Absolute, never in
+   the flex column: a strip in flow takes height off the terminal, and a
+   terminal that changes height refits and SIGWINCHes the PTY — the claude TUI
+   answers that by clearing and repainting the whole screen. A zoom control must
+   not resize the grid by existing (`.conn-banner.floating`, same argument).
+   `pointer-events` is off on the group and back on for what you can actually
+   press, so the corner of the terminal stays pannable between the buttons. */
+.term-zoom {
+  position: absolute; top: 6px; right: 8px; z-index: 5;
+  display: flex; align-items: center; gap: var(--sp-4);
+  pointer-events: none;
+}
+.term-zoom > * { pointer-events: auto; }
+/* The reader's subtree carries its own `--ui-font`, so the wrapper must not be
+   a box: `display: contents` keeps `.tr`'s `height: 100%` resolving against
+   `.term-wrap` while still passing the inherited property down. */
+.tr-zoom { display: contents; }
+/* Typing room takes the same corner: the header is pulled out of flow and its
+   two survivors (outline, menu) float exactly here, 40px tall against the top
+   of `.screen`. So the zoom drops BELOW them rather than under them — two
+   controls stacked in one place is one control you can hit and one you cannot.
+   Keyed on `data-typing`, which `App` already stamps on <html> for this mode,
+   so nothing has to be threaded through the terminal to know. */
+html[data-typing="1"] .term-zoom { top: calc(env(safe-area-inset-top) + 48px); }
+.term-zoom .key {
+  min-width: 0; padding: var(--sp-4) var(--sp-6);
+  background: var(--panel-veil-hi); border-color: var(--float-edge);
+  box-shadow: var(--elev-1);
+}
+/* The readout rides over live output, so it gets the same veil the buttons have
+   — muted text straight on a repainting TUI is unreadable half the time. */
+.term-zoom .term-zoom-px {
+  padding: var(--sp-4) var(--sp-6); border-radius: var(--r-8);
+  background: var(--panel-veil-hi); border: 1px solid var(--float-edge);
+}
+/* The model wheel (`ModelWheel.tsx`): floats for the same reason the corner
+   group floats — in flow it would refit the PTY. Fixed to the VIEWPORT (and
+   portalled to <body>), not the terminal box: on a small phone with the chrome
+   showing that box was too short and cut the wheel off. `--mw-top` is
+   `wheelTop`'s: under the button, slid up to fit. Above the chrome strips (60–65),
+   under the hint card (70). The scrim is transparent; it only catches the tap
+   that closes it. */
+.model-wheel-scrim { position: fixed; inset: 0; z-index: 66; }
+.model-wheel-place {
+  position: fixed; z-index: 67; right: 8px; width: min(360px, calc(100vw - 16px));
+  top: max(calc(env(safe-area-inset-top) + 8px), var(--mw-top, 8px));
+}
+.model-wheel-pop {
+  max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px); overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--sp-6); padding: var(--sp-8) var(--sp-10) var(--sp-10);
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-12);
+  box-shadow: var(--elev-2);
+}
+/* Nothing in the column may shrink: with the cost line and Apply showing, the
+   column outgrows max-height and flex squeezed the SVG (height: auto) down to
+   an untappable thumbnail. Full size, and the popover scrolls instead. */
+.model-wheel-pop > * { flex-shrink: 0; }
+.mw-head { display: flex; align-items: center; gap: var(--sp-8); font-weight: var(--fw-semibold); font-size: calc(var(--fs-14) * var(--ui-font, 1)); }
+.mw-head span { flex: 1; }
+.mw-head .key { min-width: 0; padding: var(--sp-4) var(--sp-6); }
+/* One size in both places it is drawn (the session popover and the launch
+   ask): capped at the popover's width and centred, so the sheet's wider column
+   does not blow the same wheel up into a different-looking one. */
+.model-wheel {
+  display: block; width: 100%; max-width: 340px; height: auto; margin: 0 auto;
+  touch-action: none; user-select: none; -webkit-user-select: none;
+}
+/* Guides, not a web: faint enough that the dots carry the picture. A pick is
+   one dot (`.mw-node.sel`), never a shaded ring. */
+.mw-ring { fill: none; stroke: color-mix(in srgb, var(--line) 55%, transparent); stroke-width: 1; }
+.mw-spoke { stroke: color-mix(in srgb, var(--line) 55%, transparent); stroke-width: 1; }
+.mw-label { fill: var(--muted); font-size: var(--fs-12); }
+.mw-label.cur { fill: var(--ok); font-weight: var(--fw-semibold); }
+.mw-label.sel { fill: var(--accent); font-weight: var(--fw-bold); }
+.mw-effort { fill: var(--muted); font-size: var(--fs-9); paint-order: stroke; stroke: var(--panel); stroke-width: 3px; }
+.mw-effort.sel { fill: var(--accent); font-weight: var(--fw-bold); }
+.mw-node { fill: var(--muted); opacity: 0.6; }
+.mw-node.cur, .mw-node.sel { opacity: 1; }
+.mw-node.cur { fill: var(--panel); stroke: var(--ok); stroke-width: 2.5; }
+.mw-node.sel { fill: var(--accent); stroke: var(--panel); stroke-width: 2; }
+.mw-hub { fill: var(--muted); }
+.mw-now { font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.mw-apply { align-self: stretch; }
+/* Room for its longest sentence, so a pick that changes the words never moves
+   the chart under the finger. */
+.mw-says { min-height: 3.9em; margin: 0; padding: 0; }
+/* The models the wheel may carry, as chips that latch (`WheelPicker`). */
+.mw-models { display: flex; flex-direction: column; gap: var(--sp-6); }
+.mw-models-head { font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.mw-chips { display: flex; flex-wrap: wrap; gap: var(--sp-6); }
+.mw-chips .row-chip { min-height: 32px; padding: var(--sp-4) var(--sp-10); }
+.mw-chips .row-chip.on { background: var(--pick-fill); color: var(--fg); border-color: var(--pick-edge); }
+/* The wheel button's mode glyph (`badgeMode`): a second, smaller icon inside
+   the same key, so the corner group grows by one glyph, not one button. */
+.term-zoom .key.mw-badged { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.term-zoom .term-zoom-outline { display: inline-flex; align-items: center; gap: var(--sp-4); }
+.term-zoom .term-zoom-count { font-size: var(--fs-12); font-variant-numeric: tabular-nums; }
+.mw-badge { display: inline-flex; color: var(--accent); }
+.key.active .mw-badge { color: inherit; }
+/* The popover's mode half (`ModeSection.tsx`): the desktop's mode menu as rows
+   — icon, title, one-line description, a check on the live mode. Each row is
+   ONE target, full width, so nothing scrolls sideways on a 360px phone. */
+.mode-sec { display: flex; flex-direction: column; gap: var(--sp-4); border-top: 1px solid var(--line); padding-top: var(--sp-8); }
+.mode-head { font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.mode-now { margin: 0; }
+.mode-rows { display: flex; flex-direction: column; gap: var(--sp-2); }
+.mode-row, .mode-ultra {
+  display: flex; align-items: center; gap: var(--sp-10); width: 100%; min-height: 44px;
+  padding: var(--sp-6) var(--sp-8); border-radius: var(--r-8); text-align: left;
+  background: none; border: 1px solid transparent; color: var(--fg); font: inherit;
+}
+.mode-row:active { background: var(--panel-veil-hi); }
+.mode-row.cur { border-color: var(--line); }
+.mode-ico { flex: 0 0 auto; display: inline-flex; color: var(--muted); }
+.mode-row.cur .mode-ico, .mode-row.cur .mode-mark { color: var(--accent); }
+.mode-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.mode-title { font-size: calc(var(--fs-14) * var(--ui-font, 1)); }
+.mode-desc { font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-13); }
+.mode-mark { flex: 0 0 auto; display: inline-flex; font-size: calc(var(--fs-11) * var(--ui-font, 1)); }
+.mode-ultra { border-top: 1px solid var(--line); border-radius: 0; margin-top: var(--sp-4); padding-top: var(--sp-8); }
+.mode-acts { flex: 0 0 auto; display: flex; gap: var(--sp-4); }
+.mode-acts .key { min-width: 0; padding: var(--sp-4) var(--sp-8); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.key.active { background: var(--pick-fill); color: var(--fg); border-color: var(--pick-edge); }
+/* "you already have this" — a positive state, not an action. */
+.key.ok { color: var(--ok); border-color: var(--ok); }
+.key.danger { color: var(--dead); }
+.key.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.key:disabled { opacity: .4; }
+
+/* LAN password gate (full-screen login takeover) + Settings inputs */
+.auth-gate { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: var(--sp-24); }
+.auth-card { width: 100%; max-width: 360px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-12); padding: var(--sp-24); }
+.auth-title { font-size: calc(var(--fs-18) * var(--ui-font, 1)); font-weight: var(--fw-semibold); margin-bottom: var(--sp-10); }
+.auth-input {
+  width: 100%; box-sizing: border-box; padding: var(--sp-10) var(--sp-12); font-size: calc(var(--fs-15) * var(--ui-font, 1));
+  background: var(--well); color: var(--fg); border: 1px solid var(--line); border-radius: var(--r-8);
+}
+.auth-input:focus { outline: none; border-color: var(--accent); }
+
+/* Passive device (the kids' phone): one screen, and the unlocked strip. */
+.pair-passive { display: flex; align-items: center; gap: var(--sp-8); min-height: 44px; font-weight: var(--fw-semibold); }
+.passive-row { padding: var(--sp-10) 0; border-top: 1px solid var(--line); }
+.passive-name { font-weight: var(--fw-semibold); overflow-wrap: anywhere; }
+.passive-foot { display: flex; align-items: center; gap: var(--sp-10); margin-top: var(--sp-14); }
+.passive-foot .link-btn { margin-left: auto; min-height: 44px; }
+.passive-unlock { margin-top: var(--sp-16); min-height: 44px; color: var(--muted); }
+.passive-pin { display: flex; flex-wrap: wrap; gap: var(--sp-8); margin-top: var(--sp-16); }
+.passive-pin .auth-input { flex: 1 1 100%; letter-spacing: 0.3em; }
+.passive-pin .key { min-height: 44px; }
+.passive-bar {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(8px + env(safe-area-inset-bottom, 0px)); z-index: 60;
+  display: flex; align-items: center; gap: var(--sp-6); padding: var(--sp-6) var(--sp-12); border-radius: var(--r-pill);
+  background: var(--panel); border: 1px solid var(--line); font-size: calc(var(--fs-12) * var(--ui-font, 1)); white-space: nowrap;
+}
+.passive-bar .link-btn { min-height: 32px; }
+
+/* There is no desktop rail any more. It existed to make the horizontal strip
+   vertical on a wide screen, where a column beside the terminal cost no rows —
+   and that is now what the toolbar IS at every width. Two renderings of one
+   control is how the two halves drift apart, so the >=900px branch went with
+   the strip it was compensating for.
+*/
+
+/* Sheets / overlays */
+.sheet { display: flex; flex-direction: column; height: 100%; padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pulse-h, 0px) + var(--ui-localrt-h, 0px) + var(--ui-tabs-h, 0px)); background: var(--bg); }
+/* WRAPS, and the title SHRINKS. `.brand` is `flex: 0 0 auto` globally, so the
+   `min-width: 0` below it bought nothing: a long repo name kept its full width
+   and pushed the head's action buttons off the right edge with nothing to
+   scroll — the Build sheet's "new" was half off-screen. Shrinking the title is
+   the first defence; wrapping is the second, for the head that still doesn't
+   fit (back + title + branch + two labelled keys on a 360px phone). */
+.sheet-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8); padding: var(--sp-10) var(--sp-12); background: var(--panel); border-bottom: 1px solid var(--line); }
+.sheet-head > .key { flex: 0 0 auto; }
+/* A branch name is context, not a control: it gives up its width first. */
+.sheet-head .head-branch { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* WRAPS on purpose: with 5 actions (skip / Send all / Send all + submit / queue /
+   the primary send) the row is wider than a phone, and a non-wrapping flex row with
+   `flex: 0 0 auto` keys pushed the PRIMARY button off the right edge with nothing to
+   scroll — the one action the sheet exists for became unreachable. Wrapping also keeps
+   the primary on its own trailing slot (`margin-left: auto`). Touch targets are floored
+   at 44px here, and the bar clears the home-indicator inset. */
+.sheet-actions {
+  display: flex; flex-wrap: wrap; gap: var(--sp-8); padding: var(--sp-10);
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  background: var(--panel); border-top: 1px solid var(--line);
+}
+.sheet-actions .key, .sheet-actions .send { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-4); }
+.sheet-actions .send { margin-left: auto; }
+/* The action bar's snippet picker floats above the bar, like the compose bar's. */
+.sheet-actions { position: relative; }
+.sheet-actions .snippet-pop { bottom: 100%; }
+.sheet-actions .key.on { color: var(--fg); border-color: var(--pick-edge); background: var(--pick-fill); }
+/* The mark sheet's send row stays ONE line: wrapped, `Send to repo` — the
+   action the sheet exists for — dropped alone onto a second row under a tall
+   gap. Every button shrinks from its content width and its LABEL wraps inside
+   the button instead, so all verbs stay on screen at 320px with every word. */
+.annot-send-bar { flex-wrap: nowrap; gap: var(--sp-6); }
+.annot-send-bar .key, .annot-send-bar .send {
+  flex: 1 1 auto; min-width: 0; padding: var(--sp-6) var(--sp-8); white-space: normal;
+  line-height: var(--lh-12); text-align: center; overflow-wrap: anywhere;
+}
+.annot-send-bar .key svg { flex: 0 0 auto; }
+.annot-send-bar .send { margin-left: 0; }
+.search {
+  margin: var(--sp-10); padding: var(--sp-12); font-size: calc(var(--fs-16) * var(--ui-font, 1)); font-family: inherit;
+  background: var(--well); color: var(--fg); border: 1px solid var(--line); border-radius: var(--r-10);
+}
+select.search { appearance: none; }
+.search-row { display: flex; align-items: center; gap: var(--sp-6); padding: 0 var(--sp-10); color: var(--muted); }
+.search-row .search { flex: 1; margin: var(--sp-10) 0; }
+.spacer { flex: 1; }
+
+.annot-tools { display: flex; gap: var(--sp-6); padding: var(--sp-8); overflow-x: auto; background: var(--panel); border-bottom: 1px solid var(--line); align-items: center; }
+/* Preset chips wrap instead of scrolling off-screen: a horizontal strip hides
+   most of a long list behind a gesture nobody discovers on a phone. */
+.annot-tools.wrap { flex-wrap: wrap; overflow-x: visible; }
+.annot-tools:not(.tri) > .key { min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-4); }
+.annot-tools:not(.tri) .swatch { width: 32px; height: 32px; }
+.annot-canvas-wrap { flex: 1; min-height: 0; position: relative; overflow: hidden; background: var(--media-bg); touch-action: none; }
+.annot-canvas { position: absolute; top: 0; left: 0; touch-action: none; will-change: transform; }
+.annot-hint { padding: var(--sp-6) var(--sp-12); font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); text-align: center; background: var(--panel); }
+.annot-crop-bar { display: flex; align-items: center; gap: var(--sp-8); padding: var(--sp-8) var(--sp-12); background: var(--panel); border-top: 1px solid var(--line); }
+.annot-hint-x { display: flex; align-items: center; gap: var(--sp-8); }
+/* "Text only": the desktop's reading of the whole picture, editable, under it. */
+.annot-ocr { display: flex; flex-direction: column; gap: var(--sp-6); padding: var(--sp-8) var(--sp-12) 0; background: var(--panel); border-top: 1px solid var(--line); }
+.annot-ocr .annot-hint { padding: 0; text-align: left; }
+.annot-ocr-text { width: 100%; box-sizing: border-box; min-height: 28vh; max-height: 45vh; resize: vertical; font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-6); padding: var(--sp-8); }
+.annot-hint-x > span { flex: 1; }
+.annot-hint-x > .key { padding: var(--sp-2) var(--sp-6); flex: none; }
+.annot-crop-bar .annot-hint { flex: 1; padding: 0; text-align: left; }
+.annot-crop-bar .annot-text-in { flex: 1; min-width: 0; }
+/* What the host read inside the newest highlighted band, with the two verbs that
+   act on it. A row of its own under the hint: it is a claim the prompt is about
+   to make, so it is shown where a thumb can reach it, not in a title nobody on a
+   phone can see. */
+.annot-read { display: flex; align-items: center; gap: var(--sp-8); padding: var(--sp-6) var(--sp-12); background: var(--panel); border-top: 1px solid var(--line); }
+.annot-read .annot-hint { flex: 1; padding: 0; text-align: left; min-width: 0; }
+.annot-read-text { color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The palette is a row of its own, opened by the colour dot. It sits under the
+   toolbar rather than over it because the toolbar scrolls sideways. */
+.annot-palette { border-bottom: 1px solid var(--line); }
+.annot-tools .swatch.dot { width: 40px; height: 40px; border-width: 3px; }
+.swatch { width: 26px; height: 26px; border-radius: var(--r-round); border: 2px solid var(--line); padding: 0; cursor: pointer; flex: 0 0 auto; }
+.swatch.on { border-color: var(--ring); box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--ring); }
+/* `overflow-wrap: anywhere`, not `word-break: break-all`: a path still breaks
+   where it must, but a sentence breaks between WORDS. break-all split prose
+   mid-word on every sheet that used this class for prose ("i s running"). */
+.err, .form-hint { padding: var(--sp-8) var(--sp-14); color: var(--muted); font-size: calc(var(--fs-13) * var(--ui-font, 1)); overflow-wrap: anywhere; }
+.err { color: var(--dead); }
+
+/* Slash palette */
+.btw-row { padding: var(--sp-10) var(--sp-10) 0; }
+.btw { width: 100%; text-align: left; padding: var(--sp-12); border-radius: var(--r-10); border: 1px solid var(--accent); background: var(--accent-tint); color: var(--fg); font-size: calc(var(--fs-14) * var(--ui-font, 1)); cursor: pointer; }
+.cmd-row { display: flex; align-items: center; gap: var(--sp-8); padding: var(--sp-10) var(--sp-12); border-bottom: 1px solid var(--line); }
+.cmd-name { display: flex; align-items: center; gap: var(--sp-8); background: none; border: none; color: var(--fg); cursor: pointer; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.muted { color: var(--muted); opacity: .55; }
+.cmd-desc { flex: 1; color: var(--muted); font-size: calc(var(--fs-12) * var(--ui-font, 1)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.src { font-size: calc(var(--fs-10) * var(--ui-font, 1)); padding: 1px var(--sp-6); border-radius: var(--r-pill); border: 1px solid var(--line); color: var(--muted); }
+.src-project { color: var(--accent); border-color: var(--accent); }
+.src-user { color: var(--ok); border-color: var(--ok); }
+.run { background: var(--raise); color: var(--fg); border: 1px solid var(--line); border-radius: var(--r-8); padding: var(--sp-6) var(--sp-10); cursor: pointer; }
+
+/* Gallery */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: var(--sp-8); padding: var(--sp-10); overflow-y: auto; }
+/* Anything in this grid that is PROSE rather than a tile spans the whole row.
+   `<Empty>` is a grid item like every thumbnail, so it was laid out inside one
+   96px column and wrapped to one word per line — a paragraph explaining what the
+   outbox is, rendered as a vertical stack of single words, on the screen whose
+   whole job at that moment is to be read. Stated for the class rather than that
+   one message: `.empty-stale`'s age line and the gallery's own notes land here
+   the same way. */
+.grid > .empty, .grid > .gallery-note { grid-column: 1 / -1; }
+/* An empty state is a sentence, not a tile: without this it inherits one 96px
+   grid column and wraps to one word per line. */
+.grid > .empty { grid-column: 1 / -1; }

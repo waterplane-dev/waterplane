@@ -332,11 +332,16 @@ ${XDG_DATA_HOME:-~/.local/share}/waterplane/
 
 ### Prerequisites, and which ones stop it
 
-- `claude` missing **stops** the install: waterplane drives the Claude Code
-  CLI the person already has (opencode is experimental), so installing it
-  first is the actual first step. The message links the Claude Code docs;
-  `--skip-claude-check` continues anyway. Also looked for in `~/.local/bin`
-  and `~/.claude/local`, where Claude Code's own installers put it.
+- `claude` missing **stops** the install: every backend but Copilot is the
+  claude binary (a Claude plan, an API key, or a local Ollama model behind it),
+  so installing it first is the actual first step. The message prints
+  Anthropic's native install command (npm second: the installer's own Node is
+  not on PATH, so a fresh machine often has no `npm`) and says what claude runs
+  on, paid plan or API key or Ollama with no account. With a terminal it asks
+  "continue without claude?"; piped, it stops. `--skip-claude-check` continues
+  anyway, and `--with copilot` skips the stop (that backend drives its own CLI).
+  Also looked for in `~/.local/bin` and `~/.claude/local`, where Claude Code's
+  own installers put it.
 - Tailscale missing is a **warning** with the download link; it is never
   installed for you. On WSL the Windows client counts (`tailscale.exe` through
   interop), and the warning names both routes: the Windows client with mirrored

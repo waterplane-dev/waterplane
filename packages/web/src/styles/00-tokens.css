@@ -1,0 +1,473 @@
+/* 00-tokens.css: palette: dark + light custom-property blocks and the token scale. */
+/* ══════════════════════════════════════════════════════════════════════════
+   THE PALETTE — every colour in this app, twice.
+   ══════════════════════════════════════════════════════════════════════════
+
+   There is no literal colour anywhere else in this file, and that is the rule
+   worth keeping. Before this block existed the same eight meanings were spelled
+   out about two hundred times — `#1b2129` twenty-seven times, four different
+   ambers, `var(--accent, #58a6ff)` beside `var(--accent, #6ea8fe)` beside a
+   bare `#4c9aff` — which was survivable while the app had one theme and became
+   impossible the moment it had two: a light mode is not a filter you put over a
+   stylesheet, it is a second value for every token, and a colour that is not a
+   token has no second value.
+
+   Two axes, deliberately kept apart:
+
+     * a HUE per meaning (accent, ok, dead, warn, star, limit, ask, …), and
+     * a WASH / TINT / EDGE per hue — the same colour at the alpha a background
+       or a border wants.
+
+   The alphas are not free parameters per call site any more. `--accent-wash`
+   replaced five alphas between .07 and .12 that no eye could have told apart,
+   and having one of them means light mode can raise it as a group: a 7% tint of
+   a dark blue on white is a different amount of visible than a 7% tint of a
+   light blue on near-black, so the light block below re-states the alphas as
+   well as the hues.
+
+   `data-theme` is set on <html> by `theme.ts` — and, before the bundle has even
+   parsed, by the inline script in `index.html`, so a cold start never flashes
+   the other theme. `system` is not a third value here: it is resolved to one of
+   these two before the attribute is written. */
+
+:root, [data-theme="dark"] {
+  color-scheme: dark;
+
+  /* ── Surfaces ──────────────────────────────────────────────────────────
+     Four, in depth order: `--bg` is the page, `--panel` the thing raised off
+     it (topbar, sheet, card), `--raise` the surface an interactive control
+     wears when it is active or pressed, `--well` the surface a field, a code
+     block or a <select> is sunk into. In dark, `--well` is BELOW `--bg`; in
+     light it is above it. That inversion is why they are separate tokens and
+     not one with an opacity. */
+  --bg: #0b0d10;
+  --panel: #14181d;
+  --sub: #12171d;            /* a strip nested under a row */
+  --raise: #1b2129;
+  --well: #0b0d10;
+  --line: #232a32;
+
+  /* The terminal, and the reconstructed scrollback that stands in for it.
+     Its own token because it must equal the xterm palette's `background`
+     exactly (`Terminal.tsx`) — a 1px mismatch round a full-screen grid reads
+     as a rendering fault. */
+  --term-bg: #0b0d10;
+  /* The compose box in raw-key (CLI) mode: a well that says it is a pipe. */
+  --pipe-bg: #0d1218;
+
+  /* ── Text ──────────────────────────────────────────────────────────────── */
+  --fg: #d6dce5;
+  --muted: #7d8794;
+  --dim: #6e7681;            /* quieter than muted: "queued", "not yet" */
+  /* The ring round a selected swatch, and anything else whose only job is to
+     be the opposite of the surface under it. */
+  --ring: #ffffff;
+
+  /* ── Hues, by meaning ───────────────────────────────────────────────────
+     Each carries its channels as a bare triple as well, because the washes
+     below are the same colour at another alpha and deriving them is what stops
+     a tint drifting away from the hue it is a tint OF. */
+  --accent-rgb: 76 154 255;
+  --accent: rgb(var(--accent-rgb));
+  --ok-rgb: 63 185 80;
+  --ok: rgb(var(--ok-rgb));
+  --dead-rgb: 248 81 73;
+  --dead: rgb(var(--dead-rgb));
+  /* Amber: "a check found something, and nothing is broken yet". It was
+     written as a literal in `.row-chip.warn` and as two different fallbacks
+     (`var(--warn, #d29922)`, `var(--warn, #e9a13b)`) elsewhere, which is one
+     meaning wearing three colours. Declared once here; the setupwatch chip's
+     shade wins because that is the amber this app already taught. */
+  --warn-rgb: 233 161 59;
+  --warn: rgb(var(--warn-rgb));
+  /* Gold: starred, and the sign-in link. */
+  --star-rgb: 230 180 80;
+  --star: rgb(var(--star-rgb));
+  /* Orange: the CLI ↔ companion-shell pair (`.pair-tabs`, the lit tab), the
+     owner's ask — it is the other half of a PAIR, not one more view control. */
+  --pair-rgb: 255 140 50;
+  --pair: rgb(var(--pair-rgb));
+  /* "At the usage limit": blocked, and handling itself. One meaning wore four
+     colours — the row badge gold (#e6b450, which is the STAR colour), the
+     manually-resumed row red-filled (which is the "waiting for your answer"
+     style), the launcher chip orange and the repo-group roll-up `--dead` — so
+     the same three sessions read as starred, broken and waiting depending on
+     which line of the launcher you looked at. Orange, because the pill it names
+     is not an alarm (`.head-wait.limit` and `.q-card.resuming` already taught
+     it) and not the amber that means "a check found something". */
+  --limit-rgb: 255 166 87;
+  --limit: rgb(var(--limit-rgb));
+  /* The CLI is asking a question and the turn is parked on the answer. Brighter
+     than `--warn` on purpose: a check that found something can wait, this
+     cannot. */
+  --ask-rgb: 255 193 7;
+  --ask: rgb(var(--ask-rgb));
+  --purple: #c98bff;         /* backlog / plugin / image kinds */
+  --sched: #a371f7;          /* armed for a wall-clock time */
+  /* The follow-up flag, coloured by WHO set it (R-sessions-042) — never the
+     star's gold, which is the other mark beside it. You by hand: the accent.
+     A launch you ticked ("flag for follow up when done"): the schedule purple,
+     because it is the same kind of standing instruction. The session's own
+     agent: a teal of its own, apart from `--ok`'s green and the accent. */
+  --fu-agent-rgb: 45 196 196;
+  --fu-agent: rgb(var(--fu-agent-rgb));
+  --fu-hand: var(--accent);
+  --fu-launch: var(--sched);
+  --defer: #e3b341;          /* a plugin left a box for you */
+  --ctx-low: #e06c5a;        /* the context window is nearly full */
+
+  /* ── Text ON a filled surface ───────────────────────────────────────────
+     A hue used as a background needs its own foreground, and which one is not
+     derivable from the hue alone — it depends on how light the fill is, which
+     is exactly what changes between the themes. */
+  --on-accent: #ffffff;
+  --on-accent-strong: #06101f;  /* a small badge, where 2.6:1 is not enough */
+  --on-accent-line: rgba(255, 255, 255, .35); /* divider inside a filled button */
+  --on-dead: #ffffff;
+  --on-ok: #06210d;
+  --on-limit: #2a1502;
+  --on-star: #2a1e05;
+  --on-media: #ffffff;       /* a label over a photo — never theme-dependent */
+
+  /* ── Washes, tints and edges ────────────────────────────────────────────
+     wash = the faintest "this row is in this state" background;
+     tint = a chip's fill; tint-hi = that chip pressed;
+     edge = a border in the hue, without the hue's full weight. */
+  --accent-wash: rgb(var(--accent-rgb) / .09);
+  --accent-tint: rgb(var(--accent-rgb) / .12);
+  --accent-tint-hi: rgb(var(--accent-rgb) / .24);
+  --accent-edge: rgb(var(--accent-rgb) / .28);
+  --accent-edge-hi: rgb(var(--accent-rgb) / .35);
+  --ok-wash: rgb(var(--ok-rgb) / .07);
+  --ok-edge: rgb(var(--ok-rgb) / .40);
+  /* "this option is the chosen one" — a light green, never the accent fill,
+     which means "tap here next". Interim until selection becomes radio rows. */
+  --pick-fill: rgb(var(--ok-rgb) / .22);
+  --pick-edge: rgb(var(--ok-rgb) / .55);
+  --dead-wash: rgb(var(--dead-rgb) / .10);
+  --dead-tint: rgb(var(--dead-rgb) / .14);
+  --dead-edge: rgb(var(--dead-rgb) / .40);
+  --dead-edge-hi: rgb(var(--dead-rgb) / .55);
+  --warn-wash: rgb(var(--warn-rgb) / .08);
+  --warn-tint: rgb(var(--warn-rgb) / .12);
+  --warn-tint-hi: rgb(var(--warn-rgb) / .24);
+  --warn-edge: rgb(var(--warn-rgb) / .40);
+  --star-wash: rgb(var(--star-rgb) / .10);
+  --star-edge: rgb(var(--star-rgb) / .45);
+  --star-edge-hi: rgb(var(--star-rgb) / .55);
+  --limit-edge: rgb(var(--limit-rgb) / .55);
+  --ask-wash: rgb(var(--ask-rgb) / .11);
+  --ask-tint-hi: rgb(var(--ask-rgb) / .22);
+  --ask-edge: rgb(var(--ask-rgb) / .55);
+  --ctx-low-edge: rgba(224, 108, 90, .5);
+
+  /* ── Neutral overlays ───────────────────────────────────────────────────
+     The three that are NOT tinted by a hue. In dark they are white at a low
+     alpha (light lifted onto a dark surface); in light they must be BLACK at a
+     low alpha, which is the single most common way a theme port goes wrong —
+     a white overlay on a white panel is an invisible pressed state. */
+  --hover-soft: rgba(255, 255, 255, .04);
+  --hover: rgba(255, 255, 255, .06);
+  --hover-hi: rgba(255, 255, 255, .10);
+  --sheen: rgba(255, 255, 255, .35);     /* the moving band on a live progress bar */
+
+  /* Translucent copies of the surfaces, for something floating over content. */
+  --panel-veil: rgba(20, 24, 29, .85);
+  --panel-veil-hi: rgba(20, 24, 29, .92);
+  --bg-veil: rgba(11, 13, 16, .78);
+  /* The edge of a control floating over content (the terminal's corner group,
+     an overlay chip, a viewer's close). `--line` is drawn for a panel sitting on
+     `--bg`; over live output it is the same grey as the text behind it, and the
+     owner could not find the corner group in dark. Lifted, not hued. */
+  --float-edge: rgba(255, 255, 255, .24);
+
+  /* ── Scrims and shadows ─────────────────────────────────────────────────
+     `--scrim-media` and `--scrim-label` sit over PHOTOS and stay dark in both
+     themes: what they have to be legible against is the picture, not the app.
+     `--scrim` (a modal backdrop) and the shadows do belong to the theme — a
+     50%-black shadow under a card on a white page is a smudge, not a lift. */
+  --scrim: rgba(0, 0, 0, .55);
+  --scrim-media: rgba(0, 0, 0, .95);
+  --scrim-label: rgba(0, 0, 0, .66);
+  --shadow: rgba(0, 0, 0, .5);
+  --shadow-soft: rgba(0, 0, 0, .35);
+  --media-bg: #000;          /* letterbox behind an image or a video */
+  --paper: #fff;             /* a PDF page is paper in either theme */
+
+  /* ── Charts ─────────────────────────────────────────────────────────────
+     The categorical slots, in ORDER — the order is the assignment, and it is
+     the CVD-safety mechanism rather than decoration. Read from CSS by
+     `.ts-barfill` and from JavaScript by `ContextGraph.tsx` /
+     `TokenStatsSheet.tsx` as `var(--chart-N)`, which is the point: one bar
+     drawn in CSS and one drawn in SVG cannot drift, and neither can a theme.
+
+     Validated as a SET, never picked by eye — `theme.test.mjs` re-runs it:
+     all four ≥3:1 against the surface a chart sits on (`--bg`, since `.sheet`
+     is `--bg`), worst all-pairs CIEDE2000 ≥15 to normal vision and ≥5 under
+     simulated protan/deutan/tritan. */
+  --chart-1: #3987e5;
+  --chart-2: #d95926;
+  --chart-3: #199e70;
+  --chart-4: #c98500;
+  /* The context graph's three. The series is slot 1 — two chart families in one
+     app wearing two different "this is the data" colours is one too many — and
+     a compaction is slot 4. Only the usage wall is its own colour, because it
+     is the one event that is not a category: it is a wall. */
+  --ctx-series: var(--chart-1);
+  --ctx-compact: var(--chart-4);
+  --ctx-limit: #d03b3b;
+
+  /* ── Per-repo identity colour ───────────────────────────────────────────
+     Only the HUE is a fact about the repo (`format.ts`'s `repoHue`); how light
+     and how saturated that hue has to be is a fact about the theme. 60%
+     lightness is right on near-black and unreadable on white. */
+  --repo-sat: 65%;
+  --repo-lit: 60%;
+  /* How much of the hue washes a surface, and how much of it fills the one you
+     are IN. Two numbers, and everything tinted by a repo uses one of them —
+     which is what makes the launcher's group header and that repo's tab the
+     same colour rather than two mixes that were tuned separately and drifted.
+     They are ALPHAS over whatever is underneath, never a mix with a named
+     surface: the strip and the list are both `--bg`, so an alpha is what lets
+     one token be correct in both places. The three SHAPES the hue takes are
+     built from these further down (`.repo-group, .stab, …`) and deliberately
+     not here — see the note there. */
+  --repo-veil: 18%;
+  --repo-veil-on: 40%;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   LIGHT
+   ══════════════════════════════════════════════════════════════════════════
+
+   Not the dark palette inverted. Three things had to be re-decided rather than
+   flipped:
+
+   1. **The hues.** `--accent: #4c9aff` is 2.4:1 on white — as body text it is
+      unreadable and as a fill it cannot carry white text. Every hue here is
+      picked to clear 4.5:1 against BOTH `--panel` (#ffffff) and `--bg`
+      (#eef1f6) as text, and to carry `--on-*` at 4.5:1 when used as a fill.
+      That is measured, not eyeballed: `npm run test:unit` pins it
+      (`packages/web/src/theme.test.mjs`), so a later tweak to one swatch cannot
+      quietly drop a label below the line.
+
+   2. **The depth order.** In dark, a field is DARKER than the panel it sits on;
+      in light it is the panel that is lightest (white) and the page around it
+      that is grey. So `--well` is not "`--bg` again" here, and `--raise` — the
+      pressed state — goes DOWN in lightness rather than up.
+
+   3. **The overlays.** Everything built out of white-at-low-alpha becomes
+      black-at-low-alpha. A pressed row lit with `rgba(255,255,255,.06)` over a
+      white panel is a control with no pressed state at all. */
+
+[data-theme="light"] {
+  --pair-rgb: 178 78 0;
+  color-scheme: light;
+
+  --bg: #eef1f6;
+  --panel: #ffffff;
+  --sub: #f4f6fa;
+  --raise: #e6eaf1;
+  --well: #f5f7fb;
+  --line: #d4dae4;
+
+  --term-bg: #fcfcfd;
+  --pipe-bg: #eaf1fd;
+
+  --fg: #1c2430;
+  --muted: #57616f;
+  --dim: #7b8593;
+  --ring: #1c2430;
+
+  /* Darkened until each one clears 4.5:1 on white AND carries white at 4.5:1.
+     They keep their hue family — this is the same vocabulary, not a second
+     one — but none of the dark values survives contact with a white page. */
+  --accent-rgb: 21 100 204;      /* #1564cc */
+  --ok-rgb: 20 122 57;           /* #147a39 */
+  --dead-rgb: 197 33 39;         /* #c52127 */
+  --warn-rgb: 141 92 0;          /* #8d5c00 */
+  --star-rgb: 133 90 0;          /* #855a00 */
+  --limit-rgb: 168 76 12;        /* #a84c0c */
+  --ask-rgb: 128 98 0;           /* #806200 */
+  --purple: #7532c8;
+  --sched: #6a2fc4;
+  --fu-agent-rgb: 0 112 120;     /* #007078 */
+  --fu-hand: var(--accent);
+  --fu-launch: var(--sched);
+  --defer: #7d5900;
+  --ctx-low: #a83c28;
+
+  /* Every fill here is dark enough for white; the near-black `--on-*` values
+     the dark theme uses would be unreadable on them. */
+  --on-accent: #ffffff;
+  --on-accent-strong: #ffffff;
+  --on-accent-line: rgba(255, 255, 255, .45);
+  --on-dead: #ffffff;
+  --on-ok: #ffffff;
+  --on-limit: #ffffff;
+  --on-star: #ffffff;
+
+  /* Lower alphas than dark: the hues are dark now, so the same fraction of
+     them over white is a much stronger colour than that fraction of a pale
+     blue over near-black. */
+  --accent-wash: rgb(var(--accent-rgb) / .07);
+  --accent-tint: rgb(var(--accent-rgb) / .10);
+  --accent-tint-hi: rgb(var(--accent-rgb) / .18);
+  --accent-edge: rgb(var(--accent-rgb) / .30);
+  --accent-edge-hi: rgb(var(--accent-rgb) / .40);
+  --ok-wash: rgb(var(--ok-rgb) / .07);
+  --ok-edge: rgb(var(--ok-rgb) / .35);
+  --pick-fill: rgb(var(--ok-rgb) / .14);
+  --pick-edge: rgb(var(--ok-rgb) / .45);
+  --dead-wash: rgb(var(--dead-rgb) / .07);
+  --dead-tint: rgb(var(--dead-rgb) / .10);
+  --dead-edge: rgb(var(--dead-rgb) / .32);
+  --dead-edge-hi: rgb(var(--dead-rgb) / .45);
+  --warn-wash: rgb(var(--warn-rgb) / .07);
+  --warn-tint: rgb(var(--warn-rgb) / .10);
+  --warn-tint-hi: rgb(var(--warn-rgb) / .18);
+  --warn-edge: rgb(var(--warn-rgb) / .35);
+  --star-wash: rgb(var(--star-rgb) / .09);
+  --star-edge: rgb(var(--star-rgb) / .35);
+  --star-edge-hi: rgb(var(--star-rgb) / .45);
+  --limit-edge: rgb(var(--limit-rgb) / .45);
+  --ask-wash: rgb(var(--ask-rgb) / .09);
+  --ask-tint-hi: rgb(var(--ask-rgb) / .18);
+  --ask-edge: rgb(var(--ask-rgb) / .45);
+  --ctx-low-edge: rgba(168, 60, 40, .4);
+
+  /* Black, not white. See the note in the dark block. */
+  --hover-soft: rgba(16, 24, 38, .035);
+  --hover: rgba(16, 24, 38, .06);
+  --hover-hi: rgba(16, 24, 38, .10);
+  --sheen: rgba(255, 255, 255, .55);
+
+  --panel-veil: rgba(255, 255, 255, .90);
+  --panel-veil-hi: rgba(255, 255, 255, .96);
+  --bg-veil: rgba(238, 241, 246, .86);
+  --float-edge: rgba(16, 24, 38, .22);
+
+  --scrim: rgba(16, 24, 38, .38);
+  /* `--scrim-media` and `--scrim-label` are NOT re-stated: they are read
+     against a photograph, and a photograph does not change theme. */
+  --shadow: rgba(16, 24, 38, .16);
+  --shadow-soft: rgba(16, 24, 38, .10);
+
+  /* Re-derived on white, not darkened by rule. The dark set is 3:1 against a
+     near-black surface and 1.6:1 against this one — invisible. These clear
+     3:1 on `--bg` and beat the dark set on every separation measure
+     (all-pairs CVD ΔE 14.4 vs 5.3, normal 34.1 vs 21.1), which is what a
+     light background buys you once the colours are chosen for it. */
+  --chart-1: #0058cc;
+  --chart-2: #9c351c;
+  --chart-3: #238b72;
+  --chart-4: #a8830c;
+  --ctx-limit: #972024;
+
+  /* The same hues, darkened until the WORST of them clears 4.5:1 against both
+     `--panel` and `--bg`. The worst is yellow (hue 60), which at any lightness
+     that suits blue is a repo name nobody can read; 28% is where it passes, and
+     the whole circle moves with it so no repo is a second-class colour.
+     `theme.test.mjs` sweeps all 360 hues, because picking a value that suits
+     the repos on this machine is exactly how the next repo gets an unreadable
+     name. */
+  --repo-sat: 55%;
+  --repo-lit: 28%;
+  /* The wash stays exactly where it shipped. It sits behind text of its OWN hue
+     on the group header — the one pairing in the app that is already close to
+     the floor (≈4.1:1 here) — and every point of wash spends some of that. The
+     FILL goes higher than dark instead: the light accent is a 28%-lightness colour
+     under white, so the fraction that reads as a solid tab on near-black
+     washes out to grey here (which is what "the tabs have no colour in light
+     mode" turned out to mean). 46% is the most it can take and still carry
+     `--fg` at 4.5:1 across all 360 hues — `theme.test.mjs` sweeps it. */
+  --repo-veil: 10%;
+  --repo-veil-on: 46%;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE SCALE — sizes, weights and timing. Theme-INDEPENDENT, so defined once.
+   ══════════════════════════════════════════════════════════════════════════
+
+   Kept apart from the two palette blocks above on purpose: those hold what
+   changes with light/dark (`theme.test.mjs` parses them by their exact
+   opening line), this holds what never does. Each name carries its px value
+   (`--sp-8` is 8px) so a call site stays greppable and a design change is a
+   decision at the call site, not a silent edit here.
+
+   Before this block the file spelled out 29 spacings, 14 radii and 26 type
+   sizes: 7px beside 6px beside 5px, 12.5px beside 12px, weights of 620 and
+   650 that a non-variable face rounds anyway. They were snapped to the grid
+   below (2026-10-19); `tokens.test.mjs` caps the raw px left over so new ones
+   are a choice, not drift.
+
+   Font sizes are BARE px. A call site that scales with the text-size setting
+   keeps `calc(var(--fs-12) * var(--ui-font, 1))`: a token that did the calc
+   here would resolve `--ui-font` at :root and ignore the reader's own override
+   on its subtree (`ScrollbackSheet.tsx`). The shadows read `--shadow` /
+   `--accent`, which only <html> sets, so resolving them here is safe.
+
+   Not here, deliberately: z-index (an ORDER, not a scale — the literals are
+   the stack), 1px hairlines and offsets, and one-off geometry (an icon box,
+   a chart's height, a hero numeral's size). */
+:root {
+  --sp-2: 2px;
+  --sp-4: 4px;
+  --sp-6: 6px;
+  --sp-8: 8px;
+  --sp-10: 10px;
+  --sp-12: 12px;
+  --sp-14: 14px;
+  --sp-16: 16px;
+  --sp-20: 20px;
+  --sp-24: 24px;
+  --sp-28: 28px;
+  --sp-32: 32px;
+  --sp-40: 40px;
+  --sp-48: 48px;
+
+  --r-2: 2px;
+  --r-4: 4px;
+  --r-6: 6px;
+  --r-8: 8px;
+  --r-10: 10px;
+  --r-12: 12px;
+  --r-16: 16px;
+  --r-pill: 999px;
+  --r-round: 50%;
+
+  --fs-9: 9px;
+  --fs-10: 10px;
+  --fs-11: 11px;
+  --fs-12: 12px;
+  --fs-13: 13px;
+  --fs-14: 14px;
+  --fs-15: 15px;
+  --fs-16: 16px;
+  --fs-18: 18px;
+  --fs-20: 20px;
+  --fs-22: 22px;
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  --lh-1: 1;
+  --lh-12: 1.2;
+  --lh-13: 1.3;
+  --lh-14: 1.4;
+  --lh-15: 1.5;
+  --lh-16: 1.6;
+
+  --elev-1: 0 1px 6px var(--shadow);
+  --elev-2: 0 6px 24px var(--shadow);
+  --elev-3: 0 10px 40px var(--shadow);
+  --focus-ring: 0 0 0 2px var(--accent);
+  /* The 3px status bar down a row's left edge. */
+  --stripe: inset 3px 0 0 var(--accent);
+
+  --dur-fast: .15s;
+  --dur-spin: 1s;
+  --dur-pulse: 1.6s;
+}

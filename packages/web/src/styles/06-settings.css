@@ -1,0 +1,558 @@
+/* 06-settings.css: lucide alignment, usage sources, Settings kit (.set-*), notifications, oracle log, ask rules, search. */
+/* Build sheet: live command output pane (mirrors .update-log).
+   `.build-body` is the sheet's ONE scroll region — see BuildSheet.tsx. The
+   lists inside it must NOT be the global `.list` (`flex: 1`, own scroll): they
+   size to their content and the body scrolls, so a 2000-line build log can
+   never squeeze the run buttons out of existence. */
+.build-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.build-body > .list, .build-body .build-run > .list { flex: 0 0 auto; overflow: visible; }
+.build-run { display: flex; flex-direction: column; flex: 0 0 auto; box-shadow: var(--stripe); }
+/* A build row's command: two lines, then an ellipsis. A shell script as a
+   subtitle made one row a whole screen; the full text is in the editor.
+   `.row-sub.build-cmd`, not `.build-cmd`: the later `.row-sub { display:
+   inline-flex }` has the same specificity and wins on order, which silently
+   un-clamped every command back to its full length. */
+.row-sub.build-cmd {
+  flex-basis: 100%; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; word-break: break-all;
+}
+/* A run row: its name on a line of its own (it was cut to "Public mirror
+   (wat…" by the meta beside it), the fold chevron at the end, the meta under. */
+.build-runs .row-title { flex: 1 1 0; min-width: 0; white-space: normal; }
+.build-runs .row > .row-sub { order: 2; }
+.build-run-fold { order: 1; flex: none; color: var(--muted); }
+/* The open run and its detail read as ONE block: same stripe down both. */
+.build-runs .row.active { background: var(--accent-wash); box-shadow: var(--stripe); }
+/* Copy / send-to-session over an open run's log. Mid-list, not a sheet foot, so no
+   home-indicator inset. */
+.sheet-actions.build-log-acts { padding: var(--sp-6) var(--sp-12); }
+.build-log {
+  /* Fixed share of the viewport with its own scroll: tall enough to read,
+     bounded so the controls above it stay one short scroll away. */
+  margin: 0; padding: var(--sp-8) var(--sp-12); flex: 0 0 auto; height: 45vh; min-height: 160px; overflow: auto;
+  background: var(--well); border-top: 1px solid var(--line);
+  color: var(--fg); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(var(--fs-11) * var(--ui-font, 1));
+  line-height: var(--lh-14); white-space: pre-wrap; word-break: break-all;
+}
+
+/* The build EDITOR's suggest list: what this repo already describes, under the
+   three fields. Its own scroll region for `.build-body`'s reason — the list can
+   be sixty rows and the Save button must never be pushed off the screen by
+   it. */
+.build-suggest { flex: 1 1 auto; min-height: 0; overflow-y: auto; border-top: 1px solid var(--line); }
+.build-suggest .list { flex: 0 0 auto; overflow: visible; }
+/* A suggested command that reads like it publishes. Amber for `.row-chip.warn`'s
+   reason: this is "look before you save", not "this failed". */
+.row-sub.warn { color: var(--warn); display: flex; align-items: flex-start; gap: var(--sp-4); }
+.row-sub.warn svg { flex: 0 0 auto; margin-top: var(--sp-2); }
+
+/* The wand's question, asked before a session is spent (`BuildSheet.tsx`). A
+   panel between the fields and the question list, bounded by lines so the box
+   reads as a box and not as a fourth field. The composer is the app's own,
+   inline, so the padding is all this needs. */
+.build-assist { flex: 0 0 auto; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding-bottom: var(--sp-6); }
+.build-assist > .promptc { padding: 0 var(--sp-10); }
+
+/* What a build ASKS for — the editor's question list, and the form between the
+   run tap and the build (`BuildSheet.tsx`). Its own scroll region for
+   `.build-suggest`'s reason: eight questions must never push Run off the
+   screen. Each question is a card, because five fields with no seam between
+   them read as one long form rather than as three separate questions. */
+.build-params { flex: 1 1 auto; min-height: 0; overflow-y: auto; border-top: 1px solid var(--line); }
+.build-param { padding: var(--sp-8) var(--sp-14); border-bottom: 1px solid var(--line); }
+.build-param > .set-row { gap: var(--sp-8); }
+.build-param .set-row label { flex: 1 1 12ch; min-width: 0; }
+/* A basis in `ch`, `.asr-asks`' rule: it scales with the text, so a bigger
+   `--ui-font` (or Android's own font scale on top of it) drops the pair to one
+   column instead of painting one field over the next. Measured in the
+   `.set-row label`'s own 11px, which is what these words are in. */
+.build-param .search { width: 100%; box-sizing: border-box; }
+.build-param > .sheet-actions { padding: var(--sp-4) 0 0; }
+/* An unreadable option list, said where the field is. Amber for
+   `.row-chip.warn`'s reason: "type it instead", not "this failed". */
+.set-note.warn { color: var(--warn); }
+
+.update-bar .update-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.update-bar .key { flex: 0 0 auto; }
+
+/* The toast is a BUTTON (it dismisses on tap — `ToastLayer.tsx`), so it resets
+   the UA's font and alignment: a two-line sentence centred in system Arial is
+   not the same sentence. `pre-wrap` because the words are often a path. */
+.toast {
+  position: fixed; left: 50%; bottom: calc(80px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  background: var(--raise); color: var(--fg); border: 1px solid var(--line); border-radius: var(--r-10);
+  padding: var(--sp-10) var(--sp-16); font-size: calc(var(--fs-13) * var(--ui-font, 1)); max-width: 90vw; z-index: 20; box-shadow: var(--elev-2);
+  font-family: inherit; line-height: var(--lh-14); text-align: left; white-space: pre-wrap; word-break: break-word; cursor: pointer;
+}
+.toast:active { background: var(--panel); }
+/* The slot check's ask (`SlotAskLayer.tsx`): above the toast's spot, never a
+   scrim — nothing under it is blocked. Words wrap; buttons wrap to a second row. */
+.slot-ask {
+  position: fixed; left: 50%; bottom: calc(150px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  width: min(520px, calc(100vw - 24px)); z-index: 19;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-12);
+  padding: var(--sp-10) var(--sp-12); box-shadow: var(--elev-2);
+  font-size: calc(var(--fs-13) * var(--ui-font, 1)); line-height: var(--lh-14);
+}
+.slot-ask-what { display: flex; align-items: flex-start; gap: var(--sp-6); color: var(--fg); }
+.slot-ask-what svg { flex: none; margin-top: var(--sp-4); }
+.slot-ask-acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8); margin-top: var(--sp-8); }
+.slot-ask-acts .key { flex: 0 1 auto; min-width: 0; white-space: normal; }
+
+/* ── lucide icon alignment ─────────────────────────────────────────── */
+.key, .send, .rc, .back, .row-act, .run, .approve-btn, .btw { display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-6); }
+.tag, .row-sub, .git-ab, .bl-meta { display: inline-flex; align-items: center; gap: var(--sp-4); }
+.gstat { display: inline-flex; align-items: center; }
+/* lucide svgs inherit text color via currentColor; keep them from shrinking */
+svg.lucide { flex: 0 0 auto; }
+/* The special-key row still scrolls sideways, so its chips must not wrap. The
+   MENU is a column and deliberately not listed here: a label long enough to
+   wrap should wrap rather than be clipped by a row it cannot scroll. */
+.keys .key { white-space: nowrap; }
+
+/* A plugin's suggested answer, on the answer card (`PromptAnswer.tsx`) */
+.oracle-hint { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--accent); margin: var(--sp-4) 0 var(--sp-8); line-height: var(--lh-14); }
+.approve-btn.suggested { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-edge-hi) inset; }
+
+.key.danger { color: var(--dead); border-color: var(--dead); }
+/* The session toolbar's hourglass while this session is blocked. It wore
+   `.key.danger` — the same red as "kill this session" two buttons along — for
+   a state that is neither an error nor destructive. Same `--limit` as every
+   other at-limit readout. */
+.key.limit { color: var(--limit); border-color: var(--limit); }
+/* Usage chip: 5-hour / weekly side by side. Tight gap so two numbers plus a
+   unit still fit the header row on a phone; the over-80 half goes red on its
+   own, since a calm session number next to a burnt week is the case that
+   matters. */
+.usage-key { gap: var(--sp-4); }
+.usage-key .usage-sep { color: var(--muted); }
+.usage-key .usage-unit { color: var(--muted); font-size: calc(var(--fs-10) * var(--ui-font, 1)); }
+.usage-key .usage-hot { color: var(--dead); font-weight: var(--fw-semibold); }
+/* Reset clock rides right after the 5-hour number it belongs to: same muted weight as "wk", with the
+   icon baseline-nudged so the row height doesn't change. */
+.usage-key .usage-reset { display: inline-flex; align-items: center; gap: var(--sp-2); margin-left: var(--sp-2); }
+/* ── WP3 usage-sources BEGIN (self-contained patch block) ─────────────────────
+   One segment per usage source (core/launcher/UsageChip.tsx). A lone claude
+   segment is the plain `.usage-key` above — none of these rules touch it. */
+/* Metrics are `.topbar > .key`'s (the rule at the header keys); the 44px touch floor is the row's.
+   In the topbar the group goes LAST: claude alone (171px measured, with its reset clock) already
+   leaves the 360px launcher bar two rows; in source order a second segment (≈109px) pushed the
+   group onto row 2 and settings onto a THIRD. Last, the icons keep row 1 and the meter takes a
+   line of its own (claude + one ≈ 284px of the 340 a 360px bar holds) — two rows at 360 and 390,
+   as with claude alone. A third segment wraps INSIDE the group rather than past the screen. */
+.usage-multi { display: inline-flex; align-items: stretch; gap: var(--sp-4); flex: none; min-width: 0; }
+.topbar > .usage-multi { order: 10; flex: 0 1 auto; flex-wrap: wrap; }
+.usage-key .usage-label { color: var(--muted); font-size: calc(var(--fs-11) * var(--ui-font, 1)); }
+html[data-layout="wide"] .ws-side .topbar > .usage-multi { order: 10; flex: 1 0 auto; justify-content: center; }
+/* ── WP3 usage-sources END ─────────────────────────────────────────────────── */
+.oracle-warn { color: var(--dead) !important; flex-basis: 100%; }
+
+
+/* Usage-limit / auto-continue state (overview rows + blocked badge). */
+.tag.limit-auto { color: var(--limit); border: 1px solid var(--limit); }
+/* Auto-continue is OFF for this session, so the reset alone will not restart it:
+   the one at-limit state that does want a hand. Filled rather than outlined —
+   the same weight `.tag.wait` uses — but still the limit colour, because it is
+   still the limit. It used to BE `.tag.wait`, i.e. red-filled and identical to
+   an open question box. */
+.tag.limit-manual { color: var(--on-limit); background: var(--limit); border: 1px solid var(--limit); }
+/* A schedule written with no link: saved on this device, not armed anywhere
+   yet. Same amber as the other "the host has not confirmed this" readouts. */
+.tag.queued { color: var(--star); border: 1px solid var(--star); display: inline-flex; align-items: center; gap: var(--sp-4); }
+.tag.limit-on { color: var(--star); border: 1px solid var(--star-edge); }
+.tag.limit-off { color: var(--muted); border: 1px solid var(--line); }
+
+/* Download affordance on artifact notifications. */
+/* Tap target, not decoration — 44px of it, since the thing beside it opens a
+   different screen and a near-miss on a phone is the wrong one. */
+.notif-dl { color: var(--accent); display: inline-flex; align-items: center; justify-content: center; flex: none; min-width: 36px; min-height: 36px; margin-right: var(--sp-2); padding: 0; background: none; border: none; cursor: pointer; }
+button.notif-dl:active { background: var(--raise); border-radius: var(--r-8); }
+
+/* Notification bell badge + feed. */
+.notif-btn { position: relative; }
+.notif-badge { position: absolute; top: -4px; right: -4px; min-width: 16px; height: 16px; padding: 0 var(--sp-4); box-sizing: border-box; background: var(--dead); color: var(--on-dead); border-radius: var(--r-pill); font-size: calc(var(--fs-10) * var(--ui-font, 1)); line-height: 16px; text-align: center; font-weight: var(--fw-bold); }
+/* The row is a container, not a button: a file you can READ carries two verbs
+   (open it here / keep it on the phone) and a button inside a button is not
+   markup a browser will give you. */
+.notif-row { display: flex; align-items: flex-start; gap: var(--sp-10); width: 100%; text-align: left; padding: var(--sp-12) var(--sp-14); border-bottom: 1px solid var(--line); }
+.notif-open { flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: var(--sp-10); text-align: left; padding: 0; background: none; border: none; color: inherit; font: inherit; cursor: pointer; }
+.notif-open:active { background: var(--raise); }
+.notif-icon { flex: none; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-8); background: var(--bg); border: 1px solid var(--line); color: var(--muted); }
+.notif-icon.notif-prompt { color: var(--accent); border-color: var(--accent); }
+.notif-icon.notif-image { color: var(--purple); border-color: var(--purple); }
+.notif-icon.notif-autofire, .notif-icon.notif-plugin { color: var(--purple); border-color: var(--purple); }
+.notif-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+.notif-title { font-size: calc(var(--fs-14) * var(--ui-font, 1)); color: var(--fg); font-weight: var(--fw-medium); }
+.notif-text { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); white-space: pre-wrap; word-break: break-word; }
+.notif-time { flex: none; }
+/* Heading over each half of the feed — the desktop's alerts and this phone's
+   own messages. The label is the point: they are different kinds of fact. */
+.notif-sec { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-8); padding: var(--sp-10) var(--sp-14) var(--sp-6); border-bottom: 1px solid var(--line); background: var(--panel); }
+.notif-sec-title { display: inline-flex; align-items: center; gap: var(--sp-6); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.cmd-copy { display: flex; align-items: center; gap: var(--sp-8); margin-top: var(--sp-6); }
+.cmd-copy code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; background: var(--well); border: 1px solid var(--line); border-radius: var(--r-8); padding: var(--sp-8) var(--sp-10); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--fg); }
+
+/* Settings sheet — grouped, readable. */
+/* No top padding: a sticky heading pins to the scrollport's PADDING box, so
+   4px here left a 4px band of the previous group's chips visible above every
+   pinned heading. */
+.settings { padding: 0 0 var(--sp-32); overflow-y: auto; display: flex; flex-direction: column; }
+
+/* ── Settings, rebuilt ─────────────────────────────────────────────────────
+   The screen used to be seventeen sections of `.set-row`s, each one a wide
+   `.key` with the label and the state inside it and four sentences of prose
+   underneath. Three things were wrong with that and all three are layout:
+
+   - a `.key` with no modifier is what an ACTION looks like AND what a switch
+     that is OFF looks like, so `token statistics` (a door to another screen)
+     and `data saver: off` (a switch) were the same pixels;
+   - the state was inside the label, so it moved as the label's length changed
+     and no two rows agreed on where to look for it;
+   - the prose never folded, so the screen was ~40 phone-heights of argument
+     you had already read.
+
+   So: one row shape, the state pinned to the right edge of every one of them,
+   the explanation one line with the rest behind a disclosure. The components
+   are `SettingsKit.tsx`, which is where the reasoning lives. */
+
+/* The rows of one group. `gap` rather than margins so an absent row leaves no
+   hole — a good third of them are conditional on the host or the shell. */
+.set-item { display: flex; flex-direction: column; gap: var(--sp-4); }
+/* `.set-note`'s `flex-basis: 100%` is for wrapping rows; in this COLUMN it is a
+   full height, and a `.list` child (`flex: 1; min-height: 0`) is squeezed to
+   nothing beside it — the phone-setup checklist drew a screen of blank. */
+.set-item > .set-note { flex-basis: auto; }
+.set-item > .list { flex: none; overflow-y: visible; }
+
+/* A group whose rows all turned out to be absent draws nothing — not even its
+   heading. The catalogue decides visibility under a query and cannot know what
+   the host is currently offering, so this is the backstop for the case it
+   cannot see.
+
+   **Both selectors are scoped to a group the CATALOGUE owns** — `.gone` and
+   `data-group` are written by `SettingsKit.tsx` and nothing else. Unscoped, the
+   second one read "a `.set-group` holding no `.set-item`" as empty, and
+   `.set-group` is a shape five OTHER sheets use with plain `.set-row`s inside:
+   the per-repo download rules, the local runner, the network health board, the
+   speed test and the app-update panel all went `display: none` in one commit —
+   heading visible, every switch under it gone. A blanket rule about a class
+   this screen did not invent is why. */
+.set-group.gone { display: none; }
+.set-group[data-group]:not(:has(.set-item)):not(:has(.set-door)) { display: none; }
+
+/* The heading stays put while its own rows scroll under it: with seven groups
+   and the search box above the scroll, "which group am I in" is otherwise a
+   scroll back up.
+ *
+ * Scoped to `[data-group]` — which `SettingsKit.tsx` writes and nothing else
+ * does — for the reason the rule above it carries: `.set-title` is AppUpdate's,
+ * LocalRtSheet's and NetHealthSheet's too, and none of them asked for a sticky
+ * heading on a scroll container that is not this one. Same mistake as the
+ * `:has()` rule that hid five sheets; a selector whose subject is a class this
+ * screen did not invent belongs to whoever did.
+ *
+ * The descendant selector also makes it WIN. Unscoped it did not: the plain
+ * `.set-title` rule further down this file sets `margin: 0` at equal
+ * specificity and later in source order, so the negative margins meant to pull
+ * the band out to the screen edges were dropped while the padding stayed — the
+ * heading sat double-indented against its own rows, and its background stopped
+ * short of both edges. */
+.set-group[data-group] > .set-title {
+  position: sticky; top: 0; z-index: 2;
+  margin: -14px -16px 0; padding: var(--sp-10) var(--sp-16) var(--sp-8);
+  background: var(--bg);
+  display: flex; align-items: center;
+}
+
+/* ── the switch ────────────────────────────────────────────────────────────
+   The whole row is the button. A 44px target the width of the screen is the
+   one thing a thumb cannot miss, and it means the label and the state can
+   never drift apart into two separate tap decisions. */
+.set-sw, .set-act {
+  display: flex; align-items: center; gap: var(--sp-8); width: 100%;
+  min-height: 44px; padding: var(--sp-8) var(--sp-12);
+  background: var(--well); color: var(--fg);
+  border: 1px solid var(--line); border-radius: var(--r-10);
+  font: inherit; font-size: calc(var(--fs-14) * var(--ui-font, 1));
+  text-align: left; cursor: pointer;
+}
+.set-sw:active, .set-act:active { background: var(--panel); }
+.set-ico { flex: none; color: var(--muted); }
+.set-lbl { flex: 1 1 auto; min-width: 0; }
+
+/* The state, always at the right edge, always the same two words unless the
+   truth is genuinely neither (`starting…`, `blocked in browser`). */
+.set-state {
+  flex: none; font-size: calc(var(--fs-12) * var(--ui-font, 1)); font-weight: var(--fw-semibold);
+  color: var(--muted); letter-spacing: .02em;
+  padding: var(--sp-2) var(--sp-8); border-radius: var(--r-pill);
+  border: 1px solid var(--line); background: var(--bg);
+  white-space: nowrap;
+}
+/* ON is the accent, and it is the BORDER and the TEXT rather than a filled
+   row: a whole row of accent for every switched-on setting turns a settings
+   screen into a wall of colour that says nothing about which one you came for. */
+.set-sw.on { border-color: var(--accent); }
+.set-sw.on .set-ico { color: var(--accent); }
+.set-sw.on .set-state { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
+/* A state that is a PROBLEM, not a preference. */
+.set-sw.danger { border-color: var(--dead); }
+.set-sw.danger .set-ico { color: var(--dead); }
+.set-sw.danger .set-state { color: var(--on-accent); background: var(--dead); border-color: var(--dead); }
+
+/* ── the action ────────────────────────────────────────────────────────────
+   Never wears the accent — that colour means "this is on", and an action is
+   never on. The chevron is drawn when and only when the tap opens another
+   screen, so a door and a verb are two shapes. */
+.set-act .set-go { flex: none; color: var(--muted); }
+.set-act.danger { border-color: var(--dead); color: var(--dead); }
+.set-act.warn { border-color: var(--warn); color: var(--warn); }
+.set-act.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.set-act.primary .set-ico, .set-act.primary .set-go { color: inherit; }
+/* Running, said in its own glyph — never a disabled attribute. */
+.set-act.busy { opacity: .85; }
+.set-act.busy .spin { animation: spin var(--dur-spin) linear infinite; }
+
+/* The reason a verb is not offered, where the button would have been. A
+   sentence, never a dimmed control (`Unavailable.tsx`). */
+.set-cant { padding: var(--sp-8) var(--sp-12); border: 1px dashed var(--line); border-radius: var(--r-10); }
+.set-cant-why {
+  flex: 1 1 100%; font-size: calc(var(--fs-12) * var(--ui-font, 1));
+  color: var(--muted); font-style: italic;
+}
+.set-cant .set-lbl { flex: 0 1 auto; color: var(--muted); }
+
+/* ── labelled rows: choice, pick, stepper, slider ──────────────────────── */
+.set-lead {
+  display: flex; align-items: center; gap: var(--sp-8); flex-wrap: wrap;
+  font-size: calc(var(--fs-14) * var(--ui-font, 1)); color: var(--fg);
+  padding: var(--sp-2) var(--sp-2) 0;
+}
+.set-lead .set-state { margin-left: auto; }
+/* The `<select>` sits in the lead line rather than under it: it is one control
+   and a short one, and a row whose label and control are on separate lines
+   reads as two rows. */
+/* ONE width for every drop-down on the screen, not "whatever is left after this
+   row's label". Sized to the leftover space they were four different widths
+   with four different left edges, which reads as four unrelated controls. */
+.set-pick { flex: 0 0 auto; margin-left: auto; width: min(58%, 15em); display: flex; }
+.set-pick > * { width: 100%; }
+.set-pick select {
+  width: 100%; max-width: 100%;
+  background: var(--well); color: var(--fg);
+  border: 1px solid var(--line); border-radius: var(--r-8);
+  padding: var(--sp-6) var(--sp-8); font-size: calc(var(--fs-13) * var(--ui-font, 1));
+}
+.set-pick select.danger { border-color: var(--dead); color: var(--dead); }
+.set-pick input { width: 100%; }
+/* The label keeps its own width so the controls all start at one left edge. */
+.set-lead > .set-lbl { flex: 0 1 auto; }
+
+/* Chips, and the stepper's buttons. Wraps rather than scrolls — a chip that
+   scrolled out of view is an option nobody knows exists, which is the whole
+   argument for chips over a `<select>` in the first place. */
+.set-chips { display: flex; flex-wrap: wrap; gap: var(--sp-6); align-items: center; }
+/* The stepper's readout is PROSE, not a `.key`: a span wearing the button
+   styling between two real buttons is the exact confusion `Unavailable.tsx`
+   exists about. */
+.set-readout {
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted);
+  font-variant-numeric: tabular-nums; padding: 0 var(--sp-4);
+}
+.set-range { width: 100%; accent-color: var(--accent); }
+
+/* The six notification kinds: switches nested inside one searchable row, so
+   they are indented under it rather than floating beside it. */
+.set-kinds { display: flex; flex-direction: column; gap: var(--sp-6); padding-left: var(--sp-10); border-left: 2px solid var(--line); }
+.set-kinds .set-note { font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+/* Ask rules (Settings › Sessions › ask before, and Repo readings): a rule is a command, so mono. */
+.askrule-list { display: flex; flex-direction: column; gap: var(--sp-8); }
+.askrule { display: flex; flex-direction: column; gap: var(--sp-4); padding: var(--sp-6) 0 var(--sp-6) var(--sp-10); border-left: 2px solid var(--line); }
+.askrule-top { display: flex; align-items: center; gap: var(--sp-8); }
+.askrule-rule { flex: 1; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(var(--fs-12) * var(--ui-font, 1)); word-break: break-all; }
+.askrule-add { display: flex; gap: var(--sp-8); align-items: center; }
+.askrule-add > input { flex: 1; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.askrule-suggest { margin: var(--sp-4) 0; padding-left: var(--sp-16); }
+.askrule-suggest code { font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.askrule-here { margin: var(--sp-4) var(--sp-14) var(--sp-10); }
+.askrule-here .set-lbl { min-width: 0; }
+
+/* A rack of doors. Nine diagnostics, each of which is a whole other screen —
+   full-width rows with a paragraph each is the shape this change is against,
+   and the label is the only thing that tells them apart anyway. */
+.set-doors { display: flex; flex-wrap: wrap; gap: var(--sp-6); }
+.set-door {
+  display: inline-flex; align-items: center; gap: var(--sp-6);
+  min-height: 40px; padding: 0 var(--sp-12);
+  background: var(--well); color: var(--fg);
+  border: 1px solid var(--line); border-radius: var(--r-10);
+  font: inherit; font-size: calc(var(--fs-13) * var(--ui-font, 1)); cursor: pointer;
+}
+.set-door:active { background: var(--panel); }
+.set-door.danger { border-color: var(--dead); color: var(--dead); }
+.set-door.warn { border-color: var(--warn); color: var(--warn); }
+
+/* A note with more behind it: the sentence IS the summary. The chevron marks it
+   as openable, and the whole line is the target — so the affordance costs no
+   extra line, which on thirty rows is most of a phone-height. */
+.set-more { cursor: pointer; }
+.set-more > summary {
+  list-style: none; cursor: pointer;
+  padding: var(--sp-2) 0; min-height: 28px; display: flex; align-items: flex-start; gap: var(--sp-4);
+}
+.set-more > summary::-webkit-details-marker { display: none; }
+.set-more > summary::after {
+  content: "›"; flex: none; color: var(--accent);
+  transform: rotate(90deg); transform-origin: center;
+  font-size: calc(var(--fs-15) * var(--ui-font, 1)); line-height: var(--lh-12);
+}
+.set-more[open] > summary::after { transform: rotate(-90deg); }
+.set-more-body { padding: var(--sp-2) 0 var(--sp-4); }
+.set-more-body p { margin: 0 0 var(--sp-8); line-height: var(--lh-14); }
+.set-more-body p:last-child { margin-bottom: 0; }
+
+/* ── search ────────────────────────────────────────────────────────────────
+   Above the scroll, so the box does not walk off the top while you read what
+   it found. */
+.set-search {
+  display: flex; align-items: center; gap: var(--sp-8);
+  margin: var(--sp-8) var(--sp-16) var(--sp-4); padding: 0 var(--sp-10);
+  background: var(--well); border: 1px solid var(--line); border-radius: var(--r-10);
+}
+.set-search-ico { flex: none; color: var(--muted); }
+.set-search input {
+  flex: 1 1 auto; min-width: 0; min-height: 40px;
+  background: none; border: none; outline: none;
+  color: var(--fg); font: inherit; font-size: calc(var(--fs-14) * var(--ui-font, 1));
+}
+.set-search input::-webkit-search-cancel-button { display: none; }
+.set-search-x {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: var(--r-8);
+  background: none; border: none; color: var(--muted); cursor: pointer;
+}
+.set-search-x:active { background: var(--panel); }
+/* Drawn LAST in the markup so it can read this render's tally, floated to the
+   top so it reads first. See `SetFilterBar`. */
+.set-filter-bar { order: -1; }
+.set-group { padding: var(--sp-14) var(--sp-16); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: var(--sp-12); }
+.set-title { margin: 0; font-size: calc(var(--fs-13) * var(--ui-font, 1)); font-weight: var(--fw-semibold); color: var(--fg); letter-spacing: .02em; }
+.set-row { display: flex; flex-wrap: wrap; gap: var(--sp-10); align-items: center; }
+.set-row label { display: flex; flex-direction: column; gap: var(--sp-4); font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); }
+.set-row select { background: var(--well); color: var(--fg); border: 1px solid var(--line); border-radius: var(--r-8); padding: var(--sp-6) var(--sp-8); font-size: calc(var(--fs-14) * var(--ui-font, 1)); }
+.set-note { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); line-height: var(--lh-14); flex-basis: 100%; }
+/* A setting that removes a safety check reads as dangerous, not as a preference. */
+.set-row select.danger { border-color: var(--dead); color: var(--dead); }
+.danger-note { color: var(--dead); border: 1px solid var(--dead); border-radius: var(--r-8); padding: var(--sp-8) var(--sp-10); background: var(--dead-wash); }
+.danger-note .link-btn { color: var(--dead); text-decoration: underline; }
+.set-note code { background: var(--well); border: 1px solid var(--line); border-radius: var(--r-4); padding: 1px var(--sp-6); font-size: calc(var(--fs-11) * var(--ui-font, 1)); }
+
+
+.annot-tools.tri { padding: 0; background: none; border: none; overflow: visible; gap: var(--sp-4); }
+.annot-tools.tri .key { padding: var(--sp-6) var(--sp-10); }
+.guardrail-text { width: 100%; box-sizing: border-box; background: var(--well); color: var(--fg); border: 1px solid var(--line); border-radius: var(--r-8); padding: var(--sp-8) var(--sp-10); font-size: calc(var(--fs-13) * var(--ui-font, 1)); line-height: var(--lh-14); font-family: inherit; resize: vertical; }
+
+/* Decision log sheet (plugin decisions + usage-limit events; features/plugins). */
+/* The source / who chips are the kit's (`kit/FilterChip.tsx`, `.fchips`); the row ends in a rule so the header block reads apart from the rows. */
+.fchips.olog-kinds { padding-bottom: var(--sp-2); border-bottom: 1px solid var(--line); }
+/* Badge styles live in ONE place (below, next to the row rules).
+   A second, filled variant here used to set only `background` — the later rules
+   overrode `color` but not it, so "auto-continue" rendered accent-on-lilac and
+   "error" red-on-red: both unreadable. */
+.tag.oracle-choice { color: var(--accent); border: 1px solid var(--accent); }
+.oracle-rationale { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--accent); margin: var(--sp-4) 0; line-height: var(--lh-14); }
+/* The decision log's and the sent log's rows: divided, like the Notifications feed (`.notif-row`), not
+   bordered cards. A row's outcome is said ONCE, by its pill (`.tag.oracle-*`); the 3px coloured
+   left stripe that used to say it again is gone with the card. `.olog-card` below is the Archive
+   sheet's own and keeps its look. */
+.olog-row { padding: var(--sp-12) var(--sp-14); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: var(--sp-8); }
+.olog-card { padding: var(--sp-12) var(--sp-14); margin: var(--sp-8) var(--sp-10); background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--line); border-radius: var(--r-10); display: flex; flex-direction: column; gap: var(--sp-8); }
+.tag.oracle-defer { color: var(--defer); border: 1px solid var(--defer); }
+.tag.oracle-sug { color: var(--ok); border: 1px solid var(--ok); }
+.tag.oracle-fire { color: var(--accent); border: 1px solid var(--accent); }
+.tag.oracle-err { color: var(--dead); border: 1px solid var(--dead); }
+.tag.oracle-muted { color: var(--muted); border: 1px solid var(--line); }
+.olog-row.archived { opacity: .55; }
+/* A divided row has no card under it, so `.row-act`'s panel fill drew small grey boxes that read
+   as disabled: bare icons in a full fingertip box instead. */
+.olog-row .hist-acts .row-act { background: none; min-width: 44px; min-height: 40px; display: inline-flex; align-items: center; justify-content: center; }
+.olog-head { display: flex; align-items: center; gap: var(--sp-8); flex-wrap: wrap; }
+.olog-sess { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--accent); font-weight: var(--fw-medium); }
+.olog-time { margin-left: auto; }
+.olog-head .hist-acts { margin-left: 0; }
+.olog-section { display: flex; flex-direction: column; gap: var(--sp-4); }
+.olog-label { font-size: calc(var(--fs-10) * var(--ui-font, 1)); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: var(--fw-semibold); }
+.olog-conf { color: var(--accent); letter-spacing: 0; text-transform: none; font-weight: var(--fw-medium); }
+.olog-q { font-size: calc(var(--fs-14) * var(--ui-font, 1)); color: var(--fg); white-space: pre-wrap; word-break: break-word; max-height: 4.5em; overflow: hidden; line-height: var(--lh-15); }
+.olog-q.open { max-height: none; }
+.olog-answer { font-size: calc(var(--fs-14) * var(--ui-font, 1)); color: var(--fg); line-height: var(--lh-15); white-space: pre-wrap; word-break: break-word; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-8); padding: var(--sp-8) var(--sp-10); }
+.olog-rationale { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); line-height: var(--lh-14); font-style: italic; }
+.olog-meta { font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); }
+.oracle-detail { display: flex; flex-direction: column; gap: var(--sp-8); margin-top: var(--sp-2); }
+.olog-row .hist-out { max-height: 240px; overflow: auto; background: var(--panel); }
+.oracle-opts { display: flex; flex-wrap: wrap; gap: var(--sp-6); }
+.oracle-opt { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); border: 1px solid var(--line); border-radius: var(--r-6); padding: var(--sp-2) var(--sp-8); }
+.oracle-opt.chosen { color: var(--accent); border-color: var(--accent); }
+
+/* Sent-command log — the decision log's divided row, but the row's own
+   subject is the TEXT that was typed, so it gets a monospace block that clamps
+   to one line until tapped (a queued /init and a 40-line prompt must not make
+   the list unscannable). */
+.olog-when { margin-left: auto; font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); white-space: nowrap; }
+.olog-body { background: none; border: 0; padding: 0; margin: 0; text-align: left; width: 100%; cursor: pointer; }
+.sent-text { display: block; font-size: calc(var(--fs-13) * var(--ui-font, 1)); line-height: var(--lh-14); color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-8); padding: var(--sp-8) var(--sp-10); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sent-text.open { white-space: pre-wrap; word-break: break-word; overflow: visible; }
+.olog-why { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); line-height: var(--lh-14); font-style: italic; }
+.olog-foot { display: flex; align-items: center; gap: var(--sp-10); flex-wrap: wrap; }
+.olog-foot .link-btn { margin-left: auto; }
+
+/* Compose → backlog dialog. */
+.bl-modal-backdrop { position: fixed; inset: 0; background: var(--scrim); display: flex; align-items: center; justify-content: center; z-index: 30; padding: var(--sp-16); }
+.bl-modal { width: 100%; max-width: 360px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-12); padding: var(--sp-16); display: flex; flex-direction: column; gap: var(--sp-12); box-shadow: var(--elev-3); }
+.bl-modal-title { font-size: calc(var(--fs-15) * var(--ui-font, 1)); font-weight: var(--fw-semibold); color: var(--fg); }
+.bl-modal-label { display: flex; flex-direction: column; gap: var(--sp-4); font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); }
+/* .search carries a page-level margin; inside a modal label the label owns spacing. */
+.bl-modal-label .search { margin: 0; width: 100%; box-sizing: border-box; }
+.bl-modal-repo { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); }
+.bl-modal-repo b { color: var(--fg); }
+.bl-modal-actions { display: flex; flex-direction: column; gap: var(--sp-8); }
+.bl-modal-actions .send, .bl-modal-actions .key { justify-content: center; }
+
+/* Git branch panel. */
+/* The drafted commit message, offered BESIDE the box rather than into it —
+   the box holds typed words and seeding over them is a delete. Shown whole and
+   wrapped: a commit message that is clipped cannot be judged, and this is the
+   one string on the screen that ends up in the repo's permanent record. */
+.git-draft { border: 1px solid var(--line); border-radius: var(--r-8); padding: var(--sp-8); background: var(--well); display: flex; flex-direction: column; gap: var(--sp-6); }
+.git-draft-msg {
+  margin: 0; white-space: pre-wrap; overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14);
+  color: var(--fg);
+}
+/* The push's note holds the pre-push hook's own lines when it refuses — kept
+   as written (line breaks matter in a test log) and scrollable, never clipped. */
+.git-note { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 40vh; overflow-y: auto; }
+/* A running push's steps and latest lines, under the note. */
+/* Scrolls on its own — the sheet does not, and a hook's steps run past a
+   phone screen. Half the height beside a file list; the rest of the sheet
+   when the tree is clean and there is nothing else to show. */
+.git-push-progress {
+  padding: var(--sp-4) var(--sp-12) calc(env(safe-area-inset-bottom) + 12px); display: flex; flex-direction: column; gap: var(--sp-4);
+  font-size: calc(var(--fs-13) * var(--ui-font, 1));
+  flex: 0 1 auto; min-height: 0; max-height: 50vh; overflow-y: auto; overscroll-behavior: contain;
+}
+.git-push-progress.fill { flex: 1 1 auto; max-height: none; }
+.git-push-progress > * { flex: none; }
+.git-push-step { display: flex; align-items: center; gap: var(--sp-8); color: var(--muted); }
+.git-push-step svg { flex: none; }
+.git-push-step.running { color: var(--fg); }
+.git-push-step.ok svg { color: var(--ok); }
+.git-push-step.failed { color: var(--dead); }
+.git-push-step-aside { margin-left: auto; text-align: right; font-variant-numeric: tabular-nums; min-width: 0; overflow-wrap: anywhere; }
+.git-push-tail {
+  margin: var(--sp-4) 0 0; padding: var(--sp-6) var(--sp-8); border-radius: var(--r-6); background: var(--well); color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(var(--fs-11) * var(--ui-font, 1)); line-height: var(--lh-14);
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.git-branches { border-bottom: 1px solid var(--line); background: var(--panel); }
+.git-branches .row.grow:disabled { opacity: .6; }

@@ -1,0 +1,539 @@
+/* 07-reader.css: Reader view (.tr-*), search lines, file refs, upload, health-index quick bits. */
+/* Search sheet. */
+.srch-scope { margin: var(--sp-8) var(--sp-12) 0; }
+/* THREE stores share this row, so the words are what decide whether it fits:
+   `min-width: 0` lets a segment go narrower than its longest word and the wrap
+   puts "recent output" on two lines rather than pushing the third segment off a
+   320px screen — Android multiplies this px text by the system font scale on
+   top of `--ui-font`, so the widest case is far past the label at 1. */
+.srch-scope .seg { min-width: 0; white-space: normal; overflow-wrap: break-word; }
+.srch-sess { border-bottom: 1px solid var(--line); padding: var(--sp-4) 0 var(--sp-8); }
+/* The result header carries the launcher row's facts under its title line, so
+   it stacks: title line first, then the tag/meta strip and the prompt gist. */
+.srch-sess-head {
+  display: flex; flex-direction: column; align-items: stretch; gap: var(--sp-4); width: 100%; text-align: left;
+  background: none; border: none; color: var(--fg); cursor: pointer;
+  padding: var(--sp-8) var(--sp-14) var(--sp-4); font-size: calc(var(--fs-13) * var(--ui-font, 1));
+}
+.srch-sess-line { display: flex; align-items: center; gap: var(--sp-8); width: 100%; }
+.srch-sess-title { font-weight: var(--fw-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.srch-sess-repo { color: var(--muted); font-size: calc(var(--fs-12) * var(--ui-font, 1)); white-space: nowrap; }
+.srch-sess-count {
+  margin-left: auto; color: var(--accent); font-size: calc(var(--fs-11) * var(--ui-font, 1));
+  border: 1px solid var(--accent); border-radius: var(--r-10); padding: 0 var(--sp-6);
+}
+/* `SessionFacts` — the launcher row's facts wherever else a session is named.
+   Its own wrapper rather than reused row rules: those live inside a flex row
+   that owns its wrapping, and this sits in ordinary block flow. */
+.sess-facts { display: flex; flex-direction: column; gap: var(--sp-4); }
+.sess-facts-tags { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4) var(--sp-10); }
+.sess-facts-tags > .row-sub { display: inline-flex; align-items: center; gap: var(--sp-4); flex: 0 0 auto; width: auto; font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+
+.srch-snip { margin: 0 var(--sp-14) var(--sp-6); border-left: 2px solid var(--line); padding-left: var(--sp-8); }
+.srch-turn { display: flex; align-items: center; gap: var(--sp-6); color: var(--muted); font-size: calc(var(--fs-11) * var(--ui-font, 1)); margin: var(--sp-4) 0 var(--sp-2); }
+.srch-turn-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.srch-turn-ago { margin-left: auto; white-space: nowrap; }
+.srch-lines {
+  margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(var(--fs-12) * var(--ui-font, 1));
+  line-height: var(--lh-14); white-space: pre-wrap; word-break: break-word; overflow-x: auto;
+}
+.srch-ctx { color: var(--muted); opacity: .8; }
+.srch-hit { color: var(--fg); }
+.srch-lines mark { background: color-mix(in srgb, var(--accent) 40%, transparent); color: var(--fg); border-radius: var(--r-2); }
+.srch-more { color: var(--muted); font-size: calc(var(--fs-11) * var(--ui-font, 1)); padding: var(--sp-2) var(--sp-14) var(--sp-4); }
+
+/* ── Reader view (structured transcript; alternative to the xterm grid) ──
+   Plain DOM on purpose: native momentum scroll, native selection, real links,
+   and a find that can jump between hits — none of which a terminal grid does
+   well on a phone. */
+.tr { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.tr-bar {
+  display: flex; align-items: center; gap: var(--sp-6); padding: var(--sp-6); overflow-x: auto;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+/* Live status strip: the reader has no spinner and no cursor, so this is the only
+   thing that says "still working" vs "waiting for you". */
+.tr-status {
+  display: flex; align-items: center; gap: var(--sp-8); min-width: 0;
+  padding: var(--sp-6) var(--sp-10); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted);
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.tr-live-dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: var(--r-round); background: var(--muted); }
+.tr-live-what { flex: 0 0 auto; }
+/* The two notes that sit INSIDE a turn rather than in the strip at the top of
+   the reader: "sent from this app · the CLI has not started it yet", and "the
+   CLI took this into the turn it was already running". Those are SENTENCES, and
+   `.tr-live-what`'s `flex: 0 0 auto` sizes an item to max-content — so they do
+   not wrap, and `.tr-body` scrolls vertically only: on a 320–400px phone the
+   longer one ran off the right edge with nothing to bring it back. Here the
+   text is the item that shrinks. The icon keeps its size and sits on the first
+   line, which is what `align-items: flex-start` is for once the words wrap. */
+.tr-status.tr-note { align-items: flex-start; }
+.tr-status.tr-note > svg { flex: 0 0 auto; margin-top: var(--sp-2); }
+.tr-status.tr-note .tr-live-what { flex: 1 1 auto; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.tr-live-line {
+  flex: 1 1 auto; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(var(--fs-12) * var(--ui-font, 1));
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tr-live-ago { flex: 0 0 auto; margin-left: auto; opacity: .8; font-variant-numeric: tabular-nums; }
+.tr-status.tr-busy { color: var(--accent); }
+.tr-status.tr-busy .tr-live-dot { background: var(--accent); animation: pulse 1.1s ease-in-out infinite; }
+.tr-status.tr-waiting { color: var(--ask); }
+.tr-status.tr-waiting .tr-live-dot { background: var(--ask); animation: pulse var(--dur-pulse) ease-in-out infinite; }
+.tr-status.tr-blocked { color: var(--dead); }
+.tr-status.tr-blocked .tr-live-dot { background: var(--dead); }
+.tr-status.tr-dead .tr-live-dot { background: var(--line); }
+/* Agents running under a session whose own turn has ended — work with no turn
+   flag behind it. The accent's dot (something IS running) at the muted text
+   weight (it is not this session's own turn), so a glance separates the two
+   without inventing a fifth status colour. */
+.tr-status.tr-agents .tr-live-dot { background: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+/* One row per agent under the strip: what it was asked to do, what it is doing
+   now, how long it has been at it. */
+.tr-agent { color: var(--muted); padding-top: var(--sp-4); padding-bottom: var(--sp-4); }
+.tr-agent .tr-live-what { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tr-agent svg { flex: 0 0 auto; opacity: .8; }
+/* Same signal repeated at the tail, where a reader following the conversation is
+   already looking. */
+.tr-inflight { display: flex; align-items: center; gap: var(--sp-8); min-width: 0; color: var(--accent); font-size: calc(var(--fs-12) * var(--ui-font, 1)); padding: var(--sp-10) 0; }
+.tr-inflight .tr-live-dot { background: var(--accent); animation: pulse 1.1s ease-in-out infinite; }
+.tr-inflight .row-sub { font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.tr-inflight .tr-stop { flex: 0 0 auto; margin-left: auto; display: inline-flex; align-items: center; gap: var(--sp-4); }
+.tr-find { display: flex; align-items: center; gap: var(--sp-6); flex: 1 1 140px; min-width: 120px; padding: 0 var(--sp-8); background: var(--raise); border: 1px solid var(--line); border-radius: var(--r-8); color: var(--muted); }
+.tr-find input { flex: 1; min-width: 60px; padding: var(--sp-8) 0; font-size: calc(var(--fs-16) * var(--ui-font, 1)); font-family: inherit; background: none; border: none; color: var(--fg); outline: none; }
+.tr-hits { display: flex; align-items: center; gap: var(--sp-4); flex: 0 0 auto; }
+.tr-hits .row-sub { font-size: calc(var(--fs-12) * var(--ui-font, 1)); min-width: 34px; text-align: center; }
+
+/* Outline drawer. It floats ABOVE the transcript body and its rows are cards,
+   both for the same reason: with a shared background and 1px hairlines between
+   rows, the drawer's last row and the body's first turn were the same two lines
+   of text on the same surface a hairline apart -- nothing said where the list
+   stopped and the conversation started, and the rows themselves read as one
+   wall rather than N entries. The terminator is deliberately heavier than any
+   divider inside the drawer, so the strongest edge on screen is the one that
+   separates the two regions. */
+.tr-outline {
+  max-height: 45%; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  background: var(--bg);
+  padding: 0 var(--sp-8) var(--sp-10);
+  border-bottom: 2px solid var(--line);
+  box-shadow: 0 6px 12px -6px var(--shadow);
+  position: relative; z-index: 1;
+}
+/* The hint is also the drawer's label -- scrolled away, a half-scrolled list of
+   cards is indistinguishable from the transcript's own turns. */
+.tr-outline > .form-hint {
+  position: sticky; top: 0; z-index: 1;
+  margin: 0 -8px var(--sp-8); padding: var(--sp-6) var(--sp-12);
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+/* The same outline as a full sheet (opened from the terminal): it owns the whole
+   screen instead of being a drawer clipped over the transcript, so the drawer's
+   height cap and its separating edge would both be wrong here. */
+.tr-outline.tr-outline-full {
+  max-height: none; flex: 1; min-height: 0;
+  border-bottom: none; box-shadow: none;
+}
+.tr-ol-row {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  margin-top: var(--sp-6); padding: var(--sp-8) var(--sp-10);
+  color: var(--fg); background: var(--panel);
+  border: 1px solid var(--line); border-left: 3px solid var(--line); border-radius: var(--r-8);
+}
+.tr-ol-row:active { background: var(--raise); border-color: var(--accent); }
+/* Same green rail the body gives an unread turn, so the two views agree. */
+.tr-ol-row.tr-ol-new { border-left-color: var(--ok); background: var(--ok-wash); }
+.tr-ol-head { display: flex; align-items: center; gap: var(--sp-6); }
+.tr-ol-prompt { font-size: calc(var(--fs-13) * var(--ui-font, 1)); margin-top: var(--sp-4); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tr-ol-sum { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); margin-top: var(--sp-4); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tr-ol-files { font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); opacity: .8; margin-top: var(--sp-4); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.tr-n { font-size: calc(var(--fs-11) * var(--ui-font, 1)); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); }
+
+.tr-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: var(--sp-6) var(--sp-10) var(--sp-20); }
+.tr-more { display: block; width: 100%; margin: var(--sp-6) 0 var(--sp-10); padding: var(--sp-8); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); background: var(--raise); border: 1px solid var(--line); border-radius: var(--r-8); cursor: pointer; }
+.tr-turn { border-top: 1px solid var(--line); padding: var(--sp-10) 0 var(--sp-4); }
+.tr-turn:first-child { border-top: none; }
+/* Unread: turns that arrived since you last left the reader. */
+.tr-turn.tr-unread { border-left: 2px solid var(--ok); margin-left: -6px; padding-left: var(--sp-4); background: var(--ok-wash); }
+.tr-newmark {
+  display: flex; align-items: center; gap: var(--sp-8); margin: var(--sp-2) 0 var(--sp-10);
+  font-size: calc(var(--fs-11) * var(--ui-font, 1)); letter-spacing: 0.04em; text-transform: uppercase; color: var(--ok);
+}
+.tr-newmark::after { content: ""; flex: 1; height: 1px; background: var(--ok); opacity: 0.45; order: 1; }
+.tr-newmark .key { order: 2; min-width: 0; padding: var(--sp-2) var(--sp-6); font-size: calc(var(--fs-11) * var(--ui-font, 1)); text-transform: none; letter-spacing: 0; }
+.tag.new { color: var(--ok); border-color: var(--ok-edge); }
+.tr-turn-head { display: flex; align-items: center; gap: var(--sp-6); margin-bottom: var(--sp-6); }
+.tr-turn-head .key { min-width: 0; padding: var(--sp-4) var(--sp-6); margin-left: auto; }
+/* The head holds two buttons now (copy, and the fork/reset disclosure). Only the
+   first pushes off the tags; a second `margin-left:auto` would split the pair
+   across the row with the tally stranded between them. */
+.tr-turn-head .key + .key { margin-left: var(--sp-4); }
+/* The fork/reset action row: inline under the turn head it belongs to, never a
+   nested sheet — the reader is already an overlay. */
+.tr-fork {
+  display: flex; flex-direction: column; gap: var(--sp-6);
+  margin: 0 0 var(--sp-8); padding: var(--sp-8) var(--sp-10);
+  background: var(--raise); border: 1px solid var(--line); border-radius: var(--r-6);
+}
+.tr-fork-acts { display: flex; flex-wrap: wrap; gap: var(--sp-8); }
+.tr-fork .row-sub { line-height: var(--lh-14); }
+/* A seam in the conversation, not a message: `TranscriptTurn.marker`. Built on
+   `.tr-newmark`'s shape — a label with a rule running off it — deliberately, so
+   the two read as the same KIND of thing (a horizontal mark between turns) and
+   not as a badge. Muted rather than `--ok`: the unread mark is news, this is
+   bookkeeping. No literal colours; both tokens are the palette's. */
+.tr-mark {
+  display: flex; align-items: center; gap: var(--sp-8); margin: var(--sp-2) 0 var(--sp-10);
+  font-size: calc(var(--fs-11) * var(--ui-font, 1)); letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted);
+}
+.tr-mark::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.tr-you {
+  white-space: pre-wrap; overflow-wrap: anywhere; font-size: calc(var(--fs-14) * var(--ui-font, 1)); line-height: var(--lh-14);
+  padding: var(--sp-8) var(--sp-10); background: var(--raise); border-left: 3px solid var(--accent); border-radius: var(--r-6);
+}
+.tr-say { font-size: calc(var(--fs-14) * var(--ui-font, 1)); line-height: var(--lh-15); overflow-wrap: anywhere; }
+.tr-p { margin: var(--sp-8) 0; white-space: pre-wrap; }
+.tr-h { font-weight: var(--fw-semibold); margin: var(--sp-12) 0 var(--sp-4); }
+/* A document's relative link (Markdown.tsx `linkNode`): a heading jump or a
+   file opened in the viewer. A button, never a relative <a>, drawn as the link
+   it reads as, inline in the sentence. */
+.md-link {
+  background: none; border: none; padding: 0; margin: 0; font: inherit; color: var(--accent);
+  text-decoration: underline; text-underline-offset: 2px; cursor: pointer; text-align: inherit;
+}
+.tr-h1, .tr-h2 { font-size: calc(var(--fs-16) * var(--ui-font, 1)); }
+.tr-h3, .tr-h4, .tr-h5, .tr-h6 { font-size: calc(var(--fs-14) * var(--ui-font, 1)); color: var(--fg); }
+.tr-list { margin: var(--sp-6) 0; padding-left: var(--sp-20); }
+.tr-list li { margin: var(--sp-4) 0; }
+.tr-quote { margin: var(--sp-8) 0; padding: var(--sp-2) var(--sp-10); color: var(--muted); border-left: 2px solid var(--line); }
+.tr-quote > :first-child { margin-top: 0; }
+.tr-quote > :last-child { margin-bottom: 0; }
+/* Tables scroll inside their own box — a wide table must never scroll the page. */
+.tr-table-wrap { margin: var(--sp-8) 0; overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--line); border-radius: var(--r-8); }
+.tr-table { border-collapse: collapse; width: 100%; font-size: calc(var(--fs-13) * var(--ui-font, 1)); }
+.tr-table th, .tr-table td { padding: var(--sp-6) var(--sp-10); border-bottom: 1px solid var(--line); vertical-align: top; white-space: nowrap; }
+.tr-table th { font-weight: var(--fw-semibold); background: var(--panel); position: sticky; top: 0; }
+.tr-table tr:last-child td { border-bottom: 0; }
+.tr-say a, .tr-you a { color: var(--accent); }
+.tr-say code, .tr-you code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(var(--fs-12) * var(--ui-font, 1)); padding: 1px var(--sp-4); background: var(--raise); border-radius: var(--r-4); }
+.tr-code { margin: var(--sp-8) 0; border: 1px solid var(--line); border-radius: var(--r-8); overflow: hidden; }
+.tr-code-head { display: flex; align-items: center; justify-content: space-between; padding: var(--sp-4) var(--sp-8); font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); background: var(--panel); }
+.tr-code-head .key { min-width: 0; padding: var(--sp-2) var(--sp-6); font-size: calc(var(--fs-11) * var(--ui-font, 1)); }
+.tr-code-acts { display: flex; gap: var(--sp-4); }
+/* A ```md fence rendered as formatted markdown (toggle back to source). */
+.tr-mdsnip { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.tr-mdsnip-body { padding: var(--sp-4) var(--sp-10) var(--sp-8); font-size: calc(var(--fs-14) * var(--ui-font, 1)); line-height: var(--lh-15); }
+.tr-mdsnip-body > :first-child { margin-top: var(--sp-4); }
+/* Upload progress + size picker (uploadScale.ts / UploadScalePicker.tsx). */
+.upload-progress-line { display: flex; align-items: center; gap: var(--sp-6); }
+/* The two answers, where the waiting is visible (App.tsx's upload row). The
+   sentence takes the room and the buttons keep their size, so a long label
+   ellipsizes rather than pushing a verb off a 360px screen — the same rule the
+   pulse strip's readings follow. */
+.upload-acts { display: flex; align-items: center; gap: var(--sp-6); flex-wrap: wrap; padding: var(--sp-2) 0 1px; }
+.upload-acts-what { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.upload-acts .key { flex: 0 0 auto; padding: var(--sp-4) var(--sp-8); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.upload-bar { height: 3px; margin-top: var(--sp-4); background: var(--line); border-radius: var(--r-2); overflow: hidden; }
+.upload-bar-fill { height: 100%; background: var(--accent); transition: width var(--dur-fast) linear; }
+
+/* Auto-download rows (PullSheet.tsx). Same 3px bar as the upload one — the two
+   are the same fact in opposite directions and shouldn't look like features. */
+/* The row is a WRAPPING flex container, so the bar is a flex item: with
+   `display: block` and no basis it measured its (empty) content and rendered
+   0px wide — an invisible progress bar on the one row whose progress is the
+   point. `0 0 100%` puts it on its own line under the status text. */
+.pull-bar { display: block; flex: 0 0 100%; height: 3px; margin-top: var(--sp-4); background: var(--line); border-radius: var(--r-2); overflow: hidden; }
+.pull-bar-fill { display: block; height: 100%; background: var(--accent); transition: width var(--dur-fast) linear; }
+/* Fan-out kickoff strip: pinned above the Run bar, because the run's own rows
+   sit below the whole repo checklist. Words first, the bar on its own line. */
+.fanout-kick { display: flex; flex-wrap: wrap; gap: var(--sp-6); align-items: center; padding: var(--sp-8) var(--sp-12); background: var(--panel); border-top: 1px solid var(--line); font-size: calc(var(--fs-13) * var(--ui-font, 1)); color: var(--fg); }
+.fanout-kick .grow { flex: 1; min-width: 0; }
+/* A bar that is merely PARKED at 63% and one that is filling both render as a
+   static bar — the difference is the whole question on a bad link, so the live
+   one carries a moving sheen. */
+.pull-bar-fill.live { background-image: linear-gradient(90deg, transparent 0%, var(--sheen) 50%, transparent 100%); background-size: 60px 100%; animation: pull-sheen 1.1s linear infinite; }
+@keyframes pull-sheen { from { background-position: -60px 0; } to { background-position: 120px 0; } }
+.row-sub.warn { color: var(--warn); }
+.row-sub.dim { opacity: .7; font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.form-hint.warn { color: var(--warn); }
+/* What every build in a repo does with what it produces (BuildSheet's
+   ArtifactPolicyRow): a section head with its `?`, then the Settings kit's
+   switch rows, full width, so the state is the `on`/`off` at the edge and never
+   words glued to a button. The head is a `.section`, so the sentence its `?`
+   opens is put back into sentence case. */
+.artifact-policy { display: flex; flex-direction: column; gap: var(--sp-6); padding: 0 var(--sp-12) var(--sp-10); }
+.artifact-policy > .form-hint { padding: 0 var(--sp-2); }
+.ap-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--sp-6); padding: var(--sp-14) var(--sp-2) 1px; }
+.ap-head .explain-body { text-transform: none; letter-spacing: 0; line-height: var(--lh-14); }
+/* "keep − 3 +" on ONE line, under the switch it belongs to. The count is a
+   READOUT between two steppers, plain text and never a third button. */
+.ap-keep {
+  display: flex; align-items: center; gap: var(--sp-8); padding: 0 var(--sp-2) 0 var(--sp-14); flex-wrap: nowrap;
+  font-size: calc(var(--fs-14) * var(--ui-font, 1)); color: var(--muted);
+}
+.ap-keep-n { min-width: 2ch; text-align: center; color: var(--fg); font-variant-numeric: tabular-nums; }
+
+.upscale { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4); padding: var(--sp-4) var(--sp-8); }
+/* 2px of vertical padding put these chips at ~20px tall — under the 24x24 CSS px
+   floor (WCAG 2.5.8) on a control row that sits right above the send buttons. */
+.upscale .key { padding: var(--sp-6) var(--sp-10); min-height: 32px; font-size: calc(var(--fs-12) * var(--ui-font, 1)); min-width: 0; display: inline-flex; align-items: center; }
+.upscale-head { display: inline-flex; align-items: center; gap: var(--sp-4); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); }
+.upscale-note { font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); }
+
+/* Inbox/outbox file mentions rendered as the file itself (Markdown.tsx).
+   Inline-block so a thumbnail can sit inside a paragraph without breaking it. */
+.fileref {
+  display: inline-flex; align-items: center; gap: var(--sp-4); vertical-align: middle;
+  max-width: 100%; margin: 0 var(--sp-2); padding: 1px var(--sp-6);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--accent);
+  background: var(--raise); border: 1px solid var(--line); border-radius: var(--r-4);
+  overflow-wrap: anywhere; text-align: left;
+}
+.fileref-img {
+  flex-direction: column; align-items: flex-start; gap: var(--sp-4);
+  padding: var(--sp-4); margin: var(--sp-4) var(--sp-4) var(--sp-2) 0;
+}
+.fileref-img img {
+  display: block; max-width: min(132px, 100%); max-height: 132px;
+  border-radius: var(--r-2); background: var(--well);
+}
+/* A document's own image link (a README's hero): reading width, not a thumb. */
+.fileref-wide { display: flex; width: 100%; margin: var(--sp-6) 0; }
+.fileref-wide img { max-width: 100%; max-height: 70vh; }
+.fileref-name { max-width: 132px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); }
+.fileref-wide .fileref-name { max-width: 100%; }
+.fileref:active { border-color: var(--accent); }
+
+/* Prompt bodies render markdown too — keep their block spacing tight. */
+.tr-you > .tr-p:first-child, .tr-you > .tr-h:first-child { margin-top: 0; }
+.tr-you > .tr-p:last-child { margin-bottom: 0; }
+.tr-code pre, .tr-pre {
+  margin: 0; padding: var(--sp-8) var(--sp-10); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14);
+  white-space: pre; overflow-x: auto; -webkit-overflow-scrolling: touch;
+}
+.tr-pre { background: var(--well); border: 1px solid var(--line); border-radius: var(--r-6); margin: var(--sp-4) 0; max-height: 320px; overflow-y: auto; }
+.tr-in { color: var(--muted); }
+.tr-pending { font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); padding: var(--sp-4) 0; }
+
+.tr-collapse { margin: var(--sp-4) 0; }
+.tr-collapse-head {
+  display: flex; align-items: center; gap: var(--sp-6); width: 100%; text-align: left;
+  padding: var(--sp-6) var(--sp-6); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted);
+  background: none; border: 1px solid transparent; border-radius: var(--r-6); cursor: pointer;
+}
+.tr-collapse.open > .tr-collapse-head { background: var(--panel); border-color: var(--line); }
+.tr-collapse-body { padding: var(--sp-2) 0 var(--sp-4) var(--sp-16); }
+.tr-tool-head, .tr-think-head, .tr-tools-head { display: flex; align-items: center; gap: var(--sp-6); min-width: 0; }
+.tr-tool-head b, .tr-tools-head b { color: var(--fg); font-weight: var(--fw-semibold); }
+/* The folded run of tool calls. Dashed so it reads as "something is hidden
+   here" rather than as another tool row — it is a lid, not a call. */
+.tr-collapse:not(.open) > .tr-collapse-head:has(.tr-tools-head) {
+  border-color: var(--line); border-style: dashed;
+}
+.tr-tool-label { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(var(--fs-12) * var(--ui-font, 1)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tr-think { color: var(--muted); font-size: calc(var(--fs-13) * var(--ui-font, 1)); font-style: italic; }
+/* Terminal text inside the reader: a local command's own output, verbatim.
+   Monospace and horizontally scrollable IN ITS OWN BOX — the capture carries
+   the CLI's box drawing at terminal width, and reflowing it would misalign
+   every rule while wrapping it would scroll the page sideways. Washed rather
+   than bordered so it reads as "this came off the screen" without competing
+   with a tool row. */
+.tr-screen {
+  margin: var(--sp-8) 0; padding: var(--sp-8) var(--sp-10); border-radius: var(--r-8);
+  background: var(--panel); border: 1px solid var(--line);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(var(--fs-12) * var(--ui-font, 1));
+  line-height: var(--lh-14); color: var(--fg);
+  white-space: pre; overflow-x: auto; -webkit-overflow-scrolling: touch;
+}
+/* What a screen capture did NOT record, said under it. The capture is a replay
+   of painted cells, and a scrollable panel paints only its visible slice — so
+   this is a sentence about the record's edge, not a warning about the session.
+   Muted and unboxed for that reason: it belongs to the block above it. No
+   colour of its own; `row-sub` carries the text. */
+.tr-clipped {
+  margin: -4px 0 var(--sp-10); display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8);
+}
+.tr-clipped .row-sub { flex: 1 1 220px; }
+
+.tr-hit { background: color-mix(in srgb, var(--accent) 40%, transparent); color: var(--fg); border-radius: var(--r-2); }
+.tr-hit.on { background: var(--accent); color: var(--on-accent); }
+
+/* Reader view: "the CLI is asking you something". The transcript comes from the
+   conversation log, which never sees a TUI dialog — so this card is the reader's
+   only sign that the session is blocked on an answer, not still working. */
+.tr-ask {
+  margin: var(--sp-10) 0 var(--sp-4); padding: var(--sp-10) var(--sp-12); border-radius: var(--r-10);
+  background: var(--ask-wash); border: 1px solid var(--ask);
+}
+.tr-ask-head { display: flex; align-items: center; gap: var(--sp-6); font-size: calc(var(--fs-12) * var(--ui-font, 1)); font-weight: var(--fw-semibold); color: var(--ask); }
+.tr-ask-head::after { content: ""; width: 7px; height: 7px; border-radius: var(--r-round); background: var(--ask); animation: pulse var(--dur-pulse) ease-in-out infinite; }
+.tr-ask-q { margin: var(--sp-6) 0 var(--sp-8); font-size: calc(var(--fs-14) * var(--ui-font, 1)); color: var(--fg); white-space: pre-wrap; }
+.tr-ask-opts { display: flex; flex-wrap: wrap; gap: var(--sp-6); margin-bottom: var(--sp-8); }
+.tr-ask-opt {
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); padding: var(--sp-4) var(--sp-8); border-radius: var(--r-pill);
+  border: 1px solid var(--line); background: var(--raise); color: var(--fg);
+}
+/* The answer card INSIDE the reader (`PromptAnswer.tsx`). The `vh` cap on
+   `.approve-opts` exists to stop a bar eating the terminal; here there is no
+   terminal and the document has its own scroll, so a cap could only clip — the
+   same exemption `.q-card` takes, for the same reason. This is the whole point
+   of the move: the question that could not fit under the terminal fits here. */
+/* The jump back down to that card, on the strip that says a question is
+   waiting. A LINK, not a `.key`: the strip is a readout and this does not
+   answer anything — it only moves the page to the thing that does. */
+.tr-live-go {
+  flex: none; margin-left: auto; padding: var(--sp-2) var(--sp-8); border-radius: var(--r-pill);
+  border: 1px solid var(--ask); background: transparent; color: var(--ask);
+  font: inherit; font-size: calc(var(--fs-12) * var(--ui-font, 1)); font-weight: var(--fw-semibold); cursor: pointer;
+}
+.tr-ask .approve-opts { max-height: none; overflow: visible; }
+.tr-ask .approve-q { margin: var(--sp-6) 0 var(--sp-8); font-size: calc(var(--fs-14) * var(--ui-font, 1)); }
+.approve-plan { margin: var(--sp-6) 0 var(--sp-8); border: 1px solid var(--line); border-radius: var(--r-8); padding: var(--sp-6) var(--sp-10); }
+.approve-plan > summary { cursor: pointer; font-size: calc(var(--fs-12) * var(--ui-font, 1)); font-weight: var(--fw-semibold); color: var(--muted); }
+.approve-plan-body { font-size: calc(var(--fs-13) * var(--ui-font, 1)); overflow-wrap: anywhere; }
+
+/* Repo group header (live sessions): attention that a COLLAPSED group would
+   otherwise hide — the header stands in for its rows, so it has to carry the
+   "something in here is waiting for you" signal itself. */
+.repo-group-wait, .head-wait {
+  display: inline-flex; align-items: center; gap: var(--sp-4); flex: 0 0 auto;
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); font-weight: var(--fw-semibold); color: var(--ask); min-height: 30px;
+  border: 1px solid var(--ask-edge); border-radius: var(--r-pill); padding: var(--sp-4) var(--sp-10);
+  animation: newact-pulse 1.8s ease-in-out infinite;
+}
+/* `.head-wait` is a <button> now (it opens the questions sheet), so the button
+   defaults have to be undone — a UA background and padding would break the pill
+   it shares with `.repo-group-wait`, which is still a span. */
+.head-wait { text-transform: none; letter-spacing: 0; background: transparent; cursor: pointer; font-family: inherit; }
+/* Status roll-up chips on the group header (and the section head). Same colours
+   as the row badges they summarise — a header count in a different colour than
+   the rows it stands for reads as a different thing. Quiet by default: only
+   `waiting` pulses, because only `waiting` wants you. */
+.repo-group-stat {
+  display: inline-flex; align-items: center; gap: var(--sp-4); flex: 0 0 auto;
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); font-weight: var(--fw-semibold); border-radius: var(--r-pill); padding: var(--sp-4) var(--sp-10);
+  min-height: 30px; border: 1px solid currentColor; opacity: .8;
+}
+.repo-group-stat.limit { color: var(--limit); }
+/* The health index chip: plain ink by default; a CALLED drop takes the warn
+   colour, a called rise the calm one (the same --ok the done chip uses). */
+.repo-group-stat.health { color: inherit; }
+.repo-group-stat.health.warn { color: var(--warn); }
+.repo-group-stat.health.severe { color: var(--dead); }
+.repo-group-stat.health.calm { color: var(--ok); }
+/* Health index section of the readings sheet. */
+.hix { padding-top: var(--sp-4); }
+.hix-bars { padding-top: var(--sp-6); }
+.hix-bar-rows { font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.hix-bar-row { display: grid; grid-template-columns: minmax(0, 8.5em) 1fr 2em 3em; gap: 0 var(--sp-8); align-items: center; min-height: 24px; }
+.hix-barname { color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hix-barscore { text-align: right; font-variant-numeric: tabular-nums; font-weight: var(--fw-semibold); }
+.hix-barval { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+/* The track is the whole row's height so the zero lines join into one axis. */
+.hix-track { position: relative; align-self: stretch; }
+.hix-track::before { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; border-left: 1px solid currentColor; opacity: .25; }
+.hix-bar { position: absolute; top: 50%; height: 8px; margin-top: -4px; min-width: 2px; border-radius: var(--r-2); background: currentColor; opacity: .5; }
+.hix-bar-axis { min-height: 18px; }
+.hix-axis-words { display: flex; justify-content: space-between; color: var(--muted); font-size: calc(var(--fs-11) * var(--ui-font, 1)); }
+.hix-box { border-bottom: 1px solid var(--line); padding-bottom: var(--sp-8); }
+/* The launcher's "N at limit" chip. Same pill as "N waiting" but in the limit
+   colour and NOT pulsing: a blocked session is not asking for you, it is telling
+   you what it will do by itself — a pulse there is an alarm for a queue that is
+   already handling it. */
+.head-wait.limit { color: var(--limit); border-color: var(--limit-edge); animation: none; }
+/* The one session actually being resumed. A queue you can watch is the whole
+   point — with every row looking identical, "one at a time" is a claim rather
+   than something visible. */
+.q-card.resuming { box-shadow: inset 3px 0 0 var(--limit); }
+.repo-group-stat.coding { color: var(--accent); }
+.repo-group-stat.done { color: var(--ok); }
+.repo-group-stat.exited { color: var(--muted); opacity: .6; }
+/* Starred: the gold of the row's own star button (.star-btn.starred), so the
+   chip and the mark it counts are visibly the same thing. */
+.repo-group-stat.starred { color: var(--star); }
+/* The roll-up chips and the row badges are FILTER controls: each one shows only
+   the rows it counts. They stay visually identical to the inert version — a
+   count that suddenly looked like a button would read as a new control rather
+   than the one that was always there — and only announce themselves on press and
+   while active. `.on` is the applied filter: filled, full opacity, so the list
+   being short always has a visible cause on screen. */
+.repo-group-stat, .repo-group-wait {
+  background: none; font-family: inherit; text-transform: none; letter-spacing: 0;
+}
+/* **`cursor: pointer` is not an affordance on a phone**, and neither is a
+   `title` — this app's own rule about dimmed buttons says as much. So every
+   chip that CUTS the list carries a visible mark that it does: a dotted
+   underline, which is the same vocabulary the pending star uses a few rules
+   down, costs no height in a row that has none to give, and survives being read
+   at a glance. Without it the row's status pill had been a filter for its whole
+   life and looked exactly like the plain one the search sheet renders. */
+button.repo-group-stat, button.repo-group-wait, .tag-filter { cursor: pointer; }
+button.repo-group-stat > *, button.repo-group-wait > *, .tag-filter > * { vertical-align: middle; }
+.tag-filter, button.repo-group-stat, button.repo-group-wait {
+  text-decoration: underline dotted;
+  text-decoration-color: color-mix(in srgb, currentColor 55%, transparent);
+  text-underline-offset: 3px;
+}
+/* Once its cut IS the one in force the mark has done its job — the filled
+   background says it now, and an underline under that reads as a defect. */
+.tag-filter.on, button.repo-group-stat.on, button.repo-group-wait.on {
+  text-decoration: none;
+}
+button.repo-group-stat:active, button.repo-group-wait:active, .tag-filter:active { opacity: 1; }
+button.repo-group-stat.on, button.repo-group-wait.on, .tag.tag-filter.on {
+  opacity: 1;
+  background: color-mix(in srgb, currentColor 22%, transparent);
+  box-shadow: 0 0 0 1px currentColor;
+}
+/* Filter bar: what the list is hiding, and the way out. Sits directly under the
+   "Live sessions" head so a filtered list can never look like a lost one. */
+/* The launcher's quick filter (LauncherScreen): always on screen under the
+   list's head. One line: icon, the box, "n of N", clear, the full search. */
+.section.quick-filter { text-transform: none; letter-spacing: 0; display: flex; align-items: center; gap: var(--sp-6); padding: var(--sp-4) var(--sp-10) var(--sp-6); }
+.quick-filter-icon { flex: none; color: var(--muted); }
+.quick-filter input { flex: 1 1 auto; min-width: 0; height: 32px; padding: var(--sp-4) var(--sp-10); border: 1px solid var(--line); border-radius: var(--r-8); background: var(--well); color: var(--fg); font: inherit; font-size: calc(var(--fs-14) * var(--ui-font, 1)); }
+.quick-filter input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.quick-filter input::-webkit-search-cancel-button { display: none; }
+.quick-filter-n { flex: none; text-transform: none; letter-spacing: 0; color: var(--muted); font-size: calc(var(--fs-12) * var(--ui-font, 1)); font-variant-numeric: tabular-nums; }
+.filter-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-8);
+  text-transform: none; letter-spacing: 0; font-weight: var(--fw-medium);
+  color: var(--accent);
+  background: var(--accent-wash);
+  border-left: 3px solid var(--accent);
+  padding: var(--sp-6) var(--sp-10) var(--sp-6) var(--sp-12); font-size: calc(var(--fs-12) * var(--ui-font, 1));
+}
+.filter-bar-txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.filter-bar-clear {
+  flex: none; display: inline-flex; align-items: center; gap: var(--sp-4);
+  /* Real fingertip box — this is the only way out of a filtered list. */
+  min-height: 32px; padding: 0 var(--sp-10); border-radius: var(--r-8);
+  font: inherit; text-transform: none; letter-spacing: 0;
+  background: none; border: 1px solid currentColor; color: inherit; cursor: pointer;
+}
+.filter-bar-clear:active { background: color-mix(in srgb, currentColor 18%, transparent); }
+/* "back to <sheet>" on a shell a sheet sent you to (core/session/ReturnChip.tsx):
+   the filter bar's look, the whole left part one fingertip-sized target. */
+.return-bar { flex: none; padding-top: var(--sp-4); padding-bottom: var(--sp-4); }
+.return-go {
+  flex: 1; min-width: 0; min-height: 36px; display: inline-flex; align-items: center; gap: var(--sp-6);
+  background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left;
+}
+
+/* Queue sheet: re-aiming a queued message, and the prompt pad's target picker.
+   Both are an inline expansion UNDER the row they belong to — a full-screen
+   picker would lose the queue position (which is the whole context for "should
+   this still go there?"), and on a phone a nested sheet is one Back tap away
+   from dismissing the wrong thing. */
+.queue-row-wrap.aiming { background: var(--accent-wash); }
+.queue-aim, .pad-pick {
+  padding: 0 var(--sp-12) var(--sp-10); border-left: 2px solid var(--accent); margin-left: var(--sp-12);
+}
+/* The pad editor's "whose inbox do these files go to?" picker sits BETWEEN the
+   growing composer and the pinned action bar, so it has to take its space out of
+   the composer and scroll — a repo list on a machine with a dozen repos would
+   otherwise push Save off the bottom of the phone. */
+.attach-aim { flex: 0 1 auto; min-height: 0; overflow-y: auto; max-height: 45vh; }
+.queue-aim .row, .pad-pick .row { padding-left: var(--sp-6); }
+.queue-aim .form-hint, .pad-pick .form-hint { padding-left: 0; }
+.pad-item { border-bottom: 1px solid var(--line); }

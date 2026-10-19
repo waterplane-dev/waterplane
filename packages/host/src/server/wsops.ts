@@ -12,6 +12,7 @@
  * `durableOp`: thrown ⇒ NOT remembered (a host fault gets a real second
  * attempt), `ok: false` ⇒ remembered. `containRepoDir`: never loosen it.
  */
+import { bootClock } from "./http.js";
 import type { IncomingMessage } from "node:http";
 import { existsSync } from "node:fs";
 import type { WebSocket, WebSocketServer } from "ws";
@@ -234,7 +235,7 @@ export function createWsOps(ctx: ServerCtx) {
       // socket landed on; `deviceId` only when this socket IS a ledger device.
       let hostId: string | undefined;
       try { hostId = lanIdentity(ctx.ROOT).hostId; } catch { /* unwritable root ⇒ absent, never a made-up id */ }
-      ctx.send(ws, { t: "welcome", protocol: PROTOCOL_VERSION, bootId: ctx.BOOT_ID, tailscaleIp: ip, tailscaleBin: tsBin, tailscaleDns: tsDns, httpsUrl, lanIps: boundLan, port: ctx.PORT, root: ctx.ROOT, tmux: true, clientKind: kind, auth: ctx.authStateFor(kind), hostId, hostName: hostName(), deviceId: device?.id });
+      ctx.send(ws, { t: "welcome", protocol: PROTOCOL_VERSION, bootId: ctx.BOOT_ID, tailscaleIp: ip, tailscaleBin: tsBin, tailscaleDns: tsDns, httpsUrl, lanIps: boundLan, port: ctx.PORT, root: ctx.ROOT, tmux: true, clientKind: kind, auth: ctx.authStateFor(kind), hostId, hostName: hostName(), deviceId: device?.id, startedAt: bootClock.startedAt, readyAt: bootClock.readyAt });
       // Which binaries this host can drive, and what each of them can be ASKED.
       // It rides beside `welcome` rather than in the `hello` arm because it is a
       // fact about the HOST, like every field of that frame — and because the

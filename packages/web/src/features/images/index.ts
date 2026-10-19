@@ -13,7 +13,7 @@ import { InboxToolbarItem } from "./NewImages";
 import { TAB_FILE_EVENT, type FileTab } from "../../sessionTabs";
 
 export {
-  annotate, annotateUrl, annotatorBusy, appendToBatch, attachForInbox, backlogEditImage, downloadArtifact, openArtifact, openBrowseAt,
+  alreadyMarking, annotate, annotateUrl, annotatorBusy, appendToBatch, attachForInbox, backlogEditImage, downloadArtifact, openArtifact, openBrowseAt,
   openBrowseFor, openFileRef, openGalleryFor, openGalleryForSend, openNewImages, openOutboxFor, openSweep, pickFileFor,
   pickImageFor, routeFiles, seedFromRoute, viewImage,
 } from "./actions";

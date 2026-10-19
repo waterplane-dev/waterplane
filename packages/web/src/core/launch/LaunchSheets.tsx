@@ -44,7 +44,6 @@ export interface LaunchSheetCtx {
   refreshRepos(): void;
   openCwd(cwd: string, title: string): void;
   pickBackend(id: string | undefined): void;
-  setLaunchOpt(patch: Partial<LaunchOpts>): void;
   relaunch(s: SessionInfo, patch: Partial<LaunchOpts>): void;
   sessionCan(s: { backend?: string } | null | undefined, cap: Parameters<typeof hasCap>[2]): boolean;
   sessionCant(s: { backend?: string } | null | undefined, cap: Parameters<typeof capReason>[2]): string | null;
@@ -122,7 +121,7 @@ export function launchSheets(c: LaunchSheetCtx): LaunchSheets {
       if (!(c.active)) return null;
       return <ModelSheet cur={c.active} backends={backends}
         modelInput={c.modelInput} setModelInput={c.setModelInput}
-        submitInput={c.submitInput} setLaunchOpt={c.setLaunchOpt} relaunch={c.relaunch}
+        submitInput={c.submitInput} relaunch={c.relaunch}
         sessionCan={c.sessionCan} sessionCant={c.sessionCant}
         onClose={() => setOverlay(null)} />;
     },

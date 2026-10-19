@@ -1,0 +1,408 @@
+/* 15-wide-layout.css: html[data-layout=wide] phases 1-3 (must stay LAST: it overrides everything above). */
+/* ── Desktop workspace, phase 1 (P1c): wide layout ─────────────────────
+   Everything here sits under `html[data-layout="wide"]`; phone never matches.
+   DOM contract: Workspace.tsx. `#root` (already fixed, bound to the viewport
+   and the top strips' offset) becomes a two-column grid: `aside.ws-side`, then
+   the main pane, which has no wrapper — it is `#root > .ws-side + *` (a session
+   `.screen`, a `.sheet`, or `.screen.ws-empty`).
+   Sidebar width 320px: the launcher's repo rows and two-row header were drawn
+   for a ~390px phone and read fine down to ~300; 320 keeps a repo name and its
+   badges on one line while leaving 1120px of a 1440 window to the terminal
+   (about 150 columns). Fixed, never a percentage, so the terminal's fit does
+   not move when the window is dragged. No transition on it: a width tween
+   would refit the PTY every frame.
+   The person may drag it (`SideGrip.tsx` writes `--ws-side-w`); the clamp's
+   numbers are `sideWidth.ts`'s, held against the live viewport here. */
+html[data-layout="wide"] {
+  --ws-side: clamp(240px, min(var(--ws-side-w, 320px), 100vw - 600px), 760px);
+}
+html[data-layout="wide"] #root {
+  display: grid;
+  grid-template-columns: var(--ws-side) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+/* The sidebar is a column of its own. Its `.screen` already carries the strip
+   offsets in its padding-top, so the aside itself adds none (the main pane does
+   the same through its own `.screen`/`.sheet`). */
+html[data-layout="wide"] .ws-side {
+  position: relative;
+  min-width: 0; min-height: 0; height: 100%;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  background: var(--bg);
+  border-right: 1px solid var(--line);
+}
+/* The sidebar's right edge as a handle: a 7px strip along the border, the
+   border lighting up under the pointer or focus. While dragging, the whole
+   page shows the resize cursor and selects no text. */
+html[data-layout="wide"] .ws-side-grip {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 7px; z-index: 5;
+  cursor: col-resize; touch-action: none; outline: none;
+}
+html[data-layout="wide"] .ws-side-grip::after {
+  content: ""; position: absolute; top: 0; bottom: 0; right: 0; width: 2px;
+  background: transparent;
+}
+html[data-layout="wide"] .ws-side-grip:is(:hover, :focus-visible)::after,
+html.ws-resizing .ws-side-grip::after { background: var(--accent); }
+html.ws-resizing, html.ws-resizing * { cursor: col-resize !important; user-select: none; }
+html[data-layout="wide"] .ws-side > .screen {
+  position: static; flex: 1 1 auto; min-height: 0; height: auto; width: 100%;
+  overflow-y: auto; overscroll-behavior: contain;
+}
+/* The main pane: whatever follows the sidebar fills the second column and
+   scrolls on its own, never the page. */
+html[data-layout="wide"] #root > .ws-side + * {
+  min-width: 0; min-height: 0; height: 100%; width: auto;
+  position: relative; overflow: hidden;
+}
+html[data-layout="wide"] #root > .ws-side + .sheet { overflow-y: auto; }
+/* Nothing attached: the hint sits in the middle of the pane. */
+html[data-layout="wide"] .screen.ws-empty {
+  align-items: center; justify-content: center; text-align: center;
+  color: var(--muted);
+}
+/* The tab strip in wide: a share of 1400 px per tab is a 460 px floor under a
+   tab with four words in it. The floor is as wide as a phone's tab would be;
+   a longer name still grows past it while there is room, and the rest scroll. */
+html[data-layout="wide"] .stab { min-width: clamp(140px, calc((100% - (var(--stab-n, 3) - 1) * 4px) / var(--stab-n, 3)), 240px); }
+
+/* ── Desktop workspace, phase 2 (P2c): the side panel, and the 320px sidebar ──
+   DOM contract: Workspace.tsx. A sheet opened from the wide layout is the LAST
+   child of `#root`, in `div.ws-panel`. It OVERLAYS the main pane: fixed, so it
+   takes no grid cell (an auto-placed third child would otherwise open a second
+   row) and the main pane — hence the terminal and its PTY geometry — never
+   changes width when a sheet opens. `#root > .ws-side + *` is adjacent to the
+   sidebar only, so it cannot match this panel.
+   `#root` is NOT below the fixed strips (z 60-63, outside `#root`): it starts
+   at `--app-top`, the visual viewport's offset, and every `.screen`/`.sheet`
+   in it pads the strips' heights itself. So the panel starts at `--app-top`
+   PLUS those heights (`--ws-strips`) and is that much shorter than `--app-h`.
+   It was at `--app-top` alone, which put the sheet's head — its only close
+   button — under the network and machine strips: a panel nobody could shut
+   without knowing Esc.
+   z-index 15: above the main pane's own floating bits (the terminal's corner
+   group is 11, the viewer 10) and below `.toast` (20), the modal backdrops (30)
+   and the strips (60+). No transition: a slide-in is a per-frame layout cost
+   for no information. */
+html[data-layout="wide"] {
+  --ws-strips: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pulse-h, 0px) + var(--ui-localrt-h, 0px) + var(--ui-tabs-h, 0px));
+}
+html[data-layout="wide"] .ws-panel {
+  position: fixed; top: calc(var(--app-top, 0px) + var(--ws-strips)); right: 0;
+  height: calc(var(--app-h, 100dvh) - var(--ws-strips));
+  /* Dragged by its left edge (BesideGrip.tsx writes `--ws-panel-w`); the
+     default stays 40vw up to 520px, never so wide the session goes under 360px. */
+  width: clamp(440px, var(--ws-panel-w, min(40vw, 520px)), max(440px, 100vw - var(--ws-side) - 360px));
+  z-index: 15; overflow: hidden;
+  display: flex; flex-direction: column;
+  background: var(--bg);
+  border-left: 1px solid var(--line);
+  box-shadow: -6px 0 24px var(--shadow-soft);
+}
+/* The strips are already above this panel, so the sheet's own offset for them
+   would be a dead band at the top. It scrolls itself, never the page. */
+html[data-layout="wide"] .ws-panel > .sheet {
+  padding-top: 0; height: 100%; min-height: 0; width: 100%;
+  overflow-y: auto; overscroll-behavior: contain;
+}
+
+/* BESIDE (Workspace.tsx): the annotator for the session on screen as a third
+   grid column, so the session's compose box stays in reach while marking. It
+   takes its width FROM the main pane — a panel over the session would cover
+   that box. Half of what the sidebar leaves, never so much that the session
+   drops under ~520px, never under 440px (the annotator's own floor). */
+html[data-layout="wide"] #root:has(> .ws-beside) {
+  --ws-beside: clamp(440px, var(--ws-beside-w, (100vw - var(--ws-side)) / 2), max(440px, 100vw - var(--ws-side) - 360px));
+  grid-template-columns: var(--ws-side) minmax(0, 1fr) var(--ws-beside);
+}
+html[data-layout="wide"] .ws-beside {
+  min-width: 0; min-height: 0; height: 100%;
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column;
+  background: var(--bg);
+  border-left: 1px solid var(--line);
+}
+html[data-layout="wide"] .ws-beside > .sheet {
+  height: 100%; min-height: 0; width: 100%;
+}
+/* Its left edge is the resize handle (BesideGrip.tsx), SideGrip's look. */
+html[data-layout="wide"] :is(.ws-beside-grip, .ws-panel-grip) {
+  position: absolute; top: 0; left: 0; bottom: 0; width: 7px; z-index: 5;
+  cursor: col-resize; touch-action: none; outline: none;
+}
+html[data-layout="wide"] :is(.ws-beside-grip, .ws-panel-grip)::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 2px; background: transparent;
+}
+html[data-layout="wide"] :is(.ws-beside-grip, .ws-panel-grip):is(:hover, :focus-visible)::after,
+html.ws-resizing :is(.ws-beside-grip, .ws-panel-grip)::after { background: var(--accent); }
+/* Full screen: the SAME element laid over the window below the strips — the
+   grid keeps its column, so the session under it keeps its width. */
+html[data-layout="wide"] .ws-beside.full {
+  position: fixed; z-index: 20; left: 0; right: 0;
+  top: calc(var(--app-top, 0px) + var(--ws-strips)); height: calc(var(--app-h, 100dvh) - var(--ws-strips));
+  border-left: 0;
+}
+html[data-layout="wide"] .ws-beside.full > .sheet { padding-top: 0; }
+/* The annotator's `place-auto` bar picks rail-or-row by the WINDOW (above),
+   which here is wide while the column is not: a dozen 44 px keys in a row ran
+   off the column's edge. Decide by the column instead. */
+html[data-layout="wide"] .ws-beside { container: beside / inline-size; }
+@container beside (max-width: 760px) {
+  .annot-body.place-auto { flex-direction: row; }
+  .annot-body.place-auto > .annot-tools {
+    flex-direction: column; flex-wrap: nowrap; overflow-x: hidden; overflow-y: auto;
+    padding: var(--sp-6); gap: var(--sp-6); border-bottom: 0; border-right: 1px solid var(--line); flex: 0 0 auto;
+  }
+  .annot-body.place-auto > .annot-tools > .key { padding: 0; width: 44px; }
+}
+
+/* The launcher in a 320px column. Its rows were drawn for a phone and clip at
+   the right edge: the section head's all-icon row (`.head-acts.tight`) is
+   no-wrap, so the filter chips and refresh ran off the edge. Wrap it, left
+   aligned, on a line of its own; and a chip may shrink and ellipsise rather
+   than push its row wider than the column. */
+html[data-layout="wide"] .ws-side .head-acts.tight {
+  flex: 1 1 100%; flex-wrap: wrap; justify-content: flex-start; min-width: 0;
+}
+/* Wrapped, the head's icon buttons cannot keep their -8px vertical margins
+   (sized for ONE row inside a short head): the second row rode up over the
+   first. Real margins in the sidebar, at the mouse size. */
+html[data-layout="wide"] .ws-side :is(.head-acts.tight, .quick-filter) .head-act { margin: 0; height: 32px; min-width: 32px; width: auto; padding: 0 var(--sp-6); }
+html[data-layout="wide"] .ws-side :is(.row-chip, .row-act.count) {
+  flex: 0 1 auto; min-width: 0; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+html[data-layout="wide"] .ws-side :is(.row-meta, .repo-sub, .row-tags) { min-width: 0; flex-wrap: wrap; }
+/* The corner group's grip (`useCornerDrag`): the browser must not pan or
+   scroll the terminal under a finger that is dragging the group. */
+.term-zoom .term-zoom-grip { touch-action: none; cursor: grab; padding: var(--sp-4) var(--sp-2); }
+.term-zoom .term-zoom-grip:active { cursor: grabbing; }
+
+/* ── Desktop workspace, phase 3 (P3c): the wide window finished ───────────
+   Still all under `html[data-layout="wide"]`; phone never matches.
+
+   A sheet's head is its close button, so it never scrolls away: the panel and
+   a `WIDE_FULL` sheet both scroll the WHOLE sheet (P2c), and a sheet that
+   jumps to a focused section (`LocalRtSheet`'s `focus`) scrolled its head out
+   of reach. The full sheet pads the strips inside its own scroller, so its head
+   sticks below them, not under them — with `top: 0`: a sticky offset counts
+   from the scroller's CONTENT edge, inside that padding. `top: var(--ws-strips)`
+   counted the strips twice and pushed the head 62px down over the sheet's
+   first row (the annotator's whole toolbar). */
+html[data-layout="wide"] .ws-panel > .sheet > .sheet-head { position: sticky; top: 0; z-index: 3; }
+html[data-layout="wide"] #root > .ws-side + .sheet > .sheet-head { position: sticky; top: 0; z-index: 3; }
+
+/* The sidebar's session card is the PHONE's card (the grid in the base
+   rules: prompt left; verbs, outline and chart stacked on the right; chips
+   under the prompt) — the owner asked for the two to look alike, and every
+   re-flow tried here read worse. Two adjustments for 320px only:
+   - the title line WRAPS: its facts (`default`, the age) are `flex: 0 0 auto`
+     by design (web-chrome: the meta never shrinks), so in 320px they ran out
+     of their grid cell and were drawn THROUGH the status pill beside it;
+   - a card with NO prompt (a fresh session) would be the right-hand column
+     alone, 220px tall over an empty left half: its outline and chart sit on
+     one line beside the verbs instead. */
+html[data-layout="wide"] .ws-side .row-wrap[data-sid] .row-head { flex-wrap: wrap; row-gap: var(--sp-2); }
+html[data-layout="wide"] .ws-side .row-wrap[data-sid]:has(.row-gist:empty) {
+  grid-template-areas: "head stat" "side ctl" "tags tags"; grid-template-rows: auto;
+}
+html[data-layout="wide"] .ws-side .row-wrap[data-sid]:has(.row-gist:empty) .row-side {
+  justify-self: start; flex-direction: row; flex-wrap: wrap; align-items: center;
+}
+html[data-layout="wide"] .ws-side .row-wrap[data-sid] .row-gist:empty { display: none; }
+/* The sidebar's top bar: logo and the icon keys first, the usage meter LAST.
+   Left in source order it wrapped after the meter, stranding bell, settings
+   and Desktop on a ragged second row. Last, at its content basis and free to
+   grow: when the sidebar is wide enough (it is resizable) the meter fills the
+   rest of the icons' line; when it is not, it wraps alone and grows to a full
+   line of its own. A forced 100% basis put it on a second row even with room
+   to spare beside the icons. */
+html[data-layout="wide"] .ws-side .topbar > .usage-key { order: 10; flex: 1 0 auto; justify-content: center; }
+
+/* An answer bar's buttons are as wide as their words. `flex: 1 1 auto` shares
+   a phone's 400px fairly; across a 1100px pane it drew a 500px "Open sign-in
+   page" slab. The rich (described) list keeps its own full-width rows. */
+html[data-layout="wide"] .approve-btn { flex: 0 1 auto; }
+
+/* The request chip belongs to the sidebar column: centred on the window it
+   sat in the middle of the session's header. */
+html[data-layout="wide"] .net-activity { right: auto; width: var(--ws-side); }
+
+/* A grid capped at `MAX_PTY_COLS` sits left with margin to its right; the
+   margin is the terminal's own ground, never the page's. Typing is the
+   terminal's when it has focus — said in words in its corner, because a ring
+   alone does not tell anyone what the keys will do. */
+html[data-layout="wide"] .term-canvas { position: relative; }
+html[data-layout="wide"] .term-canvas .xterm-screen { cursor: text; }
+html[data-layout="wide"] .term-canvas:has(.xterm.focus) { box-shadow: inset 0 0 0 1px var(--accent-edge-hi); }
+html[data-layout="wide"] .term-canvas:has(.xterm.focus)::after {
+  content: "typing goes to the CLI \00B7  Ctrl+C on a selection copies";
+  position: absolute; right: 8px; bottom: 6px; pointer-events: none;
+  padding: var(--sp-2) var(--sp-8); border-radius: var(--r-pill);
+  font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted);
+  background: var(--panel); border: 1px solid var(--line);
+}
+
+/* The reader at a reading measure: a 1100px line of prose is not read, it is
+   tracked. Padding, not max-width, so the scrollbar stays at the pane's edge. */
+html[data-layout="wide"] .tr-body { padding-inline: max(10px, calc((100% - 92ch) / 2)); }
+
+/* Scrollbars a desktop draws are thin and in the palette. ZERO specificity
+   (`:where`): at `html[…] *` it outranked every strip's own
+   `scrollbar-width: none`, and a thin bar inside the 34px tab strip pushed
+   the tabs up and cut their labels off. */
+html[data-layout="wide"] { scrollbar-color: var(--line) transparent; }
+:where(html[data-layout="wide"] *) { scrollbar-width: thin; }
+
+/* A MOUSE, not a finger: every control here was sized to a 44px fingertip, and
+   on a desktop that made the window read as a phone blown up. Gated on the
+   pointer as well as the width (plan §5) — a 1366px tablet is wide and still
+   a finger. Sizes only; nothing appears, disappears or moves. */
+@media (pointer: fine) {
+  html[data-layout="wide"] .key { min-height: 32px; min-width: 36px; padding: var(--sp-4) var(--sp-10); }
+  html[data-layout="wide"] :is(.topbar > .key, .hdr-ctl > .key, .hdr-pin > .key, .topbar > .usage-multi > .key) { min-width: 32px; min-height: 32px; padding: var(--sp-6) var(--sp-6); }
+  html[data-layout="wide"] .keys { padding: var(--sp-4) var(--sp-8); gap: var(--sp-4); }
+  html[data-layout="wide"] .row-acts .row-act { width: 30px; height: 30px; border-radius: var(--r-8); }
+  /* The tally and the two counts hold digits: a fixed 30px drew "≡ 9" with the
+     9 outside its own border and clipped "14" to "1". */
+  html[data-layout="wide"] .row-acts .row-act:is(.tally, .count) { width: auto; min-width: 30px; padding: 0 var(--sp-6); }
+  html[data-layout="wide"] .mic { width: 34px; height: 34px; font-size: calc(var(--fs-15) * var(--ui-font, 1)); }
+  html[data-layout="wide"] .approve-btn { padding: var(--sp-6) var(--sp-12); font-size: calc(var(--fs-14) * var(--ui-font, 1)); }
+  html[data-layout="wide"] .compose { padding: var(--sp-6) var(--sp-8); gap: var(--sp-6); }
+  html[data-layout="wide"] .compose textarea { min-height: 40px; padding: var(--sp-8) var(--sp-10); font-size: calc(var(--fs-15) * var(--ui-font, 1)); }
+}
+
+/* Folding a strip (`Stowable.tsx`). The control sits at the end of the strip's
+   head; the chip it leaves behind rides the session status line at that
+   line's own 12px, with its touch target grown past the drawn pill so a
+   compact line does not mean a 20px tap. */
+.login-head .stow-btn { flex: none; padding: var(--sp-6) var(--sp-10); display: inline-flex; align-items: center; gap: var(--sp-4); }
+.nextp .stow-btn { flex: none; }
+.sess-status button.stow-chip {
+  position: relative; display: inline-flex; align-items: center; gap: var(--sp-4);
+  background: transparent; border: 1px solid var(--line); border-radius: var(--r-pill);
+  padding: 1px var(--sp-8); margin: 0; font-family: inherit; color: var(--fg); cursor: pointer;
+}
+.sess-status button.stow-chip::after { content: ""; position: absolute; inset: -8px -2px; }
+/* "mark handled" beside the red "asked you" pill (`SessionHeader.tsx`): a
+   real button face — raised fill, border, the fg colour — so it reads as a
+   thing to press and not as one more status fact. Later than, and as specific
+   as, `.sess-status button.row-sub`, whose chrome reset it undoes. */
+.sess-status button.ack-asking {
+  position: relative; background: var(--raise); border: 1px solid var(--line);
+  border-radius: var(--r-8); padding: var(--sp-2) var(--sp-10); color: var(--fg); font-weight: var(--fw-semibold);
+}
+.sess-status button.ack-asking:active { background: var(--line); }
+.sess-status button.ack-asking::after { content: ""; position: absolute; inset: -8px -2px; }
+
+/* GitView's ↑N ↓M — each count a tap target that opens its own commits (GitLogView). */
+.git-ab-n {
+  font: inherit; color: inherit; background: none; cursor: pointer;
+  border: 1px solid color-mix(in srgb, currentColor 40%, transparent); border-radius: var(--r-8);
+  min-height: 32px; padding: 0 var(--sp-10);
+}
+.git-ab-n:active { background: color-mix(in srgb, currentColor 18%, transparent); }
+.git-log-fresh { padding: var(--sp-8) var(--sp-14) 0; display: flex; align-items: center; gap: var(--sp-6); }
+.git-commit-row { flex-direction: column; align-items: stretch; gap: var(--sp-2); text-align: left; }
+.git-commit-subject { font-size: calc(var(--fs-15) * var(--ui-font, 1)); font-weight: var(--fw-semibold); overflow-wrap: anywhere; }
+.git-commit-body {
+  margin: 0 var(--sp-14) var(--sp-10); padding: var(--sp-8) var(--sp-10); background: var(--panel); border-radius: var(--r-8);
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); white-space: pre-wrap; overflow-wrap: anywhere;
+}
+
+/* Scroll cue: a strip that scrolls sideways shows an accent chevron over a
+   fade at whichever edge still has buttons past it, so a cut-off chip reads as
+   "more this way" and not as the end of the row. Every scrollbar-less strip is
+   listed — the scrollbar was the only other sign, and these hide it to save a
+   row. A fade alone was too faint to notice even knowing it was there.
+
+   Pure CSS. The chevrons are sticky pseudo-elements: `::before` is the first
+   flex item stuck to the left edge, `::after` the last stuck to the right,
+   each with a negative margin so it takes no room in the row. A scroll-driven
+   animation sets their opacity from the scroll position. A strip that does not
+   overflow has an INACTIVE timeline, so the animation never applies and both
+   stay at 0 — no chevron where nothing is hidden. An engine without
+   `animation-timeline` gets no cue at all, never one over a row that fits.
+
+   `--xcue-bg` is the strip's own ground, so the fade melts into it; `--xcue-gap`
+   is its flex gap, which the pseudo-elements would otherwise add to each end;
+   `--xcue-pad` its side padding — a sticky box stops at the padding edge, so
+   the inset is negative by that much or a sliver of the row shows past it. */
+@property --xcue-l { syntax: "<number>"; inherits: true; initial-value: 0; }
+@property --xcue-r { syntax: "<number>"; inherits: true; initial-value: 0; }
+@keyframes xcue {
+  0%   { --xcue-l: 0; --xcue-r: 1; }
+  4%   { --xcue-l: 1; }
+  96%  { --xcue-r: 1; }
+  100% { --xcue-l: 1; --xcue-r: 0; }
+}
+.hdr-cmds, .keys, .compose-scroll, .sess-tabs, .tr-bar, .crumbs,
+.collage-strip, .ts-seg-chips, .ts-global .ts-filter,
+.annot-tools, .newimg-strip { --xcue-bg: var(--panel); --xcue-gap: 6px; --xcue-pad: 8px; }
+.sess-tabs, .crumbs, .collage-strip, .ts-seg-chips,
+.ts-global .ts-filter { --xcue-bg: var(--bg); }
+.compose-scroll, .collage-strip, .newimg-strip { --xcue-gap: 8px; }
+.sess-tabs, .ts-seg-chips, .ts-global .ts-filter { --xcue-gap: 4px; }
+.crumbs { --xcue-gap: 2px; }
+.hdr-cmds, .compose-scroll { --xcue-pad: 0px; }
+.tr-bar { --xcue-pad: 6px; }
+.crumbs, .collage-strip, .ts-global .ts-filter { --xcue-pad: 10px; }
+.ts-seg-chips { --xcue-pad: 0px; }
+.sess-tabs { --xcue-pad: 6px; }
+@supports (animation-timeline: scroll()) {
+  .hdr-cmds, .keys, .compose-scroll, .sess-tabs, .tr-bar, .crumbs,
+  .collage-strip, .ts-seg-chips, .ts-global .ts-filter,
+  .annot-tools, .newimg-strip {
+    animation: xcue linear both;
+    animation-timeline: scroll(self x);
+  }
+  :is(.hdr-cmds, .keys, .compose-scroll, .sess-tabs, .tr-bar, .crumbs,
+      .collage-strip, .ts-seg-chips, .ts-global .ts-filter,
+      .annot-tools, .newimg-strip)::before,
+  :is(.hdr-cmds, .keys, .compose-scroll, .sess-tabs, .tr-bar, .crumbs,
+      .collage-strip, .ts-seg-chips, .ts-global .ts-filter,
+      .annot-tools, .newimg-strip)::after {
+    position: sticky; z-index: 2; box-sizing: border-box; flex: 0 0 40px; width: 40px; align-self: stretch;
+    display: flex; align-items: center; pointer-events: none;
+    font: 700 28px/1 system-ui, sans-serif; color: var(--accent);
+  }
+  :is(.hdr-cmds, .keys, .compose-scroll, .sess-tabs, .tr-bar, .crumbs,
+      .collage-strip, .ts-seg-chips, .ts-global .ts-filter,
+      .annot-tools, .newimg-strip)::before {
+    content: "\2039"; order: -9999; left: calc(-1 * var(--xcue-pad)); justify-content: flex-start; padding-left: var(--sp-2);
+    margin-right: calc(-40px - var(--xcue-gap));
+    background: linear-gradient(to right, var(--xcue-bg) 50%, transparent);
+    opacity: var(--xcue-l);
+  }
+  :is(.hdr-cmds, .keys, .compose-scroll, .sess-tabs, .tr-bar, .crumbs,
+      .collage-strip, .ts-seg-chips, .ts-global .ts-filter,
+      .annot-tools, .newimg-strip)::after {
+    content: "\203A"; order: 9999; right: calc(-1 * var(--xcue-pad)); justify-content: flex-end; padding-right: var(--sp-2);
+    margin-left: calc(-40px - var(--xcue-gap));
+    background: linear-gradient(to left, var(--xcue-bg) 50%, transparent);
+    opacity: var(--xcue-r);
+  }
+}
+/* The keyboard repo question (`AskRepo.tsx`). */
+.ask-repo-modal { max-width: 420px; }
+.ask-repo-list { display: flex; flex-direction: column; max-height: min(50vh, 360px); overflow-y: auto; border: 1px solid var(--line); border-radius: var(--r-8); }
+.ask-repo-row { border-radius: 0; }
+.ask-repo-row.on { background: var(--accent-wash); }
+/* The shortcut card (`ShortcutCard.tsx`): hold Ctrl/⌘/Alt alone. Above every
+   sheet and dialog, never a pointer target, never focus. */
+.shortcut-card {
+  position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 22vh); transform: translateX(-50%);
+  z-index: 80; pointer-events: none; width: max-content; max-width: calc(100vw - 32px);
+  background: var(--raise); border: 1px solid var(--line); border-radius: var(--r-10); padding: var(--sp-10) var(--sp-14);
+  box-shadow: var(--elev-3); color: var(--fg); font-size: calc(var(--fs-13) * var(--ui-font, 1));
+}
+.shortcut-card-head { color: var(--muted); font-size: calc(var(--fs-11) * var(--ui-font, 1)); margin-bottom: var(--sp-6); }
+.shortcut-card-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-6); }
+.shortcut-card-row { display: flex; align-items: baseline; gap: var(--sp-10); }
+.shortcut-card-row .kbd {
+  min-width: 2.2em; text-align: center; padding: 1px var(--sp-6); border: 1px solid var(--line); border-bottom-width: 2px;
+  border-radius: var(--r-6); background: var(--panel); font-family: inherit; font-size: calc(var(--fs-12) * var(--ui-font, 1));
+}
+.shortcut-card-what { display: flex; flex-direction: column; }
+.shortcut-card-note { color: var(--muted); font-size: calc(var(--fs-11) * var(--ui-font, 1)); }

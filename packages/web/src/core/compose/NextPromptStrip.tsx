@@ -13,7 +13,7 @@
  * from `features/backlog` (`useBacklog`), the phone's half from the queue core.
  */
 import { describeRule, type ClientMessage, type Intent, type SessionInfo } from "@waterplane/shared";
-import type { OutboxEntry } from "../../outbox";
+import { addPadNote, isEditableEntry, padNoteId, type OutboxEntry } from "../../outbox";
 import { NextPrompt } from "../../NextPrompt";
 import { nextPromptView, tieNote } from "../../nextPromptState";
 import { entryProse } from "../../activityRows";
@@ -35,6 +35,8 @@ export interface NextPromptStripProps {
   holdWall(sessionId: string): string | null;
   isPendingId(id: string | null | undefined): boolean;
   sendQueuedNow(ackId: string): void;
+  editQueued(ackId: string, text: string): void;
+  removeQueued(ackId: string): void;
   toggleHoldQueued(ackId: string): void;
   handToDesktop(ackId: string): void;
   liveSend(frame: ClientMessage, done: string, blocked?: string): boolean;
@@ -44,10 +46,22 @@ export interface NextPromptStripProps {
 }
 
 export function NextPromptStrip(p: NextPromptStripProps) {
-  const { active, outboxRef, isPendingId, sendQueuedNow, toggleHoldQueued, handToDesktop, liveSend, setOverlay } = p;
+  const { active, outboxRef, isPendingId, sendQueuedNow, editQueued, toggleHoldQueued, handToDesktop, liveSend, setOverlay } = p;
   const { items: backlogItems, waiting: backlogWaiting, snapAt: backlogSnapAt } = useBacklog();
   const intentById = new Map(p.intents.map((i) => [i.id, i]));
   const now = Date.now();
+  /** The FULL words of a row that can still be rewritten, or null. The strip's
+   *  own `words` are clipped to one line, so the editor reads the source. A
+   *  desktop row is only rewritable live (`backlog.update` is live-only) and
+   *  while it still waits; a phone row while `isEditableEntry` says so. */
+  const editableText = (id: string, holder: "phone" | "desktop"): string | null => {
+    if (holder === "phone") {
+      const e = outboxRef.current.find((x) => x.ackId === id);
+      return e && isEditableEntry(e) ? e.text : null;
+    }
+    const it = backlogItems.find((x) => x.id === id);
+    return it && it.status === "queued" && p.online ? it.text : null;
+  };
   return (
     <NextPrompt
       view={nextPromptView({
@@ -94,6 +108,36 @@ export function NextPromptStrip(p: NextPromptStripProps) {
         // deliberately not durable, like every other backlog mutation: "run it
         // now" delivered an hour late is about a turn that ended long ago.
         liveSend({ t: "backlog.fire", id }, "running it now…", BL_OFFLINE);
+      }}
+      editableText={editableText}
+      onEdit={(id, holder, text) => {
+        track("action:nextprompt.edit");
+        // No link: `backlog.update` is live-only, so the tap is refused in
+        // words and the editor stays open over the words.
+        if (holder === "desktop" && !p.online) { showToast(BL_OFFLINE); return false; }
+        // The row may have gone in while the editor was open. The edited words
+        // are then the only copy of what the person meant, so they go to the
+        // pad and the toast SAYS so — never dropped, never typed somewhere else.
+        if (editableText(id, holder) == null) {
+          const why = addPadNote({ id: padNoteId(), text, ts: Date.now(), ...(active.cwd ? { cwd: active.cwd } : {}) });
+          if (why) { showToast(why); return false; }
+          showToast("it already went in — your edit is kept on the pad");
+          return true;
+        }
+        if (holder === "phone") { editQueued(id, text); showToast("edited"); return true; }
+        return liveSend({ t: "backlog.update", id, text }, "edited", BL_OFFLINE);
+      }}
+      onCancel={(id, holder) => {
+        track("action:nextprompt.cancel");
+        const text = editableText(id, holder);
+        if (text == null) { showToast(holder === "desktop" && !p.online ? BL_OFFLINE : "it already went in"); return; }
+        // The row is the last copy of words somebody typed, and this is one
+        // tap on a strip under a thumb — so the words go to the pad FIRST and
+        // the row only after; a full pad refuses the cancel and leaves the row.
+        const why = addPadNote({ id: padNoteId(), text, ts: Date.now(), ...(active.cwd ? { cwd: active.cwd } : {}) });
+        if (why) { showToast(why); return; }
+        if (holder === "phone") { p.removeQueued(id); showToast("canceled — the words are kept on the pad"); return; }
+        liveSend({ t: "backlog.remove", id }, "canceled — the words are kept on the pad", BL_OFFLINE);
       }}
       onPastBudget={(id) => {
         track("action:nextprompt.pastbudget");

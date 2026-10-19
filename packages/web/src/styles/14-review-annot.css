@@ -1,0 +1,127 @@
+/* 14-review-annot.css: file review mode, annotator body. */
+/* ── Review mode of the file viewer (FileReview.tsx) ───────────────────────
+   Mark lines (source) or blocks (rendered markdown), say what should change,
+   send every remark as one message. A marked run is tinted with the accent
+   bar the reader's pick mode uses; a line some remark covers carries a fainter
+   bar, and the remark's NUMBER sits where its first line number was — the same
+   number the message gives it. */
+.key .key-count {
+  margin-left: var(--sp-4); font-size: calc(var(--fs-11) * var(--ui-font, 1)); font-weight: var(--fw-bold);
+  color: var(--accent); font-variant-numeric: tabular-nums;
+}
+.key.active .key-count { color: inherit; }
+.rv-hint { flex: 0 0 auto; }
+.rv-src {
+  flex: 1; min-height: 0; overflow: auto; background: var(--well); color: var(--fg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-16);
+  padding: var(--sp-4) 0;
+}
+.rv-line {
+  display: flex; width: max-content; min-width: 100%; cursor: pointer;
+  box-shadow: inset 3px 0 0 transparent;
+}
+.rv-no {
+  position: sticky; left: 0; flex: 0 0 auto; min-width: 3.4em; padding: 0 var(--sp-8) 0 var(--sp-6);
+  text-align: right; color: var(--muted); background: var(--well); user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+.rv-txt { white-space: pre; padding-right: var(--sp-12); }
+.rv-line.rv-marked { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
+.rv-line.rv-marked .rv-no { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
+.rv-line.rv-sel, .rv-line.rv-sel .rv-no {
+  background: color-mix(in srgb, var(--accent) 22%, var(--well));
+  box-shadow: var(--stripe);
+}
+.rv-badge {
+  display: inline-block; min-width: 1.5em; padding: 0 var(--sp-4); border-radius: var(--r-8); text-align: center;
+  background: var(--accent); color: var(--bg); font-weight: var(--fw-bold); font-size: calc(var(--fs-11) * var(--ui-font, 1));
+  line-height: var(--lh-15);
+}
+.rv-md [data-l0] { position: relative; cursor: pointer; border-radius: var(--r-6); }
+.rv-md .rv-marked { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
+.rv-md .rv-sel {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: var(--stripe);
+}
+.rv-md [data-n]::after {
+  content: attr(data-n); position: absolute; top: 0; right: 0;
+  padding: 0 var(--sp-6); border-radius: var(--r-8); background: var(--accent); color: var(--bg);
+  font-weight: var(--fw-bold); font-size: calc(var(--fs-11) * var(--ui-font, 1)); line-height: var(--lh-15);
+}
+.rv-compose {
+  flex: 0 0 auto; display: flex; flex-direction: column; gap: var(--sp-6);
+  padding: var(--sp-8) var(--sp-12); border-top: 1px solid var(--line); background: var(--bg);
+  max-height: 55vh; overflow-y: auto;
+}
+.rv-compose-head { display: flex; align-items: center; gap: var(--sp-8); color: var(--muted); font-size: calc(var(--fs-13) * var(--ui-font, 1)); }
+.rv-compose-acts { padding: 0; flex-wrap: wrap; }
+.rv-why { padding: 0; }
+.rv-list { display: flex; flex-direction: column; gap: var(--sp-6); }
+.rv-item {
+  display: flex; align-items: flex-start; gap: var(--sp-8); padding: var(--sp-6) var(--sp-8);
+  border: 1px solid var(--line); border-radius: var(--r-8); background: var(--well);
+}
+.rv-item-where { color: var(--muted); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.rv-item-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.rv-compose-head .grow, .rv-item .grow { flex: 1; min-width: 0; }
+/* Shell links bar (ShellLinksBar.tsx) — LoginBar's amber card, one block per link. */
+.shell-link + .shell-link { margin-top: var(--sp-10); padding-top: var(--sp-8); border-top: 1px solid var(--line); }
+.shell-code-btn { font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.shell-code-big { margin-top: var(--sp-8); font-size: calc(26px * var(--ui-font, 1)); font-weight: var(--fw-bold); letter-spacing: .12em; text-align: center; user-select: all; color: var(--fg); }
+
+/* ── The annotator's body: bar + picture in one box (annLayout.ts) ─────────
+   `place-top` is the old layout (a row over the picture). `place-left` makes
+   the bar a rail down the left: on a phone held upright a dozen 44 px keys in
+   a row scroll sideways and take a strip of height the picture needs, while a
+   rail takes a thumb's width the picture's aspect mostly leaves empty anyway.
+   `place-auto` is left on a phone-sized screen (narrow, or short in landscape)
+   and top otherwise. The palette rides next to the bar either way. */
+.annot-body { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
+.annot-body > .annot-canvas-wrap { flex: 1; min-height: 0; min-width: 0; }
+.annot-style { display: inline-flex; align-items: center; justify-content: center; font-weight: var(--fw-bold); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000; }
+.annot-body.place-left { flex-direction: row; }
+.annot-body.place-left > .annot-tools {
+  flex-direction: column; flex-wrap: nowrap; overflow-x: hidden; overflow-y: auto;
+  padding: var(--sp-6); gap: var(--sp-6); border-bottom: 0; border-right: 1px solid var(--line); flex: 0 0 auto;
+}
+.annot-body.place-left > .annot-tools > .key { padding: 0; width: 44px; }
+@media (max-width: 600px), (max-height: 500px) {
+  .annot-body.place-auto { flex-direction: row; }
+  .annot-body.place-auto > .annot-tools {
+    flex-direction: column; flex-wrap: nowrap; overflow-x: hidden; overflow-y: auto;
+    padding: var(--sp-6); gap: var(--sp-6); border-bottom: 0; border-right: 1px solid var(--line); flex: 0 0 auto;
+  }
+  .annot-body.place-auto > .annot-tools > .key { padding: 0; width: 44px; }
+}
+/* The config panel lies over the picture, under the bar it edits, so each
+   change is judged against the live bar beside it. */
+.annot-config {
+  position: absolute; top: 8px; right: 8px; bottom: 8px; width: min(340px, calc(100% - 72px));
+  display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--r-12); box-shadow: 0 6px 24px rgba(0, 0, 0, .35); z-index: 3; overflow: hidden;
+}
+.annot-config-head { display: flex; align-items: center; justify-content: space-between; padding: var(--sp-6) var(--sp-6) var(--sp-6) var(--sp-12); font-weight: var(--fw-semibold); border-bottom: 1px solid var(--line); }
+.annot-config-list { flex: 1; min-height: 0; overflow-y: auto; }
+.annot-config-row { display: flex; align-items: center; gap: var(--sp-6); padding: var(--sp-4) var(--sp-8); }
+.annot-config-row.off .annot-config-label { color: var(--muted); }
+.annot-config-label { flex: 1; min-width: 0; font-size: calc(var(--fs-13) * var(--ui-font, 1)); }
+.annot-config-toggle { min-width: 78px; }
+.annot-config-gap { width: 44px; flex: 0 0 auto; }
+.annot-config-hint { padding: 0 var(--sp-12) var(--sp-6); font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); }
+/* The upload size as one line in the annotator; the widths are a tap away. */
+.upscale-line {
+  display: flex; align-items: center; justify-content: center; gap: var(--sp-4); width: 100%;
+  padding: var(--sp-6) var(--sp-12); min-height: 32px; background: var(--panel); border: 0; border-top: 1px solid var(--line);
+  color: var(--muted); font: inherit; font-size: calc(var(--fs-12) * var(--ui-font, 1)); cursor: pointer;
+}
+.upscale-change { color: var(--accent); }
+/* `Explain.tsx`: the `?` that opens a screen's own sentence in place. The
+   chip's box is `.hint-chip`'s; a label beside the icon reads as one target. */
+/* -3px, not the hint chip's -7px: after a sentence the ? sat 4px under the line. */
+.explain-chip { gap: var(--sp-4); padding: 0 var(--sp-4); vertical-align: -3px; }
+.explain-chip.open { color: var(--fg); }
+.explain-label { font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-12); }
+.explain-body { flex-basis: 100%; font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); margin-top: var(--sp-4); }
+/* A `manual` row's hold (`MANUAL_HOLD_TEXT`): the row's STATE — nothing but its
+   own `fire` starts it — so it is read, not skimmed past like a footnote. */
+.bl-hold { display: block; font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--fg); font-weight: var(--fw-semibold); margin-top: var(--sp-4); }

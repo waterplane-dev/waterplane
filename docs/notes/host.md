@@ -7310,7 +7310,7 @@ reads the file, the phone re-cleans what it is served.
   **Never on the wire**: `/api/theme` strips `icons` (`wireThemeOverlay`) — the paths are the desktop's,
   and the shell already carries the links. The APK's own bundle (and so its launcher icon) is build-time
   brand, not this.
-- **`colors`** — the CSS custom properties on `:root` in `web/src/styles.css`, per theme, with or without
+- **`colors`** — the CSS custom properties on `:root` in `web/src/styles/00-tokens.css`, per theme, with or without
   the leading `--`. The allowed set is `THEME_TOKENS`, held to the stylesheet both ways by
   `web/src/themeOverlay.test.mjs` (a token added to `:root` must be listed or the test fails). Not in it:
   the `*-rgb` channel triples (an override of `--accent` IS written to `--accent-rgb`, so every wash and

@@ -19,6 +19,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, relative } from "node:path";
+import { cssFiles } from "../../../tools/csssource.mjs";
 
 const ROOT = new URL("../../..", import.meta.url).pathname;
 
@@ -30,7 +31,7 @@ const ALLOWED = new Map([
 ]);
 
 function sheets() {
-  const out = [join(ROOT, "packages/web/src/styles.css")];
+  const out = [...cssFiles()];
   const ext = join(ROOT, "packages/extensions");
   for (const name of readdirSync(ext)) {
     const web = join(ext, name, "web");

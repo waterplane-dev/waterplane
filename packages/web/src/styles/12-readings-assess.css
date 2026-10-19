@@ -1,0 +1,601 @@
+/* 12-readings-assess.css: ui scale, sweep, model picker, assessment run/apply/guide, Repo readings (.rh-*). */
+/* ── Text and icon size, as a setting (uiScale.ts) ────────────────────────
+   Two multipliers on the root, and nothing else in the app knows about them.
+
+   TEXT rides `calc()` on every `font-size` in this file — they are all plain
+   pixel values in one stylesheet, which is what makes a global size possible at
+   all without touching 298 call sites.
+
+   ICONS cannot ride `calc()`: lucide renders its `size` prop as a `width`/
+   `height` ATTRIBUTE on the svg, and no stylesheet can multiply an attribute.
+   But CSS width/height OVERRIDE those attributes, so one rule per distinct size
+   scales every icon drawn at that size while keeping the relative sizing the
+   components chose — a 12px chip icon stays smaller than an 18px header one.
+   Scoped to `.lucide` deliberately: the app draws its own SVGs too (the pulse
+   spark, the context graph, the usage charts) and those are DATA, not chrome —
+   scaling them would move the plot, not enlarge it. Regenerate this block if a
+   new `size={n}` appears; an unlisted size simply does not scale, which is a
+   visible miss rather than a broken layout.
+
+   Both default to 1 via the `var(…, 1)` fallback, so a document that never ran
+   the bootstrap — a test, a stylesheet opened on its own — is unaffected. */
+svg.lucide[width="10"] { width: calc(10px * var(--ui-icon, 1)); height: calc(10px * var(--ui-icon, 1)); }
+svg.lucide[width="11"] { width: calc(11px * var(--ui-icon, 1)); height: calc(11px * var(--ui-icon, 1)); }
+svg.lucide[width="12"] { width: calc(12px * var(--ui-icon, 1)); height: calc(12px * var(--ui-icon, 1)); }
+svg.lucide[width="13"] { width: calc(13px * var(--ui-icon, 1)); height: calc(13px * var(--ui-icon, 1)); }
+svg.lucide[width="14"] { width: calc(14px * var(--ui-icon, 1)); height: calc(14px * var(--ui-icon, 1)); }
+svg.lucide[width="15"] { width: calc(15px * var(--ui-icon, 1)); height: calc(15px * var(--ui-icon, 1)); }
+svg.lucide[width="16"] { width: calc(16px * var(--ui-icon, 1)); height: calc(16px * var(--ui-icon, 1)); }
+svg.lucide[width="17"] { width: calc(17px * var(--ui-icon, 1)); height: calc(17px * var(--ui-icon, 1)); }
+svg.lucide[width="18"] { width: calc(18px * var(--ui-icon, 1)); height: calc(18px * var(--ui-icon, 1)); }
+svg.lucide[width="19"] { width: calc(19px * var(--ui-icon, 1)); height: calc(19px * var(--ui-icon, 1)); }
+svg.lucide[width="20"] { width: calc(20px * var(--ui-icon, 1)); height: calc(20px * var(--ui-icon, 1)); }
+svg.lucide[width="22"] { width: calc(22px * var(--ui-icon, 1)); height: calc(22px * var(--ui-icon, 1)); }
+svg.lucide[width="24"] { width: calc(24px * var(--ui-icon, 1)); height: calc(24px * var(--ui-icon, 1)); }
+svg.lucide[width="28"] { width: calc(28px * var(--ui-icon, 1)); height: calc(28px * var(--ui-icon, 1)); }
+
+/* ── Clearing out a transport directory (`SweepSheet.tsx`) ───────────────────
+   The list is a PREVIEW of a destructive action, so the two facts per row are
+   what is being deleted (the full worktree-relative path — two transport
+   directories can hold the same filename) and how much of it there is. The path
+   wraps rather than ellipsising: a truncated path in a delete confirmation is
+   the one place this app must not ask the reader to guess. */
+.sweep-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.sweep-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-10); }
+.sweep-path { min-width: 0; overflow-wrap: anywhere; font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.sweep-meta { flex: none; color: var(--muted); font-size: calc(var(--fs-11) * var(--ui-font, 1)); }
+
+/* Storage rows stack: a store's name and its bytes on one line, then the
+   sentence saying what clearing it costs, then the control. `.sweep-row`'s
+   single baseline row cannot hold three things without the cost sentence
+   being clipped, and that sentence is the one part a person must read before
+   the tap. */
+.storage-row { display: block; }
+.storage-row-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-10); }
+.storage-row .form-hint { margin: var(--sp-4) 0 var(--sp-6); }
+.storage-row .key { margin-bottom: var(--sp-2); }
+/* The age ladder wraps at phone width — four chips each carrying a count and a
+   byte total do not fit on one line, and a horizontally scrolled row of chips
+   hides the very option (the widest cut) somebody opened this sheet for. */
+.sweep-ages { flex-wrap: wrap; }
+
+/* ── The model picker's where-filter (`ModelField.tsx`) ──────────────────────
+   Thirty ids in one alphabetical drop-down is a list nobody reads to the end.
+   The chips (the kit's `FilterChip`s) split it by where the model RUNS, and the row wraps because two or
+   three chips carrying counts do not fit a phone's width beside a label. The negative margin
+   lines the first pill up with the select below it (a chip's touch box is 3px wider each side). */
+.model-field { display: flex; flex-direction: column; gap: var(--sp-6); min-width: 0; }
+.fchips.model-where { padding: 0; margin: 0 -3px; }
+/* The select must never push the row wider than the screen — an id here can be
+   `lmstudio-local/google/gemma-4-31b` and the row it sits in is a flex child. */
+.model-field select { max-width: 100%; }
+
+/* The hosted-model disclaimer (`ModelField.tsx`). Not dismissible and not a
+   `title`: the consequence it names — your source code leaving the machine —
+   is one somebody cannot undo after the fact, and a tooltip is invisible on a
+   phone. `--warn` rather than `--dead`: this is a thing to read before you act,
+   not a failure that has happened. */
+.model-warn {
+  display: flex; align-items: flex-start; gap: var(--sp-6);
+  color: var(--warn); background: var(--warn-wash);
+  border-left: 3px solid var(--warn);
+  padding: var(--sp-6) var(--sp-8); border-radius: var(--r-6);
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14);
+}
+.model-warn > svg { flex: none; margin-top: var(--sp-2); }
+
+/* A session NOT running claude, marked so the overview reads at a glance
+   (`sessionFacts.launchLabel` already writes `backend · model`; this is what
+   makes it findable in a list of twenty rows). Earned by being different — a
+   claude row is character-for-character and colour-for-colour what it was. */
+.row-foreign {
+  color: var(--accent); font-weight: var(--fw-semibold);
+  background: var(--accent-wash); border-radius: var(--r-6);
+  padding: 1px var(--sp-6); margin-left: -1px;
+}
+
+/* ── Watching an assessment run ─────────────────────────────────────────
+   The run takes up to twenty minutes and the screen used to say one sentence
+   for all of it, which is the same sentence a run that died in its first second
+   shows. This is the CLI's own stream, as a list: a headline of what it is
+   doing now, the counts, and the steps behind it.
+
+   One scroll region with a ceiling, like the build log's, because the list is
+   unbounded in the one direction a sheet is not — and `overflow-y: auto` rather
+   than a clip, so the steps above the last one are still reachable. */
+.assess-watch {
+  display: flex; flex-direction: column; gap: var(--sp-6);
+  padding: var(--sp-8) var(--sp-10); margin-bottom: var(--sp-8);
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-8);
+}
+.assess-doing {
+  display: flex; align-items: center; gap: var(--sp-6);
+  font-size: calc(var(--fs-13) * var(--ui-font, 1)); line-height: var(--lh-14);
+  word-break: break-word;
+}
+.assess-doing > svg { flex: none; color: var(--accent); }
+.assess-say { font-style: italic; }
+.assess-log {
+  display: flex; flex-direction: column; gap: var(--sp-4);
+  max-height: 210px; overflow-y: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: calc(var(--fs-11) * var(--ui-font, 1)); line-height: var(--lh-14);
+}
+.assess-step { display: flex; align-items: flex-start; gap: var(--sp-6); color: var(--muted); }
+.assess-step > svg { flex: none; margin-top: var(--sp-2); }
+.assess-step-label { flex: none; color: var(--fg); }
+.assess-step-detail { word-break: break-word; }
+/* The run's own words, marked apart from the things it DID — one is evidence of
+   work, the other is narration, and a list that reads them the same way invites
+   "it said it checked X" to stand in for "it opened X". */
+.assess-step-say { font-family: inherit; font-style: italic; }
+
+/* What accepting on a strip does, under its head. A sentence, not a `title`:
+   a tooltip is invisible on a phone, which is `Unavailable.tsx`'s rule and the
+   reason this line exists at all — "accept" on a list of work items reads as
+   "accept this task, go and build it". */
+.assess-effect { padding: 0 var(--sp-12) var(--sp-4); }
+
+/* ── The two questions the apply asks ──────────────────────────────────
+   *Should the order stay as you approved it?* and *should the run's titles go
+   on the rows?* are two answers to one screen, not a warning stacked on a
+   warning, so they sit SIDE BY SIDE and wrap to two rows on a narrow phone.
+   They are the LAST thing in the scroll region, not a band in the fixed
+   footer — `AssessSheet`'s `asks` has the measurement and the reason. */
+.asr-asks { display: flex; flex-wrap: wrap; gap: var(--sp-4) var(--sp-10); }
+/* **The two answers to one question, and the rule that stops them leaving their
+   column.**
+
+   They were an `.annot-tools tri wrap` strip borrowed from the annotator, and
+   that class is wrong here in two ways that only show up on a real phone: it is
+   `overflow: visible`, so nothing clips what escapes, and the `.key`s inside it
+   are `flex: 0 0 auto` — always their max-content width, never able to shrink.
+   At a larger `--ui-font` the free-order label therefore painted over
+   the question beside it and `leave the rows as they are` ran off the right edge
+   of the screen: unreadable and untappable, on the last decision before Apply.
+
+   So a button here SHARES the column and wraps its own words. The basis is
+   `12ch` — characters, not pixels, so it scales with the text by construction —
+   which makes the pair sit side by side inside a wide column and fall to one
+   per row inside a narrow one, with no media query and nothing to re-tune when
+   the words change. 44 px is the fingertip floor and it is asserted here rather
+   than inherited: `.annot-tools.tri .key` is a deliberate 36 px exception and
+   these buttons were inside it. (The SELECTOR, never a line number — the number
+   that used to be here was wrong two edits after it was written.) */
+.asr-answer { display: flex; flex-wrap: wrap; gap: var(--sp-6); margin-top: var(--sp-6); }
+.asr-answer > .key {
+  flex: 1 1 12ch; min-width: 0; max-width: 100%; min-height: 44px;
+  padding: var(--sp-8) var(--sp-10); text-align: center;
+  white-space: normal; overflow-wrap: break-word; word-break: normal;
+}
+/* **Two columns at 320 px as well as at 400**, which is the whole reason the
+   second question is "beside" and not "under" — and ONE COLUMN wherever two
+   would be narrower than the words.
+
+   THE measurement, re-taken in headless Chrome with both questions drawn and
+   quoted verbatim by `AssessSheet`'s `asks` and by `web.md`. At 320×780 and
+   `--ui-font` 1 the list keeps 399 px with the pair in the scroll and the pair
+   is 314 px side by side; at 400×850 it is 520 px and 250 px. Put back in the
+   fixed footer that height comes straight off the list, which is the letterbox
+   the guide block was moved out of the head for. Side by side the taller of the
+   two governs, so asking a second question costs almost nothing in height.
+
+   **The basis is in `ch`, not px, and that is the whole of the fix for the
+   overlap.** A fixed `118px` is a claim about how wide the words are, and the
+   words get wider with `--ui-font`: on a 384 px phone at a larger text size the
+   two columns stayed side by side at a width neither question's answers fitted,
+   and `.key`'s `flex: 0 0 auto` then painted them over each other and off the
+   screen.
+
+   **What `18ch` is measured in, exactly**: `.form-hint`'s own 13 px sans, which
+   is this element's font — NOT the 14 px monospace of the `.key`s inside it,
+   which is where the words that overflowed actually live. The two scale
+   together with `--ui-font`, so the basis still tracks the text; it is simply
+   not a measurement OF the words it is deciding about, and reading it as one is
+   how a basis quietly becomes a promise. It does not need to be: a `ch` basis
+   scales with the text by construction, which is the whole of what it is for.
+   Measured where the pair actually falls: side by side at 320/1, 384/1,
+   384/1.25, 400/1 and 400/1.25; one column at 320/1.25, 320/1.45, 384/1.45 and
+   400/1.45.
+
+   **The threshold is the comfort, never the correctness.** Where the pair falls
+   is a font-metric question and will land differently on another device's
+   system font — and on a basis measured in a different face from the words, as
+   above. What does NOT depend on either is that nothing overflows and nothing
+   overlaps: that rests on `min-width: 0` here and the wrapping in `.asr-answer`,
+   unconditionally and at any width. Verified green at `--ui-font` 1.5, 1.8 and
+   a forced 1.9 — past the app's own 1.45 ceiling, which is not the real ceiling
+   (Chrome/WebView on Android multiplies px text by the SYSTEM font scale on top
+   of `--ui-font`). */
+.asr-asks > .asr-pin { flex: 1 1 18ch; min-width: 0; }
+/* A proposed title, on a row/card/new item. It is a LABEL over the words, so it
+   keeps the head's own weight and only earns the `Sparkles` gap — the mark is
+   the whole point, and the words beside it must not look like a control. */
+.asr-headline { display: inline-flex; align-items: center; gap: var(--sp-4); }
+/* The chip-and-title line where there is no head to put it in (a merge card, a
+   new item): the same rhythm as the prompt it sits above. */
+.asr-namehead { padding: 0 var(--sp-12) var(--sp-4); }
+
+/* ── How this screen works (the assessment's guide block) ───────────────
+   A person met this sheet, could not tell what `accept` would do — *"Run
+   someone for implementation?"* — and approved eighty-four retirements to find
+   out. Every other sentence on that screen answers a row; this one answers the
+   screen, so it is the first thing in the scroll, where the question is still
+   being asked.
+
+   It is INSIDE the scroll, not pinned above it. Drawn in the head it was five
+   rows of chrome over an 81 px strip of the proposal (AssessSheet.tsx has the
+   measurement) — an explanation of how to read the words, occupying the screen
+   the words needed. It scrolls away with everything else it explains.
+
+   A hint block rather than a panel: it is the same weight as every other piece
+   of guidance in the app, and it is read once and collapsed. The list is tight
+   because it is four short lines, not prose. */
+.assess-intro { padding: var(--sp-8) var(--sp-12) var(--sp-4); border-bottom: 1px solid var(--line); }
+/* The gutter is on the block, not on the text: `.assess-guide-lead` and the
+   `ul` were children of `.sheet-head`'s sibling slot, which pads nothing, so
+   every sentence started hard against the left edge of the phone. */
+.assess-intro .act-group-head { padding-left: 0; padding-right: 0; }
+/* ONE line at 400 px, which is what stops it being a wall again: at the body's
+   16 px it wrapped to two and every future word added a third. The size is the
+   app's hint scale (`.form-hint`'s 13 px) and the weight is what marks it as
+   the standing sentence rather than one more hint. It still WRAPS rather than
+   clips at a bigger `--ui-font` — these are the words the screen is about. */
+.assess-guide-lead { font-weight: var(--fw-semibold); font-size: calc(var(--fs-13) * var(--ui-font, 1)); }
+.assess-guide {
+  margin: var(--sp-4) 0 var(--sp-2); padding-left: var(--sp-16);
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  color: var(--muted);
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14);
+}
+.assess-guide > li { word-break: break-word; }
+/* **The words on this sheet are the decision, so they never break mid-word.**
+   `.form-hint`'s global `word-break: break-all` is for paths and it is right
+   there; here it is wrong for `.ctxlim`'s reason and one worse. This sheet's
+   hints are the run's own summary of what it judged and the sentence saying
+   what Apply does not do — read to be checked, not scanned — and break-all
+   rendered them as "0 co / vered elsewhere" and "can be b / uilt or sent".
+   `overflow-wrap: break-word` still saves a plan path too long for the
+   line; it just will not cut an ordinary word to do it. */
+.assess-sheet .form-hint { word-break: normal; overflow-wrap: break-word; }
+
+/* **Every `.key` on this sheet shares its strip and wraps its own words** —
+   `.asr-answer`'s recipe, applied to the three other strips that have its exact
+   shape rather than waiting to be reported a fourth time.
+
+   **1.45 is not the ceiling.** `uiScaleSteps.ts`'s `TEXT_MAX` bounds what this
+   app's own zoom will set, and Chrome/WebView on Android then multiplies px
+   text by the SYSTEM font scale ON TOP of `--ui-font` — so an effective ~1.9 is
+   reachable, on exactly the phone that has reported this three times. At that
+   scale `approve the merge` (`.act-acts`, a merge card) and the step-log toggle
+   (`.section-head`, *what it looked at*) are each wider on their own than a
+   320 px phone, and both sat in `overflow: visible` strips full of
+   `flex: 0 0 auto` `.key`s: the same bug as the pin/name pair, in three more
+   places, and it does not clip — it paints off the edge of the screen where
+   nothing can scroll to it.
+
+   So: shrinkable, capped at the container, and allowed to wrap between words.
+   `flex: 0 1 auto` and not `1 1` — `.act-bulk`'s reason — because a strip of
+   two short verbs must not stretch them across the row. Ordinary words never
+   break mid-word (`word-break: normal`); `overflow-wrap` still saves a token
+   longer than the line. The 44 px fingertip floor is `.key`'s own and is
+   untouched, and the head's `.key`s keep `min-width: 0` so the title beside
+   them gives up width first.
+
+   Scoped to `.assess-sheet` deliberately: `.act-acts` and `.section-head` are
+   app-wide classes whose other users carry short verbs and are measured where
+   they are. This is the sheet whose controls are SENTENCES. */
+.assess-sheet .act-acts > .key,
+.assess-sheet .section-head > .key,
+.assess-sheet .sheet-head > .key {
+  flex: 0 1 auto; min-width: 0; max-width: 100%; text-align: center;
+  white-space: normal; overflow-wrap: break-word; word-break: normal;
+}
+/* The icon is not what gives up width — a squashed lucide glyph is the other
+   way a shrinking button goes wrong, and `.key` is `inline-flex`, so its svg is
+   a flex item with the default `flex-shrink: 1`. The WORDS wrap; the mark does
+   not change size. */
+.assess-sheet .act-acts > .key > svg,
+.assess-sheet .section-head > .key > svg,
+.assess-sheet .sheet-head > .key > svg { flex: none; }
+
+/* ── An OFFER: a pad note the run says is still wanted ──────────────────
+   Two cards can sit next to each other under *what it proposes to add*, and
+   the words on one were written by a model while the words on the other were
+   written by the person holding the phone. If those two read alike, the whole
+   point of copying the note verbatim (`cleanAssessment`) is lost: what a person
+   approves is a sentence, and "whose sentence is this" is the first thing they
+   have to be able to answer.
+
+   The head already differs — a `NotebookPen` and *from your pad*, not a `Plus`
+   and *a new item* — and the verbs differ (`file it` / `will be filed`). This
+   is the third mark, and it is the one that works at a glance while scrolling
+   past: a rail down the left edge and a wash, the shape `.q-card.resuming`
+   already uses on this app's other "this one is not like its neighbours" card.
+
+   Accent, not a kind colour: `--purple` and friends stand for KINDS of work on
+   the backlog, and an offer is not a kind — it is a provenance. Tokens only
+   (`theme.test.mjs` parses this file), so it re-picks itself in light. */
+.q-card.asr-offer {
+  box-shadow: var(--stripe);
+  background: var(--accent-wash);
+}
+
+/* The repo menu's one SENTENCE — `RepoHealthRegion.tsx`'s `RepoHealthMenuItem`,
+   under `Unavailable.tsx`'s rule: a repo with no `tools/repohealth.mjs` gets
+   words where the button would be, never a dimmed button with an invisible
+   `title`. `.row-more` is a WRAPPING FLEX ROW of controls, so a sentence
+   dropped into it is sized by its content and simply overhangs the row at
+   320px; it takes a line of its own instead, and gives up the gutter the
+   buttons beside it already carry. */
+.row-more > .act-cants { flex: 0 0 100%; padding: var(--sp-2) 0 0; }
+/* The narrative itself (`RepoHealthRegion.tsx`'s series region). `.tr-say` is the app's one
+   non-scrolling markdown prose block, borrowed here for its typography; all
+   this adds is the side gutter the transcript gets from its own row. It is
+   deliberately NOT `.viewer-doc-body`, which is `flex: 1; overflow-y: auto` —
+   a scroller nested inside `.sheet-scroll`, once per day of history. */
+.rh-doc { padding: 0 var(--sp-14) var(--sp-6); }
+.rh-doc > :first-child { margin-top: var(--sp-4); }
+
+/* ── Repo readings, region 2: the series as charts ──────────────────────────
+   `RepoHealthRegion.tsx` + `RepoHealthTiles.tsx`. Every rule here is deliberately
+   colourless except where it names a validated `--chart-*` slot: a reading
+   compared to its own past has no side to be on, so there is no `--warn`, no
+   `--dead` and no band anywhere in this block. The one accent is the end dot
+   on a curve, which marks WHERE the series is, not what it means. */
+
+/* The head: ONE status line, its `?` beside the words (not out by the button,
+   where it would read as explaining the refresh), the verb at the END of that
+   same row, and the folded details on a line of their own under all three —
+   `order` puts the `Explain` body last.
+   A flex line breaks on BASE sizes before it shrinks anything, and the words'
+   base is their whole unwrapped length — so beside the verb they are capped to
+   what the row leaves (`?` + button + gaps ≈ 16em, all scaling with --ui-font)
+   and wrap inside it; the verb wrapped onto a row of its own, pushed right with
+   empty space beside it. Under 9em of words the row truly cannot hold both and
+   the verb wraps. The slack goes to whichever sits last BEFORE the verb, never
+   to the verb's own left, so a wrapped verb starts at the gutter like any line. */
+.rh-head { justify-content: flex-start; padding: var(--sp-10) var(--sp-14) var(--sp-6); }
+.rh-head > .rh-status { flex: 0 1 auto; padding: 0; }
+.rh-head > .rh-beside { max-width: max(9em, 100% - 16.5em); }
+.rh-head > .rh-push, .rh-head > .explain-chip { margin-right: auto; }
+.rh-head > .explain-body { order: 1; }
+.rh-head > .explain-body > p { margin: 0 0 var(--sp-6); }
+/* The scope row: the kit's chips on the sheet's 14px gutter (pill = row 11 + chip 3). */
+.fchips.rh-scope { padding: 0 var(--sp-10); }
+.rh-scope > .ctx-stackpick-lab { padding: 0 var(--sp-4); }
+
+/* The measured box. Its own side padding is the gutter every other row in the
+   sheet has, and `SeriesRegion` subtracts it before drawing — `clientWidth` is
+   the padding box, and an SVG drawn at that width pushes its right-hand marks
+   past the visible edge (`ContextSheet.tsx`'s `.ctx-box` learnt this first). */
+.rh-box { padding: var(--sp-4) var(--sp-14) 0; }
+.rh-chart { padding: var(--sp-8) 0 var(--sp-2); }
+/* `touch-action: pan-y` and not `none`: a horizontal drag scrubs the curve,
+   a vertical one still scrolls the sheet the chart is halfway down. `none`
+   here traps the page under six of these. */
+.rh-spark { display: block; margin-top: var(--sp-10); overflow: visible; color: var(--fg); touch-action: pan-y; }
+
+/* One column, always. The sparkline is drawn at the MEASURED width of the box
+   above, so a media query that made this two columns would halve the space
+   each tile has and leave every curve drawn at twice its container. If this
+   ever wants a second column, the measurement has to move into the tile. */
+.rh-tiles { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-10); }
+.rh-tile {
+  display: flex; flex-direction: column; gap: var(--sp-4);
+  padding: var(--sp-10) 0 var(--sp-12); border-bottom: 1px solid var(--line);
+}
+.rh-tile:last-child { border-bottom: none; }
+.rh-tile-head { display: flex; align-items: baseline; gap: var(--sp-8); flex-wrap: wrap; }
+/* A chart that is not a tile still needs a name, because the `?` beside it
+   needs a subject — a lone question mark over a drawing is a control with
+   nothing to be about. Same type as a tile's label so the two rows of this
+   sheet read as one list. */
+.rh-chart-head { display: flex; align-items: baseline; gap: var(--sp-6); margin: 0 0 var(--sp-4); }
+.rh-chart-label { font-weight: var(--fw-semibold); min-width: 0; }
+/* Whose readings follow: waterplane's, or the repo's own. Said once per group,
+   as a heading, never as a badge on each tile. */
+.rh-prov { margin: var(--sp-14) 0 var(--sp-6); }
+/* The `?` itself.
+   The glyph is 13px and the TARGET is 26 — above WCAG 2.5.8's 24px floor and
+   in reach of a thumb, which is the whole point: it exists because the
+   long-press route it duplicates is the one nobody can see, and a chip that
+   is visible but misses under a finger has replaced an invisible affordance
+   with a frustrating one. The first version was 21px square with negative
+   margins that pulled even that back out of the layout.
+   The vertical margin still collapses the box back to the line's own height
+   so a row of labels does not grow around it; the horizontal one does not,
+   so the target keeps its full width. */
+.hint-chip {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  min-width: 26px; min-height: 26px;
+  vertical-align: -7px; padding: 0; margin: -7px 0;
+  background: none; border: 0; color: var(--muted); cursor: pointer;
+  border-radius: var(--r-pill); line-height: 0;
+}
+.hint-chip:active { background: var(--hover); }
+/* The numbers table. It is the ONE thing on this sheet allowed to be wider
+   than the phone, and only inside its own scroller — the sheet's own body must
+   never scroll sideways. `tabular-nums` because the columns are read down. */
+.rh-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: var(--sp-2) 0 var(--sp-4); }
+.rh-table {
+  border-collapse: collapse; font-size: calc(var(--fs-12) * var(--ui-font, 1));
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.rh-table th, .rh-table td { padding: var(--sp-4) var(--sp-10) var(--sp-4) 0; text-align: left; font-weight: var(--fw-regular); }
+.rh-table thead th { color: var(--muted); font-weight: var(--fw-medium); }
+.rh-table tbody th { color: var(--fg); font-weight: var(--fw-semibold); }
+.rh-table .num { text-align: right; }
+.rh-table tbody tr:nth-child(odd) { background: var(--hover-soft); }
+/* `flex: 1 1 10ch` and not a pixel basis: a label is words, and a column sized
+   in pixels is a claim about how wide they are at one font scale — the
+   assessment sheet's 118px column painted one control over another at 1.45.
+   `ch` scales with the text, so the slope drops onto its own line exactly when
+   two would be narrower than the words. */
+.rh-tile-label { flex: 1 1 10ch; min-width: 0; font-weight: var(--fw-semibold); }
+/* The slope: a glyph and its word, in the row's own ink. NEVER coloured by
+   direction — rising lines and rising escape hatches are opposite news, and a
+   hue would choose for the reader. */
+.rh-slope {
+  flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: var(--sp-4);
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); white-space: nowrap;
+}
+.rh-slope > svg { flex: none; }
+/* The stat tile's value. Proportional figures on purpose: `tabular-nums` gives
+   every digit the width of a zero, which reads as loose at this size — it is
+   reserved for columns that must align. */
+.rh-tile-val { font-size: calc(26px * var(--ui-font, 1)); font-weight: var(--fw-semibold); line-height: var(--lh-12); letter-spacing: -0.01em; }
+/* The value row: the number leads, its slope and its rank sit beside it and
+   wrap under it when the words are wider than the phone. The rank is a quiet
+   outlined pill in ink, never a colour — a percentile is a position, not news. */
+.rh-tile-valrow { display: flex; align-items: baseline; gap: var(--sp-4) var(--sp-10); flex-wrap: wrap; margin-bottom: var(--sp-4); }
+.rh-rank {
+  flex: 0 1 auto; min-width: 0; padding: 1px var(--sp-6); border: 1px solid var(--line); border-radius: var(--r-pill);
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); white-space: nowrap;
+}
+/* What the tile measures, in one plain line, under its name. */
+.rh-tile-mean { font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14); color: var(--muted); margin-top: -2px; }
+/* A repo's disable or override of this reading: an ink rule at the left, no
+   colour — it is the repo's say, reported, not news about the reading. */
+.rh-tile-variant {
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14); color: var(--fg);
+  border-left: 2px solid var(--line); padding: 1px 0 1px var(--sp-8); margin: var(--sp-2) 0 var(--sp-4); word-break: break-word;
+}
+/* A link over weeks with no row, and the readout line under the index. */
+.hix-cap { font-size: calc(var(--fs-13) * var(--ui-font, 1)); padding-top: var(--sp-4); }
+.hix-alerts { list-style: none; margin: var(--sp-4) 0 0; padding: 0; display: grid; gap: var(--sp-4); font-size: calc(var(--fs-13) * var(--ui-font, 1)); }
+.hix-alert { display: flex; gap: var(--sp-6); align-items: flex-start; }
+.hix-alert svg { flex: none; margin-top: var(--sp-2); }
+.hix-alert.severe { color: var(--dead); }
+.hix-alert.warn { color: var(--warn); }
+.hix-vs { padding-top: var(--sp-4); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); }
+.hix-legend { display: flex; flex-wrap: wrap; gap: var(--sp-4) var(--sp-14); padding-top: var(--sp-6); font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); }
+.hix-legend span { display: inline-flex; align-items: center; gap: var(--sp-6); }
+.rh-tile .rh-tile-label { font-size: calc(var(--fs-13) * var(--ui-font, 1)); letter-spacing: .01em; }
+.rh-tile-read, .rh-tile-detail, .rh-tile-absent, .rh-cap, .rh-lead {
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14); color: var(--muted);
+  word-break: break-word;
+}
+.rh-tile-read { color: var(--fg); opacity: .8; }
+.rh-tile-acts { display: flex; flex-wrap: wrap; gap: var(--sp-6); padding-top: var(--sp-2); }
+.rh-cap { padding: var(--sp-4) 0 var(--sp-6); }
+.rh-lead { color: var(--fg); font-weight: var(--fw-semibold); }
+
+/* Legends. Always present for two or more series (the non-negotiable), and the
+   TEXT wears the app's ink tokens — identity comes from the swatch beside it,
+   never from coloured words. */
+.rh-legend {
+  list-style: none; margin: var(--sp-4) 0 0; padding: 0;
+  display: flex; flex-wrap: wrap; gap: var(--sp-4) var(--sp-14);
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted);
+}
+.rh-legend > li { display: inline-flex; align-items: center; gap: var(--sp-6); min-width: 0; }
+.rh-swatch { flex: none; width: 10px; height: 10px; border-radius: var(--r-2); background: var(--muted); }
+/* The total's entry: the mark in the chart is a LINE, so the legend's mark is
+   a line too. A square here would name a band that is not drawn. */
+.rh-swatch-line { height: 2px; border-radius: 1px; background: var(--fg); opacity: .5; }
+/* The dumbbell's far end is a filled CIRCLE in the chart, so it is a circle
+   here. It was a rounded square, which named a mark the chart does not draw —
+   a legend that disagrees with its own chart about the SHAPE of a mark is one
+   the reader has to match up by position instead of by looking. */
+.rh-swatch-dot { border-radius: var(--r-round); width: 11px; height: 11px; }
+/* The dumbbell's near end is hollow in the chart and hollow here. */
+.rh-swatch-hollow {
+  background: var(--panel); border: 2px solid var(--chart-1); border-radius: var(--r-round);
+  width: 11px; height: 11px;
+}
+
+/* The per-area readout under its bars — the words half of the dumbbell, so no
+   number on that chart is reachable only by hovering something. */
+.rh-rows {
+  list-style: none; margin: var(--sp-4) 0 0; padding: 0;
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); line-height: var(--lh-14);
+}
+.rh-rows > li { padding: 1px 0; }
+.rh-rows-key { font-weight: var(--fw-semibold); color: var(--fg); }
+/* Labels drawn INSIDE an SVG cannot inherit the cascade the way a span does. */
+.rh-axis-label { fill: var(--muted); font-size: var(--fs-11); }
+/* The axis ticks: the fitted bounds up the left, the days along the bottom.
+   Tabular figures because the y pair is a column of numbers that must align,
+   and INK rather than any series colour — a label tinted with what it measures
+   is a number that changes meaning with the palette.
+
+   The text scales with `--ui-font`; the gutter that holds it does NOT — it is
+   `chars * 6 + 8` in fixed px in `RepoHealthTiles.tsx`, measured in SVG user
+   units where there is no cascade to read the variable from. So at `TEXT_MAX`
+   (1.45) the widest label here, `143,176`, wants ~55px against the ~45px the
+   gutter reserves and overhangs about ten to its left. That is deliberate
+   rather than unnoticed: `.rh-spark` is `overflow: visible` and `.rh-box`
+   carries the sheet's own 14px side gutter, so the overhang lands in padding
+   and the number stays whole. Clipping a figure would be the real fault. */
+.rh-tick {
+  fill: var(--muted); font-size: calc(var(--fs-10) * var(--ui-font, 1));
+  font-variant-numeric: tabular-nums;
+}
+/* The crosshair's answer. `min-height` and not a fixed height: at a large UI
+   scale this line wraps, and a clipped readout is worse than a taller tile.
+
+   This line is the ONE place a past day's value and its sha appear — unlike
+   `ContextChart`, which earns its crosshair by carrying a values table beside
+   it, this region has no table, so the drag is the only way to those figures.
+   That is why the line is always present and says how to use it: a fact
+   reachable only by a gesture must at least announce the gesture. Everything
+   a reader needs to ACT on — the latest value, the rank, the slope — is in the
+   tile above and needs no touching. The hint itself is muted (`.scrub-hint`),
+   so the 80% is on the colour, never an `opacity` on the box: that dimmed the
+   muted hint below AA, and the tape pick's *open* button with it. */
+.rh-scrub {
+  min-height: 17px; padding-top: var(--sp-2);
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14);
+  color: color-mix(in srgb, var(--fg) 80%, transparent); font-variant-numeric: tabular-nums;
+  word-break: break-word;
+}
+/* The tape's pick: the file under the finger and its *open* verb on one line,
+   the path allowed to wrap rather than truncate — a clipped path is the one
+   half of the pick a reader came for. */
+.rh-tape-pick { display: flex; align-items: flex-start; gap: var(--sp-8); }
+.rh-tape-pick-words { flex: 1; min-width: 0; }
+.rh-tape-pick .key { flex: none; display: inline-flex; align-items: center; gap: var(--sp-4); }
+/* The magnitudes. Not a fold any more — a fold is a button, and these are the
+   sizes the percentiles above are percentiles OF, so a reader needs them to
+   read the thing they came for. Separated from the readings by a rule rather
+   than by a disclosure triangle: the boundary is real (nothing below it is
+   compared to anything) and has to stay visible, but it is a change of KIND,
+   not a change of importance. */
+/* The longest file leads the region: its curve and today's tape, one block,
+   ruled off from the tiles under it the way the magnitudes are from above. */
+.rh-longest { padding: var(--sp-2) 0 var(--sp-8); margin-bottom: var(--sp-8); border-bottom: 1px solid var(--line); }
+.rh-longest-path {
+  font-weight: var(--fw-regular); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted);
+  overflow-wrap: anywhere;
+}
+/* One file per line: the entries are paths, and wrapped side by side two of
+   them read as one. */
+.rh-legend-rows { flex-direction: column; }
+.rh-legend-rows > li { align-items: baseline; overflow-wrap: anywhere; }
+.rh-legend-rows .rh-swatch-line { width: 12px; transform: translateY(-3px); }
+.rh-mags { padding: var(--sp-6) 0 var(--sp-4); border-top: 1px solid var(--line); margin-top: var(--sp-8); }
+.rh-mags-head {
+  padding: var(--sp-6) 0 var(--sp-2); font-weight: var(--fw-semibold);
+  font-size: calc(var(--fs-13) * var(--ui-font, 1)); color: var(--fg);
+}
+
+/* The context-weight row's twin: the SAME quantity as the check above it, read
+   on the last commit measured instead of on the working tree. Indented to the
+   check's own detail gutter so it reads as part of that row and not as a new
+   one, and boxed on its left edge in ink — never in a status colour, because
+   this half has no status. */
+.rh-twin {
+  margin: var(--sp-6) 0 var(--sp-2) var(--sp-24); padding: var(--sp-6) 0 var(--sp-2) var(--sp-10);
+  border-left: 2px solid var(--line);
+}
+.rh-twin-line, .rh-twin-read {
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14); color: var(--muted);
+}
+.rh-twin-read { padding-top: var(--sp-4); }
+.rh-twin-rows { list-style: none; margin: var(--sp-4) 0 0; padding: 0; }
+.rh-twin-rows > li {
+  display: flex; align-items: center; gap: var(--sp-8); flex-wrap: wrap;
+  padding: var(--sp-2) 0; font-size: calc(var(--fs-12) * var(--ui-font, 1));
+}
+.rh-twin-key { flex: 1 1 12ch; min-width: 0; color: var(--muted); }

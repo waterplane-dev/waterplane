@@ -97,7 +97,7 @@ export {
   redactSample,
   captureSample,
   observe,
-  rearmForVersion,
+  rearmForVersion, clearSeen,
   noteCliVersion,
   signalVerdict,
   agoText,

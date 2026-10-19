@@ -7,6 +7,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readAllCss } from "../../../../../tools/csssource.mjs";
 import { chipCut } from "@waterplane/shared";
 import { claudeDoorBeside, claudeSegmentFigures, figuresHot, infoFigures, readingsOf, tokensOpenSource } from "../../features/tokens/logic.ts";
 
@@ -67,14 +68,15 @@ test("two sources or more: one Gauge, header-key metrics, the group last in the 
   const src = readFileSync(new URL("./UsageChip.tsx", import.meta.url), "utf8");
   assert.match(src, /const gauge = !group \|\| \(!withDoor && i === 0\);/, "the Gauge is drawn once, on the group's first segment");
   assert.match(src, /function OtherFace\(\{ seg, size, gauge = true \}/);
-  const css = readFileSync(new URL("../../styles.css", import.meta.url), "utf8");
-  // Measured (Chromium, this repo's styles.css, launcher bar with logo, ?, menu, bell, settings):
+  const css = readAllCss();
+  // Measured (Chromium, this repo's styles.css, launcher bar with logo, ?, menu, bell, settings;
+  // at the 7/9 padding the 2026-10-19 token snap made 6/8 — each segment is now 2px narrower):
   // claude's segment is 171.5×40 alone AND in the group (it was 177.5×44 in the group), the bar is
   // two rows at 360 and 390 px with claude + Copilot (it was three and four) — the same two rows
   // claude alone takes at 360 — and a third source wraps inside the group, never past the screen.
   const keyRule = css.split("\n").find((l) => l.startsWith(".topbar > .key,"));
-  assert.ok(keyRule?.includes(".topbar > .usage-multi > .key") && keyRule.includes("min-height: 40px") && keyRule.includes("padding: 7px 9px"),
-    "a group segment wears `.topbar > .key`'s 40px and 7/9 padding, so claude keeps its width");
+  assert.ok(keyRule?.includes(".topbar > .usage-multi > .key") && keyRule.includes("min-height: 40px") && keyRule.includes("padding: var(--sp-6) var(--sp-8)"),
+    "a group segment wears `.topbar > .key`'s 40px and 6/8 padding, so claude keeps its width");
   assert.ok(!/\.usage-multi \.usage-seg \{[^}]*min-height/.test(css), "no 44px floor of its own: the row is the touch floor");
   assert.match(css, /\.topbar > \.usage-multi \{ order: 10; flex: 0 1 auto; flex-wrap: wrap; \}/, "last in the bar, wrapping inside");
   assert.match(css, /:is\(\.topbar > \.key, \.hdr-ctl > \.key, \.hdr-pin > \.key, \.topbar > \.usage-multi > \.key\)/, "the desktop's mouse sizes too");

@@ -245,6 +245,18 @@ export function outboxCut(r: { outboxSeenAt?: number | null; outboxCount: number
  * ran first and called preventDefault) is never taken a second time — that
  * was two copies of every Ctrl+V'd screenshot.
  */
+/**
+ * Whether every pasted picture is one the annotator ALREADY holds, byte for
+ * byte. A Ctrl+V landing while its own picture is on screen is a repeat, not a
+ * second picture: asking "Append?" there made the yes the easy answer, and the
+ * same screenshot went up twice (25 of 31 desktop pastes once took that yes).
+ * Bytes, not names or sizes alone: every clipboard picture is `image.png`.
+ */
+export function pasteRepeatsHeld(pasted: readonly Uint8Array[], held: readonly Uint8Array[]): boolean {
+  const same = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((x, i) => x === b[i]);
+  return pasted.length > 0 && pasted.every((p) => held.some((h) => same(p, h)));
+}
+
 export type PasteRoute = "route" | "ask" | "ignore";
 export function pasteRoute(p: {
   files: number; editable: boolean; inCompose: boolean; sheet: boolean; annotating: boolean; repoId: string | null;

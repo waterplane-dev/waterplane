@@ -223,6 +223,10 @@ export function CliUpdateBanner({ update, liveAsk, liveSend }: CliUpdateBannerPr
  *  per session and per version, so a newer install asks again. In memory — a
  *  reload is a fine moment to be told once more. */
 const restartDismissed = new Set<string>();
+/** Restarts already sent, same key. The button is replaced by words the moment
+ *  it is tapped: it stayed tappable until the replacement arrived, and two taps
+ *  were two relaunches — two claudes on one conversation. */
+const restartSent = new Set<string>();
 
 export interface CliRestartBannerProps {
   active: SessionInfo;
@@ -258,6 +262,9 @@ export function CliRestartBanner({ active, update, relaunch }: CliRestartBannerP
       ],
       confirmLabel: "Restart now",
     }))) return;
+    if (restartSent.has(key)) return;
+    restartSent.add(key);
+    bump((n) => n + 1);
     track("action:session.cliRestart");
     relaunch(active, {});
   };
@@ -268,7 +275,9 @@ export function CliRestartBanner({ active, update, relaunch }: CliRestartBannerP
         <span className="update-text">
           {v.text}{v.loses ? ` Running now: ${v.loses}.` : ""}
         </span>
-        {v.cant
+        {restartSent.has(key)
+          ? <span className="update-text">restarting — the new session opens here</span>
+          : v.cant
           ? <CantInline>can't restart here — {v.cant}</CantInline>
           : <button className="key" onClick={() => void restart()}>Restart, same conversation</button>}
         <button className="key" title="hide this for this version — a newer install asks again"

@@ -1,0 +1,552 @@
+/* 13-insights-onboard.css: all-sessions boxes, session budget, demo line and tour, first-app onboarding, shared bits. */
+.rh-twin-val { flex: 0 0 auto; font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; }
+
+/* The per-type filter: chips above the stack, one per file type, and the way
+   back out beside the sentence that says what is hidden. `.key.on` is the
+   SELECTED state and the off state is the plain chip — never a dimmed one
+   (`Unavailable.tsx`): both are pressable, and which is which is said by the
+   accent, not by contrast. */
+.rh-filter { display: flex; flex-wrap: wrap; gap: var(--sp-6); list-style: none; margin: 0; padding: var(--sp-6) 0 var(--sp-2); }
+.rh-filter .key { min-width: 0; min-height: 34px; padding: var(--sp-6) var(--sp-8); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.rh-filter .key.on { color: var(--fg); border-color: var(--pick-edge); background: var(--pick-fill); }
+.rh-types .rh-cap .key { min-height: 30px; padding: var(--sp-4) var(--sp-8); font-size: calc(var(--fs-12) * var(--ui-font, 1)); vertical-align: middle; }
+
+/* The context sheet's prose lines. `.empty` is the LIST empty-state and sets
+   no size, so a sentence wearing it alone renders at the body's 15px between
+   12–12.5px neighbours (the strip's legend, `.ts-caveat`) — the composition
+   note did exactly that on the phone. Every prose `.empty` on that sheet
+   carries this too. */
+.empty.ctx-note { font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14); }
+.ctx-cost .ctx-cost-more { padding: var(--sp-8) 0 0; }
+
+/* ── The all-sessions screen's boxes (TokenInsights.tsx) ──────────────────────
+   A filter is the HEAD of the box it filters, and everything it changes is
+   inside the border: which data a chip moves is read off the edge of the box,
+   not off the order of the screen. The two switches that reach everything are
+   pinned above all of it. */
+.ts-global {
+  position: sticky; top: 0; z-index: 3; background: var(--bg);
+  padding: var(--sp-2) 0 var(--sp-8); border-bottom: 1px solid var(--line);
+}
+.ts-scope {
+  margin: var(--sp-14) var(--sp-10) var(--sp-6); border: 1px solid var(--accent-edge); border-radius: var(--r-12);
+  background: var(--panel); overflow: hidden;
+}
+.ts-scope-head {
+  padding: var(--sp-10) var(--sp-12) var(--sp-10); background: var(--accent-tint);
+  border-bottom: 1px solid var(--accent-edge);
+}
+.ts-scope-title {
+  font-size: calc(var(--fs-13) * var(--ui-font, 1)); font-weight: var(--fw-bold); letter-spacing: .05em;
+  text-transform: uppercase; color: var(--fg); margin-bottom: var(--sp-6);
+}
+.ts-scope-chips { display: flex; flex-wrap: wrap; gap: var(--sp-6); }
+.ts-scope-caption { margin-top: var(--sp-6); font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14); color: var(--muted); }
+.ts-scope-body { padding-bottom: var(--sp-8); }
+.ts-scope-body .ctx-box { padding-left: var(--sp-10); padding-right: var(--sp-10); }
+/* The scope, repeated in each section's own head, in the box's accent — so a
+   chart met in the middle of a scroll still says what span it draws. */
+.ts-scope-tag {
+  display: inline-block; margin-left: var(--sp-6); padding: 1px var(--sp-6); border-radius: var(--r-pill);
+  font-size: calc(var(--fs-11) * var(--ui-font, 1)); letter-spacing: 0; text-transform: none;
+  color: var(--accent); background: var(--accent-tint); border: 1px solid var(--accent-edge);
+  vertical-align: 1px;
+}
+.ts-scope-tag-muted { color: var(--muted); background: transparent; border-color: var(--line); }
+
+.ts-insights {
+  margin: var(--sp-12) var(--sp-10) var(--sp-4); padding: var(--sp-10) var(--sp-12); border-radius: var(--r-12);
+  border: 1px solid var(--line); background: var(--well);
+}
+.ts-insights-head {
+  display: flex; align-items: center; gap: var(--sp-6); margin-bottom: var(--sp-4);
+  font-size: calc(var(--fs-13) * var(--ui-font, 1)); font-weight: var(--fw-bold); color: var(--fg);
+}
+.ts-insight { padding: var(--sp-8) 0; border-top: 1px solid var(--line); }
+.ts-insight:first-of-type { border-top: 0; }
+.ts-insight-head { font-size: calc(var(--fs-14) * var(--ui-font, 1)); font-weight: var(--fw-semibold); color: var(--fg); font-variant-numeric: tabular-nums; }
+.ts-insight-body { margin-top: var(--sp-4); font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14); color: var(--muted); }
+.ts-insight-try { margin-top: var(--sp-4); font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14); color: var(--fg); }
+
+.ts-convos { padding: var(--sp-4) var(--sp-14) var(--sp-6); display: flex; flex-direction: column; gap: var(--sp-12); }
+.ts-convo { padding-bottom: var(--sp-10); border-bottom: 1px solid var(--line); }
+.ts-convo:last-child { border-bottom: 0; }
+.ts-convo-facts { margin-top: var(--sp-4); font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14); color: var(--muted); }
+.ts-convo-acts { display: flex; flex-wrap: wrap; gap: var(--sp-6); margin-top: var(--sp-6); }
+.ts-convo-acts .key { display: inline-flex; align-items: center; gap: var(--sp-4); min-height: 34px; }
+.ts-convos-more { align-self: flex-start; }
+/* "Where the week went" (WeekCard.tsx). The chart box is measured (`useBoxWidth`), so it carries
+   the side gutter and nothing else. A row head is the tap target that lists its sessions — the
+   chevron says it opens, and the sessions sit indented under it so they read as its parts. */
+.ts-week-chart { padding: var(--sp-6) var(--sp-12) 0; min-height: 1px; }
+.ts-week-filter { padding-top: var(--sp-8); padding-bottom: var(--sp-2); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--fg); }
+.ts-week-filter .key { display: inline-flex; align-items: center; gap: var(--sp-4); }
+.ts-week-rowhead { cursor: pointer; }
+.ts-week-chev { vertical-align: -3px; margin-left: var(--sp-6); color: var(--muted); }
+.ts-week-sessions { margin-top: var(--sp-8); padding-left: var(--sp-10); border-left: 2px solid var(--line); display: flex; flex-direction: column; gap: var(--sp-10); }
+.ts-week-session .ts-barhead { font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.ts-week-live { padding: 0 var(--sp-6); font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--accent); border: 1px solid var(--accent); }
+/* One row on a 360px phone: pinned chrome that wraps is a third of the
+   screen spent on two switches. */
+.ts-global .ts-filter { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: var(--sp-4) var(--sp-10) 0; gap: var(--sp-4); }
+.ts-global .ts-filter::-webkit-scrollbar { display: none; }
+.ts-global .key { flex: 0 0 auto; padding: var(--sp-4) var(--sp-6); font-size: calc(var(--fs-12) * var(--ui-font, 1)); min-height: 30px; }
+.ts-global .ctx-stackpick-lab { flex: 0 0 auto; }
+/* The token sheet's "now" block above the span filter: never shrunk by the scroller's flex column. */
+.ts-now { flex-shrink: 0; }
+/* The token sheet's ledger picker: one line that scrolls rather than three rows that wrap.
+   `flex-shrink: 0` is load-bearing: `overflow-x: auto` turns the row's min-height into 0, so the
+   scroller's flex column squeezed it to the bottom few pixels of its chips. */
+.ts-src { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; flex-shrink: 0; }
+.ts-src::-webkit-scrollbar { display: none; }
+.ts-src .key { flex: 0 0 auto; }
+
+/* The phone's recogniser is listening, not whisper (`DictateFallbackPill.tsx`):
+   the language pill's shape, in the warn hue — it is the worse engine, and a
+   tap says why it is the one in use. */
+.dict-fallback { color: var(--warn); border-color: var(--warn); font: inherit; cursor: pointer; }
+.dict-fallback .dict-lang-face { color: var(--warn); }
+
+/* Plugins (features/plugins): a section per plugin inside Settings' one
+   `plugins` row, its session-menu group, and a row's plugin badges. */
+.plugin-sec { border-top: 1px solid var(--line); padding: var(--sp-10) 0 var(--sp-4); margin-top: var(--sp-8); }
+.plugin-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6); }
+.plugin-src code, .plugin-env code { word-break: break-all; }
+.plugin-field { display: flex; flex-wrap: wrap; gap: var(--sp-6); align-items: center; margin-top: var(--sp-6); }
+.plugin-field input, .plugin-field textarea { flex: 1 1 160px; min-width: 0; box-sizing: border-box; background: var(--well); color: var(--fg); border: 1px solid var(--line); border-radius: var(--r-8); padding: var(--sp-6) var(--sp-8); font-size: calc(var(--fs-14) * var(--ui-font, 1)); font-family: inherit; }
+.plugin-field.multi textarea { flex-basis: 100%; resize: vertical; line-height: var(--lh-14); }
+.plugin-menu { display: flex; flex-direction: column; gap: var(--sp-4); padding: var(--sp-6) 0; border-top: 1px solid var(--line); }
+.plugin-menu-head { font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); display: flex; align-items: center; gap: var(--sp-4); }
+.plugin-menu-note { font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); line-height: var(--lh-14); padding: 0 var(--sp-4); }
+.tag.plugin-ok { color: var(--ok); border: 1px solid var(--ok); }
+.tag.plugin-warn { color: var(--defer); border: 1px solid var(--defer); }
+.tag.plugin-bad { color: var(--dead); border: 1px solid var(--dead); }
+.tag.plugin-dim { color: var(--muted); border: 1px solid var(--line); }
+
+/* The Apps sheet's "when a build installs without asking" list. */
+.quiet-rules { margin: var(--sp-6) 0 0; padding-left: var(--sp-20); display: grid; gap: var(--sp-4); }
+
+/* The foot of a reader turn: this prompt's cost, the running total, the
+   context (`TurnCost`). A rule above it marks where the turn ends, so the
+   figures read as belonging to the answer above and not the prompt below. */
+.tr-cost {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4) var(--sp-8); margin: var(--sp-10) 0 var(--sp-2); padding-top: var(--sp-6);
+  border-top: 1px solid var(--line); color: var(--muted); font-size: calc(var(--fs-12) * var(--ui-font, 1));
+}
+.tr-cost-parts { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-10); font-variant-numeric: tabular-nums; }
+.tr-cost-parts > span + span::before { content: "·"; margin-right: var(--sp-10); }
+.tr-cost-note { flex-basis: 100%; font-size: calc(var(--fs-11) * var(--ui-font, 1)); }
+/* What THIS prompt cost leads, in the body's ink — the one figure a reader
+   scans the foot for; the running total and the context follow it muted. */
+.tr-cost-head { color: var(--fg); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; }
+/* The token split behind the figure, and (newest finished turn only) what the
+   next prompt re-reads against a fresh session — each its own line. */
+.tr-cost-toks { flex-basis: 100%; font-variant-numeric: tabular-nums; }
+.tr-cost-next {
+  flex-basis: 100%; margin-top: var(--sp-2); padding: var(--sp-4) var(--sp-8); border-radius: var(--r-6);
+  background: var(--raise); color: var(--fg); font-variant-numeric: tabular-nums;
+}
+/* The strip as a door to the context sheet: a full-width button that still
+   reads as the quiet foot of a turn, its edge the affordance (a chevron), not
+   a filled key. */
+.tr-when { text-align: right; font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); font-variant-numeric: tabular-nums; margin-top: var(--sp-4); }
+.tr-ended { margin-top: var(--sp-2); }
+.tr-cost-btn {
+  width: 100%; text-align: left; background: none; border: none; border-top: 1px solid var(--line);
+  border-radius: 0; font: inherit; font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); cursor: pointer;
+  padding: var(--sp-6) 0 var(--sp-2); position: relative; padding-right: var(--sp-16);
+}
+.tr-cost-btn:active { background: var(--raise); }
+.tr-cost-go { position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
+/* The turn's models as a donut beside the figures (shares by money, else
+   tokens), its legend in the text column, and the subagents it started as
+   chips — `TurnCost`. Slots are the validated `--chart-N` hues, FIXED per model
+   family app-wide (`modelHue.ts`), grey for the folded tail. */
+.tr-mix-donut { flex: none; align-self: center; }
+.tr-cost-col { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4) var(--sp-8); }
+.tr-mix-legend { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-10); font-variant-numeric: tabular-nums; }
+.tr-mix-legend i { display: inline-block; width: 8px; height: 8px; border-radius: var(--r-2); margin-right: var(--sp-4); vertical-align: baseline; }
+.tr-mix-share { opacity: 0.8; }
+.tr-cost-agents { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: var(--sp-4); }
+.tr-cost-agent {
+  display: inline-flex; align-items: center; gap: var(--sp-4); padding: 1px var(--sp-6); border: 1px solid var(--line);
+  border-radius: var(--r-10); font-size: calc(var(--fs-11) * var(--ui-font, 1));
+}
+
+/* A prompt's cost as a fold (`CostFold`, `TurnCostCard.tsx`): one head line —
+   glyph, figure, which prompt, chevron — over the `TurnCost` card. The SAME
+   control in the reader (under every turn) and under the terminal (the last
+   prompt only); only the two wrappers below differ. */
+.cost-fold-head {
+  display: flex; align-items: center; gap: var(--sp-6); width: 100%; height: 30px; padding: 0 var(--sp-10);
+  background: none; border: none; color: var(--muted); font: inherit; cursor: pointer;
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); text-align: left; white-space: nowrap; overflow: hidden;
+}
+.cost-fold-head:active { background: var(--raise); }
+.cost-fold-glyph, .cost-fold-chev { flex: none; }
+.cost-fold-chip { flex: none; color: var(--fg); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; }
+.cost-fold-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.cost-fold-body { padding: 0 var(--sp-10) var(--sp-6); }
+.cost-fold-body .tr-cost { margin-top: 0; }
+.cost-fold-note { padding: var(--sp-2) 0 var(--sp-4); color: var(--muted); font-size: calc(var(--fs-11) * var(--ui-font, 1)); }
+/* Under the terminal (`TermCostStrip.tsx`). TWO fixed heights, never a content
+   height: the strip is in the flex column above the key row, so any change in
+   its height refits the grid and SIGWINCHes the PTY, which the CLI answers by
+   repainting the whole screen. The head is one line cut with an ellipsis; the
+   card is a box of its own height that scrolls. */
+.tcs { flex: none; background: var(--panel); border-top: 1px solid var(--line); }
+.tcs-body { height: 132px; overflow-y: auto; overscroll-behavior: contain; }
+/* In the reader, the foot of a turn: a rule above marks where the turn ends,
+   so the figures read as belonging to the answer above, not the prompt below.
+   Flush with the turn's text — the head's inset is the terminal's. */
+.tr-fold { margin: var(--sp-10) 0 var(--sp-2); border-top: 1px solid var(--line); }
+.tr-fold > .cost-fold-head { padding: 0; }
+.tr-fold > .cost-fold-body { padding: 0 0 var(--sp-4); }
+/* "Why dollars on a subscription?" under the per-prompt card (`DollarsWhy`):
+   the card's own small type, flush with it rather than a sheet's inset. */
+.tr .dollars-why, .cost-fold-body .dollars-why { padding: var(--sp-2) 0 var(--sp-4); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.dollars-why > summary svg { vertical-align: -2px; margin-right: var(--sp-4); }
+/* …and on the per-prompt card itself it is a "?" in the top-right corner
+   (`WhyCorner`): the card keeps room on its right for it, the answer opens
+   under the card. 32px square tap target, drawn as a 14px glyph. */
+.tr-cost-why { position: relative; }
+.tr-cost-why > .tr-cost { padding-right: var(--sp-28); }
+.tr-cost-q {
+  position: absolute; top: 2px; right: -6px; width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: 0; color: var(--accent); cursor: pointer; padding: 0;
+}
+.tr-cost-q[aria-expanded="true"] { color: var(--fg); }
+.tr-cost-why-text {
+  margin: var(--sp-4) 0; line-height: var(--lh-14); color: var(--muted); font-size: calc(var(--fs-12) * var(--ui-font, 1));
+}
+.tr-cost-why-text b { color: var(--fg); font-weight: var(--fw-semibold); }
+
+/* Cost per request (`PerRequestSection.tsx`): the legend under the chart, and the
+   per-repo table — a row is a BUTTON (it draws that repo's line), lit `.on`. */
+.ts-perreq-legend { display: flex; gap: var(--sp-14); padding: var(--sp-4) var(--sp-12) 0; font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); }
+.ts-perreq-legend i { display: inline-block; width: 12px; height: 3px; border-radius: var(--r-2); margin-right: var(--sp-6); vertical-align: middle; }
+.ts-perreq { display: flex; flex-direction: column; padding: var(--sp-4) 0; }
+.ts-perreq-row {
+  display: grid; grid-template-columns: minmax(0, 1.6fr) repeat(4, minmax(0, 1fr)); gap: var(--sp-6); align-items: baseline;
+  padding: var(--sp-6) var(--sp-12); border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--fg);
+  font: inherit; font-size: calc(var(--fs-13) * var(--ui-font, 1)); font-variant-numeric: tabular-nums; text-align: right;
+}
+.ts-perreq-row > :first-child { text-align: left; }
+.ts-perreq-days { grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr)); }
+.ts-perreq-head { color: var(--muted); font-size: calc(var(--fs-11) * var(--ui-font, 1)); }
+.ts-perreq-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button.ts-perreq-row { cursor: pointer; }
+.ts-perreq-row.on { background: var(--accent-tint); }
+.ts-perreq-row.on .ts-perreq-name { font-weight: var(--fw-semibold); }
+.ts-perreq-more { align-self: flex-start; margin: var(--sp-6) var(--sp-12) 0; padding: var(--sp-4) 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: calc(var(--fs-12) * var(--ui-font, 1)); cursor: pointer; }
+
+/* Picking lines on the live terminal (`useTermPick.tsx`): a tick per row drawn
+   over the CLI's own rows, the bar under them, and the long-press choices. */
+.tpick-layer { position: absolute; z-index: 5; }
+.tpick-row { position: relative; display: flex; align-items: center; cursor: pointer; }
+.tpick-row.on { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.tpick-box {
+  display: inline-flex; align-items: center; justify-content: center; margin-left: 1px;
+  border: 1.5px solid var(--accent); border-radius: var(--r-2); color: var(--accent);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+}
+.tpick-row.on .tpick-box { background: var(--accent); color: var(--bg); }
+.tpick-bar {
+  position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 6;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6); padding: var(--sp-8);
+  background: var(--panel, var(--bg)); border: 1px solid var(--accent-edge, var(--accent)); border-radius: var(--r-10);
+  box-shadow: 0 4px 16px rgb(0 0 0 / .25);
+}
+.tpick-count { flex: 1 1 100%; font-size: var(--fs-13); color: var(--muted); }
+.tpick-bar .key, .tpick-menu .key { min-height: 40px; display: inline-flex; align-items: center; gap: var(--sp-4); }
+.tpick-menu {
+  position: fixed; z-index: 50; width: 220px; display: flex; flex-direction: column; gap: var(--sp-6); padding: var(--sp-8);
+  background: var(--panel, var(--bg)); border: 1px solid var(--accent-edge, var(--accent)); border-radius: var(--r-10);
+  box-shadow: 0 6px 20px rgb(0 0 0 / .3);
+}
+.tpick-menu .key { justify-content: flex-start; }
+
+/* The decisions sheet (`DecisionsSheet.tsx`): the question above its own field. */
+.decide-list { flex: 1; overflow-y: auto; padding: var(--sp-4) var(--sp-12) var(--sp-12); display: flex; flex-direction: column; gap: var(--sp-14); }
+.decide-q { font-size: var(--fs-14); line-height: var(--lh-14); }
+.decide-a { display: flex; gap: var(--sp-6); margin-top: var(--sp-6); }
+.decide-a input { flex: 1; min-width: 0; min-height: 40px; font-size: var(--fs-16); padding: var(--sp-6) var(--sp-10); }
+.decide-chips { display: flex; flex-wrap: wrap; gap: var(--sp-6); margin-top: var(--sp-6); }
+.decide-chips .key { min-height: 34px; }
+.decide-chips .key.on { color: var(--fg); border-color: var(--pick-edge); background: var(--pick-fill); }
+/* …and in the reader (`useReaderPick.tsx`): every block is pickable, a ticked
+   one is tinted with a tick in its left margin. */
+.tpick-reading :is(.tr-p, .tr-list > li, .tr-h, .tr-quote, .tr-code) {
+  position: relative; cursor: pointer; border-radius: var(--r-6);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.tpick-reading [data-tpick] {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: var(--stripe);
+}
+
+/* ── the session budget (BudgetField.tsx, features/sessionBudget) ─────────
+   Built from the app's controls: `.segmented` for the unit (the Send sheet's
+   When), a `.search`-weight box for the number with its unit written beside
+   it, `.row-chip` quick picks, `SetSwitch` for the interrupt. Inside a
+   `.set-group` on the budget sheet; inside `.send-exp` / the launch ask's form
+   elsewhere, where the gutter is the container's. */
+.budget-field { display: flex; flex-direction: column; gap: var(--sp-12); min-width: 0; }
+.form > .budget-field { padding: 0 var(--sp-12); }
+.budget-spent {
+  padding: var(--sp-8) var(--sp-10); border-radius: var(--r-8); border: 1px solid var(--line); background: var(--well);
+  font-size: calc(var(--fs-13) * var(--ui-font, 1)); line-height: var(--lh-14); color: var(--fg); font-variant-numeric: tabular-nums;
+}
+.budget-k { color: var(--muted); font-weight: var(--fw-semibold); margin-right: var(--sp-2); }
+.budget-input {
+  display: flex; align-items: center; gap: var(--sp-8); padding: 0 var(--sp-12);
+  background: var(--well); border: 1px solid var(--line); border-radius: var(--r-10);
+}
+.budget-input:focus-within { border-color: var(--accent); }
+.budget-input input {
+  flex: 1 1 auto; min-width: 0; padding: var(--sp-10) 0; background: none; border: 0; outline: none;
+  color: var(--fg); font: inherit; font-size: calc(var(--fs-16) * var(--ui-font, 1)); font-variant-numeric: tabular-nums;
+}
+.budget-input input::placeholder { color: var(--muted); opacity: 1; }
+.budget-affix { flex: none; color: var(--muted); font-size: calc(var(--fs-15) * var(--ui-font, 1)); }
+.budget-presets .row-chip { min-height: 36px; padding: var(--sp-4) var(--sp-14); font-variant-numeric: tabular-nums; }
+.budget-presets .row-chip.on { background: var(--pick-fill); color: var(--fg); border-color: var(--pick-edge); }
+.budget-presets .budget-blank { flex: 1 1 auto; text-align: right; }
+.budget-preview { font-size: calc(var(--fs-14) * var(--ui-font, 1)); font-weight: var(--fw-semibold); color: var(--fg); font-variant-numeric: tabular-nums; }
+.budget-who { font-size: calc(var(--fs-14) * var(--ui-font, 1)); font-weight: var(--fw-semibold); color: var(--fg); overflow-wrap: anywhere; }
+.set-group > .ctx-cost.budget-now { margin: 0; }
+.budget-field .set-sw:focus:not(:focus-visible) { outline: none; }
+.sheet-actions .budget-why { flex: 1 1 12em; align-self: center; font-size: calc(var(--fs-13) * var(--ui-font, 1)); color: var(--muted); }
+.sheet-actions .budget-set { margin-left: auto; }
+/* `.key` is monospace for the terminal's key row; these are sentences. */
+.sheet-actions .budget-set, .sheet-actions .budget-clear { font-family: inherit; }
+
+/* ── The demo line (DemoLine.tsx) ───────────────────────────────────────
+   On top of the connection strip's slot (`--ui-demo-h` is added in front of
+   `--ui-pulse-h` everywhere a screen clears the strips). Amber, because this is
+   the one strip that says the whole screen below it is pretend. */
+.demo-line {
+  position: fixed; top: env(safe-area-inset-top); left: 0; right: 0; z-index: 63;
+  display: flex; align-items: center; gap: var(--sp-6); overflow: hidden;
+  padding-left: calc(10px + env(safe-area-inset-left));
+  padding-right: calc(6px + env(safe-area-inset-right));
+  background: var(--panel); border-bottom: 1px solid var(--limit); color: var(--limit);
+  font-size: calc(var(--fs-11) * var(--ui-font, 1)); line-height: var(--lh-12);
+}
+.demo-line > svg { flex: 0 0 auto; }
+.demo-line-text { flex: 1 1 auto; min-width: 0; }
+.demo-line-go { flex: 0 0 auto; padding: 1px var(--sp-6); font-size: calc(var(--fs-11) * var(--ui-font, 1)); white-space: nowrap; font-family: inherit; }
+.demo-problem { margin-top: var(--sp-10); }
+/* One line holds the words AND two buttons at phone width: the words give way
+   (ellipsis), the buttons never do. The static page's two-line variant wraps. */
+.demo-line:not(.static) .demo-line-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.demo-line-go > svg { vertical-align: -1px; }
+
+/* ── The demo's "More to try" tour (features/demoTour) ──────────────────── */
+.tour-body { padding: var(--sp-4) 0 0; }
+.tour-intro { margin: var(--sp-6) var(--sp-16) var(--sp-10); color: var(--muted); line-height: var(--lh-14); }
+.tour-progress { color: var(--fg); }
+.tour-group { margin: 0 0 var(--sp-6); }
+.tour-group-title {
+  margin: var(--sp-14) var(--sp-16) var(--sp-4); font-size: calc(var(--fs-12) * var(--ui-font, 1)); font-weight: var(--fw-semibold);
+  text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+}
+.tour-row {
+  display: flex; align-items: flex-start; gap: var(--sp-12); width: 100%; text-align: left;
+  padding: var(--sp-10) var(--sp-12) var(--sp-10) var(--sp-16); background: none; border: 0; border-bottom: 1px solid var(--line);
+  color: var(--fg); font: inherit; cursor: pointer;
+}
+.tour-row:active { background: var(--accent-wash); }
+.tour-icon { flex: 0 0 auto; color: var(--accent); padding-top: 1px; }
+.tour-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-4); }
+.tour-head { font-weight: var(--fw-semibold); display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4) var(--sp-8); }
+.tour-sentence { color: var(--muted); line-height: var(--lh-14); }
+.tour-seen {
+  display: inline-flex; align-items: center; gap: var(--sp-4); font-weight: var(--fw-medium);
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--ok);
+}
+.tour-row.seen .tour-icon { color: var(--ok); }
+.tour-go { flex: 0 0 auto; color: var(--muted); align-self: center; }
+.tour-done { font-family: inherit; margin-left: auto; }
+
+/* The hook (features/demoTour `DemoHook.tsx`): one hint FLOATING over the
+   session under the real reader toggle — never in flow, so it cannot resize
+   the terminal — and the closing card, a strip under it like the new-images one. */
+.demo-hook-hint {
+  position: absolute; z-index: 6; max-width: min(280px, calc(100% - 16px));
+  display: flex; align-items: flex-start; gap: var(--sp-8); padding: var(--sp-8) var(--sp-8) var(--sp-8) var(--sp-10);
+  background: var(--panel); color: var(--fg); border: 1px solid var(--accent); border-radius: var(--r-10);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .35); font-size: calc(var(--fs-13) * var(--ui-font, 1)); line-height: var(--lh-14);
+}
+/* The start cue on the repo list: the same note, fixed to the viewport under todo-garden's `+ now`. */
+.demo-start-cue { position: fixed; z-index: 30; }
+.demo-hook-arrow {
+  position: absolute; top: -7px; width: 12px; height: 12px; background: var(--panel);
+  border-left: 1px solid var(--accent); border-top: 1px solid var(--accent); transform: rotate(45deg);
+}
+.demo-hook-hint-icon { flex: none; color: var(--accent); margin-top: 1px; }
+.demo-hook-hint-text { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+.demo-hook-hint-text > span { color: var(--muted); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.demo-hook-x { flex: none; background: none; border: 0; color: var(--muted); padding: var(--sp-2); cursor: pointer; }
+.demo-hook-pulse { box-shadow: var(--focus-ring); animation: demo-hook-pulse var(--dur-pulse) ease-in-out infinite; }
+@keyframes demo-hook-pulse { 50% { box-shadow: 0 0 0 5px rgb(var(--accent-rgb) / .25); } }
+@media (prefers-reduced-motion: reduce) { .demo-hook-pulse { animation: none; } }
+.demo-hook-card { padding: var(--sp-8) var(--sp-10) var(--sp-10); background: var(--panel); border-top: 1px solid var(--accent); }
+.demo-hook-card-head { display: flex; align-items: center; gap: var(--sp-8); margin-bottom: var(--sp-8); font-size: calc(var(--fs-14) * var(--ui-font, 1)); }
+.demo-hook-card-head > b { flex: 1; min-width: 0; }
+.demo-hook-more { display: inline-flex; align-items: center; gap: var(--sp-4); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.demo-hook-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-6); }
+.demo-hook-tile {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-4); min-width: 0;
+  padding: var(--sp-8) var(--sp-8) var(--sp-8); text-align: left; background: var(--bg); color: var(--fg); font: inherit;
+  border: 1px solid var(--line); border-radius: var(--r-8); cursor: pointer;
+}
+.demo-hook-tile:active { background: var(--accent-wash); }
+.demo-hook-tile > svg:first-child { color: var(--accent); }
+.demo-hook-tile-head { font-weight: var(--fw-semibold); font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-13); }
+.demo-hook-tile-sub { color: var(--muted); font-size: calc(var(--fs-11) * var(--ui-font, 1)); line-height: var(--lh-13); }
+.demo-hook-tile-go { position: absolute; top: 9px; right: 6px; color: var(--muted); }
+
+/* ── First app (features/onboard) ─────────────────────────────────────────
+   The launcher's first-run card, and the journey's sheet: questions, the
+   consent lines, the checklist. Nothing here is greyed — a blocked step is a
+   sentence (.onb-why) where its button would be. */
+.onb-card { margin: var(--sp-10) var(--sp-12); padding: var(--sp-12) var(--sp-14); background: var(--panel); border: 1px solid var(--accent); border-radius: var(--r-10); }
+.onb-card-head { display: flex; align-items: center; gap: var(--sp-8); font-size: calc(var(--fs-15) * var(--ui-font, 1)); font-weight: var(--fw-semibold); color: var(--fg); }
+.onb-card-head > span { flex: 1; min-width: 0; }
+button.onb-card-head { width: 100%; background: none; border: 0; padding: 0; text-align: left; }
+.onb-card-x { background: none; border: 0; color: var(--muted); padding: var(--sp-4); }
+.onb-card-body { margin-top: var(--sp-6); font-size: calc(var(--fs-13) * var(--ui-font, 1)); color: var(--muted); line-height: var(--lh-15); }
+.onb-card-acts { display: flex; flex-direction: column; gap: var(--sp-8); margin-top: var(--sp-10); }
+.onb-card-acts .key, .onb-card-acts .send { display: flex; align-items: center; justify-content: center; gap: var(--sp-8); min-width: 0; white-space: normal; }
+.onb-q { font-size: calc(var(--fs-14) * var(--ui-font, 1)); font-weight: var(--fw-semibold); }
+.onb-q.warn { color: var(--warn); }
+.onb-choice { display: flex; flex-wrap: wrap; gap: var(--sp-8); }
+.onb-choice .key { flex: 1 1 12ch; min-width: 0; white-space: normal; display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-6); }
+.onb-tick { display: inline-flex; align-items: center; gap: var(--sp-8); text-align: left; white-space: normal; }
+.onb-why { flex: 1; font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); line-height: var(--lh-14); }
+.onb-next, .onb-go, .onb-open { display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-6); }
+.onb-go { flex: 1; }
+.onb-lines { gap: var(--sp-14); }
+.onb-line { display: flex; flex-direction: column; gap: var(--sp-6); padding-left: var(--sp-10); border-left: 3px solid var(--line); }
+.onb-line.needed { border-left-color: var(--accent); }
+.onb-line-what { display: flex; align-items: flex-start; gap: var(--sp-8); background: none; border: 0; padding: 0; color: var(--fg); text-align: left;
+  font-size: calc(var(--fs-13) * var(--ui-font, 1)); line-height: var(--lh-14); }
+.onb-line-what > svg { flex: none; margin-top: var(--sp-2); }
+.onb-line-what > span, .onb-row-what, .onb-row-body .set-note, .onb-card-body { overflow-wrap: anywhere; min-width: 0; }
+.onb-line-what.active > svg { color: var(--accent); }
+.onb-line-facts { display: flex; flex-wrap: wrap; gap: var(--sp-4) var(--sp-10); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); min-width: 0; }
+.onb-line-facts .mono { overflow-wrap: anywhere; }
+.onb-tag { text-transform: uppercase; letter-spacing: .04em; font-size: calc(var(--fs-11) * var(--ui-font, 1)); }
+.onb-line-acts { display: flex; flex-wrap: wrap; gap: var(--sp-6); }
+.onb-line-acts .key { white-space: normal; min-width: 0; display: inline-flex; align-items: center; gap: var(--sp-6); }
+.onb-steps { margin: 0; padding-left: var(--sp-20); overflow-wrap: anywhere; font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); line-height: var(--lh-16); }
+.onb-check { gap: var(--sp-10); }
+.onb-row { display: flex; gap: var(--sp-10); align-items: flex-start; }
+.onb-row-icon { flex: none; margin-top: var(--sp-2); color: var(--dim); }
+.onb-row.running .onb-row-icon { color: var(--accent); }
+.onb-row.done .onb-row-icon { color: var(--ok); }
+.onb-row.stopped .onb-row-icon { color: var(--warn); }
+.onb-row-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-4); align-items: flex-start; }
+.onb-row-what { font-size: calc(var(--fs-13) * var(--ui-font, 1)); line-height: var(--lh-14); }
+.onb-row.pending .onb-row-what, .onb-row.skipped .onb-row-what { color: var(--muted); }
+.onb-clock { color: var(--muted); font-variant-numeric: tabular-nums; }
+.onb-row-body code { overflow-wrap: anywhere; }
+.onb-done { gap: var(--sp-10); }
+.onb-done .key, .onb-done .send { display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-6); white-space: normal; }
+.new-buildapp { margin: 0 var(--sp-10); display: inline-flex; align-items: center; gap: var(--sp-6); white-space: normal; text-align: left; }
+
+/* The token screen's headline (`Headline.tsx`): one number for the last seven
+   days, its split, its money, a column per day. Above the live windows. */
+.ts-headline { margin: var(--sp-10) var(--sp-10) var(--sp-4); padding: var(--sp-12) 0 var(--sp-10); border: 1px solid var(--line); border-radius: var(--r-12); background: var(--panel); }
+.ts-headline-lab {
+  padding: 0 var(--sp-14); font-size: calc(var(--fs-12) * var(--ui-font, 1)); font-weight: var(--fw-bold); letter-spacing: .05em;
+  text-transform: uppercase; color: var(--muted);
+}
+.ts-headline-row { display: flex; align-items: flex-end; gap: var(--sp-12); padding: var(--sp-6) var(--sp-14) var(--sp-8); }
+.ts-headline-row > :first-child { flex: 1 1 auto; min-width: 0; }
+.ts-headline-n {
+  font-size: calc(44px * var(--ui-font, 1)); line-height: var(--lh-1); font-weight: var(--fw-semibold); letter-spacing: -0.02em;
+  color: var(--fg); font-variant-numeric: proportional-nums;
+}
+.ts-headline-sub { margin-top: var(--sp-6); font-size: calc(var(--fs-13) * var(--ui-font, 1)); color: var(--muted); }
+.ts-headline-sub b { color: var(--fg); font-weight: var(--fw-semibold); }
+.ts-headline-spark { flex: 0 0 auto; width: 112px; }
+.ts-headline-cols { display: flex; align-items: flex-end; gap: var(--sp-4); height: 40px; }
+.ts-headline-col { flex: 1 1 0; background: var(--chart-1); opacity: .55; border-radius: var(--r-2) var(--r-2) 0 0; }
+.ts-headline-col.today { opacity: 1; }
+.ts-headline-col.none { background: none; opacity: 1; border: 1px dashed var(--line); border-bottom: none; }
+.ts-headline-days { display: flex; gap: var(--sp-4); margin-top: var(--sp-4); }
+.ts-headline-days span { flex: 1 1 0; text-align: center; font-size: calc(var(--fs-10) * var(--ui-font, 1)); color: var(--muted); }
+.ts-headline .ts-legend { display: none; }
+.ts-headline-split { width: calc(100% - 28px); margin: var(--sp-8) var(--sp-14) 0; border-collapse: collapse; font-size: calc(var(--fs-12) * var(--ui-font, 1)); font-variant-numeric: tabular-nums; }
+.ts-headline-split thead th { font-weight: var(--fw-medium); color: var(--muted); font-size: calc(var(--fs-11) * var(--ui-font, 1)); text-align: right; padding: 0 0 var(--sp-4); }
+.ts-headline-split thead th:first-child { text-align: left; }
+.ts-headline-split tbody th { text-align: left; font-weight: var(--fw-semibold); color: var(--fg); padding: var(--sp-2) 0; white-space: nowrap; }
+.ts-headline-split tbody th i { display: inline-block; width: 9px; height: 9px; border-radius: var(--r-2); margin-right: var(--sp-6); vertical-align: -0.5px; }
+.ts-headline-split td { text-align: right; color: var(--muted); padding: var(--sp-2) 0 var(--sp-2) var(--sp-10); }
+.ts-headline-split td b { color: var(--fg); font-weight: var(--fw-semibold); }
+.ts-headline-cap { padding: var(--sp-8) var(--sp-14) 0; font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14); color: var(--muted); }
+/* Why a Max plan is shown dollars: under the caption, folded, its icon on the summary line. */
+.ts-dollars-why { padding: var(--sp-6) var(--sp-14) 0; font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.ts-dollars-why > summary svg { vertical-align: -2px; margin-right: var(--sp-2); }
+
+/* The schedule sheet's week bar (`ScheduleWeekBar.tsx`). Positions are
+   percentages of the bar, so it is exactly as wide as the phone at any font
+   scale; pins are 18px and stay inside the bar by a half-pin inset. */
+.swb { margin: var(--sp-8) var(--sp-10) var(--sp-4); padding: var(--sp-10) var(--sp-12) var(--sp-10); border: 1px solid var(--line); border-radius: var(--r-12); background: var(--panel); }
+.swb-title { display: flex; align-items: center; gap: var(--sp-6); font-size: calc(var(--fs-12) * var(--ui-font, 1)); font-weight: var(--fw-bold); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin-bottom: var(--sp-8); }
+.swb-lane { margin: 0 var(--sp-8) var(--sp-6); }
+.swb-lane-lab { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); margin: 0 -9px var(--sp-4); }
+.swb-lane-lab b { color: var(--fg); font-weight: var(--fw-semibold); }
+.swb-track { position: relative; height: 10px; border-radius: var(--r-6); background: var(--line); }
+.swb-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: var(--r-6) 0 0 var(--r-6); }
+.swb-lane.weekly .swb-fill { background: var(--accent-tint-hi); border: 1px solid var(--accent-edge); }
+.swb-lane.session .swb-fill { background: color-mix(in srgb, var(--fg) 16%, transparent); border: 1px solid color-mix(in srgb, var(--fg) 35%, transparent); }
+.swb-reset { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; border-radius: 1px; }
+.swb-lane.weekly .swb-reset { background: var(--accent); }
+.swb-lane.session .swb-reset { background: var(--fg); }
+.swb-pins { position: relative; margin: var(--sp-2) var(--sp-8) 0; }
+.swb-rule { position: absolute; top: -8px; bottom: 0; width: 0; border-left: 2px dashed; margin-left: -1px; }
+.swb-rule.weekly { border-color: var(--accent-edge-hi); }
+.swb-rule.session { border-color: color-mix(in srgb, var(--fg) 40%, transparent); }
+.swb-pin {
+  position: absolute; width: 18px; height: 18px; margin-left: -9px; border-radius: var(--r-round);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: calc(var(--fs-11) * var(--ui-font, 1)); font-weight: var(--fw-bold); line-height: var(--lh-1);
+  background: var(--panel); color: var(--sched); border: 2px solid var(--sched);
+}
+.swb-pin.anchored { background: var(--sched); color: var(--on-accent); }
+.swb-pin.inline { position: static; margin: 0; flex: none; }
+.swb-days { position: relative; height: 16px; margin: var(--sp-2) var(--sp-8) 0; border-top: 1px solid var(--line); }
+.swb-day { position: absolute; top: 2px; font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); transform: translateX(-50%); white-space: nowrap; }
+.swb-day:first-child { transform: none; }
+.swb-list { list-style: none; margin: var(--sp-8) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-6); }
+.swb-list li { display: flex; align-items: flex-start; gap: var(--sp-6); font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14); color: var(--muted); }
+.swb-list b { color: var(--fg); font-weight: var(--fw-semibold); }
+.swb-list-txt { min-width: 0; word-break: break-word; }
+.swb-note { margin-top: var(--sp-6); font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14); color: var(--muted); }
+
+/* The empty reader's peek at the CLI (`core/session/CliPeek.tsx`): the top rows
+   of the live screen, read-only, tap to open. Clears the corner button group
+   it sits under; the grid is scaled to the column, never fitted. */
+.cli-peek-wrap { margin-top: var(--sp-48); }
+.cli-peek {
+  position: relative; overflow: hidden; cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--r-8);
+  background: var(--term-bg);
+  -webkit-mask-image: linear-gradient(to bottom, #000 80%, transparent);
+          mask-image: linear-gradient(to bottom, #000 80%, transparent);
+}
+.cli-peek-blank { border: 0; }
+.cli-peek-grid { transform-origin: top left; width: max-content; pointer-events: none; }
+.cli-peek-grid .xterm-viewport { overflow: hidden !important; }
+.cli-peek-cap { display: flex; align-items: center; gap: var(--sp-6); margin-top: var(--sp-8); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+/* The toggle "catching" the peek as it lands. */
+.cli-catch { animation: cli-catch 450ms ease-out; }
+@keyframes cli-catch {
+  0% { box-shadow: 0 0 0 0 var(--accent); transform: scale(1.12); }
+  100% { box-shadow: 0 0 0 10px transparent; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { .cli-catch { animation: none; } }
