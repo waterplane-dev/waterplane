@@ -92,6 +92,18 @@ health() {
   return 1
 }
 
+# Tell the running host WHY it is about to go (packages/host/src/restartnote.ts): its SIGTERM
+# handler passes the line on to every phone with `host.restarting`. Best effort — no host, an older
+# host or a refusal changes nothing. Override the words with <PREFIX>RESTART_REASON.
+REASON="$(getenv RESTART_REASON "")"
+if [ -z "$REASON" ]; then
+  REASON="npm run restart · new build $(git log -1 --format='%h %s' 2>/dev/null | cut -c1-90)"
+  [ -n "$(git status --porcelain --untracked-files=no 2>/dev/null)" ] && REASON="$REASON (+ uncommitted edits)"
+fi
+REASON="$REASON" node -e 'process.stdout.write(JSON.stringify({ reason: process.env.REASON }))' \
+  | curl -s -m 2 -o /dev/null -X POST -H 'content-type: application/json' --data-binary @- \
+      "http://127.0.0.1:$PORT/api/host/restart-note" 2>/dev/null || true
+
 if is_launchd; then
   echo "[restart] launchd service detected — reloading via launchctl in ${DELAY}s…"
   sleep "$DELAY"

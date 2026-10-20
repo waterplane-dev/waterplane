@@ -533,7 +533,7 @@ last updated 2026-09-08 per a web search; read 2026-10-02.
 | **Agent view** | Structured message stream from the agent SDK **?** | Structured: Claude Agent SDK events into Paseo's own chat UI. No PTY (`providers/claude/`) | Real PTY, xterm.js — slash commands, context meter, plan/trust prompts native |
 | **Permissions / plan mode** | ? | SDK `canUseTool` and permission modes: typed, no detection | Choice boxes read off the screen and answered by tap; heuristic, tracked by `clihealth.ts` |
 | **Slash commands** | ? | `supportedCommands()` list; `/rewind` special-cased | All of them, because it is the CLI |
-| **Platforms** | iOS + Android + web + macOS | iOS + Android + web + desktop + CLI | Android APK + PWA. **No iOS** |
+| **Platforms** | iOS + Android + web + macOS | iOS + Android + web + desktop + CLI | Android APK + PWA (the PWA is the iPhone route, untested on a real one). **No native iOS app** |
 | **Agents** | Five-ish | Claude, Codex, OpenCode, Copilot, Cursor, Kimi, Kiro, Trae, Pi | Claude + opencode |
 | **Voice** | Yes | Yes | Dictation only (`dictate.ts`, `useVoice.ts`) — not hands-free |
 | **Device handoff** | One keypress, state carried | Not a concept found | Not a concept — sessions live host-side and are always live |
@@ -565,7 +565,7 @@ or grep, not proof of absence). Omnara is left as mostly **?** on purpose: see 2
 | **Token / cost history** | Yes: per-turn, per-desktop history | `/usage`, `/context` as text; no history found | Shared rate limits; no history found | Not surfaced | Per-turn tokens and cost; no history found | Usage and rate limits in app; history ? | No | No | ? | — |
 | **Repo health** | Yes (context weight, setup compliance) | — | — | — | — | Source-control view; health — | No | No | ? | Git UI |
 | **Offline exactly-once queue** | Yes (ackIds, 500-row cap) | Reconnects after sleep; queue ? | ? | ? | — | ? | No (Mosh keeps the link, not a ledger) | — | ? | — |
-| **iOS** | **No** | Yes | Yes | Yes | Yes | Yes | Yes (Blink iOS; Termius iOS and Android) | WIP, none listed | Yes (App Store) | Browser only |
+| **iOS** | Web app only (untested on a real iPhone) | Yes | Yes | Yes | Yes | Yes | Yes (Blink iOS; Termius iOS and Android) | WIP, none listed | Yes (App Store) | Browser only |
 | **Relay / account needed** | None; Tailscale only | claude.ai account (not API key); Anthropic relay; transcript stored there | claude.ai account + GitHub | Relay server (self-hostable) + account | Optional relay; direct possible | Orca Relay (sign-in) or local network | None beyond SSH (+ Tailscale) | None; Tailscale or tunnels | Omnara Cloud or self-host | None self-hosted; account for Cloud |
 | **Price / licence** | One user, not released | Included in plan | Included in plan | MIT, free | Apache-2.0, free | MIT, free | Blink $19.99/yr (open source); Termius free tier, Pro $10/mo | MIT, free | Apache-2.0; credits on Cloud | AGPL-3.0; Cloud from €7/mo |
 
@@ -617,7 +617,7 @@ gaining surface faster than the SDK, waterplane's does.
 
 **waterplane's honest weak spots**, in order:
 
-1. **No iOS.** Happy's Expo choice is why they have it; Paseo has it too.
+1. **No native iOS app** — iPhone gets the web app only, not yet tested on a real one. Happy's Expo choice is why they have it; Paseo has it too.
 2. **Single-user, single-machine.** No team story, no handoff, no shared session.
 3. **Tailscale is both the moat and the onboarding cliff.**
 4. **Distribution is zero.** No landing page, no store listing, no community.

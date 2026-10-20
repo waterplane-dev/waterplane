@@ -47,7 +47,15 @@ function boot() {
   host = spawn("node", ["packages/host/dist/main.js"], { env, stdio: ["ignore", "pipe", "pipe"] });
   host.stderr.on("data", (d) => process.stderr.write("[host] " + d));
 }
-const stop = async () => { host?.kill(); await sleep(700); };
+// Wait for the process to EXIT, not a fixed pause: the store's debounced write
+// is flushed on the way out, and under a loaded parallel run a next host booted
+// after 700 ms read settings.json before the old one had written it.
+const stop = async () => {
+  if (!host || host.exitCode !== null || host.signalCode !== null) return;
+  const gone = new Promise((r) => host.once("exit", r));
+  host.kill();
+  await Promise.race([gone, sleep(15_000)]);
+};
 
 boot();
 await waitForHost(PORT);

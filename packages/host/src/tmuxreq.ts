@@ -10,9 +10,12 @@
  * IGNORED — `doctor` says so when it is still set — and a host that cannot find
  * tmux REFUSES to start a session, in words naming the install command.
  *
- * Pure except `onPath` (a PATH scan, no spawn). Imports nothing that reads the
+ * Pure except `onPath` and `brewHere` (a PATH scan, a realpath and an access
+ * check — no spawn). Imports nothing that reads the
  * environment at import. `packages/host/test/tmuxreq.test.mjs`.
  */
+import { accessSync, constants, realpathSync } from "node:fs";
+import { dirname } from "node:path";
 import { envName } from "@waterplane/shared";
 import type { Check } from "./doctor.js";
 import { defaultLocale } from "./ptyenv.js";
@@ -44,10 +47,32 @@ export function tmuxInstallCommand(platform: NodeJS.Platform, has: (bin: string)
   return null;
 }
 
-/** The "how to install it" sentence, for a platform with or without a known command. */
-export function tmuxInstallAdvice(platform: NodeJS.Platform, cmd: string | null): string {
+/**
+ * Homebrew on PATH: its repository (`<repo>/bin/brew`, through any symlink) and
+ * whether this account may write to it. Homebrew belongs to the account that set
+ * it up; another account's `brew install` fails on permissions half-way through.
+ */
+export function brewHere(): { repo: string; writable: boolean } | null {
+  const brew = onPath("brew");
+  if (!brew) return null;
+  let repo: string;
+  try { repo = dirname(dirname(realpathSync(brew))); } catch { return null; }
+  try { accessSync(repo, constants.W_OK); return { repo, writable: true }; } catch { return { repo, writable: false }; }
+}
+
+/** `tmuxInstallCommand`'s `has` on this machine: brew counts only when this account can install with it. */
+export function installHas(bin: string): boolean {
+  return bin === "brew" ? brewHere()?.writable === true : onPath(bin) !== null;
+}
+
+/**
+ * The "how to install it" sentence, for a platform with or without a known command.
+ * `brewForeign`: Homebrew is here but belongs to another account (`brewHere`).
+ */
+export function tmuxInstallAdvice(platform: NodeJS.Platform, cmd: string | null, brewForeign = false): string {
   if (platform === "win32") return "Native Windows is not supported: run it inside WSL2, where tmux installs with: sudo apt-get install -y tmux. From a Windows checkout, `npm run restart` does that for you (scripts/windows/host.mjs).";
   if (cmd) return `Install it with: ${cmd}`;
+  if (platform === "darwin" && brewForeign) return "Homebrew here belongs to another account, so brew install tmux fails for this one: ask that account (or an administrator of this Mac) to run it.";
   if (platform === "darwin") return "Install Homebrew (https://brew.sh), then: brew install tmux.";
   return "Install tmux with your distribution's package manager.";
 }
@@ -57,9 +82,9 @@ export function tmuxInstallAdvice(platform: NodeJS.Platform, cmd: string | null)
  * phone shows for a create that spawned nothing. There is no way to run
  * without tmux, so it names none.
  */
-export function tmuxMissingSentence(platform: NodeJS.Platform, cmd: string | null): string {
+export function tmuxMissingSentence(platform: NodeJS.Platform, cmd: string | null, brewForeign = false): string {
   return `tmux was not found, and every session runs inside tmux so it survives a host restart — no session was started. ` +
-    `${tmuxInstallAdvice(platform, cmd)} Then try again (no restart needed).`;
+    `${tmuxInstallAdvice(platform, cmd, brewForeign)} Then try again (no restart needed).`;
 }
 
 /** `tmux -V` → the version as tmux prints it (`3.4`, `3.3a`, `next-3.5`), or null. */
@@ -106,6 +131,8 @@ export interface TmuxFacts {
   versionOut: string | null;
   /** `tmuxInstallCommand` for this machine. */
   installCmd: string | null;
+  /** Homebrew is here but belongs to another account (`brewHere`). */
+  brewForeign?: boolean;
   /** The host process's own environment (only the locale variables are read). */
   env: Record<string, string | undefined>;
 }
@@ -136,7 +163,7 @@ export function tmuxChecks(f: TmuxFacts): Check[] {
       id: "tmux",
       status: "fail",
       detail: "tmux not found — the host refuses to start sessions without it",
-      fix: `${tmuxInstallAdvice(f.platform, f.installCmd)} Sessions run inside tmux so they survive a host restart.`,
+      fix: `${tmuxInstallAdvice(f.platform, f.installCmd, f.brewForeign)} Sessions run inside tmux so they survive a host restart.`,
     }];
   }
   const v = parseTmuxVersion(f.versionOut);
@@ -178,5 +205,5 @@ export { onPath };
  */
 export function tmuxRefusal(platform: NodeJS.Platform = process.platform): string | null {
   if (onPath("tmux")) return null;
-  return tmuxMissingSentence(platform, tmuxInstallCommand(platform, (b) => onPath(b) !== null));
+  return tmuxMissingSentence(platform, tmuxInstallCommand(platform, installHas), brewHere()?.writable === false);
 }

@@ -31,18 +31,20 @@ The Android app has a demo mode that runs without any backend setup, on an in-ap
 - asked: 2026-10-01, 2026-10-01
 - shipped: b902ba4
 
-### R-apk-007 · requested
+### R-apk-007 · shipped
 Demo mode can generate documentation with screenshots and videos of user journeys.
 - asked: 2026-10-01
+- shipped: cc2ef7b
 
 ### R-apk-008 · shipped
 The Android app offers an optional biometric lock as a generic feature any plugin can use, so the secrets feature is not coupled to the shipped product.
 - asked: 2026-10-05
 - shipped: f74352e8
 
-### R-apk-009 · requested
+### R-apk-009 · shipped
 The Android build tools include the dev debug APK.
 - asked: 2026-10-05
+- shipped: 1c7d859
 
 ### R-apk-010 · shipped
 The installed Android app appears in the share sheet as a share target for waterplane, for any file or text.
@@ -82,4 +84,9 @@ The Android app is published to the Play Store from the desktop, and later updat
 Android debug and dev signing keys are leased for a long time at build time, while production signing keys are short-lived and never reused.
 - asked: 2026-10-11
 - shipped: 3fc7cb4d
+
+### R-apk-018 · shipped
+An Android APK of the app is produced and available alongside the releases.
+- asked: 2026-10-19
+- shipped: 6598946
 

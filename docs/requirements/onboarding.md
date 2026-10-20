@@ -104,14 +104,27 @@ The flow from the first install step through to the first prompt working runs en
 - asked: 2026-10-08
 
 
-### R-onboarding-017 · requested
+### R-onboarding-017 · shipped
 Beside the repo-setup checklist, a repo has an Opt-ins list: the advanced things it can turn on (requirements list, repo health series and own readings, a weekly Fable security review, pre-push checks, safer npm installs, a GCP registry cleanup policy, app screenshots). Each shows whether it is on, what it is for and what it costs. None of it counts as a setup problem or in the repo badge.
 - asked: 2026-10-16
+- shipped: 1b62447
 
-### R-onboarding-018 · requested
+### R-onboarding-018 · shipped
 Every opt-in is the person's choice: a tap seeds the Send sheet (or runs the existing no-cost setup fix, or opens the screen that does the job), and nothing is sent or scheduled until the person sends it there. "Not for me" hides an offer in that repo until they offer it again. An offer the desktop cannot check can be marked done by the person and is shown as their word, not as a check that passed. Offers that do not fit the repo sit behind a count.
 - asked: 2026-10-16
+- shipped: 1b62447
 
-### R-onboarding-019 · requested
+### R-onboarding-019 · shipped
 A "walk me through these" button seeds one prompt in which an agent interviews the person about the offers still open, then posts each one they pick as its own work item (a schedule for the recurring ones) instead of doing them all in one long session.
 - asked: 2026-10-16
+- shipped: 1b62447
+### R-onboarding-020 · shipped
+The onboarding screen does not tell the user about a step the installer already handles.
+- asked: 2026-10-17
+- shipped: b174f3b0
+
+### R-onboarding-021 · shipped
+Setup shows the npm install command for Claude Code, states that a paid Claude subscription or API key is needed, and mentions local AI and GitHub Copilot as alternatives.
+- asked: 2026-10-19
+- shipped: c45c5387
+

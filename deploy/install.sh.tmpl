@@ -45,6 +45,7 @@ DEFAULT_VERSION='@@VERSION@@'
 RELEASE_BASE='@@REPO_URL@@'
 ENV_PREFIX='@@ENV_PREFIX@@'
 NODE_MIRROR_DEFAULT='https://nodejs.org/dist'
+MAC_GIT_STUB='/usr/bin/git'
 CLAUDE_DOCS='https://docs.anthropic.com/en/docs/claude-code'
 CLAUDE_INSTALL_CMD='curl -fsSL https://claude.ai/install.sh | bash'
 TAILSCALE_DL='https://tailscale.com/download'
@@ -86,8 +87,8 @@ usage: install.sh [options]
   --node-mirror <url>  where to download Node from (default $NODE_MIRROR_DEFAULT)
   --bin-dir <dir>      where to put the $SLUG command (default ~/.local/bin)
   --no-service         do not install the login service (start it with: $SLUG start)
-  --skip-claude-check  continue even though claude (Claude Code) is not installed
-                       (not needed with --with copilot)
+  --skip-claude-check  do not explain how to get claude (Claude Code) when it is
+                       missing; the install continues without it either way
   --with <id>          also install this plugin (repeatable) from the catalogue below
   --without <id>       switch an optional built-in extension off for this install (repeatable)
   --uninstall          remove the program, the runtime, the service and the command
@@ -296,17 +297,58 @@ flip() {
 
 # ── prerequisites ────────────────────────────────────────────────────────
 
-check_prereqs() {
-  for t in tar gzip uname; do has "$t" || die "$t is required and was not found."; done
-  has curl || has wget || die "neither curl nor wget is installed; install one and re-run."
-  has sha256sum || has shasum || die "no sha256 tool (sha256sum or shasum) found; cannot verify downloads."
-
+# find_claude: sets CLAUDE_BIN to the claude on PATH or in its usual home-directory spots, or ''.
+find_claude() {
   CLAUDE_BIN="$(command -v claude 2>/dev/null || true)"
   if [ -z "$CLAUDE_BIN" ]; then
     for c in "$HOME/.local/bin/claude" "$HOME/.claude/local/claude"; do
       if [ -x "$c" ]; then CLAUDE_BIN="$c"; break; fi
     done
   fi
+}
+
+tailscale_found() { has tailscale || has tailscale.exe || [ -d /Applications/Tailscale.app ]; }
+
+# git_ok: a git that runs. Every Mac has $MAC_GIT_STUB, which only offers to install the Xcode
+# Command Line Tools (an admin-only install) until they are there — so `has git` alone says yes.
+git_ok() {
+  has git || return 1
+  [ "$OS" = darwin ] || return 0
+  [ "$(command -v git)" = "$MAC_GIT_STUB" ] || return 0
+  xcode-select -p >/dev/null 2>&1
+}
+git_label() { if [ "$OS" = darwin ] && has git; then echo 'the Xcode Command Line Tools (git)'; else echo git; fi; }
+
+is_mac_admin() { case " $(id -Gn 2>/dev/null || true) " in *" admin "*) return 0 ;; *) return 1 ;; esac; }
+
+# brew_writable: this account may install with brew. Homebrew belongs to the account that set it
+# up; on a shared Mac another user's `brew install` fails on permissions half-way through.
+# Where brew does not say, it is let try, as before.
+brew_writable() {
+  BREW_REPO="$(brew --repository 2>/dev/null || true)"
+  [ -z "$BREW_REPO" ] || [ -w "$BREW_REPO" ]
+}
+
+check_prereqs() {
+  for t in tar gzip uname; do has "$t" || die "$t is required and was not found."; done
+  has curl || has wget || die "neither curl nor wget is installed; install one and re-run."
+  has sha256sum || has shasum || die "no sha256 tool (sha256sum or shasum) found; cannot verify downloads."
+
+  find_claude
+  CLAUDE_MISSING=0
+  if [ -z "$CLAUDE_BIN" ] && [ "$SKIP_CLAUDE" != 1 ] && ! with_copilot; then CLAUDE_MISSING=1; fi
+  TMUX_CMD=''
+  has tmux || TMUX_CMD="$(tmux_install_cmd)"
+
+  # Preflight: everything missing, said together BEFORE the first question or the first stop, so a
+  # person fixes it in one go instead of re-running once per missing piece. Nothing is downloaded yet.
+  NEED=''
+  [ "$CLAUDE_MISSING" = 0 ] || NEED="$NEED, claude (Claude Code)"
+  has tmux || NEED="$NEED, tmux"
+  git_ok || NEED="$NEED, $(git_label)"
+  tailscale_found || NEED="$NEED, Tailscale"
+  [ -z "$NEED" ] || warn "missing on this machine: ${NEED#, }. How to get each follows; nothing has been downloaded yet."
+
   if [ -z "$CLAUDE_BIN" ]; then
     if [ "$SKIP_CLAUDE" = 1 ]; then
       warn "claude (Claude Code) is not installed; continuing because of --skip-claude-check."
@@ -317,17 +359,13 @@ check_prereqs() {
       warn "Install it with Anthropic's installer:"
       warn "  $CLAUDE_INSTALL_CMD"
       warn "  (or: npm install -g @anthropic-ai/claude-code — docs: $CLAUDE_DOCS)"
+      warn "  (npm -g needs a global folder this account can write; if it fails with a permissions"
+      warn "   error — common on a managed Mac — use the installer above, which needs no admin.)"
       warn "Claude Code runs on a paid Claude plan (Pro, Max, Team) or an Anthropic API key — or, with"
       warn "no account, on a local model through Ollama. GitHub Copilot works too, as a plugin: --with copilot."
-      ANS=''
-      if can_ask; then
-        printf '[%s] Continue without claude (install it later)? [y/N] ' "$SLUG"
-        read -r ANS </dev/tty || ANS=''
-      fi
-      case "$ANS" in
-        y|Y|yes|YES) warn "continuing; sessions will not start until claude is on PATH." ;;
-        *) warn "Install it, then re-run this. To install anyway, add --skip-claude-check."; exit 1 ;;
-      esac
+      # Never a stop or a question: the host runs without it, and a y/N read from a piped
+      # `curl | sh` was refused on a real Mac even after "y". Install it later; nothing to re-run.
+      warn "continuing without it; sessions will not start until claude is on PATH (no need to re-run this)."
     fi
   else
     say "found claude at $CLAUDE_BIN"
@@ -335,13 +373,33 @@ check_prereqs() {
 
   # On WSL the Windows client counts (reached through interop as tailscale.exe): with mirrored
   # networking its 100.x is this distro's too. Whether it is mirrored is the doctor's wsl-tailscale row.
-  if ! has tailscale && ! has tailscale.exe && ! [ -d /Applications/Tailscale.app ]; then
+  if ! tailscale_found; then
     warn "Tailscale was not found. Your phone reaches this machine over your tailnet; install it: $TAILSCALE_DL"
     if [ "$IS_WSL" = 1 ]; then
       warn "  On WSL: install it on Windows and turn on mirrored networking ([wsl2] networkingMode=mirrored in %UserProfile%\\.wslconfig, then wsl --shutdown), or install it inside this distro ($TAILSCALE_DL/linux)."
     fi
   fi
-  has git || warn "git was not found; repo discovery, diffs and commits need it."
+  if ! git_ok; then
+    if has git; then
+      warn "git here is Apple's stand-in: the Xcode Command Line Tools are not installed, and repo discovery, diffs and commits need them. Install them: xcode-select --install"
+    else
+      warn "git was not found; repo discovery, diffs and commits need it."
+    fi
+  fi
+
+  # A Mac account that is not an administrator cannot install Homebrew, the Command Line Tools or
+  # Tailscale itself. Say so once, naming exactly what to ask for, instead of letting each fail.
+  if [ "$OS" = darwin ] && ! is_mac_admin; then
+    ASK=''
+    has tmux || [ -n "$TMUX_CMD" ] || ASK="$ASK, tmux"
+    git_ok || ASK="$ASK, the Xcode Command Line Tools"
+    tailscale_found || ASK="$ASK, Tailscale"
+    [ -z "$ASK" ] || warn "this account ($(id -un)) is not an administrator of this Mac, so it cannot install these itself. Ask whoever administers it for: ${ASK#, }."
+  fi
+
+  # tmux is required and cannot be installed from here: stop now, before asking anything else.
+  if ! has tmux && [ -z "$TMUX_CMD" ]; then die "$(tmux_unavailable)"; fi
+
   # The service bakes in only PATH, HOME and explicit --env values, never this shell's
   # environment — so a public-bind switch set here is NOT carried into it. Say so.
   if [ "$(printenv "${ENV_PREFIX}ALLOW_PUBLIC" 2>/dev/null || true)" = 1 ]; then
@@ -358,7 +416,7 @@ check_prereqs() {
 # tmux_install_cmd: the exact command that installs tmux here, or nothing.
 tmux_install_cmd() {
   if [ "$OS" = darwin ]; then
-    if has brew; then echo 'brew install tmux'; fi
+    if has brew && brew_writable; then echo 'brew install tmux'; fi
     return 0
   fi
   if has apt-get; then echo 'sudo apt-get install -y tmux'
@@ -366,6 +424,19 @@ tmux_install_cmd() {
   elif has pacman; then echo 'sudo pacman -S --noconfirm tmux'
   elif has zypper; then echo 'sudo zypper install -y tmux'
   elif has apk; then echo 'sudo apk add tmux'
+  fi
+}
+
+# tmux_unavailable: why tmux cannot be installed from here, and who can.
+tmux_unavailable() {
+  if [ "$OS" != darwin ]; then
+    echo "Install tmux with your distribution's package manager, then re-run this installer."
+  elif has brew; then
+    echo "Homebrew is here but belongs to $(stat -f %Su "$(brew --repository 2>/dev/null)" 2>/dev/null || echo 'another account'), so brew install tmux would fail for this account. Ask that account to run: brew install tmux — then re-run this installer."
+  elif is_mac_admin; then
+    echo "Install Homebrew (https://brew.sh), then run: brew install tmux — and re-run this installer."
+  else
+    echo "tmux is required, and Homebrew, the usual way to get it, needs an administrator to install. Ask one for tmux, then re-run this installer."
   fi
 }
 
@@ -377,12 +448,7 @@ ensure_tmux() {
   CMD="$(tmux_install_cmd)"
   warn "tmux was not found. $NAME runs every claude session inside tmux, so it survives a host restart"
   warn "and an upgrade; without it the host refuses to start sessions."
-  if [ -z "$CMD" ]; then
-    if [ "$OS" = darwin ]; then
-      die "Install Homebrew (https://brew.sh), then run: brew install tmux — and re-run this installer."
-    fi
-    die "Install tmux with your distribution's package manager, then re-run this installer."
-  fi
+  [ -n "$CMD" ] || die "$(tmux_unavailable)"
   if can_ask; then
     printf '[%s] Install it now with: %s ? [y/N] ' "$SLUG" "$CMD"
     ANS=''

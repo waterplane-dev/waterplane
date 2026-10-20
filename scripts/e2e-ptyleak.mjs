@@ -12,6 +12,7 @@
 //      fds back: `/api/health`'s `ptys` gauge returns to its baseline.
 //
 // Needs free PTYs for part 2; with the table full it says so and fails.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -57,7 +58,7 @@ await new Promise((resolve) => {
 const host = spawn("node", ["packages/host/dist/main.js"], { env, stdio: ["ignore", "pipe", "pipe"] });
 host.stderr.on("data", (d) => process.stderr.write("[host] " + d));
 const done = () => { host.kill(); setTimeout(() => process.exit(failed ? 1 : 0), 100); };
-setTimeout(() => { check(false, "timeout"); done(); }, 45_000);
+watchdog(() => { check(false, "timeout"); done(); });
 
 const health = () => fetch(`http://127.0.0.1:${PORT}/api/health`).then((r) => r.json());
 

@@ -1,8 +1,9 @@
 # peers
 
-### R-peers-001 · requested
+### R-peers-001 · shipped
 Two desktops running waterplane (a Mac and a Windows box via WSL2) cooperate: a session on one can delegate a job to the other and gets the answer back, so a repo can be tested on both machines.
 - asked: 2026-10-02 (user request: cooperate across Mac + Windows hosts, test ciqkit and waterplane itself on both)
+- shipped: 0ddb47f
 
 ### R-peers-002 · shipped
 Delegation is delegate-and-report only: the job opens ONE session on the peer and its final answer returns as ONE prompt into the asking session. No remote shell, no remote terminal on the phone's socket, no second WebSocket.
@@ -73,7 +74,8 @@ When more than one desktop is saved, a compact split host key is shown: one half
 - asked: 2026-10-08
 - shipped: fb64f57f, 4dc4f8b7
 
-### R-peers-016 · requested
+### R-peers-016 · shipped
 After pairing two hosts, the app visibly confirms that pairing succeeded.
 - asked: 2026-10-08
+- shipped: 23d98a4
 

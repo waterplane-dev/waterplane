@@ -11,6 +11,7 @@
 //
 // Asserted end to end, over the real socket: a refused create must open NO
 // session, and say so.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
@@ -146,4 +147,4 @@ ws.on("open", async () => {
 });
 
 ws.on("error", (e) => { console.error("FAIL: socket error", e.message); process.exit(1); });
-setTimeout(() => { console.error("FAIL: timed out"); done(); }, 60_000);
+watchdog(() => { console.error("FAIL: timed out"); done(); }, 60_000);

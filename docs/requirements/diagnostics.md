@@ -29,3 +29,16 @@ The doctor reports the WSL idle state correctly by asking Windows for the keep-a
 - asked: 2026-10-09
 - shipped: aeae7b6e
 
+### R-diagnostics-007 · requested
+The log view has a Copy Log button and a button sending the log to a CLI session for fixing; the log opens directly below the clicked row.
+- asked: 2026-10-14
+
+### R-diagnostics-008 · shipped
+A checkbox dialog with the cursor on Submit is still recorded as an open dialog in the health record, even when the footer wraps and includes 'ctrl+g to edit in Vim'.
+- asked: 2026-10-17, 2026-10-17
+- shipped: 5cb8f255
+
+### R-diagnostics-009 · requested
+The doctor command checks for the nom package and reports on it.
+- asked: 2026-10-19
+

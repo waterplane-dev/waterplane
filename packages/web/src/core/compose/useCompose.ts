@@ -43,7 +43,7 @@ import { showToast } from "../../toast";
 import { track } from "../../usage";
 import type { HostConnection } from "../../ws";
 import { useLatest } from "../../sdk/hooks.ts";
-import type { SeedOutcome } from "../../sdk/types.ts";
+import type { SecretFillContext, SeedOutcome } from "../../sdk/types.ts";
 import { secretAsk } from "../../secretAsk";
 import { isShellBackend } from "../../backendCaps";
 import { isLaterId } from "../queue/logic.ts";
@@ -375,6 +375,24 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
   const secretAskLine = secretLine && secretLine !== secretDismissed && !pending && !cliMode
     && isShellBackend(null, active?.backend) ? secretLine : null;
   function dismissSecret() { if (secretLine) setSecretDismissed(secretLine); setSecret(""); setSecretShown(false); }
+  // A filler (`SecretFillerDef`, a stored login) answers after a sheet and a
+  // fingerprint: it lands only while the SAME ask is still up in the SAME
+  // session, read live at landing — never on whatever is on screen by then.
+  const secretAskRef = useLatest(secretAskLine);
+  function secretFillContext(): SecretFillContext | null {
+    const sessionId = activeIdRef.current;
+    const askLine = secretAskRef.current;
+    if (!sessionId || !askLine) return null;
+    return {
+      sessionId, askLine,
+      fill(value: string) {
+        if (!value || activeIdRef.current !== sessionId || secretAskRef.current !== askLine) return false;
+        setSecret(value);
+        setSecretShown(false);
+        return true;
+      },
+    };
+  }
   function sendSecret() {
     if (!active) return;
     if (!secret) { showToast("type the password first — Send types it into the prompt"); return; }
@@ -782,7 +800,7 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
     sendInput, stepHistory, clearCompose, appendSnippet, focusPipe, toggleCliMode, onPipeInput, flushPipe, onPipeKey,
     onComposeKey, aimHere, sendCompose, openComposeSend, keepOnPad, runHeaderCmd, seedDraft, typeOn,
     sendNow: () => sendCompose("now"),
-    secretAskLine, secret, setSecret, secretShown, setSecretShown, noteCursorLine, dismissSecret, sendSecret,
+    secretAskLine, secret, setSecret, secretShown, setSecretShown, noteCursorLine, dismissSecret, sendSecret, secretFillContext,
   };
 }
 export type ComposeApi = ReturnType<typeof useCompose>;

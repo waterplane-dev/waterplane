@@ -210,7 +210,7 @@ export async function pullSyncNative(this: PullManager, state?: NativePullState)
  */
 export function pullAdoptNative(this: PullManager, row: NativePullRow): PullRecord | undefined {
   const item = row.origin === "link" ? row.item : undefined;
-  if (!item || item.id !== row.id || !item.repoId || !item.relPath) return undefined;
+  if (!item || item.id !== row.id || !item.repoId || !item.relPath || this.removed.has(item.id)) return undefined;
   this.dropSuperseded(item.supersedes ?? []);
   if (this.shadowed(item)) return undefined;
   const rec: PullRecord = {

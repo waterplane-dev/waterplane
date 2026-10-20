@@ -42,3 +42,17 @@ With a physical keyboard, Ctrl+N / ⌘N / Alt(Option)+N opens a new session: on 
 On a desktop or with a physical keyboard, holding Ctrl (⌘ on a Mac) or Alt/Option alone for about half a second shows a temporary card listing the keys that make a shortcut with it right now and what each will do (e.g. "N — new session in <repo>", "Return — send"). Letting go, pressing any key, or leaving the window hides it; a quick Ctrl+C never shows it; pressing a listed key still runs the shortcut. Never on a touch-only phone. A chord the browser tab will not pass on says so in words and names the one that works. The first time a keyboard key is pressed one notice says how to see the card; Settings › Writing & reading turns it off.
 - asked: 2026-10-14 (owner)
 - shipped: 5994be77
+### R-input-010 · shipped
+With a physical keyboard, Ctrl+Return (⌘+Return on a Mac) confirms the primary action button in any dialogue.
+- asked: 2026-10-12, 2026-10-13, 2026-10-14
+- shipped: 5994be77
+
+### R-input-011 · requested
+After the relevant action the cursor is placed in the prompt input field automatically.
+- asked: 2026-10-14
+
+### R-input-012 · shipped
+While a prompt has not been sent, the user can edit it with an edit button.
+- asked: 2026-10-19
+- shipped: 61c601fb
+

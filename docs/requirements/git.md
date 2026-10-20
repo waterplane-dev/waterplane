@@ -55,3 +55,8 @@ The git view shows local unpushed commits alongside incoming remote commits, eac
 A new session can start from a remote: the New sheet clones an https or ssh URL into a fresh folder under the root and opens a session there, without changing the cloned project.
 - asked: 2026-10-16
 - shipped: 8a57e6f7
+### R-git-012 · shipped
+Repos without a remote origin are marked as such.
+- asked: 2026-10-12
+- shipped: 210a702
+

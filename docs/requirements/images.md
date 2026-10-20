@@ -59,3 +59,8 @@ Image annotation offers an option to run OCR on the whole image on the backend a
 The highlighter only points: a highlighted band is not read by the desktop or by any cloud model, so a highlight costs nothing. The agent reads the picture itself; words a person types onto a band are still quoted with it. (The whole-picture "text only" read of R-images-011 is a different, on-desktop, free path and stays.)
 - asked: 2026-10-18 (owner: "I don't want to waste money with Gemini calls on this feature"; "don't involve the Mac or a backend for this one piece. Either it's all on the phone or we just skip it — then the model does it anyway")
 - shipped: the highlighter's Gemini reader (`readtext.ts`, `POST /api/host/readtext`) removed; `annotator/annRead.ts` keeps only typed words
+### R-images-013 · shipped
+Pasting a single image with Ctrl+V produces exactly one attachment, not two.
+- asked: 2026-10-17
+- shipped: a37bbb9a, 4aed6032
+

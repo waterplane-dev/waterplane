@@ -13,6 +13,7 @@
 import { useEffect, useState, type DragEvent } from "react";
 import { alreadyMarking, annotatorBusy, appendToBatch, pasteRoute } from "../../features/images";
 import { isAnnotatable } from "../../media";
+import { pastedFiles } from "../../pasteImages";
 import { core } from "../../sdk";
 
 /** The files a paste or a drop carries — a copied screenshot arrives as a
@@ -69,7 +70,7 @@ export function useFileDrop(): {
 
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
-      const files = filesOf(e.clipboardData);
+      const files = pastedFiles(filesOf(e.clipboardData), e.clipboardData?.getData("text/plain") ?? "", isAnnotatable);
       const t = e.target as HTMLElement | null;
       const c = core();
       const route = pasteRoute({

@@ -125,9 +125,10 @@ A session can be named by hand through a dedicated header button; the typed name
 - shipped: b6f9684
 
 
-### R-sessions-029 · requested
+### R-sessions-029 · shipped
 A claude session's permission mode (manual, accept edits, plan, auto — and bypass / don't ask where the session has them) can be read and switched from the phone the way the desktop's mode menu does, following a change typed at the desk; ultracode shows as the CLI last confirmed it. A mode the session's shift+tab cycle does not hold, an open question box or an unreadable footer is said in words, never guessed.
 - asked: 2026-10-07
+- shipped: 0567a97
 ### R-sessions-030 · requested
 When a new project folder is opened for the first time, waterplane asks whether to trust it; until trusted, the folder runs in restricted mode and its hooks do not execute.
 - asked: 2026-10-04
@@ -209,10 +210,27 @@ A count of flagged sessions shows on the repo group; tapping it shows exactly th
 - asked: 2026-10-15
 
 ### R-sessions-047 · shipped
-An emergency halt stops every AI process waterplane started on the desktop (agent sessions, attached or detached, with their tools, and headless model runs) with a hard kill after a short grace, and latches: nothing automatic (schedules, backlog, limit resumes) starts again until the person lifts it, across host restarts. Processes started outside waterplane are not reached yet.
+An emergency halt stops every AI process waterplane started on the desktop (agent sessions, attached or detached, with their tools and sidecars, and headless model runs) with a hard kill after a short grace, and latches across host restarts until the person lifts it. While it is on, nothing automatic starts and no AI session can be started; the app says in plain words that AI is halted and how to lift it. Processes started outside waterplane are not reached yet, though that may become optional.
 - asked: 2026-10-15
 - shipped: 68ae6d70
 
 ### R-sessions-048 · shipped
 A session budget can be set HARD instead of the default soft. Soft is R-sessions-027 unchanged. Hard, once over: queued and scheduled sends stay held, each send the person makes from the phone asks "send anyway?" first (yes runs that one turn, no keeps the words in the box), and every turn the person did not send — a subagent reporting back, a chained or resumed prompt — gets one Esc, turn after turn, not only at the crossing. The budget field shows both choices, each saying what it does, with soft preselected.
 - asked: 2026-10-18 — "A and b and make this optional as alternative "hard" behavior. Explain it clearly in the UI what both options do and have the current one be the default"
+### R-sessions-049 · shipped
+A shell session keeps the repo it was opened in even after the person cds elsewhere, and a session whose folder is inside a repo or worktree is labelled with that repo's name, including after it is closed.
+- asked: 2026-10-15
+- shipped: 579c8b42
+
+### R-sessions-050 · requested
+A prompt sent into a session is detected as delivered without the user pressing the on-screen return key.
+- asked: 2026-10-16
+
+### R-sessions-051 · requested
+Prompts from marked screenshots go to a new session with the prompt pre-filled for the user to review and send, not to the backlog.
+- asked: 2026-10-16
+
+### R-sessions-052 · requested
+Each session appears once in the session list.
+- asked: 2026-10-19
+

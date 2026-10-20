@@ -2,7 +2,7 @@
   "name": "waterplane",
   "displayName": "waterplane: Cost & Context for Claude Code",
   "publisher": "waterplane-dev",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "What each prompt cost, the context window over time, the token split and what your CLAUDE.md costs on every turn — read from Claude Code's own logs on this machine. No telemetry, no network.",
   "license": "MIT",
   "icon": "icon.png",
@@ -144,10 +144,11 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.webview.json --noEmit",
     "test": "npm run build && node --test --test-timeout=120000 \"test/*.test.mjs\"",
     "test:integration": "node test/integration/run.mjs",
-    "package": "npm run build -- --release && vsce package --no-dependencies -o waterplane-0.2.0.vsix && node scripts/check-vsix.mjs waterplane-0.2.0.vsix",
+    "screenshots": "node scripts/screenshot.mjs",
+    "package": "npm run build -- --release && vsce package --no-dependencies --baseImagesUrl https://raw.githubusercontent.com/waterplane-dev/waterplane/main/packages/vscode -o waterplane-0.3.0.vsix && node scripts/check-vsix.mjs waterplane-0.3.0.vsix",
     "check": "npm run typecheck && npm test && npm run package",
-    "publish:vsce": "vsce publish -i waterplane-0.2.0.vsix",
-    "publish:ovsx": "ovsx publish waterplane-0.2.0.vsix"
+    "publish:vsce": "vsce publish -i waterplane-0.3.0.vsix",
+    "publish:ovsx": "ovsx publish waterplane-0.3.0.vsix"
   },
   "devDependencies": {
     "@types/node": "22.19.21",

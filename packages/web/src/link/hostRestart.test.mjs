@@ -52,3 +52,14 @@ test("a restart this page never saw (loaded after it) is remembered, not announc
   R.noteHostWelcome({ bootId: "e", hostId: "fresh" }, 400_000);
   assert.equal(R.noteHostWelcome({ bootId: "f", hostId: "fresh" }, 900_000), null);
 });
+
+test("the reason the host passed on rides the waiting line and the back line", () => {
+  R.noteHostWelcome({ bootId: "g", hostId: "why" }, 1_000_000);
+  R.noteHostRestarting(1_000_000, "updating 0.1.3 → 0.1.4");
+  assert.match(R.restartLine(R.restartView(), 1_005_000).text, /desktop restarting \(updating 0\.1\.3 → 0\.1\.4\) · 5 s/);
+  R.noteHostWelcome({ bootId: "h", hostId: "why" }, 1_020_000);
+  assert.match(R.restartLine(R.restartView(), 1_020_500).text, /restarted \(updating 0\.1\.3 → 0\.1\.4\) — back after 20 s/);
+  // the next restart without a note says no reason, not the last one
+  R.noteHostRestarting(2_000_000);
+  assert.doesNotMatch(R.restartLine(R.restartView(), 2_001_000).text, /updating/);
+});

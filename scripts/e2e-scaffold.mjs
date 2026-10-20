@@ -1,6 +1,7 @@
 // New-project scaffolding: POST /api/repo seeds a repo that is ready for phone
 // use (branch main, first commit, gitignore/README/CLAUDE.md, inbox+outbox),
 // `setup: false` still gives the bare git init, and the root guard holds.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn, execFileSync } from "node:child_process";
 import { mkdtempSync, existsSync, readFileSync, realpathSync } from "node:fs";
@@ -67,4 +68,4 @@ bootWait(PORT, 900, async () => {
   setTimeout(() => process.exit(failed ? 1 : 0), 100);
 });
 
-setTimeout(() => { console.log("FAIL: timeout"); host.kill(); process.exit(1); }, 20000);
+watchdog(() => { console.log("FAIL: timeout"); host.kill(); process.exit(1); });

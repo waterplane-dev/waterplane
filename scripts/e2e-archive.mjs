@@ -11,6 +11,7 @@
 //  - the recently-closed shortlist is persisted (`<state>/closed.json`), so a host
 //    restart — routine here — no longer turns the route back into a needle in
 //    ~/.claude/projects.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, utimesSync } from "node:fs";
@@ -223,4 +224,4 @@ bootWait(PORT, 1200, async () => {
   finish();
 });
 
-setTimeout(() => { console.log("FAIL: timeout"); host.kill(); process.exit(1); }, 40000);
+watchdog(() => { console.log("FAIL: timeout"); host.kill(); process.exit(1); });

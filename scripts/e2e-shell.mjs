@@ -18,6 +18,7 @@
 //   5. Restart the host on the same root: the pane is re-attached, still a
 //      shell, still named, and still runs a command.
 // Isolated: lib-tmuxiso, a throwaway root and HOME, PREFLIGHT=0.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs";
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync } from "node:fs";
@@ -51,7 +52,7 @@ const check = (c, l) => { console.log(`${c ? "PASS" : "FAIL"}: ${l}`); if (!c) f
 const fail = async (m) => { console.log("FAIL:", m); await stopHost(); process.exit(1); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const b64 = (s) => Buffer.from(s, "base64").toString("utf8");
-setTimeout(() => fail("timeout"), 120_000).unref();
+watchdog(() => fail("timeout"), 120_000).unref();
 
 /** One socket with everything it saw, and a way to wait on it. */
 function client() {

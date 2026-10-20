@@ -23,3 +23,8 @@ Extension items such as Desktop, Links and Vault are lines in the ☰ menu, not 
 - asked: 2026-10-11
 - shipped: 937d9911
 
+### R-toolbar-006 · shipped
+The terminal's floating control folds from horizontal to a single vertical column as it is dragged toward the right edge, keeping a margin from the edge.
+- asked: 2026-10-16
+- shipped: b33c4424, 22addf63, bc1962f9
+

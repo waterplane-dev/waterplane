@@ -16,10 +16,10 @@ export function AnnSendBar({ m }: { m: AnnModel }) {
   const { index, total, onSkip, onSendAll, onDispatch, onText } = m.props;
   return (
     <>
-      {/* Last stop before the bytes go: shrink more (or less) than auto would.
-          Sticky per device — see uploadScale.ts. */}
+      {/* Last stop before the bytes go: shrink more (or less) than auto would. Sticky per device — see
+          uploadScale.ts. data-primary-key: Ctrl/Cmd+Return sends this picture, then the prompt. */}
       <UploadScalePicker compact />
-      <div className="sheet-actions annot-send-bar">
+      <div className="sheet-actions annot-send-bar" data-primary-key="">
         {onSkip && <button className="key" onClick={onSkip} disabled={busy}>skip</button>}
         {onSendAll && total && total > 1 && (
           <>

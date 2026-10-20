@@ -26,7 +26,7 @@
 import {
   Bell, Bot, CloudUpload, CornerDownLeft, Cpu, ExternalLink, Gauge, HardDrive, HelpCircle, KeyRound,
   ListChecks, Lock, Monitor, Radio, RotateCw, Settings, ShieldAlert, Smartphone, SunMoon, Waypoints,
-  Activity, BarChart3, DoorClosed,
+  Activity, BarChart3, DoorClosed, DoorOpen,
 } from "lucide-react";
 import { BRAND, SYNCED_SETTING_KEYS, envName, type Effort, type PermissionMode } from "@waterplane/shared";
 import { useEffect } from "react";
@@ -196,6 +196,7 @@ function SessionRows({ pickBackend }: { pickBackend: SettingsSheetProps["pickBac
   const setLaunchOpt = c.launch.setOpt;
   const launchAsk = usePref("launchAsk");
   const closeWhenDone = usePref("closeWhenDone");
+  const confirmClose = usePref("confirmClose");
   const localSessions = usePref("localSessions");
   return (
     <>
@@ -332,6 +333,20 @@ function SessionRows({ pickBackend }: { pickBackend: SettingsSheetProps["pickBac
 
       {/* Orange/red marks on a session's spend — the person's thresholds. */}
       <SpendWarnRow />
+
+      {/* The close confirm's "don't ask again" turns this off; this is the
+          way back its toast names. */}
+      <SetSwitch
+        id="confirm-close" label="ask before closing a session" icon={DoorOpen}
+        on={confirmClose}
+        onChange={() => {
+          track("action:confirmClose.toggle");
+          setPref("confirmClose", !confirmClose);
+          showToast(!confirmClose ? "you'll be asked before a close loses work" : "sessions close without asking");
+        }}
+        note="On, closing a session with uncommitted changes, commits not merged or shells still running asks first."
+        more={<p>Off, the close goes straight through and the toast still names what was left behind. Its conversation stays under “Recently closed” either way; uncommitted changes stay in the working tree.</p>}
+      />
 
       {/* **Automatic sessions stay open unless asked.** The session a fired
           backlog or scheduled item opens used to close itself once done; the

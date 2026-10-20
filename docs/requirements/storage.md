@@ -9,9 +9,10 @@ Cleanup utilities let the user see and remove accumulated downloads and other st
 App storage lives under the waterplane namespace; the legacy .usmc location still resolves to it.
 - shipped: f8ec634
 
-### R-storage-003 · requested
+### R-storage-003 · shipped
 Per-user state lives in the state directory (WATERPLANE_STATE_DIR, else XDG_STATE_HOME, else ~/.local/state/waterplane); config lives in ~/.config/waterplane and per-repo state in <repo>/.waterplane.
 - asked: 2026-10-04
+- shipped: 9d3cf94
 
 ### R-storage-004 · shipped
 An overview shows disk usage and free space per volume.

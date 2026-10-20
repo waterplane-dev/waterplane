@@ -3,6 +3,29 @@
 Notable changes. This project has no release branches — `main` is the supported
 version — so entries are grouped by the release they shipped in.
 
+## 0.1.3
+
+### Fixes
+
+- **The installer names everything missing at once.** Before downloading
+  anything it lists what this machine lacks (claude, tmux, git, Tailscale), so
+  one round of fixes is enough instead of one re-run per missing piece.
+- **A Mac account without admin rights is told what to ask for.** The installer
+  and `doctor` say which of tmux, the Xcode Command Line Tools and Tailscale an
+  administrator has to install, and never offer a `brew install` that would fail
+  because Homebrew belongs to another account.
+- **`doctor` no longer calls Apple's git stand-in "git present".** Without the
+  Xcode Command Line Tools, `/usr/bin/git` only offers to install them; the row
+  now fails and names `xcode-select --install`.
+- **The npm package is published.** 0.1.2's publish job failed after building
+  the package, so 0.1.2 never reached npm despite its note above; 0.1.3 is the
+  first version there, published by this repository's CI with provenance.
+
+### Docs
+
+- `docs/install.md`: installing on a Mac without admin rights, and the `EACCES`
+  fix for `npm i -g`.
+
 ## 0.1.2
 
 ### New

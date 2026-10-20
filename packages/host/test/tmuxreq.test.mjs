@@ -50,6 +50,9 @@ test("the refusal names the command, says nothing started, and offers no way rou
   assert.match(s, /Install it with: sudo apt-get install -y tmux/);
   assert.doesNotMatch(s, new RegExp(K), "there is no escape hatch to name");
   assert.match(tmuxMissingSentence("darwin", null), /Install Homebrew \(https:\/\/brew\.sh\), then: brew install tmux/);
+  const foreign = tmuxMissingSentence("darwin", null, true);
+  assert.match(foreign, /Homebrew here belongs to another account, so brew install tmux fails for this one/);
+  assert.doesNotMatch(foreign, /Install Homebrew/, "never told to install a Homebrew that is already here");
   assert.match(tmuxMissingSentence("win32", null), /Native Windows is not supported: run it inside WSL2/);
 });
 

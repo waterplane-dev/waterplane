@@ -38,9 +38,10 @@ CLI sessions do not exit unexpectedly.
 Waterplane works robustly and reliably for other open source users who clone and run it.
 - asked: 2026-10-04, 2026-10-05
 
-### R-reliability-010 · requested
+### R-reliability-010 · shipped
 Messages between phone and host are delivered at most once, tracked in an ack ledger so nothing is applied twice.
 - asked: 2026-10-04
+- shipped: 664187d
 
 ### R-reliability-011 · requested
 The app holds up under load and the full test suite passes.
@@ -49,4 +50,9 @@ The app holds up under load and the full test suite passes.
 ### R-reliability-012 · requested
 The project passes a security review with no unaddressed high-impact issues.
 - asked: 2026-10-08
+
+### R-reliability-013 · shipped
+waterplane keeps running on the Mac and comes back up on its own after a crash.
+- asked: 2026-10-15
+- shipped: 009dff3
 

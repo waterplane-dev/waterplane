@@ -13,6 +13,7 @@
 //   - an explicit tap (limit.resume) overrules that hold-off; auto-continue off
 //     for a session takes it out of the queue entirely
 // Portable: throwaway root, stub claude (bash), tiny timing knobs via env.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -166,4 +167,4 @@ bootWait(PORT, 800, async () => {
   ws.on("error", (e) => fail("ws error " + e.message));
 });
 
-setTimeout(() => fail("timeout"), 45000);
+watchdog(() => fail("timeout"));

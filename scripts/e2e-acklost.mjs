@@ -16,6 +16,7 @@
 //
 // Both stamps are sent on a phone clock an HOUR AHEAD of the desktop's, so the
 // pass also proves the comparison is skew-free (it reads the AGE, not the time).
+import { watchdog } from "./lib-watchdog.mjs";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -32,7 +33,7 @@ const { port: PORT, stop } = await bootHost({ tag: "acklost", env: { [E.STATE_DI
 let failed = false;
 const check = (c, l) => { console.log(`${c ? "PASS" : "FAIL"}: ${l}`); if (!c) failed = true; };
 const done = async () => { await stop(); process.exit(failed ? 1 : 0); };
-setTimeout(() => { console.log("FAIL: timeout"); failed = true; void done(); }, 30_000).unref();
+watchdog(() => { console.log("FAIL: timeout"); failed = true; void done(); }).unref();
 
 const SKEW = 3_600_000; // the phone's clock runs an hour ahead
 const phoneNow = () => Date.now() + SKEW;

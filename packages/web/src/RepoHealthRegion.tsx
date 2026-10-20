@@ -33,7 +33,7 @@ import { FilterChip } from "./kit/FilterChip";
 import { CantInline } from "./Unavailable";
 import { Markdown } from "./Markdown";
 import {
-  healthAskContextOf, healthIndexRemedyPrompt, healthTrendRemedyPrompt, seriesAbsenceWords, seriesAllRemedyPrompt, seriesRemedyPrompt,
+  ENGINE_ADOPT_LABEL, engineAdoptPrompt, healthAskContextOf, healthIndexRemedyPrompt, healthTrendRemedyPrompt, seriesAbsenceWords, seriesAllRemedyPrompt, seriesRemedyPrompt,
   type IndexNow, type IndexTrendWeek, type IndexVsSubject, type IndexWeekSubject,
 } from "./setupRemedy";
 import { TilesCard, WeightCard } from "./RepoHealthTiles";
@@ -312,6 +312,17 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
     );
   };
 
+  // The repo's OWN engine copy is what failed, and it outranks the desktop's,
+  // so another refresh runs the same file. The fix is in the repo: seed a
+  // prompt for its agent (`engineAdoptPrompt`). Absent — not greyed — when the
+  // desktop's engine is the one that failed, since adopting it changes nothing.
+  const ownEngineFailed = view?.engine?.kind === "repo" && !!(last?.error || view.readError);
+  const askAdopt = () => {
+    if (!onRemedy || !repo || !view) return;
+    track("action:repohealth.adoptengine");
+    onRemedy(engineAdoptPrompt(repo.repoName, last?.error ?? view.readError, view.engine?.bundled), repo, "the repo-health engine");
+  };
+
   // What the status line folds: the intro, both commits with the two ages and
   // the definition, and which engine read the tree in what packs. Four grey
   // paragraphs stood above the first number; every fact is still here, one tap
@@ -447,6 +458,14 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
               line behind an inner scroll nobody finds on a phone. */}
           {last.refused ? <pre className="update-log rh-refusal">{last.refused.text}</pre> : null}
           {warnings ? <div>{warnings}</div> : null}
+        </div>
+      ) : null}
+
+      {ownEngineFailed && onRemedy && repo ? (
+        <div className="section">
+          <button type="button" className="key rh-verb" onClick={askAdopt}>
+            <Send size={12} aria-hidden /> {ENGINE_ADOPT_LABEL}…
+          </button>
         </div>
       ) : null}
 

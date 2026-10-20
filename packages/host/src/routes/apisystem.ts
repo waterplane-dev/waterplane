@@ -27,6 +27,7 @@ import { ACK_WRITE_FAILED } from "../acks.js";
 import { BadBody, MIME, json, readBody, readJson, serveFileStream } from "./apiio.js";
 import { rangeLastByte } from "../plugins/pluginfiles.js";
 import { localProcessRefusal } from "../net.js";
+import { setRestartNote } from "../restartnote.js";
 import { mount, route, type ApiEntry } from "./apitable.js";
 
 /** The phone's "is that desktop signed in" asks (`/api/peers/<name>/status`), never cached. */
@@ -136,6 +137,18 @@ export const SYSTEM_ROUTES: readonly ApiEntry[] = [
     let form: URLSearchParams | null = null;
     try { form = new URLSearchParams((await readBody(req, 16 * 1024)).toString("utf8")); } catch { /* too large ⇒ nothing */ }
     if (form) { try { ctx.sessions.addBrowserLink(form.get("session") ?? "", form.get("url")); } catch { /* never break the host */ } }
+    res.writeHead(204).end();
+    return true;
+  }),
+  // ── why the next restart is coming (`restartnote.ts`) ────────────────
+  // `npm run restart` and `update` post one sentence before they signal the
+  // daemon, so `host.restarting` can say why. Same loopback rule as /api/hook:
+  // only a process on this machine restarts the host. JSON `{ reason }`; 204
+  // either way — the restart goes ahead with or without a note.
+  route("POST", "/api/host/restart-note", async ({ req, res }) => {
+    { const refused = localProcessRefusal(req.socket.remoteAddress, req.headers); if (refused) { json(res, { ok: false, error: refused }, 403); return true; } }
+    const body = await readJson(req, { optional: true }).catch(() => ({})) as { reason?: unknown };
+    setRestartNote(body?.reason);
     res.writeHead(204).end();
     return true;
   }),

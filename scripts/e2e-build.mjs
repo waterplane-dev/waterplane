@@ -11,6 +11,7 @@
 // gradle prints BUILD SUCCESSFUL and "50 up-to-date" — and a strict
 // "modified since the run started" rule answered zero artifacts for it, so a
 // working setup looked like it had produced nothing at all.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -164,4 +165,4 @@ bootWait(PORT, 800, async () => {
   });
   ws.on("error", (e) => fail("ws error: " + e.message));
 });
-setTimeout(() => fail("timeout — build did not complete"), 30000);
+watchdog(() => fail("timeout — build did not complete"));

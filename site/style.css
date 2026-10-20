@@ -51,11 +51,13 @@ img { max-width: 100%; height: auto; display: block; }
 .wrap { max-width: 1060px; margin: 0 auto; padding: 0 16px; }
 @media (min-width: 720px) { .wrap { padding: 0 40px; } }
 
-/* Top line: the wordmark and nothing that competes with the hero. */
+/* Top line: the wordmark, and on the right the one link that says where the source is. */
 .top { display: flex; align-items: center; gap: 10px; padding: 20px 0 0; }
 .top img { width: 28px; height: 28px; }
 .wordmark { font: 700 18px/1 var(--mono); color: var(--fg); text-decoration: none; }
 .wordmark span { color: var(--accent); }
+.top .gh { margin-left: auto; font-size: 15px; font-weight: 600; white-space: nowrap; }
+@media (max-width: 479px) { .top .gh .wide-only { display: none; } }
 
 h1, h2, h3 { line-height: 1.2; letter-spacing: -.01em; }
 h1 { font-size: clamp(30px, 6.2vw, 46px); margin: 0 0 .45em; max-width: 16ch; }

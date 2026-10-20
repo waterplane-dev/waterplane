@@ -22,10 +22,12 @@ import { lsJson, lsSetJson, LS } from "../storage.ts";
 export interface RestartView {
   /** Waiting on a restart the host announced; epoch ms it started. */
   since?: number;
+  /** Why, as the restarting caller told the host (`host.restarting.reason`); absent when nobody said. */
+  reason?: string;
   /** The last restart's wait, if one was measured. */
   usualMs?: number;
   /** Just back: when, after how long, and whether it had announced itself. */
-  back?: { at: number; downMs?: number; announced: boolean; reattachMs?: number };
+  back?: { at: number; downMs?: number; announced: boolean; reattachMs?: number; reason?: string };
 }
 
 /** How long the "back after …" line stays on the strip. */
@@ -45,9 +47,9 @@ function set(next: RestartView): void { view = next; for (const f of subs) f(); 
 export function subscribeRestart(f: () => void): () => void { subs.add(f); return () => { subs.delete(f); }; }
 export function restartView(): RestartView { return view; }
 
-export function noteHostRestarting(now = Date.now()): void {
+export function noteHostRestarting(now = Date.now(), reason?: string): void {
   const usualMs = lsJson<Boots>(LS.hostBoots, {})[hostKey]?.usualMs;
-  set({ since: now, usualMs });
+  set({ since: now, usualMs, ...(reason ? { reason } : {}) });
 }
 
 export function noteSocketDown(now = Date.now()): void {
@@ -81,7 +83,7 @@ export function noteHostWelcome(
   const reattachMs = msg.startedAt != null && msg.readyAt != null ? Math.max(0, msg.readyAt - msg.startedAt) : undefined;
   boots[hostKey] = { bootId: msg.bootId, usualMs: downMs };
   lsSetJson(LS.hostBoots, boots);
-  set({ back: { at: now, downMs, announced, reattachMs } });
+  set({ back: { at: now, downMs, announced, reattachMs, ...(view.reason ? { reason: view.reason } : {}) } });
   return { downMs, announced };
 }
 
@@ -96,17 +98,18 @@ export function restartLine(v: RestartView, now: number): { text: string; slow: 
     const waited = now - v.since;
     const usual = v.usualMs != null ? ` · usually ~${fmtSecs(v.usualMs)}` : "";
     const slow = waited > (v.usualMs != null ? v.usualMs * SLOW_FACTOR : SLOW_DEFAULT_MS);
+    const why = v.reason ? ` (${v.reason})` : "";
     return {
       text: slow
-        ? `desktop restarting ${fmtSecs(waited)} — longer than usual, it may have failed to start`
-        : `desktop restarting · ${fmtSecs(waited)}${usual}`,
+        ? `desktop restarting${why} ${fmtSecs(waited)} — longer than usual, it may have failed to start`
+        : `desktop restarting${why} · ${fmtSecs(waited)}${usual}`,
       slow,
     };
   }
   if (v.back && now - v.back.at < BACK_SHOWN_MS) {
     const after = v.back.downMs != null ? ` after ${fmtSecs(v.back.downMs)}` : "";
     return {
-      text: v.back.announced ? `desktop restarted — back${after}` : `desktop restarted unannounced (crash?) — back${after}`,
+      text: v.back.announced ? `desktop restarted${v.back.reason ? ` (${v.back.reason})` : ""} — back${after}` : `desktop restarted unannounced (crash?) — back${after}`,
       slow: !v.back.announced,
     };
   }

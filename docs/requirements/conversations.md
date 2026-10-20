@@ -28,3 +28,7 @@ option or per-shell keep.
 Compacting a conversation keeps the text the user had entered before the compact.
 - asked: 2026-10-06
 
+### R-conversations-006 · requested
+The dialogue remembers what the user said last time and offers a reset button that clears that memory.
+- asked: 2026-10-15
+

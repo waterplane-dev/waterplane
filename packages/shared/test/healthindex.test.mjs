@@ -501,3 +501,24 @@ test("healthCommitsAvailability has three states", () => {
   assert.equal(healthCommitsAvailability({ commits: { points: [], total: 0, thinned: false } }), "none");
   assert.equal(healthCommitsAvailability({ commits: healthIndexCommits([row(0)], null) }), "present");
 });
+
+// ── a repo with no CLAUDE.md, and the sentence when nothing scores ─────────
+
+import { HEALTH_NO_CLAUDE_MD, noScoredWeekWords } from "../dist/index.js";
+
+test("no CLAUDE.md weighs nothing: context reads 0 and scores 100; any other absent context is still absent", () => {
+  const r = row(0);
+  r.context = { value: null, reason: HEALTH_NO_CLAUDE_MD };
+  assert.equal(healthEntryValues(r).context, 0);
+  near(healthIndex([r], null).points[0].scores.context, 100);
+  assert.equal(healthEntryValues(row(0, { context: null })).context, undefined);
+});
+
+test("no scored week names what the latest week lacks, with the engine's reason", () => {
+  const r = row(1, { untested: null });
+  r.untested.reason = "no test convention";
+  assert.match(noScoredWeekWords([row(0, { context: null }), r]), /no week has every enabled reading.*: the latest week has no untested modules \(no test convention\)$/);
+  const two = row(0, { context: null, retouch: null });
+  assert.match(noScoredWeekWords([two]), /no re-touches \(x\), no CLAUDE\.md \+ skill descriptions \(x\)$/);
+  assert.equal(noScoredWeekWords([]), "no week has every enabled reading yet, so there is no scored week");
+});

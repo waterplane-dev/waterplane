@@ -394,6 +394,19 @@ against a host booted with a fixed sleep. So the pool starts no NEW script while
 average is above twice the cores (`E2E_MAX_LOAD`, `0` = off) — one always keeps running, so it
 degrades toward serial, never to a stop — and says so when it throttles and when it resumes.
 
+**A failure says which kind it is, and why, at the bottom.** 2026-10-20: a push refused from the
+phone showed e2e-halt and e2e-setup failing; both passed alone, and the phone's last-lines view held
+neither script's FAIL line, only a 4 kB temp-dir tally. Three changes. (1) Up to three failed scripts
+run once more ALONE after the pool, and the summary says "passes alone" (a timing window load
+stretched) or "fails alone too" — a pass alone still FAILS the run: e2e-search's was a real race in
+the test that load exposed, and a gate that waved it through would have shipped it unread
+(`E2E_RETRY_ALONE=0` turns the re-run off). (2) The summary repeats each failure's FAIL lines with
+the indented lines under them, so the cause sits in the last screen. (3) `with-tmp`'s leftover tally
+names the six biggest kinds only. And the whole-script hang guard is `watchdog()` from
+`scripts/lib-watchdog.mjs` with a 45 s floor, never an inline `setTimeout`: e2e-setup's 15 s one
+fired on a run still passing every check, with eleven more scripts on the same 15 s
+(`tools/e2ewatchdog.test.mjs`).
+
 ## The pre-push gate
 
 The hook is local CI generated from `~/.local-ci/` (`prelude.sh` + `steps/usmc.steps`, concatenated

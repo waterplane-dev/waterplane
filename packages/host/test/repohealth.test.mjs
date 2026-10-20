@@ -24,7 +24,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Small enough that the real-spawn test finishes; the module floors it at 1000.
@@ -103,6 +103,16 @@ const canned = (step) => (step === "status" ? STATUS : step === "plot" ? PLOT : 
 
 /** This desktop's engine, as resolution would hand it back. */
 const BUNDLED = { path: "/desktop/myapp/tools/repohealth.mjs", kind: "bundled" };
+/**
+ * `engine.kind` follows the faked resolution; `engine.bundled` is read off
+ * THIS desktop's disk (the adopt-the-desktop's-engine prompt names it), so it
+ * is pinned by shape: an absolute path to the tool, whichever checkout runs it.
+ */
+function assertEngine(view, kind, message) {
+  assert.equal(view.engine?.kind, kind, message);
+  assert.ok(isAbsolute(view.engine?.bundled ?? "") && view.engine.bundled.endsWith(join("tools", "repohealth.mjs")),
+    `bundled names this desktop's engine by absolute path: ${view.engine?.bundled}`);
+}
 /** …and a worktree's own copy, which decides its own root. */
 const OWN = (wt) => ({ path: join(wt, "tools", "repohealth.mjs"), kind: "repo" });
 
@@ -401,7 +411,7 @@ test("a worktree with no tool of its own is read by the BUNDLED engine, with --r
     ],
     "the engine is the desktop's, the root is the worktree VERBATIM, and there is nothing else in the argv",
   );
-  assert.deepEqual(view.engine, { kind: "bundled" }, "and the answer says whose engine read it");
+  assertEngine(view, "bundled", "and the answer says whose engine read it");
   assert.equal(view.tool, true, "`tool` is now 'an engine can read this', and one can");
 });
 
@@ -419,7 +429,7 @@ test("a worktree with its OWN tool is spawned without --root=", async () => {
     assert.ok(!argv.some((a) => a.startsWith("--root=")),
       `--root= must not be handed to a repo's own copy: ${argv.join(" ")}`);
   }
-  assert.deepEqual(view.engine, { kind: "repo" });
+  assertEngine(view, "repo");
 });
 
 test("a refresh runs its three steps through the same engine, argv for argv", async () => {
@@ -446,7 +456,7 @@ test("a failed status is an absence WITH A REASON, and it leaves the rest alone"
   assert.match(view.readError ?? "", /not a git repository: \/wt\/notgit/,
     "the engine's own words, not a paraphrase");
   assert.equal(view.tool, true, "an engine IS here; it could not read THIS tree");
-  assert.deepEqual(view.engine, { kind: "bundled" });
+  assertEngine(view, "bundled");
   assert.equal(view.plot?.series?.[0]?.key, "size.p95",
     "…and the plot read on its own, untouched by the status failing");
 });

@@ -2,7 +2,7 @@ import type { PullItem } from "@waterplane/shared";
 import { idbDel } from "../idb";
 import { nativeCancel, nativeDiscard, nativePullSupported } from "../nativePull";
 import { lsSetJson } from "../storage";
-import { fileMatch, needsFetch, noNetwork, strandedDownload, syncKeeps } from "../downloadState";
+import { fileMatch, needsFetch, noNetwork, pullGone, strandedDownload, syncKeeps } from "../downloadState";
 import { linkOnline } from "../link";
 import type { PullRecord, LocalPull } from "./pullTypes";
 import { LS_STATE, MAX_ATTEMPTS, MAX_RECORDS, localPullId, autoPull } from "./pullConsts";
@@ -241,6 +241,9 @@ export function pullRetry(this: PullManager, id: string): void {
 export async function pullRemove(this: PullManager, id: string): Promise<void> {
   if (this.active === id) { this.abort?.abort(); this.active = null; }
   delete this.records[id];
+  // A native sync that read the service's list before the discard below
+  // landed would otherwise adopt the row straight back (`adoptNative`).
+  this.removed.add(id);
   this.persist();
   void nativeDiscard(id);
   await idbDel("pulls", id);
@@ -300,6 +303,7 @@ export function pullWhyIdle(this: PullManager): string | null {
   if (!autoPull() && waiting.every((r) => !r.local)) return "auto-download is off — tap a file to fetch it now";
   if (noNetwork(navigator.onLine, linkOnline())) return "the phone reports no network — will start when it is back";
   if (waiting.every((r) => r.state === "paused")) return "paused — tap resume";
+  if (waiting.every(pullGone)) return "the desktop no longer has these files — remove them";
   if (waiting.every((r) => r.state === "failed" || r.attempts >= MAX_ATTEMPTS)) return "stopped after repeated failures — tap retry";
   // Mixed — one paused, one given up — fell through every `every()` above and
   // said nothing, which is the state this whole function exists to prevent.

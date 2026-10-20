@@ -4,6 +4,7 @@
 //   - a session that exits WITHOUT a limit banner is NOT resurrected (guard)
 //   - a session the user KILLED is NOT resurrected even if limit-blocked
 // Portable: throwaway root, stub claude (bash), tiny retry knob via env.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -112,4 +113,4 @@ bootWait(PORT, 900, async () => {
   }
 });
 
-setTimeout(() => { console.log("FAIL: timeout"); host.kill(); process.exit(1); }, 30000);
+watchdog(() => { console.log("FAIL: timeout"); host.kill(); process.exit(1); });

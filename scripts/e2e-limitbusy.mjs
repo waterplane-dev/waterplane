@@ -26,6 +26,7 @@
 // 19m28s, reset four hours past, wearing "blocked — usage limit" with the wall
 // still the last line on screen. A turn IN FLIGHT past <ENV>_LIMIT_SERVING_MS is
 // what outranks it.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -73,7 +74,7 @@ const SETUP = `echo "${BANNER}"\r`;
 // and the verdict must let a live turn outrank a stale banner.
 const BUSY = `(for i in $(seq 1 300); do echo noise-$i; sleep 0.12; done) &\r`;
 
-const timer = setTimeout(() => fail("timed out: the block never cleared on a busy session"), 40_000);
+const timer = watchdog(() => fail("timed out: the block never cleared on a busy session"));
 
 bootWait(PORT, 1200, async () => {
   const repo = await fetch(`http://127.0.0.1:${PORT}/api/repo`, {

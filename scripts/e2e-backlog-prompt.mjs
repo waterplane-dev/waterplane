@@ -11,6 +11,7 @@
 // and feed() takes ~2-5s to type+submit; acting on a stray broadcast would assert
 // before the command is even delivered. `onList` is armed ONLY right before a
 // poll, so intervening broadcasts are ignored.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -82,4 +83,4 @@ bootWait(PORT, 900, async () => {
   });
 });
 
-setTimeout(() => { console.log("FAIL: timeout"); host.kill(); process.exit(1); }, 40000);
+watchdog(() => { console.log("FAIL: timeout"); host.kill(); process.exit(1); });

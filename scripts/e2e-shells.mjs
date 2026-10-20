@@ -23,6 +23,7 @@
 // stub's own `sleep 600` is REALLY gone from the process table afterwards,
 // checked by `ps` against this script's own recorded pids only, never a
 // process this script did not itself spawn.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { execFileSync, spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
@@ -200,4 +201,4 @@ bootWait(PORT, 900, async () => {
   }
 });
 
-setTimeout(() => fail("timeout (shells flow didn't complete)"), 40000);
+watchdog(() => fail("timeout (shells flow didn't complete)"));

@@ -126,6 +126,8 @@ export const HEALTH_INDEX_MIN_POINTS = 2;
  * Pinned equal to it by the test.
  */
 export const HEALTH_INDEX_DEFAULT_WARN_CHARS = 16_000;
+/** The engine's `context.reason` for a tree with no CLAUDE.md (`metrics/context.mjs`; a tools test pins the two equal). */
+export const HEALTH_NO_CLAUDE_MD = "no CLAUDE.md at this commit";
 
 /**
  * The fields of one series row this module reads. Everything is optional
@@ -141,7 +143,7 @@ export interface HealthSeriesRow {
   size?: { value?: { p95?: unknown; max?: unknown; maxPath?: unknown; lineMean?: unknown } | null } | null;
   retouch?: { value?: { rate?: unknown } | null } | null;
   hatches?: { value?: Record<string, unknown> | null } | null;
-  context?: { value?: { claudeMdChars?: unknown; descChars?: unknown } | null } | null;
+  context?: { value?: { claudeMdChars?: unknown; descChars?: unknown } | null; reason?: unknown } | null;
   untested?: { value?: unknown[] | null } | null;
   classics?: { value?: { loc?: unknown; files?: unknown } | null } | null;
   /** The repo's disables and overrides in force on this row; absent = none. */
@@ -336,9 +338,9 @@ export function healthEntryReadings(row: HealthSeriesRow): HealthEntryReadings {
   const ctx = row.context?.value;
   const md = ctx?.claudeMdChars;
   const desc = ctx?.descChars;
-  if (nonNegFinite(md) && (desc === null || desc === undefined || nonNegFinite(desc))) {
-    values.context = md + (typeof desc === "number" ? desc : 0);
-  }
+  // No CLAUDE.md is nothing the repo loads every turn: 0, on the engine's exact words (its skills go unmeasured then).
+  if (!ctx && row.context?.reason === HEALTH_NO_CLAUDE_MD) values.context = 0;
+  else if (nonNegFinite(md) && (desc === null || desc === undefined || nonNegFinite(desc))) values.context = md + (typeof desc === "number" ? desc : 0);
 
   const list = row.untested?.value;
   const files = row.classics?.value?.files;
@@ -367,10 +369,7 @@ export function healthEntryReadings(row: HealthSeriesRow): HealthEntryReadings {
 }
 
 /** The five values alone — `healthEntryReadings(row).values`. The warn line is not read here any more (scores read it). */
-export function healthEntryValues(
-  row: HealthSeriesRow,
-  _contextWarnChars?: number | null,
-): Partial<Record<HealthEntry, number>> {
+export function healthEntryValues(row: HealthSeriesRow, _contextWarnChars?: number | null): Partial<Record<HealthEntry, number>> {
   return healthEntryReadings(row).values;
 }
 

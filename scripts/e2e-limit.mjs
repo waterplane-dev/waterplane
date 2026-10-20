@@ -5,6 +5,7 @@
 //   - flooding the screen past the banner (after an attempt) → blocked:false ("resumed")
 //   - limit.setAuto / limit.session toggles round-trip and re-derive session state
 // Portable: throwaway root, stub claude (bash), tiny idle/retry knobs via env.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -179,4 +180,4 @@ bootWait(PORT, 800, async () => {
   ws.on("error", (e) => fail("ws error " + e.message));
 });
 
-setTimeout(() => fail("timeout"), 30000);
+watchdog(() => fail("timeout"));

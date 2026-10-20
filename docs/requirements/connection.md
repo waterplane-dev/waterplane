@@ -63,28 +63,37 @@ The host accepts the iOS shell's connection by allowing only its exact origin, c
 - shipped: be49c5ea
 
 
-### R-connection-011 · requested
-Pairing a new device offers "Passive device". A passive device's token gets only the automatic app
-download/install path (health, the web-bundle update, the Apps/install manifest and the artifact
-downloads auto-install and autopull use) and the unlock route; every other request — the WebSocket
-included — is refused by the host. A route nobody put on that list is refused. Tokens paired before
-this exist keep full scope.
+### R-connection-011 · shipped
+Pairing a new device offers "Passive device". A passive device's token gets only the automatic app download/install path (health, the web-bundle update, the Apps/install manifest and the artifact downloads auto-install and autopull use) and the unlock route; every other request — the WebSocket included — is refused by the host. A route nobody put on that list is refused. Tokens paired before this exist keep full scope.
 - asked: owner, 2026-10-14
+- shipped: 1f2f2dbc
 
-### R-connection-012 · requested
-A passive device has no tokenless path on any network: pairing one switches "gate Tailscale" on (the
-pairing sheet says so in one sentence), so the phone gets nothing more with Tailscale on than on home
-wifi. No Tailscale tags, whois or ACLs are configured for it.
+### R-connection-012 · shipped
+A passive device has no tokenless path on any network: pairing one switches "gate Tailscale" on (the pairing sheet says so in one sentence), so the phone gets nothing more with Tailscale on than on home wifi. No Tailscale tags, whois or ACLs are configured for it.
 - asked: owner, 2026-10-14
+- shipped: 1f2f2dbc
 
-### R-connection-013 · requested
-A passive device unlocks with a PIN the host checks (rate-limited, stored hashed, set only from a
-trusted device, never from a passive one). A correct PIN lifts that device to full scope for 30
-minutes, held on the host, so a killed app or reboot comes back locked. The phone shows "Unlocked
-until HH:MM · Lock now", and drops back to passive when the time runs out.
+### R-connection-013 · shipped
+A passive device unlocks with a PIN the host checks (rate-limited, stored hashed, set only from a trusted device, never from a passive one). A correct PIN lifts that device to full scope for 30 minutes, held on the host, so a killed app or reboot comes back locked. The phone shows "Unlocked until HH:MM · Lock now", and drops back to passive when the time runs out.
 - asked: owner, 2026-10-14
+- shipped: 1f2f2dbc, acacd3b6
 
-### R-connection-014 · requested
-With a passive token the app shows one screen: its apps with their update/install status, the last
-check, and a small "Unlock" link. No burger menu, no settings, no sessions.
+### R-connection-014 · shipped
+With a passive token the app shows one screen: its apps with their update/install status, the last check, and a small "Unlock" link. No burger menu, no settings, no sessions.
 - asked: owner, 2026-10-14
+- shipped: acacd3b6
+
+### R-connection-015 · shipped
+Tailscale is the recommended way for the phone to reach the desktop from outside, not a requirement; the app works on home Wi-Fi, in the same room, or over another VPN without it.
+- asked: 2026-10-14, 2026-10-15
+- shipped: 72097f48
+
+### R-connection-016 · shipped
+The Android background notification link receives only the notification, authRequired and pull.new frames and no state snapshots on connect, never counts as an attached or watched session, and is recognised from its OkHttp User-Agent so the filter works before a new app version is installed.
+- asked: 2026-10-15
+- shipped: a5e813a
+
+### R-connection-017 · requested
+The webcam app's port can be changed to any other port.
+- asked: 2026-10-16
+

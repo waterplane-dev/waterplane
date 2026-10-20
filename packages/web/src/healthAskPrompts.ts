@@ -329,22 +329,26 @@ export interface IndexTrendWeek {
 }
 
 /**
- * The whole index, as one question: is this repo getting healthier, and —
- * only when the person asks — what would make it so.
+ * The whole index, as one tap: read whether this repo is getting healthier,
+ * then propose what would make it so — each proposal a backlog row.
  *
- * Two things this prompt must hold that the week prompt need not:
+ * Three things this prompt must hold that the week prompt need not:
  *
- * ADVICE IS OFFERED, NOT GIVEN. A trend reading answers "how is it going"; a
- * page of advice nobody asked for buries that answer and turns five readings
- * into a to-do list. So the agent reads the trend, OFFERS advice, and stops —
- * the person's reply is the request.
+ * PROPOSALS ARE ROWS, NOT A PAGE. Advice in chat is read once and lost, and a
+ * page of it turns five readings into a to-do list nobody owns. So each
+ * proposal is posted to the repo's backlog with the agent backlog add — held,
+ * never started — and the person fires, edits or deletes each one. Nothing
+ * applies itself: the session changes no file, and a row runs only on a tap.
+ *
+ * THE TREND COMES FIRST. The proposals are argued from what the git history
+ * says moved the readings, not from the gauge alone.
  *
  * THE READINGS ARE NOT THE REPO. They are five generic measures the engine can
  * take of any tree. The change that would help this repo most may move none of
  * them, and advice steered by the index alone would optimise the gauge. So the
- * advice starts from the repo's OWN readings where it declares any, and where
- * the biggest lever has no measure it proposes one for the repo's declaration
- * file — offered, never written unasked.
+ * proposals start from the repo's OWN readings where it declares any, and where
+ * the biggest lever has no measure one proposal is to declare one in the repo's
+ * declaration file — a row like the others, never written by this session.
  */
 export function healthTrendRemedyPrompt(
   weeks: readonly IndexTrendWeek[],
@@ -388,9 +392,9 @@ export function healthTrendRemedyPrompt(
   const hasOwn = !!ctx.own?.readings.length;
   const advice = [
     ...(hasOwn ? ["- Start from this repo's own readings above: say whether they moved over this span, and what moved them."] : []),
-    "- Say plainly that the five index readings are generic measures any tree can be given, and that the change which would help this repo most may move none of them. If that is so, say it, and say what it is anyway.",
-    `- Where that lever has no measure${ctx.own && !hasOwn ? " — this repo has none of its own yet" : ""}, propose one of this repo's own — what it would count and why it tracks the thing that matters — and offer to declare it in ${ownFile} with a script that prints it. Do not write it unless asked.`,
-    "- Order the advice by what each change would cost and what it would buy, and keep it about this repo rather than repos in general.",
+    "- Say plainly that the five index readings are generic measures any tree can be given, and that the change which would help this repo most may move none of them. If that is so, say it, and propose it anyway.",
+    `- Where that lever has no measure${ctx.own && !hasOwn ? " — this repo has none of its own yet" : ""}, propose one of this repo's own — what it would count and why it tracks the thing that matters — as a proposal to declare it in ${ownFile} with a script that prints it.`,
+    "- Keep it to the few changes worth their cost, about this repo rather than repos in general; a file that is generated or bundled is a case for excluding it from the readings, not for splitting it.",
   ];
   return `${BRAND.displayName}'s health index for ${repoName} went from ${Math.round(first.index)} in the week of ${first.week} to ${Math.round(last.index)} in the week of ${last.week}.${vsLine(ctx.vs, last.index)} It is a score out of 100 against fixed good values for five readings of the repo — file length, re-touched files, escape hatches, CLAUDE.md + skills, untested modules — held within 30 points of its worst entry, and it falls when a reading grows past its good value.${basketHead(ctx)} Each week, with what each reading added or took away in score points:
 
@@ -402,8 +406,10 @@ ${sums.join("\n")}
 ${tree}${details ? `\n${details}\n` : ""}${variants ? `\n${variants}\n` : ""}${own ? `\n${own}\n` : ""}
 Is ${repoName} getting healthier? Answer it about the repo — read the git history over this span and the code the readings point at — and use the numbers as what prompted the question, not as the answer. Say over which stretch it improved or slipped, which readings carried that, and whether the work behind them is the repo getting better or only the readings moving (a file split for its own sake, tests added that test nothing, a carried-over week, a count diluted by code growing faster). ${BACKLOG_COMMIT}${engine ? ` ${engine}` : ""}
 
-Then stop, and offer advice on what to change for a healthier code base — do not give it yet. Give it only if the person asks for it, and when you do:
+Then propose what to change for a healthier code base:
 ${advice.join("\n")}
 
-Change no file, run no fix, commit nothing.`;
+Post each proposal to this repo's backlog with ${BRAND.displayName}'s backlog add (\`POST /api/agent/backlog\`, no \`when\`; your ${BRAND.displayName} skill has the shape), one row per change, ordered by what it would buy for what it costs. Each row's prompt is the whole instruction a fresh session needs to make that change — what, where, why, and how to check it worked — and its label says the change in a few words. Use a key per change that names it, so asking again does not post it twice. Post nothing that only moves a reading. End with the list of rows you posted, one line each, and say they wait in the backlog until the person fires one.
+
+Change no file, run no fix, commit nothing: the backlog rows are the only thing you write.`;
 }

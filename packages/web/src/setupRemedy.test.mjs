@@ -22,7 +22,7 @@ import assert from "node:assert/strict";
 import { ADVISORY_CHECKS, isSetupConsider, isSetupFinding } from "@waterplane/shared";
 import { HEALTH_ENTRY_MEASURE } from "./healthIndexWords.ts";
 import {
-  agentFindings, agentVerb, bulkLabel, bulkNote, findingsCutWords, fixConfirmWords, fixNeedsConfirm, fixVerb,
+  agentFindings, agentVerb, engineAdoptPrompt, bulkLabel, bulkNote, findingsCutWords, fixConfirmWords, fixNeedsConfirm, fixVerb,
   patchFindings, patchIds,
   healthAskContextOf, healthIndexRemedyPrompt, healthTrendRemedyPrompt, remedyPrompt, setupRowLookup, seriesAbsenceWords, seriesAllRemedyPrompt, seriesRemedyPrompt,
 } from "./setupRemedy.ts";
@@ -558,14 +558,16 @@ test("the trend ask lists every week, the gaps as gaps, and each reading's total
   assert.doesNotMatch(p, /Escape hatches \(`hatches`\)/, "a reading with no contribution has no total, not a zero");
 });
 
-test("the trend ask offers advice instead of giving it, and says the readings may miss the lever", () => {
+test("the trend ask reads the trend first, then posts its proposals as held backlog rows", () => {
   const p = healthTrendRemedyPrompt(TREND, "2026-08-17", "myapp");
   assert.match(p, /Is myapp getting healthier\?/);
-  assert.ok(p.indexOf("getting healthier?") < p.indexOf("offer advice"), "the trend is read before advice is offered");
-  assert.match(p, /do not give it yet\. Give it only if the person asks for it/);
+  assert.ok(p.indexOf("getting healthier?") < p.indexOf("propose what to change"), "the trend is read before anything is proposed");
+  assert.match(p, /POST \/api\/agent\/backlog`, no `when`/, "a proposal is a backlog add, never a timed run");
+  assert.match(p, /one row per change/);
+  assert.match(p, /key per change/, "asking twice does not post twice");
   assert.match(p, /may move none of them/);
   assert.match(p, /propose one of this repo's own/);
-  assert.match(p, /Change no file, run no fix, commit nothing\./);
+  assert.match(p, /Change no file, run no fix, commit nothing: the backlog rows are the only thing you write\./);
 });
 
 /* ── what the two index prompts say about the tree beside the numbers ── */
@@ -643,11 +645,11 @@ test("a repo declaring none is told the slot exists; no own block on the wire sa
   const none = healthAskContextOf({ ...PLOT, own: { file: ".waterplane-shared/health.json", declared: false, series: [] } }, null, "2026-08-17");
   const p = healthTrendRemedyPrompt(TREND, "2026-08-17", "myapp", none);
   assert.match(p, /This repo declares no readings of its own; \.waterplane-shared\/health\.json is where one would be declared/);
-  assert.match(p, /this repo has none of its own yet, propose one of this repo's own .* offer to declare it in \.waterplane-shared\/health\.json with a script that prints it\. Do not write it unless asked\./);
+  assert.match(p, /this repo has none of its own yet, propose one of this repo's own .* as a proposal to declare it in \.waterplane-shared\/health\.json with a script that prints it\./);
   assert.doesNotMatch(p, /Start from this repo's own/);
   const old = healthTrendRemedyPrompt(TREND, "2026-08-17", "myapp", healthAskContextOf({ classics: PLOT.classics }, null, "2026-08-17"));
   assert.doesNotMatch(old, /declares no readings|own readings, declared/);
-  assert.match(old, /offer to declare it in \S+health\.json/);
+  assert.match(old, /a proposal to declare it in \S+health\.json/);
 });
 
 test("the index prompts name the repo's disables and overrides, the engine's detail, and the vs-weeks figure", () => {
@@ -692,4 +694,15 @@ test("the index prompts name the repo's disables and overrides, the engine's det
   // Nothing on the wire: none of it is said.
   const bare = healthTrendRemedyPrompt(weeks.slice(0, 1).concat(weeks[2]), "2026-08-17", "myapp", healthAskContextOf({ classics: null }, null, "2026-08-17"));
   for (const s of ["Built from", "central", "verbatim", "Against the week of"]) assert.ok(!bare.includes(s), s);
+});
+
+test("engineAdoptPrompt quotes the failure, names the desktop's engine by path, and keeps the series", () => {
+  const p = engineAdoptPrompt("demo", "the repo-health engine exited 1: Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'x'.", "/opt/wp/tools/repohealth.mjs");
+  assert.match(p, /ERR_MODULE_NOT_FOUND/);
+  assert.match(p, /\/opt\/wp\/tools\/repohealth\.mjs/);
+  assert.match(p, /Do not delete the measured series/);
+  // A repo that IS the engine's source keeps its copy.
+  assert.match(p, /keep the copy/);
+  // No path from the host: never a guessed one.
+  assert.match(engineAdoptPrompt("demo", null, null), /ask before guessing a path/);
 });

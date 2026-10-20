@@ -71,6 +71,7 @@ import { readRank, perDay, ROW_KEYS } from "./repohealth/series.mjs";
 import { measureSize } from "./repohealth/metrics/size.mjs";
 import { measureHatches } from "./repohealth/metrics/hatches.mjs";
 import { measureContext } from "./repohealth/metrics/context.mjs";
+import { HEALTH_NO_CLAUDE_MD } from "../packages/shared/dist/index.js";
 import { measureUntested } from "./repohealth/metrics/untested.mjs";
 import { measureClassics, tapeLines, tapePaths } from "./repohealth/metrics/classics.mjs";
 import { normalizeScope, scopeHistory, slugFor } from "./repohealth/scope.mjs";
@@ -564,7 +565,8 @@ test("a CLAUDE.md is measured whether or not there are skills beside it", () => 
   snap.claudeMdChars = null;
   const none = measureContext(snap, areaHistory(["A.tsx"]), 0, CFG);
   assert.equal(none.value, null);
-  assert.match(none.reason, /CLAUDE\.md/);
+  // The health score reads this exact sentence as "weighs nothing" (shared `HEALTH_NO_CLAUDE_MD`).
+  assert.equal(none.reason, HEALTH_NO_CLAUDE_MD);
 });
 
 test("a tree whose only skills are generated says so, and not that there are none", () => {

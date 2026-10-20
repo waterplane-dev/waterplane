@@ -25,6 +25,7 @@
 //  5. …and they run IN THE ORDER THEY WERE ADDED: the freed slot goes to the
 //     NEXT TICK's fresh count, which hands it to the first row in order, never
 //     to the rows behind it.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -57,7 +58,7 @@ const base = `http://127.0.0.1:${PORT}`;
 let failed = false;
 const check = (c, l) => { console.log(`${c ? "PASS" : "FAIL"}: ${l}`); if (!c) failed = true; };
 const done = () => { try { host.kill(); } catch { /* already gone */ } setTimeout(() => process.exit(failed ? 1 : 0), 150); };
-const bail = setTimeout(() => { check(false, "timed out"); done(); }, 45000);
+const bail = watchdog(() => { check(false, "timed out"); done(); });
 
 bootWait(PORT, 900, async () => {
   const mk = (n) => fetch(`${base}/api/repo`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: n }) }).then((r) => r.json());

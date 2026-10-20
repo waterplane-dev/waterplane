@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 
 import {
   createFeatureRunner, createRepoActionTable, createRepoChipList, createSettingsRowTable, createSheetTable, createToolbarItemTable, setupRowDefs,
-  availabilityText, countedN, createLauncherItemTable, createMenuItemTable, createSessionViewTable, menuBadgeTotal, menuItemCatalog,
+  availabilityText, countedN, createLauncherItemTable, createMenuItemTable, createSecretFillerTable, createSessionViewTable, menuBadgeTotal, menuItemCatalog,
 } from "./featureRun.ts";
 
 function fakeCore() {
@@ -361,4 +361,21 @@ test("menu items: catalog ids are namespaced, ordered, and open with the active 
   items[0].open();
   assert.deepEqual(opened, [["s1", true]]);
   assert.deepEqual(menuItemCatalog([{ id: "a" }]), []);
+});
+
+test("secret fillers: order, then registry order; open gets the ask's context; a throw is contained", () => {
+  const { core } = fakeCore();
+  const got = [];
+  const ctx = { sessionId: "s1", askLine: "Password:", fill: () => true };
+  const features = [
+    { id: "a", secretFillers: [{ id: "late", label: "late", icon: () => null, order: 5, open: () => { throw new Error("boom"); } }] },
+    { id: "logins", secretFillers: [{ id: "login", label: "from store", icon: () => null, open: (c, x) => got.push([c === core, x]) }] },
+    { id: "off", secretFillers: [{ id: "x", label: "x", icon: () => null, available: () => "needs the app", open: () => {} }] },
+  ];
+  const items = createSecretFillerTable(features, () => core).items(ctx);
+  assert.deepEqual(items.map((e) => [e.key, e.unavailable]), [["logins:login", null], ["off:x", "needs the app"], ["a:late", null]]);
+  items[0].open();
+  assert.deepEqual(got, [[true, ctx]]);
+  assert.doesNotThrow(() => quietly(() => items[2].open()));
+  assert.deepEqual(createSecretFillerTable([{ id: "a" }], () => core).items(ctx), []);
 });

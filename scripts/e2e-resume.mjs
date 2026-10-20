@@ -2,6 +2,7 @@
 // the delta since it last saw, not the whole scrollback — the mechanism that
 // makes a mobile wake/reconnect a near-invisible append instead of a full redraw.
 // Also asserts a fresh attach (no resumeSeq) still gets a flagged FULL replay.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -132,4 +133,4 @@ bootWait(PORT, 800, async () => {
   }
 });
 
-setTimeout(() => fail("timeout"), 12000);
+watchdog(() => fail("timeout"));

@@ -94,3 +94,23 @@ outside the signed-in session, a locked screen), the phone says so in words.
 - asked: 2026-10-16 (owner, a marked screenshot of the Desktop button: "build the remote desktop thing also for windows")
 - built: the commit that adds `packages/extensions/desktop/helper-win/`; compiled under C# 5 and run
   (synthetic source, JPEG, dry input) under Mono only — never on Windows yet
+### R-desktop-014 · shipped
+In the remote desktop view, keyboard input and shortcuts typed on the desktop are forwarded to the remote desktop, including in full screen.
+- asked: 2026-10-14
+- shipped: 7dc611f
+
+### R-desktop-015 · shipped
+Full screen fills the whole screen with the remote display; the top tabs bar is hidden there while the other two status bars stay visible.
+- asked: 2026-10-14
+- shipped: 0fb733d
+
+### R-desktop-016 · shipped
+The live desktop view has a focus toggle in its header that streams the front window.
+- asked: 2026-10-16
+- shipped: c25e0c06
+
+### R-desktop-017 · shipped
+The desktop strip shows how many agents run in parallel, amber past 10 and red past 30, with configurable marks. Past a mark the strip appears by itself and can be closed; tapping the count opens details with agent count over time and which sessions run how many agents, and tapping a session opens it.
+- asked: 2026-10-17
+- shipped: 5fb76a92, df902b7e
+

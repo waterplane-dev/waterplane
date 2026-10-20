@@ -65,6 +65,7 @@ export function WhenSection({ m }: { m: SendSheetModel }) {
                   : "Turn ended, no question open, no usage-limit block. The desktop holds it, so this phone can be shut."}
             </div>
           )}
+          <div className="section section-head"><span>What it waits for</span></div>
           <RadioRows<"clock" | "window" | "after"> label="What it waits for"
             value={when.kind === "at" ? (anchor === "window" ? "window" : "clock") : when.kind === "after" ? "after" : null}
             options={[

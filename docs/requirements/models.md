@@ -71,3 +71,7 @@ When switching models within a session, the UI shows the extra cost of the promp
 - asked: 2026-10-05
 - shipped: ad441dd5
 
+### R-models-016 · requested
+The model select box lists the models currently available in GitHub Copilot, fetched live.
+- asked: 2026-10-15
+

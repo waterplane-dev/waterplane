@@ -93,12 +93,16 @@ bootWait(PORT, 1400, async () => {
   ws.on("open", () => send({ t: "hello", protocol: 1 }));
 
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  // A positive is WAITED for, never slept for: a fixed 900 ms before reading the ack and the
+  // stub's argv failed all three under the full parallel suite and passed alone. The fixed
+  // naps left below sit before "nothing happened" checks, which load cannot make flake.
+  const until = async (pred, ms = 20_000) => { for (let t = 0; t < ms && !pred(); t += 50) await wait(50); };
 
   async function step1() {
     // ── 1. A fork at turn 1 ─────────────────────────────────────────
     send({ t: "session.create", cwd: repo.path, cols: 80, rows: 24, title: "src (from #1)",
       resumeMode: "fork", resumeSessionId: SRC, forkAtTurn: "u1", ackId: "ff-1" });
-    await wait(900);
+    await until(() => acks.has("ff-1") && created.length >= 1 && args.includes("--resume "));
     const ack = acks.get("ff-1");
     check(ack?.ok === true, `fork op acked ok (${JSON.stringify(ack)})`);
     const after = logs(repo.path);
@@ -128,7 +132,7 @@ bootWait(PORT, 1400, async () => {
 
     // ── 4. A turn that is not in the log is refused, not guessed at ──
     send({ t: "session.create", cwd: repo.path, cols: 80, rows: 24, resumeMode: "fork", resumeSessionId: SRC, forkAtTurn: "nosuchturn", ackId: "ff-2" });
-    await wait(700);
+    await until(() => acks.has("ff-2"));
     const bad = acks.get("ff-2");
     check(bad?.ok === false, `an unknown turn is refused (${JSON.stringify(bad)})`);
     check(created.length === 1, "a refused fork opens no session on the whole conversation");
@@ -136,7 +140,7 @@ bootWait(PORT, 1400, async () => {
 
     // ── 5. A traversal-shaped source id never reaches the filesystem ─
     send({ t: "session.create", cwd: repo.path, cols: 80, rows: 24, resumeMode: "fork", resumeSessionId: "../../etc/passwd", forkAtTurn: "u1", ackId: "ff-3" });
-    await wait(700);
+    await until(() => acks.has("ff-3"));
     check(acks.get("ff-3")?.ok === false, "a traversal-shaped conversation id is refused");
     check(created.length === 1, "…and opens nothing");
     finish();

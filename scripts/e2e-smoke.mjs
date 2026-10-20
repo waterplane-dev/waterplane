@@ -1,5 +1,6 @@
 // Boots the host daemon, drives one session over WS, asserts the round-trip.
 // Portable: uses a throwaway root and creates a repo via the API (no machine paths).
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -61,4 +62,4 @@ bootWait(PORT, 800, async () => {
   ws.on("error", (e) => fail("ws error " + e.message));
 });
 
-setTimeout(() => fail("timeout"), 8000);
+watchdog(() => fail("timeout"));

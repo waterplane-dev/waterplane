@@ -68,3 +68,20 @@ Spend so far in a period is this desktop's ledger at list price, never the invoi
 On an API or cloud account with no weekly window, the desktop pushes at most once per period when the dollars spent project past the cap at the current pace; words only.
 - asked: 2026-10-12 (billing-periods plan)
 - shipped: de9aef7d
+### R-cost-014 · requested
+Sessions can be auto-compacted after 30 minutes idle, optionally limited to starred or flagged conversations, to cut cache-rewrite cost.
+- asked: 2026-10-15
+
+### R-cost-015 · requested
+Metered AI calls run without asking under a per-repo daily budget; once it is used up the person gets a single ask stating what was spent today and the estimated cost of the next run, about one tap per repo per day.
+- asked: 2026-10-15, 2026-10-15
+
+### R-cost-016 · shipped
+The VS Code extension shows the same overall cost view as the phone, with one sticky span filter.
+- asked: 2026-10-16
+- shipped: 4707cf3f
+
+### R-cost-017 · requested
+The set budget is visible in the UI.
+- asked: 2026-10-18
+

@@ -117,3 +117,11 @@ test("the Send sheet's draft slot has one spelling, sendIntent.ts's", () => {
   assert.match(sendHook, /SEND_DRAFT,[^;]*from "\.\.\/\.\.\/sendIntent"/);
   assert.match(entry, /import \{ SEND_DRAFT \} from "\.\.\/\.\.\/sendIntent"/);
 });
+
+test("a filled password lands only on the SAME ask in the SAME session, read live at landing, and never sends", () => {
+  const src = read("./useCompose.ts");
+  const fn = src.slice(src.indexOf("function secretFillContext"), src.indexOf("function sendSecret"));
+  assert.match(fn, /activeIdRef\.current !== sessionId \|\| secretAskRef\.current !== askLine\) return false/);
+  assert.match(fn, /setSecret\(value\)/);
+  assert.doesNotMatch(fn, /sendInput|setCompose|pushHistory/);
+});

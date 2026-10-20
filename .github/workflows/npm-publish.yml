@@ -138,7 +138,9 @@ jobs:
       - name: The tarball is this version, with its shrinkwrap
         if: steps.npm.outputs.published == 'false'
         run: |
-          TGZ="dist-release/$PKG-$VERSION.tgz"
+          # ./ on purpose: npm reads a bare "dist-release/x.tgz" as a GitHub user/repo and runs
+          # git ls-remote on it (the v0.1.2 run died that way).
+          TGZ="./dist-release/$PKG-$VERSION.tgz"
           if [ ! -f "$TGZ" ]; then
             echo "::error::release:build made no $TGZ. Nothing was published."
             ls -la dist-release || true

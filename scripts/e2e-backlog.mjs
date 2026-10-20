@@ -6,6 +6,7 @@
 // in CLAUDE.md) — so the PTY here is captured off `session.created` rather than
 // off the item going running: the executor awaits its own delivery now, and by
 // the time the row says `running` the words have already been typed.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync, existsSync } from "node:fs";
@@ -107,4 +108,4 @@ bootWait(PORT, 900, async () => {
   });
 });
 
-setTimeout(() => { console.log("FAIL: timeout (auto-fire didn't complete)"); host.kill(); process.exit(1); }, 20000);
+watchdog(() => { console.log("FAIL: timeout (auto-fire didn't complete)"); host.kill(); process.exit(1); });

@@ -40,9 +40,11 @@ export type HostCoreMsg =
    * `welcome`'s `startedAt` (process start) and `readyAt` (sessions
    * re-attached, the moment it can answer) the phone can say "the desktop is
    * restarting", for how long, and when it was back — a restart is otherwise
-   * a few missed pings in a graph that has no time axis.
+   * a few missed pings in a graph that has no time axis. `reason`
+   * (optional, additive): one line the restarting caller posted first
+   * (`npm run restart`, `update`); absent when nobody said — never inferred.
    */
-  | { t: "host.restarting"; at: number }
+  | { t: "host.restarting"; at: number; reason?: string }
   /** Sent to a gated socket that presented no valid token, right before close. */
   | { t: "authRequired"; enabled: boolean; kind: PeerKind }
   /** Current auth state (after a management change, or on request). */

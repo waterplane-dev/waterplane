@@ -27,8 +27,8 @@
  * function, or a badge reading 3 opens a list of 4.
  */
 import {
-  AUTO_COMPACT_SUGGESTED, BRAND, CONFIRM_GATED_FIXES, SIGNING_KEY_CONSENT, androidToolchainConsent, isSetupFinding,
-  sharedRel, type ComplianceCheck,
+  AUTO_COMPACT_SUGGESTED, BRAND, CONFIRM_GATED_FIXES, REPOHEALTH_OWN_FILE, REPOHEALTH_SERIES, REPOHEALTH_TOOL, SIGNING_KEY_CONSENT,
+  androidToolchainConsent, isSetupFinding, sharedRel, type ComplianceCheck,
 } from "@waterplane/shared";
 import type { SetupRowDef } from "./sdk/types.ts";
 
@@ -435,6 +435,48 @@ Is this serving ${subjectOfReading(repoName, scope)}, and what would you change?
 "It is serving you; change nothing" is a complete answer, and so is "this is an artefact of how it was measured". If either is what you find, say so and stop. \`${s.key}\` is the tool's own name for this measurement; the tool is ${BRAND.displayName}'s, run against this tree, and is probably not in this repo — open it only if you come to doubt the number, and do not go hunting for it here.
 
 This is not a brief and it is not a finding: the tool holds no threshold, so there is no line this number is on the wrong side of, and nothing above says it is too much or too little. A judgment you form by reading this repo is a different thing, and it is exactly what is being asked for — say what it rests on, and keep it about this repo rather than repos in general. Change no file, run no fix, commit nothing. Finish with the options as you see them, in order of what each would cost.`;
+}
+
+/**
+ * The verb under a failure of the REPO'S OWN engine copy. That copy wins over
+ * the desktop's (a repo carrying the tool is the authority on its root), so
+ * when it cannot even start — an import its tree never built, a version that
+ * predates the wire — nothing here can read the repo, and a refresh tap runs
+ * the same broken file again. What closes it is a change in the repo, so the
+ * verb seeds a prompt for that repo's agent; nothing is sent by the tap.
+ */
+export const ENGINE_ADOPT_LABEL = "ask the agent to adopt this desktop's engine";
+
+/**
+ * The repo's own `tools/repohealth.mjs` failed, and it is what reads this repo:
+ * a repo carrying the engine outranks the desktop's, so the refresh cannot get
+ * past it. The ask is to bring the repo onto the engine this desktop ships —
+ * by updating its copy, or by dropping it so the desktop's reads the tree —
+ * and to carry any reading only this repo has into its committed declaration,
+ * which the desktop's engine runs.
+ *
+ * The failure is QUOTED, and the desktop's engine is named by PATH when the
+ * host sent one: "the latest engine" with no location sends the agent looking
+ * in its own tree, which is the copy that failed. Options in order of cost,
+ * and the agent decides; a repo that IS the engine's source is told so,
+ * because there deleting the copy is deleting the product.
+ */
+export function engineAdoptPrompt(repoName: string, failure: string | null, bundled: string | null | undefined): string {
+  const tool = REPOHEALTH_TOOL;
+  const own = REPOHEALTH_OWN_FILE;
+  const where = bundled
+    ? `The engine this desktop ships is \`${bundled}\` (its modules sit beside it, under \`${tool.replace(/\.mjs$/, "/")}\` in that tree). It takes \`--root=<repo>\` and reads any repo from outside it.`
+    : `This desktop did not say where its own engine is — ask before guessing a path.`;
+  return `${BRAND.displayName}'s repo-health charts for ${repoName} cannot be drawn: this repo carries its own \`${tool}\`, which outranks the desktop's engine, and it failed.
+${failure ? `\nIt said: ${failure.trim()}\n` : ""}
+${where}
+
+Bring this repo onto the latest engine. In order of cost, pick the one that fits:
+1. If the copy here is stale or half-built, and nothing in it is specific to this repo, remove \`${tool}\` and \`${tool.replace(/\.mjs$/, "/")}\` so the desktop's engine reads the repo.
+2. If the copy carries readings only this repo has, move them into \`${own}\` (committed; \`readings\` is a list of argv commands that each print one number), then remove the copy as in 1.
+3. If this repo is where the engine is developed (it is the engine's own source), keep the copy and make it run here instead — the failure above says what is missing.
+
+Do not delete the measured series (\`${REPOHEALTH_SERIES}\`) — the desktop's engine reads it. Run \`node <engine> status --root=.\` with the engine you end up on to show it loads, say which option you took and why, and commit it.`;
 }
 
 /**

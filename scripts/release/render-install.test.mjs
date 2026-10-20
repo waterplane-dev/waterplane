@@ -349,11 +349,11 @@ test("tmux missing on macOS with brew, non-interactive: stops with the exact bre
   assert.match(r.out, /Install it with: brew install tmux — then re-run this installer\./);
   assert.doesNotMatch(r.out, /\[y\/N\]/, "no prompt without a terminal");
   assert.doesNotMatch(r.out, /ENSURED/);
-  assert.equal(r.ran, "", "brew was never run without consent");
+  assert.doesNotMatch(r.ran, /RAN brew install/, "brew never installed anything without consent (asking where it lives is a read)");
 });
 
 test("tmux missing on macOS without brew: names Homebrew and the command", async () => {
-  const r = await tmuxCheck({ os: "darwin" });
+  const r = await tmuxCheck({ os: "darwin", fakes: { id: 'echo "staff admin"' } });
   assert.equal(r.code, 1);
   assert.match(r.out, /Install Homebrew \(https:\/\/brew\.sh\), then run: brew install tmux/);
 });
@@ -454,4 +454,77 @@ test("install_release: INSECURE_SKIP_SIG=1 installs an unsigned release, and say
     assert.match(r.out, /WARNING: .*INSECURE_SKIP_SIG=1 — NOT checking who published/);
     assert.ok(r.installed);
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// ── preflight: everything missing said at once, and a non-admin Mac told what to ask for ───────
+// Driven with a PATH holding only stubs and the few real tools the checks call, so this machine's
+// own tmux, claude or brew never answer.
+async function preflight({ admin, tools = [], clt = false, brewWritable = true } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), "inst-pre-"));
+  const bin = join(dir, "bin");
+  mkdirSync(bin);
+  for (const t of ["stat", "uname"]) {
+    const real = execFileSync("/bin/sh", ["-c", `command -v ${t}`], { encoding: "utf8" }).trim();
+    writeFileSync(join(bin, t), `#!/bin/sh\nexec ${real} "$@"\n`, { mode: 0o755 });
+  }
+  const stub = (name, body = "exit 0") => writeFileSync(join(bin, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+  for (const t of ["tar", "gzip", "shasum", "curl", "git", ...tools]) stub(t);
+  stub("id", `case "$1" in -Gn) echo "staff everyone${admin ? " admin" : ""}" ;; -un) echo kid ;; esac`);
+  stub("xcode-select", clt ? "echo /Library/Developer/CommandLineTools" : "exit 2");
+  const brewRepo = join(dir, "homebrew");
+  mkdirSync(brewRepo, { mode: brewWritable ? 0o755 : 0o555 });
+  if (tools.includes("brew")) stub("brew", `[ "$1" = --repository ] && echo '${brewRepo}'`);
+  const script = (await render([])).replace(/\nmain "\$@"\s*$/, "\n");
+  const tsFound = tools.includes("tailscale") ? "tailscale_found() { :; }" : "tailscale_found() { false; }";
+  writeFileSync(join(dir, "drive.sh"), `${script}
+${tsFound}
+OS=darwin; IS_WSL=0; SKIP_CLAUDE=0; WITH_IDS=''; MAC_GIT_STUB='${join(bin, "git")}'
+check_prereqs
+echo REACHED
+`);
+  const r = spawnSync("/bin/sh", [join(dir, "drive.sh")], { encoding: "utf8", env: { PATH: bin, HOME: dir } });
+  rmSync(dir, { recursive: true, force: true });
+  return { code: r.status, out: (r.stdout || "") + (r.stderr || "") };
+}
+
+test("preflight: a non-admin Mac hears every missing piece at once, what to ask for, and stops before any question", async () => {
+  const r = await preflight({ admin: false, tools: ["brew"], brewWritable: false });
+  assert.equal(r.code, 1);
+  assert.match(r.out, /missing on this machine: claude \(Claude Code\), tmux, the Xcode Command Line Tools \(git\), Tailscale\./);
+  assert.match(r.out, /this account \(kid\) is not an administrator of this Mac.*Ask whoever administers it for: tmux, the Xcode Command Line Tools, Tailscale\./);
+  assert.match(r.out, /Homebrew is here but belongs to .*, so brew install tmux would fail/);
+  assert.match(r.out, /xcode-select --install/, "the git stand-in is named, not trusted");
+  assert.ok(!/Install it, then re-run this/.test(r.out), "tmux stops it before the claude question");
+  assert.ok(!/REACHED/.test(r.out));
+});
+
+test("preflight: a non-admin Mac with no Homebrew is told an administrator is needed for tmux", async () => {
+  const r = await preflight({ admin: false, tools: ["claude", "tailscale"], clt: true });
+  assert.equal(r.code, 1);
+  assert.match(r.out, /missing on this machine: tmux\./);
+  assert.match(r.out, /Ask whoever administers it for: tmux\./);
+  assert.match(r.out, /needs an administrator to install\. Ask one for tmux/);
+});
+
+test("preflight: an admin Mac with a writable Homebrew is offered brew for tmux, not stopped", async () => {
+  const r = await preflight({ admin: true, tools: ["brew", "claude", "tailscale"], clt: true });
+  assert.match(r.out, /missing on this machine: tmux\./);
+  assert.ok(!/administrator/.test(r.out));
+  assert.match(r.out, /REACHED/, "the brew offer comes later, in ensure_tmux");
+});
+
+test("preflight: nothing missing says nothing about missing", async () => {
+  const r = await preflight({ admin: false, tools: ["tmux", "claude", "tailscale"], clt: true });
+  assert.equal(r.code, 0);
+  assert.ok(!/missing|administrator|stand-in/.test(r.out), r.out);
+  assert.match(r.out, /REACHED/);
+});
+
+test("preflight: a missing claude is explained, never asked about, and the install goes on", async () => {
+  const r = await preflight({ admin: true, tools: ["tmux", "tailscale"], clt: true });
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /missing on this machine: claude \(Claude Code\)\./);
+  assert.match(r.out, /continuing without it; sessions will not start until claude is on PATH/);
+  assert.ok(!/\[y\/N\]|Install it, then re-run/.test(r.out), r.out);
+  assert.match(r.out, /REACHED/);
 });

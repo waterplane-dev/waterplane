@@ -10,6 +10,7 @@
 // rendered screen) may retire a prompt. Output alone never does — and the check
 // still runs under a repaint stream, so a box that really goes away still
 // clears.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -168,4 +169,4 @@ bootWait(PORT, 900, async () => {
   setTimeout(() => process.exit(failed ? 1 : 0), 150);
 });
 
-setTimeout(() => { console.log("FAIL: timeout"); host.kill(); process.exit(1); }, 45000);
+watchdog(() => { console.log("FAIL: timeout"); host.kill(); process.exit(1); });

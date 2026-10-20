@@ -23,6 +23,7 @@
 // awake. Hence `history`, asserted here too: the host says whether it holds
 // anything beyond the current grid, so a daemon that has just restarted cannot
 // talk a phone out of an archive that is longer than its own.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -131,4 +132,4 @@ bootWait(PORT, 1200, async () => {
   setTimeout(() => process.exit(failed ? 1 : 0), 150);
 });
 
-setTimeout(() => { console.log("FAIL: timeout"); host.kill(); process.exit(1); }, 45000);
+watchdog(() => { console.log("FAIL: timeout"); host.kill(); process.exit(1); });

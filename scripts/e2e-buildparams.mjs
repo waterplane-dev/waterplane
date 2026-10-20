@@ -18,6 +18,7 @@
 //    with what it printed — and answers with an ERROR SENTENCE, never an empty
 //    list, when the command fails. "That command is broken" and "this monorepo
 //    has no apps" are opposite facts and the form draws them differently.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
@@ -128,4 +129,4 @@ bootWait(PORT, 800, async () => {
   });
   ws.on("error", (e) => fail("ws error: " + e.message));
 });
-setTimeout(() => fail("timeout — the parameterised build did not complete"), 30000);
+watchdog(() => fail("timeout — the parameterised build did not complete"));

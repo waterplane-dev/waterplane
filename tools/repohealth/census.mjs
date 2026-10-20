@@ -70,7 +70,7 @@ import { PACKS } from "./packs/index.mjs";
 // path for the same pack a parser would be handed it for, and two
 // implementations of "which pack owns this extension" is two answers.
 import { packFor } from "./metrics/route.mjs";
-import { inExcludedDir, isSource } from "./source.mjs";
+import { inExcludedDir, isGenerated, isSource, parseGeneratedAttrs } from "./source.mjs";
 
 /**
  * The directory names no pack's language owns — build output and vendored
@@ -126,10 +126,13 @@ function excludeDirsOf(packs) {
  * the literal truth — it claims no extensions, so no file activated it. It is
  * there so the pack list is never empty and `HATCH_KINDS` always has a shape.
  */
-function activate(paths, packs, excludeDirs) {
+function activate(paths, packs, excludeDirs, generated, generatedRoot) {
   const counts = new Map(packs.map((p) => [p.name, 0]));
   for (const path of paths) {
     if (inExcludedDir(path, excludeDirs)) continue;
+    // A file the repo marks generated is not evidence the language is written
+    // here, for the same reason a vendored directory is not.
+    if (isGenerated(path, generated, generatedRoot)) continue;
     for (const p of packs) {
       if (p.exts.length && p.exts.some((e) => path.endsWith(e))) counts.set(p.name, counts.get(p.name) + 1);
     }
@@ -252,8 +255,12 @@ function union(active, field) {
  * name; sha1 truncated to 8 because this is an identity tag for a handful of
  * combinations, not a security boundary.
  */
-function versionOf(active) {
+function versionOf(active, generated) {
   const ids = active.map((a) => `${a.name}@${a.version}`).sort();
+  // The repo's generated-file rules change which files are measured, so they
+  // are part of the definition. Appended only when there are any, so a repo
+  // that marks nothing keeps the string it already had.
+  if (generated.length) ids.push(`gitattributes:${JSON.stringify(generated.map((r) => r.src))}`);
   const hash = createHash("sha1").update(JSON.stringify(ids)).digest("hex").slice(0, 8);
   return `${PREREG_VERSION}+${hash}`;
 }
@@ -313,7 +320,12 @@ export function configure(root, git, packs = PACKS, scope = null) {
   // each pack are the denominators of every absence, so they follow too.
   const paths = scopePaths(git.listHeadPaths(root), scope);
   const excludeDirs = excludeDirsOf(packs);
-  const active = activate(paths, packs, excludeDirs);
+  // HEAD's root `.gitattributes`, applied to every commit — see `source.mjs`
+  // for why HEAD. Read from the commit like everything else here, never off
+  // the disk. Optional on `git` because test doubles stub only the tree.
+  const generated = parseGeneratedAttrs(git.readFileAt?.(root, "HEAD", ".gitattributes") ?? null);
+  const generatedRoot = scope ? `${scope}/` : "";
+  const active = activate(paths, packs, excludeDirs, generated, generatedRoot);
 
   // Built in two passes because the second needs the first: `isSource` is the
   // union of the ACTIVE packs' extensions, suffixes and test globs, so the
@@ -329,10 +341,12 @@ export function configure(root, git, packs = PACKS, scope = null) {
       excludeSuffixes: union(active, "excludeSuffixes"),
       excludeDirs,
       testGlobs: union(active, "testGlobs"),
+      generated,
+      generatedRoot,
     }),
     HATCH_KINDS: mergeHatchKinds(active),
     HATCH_EXPLAIN: mergeHatchExplain(active),
-    VERSION: versionOf(active),
+    VERSION: versionOf(active, generated),
   };
 
   return Object.freeze({ ...config, PACKS: Object.freeze(countSource(paths, active, config)) });

@@ -22,6 +22,7 @@
 //
 // The server here is a ten-line Node stub speaking /chat/completions, so this
 // needs no ollama, no model download and no GPU in CI.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
@@ -116,7 +117,7 @@ function driveSession(port, cwd, label) {
 }
 
 const die = (m) => { console.log("FAIL: " + m); if (host) host.kill(); stub.close(); process.exit(1); };
-setTimeout(() => die("timeout"), 90_000);
+watchdog(() => die("timeout"), 90_000);
 
 try {
   // ── A host routed at the local server ─────────────────────────────────────

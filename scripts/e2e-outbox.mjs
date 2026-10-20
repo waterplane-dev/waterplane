@@ -2,6 +2,7 @@
 // the alert has to promise what a tap actually does — a report the phone can
 // paint says "tap to read", an APK says "tap to download" (host `readsInline`,
 // web `docKind.ts`).
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
@@ -66,4 +67,4 @@ bootWait(PORT, 800, async () => {
     }
   });
 });
-setTimeout(() => fail(`timeout — artifact notification missing (md=${seenDoc}, apk=${seenApk})`), 15000);
+watchdog(() => fail(`timeout — artifact notification missing (md=${seenDoc}, apk=${seenApk})`));

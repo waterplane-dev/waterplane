@@ -298,9 +298,10 @@ On a window at least 1024px wide the app is a two-pane workspace — repos and s
 On a desktop window the keyboard drives the CLI: a key typed while no field has focus reaches the terminal (which then keeps the keyboard), and the terminal says when it has it — not only the on-screen key buttons.
 - asked: 2026-10-08 — plan: docs/analysis/desktop-workspace-plan.md §5
 
-### R-ui-075 · requested
+### R-ui-075 · shipped
 A side panel on a desktop window can always be closed with a visible control: its head sits below the top strips and never scrolls away.
 - asked: 2026-10-08 — plan: docs/analysis/desktop-workspace-plan.md §3
+- shipped: dda5ea2
 ### R-ui-076 · requested
 The UI never greys out a button; when an action is unavailable it explains why in text. Confirmations never use the browser's window.confirm, and icons contain no emoji.
 - asked: 2026-10-04, 2026-10-06
@@ -408,8 +409,8 @@ Any horizontally scrollable strip that hides content shows a clearly visible che
 - shipped: afe65dd2, 0dbdd2d2
 
 ### R-ui-100 · shipped
-Expanding or collapsing a repo group scrolls the list so its header and revealed content are visible.
-- asked: 2026-10-11
+Expanding or collapsing a repo group scrolls the list so its header and revealed content are visible; expanding any list item scrolls to the end of the expanded items. This is on by default and a user setting turns it off.
+- asked: 2026-10-11, 2026-10-13
 - shipped: 9e2321e3
 
 ### R-ui-101 · shipped
@@ -430,4 +431,39 @@ The VS Code extension has a sidebar view and shows subagent lanes.
 ### R-ui-104 · requested
 Filtered gallery views look the same as the unfiltered view, with the same styling and layout.
 - asked: 2026-10-12
+
+### R-ui-105 · requested
+No two buttons share the same name, so the UI is easy to follow.
+- asked: 2026-10-12
+
+### R-ui-106 · requested
+waterplane.dev is a real final landing page (hook, journey gif, short description, three or four features each with a real still or gif, install snippet, demo link, source link, no 'coming soon'). It makes no third-party requests, works at 360px width in light and dark mode, and avoids generic AI-looking design (no gradient hero, glassmorphism, emoji, icon-in-circle grids, identical card rows or buzzword copy).
+- asked: 2026-10-13, 2026-10-15
+
+### R-ui-107 · shipped
+Choices among text options are radio rows with a round dot and a full wrapping label; a solid accent fill appears only on the single 'tap here next' button on a screen, and selected-option states never use the accent background. Icon-only toggles, chip sets and single on/off switches keep their look.
+- asked: 2026-10-15
+- shipped: a2a657b4, 8489dc15, c38b1ba3
+
+### R-ui-108 · requested
+Multi-selection controls are rendered as checkboxes, not circles.
+- asked: 2026-10-17
+
+### R-ui-109 · requested
+The VS Code extension UI looks the same as the web UI, with matching styling.
+- asked: 2026-10-17
+
+### R-ui-110 · shipped
+App styling is built on reusable shared variables (a token scale) and split into ordered slices, so styles stay maintainable.
+- asked: 2026-10-18
+- shipped: cd8ae25f, 669f639c
+
+### R-ui-111 · requested
+The cute elements have a cancel button.
+- asked: 2026-10-19
+
+### R-ui-112 · shipped
+Folding the CLI output stays folded: it does not reopen itself in a loop.
+- asked: 2026-10-19
+- shipped: 56451ee6
 

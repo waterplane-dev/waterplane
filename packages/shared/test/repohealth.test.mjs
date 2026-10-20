@@ -280,6 +280,21 @@ test("exit 1 is an error, one sentence, and never a refusal", () => {
   assert.equal(v.error?.includes("\n"), false);
 });
 
+test("a node crash dump is named by its error line, not the source location above it", () => {
+  const stderr = [
+    "node:internal/modules/esm/resolve:271",
+    "    throw new ERR_MODULE_NOT_FOUND(",
+    "          ^",
+    "",
+    "Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/x/packages/shared/dist/index.js' imported from /x/tools/repohealth/statefile.mjs",
+    "    at finalizeResolution (node:internal/modules/esm/resolve:271:11)",
+    "",
+  ].join("\n");
+  const v = classifyExit(1, stderr);
+  assert.match(v.error ?? "", /exited 1: Error \[ERR_MODULE_NOT_FOUND\]: Cannot find module/);
+  assert.doesNotMatch(v.error ?? "", /resolve:271/);
+});
+
 test("exit 0 is neither", () => {
   assert.deepEqual(classifyExit(0, "whatever"), { refused: null, error: null });
 });

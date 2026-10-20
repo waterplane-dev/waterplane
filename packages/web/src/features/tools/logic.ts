@@ -98,7 +98,7 @@ export const ACTION_IDS = [
   // exists to surface, and one missing from it can never report zero.
   "schedule.new", "schedule.save", "schedule.edit", "schedule.runnow", "schedule.toggle", "schedule.remove",
   "schedule.skipnext", "schedule.session", "schedule.reposession", "schedule.spent",
-  "pull.auto", "pull.enable", "pull.supersede", "pull.retry", "pull.pause", "pull.resumeall", "pull.save", "pull.clearall", "gallery.pull", "gallery.pullsave",
+  "pull.auto", "pull.enable", "pull.supersede", "pull.retry", "pull.pause", "pull.resumeall", "pull.save", "pull.clearall", "pull.strip.remove", "gallery.pull", "gallery.pullsave",
   "search.recent", "search.history", "read.toggle", "read.find", "read.outline", "read.fileref", "outline.find", "outline.jump", "scrollback.find", "scrollback.reachback",
   // `setup.fix` patches; `setup.remedy` opens a prompt. Counted apart because a
   // checklist whose findings are mostly remedies is one whose checks have

@@ -14,7 +14,7 @@
    to the fallback, computes to a flat transparent and inherits that down to
    every tab. The symptom is a strip of colourless blocks and nothing in the
    stylesheet that looks wrong. */
-.repo-group, .row-wrap, .stab, .sess-top, .rc-row, .rc-swatch, .rc-dot {
+.repo-group, .row-wrap, .stab, .stab-row, .sess-top, .rc-row, .rc-swatch, .rc-dot {
   --repo-fill: color-mix(in srgb, var(--repo-accent, transparent) var(--repo-veil), transparent);
   --repo-fill-on: color-mix(in srgb, var(--repo-accent, transparent) var(--repo-veil-on), transparent);
   --repo-edge: color-mix(in srgb, var(--repo-accent, transparent) 38%, transparent);
@@ -400,6 +400,7 @@
 .screen.typing.fullscreen .keys { display: flex; }
 html[data-typing="1"] .net-pulse,
 html[data-typing="1"] .sess-tabs,
+html[data-typing="1"] .stab-all,
 html[data-typing="1"] .localrt-bar,
 html[data-typing="1"] .demo-line { display: none; }
 html[data-typing="1"] .screen { padding-top: env(safe-area-inset-top); }

@@ -26,6 +26,7 @@
 // session being busy — one at a time in this repo. That rung is what stops five
 // due items putting five agents in one worktree, which is a thing that could not
 // happen while every item in a repo shared one session.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -53,7 +54,7 @@ const base = `http://127.0.0.1:${PORT}`;
 let failed = false;
 const check = (c, l) => { console.log(`${c ? "PASS" : "FAIL"}: ${l}`); if (!c) failed = true; };
 const done = () => { host.kill(); setTimeout(() => process.exit(failed ? 1 : 0), 100); };
-const bail = setTimeout(() => { check(false, "timed out"); done(); }, 40000);
+const bail = watchdog(() => { check(false, "timed out"); done(); });
 
 bootWait(PORT, 900, async () => {
   const repo = await fetch(`${base}/api/repo`, {

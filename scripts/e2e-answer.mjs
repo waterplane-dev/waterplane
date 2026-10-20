@@ -13,6 +13,7 @@
 // that exact question is still live. This pins both halves: the fingerprint
 // rules (pure, no host) and the guard itself, asserted against a real PTY —
 // the stub is a shell, so "did those bytes reach the terminal" is countable.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -180,4 +181,4 @@ bootWait(PORT, 900, async () => {
   setTimeout(() => process.exit(failed ? 1 : 0), 150);
 });
 
-setTimeout(() => { console.log("FAIL: timeout"); host.kill(); process.exit(1); }, 40000);
+watchdog(() => { console.log("FAIL: timeout"); host.kill(); process.exit(1); });

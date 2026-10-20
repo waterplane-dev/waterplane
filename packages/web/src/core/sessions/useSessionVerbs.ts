@@ -16,7 +16,8 @@ import { shellCloseWords, shellsSummary } from "@waterplane/shared";
 import type { Connection } from "../conn/useConnection";
 import { PENDING_FOLLOWUPS_KEY, PENDING_STARS_KEY, loadPendingMarks, savePendingMarks } from "../../localState";
 import { FOLLOWUP_MARK, STAR_MARK, reconcileMarks, type PendingMarks, type SessionMark } from "../../pendingMarks";
-import { askConfirm } from "../../Confirm";
+import { askConfirmRemember } from "../../Confirm";
+import { prefRef, setPref } from "../prefs";
 import { showToast } from "../../toast";
 import { track } from "../../usage";
 import { noteSessionClosing } from "../../features/shells";
@@ -105,11 +106,22 @@ export function useSessionVerbs(conn: Connection, getSessions: () => SessionInfo
     // `window.confirm` — the native modal blocks the WebView's event loop
     // while it is up, which on this link means the socket's own keepalive
     // stalls behind a question about a branch.
+    const lines = warn.map((w) => w.replace(/^• /, ""));
+    const close = (toast: string) => { noteSessionClosing(msg.id); send({ t: "session.remove", id: msg.id }); showToast(toast); };
+    // "Don't ask again" was ticked earlier: close, but still say what was left.
+    if (!prefRef("confirmClose").current) { close(`${archivedToast(name)} — left: ${lines.join("; ")}`); return; }
     void (async () => {
-      if (!await askConfirm({ title: `Close ${label}?`, lines: warn.map((w) => w.replace(/^• /, "")), confirmLabel: "Close anyway" })) return;
-      noteSessionClosing(msg.id);
-      send({ t: "session.remove", id: msg.id });
-      showToast(archivedToast(name));
+      const { ok, remember } = await askConfirmRemember({
+        title: `Close ${label}?`, lines, confirmLabel: "Close anyway", tone: "warn",
+      });
+      if (!ok) return;
+      // Remembered only with "Close anyway" — a ticked Cancel has nothing to keep.
+      if (remember) {
+        setPref("confirmClose", false);
+        close("won't ask again — Settings › Sessions › ask before closing a session turns it back on");
+        return;
+      }
+      close(archivedToast(name));
     })();
   }
 

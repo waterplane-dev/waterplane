@@ -52,3 +52,7 @@ Read mode does not scrape fragile slash commands like /btw; the reader shows a r
 - asked: 2026-10-11
 - shipped: 0dfaae39
 
+### R-read-mode-012 · requested
+The CLI / read mode toggle is visible on the backlog view.
+- asked: 2026-10-15
+

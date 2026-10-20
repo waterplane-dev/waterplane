@@ -16,7 +16,7 @@ import type { HostMessage, RepoTarget, SessionInfo } from "@waterplane/shared";
 import { addSettingRows } from "../settingsIndex.ts";
 import type { ComponentType } from "react";
 import type {
-  Availability, ContributionIcon, CoreApi, FeatureManifest, LauncherItemCount, LauncherItemDef, MenuItemDef, RepoChipDef, SessionViewDef, SettingsGroupId, SetupRowDef, SheetDef, SheetId, ToolbarItemDef,
+  Availability, ContributionIcon, CoreApi, FeatureManifest, LauncherItemCount, LauncherItemDef, MenuItemDef, RepoChipDef, SecretFillContext, SecretFillerDef, SessionViewDef, SettingsGroupId, SetupRowDef, SheetDef, SheetId, ToolbarItemDef,
 } from "../sdk/types.ts";
 
 type AnyHandler = (msg: HostMessage, c: CoreApi) => void;
@@ -342,4 +342,10 @@ export function menuItemCatalog(features: readonly FeatureManifest[]): { id: str
 export function createMenuItemTable(features: readonly FeatureManifest[], getCore: () => CoreApi) {
   const t = contributionTable<MenuItemDef, [SessionInfo]>(features, (f) => f.menuItems, "menu item", getCore, (d, c, active) => d.open(c, { active }));
   return { items: (active: SessionInfo) => t.entries(active) };
+}
+
+/** Contributed buttons for the masked password field, under the same containment. */
+export function createSecretFillerTable(features: readonly FeatureManifest[], getCore: () => CoreApi) {
+  const t = contributionTable<SecretFillerDef, [SecretFillContext]>(features, (f) => f.secretFillers, "secret filler", getCore, (d, c, ctx) => d.open(c, ctx));
+  return { items: (ctx: SecretFillContext) => t.entries(ctx) };
 }

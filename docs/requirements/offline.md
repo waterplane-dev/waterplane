@@ -22,3 +22,7 @@ Images, including cached images and full-screen thumbnails, display correctly an
 ### R-offline-006 · requested
 Responsive layout behavior from offline mode also works in online mode.
 
+### R-offline-007 · requested
+With no connection the phone shows the latest known remote status, and it stays viewable offline.
+- asked: 2026-10-12, 2026-10-13
+

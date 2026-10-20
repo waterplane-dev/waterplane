@@ -58,6 +58,11 @@ Tabs show a busy indicator while code generation is ongoing in that session.
 
 
 ### R-tabs-013 · shipped
-A file open in the file viewer can be pinned to the tab strip from the viewer's header; pinned files sit after the sessions, marked as files (file icon, dashed edge), open the viewer on tap, and unpin from their ×.
-- asked: 2026-10-15
+A file open in the file viewer can be pinned to the tab strip from the viewer's header; pinned files are marked as files (file icon, dashed edge), open the viewer on tap, unpin from their ×, and sort in among the sessions by the strip's own order rather than in a separate group.
+- asked: 2026-10-15, 2026-10-15, 2026-10-16
 - shipped: 2026-10-15
+
+### R-tabs-014 · requested
+On desktop the tabs are fully visible and not cut off at the edge.
+- asked: 2026-10-12
+

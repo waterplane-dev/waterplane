@@ -6,6 +6,7 @@
 //
 // Asserted against a real PTY: the stub is a shell, which echoes what it is
 // typed, so "how many times did this text reach the terminal" is countable.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -631,4 +632,4 @@ bootWait(PORT, 900, async () => {
   }
 });
 
-setTimeout(() => bail("timeout"), 20000);
+watchdog(() => bail("timeout"));

@@ -78,10 +78,17 @@ const env = { ...process.env, TMPDIR: dir, TEMP: dir, TMP: dir, WP_TMP_SWEPT: sw
 const prefixOf = (n) => /^\.[0-9a-f]{16}-[0-9a-f]{8}\.\w+$/.test(n)
   ? n.replace(/^\.[^.]+/, ".<hash>")
   : n.replace(/[A-Za-z0-9]{6}$/, "").replace(/-?$/, "-");
+const TALLY_KINDS = 6;
 function tally(names) {
   const m = new Map();
   for (const n of names) m.set(prefixOf(n), (m.get(prefixOf(n)) || 0) + 1);
-  return [...m].sort((a, b) => b[1] - a[1]).map(([p, c]) => `${p}* x${c}`).join(", ");
+  // The biggest few only: this prints AFTER the run's own verdict, and a full list of every
+  // per-script dir (~4 kB on an e2e run) pushed the failing script's lines off the phone's
+  // last-lines view of a refused push.
+  const kinds = [...m].sort((a, b) => b[1] - a[1]);
+  const shown = kinds.slice(0, TALLY_KINDS).map(([p, c]) => `${p}* x${c}`).join(", ");
+  const rest = kinds.slice(TALLY_KINDS);
+  return rest.length ? `${shown}, and ${rest.reduce((n, [, c]) => n + c, 0)} more in ${rest.length} other kinds` : shown;
 }
 
 const child = spawn(cmd[0], cmd.slice(1), { env, stdio: "inherit" });

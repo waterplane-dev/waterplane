@@ -57,3 +57,14 @@ export function kickoffSent(offline: boolean, repos: number): string {
   return offline ? `Queued — the sweep starts ${repos} session${repos === 1 ? "" : "s"} when the link is back`
     : `Sent — waiting for the desktop to start ${repos} session${repos === 1 ? "" : "s"}`;
 }
+
+/** A target row's second line, worded off its STATUS as well as its session:
+ *  the host drops a settled target's session id once that session is gone
+ *  (`intents/watch.ts`), so "no id" alone does not mean "still starting". */
+export function targetSubline(t: KickoffTarget & { error?: string }): string {
+  if (t.error) return t.error;
+  if (t.sessionId) return "tap to open the session";
+  if (t.status === "done" || t.status === "failed") return "its session has closed";
+  if (t.status === "pending") return "waiting to start";
+  return "starting…";
+}

@@ -16,6 +16,7 @@
 // session (the cost argument), never two at once in one repo (`serial` — five
 // due items must not put five agents in one worktree), and they run in the order
 // they were added, which is the only thing that makes a queue a queue.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -81,4 +82,4 @@ bootWait(PORT, 900, async () => {
     }
   });
 });
-setTimeout(() => { console.log("FAIL: timeout"); host.kill(); process.exit(1); }, 25000);
+watchdog(() => { console.log("FAIL: timeout"); host.kill(); process.exit(1); });

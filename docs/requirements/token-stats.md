@@ -14,3 +14,12 @@ The context chart draws the currently set auto-compact window as a line, and say
 - asked: 2026-10-11
 - shipped: 0153deae
 
+### R-token-stats-004 · shipped
+The context window mini graph uses the auto-compact value as its maximum y value.
+- asked: 2026-10-12
+- shipped: e6e47af
+
+### R-token-stats-005 · requested
+The Copilot stats page has the same quality and layout as the Claude stats page, built from shared code; other providers' pages match where it makes sense.
+- asked: 2026-10-15
+

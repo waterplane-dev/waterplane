@@ -93,9 +93,10 @@ The 'when it's free' option is a checkbox that can be combined with other schedu
 - asked: 2026-09-16
 - shipped: 6beef0b
 
-### R-automation-022 · requested
+### R-automation-022 · shipped
 Scheduled tasks can optionally switch between open-code, Claude, and model implementations.
 - asked: 2026-09-17
+- shipped: 9dea53c
 
 ### R-automation-023 · shipped
 Build screen displays an AI-assistance button for setting up new build entries, which can accept runtime parameters and requests user input before starting the CLI session.
@@ -112,8 +113,8 @@ Scheduled tasks view can be filtered by repository, and tapping a repo's schedul
 - shipped: 00d1dc0
 
 ### R-automation-026 · shipped
-User can define the execution order for multiple tasks scheduled for the same instant.
-- asked: 2026-09-23
+User can define the execution order for multiple tasks scheduled for the same instant, by manual sorting in the backlog and by asking for it in a scheduling prompt without using the UI.
+- asked: 2026-09-23, 2026-10-15
 - shipped: c6b9713
 
 ### R-automation-027 · shipped
@@ -243,10 +244,10 @@ A desktop-wide list of "ask before" rules (Claude Code permission-rule strings s
 - shipped: 68f67124 83624d31 94a23918
 - note: a rule matches the words typed, not git's state; it stops the accident, not a wrapper script or an agent that talks the person into Yes. docs/plans/agent-authority.md §2.
 
-### R-automation-051 · requested
-On the phone, a desktop-wide "Ask before" settings section lists the rules (with the suggested list one tap to add) and a per-repo "off here" row turns a rule off for a repo where that action is the daily flow. It says at the moment of a change that running sessions keep the rules they were launched with, and that other backends (opencode, Copilot) take no such rule.
+### R-automation-051 · shipped
+On the phone, a desktop-wide "Ask before" settings section lists the rules (with the suggested list one tap to add) and a per-repo "off here" row turns a rule off for a repo where that action is the daily flow. It says at the moment of a change that running sessions keep the rules they were launched with, and that other backends (opencode, Copilot) take no such rule. - note: in progress; the host half is R-automation-050.
 - asked: 2026-10-13 (owner, agent-authority plan)
-- note: in progress; the host half is R-automation-050.
+- shipped: 39d7b1ec
 
 ### R-automation-052 · shipped
 Changing the ask-rule list needs a browser origin: an agent's origin-less request cannot quietly delete a rule.
@@ -269,11 +270,33 @@ Releasing a login that belongs to the owner (`mine`) to an agent requires a writ
 When more than three tool boxes in a day were answered by the person, a sentence says the policy is wrong, not the person; words only, never a refusal. Not built; waits on owner question 7 of docs/plans/agent-authority.md.
 - asked: 2026-10-13 (owner, agent-authority plan)
 
-### R-automation-057 · requested
+### R-automation-057 · shipped
 When a timed item lands in a slot that already holds others (same usage-window reset, or the same instant), the person is asked whether to check them together — on the send receipt when they typed it, on the slot's group header (*check these N*, exactly those rows) when an agent posted it — and a per-repo switch turns the ask off. The check is the assessment scoped to that slot: it may propose merges (carrying the latest member's clock), an order within the slot, a split of one item into two (posted on the same clock, the original archived), and conflicts (words only, never resolved for the person); each change is approved one at a time and nothing applies itself. Replaces the smart pick (R-automation-013, R-automation-017).
 - asked: 2026-10-16 (owner, .claude/outbox/schedule-check-plan.md)
+- shipped: 23c317c4, 0d3cfdf4, 025374fc, 232e127c
 
 ### R-automation-058 · shipped
 One build entry ships the docs media end to end: re-cuts every gif and the APK film, rebuilds the site page from the README (its gif sizes follow the new films), commits only those files, pushes, then publishes the public mirror and its media repo. Any failed step stops it before anything is committed or pushed.
 - asked: 2026-10-18
 - shipped: build entry "Docs media: ship" in `.waterplane-shared/builds.json`
+### R-automation-059 · requested
+Scheduled items with their own budget and no budget condition fire at their scheduled time even when the global budget limiter is nearly exhausted, consuming the remaining usage.
+- asked: 2026-10-14
+
+### R-automation-060 · requested
+Agent authority (what an agent may cause, such as spending, deploying, pushing to main or sending mail) is a separate feature from vault secret protection, with its own UI and decisions, and never appears on vault approval cards.
+- asked: 2026-10-15, 2026-10-15
+
+### R-automation-061 · requested
+A button lets the user re-trigger a run when nothing is running.
+- asked: 2026-10-16
+
+### R-automation-062 · shipped
+While a build tool entry runs in a repo, its header button shows a busy indicator, like the git button during a push.
+- asked: 2026-10-17
+- shipped: c4e08626
+
+### R-automation-063 · requested
+Scheduled work items, including the midnight run, appear in the waterplane schedule.
+- asked: 2026-10-18
+

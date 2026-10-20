@@ -58,6 +58,7 @@ export const GUARDS = [
   { test: "screenfixtures", tier: "edit", paths: ["tools/screenfixtures.mjs", "packages/host/test/fixtures/**"] },
   { test: "healthreadings", tier: "edit", paths: ["tools/healthreadings.mjs", ".claude/skills/**", ".*-shared/health.json"] }, // the shared config dir by glob: this file cannot import BRAND
   { test: "site", tier: "edit", paths: ["README.md", "site/**", "scripts/site/**", "docs/media/**", "docs/assets/**"] },
+  { test: "e2ewatchdog", tier: "edit", paths: ["scripts/e2e-*.mjs", "scripts/lib-watchdog.mjs", "packages/extensions/*/e2e/**"] },
   { test: "guards", tier: "edit", paths: ["scripts/guards/**", "tools/*.test.mjs"] },
 
   // ── commit: typescript / eslint / child processes, still no build ─────────

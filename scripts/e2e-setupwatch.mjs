@@ -2,6 +2,7 @@
 // on its own, stamps the verdict on /api/repos so a repo row can badge it, keeps
 // it across a restart, and re-stamps it the moment a fix lands. Host-scope rows
 // (the Gemini key) must never count — one unset env var would flag every repo.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn, execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, realpathSync, writeFileSync, existsSync } from "node:fs";
@@ -185,4 +186,4 @@ setTimeout(async () => {
 }, 300);
 
 // Two boots inside: a host answers in under a second on a Mac and in 3-5 s under WSL.
-setTimeout(() => { console.log("FAIL: timeout"); if (host) host.kill(); process.exit(1); }, 60000);
+watchdog(() => { console.log("FAIL: timeout"); if (host) host.kill(); process.exit(1); }, 60000);

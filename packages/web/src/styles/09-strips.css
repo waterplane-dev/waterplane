@@ -193,7 +193,7 @@
   top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pulse-h, 0px) + var(--ui-localrt-h, 0px));
   left: 0; right: 0; z-index: 60;
   height: 34px; display: flex; align-items: flex-end; gap: var(--sp-4);
-  padding-left: calc(env(safe-area-inset-left) + 6px);
+  padding-left: calc(env(safe-area-inset-left) + var(--stab-all-w) + 4px);
   padding-right: calc(env(safe-area-inset-right) + 6px);
   background: var(--bg); border-bottom: 1px solid var(--line);
   /* Sideways, and only sideways. `--stab-n` is the narrowest a tab gets, a
@@ -204,6 +204,51 @@
   scrollbar-width: none; user-select: none;
 }
 .sess-tabs::-webkit-scrollbar { display: none; }
+/* The list button: OUTSIDE the scroller, at the strip's left edge and above it,
+   so it never scrolls away and the strip's sticky scroll cues start right of it
+   (the strip is padded clear by `--stab-all-w`). Opens `.stab-list-layer`. */
+:root { --stab-all-w: 45px; } /* fallback; SessionTabsBar sets it per count */
+.stab-all {
+  position: fixed; z-index: 61;
+  top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pulse-h, 0px) + var(--ui-localrt-h, 0px));
+  left: env(safe-area-inset-left); width: var(--stab-all-w); height: 34px; padding: 0 0 0 6px;
+  display: flex; align-items: flex-end;
+  background: var(--bg); border: 0; border-bottom: 1px solid var(--line); color: var(--muted); cursor: pointer;
+}
+/* The visible part is a neutral TAB on the strip's baseline (the same 27px,
+   top-rounded hairline shape as `.stab`, no repo hue), so it reads as part of
+   the strip and never as a second burger above the header's own. */
+.stab-all::before {
+  content: ""; position: absolute; left: 6px; right: 0; bottom: 0; height: 27px;
+  border-radius: var(--r-10) var(--r-10) 0 0; box-shadow: inset 0 0 0 1px var(--line);
+}
+.stab-all > * { position: relative; }
+.stab-all svg { margin: 0 3px 6px 7px; }
+.stab-all-n { font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: 27px; font-variant-numeric: tabular-nums; }
+.stab-all:active, .stab-all[aria-expanded="true"] { color: var(--accent); }
+.stab-all[aria-expanded="true"]::before { box-shadow: inset 0 2px 0 var(--accent), inset 0 0 0 1px var(--line); }
+/* The list itself: a full sheet under the strip (z below it, so the strip and
+   its button stay on top and a second tap shuts the list). */
+.stab-list-layer { position: fixed; inset: 0; z-index: 59; background: var(--bg); display: flex; flex-direction: column; }
+.stab-list { list-style: none; margin: 0; padding: var(--sp-8); overflow-y: auto; flex: 1 1 auto; display: flex; flex-direction: column; gap: var(--sp-6); }
+.stab-row {
+  display: flex; align-items: center; gap: var(--sp-12); min-height: 56px;
+  padding: var(--sp-10) var(--sp-8) var(--sp-10) var(--sp-12);
+  border-radius: var(--r-10); background: var(--repo-fill); box-shadow: inset 0 0 0 1px var(--repo-edge);
+  color: var(--fg); cursor: pointer;
+}
+.stab-row.on { background: var(--repo-fill-on); box-shadow: inset 4px 0 0 var(--repo-accent, var(--accent)), inset 0 0 0 1px var(--repo-edge); }
+.stab-row.stab-file { box-shadow: none; outline: 1px dashed var(--repo-edge); outline-offset: -1px; }
+.stab-row .stab-led { width: 10px; height: 10px; }
+.stab-row[data-state="done"] .stab-led { background: var(--dim); }
+.stab-row[data-state="wait"] .stab-led { background: var(--dead); }
+.stab-row[data-state="limit"] .stab-led { background: var(--limit); }
+.stab-row[data-state="exited"] .stab-led { background: var(--dead); }
+.stab-row[data-state="exited"] .stab-row-label { font-style: italic; }
+.stab-row-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+.stab-row-label { font-size: calc(var(--fs-16) * var(--ui-font, 1)); font-weight: var(--fw-semibold); line-height: 1.3; overflow-wrap: anywhere; }
+.stab-row-sub { font-size: calc(var(--fs-13) * var(--ui-font, 1)); color: var(--muted); overflow-wrap: anywhere; }
+.stab-row .stab-x { width: 40px; height: 40px; }
 /* One tab. The repo hue is the FILL (`--repo-accent` is set inline per tab from
    the repo name, `--repo-fill` turns it into the wash the launcher uses) and
    the text is plain `--fg`: a repo-hued label on a repo-hued ground is the one

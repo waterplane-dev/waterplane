@@ -116,7 +116,7 @@ export const KEY_SCOPE = {
   // synced — the settings document is per host
   snippets: "host", headerCmds: "host", fanoutPresets: "host", toolbar: "host", launch: "host",
   launchAsk: "host", spendWarn: "host", pad: "host", hiddenRepos: "host", enterSends: "host", dictateTerms: "host",
-  autoSend: "host", serialSessions: "host", confirmQueue: "host", readerTools: "host", annKnobs: "host", annTools: "host", annPrompt: "device",
+  autoSend: "host", serialSessions: "host", confirmQueue: "host", confirmClose: "host", readerTools: "host", annKnobs: "host", annTools: "host", annPrompt: "device",
   hints: "host", repoColors: "host", installAllow: "host", closeWhenDone: "host", localSessions: "host", agentWarn: "host", syncTs: "host",
   // identity and the host list itself; healthAxis is this screen's choice
   healthAxis: "device", deviceId: "device", deviceName: "device", hostBase: "device", hosts: "device", hostActive: "device",

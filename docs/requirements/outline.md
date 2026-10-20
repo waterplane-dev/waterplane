@@ -22,3 +22,8 @@ Outbox images and links from agent worktrees keep working after the worktree is 
 - asked: 2026-10-02
 - shipped: 27c4d08
 
+### R-outline-006 · shipped
+The Outline control sits to the left of the CLI / read mode toggle.
+- asked: 2026-10-15
+- shipped: 923560d
+

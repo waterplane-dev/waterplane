@@ -28,7 +28,7 @@ export function AnnTextOnly({ m }: { m: AnnModel }) {
           spellCheck={false} autoCapitalize="off" aria-label="text read off the picture" />
       )}
       {ocr.phase === "ready" && empty && <div className="annot-hint">Nothing left to send — read again, or go back to the picture.</div>}
-      <div className="sheet-actions annot-send-bar">
+      <div className="sheet-actions annot-send-bar" data-primary-key="">
         <button className="key" onClick={closeOcr}><ArrowLeft size={14} /> picture</button>
         {ocr.phase !== "reading" && <button className="key" onClick={() => void readAll()}><RotateCw size={14} /> read again</button>}
         {ocr.phase !== "reading" && !empty && (

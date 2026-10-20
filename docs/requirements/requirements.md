@@ -33,3 +33,8 @@ After clicking update requirements, the generated prompt and its fire button are
 - asked: 2026-10-07
 - shipped: 864d97d5
 
+### R-requirements-008 · shipped
+The requirements view shows no duplicate requirements row; before the list is set up, the offer is the Opt-ins card only.
+- asked: 2026-10-16
+- shipped: 93c331db
+

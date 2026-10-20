@@ -19,9 +19,10 @@ A contributor's request is never fed verbatim to an agent: the owner rewrites it
 brief, and example code in a request is read, never pasted.
 - asked: 2026-10-01 (owner, open-source contribution policy)
 - shipped: bcd117d
-### R-contributing-004 · requested
+### R-contributing-004 · shipped
 Users can fork and customize waterplane while still pulling upstream release updates; a fork is an upstream release plus a plugins directory and a config overlay, and never edits core.
 - asked: 2026-10-04, 2026-10-05
+- shipped: 30f44ff
 
 ### R-contributing-005 · requested
 The project stays low-maintenance and easy for others to collaborate on.

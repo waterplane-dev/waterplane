@@ -32,3 +32,18 @@ Tapping a notification opens the related session or artifact, including a toaste
 - asked: 2026-10-03
 - shipped: 0074357
 
+### R-notifications-008 · shipped
+A fingerprint approval request shows as a prominent, audible Android notification, and tapping it opens the exact approval page.
+- asked: 2026-10-13
+- shipped: 1dc5db4
+
+### R-notifications-009 · shipped
+A clear button removes the CLI health warnings once the user has read them; a later miss brings them back.
+- asked: 2026-10-19
+- shipped: 2570087b
+
+### R-notifications-010 · shipped
+When the backend restarts, the UI shows a notification so the user knows the connection was interrupted.
+- asked: 2026-10-19
+- shipped: 8d69613a
+

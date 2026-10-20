@@ -38,6 +38,7 @@ test("publish: the tag's own build, with --provenance, through trusted publishin
   assert.match(code, /npm run release:build -- --unsigned\n/, "built in CI from the tag; no signing key, no APK");
   assert.doesNotMatch(code, /--apk|--no-build|--allow-dirty/);
   assert.match(code, /npm publish "\$TGZ" --provenance --access public/);
+  assert.match(code, /TGZ="\.\/dist-release\//, "a path, not a spec: bare dist-release/x.tgz is read as a GitHub user/repo");
   assert.doesNotMatch(code, /secrets\.|NODE_AUTH_TOKEN|NPM_TOKEN/, "OIDC only: no long-lived npm token");
   assert.match(code, /\[ "v\$VERSION" != "\$TAG" \]/, "package.json's version must be the tag");
   assert.match(code, /\[ "\$GOT" != "\$PKG@\$VERSION" \]/, "and the built tarball's too");

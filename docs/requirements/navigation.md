@@ -35,3 +35,23 @@ A repo card shows a found chip with its discovered link count; tapping it opens 
 - asked: 2026-10-11
 - shipped: c1af892a
 
+### R-navigation-009 · shipped
+The repo list is sorted alphabetically by default.
+- asked: 2026-10-13
+- shipped: 21bdcd3
+
+### R-navigation-010 · shipped
+Tapping the clock marker opens the matching provider's section, so the Copilot clock opens Copilot rather than Claude.
+- asked: 2026-10-15
+- shipped: 1e04d23d
+
+### R-navigation-011 · shipped
+The ☰ menu button shows a badge summing every counted line inside it, and a counted extension item such as the vault's asks lifts out beside the bell while work waits.
+- asked: 2026-10-16
+- shipped: ea3bcb34, 9f15a7e6
+
+### R-navigation-012 · shipped
+In the VS Code tree the Sessions section stays collapsed after the user collapses it, and there is no prompts row.
+- asked: 2026-10-16
+- shipped: 70886617
+

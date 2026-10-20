@@ -86,6 +86,10 @@ bootWait(PORT, 800, async () => {
     // A recorded turn whose OUTPUT carries the token and whose prompt does not:
     // "history" must find it and "prompts" must not, or the scope is a label
     // over the same search.
+    // Its own turn, opened right before the keys — as `deliver.ts` records then types. Reusing the
+    // banana turn lost a race under the full suite: a late stub repaint plus the 600 ms idle sealed
+    // that capture while the searches above ran, so the echo landed with nothing capturing it.
+    ws.send(JSON.stringify({ t: "session.record", id: sidB, text: "run the echo", kind: "prompt" }));
     ws.send(JSON.stringify({ t: "session.input", id: sidB, data: "echo cherrymarker_out\n" }));
     // The output lands on the entry once the turn goes idle (the idle knob) and its async render
     // finishes: wait for THAT, then ask the prompts scope the same question. 45 s: under the

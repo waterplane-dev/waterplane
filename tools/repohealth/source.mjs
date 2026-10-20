@@ -129,12 +129,138 @@ export function isTestPath(path, prereg) {
  *
  * @param {string} path
  * @param {{SRC: {exts: readonly string[], excludeSuffixes: readonly string[],
- *           excludeDirs: readonly string[], testGlobs: readonly string[]}}} prereg
+ *           excludeDirs: readonly string[], testGlobs: readonly string[],
+ *           generated?: readonly {re: RegExp, on: boolean}[], generatedRoot?: string}}} prereg
  */
 export function isSource(path, prereg) {
   const src = prereg.SRC;
   if (!src.exts.some((e) => path.endsWith(e))) return false;
   if (src.excludeSuffixes.some((e) => path.endsWith(e))) return false;
   if (inExcludedDir(path, src.excludeDirs)) return false;
+  if (isGenerated(path, src.generated, src.generatedRoot)) return false;
   return !isTestPath(path, prereg);
+}
+
+/**
+ * ── Why a repo can mark a file generated, and why it is read from HEAD ─────
+ *
+ * `excludeDirs` catches build output by where it lives. It cannot catch a
+ * bundle that is COMMITTED on purpose under a directory with an ordinary name:
+ * garmin-monorepo vendors a 36,776-line esbuild bundle at
+ * `shared/garmin-shared/sdk-mcp/server.mjs` so its MCP server runs without an
+ * `npm install`, and that one file was the repo's "longest file", its severe
+ * size finding and most of its average-line figure. Nobody edits it; it is not
+ * code this repo maintains.
+ *
+ * The repo already has a standard place to say so: `linguist-generated` and
+ * `linguist-vendored` in `.gitattributes`, which GitHub reads for the same
+ * reason. Honouring them adds no configuration of our own, and a file marked
+ * there is out of GitHub's language stats too.
+ *
+ * Only the ROOT `.gitattributes` at HEAD is read, once per run, and applied to
+ * every commit's tree. HEAD and not each commit's own copy: marking a file
+ * generated is a correction of what it always was, so a recut should clean the
+ * whole history, including the commits from before anyone wrote the line —
+ * and a pattern for a path that no longer exists still matches it in the
+ * commits where it did. Nested `.gitattributes` files are not read; the root
+ * one is where a repo-wide statement like this belongs.
+ *
+ * The rules travel in the version string (`census.mjs`), so marking a file
+ * moves it and `refuseMixedPrereg` asks for a recut instead of splicing two
+ * definitions into one series. A repo with no such lines keeps its string.
+ */
+
+/** The two attributes that take a path out of the measured population. */
+const GENERATED_ATTRS = Object.freeze(["linguist-generated", "linguist-vendored"]);
+
+/**
+ * One gitattributes pattern -> a regex over a repo-relative path, with git's
+ * wildmatch rules: a pattern with no slash matches a basename at any depth, a
+ * slash anchors it at the root, `*` and `?` stop at `/`, `**` crosses it.
+ * Returns null for a pattern that can match no file (a trailing `/` names a
+ * directory, and attributes never apply to one).
+ */
+function attrPatternToRegExp(pattern) {
+  if (pattern.endsWith("/")) return null;
+  let p = pattern;
+  const anchored = p.includes("/");
+  if (p.startsWith("/")) p = p.slice(1);
+  let re = anchored ? "^" : "^(?:.*/)?";
+  for (let i = 0; i < p.length; i++) {
+    const c = p[i];
+    if (c === "*" && p[i + 1] === "*" && (i === 0 || p[i - 1] === "/") && (p[i + 2] === "/" || i + 2 === p.length)) {
+      // `**/` = any number of directories, `/**` at the end = everything below.
+      re += i + 2 === p.length ? ".*" : "(?:.*/)?";
+      i += 2;
+    } else if (c === "*") {
+      re += "[^/]*";
+    } else if (c === "?") {
+      re += "[^/]";
+    } else if (c === "[") {
+      const end = p.indexOf("]", i + 2);
+      if (end < 0) {
+        re += "\\[";
+      } else {
+        let body = p.slice(i + 1, end);
+        if (body.startsWith("!")) body = "^" + body.slice(1);
+        re += "[" + body.replace(/\\/g, "\\\\") + "]";
+        i = end;
+      }
+    } else if (c === "\\" && i + 1 < p.length) {
+      re += p[++i].replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+    } else {
+      re += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+    }
+  }
+  return new RegExp(re + "$");
+}
+
+/**
+ * The lines of a `.gitattributes` text that set, unset or clear one of
+ * `GENERATED_ATTRS`, in file order — later lines win, as in git.
+ *
+ * `linguist-generated` and `linguist-generated=true` set it; `-linguist-...`,
+ * `!linguist-...` and `=false` clear it. Comments, blank lines, `[attr]` macro
+ * definitions and quoted patterns are skipped: the quoted form exists for
+ * paths with spaces, and a skipped rule leaves a file measured, which is the
+ * old behaviour and never a wrong exclusion.
+ *
+ * @param {string | null} text
+ * @returns {readonly {src: string, re: RegExp, on: boolean}[]}
+ */
+export function parseGeneratedAttrs(text) {
+  const rules = [];
+  for (const raw of (text ?? "").split("\n")) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#") || line.startsWith("[attr]") || line.startsWith('"')) continue;
+    const [pattern, ...attrs] = line.split(/\s+/);
+    let on = null;
+    for (const a of attrs) {
+      const neg = a.startsWith("-") || a.startsWith("!");
+      const [name, value] = (neg ? a.slice(1) : a).split("=", 2);
+      if (!GENERATED_ATTRS.includes(name)) continue;
+      on = !neg && value !== "false";
+    }
+    if (on === null) continue;
+    const re = attrPatternToRegExp(pattern);
+    if (re) rules.push(Object.freeze({ src: `${pattern} ${on ? "on" : "off"}`, re, on }));
+  }
+  return Object.freeze(rules);
+}
+
+/**
+ * True when the last rule matching `root + path` turned a generated attribute
+ * on. `root` is the scope prefix: the rules are written against the repo
+ * root, and a scoped census hands this function paths re-rooted at the scope.
+ *
+ * @param {string} path
+ * @param {readonly {re: RegExp, on: boolean}[] | undefined} rules
+ * @param {string} [root]  `""`, or the scope with a trailing slash
+ */
+export function isGenerated(path, rules, root = "") {
+  if (!rules?.length) return false;
+  const full = root + path;
+  let on = false;
+  for (const r of rules) if (r.re.test(full)) on = r.on;
+  return on;
 }

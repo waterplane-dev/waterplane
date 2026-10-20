@@ -577,12 +577,20 @@ export function parseUpdateSummary(stdout: string): { added: number | null } {
   return { added: null };
 }
 
+/** The line that says what went wrong. Usually the first one — but node's own
+ *  crash dump (an import that does not resolve, an uncaught throw) opens with
+ *  the SOURCE LOCATION (`node:internal/modules/esm/resolve:271`), then the
+ *  source line and a caret, and only then `Error [ERR_MODULE_NOT_FOUND]: …`.
+ *  Shown alone, that location told the reader nothing; the error line is the
+ *  sentence, so it is the one kept. */
 const firstLine = (s: string): string => {
-  for (const line of s.split("\n")) {
-    const t = line.trim();
-    if (t) return t;
+  const lines = s.split("\n").map((l) => l.trim()).filter(Boolean);
+  const head = lines[0] ?? "";
+  if (/^(node:|file:\/\/|\/)\S*:\d+$/.test(head)) {
+    const err = lines.find((l) => /^[A-Za-z]*Error\b.*?:\s/.test(l));
+    if (err) return err;
   }
-  return "";
+  return head;
 };
 
 /**

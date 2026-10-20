@@ -18,6 +18,7 @@
 //
 // The block here comes from the LOG alone: the stub prints no banner, so the
 // screen heuristic cannot mask what is being tested.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
@@ -53,7 +54,7 @@ const fail = (m) => { console.error("FAIL:", m); host.kill(); process.exit(1); }
 const ok = (m) => console.log("ok:", m);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const timer = setTimeout(() => fail("timed out before the auto-continue attempt fired"), 60_000);
+const timer = watchdog(() => fail("timed out before the auto-continue attempt fired"), 60_000);
 
 /** The rejection row the CLI writes, plus an ordinary turn BEFORE it. */
 function writeLog(cwd, cid, rejectedAt, resetAt) {

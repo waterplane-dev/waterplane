@@ -21,6 +21,7 @@
 // quiet — and nothing may be typed again.
 // Isolated: private tmux server (-L <slug>-e2e-<pid>), throwaway root, bash as claude.
 // Requires tmux; SKIPs cleanly if absent.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn, spawnSync, execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
@@ -259,4 +260,4 @@ const withWs = (fn) => new Promise((resolve) => {
   process.exit(0);
 })().catch((e) => fail(String(e)));
 
-setTimeout(() => fail("timeout"), 75_000);
+watchdog(() => fail("timeout"), 75_000);

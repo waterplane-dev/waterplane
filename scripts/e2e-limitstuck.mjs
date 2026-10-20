@@ -14,6 +14,7 @@
 // So: block the session, press a key that is NOT a submit, scroll the banner off
 // the screen, and assert the block SURVIVES and the auto-continue attempt still
 // fires. Recovery has to be a turn actually starting, never the absence of text.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -44,7 +45,7 @@ const BANNER = "You've reached your Fable 5 limit. Run /usage-credits to continu
 // a Return would legitimately start a turn and legitimately clear the block.
 const SETUP = `(sleep 4; for i in $(seq 1 900); do echo filler-$i; done) & echo "${BANNER}"\r`;
 
-const timer = setTimeout(() => fail("timed out before the auto-continue attempt fired"), 45_000);
+const timer = watchdog(() => fail("timed out before the auto-continue attempt fired"));
 
 bootWait(PORT, 1200, async () => {
   const repo = await fetch(`http://127.0.0.1:${PORT}/api/repo`, {

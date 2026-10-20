@@ -30,6 +30,7 @@
 // alone. A fourth session exiting at the limit in the same run joins that wave
 // and waits behind a resurrection whose verdict is not in yet — which would make
 // this script a measurement of the resume queue instead of the rule it is about.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -63,7 +64,7 @@ const base = `http://127.0.0.1:${PORT}`;
 let failed = false;
 const check = (c, l) => { console.log(`${c ? "PASS" : "FAIL"}: ${l}`); if (!c) failed = true; };
 const done = () => { try { host.kill(); } catch { /* already gone */ } setTimeout(() => process.exit(failed ? 1 : 0), 150); };
-const bail = setTimeout(() => { check(false, "timed out"); done(); }, 45000);
+const bail = watchdog(() => { check(false, "timed out"); done(); });
 const BANNER = "You've reached your Fable 5 limit. Run /usage-credits to continue or switch models with /model.";
 
 bootWait(PORT, 900, async () => {

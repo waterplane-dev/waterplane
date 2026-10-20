@@ -36,10 +36,8 @@ import { openBacklogIn } from "../../features/backlog";
 import type { ComposeApi } from "./useCompose";
 import { useFileDrop } from "./useFileDrop";
 import { isShellBackend } from "../../backendCaps";
-import { routeFiles } from "../../features/images";
-import { isAnnotatable } from "../../media";
-import { pastedImages } from "../../pasteImages";
 import { isLaterId, isPendingId } from "../queue/logic.ts";
+import { secretFillers } from "../extensionPoints";
 
 const ICON = 16;
 
@@ -78,7 +76,7 @@ export function ComposeBar(p: ComposeBarProps) {
     snippetOpen, setSnippetOpen, sendMode, setSendMode, sendWhere, setSendWhere, sendWhereSid, setSendWhereSid,
     sendMenu, setSendMenu, cliMode, enterSends, voice, aimedSession, stepHistory, clearCompose, appendSnippet,
     toggleCliMode, onPipeInput, flushPipe, onPipeKey, onComposeKey, aimHere, sendCompose, openComposeSend, keepOnPad, noteSendAim,
-    secretAskLine, secret, setSecret, secretShown, setSecretShown, dismissSecret, sendSecret,
+    secretAskLine, secret, setSecret, secretShown, setSecretShown, dismissSecret, sendSecret, secretFillContext,
   } = api;
   // A shell takes commands, not sentences: the keyboard's capital first letter
   // and autocorrect are both wrong there, as they are in CLI mode.
@@ -376,6 +374,13 @@ export function ComposeBar(p: ComposeBarProps) {
                 title="Back to the message box — this line is not asking for a password">
                 <X size={14} /> not a password
               </button>
+              {/* Contributed sources (`SecretFillerDef`): they fill the field above, never send. */}
+              {(() => { const ctx = secretFillContext(); return ctx ? secretFillers(ctx) : []; })().map((f) => (
+                <button key={f.key} className="key" onPointerDown={keepFocus} title={f.unavailable ?? f.label}
+                  onClick={() => { if (f.unavailable) { showToast(f.unavailable); return; } track("action:compose.secret.fill"); f.open(); }}>
+                  <f.icon size={14} /> {f.label}
+                </button>
+              ))}
               <div className="send-split">
                 <button className="send" onPointerDown={keepFocus} onClick={sendSecret}
                   title="Type it into the prompt and press Enter — nothing is kept">
@@ -405,16 +410,9 @@ export function ComposeBar(p: ComposeBarProps) {
           spellCheck={literal ? false : undefined}
           enterKeyHint={cliMode ? "enter" : enterSends ? "send" : "enter"}
           onKeyDown={cliMode ? onPipeKey : onComposeKey}
-          // Ctrl+V of a screenshot takes the picker's route — the annotator,
-          // then the upload — rather than pasting nothing (`pasteImages.ts`).
-          onPaste={cliMode ? undefined : (e) => {
-            const images = pastedImages(e.clipboardData, isAnnotatable);
-            if (!images.length) return;
-            e.preventDefault();
-            if (!activeRepoId) { showToast("not a known repo — the picture was not attached"); return; }
-            track("action:attach.paste");
-            routeFiles(images, activeRepoId);
-          }}
+          // Ctrl+V of a screenshot or a file is `useFileDrop`'s, the ONE paste
+          // handler: two of them once routed the same picture twice, and this
+          // one skipped the annotator-busy question and replaced its marks.
           onFocus={() => setComposeFocused(true)}
           onBlur={() => setComposeFocused(false)}
         />

@@ -35,6 +35,9 @@ export class PullManager {
   started = false;
   /** When the native queue was last read. See `syncNativeSoon`. */
   lastNativeSync = 0;
+  /** Ids removed by hand this page lifetime: never adopted back from the
+   *  native list (`pullAdoptNative`). */
+  removed = new Set<string>();
 
   // ── subscription ──────────────────────────────────────────────────
   subscribe(cb: Listener): () => void {

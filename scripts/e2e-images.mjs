@@ -1,6 +1,7 @@
 // New-image detection: a file appearing in a session's worktree during a turn
 // is broadcast as session.images (and would push-notify). Uses bash as the
 // fake `claude` so we can drive PTY output to trigger idle/turn-finished scans.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
@@ -67,4 +68,4 @@ bootWait(PORT, 900, async () => {
   done();
 });
 
-setTimeout(() => { console.log("FAIL: timeout"); host.kill(); process.exit(1); }, 15000);
+watchdog(() => { console.log("FAIL: timeout"); host.kill(); process.exit(1); });

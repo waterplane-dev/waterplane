@@ -4,13 +4,15 @@
 Instructions can optionally be resent to CLI clients from the initial fan-out.
 - shipped: f479df9
 
-### R-distribution-002 · requested
+### R-distribution-002 · shipped
 The public repository receives one squashed commit per release, and outside contributions arrive as intent requests.
 - asked: 2026-10-04
+- shipped: fa1bd0f
 
-### R-distribution-003 · requested
+### R-distribution-003 · shipped
 Waterplane is released under the MIT licence.
 - asked: 2026-10-04
+- shipped: 009dff3
 
 ### R-distribution-004 · shipped
 Users who clone and run waterplane are protected against supply-chain attacks: no install scripts, a release-age cooldown, verified lockfiles, dependency verification and signed releases.
@@ -32,13 +34,15 @@ Only allow-listed files are published to the public repository; GIF, video and r
 - asked: 2026-10-06
 - shipped: db8533d0
 
-### R-distribution-008 · requested
+### R-distribution-008 · shipped
 The publish step blocks publishing when internal addresses or secret-like keys are found in the files to be published.
 - asked: 2026-10-06
+- shipped: fa1bd0f
 
-### R-distribution-009 · requested
+### R-distribution-009 · shipped
 The WP build tools include a mirror publish entry.
 - asked: 2026-10-06
+- shipped: 1c7d859
 
 ### R-distribution-010 · shipped
 Each internal link in the published docs that points to an unpublished file is handled on its own: removed if it adds little value, or its content moved into the linking page. No public doc links to a missing target.
@@ -59,13 +63,15 @@ Waterplane installs and runs on Windows as well as macOS.
 - asked: 2026-10-07
 - shipped: 0ff8d17e, ccb88790
 
-### R-distribution-014 · requested
+### R-distribution-014 · shipped
 Waterplane runs under OrbStack, and user documentation explains how to set it up that way.
 - asked: 2026-10-07
+- shipped: 9baaa6e
 
-### R-distribution-015 · requested
+### R-distribution-015 · shipped
 Lighter alternative variants are available on demand as options in the WP build tools, while the main button stays unchanged for all users.
 - asked: 2026-10-08
+- shipped: 1c7d859
 
 ### R-distribution-016 · requested
 The APK is trustworthy enough for users to install: it is planned for Play Store distribution, and users can compile it themselves from source.
@@ -93,4 +99,54 @@ The VS Code extension is built to publishable quality so it can be shipped as is
 The cost and repo health views are one shared implementation used by both waterplane and the VS Code extension.
 - asked: 2026-10-11
 - shipped: f984d9cf, c4b2f739
+
+### R-distribution-022 · shipped
+Before anything is downloaded, the installer names everything missing at once; on a Mac, the installer and the doctor tell an account without admin rights exactly what to ask an administrator for (tmux, the Xcode Command Line Tools, Tailscale), never offering a Homebrew install that would fail for that account.
+- asked: 2026-10-19
+- shipped: 502e4497, 76282558, 9c500ce9
+### R-distribution-023 · shipped
+The wp build tool offers one entry that installs the latest version and a second entry that removes it again.
+- asked: 2026-10-12
+- shipped: 1c7d859
+
+### R-distribution-024 · shipped
+The wp build tool entries are shared across all clients and machines where the repo is checked out; machine-specific build settings live in a separate folder that is not shared.
+- asked: 2026-10-12
+- shipped: 50bf8fc
+
+### R-distribution-025 · shipped
+Expanding a section lists only the artifacts that belong to that item and time. Building and installing the VS Code extension produces and installs a VS Code artifact, never an APK.
+- asked: 2026-10-14
+- shipped: ea7bea2
+
+### R-distribution-026 · shipped
+waterplane.dev has a landing page and a privacy page, generated from the README and hosted on GitHub Pages under the custom domain.
+- asked: 2026-10-15
+- shipped: d1c66b6e
+
+### R-distribution-027 · shipped
+The install URL points to the GitHub release (releases/latest/download/install.sh), not the project's own domain, and the link returns the script.
+- asked: 2026-10-16, 2026-10-17, 2026-10-17
+- shipped: 05a659ca
+
+### R-distribution-028 · requested
+The game is published to the Play Store as 'Waterplane game', distinguishable from the coming waterplane-dev app.
+- asked: 2026-10-16
+
+### R-distribution-029 · requested
+The waterplane, waterplane-game and child-paint repos are public on GitHub with clean rewritten history, no personal paths, noreply commit emails, a description and topics; child-paint is served as a GitHub Pages site and the waterplane npm package is published and installable.
+- asked: 2026-10-17, 2026-10-17, 2026-10-17
+
+### R-distribution-030 · requested
+waterplane.dev and www.waterplane.dev serve the GitHub Pages site over HTTPS with a valid certificate, and waterplane-dev.github.io redirects to it.
+- asked: 2026-10-16, 2026-10-17
+
+### R-distribution-031 · shipped
+The build entry for the VS Code extension has a restart option for updating open windows' extensions, on by default.
+- asked: 2026-10-17
+- shipped: 2320f565
+
+### R-distribution-032 · requested
+Granting access to development builds is quick and convenient rather than a repeated manual chore.
+- asked: 2026-10-19
 

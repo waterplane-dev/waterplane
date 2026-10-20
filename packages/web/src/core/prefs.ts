@@ -55,6 +55,8 @@ export interface DevicePrefs {
   serialSessions: boolean;
   /** Ask before text queued offline goes out. Default ON, synced. */
   confirmQueue: boolean;
+  /** Ask before closing a session that would lose work. Default ON, synced. */
+  confirmClose: boolean;
   /** Ask backend + model before every fresh launch. Default OFF, synced. */
   launchAsk: boolean;
   /** The spend marks' thresholds (`shared/spendwarn.ts`). Default ON at 2%/5% of a week, synced. */
@@ -138,6 +140,7 @@ export const prefs = createPrefs<DevicePrefs>({
   autoSend: flag(LS.autoSend, onUnlessZero, true),
   serialSessions: flag(LS.serialSessions, onUnlessZero, true),
   confirmQueue: flag(LS.confirmQueue, onUnlessZero, true),
+  confirmClose: flag(LS.confirmClose, onUnlessZero, true),
   // Default OFF, so `lsBool` and not `!== "0"`: a device that has never heard
   // of this key must not read its absence as "ask me".
   launchAsk: { load: () => lsBool(LS.launchAsk), save: (v) => lsSetBool(LS.launchAsk, v), keys: [LS.launchAsk] },

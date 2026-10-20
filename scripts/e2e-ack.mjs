@@ -2,12 +2,13 @@
 //   - ackId to a LIVE session  → { ok: true }
 //   - ackId to a GONE session  → { ok: false }  (so the phone recovers the text)
 // Portable: throwaway root, repo via API, <ENV>_CLAUDE_BIN=bash (no real claude).
+import { watchdog } from "./lib-watchdog.mjs";
 import { WebSocket } from "ws";
 import { bootHost } from "./lib-e2e.mjs";
 
 const { port: PORT, stop } = await bootHost({ tag: "ack" });
 const fail = async (m) => { console.error("FAIL:", m); await stop(); process.exit(1); };
-setTimeout(() => fail("timeout — no acks"), 8000);
+watchdog(() => fail("timeout — no acks"));
 
 // The settle window the old bootWait(…, 800) gave, kept so the timing is unchanged.
 await new Promise((r) => setTimeout(r, 800));

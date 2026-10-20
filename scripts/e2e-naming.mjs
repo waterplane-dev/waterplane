@@ -25,6 +25,7 @@
 // local engine — so the model here is a ten-line Node stub speaking
 // /chat/completions (`e2e-sidecar.mjs`'s) and CI needs no ollama, no download
 // and no GPU.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
@@ -135,7 +136,7 @@ async function connect(port) {
 
 const ack = (s, id) => s.acks.find((a) => a.ackId === id);
 const die = (m) => { console.log("FAIL: " + m); if (host) host.kill(); stub.close(); process.exit(1); };
-setTimeout(() => die("timeout"), 120_000);
+watchdog(() => die("timeout"), 120_000);
 
 try {
   boot(PORT, `openai-compat:${BASE}|${MODEL}`);

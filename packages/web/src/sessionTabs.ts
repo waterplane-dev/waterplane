@@ -485,6 +485,9 @@ export interface TabsSnapshot {
   /** What is drawn, left to right: `tabs` with `files` merged in by the same
    *  order (`mergeStrip`). */
   strip: StripTab[];
+  /** Every open session and pinned file in the strip's own order, NOT cut by
+   *  the limit — what the list button at the strip's left edge opens. */
+  all: StripTab[];
   /** `fileTabKey` of the file on screen, whether or not it is pinned. */
   fileActive: string | null;
 }
@@ -494,13 +497,14 @@ let activeId: string | null = null;
 let fileActive: string | null = null;
 /** The session `openOwed` last counted — see there. */
 let counted: string | null = null;
-let snap: TabsSnapshot = { enabled: false, count: TAB_COUNT_DEFAULT, order: TAB_ORDER_DEFAULT, tabs: [], hidden: 0, activeId: null, files: [], strip: [], fileActive: null };
+let snap: TabsSnapshot = { enabled: false, count: TAB_COUNT_DEFAULT, order: TAB_ORDER_DEFAULT, tabs: [], hidden: 0, activeId: null, files: [], strip: [], all: [], fileActive: null };
 const listeners = new Set<(s: TabsSnapshot) => void>();
 
 function rebuild(): void {
   const order = tabsOrder();
   const opens = readOpens();
-  const { shown, hidden } = limitTabs(glueCompanions(orderTabs(tabs, order, opens)), tabsLimit(), activeId);
+  const ordered = glueCompanions(orderTabs(tabs, order, opens));
+  const { shown, hidden } = limitTabs(ordered, tabsLimit(), activeId);
   const files = readFiles();
   snap = {
     enabled: tabsEnabled(),
@@ -511,6 +515,7 @@ function rebuild(): void {
     activeId,
     files,
     strip: mergeStrip(shown, files, order, opens),
+    all: mergeStrip(ordered, files, order, opens),
     fileActive,
   };
 }

@@ -1,5 +1,6 @@
-import { FileText, Loader, X } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { FileText, Layers, Loader, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useBackStep } from "./backStep";
 import { askConfirm } from "./Confirm";
 import { repoAccentStyle } from "./format";
 import { useRepoColors } from "./repoColors";
@@ -8,6 +9,7 @@ import {
   askTabAttach, askTabClose, askTabFile, fileTabKey, fileTabLabel, setFilePinned, tabCloseAsk, tabStripHeight, useSessionTabs,
   type FileTab, type SessionTab, type TabsSnapshot,
 } from "./sessionTabs";
+import { Sheet } from "./Sheet";
 import { showToast } from "./toast";
 
 /**
@@ -92,6 +94,15 @@ import { showToast } from "./toast";
  * session's state mark goes, a dashed edge where a session's is solid. While
  * one is on screen IT is the front tab, not the session under the viewer.
  *
+ * **The list button** at the far left opens the same tabs, in the same order,
+ * as a vertical list (`TabsList`): at ~10 characters a tab the strip is for
+ * the colour, the list is for READING — whole names, the repo and the state
+ * in words, and everything the limit cut from the strip. It sits OUTSIDE the
+ * scroller (fixed, the strip padded clear of it), so it never scrolls away and
+ * never collides with the strip's sticky scroll cues. It is drawn as a neutral
+ * TAB on the strip's baseline with the number of open tabs — a bare list glyph
+ * there read as a second burger right above the header's own.
+ *
  * It renders NOTHING with no sessions and no pins: a strip that is permanently empty is
  * furniture, and the height it publishes goes to zero with it so no screen pads
  * itself clear of a bar that is not there.
@@ -142,9 +153,22 @@ function Strip() {
     else strip.scrollLeft = 0;
   }, [s.activeId, s.fileActive, s.order, s.strip.length]);
 
+  const [listOpen, setListOpen] = useState(false);
+  useBackStep(listOpen, () => setListOpen(false));
+
+  // The list button grows with its count (215 open is real), and the strip is
+  // padded clear of whatever width that is — one number, set on both.
+  const allW = { ["--stab-all-w" as string]: `${38 + 7 * String(s.all.length).length}px` };
   return (
+    <>
+    <button className="stab-all" aria-label="list all open tabs" title="all open tabs as a list" style={allW}
+      aria-expanded={listOpen} onClick={() => setListOpen((o) => !o)}>
+      <Layers size={14} aria-hidden="true" />
+      <span className="stab-all-n">{s.all.length}</span>
+    </button>
+    {listOpen && <TabsList s={s} fileOn={fileOn} onClose={() => setListOpen(false)} />}
     <div className="sess-tabs" ref={ref} role="tablist" aria-label="open sessions"
-      style={{ ["--stab-n" as string]: String(s.count) }}>
+      style={{ ...allW, ["--stab-n" as string]: String(s.count) }}>
       {/* A pinned file on screen is the front tab; the session under the
           viewer is not, or two tabs would both claim to be the one you see. */}
       {s.strip.map((x) => x.kind === "session"
@@ -158,6 +182,62 @@ function Strip() {
           +{s.hidden}
         </span>
       )}
+    </div>
+    </>
+  );
+}
+
+/**
+ * Every open tab, top to bottom in the strip's left-to-right order, uncut by
+ * the limit — the strip made READABLE: the whole name wraps instead of
+ * ellipsizing, with the repo and the state in words under it. A tap opens it
+ * exactly as the tab would; the × asks exactly as the tab's does.
+ */
+function TabsList({ s, fileOn, onClose }: { s: TabsSnapshot; fileOn: boolean; onClose: () => void }) {
+  async function close(t: SessionTab) {
+    const ask = tabCloseAsk(t.label, t.status !== "exited");
+    if (await askConfirm(ask)) askTabClose(t.id);
+  }
+  return (
+    <div className="stab-list-layer">
+      <Sheet title={`open tabs · ${s.all.length}`} onClose={onClose}>
+        <ul className="stab-list">
+          {s.all.map((x) => {
+            if (x.kind === "file") {
+              const f = x.file;
+              const on = fileTabKey(f) === s.fileActive;
+              return (
+                <li key={fileTabKey(f)} className={`stab-row stab-file${on ? " on" : ""}`} style={repoAccentStyle(f.repo)}
+                  onClick={() => { onClose(); askTabFile(f); }}>
+                  <FileText size={16} className="stab-fico" aria-hidden="true" />
+                  <span className="stab-row-text">
+                    <span className="stab-row-label">{fileTabLabel(f.path)}</span>
+                    <span className="stab-row-sub">{f.repo || "file"} · pinned file · {f.path}</span>
+                  </span>
+                </li>
+              );
+            }
+            const t = x.tab;
+            const on = !fileOn && t.id === s.activeId;
+            return (
+              <li key={t.id} className={`stab-row${on ? " on" : ""}`} data-state={t.status} style={repoAccentStyle(t.repo)}
+                onClick={() => { onClose(); askTabAttach(t.id); }}>
+                {t.status === "coding"
+                  ? <Loader size={16} className="spin stab-spin" aria-hidden="true" />
+                  : <span className="stab-led" aria-hidden="true" />}
+                <span className="stab-row-text">
+                  <span className="stab-row-label">{t.label}</span>
+                  <span className="stab-row-sub">{t.repo} · {STATUS_LABEL[t.status]}</span>
+                </span>
+                <button className="stab-x" aria-label={`close ${t.label}`} title="close this session"
+                  onClick={(e) => { e.stopPropagation(); void close(t); }}>
+                  <X size={18} />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </Sheet>
     </div>
   );
 }

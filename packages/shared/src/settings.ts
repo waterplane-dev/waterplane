@@ -111,6 +111,8 @@ export const SYNCED_SETTING_KEYS = [
   lsKey("serialSessions"),
   /** Ask before draining text that was queued offline. */
   lsKey("confirmQueue"),
+  /** Ask before closing a session with uncommitted or unmerged work. Default on. */
+  lsKey("confirmClose"),
   /**
    * Reader view: how much of a tool call is shown, and how much of it is even
    * downloaded (`web/transcriptUtil.ts`). A preference about reading, which is

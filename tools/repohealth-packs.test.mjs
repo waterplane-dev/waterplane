@@ -40,7 +40,7 @@ import assert from "node:assert/strict";
 
 import { PACKS } from "./repohealth/packs/index.mjs";
 import { configure } from "./repohealth/census.mjs";
-import { isSource, isTestPath } from "./repohealth/source.mjs";
+import { isGenerated, isSource, isTestPath, parseGeneratedAttrs } from "./repohealth/source.mjs";
 import common from "./repohealth/packs/common.mjs";
 import kotlin from "./repohealth/packs/kotlin.mjs";
 import python from "./repohealth/packs/python.mjs";
@@ -748,4 +748,62 @@ test("untested: what moved the list is counted from the two rows, and says what 
   assert.match(detail, /A further 0 are reached/);
   assert.match(detail, /Since 2026-06-18: 2 joined the list \(1 of them reached by a test on that day\) and 1 left it/);
   assert.doesNotMatch(s.detail(now, null, now), /Since/, "a row compared with itself says nothing moved, by saying nothing");
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// Files the repo marks generated in HEAD's root `.gitattributes`.
+// ───────────────────────────────────────────────────────────────────────────
+
+/** `treeOf`, plus a committed `.gitattributes` at HEAD. */
+function treeWithAttrs(paths, attrs) {
+  return {
+    listHeadPaths: () => paths,
+    readFileAt: (_root, sha, path) => (sha === "HEAD" && path === ".gitattributes" ? attrs : null),
+  };
+}
+
+test("gitattributes: linguist-generated and -vendored take a file out of source, git's pattern rules", () => {
+  const rules = parseGeneratedAttrs(
+    [
+      "# comment",
+      "* text=auto eol=lf",
+      "shared/sdk-mcp/server.mjs linguist-generated",
+      "old/bundled/** linguist-vendored=true",
+      "*.gen.ts linguist-generated",
+      "keep.gen.ts -linguist-generated",
+      "/root-only.ts linguist-generated",
+      "dir/ linguist-generated",
+      "[attr]binary -diff -merge -text",
+      '"with space.ts" linguist-generated',
+      "noop.ts linguist-generated=false",
+    ].join("\n"),
+  );
+  assert.equal(rules.length, 6, "only lines that set or clear a generated attribute, minus the directory and quoted forms");
+  assert.equal(isGenerated("shared/sdk-mcp/server.mjs", rules), true);
+  assert.equal(isGenerated("x/shared/sdk-mcp/server.mjs", rules), false, "a slash anchors the pattern at the root");
+  assert.equal(isGenerated("old/bundled/a/b/server.mjs", rules), true, "/** reaches every depth");
+  assert.equal(isGenerated("deep/in/tree/api.gen.ts", rules), true, "no slash matches a basename anywhere");
+  assert.equal(isGenerated("keep.gen.ts", rules), false, "a later line clears it, as in git");
+  assert.equal(isGenerated("root-only.ts", rules), true);
+  assert.equal(isGenerated("sub/root-only.ts", rules), false);
+  assert.equal(isGenerated("noop.ts", rules), false);
+  assert.equal(isGenerated("sdk-mcp/server.mjs", rules, "shared/"), true, "a scoped path is matched against the repo root");
+  assert.equal(isGenerated("anything.ts", parseGeneratedAttrs(null)), false);
+});
+
+test("gitattributes: configure drops a marked file from source and moves the version only when something is marked", () => {
+  const paths = ["src/app.ts", "shared/sdk-mcp/server.mjs"];
+  const plain = configure("/nowhere", treeOf(paths));
+  const noLines = configure("/nowhere", treeWithAttrs(paths, "* text=auto eol=lf\n"));
+  const marked = configure("/nowhere", treeWithAttrs(paths, "shared/sdk-mcp/server.mjs linguist-generated\n"));
+
+  assert.equal(isSource("shared/sdk-mcp/server.mjs", plain), true);
+  assert.equal(isSource("shared/sdk-mcp/server.mjs", marked), false);
+  assert.equal(isSource("src/app.ts", marked), true);
+  assert.equal(noLines.VERSION, plain.VERSION, "a .gitattributes that marks nothing must not re-cut a series");
+  assert.notEqual(marked.VERSION, plain.VERSION, "marking a file changes the definition, so the string moves");
+  assert.equal(marked.PACKS.find((p) => p.name === "typescript").files, 1);
+
+  const scoped = configure("/nowhere", treeWithAttrs(paths, "shared/sdk-mcp/server.mjs linguist-generated\n"), undefined, "shared");
+  assert.equal(isSource("sdk-mcp/server.mjs", scoped), false, "a scope re-roots the paths, not the rules");
 });

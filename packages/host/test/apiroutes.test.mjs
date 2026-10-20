@@ -20,6 +20,8 @@ const ROUTES = [
   "POST /api/hook",
   // A shell session's `$BROWSER` shim (`backends/shell.ts`) — loopback only, like the hook sink.
   "POST /api/shell/open",
+  // Why the next restart is coming (`restartnote.ts`) — loopback only, like the hook sink.
+  "POST /api/host/restart-note",
   "POST /api/plugin/:id/hook",
   // A file a plugin offered (`api.offerFile`, plugin API 1.5): bytes, deleted once fetched.
   "GET /api/plugin-file/:id/:token",

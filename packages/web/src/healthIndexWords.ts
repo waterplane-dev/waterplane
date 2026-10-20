@@ -512,5 +512,5 @@ export function indexAskLabel(week: string, thisWeek: boolean): string {
   return thisWeek ? "ask what moved it this week" : `ask what moved it in the week of ${week}`;
 }
 
-/** The second ask: the whole line, not one week. */
-export const INDEX_TREND_ASK_LABEL = "ask if it is getting healthier";
+/** The second ask: the whole line, not one week — read, then propose backlog rows. */
+export const INDEX_TREND_ASK_LABEL = "assess and propose improvements";

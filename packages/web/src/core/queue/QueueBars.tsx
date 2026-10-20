@@ -17,7 +17,8 @@ import type { OutboxEntry } from "../../outbox";
 import type { PullRecord } from "../../pull";
 import type { Overlay } from "../../routing";
 import { PullBar, PullBrowserAsk } from "../../PullSheet";
-import { autoPull } from "../../pull";
+import { autoPull, pulls } from "../../pull";
+import { core } from "../api.ts";
 import { stripRows } from "../../downloadState";
 import { confirmingLine, hostStillConfirming } from "../../sendConfirm";
 import { showToast } from "../../toast";
@@ -93,7 +94,20 @@ export function QueueBars(props: QueueBarsProps) {
   // The auto-download queue rides the same strip: it is the same kind of fact
   // ("work is in flight that you didn't have to watch"), just in the other
   // direction, and a second floating bar somewhere else would be missed.
-  const pullBar = <PullBar records={pullRecords} onOpen={() => { track("overlay:pull"); setOverlay("pull"); }} />;
+  // Removing a stopped row from the strip is the sheet's per-row remove, done
+  // for each: dropped here, and the host told about the rows that came from
+  // its queue (a row this phone tapped is not in it).
+  const removePulls = (rows: PullRecord[]) => {
+    track("action:pull.strip.remove");
+    for (const r of rows) void pulls.remove(r.item.id);
+    const fromHost = rows.filter((r) => !r.local).map((r) => ({ t: "pull.dismiss" as const, id: r.item.id }));
+    const done = `removed ${rows.length === 1 ? rows[0].item.name : `${rows.length} stopped downloads`}`;
+    if (!fromHost.length) showToast(done);
+    else core().conn.liveSendAll(fromHost, done,
+      `${done} here — the desktop's queue still lists ${fromHost.length === 1 ? "it" : "them"} until the link is back`);
+  };
+  const pullBar = <PullBar records={pullRecords} onRemove={removePulls}
+    onOpen={() => { track("overlay:pull"); setOverlay("pull"); }} />;
   // The same cut the strip draws (`stripRows`): a file waiting for a tap with
   // auto-download off here keeps no bar on screen.
   const pullActive = stripRows(pullRecords, autoPull()).length > 0;

@@ -55,3 +55,23 @@ On a wide desktop window the sidebar's top bar sits on one line and session card
 The bottom-left area of the screen uses less space so more content fits.
 - asked: 2026-10-10
 
+### R-layout-015 · requested
+On desktop the sync dialog is tidy and its marked part is accessible; on mobile the sync log stays readable.
+- asked: 2026-10-13
+
+### R-layout-016 · requested
+Marked text wraps so the x and ... controls stay pinned top-right on desktop and mobile.
+- asked: 2026-10-13
+
+### R-layout-017 · requested
+The VS Code extension's left panel is well structured with the main data in the centre, no confusing double panels, and both side columns are resizable.
+- asked: 2026-10-14, 2026-10-14
+
+### R-layout-018 · requested
+Elements on screen do not overlap each other.
+- asked: 2026-10-15
+
+### R-layout-019 · requested
+On desktop the conversation uses the available screen space so the main content is comfortable to read.
+- asked: 2026-10-19
+

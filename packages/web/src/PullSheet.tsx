@@ -6,7 +6,7 @@ import {
 import { BRAND, DEFAULT_AUTOPULL, type AutoPullConfig, type RepoTarget } from "@waterplane/shared";
 import { autoPull, pulls, setAutoPull, type PullRecord } from "./pull";
 import { autoSaveOutPref, saveNow, setAutoSaveOut } from "./download";
-import { browserPullAsk, downloadAction, downloadStatus, stripRows } from "./downloadState";
+import { browserPullAsk, downloadAction, downloadStatus, pullGone, stripRows } from "./downloadState";
 import { nativeSaveSupported } from "./nativeSave";
 import { fmtSize } from "./format";
 import { track } from "./usage";
@@ -515,6 +515,8 @@ function PullRow({ rec, repos, onDismiss, caps, allow, onAllow }: {
       : evicted
       ? "downloaded before · bytes cleared to save space · tap to fetch again"
       : downloadStatus(rec).detail;
+  } else if (pullGone(rec)) {
+    status = "the desktop no longer has this file · remove it";
   } else if (state === "failed") {
     status = `stopped at ${pct}%${received > 0 ? ` (${fmtSize(received)} kept)` : ""} · tap to retry`;
   } else if (retryIn) {
@@ -708,7 +710,12 @@ function PullRow({ rec, repos, onDismiss, caps, allow, onAllow }: {
  * have to watch", and putting the incoming half somewhere else would mean
  * nobody sees it.
  */
-export function PullBar({ records, onOpen }: { records: PullRecord[]; onOpen: () => void }) {
+export function PullBar({ records, onOpen, onRemove }: {
+  records: PullRecord[]; onOpen: () => void;
+  /** Drop these stopped rows — the strip's own way out, so a dead download
+   *  is not a standing bar until someone finds the sheet's row. */
+  onRemove?: (rows: PullRecord[]) => void;
+}) {
   const active = stripRows(records, autoPull());
   const now = useTick(active.length > 0);
   if (!active.length) return null;
@@ -752,11 +759,20 @@ export function PullBar({ records, onOpen }: { records: PullRecord[]; onOpen: ()
             + (!stalled && running.rate ? ` · ${fmtRate(running.rate)}` : "")
             + (rest > 0 ? ` · +${rest} more (${fmtSize(queueLeft)})` : "")
           : failed.length
-            ? `${failed.length} download${failed.length > 1 ? "s" : ""} stopped${queueTail}`
+            ? failed.every(pullGone)
+              ? `${failed.length} download${failed.length > 1 ? "s" : ""} no longer on the desktop`
+              : `${failed.length} download${failed.length > 1 ? "s" : ""} stopped${queueTail}`
             : paused.length === active.length
               ? `${paused.length} download${paused.length > 1 ? "s" : ""} paused${queueTail}`
               : `${active.length} file${active.length > 1 ? "s" : ""} to download${queueTail}`}
       </span>
+      {!running && failed.length > 0 && onRemove && (failed.some((r) => r.received > 0)
+        ? <ConfirmButton className="key" title="remove the stopped downloads, and the bytes they kept"
+            confirmTitle="tap again to drop them and their kept bytes" onConfirm={() => onRemove(failed)}>
+            <X size={14} /> remove
+          </ConfirmButton>
+        : <button className="key" title="remove the stopped downloads from the queue"
+            onClick={() => onRemove(failed)}><X size={14} /> remove</button>)}
       <button className="key" onClick={onOpen}><Download size={14} /> Downloads</button>
     </div>
   );

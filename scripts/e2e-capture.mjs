@@ -46,6 +46,7 @@
 //      Get that wrong and every run answers "score n/a", which is
 //      indistinguishable from the honest no-scorer case in (8) — which is
 //      exactly why (8) cannot catch it and this leg has to exist.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -386,4 +387,4 @@ bootWait(PORT, 800, async () => {
   process.exit(0);
 });
 
-setTimeout(() => fail("timeout — the capture suite did not finish"), 90_000);
+watchdog(() => fail("timeout — the capture suite did not finish"), 90_000);

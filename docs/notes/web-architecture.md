@@ -233,6 +233,12 @@ A feature declares what it adds; it does not patch App:
   so it cannot import the registry) under the id `<manifest id>:<id>`: a colon no core id has, so
   the two never collide, and `loadToolbarCfg` keeps such ids even before the binding is made. The
   customize sheet orders and hides it and can pin it into the header like any core line.
+- `secretFillers` — `SecretFillerDef { id, label, icon, order?, available?, open(core, ctx) }`: a
+  button on the masked password field's row (a shell's `Password:`, `secretAsk.ts`), drawn only
+  while that ask is up. `ctx.fill(value)` puts the value into the masked field and nowhere else —
+  never a draft, never sent: the person still taps Send. It is checked LIVE at landing and returns
+  false (dropping the value) once the ask or the session changed, because a fill typically arrives
+  after a sheet and a fingerprint, and must never land on whatever is on screen by then.
 - `boot` — once on App's mount (`bootFeatures`), may return a cleanup.
 
 `features/registry.ts` is a static list. **Nothing is lazily loaded**: sheets are opened from a

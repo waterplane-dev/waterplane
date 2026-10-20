@@ -731,7 +731,7 @@ export async function readRepoHealth(
     // the one where nothing ran: a phone saying how long a backfill may take
     // must not hold its own copy of a number this desktop can change.
     stepTimeoutMs: REPOHEALTH_TIMEOUT_MS,
-    engine: engine ? { kind: engine.kind } : null,
+    engine: engine ? { kind: engine.kind, bundled: bundledEngine() } : null,
     // WHICH reading this is, and which others exist. Both ride on every answer
     // including the one where nothing ran: a client that cannot see the list
     // cannot offer the subtrees, and one that cannot see which it is holding

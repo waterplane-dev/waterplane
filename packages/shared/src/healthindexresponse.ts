@@ -12,7 +12,8 @@
  * a command on the desktop, a re-measure in the extension.
  */
 import {
-  assessHealthMove, healthIndex, healthIndexCommits, healthMoveWords, isoWeekOf,
+  assessHealthMove, centralOf, HEALTH_ENTRIES, HEALTH_ENTRY_LABEL, healthEntryReadings, healthIndex, healthIndexCommits,
+  healthMoveWords, healthWeeks, isoWeekOf,
   type HealthIndexResponse, type HealthSeriesRow,
 } from "./healthindex.js";
 
@@ -34,6 +35,31 @@ export function parseHealthRows(text: string): HealthSeriesRow[] {
 export function isStaleEngineSeries(rows: readonly HealthSeriesRow[]): boolean {
   const measured = rows.filter((r) => r.size?.value && typeof r.size.value === "object");
   return measured.length > 0 && !measured.some((r) => typeof (r.size!.value as { lineMean?: unknown }).lineMean === "number");
+}
+
+const NO_SCORED_WEEK = "no week has every enabled reading yet, so there is no scored week";
+
+/**
+ * The no-score sentence, naming what the LATEST week lacks and the engine's own
+ * reason for it — "no week has every reading" alone leaves the person to dig
+ * out which one. Untested and hatches also lean on `classics`, so its reason
+ * stands in where the entry's own row carries none.
+ */
+export function noScoredWeekWords(rows: readonly HealthSeriesRow[]): string {
+  const last = healthWeeks(rows).at(-1)?.row;
+  if (!last) return NO_SCORED_WEEK;
+  const { values } = healthEntryReadings(last);
+  const { disabled } = centralOf(last);
+  const why = (r: unknown): string | null => {
+    const w = (r as { reason?: unknown } | null | undefined)?.reason;
+    return typeof w === "string" && w ? w : null;
+  };
+  const rec = last as unknown as Record<string, unknown>;
+  const missing = HEALTH_ENTRIES.filter((e) => !disabled.includes(e) && values[e] === undefined).map((e) => {
+    const reason = why(rec[e]) ?? (e === "untested" || e === "hatches" ? why(rec.classics) : null);
+    return reason ? `${HEALTH_ENTRY_LABEL[e]} (${reason})` : HEALTH_ENTRY_LABEL[e];
+  });
+  return missing.length ? `${NO_SCORED_WEEK}: the latest week has no ${missing.join(", no ")}` : NO_SCORED_WEEK;
 }
 
 /** The response over `text` (null = no series file). `series: null` + a reason when there is no scored week — never a made-up number. */
@@ -58,7 +84,7 @@ export function healthIndexResponseOf(text: string | null, opts: {
     // Size is scored on `lineMean` (engine 2026-10-17a on). Rows where size WAS measured
     // but none carries it are an older engine's series: name the fix, not the symptom.
     if (isStaleEngineSeries(rows)) return { ...none, reason: opts.staleEngine, commits };
-    return { ...none, reason: "no week has every enabled reading yet, so there is no scored week", commits };
+    return { ...none, reason: noScoredWeekWords(rows), commits };
   }
   const move = assessHealthMove(series.points);
   return {

@@ -31,11 +31,12 @@ import { compareVersions, currentMode, currentSigPolicy, latestRelease, releaseS
 import { hostStateDir, resolveStateDir, stateDirReport, type RootPicked } from "./branddirs.js";
 import { rootChoicePath } from "./rootchoice.js";
 import { installedServiceEnv } from "./cli/service.js";
-import { onPath, tmuxChecks, tmuxInstallCommand } from "./tmuxreq.js";
+import { brewHere, installHas, onPath, tmuxChecks, tmuxInstallCommand } from "./tmuxreq.js";
 import { overlaysCheck } from "./themeoverlay.js";
 import { execFileP } from "./proc.js";
 import { run, which } from "./doctorproc.js";
 import { checkClaude } from "./doctorclaude.js";
+import { macAdminCheck, macGitCheck, probeMac, type MacFacts } from "./doctormac.js";
 export { CLAUDE_INSTALL_CMD, CLAUDE_SIGN_IN_FIX, NO_ACCOUNT_NOTE, classifyClaudeAuth, claudeSignInState, signedOutStatus } from "./doctorclaude.js";
 
 
@@ -255,12 +256,14 @@ async function checkTmux(): Promise<Check[]> {
   return tmuxChecks({
     knob: env("TMUX"), platform: process.platform, path,
     versionOut: v?.ok ? v.out : null,
-    installCmd: tmuxInstallCommand(process.platform, (b) => onPath(b) !== null),
+    installCmd: tmuxInstallCommand(process.platform, installHas),
+    brewForeign: brewHere()?.writable === false,
     env: process.env,
   });
 }
 
-async function checkGit(): Promise<Check> {
+async function checkGit(mac: MacFacts | null): Promise<Check> {
+  if (mac) return macGitCheck(mac);
   const g = await which("git");
   return g
     ? { id: "git", status: "ok", detail: "git present" }
@@ -693,6 +696,7 @@ export function androidChecks(r: AndroidEnvReport = probeAndroidEnv()): Check[] 
 export async function runChecks(i: DoctorInput, skipPort = false, skipCapture = false, skipNetwork = false): Promise<Check[]> {
   const native = nativeWindowsCheck(process.platform);
   if (native) return [native];
+  const mac = process.platform === "darwin" ? await probeMac() : null;
   const [node, ptyc, ptycap, claude, builtins, curl, git, tmux, capture, dictate, tskey, secure, port, wsl, selfUpdate] = await Promise.all([
     checkNode(),
     checkPty(),
@@ -700,7 +704,7 @@ export async function runChecks(i: DoctorInput, skipPort = false, skipCapture = 
     checkClaude(i.claudeBin, i.usedBackends ?? []),
     builtinDoctorChecks(i.usedBackends ?? []),
     checkCurl(),
-    checkGit(),
+    checkGit(mac),
     checkTmux(),
     skipCapture ? Promise.resolve(null) : checkCapture(),
     checkDictate(),
@@ -719,6 +723,7 @@ export async function runChecks(i: DoctorInput, skipPort = false, skipCapture = 
     ...builtins,
     git,
     ...tmux,
+    ...[mac ? macAdminCheck(mac) : null].filter((c): c is Check => c !== null),
     curl,
     ...(capture ? [capture] : []),
     dictate,

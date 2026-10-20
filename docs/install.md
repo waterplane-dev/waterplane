@@ -47,6 +47,22 @@ The rest of the detail:
   min-release-age", which is harmless for `npm ci` (it installs the lockfile exactly). Upgrade npm
   only if you will `npm install` new dependencies yourself.
 
+### On a Mac without admin rights
+
+waterplane itself installs without admin: the installer puts its Node, the program and the
+`waterplane` command in your home folder and the background service is a per-user LaunchAgent. Three
+of its requirements are not like that — tmux (through Homebrew), the **Xcode Command Line Tools**
+(which `git` needs: until they are installed, `/usr/bin/git` is only Apple's offer to install them)
+and **Tailscale**. An account outside the admin group cannot install any of them, and a Homebrew set
+up by another account refuses its `brew install`. The installer and `waterplane doctor` both say
+which of the three are missing and that an administrator has to install them, so: ask whoever
+administers the Mac for exactly that list.
+
+Without an administrator, tmux can come from conda-forge into your home folder:
+`pixi global install tmux` ([pixi](https://pixi.sh) installs without admin) — not yet tested here.
+There is no supported way around the Command Line Tools or Tailscale. On a company-managed Mac,
+check the policy too: this daemon runs `claude` on that machine for whoever reaches it.
+
 ## Windows
 
 The host runs inside WSL2 (sessions need tmux, which has no Windows build). Either clone inside the
@@ -80,6 +96,12 @@ carries an [npm provenance](https://docs.npmjs.com/generating-provenance-stateme
 the package page, `npm view waterplane dist.attestations` and `npm audit signatures` link the
 published bytes to the commit and the workflow run that built them. How a release is made, signed
 and published: [docs/notes/distribution.md](notes/distribution.md).
+
+`npm i -g` fails with `EACCES` when Node came from the nodejs.org installer or another account's
+Homebrew (its global folder is not yours). Either use a Node in your home folder (nvm, fnm, volta),
+or point npm's global folder there once: `npm config set prefix ~/.npm-global`, then add
+`~/.npm-global/bin` to your PATH. The package runs no install script, so it does not check for tmux,
+git or Tailscale — run `waterplane doctor` after installing; it does.
 
 On a home server or a VPS, the host also runs in Docker, joining the tailnet as its own machine:
 [deploy/docker/README.md](../deploy/docker/README.md).

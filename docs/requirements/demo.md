@@ -262,3 +262,7 @@ checks, the gallery opening as a panel beside the session. The section also says
 two paired desktops can hand each other a job (R-peers-002).
 - asked: 2026-10-18 (owner: "I like it better than vscode by now and is my preferred environment on the desktop … especially when I run stuff from my notebook on another bigger machine like my Mac studio"; "you should add desktop screenshot material as well … Incorporate it in the automated screenshot and media generation")
 - shipped: `scripts/ui/journey-desktop.mjs` (`device: "desktop"`, `gif`, `captionScale`), `scripts/ui/lib.mjs` `filmOf`, `encode.mjs` `probeFor`, README `site:desk`, `site-lib.mjs` landscape figure
+### R-demo-037 · requested
+The water plane game and little painter are offered as additional example repos in the demo.
+- asked: 2026-10-16
+

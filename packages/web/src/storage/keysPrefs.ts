@@ -34,6 +34,8 @@ export const LS_PREFS = {
   serialSessions: lsKey("serialSessions"),
   /** Ask before draining text that was queued offline. */
   confirmQueue: lsKey("confirmQueue"),
+  /** Ask before closing a session that would lose work (uncommitted, unmerged, shells). */
+  confirmClose: lsKey("confirmClose"),
   /** Reader view: how much of a tool call is shown, and downloaded at all. */
   readerTools: lsKey("readerTools"),
   /** Annotator move mode: knobs on strings (`annKnobs.ts`), not drag. Synced (`SYNCED_SETTING_KEYS`). */

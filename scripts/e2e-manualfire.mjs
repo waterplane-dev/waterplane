@@ -11,6 +11,7 @@
 // exists: the session a PERSON has open is never the one work lands in. A repo
 // session is opened first here precisely so that there is something to wrongly
 // adopt, and the item still gets its own.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -52,4 +53,4 @@ waitForHost(PORT).then(async () => {
     try{host.kill();}catch{}; setTimeout(()=>process.exit(failed?1:0),100);
   }, 6000);
 });
-setTimeout(()=>{console.log("FAIL: timeout");host.kill();process.exit(1);},12000);
+watchdog(()=>{console.log("FAIL: timeout");host.kill();process.exit(1);});

@@ -50,8 +50,12 @@ export function gitOnlyProblems(text) {
   // Three more shapes a short name meets that are not uses either: an object KEY (`{ts:e}`, `,ts:1` —
   // nothing before the colon can call or pass anything), a string that IS the name (`"ts"`), and a
   // word in a string after `@` (`"@ts-ignore"`), which no code position in a bundle with no
-  // decorators takes.
+  // decorators takes. And a name that is also an English word or the `as` of an import specifier
+  // (`spawnSync` minified to `as`): a reference followed by whitespace and then a word or `{`, or by
+  // a backslash, is no code esbuild emits — `import{createRequire as Ui}`, "read as code" or
+  // "\\bas unknown as\\b" in a string — save the operators `in`/`instanceof`, which stay counted.
   const uses = (name) => body
+    .replace(new RegExp(String.raw`(?<![\w$.])${esc(name)}(?=\s+(?!(?:in|instanceof)(?![\w$]))[\w$\{]|\\)`, "g"), " ")
     .replace(new RegExp(String.raw`\w-${esc(name)}-\w`, "g"), " ")
     .replace(new RegExp(String.raw`([{,])${esc(name)}:`, "g"), "$1 :")
     .replace(new RegExp(String.raw`(["'])${esc(name)}\1`, "g"), "$1$1")

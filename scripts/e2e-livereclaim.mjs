@@ -18,6 +18,7 @@
 //     C kept (unstamped, and this host is not on the default socket)
 //   and the host said so in one line.
 // Isolated: private socket dir (lib-tmuxiso), its own -L name, throwaway root.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn, spawnSync, execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
@@ -133,4 +134,4 @@ const age = (p, ms) => { const t = new Date(Date.now() - ms); utimesSync(p, t, t
   process.exit(failed ? 1 : 0);
 })().catch((e) => fail(String(e?.stack ?? e)));
 
-setTimeout(() => fail("timeout"), 60_000);
+watchdog(() => fail("timeout"), 60_000);

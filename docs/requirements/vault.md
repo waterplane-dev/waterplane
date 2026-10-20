@@ -257,10 +257,10 @@ Using a login on demand without autofill: on the phone, show (one fingerprint) g
 - plan: REPO-VIEW-PLAN.md §3.5–3.6
 - shipped: e97d3aa4 42d3d866
 
-### R-vault-051 · requested
-The vault's screens share one row grammar and the app's theme tokens: a fact is said once per screen, no pill per row, chips are tinted filters, one solid verb per screen or card, cards say what/to whom/until when with the rest folded, the fingerprint button is labelled with its verb, a card that was answered becomes its receipt in place, empties are one sentence with one verb, mono only for ids, keys, paths and commands, icons mapped once.
+### R-vault-051 · shipped
+The vault's screens share one row grammar and the app's theme tokens: a fact is said once per screen, no pill per row, chips are tinted filters, one solid verb per screen or card, cards say what/to whom/until when with the rest folded, the fingerprint button is labelled with its verb, a card that was answered becomes its receipt in place, empties are one sentence with one verb, mono only for ids, keys, paths and commands, icons mapped once. - plan: REPO-VIEW-PLAN.md §10
 - asked: 2026-10-17 (owner: "if you have good ideas on How to make the vault UI more intuitive and sexy. Do it!")
-- plan: REPO-VIEW-PLAN.md §10
+- shipped: 2fb07096, 08842d9d, 55291043, 6a2a7447, 6bde8c54
 
 ### R-vault-052 · shipped
 A standing grant: "until I revoke" is the last entry of every release card's picker (never the default), also reachable from the CLI and the project window. It has no end until revoked from the phone or CLI; only its scope (never a value) is kept on disk, so after a desktop restart it is dormant and ONE re-arm card re-arms every dormant grant with one fingerprint. Every scope is visible and removable on that card before the fingerprint; a declined re-arm goes quiet (15 min) and the next request asks with an ordinary card; "lock now" ends standing grants for good.
@@ -327,3 +327,60 @@ Demo mode shows the vault: a fixture of value-free cards (release with advice, g
 - asked: 2026-10-18 (owner: follow-ups lesson 8)
 - plan: FOLLOWUPS-PLAN.md §8
 - shipped: eab7d1d3 c5f90c0f 9f5988f6
+### R-vault-063 · requested
+All items nested beneath a repo in the vault plugin can be collapsed and expanded, as in the main view.
+- asked: 2026-10-15
+
+### R-vault-064 · requested
+When an app needs a vault secret whose original was already removed, the phone prompts the user to release the key instead of the app failing silently.
+- asked: 2026-10-16
+
+### R-vault-065 · shipped
+Each secret in the vault's list shows its migration step and its last use, and tapping the status line opens its steps.
+- asked: 2026-10-16
+- shipped: 084d2c55, 805a35f6
+
+### R-vault-066 · requested
+Vault approval can use Windows Hello, Face ID or Touch ID, and WebAuthn security keys as approvers, as the Android Keystore is used.
+- asked: 2026-10-17
+
+### R-vault-067 · requested
+The vault can hold an old developer key protected by an additional password, usable to publish and release artifacts.
+- asked: 2026-10-17
+
+### R-vault-068 · shipped
+The secrets scanner detects names ending in SALT (e.g. IP_HASH_SALT) as secrets, but not SALT_ROUNDS.
+- asked: 2026-10-17
+- shipped: 0f5eb13b
+
+### R-vault-069 · shipped
+The secrets scanner ignores .example template files.
+- asked: 2026-10-17
+- shipped: 8548f74
+
+### R-vault-070 · requested
+The salts and HMAC screen is structured and easy to understand at a glance.
+- asked: 2026-10-17
+
+### R-vault-071 · shipped
+The fingerprint confirm popup never sits at '0 waiting' after a confirm; it shows only while at least one card waits.
+- asked: 2026-10-17
+- shipped: e4300056
+
+### R-vault-072 · shipped
+Grant and re-arm cards show why each secret is requested, per secret.
+- asked: 2026-10-18
+- shipped: c85d0bd3, 26211dff
+
+### R-vault-073 · requested
+A user can advance all remaining items of a list at once instead of handling each individually.
+- asked: 2026-10-19
+
+### R-vault-074 · requested
+On desktop, the vault export screen shows the generated KDBX password clearly so it can be copied, as the phone does, and the export UI is easy to read.
+- asked: 2026-10-19
+
+### R-vault-075 · requested
+The exported KDBX file opens correctly in a KeePass-compatible password manager.
+- asked: 2026-10-19
+

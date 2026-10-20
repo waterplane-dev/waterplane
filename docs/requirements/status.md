@@ -45,3 +45,11 @@ The status output shows more detail, so users see more information there.
 The done status shown for an item matches its actual completion state.
 - asked: 2026-10-08
 
+### R-status-011 · requested
+The red 'Ask you' status has a clearly pressable button right next to it that deactivates the status; it looks like a button, not a status.
+- asked: 2026-10-15
+
+### R-status-012 · requested
+GitHub Copilot status is never detected covertly; it is determined openly.
+- asked: 2026-10-15
+

@@ -23,6 +23,7 @@
 //     session of its own, once; and a failed one is rescued by *drop the clock*
 //     (`intent.update` with a new trigger), which is the only patch a terminal
 //     row accepts.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -60,7 +61,7 @@ const env = {
 const host = spawn("node", ["packages/host/dist/main.js"], { env, stdio: ["ignore", "pipe", "pipe"] });
 host.stderr.on("data", (d) => process.stderr.write("[host] " + d));
 const base = `http://127.0.0.1:${PORT}`;
-const bail = setTimeout(() => { check(false, "timed out"); host.kill(); process.exit(1); }, 180_000);
+const bail = watchdog(() => { check(false, "timed out"); host.kill(); process.exit(1); }, 180_000);
 await waitForHost(PORT);
 
 const repo = await fetch(`${base}/api/repo`, {
@@ -177,7 +178,9 @@ check(await waitFor(() => item("tw-drop")?.status === "failed"), "a second faile
 ws.send(JSON.stringify({ t: "intent.update", ackId: "tw-drop-1", id: "tw-drop", patch: { trigger: { kind: "idle" } } }));
 check(await waitFor(() => row("tw-drop")?.trigger?.kind === "idle"),
   `the clock is dropped on disk (${row("tw-drop")?.trigger?.kind})`);
-check(item("tw-drop")?.at === undefined, "…so the row stops wearing one");
+// The disk write lands before the backlog push that carries it, and under a
+// loaded parallel run the push can trail by more than one read: wait for it.
+check(await waitFor(() => item("tw-drop")?.at === undefined), "…so the row stops wearing one");
 check(await waitFor(() => count(DROP) >= 1), "…and it fires on the next tick, like any other queued item");
 await sleep(2500);
 check(count(DROP) === 1, `…once (copies: ${count(DROP)})`);

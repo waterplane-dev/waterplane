@@ -2,6 +2,12 @@
 
 What each prompt cost, the context window over time, the token split and what your `CLAUDE.md` costs on every turn. Read from Claude Code's own logs on this machine. No telemetry, no network.
 
+![The Session view: a four-hour session's cost split by token kind, and its context window over time with a cold start and a compaction](media/listing-session.png)
+
+![All sessions: the last seven days' tokens and cost by kind, and where the week went, per repo and hour](media/listing-all.png)
+
+*Fictional repos and a generated session, its token shape scaled from real use (`npm run screenshots`).*
+
 ## What it shows
 
 Two parts: the **waterplane tree** in the activity bar on the left is the navigation, and the **panel** — an editor tab in the centre — shows the one view you picked there. Open both from the status bar item (`$4.21 · 38%`: this session's cost and how full its context window is) or with **waterplane: Open cost & context** from the command palette.

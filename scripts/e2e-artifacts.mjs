@@ -9,6 +9,7 @@
 // older build of the same artifact stops existing when `keep` says so — and
 // that `collect: false` gives back exactly the behaviour every build had
 // before any of this.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync } from "node:fs";
@@ -116,4 +117,4 @@ bootWait(PORT, 1000, async () => {
   }
 });
 
-setTimeout(() => die("timeout — artifacts e2e did not finish"), 90000);
+watchdog(() => die("timeout — artifacts e2e did not finish"), 90000);

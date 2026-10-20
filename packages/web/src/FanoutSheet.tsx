@@ -14,7 +14,7 @@ import { SyncMark } from "./SyncMark";
 import { LaunchPicker, launchOf, type LaunchPick } from "./LaunchPicker";
 import { backendUnavailable, launchAskStart } from "./backendCaps";
 import { CantInline } from "./Unavailable";
-import { kickoff, kickoffSent } from "./fanoutKickoff";
+import { kickoff, kickoffSent, targetSubline } from "./fanoutKickoff";
 
 interface Props {
   repos: RepoTarget[];
@@ -297,7 +297,7 @@ export function FanoutSheet({ repos, runs, backends, launch, onRun, onFollowUp, 
                         {t.status === "failed" ? <CircleAlert size={12} /> : null}
                         {" "}{t.title} <span className={`tag ${STATUS_TAG[t.status]}`}>{t.status}</span>
                       </span>
-                      <span className="row-sub">{t.error || (t.sessionId ? "tap to open the session" : "starting…")}</span>
+                      <span className="row-sub">{targetSubline(t)}</span>
                     </button>
                     {/* Picking targets is a SEPARATE control from the row: tapping
                         the row must keep meaning "open that session". */}

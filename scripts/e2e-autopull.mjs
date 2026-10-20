@@ -6,6 +6,7 @@
 // exact bytes and status codes, not "did it 200": a resume that silently returns
 // the whole file, or an unsatisfiable range that falls through to a 200, both
 // produce a corrupt download that looks complete.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
@@ -297,4 +298,4 @@ bootWait(PORT, 1200, async () => {
   }
 });
 
-setTimeout(() => die("timeout — auto-pull e2e did not finish"), 70000);
+watchdog(() => die("timeout — auto-pull e2e did not finish"), 70000);

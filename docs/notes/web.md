@@ -8218,7 +8218,7 @@ the
 
 ### `pasteImages.ts` — which pasted files are a picture someone meant to send
 
-Ctrl+V of a screenshot on a desktop takes the picker's route (`routeFiles`): one image to the annotator, several to the combine-or-not question. Text wins: Office and many editors put a rendered PNG of the selection on the clipboard beside its text, so any non-blank `text/plain` leaves the paste to the textarea and `pastedImages` returns nothing. `ComposeBar.tsx` is the caller.
+Ctrl+V of a screenshot on a desktop takes the picker's route (`routeFiles`): one image to the annotator, several to the combine-or-not question. Text wins: Office and many editors put a rendered PNG of the selection on the clipboard beside its text, so any non-blank `text/plain` leaves the paste to the textarea (`pastedFiles` drops the pictures, never other files). The ONE paste handler is `useFileDrop.ts`'s document listener: `ComposeBar.tsx` had a second, which routed a picture the listener then took again, and skipped the annotator-busy question so a paste into the box beside the annotator replaced the picture being marked (2026-10-19). A paste of the picture already held is a repeat: toasted, never offered as an Append.
 
 ### `GalleryViewer.tsx` and `useGalleryOpen.ts` — the gallery's viewer half
 

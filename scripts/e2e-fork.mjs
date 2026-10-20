@@ -1,3 +1,4 @@
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync, writeFileSync, chmodSync } from "node:fs";
@@ -50,4 +51,4 @@ waitForHost(PORT).then(async () => {
       ws.close(); finish(); }
   });
 });
-setTimeout(()=>{console.log("FAIL: timeout");host.kill();process.exit(1);},15000);
+watchdog(()=>{console.log("FAIL: timeout");host.kill();process.exit(1);});

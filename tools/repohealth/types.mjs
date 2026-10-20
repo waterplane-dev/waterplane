@@ -60,7 +60,8 @@
  *
  * @typedef {typeof import("./constants.mjs").PREREG & {
  *   PACKS: ActivePack[],
- *   SRC: {exts: string[], excludeSuffixes: string[], excludeDirs: string[], testGlobs: string[]},
+ *   SRC: {exts: string[], excludeSuffixes: string[], excludeDirs: string[], testGlobs: string[],
+ *     generated: {src: string, re: RegExp, on: boolean}[], generatedRoot: string},
  *   HATCH_KINDS: Record<string, string>,
  *   VERSION: string,
  * }} EffectivePrereg

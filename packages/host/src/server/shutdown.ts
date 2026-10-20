@@ -9,6 +9,7 @@
  */
 import type { ServerCtx } from "./ctx.js";
 import { logTag, envName } from "@waterplane/shared";
+import { restartReason } from "../restartnote.js";
 
 export function installShutdown(ctx: ServerCtx): void {
   /**
@@ -31,7 +32,8 @@ export function installShutdown(ctx: ServerCtx): void {
     process.on(sig, () => {
       // Tell every phone first, while the sockets are still up: without it a
       // restart is a dropped socket that looks like the tunnel (`host.restarting`).
-      try { ctx.broadcast({ t: "host.restarting", at: Date.now() }); } catch { /* shutdown must never throw */ }
+      // `reason` is what the restarting caller posted first (`restartnote.ts`), else absent.
+      try { const reason = restartReason(); ctx.broadcast({ t: "host.restarting", at: Date.now(), ...(reason ? { reason } : {}) }); } catch { /* shutdown must never throw */ }
       try { ctx.acks.flush(); } catch { /* shutdown must never throw */ }
       // Debounced ~2 s, and `npm run restart` is routine — without this the last
       // observations before every restart die with the process, which for a record

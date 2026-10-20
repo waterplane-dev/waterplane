@@ -76,3 +76,30 @@ Repo-specific tooling lives in a private plugin, and nothing private is in the p
 The vault plugin has its own visible repo, like the other plugins.
 - asked: 2026-10-11
 
+### R-plugins-017 · requested
+Public plugins living in other repos get updates that stay compatible with the core, e.g. reshipped with the core.
+- asked: 2026-10-13
+
+### R-plugins-018 · requested
+Users install plugins without touching the desktop.
+- asked: 2026-10-13
+
+### R-plugins-019 · requested
+Bundled plugins are enabled by default; their links are included but switched off. No copilot, codex or oracle plugins are offered.
+- asked: 2026-10-13
+
+### R-plugins-020 · shipped
+Plugin authors are asked to tag their repos with the waterplane-plugin GitHub topic, and the README links to the topic search.
+- asked: 2026-10-15
+- shipped: 677f572a
+
+### R-plugins-021 · shipped
+A minimal example plugin template passes the manifest checks, offers one session action and one setting, and has a README explaining how to install it.
+- asked: 2026-10-15
+- shipped: 12d9b75b
+
+### R-plugins-022 · shipped
+The plugin docs explain installing a plugin, starting from the template, and a curated list of plugins with how to get listed.
+- asked: 2026-10-15
+- shipped: 4fadc65b
+

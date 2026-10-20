@@ -6,6 +6,7 @@
 //      silence threshold passes — the exact bug: silence said "ready", turn wasn't
 //   3. the item completes on its own turn's Stop (stopCount past the fire baseline),
 //      not on a silence guess
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -118,4 +119,4 @@ bootWait(PORT, 900, async () => {
   done();
 });
 
-setTimeout(() => fail("timeout (hook flow didn't complete)"), 30000);
+watchdog(() => fail("timeout (hook flow didn't complete)"));

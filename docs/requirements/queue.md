@@ -36,3 +36,26 @@ Sending a prompt while the session is busy asks whether to send it now or queue 
 - asked: 2026-10-12
 - shipped: d112079a
 
+### R-queue-009 · requested
+The backlog view clearly shows each scheduled prompt, and its Manage action shows that prompt and its schedule.
+- asked: 2026-10-15
+
+### R-queue-010 · shipped
+The backlog has a text search that works together with active filters, so items can be found by text while filters stay on.
+- asked: 2026-10-15
+- shipped: c74402f
+
+### R-queue-011 · shipped
+Each waiting backlog row states in words which model it will open on.
+- asked: 2026-10-15
+- shipped: dbc3ab7
+
+### R-queue-012 · shipped
+Backlog and scheduled items deliver their prompt into the session they open exactly once, and a delivery is reported as not confirmed only when the prompt did not actually run in the session.
+- asked: 2026-10-16
+- shipped: dad1b64a, 1314b947, 5eff24ea
+
+### R-queue-013 · requested
+Delivered backlog items show their delivered status and never carry a false failed label.
+- asked: 2026-10-15
+

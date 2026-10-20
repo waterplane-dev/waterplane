@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 - 2026-10-19
 
 - A fresh install from the desktop app's install build loads itself: every open window restarts its extensions once, a few seconds after the install (the build's `restart` option, on by default). No more hand reload.
 - Repo health is laid out as the phone's: one status line with its details behind a `?`, a sticky jump bar with the refresh button, one weeks | commits x-axis choice for every chart (kept across reloads), and a card per section — score, longest file, the tiles as a two-column grid that opens one tile at a time, always-on weight, size, the table, the repo's own readings.

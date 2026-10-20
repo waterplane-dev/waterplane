@@ -109,9 +109,9 @@ export function useHostFrames(latest: HostFrameLatest, sinks: HostFrameSinks) {
           break;
         // The host's SIGTERM handler, before it goes: the strip counts the wait.
         case "host.restarting": {
-          noteHostRestarting();
+          noteHostRestarting(Date.now(), msg.reason);
           const usual = restartView().usualMs;
-          showToast(`desktop is restarting${usual != null ? ` — usually back in ~${fmtSecs(usual)}` : ""}`);
+          showToast(`desktop is restarting${msg.reason ? ` (${msg.reason})` : ""}${usual != null ? ` — usually back in ~${fmtSecs(usual)}` : " — the app cannot reach it until it is back"}`);
           break;
         }
         case "auth.state":

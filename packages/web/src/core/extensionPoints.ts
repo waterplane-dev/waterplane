@@ -15,11 +15,11 @@ import { FEATURES } from "../features/registry.ts";
 import { bindSetupRows, setupRowLookup, type SetupRowLookup } from "../setupRemedy.ts";
 import { core } from "./api.ts";
 import {
-  createLauncherItemTable, createMenuItemTable, createRepoActionTable, createRepoChipList, createSessionViewTable, menuItemCatalog, setupRowDefs, type ContributedEntry, type RepoActionItem,
+  createLauncherItemTable, createMenuItemTable, createSecretFillerTable, createRepoActionTable, createRepoChipList, createSessionViewTable, menuItemCatalog, setupRowDefs, type ContributedEntry, type RepoActionItem,
 } from "./featureRun.ts";
 import { bindLedgerViews } from "../sdk/ledgers.ts";
 import { bindMenuCatalog } from "../toolbar.ts";
-import type { FeatureManifest, LedgerViewDef } from "../sdk/types.ts";
+import type { FeatureManifest, LedgerViewDef, SecretFillContext } from "../sdk/types.ts";
 
 let actionTable: ReturnType<typeof createRepoActionTable> | null = null;
 let chips: ReturnType<typeof createRepoChipList> | null = null;
@@ -28,6 +28,7 @@ let views: readonly LedgerViewDef<any>[] | null = null;
 let sessionViewTable: ReturnType<typeof createSessionViewTable> | null = null;
 let launcherItemTable: ReturnType<typeof createLauncherItemTable> | null = null;
 let menuItemTable: ReturnType<typeof createMenuItemTable> | null = null;
+let secretFillerTable: ReturnType<typeof createSecretFillerTable> | null = null;
 let menuCatalog: ReturnType<typeof menuItemCatalog> | null = null;
 
 /** The menu lines extensions offer for this repo, registry order. */
@@ -58,6 +59,10 @@ export const menuItems = (active: SessionInfo): ContributedEntry[] => (menuItemT
 // `toolbar.ts` is imported by the registry's own features (`toolbarCfg`), so it reads the contributed
 // catalog through a binding rather than importing this module — the same cycle as `setupRows`.
 bindMenuCatalog(() => (menuCatalog ??= menuItemCatalog(FEATURES)));
+
+/** The buttons extensions add to the masked password field's row (`SecretFillerDef`); [] when none does. */
+export const secretFillers = (ctx: SecretFillContext): ContributedEntry[] =>
+  (secretFillerTable ??= createSecretFillerTable(FEATURES, core)).items(ctx);
 
 /** Every repo chip def, registry order. */
 export const repoChips = () => (chips ??= createRepoChipList(FEATURES));

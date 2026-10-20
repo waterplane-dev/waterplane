@@ -310,6 +310,10 @@ test("gitOnlyProblems reads minified and namespace forms, and refuses anything b
   assert.equal(gitOnlyProblems('import*as cp from"node:child_process";cp.spawn("sh")').length, 1);
   assert.equal(gitOnlyProblems('const cp=require("child_process");cp.spawn("sh")').length, 1, "an unrecognised form fails");
   assert.deepEqual(gitOnlyProblems('import{execFileSync as Za}from"node:child_process";const r=/[A-Za-z_$]/;Za("git",[])'), [], "a regex range that spells the name is not a use");
+  // spawnSync minified to `as`: the keyword in other imports and the word in strings are not uses.
+  const asName = 'import{spawnSync as as}from"node:child_process";import{createRequire as Ui}from"node:module";';
+  assert.deepEqual(gitOnlyProblems(asName + 'as("git",[]);const m="read as code",r="\\\\bas unknown as\\\\b",o={\n}'), [], "`as` as a word is not a use");
+  assert.equal(gitOnlyProblems(asName + 'as("git",[]);const s=as;s("sh")').length, 1, "`as` passed as a value still fails");
   assert.equal(gitOnlyProblems('import{execFileSync as Za}from"node:child_process";const r=/[A-Za-z]/;x-Za("sh")').length, 1, "only the whole x-NAME-y range is exempt");
   assert.deepEqual(gitOnlyProblems('import{spawnSync as ts}from"node:child_process";const o={ts:1,b:2},p={a:1,ts:2},k=["ts"],m="@ts-ignore";ts("git",[])'), [],
     "a key, a string that is the name and \"@name-\" are not uses");

@@ -102,6 +102,7 @@ export const SETTING_ROWS: SettingRowMeta[] = [
   { id: "launch-remote", group: "sessions", label: "remote control", keywords: "claude.ai steer remote-control" },
   { id: "launch-ask", group: "sessions", label: "ask before each launch", keywords: "prompt every time silently defaults pick" },
   { id: "spend-warn", group: "sessions", label: "spend marks", keywords: "cost warning orange red triangle threshold dollars percent week alert expensive api" },
+  { id: "confirm-close", group: "sessions", label: "ask before closing a session", keywords: "close confirm uncommitted unmerged warning don't ask again dialog" },
   { id: "close-when-done", group: "sessions", label: "close automatic sessions when done", keywords: "backlog scheduled linger keep open reap slot auto-close" },
   { id: "local-sessions", group: "sessions", label: "local model sessions at once", keywords: "ollama qwen gpu runner local model limit cap one at a time concurrent" },
   { id: "hosted-notice", group: "sessions", label: "hosted-model notice", keywords: "privacy disclaimer acknowledge server third party leaves machine" },

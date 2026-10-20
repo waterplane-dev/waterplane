@@ -65,3 +65,7 @@ After a slash command the reader cannot show, the app asks whether to switch to 
 - asked: 2026-10-11
 - shipped: 09841249
 
+### R-commands-016 · requested
+In the edit dialogue the command line is shown shortened, not as the long raw command.
+- asked: 2026-10-12
+

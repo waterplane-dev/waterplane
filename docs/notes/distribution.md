@@ -337,9 +337,12 @@ ${XDG_DATA_HOME:-~/.local/share}/waterplane/
   so installing it first is the actual first step. The message prints
   Anthropic's native install command (npm second: the installer's own Node is
   not on PATH, so a fresh machine often has no `npm`) and says what claude runs
-  on, paid plan or API key or Ollama with no account. With a terminal it asks
-  "continue without claude?"; piped, it stops. `--skip-claude-check` continues
-  anyway, and `--with copilot` skips the stop (that backend drives its own CLI).
+  on, paid plan or API key or Ollama with no account — then continues: the host
+  runs without it and sessions start once claude is on PATH. It used to ask
+  "continue without claude? [y/N]", and on 2026-10-20 a real Mac answered "y" to
+  a `curl | sh` run and was still refused; a stop that costs a re-run buys
+  nothing. `--skip-claude-check` only drops the explanation, and `--with copilot`
+  skips it too (that backend drives its own CLI).
   Also looked for in `~/.local/bin` and `~/.claude/local`, where Claude Code's
   own installers put it.
 - Tailscale missing is a **warning** with the download link; it is never
@@ -476,7 +479,7 @@ composition, the WSL lines, the checkout conflict. The installer was run
 end to end against a hand-assembled release dir with `HOME` and
 `XDG_DATA_HOME` in a temp dir and `--no-service`: fresh install through a
 pipe, re-run (Node skipped), upgrade, tampered archive refused, missing
-claude refused and `--skip-claude-check`, foreign wrapper refused,
+claude explained and continued, foreign wrapper refused,
 uninstall keeping `~/.config` and other data; and in a Debian container
 (no systemd) for the Linux path. `shellcheck --shell=sh` is clean on the
 rendered script.

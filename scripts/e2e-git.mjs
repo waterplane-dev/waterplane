@@ -1,4 +1,5 @@
 // Tier 3: git status, diff, stage, commit, pull, push from the API.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { execFileSync, spawn } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -147,4 +148,4 @@ bootWait(PORT, 900, async () => {
   setTimeout(() => process.exit(failed ? 1 : 0), 100);
 });
 
-setTimeout(() => { console.log("FAIL: timeout"); host.kill(); process.exit(1); }, 15000);
+watchdog(() => { console.log("FAIL: timeout"); host.kill(); process.exit(1); });

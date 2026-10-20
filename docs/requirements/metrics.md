@@ -87,3 +87,52 @@ Each repo has a health score, 0 to 100, read week by week from five readings (si
 A repo can declare readings of its own in a committed `.waterplane-shared/health.json` (argv run at HEAD, one number out, absent with a reason otherwise); they are stored in the series beside waterplane's but never enter the health index, and every reading on the phone says whose it is — waterplane's (the same for every repo) or the repo's own — with one line on how to add one where a repo has none.
 - asked: 2026-10-16 (owner)
 - shipped: tools/repohealth/own.mjs; RepoHealthOwn.tsx in packages/web
+### R-metrics-019 · requested
+Repo health counts a module as covered when a test reaches it through the language's own import or path rules, lists modules no test reaches as its headline (a repo can declare globs covered elsewhere), explains which modules joined, were lost or stayed, and a change in measuring bumps the version and recomputes so old and new readings never mix.
+- asked: 2026-10-15
+
+### R-metrics-020 · shipped
+A script archives GitHub traffic and release download counts to a local file outside the repo, one row per day with no duplicates.
+- asked: 2026-10-15
+- shipped: f8d4b23f
+
+### R-metrics-021 · shipped
+The repo health score has Ask-AI buttons: one on the index box asking what moved the picked week, and one, *assess and propose improvements*, that reads whether the repo is getting healthier and then posts each proposed change as a held backlog row the person fires, edits or deletes (no file changed, nothing started), with a disclaimer that the biggest lever may not move the five generic readings.
+- asked: 2026-10-16
+- shipped: 86e52da1, 81e3edb5, 6e8483f7
+- amended: 2026-10-19 (owner: advice-on-request replaced by one tap whose proposals land as backlog rows, approved one at a time; button renamed from "ask if it is getting healthier")
+
+### R-metrics-022 · shipped
+A repo can overwrite or disable one of the centrally provided health readings in its committed health.json (with a reason), and add its own readings beside them without replacing them.
+- asked: 2026-10-16
+- shipped: d09adb82, 2f156069
+
+### R-metrics-023 · shipped
+The health chart plots tokens per request as a line beside the score, and its hint says context size raises both cost and waiting time and names the readings that directly affect it.
+- asked: 2026-10-17
+- shipped: 56e8ec5f
+
+### R-metrics-024 · shipped
+The health charts have a toggle switching the x-axis between weeks and commits, with a score per commit.
+- asked: 2026-10-17
+- shipped: c9e436db, d358a466
+
+### R-metrics-025 · shipped
+The VS Code extension's Health view matches the phone's repo-health region: cards, a sticky jump bar, a weeks|commits x axis, the tile grid, the score card with its spend line, and the same current health value as the phone.
+- asked: 2026-10-17, 2026-10-17
+- shipped: 7c26e7fe
+
+### R-metrics-026 · shipped
+The current repo health score is calculated from current data alone, without needing commit history.
+- asked: 2026-10-17
+- shipped: 87750d7a
+
+### R-metrics-027 · requested
+When repo health has no score, the view shows a plain sentence explaining why, never a prompt to restart the desktop app.
+- asked: 2026-10-17
+
+### R-metrics-028 · shipped
+The repo-health engine counts .mts and .cts files as TypeScript source.
+- asked: 2026-10-18
+- shipped: 7f7a22ba
+

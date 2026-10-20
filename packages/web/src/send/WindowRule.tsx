@@ -13,10 +13,12 @@ export function WindowRule({ m }: { m: SendSheetModel }) {
   return (
     <>
       <>
+        <div className="section section-head"><span>Which usage window</span></div>
         <RadioRows<"session" | "weekly"> label="Which usage window"
           value={rule.window === "weekly" ? "weekly" : "session"}
           options={[{ key: "session", label: "session window" }, { key: "weekly", label: "weekly window" }]}
           onChange={(k) => patchRule({ window: k })} />
+        <div className="section section-head"><span>When in the window</span></div>
         <RadioRows<"before" | "after"> label="When in the window"
           value={rule.edge === "after" ? "after" : "before"}
           onChange={(k) => patchRule(k === "before"

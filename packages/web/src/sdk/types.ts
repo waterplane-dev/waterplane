@@ -610,6 +610,8 @@ export interface FeatureManifest {
   launcherItems?: readonly LauncherItemDef[];
   /** Lines in a session's ☰ menu that join its catalog (`MenuItemDef`). */
   menuItems?: readonly MenuItemDef[];
+  /** Buttons on the masked password field's row (`SecretFillerDef`). */
+  secretFillers?: readonly SecretFillerDef[];
 }
 
 /** An icon a contribution draws — wide enough for a lucide-react icon's own propTypes. */
@@ -693,6 +695,35 @@ export interface MenuItemDef {
   /** Absent = always available. */
   available?(core: CoreApi): Availability;
   open(core: CoreApi, ctx: { active: SessionInfo }): void;
+}
+
+/**
+ * Where a password asked on a shell's screen (the compose bar's masked field) can come from besides
+ * the keyboard — the first: a stored login. Drawn as a button on the masked field's row, only while
+ * an ask is up. `open` picks and fetches however it likes (its own sheet, a fingerprint); it ends by
+ * calling `ctx.fill(value)`, which puts the value into the MASKED FIELD and nowhere else — never a
+ * draft, never history, never sent: the person still taps Send. `fill` returns false, and puts
+ * nothing anywhere, once that ask is gone (the prompt answered, another session open) — a password
+ * arriving late must never land on whatever is on screen by then. Keep no copy of the value.
+ */
+export interface SecretFillerDef {
+  id: string;
+  /** The button's words, beside its icon. Short: it shares the row with Send. */
+  label: string;
+  icon: ContributionIcon;
+  /** Lower first, then registry order. Default 0. */
+  order?: number;
+  /** Absent = always available. */
+  available?(core: CoreApi): Availability;
+  open(core: CoreApi, ctx: SecretFillContext): void;
+}
+
+export interface SecretFillContext {
+  sessionId: string;
+  /** The line that asked (`Password:`), as the field's header shows it. */
+  askLine: string;
+  /** Put `value` into the masked field — true if it landed, false when that ask is gone. */
+  fill(value: string): boolean;
 }
 
 /**

@@ -32,7 +32,7 @@ import {
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { BRAND, envName } from "@waterplane/shared";
+import { BRAND, DEFAULT_HOST_PORT, envName } from "@waterplane/shared";
 import { env, STATE_DIR } from "../env.js";
 import { identity } from "./index.js";
 import { sigPolicy, sigRefusal, type SigPolicy } from "./releasesig.js";
@@ -383,6 +383,21 @@ const snapDirFor = (dataDir: string, version: string): string => join(dataDir, "
 
 const cmdline = (c: [string, string[]]): string => `${c[0]} ${c[1].join(" ")}`;
 
+/**
+ * Tell the running host why it is about to be restarted (`restartnote.ts`), so
+ * the phone's "desktop restarting" line says it. Best effort, 2 s: no host, an
+ * older host without the route, or a refusal all leave the restart unchanged.
+ */
+async function noteRestart(dataDir: string, reason: string): Promise<void> {
+  const port = Number(serviceFor(dataDir)?.env[envName("PORT")] || env("PORT")) || DEFAULT_HOST_PORT;
+  try {
+    await fetch(`http://127.0.0.1:${port}/api/host/restart-note`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reason }), signal: AbortSignal.timeout(2000),
+    });
+  } catch { /* the restart goes ahead either way */ }
+}
+
 function restartOrSay(dataDir: string, noRestart: boolean): number {
   const svc = serviceFor(dataDir);
   if (!svc) {
@@ -529,6 +544,7 @@ async function update(mode: Extract<InstallMode, { kind: "tarball" }>, source: s
   } finally {
     release();
   }
+  if (!noRestart) await noteRestart(dataDir, `updating ${current} → ${latest.version}`);
   return restartOrSay(dataDir, noRestart);
 }
 

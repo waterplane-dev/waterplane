@@ -137,6 +137,7 @@ export function ToSection({ m }: { m: SendSheetModel }) {
                   closes. Default inherits the global and sends nothing. */}
               {when.kind !== "now" && (
                 <>
+                  <div className="section section-head"><span>Its session once the work is done</span></div>
                   <RadioRows<CloseChoice> label="Its session once the work is done"
                     value={closeChoiceOf(target.closeWhenDone)}
                     options={CLOSE_CHOICES.map((c) => ({
@@ -173,6 +174,8 @@ export function ToSection({ m }: { m: SendSheetModel }) {
               it was baked into whichever sheet you opened, or repaired
               afterwards in the queue manager. */}
           {seqMeans && (
+            <>
+            <div className="section section-head"><span>How many at once</span></div>
             <RadioRows<"parallel" | "sequential"> label="How many at once"
               value={sequential ? "sequential" : "parallel"}
               options={[
@@ -180,6 +183,7 @@ export function ToSection({ m }: { m: SendSheetModel }) {
                 { key: "sequential", label: <><ListOrdered size={13} /> one at a time</> },
               ]}
               onChange={(k) => setSequential(k === "sequential")} />
+            </>
           )}
           {seqMeans && <div className="form-hint">{sequential ? seqMeans.on : seqMeans.off}</div>}
         </div>

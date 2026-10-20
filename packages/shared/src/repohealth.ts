@@ -525,8 +525,14 @@ export interface RepoHealthView {
    * on a screen: the two can be different versions of the engine, and a
    * reading that moved because the engine changed is a different event from
    * one that moved because the code did.
+   *
+   * `bundled` is this desktop's own engine, as an absolute path, whichever
+   * kind answered — null when the desktop has none, ABSENT from a host older
+   * than the field. It is what a prompt hands a repo's agent when the repo's
+   * own copy cannot run: "the latest engine" is a file on this desktop, and an
+   * agent told to adopt it without the path goes looking in the wrong tree.
    */
-  engine: { kind: "repo" | "bundled" } | null;
+  engine: { kind: "repo" | "bundled"; bundled?: string | null } | null;
   /** The repo's own HEAD, so "measured through" can be compared to "now". */
   head: { sha: string; ts: number } | null;
   series: RepoHealthSeries | null;

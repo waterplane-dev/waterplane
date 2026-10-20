@@ -16,6 +16,7 @@
 //  - switching the plugin off releases a held hook with `{}`, removes the
 //    backend, refuses the next create on it in words, and 404s its sink;
 //  - switching it back on registers the backend again.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -200,4 +201,4 @@ bootWait(PORT, 900, async () => {
   }
 });
 
-setTimeout(() => { console.log("FAIL: timeout"); host.kill("SIGKILL"); process.exit(1); }, 90_000);
+watchdog(() => { console.log("FAIL: timeout"); host.kill("SIGKILL"); process.exit(1); }, 90_000);

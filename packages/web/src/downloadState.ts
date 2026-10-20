@@ -340,6 +340,15 @@ export function noNetwork(navOnline: boolean, linkOpen: boolean): boolean {
  * tapped (`local`) is theirs whatever the switch says, and one already
  * downloading is in flight whatever it was.
  */
+/**
+ * A stopped download whose file the desktop no longer has (http 404/410, the
+ * wording both engines use). Retrying it only fetches the same refusal, so its
+ * words say "gone" and offer removal, never "tap to retry".
+ */
+export function pullGone(r: Pick<PullRecord, "state" | "error">): boolean {
+  return r.state === "failed" && /^http (404|410)\b/.test(r.error ?? "");
+}
+
 export function stripRows<R extends Pick<PullRecord, "state" | "local">>(records: readonly R[], auto: boolean): R[] {
   return records.filter((r) => r.state !== "done" && (auto || !!r.local || r.state === "downloading"));
 }

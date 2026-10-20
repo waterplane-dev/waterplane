@@ -13,6 +13,7 @@
 //     agents must not edit one checkout)
 //   - the mode rides on limit.config, so every client agrees on it
 // Portable: throwaway root, stub claude (node), tiny timing knobs via env.
+import { watchdog } from "./lib-watchdog.mjs";
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -201,4 +202,4 @@ bootWait(PORT, 800, async () => {
   ws.on("error", (e) => fail("ws error " + e.message));
 });
 
-setTimeout(() => fail("timeout"), 45000);
+watchdog(() => fail("timeout"));

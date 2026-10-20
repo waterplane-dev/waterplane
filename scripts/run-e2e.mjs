@@ -407,6 +407,8 @@ function nextRunnable(queue) {
 }
 
 const failures = [];
+/** A failed script's whole output, for the recap at the very end. */
+const failedOutput = new Map();
 const wallStart = Date.now();
 
 async function runAndReport(file) {
@@ -415,17 +417,18 @@ async function runAndReport(file) {
   const started = Date.now();
   const live = JOBS === 1;
   const out = [];
-  const say = live ? (d) => process.stdout.write(d) : (d) => out.push(Buffer.isBuffer(d) ? d : Buffer.from(String(d)));
+  const keep = (d) => out.push(Buffer.isBuffer(d) ? d : Buffer.from(String(d)));
+  const say = live ? (d) => { process.stdout.write(d); keep(d); } : keep;
   if (live) console.log(`\n──────── ${file} ────────`);
   let code = 1;
   try { code = await runOne(file, say); } finally { for (const p of ports) busyPorts.delete(p); }
   const secs = (Date.now() - started) / 1000;
   thisTimes[file] = Math.round(secs);
   const verdict = code === 0 ? `[run-e2e] ${file} passed (${secs.toFixed(1)}s)` : `[run-e2e] ${file} FAILED with exit ${code} (${secs.toFixed(1)}s)`;
-  if (code !== 0) failures.push(file);
+  const tail = Buffer.concat(out).toString("utf8");
+  if (code !== 0) { failures.push(file); failedOutput.set(file, tail); }
   if (live) { (code === 0 ? console.log : console.error)(verdict); return; }
   // One block per script, whole, in the order scripts FINISH — never two scripts' lines mixed.
-  const tail = Buffer.concat(out).toString("utf8");
   process.stdout.write(`\n──────── ${file} ────────\n${tail}${tail.endsWith("\n") || !tail ? "" : "\n"}${verdict}\n`);
 }
 
@@ -481,7 +484,63 @@ if (TIMES_FILE && Object.keys(thisTimes).length) {
   } catch { /* an ordering hint; never worth failing a run over */ }
 }
 
+/**
+ * Each script that failed in the pool runs ONCE more, alone, so the summary can say which kind
+ * of failure it was: one that fails alone too is a plain break; one that passes alone failed
+ * only beside its siblings — a timing window in the test or the code that load stretched.
+ * That second kind STILL fails the run. Passing alone does not make it right (e2e-search's
+ * was a real race in the test that load exposed), and a gate that waved it through would let
+ * it be pushed and never looked at again; the verdict exists so nobody spends the first ten
+ * minutes re-running it by hand to find out which kind it is.
+ * Only for a few: more than RETRY_MAX failing at once is a break, and re-running them would
+ * only make the refused push slower. `E2E_RETRY_ALONE=0` turns it off.
+ */
+const RETRY_MAX = 3;
+const aloneVerdict = new Map(); // file → true passed alone / false failed alone too
+const retrying = JOBS > 1 && failures.length > 0 && failures.length <= RETRY_MAX && process.env.E2E_RETRY_ALONE !== "0";
+if (retrying) {
+  for (const file of failures) {
+    console.log(`\n[run-e2e] ${file} failed beside other scripts — running it once more alone, to tell a load flake from a break`);
+    const out = [];
+    const started = Date.now();
+    const code = await runOne(file, (d) => out.push(Buffer.isBuffer(d) ? d : Buffer.from(String(d))));
+    const secs = ((Date.now() - started) / 1000).toFixed(1);
+    aloneVerdict.set(file, code === 0);
+    if (code === 0) { console.log(`[run-e2e] ${file} passed alone (${secs}s)`); continue; }
+    const text = Buffer.concat(out).toString("utf8");
+    failedOutput.set(file, text); // the alone run's lines: no sibling's load in them
+    process.stdout.write(`\n──────── ${file} (alone) ────────\n${text}${text.endsWith("\n") || !text ? "" : "\n"}[run-e2e] ${file} FAILED alone too with exit ${code} (${secs}s)\n`);
+  }
+}
+
+/**
+ * The lines that say WHY, out of a failed script's output: every FAIL line with the indented
+ * lines under it (e2e-halt prints what survived there), the runner's own kill notice, or the
+ * last few lines when the script died without a FAIL. Printed in the summary because a push
+ * refused from the phone shows only the last lines of the output — the script's own block
+ * had scrolled out of that view, and with it the one line that named the cause.
+ */
+const RECAP_LINES = 12;
+function whyLines(text) {
+  const lines = text.split("\n");
+  const out = [];
+  for (let i = 0; i < lines.length && out.length < RECAP_LINES; i++) {
+    if (!/^\s*FAIL\b|exceeded \d+s — killing|failed to start|^\[run-e2e\] .*: derives a port/.test(lines[i])) continue;
+    out.push(lines[i]);
+    for (let j = i + 1; j < lines.length && /^\s+\S/.test(lines[j]) && j <= i + 6 && out.length < RECAP_LINES; j++) out.push(lines[j]);
+  }
+  if (!out.length) out.push(...lines.filter((l) => l.trim()).slice(-5));
+  return out.map((l) => (l.length > 200 ? l.slice(0, 199) + "…" : l));
+}
+const kindOf = (file) => !aloneVerdict.has(file) ? ""
+  : aloneVerdict.get(file) ? " — passes alone: fails only beside other scripts, a timing window load stretched (still a failure)"
+  : " — fails alone too";
+
 const wall = Math.round((Date.now() - wallStart) / 1000);
 console.log(`\n════════ ${scripts.length - failures.length}/${scripts.length} e2e scripts passed in ${wall}s (jobs ${JOBS}) ════════`);
-for (const f of failures.sort()) console.error(`  FAILED  ${f}`);
+if (failures.length > RETRY_MAX && JOBS > 1) console.error(`  (${failures.length} failed at once — not re-run alone; that many is a break, not load)`);
+for (const f of failures.sort()) {
+  console.error(`  FAILED  ${f}${kindOf(f)}`);
+  for (const l of whyLines(failedOutput.get(f) ?? "")) console.error(`      ${l}`);
+}
 process.exit(failures.length ? 1 : 0);

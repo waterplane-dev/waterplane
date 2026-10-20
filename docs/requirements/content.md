@@ -18,3 +18,13 @@ Spaces and line breaks are preserved in the waiting-for-answer question card.
 - asked: 2026-10-02
 - shipped: cfb4c7a
 
+### R-content-005 · shipped
+The privacy page states that nothing leaves the owner's desktop or tailnet, there is no analytics, what the phone and host store, who is responsible, and a private contact address.
+- asked: 2026-10-15
+- shipped: dada7d99
+
+### R-content-006 · shipped
+The app never says there is no waterplane server; it says the user's desktop is the server and nothing is hosted.
+- asked: 2026-10-15
+- shipped: 72097f48
+

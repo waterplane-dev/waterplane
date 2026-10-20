@@ -10,7 +10,7 @@
  * feature needs it, not before.
  */
 export type {
-  Availability, CommandDef, ConnInfo, ContributionIcon, CoreApi, DurableOp, FeatureManifest, LauncherItemCount, LauncherItemDef, LedgerSummary, MenuItemDef, LedgerViewDef, LedgerViewParts, LedgerViewProps,
+  Availability, CommandDef, ConnInfo, ContributionIcon, CoreApi, DurableOp, FeatureManifest, LauncherItemCount, LauncherItemDef, LedgerSummary, MenuItemDef, SecretFillContext, SecretFillerDef, LedgerViewDef, LedgerViewParts, LedgerViewProps,
   MessageHandlers, QueueBacklogOpts, RepoActionDef, RepoChipCount, RepoChipDef, ReturnTo, SessionViewDef, SettingsGroupId, SettingsRowsDef, SetupRowDef, SheetDef, SheetId,
   ToolbarItemDef, UploadApi, UploadBuf, UploadProgress,
 } from "./types.ts";
