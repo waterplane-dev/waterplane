@@ -1,6 +1,7 @@
 // The Marketplace / Open VSX listing pictures: the packaged .vsix in a real VS Code, over a fictional
 // repo (`todo-garden`) and a generated Claude Code session whose token shape is scaled from real
-// use — cache reads dwarfing output, a subagent, a cold start after a long break, a compaction.
+// use — cache reads dwarfing output, a subagent, a cold start after a long break, a compaction —
+// and sixteen weeks of generated git history for the Repo health view to measure.
 // Names are fictional; nothing is read from your own ~/.claude or VS Code profile.
 //
 //   node scripts/screenshot.mjs [file.vsix]   (default: the newest waterplane-*.vsix here)
@@ -20,7 +21,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const pkg = resolve(here, "..");
 // The extension's ids are the ones its package.json declares; the suite reads them from the env.
 const manifest = JSON.parse(readFileSync(join(pkg, "package.json"), "utf8"));
-const VIEWS = ["session", "all"];
+const VIEWS = ["session", "all", "health"];
 const WIDTH = 1600, HEIGHT = 1000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -170,16 +171,55 @@ execFileSync("unzip", ["-q", vsix, "-d", dirs.unpacked]);
 
 const gitEnv = { ...process.env };
 delete gitEnv.GIT_DIR; delete gitEnv.GIT_WORK_TREE; delete gitEnv.GIT_INDEX_FILE;
-const git = (...a) => execFileSync("git", ["-C", work, ...a], { stdio: "ignore", env: gitEnv });
-git("init", "-q", "-b", "main");
-writeFileSync(join(work, "CLAUDE.md"), "# todo-garden\n\nA plant-care to-do app (React, Vite, IndexedDB).\n\n" +
-  Array.from({ length: 40 }, (_, i) => `- Rule ${i + 1}: keep the schedule store the one place a watering date is computed.`).join("\n") + "\n");
-writeFileSync(join(work, "index.ts"), "export const garden = [];\n");
-git("add", "-A");
-git("-c", "user.name=demo", "-c", "user.email=demo@example.invalid", "commit", "-q", "-m", "Start the garden");
+const git = (a, env = {}) => execFileSync("git", ["-C", work, ...a], { stdio: "ignore", env: { ...gitEnv, ...env } });
+const DAY = 86_400_000;
+git(["init", "-q", "-b", "main"]);
+{ const s0 = seed; writeGardenHistory(); seed = s0; } // the sessions keep the numbers they drew before the history
+
+/**
+ * Sixteen weeks of todo-garden's history, a commit most days, for the Repo health view to measure:
+ * PlantList.tsx grows past 900 lines and is split in week 14, a helper is pasted into two files
+ * (duplication), a few exports go unused and CLAUDE.md gains a rule now and then.
+ */
+function writeGardenHistory() {
+  const DAYS = 112;
+  const src = join(work, "src");
+  mkdirSync(src, { recursive: true });
+  const fn = (file, i) => `export function ${file}${i}(n: number): number {\n  const step = ${i} * n + ${(i * 7) % 13};\n  return step > ${i * 3} ? step - ${i} : step + ${i};\n}\n`;
+  const body = (file, n, from = 0) => Array.from({ length: n }, (_, i) => fn(file, from + i)).join("\n");
+  const pasted = "export function wateringLabel(days: number): string {\n  if (days <= 0) return \"water today\";\n  if (days === 1) return \"water tomorrow\";\n" +
+    "  if (days < 7) return `water in ${days} days`;\n  const weeks = Math.round(days / 7);\n  return weeks === 1 ? \"water next week\" : `water in ${weeks} weeks`;\n}\n";
+  const files = { list: 20, schedule: 6, sync: 0, calendar: 0, exporter: 0, card: 0 };
+  let rules = 8;
+  for (let d = 0; d < DAYS; d++) {
+    if (d % 7 === 5 || (d % 7 === 6 && d % 3)) continue; // most weekends off
+    if (d < 92) files.list += between(1, 4); else if (d === 92) { files.card = Math.round(files.list * 0.45); files.list = Math.round(files.list * 0.35); }
+    else files.list += between(0, 1);
+    files.schedule += between(0, 2);
+    if (d >= 20) files.sync += between(0, 2);
+    if (d >= 45) files.calendar += between(0, 2);
+    if (d >= 70) files.exporter += between(0, 1);
+    if (d % 9 === 0) rules += between(1, 4);
+    const write = (name, key) => { if (files[key]) writeFileSync(join(src, name), body(key, files[key]) + (key === "calendar" || key === "exporter" ? "\n" + pasted : "")); };
+    write("PlantList.tsx", "list"); write("schedule.ts", "schedule"); write("sync.ts", "sync");
+    write("calendar.tsx", "calendar"); write("exportCsv.ts", "exporter"); write("PlantCard.tsx", "card");
+    // Tests reach some modules (calendar and the export never get one), so the health index has a week to score.
+    const test = (name, mod) => writeFileSync(join(work, "test", `${name}.test.ts`), `import { ${mod}0 } from "../src/${name}.ts";\n\ntest("${name}", () => expect(${mod}0(1)).toBeDefined());\n`);
+    mkdirSync(join(work, "test"), { recursive: true });
+    test("schedule", "schedule");
+    if (d >= 30) test("sync", "sync");
+    writeFileSync(join(work, "test", "PlantList.test.ts"), `import { list0 } from "../src/PlantList.tsx";\n${d >= 92 ? "import { card0 } from \"../src/PlantCard.tsx\";\n" : ""}\ntest("list", () => expect(list0(1)).toBeDefined());\n`);
+    writeFileSync(join(src, "index.ts"),"export { list0 } from \"./PlantList.tsx\";\nexport { schedule0 } from \"./schedule.ts\";\n");
+    writeFileSync(join(work, "CLAUDE.md"), "# todo-garden\n\nA plant-care to-do app (React, Vite, IndexedDB).\n\n" +
+      Array.from({ length: rules }, (_, i) => `- Rule ${i + 1}: keep the schedule store the one place a watering date is computed.`).join("\n") + "\n");
+    const when = new Date(Date.now() - (DAYS - d) * DAY + between(9, 18) * 3600_000).toISOString();
+    git(["add", "-A"]);
+    git(["-c", "user.name=demo", "-c", "user.email=demo@example.invalid", "commit", "-q", "--allow-empty", "-m", PROMPTS[d % PROMPTS.length]],
+      { GIT_AUTHOR_DATE: when, GIT_COMMITTER_DATE: when });
+  }
+}
 
 const slugDir = (cwd) => join(dirs.claude, "projects", cwd.replace(/[^a-zA-Z0-9]/g, "-"));
-const DAY = 86_400_000;
 // The week before: shorter sessions in todo-garden and two other fictional repos.
 for (let d = 6; d >= 1; d--) {
   for (const [k, name] of ["todo-garden", "pocket-notes", "trail-log"].entries()) {
@@ -208,7 +248,8 @@ writeFileSync(join(dirs.user, "User", "settings.json"), JSON.stringify({
 }));
 
 const port = await new Promise((res) => { const s = createServer().listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => res(p)); }); });
-const env = { ...process.env, CLAUDE_CONFIG_DIR: dirs.claude, WP_SHOT_SIG: dirs.sig, WP_SHOT_VIEWS: VIEWS.join(","), WP_SHOT_EXT: manifest.name, WP_SHOT_PUBLISHER: manifest.publisher };
+const env = { ...process.env, CLAUDE_CONFIG_DIR: dirs.claude, WP_SHOT_SIG: dirs.sig, WP_SHOT_VIEWS: VIEWS.join(","), WP_SHOT_EXT: manifest.name, WP_SHOT_PUBLISHER: manifest.publisher,
+  WP_SHOT_STORAGE: join(dirs.user, "User", "globalStorage", `${manifest.publisher}.${manifest.name}`.toLowerCase()) };
 for (const k of Object.keys(env)) if (k.startsWith("VSCODE_") || k === "ELECTRON_RUN_AS_NODE") delete env[k];
 
 const proc = spawn(bin, [

@@ -15,6 +15,10 @@ export function WeightView({ doc, why, prompts, terminal, post }: {
   const r = doc.reading;
   const skills = [...doc.skills].sort((a, b) => b.descChars - a.descChars);
   const descTotal = skills.reduce((n, s) => n + s.descChars, 0);
+  // Nothing to weigh is a sentence, not "~0 tokens" over a half-and-half bar of two zeros.
+  if (doc.claudeMdChars === 0 && skills.length === 0) {
+    return <Absent>This folder has no CLAUDE.md, .claude/CLAUDE.md or skills, so Claude Code carries nothing from it on every turn.</Absent>;
+  }
   const groom = prompts.find((p) => p.id === "groom-claudemd");
   const shrink = prompts.find((p) => p.id === "shrink-skill-descs");
   return (

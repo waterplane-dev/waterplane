@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1 - 2026-10-20
+
+- A folder with no CLAUDE.md or skills says it carries nothing always-on, instead of drawing ~0 tokens over an empty bar.
+- Repo health on a folder that is not a git repository says so once, in the view and on the tree's row, instead of quoting the engine's exit twice and offering Forget.
+- The listing shows the Repo health view too: a third screenshot, over a fictional repo's generated git history.
+
 ## 0.3.0 - 2026-10-19
 
 - A fresh install from the desktop app's install build loads itself: every open window restarts its extensions once, a few seconds after the install (the build's `restart` option, on by default). No more hand reload.

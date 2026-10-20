@@ -6,7 +6,9 @@ What each prompt cost, the context window over time, the token split and what yo
 
 ![All sessions: the last seven days' tokens and cost by kind, and where the week went, per repo and hour](media/listing-all.png)
 
-*Fictional repos and a generated session, its token shape scaled from real use (`npm run screenshots`).*
+![Repo health: a fictional repo's health score over sixteen weeks, held down by its untested modules, with what each reading added or took away](media/listing-health.png)
+
+*Fictional repos, a generated session (its token shape scaled from real use) and a generated git history (`npm run screenshots`).*
 
 ## What it shows
 

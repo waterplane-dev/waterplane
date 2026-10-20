@@ -11,6 +11,7 @@ import type { HealthDoc, SessionSummary, TabId, WeightDoc, CorpusDoc } from "./p
 import { fmtAge, isLive, isRunning } from "./data/running.js";
 import { seriesValueWords } from "../../web/src/repoHealthWords.js";
 import { signedWhole, weekWhenWords } from "../../web/src/healthIndexWords.js";
+import { NOT_GIT } from "./health/sourcewords.js";
 
 export interface NavState {
   folders: string[];
@@ -223,7 +224,9 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
           ? `${fmtUsd(s.corpus.cost.total)} · ${fmtCount(s.corpus.conversations)} conversations`
           : `${fmtCount(s.corpus.conversations)} conversations`;
       case "always-on":
-        return s.weight ? `~${fmtCount(s.weight.reading.alwaysOnTokens)} tokens every turn` : "nothing measured";
+        if (!s.weight) return "nothing measured";
+        if (s.weight.claudeMdChars === 0 && s.weight.skills.length === 0) return "no CLAUDE.md or skills here";
+        return `~${fmtCount(s.weight.reading.alwaysOnTokens)} tokens every turn`;
       case "health": {
         if (s.healthRunning) return "measuring…";
         // The score leads, as on the phone's launcher chip (trend second, the worst alert level named);
@@ -236,7 +239,9 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
         }
         const p95 = s.health?.plot?.series.find((x) => x.key === "size.p95") ?? null;
         if (p95) return `${p95.label} ${seriesValueWords(p95.last, p95.unit)}`;
-        return s.health?.series ? "measured" : "not measured yet";
+        if (s.health?.series) return "measured";
+        if (s.health?.readError) return NOT_GIT.test(s.health.readError) ? "not a git repository" : "could not be read";
+        return "not measured yet";
       }
     }
   }

@@ -97,3 +97,12 @@ export function notRunWords(plot: RepoHealthPlot | null | undefined, file: strin
 export function ownAddNoteWords(): string {
   return `The ${BRAND.name} desktop app runs what that file declares; this extension starts only git, so here they would show as absent.`;
 }
+
+/** The engine's stderr when the folder has no `.git` — git's own phrase, so it survives an engine bump. */
+export const NOT_GIT = /not a git repository/i;
+
+/** A folder with no git history, said plainly instead of quoting the engine's exit: nothing was
+ *  wrong with the engine, and no rebuild answers it — only `git init` (or opening the repo root) does. */
+export function notGitWords(): string {
+  return "This folder is not a git repository. Repo health reads git history, one row per first-parent commit, so there is nothing to measure here. Open the repository's root folder, or run git init, then build the series.";
+}
