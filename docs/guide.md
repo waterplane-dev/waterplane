@@ -19,9 +19,9 @@ features, one plain sentence each.
 
 ## The first minute
 
-<a href="https://waterplane-dev.github.io/media/first-look-e3bfacdfc2.mp4"><img src="media/first-look.gif" width="270" alt="The real claude terminal on a phone works a typed prompt; a screenshot arrives, is circled and sent back, and the after screenshot shows the fix"></a>
+<a href="https://waterplane-dev.github.io/media/first-look-8a2bff9544.mp4"><img src="media/first-look.gif" width="270" alt="The real claude terminal on a phone works a typed prompt; a screenshot arrives, is circled and sent back, and the after screenshot shows the fix"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/first-look-e3bfacdfc2.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/first-look-8a2bff9544.mp4), with pause and seek.*
 
 1. **A live session.** The real `claude` terminal in a fictional repo; the demo types a prompt
    into the compose box and sends it, then tool lines stream and the context meter ticks. It is the
@@ -47,9 +47,9 @@ Try it: `?demo=first-look`
 On a desktop that has never run a session from the phone, the first-run card builds a hello-world
 page: three questions, a list of what it will create, one Go.
 
-<a href="https://waterplane-dev.github.io/media/first-app-e368764786.mp4"><img src="media/first-app.gif" width="270" alt="A fresh desktop's first-run card; a plan listing what will be created; Go copies a template and builds a page you open and tap on the phone"></a>
+<a href="https://waterplane-dev.github.io/media/first-app-5f754ff4ab.mp4"><img src="media/first-app.gif" width="270" alt="A fresh desktop's first-run card; a plan listing what will be created; Go copies a template and builds a page you open and tap on the phone"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/first-app-e368764786.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/first-app-5f754ff4ab.mp4), with pause and seek.*
 
 The page it builds lands in `.claude/outbox/` and opens on the phone; the session then opens with a
 suggested first prompt in the box. It needs a connected desktop, so there is no demo for it.
@@ -70,9 +70,9 @@ Try it: `?demo=gallery-and-files`
 
 *Android app developers only (optional).*
 
-<a href="https://waterplane-dev.github.io/media/apk-install-e275846493.mp4"><img src="media/apk-install.gif" width="490" alt="Your phone circles a spot on a screenshot of the app, Claude Code adds a logo there, the build runs, the notifications on the phone with the app (a second one here, or the same one) say the build succeeded and the update is ready to install, one tap on Install updates it, and it opens with the logo in the circled spot"></a>
+<a href="https://waterplane-dev.github.io/media/apk-install-a541f6b014.mp4"><img src="media/apk-install.gif" width="490" alt="Your phone circles a spot on a screenshot of the app, Claude Code adds a logo there, the build runs, the notifications on the phone with the app (a second one here, or the same one) say the build succeeded and the update is ready to install, one tap on Install updates it, and it opens with the logo in the circled spot"></a>
 
-*Loops. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/apk-install-e275846493.mp4), with pause and seek.*
+*Loops. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/apk-install-a541f6b014.mp4), with pause and seek.*
 
 A build command saved for a repo runs from the phone without a Claude session, so it spends no
 tokens. When it produces an APK, every phone running the developer build of the Android app that
@@ -135,9 +135,9 @@ Try it: `?demo=numbers`
 
 ## Repo health
 
-<a href="https://waterplane-dev.github.io/media/repo-health-a1398d5f73.mp4"><img src="media/repo-health.gif" width="270" alt="A repo vibe-coded for eight months scores 46 out of 100: one 8,397-line file caps the score, two severe warnings name it, and the trend slides from 100 in February"></a>
+<a href="https://waterplane-dev.github.io/media/repo-health-0e9419dde7.mp4"><img src="media/repo-health.gif" width="270" alt="A repo vibe-coded for eight months scores 46 out of 100: one 8,397-line file caps the score, two severe warnings name it, and the trend slides from 100 in February"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/repo-health-a1398d5f73.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/repo-health-0e9419dde7.mp4), with pause and seek.*
 
 Each repo has one health score out of 100, against fixed good values for five readings: file length
 (the longest file and the file the average line sits in), files reworked right after an edit,

@@ -118,12 +118,14 @@ test("the hook blob carries every lifecycle event the host listens for", () => {
   const settings = JSON.parse(HOOKS);
   assert.deepEqual(
     Object.keys(settings.hooks).sort(),
-    ["Notification", "SessionEnd", "SessionStart", "Stop", "UserPromptSubmit"],
+    ["Notification", "PreToolUse", "SessionEnd", "SessionStart", "Stop", "UserPromptSubmit"],
     "dropping one of these degrades that signal to silence-guessing, invisibly",
   );
   const cmd = settings.hooks.Stop[0].hooks[0].command;
   assert.ok(cmd.includes(`http://127.0.0.1:${PORT}/api/hook`), "the sink is loopback-only");
   assert.ok(cmd.endsWith("|| true"), "hook delivery is best-effort and must never block a turn");
+  assert.deepEqual(settings.hooks.PreToolUse.map((e) => e.matcher), ["AskUserQuestion"], "PreToolUse fires for the one tool whose box needs its words, no other");
+  assert.equal(settings.hooks.PreToolUse[0].hooks[0].command, cmd, "…through the same silent sink, which decides nothing");
 });
 
 test("an absent backend id is claude; an unknown one is REFUSED in words", () => {

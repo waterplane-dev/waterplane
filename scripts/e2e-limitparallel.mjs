@@ -54,6 +54,9 @@ const fail = (m) => {
   host.kill(); process.exit(1);
 };
 const ok = (m) => console.log("ok:", m);
+// What the run was waiting on when the watchdog fired: the phase, and per session
+// how far it got — so a hang names the step that never happened.
+let where = () => "the host never answered";
 
 bootWait(PORT, 800, async () => {
   const mk = async (name) => {
@@ -78,6 +81,13 @@ bootWait(PORT, 800, async () => {
   let phase = "boot";
   let probeId = null;             // the first session ever TYPED INTO by the resume queue
   let sawParallel = false;        // two sessions resuming at once, in different repos
+  const typedAt = new Map();      // session id → when its first attempt was seen (for the failure message)
+  const CLEAR_MS = 15000;         // every verdict in, after the last continue — a loaded machine's deadline
+  let clearDeadline = null;
+  where = () => `phase ${phase}; ` + ([...cwdOf.keys()].map((id) => {
+    const l = lim.get(id);
+    return `${id}: ${!l ? "no limit state yet" : `blocked=${l.blocked} attempts=${l.attempts} resuming=${!!l.resuming} queuePos=${l.queuePos ?? "-"}`}`;
+  }).join("; ") || "no session created");
 
   // Two sessions in alpha and one in beta: enough for both halves of `repo`
   // mode. Alpha's pair must never overlap; alpha and beta must.
@@ -150,6 +160,7 @@ bootWait(PORT, 800, async () => {
     }
     if (m.t !== "session.updated" || !m.session.limit) return;
     lim.set(m.session.id, m.session.limit);
+    if (m.session.limit.attempts >= 1 && !typedAt.has(m.session.id)) typedAt.set(m.session.id, Date.now());
     { const l = m.session.limit; trail.push(`${Date.now() % 100000} lim ${m.session.id} blocked=${l.blocked} attempts=${l.attempts} resuming=${!!l.resuming} prompt=${!!m.session.prompt}`); }
     checkParallel();
     advance();
@@ -189,9 +200,33 @@ bootWait(PORT, 800, async () => {
     // ── 3. the probe works, then the rest go — one per worktree at a time ──
     if (phase === "running" && sawParallel && all.every((l) => l.attempts >= 1)) {
       phase = "done";
+      // The last "continue" has only just been TYPED here; its verdict is the
+      // next idle scan after the stub's answer (IDLE_PING_MS of quiet, then the
+      // grid read). A fixed 1.5 s for that once failed a loaded run in which the
+      // last session's block cleared 1.6 s after its continue — the host logged
+      // the resume a moment after the run had given up. So this phase WAITS on
+      // the fact itself (every block cleared, asked on every frame below) with
+      // a deadline sized for a loaded machine, and a miss says which step each
+      // session still lacks.
+      clearDeadline = setTimeout(() => {
+        const stuck = [...lim.entries()].filter(([, l]) => l.blocked).map(([id, l]) => {
+          const step = !l.attempts ? "never typed into (attempts=0)"
+            : l.resuming ? `typed into ${Date.now() - (typedAt.get(id) ?? Date.now())} ms ago, verdict never came in`
+            : "typed into and released, but still blocked (the resume's verdict was a wall)";
+          return `${id} ${cwdOf.get(id) === A ? "alpha" : "beta"}: ${step}`;
+        });
+        fail(`${stuck.length} session(s) still blocked ${CLEAR_MS} ms after the last resume was typed — the resuming stub should have cleared every block: ${stuck.join("; ")}`);
+      }, CLEAR_MS);
+    }
+    // Every block down — then held a moment, as the fixed wait used to hold it:
+    // a resumed session the next repaint re-blocks is the bug `checkLimit`'s
+    // after-the-echo rule exists for, and a pass must not be taken before it could show.
+    if (phase === "done" && all.every((l) => !l.blocked)) {
+      phase = "settling";
+      clearTimeout(clearDeadline);
       setTimeout(() => {
-        const stillBlocked = [...lim.values()].filter((l) => l.blocked).length;
-        if (stillBlocked) fail(`${stillBlocked} session(s) still blocked — the resuming stub should have cleared every block`);
+        const back = [...lim.entries()].filter(([, l]) => l.blocked).map(([id]) => id);
+        if (back.length) fail(`${back.length} session(s) blocked again after every block had cleared: ${back.join(", ")}`);
         ok("probe went alone, then alpha and beta resumed together while alpha's own pair stayed serialized");
         console.log("PASS: resume release mode — probe first, parallel across repos, never two in one worktree");
         host.kill();
@@ -202,4 +237,6 @@ bootWait(PORT, 800, async () => {
   ws.on("error", (e) => fail("ws error " + e.message));
 });
 
-watchdog(() => fail("timeout"));
+// Boot, up to 20 s for the clients to go quiet and up to CLEAR_MS for the
+// verdicts: past the floor on a loaded machine, so the watchdog stays a hang guard.
+watchdog(() => fail(`timeout — ${where()}`), 60_000);

@@ -1,6 +1,6 @@
 ---
 name: heuristics
-description: waterplane's regex heuristics over the claude TUI — everything read off the rendered screen: choice boxes (prompt.ts, askbox.ts, planbox.ts), the question with no box (question.ts), sign-in and shell links, usage-limit and spend walls with the resume queue (limit.ts, limitlog.ts, limitretry.ts, spendwall.ts), the context meter (context.ts), permmode.ts, turn boundaries (Stop hook, /compact), claudeversion.ts and the health record (clihealth.ts). Load BEFORE editing any of those or anything else that reads the rendered screen, changing how a box is detected, merged or answered, or what counts as a turn ending. These degrade to null, never to a wrong number.
+description: waterplane's regex heuristics over the claude TUI — everything read off the rendered screen: choice boxes (prompt.ts, askbox.ts, planbox.ts), the question with no box (question.ts), sign-in and shell links, usage-limit and spend walls with the resume queue (limit.ts, limitlog.ts, limitretry.ts, spendwall.ts), the context meter (context.ts), permmode.ts, keyhints.ts, turn boundaries (Stop hook, /compact), claudeversion.ts and the health record (clihealth.ts). Load BEFORE editing any of those or anything else that reads the rendered screen, changing how a box is detected, merged or answered, or what counts as a turn ending. These degrade to null, never to a wrong number.
 ---
 
 # waterplane heuristics over the TUI
@@ -94,8 +94,10 @@ Narrative and incidents: [protocol-and-security.md](../../../docs/notes/protocol
   signal, never an interlock; it blocks nothing**: `sessionWall`/`laneBusy` are untouched, because
   typing into that session is the correct move. `packages/host/test/question.test.mjs`,
   `e2e-askprose.mjs`.
-- `askbox.ts` — the question as the CLI wrote it: `AskUserQuestion` is a TOOL CALL, so its full text
-  is in the jsonl before anyone answers. Only a PENDING call counts, newest wins, **matching is by
+- `askbox.ts` — the question as the CLI wrote it: `AskUserQuestion` is a TOOL CALL — in the jsonl,
+  or, since 2.1.304 writes it there only once ANSWERED, in the `PreToolUse` hook matched to that one
+  tool (`claude.ts`; `Session.askHook`, `asksFromCall`, refused once the log shows its result). Late
+  enrichment is ADDED by `mergeBox` (`desc` onto a published row). Only a PENDING call counts, newest wins, **matching is by
   LABEL, never index**, two labels must agree AND be a majority. Those fields are **outside
   `promptFingerprint`** so late enrichment cannot invalidate a queued answer. `recoverHead` puts
   back the options a TALL box scrolled off its own top — exact, because the log's option *i* IS the
@@ -130,17 +132,25 @@ Narrative and incidents: [protocol-and-security.md](../../../docs/notes/protocol
   this one must not). Ultracode: that label, else the NEWEST `Ultracode on (this session only)` /
   `Ultracode off` / refusal row; a picker's mid-row `Ultracode on` never counts. Real grids in
   `packages/host/test/fixtures/permmode/`.
+- `keyhints.ts` — the shortcuts the CLI names on screen (`(shift+tab to cycle)`, a picker's `s for
+  this session only`) → `SessionInfo.keyHints`, chips at the head of the phone's key row. Read ONLY
+  from the footer under the newest composer frame (same ≤6 rows as `permmode.ts`, the person's
+  status line included on purpose), else the last 3 rows when a picker replaced the composer —
+  never the transcript. Only keys the row lacks (`shared/keyhint.ts`'s `keyHintBytes`; `ctrl+c` is
+  the row's `^C`, `ctrl+g` opens an editor the phone cannot leave); a bare letter only on a row with
+  another hint and only lower case; a `…` verb or one a wrap cut is dropped. Re-read on the quiet
+  tick with the mode (`livemode.ts`); the phone hides a tapped one-shot chip until the list changes.
 - `context.ts` — the context meter off the rendered screen: `PCT_RES` (percent phrasings: "Context
   left until auto-compact: N%", "N% context left", "Context remaining: N%"), `RATIO_RE` ("123k/200k
   tokens"). **`leftPct` is percent FREE**, never used; `usedTok`/`totalTok`
   only when an absolute figure is printed; null when no shape matches. Its health gate
   (`METER_GATE_RE`) is deliberately NOT built from the matchers it checks, so it can disagree with
   them, and requires a figure on a non-conversation row. Pinned by e2e.
-- `packages/shared/src/claudeversion.ts` — `TESTED_CLAUDE_VERSION` (now `2.1.289`): the newest `claude`
-  build a person last verified these heuristics against. **Bump it when you re-verify**; the doctor
-  warns for NEWER only (no minimum is claimed), unparsable ⇒ no warning. It lags this file: the
-  unnumbered trust box above is described from 2.1.293 and `/fork` interception from ≥ 2.1.291, so the
-  constant does not vouch for them until someone re-verifies and bumps it (the owner's call).
+- `packages/shared/src/claudeversion.ts` — `TESTED_CLAUDE_VERSION` (now `2.1.304`): the newest `claude`
+  build a person last verified these heuristics against. **Bump it when you re-verify** (the owner's
+  call); the doctor warns for NEWER only (no minimum is claimed), unparsable ⇒ no warning. 2.1.304
+  rests on 8 harvested fixtures + the real-CLI smoke; the context meter, the limit notice and `/fork`
+  are not vouched by a 2.1.304 capture ([which](../../../docs/notes/protocol-and-security.md#claudeversionts--the-build-the-heuristics-were-last-verified-against)).
 - `clisuggest.ts` — the CLI's dim-text proposal for the next prompt, read off the empty composer by
   comparing the PLAIN render (holds the words) against the render with dim cells blanked (holds
   nothing); words that survive the blanking were typed, never a proposal; the generic `Try "how
@@ -159,6 +169,12 @@ Narrative and incidents: [protocol-and-security.md](../../../docs/notes/protocol
   Host side: **unset `noteHealth()` is a silent no-op**; writes and broadcasts DEBOUNCED; **notify on a
   verdict TRANSITION, never per observation**; the captured block-notice sample **must NEVER be routed
   into a PTY**.
+  **Fixture harvest** (`clifixtures.ts`): a `good` may carry a `fixture` THUNK; the store keeps ONE
+  redacted capture per signal per CLI version under `<state>/clifixtures/` — chrome rows verbatim,
+  every other row masked, a `shape` signal as a key skeleton (`shared`'s `fixtureSample`); the echo as
+  prompt+grid masked alike, the block notice ROT13'd (`FIXTURE_FORMS`). `tools/harvestfixtures.mjs --write`
+  copies them in with the role its reader (`test/signalreaders.mjs`) gives; a person reviews.
+  [Why](../../../docs/notes/testing-and-ops.md#harvested-screen-fixtures-clifixturests-toolsharvestfixturesmjs).
 - `limit.ts` — usage-limit banner + reset parsing → auto-continue, plus the **resume queue**
   (`sessions/resume.ts`, `releaseResume`): a limit is an ACCOUNT fact, so sessions block as a group
   on one reset instant. UI is `LimitSheet.tsx`. `LimitResumeMode` = `one` / `repo` / `all`, and **in

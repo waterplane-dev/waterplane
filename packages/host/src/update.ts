@@ -25,7 +25,9 @@
  *
  *   1. The route's own index — `brew outdated --cask claude-code`, or
  *      `npm view @anthropic-ai/claude-code version` compared against what is
- *      installed. Authoritative when the index is current.
+ *      installed. Authoritative when the index is current. The native installer
+ *      has no index of its own; it asks npm too (same releases, at the dist-tag
+ *      of claude's `autoUpdatesChannel`), and only when npm is there to ask.
  *   2. The CLI's own "Update available! Run: …" banner, scraped from PTY output
  *      (`noteBanner`). The CLI checks npm. On a Homebrew desktop that fires the
  *      moment npm is ahead **while the cask still lags** (measured: cask at
@@ -33,8 +35,8 @@
  *      with the on-screen nag even though brew has nothing to offer.
  *
  * `available = indexOutdated || bannerActive`. The banner self-clears once the
- * installed version changes (upgraded by ANY route), and — on the npm route
- * only — once the installed version equals what the registry offers, because
+ * installed version changes (upgraded by ANY route), and — on the npm and
+ * native routes only — once the installed version equals what the registry offers, because
  * there the index and the CLI's own reference are the same registry. On the
  * brew route they are not, which is exactly the lag above, so a cask that says
  * "current" may never silence an npm-sourced nag.
@@ -49,10 +51,12 @@
  * upgrading — and even swapping routes — is safe while sessions are running.
  */
 import { spawn } from "node:child_process";
-import { realpathSync, statSync } from "node:fs";
+import { readFileSync, realpathSync, statSync } from "node:fs";
+import { join } from "node:path";
 import type { InstallRoute, UpdateInfo } from "@waterplane/shared";
 import { cmpCliVersion, envName } from "@waterplane/shared";
 import { claudeBackend } from "./backends/index.js";
+import { claudeConfigDir } from "./claudeconfig.js";
 
 const CASK = "claude-code";
 const PKG = "@anthropic-ai/claude-code";
@@ -97,6 +101,20 @@ export function routeFromPath(p: string | undefined): InstallRoute {
 /** `a` vs `b` as dotted numbers — the one comparison lives in shared, beside
  *  the per-session restart rule that must agree with it. */
 export const cmpVersion = cmpCliVersion;
+
+/**
+ * The npm dist-tag a native install follows: claude's own `autoUpdatesChannel`
+ * setting ("latest" by default, or "stable"). Both are npm dist-tags, and asking
+ * `latest` for a stable-channel install would show an update `claude update`
+ * never takes — a nag nothing can clear. An unreadable or unknown value is "latest".
+ */
+export function nativeChannel(settingsJson: string | undefined): "latest" | "stable" {
+  try {
+    return JSON.parse(settingsJson ?? "{}")?.autoUpdatesChannel === "stable" ? "stable" : "latest";
+  } catch {
+    return "latest";
+  }
+}
 
 export interface ApplyStep { cmd: string; args: string[]; env?: Record<string, string> }
 export interface ApplyPlan { label: string; steps: ApplyStep[] }
@@ -279,6 +297,16 @@ export class UpdateChecker {
         const out = await run("npm", ["view", PKG, "version"], {});
         latest = /(\d+\.\d+\.\d+)/.exec(out.stdout || "")?.[1];
         this.indexOutdated = cmpVersion(latest, installed) > 0;
+      } else if (this.route === "native") {
+        // The native installer ships the same releases the npm registry lists, so
+        // the registry is this route's index too — when this machine has npm to ask
+        // it. Without npm (or offline) it degrades to the CLI's banner alone: absent,
+        // never an error, because npm was never this route's to need.
+        let settings: string | undefined;
+        try { settings = readFileSync(join(claudeConfigDir(), "settings.json"), "utf8"); } catch { /* no settings: default channel */ }
+        const out = await run("npm", ["view", `${PKG}@${nativeChannel(settings)}`, "version"], {}).catch(() => undefined);
+        latest = /(\d+\.\d+\.\d+)/.exec(out?.stdout || "")?.[1];
+        this.indexOutdated = cmpVersion(latest, installed) > 0;
       } else {
         // No index we may ask on this route's behalf. The CLI's own banner is
         // the only signal, and absent it we say nothing rather than guess.
@@ -296,11 +324,11 @@ export class UpdateChecker {
         // was when we first saw the nag (upgraded by any route: brew, npm, native).
         if (this.banner.atVersion == null) this.banner.atVersion = this.info.current;
         else if (this.info.current && this.info.current !== this.banner.atVersion) this.clearBanner();
-        // On npm, the index and the CLI's own reference are the SAME registry, so
+        // On npm (and native, which reads npm), the index and the CLI's own reference are the SAME registry, so
         // "installed === latest" really does resolve the nag. On brew they are two
         // different indexes — that gap IS the lag — so a current cask may never
         // silence an npm-sourced banner.
-        else if (this.route === "npm" && latest && this.info.current === latest) this.clearBanner();
+        else if ((this.route === "npm" || this.route === "native") && latest && this.info.current === latest) this.clearBanner();
       }
       this.recompute();
     } catch (err) {
@@ -314,7 +342,7 @@ export class UpdateChecker {
     this.info = {
       ...this.info,
       available: this.indexOutdated || !!this.banner,
-      source: this.indexOutdated ? (this.route === "npm" ? "npm" : "brew") : this.banner ? "cli" : undefined,
+      source: this.indexOutdated ? (this.route === "brew" ? "brew" : "npm") : this.banner ? "cli" : undefined,
     };
     this.onChange(this.info);
   }

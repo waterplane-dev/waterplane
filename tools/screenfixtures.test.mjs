@@ -140,3 +140,90 @@ test("--reading prints exactly one JSON number on stdout", () => {
   assert.match(out, /^\d+\n$/);
   assert.equal(typeof JSON.parse(out), "number");
 });
+
+// ── tools/harvestfixtures.mjs: the host's captures into the manifest ────
+
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { listSamples, leaks, planHarvest, withEntries, formatManifest, fixturePath } from "./harvestfixtures.mjs";
+
+const KNOWN = new Set(["prompt.box", "hook.pipe", "limit.reset"]);
+
+function captureDir(files) {
+  const dir = mkdtempSync(join(tmpdir(), "harvest-"));
+  for (const [rel, body] of Object.entries(files)) {
+    mkdirSync(join(dir, rel, ".."), { recursive: true });
+    writeFileSync(join(dir, rel), body);
+  }
+  return dir;
+}
+
+test("listSamples: a capture's version is its dir's X.Y.Z, and nothing else counts", (t) => {
+  const dir = captureDir({
+    "2.1.303/prompt.box.txt": "box",
+    "2.1.303/hook.pipe.json": "{}",
+    "2.1.303/not.asignal.txt": "x",
+    "2.1.303/prompt.box.md": "x",
+    "latest/prompt.box.txt": "x",
+    "2.1/prompt.box.txt": "x",
+    "2.1.302/prompt.box.txt": "older",
+  });
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const { samples, skipped } = listSamples(dir, KNOWN);
+  assert.deepEqual(samples.map((s) => `${s.version} ${s.id} ${s.ext}`), ["2.1.302 prompt.box txt", "2.1.303 hook.pipe json", "2.1.303 prompt.box txt"]);
+  assert.equal(skipped.length, 4, skipped.join("; "));
+  assert.ok(skipped.some((s) => s.startsWith("latest/")) && skipped.some((s) => s.startsWith("2.1/")));
+  assert.deepEqual(listSamples(join(dir, "missing"), KNOWN), { samples: [], skipped: [] });
+});
+
+test("leaks: a home path, an address or an opaque run refuses a sample; masked words do not", () => {
+  assert.deepEqual(leaks("❯ 1. Xxxxx xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx 0000000000000000000000000"), []);
+  assert.deepEqual(leaks("Enter to select · Esc to cancel\n~ <redacted:40>"), []);
+  assert.deepEqual(leaks(" /xxxxxxx/xx0xxx0x0x00xxxxxxxx_00x0000xx/X/xxxxx"), [], "a masked temp path");
+  assert.deepEqual(leaks('{ "additionalWorkingDirectories": "<string>" }'), [], "a schema key is words");
+  assert.deepEqual(leaks('{ "ephemeral_5m_input_tokens": "<number>" }'), [], "…digits and all");
+  assert.match(leaks('{ "toolu_014eSw5ZGDhNfrMw3JtzPhFA": {} }').join(), /opaque/);
+  assert.match(leaks("secret 3f9a1c0b7e2d4a6f8b1c3e5d7f9a0b2c").join(), /opaque/, "a hex secret");
+  assert.match(leaks("cwd /Users/alice/repo").join(), /home/);
+  assert.match(leaks("ask bob@example.com").join(), /email/);
+  assert.match(leaks("key sk-ant-abcdefghijklmnopqrstuvwxyz0123").join(), /opaque/);
+});
+
+test("planHarvest: role from the reader, cli from the version, a listed path is never added twice", () => {
+  const samples = [
+    { id: "prompt.box", version: "2.1.303", ext: "txt", file: "a" },
+    { id: "prompt.box", version: "2.1.302", ext: "txt", file: "b" },
+    { id: "hook.pipe", version: "2.1.303", ext: "json", file: "c" },
+    { id: "limit.reset", version: "2.1.303", ext: "txt", file: "d" },
+    { id: "prompt.box", version: "2.1.301", ext: "txt", file: "e" },
+  ];
+  const text = { a: "a box", b: "no box here", c: "{}", d: "anything", e: "/home/alice" };
+  const manifest = { _about: "x", signals: { "prompt.box": [{ path: fixturePath(samples[1]), role: "match" }] } };
+  samples.push({ id: "limit.reset", version: "2.1.304", ext: "txt", file: "f" });
+  text.f = "/Hfref/nyvpr"; // ROT13 of a home path: refused only once decoded
+  const plan = planHarvest(samples, manifest, {
+    read: (f) => text[f],
+    readSignal: (id, t) => (id === "limit.reset" ? null : t.includes("box") || t === "{}"),
+    decode: (id, t) => (id === "limit.reset" ? t.replace(/[a-z]/gi, (c) => String.fromCharCode(((c.toLowerCase().charCodeAt(0) - 97 + 13) % 26) + (c <= "Z" ? 65 : 97))) : t),
+  });
+  assert.deepEqual(plan.map((p) => [p.path, p.action, p.role ?? p.why]), [
+    ["screens/harvest-prompt.box-2.1.303.txt", "new", "match"],
+    ["screens/harvest-prompt.box-2.1.302.txt", "present", undefined],
+    ["screens/harvest-hook.pipe-2.1.303.json", "new", "match"],
+    ["screens/harvest-limit.reset-2.1.303.txt", "refused", "no fixture reader for this signal"],
+    ["screens/harvest-prompt.box-2.1.301.txt", "refused", "carries a home directory path"],
+    ["screens/harvest-limit.reset-2.1.304.txt", "refused", "carries a home directory path"],
+  ]);
+  const next = withEntries(manifest, plan);
+  assert.equal(next.signals["prompt.box"].length, 2, "the listed entry is kept, the new one appended");
+  assert.deepEqual(next.signals["prompt.box"][1], { path: "screens/harvest-prompt.box-2.1.303.txt", role: "match", test: "packages/host/test/harvested.test.mjs", cli: "2.1.303" });
+  assert.equal(next.signals["hook.pipe"][0].cli, "2.1.303");
+  assert.equal(manifest.signals["prompt.box"].length, 1, "the manifest handed in is not mutated");
+});
+
+test("formatManifest: signals.json round-trips byte for byte, so --write adds one line per fixture", () => {
+  const file = fileURLToPath(new URL("../packages/host/test/fixtures/signals.json", import.meta.url));
+  const raw = readFileSync(file, "utf8");
+  assert.equal(formatManifest(JSON.parse(raw)), raw);
+});

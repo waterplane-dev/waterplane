@@ -8,7 +8,7 @@
  * `CLAUDE_CONFIG_DIR` untouched (`ptyenv.ts` starts from `process.env`; the
  * tmux pane gets it explicitly, `sessions/tmux.ts`).
  */
-import { closeSync, existsSync, openSync, readSync, readdirSync } from "node:fs";
+import { closeSync, existsSync, openSync, readSync, readdirSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { claudeConfigDirOf, transcriptDirName, truncatedSlugPrefix } from "@waterplane/shared";
@@ -31,8 +31,25 @@ export function claudeConfigDir(): string {
  * their first 200 chars, and the wrong sibling is a wrong file. Nothing found
  * (yet) or ambiguous answers the untruncated path, which does not exist, so a
  * reader finds nothing and says so.
+ *
+ * The CLI slugs its REALPATH: a session started in `/tmp/x` (or under macOS's
+ * `/var` → `/private/var`, or a symlinked checkout) writes to
+ * `-private-tmp-x`. So when the folder for the path as given does not exist,
+ * the resolved path's is tried — found by the real-CLI smoke on 2.1.304, whose
+ * scratch repo under `/var/folders` had every log reader that builds its path
+ * from the cwd (the `AskUserQuestion` enrichment among them) reading nothing.
  */
 export function claudeProjectDir(cwd: string): string {
+  const given = projectDirFor(cwd);
+  if (existsSync(given)) return given;
+  let real: string;
+  try { real = realpathSync(cwd); } catch { return given; }
+  if (real === cwd) return given;
+  const resolved = projectDirFor(real);
+  return existsSync(resolved) ? resolved : given;
+}
+
+function projectDirFor(cwd: string): string {
   const projects = join(claudeConfigDir(), "projects");
   const slug = transcriptDirName(cwd);
   const exact = join(projects, slug);

@@ -295,6 +295,15 @@
    terminal key. The bar under the terminal keeps the face; everything else is the UI font. */
 .keys .key { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .key:active { background: var(--accent); }
+/* A key the CLI names on screen now (`keyHints`): outlined in the accent so it
+   reads as "the screen asks for this", its verb in the UI font, capped so a long
+   picker verb cannot push the fixed keys off the row. */
+.keys .key-hint { border-color: var(--accent); display: inline-flex; overflow: hidden; align-items: center; gap: var(--sp-6); max-width: 60vw; }
+/* Ctrl / Alt / Shift (`KeyRow.tsx`): the held state is a second, small line, so the key keeps its
+   width between taps and the row never moves under the finger. */
+.keys .mod-key { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; padding-left: var(--sp-8); padding-right: var(--sp-8); }
+.mod-state { font-size: calc(var(--fs-10) * var(--ui-font, 1)); font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
+.key-hint-verb { min-width: 0; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* New-image strip (agent-produced images this turn) */
 .newimg-strip { display: flex; align-items: center; gap: var(--sp-8); padding: var(--sp-6) var(--sp-8); overflow-x: auto; background: var(--panel); border-top: 1px solid var(--accent); }

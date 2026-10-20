@@ -159,6 +159,19 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
 
   const v = linkVerdict(me, host, notDelivered);
   const d = host?.delivery;
+  // The unconfirmed count is the host's running total for the window, so it
+  // only goes down when the window does — the clear beside it IS the reset.
+  const stuck = (d?.unsubmitted ?? 0) + (d?.unconfirmed ?? 0);
+  function resetWindow() {
+    if (!armed) { setArmed(true); onToast("tap again to reset the window"); return; }
+    setArmed(false);
+    resetLinkWindow();
+    // Counters only. The sends themselves are rows in Activity and
+    // are not this button's to clear — resetting a window must never
+    // be a way to delete somebody's words.
+    void api.netstats.reset().then(() => load(), () => load());
+    onToast("connection stats reset");
+  }
   // While offline `syncSnapshot()` reports no CURRENT sync (correctly — nothing
   // is current), but the number being asked for is when the last one happened,
   // which outlives the socket.
@@ -174,6 +187,14 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
       </SheetHead>
       <div className="sheet-body">
         <p className={`nh-verdict nh-${v.tone}`}>{v.text}</p>
+        {stuck > 0 && (
+          <div className="set-row">
+            <button className={`key ${armed ? "active" : ""}`} onClick={resetWindow}>
+              <RotateCcw size={ICON} /> {armed ? "tap again to clear" : "checked them — clear"}
+            </button>
+            <span className="set-note">Resets this window's counters; the prompts themselves stay in Activity.</span>
+          </div>
+        )}
 
         {/* The one part of this screen that is a decision rather than a
             reading, and the only one with names in it. Rendered whenever there
@@ -271,7 +292,12 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
             <Stat label="last ping"
               value={pulseSum.last != null ? ms(pulseSum.last) : probes ? "no reply" : "—"}
               note={pulseSum.last == null && probes ? "the newest probe timed out" : undefined} />
-            <Stat label="median ping" value={ms(pulseSum.median ?? undefined)} note={probes ? `over the last ${probes} probe${probes > 1 ? "s" : ""}` : undefined} />
+            {/* The median is of the replies only, so with misses in the window
+                the note counts those, not every probe sent. */}
+            <Stat label="median ping" value={ms(pulseSum.median ?? undefined)}
+              note={!probes ? undefined
+                : pulseSum.misses ? `over the ${probes - pulseSum.misses} replies of the last ${probes} probes`
+                : `over the last ${probes} probe${probes > 1 ? "s" : ""}`} />
             {/* The count the strip used to carry, in the one place it can be
                 read next to the window it is true over. It came off the strip
                 because a lost ping costs nothing — nothing typed goes missing
@@ -443,16 +469,7 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
 
         <section className="set-group">
           <div className="set-row">
-            <button className={`key ${armed ? "active" : ""}`} onClick={() => {
-              if (!armed) { setArmed(true); onToast("tap again to reset the window"); return; }
-              setArmed(false);
-              resetLinkWindow();
-              // Counters only. The sends themselves are rows in Activity and
-              // are not this button's to clear — resetting a window must never
-              // be a way to delete somebody's words.
-              void api.netstats.reset().then(() => load(), () => load());
-              onToast("connection stats reset");
-            }}><RotateCcw size={ICON} /> {armed ? "tap again to reset" : "reset window"}</button>
+            <button className={`key ${armed ? "active" : ""}`} onClick={resetWindow}><RotateCcw size={ICON} /> {armed ? "tap again to reset" : "reset window"}</button>
           </div>
           <span className="set-note">
             Everything here is local: the device half lives in this browser, the host half in

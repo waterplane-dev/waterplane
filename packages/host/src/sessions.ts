@@ -107,7 +107,7 @@ export class SessionManager extends EventEmitter {
       // health.ts
       noteFor: (s, id, outcome, opts) => noteFor(s, id, outcome, opts),
       noteContextHealth: (s, cleaned, pct) => noteContextHealth(s, cleaned, pct),
-      noteLogHealth: (s, outcome, raw) => noteLogHealth(s, outcome, raw),
+      noteLogHealth: (s, outcome, raw, fixture) => noteLogHealth(s, outcome, raw, fixture),
       // ctxseries.ts
       refreshSpark: (s) => this.ctx.refreshSpark(s), checkContext: (s) => this.ctx.checkContext(s), checkMode: (s) => mode.checkMode(this.core, s), // + livemode.ts
       storeFor: (id) => this.ctx.storeFor(id), logFor: (id) => this.ctx.logFor(id), judgeBudget: (s) => this.budget.judge(s),
@@ -533,9 +533,9 @@ export class SessionManager extends EventEmitter {
 
   // ── turn (sessions/turn.ts): the turn flag and the hook lifecycle (the turn watch and the
   // Stop verify behind it), and the turn queries. `clearStopVerify` is for `register`.
-  onHookEvent(payload: { hook_event_name?: string; session_id?: string; cwd?: string; transcript_path?: string; prompt?: string }): void { turn.onHookEvent(this.core, payload); }
+  onHookEvent(payload: Parameters<typeof turn.onHookEvent>[1]): void { turn.onHookEvent(this.core, payload); }
   private clearStopVerify(s: Session): void { turn.clearStopVerify(s); }
-  isHooked(id: string): boolean { return turn.isHooked(this.core, id); }
+  isHooked(id: string): boolean { return turn.isHooked(this.core, id); } lastHook(id: string): unknown { return this.core.sessions.get(id)?.lastHook; } // ← its SHAPE only, for the fixture capture
   sawTurnHook(id: string): boolean { return turn.sawTurnHook(this.core, id); }
   inCopyMode(id: string): boolean { return turn.inCopyMode(this.core, id); }
   noteHookFallback(id: string, via: string): void { turn.noteHookFallback(this.core, id, via); }

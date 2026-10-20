@@ -1023,7 +1023,7 @@ const WEBCLIENT_SPLIT_FILES = {
   "repoHealthWords/repoHealthWordsPlot.ts": 155,
   "repoHealthWords/repoHealthWordsRank.ts": 125,
   "repoHealthWords/repoHealthWordsRegion.ts": 195, // +notesSummaryWords, plotAxisModeWords (weeks | commits)
-  "repoHealthWords/repoHealthWordsRun.ts": 110,
+  "repoHealthWords/repoHealthWordsRun.ts": 115, // +outcomeRepeatsReadError, a failed read said once
   "repoHealthWords/repoHealthWordsScope.ts": 60,
   "repoHealthWords/repoHealthWordsStale.ts": 130, // +seriesStatusWords, the one line over the series charts
 };

@@ -106,7 +106,11 @@ bootWait(PORT, 900, async () => {
   await postHook("Stop"); // stopCount → 2 > baseline 1 → done
   let doneItem = null;
   let lastSeen = null;
-  for (let i = 0; i < 40 && !doneItem; i++) {
+  // `done` lands when the executor returns, i.e. after the delivery's own proof (the echo wait,
+  // the no-box hold since 616671df, the submitted-prompt wait — this test's hooks arrive before
+  // the Return): ~7.9 s alone, past the 8 s this loop used to give. 25 s is only a hang bound;
+  // a hooked session is never settled by silence, so a longer wait proves no less.
+  for (let i = 0; i < 125 && !doneItem; i++) {
     const bl = await new Promise((r) => { listResolvers.push(r); ws.send(JSON.stringify({ t: "backlog.list" })); });
     const it = bl.items.find((i) => i.repoDir === repo.path);
     lastSeen = it ?? lastSeen;

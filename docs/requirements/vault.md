@@ -384,3 +384,8 @@ On desktop, the vault export screen shows the generated KDBX password clearly so
 The exported KDBX file opens correctly in a KeePass-compatible password manager.
 - asked: 2026-10-19
 
+
+### R-vault-076 · shipped
+A password asked on a shell's screen can be filled from a stored login: the masked field offers "from vault" (and, once a login filled that prompt on this desktop, "fill with <that login>" in one tap), the logins the prompt names come first, one fingerprint card that says it fills (not shows), and the password lands only in the masked field — typed when the person taps Send, dropped if the prompt has gone.
+- asked: 2026-10-20
+- shipped: 97e0ee27

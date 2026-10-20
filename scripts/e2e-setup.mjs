@@ -275,6 +275,25 @@ bootWait(PORT, 900, async () => {
     check(r4.checks.filter((c) => c.status === "fail").length === 0,
       "an enormous CLAUDE.md does not make the repo report as failing");
 
+    // ── A CLAUDE.md copied from AGENTS.md: Copilot carries both ──────────
+    // The migration case: a repo moved from Copilot to Claude Code, pasted its
+    // AGENTS.md into a new CLAUDE.md, and kept both. Copilot reads both on every
+    // request, so the row says so — as a warn with no fix (which copy to keep is
+    // the author's call), and it names the import that lets one copy serve both.
+    const rules = Array.from({ length: 12 }, (_, i) => `- Rule number ${i}: always run the tests before committing.`).join("\n");
+    writeFileSync(join(repo.path, "AGENTS.md"), rules);
+    writeFileSync(join(repo.path, "CLAUDE.md"), `# setupdemo\n${rules}\n`);
+    const r5 = await j(`/api/repos/${id}/compliance`);
+    const cwCopy = find(r5, "context-weight");
+    check(cwCopy && cwCopy.status === "warn" && cwCopy.fix === null, `a copied AGENTS.md → warn, no fix (got ${cwCopy && cwCopy.status})`);
+    check(cwCopy && /CLAUDE\.md and AGENTS\.md repeat/.test(cwCopy.detail) && /Copilot carries both/.test(cwCopy.detail) && /@AGENTS\.md/.test(cwCopy.detail),
+      "the row names the repeat, who carries both, and the one-copy import");
+    writeFileSync(join(repo.path, "CLAUDE.md"), "@AGENTS.md\n");
+    const cwImport = find(await j(`/api/repos/${id}/compliance`), "context-weight");
+    check(cwImport && cwImport.status === "pass" && !/repeat/.test(cwImport.detail), "CLAUDE.md as the one line @AGENTS.md → pass, no repeat");
+    rmSync(join(repo.path, "AGENTS.md"));
+    writeFileSync(join(repo.path, "CLAUDE.md"), big.repeat(6));
+
     // ── The line, per repo ──────────────────────────────────────────────
     // The row quotes a threshold, so the threshold has to be arguable. It used
     // to be three env vars: host-wide, invisible from the phone, needing a

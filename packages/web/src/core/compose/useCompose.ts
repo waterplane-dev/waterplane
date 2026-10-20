@@ -32,6 +32,8 @@ import { recallMode, recallWhen, recallWhere, recalledWhenNote } from "../../sen
 import type { SendTarget } from "../../sendIntent";
 import { addPadNote, loadDraft, padNoteId, saveDraft } from "../../outbox";
 import { PIPE_PAD, decodePipe, keyToBytes } from "../../cliKeys";
+import { useChord } from "./useChord";
+import { NAMED_KEY, type ChordMod } from "./chordState.ts";
 import { CMD_HISTORY_MAX, loadCmdHistory } from "../../localState";
 import type { HeaderCmd } from "../../headerCmds";
 import type { Snippet } from "../../SnippetSheet";
@@ -259,7 +261,41 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
    *  So is the reader: the grid those keystrokes land in is not on screen
    *  there, so typing into it is typing blind. Switching back to the terminal
    *  puts the mode back, draft intact. */
-  const cliMode = cliModeOn && !pending && !readerShown;
+  // A held modifier (`useChord`) makes the box a key pipe for the next key, so
+  // the letter that goes with Ctrl never lands in the draft.
+  const chord = useChord(sendInput);
+  const cliMode = (cliModeOn || chord.armed) && !pending && !readerShown;
+  // Whether the box had the caret before a modifier armed it: a one-shot chord
+  // that RAISED the keyboard puts it away again, so the key row comes back
+  // (typing room hides it while the box is focused).
+  const chordFocusedBefore = useRef(false);
+  /** A modifier key's tap. Focus happens HERE, inside the gesture — iOS raises
+   *  the keyboard only for a focus in the user event. */
+  function tapChordMod(m: ChordMod) {
+    if (!chord.armed && !cliModeOn) {
+      chordFocusedBefore.current = document.activeElement === composeRef.current;
+      pipePrev.current = PIPE_PAD;
+      chord.tapMod(m);
+      focusPipe();
+      return;
+    }
+    chord.tapMod(m);
+  }
+  const chordWasArmed = useRef(false);
+  useEffect(() => {
+    if (chord.armed) { chordWasArmed.current = true; pipePrev.current = PIPE_PAD; return; }
+    if (!chordWasArmed.current) return;
+    chordWasArmed.current = false;
+    if (!cliModeOn && !chordFocusedBefore.current) composeRef.current?.blur();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chord.armed]);
+  // A held key belongs to the screen it was armed on: a session switch, the
+  // reader or a pending session (where the row and the "held" bar are not
+  // drawn) lets go, rather than firing on the first key typed somewhere else.
+  useEffect(() => {
+    chord.clear();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId, pending, readerShown]);
   /** The `+ later` screen (`isLaterId`): no session until its backlog item runs. */
   const later = isLaterId(activeId);
 
@@ -329,6 +365,7 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
     // behind the raw-keys pad, so the mode is left (the caller says so).
     const leftCli = cliModeOn;
     if (cliModeOn) { setCliModeOn(false); pipePrev.current = PIPE_PAD; }
+    chord.clear();
     const onScreen = activeIdRef.current === sid;
     const cur = onScreen ? draft.composeNow.current : (loadDraft(sid) ?? "");
     // The same words twice (a second tap on the same button) are one copy, not two.
@@ -471,6 +508,7 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
   function toggleCliMode() {
     const on = !cliModeOn;
     track(on ? "action:cli.on" : "action:cli.off");
+    chord.clear();
     setCliModeOn(on);
     pipePrev.current = PIPE_PAD;
     if (on) {
@@ -499,7 +537,7 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
     const bytes = decodePipe(pipePrev.current, el.value);
     pipePrev.current = PIPE_PAD;
     el.value = PIPE_PAD;
-    if (bytes) sendInput(bytes);
+    if (bytes) chord.sendTyped(bytes);
   }
   /** Keys the text diff cannot see (Return, Tab, Esc, arrows, ^C from a
    *  hardware keyboard). `keyToBytes` returning bytes means we own the event —
@@ -509,7 +547,8 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
     const bytes = keyToBytes(e);
     if (!bytes) return;
     e.preventDefault();
-    sendInput(bytes);
+    const named = NAMED_KEY[e.key];
+    if (chord.armed && named) chord.sendKey(named, bytes); else sendInput(bytes);
   }
   /** Return in the compose box = send, when `enterSends` is on.
    *  Modifier+Return always inserts a newline (the default action), and an IME
@@ -797,7 +836,7 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
     ...draft,
     sendMode, setSendMode, sendWhere, setSendWhere, sendWhereSid, setSendWhereSid, sendMenu, setSendMenu,
     cliMode, enterSends, voice, aimedSession, noteSendAim,
-    sendInput, stepHistory, clearCompose, appendSnippet, focusPipe, toggleCliMode, onPipeInput, flushPipe, onPipeKey,
+    chord, tapChordMod, sendInput, stepHistory, clearCompose, appendSnippet, focusPipe, toggleCliMode, onPipeInput, flushPipe, onPipeKey,
     onComposeKey, aimHere, sendCompose, openComposeSend, keepOnPad, runHeaderCmd, seedDraft, typeOn,
     sendNow: () => sendCompose("now"),
     secretAskLine, secret, setSecret, secretShown, setSecretShown, noteCursorLine, dismissSecret, sendSecret, secretFillContext,

@@ -2790,6 +2790,58 @@ not. All emit `action:voice`, so the usage sheet counts dictation once.
   `keyToBytes` covers what a diff can't see. Don't advance the baseline mid-composition, and don't
   reset the value through state — see the `cliKeys.ts` section above.
 
+### `KeyRow.tsx` + `useChord.ts` + `KeysPop.tsx` — any key combination, from a phone
+
+A phone keyboard has no Ctrl and no Alt, and claude binds most of what it does to them — its own
+keybinding table (2.1.304) has `ctrl+o` transcript, `ctrl+t` todos, `ctrl+b` background, `ctrl+r`
+history, `meta+p` model picker, `shift+tab` mode. The key row offered Esc, Tab, arrows, ^C and
+Return, so every other shortcut was out of reach. Asked for 2026-10-20 as "a generic hotkey to the
+console", after the on-screen hint chips (`keyHints`, host `keyhints.ts`) covered only the keys the
+CLI happens to print.
+
+Three layers, one encoding (`shared/chord.ts`, xterm's: `ctrl+<letter>` the C0 byte, `alt+` an ESC
+prefix, `shift+tab` CSI Z, modified cursor keys `CSI 1;<m>X`; a combination a terminal has no bytes
+for — `ctrl+1`, `shift+enter`, `ctrl+shift+b` — is REFUSED in a sentence, never sent as a
+different key):
+
+- **Hint chips** — the keys the screen names now; first in the row.
+- **Sticky modifiers** (`useChord.ts`, rules in `chordState.ts`): `Ctrl` `Alt` `Shift` on the row,
+  the way a terminal app's extra-keys row works. One tap holds it for the next key, a second locks
+  it, a third lets go; the button SAYS `next` / `lock`, so a held key is never a guess. The next
+  key is one on the row or a letter on the on-screen keyboard: while a modifier is held, `useCompose`
+  widens `cliMode` by `chord.armed`, so the box is the key pipe for that one key — the letter never
+  lands in the draft, and the draft is kept exactly as CLI mode keeps it. The bar says what is held
+  and offers `let go`. The state lives in a REF as well as React state, because two input events can
+  land before a render and the second must already see a one-shot modifier gone. `^C` ignores held
+  modifiers (it is a chord already).
+- **`Keys` list** (`KeysPop.tsx`, list in `cliShortcuts.ts`): claude's own shortcuts, one tap each,
+  over the bottom of the grid (an overlay — a PTY resize repaints the whole screen). Taken from the
+  binary's default table, not memory, and it says which version. Left out on purpose: `ctrl+d`
+  (exits claude — one stray tap ends the session), `ctrl+g`/`ctrl+e` (hand the PTY to an editor the
+  phone cannot leave), `ctrl+v` (the DESKTOP's clipboard), `ctrl+shift+…`. `esc esc` is two writes
+  150 ms apart — one write of two ESC bytes reads as alt+esc.
+
+`KeyRow.tsx` was lifted out of `TermArea.tsx` when the row grew past the core-file cap; the caller
+still decides whether it is drawn (never for a pending session, never in the reader).
+
+What the first review (2026-10-20) changed, each from a measurement:
+
+- **ctrl+b is tmux's prefix.** Every session runs inside our tmux client, which ate a lone `\x02`
+  and read the NEXT key as a tmux command (`d` detaches). The host now doubles every `\x02` it
+  types into a pane (`sessions/tmux.ts`'s `tmuxLiteral`, both write paths in `sessions/drive.ts`):
+  tmux's default `C-b C-b` is `send-prefix`, so exactly one reaches claude — what claude itself
+  prints under tmux ("ctrl+b ctrl+b (twice)"). The prefix itself is left alone for a person who
+  attaches at the desk.
+- **Row order**: at 390 px the modifiers in front pushed ↓ ← → ^C Return off the first screen;
+  the fixed keys come first now, modifiers after them.
+- **The held word is a second line** on the key (`next` / `lock`) — worded inline it widened the
+  key by 42 px and moved every key right of it under the finger between taps.
+- **A held key lets go** on a session switch, the reader, a pending session and `seedDraft` —
+  where neither the row nor the "held" bar is drawn, it would otherwise fire on the first key typed
+  elsewhere. A hint chip lets go too (it is a whole key already).
+- **Focus inside the tap** (iOS raises the keyboard only for a focus in the user gesture), and a
+  one-shot chord that raised the keyboard puts it away again, so typing room gives the row back.
+
 ### `theme.ts` + `termTheme.ts` — light or dark, as a setting
 
 The app was dark-only, and that was not a stylesheet fact: it was two hundred literal colours spread

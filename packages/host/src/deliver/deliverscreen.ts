@@ -22,7 +22,7 @@ import {
 } from "../echo.js";
 import { rivalTexts } from "../opendeliveries.js";
 import { resolveBackend } from "../backends/index.js";
-import { sleep } from "./deliverknobs.js";
+import { FALLBACK_HOLD_MS, sleep } from "./deliverknobs.js";
 
 /** A prompt this long whose words contain the held text whole is our own text
  *  drawn in a way no echo rule placed (a viewport slice under `SLICE_MIN`) —
@@ -196,6 +196,9 @@ export function makeScreenReader(
    */
   const anchors = composerAnchorsOf(sessions, sessionId);
   const fullReader = !!anchors?.cursor && !!anchors?.rule;
+  /** Did the last `placeEcho` answer by the no-box rule — no composer frame on
+   *  that screen at all? `waitForEcho` holds such an answer (FALLBACK_HOLD_MS). */
+  let fellBack = false;
   const placeEcho = (raw: readonly string[], newestOnly: boolean): EchoRule => {
     // BEFORE typing, "already in the composer" is judged on the LIVE box only,
     // by the backend's own anchors, and a head match only where the box holds
@@ -225,6 +228,7 @@ export function makeScreenReader(
       if (live !== null) return live;
     }
     const anchored = composerEcho(raw, text, { newestOnly });
+    fellBack = anchored === null;
     if (anchored !== null) return anchored;
     // No composer frame anywhere on this screen — a picker covering it, a stub
     // TUI, or an upstream redraw. Back to the old rule, and back to the old
@@ -265,9 +269,13 @@ export function makeScreenReader(
   /** The after-write poll: any frame will do, we typed the text moments ago.
    *  The BEFORE-typing question renders its own rows, because it has a second
    *  question to ask of them — see `composerFramesAmbiguous` at that site. */
+  /** The rendered screen the newest echo read was made on, as drawn — the
+   *  `deliver.echo` fixture capture keeps the one the rule proved on. */
+  let seen = "";
   const onScreen = async (): Promise<EchoRule> => {
     if (!probe) return "none";
-    return placeEcho((await sessions.screenText(sessionId, ROW_WINDOW)).split("\n"), false);
+    seen = await sessions.screenText(sessionId, ROW_WINDOW);
+    return placeEcho(seen.split("\n"), false);
   };
   /**
    * Is a match evidence about OUR text?
@@ -351,6 +359,7 @@ export function makeScreenReader(
    */
   const waitForEcho = async (ms: number) => {
     const deadline = Date.now() + ms;
+    let heldSince: number | undefined;
     for (;;) {
       // `proven`, not merely "matched": a prefix hit that a rival could equally
       // have produced is not our echo, and keeps polling — the composer may
@@ -364,12 +373,24 @@ export function makeScreenReader(
       // whole paste" are different facts about what this CLI draws, and the
       // measurement that sent anyone looking here could only count the misses.
       const rule = await onScreen();
+      // A proof by the no-box rule, for a backend whose reader CAN place its
+      // composer, is held a moment for a framed one. Measured on 2.1.304: a
+      // prompt typed just after the trust box closed was drawn bare at the
+      // top of a cleared screen (the tty's echo, the CLI between frames — no
+      // `❯`, no rules), the distance rule read that as `exact`, and the
+      // composer drew it properly 400 ms later. The bare read is still
+      // accepted if no frame ever comes (a stub, an unrecognised redraw), so
+      // nothing that degraded to it before stops delivering.
+      if (proven(rule) && fellBack && fullReader) {
+        heldSince ??= Date.now();
+        if (Date.now() - heldSince < FALLBACK_HOLD_MS && Date.now() < deadline) { await sleep(200); continue; }
+      }
       if (proven(rule)) { shape.echo = rule; return true; }
       if (Date.now() >= deadline) { shape.echo = "none"; return false; }
       await sleep(200);
     }
   };
-  return { screen, probe, placeEcho, proven, snapshot, waitForEcho };
+  return { screen, probe, placeEcho, proven, snapshot, waitForEcho, lastSeen: () => seen };
 }
 
 /** The row the NEWEST occurrence of `probe` starts on, searching the rows as

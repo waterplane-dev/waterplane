@@ -27,6 +27,10 @@ const READY = mkdtempSync(join(tmpdir(), `${SLUG}-halt-ready-`));
 writeFileSync(STUB, `#!/bin/sh\n[ "$1" = "--version" ] && { echo "2.1.0 (Claude Code)"; exit 0; }\ntrap '' TERM\ncase "$*" in *--session-id*) : > "${READY}/$$";; esac\n"${process.cwd()}/scripts/claude-stub.sh" "$@"\n`);
 chmodSync(STUB, 0o755);
 const env = { ...process.env, [E.PREFLIGHT]: "0", [E.PORT]: String(PORT), [E.HOST]: "127.0.0.1", ...rootEnv(ROOT), [E.CLAUDE_BIN]: STUB, [E.IDLE_MS]: "600", [E.IDLE_PING_MS]: "400" };
+// No locale, as the launchd service runs: a tmux client then prints a `\t` in a
+// `-F` format as `_`, and the halt's pane listing came back empty — nothing was
+// forced, and only a push from the phone (the service's env) caught it.
+for (const k of ["LANG", "LC_ALL", "LC_CTYPE"]) delete env[k];
 const boot = () => {
   const h = spawn("node", ["packages/host/dist/main.js"], { env, stdio: ["ignore", "pipe", "pipe"] });
   h.stderr.on("data", (d) => process.stderr.write("[host] " + d));

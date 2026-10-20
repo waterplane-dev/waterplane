@@ -204,8 +204,9 @@ test("repoHealthWords.ts exports exactly its pinned surface (the five helpers st
   const names = surface("repoHealthWords.ts");
   // 49 at the split; the repo's own readings (whose each reading is) and its
   // say over the central ones (repoHealthWordsCentral.ts) added the rest; the
-  // redesign's new words (plotAxisModeWords, notesSummaryWords, middleEllipsis) took it to 62.
-  assert.equal(names.length, 62);
+  // redesign's new words (plotAxisModeWords, notesSummaryWords, middleEllipsis) took it to 62;
+  // outcomeRepeatsReadError (a failed run's line that would only repeat the read error) to 63.
+  assert.equal(names.length, 63);
   const m = await import(pathToFileURL(WORDS).href);
   assert.deepEqual(Object.keys(m).sort(), names.filter((n) => n.endsWith(":value")).map((n) => n.split(":")[0]).sort());
   for (const priv of ["nf", "ordinal", "pctOf", "spanWords", "commitWords"]) assert.ok(!(priv in m), priv);

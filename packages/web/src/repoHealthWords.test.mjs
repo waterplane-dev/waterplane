@@ -32,7 +32,7 @@ import { KPI_MEANING, rankChipWords, kpiMeaning,
   outcomeWords,
   drawnPageWords,
   pointReadoutWords,
-  readFailedWords,
+  readFailedWords, outcomeRepeatsReadError,
   refreshBusyLabel,
   refreshFailedWords,
   refreshLabel,
@@ -1179,4 +1179,14 @@ test("a path is shortened in the middle, the filename kept whole", () => {
   assert.match(long, /^an-extr….*\.ts$/);
   assert.equal(middleEllipsis("abcdefghij", 5), "ab…ij");
   for (const n of [5, 10, 20, 30, 44]) assert.ok(middleEllipsis(p, n).length <= n, `fits ${n}`);
+});
+
+test("a failed run over an unreadable tree is said once: the read error, not the run line too", () => {
+  const failed = { ok: false, step: "update", error: "repohealth: not a git repository" };
+  assert.equal(outcomeRepeatsReadError(failed, "repohealth: not a git repository", false), true);
+  // A series on screen, a refusal, or no read error: the run line is its own news.
+  assert.equal(outcomeRepeatsReadError(failed, "x", true), false);
+  assert.equal(outcomeRepeatsReadError({ ok: false, refused: { text: "no" } }, "x", false), false);
+  assert.equal(outcomeRepeatsReadError(failed, null, false), false);
+  assert.equal(outcomeRepeatsReadError({ ok: true, added: 3 }, "x", false), false);
 });

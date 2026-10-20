@@ -8,6 +8,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { detectPrompt, dialogStillUp, hasDialogFooter, mergeBox, navToSubmit, sameBox, samePrompt, stripAnsi } from "../dist/prompt.js";
+import { promptFingerprint } from "@waterplane/shared";
 
 /** A well-formed two-option box, as the TUI draws one. */
 const BOX = [
@@ -339,6 +340,15 @@ test("the merge keeps the options that scrolled off, and the real question", () 
   assert.equal(m.question, PUB.question, "the placeholder never overwrites a question somebody read");
   assert.equal(m.options[0].desc, PUB.options[0].desc, "enrichment survives a repaint");
   assert.ok(!m.truncated, "nothing is unreachable from the card any more");
+});
+
+test("a description that arrives a pass late is added, and changes no fingerprint", () => {
+  const bare = { ...PUB, options: PUB.options.map(({ desc, ...o }) => o) };
+  const m = mergeBox(bare, PUB);
+  assert.deepEqual(m.options.map((o) => o.desc), PUB.options.map((o) => o.desc), "the late enrichment reaches the card");
+  assert.equal(promptFingerprint(m), promptFingerprint(bare), "a queued answer stays valid");
+  const other = { ...PUB, options: PUB.options.map((o) => ({ ...o, desc: "something else" })) };
+  assert.equal(mergeBox(PUB, other).options[0].desc, PUB.options[0].desc, "a description already shown is kept");
 });
 
 test("the merge is STABLE — a second identical pass changes nothing", () => {

@@ -44,7 +44,7 @@ import { OwnReadings } from "./RepoHealthOwn";
 import { CLAUDE_MD_KEY, DESC_KEY } from "./repoHealthPlot";
 import {
   SCOPE_ALL_LABEL, SERIES_ASK_LABEL, centralFileLines, centralHeadWords, drawnPageWords, emptySeriesWords, engineLineWords, lastCommitWords,
-  mixedPlotWords, mixedVersionWords, narrativeWrittenWords, notPlottedWords, outcomeWords,
+  mixedPlotWords, mixedVersionWords, narrativeWrittenWords, notPlottedWords, outcomeRepeatsReadError, outcomeWords,
   rankSentence, readFailedWords, refreshBusyLabel,
   refreshFailedWords, refreshLabel, runningWords, seriesHeadWords,
   scopeChoiceHeadWords, scopeEmptyWords, scopeHeadWords, scopePickWords,
@@ -217,7 +217,7 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
   const noEngine = !!view && !view.tool;
   const staleRows = staleRowsWords(series?.staleRows);
   const running = runningWords(view?.run, now);
-  const last = view?.last ?? null;
+  const last = view?.last && !outcomeRepeatsReadError(view.last, view.readError, !!view.series) ? view.last : null;
   const narrative = view?.narrative ?? null;
   const sizeWords = seriesSizeWords(series);
   const warnings = warningsWords(last?.warnings);

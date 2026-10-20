@@ -110,8 +110,9 @@ test("a run past its timeout is killed — the whole GROUP of it — and reporte
   // The deadline must be long enough for the shell to START and print its pid
   // even when the whole suite is running in parallel: at 300 ms this failed
   // ("the shell told us its pid") whenever the machine was busy, while
-  // passing alone — the kill was fine, the witness had not spoken yet.
-  const timeoutMs = 1500;
+  // passing alone — the kill was fine, the witness had not spoken yet. 1500 ms
+  // still failed that way with every core busy and three suites side by side.
+  const timeoutMs = 3000;
   const r = await run(bin, { onOut: (c) => { seen += c; }, timeoutMs });
   assert.equal(r.failed, true);
   assert.match(String(r.err), /timed out/);

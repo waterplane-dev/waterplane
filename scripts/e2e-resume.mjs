@@ -25,6 +25,23 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const MARK_A = "MARK_ALPHA";
 const MARK_B = "MARK_BRAVO";
+// Typed as `printf 'MARK_%s\n' ALPHA`: the shell's echo of the typed line never
+// holds the mark, so seeing it means the COMMAND RAN — not that tmux echoed
+// the keystrokes, which a loaded machine can do long before the output.
+const emit = (word) => `printf 'MARK_%s\\n' ${word}\r`;
+
+// Every wait is on the condition itself, never a fixed sleep: in a ten-script
+// parallel suite a 500 ms sleep elapsed before the shell had printed MARK_B,
+// and the delta replay (correctly) did not hold it yet. The deadline is sized
+// for a loaded machine; the watchdog still catches a real hang.
+const DEADLINE_MS = 15_000;
+async function until(what, ok) {
+  const end = Date.now() + DEADLINE_MS;
+  while (!ok()) {
+    if (Date.now() > end) fail(`timed out after ${DEADLINE_MS} ms waiting for ${what}`);
+    await sleep(25);
+  }
+}
 
 bootWait(PORT, 800, async () => {
   const repo = await fetch(`http://127.0.0.1:${PORT}/api/repo`, {
@@ -42,7 +59,28 @@ bootWait(PORT, 800, async () => {
   const frames = [];         // { seq, full } of pty frames in the current phase
 
   let bootId = null;
+  let histories = 0;         // session.history follows an attach's replay frame on the same socket
   const onPty = (m) => { if (m.id !== sid) return; capture += b64(m.dataB64); frames.push({ seq: m.seq, full: !!m.full }); if (m.seq != null) lastSeq = m.seq; };
+
+  // A second client attached the whole time: the witness that MARK_B reached
+  // the host's stream while the client under test is detached.
+  let observed = "";
+  const observer = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
+  observer.on("error", (e) => fail("observer ws error " + e.message));
+  observer.on("message", (raw) => {
+    const m = JSON.parse(raw.toString());
+    if (m.t === "pty" && m.id === sid) observed += b64(m.dataB64);
+  });
+  const observerUp = new Promise((r) => observer.on("message", (raw) => { if (JSON.parse(raw.toString()).t === "welcome") r(); }));
+  observer.on("open", () => observer.send(JSON.stringify({ t: "hello", protocol: 1 })));
+
+  // Attach and wait for its replay to have ARRIVED: the host sends the pty
+  // frame (when there is one) and then session.history, in order.
+  async function attach(msg, what) {
+    const before = histories;
+    send({ t: "session.attach", id: sid, ...msg });
+    await until(`the ${what} attach's replay`, () => histories > before);
+  }
 
   ws.on("open", () => send({ t: "hello", protocol: 1 }));
   ws.on("error", (e) => fail("ws error " + e.message));
@@ -60,14 +98,16 @@ bootWait(PORT, 800, async () => {
       return;
     }
     if (m.t === "pty") onPty(m);
+    if (m.t === "session.history" && m.id === sid) histories++;
   });
 
   async function runScript() {
-    // 1) Produce MARK_A, let it flush, snapshot the seq the client would remember.
-    await sleep(300);
-    send({ t: "session.input", id: sid, data: `echo ${MARK_A}\r` });
-    await sleep(500);
-    if (!capture.includes(MARK_A)) fail("MARK_A never streamed while attached");
+    await observerUp;
+    observer.send(JSON.stringify({ t: "session.attach", id: sid }));
+
+    // 1) Produce MARK_A, wait for it to stream, snapshot the seq the client would remember.
+    send({ t: "session.input", id: sid, data: emit("ALPHA") });
+    await until("MARK_A to stream while attached", () => capture.includes(MARK_A));
     const seqAtDetach = lastSeq;
     if (!seqAtDetach) fail("no seq carried on live PTY frames");
     console.log("seq at detach:", seqAtDetach);
@@ -76,15 +116,15 @@ bootWait(PORT, 800, async () => {
     send({ t: "session.detach", id: sid });
     await sleep(150);
     phase = "detached"; capture = ""; frames.length = 0;
-    send({ t: "session.input", id: sid, data: `echo ${MARK_B}\r` });
-    await sleep(500);
+    send({ t: "session.input", id: sid, data: emit("BRAVO") });
+    await until("the observer to see MARK_B (it is in the host's stream)", () => observed.includes(MARK_B));
+    await sleep(150); // a frame the host sent us anyway would have landed by now
     if (capture.includes(MARK_B)) fail("received PTY while detached — detach not honored");
 
     // 3) Re-attach WITH resumeSeq → expect only the delta (MARK_B), NOT MARK_A,
     //    and the replay frame flagged full:false.
     phase = "resume"; capture = ""; frames.length = 0;
-    send({ t: "session.attach", id: sid, resumeSeq: seqAtDetach });
-    await sleep(500);
+    await attach({ resumeSeq: seqAtDetach }, "resume");
     if (!capture.includes(MARK_B)) fail("delta replay missing MARK_B (new output since resumeSeq)");
     if (capture.includes(MARK_A)) fail("delta replay re-sent MARK_A — resume streamed the whole scrollback, not the delta");
     const replay = frames.find((f) => f.seq != null);
@@ -95,8 +135,7 @@ bootWait(PORT, 800, async () => {
     send({ t: "session.detach", id: sid });
     await sleep(150);
     phase = "full"; capture = ""; frames.length = 0;
-    send({ t: "session.attach", id: sid });
-    await sleep(500);
+    await attach({}, "fresh");
     if (!frames.some((f) => f.full === true)) fail("fresh attach should send a full-flagged replay, got: " + JSON.stringify(frames));
     if (!capture.includes(MARK_A)) fail("full replay missing MARK_A (whole scrollback expected)");
     console.log("PASS(full): fresh attach got a full replay including MARK_A");
@@ -110,8 +149,7 @@ bootWait(PORT, 800, async () => {
     send({ t: "session.detach", id: sid });
     await sleep(150);
     phase = "boot"; capture = ""; frames.length = 0;
-    send({ t: "session.attach", id: sid, resumeSeq: seqAtDetach, resumeBoot: "not-this-boot" });
-    await sleep(500);
+    await attach({ resumeSeq: seqAtDetach, resumeBoot: "not-this-boot" }, "foreign-boot");
     if (!frames.some((f) => f.full === true)) fail("attach with a foreign resumeBoot must fall back to a FULL replay, got: " + JSON.stringify(frames));
     if (!capture.includes(MARK_A)) fail("boot-mismatch replay should carry the whole scrollback (MARK_A)");
     console.log("PASS(boot): a resume point from another host boot is refused, full replay instead");
@@ -121,13 +159,13 @@ bootWait(PORT, 800, async () => {
     send({ t: "session.detach", id: sid });
     await sleep(150);
     phase = "boot-ok"; capture = ""; frames.length = 0;
-    send({ t: "session.attach", id: sid, resumeSeq: lastSeq, resumeBoot: bootId });
-    await sleep(400);
+    await attach({ resumeSeq: lastSeq, resumeBoot: bootId }, "this-boot");
     if (frames.some((f) => f.full === true)) fail("attach with THIS boot's id should still be a delta, got: " + JSON.stringify(frames));
     console.log("PASS(boot): the live boot id still gets a delta replay");
 
     send({ t: "session.kill", id: sid });
     console.log("PASS: resumable replay verified");
+    observer.close();
     host.kill();
     process.exit(0);
   }

@@ -1,10 +1,16 @@
 # Changelog
 
-## 0.3.1 - 2026-10-20
+## 0.4.0 - 2026-10-20
 
+- Copilot quota in the tree: premium requests and chat usage, read with VS Code's own GitHub sign-in. It is the extension's one network call, so it stays off until you click the row (kept per machine), re-reads every 10 minutes while on, and a right-click turns it off.
+- Always-on weighs Copilot's instruction files too (AGENTS.md, `.github/copilot-instructions.md`, `.github/instructions`, skills under `.github` and `.agents`) and names who reads each file and when. Copilot counts only in a folder with a Copilot file of its own; VS Code's instruction settings drop it from a row when turned off.
+- Claude's always-on weight now also counts CLAUDE.md `@imports` and unscoped `.claude/rules`.
+- Always-on names instruction files one agent carries twice (AGENTS.md copied into CLAUDE.md, or imported and repeated), with the repeated characters and how one copy can serve both agents.
+- Repo health states a failed read once instead of quoting the engine's error again on the run's line.
 - A folder with no CLAUDE.md or skills says it carries nothing always-on, instead of drawing ~0 tokens over an empty bar.
 - Repo health on a folder that is not a git repository says so once, in the view and on the tree's row, instead of quoting the engine's exit twice and offering Forget.
 - The listing shows the Repo health view too: a third screenshot, over a fictional repo's generated git history.
+- The extension icon has transparent corners instead of a white frame on a dark panel.
 
 ## 0.3.0 - 2026-10-19
 

@@ -223,3 +223,18 @@ test("a hookless backend is never handed a claude hook, even by exact id", () =>
     assert.equal(h.events.length, 0);
   } finally { h.stop(); }
 });
+
+test("a PreToolUse for AskUserQuestion keeps the call for the box; a turn boundary retires it", () => {
+  const h = harness();
+  try {
+    h.hook("SessionStart", { session_id: "c1" });
+    const input = { questions: [{ question: "Which?", options: [{ label: "A" }, { label: "B" }] }] };
+    h.hook("PreToolUse", { session_id: "c1", tool_name: "AskUserQuestion", tool_use_id: "toolu_1", tool_input: input });
+    assert.deepEqual(h.s.askHook, { id: "toolu_1", input });
+    assert.equal(h.s.turnHookSeen, true, "set by the SessionStart, untouched by a tool hook");
+    h.hook("PreToolUse", { session_id: "c1", tool_name: "Bash", tool_use_id: "toolu_2", tool_input: {} });
+    assert.equal(h.s.askHook.id, "toolu_1", "another tool is not a question");
+    h.hook("Stop", { session_id: "c1" });
+    assert.equal(h.s.askHook, null);
+  } finally { h.stop(); }
+});

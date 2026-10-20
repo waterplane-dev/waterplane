@@ -6,7 +6,7 @@
  */
 import type { SessionManager } from "../sessions.js";
 import type { DeliveryShape, HistoryEntry } from "@waterplane/shared";
-import { noteHealth } from "../clihealth.js";
+import { fixtureWanted, noteHealth } from "../clihealth.js";
 import { asksYesNo } from "../shelllinks.js";
 import { readNavBox, trustKeys } from "../prompt.js";
 import { ROW_WINDOW, composerFramesAmbiguous } from "../echo.js";
@@ -55,14 +55,38 @@ export async function runDelivery(
    */
   const note: typeof noteHealth = (id, outcome, o) => {
     if (!sessions.healthScope(sessionId)) return;
+    // Every `deliver.submit` good, wherever it is filed, can carry the one
+    // input that proves a submit on a hooked session: the `UserPromptSubmit`
+    // payload, kept as a skeleton (`clifixtures.ts`). Any other proof — a turn
+    // boundary, the screen — leaves nothing to keep.
+    if (id === "deliver.submit" && outcome === "good" && !o?.fixture) {
+      o = { ...o, fixture: () => {
+        const h = sessions.lastHook(sessionId) as { hook_event_name?: unknown } | undefined;
+        return h?.hook_event_name === "UserPromptSubmit" ? JSON.stringify(h) : null;
+      } };
+    }
     noteHealth(id, outcome, o);
+  };
+  /**
+   * The `deliver.echo` fixture: the composer AS the echo was seen in it. Read
+   * here, before the Return clears it, and so only while one is wanted — once
+   * per CLI version (`fixtureWanted`), never per delivery.
+   */
+  const echoFixture = async () => {
+    if (!sessions.healthScope(sessionId) || !fixtureWanted("deliver.echo")) return {};
+    // The screen the echo rule PROVED on, as drawn — not a fresh read (on
+    // 2.1.304 a read a moment later held a half-repainted frame, or one with
+    // no echo in it) and not `snapshot()`, which squashes the spaces a
+    // fixture's layout is read by.
+    const grid = lastSeen() || await sessions.screenText(sessionId, 40);
+    return { fixture: () => JSON.stringify({ prompt: text, grid }) };
   };
   /** When this delivery began — the recency floor every log lookup below is
    *  matched against, so an identical prompt fired at the same session this
    *  morning can never be mistaken for proof about this one. */
   const startedAt = Date.now();
   const shell = !hasTurns({ sessions, sessionId });
-  const { screen, probe, placeEcho, proven, snapshot, waitForEcho } = makeScreenReader(sessions, sessionId, text, key, shape, { firstLineProbe: shell && /[\r\n]/.test(text) });
+  const { screen, probe, placeEcho, proven, snapshot, waitForEcho, lastSeen } = makeScreenReader(sessions, sessionId, text, key, shape, { firstLineProbe: shell && /[\r\n]/.test(text) });
   const ranAnyway = makeLogProof(sessions, sessionId, text, startedAt, key);
   const proof = makeSubmitProof(sessions, sessionId, text, startedAt);
   const { armSourceProof, proofKind, submitProofWithin } = proof;
@@ -458,13 +482,13 @@ export async function runDelivery(
     // saw, and put a miss and a success in the same twenty-slot window for one
     // delivery: a rate describing no event at all, with the real misses this
     // signal exists to surface diluted out of it.
-    if (echoed) note("deliver.echo", "good");
+    if (echoed) note("deliver.echo", "good", await echoFixture());
   } else {
     // The short-circuit: the text was already on screen from an earlier
     // attempt, and provably ours. The probe found it, which is the thing this
     // signal measures.
     shape.echo = before;
-    note("deliver.echo", "good");
+    note("deliver.echo", "good", await echoFixture());
   }
   return submitAndConfirm({ sessions, sessionId, text, historyKind, shape, note, snapshot, noTurn, unannounced, proof, ranAnyway });
 }

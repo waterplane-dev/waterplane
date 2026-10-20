@@ -12,6 +12,13 @@
  */
 export const ECHO_WAIT_MS = 4000;
 /**
+ * How long an echo found only by the no-box rule waits for the composer to
+ * draw it in a frame before it is believed (`deliverscreen.ts`'s
+ * `waitForEcho`). The bare read is the CLI between frames as often as it is a
+ * redraw this host no longer recognises; 2.1.304 drew the frame 400 ms on.
+ */
+export const FALLBACK_HOLD_MS = 1000;
+/**
  * How long the submitted-prompt hook is given to arrive after a Return.
  *
  * Longer than it usually needs (the pipe answers in milliseconds) because what

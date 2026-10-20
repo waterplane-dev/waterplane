@@ -211,6 +211,8 @@ export * from "./sessioncost.js";
  *  skill descriptions, which are the always-loaded half. Behind the repo-setup
  *  checklist's context-weight row. */
 export * from "./contextweight.js";
+/** Every agent-instruction file in a folder, who reads it (Claude Code, Copilot) and when; the repeats between them. */
+export * from "./agentfiles.js";
 
 /** Which `autoCompactWindow` a spawned session would see, and from where —
  *  env > repo local > repo > user. Behind the checklist's auto-compact row. */
@@ -286,6 +288,14 @@ export * from "./ptysize.js";
  *  right now. One matcher for the phone's reader and the host's turn-end
  *  verification, because they are one question. */
 export * from "./working.js";
+
+/** The keys the CLI's footer and pickers tell a person to press, and the
+ *  bytes each one is — the host reads the hints, the phone offers the keys. */
+export * from "./keyhint.js";
+
+/** A key with Ctrl / Alt / Shift held, as xterm's bytes — the phone's sticky
+ *  modifiers and its Keys sheet send through this one encoding. */
+export * from "./chord.js";
 
 /** Dictation's wire shape: the audio format the phone writes and the host
  *  reads, the caps in seconds, and the one wording for a clip that is refused

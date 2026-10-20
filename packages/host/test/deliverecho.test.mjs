@@ -347,6 +347,38 @@ test("the no-box fallback may not reach sixty rows up to find a command that alr
   );
 });
 
+test("an echo drawn bare between frames waits for the composer to draw it", async () => {
+  // 2.1.304, the real-CLI smoke: typed just after the trust box closed, the
+  // text landed at the top of a cleared screen with no `❯` and no rules (the
+  // CLI between frames), the no-box rule read it as `exact`, and Return
+  // followed — a proof made on a screen with no composer on it. The frame drew
+  // the text 400 ms later. The proof now waits for that frame.
+  store();
+  const sessions = fakeSessions({ hooked: true });
+  let typedAt = 0, framedAtReturn = null;
+  sessions.screenText = async () => (!typedAt || Date.now() - typedAt >= 400
+    ? tornScreen(sessions.state.composer)
+    : sessions.state.composer);
+  const write = sessions.write;
+  sessions.write = (id, data) => {
+    if (data === TEXT) typedAt = Date.now();
+    if (data === "\r" && framedAtReturn === null) framedAtReturn = Date.now() - typedAt >= 400;
+    write(id, data);
+  };
+  assert.equal(await deliverPrompt(sessions, "s1", TEXT, "prompt", { watch: false }), "ok");
+  assert.equal(framedAtReturn, true, "Return only once the composer frame held the text");
+});
+
+test("…and a screen that never draws a frame still delivers on the bare read", async () => {
+  // The fallback exists for a stub or a redraw this host no longer knows; held,
+  // never dropped.
+  store();
+  const sessions = fakeSessions({ hooked: true });
+  sessions.screenText = async () => sessions.state.composer;
+  assert.equal(await deliverPrompt(sessions, "s1", TEXT, "prompt", { watch: false }), "ok");
+  assert.deepEqual(sessions.state.writes.slice(0, 2), [TEXT, "\r"]);
+});
+
 test("two composers that do not agree are not a composer this app may act on", async () => {
   // The other way the tear falls. `newestOnly` answers "does the box already
   // hold my text" off the bottom-most frame that is holding anything, which is

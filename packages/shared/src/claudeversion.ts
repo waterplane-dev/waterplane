@@ -7,7 +7,7 @@
  * `--settings`, `--plugin-dir`, `--effort`, `--remote-control`,
  * `--permission-mode`) have no recorded first-supported version here.
  */
-export const TESTED_CLAUDE_VERSION = "2.1.289";
+export const TESTED_CLAUDE_VERSION = "2.1.304";
 
 /** `2.1.289 (Claude Code)` → [2,1,289]; anything else null (never a guess). */
 export function parseClaudeVersion(raw: string | null | undefined): [number, number, number] | null {

@@ -86,13 +86,20 @@ const env = {
   [E.PORT]: String(PORT), [E.HOST]: "127.0.0.1", ...rootEnv(ROOT),
   [E.CLAUDE_BIN]: process.cwd() + "/scripts/claude-stub.sh",
   [E.IDLE_PING_MS]: "600",       // quick idle scans
-  [E.LIMIT_RETRY_MS]: "1500",    // quick continue attempt (banner has no reset time)
+  // The first attempt is the ladder's probe (`limitretry.ts`, 5 s): this knob
+  // only sets the hold-off after a failed resume and the notification's cadence.
+  [E.LIMIT_RETRY_MS]: "1500",
 };
 const host = spawn("node", ["packages/host/dist/main.js"], { env, stdio: ["ignore", "pipe", "pipe"] });
 host.stdout.on("data", (d) => process.stdout.write("[host] " + d));
 host.stderr.on("data", (d) => process.stderr.write("[host] " + d));
 
 const fail = (m) => { console.error("FAIL:", m); host.kill(); process.exit(1); };
+// Which wait the script is in, so a timeout names the step it was waiting on.
+let phase = "booting host"; // booting host → boot → blocked → attempting → attempted → toggles → override
+let pty = "";
+let lastLimit = null; // the last session.updated limit state, for the timeout line
+let attemptMark = -1; // pty length when the attempt was announced; -1 = not yet
 const BANNER = "You've reached your Fable 5 limit. Run /usage-credits to continue or switch models with /model.";
 
 bootWait(PORT, 800, async () => {
@@ -105,8 +112,7 @@ bootWait(PORT, 800, async () => {
   const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
   const send = (m) => ws.send(JSON.stringify(m));
   let sid = null;
-  let pty = "";
-  let phase = "boot"; // boot → blocked → attempted → resumed → toggles
+  phase = "boot";
   let sawLimitNotif = false;
   let globalOff = false;
   const logPhases = new Set(); // limit entries seen in the decision log ("decisions.log")
@@ -124,6 +130,7 @@ bootWait(PORT, 800, async () => {
       setTimeout(() => send({ t: "session.input", id: sid, data: `echo "${BANNER}"\r` }), 500);
     } else if (m.t === "pty" && m.id === sid) {
       pty += Buffer.from(m.dataB64, "base64").toString("utf8");
+      if (phase === "attempting") checkAttemptLanded();
     } else if (m.t === "notification" && m.item.kind === "limit") {
       console.log("notification:", m.item.title, "—", m.item.body);
       sawLimitNotif = true;
@@ -135,26 +142,26 @@ bootWait(PORT, 800, async () => {
     } else if (m.t === "session.updated" && m.session.id === sid) {
       const lim = m.session.limit;
       if (!lim) return;
+      lastLimit = lim;
       if (phase === "boot" && lim.blocked) {
         console.log(`blocked detected (attempts=${lim.attempts}, nextAttemptAt=${lim.nextAttemptAt ? "set" : "null"})`);
         phase = "blocked"; // the schedule lands in a follow-up update
       } else if (phase === "blocked" && lim.blocked && lim.nextAttemptAt && lim.attempts === 0) {
-        console.log(`attempt scheduled for ${new Date(lim.nextAttemptAt).toISOString()}`);
+        // ~5 s (the probe) normally; ~60 s when the host found the session busy
+        // at the due moment and looked again later — the case the watchdog is
+        // sized for, so the log says which one this run got.
+        console.log(`attempt scheduled in ${Math.round((lim.nextAttemptAt - Date.now()) / 100) / 10}s`);
       } else if (phase === "blocked" && lim.attempts >= 1) {
-        // Leave the "blocked" phase NOW, not inside the timer: more session.updated
-        // frames carrying attempts>=1 arrive during the 700 ms wait, and each would
-        // re-enter this branch. The later re-entries check the PTY tail *after* the
-        // filler below has scrolled "continue" out of it → spurious failure.
+        // Leave the "blocked" phase NOW: more session.updated frames carrying
+        // attempts>=1 follow, and each would re-enter this branch.
         phase = "attempting";
-        // The attempt typed "continue" into the PTY — bash echoes it.
-        setTimeout(() => {
-          if (!/continue/.test(pty.slice(-2000))) fail("attempt should have typed 'continue' into the PTY");
-          console.log("auto-continue attempt landed in the PTY");
-          phase = "attempted";
-          // Push the banner out of the scan window; with attempts>0 the next
-          // idle scan should clear the block ("resumed").
-          send({ t: "session.input", id: sid, data: "for i in $(seq 1 800); do echo filler-$i; done\r" });
-        }, 700);
+        // The host announces the attempt BEFORE it types: "continue", then
+        // Return 250 ms later. Wait for bash's ANSWER to the command, not a
+        // fixed 700 ms — that proves both halves landed, and the filler below
+        // typed before the Return would have been glued onto the continue
+        // line ("continuefor i in …"), leaving the banner on screen for good.
+        attemptMark = pty.length;
+        checkAttemptLanded();
       } else if (phase === "attempted" && !lim.blocked) {
         console.log("resumed: blocked cleared after the banner left the screen");
         if (!sawLimitNotif) fail("no 'limit' notification was fired");
@@ -177,7 +184,21 @@ bootWait(PORT, 800, async () => {
       }
     }
   });
+  // bash's reply to a bare `continue` outside a loop: the typed word AND its
+  // Return reached the shell, so the session line is free for the filler.
+  function checkAttemptLanded() {
+    if (attemptMark < 0 || !/continue: only meaningful/.test(pty.slice(attemptMark))) return;
+    console.log("auto-continue attempt landed in the PTY (typed and submitted)");
+    phase = "attempted";
+    // Push the banner out of the scan window; with attempts>0 the next
+    // idle scan should clear the block ("resumed").
+    send({ t: "session.input", id: sid, data: "for i in $(seq 1 800); do echo filler-$i; done\r" });
+  }
   ws.on("error", (e) => fail("ws error " + e.message));
 });
 
-watchdog(() => fail("timeout"));
+// Solo this runs in ~9 s; the 10-parallel suite stretches every step two to
+// three times, and a host that finds the session busy at the probe looks again
+// a minute later (`doLimitContinue`). 90 s covers that rung on a loaded machine;
+// past it the line names the phase it was stuck in.
+watchdog(() => fail(`timeout waiting in phase "${phase}"; last limit: ${JSON.stringify(lastLimit)}, pty tail: ${JSON.stringify(pty.slice(-300))}`), 90_000);

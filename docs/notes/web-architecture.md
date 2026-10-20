@@ -239,6 +239,8 @@ A feature declares what it adds; it does not patch App:
   never a draft, never sent: the person still taps Send. It is checked LIVE at landing and returns
   false (dropping the value) once the ask or the session changed, because a fill typically arrives
   after a sheet and a fingerprint, and must never land on whatever is on screen by then.
+  `labelFor(ctx)` words the button for THIS ask ("fill with mac · johannes", the login remembered
+  for that prompt) or drops it (null), so a contributor can offer a one-tap choice beside its picker.
 - `boot` — once on App's mount (`bootFeatures`), may return a cleanup.
 
 `features/registry.ts` is a static list. **Nothing is lazily loaded**: sheets are opened from a

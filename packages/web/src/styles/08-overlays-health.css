@@ -36,6 +36,24 @@
   background: var(--bg); border: 1px solid var(--ask); box-shadow: 0 4px 18px rgba(0, 0, 0, .35);
 }
 .term-answer .approve-opts { max-height: none; overflow: visible; }
+/* The key row's `Keys` list (`KeysPop.tsx`): claude's shortcuts over the bottom of the grid, the
+   trust card's placement — an overlay with its own scroll, never a PTY resize. */
+.keys-pop {
+  position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 3;
+  max-height: 70%; display: flex; flex-direction: column; border-radius: var(--r-10);
+  background: var(--bg); border: 1px solid var(--line); box-shadow: 0 4px 18px rgba(0, 0, 0, .35);
+}
+.keys-pop-head { display: flex; align-items: center; gap: var(--sp-8); padding: var(--sp-6) var(--sp-6) var(--sp-6) var(--sp-12); border-bottom: 1px solid var(--line); font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+.keys-pop-head .muted { flex: 1; min-width: 0; }
+.keys-pop-head .key { min-width: 44px; }
+.keys-pop-list { overflow-y: auto; padding: var(--sp-4) 0; }
+.keys-pop-row {
+  display: flex; align-items: baseline; gap: var(--sp-12); width: 100%; min-height: 44px; padding: var(--sp-8) var(--sp-12);
+  background: none; border: none; color: var(--fg); text-align: left; cursor: pointer; font: inherit;
+}
+.keys-pop-row:active { background: var(--raise); }
+.keys-pop-key { flex: 0 0 6.5em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); }
+.keys-pop-does { flex: 1; min-width: 0; }
 .term-answer .approve-q { margin: 0 0 var(--sp-8); font-size: calc(var(--fs-14) * var(--ui-font, 1)); }
 
 .term-overlay.as-chip .term-overlay-box { padding: var(--sp-6) var(--sp-10); max-width: 92%; font-size: calc(var(--fs-12) * var(--ui-font, 1)); }

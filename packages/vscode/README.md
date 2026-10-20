@@ -1,6 +1,6 @@
-# waterplane: Cost & Context for Claude Code
+# waterplane: Cost & Context for Claude Code and Copilot
 
-What each prompt cost, the context window over time, the token split and what your `CLAUDE.md` costs on every turn. Read from Claude Code's own logs on this machine. No telemetry, no network.
+What each Claude Code prompt cost, the context window over time, the token split, and what your `CLAUDE.md`, `AGENTS.md` and Copilot instructions cost every request. Read from files on this machine. GitHub Copilot's monthly quota on request. No telemetry.
 
 ![The Session view: a four-hour session's cost split by token kind, and its context window over time with a cold start and a compaction](media/listing-session.png)
 
@@ -18,7 +18,7 @@ Two parts: the **waterplane tree** in the activity bar on the left is the naviga
 2. **This prompt cost X.** Every prompt in the selected session with its cost, the context it carried and how many requests it took. Pick one to see why it was dear. A prompt that is still running is pinned at the top (`running · $0.42 so far · 7 requests · 1m 20s`) and its cost climbs as the log grows; before the first reply it says it is waiting for it. It counts as running only while the log ends mid-turn (an unanswered prompt, or a reply that stopped for a tool) and was written to in the last ten minutes, otherwise nothing is claimed.
 3. **Context window over time.** Compactions and cold cache rebuilds are marked on the chart.
 4. **The split.** Wherever a total appears it comes with input, output, cache read and cache write, because the kinds differ by up to 100x in price and a bare total hides it.
-5. **What this folder's CLAUDE.md costs on every turn.** The folder's `CLAUDE.md` (and `.claude/CLAUDE.md`) and every skill description in `.claude/skills` are re-sent with every prompt. The panel measures that always-on weight, per skill. Your user-level `~/.claude/CLAUDE.md` and a `CLAUDE.local.md` are not counted.
+5. **What this folder's instructions cost on every request, for Claude Code and for Copilot.** Every instruction file in the folder is listed with who reads it and when, following each tool's documented rules: `CLAUDE.md` and `.claude/CLAUDE.md` (both; Claude Code also inlines their `@` imports), `AGENTS.md` (Copilot; Claude Code only when `CLAUDE.md` imports it), `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md` (every request at `applyTo: "**"`, else when a matching file is touched, or by description), `.claude/rules` (by `paths`), and skills in `.claude/skills` (both), `.github/skills` and `.agents/skills` (Copilot): their descriptions every request, their bodies on demand. Each tool gets its own every-request figure. VS Code's instruction settings (`chat.useAgentsMdFile`, `chat.useClaudeMdFile`, `github.copilot.chat.codeGeneration.useInstructionFiles`) are honoured: one turned off drops Copilot from those files. User-level files, `CLAUDE.local.md` and nested `AGENTS.md` files are not counted. Copilot bills per request, not per token, so for Copilot this weight costs context room, not money.
 6. **Optimisation prompts.** Six ready-made prompts (groom `CLAUDE.md`, shrink skill descriptions, hand off to a fresh session, why a prompt was expensive, split the file that grew most, why a health metric is rising). Copy one, or type it into the active terminal. It is typed, not sent: you press Enter. Nothing applies itself.
 7. **All sessions.** Total over time, by model, by repo and your dearest conversations. Reading every log takes a few seconds the first time, so it happens when you open the panel or run **waterplane: Re-read Claude Code logs**, never at startup.
 
@@ -32,20 +32,24 @@ The first card is the **health score**, as on the phone: an absolute 0–100 num
 
 The readings come in two groups, each under its own heading as on the phone: **waterplane's readings**, measured the same way in every repo, and **the repo's own readings**, declared in the folder's committed `.waterplane-shared/health.json`. That file can also disable one of waterplane's readings or replace it with the repo's own command; the tile says so, with the repo's reason, and the file's ignored entries are listed under the heading. **The extension never runs a command that file names**: it starts only `git`, so a repo's own readings and its overrides show as absent here with that reason, and a disable (which needs nothing run) is honoured. The waterplane desktop app runs them, and a series it measured carries their numbers. When the bundled engine's definition moves on with an extension update, the extension's own copy is drawn as it is, a measure refuses to add rows under the new definition, and **Forget this series and measure again** re-cuts it.
 
+## Copilot quota
+
+The tree's **Copilot quota** row shows the share of this month's premium requests and chat used (`premium 34% · chat 2%`), with the counts and reset date on hover. It is off until you click it; the first click may ask you to sign in to GitHub in VS Code. Sessions, costs and the context window are Claude Code's only: Copilot's chat history is not read.
+
 ## Subagent lanes
 
 A session's subagents get their own lanes under the context chart and their cost is part of the session total — or the total is withheld when their logs cannot be read.
 
 ## The tree
 
-The waterplane icon in the activity bar opens the tree: **Sessions** (the recent ones, as above) and **All sessions**, **Always-on context**, and **Repo health**, each with a one-line headline. A click shows that view in the panel; the panel itself has no tab bar and no session list, so nothing is on screen twice. The tree never scans all your logs, only the few listed sessions.
+The waterplane icon in the activity bar opens the tree: **Sessions** (the recent ones, as above) and **All sessions**, **Always-on context**, **Repo health**, and **Copilot quota**, each with a one-line headline. A click shows that view in the panel; the panel itself has no tab bar and no session list, so nothing is on screen twice. The tree never scans all your logs, only the few listed sessions.
 
 With several workspace folders open, the panel follows the folder of your active editor; the tree's folder row picks another.
 
 ## Privacy
 
-- No telemetry. No network requests.
-- It reads only the `claude` CLI's local logs under `~/.claude/projects` (or `CLAUDE_CONFIG_DIR`), plus `CLAUDE.md` and skill files in your workspace folder.
+- No telemetry. One network request, off until you turn it on: **Copilot quota** (click its tree row) reads `api.github.com/copilot_internal/user` with the GitHub sign-in VS Code already holds — GitHub's internal endpoint, so a shape the extension does not know shows as no figure — then again every 10 minutes. Right-click the row to stop.
+- It reads only the `claude` CLI's local logs under `~/.claude/projects` (or `CLAUDE_CONFIG_DIR`), plus the agent-instruction files listed above in your workspace folder.
 - The repo-health engine runs `git` on this machine against the folder's own history — read-only object reads (`rev-list`, `log`, `ls-tree`, `cat-file`); it never runs `git fetch`, `pull` or `push`, never touches the index or the working tree, and writes its series only into VS Code's global storage for this extension. `dist/healthworker.mjs` is the one file that can start a process, and the only program it starts is `git` — never a command a repo declares in `.waterplane-shared/health.json`.
 - It reads, and never writes, a waterplane series already in your folder (`.waterplane/repohealth*.jsonl`).
 - It writes only its own cache and series, in VS Code's global storage for this extension.

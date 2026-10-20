@@ -6,12 +6,14 @@
  * Every absence is a description in words, never a "$0" or an empty row.
  */
 import * as vscode from "vscode";
-import { BRAND, contextPct, fmtCount, fmtUsd, isoWeekOf, repoHealthIndexOf } from "@waterplane/shared";
+import { BRAND, CHARS_PER_TOKEN, contextPct, fmtCount, fmtUsd, isoWeekOf, repoHealthIndexOf } from "@waterplane/shared";
 import type { HealthDoc, SessionSummary, TabId, WeightDoc, CorpusDoc } from "./protocol.js";
 import { fmtAge, isLive, isRunning } from "./data/running.js";
 import { seriesValueWords } from "../../web/src/repoHealthWords.js";
 import { signedWhole, weekWhenWords } from "../../web/src/healthIndexWords.js";
 import { NOT_GIT } from "./health/sourcewords.js";
+import { quotaTooltip, quotaWords } from "./copilotquota.js";
+import type { QuotaState } from "./copilotquota.js";
 
 export interface NavState {
   folders: string[];
@@ -28,6 +30,7 @@ export interface NavState {
   weight: WeightDoc | null;
   health: HealthDoc | null;
   healthRunning: boolean;
+  quota: QuotaState;
 }
 
 /** The views the tree lists. The ready-made prompts are not one: they stay beside the numbers they quote. */
@@ -39,7 +42,8 @@ type Node =
   | { kind: "session"; row: SessionSummary }
   | { kind: "follow" }
   | { kind: "note"; text: string; tab?: TabId }
-  | { kind: "view"; tab: NavTab };
+  | { kind: "view"; tab: NavTab }
+  | { kind: "quota" };
 
 const VIEWS: { tab: NavTab; label: string; icon: string }[] = [
   { tab: "all", label: "All sessions", icon: "graph" },
@@ -50,6 +54,7 @@ const VIEWS: { tab: NavTab; label: string; icon: string }[] = [
 export const SHOW = `${BRAND.slug}.show`;
 export const PICK = `${BRAND.slug}.pickSession`;
 export const PICK_FOLDER = `${BRAND.slug}.pickFolder`;
+export const QUOTA = `${BRAND.slug}.copilotQuota`;
 
 /** The workspace-state key holding whether the person collapsed Sessions. */
 const COLLAPSED_KEY = `${BRAND.slug}.sessionsCollapsed`;
@@ -128,7 +133,7 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
     if (!n) {
       const top: Node[] = [];
       if (s.folders.length > 1) top.push({ kind: "folder" });
-      top.push(this.sessionsNode, ...VIEWS.map((v) => ({ kind: "view" as const, tab: v.tab })));
+      top.push(this.sessionsNode, ...VIEWS.map((v) => ({ kind: "view" as const, tab: v.tab })), { kind: "quota" });
       return top;
     }
     if (n.kind !== "sessions") return [];
@@ -202,6 +207,19 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
         if (n.tab) it.command = { command: SHOW, title: "Open", arguments: [n.tab] };
         return it;
       }
+      case "quota": {
+        const q = s.quota;
+        const it = new vscode.TreeItem("Copilot quota", vscode.TreeItemCollapsibleState.None);
+        it.id = "quota";
+        it.contextValue = q.on ? "copilotQuotaOn" : "copilotQuotaOff";
+        it.iconPath = new vscode.ThemeIcon(q.busy ? "loading~spin" : "copilot");
+        const words = q.reading ? quotaWords(q.reading) : null;
+        it.description = !q.on ? "off · click to read from GitHub"
+          : words ?? (q.why ? "not read · hover for why" : q.busy ? "reading…" : "not read yet");
+        it.tooltip = quotaTooltip(q);
+        it.command = { command: QUOTA, title: "Read Copilot's quota" };
+        return it;
+      }
       case "view": {
         const v = VIEWS.find((x) => x.tab === n.tab)!;
         const it = new vscode.TreeItem(v.label, vscode.TreeItemCollapsibleState.None);
@@ -225,8 +243,14 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
           : `${fmtCount(s.corpus.conversations)} conversations`;
       case "always-on":
         if (!s.weight) return "nothing measured";
-        if (s.weight.claudeMdChars === 0 && s.weight.skills.length === 0) return "no CLAUDE.md or skills here";
-        return `~${fmtCount(s.weight.reading.alwaysOnTokens)} tokens every turn`;
+        if (!s.weight.files.length) return "no instruction files here";
+        // Each agent that reads something here, by its every-request weight.
+        const { claude, copilot } = s.weight.agents;
+        const bits = [
+          claude.files ? `Claude ~${fmtCount(s.weight.reading.alwaysOnTokens)}` : null,
+          copilot.files ? `Copilot ~${fmtCount(Math.round(copilot.always / CHARS_PER_TOKEN))}` : null,
+        ].filter(Boolean);
+        return `${bits.join(" · ")} tokens every request`;
       case "health": {
         if (s.healthRunning) return "measuring…";
         // The score leads, as on the phone's launcher chip (trend second, the worst alert level named);

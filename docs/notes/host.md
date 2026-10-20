@@ -1065,6 +1065,15 @@ rows. Handed 100, of which ~50 are scrollback above the viewport, the `before`-c
 Return at an empty composer. So the fallback keeps 40 and the anchor keeps 100: the rule that knows
 WHERE the box is may look further, the rule that is guessing may not.
 
+**And after our write, the guessing rule waits a moment for the knowing one** (`waitForEcho`,
+`FALLBACK_HOLD_MS`, 1 s). The real-CLI smoke on 2.1.304 typed its first prompt just after the trust
+box closed: the CLI had cleared the screen and not yet drawn its composer, so the text landed BARE at
+the top of an empty grid (no `❯`, no rules), the distance rule read that one row as `exact`, and the
+Return followed a proof made on a screen with no composer on it. The frame drew the text 400 ms
+later. For a backend whose reader can place its box, a no-box proof is now held up to 1 s for a
+framed one; if no frame comes it is still accepted, so a stub or an unrecognised redraw delivers as
+before, a second later.
+
 `settle.ts` was narrowing by the same bottom-`depth` slice and its comment already said the two were
 "meant to be the same rule"; they now are — **including the window**, which is shared rather than
 copied. A tear putting the frame 40–100 rows up was otherwise confirmable by `deliver.ts` and
@@ -6309,6 +6318,43 @@ on a binary that never draws one, a bare rule says nothing.
   delivered late changes what an unwatched session may do unasked (`session.name`'s
   reasoning). The reply is `session.moded` to the asking socket; `liveMode` reaches
   everyone with the `updated` it publishes. `packages/host/test/permmode.test.mjs`.
+
+## `keyhints.ts` + `shared/keyhint.ts` — the keys the CLI names, as one tap
+
+claude tells a person which key to press: the footer's `(shift+tab to cycle)`, `/model`'s
+`s to use this session only`, `/effort`'s `s for this session only`. The phone's key row has Esc,
+Tab, the arrows, ^C and Return — no shift, no ctrl, and (outside CLI mode) no bare letter — so the
+one key the screen is asking for was the one the phone could not press. Asked for from a
+screenshot of the auto-mode footer, 2026-10-20.
+
+`keyhints.ts` reads the hints off the rendered grid on the same quiet tick as the mode
+(`livemode.ts`'s `applyGrid`), publishes `SessionInfo.keyHints`, and the phone draws each as a chip
+at the head of the key row that sends the raw bytes through `sendInput` — the row's own path.
+`shared/keyhint.ts` is the half both ends must agree on: which key names count and their bytes.
+
+Why it reads where it reads:
+
+- **The footer under the newest composer frame, never the transcript.** A turn that QUOTES
+  `(ctrl+o to expand)` is not the CLI offering it. The frame is `permmode.ts`'s `composerFrame`, the
+  footer its ≤6 rows. The person's own status line sits in those rows and is read too — a footer
+  row cannot say whose it is, and a status line printing a key line is offering those keys.
+- **With no composer, the last 3 rows**: a picker or box replaces the composer and draws its key
+  line at the bottom.
+- **A bare letter only on a key line** (a row with another hint) and only lower case — a sentence
+  starting "a to …" or "I to …" is not a key. Measured: the CLI draws bare keys lower case.
+- **Cut verbs are dropped**: an elided `…` verb, and a key line WRAPPED by a narrow grid (the CLI
+  wraps a picker line rather than eliding it, `fixtures/screens/checkbox-46col.txt`) — the last
+  hint on a row is dropped when the next row starts with lower-case words that are not a hint.
+- **Refused keys**: everything the fixed row has (Esc, Tab, Return, arrows, `ctrl+c` = `^C`) and
+  `ctrl+g` — AskUserQuestion's `ctrl+g to edit in Vim` hands the PTY to an editor the phone has no
+  way out of but CLI mode and `:q!`.
+
+The host re-reads only on the quiet tick, so after a tapped `s` closes its picker the chip would
+linger ~4 s and a second tap would type `s` into the composer. The phone hides a tapped one-shot
+chip until the host's list changes; `shift+tab` cycles and stays.
+
+Pinned by `packages/host/test/keyhints.test.mjs` over the real 2.1.293 grids in
+`fixtures/permmode/` and `fixtures/screens/`. Requirement R-cli-010.
 
 ## `repohealth.ts` — the codebase's own vital signs, asked for from the phone
 

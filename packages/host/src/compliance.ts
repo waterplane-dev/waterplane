@@ -21,8 +21,8 @@ import { execFile, execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { BRAND, LEGACY } from "@waterplane/shared";
-import type { AutoCompactResolution, BuildCandidate, ComplianceCheck, ComplianceFixResult, ComplianceIgnoreResult, ComplianceLimitsResult, ComplianceReport, ContextLimitsView, ContextWeightLimits, RepoTarget, RepoSetupState, SkillWeight } from "@waterplane/shared";
-import { ADVISORY_CHECKS, AUTO_COMPACT_ENV, CONFIRM_GATED_FIXES, autoCompactVerdict, isSetupFinding, resolveAutoCompact, resolveContextLimits, sanitizeContextLimits, skillDescChars, weighContext, withAutoCompactWindow } from "@waterplane/shared";
+import type { AutoCompactResolution, BuildCandidate, ComplianceCheck, ComplianceFixResult, ComplianceIgnoreResult, ComplianceLimitsResult, ComplianceReport, ContextLimitsView, ContextWeightLimits, RepoTarget, RepoSetupState, AgentFilesFs } from "@waterplane/shared";
+import { ADVISORY_CHECKS, AUTO_COMPACT_ENV, CONFIRM_GATED_FIXES, autoCompactVerdict, isSetupFinding, resolveAutoCompact, resolveContextLimits, sanitizeContextLimits, weighContext, withAutoCompactWindow, claudeWeightInput, copilotWeightWords, fmtCount, instructionInventory, instructionTotals, overlapWords } from "@waterplane/shared";
 import { adoptRepoStateDir, legacyRepoStateDirs, repoSharedDir, repoStateDir } from "./branddirs.js";
 import { mergeBuilds, readBuildsFile } from "./builds.js";
 import { env } from "./env.js";
@@ -82,18 +82,20 @@ export function contextLimitsFor(worktree: string): ContextLimitsView {
   return resolveContextLimits(envContextLimits(), repoContextLimits(worktree));
 }
 
-/** Every `.claude/skills/<name>/SKILL.md` in a worktree, sized. */
-function readSkills(worktree: string): SkillWeight[] {
-  const dir = join(worktree, ".claude", "skills");
-  let names: string[];
-  try { names = readdirSync(dir); } catch { return []; }
-  const out: SkillWeight[] = [];
-  for (const name of names) {
-    let text: string;
-    try { text = readFileSync(join(dir, name, "SKILL.md"), "utf8"); } catch { continue; }
-    out.push({ name, descChars: skillDescChars(text), bodyChars: text.length });
-  }
-  return out;
+/** A worktree as `AgentFilesFs`, every path through `contained`: an unreadable file is absent. */
+function worktreeFs(worktree: string): AgentFilesFs {
+  return {
+    read: (rel) => {
+      const abs = contained(worktree, rel);
+      if (!abs) return null;
+      try { return readFileSync(abs, "utf8"); } catch { return null; }
+    },
+    list: (rel) => {
+      const abs = contained(worktree, rel);
+      if (!abs) return [];
+      try { return readdirSync(abs, { withFileTypes: true }).map((e) => ({ name: e.name, dir: e.isDirectory() })); } catch { return []; }
+    },
+  };
 }
 
 /** The repo file the `auto-compact` fix writes. */
@@ -292,23 +294,32 @@ export function inspectRepo(worktree: string, git: GitProbe = liveProbe(worktree
   // CLAUDE.md would be deleting the very thing it cannot read. It names the
   // fan-out preset that does the work instead.
   {
-    const extra = join(worktree, ".claude", "CLAUDE.md");
-    const chars = (claudeMd?.length ?? 0) +
-      (existsSync(extra) ? readFileSync(extra, "utf8").length : 0);
-    if (chars > 0) {
+    // Every instruction file, Claude Code's and Copilot's (`@waterplane/shared`'s `agentfiles.ts`,
+    // the VS Code extension's rules too). The host cannot see VS Code's settings, so no switch is
+    // known and Copilot is counted as reading what it reads by default.
+    const { files, overlaps } = instructionInventory(worktreeFs(worktree));
+    if (files.length > 0) {
       const lim = contextLimitsFor(worktree);
-      const w = weighContext({ claudeMdChars: chars, skills: readSkills(worktree) }, lim.effective, lim.source);
+      const claude = files.some((f) => f.parts.some((p) => p.readers.includes("claude")));
+      const w = weighContext(claudeWeightInput(files), lim.effective, lim.source);
+      const said = [
+        claude ? (w.advice ? `${w.note} ${w.advice}` : w.note) : null,
+        copilotWeightWords(instructionTotals(files, "copilot"), fmtCount),
+        ...overlaps.map((o) => overlapWords(o, fmtCount)),
+      ].filter((x): x is string => !!x);
       checks.push({
         id: "context-weight",
         label: "Agent context weight",
-        status: w.verdict === "lean" ? "pass" : "warn",
-        detail: w.advice ? `${w.note} ${w.advice}` : w.note,
+        // A repeat is sent twice on every request: worth a warn, like a heavy CLAUDE.md, and like
+        // it never a fix — which copy to keep is the author's call.
+        status: (claude && w.verdict !== "lean") || overlaps.length ? "warn" : "pass",
+        detail: said.join(" "),
         fix: null,
-        // The same number the sentence states, carried as a figure: the
+        // The same number Claude's sentence states, carried as a figure: the
         // repo-health series measures this subject at the last COMMIT, and the
         // sheet prints the two clocks side by side rather than reconciling
-        // them.
-        alwaysOnChars: w.alwaysOnChars,
+        // them. Absent when Claude Code reads nothing here.
+        ...(claude ? { alwaysOnChars: w.alwaysOnChars } : {}),
       });
     }
   }

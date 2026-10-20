@@ -424,6 +424,8 @@ Prose verbatim as it stood in the skill; the rules stay there.
 
 `TESTED_CLAUDE_VERSION` is the newest `claude` build a person last checked the screen-reading heuristics against (what `claude --version` said on the dev desktop). Bump it when you re-verify. `claudeNewerThanTested(raw)` returns a warning sentence only when the installed build is NEWER; older is never warned (no minimum is claimed, the launch flags have no recorded first-supported version) and an unparsable version is absent, not a warning about nothing. It never refuses a session.
 
+**2.1.304 (2026-10-20), and what that vouches for.** Bumped by the owner on evidence, not a read-through: eight of the ten clihealth signals have a harvested 2.1.304 fixture that its reader passes (`harvested.test.mjs`), and the real-CLI smoke (`scripts/smoke-real-cli.mjs`) drove a 2.1.304 session through the unnumbered trust box, a delivery and a turn. Not vouched by any 2.1.304 capture yet: the context meter and the limit notice (only the live host can capture them) and `/fork` interception, which the smoke does not exercise.
+
 ### `clisuggest.ts` — the CLI's proposal for the next prompt
 
 After a turn claude draws a suggested next prompt in its EMPTY composer in DIM (SGR 2). The host publishes it as `SessionInfo.cliSuggestion` and the phone offers it as one tap. Two reads of the same composer decide it: the PLAIN render holds the words, the render with dim cells blanked (`RenderRow.undimmed`) holds nothing; words that survive the blanking were typed and are never a proposal. The first-run placeholder `Try "how does <filepath> work?"` is refused by shape. `CLI_SUGGESTION_MAX` caps a misread. Null on any doubt.

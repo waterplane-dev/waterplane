@@ -11,7 +11,7 @@
 //
 // Requires `npm run build` first: these drive packages/host/dist.
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { availableParallelism, cpus, homedir, loadavg, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -337,11 +337,24 @@ async function runOne(file, say) {
   }
 }
 
+/**
+ * Every script runs with NO locale, as the launchd service does — and the service is what
+ * runs a push from the phone, so its pre-push suite always saw this env while a terminal
+ * push saw the shell's UTF-8 one. 2026-10-20: tmux with no locale prints a `\t` in a `-F`
+ * format as `_`, the halt's pane listing came back empty, and only phone pushes failed.
+ * One env everywhere: a session that tests its own work meets the failure before the push.
+ */
+function serviceLocale(env) {
+  const out = { ...env };
+  for (const k of ["LANG", "LC_ALL", "LC_CTYPE"]) delete out[k];
+  return out;
+}
+
 function runChild(file, say) {
   return new Promise((resolve) => {
     const tmuxDir = makeTmuxDir();
     tmuxDirs.add(tmuxDir);
-    const env = tmuxIsoEnv(envFor(file), tmuxDir);
+    const env = serviceLocale(tmuxIsoEnv(envFor(file), tmuxDir));
     const live = JOBS === 1;
     const child = spawn(process.execPath, [where.get(file)], { cwd: repoRoot, env, stdio: live ? "inherit" : ["ignore", "pipe", "pipe"], detached: true });
     // stdout and stderr into ONE buffer in arrival order, so a FAIL line sits where it was
@@ -470,6 +483,28 @@ async function pool(queue, width) {
   }
 }
 
+/**
+ * One FULL suite on this machine at a time — the pre-push gate's, a session's own, a
+ * `verify-rev.sh` — whoever starts second waits here. The gate's lock (`~/.local-ci`'s
+ * `ci_lock`) only ever serialized pushes; a session's full run beside a push's doubled the
+ * load, and 2026-10-20's refused pushes were load flakes from exactly that overlap. A filtered
+ * run (a few scripts) does not wait: it is the session checking its own change, and short.
+ * Same lock files as the ports (`lib-portlock.mjs`), under the key `suite`.
+ */
+if (!filters.length) {
+  let said = 0;
+  for (;;) {
+    const got = locks.tryAcquire("suite");
+    if (got.held) break;
+    if (got.owner && Date.now() - said > 60_000) {
+      console.log(`[run-e2e] another full e2e suite is running on this machine (pid ${got.owner}) — waiting for it, so the two do not load each other into flakes`);
+      said = Date.now();
+    }
+    await new Promise((r) => setTimeout(r, got.owner ? 2000 : 50));
+  }
+  process.on("exit", () => locks.release("suite"));
+}
+
 console.log(`[run-e2e] ${scripts.length} script(s), ${Math.min(JOBS, pooled.length) || 1} at a time${serial.length ? ` + ${serial.length} alone afterwards (${serial.join(", ")})` : ""} — ${cores} cores`);
 await pool(pooled, JOBS);
 for (const file of serial) {
@@ -488,14 +523,17 @@ if (TIMES_FILE && Object.keys(thisTimes).length) {
  * Each script that failed in the pool runs ONCE more, alone, so the summary can say which kind
  * of failure it was: one that fails alone too is a plain break; one that passes alone failed
  * only beside its siblings — a timing window in the test or the code that load stretched.
- * That second kind STILL fails the run. Passing alone does not make it right (e2e-search's
- * was a real race in the test that load exposed), and a gate that waved it through would let
- * it be pushed and never looked at again; the verdict exists so nobody spends the first ten
- * minutes re-running it by hand to find out which kind it is.
- * Only for a few: more than RETRY_MAX failing at once is a break, and re-running them would
- * only make the refused push slower. `E2E_RETRY_ALONE=0` turns it off.
+ * That second kind no longer fails the run (owner's call, 2026-10-20: about ten pushes in five
+ * days were refused by a different load flake each time). It is still not right — e2e-search's
+ * was a real race in the test — so it is never silent: the summary names it as a LOAD FLAKE
+ * with its FAIL lines, and it is appended to FLAKES_FILE so it can be fixed later.
+ * Up to RETRY_MAX of them: it was 3, and a run beside another project's build (load average
+ * 31-38) failed four that each passed alone, so the push was refused as a "break". Past ten at
+ * once is a break, and re-running them would only make the refused push slower.
+ * `E2E_RETRY_ALONE=0` turns it off.
  */
-const RETRY_MAX = 3;
+const RETRY_MAX = 10;
+const FLAKES_FILE = join(dirname(TIMES_FILE ?? join(homedir(), ".cache", SLUG, "x")), "e2e-flakes.jsonl");
 const aloneVerdict = new Map(); // file → true passed alone / false failed alone too
 const retrying = JOBS > 1 && failures.length > 0 && failures.length <= RETRY_MAX && process.env.E2E_RETRY_ALONE !== "0";
 if (retrying) {
@@ -506,7 +544,10 @@ if (retrying) {
     const code = await runOne(file, (d) => out.push(Buffer.isBuffer(d) ? d : Buffer.from(String(d))));
     const secs = ((Date.now() - started) / 1000).toFixed(1);
     aloneVerdict.set(file, code === 0);
-    if (code === 0) { console.log(`[run-e2e] ${file} passed alone (${secs}s)`); continue; }
+    if (code === 0) {
+      console.log(`[run-e2e] ${file} passed alone (${secs}s) — a load flake, not blocking`);
+      continue;
+    }
     const text = Buffer.concat(out).toString("utf8");
     failedOutput.set(file, text); // the alone run's lines: no sibling's load in them
     process.stdout.write(`\n──────── ${file} (alone) ────────\n${text}${text.endsWith("\n") || !text ? "" : "\n"}[run-e2e] ${file} FAILED alone too with exit ${code} (${secs}s)\n`);
@@ -533,14 +574,25 @@ function whyLines(text) {
   return out.map((l) => (l.length > 200 ? l.slice(0, 199) + "…" : l));
 }
 const kindOf = (file) => !aloneVerdict.has(file) ? ""
-  : aloneVerdict.get(file) ? " — passes alone: fails only beside other scripts, a timing window load stretched (still a failure)"
+  : aloneVerdict.get(file) ? " — passes alone: a timing window load stretched; not blocking, logged to " + FLAKES_FILE
   : " — fails alone too";
 
 const wall = Math.round((Date.now() - wallStart) / 1000);
-console.log(`\n════════ ${scripts.length - failures.length}/${scripts.length} e2e scripts passed in ${wall}s (jobs ${JOBS}) ════════`);
+const nFlaky = failures.filter((f) => aloneVerdict.get(f) === true).length;
+console.log(`\n════════ ${scripts.length - failures.length}/${scripts.length} e2e scripts passed in ${wall}s (jobs ${JOBS})${nFlaky ? `, ${nFlaky} more passed alone (load flake, not blocking)` : ""} ════════`);
 if (failures.length > RETRY_MAX && JOBS > 1) console.error(`  (${failures.length} failed at once — not re-run alone; that many is a break, not load)`);
+const blocking = failures.filter((f) => aloneVerdict.get(f) !== true);
 for (const f of failures.sort()) {
-  console.error(`  FAILED  ${f}${kindOf(f)}`);
+  console.error(`  ${aloneVerdict.get(f) === true ? "LOAD FLAKE" : "FAILED"}  ${f}${kindOf(f)}`);
   for (const l of whyLines(failedOutput.get(f) ?? "")) console.error(`      ${l}`);
 }
-process.exit(failures.length ? 1 : 0);
+// Appended here, not in the re-run loop: `whyLines` reads RECAP_LINES, declared after it.
+const flakes = failures.filter((f) => aloneVerdict.get(f) === true);
+if (flakes.length) {
+  try {
+    mkdirSync(dirname(FLAKES_FILE), { recursive: true });
+    const at = new Date().toISOString();
+    appendFileSync(FLAKES_FILE, flakes.map((file) => JSON.stringify({ at, file, why: whyLines(failedOutput.get(file) ?? "") }) + "\n").join(""));
+  } catch (e) { console.error(`  (could not log the flakes to ${FLAKES_FILE}: ${e.message})`); }
+}
+process.exit(blocking.length ? 1 : 0);

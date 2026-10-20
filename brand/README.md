@@ -37,3 +37,4 @@ as a `<path d>` with the same fill and opacity, and save as `hero.svg`.
   `drawable/ic_launcher_{background,monochrome}.xml` (vector), `values/ic_launcher_background.xml`,
   `drawable-*dpi/ic_stat_app.png` (white notification glyph), `drawable*/splash.png`.
 - `docs/assets/`: `hero.svg`, `icon-light.svg`.
+- `packages/vscode/icon.png`: the Marketplace icon, 256 px, transparent corners.

@@ -347,5 +347,18 @@ export function createMenuItemTable(features: readonly FeatureManifest[], getCor
 /** Contributed buttons for the masked password field, under the same containment. */
 export function createSecretFillerTable(features: readonly FeatureManifest[], getCore: () => CoreApi) {
   const t = contributionTable<SecretFillerDef, [SecretFillContext]>(features, (f) => f.secretFillers, "secret filler", getCore, (d, c, ctx) => d.open(c, ctx));
-  return { items: (ctx: SecretFillContext) => t.entries(ctx) };
+  const defs = new Map<string, SecretFillerDef>();
+  for (const f of features) for (const d of f.secretFillers ?? []) defs.set(`${f.id}:${d.id}`, d);
+  const fail = createFailReporter(true);
+  return {
+    // `labelFor` words the button for this ask, or drops it (null); a throw drops it too, said once.
+    items: (ctx: SecretFillContext) => t.entries(ctx).flatMap((e) => {
+      const d = defs.get(e.key);
+      if (!d?.labelFor) return [e];
+      try {
+        const label = d.labelFor(ctx);
+        return label ? [{ ...e, label }] : [];
+      } catch (err) { fail(e.feature, `secret filler ${d.id}`, err, getCore()); return []; }
+    }),
+  };
 }

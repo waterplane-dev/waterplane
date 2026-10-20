@@ -1,0 +1,31 @@
+▐▛███▛█   Claude Code v2.1.304
+▝▜██████▀  Xxxxx 0.0 · Xxxxxx Xxx
+ ▝▝   ▝▝   /xxxxxxx/xxx/xxxxxxx/0_/xx0xxx0x0x00xxxxxxxx_00x0000xx/X/xxxxxxxxxx-xxxxx-xxxx-XxXXXX/xxxxx-xxxx
+
+❯ Xxx xxx Xxxx xxxx xx xxx xxxxxxx: xxxxx -x xx-xxxxx && xxxx XX_XXXXX_$((0*0)) — xxxx xxxxx XXXX.
+
+  Xxx 0 xxxxx xxxxxxx
+
+⏺ XXXX. Xxxxxx: XX_XXXXX_00.
+
+✻ Xxxxxx xxx 0x · xxxx 0:00 XX
+
+❯ Xxxx xxx XxxXxxxXxxxxxxx xxxx xxxxxxx xxxx xxxx xxx xxxxxxxx, "Xxxxx xxxxxx xx xx xxx xxxxx?", xxxxxx "Xxxxx",
+  xxxxxXxxxxx xxxx, xxxxxxx Xxxxx, Xxxxxx xxx Xxxxxx (xxxx xxxx x xxx-xxxx xxxxxxxxxxx). Xxxxx xxx xxxxxx, xxxxx XXXX0.
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☒ Xxxxx  ✔ Xxxxxx  →
+
+Xxxxx xxxxxx xx xx xxx xxxxx?
+
+  1. [ ] Xxxxx
+         Xxxxx, xxxxx-xxxx xxxxxx.
+  2. [✔] Xxxxxx
+         Xxxx, xxxxxx xxxxxxxxx; xxxxx xxxx xxxxxx xxxxxxx.
+  3. [ ] Xxxxxx
+         Xxxxx, xxxxxx; xxxxx xxx xxx xxxxx.
+  4. [ ] Type something
+❯    Submit
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  5. Chat about this
+
+Enter to select · ↑/↓ to navigate · ctrl+g to edit in Vim · Esc to cancel

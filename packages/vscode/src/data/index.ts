@@ -39,6 +39,8 @@ export { TokenStore } from "./store.js";
 export type { Files, ScanStats } from "./store.js";
 export { foldCorpus } from "./corpus.js";
 export { weighFolder } from "./weight.js";
+export { claudeImports, classifyInstructions, classifyRule, fmGlobs, instructionTotals as totalsFor, sharedChars } from "@waterplane/shared";
+export { inventory } from "./instructions.js";
 
 // ── The host primitives these are built on, re-exported for the tests ONLY:
 // `test/*.test.mjs` pins the extension's figures equal to the host's own

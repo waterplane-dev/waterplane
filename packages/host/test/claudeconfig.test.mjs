@@ -6,7 +6,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { claudeConfigDirFromEnv, claudeConfigDirOf, truncatedSlugPrefix, transcriptDirName } from "@waterplane/shared";
@@ -46,6 +46,23 @@ test("tmux pane carries CLAUDE_CONFIG_DIR unchanged, unset adds nothing, a launc
   withEnv({ CLAUDE_CONFIG_DIR: "/cfg" }, () => {
     assert.deepEqual(cliConfigEnv({}), { CLAUDE_CONFIG_DIR: "/cfg" });
     assert.deepEqual(cliConfigEnv({ CLAUDE_CONFIG_DIR: "/mine" }), { CLAUDE_CONFIG_DIR: "/mine" });
+  });
+});
+
+test("a cwd reached through a symlink finds the folder the CLI slugged off its realpath", (t) => {
+  const base = mkdtempSync(join(tmpdir(), "cfgreal-"));
+  t.after(() => rmSync(base, { recursive: true, force: true }));
+  const real = join(realpathSync(base), "repo");
+  mkdirSync(real);
+  const link = join(base, "link");
+  symlinkSync(real, link);
+  const cfg = join(base, "cfg");
+  withEnv({ CLAUDE_CONFIG_DIR: cfg }, () => {
+    assert.equal(claudeProjectDir(link), join(cfg, "projects", transcriptDirName(link)), "no folder either way: the path as given");
+    mkdirSync(join(cfg, "projects", transcriptDirName(real)), { recursive: true });
+    assert.equal(claudeProjectDir(link), join(cfg, "projects", transcriptDirName(real)), "the realpath's folder");
+    mkdirSync(join(cfg, "projects", transcriptDirName(link)), { recursive: true });
+    assert.equal(claudeProjectDir(link), join(cfg, "projects", transcriptDirName(link)), "a folder for the given path still wins");
   });
 });
 

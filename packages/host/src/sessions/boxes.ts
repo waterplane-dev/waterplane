@@ -10,7 +10,7 @@
 import { SOURCE_KEYS_MAX, type DetectedPrompt, type PluginScreenBox, type PluginScreenReader, type SourceKeys } from "@waterplane/shared";
 import { screenReaderFor } from "../backends/readers.js";
 import { detectPrompt, dialogStillUp, dialogEvidence, hasDialogFooter, isDialogFooterRow, MAX_BOX_OPTIONS, mergeBox, navToSubmit, readNavBox, sameBox, samePrompt, stripAnsi } from "../prompt.js";
-import { descFor, pendingAskQuestions, pickAsk, recoverHead, type AskQuestion } from "../askbox.js";
+import { asksFromCall, descFor, pendingAskQuestions, pendingAskRecord, pickAsk, recoverHead, type AskQuestion } from "../askbox.js";
 import { isPlanBox, planPathFor, readPlan } from "../planbox.js";
 import { detectLimitText, STOP_WAIT_RE } from "../limit.js";
 import { detectLogin, loginCandidate, sameLogin, type DetectedLogin } from "../login.js";
@@ -32,6 +32,10 @@ import {
  * bottom of a claude screen is the composer and the working line, and a sample
  * that shows those says nothing about the box above them.
  */
+/** How long the `askbox.enrich` fixture waits for the log to write the call: 2 min. */
+const ASK_RECORD_POLLS = 60;
+const ASK_RECORD_POLL_MS = 2_000;
+
 function healthTail(screen: string, anchor: (line: string) => boolean): string {
   const rows = screen.split("\n");
   let hit = -1;
@@ -634,6 +638,9 @@ function enrichPrompt(s: Session, p: DetectedPrompt): DetectedPrompt {
       asks = pendingAskQuestions(s.info.cwd, cid);
       s.askCache = { mtime, asks };
     }
+    // The log does not hold the call while its box is up on 2.1.304 (it is
+    // written once answered); the `PreToolUse` hook carried it before the box.
+    if (!asks.length && s.askHook) asks = asksFromCall(s.info.cwd, cid, s.askHook);
   } catch { return p; }
   const labels = p.options.map((o) => o.label);
   // The UNIQUE best match, never the first that overlaps: one
@@ -798,14 +805,24 @@ export function applyPrompt(core: SessionCore, s: Session, prompt: DetectedPromp
     // box. Not on every strict pass either, for the reason `enrichPrompt`
     // states.
     if (prompt && !had) {
-      core.noteFor(s, "prompt.box", "good");
+      // The fixture is the screen the box was published off (`clifixtures.ts`).
+      core.noteFor(s, "prompt.box", "good", { fixture: () => core.screenText(s.info.id) });
       // The enrichment rides on the same edge, from what the poll stashed.
       // `asks: 0` is not a miss (see `enrichPrompt`); the fallback is that the
       // phone shows the labels as the terminal cut them, with the paragraph
       // that explains them nowhere on the device.
       const e = s.enrich;
       if (e && e.asks > 0) {
-        if (e.matched) core.noteFor(s, "askbox.enrich", "good");
+        // The fixture is the LOG's record of the call, which 2.1.304 writes only
+        // once the box is answered — so it is waited for (once per CLI version).
+        if (e.matched) core.noteFor(s, "askbox.enrich", "good", { fixture: async () => {
+          for (let i = 0; i < ASK_RECORD_POLLS; i++) {
+            const rec = pendingAskRecord(s.info.cwd, s.info.claudeSessionId);
+            if (rec) return rec;
+            await pause(ASK_RECORD_POLL_MS);
+          }
+          return null;
+        } });
         else core.noteFor(s, "askbox.enrich", "fallback", { via: "the labels as the terminal cut them", raw: e.labels });
       }
     }
@@ -867,7 +884,7 @@ export async function submitPromptBox(core: SessionCore, id: string): Promise<{ 
   // Both words the commit row is drawn with — see `prompt.ts`'s
   // `SUBMIT_ROW_RE`. Anchored, so a sentence containing "next" is not a row.
   const tail = healthTail(seen, (l) => /^\s*\S?\s*(Submit|Next)\s*$/.test(l));
-  if (placed) core.noteFor(s, "prompt.submit", "good");
+  if (placed) core.noteFor(s, "prompt.submit", "good", { fixture: () => seen });
   else if (readable) core.noteFor(s, "prompt.submit", "miss", { raw: tail });
   else core.noteFor(s, "prompt.submit", "fallback", { via: "a bare Return", raw: tail });
   return { ok: core.input(id, "\r"), placed };

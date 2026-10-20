@@ -4,7 +4,8 @@
  * the facade (docs/notes/host-architecture.md, package S1).
  *
  * Constants only: no class, and no function but `defaultTmuxServer` (the tmux
- * socket's derivation, evaluated once below) and the one-line `tmuxName` —
+ * socket's derivation, evaluated once below) and the one-liners `tmuxName` and
+ * `tmuxLiteral` (here so every slice may use it: a slice imports no slice) —
  * nothing that runs but the env reads themselves. Those still happen at IMPORT,
  * exactly once, exactly as they did inline — the facade imports this module
  * LAST among its imports, so it is evaluated immediately before the facade's own
@@ -385,3 +386,16 @@ export const STALE_LIVE_MIN_AGE_MS = Math.max(0, Number(env("STALE_LIVE_MIN_AGE_
 /** How often a backend's `sources.sweep` is asked to reap what a gone session left behind
  *  (`sidechannel.ts`; opencode's seat servers and records). Also run once when plugins settle. */
 export const SEAT_SWEEP_MS = Math.max(1000, Number(env("SEAT_SWEEP_MS") || 60_000));
+
+/**
+ * Bytes typed INTO a pane through our tmux client: tmux reads ctrl+b (`\x02`)
+ * as its PREFIX and the key after it as a tmux command (`d` detaches, `x` kills
+ * the pane), so a lone ctrl+b from the phone never reached claude, which binds
+ * it to "background the running task". The default `C-b C-b` binding is
+ * `send-prefix`: doubling every `\x02` hands exactly one to the pane — what
+ * claude itself says under tmux ("ctrl+b ctrl+b (twice)"). The prefix is left
+ * as it is, for a person who attaches to this server at the desk.
+ */
+export function tmuxLiteral(data: string): string {
+  return data.includes("\x02") ? data.replace(/\x02/g, "\x02\x02") : data;
+}

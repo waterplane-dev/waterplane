@@ -91,10 +91,9 @@ export type {
   CliSignalId,
 } from "./clihealth/healthcatalog.js";
 export {
-  emptyHealth,
-  blankSignal,
+  emptyHealth, blankSignal,
   shapeOf,
-  redactSample,
+  redactSample, redactRow,
   captureSample,
   observe,
   rearmForVersion, clearSeen,
@@ -113,6 +112,7 @@ export type {
   HealthVerdict,
   HealthCheck,
 } from "./clihealth/healthrecord.js";
+export { FIXTURE_FORMS, ECHO_SPLIT, FIXTURE_ROWS, fixtureExt, decodeFixture, maskRow, maskGrid, skeletonOf, fixtureSample } from "./clihealth/healthfixture.js";
 export {
   unhealthySignals,
   healthRollup,

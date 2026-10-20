@@ -25,6 +25,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 bootWait(PORT, 800, async () => {
   const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
   const created = [];              // session ids in creation order
+  const idle = new Map();          // session id → newest info.idle off the wire
   let lastResults = null;          // newest session.searchResults payload
   // Fire a search and wait for the matching reply (matched by query+scope+id).
   const searchFor = async (query, scope, id) => {
@@ -48,6 +49,7 @@ bootWait(PORT, 800, async () => {
     ws.on("message", (raw) => {
       const m = JSON.parse(raw.toString());
       if (m.t === "session.created") created.push(m.session.id);
+      if (m.t === "session.created" || m.t === "session.updated") idle.set(m.session.id, m.session.idle === true);
       if (m.t === "session.searchResults") lastResults = m;
     });
 
@@ -89,11 +91,19 @@ bootWait(PORT, 800, async () => {
     // Its own turn, opened right before the keys — as `deliver.ts` records then types. Reusing the
     // banana turn lost a race under the full suite: a late stub repaint plus the 600 ms idle sealed
     // that capture while the searches above ran, so the echo landed with nothing capturing it.
+    // …and only once B's shell has gone QUIET. The host seals a turn on the first idle tick after
+    // output, so a turn opened while bash's late start-up output still had that tick pending was
+    // sealed empty ~100 ms later and the echo landed with nothing capturing it. Prompt on screen
+    // first, then idle: the idle=false that output sends is ordered before the search reply, so
+    // an idle=true seen after it is a quiet that came after the prompt.
+    r = await searchUntil("bash-", "recent", sidB, (x) => x.results.length >= 1, 30_000);
+    check(r != null && r.results.length >= 1, "B's shell prompt is on screen before its turn opens");
+    for (let i = 0; i < 300 && !idle.get(sidB); i++) await sleep(100);
+    check(idle.get(sidB) === true, "B is idle before its turn opens");
     ws.send(JSON.stringify({ t: "session.record", id: sidB, text: "run the echo", kind: "prompt" }));
     ws.send(JSON.stringify({ t: "session.input", id: sidB, data: "echo cherrymarker_out\n" }));
     // The output lands on the entry once the turn goes idle (the idle knob) and its async render
-    // finishes: wait for THAT, then ask the prompts scope the same question. 45 s: under the
-    // pre-push run's ten parallel scripts the idle + render took past the 15 s default.
+    // finishes: wait for THAT, then ask the prompts scope the same question.
     r = await searchUntil("cherrymarker_out", "history", sidB, (x) => x.results.length >= 1, 45_000);
     const outInHistory = r != null && r.results.length === 1;
     check(outInHistory, "history: a token only in the turn's OUTPUT is found");

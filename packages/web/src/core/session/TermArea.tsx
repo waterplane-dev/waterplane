@@ -10,9 +10,9 @@
  * the queue's (`submitInput`, `answerPrompt`) or a raw key through the compose
  * core's `sendInput` — no new send path.
  */
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, ChevronLeft, CloudOff, CornerDownLeft, GripVertical, Hourglass, Loader2,
+  AlertTriangle, BookOpen, ChevronLeft, CloudOff, GripVertical, Hourglass, Loader2,
   List, Maximize2, Minimize2, Radar, RotateCw, ScrollText, Terminal as TerminalIcon, X,
 } from "lucide-react";
 import { blockedReasonText, promptFingerprint, sessionCostOf } from "@waterplane/shared";
@@ -36,6 +36,8 @@ import { CliPeek } from "./CliPeek";
 import { PromptAnswer } from "../../PromptAnswer";
 import { termAnswersBox } from "./termAnswers";
 import { ModelWheel } from "./ModelWheel";
+import { KeysPop } from "./KeysPop";
+import { KeyRow } from "./KeyRow";
 import { ModeGlyph } from "./ModeSection";
 import { badgeMode, modeTitle } from "../../modePick";
 import { tallyTitle, turnTally } from "../sessions/tags";
@@ -69,27 +71,6 @@ import { OVER_TERMINAL, startStrayKeys } from "./strayKeys";
 
 const ICON = 16;
 
-/** Actively blur the compose box so a tap can't re-summon the on-screen keyboard.
- * preventDefault keeps the tapped button from taking focus; the blur dismisses
- * (and keeps dismissed) the keyboard for TUI-navigation keys. */
-const blurCompose = (e: ReactPointerEvent) => {
-  e.preventDefault();
-  (document.activeElement as HTMLElement | null)?.blur();
-};
-
-// `nav` keys (arrows) are TUI navigation used while NOT typing. They must not
-// hold compose focus — on Android a still-focused (but keyboard-dismissed)
-// textarea re-summons the on-screen keyboard on any focus-preserving tap. So
-// arrows blur the compose box instead; the rest keep focus for mid-typing use.
-// `title` is what a long press explains (`hints.ts` falls back to it) and the name a screen
-// reader says: four of these are bare glyphs, which explained nothing.
-const SPECIAL_KEYS: { label: ReactNode; title: string; data: string; nav?: boolean }[] = [
-  { label: "Esc", title: "Esc — close a menu or interrupt claude", data: "\x1b" }, { label: "Tab", title: "Tab — complete", data: "\t" },
-  { label: <ArrowUp size={ICON} />, title: "up — move the selection in a box", data: "\x1b[A", nav: true },
-  { label: <ArrowDown size={ICON} />, title: "down — move the selection in a box", data: "\x1b[B", nav: true },
-  { label: <ArrowLeft size={ICON} />, title: "left", data: "\x1b[D", nav: true }, { label: <ArrowRight size={ICON} />, title: "right", data: "\x1b[C", nav: true },
-  { label: "^C", title: "Ctrl-C — cancel", data: "\x03" }, { label: <CornerDownLeft size={ICON} />, title: "Return — confirm the selection", data: "\r" },
-];
 
 /** Each hook's members this area reads — `Pick<>`s, like `LauncherProps`, so
  *  what the screen depends on is stated rather than "the whole hook". */
@@ -100,7 +81,7 @@ export interface TermAreaProps {
   term: Pick<TermFeed, "termRef" | "geomRef" | "buffers" | "lastPtyAt" | "ptyTail" | "exitedRef" | "staleAt" | "writeSeq"
     | "termNonce" | "readMode" | "setView" | "readerCmd" | "outlineJump" | "transcriptNonce">;
   q: Pick<QueueApi, "entries" | "pendingEntry" | "answerPrompt" | "retryPendingCreate" | "submitInput" | "blocked">;
-  compose: Pick<ComposeApi, "cliMode" | "sendInput" | "focusPipe" | "toggleCliMode" | "noteCursorLine">;
+  compose: Pick<ComposeApi, "chord" | "tapChordMod" | "cliMode" | "sendInput" | "focusPipe" | "toggleCliMode" | "noteCursorLine">;
   launch: Pick<Launch, "sessionCan" | "openCwd" | "runForkRequest" | "relaunch">;
   chrome: SessionChrome;
   backends: BackendInfo[] | null;
@@ -332,7 +313,8 @@ export function TermArea(p: TermAreaProps): ReactNode {
   } = term;
   const outbox = q.entries;
   const { answerPrompt, retryPendingCreate, submitInput } = q;
-  const { cliMode, sendInput, focusPipe, toggleCliMode } = compose;
+  const { cliMode, sendInput, focusPipe } = compose;
+  const [keysOpen, setKeysOpen] = useState(false);
   const { sessionCan, openCwd, runForkRequest } = launch;
   const { dismissedReply, setDismissedReply } = chrome;
   // The CLI's proposal the person hid on this screen — by its words, so the
@@ -596,6 +578,8 @@ export function TermArea(p: TermAreaProps): ReactNode {
                 person meets first, before they know the key bar, drawn unnumbered with the
                 cursor on "No, exit". The reader's own card body, over the bottom of the grid
                 where the CLI draws the same box — an overlay, so the PTY is never resized. */}
+            {/* Not under the trust card (same corner): that box is answered first. */}
+            {keysOpen && !pending && !termAnswersBox(active.prompt, active.running) && <KeysPop sendInput={sendInput} onClose={() => setKeysOpen(false)} />}
             {termAnswersBox(active.prompt, active.running) && (
               <div className="term-answer" data-box="trust">
                 <PromptAnswer prompt={active.prompt} queued={queuedAnswers} suggestion={active.suggestion}
@@ -813,26 +797,7 @@ export function TermArea(p: TermAreaProps): ReactNode {
           reads `readerShown` as well — hiding the way out of a live pipe would
           strand the composer in it. */}
       {!pending && !readerShown && (
-      <div className="keys">
-        {/* The arrows normally BLUR the box (a focused-but-dismissed textarea
-            re-summons the keyboard on any focus-preserving tap). In CLI mode the
-            box IS the keyboard — dismissing it to press an arrow would mean
-            re-opening it for the next letter. */}
-        {SPECIAL_KEYS.map((k, i) => (
-          <button key={i} className="key" title={k.title} aria-label={k.title} onPointerDown={k.nav && !cliMode ? blurCompose : keepFocus} onClick={() => sendInput(k.data)}>{k.label}</button>
-        ))}
-        {/* Lives at the END of this row on purpose: the row IS raw input, and
-            CLI mode is the same thing with the alphabet added. */}
-        <button
-          className={`key cli-key ${cliMode ? "active" : ""}`}
-          data-hint="compose.cli"
-          onPointerDown={keepFocus}
-          onClick={toggleCliMode}
-          title={cliMode
-            ? "CLI mode is on — every key you type goes straight to the session. Tap to go back to composing (queued, confirmed sends)."
-            : "CLI mode — type directly at the CLI instead of composing a message: keystrokes go through as you type, nothing is queued or echo-checked."}
-        ><TerminalIcon size={ICON} /> CLI</button>
-      </div>
+      <KeyRow active={active} compose={compose} keysOpen={keysOpen} setKeysOpen={setKeysOpen} />
       )}
 
       <NewImagesStrip sessionId={active.id} />

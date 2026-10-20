@@ -112,6 +112,8 @@ function androidOutputs() {
 function docsOutputs() {
   put("docs/assets/hero.svg", readIn("hero.svg"));
   put("docs/assets/icon-light.svg", readIn("icon-light.svg"));
+  // VS Code Marketplace listing: transparent outside the rounded square (the panel is dark or light).
+  put("packages/vscode/icon.png", png(readIn("icon.svg"), 256));
 }
 
 // ---- SVG -> Android VectorDrawable (the small element set the layers use) ----

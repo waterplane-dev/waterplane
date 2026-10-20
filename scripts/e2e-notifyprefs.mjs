@@ -51,7 +51,14 @@ function boot() {
   host = spawn("node", ["packages/host/dist/main.js"], { env, stdio: ["ignore", "pipe", "pipe"] });
   host.stderr.on("data", (d) => process.stderr.write("[host] " + d));
 }
-const stop = async () => { host?.kill(); await sleep(700); };
+// Wait for the EXIT, never a fixed sleep: a host still dying when the next one
+// boots answers `waitForHost` itself, and its sockets then tell nothing.
+const stop = async () => {
+  if (!host || host.exitCode !== null || host.signalCode !== null) return;
+  const gone = new Promise((r) => host.once("exit", r));
+  host.kill();
+  await gone;
+};
 
 boot();
 await waitForHost(PORT);
@@ -66,7 +73,9 @@ async function connect(label) {
   });
   await new Promise((r) => ws.on("open", r));
   ws.send(JSON.stringify({ t: "hello", protocol: 1 }));
-  await sleep(400);
+  // The prefs frame is the hello's answer: wait for it, not a fixed sleep,
+  // which a loaded machine outruns.
+  await waitFor(() => state.prefs !== null);
   state.send = (msg) => ws.send(JSON.stringify(msg));
   state.close = () => ws.close();
   return state;

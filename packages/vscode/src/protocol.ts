@@ -8,6 +8,7 @@ import type {
   ColdStarts, CompactionLedger, ContextEvent, ContextSample, ContextWindowSource, CostBreakdown,
   CostConvo, CostWindowDoc, SkillWeight, ContextWeightReading, TokenStatsDoc, TokenTotals,
 } from "@waterplane/shared";
+import type { InstructionFile, InstructionOverlap, InstructionReader, InstructionTotals } from "@waterplane/shared";
 import type { AgentRun, HealthIndexResponse, RepoHealthMeasure, RepoHealthOutcome, RepoHealthPlot, RepoHealthSeries } from "@waterplane/shared";
 
 export type TabId = "session" | "all" | "always-on" | "health" | "prompts";
@@ -107,7 +108,23 @@ export interface CorpusDoc extends TokenStatsDoc {
   spans: Partial<Record<number, CostWindowDoc>>;
 }
 
-export interface WeightDoc { folder: string; claudeMdChars: number; skills: SkillWeight[]; reading: ContextWeightReading }
+// ---- agent instructions: who reads which file, and when (`@waterplane/shared`'s `agentfiles.ts`) ----
+
+export type Agent = InstructionReader;
+export type { CopilotSwitches, InstructionFile, InstructionPart, InstructionWhen as When, InstructionTotals as AgentTotals, InstructionOverlap as Overlap } from "@waterplane/shared";
+
+export interface WeightDoc {
+  folder: string;
+  /** CLAUDE.md and .claude/CLAUDE.md alone — what the groom prompt quotes. */
+  claudeMdChars: number;
+  skills: SkillWeight[];
+  /** Claude Code's reading: everything it carries every turn. */
+  reading: ContextWeightReading;
+  /** Every instruction file, who reads it and when (`data/instructions.ts`). */
+  files: InstructionFile[];
+  agents: Record<InstructionReader, InstructionTotals>;
+  overlaps: InstructionOverlap[];
+}
 
 export type PromptId =
   | "groom-claudemd" | "shrink-skill-descs" | "handoff-fresh-session" | "explain-turn"

@@ -34,7 +34,9 @@ after(() => {
   rmSync(WORK, { recursive: true, force: true });
 });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const until = async (cond, ms = 4000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (cond()) return true; await sleep(20); } return cond(); };
+// A bound for a hang, not a speed claim (it returns the moment `cond` holds): every wait here is
+// on a fake helper, a fresh node process, and 4 s did not cover one starting with every core busy.
+const until = async (cond, ms = 15000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (cond()) return true; await sleep(20); } return cond(); };
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 
 // ── records ────────────────────────────────────────────────────────────────
@@ -526,7 +528,9 @@ test("stream: Auto cuts the bitrate on skipped frames with a cheap bitrate line"
   desk.handlers.ack(sub);
   assert.ok(await until(() => h.lines().some((l) => l.t === "bitrate")), "a bitrate line");
   assert.equal(h.lines().find((l) => l.t === "bitrate").kbps, 700);
-  assert.ok(await until(() => sub.statuses.at(-1)?.bitrateKbps === 700), "the view is told what Auto picked");
+  // Any status, not the newest: frames are still "skipped", so a loaded run's next tick
+  // cut again below 700 before this read — the latest status then named that cut instead.
+  assert.ok(await until(() => sub.statuses.some((s) => s.bitrateKbps === 700)), "the view is told what Auto picked");
   sub.end("test over");
   assert.ok(await until(() => desk.pids().length === 0));
 });
@@ -592,7 +596,7 @@ test("stream: a helper that exits on its own ends the view with a sentence", asy
   const h = fakeHelper("die", { FAKE_MODE: "die" });
   const { desk, open, logs } = rig(h);
   const { sub } = await open({});
-  assert.ok(await until(() => sub.ended !== null, 3000));
+  assert.ok(await until(() => sub.ended !== null));
   assert.match(sub.ended, /stopped unexpectedly \(exit code 7\)\. Open the view again/);
   assert.ok(logs.some((l) => /ended on its own: exit 7/.test(l)));
   assert.equal(desk.openCount(), 0);

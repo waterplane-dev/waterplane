@@ -16,7 +16,7 @@ import { FilterChip } from "../../web/src/kit/FilterChip";
 import type { HealthAxisMode } from "../../web/src/healthIndexWords";
 import { CLAUDE_MD_KEY, DESC_KEY } from "../../web/src/repoHealthPlot";
 import {
-  centralFileLines, centralHeadWords, emptySeriesWords, engineLineWords, lastCommitWords, notPlottedWords, outcomeWords, ownShow,
+  centralFileLines, centralHeadWords, emptySeriesWords, engineLineWords, lastCommitWords, notPlottedWords, outcomeRepeatsReadError, outcomeWords, ownShow,
   readFailedWords, refreshBusyLabel, refreshLabel, runningWords, seriesHeadWords, seriesSizeWords, seriesStatusWords,
   staleRowsWords, stalenessWords, warningsWords,
 } from "../../web/src/repoHealthWords";
@@ -84,7 +84,7 @@ export function HealthView({ folder, doc, why, run, prompts, terminal, post }: {
   const plot = doc?.plot ?? null;
   const measure = doc?.measure ?? null;
   // With no series, a failed run's line repeats the read error word for word; the read error says it once.
-  const last = doc?.last && !(doc.readError && !series && !doc.last.refused) ? doc.last : null;
+  const last = doc?.last && !outcomeRepeatsReadError(doc.last, doc.readError, !!series) ? doc.last : null;
 
   // `commits` is offered only where the index carries the per-commit series; a scope has no index,
   // and its tiles' commit mode needs none, so unknown (null) still offers it — as on the phone.

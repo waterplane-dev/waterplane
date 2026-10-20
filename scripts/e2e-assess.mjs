@@ -206,7 +206,14 @@ function boot() {
 // SIGKILL, not SIGTERM. Half of what this script pins is what survives the
 // daemon dying WITHOUT a chance to tidy up — a graceful shutdown would let the
 // flush hide exactly the writes that are supposed to have happened already.
-const stop = async () => { host?.kill("SIGKILL"); await sleep(700); };
+// And wait for the EXIT, never a fixed sleep: a host still dying when the next
+// one boots answers `waitForHost` itself, and its sockets then tell nothing.
+const stop = async () => {
+  if (!host || host.exitCode !== null || host.signalCode !== null) return;
+  const gone = new Promise((r) => host.once("exit", r));
+  host.kill("SIGKILL");
+  await gone;
+};
 // A script that throws must not leave a daemon holding this port: the next run
 // would boot into "port already in use" and report a wall of failures that have
 // nothing to do with the code under test.
@@ -214,9 +221,10 @@ process.on("exit", () => { try { host?.kill("SIGKILL"); } catch { /* already gon
 
 async function connect() {
   const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
-  const s = { runs: new Map(), intents: [], acks: [], toasts: [], frames: [], backlog: [] };
+  const s = { runs: new Map(), intents: [], acks: [], toasts: [], frames: [], backlog: [], seen: {} };
   ws.on("message", (raw) => {
     const m = JSON.parse(raw.toString());
+    s.seen[m.t] = (s.seen[m.t] ?? 0) + 1;
     if (m.t === "assess.state") { s.frames.push(m); if (m.run) s.runs.set(m.repoDir, m.run); else s.runs.delete(m.repoDir); }
     // Both halves, the way the real client does it: the full list on hello and
     // on request, and one row per transition. This script used to read only
@@ -243,13 +251,21 @@ async function connect() {
   });
   await new Promise((r) => ws.on("open", r));
   ws.send(JSON.stringify({ t: "hello", protocol: 1 }));
-  await sleep(400);
+  // `settings.all` is the last of hello's answers this script reads (after
+  // `intent.list`): wait for it, not a fixed sleep a loaded machine outruns.
+  await waitFor(() => s.settings !== undefined);
   s.send = (msg) => ws.send(JSON.stringify(msg));
   s.close = () => ws.close();
   s.run = () => s.runs.get(REPO);
   s.intent = (id) => s.intents.find((i) => i.id === id);
   s.item = (id) => s.backlog.find((i) => i.id === id);
-  s.refresh = async () => { s.send({ t: "intent.list" }); s.send({ t: "backlog.list" }); s.send({ t: "assess.state", repoDir: REPO }); await sleep(400); };
+  // A fresh frame of each kind asked for, however long the host takes to answer.
+  s.refresh = async () => {
+    const kinds = ["intent.list", "backlog.list", "assess.state"];
+    const before = Object.fromEntries(kinds.map((k) => [k, s.seen[k] ?? 0]));
+    s.send({ t: "intent.list" }); s.send({ t: "backlog.list" }); s.send({ t: "assess.state", repoDir: REPO });
+    await waitFor(() => kinds.every((k) => (s.seen[k] ?? 0) > before[k]));
+  };
   return s;
 }
 

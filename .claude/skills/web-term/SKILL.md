@@ -75,6 +75,13 @@ The two surfaces that show what the CLI is doing — the live terminal and the t
 - `cliKeys.ts` — **CLI mode**: the compose box becomes a raw key pipe, per device, NOT synced. Android
   soft keyboards report no `keydown` for letters, so the box holds a pad of spaces and every `input`
   is diffed. **Don't advance the baseline mid-composition, and don't reset the value through state.**
+- `KeyRow.tsx` + `useChord.ts` + `chordState.ts` + `KeysPop.tsx` + `cliShortcuts.ts` — **any key combination**:
+  hint chips (host `keyHints`), sticky `Ctrl`/`Alt`/`Shift` (tap = next key, twice = lock, worded on
+  the button), the fixed keys, and the `Keys` list of claude's own shortcuts. **One encoding**,
+  `shared/chord.ts`; a combination with no terminal bytes is REFUSED in words, never sent as another
+  key. A held modifier makes the compose box the key pipe for ONE key (`cliMode` widened by
+  `chord.armed`) — the letter never lands in the draft. The list leaves out `ctrl+d`, `ctrl+g`/`ctrl+e`,
+  `ctrl+v` on purpose and is an overlay, never a PTY resize. [web.md](../../../docs/notes/web.md#keyrowtsx--usechordts--keyspoptsx--any-key-combination-from-a-phone)
 - `strayKeys.ts` (`core/session/`) — **a desktop key typed at no field goes to the terminal**, then
   the terminal keeps the keyboard; through `sendInput`, never a new send path. **A stray Esc, any
   Ctrl/Alt/Meta chord and Tab are NEVER forwarded** — a stray Esc or ^C interrupts a running turn;

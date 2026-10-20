@@ -313,8 +313,10 @@ export class WallSlice {
       // parse failure here worth a word.
       // A spend wall with no printed instant is the rule answering correctly:
       // there is no clock in it to parse, so it is neither a miss nor a good.
+      // The fixture is the same sample, kept ROT13'd (`clifixtures.ts`): the
+      // notice must never sit in plain bytes in a file a session might print.
       if (!spend || parsedReset) this.core.noteFor(s, "limit.reset", parsedReset ? "good" : "fallback", {
-        ...(parsedReset ? {} : { via: "a periodic re-scan with no scheduled resume" }),
+        ...(parsedReset ? (sample ? { fixture: () => sample } : {}) : { via: "a periodic re-scan with no scheduled resume" }),
         ...(sample ? { raw: sample } : {}),
       });
     }

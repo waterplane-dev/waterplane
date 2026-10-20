@@ -318,6 +318,10 @@ test("gitOnlyProblems reads minified and namespace forms, and refuses anything b
   assert.deepEqual(gitOnlyProblems('import{spawnSync as ts}from"node:child_process";const o={ts:1,b:2},p={a:1,ts:2},k=["ts"],m="@ts-ignore";ts("git",[])'), [],
     "a key, a string that is the name and \"@name-\" are not uses");
   assert.equal(gitOnlyProblems('import{spawnSync as ts}from"node:child_process";const o={ts:ts};o.ts("sh")').length, 1, "a key's VALUE still is");
+  // spawnSync minified to `ls` (0.3.1): git's own "ls-tree" argument is not a use.
+  assert.deepEqual(gitOnlyProblems('import{execFileSync as iu,spawnSync as ls}from"node:child_process";iu("git",["ls-tree","-r"]);ls("git",[\'ls-files\'])'), [],
+    "a string opening with \"name-\" is not a use");
+  assert.equal(gitOnlyProblems('import{spawnSync as ls}from"node:child_process";const m="ls-tree";ls("sh")').length, 1, "a real call beside it still fails");
 });
 
 test("cancel during a read also drops the refresh queued behind it", { skip: noGit }, async () => {

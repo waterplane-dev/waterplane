@@ -50,6 +50,10 @@ export interface OutcomeInput {
   error?: string | null;
 }
 
+/** A failed run over an unreadable tree (no series, no refusal) only repeats the read error: say it once. */
+export const outcomeRepeatsReadError = (o: OutcomeInput | null, readError: string | null | undefined, hasSeries: boolean): boolean =>
+  !!o && !!readError && !hasSeries && !o.refused && o.ok === false;
+
 /**
  * What the last run did — the summary line above the tool's own words.
  *

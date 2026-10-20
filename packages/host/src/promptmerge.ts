@@ -136,9 +136,19 @@ export function mergeBox(published: DetectedPrompt, parsed: DetectedPrompt): Det
     // panel border the side-panel cut missed) then wins permanently, since
     // the correct shorter read can never take it back (`desc`/`ask` carry the
     // full words). Ticks are the one row field where the FRESHEST read wins.
+    //
+    // A description is ADDED to a published row that has none: the CLI may
+    // flush its `AskUserQuestion` record to the log a pass AFTER the box is
+    // drawn, and dropping the late enrichment here left the card without its
+    // explanations for as long as the box stayed up (measured on 2.1.304 by
+    // the real-CLI smoke, two runs in three). `desc` is outside the
+    // fingerprint, so adding it re-keys nothing; one already shown is kept.
     const had = byIndex.get(o.index);
-    if (!had) byIndex.set(o.index, o);
-    else if (o.checked !== undefined) byIndex.set(o.index, { ...had, checked: o.checked });
+    if (!had) { byIndex.set(o.index, o); continue; }
+    let row = had;
+    if (o.checked !== undefined) row = { ...row, checked: o.checked };
+    if (!row.desc && o.desc) row = { ...row, desc: o.desc };
+    if (row !== had) byIndex.set(o.index, row);
   }
   // Lowest indices first and capped there: the head is the half that scrolled
   // away, so if anything has to go it is the tail — which is on screen.

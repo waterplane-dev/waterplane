@@ -8,7 +8,8 @@
  * Stateless: the "what was last said" fields live on the `Session` record.
  */
 import type { CliSignalId, HealthOutcome } from "@waterplane/shared";
-import { noteHealth } from "../clihealth.js";
+import { noteHealth, type HealthOpts } from "../clihealth.js";
+import type { FixtureSource } from "../clifixtures.js";
 import { contextMeterRow } from "../context.js";
 import type { Session, SessionCore } from "./core.js";
 import { HEALTH_SPAWN_GRACE_MS } from "./knobs.js";
@@ -61,7 +62,7 @@ export function healthScope(core: SessionCore, id: string): boolean {
  * A helper rather than a guard repeated at ten call sites, for the reason
  * `clihealth.ts` gives for its own singleton: call site eleven forgets.
  */
-export function noteFor(s: Session | null | undefined, id: CliSignalId, outcome: HealthOutcome, opts: { raw?: string; via?: string } = {}): void {
+export function noteFor(s: Session | null | undefined, id: CliSignalId, outcome: HealthOutcome, opts: HealthOpts = {}): void {
   if (!s?.backend.healthScope) return;
   noteHealth(id, outcome, opts);
 }
@@ -84,7 +85,7 @@ export function noteContextHealth(s: Session, cleaned: string, pct: number | nul
   const outcome = pct != null ? "good" : "miss";
   if (s.ctxHealth === outcome) return;  // already said; a state, not an event
   s.ctxHealth = outcome;
-  noteFor(s, "context.meter", outcome, outcome === "miss" ? { raw: row } : {});
+  noteFor(s, "context.meter", outcome, outcome === "miss" ? { raw: row } : { fixture: () => cleaned });
 }
 
 /**
@@ -103,7 +104,7 @@ export function noteContextHealth(s: Session, cleaned: string, pct: number | nul
  * when it accepts the first prompt: a reader opened on a two-second-old
  * session would otherwise record a fallback for every session ever created.
  */
-export function noteLogHealth(s: Session | null, outcome: "good" | "miss" | "fallback" | null, raw: string): void {
+export function noteLogHealth(s: Session | null, outcome: "good" | "miss" | "fallback" | null, raw: string, fixture?: FixtureSource): void {
   if (!s || outcome == null) return;
   if (Date.now() - s.spawnedAt < HEALTH_SPAWN_GRACE_MS) return;
   if (s.logHealth === outcome) return;
@@ -111,5 +112,6 @@ export function noteLogHealth(s: Session | null, outcome: "good" | "miss" | "fal
   noteFor(s, "transcript.jsonl", outcome, {
     ...(outcome === "fallback" ? { via: "our own record of what we typed" } : {}),
     raw,
+    ...(fixture ? { fixture } : {}),
   });
 }

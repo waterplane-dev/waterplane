@@ -5,6 +5,7 @@ import type { ChannelHealth } from "../../backendsources.js";
 import type { StandingRule, DetectedPrompt } from "./promptbox.js";
 import type { Effort, PermissionMode, SessionLimit, SessionLogin, ShellLink, SessionAgent, SessionAsk, SessionShell } from "./launch.js";
 import type { ContextSpark } from "./contextspark.js";
+import type { KeyHint } from "../../keyhint.js";
 
 /** A drivable Claude Code session, bound to a working directory. */
 export interface SessionInfo {
@@ -46,6 +47,13 @@ export interface SessionInfo {
    * never a guess; the phone then falls back to `permissionMode` and says so.
    */
   liveMode?: PermissionMode;
+  /**
+   * The shortcuts the CLI's footer or open picker names right now that the
+   * phone's fixed key row lacks (`(shift+tab to cycle)`, `s to use this
+   * session only`), read off the rendered screen (`host/keyhints.ts`). Absent
+   * = none on screen, a non-claude backend, or an old host.
+   */
+  keyHints?: KeyHint[];
   /**
    * The model and effort the NEWEST turn actually ran on, read off the CLI's
    * conversation log (`message.model` and the record's `effort`). `model` and

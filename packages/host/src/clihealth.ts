@@ -47,6 +47,12 @@ import {
   type CliHealth, type CliSignalId, type HealthOutcome, type HealthRollup, type HealthVerdict } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
 import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
+import { FixtureShelf, type FixtureSource } from "./clifixtures.js";
+
+/** What a call site may hand an observation. `fixture` is asked only on a
+ *  `good`, and only while no capture of this signal on this CLI version is
+ *  kept (`clifixtures.ts`). */
+export interface HealthOpts { raw?: string; via?: string; fixture?: FixtureSource }
 
 /**
  * How long a write waits for its neighbours.
@@ -92,6 +98,7 @@ export class CliHealthStore {
    * the notification nobody reads.
    */
   private lastVerdict = new Map<string, HealthVerdict>();
+  private shelf: FixtureShelf;
 
   constructor(
     root: string,
@@ -99,6 +106,7 @@ export class CliHealthStore {
     private alert: HealthAlert,
   ) {
     this.path = join(hostStateDir(root), "clihealth.json");
+    this.shelf = new FixtureShelf(join(hostStateDir(root), "clifixtures"));
     try {
       if (existsSync(this.path)) this.health = cleanHealth(readJsonGuarded<any>(this.path, null));
     } catch {
@@ -128,9 +136,11 @@ export class CliHealthStore {
    * in ten seconds and make the misses mathematically invisible. Which is the
    * precise failure the feature exists to prevent.
    */
-  observe(id: CliSignalId, outcome: HealthOutcome, opts: { raw?: string; via?: string } = {}): void {
+  observe(id: CliSignalId, outcome: HealthOutcome, opts: HealthOpts = {}): void {
     const now = Date.now();
-    const sig = observe(this.health, id, outcome, { at: now, ...opts });
+    const { fixture, ...rest } = opts;
+    const sig = observe(this.health, id, outcome, { at: now, ...rest });
+    if (outcome === "good" && fixture) this.shelf.offer(id, this.health.version, fixture);
     this.schedulePersist();
     this.scheduleChange();
 
@@ -149,6 +159,9 @@ export class CliHealthStore {
       tag: `clihealth-${id}`,
     });
   }
+
+  /** Is a fixture of this signal still wanted on the installed CLI? (`clifixtures.ts`) */
+  wantsFixture(id: CliSignalId): boolean { return this.shelf.wants(id, this.health.version); }
 
   /**
    * Tell the record which `claude` is installed — driven by `update.ts`'s
@@ -257,7 +270,14 @@ export function cliHealth(): CliHealthStore | null { return current; }
 export function noteHealth(
   id: CliSignalId,
   outcome: HealthOutcome,
-  opts: { raw?: string; via?: string } = {},
+  opts: HealthOpts = {},
 ): void {
   current?.observe(id, outcome, opts);
+}
+
+/** Whether a `fixture` passed with the next `good` of this signal would be
+ *  kept — false with no store. Lets a call site read an input that will not
+ *  last (the composer) only when it is wanted, once per CLI version. */
+export function fixtureWanted(id: CliSignalId): boolean {
+  return current?.wantsFixture(id) ?? false;
 }

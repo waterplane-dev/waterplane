@@ -22,7 +22,7 @@ import { renderCapture, renderCells, type RenderRow } from "../render.js";
 import { foregroundWrapperPids, killShellGroup, readPsTable, readPsTableAsync, readShellDetail, readShellList, shellsUnder, type PsRow } from "../shells.js";
 import { exitCopyMode as tmuxExitCopyMode, exitCopyModeSync as tmuxExitCopyModeSync, paneWantsMouse, parseWheel, scroll as tmuxScroll } from "../tmuxscroll.js";
 import type { Session, SessionCore } from "./core.js";
-import { TMUX_SERVER, tmuxName } from "./knobs.js";
+import { TMUX_SERVER, tmuxLiteral, tmuxName } from "./knobs.js";
 
 /** What a shell-stopping pass settled on — `kill()`/`remove()`'s
  *  `onShellsStopped` and `killOneShell`'s reason for `shell.killed`. */
@@ -162,7 +162,7 @@ export function input(core: SessionCore, id: string, data: string): boolean {
     // types a digit into a running turn.
     core.armPromptCheck(s, 250);
   }
-  s.proc.write(data);
+  s.proc.write(tmuxLiteral(data));
   return true;
 }
 
@@ -240,7 +240,7 @@ export function write(core: SessionCore, id: string, data: string): boolean {
   s.idleNotified = false; // real input → new turn → re-arm the turn-finished ping
   markSubmitted(core, s, data);
   core.armPromptCheck(s, 250); // same as input(): the write may have answered a box
-  s.proc.write(data);
+  s.proc.write(tmuxLiteral(data));
   return true;
 }
 

@@ -419,6 +419,16 @@ export function onHookEvent(core: SessionCore, payload: ClaudeHookPayload): void
   // A fact about the SINK rather than an edge: a turn-shaped hook arrived since
   // this process attached (`Session.turnHookSeen`). `SessionEnd` never counted.
   if (ev === "SessionStart" || ev === "UserPromptSubmit" || ev === "Stop") s.turnHookSeen = true;
+  // Before the source hears it: the first hook is what flips the pipe live,
+  // and that edge's fixture capture reads this payload's shape.
+  s.lastHook = payload;
+  // The question a box is about to draw, before the log has it (2.1.304
+  // writes the call only once it is answered). A turn boundary retires it.
+  if (ev === "PreToolUse" && payload.tool_name === "AskUserQuestion" && typeof payload.tool_use_id === "string") {
+    s.askHook = { id: payload.tool_use_id, input: payload.tool_input };
+  } else if (ev === "UserPromptSubmit" || ev === "Stop" || ev === "SessionStart") {
+    s.askHook = null;
+  }
   // What the hook MEANS is the source's: the pipe going live (once), then the
   // edge — through the side channel slice into `sourceTurn` below.
   postClaudeHook(s.info.id, payload);

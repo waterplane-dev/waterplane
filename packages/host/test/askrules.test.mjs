@@ -33,7 +33,9 @@ const settingsOf = (args) => JSON.parse(args[args.indexOf("--settings") + 1]);
 // change to `hookSettingsArg` itself cannot move both sides of the comparison at once.
 const HOOK_CMD = "curl -sS -m 2 -X POST http://127.0.0.1:8770/api/hook -H 'content-type: application/json' --data-binary @- >/dev/null 2>&1 || true";
 const HOOK_ENTRY = `[{"hooks":[{"type":"command","command":"${HOOK_CMD}","timeout":5}]}]`;
-const LEGACY_BLOB = `{"hooks":{"SessionStart":${HOOK_ENTRY},"UserPromptSubmit":${HOOK_ENTRY},"Stop":${HOOK_ENTRY},"Notification":${HOOK_ENTRY},"SessionEnd":${HOOK_ENTRY}}}`;
+// Plus, since 2026-10-20, the `AskUserQuestion`-matched `PreToolUse` (claude.ts says why).
+const PRE_ENTRY = `[{"matcher":"AskUserQuestion","hooks":[{"type":"command","command":"${HOOK_CMD}","timeout":5}]}]`;
+const LEGACY_BLOB = `{"hooks":{"SessionStart":${HOOK_ENTRY},"UserPromptSubmit":${HOOK_ENTRY},"Stop":${HOOK_ENTRY},"Notification":${HOOK_ENTRY},"SessionEnd":${HOOK_ENTRY},"PreToolUse":${PRE_ENTRY}}}`;
 
 test("no rules ⇒ the argv and settings blob are exactly what they were before ask rules", () => {
   for (const askRules of [undefined, []]) {

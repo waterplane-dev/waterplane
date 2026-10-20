@@ -14,12 +14,14 @@ import { TMUX_SERVER, tmuxName } from "./knobs.js";
  * Every pane on OUR tmux server whose session name is ours, as session id →
  * the pane's pid (the binary tmux exec'd, so the agent itself). Empty when the
  * server is not running or tmux fails — the halt then has the map to go on.
+ * `-u`: a client with no UTF-8 locale (the launchd service has none) prints the
+ * `\t` below as `_`, every line then failed the split, and nothing was forced.
  */
 export function ourPanePids(): Map<string, number> {
   const out = new Map<string, number>();
   let text = "";
   try {
-    text = execFileSync("tmux", ["-L", TMUX_SERVER, "list-panes", "-a", "-F", "#{session_name}\t#{pane_pid}"],
+    text = execFileSync("tmux", ["-u", "-L", TMUX_SERVER, "list-panes", "-a", "-F", "#{session_name}\t#{pane_pid}"],
       { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
   } catch { return out; }
   const prefix = tmuxName("");

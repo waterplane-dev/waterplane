@@ -78,3 +78,4 @@ scripts/release/public-lib.test.mjs:215:422e825151  # session-url fixture
 # channel). Nowhere else; SECURITY.md stays address-free.
 site/game-privacy.html:43:2bf2ef5834  # personal-email, privacy contact (owner decision)
 site/privacy.html:115:2bf2ef5834  # personal-email, privacy contact (owner decision)
+tools/screenfixtures.test.mjs:190:8cd7a354b3

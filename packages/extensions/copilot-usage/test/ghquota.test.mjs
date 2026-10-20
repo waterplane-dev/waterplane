@@ -100,7 +100,9 @@ test("a stub gh: the body is read; a failing gh is a miss, never a number", asyn
   chmodSync(bad, 0o755);
   const probe = makeProbe(() => fetchCopilotQuota(ok), () => {}, () => NOW);
   assert.equal((await probe()).windows[0].pct, 5);
-  const miss = await fetchCopilotQuota(bad);
+  // A generous timeout: at the default 8 s this one-line sh was killed before it
+  // printed, with every core busy, and a killed gh has no 404 to read.
+  const miss = await fetchCopilotQuota(bad, 60_000);
   assert.equal(miss.miss, "gh-failed");
   assert.match(miss.detail, /404/);
   assert.equal(await makeProbe(() => fetchCopilotQuota(bad), () => {}, () => NOW)(), null);

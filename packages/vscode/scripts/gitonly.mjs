@@ -48,18 +48,20 @@ export function gitOnlyProblems(text) {
   // [A-Za-z]. The whole shape `x-NAME-y` (a word character each side of the dashes) is not a
   // use; as code it is arithmetic on the function value, which neither calls nor passes it anywhere.
   // Three more shapes a short name meets that are not uses either: an object KEY (`{ts:e}`, `,ts:1` —
-  // nothing before the colon can call or pass anything), a string that IS the name (`"ts"`), and a
+  // nothing before the colon can call or pass anything), a string that IS the name (`"ts"`), a
   // word in a string after `@` (`"@ts-ignore"`), which no code position in a bundle with no
-  // decorators takes. And a name that is also an English word or the `as` of an import specifier
-  // (`spawnSync` minified to `as`): a reference followed by whitespace and then a word or `{`, or by
-  // a backslash, is no code esbuild emits — `import{createRequire as Ui}`, "read as code" or
+  // decorators takes, and a string that opens with the name and a dash (`spawnSync` minified to
+  // `ls` beside git's own `"ls-tree"`) — a quote right before a name only ever opens a string.
+  // And a name that is also an English word or the `as` of an import specifier (`spawnSync`
+  // minified to `as`): a reference followed by whitespace and then a word or `{`, or by a backslash, is no code esbuild emits — `import{createRequire as Ui}`, "read as code" or
   // "\\bas unknown as\\b" in a string — save the operators `in`/`instanceof`, which stay counted.
   const uses = (name) => body
     .replace(new RegExp(String.raw`(?<![\w$.])${esc(name)}(?=\s+(?!(?:in|instanceof)(?![\w$]))[\w$\{]|\\)`, "g"), " ")
     .replace(new RegExp(String.raw`\w-${esc(name)}-\w`, "g"), " ")
     .replace(new RegExp(String.raw`([{,])${esc(name)}:`, "g"), "$1 :")
     .replace(new RegExp(String.raw`(["'])${esc(name)}\1`, "g"), "$1$1")
-    .replace(new RegExp(String.raw`@${esc(name)}-`, "g"), "@ -");
+    .replace(new RegExp(String.raw`@${esc(name)}-`, "g"), "@ -")
+    .replace(new RegExp(String.raw`(["'\`])${esc(name)}-`, "g"), "$1 -");
   for (const [local, imported] of fns) {
     const all = [...uses(local).matchAll(new RegExp(`${notMember}${esc(local)}(?![\\w$])`, "g"))].length;
     const git = [...body.matchAll(new RegExp(`${notMember}${esc(local)}${GIT_ARG}`, "g"))].length;

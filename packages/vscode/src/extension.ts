@@ -1,6 +1,6 @@
 /**
  * waterplane for Claude Code: reads the claude CLI's own logs on this machine and shows what each
- * prompt cost. No network, no telemetry. The corpus scan runs only when the panel opens (unless the
+ * prompt cost. No telemetry; the one network call is Copilot's quota, off until turned on (`copilotquota.ts`). The corpus scan runs only when the panel opens (unless the
  * last one is under 10 minutes old), on the rescan command, and every 10 minutes while the panel is
  * visible — never on activation — and always in a worker thread (`scanworker.ts`), never on the
  * extension host's own.
@@ -25,10 +25,12 @@ import {
 } from "./data/index.js";
 import { DEFAULT_HEALTH_SECONDS, HealthRun } from "./health/healthrun.js";
 import { Panel } from "./panel.js";
-import { NavTree, PICK, PICK_FOLDER, SHOW } from "./navtree.js";
+import { NavTree, PICK, PICK_FOLDER, QUOTA, SHOW } from "./navtree.js";
+import { CopilotQuota } from "./copilotquota.js";
 import type { NavState } from "./navtree.js";
 import { deliver, PROMPTS, render } from "./prompts.js";
 import type { ScanJob, ScanMsg } from "./scanworker.js";
+import type { CopilotSwitches } from "./protocol.js";
 import type { CorpusDoc, HealthDoc, PromptId, TabId, SessionDoc, SessionRow, SessionSummary, ToExtension, ToWebview, WeightDoc } from "./protocol.js";
 import { RestartWatch } from "./restartwatch.js";
 import { StatusBar } from "./statusbar.js";
@@ -63,6 +65,7 @@ class Ext implements vscode.Disposable {
   private statusBar = new StatusBar(`${BRAND.slug}.open`);
   private panel: Panel;
   private tree: NavTree;
+  private quota: CopilotQuota;
   private health: HealthRun;
   /** A tab the panel should show once it says `ready` (rides the ready round-trip). */
   private wantTab: TabId | null = null;
@@ -94,6 +97,8 @@ class Ext implements vscode.Disposable {
     const cfg = vscode.workspace.getConfiguration(BRAND.slug);
     this.panel = new Panel(ctx.extensionUri, (m) => void this.onMessage(m, "panel"), (v) => this.onVisible(v), () => this.cancelScan());
     // The tree on screen reads the cheap state and the cached health reading — never a corpus scan.
+    // Before the tree, which reads its state; off until the person turns it on (its one network call).
+    this.quota = new CopilotQuota(ctx.globalState, () => this.tree?.refresh());
     this.tree = new NavTree(() => this.navState(), (v) => {
       if (!v) return;
       void this.refreshSession();
@@ -121,6 +126,8 @@ class Ext implements vscode.Disposable {
       vscode.commands.registerCommand(PICK_FOLDER, () => this.pickFolderCommand()),
       vscode.commands.registerCommand(`${BRAND.slug}.healthRefresh`, () => this.healthCommand()),
       vscode.commands.registerCommand(`${BRAND.slug}.rescan`, () => this.rescan()),
+      vscode.commands.registerCommand(QUOTA, () => this.quota.click()),
+      vscode.commands.registerCommand(`${QUOTA}Off`, () => this.quota.turnOff()),
       vscode.commands.registerCommand(`${BRAND.slug}.copyPrompt`, () => this.copyPromptCommand()),
       vscode.window.onDidChangeActiveTextEditor(() => this.onEditor()),
       vscode.window.onDidChangeActiveTerminal(() => this.sendPrompts()),
@@ -163,6 +170,10 @@ class Ext implements vscode.Disposable {
   }
 
   private onConfig(e: vscode.ConfigurationChangeEvent): void {
+    // A Copilot instruction switch changes who reads which file: weigh again.
+    if (["github.copilot.chat.codeGeneration.useInstructionFiles", "chat.useAgentsMdFile", "chat.useClaudeMdFile"].some((k) => e.affectsConfiguration(k))) {
+      void this.refreshSession();
+    }
     if (!e.affectsConfiguration(BRAND.slug)) return;
     const cfg = vscode.workspace.getConfiguration(BRAND.slug);
     this.statusBar.setEnabled(cfg.get<boolean>("statusBar", true));
@@ -256,7 +267,7 @@ class Ext implements vscode.Disposable {
       this.session = { folder, doc: null, why: sentence(e) };
     }
     try {
-      this.weight = { doc: await weighFolder(folder) };
+      this.weight = { doc: await weighFolder(folder, copilotSwitches()) };
     } catch (e) {
       this.weight = { doc: null, why: sentence(e) };
     }
@@ -374,6 +385,7 @@ class Ext implements vscode.Disposable {
       weight: this.weight.doc,
       health: h?.doc ?? null,
       healthRunning: !!h?.run,
+      quota: this.quota.state,
     };
   }
 
@@ -582,7 +594,21 @@ class Ext implements vscode.Disposable {
     this.watch.dispose();
     this.panel.dispose();
     this.statusBar.dispose();
+    this.quota.dispose();
   }
+}
+
+/** The VS Code settings that switch an instruction family off for Copilot chat; unset stays undefined. */
+function copilotSwitches(): CopilotSwitches {
+  const get = (k: string): boolean | undefined => {
+    const v = vscode.workspace.getConfiguration().get<unknown>(k);
+    return typeof v === "boolean" ? v : undefined;
+  };
+  return {
+    instructionFiles: get("github.copilot.chat.codeGeneration.useInstructionFiles"),
+    agentsMd: get("chat.useAgentsMdFile"),
+    claudeMd: get("chat.useClaudeMdFile"),
+  };
 }
 
 export function activate(ctx: vscode.ExtensionContext): void {

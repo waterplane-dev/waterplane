@@ -124,13 +124,17 @@ const OPAQUE_RE = /[A-Za-z0-9_+=-]{24,}/g;
  * on `SampleMode`: the call site that leaks is always the one written later.
  */
 export function redactSample(raw: string, cap = SAMPLE_CAP): string {
-  let s = raw.replace(/\s+/g, " ").trim();
-  s = s.replace(URL_CREDS_RE, "$1<redacted>@");
+  const s = redactRow(raw.replace(/\s+/g, " ").trim());
+  return s.length > cap ? s.slice(0, cap - 1) + "…" : s;
+}
+
+/** `redactSample`'s rules with the layout kept: a fixture grid is read by column. */
+export function redactRow(row: string): string {
+  let s = row.replace(URL_CREDS_RE, "$1<redacted>@");
   s = s.replace(SECRET_ASSIGN_RE, (_m, k: string) => `${k}=<redacted>`);
   s = s.replace(EMAIL_RE, "<email>");
   s = s.replace(HOME_RE, "~");
-  s = s.replace(OPAQUE_RE, (m) => `<redacted:${m.length}>`);
-  return s.length > cap ? s.slice(0, cap - 1) + "…" : s;
+  return s.replace(OPAQUE_RE, (m) => `<redacted:${m.length}>`);
 }
 
 /** Store a failing input the way this signal is allowed to store it. */

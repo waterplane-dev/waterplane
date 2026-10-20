@@ -14,7 +14,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyPlan, cmpVersion, detectUpdateBanner, routeFromPath } from "../dist/update.js";
+import { applyPlan, cmpVersion, detectUpdateBanner, nativeChannel, routeFromPath } from "../dist/update.js";
 
 test("route is read off the far end of the symlink", () => {
   assert.equal(routeFromPath("/opt/homebrew/Caskroom/claude-code/2.1.273/claude"), "brew");
@@ -64,4 +64,14 @@ test("the CLI's own nag is still read, whichever upgrade it names", () => {
   );
   // Prose that merely says the words is not a nag.
   assert.equal(detectUpdateBanner("there is an update available for the docs").available, false);
+});
+
+test("a native install is checked against the npm dist-tag of its own update channel", () => {
+  // Asking `latest` for a stable-channel install would raise a nag `claude update` never clears.
+  assert.equal(nativeChannel('{"autoUpdatesChannel":"stable"}'), "stable");
+  assert.equal(nativeChannel('{"autoUpdatesChannel":"latest"}'), "latest");
+  assert.equal(nativeChannel("{}"), "latest");
+  assert.equal(nativeChannel(undefined), "latest");
+  assert.equal(nativeChannel("not json"), "latest");
+  assert.equal(nativeChannel('{"autoUpdatesChannel":"nightly"}'), "latest");
 });

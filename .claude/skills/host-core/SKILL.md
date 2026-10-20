@@ -80,7 +80,7 @@ One live PTY session, end to end: which binary it drives, how words get typed in
   `unsubmitted` (Return swallowed — say so, never retype). Echo is checked by POLLING the RENDERED
   screen and by PLACING the match **structurally** — inside the `❯` box (`echo.ts`'s
   `composerEcho`, shared with `settle.ts`), never by distance from the bottom of the render: the
-  replay TEARS mid-turn and strands the live composer above stale rows. No box found ⇒ the old distance rule, never a brick — at the OLD DEPTH (`FALLBACK_ROWS` 40, not the anchor's `ROW_WINDOW` 100). Two frames that DISAGREE — a live empty
+  replay TEARS mid-turn and strands the live composer above stale rows. No box found ⇒ the old distance rule, never a brick — at the OLD DEPTH (`FALLBACK_ROWS` 40, not the anchor's `ROW_WINDOW` 100). After our write, a no-box proof is HELD `FALLBACK_HOLD_MS` (1 s) for a framed one — 2.1.304 draws the text bare between frames ([why](../../../docs/notes/host.md#deliverts)). Two frames that DISAGREE — a live empty
   box under a stale one holding submitted words — are not a composer either
   (`composerFramesAmbiguous` ⇒ `retry`, never a Return at nothing). **The miss sweep sends no Esc
   and no ctrl-U while a turn is active**. **ONE health observation per delivery**: a rescue records the

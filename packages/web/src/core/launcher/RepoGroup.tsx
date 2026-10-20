@@ -564,8 +564,12 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
       )}
     </div>
   );
+  // One block per repo, not a Fragment: a sticky header pins within its PARENT,
+  // and flat in `.list` every header shared one parent, so they stacked at top 0
+  // instead of the next one pushing the last out — a tall header peeked out
+  // under a shorter one. The block makes each header leave with its own rows.
   return (
-    <Fragment>
+    <div className="repo-group-block">
       <span ref={anchorRef} className="repo-group-anchor" aria-hidden />
       {groupHead}
       {idle && !collapsed && (
@@ -583,7 +587,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
         </Fragment>
       ))}
       <span ref={endRef} className="repo-group-anchor" aria-hidden />
-    </Fragment>
+    </div>
   );
 }
 

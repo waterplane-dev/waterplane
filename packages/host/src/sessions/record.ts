@@ -31,6 +31,7 @@ import {
   RENAME_PROMPT, RENAME_RECENT_PROMPTS, RENAME_RECENT_CHARS,
 } from "./knobs.js";
 import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
+import { logRecords } from "../clifixtures.js";
 
 // ── History (prompt + captured output) ──────────────────────────────
 
@@ -223,7 +224,7 @@ export function getTranscript(core: SessionCore, id: string, since = 0, detail: 
         parsed.updatedAt = Math.max(parsed.updatedAt, localAt);
       }
       core.noteLogHealth(live, logHealthOutcome(logTurns, parsed.bytes, live?.history ?? [], logBirth(path)),
-        `${parsed.bytes} bytes, ${logTurns} turns`);
+        `${parsed.bytes} bytes, ${logTurns} turns`, () => logRecords(path));
       return { sessionId: id, claudeSessionId: cid, source: "jsonl", ...parsed };
     }
   }

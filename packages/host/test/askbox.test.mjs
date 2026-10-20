@@ -15,7 +15,10 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pickAsk, recoverHead } from "../dist/askbox.js";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { asksFromCall, pickAsk, recoverHead } from "../dist/askbox.js";
 
 const ASK = {
   question: "Which mixing strategies should exist?",
@@ -87,4 +90,19 @@ test("a call with one question is unaffected", () => {
   assert.equal(pickAsk([Q1], ["Yes", "No"])?.id, "toolu#0");
   assert.equal(pickAsk([], ["Yes", "No"]), null);
   assert.equal(pickAsk([Q1], ["Totally", "Unrelated"]), null);
+});
+
+test("the hook's call stands in for the log's, until the log shows it answered", (t) => {
+  const cfg = mkdtempSync(join(tmpdir(), "askcall-"));
+  const was = process.env.CLAUDE_CONFIG_DIR;
+  process.env.CLAUDE_CONFIG_DIR = cfg;
+  t.after(() => { if (was === undefined) delete process.env.CLAUDE_CONFIG_DIR; else process.env.CLAUDE_CONFIG_DIR = was; rmSync(cfg, { recursive: true, force: true }); });
+  const call = { id: "toolu_9", input: { questions: [{ question: "Pick?", multiSelect: true, options: [{ label: "A", description: "first" }, { label: "B" }] }] } };
+  const dir = join(cfg, "projects", "-repo");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "c1.jsonl"), JSON.stringify({ type: "user", message: { content: "hi" } }) + "\n");
+  const asks = asksFromCall("/repo", "c1", call);
+  assert.deepEqual(asks, [{ id: "toolu_9#0", question: "Pick?", multi: true, options: [{ label: "A", desc: "first" }, { label: "B" }] }]);
+  writeFileSync(join(dir, "c1.jsonl"), JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "toolu_9", content: "ok" }] } }) + "\n");
+  assert.deepEqual(asksFromCall("/repo", "c1", call), [], "answered: the box on screen is not this call's");
 });

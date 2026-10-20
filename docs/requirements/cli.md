@@ -42,3 +42,12 @@ The CLI closes its background shells when it exits.
 - asked: 2026-09-28
 - shipped: a1a9283
 
+
+### R-cli-010 · shipped
+A shortcut the CLI names on screen (the footer's "shift+tab to cycle", a picker's "s for this session only") that the special-keys row lacks appears as a one-tap key at the head of that row, sends the raw key, and is gone when the screen stops naming it.
+- asked: 2026-10-20
+- shipped: a54f2370
+
+### R-cli-011 · shipped
+Any key combination can be sent to the CLI from the phone: Ctrl / Alt / Shift on the special-keys row are held for the next key (one on the row, or a letter from the on-screen keyboard), a second tap locks one, and a `Keys` list offers claude's own shortcuts one tap each. A combination a terminal cannot send is refused in words, never sent as another key.
+- asked: 2026-10-20

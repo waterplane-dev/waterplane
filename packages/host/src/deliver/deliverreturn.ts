@@ -89,7 +89,14 @@ export async function submitAndConfirm(run: DeliveryRun): Promise<{ result: Deli
         await sleep(150);
         moved = (await snapshot()) !== before;
       }
-      if (moved) { note("slash.local", "good"); shape.submit = "screen-moved"; return { result: "ok" }; }
+      if (moved) {
+        // The fixture leads with the command NAME, then the view it opened as
+        // drawn (`snapshot()` squashes and folds case — a proof, not a picture).
+        const cmd = text.trim().split(/\s+/)[0] ?? "";
+        note("slash.local", "good", { fixture: async () => `${cmd}\n${await sessions.screenText(sessionId, 40)}` });
+        shape.submit = "screen-moved";
+        return { result: "ok" };
+      }
     }
     // Three presses and the screen never moved. Either the command starts a turn
     // after all (so the app is waiting for a redraw that will never come) or the

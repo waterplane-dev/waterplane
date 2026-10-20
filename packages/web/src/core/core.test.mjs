@@ -379,3 +379,15 @@ test("secret fillers: order, then registry order; open gets the ask's context; a
   assert.doesNotThrow(() => quietly(() => items[2].open()));
   assert.deepEqual(createSecretFillerTable([{ id: "a" }], () => core).items(ctx), []);
 });
+
+test("secret fillers: labelFor words the button for this ask, null drops it, a throw drops it", () => {
+  const { core } = fakeCore();
+  const ctx = { sessionId: "s1", askLine: "Password:", fill: () => true };
+  const mk = (id, labelFor) => ({ id, label: "plain", icon: () => null, labelFor, open: () => {} });
+  const t = createSecretFillerTable([{ id: "x", secretFillers: [
+    mk("named", (c) => `for ${c.askLine}`), mk("gone", () => null), mk("broken", () => { throw new Error("boom"); }), mk("plain"),
+  ] }], () => core);
+  let items;
+  quietly(() => { items = t.items(ctx); });
+  assert.deepEqual(items.map((e) => [e.key, e.label]), [["x:named", "for Password:"], ["x:plain", "plain"]]);
+});

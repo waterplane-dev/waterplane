@@ -49,6 +49,10 @@ export interface ClaudeHookPayload {
   cwd?: string;
   transcript_path?: string;
   prompt?: string;
+  /** `PreToolUse` only (matched to `AskUserQuestion`): the call, before its box. */
+  tool_name?: string;
+  tool_input?: unknown;
+  tool_use_id?: string;
 }
 
 export const claudeSources: BackendSources = {

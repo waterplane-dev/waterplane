@@ -13,6 +13,9 @@
  *   change the mode ("Yes, and switch to auto mode"), so last-known is not
  *   kept. Never persisted: `live/` records carry no `SessionInfo`, so a
  *   restart starts absent and the first quiet tick reads it again.
+ * - **keyHints is the screen NOW, or absent** (`keyhints.ts`): read on the
+ *   same tick, so a picker's `s for this session only` reaches the phone's
+ *   key row while the picker is up.
  * - **ultracode is sticky.** The confirmation line scrolls away and the mode
  *   reader cannot ask the CLI, so the last screen that SAID something stands
  *   until another one does (`ultracodeVerdict`). Absent until one did.
@@ -21,7 +24,8 @@
  *   about: it stops on the target, when the cycle comes back round (the mode
  *   is not in it), or at a hard cap. Serialised per session.
  */
-import type { PermissionMode } from "@waterplane/shared";
+import { sameKeyHints, type PermissionMode } from "@waterplane/shared";
+import { readKeyHints } from "../keyhints.js";
 import { permModeWords, readPermMode, readUltracode, ultracodeVerdict } from "../permmode.js";
 import type { Session, SessionCore } from "./core.js";
 import { MODE_MAX_PRESSES, MODE_POLL_MS, MODE_PRESS_WAIT_MS } from "./knobs.js";
@@ -48,6 +52,13 @@ function applyGrid(s: Session, grid: string): boolean {
   const mode = grid ? readPermMode(grid) : null;
   if (mode !== (s.info.liveMode ?? null)) {
     if (mode) s.info.liveMode = mode; else delete s.info.liveMode;
+    changed = true;
+  }
+  // The footer's and an open picker's shortcuts, for the phone's key row.
+  // Like the mode: the screen NOW, or absent.
+  const hints = grid ? readKeyHints(grid) : [];
+  if (!sameKeyHints(hints, s.info.keyHints)) {
+    if (hints.length) s.info.keyHints = hints; else delete s.info.keyHints;
     changed = true;
   }
   if (grid) {

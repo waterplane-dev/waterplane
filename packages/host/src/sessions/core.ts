@@ -17,6 +17,8 @@ import type {
   RecentSession, SessionAsk, SessionBudget, SessionInfo, SessionLimit, SessionOrigin, SourceDialog, SourceHandle, TurnFacts,
 } from "@waterplane/shared";
 import type { AskQuestion } from "../askbox.js";
+import type { HealthOpts } from "../clihealth.js";
+import type { FixtureSource } from "../clifixtures.js";
 import type { PendingPlan } from "../planbox.js";
 import type { BackendDescriptor } from "../backends/index.js";
 import type { PluginStoreReader } from "@waterplane/shared";
@@ -173,6 +175,10 @@ export interface Session {
    *  the strict prompt pass runs about twice a second while a box is up and the
    *  log does not move in that window. See `enrichPrompt`. */
   askCache?: { mtime: number; asks: AskQuestion[] };
+  /** The newest `AskUserQuestion` call as its `PreToolUse` hook carried it —
+   *  the enrichment's source while the log does not hold the call yet
+   *  (`boxes.ts`'s `enrichPrompt`). Cleared on a turn boundary. */
+  askHook?: { id: string; input: unknown } | null;
   /** Last plan-file read for a plan-approval box (`planbox.ts`), keyed on the
    *  log's mtime AND the plan file's — the plan can be edited while its box is
    *  up (ctrl+g), and the log does not move when it is. */
@@ -352,6 +358,9 @@ export interface Session {
    *  not waited on for a Stop that will never come (`sawTurnHook`). Nothing
    *  else reads it: `hooksActive` keeps its meaning everywhere it gates. */
   turnHookSeen: boolean;
+  /** The newest hook payload, as it arrived — read only for its SHAPE, by the
+   *  `hook.pipe` fixture capture (`clifixtures.ts`). Memory only. */
+  lastHook?: unknown;
   /** True between a UserPromptSubmit hook and its matching Stop hook — the turn is
    *  in flight. When hooksActive, this (not silence) gates auto-fire readiness. */
   turnActive: boolean;
@@ -576,9 +585,9 @@ export interface SessionCore {
   refreshModel(s: Session, transcriptPath?: string): void;
 
   // ── health.ts (S3) ──
-  noteFor(s: Session | null | undefined, id: CliSignalId, outcome: HealthOutcome, opts?: { raw?: string; via?: string }): void;
+  noteFor(s: Session | null | undefined, id: CliSignalId, outcome: HealthOutcome, opts?: HealthOpts): void;
   noteContextHealth(s: Session, cleaned: string, pct: number | null): void;
-  noteLogHealth(s: Session | null, outcome: "good" | "miss" | "fallback" | null, raw: string): void;
+  noteLogHealth(s: Session | null, outcome: "good" | "miss" | "fallback" | null, raw: string, fixture?: FixtureSource): void;
 
   // ── ctxseries.ts (S8) ──
   refreshSpark(s: Session): boolean;

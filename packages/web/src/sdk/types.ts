@@ -715,6 +715,12 @@ export interface SecretFillerDef {
   order?: number;
   /** Absent = always available. */
   available?(core: CoreApi): Availability;
+  /**
+   * The button's words for THIS ask, in place of `label` ("fill with mac · johannes" — the one remembered for
+   * this prompt); null = not drawn for this ask. Called on every render of the row: a cheap read of state
+   * already held. A throw drops the button, said once.
+   */
+  labelFor?(ctx: SecretFillContext): string | null;
   open(core: CoreApi, ctx: SecretFillContext): void;
 }
 

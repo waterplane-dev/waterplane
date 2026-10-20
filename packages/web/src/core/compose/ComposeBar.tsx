@@ -75,7 +75,7 @@ export function ComposeBar(p: ComposeBarProps) {
     compose, setCompose, composeRef, cmdHistory, histIdx, setHistIdx, clearArmed, setClearArmed, setComposeFocused,
     snippetOpen, setSnippetOpen, sendMode, setSendMode, sendWhere, setSendWhere, sendWhereSid, setSendWhereSid,
     sendMenu, setSendMenu, cliMode, enterSends, voice, aimedSession, stepHistory, clearCompose, appendSnippet,
-    toggleCliMode, onPipeInput, flushPipe, onPipeKey, onComposeKey, aimHere, sendCompose, openComposeSend, keepOnPad, noteSendAim,
+    chord, toggleCliMode, onPipeInput, flushPipe, onPipeKey, onComposeKey, aimHere, sendCompose, openComposeSend, keepOnPad, noteSendAim,
     secretAskLine, secret, setSecret, secretShown, setSecretShown, dismissSecret, sendSecret, secretFillContext,
   } = api;
   // A shell takes commands, not sentences: the keyboard's capital first letter
@@ -424,14 +424,23 @@ export function ComposeBar(p: ComposeBarProps) {
           <div className="compose-bar cli-bar">
             <span className={`cli-note${online ? "" : " warn"}`}>
               <TerminalIcon size={13} />
-              {online
+              {chord.armed
+                ? ` ${chord.heldName} held — the next key you type or tap goes with it${online ? "" : " (link is down: it is dropped, not held)"}`
+                : online
                 ? " keys go straight to the session — nothing is queued or confirmed"
                 : " link is down — these keystrokes are dropped, not held"}
             </span>
+            {chord.armed ? (
+              <button className="send" onPointerDown={keepFocus} onClick={chord.clear}
+                title="Let go of the held keys — your draft comes back">
+                <X size={ICON} /> let go
+              </button>
+            ) : (
             <button className="send" onPointerDown={keepFocus} onClick={toggleCliMode}
               title="Back to composing — messages queue, survive a dead link and are confirmed on the host">
               <X size={ICON} /> leave CLI
             </button>
+            )}
           </div>
         ) : (
         <div className="compose-bar">

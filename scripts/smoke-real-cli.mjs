@@ -12,7 +12,12 @@
 //   turn     the command's output reaches the PTY and the turn ends
 //   hooks    the injected hooks reached the sink (session.hooked)
 //   context  the context meter / ledger produced a reading
+//   ask      a multi-select AskUserQuestion: detected, enriched off the log,
+//            one row ticked by its digit, submitted by the Submit row
+//   local    `/context` delivered as a TUI-local command (no turn, screen moves)
 //   clihealth  the detector-health record, printed for the report
+//   fixtures   where the host kept this CLI's captures (`clifixtures.ts`), for
+//              `node tools/harvestfixtures.mjs --dir <that dir>`
 //
 // Spends a few cents of Haiku. Uses the developer's real login (real HOME) but
 // a temp root, its own state dir and a private tmux socket dir, so the live
@@ -23,7 +28,8 @@
 // Exit 0 = every step passed; 1 = a step failed (the JSON names which and why).
 import "./lib-tmuxiso.mjs";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
 import { bootHost } from "./lib-e2e.mjs";
@@ -52,7 +58,9 @@ const finish = async (host, code) => {
 };
 const step = (name, ok, detail) => { steps.push({ name, ok, detail }); console.log(`${ok ? "ok  " : "FAIL"} ${name}${detail ? " — " + detail : ""}`); return ok; };
 
-const host = await bootHost({ tag: "smoke-real", quiet: true, env: { [E.CLAUDE_BIN]: claudeBin } });
+// The log-health spawn grace (60 s) outlasts this whole run, which would keep
+// the `transcript.jsonl` observation — and its fixture capture — from firing.
+const host = await bootHost({ tag: "smoke-real", quiet: true, env: { [E.CLAUDE_BIN]: claudeBin, [E.HEALTH_GRACE_MS]: process.env[E.HEALTH_GRACE_MS] ?? "1000" } });
 const repoDir = join(host.root, "smoke-real");
 mkdirSync(repoDir);
 execFileSync("git", ["init", "-q"], { cwd: repoDir });
@@ -60,6 +68,8 @@ writeFileSync(join(repoDir, "README.md"), "smoke\n");
 
 const ws = new WebSocket(`ws://127.0.0.1:${host.port}/ws`);
 const waiters = new Set();
+/** Delivery receipts by ackId (`input.ack`). */
+const acks = new Map();
 const check = () => { for (const w of waiters) if (w.pred()) { waiters.delete(w); clearTimeout(w.timer); w.resolve(true); } };
 const until = (pred, ms = STEP_MS) => new Promise((resolve) => {
   if (pred()) return resolve(true);
@@ -71,6 +81,7 @@ ws.on("message", (raw) => {
   if ((m.t === "session.created" || m.t === "session.updated") && (!session || m.session.id === session.id)) session = m.session;
   else if (m.t === "pty" && session && m.id === session.id) pty += Buffer.from(m.dataB64, "base64").toString("utf8");
   else if (m.t === "clihealth") ws.health = m;
+  else if (m.t === "input.ack") acks.set(m.ackId, m);
   else if (m.t === "session.exit" && session && m.id === session.id) session = { ...session, exited: m.code };
   check();
 });
@@ -118,8 +129,67 @@ steps.push({ name: "context meter (info)", ok: true, detail: `left=${session.con
 const ctx = await fetch(`${host.base}/api/context?id=${session.id}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 step("context ledger", !!ctx, ctx ? "series read off the CLI's log" : "no context series (ctxlog could not read the log)");
 
+// A checkbox box, answered as the phone answers one: a digit ticks a row, and
+// `promptSubmit` has the host walk the cursor onto Submit (`submitPromptBox`).
+// It also files `askbox.enrich` (the log's question for the box) and
+// `prompt.submit` — each one's fixture capture rides on that good.
+ws.send(JSON.stringify({ t: "session.input", id: session.id, submit: true, ackId: ack(),
+  data: "Call the AskUserQuestion tool exactly once with one question, \"Which fruits go in the salad?\", header \"Fruit\", multiSelect true, options Apple, Banana and Cherry (each with a one-line description). After the answer, reply DONE2." }));
+if (step("ask box detected", await until(() => session?.prompt?.multi === true), session?.prompt ? `saw ${session.prompt.kind}` : "no checkbox box published")) {
+  // The host's own matcher, asked here against the labels it published.
+  const askDiag = async () => {
+    try {
+      const { pendingAskQuestions, pickAsk } = await import("../packages/host/dist/askbox.js");
+      const asks = pendingAskQuestions(repoDir, session.claudeSessionId);
+      const labels = (session.prompt?.options ?? []).map((o) => o.label);
+      return `labels ${JSON.stringify(labels)}, pending asks ${asks.length}${asks[0] ? ` ${JSON.stringify(asks[0].options.map((o) => o.label))}` : ""}, match ${!!pickAsk(asks, labels)}`;
+    } catch (e) { return `diag failed: ${e.message}`; }
+  };
+  const enriched = await until(() => session.prompt?.options?.some((o) => o.desc), 20_000);
+  // On a miss, say whether the CLI's log held the pending call at all — the
+  // difference between a matcher that broke and a CLI that stopped writing the
+  // call before it is answered (`askbox.ts` rests on the latter not happening).
+  let logged = "unknown";
+  try {
+    const dir = join(homedir(), ".claude", "projects", realpathSync(repoDir).replace(/[^A-Za-z0-9]/g, "-"));
+    // The CALL record, not the tool's definition (the CLI logs its request
+    // records too, and every one of them names AskUserQuestion).
+    const pending = readdirSync(dir).filter((f) => f.endsWith(".jsonl"))
+      .some((f) => readFileSync(join(dir, f), "utf8").split("\n").some((l) => /"type":"tool_use"[^}]*"name":"AskUserQuestion"/.test(l)));
+    logged = pending ? "the log holds the call" : "the log does NOT hold the call while the box is up";
+  } catch { /* unknown */ }
+  step("ask box enriched", enriched, enriched ? "descriptions in the CLI's own words (its log, or the PreToolUse hook)"
+    : `${logged}; conversation id ${session.claudeSessionId ?? "unknown"}, askId ${session.prompt?.askId ?? "none"}; ${await askDiag()}`);
+  const banana = session.prompt.options.find((o) => /banana/i.test(o.label)) ?? session.prompt.options[1];
+  ws.send(JSON.stringify({ t: "session.input", id: session.id, data: String(banana.index), ackId: ack(), expectPrompt: promptFingerprint(session.prompt) }));
+  step("ask row ticked", await until(() => session.prompt?.options?.some((o) => o.index === banana.index && o.checked), 10_000), banana.label);
+  ws.send(JSON.stringify({ t: "session.input", id: session.id, data: "", promptSubmit: true, ackId: ack(), expectPrompt: promptFingerprint(session.prompt) }));
+  step("ask box submitted", await until(() => !session.prompt?.multi, 20_000));
+  // 2.1.304 asks once more before sending — "Review your answers", a numbered
+  // box of its own (Submit answers / Cancel) — and the phone answers it like any box.
+  if (await until(() => session.prompt?.options?.some((o) => /^submit answers/i.test(o.label)), 5_000)) {
+    const p = session.prompt, go = p.options.find((o) => /^submit answers/i.test(o.label));
+    ws.send(JSON.stringify({ t: "session.input", id: session.id, data: String(go.index), ackId: ack(), expectPrompt: promptFingerprint(p) }));
+    step("ask review answered", await until(() => !session.prompt, 20_000), `chose "${go.label}"`);
+  }
+  step("ask turn ended", await until(() => session.turnActive === false && pty.includes("DONE2"), 60_000));
+}
+
+// A TUI-local command: a view opens, no turn starts (`slash.local`).
+// Its receipt, not the output growing: the typed echo alone grows it, and the
+// delivery's own "the screen moved" proof is what `slash.local` records.
+const ctxAck = ack();
+ws.send(JSON.stringify({ t: "session.input", id: session.id, data: "/context", submit: true, ackId: ctxAck }));
+const ctxDone = await until(() => acks.has(ctxAck), 60_000);
+const ctxR = acks.get(ctxAck);
+step("local command", ctxDone && ctxR.ok && session.turnActive !== true, ctxR ? `/context: ${ctxR.ok ? "delivered" : ctxR.reason ?? "refused"}` : "no receipt");
+ws.send(JSON.stringify({ t: "session.input", id: session.id, data: "\x1b" }));
+
 ws.send(JSON.stringify({ t: "clihealth.get" }));
 await until(() => !!ws.health, 5_000);
 steps.push({ name: "clihealth", ok: true, detail: JSON.stringify(ws.health?.rollup ?? null) });
+// The temp root outlives `stop()`, so the captures can be harvested afterwards.
+const { hostStateDir } = await import("../packages/host/dist/branddirs.js");
+step("fixtures (info)", true, join(hostStateDir(host.root), "clifixtures"));
 ws.send(JSON.stringify({ t: "session.kill", id: session.id }));
 await finish(host);

@@ -398,9 +398,19 @@ degrades toward serial, never to a stop — and says so when it throttles and wh
 phone showed e2e-halt and e2e-setup failing; both passed alone, and the phone's last-lines view held
 neither script's FAIL line, only a 4 kB temp-dir tally. Three changes. (1) Up to three failed scripts
 run once more ALONE after the pool, and the summary says "passes alone" (a timing window load
-stretched) or "fails alone too" — a pass alone still FAILS the run: e2e-search's was a real race in
-the test that load exposed, and a gate that waved it through would have shipped it unread
-(`E2E_RETRY_ALONE=0` turns the re-run off). (2) The summary repeats each failure's FAIL lines with
+stretched) or "fails alone too" (`E2E_RETRY_ALONE=0` turns the re-run off). A pass alone first
+still FAILED the run (e2e-search's was a real race in the test that load exposed); the same day the
+owner made it a LOAD FLAKE that does not block — about ten pushes in five days had each been refused
+by a different one — named in the summary and appended to `~/.cache/<slug>/e2e-flakes.jsonl` so it
+is fixed later, not lost. Every script also runs with no locale, as the launchd service does: a phone
+push runs in the service's env, and e2e-halt failed only there (tmux with no locale printed a
+format's `\t` as `_`). Later that day: up to TEN failed scripts are re-run alone (was three — a run beside
+another project's build failed four that each passed alone, and "more than three" read it as a
+break), and only one FULL suite runs on this machine at a time (`run-e2e.mjs`, lock key `suite`
+beside the port locks): a session's own full run had been doubling a push's load. The pre-push
+hook itself (`~/.local-ci`) now runs one gate per code version — a push waiting on a run of the
+same tree takes its verdict, pass or fail, and a push whose tip contains the commit being tested
+supersedes that run (the old push aborts saying so; its commits go out with the new one). (2) The summary repeats each failure's FAIL lines with
 the indented lines under them, so the cause sits in the last screen. (3) `with-tmp`'s leftover tally
 names the six biggest kinds only. And the whole-script hang guard is `watchdog()` from
 `scripts/lib-watchdog.mjs` with a 45 s floor, never an inline `setTimeout`: e2e-setup's 15 s one
@@ -539,6 +549,58 @@ The smoke answers each box as the phone does: the option that says yes, by `prom
 
 `E2E_BOOT_MS` lengthens `waitForHost`'s 20 s (every `bootHost`): a host booted from a Windows
 checkout inside WSL loads its modules over 9P and needs 28–44 s.
+
+## Harvested screen fixtures (`clifixtures.ts`, `tools/harvestfixtures.mjs`)
+
+The heuristics' host tests are fixture in, verdict out, and a fixture is only as good as the CLI
+build that drew it. On 2026-10-19 `tools/screenfixtures.mjs` showed four of the ten health signals
+with no real capture at all and the other six two patches behind the installed CLI, hand-captured
+three days earlier — the reading was 0, and it will be 0 again after every release somebody does
+not sit down and re-capture.
+
+So the host captures as it goes. The first time a signal is seen to WORK on a CLI version, the
+call site's `fixture` thunk (passed beside `good` — `noteHealth`, `noteFor`) is asked for its
+input, and `clifixtures.ts`'s `FixtureShelf` keeps that one sample under
+`<state>/clifixtures/<version>/<signal>.txt|json`: at most one per signal per version, the thunk
+never asked once a file exists (a capture costs a screen or log read; it is paid per release, not
+per observation), a failed or empty capture leaving the slot open for the next good.
+
+What is kept is what may go into a PUBLIC repo, which is a higher bar than the health record's own
+sample. A `line` signal keeps a GRID, because the readers work by row and column: rows the host
+recognises as the CLI's chrome (dialog footers and key-hint rows, the constant `Type
+something`/`Chat about this` options, the Submit/Next row, the meter row, a local command, the
+version banner) stay verbatim under the health sample's redactions; every other row has each letter
+masked to `x`/`X` and each digit to `0` (`maskRow`), so the layout survives and no word does. A
+`shape` signal keeps a SKELETON (`skeletonOf`): keys and record/event/tool names, every value
+replaced by its kind, an array by its distinct element shapes — `deliver.submit`'s is the
+`UserPromptSubmit` hook that proved the turn, its prompt gone with every other value. Two signals
+have a form of their own (`FIXTURE_FORMS`). `deliver.echo`'s evidence is the composer holding the
+person's prompt: kept as the prompt and the screen the echo rule PROVED on, masked by the same
+character-for-character rule so one is still found in the other, with paste chits protected as
+spans (`chromeSpans`) because the composer wraps them across rows. `limit.reset`'s evidence is the
+block notice itself, and a file carrying it in plain bytes is one `cat` away from false-positiving
+the detector on a live screen — so the notice rows are kept verbatim and the whole file ROT13'd;
+`decodeFixture` undoes it for the readers and the leak check.
+
+The real-CLI smoke is the harvest's cheap source: it drives the trust box, a Bash permission box, a
+multi-select `AskUserQuestion` (ticked by digit, submitted by `promptSubmit`) and `/context`, which
+yields every signal but two. `context.meter` needs the CLI's gated meter row, drawn only near the
+window's end, and `limit.reset` a real wall — both are left to the live host. Its first runs found
+three things the stub suite could not, all on 2.1.304: submitting a single-question checkbox opens
+a second box (`Review your answers` — 1. Submit answers / 2. Cancel); the `AskUserQuestion` call
+reaches the log only once answered (two runs in three), so the enrichment now also reads the
+`PreToolUse` hook matched to that tool — and `mergeBox` had been dropping a description that
+arrived a pass late; and the CLI slugs its log folder off the cwd's REALPATH, which
+`claudeProjectDir` now falls back to (a repo under `/tmp` or `/var` read no log at all).
+
+`tools/harvestfixtures.mjs` lists the captures and, with `--write`, copies each new one to
+`packages/host/test/fixtures/screens/harvest-<signal>-<version>.<ext>` and appends its
+`signals.json` entry with `cli` (the capture dir's version) and `role` from running the signal's
+reader over it (`packages/host/test/signalreaders.mjs` — the same table `harvested.test.mjs` holds
+each entry to). A sample that still carries a home path, an address or an opaque run is refused.
+A GOOD capture that reads as a non-match is filed as a guard and SAID: it means the cut or the mask
+lost what the reader needs. Nothing stages or commits; a person reads the diff. `--dir` takes
+another capture dir — `smoke-real-cli.mjs`'s state dir is one.
 
 ## The rough map, and the three scripts described nowhere else
 

@@ -89,7 +89,10 @@ try {
     // the tmux client is exactly as unattended as before.
     const frames = [];
     const ob = new WebSocket(`ws://127.0.0.1:${h.port}/ws`);
-    ob.on("message", (b) => { const m = JSON.parse(b.toString()); if (m.t === "pty" && m.id === a.id) frames.push([Date.now(), Buffer.from(m.dataB64, "base64").toString("utf8")]); });
+    // The attach's own replay (`full`) is the screen so far, not something the
+    // client drew: under the loaded pre-push run the observer attached past
+    // 4.5 s and its replay (`ESC[?1049h` and every row) read as the repaint.
+    ob.on("message", (b) => { const m = JSON.parse(b.toString()); if (m.t === "pty" && m.id === a.id && !m.full) frames.push([Date.now(), Buffer.from(m.dataB64, "base64").toString("utf8")]); });
     await new Promise((r) => ob.on("open", r));
     ob.send(JSON.stringify({ t: "hello", protocol: 1 }));
     ob.send(JSON.stringify({ t: "session.attach", id: a.id }));

@@ -77,20 +77,59 @@ const str = (v: unknown, cap: number): string | undefined => {
  */
 export function pendingAskQuestions(cwd: string, claudeSessionId: string | undefined): AskQuestion[] {
   if (!claudeSessionId) return [];
+  const raw = logTail(cwd, claudeSessionId);
+  if (raw == null) return [];
+  return pendingIn(raw);
+}
+
+/**
+ * The newest log record carrying an `AskUserQuestion` call, as the raw line —
+ * the input to the `askbox.enrich` fixture capture, which keeps only its
+ * skeleton (`clifixtures.ts`). Null when there is none.
+ */
+export function pendingAskRecord(cwd: string, claudeSessionId: string | undefined): string | null {
+  if (!claudeSessionId) return null;
+  const lines = (logTail(cwd, claudeSessionId) ?? "").split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (!lines[i].includes("AskUserQuestion")) continue;
+    try {
+      const content = JSON.parse(lines[i])?.message?.content;
+      if (Array.isArray(content) && content.some((b: any) => b?.type === "tool_use" && b?.name === "AskUserQuestion")) return lines[i];
+    } catch { /* not a record */ }
+  }
+  return null;
+}
+
+/** The log's last `TAIL_BYTES`, starting on a whole record; null when unreadable. */
+function logTail(cwd: string, claudeSessionId: string): string | null {
   let raw: string;
   try {
     const path = transcriptPath(cwd, claudeSessionId);
     const st = statSync(path);
     const start = Math.max(0, st.size - TAIL_BYTES);
     const len = st.size - start;
-    if (len <= 0) return [];
+    if (len <= 0) return null;
     const buf = Buffer.allocUnsafe(len);
     const fd = openSync(path, "r");
     try { readSync(fd, buf, 0, len, start); } finally { closeSync(fd); }
     raw = buf.toString("utf8");
     if (start > 0) raw = raw.slice(raw.indexOf("\n") + 1); // first line of a tail-read is half a record
-  } catch { return []; }
+  } catch { return null; }
+  return raw;
+}
 
+/**
+ * The questions of ONE call, from its input as a `PreToolUse` hook carried it —
+ * the source while the log does not hold the call yet. Unless the log already
+ * shows it ANSWERED: then the box on screen is not this call's.
+ */
+export function asksFromCall(cwd: string, claudeSessionId: string | undefined, call: { id: string; input: unknown }): AskQuestion[] {
+  const raw = claudeSessionId ? logTail(cwd, claudeSessionId) : null;
+  if (raw?.includes(`"tool_use_id":${JSON.stringify(call.id)}`)) return [];
+  return parseAsk(call.input, call.id);
+}
+
+function pendingIn(raw: string): AskQuestion[] {
   const asks = new Map<string, AskQuestion[]>();
   const answered = new Set<string>();
   const order: string[] = [];
