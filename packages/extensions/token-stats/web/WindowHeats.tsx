@@ -6,7 +6,7 @@ import {
   heatFrac, heatStep, LIVE_WINDOWS, type LiveWindowId, type WindowCell, type WindowCut, windowGrid,
   windowWhen,
 } from "./usageCut.ts";
-import { type ResourceState } from "@waterplane/kit";
+import { type ResourceState, Button } from "@waterplane/kit";
 
 /**
  * WHICH window the readouts are cut to: a kind, and how many windows back.
@@ -54,19 +54,19 @@ export function WindowStep({ cut, grid, onScope }: {
   return (
     <div className="ts-wstep">
       {canOlder
-        ? <button className="key" onClick={() => onScope({ id: cut.id, back: cut.back + 1 })}
+        ? <Button onClick={() => onScope({ id: cut.id, back: cut.back + 1 })}
             title="the window before this one">
             <ChevronLeft size={14} /> older
-          </button>
+          </Button>
         : <span className="ts-wstep-end">the record stops here</span>}
       <span className="ts-wstep-at">
         {cut.back === 0 ? "the window running now" : windowWhen(cut.openedAt, cut.resetAt)}
       </span>
       {canNewer
-        ? <button className="key" onClick={() => onScope({ id: cut.id, back: cut.back - 1 })}
+        ? <Button onClick={() => onScope({ id: cut.id, back: cut.back - 1 })}
             title="the window after this one">
             newer <ChevronRight size={14} />
-          </button>
+          </Button>
         : <span className="ts-wstep-end">nothing newer has happened</span>}
     </div>
   );

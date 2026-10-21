@@ -21,7 +21,7 @@ import {
   staleRowsWords, stalenessWords, warningsWords,
 } from "../../web/src/repoHealthWords";
 import { SCOPE_ALL_LABEL, scopeHeadWords } from "../../web/src/repoHealthWords/repoHealthWordsScope";
-import { NOT_GIT, measureWords, notGitWords, notRunWords, ownAddNoteWords, ownMixedWords, repoMixedWords, sourceWords } from "../src/health/sourcewords";
+import { NOT_GIT, XCODE_LICENSE, knownReadErrorWords, measureWords, notRunWords, ownAddNoteWords, ownMixedWords, repoMixedWords, sourceWords } from "../src/health/sourcewords";
 import { Absent } from "./Absent";
 import { loadHealthAxis, saveHealthAxis } from "./host";
 import "../../web/src/repohealth.css";
@@ -191,7 +191,7 @@ export function HealthView({ folder, doc, why, run, prompts, terminal, post }: {
       {!series && !plot && !why ? (
         <Absent>
           {doc.readError
-            ? NOT_GIT.test(doc.readError) ? notGitWords() : readFailedWords(doc.readError)
+            ? knownReadErrorWords(doc.readError) ?? readFailedWords(doc.readError)
             : emptySeriesWords(measure?.commits, doc.stepMs)}
         </Absent>
       ) : null}
@@ -219,8 +219,9 @@ export function HealthView({ folder, doc, why, run, prompts, terminal, post }: {
       {doc.tailNote ? <div className="section section-hint">{doc.tailNote}</div> : null}
 
       {/* A refusal or a series that cannot be read offers this; it deletes only OUR copy of the series, never anything in the folder. */}
-      {/* Not offered on a folder with no git: there is no series to forget, and only the folder answers that. */}
-      {(last?.refused || (doc.source === "own" && ((doc.readError && !NOT_GIT.test(doc.readError)) || mixed))) && !run ? (
+      {/* Not offered on a folder with no git, nor where git itself is blocked (Xcode's license): there
+          is no series to forget, and only the folder or the machine answers that. */}
+      {(last?.refused || (doc.source === "own" && ((doc.readError && !NOT_GIT.test(doc.readError) && !XCODE_LICENSE.test(doc.readError)) || mixed))) && !run ? (
         <div className="rh-forget">
           {asking ? (
             <>

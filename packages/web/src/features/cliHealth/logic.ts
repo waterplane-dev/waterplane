@@ -4,6 +4,7 @@
  * `logic.test.mjs` runs it under plain node.
  */
 import type { HealthRollup, HealthVerdict } from "@waterplane/shared";
+import type { CliHealthSource, InspectFacts } from "../../CliHealthSheet";
 
 /**
  * How bad a CLI-health rollup is, for the "did it get worse?" comparison only.
@@ -47,4 +48,44 @@ export function chipSplit(r: Pick<HealthRollup, "broken" | "degraded">): string 
     r.broken.length > 0 ? `${r.broken.length} broken` : "",
     r.degraded.length > 0 ? `${r.degraded.length} degraded` : "",
   ].filter(Boolean).join(" · ");
+}
+
+
+/**
+ * Signals whose captured sample is the CLI's usage-block notice. That text may
+ * reach disk, the wire and the phone but never a PTY (`host/clihealth.ts`):
+ * typed into a claude session it false-positives the detector it documents. So
+ * the prompt points at the file instead of quoting it.
+ */
+const SAMPLE_NEVER_TYPED = new Set(["limit.reset"]);
+
+/**
+ * The prompt "inspect in a session" seeds: the row's facts plus where the
+ * evidence lives on this desktop, so the session starts from the record and
+ * the kept captures rather than from a description of a screenshot. A seed —
+ * the person reads and edits it in the Send sheet before anything runs.
+ */
+export function inspectPrompt(f: InspectFacts, src: CliHealthSource): string {
+  const lines = [
+    `Inspect a ${f.verdict} CLI-health signal: \`${f.id}\` — ${f.name}.`,
+    "",
+    `claude ${f.version ?? "(version unknown)"}`,
+    `The board says: ${f.sentence}`,
+  ];
+  if (f.via) lines.push(`Fell back to: ${f.via}`);
+  if (f.stats) lines.push(`Counts: ${f.stats}`);
+  if (f.sample && !SAMPLE_NEVER_TYPED.has(f.id)) {
+    lines.push(`Last captured input (redacted${f.sampleAgo ? `, ${f.sampleAgo}` : ""}):`, "```", f.sample, "```");
+  }
+  const record = `${src.stateDir}/clihealth.json`;
+  lines.push(
+    "",
+    "Where to look:",
+    `- the record: ${record} — \`signals["${f.id}"]\`${f.sample && SAMPLE_NEVER_TYPED.has(f.id) ? " (its `sample` is a block notice: read it, never print it)" : ""}`,
+    `- what this signal read when it WORKED on this CLI: ${src.stateDir}/clifixtures/${f.version ?? "<version>"}/`,
+    `- the catalog: packages/shared/src/clihealth/healthcatalog.ts; the observation sites: grep \`"${f.id}"\` in packages/host/src`,
+    "",
+    "Load the `heuristics` skill first. Find why the primary rule missed on this CLI version: if the CLI changed, fix the reader and pin the new shape with a test (tools/harvestfixtures.mjs for the capture); if the misses are false alarms (a rule correctly declining), fix where the observation is recorded instead. Say which it was.",
+  );
+  return lines.join("\n");
 }

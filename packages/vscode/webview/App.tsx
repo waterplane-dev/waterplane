@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { BRAND } from "@waterplane/shared";
 import type { TabId } from "../src/protocol";
-import { loadTab, post, saveTab, useExtension } from "./host";
+import { loadTab, post, TAB_IDS, saveTab, useExtension } from "./host";
 import { SessionView } from "./SessionView";
 import { OverviewView } from "./OverviewView";
 import { WeightView } from "./WeightView";
@@ -9,14 +9,14 @@ import { HealthView } from "./HealthView";
 import { PromptsView } from "./PromptsView";
 import { ViewHead } from "./ViewHead";
 
-const IDS: readonly TabId[] = ["session", "all", "always-on", "health", "prompts"];
+const IDS = TAB_IDS;
 
 /**
  * The panel: one view at a time, picked in the activity-bar tree (it sends `tab`). No tab bar and no
  * session list here — those live in the tree, so the same list is never on screen twice.
  */
 export function App() {
-  const [tab, setTab] = useState<TabId>(() => loadTab(IDS, "session"));
+  const [tab, setTab] = useState<TabId>(() => loadTab(IDS, "all"));
   const [turn, setTurn] = useState<number | null>(null);
   const choose = (id: TabId) => { setTab(id); saveTab(id); };
   // The tree asked for a view: it arrives after `ready`, so it wins over the remembered one.
@@ -36,7 +36,7 @@ export function App() {
 
   return (
     <div className="app">
-      <ViewHead tab={tab} folder={folder} following={session?.following ?? true} post={post}
+      <ViewHead tab={tab} folder={folder} following={session?.following ?? true} scannedAt={corpus?.doc?.scannedAt ?? null} post={post}
         row={sessions && sessions.folder === folder ? sessions.rows.find((r) => r.id === (session?.doc?.id ?? sessions.selected)) ?? null : null} />
 
       <main id={`panel-${tab}`} tabIndex={-1}>

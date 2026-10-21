@@ -157,7 +157,7 @@ ctx.deliverySnapshot = deliveries.deliverySnapshot; ctx.deliverInput = deliverie
  */
 const cliHealthStore = new CliHealthStore(
   ROOT,
-  (health, rollup) => broadcast({ t: "clihealth", health, rollup }),
+  (health, rollup) => broadcast({ t: "clihealth", health, rollup, source: cliHealthStore.source() }),
   (kind, p) => notify(kind, p),
 );
 setCliHealth(cliHealthStore);

@@ -12,6 +12,7 @@ import { startDownload } from "../download";
 import { PREVIEW_MAX, fmtCreated, fmtCreatedFull } from "./galleryTypes";
 import type { GalleryModel } from "./useGallery";
 import { SessionPickButtons, SessionPickList } from "./GallerySessionPick";
+import { Button } from "../kit/Button";
 
 /** The open file: image / video / document / pdf / audio body, its path lines and the action bar. */
 export function GalleryViewer({ m }: { m: GalleryModel }) {
@@ -35,7 +36,7 @@ export function GalleryViewer({ m }: { m: GalleryModel }) {
                     <div className="viewer-doc">
                       {isRich(open.relPath) && (
                         <div className="viewer-doc-bar">
-                          <button className="key" onClick={() => setDocRaw((v) => !v)}>{docRaw ? "rendered" : "source"}</button>
+                          <Button onClick={() => setDocRaw((v) => !v)}>{docRaw ? "rendered" : "source"}</Button>
                           {/* Both notes are about the TEXT this viewer fetched, so
                               neither is true of a frame painting the file itself. */}
                           {doc?.truncated && !htmlLive && <span className="viewer-doc-note">showing the first {Math.round(PREVIEW_MAX / 1000)} KB — download for the rest</span>}
@@ -118,14 +119,14 @@ export function GalleryViewer({ m }: { m: GalleryModel }) {
               <div className="viewer-doc-note"><CloudOff size={12} /> saved copy from {fmtCreated(docCachedAt)}</div>
             )}
             <div className="sheet-actions">
-              <button className="key" onClick={() => closeDoc()}><ChevronLeft size={16} /> back</button>
-              <button className="key" onClick={() => copy(open.relPath)}>{copied === open.relPath ? <><Check size={16} /> copied</> : "copy path"}</button>
+              <Button onClick={() => closeDoc()}><ChevronLeft size={16} /> back</Button>
+              <Button onClick={() => copy(open.relPath)}>{copied === open.relPath ? <><Check size={16} /> copied</> : "copy path"}</Button>
               {canFullRes(open) && !fullRes && !localUrl && (
-                <button className="key" data-hint="gallery.fullres" title="load the original file instead of the screen-sized copy" onClick={() => { track("action:gallery.fullres"); setFullRes(true); }}>
+                <Button data-hint="gallery.fullres" title="load the original file instead of the screen-sized copy" onClick={() => { track("action:gallery.fullres"); setFullRes(true); }}>
                   full res{open.size ? ` (${Math.round(open.size / 1024)} KB)` : ""}
-                </button>
+                </Button>
               )}
-              {isImage(open.relPath) && <button className="key" onClick={() => { track("action:gallery.annotate"); onAnnotate(urlFor(open!), open!.name, repoOf(open!)); }}><Pencil size={16} /> annotate</button>}
+              {isImage(open.relPath) && <Button onClick={() => { track("action:gallery.annotate"); onAnnotate(urlFor(open!), open!.name, repoOf(open!)); }}><Pencil size={16} /> annotate</Button>}
               {/* ONE download button, the same one every screen in this app
                   shows (`download.ts`): the resumable queue, the Downloads
                   sheet, and the device hand-off that says where it landed. The
@@ -138,7 +139,7 @@ export function GalleryViewer({ m }: { m: GalleryModel }) {
                  file was downloaded. The pull record is what says "asked for",
                  and it draws its own badge. */
               onStart={() => setMarkTick((n) => n + 1)} />
-              {isInboxFile(open) && <button className="key danger" onClick={() => del(open!)}>delete</button>}
+              {isInboxFile(open) && <Button variant="danger" onClick={() => del(open!)}>delete</Button>}
               <SessionPickButtons {...pick} />
               <button className="send" onClick={() => { onInsertPath(open.relPath); onClose(); }}>insert path</button>
             </div>

@@ -43,6 +43,8 @@ import {
   closeCut, closeFacetCounts, closeFilterBarLabel, closeFacetsActive, closeFootLabel, closeSendList,
   closeShellsAtStake, closeToast, closeWaitingCount, idleUnknownNote, isKept, timedKeptNote,
 } from "./closeModel";
+import { Row, RowSub } from "../../kit/Row";
+import { Hint } from "../../kit/Hint";
 
 const ICON = 16;
 
@@ -115,21 +117,21 @@ function CloseRow({ s, repoLabel, kept, onToggleKeep, statusOf, now, timedAt, ba
 }) {
   const waiting = statusOf(s) === "wait";
   return (
-    <div className="row-wrap">
-      <div className="row grow" style={{ cursor: "default" }}>
+    <Row kind="wrap">
+      <Row kind="grow" style={{ cursor: "default" }}>
         <SessionFacts s={s} repoLabel={repoLabel} backends={backends} />
         {s.shellList?.length ? (
-          <span className="row-sub"><SquareTerminal size={11} /> {shellsChipText(shellsSummary(s.shellList, now))} — will stop</span>
+          <RowSub><SquareTerminal size={11} /> {shellsChipText(shellsSummary(s.shellList, now))} — will stop</RowSub>
         ) : null}
-        {timedAt && <span className="row-sub"><Clock size={11} /> a prompt is timed into it · {timedAt}{kept ? " — kept open" : " — its conversation is reopened then"}</span>}
-        {waiting && <span className="row-sub warn"><CircleDot size={11} /> waiting on a box — closing answers nothing, it just ends the process</span>}
-      </div>
+        {timedAt && <RowSub><Clock size={11} /> a prompt is timed into it · {timedAt}{kept ? " — kept open" : " — its conversation is reopened then"}</RowSub>}
+        {waiting && <RowSub className="warn"><CircleDot size={11} /> waiting on a box — closing answers nothing, it just ends the process</RowSub>}
+      </Row>
       <button className={`row-act${kept ? " on" : ""}`}
         title={kept ? "kept — tap to put it back in this close" : "keep — leave this one open"}
         onClick={onToggleKeep}>
         <ShieldCheck size={ICON} />
       </button>
-    </div>
+    </Row>
   );
 }
 
@@ -214,15 +216,15 @@ export function CloseSheet({ p, m }: { p: LauncherProps; m: LauncherModel }) {
                 <X size={ICON} /> {footLabel}
               </ConfirmButton>
             ) : (
-              <div className="form-hint">
+              <Hint>
                 {scope.length === 0
                   ? (sparedStars > 0
                     ? `Nothing left to close — every session here is starred or flagged. "Close them too" below puts ${sparedStars === 1 ? "it" : "them"} back in reach.`
                     : "Nothing here to close.")
                   : "Nothing in the cut, or every matching row is kept — nothing to send."}
-              </div>
+              </Hint>
             )}
-            <div className="form-hint">Conversations are kept — reopen under "Recently closed" or Archive.</div>
+            <Hint>Conversations are kept — reopen under "Recently closed" or Archive.</Hint>
           </>
         }
       >
@@ -260,10 +262,10 @@ export function CloseSheet({ p, m }: { p: LauncherProps; m: LauncherModel }) {
         <FacetRow label="Idle for" options={TIME_EDGE_OPTIONS} counts={counts.idleOver} active={facets.idleOver}
           labels={TIME_EDGE_LABEL} onToggle={(o) => set("idleOver", toggled(facets.idleOver, o))} hintId="session.close.stale" />
         {idleLead && (
-          <div className="form-hint">
+          <Hint>
             {idleLead}.{" "}
             {idleWhy && <Explain of="the idle-for reading" label="what does that change?">{idleWhy}</Explain>}
-          </div>
+          </Hint>
         )}
         <FacetRow label="Open for" options={TIME_EDGE_OPTIONS} counts={counts.openOver} active={facets.openOver}
           labels={TIME_EDGE_LABEL} onToggle={(o) => set("openOver", toggled(facets.openOver, o))} />
@@ -279,7 +281,7 @@ export function CloseSheet({ p, m }: { p: LauncherProps; m: LauncherModel }) {
         )}
         </div>
 
-        {timedNote && <div className="form-hint">{timedNote}</div>}
+        {timedNote && <Hint>{timedNote}</Hint>}
         {/* Sentence case like the facet labels above it: `.section` uppercases. */}
         <div className="section section-head close-cut"><span>The cut{waitingN > 0 ? ` · ${waitingN} waiting on a box` : ""}</span></div>
         {cut.length === 0 ? (

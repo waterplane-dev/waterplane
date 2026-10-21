@@ -2,6 +2,7 @@ import { ACTIVITY_FILTERS } from "../activityRows";
 import { Group } from "./ActivityGroupCard";
 import type { ActivityModel } from "./useActivityModel";
 import type { ActivitySheetProps } from "./activitySheetTypes";
+import { Hint } from "../kit/Hint";
 
 /** The rows themselves, grouped, or the sentence that says why there are none. */
 export function ActivityList({ m, p }: { m: ActivityModel; p: ActivitySheetProps }) {
@@ -9,7 +10,7 @@ export function ActivityList({ m, p }: { m: ActivityModel; p: ActivitySheetProps
   return (
       <div className="list act-list">
         {shown.length === 0 ? (
-          <div className="form-hint">
+          <Hint>
             {focus
               ? `Nothing left of ${focus.label} — every one of them has moved on. They are under “all”.`
               : rows.length === 0
@@ -17,7 +18,7 @@ export function ActivityList({ m, p }: { m: ActivityModel; p: ActivitySheetProps
               : filter === "dismissed"
                 ? "Nothing filed away yet. Rows you have read and dealt with land here — they keep their words and their buttons, and “bring back” returns them to the list."
                 : `Nothing under “${ACTIVITY_FILTERS.find((f) => f.id === filter)?.label}”. ${counts.all} ${counts.all === 1 ? "row" : "rows"} under “all”${counts.dismissed ? `, ${counts.dismissed} filed away` : ""}.`}
-          </div>
+          </Hint>
         ) : groups.map((g) => (
           <Group key={g.key} g={g} now={now} sessions={p.sessions} repos={p.repos}
             outbox={p.outbox} online={p.online} reviews={p.reviews} repoIdForCwd={p.repoIdForCwd}

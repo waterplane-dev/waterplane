@@ -6,6 +6,8 @@ import { track } from "./usage";
 import { SheetHead } from "./Sheet";
 import { backendOptionLabel } from "./backendCaps";
 import { Unavailable } from "./Unavailable";
+import { Button } from "./kit/Button";
+import { Hint } from "./kit/Hint";
 
 interface Props {
   root: string;
@@ -113,45 +115,45 @@ export function NewMenu({ root, repos, onOpen, onChanged, onClose, backends, bac
     <div className="sheet">
       <SheetHead title={"New"} onClose={onClose} />
       <div className="annot-tools">
-        <button className={`key ${tab === "repo" ? "active" : ""}`} onClick={() => setTab("repo")}>project</button>
-        <button className={`key ${tab === "clone" ? "active" : ""}`} onClick={() => setTab("clone")}>clone</button>
-        <button className={`key ${tab === "folder" ? "active" : ""}`} onClick={() => setTab("folder")}>folder</button>
-        <button className={`key ${tab === "worktree" ? "active" : ""}`} onClick={() => setTab("worktree")}>worktree</button>
+        <Button className={tab === "repo" ? "active" : ""} onClick={() => setTab("repo")}>project</Button>
+        <Button className={tab === "clone" ? "active" : ""} onClick={() => setTab("clone")}>clone</Button>
+        <Button className={tab === "folder" ? "active" : ""} onClick={() => setTab("folder")}>folder</Button>
+        <Button className={tab === "worktree" ? "active" : ""} onClick={() => setTab("worktree")}>worktree</Button>
       </div>
 
       <div className="form">
-        <div className="form-hint mono">{root}</div>
+        <Hint tone="mono">{root}</Hint>
         {tab === "clone" && (
           <>
             <input className="search" type="url" inputMode="url" autoCapitalize="off" autoCorrect="off" spellCheck={false}
               placeholder="https://github.com/owner/repo or git@host:owner/repo" value={url} onChange={(e) => setUrl(e.target.value)} autoFocus />
             <input className="search" placeholder="folder name (optional — taken from the URL)" value={name} onChange={(e) => setName(e.target.value)} />
-            <div className="form-hint">
+            <Hint>
               Cloned on the desktop with its own git sign-in, so private repos work where the desktop can reach them.
               The phone's inbox and outbox are excluded in this clone only — the project itself is not changed.
               A big repo takes a while; this sheet waits.
-            </div>
+            </Hint>
           </>
         )}
         {tab !== "worktree" && tab !== "clone" && (
           <input className="search" placeholder={tab === "repo" ? "new project name" : "new folder name"} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
         )}
         {tab === "repo" && onBuildApp && (
-          <button className="key new-buildapp" onClick={onBuildApp}>
+          <Button className="new-buildapp" onClick={onBuildApp}>
             <Rocket size={14} /> build an app — a phone app or a web page from a template, built and ready to change
-          </button>
+          </Button>
         )}
         {tab === "repo" && (
           <>
             <input className="search" placeholder="one line: what is it? (optional)" value={desc} onChange={(e) => setDesc(e.target.value)} />
-            <button className={`key ${initSetup ? "active" : ""}`} onClick={() => setInitSetup(!initSetup)}>
+            <Button className={initSetup ? "active" : ""} onClick={() => setInitSetup(!initSetup)}>
               {initSetup && <Check size={14} />} set up for phone use
-            </button>
-            <div className="form-hint">
+            </Button>
+            <Hint>
               {initSetup
                 ? "git init on main + first commit, .gitignore, README, CLAUDE.md, and the .claude/outbox drop the phone gallery reads."
                 : "bare git init + empty first commit only."}
-            </div>
+            </Hint>
           </>
         )}
         {tab === "worktree" && (
@@ -172,20 +174,20 @@ export function NewMenu({ root, repos, onOpen, onChanged, onClose, backends, bac
               onChange={(e) => onBackend(e.target.value === "claude" ? undefined : e.target.value)}>
               {backends.map((b) => <option key={b.id} value={b.id}>{backendOptionLabel(b)}</option>)}
             </select>
-            <div className="form-hint">
+            <Hint>
               The session this opens runs {backends.find((b) => b.id === (backend ?? "claude"))?.label ?? "the default"}.
               Every new session does, until you change it back.
-            </div>
+            </Hint>
           </>
         )}
         {/* Running is a line of text, not a dimmed button: the tap already happened, and a
             second one must not be offered while the first is still on the desktop. */}
         {busy
-          ? <div className="form-hint"><Loader2 size={13} className="spin" style={{ verticalAlign: "-2px" }} /> {tab === "clone" ? "Cloning on the desktop — a big repo takes a while" : "Working…"}</div>
+          ? <Hint><Loader2 size={13} className="spin" style={{ verticalAlign: "-2px" }} /> {tab === "clone" ? "Cloning on the desktop — a big repo takes a while" : "Working…"}</Hint>
           : missing
             ? <Unavailable cants={[{ label: verb, reason: missing }]} />
             : <button className="send" onClick={go}>{verb}</button>}
-        {msg && <div className="form-hint">{msg}</div>}
+        {msg && <Hint>{msg}</Hint>}
         {made && <button className="send" onClick={() => onOpen(made.path, made.title)}>Open session anyway</button>}
       </div>
     </div>

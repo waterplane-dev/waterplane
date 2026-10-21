@@ -3,7 +3,7 @@
   "name": "Copilot usage",
   "version": "0.1.0",
   "apiVersion": "1.7",
-  "description": "GitHub Copilot's monthly quota beside Claude's on the usage meter, read with gh's own sign-in (gh api /copilot_internal/user). Only on a desktop with copilot on PATH; nothing is read, and nothing drawn, otherwise.",
+  "description": "GitHub Copilot's monthly quota beside Claude's on the usage meter, read with gh's own sign-in (gh api /copilot_internal/user). Only on a desktop with copilot on PATH; nothing is read, and nothing drawn, otherwise. Its status line counts this month's premium requests from VS Code's own Copilot Chat logs on any desktop: files only, no sign-in.",
   "host": "host/index.mts",
   "env": ["WATERPLANE_GH_BIN"]
 }

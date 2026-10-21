@@ -38,6 +38,8 @@ import { DEVICE_TZ, type SendSeed } from "./sendIntent";
 import {
   OPTINS_GUIDE, declinedHead, noOffersWords, optInSeed, optInWalkSeed, unfitHead, walkLabel, walkOffered,
 } from "./optInSeed";
+import { Button } from "./kit/Button";
+import { Hint } from "./kit/Hint";
 
 const ICON = 16;
 
@@ -118,33 +120,33 @@ export function OptInRegion({ repo, onSeed, onSeries, onCapture, onChecklist }: 
     const a = def.action;
     const label = busy === row.id ? "working…" : def.verb;
     if (a.kind === "fix") {
-      return <button className="key" onClick={() => void runFix(row.id, a.fix)}>{verbIcon(a)} {label}</button>;
+      return <Button onClick={() => void runFix(row.id, a.fix)}>{verbIcon(a)} {label}</Button>;
     }
     if (a.kind === "open" && a.to === "series") {
-      return <button className="key" onClick={() => { track("action:optins.series"); onSeries(); }}>{verbIcon(a)} {label}</button>;
+      return <Button onClick={() => { track("action:optins.series"); onSeries(); }}>{verbIcon(a)} {label}</Button>;
     }
     if (a.kind === "open") {
       if (!repo || !onCapture) return <CantInline>The capture screen cannot be opened from here.</CantInline>;
-      return <button className="key" onClick={() => { track("action:optins.capture"); onCapture(repo); }}>{verbIcon(a)} {label}</button>;
+      return <Button onClick={() => { track("action:optins.capture"); onCapture(repo); }}>{verbIcon(a)} {label}</Button>;
     }
     if (!repo || !onSeed) return <CantInline>No send surface here — open this repo from the launcher to send it.</CantInline>;
-    return <button className="key" onClick={() => seed(optInSeed(row.id, repo, DEVICE_TZ))}>{verbIcon(a)} {label}</button>;
+    return <Button onClick={() => seed(optInSeed(row.id, repo, DEVICE_TZ))}>{verbIcon(a)} {label}</Button>;
   }
 
   return (
     <>
       <div className="section-head">
         <span className="section section-hint">{OPTINS_GUIDE}</span>
-        <button className="key" onClick={() => res.reload({ quiet: true })} title="read the offers again">
+        <Button onClick={() => res.reload({ quiet: true })} title="read the offers again">
           <RefreshCw size={14} className={res.inflight ? "spin" : undefined} /> re-check
-        </button>
+        </Button>
       </div>
 
       <Empty res={res} empty={!report} thing="the opt-ins" noun="list of opt-ins">
         The desktop listed no opt-ins for this repo.
       </Empty>
-      {error && <div className="form-hint" style={{ color: "var(--dead)" }}>The desktop said: {error}</div>}
-      {notes.map((n, i) => <div key={i} className="form-hint">{n}</div>)}
+      {error && <Hint style={{ color: "var(--dead)" }}>The desktop said: {error}</Hint>}
+      {notes.map((n, i) => <Hint key={i}>{n}</Hint>)}
 
       {report && (<>
         {repo && onSeed && walkOffered(cut.offered) && (
@@ -153,9 +155,9 @@ export function OptInRegion({ repo, onSeed, onSeries, onCapture, onChecklist }: 
               <Compass size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
               {walkLabel(cut.offered.length)}
             </button>
-            <div className="form-hint">
+            <Hint>
               One session that asks which of these you want, then posts each one as its own piece of work. Nothing is set up in it.
-            </div>
+            </Hint>
           </>
         )}
 
@@ -174,9 +176,9 @@ export function OptInRegion({ repo, onSeed, onSeries, onCapture, onChecklist }: 
                   <div className="check-acts optin-acts">
                     {primary(row)}
                     {row.state === "unknown" && (
-                      <button className="key" onClick={() => void choose(row.id, "done")}><Check size={14} /> mark as done</button>
+                      <Button onClick={() => void choose(row.id, "done")}><Check size={14} /> mark as done</Button>
                     )}
-                    <button className="key" onClick={() => void choose(row.id, "declined")}><EyeOff size={14} /> not for me</button>
+                    <Button onClick={() => void choose(row.id, "declined")}><EyeOff size={14} /> not for me</Button>
                   </div>
                 </li>
               );
@@ -192,7 +194,7 @@ export function OptInRegion({ repo, onSeed, onSeries, onCapture, onChecklist }: 
                 <div className="check-top">
                   <span className="check-label">{optInDef(row.id)!.title}<span className="check-kind"> · {optInActiveWords(row)}</span></span>
                   {row.choice === "done" && (
-                    <button className="key" onClick={() => void choose(row.id, null)}><Undo2 size={14} /> undo</button>
+                    <Button onClick={() => void choose(row.id, null)}><Undo2 size={14} /> undo</Button>
                   )}
                 </div>
                 {row.detail && <div className="check-detail check-detail-quiet">{row.detail}</div>}
@@ -211,7 +213,7 @@ export function OptInRegion({ repo, onSeed, onSeries, onCapture, onChecklist }: 
                 <li key={row.id} className="check-row optin-on">
                   <div className="check-top">
                     <span className="check-label">{optInDef(row.id)!.title}</span>
-                    <button className="key" onClick={() => void choose(row.id, null)}><RotateCcw size={14} /> offer again</button>
+                    <Button onClick={() => void choose(row.id, null)}><RotateCcw size={14} /> offer again</Button>
                   </div>
                 </li>
               ))}

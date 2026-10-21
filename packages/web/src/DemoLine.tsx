@@ -19,6 +19,7 @@ import { BRAND } from "@waterplane/shared";
 import { FlaskConical, LogOut, Plug, Sparkles } from "lucide-react";
 import { isDemo } from "./demo/mode";
 import { demoPlace, haveRealHost, leaveDemo, openDemoTour } from "./demoEntry";
+import { Button } from "./kit/Button";
 
 /** One-line height; the static variant wraps to two. */
 const ONE_LINE = 22;
@@ -44,11 +45,11 @@ export function DemoLine() {
           ? <>Demo — nothing runs on a computer. To use {BRAND.name} for real, open it from your own desktop host.</>
           : "Demo — nothing runs on a computer"}
       </span>
-      <button className="key demo-line-go" onClick={openDemoTour}><Sparkles size={11} /> More to try</button>
+      <Button className="demo-line-go" onClick={openDemoTour}><Sparkles size={11} /> More to try</Button>
       {place !== "static" && (
-        <button className="key demo-line-go" onClick={leaveDemo}>
+        <Button className="demo-line-go" onClick={leaveDemo}>
           {connect ? <><Plug size={11} /> Connect a real desktop</> : <><LogOut size={11} /> Leave the demo</>}
-        </button>
+        </Button>
       )}
     </div>
   );

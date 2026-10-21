@@ -148,6 +148,26 @@ export default tseslint.config(
     },
     rules: { "local/extension-boundary": "error" },
   },
+  // The same 900-line cap on the source the TypeScript block cannot see: an
+  // extension's host/shared/cli halves and the repo's own tools. Uncapped,
+  // `vault/host/index.mts` grew to 4,450 lines in twelve days and had to be cut
+  // by hand (2026-10-18). Tests are left out, and so is `scripts/` — its
+  // `claude-stub-tui.mjs` is a test double. `tools/healthreadings.mjs`'s
+  // `inCapScope` mirrors these globs; change both together.
+  {
+    files: [
+      "packages/extensions/*/{host,shared,cli}/**/*.{mts,mjs}",
+      "tools/**/*.{mjs,js}",
+    ],
+    ignores: ["**/*.test.{mjs,mts,js}", "**/fixtures/**"],
+    languageOptions: {
+      parser: tseslint.parser,
+      parserOptions: { ecmaVersion: "latest", sourceType: "module", ecmaFeatures: { jsx: true } },
+    },
+    rules: {
+      "max-lines": ["error", { max: 900, skipBlankLines: false, skipComments: false }],
+    },
+  },
   // DemoHost's core is DOM-free and node-runnable (docs/analysis/demo-mode-plan.md
   // §1): it imports only its own folder and @waterplane/shared, touches no
   // browser global, keeps no storage and reads no wall clock. Everything else

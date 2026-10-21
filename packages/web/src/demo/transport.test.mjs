@@ -296,9 +296,9 @@ test("routeOf: the three doors", () => {
 });
 
 test("abs() in the demo: host files become bundled media; every other /api URL stays for fetch", () => {
-  assert.equal(demoMediaUrl("/api/repos/demo-todo/artifact?path=.claude%2Foutbox%2Fflow.gif"), "/demo/media/demo-todo/.claude/outbox/flow.gif");
+  assert.equal(demoMediaUrl("/api/repos/demo-todo/artifact?path=.claude%2Foutbox%2Fflow.gif"), "/demo/media/demo-todo/dot-claude/outbox/flow.gif");
   assert.equal(demoMediaUrl("/api/repos/demo-todo/artifact?path=docs%2Fa%20b.png&download=1"), "/demo/media/demo-todo/docs/a%20b.png");
-  assert.equal(demoMediaUrl("/api/repos/demo-todo/inbox/shot%201.png"), "/demo/media/demo-todo/.claude/inbox/shot%201.png");
+  assert.equal(demoMediaUrl("/api/repos/demo-todo/inbox/shot%201.png"), "/demo/media/demo-todo/dot-claude/inbox/shot%201.png");
   assert.equal(demoMediaUrl("/api/repos/demo-todo/artifact?path=x.png&stat=1"), "/api/repos/demo-todo/artifact?path=x.png&stat=1");
   assert.equal(demoMediaUrl("/api/repos/demo-todo/artifact?path=..%2F..%2Fetc%2Fpasswd"), "/api/repos/demo-todo/artifact?path=..%2F..%2Fetc%2Fpasswd", "a traversal is not mapped");
   assert.equal(demoMediaUrl("/api/health"), "/api/health");

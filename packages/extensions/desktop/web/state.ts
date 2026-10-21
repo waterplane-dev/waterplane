@@ -69,7 +69,50 @@ export function openDesktop(): void {
 }
 
 export function closeDesktop(): void {
+  clearSecret();
   core().nav.close(DESKTOP_SHEET);
+}
+
+/**
+ * Protected typing: a masked field in place of the typing box, for a password. MEMORY ONLY — never
+ * `extStorage`, never the draft (the draft is untouched underneath). `seq` names one protected ask: it
+ * moves on whenever the field is switched off, emptied by a send or the view closed, so a filler's
+ * value that lands later than that (`fillSecret`) is refused, never put into a field nobody asked from.
+ * `reopen`: a filler's value landed while another sheet (the one picking the login) had replaced this
+ * view, so the view comes back with the typing panel open (`takeReopen`).
+ */
+export interface SecretState { on: boolean; value: string; seq: number; reopen: boolean }
+export const secret = createStore<SecretState>({ on: false, value: "", seq: 0, reopen: false });
+
+/** What the vault's card says the password is for (`SecretFillContext.askLine`). */
+export const SECRET_ASK = "a password field on the live desktop";
+
+export function setSecretOn(on: boolean): void {
+  secret.set((s) => (on ? { ...s, on: true } : { on: false, value: "", seq: s.seq + 1, reopen: false }));
+}
+export function setSecretValue(value: string): void {
+  secret.set((s) => ({ ...s, value }));
+}
+/** After a send went out in full, or the view closed: the value goes, the ask with it. */
+export function clearSecret(): void {
+  secret.set((s) => ({ ...s, value: "", seq: s.seq + 1, reopen: false }));
+}
+
+/** A filler's value for the ask `seq`: true if it landed in the masked field. Never types anything. */
+export function fillSecret(seq: number, value: string): boolean {
+  const s = secret.get();
+  if (!value || !s.on || s.seq !== seq) return false;
+  const away = core().nav.overlay !== DESKTOP_SHEET;
+  secret.set({ ...s, value, reopen: away });
+  if (away) openDesktop();
+  return true;
+}
+
+/** Read once by a mounting view: open the typing panel because a fill brought it back. */
+export function takeReopen(): boolean {
+  const r = secret.get().reopen;
+  if (r) secret.set((s) => ({ ...s, reopen: false }));
+  return r;
 }
 
 /** What was typed for the desktop and not sent yet. Kept outside the panel so closing it (or the

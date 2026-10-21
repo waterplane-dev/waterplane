@@ -7,6 +7,7 @@ import { useStore } from "../../sdk";
 import { chipShown, chipSplit, chipVerdicts } from "./logic";
 import { rollup } from "./store";
 import { openCliHealth } from "./actions";
+import { Button } from "../../kit";
 
 const ICON = 16;
 
@@ -46,7 +47,7 @@ export function CliHealthChip() {
   const split = chipSplit(r);
   const line = r.lines[0] ?? "the CLI integration is degraded";
   return (
-    <button className={`key cli-health-key ${r.verdict === "broken" ? "danger" : "warn"}`}
+    <Button className={`cli-health-key ${r.verdict === "broken" ? "danger" : "warn"}`}
       title={`CLI: ${split}\n${line}\ntap for just these`}
       aria-label={`CLI health — ${split}. ${line}. tap for just these`}
       // No `track` here: App counts every overlay it opens (`overlay:clihealth`).
@@ -54,6 +55,6 @@ export function CliHealthChip() {
       {/* Ten signals exist in all, so the count never needs a "9+". */}
       <Waypoints size={ICON} />
       <span className="cli-health-badge">{r.broken.length + r.degraded.length}</span>
-    </button>
+    </Button>
   );
 }

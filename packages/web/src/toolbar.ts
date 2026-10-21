@@ -14,7 +14,7 @@
  * reason in reverse — a stale pin from an older build must not render an empty
  * slot in the header.
  */
-import { BookKey, Brain, Camera, CircleDollarSign, ClipboardPaste, Copy, Cpu, FileDiff, Flag, FolderTree, GalleryVerticalEnd, Gauge, GitBranch, GitFork, Hammer, History, Hourglass, Images, List, ListChecks, ListTodo, MessageSquare, MessageSquareReply, Monitor, Paperclip, Puzzle, Radio, RotateCw, ScrollText, Search, Slash, SquareTerminal, Star, Waypoints, type LucideIcon } from "lucide-react";
+import { BookKey, Bookmark, Brain, Camera, CircleDollarSign, ClipboardPaste, Copy, Cpu, FileDiff, Flag, FolderTree, GalleryVerticalEnd, Gauge, GitBranch, GitFork, Hammer, History, Hourglass, Images, List, ListChecks, ListTodo, MessageSquare, MessageSquareReply, Monitor, Paperclip, Puzzle, Radio, RotateCw, ScrollText, Search, Slash, SquareTerminal, Star, Waypoints, type LucideIcon } from "lucide-react";
 import type { ComponentType } from "react";
 import { usageCount } from "./usage";
 import { LS, lsGet, lsSetJson } from "./storage";
@@ -123,6 +123,11 @@ export const TOOLBAR_ITEMS: ToolbarItem[] = [
   { id: "companion", name: "companion shell", Icon: SquareTerminal },
   { id: "star", name: "star", Icon: Star },
   { id: "followup", name: "flag for follow up", Icon: Flag },
+  // A bookmark on the CONVERSATION (R-conversations-007): the way back to it in
+  // the archive after it is closed. In the menu, not pinned out of the box —
+  // the header is full; pinning it is the person's call. Drawn by
+  // `core/sessions/bookmark.tsx` (its own state, its note).
+  { id: "bookmark", name: "bookmark", Icon: Bookmark },
 ];
 
 let contributed: () => readonly ToolbarItem[] = () => [];

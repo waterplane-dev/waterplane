@@ -9,6 +9,7 @@
  */
 import type { SessionInfo } from "@waterplane/shared";
 import { peerJobLines, peerOriginPill, peerSpendPill } from "../../sessionFacts";
+import { RowSub, Tag } from "../../kit";
 
 /** The launcher row's tags: "$22.28 here + $0.84 on pc", "job from mac · …". */
 export function PeerRowTags({ s }: { s: SessionInfo }) {
@@ -17,8 +18,8 @@ export function PeerRowTags({ s }: { s: SessionInfo }) {
   if (!spend && !origin) return null;
   return (
     <>
-      {origin && <span className={`tag ${origin.cls}`} title={origin.title}>{origin.body}</span>}
-      {spend && <span className={`tag ${spend.cls}`} title={spend.title}>{spend.body}</span>}
+      {origin && <Tag className={origin.cls} title={origin.title}>{origin.body}</Tag>}
+      {spend && <Tag className={spend.cls} title={spend.title}>{spend.body}</Tag>}
     </>
   );
 }
@@ -33,7 +34,7 @@ export function PeerSessionFacts({ s }: { s: SessionInfo }) {
   return (
     <>
       <PeerRowTags s={s} />
-      {lines.map((j) => <span key={j.key} className="row-sub peer-job-line">{j.text}</span>)}
+      {lines.map((j) => <RowSub key={j.key} className="peer-job-line">{j.text}</RowSub>)}
     </>
   );
 }

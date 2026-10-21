@@ -7,6 +7,10 @@ import { clock, matches, readSeen, turnTs, turnText } from "./transcriptUtil";
 import { track } from "./usage";
 import { SheetHead } from "./Sheet";
 import { Empty } from "./Empty";
+import { Button } from "./kit/Button";
+import { RowSub } from "./kit/Row";
+import { Hint } from "./kit/Hint";
+import { Tag } from "./kit/Tag";
 
 /**
  * The outline rows themselves — ONE renderer, used by the reader's outline
@@ -26,15 +30,15 @@ export function OutlineRows({ turns, seenMark, onJump }: {
           <button className={`tr-ol-row${isNew ? " tr-ol-new" : ""}`} key={t.id} onClick={() => onJump(t.n)}>
             <div className="tr-ol-head">
               <span className="tr-n">#{t.n}</span>
-              <span className="row-sub">{clock(t.sentAt)}</span>
+              <RowSub>{clock(t.sentAt)}</RowSub>
               {/* Sent, and the CLI has not taken it yet — see `TranscriptTurn.queued`.
                   The row exists because this list looked wrong without it: the
                   newest thing the person had sent was simply absent for as long
                   as the running turn lasted. */}
-              {t.queued && <span className="tag"><Clock size={11} /> waiting</span>}
-              {t.toolCount > 0 && <span className="tag"><Wrench size={11} /> {t.toolCount}</span>}
-              {t.files.length > 0 && <span className="tag"><FileCode2 size={11} /> {t.files.length}</span>}
-              {isNew && <span className="tag new">new</span>}
+              {t.queued && <Tag><Clock size={11} /> waiting</Tag>}
+              {t.toolCount > 0 && <Tag><Wrench size={11} /> {t.toolCount}</Tag>}
+              {t.files.length > 0 && <Tag><FileCode2 size={11} /> {t.files.length}</Tag>}
+              {isNew && <Tag className="new">new</Tag>}
             </div>
             <div className="tr-ol-prompt">{t.promptLabel}</div>
             {t.queued && <div className="tr-ol-sum">→ the CLI has not started it yet</div>}
@@ -128,7 +132,7 @@ export function OutlineSheet({ sessionId, title, onJump, onClose }: Props) {
   return (
     <div className="sheet">
       <SheetHead title={<>Outline · {title}</>} onClose={onClose}>
-        <button className="key" title="refresh" onClick={() => void load()}><RotateCw size={14} /></button>
+        <Button title="refresh" onClick={() => void load()}><RotateCw size={14} /></Button>
       </SheetHead>
       <div className="tr-bar">
         <div className="tr-find">
@@ -139,7 +143,7 @@ export function OutlineSheet({ sessionId, title, onJump, onClose }: Props) {
             onChange={(e) => { if (!q && e.target.value) track("action:outline.find"); setQ(e.target.value); }}
             autoCapitalize="off" autoCorrect="off" spellCheck={false}
           />
-          {q && <button className="key" title="clear" onClick={() => setQ("")}><X size={13} /></button>}
+          {q && <Button title="clear" onClick={() => setQ("")}><X size={13} /></Button>}
         </div>
       </div>
       {offlineAt != null && (
@@ -149,7 +153,7 @@ export function OutlineSheet({ sessionId, title, onJump, onClose }: Props) {
         </div>
       )}
       <div className="tr-outline tr-outline-full">
-        <div className="form-hint">
+        <Hint>
           {shown.length} turn{shown.length === 1 ? "" : "s"}{q ? ` matching “${q}”` : ""}
           {/* Counted APART from the turns, because a queued row is not one: it
               is a prompt sitting in that session's composer. Saying "3 turns"
@@ -158,7 +162,7 @@ export function OutlineSheet({ sessionId, title, onJump, onClose }: Props) {
           {waiting > 0 && ` · ${waiting} waiting`} · tap to jump into the reader
           {doc?.source === "history" && " · approximate (no conversation log for this session — showing captured terminal text)"}
           {doc?.truncated && " · older turns trimmed"}
-        </div>
+        </Hint>
         {/* Only once the cache has been asked and had nothing — see `probing`. */}
         {loading && !doc && !probing && <Empty>Reading the transcript…</Empty>}
         {err && !doc && <Empty><AlertTriangle size={14} /> {err}</Empty>}

@@ -513,3 +513,23 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
 .pp-now .pp-text { color: var(--fg); }
 .closed-meta { font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
 .annot-tools.closed-chips { background: none; border-bottom: 0; padding: var(--sp-4) var(--sp-8); }
+
+/* The session chrome as one frame a person can shorten (`ChromeGrip.tsx`):
+   the cap CLIPS from the bottom, so the status line goes first and the title
+   row last. Not positioned, so typing room's absolute `.topbar` still resolves
+   against `.screen` — and the cap is lifted in that mode anyway. */
+.sess-chrome { flex: 0 0 auto; min-height: 0; }
+.sess-chrome.capped { overflow: hidden; }
+/* The grip: a thin bar under the frame with a handle drawn in it, and a taller
+   invisible hit area so a fingertip finds it without it costing a row. */
+.sess-chrome-grip {
+  position: relative; flex: 0 0 auto; height: 10px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+  color: var(--muted); cursor: row-resize; touch-action: none; outline: none; z-index: 2;
+}
+.sess-chrome-grip::before { content: ""; position: absolute; inset: -6px 0 -8px; }
+.sess-chrome-grip::after { content: ""; width: 36px; height: 3px; border-radius: var(--r-2); background: var(--line); }
+.sess-chrome-grip.capped { height: 14px; }
+.sess-chrome-grip.capped::after { display: none; }
+.sess-chrome-grip:is(:focus-visible, :active)::after { background: var(--accent); }

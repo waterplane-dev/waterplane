@@ -23,7 +23,7 @@
  * it about today's code only.
  *
  * The second half of the guard is that an empty bundle is not for sale.
- * `narrate.mjs` emits events whose subject is a series key — a rank, a slope —
+ * `events.mjs` emits events whose subject is a series key — a rank, a slope —
  * and those carry no file to show anybody. Offering to spend on one is
  * offering to buy a confident answer about nothing, so `run()` exits 2 saying
  * there is no evidence to send, after printing the estimate and before asking
@@ -140,7 +140,7 @@ function commitsForDay(day, git) {
 /**
  * The one question this bundle is being assembled to ask.
  *
- * Matched on the event kinds `narrate.mjs` actually emits. A kind nobody
+ * Matched on the event kinds `events.mjs` actually emits. A kind nobody
  * listed gets the neutral question rather than the nearest-looking one: a
  * confident answer to the wrong question is the failure this whole module is
  * shaped around.

@@ -11,6 +11,7 @@ import { showToast } from "./toast";
 import { track } from "./usage";
 import { durSpan } from "./format";
 import { BUILD_LOG_COPIED, BUILD_LOG_COPY_FAILED, BUILD_LOG_COPY_LABEL, BUILD_LOG_SEND_LABEL } from "./buildLogPrompt";
+import { Button } from "./kit/Button";
 
 interface Props {
   r: BuildRun;
@@ -28,19 +29,19 @@ export function BuildRunLog({ r, text, logRef, onSendLog }: Props) {
           kept — copying an empty pane is no verb. */}
       {text.trim() && (
         <div className="sheet-actions build-log-acts">
-          <button className="key" onClick={async () => {
+          <Button onClick={async () => {
             track("action:build.copyLog");
             showToast(await copyText(text) ? BUILD_LOG_COPIED : BUILD_LOG_COPY_FAILED);
           }} title="copy this run's output to the clipboard">
             <Copy size={16} /> {BUILD_LOG_COPY_LABEL}
-          </button>
+          </Button>
           {onSendLog && (
-            <button className="key" onClick={() => {
+            <Button onClick={() => {
               track("action:build.sendLog");
               onSendLog(r, text, durSpan(r.startedAt, r.finishedAt));
             }} title="open the Send sheet with this log, the command and its exit, aimed at a new session in this repo — nothing is sent yet">
               <SquareTerminal size={16} /> {BUILD_LOG_SEND_LABEL}
-            </button>
+            </Button>
           )}
         </div>
       )}

@@ -66,3 +66,8 @@ A file open in the file viewer can be pinned to the tab strip from the viewer's 
 On desktop the tabs are fully visible and not cut off at the edge.
 - asked: 2026-10-12
 
+### R-tabs-015 · shipped
+A button at the tab strip's left edge opens every open tab as a readable vertical list, in the strip's order and uncut by the tab limit. Each row shows the whole name, repo and state in words, wears its repo's tint, opens on tap and asks before closing; the button shows the open count.
+- asked: 2026-10-19
+- shipped: 94b41cdc, 4666311a, 73267045, 3d4d2dda
+

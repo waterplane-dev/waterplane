@@ -357,7 +357,6 @@ svg.lucide[width="28"] { width: calc(28px * var(--ui-icon, 1)); height: calc(28p
    to the verb's own left, so a wrapped verb starts at the gutter like any line. */
 .rh-head { justify-content: flex-start; padding: var(--sp-10) var(--sp-14) var(--sp-6); }
 .rh-head > .rh-status { flex: 0 1 auto; padding: 0; }
-.rh-head > .rh-beside { max-width: max(9em, 100% - 16.5em); }
 .rh-head > .rh-push, .rh-head > .explain-chip { margin-right: auto; }
 .rh-head > .explain-body { order: 1; }
 .rh-head > .explain-body > p { margin: 0 0 var(--sp-6); }

@@ -12,6 +12,8 @@ import { track } from "../usage";
 import { RepoSelect } from "../RepoPicker";
 import { SheetHead } from "../Sheet";
 import type { BacklogModel } from "./backlogTypes";
+import { Button } from "../kit/Button";
+import { Hint } from "../kit/Hint";
 
 export function BacklogHead({ m }: { m: BacklogModel }) {
   const { p, repoDir } = m;
@@ -65,15 +67,15 @@ export function RepoBar({ m }: { m: BacklogModel }) {
           // a `title` — invisible on the only device this sheet is used from —
           // in a sheet that already has a banner for exactly this job.
           assessWhyNot ? (
-            <span className="form-hint">assess: {assessWhyNot}</span>
+            <Hint as="span">assess: {assessWhyNot}</Hint>
           ) : filtering && !assessIds.length ? (
             // ABSENT with the reason in words, never a dimmed button: a cut of
             // finished rows has nothing an assessment can form a verdict about,
             // and a run over it would spend an agent reading a repo to answer a
             // question with no candidates.
-            <span className="form-hint">{ASSESS_NONE_IN_CUT}</span>
+            <Hint as="span">{ASSESS_NONE_IN_CUT}</Hint>
           ) : (
-            <button className="key"
+            <Button
               title={filtering
                 ? "judge exactly the open rows in this cut — it still reads the whole repo as evidence, and nothing applies itself"
                 : "read this repo and judge what is left in it — with evidence, and nothing applies itself"}
@@ -85,7 +87,7 @@ export function RepoBar({ m }: { m: BacklogModel }) {
                 p.cutVerbs.onAssess?.(repoDir, filtering ? assessIds : undefined);
               }}>
               <ClipboardCheck size={14} /> {filtering ? assessScopeLabel(assessIds.length) : "assess"}
-            </button>
+            </Button>
           )
         ) : null}
         {/* **The one control here whose number is not the cut on screen.**
@@ -96,7 +98,7 @@ export function RepoBar({ m }: { m: BacklogModel }) {
             only while a filter is actually on — with none there are no two
             numbers to confuse and the sentence would be chrome. */}
         {p.cutVerbs.onAssess && repoDir && !assessWhyNot && filtering && assessIds.length > 0 && (
-          <span className="form-hint">{assessScopeNote(assessIds.length, cut.length)}</span>
+          <Hint as="span">{assessScopeNote(assessIds.length, cut.length)}</Hint>
         )}
       </div>
     </>

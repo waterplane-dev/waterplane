@@ -20,7 +20,10 @@ interface Kept { tab?: string; healthAxis?: string }
 const kept = (): Kept => (api.getState() as Kept | undefined) ?? {};
 const keep = (k: Kept): void => api.setState({ ...kept(), ...k });
 
-export function loadTab<T extends string>(valid: readonly T[], fallback: T): T {
+/** The views the panel can show; the remembered one is only honoured when it is still one of these. */
+export const TAB_IDS: readonly TabId[] = ["session", "all", "always-on", "health", "prompts"];
+
+export function loadTab<T extends string, F extends T | null>(valid: readonly T[], fallback: F): T | F {
   return valid.find((t) => t === kept().tab) ?? fallback;
 }
 export const saveTab = (tab: string): void => keep({ tab });
@@ -73,7 +76,7 @@ export function useExtension(onTab?: (id: TabId) => void): ExtensionState {
       }
     };
     window.addEventListener("message", on);
-    post({ t: "ready" });
+    post({ t: "ready", tab: loadTab(TAB_IDS, null) });
     return () => window.removeEventListener("message", on);
   }, []);
 

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { MENU_KEEP_OPEN, closesMenu, draggedOnto, movedBy, toggled } from "./logic.ts";
 
 test("only the in-place entries keep the menu open", () => {
-  assert.deepEqual([...MENU_KEEP_OPEN].sort(), ["followup", "limit", "star"]);
+  assert.deepEqual([...MENU_KEEP_OPEN].sort(), ["bookmark", "followup", "limit", "star"]);
   assert.equal(closesMenu("star"), false);
   assert.equal(closesMenu("diff"), true);
   assert.equal(closesMenu(), true);

@@ -130,6 +130,36 @@ bootWait(PORT, 1200, async () => {
     const withLive = await j(`/api/repos/${repoId}/archive`);
     check(withLive.rows[0].id === conv, "a live session's conversation is listed too (newest), so the UI can mark it open");
 
+    // ── Bookmarks (R-conversations-007): set, filter, read without a session ──
+    const post = (body) => fetch(`${base}/api/repos/${repoId}/archive/bookmark`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const bmBad = await post({ id: "../../../etc/passwd", note: "x" });
+    check(bmBad.status === 404, `bookmarking a traversal id is refused (got ${bmBad.status})`);
+    const bmAbsent = await post({ id: "aaaaaaaa-0000-0000-0000-00000000dead" });
+    check(bmAbsent.status === 404, "bookmarking a conversation that is not on disk (and not live) is refused");
+    const bm = await post({ id: "aaaaaaaa-0000-0000-0000-000000000002", note: "the gif\nframe", name: "Notes tab" }).then((r) => r.json());
+    check(bm.ok === true && bm.bookmark?.note === "the gif frame" && bm.bookmark?.name === "Notes tab" && bm.bookmark?.at > 0, `a bookmark is set, note one line (${JSON.stringify(bm)})`);
+    const bmUpd = await post({ id: "aaaaaaaa-0000-0000-0000-000000000002", note: "edited" }).then((r) => r.json());
+    check(bmUpd.bookmark?.at === bm.bookmark?.at && bmUpd.bookmark?.name === "Notes tab" && bmUpd.bookmark?.note === "edited", "an update keeps when it was set and the name it was not sent");
+    const marked = await j(`/api/repos/${repoId}/archive?bookmarked=1`);
+    check(marked.bookmarked === true && marked.total === 1 && marked.rows[0]?.id.endsWith("002"), `bookmarked=1 lists only bookmarks, total after the cut (total ${marked.total})`);
+    check(marked.rows[0]?.name === "Notes tab" && marked.rows[0]?.bookmark?.note === "edited", "a row carries its name and bookmark");
+    check(marked.scanned === withLive.scanned, `scanned still counts everything on disk (got ${marked.scanned})`);
+    const byNote = await j(`/api/repos/${repoId}/archive?q=edited`);
+    check(byNote.total === 1 && byNote.rows[0].id.endsWith("002"), "q matches a bookmark's note");
+    const tr = await fetch(`${base}/api/repos/${repoId}/archive/transcript?conv=aaaaaaaa-0000-0000-0000-000000000001`);
+    const trDoc = tr.status === 200 ? await tr.json() : null;
+    check(trDoc?.source === "jsonl" && trDoc?.turns?.[0]?.prompt === "Fix the scroll jank in the terminal", `an archived conversation reads as the reader's document without a session (${tr.status})`);
+    const trBad = await fetch(`${base}/api/repos/${repoId}/archive/transcript?conv=${encodeURIComponent("../../../etc/passwd")}`);
+    check(trBad.status === 404, `the transcript route refuses a traversal id (got ${trBad.status})`);
+    const tr204 = await fetch(`${base}/api/repos/${repoId}/archive/transcript?conv=aaaaaaaa-0000-0000-0000-000000000001&since=${Date.now()}`);
+    check(tr204.status === 204, `an unchanged log answers 204 (got ${tr204.status})`);
+    const bmGet = await fetch(`${base}/api/repos/${repoId}/archive/bookmark?id=x`, { method: "GET" }).then((r) => r.json());
+    check(Array.isArray(bmGet.rows), "a GET never sets a bookmark — it is the listing");
+    const unmark = await fetch(`${base}/api/repos/${repoId}/archive/bookmark?id=aaaaaaaa-0000-0000-0000-000000000002`, { method: "DELETE" }).then((r) => r.json());
+    const unmarked = await j(`/api/repos/${repoId}/archive?bookmarked=1`);
+    check(unmark.ok === true && unmarked.total === 0, "DELETE removes the bookmark");
+    await post({ id: "aaaaaaaa-0000-0000-0000-000000000001", note: "about to go" });
+
     // ── Delete: the one destructive verb, and it is guarded ──
     const badId = await fetch(`${base}/api/repos/${repoId}/archive?id=${encodeURIComponent("../../../etc/passwd")}`, { method: "DELETE" });
     check(badId.status === 400, `a traversal id is refused (got ${badId.status})`);
@@ -139,6 +169,8 @@ bootWait(PORT, 1200, async () => {
     check(delRes.ok === true, "deleting an archived conversation succeeds");
     const after = await j(`/api/repos/${repoId}/archive`);
     check(!after.rows.some((r) => r.id.endsWith("001")), "the deleted conversation is gone from the listing");
+    const bmFile = JSON.parse(readFileSync(join(ROOT, STATE, "bookmarks.json"), "utf8"));
+    check(!JSON.stringify(bmFile).includes("000000000001"), "…and its bookmark went with it");
     check(!existsSync(join(HOME, ".claude", "projects", repo.path.replace(/[^a-zA-Z0-9]/g, "-"), "aaaaaaaa-0000-0000-0000-000000000001.jsonl")),
       "…and gone from disk");
 
@@ -184,6 +216,10 @@ bootWait(PORT, 1200, async () => {
     for (let i = 0; i < 30 && !sessionList; i++) await sleep(100);
     check(!!sessionList, "session.remove for an unknown id is still answered with the session list");
 
+    // A LIVE session's conversation can be bookmarked; its closed row wears it.
+    const bmLive = await post({ id: conv, note: "live one" }).then((r) => r.json());
+    check(bmLive.ok === true, "a live session's conversation can be bookmarked");
+
     // ── Closing a session ARCHIVES it: log kept, entry on the reopen stack ──
     closedList = null;
     ws.send(JSON.stringify({ t: "session.kill", id: sid }));
@@ -192,6 +228,7 @@ bootWait(PORT, 1200, async () => {
     check(!!entry, "killing a session puts it on the recently-closed stack");
     check(entry?.claudeSessionId === conv, "the closed entry names the conversation, so a reopen resumes exactly it");
     check(entry?.closedBy === "you", `a person's kill is closedBy "you" (got ${entry?.closedBy})`);
+    check(entry?.bookmark?.note === "live one", "the closed row wears its conversation's bookmark");
     const stillThere = await j(`/api/repos/${repoId}/archive`);
     check(stillThere.rows.some((r) => r.id === conv), "closing a session does NOT delete its conversation");
     ws.close();

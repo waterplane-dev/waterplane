@@ -12,7 +12,7 @@
 import { core } from "../../sdk";
 import { DEMO_TOUR_EVENT, demoActiveId, isDemo, openRepoHealthFor } from "../../demoEntry";
 import { LS, lsJson, lsSetJson } from "../../storage";
-import { HOOK_PROMPT, claimHook, claimsHook, markHook, markSeen, needsSession, parseTourState, shouldTypeHook, tourSession, type TourRow, type TourState } from "./logic";
+import { HOOK_PROMPT, claimHook, claimsHook, markHook, markSeen, needsSession, parseTourState, shouldTypeHook, tourRowPath, tourSession, type TourRow, type TourState } from "./logic";
 import { tourStore } from "./store";
 
 /** The one writer: store and storage move together. */
@@ -73,7 +73,7 @@ export function runTourRow(row: TourRow): void {
     // "this session, no sheet" is what closing a sheet looks like, and the
     // route takes it as ONE Back (`routeStep`) — onto the gallery again. So
     // the tour closes first, and the attach then closes what was under it.
-    if (c.world.active?.id === s!.id) { closeDemoTour(); afterBack(go); } else go();
+    if (tourRowPath(t, c.world.active?.id, s!.id) === "after-close") { closeDemoTour(); afterBack(go); } else go();
     return;
   }
   if (t.kind === "health") {
@@ -84,12 +84,19 @@ export function runTourRow(row: TourRow): void {
     return;
   }
   if (!s) { c.nav.open(t.overlay); return; }
+  const overlay = t.overlay;
+  // Over this session already: the attach would be a Back that lands after the
+  // sheet opened and closes it (`tourRowPath`) — close the tour, then open.
+  if (tourRowPath(t, c.world.active?.id, s.id) === "after-close") {
+    closeDemoTour();
+    afterBack(() => core().nav.open(overlay));
+    return;
+  }
   c.nav.attach(s);
   // A render apart, so the session gets its OWN entry in the route stack under
   // the sheet. Batched into one, the stack held only "session + sheet", and a
   // later "Your session" row from a tour opened over that sheet read as
   // closing a sheet — one Back, onto the sheet again (`routeStep`).
-  const overlay = t.overlay;
   setTimeout(() => core().nav.open(overlay), 0);
 }
 

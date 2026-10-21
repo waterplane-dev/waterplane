@@ -189,7 +189,8 @@ export type ToWebview =
   | { t: "tab"; id: TabId };
 
 export type ToExtension =
-  | { t: "ready" }
+  /** `tab` = the view the panel last showed on this machine (webview storage), null = none remembered. */
+  | { t: "ready"; tab?: TabId | null }
   | { t: "rescan" }
   | { t: "pickFolder"; folder: string }
   /** `id: null` = follow the newest session again (un-pin). */

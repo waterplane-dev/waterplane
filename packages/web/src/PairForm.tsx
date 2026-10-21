@@ -10,6 +10,7 @@ import {
   fieldsFromPaste, heldTokenFor, pairLinkSentence, pairTargetOf, readRedeemReply, redeemErrorText, storeRedeemed, type PairFields,
 } from "./pairRedeem";
 import { showToast } from "./toast";
+import { Button } from "./kit/Button";
 
 /**
  * "Pair with code" — the half of `HostSetup` that takes a code shown as a QR
@@ -101,19 +102,19 @@ export function PairForm({ mode, initial, fromLink, onDone }: {
         <div className="pair-confirm-code">code <code>{formatPairCode(target.code)}</code></div>
         {status}
         {!busy && (
-          <button className="key primary pair-wide" style={{ marginTop: 16 }} onClick={() => void pair(true)}>
+          <Button variant="primary" className="pair-wide" style={{ marginTop: 16 }} onClick={() => void pair(true)}>
             <KeyRound size={15} /> {mode === "add" ? "pair and switch" : "pair"}
-          </button>
+          </Button>
         )}
         {!busy && mode === "add" && (
-          <button className="key pair-wide" style={{ marginTop: 8 }} onClick={() => void pair(false)}>pair, stay here</button>
+          <Button className="pair-wide" style={{ marginTop: 8 }} onClick={() => void pair(false)}>pair, stay here</Button>
         )}
         <div className="set-note warn pair-confirm-note">
           <Link2 size={12} style={{ verticalAlign: "-2px" }} /> A pairing link filled this in. Nothing is sent until you tap pair —
           if you did not open a link just now, do not.
         </div>
         {!busy && (
-          <button className="key pair-link-btn" onClick={() => setEditing(true)}><Pencil size={13} /> change address or code</button>
+          <Button className="pair-link-btn" onClick={() => setEditing(true)}><Pencil size={13} /> change address or code</Button>
         )}
       </div>
     );
@@ -166,9 +167,9 @@ export function PairForm({ mode, initial, fromLink, onDone }: {
       {status}
       {target && !busy && (
         <div className="set-row" style={{ marginTop: 14, flexWrap: "wrap", gap: 8 }}>
-          {mode === "first" && <button className="key primary pair-wide" onClick={() => void pair(true)}><KeyRound size={14} /> pair</button>}
-          {mode === "add" && <button className="key primary" onClick={() => void pair(true)}><KeyRound size={14} /> pair and switch</button>}
-          {mode === "add" && <button className="key" onClick={() => void pair(false)}>pair</button>}
+          {mode === "first" && <Button variant="primary" className="pair-wide" onClick={() => void pair(true)}><KeyRound size={14} /> pair</Button>}
+          {mode === "add" && <Button variant="primary" onClick={() => void pair(true)}><KeyRound size={14} /> pair and switch</Button>}
+          {mode === "add" && <Button onClick={() => void pair(false)}>pair</Button>}
         </div>
       )}
     </>

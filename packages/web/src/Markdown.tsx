@@ -5,6 +5,7 @@ import { pickThumbWidth, viewerWidth } from "./media";
 import { useFileMtime } from "./fileMtime";
 import { cacheThumb } from "./thumbCache";
 import { useThumbSrc } from "./thumbSrc";
+import { Button } from "./kit/Button";
 
 /**
  * Markdown-lite renderer, shared by the reader view (TranscriptView) and the
@@ -315,8 +316,8 @@ function MdSnippet({ src, q, onCopy, files }: { src: string; q: string; onCopy: 
       <div className="tr-code-head">
         <span>markdown</span>
         <span className="tr-code-acts">
-          <button className="key" onClick={() => setRaw((v) => !v)}>{raw ? "rendered" : "source"}</button>
-          <button className="key" title="copy" onClick={() => onCopy(src)}><Copy size={12} /></button>
+          <Button onClick={() => setRaw((v) => !v)}>{raw ? "rendered" : "source"}</Button>
+          <Button title="copy" onClick={() => onCopy(src)}><Copy size={12} /></Button>
         </span>
       </div>
       {raw
@@ -389,7 +390,7 @@ export function Markdown({ src, q, onCopy, files, lineTag }: {
         <div {...tag(start, base, "tr-code")} key={`c${pi}`}>
           <div className="tr-code-head">
             <span>{lang || "code"}</span>
-            <button className="key" title="copy code" onClick={() => onCopy(code)}><Copy size={12} /></button>
+            <Button title="copy code" onClick={() => onCopy(code)}><Copy size={12} /></Button>
           </div>
           <pre>{hl(code, q)}</pre>
         </div>,

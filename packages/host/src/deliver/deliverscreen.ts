@@ -5,21 +5,24 @@
  */
 import type { SessionManager } from "../sessions.js";
 import type { DeliveryShape } from "@waterplane/shared";
-import type { ComposerAnchors, EchoRule } from "../echo.js";
+import type { EchoRule } from "../echo.js";
+import type { ComposerAnchors } from "../composer.js";
 import {
-  FALLBACK_ROWS,
   PASTE_CHIT,
   pastedNewlines,
   pasteCollapsible,
-  ROW_WINDOW,
-  composerEcho,
-  composerHeld,
   echoAmbiguous,
   echoProbe,
-  liveComposerEcho,
   squash,
   tailProbe,
 } from "../echo.js";
+import {
+  FALLBACK_ROWS,
+  ROW_WINDOW,
+  composerEcho,
+  composerHeld,
+  liveComposerEcho,
+} from "../composer.js";
 import { rivalTexts } from "../opendeliveries.js";
 import { resolveBackend } from "../backends/index.js";
 import { FALLBACK_HOLD_MS, sleep } from "./deliverknobs.js";
@@ -173,7 +176,7 @@ export function makeScreenReader(
    * plain sight, and then the sweep's Esc into a running turn.
    *
    * So ask the structural question instead: is the text inside the box the CLI
-   * draws to take typing (`echo.ts`'s `composerEcho`, which is also what
+   * draws to take typing (`composer.ts`'s `composerEcho`, which is also what
    * `settle.ts` asks minutes later — one rule, not two opinions). The old
    * distance test stays as the fallback for a screen with no `❯` box on it at
    * all, because an upstream redraw we stop recognising must degrade to the
@@ -236,7 +239,7 @@ export function makeScreenReader(
     // is not "unchanged" when it is handed twice the rows, and the slash branch
     // below accepts a hit at ANY height as long as two rows under it start with
     // `/` — which is how every file path in every tool result starts. Why the
-    // two windows differ is written out at `echo.ts`'s `FALLBACK_ROWS`.
+    // two windows differ is written out at `composer.ts`'s `FALLBACK_ROWS`.
     const rows = raw.slice(-FALLBACK_ROWS).map(squash);
     let hit = -1;
     for (let i = rows.length - 1; i >= 0; i--) if (rows[i].includes(probe)) { hit = i; break; }

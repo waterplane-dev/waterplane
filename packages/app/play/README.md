@@ -19,6 +19,7 @@ npm run release:play -- listing --yes                        # store text + imag
 |---|---|
 | `listings/<locale>/title.txt` (≤30), `short-description.txt` (≤80), `full-description.txt` (≤4000) | Main store listing, with `listing` or `upload --listing` |
 | `listings/<locale>/{icon,featureGraphic,phoneScreenshots,…}/*.png` | Graphics of that type, replaced as a set, in file-name order |
+| `listings/en-US/{phoneScreenshots,icon,featureGraphic}/*` | Made by `node scripts/media/play-shots.mjs` from the demo (screenshots 1080×2160 with a caption band, the app icon, a 1024×500 graphic); re-run after a UI change |
 | `release-notes/<locale>.txt` (≤500) | "What's new" of every upload. `--notes "…"` overrides it with one en-US text |
 
 The en-US texts are a **draft** written from the Play checklist: read them before the first

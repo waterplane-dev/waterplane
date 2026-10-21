@@ -25,14 +25,14 @@
  */
 import { createPrefs, flagText, onIfOne, onUnlessZero, sameList, type PrefDef } from "./prefStore.ts";
 import { LS, lsBool, lsDel, lsGet, lsJson, lsSet, lsSetBool, lsSetJson } from "../storage.ts";
-import { cleanSpendWarn, type SpendWarnCfg } from "@waterplane/shared";
+import { agentWindowWarnSetting, cleanSpendWarn, type SpendWarnCfg } from "@waterplane/shared";
 import { dataSaver, setDataSaver } from "../media.ts";
 import { bgFresh, setBgFresh, type BgFresh } from "./term/bgFresh.ts";
 import { setThemeChoice, themeChoice, type ThemeChoice } from "../theme.ts";
 import { iconScale, readerZoom, setIconScale, setReaderZoom, setTermZoom, setTextScale, termZoom, textScale } from "../uiScale.ts";
 import { pulseEnabled, setPulseEnabled } from "../link.ts";
 import { localRtMode, setLocalRtMode, type LocalRtMode } from "../localRt.ts";
-import { setTabsCount, setTabsEnabled, setTabsLimit, setTabsOrder, tabsCount, tabsEnabled, tabsLimit, tabsOrder, type TabOrder } from "../sessionTabs.ts";
+import { setTabsCount, setTabsEnabled, setTabsLimit, setTabsOrder, setTabsSynced, tabsCount, tabsEnabled, tabsLimit, tabsOrder, tabsSynced, type TabOrder } from "../sessionTabs.ts";
 import { readerToolsMode, setReaderToolsMode, type ReaderToolsMode } from "../transcriptUtil.ts";
 import { hintMode, hintSeenCount, setHintMode, type HintMode } from "../hints.ts";
 import {
@@ -67,6 +67,8 @@ export interface DevicePrefs {
   /** The local-model session cap as its raw synced string — `""` is the
    *  desktop's own default, `"0"` no cap. Read by the HOST. */
   localSessions: string;
+  /** The large-subagent line as its raw synced string (`agentWindowWarnSetting` parses; `""` = the default). Read by the HOST for its push. */
+  agentWindowWarn: string;
   /** The parallel-agent count's marks (`agentCount.ts`). Default 10 / 30, synced. */
   agentWarn: AgentWarnCfg;
   /** Return sends (vs inserts a newline). Default ON, synced. */
@@ -101,6 +103,8 @@ export interface DevicePrefs {
   tabsOn: boolean;
   tabsN: number;
   tabsSort: TabOrder;
+  /** The order and open history follow every device (default on). Per device. */
+  tabsSync: boolean;
   tabsMax: number;
   /** How much of a tool call the reader shows/downloads. Synced. */
   toolsMode: ReaderToolsMode;
@@ -160,6 +164,11 @@ export const prefs = createPrefs<DevicePrefs>({
     save: (v) => (v ? lsSet(LS.localSessions, v) : lsDel(LS.localSessions)),
     keys: [LS.localSessions],
   },
+  agentWindowWarn: {
+    load: () => lsGet(LS.agentWindowWarn) ?? "",
+    save: (v) => (v ? lsSet(LS.agentWindowWarn, v) : lsDel(LS.agentWindowWarn)),
+    keys: [LS.agentWindowWarn],
+  },
   agentWarn: {
     load: loadAgentWarn,
     save: saveAgentWarn,
@@ -196,10 +205,11 @@ export const prefs = createPrefs<DevicePrefs>({
   netPulse: { load: pulseEnabled, save: setPulseEnabled },
   localRtBar: { load: localRtMode, save: setLocalRtMode },
   unfoldToEnd: flag(LS.unfoldToEnd, onUnlessZero),
-  repoSort: { load: () => lsGet(LS.repoSort) === "sessions" ? "sessions" : "name", save: (v) => { if (v === "sessions") lsSet(LS.repoSort, v); else lsDel(LS.repoSort); } },
+  repoSort: { load: () => lsGet(LS.repoSort) === "name" ? "name" : "sessions", save: (v) => { if (v === "name") lsSet(LS.repoSort, v); else lsDel(LS.repoSort); } },
   tabsOn: { load: tabsEnabled, save: setTabsEnabled },
   tabsN: { load: tabsCount, save: setTabsCount },
-  tabsSort: { load: tabsOrder, save: setTabsOrder },
+  tabsSort: { load: tabsOrder, save: setTabsOrder, keys: [LS.tabOrderShared] },
+  tabsSync: { load: tabsSynced, save: setTabsSynced },
   tabsMax: { load: tabsLimit, save: setTabsLimit },
   toolsMode: { load: readerToolsMode, save: setReaderToolsMode, keys: [LS.readerTools] },
   theme: { load: themeChoice, save: setThemeChoice },
@@ -222,6 +232,12 @@ export function usePref<K extends PrefKey>(k: K): DevicePrefs[K] {
 /** Save one preference and publish it. */
 export function setPref<K extends PrefKey>(k: K, v: DevicePrefs[K]): void {
   prefs.set(k, v);
+}
+
+/** The large-subagent line in tokens, for a render or callback outside a pref hook: the ONE reading
+ *  the chip, the toast and the sheet share with the host's push (`agentWindowWarnSetting`). */
+export function agentWarnTok(): number {
+  return agentWindowWarnSetting(lsGet(LS.agentWindowWarn));
 }
 
 /** The current value for a callback that runs outside a render. */

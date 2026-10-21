@@ -1,6 +1,6 @@
 /** The When row: now / when it's free, the anchors, after-another, wait-until-free. Split from `SendSheet.tsx` (docs/notes/send-architecture.md). */
 import { CalendarClock, ChevronDown, ChevronRight, Files, Gauge, Hourglass, Link2 } from "lucide-react";
-import { RadioRows } from "../kit";
+import { RadioRows, RowTitle, RowSub, Hint } from "../kit";
 import { intentTitle } from "../activityRows";
 import { CHAIN_EMPTY, CHAIN_NOTE, chainOkWords, RETIME_NOW_SEG, whenWords } from "../sendIntent";
 import { Empty } from "../Empty";
@@ -38,14 +38,14 @@ export function WhenSection({ m }: { m: SendSheetModel }) {
           {/* A re-time with no clock MOVES the rows: off the clock list, onto
               the repo's ⌛ chip. Said here, before the tap, and again in the
               receipt — rows that vanish from where you were looking read as lost. */}
-          {retime && when.kind !== "at" && <div className="form-hint">{retimeOffClockNote(retime.ids.length)}</div>}
+          {retime && when.kind !== "at" && <Hint>{retimeOffClockNote(retime.ids.length)}</Hint>}
           {/* …and the rule that tap left behind is still there. Without this
               sentence the only way to find out was to tap back, which is
               exactly what a person avoids doing after something vanished. */}
           {when.kind !== "at" && atMemo.current && (
-            <div className="form-hint">
+            <Hint>
               The schedule you set is kept — tap <b>at a time</b> or <b>a usage window</b> to get it back.
-            </div>
+            </Hint>
           )}
           {/* What "free" MEANS depends on the target, and the two answers are
               not the same wait: a live session is free when its turn ends,
@@ -53,7 +53,7 @@ export function WhenSection({ m }: { m: SendSheetModel }) {
               at all. Said in text rather than in a `title`, which never
               appears on the device this sheet is used from. */}
           {when.kind === "idle" && (
-            <div className="form-hint">
+            <Hint>
               {target.kind === "repo"
                 // One clause for this wait, everywhere it is named — the
                 // button, this hint and the toast after the tap all say "when
@@ -63,7 +63,7 @@ export function WhenSection({ m }: { m: SendSheetModel }) {
                 : target.kind === "repos"
                   ? "Each one starts when its own repo is free. The desktop holds them — this phone can be shut."
                   : "Turn ended, no question open, no usage-limit block. The desktop holds it, so this phone can be shut."}
-            </div>
+            </Hint>
           )}
           <div className="section section-head"><span>What it waits for</span></div>
           <RadioRows<"clock" | "window" | "after"> label="What it waits for"
@@ -77,7 +77,7 @@ export function WhenSection({ m }: { m: SendSheetModel }) {
           {when.kind === "after" && (
             <>
               <div className="pad-pick">
-                <div className="form-hint">Which item does it wait for?</div>
+                <Hint>Which item does it wait for?</Hint>
                 {chainRows.map((c) => (
                   <button key={c.id} className={`row${when.id === c.id ? " sched-on" : ""}`}
                     onClick={() => setWhen({ ...when, id: c.id, title: intentTitle(c) })}>
@@ -85,8 +85,8 @@ export function WhenSection({ m }: { m: SendSheetModel }) {
                         own rule — so the row you pick here is the row you
                         recognise there, and the name snapshotted onto the
                         trigger is the name that screen will keep using. */}
-                    <span className="row-title">{intentTitle(c)}</span>
-                    <span className="row-sub">{chainRowState(c)}</span>
+                    <RowTitle>{intentTitle(c)}</RowTitle>
+                    <RowSub>{chainRowState(c)}</RowSub>
                   </button>
                 ))}
                 {/* An empty picker is a STATE, said in words. The segment
@@ -103,8 +103,8 @@ export function WhenSection({ m }: { m: SendSheetModel }) {
                   only if it succeeded
                 </button>
               </div>
-              <div className="form-hint">{chainOkWords(when.onlyIfOk)}</div>
-              <div className="form-hint">{CHAIN_NOTE}</div>
+              <Hint>{chainOkWords(when.onlyIfOk)}</Hint>
+              <Hint>{CHAIN_NOTE}</Hint>
             </>
           )}
           {/* An ADDITION to the anchor above, never a third one to pick
@@ -128,11 +128,11 @@ export function WhenSection({ m }: { m: SendSheetModel }) {
                   `title` never appears on a phone, which is the only device
                   this sheet is used from, so the one sentence explaining what
                   the chip does was invisible to everyone who could tap it. */}
-              <div className="form-hint">
+              <Hint>
                 {when.waitUntilFree
                   ? "Still due at the time above — but held, once due, until this repo's own session is free and nothing else on the desktop is starting or running."
                   : "Fires at the time above whatever else is running. Tick it to hold instead — the fix for a dozen repos anchored to the same reset all going off in one burst."}
-              </div>
+              </Hint>
             </>
           )}
 
@@ -144,10 +144,10 @@ export function WhenSection({ m }: { m: SendSheetModel }) {
           held by the HOST until the bytes land (`launch.ts`), for hours, with
           this phone closed. Said here because it changes what "now" means. */}
       {!retime && waitsForFiles > 0 && when.kind !== "at" && (
-        <div className="form-hint">
+        <Hint>
           <Files size={12} /> It names {waitsForFiles} file{waitsForFiles > 1 ? "s" : ""} in the inbox — the desktop holds the
           send until {waitsForFiles > 1 ? "they have" : "it has"} arrived, even with this app closed.
-        </div>
+        </Hint>
       )}
     </>
   );

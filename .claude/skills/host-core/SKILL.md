@@ -1,6 +1,6 @@
 ---
 name: host-core
-description: waterplane host — a live session and how words reach it (packages/host/src): `backends/` (`claude.ts`, claude-local, claude-endpoint, `shell.ts`), `ptyenv.ts`, `sessions.ts` + its `sessions/` slices, `deliver.ts` + `echo.ts` + `settle.ts`, `agents.ts` + `shells.ts`, `screenlog.ts`, `halt.ts`, `answergate.ts` + `askrules.ts`, the plugin host. Load BEFORE adding a backend, spawning or resizing a PTY, changing how a prompt is typed into a live session and confirmed, letting anything but a person's tap answer a box (or forcing a tap before a command), touching what a plugin may see or do, halting, or reading back the screen, the scrollback or what runs under a session. Never fork `deliver.ts`.
+description: waterplane host — a live session and how words reach it (packages/host/src): `backends/` (`claude.ts`, claude-local, claude-endpoint, `shell.ts`), `ptyenv.ts`, `sessions.ts` + its `sessions/` slices, `deliver.ts` + `echo.ts` + `composer.ts` + `settle.ts`, `agents.ts` + `shells.ts`, `screenlog.ts`, `halt.ts`, `answergate.ts` + `askrules.ts`, the plugin host. Load BEFORE adding a backend, spawning or resizing a PTY, changing how a prompt is typed into a live session and confirmed, letting anything but a person's tap answer a box (or forcing a tap before a command), touching what a plugin may see or do, halting, or reading back the screen, the scrollback or what runs under a session. Never fork `deliver.ts`.
 ---
 
 # waterplane host — a live session and how words reach it
@@ -74,11 +74,11 @@ One live PTY session, end to end: which binary it drives, how words get typed in
   memory only) and `setMode` (`session.mode`): one shift+tab via `write`, re-read the LIVE grid until
   the footer changes, stop on the target / a repeat (not in the cycle) / 6 presses; refused in words
   with a box open or the footer unreadable; serialised per session (`modeChain`). Never counts positions.
-- `deliver.ts` + `deliver/deliverrun.ts` + `deliver/deliverreturn.ts` + `deliver/deliverknobs.ts` + `deliver/delivertypes.ts` + `deliver/deliverscreen.ts` + `deliver/deliverproof.ts` + `echo.ts` — **the one implementation** of "type into a live session like a human, and confirm".
-  `deliver.ts` is the facade and the ONLY way in (`local/host-boundary` refuses a `deliver/*` import from outside the folder); `deliver/` holds its halves, MOVED, never copied — `runDelivery` to the echo verdict, its submit tail, the knobs, the types, the composer reader, the log/hook proof ([host-architecture.md](../../../docs/notes/host-architecture.md), "The deliver slices").
+- `deliver.ts` + `deliver/deliverrun.ts` + `deliver/deliverreturn.ts` + `deliver/deliverknobs.ts` + `deliver/delivertypes.ts` + `deliver/deliverscreen.ts` + `deliver/deliverproof.ts` + `echo.ts` + `composer.ts` — **the one implementation** of "type into a live session like a human, and confirm".
+  `echo.ts` is the text rule ("is THIS text in that string", probes, paste chits, the log); `composer.ts` finds the box on rendered rows and hands what it holds to `echo.ts`'s `screenEcho` — it imports `echo.ts`, never the reverse. `deliver.ts` is the facade and the ONLY way in (`local/host-boundary` refuses a `deliver/*` import from outside the folder); `deliver/` holds its halves, MOVED, never copied — `runDelivery` to the echo verdict, its submit tail, the knobs, the types, the composer reader, the log/hook proof ([host-architecture.md](../../../docs/notes/host-architecture.md), "The deliver slices").
   `ok` / `retry` (nothing typed) / `unconfirmed` (written, never seen — never auto-retry) /
   `unsubmitted` (Return swallowed — say so, never retype). Echo is checked by POLLING the RENDERED
-  screen and by PLACING the match **structurally** — inside the `❯` box (`echo.ts`'s
+  screen and by PLACING the match **structurally** — inside the `❯` box (`composer.ts`'s
   `composerEcho`, shared with `settle.ts`), never by distance from the bottom of the render: the
   replay TEARS mid-turn and strands the live composer above stale rows. No box found ⇒ the old distance rule, never a brick — at the OLD DEPTH (`FALLBACK_ROWS` 40, not the anchor's `ROW_WINDOW` 100). After our write, a no-box proof is HELD `FALLBACK_HOLD_MS` (1 s) for a framed one — 2.1.304 draws the text bare between frames ([why](../../../docs/notes/host.md#deliverts)). Two frames that DISAGREE — a live empty
   box under a stale one holding submitted words — are not a composer either
@@ -87,7 +87,7 @@ One live PTY session, end to end: which binary it drives, how words get typed in
   `fallback`, and the trailing `good` is gated on the echo having been seen. **A multi-line write IS a
   paste** and collapses to `[Pasted text #1 +N lines]` — **and so is any write past 800 chars,
   whatever its shape, where the placeholder is BARE (`[Pasted text #5]`, no clause, because the
-  clause counts NEWLINES and a phone message has none). **The composer is a VIEWPORT, not a field**: a box whose WHOLE contents are a window onto a long prompt's tail is an echo (`echo.ts`'s `scrolled`, `SLICE_MIN` 40), asked as a SUBSTRING not a suffix (`settle.ts` asks minutes later at any scroll).
+  clause counts NEWLINES and a phone message has none). **The composer is a VIEWPORT, not a field**: a box whose WHOLE contents are a window onto a long prompt's tail is an echo (`composer.ts`'s `scrolled`, `SLICE_MIN` 40), asked as a SUBSTRING not a suffix (`settle.ts` asks minutes later at any scroll).
   `e2e-scrollcomposer.mjs`. An absent clause is "zero newlines", never
   "no information" (`echo.ts`'s `PASTE_CHIT` / `pasteCollapsible`).** A TUI-local command (`slash.ts`) fires no
   `UserPromptSubmit`, so the proof is the screen MOVING and the sweep sends NO Esc. **A probe is a

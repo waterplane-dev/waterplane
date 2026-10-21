@@ -26,6 +26,7 @@ import { demoActiveId, isDemo, openRepoHealthFor } from "../../demoEntry";
 import { TOUR_REPO, cardShown, cueShown, hintShown } from "./logic";
 import { claimHookSession, closeHookCard, closeStartCue, hookDoor, hookReadUsed, openDemoTourSheet } from "./actions";
 import { useTour } from "./store";
+import { Button } from "../../kit";
 
 /** The toggle the hint points at — `TermArea`'s reader switch. */
 const TOGGLE = '[data-hint="term.read"]';
@@ -168,9 +169,9 @@ export function DemoHookCard({ session, readMode }: { session: SessionInfo; read
     <section className="demo-hook-card" aria-label="While you're away">
       <div className="demo-hook-card-head">
         <b>While you’re away</b>
-        <button className="key demo-hook-more" onClick={() => hookDoor("more", openDemoTourSheet)}>
+        <Button className="demo-hook-more" onClick={() => hookDoor("more", openDemoTourSheet)}>
           <Sparkles size={12} /> More to try
-        </button>
+        </Button>
         <button className="demo-hook-x" aria-label="close the card" onClick={closeHookCard}><X size={14} /></button>
       </div>
       <div className="demo-hook-tiles">

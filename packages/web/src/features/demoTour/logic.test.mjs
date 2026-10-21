@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   EMPTY_TOUR, HOOK_PROMPT, HOOK_SCENARIO, TOUR, TOUR_ROWS, TOUR_SESSION, cardShown, claimHook, claimsHook, cueShown, hintShown, loopDone, shouldTypeHook, markHook, markSeen, needsSession,
-  parseTourState, progressText, tourProgress, tourSession,
+  parseTourState, progressText, tourProgress, tourRowPath, tourSession,
 } from "./logic.ts";
 
 /** The string literals of `routing.ts`'s `Overlay` union — the route stack's own list. */
@@ -139,4 +139,17 @@ test("tourSession: the scenario's id, else its repo, else none", () => {
   assert.equal(tourSession([other, renamed]), renamed);
   assert.equal(tourSession([other]), null);
   assert.equal(tourSession([]), null);
+});
+
+test("a row over its own session closes the tour first, so the attach's Back cannot close what the row opens", () => {
+  // Gallery from a tour opened over the demo session used to land on the session with no sheet.
+  for (const r of TOUR_ROWS) {
+    const path = tourRowPath(r.target, TOUR_SESSION, TOUR_SESSION);
+    const expect = r.target.kind === "health" || !needsSession(r.target) ? "direct" : "after-close";
+    assert.equal(path, expect, `${r.id} over its own session`);
+    assert.equal(tourRowPath(r.target, "someone-else", TOUR_SESSION), "direct", `${r.id} from another screen`);
+    assert.equal(tourRowPath(r.target, null, TOUR_SESSION), "direct", `${r.id} from the repo list`);
+  }
+  const gallery = TOUR_ROWS.find((r) => r.id === "gallery");
+  assert.equal(tourRowPath(gallery.target, TOUR_SESSION, TOUR_SESSION), "after-close");
 });

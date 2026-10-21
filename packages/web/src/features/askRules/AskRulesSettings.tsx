@@ -14,8 +14,8 @@ import {
 import { useAskRules } from "../../AskRulesHere";
 import { ConfirmButton } from "../../Confirm";
 import { Empty } from "../../Empty";
-import { FilterChip } from "../../kit";
-import { SetAction, SetCustom, SetWarn } from "../../SettingsKit";
+import { FilterChip, Button } from "../../kit";
+import { SetAction, SetCustom, SetNote, SetWarn } from "../../SettingsKit";
 import { useCore } from "../../sdk";
 
 export function AskRulesSettings() {
@@ -55,7 +55,7 @@ export function AskRulesSettings() {
       {ask.res.data && (
         <div className="askrule-list">
           {lostWords(ask.res.data.lost) && <SetWarn icon={ShieldAlert}>{lostWords(ask.res.data.lost)}</SetWarn>}
-          {ask.rules.length === 0 && !ask.res.data.lost && <div className="set-note">No rules yet — nothing asks first.</div>}
+          {ask.rules.length === 0 && !ask.res.data.lost && <SetNote>No rules yet — nothing asks first.</SetNote>}
           {ask.rules.map((r) => {
             const off = offInWords(r, repos);
             return (
@@ -93,11 +93,11 @@ export function AskRulesSettings() {
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void add(); } }}
               aria-label="a rule to add"
             />
-            <button className="key" onClick={() => void add()}>
+            <Button onClick={() => void add()}>
               <Plus size={14} /> {ask.saving ? "saving…" : "add"}
-            </button>
+            </Button>
           </div>
-          {why && <div className="set-note oracle-warn">{why}</div>}
+          {why && <SetWarn>{why}</SetWarn>}
 
           {/* Exactly the missing ones, and only on this tap: the count IS what
               the tap adds, and the fold lists them before anything is sent. */}

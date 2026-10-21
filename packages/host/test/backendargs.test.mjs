@@ -35,7 +35,7 @@ import { join } from "node:path";
 import assert from "node:assert/strict";
 import { claudeBackend, hookSettingsArg } from "../dist/backends/claude.js";
 import { resolveBackend, DEFAULT_BACKEND } from "../dist/backends/index.js";
-import { composerSpans } from "../dist/echo.js";
+import { composerSpans } from "../dist/composer.js";
 import { BRAND, envName } from "@waterplane/shared";
 
 const PORT = 8770;
@@ -144,9 +144,9 @@ test("an absent backend id is claude; an unknown one is REFUSED in words", () =>
   });
 });
 
-test("the descriptor's composer cursor rule agrees with echo.ts's", () => {
-  // `backends/claude.ts` holds a SECOND copy of a regex `echo.ts` keeps private,
-  // because `echo.ts` is the last file this refactor may touch. Two copies of a
+test("the descriptor's composer cursor rule agrees with composer.ts's", () => {
+  // `backends/claude.ts` holds a SECOND copy of a regex `composer.ts` keeps private,
+  // because its home (then `echo.ts`) was the last file this refactor may touch. Two copies of a
   // rule are two opinions waiting to happen, so they are held to the same
   // answers until the copy is deleted.
   const RULE = "─".repeat(24);
@@ -160,7 +160,7 @@ test("the descriptor's composer cursor rule agrees with echo.ts's", () => {
   ];
   for (const [row, expected] of cases) {
     assert.equal(claudeBackend.delivery.composerCursorRe.test(row), expected, `descriptor: ${JSON.stringify(row)}`);
-    assert.equal(composerSpans([RULE, row, RULE]).length === 1, expected, `echo.ts: ${JSON.stringify(row)}`);
+    assert.equal(composerSpans([RULE, row, RULE]).length === 1, expected, `composer.ts: ${JSON.stringify(row)}`);
   }
 });
 

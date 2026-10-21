@@ -4,6 +4,8 @@ import { Check, Loader2, Radar, Server } from "lucide-react";
 import { api, bgFetch } from "./api";
 import { addAndActivate, listHosts } from "./hosts";
 import { emptyFoundText, foundRows, foundSub, healthVerdict, type FoundRow } from "./hostDiscover";
+import { Row, RowTitle, RowSub } from "./kit/Row";
+import { SetNote } from "./SettingsKit";
 
 /**
  * "Found on your tailnet" in Add a desktop: the connected desktop lists the
@@ -69,21 +71,21 @@ export function FoundDesktops({ onPassword }: {
   const fresh = rows.filter((r) => !r.saved);
   return (
     <div style={{ marginBottom: 14 }}>
-      <div className="set-note"><Radar size={13} style={{ verticalAlign: "-2px" }} /> found on your tailnet</div>
+      <SetNote><Radar size={13} style={{ verticalAlign: "-2px" }} /> found on your tailnet</SetNote>
       {fresh.length === 0 && <div className="set-note" style={{ marginTop: 6 }}>{emptyFoundText(load.res.note, rows.length > 0)}</div>}
       <div className="list" style={{ marginTop: 6 }}>
         {rows.map((r) => r.saved ? (
-          <div key={r.base} className="row">
-            <span className="row-title"><Check size={12} /> {r.peer.name} · already on this phone</span>
-            <span className="row-sub dim">{foundSub(r)}</span>
-          </div>
+          <Row key={r.base}>
+            <RowTitle><Check size={12} /> {r.peer.name} · already on this phone</RowTitle>
+            <RowSub className="dim">{foundSub(r)}</RowSub>
+          </Row>
         ) : (
-          <button key={r.base} className="row" onClick={() => void pick(r)}>
-            <span className="row-title">
+          <Row key={r.base} as="button" onClick={() => void pick(r)}>
+            <RowTitle>
               {picked === r.base ? <Loader2 size={12} className="spin" /> : <Server size={12} />} {r.peer.name}
-            </span>
-            <span className="row-sub dim">{foundSub(r)} · {picked === r.base ? "checking…" : r.peer.gated ? "tap to pair" : "tap to add"}</span>
-          </button>
+            </RowTitle>
+            <RowSub className="dim">{foundSub(r)} · {picked === r.base ? "checking…" : r.peer.gated ? "tap to pair" : "tap to add"}</RowSub>
+          </Row>
         ))}
       </div>
       {say && <div className="set-note" style={{ marginTop: 8, color: "var(--dead)" }}>{say}</div>}

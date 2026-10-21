@@ -36,6 +36,7 @@ import { SheetHead } from "./Sheet";
 import { useHostRoute, useHostRouteEditor } from "./hostRoute";
 import { NO_PASSWORD_SENTENCE } from "./lanRoute";
 import { openSettingsAt } from "./settingsFocus";
+import { Button } from "./kit/Button";
 
 const ICON = 16;
 
@@ -183,15 +184,15 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
   return (
     <div className="sheet">
       <SheetHead title="Connection health" icon={<Activity size={ICON} />} onClose={onClose}>
-        <button className="key" title="re-read the host's own counters" onClick={() => void load()}><RotateCcw size={ICON} /></button>
+        <Button title="re-read the host's own counters" onClick={() => void load()}><RotateCcw size={ICON} /></Button>
       </SheetHead>
       <div className="sheet-body">
         <p className={`nh-verdict nh-${v.tone}`}>{v.text}</p>
         {stuck > 0 && (
           <div className="set-row">
-            <button className={`key ${armed ? "active" : ""}`} onClick={resetWindow}>
+            <Button className={armed ? "active" : ""} onClick={resetWindow}>
               <RotateCcw size={ICON} /> {armed ? "tap again to clear" : "checked them — clear"}
-            </button>
+            </Button>
             <span className="set-note">Resets this window's counters; the prompts themselves stay in Activity.</span>
           </div>
         )}
@@ -250,9 +251,9 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
               in that repo&apos;s backlog — where it opens a new session of its own.
             </span>
             <div className="set-row">
-              <button className="key" onClick={onOpenActivity}>
+              <Button onClick={onOpenActivity}>
                 <ListOrdered size={ICON} /> open the {notDelivered} in Activity
-              </button>
+              </Button>
             </div>
           </section>
         )}
@@ -269,14 +270,14 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
               place they change is one tap away, not three screens. */}
           {route && editRoute && (
             <div className="set-row">
-              <button className="key" onClick={editRoute}>
+              <Button onClick={editRoute}>
                 <Settings2 size={ICON} /> change LAN settings
-              </button>
+              </Button>
               {/* This one is the host's setting, not the phone's form. */}
               {route.sentence === NO_PASSWORD_SENTENCE && (
-                <button className="key" onClick={() => openSettingsAt("lan-password")}>
+                <Button onClick={() => openSettingsAt("lan-password")}>
                   <KeyRound size={ICON} /> set the LAN password
-                </button>
+                </Button>
               )}
             </div>
           )}
@@ -314,9 +315,9 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
           </div>
           {!pulse.enabled && (
             <div className="set-row">
-              <button className="key" onClick={() => openSettingsAt("net-pulse")}>
+              <Button onClick={() => openSettingsAt("net-pulse")}>
                 <Settings2 size={ICON} /> turn the connection strip on
-              </button>
+              </Button>
             </div>
           )}
           <span className="set-note">
@@ -469,7 +470,7 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
 
         <section className="set-group">
           <div className="set-row">
-            <button className={`key ${armed ? "active" : ""}`} onClick={resetWindow}><RotateCcw size={ICON} /> {armed ? "tap again to reset" : "reset window"}</button>
+            <Button className={armed ? "active" : ""} onClick={resetWindow}><RotateCcw size={ICON} /> {armed ? "tap again to reset" : "reset window"}</Button>
           </div>
           <span className="set-note">
             Everything here is local: the device half lives in this browser, the host half in

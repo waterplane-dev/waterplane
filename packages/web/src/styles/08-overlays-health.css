@@ -245,52 +245,6 @@
   border-color: var(--accent, var(--line));
 }
 
-/* The named give-ups. A row is a target, not a reading — it goes to whichever of
-   the queue or the pad is holding those words — so it is a real button with the
-   text on top and everything that explains it underneath. The text is clamped:
-   the list is for recognising which prompt this was, and a full 200-character
-   head per row turns a list of nine into a page of prose. */
-.nh-gaves { display: flex; flex-direction: column; gap: var(--sp-6); margin: var(--sp-2) 0 var(--sp-10); }
-.nh-give {
-  display: flex; flex-direction: column; gap: var(--sp-4); width: 100%;
-  padding: var(--sp-8) var(--sp-10); border: 1px solid var(--line); border-radius: var(--r-8);
-  background: var(--bg); text-align: left; color: var(--fg); font: inherit;
-  border-left: 3px solid var(--dead);
-}
-.nh-give:active { background: var(--hover); }
-.nh-give[disabled] { opacity: .55; }
-.nh-give.risky { border-left-color: var(--warn); }
-.nh-give-t {
-  font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14); min-width: 0;
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
-  white-space: pre-wrap; overflow-wrap: anywhere;
-}
-.nh-give-m { font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); line-height: var(--lh-14); overflow-wrap: anywhere; }
-.nh-give-m.warn { color: var(--warn); }
-/* The row became a container the moment it carried an ACTION as well as a
-   destination: a button inside a button is invalid and, on a phone, unpressable
-   — the outer one swallows the tap. So the words are one button (go to where
-   they are kept) and "send again" is another, side by side. */
-.nh-give { flex-direction: row; align-items: center; gap: var(--sp-8); }
-.nh-give-open {
-  display: flex; flex-direction: column; gap: var(--sp-4); flex: 1; min-width: 0;
-  padding: 0; border: 0; background: none; text-align: left; color: var(--fg); font: inherit;
-}
-.nh-give-open[disabled] { opacity: .55; }
-.nh-give:active { background: var(--hover); }
-.nh-give-retry {
-  flex: 0 0 auto; display: inline-flex; align-items: center; gap: var(--sp-4);
-  padding: var(--sp-8) var(--sp-10); min-height: 40px; border: 1px solid var(--line); border-radius: var(--r-6);
-  background: var(--hover-soft); color: var(--fg); font: inherit; font-size: calc(var(--fs-12) * var(--ui-font, 1));
-}
-.nh-give-retry:active { background: var(--hover-hi); }
-.nh-give-done { flex: 0 0 auto; font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); }
-/* A row plus, when its FILE is what is stuck, the picture that file is. The
-   strip is a sibling of the row rather than a child: the row is a flex ROW of
-   two buttons, and a thumbnail belongs under both, not beside either. */
-.nh-give-item { display: flex; flex-direction: column; gap: var(--sp-4); }
-.nh-give-files { padding: 0 var(--sp-10) var(--sp-2); }
-
 /* ── Mobile pass on the newer sheets ───────────────────────────────────────
    These were built desktop-first-ish and each broke the same three ways on a
    phone: controls under the fingertip floor, a scroll container that either

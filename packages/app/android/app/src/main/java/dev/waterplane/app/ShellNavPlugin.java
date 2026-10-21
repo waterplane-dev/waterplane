@@ -94,4 +94,22 @@ public class ShellNavPlugin extends Plugin {
             ((MainActivity) getActivity()).setWebTheme(theme, background);
         }
     }
+
+    /**
+     * The third push: **hide the status and navigation bars, or bring them
+     * back.** The live desktop's fullscreen wants the whole glass, and a
+     * WebView's own `requestFullscreen` never gets it here — Capacitor's chrome
+     * client dismisses the custom view the moment it is shown.
+     *
+     * Optional like the others: a bundle that never calls it keeps the bars.
+     *
+     * @param on true hides both bars (a swipe from the edge shows them for a
+     *           moment); false shows them again.
+     */
+    @JavascriptInterface
+    public void setImmersive(boolean on) {
+        if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).setWebImmersive(on);
+        }
+    }
 }

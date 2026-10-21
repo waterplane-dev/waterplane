@@ -14,6 +14,7 @@ import { keyHintBytes, keyHintLabel, type ChordKey, type SessionInfo } from "@wa
 import type { ComposeApi } from "../compose/useCompose";
 import type { ChordMod, ModState } from "../compose/chordState.ts";
 import { keepFocus } from "../compose/ComposeBar";
+import { Button } from "../../kit/Button";
 
 const ICON = 16;
 
@@ -81,7 +82,7 @@ export function KeyRow({ active, compose, keysOpen, setKeysOpen }: {
         if (!bytes || spent.includes(h.key)) return null;
         const title = `${h.key} — ${h.verb} (the CLI names this key on screen now)`;
         return (
-          <button key={`hint:${h.key}`} className="key key-hint" title={title} aria-label={title}
+          <Button key={`hint:${h.key}`} className="key-hint" title={title} aria-label={title}
             onPointerDown={keepFocus} onClick={() => {
               // A chip is a whole key already: held modifiers let go rather
               // than waiting to land on whatever is pressed next.
@@ -90,13 +91,13 @@ export function KeyRow({ active, compose, keysOpen, setKeysOpen }: {
               if (h.key !== "shift+tab") setSpentHints({ of: hintKey, keys: [...spent, h.key] });
             }}>
             {keyHintLabel(h.key)} <span className="key-hint-verb">{h.verb}</span>
-          </button>
+          </Button>
         );
       })}
       {SPECIAL_KEYS.map((k, i) => (
-        <button key={i} className="key" title={k.title} aria-label={k.title}
+        <Button key={i} title={k.title} aria-label={k.title}
           onPointerDown={k.nav && !cliMode ? blurCompose : keepFocus}
-          onClick={() => (k.key ? compose.chord.sendKey(k.key, k.data) : sendInput(k.data))}>{k.label}</button>
+          onClick={() => (k.key ? compose.chord.sendKey(k.key, k.data) : sendInput(k.data))}>{k.label}</Button>
       ))}
       {/* Sticky modifiers: held for the next key — one of these, or a
           letter typed on the keyboard, which the compose box then pipes
@@ -107,10 +108,10 @@ export function KeyRow({ active, compose, keysOpen, setKeysOpen }: {
       {MOD_KEYS.map(({ mod, label }) => {
         const st = compose.chord.mods[mod];
         return (
-          <button key={mod} className={`key mod-key${st !== "off" ? " active" : ""}`} title={modTitle(label, st)} aria-label={modTitle(label, st)}
+          <Button key={mod} className={`mod-key${st !== "off" ? " active" : ""}`} title={modTitle(label, st)} aria-label={modTitle(label, st)}
             aria-pressed={st !== "off"} onPointerDown={keepFocus} onClick={() => compose.tapChordMod(mod)}>
             <span>{label}</span>{st !== "off" && <span className="mod-state">{MOD_WORD[st]}</span>}
-          </button>
+          </Button>
         );
       })}
       <button className={`key${keysOpen ? " active" : ""}`} onPointerDown={keepFocus} onClick={() => setKeysOpen((o) => !o)}
@@ -118,15 +119,15 @@ export function KeyRow({ active, compose, keysOpen, setKeysOpen }: {
         aria-label="claude's shortcuts"><Keyboard size={ICON} /> Keys</button>
       {/* Lives at the END of this row on purpose: the row IS raw input, and
           CLI mode is the same thing with the alphabet added. */}
-      <button
-        className={`key cli-key ${cliMode ? "active" : ""}`}
+      <Button
+        className={`cli-key ${cliMode ? "active" : ""}`}
         data-hint="compose.cli"
         onPointerDown={keepFocus}
         onClick={toggleCliMode}
         title={cliMode
           ? "CLI mode is on — every key you type goes straight to the session. Tap to go back to composing (queued, confirmed sends)."
           : "CLI mode — type directly at the CLI instead of composing a message: keystrokes go through as you type, nothing is queued or echo-checked."}
-      ><TerminalIcon size={ICON} /> CLI</button>
+      ><TerminalIcon size={ICON} /> CLI</Button>
     </div>
   );
 }

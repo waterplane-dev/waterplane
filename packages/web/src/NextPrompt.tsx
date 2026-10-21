@@ -29,6 +29,9 @@ import type { NextPromptView } from "./nextPromptState";
 import { pastBudgetLabel, skipQueueNote } from "./sendIntent";
 import { Stowable, StowButton } from "./Stowable";
 import { PromptComposer } from "./PromptComposer";
+import { Button } from "./kit/Button";
+import { Row } from "./kit/Row";
+import { Hint } from "./kit/Hint";
 
 const ICON = 14;
 
@@ -82,11 +85,11 @@ export function NextPrompt({ view, onSendNow, onPastBudget, onHold, onOpenQueue,
         <div className="form" style={{ width: "100%" }}>
           <PromptComposer inline rows={3} prompts={[editing.text]} autoFocus
             onChange={(next) => setEditing({ ...editing, text: next[0] ?? "" })} placeholder="the next prompt…" />
-          {!editing.text.trim() && <div className="form-hint">Nothing to save — type the prompt, or cancel to keep it as it was.</div>}
-          <div className="row">
+          {!editing.text.trim() && <Hint>Nothing to save — type the prompt, or cancel to keep it as it was.</Hint>}
+          <Row>
             {editing.text.trim() && <button className="send" onClick={save}>Save</button>}
-            <button className="key" onClick={() => setEditing(null)}>Cancel</button>
-          </div>
+            <Button onClick={() => setEditing(null)}>Cancel</Button>
+          </Row>
         </div>
       </div>
     );
@@ -118,15 +121,15 @@ export function NextPrompt({ view, onSendNow, onPastBudget, onHold, onOpenQueue,
           // Not a disabled button. The sentence IS the control's absence.
           ? <span className="nextp-cant">{view.wall}</span>
           : <>
-              <button className="key" data-hint="queue.sendnow" onPointerDown={keepFocus}
+              <Button data-hint="queue.sendnow" onPointerDown={keepFocus}
                 title={skipQueueNote(false)}
-                onClick={() => onSendNow(view.id, view.holder)}><Zap size={ICON} /> send now</button>
+                onClick={() => onSendNow(view.id, view.holder)}><Zap size={ICON} /> send now</Button>
               {/* The budget is the wait, not the turn: lift that one rung for
                   this row and leave *when it's free* standing. */}
               {view.budgetHeld && (
-                <button className="key" onPointerDown={keepFocus}
+                <Button onPointerDown={keepFocus}
                   title="lifts the usage budget for this prompt only — it still goes in when this session is free"
-                  onClick={() => onPastBudget(view.id)}><Gauge size={ICON} /> {pastBudgetLabel(1)}</button>
+                  onClick={() => onPastBudget(view.id)}><Gauge size={ICON} /> {pastBudgetLabel(1)}</Button>
               )}
             </>
       ) : (
@@ -140,19 +143,19 @@ export function NextPrompt({ view, onSendNow, onPastBudget, onHold, onOpenQueue,
         // the queue row's hourglass says the same sentence; this button used to
         // call it `make it wait`, which is a fourth spelling of one decision on
         // a strip two taps from the other three.
-        <button className="key" data-hint="queue.hold" onPointerDown={keepFocus}
+        <Button data-hint="queue.hold" onPointerDown={keepFocus}
           title="hand it to the desktop and let it go in when this session is free, instead of typing it in mid-turn"
-          onClick={() => onHold(view.id)}><Hourglass size={ICON} /> when it&apos;s free</button>
+          onClick={() => onHold(view.id)}><Hourglass size={ICON} /> when it&apos;s free</Button>
       )}
       {/* Rewrite it while it has not gone in yet. Absent, not dimmed, on a row
           that cannot be rewritten. */}
       {editText != null && (
-        <button className="key" onPointerDown={keepFocus} title="rewrite this prompt before it goes in"
-          onClick={() => setEditing({ id: view.id, holder: view.holder, text: editText })}><Pencil size={ICON} /> edit</button>
+        <Button onPointerDown={keepFocus} title="rewrite this prompt before it goes in"
+          onClick={() => setEditing({ id: view.id, holder: view.holder, text: editText })}><Pencil size={ICON} /> edit</Button>
       )}
       {editText != null && (
-        <button className="key" onPointerDown={keepFocus} title="don't send it — the words are kept on the pad"
-          onClick={() => onCancel(view.id, view.holder)}><X size={ICON} /> cancel</button>
+        <Button onPointerDown={keepFocus} title="don't send it — the words are kept on the pad"
+          onClick={() => onCancel(view.id, view.holder)}><X size={ICON} /> cancel</Button>
       )}
       {/* Where the rest of them are — and they are in two different places, so
           the button goes to the one this row actually came out of. The phone's
@@ -160,11 +163,11 @@ export function NextPrompt({ view, onSendNow, onPastBudget, onHold, onOpenQueue,
           work, which is where a pinned item lives and is the only list that can
           reorder or cancel one. */}
       {view.holder === "desktop" ? (
-        <button className="key" onPointerDown={keepFocus} title="this repo's waiting work on the desktop"
-          onClick={onOpenBacklog}><ListTodo size={ICON} /> backlog</button>
+        <Button onPointerDown={keepFocus} title="this repo's waiting work on the desktop"
+          onClick={onOpenBacklog}><ListTodo size={ICON} /> backlog</Button>
       ) : (
-        <button className="key" onPointerDown={keepFocus} title="the whole queue for every session"
-          onClick={onOpenQueue}><ListOrdered size={ICON} /> queue</button>
+        <Button onPointerDown={keepFocus} title="the whole queue for every session"
+          onClick={onOpenQueue}><ListOrdered size={ICON} /> queue</Button>
       )}
       <StowButton className="key" />
     </div>

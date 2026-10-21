@@ -8,6 +8,7 @@ import type { OutboxEntry } from "../outbox";
 import { CantInline } from "../Unavailable";
 import { ICON } from "./asxConst";
 import { NameHead, ItemFiles } from "./AsxParts";
+import { Button } from "../kit/Button";
 
 /** One assessed item: its words, whole, the pictures they name, and what the
  *  run concluded. */
@@ -141,9 +142,9 @@ export function RowCard({ r, accepted, rejected, onAccept, onReject, onOpen, rep
           </>
         )}
         {onOpen ? (
-          <button className="key" title="show this item where it lives" onClick={onOpen}>
+          <Button title="show this item where it lives" onClick={onOpen}>
             <FileText size={ICON} /> open
-          </button>
+          </Button>
         ) : null}
       </div>
     </div>

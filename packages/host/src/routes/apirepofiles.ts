@@ -22,11 +22,12 @@ import {
   type ArtifactKind,
 } from "../files.js";
 import { listDir, readTreeFile, searchTree, writeTreeFile } from "../tree.js";
-import { deleteArchived, listArchive } from "../archive.js";
+import { archivedExists, archivedToolDetails, archivedTranscript, deleteArchived, listArchive } from "../archive.js";
+import { bookmarkStore } from "../bookmarks.js";
 import { isSecretFile } from "../git.js";
 import { listEnvFiles } from "../secrets.js";
 import { MAX_UPLOAD, headerFilename, json, parseMultipart, readBody, readJson, serveTreeFile } from "./apiio.js";
-import { dispatchApi, route, type ApiEntry, type ApiRoute, type RepoReq } from "./apitable.js";
+import { dispatchApi, route, type ApiCtx, type ApiEntry, type ApiRoute, type RepoReq } from "./apitable.js";
 import { REPO_WORK_ROUTES } from "./apirepowork.js";
 
 /**
@@ -62,22 +63,89 @@ function inboxName(rest: readonly string[]): string | null {
   return raw && !raw.includes("/") && !raw.includes("\\") && raw !== "." && raw !== ".." ? raw : null;
 }
 
+/**
+ * Conversation id → the session's tab name, where this host still knows one:
+ * a live session's first, then the newest closed row's. Never derived here —
+ * a conversation with no recorded name stays without one.
+ */
+function tabNames(ctx: ApiCtx): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const i of ctx.sessions.list()) if (i.claudeSessionId && i.tabTitle) out.set(i.claudeSessionId, i.tabTitle);
+  for (const c of ctx.sessions.listClosed()) if (c.claudeSessionId && c.tabTitle && !out.has(c.claudeSessionId)) out.set(c.claudeSessionId, c.tabTitle);
+  return out;
+}
+
 const REPO_FILE_ROUTES: readonly ApiEntry<RepoReq>[] = [
   // ── Conversation archive: /api/repos/:id/archive ──────────────────
   // Closing a session keeps its conversation on disk; the reopen stack and the
   // recent list are capped shortlists, so this is the uncapped route back.
   // Read-only listing → GET; the delete is the one destructive verb here and
   // gets its own method.
-  route<RepoReq>("GET", "archive/*", ({ res, url, wt }) => {
+  //
+  // Bookmarks (R-conversations-007) and the read-only transcript come first:
+  // `archive/*` would otherwise answer them as a listing / a delete.
+  // POST sets or updates one ({id, note?, name?}); a live session's
+  // conversation may have no log yet, so a live one in this worktree counts.
+  route<RepoReq>("POST", "archive/bookmark", async ({ req, res, wt }, ctx) => {
+    const body = await readJson(req);
+    const id = typeof body?.id === "string" ? body.id : "";
+    const live = ctx.sessions.list().some((i) => i.claudeSessionId === id && i.cwd === wt);
+    if (!archivedExists(wt, id) && !live) { json(res, { ok: false, error: "no such conversation in this repo" }, 404); return true; }
+    const store = bookmarkStore(ctx.root);
+    const prev = store.get(wt, id);
+    // An update keeps when it was first bookmarked; a field the body leaves
+    // out keeps what it had, a field sent empty clears it.
+    const b = store.set(wt, id, {
+      at: prev?.at ?? Date.now(),
+      note: "note" in (body ?? {}) ? body.note : prev?.note,
+      name: "name" in (body ?? {}) ? body.name : prev?.name,
+    });
+    if (!b) { json(res, { ok: false, error: "bad bookmark" }, 400); return true; }
+    json(res, { ok: true, id, bookmark: b });
+    return true;
+  }),
+  route<RepoReq>("DELETE", "archive/bookmark", ({ res, url, wt }, ctx) => {
+    const id = url.searchParams.get("id") || "";
+    const r = bookmarkStore(ctx.root).set(wt, id, null);
+    if (r === undefined) { json(res, { ok: false, error: "bad id" }, 400); return true; }
+    json(res, { ok: true, id });
+    return true;
+  }),
+  // One archived conversation as the reader's document, read off its log —
+  // nothing spawned, nothing spent. Same `since` → 204 and `detail` rules as
+  // `/api/transcript`; `conv` is a bare id, the path is `transcriptPath`'s.
+  route<RepoReq>("GET", "archive/transcript/tools", ({ res, url, wt }) => {
+    const conv = url.searchParams.get("conv") || "";
+    const turn = url.searchParams.get("turn") || "";
+    const tools = archivedToolDetails(wt, conv, turn);
+    if (!tools) { json(res, { error: "no tool details" }, 404); return true; }
+    json(res, { sessionId: conv, turnId: turn, tools });
+    return true;
+  }),
+  route<RepoReq>("GET", "archive/transcript", ({ res, url, wt }) => {
+    const doc = archivedTranscript(wt, url.searchParams.get("conv") || "",
+      Number(url.searchParams.get("since") || 0), url.searchParams.get("detail") === "full" ? "full" : "lite");
+    if (!doc) { json(res, { error: "no transcript" }, 404); return true; }
+    if (doc === "unchanged") { res.writeHead(204).end(); return true; }
+    json(res, doc);
+    return true;
+  }),
+  route<RepoReq>("GET", "archive/*", ({ res, url, wt }, ctx) => {
     json(res, listArchive(wt, {
       offset: Number(url.searchParams.get("offset") || 0),
       limit: Number(url.searchParams.get("limit") || 0) || undefined,
       q: url.searchParams.get("q") || "",
+      bookmarked: url.searchParams.get("bookmarked") === "1",
+      bookmarks: bookmarkStore(ctx.root).of(wt),
+      names: tabNames(ctx),
     }));
     return true;
   }),
-  route<RepoReq>("DELETE", "archive/*", ({ res, url, wt }) => {
-    const r = deleteArchived(wt, url.searchParams.get("id") || "");
+  // Deleting a conversation drops its bookmark with it.
+  route<RepoReq>("DELETE", "archive/*", ({ res, url, wt }, ctx) => {
+    const id = url.searchParams.get("id") || "";
+    const r = deleteArchived(wt, id);
+    if (r.ok) bookmarkStore(ctx.root).set(wt, id, null);
     json(res, r, r.ok ? 200 : 400);
     return true;
   }),

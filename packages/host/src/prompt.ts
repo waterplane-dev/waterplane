@@ -10,12 +10,12 @@
  */
 import type { DetectedPrompt, PromptOption } from "@waterplane/shared";
 // The composer's own full-width rules, above and below its input row. Shared
-// with `echo.ts`, which anchors the delivery echo on the same box — the
+// with `composer.ts`, which anchors the delivery echo on the same box — the
 // CONSTANT only, and deliberately not the input row: the one below accepts a
 // plain `>` because a shell stub's prompt is a composer for the purpose of
-// retiring a box, and `echo.ts` explains at length why that is exactly wrong
+// retiring a box, and `composer.ts` explains at length why that is exactly wrong
 // when the question is "is the user's text sitting in the box right now".
-import { COMPOSER_RULE_RE } from "./echo.js";
+import { COMPOSER_RULE_RE } from "./composer.js";
 
 import { stripAnsi, OPTION_RE, MAX_BOX_OPTIONS, PLACEHOLDER_QUESTION } from "./promptbase.js";
 export { stripAnsi, MAX_BOX_OPTIONS, PLACEHOLDER_QUESTION };

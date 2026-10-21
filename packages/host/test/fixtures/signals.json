@@ -7,7 +7,8 @@
       { "path": "screens/checkbox-*.txt", "role": "match", "test": "packages/host/test/screens.test.mjs", "cli": "2.1.301" },
       { "path": "screens/slash-*.txt", "role": "guard", "test": "packages/host/test/screens.test.mjs", "cli": "2.1.301" },
       { "path": "screens/context-view.txt", "role": "guard", "test": "packages/host/test/screens.test.mjs", "cli": "2.1.301" },
-      { "path": "screens/harvest-prompt.box-2.1.304.txt", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.304" }
+      { "path": "screens/harvest-prompt.box-2.1.304.txt", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.304" },
+      { "path": "screens/harvest-prompt.box-2.1.306.txt", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.306" }
     ],
     "prompt.submit": [
       { "path": "screens/checkbox-*.txt", "role": "match", "test": "packages/host/test/screens.test.mjs", "cli": "2.1.301" },
@@ -15,7 +16,9 @@
     ],
     "deliver.echo": [
       { "path": "screens/paste-*.txt", "role": "match", "test": "packages/host/test/screens.test.mjs", "cli": "2.1.301" },
-      { "path": "screens/harvest-deliver.echo-2.1.304.txt", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.304" }
+      { "path": "screens/harvest-deliver.echo-2.1.304.txt", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.304" },
+      { "path": "screens/harvest-deliver.echo-2.1.305.txt", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.305" },
+      { "path": "screens/harvest-deliver.echo-2.1.306.txt", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.306" }
     ],
     "context.meter": [
       { "path": "screens/context-view.txt", "role": "match", "test": "packages/host/test/screens.test.mjs", "cli": "2.1.301" }
@@ -23,7 +26,8 @@
     "slash.local": [
       { "path": "screens/slash-*.txt", "role": "match", "test": "packages/host/test/screens.test.mjs", "cli": "2.1.301" },
       { "path": "screens/context-view.txt", "role": "match", "test": "packages/host/test/screens.test.mjs", "cli": "2.1.301" },
-      { "path": "screens/harvest-slash.local-2.1.304.txt", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.304" }
+      { "path": "screens/harvest-slash.local-2.1.304.txt", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.304" },
+      { "path": "screens/harvest-slash.local-2.1.306.txt", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.306" }
     ],
     "limit.reset": [
       { "path": "screens/slash-usage-*.txt", "role": "guard", "test": "packages/host/test/screens.test.mjs", "cli": "2.1.301" },
@@ -31,16 +35,22 @@
       { "path": "screens/checkbox-submit.txt", "role": "guard", "test": "packages/host/test/screens.test.mjs", "cli": "2.1.301" }
     ],
     "hook.pipe": [
-      { "path": "screens/harvest-hook.pipe-2.1.304.json", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.304" }
+      { "path": "screens/harvest-hook.pipe-2.1.304.json", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.304" },
+      { "path": "screens/harvest-hook.pipe-2.1.305.json", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.305" },
+      { "path": "screens/harvest-hook.pipe-2.1.306.json", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.306" }
     ],
     "transcript.jsonl": [
-      { "path": "screens/harvest-transcript.jsonl-2.1.304.json", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.304" }
+      { "path": "screens/harvest-transcript.jsonl-2.1.304.json", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.304" },
+      { "path": "screens/harvest-transcript.jsonl-2.1.306.json", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.306" }
     ],
     "askbox.enrich": [
-      { "path": "screens/harvest-askbox.enrich-2.1.304.json", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.304" }
+      { "path": "screens/harvest-askbox.enrich-2.1.304.json", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.304" },
+      { "path": "screens/harvest-askbox.enrich-2.1.306.json", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.306" }
     ],
     "deliver.submit": [
-      { "path": "screens/harvest-deliver.submit-2.1.304.json", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.304" }
+      { "path": "screens/harvest-deliver.submit-2.1.304.json", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.304" },
+      { "path": "screens/harvest-deliver.submit-2.1.305.json", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.305" },
+      { "path": "screens/harvest-deliver.submit-2.1.306.json", "role": "match", "test": "packages/host/test/harvested.test.mjs", "cli": "2.1.306" }
     ]
   }
 }

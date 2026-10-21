@@ -25,3 +25,7 @@ The app keeps the user in CLI/terminal mode until claude's first-launch setup an
 Login support is visible on the login screen.
 - asked: 2026-10-08
 
+### R-login-006 · requested
+Signing in with the phone authenticator works even when the desktop is out of the phone's nearby range.
+- asked: 2026-10-20
+

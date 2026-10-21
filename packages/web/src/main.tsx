@@ -51,6 +51,7 @@ import { demoProblem, setDemoActive } from "./demo/mode";
 import { leaveDemo } from "./demoEntry";
 import { DemoLine } from "./DemoLine";
 import { FlaskConical } from "lucide-react";
+import { Button } from "./kit/Button";
 import "./styles.css";
 
 /** How often the shell re-asks the daemon which web build it is serving. The
@@ -275,7 +276,7 @@ function Root() {
           <div className="auth-title"><FlaskConical size={16} style={{ verticalAlign: "-3px" }} /> Demo not available</div>
           <div className="set-note">{noDemo}</div>
           <div className="set-row demo-problem">
-            <button className="key primary" onClick={leaveDemo}>Leave the demo</button>
+            <Button variant="primary" onClick={leaveDemo}>Leave the demo</Button>
           </div>
         </div>
       </div>

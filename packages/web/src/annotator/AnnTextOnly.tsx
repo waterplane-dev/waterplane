@@ -7,6 +7,7 @@
  */
 import { ArrowLeft, RotateCw, ScanText } from "lucide-react";
 import type { AnnModel } from "./useAnnotator";
+import { Button } from "../kit/Button";
 
 export function AnnTextOnly({ m }: { m: AnnModel }) {
   const { ocr, ocrDraft, setOcrDraft, readAll, closeOcr, sendText } = m;
@@ -29,8 +30,8 @@ export function AnnTextOnly({ m }: { m: AnnModel }) {
       )}
       {ocr.phase === "ready" && empty && <div className="annot-hint">Nothing left to send — read again, or go back to the picture.</div>}
       <div className="sheet-actions annot-send-bar" data-primary-key="">
-        <button className="key" onClick={closeOcr}><ArrowLeft size={14} /> picture</button>
-        {ocr.phase !== "reading" && <button className="key" onClick={() => void readAll()}><RotateCw size={14} /> read again</button>}
+        <Button onClick={closeOcr}><ArrowLeft size={14} /> picture</Button>
+        {ocr.phase !== "reading" && <Button onClick={() => void readAll()}><RotateCw size={14} /> read again</Button>}
         {ocr.phase !== "reading" && !empty && (
           <button className="send" onClick={() => sendText(ocrDraft)}><ScanText size={14} /> Send text only</button>
         )}

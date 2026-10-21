@@ -724,9 +724,22 @@ export interface SecretFillerDef {
   open(core: CoreApi, ctx: SecretFillContext): void;
 }
 
+/** A contributed filler's button for one ask, as the compose bar draws it (`secretFillers` in the SDK). */
+export interface SecretFillerEntry {
+  /** `<manifest id>:<entry id>`, for React and `track`. */
+  key: string;
+  label: string;
+  icon: ContributionIcon;
+  /** Why it cannot run now, as a sentence (a toast on tap), or null. */
+  unavailable: string | null;
+  /** Contained: a throw is said once. */
+  open(): void;
+}
+
 export interface SecretFillContext {
-  sessionId: string;
-  /** The line that asked (`Password:`), as the field's header shows it. */
+  /** The shell session that asked; null for a masked field that is no session's (the live desktop's protected typing). */
+  sessionId: string | null;
+  /** The line that asked (`Password:`), as the field's header shows it — or, with no session, what the field is for. */
   askLine: string;
   /** Put `value` into the masked field — true if it landed, false when that ask is gone. */
   fill(value: string): boolean;

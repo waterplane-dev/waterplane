@@ -12,7 +12,7 @@ import { Unavailable } from "./Unavailable";
 import { track } from "./usage";
 import { ago, durSpan, fmtSize, seqId, stripAnsi, when } from "./format";
 import { SheetHead } from "./Sheet";
-import { RadioRows } from "./kit";
+import { RadioRows, Button, RowSub, RowTitle, Row, Hint, Tag } from "./kit";
 import { useBackStep } from "./backStep";
 import { Empty } from "./Empty";
 
@@ -219,35 +219,35 @@ export function CaptureSheet({ repo, targets, runs, backends, output, outTick, o
   return (
     <div className="sheet">
       <SheetHead title={<><ScanEye size={16} /> Capture · {repo.repoName}</>} onClose={onClose}>
-        {branchLabel(repo) && <span className="row-sub head-branch">{branchLabel(repo)}</span>}
+        {branchLabel(repo) && <RowSub className="head-branch">{branchLabel(repo)}</RowSub>}
         {/* Writing the list is `capture.save`, a live-only frame: it edits a file
             on the desktop and there is no honest way to hold one. Offline the
             control is ABSENT and the sentence below says why — a dimmed “new”
             with the explanation in a `title` is invisible on the device this app
             is for. */}
         {online && (
-          <button className="key" title="add a capture target"
-            onClick={() => setEditing({ id: seqId("t"), name: "", backend: "web" })}><Plus size={16} /> new</button>
+          <Button title="add a capture target"
+            onClick={() => setEditing({ id: seqId("t"), name: "", backend: "web" })}><Plus size={16} /> new</Button>
         )}
       </SheetHead>
-      <div className="form-hint">
+      <Hint>
         Photograph a running screen and say how much the picture can be trusted — no session, no tokens. The frames and an evidence sidecar land in <span className="mono">.claude/outbox/</span>, so the gallery lists them and an agent can read the verdict instead of the image.
         {!online && " No connection right now: a tap is queued and the capture runs once the link is back."}
-      </div>
+      </Hint>
       {/* Two verbs, named in words rather than left to two icons. They are
           different lengths of work — one is over in seconds, the other holds a
           browser or a simulator open for up to ten minutes — and a phone user
           has to know which one a tap starts BEFORE tapping it, not from a
           `title` no touch screen ever shows. */}
-      <div className="form-hint">
+      <Hint>
         <Play size={12} style={{ verticalAlign: "-1px" }} /> takes one frame now.{" "}
         <Eye size={12} style={{ verticalAlign: "-2px" }} /> <strong>watch</strong> keeps the screen open and keeps a frame each time it changes past the target’s threshold — until you stop it, or it hits its own ceiling. That is what makes this a loop rather than a snapshot: leave it watching while you change the code and the outbox fills with the moments that actually moved.
-      </div>
+      </Hint>
       {/* Offline the rows below came off this device, not the host. Say so, and
           say when — the targets are cached, the RUN is what needed the link. */}
       {!online && (
         <>
-          <div className="form-hint">
+          <Hint>
             <CloudOff size={13} style={{ verticalAlign: "-2px" }} />{" "}
             {targets.length === 0
               ? "this device has no copy of this repo's targets"
@@ -255,7 +255,7 @@ export function CaptureSheet({ repo, targets, runs, backends, output, outTick, o
                 ? `these targets are this device's copy, last confirmed ${ago(listAt)} ago`
                 : "these targets are this device's copy"}
             {" — running one does not need the link."}
-          </div>
+          </Hint>
           <Unavailable cants={[{
             label: "adding, editing or deleting a target",
             reason: "capture targets live in a file on the desktop and there is no honest way to hold an edit — the change would be composed now against a file that has moved on",
@@ -282,54 +282,54 @@ export function CaptureSheet({ repo, targets, runs, backends, output, outTick, o
                     The spinner alone says "still going"; the chip says which
                     kind of still-going this is, and therefore whether Stop is
                     the thing you are waiting to press. */}
-                <span className="row-title">{t.name}{running ? <> <Loader size={12} className="spin" /></> : null}
-                  {isWatch ? <> <span className="tag coding"><Eye size={11} /> watching</span></> : null}</span>
-                <span className="row-sub mono">{t.backend}{t.dir ? ` · ${t.dir}` : ""}{targetDetail(t) ? ` · ${targetDetail(t)}` : ""}</span>
+                <RowTitle>{t.name}{running ? <> <Loader size={12} className="spin" /></> : null}
+                  {isWatch ? <> <Tag tone="coding"><Eye size={11} /> watching</Tag></> : null}</RowTitle>
+                <RowSub className="mono">{t.backend}{t.dir ? ` · ${t.dir}` : ""}{targetDetail(t) ? ` · ${targetDetail(t)}` : ""}</RowSub>
               </>
             );
             return (
               <Fragment key={t.id}>
-                <div className="row-wrap">
+                <Row kind="wrap">
                   {/* A target this desktop cannot drive is not a control at all —
                       not a dimmed one, and not a live one that refuses on tap. A
                       thing that looks pressable and does nothing is the failure
                       `Unavailable.tsx` exists for, so the row goes flat and the
                       sentence underneath carries the whole answer. */}
                   {blocked
-                    ? <div className="row grow" title={t.id}>{body}</div>
-                    : <button className="row grow" title={t.id}
+                    ? <Row kind="grow" title={t.id}>{body}</Row>
+                    : <Row as="button" kind="grow" title={t.id}
                       onClick={() => {
                         if (running) { setCut("all"); setSel(running.runId); return; }
                         track("action:capture.run"); onRun(t.id);
-                      }}>{body}</button>}
+                      }}>{body}</Row>}
                   {running
                     // Stop reaches a watching run through exactly the same live
                     // (never queued) cancel: a watch is the one run that is
                     // still there to be called off, and the one a cancel
                     // delivered an hour late would call off long after the
                     // person had walked away from the screen it was watching.
-                    ? <button className="key danger" title={isWatch ? "stop watching — the frames kept so far stay" : "stop this capture"}
-                      onClick={() => onCancel(running.runId)}><Square size={16} /></button>
+                    ? <Button variant="danger" title={isWatch ? "stop watching — the frames kept so far stay" : "stop this capture"}
+                      onClick={() => onCancel(running.runId)}><Square size={16} /></Button>
                     : blocked
                       // No control at all — the sentence below IS the answer.
                       ? null
                       : (
                         <>
-                          <button className="key" title="take one frame now" onClick={() => { track("action:capture.run"); onRun(t.id); }}><Play size={16} /></button>
+                          <Button title="take one frame now" onClick={() => { track("action:capture.run"); onRun(t.id); }}><Play size={16} /></Button>
                           {/* A SECOND verb, never a mode switch on the first
                               one: whichever way a toggle was left, the primary
                               button would then start whichever length of work
                               you last picked, and a phone gives you nothing to
                               check that against before your thumb lands. */}
-                          <button className="key" title="watch this screen — keep capturing until stopped" onClick={() => { track("action:capture.watch"); onRun(t.id, true); }}><Eye size={16} /></button>
+                          <Button title="watch this screen — keep capturing until stopped" onClick={() => { track("action:capture.watch"); onRun(t.id, true); }}><Eye size={16} /></Button>
                         </>
                       )}
                   {/* Absent, not dimmed, with the link down — the sheet says once,
                       above, why every one of these is gone, rather than N rows
                       each carrying an invisible `title`. */}
-                  {online && <button className="key" title="edit" onClick={() => setEditing(t)}><Pencil size={16} /></button>}
-                  {online && <button className="key danger" title="delete" onClick={() => remove(t.id)}><Trash2 size={16} /></button>}
-                </div>
+                  {online && <Button title="edit" onClick={() => setEditing(t)}><Pencil size={16} /></Button>}
+                  {online && <Button variant="danger" title="delete" onClick={() => remove(t.id)}><Trash2 size={16} /></Button>}
+                </Row>
                 {/* Outside the row, deliberately: `.act-cants` is a block, and a
                     block inside a `<button>` is markup a phone browser is free to
                     lay out however it likes. "web needs Playwright — npm i -D
@@ -398,25 +398,25 @@ export function CaptureSheet({ repo, targets, runs, backends, output, outTick, o
                 const lvl = r.verification ? LEVEL[r.verification] : null;
                 return (
                   <button key={r.runId} className={`row ${selRun?.runId === r.runId ? "active" : ""}`} onClick={() => setSel(r.runId)}>
-                    <span className="row-title">
+                    <RowTitle>
                       {r.status === "running" ? <Loader size={12} className="spin" /> : null} {r.name}
-                      {" "}<span className={`tag ${r.status === "done" ? "idle" : r.status === "running" ? "coding" : "dead"}`}>{r.status}{r.exitCode ? ` ${r.exitCode}` : ""}</span>
+                      {" "}<Tag className={r.status === "done" ? "idle" : r.status === "running" ? "coding" : "dead"}>{r.status}{r.exitCode ? ` ${r.exitCode}` : ""}</Tag>
                       {/* Told apart from a stuck run, which is the only reason
                           this chip exists: both spin for minutes and only one
                           of them is waiting for you to stop it. */}
-                      {watching(r) ? <> <span className="tag coding"><Eye size={11} /> watching</span></> : null}
+                      {watching(r) ? <> <Tag tone="coding"><Eye size={11} /> watching</Tag></> : null}
                       {/* No chip at all while there is nothing to claim. A run
                           still going, or one that died before it took a frame,
                           has no level — and painting "unverified" there would
                           turn "not yet" into a judgement. */}
-                      {lvl ? <> <span className={`tag ${lvl.tag}`} title={lvl.title}><ShieldCheck size={11} /> {lvl.word}</span></> : null}
-                    </span>
+                      {lvl ? <> <Tag className={lvl.tag} title={lvl.title}><ShieldCheck size={11} /> {lvl.word}</Tag></> : null}
+                    </RowTitle>
                     {/* The verdict, WHOLE and verbatim. The host writes it with
                         one function so the row, the sheet and the agent's HTTP
                         answer cannot word it three ways; the phone's job is to
                         print it, never to re-derive it or cut it at its
                         separator. */}
-                    {r.verdict ? <span className="row-sub">{r.verdict}</span> : null}
+                    {r.verdict ? <RowSub>{r.verdict}</RowSub> : null}
                     {/* The backend, and NOTHING where there isn't one.
                         `CaptureRun.backend` is what the run was actually taken
                         with, and a row whose payload and sidecar both went
@@ -425,7 +425,7 @@ export function CaptureSheet({ repo, targets, runs, backends, output, outTick, o
                         printed over a row whose config said `garmin`. So the
                         absence is the absence: a neutral phrase, never a
                         guessed id and never a dimmed one. */}
-                    <span className="row-sub">{when(r.finishedAt ?? r.startedAt)} · {durSpan(r.startedAt, r.finishedAt)} · {r.backend ?? "backend not recorded"}{r.files?.length ? ` · ${r.files.length} file${r.files.length > 1 ? "s" : ""}` : ""}</span>
+                    <RowSub>{when(r.finishedAt ?? r.startedAt)} · {durSpan(r.startedAt, r.finishedAt)} · {r.backend ?? "backend not recorded"}{r.files?.length ? ` · ${r.files.length} file${r.files.length > 1 ? "s" : ""}` : ""}</RowSub>
                   </button>
                 );
               })}
@@ -436,21 +436,21 @@ export function CaptureSheet({ repo, targets, runs, backends, output, outTick, o
                 names the chips as the way to see all of one kind rather than
                 leaving the reader to wonder where the other rows went. */}
             {hiddenRuns > 0 && (
-              <div className="form-hint">
+              <Hint>
                 Showing the newest {runRows.length} of {runs.length} runs for this repo.
                 {/* Only mention the chips when there ARE chips: a repo whose
                     older runs were all cancelled draws none, and pointing at a
                     control that is not on the screen is its own small lie. */}
                 {CHIP_CUTS.some((s) => captureCut(runs, s).length > 0)
                   && ` The counts above are over all ${runs.length}; tap one to open exactly those.`}
-              </div>
+              </Hint>
             )}
           </>
         )}
 
         {selRun && (
           <div className="build-run">
-            <div className="form-hint">
+            <Hint>
               {/* ABSENT is rendered as absent. A finished run with no `score`
                   means no scorer exists on this machine — nobody looked — and
                   `0` there would read as "this screenshot is terrible", which is
@@ -473,7 +473,7 @@ export function CaptureSheet({ repo, targets, runs, backends, output, outTick, o
               {/* The evidence file, by its FULL transport path — that path is
                   what a report quotes and what the artifact endpoint takes. */}
               {selRun.sidecarRelPath ? <> · <FileText size={12} style={{ verticalAlign: "-2px" }} /> <span className="mono">{selRun.sidecarRelPath}</span></> : null}
-            </div>
+            </Hint>
             {selRun.files && selRun.files.length > 0 && (
               <div className="list">
                 {selRun.files.map((a) => (
@@ -487,11 +487,11 @@ export function CaptureSheet({ repo, targets, runs, backends, output, outTick, o
                 to know whether one taken a second ago has been reported yet, so
                 an empty list mid-run is "not told", never "none taken". */}
             {selRun.status === "running" && (
-              <div className="form-hint">
+              <Hint>
                 {watching(selRun)
                   ? "This run is still keeping frames. What is listed here is what the desktop has reported so far — more arrive while it watches, and the verdict is written when it stops."
                   : "Frames are listed as the desktop reports them; this list is not final until the run finishes."}
-              </div>
+              </Hint>
             )}
             {selRun.status === "done" && !selRun.files?.length && (
               <Empty>This run finished and wrote no frame — there is nothing to look at.</Empty>
@@ -533,17 +533,17 @@ function FrameRow({ a, repoDir, repoName, onDownload }: {
   onDownload: (a: BuildArtifact) => void;
 }) {
   return (
-    <div className="row-wrap">
-      <button className="row grow" title={a.relPath} onClick={() => { track("action:capture.artifact"); onDownload(a); }}>
-        <span className="row-title"><Download size={14} /> {a.name}</span>
+    <Row kind="wrap">
+      <Row as="button" kind="grow" title={a.relPath} onClick={() => { track("action:capture.artifact"); onDownload(a); }}>
+        <RowTitle><Download size={14} /> {a.name}</RowTitle>
         {/* The FULL transport path, not just the base name: it is what a report
             quotes and the only thing that tells two frames of one target apart. */}
-        <span className="row-sub mono">{a.relPath}</span>
-        <span className="row-sub">{fmtSize(a.size)}{a.mtime ? ` · ${when(a.mtime)}` : ""}</span>
-      </button>
+        <RowSub className="mono">{a.relPath}</RowSub>
+        <RowSub>{fmtSize(a.size)}{a.mtime ? ` · ${when(a.mtime)}` : ""}</RowSub>
+      </Row>
       <DownloadButton compact trackId="action:capture.artifact"
         target={{ repoId: a.repoId, relPath: a.relPath, name: a.name, size: a.size, mtime: a.mtime, repoDir, repoName }} />
-    </div>
+    </Row>
   );
 }
 
@@ -659,26 +659,26 @@ function CaptureEditor({ draft, backends, onCancel, onSave }: {
               which tool was found — and that is worth printing too. */}
           {be?.reason && (
             be.available
-              ? <div className="form-hint">{be.reason}</div>
+              ? <Hint>{be.reason}</Hint>
               : <Unavailable cants={[{ label: `${backend} captures on this desktop`, reason: be.reason }]} />
           )}
           {be === undefined && (
-            <div className="form-hint">
+            <Hint>
               <CloudOff size={13} style={{ verticalAlign: "-2px" }} /> This desktop has not said whether it can drive <span className="mono">{backend}</span>. The target saves either way; a run that cannot happen refuses in words.
-            </div>
+            </Hint>
           )}
           <input className="search" placeholder="Working sub-dir (optional, relative to repo root)" value={dir} onChange={(e) => setDir(e.target.value)} style={{ fontFamily: "monospace" }} />
           <input className="search" placeholder="Anchor text, comma-separated (e.g. TOTAL, Settings)" value={anchor} onChange={(e) => setAnchor(e.target.value)} />
-          <div className="form-hint">
+          <Hint>
             Anchors are what make a capture claim <em>verified</em> instead of merely taken: the backend goes and asks the running thing what text is on its screen. A backend with no oracle — a window grab, a simulator nobody can query — can never answer an anchor however many you set, and says <em>settled</em> at best.
-          </div>
+          </Hint>
           {/* Watch mode's only knob, on the target rather than on the tap: it is
               a property of the screen (a spinner-heavy page moves constantly, a
               form barely moves), not a decision to make again every time. */}
           <input className="search" inputMode="decimal" placeholder="Watch: keep a frame past this % changed (blank = the desktop's default)" value={diffPct} onChange={(e) => setDiffPct(e.target.value)} />
-          <div className="form-hint">
+          <Hint>
             Only watch runs read this. With no pixel tool on the desktop nothing can be measured, so the gate opens and every frame is kept — the run's output says that is what happened rather than quietly keeping none.
-          </div>
+          </Hint>
 
           {backend === "web" && (
             <>
@@ -690,15 +690,15 @@ function CaptureEditor({ draft, backends, onCancel, onSave }: {
                 value={theme || "default"}
                 onChange={(k) => setTheme(k === "default" ? "" : (k as typeof theme))}
               />
-              <div className="form-hint">
+              <Hint>
                 Capture never starts a dev server. A URL that does not answer is refused in words, and the Build sheet is where you start one. Empty viewports means one frame at <span className="mono">{DEFAULT_CAPTURE_VIEWPORT.w}×{DEFAULT_CAPTURE_VIEWPORT.h}</span>.
-              </div>
+              </Hint>
             </>
           )}
           {backend === "android" && (
             <>
               <input className="search" placeholder="Device serial (optional)" value={serial} onChange={(e) => setSerial(e.target.value)} style={{ fontFamily: "monospace" }} />
-              <div className="form-hint">Empty means the only connected device. With more than one connected and no serial the run refuses rather than guessing which phone you meant.</div>
+              <Hint>Empty means the only connected device. With more than one connected and no serial the run refuses rather than guessing which phone you meant.</Hint>
             </>
           )}
           {backend === "garmin" && (
@@ -710,14 +710,14 @@ function CaptureEditor({ draft, backends, onCancel, onSave }: {
           {backend === "window" && (
             <>
               <input className="search" placeholder="Window title (optional)" value={windowTitle} onChange={(e) => setWindowTitle(e.target.value)} />
-              <div className="form-hint">Resolved best-effort. A title that matches nothing falls back to the whole desktop, and the run’s evidence file records that it did — the picture is never passed off as that window.</div>
+              <Hint>Resolved best-effort. A title that matches nothing falls back to the whole desktop, and the run’s evidence file records that it did — the picture is never passed off as that window.</Hint>
             </>
           )}
         </div>
       </div>
 
       <div className="sheet-actions">
-        <button className="key" onClick={onCancel}><X size={16} /> cancel</button>
+        <Button onClick={onCancel}><X size={16} /> cancel</Button>
         <span className="spacer" />
         {/* The one thing a target cannot be saved without is the label on its own
             button. Said as a sentence where the button would be, rather than as a

@@ -14,6 +14,7 @@ import type { RepoTarget, SessionInfo } from "@waterplane/shared";
 import type { Overlay } from "../../routing";
 import type { PendingStars } from "../../localState";
 import { FOLLOWUP_CLEAR, FOLLOWUP_SET, FlagIcon, followUpButtonTitle, followUpClass } from "../sessions/followUp";
+import { SessionBookmark } from "../sessions/bookmark";
 import { HINTS } from "../../hints";
 import { shortModel } from "../../sessionFacts";
 import { isShellBackend, shellBackend, type BackendList } from "../../backendCaps";
@@ -28,6 +29,7 @@ import { showToast } from "../../toast";
 import { track } from "../../usage";
 import type { Connection } from "../conn/useConnection";
 import { gitPending, gitSyncText, gitTitle } from "../../gitCounts";
+import { Button } from "../../kit/Button";
 
 const ICON = 16;
 
@@ -81,7 +83,7 @@ export function renderToolbarItem(c: ToolbarCtx, t: ToolbarItem, compact = false
   switch (t.id) {
     case "untracked":
       if (!activeRepo || !gitPending(activeRepo)) return null;
-      return <button key="untracked" className="key count" title={gitTitle(activeRepo)} onClick={() => { dismiss(); setOverlay("git"); }}><FileDiff size={ICON} /> {activeRepo.changedCount > 0 && activeRepo.changedCount}{gitSyncText(activeRepo) && <span className="git-ab"> {gitSyncText(activeRepo)}</span>}</button>;
+      return <Button key="untracked" className="count" title={gitTitle(activeRepo)} onClick={() => { dismiss(); setOverlay("git"); }}><FileDiff size={ICON} /> {activeRepo.changedCount > 0 && activeRepo.changedCount}{gitSyncText(activeRepo) && <span className="git-ab"> {gitSyncText(activeRepo)}</span>}</Button>;
     // The star is stateful, so it is not the generic button: it says whether
     // this session IS starred (filled) and whether the desktop has agreed yet
     // (`star-pending`'s dotted underline). Absent on a queued open — there is
@@ -90,14 +92,14 @@ export function renderToolbarItem(c: ToolbarCtx, t: ToolbarItem, compact = false
       if (!active || pending) return null;
       const waiting = active.id in pendingStars;
       return (
-        <button key="star" className={`key star-btn${active.starred ? " starred" : ""}${waiting ? " star-pending" : ""}`}
+        <Button key="star" className={`star-btn${active.starred ? " starred" : ""}${waiting ? " star-pending" : ""}`}
           data-hint="session.star"
           title={waiting
             ? (status === "open" ? "starred here — the desktop has not confirmed it yet" : "starred here — offline, so it is only on this phone until the link is back")
             : active.starred ? "unstar (prima interest)" : "star — mark as prima interest to come back to"}
           onClick={() => { dismiss(); toggleStar(active.id, !active.starred); }}>
           <Star size={ICON} fill={active.starred ? "currentColor" : "none"} />{label && <> {active.starred ? "starred" : "star"}</>}
-        </button>
+        </Button>
       );
     }
     // The follow-up flag, the star's twin: its state drawn (filled, in the
@@ -106,20 +108,26 @@ export function renderToolbarItem(c: ToolbarCtx, t: ToolbarItem, compact = false
       if (!active || pending) return null;
       const on = !!active.followUp;
       return (
-        <button key="followup" className={`key fu-btn${followUpClass(active.followUp)}${active.id in pendingFollowUps ? " star-pending" : ""}`}
+        <Button key="followup" className={`fu-btn${followUpClass(active.followUp)}${active.id in pendingFollowUps ? " star-pending" : ""}`}
           data-hint="session.followup" aria-pressed={on}
           title={followUpButtonTitle(active, active.id in pendingFollowUps, status === "open")}
           onClick={() => { dismiss(); toggleFollowUp(active.id, !on); }}>
           <FlagIcon on={on} size={ICON} />{label && <> {on ? FOLLOWUP_CLEAR : FOLLOWUP_SET}</>}
-        </button>
+        </Button>
       );
+    }
+    // The conversation's bookmark (R-conversations-007): its own state, and in
+    // the menu its note under it. Absent on a queued open — no conversation.
+    case "bookmark": {
+      if (!active || pending) return null;
+      return <SessionBookmark key="bookmark" active={active} repo={activeRepo} online={status === "open"} compact={compact} dismiss={dismiss} />;
     }
     default: {
       // An extension's own line (`MenuItemDef`): its words and its open, under the catalog's
       // order/hide/pin like any other. Unavailable is the sentence on the tap, never a grey line.
       const ext = menuItems(active).find((e) => e.key === t.id);
       if (ext) return (
-        <button key={t.id} className="key" title={ext.unavailable ?? ext.label}
+        <Button key={t.id} title={ext.unavailable ?? ext.label}
           onClick={() => {
             dismiss();
             track(`toolbar:${t.id}`);
@@ -127,7 +135,7 @@ export function renderToolbarItem(c: ToolbarCtx, t: ToolbarItem, compact = false
             ext.open();
           }}>
           <ext.icon size={ICON} />{label && <> {ext.label}</>}
-        </button>
+        </Button>
       );
       const own = featureToolbarItem(t.id, { label, dismiss, active });
       if (own !== undefined) return <Fragment key={t.id}>{own}</Fragment>;
@@ -142,11 +150,11 @@ export function renderToolbarItem(c: ToolbarCtx, t: ToolbarItem, compact = false
       // button, so the two can never say different things about one session.
       const tally = t.id === "outline" ? turnTally(active) : null;
       return (
-        <button key={t.id} className="key" data-hint={`toolbar:${t.id}`}
+        <Button key={t.id} data-hint={`toolbar:${t.id}`}
           title={`${hint ? `${hint.title} — ${hint.what}` : t.name}${tallyTitle(tally)}`}
           onClick={() => { dismiss(); runToolbar(t.id); }}>
           <t.Icon size={ICON} />{label && <> {t.id === "model" ? (shortModel(active?.model) || "model") : t.name}</>}{tally == null ? null : <> {tally}</>}
-        </button>
+        </Button>
       );
     }
   }
@@ -175,14 +183,14 @@ export function ToolbarMenu({ c, usedOrder, refreshTerminal }: {
   );
   return (
     <div className="toolbar" role="menu" aria-label="toolbar">
-      <button className="key" title="refresh terminal" onClick={() => { closeToolbarMenu(); refreshTerminal(); }}><RotateCw size={ICON} /> refresh</button>
-      {active.remoteUrl && <button className="key" onClick={() => { closeToolbarMenu(); window.open(active.remoteUrl, "_blank"); }} title="open in app"><Smartphone size={ICON} /> open in app</button>}
+      <Button title="refresh terminal" onClick={() => { closeToolbarMenu(); refreshTerminal(); }}><RotateCw size={ICON} /> refresh</Button>
+      {active.remoteUrl && <Button onClick={() => { closeToolbarMenu(); window.open(active.remoteUrl, "_blank"); }} title="open in app"><Smartphone size={ICON} /> open in app</Button>}
       {orderedToolbarItems(toolbarCfg, usedOrder).map((t) => renderToolbarItem(c, t))}
       {/* Contributed session views (the live desktop): opening one here is what
           gives it a tab in the header (`headerViews.ts`); the tab's × takes it
           down. Unavailable is the sentence on the tap, never a grey line. */}
       {sessionViews(active.id).map((v) => (
-        <button key={v.key} className="key" title={v.unavailable ?? `open ${v.label} — adds its tab to the header`}
+        <Button key={v.key} title={v.unavailable ?? `open ${v.label} — adds its tab to the header`}
           onClick={() => {
             closeToolbarMenu();
             track(`action:view.${v.key}.menu`);
@@ -191,9 +199,9 @@ export function ToolbarMenu({ c, usedOrder, refreshTerminal }: {
             v.open();
           }}>
           <v.icon size={ICON} /> {v.label}
-        </button>
+        </Button>
       ))}
-      <button className="key" title="customize toolbar" onClick={() => { closeToolbarMenu(); setOverlay("toolbar"); }}><Settings size={ICON} /> customize</button>
+      <Button title="customize toolbar" onClick={() => { closeToolbarMenu(); setOverlay("toolbar"); }}><Settings size={ICON} /> customize</Button>
     </div>
   );
 }

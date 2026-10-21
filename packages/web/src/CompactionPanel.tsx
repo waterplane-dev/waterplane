@@ -8,6 +8,7 @@ import {
   compactionRatioText, compactionReading, compactionRowFacts, compactionRowLabel,
   compactionSavedText, compactionUnmeasuredText, compactionWindowText,
 } from "@waterplane/shared";
+import { RowTitle, RowSub } from "./kit/Row";
 
 /**
  * What compacting this conversation saved, and what it cost — in tokens and
@@ -46,14 +47,14 @@ export function CompactionPanel(
   const unmeasured = compactionUnmeasuredText(r);
   const row = (kind: "auto" | "manual", c: CompactionCost) => c.count > 0 && (
     <div key={kind} className="row ctx-row ctx-val">
-      <span className="row-title">{compactionRowLabel(kind, c.count)}</span>
+      <RowTitle>{compactionRowLabel(kind, c.count)}</RowTitle>
       {/* Saved first: it is the bigger number and the one being asked about.
           Money beside each, never instead of it — the two sides are a cache
           read and a cache write, which differ by up to twenty times in price,
           so the token counts alone cannot be compared. A side with nothing in
           it is DROPPED by `compactionRowFacts`, never drawn as a zero. */}
       <span className="row-meta">
-        {compactionRowFacts(c).map((f) => <span key={f} className="row-sub">{f}</span>)}
+        {compactionRowFacts(c).map((f) => <RowSub key={f}>{f}</RowSub>)}
       </span>
     </div>
   );

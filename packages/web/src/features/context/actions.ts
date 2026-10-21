@@ -1,9 +1,9 @@
 /**
  * Every writer of the context feature's store, and the one thing it sends.
  */
-import type { RepoTarget, SessionInfo } from "@waterplane/shared";
+import { replanPromptText, type RepoTarget, type SessionInfo } from "@waterplane/shared";
 import { core } from "../../sdk";
-import { compactToast } from "./logic";
+import { compactToast, replanBlockedToast, replanDoneToast } from "./logic";
 import { explainCostPrompt } from "../../explainCost";
 import { ctxSid } from "./store";
 
@@ -74,4 +74,23 @@ export function explainCostOf(subject: SessionInfo, title: string): boolean {
   closeContext();
   c.nav.startSessionWithPrompt(subject.cwd, `cost of ${title}`, [prompt]);
   return true;
+}
+
+/**
+ * "Interrupt and re-plan" for a large running subagent: Esc now, then a prompt
+ * through the queue (an ackId, the one send path) asking the main agent to
+ * stop the agent if it is still going and re-spawn the rest narrower.
+ *
+ * The Esc is a live key: with the socket down it is refused in a sentence and
+ * the prompt is NOT queued either, because a re-plan prompt without the
+ * interrupt would land on a turn that is still running the expensive agent.
+ * Aimed at SUBJECT, never the attached session. Nothing here runs by itself.
+ */
+export function replanSubject(subject: SessionInfo, title: string): void {
+  const c = core();
+  c.say.track("action:ctx.replan");
+  const sp = subject.contextSpark;
+  const sent = c.conn.liveSend({ t: "session.input", id: subject.id, data: "\x1b" }, replanDoneToast(title), replanBlockedToast(title));
+  if (!sent) return;
+  c.queue.submitInput(subject.id, subject.cwd, replanPromptText(sp?.liveAgentTok ?? 0, sp?.liveAgentType), "prompt");
 }

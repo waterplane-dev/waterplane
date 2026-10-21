@@ -41,6 +41,7 @@ import {
   BAR_DOWN_WORDS, BAR_UP_WORDS, COMMIT_GAP_NOTE, FIRST_SCORED_WEEK_WORDS, HOW_SCORED_SUMMARY, OUT_OF_100, carriedNoMovesWords,
   commitGapWords, commitSpendClause, heldDownWords, scoreChartAria, spendStepNote,
 } from "./healthIndexChartWords";
+import { Button } from "./kit/Button";
 
 const LINE_H = 112;
 const GUTTER = 30;
@@ -338,14 +339,14 @@ export function HealthIndexChart({ view, empty, onAsk, onAskTrend, axis = "weeks
           {(ask && at) || askTrend ? (
             <div className="rh-tile-acts">
               {ask && at ? (
-                <button className="key rh-verb" onClick={ask}>
+                <Button className="rh-verb" onClick={ask}>
                   <Send size={12} /> {indexAskLabel(at.week, weekIdx === points.length - 1 && at.week === currentWeek)}…
-                </button>
+                </Button>
               ) : null}
               {askTrend ? (
-                <button className="key rh-verb" onClick={askTrend}>
+                <Button className="rh-verb" onClick={askTrend}>
                   <Send size={12} /> {INDEX_TREND_ASK_LABEL}…
-                </button>
+                </Button>
               ) : null}
             </div>
           ) : null}

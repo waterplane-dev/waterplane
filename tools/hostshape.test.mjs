@@ -68,6 +68,11 @@ const MAX_LINES = {
   // `deliver/` — `deliverPrompt`, `deliverToNewSession`, the audit row (host-architecture.md,
   // "The deliver slices"). Moved, never copied: it only shrinks.
   "deliver.ts":          157,
+  // The echo proof deliver.ts rests on, 894 of the 900 cap until 2026-10-21 (d01ebdd4): split by
+  // subject into the text rule (echo.ts) and the box on rendered rows (composer.ts). Its notes were
+  // trimmed once to fit (a8203f2b) — over this line, cut by subject again, never the comments.
+  "echo.ts":             500,
+  "composer.ts":         500,
 };
 
 /** Each HTTP route table in `routes/` (`api*.ts`). Not `MAX_SLICE_LINES`: a table is a

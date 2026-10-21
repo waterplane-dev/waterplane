@@ -15,6 +15,7 @@ import { api } from "../../api";
 import { fmtSize } from "../../format";
 import { agoText, useRemoteResource } from "../../useRemoteResource";
 import { closeShells, killShell } from "./actions";
+import { RowSub, Row, RowTitle, Hint } from "../../kit";
 
 /** How often an OPEN row re-reads its output — a shell is live, and "what is
  *  it printing now" is the question that opened it. Only while open. */
@@ -44,24 +45,24 @@ function ShellDetail({ subject, sh }: { subject: SessionInfo; sh: SessionShell }
       <Empty res={res} empty={!d} thing="this shell" />
       {d && (
         <>
-          <div className="row-sub">command</div>
+          <RowSub as="div">command</RowSub>
           <pre className="shell-cmd">{d.command}</pre>
-          <div className="row-sub">
+          <RowSub as="div">
             output
             {d.outputBytes !== undefined && <> · {fmtSize(d.outputBytes)}{d.truncated ? " (last 64 KB)" : ""}</>}
             {d.outputAt !== undefined && <> · written {agoText(Date.now() - d.outputAt)}</>}
-          </div>
+          </RowSub>
           {d.output === undefined
-            ? <div className="row-sub">{d.outputWhy}</div>
+            ? <RowSub as="div">{d.outputWhy}</RowSub>
             : d.output === ""
-              ? <div className="row-sub">nothing printed — the command may send its output to a file of its own</div>
+              ? <RowSub as="div">nothing printed — the command may send its output to a file of its own</RowSub>
               : (
                 <pre ref={outRef} className="shell-out"
                   onScroll={(e) => { const el = e.currentTarget; pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; }}>
                   {d.output}
                 </pre>
               )}
-          {d.outputPath && <div className="row-sub mono shell-path">{d.outputPath}</div>}
+          {d.outputPath && <RowSub as="div" className="mono shell-path">{d.outputPath}</RowSub>}
         </>
       )}
     </div>
@@ -79,13 +80,13 @@ function ShellRow({ subject, sh, now }: { subject: SessionInfo; sh: SessionShell
   const Chevron = open ? ChevronDown : ChevronRight;
   return (
     <>
-    <div className="row-wrap">
+    <Row kind="wrap">
       <button type="button" className="row grow" aria-expanded={open}
         onClick={() => { if (!open) core().say.track("action:shell.open"); setOpen(!open); }}>
-        <span className="row-title"><Icon size={14} /> {shellLabel(sh)}</span>
-        {!open && <span className="row-sub mono bl-text">{sh.command}</span>}
-        <span className="row-sub">{shellWords(sh, now)}</span>
-        <span className="row-sub"><Chevron size={12} /> {open ? "hide" : "full command and output"}</span>
+        <RowTitle><Icon size={14} /> {shellLabel(sh)}</RowTitle>
+        {!open && <RowSub className="mono bl-text">{sh.command}</RowSub>}
+        <RowSub>{shellWords(sh, now)}</RowSub>
+        <RowSub><Chevron size={12} /> {open ? "hide" : "full command and output"}</RowSub>
       </button>
       {/* A `foreground` wrapper is not a background shell at all — it is the
           running turn's OWN command wearing the same `ps` shape (CLAUDE.md:
@@ -102,7 +103,7 @@ function ShellRow({ subject, sh, now }: { subject: SessionInfo; sh: SessionShell
           <Square size={16} />
         </ConfirmButton>
       )}
-    </div>
+    </Row>
     {open && <ShellDetail subject={subject} sh={sh} />}
     </>
   );
@@ -122,9 +123,9 @@ export function ShellsSheet({ subject }: { subject: SessionInfo }) {
       {list && list.length === 0 && <Empty>No background shells running right now.</Empty>}
       {list && list.length > 0 && (
         <>
-          <div className="form-hint">{shellsChipText(shellsSummary(list, now))}</div>
+          <Hint>{shellsChipText(shellsSummary(list, now))}</Hint>
           {list.map((sh) => <ShellRow key={sh.pid} subject={subject} sh={sh} now={now} />)}
-          <div className="row-sub" style={{ padding: "8px 12px" }}>closing the session stops these too</div>
+          <RowSub as="div" style={{ padding: "8px 12px" }}>closing the session stops these too</RowSub>
         </>
       )}
     </Sheet>

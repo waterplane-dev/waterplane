@@ -7,7 +7,7 @@
  * same tree — the ANALYZER of the pack that owns each file's extension, one
  * parse feeding both metrics — and neither is a judgment: a dead export is a
  * sorted list of `path#name`, and what the narrative is allowed to say about
- * it lives in `narrate.mjs`.
+ * it lives in `events.mjs`.
  *
  * A language with no analyzer here reports `{value: null, reason}` naming the
  * packs that declined. That is the whole reason the parser arrives from a

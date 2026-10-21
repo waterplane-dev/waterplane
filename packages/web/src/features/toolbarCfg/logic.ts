@@ -13,7 +13,7 @@
  * the `plugins` entry never call `dismiss` at all, for the same reason; its
  * actions do.)
  */
-export const MENU_KEEP_OPEN: ReadonlySet<string> = new Set(["limit", "star", "followup"]);
+export const MENU_KEEP_OPEN: ReadonlySet<string> = new Set(["limit", "star", "followup", "bookmark"]);
 
 /** Does a tap on this menu entry shut the menu? */
 export function closesMenu(id?: string): boolean {

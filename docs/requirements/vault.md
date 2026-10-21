@@ -386,6 +386,11 @@ The exported KDBX file opens correctly in a KeePass-compatible password manager.
 
 
 ### R-vault-076 · shipped
-A password asked on a shell's screen can be filled from a stored login: the masked field offers "from vault" (and, once a login filled that prompt on this desktop, "fill with <that login>" in one tap), the logins the prompt names come first, one fingerprint card that says it fills (not shows), and the password lands only in the masked field — typed when the person taps Send, dropped if the prompt has gone.
-- asked: 2026-10-20
-- shipped: 97e0ee27
+A password asked on a shell's screen can be filled from a stored login: the masked field offers "from vault" (and, once a login filled that prompt on this desktop, "fill with <that login>" in one tap), only logins are offered, the logins the prompt names come first, one fingerprint card says what is filled and for which login, and the password lands only in the masked field — typed when the person taps Send, dropped if the prompt has gone. The masked value is never stored as a draft, in history or in the outbox, and sending it offline is refused.
+- asked: 2026-10-20, 2026-10-20
+- shipped: 97e0ee27, 094ee9dd
+
+### R-vault-077 · requested
+The desktop plugin supports the vault plugin, so secrets can be stored in the vault from there.
+- asked: 2026-10-20, 2026-10-20
+

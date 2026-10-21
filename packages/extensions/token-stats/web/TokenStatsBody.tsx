@@ -19,6 +19,7 @@ import { ledgers, type LedgerViewParts } from "@waterplane/sdk";
 import {
   type DayPoint, Empty, fillMix, fillSeries, HOUR_MS, hourPoints, modelBands, type ResourceState,
   rollingMean, SheetHead, useBoxWidth, useRemoteResource,
+  Button,
 } from "@waterplane/kit";
 import { FETCH_HOURS, type SourceId, TREND_DAYS } from "./constants.ts";
 import {
@@ -668,12 +669,12 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
             KEY rather than calling `reload`, and a key change never passes
             through `loading` — so that flag is false from the first paint
             onward and a glyph keyed on it would never once have appeared. */}
-        <button className="key" onClick={() => { if (res.inflight) return; onRescan(); }}
+        <Button onClick={() => { if (res.inflight) return; onRescan(); }}
           title={guest
             ? guest.def.rescanTitle
             : "re-scan the conversation logs — a point-in-time answer, not a live feed"}>
           {res.inflight ? <Loader size={14} className="spin" /> : <RefreshCw size={14} />}
-        </button>
+        </Button>
       </SheetHead>
 
       {/* ONE scroll region for the whole screen. Since 2026-10-15 ONE row in it is pinned: the
@@ -712,7 +713,7 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
         {onText && (
           <div className="ts-filter" role="group" aria-label="opened on">
             <span className="empty ts-caveat">{onText}</span>
-            <button className="key" onClick={() => { setOn(null); onClearOn?.(); setExtraId(null); setSource("claude"); }}>all</button>
+            <Button onClick={() => { setOn(null); onClearOn?.(); setExtraId(null); setSource("claude"); }}>all</Button>
           </div>
         )}
 
@@ -787,9 +788,9 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
           {cut && (
             <div className="ts-filter" role="group" aria-label="models">
               <span className="empty ts-caveat">{allModels ? allNoteText(cut, fmtCount) : splitNoteText(cut, fmtCount, localTab)}</span>
-              <button className="key" onClick={() => setAllModels((v) => !v)}>
+              <Button onClick={() => setAllModels((v) => !v)}>
                 {allModels ? `Anthropic’s ${cut.shown} only` : `show all ${cut.all} models`}
-              </button>
+              </Button>
             </div>
           )}
 

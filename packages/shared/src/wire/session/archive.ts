@@ -39,6 +39,24 @@ export interface RecentSession {
   launch?: LaunchOpts;
 }
 
+/**
+ * A bookmark on one conversation (R-conversations-007): "I will want to look
+ * at this again". Kept by the host per repo directory, keyed by conversation
+ * id, so it survives the session closing, a restart and the conversation
+ * leaving every shortlist. Not a star (waiting on it), not a follow-up flag
+ * (a reading list), not "keep" (do not close) — closing a bookmarked session
+ * is fine; the archive finds it again. Read through `cleanBookmark`.
+ */
+export interface Bookmark {
+  /** When it was set (host clock, ms). */
+  at: number;
+  /** The person's one-line note, clipped (`BOOKMARK_NOTE_CAP`). */
+  note?: string;
+  /** The tab's name at bookmark time, when the phone knew one — so the row
+   *  still has a name after the closed-row shortlist has forgotten it. */
+  name?: string;
+}
+
 /** A session that was closed (killed/exited) — kept in a short stack so a
  *  mis-tap on the close button can be undone, newest-first. */
 /**
@@ -58,6 +76,12 @@ export interface ArchivedConversation {
   /** Log mtime = when the conversation was last active. */
   mtime: number;
   size: number;
+  /** The session's tab name, when the host still knows it for this
+   *  conversation (a live session or a closed row), else the bookmark's
+   *  remembered one. Absent = no name known; never derived here. */
+  name?: string;
+  /** The conversation's bookmark, stamped by the host at list time. */
+  bookmark?: Bookmark;
 }
 
 export interface ArchiveListing {
@@ -68,6 +92,10 @@ export interface ArchiveListing {
   rows: ArchivedConversation[];
   /** Conversations on disk for this directory, before any query. */
   scanned: number;
+  /** True when the listing was cut to bookmarked conversations (`bookmarked=1`);
+   *  `total` then counts those. Absent on an older host — which ignored the
+   *  filter, so a phone must not call its rows "bookmarks". */
+  bookmarked?: boolean;
 }
 
 export interface ClosedSession {
@@ -113,6 +141,9 @@ export interface ClosedSession {
   /** The conversation's follow-up flag, stamped by the host when it lists the
    *  closed stack (never persisted on the row — the flag store owns it). */
   followUp?: FollowUp;
+  /** The conversation's bookmark, stamped the same way (the bookmark store
+   *  owns it; never persisted on the row). */
+  bookmark?: Bookmark;
   /** `closedBy` "exited"/"limit": the process's own exit code, when node-pty
    *  reported one. */
   exitCode?: number;

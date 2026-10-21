@@ -8,6 +8,8 @@ import { LS } from "./storage";
 import { seqId } from "./format";
 import { ConfirmButton } from "./Confirm";
 import { Empty } from "./Empty";
+import { Button } from "./kit/Button";
+import { Hint } from "./kit/Hint";
 
 /** A saved reusable text snippet the compose box can append. */
 export interface Snippet { id: string; title: string; text: string }
@@ -100,16 +102,16 @@ export function SnippetSheet({
             confirm={<><RotateCcw size={16} /> sure?</>}
             onConfirm={onReset}><RotateCcw size={16} /> defaults</ConfirmButton>
         )}
-        <button className="key" onClick={() => setEditing({ id: seqId("sn"), title: "", text: "" })}><Plus size={16} /> new</button>
+        <Button onClick={() => setEditing({ id: seqId("sn"), title: "", text: "" })}><Plus size={16} /> new</Button>
       </SheetHead>
       {/* Prompt templates and the header row are authored content: they follow
           the user across devices, so "is this anywhere but here?" is a question
           about them too. */}
       <SyncMark keys={[LS.snippets, LS.headerCmds]} thing="these templates" />
-      <div className="form-hint">
+      <Hint>
         {hint ?? <>Tap the <Quote size={12} /> button by the compose box to pick a snippet and append it.</>}
         {" "}Drag the <GripVertical size={12} /> handle (or the arrows) to reorder.
-      </div>
+      </Hint>
       <div
         className="list"
         style={{ touchAction: dragId ? "none" : undefined }}
@@ -119,19 +121,19 @@ export function SnippetSheet({
       >
         {snippets.map((s, i, arr) => (
           <div key={s.id} data-snid={s.id} className={`row ${dragId === s.id ? "dragging" : ""}`}>
-            <button
-              className="key drag-handle"
+            <Button
+              className="drag-handle"
               title="drag to reorder"
               style={{ touchAction: "none", cursor: "grab" }}
               onPointerDown={(e) => { e.preventDefault(); setDragId(s.id); }}
-            ><GripVertical size={16} /></button>
+            ><GripVertical size={16} /></Button>
             <button className="row-title snippet-title" title={s.text} onClick={() => setEditing(s)}>
               {s.title || autoTitle(s.text)}
             </button>
-            <button className="key" title="move up" disabled={i === 0} onClick={() => move(s.id, -1)}><ArrowUp size={16} /></button>
-            <button className="key" title="move down" disabled={i === arr.length - 1} onClick={() => move(s.id, 1)}><ArrowDown size={16} /></button>
-            <button className="key" title="edit" onClick={() => setEditing(s)}><Pencil size={16} /></button>
-            <button className="key danger" title="delete" onClick={() => remove(s.id)}><Trash2 size={16} /></button>
+            <Button title="move up" disabled={i === 0} onClick={() => move(s.id, -1)}><ArrowUp size={16} /></Button>
+            <Button title="move down" disabled={i === arr.length - 1} onClick={() => move(s.id, 1)}><ArrowDown size={16} /></Button>
+            <Button title="edit" onClick={() => setEditing(s)}><Pencil size={16} /></Button>
+            <Button variant="danger" title="delete" onClick={() => remove(s.id)}><Trash2 size={16} /></Button>
           </div>
         ))}
         <Empty empty={snippets.length === 0}>{emptyText}</Empty>
@@ -161,7 +163,7 @@ function SnippetEditor({ draft, onCancel, onSave, textPlaceholder, trackId }: {
           value={text} onChange={(e) => setText(e.target.value)} style={{ resize: "vertical", fontFamily: "inherit" }} />
       </div>
       <div className="sheet-actions">
-        <button className="key" onClick={onCancel}><X size={16} /> cancel</button>
+        <Button onClick={onCancel}><X size={16} /> cancel</Button>
         <span className="spacer" />
         <button className="send" disabled={!text.trim()} onClick={() => { track(trackId); onSave({ ...draft, title, text }); }}>Save</button>
       </div>

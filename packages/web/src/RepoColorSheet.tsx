@@ -30,7 +30,7 @@ import {
   setPalette, setRepoColor, spreadRepoColors, type RepoTarget,
 } from "@waterplane/shared";
 import { Sheet } from "./Sheet";
-import { RadioRows } from "./kit";
+import { RadioRows, Button } from "./kit";
 import { Empty } from "./Empty";
 import { repoColors, saveRepoColors, useRepoColors } from "./repoColors";
 import { showToast } from "./toast";
@@ -109,17 +109,17 @@ export function RepoColorSheet({ repos, onClose }: { repos: RepoTarget[]; onClos
           {clashes.length > 0 ? (
             <>
               {/* The count IS the cut. */}
-              <button className={`key ${cut ? "active" : ""}`}
+              <Button className={cut ? "active" : ""}
                 onClick={() => { setCut(cut ? null : clashes.flat()); track("action:repocolor.clashcut"); }}>
                 <Shuffle size={14} /> {clashed.size} repos share a colour
-              </button>
-              <button className="key" onClick={() => {
+              </Button>
+              <Button onClick={() => {
                 const next = spreadRepoColors(names, repoColors());
                 saveRepoColors(next);
                 track("action:repocolor.spread");
                 const left = repoColorClashes(names, next).flat().length;
                 showToast(left ? `separated — ${left} still share a colour` : "every repo has its own colour");
-              }}><RefreshCw size={14} /> give them separate colours</button>
+              }}><RefreshCw size={14} /> give them separate colours</Button>
               <span className="set-note">
                 {clashes.map((g) => g.join(" + ")).join(" · ")} land on the same hue.
                 {" "}Separating them <b>moves only the ones that collide</b>: a repo already alone on
@@ -140,7 +140,7 @@ export function RepoColorSheet({ repos, onClose }: { repos: RepoTarget[]; onClos
         {cut ? (
           <div className="filter-bar">
             <span>Showing the {shown.length} of {names.length} that share a colour.</span>
-            <button className="key" onClick={() => setCut(null)}><X size={14} /> clear</button>
+            <Button onClick={() => setCut(null)}><X size={14} /> clear</Button>
           </div>
         ) : null}
 
@@ -167,11 +167,11 @@ export function RepoColorSheet({ repos, onClose }: { repos: RepoTarget[]; onClos
                     </div>
                   </div>
                   {pinned ? (
-                    <button className="key rc-act" title="use the ring’s colour for this repo again"
-                      onClick={() => pick(name, null)}><RefreshCw size={14} /></button>
+                    <Button className="rc-act" title="use the ring’s colour for this repo again"
+                      onClick={() => pick(name, null)}><RefreshCw size={14} /></Button>
                   ) : null}
-                  <button className="key rc-act" title="a colour no other repo here is using"
-                    onClick={() => pick(name, freeHue(names, cfg, name))}><Shuffle size={14} /></button>
+                  <Button className="rc-act" title="a colour no other repo here is using"
+                    onClick={() => pick(name, freeHue(names, cfg, name))}><Shuffle size={14} /></Button>
                 </div>
                 {open ? (
                   <div className="rc-swatches">

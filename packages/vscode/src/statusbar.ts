@@ -1,18 +1,32 @@
 /**
- * The status bar is the door, not the pitch: `$4.21 · 38%`, hidden when the folder has no session
- * (never a "$0"). A click opens the panel.
+ * The status bar is the door, not the pitch. While a session is being worked on (`anyLive`) it is
+ * that session: `$4.21 · 38%`. Otherwise it is the last scan's seven days, this repo's when the
+ * ledger has a priced figure for it (`7 d here $14`), else everything (`7 d all $80`); a reading
+ * over a day old says its age in the text (`7 d here $14 · 3 d ago`), a younger one on hover.
+ * Hidden when there is neither, or the scan is older than the seven days (never a "$0").
+ * A click opens the panel.
  */
 import * as vscode from "vscode";
 import { BRAND, contextPct, fmtCount, fmtUsd, PRICES_AS_OF } from "@waterplane/shared";
 import type { SessionDoc } from "./protocol.js";
 import { sessionTotal } from "./data/sessiontotal.js";
 import type { SessionTotal } from "./data/sessiontotal.js";
+import { fmtAge } from "./data/running.js";
+import { currentSummary, weekFigure, weekSplit } from "./data/summary.js";
+import type { HeadlineSummary } from "./data/summary.js";
+
+/** Past this the reading's age is in the status-bar text, not only on hover. */
+const AGE_IN_TEXT_MS = 24 * 3_600_000;
 
 export class StatusBar implements vscode.Disposable {
   private item: vscode.StatusBarItem;
   private doc: SessionDoc | null = null;
   private scan: { done: number; total: number } | null = null;
   private enabled = true;
+  private summary: HeadlineSummary | null = null;
+  private repo: { usd: number } | null = null;
+  /** Re-renders the summary so its age moves with the clock (and it hides once the scan is too old). */
+  private ageTimer: NodeJS.Timeout | null = null;
 
   constructor(command: string) {
     this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 90);
@@ -23,8 +37,16 @@ export class StatusBar implements vscode.Disposable {
   setEnabled(on: boolean): void { this.enabled = on; this.render(); }
   setDoc(doc: SessionDoc | null): void { this.doc = doc; this.render(); }
   setScan(p: { done: number; total: number } | null): void { this.scan = p; this.render(); }
+  /** The last scan's seven days, and this folder's share of them (null: no priced figure for it). */
+  setSummary(s: HeadlineSummary | null, repo: { usd: number } | null): void { this.summary = s; this.repo = s ? repo : null; this.render(); }
+
+  private ticking(on: boolean): void {
+    if (on && !this.ageTimer) this.ageTimer = setInterval(() => this.render(), 60_000);
+    if (!on && this.ageTimer) { clearInterval(this.ageTimer); this.ageTimer = null; }
+  }
 
   private render(): void {
+    this.ticking(false);
     if (!this.enabled) { this.item.hide(); return; }
     if (this.scan) {
       this.item.text = `$(sync~spin) reading logs ${fmtCount(this.scan.done)}/${fmtCount(this.scan.total)}`;
@@ -33,7 +55,7 @@ export class StatusBar implements vscode.Disposable {
       return;
     }
     const d = this.doc;
-    if (!d) { this.item.hide(); return; }
+    if (!d) { this.renderSummary(); return; }
     // The latest RAW reading (`lastTok`), never the chart's downsampled last point.
     const tok = d.lastTok;
     const pct = tok != null ? contextPct(tok, d.windowTok) : null;
@@ -70,5 +92,22 @@ export class StatusBar implements vscode.Disposable {
     return md;
   }
 
-  dispose(): void { this.item.dispose(); }
+  private renderSummary(): void {
+    const now = Date.now();
+    const s = currentSummary(this.summary, now);
+    const all = s ? weekFigure(s) : null;
+    if (!s || !all) { this.item.hide(); return; }
+    const age = now - s.scannedAt;
+    this.item.text = `$(graph-line) 7 d ${this.repo ? `here ${fmtUsd(this.repo.usd)}` : `all ${all}`}${age > AGE_IN_TEXT_MS ? ` · ${fmtAge(age)}` : ""}`;
+    const md = new vscode.MarkdownString(undefined, true);
+    md.appendMarkdown(`**Last 7 days, as of ${fmtAge(age)}**`);
+    if (this.repo) md.appendMarkdown(` · this repo ${fmtUsd(this.repo.usd)}`);
+    md.appendMarkdown(` · all ${all}\n\n${weekSplit(s)}\n\n`);
+    md.appendMarkdown(s.week.cost ? `List price at ${PRICES_AS_OF}, not your bill. Click to open.` : "Nothing in these days was priced. Click to open.");
+    this.item.tooltip = md;
+    this.item.show();
+    this.ticking(true);
+  }
+
+  dispose(): void { this.ticking(false); this.item.dispose(); }
 }

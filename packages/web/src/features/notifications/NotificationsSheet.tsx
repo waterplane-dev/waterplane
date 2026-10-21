@@ -4,7 +4,7 @@
  */
 import { useEffect } from "react";
 import type { LucideIcon } from "lucide-react";
-import { AlertTriangle, Bell, CircleDot, CornerDownLeft, Download, Fingerprint, Flag, Flame, HeartPulse, Hourglass, Images, ListTodo, Puzzle, SendHorizontal, Trash2 } from "lucide-react";
+import { AlertTriangle, Bell, Bot, CircleDot, CornerDownLeft, Download, Fingerprint, Flag, Flame, HeartPulse, Hourglass, Images, ListTodo, Puzzle, SendHorizontal, Trash2 } from "lucide-react";
 import { useCore, useStore } from "../../sdk";
 import { SheetHead } from "../../Sheet";
 import { Empty } from "../../Empty";
@@ -14,6 +14,7 @@ import { ago } from "../../format";
 import { viewerHandles } from "../../docKind";
 import { notifs as notifStore } from "./store";
 import { markAllSeen, openNotif } from "./actions";
+import { Button, RowSub } from "../../kit";
 
 // Lucide icon per notification kind (no emoji) — the feed's rows and App's
 // settings switches (`NOTIF_LABEL` in `logic.ts` is the words).
@@ -30,6 +31,7 @@ export const NOTIF_ICON: Record<string, LucideIcon> = {
   info: Bell,
   limit: Hourglass,
   burn: Flame,
+  agent: Bot,
   artifact: Download,
   undelivered: AlertTriangle,
 };
@@ -60,7 +62,7 @@ export function NotificationsSheet() {
             their own clear, beside their own heading. Absent rather than
             dimmed when there is nothing to clear. */}
         {notifs.length > 0 && (
-          <button className="key" onClick={() => core.conn.liveSend({ t: "notification.clear" }, "notifications cleared")} title="clear alerts from the desktop"><Trash2 size={14} /></button>
+          <Button onClick={() => core.conn.liveSend({ t: "notification.clear" }, "notifications cleared")} title="clear alerts from the desktop"><Trash2 size={14} /></Button>
         )}
       </SheetHead>
       <div className="list hist">
@@ -94,7 +96,7 @@ export function NotificationsSheet() {
                       onClick={() => { core.files.downloadArtifact(n.file!); core.say.toast(`downloading ${n.file!.name}`); }}><Download size={16} /></button>
                   : <span className="notif-dl" title="download"><Download size={16} /></span>
               )}
-              <span className="row-sub notif-time">{ago(n.ts)}</span>
+              <RowSub className="notif-time">{ago(n.ts)}</RowSub>
             </div>
           );
         })}

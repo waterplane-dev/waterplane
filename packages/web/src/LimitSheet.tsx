@@ -6,7 +6,7 @@ import { ago, clock as hhmm } from "./format";
 import { Empty } from "./Empty";
 import { Explain } from "./Explain";
 import { Unavailable } from "./Unavailable";
-import { RadioRows } from "./kit";
+import { RadioRows, Button, Hint, Tag } from "./kit";
 import { openSettingsAt } from "./settingsFocus";
 
 interface Props {
@@ -126,7 +126,7 @@ export function LimitSheet({
             <TerminalIcon size={13} style={{ verticalAlign: "-2px" }} /> {s.title || s.cwd}
           </button>
           <span className="spacer" />
-          {l.queuePos != null && <span className="tag limit-auto"><Hourglass size={12} /> {l.queuePos}</span>}
+          {l.queuePos != null && <Tag className="limit-auto"><Hourglass size={12} /> {l.queuePos}</Tag>}
           {s.starred && <Star size={12} className="star-on" />}
         </div>
         <div className="approve-hint">
@@ -177,19 +177,19 @@ export function LimitSheet({
       </SheetHead>
 
       {!online && (
-        <div className="form-hint">
+        <Hint>
           <CloudOff size={13} style={{ verticalAlign: "-2px" }} />{" "}
           offline — {seenAt ? <>this is the state as of {ago(seenAt)}</> : <>nothing has been synced to this device yet</>}.
           The buttons need the host, so they are back with the link rather than queueing: which session should go first
           is a decision about right now.
-        </div>
+        </Hint>
       )}
 
       {holding && (
-        <div className="form-hint">
+        <Hint>
           A resume just came back still blocked, so the limit has not actually reset. Nothing else will spend an
           attempt until {hhmm(holdUntil!)} — tap <b>now</b> on a session to override that.
-        </div>
+        </Hint>
       )}
 
       {blocked.length === 0 && (
@@ -228,10 +228,10 @@ export function LimitSheet({
       </div>
       </>}
       {queued.length > 1 && mode !== "one" && (
-        <div className="form-hint">
+        <Hint>
           The first session still goes alone — if it comes back still blocked, nothing else spends an attempt on the
           same wall. The rest follow once one of them provably starts working again.
-        </div>
+        </Hint>
       )}
       <div className="list">
         {queued.map(row)}
@@ -240,9 +240,9 @@ export function LimitSheet({
             <span>Not resuming <span className="section-hint">· auto-continue is off for these</span></span>
             {/* Each row's own on/off is below; this is the default new
                 sessions start with, which is what parked most of them. */}
-            <button className="key" onClick={() => openSettingsAt("limit-auto")}>
+            <Button onClick={() => openSettingsAt("limit-auto")}>
               <Settings2 size={14} /> default
-            </button>
+            </Button>
           </div>
         )}
         {parked.map(row)}
@@ -252,25 +252,23 @@ export function LimitSheet({
           nothing blocked the empty sentence above is the reason, with nothing
           in line the "Not resuming" head is, and offline the offline line is. */}
       <div className="sheet-actions">
-        {online && queued.length > 0 && <button
-          className="key" data-hint="limit.resumeall"
+        {online && queued.length > 0 && <Button data-hint="limit.resumeall"
           title={`Stop waiting for the clock — the queue starts now, ${MODE_TEXT[mode].label}`}
           onClick={() => { track("action:limit.resumeall"); onResume(); }}
-        ><Play size={16} /> resume all</button>}
-        {online && blocked.length > 0 && <button
-          className="key" data-hint="limit.starredonly"
+        ><Play size={16} /> resume all</Button>}
+        {online && blocked.length > 0 && <Button data-hint="limit.starredonly"
           title="Only starred sessions resume by themselves; the rest wait for you"
           onClick={() => {
             track("action:limit.starredonly");
             for (const s of blocked) onSetOverride(s.id, !!s.starred);
           }}
-        ><Star size={16} /> starred only</button>}
-        {online && <button
-          className={`key ${globalAuto ? "active" : ""}`} data-hint="limit.global"
+        ><Star size={16} /> starred only</Button>}
+        {online && <Button
+          className={globalAuto ? "active" : ""} data-hint="limit.global"
           title="The global switch: whether a session resumes itself at all once a limit resets"
           onClick={() => { track("action:limit.global"); onSetGlobal(!globalAuto); }}
-        ><Power size={16} /> auto {globalAuto ? "on" : "off"}</button>}
-        <button className="key" onClick={onClose}><X size={16} /> close</button>
+        ><Power size={16} /> auto {globalAuto ? "on" : "off"}</Button>}
+        <Button onClick={onClose}><X size={16} /> close</Button>
       </div>
     </div>
   );

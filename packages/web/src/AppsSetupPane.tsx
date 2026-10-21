@@ -11,6 +11,9 @@ import { useRemoteResource } from "./useRemoteResource";
 import { installSources, openInstallSettings } from "./nativeInstall";
 import { readiness, readinessCut, readinessVerdict, type AppReadiness, type CheckState } from "./appReady";
 import type { AppRow, InstallCaps, InstallSources } from "./installPolicy";
+import { Button } from "./kit/Button";
+import { Row, RowSub } from "./kit/Row";
+import { Hint } from "./kit/Hint";
 
 /**
  * **Which apps are set up to install themselves** — the Apps screen's `setup`
@@ -59,33 +62,33 @@ export function AppsSetupPane({ rows, caps, allow, log, me, onFlip, onOpenDownlo
 
   return (
     <>
-      <div className="form-hint">
+      <Hint>
         Each app's whole chain for a build to install by itself — the desktop's half (from its repo) and this phone's.
         The first line marked <CircleX size={12} /> is what to fix next.{" "}
-        <button className="key" title="read the repos again"
+        <Button title="read the repos again"
           onClick={() => { res.reload({ quiet: true }); track("action:apps.setup.reload"); showToast("reading the repos again"); }}>
           <RotateCw size={14} /> re-read
-        </button>
-      </div>
+        </Button>
+      </Hint>
 
       {/* Two chips, each a filter that opens exactly what it counts. */}
       {all.length > 0 && (
         <div className="set-row">
-          <button className={`key ${cut === "blocked" ? "active" : ""}`}
+          <Button className={cut === "blocked" ? "active" : ""}
             onClick={() => { setCut(cut === "blocked" ? "all" : "blocked"); track("action:apps.setup.blocked"); }}>
             <CircleX size={14} /> not yet · {blocked.length}
-          </button>
-          <button className={`key ${cut === "ready" ? "active" : ""}`}
+          </Button>
+          <Button className={cut === "ready" ? "active" : ""}
             onClick={() => { setCut(cut === "ready" ? "all" : "ready"); track("action:apps.setup.ready"); }}>
             <CircleCheck size={14} /> set up · {ready.length}
-          </button>
+          </Button>
         </div>
       )}
       {cut !== "all" && (
-        <div className="form-hint">
+        <Hint>
           {shown.length} of {all.length} · {cut === "blocked" ? "not yet set up" : "set up"}{" "}
-          <button className="key" onClick={() => setCut("all")}><X size={14} /> show all</button>
-        </div>
+          <Button onClick={() => setCut("all")}><X size={14} /> show all</Button>
+        </Hint>
       )}
 
       <div className="list">
@@ -125,16 +128,16 @@ function ReadyCard({ r, open, onToggle, onFlip, onOpenDownloads }: {
   const Icon = ICON[state];
   return (
     <div className={`check-row check-${CLS[state]}`}>
-      <button className="row grow" title={open ? "hide the checklist" : "show every line of the checklist"} onClick={onToggle}>
+      <Row as="button" kind="grow" title={open ? "hide the checklist" : "show every line of the checklist"} onClick={onToggle}>
         <span className="check-top">
           <span className="check-icon"><Icon size={16} /></span>
           <span className="check-label">{r.label}</span>
           <span className="check-kind">{open ? "hide" : `${r.checks.filter((c) => c.state === "ok").length}/${r.checks.length}`}</span>
         </span>
-        <span className="row-sub mono">{r.pkg}{r.repo ? ` · ${r.repo}` : ""}</span>
-        <span className={`row-sub ${b ? "warn" : ""}`}>{readinessVerdict(r)}</span>
+        <RowSub className="mono">{r.pkg}{r.repo ? ` · ${r.repo}` : ""}</RowSub>
+        <RowSub className={b ? "warn" : ""}>{readinessVerdict(r)}</RowSub>
         {!open && b && <span className="check-detail">{b.text}</span>}
-      </button>
+      </Row>
       {open && (
         <ul className="check-list">
           {(["repo", "phone"] as const).map((half) => {
@@ -162,23 +165,23 @@ function ReadyCard({ r, open, onToggle, onFlip, onOpenDownloads }: {
       {b && (b.id === "switch" || b.id === "access" || b.id === "pull") && (
         <div className="row-acts pull-acts">
           {b.id === "switch" && (
-            <button className="key primary" title={`always install ${r.label}`}
+            <Button variant="primary" title={`always install ${r.label}`}
               onClick={() => { track("action:apps.setup.allow"); onFlip(); }}>
               <PackageCheck size={16} /> auto-install: on
-            </button>
+            </Button>
           )}
           {b.id === "access" && (
-            <button className="key primary" title="open the phone's install-unknown-apps setting"
+            <Button variant="primary" title="open the phone's install-unknown-apps setting"
               onClick={() => {
                 track("action:apps.setup.settings");
                 void openInstallSettings().catch(() => showToast("this phone has no screen for that switch"));
-              }}><Settings size={16} /> allow it</button>
+              }}><Settings size={16} /> allow it</Button>
           )}
           {b.id === "pull" && (
-            <button className="key primary" title="the auto-download rule lives in Downloads"
+            <Button variant="primary" title="the auto-download rule lives in Downloads"
               onClick={() => { track("action:apps.setup.downloads"); onOpenDownloads(); }}>
               <Download size={16} /> downloads
-            </button>
+            </Button>
           )}
         </div>
       )}

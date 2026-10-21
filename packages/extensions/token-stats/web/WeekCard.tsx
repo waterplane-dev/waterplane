@@ -5,7 +5,7 @@ import {
   agentModelInsight, type CostConvo, type CostWindowDoc, fmtCount, fmtUsd, foldLaunches, LAUNCH_KIND_WORD,
   type PtsCalibration, type PtsRefusal, ptsText, rankRepos, tokenTotal, type TokenConvo, type UsageSample, weekCut,
 } from "@waterplane/shared";
-import { useBoxWidth } from "@waterplane/kit";
+import { useBoxWidth, Button, Tag } from "@waterplane/kit";
 import { ScopeCard, ScopeTag } from "./TokenInsights.tsx";
 import { Composition } from "./Readouts.tsx";
 import { RepoHourChart, slotFill } from "./charts/RepoHourChart.tsx";
@@ -186,13 +186,13 @@ export function WeekCard({ doc, res, openedAt, samples, everyMs, cal, span, comp
         {pick && (
           <div className="ts-filter ts-week-filter">
             <span>{cut!.filterText(pick)}</span>
-            <button className="key" onClick={() => setHour(null)}><X size={13} /> clear</button>
+            <Button onClick={() => setHour(null)}><X size={13} /> clear</Button>
           </div>
         )}
         {compact && !pick && !open.has("*list") ? (
-          <button className="key ts-convos-more" onClick={() => toggle("*list")}>
+          <Button className="ts-convos-more" onClick={() => toggle("*list")}>
             <ChevronDown size={13} /> list the week by {by === "repo" ? "repo" : "launch"} ({groups.length})
-          </button>
+          </Button>
         ) : <>
         <div className="section section-head">
           <span>{by === "repo" ? "By repo" : "By launch"} <ScopeTag>{pick ? `sessions that ran ${hourWords(at!.t)} · their week` : span ? span.tag : "since reset"} · in {priced(total) ? "money" : "tokens"}</ScopeTag></span>
@@ -204,15 +204,15 @@ export function WeekCard({ doc, res, openedAt, samples, everyMs, cal, span, comp
               nameOf={nameOf} onExplain={onExplain} isLive={isLive} onOpenConvo={onOpenConvo} />
           ))}
           {groups.length > ROWS_SHOWN && (
-            <button className="key ts-convos-more" onClick={() => toggle("*all")}>
+            <Button className="ts-convos-more" onClick={() => toggle("*all")}>
               {open.has("*all") ? `show the top ${ROWS_SHOWN}` : `show all ${groups.length}`}
-            </button>
+            </Button>
           )}
           {pick
             ? (cut!.restText(pick) && <div className="empty ts-caveat">{cut!.restText(pick)} — the host folds the cheapest sessions by repo and launch, without their hours.</div>)
             : (listedText(doc.convos.length, cut!) && <div className="empty ts-caveat">{listedText(doc.convos.length, cut!)}</div>)}
           {compact && !pick && (
-            <button className="key ts-convos-more" onClick={() => toggle("*list")}><ChevronUp size={13} /> fold the list</button>
+            <Button className="ts-convos-more" onClick={() => toggle("*list")}><ChevronUp size={13} /> fold the list</Button>
           )}
         </div>
         </>}
@@ -286,9 +286,9 @@ function WeekRow({ g, total, totalTok, cal, open, allSessions, onToggle, onAll, 
             <WeekSession key={c.id} c={c} cal={cal} nameOf={nameOf} onExplain={onExplain} isLive={isLive} onOpenConvo={onOpenConvo} />
           ))}
           {g.convos.length > SESSIONS_SHOWN && (
-            <button className="key ts-convos-more" onClick={onAll}>
+            <Button className="ts-convos-more" onClick={onAll}>
               {allSessions ? `show the top ${SESSIONS_SHOWN}` : `show all ${g.convos.length} sessions`}
-            </button>
+            </Button>
           )}
           {moreText(g.more) && <div className="empty ts-caveat">{moreText(g.more)}</div>}
         </div>
@@ -320,14 +320,14 @@ function WeekSession({ c, cal, nameOf, onExplain, isLive, onOpenConvo }: {
         {c.label} · {fmtCount(tokenTotal(c.totals))} tokens
         {c.agents > 0 && <> · {c.agents} subagents{ag != null ? ` (${ag}% of it)` : ""}</>}
         {c.peakCtx ? <> · peak {fmtCount(c.peakCtx)} context</> : null}
-        {live && <> · <span className="tag ts-week-live">live</span></>}
+        {live && <> · <Tag className="ts-week-live">live</Tag></>}
       </div>
       {insight && <div className="ts-convo-facts">{insight}</div>}
       {onExplain && (
         <div className="ts-convo-acts">
-          <button className="key" onClick={() => onExplain(c, title)}><SearchCheck size={13} /> explain the cost</button>
+          <Button onClick={() => onExplain(c, title)}><SearchCheck size={13} /> explain the cost</Button>
           {onOpenConvo && isLive?.(c.id) && (
-            <button className="key" onClick={() => onOpenConvo(c.id)}><BarChart3 size={13} /> context & cost</button>
+            <Button onClick={() => onOpenConvo(c.id)}><BarChart3 size={13} /> context & cost</Button>
           )}
         </div>
       )}

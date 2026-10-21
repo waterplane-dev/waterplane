@@ -21,6 +21,8 @@ import type { TranscriptDoc, TranscriptTurn } from "@waterplane/shared";
 import { anchorNote, forkAnchor, forkBlocker } from "./forkAnchor";
 import { Unavailable } from "./Unavailable";
 import { track } from "./usage";
+import { Button } from "./kit/Button";
+import { RowSub } from "./kit/Row";
 
 /** One tap on "fork from here" / "reset to here", as the reader can describe it. */
 export interface ForkRequest {
@@ -89,22 +91,22 @@ export function ForkTurnRow({ doc, turn, fork, onRun }: {
             { label: "reset to here", reason: why },
           ]} />
         : <div className="tr-fork-acts">
-            <button className="key" onClick={() => run("fork")}>
+            <Button onClick={() => run("fork")}>
               <GitFork size={12} /> fork from here
-            </button>
-            <button className="key danger" onClick={() => run("reset")}>
+            </Button>
+            <Button variant="danger" onClick={() => run("reset")}>
               <Undo2 size={12} /> reset to here
-            </button>
+            </Button>
           </div>}
-      {note && <div className="row-sub">{note}</div>}
+      {note && <RowSub as="div">{note}</RowSub>}
       {!why && (
-        <div className="row-sub">
+        <RowSub as="div">
           Both take back #{turn.n}: fork opens a second session holding this conversation up to
           just before it (through #{anchor?.turn.n}) and leaves this one running; reset replaces
           this session with that copy. Neither deletes anything: #{turn.n} and the turns after it
           stay on disk under this conversation and stay listed in the archive, and no file in the
           repo is touched.
-        </div>
+        </RowSub>
       )}
     </div>
   );

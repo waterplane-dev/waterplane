@@ -7,6 +7,7 @@ import type { OutboxEntry } from "../outbox";
 import { track } from "../usage";
 import { Row } from "./ActivityRowCard";
 import type { ReviewMarks } from "./activitySheetTypes";
+import { Button } from "../kit/Button";
 
 /**
  * A group of rows that say the same thing.
@@ -66,10 +67,10 @@ export function Group({ g, now, sessions, repos, outbox, online, reviews, repoId
         {also > 0 ? <span className="act-group-ran"><CheckCheck size={11} /> {also === 1 ? "one of these already ran" : `${also} of these already ran`}</span> : null}
         {g.elsewhere.other > 0 ? <span className="act-group-else">{g.elsewhere.other} more elsewhere in the list</span> : null}
         {n > 1 ? (
-          <button className="key act-group-more" title={open ? "collapse these" : `show all ${n} copies`}
+          <Button className="act-group-more" title={open ? "collapse these" : `show all ${n} copies`}
             onClick={() => { track("action:activity.expand"); setOpen((v) => !v); }}>
             {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </button>
+          </Button>
         ) : null}
       </div>
       {(open ? g.rows : g.rows.slice(0, 1)).map((r) => (

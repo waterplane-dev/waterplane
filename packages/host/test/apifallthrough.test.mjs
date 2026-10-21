@@ -127,7 +127,7 @@ async function run() {
   assert.ok(target, "the scratch repo was not discovered");
   const ctx = {
     root: ROOT,
-    sessions: { list: () => [], onHookEvent() {} },
+    sessions: { list: () => [], listClosed: () => [], onHookEvent() {} },
     setup: { stateFor() { return undefined; }, record() {} },
     capture: { run: () => ({ error: "stub capture" }), runsFor: () => [] },
   };

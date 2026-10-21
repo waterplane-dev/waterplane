@@ -5,6 +5,7 @@ import { api } from "./api";
 import { useRemoteResource } from "./useRemoteResource";
 import { SheetHead } from "./Sheet";
 import { Empty } from "./Empty";
+import { Row, RowTitle, RowSub } from "./kit/Row";
 
 interface Props {
   /** The repo's primary worktree (used for the git API + as the "current branch" target). */
@@ -80,13 +81,13 @@ export function BranchPicker({ primary, targets, onOpen, onClose }: Props) {
         {branches?.filter((b) => b.name.toLowerCase().includes(newName.trim().toLowerCase())).map((b) => {
           const checkedOut = !!worktreeFor(b.name);
           return (
-            <button key={b.name} className="row" disabled={busy === b.name} onClick={() => pick(b.name)}>
+            <Row key={b.name} as="button" disabled={busy === b.name} onClick={() => pick(b.name)}>
               <span className={`gstat ${b.current ? "g-added" : ""}`}>{b.current ? "●" : "○"}</span>
-              <span className="row-title mono">{b.name}</span>
-              <span className="row-sub">
+              <RowTitle className="mono">{b.name}</RowTitle>
+              <RowSub>
                 {busy === b.name ? "creating…" : b.current ? "primary" : checkedOut ? "worktree" : "new worktree"}
-              </span>
-            </button>
+              </RowSub>
+            </Row>
           );
         })}
       </div>

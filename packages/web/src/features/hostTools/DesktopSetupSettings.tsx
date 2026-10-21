@@ -15,7 +15,7 @@ import { useState } from "react";
 import { AlertTriangle, Check, Monitor, RefreshCw, Wrench, X } from "lucide-react";
 import type { HostSetupReport } from "@waterplane/shared";
 import { api } from "../../api";
-import { Empty } from "../../kit";
+import { Empty, Button, Hint } from "../../kit";
 import { SetCustom } from "../../SettingsKit";
 import { useRemoteResource } from "../../useRemoteResource";
 import { track } from "../../usage";
@@ -62,19 +62,19 @@ export function DesktopSetupChecklist() {
               <span className="check-icon">{STATUS_ICON[c.status]}</span>
               <span className="check-label">{c.label}</span>
               {c.fix && (
-                <button className="key" onClick={() => void fix(c.fix!)}>
+                <Button onClick={() => void fix(c.fix!)}>
                   <Wrench size={12} /> {busy ? "fixing…" : "fix"}
-                </button>
+                </Button>
               )}
             </div>
             <div className="check-detail">{c.detail}</div>
           </li>
         ))}
       </ul>
-      {said?.map((n, i) => <div key={i} className="form-hint">{n}</div>)}
-      <button className="key" onClick={() => { setSaid(null); res.reload({ quiet: true }); }}>
+      {said?.map((n, i) => <Hint key={i}>{n}</Hint>)}
+      <Button onClick={() => { setSaid(null); res.reload({ quiet: true }); }}>
         <RefreshCw size={14} className={res.inflight ? "spin" : undefined} /> re-check
-      </button>
+      </Button>
     </SetCustom>
   );
 }

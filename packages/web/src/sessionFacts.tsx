@@ -23,6 +23,8 @@ import { ago, dur, hhmm } from "./format";
 import { isShellBackend, type BackendList } from "./backendCaps";
 import { isFlagged } from "./core/sessions/followUpFacts.ts";
 import { liveLaunch } from "./liveLaunch";
+import { RowSub } from "./kit/Row";
+import { Tag } from "./kit/Tag";
 
 /**
  * The ONE definition of "what is this session doing" — the row badge
@@ -356,21 +358,21 @@ export function SessionFacts({ s, repoLabel, backendLabel, backends }: {
   return (
     <span className="sess-facts">
       <span className="sess-facts-tags">
-        <span className={`tag ${st.cls}`} title={st.title}>{st.body}</span>
-        {ctx && <span className={`tag ${ctx.cls}`} title={ctx.title}>{ctx.body}</span>}
-        {cost && <span className={`tag ${cost.cls}`} title={cost.title}>{cost.body}</span>}
-        {peer && <span className={`tag ${peer.cls}`} title={peer.title}>{peer.body}</span>}
-        {spend && <span className={`tag ${spend.cls}`} title={spend.title}>{spend.body}</span>}
-        {origin && <span className={`tag ${origin.cls}`} title={origin.title}>{origin.body}</span>}
-        <span className="row-sub row-launch">{launchLabel(liveLaunch(s), backendLabel, backends)}</span>
+        <Tag className={st.cls} title={st.title}>{st.body}</Tag>
+        {ctx && <Tag className={ctx.cls} title={ctx.title}>{ctx.body}</Tag>}
+        {cost && <Tag className={cost.cls} title={cost.title}>{cost.body}</Tag>}
+        {peer && <Tag className={peer.cls} title={peer.title}>{peer.body}</Tag>}
+        {spend && <Tag className={spend.cls} title={spend.title}>{spend.body}</Tag>}
+        {origin && <Tag className={origin.cls} title={origin.title}>{origin.body}</Tag>}
+        <RowSub className="row-launch">{launchLabel(liveLaunch(s), backendLabel, backends)}</RowSub>
         {s.createdAt && s.running && (
-          <span className="row-sub" title={`session open for ${dur(s.createdAt)} — started ${new Date(s.createdAt).toLocaleString()}`}>
+          <RowSub title={`session open for ${dur(s.createdAt)} — started ${new Date(s.createdAt).toLocaleString()}`}>
             <Clock size={11} /> {dur(s.createdAt)}
-          </span>
+          </RowSub>
         )}
-        {repoLabel && <span className="row-sub">{repoLabel}</span>}
+        {repoLabel && <RowSub>{repoLabel}</RowSub>}
       </span>
-      {jobs.map((j) => <span key={j.key} className={`row-sub peer-job-line${j.bad ? " warn" : ""}`}>{j.text}</span>)}
+      {jobs.map((j) => <RowSub key={j.key} className={`peer-job-line${j.bad ? " warn" : ""}`}>{j.text}</RowSub>)}
       <PromptPair firstPrompt={s.firstPrompt} lastPrompt={s.lastPrompt} pinnedPrompt={s.pinnedPrompt} />
     </span>
   );

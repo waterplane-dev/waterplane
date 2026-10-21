@@ -51,6 +51,7 @@ import { SheetHead } from "./Sheet";
 import {
   backendInfo, isZeroCost, CLAUDE, HOSTED_DISCLAIMER, ZERO_COST_DISCLAIMER, type BackendList,
 } from "./backendCaps";
+import { Hint } from "./kit/Hint";
 
 interface Props {
   /** What is about to be opened — the caller's own title for this launch, so
@@ -78,10 +79,10 @@ export function HostedAckSheet({ title, backends, launch, onAccept, onClose }: P
       {/* What is about to happen, in this launch's own terms. The model id is
           shown as itself: it is the person's own selection echoed back, not a
           claim about anybody. */}
-      <div className="form-hint">
+      <Hint>
         {title} would run <b>{model}</b>{info && info.id !== CLAUDE ? <> on {info.label}</> : null}, which is a
         hosted model — it runs on somebody’s server, not on the Mac.
-      </div>
+      </Hint>
       <div className="form">
         <div className="model-warn">
           <AlertTriangle size={14} />
@@ -93,18 +94,18 @@ export function HostedAckSheet({ title, backends, launch, onAccept, onClose }: P
             <span>{ZERO_COST_DISCLAIMER}</span>
           </div>
         )}
-        <div className="form-hint">
+        <Hint>
           The long form is §2 of <b>DISCLAIMER.md</b> in this repo.
-        </div>
+        </Hint>
         {/* The whole decision, restated. Tapping records the acknowledgement on
             THIS device and resumes the exact launch that was held. */}
         <button className="send" onClick={onAccept}>
           <Play size={14} /> I understand — start {title}
         </button>
-        <div className="form-hint">
+        <Hint>
           Closing this starts nothing — nothing is queued until you accept. Asked once on this
           phone; the settings screen can bring it back.
-        </div>
+        </Hint>
       </div>
     </div>
   );

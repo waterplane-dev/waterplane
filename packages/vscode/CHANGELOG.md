@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.0 - 2026-10-21
+
+- Insight first: the tree leads with **All sessions** and its last seven days (`7 d: here $14 · all $80 · 2 h ago`), before and after a read, then Repo health, Always-on context and Copilot. Sessions sits second and open while a session ran in the last 30 minutes, last and closed otherwise; a fold you set yourself is kept.
+- The panel opens on All sessions, or on the Session view while one is live, instead of always on Session; while the panel stays open it keeps the view you left it on. All sessions says how old its reading is (`Read 2 h ago`) beside Re-read every log now, and drops the conversation-count line the footer already had.
+- No scan at startup for the headline: each finished log read leaves a small summary in VS Code's storage, shown after a reload with its age; one more than seven days old is not shown. A changed `claudeConfigDir` drops it.
+- The status bar shows a session only while one is live; otherwise the last seven days' cost, this repo's when the logs have a priced figure for it (`7 d here $14`), else everything (`7 d all $80`), with the reading's age once it is over a day old.
+- A line above the first row of `CLAUDE.md`, `AGENTS.md`, `copilot-instructions.md`, `*.instructions.md`, `.claude/rules` and skill `SKILL.md` files says what the file costs on every request (its Always-on row's reading, in tokens); a click opens Always-on, saving the file updates it.
+- Repo health on a Mac whose git is blocked by Xcode's unaccepted license says so in plain words with the fixes (`sudo xcodebuild -license accept`, switching to the Command Line Tools, or `git.path` to another git), and no longer offers Forget, which could not help. The tree's row reads `git blocked: Xcode license`.
+
+## 0.4.1 - 2026-10-21
+
+- The Copilot row shows your plan and this month's premium requests counted from this machine's Copilot Chat logs, with no GitHub sign-in and no network. A click still reads GitHub's own figure, which knows the limit.
+- Repo health no longer calls a real repository "not a git repository" when git refuses to read it (dubious ownership / `safe.directory`, a broken Xcode command-line-tools shim, an unknown repository extension). It quotes git's own message, which carries the fix.
+
 ## 0.4.0 - 2026-10-20
 
 - Copilot quota in the tree: premium requests and chat usage, read with VS Code's own GitHub sign-in. It is the extension's one network call, so it stays off until you click the row (kept per machine), re-reads every 10 minutes while on, and a right-click turns it off.

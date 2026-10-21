@@ -4,6 +4,8 @@ import { hl } from "../Markdown";
 import { blockText, matches } from "../transcriptUtil";
 import type { ToolBlock } from "./tvRows";
 import type { TvModel } from "./useTranscriptView";
+import { Button } from "../kit/Button";
+import { Tag } from "../kit/Tag";
 
 /** Collapsible assistant thinking / tool call. Force-opened while its content
  *  matches the current find, so a hit is never hidden behind a closed section. */
@@ -45,7 +47,7 @@ export function ToolRow({ m, t, b, k }: { m: TvModel; t: TranscriptTurn; b: Tool
         <span className="tr-tool-head">
           <Wrench size={12} /> <b>{b.name}</b>
           <span className="tr-tool-label">{hl(b.label, q)}</span>
-          {b.ok === false && <span className="tag danger">error</span>}
+          {b.ok === false && <Tag tone="danger">error</Tag>}
         </span>
       }>
       <>
@@ -53,7 +55,7 @@ export function ToolRow({ m, t, b, k }: { m: TvModel; t: TranscriptTurn; b: Tool
         {d?.state === "error" && (
           <div className="tr-pending">
             <AlertTriangle size={12} /> {d.msg}{" "}
-            <button className="key" onClick={() => void loadDetails(t, true)}>retry</button>
+            <Button onClick={() => void loadDetails(t, true)}>retry</Button>
           </div>
         )}
         {det?.input && <pre className="tr-pre tr-in">{hl(det.input, q)}</pre>}

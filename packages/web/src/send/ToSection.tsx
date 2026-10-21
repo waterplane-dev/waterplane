@@ -1,6 +1,6 @@
 /** The To row and its expansion, with the budget chip. Split from `SendSheet.tsx` (docs/notes/send-architecture.md). */
 import { ChevronDown, ChevronRight, DoorClosed, DoorOpen, History, ListOrdered, Play, SendHorizontal, Split, Wallet } from "lucide-react";
-import { RadioRows } from "../kit";
+import { RadioRows, RowTitle, RowSub, Hint } from "../kit";
 import { LaunchRow } from "./LaunchRow";
 import { FlagWhenDoneRow } from "./FlagWhenDoneRow";
 import { BudgetField } from "../BudgetField";
@@ -59,9 +59,9 @@ export function ToSection({ m }: { m: SendSheetModel }) {
           either one retires it rather than leaving it describing a state that
           has moved on. */}
       {clockSessionNote(target, when, target.kind === "session" ? names.sessionTitle(target.sessionId) : "") && (
-        <div className="form-hint">
+        <Hint>
           {clockSessionNote(target, when, target.kind === "session" ? names.sessionTitle(target.sessionId) : "")}
-        </div>
+        </Hint>
       )}
       {open === "to" && (
         <div className="send-exp">
@@ -96,16 +96,16 @@ export function ToSection({ m }: { m: SendSheetModel }) {
 
           {target.kind === "session" && (
             <div className="pad-pick">
-              <div className="form-hint">Which session?</div>
+              <Hint>Which session?</Hint>
               {live.map((s) => (
                 <button key={s.id} className={`row${target.sessionId === s.id ? " sched-on" : ""}`}
                   onClick={() => setTarget({ kind: "session", sessionId: s.id, cwd: s.cwd })}>
-                  <span className="row-title">{s.title}</span>
+                  <RowTitle>{s.title}</RowTitle>
                   {/* The desktop's own name for the conversation. Without it
                       this list is the repo name repeated once per session and
                       the question is unanswerable — `SessionName.tsx`. */}
                   <SessionName s={s} />
-                  <span className="row-sub">{s.turnActive ? "working" : "idle"}</span>
+                  <RowSub>{s.turnActive ? "working" : "idle"}</RowSub>
                 </button>
               ))}
               {!live.length && <Empty>No live sessions.</Empty>}
@@ -126,11 +126,11 @@ export function ToSection({ m }: { m: SendSheetModel }) {
                   <History size={13} /> pick up its last conversation
                 </button>
               </div>
-              <div className="form-hint">
+              <Hint>
                 {target.resume
                   ? "It reopens this repo's last conversation and carries on in it — everything that one read is already in the window, and every turn pays for it again."
                   : "Otherwise it starts clean — cheaper for anything that does not need what the last one knew."}
-              </div>
+              </Hint>
               {/* **Its session once the work is done** — asked only where
                   the DESKTOP opens it (a backlog item, a chain, a schedule):
                   a `now` is a session the person opened, which nothing
@@ -145,7 +145,7 @@ export function ToSection({ m }: { m: SendSheetModel }) {
                       label: <>{c === "close" ? <DoorClosed size={13} /> : c === "keep" ? <DoorOpen size={13} /> : null} {closeChoiceLabel(c, closeGlobal)}</>,
                     }))}
                     onChange={(c) => setTarget({ ...target, closeWhenDone: closeChoiceDraft(c) })} />
-                  <div className="form-hint">{closeEffectWords(target.closeWhenDone, closeGlobal)}</div>
+                  <Hint>{closeEffectWords(target.closeWhenDone, closeGlobal)}</Hint>
                 </>
               )}
               {flagRow}
@@ -164,9 +164,9 @@ export function ToSection({ m }: { m: SendSheetModel }) {
           {target.kind === "repos" && launchRow}
           {target.kind === "repos" && budgetRow}
           {target.kind === "shell" && (
-            <div className="form-hint">
+            <Hint>
               A build command — a shell in <b>{names.repoName(target.cwd)}</b>, no agent and no session.
-            </div>
+            </Hint>
           )}
 
           {/* Sequential-vs-parallel, at composition time and only where it can
@@ -185,7 +185,7 @@ export function ToSection({ m }: { m: SendSheetModel }) {
               onChange={(k) => setSequential(k === "sequential")} />
             </>
           )}
-          {seqMeans && <div className="form-hint">{sequential ? seqMeans.on : seqMeans.off}</div>}
+          {seqMeans && <Hint>{sequential ? seqMeans.on : seqMeans.off}</Hint>}
         </div>
       )}
     </>

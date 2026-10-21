@@ -8,7 +8,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PROTOCOL_VERSION, budgetVerdict, promptFingerprint } from "@waterplane/shared";
@@ -21,6 +21,8 @@ import { galleryAndFiles, MEDIA_SIZES as FILE_SIZES } from "./gallery-and-files.
 import { numbers, LAST_TOK, WINDOW_TOK } from "./numbers.ts";
 import { repoHealth } from "./repo-health.ts";
 import { findLeaks } from "../../../../../tools/demo-scenario.mjs";
+import { DEMO_MEDIA_ROOT, demoMediaUrl } from "../media.ts";
+import { outboxCut } from "../../features/images/logic.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const publicDir = resolve(here, "../../../public");
@@ -45,6 +47,45 @@ test("the scrub would catch a hand edit that leaks", () => {
   assert.ok(findLeaks(sc).length > 0);
 });
 
+/** Where the page LOOKS for a host file in the demo — `demoMediaUrl`, the one mapping the
+ *  gallery, the viewer and a download all go through — as a path under `public/`. */
+function bundled(repoId, rel) {
+  const url = demoMediaUrl(`/api/repos/${repoId}/artifact?path=${encodeURIComponent(rel)}`);
+  assert.ok(url.startsWith(`${DEMO_MEDIA_ROOT}/`), `${rel} is not mapped to bundled media: ${url}`);
+  return join(publicDir, "demo", "media", ...url.slice(DEMO_MEDIA_ROOT.length + 1).split("/").map(decodeURIComponent));
+}
+
+/** aapt's `ignoreAssetsPattern` as the APK build sets it: does it drop this file or directory name? */
+function apkDrops(patterns, name, isDir) {
+  return patterns.some((raw) => {
+    let p = raw.replace(/^!/, "");
+    if (p.startsWith("<dir>")) { if (!isDir) return false; p = p.slice(5); }
+    else if (p.startsWith("<file>")) { if (isDir) return false; p = p.slice(6); }
+    const body = p.split("*").map((x) => x.replace(/[.+?^$()|[\]{}\\]/g, "\\$&")).join(".*");
+    const re = new RegExp("^" + body + "$", "i");
+    return re.test(name);
+  });
+}
+
+test("nothing under packages/web/public is a name the APK build drops from its assets", () => {
+  // The Play build's demo had an empty gallery and two "no longer on the desktop" downloads: its
+  // media sat under `.claude/`, which the `.*` rule leaves out of the APK while every browser serves it.
+  const gradle = readFileSync(join(publicDir, "..", "..", "app", "android", "app", "build.gradle"), "utf8");
+  const m = /ignoreAssetsPattern\s*=\s*['"]([^'"]+)['"]/.exec(gradle);
+  assert.ok(m, "build.gradle sets ignoreAssetsPattern");
+  const patterns = m[1].split(":").filter(Boolean);
+  assert.ok(apkDrops(patterns, ".claude", true), "the matcher reads the `.*` rule");
+  const dropped = [];
+  const walk = (dir) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      if (apkDrops(patterns, e.name, e.isDirectory())) dropped.push(join(dir, e.name));
+      else if (e.isDirectory()) walk(join(dir, e.name));
+    }
+  };
+  walk(publicDir);
+  assert.deepEqual(dropped, [], "these never reach the APK (demo/media.ts `bundledSegment`)");
+});
+
 test("every gallery and inbox file is bundled under public/demo/media/<repoId>/ at the size its entry says, under 150 KB", () => {
   const sizes = { ...MEDIA_SIZES, ...FILE_SIZES };
   for (const build of [firstLook, galleryAndFiles]) {
@@ -52,7 +93,7 @@ test("every gallery and inbox file is bundled under public/demo/media/<repoId>/ 
     for (const [kind, lists] of [["gallery", m.gallery ?? {}], ["inbox", m.inbox ?? {}]]) {
       for (const [repoId, files] of Object.entries(lists)) {
         for (const f of files) {
-          const p = join(publicDir, "demo", "media", repoId, f.relPath);
+          const p = bundled(repoId, f.relPath);
           assert.ok(existsSync(p), `${kind}: ${p} is missing`);
           const size = statSync(p).size;
           assert.equal(size, f.size, `${f.relPath}: entry says ${f.size}, file is ${size}`);
@@ -80,8 +121,35 @@ function play(build = firstLook) {
   const conn = host.connect((o) => outs.push(o));
   const frames = () => outs.filter((o) => o.kind === "frame").map((o) => o.msg);
   const tick = (ms) => { now += ms; host.advance(); };
-  return { host, conn, frames, tick };
+  return { host, conn, frames, tick, now: () => now };
 }
+
+test("an outbox badge opens a cut that lists its own count — before, after and between opening the gallery", () => {
+  // The Play build's demo: opening todo-garden's outbox moved the seen mark but left the badge
+  // at 2, so the second tap opened "2 new since you last looked · 0 still here" over an empty grid.
+  for (const build of [firstLook, galleryAndFiles]) {
+    const h = play(build);
+    const get = (path, query) => JSON.parse(h.host.request({ method: "GET", path, query }).body);
+    const check = (when) => {
+      for (const r of get("/api/repos").targets) {
+        const cut = outboxCut(r);
+        if (!cut) continue;
+        // As the gallery asks it: the cut as seconds back, rounded up (`useGalleryListing`).
+        const since = String(Math.max(1, Math.ceil((h.now() - cut.since) / 1000)));
+        const rows = get(`/api/repos/${r.id}/artifacts`, { since }).files;
+        assert.equal(rows.length, cut.count, `${build.name} ${when}: ${r.id}'s badge says ${cut.count}, its cut lists ${rows.length}`);
+      }
+    };
+    check("at start");
+    for (const r of get("/api/repos").targets) {
+      h.tick(1000);
+      assert.equal(h.host.request({ method: "POST", path: `/api/repos/${r.id}/artifacts/seen` }).status, 200);
+      const after = get("/api/repos").targets.find((x) => x.id === r.id);
+      assert.equal(after.outboxCount, 0, `${build.name}: ${r.id} was just opened, so nothing in it is new`);
+      check(`after opening ${r.id}`);
+    }
+  }
+});
 
 const ptyText = (frames, id) => frames.filter((m) => m.t === "pty" && m.id === id).map((m) => Buffer.from(m.dataB64, "base64").toString("utf8")).join("");
 
@@ -223,7 +291,7 @@ test("first-look: no headline screen is empty, and its numbers agree with each o
 test("first-look media: every file the scenario names is bundled at its stated size", () => {
   for (const [rel, size] of Object.entries(MEDIA_SIZES)) {
     const repo = rel.includes("trail-log") ? "r3" : "r1";
-    const p = join(publicDir, "demo", "media", repo, rel);
+    const p = bundled(repo, rel);
     assert.ok(existsSync(p), `${p} is missing`);
     assert.equal(statSync(p).size, size, rel);
   }

@@ -106,3 +106,21 @@ export const NOT_GIT = /not a git repository/i;
 export function notGitWords(): string {
   return "This folder is not a git repository. Repo health reads git history, one row per first-parent commit, so there is nothing to measure here. Open the repository's root folder, or run git init, then build the series.";
 }
+
+/** macOS's `/usr/bin/git` is a shim through Xcode; until Xcode's license is accepted it refuses every
+ *  command with Apple's paragraph about `xcodebuild -license`. Matched on that command, not the prose. */
+export const XCODE_LICENSE = /xcodebuild -license|Xcode license/i;
+
+/** git itself is blocked on this Mac, said with its three fixes. Nothing in the folder or the
+ *  extension is wrong, so neither a rebuild nor forgetting the series answers it — the view offers
+ *  no Forget here, and the sentence says so, or the build button reads like a remedy. */
+export function xcodeLicenseWords(): string {
+  return "git is blocked on this Mac: Apple's git runs through Xcode, and Xcode's license has not been accepted, so every git command refuses (VS Code's Source Control too). Nothing is wrong with this folder or its series, and building again will not change that until git works. Fix it once in Terminal: sudo xcodebuild -license accept. Or, if the Command Line Tools are installed, sudo xcode-select -s /Library/Developer/CommandLineTools. Without admin rights, set VS Code's git.path to another git, such as Homebrew's. Then build the series.";
+}
+
+/** The read error said in our words when we know what it means; null = quote the engine. */
+export function knownReadErrorWords(readError: string): string | null {
+  if (XCODE_LICENSE.test(readError)) return xcodeLicenseWords();
+  if (NOT_GIT.test(readError)) return notGitWords();
+  return null;
+}

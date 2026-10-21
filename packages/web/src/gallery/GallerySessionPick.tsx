@@ -1,6 +1,8 @@
 import { ArrowRight, Plus, Terminal } from "lucide-react";
 import { track } from "../usage";
 import type { GalleryProps } from "./galleryTypes";
+import { Button } from "../kit/Button";
+import { Row, RowTitle, RowSub } from "../kit/Row";
 
 /**
  * The viewer's *to session* verbs. Which live session gets the file is the
@@ -33,9 +35,9 @@ export function SessionPickButtons(p: PickArgs) {
   const targets = targetsOf(p);
   return (
     <>
-      {targets.length === 1 && <button className="key" title="put this file's path in that session's prompt" onClick={() => go(p, targets[0].id)}><ArrowRight size={16} /> {targets[0].label}</button>}
-      {targets.length > 1 && <button className="key" title="pick which live session gets this file's path" onClick={() => p.setPicking(!p.picking)}><ArrowRight size={16} /> session · {targets.length}</button>}
-      <button className="key" title="start a new session in this repo with this file's path in its prompt" onClick={() => go(p, null)}><Plus size={16} /> new session</button>
+      {targets.length === 1 && <Button title="put this file's path in that session's prompt" onClick={() => go(p, targets[0].id)}><ArrowRight size={16} /> {targets[0].label}</Button>}
+      {targets.length > 1 && <Button title="pick which live session gets this file's path" onClick={() => p.setPicking(!p.picking)}><ArrowRight size={16} /> session · {targets.length}</Button>}
+      <Button title="start a new session in this repo with this file's path in its prompt" onClick={() => go(p, null)}><Plus size={16} /> new session</Button>
     </>
   );
 }
@@ -48,10 +50,10 @@ export function SessionPickList(p: PickArgs) {
       <div className="viewer-doc-note">{targets.length} live sessions in {p.repoName || "this repo"} — the path goes into the prompt of the one you pick</div>
       <div className="list">
         {targets.map((t) => (
-          <button key={t.id} className="row" onClick={() => go(p, t.id)}>
-            <span className="row-title"><Terminal size={14} /> {t.label}</span>
-            {t.onScreen && <span className="row-sub">on screen behind the gallery</span>}
-          </button>
+          <Row key={t.id} as="button" onClick={() => go(p, t.id)}>
+            <RowTitle><Terminal size={14} /> {t.label}</RowTitle>
+            {t.onScreen && <RowSub>on screen behind the gallery</RowSub>}
+          </Row>
         ))}
       </div>
     </>

@@ -37,6 +37,7 @@
  */
 
 import { lsKey } from "./brand.js";
+import { AGENT_LARGE_TOK } from "./sessioncost.js";
 
 /** One synced setting as the host holds it: the client's raw string + when. */
 export interface SettingRecord {
@@ -195,6 +196,25 @@ export const SYNCED_SETTING_KEYS = [
    * and account, not a fact about the phone it was set on.
    */
   lsKey("agentWarn"),
+  /**
+   * The context size, in tokens, at which a RUNNING subagent is called large
+   * (`AGENT_WINDOW_WARN_KEY`, `agentWindowWarnSetting` the one parse): the
+   * context sheet's line and the host's one push per agent. Synced because the
+   * host pushes on it whichever device set it.
+   */
+  lsKey("agentWindowWarn"),
+  /**
+   * The session-tab strip's order and its open history, SHARED — read in place
+   * of the per-device pair (`sessionTabs.order`, `sessionTabs.opens`) while a
+   * device has "sync tab order" on (`web/sessionTabs.ts`; the default). The
+   * owner asked for the strip to read the same on the phone and the desktop:
+   * "last opened first" answers "where was I", and that is the same answer
+   * whichever screen you were last on. The per-device pair stays, untouched,
+   * for a device switched off. The opens are merged on adopt, never
+   * last-write-wins — two devices bump different sessions at once.
+   */
+  lsKey("tabsShared.order"),
+  lsKey("tabsShared.opens"),
 ] as const satisfies readonly string[];
 
 /** The synced key the host reads for the local-model session cap. */
@@ -214,6 +234,25 @@ export function localSessionsSetting(raw: string | undefined | null, fallback: n
   const n = Number(v);
   if (n === 0) return null;
   return n <= LOCAL_SESSIONS_MAX ? n : fallback;
+}
+
+/** The synced key the host and the phone read for the large-subagent line. */
+export const AGENT_WINDOW_WARN_KEY = lsKey("agentWindowWarn");
+
+/** The smallest and largest line a person may set, in tokens. */
+export const AGENT_WINDOW_WARN_MIN = 50_000;
+export const AGENT_WINDOW_WARN_MAX = 2_000_000;
+
+/**
+ * The large-subagent line off its raw synced string: a positive whole number
+ * of tokens within [50k, 2M] is that line; absent, empty, fractional, out of
+ * range or garbage is `AGENT_LARGE_TOK` — the default, never a guessed number.
+ */
+export function agentWindowWarnSetting(raw: string | undefined | null): number {
+  const v = (raw ?? "").trim();
+  if (!/^\d{1,7}$/.test(v)) return AGENT_LARGE_TOK;
+  const n = Number(v);
+  return n >= AGENT_WINDOW_WARN_MIN && n <= AGENT_WINDOW_WARN_MAX ? n : AGENT_LARGE_TOK;
 }
 
 /** The synced key the host reads for the global close-when-done default. */

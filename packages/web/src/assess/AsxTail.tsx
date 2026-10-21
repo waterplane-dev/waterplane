@@ -8,6 +8,7 @@ import { track } from "../usage";
 import { RunLog } from "./AsxParts";
 import { AsxAsks } from "./AsxAsks";
 import type { AssessModel } from "./useAssessSheet";
+import { Button } from "../kit/Button";
 
 export function AsxTail({ m }: { m: AssessModel }) {
   const { logOpen, setLogOpen, pastSteps } = m;
@@ -27,10 +28,10 @@ export function AsxTail({ m }: { m: AssessModel }) {
                 The live panel's chip and this label are now one call on the
                 same two numbers (`assessStepCounts`), so they cannot disagree
                 about either. */}
-            <button className="key" title={logOpen ? "collapse this" : "show these"}
+            <Button title={logOpen ? "collapse this" : "show these"}
               onClick={() => { track("action:assess.log"); setLogOpen((v) => !v); }}>
               {logOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />} {assessStepCounts(pastSteps.steps, pastSteps.tail.length).button}
-            </button>
+            </Button>
           </div>
           {logOpen ? <RunLog steps={pastSteps.tail} /> : null}
         </>

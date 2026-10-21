@@ -3,6 +3,7 @@ import { track } from "../usage";
 import { Unavailable } from "../Unavailable";
 import type { ActivityModel } from "./useActivityModel";
 import type { ActivitySheetProps } from "./activitySheetTypes";
+import { Button } from "../kit/Button";
 
 /** The bulk bar under the list: what each of the two decisions would cover. Null when not selecting. */
 export function ActivityBulkBar({ m, p }: { m: ActivityModel; p: ActivitySheetProps }) {
@@ -19,31 +20,31 @@ export function ActivityBulkBar({ m, p }: { m: ActivityModel; p: ActivitySheetPr
     <div className="act-bulk">
       <span className="act-bulk-n">{pickedRows.length ? `${pickedRows.length} selected` : "none selected — tick rows to act on them"}</span>
       {shown.length ? (
-        <button className="key" title={`select all ${shown.length} rows on screen`} onClick={selectVisible}>
+        <Button title={`select all ${shown.length} rows on screen`} onClick={selectVisible}>
           <SquareCheck size={14} /> all {shown.length}
-        </button>
+        </Button>
       ) : null}
-      {pickedRows.length ? <button className="key" title="clear the selection" onClick={clearSelection}><Square size={14} /> none</button> : null}
+      {pickedRows.length ? <Button title="clear the selection" onClick={clearSelection}><Square size={14} /> none</Button> : null}
       {/* The two decisions the 84 rows are read for. Both restate their count, and both are
           confirmed with a sample before anything happens. */}
       {refire.go.length ? (
-        <button className="key primary" data-hint="activity.bulkRefire"
+        <Button variant="primary" data-hint="activity.bulkRefire"
           title={`send ${refire.go.length} again as backlog items, each in the repo it was written for${refire.skip.length ? ` — ${refire.skip.length} left alone` : ""}`}
           onClick={() => { track("action:activity.bulk.refire"); p.onBulk("refire", refire.go); }}>
           <SendHorizontal size={14} /> send {refire.go.length} again
-        </button>
+        </Button>
       ) : null}
       {filed ? (restorable.length ? (
-        <button className="key" title={`put ${restorable.length} back in the list`}
+        <Button title={`put ${restorable.length} back in the list`}
           onClick={() => { track("action:activity.bulk.restore"); p.onBulk("restore", restorable); }}>
           <ArchiveRestore size={14} /> bring {restorable.length} back
-        </button>
+        </Button>
       ) : null) : file.go.length ? (
-        <button className="key" data-hint="activity.bulkDismiss"
+        <Button data-hint="activity.bulkDismiss"
           title={`file ${file.go.length} away as dealt with — nothing is deleted, and “dismissed” brings them back`}
           onClick={() => { track("action:activity.bulk.dismiss"); p.onBulk("dismiss", file.go); }}>
           <Inbox size={14} /> file {file.go.length} away
-        </button>
+        </Button>
       ) : null}
       <Unavailable cants={cants} />
     </div>

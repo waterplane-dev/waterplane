@@ -17,6 +17,7 @@ import {
   LOCKED_WORDS, checkWords, footerWords, namedWords, pendingWords, pickedWords, reposWords, rootLine, samePath, sheetMode, targetPath,
 } from "./logic";
 import { rootInfo, rootUi } from "./store";
+import { Button, RowSub, RowTitle, Hint } from "../../kit";
 
 const ICON = 16;
 
@@ -64,13 +65,13 @@ export function CodeFolderSheet() {
   };
 
   const footer = mode !== "choose" || waiting ? (
-    ui.phase === "restarting" ? null : <button className="key" onClick={close}>Close</button>
+    ui.phase === "restarting" ? null : <Button onClick={close}>Close</Button>
   ) : busy === "save" ? (
-    <span className="row-sub">Saving…</span>
+    <RowSub>Saving…</RowSub>
   ) : (
     <>
-      <button className="key" onClick={close}>{info.picked === "chosen" && info.rootExists ? "Close" : "Later"}</button>
-      {canKeep && <button className="key" onClick={() => void save(info.root)}>Keep {info.root}</button>}
+      <Button onClick={close}>{info.picked === "chosen" && info.rootExists ? "Close" : "Later"}</Button>
+      {canKeep && <Button onClick={() => void save(info.root)}>Keep {info.root}</Button>}
       {differs && <button className="send" onClick={() => void save(target)}>Use this folder</button>}
     </>
   );
@@ -78,21 +79,21 @@ export function CodeFolderSheet() {
   return (
     <Sheet title="Which folder holds your repos?" icon={<FolderOpen size={ICON} />} onClose={close} footer={footer}>
       <div className="sheet-scroll">
-        <div className="form-hint">
+        <Hint>
           Everything under this folder is reachable from the phone. The host scans it for repos.
-        </div>
+        </Hint>
 
         <div className="section">In use now</div>
-        <div className="form-hint">
+        <Hint>
           <span className="mono">{rootLine(info)}</span>
           <br />{pickedWords(info.picked, info.envName)}
-        </div>
-        {info.pending && <div className="form-hint warn">{pendingWords(info.pending)}</div>}
+        </Hint>
+        {info.pending && <Hint tone="warn">{pendingWords(info.pending)}</Hint>}
 
-        {ui.phase === "restarting" && <div className="form-hint">{ui.text}</div>}
-        {ui.phase === "manual" && <div className="form-hint">{ui.text}</div>}
+        {ui.phase === "restarting" && <Hint>{ui.text}</Hint>}
+        {ui.phase === "manual" && <Hint>{ui.text}</Hint>}
 
-        {mode === "named" && <div className="form-hint">{namedWords(info.envName)}</div>}
+        {mode === "named" && <Hint>{namedWords(info.envName)}</Hint>}
         {mode === "locked" && <div className="act-cants"><CantInline>{LOCKED_WORDS}</CantInline></div>}
 
         {mode === "choose" && !waiting && (
@@ -106,8 +107,8 @@ export function CodeFolderSheet() {
                     return (
                       <button key={c.path} className={`row${on ? " sched-on" : ""}`} aria-pressed={on} onClick={() => pick(c.path)}>
                         {on ? <Check size={ICON} /> : <Folder size={ICON} />}
-                        <span className="row-title mono">{c.path}</span>
-                        <span className="row-sub">{reposWords(c.repos)}{samePath(c.path, info.root) ? " · in use" : ""}</span>
+                        <RowTitle className="mono">{c.path}</RowTitle>
+                        <RowSub>{reposWords(c.repos)}{samePath(c.path, info.root) ? " · in use" : ""}</RowSub>
                       </button>
                     );
                   })}
@@ -120,17 +121,17 @@ export function CodeFolderSheet() {
               <input className="search mono" placeholder={info.root} value={typed} spellCheck={false}
                 autoCapitalize="off" autoCorrect="off" onChange={(e) => type(e.target.value)} />
               {typed.trim() && (busy === "check"
-                ? <span className="form-hint">Checking…</span>
-                : <button className="key" style={{ margin: "0 10px", alignSelf: "flex-start" }} onClick={() => void runCheck()}>Check</button>)}
+                ? <Hint as="span">Checking…</Hint>
+                : <Button style={{ margin: "0 10px", alignSelf: "flex-start" }} onClick={() => void runCheck()}>Check</Button>)}
             </div>
-            {check && <div className={`form-hint${check.ok ? "" : " warn"}`}>{check.text}</div>}
-            {!target && <div className="form-hint">Pick a folder above, or type a path, to change it.</div>}
-            {target && !differs && <div className="form-hint">That is the folder in use now.</div>}
-            {err && <div className="form-hint warn">{err}</div>}
+            {check && <Hint tone={check.ok ? undefined : "warn"}>{check.text}</Hint>}
+            {!target && <Hint>Pick a folder above, or type a path, to change it.</Hint>}
+            {target && !differs && <Hint>That is the folder in use now.</Hint>}
+            {err && <Hint tone="warn">{err}</Hint>}
           </>
         )}
 
-        <div className="form-hint">{footerWords(info)}</div>
+        <Hint>{footerWords(info)}</Hint>
       </div>
     </Sheet>
   );

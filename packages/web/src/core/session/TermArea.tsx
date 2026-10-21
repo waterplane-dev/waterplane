@@ -68,6 +68,7 @@ import { useTermPick } from "./useTermPick";
 import { useReaderPick } from "./useReaderPick";
 import { useCornerDrag } from "./useCornerDrag";
 import { OVER_TERMINAL, startStrayKeys } from "./strayKeys";
+import { Button } from "../../kit/Button";
 
 const ICON = 16;
 
@@ -179,25 +180,25 @@ function ScreenCorner({ zoom: zoomOn, active, pending, readerShown, readMode, se
           double-tap to put it back (`useCornerDrag`). No `active` highlight
           once moved: the owner asked for it not to stay blue after a drag —
           the group's new place already says it was moved. */}
-      <button className="key term-zoom-grip" data-hint="term.grip"
+      <Button className="term-zoom-grip" data-hint="term.grip"
         aria-label="move these buttons"
         title="drag to move these buttons; double-tap to put them back"
         {...corner.handle}>
         <GripVertical size={ICON} />
-      </button>
+      </Button>
       {/* The outline, when pinned, LEFT of the view switch — the owner's
           place for it. It was on the status line beside context for a build
           (0679e450): a number there read as one more fact in a row of facts,
           not as a door, and it sat away from the reader it opens. The count
           rides on the button; the pin still decides whether it is shown. */}
       {!pending && openOutline && (
-        <button className="key term-zoom-outline" data-hint="toolbar:outline"
+        <Button className="term-zoom-outline" data-hint="toolbar:outline"
           onPointerDown={keepFocus}
           aria-label="outline"
           title={`outline — where you are in this session${tallyTitle(turnTally(active))}`}
           onClick={openOutline}>
           <List size={ICON} />{turnTally(active) == null ? null : <span className="term-zoom-count">{turnTally(active)}</span>}
-        </button>
+        </Button>
       )}
       {/* The CLI ↔ companion-shell toggle USED TO BE HERE (orange, first in
           the group). It is the header's [Claude | Shell] tabs now
@@ -220,7 +221,7 @@ function ScreenCorner({ zoom: zoomOn, active, pending, readerShown, readMode, se
       {/* Absent while the CLI is in its first-launch setup: the terminal is held up then
           (`cliSetup`), and the toast on entering said why and when the reader comes back. */}
       {!pending && sessionCan(active, "transcript") && !(active.cliSetup && active.running) && (
-        <button className="key" data-hint="term.read"
+        <Button data-hint="term.read"
           /* `keepFocus` for the full-screen button's reason: with the caret
              in the box the pointerdown blurred it, typing room let go, the
              chrome came back and this button moved before its click landed —
@@ -230,7 +231,7 @@ function ScreenCorner({ zoom: zoomOn, active, pending, readerShown, readMode, se
           title={readMode ? "back to the terminal" : "reader view — scrollable, searchable transcript of this conversation"}
           onClick={() => { track("action:read.toggle"); setView(!readMode); }}>
           {readMode ? <TerminalIcon size={ICON} /> : <BookOpen size={ICON} />}
-        </button>
+        </Button>
       )}
       {/* The model wheel, RIGHT of the view switch (the owner swapped them). Absent on a pending
           session: there is no process yet to send /model to or relaunch.
@@ -606,8 +607,8 @@ export function TermArea(p: TermAreaProps): ReactNode {
                           opens an empty view is worse than no button. */}
                       {hasScrollback(active.id) && (
                         <span className="term-overlay-acts">
-                          <button className="key" title="earlier output, read from this device (pan up on the terminal does the same)"
-                            onClick={openScrollback}><ScrollText size={14} /> scrollback</button>
+                          <Button title="earlier output, read from this device (pan up on the terminal does the same)"
+                            onClick={openScrollback}><ScrollText size={14} /> scrollback</Button>
                         </span>
                       )}
                     </>
@@ -643,14 +644,14 @@ export function TermArea(p: TermAreaProps): ReactNode {
                       </span>
                       <span className="term-overlay-acts">
                         {failed && (
-                          <button className="key" title="try this open again" onClick={retryPendingCreate}>
+                          <Button title="try this open again" onClick={retryPendingCreate}>
                             <RotateCw size={14} /> try again
-                          </button>
+                          </Button>
                         )}
-                        <button className="key" title={failed ? "back to the launcher" : "stop waiting — the open stays queued and can be dropped in Activity"}
+                        <Button title={failed ? "back to the launcher" : "stop waiting — the open stays queued and can be dropped in Activity"}
                           onClick={() => setActiveId(null)}>
                           <ChevronLeft size={14} /> back
-                        </button>
+                        </Button>
                       </span>
                     </>
                     );
@@ -666,13 +667,13 @@ export function TermArea(p: TermAreaProps): ReactNode {
                             claude — the wrong binary, not merely the wrong
                             conversation. (`wireLaunch` in `createOp` still strips
                             it for a host that never described one.) */}
-                        <button className="key" title={`reopen this session — ${resumeHint(!!resumeIdOf(active))}`}
+                        <Button title={`reopen this session — ${resumeHint(!!resumeIdOf(active))}`}
                           onClick={() => openCwd(active.cwd, active.title, true, "continue", { model: active.model, effort: active.effort, permissionMode: active.permissionMode, backend: active.backend }, resumeIdOf(active))}>
                           <RotateCw size={14} /> reopen
-                        </button>
-                        <button className="key" title="remove this session from the list" onClick={() => { closeSession(active); setActiveId(null); }}>
+                        </Button>
+                        <Button title="remove this session from the list" onClick={() => { closeSession(active); setActiveId(null); }}>
                           <X size={14} /> close
-                        </button>
+                        </Button>
                       </span>
                     </>
                   )}

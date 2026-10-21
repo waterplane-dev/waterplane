@@ -36,3 +36,8 @@ Pressing the update button in the VS Code title bar fully updates the open exten
 - asked: 2026-10-17
 - shipped: 2320f565
 
+### R-updates-009 · shipped
+A Claude CLI update installed by any route (native installer, npm, brew) shows up in the UI the same way; a native install is checked against npm at its own update channel.
+- asked: 2026-10-20
+- shipped: d897e1c7
+

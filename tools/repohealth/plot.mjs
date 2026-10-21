@@ -161,7 +161,7 @@ export function buildPlot({ rows, prereg, preregVersion, scope = null, ownDeclar
     const absent = absenceOf(last, family) ?? own ?? undefined;
     // The window is the READINGS, not the calendar days: the absences are
     // dropped before `reading` cuts to `RANK_WINDOW_DAYS`, exactly as
-    // `narrate.mjs` does it, because that is the same function.
+    // `events.mjs` does it, because that is the same function.
     // The series DEFINITION goes in with the points: a `plain` one comes
     // back unranked with the tool's own reason, decided in `readings.mjs`
     // beside the rest of the reading rather than subtracted here.

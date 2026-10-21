@@ -4,6 +4,7 @@ import { AttachStrip } from "../AttachStrip";
 import { dropFileRef } from "../fileRefs";
 import { PromptComposer } from "../PromptComposer";
 import type { SendSheetModel } from "./useSendSheet";
+import { Hint } from "../kit/Hint";
 
 export function ComposeSection({ m }: { m: SendSheetModel }) {
   const {
@@ -11,12 +12,12 @@ export function ComposeSection({ m }: { m: SendSheetModel }) {
   } = m;
   return (
     <>
-      <div className="form-hint">
+      <Hint>
         {seed.origin ? `${seed.origin} · ` : ""}
         {online
           ? "Write it, check the two lines below, send."
           : <><CloudOff size={12} /> No connection — this is queued and goes out the moment the link is back.</>}
-      </div>
+      </Hint>
 
       {/* Text FIRST. Everything else has a working default; the words do not. */}
       <PromptComposer
@@ -30,9 +31,9 @@ export function ComposeSection({ m }: { m: SendSheetModel }) {
         autoFocus={!seed.prompts?.length}
       >
         {shots.length > 0 && (
-          <div className="form-hint">
+          <Hint>
             <Files size={12} /> {shots.length} file{shots.length > 1 ? "s" : ""} queued for {attachRepo?.repoName ?? "that repo"}&apos;s inbox — the paths are in the prompt above.
-          </div>
+          </Hint>
         )}
         {/* The files as files. A prompt written here names paths minted before
             the bytes moved, so "which screenshot is that, and is it going to
@@ -61,13 +62,13 @@ export function ComposeSection({ m }: { m: SendSheetModel }) {
             : (relPath) => updatePrompts(promptsRef.current.map((p) => dropFileRef(p, relPath)))}
         />
         {seed.repair && states.length > 0 && (
-          <div className={`form-hint ${ready ? "" : "warn"}`}>
+          <Hint className={ready ? "" : "warn"}>
             {ready
               ? states.length === 1 ? "The file it names will be there." : "Every file it names will be there."
               : online
                 ? `${blockers.length} of ${states.length} ${blockers.length === 1 ? "file is" : "files are"} not going to arrive. Fix or drop ${blockers.length === 1 ? "it" : "them"} above, or send anyway and the agent will find nothing at ${blockers.length === 1 ? "that path" : "those paths"}.`
                 : "No connection, so the repo can't be checked — what this says about the files is only what this phone knows."}
-          </div>
+          </Hint>
         )}
       </PromptComposer>
 

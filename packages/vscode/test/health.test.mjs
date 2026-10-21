@@ -103,6 +103,30 @@ test("a folder without .git: exit 1, the engine's sentence as readError, no seri
   assert.equal(doc.shallow, null);
 });
 
+test("a repo git refuses to read is quoted, never called 'not a git repository'", { skip: noGit }, async () => {
+  // Stands in for dubious ownership / a broken xcrun shim: git runs, the folder IS a repo, git refuses.
+  const d = tmp("hrefused");
+  git(d, ["init", "-q"]);
+  git(d, ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "a"]);
+  git(d, ["config", "core.repositoryformatversion", "1"]);
+  git(d, ["config", "extensions.bogusext", "true"]);
+  const s = await step("status", d, tmp("hdir"));
+  assert.notEqual(s.code, 0);
+  const { doc } = fold(d, s);
+  assert.doesNotMatch(doc.readError, /not a git repository/);
+  assert.match(doc.readError, /git refused to read .*unknown repository extension/);
+});
+
+test("git blocked by Xcode's license is said with its fixes, and the rest keep their meaning", () => {
+  // The engine's sentence from a Mac whose /usr/bin/git shim refuses until the license is accepted.
+  const err = "repohealth: git refused to read /Users/x/dev/r: You have not agreed to the Xcode license agreements. Please run 'sudo xcodebuild -license' from within a Terminal window to review and agree to the Xcode and Apple SDKs license.";
+  const w = data.knownReadErrorWords(err);
+  assert.match(w, /sudo xcodebuild -license accept/);
+  assert.match(w, /git\.path/);
+  assert.match(data.knownReadErrorWords("fatal: not a git repository (or any parent)"), /not a git repository/);
+  assert.equal(data.knownReadErrorWords("git refused to read r: unknown repository extension"), null, "anything else is quoted");
+});
+
 test("an empty git init says there are no commits yet", { skip: noGit }, async () => {
   const d = tmp("hempty");
   git(d, ["init", "-q"]);
@@ -310,6 +334,8 @@ test("gitOnlyProblems reads minified and namespace forms, and refuses anything b
   assert.equal(gitOnlyProblems('import*as cp from"node:child_process";cp.spawn("sh")').length, 1);
   assert.equal(gitOnlyProblems('const cp=require("child_process");cp.spawn("sh")').length, 1, "an unrecognised form fails");
   assert.deepEqual(gitOnlyProblems('import{execFileSync as Za}from"node:child_process";const r=/[A-Za-z_$]/;Za("git",[])'), [], "a regex range that spells the name is not a use");
+  assert.deepEqual(gitOnlyProblems('import{existsSync as i}from"node:fs";import{spawnSync as fs}from"node:child_process";fs("git",[])'), [], "a node: specifier that spells the name is not a use");
+  assert.equal(gitOnlyProblems('import{spawnSync as fs}from"node:child_process";fs("sh")').length, 1, "the same name called with anything else still fails");
   // spawnSync minified to `as`: the keyword in other imports and the word in strings are not uses.
   const asName = 'import{spawnSync as as}from"node:child_process";import{createRequire as Ui}from"node:module";';
   assert.deepEqual(gitOnlyProblems(asName + 'as("git",[]);const m="read as code",r="\\\\bas unknown as\\\\b",o={\n}'), [], "`as` as a word is not a use");

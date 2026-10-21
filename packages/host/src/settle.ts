@@ -38,9 +38,6 @@
 import type { SessionManager } from "./sessions.js";
 import type { EchoRule } from "./echo.js";
 import {
-  FALLBACK_ROWS,
-  ROW_WINDOW,
-  composerEcho,
   echoAmbiguous,
   echoProbe,
   isSlashText,
@@ -48,6 +45,11 @@ import {
   screenEcho,
   squash,
 } from "./echo.js";
+import {
+  FALLBACK_ROWS,
+  ROW_WINDOW,
+  composerEcho,
+} from "./composer.js";
 import { liveSourceFor } from "./livesources.js";
 
 export type SettleVerdict = "landed" | "composer" | "absent" | "unknown";
@@ -450,7 +452,7 @@ export async function settleDelivery(
     // between the fall-through and `absent`, and `absent` authorises a re-send:
     // widening it would change which prompts get sent twice, which is not a
     // change to make as a side effect of fixing a window. Same for the fallback
-    // slice below, for the reason written at `echo.ts`'s `FALLBACK_ROWS`.
+    // slice below, for the reason written at `composer.ts`'s `FALLBACK_ROWS`.
     const wide = (await sessions.screenText(sessionId, ROW_WINDOW)).split("\n");
     const rows = wide.slice(-FALLBACK_ROWS);
     const raw = rows.join("\n");

@@ -21,8 +21,9 @@ import type { LauncherModel } from "./useLauncherModel";
 import { countBadges } from "./SessionRow";
 import { matchesText } from "./model";
 import { Empty } from "../../Empty";
-import { CountChips, FilterBar } from "../../kit";
+import { CountChips, FilterBar, Row, RowTitle, RowSub, Tag } from "../../kit";
 import { FOLLOWUP_CLEAR, FlagIcon, FollowUpLine, followUpClass } from "../sessions/followUp";
+import { BookmarkIcon } from "../sessions/bookmark";
 import {
   closedCut, closedFilterWords, closedHeadline, closedKindWord, closedMeta, closedOutcome,
   closedReason, closedSubtitle, isAutoClosed, type ClosedFilter,
@@ -143,17 +144,19 @@ export function ClosedRows({ p, m }: { p: LauncherProps; m: LauncherModel }) {
           const meta = closedMeta(c, now);
           return (
           <div key={c.id} className={`row-wrap${isAutoClosed(c) ? " closed-auto-row" : ""}`} style={repoAccentStyle(repoForCwd(c.cwd)?.repoName ?? baseName(c.cwd))}>
-            <button className="row grow" title={`reopen ${trimDefaultBranch(c.title)} — ${reopenHint(c)}`} onClick={() => openCwd(c.cwd, trimDefaultBranch(c.title) || c.title, true, "continue", c.launch, resumeIdOf(c))}>
-              <span className="row-title">{closedHeadline(c)}</span>
+            <Row as="button" kind="grow" title={`reopen ${trimDefaultBranch(c.title)} — ${reopenHint(c)}`} onClick={() => openCwd(c.cwd, trimDefaultBranch(c.title) || c.title, true, "continue", c.launch, resumeIdOf(c))}>
+              {/* A bookmark (R-conversations-007) is drawn ONCE: its note as a
+                  line below when it has one, else this small mark. */}
+              <RowTitle>{c.bookmark && !c.bookmark.note && <><span className="bm-mark"><BookmarkIcon on size={12} /></span> </>}{closedHeadline(c)}</RowTitle>
               {reason?.tone === "auto" && (
-                <span className="closed-line"><span className="tag closed-auto"><Bot size={12} /> {reason.text}</span></span>
+                <span className="closed-line"><Tag className="closed-auto"><Bot size={12} /> {reason.text}</Tag></span>
               )}
               <span className="row-meta">
-                {sub && <span className="row-sub closed-folder">{sub}</span>}
-                <span className={`row-sub row-launch${backendMark(backends, c.launch?.backend) ? " row-foreign" : ""}`}>{launchLabel(c.launch ?? {}, backendMark(backends, c.launch?.backend), backends)}</span>
-                {kind && <span className="tag closed-kind">{kind}</span>}
+                {sub && <RowSub className="closed-folder">{sub}</RowSub>}
+                <RowSub className={`row-launch${backendMark(backends, c.launch?.backend) ? " row-foreign" : ""}`}>{launchLabel(c.launch ?? {}, backendMark(backends, c.launch?.backend), backends)}</RowSub>
+                {kind && <Tag className="closed-kind">{kind}</Tag>}
                 {reason && reason.tone !== "auto" && <span className={`row-sub${reason.tone === "note" ? " closed-note" : ""}`}>{reason.text}</span>}
-                <span className="row-sub"><RotateCw size={12} /> {isShell(c) ? "new shell here" : "reopen"} · closed {ago(c.closedAt)}</span>
+                <RowSub><RotateCw size={12} /> {isShell(c) ? "new shell here" : "reopen"} · closed {ago(c.closedAt)}</RowSub>
                 {/* …and when the reopen is APPROXIMATE, that is said HERE
                     — on the row where the tap is decided — rather than in
                     the cants strip of the session you land in, which is
@@ -170,16 +173,17 @@ export function ClosedRows({ p, m }: { p: LauncherProps; m: LauncherModel }) {
                 {reopenCant(c)}
               </span>
               {outcome && (
-                <span className={`row-sub closed-line closed-outcome ${outcome.tone}`}>
+                <RowSub className={`closed-line closed-outcome ${outcome.tone}`}>
                   {outcome.tone === "ok" ? <CircleCheck size={12} /> : outcome.tone === "bad" ? <XCircle size={12} /> : <Ban size={12} />} {outcome.text}
-                </span>
+                </RowSub>
               )}
               <span className="row-gist"><PromptPair firstPrompt={c.firstPrompt} lastPrompt={c.lastPrompt} className="closed-gist" /></span>
-              {meta.length > 0 && <span className="row-sub closed-line closed-meta">{meta.join(" · ")}</span>}
+              {meta.length > 0 && <RowSub className="closed-line closed-meta">{meta.join(" · ")}</RowSub>}
               {/* The follow-up flag outlives the session (R-sessions-041): its
                   one line here, and its "done" beside the row. */}
               {c.followUp && <span className="closed-line"><FollowUpLine f={c.followUp} /></span>}
-            </button>
+              {c.bookmark?.note && <span className="closed-line bm-mark"><BookmarkIcon on size={12} /> {c.bookmark.note}</span>}
+            </Row>
             {/* Marked read from here too — keyed on the CONVERSATION, which is
                 what the desktop keeps the flag by; answered by a fresh list. */}
             {c.followUp && (
@@ -237,15 +241,15 @@ export function ClosedRows({ p, m }: { p: LauncherProps; m: LauncherModel }) {
         conversations in one repo both fell back to `r.cwd` and React was
         handed the same key twice. */}
     {foldOpen && recentRows.map((r) => (
-      <div key={resumeIdOf(r) ?? r.cwd} className="row-wrap" style={repoAccentStyle(repoForCwd(r.cwd)?.repoName ?? baseName(r.cwd))}>
-        <button className="row grow" title={`${isShell(r) ? "open a new shell in" : "resume"} ${r.title} — ${reopenHint(r)}`} onClick={() => openCwd(r.cwd, r.title, true, "continue", r.launch, resumeIdOf(r))}>
-          <span className="row-title">{r.title}</span>
-          <span className="row-sub"><RotateCw size={12} /> {isShell(r) ? "new shell here" : "resume"}</span>
+      <Row key={resumeIdOf(r) ?? r.cwd} kind="wrap" style={repoAccentStyle(repoForCwd(r.cwd)?.repoName ?? baseName(r.cwd))}>
+        <Row as="button" kind="grow" title={`${isShell(r) ? "open a new shell in" : "resume"} ${r.title} — ${reopenHint(r)}`} onClick={() => openCwd(r.cwd, r.title, true, "continue", r.launch, resumeIdOf(r))}>
+          <RowTitle>{r.title}</RowTitle>
+          <RowSub><RotateCw size={12} /> {isShell(r) ? "new shell here" : "resume"}</RowSub>
           {reopenCant(r)}
-        </button>
+        </Row>
         {countBadges(repoForCwd(r.cwd), openGitFor)}
         {repoForCwd(r.cwd) && <button className="row-act" title="send image to this repo" onClick={() => pickImageFor(repoForCwd(r.cwd)!.id)}><Camera size={ICON} /></button>}
-      </div>
+      </Row>
     ))}
 
 
@@ -256,33 +260,33 @@ export function ClosedRows({ p, m }: { p: LauncherProps; m: LauncherModel }) {
         </button>
         {showHidden && <>
           {hiddenSessions.map((s) => (
-            <div key={s.id} className="row-wrap">
-              <button className="row grow" onClick={() => attach(s)}>
-                <span className="row-title">{s.title}<span className={`row-sub${backendMark(backends, s.backend) ? " row-foreign" : ""}`}> {launchLabel(s, backendMark(backends, s.backend), backends)}</span></span>
+            <Row key={s.id} kind="wrap">
+              <Row as="button" kind="grow" onClick={() => attach(s)}>
+                <RowTitle>{s.title}<span className={`row-sub${backendMark(backends, s.backend) ? " row-foreign" : ""}`}> {launchLabel(s, backendMark(backends, s.backend), backends)}</span></RowTitle>
                 <SessionName s={s} />
                 {statusTags(s, undefined, undefined, backends)}
-              </button>
+              </Row>
               {countBadges(sessionRepo(s), openGitFor)}
               {sessionRepo(s) && <button className="row-act" title="send image to this session" onClick={() => pickImageFor(sessionRepo(s)!.id)}><Camera size={ICON} /></button>}
               <button className="row-act danger" title={s.running ? "close" : "remove"} onClick={() => closeSession(s)}><X size={ICON} /></button>
-            </div>
+            </Row>
           ))}
           {hiddenRecent.map((r) => (
-            <div key={resumeIdOf(r) ?? r.cwd} className="row-wrap">
-              <button className="row grow" title={`${isShell(r) ? "open a new shell in" : "resume"} ${r.title} — ${reopenHint(r)}`} onClick={() => openCwd(r.cwd, r.title, true, "continue", r.launch, resumeIdOf(r))}>
-                <span className="row-title">{r.title}</span>
-                <span className="row-sub"><RotateCw size={12} /> {isShell(r) ? "new shell here" : "resume"}</span>
-              </button>
+            <Row key={resumeIdOf(r) ?? r.cwd} kind="wrap">
+              <Row as="button" kind="grow" title={`${isShell(r) ? "open a new shell in" : "resume"} ${r.title} — ${reopenHint(r)}`} onClick={() => openCwd(r.cwd, r.title, true, "continue", r.launch, resumeIdOf(r))}>
+                <RowTitle>{r.title}</RowTitle>
+                <RowSub><RotateCw size={12} /> {isShell(r) ? "new shell here" : "resume"}</RowSub>
+              </Row>
               {countBadges(repoForCwd(r.cwd), openGitFor)}
               {repoForCwd(r.cwd) && <button className="row-act" title="send image to this repo" onClick={() => pickImageFor(repoForCwd(r.cwd)!.id)}><Camera size={ICON} /></button>}
-            </div>
+            </Row>
           ))}
           {hiddenRepos.map((t) => (
             <div key={t.id} className={`row-wrap ${t.isPrimary ? "" : "row-wt"}`}>
-              <button className="row grow" onClick={() => openRepo(t)}>
-                <span className="row-title">{t.isPrimary ? t.repoName : <span className="wt-branch">{t.branch}</span>}</span>
-                {(t.isPrimary ? branchLabel(t) : "worktree") && <span className="row-sub">{t.isPrimary ? branchLabel(t) : "worktree"}</span>}
-              </button>
+              <Row as="button" kind="grow" onClick={() => openRepo(t)}>
+                <RowTitle>{t.isPrimary ? t.repoName : <span className="wt-branch">{t.branch}</span>}</RowTitle>
+                {(t.isPrimary ? branchLabel(t) : "worktree") && <RowSub>{t.isPrimary ? branchLabel(t) : "worktree"}</RowSub>}
+              </Row>
               <button className="row-act" title="show repo" onClick={() => toggleHideRepo(t.id)}><Eye size={ICON} /></button>
             </div>
           ))}

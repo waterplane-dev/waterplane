@@ -4,7 +4,8 @@
  * An artifact or inbox file is loaded as a raw attribute — `<img src>`, a
  * download, a video poster — which never passes through a transport, so the
  * demo cannot answer it from the fake desktop. It is bundled media instead,
- * under `public/demo/media/<repoId>/<path>` (WP4 ships the files), served by
+ * under `public/demo/media/<repoId>/<path>` (WP4 ships the files; a dot-named
+ * segment is stored as `dot-…`, `bundledSegment`), served by
  * the same origin as the bundle. Pure; node-tested.
  *
  * Only the two raw-attribute shapes are mapped. A `stat=1` probe is a JSON
@@ -39,11 +40,29 @@ export function rememberDemoUpload(repoId: string, name: string, url: string): v
 
 const INBOX_REL = ".claude/inbox/";
 
-/** Each segment of a repo-relative path, encoded; `..` and empty segments refused. */
+/**
+ * A path segment as it is STORED in the bundle. **No bundled file may sit under a
+ * dot-named segment**: the Android build drops every hidden file and directory
+ * from the APK's assets (aapt's `ignoreAssetsPattern` `.*`, `packages/app/android/app/build.gradle`),
+ * so `public/demo/media/r1/.claude/outbox/x.png` existed in the browser and was
+ * a 404 in the APK — an empty gallery and two "gone" downloads in the Play
+ * build's demo. `.claude` is stored as `dot-claude`. Pure; the inverse is not
+ * needed (nothing reads a bundled path back as a repo path).
+ */
+export function bundledSegment(seg: string): string {
+  return seg.startsWith(".") ? `dot-${seg.slice(1)}` : seg;
+}
+
+/** A repo-relative path as it is stored under `public/demo/media/<repoId>/`. */
+export function bundledRel(rel: string): string {
+  return rel.split("/").map(bundledSegment).join("/");
+}
+
+/** Each segment of a repo-relative path, as stored in the bundle and encoded; `..` and empty segments refused. */
 function encodePath(rel: string): string | null {
   const parts = rel.split("/").filter((p) => p !== "" && p !== ".");
   if (!parts.length || parts.some((p) => p === "..")) return null;
-  return parts.map(encodeURIComponent).join("/");
+  return parts.map((p) => encodeURIComponent(bundledSegment(p))).join("/");
 }
 
 /** `url` as bundled media, or `url` unchanged when it is not a host file. */
@@ -65,7 +84,7 @@ export function demoMediaUrl(url: string): string {
     const kept = uploads.get(`${inbox[1]}/${decodeURIComponent(inbox[2])}`);
     if (kept) return kept;
     const name = encodePath(decodeURIComponent(inbox[2]));
-    return name ? `${DEMO_MEDIA_ROOT}/${inbox[1]}/.claude/inbox/${name}` : url;
+    return name ? `${DEMO_MEDIA_ROOT}/${inbox[1]}/${bundledRel(".claude/inbox")}/${name}` : url;
   }
   return url;
 }

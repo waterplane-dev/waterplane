@@ -155,11 +155,6 @@ function OverviewBody({ doc }: { doc: CorpusDoc }) {
   return (
     <div className="ts-list">
       <div className="ctx-chart-title">All sessions</div>
-      <div className="ctx-summary">
-        {fmtCount(doc.conversations)} {doc.conversations === 1 ? "conversation" : "conversations"}
-        {doc.subagentLogs > 0 ? ` and ${fmtCount(doc.subagentLogs)} subagent logs` : ""} on this machine. Read {new Date(doc.scannedAt).toLocaleTimeString()}.
-      </div>
-
       {/* ── NOW: no switch below reaches these — the phone's limit bars and week chart. */}
       <Headline doc={doc} now={doc.scannedAt} />
       {/* Absent when nothing ran: the headline above already says so, in the same span. */}

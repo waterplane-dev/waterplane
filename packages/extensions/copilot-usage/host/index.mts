@@ -9,14 +9,22 @@
  * halt latch is not asked. Every miss — gh missing, not signed in, a non-2xx, a shape this does
  * not recognise — is null (the segment is absent), logged once per cause until it recovers.
  *
+ * Separately, and on every desktop: the extension's status line carries the plan and this month's
+ * premium requests counted off VS Code's own Copilot Chat logs (`vscodelocal.mts`, the same
+ * reader the VS Code extension's Copilot row uses). Files only — no sign-in, no network, nothing
+ * spawned — so it needs neither `copilot` nor `gh`. It is never a usage-chip segment: with no
+ * limit known there is no share to draw, and a guessed limit would be a wrong number.
+ *
  * `WATERPLANE_GH_BIN` names the gh binary (default `gh` on PATH); the e2e stubs it.
  */
 import { accessSync, constants } from "node:fs";
 import { join } from "node:path";
-import { makeEnvReader, type HostPluginApi, type UsageReading } from "@waterplane/shared";
+import { makeEnvReader, type HostPluginApi, type PluginStatus, type UsageReading } from "@waterplane/shared";
 import { fetchCopilotQuota, parseCopilotQuota } from "./ghquota.mjs";
+import { CopilotLocalReader, localWords, vscodeUserDirs, type CopilotLocalDoc } from "./vscodelocal.mjs";
 
 export { parseCopilotQuota, fetchCopilotQuota } from "./ghquota.mjs";
+export { CopilotLocalReader, localWords, vscodeUserDirs } from "./vscodelocal.mjs";
 
 const { env } = makeEnvReader(process.env, (text) => console.warn(text));
 
@@ -49,7 +57,30 @@ export function makeProbe(
   };
 }
 
+/** The status line from the local count; null (no line) when this desktop has no Copilot Chat logs. */
+export function localStatus(d: CopilotLocalDoc | null): PluginStatus | null {
+  if (!d || (!d.logs && !d.sku)) return null;
+  return { tone: "ok", text: `${localWords(d, "in this desktop's VS Code")} — counted from its chat logs, not GitHub's figure` };
+}
+
+/** Reads the local count now and every `everyMs`; returns the stop. */
+export function watchLocal(userDir: string, set: (s: PluginStatus | null) => void, everyMs = COPILOT_EVERY_MS): () => void {
+  const reader = new CopilotLocalReader(userDir);
+  // Never throws out of the timer: a reading that fails is no line, and a setter that fails is ignored.
+  const put = (st: PluginStatus | null) => { try { set(st); } catch { /* host gone */ } };
+  const once = () => reader.read().then((d) => put(localStatus(d)), () => put(null));
+  void once();
+  const t = setInterval(once, everyMs);
+  t.unref?.();
+  return () => clearInterval(t);
+}
+
+let stopLocal: (() => void) | null = null;
+
 export function activate(api: HostPluginApi): void {
+  const userDir = vscodeUserDirs()[0];
+  stopLocal?.();
+  stopLocal = userDir ? watchLocal(userDir, (s) => api.setStatus(s)) : null;
   if (!onPath("copilot")) {
     api.log("no copilot on PATH — Copilot's quota is not read");
     return;
@@ -66,4 +97,9 @@ export function activate(api: HostPluginApi): void {
   } catch (e) {
     api.log(`Copilot's quota is not read: ${e instanceof Error ? e.message : String(e)}`);
   }
+}
+
+export function deactivate(): void {
+  stopLocal?.();
+  stopLocal = null;
 }

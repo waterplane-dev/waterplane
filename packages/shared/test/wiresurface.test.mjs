@@ -18,6 +18,7 @@ const SESSION_SURFACE = [
   "AgentRun:type",
   "ArchiveListing:type",
   "ArchivedConversation:type",
+  "Bookmark:type",
   "ClosedBy:type",
   "ClosedSession:type",
   "CompactionCost:type",

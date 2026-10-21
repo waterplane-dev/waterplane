@@ -1,6 +1,8 @@
 import { ChevronDown, ChevronUp, Search, X } from "lucide-react";
 import { track } from "../usage";
 import type { TvModel } from "./useTranscriptView";
+import { Button } from "../kit/Button";
+import { RowSub } from "../kit/Row";
 
   /**
    * The reader's controls are TOOLBAR actions now (`toolbar.ts`), so what is
@@ -30,13 +32,13 @@ export function TvFindBar({ m }: { m: TvModel }) {
           onChange={(e) => { if (!q && e.target.value) track("action:read.find"); setQ(e.target.value); setHitIdx(0); }}
           autoCapitalize="off" autoCorrect="off" spellCheck={false}
         />
-        <button className="key" title="close find" onClick={() => { setQ(""); setFindOpen(false); }}><X size={13} /></button>
+        <Button title="close find" onClick={() => { setQ(""); setFindOpen(false); }}><X size={13} /></Button>
       </div>
       {q && (
         <span className="tr-hits">
-          <button className="key" onClick={() => jump(-1)} disabled={!hitCount}><ChevronUp size={13} /></button>
-          <span className="row-sub">{hitCount ? `${hitIdx + 1}/${hitCount}` : "0"}</span>
-          <button className="key" onClick={() => jump(1)} disabled={!hitCount}><ChevronDown size={13} /></button>
+          <Button onClick={() => jump(-1)} disabled={!hitCount}><ChevronUp size={13} /></Button>
+          <RowSub>{hitCount ? `${hitIdx + 1}/${hitCount}` : "0"}</RowSub>
+          <Button onClick={() => jump(1)} disabled={!hitCount}><ChevronDown size={13} /></Button>
         </span>
       )}
     </div>

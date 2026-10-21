@@ -332,6 +332,7 @@ export function agentUsage(dir: string, prev?: AgentUsage | null): AgentUsage | 
       // unknown cost, and a bar labelled $0 claims it was free.
       ...(f.cost.total > 0 ? { costUsd: f.cost.total } : {}),
       ...(f.peak > 0 ? { peakTok: f.peak } : {}),
+      ...(f.split.turns > 0 ? { turns: f.split.turns } : {}),
       ...(f.ctx.length ? { ctx: thinMax(f.ctx, AGENT_CTX_POINTS) } : {}),
     });
   }

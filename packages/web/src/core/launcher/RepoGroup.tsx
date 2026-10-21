@@ -37,6 +37,7 @@ import { repoActions, repoChips } from "../extensionPoints";
 import { ExtRepoChip } from "./ExtRepoChip";
 import { LeftoverHead, LeftoverLine, LeftoverRemove, useLeftovers } from "./LeftoverWorktrees";
 import { flaggedChipTitle } from "../sessions/followUpFacts";
+import { RowTitle, RowSub } from "../../kit/Row";
 
 const ICON = 16;
 
@@ -509,8 +510,8 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
             already says worktree — and that line names the REPO in its own
             hue: between two session cards a bare branch row read as a
             stranger, not as part of the group it sits in. */}
-        <span className="row-title"><span className="wt-branch">{t.branch.replace(/^worktree-/, "")}</span></span>
-        <span className="row-sub repo-sub">
+        <RowTitle><span className="wt-branch">{t.branch.replace(/^worktree-/, "")}</span></RowTitle>
+        <RowSub className="repo-sub">
           <span className="repo-branch wt-of"><GitBranch size={12} />worktree of <b>{repoName}</b></span>
           {(() => {
             const o = openingCwds.get(t.worktreePath);
@@ -538,7 +539,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
             <button className={`row-chip ${!t.setup.ok ? "bad" : "warn"}`} title={setupTitle(t.setup)}
               onClick={(e) => { e.stopPropagation(); track("action:repo.setup"); openSetup(t.id, { focus: "findings" }); }}><ListChecks size={12} />{t.setup.issues}</button>
           )}
-        </span>
+        </RowSub>
         {!t.ownerSessionId && <LeftoverLine r={leftovers.get(t.id)} />}
       </div>
       <button className="row-act" title="send image to this worktree" onClick={() => pickImageFor(t.id)}><Camera size={ICON} /></button>

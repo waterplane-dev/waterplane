@@ -38,7 +38,10 @@ export type { TurnCursor } from "./turns.js";
 export { TokenStore } from "./store.js";
 export type { Files, ScanStats } from "./store.js";
 export { foldCorpus } from "./corpus.js";
+export { currentSummary, summaryOf, thisRepoWeek, weekFigure, weekSplit } from "./summary.js";
+export type { HeadlineSummary } from "./summary.js";
 export { weighFolder } from "./weight.js";
+export { isInstructionPath, LENS_PATTERNS, lensWords } from "./lenswords.js";
 export { claudeImports, classifyInstructions, classifyRule, fmGlobs, instructionTotals as totalsFor, sharedChars } from "@waterplane/shared";
 export { inventory } from "./instructions.js";
 
@@ -49,11 +52,12 @@ export { summarizeLog } from "../../../host/src/tokenscan.js";
 export { updateContextLog } from "../../../host/src/ctxlog/ctxupdate.js";
 export { foldCostWindow } from "../../../host/src/costwindow.js";
 export { claudeProjectDir } from "../../../host/src/claudeconfig.js";
+export { headline } from "../../../extensions/token-stats/web/headline.js";
 
 // ── Pure pieces the extension and the webview share, exported for the tests.
 export { PROMPTS, render, scrub } from "./promptText.js";
 export { sessionTotal } from "./sessiontotal.js";
-export { isLive, isRunning, fmtAge, fmtElapsed, runningTurn, runningWords, LIVE_MS, RUNNING_FRESH_MS } from "./running.js";
+export { isLive, isRunning, fmtAge, fmtElapsed, runningTurn, runningWords, anyLive, isRecent, LIVE_MS, RECENT_MS, RUNNING_FRESH_MS } from "./running.js";
 export { MAX_ROWS, WINDOW_MS, SessionLedger, recentRows, summarize, isAutomated, peekEntrypoint } from "./sessionlist.js";
 
 // ── Repo health: the pure fold, the PATH check, the storage slug, the prompt builders, and the
@@ -68,5 +72,9 @@ export { mendSeriesTail, TORN_TAIL_NOTE } from "../health/seriestail.js";
 export type { HealthRunDeps, HealthStep } from "../health/healthrun.js";
 export { chooseSource, lastRowTs, readScopes, repoSeriesDir, seriesName } from "../health/healthsource.js";
 export type { HealthSource } from "../health/healthsource.js";
-export { measureWords, notRunHere, notRunWords, ownAddNoteWords, ownMixedWords, repoMixedWords, sourceWords } from "../health/sourcewords.js";
+export { knownReadErrorWords, measureWords, notRunHere, notRunWords, ownAddNoteWords, ownMixedWords, repoMixedWords, sourceWords } from "../health/sourcewords.js";
 export { NO_RUN } from "../shims/healthnorun.js";
+
+// ── Copilot without a sign-in: the plan and this month's requests, off VS Code's own files.
+export { CopilotLocalReader, localLines, localWords, monthStart, parseDetails, planWords, readSku, replayRequests, tallyMonth, userDirOf, vscodeUserDirs } from "../../../extensions/copilot-usage/host/vscodelocal.mts";
+export type { CopilotLocalDoc, CopilotModelCount, CopilotRequest } from "../../../extensions/copilot-usage/host/vscodelocal.mts";

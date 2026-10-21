@@ -17,6 +17,9 @@ import { track } from "../usage";
 import { ACTION_ICON, DELIVERY_TEXT, ICON, KIND_ICON, STATE_ICON, inWords } from "./activityLabels";
 import { bytes } from "./activityPullRow";
 import type { ReviewMarks } from "./activitySheetTypes";
+import { Button } from "../kit/Button";
+import { RowTitle, RowSub } from "../kit/Row";
+import { Hint } from "../kit/Hint";
 
 /**
  * A control that can actually be pressed.
@@ -249,8 +252,8 @@ export function Row({ row, now, sessions, repos, pick, outbox, online, review, r
                   fact stated instead. A greyed terminal icon on a phone is a
                   guess about whether the tap will do anything. */}
               {t.sessionId
-                ? <button className="key" title="open this repo's session"
-                    onClick={() => onOpenSession(t.sessionId!)}><Terminal size={14} /></button>
+                ? <Button title="open this repo's session"
+                    onClick={() => onOpenSession(t.sessionId!)}><Terminal size={14} /></Button>
                 : <CantInline>no session</CantInline>}
             </div>
           ))}
@@ -269,10 +272,10 @@ export function Row({ row, now, sessions, repos, pick, outbox, online, review, r
             whose only news is what it cannot do keeps that behind one tap like
             everything else, unless there is nothing else at all. */}
         {rest.length || (blocked.length && primary) ? (
-          <button className="key act-more" title={open ? "fewer options" : "more options"}
+          <Button className="act-more" title={open ? "fewer options" : "more options"}
             onClick={() => setOpen((v) => !v)}>
             {open ? <ChevronUp size={ICON} /> : <ChevronDown size={ICON} />} more
-          </button>
+          </Button>
         ) : null}
       </div>
       {open && rest.length ? (
@@ -282,7 +285,7 @@ export function Row({ row, now, sessions, repos, pick, outbox, online, review, r
       ) : null}
       {/* What the drawn verbs do, as text — `skipQueueNote` on *run it now*. */}
       {[primary, ...shown, ...(open ? rest : [])].filter((a): a is ActivityAction => !!a?.note).map((a) => (
-        <div key={`note-${a.id}`} className="form-hint">{a.note}</div>
+        <Hint key={`note-${a.id}`}>{a.note}</Hint>
       ))}
       {/* Shown unasked when there is no button on the row: otherwise the row
           ends after its verdict and the person is left to wonder whether the
@@ -293,13 +296,13 @@ export function Row({ row, now, sessions, repos, pick, outbox, online, review, r
 
       {aiming ? (
         <div className="act-aim">
-          <div className="form-hint">Keep the words, change where they go.</div>
+          <Hint>Keep the words, change where they go.</Hint>
           {sessions.filter((s) => s.running && s.id !== row.sessionId).map((s) => (
             <button key={s.id} className="row"
               onClick={() => { setAiming(false); onRetarget(row, { sessionId: s.id, cwd: s.cwd, mode: "input" }); }}>
-              <span className="row-title"><SendHorizontal size={12} /> {s.title}</span>
+              <RowTitle><SendHorizontal size={12} /> {s.title}</RowTitle>
               <SessionName s={s} />
-              <span className="row-sub">{s.turnActive ? "working" : "idle"}</span>
+              <RowSub>{s.turnActive ? "working" : "idle"}</RowSub>
             </button>
           ))}
           {/* The shared picker (`RepoPicker.tsx`) — one place asks "which repo?".

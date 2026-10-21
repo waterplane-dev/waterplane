@@ -7,6 +7,9 @@ import { SheetHead } from "./Sheet";
 import { Empty } from "./Empty";
 import { ZoomPair } from "./ZoomPair";
 import { nextReaderZoom, readerScale, scrollbackZoom, setScrollbackZoom, textScale } from "./uiScale";
+import { Button } from "./kit/Button";
+import { RowSub } from "./kit/Row";
+import { Hint } from "./kit/Hint";
 
 interface Props {
   sessionId: string;
@@ -165,7 +168,7 @@ export function ScrollbackSheet({ sessionId, title, live, linkUp, onClose }: Pro
   return (
     <div className="sheet">
       <SheetHead title={<>Scrollback · {title}</>} onClose={onClose}>
-        <span className="row-sub">{lines.length} line{lines.length === 1 ? "" : "s"}</span>
+        <RowSub>{lines.length} line{lines.length === 1 ? "" : "s"}</RowSub>
       </SheetHead>
       <div className="tr-bar">
         <div className="tr-find">
@@ -177,13 +180,13 @@ export function ScrollbackSheet({ sessionId, title, live, linkUp, onClose }: Pro
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); step(e.shiftKey ? -1 : 1); } }}
             autoCapitalize="off" autoCorrect="off" spellCheck={false}
           />
-          {q && <button className="key" title="clear" onClick={() => setQ("")}><X size={13} /></button>}
+          {q && <Button title="clear" onClick={() => setQ("")}><X size={13} /></Button>}
         </div>
         {q && (
           <div className="sb-hits">
-            <span className="row-sub">{matches.length ? `${hit + 1}/${matches.length}` : "no match"}</span>
-            <button className="key" title="previous match" disabled={!matches.length} onClick={() => step(-1)}><ArrowUp size={14} /></button>
-            <button className="key" title="next match" disabled={!matches.length} onClick={() => step(1)}><ArrowDown size={14} /></button>
+            <RowSub>{matches.length ? `${hit + 1}/${matches.length}` : "no match"}</RowSub>
+            <Button title="previous match" disabled={!matches.length} onClick={() => step(-1)}><ArrowUp size={14} /></Button>
+            <Button title="next match" disabled={!matches.length} onClick={() => step(1)}><ArrowDown size={14} /></Button>
           </div>
         )}
         {/* Last in the bar and anchored right, the corner group's rule: the
@@ -224,11 +227,11 @@ export function ScrollbackSheet({ sessionId, title, live, linkUp, onClose }: Pro
           <Empty>{asking ? "Asking the desktop for this session's scrollback…" : "Nothing recorded on this device yet — history starts the next time this session paints."}</Empty>
         ) : (
           <>
-            <div className="form-hint sb-top">
+            <Hint className="sb-top">
               {host
                 ? "Recorded on the desktop, which watches this session whether or not this app is open. It begins when the daemon does and what it keeps is bounded — ask the reader view for anything older."
                 : "Reconstructed from what this device displayed — output that scrolled by while the app was closed was never here, and a view switch can leave a block in twice. Ask the session itself (or the reader view) for anything older."}
-            </div>
+            </Hint>
             {lines.map((l, i) => (
               <div className={`sb-line${matches.length && matches[hit] === i ? " sb-hit" : ""}`} data-ln={i} key={i}>{l === "" ? " " : l}</div>
             ))}

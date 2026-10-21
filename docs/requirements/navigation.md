@@ -54,4 +54,9 @@ The ☰ menu button shows a badge summing every counted line inside it, and a co
 In the VS Code tree the Sessions section stays collapsed after the user collapses it, and there is no prompts row.
 - asked: 2026-10-16
 - shipped: 70886617
+- reworked 2026-10-21 (owner): until the user folds it, Sessions is open while a session is live and closed otherwise (R-navigation-013); a fold against that default is kept, one matching it hands the choice back.
 
+### R-navigation-013 · shipped
+The VS Code tree leads with insight: All sessions first, then the folder switcher (several folders), then Repo health, Always-on context and Copilot. Sessions sits second and expanded while a session is running or was written to in the last 30 minutes, and last and collapsed when none is; a fold the user sets against that default is remembered. The panel opens on the Session view while a session is live (the same test as Sessions' placement) and on All sessions otherwise, decided once the folder's sessions are read; while the panel stays open (hidden included) it keeps the view it was last left on. All sessions says once how old its reading is, beside the re-read link, and does not repeat the conversation count its footer carries.
+- asked: 2026-10-21 (owner)
+- shipped: f6fb1a70, e5c20ae7, f41b5db5

@@ -24,6 +24,8 @@ import { closeSessionBudget, setSessionBudget } from "./actions";
 import {
   BUDGET_CLEARED_TOAST, BUDGET_CONFIRM_MS, BUDGET_UNCONFIRMED, budgetConfirmed, budgetSetToast, budgetStateLine,
 } from "./logic";
+import { Button } from "../../kit";
+import { SetNote } from "../../SettingsKit";
 
 const CAL_LATER = "A percent is converted from dollars at the window's measured rate; the desktop sends that rate with a budget, so once one is set this line says what 1% is worth — until then nothing is held.";
 
@@ -56,9 +58,9 @@ export function SessionBudgetSheet({ subject, title }: { subject: SessionInfo; t
         <ConfirmButton className="key budget-clear" confirm="clear it — sure?" onConfirm={() => ask(null)}>clear budget</ConfirmButton>
       )}
       {draft && !same ? (
-        <button className="key primary budget-set" onClick={() => ask(draft)}>
+        <Button variant="primary" className="budget-set" onClick={() => ask(draft)}>
           <Wallet size={14} /> {cur ? "change to" : "set budget"} {sessionBudgetLabel(draft)}
-        </button>
+        </Button>
       ) : (
         <span className="budget-why">
           {same ? "This is the budget already set — change the cap above to replace it."
@@ -78,10 +80,10 @@ export function SessionBudgetSheet({ subject, title }: { subject: SessionInfo; t
             {cur && <div className="ctx-cost-note">{budgetStateLine(cur, now)}</div>}
           </div>
           {asked && late && <div className="set-note warn">{BUDGET_UNCONFIRMED}</div>}
-          <div className="set-note">
+          <SetNote>
             What this one conversation may spend, its subagents included. At the cap its sends are held
             and you are told; raising or clearing the budget lets them go.
-          </div>
+          </SetNote>
         </div>
         <div className="set-group">
           {/* Keyed by session: switching subject restarts the field on ITS cap. */}

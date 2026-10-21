@@ -114,3 +114,7 @@ The desktop strip shows how many agents run in parallel, amber past 10 and red p
 - asked: 2026-10-17
 - shipped: 5fb76a92, df902b7e
 
+
+### R-desktop-018 · built
+The desktop typing box adds no capital letter by itself (no auto-capital, autocorrect or spellcheck). A **protected** switch swaps it for a masked field kept in memory only — never the draft, never stored — and offers the contributed password fillers (a stored login), which fill the field and never type; the person still taps type.
+- asked: 2026-10-21

@@ -27,6 +27,8 @@ import {
   INSTALL_SWITCH_OFF, answersFrom, artifactFile, checklist, consentRows, consentToSend, defaultPath, fixLabel, goBlocker,
   initialTicks, plannedSteps, progressHead, questionsBlocker, suggestName, type CheckIcon, type CheckRow, type ConsentRow,
 } from "./logic";
+import { Button } from "../../kit";
+import { SetNote } from "../../SettingsKit";
 
 type Stage = "questions" | "consent" | "progress";
 
@@ -99,13 +101,13 @@ export function OnboardSheet() {
           <div className="onb-q">What is it called?</div>
           <input className="search onb-name" value={answers.name} onChange={(e) => set({ name: e.target.value })}
             autoCapitalize="none" autoCorrect="off" spellCheck={false} aria-label="app name" />
-          <div className="set-note">It becomes a new folder on your desktop, under the host root.</div>
+          <SetNote>It becomes a new folder on your desktop, under the host root.</SetNote>
         </div>
         <div className="set-group">
           <div className="onb-q">What should it do?</div>
           <div className="onb-choice">
-            <button className={`key ${!answers.describe ? "active" : ""}`} onClick={() => set({ describe: false })}>plain hello world</button>
-            <button className={`key ${answers.describe ? "active" : ""}`} onClick={() => set({ describe: true })}>describe it</button>
+            <Button className={!answers.describe ? "active" : ""} onClick={() => set({ describe: false })}>plain hello world</Button>
+            <Button className={answers.describe ? "active" : ""} onClick={() => set({ describe: true })}>describe it</Button>
           </div>
           {answers.describe && (
             <input className="search" placeholder="one line: what should the app do?" value={answers.description}
@@ -120,12 +122,12 @@ export function OnboardSheet() {
         <div className="set-group">
           <div className="onb-q">Where does it run?</div>
           <div className="onb-choice">
-            <button className={`key ${answers.path === "android" ? "active" : ""}`} onClick={() => set({ path: "android" })}>
+            <Button className={answers.path === "android" ? "active" : ""} onClick={() => set({ path: "android" })}>
               <Smartphone size={14} /> phone app (Android)
-            </button>
-            <button className={`key ${answers.path === "web" ? "active" : ""}`} onClick={() => set({ path: "web" })}>
+            </Button>
+            <Button className={answers.path === "web" ? "active" : ""} onClick={() => set({ path: "web" })}>
               <AppWindow size={14} /> web page
-            </button>
+            </Button>
           </div>
           <div className="set-note">
             {answers.path === "android"
@@ -134,10 +136,10 @@ export function OnboardSheet() {
           </div>
         </div>
         <div className="set-group">
-          <button className={`key onb-tick ${answers.setup ? "active" : ""}`} onClick={() => set({ setup: !answers.setup })}>
+          <Button className={`onb-tick ${answers.setup ? "active" : ""}`} onClick={() => set({ setup: !answers.setup })}>
             {answers.setup ? <CheckSquare size={14} /> : <Square size={14} />} set this repo up for the phone (recommended)
-          </button>
-          <div className="set-note">The setup checklist's one-tap fixes, run as one step.</div>
+          </Button>
+          <SetNote>The setup checklist's one-tap fixes, run as one step.</SetNote>
         </div>
         {error && <div className="set-group"><div className="set-note warn" role="alert">{error}</div></div>}
       </div>
@@ -163,7 +165,7 @@ function Consent({ plan, canInstall, title, icon, onBack, onWeb, onStarted }: {
   };
   const footer = (
     <>
-      <button className="key onb-cancel" onClick={onBack}>Cancel</button>
+      <Button className="onb-cancel" onClick={onBack}>Cancel</Button>
       {blocker ? <span className="onb-why">{blocker}</span> : (
         <button className="send onb-go" onClick={() => void go()}>
           {busy ? <><Loader size={14} className="spin" /> starting…</> : <><Rocket size={14} /> Go</>}
@@ -176,10 +178,10 @@ function Consent({ plan, canInstall, title, icon, onBack, onWeb, onStarted }: {
       <div className="sheet-scroll">
         <div className="set-group">
           <div className="onb-q">{plan.path === "android" ? "A phone app" : "A web page"} called {plan.name}</div>
-          <div className="set-note">
+          <SetNote>
             Go allows exactly what is ticked below, and nothing else. Nothing is downloaded, created or
             installed before you tap it. Cancel goes back to the questions.
-          </div>
+          </SetNote>
         </div>
         {plan.signIn && <div className="set-group"><div className="set-note warn" role="status">{plan.signIn}</div></div>}
         <div className="set-group onb-lines">
@@ -212,15 +214,15 @@ function ConsentLine({ row, on, onToggle, onWeb }: { row: ConsentRow; on: boolea
         {row.where && <span className="mono">{row.where}</span>}
         {row.size && <span>{row.size}</span>}
       </div>
-      {row.cant && <div className="set-note">{row.cant}</div>}
+      {row.cant && <SetNote>{row.cant}</SetNote>}
       {(row.link || onWeb) && (
         <div className="onb-line-acts">
           {row.link && (
-            <button className="key" onClick={() => { if (!openExternal(row.link!)) core().say.toast(`Could not open ${row.link}`); }}>
+            <Button onClick={() => { if (!openExternal(row.link!)) core().say.toast(`Could not open ${row.link}`); }}>
               <ExternalLink size={13} /> read the licence
-            </button>
+            </Button>
           )}
-          {onWeb && <button className="key" onClick={onWeb}><AppWindow size={13} /> make a web page instead (nothing to install)</button>}
+          {onWeb && <Button onClick={onWeb}><AppWindow size={13} /> make a web page instead (nothing to install)</Button>}
         </div>
       )}
     </div>
@@ -260,7 +262,7 @@ function Progress({ job, onAnother }: { job: OnboardJob; onAnother(): void }) {
     <div className="sheet-scroll">
       <div className="set-group">
         <div className={`onb-q${job.state === "stopped" ? " warn" : ""}`}>{progressHead(job)}</div>
-        {job.state === "running" && <div className="set-note">This keeps going on the desktop if you leave this screen; the launcher shows where it is.</div>}
+        {job.state === "running" && <SetNote>This keeps going on the desktop if you leave this screen; the launcher shows where it is.</SetNote>}
       </div>
       <div className="set-group onb-check">
         {rows.map((r) => {
@@ -270,12 +272,12 @@ function Progress({ job, onAnother }: { job: OnboardJob; onAnother(): void }) {
               <span className="onb-row-icon">{ICONS[r.icon]}</span>
               <div className="onb-row-body">
                 <div className="onb-row-what">{r.what}{r.clock && <span className="onb-clock"> · {r.clock}</span>}</div>
-                {r.note && <div className="set-note">{r.note}</div>}
-                {r.command && <div className="set-note">do it yourself: <code>{r.command}</code></div>}
+                {r.note && <SetNote>{r.note}</SetNote>}
+                {r.command && <SetNote>do it yourself: <code>{r.command}</code></SetNote>}
                 {r.fix && (
-                  <button className="key" onClick={() => void fix(r)}>
+                  <Button onClick={() => void fix(r)}>
                     {busy ? <Loader size={13} className="spin" /> : <Hammer size={13} />} {fixLabel(r.fix, status)}
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -285,21 +287,21 @@ function Progress({ job, onAnother }: { job: OnboardJob; onAnother(): void }) {
       </div>
       {job.state === "stopped" && (
         <div className="set-group">
-          <button className="key" onClick={onAnother}><Rocket size={14} /> start over with other answers</button>
-          <div className="set-note">What was already made stays on the desktop; a new start replaces this stopped job.</div>
+          <Button onClick={onAnother}><Rocket size={14} /> start over with other answers</Button>
+          <SetNote>What was already made stays on the desktop; a new start replaces this stopped job.</SetNote>
         </div>
       )}
       {job.state === "done" && (
         <div className="set-group onb-done">
           {art && (
-            <button className="key" onClick={() => openArtifactOf(art, job.answers.path)}>
+            <Button onClick={() => openArtifactOf(art, job.answers.path)}>
               {android ? <><Smartphone size={14} /> install {art.name}</> : <><AppWindow size={14} /> open the page</>}
-            </button>
+            </Button>
           )}
           {switchOff && (
             <>
               <div className="set-note warn">{INSTALL_SWITCH_OFF}</div>
-              <button className="key" onClick={() => void openInstallSwitch()}><Smartphone size={14} /> open Android's setting</button>
+              <Button onClick={() => void openInstallSwitch()}><Smartphone size={14} /> open Android's setting</Button>
             </>
           )}
           {job.consent.session === true && (
@@ -307,14 +309,14 @@ function Progress({ job, onAnother }: { job: OnboardJob; onAnother(): void }) {
               <button className="send onb-open" onClick={() => openNewSession(job)}>
                 <TerminalIcon size={14} /> open the session in {job.name}
               </button>
-              <div className="set-note">
+              <SetNote>
                 <MessageSquare size={12} /> {job.answers.description
                   ? "Your description is the session's first prompt."
                   : "A first prompt waits in the box there; change it or send it."}
-              </div>
+              </SetNote>
             </>
           )}
-          <button className="key" onClick={onAnother}><Rocket size={14} /> build another app</button>
+          <Button onClick={onAnother}><Rocket size={14} /> build another app</Button>
         </div>
       )}
     </div>

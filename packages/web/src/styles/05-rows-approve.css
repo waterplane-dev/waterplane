@@ -485,12 +485,6 @@
 .fu-line > svg { flex: none; margin-top: var(--sp-2); }
 @keyframes newact-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
-/* Launch options bar */
-.launch-bar { display: flex; gap: var(--sp-10); flex-wrap: wrap; align-items: center; padding: var(--sp-10) var(--sp-12); background: var(--panel); border-bottom: 1px solid var(--line); }
-.launch-bar label { display: flex; flex-direction: column; gap: var(--sp-4); font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); }
-.launch-bar select { background: var(--well); color: var(--fg); border: 1px solid var(--line); border-radius: var(--r-8); padding: var(--sp-6) var(--sp-8); font-size: calc(var(--fs-14) * var(--ui-font, 1)); }
-.launch-note { font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); margin-left: auto; }
-
 /* Git review */
 .git-bar { display: flex; gap: var(--sp-10); align-items: center; padding: var(--sp-8) var(--sp-14); background: var(--panel); border-bottom: 1px solid var(--line); font-size: calc(var(--fs-13) * var(--ui-font, 1)); color: var(--muted); }
 .git-ab { color: var(--accent); }

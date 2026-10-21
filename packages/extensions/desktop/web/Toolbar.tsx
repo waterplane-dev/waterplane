@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { Eye, Hand, Maximize, MousePointer2, Power, ShieldCheck } from "lucide-react";
 import { useStore } from "@waterplane/sdk";
-import { ConfirmButton } from "@waterplane/kit";
+import { ConfirmButton, Button, Hint } from "@waterplane/kit";
 import type { InputMode } from "./gestures.ts";
 import { chipText, detailLines } from "./stats.ts";
 import { presetLabel } from "./quality.ts";
@@ -42,19 +42,19 @@ export function Toolbar({ ctl, ui, onFull }: { ctl: DesktopController; ui: Ui; o
         {/* Fullscreen, not fit: this icon reads as fullscreen, and a fit button at fit (the default)
             did nothing on a tap. Fit is drawn over the picture while zoomed instead (DesktopSheet). */}
         <ShotButton />
-        <button className="key" title="fullscreen — the desktop gets the whole screen" aria-label="fullscreen" onClick={onFull}><Maximize size={15} /></button>
+        <Button title="fullscreen — the desktop gets the whole screen" aria-label="fullscreen" onClick={onFull}><Maximize size={15} /></Button>
       </div>
       <button className="form-hint mono" style={{ ...LINE, background: "none", border: 0, textAlign: "left", width: "100%", cursor: "pointer" }}
         title="what this view costs — tap for the split" aria-expanded={open} onClick={() => setOpen(!open)}>
         {chipText(ui.kbps, ui.fps, ui.meter)}
       </button>
       {open && (
-        <div className="form-hint" style={LINE}>
+        <Hint style={LINE}>
           {detailLines(ui.meter, ui.status && { ...ui.status, auto: ui.auto }).map((l) => <div key={l}>{l}</div>)}
-        </div>
+        </Hint>
       )}
       {steps.length > 0 ? (
-        <div className="form-hint warn" style={LINE}>
+        <Hint tone="warn" style={LINE}>
           <div>{stepsHead(steps.length)}</div>
           {steps.map((st, i) => (
             <div key={st.need} style={STEP}>
@@ -64,20 +64,20 @@ export function Toolbar({ ctl, ui, onFull }: { ctl: DesktopController; ui: Ui; o
                   <Power size={15} /> {st.button}
                 </ConfirmButton>
               ) : (
-                <button className="key" style={STEP_BTN} onClick={() => void askGrant("accessibility")}><ShieldCheck size={15} /> {st.button}</button>
+                <Button style={STEP_BTN} onClick={() => void askGrant("accessibility")}><ShieldCheck size={15} /> {st.button}</Button>
               )}
               {st.need === "accessibility" && asked && <div className="row-sub">{asked}</div>}
             </div>
           ))}
-        </div>
-      ) : block && <div className="form-hint warn" style={LINE}>{block}</div>}
+        </Hint>
+      ) : block && <Hint tone="warn" style={LINE}>{block}</Hint>}
       {ui.note && (
-        <div className="form-hint" style={LINE}>
+        <Hint style={LINE}>
           {ui.note}{" "}
-          <button className="key" style={{ minHeight: 32, padding: "2px 8px" }} onClick={() => ctl.dropOverride()}>use {presetLabel(choice.get().preset)}</button>
-        </div>
+          <Button style={{ minHeight: 32, padding: "2px 8px" }} onClick={() => ctl.dropOverride()}>use {presetLabel(choice.get().preset)}</Button>
+        </Hint>
       )}
-      {ui.noVideo && <div className="form-hint warn" style={LINE}>{ui.noVideo}</div>}
+      {ui.noVideo && <Hint tone="warn" style={LINE}>{ui.noVideo}</Hint>}
     </>
   );
 }

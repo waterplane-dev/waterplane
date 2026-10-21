@@ -102,3 +102,14 @@ test("the setting: whole numbers are the cap, 0 is none, anything else is the de
   assert.equal(localSessionsSetting("99", 1), 1);
   assert.equal(localSessionsSetting(undefined, null), null);
 });
+
+test("agentWindowWarnSetting: a whole number of tokens within 50k..2M, else the default", async () => {
+  const { agentWindowWarnSetting, AGENT_WINDOW_WARN_KEY, AGENT_LARGE_TOK } = await import("../dist/index.js");
+  assert.ok(SYNCED_SETTING_KEYS.includes(AGENT_WINDOW_WARN_KEY));
+  assert.equal(agentWindowWarnSetting("300000"), 300_000);
+  assert.equal(agentWindowWarnSetting(" 50000 "), 50_000);
+  assert.equal(agentWindowWarnSetting("2000000"), 2_000_000);
+  for (const bad of [undefined, null, "", "abc", "49999", "2000001", "0", "-5", "1.5e5", "300000.5", "99999999"]) {
+    assert.equal(agentWindowWarnSetting(bad), AGENT_LARGE_TOK, String(bad));
+  }
+});

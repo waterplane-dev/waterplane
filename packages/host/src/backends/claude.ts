@@ -17,7 +17,8 @@
 import { randomUUID } from "node:crypto";
 import type { PermissionMode } from "@waterplane/shared";
 import { isLocalCommand, startsNoTurn } from "@waterplane/shared";
-import { COMPOSER_RULE_RE, PASTE_CHIT } from "../echo.js";
+import { PASTE_CHIT } from "../echo.js";
+import { COMPOSER_RULE_RE } from "../composer.js";
 import type { BackendDescriptor, LaunchPlan, LaunchRequest } from "./types.js";
 import { claudeSources } from "./claude-sources.js";
 import { claudeModels } from "./claudemodels.js";
@@ -66,7 +67,7 @@ export function hookSettingsArg(port: number, askRules: readonly string[] = []):
 /**
  * The composer's input row.
  *
- * **A second copy of `echo.ts`'s `COMPOSER_CURSOR_RE`, and it must not be
+ * **A second copy of `composer.ts`'s `COMPOSER_CURSOR_RE`, and it must not be
  * allowed to become a second OPINION.** That file keeps the const private and
  * is the last thing this refactor may touch (its rules were paid for by real
  * deliveries that stacked, vanished or pressed Return at an empty box), so the

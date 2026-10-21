@@ -6,6 +6,7 @@ import type { StandingRule, DetectedPrompt } from "./promptbox.js";
 import type { Effort, PermissionMode, SessionLimit, SessionLogin, ShellLink, SessionAgent, SessionAsk, SessionShell } from "./launch.js";
 import type { ContextSpark } from "./contextspark.js";
 import type { KeyHint } from "../../keyhint.js";
+import type { Bookmark } from "./archive.js";
 
 /** A drivable Claude Code session, bound to a working directory. */
 export interface SessionInfo {
@@ -351,6 +352,12 @@ export interface SessionInfo {
    * a restart, a resume and a close. `by` says who set it; absent = not flagged.
    */
   followUp?: FollowUp;
+  /**
+   * This session's conversation is bookmarked (R-conversations-007) — the
+   * host's bookmark store, keyed by repo directory + conversation id, stamped
+   * here like `followUp`. Absent = not bookmarked (or an older host).
+   */
+  bookmark?: Bookmark;
   /**
    * This session handed a job to a peer desktop and is waiting for its report
    * (`peer.ts`). Additive: an older phone draws no tag. Absent = not waiting.

@@ -119,7 +119,7 @@ test("onPath stats, never runs", () => {
 });
 
 test("the probe registers as COPILOT's account, so a claude session's header never draws it", async () => {
-  const { activate } = await import(`${D}/host/index.mjs`);
+  const { activate, deactivate } = await import(`${D}/host/index.mjs`);
   const dir = mkdtempSync(join(tmpdir(), "gha-"));
   writeFileSync(join(dir, "copilot"), "#!/bin/sh\nexit 0\n");
   chmodSync(join(dir, "copilot"), 0o755);
@@ -127,8 +127,8 @@ test("the probe registers as COPILOT's account, so a claude session's header nev
   const PATH = process.env.PATH;
   process.env.PATH = dir;
   try {
-    activate({ log: () => {}, usageProbe: (def) => defs.push(def), env: () => undefined });
-  } finally { process.env.PATH = PATH; }
+    activate({ log: () => {}, usageProbe: (def) => defs.push(def), setStatus: () => {}, env: () => undefined });
+  } finally { process.env.PATH = PATH; deactivate(); }
   assert.equal(defs.length, 1);
   assert.equal(defs[0].source, "copilot");
   // Without it the reading is account-only and `headerReadings` hands it to a claude session.

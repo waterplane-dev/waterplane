@@ -18,6 +18,7 @@ import { track } from "../../usage";
 import { ExtBoundary } from "../ExtBoundary";
 import { launcherItems } from "../extensionPoints";
 import { countedN, menuBadgeTotal, type ContributedEntry } from "../featureRun";
+import { Button } from "../../kit/Button";
 
 const noCount = () => null;
 
@@ -64,9 +65,9 @@ function LauncherItemKey({ it, size }: { it: ContributedEntry; size: number }) {
   if (!n) return null;
   const Icon = it.icon;
   return (
-    <button className="key notif-btn" aria-label={c!.title} title={c!.title} onClick={() => tap(it, "key.", n)}>
+    <Button className="notif-btn" aria-label={c!.title} title={c!.title} onClick={() => tap(it, "key.", n)}>
       <Icon size={size} /><span className="notif-badge">{badgeText(n)}</span>
-    </button>
+    </Button>
   );
 }
 

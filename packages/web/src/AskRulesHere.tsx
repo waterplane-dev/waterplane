@@ -17,6 +17,7 @@ import { Empty } from "./Empty";
 import { Explain } from "./Explain";
 import { SetSwitch, SetWarn } from "./SettingsKit";
 import { useRemoteResource, type RemoteResource } from "./useRemoteResource";
+import { Hint } from "./kit/Hint";
 
 export interface AskRulesHandle {
   res: RemoteResource<AskRulesReply>;
@@ -77,7 +78,7 @@ export function AskRulesHere({ repo, say }: { repo: RepoTarget; say: (words: str
       {ask.res.data && (
         <>
           {lostWords(ask.res.data.lost) && <SetWarn icon={ShieldAlert}>{lostWords(ask.res.data.lost)}</SetWarn>}
-          <div className="form-hint">{hereWords(ask.rules, path)}</div>
+          <Hint>{hereWords(ask.rules, path)}</Hint>
           <div className="set-kinds askrule-here">
             {ask.rules.map((r) => {
               const on = !isOffIn(r, path);

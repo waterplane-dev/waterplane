@@ -128,7 +128,7 @@ Narrative and incidents: [protocol-and-security.md](../../../docs/notes/protocol
 - `permmode.ts` — the permission mode off the footer under the NEWEST composer frame (rule, `❯`
   row, closing rule, ≤6 footer rows), else null — a box, a picker or a slash menu is null, never a
   mode. On 2.1.293 the default mode is LABELLED (`⏸ manual mode on`); no label is `default` only
-  beside `? for shortcuts`. The top rule may wear `ultracode` (echo.ts's anchor rejects that shape;
+  beside `? for shortcuts`. The top rule may wear `ultracode` (composer.ts's anchor rejects that shape;
   this one must not). Ultracode: that label, else the NEWEST `Ultracode on (this session only)` /
   `Ultracode off` / refusal row; a picker's mid-row `Ultracode on` never counts. Real grids in
   `packages/host/test/fixtures/permmode/`.

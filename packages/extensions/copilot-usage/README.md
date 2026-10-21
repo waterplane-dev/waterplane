@@ -30,6 +30,14 @@ endpoint's are one unit.
 the same predicate claude's `/usage` poll uses), and when a phone asks for a fresh figure, behind
 claude's TTL. A failed ask is not retried for a minute.
 
+**The status line — on every desktop, no sign-in.** Beside the chip, the extension's status line
+on the phone's extension list reads the plan and this month's premium requests counted off VS
+Code's own Copilot Chat logs (`host/vscodelocal.mts`: the plan from VS Code's `state.vscdb`, each
+request priced by the multiplier Copilot showed under its answer). Files only — no `gh`, no
+`copilot`, no network — re-read every 15 minutes, and only files that moved. It is the same reader
+the VS Code extension's Copilot row bundles. Never a chip segment: no limit is known locally, so
+there is no share to draw. No VS Code chat logs on the desktop ⇒ no line.
+
 **Knob.** `WATERPLANE_GH_BIN` — the gh binary (default `gh` on `PATH`); the e2e points it at a stub.
 
 Test: `node --test packages/extensions/copilot-usage/test/ghquota.test.mjs` (after the host build).

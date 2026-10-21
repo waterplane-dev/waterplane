@@ -10,6 +10,10 @@ import { ConfirmButton } from "./Confirm";
 import { Empty } from "./Empty";
 import { Unavailable } from "./Unavailable";
 import { BuildScopeChoice } from "./BuildScopeChoice";
+import { Button } from "./kit/Button";
+import { Row, RowTitle, RowSub } from "./kit/Row";
+import { Hint } from "./kit/Hint";
+import { Tag } from "./kit/Tag";
 
 /**
  * Add or edit one build command — and the reason this screen is not three blank
@@ -105,10 +109,10 @@ export function BuildEditor({ draft, candidates, candidatesTotal, online, saved,
             one is about the entry in front of you. Not gated on the link: it is
             the ordinary durable create-and-prompt path, so a tap on a dead
             tunnel opens the session when the link is back. */}
-        <button className="key" title={ONE_BUILD_TITLE}
+        <Button title={ONE_BUILD_TITLE}
           onClick={() => setBrief((b) => (b === null ? "" : null))}>
           <Wand2 size={16} /> {ONE_BUILD_LABEL}
-        </button>
+        </Button>
       </SheetHead>
       <div className="form">
         <input className="search" placeholder="Name (e.g. Release APK)" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
@@ -117,9 +121,9 @@ export function BuildEditor({ draft, candidates, candidatesTotal, online, saved,
         <input className="search" placeholder="Working sub-dir (optional, relative to repo root)" value={dir} onChange={(e) => setDir(e.target.value)} style={{ fontFamily: "monospace" }} />
       </div>
       {brief === null ? (
-        <div className="form-hint">
+        <Hint>
           Tap <Wand2 size={12} style={{ verticalAlign: "-2px" }} /> {ONE_BUILD_LABEL} to say what you want in a sentence and have Claude work this one command out of the repo — one turn, this entry only.
-        </div>
+        </Hint>
       ) : (
         <div className="build-assist">
           <div className="section">{ONE_BUILD_ASK}</div>
@@ -128,9 +132,9 @@ export function BuildEditor({ draft, candidates, candidatesTotal, online, saved,
               session it opens is where anything further gets said. */}
           <PromptComposer inline rows={3} placeholder={ONE_BUILD_PLACEHOLDER}
             prompts={[brief]} onChange={(next) => setBrief(next[0] ?? "")} autoFocus />
-          <div className="form-hint">{ONE_BUILD_ASK_NOTE}</div>
+          <Hint>{ONE_BUILD_ASK_NOTE}</Hint>
           <div className="sheet-actions">
-            <button className="key" onClick={() => setBrief(null)}><X size={16} /> cancel</button>
+            <Button onClick={() => setBrief(null)}><X size={16} /> cancel</Button>
             <span className="spacer" />
             {/* Nothing said and nothing typed ⇒ there is nothing to work out, and
                 the verb is a SENTENCE rather than a dimmed button. A session
@@ -151,7 +155,7 @@ export function BuildEditor({ draft, candidates, candidatesTotal, online, saved,
           disagree. While the host has not answered, the control says it is
           reading rather than claiming a number. */}
       <div className="sheet-actions">
-        <button className="key" onClick={() => { if (!open) track("action:build.suggest.open"); setOpen(!open); }}>
+        <Button onClick={() => { if (!open) track("action:build.suggest.open"); setOpen(!open); }}>
           {/* A spinner is a promise that something is coming. The link can
               drop between opening this editor and the host answering, and a
               "reading the repo…" that spins for ever is the one thing this
@@ -162,31 +166,31 @@ export function BuildEditor({ draft, candidates, candidatesTotal, online, saved,
             : online
               ? <><Loader size={16} className="spin" /> reading the repo…</>
               : <><CloudOff size={16} /> no connection</>}
-        </button>
+        </Button>
       </div>
 
       {open && (
         <div className="build-suggest">
-          <div className="form-hint">
+          <Hint>
             From this repo’s own files — package.json scripts, gradle tasks, Makefile targets, CI workflow steps, scripts.
             Tap one to fill the fields above; nothing is saved or run until you tap Save.
             {candidates !== null && candidatesTotal > candidates.length && ` Showing the top ${candidates.length} of ${candidatesTotal} found.`}
-          </div>
+          </Hint>
           <div className="list">
             {shown.map((c) => (
-              <button key={`${c.dir ?? ""}|${c.cmd}`} className="row" onClick={() => use(c)}>
-                <span className="row-title">
+              <Row key={`${c.dir ?? ""}|${c.cmd}`} as="button" onClick={() => use(c)}>
+                <RowTitle>
                   {c.name}
-                  {c.already ? <> <span className="tag idle"><Check size={11} /> already a button</span></> : null}
-                </span>
-                <span className="row-sub mono">{c.dir ? `${c.dir}$ ` : ""}{c.cmd}</span>
-                <span className="row-sub">{c.source}</span>
+                  {c.already ? <> <Tag className="idle"><Check size={11} /> already a button</Tag></> : null}
+                </RowTitle>
+                <RowSub className="mono">{c.dir ? `${c.dir}$ ` : ""}{c.cmd}</RowSub>
+                <RowSub>{c.source}</RowSub>
                 {/* A publishing command is offered, not hidden — a release
                     script is a legitimate thing to want on a phone. What it is
                     NOT allowed to be is a surprise, since these run later with
                     nobody watching. */}
-                {c.note ? <span className="row-sub warn"><AlertTriangle size={12} /> {c.note}</span> : null}
-              </button>
+                {c.note ? <RowSub className="warn"><AlertTriangle size={12} /> {c.note}</RowSub> : null}
+              </Row>
             ))}
             {/* Three different nothings, and they are not interchangeable: the
                 host has not answered; it answered and this repo describes no
@@ -218,7 +222,7 @@ export function BuildEditor({ draft, candidates, candidatesTotal, online, saved,
       {scope && <BuildScopeChoice local={local} wasShared={saved && !scope.local} onChange={setLocal} />}
 
       <div className="sheet-actions">
-        <button className="key" onClick={onCancel}><X size={16} /> cancel</button>
+        <Button onClick={onCancel}><X size={16} /> cancel</Button>
         {/* Delete is here and not on the sheet's rows: you are looking at the
             whole command you are about to lose, and it takes two taps. */}
         {saved && (
@@ -259,13 +263,13 @@ function ParamsEditor({ params, cmd, dir, unknown, onChange }: {
   return (
     <>
       <div className="sheet-actions">
-        <button className="key" onClick={() => setOpen(!open)}>
+        <Button onClick={() => setOpen(!open)}>
           <HelpCircle size={16} /> {open ? "hide" : "asks for"} ({params.length})
-        </button>
+        </Button>
         {open && (
-          <button className="key" onClick={() => onChange([...params, { id: "", kind: "text" }])}>
+          <Button onClick={() => onChange([...params, { id: "", kind: "text" }])}>
             <Plus size={16} /> question
-          </button>
+          </Button>
         )}
       </div>
 
@@ -273,17 +277,17 @@ function ParamsEditor({ params, cmd, dir, unknown, onChange }: {
           not an error: the command runs with the braces in it and fails loudly,
           which is the only outcome readable off a build log afterwards. */}
       {unknown.length > 0 && (
-        <div className="form-hint warn">
+        <Hint tone="warn">
           <AlertTriangle size={13} style={{ verticalAlign: "-2px" }} />{" "}
           {unknown.map((u) => `{{${u}}}`).join(", ")} {unknown.length === 1 ? "is" : "are"} in the command but nothing here answers {unknown.length === 1 ? "it" : "them"} — the shell will see the braces. Add a question with that id, or fix the spelling.
-        </div>
+        </Hint>
       )}
 
       {open && (
         <div className="build-params">
-          <div className="form-hint">
+          <Hint>
             A question is asked when you tap run. Its value is put into the command at <span className="mono">{"{{id}}"}</span> — and into the environment as <span className="mono">{paramEnvName("id")}</span>, whether the command names it or not. One question beats one button per app.
-          </div>
+          </Hint>
           {params.map((p, i) => (
             <div key={i} className="build-param">
               <div className="set-row">
@@ -326,16 +330,16 @@ function ParamsEditor({ params, cmd, dir, unknown, onChange }: {
                 {/* What this question is actually wired to, so an id that is in
                     the form but not in the command is visible here rather than
                     at run time. */}
-                <span className="row-sub">
+                <RowSub>
                   {p.id && (cmd + " " + dir).includes(`{{${p.id}}}`)
                     ? <>in the command as <span className="mono">{`{{${p.id}}}`}</span></>
                     : p.id
                       ? <>only in the environment — the command does not name <span className="mono">{`{{${p.id}}}`}</span></>
                       : <>an id is <span className="mono">app</span>, <span className="mono">flavour</span> — a letter, then letters, digits or underscores</>}
-                </span>
+                </RowSub>
                 <span className="spacer" />
-                <button className="key danger" title="remove this question"
-                  onClick={() => onChange(params.filter((_, j) => j !== i))}><Trash2 size={16} /></button>
+                <Button variant="danger" title="remove this question"
+                  onClick={() => onChange(params.filter((_, j) => j !== i))}><Trash2 size={16} /></Button>
               </div>
             </div>
           ))}

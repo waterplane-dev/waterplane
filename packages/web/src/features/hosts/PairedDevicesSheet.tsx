@@ -22,6 +22,7 @@ import { useRemoteResource } from "../../useRemoteResource";
 import { useCore } from "../../sdk";
 import { openSettingsAt } from "../../settingsFocus";
 import { deviceRouteText, devicesEmptyText, revokeLines, seenAgo } from "./logic";
+import { Button, Row, RowTitle, RowSub, Hint } from "../../kit";
 
 const ICON = 16;
 
@@ -86,58 +87,58 @@ export function PairedDevicesSheet() {
       icon={<Smartphone size={ICON} />}
       onClose={() => c.nav.close("devices")}
       actions={
-        <button className="key" aria-label="refresh" onClick={() => res.reload({ quiet: true })}>
+        <Button aria-label="refresh" onClick={() => res.reload({ quiet: true })}>
           {res.inflight ? <Loader2 size={ICON} className="spin" /> : <RotateCw size={ICON} />}
-        </button>
+        </Button>
       }
     >
       <Empty res={res} empty={rows.length === 0} thing="the paired devices">{devicesEmptyText(passwordSet)}</Empty>
       {rows.length > 0 && (
         <div className="list">
           {rows.map((d) => (
-            <div key={d.id} className="row-wrap">
-              <div className="row grow">
-                <span className="row-title">{d.scope === "passive" ? <Baby size={12} /> : <Smartphone size={12} />} {d.name}{d.current ? " · this phone" : ""}{d.scope === "passive" ? " · passive" : ""}</span>
-                <span className="row-sub dim">
+            <Row key={d.id} kind="wrap">
+              <Row kind="grow">
+                <RowTitle>{d.scope === "passive" ? <Baby size={12} /> : <Smartphone size={12} />} {d.name}{d.current ? " · this phone" : ""}{d.scope === "passive" ? " · passive" : ""}</RowTitle>
+                <RowSub className="dim">
                   paired {new Date(d.createdAt).toLocaleDateString()} · last seen {seenAgo(Math.max(0, now - d.lastSeenAt))} · {deviceRouteText(d.lastKind)}
-                </span>
-              </div>
+                </RowSub>
+              </Row>
               <div className="row-acts">
                 {revoking === d.id ? (
                   <span className="key" aria-label="revoking"><Loader2 size={ICON} className="spin" /></span>
                 ) : (
-                  <button className="key" aria-label={`revoke ${d.name}`} onClick={() => void revoke(d)}><Trash2 size={ICON} /></button>
+                  <Button aria-label={`revoke ${d.name}`} onClick={() => void revoke(d)}><Trash2 size={ICON} /></Button>
                 )}
               </div>
-            </div>
+            </Row>
           ))}
         </div>
       )}
       {!passwordSet && rows.length > 0 && (
         <>
-          <div className="form-hint">No host password is set right now, so these rows cannot sign in until one is.</div>
+          <Hint>No host password is set right now, so these rows cannot sign in until one is.</Hint>
           <div className="set-row">
-            <button className="key" onClick={() => openSettingsAt("lan-password")}><KeyRound size={ICON} /> set the LAN password</button>
+            <Button onClick={() => openSettingsAt("lan-password")}><KeyRound size={ICON} /> set the LAN password</Button>
           </div>
         </>
       )}
       {(anyPassive || pinSet) && (
         <>
-          <div className="form-hint">
+          <Hint>
             {pinSet === undefined ? "Asking the desktop whether an unlock PIN is set…"
               : pinSet ? "Passive devices get app updates only; the unlock PIN opens the full app on one for 30 minutes."
               : "No unlock PIN is set, so a passive device cannot be unlocked."}
-          </div>
+          </Hint>
           <div className="set-row">
-            <button className="key" title="the PIN a passive device unlocks with" onClick={() => void setPin()}>
+            <Button title="the PIN a passive device unlocks with" onClick={() => void setPin()}>
               <Lock size={ICON} /> {pinSet ? "change the unlock PIN" : "set the unlock PIN"}
-            </button>
+            </Button>
           </div>
         </>
       )}
-      <div className="form-hint">
+      <Hint>
         Each row is one phone's own sign-in. Revoking it ends that phone's access at once; changing the host password revokes every row.
-      </div>
+      </Hint>
     </Sheet>
   );
 }

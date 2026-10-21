@@ -1,0 +1,36 @@
+xxxxxxx xxxxxx xxxxxx xx xxxx xxxx 0% xx xxxxxx xxxxxx
+  xx xxxxxxxxx.
+
+  Xxxxxxxx xxx 0 xxxxxxx, xxx 0 xxxxx xxxxxxxx
+
+⏺ Xx xxx-xxx xxxxxx xxxxxxxxx xxxxxx xx xxxxxxxxxx'x XXX;
+  xxxxxx xxxx xxxxx xx xxxxx. Xxxxxxxxxx xxx xxxxxx xxx,
+  xxxxxx xxxxxx (00 x xx xxxxxx xxxx xxx 0 x xxxxxxx
+  xxxxxx).
+
+  Xxx 0 xxxxx xxxxxxxx
+
+⏺ Xxxxxxx xxx xxxxxxxxx: xxxxxxxxxx xxxx xxxx xxxx xx 00x
+  (00x xxx'x xxxxxxx), xxx xxxxx'x xx xxxxxx xxxxx xx x
+  xxxxxxxxx xxx, xx xxx "0% xxxx" xxxxxxxxx xxxxx xxxx xx
+  xx xxx xxx xxxx xxxxx'x xxxx-xxxx xxxxxx xxxxxxx. Xxx
+  xxxxx xxxxxxx xxxx xxxxxx xxxxxxxxx.
+──────────────────────────────────────────────────────────
+ ☐ Xxxxxx
+
+│ 00 x xxxxxx xxx xxxxxx xxxxx xxx'x xx xxxxxxxxx (xxx 00
+│ x). Xxx xxxxxx X xxxxxxxx xxx xxxxx xxxx?
+
+❯ 1. 00 x xxxxxx xxxxx
+     Xxxxxxx xxxxxxx. Xxx xxxxx xxxx 00 x xxxxxx xxx
+     xxxxxx xxxxx, xxx xxxxx xxxxxxx xx xxxxxxx xxxxx.
+  2. Xxxxx xxxx/xxxx
+     Xxx xxxx xxx xxxxx xxxx (xxxxx xxxxx 00 x), X
+     xxxxxxxx xxxx xx xxxx xxxxxx.
+  3. Xxxxx xx xxxxxxx
+     Xxxxxx xxxxxxx; xxx xxxx xxxx xx xxxx.
+  4. Type something.
+──────────────────────────────────────────────────────────
+  5. Chat about this
+
+Enter to select · ↑/↓ to navigate · Esc to cancel

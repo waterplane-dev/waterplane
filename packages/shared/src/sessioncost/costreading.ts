@@ -115,10 +115,38 @@ export const AGENT_LIVE_MS = 10 * 60_000;
  * given — once the agent's last record is older than `AGENT_LIVE_MS` by the
  * caller's clock. A readout: it names the lever and refuses nothing.
  */
-export function liveAgentText(liveAgentTok: number | null | undefined, lastAt?: number | null, now?: number): string | null {
-  if (liveAgentTok == null || !(liveAgentTok >= AGENT_LARGE_TOK)) return null;
+export function liveAgentText(
+  liveAgentTok: number | null | undefined, lastAt?: number | null, now?: number,
+  /** The person's own line (`agentWindowWarnSetting`); absent is `AGENT_LARGE_TOK`. */
+  threshold: number = AGENT_LARGE_TOK,
+): string | null {
+  if (liveAgentTok == null || !(liveAgentTok >= threshold)) return null;
   if (lastAt != null && now != null && now - lastAt > AGENT_LIVE_MS) return null;
   return `A subagent is re-reading ${fmtTok(liveAgentTok)} on every step — agents with a narrower task that finish sooner cost less.`;
+}
+
+/**
+ * The push when a RUNNING subagent's window passes the person's line: what it
+ * is reading, what that costs per step, and where the lever is. Words only —
+ * nothing is stopped; the phone's context sheet is where a person interrupts.
+ */
+export function agentPushText(a: { tok: number; type?: string | null; title?: string | null }): { title: string; body: string } {
+  const who = a.type ? `a ${a.type} agent` : "an agent";
+  const head = a.title ? `${a.title}: ` : "";
+  return {
+    title: `${head}${who} passed ${fmtTok(a.tok)}`,
+    body: `It re-reads ${fmtTok(a.tok)} of context on every step. Open the context sheet to interrupt and re-plan.`,
+  };
+}
+
+/**
+ * The prompt the phone queues after an Esc on a large subagent: it asks the
+ * main agent to stop that agent and re-spawn the rest narrower. Queued by the
+ * person's tap on the context sheet — never sent by the host on its own.
+ */
+export function replanPromptText(tok: number, type?: string | null): string {
+  const what = type ? ` (${type})` : "";
+  return `A subagent${what} was re-reading ${fmtTok(tok)} of context on every step. If it is still running, stop it with TaskStop, keep what it already returned, and re-spawn the rest as narrower tasks: one work package per agent, model set explicitly, each briefed to return before about 200k of context. If it already finished, apply that to the next agents you spawn.`;
 }
 
 export function sessionCost(input: SessionCostInput): SessionCostReading {

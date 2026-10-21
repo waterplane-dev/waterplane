@@ -310,6 +310,11 @@ export const HINTS: Record<string, HintDef> = {
     what: "A one-shot mark that this session has something to come back and read. Opening the session does not clear it — only “Done — clear flag” does, here or on its Recently closed row, so it survives a restart, a close and a resume. A bulk close spares it, and the repo's flag count shows exactly the flagged ones.",
     when: "Its colour says who set it: blue is you, by hand; purple is a launch you ticked “Flag for follow up when done” on, once it finished; teal is the session's own agent, with its one-line reason under the row.",
   },
+  "session.bookmark": {
+    title: "Bookmark",
+    what: "Marks the conversation as one you will want to look at again, with an optional one-line note. Closing the session is fine: Archive › Bookmarks lists this repo's bookmarked conversations, and read opens one read-only without starting the CLI.",
+    when: "Needs the desktop — with the link down a tap says so. Removing a bookmark that has a note asks a second tap, because the note goes with it.",
+  },
   "session.context": {
     title: "Context window",
     what: "How full this conversation's window has been over time, with a mark where it was compacted and a shaded band over every stretch the account refused to serve. Read off the CLI's own conversation log, which is dated — the badge beside it can only say where you are NOW.",

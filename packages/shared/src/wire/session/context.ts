@@ -137,6 +137,9 @@ export interface AgentRun {
    *  shows: one session read 31% in its window while an agent under it ran at
    *  97%. Absent from an older host. */
   peakTok?: number;
+  /** How many REQUESTS the agent made (its log's assistant records, deduped by
+   *  message id) — not prompts. Absent when 0 or unknown, and from an older host. */
+  turns?: number;
   /** That window over time, `[t, tok]`, thinned to at most `AGENT_CTX_POINTS`
    *  with every bucket's MAXIMUM kept, so the peak survives thinning. Absent
    *  from an older host. */

@@ -1,6 +1,6 @@
 {
   "name": "@waterplane/app",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "waterplane Android shell — Capacitor wrapper around packages/web, so the UI survives a dead tunnel",
   "type": "module",

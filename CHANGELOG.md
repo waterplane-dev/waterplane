@@ -3,6 +3,43 @@
 Notable changes. This project has no release branches — `main` is the supported
 version — so entries are grouped by the release they shipped in.
 
+## 0.1.4
+
+0.1.3 was tagged but never published; its notes below ship with this release.
+
+### New
+
+- **Every device can show your tabs in the same order.** On by default: the tab order and which sessions you opened most recently are shared between your devices, so a tab sits in the same place on the phone and on the desktop. The switch is per device, in Settings › Appearance › "same tab order on every device"; a device that turns it off keeps its own order.
+- **A data saver or battery saver offers, once, to stop sharing the tab order.** When this app's data saver, the phone's data saver or Android's battery saver comes on, you are asked once per saver spell whether to stop sharing; nothing changes unless you say yes. Detecting Android's battery saver needs this release's APK.
+- **A list button at the left edge of the tab strip shows every open tab as a vertical list.** It carries the number of open tabs. Names wrap in full, the repo and state are in words under each, rows wear their repo's tint, and tapping a row opens it.
+- **Bookmark a conversation and find it again.** A session's menu has a bookmark line with a one-line note. The archive has a "Bookmarks (n)" filter, a toggle and note on each row, and a "read" button that opens the conversation read-only without starting `claude`.
+- **The key row sends any key combination.** Ctrl, Alt and Shift stay held for the next key (tap once to hold, twice to lock, three times to let go). A new Keys list has `claude`'s own shortcuts, one tap each. The row also offers the shortcuts the CLI names on screen, such as "shift+tab to cycle".
+- **The session header can be shortened by dragging.** A grip under the header clips it from the bottom (status line first, title last) and a tap shows it all again. It is remembered per device. The star and follow-up flag moved to the title row.
+- **The context sheet names the dearest subagents and warns when one grows large.** It lists the five costliest agents with requests, peak window, tokens and cost. You get one push when a running agent passes a line you set (200k to 500k), and an "interrupt and re-plan" button on the large-agent card. It only warns; it never stops an agent.
+- **The launcher lists repos with the most open sessions first.** Alphabetical order is still a choice in Settings; a device that already chose it keeps it.
+- **"Assess and propose improvements" on the health index posts its proposals as held backlog rows.** Each proposal is a row you can fire, edit or delete. The session itself changes no file.
+- **Repo health quotes git's refusal and handles committed bundles.** A repo git refuses to read is no longer called "not a git repository"; git's own words and suggested fix are shown, and a failed read is said once. Files marked `linguist-generated` or `linguist-vendored` in `.gitattributes` no longer count as your longest file. A repo with no `CLAUDE.md` now scores instead of showing no score. When a repo's own copy of the health engine fails, the readings offer a prompt to switch to the desktop's engine.
+- **The desktop view (experimental) goes fully fullscreen.** Fullscreen covers the status strips too. The controls sit behind one draggable round handle, and Android hides its status and navigation bars (older APKs keep theirs). The desktop typing box no longer auto-capitalises or autocorrects. The extension's settings row now carries an "experimental" tag.
+- **`claude` update checks work for the native install.** The host asks npm for new versions, on the channel `claude` itself follows, so the update banner no longer depends on the CLI printing its own nag.
+
+### Fixes
+
+- **A restart says why.** The restart toast and strip name the reason and the new build, for example "desktop restarting (npm run restart · new build ad1f6b9) · 12 s · usually ~30 s".
+- **Pasting a picture next to the annotator asks instead of replacing your marks.** One paste handler now decides, so a screenshot pasted while another is being marked can no longer wipe that one's marks.
+- **Ctrl/Cmd+Return in the annotator sends the picture first, then the prompt.**
+- **A stopped download can be removed from the strip itself.** A file the desktop no longer has reads "no longer on the desktop" instead of "tap retry".
+- **A finished fan-out target whose session has closed no longer reads "starting…".**
+- **Repo headers in the launcher scroll away with their rows.** A tall header (two chip rows) no longer peeks out under the next one.
+- **Connection health is clearer.** The unconfirmed-prompts banner can be cleared where it stands, and the median-ping note counts only the replies that came back.
+- **The Send sheet's option groups have visible headings** ("What it waits for", "How many at once", and so on).
+- **The installer explains a missing `claude`, then carries on.** It also says why `npm i -g` can fail and what to use instead.
+- **The context-weight row no longer mentions Copilot in a Claude-only repo.** Copilot is weighed only where the repo has its own Copilot instruction file.
+
+### Docs
+
+- The Impressum page and footer links, a GDPR paragraph and a controller address are on the site's privacy pages. The site header and footer say waterplane is open source and link the repo.
+- The comparison docs now say iOS uses the web app rather than "No".
+
 ## 0.1.3
 
 ### Fixes
@@ -18,7 +55,7 @@ version — so entries are grouped by the release they shipped in.
   Xcode Command Line Tools, `/usr/bin/git` only offers to install them; the row
   now fails and names `xcode-select --install`.
 - **The npm package is published.** 0.1.2's publish job failed after building
-  the package, so 0.1.2 never reached npm despite its note above; 0.1.3 is the
+  the package, so 0.1.2 never reached npm despite its note above; 0.1.4 is the
   first version there, published by this repository's CI with provenance.
 
 ### Docs

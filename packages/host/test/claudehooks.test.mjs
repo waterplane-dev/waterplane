@@ -224,6 +224,23 @@ test("a hookless backend is never handed a claude hook, even by exact id", () =>
   } finally { h.stop(); }
 });
 
+test("a relaunch onto the same conversation gets the hooks, not the exited session it replaced", () => {
+  // `replaceSessionId`: the old session is killed and stays in the map, exited,
+  // with the SAME claudeSessionId — and was inserted first.
+  const h = harness({ claudeSessionId: "c1" });
+  const old = h.s;
+  h.stop();
+  const s2 = { ...old, info: { ...old.info, id: "w2", running: true }, hooksActive: false, turnHookSeen: false, spawnedAt: Date.now() };
+  h.core.sessions.set("w2", s2);
+  h.slice.attach(s2);
+  try {
+    h.hook("SessionStart", { session_id: "c1", source: "resume" });
+    assert.equal(s2.hooksActive, true, "the live replacement is the route");
+    assert.equal(s2.info.hooked, true);
+    assert.equal(old.hooksActive, false, "the exited session hears nothing");
+  } finally { s2.info.running = false; h.slice.detach(s2); turn.clearStopVerify(s2); }
+});
+
 test("a PreToolUse for AskUserQuestion keeps the call for the box; a turn boundary retires it", () => {
   const h = harness();
   try {

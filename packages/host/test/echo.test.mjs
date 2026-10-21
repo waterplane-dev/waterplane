@@ -14,7 +14,8 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { collapsedPasteEcho, composerEcho, composerSpans, composerText, echoAmbiguous, echoProbe, isSlashText, logEcho, screenEcho, squash, tailProbe, textEcho } from "../dist/echo.js";
+import { collapsedPasteEcho, echoAmbiguous, echoProbe, isSlashText, logEcho, screenEcho, squash, tailProbe, textEcho } from "../dist/echo.js";
+import { composerEcho, composerSpans, composerText } from "../dist/composer.js";
 
 test("the comparison view removes the spaces a TUI loses", () => {
   // The real symptom: a rendered claude screen reads "Isthisaprojectyou…"

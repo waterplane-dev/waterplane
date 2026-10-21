@@ -7,7 +7,7 @@
 import { useState, type ReactNode } from "react";
 import { AppWindow, Monitor, MousePointerClick, X } from "lucide-react";
 import { useStore } from "@waterplane/sdk";
-import { RadioRows } from "@waterplane/kit";
+import { RadioRows, Button, Hint } from "@waterplane/kit";
 import { PRESETS, type DesktopSource, type DesktopWindow } from "../shared/wire.mts";
 import {
   BITRATE_STEPS, CAP_STEPS, FPS_STEPS, JPEG_Q_STEPS, KEYFRAME_STEPS, RESOLUTIONS, fmtKbps, presetLine,
@@ -48,7 +48,7 @@ function Toggle({ label, on, hint, onFlip }: { label: string; on: boolean; hint:
       <button className={`key${on ? " active" : ""}`} style={{ alignSelf: "flex-start", ...SMALL }} aria-pressed={on} onClick={onFlip}>
         {label}: {on ? "on" : "off"}
       </button>
-      <div className="form-hint" style={{ padding: 0 }}>{hint}</div>
+      <Hint style={{ padding: 0 }}>{hint}</Hint>
     </li>
   );
 }
@@ -71,14 +71,14 @@ function SourcePicker({ c }: { c: QualityChoice }) {
         {displays.map((d, i) => row(`d${d.id}`, c.source.kind === "display" && (c.source.id ?? (d.main ? d.id : -1)) === d.id, <Monitor size={14} />,
           `display ${i + 1} · ${d.width}×${d.height}${d.main ? " (main)" : ""}`, { kind: "display", id: d.id }))}
         {row("front", c.source.kind === "front", <MousePointerClick size={14} />, "the front window (follows focus)", { kind: "front" })}
-        <button className="key" style={SMALL} onClick={() => {
+        <Button style={SMALL} onClick={() => {
           setWins(null);
           void client.read("windows", {}).then((r) => setWins(r.ok ? { list: r.result.windows } : { error: r.error }));
-        }}><AppWindow size={14} /> one window…</button>
+        }}><AppWindow size={14} /> one window…</Button>
       </div>
-      {wins && "error" in wins && <div className="form-hint warn" style={{ padding: "0 14px" }}>The window list did not come: {wins.error}</div>}
+      {wins && "error" in wins && <Hint tone="warn" style={{ padding: "0 14px" }}>The window list did not come: {wins.error}</Hint>}
       {wins && "list" in wins && (wins.list.length === 0
-        ? <div className="form-hint" style={{ padding: "0 14px" }}>The desktop reports no windows it can show.</div>
+        ? <Hint style={{ padding: "0 14px" }}>The desktop reports no windows it can show.</Hint>
         : <div style={CHIPS}>{wins.list.map((w) => row(`w${w.id}`, sameSource(c.source, { kind: "window", id: w.id }), <AppWindow size={14} />,
             `${w.app}${w.title ? ` — ${w.title}` : ""}`, { kind: "window", id: w.id }))}</div>)}
     </div>
@@ -100,9 +100,9 @@ function Custom({ k }: { k: CustomKnobs }) {
         {!h264 && <Toggle label="grayscale" on={k.grayscale} hint="Gray stills: fewer bytes each, colour gone." onFlip={() => set({ grayscale: !k.grayscale })} />}
         <Toggle label="cursor" on={k.cursor} hint="Draw the desktop's own mouse pointer into the picture." onFlip={() => set({ cursor: !k.cursor })} />
       </ul>
-      <div className="form-hint" style={{ padding: "0 14px" }}>
+      <Hint style={{ padding: "0 14px" }}>
         {h264 ? "JPEG quality and grayscale are for JPEG stills." : "Bitrate and keyframe refresh are for H.264 video."}
-      </div>
+      </Hint>
     </>
   );
 }
@@ -116,7 +116,7 @@ export function QualityPanel({ ctl, ui, onClose }: { ctl: DesktopController; ui:
     <div style={PANEL}>
       <div style={HEAD}>
         <b style={{ flex: 1 }}>Quality</b>
-        <button className="key" title="close — the view keeps these settings" aria-label="close" onClick={onClose}><X size={16} /></button>
+        <Button title="close — the view keeps these settings" aria-label="close" onClick={onClose}><X size={16} /></Button>
       </div>
       <div style={{ padding: "4px 14px 8px" }}>
         <RadioRows label="quality preset" value={current} onChange={pickPreset}

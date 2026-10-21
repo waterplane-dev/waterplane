@@ -29,7 +29,7 @@
  * and `dontAsk` is reachable only as the launch mode (the first shift+tab
  * leaves it for good).
  *
- * Structural, like `echo.ts`'s composer anchor: the label is read ONLY on the
+ * Structural, like `composer.ts`'s composer anchor: the label is read ONLY on the
  * rows under the newest composer frame (a full-width rule, a `❯` row adjacent
  * under it, the rule that closes it), never anywhere on the screen. A choice
  * box replaces the composer, so a box on screen reads as null — which is the
@@ -40,13 +40,13 @@
 import type { PermissionMode } from "@waterplane/shared";
 
 /** A full-width rule with nothing in it: the composer's closing border. Same
- *  shape as `echo.ts`'s `COMPOSER_RULE_RE`, held here so a reader of the
+ *  shape as `composer.ts`'s `COMPOSER_RULE_RE`, held here so a reader of the
  *  footer cannot drift with a change made for delivery. */
 const PLAIN_RULE_RE = /^[─━]{20,}$/;
 
 /**
  * The composer's OPENING border, which may carry a label at its right end:
- * `──────── ultracode ─` (2.1.293, ultracode on). `echo.ts`'s composer anchor
+ * `──────── ultracode ─` (2.1.293, ultracode on). `composer.ts`'s composer anchor
  * does not accept this shape — this one must, or turning ultracode on would
  * blind the mode reader.
  */

@@ -7,6 +7,7 @@
  *   node tools/healthreadings.mjs nearCap       # files within 50 lines of the max-lines cap
  *   node tools/healthreadings.mjs skillBodies   # kB of text under .claude/skills/
  *   node tools/healthreadings.mjs bareHookDeps  # exhaustive-deps disables with no reason
+ *   node tools/healthreadings.mjs capSqueeze    # commits that fit a file under the cap by deleting notes
  *
  * Pure counters are exported for tools/healthreadings.test.mjs.
  */
@@ -36,8 +37,13 @@ export function lineCount(text) {
 export function inCapScope(p) {
   if (/(^|\/)(dist|node_modules|fixtures)\//.test(p)) return false;
   if (/^packages\/(app|vscode)\//.test(p)) return false;
-  if (!/\.(ts|tsx)$/.test(p)) return false;
-  return /^packages\/[^/]+\/src\//.test(p) || /^packages\/extensions\/[^/]+\/web\//.test(p);
+  if (/\.(ts|tsx)$/.test(p)) {
+    return /^packages\/[^/]+\/src\//.test(p) || /^packages\/extensions\/[^/]+\/web\//.test(p);
+  }
+  // The second max-lines block: extension host/shared/cli halves and tools/, tests excluded.
+  if (/^tools\/.*\.(mjs|js)$/.test(p)) return !/\.test\.(mjs|js)$/.test(p);
+  if (!/\.(mts|mjs)$/.test(p) || /\.test\.(mjs|mts)$/.test(p)) return false;
+  return /^packages\/extensions\/[^/]+\/(host|shared|cli)\//.test(p);
 }
 
 /** Count of `files` ({path,text}) in scope with lineCount >= cap - margin. */
@@ -69,6 +75,51 @@ export function bareHookDisables(text) {
     out.push(i + 1);
   });
   return out;
+}
+
+/** A capped file this close under the cap (880 at 900) is one where a shrink is suspect. */
+export const SQUEEZE_MARGIN = 20;
+export const SQUEEZE_DAYS = 30;
+
+/** A removed diff line that is a comment or blank (`//`, `/*`, ` *`, `*\/`, JSX `{/*`). */
+export function isNoteLine(line) {
+  const t = String(line).trim();
+  return t === "" || /^(\/\/|\/\*|\*|\{\s*\/\*)/.test(t);
+}
+
+/** The `-` lines of a unified diff, without their marker or the `---` header. */
+export function removedLines(diff) {
+  return String(diff).split("\n").filter((l) => l.startsWith("-") && !l.startsWith("---")).map((l) => l.slice(1));
+}
+
+function git(args, cwd) {
+  return execFileSync("git", args, { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+}
+
+/**
+ * Commits in the last `days` where a capped file at `cap - SQUEEZE_MARGIN`+ lines lost lines, ended at or
+ * under the cap, and every line removed from it was a comment or blank: the notes deleted to fit the cap instead of a split by
+ * subject. A commit counts once however many files it squeezed. Throws if git cannot be read.
+ */
+export function countCapSqueeze({ cwd = ".", cap = DEFAULT_CAP, days = SQUEEZE_DAYS } = {}) {
+  const log = git(["log", "--no-merges", "--no-renames", `--since=${days} days ago`, "--numstat", "--format=%x00%H"], cwd);
+  let n = 0;
+  for (const chunk of log.split("\0").filter((c) => c.trim())) {
+    const [sha, ...rows] = chunk.split("\n");
+    const shrunk = rows.map((r) => r.split("\t")).filter(([add, del, path]) =>
+      path && inCapScope(path) && /^\d+$/.test(add) && Number(del) > Number(add));
+    const squeezed = shrunk.some(([, , path]) => {
+      let before, after;
+      try { before = git(["show", `${sha}^:${path}`], cwd); } catch { return false; } // root commit or new file
+      if (lineCount(before) < cap - SQUEEZE_MARGIN) return false;
+      try { after = git(["show", `${sha}:${path}`], cwd); } catch { return false; } // deleted: moved, not trimmed
+      // Still over the cap after it is not a fit: a file with no cap then (wire/messages.ts at 1300+).
+      if (lineCount(after) > cap) return false;
+      return removedLines(git(["show", "--format=", "--no-renames", "-U0", sha, "--", path], cwd)).every(isNoteLine);
+    });
+    if (squeezed) n++;
+  }
+  return n;
 }
 
 function gitFiles() {
@@ -106,6 +157,16 @@ const READINGS = {
     }
     if (bare.length) process.stderr.write(bare.join("\n") + "\n");
     return n;
+  },
+  capSqueeze() {
+    let cap = DEFAULT_CAP;
+    try { cap = capFromConfig(readFileSync("eslint.config.js", "utf8")); } catch { /* fallback cap */ }
+    try {
+      return countCapSqueeze({ cap });
+    } catch (e) {
+      process.stderr.write(`capSqueeze: git unreadable: ${e.message}\n`);
+      process.exit(1);
+    }
   },
 };
 

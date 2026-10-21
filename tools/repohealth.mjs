@@ -604,7 +604,7 @@ function days() {
  * second place where "how far back is recent" could be decided differently.
  *
  * The window is the last `RANK_WINDOW_DAYS` READINGS, not calendar days:
- * `windowFor` in `narrate.mjs` drops the absences before the values get here,
+ * `windowFor` in `events.mjs` drops the absences before the values get here,
  * so the days are already gone and a calendar cut through this seam could
  * only be a guess. `series.mjs`'s header argues it out.
  */

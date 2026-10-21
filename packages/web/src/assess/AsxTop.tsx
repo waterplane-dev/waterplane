@@ -9,6 +9,7 @@ import { track } from "../usage";
 import { ICON, VERDICT_TAG } from "./asxConst";
 import { RunLog } from "./AsxParts";
 import type { AssessModel } from "./useAssessSheet";
+import { Button, Hint } from "../kit";
 
 export function AsxTop({ m }: { m: AssessModel }) {
   const { p, run, proposal, counts, watch, guideOpen, setGuideOpen, res, nothing, guide } = m;
@@ -41,10 +42,10 @@ export function AsxTop({ m }: { m: AssessModel }) {
           {m.slotIntro ? <div className="assess-guide-lead">{m.slotIntro}</div> : null}
           <div className="assess-guide-lead">{guide.lead}</div>
           <div className="act-group-head">
-            <button className="key" title={guideOpen ? "hide this" : "what accepting and applying on this screen actually do"}
+            <Button title={guideOpen ? "hide this" : "what accepting and applying on this screen actually do"}
               onClick={() => { track("action:assess.guide"); setGuideOpen((v) => !v); }}>
               {guideOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />} how this works
-            </button>
+            </Button>
           </div>
           {guideOpen ? (
             <ul className="assess-guide">
@@ -55,7 +56,7 @@ export function AsxTop({ m }: { m: AssessModel }) {
       ) : null}
       {/* The host's own one-line summary of the run, verbatim — it is built from
           the proposal's counts, so the row and this screen cannot disagree. */}
-      {run?.detail ? <div className={`form-hint${run.status === "failed" ? " warn" : ""}`}>{run.detail}</div> : null}
+      {run?.detail ? <Hint tone={run.status === "failed" ? "warn" : undefined}>{run.detail}</Hint> : null}
       {run?.status === "failed" && run.envelope
         ? <div className="hist-out mono">{run.envelope}</div>
         : null}
@@ -79,16 +80,16 @@ export function AsxTop({ m }: { m: AssessModel }) {
                 telling somebody about — which one is theirs to decide. */}
             {watch.quiet ? <span className="act-count warn">{watch.quiet}</span> : null}
           </div>
-          {watch.say ? <div className="form-hint assess-say">{watch.say}</div> : null}
+          {watch.say ? <Hint className="assess-say">{watch.say}</Hint> : null}
           <RunLog steps={run?.progress?.tail ?? []} />
         </div>
       ) : null}
 
       {!p.online ? (
-        <div className="form-hint warn">
+        <Hint tone="warn">
           No connection — this is the last proposal this phone was told about. Applying starts work on the
           desktop, so it waits for the link; nothing here expires while it is down.
-        </div>
+        </Hint>
       ) : null}
 
       <Empty res={res} empty={nothing} thing="the assessment" noun="proposal">

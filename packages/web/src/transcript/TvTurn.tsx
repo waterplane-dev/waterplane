@@ -8,6 +8,7 @@ import { stamp, took } from "../turnWhen";
 import { track } from "../usage";
 import { TvBlocks } from "./TvBlocks";
 import type { TvModel } from "./useTranscriptView";
+import { Button, Tag } from "../kit";
 
 /** One turn: its header, the prompt, the notes about how it was sent, its blocks and its foot. */
 export function TvTurn({ m, t }: { m: TvModel; t: TranscriptTurn }) {
@@ -23,7 +24,7 @@ export function TvTurn({ m, t }: { m: TvModel; t: TranscriptTurn }) {
       {firstNew && (
         <div className="tr-newmark" id="tr-newmark">
           <span>{unread} new since you left</span>
-          <button className="key" onClick={markRead}>mark read</button>
+          <Button onClick={markRead}>mark read</Button>
         </div>
       )}
       <div className="tr-turn-head">
@@ -35,11 +36,11 @@ export function TvTurn({ m, t }: { m: TvModel; t: TranscriptTurn }) {
             the conversation log has no record of this at all and the
             words were read back off the terminal. */}
         {t.local && (
-          <span className="tag" title={t.local === "screen"
+          <Tag title={t.local === "screen"
             ? "the CLI answered this in the terminal — no conversation-log record exists, so this was read back from the screen capture"
             : "the CLI answered this itself — a local command, no model turn"}>
             <TerminalIcon size={11} /> {t.local === "screen" ? "terminal only" : "local command"}
-          </span>
+          </Tag>
         )}
         {/* SENT, NOT STARTED. The TUI holds a prompt typed into a busy
             session until the turn ends, so this row is the app's own record
@@ -48,9 +49,9 @@ export function TvTurn({ m, t }: { m: TvModel; t: TranscriptTurn }) {
             produced nothing. It is replaced by the real turn the moment
             the conversation log takes the prompt. */}
         {t.queued && (
-          <span className="tag" title="typed into that session and accepted — the CLI holds a prompt until the turn it is working on ends, so nothing has started it yet">
+          <Tag title="typed into that session and accepted — the CLI holds a prompt until the turn it is working on ends, so nothing has started it yet">
             <Clock size={11} /> waiting for the CLI
-          </span>
+          </Tag>
         )}
         {/* THE OTHER END OF `queued`. The CLI took these words into the
             turn it was already running instead of starting a turn of
@@ -58,18 +59,18 @@ export function TvTurn({ m, t }: { m: TvModel; t: TranscriptTurn }) {
             nowhere else — so the row is exact, but the boundary above it
             is the CLI's decision rather than a prompt-and-answer pair. */}
         {t.absorbed && (
-          <span className="tag" title="the CLI took this prompt into the turn it was already running instead of starting a new one">
+          <Tag title="the CLI took this prompt into the turn it was already running instead of starting a new one">
             <CornerDownRight size={11} /> taken mid-turn
-          </span>
+          </Tag>
         )}
-        {t.toolCount > 0 && <span className="tag"><Wrench size={11} /> {t.toolCount}</span>}
-        {t.sidechains > 0 && <span className="tag">{t.sidechains} sub-agent</span>}
-        <button className="key" title="copy turn" onClick={() => copy(turnText(t))}><Copy size={13} /></button>
+        {t.toolCount > 0 && <Tag><Wrench size={11} /> {t.toolCount}</Tag>}
+        {t.sidechains > 0 && <Tag>{t.sidechains} sub-agent</Tag>}
+        <Button title="copy turn" onClick={() => copy(turnText(t))}><Copy size={13} /></Button>
         {fork && (
-          <button className="key" title="fork or reset to this turn" aria-expanded={forkTurn === t.id}
+          <Button title="fork or reset to this turn" aria-expanded={forkTurn === t.id}
             onClick={() => setForkTurn((id) => (id === t.id ? null : t.id))}>
             <GitFork size={13} />
-          </button>
+          </Button>
         )}
       </div>
       {fork && forkTurn === t.id && (
@@ -128,9 +129,9 @@ export function TvTurn({ m, t }: { m: TvModel; t: TranscriptTurn }) {
             the CLI answers {t.prompt.trim().split(/\s+/)[0]} in an overlay of its own and keeps no record of it,
             so the reader does not copy it · read it in the CLI while the overlay is up — once closed (Esc) it is gone
           </span>
-          <button className="key" onClick={() => { track("action:read.btwToCli"); onShowCli(); }}>
+          <Button onClick={() => { track("action:read.btwToCli"); onShowCli?.(); }}>
             <TerminalIcon size={13} /> open the CLI
-          </button>
+          </Button>
         </div>
       )}
       <TvBlocks m={m} t={t} />

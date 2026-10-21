@@ -63,7 +63,7 @@ import {
   type FamilyKeep, type SweepAge, type SweepPlan, type SweepResult, type SweepScope, type SweepTally,
 } from "@waterplane/shared";
 import { api, type FileEntry } from "./api";
-import { SheetHead, ConfirmButton, Unavailable, FilterBar, CountChips } from "./kit";
+import { SheetHead, ConfirmButton, Unavailable, FilterBar, CountChips, Button, Hint } from "./kit";
 import { ago } from "./format";
 
 interface Props {
@@ -177,20 +177,20 @@ export function SweepSheet({ repoId, repoName, scope, onScope, onDone, onClose }
         {loading && <Loader2 size={13} className="spin" />}
       </SheetHead>
 
-      <div className="form-hint">
+      <Hint>
         {repoName} · {SWEEP_SCOPE_LABEL[scope]}. Pick how far back, look at what it would delete,
         then confirm. Nothing goes until you do.
-      </div>
+      </Hint>
 
       {/* Which direction. Two chips and never a "both": see the module note. */}
       <div className="annot-tools">
         {(["outbox", "inbox"] as const).map((s) => (
-          <button key={s} className={`key ${scope === s ? "active" : ""}`} onClick={() => onScope(s)}>{s}</button>
+          <Button key={s} className={scope === s ? "active" : ""} onClick={() => onScope(s)}>{s}</Button>
         ))}
-        <button className="key" onClick={() => void load()}><RefreshCw size={14} /> re-read</button>
+        <Button onClick={() => void load()}><RefreshCw size={14} /> re-read</Button>
       </div>
 
-      {error && <div className="form-hint warn">{error}</div>}
+      {error && <Hint tone="warn">{error}</Hint>}
 
       {/* The age ladder. Each chip is a COUNT and its BYTES, and tapping one
           opens exactly those rows — the number and the cut are one function. A
@@ -213,19 +213,19 @@ export function SweepSheet({ repoId, repoName, scope, onScope, onDone, onClose }
             bucket={(k) => ({ count: families.counts[k].count, detail: fmtBytes(families.counts[k].bytes) })} />
           {/* What a family IS, in one line — without it the chips above read as
               a second age ladder with strange numbers. */}
-          <div className="form-hint">
+          <Hint>
             A build family is the same artifact across builds — the version, the hash and the build
             number vary, everything else is its name. {families.n} {families.n === 1 ? "family" : "families"} here.
-          </div>
+          </Hint>
         </>
       )}
 
       {plan && !cut && (
-        <div className="form-hint">
+        <Hint>
           {plan.total.count
             ? <>{plan.total.count} file{plan.total.count === 1 ? "" : "s"} here, {fmtBytes(plan.total.bytes)} in all. Pick a cut above to see what would go.</>
             : <>Nothing in this repo’s {scope}.</>}
-        </div>
+        </Hint>
       )}
 
       {/* The filtered view SAYS what it is hiding — n of N against the
@@ -254,9 +254,9 @@ export function SweepSheet({ repoId, repoName, scope, onScope, onDone, onClose }
             {/* What STAYS — each ladder says it in its own terms, because "3
                 newer files stay" and "the newest 3 of each of 13 families" are
                 different facts and only one of them is true at a time. */}
-            <div className="form-hint">
+            <Hint>
               {age ? sweepKeepText(cut, age) : familyKeepText(cut, keep!, families?.n ?? 0)}
-            </div>
+            </Hint>
             {cut.count > 0 ? (
               // `ConfirmButton`, never `window.confirm` — a native modal blocks
               // the WebView's event loop (CLAUDE.md). The label restates the
@@ -284,7 +284,7 @@ export function SweepSheet({ repoId, repoName, scope, onScope, onDone, onClose }
           another route, the other is bytes still on disk. */}
       {result && (
         <div className="form">
-          <div className={`form-hint ${result.failed.length ? "warn" : ""}`}>{sweepResultText(result)}</div>
+          <Hint className={result.failed.length ? "warn" : ""}>{sweepResultText(result)}</Hint>
           {result.failed.length > 0 && (
             <div className="list">
               {result.failed.map((p) => <div key={p} className="row sweep-row"><span className="sweep-path mono">{p}</span></div>)}

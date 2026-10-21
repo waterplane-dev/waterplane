@@ -9,6 +9,7 @@ import { useCore } from "../../sdk";
 import { SheetHead } from "../../Sheet";
 import { api } from "../../api";
 import { clipSeed } from "./store";
+import { Button, Hint } from "../../kit";
 
 export function ClipSheet() {
   const core = useCore();
@@ -51,10 +52,10 @@ export function ClipSheet() {
   return (
     <div className="sheet">
       <SheetHead title={"To desktop clipboard"} onClose={() => core.nav.close("clip")} />
-      <div className="form-hint">
+      <Hint>
         Puts text on the DESKTOP's system clipboard — nothing is typed into the session.
         Paste your phone's clipboard, pull in the compose draft, or just type below.
-      </div>
+      </Hint>
       <textarea
         className="text-dump mono"
         autoFocus
@@ -63,11 +64,11 @@ export function ClipSheet() {
         onChange={(e) => setClipText(e.target.value)}
       />
       <div className="sheet-actions">
-        <button className="key" onClick={() => void pasteFromPhoneClip()}><ClipboardPaste size={16} /> phone clipboard</button>
+        <Button onClick={() => void pasteFromPhoneClip()}><ClipboardPaste size={16} /> phone clipboard</Button>
         {compose.trim() && compose !== clipText
-          ? <button className="key" onClick={() => setClipText(compose)}><Quote size={16} /> compose draft</button>
+          ? <Button onClick={() => setClipText(compose)}><Quote size={16} /> compose draft</Button>
           : null}
-        {n ? <button className="key" onClick={() => setClipText("")}><Eraser size={16} /> clear</button> : null}
+        {n ? <Button onClick={() => setClipText("")}><Eraser size={16} /> clear</Button> : null}
         <div className="spacer" />
         <button className="send" disabled={!clipText.trim()} onClick={() => void sendToHostClip(clipText)}>
           <CloudUpload size={16} /> send{n ? ` ${n}` : ""}

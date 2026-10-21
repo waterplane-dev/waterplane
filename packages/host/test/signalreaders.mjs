@@ -17,7 +17,7 @@ import { detectPrompt } from "../dist/prompt.js";
 import { navToSubmit } from "../dist/promptnav.js";
 import { detectContext } from "../dist/context.js";
 import { isLocalCommand, startsNoTurn } from "../dist/slash.js";
-import { composerEcho } from "../dist/echo.js";
+import { composerEcho } from "../dist/composer.js";
 import { detectLimitText } from "../dist/limit.js";
 import { ECHO_SPLIT, decodeFixture } from "@waterplane/shared";
 

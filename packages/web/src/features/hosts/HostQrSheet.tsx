@@ -22,6 +22,8 @@ import { openExternal } from "../../openExternal";
 import { PairCopyRows } from "../../PairCopyRows";
 import { useCore } from "../../sdk";
 import { codeLeftText, qrPath } from "./logic";
+import { Button } from "../../kit";
+import { SetNote } from "../../SettingsKit";
 
 const ICON = 16;
 const QUIET = 4;
@@ -49,7 +51,7 @@ function Qr({ text }: { text: string }) {
       return { n, d: qrPath(n, (r, c) => qr.isDark(r, c)) };
     } catch { return null; }
   }, [text]);
-  if (!drawn) return <div className="set-note">This address is too long to draw as a QR — use the code below.</div>;
+  if (!drawn) return <SetNote>This address is too long to draw as a QR — use the code below.</SetNote>;
   const side = drawn.n + QUIET * 2;
   // Dark on paper in BOTH themes: an inverted code does not scan everywhere.
   return (
@@ -98,7 +100,7 @@ export function HostQrSheet() {
             <input type="checkbox" checked={passive} onChange={(e) => { const on = e.target.checked; setPassive(on); c.say.track("action:hosts.pairPassive"); void mint(on); }} />
             <Baby size={15} /> Passive device — app updates only
           </label>
-          {passive && <div className="set-note">{PASSIVE_PAIR_NOTE} Nothing else works on it until it is unlocked with the PIN (Settings › Connection › Paired devices sets the PIN).</div>}
+          {passive && <SetNote>{PASSIVE_PAIR_NOTE} Nothing else works on it until it is unlocked with the PIN (Settings › Connection › Paired devices sets the PIN).</SetNote>}
         </section>
         {minted.s === "busy" && (
           <div className="pair-state"><Loader2 size={18} className="spin" /> asking the desktop for a code…</div>
@@ -106,13 +108,13 @@ export function HostQrSheet() {
         {minted.s === "bad" && (
           <div className="pair-state">
             <div style={{ color: "var(--dead)" }}>The desktop did not give a code: {minted.why}</div>
-            <button className="key" onClick={() => void mint()}><RotateCw size={14} /> try again</button>
+            <Button onClick={() => void mint()}><RotateCw size={14} /> try again</Button>
           </div>
         )}
         {minted.s === "ok" && !left && (
           <div className="pair-state">
             <div>That code has expired — they last 10 minutes and work once.</div>
-            <button className="key primary" onClick={() => void mint()}><RotateCw size={14} /> new code</button>
+            <Button variant="primary" onClick={() => void mint()}><RotateCw size={14} /> new code</Button>
           </div>
         )}
         {minted.s === "ok" && left && (
@@ -120,12 +122,12 @@ export function HostQrSheet() {
             {here && (
               <section className="pair-card">
                 <div className="pair-card-head"><Smartphone size={15} /> The app is on this phone</div>
-                <button className="key primary pair-wide" onClick={() => { c.say.track("action:hosts.pairThisPhone"); window.location.href = minted.m.deepLink; }}>
+                <Button variant="primary" className="pair-wide" onClick={() => { c.say.track("action:hosts.pairThisPhone"); window.location.href = minted.m.deepLink; }}>
                   <Smartphone size={15} /> open the app on this phone
-                </button>
-                <div className="set-note">
+                </Button>
+                <SetNote>
                   It opens with this desktop and code filled in — tap pair there. If nothing opens, the app is not installed.
-                </div>
+                </SetNote>
               </section>
             )}
             {here && <div className="pair-or">or on another phone</div>}
@@ -144,14 +146,14 @@ export function HostQrSheet() {
           </>
         )}
         <div className="pair-foot">
-          <div className="set-note">The new phone needs Tailscale signed in to the same tailnet.</div>
-          <div className="set-note">
+          <SetNote>The new phone needs Tailscale signed in to the same tailnet.</SetNote>
+          <SetNote>
             No app needed: the QR opens a page with "use web version" — that address is the whole app,
             and on your tailnet it needs no code. The code is for the Android app's "pair with code".
-          </div>
-          <button className="key" onClick={() => { if (!openExternal(TAILSCALE_ANDROID)) c.say.toast("could not open the link"); }}>
+          </SetNote>
+          <Button onClick={() => { if (!openExternal(TAILSCALE_ANDROID)) c.say.toast("could not open the link"); }}>
             <ExternalLink size={13} /> Tailscale for Android
-          </button>
+          </Button>
         </div>
       </div>
     </Sheet>

@@ -220,8 +220,8 @@ export function sessionNumbersOf(sorted: readonly SessionInfo[], repoName: (s: S
  * it. Sessions inside a group keep the session list's own order. A status
  * filter drops the sessionless repos — they cannot match a status.
  *
- * `openByRepo` is the opt-in second order (`repoSort: "sessions"`): most open
- * sessions first, ties alphabetically. Counted off every live session, not the
+ * `openByRepo` is the default order (`repoSort: "sessions"`): most open
+ * sessions first, ties alphabetically; `"name"` drops it for the plain sort. Counted off every live session, not the
  * filtered ones, so typing a filter does not reshuffle the repos it leaves.
  */
 export type RepoOrder = "name" | "sessions";

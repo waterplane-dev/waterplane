@@ -6,6 +6,8 @@ import type { Snippet } from "./SnippetSheet";
 import { track } from "./usage";
 import { useVoice } from "./useVoice";
 import { VoiceButton } from "./VoiceButton";
+import { Button } from "./kit/Button";
+import { Hint } from "./kit/Hint";
 
 /**
  * The one prompt-writing surface.
@@ -80,14 +82,21 @@ interface Props {
    * somebody keeps talking. Optional — a sheet with one box has one answer.
    */
   focusRef?: MutableRefObject<number>;
+  /**
+   * Words for a machine, not a sentence — the live desktop's typing box: no capital the keyboard
+   * adds by itself (a lone `ls` arrived as `Ls`), no autocorrect, no spellcheck.
+   */
+  plain?: boolean;
   /** Under the primary box: hints, an `AttachStrip`, anything sheet-specific. */
   children?: ReactNode;
 }
 
+const PLAIN = { autoCapitalize: "none", autoCorrect: "off", spellCheck: false } as const;
+
 export function PromptComposer({
   prompts, onChange, placeholder, chain, stepPlaceholder = "…and then?",
   stepHint = "then, once the turn before it finishes:", addLabel = "another prompt",
-  trackAdd, autoFocus, children, inline, rows, focusRef,
+  trackAdd, autoFocus, children, inline, rows, focusRef, plain,
 }: Props) {
   const text = prompts[0] ?? "";
   const steps = prompts.slice(1);
@@ -104,6 +113,7 @@ export function PromptComposer({
         className="search promptc-area"
         autoFocus={autoFocus}
         rows={inline ? rows ?? 3 : undefined}
+        {...(plain ? PLAIN : {})}
         placeholder={placeholder}
         value={text}
         onChange={(e) => setAt(0, e.target.value)}
@@ -116,7 +126,7 @@ export function PromptComposer({
           composer back-to-back the TUI would glue them into one line. */}
       {chain && steps.map((p, i) => (
         <div key={i} className="promptc-step">
-          <div className="form-hint" style={{ padding: 0 }}>{stepHint}</div>
+          <Hint style={{ padding: 0 }}>{stepHint}</Hint>
           <textarea
             className="search"
             rows={4}
@@ -128,8 +138,8 @@ export function PromptComposer({
           />
           <div className="queue-row-acts">
             <span className="spacer" />
-            <button className="key danger" title="drop this step"
-              onClick={() => onChange(prompts.filter((_, j) => j !== i + 1))}><Trash2 size={16} /></button>
+            <Button variant="danger" title="drop this step"
+              onClick={() => onChange(prompts.filter((_, j) => j !== i + 1))}><Trash2 size={16} /></Button>
           </div>
         </div>
       ))}
@@ -138,11 +148,11 @@ export function PromptComposer({
           own, and there is nothing a second turn could follow. */}
       {chain && !!filled.length && (
         <div className="queue-row-acts promptc-add">
-          <button className="key"
+          <Button
             title="add another prompt, delivered after this one's turn ends"
             onClick={() => { if (trackAdd) track(trackAdd); onChange([...prompts, ""]); }}>
             <Plus size={16} /> {addLabel}
-          </button>
+          </Button>
         </div>
       )}
     </div>
@@ -223,21 +233,21 @@ export function AttachButtons({ prompts, onPrompts, busy, disabled, disabledTitl
     <>
       <DictateButton prompts={prompts} onPrompts={onPrompts} focusRef={focusRef} />
       <SnippetButton prompts={prompts} onPrompts={onPrompts} focusRef={focusRef} />
-      <button className="key" disabled={busy || disabled} title={disabled ? disabledTitle : "attach an image (mark it up before it goes)"}
+      <Button disabled={busy || disabled} title={disabled ? disabledTitle : "attach an image (mark it up before it goes)"}
         onClick={() => { if (trackImage) track(trackImage); imgRef.current?.click(); }}>
         <Camera size={16} /> {busy ? "adding…" : "image"}
-      </button>
-      <button className="key" disabled={busy || disabled}
+      </Button>
+      <Button disabled={busy || disabled}
         title={disabled ? disabledTitle : "attach a file of any kind (PDF, doc, zip, audio…)"}
         onClick={() => { if (trackFile) track(trackFile); docRef.current?.click(); }}>
         <Paperclip size={16} /> file
-      </button>
+      </Button>
       {onBrowse && (
-        <button className="key" disabled={busy || disabled}
+        <Button disabled={busy || disabled}
           title={disabled ? disabledTitle : "name a file that is already in this repo — the gallery, and the path comes back into the prompt"}
           onClick={onBrowse}>
           <Images size={16} /> {browseLabel}
-        </button>
+        </Button>
       )}
       <input ref={imgRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={take} />
       <input ref={docRef} type="file" multiple style={{ display: "none" }} onChange={take} />
@@ -281,7 +291,7 @@ function SnippetButton({ prompts, onPrompts, focusRef }:
         <div className="snippet-pop">
           <div className="snippet-pop-head">
             <span>Snippets</span>
-            <button className="key" onClick={() => setOpen(null)} title="Close"><X size={14} /></button>
+            <Button onClick={() => setOpen(null)} title="Close"><X size={14} /></Button>
           </div>
           <div className="snippet-pop-list">
             {open.length === 0 && <Empty>No snippets yet — add them from the compose bar's snippet button, under “manage”.</Empty>}

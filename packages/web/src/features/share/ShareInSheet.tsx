@@ -10,7 +10,7 @@ import { useState } from "react";
 import { FileText, Image as ImageIcon, Inbox, Share2, Terminal, X } from "lucide-react";
 import { BRAND, fmtBytes } from "@waterplane/shared";
 import { Sheet } from "../../Sheet";
-import { RadioRows } from "../../kit";
+import { RadioRows, Button, Row, RowTitle, RowSub, Hint } from "../../kit";
 import { RepoPicker } from "../../RepoPicker";
 import { tabLabel } from "../../sessionTabs";
 import { useCore, useStore } from "../../sdk";
@@ -38,21 +38,21 @@ export function ShareInSheet() {
     void shareTo(t).finally(() => setBusy(false));
   };
   const sessionRow = (x: typeof sessions[number], sub: string) => (
-    <button key={x.id} className="row" onClick={() => go({ kind: "session", sessionId: x.id, annotate })}>
-      <span className="row-title"><Terminal size={14} /> {tabLabel(x, repoName(x.cwd))}</span>
-      <span className="row-sub">{repoName(x.cwd) || x.cwd}{sub ? ` · ${sub}` : ""}</span>
-    </button>
+    <Row key={x.id} as="button" onClick={() => go({ kind: "session", sessionId: x.id, annotate })}>
+      <RowTitle><Terminal size={14} /> {tabLabel(x, repoName(x.cwd))}</RowTitle>
+      <RowSub>{repoName(x.cwd) || x.cwd}{sub ? ` · ${sub}` : ""}</RowSub>
+    </Row>
   );
   return (
     <Sheet title={`Shared to ${BRAND.displayName}`} icon={<Share2 size={16} />} onClose={dropShare}
       footer={
         <div className="sheet-actions">
-          <button className="key" onClick={dropShare}><X size={16} /> drop it</button>
+          <Button onClick={dropShare}><X size={16} /> drop it</Button>
         </div>
       }>
-      <div className="form-hint">
+      <Hint>
         {busy ? "reading what was shared…" : `${shareSummary(s)} — where should it go? In a session, files are uploaded with their paths in the prompt, which is not sent until you send it.`}
-      </div>
+      </Hint>
       {pics > 0 && (
         <RadioRows<"asis" | "markup">
           label="pictures"
@@ -61,19 +61,19 @@ export function ShareInSheet() {
           onChange={(k) => setAnnotate(k === "markup")}
         />
       )}
-      {connecting && <div className="form-hint">Connecting to the desktop — its open sessions appear here once it answers.</div>}
+      {connecting && <Hint>Connecting to the desktop — its open sessions appear here once it answers.</Hint>}
       <div className="list">
         {s.files.map((f) => (
-          <div key={f.url} className="row">
-            <span className="row-title">{f.type.startsWith("image/") ? <ImageIcon size={14} /> : <FileText size={14} />} {f.name}</span>
-            <span className="row-sub">{f.type || "file"}{f.size ? ` · ${fmtBytes(f.size)}` : ""}</span>
-          </div>
+          <Row key={f.url}>
+            <RowTitle>{f.type.startsWith("image/") ? <ImageIcon size={14} /> : <FileText size={14} />} {f.name}</RowTitle>
+            <RowSub>{f.type || "file"}{f.size ? ` · ${fmtBytes(f.size)}` : ""}</RowSub>
+          </Row>
         ))}
         {s.text && (
-          <div className="row">
-            <span className="row-title"><FileText size={14} /> text</span>
-            <span className="row-sub">{s.text.length > 200 ? `${s.text.slice(0, 200)}…` : s.text}</span>
-          </div>
+          <Row>
+            <RowTitle><FileText size={14} /> text</RowTitle>
+            <RowSub>{s.text.length > 200 ? `${s.text.slice(0, 200)}…` : s.text}</RowSub>
+          </Row>
         )}
       </div>
       {active && (
@@ -99,7 +99,7 @@ export function ShareInSheet() {
           onChange={(k) => setInbox(k === "inbox")}
         />
       )}
-      {inbox && <div className="form-hint">No session: the files upload to the repo's .claude/inbox/ in the background{s.text ? ", and the text is copied" : ""}.</div>}
+      {inbox && <Hint>No session: the files upload to the repo's .claude/inbox/ in the background{s.text ? ", and the text is copied" : ""}.</Hint>}
       <RepoPicker repos={repos} label={inbox ? "Into the inbox of…" : "A new session in…"} listClass="list" home={active?.cwd ?? null} worktreeFilter
         emptyText="No repos on this desktop yet." onPick={(repo) => go(inbox ? { kind: "inbox", repo } : { kind: "new", repo, annotate })} />
     </Sheet>

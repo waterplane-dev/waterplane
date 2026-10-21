@@ -26,6 +26,7 @@ import { AlertTriangle } from "lucide-react";
 import { memoryPressureNote, windowAdviceText } from "@waterplane/shared";
 import { FilterChip } from "./kit/FilterChip";
 import { acquireLocalRtWatch, freshSample, modelBaseName, useLocalRt } from "./localRt";
+import { SetNote } from "./SettingsKit";
 import {
   backendInfo, isZeroCost, modelChoices, modelGroups, showWhereFilter,
   HOSTED_DISCLAIMER, WHERE_LABEL, WHERE_NOTE, ZERO_COST_DISCLAIMER,
@@ -162,15 +163,15 @@ export function ModelField({ backends, backend, value, onChange, placeholder }: 
           what it is showing is the same rule the rest of the app follows; here
           it also carries the only warning this screen owes anybody, which is
           that a hosted model needs the tunnel and may bill. */}
-      {note && <div className="set-note">{note}</div>}
+      {note && <SetNote>{note}</SetNote>}
       {/* What this local model costs the desktop it will run on, measured from
           what the runner is holding RIGHT NOW. A sentence, never a refusal —
           the estimate cannot see the model this desktop has never loaded, and
           "free memory" on a machine with a page cache and a compressor is not a
           number anybody's work should be blocked on. Nothing here disables
           Start; see `localRt.ts`. */}
-      {pressure && <div className="set-note">{pressure}</div>}
-      {advice && <div className="set-note">{advice}</div>}
+      {pressure && <SetNote>{pressure}</SetNote>}
+      {advice && <SetNote>{advice}</SetNote>}
       {/* THE HARD PART, and it is deliberately not dismissible. It is drawn
           whenever a hosted model is in play — when the group is selected, and
           whenever the CURRENT value is one — because the moment that matters is
@@ -215,11 +216,11 @@ export function ModelField({ backends, backend, value, onChange, placeholder }: 
           </optgroup>
         ))}
       </select>
-      {listNote && <div className="set-note">{listNote}</div>}
+      {listNote && <SetNote>{listNote}</SetNote>}
       {/* A model chosen and then filtered out of view is still the model that
           will run. Say so rather than letting the control look empty-handed. */}
       {active && value && !shown.some((g) => g.ids.includes(value)) && (
-        <div className="set-note">Still set to <code>{value}</code>, which is not in this group.</div>
+        <SetNote>Still set to <code>{value}</code>, which is not in this group.</SetNote>
       )}
     </div>
   );

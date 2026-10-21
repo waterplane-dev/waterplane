@@ -119,7 +119,7 @@ const WIRE_BARRELS = [
   { barrel: "wire/messages.ts", dir: "wire/messages", maxBarrel: 53 },
   // The logic modules cut the same way (sessioncost 1,220 → 122, schedule 1,199 → 102, queue
   // 1,103 → 104, clihealth 940 → 123): header + explicit re-exports, a slice per subject.
-  { barrel: "sessioncost.ts", dir: "sessioncost", maxBarrel: 122 },
+  { barrel: "sessioncost.ts", dir: "sessioncost", maxBarrel: 124 },
   { barrel: "schedule.ts", dir: "schedule", maxBarrel: 102 },
   { barrel: "queue.ts", dir: "queue", maxBarrel: 104 },
   { barrel: "clihealth.ts", dir: "clihealth", maxBarrel: 123 },

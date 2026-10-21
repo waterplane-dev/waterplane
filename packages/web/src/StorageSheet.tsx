@@ -63,6 +63,9 @@ import { Empty } from "./Empty";
 import { api } from "./api";
 import { useRemoteResource } from "./useRemoteResource";
 import { ago } from "./format";
+import { Button } from "./kit/Button";
+import { Row } from "./kit/Row";
+import { Hint } from "./kit/Hint";
 
 interface Props {
   onClose: () => void;
@@ -170,18 +173,18 @@ export function StorageSheet({ onClose, onToast, onOpenSweep }: Props) {
         {loading && <Loader2 size={13} className="spin" />}
       </SheetHead>
 
-      <div className="form-hint">
+      <Hint>
         {audit ? totalText(audit.named, audit.estimate, audit.quota) : "Measuring…"}
-      </div>
-      {nativeNote && <div className="form-hint">{nativeNote}</div>}
+      </Hint>
+      {nativeNote && <Hint>{nativeNote}</Hint>}
 
       <div className="annot-tools">
-        <button className="key" onClick={() => { void load(); setBump((n) => n + 1); }}>
+        <Button onClick={() => { void load(); setBump((n) => n + 1); }}>
           <RefreshCw size={14} /> re-measure
-        </button>
+        </Button>
       </div>
 
-      {said && <div className="form-hint">{said}</div>}
+      {said && <Hint>{said}</Hint>}
 
       {/* ── Downloads ─────────────────────────────────────────────────────
           Its own section and not a cache row: these are the gigabytes, the
@@ -190,15 +193,15 @@ export function StorageSheet({ onClose, onToast, onOpenSweep }: Props) {
       {dl && (
         <section className="set-group">
           <h3 className="set-title">Downloads</h3>
-          <div className="form-hint">
+          <Hint>
             Finished downloads keep their bytes for a week and then drop them by themselves.
             Dropping one now keeps its row: fetching it back is a tap.
-          </div>
+          </Hint>
 
-          <div className="row">
+          <Row>
             <span className="sweep-path">already saved out</span>
             <span className="sweep-meta">{tallyText(dl.savedIds.length, dl.savedBytes, "file")}</span>
-          </div>
+          </Row>
           {dl.savedIds.length > 0 ? (
             <ConfirmButton className="send" confirm={`Yes — free ${fmtBytes(dl.savedBytes)}`}
               disabled={busy} onConfirm={() => void runDownloads(dl.savedIds, "already saved out")}>
@@ -211,19 +214,19 @@ export function StorageSheet({ onClose, onToast, onOpenSweep }: Props) {
             }]} />
           )}
 
-          <div className="row">
+          <Row>
             <span className="sweep-path">never saved out</span>
             <span className="sweep-meta">{tallyText(dl.unsavedIds.length, dl.unsavedBytes, "file")}</span>
-          </div>
+          </Row>
           {dl.unsavedIds.length > 0 ? (
             <>
               {/* Honest about the one way this is not free: the desktop prunes
                   old builds (`artifacts.ts` keeps 3 of each), so "fetch it
                   again" is a promise about the build, not about the file. */}
-              <div className="form-hint">
+              <Hint>
                 These were never saved to the phone. They come back as a tap only while the desktop
                 still has that build — it keeps the newest few of each.
-              </div>
+              </Hint>
               <ConfirmButton className="send danger" confirm={`Yes — free ${fmtBytes(dl.unsavedBytes)}`}
                 disabled={busy} onConfirm={() => void runDownloads(dl.unsavedIds, "not saved out")}>
                 <Trash2 size={14} /> Drop bytes of {dl.unsavedIds.length} unsaved · {fmtBytes(dl.unsavedBytes)}
@@ -244,10 +247,10 @@ export function StorageSheet({ onClose, onToast, onOpenSweep }: Props) {
           <h3 className="set-title">
             Caches — {tallyText(groups.caches.count, groups.caches.bytes, "entry")}
           </h3>
-          <div className="form-hint">
+          <Hint>
             Everything here can be read from the desktop again. Clearing costs a request each,
             and leaves these screens blank until the tunnel is back.
-          </div>
+          </Hint>
           <StoreRows rows={groups.caches.rows} busy={busy} onClear={runRow} />
           {groups.caches.rows.some((r) => r.count > 0 && !r.cant) ? (
             <ConfirmButton className="send" confirm={`Yes — clear ${fmtBytes(groups.caches.bytes ?? 0)}`}
@@ -267,9 +270,9 @@ export function StorageSheet({ onClose, onToast, onOpenSweep }: Props) {
           <h3 className="set-title">
             Only on this phone — {tallyText(groups.keep.count, groups.keep.bytes, "entry")}
           </h3>
-          <div className="form-hint">
+          <Hint>
             The desktop cannot send these back. Each one goes on its own, and says what it takes with it.
-          </div>
+          </Hint>
           <StoreRows rows={groups.keep.rows} busy={busy} onClear={runRow} />
         </section>
       )}
@@ -281,7 +284,7 @@ export function StorageSheet({ onClose, onToast, onOpenSweep }: Props) {
         <h3 className="set-title"><Server size={13} /> On the desktop — repos</h3>
         {survey.data ? (
           <>
-            <div className="form-hint">{surveyHeadText(survey.data)}</div>
+            <Hint>{surveyHeadText(survey.data)}</Hint>
             <Empty res={survey} empty={!survey.data.repos.length} thing="No repos on the desktop." noun="survey" />
             <div className="list">
               {survey.data.repos.map((r) => (
@@ -298,9 +301,9 @@ export function StorageSheet({ onClose, onToast, onOpenSweep }: Props) {
                     {(["outbox", "inbox"] as const).map((scope) => {
                       const t = scope === "outbox" ? r.outbox : r.inbox;
                       return t && t.count > 0 ? (
-                        <button key={scope} className="key" onClick={() => onOpenSweep(r.repoId, scope)}>
+                        <Button key={scope} onClick={() => onOpenSweep(r.repoId, scope)}>
                           {scope} · {scopeChipText(t)}
-                        </button>
+                        </Button>
                       ) : (
                         <span key={scope} className="sweep-meta">{scope} · {scopeChipText(t)}</span>
                       );
@@ -322,13 +325,13 @@ export function StorageSheet({ onClose, onToast, onOpenSweep }: Props) {
         <h3 className="set-title"><Server size={13} /> On the desktop — the app’s own store</h3>
         {store.data ? (
           <>
-            <div className="form-hint">
+            <Hint>
               <span className="mono">{store.data.dir}</span> —{" "}
               {store.data.total == null
                 ? "part of it could not be measured."
                 : `${fmtBytes(store.data.total)} in all. Most of it is already bounded by whatever writes it.`}
               {" "}Read {ago(store.data.at)}.
-            </div>
+            </Hint>
             <div className="list">
               {store.data.rows.map((r) => (
                 <div key={r.id} className="row sweep-row storage-row">
@@ -336,7 +339,7 @@ export function StorageSheet({ onClose, onToast, onOpenSweep }: Props) {
                     <span className="sweep-path">{r.label}</span>
                     <span className="sweep-meta">{tallyText(r.count, r.bytes, "file")}</span>
                   </div>
-                  <div className="form-hint">{HOST_STORE_KIND_LABEL[r.kind]} — {r.cost}</div>
+                  <Hint>{HOST_STORE_KIND_LABEL[r.kind]} — {r.cost}</Hint>
                   {r.cant ? (
                     <Unavailable className="form-hint" cants={[{ label: `clear ${r.label}`, reason: r.cant }]} />
                   ) : r.count > 0 ? (
@@ -345,7 +348,7 @@ export function StorageSheet({ onClose, onToast, onOpenSweep }: Props) {
                       <Trash2 size={13} /> {hostStoreButtonText(r)}
                     </ConfirmButton>
                   ) : (
-                    <div className="form-hint">Nothing here.</div>
+                    <Hint>Nothing here.</Hint>
                   )}
                 </div>
               ))}
@@ -376,7 +379,7 @@ function StoreRows({ rows, busy, onClear }: { rows: StoreUse[]; busy: boolean; o
             <span className="sweep-path">{r.label}</span>
             <span className="sweep-meta">{tallyText(r.count, r.bytes, "entry")}</span>
           </div>
-          <div className="form-hint">{r.cost}</div>
+          <Hint>{r.cost}</Hint>
           {r.cant ? (
             <Unavailable className="form-hint" cants={[{ label: `clear ${r.label}`, reason: r.cant }]} />
           ) : r.count > 0 ? (
@@ -387,7 +390,7 @@ function StoreRows({ rows, busy, onClear }: { rows: StoreUse[]; busy: boolean; o
           ) : (
             // Empty is an answer, and it is said rather than drawn as a
             // control that would do nothing.
-            <div className="form-hint">Nothing here.</div>
+            <Hint>Nothing here.</Hint>
           )}
         </div>
       ))}

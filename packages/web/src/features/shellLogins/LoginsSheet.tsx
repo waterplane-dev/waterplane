@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { AlertTriangle, BookKey, Plus } from "lucide-react";
 import { Sheet } from "../../Sheet";
-import { CountChips, FilterBar } from "../../kit";
+import { CountChips, FilterBar, Row, RowTitle, RowSub, Hint } from "../../kit";
 import { closeLogins, insertLogin } from "./actions";
 import { LOGINS_HEADER, LOGIN_ROWS, cutRows, cutWords, localhostCount, rowWords } from "./logic";
 
@@ -15,7 +15,7 @@ export function LoginsSheet() {
   const rows = cutRows(onlyLocal);
   return (
     <Sheet title="logins" icon={<BookKey size={16} />} onClose={closeLogins}>
-      <div className="form-hint">{LOGINS_HEADER}</div>
+      <Hint>{LOGINS_HEADER}</Hint>
       <CountChips className="annot-tools" keys={["local"] as const}
         bucket={() => ({ count: localhostCount() })} label={() => "redirect to localhost"}
         active={onlyLocal ? "local" : null} onPick={(k) => setOnlyLocal(k === "local")} />
@@ -25,16 +25,16 @@ export function LoginsSheet() {
         </FilterBar>
       )}
       {rows.map((r) => (
-        <div key={r.id} className="row-wrap">
-          <button className="row grow" title="add this command to the compose box" onClick={() => insertLogin(r)}>
-            <span className="row-title mono">{r.command}</span>
-            <span className="row-sub">{rowWords(r)}</span>
+        <Row key={r.id} kind="wrap">
+          <Row as="button" kind="grow" title="add this command to the compose box" onClick={() => insertLogin(r)}>
+            <RowTitle className="mono">{r.command}</RowTitle>
+            <RowSub>{rowWords(r)}</RowSub>
             {r.redirectsToLocalhost && (
-              <span className="row-sub"><AlertTriangle size={12} /> plain login redirects to localhost</span>
+              <RowSub><AlertTriangle size={12} /> plain login redirects to localhost</RowSub>
             )}
-          </button>
+          </Row>
           <span className="row-act" aria-hidden><Plus size={16} /></span>
-        </div>
+        </Row>
       ))}
     </Sheet>
   );

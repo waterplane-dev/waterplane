@@ -1,5 +1,5 @@
 /** The usage-window rule's fields. Split from `SendSheet.tsx` (docs/notes/send-architecture.md). */
-import { RadioRows } from "../kit";
+import { RadioRows, Hint } from "../kit";
 import { LS, lsSet } from "../storage";
 import { GUARD_LABEL, guardWords, pctChoices, pctOk, pctWords } from "../sendIntent";
 import { LeadPick } from "./LeadPick";
@@ -93,9 +93,9 @@ export function WindowRule({ m }: { m: SendSheetModel }) {
             {/* Never a dimmed field and never a refusal: the chips
                 above still answer the question, so an unusable
                 number owes the reader a sentence and nothing more. */}
-            <div className="form-hint">
+            <Hint>
               {pctWords(pctRaw) ?? `Kept on this phone — ${pctOk(pctRaw)}% left is offered as a chip on the next rule you write.`}
-            </div>
+            </Hint>
           </>
         )}
         {rule.minPctLeft != null && (
@@ -122,14 +122,14 @@ export function WindowRule({ m }: { m: SendSheetModel }) {
             {/* Not a dimmed control and never a refusal, in any of
                 the three cases: the rule is savable exactly as
                 written and `guardWords` says what it will DO. */}
-            <div className="form-hint">{guardWords(rule)}</div>
+            <Hint>{guardWords(rule)}</Hint>
           </>
         )}
-        <div className="form-hint">
+        <Hint>
           Anchored to the reset, not to a clock: the session window slides with whenever you last
           started using it, so there is no time of day that means the same thing twice.
           Nothing is armed until the host has read the window once.
-        </div>
+        </Hint>
       </>
     </>
   );

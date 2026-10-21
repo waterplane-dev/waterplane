@@ -10,7 +10,7 @@
  * feature needs it, not before.
  */
 export type {
-  Availability, CommandDef, ConnInfo, ContributionIcon, CoreApi, DurableOp, FeatureManifest, LauncherItemCount, LauncherItemDef, LedgerSummary, MenuItemDef, SecretFillContext, SecretFillerDef, LedgerViewDef, LedgerViewParts, LedgerViewProps,
+  Availability, CommandDef, ConnInfo, ContributionIcon, CoreApi, DurableOp, FeatureManifest, LauncherItemCount, LauncherItemDef, LedgerSummary, MenuItemDef, SecretFillContext, SecretFillerDef, SecretFillerEntry, LedgerViewDef, LedgerViewParts, LedgerViewProps,
   MessageHandlers, QueueBacklogOpts, RepoActionDef, RepoChipCount, RepoChipDef, ReturnTo, SessionViewDef, SettingsGroupId, SettingsRowsDef, SetupRowDef, SheetDef, SheetId,
   ToolbarItemDef, UploadApi, UploadBuf, UploadProgress,
 } from "./types.ts";
@@ -21,7 +21,7 @@ export { useBackStep } from "../backStep.ts";
 /** This device's preferences (`core/prefs.ts`) — read-only from a feature; the
  *  Settings sheet is their writer. */
 export { useConnStatus } from "./connStatus.ts";
-export { usePref, type DevicePrefs, type PrefKey } from "../core/prefs.ts";
+export { setPref, usePref, type DevicePrefs, type PrefKey } from "../core/prefs.ts";
 export type { CachedListStore, CachedLists } from "./cached.ts";
 export { repoRunStore, type RepoRunStore, type RunLike } from "./repoRun.ts";
 export { featureSheetId, type FeatureSheetId } from "../routing.ts";
@@ -33,10 +33,13 @@ export type { PluginCallResult, PluginMethods } from "@waterplane/shared";
 export { openStream, type StreamCallbacks, type StreamHandle, type StreamState, type StreamStats, type StreamStopCause } from "./stream.ts";
 export type { StreamFrame } from "@waterplane/shared";
 export { ledgers, type CachedRead } from "./ledgers.ts";
+export { secretFillers } from "./secretFillers.ts";
 /** Open a URL outside the app — the one call that works in both a browser tab and the Android shell. */
 export { openExternal } from "../openExternal.ts";
 /** A full-resolution screenshot of the desktop into a repo's `.claude/outbox/` — the one capture route. */
 export { desktopScreenshot } from "../desktopShot.ts";
+/** Hide (or bring back) the Android shell's system bars; false where the shell cannot. */
+export { shellImmersive } from "../immersive.ts";
 export {
   modelRows, pacing, pacingLine, periodCap, periodReadSpan, periodTitle, primaryUsdPeriod, usdWords,
   type ModelRow, type Pacing,

@@ -12,6 +12,7 @@ import { BacklogRow } from "./BacklogRow";
 import { Empty } from "../Empty";
 import type { BacklogModel } from "./backlogTypes";
 import { CLOSED_GROUP } from "./backlogLabels";
+import { Tag } from "../kit/Tag";
 
 export function BacklogList({ m }: { m: BacklogModel }) {
   const { base, displayOrder, dragId, groups, hereInRepo, q } = m;
@@ -42,7 +43,7 @@ export function BacklogList({ m }: { m: BacklogModel }) {
                     view — only wayfinding: with three sessions open in a repo
                     there were four identical-looking groups and nothing saying
                     which one a tap had just added to. */}
-                {hereInRepo && g.key === hereInRepo.id && <span className="tag bl-here">on screen</span>}
+                {hereInRepo && g.key === hereInRepo.id && <Tag className="bl-here">on screen</Tag>}
               </span>
               <span className="bl-group-meta">
                 {`${g.items.length} item${g.items.length === 1 ? "" : "s"}`}

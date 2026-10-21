@@ -5,7 +5,7 @@
 import { CliHealthSheet } from "../../CliHealthSheet";
 import { useCore, useStore } from "../../sdk";
 import { filter } from "./store";
-import { requestCliHealth } from "./actions";
+import { inspectInSession, requestCliHealth } from "./actions";
 
 // The ten places this app reads something it does not own, and what each of
 // them last managed to read. `online` is the SOCKET's verdict rather than
@@ -15,7 +15,7 @@ export function HealthBoardSheet() {
   const c = useCore();
   const f = useStore(filter);
   return <CliHealthSheet online={c.conn.status === "open"} request={requestCliHealth} onClose={() => c.nav.close("clihealth")}
-    filter={f} onClearFilter={() => filter.set(null)}
+    filter={f} onClearFilter={() => filter.set(null)} onInspect={inspectInSession}
     onClearWarnings={(through, n) => c.conn.liveSend({ t: "clihealth.clear", through },
       `Cleared ${n} warning${n === 1 ? "" : "s"} — a new miss brings ${n === 1 ? "it" : "them"} back.`)} />;
 }

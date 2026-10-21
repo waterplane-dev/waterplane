@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Pencil, X } from "lucide-react";
 import { ZoomableImage } from "./ZoomableImage";
 import { DownloadButton } from "./DownloadButton";
+import { Button } from "./kit/Button";
 
 /** One browsable item — enough to render it and to act on it (annotate / ref). */
 export interface SwipeItem {
@@ -77,15 +78,15 @@ export function ImageSwiper({ items, index, onIndex, onAnnotate, onReference, on
         <div className="sheet-actions">
           {items.length > 1 && (
             <>
-              <button className="key" onClick={() => nav(-1)} disabled={index === 0} aria-label="previous"><ChevronLeft size={16} /></button>
+              <Button onClick={() => nav(-1)} disabled={index === 0} aria-label="previous"><ChevronLeft size={16} /></Button>
               <span className="viewer-count">{index + 1} / {items.length}</span>
-              <button className="key" onClick={() => nav(1)} disabled={index === items.length - 1} aria-label="next"><ChevronRight size={16} /></button>
+              <Button onClick={() => nav(1)} disabled={index === items.length - 1} aria-label="next"><ChevronRight size={16} /></Button>
             </>
           )}
           {!cur.video && cur.fullUrl && cur.fullUrl !== cur.url && !fullRes && (
-            <button className="key" title="load the original file instead of the screen-sized copy" onClick={() => setFullRes(true)}>full res</button>
+            <Button title="load the original file instead of the screen-sized copy" onClick={() => setFullRes(true)}>full res</Button>
           )}
-          {!cur.video && onAnnotate && <button className="key" onClick={() => onAnnotate(cur)}><Pencil size={16} /> mark</button>}
+          {!cur.video && onAnnotate && <Button onClick={() => onAnnotate(cur)}><Pencil size={16} /> mark</Button>}
           {/* Keeping a picture used to be impossible from here: the viewer could
               show it and mark it, and the only way at the file itself was to find
               it again in the gallery. Shown only for a HOST file — an item

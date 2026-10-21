@@ -3,6 +3,8 @@ import { ArrowDownToLine, CheckCircle2, Loader2, RotateCcw, ShieldAlert, Smartph
 import { autoApply, autoUpdate, nativeInfo, setAutoApply, setAutoUpdate, updates, type NativeUpdateInfo, type UpdateStatus } from "./webUpdate";
 import { ago } from "./format";
 import { track } from "./usage";
+import { Button } from "./kit/Button";
+import { SetNote } from "./SettingsKit";
 
 /**
  * Settings → App version. Android shell only.
@@ -53,12 +55,12 @@ export function AppUpdateSection({ onToast, bare }: {
 
   return (
     <Frame>
-      <div className="set-note">
+      <SetNote>
         The interface lives inside the APK so it survives a dead tunnel. It still
         updates itself from the desktop — you only need a new APK when the native
         shell itself changes. Checking, downloading and restarting all happen by
         themselves; the buttons here are for when you don't want to wait.
-      </div>
+      </SetNote>
 
       <div className="set-row">
         <span className="set-note" style={{ flexBasis: "auto" }}>
@@ -77,19 +79,19 @@ export function AppUpdateSection({ onToast, bare }: {
         </div>
       )}
       {s.phase === "unsupported" && (
-        <div className="set-note">
+        <SetNote>
           no update mechanism on this build — either this is not the Android
           shell, or the installed APK predates the plugin OTA relies on.
           "check now" below does nothing until a newer APK is sideloaded.
-        </div>
+        </SetNote>
       )}
 
       {s.phase === "downloading" && s.progress && (
-        <div className="set-note">
+        <SetNote>
           <Loader2 size={13} className="spin" style={{ verticalAlign: "-2px" }} />{" "}
           downloading {s.progress.files}/{s.progress.totalFiles} files ·{" "}
           {Math.round(s.progress.bytes / 1024)} / {Math.round(s.progress.totalBytes / 1024)} KB
-        </div>
+        </SetNote>
       )}
       {s.phase === "staged" && (
         <div className="set-note" style={{ color: "var(--ok)" }}>
@@ -106,7 +108,7 @@ export function AppUpdateSection({ onToast, bare }: {
         </div>
       )}
       {s.phase === "unavailable" && (
-        <div className="set-note">the desktop cannot serve a bundle: {s.message}</div>
+        <SetNote>the desktop cannot serve a bundle: {s.message}</SetNote>
       )}
       {s.phase === "error" && (
         <div className="set-note" style={{ color: "var(--dead)" }}>
@@ -115,53 +117,50 @@ export function AppUpdateSection({ onToast, bare }: {
       )}
 
       <div className="set-row" style={{ flexWrap: "wrap" }}>
-        <button
-          className="key"
+        <Button
           disabled={s.phase === "checking" || s.phase === "downloading"}
           onClick={() => { track("action:appUpdate.check"); void updates.check(); }}
         >
           {s.phase === "checking" ? <Loader2 size={12} className="spin" /> : <ArrowDownToLine size={12} />} check now
-        </button>
+        </Button>
         {s.phase === "staged" && (
-          <button
-            className="key primary"
+          <Button
+            variant="primary"
             onClick={() => { track("action:appUpdate.apply"); onToast?.("restarting into the new build"); void updates.applyNow(); }}
-          >restart into it</button>
+          >restart into it</Button>
         )}
         {!!s.available && !fresh && s.phase !== "downloading" && s.phase !== "staged" && (
           s.phase === "held" ? (
-            <button
-              className="key"
+            <Button
               onClick={() => { track("action:appUpdate.retryHeld"); void updates.download(true); }}
-            >try build {s.available.slice(0, 8)} again</button>
+            >try build {s.available.slice(0, 8)} again</Button>
           ) : (
-            <button
-              className="key"
+            <Button
               onClick={() => { track("action:appUpdate.download"); void updates.download(); }}
-            >download now</button>
+            >download now</Button>
           )
         )}
-        <button
-          className={`key ${auto ? "active" : ""}`}
+        <Button
+          className={auto ? "active" : ""}
           onClick={() => { const n = !auto; setAuto(n); setAutoUpdate(n); track("action:appUpdate.auto"); }}
-        >{auto ? "auto-update on" : "auto-update off"}</button>
-        <button
-          className={`key ${apply ? "active" : ""}`}
+        >{auto ? "auto-update on" : "auto-update off"}</Button>
+        <Button
+          className={apply ? "active" : ""}
           onClick={() => { const n = !apply; setApply(n); setAutoApply(n); track("action:appUpdate.autoApply"); }}
-        >{apply ? "auto-restart on" : "auto-restart off"}</button>
+        >{apply ? "auto-restart on" : "auto-restart off"}</Button>
       </div>
-      <div className="set-note">
+      <SetNote>
         A downloaded build never replaces the screen you are reading: the restart
         waits until the app has been in your pocket for a bit, or takes the moment
         you come back after a couple of minutes away — where it reads as the app
         starting rather than as the app reloading.
-      </div>
+      </SetNote>
 
       <div className="set-row">
-        <button
-          className="key danger"
+        <Button
+          variant="danger"
           onClick={() => { track("action:appUpdate.revert"); onToast?.("back to the built-in build"); void updates.revertToBuiltIn(); }}
-        ><RotateCcw size={12} /> use the build inside the APK</button>
+        ><RotateCcw size={12} /> use the build inside the APK</Button>
         <span className="set-note">
           The escape hatch if a downloaded build misbehaves. The app does this by
           itself too, when a downloaded build has not started after 15 seconds on

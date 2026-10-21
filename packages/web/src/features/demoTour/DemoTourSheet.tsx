@@ -12,6 +12,7 @@ import { Sheet } from "../../Sheet";
 import { TOUR, progressText, type TourIcon } from "./logic";
 import { closeDemoTour, runTourRow } from "./actions";
 import { useTour } from "./store";
+import { Button } from "../../kit";
 
 const ICONS: Record<TourIcon, LucideIcon> = {
   terminal: Terminal, pointer: MousePointerClick, book: BookOpen, list: ListTodo, clock: Clock,
@@ -30,7 +31,7 @@ export function DemoTourSheet() {
       icon={<Sparkles size={18} />}
       onClose={closeDemoTour}
       className="tour"
-      footer={<button className="key tour-done" onClick={closeDemoTour}>Look around on my own</button>}
+      footer={<Button className="tour-done" onClick={closeDemoTour}>Look around on my own</Button>}
     >
       <div className="sheet-body tour-body">
         <p className="tour-intro">

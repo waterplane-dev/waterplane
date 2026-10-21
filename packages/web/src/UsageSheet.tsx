@@ -17,6 +17,9 @@ import { copyText } from "./api";
 import { ago } from "./format";
 import { SheetHead } from "./Sheet";
 import { useRemoteResource } from "./useRemoteResource";
+import { Button } from "./kit/Button";
+import { Row, RowTitle } from "./kit/Row";
+import { Hint } from "./kit/Hint";
 
 const ICON = 16;
 
@@ -66,40 +69,40 @@ export function UsageSheet({ knownIds, onClose, onToast }: Props) {
     <div className="sheet">
       <SheetHead title={"Feature usage"} onClose={onClose} />
       <div className="form">
-        <div className="form-hint">
+        <Hint>
           <BarChart3 size={12} /> Counted on the host in <code>{stateRel("ui-usage.json")}</code> (all devices, never leaves this machine).
           {doc?.since ? ` Since ${new Date(doc.since).toLocaleDateString()}.` : ""} {total} interactions across {used.length} features.
-        </div>
-        <div className="row" style={{ gap: 6 }}>
-          <button className="key" onClick={report}><Copy size={ICON} /> copy report</button>
-          <button className="key" onClick={load}>refresh</button>
+        </Hint>
+        <Row style={{ gap: 6 }}>
+          <Button onClick={report}><Copy size={ICON} /> copy report</Button>
+          <Button onClick={load}>refresh</Button>
           <div className="spacer" />
-          <button
-            className={`key ${armed ? "danger" : ""}`}
+          <Button
+            className={armed ? "danger" : ""}
             onClick={() => { if (!armed) { setArmed(true); return; } void resetUsage().then(() => { setArmed(false); load(); }); }}
-          ><RotateCcw size={ICON} /> {armed ? "tap to confirm" : "reset"}</button>
-        </div>
+          ><RotateCcw size={ICON} /> {armed ? "tap to confirm" : "reset"}</Button>
+        </Row>
       </div>
-      {loading && <div className="form-hint">loading…</div>}
+      {loading && <Hint>loading…</Hint>}
       {/* "The host refused this" and "the host was not reachable" are different
           next actions, so they are different sentences — the rule the hook
           exists to keep. */}
-      {usage.state === "offline" && <div className="form-hint">No connection — this is the host-side aggregate across every device, so there is nothing cached to show.</div>}
-      {usage.state === "error" && <div className="form-hint" style={{ color: "var(--dead)" }}>The host refused to report usage: {usage.error}</div>}
+      {usage.state === "offline" && <Hint>No connection — this is the host-side aggregate across every device, so there is nothing cached to show.</Hint>}
+      {usage.state === "error" && <Hint style={{ color: "var(--dead)" }}>The host refused to report usage: {usage.error}</Hint>}
       <div className="list">
         {used.map((r) => (
-          <div key={r.id} className="row">
-            <span className="row-title">{r.id}</span>
+          <Row key={r.id}>
+            <RowTitle>{r.id}</RowTitle>
             <span className="muted" style={{ fontSize: 12 }}>{r.last ? ago(r.last) : "never"}</span>
             <span style={{ fontVariantNumeric: "tabular-nums" }}>{r.count}</span>
-          </div>
+          </Row>
         ))}
         {unused.length > 0 && <div className="section">never used ({unused.length})</div>}
         {unused.map((r) => (
-          <div key={r.id} className="row">
-            <span className="row-title muted">{r.id}</span>
+          <Row key={r.id}>
+            <RowTitle className="muted">{r.id}</RowTitle>
             <span className="muted">0</span>
-          </div>
+          </Row>
         ))}
       </div>
     </div>

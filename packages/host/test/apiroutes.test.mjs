@@ -88,6 +88,10 @@ const ROUTES = [
   "POST /api/secret",
   // The repo scope: resolves the target, then the table below (relative to it).
   "* /api/repos/:id/*",
+  "POST /api/repos/:id/archive/bookmark",
+  "DELETE /api/repos/:id/archive/bookmark",
+  "GET /api/repos/:id/archive/transcript/tools",
+  "GET /api/repos/:id/archive/transcript",
   "GET /api/repos/:id/archive/*",
   "DELETE /api/repos/:id/archive/*",
   "POST /api/repos/:id/capture/run/*",

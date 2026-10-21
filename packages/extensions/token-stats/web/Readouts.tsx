@@ -5,7 +5,7 @@ import {
   tokenTotal,
 } from "@waterplane/shared";
 import { type WindowCut } from "./usageCut.ts";
-import { KindBar, shiftWeek, until, type WeekDay, weekDelta, weekLabel, weekStart } from "@waterplane/kit";
+import { KindBar, shiftWeek, until, type WeekDay, weekDelta, weekLabel, weekStart, Button } from "@waterplane/kit";
 import { shareNote, spanDays, spanWord, whenShort } from "./when.ts";
 
 /**
@@ -55,11 +55,11 @@ export function WeekNav({ week, bounds, onGo, totals, prev, rows }: {
     <div className="ts-week">
       <div className="ts-week-nav">
         {canPrev
-          ? <button className="key" onClick={() => onGo(shiftWeek(week, -1))} title="the week before"><ChevronLeft size={16} /></button>
+          ? <Button onClick={() => onGo(shiftWeek(week, -1))} title="the week before"><ChevronLeft size={16} /></Button>
           : <span className="ts-week-gap" aria-hidden="true" />}
         <span className="ts-week-label">{weekLabel(week)}</span>
         {canNext
-          ? <button className="key" onClick={() => onGo(shiftWeek(week, 1))} title="the week after"><ChevronRight size={16} /></button>
+          ? <Button onClick={() => onGo(shiftWeek(week, 1))} title="the week after"><ChevronRight size={16} /></Button>
           : <span className="ts-week-gap" aria-hidden="true" />}
       </div>
 

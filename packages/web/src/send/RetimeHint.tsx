@@ -4,6 +4,7 @@ import { ConfirmButton } from "../Confirm";
 import { track } from "../usage";
 import { pastBudgetConfirm, pastBudgetLabel, pastBudgetNote, retimeHeldWords } from "../sendIntent";
 import type { SendSheetModel } from "./useSendSheet";
+import { Hint } from "../kit/Hint";
 
 export function RetimeHint({ m }: { m: SendSheetModel }) {
   const {
@@ -11,7 +12,7 @@ export function RetimeHint({ m }: { m: SendSheetModel }) {
   } = m;
   const retime = m.retime as NonNullable<typeof m.retime>;
   return (
-    <div className="form-hint">
+    <Hint>
       A new <b>when</b> for the {retime.ids.length === 1 ? "row" : `${retime.ids.length} rows`} you ticked — each keeps its own words,
       where it goes and its place in its list. Only the when changes.
       {budgetHeld && budgetHeld.ids.length > 0 && (<>
@@ -28,6 +29,6 @@ export function RetimeHint({ m }: { m: SendSheetModel }) {
           </div>
         )}
       </>)}
-    </div>
+    </Hint>
   );
 }

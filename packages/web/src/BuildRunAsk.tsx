@@ -4,6 +4,8 @@ import type { BuildConfig, BuildParam } from "@waterplane/shared";
 import { cleanParamValue, missingParamsText, paramLabel, resolveParamValues } from "@waterplane/shared";
 import { SheetHead } from "./Sheet";
 import { Unavailable } from "./Unavailable";
+import { Button } from "./kit/Button";
+import { Hint } from "./kit/Hint";
 
 /**
  * The form between the tap and the build: what this run is for.
@@ -39,7 +41,7 @@ export function BuildRunAsk({ build, options, online, onCancel, onRun }: {
   return (
     <div className="sheet">
       <SheetHead title={<><Play size={16} /> {build.name}</>} onClose={onCancel} />
-      <div className="form-hint mono">{build.dir ? `${build.dir}$ ` : ""}{build.cmd}</div>
+      <Hint tone="mono">{build.dir ? `${build.dir}$ ` : ""}{build.cmd}</Hint>
       <div className="build-params">
         {(build.params ?? []).map((p) => (
           <ParamField key={p.id} p={p} value={vals[p.id] ?? ""} answer={options?.[p.id]} online={online} asked={options !== undefined}
@@ -47,16 +49,16 @@ export function BuildRunAsk({ build, options, online, onCancel, onRun }: {
         ))}
       </div>
       <div className="sheet-actions">
-        <button className="key" onClick={onCancel}><X size={16} /> cancel</button>
+        <Button onClick={onCancel}><X size={16} /> cancel</Button>
         <span className="spacer" />
         {missing.length === 0
           ? <button className="send" onClick={() => onRun(values)}><Play size={14} /> Run</button>
           : <Unavailable cants={[{ label: "run", reason: missingParamsText(missing) }]} />}
       </div>
       {!online && (
-        <div className="form-hint">
+        <Hint>
           <CloudOff size={13} style={{ verticalAlign: "-2px" }} /> No connection: the run is queued and starts with these values once the link is back.
-        </div>
+        </Hint>
       )}
     </div>
   );

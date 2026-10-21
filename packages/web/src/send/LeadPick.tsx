@@ -3,6 +3,7 @@
 import { LS, lsSet } from "../storage";
 import { leadChoices, leadLabel, leadOk, leadWords } from "../sendIntent";
 import type { SendSheetModel } from "./useSendSheet";
+import { Hint } from "../kit/Hint";
 
 export function LeadPick({ m }: { m: SendSheetModel }) {
   const { leadOpen, setLeadOpen, savedLead, setSavedLead, leadRaw, setLeadRaw, patchRule } = m;
@@ -38,9 +39,9 @@ export function LeadPick({ m }: { m: SendSheetModel }) {
           </div>
           {/* Echoes what it READ, so a bare `4` meant as hours shows
               up as 4m on the row being typed on. */}
-          <div className="form-hint">
+          <Hint>
             {leadWords(leadRaw) ?? `Read as ${leadLabel(leadOk(leadRaw)!)} before the reset. Kept on this phone — offered as a chip on the next rule you write.`}
-          </div>
+          </Hint>
         </>
       )}
     </>

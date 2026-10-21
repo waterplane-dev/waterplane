@@ -21,6 +21,7 @@ import { parseBudgetInput } from "../../budgetInput";
 import { buildPeriod, DOW, emptyDraft, periodCap, periodDescribe, PERIOD_KINDS, type PeriodDraft } from "../../periodWords";
 import { track } from "../../usage";
 import { useBilling } from "./store";
+import { Button } from "../../kit";
 
 type Pick = "auto" | Exclude<BillingProfile, "unknown">;
 
@@ -146,7 +147,7 @@ export function BillingSettings() {
 
         {cfg && !adding && (
           <div className="set-chips">
-            <button className="key" onClick={() => setAdding(true)}><Plus size={13} /> add a period</button>
+            <Button onClick={() => setAdding(true)}><Plus size={13} /> add a period</Button>
           </div>
         )}
         {cfg && adding && (
@@ -193,8 +194,8 @@ export function BillingSettings() {
                 value={newCap} onChange={(e) => setNewCap(e.target.value)} />
             </div>
             <div className="set-chips">
-              <button className="key active" onClick={add}>save period</button>
-              <button className="key" onClick={() => { setAdding(false); setWhy(null); }}>cancel</button>
+              <Button className="active" onClick={add}>save period</Button>
+              <Button onClick={() => { setAdding(false); setWhy(null); }}>cancel</Button>
             </div>
           </div>
         )}

@@ -70,7 +70,8 @@ export interface ShellLinkStatus {
 }
 
 interface LinkPlugin {
-  isSupported(): Promise<{ supported: boolean; notifications: boolean; batteryExempt: boolean }>;
+  /** `powerSave` is absent on a shell older than the tab-sync offer. */
+  isSupported(): Promise<{ supported: boolean; notifications: boolean; batteryExempt: boolean; powerSave?: boolean }>;
   status(): Promise<ShellLinkStatus>;
   start(opts: { url: string; protocol: number; label: string }): Promise<ShellLinkStatus>;
   stop(): Promise<void>;
@@ -93,6 +94,18 @@ function plugin(): LinkPlugin | null {
  *  browser, where Web Push is the answer and `push.ts` already gives it. */
 export function shellLinkSupported(): boolean {
   return isNativeShell() && plugin() !== null;
+}
+
+/** Is the phone's battery saver on? Null in a browser, or a shell too old to say. */
+export async function phonePowerSave(): Promise<boolean | null> {
+  const p = plugin();
+  if (!p) return null;
+  try {
+    const r = await p.isSupported();
+    return typeof r.powerSave === "boolean" ? r.powerSave : null;
+  } catch {
+    return null;
+  }
 }
 
 /** What the link is doing right now, or null where there is no link to ask. */

@@ -38,6 +38,8 @@ import { useFileDrop } from "./useFileDrop";
 import { isShellBackend } from "../../backendCaps";
 import { isLaterId, isPendingId } from "../queue/logic.ts";
 import { secretFillers } from "../extensionPoints";
+import { Button } from "../../kit/Button";
+import { RowTitle, RowSub } from "../../kit/Row";
 
 const ICON = 16;
 
@@ -124,11 +126,11 @@ export function ComposeBar(p: ComposeBarProps) {
         return (
           <div className="compose-aim">
             <span className="compose-aim-what"><Waypoints size={12} /> {note}</span>
-            <button className="key" onPointerDown={keepFocus}
+            <Button onPointerDown={keepFocus}
               title={`send to ${sendWhereLabel("this")} instead — the conversation on screen`}
               onClick={() => { track("action:compose.where.here"); aimHere(); }}>
               <SendHorizontal size={12} /> {AIM_HERE_LABEL}
-            </button>
+            </Button>
           </div>
         );
       })()}
@@ -144,9 +146,9 @@ export function ComposeBar(p: ComposeBarProps) {
                   line already says "uploads done", and a dimmed cancel beside
                   it was a control with nothing to cancel. */}
               {uploadPending && (
-                <button className="key upload-cancel" onPointerDown={keepFocus} onClick={cancelUploads} title="cancel uploads">
+                <Button className="upload-cancel" onPointerDown={keepFocus} onClick={cancelUploads} title="cancel uploads">
                   <X size={12} /> cancel
-                </button>
+                </Button>
               )}
             </div>
             {/**
@@ -180,16 +182,16 @@ export function ComposeBar(p: ComposeBarProps) {
                 <span className="upload-acts-what">{parking > 0
                   ? "Send goes as soon as the picture is readable"
                   : "your prompt is ready to go — it is delivered after the picture lands"}</span>
-                <button className="key" onPointerDown={keepFocus} data-hint="queue.sendnow"
+                <Button onPointerDown={keepFocus} data-hint="queue.sendnow"
                   title="post it now — if it names a picture still moving, the queue still delivers it after the bytes"
                   onClick={() => { track("action:upload.sendnow"); sendCompose("now"); }}>
                   <Zap size={14} /> send now
-                </button>
-                <button className="key" onPointerDown={keepFocus} data-hint="queue.hold"
+                </Button>
+                <Button onPointerDown={keepFocus} data-hint="queue.hold"
                   title="park it until this session is free, instead of typing it in mid-turn"
                   onClick={() => { track("action:upload.hold"); sendCompose("idle"); }}>
                   <Hourglass size={14} /> let it wait
-                </button>
+                </Button>
               </div>
             )}
             {/* Determinate bar whenever the byte total is known — the spinner
@@ -277,12 +279,12 @@ export function ComposeBar(p: ComposeBarProps) {
                       onPointerDown={keepFocus}
                       title={`send to ${sessionPickLabel(s)}`}
                       onClick={() => { track("action:compose.where.pick"); setSendWhereSid(s.id); }}>
-                      <span className="row-title">{s.title}</span>
+                      <RowTitle>{s.title}</RowTitle>
                       {/* The desktop's own name for the conversation — without
                           it this list is the repo name once per session and the
                           question cannot be answered (`SessionName.tsx`). */}
                       <SessionName s={s} />
-                      <span className="row-sub">{s.turnActive ? "working" : "idle"}</span>
+                      <RowSub>{s.turnActive ? "working" : "idle"}</RowSub>
                     </button>
                   ))}
                 </div>
@@ -328,8 +330,8 @@ export function ComposeBar(p: ComposeBarProps) {
           <div className="snippet-pop">
             <div className="snippet-pop-head">
               <span>Snippets</span>
-              <button className="key" onPointerDown={keepFocus} onClick={() => { setSnippetOpen(false); setOverlay("snippets"); }} title="Manage snippets"><Pencil size={14} /> manage</button>
-              <button className="key" onPointerDown={keepFocus} onClick={() => setSnippetOpen(false)} title="Close"><X size={14} /></button>
+              <Button onPointerDown={keepFocus} onClick={() => { setSnippetOpen(false); setOverlay("snippets"); }} title="Manage snippets"><Pencil size={14} /> manage</Button>
+              <Button onPointerDown={keepFocus} onClick={() => setSnippetOpen(false)} title="Close"><X size={14} /></Button>
             </div>
             <div className="snippet-pop-list">
               {snippets.length === 0 && <Empty>No snippets yet — tap “manage” to add one.</Empty>}
@@ -370,16 +372,16 @@ export function ComposeBar(p: ComposeBarProps) {
               </button>
             </div>
             <div className="compose-bar">
-              <button className="key secret-other" onPointerDown={keepFocus} onClick={dismissSecret}
+              <Button className="secret-other" onPointerDown={keepFocus} onClick={dismissSecret}
                 title="Back to the message box — this line is not asking for a password">
                 <X size={14} /> not a password
-              </button>
+              </Button>
               {/* Contributed sources (`SecretFillerDef`): they fill the field above, never send. */}
               {(() => { const ctx = secretFillContext(); return ctx ? secretFillers(ctx) : []; })().map((f) => (
-                <button key={f.key} className="key" onPointerDown={keepFocus} title={f.unavailable ?? f.label}
+                <Button key={f.key} onPointerDown={keepFocus} title={f.unavailable ?? f.label}
                   onClick={() => { if (f.unavailable) { showToast(f.unavailable); return; } track("action:compose.secret.fill"); f.open(); }}>
                   <f.icon size={14} /> {f.label}
-                </button>
+                </Button>
               ))}
               <div className="send-split">
                 <button className="send" onPointerDown={keepFocus} onClick={sendSecret}

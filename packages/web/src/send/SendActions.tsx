@@ -4,6 +4,7 @@ import { AttachButtons } from "../PromptComposer";
 import { track } from "../usage";
 import { offlineLabel, EMPTY_PROMPT_BLOCKER } from "../sendIntent";
 import type { SendSheetModel } from "./useSendSheet";
+import { Button } from "../kit/Button";
 
 export function SendActions({ m }: { m: SendSheetModel }) {
   const {
@@ -16,7 +17,7 @@ export function SendActions({ m }: { m: SendSheetModel }) {
         onFiles={(f) => void pick(f)}
         onBrowse={onBrowseRepoFiles && attachRepo ? () => { track("action:send.browse"); onBrowseRepoFiles(attachRepo); } : undefined}
         trackImage="action:send.attach" trackFile="action:send.attachfile" />}
-      <button className="key" onClick={onClose}><X size={16} /> cancel</button>
+      <Button onClick={onClose}><X size={16} /> cancel</Button>
       <span className="spacer" />
       {blocker && blocker !== EMPTY_PROMPT_BLOCKER && <span className="approve-hint sched-blocked">{blocker}</span>}
       <button className="send" disabled={!!blocker || busy} title={blocker ?? undefined} onClick={go}>

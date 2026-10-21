@@ -37,6 +37,7 @@ Before running a fan-out, the sheet says what the last similar finished run cost
 The VS Code extension shows token cost live per session and per prompt plus an overall total, with prompts that help cut cost and improve code health.
 - asked: 2026-10-11
 - shipped: f984d9cf
+- reworked 2026-10-21 (owner): "live" now means running or written in the last 30 minutes; outside that the status bar shows the last seven days instead of the newest session (R-cost-018).
 
 ### R-cost-008 · shipped
 Colour marks the dearer models red, with other models shifting cooler as they get cheaper.
@@ -80,8 +81,14 @@ Metered AI calls run without asking under a per-repo daily budget; once it is us
 The VS Code extension shows the same overall cost view as the phone, with one sticky span filter.
 - asked: 2026-10-16
 - shipped: 4707cf3f
+- reworked 2026-10-21 (owner): the view's headline is also shown before any scan, from the last scan's kept summary (R-cost-018).
 
 ### R-cost-017 · requested
 The set budget is visible in the UI.
 - asked: 2026-10-18
+
+### R-cost-018 · shipped
+The VS Code extension shows the last seven days' cost the moment VS Code opens, without reading the logs: the tree's All sessions row says `7 d: here $14 · all $80 · 2 h ago` from the last finished scan, with its age (none right after a read), the same seven days before and after this window's scan, and the `here` part only when that folder has a priced figure (a sub-folder counts only sessions started in it; never a prefix match, never `$0` — unpriced weeks in tokens). The status bar shows the session only while one is live (running, or written in the last 30 minutes); otherwise the seven days, `7 d here $14` when this repo's is known, else `7 d all $80`, with the age in the text once the reading is over a day old; with neither it hides. A reading more than seven days old is not shown anywhere: it would not be the last seven days. A changed Claude config dir drops the kept figure.
+- asked: 2026-10-21 (owner)
+- shipped: 4eac8074, f6fb1a70, f41b5db5
 

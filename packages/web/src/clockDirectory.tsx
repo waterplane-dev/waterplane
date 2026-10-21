@@ -40,6 +40,8 @@ import { fmtWhen } from "./sendIntent";
 import { SyncChip } from "./SyncMark";
 import { queueSync } from "./syncState";
 import { track } from "./usage";
+import { Button } from "./kit/Button";
+import { Hint } from "./kit/Hint";
 
 interface DirProps {
   rows: Intent[];
@@ -240,18 +242,18 @@ export function ClocksGone({ goneByRepo, repoName, onOpen }: {
 }) {
   if (!goneByRepo.length || !onOpen) return null;
   return (
-    <div className="form-hint sched-spent">
+    <Hint className="sched-spent">
       <History size={13} style={{ verticalAlign: "-2px" }} />{" "}
       On a clock, and been and gone — run or missed, the row says which:
       <div className="annot-tools" style={{ marginTop: 6 }}>
         {goneByRepo.map(([dir, rows]) => (
-          <button key={dir} className="key"
+          <Button key={dir}
             title={`show the ${rows.length} timed one-off${rows.length === 1 ? "" : "s"} of ${repoName(dir)} that have been and gone — they are rows in that backlog, with re-fire and “drop the clock” on them`}
             onClick={() => { track("action:schedule.clockspent"); onOpen(dir, rows.map((i) => i.id), goneOnClockLabel(repoName(dir))); }}>
             {rows.length} in {repoName(dir)}
-          </button>
+          </Button>
         ))}
       </div>
-    </div>
+    </Hint>
   );
 }

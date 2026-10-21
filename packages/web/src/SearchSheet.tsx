@@ -8,6 +8,7 @@ import { Empty } from "./Empty";
 import { Explain } from "./Explain";
 import { SessionFacts } from "./sessionFacts";
 import type { BackendList } from "./backendCaps";
+import { Hint } from "./kit/Hint";
 
 interface Props {
   /** The host's backends, so a session row knows a shell by kind. */
@@ -161,10 +162,10 @@ export function SearchSheet({ sessionId, sessionLabel, results, loading, online 
           <button key={key} className={scope === key ? "seg on" : "seg"} onClick={() => setScope(key)}>{label}</button>
         ))}
       </div>
-      <div className="form-hint">
+      <Hint>
         {SCOPE_HINT[scope].line}
         <Explain of="what this search reads">{SCOPE_HINT[scope].more}</Explain>
-      </div>
+      </Hint>
 
       <div className="list">
         {q.trim().length < 2 && <Empty>Type at least 2 characters.</Empty>}
@@ -180,7 +181,7 @@ export function SearchSheet({ sessionId, sessionLabel, results, loading, online 
           totalHits === 0
             ? <Empty>No matches for “{shown}”.</Empty>
             : <>
-                <div className="form-hint">{totalHits} match{totalHits === 1 ? "" : "es"} in {results.length} session{results.length === 1 ? "" : "s"}{loading ? " · updating…" : ""}</div>
+                <Hint>{totalHits} match{totalHits === 1 ? "" : "es"} in {results.length} session{results.length === 1 ? "" : "s"}{loading ? " · updating…" : ""}</Hint>
                 {results.map((r) => (
                   <div key={r.id} className="srch-sess">
                     {!sessionId && (() => {

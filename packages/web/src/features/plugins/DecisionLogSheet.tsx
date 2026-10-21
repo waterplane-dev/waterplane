@@ -19,7 +19,7 @@ import { SheetHead } from "../../Sheet";
 import { ConfirmButton } from "../../Confirm";
 import { Empty } from "../../Empty";
 import { Explain } from "../../Explain";
-import { FilterBar, FilterChip } from "../../kit";
+import { FilterBar, FilterChip, Button, RowSub, Hint, Tag } from "../../kit";
 import { ago } from "../../format";
 import { cleanTerm, cutDecisions, decisionSource, decisionSources, sourceLabel } from "./logic";
 import { decisions, decisionScope, plugins } from "./store";
@@ -81,17 +81,17 @@ export function DecisionLogSheet() {
           confirmTitle="tap again to archive every unarchived entry, in every session"
           confirm={<><Archive size={14} /> all?</>}
           onConfirm={() => live.liveSend({ t: "decisions.archiveAll" }, "all archived")}><Archive size={14} /></ConfirmButton>
-        <button className="key" title="refresh" onClick={() => live.liveAsk(sid ? { t: "decisions.get", sessionId: sid } : { t: "decisions.get" })}><RefreshCw size={14} /></button>
+        <Button title="refresh" onClick={() => live.liveAsk(sid ? { t: "decisions.get", sessionId: sid } : { t: "decisions.get" })}><RefreshCw size={14} /></Button>
       </SheetHead>
 
       {/* One line says what this is; what a row holds is behind the `?`. */}
-      <div className="form-hint">
+      <Hint>
         Done or proposed for a session without a tap.
         <Explain of="the decision log">
           Each row is a usage-limit auto-continue, or a plugin&apos;s suggestion or answer with what it
           was shown and why it chose.
         </Explain>
-      </div>
+      </Hint>
 
       {/* The kit's filter chips. "all" is lit exactly when no source is, so it is a choice and
           carries no x; a lit source chip is a cut, and the bar below says what it hides. The
@@ -141,9 +141,9 @@ function LimitRow({ e, showSession, acts }: { e: DecisionLogEntry; showSession: 
   return (
     <div className={`olog-row${e.archived ? " archived" : ""}`}>
       <div className="olog-head">
-        <span className={`tag oracle-${meta.cls}`}><meta.Icon size={12} /> {meta.label}</span>
+        <Tag className={`oracle-${meta.cls}`}><meta.Icon size={12} /> {meta.label}</Tag>
         {showSession && <span className="olog-sess">{e.sessionTitle}</span>}
-        <span className="row-sub olog-time">{ago(e.ts)}</span>
+        <RowSub className="olog-time">{ago(e.ts)}</RowSub>
         {acts}
       </div>
       <div className="olog-q open">{e.question}</div>
@@ -165,16 +165,16 @@ function PluginRow({ e, showSession, acts, list, open, onToggle }: {
   return (
     <div className={`olog-row${e.archived ? " archived" : ""}`}>
       <div className="olog-head">
-        <span className={`tag oracle-${meta.cls}`}><meta.Icon size={12} /> {meta.label}</span>
-        <span className="tag"><Puzzle size={12} /> {who}</span>
-        {e.choice != null && <span className="tag oracle-choice">chose {e.choice}</span>}
+        <Tag className={`oracle-${meta.cls}`}><meta.Icon size={12} /> {meta.label}</Tag>
+        <Tag><Puzzle size={12} /> {who}</Tag>
+        {e.choice != null && <Tag className="oracle-choice">chose {e.choice}</Tag>}
         {showSession && <span className="olog-sess">{e.sessionTitle}</span>}
-        <span className="row-sub olog-time">{ago(e.ts)}</span>
+        <RowSub className="olog-time">{ago(e.ts)}</RowSub>
         {acts}
       </div>
       <div className="olog-section">
         <div className="olog-label">{isReply ? "Agent asked" : "Decision"}</div>
-        <div className={`olog-q ${open ? "open" : ""}`}>{question || <span className="row-sub">(no text captured)</span>}</div>
+        <div className={`olog-q ${open ? "open" : ""}`}>{question || <RowSub>(no text captured)</RowSub>}</div>
       </div>
       {e.error && <div className="oracle-warn"><AlertTriangle size={12} /> {e.error}</div>}
       {(e.answer || e.rationale) && (

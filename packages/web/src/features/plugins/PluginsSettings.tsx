@@ -14,10 +14,11 @@ import { BRAND, PLUGIN_MANIFEST } from "@waterplane/shared";
 import type { PluginField, PluginView } from "@waterplane/shared";
 import { useCore, useStore } from "../../sdk";
 import { ConfirmButton } from "../../Confirm";
-import { SetAction, SetChoice, SetCustom, SetPick, SetSwitch, SetWarn, useNestedShown } from "../../SettingsKit";
+import { SetAction, SetChoice, SetCustom, SetNote, SetPick, SetSwitch, SetWarn, useNestedShown } from "../../SettingsKit";
 import { enablePlugin, openDecisions, refuseValue, runPluginAction, setPluginValue } from "./actions";
 import { actionKey, envRows, fieldValue, globalActions, parseFieldInput, pluginStateLine, pluginWords } from "./logic";
 import { errors, plugins as pluginStore, results } from "./store";
+import { Button, RowSub, Tag } from "../../kit";
 
 /** The rack's door to the decision log. */
 export function DecisionLogDoor() {
@@ -41,12 +42,12 @@ export function PluginsSettings() {
   return (
     <SetCustom id="plugins" label="plugins" icon={Puzzle}
       note={list?.length ? `Code you installed on the desktop that extends ${BRAND.displayName}. A changed plugin takes effect after the desktop restarts.` : undefined}>
-      {list === null && <div className="set-note">The desktop has not listed its plugins yet.</div>}
+      {list === null && <SetNote>The desktop has not listed its plugins yet.</SetNote>}
       {list?.length === 0 && (
-        <div className="set-note">
+        <SetNote>
           No plugins installed. A plugin is a folder under <code>~/.config/{BRAND.configDirName}/plugins/</code> on the
           desktop, or a path listed in <code>~/.config/{BRAND.configDirName}/plugin-paths.json</code>; the desktop loads them when it starts.
-        </div>
+        </SetNote>
       )}
       {list?.map((p) => <PluginSection key={p.source} p={p} />)}
     </SetCustom>
@@ -67,10 +68,11 @@ function PluginSection({ p }: { p: PluginView }) {
   return (
     <div className="plugin-sec">
       <div className="plugin-head">
-        <b>{m.name}</b> <span className="row-sub">v{m.version}</span>
-        <span className={`tag plugin-${state.tone}`}><StateIcon size={12} /> {p.state}</span>
+        <b>{m.name}</b> <RowSub>v{m.version}</RowSub>
+        {m.experimental === true && <Tag>experimental</Tag>}
+        <Tag className={`plugin-${state.tone}`}><StateIcon size={12} /> {p.state}</Tag>
       </div>
-      {m.description && <div className="set-note">{m.description}</div>}
+      {m.description && <SetNote>{m.description}</SetNote>}
       <div className="set-note plugin-src"><FolderOpen size={12} /> <code>{p.source}</code></div>
       {state.tone !== "ok" && <SetWarn tone={state.tone === "bad" ? "bad" : "plain"}>{state.text}</SetWarn>}
       {p.status && p.state === "active" && (
@@ -103,7 +105,7 @@ function PluginSection({ p }: { p: PluginView }) {
         );
       })}
       {p.state !== "active" && globalActions(p).length > 0 && (
-        <div className="set-note">Its {globalActions(p).length === 1 ? "action is" : `${globalActions(p).length} actions are`} here once it is active.</div>
+        <SetNote>Its {globalActions(p).length === 1 ? "action is" : `${globalActions(p).length} actions are`} here once it is active.</SetNote>
       )}
     </div>
   );
@@ -165,8 +167,8 @@ function TypedField({ p, f, value }: { p: PluginView; f: Extract<PluginField, { 
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") save(); }} />
         )}
-        {dirty && <button className="key" onClick={save}>save</button>}
-        {dirty && <button className="key" onClick={() => setDraft(null)}>undo edit</button>}
+        {dirty && <Button onClick={save}>save</Button>}
+        {dirty && <Button onClick={() => setDraft(null)}>undo edit</Button>}
         {/* Armed twice: the stored text may be the only copy of what
             somebody wrote (a system prompt), and a default is not an undo. */}
         {!dirty && String(f.default) !== value && (

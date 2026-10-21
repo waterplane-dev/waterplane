@@ -32,6 +32,8 @@ import { renameSession } from "../session/rename";
 import type { LauncherModel } from "./useLauncherModel";
 import { useSpendWarn } from "../sessions/spendWarn";
 import { FlagIcon, FollowUpLine, followUpButtonTitle, followUpClass } from "../sessions/followUp";
+import { RowTitle, RowSub } from "../../kit/Row";
+import { Tag } from "../../kit/Tag";
 
 const ICON = 16;
 
@@ -82,10 +84,10 @@ export function SessionRow({ p, m, s, repoName }: { p: LauncherProps; m: Launche
         <span className="row-head">
         {/* Its number among this repo's OPEN sessions, from 0 (`sessionNumbersOf`). */}
         {sessionNumbers.has(s.id) && <span className="row-num" title={`open session ${sessionNumbers.get(s.id)} in ${repoName}`}>{sessionNumbers.get(s.id)}</span>}
-        {sessionRowBranch(s) && <span className="row-title">{sessionRowBranch(s)}</span>}
+        {sessionRowBranch(s) && <RowTitle>{sessionRowBranch(s)}</RowTitle>}
         {sessionName(s)
           ? <SessionName s={s} />
-          : !sessionRowBranch(s) && <span className="row-title">{sessionRepoName(s)}</span>}
+          : !sessionRowBranch(s) && <RowTitle>{sessionRepoName(s)}</RowTitle>}
         {/* One meta line, not one line per fact: as separate
             `flex-basis: 100%` spans "default" and "2d" ate two
             full rows of a phone screen each. And not a line of its
@@ -96,8 +98,8 @@ export function SessionRow({ p, m, s, repoName }: { p: LauncherProps; m: Launche
               not claude (`backendMark` answers null otherwise),
               so every row that ran the default binary is exactly
               the string it has always been. */}
-          <span className={`row-sub row-launch${backendMark(backends, s.backend) ? " row-foreign" : ""}`}>{launchLabel(liveLaunch(s), backendMark(backends, s.backend), backends)}</span>
-          {s.createdAt && s.running && <span className="row-sub" title={`session open for ${dur(s.createdAt)}`}><Clock size={11} /> {dur(s.createdAt)}</span>}
+          <RowSub className={`row-launch${backendMark(backends, s.backend) ? " row-foreign" : ""}`}>{launchLabel(liveLaunch(s), backendMark(backends, s.backend), backends)}</RowSub>
+          {s.createdAt && s.running && <RowSub title={`session open for ${dur(s.createdAt)}`}><Clock size={11} /> {dur(s.createdAt)}</RowSub>}
         </span>
         </span>
         {/* The prompt: the card's left column. The buttons and readings are
@@ -164,7 +166,7 @@ export function SessionRow({ p, m, s, repoName }: { p: LauncherProps; m: Launche
             one, because both answer "what is this session doing / done". */}
         <span className="row-stat">{statusTags(s, tagFilter, s.starred && s.newActivity, backends)}</span>
         <span className="row-tags">
-          {s.remoteControlled && <span className="tag rc-tag" title="a desktop is driving this session"><Radio size={12} /> RC</span>}
+          {s.remoteControlled && <Tag className="rc-tag" title="a desktop is driving this session"><Radio size={12} /> RC</Tag>}
           {/* **Words already on a clock for THIS session.**
               A count, so it is a filter: the tap opens exactly
               these rows in that repo's backlog and never the
@@ -179,13 +181,13 @@ export function SessionRow({ p, m, s, repoName }: { p: LauncherProps; m: Launche
             const when = sched.nextAt != null ? fmtWhen(sched.nextAt) : "when its window opens";
             const open = () => { track("action:session.scheduled.open"); openBacklogCut(s.cwd, sched.ids, `scheduled for ${s.title}`); };
             return (
-              <span className="tag sched tag-filter" role="button" tabIndex={0}
+              <Tag className="sched tag-filter" role="button" tabIndex={0}
                 title={`${n} prompt${n > 1 ? "s" : ""} on a clock for this session — next ${when}; tap to open ${n > 1 ? "them" : "it"}`}
                 onPointerDown={(e) => e.stopPropagation()}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); open(); } }}
                 onClick={(e) => { e.stopPropagation(); open(); }}>
                 <CalendarClock size={12} /> {n > 1 ? `${n} · ` : ""}{when}
-              </span>
+              </Tag>
             );
           })()}
           <PeerWaitTag s={s} />

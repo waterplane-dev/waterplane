@@ -40,14 +40,17 @@
  * Nothing in this file writes to a session, and nothing downstream may make it
  * do so.
  */
-import { existsSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, realpathSync } from "node:fs";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { 
   clearSeen, cleanHealth, emptyHealth, healthRollup, healthSentence, noteCliVersion, observe, signalSpec, signalVerdict,
-  type CliHealth, type CliSignalId, type HealthOutcome, type HealthRollup, type HealthVerdict } from "@waterplane/shared";
+  type CliHealth, type CliSignalId, type HostMessage, type HealthOutcome, type HealthRollup, type HealthVerdict } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
 import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
 import { FixtureShelf, type FixtureSource } from "./clifixtures.js";
+
+/** The `clihealth` frame's checkout pointer (`devSource`). */
+export type CliHealthSource = NonNullable<Extract<HostMessage, { t: "clihealth" }>["source"]>;
 
 /** What a call site may hand an observation. `fixture` is asked only on a
  *  `good`, and only while no capture of this signal on this CLI version is
@@ -99,9 +102,10 @@ export class CliHealthStore {
    */
   private lastVerdict = new Map<string, HealthVerdict>();
   private shelf: FixtureShelf;
+  private src: CliHealthSource | null | undefined;
 
   constructor(
-    root: string,
+    private root: string,
     private onChange: (health: CliHealth, rollup: HealthRollup) => void,
     private alert: HealthAlert,
   ) {
@@ -122,6 +126,13 @@ export class CliHealthStore {
   }
 
   get(): CliHealth { return this.health; }
+
+  /** The checkout this host runs from, when it is one (`devSource`) — asked
+   *  once: neither the install nor the root moves under a running daemon. */
+  source(): CliHealthSource | undefined {
+    if (this.src === undefined) this.src = devSource(this.root);
+    return this.src ?? undefined;
+  }
 
   rollup(now = Date.now()): HealthRollup { return healthRollup(this.health, now); }
 
@@ -255,6 +266,23 @@ export class CliHealthStore {
  * omits. A forgotten one here is a heuristic that quietly stops being watched,
  * which is the same shape as the bug this feature is about.
  */
+/**
+ * A developer's install: this module sits in a git checkout that still has
+ * its sources (`<repo>/packages/host/{src,dist}/clihealth.*`), and that
+ * checkout is under the root, so a session can be opened in it. An npm or
+ * tarball install has neither, so the phone never offers to inspect code that
+ * is not on this desktop. Null on any doubt.
+ */
+export function devSource(root: string, here: string = import.meta.dirname): CliHealthSource | null {
+  try {
+    const repo = realpathSync(resolve(here, "../../.."));
+    if (!existsSync(join(repo, ".git")) || !existsSync(join(repo, "packages/host/src/clihealth.ts"))) return null;
+    const rel = relative(realpathSync(root), repo);
+    if (rel.startsWith("..") || isAbsolute(rel)) return null;
+    return { repo, stateDir: hostStateDir(root) };
+  } catch { return null; }
+}
+
 let current: CliHealthStore | null = null;
 export function setCliHealth(store: CliHealthStore | null): void { current = store; }
 export function cliHealth(): CliHealthStore | null { return current; }

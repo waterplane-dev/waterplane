@@ -13,6 +13,8 @@ import { fmtSize } from "./format";
 import { track } from "./usage";
 import { LS, lsGet, lsSet } from "./storage";
 import { SheetHead } from "./Sheet";
+import { Button } from "./kit/Button";
+import { Hint } from "./kit/Hint";
 
 /**
  * More than one image was picked — one picture, or several?
@@ -215,10 +217,10 @@ export function CollageSheet({ files, onCombine, onSeparate, onClose }: Props) {
       <SheetHead title={<>{count} images</>} onClose={onClose}>
         <span className="upscale-note">{plan ? `${plan.width} × ${plan.height}` : ""}</span>
       </SheetHead>
-      <div className="form-hint">
+      <Hint>
         Put them on one canvas so a circle or an arrow can span them — that is the only way to
         point at something that crosses screens. Or keep them apart and mark each in turn.
-      </div>
+      </Hint>
 
       {items && items.length > 1 && (
         <>
@@ -230,12 +232,12 @@ export function CollageSheet({ files, onCombine, onSeparate, onClose }: Props) {
                 <img src={thumbUrl(it)} alt={it.name} />
                 <span className="collage-chip-n">{i + 1}</span>
                 <div className="collage-chip-acts">
-                  <button className="key" disabled={i === 0} title="earlier" onClick={() => move(i, -1)}>
+                  <Button disabled={i === 0} title="earlier" onClick={() => move(i, -1)}>
                     <MoveLeft size={14} />
-                  </button>
-                  <button className="key" disabled={i === items.length - 1} title="later" onClick={() => move(i, 1)}>
+                  </Button>
+                  <Button disabled={i === items.length - 1} title="later" onClick={() => move(i, 1)}>
                     <MoveRight size={14} />
-                  </button>
+                  </Button>
                 </div>
               </div>
             ))}
@@ -243,26 +245,26 @@ export function CollageSheet({ files, onCombine, onSeparate, onClose }: Props) {
 
           <div className="upscale">
             <span className="upscale-head"><LayoutGrid size={12} /> arrangement</span>
-            <button className={`key ${cols === null ? "active" : ""}`}
+            <Button className={cols === null ? "active" : ""}
               title="chosen from the shapes of these images"
               onClick={() => pickCols(null)}>
               <Sparkles size={13} /> auto
-            </button>
+            </Button>
             {colChoices(items.length).map((c) => (
-              <button key={c} className={`key ${cols === c ? "active" : ""}`} onClick={() => pickCols(c)}>
+              <Button key={c} className={cols === c ? "active" : ""} onClick={() => pickCols(c)}>
                 {collageLabel(items.length, c)}
-              </button>
+              </Button>
             ))}
             <span className="upscale-note">{cols === null ? `auto → ${collageLabel(items.length, auto)}` : ""}</span>
           </div>
           <div className="upscale">
             <span className="upscale-head"><SplitSquareHorizontal size={12} /> seam</span>
             {(["none", "thin", "wide"] as CollageGap[]).map((g) => (
-              <button key={g} className={`key ${gap === g ? "active" : ""}`} onClick={() => pickGap(g)}>{g}</button>
+              <Button key={g} className={gap === g ? "active" : ""} onClick={() => pickGap(g)}>{g}</Button>
             ))}
-            <button className={`key ${labels ? "active" : ""}`}
+            <Button className={labels ? "active" : ""}
               title="number each panel, so the prompt can say which screen it means"
-              onClick={toggleLabels}><Hash size={13} /> numbers</button>
+              onClick={toggleLabels}><Hash size={13} /> numbers</Button>
           </div>
         </>
       )}
@@ -274,26 +276,26 @@ export function CollageSheet({ files, onCombine, onSeparate, onClose }: Props) {
       </div>
 
       {(err || failed.length > 0) && (
-        <div className="form-hint warn">
+        <Hint tone="warn">
           {err}
           {failed.length > 0 && ` ${failed.length} file${failed.length === 1 ? "" : "s"} couldn't be decoded on this device and ${failed.length === 1 ? "is" : "are"} not in the picture: ${failed.map((f) => f.name).join(", ")}.`}
-        </div>
+        </Hint>
       )}
       {preview && !err && (
-        <div className="form-hint">
+        <Hint>
           One image, {collageLabel(count, chosen)}{labels ? ", panels numbered" : ""} · goes to the
           annotator next, and uploads at {widthLabel(upload.width)}{upload.auto ? " (auto)" : ""}.
           {reduced ? " This device couldn't draw it at full size, so it was drawn smaller." : ""}
           {` Preview is ${fmtSize(preview.bytes)}.`}
-        </div>
+        </Hint>
       )}
 
       <div className="sheet-actions">
-        <button className="key" disabled={busy}
+        <Button disabled={busy}
           title="mark each image on its own, one after another"
           onClick={separate}>
           <Images size={16} /> keep separate
-        </button>
+        </Button>
         <button className="send" disabled={busy || !items || items.length < 2}
           onClick={() => void combine()}>
           <Check size={16} /> {busy ? "combining…" : "combine & mark"}

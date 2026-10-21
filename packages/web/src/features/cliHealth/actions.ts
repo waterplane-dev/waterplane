@@ -4,9 +4,9 @@
  */
 import { TimeoutError, type HealthVerdict, type HostMessage } from "@waterplane/shared";
 import { core } from "../../sdk";
-import type { CliHealthDoc } from "../../CliHealthSheet";
+import type { CliHealthDoc, CliHealthSource, InspectFacts } from "../../CliHealthSheet";
 import { saveCliHealthSnap } from "../../localState";
-import { worsened } from "./logic";
+import { inspectPrompt, worsened } from "./logic";
 import { filter, rollup } from "./store";
 
 /** The worst rollup this page has SEEN. The toast fires on a worsening, and
@@ -66,9 +66,10 @@ export function requestCliHealth(): Promise<CliHealthDoc> {
  * is one nobody reads.
  */
 export function onCliHealth(msg: Extract<HostMessage, { t: "clihealth" }>): void {
-  saveCliHealthSnap({ health: msg.health, rollup: msg.rollup });
+  const doc: CliHealthDoc = { health: msg.health, rollup: msg.rollup, source: msg.source };
+  saveCliHealthSnap(doc);
   rollup.set(msg.rollup);
-  for (const resolve of waiters.current.splice(0)) resolve({ health: msg.health, rollup: msg.rollup });
+  for (const resolve of waiters.current.splice(0)) resolve(doc);
   const prev = seen.current;
   seen.current = msg.rollup.verdict;
   if (worsened(prev, msg.rollup.verdict)) {
@@ -77,6 +78,23 @@ export function onCliHealth(msg: Extract<HostMessage, { t: "clihealth" }>): void
     const line = msg.rollup.lines[0];
     if (line) core().say.toast(line);
   }
+}
+
+/**
+ * "Inspect in a session": the Send sheet, seeded with the row's facts and
+ * aimed at a NEW session in the checkout the host runs from. A seed, never a
+ * send — the person reads the words, can retarget, and taps send themselves.
+ */
+export function inspectInSession(facts: InspectFacts, source: CliHealthSource): void {
+  const c = core();
+  c.say.track("action:clihealth.inspect");
+  c.nav.openSend({
+    prompts: [inspectPrompt(facts, source)],
+    target: { kind: "repo", cwd: source.repo },
+    when: { kind: "now" },
+    cwdHint: source.repo,
+    origin: "From CLI health",
+  });
 }
 
 /** Open the board — whole (`null`, Settings' door) or cut to the verdicts a

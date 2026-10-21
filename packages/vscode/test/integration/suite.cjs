@@ -64,6 +64,12 @@ async function run() {
     await until("the panel tab", panelTab, 15_000);
   });
 
+  await check("opening the panel with no live session shows All sessions", async () => {
+    // Both fixture conversations are hours old here (run.mjs), so nothing is live.
+    const v = await probe("default-all", { tab: "all", needles: ["All sessions", "Re-read every log now"] });
+    assert.ok(v.ok, v.why);
+  });
+
   await check("the panel renders with no error, and the tree is its navigation", async () => {
     await vscode.commands.executeCommand("workbench.view.extension.waterplane");
     const v = await probe("render", ["panel"]);
@@ -125,6 +131,28 @@ async function run() {
     const f = await until("a repohealth.jsonl row", series, 120_000);
     const rows = fs.readFileSync(f, "utf8").trim().split("\n").map((l) => JSON.parse(l));
     assert.ok(rows.length >= 1, "no rows");
+  });
+
+  // Near the end: opening an editor takes the panel out of view, and the webview probes need it showing.
+  await check("CLAUDE.md carries a CodeLens with its every-request weight, and it opens Always-on", async () => {
+    const uri = vscode.Uri.file(path.join(folder, "CLAUDE.md"));
+    await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
+    const lens = await until("the CLAUDE.md lens", async () => {
+      const l = await vscode.commands.executeCommand("vscode.executeCodeLensProvider", uri);
+      return l?.find((x) => /tokens every request/.test(x.command?.title ?? ""));
+    }, 20_000);
+    assert.match(lens.command.title, /^~\d+(\.\d)?k? tokens every request · Claude Code/);
+    assert.deepEqual(lens.command.arguments, ["always-on"]);
+  });
+
+  await check("a .claude/rules file carries the lens too", async () => {
+    const uri = vscode.Uri.file(path.join(folder, ".claude", "rules", "style.md"));
+    await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
+    const lens = await until("the rules lens", async () => {
+      const l = await vscode.commands.executeCommand("vscode.executeCodeLensProvider", uri);
+      return l?.find((x) => /tokens every request/.test(x.command?.title ?? ""));
+    }, 20_000);
+    assert.match(lens.command.title, /^~\d+ tokens every request · Claude Code$/);
   });
 
   await check("closing the panel leaves the extension alive", async () => {

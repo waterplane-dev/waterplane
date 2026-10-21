@@ -24,6 +24,9 @@ import { deviceId } from "./link";
 import { hhmm, when } from "./format";
 import { takeAppsPane, type AppsPane } from "./appsPane";
 import { AppsSetupPane } from "./AppsSetupPane";
+import { Button } from "./kit/Button";
+import { Row, RowTitle, RowSub } from "./kit/Row";
+import { Hint } from "./kit/Hint";
 
 /**
  * **Your own apps, and which of them install themselves.**
@@ -153,32 +156,32 @@ export function AppsSheet({ onClose, onOpenDownloads }: {
         <InstallLogPane log={log} cut={cut} onCut={setCut}
           naming={naming} draft={nameDraft} onNaming={setNaming} onDraft={setNameDraft} />
       ) : pane === "setup" ? (
-        caps === null ? <div className="form-hint">Asking this phone what it will allow…</div> :
+        caps === null ? <Hint>Asking this phone what it will allow…</Hint> :
         <AppsSetupPane rows={rows} caps={known} allow={allow} log={log.doc.entries} me={deviceId()}
           onFlip={flip} onOpenDownloads={onOpenDownloads} />
       ) : (
       <>
-        <div className="form-hint">
+        <Hint>
           {caps === null ? "Asking this phone what it will allow…" : appsSummary(rows, caps)}
           {caps !== null && nativeInstallSupported() && !caps.canInstall && (
-            <> <button className="key" title="open the phone's install-unknown-apps setting"
+            <> <Button title="open the phone's install-unknown-apps setting"
               onClick={() => {
                 track("action:apps.settings");
                 void openInstallSettings().catch(() => showToast("this phone has no screen for that switch"));
-              }}><Settings size={14} /> allow it</button></>
+              }}><Settings size={14} /> allow it</Button></>
           )}
-        </div>
+        </Hint>
         {caps?.supported && !isPlayBuild(caps) && (
-          <div className="form-hint dim">
-            <button className="key" onClick={() => { setRulesOpen((o) => !o); track("action:apps.rules.quiet"); }}>
+          <Hint className="dim">
+            <Button onClick={() => { setRulesOpen((o) => !o); track("action:apps.rules.quiet"); }}>
               <ListChecks size={14} /> {rulesOpen ? "hide" : "when"} a build installs without asking
-            </button>
+            </Button>
             {rulesOpen && (
               <ol className="quiet-rules">
                 {QUIET_INSTALL_RULES.map((r) => <li key={r}>{r}</li>)}
               </ol>
             )}
-          </div>
+          </Hint>
         )}
         {/* Delete an installed build's APK — opt-in, per phone, held by the
             shell because it runs at the install's receiver with the page
@@ -186,7 +189,7 @@ export function AppsSheet({ onClose, onOpenDownloads }: {
         {caps?.supported && !isPlayBuild(caps) && cleanup !== undefined && (
           <div className="set-row">
             {cleanup !== null && (
-              <button className={`key ${cleanup ? "active" : ""}`}
+              <Button className={cleanup ? "active" : ""}
                 onClick={() => {
                   const next = !cleanup;
                   track("action:apps.cleanup");
@@ -196,24 +199,24 @@ export function AppsSheet({ onClose, onOpenDownloads }: {
                       ? "an installed build's APK will now be deleted from this phone"
                       : "installed builds keep their APK on this phone");
                   }).catch((e: unknown) => showToast(e instanceof Error ? e.message : "could not change it"));
-                }}><Trash2 size={14} /> {cleanupLabel(cleanup)}</button>
+                }}><Trash2 size={14} /> {cleanupLabel(cleanup)}</Button>
             )}
             <span className="set-note">{cleanupText(cleanup)}</span>
           </div>
         )}
-        <div className="form-hint dim">
+        <Hint className="dim">
           Which repo sends builds to this phone at all is the auto-download rule, per repo.{" "}
-          <button className="key" onClick={() => { track("action:apps.rules"); onOpenDownloads(); }}>downloads</button>
-        </div>
+          <Button onClick={() => { track("action:apps.rules"); onOpenDownloads(); }}>downloads</Button>
+        </Hint>
 
         {/* The ready pane is a CUT of the apps list and says so, with one tap
             back to all of it. */}
         {pane === "ready" && rows.length > 0 && (
-          <div className="form-hint">
+          <Hint>
             {ready.length} of {rows.length} app{rows.length === 1 ? "" : "s"} · a build here that has not gone on,
             newest first — the same ones the phone notified you about, swiped away or put off included{" "}
-            <button className="key" onClick={() => setPane("apps")}><X size={14} /> show all</button>
-          </div>
+            <Button onClick={() => setPane("apps")}><X size={14} /> show all</Button>
+          </Hint>
         )}
         <div className="list">
           {pane === "ready" && rows.length > 0 && ready.length === 0 && (
@@ -253,26 +256,26 @@ function AppItem({ row, caps, ownerNote, onFlip, logged, onOpenLog }: {
   const play = isPlayBuild(caps);
   return (
     <div className="row-wrap pull-row">
-      <button className="row grow" title={row.pkg} onClick={play ? undefined : onFlip}>
-        <span className="row-title">
+      <Row as="button" kind="grow" title={row.pkg} onClick={play ? undefined : onFlip}>
+        <RowTitle>
           {row.allowed ? <PackageCheck size={12} /> : <PackagePlus size={12} />} {row.label}
-        </span>
-        <span className="row-sub mono">{row.pkg}{row.version ? ` · ${row.version}` : ""}</span>
+        </RowTitle>
+        <RowSub className="mono">{row.pkg}{row.version ? ` · ${row.version}` : ""}</RowSub>
         {/* The repo, always: the label is the app's own and the package is
             what the switch keys on, but the repo is what a person recognises —
             and the only name the Downloads rows and the log share with it. */}
-        <span className="row-sub">{row.repo ? `from ${row.repo}` : "no repo recorded for it on this phone or in the log"}</span>
-        <span className="row-sub">{row.note}</span>
-        {ownerNote && <span className="row-sub warn">{ownerNote}</span>}
-        {state && <span className={`row-sub ${row.install === "failed" ? "warn" : "dim"}`}>{state}</span>}
-        {snoozed && <span className="row-sub dim">{snoozed}</span>}
-      </button>
+        <RowSub>{row.repo ? `from ${row.repo}` : "no repo recorded for it on this phone or in the log"}</RowSub>
+        <RowSub>{row.note}</RowSub>
+        {ownerNote && <RowSub className="warn">{ownerNote}</RowSub>}
+        {state && <RowSub className={row.install === "failed" ? "warn" : "dim"}>{state}</RowSub>}
+        {snoozed && <RowSub className="dim">{snoozed}</RowSub>}
+      </Row>
       {/* Labelled, and under the text: two package glyphs side by side are not
           two verbs anybody can tell apart, and there is no hover on a phone to
           ask with (`.pull-acts` in `styles.css`). */}
       <div className="row-acts pull-acts">
         {verb && (
-          <button className="key primary" title={verb.label}
+          <Button variant="primary" title={verb.label}
             onClick={() => {
               track("action:apps.install");
               void nativeInstall(verb.id).catch((e: unknown) =>
@@ -280,12 +283,12 @@ function AppItem({ row, caps, ownerNote, onFlip, logged, onOpenLog }: {
             }}>
             {row.install === "failed" ? <RotateCw size={16} /> : <PackagePlus size={16} />}
             {row.install === "failed" ? "retry install" : `install ${row.version || "this build"}`}
-          </button>
+          </Button>
         )}
         {!play && (
-          <button className={`key ${row.allowed ? "active" : ""}`}
+          <Button className={row.allowed ? "active" : ""}
             title={row.allowed ? `stop installing ${row.label} by itself` : `always install ${row.label}`}
-            onClick={onFlip}><PackageCheck size={16} /> auto-install: {row.allowed ? "on" : "off"}</button>
+            onClick={onFlip}><PackageCheck size={16} /> auto-install: {row.allowed ? "on" : "off"}</Button>
         )}
         {/* How often this app has actually landed, on any phone. A COUNT ON A
             CONTROL, so it opens the log cut to exactly these rows rather than
@@ -294,8 +297,8 @@ function AppItem({ row, caps, ownerNote, onFlip, logged, onOpenLog }: {
             that is what the tap opens. A count that says "3 installs" and opens
             four rows is the two-copies-of-the-edge failure `CLAUDE.md` names. */}
         {logged > 0 && (
-          <button className="key" title={`everything the log holds about ${row.label}, on every phone`}
-            onClick={onOpenLog}><History size={16} /> {logged} logged</button>
+          <Button title={`everything the log holds about ${row.label}, on every phone`}
+            onClick={onOpenLog}><History size={16} /> {logged} logged</Button>
         )}
       </div>
     </div>
@@ -335,7 +338,7 @@ function InstallLogPane({ log, cut, onCut, naming, draft, onNaming, onDraft }: {
 
   return (
     <>
-      <div className="form-hint">
+      <Hint>
         {/* "Nothing has installed itself yet" is an ANSWER, and this phone has
             one only if the desktop has ever told it. Never been told is its own
             sentence — the rule `localState.ts` states about every cached list:
@@ -350,7 +353,7 @@ function InstallLogPane({ log, cut, onCut, naming, draft, onNaming, onDraft }: {
               : ` the desktop is not reachable — this is what it said ${when(toldAt)}.`}
           </span></>
         )}
-      </div>
+      </Hint>
 
       {/* Naming THIS phone. Not a synced setting: it is the one preference whose
           entire job is to be different on each device, and a synced copy would
@@ -362,14 +365,14 @@ function InstallLogPane({ log, cut, onCut, naming, draft, onNaming, onDraft }: {
               placeholder="what to call this phone"
               onChange={(e) => onDraft(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") save(); }} />
-            <button className="key" onClick={save}>save</button>
-            <button className="key" onClick={() => { onDraft(deviceName()); onNaming(false); }}><X size={14} /> cancel</button>
+            <Button onClick={save}>save</Button>
+            <Button onClick={() => { onDraft(deviceName()); onNaming(false); }}><X size={14} /> cancel</Button>
           </>
         ) : (
           <>
-            <button className="key" onClick={() => { onDraft(deviceName()); onNaming(true); track("action:apps.name"); }}>
+            <Button onClick={() => { onDraft(deviceName()); onNaming(true); track("action:apps.name"); }}>
               <Pencil size={14} /> name this phone
-            </button>
+            </Button>
             <span className="set-note">
               This phone reports as <span className="mono">{deviceName() || deviceLabel({ id: mine })}</span>.
               A name makes the rows below readable when there is more than one device.
@@ -385,23 +388,23 @@ function InstallLogPane({ log, cut, onCut, naming, draft, onNaming, onDraft }: {
       {doc.devices.length > 1 && (
         <div className="set-row">
           {doc.devices.map((d) => (
-            <button key={d.id} className={`key ${cut.deviceId === d.id ? "active" : ""}`}
+            <Button key={d.id} className={cut.deviceId === d.id ? "active" : ""}
               title={d.failures
                 ? `${d.installs} installed, ${d.failures} failed on ${deviceLabel(d)}`
                 : `only what installed on ${deviceLabel(d)}`}
               onClick={() => onCut(cut.deviceId === d.id ? {} : { deviceId: d.id })}>
               <Smartphone size={14} /> {deviceLabel(d)}{d.id === mine ? " (this phone)" : ""} · {d.installs + d.failures}
-            </button>
+            </Button>
           ))}
         </div>
       )}
 
       {/* A filtered view SAYS what it is hiding, with one tap back to all of it. */}
       {filtered && (
-        <div className="form-hint">
+        <Hint>
           {shown.length} of {doc.entries.length} · {cutName}{" "}
-          <button className="key" onClick={() => onCut({})}><X size={14} /> show all</button>
-        </div>
+          <Button onClick={() => onCut({})}><X size={14} /> show all</Button>
+        </Hint>
       )}
 
       <div className="list">
@@ -426,25 +429,25 @@ function InstallLogPane({ log, cut, onCut, naming, draft, onNaming, onDraft }: {
  *  whether anybody tapped). */
 function InstallLogRow({ entry, mine }: { entry: InstallLogEntry; mine: string }) {
   return (
-    <div className="row-wrap">
-      <div className="row grow" title={entry.file ? `${entry.file}${entry.repo ? ` · ${entry.repo}` : ""}` : undefined}>
-        <span className="row-title">
+    <Row kind="wrap">
+      <Row kind="grow" title={entry.file ? `${entry.file}${entry.repo ? ` · ${entry.repo}` : ""}` : undefined}>
+        <RowTitle>
           {entry.outcome === "installed" ? <PackageCheck size={12} /> : <X size={12} />} {installTitle(entry)}
-        </span>
-        <span className="row-sub mono">{entry.pkg}</span>
-        <span className={`row-sub ${entry.outcome === "failed" ? "warn" : ""}`}>
+        </RowTitle>
+        <RowSub className="mono">{entry.pkg}</RowSub>
+        <RowSub className={entry.outcome === "failed" ? "warn" : ""}>
           {installLogLine(entry, when)}
-        </span>
+        </RowSub>
         {(entry.repo || entry.file) && (
           // The FILE first and not dimmed: it is the one string the Downloads
           // row prints too, so it is how an install here is matched to a build
           // there.
-          <span className="row-sub">
+          <RowSub>
             {entry.file ?? ""}{entry.repo && entry.file ? " · " : ""}{entry.repo ? `from ${entry.repo}` : ""}
             {entry.deviceId === mine ? " · this phone" : ""}
-          </span>
+          </RowSub>
         )}
-      </div>
-    </div>
+      </Row>
+    </Row>
   );
 }

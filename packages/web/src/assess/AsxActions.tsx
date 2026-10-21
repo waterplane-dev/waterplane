@@ -9,6 +9,7 @@ import { track } from "../usage";
 import { openSettingsAt } from "../settingsFocus";
 import { ICON } from "./asxConst";
 import type { AssessModel } from "./useAssessSheet";
+import { Button } from "../kit/Button";
 
 export function AsxActions({ m }: { m: AssessModel }) {
   const { p, run, proposal, runBlocked, scopeN, planPath, runLabel } = m;
@@ -21,11 +22,11 @@ export function AsxActions({ m }: { m: AssessModel }) {
           that would settle the whole page is the suspicion that opening it
           starts an agent, or loses the ticks they have made. It does neither. */}
       {planPath && p.onOpenPlan ? (
-        <button className="key"
+        <Button
           title={`open ${planPath}, the write-up the run left for you — for reading; it does not run anything, and your ticks are kept`}
           onClick={() => { track("action:assess.plan"); p.onOpenPlan?.(planPath); }}>
           <FileText size={ICON} /> read the plan
-        </button>
+        </Button>
       ) : null}
       {proposal && p.onDiscard ? (
         <ConfirmButton className="key" title="throw this proposal away without applying any of it"
@@ -44,13 +45,13 @@ export function AsxActions({ m }: { m: AssessModel }) {
             <Unavailable cants={[{ label: runLabel, reason: runBlocked }]} />
             {/* The budget is the one blocker a person can change from here. */}
             {p.budgetNote && runBlocked === p.budgetNote && (
-              <button className="key" onClick={() => openSettingsAt("budget")}>
+              <Button onClick={() => openSettingsAt("budget")}>
                 <Settings2 size={ICON} /> change the usage budget
-              </button>
+              </Button>
             )}
           </>
         : (
-          <button className="key"
+          <Button
             title={scopeN
               ? `judge ${scopeN === 1 ? "the one row" : `the ${scopeN} rows`} you came here with — it still reads ${p.repoName} as evidence`
               : run ? `read ${p.repoName} again and judge what is left now` : `read ${p.repoName} and judge what is left`}
@@ -63,7 +64,7 @@ export function AsxActions({ m }: { m: AssessModel }) {
                 panel, which has the spinner, the elapsed clock and the steps
                 as they arrive. */}
             <Play size={ICON} /> {runLabel}
-          </button>
+          </Button>
         )}
     </>
   );

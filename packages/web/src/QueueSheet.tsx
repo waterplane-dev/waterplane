@@ -10,6 +10,9 @@ import { SheetHead } from "./Sheet";
 import { Empty } from "./Empty";
 import { SessionName } from "./SessionName";
 import { useLink } from "./link";
+import { Button } from "./kit/Button";
+import { Row, RowTitle, RowSub } from "./kit/Row";
+import { Hint } from "./kit/Hint";
 
 interface Props {
   /** The whole send queue, in send order (queued + in-flight + failed). */
@@ -278,7 +281,7 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
             <PromptComposer inline rows={4} autoFocus prompts={[draft]}
               onChange={(next) => setDraft(next[0] ?? "")} placeholder="Rewrite it…" />
             <div className="queue-row-acts">
-              <button className="key" onClick={() => setEditing(null)}><X size={16} /> cancel</button>
+              <Button onClick={() => setEditing(null)}><X size={16} /> cancel</Button>
               <span className="spacer" />
               <button className="send" onClick={() => { track("action:queue.edit"); commitEdit(e.ackId); }}>Save</button>
             </div>
@@ -333,7 +336,7 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
                 sheet in the report, where nothing a person pressed did
                 anything. Everything else still needs a socket to mean
                 anything, so it stays gated. */}
-            <button className="key" data-hint="queue.sendone"
+            <Button data-hint="queue.sendone"
               disabled={e.status === "pending" || (!online && e.status !== "failed")}
               title={e.status === "pending" ? "already on its way"
                 : e.status === "failed" ? (online ? "try this one again" : "put it back in the queue — it goes out when the link is back")
@@ -342,14 +345,14 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
                 : "send this one now"}
               onClick={() => { track("action:queue.sendone"); onSendNow(e.ackId); }}>
               {e.status === "failed" ? <RotateCw size={16} /> : <SendHorizontal size={16} />}
-            </button>
-            <button className="key danger" data-hint="queue.remove" title="discard" disabled={locked}
-              onClick={() => { track("action:queue.remove"); onRemove(e.ackId); }}><Trash2 size={16} /></button>
+            </Button>
+            <Button variant="danger" data-hint="queue.remove" title="discard" disabled={locked}
+              onClick={() => { track("action:queue.remove"); onRemove(e.ackId); }}><Trash2 size={16} /></Button>
             {hasMore && (
-              <button className={`key ${moreFor === e.ackId ? "on" : ""}`} data-hint="queue.more"
+              <Button className={moreFor === e.ackId ? "on" : ""} data-hint="queue.more"
                 title={moreFor === e.ackId ? "hide the other actions" : "reorder, hold, re-aim, rewrite and send again"}
                 aria-expanded={moreFor === e.ackId}
-                onClick={() => setMoreFor(moreFor === e.ackId ? null : e.ackId)}><Ellipsis size={16} /></button>
+                onClick={() => setMoreFor(moreFor === e.ackId ? null : e.ackId)}><Ellipsis size={16} /></Button>
             )}
           </div>
         </div>
@@ -365,9 +368,9 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
         )}
         {moreFor === e.ackId && (
           <div className="queue-row-acts queue-more">
-            <button className="key" data-hint="queue.moveup" title="move earlier" disabled={locked || i === 0} onClick={() => onMove(e.ackId, -1)}><ArrowUp size={16} /></button>
-            <button className="key" data-hint="queue.movedown" title="move later" disabled={locked || i === arr.length - 1} onClick={() => onMove(e.ackId, 1)}><ArrowDown size={16} /></button>
-            <button className={`key ${e.holdUntilIdle ? "on" : ""}`} data-hint="queue.hold" disabled={e.status !== "queued"}
+            <Button data-hint="queue.moveup" title="move earlier" disabled={locked || i === 0} onClick={() => onMove(e.ackId, -1)}><ArrowUp size={16} /></Button>
+            <Button data-hint="queue.movedown" title="move later" disabled={locked || i === arr.length - 1} onClick={() => onMove(e.ackId, 1)}><ArrowDown size={16} /></Button>
+            <Button className={e.holdUntilIdle ? "on" : ""} data-hint="queue.hold" disabled={e.status !== "queued"}
               // The composer's words for this WHEN, not a fifth spelling of it:
               // *when it's free* on the split button, on the Backlog row and on
               // the next-prompt strip, and the same sentence here.
@@ -375,37 +378,37 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
                 : e.holdUntilIdle
                 ? "when it's free — the turn has ended, no question box is up and it isn't blocked on a usage limit. Tap to send at the next opportunity instead"
                 : "when it's free: the turn ended, no question is on screen, no usage-limit block (exact for sessions that report turn boundaries; a guess from silence otherwise)"}
-              onClick={() => onToggleHold(e.ackId)}><Hourglass size={16} /></button>
+              onClick={() => onToggleHold(e.ackId)}><Hourglass size={16} /></Button>
             {/* Only an open that RUNS something can pile up: a bare terminal
                 costs nothing and edits nothing, so there is nothing to
                 serialize. */}
             {isSerializable(e) && (
-              <button className={`key ${e.serial ? "on" : ""}`} data-hint="queue.serial" disabled={e.status !== "queued"}
+              <Button className={e.serial ? "on" : ""} data-hint="queue.serial" disabled={e.status !== "queued"}
                 title={e.status !== "queued" ? "already on its way"
                   : e.serial
                   ? "waiting until this repo's other sessions have finished — one agent at a time, so they don't spend the usage limit in parallel or edit the same files. Tap to let it start straight away"
                   : "start it straight away, even if another session in this repo is working. Tap to make it wait its turn instead"}
-                onClick={() => onToggleSerial(e.ackId)}><ListOrdered size={16} /></button>
+                onClick={() => onToggleSerial(e.ackId)}><ListOrdered size={16} /></Button>
             )}
             {canAim && (
-              <button className={`key ${retargeting === e.ackId ? "on" : ""}`} data-hint="queue.retarget" disabled={e.status !== "queued"}
+              <Button className={retargeting === e.ackId ? "on" : ""} data-hint="queue.retarget" disabled={e.status !== "queued"}
                 title={e.status !== "queued" ? "already on its way" : "send it somewhere else"}
-                onClick={() => setRetargeting(retargeting === e.ackId ? null : e.ackId)}><Shuffle size={16} /></button>
+                onClick={() => setRetargeting(retargeting === e.ackId ? null : e.ackId)}><Shuffle size={16} /></Button>
             )}
             {/* A queued open is worth queuing only for what runs in it.
                 This adds another prompt to its chain — delivered after
                 the one before it has finished its turn. */}
             {isCreateOp(e) && (
-              <button className={`key ${adding === e.ackId ? "on" : ""}`} data-hint="queue.addprompt" disabled={e.status !== "queued"}
+              <Button className={adding === e.ackId ? "on" : ""} data-hint="queue.addprompt" disabled={e.status !== "queued"}
                 title={e.status !== "queued" ? "already on its way" : "add a prompt to run after this session opens"}
-                onClick={() => { setAdding(adding === e.ackId ? null : e.ackId); setAddDraft(""); }}><Plus size={16} /></button>
+                onClick={() => { setAdding(adding === e.ackId ? null : e.ackId); setAddDraft(""); }}><Plus size={16} /></Button>
             )}
             {/* An op has no text to hand back to a compose box — its
                 label is a description, not something you'd retype. Nor
                 does an answer: pasting "2" into the composer would type
                 a stray digit at whatever the session is doing now. */}
-            <button className="key" data-hint="queue.restore" title="put the text back in the message box" disabled={locked || isOp || isUpload || isAnswer}
-              onClick={() => { track("action:queue.restore"); onRestore(e.ackId); }}><CornerDownLeft size={16} /></button>
+            <Button data-hint="queue.restore" title="put the text back in the message box" disabled={locked || isOp || isUpload || isAnswer}
+              onClick={() => { track("action:queue.restore"); onRestore(e.ackId); }}><CornerDownLeft size={16} /></Button>
             {/* Rewrite it, check the files it names, send it as a new message.
                 What "try again" cannot do: a retry re-sends the same words at
                 the same target with the same attachments, which is precisely
@@ -413,24 +416,24 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
                 names the file — the editor's whole job there is picking the
                 file again or dropping the mention, and this row IS where the
                 failure is printed. */}
-            <button className="key" data-hint="queue.resend"
+            <Button data-hint="queue.resend"
               title={isUpload
                 ? "rewrite the message that names this file — re-attach it, swap it, or drop the mention"
                 : "rewrite it, check the files it names, and send it again"}
               disabled={locked || isAnswer || !resendTarget}
-              onClick={() => { track("action:queue.resend"); onResend(resendTarget!); }}><FilePenLine size={16} /></button>
+              onClick={() => { track("action:queue.resend"); onResend(resendTarget!); }}><FilePenLine size={16} /></Button>
           </div>
         )}
         {adding === e.ackId && (
           <div className="queue-edit">
-            <div className="form-hint" style={{ padding: 0 }}>
+            <Hint style={{ padding: 0 }}>
               Runs in this session once it is open — after everything already queued for it has finished.
-            </div>
+            </Hint>
             {/* Same composer: a prompt queued behind an open is a prompt. */}
             <PromptComposer inline rows={3} autoFocus prompts={[addDraft]}
               onChange={(next) => setAddDraft(next[0] ?? "")} placeholder="…and then do this" />
             <div className="queue-row-acts">
-              <button className="key" onClick={() => setAdding(null)}><X size={16} /> cancel</button>
+              <Button onClick={() => setAdding(null)}><X size={16} /> cancel</Button>
               <span className="spacer" />
               <button className="send" disabled={!addDraft.trim()}
                 onClick={() => { onAddPrompt(e.ackId, addDraft.trim()); setAdding(null); setAddDraft(""); }}>Add</button>
@@ -445,13 +448,13 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
           // App-side, because the host may already hold a verdict for
           // the old one.
           <div className="queue-aim">
-            <div className="form-hint">Send it to another session, or park it in a repo’s backlog.</div>
+            <Hint>Send it to another session, or park it in a repo’s backlog.</Hint>
             {live.filter((s) => s.id !== e.sessionId).map((s) => (
-              <button key={s.id} className="row" onClick={() => { setRetargeting(null); onRetarget(e.ackId, { sessionId: s.id, cwd: s.cwd, mode: "input" }); }}>
-                <span className="row-title"><SendHorizontal size={12} /> {s.title}</span>
+              <Row key={s.id} as="button" onClick={() => { setRetargeting(null); onRetarget(e.ackId, { sessionId: s.id, cwd: s.cwd, mode: "input" }); }}>
+                <RowTitle><SendHorizontal size={12} /> {s.title}</RowTitle>
                 <SessionName s={s} />
-                <span className="row-sub">{s.turnActive ? "working" : "idle"}</span>
-              </button>
+                <RowSub>{s.turnActive ? "working" : "idle"}</RowSub>
+              </Row>
             ))}
             {/* The shared picker (`RepoPicker.tsx`). `home` is the repo the
                 entry was written against, so re-aiming a stranded prompt starts
@@ -469,16 +472,16 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
     <div className="sheet">
       <SheetHead title={"Queued messages"} onClose={onClose}>
         {queuedCount > 0 && (
-          <button className="key" data-hint="queue.sendall" title={online ? "send everything queued now" : "no connection — this stays queued"}
+          <Button data-hint="queue.sendall" title={online ? "send everything queued now" : "no connection — this stays queued"}
             onClick={() => { track("action:queue.sendall"); onSendAll(); }}>
             <CheckCheck size={16} /> send all
-          </button>
+          </Button>
         )}
       </SheetHead>
       {/* Four sentences of standing explanation above every list is the wall a
           phone screen can least afford. The state sentence stays; the manual
           moves behind a disclosure. */}
-      <div className="form-hint">
+      <Hint>
         {online
           ? "Connected. One message per session at a time, in order."
           : "No connection. Everything here is kept on this phone and sent when the link is back."}
@@ -492,28 +495,28 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
         {strandedCount > 0 && (
           <> {strandedCount} {strandedCount > 1 ? "are" : "is"} waiting for a session that has gone — they will not be sent. Under “⋯”, aim them at another session or at the repo’s backlog.</>
         )}
-      </div>
+      </Hint>
       {/* The answer to a sheet of red, above the list rather than once per row:
           an outage past the queue's TTL expires the whole backlog at once, so
           the per-row retry is the right control for one message and the wrong
           one for twenty. */}
       {retryable > 0 && (
         <div className="queue-row-acts" style={{ padding: "0 12px 8px" }}>
-          <button className="key" data-hint="queue.retryall"
+          <Button data-hint="queue.retryall"
             title="put every message that gave up back in the queue, with its retry budget reset"
             onClick={() => { track("action:queue.retryall"); onRetryFailed(); }}>
             <RotateCw size={14} /> try {retryable} again
-          </button>
+          </Button>
         </div>
       )}
       <div className="queue-row-acts" style={{ padding: "0 12px 8px" }}>
-        <button className={`key ${serialSessions ? "on" : ""}`} data-hint="queue.serialall"
+        <Button className={serialSessions ? "on" : ""} data-hint="queue.serialall"
           title={serialSessions
             ? "New queued prompts that open a session run ONE AT A TIME per repo: the next one starts when the one before it has finished its turn. Tap to let them all start together"
             : "New queued prompts that open a session all start as soon as the link is back — several agents in one repo at once. Tap to run them one at a time instead"}
           onClick={onToggleSerialAll}>
           <ListOrdered size={14} /> one session at a time per repo: {serialSessions ? "on" : "off"}
-        </button>
+        </Button>
       </div>
       <details className="hint-more">
         <summary>what the buttons do</summary>
@@ -534,9 +537,9 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
               <span className="queue-lane-title">waiting on the desktop</span>
               <span className="queue-lane-count">{held.length}</span>
             </div>
-            <div className="form-hint" style={{ paddingTop: 0 }}>
+            <Hint style={{ paddingTop: 0 }}>
               The desktop has these and will open them itself when the files land — this phone can be closed.
-            </div>
+            </Hint>
             {held.map((l) => (
               <div key={l.id} className="queue-row-wrap">
                 <div className="queue-row queued">
@@ -549,14 +552,14 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
                     </span>
                   </div>
                   <div className="queue-row-acts">
-                    <button className="key" title="open the session now, without the files it is waiting for — the prompt inside it will still name them"
+                    <Button title="open the session now, without the files it is waiting for — the prompt inside it will still name them"
                       onClick={() => { track("action:launch.run"); onRunLaunch(l.id); }}>
                       <Play size={16} />
-                    </button>
-                    <button className="key danger" title="call it off — the session never opens"
+                    </Button>
+                    <Button variant="danger" title="call it off — the session never opens"
                       onClick={() => { track("action:launch.cancel"); onCancelLaunch(l.id); }}>
                       <X size={16} />
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -610,7 +613,7 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
         ))}
       </div>
       <div className="sheet-actions">
-        <button className="key" onClick={onClose}><ChevronLeft size={16} /> back</button>
+        <Button onClick={onClose}><ChevronLeft size={16} /> back</Button>
         <span className="spacer" />
         <span className="set-note" style={{ padding: 0 }}>{queuedCount} waiting</span>
         <Pencil size={14} style={{ opacity: 0.35 }} />

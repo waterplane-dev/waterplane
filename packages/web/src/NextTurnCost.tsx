@@ -8,6 +8,7 @@ import { Plus, TrendingUp } from "lucide-react";
 import type { SessionCostReading } from "@waterplane/shared";
 import { costDoorsText } from "@waterplane/shared";
 import { Unavailable } from "./Unavailable";
+import { Button } from "./kit/Button";
 
 export function NextTurnCost({ cost, onFresh, onCompact, noDoors }: {
   cost: SessionCostReading;
@@ -29,9 +30,9 @@ export function NextTurnCost({ cost, onFresh, onCompact, noDoors }: {
           was a second door to the same send. Its absence is said there. */}
       {cost.advice && !noDoors && onFresh && (
         <div className="sheet-actions">
-          <button className="key" onClick={onFresh}>
+          <Button onClick={onFresh}>
             <Plus size={14} /> new session in this repo
-          </button>
+          </Button>
         </div>
       )}
       {cost.advice && !noDoors && !onFresh && (

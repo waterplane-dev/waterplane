@@ -67,6 +67,9 @@ writeFileSync(join(dirs.work, "index.ts"), "export const a = 1;\nexport function
 writeFileSync(join(dirs.work, "CLAUDE.md"), "# test repo\n\nOne rule.\n");
 git("add", "-A");
 git("-c", "user.name=it", "-c", "user.email=it@example.invalid", "commit", "-q", "-m", "one");
+// An unscoped `.claude/rules` file, left untracked: the lens must reach files outside the four names too.
+mkdirSync(join(dirs.work, ".claude", "rules"), { recursive: true });
+writeFileSync(join(dirs.work, ".claude", "rules", "style.md"), "Keep functions short.\n");
 
 // A repo-health series the waterplane desktop app "already measured" in the folder: the packaged engine run
 // into a scratch dir, then filed as `.waterplane/repohealth.jsonl`. The Health tab must show it unmeasured.
@@ -89,15 +92,18 @@ const slug = dirs.work.replace(/[^a-zA-Z0-9]/g, "-");
 mkdirSync(join(dirs.claude, "projects", slug), { recursive: true });
 copyFileSync(FIXTURE, join(dirs.claude, "projects", slug, `${CONV}.jsonl`));
 {
-  // The fixture is the older one by a few minutes; the second is written just now, so it is the newest.
-  const old = new Date(Date.now() - 5 * 60_000);
-  utimesSync(join(dirs.claude, "projects", slug, `${CONV}.jsonl`), old, old);
+  // The fixture is the older one; the second is newer. Both are aged below.
   const at = (s) => new Date(Date.now() - 20_000 + s * 1000).toISOString();
   writeFileSync(join(dirs.claude, "projects", slug, `${CONV2}.jsonl`), [
     { type: "user", timestamp: at(0), cwd: dirs.work, message: { role: "user", content: SECOND } },
     { type: "assistant", timestamp: at(1), cwd: dirs.work, message: { id: "it-1", model: "claude-sonnet-4-5", role: "assistant", stop_reason: "end_turn",
       usage: { input_tokens: 40, cache_creation_input_tokens: 900, cache_read_input_tokens: 0, output_tokens: 30 } } },
   ].map((r) => JSON.stringify(r)).join("\n") + "\n");
+  // Nothing is live (a write in the last 30 minutes would be), so the panel's default view is All sessions.
+  for (const [id, h] of [[CONV, 3], [CONV2, 1]]) {
+    const t = new Date(Date.now() - h * 3600_000);
+    utimesSync(join(dirs.claude, "projects", slug, `${id}.jsonl`), t, t);
+  }
 }
 
 const out = join(root, "result.json");

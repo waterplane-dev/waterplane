@@ -13,6 +13,7 @@ import {
   browseNewImages, dismissNewImages, minimizeNewImages, openFileRef, openNewImages, openOutboxFor, referenceNewImage, restoreNewImages,
 } from "./actions";
 import { isMarkdownPath, isVideoPath, isViewable } from "./logic";
+import { Button, Tag } from "../../kit";
 
 /** The session screen's strip, or its folded pill; nothing with no new files.
  *  Pictures open the swipeable viewer; a markdown tile opens the reader. */
@@ -82,19 +83,19 @@ export function NewImagesTag({ sessionId }: { sessionId: string }) {
   const n = useNewImagesOf(sessionId).filter((im) => isViewable(im.relPath)).length;
   if (n <= 0) return null;
   return (
-    <span className="tag img tag-filter" role="button" tabIndex={0}
+    <Tag className="img tag-filter" role="button" tabIndex={0}
       title={`${n} new image${n > 1 ? "s" : ""} from this session — tap to browse them`}
       onPointerDown={(e) => e.stopPropagation()}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); openNewImages(sessionId); } }}
       onClick={(e) => { e.stopPropagation(); openNewImages(sessionId); }}>
       <Images size={12} /> {n}
-    </span>
+    </Tag>
   );
 }
 
 /** The toolbar's `inbox`: new outbox files since this repo was last opened. */
 export function InboxToolbarItem({ repo, dismiss }: { repo: RepoTarget | null; dismiss(): void }) {
   if (!repo || repo.outboxCount <= 0) return null;
-  return <button key="inbox" className="key count" title={`${repo.outboxCount} new outbox file${repo.outboxCount > 1 ? "s" : ""} since last opened — open gallery`}
-    onClick={() => { dismiss(); openOutboxFor(repo.id); }}><Images size={16} /> {repo.outboxCount}</button>;
+  return <Button key="inbox" className="count" title={`${repo.outboxCount} new outbox file${repo.outboxCount > 1 ? "s" : ""} since last opened — open gallery`}
+    onClick={() => { dismiss(); openOutboxFor(repo.id); }}><Images size={16} /> {repo.outboxCount}</Button>;
 }

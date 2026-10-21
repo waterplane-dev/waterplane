@@ -18,6 +18,9 @@ import { Unavailable } from "./Unavailable";
 import { ConfirmButton } from "./Confirm";
 import { SyncChip, SyncSummary } from "./SyncMark";
 import { queueSync, rowChipWord, type SyncPhase } from "./syncState";
+import { Button } from "./kit/Button";
+import { Hint } from "./kit/Hint";
+import { Tag } from "./kit/Tag";
 
 interface Props {
   repos: RepoTarget[];
@@ -423,13 +426,13 @@ export function ScheduleSheet({
     const stateTag = queued || (e.nextAt && !e.running)
       ? null
       : e.running
-        ? <span className="tag"><Loader size={12} className="spin" /> running</span>
+        ? <Tag><Loader size={12} className="spin" /> running</Tag>
         // "not armed" names a state you can leave, and a spent one-off
         // cannot. It says what it IS instead; the sentence under the card
         // says what is left to do with it.
         : spent
-          ? <span className="tag">been and gone</span>
-          : <span className="tag">{e.enabled ? HORIZON_LABEL.unarmed : paused ? "paused" : "off"}</span>;
+          ? <Tag>been and gone</Tag>
+          : <Tag>{e.enabled ? HORIZON_LABEL.unarmed : paused ? "paused" : "off"}</Tag>;
     const syncTagged = rowChipWord(syncPhase, true) != null;
     return (
       <div key={e.id} className={`q-card${e.running ? " resuming" : ""}`}>
@@ -711,7 +714,7 @@ export function ScheduleSheet({
           at. Editing is named too, and as the thing that still WORKS — a save is
           a durable op, so an offline edit is queued and upserts on its id. */}
       {!online && (
-        <div className="form-hint">
+        <Hint>
           <CloudOff size={13} style={{ verticalAlign: "-2px" }} /> offline — a new or edited schedule is queued and
           saved when the link is back, so <b>edit</b> still works on every row below (the save replaces the copy it
           edits rather than arming a second one). What the cards do not show while the link is down is{" "}
@@ -731,7 +734,7 @@ export function ScheduleSheet({
               all. */}
           {" "}Items waiting on a clock are not listed below while the link is down — this device caches the rules,
           not the rows. Each of them is in its repo's <b>backlog</b>, which does keep a copy.
-        </div>
+        </Hint>
       )}
 
       {/* Offline with nothing cached, this says only that THIS DEVICE has never
@@ -778,12 +781,12 @@ export function ScheduleSheet({
           are), and it does not pretend a list is missing. With neither, the
           `Empty` above still stands. */}
       {sorted.length === 0 && standingTotal > 0 && !searching && (
-        <div className="form-hint sched-nothing-repeats">
+        <Hint className="sched-nothing-repeats">
           <Repeat size={13} style={{ verticalAlign: "-2px" }} /> Nothing repeats — there is no standing rule on this
           desktop. {standingTotal} one-off{standingTotal === 1 ? "" : "s"} wait{standingTotal === 1 ? "s" : ""} on a
           clock in {standingTotal === 1 ? "its repo's backlog" : "their repos' backlogs"}, where every verb they have
           lives. A rule that repeats would be a card here; <b>new schedule</b> writes one.
-        </div>
+        </Hint>
       )}
 
       {/* Two kinds of thing, and they are not read the same way. A REPEATING
@@ -853,18 +856,18 @@ export function ScheduleSheet({
           screens can stand behind, and which of the two it was is the one thing
           Activity's row is there to say. */}
       {spentRows.length > 0 && !focus && !focusIds && !searching && (
-        <div className="form-hint sched-spent">
+        <Hint className="sched-spent">
           <History size={13} style={{ verticalAlign: "-2px" }} />{" "}
           {spentRows.length} one-off sweep{spentRows.length === 1 ? " has" : "s have"} been and gone — run or missed,{" "}
           Activity's row says which — and a one-off cannot be re-armed, so{" "}
           {spentRows.length === 1 ? "it is not a row here" : "they are not rows here"} any more.
           {onOpenSpent && (
-            <> <button className="key" data-hint="schedule.spent"
+            <> <Button data-hint="schedule.spent"
               onClick={() => { track("action:schedule.spent"); onOpenSpent(spentRows.map((e) => e.id)); }}>
               see {spentRows.length === 1 ? "it" : "them"} in Activity
-            </button></>
+            </Button></>
           )}
-        </div>
+        </Hint>
       )}
 
       {/* …and the same foot for the TIMED ITEMS that are over — a separate

@@ -17,6 +17,8 @@ import {
   AGENT_LARGE_TOK,
   AGENT_LIVE_MS,
   liveAgentText,
+  agentPushText,
+  replanPromptText,
   MIN_TURNS,
   agentAdvice,
   compactionCostText,
@@ -603,6 +605,32 @@ test("liveAgentText is silent below the threshold and speaks at it", () => {
   assert.equal(liveAgentText(AGENT_LARGE_TOK),
     "A subagent is re-reading 500k on every step — agents with a narrower task that finish sooner cost less.");
   assert.match(liveAgentText(720_000), /re-reading 720k on every step/);
+});
+
+test("liveAgentText takes the person's own line, defaulting to AGENT_LARGE_TOK", () => {
+  assert.equal(liveAgentText(300_000), null);
+  assert.match(liveAgentText(300_000, null, undefined, 250_000), /re-reading 300k/);
+  assert.equal(liveAgentText(300_000, null, undefined, 400_000), null);
+  assert.equal(liveAgentText(AGENT_LARGE_TOK, null, undefined, undefined) !== null, true);
+});
+
+test("agentPushText names the agent, the size and the lever, and promises nothing stopped", () => {
+  const p = agentPushText({ tok: 612_000, type: "general-purpose", title: "api work" });
+  assert.equal(p.title, "api work: a general-purpose agent passed 612k");
+  assert.match(p.body, /612k of context on every step/);
+  assert.match(p.body, /context sheet to interrupt and re-plan/);
+  assert.equal(agentPushText({ tok: 500_000 }).title, "an agent passed 500k");
+  assert.doesNotMatch(p.body, /stopped|paused|killed/i);
+});
+
+test("replanPromptText is one plain paragraph that names the size, TaskStop and the 200k brief", () => {
+  const t = replanPromptText(747_000, "Explore");
+  assert.match(t, /^A subagent \(Explore\) was re-reading 747k of context on every step\./);
+  assert.match(t, /TaskStop/);
+  assert.match(t, /model set explicitly/);
+  assert.match(t, /200k/);
+  assert.doesNotMatch(t, /\n/);
+  assert.match(replanPromptText(600_000), /^A subagent was re-reading 600k/);
 });
 
 test("liveAgentText goes quiet once the agent's last record is stale by the caller's clock", () => {

@@ -2,6 +2,7 @@
 import { GRACES, LEADS, hoursWords } from "../sendIntent";
 import type { SendSheetModel } from "./useSendSheet";
 import { HOURS_FROM, HOURS_TO, hhmm, minuteOfDay } from "./sendTargets";
+import { Hint } from "../kit/Hint";
 
 export function MoreRule({ m }: { m: SendSheetModel }) {
   const {
@@ -27,10 +28,10 @@ export function MoreRule({ m }: { m: SendSheetModel }) {
                     onClick={() => patchRule({ offsetMin: -m })}>{m === 0 ? "on time" : `${m < 60 ? `${m}m` : `${m / 60}h`} before`}</button>
                 ))}
               </div>
-              <div className="form-hint">
+              <Hint>
                 The time above is the thing you are tracking — a usage window rolling over, a nightly deploy.
                 The lead is when to act on it. Keeping them apart means a moved reset is one field to change.
-              </div>
+              </Hint>
             </>
           )}
           {/* THE RUN WINDOW, and deliberately under *more* rather
@@ -77,7 +78,7 @@ export function MoreRule({ m }: { m: SendSheetModel }) {
           {/* A zero-width window and a window that wraps midnight
               are both SAID rather than refused or silently reshaped —
               `hoursWords` owns all three readings. */}
-          <div className="form-hint">{hoursWords(rule)}</div>
+          <Hint>{hoursWords(rule)}</Hint>
 
           <div className="section section-head"><span>If the host was asleep</span></div>
           <div className="sched-days">

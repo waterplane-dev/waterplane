@@ -17,6 +17,7 @@ import { useState, type ReactNode } from "react";
 import { Lightbulb, SearchCheck, BarChart3 } from "lucide-react";
 import { agentModelInsight, fmtCount, fmtUsd, tokenTotal, type TokenConvo } from "@waterplane/shared";
 import type { Insight } from "./statsInsights.ts";
+import { Button } from "@waterplane/kit";
 
 export function InsightsPanel({ items }: { items: Insight[] }) {
   if (!items.length) return null;
@@ -99,13 +100,13 @@ export function TopConvos({ rows, total, pts, nameOf, onExplain, isLive, onOpen 
             {insight && <div className="ts-convo-facts">{insight}</div>}
             {onExplain && (
               <div className="ts-convo-acts">
-                <button className="key" onClick={() => onExplain(c, title)}>
+                <Button onClick={() => onExplain(c, title)}>
                   <SearchCheck size={13} /> explain the cost
-                </button>
+                </Button>
                 {onOpen && isLive?.(c.id) && (
-                  <button className="key" onClick={() => onOpen(c.id)}>
+                  <Button onClick={() => onOpen(c.id)}>
                     <BarChart3 size={13} /> context & cost
-                  </button>
+                  </Button>
                 )}
               </div>
             )}
@@ -113,9 +114,9 @@ export function TopConvos({ rows, total, pts, nameOf, onExplain, isLive, onOpen 
         );
       })}
       {rows.length > TOP_SHOWN && (
-        <button className="key ts-convos-more" onClick={() => setAll((x) => !x)}>
+        <Button className="ts-convos-more" onClick={() => setAll((x) => !x)}>
           {all ? `show the top ${TOP_SHOWN}` : `show all ${rows.length}`}
-        </button>
+        </Button>
       )}
     </div>
   );

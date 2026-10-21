@@ -15,6 +15,9 @@ import { GitLogView, type GitLogFocus } from "./GitLogView";
 import { GIT_COPIED, GIT_COPY_FAILED, GIT_COPY_LABEL, GIT_FIX_LABEL, gitFailPrompt, type GitFailure } from "./gitFailPrompt";
 import { showToast } from "./toast";
 import { gitZoom, nextReaderZoom, readerScale, setGitZoom, textScale } from "./uiScale";
+import { Button } from "./kit/Button";
+import { Row, RowTitle } from "./kit/Row";
+import { Hint } from "./kit/Hint";
 
 interface Props {
   repoId: string;
@@ -434,21 +437,21 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose }: Props) {
   // the commit form whatever the tree's state.
   const remoteRow = (
     <div className="sheet-actions">
-      <button className="key" onClick={() => { track("action:git.pull"); void pull(); }} disabled={busy}>{pullLabel}</button>
-      <button className="key" onClick={() => { void push(); }} disabled={busy}>{pushLabel}</button>
-      <button className="key" onClick={() => { void sync(); }} disabled={busy}
+      <Button onClick={() => { track("action:git.pull"); void pull(); }} disabled={busy}>{pullLabel}</Button>
+      <Button onClick={() => { void push(); }} disabled={busy}>{pushLabel}</Button>
+      <Button onClick={() => { void sync(); }} disabled={busy}
         title="pull, then push whatever is still ahead">
         <ArrowDownUp size={14} /> Sync
-      </button>
+      </Button>
     </div>
   );
   return (
     <div className="sheet">
       <SheetHead title={<>Review · {status?.branch ?? "…"}</>} onClose={onClose}>
-        {onBrowse && <button className="key" title="browse files" onClick={() => { track("action:git.browse"); onBrowse(); }}><FolderTree size={16} /></button>}
-        <button className="key" title="history — incoming, not pushed, and what both have" onClick={() => { track("action:git.log"); setLogFocus("all"); }}><History size={16} /></button>
-        <button className={`key ${showBranches ? "active" : ""}`} title="branches" onClick={toggleBranches}><GitBranchIcon size={16} /></button>
-        <button className="key" onClick={refresh}><RotateCw size={16} /></button>
+        {onBrowse && <Button title="browse files" onClick={() => { track("action:git.browse"); onBrowse(); }}><FolderTree size={16} /></Button>}
+        <Button title="history — incoming, not pushed, and what both have" onClick={() => { track("action:git.log"); setLogFocus("all"); }}><History size={16} /></Button>
+        <Button className={showBranches ? "active" : ""} title="branches" onClick={toggleBranches}><GitBranchIcon size={16} /></Button>
+        <Button onClick={refresh}><RotateCw size={16} /></Button>
       </SheetHead>
 
       {status && (
@@ -485,12 +488,12 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose }: Props) {
                 cached-age line the sheet below it never had either. */}
             <Empty res={branchRes} empty={!branches?.length} thing="branches" noun="branch list">No local branches.</Empty>
             {branches?.map((b) => (
-              <div key={b.name} className="row-wrap">
-                <button className="row grow" disabled={b.current || b.inUseElsewhere} onClick={() => switchTo(b)}
+              <Row key={b.name} kind="wrap">
+                <Row as="button" kind="grow" disabled={b.current || b.inUseElsewhere} onClick={() => switchTo(b)}
                   title={b.inUseElsewhere ? "checked out in another worktree" : b.current ? "current branch" : "switch to this branch"}>
                   <span className={`gstat ${b.current ? "g-added" : ""}`}>{b.current ? "●" : "○"}</span>
-                  <span className="row-title mono">{b.name}{b.upstream ? ` → ${b.upstream}` : ""}{b.inUseElsewhere ? " (in use)" : ""}</span>
-                </button>
+                  <RowTitle className="mono">{b.name}{b.upstream ? ` → ${b.upstream}` : ""}{b.inUseElsewhere ? " (in use)" : ""}</RowTitle>
+                </Row>
                 {!b.current && (
                   <ConfirmButton className="row-act" title={`delete branch ${b.name}`}
                     confirmTitle={`tap again to delete ${b.name}`}
@@ -499,7 +502,7 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose }: Props) {
                     <Trash2 size={16} />
                   </ConfirmButton>
                 )}
-              </div>
+              </Row>
             ))}
           </div>
         </div>
@@ -513,15 +516,15 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose }: Props) {
           Working tree clean.
         </Empty>
         {status?.files.map((f) => (
-          <div key={f.path + f.code} className="row-wrap">
-            <button className="row grow" onClick={() => { track("action:git.diff"); setOpenFile(f); }}>
+          <Row key={f.path + f.code} kind="wrap">
+            <Row as="button" kind="grow" onClick={() => { track("action:git.diff"); setOpenFile(f); }}>
               <span className={`gstat g-${label(f)}`}>{label(f)}</span>
-              <span className="row-title mono">{f.from ? `${f.from} → ${f.path}` : f.path}</span>
-            </button>
+              <RowTitle className="mono">{f.from ? `${f.from} → ${f.path}` : f.path}</RowTitle>
+            </Row>
             <button className={`row-act ${f.staged ? "on" : ""}`} title={f.staged ? "unstage" : "stage"} onClick={() => toggleStage(f)}>
               {f.staged ? <Check size={16} /> : <Plus size={16} />}
             </button>
-          </div>
+          </Row>
         ))}
       </div>
 
@@ -531,11 +534,11 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose }: Props) {
               it is a commit message, and a clipped one cannot be judged. */}
           {draft && (
             <div className="git-draft">
-              <div className="form-hint">A message was drafted, and your own words are still in the box:</div>
+              <Hint>A message was drafted, and your own words are still in the box:</Hint>
               <pre className="git-draft-msg">{draft}</pre>
               <div className="sheet-actions">
-                <button className="key" onClick={() => { setMessage(draft); setDraft(null); }}>Use this one</button>
-                <button className="key" onClick={() => setDraft(null)}>Keep mine</button>
+                <Button onClick={() => { setMessage(draft); setDraft(null); }}>Use this one</Button>
+                <Button onClick={() => setDraft(null)}>Keep mine</Button>
               </div>
             </div>
           )}
@@ -545,10 +548,10 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose }: Props) {
             {/* The desktop writes the message. Last in the row: it is the one
                 control here that spends, and the commit beside it is what
                 this sheet is for. */}
-            <button className="key" onClick={writeMessage}
+            <Button onClick={writeMessage}
               title="draft the commit message from this diff — one cheap call on the desktop">
               <Sparkles size={16} /> {writing ? "writing…" : "message"}
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -557,22 +560,22 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose }: Props) {
       {failure && failure.note === note && (
         <div className="sheet-actions">
           {onAskAgent && (
-            <button className="key" onClick={() => {
+            <Button onClick={() => {
               track("action:git.askAgent");
               onAskAgent(fullFailure(failure.f));
             }} title="open the Send sheet with this log and its context, aimed at a new session in this repo — nothing is sent yet">
               <SquareTerminal size={16} /> {GIT_FIX_LABEL}
-            </button>
+            </Button>
           )}
-          <button className="key" onClick={async () => {
+          <Button onClick={async () => {
             track("action:git.copyFailure");
             showToast(await copyText(gitFailPrompt(fullFailure(failure.f))) ? GIT_COPIED : GIT_COPY_FAILED);
           }} title="copy the same words to the clipboard: the log, with the branch, upstream and how long it ran">
             <Copy size={16} /> {GIT_COPY_LABEL}
-          </button>
+          </Button>
         </div>
       )}
-      {note && <div className="form-hint git-note">{note}</div>}
+      {note && <Hint className="git-note">{note}</Hint>}
       {pushStart != null && pushProgress && <PushProgressView p={pushProgress} fill={!!status?.clean} />}
     </div>
   );

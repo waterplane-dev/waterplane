@@ -5,6 +5,7 @@ import { modelRows, pacingLine, periodTitle, usdWords } from "@waterplane/sdk";
 import { ScopeCard, ScopeTag } from "./TokenInsights.tsx";
 import { Composition } from "./Readouts.tsx";
 import { foldStateText, priced, rowFacts, usdOrTok } from "./weekBands.ts";
+import { Button } from "@waterplane/kit";
 
 const ROWS_SHOWN = 8;
 
@@ -93,9 +94,9 @@ export function PeriodCard({ state, cap, doc, res, refusal, now }: {
             );
           })}
           {rows.length > ROWS_SHOWN && (
-            <button className="key ts-convos-more" onClick={() => setAll((v) => !v)}>
+            <Button className="ts-convos-more" onClick={() => setAll((v) => !v)}>
               {all ? `show the top ${ROWS_SHOWN}` : `show all ${rows.length}`}
-            </button>
+            </Button>
           )}
         </div>
       </>}

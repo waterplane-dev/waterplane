@@ -3,6 +3,7 @@ import { api } from "./api";
 import { track } from "./usage";
 import { sideWords } from "./GitMediaDiff";
 import { splitDiff, type SplitCell } from "./diffSplit";
+import { Button } from "./kit/Button";
 
 /**
  * A changed text file, four ways: the unified diff, the same diff side by
@@ -114,8 +115,8 @@ export function GitTextDiff({ repoId, path, staged, diff, zoomFont }: { repoId: 
     <>
       <div className="ts-filter">
         {MODES.map((m) => (
-          <button key={m.id} className={`key ${mode === m.id ? "active" : ""}`}
-            onClick={() => { track(`action:git.view.${m.id}`); setMode(m.id); }}>{m.label}</button>
+          <Button key={m.id} className={mode === m.id ? "active" : ""}
+            onClick={() => { track(`action:git.view.${m.id}`); setMode(m.id); }}>{m.label}</Button>
         ))}
       </div>
       {body}

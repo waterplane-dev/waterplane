@@ -11,6 +11,7 @@ import { MARK_TITLE, PAGE, fmtCreated, fmtCreatedFull } from "./galleryTypes";
 import { emptyCutText } from "./galleryCuts";
 import { GalleryPickBar } from "./GalleryPickBar";
 import type { GalleryModel } from "./useGallery";
+import { Button } from "../kit/Button";
 
 /** The tiles (thumbnail, name, date, read / download badges, the inbox delete) and "load more". */
 export function GalleryGrid({ m }: { m: GalleryModel }) {
@@ -93,9 +94,9 @@ export function GalleryGrid({ m }: { m: GalleryModel }) {
 
       {truncated && (
         <div className="annot-tools">
-          <button className="key" onClick={() => { track("action:gallery.more"); setLimit((n) => n + PAGE); }}>
+          <Button onClick={() => { track("action:gallery.more"); setLimit((n) => n + PAGE); }}>
             load {PAGE} more
-          </button>
+          </Button>
           <span className="viewer-doc-note">showing the newest {files.length}</span>
         </div>
       )}

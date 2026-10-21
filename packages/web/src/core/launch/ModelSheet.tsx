@@ -12,6 +12,10 @@ import { Unavailable } from "../../Unavailable.tsx";
 import { CLAUDE, backendIdOf, effortChoices, freeTextNote, modelChoices, type capReason, type hasCap } from "../../backendCaps.ts";
 import { shortModel } from "../../sessionFacts.tsx";
 import { showToast } from "../../toast.ts";
+import { Button } from "../../kit/Button";
+import { Row, RowTitle } from "../../kit/Row";
+import { Hint } from "../../kit/Hint";
+import { Tag } from "../../kit/Tag";
 
 export interface ModelSheetProps {
   cur: SessionInfo;
@@ -56,31 +60,31 @@ export function ModelSheet({ cur, backends, modelInput, setModelInput, submitInp
   return (
     <div className="sheet">
       <SheetHead title="Switch model" onClose={onClose} />
-      <div className="form-hint">
+      <Hint>
         Current: {shortModel(cur.model) || "default"}{cur.effort ? ` · ${cur.effort}` : ""}.{" "}
         {canSlash
           ? <>Picking a model sends <span className="mono">/model</span> to this session.</>
           : "Picking a model is a launch flag here — it kills and relaunches this session."}
-      </div>
+      </Hint>
       <div className="list">
         {cat.aliases.length > 0 && <div className="section">Aliases</div>}
         {cat.aliases.map((m) => (
-          <button key={m} className="row" onClick={() => applyModel(m)}>
-            <span className="row-title mono">{m}</span>
-            {cur.model === m && <span className="tag ok">current</span>}
-          </button>
+          <Row key={m} as="button" onClick={() => applyModel(m)}>
+            <RowTitle className="mono">{m}</RowTitle>
+            {cur.model === m && <Tag tone="ok">current</Tag>}
+          </Row>
         ))}
         {cat.ids.length > 0 && <div className="section">Versions</div>}
         {cat.ids.map((m) => (
-          <button key={m} className="row" onClick={() => applyModel(m)}>
-            <span className="row-title mono">{m}</span>
-            {cur.model === m && <span className="tag ok">current</span>}
-          </button>
+          <Row key={m} as="button" onClick={() => applyModel(m)}>
+            <RowTitle className="mono">{m}</RowTitle>
+            {cur.model === m && <Tag tone="ok">current</Tag>}
+          </Row>
         ))}
         <div className="section">Custom</div>
         {/* The only control when the backend names no models at all — a
             typed id, never a guessed list. */}
-        {cat.freeText && <div className="form-hint">{freeTextNote(backends, cur.backend)}</div>}
+        {cat.freeText && <Hint>{freeTextNote(backends, cur.backend)}</Hint>}
         <div className="form">
           <input
             className="search mono"
@@ -98,9 +102,9 @@ export function ModelSheet({ cur, backends, modelInput, setModelInput, submitInp
           </button>
         </div>
         {canSlash ? (
-          <button className="row" onClick={() => { submitInput(cur.id, cur.cwd, "/model", "command"); onClose(); }}>
-            <span className="row-title">Open the model picker…</span>
-          </button>
+          <Row as="button" onClick={() => { submitInput(cur.id, cur.cwd, "/model", "command"); onClose(); }}>
+            <RowTitle>Open the model picker…</RowTitle>
+          </Row>
         ) : (
           // The CLI's own picker is a slash command. Absent, with the
           // reason — never a greyed row (`Unavailable.tsx`).
@@ -108,13 +112,13 @@ export function ModelSheet({ cur, backends, modelInput, setModelInput, submitInp
         )}
       </div>
       {efforts.length > 0 ? <>
-        <div className="form-hint">{liveEffort
+        <Hint>{liveEffort
           ? <>Picking an effort sends <span className="mono">/effort</span> to this session.</>
-          : "Effort is a launch flag here — picking it kills + relaunches this session."}</div>
+          : "Effort is a launch flag here — picking it kills + relaunches this session."}</Hint>
         <div className="form">
           <div className="annot-tools">
             {efforts.map((e) => (
-              <button key={e} className={`key ${cur.effort === e ? "active" : ""}`} onClick={() => applyEffort(e)}>{e}</button>
+              <Button key={e} className={cur.effort === e ? "active" : ""} onClick={() => applyEffort(e)}>{e}</Button>
             ))}
           </div>
         </div>

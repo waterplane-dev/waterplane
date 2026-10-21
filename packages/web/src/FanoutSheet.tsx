@@ -15,6 +15,10 @@ import { LaunchPicker, launchOf, type LaunchPick } from "./LaunchPicker";
 import { backendUnavailable, launchAskStart } from "./backendCaps";
 import { CantInline } from "./Unavailable";
 import { kickoff, kickoffSent, targetSubline } from "./fanoutKickoff";
+import { Button } from "./kit/Button";
+import { Row, RowTitle, RowSub } from "./kit/Row";
+import { Hint } from "./kit/Hint";
+import { Tag } from "./kit/Tag";
 
 interface Props {
   repos: RepoTarget[];
@@ -223,9 +227,9 @@ export function FanoutSheet({ repos, runs, backends, launch, onRun, onFollowUp, 
           list and each run's list are sibling `flex:1` boxes, so a few recorded
           runs squeeze the repo checklist to nothing and no repo can be picked. */}
       <div className="sheet-scroll">
-      <div className="form-hint">
+      <Hint>
         One prompt, a fresh CLI session per selected repo, all at once. Slash commands work (<span className="mono">/init</span>, <span className="mono">/cost</span>). Each session is a normal session afterwards — tap a result row to open it, or follow up in all of them at once.
-      </div>
+      </Hint>
 
       <div className="form">
         {/* The one prompt-writing surface (`PromptComposer`). Inline, because
@@ -240,15 +244,15 @@ export function FanoutSheet({ repos, runs, backends, launch, onRun, onFollowUp, 
         />
         <div className="annot-tools wrap">
           {(allPresets ? presets : presets.slice(0, PRESETS_SHOWN)).map((p) => (
-            <button key={p.id} className="key" title={p.text} onClick={() => applyPreset(p)}>{p.title}</button>
+            <Button key={p.id} title={p.text} onClick={() => applyPreset(p)}>{p.title}</Button>
           ))}
           {presets.length > PRESETS_SHOWN && (
-            <button className="key" onClick={() => setAllPresets(!allPresets)}>
+            <Button onClick={() => setAllPresets(!allPresets)}>
               {allPresets ? <><ChevronUp size={14} /> less</> : <><ChevronDown size={14} /> {presets.length - PRESETS_SHOWN} more</>}
-            </button>
+            </Button>
           )}
-          <button className="key" title="edit the preset list"
-            onClick={() => { track("action:fanout.presets.edit"); setEditPresets(true); }}><Pencil size={14} /></button>
+          <Button title="edit the preset list"
+            onClick={() => { track("action:fanout.presets.edit"); setEditPresets(true); }}><Pencil size={14} /></Button>
         </div>
         <LaunchPicker backends={backends} defaults={launch} nowLead="Every repo starts on"
           value={chose} onChange={pickLaunch}>
@@ -265,7 +269,7 @@ export function FanoutSheet({ repos, runs, backends, launch, onRun, onFollowUp, 
             <Flag size={13} fill={flagWhenDone ? "currentColor" : "none"} /> Flag for follow up when done
           </button>
         </div>
-        {flagWhenDone && <div className="form-hint">Each session this run opens gets the follow-up flag once it is done — not if it failed or stopped on a usage limit. Not carried to “later”.</div>}
+        {flagWhenDone && <Hint>Each session this run opens gets the follow-up flag once it is done — not if it failed or stopped on a usage limit. Not carried to “later”.</Hint>}
       </div>
 
       {/* The shared picker (`RepoPicker.tsx`) — its own all/none and its own
@@ -281,24 +285,24 @@ export function FanoutSheet({ repos, runs, backends, launch, onRun, onFollowUp, 
             const picking = fuRun === run.id;
             return (
             <div key={run.id} id={`fanout-run-${run.id}`}>
-              <div className="form-hint mono">{run.text.length > 90 ? `${run.text.slice(0, 90)}…` : run.text}</div>
+              <Hint tone="mono">{run.text.length > 90 ? `${run.text.slice(0, 90)}…` : run.text}</Hint>
               {run.followUps?.map((f, i) => (
-                <div key={i} className="form-hint mono"><CornerDownRight size={11} /> {f.text.length > 90 ? `${f.text.slice(0, 90)}…` : f.text}
+                <Hint key={i} tone="mono"><CornerDownRight size={11} /> {f.text.length > 90 ? `${f.text.slice(0, 90)}…` : f.text}
                   {f.dirs.length < run.targets.length ? <span className="section-hint"> · {f.dirs.length} of {run.targets.length}</span> : null}
-                </div>
+                </Hint>
               ))}
               <div className="list">
                 {run.targets.map((t) => (
-                  <div key={t.dir} className="row-wrap">
-                    <button className="row grow" disabled={!t.sessionId} onClick={() => t.sessionId && onOpen(t.sessionId)}>
-                      <span className="row-title">
+                  <Row key={t.dir} kind="wrap">
+                    <Row as="button" kind="grow" disabled={!t.sessionId} onClick={() => t.sessionId && onOpen(t.sessionId)}>
+                      <RowTitle>
                         {t.status === "starting" || t.status === "running" ? <Loader size={12} className="spin" /> : null}
                         {t.status === "done" ? <CircleCheck size={12} /> : null}
                         {t.status === "failed" ? <CircleAlert size={12} /> : null}
-                        {" "}{t.title} <span className={`tag ${STATUS_TAG[t.status]}`}>{t.status}</span>
-                      </span>
-                      <span className="row-sub">{targetSubline(t)}</span>
-                    </button>
+                        {" "}{t.title} <Tag className={STATUS_TAG[t.status]}>{t.status}</Tag>
+                      </RowTitle>
+                      <RowSub>{targetSubline(t)}</RowSub>
+                    </Row>
                     {/* Picking targets is a SEPARATE control from the row: tapping
                         the row must keep meaning "open that session". */}
                     {picking && (
@@ -308,14 +312,14 @@ export function FanoutSheet({ repos, runs, backends, launch, onRun, onFollowUp, 
                         {t.sessionId && fuSel.has(t.dir) ? <SquareCheck size={16} /> : <Square size={16} />}
                       </button>
                     )}
-                  </div>
+                  </Row>
                 ))}
               </div>
               {live.length > 0 && !picking && (
                 <div className="form">
-                  <button className="key" data-hint="fanout.followup" onClick={() => openFollowUp(run)}>
+                  <Button data-hint="fanout.followup" onClick={() => openFollowUp(run)}>
                     <CornerDownRight size={14} /> follow up in {live.length} session{live.length === 1 ? "" : "s"}
-                  </button>
+                  </Button>
                 </div>
               )}
               {picking && (
@@ -329,9 +333,9 @@ export function FanoutSheet({ repos, runs, backends, launch, onRun, onFollowUp, 
                     placeholder="Next instruction for the selected sessions…"
                   />
                   <div className="annot-tools">
-                    <button className="key" onClick={() => setFuSel(new Set(live.map((t) => t.dir)))}>all</button>
-                    <button className="key" onClick={() => setFuSel(new Set())}>none</button>
-                    <button className="key" onClick={() => { setFuRun(null); setFuText(""); }}>cancel</button>
+                    <Button onClick={() => setFuSel(new Set(live.map((t) => t.dir)))}>all</Button>
+                    <Button onClick={() => setFuSel(new Set())}>none</Button>
+                    <Button onClick={() => { setFuRun(null); setFuText(""); }}>cancel</Button>
                     <span className="spacer" />
                     <button className="send" disabled={!fuText.trim() || !live.some((t) => fuSel.has(t.dir))}
                       onClick={() => sendFollowUp(run)}>
@@ -371,8 +375,7 @@ export function FanoutSheet({ repos, runs, backends, launch, onRun, onFollowUp, 
 
       <div className="sheet-actions">
         <span className="spacer" />
-        <button
-          className="key" data-hint="fanout.schedule"
+        <Button data-hint="fanout.schedule"
           disabled={!chosen.length || !text.trim()}
           title="Run it later instead — once tonight, or every week at a time you pick"
           onClick={() => {
@@ -380,7 +383,7 @@ export function FanoutSheet({ repos, runs, backends, launch, onRun, onFollowUp, 
             save(TEXT_KEY, text);
             onSchedule(chosen.map((r) => r.worktreePath), text.trim(), sweep);
           }}
-        ><CalendarClock size={16} /> later</button>
+        ><CalendarClock size={16} /> later</Button>
         {blocked ? <CantInline>{blocked}</CantInline> : (
         <button className="send" data-hint="fanout.run" disabled={!chosen.length || !text.trim()} onClick={go}
           title={online ? undefined : "no connection — the sweep is queued and runs when the link is back"}>

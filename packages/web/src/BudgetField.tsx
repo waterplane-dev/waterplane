@@ -21,7 +21,7 @@
 import { RadioRows } from "./kit";
 import { useId, useState } from "react";
 import type { SessionBudget, SessionBudgetCal, SessionBudgetSpark, SessionBudgetUnit } from "@waterplane/shared";
-import { SetSwitch } from "./SettingsKit";
+import { SetNote, SetSwitch } from "./SettingsKit";
 import {
   BUDGET_MODES, BUDGET_UNITS, type BudgetMode, budgetPreview, budgetSpentLine, budgetText, calibrationWords, isPctUnit, parseBudgetInput, presetLabel, unitInfo,
 } from "./budgetInput";
@@ -90,7 +90,7 @@ export function BudgetField({ initial, cal, onChange, calFor, spark }: {
       </div>
       {parsed && !parsed.ok && <div className="set-note warn">{parsed.reason}</div>}
       {preview && <div className="budget-preview">{preview}</div>}
-      {calWords && <div className="set-note">{calWords}</div>}
+      {calWords && <SetNote>{calWords}</SetNote>}
       <div className="set-item">
         <div className="set-lead"><span className="set-lbl">at the cap</span></div>
         <RadioRows

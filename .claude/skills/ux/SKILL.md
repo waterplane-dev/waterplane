@@ -51,6 +51,10 @@ Where it already holds, as patterns to copy:
 - **Explain mode** (header `?`): the relearn route once everything was dismissed.
 - **A refusal is never a hint.** A verb that cannot run says why in text, always
   (`Unavailable.tsx`).
+- **The kit props carry these rules** (`kit/Button.tsx`, `Hint.tsx`): `variant="primary"` is the
+  sheet's ONE next verb (never two per sheet); `variant="danger"` only for something destructive;
+  never `disabled` to mean "not now" (say why, `Unavailable`); `Hint tone="mono"` only for a key or
+  a command, `tone="warn"` only for why something cannot or should not run.
 - **A first-run aid is a word, not a tour.** Put the word on the control itself
   (`+ now`) rather than a coach mark pointing at it. A card that says "tap the X"
   must name the X exactly as drawn ("tap + now on one of your repos below").

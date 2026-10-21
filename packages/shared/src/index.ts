@@ -25,6 +25,8 @@ export * from "./wire/session.js";
 export * from "./closed.js";
 /** The follow-up flag: who set it, what it may say, its one wording. */
 export * from "./followup.js";
+/** What a conversation bookmark may say (R-conversations-007). */
+export * from "./bookmark.js";
 /** The emergency halt latch: its state, its receipt and the one refusal sentence. */
 export * from "./halt.js";
 

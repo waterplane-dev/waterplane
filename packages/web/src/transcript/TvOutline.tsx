@@ -1,12 +1,13 @@
 import { OutlineRows } from "../OutlineSheet";
 import type { TvModel } from "./useTranscriptView";
+import { Hint } from "../kit/Hint";
 
 export function TvOutline({ m }: { m: TvModel }) {
   const { outline, outlineTurns, q, doc, seenMark, goTurn } = m;
   if (!outline) return null;
   return (
     <div className="tr-outline">
-      <div className="form-hint">
+      <Hint>
         {outlineTurns.length} turn{outlineTurns.length === 1 ? "" : "s"}
         {q ? ` matching “${q}”` : ""} · tap to jump
         {/* `"history"` is the ONLY approximate source, and the test is
@@ -19,7 +20,7 @@ export function TvOutline({ m }: { m: TvModel }) {
             approximate one is the one this app builds itself. */}
         {doc?.source === "history" && " · approximate (no conversation log for this session — showing captured terminal text)"}
         {doc?.truncated && " · older turns trimmed"}
-      </div>
+      </Hint>
       <OutlineRows turns={outlineTurns} seenMark={seenMark} onJump={goTurn} />
     </div>
   );

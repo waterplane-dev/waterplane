@@ -12,6 +12,7 @@ import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CornerDownLeft, Delete, Keyb
 import type { Modifier } from "../shared/wire.mts";
 import { MOD_GLYPH, MOD_NAME, MOD_ORDER, ROW_KEYS } from "./keys.ts";
 import type { DesktopController } from "./controller.ts";
+import { Button } from "@waterplane/kit";
 
 const ICON = 16;
 const GLYPH: Record<string, ReactNode> = {
@@ -34,7 +35,7 @@ export function KeyRow({ ctl, held, typing, onType }: { ctl: DesktopController; 
         );
       })}
       {ROW_KEYS.map((k) => (
-        <button key={k.id} className="key" title={k.title} aria-label={k.title} onClick={() => ctl.pressRowKey(k)}>{GLYPH[k.id] ?? k.label}</button>
+        <Button key={k.id} title={k.title} aria-label={k.title} onClick={() => ctl.pressRowKey(k)}>{GLYPH[k.id] ?? k.label}</Button>
       ))}
     </div>
   );

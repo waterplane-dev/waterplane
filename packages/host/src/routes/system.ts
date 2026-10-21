@@ -23,7 +23,7 @@ import type { HostCtx, Route, RouteTable } from "./types.js";
 function cliHealthFrame(): HostMessage | null {
   const store = cliHealth();
   if (!store) return null;   // no store installed (a unit host) → nothing to say
-  return { t: "clihealth", health: store.get(), rollup: store.rollup() };
+  return { t: "clihealth", health: store.get(), rollup: store.rollup(), source: store.source() };
 }
 
 /**

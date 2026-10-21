@@ -61,6 +61,8 @@ export const LS_PREFS = {
   closeWhenDone: lsKey("backlog.closeWhenDone"),
   /** LOCAL-model sessions working at once; `"0"` no cap, absent = desktop default (host: `localSessionsSetting`). Synced. */
   localSessions: lsKey("local.maxSessions"),
+  /** Tokens at which a RUNNING subagent is called large (`agentWindowWarnSetting`); the host pushes on it too. Synced. */
+  agentWindowWarn: lsKey("agentWindowWarn"),
   /** Parallel-agent count's amber/red marks (`agentCount.ts`). Synced. */ agentWarn: lsKey("agentWarn"),
 
   // ── This device's identity and its pairing ─────────────────────────────
@@ -170,6 +172,23 @@ export const LS_PREFS = {
    * conversation.
    */
   tabOpens: lsKey("sessionTabs.opens"), tabFiles: lsKey("sessionTabs.files"), // pinned files: a choice, never in UI_RESET_KEYS
+  /**
+   * This device's strip follows the order every device shares — `"0"` off,
+   * absent ON. Per device: opting one screen out must not turn it off on the
+   * others.
+   */
+  sessionTabsSync: lsKey("sessionTabs.sync"),
+  /** `"1"` once this device was offered to stop that sharing during the
+   *  current saver spell (`core/sessions/tabsSyncSaver.ts`); cleared when no
+   *  saver is on, so the next spell asks again. */
+  tabsSaverAsked: lsKey("sessionTabs.saverAsked"),
+  /**
+   * The SHARED tab order and open history, used instead of `sessionTabsOrder`
+   * and `tabOpens` while `sessionTabsSync` is on. Synced (`shared/settings.ts`);
+   * the opens are merged on adopt (`mergeOpens`), never last-write-wins, and
+   * hold sessions only — a file looked at is this device's.
+   */
+  tabOrderShared: lsKey("tabsShared.order"), tabOpensShared: lsKey("tabsShared.opens"),
   /**
    * The last local-runner reading this phone was told, so an offline open can
    * say "last seen: qwen3-coder:30b holding 18.2 GB, 2h ago" instead of nothing.

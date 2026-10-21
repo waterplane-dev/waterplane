@@ -38,7 +38,7 @@ test("the plan's device keys are device keys", () => {
   const device = [
     "hosts", "hostActive", "hostBase", "deviceId", "deviceName", "theme", "textScale", "iconScale", "termZoom",
     "readerZoom", "scrollZoom", "gitZoom", "dataSaver", "netPulse", "localRtBar", "sessionTabs", "sessionTabsCount",
-    "sessionTabsOrder", "dictateLang", "dictateLangs", "cliMode", "typingRoom", "readMode", "toolbarOpen",
+    "sessionTabsOrder", "sessionTabsSync", "tabsSaverAsked", "dictateLang", "dictateLangs", "cliMode", "typingRoom", "readMode", "toolbarOpen",
     "closeBy", "closeKeepStar", "closeCustomH", "schedPctLeft", "collageGap", "collageLabels",
     "dismissInsecure", "dismissPhoneSetup", "dismissedUpdate", "lastForcedReload", "toastLog", "hostedAck",
     "giveups", "giveupsMigrated", "padRescue", "padRescueMigrated", "healthAxis",
@@ -51,7 +51,7 @@ test("the plan's host keys — and every store of words in flight — are host k
     "outbox", "compose", "composeDrafts", "composeOutbox", "composeSheets", "deadUploads", "dictations",
     "pendingStars", "pullState", "slashCache", "fileMtimes", "artMarks", "newImages", "syncTs", "cmdHistory",
     "sessionOrder", "collapsedRepos", "backlogDraft", "fanoutText", "sendMemory", "launchLast", "notifSeen",
-    "costNoticed", "agentNoticed", "installLog", "localRt", "tabOpens", "routeLast", "routeResume", "usage",
+    "costNoticed", "agentNoticed", "installLog", "localRt", "tabOpens", "tabOpensShared", "tabOrderShared", "routeLast", "routeResume", "usage",
     "netlog", "netTraffic", "netSync", "upKbps", "webUpdateStaged", "pad",
   ];
   for (const k of host) assert.equal(DEVICE_KEYS.has(LS[k]), false, k);

@@ -49,7 +49,7 @@ export interface ReadingWords {
  * Where a value sits in its own past, as the tool words it.
  *
  * Deliberately the same clause order as `rankPhrase` in
- * `tools/repohealth/narrate.mjs`, because this sentence and the narrative
+ * `tools/repohealth/events.mjs`, because this sentence and the narrative
  * further down the same screen are about the same number and a reader will
  * compare them. Both endpoints are named — the size of the window and the day
  * it opens — for the reason the whole file is arranged around: a position with

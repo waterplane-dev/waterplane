@@ -30,7 +30,7 @@
  *    above its chart, and the drag readout is a text line under it.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BarChart3, Bot, Loader, RefreshCw, Scissors, SearchCheck, Wallet } from "lucide-react";
+import { BarChart3, Bot, Loader, RefreshCw, RotateCcw, Scissors, SearchCheck, Wallet } from "lucide-react";
 import type { AgentRun, ContextSample, ContextSeriesDoc } from "@waterplane/shared";
 import {
   coldStartText, sessionCostOfSeries, tokenTotal as tokenTot,
@@ -52,7 +52,10 @@ import {
   spendNote, spendSplit, spendSummary, splitNote, splitSummary,
 } from "./contextPlot";
 import { GAP_BREAK_MS } from "./contextPlot";
+import { AgentTopList, AgentWarnLine } from "./AgentTopList";
 import { DollarsWhy } from "./TurnCostCard";
+import { Button } from "./kit/Button";
+import { Hint } from "./kit/Hint";
 
 /** Chart height. Sized to include the x-axis band — a fixed height that only
  *  fits the plot is what gives a chart card its own tiny nested scrollbar. */
@@ -62,7 +65,7 @@ const CHART_H = 220;
  *  are equally hard to read rather than that one is the answer to the other. */
 const SPEND_H = 110;
 
-export function ContextSheet({ sessionId, title, online, liveAgentNote, budget, onFresh, onCompact, compactCant, onExplainCost, unmeasured, backendLabel, onClose }: {
+export function ContextSheet({ sessionId, title, online, liveAgentNote, onReplan, replanCant, replanNote, agentWarn, budget, onFresh, onCompact, compactCant, onExplainCost, unmeasured, backendLabel, onClose }: {
   sessionId: string;
   /** The session's own name, so the sheet says WHICH conversation this is. */
   title: string;
@@ -85,6 +88,21 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, budget, 
    * Absent/null ⇒ nothing drawn.
    */
   liveAgentNote?: string | null;
+  /**
+   * "Interrupt and re-plan" on the large-agent card: Esc, then a queued prompt
+   * (the caller owns both sends, aimed at the SUBJECT). Absent means this
+   * backend cannot take it, and `replanCant` is the sentence drawn instead.
+   */
+  onReplan?: () => void;
+  replanCant?: string;
+  /** The line under the button: what Esc does and what is lost. */
+  replanNote?: string;
+  /**
+   * The large-agent line (tokens) and how to change it. Drawn on the budget
+   * card whether or not a budget is set; the caller persists it (synced, so the
+   * desktop's push uses the same number). Absent means no control.
+   */
+  agentWarn?: { value: number; onChange: (tok: number) => void };
   /**
    * The session's own budget, already worded (`features/sessionBudget`'s
    * `budgetStateLine` over shared's sentences — this file words nothing about
@@ -298,9 +316,9 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, budget, 
       <div className="sheet">
         <SheetHead title={<><BarChart3 size={16} style={{ verticalAlign: "-3px", marginRight: 4 }} />Context window &amp; cost</>} onClose={onClose} />
         <Unavailable cants={[{ label: "context graph", reason: unmeasured }]} />
-        <div className="form-hint">
+        <Hint>
           {title} — nothing on this screen is a measurement of it. The terminal is still the whole story.
-        </div>
+        </Hint>
       </div>
     );
   }
@@ -339,14 +357,14 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, budget, 
             SAYS so and the handler returns early — never `disabled`. Keyed on
             `inflight`, never `state === "loading"`, which a quiet reload never
             enters. */}
-        <button className="key" onClick={() => { if (res.inflight) return; res.reload({ quiet: true }); }}
+        <Button onClick={() => { if (res.inflight) return; res.reload({ quiet: true }); }}
           title="re-read — this is a point-in-time answer, not a live feed">
           {res.inflight ? <Loader size={14} className="spin" /> : <RefreshCw size={14} />}
-        </button>
+        </Button>
       </SheetHead>
 
       {/* WHICH conversation, and nothing else — the method caption is at the foot. */}
-      <div className="form-hint">{title}</div>
+      <Hint>{title}</Hint>
 
       <Empty res={res} empty={!samples.length} thing="the context history" noun="graph"
         note={res.state === "error" ? "A session that has not run a turn yet has no log to read." : undefined}>
@@ -386,9 +404,9 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, budget, 
             <div className="ctx-chart-title ctx-chart-title-row">
               <span>Context window</span>
               {onCompact && (
-                <button className="key" onClick={onCompact}>
+                <Button onClick={onCompact}>
                   <Scissors size={14} /> /compact
-                </button>
+                </Button>
               )}
             </div>
             {!onCompact && compactCant && (
@@ -431,6 +449,7 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, budget, 
                 {pickedAgent ? agentReadout(pickedAgent, doc?.models, span) : "tap a bar to read that agent"}
               </div>
               <ModelLegend slots={slots} only={new Set(agents.map((a) => slots?.slotOf(a.model) ?? 0))} />
+              <AgentTopList agents={agents} models={doc?.models} picked={pickedAgent} onPick={setPickedAgent} />
             </>}
             {undated && <div className="empty ctx-note">{undated}</div>}
 
@@ -479,6 +498,16 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, budget, 
                 <span>a subagent is running on a large window</span>
               </div>
               <div className="ctx-cost-note">{liveAgentNote}</div>
+              {onReplan ? <>
+                <div className="sheet-actions">
+                  <Button onClick={onReplan}>
+                    <RotateCcw size={14} /> interrupt and re-plan
+                  </Button>
+                </div>
+                {replanNote && <Hint>{replanNote}</Hint>}
+              </> : replanCant ? (
+                <Unavailable cants={[{ label: "interrupt and re-plan", reason: replanCant }]} />
+              ) : null}
             </div>
           )}
           {cost && <NextTurnCost cost={cost} onFresh={onFresh} onCompact={onCompact} />}
@@ -488,18 +517,26 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, budget, 
               nothing here sets or clears. Unknown says why and holds nothing.
               "No budget" is the TITLE's to say: the line under it is only what
               was spent, and absent when there is nothing to add. */}
-          {budget && (
+          {(budget || agentWarn) && (
             <div className="ctx-cost">
-              <div className="ctx-cost-head">
-                <Wallet size={14} />
-                <span>{budget.label ? `budget ${budget.label}` : "no budget on this session"}</span>
-              </div>
-              {budget.line ? <div className="ctx-cost-note">{budget.line}</div> : null}
-              <div className="sheet-actions">
-                <button className="key" onClick={budget.onOpen}>
-                  <Wallet size={14} /> {budget.label ? "change or clear the budget" : "set a budget"}
-                </button>
-              </div>
+              {budget && <>
+                <div className="ctx-cost-head">
+                  <Wallet size={14} />
+                  <span>{budget.label ? `budget ${budget.label}` : "no budget on this session"}</span>
+                </div>
+                {budget.line ? <div className="ctx-cost-note">{budget.line}</div> : null}
+                <div className="sheet-actions">
+                  <Button onClick={budget.onOpen}>
+                    <Wallet size={14} /> {budget.label ? "change or clear the budget" : "set a budget"}
+                  </Button>
+                </div>
+              </>}
+              {/* The second row: the line that calls a running agent large. Its
+                  own card heading only when no budget row stands above it. */}
+              {agentWarn && <>
+                {!budget && <div className="ctx-cost-head"><Bot size={14} /><span>large subagents</span></div>}
+                <AgentWarnLine value={agentWarn.value} onChange={agentWarn.onChange} />
+              </>}
             </div>
           )}
 
@@ -517,9 +554,9 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, budget, 
                 make it cheaper — it changes nothing until you pick one.
               </div>
               <div className="sheet-actions">
-                <button className="key" onClick={onExplainCost}>
+                <Button onClick={onExplainCost}>
                   <SearchCheck size={14} /> explain the cost of this session
-                </button>
+                </Button>
               </div>
             </> : (
               <Unavailable cants={[{
@@ -535,7 +572,7 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, budget, 
           {coldNote && (
             <div className="ctx-panel">
               <div className="ctx-summary">Expired cache</div>
-              <div className="form-hint">{coldNote}</div>
+              <Hint>{coldNote}</Hint>
               <details className="hint-more ctx-method">
                 <summary>why a cold cache costs more</summary>
                 <p>

@@ -150,6 +150,9 @@ public class MainActivity extends BridgeActivity {
         // gesture its proper exit animation.
         if (backCallback != null) backCallback.setEnabled(webBackDepth != 0);
         applyBarAppearance();
+        // Back from another app (or the recents screen) the bars are shown
+        // again by the platform; a page still in fullscreen wants them gone.
+        applyImmersive();
         // The service is the only poster of OS notifications, and it must post
         // none while the user is looking at the app's own feed.
         ShellLinkService.setAppForeground(true);
@@ -666,6 +669,33 @@ public class MainActivity extends BridgeActivity {
             // Colouring the bars is cosmetic; failing to do it must never be the
             // reason the activity does not come up.
             Log.w(TAG, "bar colour", e);
+        }
+    }
+
+    /** The page asked for the whole screen (`ShellNavPlugin.setImmersive`). */
+    private volatile boolean immersive = false;
+
+    /** Called on the WebView's JavaScript thread; the bars are touched on the UI thread. */
+    void setWebImmersive(boolean on) {
+        runOnUiThread(() -> {
+            immersive = on;
+            applyImmersive();
+        });
+    }
+
+    /**
+     * Hidden bars still come back on a swipe from the edge — for a moment, over
+     * the page — so Back and Home stay one gesture away and the page never has
+     * to draw a way out of a screen the person cannot leave.
+     */
+    private void applyImmersive() {
+        WindowInsetsControllerCompat bars =
+                WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        if (immersive) {
+            bars.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            bars.hide(WindowInsetsCompat.Type.systemBars());
+        } else {
+            bars.show(WindowInsetsCompat.Type.systemBars());
         }
     }
 

@@ -30,6 +30,8 @@ import { track } from "../../usage";
 import { Unavailable } from "../../Unavailable";
 import { RISKY_PERM_WARNING } from "../settings/permModes";
 import { beginModeSwitch, useModeSwitch } from "./modeSwitch";
+import { Button } from "../../kit/Button";
+import { Hint } from "../../kit/Hint";
 
 const ICONS: Record<ModeIcon, typeof Hand> = {
   hand: Hand, code: Code, scroll: ScrollText, zap: Zap, shieldOff: ShieldOff, lock: Lock,
@@ -105,7 +107,7 @@ export function ModeSection({ cur, backends, canSlash, submitInput, liveAsk, onC
     <div className="mode-sec">
       {rows.length > 0 && <>
         <div className="mode-head muted">Mode{isClaude ? " · shift+tab on the desktop" : ""}</div>
-        <div className="form-hint mode-now">{modeNowText(now)}</div>
+        <Hint className="mode-now">{modeNowText(now)}</Hint>
         {isClaude ? (
           <div className="mode-rows" role="group" aria-label="permission mode">
             {rows.map((r) => {
@@ -147,8 +149,8 @@ export function ModeSection({ cur, backends, canSlash, submitInput, liveAsk, onC
           <span className="mode-acts">
             {/* Unknown gets BOTH verbs: neither is "the toggle" when nobody
                 knows which side it is on. */}
-            {ust !== "on" && <button className="key" onClick={() => ultra(true)}>turn on</button>}
-            {ust !== "off" && <button className="key" onClick={() => ultra(false)}>turn off</button>}
+            {ust !== "on" && <Button onClick={() => ultra(true)}>turn on</Button>}
+            {ust !== "off" && <Button onClick={() => ultra(false)}>turn off</Button>}
           </span>
         </div>
       )}

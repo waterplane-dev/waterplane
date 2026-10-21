@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { SessionCostReading } from "@waterplane/shared";
-import type { AnswerSuggestion, DetectedPrompt, SessionAgent, SessionShell, TranscriptToolDetail } from "@waterplane/shared";
+import type { AnswerSuggestion, DetectedPrompt, SessionAgent, SessionShell, TranscriptDoc, TranscriptToolDetail } from "@waterplane/shared";
 import type { FileRefCtx } from "../Markdown";
 import type { ReaderToolsMode } from "../transcriptUtil";
 import type { ForkCtx } from "../ForkTurn";
@@ -71,14 +71,31 @@ export interface TranscriptStatus {
   tail?: string;
 }
 
+/**
+ * Where the reader's document comes from. Absent = the live session's routes
+ * (`/api/transcript`, keyed by `sessionId`). The archive passes its own pair
+ * (`/api/repos/:id/archive/transcript`) so an ARCHIVED conversation reads in
+ * this same view with no session and no CLI — one reader, two feeds, never a
+ * fork of the view. Read through a ref, so a new object per render is fine.
+ */
+export interface TranscriptSource {
+  transcript(since: number | undefined, detail: "lite" | "full"): Promise<TranscriptDoc | null>;
+  tools(turnId: string): Promise<Record<string, TranscriptToolDetail>>;
+}
+
 export interface TranscriptViewProps {
+  /** The cache key, and the id `/api/transcript` is asked for — for an
+   *  archived read, the conversation id (what its document's `sessionId` is). */
   sessionId: string;
+  /** Read the document from somewhere other than the live session. */
+  source?: TranscriptSource;
   /** Bump to force a refetch (the session's turn just ended). */
   refreshKey: number;
   /** Live session state, rendered as the status strip. */
   status?: TranscriptStatus;
-  /** Switch back to the xterm view. */
-  onShowCli: () => void;
+  /** Switch back to the xterm view. Absent (an archived read: there is no
+   *  terminal) ⇒ the buttons that would open it are not drawn. */
+  onShowCli?: () => void;
   /** What an EMPTY reader shows instead of a blank page: the top of the CLI
    *  (`CliPeek`). `leaving` turns true when the first turn lands; the peek
    *  animates away and calls `onGone`, after which it is not drawn again. */

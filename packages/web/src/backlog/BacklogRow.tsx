@@ -19,6 +19,7 @@ import { RowChips } from "./RowChips";
 import { RowEditor } from "./RowEditor";
 import { RowNotes } from "./RowNotes";
 import type { BLGroup } from "./useBacklogCuts";
+import { Button } from "../kit/Button";
 
 /** What one row's parts are drawn from, computed once per row. */
 export interface RowFacts {
@@ -143,15 +144,15 @@ export function BacklogRow({ m, g, it, idx }: { m: BacklogModel; g: BLGroup; it:
           </div>
           <div className="bl-order">
             {canDrag && (
-              <button
-                className="key drag-handle"
+              <Button
+                className="drag-handle"
                 title="drag to reorder"
                 style={{ touchAction: "none", cursor: "grab" }}
                 onPointerDown={(e) => { e.preventDefault(); setDragId(it.id); }}
-              ><GripVertical size={14} /></button>
+              ><GripVertical size={14} /></Button>
             )}
-            {up && p.online && <button className="key" onClick={() => p.verbs.onSwap(it.id, up)} title="move up"><ArrowUp size={14} /></button>}
-            {down && p.online && <button className="key" onClick={() => p.verbs.onSwap(it.id, down)} title="move down"><ArrowDown size={14} /></button>}
+            {up && p.online && <Button onClick={() => p.verbs.onSwap(it.id, up)} title="move up"><ArrowUp size={14} /></Button>}
+            {down && p.online && <Button onClick={() => p.verbs.onSwap(it.id, down)} title="move down"><ArrowDown size={14} /></Button>}
           </div>
         </div>
         <RowActions m={m} row={row} />

@@ -2,7 +2,7 @@
   "name": "waterplane",
   "displayName": "waterplane: Cost & Context for Claude Code and Copilot",
   "publisher": "waterplane-dev",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "What each Claude Code prompt cost, the context window over time, and what your CLAUDE.md, AGENTS.md and Copilot instructions cost every request — read from files on this machine. Copilot's monthly quota on request, with your VS Code GitHub sign-in; nothing else touches the network. No telemetry.",
   "license": "MIT",
   "icon": "icon.png",
@@ -91,7 +91,7 @@
         "waterplane.statusBar": {
           "type": "boolean",
           "default": true,
-          "description": "Show the current session's cost and context in the status bar."
+          "description": "Show the live session's cost and context in the status bar, or the last seven days' cost when no session is live."
         },
         "waterplane.pollSeconds": {
           "type": "number",
@@ -169,7 +169,7 @@
     "test": "npm run build && node --test --test-timeout=120000 \"test/*.test.mjs\"",
     "test:integration": "node test/integration/run.mjs",
     "screenshots": "node scripts/screenshot.mjs",
-    "package": "npm run build -- --release && vsce package --no-dependencies --baseImagesUrl https://raw.githubusercontent.com/waterplane-dev/waterplane/main/packages/vscode -o waterplane-0.4.0.vsix && node scripts/check-vsix.mjs waterplane-0.4.0.vsix",
+    "package": "npm run build -- --release && vsce package --no-dependencies --baseImagesUrl https://raw.githubusercontent.com/waterplane-dev/waterplane/main/packages/vscode -o waterplane-0.5.0.vsix && node scripts/check-vsix.mjs waterplane-0.5.0.vsix",
     "check": "npm run typecheck && npm test && npm run package",
     "release": "node scripts/release.mjs"
   },

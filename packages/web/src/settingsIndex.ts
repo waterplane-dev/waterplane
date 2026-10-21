@@ -134,6 +134,7 @@ export const SETTING_ROWS: SettingRowMeta[] = [
   { id: "tabs-count", group: "appearance", label: "tabs that fit", keywords: "how many width narrower wider strip" },
   { id: "tabs-limit", group: "appearance", label: "most tabs shown", keywords: "limit cap max maximum how many strip hide" },
   { id: "tabs-order", group: "appearance", label: "tab order", keywords: "sort opened frequent recent where was i" },
+  { id: "tabs-sync", group: "appearance", label: "same tab order on every device", keywords: "sync share phone desktop devices order opened recent across" },
   { id: "repo-order", group: "appearance", label: "repo order", keywords: "launcher sort alphabetical sessions open busiest list repos rank" },
   { id: "unfold-to-end", group: "appearance", label: "unfolding a repo shows its last row", keywords: "launcher expand collapse fold scroll bottom end list sessions chevron" },
   { id: "net-pulse", group: "appearance", label: "connection strip", keywords: "ping latency graph round trip bar link live network" },

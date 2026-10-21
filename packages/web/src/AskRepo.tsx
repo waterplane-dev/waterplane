@@ -16,6 +16,7 @@ import { createStore, useStore } from "./sdk/store.ts";
 import { repoBranchLine, repoTitle } from "./RepoPicker";
 import { askRepoRows } from "./askRepoRows";
 import { registerShortcut } from "./shortcuts";
+import { RowTitle, RowSub } from "./kit/Row";
 
 interface Ask {
   repos: RepoTarget[];
@@ -91,8 +92,8 @@ export function AskRepoHost() {
             <button key={r.id} id={`ask-repo-${i}`} data-i={i} role="option" aria-selected={i === at} tabIndex={-1}
               className={`row ask-repo-row${i === at ? " on" : ""}`}
               onMouseMove={() => { if (i !== at) setAt(i); }} onClick={() => answerRepo(r)}>
-              <span className="row-title">{repoTitle(r)}</span>
-              {repoBranchLine(r) && <span className="row-sub">{repoBranchLine(r)}</span>}
+              <RowTitle>{repoTitle(r)}</RowTitle>
+              {repoBranchLine(r) && <RowSub>{repoBranchLine(r)}</RowSub>}
             </button>
           ))}
           {rows.length === 0 && (

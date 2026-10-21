@@ -278,9 +278,10 @@ export function useLauncherModel(p: LauncherProps) {
    * disagreed about the same repo: two headers, two accents, two counts.
    *
    * So the group header is now the repo's row, sessions or none, and it holds
-   * every verb. Order: repos alphabetically, live or idle, so a repo never jumps
-   * when a session starts or ends — unless the person chose `repoSort:
-   * "sessions"` (most open first), which trades that stillness for ranking; the drag reordering owns the session order
+   * every verb. Order: by default `repoSort: "sessions"` — most open first, ties
+   * alphabetically — so the repos being worked in sit on top; a person who chose
+   * `"name"` gets plain alphabetical, where a repo never jumps when a session
+   * starts or ends. The drag reordering owns the session order
    * INSIDE a group (it never crosses repos) and that is not re-sorted.
    *
    * A status filter is an explicit "show me these SESSIONS", so it drops the

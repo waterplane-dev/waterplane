@@ -117,7 +117,7 @@ export const KEY_SCOPE = {
   snippets: "host", headerCmds: "host", fanoutPresets: "host", toolbar: "host", launch: "host",
   launchAsk: "host", spendWarn: "host", pad: "host", hiddenRepos: "host", enterSends: "host", dictateTerms: "host",
   autoSend: "host", serialSessions: "host", confirmQueue: "host", confirmClose: "host", readerTools: "host", annKnobs: "host", annTools: "host", annPrompt: "device",
-  hints: "host", repoColors: "host", installAllow: "host", closeWhenDone: "host", localSessions: "host", agentWarn: "host", syncTs: "host",
+  hints: "host", repoColors: "host", installAllow: "host", closeWhenDone: "host", localSessions: "host", agentWarn: "host", agentWindowWarn: "host", syncTs: "host",
   // identity and the host list itself; healthAxis is this screen's choice
   healthAxis: "device", deviceId: "device", deviceName: "device", hostBase: "device", hosts: "device", hostActive: "device",
   hostSwitch: "device", hostsGone: "device",
@@ -130,6 +130,7 @@ export const KEY_SCOPE = {
   upKbps: "host", netlog: "host", netTraffic: "host", netSync: "host", localRt: "host",
   // the session tab strip: its SHAPE is this screen's, its open counts are that host's sessions
   sessionTabs: "device", sessionTabsCount: "device", sessionTabsOrder: "device", sessionTabsLimit: "device", tabOpens: "host", tabFiles: "host",
+  sessionTabsSync: "device", tabsSaverAsked: "device", tabOrderShared: "host", tabOpensShared: "host",
   // work in flight: that host's words, that host's queue
   outbox: "host", compose: "host", composeDrafts: "host", composeOutbox: "host", composeSheets: "host",
   deadUploads: "host", dictations: "host", pendingStars: "host", pendingFollowUps: "host", backlogDraft: "host",
@@ -149,7 +150,7 @@ export const KEY_SCOPE = {
   sessionOrder: "host", collapsedRepos: "host", sendMemory: "host", slotAskOff: "host", launchLast: "host", wheelHidden: "host",
   // how this phone is held and read
   toolbarOpen: "device", readMode: "device", cliMode: "device", termCostOpen: "device",
-  typingRoom: "device", hintChip: "device", termCornerPos: "device", wideSideW: "device", wideBesideW: "device", widePanelW: "device", closeKbOnSend: "device", shortcutCard: "device", busySend: "device", btwToCli: "device", theme: "device", textScale: "device", iconScale: "device", termZoom: "device",
+  typingRoom: "device", hintChip: "device", termCornerPos: "device", wideSideW: "device", wideBesideW: "device", widePanelW: "device", sessChromeH: "device", closeKbOnSend: "device", shortcutCard: "device", busySend: "device", btwToCli: "device", theme: "device", textScale: "device", iconScale: "device", termZoom: "device",
   readerZoom: "device", scrollZoom: "device", gitZoom: "device", textDumpWrap: "device", closeCustomH: "device",
   schedPctLeft: "device", schedLeadMin: "device", closeBy: "device", closeKeepStar: "device", collageGap: "device",
   collageLabels: "device", toastLog: "device", hostedAck: "device",

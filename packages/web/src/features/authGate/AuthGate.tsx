@@ -10,6 +10,7 @@ import { api } from "../../api";
 import { useStore } from "../../sdk";
 import { gate } from "./store";
 import { unlocked } from "./actions";
+import { Button } from "../../kit";
 
 const ICON = 16;
 
@@ -51,15 +52,15 @@ export function AuthGate({ reconnect }: {
                 value={authPw} onChange={(e) => { setAuthPw(e.target.value); setAuthErr(null); }}
               />
               {authErr && <div className="set-note oracle-warn" style={{ marginTop: 8 }}>{authErr}</div>}
-              <button className="key primary" type="submit" style={{ marginTop: 12, width: "100%" }}>
+              <Button variant="primary" type="submit" style={{ marginTop: 12, width: "100%" }}>
                 {authBusy ? "checking…" : "unlock"}
-              </button>
+              </Button>
             </form>
           </>
         ) : (
           <>
             <p className="set-note">This device is on the local network, and LAN access is protected — but no password has been set yet. Set one from the desktop itself, or from a phone connected over Tailscale (Settings → LAN access), then retry.</p>
-            <button className="key" style={{ marginTop: 12 }} onClick={() => reconnect()}><RotateCw size={ICON} /> retry</button>
+            <Button style={{ marginTop: 12 }} onClick={() => reconnect()}><RotateCw size={ICON} /> retry</Button>
           </>
         )}
       </div>

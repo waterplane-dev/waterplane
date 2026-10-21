@@ -361,6 +361,28 @@ says what the feature is for, what it owns (stores, sheets, message types), what
 `.github/CODEOWNERS` gets one line per feature folder, and the PR template asks whether the change
 stayed inside one — a change that needed `core/`, `sdk/` or `App.tsx` says which and why.
 
+## The kit: one component per repeated pattern
+
+`kit/` holds a component for each pattern the screens repeated by hand: `Button` (`.key`, with
+`primary` and `danger`), `Row`/`RowTitle`/`RowSub`, `Hint` (`form-hint`), `Tag`, and in
+`SettingsKit.tsx` `SetNote`/`SetWarn`. The owner's rules ride on the props (one `primary` per sheet,
+`danger` only for destructive, mono only for keys and commands), so a rule is a prop instead of a
+class string to remember. Class composition is in node-tested `keyClass.ts`, `rowClass.ts`,
+`hintClass.ts`.
+
+The migration was render-neutral on purpose: the harness (`scripts/ui/screens.mjs` +
+`screendiff.mjs`, [testing-and-ops.md](testing-and-ops.md#the-render-gate-for-ui-refactors-scriptsuiscreensmjs-screendiffmjs)) compares the DOM and the pixels before and after, so every
+component reproduces the hand-written element exactly. That is why `className` is written FIRST
+(React sets attributes in props order, and `outerHTML` shows it), why there is no `type` default
+(a site that wrote none gets none), and why an EMPTY `className`
+keeps its space: ~70 sites rendered `"key "` from `` `key ${on ? "active" : ""}` ``. Dropping that
+space is a render change and waits for a package that is allowed to change renders. A site with a
+DOM attribute before `className` stays raw, with a reason in a comment. `Row` takes no `className` at all: `kind` is the only way to its class, so nothing can replace `row`.
+
+Each pattern has a ratchet in `tools/webshape.test.mjs` (`MAX_RAW_KEY_BUTTONS`, `_EXT`,
+`MAX_RAW_ROW_PARTS`, `MAX_RAW_SET_PARTS`, `MAX_RAW_FORM_HINT`, `MAX_RAW_TAG`): the count of raw
+copies may only go down, and the test prints the new value to lock in when it does.
+
 ## Extension points (in-repo extensions)
 
 `packages/extensions/<id>/web/index.ts` exports a `FeatureManifest` named for the folder and is listed

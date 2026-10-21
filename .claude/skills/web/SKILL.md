@@ -33,6 +33,8 @@ Steps ([full](../../../docs/notes/web-architecture.md#adding-a-feature-step-by-s
 
 - `kit/` — shared controls. **`kit/chips.ts`
   `chipText`/`chipRows` implements CLAUDE.md's "a count is a filter" ONCE** — new count chips call it.
+  **A button is `Button`, a row `Row`/`RowTitle`/`RowSub`, a note `Hint`/`SetNote`/`SetWarn`, a chip `Tag`**; raw only
+  with a reason in a comment ([why](../../../docs/notes/web-architecture.md#the-kit-one-component-per-repeated-pattern)).
 - `sdk/` — an extension's web half imports only `@waterplane/sdk` (the `sdk/index.ts` barrel: `core()`, `createStore`/`useStore`, `usePref`, `pluginClient`, `extStorage`, …), `@waterplane/kit`, `@waterplane/shared`, react(-dom) and lucide-react; a feature imports `sdk` by its index, never `sdk/<file>`.
 - `webapi/` — `api.ts` (src root) spreads 9 slices; the folder's other files are helpers. A new endpoint's call goes in the slice of its SUBJECT as a literal
   `/api/...` argument (`demo/contract.test.mjs` reads the AST); raw `fetch` is lint-banned elsewhere.

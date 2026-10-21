@@ -4,6 +4,8 @@ import type { ComplianceReport, ContextLimitsView, ContextWeightLimits } from "@
 import { CHARS_PER_TOKEN, CONTEXT_LIMIT_BOUNDS, contextLimitError } from "@waterplane/shared";
 import { api } from "./api";
 import { track } from "./usage";
+import { Button } from "./kit/Button";
+import { Hint } from "./kit/Hint";
 
 /**
  * The line the `context-weight` row is measured against, for THIS repo.
@@ -128,9 +130,9 @@ export function ContextLimitsEditor({ repoId, view, setAt, onReport }: {
   if (!open) {
     return (
       <div className="check-acts">
-        <button className="key" onClick={() => setOpen(true)}>
+        <Button onClick={() => setOpen(true)}>
           <SlidersHorizontal size={12} /> thresholds{hasOverride ? " (set here)" : ""}
-        </button>
+        </Button>
       </div>
     );
   }
@@ -139,10 +141,10 @@ export function ContextLimitsEditor({ repoId, view, setAt, onReport }: {
 
   return (
     <div className="ctxlim">
-      <div className="form-hint">
+      <Hint>
         What this repo is measured against. Leave a field blank to inherit the
         host's line — blank is “inherit”, not zero.
-      </div>
+      </Hint>
       {FIELDS.map((f) => (
         <label key={f.key} className="form-hint">
           {f.label} — now {f.chars ? shorten(view.effective[f.key]) : view.effective[f.key]} ({SOURCE_WORD[view.source[f.key]]})
@@ -161,31 +163,31 @@ export function ContextLimitsEditor({ repoId, view, setAt, onReport }: {
         </label>
       ))}
       {Number.isFinite(warnPreview) && warnPreview > 0 && (
-        <div className="form-hint">
+        <Hint>
           A warn line of {shorten(warnPreview)} chars is ~{shorten(Math.round(warnPreview / CHARS_PER_TOKEN))} tokens
           on every turn of every session and every subagent here.
-        </div>
+        </Hint>
       )}
-      {view.note && <div className="form-hint">{view.note}</div>}
-      {error && <div className="form-hint" style={{ color: "var(--dead)" }}>{error}</div>}
+      {view.note && <Hint>{view.note}</Hint>}
+      {error && <Hint style={{ color: "var(--dead)" }}>{error}</Hint>}
       <div className="check-acts">
-        <button className="key" onClick={() => void save(false)}>
+        <Button onClick={() => void save(false)}>
           {busy ? "saving…" : "save for this repo"}
-        </button>
+        </Button>
         {/* Only offered when there is something to undo — and it says what it
             goes back TO, since "default" and "the host's line" are different
             things whenever an env knob is set. */}
         {hasOverride && (
-          <button className="key" onClick={() => void save(true)}>
+          <Button onClick={() => void save(true)}>
             <RotateCcw size={12} /> back to {Object.keys(view.env).length ? "the host's line" : "the default"}
-          </button>
+          </Button>
         )}
-        <button className="key" onClick={() => { setOpen(false); setDraft(draftFrom(view)); setError(null); }}>
+        <Button onClick={() => { setOpen(false); setDraft(draftFrom(view)); setError(null); }}>
           cancel
-        </button>
+        </Button>
       </div>
       {hasOverride && setAt != null && (
-        <div className="form-hint">Set for this repo {new Date(setAt).toLocaleDateString()}.</div>
+        <Hint>Set for this repo {new Date(setAt).toLocaleDateString()}.</Hint>
       )}
     </div>
   );

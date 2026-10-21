@@ -46,9 +46,13 @@
  * `health` sits after `followup`: a repo's health index (`healthindex.ts`)
  * made a move unusual for that repo's own past. Default ON — it fires on a
  * called move only, at most one per repo per week — and words only.
+ *
+ * `agent` sits after `health`: a RUNNING subagent's window passed the person's
+ * line (`agentWindowWarnSetting`), pushed once per agent. Default ON — once per
+ * agent, words only; nothing is stopped or held.
  */
 export const NOTIFICATION_KINDS = [
-  "prompt", "approval", "limit", "burn", "cli", "undelivered", "backlog", "followup", "health", "artifact", "image", "plugin", "autofire", "idle", "info",
+  "prompt", "approval", "limit", "burn", "cli", "undelivered", "backlog", "followup", "health", "agent", "artifact", "image", "plugin", "autofire", "idle", "info",
 ] as const;
 
 /** Kind of in-app notification (drives the icon shown). */

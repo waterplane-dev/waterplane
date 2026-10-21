@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { nativePlugin } from "./shellBridge";
 import { BRAND, envName, PROTOCOL_VERSION, normalizeHostBase, normalizeHostName, normalizeSsid, defaultHostName, type PairTarget, type SavedHost } from "@waterplane/shared";
 import { CheckCircle2, FlaskConical, KeyRound, Loader2, Plug, Plus, Router, Wifi, X, XCircle } from "lucide-react";
-import { SetSwitch } from "./SettingsKit";
+import { SetNote, SetSwitch } from "./SettingsKit";
 import { PairForm } from "./PairForm";
 import { FoundDesktops } from "./FoundDesktops";
 import { passwordSentence } from "./hostDiscover";
@@ -11,6 +11,7 @@ import { askConfirm } from "./Confirm";
 import { LOCATION_DISCLOSURE, LOCATION_SKIPPED_TEXT } from "./shellNet";
 import { tryDemo } from "./demoEntry";
 import { activeHostId, addAndActivate, addHost, browserKV, updateHost, type HostInput } from "./hosts";
+import { Button } from "./kit/Button";
 
 /**
  * Add or edit one desktop — Android shell only.
@@ -241,7 +242,7 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
             />
             {onCancel && (
               <div className="set-row" style={{ marginTop: 10 }}>
-                <button className="key" onClick={onCancel}>cancel</button>
+                <Button onClick={onCancel}>cancel</Button>
               </div>
             )}
           </>
@@ -323,24 +324,24 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
             {lanSuggest.length > 0 && (
               <div className="set-chips" style={{ marginTop: 6 }}>
                 {lanSuggest.map((ip) => (
-                  <button key={ip} className="key" onClick={() => setLanText(ip)}>{ip}</button>
+                  <Button key={ip} onClick={() => setLanText(ip)}>{ip}</Button>
                 ))}
               </div>
             )}
             <div className="set-chips" style={{ marginTop: 8 }}>
               {ssids.map((s) => (
-                <button key={s} className="key" onClick={() => setSsids(ssids.filter((x) => x !== s))} aria-label={`remove ${s}`}>
+                <Button key={s} onClick={() => setSsids(ssids.filter((x) => x !== s))} aria-label={`remove ${s}`}>
                   <Wifi size={12} /> {s} <X size={12} />
-                </button>
+                </Button>
               ))}
-              {net && <button className="key" onClick={() => void addCurrentWifi()}><Plus size={12} /> add current Wi-Fi</button>}
+              {net && <Button onClick={() => void addCurrentWifi()}><Plus size={12} /> add current Wi-Fi</Button>}
             </div>
             {!net && (
-              <div className="set-note">This app build cannot read the Wi-Fi name; a newer APK can.</div>
+              <SetNote>This app build cannot read the Wi-Fi name; a newer APK can.</SetNote>
             )}
-            {ssidNote && <div className="set-note">{ssidNote}</div>}
+            {ssidNote && <SetNote>{ssidNote}</SetNote>}
             {needLocation && (
-              <button className="key" onClick={() => void addCurrentWifi(true)}>allow location</button>
+              <Button onClick={() => void addCurrentWifi(true)}>allow location</Button>
             )}
             {lanBase && (
               <SetSwitch label="switch to LAN automatically" icon={Router} on={auto} onChange={() => setAuto(!auto)}
@@ -354,19 +355,19 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
         <div className="set-row" style={{ marginTop: 14, flexWrap: "wrap", gap: 8 }}>
           {base ? (
             <>
-              {probe.s !== "busy" && <button className="key" onClick={() => void test()}>test</button>}
+              {probe.s !== "busy" && <Button onClick={() => void test()}>test</Button>}
               {/* Offered even on a failed probe: a desktop that is merely asleep
                   is the common case, and refusing to save the (correct) address
                   would strand someone on this screen with nothing to do. */}
-              {mode === "first" && <button className="key primary" onClick={() => save(true)}>connect</button>}
-              {mode === "add" && <button className="key primary" onClick={() => save(true)}>add and switch</button>}
-              {mode === "add" && <button className="key" onClick={() => save(false)}>add</button>}
-              {mode === "edit" && <button className="key primary" onClick={() => save(false)}>save</button>}
+              {mode === "first" && <Button variant="primary" onClick={() => save(true)}>connect</Button>}
+              {mode === "add" && <Button variant="primary" onClick={() => save(true)}>add and switch</Button>}
+              {mode === "add" && <Button onClick={() => save(false)}>add</Button>}
+              {mode === "edit" && <Button variant="primary" onClick={() => save(false)}>save</Button>}
             </>
           ) : (
             <span className="set-note">Type the desktop's address to test or save it.</span>
           )}
-          {onCancel && <button className="key" onClick={onCancel}>cancel</button>}
+          {onCancel && <Button onClick={onCancel}>cancel</Button>}
         </div>
         </>)}
 
@@ -374,8 +375,8 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
           // Beside host setup, not instead of it: someone with no desktop to
           // hand (a store reviewer, a first look) can still see what this is.
           <div className="pair-demo">
-            <div className="set-note">No desktop to hand? A pretend one inside this app — nothing connects and nothing runs.</div>
-            <button className="key" onClick={() => tryDemo()}><FlaskConical size={13} /> Try the demo</button>
+            <SetNote>No desktop to hand? A pretend one inside this app — nothing connects and nothing runs.</SetNote>
+            <Button onClick={() => tryDemo()}><FlaskConical size={13} /> Try the demo</Button>
           </div>
         )}
 

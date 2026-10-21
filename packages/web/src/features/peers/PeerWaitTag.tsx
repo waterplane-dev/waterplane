@@ -14,6 +14,7 @@ import { useNow } from "../../useNow";
 import { openPeerSession, pairableHosts } from "./actions";
 import { peerTagFacts } from "./logic";
 import { activeHost } from "../../hosts";
+import { Tag } from "../../kit";
 
 export function PeerWaitTag({ s }: { s: SessionInfo }) {
   // A minute grain: the age is in whole minutes.
@@ -24,12 +25,12 @@ export function PeerWaitTag({ s }: { s: SessionInfo }) {
   if (!pill || !facts) return null;
   const open = () => openPeerSession(facts, s.peerWait!.peer);
   return (
-    <span className={`tag ${pill.cls} tag-filter`} role="button" tabIndex={0} title={facts.title}
+    <Tag className={`${pill.cls} tag-filter`} role="button" tabIndex={0} title={facts.title}
       onPointerDown={(e) => e.stopPropagation()}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); open(); } }}
       onClick={(e) => { e.stopPropagation(); open(); }}>
       {pill.body}
       {!facts.target && <> · not a saved desktop</>}
-    </span>
+    </Tag>
   );
 }

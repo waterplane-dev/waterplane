@@ -86,6 +86,8 @@ import { Explain } from "./Explain";
 import { FilterChip } from "./kit/FilterChip";
 import type { CoreApi } from "./sdk/types";
 import { showToast } from "./toast";
+import { Button } from "./kit/Button";
+import { Hint } from "./kit/Hint";
 
 const STATUS_ICON = {
   pass: <Check size={16} color="var(--ok)" />,
@@ -410,9 +412,9 @@ function SetupRegion({
           Checks a repo follows the conventions: CLAUDE.md tells the agent to use the outbox,
           inbox/outbox are gitignored and secrets aren&apos;t committed. Re-run regularly.
         </span>
-        <button className="key" onClick={() => res.reload({ quiet: true })} title="re-check">
+        <Button onClick={() => res.reload({ quiet: true })} title="re-check">
           <RefreshCw size={14} className={res.inflight ? "spin" : undefined} /> re-check
-        </button>
+        </Button>
       </div>
 
       {/* The checklist's OWN four nothings — and only one of them means "this
@@ -421,8 +423,8 @@ function SetupRegion({
       <Empty res={res} empty={!report} thing="the setup checklist" noun="checklist">
         Nothing in this checklist applies to this repo yet.
       </Empty>
-      {fixError && <div className="form-hint" style={{ color: "var(--dead)" }}>Fix failed: {fixError}</div>}
-      {fixNotes.map((n, i) => <div key={i} className="form-hint">{n}</div>)}
+      {fixError && <Hint style={{ color: "var(--dead)" }}>Fix failed: {fixError}</Hint>}
+      {fixNotes.map((n, i) => <Hint key={i}>{n}</Hint>)}
 
       {report && (
         <>
@@ -435,7 +437,7 @@ function SetupRegion({
               {/* Only when one tap is about to do two different things — a
                   button that patches two files needs no footnote. */}
               {canAsk && repo && bulkNote(patchable, forAgent, repo.repoName) && (
-                <div className="form-hint">{bulkNote(patchable, forAgent, repo.repoName)}</div>
+                <Hint>{bulkNote(patchable, forAgent, repo.repoName)}</Hint>
               )}
             </>
           )}
@@ -498,9 +500,9 @@ function SetupRegion({
                     <div className="check-top">
                       <span className="check-icon"><EyeOff size={16} color="var(--dim)" /></span>
                       <span className="check-label">{c.label}</span>
-                      <button className="key" onClick={() => onIgnore(c.id, false)}>
+                      <Button onClick={() => onIgnore(c.id, false)}>
                         stop ignoring
-                      </button>
+                      </Button>
                     </div>
                     <div className="check-detail check-detail-quiet">
                       {c.status === "pass" ? "Fine here now." : "Still on the far side of its line — not counted, not suggested."}
@@ -616,18 +618,18 @@ function Row({ c, busy, onFix, onIgnore, size, remedy, extra }: {
         <span className="check-icon">{consider ? <Lightbulb size={16} color="var(--accent)" /> : STATUS_ICON[c.status]}</span>
         <span className="check-label">{c.label}{consider && <span className="check-kind"> · consider</span>}</span>
         {c.fix && !fixNeedsConfirm(c.fix) && (
-          <button className="key" onClick={() => onFix([c.fix!])} disabled={busy}>
+          <Button onClick={() => onFix([c.fix!])} disabled={busy}>
             <Wrench size={12} /> {fixVerb(c.fix, size, setupRows())}
-          </button>
+          </Button>
         )}
       </div>
       <div className="check-detail">{c.detail}</div>
       {consider && (
         <div className="check-acts check-acts-split">
-          <span className="form-hint">Not counted in the badge. Leaving it is a fine answer.</span>
-          <button className="key" onClick={() => onIgnore(c.id, true)}>
+          <Hint as="span">Not counted in the badge. Leaving it is a fine answer.</Hint>
+          <Button onClick={() => onIgnore(c.id, true)}>
             <EyeOff size={12} /> ignore in this repo
-          </button>
+          </Button>
         </div>
       )}
       {/* A fix that CHOOSES a setting (auto-compact's 400k) rather than
@@ -648,9 +650,9 @@ function Row({ c, busy, onFix, onIgnore, size, remedy, extra }: {
           with a different meaning. */}
       {remedy && (
         <div className="check-acts">
-          <button className="key" onClick={remedy.run}>
+          <Button onClick={remedy.run}>
             <Send size={12} /> {remedy.label}…
-          </button>
+          </Button>
         </div>
       )}
       {extra}

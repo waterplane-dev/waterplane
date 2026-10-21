@@ -185,7 +185,7 @@ export interface BackendDelivery {
   readonly composerRuleRe: RegExp | null;
   /**
    * An EMPTY composer's hint text, where the TUI draws it in a colour rather
-   * than dim (`echo.ts`'s `composerHeld` already discounts dim cells). Tested
+   * than dim (`composer.ts`'s `composerHeld` already discounts dim cells). Tested
    * against the held text with its whitespace runs collapsed. Absent/null = the
    * backend draws no such hint, or draws it dim.
    */

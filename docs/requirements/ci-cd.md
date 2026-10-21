@@ -45,3 +45,18 @@ Test runs leave no temp directories behind.
 - asked: 2026-10-17
 - shipped: ff45e7a
 
+### R-ci-cd-011 · shipped
+An end-to-end script that fails under load but passes when re-run alone is reported as a load flake and does not block a push; scripts run with no locale, like the launchd service.
+- asked: 2026-10-20
+- shipped: bfd51b60, 3759768a, 8a2b94d6
+
+### R-ci-cd-012 · shipped
+Only one full test suite runs per machine at a time, so two sessions never run the gate on the same code at once.
+- asked: 2026-10-20
+- shipped: 3759768a
+
+### R-ci-cd-013 · shipped
+The pre-push gate runs once per code version and identical code reuses the result; when a branch's code changes, a newer run cancels the older one.
+- asked: 2026-10-20
+- shipped: 3759768a (the gate itself is ~/.local-ci/prelude.sh, outside this repo: tree-hash cache + newer push supersedes)
+

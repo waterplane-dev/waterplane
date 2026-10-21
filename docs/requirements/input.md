@@ -56,3 +56,12 @@ While a prompt has not been sent, the user can edit it with an edit button.
 - asked: 2026-10-19
 - shipped: 61c601fb
 
+### R-input-013 · requested
+Confirmation prompts accept a response without 'y' and continue.
+- asked: 2026-10-20
+
+### R-input-014 · shipped
+With a picture open in the annotator, Ctrl/Cmd+Return sends the picture first; the next press sends the prompt.
+- asked: 2026-10-20
+- shipped: abcd5220
+

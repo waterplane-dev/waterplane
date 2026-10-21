@@ -83,13 +83,22 @@ function gitText(root, args) {
  * the reader never typed. Say which root, and say which of the two it is: an
  * empty repo is a repo, and the answer there is "commit something", not "this
  * is not a repo".
+ *
+ * Only git's own "not a git repository" earns that sentence. Any other refusal
+ * (dubious ownership / safe.directory, a broken xcrun shim, a corrupt index) is
+ * a repo git would not read, and is quoted verbatim: calling it "not a repo"
+ * sent a person with a real repository to `git init`.
  */
 function notARepo(root, err) {
   const said = `${err.stderr ?? ""}`;
   if (/unknown revision|does not have any commits|bad revision|not a valid object name/i.test(said)) {
     return new Error(`no commits yet in ${root} — there is nothing to measure until the first one.`);
   }
-  return new Error(`not a git repository: ${root}`);
+  if (err.code === "ENOENT") return new Error(`git could not be started to read ${root}: ${err.message}`);
+  if (/not a git repository/i.test(said) || !said.trim()) return new Error(`not a git repository: ${root}`);
+  // All of it, not just the fatal line: git's next lines are the fix (the safe.directory command).
+  const lines = said.split("\n").map((l) => l.trim()).filter(Boolean);
+  return new Error(`git refused to read ${root}: ${lines.slice(0, 4).join(" ")}`);
 }
 
 /**

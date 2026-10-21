@@ -9,6 +9,7 @@ import { cacheThumb } from "./thumbCache";
 import { useThumbSrc } from "./thumbSrc";
 import type { OutboxEntry } from "./outbox";
 import type { FileRef } from "./fileRefs";
+import { Button } from "./kit/Button";
 
 /** CSS width of a strip thumbnail. Same reasoning as the reader's inline one:
  *  small enough to sit under a queue row, big enough to tell WHICH screenshot. */
@@ -207,16 +208,16 @@ export function AttachStrip({ text, repoId, outbox, online, nonce, onStates, onR
               {!compact && bad && (
                 <div className="attach-acts">
                   {s.state === "kept" && onReattach && (
-                    <button className="key" title="put this phone's copy back in the send queue, under the same path — the message needs no change"
-                      onClick={() => onReattach(r.relPath)}><RotateCw size={14} /> re-attach</button>
+                    <Button title="put this phone's copy back in the send queue, under the same path — the message needs no change"
+                      onClick={() => onReattach(r.relPath)}><RotateCw size={14} /> re-attach</Button>
                   )}
                   {onReplace && (
-                    <button className="key" title="pick a different file for this mention — the path in the message is rewritten to the new one"
-                      onClick={() => onReplace(r.relPath)}><Paperclip size={14} /> pick a file</button>
+                    <Button title="pick a different file for this mention — the path in the message is rewritten to the new one"
+                      onClick={() => onReplace(r.relPath)}><Paperclip size={14} /> pick a file</Button>
                   )}
                   {onForget && (
-                    <button className="key danger" title="take this mention out of the message and send the words without it"
-                      onClick={() => onForget(r.relPath)}><Trash2 size={14} /> drop mention</button>
+                    <Button variant="danger" title="take this mention out of the message and send the words without it"
+                      onClick={() => onForget(r.relPath)}><Trash2 size={14} /> drop mention</Button>
                   )}
                 </div>
               )}

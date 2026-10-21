@@ -61,7 +61,9 @@ export function gitOnlyProblems(text) {
     .replace(new RegExp(String.raw`([{,])${esc(name)}:`, "g"), "$1 :")
     .replace(new RegExp(String.raw`(["'])${esc(name)}\1`, "g"), "$1$1")
     .replace(new RegExp(String.raw`@${esc(name)}-`, "g"), "@ -")
-    .replace(new RegExp(String.raw`(["'\`])${esc(name)}-`, "g"), "$1 -");
+    .replace(new RegExp(String.raw`(["'\`])${esc(name)}-`, "g"), "$1 -")
+    // A module specifier that IS the name (`spawnSync` minified to `fs` beside `from"node:fs"`).
+    .replace(new RegExp(String.raw`(["'])node:${esc(name)}\1`, "g"), "$1node:$1");
   for (const [local, imported] of fns) {
     const all = [...uses(local).matchAll(new RegExp(`${notMember}${esc(local)}(?![\\w$])`, "g"))].length;
     const git = [...body.matchAll(new RegExp(`${notMember}${esc(local)}${GIT_ARG}`, "g"))].length;

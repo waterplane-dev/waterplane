@@ -14,3 +14,7 @@ A running git push or pull shows a busy indicator on the repo's git button.
 - asked: 2026-10-17
 - shipped: 596b7482
 
+### R-sync-004 · requested
+The phone's sync button pushes work while the user is away from the computer.
+- asked: 2026-10-20
+

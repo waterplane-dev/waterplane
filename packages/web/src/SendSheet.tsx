@@ -8,6 +8,7 @@ import { ToSection } from "./send/ToSection";
 import { WhenSection } from "./send/WhenSection";
 import { useSendSheet } from "./send/useSendSheet";
 import type { SendSheetProps } from "./send/sendSheetTypes";
+import { Button } from "./kit/Button";
 
 /**
  * **The one send surface.**
@@ -40,10 +41,10 @@ export function SendSheet(props: SendSheetProps) {
     <div className="sheet">
       <SheetHead title={retime ? <><CalendarClock size={16} /> Re-time</> : <><SendHorizontal size={16} /> Send</>} onClose={onClose}>
         {onDiscard && !retime && (
-          <button className="key danger" title="throw this message away — the words go too"
+          <Button variant="danger" title="throw this message away — the words go too"
             onClick={() => { track("action:send.discard"); onDiscard(); onClose(); }}>
             <X size={16} /> discard
-          </button>
+          </Button>
         )}
       </SheetHead>
 

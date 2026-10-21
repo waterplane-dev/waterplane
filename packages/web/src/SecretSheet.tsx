@@ -6,7 +6,7 @@ import { track } from "./usage";
 import { RepoSelect } from "./RepoPicker";
 import { useRemoteResource } from "./useRemoteResource";
 import { SheetHead } from "./Sheet";
-import { RadioRows } from "./kit";
+import { RadioRows, Hint } from "./kit";
 
 interface Props {
   repos: RepoTarget[];
@@ -103,12 +103,12 @@ export function SecretSheet({ repos, onClose }: Props) {
         onChange={setScope} />
 
       <div className="form">
-        <div className="form-hint">
+        <Hint>
           <ShieldCheck size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
           Write-only here: this app never shows the value back, only a masked
           tail. It's stored as plaintext in a gitignored file on the host, so
           the Claude CLI running there can still read it.
-        </div>
+        </Hint>
 
         {scope === "host" ? (
           <>
@@ -117,12 +117,12 @@ export function SecretSheet({ repos, onClose }: Props) {
                 <option key={t.id} value={t.id}>{t.label} · {t.mode}</option>
               ))}
             </select>
-            <div className="form-hint mono">
+            <Hint tone="mono">
               → {target?.path ?? `~/.config/${BRAND.configDirName}/.env`}
               {target?.hotReload || targetId === "env" ? " · applied live, no restart" : ""}
-            </div>
-            {targetsRes.state === "offline" && <div className="form-hint">No connection — the host's write targets could not be listed, so only the built-in one is offered.</div>}
-            {targetsRes.state === "error" && <div className="form-hint" style={{ color: "var(--dead)" }}>The host refused to list its write targets: {targetsRes.error}</div>}
+            </Hint>
+            {targetsRes.state === "offline" && <Hint>No connection — the host's write targets could not be listed, so only the built-in one is offered.</Hint>}
+            {targetsRes.state === "error" && <Hint style={{ color: "var(--dead)" }}>The host refused to list its write targets: {targetsRes.error}</Hint>}
           </>
         ) : (
           <>
@@ -136,8 +136,8 @@ export function SecretSheet({ repos, onClose }: Props) {
               onChange={(dir) => { const r = repos.find((x) => x.worktreePath === dir); if (r) { setRepoId(r.id); setResult(null); } }}
               aria-label="repo"
             />
-            {envRes.state === "offline" && <div className="form-hint">No connection — this repo's .env files could not be listed, so nothing below says whether one is gitignored.</div>}
-            {envRes.state === "error" && <div className="form-hint" style={{ color: "var(--dead)" }}>The host refused to list this repo's .env files: {envRes.error}</div>}
+            {envRes.state === "offline" && <Hint>No connection — this repo's .env files could not be listed, so nothing below says whether one is gitignored.</Hint>}
+            {envRes.state === "error" && <Hint style={{ color: "var(--dead)" }}>The host refused to list this repo's .env files: {envRes.error}</Hint>}
             <select className="search" value={file} onChange={(e) => setFile(e.target.value)}>
               {!envFiles.some((f) => f.name === ".env") && <option value=".env">.env (new)</option>}
               {envFiles.map((f) => (
@@ -147,9 +147,9 @@ export function SecretSheet({ repos, onClose }: Props) {
               ))}
             </select>
             {trackedWarn && (
-              <div className="form-hint" style={{ color: "var(--dead)" }}>
+              <Hint style={{ color: "var(--dead)" }}>
                 {file} is tracked by git — writing a secret there risks committing it. The host will refuse.
-              </div>
+              </Hint>
             )}
           </>
         )}
@@ -186,7 +186,7 @@ export function SecretSheet({ repos, onClose }: Props) {
               style={{ fontFamily: "monospace", resize: "vertical" }}
             />
             {value && !jsonValid && (
-              <div className="form-hint" style={{ color: "var(--dead)" }}>Not valid JSON.</div>
+              <Hint style={{ color: "var(--dead)" }}>Not valid JSON.</Hint>
             )}
           </>
         ) : (
@@ -208,13 +208,13 @@ export function SecretSheet({ repos, onClose }: Props) {
         </button>
 
         {result && (
-          <div className="form-hint" style={{ color: result.ok ? undefined : "var(--dead)" }}>
+          <Hint style={{ color: result.ok ? undefined : "var(--dead)" }}>
             {result.ok
               ? `✓ ${result.key ? result.key + " " : ""}${result.action} in ${result.file} — ${result.masked}` +
                 (result.addedToGitignore ? " · added to .gitignore" : "") +
                 (scope === "host" && (target?.hotReload || targetId === "env") ? " · live now" : "")
               : `Error: ${result.error}`}
-          </div>
+          </Hint>
         )}
       </div>
     </div>

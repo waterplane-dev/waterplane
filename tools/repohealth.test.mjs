@@ -654,7 +654,7 @@ let plotMemo = null;
 const plotDoc = () => (plotMemo ??= JSON.parse(runPlot()));
 
 /** The readings of one plotted series, oldest first — absences dropped, which
- *  is what `windowFor` does in `narrate.mjs` before a rank is taken. */
+ *  is what `windowFor` does in `events.mjs` before a rank is taken. */
 const readingsOf = (s) => s.points.filter((p) => p.v !== null).map((p) => ({ day: p.day, v: p.v }));
 
 test("plot is one JSON line, exits 0, and says which window a rank was taken in", () => {
@@ -1290,4 +1290,20 @@ test("a package with no files on a measured day is a zero, not a hole", () => {
   // Every day that carries a classics reading carries one for every package.
   const holes = plot.classics.packages.flatMap((p) => p.points.filter((x) => x.v == null));
   assert.equal(holes.length, 0, "no package is a hole on a day the classics were measured");
+});
+
+test("git.listCommits: only git's own 'not a git repository' is called that; any other refusal is quoted", async () => {
+  const { mkdtempSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const run = (cwd, args) => execFileSync("git", args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
+  const plain = mkdtempSync(join(tmpdir(), "rh-notgit-"));
+  assert.throws(() => git.listCommits(plain), /^Error: not a git repository: /);
+  // A real repo git refuses to open — stands in for dubious ownership or a broken xcrun shim.
+  const refused = mkdtempSync(join(tmpdir(), "rh-refused-"));
+  run(refused, ["init", "-q"]);
+  run(refused, ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "a"]);
+  run(refused, ["config", "core.repositoryformatversion", "1"]);
+  run(refused, ["config", "extensions.bogusext", "true"]);
+  assert.throws(() => git.listCommits(refused), (e) =>
+    /^git refused to read .*unknown repository extension/.test(e.message) && !/not a git repository/.test(e.message));
 });

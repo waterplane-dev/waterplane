@@ -3,6 +3,9 @@ import { Gauge, Download, Upload, Wifi, AlertTriangle, CheckCircle2, Copy } from
 import { api, copyText, type SpeedDebug, type SpeedResult } from "./api";
 import { track } from "./usage";
 import { SheetHead } from "./Sheet";
+import { Button } from "./kit/Button";
+import { SetNote } from "./SettingsKit";
+import { Hint } from "./kit/Hint";
 
 interface Props {
   onClose: () => void;
@@ -84,20 +87,20 @@ export function SpeedTestSheet({ onClose }: Props) {
       <SheetHead title={<><Gauge size={18} style={{ verticalAlign: "-3px", marginRight: 6 }} />Speed test</>} onClose={onClose} />
 
       <div className="form">
-        <div className="form-hint">
+        <Hint>
           Measures throughput both directions over the address you loaded the app
           from — so the numbers reflect the real path (Tailscale tunnel or LAN).
-        </div>
+        </Hint>
 
         {/* size presets */}
         <div className="annot-tools">
           {SIZES.map((s) => (
-            <button
+            <Button
               key={s}
-              className={`key ${sizeMB === s ? "active" : ""}`}
+              className={sizeMB === s ? "active" : ""}
               disabled={busy}
               onClick={() => setSizeMB(s)}
-            >{s} MB</button>
+            >{s} MB</Button>
           ))}
         </div>
 
@@ -113,7 +116,7 @@ export function SpeedTestSheet({ onClose }: Props) {
             : busy ? "Running…" : "Run test"}
         </button>
 
-        {error && <div className="form-hint" style={{ color: "var(--dead)" }}>Error: {error}</div>}
+        {error && <Hint style={{ color: "var(--dead)" }}>Error: {error}</Hint>}
 
         {/* results */}
         {(down || up) && (
@@ -136,8 +139,7 @@ export function SpeedTestSheet({ onClose }: Props) {
         {/* diagnostics */}
         {debug && (
           <div className="set-group" style={{ marginTop: 8 }}>
-            <div
-              className="form-hint"
+            <Hint
               style={{
                 display: "flex", gap: 8, alignItems: "flex-start",
                 color: relayed ? "var(--dead)" : undefined,
@@ -146,7 +148,7 @@ export function SpeedTestSheet({ onClose }: Props) {
               {relayed ? <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
                        : <CheckCircle2 size={16} style={{ flexShrink: 0, marginTop: 1 }} />}
               <span>{debug.verdict}</span>
-            </div>
+            </Hint>
 
             <div className="set-note mono">
               <Wifi size={12} style={{ verticalAlign: "-2px" }} /> phone seen as {debug.clientIp} ({debug.clientKind})
@@ -156,17 +158,17 @@ export function SpeedTestSheet({ onClose }: Props) {
 
             {/* bypass links: hit these on the same WiFi to skip the tunnel */}
             {debug.lanIps.length > 0 && (
-              <div className="set-note">
+              <SetNote>
                 Bypass the tunnel on same WiFi:
                 {debug.lanIps.map((ip) => {
                   const urlStr = `http://${ip}:8770`;
                   return (
-                    <button key={ip} className="key" style={{ margin: "4px 6px 0 0" }} onClick={() => copy(urlStr, ip)}>
+                    <Button key={ip} style={{ margin: "4px 6px 0 0" }} onClick={() => copy(urlStr, ip)}>
                       <Copy size={12} /> {urlStr}{copied === ip ? " ✓" : ""}
-                    </button>
+                    </Button>
                   );
                 })}
-              </div>
+              </SetNote>
             )}
             {debug.tailscaleIp && (
               <div className="set-note mono">tailscale IP: {debug.tailscaleIp}</div>
@@ -179,9 +181,9 @@ export function SpeedTestSheet({ onClose }: Props) {
             {(debug.raw.ping || debug.raw.netcheck || debug.raw.status) && (
               <details style={{ marginTop: 6 }}>
                 <summary className="form-hint" style={{ cursor: "pointer" }}>Raw tailscale output</summary>
-                {debug.raw.ping && <><div className="set-note">ping</div><pre className="mono" style={{ overflowX: "auto", fontSize: 11 }}>{debug.raw.ping}</pre></>}
-                {debug.raw.netcheck && <><div className="set-note">netcheck</div><pre className="mono" style={{ overflowX: "auto", fontSize: 11 }}>{debug.raw.netcheck}</pre></>}
-                {debug.raw.status && <><div className="set-note">status</div><pre className="mono" style={{ overflowX: "auto", fontSize: 11 }}>{debug.raw.status}</pre></>}
+                {debug.raw.ping && <><SetNote>ping</SetNote><pre className="mono" style={{ overflowX: "auto", fontSize: 11 }}>{debug.raw.ping}</pre></>}
+                {debug.raw.netcheck && <><SetNote>netcheck</SetNote><pre className="mono" style={{ overflowX: "auto", fontSize: 11 }}>{debug.raw.netcheck}</pre></>}
+                {debug.raw.status && <><SetNote>status</SetNote><pre className="mono" style={{ overflowX: "auto", fontSize: 11 }}>{debug.raw.status}</pre></>}
               </details>
             )}
           </div>

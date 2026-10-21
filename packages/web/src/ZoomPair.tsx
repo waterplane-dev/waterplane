@@ -1,4 +1,5 @@
 import { ZoomIn, ZoomOut } from "lucide-react";
+import { Button } from "./kit/Button";
 
 /**
  * The smaller/bigger text pair — the terminal corner, the scrollback sheet and
@@ -34,9 +35,9 @@ export function ZoomPair({ smaller, bigger, onZoom, what = "", subject = "the te
   return (
     <>
       {smaller != null && (
-        <button className="key" aria-label={`smaller ${txt}`}
+        <Button aria-label={`smaller ${txt}`}
           title={`smaller ${txt}${smallerHint}`}
-          onClick={() => onZoom(smaller)}><ZoomOut size={iconSize} /></button>
+          onClick={() => onZoom(smaller)}><ZoomOut size={iconSize} /></Button>
       )}
       {end && (
         <span className={endClassName} aria-live="polite"
@@ -45,9 +46,9 @@ export function ZoomPair({ smaller, bigger, onZoom, what = "", subject = "the te
         </span>
       )}
       {bigger != null && (
-        <button className="key" aria-label={`bigger ${txt}`}
+        <Button aria-label={`bigger ${txt}`}
           title={`bigger ${txt}${biggerHint}`}
-          onClick={() => onZoom(bigger)}><ZoomIn size={iconSize} /></button>
+          onClick={() => onZoom(bigger)}><ZoomIn size={iconSize} /></Button>
       )}
     </>
   );

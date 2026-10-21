@@ -23,7 +23,8 @@ import { appendFileSync, mkdirSync, statSync } from "node:fs";
 import { keepLastLines } from "../jsonstore.js";
 import { basename, join } from "node:path";
 import type { DetectedPrompt, FollowUp, HistoryEntry, HostMessage, SessionInfo } from "@waterplane/shared";
-import { followUpPushText } from "@waterplane/shared";
+import { AGENT_WINDOW_WARN_KEY, followUpPushText } from "@waterplane/shared";
+import { createAgentWatch } from "../agentwatch.js";
 import { isMarkdownPath, readsInline } from "../files.js";
 import { stripFresh } from "./scan.js";
 import { forgetRules } from "../answergate.js";
@@ -406,6 +407,14 @@ export function wireSessionEvents(ctx: ServerCtx) {
       sessionId: id, tag: `session-budget:${id}`,
     });
   });
+  // A running subagent over the person's line: one `agent` push per agent
+  // (`agentwatch.ts`). Registered last so it changes no listener's relative order.
+  const agentWatch = createAgentWatch({
+    notify: (kind, p) => ctx.notify(kind, p),
+    setting: () => ctx.settings.get(AGENT_WINDOW_WARN_KEY)?.value,
+  });
+  ctx.sessions.on("updated", (info: SessionInfo) => agentWatch.onUpdated(info));
+  ctx.sessions.on("exit", (id: string) => agentWatch.forget(id));
   // A budget in window percent needs a fresh reading to be judged at all, so a
   // session born with one is a reason for the usage poll to run.
   ctx.sessions.on("created", (info: SessionInfo) => { if (info.budget) ctx.syncUsagePolling(); });

@@ -102,7 +102,7 @@ export const plural = (n, one, many) => `${nf(n)} ${n === 1 ? one : many ?? `${o
 
 /**
  * THE conversion from `readRank`'s fraction to the percentile a sentence
- * prints. One call site — `narrate.mjs`'s `rankPhrase` — so there is exactly
+ * prints. One call site — `events.mjs`'s `rankPhrase` — so there is exactly
  * one place where the scale of a rank is decided. See the header for what two
  * of them cost.
  */

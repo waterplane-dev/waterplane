@@ -7,6 +7,7 @@ import {
 import { track } from "./usage";
 import { prefs, setPref, usePref } from "./core/prefs";
 import { showToast } from "./toast";
+import { Button } from "./kit/Button";
 
 /**
  * Renders whatever `hints.ts` decided to say, and the explain-mode banner.
@@ -46,7 +47,7 @@ export function HintLayer() {
         <div className="hint-mode-bar">
           <HelpCircle size={14} />
           <span>Explain mode — tap any button to read what it does. Nothing runs.</span>
-          <button className="key" data-nohint onClick={() => setExplainMode(false)}><X size={14} /> done</button>
+          <Button data-nohint onClick={() => setExplainMode(false)}><X size={14} /> done</Button>
         </div>
       )}
       {askChip && !hint && (
@@ -58,7 +59,7 @@ export function HintLayer() {
               to give the headers their space back — in the launcher and in every session.</p>
             <p className="hint-card-when">Settings › Writing &amp; reading brings it back, or resets the whole UI to its defaults.</p>
             <div className="hint-card-acts">
-              <button className="key" data-nohint onClick={() => { setPref("hintChip", "asked"); setAskChip(false); }}>keep it</button>
+              <Button data-nohint onClick={() => { setPref("hintChip", "asked"); setAskChip(false); }}>keep it</Button>
               <span className="spacer" />
               <button className="send" data-nohint onClick={() => {
                 track("action:hints.chipHidden");
@@ -85,7 +86,7 @@ export function HintLayer() {
             <div className="hint-card-acts">
               {hint.intercepted ? (
                 <>
-                  <button className="key" data-nohint onClick={() => closeHint(false)}><X size={14} /> not now</button>
+                  <Button data-nohint onClick={() => closeHint(false)}><X size={14} /> not now</Button>
                   <span className="spacer" />
                   <button className={`send${hint.def.danger ? " danger" : ""}`} data-nohint
                     onClick={() => { track("action:hint.proceed"); proceedHint(); }}>do it</button>
@@ -123,10 +124,10 @@ export function HintToggle({ compact = false }: { compact?: boolean }) {
   // since this one component is what each of them draws.
   if (usePref("hintChip") === "hidden") return null;
   return (
-    <button className={`key hint-toggle${on ? " on" : ""}`} data-nohint
+    <Button className={`hint-toggle${on ? " on" : ""}`} data-nohint
       aria-pressed={on}
       onClick={() => { if (!on) track("action:hints.explain"); setExplainMode(!on); }}>
       <HelpCircle size={compact ? 14 : 16} />{!compact && (on ? " done" : "")}
-    </button>
+    </Button>
   );
 }

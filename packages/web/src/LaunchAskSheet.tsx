@@ -45,6 +45,7 @@ import { budgetChipWords } from "./budgetInput";
 import { CantInline } from "./Unavailable";
 import { backendUnavailable, launchAskStart, showBackendPicker, type BackendList } from "./backendCaps";
 import { LS, lsJson, lsSetJson } from "./storage";
+import { Hint } from "./kit/Hint";
 
 interface Props {
   /** What is about to be opened, for the sentence at the top. */
@@ -101,11 +102,11 @@ export function LaunchAskSheet({ title, backends, defaults, budget: startBudget,
           than the wheel + chips (an iPhone 17 is) Start was below the edge
           with nothing to scroll. */}
       <div className="sheet-scroll">
-      <div className="form-hint">
+      <Hint>
         {title} — {pickBackends ? "which binary and which model" : "which model"}{wheel ? " and effort" : ""} this session runs.
         Just this one: your new-session defaults don’t change, and everything else about the
         launch ({wheel ? "permission mode" : "effort, permission mode"}) still comes from them.
-      </div>
+      </Hint>
       <div className="form">
         <LaunchPicker backends={backends} defaults={defaults} nowLead="Starts on"
           value={{ backend, model, effort }}
@@ -123,9 +124,9 @@ export function LaunchAskSheet({ title, backends, defaults, budget: startBudget,
           <BudgetField initial={budget ?? startBudget ?? null} onChange={setBudget}
             calFor="A percent is converted from dollars at the window's measured rate once this session is running — until there is a fresh usage reading, nothing is held." />
         )}
-        <div className="form-hint">
+        <Hint>
           Closing this starts nothing — nothing is queued until you press Start.
-        </div>
+        </Hint>
       </div>
       </div>
       {/* Outside the scroller: Start is the verb the sheet exists for, and the
@@ -140,7 +141,7 @@ export function LaunchAskSheet({ title, backends, defaults, budget: startBudget,
               <RefreshCw size={14} /> Check again
             </button>
           )}
-          {asked && <div className="form-hint">Asked the desktop to look again — if the sentence above is still here, it is still not reachable. Start appears here by itself once it is.</div>}
+          {asked && <Hint>Asked the desktop to look again — if the sentence above is still here, it is still not reachable. Start appears here by itself once it is.</Hint>}
         </>
       ) : (
       <button className="send" onClick={() => {

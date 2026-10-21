@@ -467,3 +467,25 @@ Folding the CLI output stays folded: it does not reopen itself in a loop.
 - asked: 2026-10-19
 - shipped: 56451ee6
 
+### R-ui-113 · shipped
+Radio-button option groups show visible headings and full labels, with no text missing.
+- asked: 2026-10-19
+- shipped: 54ed1399
+
+### R-ui-114 · requested
+An on-screen banner can be dismissed by the user and stays gone.
+- asked: 2026-10-20
+
+### R-ui-115 · requested
+Dialogs offer a "don't show again" tickbox.
+- asked: 2026-10-20
+
+### R-ui-116 · requested
+A button on the phone clears the element marked at the top of the screen.
+- asked: 2026-10-20
+
+### R-ui-117 · shipped
+The VS Code extension logo looks clean and recognisable at small sizes, with transparent corners in the editor and Marketplace.
+- asked: 2026-10-20
+- shipped: 0b83f4d2
+

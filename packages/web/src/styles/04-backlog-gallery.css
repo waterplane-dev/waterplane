@@ -297,9 +297,6 @@
    takes off — it would otherwise float clear of the text it belongs to. */
 .bl-searchrow .bl-search-icon { left: 10px; }
 .bl-searchrow > .fchip { align-self: center; margin-right: -3px; }
-/* The bulk bars' rows (`BulkBars.tsx`, `clockDirectory.tsx`) still wear `.bl-filters`; their
-   `.key`s keep their numbers from reading as part of the label beside them. */
-.bl-filters .key { font-variant-numeric: tabular-nums; }
 /* The backlog's own bulk verbs (`backlog/BulkBars.tsx`): `.link-btn`s, no panel and no frame,
    on the left edge the chips above them start at (`.bl-fchips > .fchips` 6px + `.fchip` 3px).
    They were a `.key` each in an `.annot-tools` panel, which read as a second row of primary
@@ -310,9 +307,6 @@
 .sheet .bl-bulk .link-btn { min-height: 44px; margin: 0; padding: 0; font-variant-numeric: tabular-nums; }
 .bl-bulk > .act-cants { padding: var(--sp-10) 0; }
 .bl-bulk-bar > .form-hint { padding: var(--sp-8) var(--sp-8) var(--sp-2); }
-/* The inline disclosures under the repo bar — *how it works* · *on in N repos*.
-   They were two `.form` blocks in a column; they are one line of two links. */
-.bl-notelinks { display: flex; flex-wrap: wrap; gap: var(--sp-4) var(--sp-14); margin-top: var(--sp-4); }
 .bl-text-btn { background: none; border: none; padding: 0; margin: 0; font: inherit; color: inherit; text-align: left; width: 100%; cursor: pointer; }
 .bl-text-btn.open { -webkit-line-clamp: unset; }
 /* In a `.q-card` (the schedule sheet) the block it replaced was an

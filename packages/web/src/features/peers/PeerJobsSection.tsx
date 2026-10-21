@@ -14,7 +14,7 @@
 import { Link2, Terminal } from "lucide-react";
 import type { PeerJobLedgerRow, SessionInfo } from "@waterplane/shared";
 import { api } from "../../api";
-import { Empty, useRemoteResource } from "../../kit";
+import { Empty, useRemoteResource, Button, Row, RowTitle, RowSub, Hint } from "../../kit";
 import { activeHost } from "../../hosts";
 import { useNow } from "../../useNow";
 import { openPeerSession, pairableHosts } from "./actions";
@@ -34,7 +34,7 @@ export function PeerJobsSection({ sessions, onOpenSession }: {
 
   return (
     <div className="peer-jobs">
-      <div className="form-hint" style={{ marginTop: 10 }}><Link2 size={12} /> Peer jobs — work this desktop handed to another</div>
+      <Hint style={{ marginTop: 10 }}><Link2 size={12} /> Peer jobs — work this desktop handed to another</Hint>
       <Empty res={res} empty={rows.length === 0} thing="this desktop's peer jobs" noun="job list" />
       <div className="list">
         {rows.map((r) => {
@@ -43,26 +43,26 @@ export function PeerJobsSection({ sessions, onOpenSession }: {
           const tag = peerTagFacts({ peerWait: { peer: r.peer, jobId: r.jobId, state: r.state, since: r.since, ...(r.peerSessionId ? { peerSessionId: r.peerSessionId } : {}), ...(r.peerBase ? { peerBase: r.peerBase } : {}) } },
             pairableHosts(), activeHost()?.id ?? null, now);
           return (
-            <div key={r.jobId} className="row-wrap">
-              <div className="row grow">
-                <span className="row-title">{f.title}</span>
+            <Row key={r.jobId} kind="wrap">
+              <Row kind="grow">
+                <RowTitle>{f.title}</RowTitle>
                 <span className={`row-sub${f.bad ? " warn" : ""}`}>{f.state}</span>
-                {f.cost && <span className="row-sub">{f.cost}</span>}
-                {f.tokens && <span className="row-sub">{f.tokens}</span>}
-                {f.costNote && <span className="row-sub">{f.costNote}</span>}
-                {!f.cost && !f.tokens && <span className="row-sub">{r.peer} has not said what it cost{r.closed ? "" : " yet"}</span>}
-                {f.asker && <span className="row-sub">asked by {f.asker}</span>}
-                {f.detail && <span className="row-sub">{f.detail}</span>}
+                {f.cost && <RowSub>{f.cost}</RowSub>}
+                {f.tokens && <RowSub>{f.tokens}</RowSub>}
+                {f.costNote && <RowSub>{f.costNote}</RowSub>}
+                {!f.cost && !f.tokens && <RowSub>{r.peer} has not said what it cost{r.closed ? "" : " yet"}</RowSub>}
+                {f.asker && <RowSub>asked by {f.asker}</RowSub>}
+                {f.detail && <RowSub>{f.detail}</RowSub>}
                 <span className="act-acts">
                   {asker
-                    ? <button className="key" onClick={() => onOpenSession(asker.id)}><Terminal size={ICON} /> the asking session</button>
-                    : <span className="row-sub">the asking session is no longer open here</span>}
+                    ? <Button onClick={() => onOpenSession(asker.id)}><Terminal size={ICON} /> the asking session</Button>
+                    : <RowSub>the asking session is no longer open here</RowSub>}
                   {tag?.target
-                    ? <button className="key" title={tag.title} onClick={() => openPeerSession(tag, r.peer)}><Link2 size={ICON} /> {r.peerSessionId ? `its session on ${r.peer}` : `open ${r.peer}`}</button>
-                    : <span className="row-sub">{noHostText(r.peer)}</span>}
+                    ? <Button title={tag.title} onClick={() => openPeerSession(tag, r.peer)}><Link2 size={ICON} /> {r.peerSessionId ? `its session on ${r.peer}` : `open ${r.peer}`}</Button>
+                    : <RowSub>{noHostText(r.peer)}</RowSub>}
                 </span>
-              </div>
-            </div>
+              </Row>
+            </Row>
           );
         })}
       </div>

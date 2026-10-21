@@ -1,6 +1,7 @@
 import { WrapText } from "lucide-react";
 import { LS, lsBool, lsSetBool } from "./storage";
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
+import { Button } from "./kit/Button";
 
 /**
  * The text dump as LINES, each with its own tick box.
@@ -69,7 +70,7 @@ export const TextDumpLines = forwardRef<TextDumpHandle, { text: string }>(functi
       {ticked.size > 0 && (
         <div className="text-dump-ticked">
           <span>{ticked.size} of {lines.length} lines ticked — copy and quote use only these.</span>
-          <button className="key" onClick={() => setTicked(new Set())}>clear</button>
+          <Button onClick={() => setTicked(new Set())}>clear</Button>
         </div>
       )}
       <div ref={boxRef} className={`text-dump text-dump-lines mono${wrap ? "" : " nowrap"}`}>

@@ -20,7 +20,7 @@
  * Degrades to null: no box in either read, a box holding typed words, a
  * placeholder. Never a guess.
  */
-import { CLAUDE_COMPOSER, composerHeld } from "./echo.js";
+import { CLAUDE_COMPOSER, composerHeld } from "./composer.js";
 
 /** Longer than any proposal measured (they are one short line); a cap so a
  *  misread screen can never publish a paragraph as one tap. */

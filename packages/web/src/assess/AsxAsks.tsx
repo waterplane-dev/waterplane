@@ -4,7 +4,7 @@
  */
 import { ASSESS_NAME_SKIP, ASSESS_NAME_WRITE, ASSESS_PIN_FREE, ASSESS_PIN_KEEP, assessNameNote, assessNameQuestion, assessPinNote, assessPinQuestion } from "@waterplane/shared";
 import { track } from "../usage";
-import { RadioRows } from "../kit";
+import { RadioRows, Hint } from "../kit";
 import type { AssessModel } from "./useAssessSheet";
 
 export function AsxAsks({ m }: { m: AssessModel }) {
@@ -53,7 +53,7 @@ export function AsxAsks({ m }: { m: AssessModel }) {
       // drawn only where its question can arise.
       <div className="asr-asks">
         {rankedN > 0 && (
-          <div className="form-hint asr-pin">
+          <Hint className="asr-pin">
             {assessPinQuestion(rankedN)}
             {/* `.asr-answer`, never the annotator's `.annot-tools tri` strip it
                 borrowed: that class is `overflow: visible` over `.key`s that are
@@ -69,7 +69,7 @@ export function AsxAsks({ m }: { m: AssessModel }) {
                 onChange={(k) => { if (k === "keep") { track("action:assess.pin"); setPinRanks(true); } else { track("action:assess.pin.free"); setPinRanks(false); } }} />
             </div>
             <div>{assessPinNote(pinRanks)}</div>
-          </div>
+          </Hint>
         )}
         {/* **Do the run's titles go on the rows?** Above the button rather than
             behind it, for the pin question's reason: it is half of what the tap
@@ -79,7 +79,7 @@ export function AsxAsks({ m }: { m: AssessModel }) {
             is not, and a title a model wrote is also the one string on the row
             nobody checked. */}
         {nameCount > 0 && (
-          <div className="form-hint asr-pin">
+          <Hint className="asr-pin">
             {assessNameQuestion(nameCount)}
             <div className="asr-answer">
               <RadioRows label="the run's titles" value={writeNames ? "write" : "skip"}
@@ -87,7 +87,7 @@ export function AsxAsks({ m }: { m: AssessModel }) {
                 onChange={(k) => { if (k === "write") { track("action:assess.name"); setWriteNames(true); } else { track("action:assess.name.skip"); setWriteNames(false); } }} />
             </div>
             <div>{assessNameNote(writeNames)}</div>
-          </div>
+          </Hint>
         )}
       </div>
   ) : null;

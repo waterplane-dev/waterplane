@@ -6,6 +6,9 @@ import { track } from "./usage";
 import { fmtSize, when } from "./format";
 import { Explain } from "./Explain";
 import { SetSwitch } from "./SettingsKit";
+import { Button } from "./kit/Button";
+import { Row, RowTitle, RowSub } from "./kit/Row";
+import { Hint } from "./kit/Hint";
 
 /**
  * What becomes of what a build produces — the two switches, and the number.
@@ -58,22 +61,22 @@ export function ArtifactPolicyRow({ policy, online, onSave }: {
             <div className="ap-keep">
               keep
               {policy.keep > 1 && (
-                <button className="key" aria-label="keep one fewer" title="keep one fewer build of each artifact"
-                  onClick={() => set({ keep: policy.keep - 1 })}><Minus size={14} /></button>
+                <Button aria-label="keep one fewer" title="keep one fewer build of each artifact"
+                  onClick={() => set({ keep: policy.keep - 1 })}><Minus size={14} /></Button>
               )}
               <span className="ap-keep-n" aria-live="polite">{policy.keep}</span>
               {policy.keep < MAX_ARTIFACT_KEEP && (
-                <button className="key" aria-label="keep one more" title="keep one more build of each artifact"
-                  onClick={() => set({ keep: policy.keep + 1 })}><Plus size={14} /></button>
+                <Button aria-label="keep one more" title="keep one more build of each artifact"
+                  onClick={() => set({ keep: policy.keep + 1 })}><Plus size={14} /></Button>
               )}
             </div>
           )}
         </>
       ) : (
-        <div className="form-hint">
+        <Hint>
           <div><Package size={13} style={{ verticalAlign: "-2px" }} /> {sentence}</div>
           <div><CloudOff size={13} style={{ verticalAlign: "-2px" }} /> this is this device's copy — changing it needs the desktop, where the policy lives with the project.</div>
-        </div>
+        </Hint>
       )}
     </div>
   );
@@ -94,9 +97,9 @@ export function ArtifactRow({ a, repoDir, repoName, onDownload }: {
   onDownload: (a: BuildArtifact) => void;
 }) {
   return (
-    <div className="row-wrap">
-      <button className="row grow" title={a.relPath} onClick={() => { track("action:build.artifact"); onDownload(a); }}>
-        <span className="row-title"><Download size={14} /> {a.name}</span>
+    <Row kind="wrap">
+      <Row as="button" kind="grow" title={a.relPath} onClick={() => { track("action:build.artifact"); onDownload(a); }}>
+        <RowTitle><Download size={14} /> {a.name}</RowTitle>
         {/* A build whose outputs were already current writes no file — gradle
             says UP-TO-DATE and the APK it would have produced is right there,
             older than the run. The host offers those anyway rather than
@@ -106,10 +109,10 @@ export function ArtifactRow({ a, repoDir, repoName, onDownload }: {
             the entire point: "unchanged by this run" says the bytes predate the
             run without saying by how much, and a phone showing two same-sized
             APKs has nothing else to separate them. */}
-        <span className="row-sub">{fmtSize(a.size)}{a.mtime ? ` · ${when(a.mtime)}` : ""}{a.stale ? " · unchanged by this run (already up to date)" : ""}</span>
-      </button>
+        <RowSub>{fmtSize(a.size)}{a.mtime ? ` · ${when(a.mtime)}` : ""}{a.stale ? " · unchanged by this run (already up to date)" : ""}</RowSub>
+      </Row>
       <DownloadButton compact trackId="action:build.artifact"
         target={{ repoId: a.repoId, relPath: a.relPath, name: a.name, size: a.size, mtime: a.mtime, repoDir, repoName }} />
-    </div>
+    </Row>
   );
 }

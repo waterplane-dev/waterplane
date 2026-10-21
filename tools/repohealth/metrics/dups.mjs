@@ -36,7 +36,7 @@
  * the tree writes any more (`measureDeadExports`). Neither is a judgment and
  * neither applies itself: a pair is two block ids, a dead export is a sorted
  * list of `path#name`, and what the narrative is allowed to say about either
- * lives in `narrate.mjs`.
+ * lives in `events.mjs`.
  *
  * ── Why whole-file granularity is banned ────────────────────────────────────
  *

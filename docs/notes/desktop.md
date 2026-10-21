@@ -117,6 +117,16 @@ needs the Mac itself or another remote-control app. Control is arbitrary input o
 token never reaches a stream (`/api/peer/*` only), and no job, schedule or peer opens one. Secure input
 (password fields, the login window) silently swallows synthetic keys; the view must never say "typed".
 
+**Protected typing.** The typing panel's *protected* switch is the compose bar's masked field for the
+desktop: an `<input type=password>` whose words live in `state.ts`'s `secret` store (memory only, never
+the draft or `extStorage`, cleared by a send that went out and by closing the view). The fillers beside it
+come from the SDK's `secretFillers` — the same `SecretFillerDef` buttons the compose bar shows, bound by
+`core/extensionPoints.ts`; this extension names none of them. A filler that picks in a sheet of its own
+replaces this view (one overlay); its value lands through `fillSecret`, which checks the ask (`seq`) is
+still the one asked from and reopens the view with the panel open. Nothing is typed until the person taps
+type. Unverified: whether macOS secure input takes the helper's Unicode-string `text` events in a browser
+password field.
+
 ## Moving a zoomed view with a mouse
 
 Fingers move a zoomed view with three of them (two mean scroll), and View only pans with one. A

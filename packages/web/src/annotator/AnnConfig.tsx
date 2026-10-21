@@ -12,6 +12,7 @@
 import { ChevronDown, ChevronUp, X } from "lucide-react";
 import { ANN_CONTROLS, DEFAULT_LAYOUT, isDefaultLayout, moveControl, toggleHidden, type AnnPlace } from "../annLayout";
 import type { AnnModel } from "./useAnnotator";
+import { Button } from "../kit/Button";
 
 const PLACES: { v: AnnPlace; label: string }[] = [
   { v: "auto", label: "auto" },
@@ -27,13 +28,13 @@ export function AnnConfig({ m }: { m: AnnModel }) {
     <div className="annot-config" role="dialog" aria-label="customize the toolbar">
       <div className="annot-config-head">
         <span>Toolbar</span>
-        <button className="key" onClick={() => setConfigOpen(false)} aria-label="close the toolbar settings"><X size={16} /> done</button>
+        <Button onClick={() => setConfigOpen(false)} aria-label="close the toolbar settings"><X size={16} /> done</Button>
       </div>
       <div className="annot-config-row">
         <span className="annot-config-label">position</span>
         {PLACES.map((p) => (
-          <button key={p.v} className={`key ${layout.place === p.v ? "active" : ""}`} aria-pressed={layout.place === p.v}
-            onClick={() => setLayout({ ...layout, place: p.v })}>{p.label}</button>
+          <Button key={p.v} className={layout.place === p.v ? "active" : ""} aria-pressed={layout.place === p.v}
+            onClick={() => setLayout({ ...layout, place: p.v })}>{p.label}</Button>
         ))}
       </div>
       <div className="annot-config-hint">
@@ -44,15 +45,15 @@ export function AnnConfig({ m }: { m: AnnModel }) {
           const shown = !layout.hidden.includes(id);
           return (
             <div key={id} className={`annot-config-row ${shown ? "" : "off"}`}>
-              <button className={`key annot-config-toggle ${shown ? "active" : ""}`} aria-pressed={shown}
-                onClick={() => setLayout(toggleHidden(layout, id))}>{shown ? "shown" : "hidden"}</button>
+              <Button className={`annot-config-toggle ${shown ? "active" : ""}`} aria-pressed={shown}
+                onClick={() => setLayout(toggleHidden(layout, id))}>{shown ? "shown" : "hidden"}</Button>
               <span className="annot-config-label">{labelOf(id)}</span>
               {/* At either end the arrow is absent, not dimmed: there is nowhere to go. */}
               {i > 0 ? (
-                <button className="key" onClick={() => setLayout(moveControl(layout, id, -1))} aria-label={`move ${labelOf(id)} up`}><ChevronUp size={16} /></button>
+                <Button onClick={() => setLayout(moveControl(layout, id, -1))} aria-label={`move ${labelOf(id)} up`}><ChevronUp size={16} /></Button>
               ) : <span className="annot-config-gap" />}
               {i < last ? (
-                <button className="key" onClick={() => setLayout(moveControl(layout, id, 1))} aria-label={`move ${labelOf(id)} down`}><ChevronDown size={16} /></button>
+                <Button onClick={() => setLayout(moveControl(layout, id, 1))} aria-label={`move ${labelOf(id)} down`}><ChevronDown size={16} /></Button>
               ) : <span className="annot-config-gap" />}
             </div>
           );
@@ -60,7 +61,7 @@ export function AnnConfig({ m }: { m: AnnModel }) {
       </div>
       {!isDefaultLayout(layout) && (
         <div className="annot-config-row">
-          <button className="key" onClick={() => setLayout({ ...DEFAULT_LAYOUT, order: DEFAULT_LAYOUT.order.slice() })}>reset to default</button>
+          <Button onClick={() => setLayout({ ...DEFAULT_LAYOUT, order: DEFAULT_LAYOUT.order.slice() })}>reset to default</Button>
         </div>
       )}
     </div>

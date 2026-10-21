@@ -28,3 +28,8 @@ The app never says there is no waterplane server; it says the user's desktop is 
 - asked: 2026-10-15
 - shipped: 72097f48
 
+### R-content-007 · shipped
+The waterplane.dev page links prominently to the GitHub repository and states clearly that the product is fully open source.
+- asked: 2026-10-20
+- shipped: 9d23550a
+

@@ -30,7 +30,8 @@ import { detectPrompt, navToSubmit, dialogEvidence, mergeBox, sameBox, samePromp
 import { detectContext } from "../dist/context.js";
 import { detectLimitText } from "../dist/limit.js";
 import { startsNoTurn, isLocalCommand } from "../dist/slash.js";
-import { composerEcho, composerSpans, composerText, pastedNewlines } from "../dist/echo.js";
+import { pastedNewlines } from "../dist/echo.js";
+import { composerEcho, composerSpans, composerText } from "../dist/composer.js";
 
 const DIR = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "screens");
 const screen = (name) => readFileSync(join(DIR, `${name}.txt`), "utf8");

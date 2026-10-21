@@ -9,6 +9,7 @@ import { VERDICT_TAG } from "./asxConst";
 import { RowCard } from "./AsxRowCard";
 import { MergeCard } from "./AsxMergeCard";
 import type { AssessModel } from "./useAssessSheet";
+import { Button } from "../kit/Button";
 
 export function AsxStrips({ m }: { m: AssessModel }) {
   const { p, pickedRows, setPickedRows, pickedMerges, setPickedMerges, rejected, flipped, setFlipped, groups, itemsById, toggleRow, toggleReject, bulkGroup, acceptMerge } = m;
@@ -34,15 +35,15 @@ export function AsxStrips({ m }: { m: AssessModel }) {
                   merged (the decision is on the card), unclear (nothing was
                   decided), a strip of pad notes. Never a dead one. */}
               {bulk ? (
-                <button className="key" title={bulk.title} onClick={() => bulkGroup(g, bulk)}>
+                <Button title={bulk.title} onClick={() => bulkGroup(g, bulk)}>
                   <CheckCheck size={14} /> {bulk.label}
-                </button>
+                </Button>
               ) : null}
               {g.fixedOpen ? null : (
-                <button className="key act-group-more" title={open ? "collapse this" : "show these"}
+                <Button className="act-group-more" title={open ? "collapse this" : "show these"}
                   onClick={() => { track(`action:assess.strip.${g.verdict}`); setFlipped((s) => { const n = new Set(s); if (!n.delete(g.verdict)) n.add(g.verdict); return n; }); }}>
                   {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                </button>
+                </Button>
               )}
             </div>
             {/* **What accepting anything on this strip DOES**, said once per

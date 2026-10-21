@@ -21,6 +21,7 @@ import {
   cpuSplitText, diskLow, diskSize, diskText, diskUsedPct, loadText, memNote, memSlices, procFoldText,
   rssSumText, slowAgeSec, swapText, tempText, uptimeText,
 } from "./sysStat";
+import { Button } from "./kit/Button";
 
 /**
  * **This desktop, in full** — the tap destination for every reading on the
@@ -628,7 +629,7 @@ export function LocalRtSheet({ onClose, focus, onOpenSession }: Props) {
               {sys?.thermalFix?.map((cmd) => (
                 <div className="cmd-copy" key={cmd}>
                   <code>{cmd}</code>
-                  <button className="key" aria-label="copy command" onClick={async () => showToast(await copyText(cmd) ? "command copied" : "copy failed")}><Copy size={16} /></button>
+                  <Button aria-label="copy command" onClick={async () => showToast(await copyText(cmd) ? "command copied" : "copy failed")}><Copy size={16} /></Button>
                 </div>
               ))}
             </>

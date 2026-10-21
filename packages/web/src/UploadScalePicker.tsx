@@ -5,6 +5,7 @@ import {
   type UploadScale,
 } from "./uploadScale";
 import { track } from "./usage";
+import { Button } from "./kit/Button";
 
 /**
  * How big an image goes UP. Rendered in the annotator (right above the send
@@ -55,7 +56,7 @@ export function UploadScalePicker({ onChange, compact }: { onChange?: (v: Upload
         <Gauge size={12} /> upload size
       </span>
       {opts.map((o) => (
-        <button key={String(o.v)} className={`key ${value === o.v ? "active" : ""}`} onClick={() => pick(o.v)}>{o.label}</button>
+        <Button key={String(o.v)} className={value === o.v ? "active" : ""} onClick={() => pick(o.v)}>{o.label}</Button>
       ))}
       <span className="upscale-note">{note}</span>
     </div>

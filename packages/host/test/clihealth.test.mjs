@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CliHealthStore, noteHealth, setCliHealth } from "../dist/clihealth.js";
+import { CliHealthStore, devSource, noteHealth, setCliHealth } from "../dist/clihealth.js";
 import { detectPrompt, dialogEvidence, hasDialogFooter, isDialogFooterRow } from "../dist/prompt.js";
 
 const root = () => mkdtempSync(join(tmpdir(), "waterplane-health-"));
@@ -354,4 +354,22 @@ test("the sample is anchored on the footer ROW, so it holds the box and not the 
   assert.match(s, /Enter to confirm/, "the line that stopped matching");
   assert.match(s, /1\) Yes/, "and the rows it refused");
   assert.ok(!s.includes("/Users/somebody"), "with the account name redacted out of it");
+});
+
+// "Inspect in a session" is a developer's button: only a host running from a
+// checkout with its sources, under the root, names one.
+test("devSource: a checkout under the root is named, a packaged install never", () => {
+  const top = root();
+  const repo = join(top, "waterplane");
+  mkdirSync(join(repo, ".git"), { recursive: true });
+  mkdirSync(join(repo, "packages/host/src"), { recursive: true });
+  writeFileSync(join(repo, "packages/host/src/clihealth.ts"), "");
+  const here = join(repo, "packages/host/dist");
+  mkdirSync(here, { recursive: true });
+  const src = devSource(top, here);
+  assert.ok(src && src.repo.endsWith(join("waterplane")), "a checkout under the root is named");
+  assert.equal(devSource(root(), here), null, "a checkout outside the root is not");
+  const npm = join(top, "node_modules/waterplane/packages/host/dist");
+  mkdirSync(npm, { recursive: true });
+  assert.equal(devSource(top, npm), null, "an npm install has no .git and no sources");
 });

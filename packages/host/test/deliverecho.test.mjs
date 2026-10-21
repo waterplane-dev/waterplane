@@ -408,7 +408,7 @@ test("two composers that do not agree are not a composer this app may act on", a
 /**
  * **The rescue the composer's own geometry made necessary.**
  *
- * The composer is a VIEWPORT (`echo.ts`'s `scrolled`): it is sized off the
+ * The composer is a VIEWPORT (`composer.ts`'s `scrolled`): it is sized off the
  * terminal's height and the text scrolls inside it, so a long single-line
  * prompt — which is what a phone produces — draws only its TAIL, and the head
  * the probe is cut from is off the top of the box. Measured on the live host

@@ -184,7 +184,7 @@ test("a box the tear pushed far up the replay is still the box", async (t) => {
   // there and invisible here: the anchored rule saw no box, the fallback slice
   // saw no text, and the delivery settled `unknown` (or, with a log that could
   // not find it, `absent` — which authorises sending it again) while the words
-  // sat in the composer. Both sides share `echo.ts`'s `ROW_WINDOW` now.
+  // sat in the composer. Both sides share `composer.ts`'s `ROW_WINDOW` now.
   //
   // The fake honours `lines` the way the real `screenText` does, because that
   // is the entire subject of this test.

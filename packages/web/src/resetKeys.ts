@@ -15,7 +15,7 @@ import { LS } from "./storage.ts";
  */
 export const UI_RESET_KEYS: readonly (keyof typeof LS)[] = [
   "theme", "textScale", "iconScale", "termZoom", "readerZoom", "scrollZoom", "gitZoom", "textDumpWrap",
-  "sessionTabs", "sessionTabsCount", "sessionTabsOrder", "sessionTabsLimit", "netPulse", "localRtBar", "unfoldToEnd",
+  "sessionTabs", "sessionTabsCount", "sessionTabsOrder", "sessionTabsLimit", "sessionTabsSync", "netPulse", "localRtBar", "unfoldToEnd",
   "typingRoom", "closeKbOnSend", "shortcutCard", "busySend", "btwToCli", "toolbarOpen", "readMode", "cliMode", "termCostOpen", "termCornerPos",
   "hintChip", "annHintHidden",
 ];

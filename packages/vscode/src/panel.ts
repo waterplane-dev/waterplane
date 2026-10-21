@@ -46,7 +46,7 @@ export class Panel implements vscode.Disposable {
     this.dist = vscode.Uri.joinPath(extensionUri, "dist");
   }
 
-  private view: TabId = "session";
+  private view: TabId = "all";
 
   get open(): boolean { return this.panel !== null; }
   get visible(): boolean { return this.panel?.visible ?? false; }

@@ -27,6 +27,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { warnLongFiles } from "./longfiles.mjs";
+import ts from "typescript";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const SRC = join(ROOT, "packages", "web", "src");
@@ -637,7 +638,7 @@ const TV_SPLIT_FILES = {
   "transcript/TvOutline.tsx": 40,
   "transcript/TvStrips.tsx": 100,
   "transcript/TvTail.tsx": 110,
-  "transcript/TvTurn.tsx": 170,
+  "transcript/TvTurn.tsx": 171,
   "transcript/tvLive.ts": 90,
   "transcript/tvParts.tsx": 85,
   "transcript/readThrough.ts": 30,
@@ -684,7 +685,7 @@ const ACTIVITY_SPLIT_FILES = {
   "activity/ActivityGroupCard.tsx": 90,
   "activity/ActivityHead.tsx": 65,
   "activity/ActivityList.tsx": 35,
-  "activity/ActivityNotices.tsx": 45,
+  "activity/ActivityNotices.tsx": 46,
   "activity/ActivityRowCard.tsx": 330,
   "activity/activityBucket.ts": 35,
   "activity/activityBulk.ts": 125,
@@ -743,7 +744,7 @@ const ASSESS_SPLIT_FILES = {
   "assess/arowsDisplay.ts": 130,
   "assess/arowsGroups.ts": 295,
   "assess/arowsRun.ts": 190,
-  "assess/AsxActions.tsx": 70,
+  "assess/AsxActions.tsx": 71,
   "assess/AsxAsks.tsx": 95,
   "assess/AsxFooter.tsx": 80,
   "assess/AsxHead.tsx": 45,
@@ -879,6 +880,7 @@ test("every file in pull/ and link/ is listed once, under its cap", () => {
 // primitives both share in `kit/chart/chart*.ts`. Lower in every commit that moves code out.
 const CHART_FACADES = { "contextPlot.ts": 62, "kit/chart/statsPlot.ts": 46 };
 const CHART_SPLIT_FILES = {
+  "contextPlot/cplotAgentTop.ts": 70,
   "contextPlot/cplotAgents.ts": 180,
   "contextPlot/cplotCompactSet.ts": 45,
   "contextPlot/cplotAxis.ts": 275,
@@ -931,7 +933,7 @@ const ANNOTATOR_SPLIT_FILES = {
   "annotator/AnnConfig.tsx": 75,
   "annotator/AnnHeadKeys.tsx": 45,
   "annotator/AnnPrompt.tsx": 40,
-  "annotator/AnnSendBar.tsx": 55,
+  "annotator/AnnSendBar.tsx": 56,
   "annotator/AnnStage.tsx": 48,
   "annotator/AnnTextOnly.tsx": 45,
   "annotator/AnnToolbar.tsx": 105,
@@ -997,16 +999,16 @@ const WEBCLIENT_SPLIT_FILES = {
   "webapi/webapiRoot.ts": 20,
   "webapi/webapiSessions.ts": 105,
   "webapi/webapiStats.ts": 85,
-  "webapi/webapiTree.ts": 55,
+  "webapi/webapiTree.ts": 100, // +bookmark set/remove and the archived reader's two reads
   "webapi/webapiTypes.ts": 145,
   "gallery/DocIcon.tsx": 30,
   "gallery/GalleryBar.tsx": 105, // where/what moved to GalleryFilters
   "gallery/GalleryFilters.tsx": 65,
   "gallery/GalleryPickBar.tsx": 30,
-  "gallery/GalleryGrid.tsx": 104, // +the empty grid under a time cut, with its way out; +the combine pick on a tile
+  "gallery/GalleryGrid.tsx": 105, // +the empty grid under a time cut, with its way out; +the combine pick on a tile
   "gallery/GallerySessionPick.tsx": 65,
   "gallery/GalleryTiles.tsx": 60,
-  "gallery/GalleryViewer.tsx": 150,
+  "gallery/GalleryViewer.tsx": 151,
   "gallery/galleryCuts.ts": 20,
   "gallery/galleryPick.ts": 20,
   "gallery/galleryTypes.ts": 140,
@@ -1050,4 +1052,198 @@ test("every file in webapi/, gallery/ and repoHealthWords/ is listed once, under
     if (n > max) bad.push(`${rel}: ${n} lines, over its ${max} cap`);
   }
   assert.deepEqual(bad, []);
+});
+
+/** `.key` buttons still hand-written outside kit/ (kit/Button.tsx is the one). The
+ *  leftovers are of two kinds (docs/plans/ui-kit-components.md, P1): sites with a DOM attribute
+ *  before className (Button writes className first), and `key${c ? " x" : ""}` templates with no
+ *  space after `key` (Button would render "key  x"). A later package may move them. Lower it,
+ *  never raise it. */
+const MAX_RAW_KEY_BUTTONS = 36;
+
+/** The STRING text of a className initializer (identifiers are never read, so a variable that
+ *  happens to be called `key` is not the class). */
+function classStrings(node, out = []) {
+  if (!node) return out;
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) out.push(node.text);
+  else if (ts.isTemplateExpression(node)) {
+    out.push(node.head.text);
+    for (const s of node.templateSpans) { out.push(s.literal.text); classStrings(s.expression, out); }
+  } else if (ts.isJsxExpression(node) || ts.isParenthesizedExpression(node)) classStrings(node.expression, out);
+  else if (ts.isConditionalExpression(node)) { classStrings(node.whenTrue, out); classStrings(node.whenFalse, out); }
+  else if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) { classStrings(node.left, out); classStrings(node.right, out); }
+  return out;
+}
+
+function jsxTags(rel, text, tagOf) {
+  const sf = ts.createSourceFile(rel, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const found = [];
+  const visit = (n) => {
+    if ((ts.isJsxOpeningElement(n) || ts.isJsxSelfClosingElement(n)) && tagOf(n.tagName.getText(sf))) {
+      const a = n.attributes.properties.find((p) => ts.isJsxAttribute(p) && p.name.getText(sf) === "className");
+      found.push({ at: `${rel}:${sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1}`, strings: a ? classStrings(a.initializer) : [],
+        static: !!a && (a.initializer && (ts.isStringLiteral(a.initializer) || (ts.isJsxExpression(a.initializer) && a.initializer.expression && (ts.isStringLiteral(a.initializer.expression) || ts.isNoSubstitutionTemplateLiteral(a.initializer.expression))))) });
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(sf);
+  return found;
+}
+
+function webTsx() {
+  return readdirSync(SRC, { recursive: true }).map((f) => f.split("\\").join("/")).filter((f) => f.endsWith(".tsx"));
+}
+
+test(`at most ${MAX_RAW_KEY_BUTTONS} hand-written <button className="key …"> outside kit/ (use kit <Button>)`, () => {
+  const raw = [];
+  for (const rel of webTsx()) {
+    if (rel.startsWith("kit/")) continue;
+    for (const b of jsxTags(rel, readFileSync(join(SRC, rel), "utf8"), (t) => t === "button")) {
+      if (b.strings.some((s) => /(^|\s)key(\s|$)/.test(s))) raw.push(b.at);
+    }
+  }
+  assert.ok(raw.length <= MAX_RAW_KEY_BUTTONS,
+    `${raw.length} raw .key buttons, over the ${MAX_RAW_KEY_BUTTONS} ratchet. Use <Button> from kit/ (variant="primary"|"danger").\n${raw.join("\n")}`);
+  if (raw.length < MAX_RAW_KEY_BUTTONS) console.log(`# ${raw.length} raw .key buttons — lower MAX_RAW_KEY_BUTTONS in tools/webshape.test.mjs to lock that in`);
+});
+
+/** Same ratchet over the in-repo extensions' web code (every packages/extensions/<name>/web, found by
+ *  reading the directory — a checkout may hold more or fewer extensions than the public mirror, so the
+ *  count can only ever be lower there). What is left: `key${c ? " x" : ""}` templates with no space
+ *  after `key`, whole-string ternaries (`c ? "key active" : "key"`), `key` on a button that also
+ *  carries `type=` first, and a `ref` + `style` before className. Lower it, never raise it. */
+const MAX_RAW_KEY_BUTTONS_EXT = 48;
+
+function extWebTsx() {
+  const dir = join(ROOT, "packages", "extensions");
+  const out = [];
+  for (const ext of readdirSync(dir)) {
+    const web = join(dir, ext, "web");
+    if (!existsSync(web)) continue;
+    for (const f of readdirSync(web, { recursive: true })) {
+      const rel = f.split("\\").join("/");
+      if (rel.endsWith(".tsx") && !rel.includes("node_modules")) out.push(join(web, rel));
+    }
+  }
+  return out;
+}
+
+test(`at most ${MAX_RAW_KEY_BUTTONS_EXT} hand-written <button className="key …"> in extensions (use kit <Button>)`, () => {
+  const raw = [];
+  for (const file of extWebTsx()) {
+    for (const b of jsxTags(file.slice(ROOT.length + 1), readFileSync(file, "utf8"), (t) => t === "button")) {
+      if (b.strings.some((s) => /(^|\s)key(\s|$)/.test(s))) raw.push(b.at);
+    }
+  }
+  assert.ok(raw.length <= MAX_RAW_KEY_BUTTONS_EXT,
+    `${raw.length} raw .key buttons in extensions, over the ${MAX_RAW_KEY_BUTTONS_EXT} ratchet. Use <Button> from @waterplane/kit.\n${raw.join("\n")}`);
+  if (raw.length < MAX_RAW_KEY_BUTTONS_EXT) console.log(`# ${raw.length} raw .key buttons in extensions — lower MAX_RAW_KEY_BUTTONS_EXT in tools/webshape.test.mjs to lock that in`);
+});
+
+/** `row-title` / `row-sub` elements still hand-written outside kit/ (kit/Row.tsx is the one:
+ *  `RowTitle`, `RowSub`, and `Row` for the wrapper). What is left (docs/plans/ui-kit-components.md,
+ *  P3): a `<button>` that is itself the part, `row-sub${c ? " x" : ""}` templates with no space
+ *  after the class (RowSub would render two), and a file at its line cap with no kit import.
+ *  Lower it, never raise it. */
+const MAX_RAW_ROW_PARTS = 10;
+
+test(`at most ${MAX_RAW_ROW_PARTS} hand-written row-title / row-sub elements outside kit/ (use kit RowTitle / RowSub)`, () => {
+  const raw = [];
+  for (const rel of webTsx()) {
+    if (rel.startsWith("kit/")) continue;
+    for (const b of jsxTags(rel, readFileSync(join(SRC, rel), "utf8"), (t) => t !== "RowTitle" && t !== "RowSub")) {
+      if (b.strings.some((s) => /(^|\s)row-(title|sub)(\s|$)/.test(s))) raw.push(b.at);
+    }
+  }
+  assert.ok(raw.length <= MAX_RAW_ROW_PARTS,
+    `${raw.length} raw row-title/row-sub elements, over the ${MAX_RAW_ROW_PARTS} ratchet. Use <RowTitle> / <RowSub> from kit/Row.\n${raw.join("\n")}`);
+  if (raw.length < MAX_RAW_ROW_PARTS) console.log(`# ${raw.length} raw row-title/row-sub elements — lower MAX_RAW_ROW_PARTS in tools/webshape.test.mjs to lock that in`);
+});
+
+/** Hand-written `set-note` / `set-row` elements outside SettingsKit.tsx, in the phone client and in
+ *  the in-repo extensions' web code. What is left is deliberate: the `div.set-note` whose children
+ *  are a bare expression with no guard (SetNote renders nothing for an empty one, the raw div drew
+ *  an empty box), `<span>`/`<p>`/`<summary>` notes (SetNote is a div), notes that carry a `style`,
+ *  a second class (`warn`, `mono`, `nh-saved`, ...) or `role`, the boot screens (main, AuthGate,
+ *  PassiveScreen: they load before the settings kit), the extension rows, and every `set-row` --
+ *  a catalogued row is SetSwitch/SetChoice/... with an id and counts toward search, whereas these
+ *  are controls laid out inside one sheet. Lower it, never raise it. */
+const MAX_RAW_SET_PARTS = 166;
+
+test(`at most ${MAX_RAW_SET_PARTS} hand-written set-note / set-row elements outside SettingsKit (use SetNote / SetWarn)`, () => {
+  const raw = [];
+  const files = [];
+  for (const rel of webTsx()) if (rel !== "SettingsKit.tsx") files.push([rel, join(SRC, rel)]);
+  const EXT = join(ROOT, "packages", "extensions");
+  for (const e of readdirSync(EXT)) {
+    const web = join(EXT, e, "web");
+    if (!existsSync(web)) continue;
+    for (const f of readdirSync(web, { recursive: true })) if (String(f).endsWith(".tsx")) files.push([`extensions/${e}/web/${f}`, join(web, String(f))]);
+  }
+  for (const [rel, abs] of files) {
+    for (const b of jsxTags(rel, readFileSync(abs, "utf8"), () => true)) {
+      if (b.strings.some((s) => /(^|\s)set-(note|row)(\s|$)/.test(s))) raw.push(b.at);
+    }
+  }
+  assert.ok(raw.length <= MAX_RAW_SET_PARTS,
+    `${raw.length} raw set-note/set-row elements, over the ${MAX_RAW_SET_PARTS} ratchet. Use <SetNote> / <SetWarn> from SettingsKit.\n${raw.join("\n")}`);
+  if (raw.length < MAX_RAW_SET_PARTS) console.log(`# ${raw.length} raw set-note/set-row elements -- lower MAX_RAW_SET_PARTS in tools/webshape.test.mjs to lock that in`);
+});
+
+/** Every `.tsx` the phone client or an in-repo extension's web code holds, outside kit/ (`[rel, abs]`). */
+function allWebTsx() {
+  const files = [];
+  for (const rel of webTsx()) if (!rel.startsWith("kit/")) files.push([rel, join(SRC, rel)]);
+  const EXT = join(ROOT, "packages", "extensions");
+  for (const e of readdirSync(EXT)) {
+    const web = join(EXT, e, "web");
+    if (!existsSync(web)) continue;
+    for (const f of readdirSync(web, { recursive: true })) if (String(f).endsWith(".tsx")) files.push([`extensions/${e}/web/${f}`, join(web, String(f))]);
+  }
+  return files;
+}
+
+function rawWith(token, kitName) {
+  const raw = [];
+  const re = new RegExp(`(^|\\s)${token}(\\s|$)`);
+  for (const [rel, abs] of allWebTsx()) {
+    for (const b of jsxTags(rel, readFileSync(abs, "utf8"), (t) => t !== kitName)) {
+      if (b.strings.some((s) => re.test(s))) raw.push(b.at);
+    }
+  }
+  return raw;
+}
+
+/** `form-hint` elements still hand-written outside kit/ (kit/Hint.tsx is the one). What is left
+ *  (docs/plans/ui-kit-components.md, P5): a tag other than div/span (label, li, summary, button),
+ *  `Unavailable`'s own className, a whole-string ternary (`c ? "form-hint" : "x-warn"`), the class
+ *  after another one (`mono form-hint`), and a DOM attribute before `className`. Lower it, never raise it. */
+const MAX_RAW_FORM_HINT = 30;
+
+test(`at most ${MAX_RAW_FORM_HINT} hand-written form-hint elements outside kit/ (use kit Hint)`, () => {
+  const raw = rawWith("form-hint", "Hint");
+  assert.ok(raw.length <= MAX_RAW_FORM_HINT,
+    `${raw.length} raw form-hint elements, over the ${MAX_RAW_FORM_HINT} ratchet. Use <Hint tone?> from kit/Hint.\n${raw.join("\n")}`);
+  if (raw.length < MAX_RAW_FORM_HINT) console.log(`# ${raw.length} raw form-hint elements -- lower MAX_RAW_FORM_HINT in tools/webshape.test.mjs to lock that in`);
+});
+
+/** `tag` chips still hand-written outside kit/ (kit/Tag.tsx is the one). What is left: a `<button>`
+ *  that is the chip, and a DOM attribute before `className`. Lower it, never raise it. */
+const MAX_RAW_TAG = 1;
+
+test(`at most ${MAX_RAW_TAG} hand-written tag chips outside kit/ (use kit Tag)`, () => {
+  const raw = rawWith("tag", "Tag");
+  assert.ok(raw.length <= MAX_RAW_TAG,
+    `${raw.length} raw tag chips, over the ${MAX_RAW_TAG} ratchet. Use <Tag tone?> from kit/Tag.\n${raw.join("\n")}`);
+  if (raw.length < MAX_RAW_TAG) console.log(`# ${raw.length} raw tag chips -- lower MAX_RAW_TAG in tools/webshape.test.mjs to lock that in`);
+});
+
+test("no <Button> static className starts with primary/danger (those are variant=; a computed one stays in className)", () => {
+  const bad = [];
+  for (const rel of webTsx()) {
+    for (const b of jsxTags(rel, readFileSync(join(SRC, rel), "utf8"), (t) => t === "Button")) {
+      if (b.static && /^\s*(primary|danger)(\s|$)/.test(b.strings[0])) bad.push(b.at);
+    }
+  }
+  assert.deepEqual(bad, [], `Move primary/danger to variant=.`);
 });

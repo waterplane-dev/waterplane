@@ -136,3 +136,12 @@ The repo-health engine counts .mts and .cts files as TypeScript source.
 - asked: 2026-10-18
 - shipped: 7f7a22ba
 
+### R-metrics-029 · requested
+The metrics view has a button that resets the stats so the user can start over.
+- asked: 2026-10-19
+
+### R-metrics-030 · shipped
+When a repo's own health engine copy fails, the view offers a button that seeds a prompt asking the agent to adopt the desktop's engine for the repo's item metrics.
+- asked: 2026-10-19
+- shipped: 6e2394a1
+

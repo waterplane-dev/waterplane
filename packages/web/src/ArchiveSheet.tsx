@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { Archive, GitBranch, RotateCw, Search, Trash2, X } from "lucide-react";
-import type { ArchivedConversation, ArchiveListing, RepoTarget } from "@waterplane/shared";
+import { Archive, BookOpen, GitBranch, Pencil, RotateCw, Search, Trash2, X } from "lucide-react";
+import type { ArchivedConversation, ArchiveListing, Bookmark, RepoTarget } from "@waterplane/shared";
 import { api } from "./api";
 import { ago, fmtSize } from "./format";
 import { RepoSelect } from "./RepoPicker";
-import { useRemoteResource, ConfirmButton, Empty, SearchBox, StaleHead } from "./kit";
+import { useBackStep } from "./backStep";
+import { ArchiveReader } from "./ArchiveReader";
+import { BookmarkIcon, BookmarkNoteEdit, BOOKMARK_ON, BOOKMARK_SET, removeBookmark, setBookmark } from "./core/sessions/bookmark";
+import { archiveRowLines, bookmarkChipText, bookmarkCount, bookmarkCutText, withBookmark } from "./core/sessions/bookmarkFacts";
+import { useRemoteResource, ConfirmButton, Empty, FilterChip, SearchBox, StaleHead, Row, RowTitle, RowSub, Hint } from "./kit";
 
 const ICON = 16;
 
@@ -70,6 +74,13 @@ export function ArchiveSheet({ repos, initialRepoId, liveIds, onClose, onResume,
   const [repoId, setRepoId] = useState(initialRepoId);
   const [draft, setDraft] = useState("");
   const [q, setQ] = useState("");
+  /** The "Bookmarks (n)" cut (R-conversations-007). */
+  const [bmOnly, setBmOnly] = useState(false);
+  /** A row open in the read-only reader — a sub-view with its own Back. */
+  const [reading, setReading] = useState<ArchivedConversation | null>(null);
+  useBackStep(!!reading, () => setReading(null));
+  /** The row whose bookmark note is being typed — one at a time. */
+  const [editing, setEditing] = useState<string | null>(null);
 
   const repo = useMemo(() => repos.find((r) => r.id === repoId) ?? repos[0], [repos, repoId]);
 
@@ -88,11 +99,25 @@ export function ArchiveSheet({ repos, initialRepoId, liveIds, onClose, onResume,
     () => api.archive(repo!.id, { offset: 0, q: q || undefined }),
     { enabled: !!repo },
   );
-  const listing = res.data;
+  /**
+   * The repo's bookmarks (`bookmarked=1`), under the same search. ONE listing
+   * is both the number on the "Bookmarks" control and, with it lit, the list
+   * under it — so the count and the cut can never disagree.
+   */
+  const bmRes = useRemoteResource<ArchiveListing>(
+    `${repo?.id ?? ""}|bm|${q}`,
+    () => api.archive(repo!.id, { offset: 0, q: q || undefined, bookmarked: true }),
+    { enabled: !!repo },
+  );
+  const bm = bookmarkCount(bmRes.data);
+  const cur = bmOnly ? bmRes : res;
+  // An older host ignored the filter: its rows are EVERY conversation, and
+  // calling them bookmarks would be the lie the field exists to prevent.
+  const listing = bmOnly && bm.kind === "old-host" ? null : cur.data;
   /** Pages 2..N, appended. Reset whenever the first page is re-asked. */
   const [extra, setExtra] = useState<ArchivedConversation[]>([]);
   const [more, setMore] = useState<"idle" | "loading" | "failed">("idle");
-  useEffect(() => { setExtra([]); setMore("idle"); }, [repoId, q]);
+  useEffect(() => { setExtra([]); setMore("idle"); }, [repoId, q, bmOnly]);
 
   const rows = useMemo(() => [...(listing?.rows ?? []), ...extra], [listing, extra]);
 
@@ -100,7 +125,7 @@ export function ArchiveSheet({ repos, initialRepoId, liveIds, onClose, onResume,
     if (!repo) return;
     setMore("loading");
     try {
-      const r = await api.archive(repo.id, { offset: rows.length, q: q || undefined });
+      const r = await api.archive(repo.id, { offset: rows.length, q: q || undefined, bookmarked: bmOnly || undefined });
       setExtra((prev) => [...prev, ...r.rows]);
       setMore("idle");
     } catch {
@@ -116,15 +141,42 @@ export function ArchiveSheet({ repos, initialRepoId, liveIds, onClose, onResume,
     if (listing) res.set({ ...listing, rows: listing.rows.filter((x) => x.id !== row.id), total: Math.max(0, listing.total - 1), scanned: Math.max(0, listing.scanned - 1) });
     setExtra((prev) => prev.filter((x) => x.id !== row.id));
     showToast("conversation deleted");
+    bmRes.reload({ quiet: true });
+  }
+
+  /** A bookmark moved on one row: patch it where it is drawn, re-read the cut. */
+  function patch(id: string, b: Bookmark | undefined) {
+    if (res.data) res.set({ ...res.data, rows: withBookmark(res.data.rows, id, b) });
+    if (bmRes.data) bmRes.set({ ...bmRes.data, rows: withBookmark(bmRes.data.rows, id, b) });
+    setExtra((prev) => withBookmark(prev, id, b));
+    bmRes.reload({ quiet: true });
+  }
+  async function bookmark(row: ArchivedConversation, fields: { note?: string; name?: string }) {
+    if (!repo) return;
+    const was = !!row.bookmark;
+    const b = await setBookmark(repo.id, row.id, fields);
+    if (!b) return;
+    patch(row.id, b);
+    showToast(was ? "bookmark note saved" : "bookmarked");
+  }
+  async function unbookmark(row: ArchivedConversation) {
+    if (!repo) return;
+    if (await removeBookmark(repo.id, row.id)) patch(row.id, undefined);
   }
 
   const hasMore = !!listing && rows.length < listing.total;
-  const loading = res.state === "loading";
+  const loading = cur.state === "loading";
+
+  if (reading && repo) {
+    const live = liveIds.has(reading.id);
+    return <ArchiveReader repoId={repo.id} row={reading} live={live} onToast={showToast} onBack={() => setReading(null)}
+      onResume={() => (live ? onOpenLive(reading.id) : onResume(reading.cwd, reading.name || reading.title || "resumed", reading.id))} />;
+  }
 
   return (
     <div className="sheet">
       <StaleHead title={<><Archive size={ICON} style={{ verticalAlign: "-3px", marginRight: 4 }} />Archive</>} onClose={onClose}
-        refreshTitle="re-read the archive" onRefresh={() => res.reload()} />
+        refreshTitle="re-read the archive" onRefresh={() => { res.reload(); bmRes.reload(); }} />
 
       {repos.length > 1 && (
         <div className="search-row">
@@ -144,24 +196,42 @@ export function ArchiveSheet({ repos, initialRepoId, liveIds, onClose, onResume,
           host a title read of every log in the directory, and a busy repo holds
           thousands of them. */}
       <div className="form">
-        <div className="row-wrap">
-          <SearchBox className="grow" value={draft} placeholder="Search first prompts…"
+        <Row kind="wrap">
+          <SearchBox className="grow" value={draft} placeholder="Search prompts, names, notes…"
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") setQ(draft.trim()); }} />
           {q && <button className="row-act" title="clear the search" onClick={() => { setDraft(""); setQ(""); }}><X size={ICON} /></button>}
           <button className="row-act" title="search" onClick={() => setQ(draft.trim())}><Search size={ICON} /></button>
-        </div>
+        </Row>
       </div>
 
-      <div className="form-hint">
-        Every conversation the CLI ever wrote for {repo?.repoName ?? "this repo"} — closing a session
-        never deleted one. Tap to resume it exactly (<code>claude --resume</code>), with its full history.
-        {listing && (q
-          ? ` ${listing.total} of ${listing.scanned} match.`
-          : ` ${listing.scanned} on disk.`)}
+      {/* "A count on a control is a filter": the number is the bookmarked
+          listing's own total, and a tap shows exactly those rows. */}
+      <div className="form">
+        <Row kind="wrap">
+          <FilterChip on={bmOnly} busy={bmOnly && bmRes.inflight} onClick={() => setBmOnly((v) => !v)}
+            title={bmOnly ? "show every conversation again" : "show only the bookmarked conversations"}>
+            <BookmarkIcon on={bmOnly} size={13} /> {bookmarkChipText(bm)}
+          </FilterChip>
+        </Row>
       </div>
 
-      {backendNote && <div className="form-hint">{backendNote}</div>}
+      {bmOnly ? (
+        <Hint>{bookmarkCutText(bm, bmRes.data?.scanned ?? null)}{" "}
+          <button className="link-btn" onClick={() => setBmOnly(false)}>show all</button>
+        </Hint>
+      ) : (
+        <Hint>
+          Every conversation the CLI ever wrote for {repo?.repoName ?? "this repo"} — closing a session
+          never deleted one. Tap to resume it exactly (<code>claude --resume</code>); <em>read</em> opens
+          it read-only, without starting anything.
+          {listing && (q
+            ? ` ${listing.total} of ${listing.scanned} match.`
+            : ` ${listing.scanned} on disk.`)}
+        </Hint>
+      )}
+
+      {backendNote && <Hint>{backendNote}</Hint>}
 
       <div className="list hist">
         {/* Two different nothings. The archive lives on the desktop, so a dead
@@ -169,22 +239,59 @@ export function ArchiveSheet({ repos, initialRepoId, liveIds, onClose, onResume,
             yet" about a repo holding four hundred of them is the exact lie this
             hook was written to stop. Both sentences live in `Empty.tsx` now,
             along with the cached-age line this list never had. */}
-        <Empty res={res} empty={rows.length === 0} thing="the archive" noun="archive listing">
-          {q ? "No conversation matches that." : "No conversations here yet."}
-        </Empty>
+        {!(bmOnly && bm.kind === "old-host") && (
+          <Empty res={cur} empty={rows.length === 0} thing="the archive" noun="archive listing">
+            {bmOnly
+              ? (q ? "No bookmarked conversation matches that." : "No bookmarks in this repo yet — bookmark a row below, or an open session from its menu.")
+              : q ? "No conversation matches that." : "No conversations here yet."}
+          </Empty>
+        )}
         {rows.map((row) => {
           const live = liveIds.has(row.id);
+          const { title, sub } = archiveRowLines(row);
+          const b = row.bookmark;
           return (
             <div key={row.id} className="olog-card">
               <button className="olog-body" title={live ? "already open — jump to it" : "resume this conversation"}
-                onClick={() => (live ? onOpenLive(row.id) : onResume(row.cwd, row.title || "resumed", row.id))}>
-                <span className="row-title">{row.title || <em>(no prompt — never typed into)</em>}</span>
-                <span className="row-sub">
+                onClick={() => (live ? onOpenLive(row.id) : onResume(row.cwd, row.name || row.title || "resumed", row.id))}>
+                <RowTitle>{title || <em>(no prompt — never typed into)</em>}</RowTitle>
+                {sub && <RowSub>{sub}</RowSub>}
+                <RowSub>
                   {live ? <>open now</> : <><RotateCw size={12} /> resume</>} · {ago(row.mtime)} · {fmtSize(row.size)}
-                </span>
+                </RowSub>
               </button>
+              {/* The note, once, under the row it is about — tap to edit it in
+                  place (one line). Never a badge beside the title as well. */}
+              {b && (editing === row.id
+                ? <BookmarkNoteEdit initial={b.note ?? ""} onCancel={() => setEditing(null)}
+                    onSave={(note) => { setEditing(null); void bookmark(row, { note }); }} />
+                : (
+                  <button className="link-btn bm-note-line" title="edit the bookmark's one-line note" onClick={() => setEditing(row.id)}>
+                    <Pencil size={12} /> {b.note || "add a note"}
+                  </button>
+                ))}
               <div className="olog-foot">
                 <span className="olog-sess" title={row.id}>{row.id.slice(0, 8)}</span>
+                {/* The bookmark toggle, on the row it marks. Removing one that
+                    carries a note deletes words somebody typed: armed then. */}
+                {b && b.note ? (
+                  <ConfirmButton className="link-btn bm-btn on" title={`${BOOKMARK_ON} — tap to remove`}
+                    confirmTitle="tap again to remove the bookmark and its note"
+                    confirm={<><BookmarkIcon on size={12} /> remove, with its note?</>}
+                    onConfirm={() => { void unbookmark(row); }}>
+                    <BookmarkIcon on size={12} /> {BOOKMARK_ON}
+                  </ConfirmButton>
+                ) : (
+                  <button className={`link-btn bm-btn${b ? " on" : ""}`} data-hint="session.bookmark" aria-pressed={!!b}
+                    title={b ? `${BOOKMARK_ON} — tap to remove` : "bookmark this conversation — Bookmarks finds it again"}
+                    onClick={() => { if (b) void unbookmark(row); else void bookmark(row, row.name ? { name: row.name } : {}); }}>
+                    <BookmarkIcon on={!!b} size={12} /> {b ? BOOKMARK_ON : BOOKMARK_SET}
+                  </button>
+                )}
+                <button className="link-btn" title="read this conversation here, read-only — nothing is started"
+                  onClick={() => { setEditing(null); setReading(row); }}>
+                  <BookOpen size={12} style={{ verticalAlign: "-2px" }} /> read
+                </button>
                 {/* The armed tap this sheet invented, now the shared one
                     (`Confirm.tsx`) — which adds the half that was missing: it
                     disarms itself. A row armed and then scrolled past used to
@@ -219,10 +326,10 @@ export function ArchiveSheet({ repos, initialRepoId, liveIds, onClose, onResume,
         })}
         {more === "failed" && <Empty>The next page did not arrive — tap again.</Empty>}
         {hasMore && more !== "loading" && !loading && (
-          <button className="row grow" onClick={() => void loadMore()}>
-            <span className="row-title">load more</span>
-            <span className="row-sub">{rows.length} of {listing?.total}</span>
-          </button>
+          <Row as="button" kind="grow" onClick={() => void loadMore()}>
+            <RowTitle>load more</RowTitle>
+            <RowSub>{rows.length} of {listing?.total}</RowSub>
+          </Row>
         )}
         {more === "loading" && <Empty>Reading the next page…</Empty>}
       </div>

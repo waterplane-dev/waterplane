@@ -320,7 +320,8 @@ button.sched-clock:active { background: var(--raise); }
    everything under it, and a clause tucked after a version string reads as
    metadata rather than as the cause. */
 .cli-rearm { flex: 1 1 100%; font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--warn); }
-.cli-clear { display: inline-flex; align-items: center; gap: var(--sp-4); }
+.cli-clear, .cli-inspect { display: inline-flex; align-items: center; gap: var(--sp-4); }
+.cli-inspect { align-self: flex-start; margin-top: var(--sp-4); }
 
 .cli-row { padding: var(--sp-10) var(--sp-14); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: var(--sp-6); }
 /* The verdict is the row's LEFT EDGE, not its background — the same call

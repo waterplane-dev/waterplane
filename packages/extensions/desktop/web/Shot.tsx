@@ -9,16 +9,17 @@ import { Camera, ImageIcon, Loader2, X } from "lucide-react";
 import { useStore } from "@waterplane/sdk";
 import { dropShotLine, openShot, shot, takeDesktopShot } from "./state.ts";
 import { SHOT, SHOT_TITLE } from "./words.ts";
+import { Button, Hint } from "@waterplane/kit";
 
 /** `worded`: the fullscreen float says "screenshot"; the toolbar's is the glyph alone (its row is full). */
 export function ShotButton({ worded, style }: { worded?: boolean; style?: CSSProperties }) {
   const s = useStore(shot);
   const Icon = s.busy ? Loader2 : Camera;
   return (
-    <button className="key" style={style} title={SHOT_TITLE} aria-label={SHOT} aria-busy={s.busy}
+    <Button style={style} title={SHOT_TITLE} aria-label={SHOT} aria-busy={s.busy}
       onClick={() => void takeDesktopShot()}>
       <Icon size={15} className={s.busy ? "spin" : undefined} />{worded ? ` ${SHOT}` : null}
-    </button>
+    </Button>
   );
 }
 
@@ -32,10 +33,10 @@ export function ShotLine() {
   const s = useStore(shot);
   if (!s.line) return null;
   return (
-    <div className="form-hint" style={LINE} role="status">
+    <Hint style={LINE} role="status">
       <div style={{ flex: "1 1 auto", minWidth: 0, overflowWrap: "anywhere" }}>{s.line}</div>
-      {s.file && <button className="key" style={BTN} title="open the screenshot — closing it comes back here" onClick={openShot}><ImageIcon size={15} /> open</button>}
-      {!s.busy && <button className="key" style={BTN} title="dismiss" aria-label="dismiss" onClick={dropShotLine}><X size={15} /></button>}
-    </div>
+      {s.file && <Button style={BTN} title="open the screenshot — closing it comes back here" onClick={openShot}><ImageIcon size={15} /> open</Button>}
+      {!s.busy && <Button style={BTN} title="dismiss" aria-label="dismiss" onClick={dropShotLine}><X size={15} /></Button>}
+    </Hint>
   );
 }

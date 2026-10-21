@@ -642,13 +642,20 @@ export function clearStopVerify(s: Session): void {
  * perfectly. A false amber on the claude path, caused by a backend that was
  * supposed to be incapable of making anything worse.
  *
- * The exact-id match above is left alone: an id that matches is evidence, not
- * a guess, and a backend that somehow owns one has earned the route.
+ * The exact-id match is evidence, not a guess, and a backend that somehow owns
+ * one has earned the route — **but only a session that is still listening.**
+ * A relaunch onto the same conversation (`replaceSessionId`, `--resume <id>`)
+ * kills the old session and opens the new one with the SAME
+ * `claudeSessionId`; the dead one stays in the map (exited, channel detached)
+ * and, inserted first, won this loop for every hook the new one sent. The
+ * listening gate in `onHookEvent` then dropped each of them: the replacement
+ * was never `hooked` for its whole life, and every delivery into it was filed
+ * as a `deliver.submit` fallback (2.1.306, 2026-10-21: 5 of 20, all `ok`).
  */
 function routeHook(core: SessionCore, payload: { session_id?: string; cwd?: string }): Session | null {
   const sid = payload.session_id;
   if (sid) {
-    for (const s of core.sessions.values()) if (s.info.claudeSessionId === sid) return s;
+    for (const s of core.sessions.values()) if (s.info.claudeSessionId === sid && claudeHookWatched(s.info.id)) return s;
   }
   const cwd = payload.cwd;
   if (!cwd) return null;

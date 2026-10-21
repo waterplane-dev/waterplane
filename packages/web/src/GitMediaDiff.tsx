@@ -3,6 +3,7 @@ import { RotateCw } from "lucide-react";
 import { api } from "./api";
 import { isAudio, isImage, isVideo } from "./docKind";
 import { fmtBytes } from "@waterplane/shared";
+import { Button } from "./kit/Button";
 
 /** A changed file the git view draws as before/after instead of a text diff. */
 export function isMediaDiff(path: string): boolean {
@@ -58,7 +59,7 @@ function MediaSide({ repoId, path, side, staged }: { repoId: string; path: strin
     body = (
       <div className="gm-note">
         could not load this side: {got.reason}{" "}
-        <button className="key" onClick={() => setAttempt((n) => n + 1)}><RotateCw size={14} /> Retry</button>
+        <Button onClick={() => setAttempt((n) => n + 1)}><RotateCw size={14} /> Retry</Button>
       </div>
     );
   }

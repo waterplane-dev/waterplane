@@ -14,6 +14,12 @@ board is `CliHealthSheet.tsx` at the top level; this folder owns the state, the 
   page-lifetime bookkeeping (`seen`, the worst verdict so far; `waiters`). `logic.ts` — the
   ordering and the chip's filter. `HealthBoardSheet.tsx` — the overlay. `CliHealthChip.tsx` — the
   topbar mark.
+- `inspectInSession` (`actions.ts`) + `inspectPrompt` (`logic.ts`): the developer's "inspect in a
+  session" on a degraded/broken row — the Send sheet seeded with the row's facts and the paths of
+  `clihealth.json` / `clifixtures/<version>/`, aimed at a new session in the checkout. Drawn ONLY
+  when the frame carries `source` (host `devSource`: running from a git checkout with its sources,
+  under the root) — an npm/tarball install never sees it. A block-notice sample is pointed at,
+  never quoted (it must never reach a PTY).
 - overlay `clihealth` (persisted — in `PERSISTED_OVERLAYS`).
 - wire frames in: `clihealth` (saves the snapshot, publishes the rollup, resolves any
   `requestCliHealth` waiters, toasts once on a WORSENING only — `logic.ts`). Out: `clihealth.get`.

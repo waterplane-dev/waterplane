@@ -11,6 +11,7 @@ import { showToast } from "../../toast";
 import { track } from "../../usage";
 import { CLI_SHORTCUTS, CLI_SHORTCUTS_VERSION, shortcutWrites } from "./cliShortcuts";
 import { keepFocus } from "../compose/ComposeBar";
+import { Button } from "../../kit/Button";
 
 const ICON = 16;
 
@@ -38,7 +39,7 @@ export function KeysPop({ sendInput, onClose }: { sendInput: (data: string) => v
     <div className="keys-pop" role="dialog" aria-label="claude's shortcuts">
       <div className="keys-pop-head">
         <span className="muted">claude {CLI_SHORTCUTS_VERSION}'s default keys — a remapped keybindings.json has others</span>
-        <button className="key" onPointerDown={keepFocus} onClick={onClose} title="close the list" aria-label="close the list"><X size={ICON} /></button>
+        <Button onPointerDown={keepFocus} onClick={onClose} title="close the list" aria-label="close the list"><X size={ICON} /></Button>
       </div>
       <div className="keys-pop-list">
         {CLI_SHORTCUTS.map((s, i) => (

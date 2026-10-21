@@ -23,6 +23,7 @@ import { LS, lsGet, lsSet } from "../storage";
 import { usePhoneSetup } from "../usePhoneSetup";
 import { setupMissingText } from "../phoneSetup";
 import { haltBannerWords, liftHalt, useHalt } from "../features/halt";
+import { Button } from "../kit/Button";
 
 const ICON = 16;
 
@@ -93,17 +94,17 @@ export function InsecureBanner({ httpsUrl }: { httpsUrl: string | null }): React
           Plain HTTP: no offline shell, so a dropped tunnel replaces the app with the browser's
           timeout page. No push and no background downloads either. Switch to the HTTPS address.
         </span>
-        <button className="key" onClick={() => { track("action:https.switch"); location.href = httpsUrl + location.pathname + location.hash; }}>
+        <Button onClick={() => { track("action:https.switch"); location.href = httpsUrl + location.pathname + location.hash; }}>
           switch
-        </button>
-        <button className="key" title="hide for a week — this comes back, because the problem does"
+        </Button>
+        <Button title="hide for a week — this comes back, because the problem does"
           onClick={() => {
             const until = Date.now() + INSECURE_SNOOZE_MS;
             insecureSnooze.set(until);
             lsSet(LS.dismissInsecure, String(until));
           }}>
           <X size={ICON} />
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -133,15 +134,15 @@ export function PhoneSetupBanner({ onOpen }: { onOpen: () => void }): ReactNode 
       <div className="update-bar">
         <Smartphone size={ICON} />
         <span className="update-text">{text} Downloads, alerts and installs wait for the app to be opened until then.</span>
-        <button className="key" onClick={() => { track("action:phoneSetup.open"); onOpen(); }}>set up</button>
-        <button className="key" title="hide for a week — this comes back while something is still missing"
+        <Button onClick={() => { track("action:phoneSetup.open"); onOpen(); }}>set up</Button>
+        <Button title="hide for a week — this comes back while something is still missing"
           onClick={() => {
             const until = Date.now() + SETUP_SNOOZE_MS;
             setupSnooze.set(until);
             lsSet(LS.dismissPhoneSetup, String(until));
           }}>
           <X size={ICON} />
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -198,16 +199,16 @@ export function CliUpdateBanner({ update, liveAsk, liveSend }: CliUpdateBannerPr
         {update.running ? (
           <span className="act-cant act-cant-inline"><Loader size={ICON} className="spin" /> running — the buttons come back when it finishes</span>
         ) : <>
-          <button className="key" onClick={() => liveAsk({ t: "update.check" }, "no connection — the update lives on the desktop and can't be checked from here")}>
+          <Button onClick={() => liveAsk({ t: "update.check" }, "no connection — the update lives on the desktop and can't be checked from here")}>
             <RotateCw size={ICON} />
-          </button>
-          {canApply && <button className="key" onClick={() => liveSend({ t: "update.apply" }, "updating — the host restarts itself when it is done")}>
+          </Button>
+          {canApply && <Button onClick={() => liveSend({ t: "update.apply" }, "updating — the host restarts itself when it is done")}>
             {update.applyLabel ?? "update"}
-          </button>}
-          <button className="key" title="dismiss this — it comes back for a newer version, a new upgrade result or a new error"
+          </Button>}
+          <Button title="dismiss this — it comes back for a newer version, a new upgrade result or a new error"
             onClick={() => setPref("dismissedUpdate", sig)}>
             <X size={ICON} />
-          </button>
+          </Button>
         </>}
       </div>
       {showLog && (
@@ -279,11 +280,11 @@ export function CliRestartBanner({ active, update, relaunch }: CliRestartBannerP
           ? <span className="update-text">restarting — the new session opens here</span>
           : v.cant
           ? <CantInline>can't restart here — {v.cant}</CantInline>
-          : <button className="key" onClick={() => void restart()}>Restart, same conversation</button>}
-        <button className="key" title="hide this for this version — a newer install asks again"
+          : <Button onClick={() => void restart()}>Restart, same conversation</Button>}
+        <Button title="hide this for this version — a newer install asks again"
           onClick={() => { restartDismissed.add(key); bump((n) => n + 1); }}>
           <X size={ICON} />
-        </button>
+        </Button>
       </div>
     </div>
   );

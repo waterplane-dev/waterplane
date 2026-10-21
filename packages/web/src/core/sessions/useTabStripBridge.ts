@@ -1,11 +1,24 @@
 import { useEffect } from "react";
 import type { RepoTarget, SessionInfo } from "@waterplane/shared";
-import { TAB_ATTACH_EVENT, TAB_CLOSE_EVENT, noteSessionTabs, tabLabel } from "../../sessionTabs";
+import { TAB_ATTACH_EVENT, TAB_CLOSE_EVENT, adoptOpens, noteSessionTabs, refreshTabs, tabLabel } from "../../sessionTabs";
+import { onAdopt, onSettingsChange } from "../../settings";
+import { LS } from "../../storage";
+import { watchSaverForTabs } from "./tabsSyncSaver";
 import { sessionStatus } from "../../sessionFacts";
 import type { BackendList } from "../../backendCaps";
 import type { TermFeed } from "../term/useTermFeed";
 import type { SessionVerbs } from "./useSessionVerbs";
 import { useAgentCountBridge } from "./useAgentCountBridge";
+
+// Another device's copy of the shared open history is MERGED in, never just
+// adopted (`adoptOpens`) — here, not in `sessionTabs.ts`, because that module is
+// node-tested and `settings.ts` cannot be imported without a browser.
+onAdopt(LS.tabOpensShared, (incoming, current) => adoptOpens(incoming, current, Date.now()));
+// …and once either shared key has landed, the strip redraws. Module scope like
+// the guard: the strip outlives every App render.
+onSettingsChange(refreshTabs, [LS.tabOrderShared, LS.tabOpensShared]);
+// A data or battery saver coming on offers to stop that sharing (`tabsSyncSaver.ts`).
+watchSaverForTabs();
 
 interface UseTabStripBridgeCtx {
   tabsOn: boolean;

@@ -55,6 +55,7 @@ export const NOTIF_LABEL: Record<string, { name: string; note: string }> = {
   approval: { name: "Approvals", note: "A plugin asked for something you must approve now, such as a vault fingerprint. Loud on purpose." },
   limit: { name: "Usage limit", note: "A session hit the account limit, and whether auto-continue got it running again." },
   burn: { name: "Week burning fast", note: "The weekly limit climbed faster than the threshold over the last stretch of readings — one push naming what spent it. Nothing is paused." },
+  agent: { name: "Large subagent", note: "A running subagent passed the context size you set on the context sheet (default 500k) — one push per agent, naming it. It warns only; nothing is stopped." },
   backlog: { name: "Backlog", note: "A queued backlog item started, finished, or failed." },
   followup: { name: "Follow up", note: "A session was flagged for follow up without your tap — by a launch you ticked to flag when done, or by its own agent with one line on what to read. A flag you set by hand sends none." },
   health: { name: "Repo health index", note: "A repo's health index moved by more than is usual for that repo's own past — at most one push per repo per week, in words, naming the readings that carried it." },

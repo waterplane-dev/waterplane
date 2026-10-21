@@ -14,6 +14,7 @@ import { useEffect } from "react";
 import { Maximize2, Minimize2, SlidersHorizontal, ZoomIn } from "lucide-react";
 import { besideFull, offerPicture, useBesideFull, useBesideRoom } from "../besideRoom";
 import type { AnnModel } from "./useAnnotator";
+import { Button } from "../kit/Button";
 
 export function AnnHeadKeys({ m }: { m: AnnModel }) {
   const { view, fitRef, zoomed, resetZoom, configOpen, setConfigOpen } = m;
@@ -26,15 +27,15 @@ export function AnnHeadKeys({ m }: { m: AnnModel }) {
   useEffect(() => (beside ? offerPicture((mode) => void send(mode)) : undefined), [beside, send]);
   return (
     <>
-      <button className={`key ${zoomed ? "active" : ""}`} onClick={resetZoom} title="reset zoom" aria-label="reset zoom"><ZoomIn size={16} /> {(view.k / (fitRef.current.k || 1)).toFixed(1)}×</button>
-      <button className={`key ${configOpen ? "active" : ""}`} onClick={() => setConfigOpen((v) => !v)} aria-pressed={configOpen}
-        title="customize the toolbar" aria-label="customize the toolbar"><SlidersHorizontal size={16} /></button>
+      <Button className={zoomed ? "active" : ""} onClick={resetZoom} title="reset zoom" aria-label="reset zoom"><ZoomIn size={16} /> {(view.k / (fitRef.current.k || 1)).toFixed(1)}×</Button>
+      <Button className={configOpen ? "active" : ""} onClick={() => setConfigOpen((v) => !v)} aria-pressed={configOpen}
+        title="customize the toolbar" aria-label="customize the toolbar"><SlidersHorizontal size={16} /></Button>
       {beside && (
-        <button className={`key ${full ? "active" : ""}`} onClick={() => besideFull.set(!full)} aria-pressed={full}
+        <Button className={full ? "active" : ""} onClick={() => besideFull.set(!full)} aria-pressed={full}
           title={full ? "back beside the session (Esc)" : "full screen — the session stays where it is"}
           aria-label={full ? "exit annotator full screen" : "annotator full screen"}>
           {full ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-        </button>
+        </Button>
       )}
     </>
   );

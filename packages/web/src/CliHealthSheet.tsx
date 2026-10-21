@@ -32,7 +32,7 @@
  * stays live.
  */
 import { useMemo } from "react";
-import { Check, ChevronDown, Waypoints, X } from "lucide-react";
+import { Bug, Check, ChevronDown, Waypoints, X } from "lucide-react";
 import {
   CLI_SIGNALS,
   agoText,
@@ -44,12 +44,37 @@ import {
   type CliHealth,
   type HealthRollup,
   type HealthVerdict,
+  type HostMessage,
   type SignalRecord,
 } from "@waterplane/shared";
-import { ConfirmButton, Empty, FilterBar, StaleHead, useRemoteResource } from "./kit";
+import { ConfirmButton, Empty, FilterBar, StaleHead, useRemoteResource, Hint } from "./kit";
 import { loadCliHealthSnap } from "./localState";
 
-export interface CliHealthDoc { health: CliHealth; rollup: HealthRollup }
+/** The `clihealth` frame's checkout pointer — present only from a developer's install. */
+export type CliHealthSource = NonNullable<Extract<HostMessage, { t: "clihealth" }>["source"]>;
+
+/** What one row in trouble says, already worded by `@waterplane/shared` — the
+ *  sheet hands these over; nothing here grades a signal. */
+export interface InspectFacts {
+  id: string;
+  name: string;
+  verdict: HealthVerdict;
+  version: string | null;
+  sentence: string;
+  /** "press-and-look · last 1m ago", or absent. */
+  via?: string;
+  sample?: string;
+  /** "1m ago", with the sample. */
+  sampleAgo?: string;
+  stats?: string;
+}
+
+export interface CliHealthDoc {
+  health: CliHealth;
+  rollup: HealthRollup;
+  /** Only from a host running out of a source checkout — what gates "inspect". */
+  source?: CliHealthSource;
+}
 
 /**
  * A version change is worth naming for a while and then stops being the story.
@@ -66,7 +91,7 @@ const VERDICT_LABEL: Record<HealthVerdict, string> = {
   unknown: "unknown",
 };
 
-export function CliHealthSheet({ online, request, onClose, filter, onClearFilter, onClearWarnings }: {
+export function CliHealthSheet({ online, request, onClose, filter, onClearFilter, onClearWarnings, onInspect }: {
   /** The socket's own verdict, not `navigator.onLine` — see the hook's note. */
   online: boolean;
   /** Ask the host and resolve on its answer. Owned by `App`, which is where
@@ -84,6 +109,10 @@ export function CliHealthSheet({ online, request, onClose, filter, onClearFilter
   /** Send the clear and say so; false when it could not go (the link). Per
    *  signal, the newest miss THIS board showed — see `clearSeen`. */
   onClearWarnings?: (through: Record<string, number>, count: number) => boolean;
+  /** Seed a coding session with one row in trouble. Drawn only where the
+   *  host said it runs from a source checkout (`doc.source`): everybody else's
+   *  desktop has no code to inspect, so they never see the button. */
+  onInspect?: (facts: InspectFacts, source: CliHealthSource) => void;
 }) {
   const res = useRemoteResource<CliHealthDoc>("clihealth", request, {
     offline: !online,
@@ -134,12 +163,12 @@ export function CliHealthSheet({ online, request, onClose, filter, onClearFilter
         bare iconSize={14} onRefresh={() => res.reload()}
         refreshTitle="re-read — the board is a point-in-time answer, not a live feed" />
 
-      <div className="form-hint">
+      <Hint>
         Every point where this app reads something it does not own: the choice-box
         detector, the hook pipe, the echo probe, the conversation log. Each one
         degrades to nothing rather than to a wrong answer — this is where that
         nothing gets said out loud.
-      </div>
+      </Hint>
 
       <div className="list">
         {rollup && (
@@ -206,13 +235,16 @@ export function CliHealthSheet({ online, request, onClose, filter, onClearFilter
           The host answered with no health record at all.
         </Empty>
 
-        {rows.map((sig) => <Row key={sig.id} sig={sig} now={now} />)}
+        {rows.map((sig) => <Row key={sig.id} sig={sig} now={now} version={doc?.health.version ?? null}
+          onInspect={onInspect && doc?.source ? (f) => onInspect(f, doc.source!) : undefined} />)}
       </div>
     </div>
   );
 }
 
-function Row({ sig, now }: { sig: SignalRecord; now: number }) {
+function Row({ sig, now, version, onInspect }: {
+  sig: SignalRecord; now: number; version: string | null; onInspect?: (f: InspectFacts) => void;
+}) {
   const spec = signalSpec(sig.id);
   const check = signalVerdict(sig, now);
   // A breadcrumb the primary rule has since been confirmed over is history,
@@ -275,6 +307,24 @@ function Row({ sig, now }: { sig: SignalRecord; now: number }) {
         {check.rate != null && <>{check.failed} of the last {check.samples} failed · </>}
         {sig.totalGood + sig.totalMiss > 0 && <>{sig.totalGood} good / {sig.totalMiss} missed all-time</>}
       </div>
+
+      {onInspect && (check.verdict === "degraded" || check.verdict === "broken") && (
+        <button type="button" className="key cli-inspect"
+          title="open the Send sheet with this row's facts and where its record and captures live, aimed at a new session in the checkout"
+          onClick={() => onInspect({
+            id: sig.id, name: spec.name, verdict: check.verdict, version,
+            sentence: healthSentence(sig, now),
+            via: sig.via ? `${sig.via}${sig.lastFallbackAt != null ? ` · last ${agoText(now - sig.lastFallbackAt)} ago` : ""}` : undefined,
+            sample: sig.sample ?? undefined,
+            sampleAgo: sig.sampleAt != null ? `${agoText(now - sig.sampleAt)} ago` : undefined,
+            stats: [
+              check.rate != null ? `${check.failed} of the last ${check.samples} failed` : "",
+              sig.totalGood + sig.totalMiss > 0 ? `${sig.totalGood} good / ${sig.totalMiss} missed all-time` : "",
+            ].filter(Boolean).join(" · ") || undefined,
+          })}>
+          <Bug size={13} /> inspect in a session
+        </button>
+      )}
     </div>
   );
 }

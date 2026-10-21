@@ -7,6 +7,9 @@ import { useRemoteResource } from "./useRemoteResource";
 import { SheetHead } from "./Sheet";
 import { Empty } from "./Empty";
 import { ago } from "./format";
+import { Button } from "./kit/Button";
+import { RowSub } from "./kit/Row";
+import { Hint } from "./kit/Hint";
 
 /** Which side the tap came from: the ↑ count opens `out`, the ↓ count `in`. */
 export type GitLogFocus = "in" | "out" | "all";
@@ -35,7 +38,7 @@ function CommitRow({ repoId, c }: { repoId: string; c: GitCommit }) {
     <div className="git-commit">
       <button className="row git-commit-row" onClick={toggle}>
         <span className="git-commit-subject">{c.subject || "(no message)"}</span>
-        <span className="row-sub"><span className="mono">{c.short}</span> · {c.author} · {ago(c.at)}</span>
+        <RowSub><span className="mono">{c.short}</span> · {c.author} · {ago(c.at)}</RowSub>
       </button>
       {open && <pre className="git-commit-body">{body ?? "reading…"}</pre>}
     </div>
@@ -104,10 +107,10 @@ export function GitLogView({ repoId, focus, onFocus, onFetched, onClose }: Props
     <div className="sheet">
       <SheetHead title={<>History · {log?.branch ?? "…"}</>} onClose={onClose}>
         {log?.upstream && (
-          <button className="key" onClick={() => { track("action:git.log.fetch"); void fetchRemote(); }}
+          <Button onClick={() => { track("action:git.log.fetch"); void fetchRemote(); }}
             title={`fetch ${log.upstream} — moves no branch and no file`}>
             {fetching ? <Loader size={16} className="spin" /> : <CloudDownload size={16} />} {fetching ? "checking…" : "check"}
-          </button>
+          </Button>
         )}
       </SheetHead>
       {log && (
@@ -127,8 +130,8 @@ export function GitLogView({ repoId, focus, onFocus, onFetched, onClose }: Props
       )}
       <div className="list git-log">
         <Empty res={res} empty={!log} thing="this branch's history" noun="history" />
-        {freshness && <div className="form-hint git-log-fresh">{freshness}</div>}
-        {fetchNote && <div className="form-hint git-note">{fetchNote}</div>}
+        {freshness && <Hint className="git-log-fresh">{freshness}</Hint>}
+        {fetchNote && <Hint className="git-note">{fetchNote}</Hint>}
         {log && log.upstream && showIn && (
           <Section repoId={repoId} title="Incoming" hint={`on ${up}, not here — a pull brings these`}
             rows={log.incoming} total={log.incomingTotal}

@@ -36,7 +36,7 @@ test("the line follows the body's OWN `on`: gone after `all` (null) even with th
 test("the `all` tap clears the body's own state, and the sheet never clears in an unmount cleanup", () => {
   const body = readFileSync(new URL("./TokenStatsBody.tsx", import.meta.url), "utf8");
   assert.match(body, /useState<string \| null>\(openedOn \?\? null\)/, "the tapped source is held as state, not read off the prop");
-  assert.match(body, /onClick=\{\(\) => \{ setOn\(null\);[^}]*\}\}>all<\/button>/, "`all` drops the line at once");
+  assert.match(body, /onClick=\{\(\) => \{ setOn\(null\);[^}]*\}\}>all<\/Button>/, "`all` drops the line at once");
   assert.match(body, /openedOnFor\(on, viewing, readings\)/);
   const sheet = readFileSync(new URL("./TokensSheet.tsx", import.meta.url), "utf8");
   assert.ok(!/useEffect\(\(\) => \(\) =>/.test(sheet), "StrictMode runs an unmount cleanup at mount in dev");

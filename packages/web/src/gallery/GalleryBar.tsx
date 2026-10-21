@@ -6,6 +6,7 @@ import { fmtCreated } from "./galleryTypes";
 import { newCutText } from "./galleryCuts";
 import { GalleryFilters } from "./GalleryFilters";
 import type { GalleryModel } from "./useGallery";
+import { Button } from "../kit/Button";
 
 declare const __BUILD_ID__: string; // injected by vite define — UI build stamp
 
@@ -34,14 +35,14 @@ export function GalleryBar({ m }: { m: GalleryModel }) {
             offering it over "this repo" would be offering a verb that refuses.
             Not drawn at all rather than drawn dimmed — CLAUDE.md. */}
         {onSweep && singleRepo && (scope === "inbox" || scope === "outbox") && (
-          <button className="key gallery-head-btn" title={`clear out old ${scope} files`} aria-label={`clear out old ${scope} files`}
-            onClick={() => onSweep(scope)}><Trash2 size={17} /></button>
+          <Button className="gallery-head-btn" title={`clear out old ${scope} files`} aria-label={`clear out old ${scope} files`}
+            onClick={() => onSweep(scope)}><Trash2 size={17} /></Button>
         )}
         {/* The same verb where it CAN'T be per-repo: ranked bytes across every
             repo, each row opening exactly that repo's sweep. */}
         {onSurvey && scope === "all" && (
-          <button className="key gallery-head-btn" title="what is taking space, repo by repo" aria-label="what is taking space"
-            onClick={onSurvey}><HardDrive size={17} /></button>
+          <Button className="gallery-head-btn" title="what is taking space, repo by repo" aria-label="what is taking space"
+            onClick={onSurvey}><HardDrive size={17} /></Button>
         )}
       </SheetHead>
 
@@ -54,7 +55,7 @@ export function GalleryBar({ m }: { m: GalleryModel }) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          {query && <button className="key" aria-label="clear the search" onClick={() => setQuery("")}><X size={14} /></button>}
+          {query && <Button aria-label="clear the search" onClick={() => setQuery("")}><X size={14} /></Button>}
         </div>
       </div>
 
@@ -77,7 +78,7 @@ export function GalleryBar({ m }: { m: GalleryModel }) {
         <div className="gallery-note err">
           <TriangleAlert size={14} />
           <span>Could not load the list ({loadErr}){n ? " — showing what was already loaded" : ""}.</span>
-          <button className="key" onClick={() => setReload((x) => x + 1)}><RotateCw size={14} /> retry</button>
+          <Button onClick={() => setReload((x) => x + 1)}><RotateCw size={14} /> retry</Button>
         </div>
       )}
 
@@ -93,7 +94,7 @@ export function GalleryBar({ m }: { m: GalleryModel }) {
               ? `Showing the list this phone last saw, ${fmtCreated(cachedAt)} — ${staleWhy}.`
               : `Showing the list this phone last saw, ${fmtCreated(cachedAt)} — refreshing…`}
           </span>
-          {staleWhy && <button className="key" onClick={() => setReload((x) => x + 1)}><RotateCw size={14} /> retry</button>}
+          {staleWhy && <Button onClick={() => setReload((x) => x + 1)}><RotateCw size={14} /> retry</Button>}
         </div>
       )}
       {/* Actions the gallery hands off report here too when no viewer is open —

@@ -10,7 +10,7 @@
 import { ArrowRight, ChevronDown, ChevronRight, DoorClosed, Wallet, X } from "lucide-react";
 import { RowFlagChoice } from "./RowFlagChoice";
 import { RowBudgetEdit } from "./RowBudgetEdit";
-import { RadioRows } from "../kit";
+import { RadioRows, Button } from "../kit";
 import type { RowFacts } from "./BacklogRow";
 import { AGENT_POSTED_WORDS, MANUAL_HOLD_TEXT } from "@waterplane/shared";
 import { skipQueueNote } from "../sendIntent";
@@ -144,10 +144,10 @@ export function RowNotes({ m, row }: { m: BacklogModel; row: RowFacts }) {
                       the list the tap opens (`autoSlotSessions`). */}
                   {p.online && it.status === "queued" && slotHeld(p.waiting?.[it.id], p.autoSlots) && slotSessions.length > 0 && (
                     <div className="bl-slots">
-                      <button className={`key bl-step${slotOpen.has(it.id) ? " active" : ""}`}
+                      <Button className={`bl-step${slotOpen.has(it.id) ? " active" : ""}`}
                         onClick={() => setSlotOpen((m) => toggled(m, it.id))}>
                         <DoorClosed size={14} /> {closeOneLabel(slotSessions.length)}
-                      </button>
+                      </Button>
                       {slotOpen.has(it.id) && (
                         <ul className="bl-slot-list">
                           {slotSessions.map(({ s, closeWhenDone }) => (
@@ -156,9 +156,9 @@ export function RowNotes({ m, row }: { m: BacklogModel; row: RowFacts }) {
                                 <span className="bl-slot-title">{s.title}</span>
                                 <span className="bl-slot-sub">opened {ago(s.createdAt)} · {slotSessionState(s, closeWhenDone)}</span>
                               </button>
-                              <button className="key danger" onClick={() => { track("action:backlog.slotClose"); p.nav.onCloseSession(s); }}>
+                              <Button variant="danger" onClick={() => { track("action:backlog.slotClose"); p.nav.onCloseSession(s); }}>
                                 <X size={14} /> close
-                              </button>
+                              </Button>
                             </li>
                           ))}
                         </ul>
@@ -203,9 +203,9 @@ export function RowNotes({ m, row }: { m: BacklogModel; row: RowFacts }) {
                     <div className="bl-check-detail">
                       <div className="bl-steps">
                         {p.online && (
-<button className="key bl-step" title="open/resume a session seeded with this task as context" onClick={() => p.verbs.onContinue(it.id)}>
+<Button className="bl-step" title="open/resume a session seeded with this task as context" onClick={() => p.verbs.onContinue(it.id)}>
 <ArrowRight size={14} /> Continue in a session
-</button>)}
+</Button>)}
                       </div>
                     </div>
                   )}
@@ -229,9 +229,9 @@ export function RowNotes({ m, row }: { m: BacklogModel; row: RowFacts }) {
                             <pre>{it.checkDetail}</pre>
                             <div className="bl-steps">
                               {p.online && (
-<button className="key bl-step" title="open/resume a session with this task + verdict as context" onClick={() => p.verbs.onContinue(it.id)}>
+<Button className="bl-step" title="open/resume a session with this task + verdict as context" onClick={() => p.verbs.onContinue(it.id)}>
 <ArrowRight size={14} /> Continue in a session
-</button>)}
+</Button>)}
                             </div>
                             {it.checkedAt && <span className="bl-check-when">checked {new Date(it.checkedAt).toLocaleString()}</span>}
                           </div>
@@ -261,17 +261,17 @@ export function RowNotes({ m, row }: { m: BacklogModel; row: RowFacts }) {
                               <div className="bl-steps">
                                 <span className="bl-steps-head">Next steps — tap to run in the CLI:</span>
                                 {it.validateSteps.map((s, si) => (
-                                  p.online && (<button key={si} className="key bl-step" title={s.prompt} onClick={() => p.verbs.onNextStep(it.id, si)}>
+                                  p.online && (<Button key={si} className="bl-step" title={s.prompt} onClick={() => p.verbs.onNextStep(it.id, si)}>
                                     <ArrowRight size={14} /> {s.label}
-                                  </button>)
+                                  </Button>)
                                 ))}
                               </div>
                             )}
                             <div className="bl-steps">
                               {p.online && (
-<button className="key bl-step" title="open/resume a session with this task + verdict as context" onClick={() => p.verbs.onContinue(it.id)}>
+<Button className="bl-step" title="open/resume a session with this task + verdict as context" onClick={() => p.verbs.onContinue(it.id)}>
 <ArrowRight size={14} /> Continue in a session
-</button>)}
+</Button>)}
                             </div>
                             {it.validatedAt && <span className="bl-check-when">validated {new Date(it.validatedAt).toLocaleString()}</span>}
                           </div>

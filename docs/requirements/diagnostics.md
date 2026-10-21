@@ -42,3 +42,8 @@ A checkbox dialog with the cursor on Submit is still recorded as an open dialog 
 The doctor command checks for the nom package and reports on it.
 - asked: 2026-10-19
 
+### R-diagnostics-010 · shipped
+Each CLI health signal has a fixture current for the installed CLI version, harvested from the live host once per version as one redacted sample (chrome verbatim, prose and secrets masked), and written into the repo only on explicit request.
+- asked: 2026-10-20
+- shipped: d1d922d1, f69cd06b
+

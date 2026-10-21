@@ -9,7 +9,7 @@ import type { DeliveryShape, HistoryEntry } from "@waterplane/shared";
 import { fixtureWanted, noteHealth } from "../clihealth.js";
 import { asksYesNo } from "../shelllinks.js";
 import { readNavBox, trustKeys } from "../prompt.js";
-import { ROW_WINDOW, composerFramesAmbiguous } from "../echo.js";
+import { ROW_WINDOW, composerFramesAmbiguous } from "../composer.js";
 import { isLocalCommand, startsNoTurn, worksUnannounced } from "../slash.js";
 import { CHANNEL_CONNECT_WAIT_MS, ECHO_WAIT_MS, PROMPT_HOOK_WAIT_MS, sleep } from "./deliverknobs.js";
 import type { DeliverOpts, DeliveryResult } from "./delivertypes.js";
@@ -348,7 +348,7 @@ export async function runDelivery(
        * **Ask the CLI, in the only language it answers this question in.**
        *
        * Everything above has failed for the SAME reason, and it is not that the
-       * prompt is missing: the composer is a viewport (`echo.ts`'s `scrolled`),
+       * prompt is missing: the composer is a viewport (`composer.ts`'s `scrolled`),
        * a long single-line phone message draws only its tail, and the head this
        * file cuts its probe from is off the top of the box. Measured on this
        * desktop over a fortnight: 46% of deliveries between 300 and 800

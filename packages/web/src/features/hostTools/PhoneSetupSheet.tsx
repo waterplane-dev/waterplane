@@ -8,7 +8,7 @@ import { useState } from "react";
 import { BatteryCharging, Bell, Check, PackagePlus, Smartphone, Wifi, X, type LucideIcon } from "lucide-react";
 import { core } from "../../sdk";
 import { Sheet } from "../../Sheet";
-import { Empty, FilterBar } from "../../kit";
+import { Empty, FilterBar, Button, Row, RowTitle, RowSub } from "../../kit";
 import { requestShellBatteryExemption, requestShellNotifications } from "../../shellLink";
 import { openInstallSettings } from "../../nativeInstall";
 import { usePhoneSetup } from "../../usePhoneSetup";
@@ -40,17 +40,17 @@ export function SetupStepRows({ steps, refresh }: { steps: readonly SetupStep[];
       {steps.map((st) => {
         const Icon = STEP_ICON[st.id];
         return (
-          <div key={st.id} className="row-wrap">
-            <div className="row grow">
-              <span className="row-title"><Icon size={12} /> {st.label}: {st.done ? "ready" : "not allowed yet"}</span>
-              <span className="row-sub dim">{st.why}</span>
-            </div>
+          <Row key={st.id} kind="wrap">
+            <Row kind="grow">
+              <RowTitle><Icon size={12} /> {st.label}: {st.done ? "ready" : "not allowed yet"}</RowTitle>
+              <RowSub className="dim">{st.why}</RowSub>
+            </Row>
             <div className="row-acts">
               {st.done
-                ? <span className="row-sub"><Check size={ICON} /> done</span>
-                : <button className="key primary" onClick={() => void allowStep(st.id, refresh)}>allow</button>}
+                ? <RowSub><Check size={ICON} /> done</RowSub>
+                : <Button variant="primary" onClick={() => void allowStep(st.id, refresh)}>allow</Button>}
             </div>
-          </div>
+          </Row>
         );
       })}
     </div>
@@ -77,9 +77,9 @@ export function PhoneSetupSheet() {
       {missing === 0 && !showAll
         ? <Empty>Everything is allowed — this app works with the app closed.</Empty>
         : <SetupStepRows steps={shown} refresh={refresh} />}
-      <div className="row-sub" style={{ padding: "8px 12px" }}>
+      <RowSub as="div" style={{ padding: "8px 12px" }}>
         Android grants none of these on its own — each is your tap on a system dialog or switch. This list re-reads when you come back from one.
-      </div>
+      </RowSub>
     </Sheet>
   );
 }

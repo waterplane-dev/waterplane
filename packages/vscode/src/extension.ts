@@ -11,7 +11,8 @@
  *
  * Activation reads only the active folder's newest session (`readSession`): the host's cursor reads
  * synchronously, in bounded 24 MB chunks, so its cost is that one log's size, once; every later poll
- * reads only what was appended.
+ * reads only what was appended. The week's headline at startup is the small `HeadlineSummary` the
+ * last finished scan left in `globalState` (zero IO), printed with its age.
  */
 import { realpathSync } from "node:fs";
 import * as fs from "node:fs/promises";
@@ -21,12 +22,15 @@ import * as vscode from "vscode";
 import { BRAND, fmtUsd, healthSpendWeeks } from "@waterplane/shared";
 import { repoOfWorktree } from "../../host/src/costwindow.js";
 import {
-  claudeConfigDir, listSessions, projectDirFor, recentRows, SessionLedger, weighFolder, WINDOW_MS,
+  anyLive, claudeConfigDir, listSessions, projectDirFor, RECENT_MS, recentRows, SessionLedger, summaryOf, thisRepoWeek, weighFolder, WINDOW_MS,
 } from "./data/index.js";
+import type { HeadlineSummary } from "./data/index.js";
 import { DEFAULT_HEALTH_SECONDS, HealthRun } from "./health/healthrun.js";
+import { InstructionLens } from "./codelens.js";
 import { Panel } from "./panel.js";
 import { NavTree, PICK, PICK_FOLDER, QUOTA, SHOW } from "./navtree.js";
 import { CopilotQuota } from "./copilotquota.js";
+import { CopilotLocalReader, userDirOf } from "../../extensions/copilot-usage/host/vscodelocal.mts";
 import type { NavState } from "./navtree.js";
 import { deliver, PROMPTS, render } from "./prompts.js";
 import type { ScanJob, ScanMsg } from "./scanworker.js";
@@ -42,6 +46,15 @@ interface RowsState { folder: string | null; rows: SessionSummary[]; selected: s
 const blankRows = (folder: string | null): RowsState => ({ folder, rows: [], selected: null, older: 0, capped: 0, automated: 0 });
 
 const RESCAN_MS = 10 * 60_000;
+/** The globalState key of the last finished scan's `HeadlineSummary`. */
+const SUMMARY_KEY = `${BRAND.slug}.headline`;
+
+/** The ledger's repo keys for a folder: as given and realpath-resolved, exactly (no prefix matching). */
+function repoKeysOf(folder: string): string[] {
+  let real = folder;
+  try { real = realpathSync(folder); } catch { /* the path as given */ }
+  return [...new Set([folder, real].map(repoOfWorktree))];
+}
 const OPEN_HOSTS = new Set([BRAND.domain, "marketplace.visualstudio.com", "open-vsx.org"]);
 
 const sentence = (e: unknown): string => {
@@ -69,6 +82,12 @@ class Ext implements vscode.Disposable {
   private health: HealthRun;
   /** A tab the panel should show once it says `ready` (rides the ready round-trip). */
   private wantTab: TabId | null = null;
+  /**
+   * The panel said `ready` with no view of its own before the active folder's rows were read:
+   * its default (Session while one is live, else All sessions) is chosen once they are, by
+   * `resolveDefault`, rather than guessed from an empty list. An explicit `showTab` cancels it.
+   */
+  private defaultPending = false;
   private watch: LogWatch;
   private rescanTimer: NodeJS.Timeout | null = null;
   private activeFolder: string | null = null;
@@ -83,12 +102,19 @@ class Ext implements vscode.Disposable {
   private rows: RowsState = blankRows(null);
   private session: { folder: string | null; doc: SessionDoc | null; why?: string } = { folder: null, doc: null };
   private weight: { doc: WeightDoc | null; why?: string } = { doc: null };
+  private lens!: InstructionLens;
   private corpus: { doc: CorpusDoc | null; why?: string } = { doc: null };
   private scanning: { done: number; total: number } | null = null;
   /** The running scan's worker; terminated when the panel closes or the config dir changes. */
   private worker: Worker | null = null;
   /** When the last scan finished (ms); 0 = none this window. */
   private lastScanAt = 0;
+  /** The last finished scan's seven days, from any window; null before one, or for another config dir. */
+  private summary: HeadlineSummary | null = null;
+  /** `repoKeysOf` for the active folder, kept: the tree asks on every row it draws. */
+  private keys: { folder: string; keys: string[] } | null = null;
+  /** Fires when the newest listed session stops counting as live, so the status bar and tree follow. */
+  private liveTimer: NodeJS.Timeout | null = null;
   private busy = false;
   private again = false;
   private disposed = false;
@@ -98,7 +124,7 @@ class Ext implements vscode.Disposable {
     this.panel = new Panel(ctx.extensionUri, (m) => void this.onMessage(m, "panel"), (v) => this.onVisible(v), () => this.cancelScan());
     // The tree on screen reads the cheap state and the cached health reading — never a corpus scan.
     // Before the tree, which reads its state; off until the person turns it on (its one network call).
-    this.quota = new CopilotQuota(ctx.globalState, () => this.tree?.refresh());
+    this.quota = new CopilotQuota(ctx.globalState, new CopilotLocalReader(userDirOf(ctx.globalStorageUri.fsPath)), () => this.tree?.refresh());
     this.tree = new NavTree(() => this.navState(), (v) => {
       if (!v) return;
       void this.refreshSession();
@@ -116,9 +142,18 @@ class Ext implements vscode.Disposable {
       cfg.get<number>("pollSeconds", 5),
     );
     this.statusBar.setEnabled(cfg.get<boolean>("statusBar", true));
+    const kept = ctx.globalState.get<HeadlineSummary>(SUMMARY_KEY);
+    this.summary = kept?.v === 1 && kept.configDir === this.configDir() ? kept : null;
+    this.lens = new InstructionLens({
+      active: (folder) => (this.weight.doc?.folder === folder ? this.weight.doc : null),
+      switches: copilotSwitches,
+      saved: (folder) => this.reweigh(folder),
+      command: SHOW,
+    });
     ctx.subscriptions.push(
       this,
       this.tree,
+      this.lens,
       new RestartWatch(ctx),
       vscode.commands.registerCommand(`${BRAND.slug}.open`, () => this.openCommand()),
       vscode.commands.registerCommand(SHOW, (tab: unknown) => this.showTab(isTab(tab) ? tab : "session")),
@@ -173,6 +208,7 @@ class Ext implements vscode.Disposable {
     // A Copilot instruction switch changes who reads which file: weigh again.
     if (["github.copilot.chat.codeGeneration.useInstructionFiles", "chat.useAgentsMdFile", "chat.useClaudeMdFile"].some((k) => e.affectsConfiguration(k))) {
       void this.refreshSession();
+      this.lens.reset();
     }
     if (!e.affectsConfiguration(BRAND.slug)) return;
     const cfg = vscode.workspace.getConfiguration(BRAND.slug);
@@ -183,6 +219,9 @@ class Ext implements vscode.Disposable {
       this.cancelScan();
       this.lastScanAt = 0;
       this.corpus = { doc: null };
+      this.summary = null;
+      void this.ctx.globalState.update(SUMMARY_KEY, undefined);
+      this.pushSummary();
       void this.refreshSession();
       if (this.panel.visible) void this.scan();
     }
@@ -210,7 +249,7 @@ class Ext implements vscode.Disposable {
       this.watch.setProjectDir(null);
       this.watch.setActiveLog(null);
       this.watch.setRecent([]);
-      this.statusBar.setDoc(null);
+      this.applyLive();
       this.sendAll("panel");
       return;
     }
@@ -258,6 +297,7 @@ class Ext implements vscode.Disposable {
             : (prior ?? []);
           this.rows = { folder, rows: first, selected: row.id, older, capped, automated };
           this.post(this.sessionsMsg(folder));
+          this.resolveDefault();
           const full = await this.ledger.rows(listed, folder, r.sum);
           if (stale()) return;
           this.rows = { folder, rows: full, selected: row.id, older, capped, automated };
@@ -272,11 +312,66 @@ class Ext implements vscode.Disposable {
       this.weight = { doc: null, why: sentence(e) };
     }
     if (stale()) return;
-    this.statusBar.setDoc(this.session.doc);
+    this.applyLive();
     this.post({ t: "session", folder, doc: this.session.doc, why: this.session.why, following: !this.pinned.has(folder) });
     this.post(this.sessionsMsg(folder));
+    this.resolveDefault();
     this.post({ t: "weight", ...this.weight });
+    this.lens.refresh();
     this.postHealth(folder);
+  }
+
+  /** The panel's pending default view, now that the active folder has been read (see `defaultPending`). */
+  private resolveDefault(): void {
+    if (!this.defaultPending || this.wantTab) return;
+    this.defaultPending = false;
+    const id: TabId = anyLive(this.myRows(), Date.now()) ? "session" : "all";
+    this.panel.setView(id);
+    this.post({ t: "tab", id }, "panel");
+  }
+
+  /** An instruction file was saved: weigh that folder again so the Always-on view and the lenses agree at once. */
+  private async reweigh(folder: string): Promise<void> {
+    if (folder !== this.activeFolder) return;
+    try { this.weight = { doc: await weighFolder(folder, copilotSwitches()) }; } catch (e) { this.weight = { doc: null, why: sentence(e) }; }
+    this.post({ t: "weight", ...this.weight });
+  }
+
+  private folderKeys(): string[] {
+    const f = this.activeFolder;
+    if (!f) return [];
+    if (this.keys?.folder !== f) this.keys = { folder: f, keys: repoKeysOf(f) };
+    return this.keys.keys;
+  }
+
+  /** The active folder's listed rows, or none while they belong to another folder. */
+  private myRows(): SessionSummary[] {
+    return this.activeFolder && this.rows.folder === this.activeFolder ? this.rows.rows : [];
+  }
+
+  /**
+   * The status bar's mode from `anyLive`: the session while one is being worked on, else the last
+   * scan's week. Re-armed to run again when the newest row ages out of "recent", since nothing is
+   * written then to trigger a read.
+   */
+  private applyLive(): void {
+    if (this.liveTimer) clearTimeout(this.liveTimer);
+    this.liveTimer = null;
+    if (this.disposed) return;
+    const rows = this.myRows();
+    const now = Date.now();
+    const live = anyLive(rows, now);
+    this.statusBar.setDoc(live && this.session.folder === this.activeFolder ? this.session.doc : null);
+    this.pushSummary();
+    if (live) {
+      const newest = Math.max(...rows.map((r) => r.mtime));
+      this.liveTimer = setTimeout(() => { this.applyLive(); this.tree.refresh(); }, Math.max(1000, newest + RECENT_MS - now + 1000));
+    }
+  }
+
+  private pushSummary(): void {
+    const s = this.summary;
+    this.statusBar.setSummary(s, s ? thisRepoWeek(s, this.folderKeys()) : null);
   }
 
   private sessionsMsg(folder: string): ToWebview {
@@ -316,6 +411,11 @@ class Ext implements vscode.Disposable {
         void w.terminate();
         this.corpus = next;
         this.lastScanAt = Date.now();
+        if (next.doc && !next.why) {
+          this.summary = summaryOf(next.doc, job.configDir);
+          void this.ctx.globalState.update(SUMMARY_KEY, this.summary);
+          this.pushSummary();
+        }
         this.scanning = null;
         this.statusBar.setScan(null);
         if (!this.disposed) this.post({ t: "corpus", ...this.corpus });
@@ -386,6 +486,9 @@ class Ext implements vscode.Disposable {
       health: h?.doc ?? null,
       healthRunning: !!h?.run,
       quota: this.quota.state,
+      summary: this.summary,
+      live: anyLive(mine ? this.rows.rows : [], Date.now()),
+      folderKeys: this.folderKeys(),
     };
   }
 
@@ -415,13 +518,12 @@ class Ext implements vscode.Disposable {
   private withSpend(folder: string, doc: HealthDoc | null): HealthDoc | null {
     const days = this.corpus.doc?.days;
     if (!doc?.index?.series || !days) return doc;
-    let real = folder;
-    try { real = realpathSync(folder); } catch { /* the path as given */ }
-    const spend = healthSpendWeeks(days, [...new Set([folder, real].map(repoOfWorktree))]);
+    const spend = healthSpendWeeks(days, repoKeysOf(folder));
     return { ...doc, index: { ...doc.index, spend } };
   }
 
   private showTab(tab: TabId): void {
+    this.defaultPending = false;
     this.panel.setView(tab);
     // An open panel will not say `ready` again, so tell it now; a new one gets it on its `ready`.
     if (this.panel.open) { this.panel.show(); this.post({ t: "tab", id: tab }, "panel"); return; }
@@ -515,7 +617,20 @@ class Ext implements vscode.Disposable {
   private async onMessage(m: ToExtension, from: Origin): Promise<void> {
     try {
       switch (m.t) {
-        case "ready": this.sendAll(from); break;
+        case "ready": {
+          const asked = this.wantTab;
+          this.sendAll(from);
+          // The panel's default view: what it was left on, else the session while one is live, else All sessions.
+          // Before the active folder's rows are read, "nothing live" would only mean "not read yet".
+          if (from === "panel" && !asked) {
+            if (m.tab == null && this.activeFolder && this.rows.folder !== this.activeFolder) { this.defaultPending = true; void this.refreshSession(); break; }
+            this.defaultPending = false;
+            const id: TabId = m.tab ?? (anyLive(this.myRows(), Date.now()) ? "session" : "all");
+            this.panel.setView(id);
+            this.post({ t: "tab", id }, "panel");
+          }
+          break;
+        }
         case "rescan": void this.scan(); break;
         case "pickFolder":
           if (this.folders().includes(m.folder)) { this.activeFolder = m.folder; this.sendFolders(); await this.refreshSession(); }
@@ -588,6 +703,7 @@ class Ext implements vscode.Disposable {
   dispose(): void {
     this.disposed = true;
     this.cancelScan();
+    if (this.liveTimer) clearTimeout(this.liveTimer);
     if (this.rescanTimer) clearInterval(this.rescanTimer);
     this.rescanTimer = null;
     this.health.dispose();

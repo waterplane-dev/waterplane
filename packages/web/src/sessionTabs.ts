@@ -18,12 +18,16 @@
  * that one tap from wherever you are, and it is the only surface in the app
  * where sessions sit side by side rather than in a column.
  *
- * **Everything here is per device** (`storage.ts`'s `sessionTabs*`), which is
+ * **The strip's SHAPE is per device** (`storage.ts`'s `sessionTabs*`), which is
  * `waterplane.netPulse`'s argument and one step plainer: HOW MANY tabs fit is a
  * measurement of the screen in your hand, and a phone's four carried onto a
- * desktop tab is four labels stretched over 1200 px. The open counts are per
- * device for a second reason — they are a record of taps on one screen, and a
- * synced counter is one two devices race to increment.
+ * desktop tab is four labels stretched over 1200 px. **Its ORDER is shared by
+ * default** (`tabsSynced`): the order mode and the sessions' open history live
+ * in two synced keys, so "last opened first" on the phone puts first the
+ * session you were last in on the desktop. The race two devices run to bump a
+ * counter is settled by MERGING the two histories on adopt (`mergeOpens`),
+ * never last-write-wins. A device switched off keeps its own pair, untouched
+ * while it was shared, and a pinned file's opens are always this device's.
  *
  * The pure half is here and node-tested (`sessionTabs.test.mjs`); the drawing
  * is `SessionTabsBar.tsx`.
@@ -241,6 +245,50 @@ export function migrateOpens(raw: StoredOpens): TabOpens {
   return out;
 }
 
+/**
+ * How long the SHARED history remembers an open. It is never pruned against
+ * the live session list the way this device's is: two devices that disagree
+ * for a moment about which sessions exist would delete and re-merge the same
+ * rows back and forth. Age is a rule both sides reach on their own.
+ */
+export const SHARED_OPENS_TTL_MS = 30 * 86_400_000;
+
+/**
+ * Two open histories as one: every session either side has, its LAST open the
+ * later of the two and its count the higher (two devices' taps on the same
+ * session are not added — each side's count already includes whatever it
+ * adopted, so a sum would double it on every exchange). Rows older than
+ * `SHARED_OPENS_TTL_MS` are dropped. Keys come out sorted, so one history
+ * always serialises to one string and an exchange that changed nothing is
+ * recognised as such — the merge converges instead of ping-ponging.
+ */
+export function mergeOpens(a: TabOpens, b: TabOpens, now: number): TabOpens {
+  const out: TabOpens = {};
+  const cut = now - SHARED_OPENS_TTL_MS;
+  for (const id of [...new Set([...Object.keys(a), ...Object.keys(b)])].sort()) {
+    const x = a[id], y = b[id];
+    const at = Math.max(x?.at ?? 0, y?.at ?? 0);
+    if (at < cut) continue;
+    out[id] = { n: Math.max(x?.n ?? 0, y?.n ?? 0), at };
+  }
+  return out;
+}
+
+function parseOpens(raw: string | null): TabOpens {
+  try { return migrateOpens(JSON.parse(raw || "{}") as StoredOpens); } catch { return {}; }
+}
+
+/**
+ * The shared history's `AdoptGuard`: what to write when another device's copy
+ * arrives. The merge of both, or nothing (write what arrived) when the merge
+ * IS what arrived — anything else is re-pushed, and an unequal string for an
+ * equal history would push for ever.
+ */
+export function adoptOpens(incoming: string, current: string | null, now: number): string | void {
+  const merged = JSON.stringify(mergeOpens(parseOpens(incoming), parseOpens(current), now));
+  return merged === incoming ? undefined : merged;
+}
+
 export function clampTabLimit(n: unknown): number {
   const v = typeof n === "number" && Number.isFinite(n) ? Math.round(n) : TAB_LIMIT_DEFAULT;
   return Math.min(TAB_LIMIT_MAX, Math.max(TAB_LIMIT_MIN, v));
@@ -414,12 +462,45 @@ export function tabCloseAsk(label: string, running: boolean): { title: string; l
 
 export const tabsEnabled = (): boolean => lsBool(LS.sessionTabs, true);
 export const tabsCount = (): number => clampTabCount(lsNum(LS.sessionTabsCount, TAB_COUNT_DEFAULT));
-export const tabsOrder = (): TabOrder => cleanTabOrder(lsGet(LS.sessionTabsOrder));
+/** This device follows the shared order — absent is ON (the default). */
+export const tabsSynced = (): boolean => lsGet(LS.sessionTabsSync) !== "0";
+/** Shared: the shared mode, or — until any device has written one — this device's own. */
+export const tabsOrder = (): TabOrder =>
+  cleanTabOrder(tabsSynced() ? lsGet(LS.tabOrderShared) ?? lsGet(LS.sessionTabsOrder) : lsGet(LS.sessionTabsOrder));
 export const tabsLimit = (): number => clampTabLimit(lsNum(LS.sessionTabsLimit, TAB_LIMIT_DEFAULT));
 
 export function setTabsEnabled(on: boolean): void { lsSetBool(LS.sessionTabs, on); emit(); }
 export function setTabsCount(n: number): void { lsSet(LS.sessionTabsCount, String(clampTabCount(n))); emit(); }
-export function setTabsOrder(o: TabOrder): void { lsSet(LS.sessionTabsOrder, o); emit(); }
+export function setTabsOrder(o: TabOrder): void { lsSet(tabsSynced() ? LS.tabOrderShared : LS.sessionTabsOrder, o); emit(); }
+export function setTabsSynced(on: boolean): void { lsSet(LS.sessionTabsSync, on ? "1" : "0"); emit(); }
+/** Which saver is on — this app's data saver, the phone's, or its battery saver. */
+export type SaverKind = "app" | "phone-data" | "battery";
+
+export const SAVER_WORDS: Record<SaverKind, string> = {
+  app: "data saver",
+  "phone-data": "the phone's data saver",
+  battery: "battery saver",
+};
+
+/**
+ * The saver that is on, or null. ONE predicate for both halves of the offer:
+ * a non-null answer may ask, a null one ends the spell so the next one asks
+ * again. `battery` is null where nothing can say (a browser, an older APK).
+ */
+export function saverOn(s: { app: boolean; phoneData: boolean; battery: boolean | null }): SaverKind | null {
+  if (s.app) return "app";
+  if (s.battery) return "battery";
+  if (s.phoneData) return "phone-data";
+  return null;
+}
+
+/** Offer to stop sharing the tab order: a saver is on, sharing is, and this spell has not asked. */
+export function offerUnsync(saver: SaverKind | null, synced: boolean, asked: boolean): boolean {
+  return saver !== null && synced && !asked;
+}
+
+/** Re-read after another device's copy of a shared key was adopted. */
+export function refreshTabs(): void { emit(); }
 export function setTabsLimit(n: number): void { lsSet(LS.sessionTabsLimit, String(clampTabLimit(n))); emit(); }
 
 const readFiles = (): FileTab[] => cleanFileTabs(lsJson<unknown>(LS.tabFiles, []));
@@ -442,11 +523,26 @@ export function noteFileOnScreen(key: string | null, now = Date.now()): void {
   // Being looked at is an open, exactly as a session's attach is — so a file
   // moves in `recent`/`frequent` by the same rule. Unpinned files' rows are
   // pruned on the next publish.
-  if (key) lsSetJson(LS.tabOpens, bumpOpen(readOpens(), `file:${key}`, now));
+  if (key) lsSetJson(LS.tabOpens, bumpOpen(readOwnOpens(), `file:${key}`, now));
   emit();
 }
 
-const readOpens = (): TabOpens => migrateOpens(lsJson<StoredOpens>(LS.tabOpens, {}));
+const readOwnOpens = (): TabOpens => migrateOpens(lsJson<StoredOpens>(LS.tabOpens, {}));
+
+/** The shared SESSION history, or — until any device has written it — this
+ *  device's own sessions' rows, so switching sync on starts from what is here. */
+function readSharedOpens(): TabOpens {
+  const raw = lsGet(LS.tabOpensShared);
+  if (raw !== null) return parseOpens(raw);
+  return Object.fromEntries(Object.entries(readOwnOpens()).filter(([k]) => !k.startsWith("file:")));
+}
+
+/** What the strip sorts on: shared sessions plus this device's files, or all this device's. */
+function readOpens(): TabOpens {
+  if (!tabsSynced()) return readOwnOpens();
+  const files = Object.fromEntries(Object.entries(readOwnOpens()).filter(([k]) => k.startsWith("file:")));
+  return { ...files, ...readSharedOpens() };
+}
 
 /**
  * Which session just CAME ON SCREEN and is owed an open, or null.
@@ -537,11 +633,16 @@ export function noteSessionTabs(next: readonly SessionTab[], active: string | nu
   tabs = [...next];
   activeId = active;
   const ids = tabs.map((t) => t.id);
-  const opens = readOpens();
+  const opens = readOwnOpens();
   const pruned = pruneOpens(opens, ids, readFiles().map(fileOpenKey));
   const owed = openOwed(counted, active, ids);
   if (!active) counted = null;
-  if (owed) { counted = owed; lsSetJson(LS.tabOpens, bumpOpen(pruned, owed, Date.now())); }
+  const shared = tabsSynced();
+  if (owed) counted = owed;
+  // Shared: the open goes to the shared history (sorted, aged — `mergeOpens`),
+  // and this device's own rows are only pruned.
+  if (owed && shared) { const now = Date.now(); lsSetJson(LS.tabOpensShared, mergeOpens(bumpOpen(readSharedOpens(), owed, now), {}, now)); }
+  if (owed && !shared) lsSetJson(LS.tabOpens, bumpOpen(pruned, owed, Date.now()));
   else if (Object.keys(pruned).length !== Object.keys(opens).length) lsSetJson(LS.tabOpens, pruned);
   emit();
 }

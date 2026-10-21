@@ -7,11 +7,13 @@
  * nothing to say (a chip with nothing in it is not drawn — never a greyed one).
  */
 import type { ReactNode } from "react";
+import { agentWarnTok } from "../prefs";
 import { Bot, Hourglass, SquareTerminal, Star, Wallet } from "lucide-react";
 import { fmtTok, liveAgentText, shellsChipText, shellsSummary, type SessionInfo } from "@waterplane/shared";
 import type { BackendList } from "../../backendCaps";
 import { budgetTagFacts } from "../../features/sessionBudget";
 import { STATUS_LABEL, contextPill, sessionCostPill, sessionStatus, statusPill, type SessionFilter } from "../../sessionFacts";
+import { Tag } from "../../kit/Tag";
 
 /**
  * What makes a status badge a FILTER control: the launcher's status filter,
@@ -44,16 +46,16 @@ export function statusTags(s: SessionInfo, filter?: TagFilter, fresh?: boolean, 
     const cls = fresh ? `${cls0} tag-fresh` : cls0;
     const title = fresh ? `something new since you last looked${title0 ? " · " : ""}${title0}` : title0;
     const body = fresh ? <><Star size={11} fill="currentColor" /> {body0}</> : body0;
-    if (!filter) return <span className={`tag ${cls}`} title={title}>{body}</span>;
+    if (!filter) return <Tag className={cls} title={title}>{body}</Tag>;
     const on = filter.isOn(st);
     return (
-      <span className={`tag ${cls} tag-filter${on ? " on" : ""}`} role="button" tabIndex={0}
+      <Tag className={`${cls} tag-filter${on ? " on" : ""}`} role="button" tabIndex={0}
         title={`${title}${title ? " · " : ""}${on ? "showing only these — tap to clear the filter" : `tap to show only the ${STATUS_LABEL[st]} sessions`}`}
         onPointerDown={(e) => e.stopPropagation()}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); filter.toggle(st); } }}
         onClick={(e) => { e.stopPropagation(); filter.toggle(st); }}>
         {body}
-      </span>
+      </Tag>
     );
   };
   // The WORDS are `sessionFacts.ts`'s (`statusPill`), so a session named in
@@ -88,15 +90,15 @@ export function limitTag(s: SessionInfo, limitAuto: boolean): ReactNode {
   if (!lim || lim.blocked || !s.running) return null;
   if (lim.autoContinue === limitAuto) return null;
   if (lim.autoContinue)
-    return <span className="tag limit-on" title={`set for this session: auto-continue after a usage-limit reset is ON here — the global setting is off`}><Hourglass size={12} /> auto</span>;
-  return <span className="tag limit-off" title={`set for this session: auto-continue after a usage-limit reset is OFF here — the global setting is on, so a hit limit waits for you in this session only`}><Hourglass size={12} /> no auto</span>;
+    return <Tag className="limit-on" title={`set for this session: auto-continue after a usage-limit reset is ON here — the global setting is off`}><Hourglass size={12} /> auto</Tag>;
+  return <Tag className="limit-off" title={`set for this session: auto-continue after a usage-limit reset is OFF here — the global setting is on, so a hit limit waits for you in this session only`}><Hourglass size={12} /> no auto</Tag>;
 }
 
 // Context-window badge: percent of the window still free (parsed from the TUI).
 // Absent until the CLI has printed a figure. Warm colours as it runs low.
 export function contextTag(s: SessionInfo): ReactNode {
   const p = contextPill(s);
-  return p && <span className={`tag ${p.cls}`} title={p.title}>{p.body}</span>;
+  return p && <Tag className={p.cls} title={p.title}>{p.body}</Tag>;
 }
 
 /**
@@ -109,7 +111,7 @@ export function contextTag(s: SessionInfo): ReactNode {
  */
 export function costTag(s: SessionInfo): ReactNode {
   const p = sessionCostPill(s);
-  return p && <span className={`tag ${p.cls}`} title={p.title}>{p.body}</span>;
+  return p && <Tag className={p.cls} title={p.title}>{p.body}</Tag>;
 }
 
 /**
@@ -125,11 +127,11 @@ export function costTag(s: SessionInfo): ReactNode {
  */
 export function liveAgentTag(s: SessionInfo): ReactNode {
   const sp = s.contextSpark;
-  const text = s.running ? liveAgentText(sp?.liveAgentTok, sp?.liveAgentAt, Date.now()) : null;
+  const text = s.running ? liveAgentText(sp?.liveAgentTok, sp?.liveAgentAt, Date.now(), agentWarnTok()) : null;
   if (!text || sp?.liveAgentTok == null) return null;
-  return <span className="tag cost-heavy" title={`${text}\n\nTap the context readout for the whole picture. Nothing here stops it.`}>
+  return <Tag className="cost-heavy" title={`${text}\n\nTap the context readout for the whole picture. Nothing here stops it.`}>
     <Bot size={12} /> {sp.liveAgentType ? `${sp.liveAgentType} ` : "agent "}re-reads {fmtTok(sp.liveAgentTok)}
-  </span>;
+  </Tag>;
 }
 
 /**
@@ -148,13 +150,13 @@ export function shellsTag(s: SessionInfo, onOpen: () => void): ReactNode {
   const sum = shellsSummary(list, Date.now());
   const cls = sum.working > 0 ? "coding" : "idle";
   return (
-    <span className={`tag ${cls} tag-filter`} role="button" tabIndex={0}
+    <Tag className={`${cls} tag-filter`} role="button" tabIndex={0}
       title="tap to see what each background shell is doing"
       onPointerDown={(e) => e.stopPropagation()}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onOpen(); } }}
       onClick={(e) => { e.stopPropagation(); onOpen(); }}>
       <SquareTerminal size={12} /> {shellsChipText(sum)}
-    </span>
+    </Tag>
   );
 }
 
@@ -192,11 +194,11 @@ export function budgetTag(s: SessionInfo, onOpen: () => void): ReactNode {
   const f = budgetTagFacts(s, Date.now());
   if (!f) return null;
   return (
-    <span className={`tag ${f.cls} tag-filter`} role="button" tabIndex={0} title={f.title}
+    <Tag className={`${f.cls} tag-filter`} role="button" tabIndex={0} title={f.title}
       onPointerDown={(e) => e.stopPropagation()}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onOpen(); } }}
       onClick={(e) => { e.stopPropagation(); onOpen(); }}>
       <Wallet size={12} /> {f.text}
-    </span>
+    </Tag>
   );
 }

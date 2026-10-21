@@ -271,6 +271,19 @@ export function tourSession<S extends { id: string; cwd: string }>(sessions: rea
     ?? null;
 }
 
+/**
+ * How a row's tap reaches its screen. `after-close` when the tour is open over a screen of the very
+ * session the row drives into: there "this session, no sheet" is what closing a sheet looks like, so
+ * the attach is taken as ONE Back (`routeStep`) — and that Back's popstate lands AFTER whatever the
+ * row opened next, closing it. A sheet row did exactly that: Gallery from a tour opened over the
+ * session left the session on screen and no gallery. So the tour closes first, and the row acts on
+ * that Back's arrival (`afterBack`). `health` never attaches a session it is already on.
+ */
+export function tourRowPath(t: TourTarget, activeId: string | null | undefined, sid: string | null | undefined): "direct" | "after-close" {
+  if (t.kind === "health" || !needsSession(t) || !sid) return "direct";
+  return activeId === sid ? "after-close" : "direct";
+}
+
 /** Does tapping this row need the demo session on the list? */
 export function needsSession(t: TourTarget): boolean {
   return t.kind !== "sheet" || t.inSession === true;

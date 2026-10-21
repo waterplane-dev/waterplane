@@ -14,6 +14,9 @@ import { track } from "../usage";
 import { ICON } from "./asxConst";
 import { ItemFiles } from "./AsxParts";
 import type { AssessModel } from "./useAssessSheet";
+import { Button } from "../kit/Button";
+import { Hint } from "../kit/Hint";
+import { Tag } from "../kit/Tag";
 
 function Words({ row, m }: { row: SlotCardRow; m: AssessModel }) {
   const { p } = m;
@@ -33,7 +36,7 @@ export function AsxSlotCards({ m }: { m: AssessModel }) {
     <>
       {conflicts.length ? (
         <div className="act-group">
-          <div className="act-group-head"><span className="tag tag-failed">contradict</span><span className="act-group-n">{conflicts.length}</span></div>
+          <div className="act-group-head"><Tag className="tag-failed">contradict</Tag><span className="act-group-n">{conflicts.length}</span></div>
           <div className="act-verdict assess-effect">{CONFLICT_NOTE}</div>
           {conflicts.map((c) => {
             const left = rejected.has(`conflict:${c.cid}`);
@@ -50,16 +53,16 @@ export function AsxSlotCards({ m }: { m: AssessModel }) {
                         {p.online || (item && p.onOpenItem) ? (
                           <div className="act-acts">
                             {item && p.onOpenItem ? (
-                              <button className="key" title="show it where its words live"
+                              <Button title="show it where its words live"
                                 onClick={() => { track("action:assess.conflict.open"); p.onOpenItem?.(item); }}>
                                 <ExternalLink size={ICON} /> open
-                              </button>
+                              </Button>
                             ) : null}
                             {p.online && p.onEditItem ? (
-                              <button className="key" title="change its words or its time — the send sheet, with this row in it"
+                              <Button title="change its words or its time — the send sheet, with this row in it"
                                 onClick={() => { track("action:assess.conflict.edit"); p.onEditItem?.(r.id); }}>
                                 <Pencil size={ICON} /> edit
-                              </button>
+                              </Button>
                             ) : null}
                             {p.online && p.onDropItem ? (
                               <ConfirmButton confirm={CONFLICT_DROP_CONFIRM} title={CONFLICT_DROP_TITLE}
@@ -73,7 +76,7 @@ export function AsxSlotCards({ m }: { m: AssessModel }) {
                     </div>
                   );
                 })}
-                {!p.online ? <div className="form-hint">No connection — edit and drop wait for the link.</div> : null}
+                {!p.online ? <Hint>No connection — edit and drop wait for the link.</Hint> : null}
                 <div className="act-acts">
                   <button className={`key${left ? " active" : ""}`} title={left ? "un-mark it" : "leave every row here as it is — nothing is sent either way"}
                     onClick={() => { track("action:assess.conflict.ignore"); flip(`conflict:${c.cid}`); }}>
@@ -87,7 +90,7 @@ export function AsxSlotCards({ m }: { m: AssessModel }) {
       ) : null}
       {splits.length ? (
         <div className="act-group">
-          <div className="act-group-head"><span className="tag tag-running">split</span><span className="act-group-n">{splits.length}</span></div>
+          <div className="act-group-head"><Tag className="tag-running">split</Tag><span className="act-group-n">{splits.length}</span></div>
           {splits.map((s) => {
             const on = pickedSplits.has(s.sid);
             const left = rejected.has(`split:${s.sid}`);

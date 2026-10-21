@@ -38,3 +38,8 @@ The README is a clear first touchpoint: a visitor understands the project and ho
 - asked: 2026-10-11
 - shipped: bbb4349c
 
+### R-contributing-008 · shipped
+Every source file in the extension host, shared and cli halves, and tools scripts stays under 900 lines, enforced by lint with no disable comment or higher cap.
+- asked: 2026-10-21
+- shipped: df9a900b, 49307dc3
+

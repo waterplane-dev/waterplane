@@ -58,7 +58,7 @@
  * Of the two available repairs — cut the window by calendar day, or say
  * READINGS and mean it — this is the second, and the reason is that the first
  * one cannot be honest through this seam. A caller hands in the values of ONE
- * series with its absences already dropped (`narrate.mjs`'s `windowFor` filters
+ * series with its absences already dropped (`events.mjs`'s `windowFor` filters
  * non-numbers), so the days are gone before the window is cut and no function
  * here can recover them. A calendar cut would have to be re-implemented by
  * every caller, which is the second definition this module exists to prevent.

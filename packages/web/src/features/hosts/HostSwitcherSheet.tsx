@@ -18,6 +18,7 @@ import { confirmRemoveHost, openPairQr, showAddHost, showEditHost, showHostList,
 import { hostAddress, hostRows } from "./logic";
 import { useHostRoute, useHosts, useSwitcherView } from "./store";
 import { usePeersSheet } from "../../peersSlot";
+import { Button, Row, RowTitle, RowSub, Hint } from "../../kit";
 
 const ICON = 16;
 
@@ -67,7 +68,7 @@ export function HostSwitcherSheet() {
       title="Hosts"
       icon={<Server size={ICON} />}
       onClose={close}
-      actions={<button className="key" onClick={showAddHost}><Plus size={ICON} /> add</button>}
+      actions={<Button onClick={showAddHost}><Plus size={ICON} /> add</Button>}
     >
       {hosts.length === 0 ? (
         <Empty thing="saved desktops">No desktops saved on this phone. Add one with its Tailscale address.</Empty>
@@ -80,60 +81,60 @@ export function HostSwitcherSheet() {
               // parked while it runs; it has no address to edit, no QR and no
               // "remove" — only the way out.
               return (
-                <div key={h.id} className="row-wrap">
-                  <div className="row grow">
-                    <span className="row-title"><FlaskConical size={12} /> {h.name} · in use</span>
-                    <span className="row-sub dim">A pretend desktop — nothing runs on a computer</span>
-                  </div>
+                <Row key={h.id} kind="wrap">
+                  <Row kind="grow">
+                    <RowTitle><FlaskConical size={12} /> {h.name} · in use</RowTitle>
+                    <RowSub className="dim">A pretend desktop — nothing runs on a computer</RowSub>
+                  </Row>
                   <div className="row-acts">
-                    <button className="key" aria-label="leave the demo" onClick={leaveDemo}><LogOut size={ICON} /> leave</button>
+                    <Button aria-label="leave the demo" onClick={leaveDemo}><LogOut size={ICON} /> leave</Button>
                   </div>
-                </div>
+                </Row>
               );
             }
             return (
-              <div key={h.id} className="row-wrap">
+              <Row key={h.id} kind="wrap">
                 {active ? (
-                  <div className="row grow">
-                    <span className="row-title"><Check size={12} /> {h.name} · in use</span>
-                    <span className="row-sub dim">{hostAddress(h.base)}{h.lan ? ` · LAN ${hostAddress(h.lan.base)}` : ""}</span>
+                  <Row kind="grow">
+                    <RowTitle><Check size={12} /> {h.name} · in use</RowTitle>
+                    <RowSub className="dim">{hostAddress(h.base)}{h.lan ? ` · LAN ${hostAddress(h.lan.base)}` : ""}</RowSub>
                     {route && (
-                      <span className="row-sub">
+                      <RowSub>
                         {route.route === "lan" ? <Router size={12} /> : <Globe size={12} />} {route.sentence}
-                      </span>
+                      </RowSub>
                     )}
-                  </div>
+                  </Row>
                 ) : (
-                  <button className="row grow" onClick={() => switchHost(h.id)}>
-                    <span className="row-title">{h.name}</span>
-                    <span className="row-sub dim">{hostAddress(h.base)} · tap to switch</span>
-                  </button>
+                  <Row as="button" kind="grow" onClick={() => switchHost(h.id)}>
+                    <RowTitle>{h.name}</RowTitle>
+                    <RowSub className="dim">{hostAddress(h.base)} · tap to switch</RowSub>
+                  </Row>
                 )}
                 <div className="row-acts">
                   {/* The QR is minted by the host this page talks to — the
                       active one — so only its row offers it. */}
                   {active && (
-                    <button className="key" aria-label={`show a pairing QR for ${h.name}`} onClick={openPairQr}><QrCode size={ICON} /></button>
+                    <Button aria-label={`show a pairing QR for ${h.name}`} onClick={openPairQr}><QrCode size={ICON} /></Button>
                   )}
-                  <button className="key" aria-label={`edit ${h.name}`} onClick={() => showEditHost(h.id)}><Pencil size={ICON} /></button>
-                  <button className="key" aria-label={`remove ${h.name}`} onClick={() => void confirmRemoveHost(h)}><Trash2 size={ICON} /></button>
+                  <Button aria-label={`edit ${h.name}`} onClick={() => showEditHost(h.id)}><Pencil size={ICON} /></Button>
+                  <Button aria-label={`remove ${h.name}`} onClick={() => void confirmRemoveHost(h)}><Trash2 size={ICON} /></Button>
                 </div>
-              </div>
+              </Row>
             );
           })}
         </div>
       )}
       {PeersSheet && <div className="set-row" style={{ marginTop: 10 }}>
-        <button className="key" onClick={() => setPeers(true)}><Link2 size={ICON} /> Peer desktops</button>
+        <Button onClick={() => setPeers(true)}><Link2 size={ICON} /> Peer desktops</Button>
       </div>}
       {!hosts.some(isDemoHost) && (
         <div className="set-row" style={{ marginTop: 10 }}>
-          <button className="key" onClick={() => tryDemo()}><FlaskConical size={ICON} /> Try the demo</button>
+          <Button onClick={() => tryDemo()}><FlaskConical size={ICON} /> Try the demo</Button>
         </div>
       )}
-      <div className="form-hint">
+      <Hint>
         Each desktop keeps its own drafts, queue and caches on this phone; switching reloads the app onto the other one.
-      </div>
+      </Hint>
     </Sheet>
   );
 }

@@ -25,6 +25,7 @@ import {
 import { pointReadoutWords, seriesValueWords } from "./repoHealthWords";
 import { HintChip } from "./HintChip";
 import { FilterChip } from "./kit/FilterChip";
+import { Button } from "./kit/Button";
 
 const TAPE_H = 64;
 
@@ -234,7 +235,7 @@ export function TypeStack({ classics, width }: {
       {filtered ? (
         <div className="rh-cap">
           {filtered}{" "}
-          <button className="key" onClick={() => setOff(new Set<string>())}>{TYPE_FILTER_CLEAR}</button>
+          <Button onClick={() => setOff(new Set<string>())}>{TYPE_FILTER_CLEAR}</Button>
         </div>
       ) : null}
     </div>
@@ -368,9 +369,9 @@ export function Tape({ tape, paths, width, caption, onOpenFile, holderHue }: {
             a picked bar's answer keeps the readout's weight. */}
         <span className={`rh-tape-pick-words${pick ? "" : " scrub-hint"}`}>{tapePickWords(pick, !!paths)}</span>
         {pick?.path && onOpenFile ? (
-          <button className="key" onClick={() => onOpenFile(pick.path!)}>
+          <Button onClick={() => onOpenFile(pick.path!)}>
             <FileText size={14} /> open
-          </button>
+          </Button>
         ) : null}
       </div>
       {/* The figures in the open; why they are words and not rules folds behind

@@ -5,7 +5,7 @@ import { fmtCount, fmtShare, fmtUsd, tokenTotal, type UsageHistoryDoc, type Usag
 import {
   type CutRefusal, cutRefusalText, isCut, LIVE_WINDOWS, type LiveWindowId, type WindowCut,
 } from "./usageCut.ts";
-import { ago, until } from "@waterplane/kit";
+import { ago, until, Button } from "@waterplane/kit";
 import { USAGE_STALE_MS } from "./constants.ts";
 import { resetWhen, short } from "./when.ts";
 import { UsageSpark } from "./UsageSpark.tsx";
@@ -118,10 +118,10 @@ export function LimitWindows({ usage, onRefresh, history, cuts, scope, onScope, 
             screen, while `RefreshCw` stays the head's "read the document
             again" as on every other sheet. One icon per meaning. */}
         {onRefresh && (
-          <button className="key" onClick={() => onRefresh()}
+          <Button onClick={() => onRefresh()}
             title="re-read the CLI’s /usage screen (spawns a short claude probe)">
             <ScanLine size={14} /> re-read
-          </button>
+          </Button>
         )}
       </div>
 

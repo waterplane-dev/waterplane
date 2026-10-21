@@ -7912,7 +7912,7 @@ region 2 has no status to carry.
 Region 2 added these, and three are worth recording:
 
 - **`rankSentence` is the ONE conversion from a rank fraction to a percentile on this side of the
-  wire.** `narrate.mjs` keeps its own `pct` to a single call site and its header says what two of
+  wire.** `events.mjs` keeps its own `pct` to a single call site and its header says what two of
   them cost: every percentile in production printed `0th` for months because a second conversion
   existed and the tests exercised the copy production did not use. The wire therefore carries the
   rank as a fraction in [0,1] and this is the only place the phone turns one into a number a person

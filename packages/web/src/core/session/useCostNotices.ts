@@ -13,6 +13,7 @@ import { liveAgentText, sessionCostOf, type SessionInfo } from "@waterplane/shar
 import { shouldNotice, shouldNoticeAgent, shouldNoticeSpend } from "../../costNotice";
 import { useSpendWarn } from "../sessions/spendWarn";
 import { showToast } from "../../toast";
+import { agentWarnTok } from "../prefs";
 import { LS, lsJson, lsSetJson } from "../../storage";
 import { budgetToast, shouldNoticeBudget } from "../../features/sessionBudget";
 
@@ -68,7 +69,7 @@ export function useCostNotices(active: SessionInfo | null | undefined): void {
   useEffect(() => {
     if (!active) return;
     const sp = active.contextSpark;
-    const text = active.running ? liveAgentText(sp?.liveAgentTok, sp?.liveAgentAt, Date.now()) : null;
+    const text = active.running ? liveAgentText(sp?.liveAgentTok, sp?.liveAgentAt, Date.now(), agentWarnTok()) : null;
     const seen = agentNoticedRef.current ??= lsJson<Record<string, string>>(LS.agentNoticed, {});
     const { notice, next } = shouldNoticeAgent(active.id, text ? (sp?.liveAgentId ?? "agent") : null, seen);
     if (next !== seen) { agentNoticedRef.current = next; lsSetJson(LS.agentNoticed, next); }

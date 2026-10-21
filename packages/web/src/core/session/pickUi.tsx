@@ -13,6 +13,7 @@ import { Copy, ListChecks, MessageSquareReply, Quote, TextSelect, X } from "luci
 import { useBackStep } from "../../backStep";
 import { openDecisions, quoteIntoCompose } from "../../features/clipboard";
 import { showToast } from "../../toast";
+import { Button } from "../../kit/Button";
 
 const ICON = 16;
 /** How long a still finger is a long-press, not a tap. Under Android's own
@@ -49,10 +50,10 @@ export function PickMenu({ at, onPick, onCancel }: { at: MenuAt; onPick: () => v
       left: Math.max(8, Math.min(at.x - 110, window.innerWidth - 236)),
       top: at.y + 220 > window.innerHeight ? Math.max(8, at.y - 220) : at.y + 28,
     }}>
-      <button className="key" onClick={onPick}><ListChecks size={ICON} /> pick lines</button>
-      <button className="key" onClick={() => { onCancel(); void openDecisions(); }}><MessageSquareReply size={ICON} /> answer list</button>
-      <button className="key" onClick={onCancel}><TextSelect size={ICON} /> select text</button>
-      <button className="key" onClick={() => { window.getSelection()?.removeAllRanges(); onCancel(); }}><X size={ICON} /> cancel</button>
+      <Button onClick={onPick}><ListChecks size={ICON} /> pick lines</Button>
+      <Button onClick={() => { onCancel(); void openDecisions(); }}><MessageSquareReply size={ICON} /> answer list</Button>
+      <Button onClick={onCancel}><TextSelect size={ICON} /> select text</Button>
+      <Button onClick={() => { window.getSelection()?.removeAllRanges(); onCancel(); }}><X size={ICON} /> cancel</Button>
     </div>
   );
 }
@@ -67,11 +68,11 @@ export function PickBar({ count, off, hint, lines, onStop }: {
         {count ? <>{count} picked{off ? <>, {off} out of view</> : null}</> : hint}
       </span>
       {count > 0 && <>
-        <button className="key" onClick={() => { if (quotePicked(lines())) onStop(); }}><Quote size={ICON} /> quote</button>
-        <button className="key" onClick={() => void copyPicked(lines())}><Copy size={ICON} /> copy</button>
-        <button className="key" onClick={() => { const l = lines(); onStop(); void openDecisions(l); }}><MessageSquareReply size={ICON} /> answer</button>
+        <Button onClick={() => { if (quotePicked(lines())) onStop(); }}><Quote size={ICON} /> quote</Button>
+        <Button onClick={() => void copyPicked(lines())}><Copy size={ICON} /> copy</Button>
+        <Button onClick={() => { const l = lines(); onStop(); void openDecisions(l); }}><MessageSquareReply size={ICON} /> answer</Button>
       </>}
-      <button className="key" onClick={onStop}><X size={ICON} /> {count ? "cancel" : "done"}</button>
+      <Button onClick={onStop}><X size={ICON} /> {count ? "cancel" : "done"}</Button>
     </div>
   );
 }

@@ -17,6 +17,7 @@ import { downloadStatus, downloadTap } from "./download";
 import { pulls, type LocalPull, type PullRecord } from "./pull";
 import { useEffect, useState } from "react";
 import { track } from "./usage";
+import { Button } from "./kit/Button";
 
 interface Props {
   /** The file, as a download target. */
@@ -56,8 +57,8 @@ export function DownloadButton({ target, rec, onStart, compact, className, track
       : st.phase === "have" || st.phase === "saved" ? <Smartphone size={16} />
         : <Download size={16} />;
   return (
-    <button
-      className={`key ${st.phase === "have" || st.phase === "saved" ? "ok" : ""} ${className ?? ""}`}
+    <Button
+      className={`${st.phase === "have" || st.phase === "saved" ? "ok" : ""} ${className ?? ""}`}
       title={st.detail} data-hint="gallery.pull"
       onClick={() => {
         if (trackId) track(trackId);
@@ -66,6 +67,6 @@ export function DownloadButton({ target, rec, onStart, compact, className, track
       }}
     >
       {icon}{compact ? null : <> {st.label}</>}
-    </button>
+    </Button>
   );
 }

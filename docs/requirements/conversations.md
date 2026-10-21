@@ -32,3 +32,8 @@ Compacting a conversation keeps the text the user had entered before the compact
 The dialogue remembers what the user said last time and offers a reset button that clears that memory.
 - asked: 2026-10-15
 
+
+### R-conversations-007 · shipped
+A conversation can be bookmarked (live or from the archive) with an optional one-line note; the archive filters to a repo's bookmarks, shows each conversation's tab name beside its first prompt, and opens a bookmarked conversation read-only without starting the CLI.
+- asked: 2026-10-21
+- shipped: host + shared 5eac5bbc (`bookmarks.ts`, `archive.ts`, `routes/apirepofiles.ts`, shared `bookmark.ts`); phone UI in the commit after it (`ArchiveSheet.tsx` Bookmarks filter + per-row bookmark/note/read, `ArchiveReader.tsx` over `TranscriptView`'s `source` seam, the session menu's `bookmark` line `core/sessions/bookmark.tsx`, the mark on Recently closed rows)

@@ -9,10 +9,13 @@ import * as vscode from "vscode";
 import { BRAND, CHARS_PER_TOKEN, contextPct, fmtCount, fmtUsd, isoWeekOf, repoHealthIndexOf } from "@waterplane/shared";
 import type { HealthDoc, SessionSummary, TabId, WeightDoc, CorpusDoc } from "./protocol.js";
 import { fmtAge, isLive, isRunning } from "./data/running.js";
+import { currentSummary, thisRepoWeek, weekFigure, weekSplit } from "./data/summary.js";
+import type { HeadlineSummary } from "./data/summary.js";
 import { seriesValueWords } from "../../web/src/repoHealthWords.js";
 import { signedWhole, weekWhenWords } from "../../web/src/healthIndexWords.js";
-import { NOT_GIT } from "./health/sourcewords.js";
+import { NOT_GIT, XCODE_LICENSE } from "./health/sourcewords.js";
 import { quotaTooltip, quotaWords } from "./copilotquota.js";
+import { localWords } from "../../extensions/copilot-usage/host/vscodelocal.mts";
 import type { QuotaState } from "./copilotquota.js";
 
 export interface NavState {
@@ -31,6 +34,12 @@ export interface NavState {
   health: HealthDoc | null;
   healthRunning: boolean;
   quota: QuotaState;
+  /** The last finished scan's seven days, kept across reloads; null before the first one. */
+  summary: HeadlineSummary | null;
+  /** Some listed session is running or was written to in the last half hour (`anyLive`). */
+  live: boolean;
+  /** The ledger's repo keys for the folder (as given and realpath-resolved). */
+  folderKeys: string[];
 }
 
 /** The views the tree lists. The ready-made prompts are not one: they stay beside the numbers they quote. */
@@ -47,8 +56,8 @@ type Node =
 
 const VIEWS: { tab: NavTab; label: string; icon: string }[] = [
   { tab: "all", label: "All sessions", icon: "graph" },
-  { tab: "always-on", label: "Always-on context", icon: "file-text" },
   { tab: "health", label: "Repo health", icon: "pulse" },
+  { tab: "always-on", label: "Always-on context", icon: "file-text" },
 ];
 
 export const SHOW = `${BRAND.slug}.show`;
@@ -56,7 +65,7 @@ export const PICK = `${BRAND.slug}.pickSession`;
 export const PICK_FOLDER = `${BRAND.slug}.pickFolder`;
 export const QUOTA = `${BRAND.slug}.copilotQuota`;
 
-/** The workspace-state key holding whether the person collapsed Sessions. */
+/** The workspace-state key holding whether the person collapsed Sessions; unset = follow `live`. */
 const COLLAPSED_KEY = `${BRAND.slug}.sessionsCollapsed`;
 
 const clip = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
@@ -80,16 +89,19 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
   /**
    * Whether the person collapsed Sessions. Kept here (and across reloads) because revealing the
    * selected session expands its parent: without it every log write re-opened the section.
+   * Undefined until they fold it once: then it is open while something is live, closed otherwise.
    */
-  private collapsed: boolean;
+  private folded: boolean | undefined;
 
   constructor(private state: () => NavState, onVisible: (v: boolean) => void, private memo: vscode.Memento) {
-    this.collapsed = memo.get<boolean>(COLLAPSED_KEY, false);
+    this.folded = memo.get<boolean | undefined>(COLLAPSED_KEY);
     this.view = vscode.window.createTreeView(`${BRAND.slug}.sidebar`, { treeDataProvider: this, showCollapseAll: false });
     const fold = (on: boolean) => (e: vscode.TreeViewExpansionEvent<Node>) => {
       if (e.element.kind !== "sessions") return;
-      this.collapsed = on;
-      void this.memo.update(COLLAPSED_KEY, on);
+      // A fold that matches the live/idle default hands the choice back to it (a reveal expanding
+      // an open section must not pin it open for the idle hours after).
+      this.folded = on === !this.state().live ? undefined : on;
+      void this.memo.update(COLLAPSED_KEY, this.folded);
     };
     this.subs.push(this.view.onDidCollapseElement(fold(true)), this.view.onDidExpandElement(fold(false)));
     this.subs.push(this.view.onDidChangeVisibility((e) => {
@@ -119,10 +131,13 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
 
   private revealSelected(): void {
     const s = this.state();
-    if (!this.view.visible || !s.selected || this.collapsed) return;
+    if (!this.view.visible || !s.selected || this.collapsed(s.live)) return;
     const n = this.nodes.get(s.selected);
     if (n) void this.view.reveal(n, { select: true, focus: false }).then(undefined, () => {});
   }
+
+  /** A remembered fold wins; otherwise Sessions is open exactly while something is live. */
+  private collapsed(live: boolean): boolean { return this.folded ?? !live; }
 
   getParent(n: Node): Node | undefined {
     return n.kind === "session" || n.kind === "follow" || (n.kind === "note" && n.tab !== undefined) ? this.sessionsNode : undefined;
@@ -131,9 +146,14 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
   getChildren(n?: Node): Node[] {
     const s = this.state();
     if (!n) {
-      const top: Node[] = [];
+      // Insight first: the week's figure leads; the session list sits second while something is
+      // being worked on and drops to the bottom when nothing is.
+      const view = (tab: NavTab): Node => ({ kind: "view", tab });
+      const top: Node[] = [view("all")];
       if (s.folders.length > 1) top.push({ kind: "folder" });
-      top.push(this.sessionsNode, ...VIEWS.map((v) => ({ kind: "view" as const, tab: v.tab })), { kind: "quota" });
+      if (s.live) top.push(this.sessionsNode);
+      top.push(view("health"), view("always-on"), { kind: "quota" });
+      if (!s.live) top.push(this.sessionsNode);
       return top;
     }
     if (n.kind !== "sessions") return [];
@@ -167,8 +187,10 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
       }
       case "sessions": {
         const it = new vscode.TreeItem("Sessions",
-          this.collapsed ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.Expanded);
-        it.id = "sessions";
+          this.collapsed(s.live) ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.Expanded);
+        // VS Code keeps an item's fold by id and ignores a new state for the same id, so the
+        // live/idle default needs its own id to take; a remembered fold is the same either way.
+        it.id = s.live ? "sessions:live" : "sessions:idle";
         it.description = s.rows.length ? (s.following ? "following the newest" : "pinned to one") : undefined;
         it.iconPath = new vscode.ThemeIcon("comment-discussion");
         return it;
@@ -209,13 +231,14 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
       }
       case "quota": {
         const q = s.quota;
-        const it = new vscode.TreeItem("Copilot quota", vscode.TreeItemCollapsibleState.None);
+        const it = new vscode.TreeItem("Copilot", vscode.TreeItemCollapsibleState.None);
         it.id = "quota";
         it.contextValue = q.on ? "copilotQuotaOn" : "copilotQuotaOff";
         it.iconPath = new vscode.ThemeIcon(q.busy ? "loading~spin" : "copilot");
         const words = q.reading ? quotaWords(q.reading) : null;
-        it.description = !q.on ? "off · click to read from GitHub"
-          : words ?? (q.why ? "not read · hover for why" : q.busy ? "reading…" : "not read yet");
+        // GitHub's figure when read; otherwise the plan and local count, which need no sign-in.
+        const local = q.local ? localWords(q.local) : null;
+        it.description = words ?? local ?? (q.on && q.why ? "not read · hover for why" : q.busy ? "reading…" : "not read yet");
         it.tooltip = quotaTooltip(q);
         it.command = { command: QUOTA, title: "Read Copilot's quota" };
         return it;
@@ -226,6 +249,10 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
         it.id = `v:${n.tab}`;
         it.iconPath = new vscode.ThemeIcon(v.icon);
         it.description = this.viewWords(n.tab, s);
+        if (n.tab === "all" && !s.scanning) {
+          const sum = currentSummary(s.summary, Date.now());
+          if (sum && weekFigure(sum)) it.tooltip = this.summaryTip(sum, s.corpus !== null);
+        }
         it.command = { command: SHOW, title: `Open ${v.label}`, arguments: [n.tab] };
         return it;
       }
@@ -235,12 +262,14 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
   /** The one-line headline beside each view; the panel says what it means. */
   private viewWords(tab: NavTab, s: NavState): string {
     switch (tab) {
-      case "all":
+      case "all": {
         if (s.scanning) return `reading logs ${fmtCount(s.scanning.done)}/${fmtCount(s.scanning.total)}`;
-        if (!s.corpus) return "read when opened";
-        return s.corpus.cost.total > 0
-          ? `${fmtUsd(s.corpus.cost.total)} · ${fmtCount(s.corpus.conversations)} conversations`
-          : `${fmtCount(s.corpus.conversations)} conversations`;
+        // Always the seven days, before and after this window's scan (which refreshes the summary):
+        // the all-time total is the panel footer's. A week with nothing in it says so once scanned.
+        const sum = currentSummary(s.summary, Date.now());
+        const words = sum ? this.summaryWords(sum, s.folderKeys) : null;
+        return words ?? (s.corpus ? "nothing in the last 7 days" : "read when opened");
+      }
       case "always-on":
         if (!s.weight) return "nothing measured";
         if (!s.weight.files.length) return "no instruction files here";
@@ -264,10 +293,34 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
         const p95 = s.health?.plot?.series.find((x) => x.key === "size.p95") ?? null;
         if (p95) return `${p95.label} ${seriesValueWords(p95.last, p95.unit)}`;
         if (s.health?.series) return "measured";
-        if (s.health?.readError) return NOT_GIT.test(s.health.readError) ? "not a git repository" : "could not be read";
+        if (s.health?.readError) {
+          if (XCODE_LICENSE.test(s.health.readError)) return "git blocked: Xcode license";
+          return NOT_GIT.test(s.health.readError) ? "not a git repository" : "could not be read";
+        }
         return "not measured yet";
       }
     }
+  }
+
+  /**
+   * The last scan's week: `7 d: here $14 · all $80 · 2 h ago`, short so the age survives a narrow
+   * sidebar. A scan within the last minute (this window's own) drops the age: it is now.
+   */
+  private summaryWords(sum: HeadlineSummary, keys: string[]): string | null {
+    const all = weekFigure(sum);
+    if (!all) return null;
+    const repo = thisRepoWeek(sum, keys);
+    const ms = Date.now() - sum.scannedAt;
+    const age = ms < 60_000 ? "" : ` · ${fmtAge(ms)}`;
+    return repo ? `7 d: here ${fmtUsd(repo.usd)} · all ${all}${age}` : `7 d: all ${all}${age}`;
+  }
+
+  private summaryTip(sum: HeadlineSummary, scanned: boolean): vscode.MarkdownString {
+    const md = new vscode.MarkdownString();
+    md.appendText(`Last 7 days, ${weekSplit(sum)}.\n\n`);
+    const from = scanned ? "" : " From the last scan; opening the view reads the logs again.";
+    md.appendText(sum.week.cost ? `List prices.${from}` : `Nothing in these days was priced.${from}`);
+    return md;
   }
 
   dispose(): void {

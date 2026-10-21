@@ -54,6 +54,7 @@ import type { LucideIcon } from "lucide-react";
 
 import { RadioRows } from "./kit/RadioRows";
 import { filterSummary, groupShown, nestedMatches, rowShown } from "./settingsIndex";
+import { Button } from "./kit/Button";
 
 /** Matches `App.tsx`'s own constant; the icon SCALE setting is applied in CSS
  *  off the `width` attribute, so this is a base size and not a final one. */
@@ -290,15 +291,15 @@ export function SetChoice<T extends string | number>({ id, label, icon: Icon, va
       ) : (
       <div className="set-chips">
         {options.map((o) => (
-          <button
+          <Button
             key={String(o.value)}
-            className={`key ${value === o.value ? "active" : ""}`}
+            className={value === o.value ? "active" : ""}
             style={o.style}
             title={o.title}
             onClick={() => onChange(o.value)}
           >
             {o.icon && <o.icon size={ICON} />} {o.label}
-          </button>
+          </Button>
         ))}
       </div>
       )}
@@ -334,15 +335,15 @@ export function SetMulti<T extends string>({ id, label, icon: Icon, value, optio
       </div>
       <div className="set-chips">
         {options.map((o) => (
-          <button
+          <Button
             key={String(o.value)}
-            className={`key ${on.has(o.value) ? "active" : ""}`}
+            className={on.has(o.value) ? "active" : ""}
             aria-pressed={on.has(o.value)}
             title={o.title}
             onClick={() => onChange(options.map((x) => x.value).filter((v) => (v === o.value ? !on.has(v) : on.has(v))))}
           >
             {o.icon && <o.icon size={ICON} />} {o.label}
-          </button>
+          </Button>
         ))}
       </div>
       <SetNote more={more}>{note}</SetNote>
@@ -411,9 +412,9 @@ export function SetStepper({ id, label, icon: Icon, readout, onLess, onMore, les
         <span className="set-lbl">{label}</span>
       </div>
       <div className="set-chips">
-        {onLess && <button className="key" onClick={onLess}><Minus size={ICON} /> {lessLabel}</button>}
+        {onLess && <Button onClick={onLess}><Minus size={ICON} /> {lessLabel}</Button>}
         <span className="set-readout" aria-live="polite">{readout}</span>
-        {onMore && <button className="key" onClick={onMore}><Plus size={ICON} /> {moreLabel}</button>}
+        {onMore && <Button onClick={onMore}><Plus size={ICON} /> {moreLabel}</Button>}
         {extra}
       </div>
       <SetNote more={more}>{note}</SetNote>

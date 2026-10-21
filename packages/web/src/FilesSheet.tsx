@@ -18,6 +18,9 @@ import { sized, viewerWidth } from "./media";
 import { FileReview, storedRemarkCount } from "./FileReview";
 import { fileTabKey, fileTabLabel, noteFileOnScreen, setFilePinned, useSessionTabs } from "./sessionTabs";
 import { showToast } from "./toast";
+import { Button } from "./kit/Button";
+import { Row, RowTitle, RowSub } from "./kit/Row";
+import { Hint } from "./kit/Hint";
 
 /**
  * Browse the repo as a TREE, and edit a file now and then.
@@ -198,7 +201,7 @@ export function FilesSheet({ repoId, repoName, socketOpen, onInsertPath, onRemar
   return (
     <div className="sheet">
       <SheetHead title={<>Files{repoName ? ` · ${repoName}` : ""}</>} onClose={onClose}>
-        <button className="key" title="refresh" onClick={() => load(dir)}><RotateCw size={16} /></button>
+        <Button title="refresh" onClick={() => load(dir)}><RotateCw size={16} /></Button>
       </SheetHead>
 
       <div className="crumbs">
@@ -210,34 +213,34 @@ export function FilesSheet({ repoId, repoName, socketOpen, onInsertPath, onRemar
       </div>
 
       <div className="form">
-        <div className="row-wrap">
+        <Row kind="wrap">
           <input className="search grow" placeholder="Filter this folder…" value={filter}
             onChange={(e) => setFilter(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") searchRepo(); }} />
           {filter && <button className="row-act" title="clear" onClick={() => { setFilter(""); if (searched) load(dir); }}><X size={16} /></button>}
           <button className="row-act" title="search this folder and everything under it" disabled={!filter.trim()} onClick={searchRepo}><Search size={16} /></button>
-        </div>
+        </Row>
       </div>
 
       {searched && (
-        <div className="form-hint">
+        <Hint>
           Matches for “{searched}” under /{dir} — build and dependency folders are not searched.
-        </div>
+        </Hint>
       )}
       {/* The staleness sentence is `useRemoteResource`'s, not this sheet's: the
           wording is a PROMISE about freshness, and one written per sheet is one
           that can quietly overstate it. */}
       {tree.state === "cached" && (
-        <div className="form-hint">{stalenessNote(tree.state, tree.age)}</div>
+        <Hint>{stalenessNote(tree.state, tree.age)}</Hint>
       )}
       {tree.state === "offline" && (
-        <div className="form-hint">No link, and this folder isn't cached on the phone.</div>
+        <Hint>No link, and this folder isn't cached on the phone.</Hint>
       )}
       {tree.state === "error" && (
-        <div className="form-hint">Couldn't read this folder: {tree.error}</div>
+        <Hint>Couldn't read this folder: {tree.error}</Hint>
       )}
-      {listing?.truncated && <div className="form-hint">Long folder — showing the first {listing.entries.length} entries.</div>}
-      {error && <div className="form-hint">{error}</div>}
+      {listing?.truncated && <Hint>Long folder — showing the first {listing.entries.length} entries.</Hint>}
+      {error && <Hint>{error}</Hint>}
 
       <div className="list">
         {/* No `res` here, deliberately: this sheet already answers the read's
@@ -250,11 +253,11 @@ export function FilesSheet({ repoId, repoName, socketOpen, onInsertPath, onRemar
         {rows.map((e) => (
           <button key={e.path} className={`row grow ${e.ignored ? "dim" : ""}`} onClick={() => openEntry(e)}>
             <span className="row-ico">{e.dir ? <Folder size={16} /> : <FileIcon size={16} />}</span>
-            <span className="row-title mono">{searched ? e.path : e.name}{e.dir ? "/" : ""}</span>
+            <RowTitle className="mono">{searched ? e.path : e.name}{e.dir ? "/" : ""}</RowTitle>
             {e.status && <span className={`gstat g-${statusLabel(e.status)}`}>{statusLabel(e.status)}</span>}
-            <span className="row-sub">
+            <RowSub>
               {e.dir ? (e.count != null ? `${e.count}` : "") : `${fmtSize(e.size)} · ${ago(e.mtime)}`}
-            </span>
+            </RowSub>
           </button>
         ))}
       </div>
@@ -395,39 +398,39 @@ function FileView({ repoId, repoName, file, socketOpen, onReopen, onInsertPath, 
   return (
     <div className="sheet">
       <SheetHead title={file.path} brandClass="mono" onClose={onClose}>
-        <button className={`key ${pinned ? "active" : ""}`}
+        <Button className={pinned ? "active" : ""}
           title={pinned ? "unpin from the tab strip" : "pin to the tab strip — one tap back to this file from anywhere"}
           aria-pressed={pinned} onClick={togglePin}>
           {pinned ? <PinOff size={16} /> : <Pin size={16} />}
-        </button>
+        </Button>
         {reviewable && !editing && (
-          <button className={`key ${review ? "active" : ""}`}
+          <Button className={review ? "active" : ""}
             title={review ? "back to reading — the remarks are kept" : "mark lines and say what should change — sent to the chat as one message"}
             onClick={() => { track("action:files.review"); setReview(!review); }}>
             <MessageSquarePlus size={16} />{remarkCount > 0 && <span className="key-count">{remarkCount}</span>}
-          </button>
+          </Button>
         )}
         {file.editable && !review && (
-          <button className={`key ${editing ? "active" : ""}`} title={editing ? "stop editing" : "edit"}
+          <Button className={editing ? "active" : ""} title={editing ? "stop editing" : "edit"}
             onClick={() => { track("action:files.edit"); setEditing(!editing); }}>
             {editing ? <Eye size={16} /> : <Pencil size={16} />}
-          </button>
+          </Button>
         )}
         {/* Every file, not only a binary one: a text file past the preview cap
             is shown in part, and "the rest" is a download like any other
             (`download.ts`). */}
         <DownloadButton target={dlTarget} compact trackId="action:files.download" />
-        <button className="key" title="use this path in the prompt" onClick={() => { onInsertPath(file.path); onClose(); }}><AtSign size={16} /></button>
+        <Button title="use this path in the prompt" onClick={() => { onInsertPath(file.path); onClose(); }}><AtSign size={16} /></Button>
       </SheetHead>
 
-      <div className="form-hint">
+      <Hint>
         {fmtSize(file.size)} · {ago(file.mtime)}{why && !review ? ` · ${why}` : ""}{dirty ? " · unsaved" : ""}
         {review && dirty ? " · remarks name the lines as saved on disk, not your unsaved edits" : ""}
         {!review && remarkCount > 0 ? ` · ${remarkCount} remark${remarkCount === 1 ? "" : "s"} waiting` : ""}
         {rendered && !editing && (
-          <button className="key md-toggle" onClick={() => setRaw((v) => !v)}>{raw ? "rendered" : "source"}</button>
+          <Button className="md-toggle" onClick={() => setRaw((v) => !v)}>{raw ? "rendered" : "source"}</Button>
         )}
-      </div>
+      </Hint>
 
       {review && onRemarks ? (
         <FileReview key={file.path} repoId={repoId} path={file.path} body={file.body ?? ""}
@@ -469,10 +472,10 @@ function FileView({ repoId, repoName, file, socketOpen, onReopen, onInsertPath, 
       )}
 
       {stale && (
-        <div className="form-hint">
+        <Hint>
           Saving again would overwrite whatever was written there — so it is not offered. Copy your
           text out if you need it, then reload.
-        </div>
+        </Hint>
       )}
 
       <div className="sheet-actions">
@@ -480,13 +483,13 @@ function FileView({ repoId, repoName, file, socketOpen, onReopen, onInsertPath, 
             re-sending is the one action that would clobber the other writer. */}
         {dirty && !stale && <button className="send" onClick={save} disabled={!canSave}><Save size={16} /> Save</button>}
         {stale && (
-          <button className="key" onClick={async () => setNote(await copyText(text) ? "Your version is on the clipboard." : "Couldn't reach the clipboard — select the text instead.")}>
+          <Button onClick={async () => setNote(await copyText(text) ? "Your version is on the clipboard." : "Couldn't reach the clipboard — select the text instead.")}>
             <Copy size={16} /> Copy mine
-          </button>
+          </Button>
         )}
-        {(stale || dirty) && <button className="key" onClick={reload} disabled={busy}>Reload from disk</button>}
+        {(stale || dirty) && <Button onClick={reload} disabled={busy}>Reload from disk</Button>}
       </div>
-      {note && <div className="form-hint">{note}</div>}
+      {note && <Hint>{note}</Hint>}
     </div>
   );
 }

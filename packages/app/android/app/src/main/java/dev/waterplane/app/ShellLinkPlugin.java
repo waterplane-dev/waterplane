@@ -55,6 +55,7 @@ public class ShellLinkPlugin extends Plugin {
         ret.put("supported", true);
         ret.put("notifications", getPermissionState(NOTIFICATIONS) == PermissionState.GRANTED);
         ret.put("batteryExempt", isBatteryExempt());
+        ret.put("powerSave", isPowerSave());
         call.resolve(ret);
     }
 
@@ -201,6 +202,13 @@ public class ShellLinkPlugin extends Plugin {
         } catch (RuntimeException e) {
             call.reject("cannot open notification settings: " + e.getMessage());
         }
+    }
+
+    /** The phone's own battery saver — the page offers to stop the strip's
+     *  tab-order sync while it is on (`tabsSyncSaver.ts`). */
+    private boolean isPowerSave() {
+        PowerManager pm = (PowerManager) getContext().getSystemService(Context.POWER_SERVICE);
+        return pm != null && pm.isPowerSaveMode();
     }
 
     private boolean isBatteryExempt() {

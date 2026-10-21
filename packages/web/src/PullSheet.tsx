@@ -11,7 +11,7 @@ import { nativeSaveSupported } from "./nativeSave";
 import { fmtSize } from "./format";
 import { track } from "./usage";
 import { SheetHead } from "./Sheet";
-import { RadioRows } from "./kit";
+import { RadioRows, Button, Row, RowTitle, RowSub, Hint } from "./kit";
 import { Empty } from "./Empty";
 import { hostBase, isNativeShell } from "./hostUrl";
 import { LS, lsGet, lsSet } from "./storage";
@@ -224,27 +224,27 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
       <div className="sheet-scroll">
       {pane === "files" ? (
       <>
-      <div className="form-hint">
+      <Hint>
         Files a repo produces download to this phone on their own, resuming where they stopped.
         {!online && " Offline right now — queued files start when the link is back."}
-      </div>
+      </Hint>
       {/* The install line, once, above the rows — and only where there is
           something to say: in a browser this whole subject is absent rather
           than explained. */}
       {installIntro && (
-        <div className="form-hint">
+        <Hint>
           {installIntro}{" "}
           {caps.canInstall ? (
-            <button className="key" title="which of your apps install themselves"
-              onClick={() => { track("action:pull.apps"); onOpenApps(); }}><Boxes size={14} /> apps</button>
+            <Button title="which of your apps install themselves"
+              onClick={() => { track("action:pull.apps"); onOpenApps(); }}><Boxes size={14} /> apps</Button>
           ) : nativeInstallSupported() ? (
-            <button className="key" title="open the phone's install-unknown-apps setting"
+            <Button title="open the phone's install-unknown-apps setting"
               onClick={() => {
                 track("action:pull.installSettings");
                 void openInstallSettings().catch(() => showToast("this phone has no screen for that switch"));
-              }}><Settings size={14} /> allow it</button>
+              }}><Settings size={14} /> allow it</Button>
           ) : null}
-        </div>
+        </Hint>
       )}
       <details className="hint-more">
         <summary>how this works</summary>
@@ -290,7 +290,7 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
       </div>
       {/* Why nothing is moving. A stalled queue with no explanation is the exact
           state this sheet exists to make readable. */}
-      {idle && <div className="form-hint warn">{idle}</div>}
+      {idle && <Hint tone="warn">{idle}</Hint>}
       <div className="list">
         {active.length === 0 && (
           <Empty>Nothing waiting. Files you tap to download land here, and so do the ones a repo's rule fetches on its own.</Empty>
@@ -316,10 +316,10 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
       <div className="section">This phone <span className="section-hint">· the same on every repo</span></div>
       <div className="set-group">
         <div className="set-row">
-          <button className={`key ${auto ? "active" : ""}`}
+          <Button className={auto ? "active" : ""}
             onClick={() => { const on = !auto; setAutoPull(on); setAuto(on); track("action:pull.auto"); }}>
             {auto ? <Check size={14} /> : <X size={14} />} auto-download: {auto ? "on" : "off"}
-          </button>
+          </Button>
           <span className="set-note">
             The master switch. Off, nothing is fetched without a tap — whatever the per-repo rules below say.
             {isNativeShell() ? "" : ` It is this browser's own: the ${BRAND.displayName} app keeps a separate one, so with the app on this phone too, off here means each file downloads once — in the app.`}
@@ -331,10 +331,10 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
             second copy rather than overwriting the first — so the hand-off is
             automatic and the rows say what the folder holds. */}
         <div className="set-row">
-          <button className={`key ${autoSave ? "active" : ""}`}
+          <Button className={autoSave ? "active" : ""}
             onClick={() => { const on = !autoSave; setAutoSaveOut(on); setAutoSaveState(on); track("action:pull.autosave"); }}>
             {autoSave ? <Check size={14} /> : <X size={14} />} save to Downloads: {autoSave ? "automatic" : "on tap"}
-          </button>
+          </Button>
           <span className="set-note">
             {nativeSaveSupported()
               ? "Every file that finishes downloading is put in the phone's Downloads by itself. A file already there is left alone — saving it again would only add a copy beside it."
@@ -347,9 +347,9 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
             themselves" will look for it. */}
         {nativeInstallSupported() && (
           <div className="set-row">
-            <button className="key" onClick={() => { track("action:pull.apps"); onOpenApps(); }}>
+            <Button onClick={() => { track("action:pull.apps"); onOpenApps(); }}>
               <Boxes size={14} /> apps
-            </button>
+            </Button>
             <span className="set-note">
               Which of your apps install themselves when a new build lands here. {installIntro ?? ""}
             </span>
@@ -373,10 +373,10 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
         <>
           <div className="set-group">
           <div className="set-row">
-            <button className={`key ${cfg.enabled ? "active" : ""}`}
+            <Button className={cfg.enabled ? "active" : ""}
               onClick={() => { patch({ enabled: !cfg.enabled }); track("action:pull.enable"); }}>
               {cfg.enabled ? <Check size={14} /> : <X size={14} />} auto-download: {cfg.enabled ? "on" : "off"}
-            </button>
+            </Button>
             <span className="set-note">Off means files from this repo are never fetched on their own — a file you tap to download still is, wherever you tap it.</span>
           </div>
 
@@ -394,16 +394,16 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
           </div>
 
           <div className="set-row">
-            <button className={`key ${cfg.builds ? "active" : ""}`} onClick={() => patch({ builds: !cfg.builds })}>
+            <Button className={cfg.builds ? "active" : ""} onClick={() => patch({ builds: !cfg.builds })}>
               build outputs: {cfg.builds ? "on" : "off"}
-            </button>
+            </Button>
             <span className="set-note">Also queue what a build button produces (the APK), wherever it lands.</span>
           </div>
 
           <div className="set-row">
-            <button className={`key ${cfg.supersede ? "active" : ""}`} data-hint="pull.supersede" onClick={() => { patch({ supersede: !cfg.supersede }); track("action:pull.supersede"); }}>
+            <Button className={cfg.supersede ? "active" : ""} data-hint="pull.supersede" onClick={() => { patch({ supersede: !cfg.supersede }); track("action:pull.supersede"); }}>
               newest only: {cfg.supersede ? "on" : "off"}
-            </button>
+            </Button>
             <span className="set-note">
               When a rebuilt version of a file already in the queue turns up, the older ones are dropped and a
               download in flight for them is cancelled — five APKs of the same build is 100+ MB spent on four
@@ -413,9 +413,9 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
 
           <div className="set-row">
             {CAPS.map((c) => (
-              <button key={c} className={`key ${cfg.maxBytes === c ? "active" : ""}`} onClick={() => patch({ maxBytes: c })}>
+              <Button key={c} className={cfg.maxBytes === c ? "active" : ""} onClick={() => patch({ maxBytes: c })}>
                 {capLabel(c)}
-              </button>
+              </Button>
             ))}
             <span className="set-note">Skip anything bigger. A phone should not silently pull a 2 GB tarball over a metered link.</span>
           </div>
@@ -424,12 +424,12 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
           <div className="section">Match <span className="section-hint">· empty = every file in the scope</span></div>
           <div className="list">
             {cfg.match.map((p) => (
-              <div key={p} className="row-wrap">
-                <span className="row grow"><span className="row-title mono">{p}</span></span>
-                <button className="key danger" title="remove pattern" onClick={() => patch({ match: cfg.match.filter((x) => x !== p) })}>
+              <Row key={p} kind="wrap">
+                <span className="row grow"><RowTitle className="mono">{p}</RowTitle></span>
+                <Button variant="danger" title="remove pattern" onClick={() => patch({ match: cfg.match.filter((x) => x !== p) })}>
                   <Trash2 size={16} />
-                </button>
-              </div>
+                </Button>
+              </Row>
             ))}
             {cfg.match.length === 0 && <Empty>No patterns — everything in the scope matches.</Empty>}
           </div>
@@ -438,11 +438,11 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
               onChange={(e) => setPattern(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") addPattern(); }} />
             <div className="set-row">
-              <button className="key" disabled={!pattern.trim()} onClick={addPattern}><Plus size={14} /> add</button>
+              <Button disabled={!pattern.trim()} onClick={addPattern}><Plus size={14} /> add</Button>
               {PRESETS.map((p) => (
-                <button key={p.label} className="key" onClick={() => patch({ match: dedupe([...cfg.match, ...p.patterns]) })}>
+                <Button key={p.label} onClick={() => patch({ match: dedupe([...cfg.match, ...p.patterns]) })}>
                   {p.label}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -559,9 +559,9 @@ function PullRow({ rec, repos, onDismiss, caps, allow, onAllow }: {
 
   return (
     <div className="row-wrap pull-row">
-      <button className="row grow" title={item.relPath} onClick={tap}>
-        <span className="row-title">{icon} {item.name}</span>
-        <span className="row-sub" title={item.mtime ? `created ${fmtWhenFull(item.mtime)}${item.ts ? ` · queued ${fmtWhenFull(item.ts)}` : ""}` : undefined}>
+      <Row as="button" kind="grow" title={item.relPath} onClick={tap}>
+        <RowTitle>{icon} {item.name}</RowTitle>
+        <RowSub title={item.mtime ? `created ${fmtWhenFull(item.mtime)}${item.ts ? ` · queued ${fmtWhenFull(item.ts)}` : ""}` : undefined}>
           {/* Who asked for it. The auto switch, "clear queue" and the "nothing is
               moving" line all treat the two sources differently, so the row has
               to say which it is. */}
@@ -572,7 +572,7 @@ function PullRow({ rec, repos, onDismiss, caps, allow, onAllow }: {
               sheet's installed log spells it — a git hash in the file name
               cannot be matched against "Tiptoi 0.1.102" by eye. */}
           {rec.local ? "you" : "auto"} · {repoLabel ? `${repoLabel} · ` : ""}{rec.pkgVersion ? `${rec.pkgLabel || rec.pkg || "version"} ${rec.pkgVersion} · ` : ""}{fmtSize(total)}
-        </span>
+        </RowSub>
         {/* One line about WHEN, not two. The row used to print `· 1m ago` here
             and `created 21 Sept, 11:21` underneath — the same instant, twice, a
             whole line of a phone screen apart. The stamp is the one that answers
@@ -580,9 +580,9 @@ function PullRow({ rec, repos, onDismiss, caps, allow, onAllow }: {
             fresh", so they share a line and the distance is dropped once it is
             only a coarser spelling of the date beside it. */}
         {item.mtime ? (
-          <span className="row-sub dim">created {fmtStamp(item.mtime)}{fmtAgo(item.mtime)}</span>
+          <RowSub className="dim">created {fmtStamp(item.mtime)}{fmtAgo(item.mtime)}</RowSub>
         ) : null}
-        <span className={`row-sub ${state === "failed" || stalled || (saveError && state === "done") ? "warn" : ""}`}>{status}</span>
+        <RowSub className={state === "failed" || stalled || (saveError && state === "done") ? "warn" : ""}>{status}</RowSub>
         {showBar && (
           <span className="pull-bar"><span className={`pull-bar-fill ${state === "downloading" && !stalled ? "live" : ""}`} style={{ width: `${pct}%` }} /></span>
         )}
@@ -590,7 +590,7 @@ function PullRow({ rec, repos, onDismiss, caps, allow, onAllow }: {
             the row rather than in a console: "http 404" and "connection stalled"
             call for completely different reactions. */}
         {error && state !== "done" && (
-          <span className="row-sub dim">{error}{attempts > 1 ? ` · ${attempts} tries` : ""}</span>
+          <RowSub className="dim">{error}{attempts > 1 ? ` · ${attempts} tries` : ""}</RowSub>
         )}
         {/* A save that failed is said ONCE. `downloadStatus().detail` above is
             already "on this phone — saving it out failed: …", so a second span
@@ -602,14 +602,14 @@ function PullRow({ rec, repos, onDismiss, caps, allow, onAllow }: {
             where the phone refuses — why, as a sentence rather than a dead
             button (`Unavailable.tsx`). */}
         {installLine && (
-          <span className={`row-sub ${rec.install === "failed" ? "warn" : ""}`}>{installLine}</span>
+          <RowSub className={rec.install === "failed" ? "warn" : ""}>{installLine}</RowSub>
         )}
-        {offer.reason && <span className="row-sub dim">{offer.reason}</span>}
-        {autoLine && autoLine !== offer.reason && <span className="row-sub dim">{autoLine}</span>}
+        {offer.reason && <RowSub className="dim">{offer.reason}</RowSub>}
+        {autoLine && autoLine !== offer.reason && <RowSub className="dim">{autoLine}</RowSub>}
         {state !== "done" && (wireBytes ?? 0) > received + 1024 && (
-          <span className="row-sub dim">{fmtSize(wireBytes ?? 0)} pulled over the link so far</span>
+          <RowSub className="dim">{fmtSize(wireBytes ?? 0)} pulled over the link so far</RowSub>
         )}
-      </button>
+      </Row>
 
       {/* ── What you can do to it ──────────────────────────────────
           A STRIP under the text, with WORDS on the buttons.
@@ -628,24 +628,24 @@ function PullRow({ rec, repos, onDismiss, caps, allow, onAllow }: {
             running range fetch, and a Background Fetch belongs to the browser —
             offering the button there stopped some other row instead. */}
         {state === "downloading" && rec.engine !== "bgfetch" && (
-          <button className="key" data-hint="pull.pause" title="pause (keeps what has downloaded)"
-            onClick={() => { track("action:pull.pause"); pulls.pause(item.id); }}><Pause size={16} /> pause</button>
+          <Button data-hint="pull.pause" title="pause (keeps what has downloaded)"
+            onClick={() => { track("action:pull.pause"); pulls.pause(item.id); }}><Pause size={16} /> pause</Button>
         )}
         {state === "paused" && (
-          <button className="key" data-hint="pull.retry" title="resume from where it stopped"
-            onClick={() => { track("action:pull.retry"); pulls.retry(item.id); }}><Play size={16} /> resume</button>
+          <Button data-hint="pull.retry" title="resume from where it stopped"
+            onClick={() => { track("action:pull.retry"); pulls.retry(item.id); }}><Play size={16} /> resume</Button>
         )}
         {(state === "queued" || state === "failed") && (
-          <button className="key" title={received > 0 ? "resume now" : "download now"}
+          <Button title={received > 0 ? "resume now" : "download now"}
             onClick={() => { track("action:pull.retry"); pulls.retry(item.id); }}>
             <RotateCw size={16} /> {received > 0 ? "resume" : "download"}
-          </button>
+          </Button>
         )}
         {/* Put this build on the phone. The first one of any app opens the system
             installer — that is the platform's rule and the row says so above
             rather than promising a silence it cannot deliver. */}
         {offer.verb === "install" && (
-          <button className="key primary" title={`install ${item.name} on this phone`}
+          <Button variant="primary" title={`install ${item.name} on this phone`}
             onClick={() => {
               track("action:pull.install");
               void nativeInstall(item.id).catch((e: unknown) => showToast(e instanceof Error ? e.message : "could not start the install"));
@@ -653,7 +653,7 @@ function PullRow({ rec, repos, onDismiss, caps, allow, onAllow }: {
             {rec.install === "failed" ? <RotateCw size={16} />
               : rec.install === "installed" ? <PackageCheck size={16} /> : <PackagePlus size={16} />}
             {installVerbText(rec.install)}
-          </button>
+          </Button>
         )}
         {/* The per-app switch: every future build of THIS package, by itself.
             Drawn only where the package could be read — a promise about "this
@@ -661,18 +661,18 @@ function PullRow({ rec, repos, onDismiss, caps, allow, onAllow }: {
             vocabulary ("auto-download: on") rather than a fifth way of saying
             the same thing. */}
         {allowSwitch && (
-          <button className={`key ${allowSwitch.on ? "active" : ""}`} title={allowSwitch.label}
+          <Button className={allowSwitch.on ? "active" : ""} title={allowSwitch.label}
             onClick={() => { track("action:pull.installAuto"); onAllow(allowSwitch.pkg); }}>
             <PackageCheck size={16} /> auto-install: {allowSwitch.on ? "on" : "off"}
-          </button>
+          </Button>
         )}
         {/* The one refusal a tap can fix. */}
         {offer.settings && (
-          <button className="key" title="open the phone's install-unknown-apps setting"
+          <Button title="open the phone's install-unknown-apps setting"
             onClick={() => {
               track("action:pull.installSettings");
               void openInstallSettings().catch(() => showToast("this phone has no screen for that switch"));
-            }}><Settings size={16} /> allow installs</button>
+            }}><Settings size={16} /> allow installs</Button>
         )}
         {/* Offered only when saving is a thing that would change something. A
             file the folder confirms is THERE gets no button — MediaStore renames
@@ -680,8 +680,8 @@ function PullRow({ rec, repos, onDismiss, caps, allow, onAllow }: {
             the five before it, and the row's own sentence says where the file is
             (never a greyed-out button: see `Unavailable.tsx`). */}
         {state === "done" && !evicted && downloadAction(rec) === "save" && (
-          <button className="key" title="put it where a file manager can see it"
-            onClick={() => { track("action:pull.save"); void saveNow(item.id); }}><Save size={16} /> save to phone</button>
+          <Button title="put it where a file manager can see it"
+            onClick={() => { track("action:pull.save"); void saveNow(item.id); }}><Save size={16} /> save to phone</Button>
         )}
         {/* A row this device asked for (`download.ts`) is not in the host's queue,
             so telling the host to drop it names an id it has never heard of.
@@ -696,8 +696,8 @@ function PullRow({ rec, repos, onDismiss, caps, allow, onAllow }: {
             <Trash2 size={16} /> delete
           </ConfirmButton>
         ) : (
-          <button className="key danger" title="remove from the queue (and delete any bytes already fetched)"
-            onClick={() => { void pulls.remove(item.id); if (!rec.local) onDismiss(item.id); }}><Trash2 size={16} /> remove</button>
+          <Button variant="danger" title="remove from the queue (and delete any bytes already fetched)"
+            onClick={() => { void pulls.remove(item.id); if (!rec.local) onDismiss(item.id); }}><Trash2 size={16} /> remove</Button>
         )}
       </div>
     </div>
@@ -771,9 +771,9 @@ export function PullBar({ records, onOpen, onRemove }: {
             confirmTitle="tap again to drop them and their kept bytes" onConfirm={() => onRemove(failed)}>
             <X size={14} /> remove
           </ConfirmButton>
-        : <button className="key" title="remove the stopped downloads from the queue"
-            onClick={() => onRemove(failed)}><X size={14} /> remove</button>)}
-      <button className="key" onClick={onOpen}><Download size={14} /> Downloads</button>
+        : <Button title="remove the stopped downloads from the queue"
+            onClick={() => onRemove(failed)}><X size={14} /> remove</Button>)}
+      <Button onClick={onOpen}><Download size={14} /> Downloads</Button>
     </div>
   );
 }
@@ -812,14 +812,14 @@ export function PullBrowserAsk({ records }: { records: PullRecord[] }) {
     <div className="outbox-recover ask">
       <Smartphone size={14} />
       <span>Auto-download in this browser too? If the {BRAND.displayName} app is on this phone, it already fetches these — keep both on and every file downloads twice.</span>
-      <button className="key" onClick={() => answer(true)}
+      <Button onClick={() => answer(true)}
         title="turn auto-download off in this browser only — the app keeps fetching">
         <Smartphone size={14} /> off — app has it
-      </button>
-      <button className="key" onClick={() => answer(false)}
+      </Button>
+      <Button onClick={() => answer(false)}
         title="keep auto-download on in this browser">
         <Download size={14} /> keep on — no app
-      </button>
+      </Button>
     </div>
   );
 }

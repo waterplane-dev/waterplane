@@ -234,3 +234,7 @@ Prompts from marked screenshots go to a new session with the prompt pre-filled f
 Each session appears once in the session list.
 - asked: 2026-10-19
 
+### R-sessions-053 · requested
+Long sessions auto-compact at the configured 400k context, and the phone offers intervention buttons when a session nears its context limit.
+- asked: 2026-10-20
+

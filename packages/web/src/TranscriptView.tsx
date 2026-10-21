@@ -9,6 +9,7 @@ import { TvTurn } from "./transcript/TvTurn";
 import { TvTail } from "./transcript/TvTail";
 import { useTranscriptView } from "./transcript/useTranscriptView";
 import type { TranscriptViewProps } from "./transcript/tvTypes";
+import { Button } from "./kit/Button";
 
 export type { TranscriptStatus } from "./transcript/tvTypes";
 
@@ -65,7 +66,7 @@ export function TranscriptView(props: TranscriptViewProps) {
           {/* The CLI view keeps its own persisted scrollback (App.tsx
               savePtyTail), so it is not an empty gesture: with no cached
               transcript it is the only saved output there is. */}
-          <div><button className="key" onClick={onShowCli}>open the CLI (saved output)</button></div>
+          {onShowCli && <div><Button onClick={onShowCli}>open the CLI (saved output)</Button></div>}
         </Empty>
       )}
       {emptyNow && !(cliPeek && peek !== "gone") && <Empty>No turns recorded yet.</Empty>}

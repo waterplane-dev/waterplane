@@ -18,6 +18,7 @@ import { onRulesChanged, sessionRules } from "../answergate.js";
 import { resolveBackend } from "../backends/index.js";
 import { hostStateDir } from "../branddirs.js";
 import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
+import { bookmarkStore, type BookmarkStore } from "../bookmarks.js";
 
 /**
  * The entries a row's "Started"/"Latest" may quote: what the person asked for,
@@ -63,6 +64,10 @@ export class RosterSlice {
   private pins = new Map<string, string>();
   private pinsPath: string;
 
+  /** Conversation bookmarks (R-conversations-007) — their own store
+   *  (`bookmarks.ts`, written by the archive routes); stamped here like the flag. */
+  private bookmarks: BookmarkStore;
+
   constructor(private readonly core: SessionCore) {
     // The standing rules a person can SEE on a session are the gate's store, copied onto its
     // info on every change (made, used, forgotten) — never a plugin's own account of them.
@@ -96,6 +101,8 @@ export class RosterSlice {
         for (const [k, v] of Object.entries(raw)) { const f = cleanFollowUp(v); if (f) this.followUps.set(k, f); }
       }
     } catch { /* fresh */ }
+    this.bookmarks = bookmarkStore(root);
+    this.bookmarks.onChange((cwd, convId) => this.bookmarkChanged(cwd, convId));
     this.pinsPath = join(hostStateDir(root), "pins.json");
     try {
       if (existsSync(this.pinsPath)) this.pins = new Map(Object.entries(readJsonGuarded<Record<string, any>>(this.pinsPath, {})));
@@ -211,10 +218,26 @@ export class RosterSlice {
    *  the store owns the flag, so a stale copy persisted on a row is replaced. */
   private withFollowUp(c: ClosedRow): ClosedRow {
     const f = this.followUps.get(c.claudeSessionId ?? c.id) ?? this.followUps.get(c.id);
-    if (f) return { ...c, followUp: f };
-    if (!c.followUp) return c;
-    const { followUp: _gone, ...rest } = c;
-    return rest;
+    const b = this.bookmarks.get(c.cwd, c.claudeSessionId);
+    const { followUp: _f, bookmark: _b, ...rest } = c;
+    return { ...rest, ...(f ? { followUp: f } : {}), ...(b ? { bookmark: b } : {}) };
+  }
+
+  /** A bookmark moved: re-stamp the live session(s) of that conversation and
+   *  re-send the closed stack when a row there wears it. */
+  private bookmarkChanged(_cwd: string, convId: string): void {
+    for (const s of this.core.sessions.values()) {
+      if (s.info.claudeSessionId !== convId) continue;
+      this.applyBookmark(s.info);
+      this.core.emit("updated", s.info);
+    }
+    if (this.recentlyClosed.some((c) => c.claudeSessionId === convId)) this.core.emit("closed", this.listClosed());
+  }
+
+  /** Reflect the bookmark store onto a session's info. */
+  applyBookmark(info: SessionInfo): void {
+    const b = this.bookmarks.get(info.cwd, info.claudeSessionId);
+    if (b) info.bookmark = b; else delete info.bookmark;
   }
 
   /** Drop the whole reopen stack. Clears the persisted file too — but the
@@ -309,6 +332,7 @@ export class RosterSlice {
   applyStar(info: SessionInfo): void {
     info.starred = this.stars.has(this.starKey(info)) || (info.id ? this.stars.has(info.id) : false);
     this.applyFollowUp(info);
+    this.applyBookmark(info);
   }
 
   private persistStars(): void {

@@ -966,6 +966,18 @@ gifs; and the tests, for which it is the only host double. The rules it keeps:
   `scripts/e2e-demorecord.mjs`), never from a real `claude`, whose output drifts per version and
   carries real paths; the scrub fails closed.
 
+## The render gate for UI refactors (`scripts/ui/screens.mjs`, `screendiff.mjs`)
+
+A refactor that must not change what the phone draws is checked by drawing it. `node scripts/ui/screens.mjs
+<distDir> <outDir>` serves a BUILT dist (vite build into a scratch dir, never `packages/web/dist`) and, for
+each of 22 demo screens in dark and light at 412x915, writes `<name>.<theme>.png` and
+`<name>.<theme>.html` (`document.body.outerHTML` after settling, with a short listed set of volatile bits
+normalised). Run it on the base commit's dist and on the changed one, then `node scripts/ui/screendiff.mjs
+<before> <after> [diffDir]`: DOM files are compared as text (first differing line printed), PNGs are
+decoded in Playwright's Chromium and counted by changed pixels with a bounding box, and it exits 1 on any
+DOM difference or more than 10 changed pixels in a shot (a pixel counts only above 2 per colour channel;
+the rest is sub-pixel antialias noise). No Python, no extra dependency. The measured noise is in the header of `screens.mjs`.
+
 ## The demo terminal is drawn like the real CLI
 
 The docs gifs film the in-app demo, whose "PTY" is a string the fake host writes. Scenarios used to

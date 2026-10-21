@@ -20,6 +20,8 @@ import { chipCut, usageReadingTitle, type ChipSegment, type UsageInfo } from "@w
 import { hhmm, usageTitle } from "../../format";
 import { track } from "../../usage";
 import { claudeDoorBeside, claudeSegmentFigures, figuresHot, headerReadings, hiddenNote, infoFigures, launcherReadings, openTokensOn, tokensOpenSource, useUsage, useUsageReadings, type ClaudeFigures } from "../../features/tokens";
+import { Button } from "../../kit/Button";
+import { RowSub } from "../../kit/Row";
 
 const ICON = 16;
 const TAP = "\ntap for both windows, their reset times and the token history";
@@ -73,10 +75,10 @@ export function UsageChip({ sessions }: { sessions: readonly { backend?: string;
   const door = () => {
     const f = infoFigures(usage);
     return (
-      <button key="claude" className={`key usage-key ${figuresHot(f) ? "danger" : ""}`} title={`${usageTitle(usage)}${TAP}`}
+      <Button key="claude" className={`usage-key ${figuresHot(f) ? "danger" : ""}`} title={`${usageTitle(usage)}${TAP}`}
         onClick={() => { track("overlay:tokens"); openTokensOn(null); }}>
         <ClaudeFace f={f} size={ICON} />
-      </button>
+      </Button>
     );
   };
 
@@ -89,10 +91,10 @@ export function UsageChip({ sessions }: { sessions: readonly { backend?: string;
     // One Gauge per meter: on the lone button, else on the group's first segment only.
     const gauge = !group || (!withDoor && i === 0);
     return (
-      <button key={seg.source} className={`key usage-key${group ? " usage-seg" : ""} ${(f ? figuresHot(f) : seg.hot) ? "danger" : ""}`}
+      <Button key={seg.source} className={`usage-key${group ? " usage-seg" : ""} ${(f ? figuresHot(f) : seg.hot) ? "danger" : ""}`}
         title={segmentTitle(seg, usage)} onClick={() => open(seg)}>
         {f ? <ClaudeFace f={f} size={ICON} gauge={gauge} /> : <OtherFace seg={seg} size={ICON} gauge={gauge} />}
-      </button>
+      </Button>
     );
   });
   return group ? <div className="usage-multi">{withDoor && door()}{buttons}</div> : <>{buttons}</>;
@@ -110,20 +112,20 @@ export function SessionUsage({ backend }: { backend: string | null | undefined }
   const open = (seg: ChipSegment | null) => { track("overlay:tokens"); openTokensOn(seg ? tokensOpenSource(seg.source) : null); };
 
   const claudeInline = (f: ClaudeFigures, title: string, seg: ChipSegment | null) => (
-    <span key={seg?.source ?? "claude"} className={`row-sub usage-inline${(f.sess ?? 0) >= 80 ? " danger" : ""}`} title={title} onClick={() => open(seg)}>
+    <RowSub key={seg?.source ?? "claude"} className={`usage-inline${(f.sess ?? 0) >= 80 ? " danger" : ""}`} title={title} onClick={() => open(seg)}>
       {/* The reset belongs to the 5-hour window, so it sits beside that
           number — at the end of the strip it read as the week's. */}
       <Gauge size={11} /> sess {f.sess != null ? `${f.sess}%` : "?"}
       {f.sessResetAt != null && <> resets {hhmm(f.sessResetAt)}</>}
       {" · "}wk {f.wk != null ? `${f.wk}%` : "?"}
-    </span>
+    </RowSub>
   );
   if (!segments.length) return claudeInline(infoFigures(usage), `${usageTitle(usage)}${TAP}`, null);
   return <>{segments.map((seg: ChipSegment) => seg.source === "claude"
     ? claudeInline(claudeSegmentFigures(seg.reading, usage), segmentTitle(seg, usage), seg)
     : (
-      <span key={seg.source} className={`row-sub usage-inline${seg.hot ? " danger" : ""}`} title={segmentTitle(seg, usage)} onClick={() => open(seg)}>
+      <RowSub key={seg.source} className={`usage-inline${seg.hot ? " danger" : ""}`} title={segmentTitle(seg, usage)} onClick={() => open(seg)}>
         <Gauge size={11} /> {seg.label} {seg.text}{seg.unit ? ` ${seg.unit}` : ""}
-      </span>
+      </RowSub>
     ))}</>;
 }

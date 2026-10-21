@@ -15,6 +15,8 @@ import type { ReactNode } from "react";
 import { CalendarClock, Square, SquareCheck, X } from "lucide-react";
 import { RETIME_NONE_PICKED, retimeNote } from "./backlogFilter";
 import { track } from "./usage";
+import { Button } from "./kit/Button";
+import { Hint } from "./kit/Hint";
 
 /**
  * The When editor for the ticked rows, drawn by the CALLER (App owns the Send
@@ -40,30 +42,30 @@ export function RetimeBar({ picked, eligible, shown, onAll, onNone, onDone, onCh
   where: string;
 }) {
   return (
-    <div className="form"><div className="form-hint">
+    <div className="form"><Hint>
       {retimeNote(picked, eligible, shown)}
       <div className="annot-tools wrap" style={{ marginTop: 6 }}>
         {picked > 0 ? (
-          <button className="key" title="choose the new when — a time, a usage window, a condition, a repeat — for the ticked rows"
+          <Button title="choose the new when — a time, a usage window, a condition, a repeat — for the ticked rows"
             onClick={() => { track(`action:${where}.retime.choose`); onChoose(); }}>
             <CalendarClock size={14} /> {picked === 1 ? "new when for it…" : `new when for these ${picked}…`}
-          </button>
+          </Button>
         ) : <span>{RETIME_NONE_PICKED}</span>}
         {picked < eligible && (
-          <button className="key" title="tick every row on screen that can be re-timed" onClick={onAll}>
+          <Button title="tick every row on screen that can be re-timed" onClick={onAll}>
             <SquareCheck size={14} /> all {eligible}
-          </button>
+          </Button>
         )}
         {picked > 0 && (
-          <button className="key" title="untick every row" onClick={onNone}>
+          <Button title="untick every row" onClick={onNone}>
             <Square size={14} /> none
-          </button>
+          </Button>
         )}
-        <button className="key" title="close the pick list — nothing is changed" onClick={onDone}>
+        <Button title="close the pick list — nothing is changed" onClick={onDone}>
           <X size={14} /> done
-        </button>
+        </Button>
       </div>
-    </div></div>
+    </Hint></div>
   );
 }
 

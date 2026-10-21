@@ -24,8 +24,9 @@
  */
 import { closeSync, openSync, readSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
-import type { ArchivedConversation, ArchiveListing } from "@waterplane/shared";
-import { claudeProjectDir, promptLabel, promptOf, transcriptPath } from "./transcript.js";
+import { isConversationId } from "@waterplane/shared";
+import type { ArchivedConversation, ArchiveListing, Bookmark, TranscriptDoc, TranscriptToolDetail } from "@waterplane/shared";
+import { claudeProjectDir, logMtime, parseTranscript, promptLabel, promptOf, toolDetails, transcriptPath } from "./transcript.js";
 
 /** Bytes read from the head of a log to find its first prompt. A conversation
  *  opens with a handful of records; a system-reminder block is the only thing
@@ -102,29 +103,81 @@ function statAll(cwd: string): Array<{ id: string; path: string; mtime: number; 
  * One page of a repo's archive.
  *
  * `q` filters on the title, which means titling every log — the expensive path,
- * and the reason the un-filtered listing exists at all. `total` is the count
- * AFTER filtering, so the UI can say "N of M" honestly.
+ * and the reason the un-filtered listing exists at all. It also matches a row's
+ * `name` and its bookmark's note. `bookmarked` cuts to the conversations
+ * `bookmarks` names BEFORE the query (cheap: a bookmarked repo has a handful).
+ * `total` is the count AFTER filtering, so the UI can say "N of M" honestly.
+ *
+ * `bookmarks` and `names` are the caller's (the bookmark store, and the tab
+ * names the session roster still knows); this module remembers neither. A
+ * bookmark whose log is gone is never listed — the listing is what is on disk.
  */
 export function listArchive(
   cwd: string,
-  opts: { offset?: number; limit?: number; q?: string } = {},
+  opts: {
+    offset?: number; limit?: number; q?: string; bookmarked?: boolean;
+    bookmarks?: ReadonlyMap<string, Bookmark>; names?: ReadonlyMap<string, string>;
+  } = {},
 ): ArchiveListing {
   const all = statAll(cwd);
   const q = (opts.q ?? "").trim().toLowerCase();
   const offset = Math.max(0, opts.offset ?? 0);
   const limit = Math.max(1, Math.min(500, opts.limit ?? PAGE));
+  const marks = opts.bookmarks ?? new Map<string, Bookmark>();
+  const nameOf = (id: string): string | undefined => opts.names?.get(id) || marks.get(id)?.name || undefined;
 
   let rows = all;
-  if (q) rows = all.filter((r) => titleOf(r.id, r.path).toLowerCase().includes(q) || r.id.includes(q));
+  if (opts.bookmarked) rows = rows.filter((r) => marks.has(r.id));
+  if (q) {
+    rows = rows.filter((r) => titleOf(r.id, r.path).toLowerCase().includes(q) || r.id.includes(q)
+      || (nameOf(r.id) ?? "").toLowerCase().includes(q) || (marks.get(r.id)?.note ?? "").toLowerCase().includes(q));
+  }
 
-  const page = rows.slice(offset, offset + limit).map<ArchivedConversation>((r) => ({
-    id: r.id,
-    cwd,
-    title: titleOf(r.id, r.path),
-    mtime: r.mtime,
-    size: r.size,
-  }));
-  return { cwd, total: rows.length, offset, rows: page, scanned: all.length };
+  const page = rows.slice(offset, offset + limit).map<ArchivedConversation>((r) => {
+    const name = nameOf(r.id);
+    const bookmark = marks.get(r.id);
+    return {
+      id: r.id,
+      cwd,
+      title: titleOf(r.id, r.path),
+      mtime: r.mtime,
+      size: r.size,
+      ...(name ? { name } : {}),
+      ...(bookmark ? { bookmark } : {}),
+    };
+  });
+  return { cwd, total: rows.length, offset, rows: page, scanned: all.length, ...(opts.bookmarked ? { bookmarked: true } : {}) };
+}
+
+/** Does this directory hold a log for `id`? Bare ids only. */
+export function archivedExists(cwd: string, id: string): boolean {
+  if (!isConversationId(id)) return false;
+  try { return statSync(transcriptPath(cwd, id)).isFile(); } catch { return false; }
+}
+
+/**
+ * The reader's document for one ARCHIVED conversation, straight off its log —
+ * no session, no `claude` spawned, no tokens. The same parser the live reader
+ * uses (`parseTranscript`), so the phone draws it with the same view. `since`
+ * answers `"unchanged"` from the log's mtime, as `/api/transcript` does.
+ * Null for a bad id or a log that is not there; the path is `transcriptPath`
+ * of a bare id, never anything the caller spelled.
+ */
+export function archivedTranscript(
+  cwd: string, id: string, since = 0, detail: "lite" | "full" = "lite",
+): TranscriptDoc | "unchanged" | null {
+  if (!archivedExists(cwd, id)) return null;
+  const path = transcriptPath(cwd, id);
+  const mtime = logMtime(path);
+  if (since && mtime != null && mtime <= since) return "unchanged";
+  const parsed = parseTranscript(path, cwd, detail);
+  return parsed ? { sessionId: id, claudeSessionId: id, source: "jsonl", ...parsed } : null;
+}
+
+/** The tool inputs/results a `lite` archived document withheld, for one turn. */
+export function archivedToolDetails(cwd: string, id: string, turnId: string): Record<string, TranscriptToolDetail> | null {
+  if (!archivedExists(cwd, id) || !turnId) return null;
+  return toolDetails(transcriptPath(cwd, id), cwd, turnId);
 }
 
 /**
@@ -137,7 +190,7 @@ export function listArchive(
  * anything outside the CLI's project directory for this cwd.
  */
 export function deleteArchived(cwd: string, id: string): { ok: boolean; error?: string } {
-  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(id)) return { ok: false, error: "bad id" };
+  if (!isConversationId(id)) return { ok: false, error: "bad id" };
   const path = transcriptPath(cwd, id);
   try {
     if (!statSync(path).isFile()) return { ok: false, error: "not a conversation" };

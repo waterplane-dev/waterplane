@@ -29,6 +29,7 @@ import { openActivityOn } from "../../features/activity";
 import { WHICH_MAX, sendingLabel, whichWords } from "./logic.ts";
 import type { QueueApi } from "./useQueue.ts";
 import type { Connection } from "../conn/useConnection";
+import { Button } from "../../kit/Button";
 
 /** Stop a tap from blurring the compose box (which would dismiss the keyboard). */
 const keepFocus = (e: ReactPointerEvent) => e.preventDefault();
@@ -120,19 +121,19 @@ export function QueueBars(props: QueueBarsProps) {
         <div className="outbox-recover ask">
           <Radio size={14} />
           <span>Back online — send {parkedSends.length} message{parkedSends.length > 1 ? "s" : ""} you queued while offline?</span>
-          <button className="key" onPointerDown={keepFocus} onClick={() => {
+          <Button onPointerDown={keepFocus} onClick={() => {
             track("action:queue.confirm.send");
             const n = flushOutbox(true);
             setReconnectAsk(false);
             showToast(n ? "sending queued messages…" : idleReason("nothing left to send"));
-          }}><SendHorizontal size={14} /> Send</button>
-          <button className="key" onPointerDown={keepFocus} onClick={() => { track("action:queue.confirm.review"); setOverlay("queue"); }}>
+          }}><SendHorizontal size={14} /> Send</Button>
+          <Button onPointerDown={keepFocus} onClick={() => { track("action:queue.confirm.review"); setOverlay("queue"); }}>
             <ListOrdered size={14} /> Review
-          </button>
-          <button className="key" onPointerDown={keepFocus} onClick={() => { track("action:queue.confirm.hold"); setReconnectAsk(false); }}
+          </Button>
+          <Button onPointerDown={keepFocus} onClick={() => { track("action:queue.confirm.hold"); setReconnectAsk(false); }}
             title="keep them queued — nothing is sent until you release it">
             <X size={14} /> Hold
-          </button>
+          </Button>
         </div>
       )}
       {(failed.length === 0 && confirming.length === 0 && queuedAll.length === 0 && !inFlight && sendSettled) && (
@@ -157,9 +158,9 @@ export function QueueBars(props: QueueBarsProps) {
                   the sentence contradicted each other. Several rows have
                   several reasons; that list is Manage. */}
               <span>{failed.length} message{failed.length > 1 ? "s" : ""} not delivered{failed.length === 1 && failed[0].reason ? ` — ${failed[0].reason}` : ""}</span>
-              <button className="key" onPointerDown={keepFocus} onClick={restoreOutbox}><RotateCw size={14} /> Restore</button>
-              <button className="key" onPointerDown={keepFocus} onClick={() => { track("action:queue.manage"); openActivityOn(failed, "the messages that were not delivered"); }}><ListOrdered size={14} /> Manage</button>
-              <button className="key" onPointerDown={keepFocus} onClick={dismissOutbox}><X size={14} /> Dismiss</button>
+              <Button onPointerDown={keepFocus} onClick={restoreOutbox}><RotateCw size={14} /> Restore</Button>
+              <Button onPointerDown={keepFocus} onClick={() => { track("action:queue.manage"); openActivityOn(failed, "the messages that were not delivered"); }}><ListOrdered size={14} /> Manage</Button>
+              <Button onPointerDown={keepFocus} onClick={dismissOutbox}><X size={14} /> Dismiss</Button>
               {/* WHICH ones. A count with no names is the whole complaint
                   this answers: "2 messages not delivered" over a Manage
                   button that opened 200 rows left the person to work out
@@ -196,10 +197,10 @@ export function QueueBars(props: QueueBarsProps) {
                   found, and nothing that acts on them. */}
               <Hourglass size={14} />
               <span>{confirmingLine(confirming.length)}</span>
-              <button className="key" onPointerDown={keepFocus}
+              <Button onPointerDown={keepFocus}
                 onClick={() => { track("action:queue.confirming"); openActivityOn(confirming, "the messages the desktop is still confirming"); }}>
                 <ListOrdered size={14} /> Which
-              </button>
+              </Button>
             </>
           ) : queued.length > 0 ? (
             <>
@@ -212,7 +213,7 @@ export function QueueBars(props: QueueBarsProps) {
                   lie the toast told. If the last flush refused to send, say
                   what refused it. */}
               <span>{queued.length} queued{holdQueueRef.current ? " — held until you send them" : status !== "open" ? " — will send when the connection is back" : inFlight ? " — going out one per session" : flushIdleReason.current ? ` — ${flushIdleReason.current}` : " — going out one per session"}</span>
-              <button className="key" onPointerDown={keepFocus} onClick={() => { track("action:outbox.retry"); const n = flushOutbox(true); if (!n) showToast(idleReason("nothing left to send")); }}><RotateCw size={14} /> Send now</button>
+              <Button onPointerDown={keepFocus} onClick={() => { track("action:outbox.retry"); const n = flushOutbox(true); if (!n) showToast(idleReason("nothing left to send")); }}><RotateCw size={14} /> Send now</Button>
               {/* "Send it the moment the link is back" as ONE control, right
                   where the waiting is visible. It drives both switches that
                   decide it — auto-send, and the ask-on-reconnect confirmation
@@ -223,7 +224,7 @@ export function QueueBars(props: QueueBarsProps) {
                   Online with nothing held, the queue is already going out and
                   "auto on" beside "held until the turn ends" read as a switch
                   for that wait, which it is not. */}
-              {(status !== "open" || holdQueueRef.current || !(autoSend && !confirmQueue)) && <button className={`key ${autoSend && !confirmQueue ? "active" : ""}`} onPointerDown={keepFocus}
+              {(status !== "open" || holdQueueRef.current || !(autoSend && !confirmQueue)) && <Button className={autoSend && !confirmQueue ? "active" : ""} onPointerDown={keepFocus}
                 title={autoSend && !confirmQueue
                   ? "queued messages go out by themselves as soon as the connection is back — tap to hold them instead"
                   : "send everything queued the moment the connection is back, without asking"}
@@ -235,12 +236,12 @@ export function QueueBars(props: QueueBarsProps) {
                   setPref("confirmQueue", !on);
                   if (on) { holdQueueRef.current = false; setReconnectAsk(false); flushOutbox(); }
                   showToast(on ? "auto-send on — the queue goes out as soon as the link is back" : "auto-send off — the queue waits for “Send now”");
-                }}><Zap size={14} /> auto {autoSend && !confirmQueue ? "on" : "off"}</button>}
+                }}><Zap size={14} /> auto {autoSend && !confirmQueue ? "on" : "off"}</Button>}
               {/* A count is a filter: "2 queued" opens those two. Unfiltered it
                   opened all ~200 rows, ranked with the queued ones under every
                   failed and needs-you row — the words just sent were nowhere
                   on the first screen. */}
-              <button className="key" onPointerDown={keepFocus} onClick={() => { track("action:queue.manage"); openActivityOn(queued, "the messages still waiting to go out"); }}><ListOrdered size={14} /> Manage</button>
+              <Button onPointerDown={keepFocus} onClick={() => { track("action:queue.manage"); openActivityOn(queued, "the messages still waiting to go out"); }}><ListOrdered size={14} /> Manage</Button>
             </>
           ) : (
             // "Sending…" with no clock is the exact complaint this bar was
@@ -252,7 +253,7 @@ export function QueueBars(props: QueueBarsProps) {
             <>
               <Loader size={14} className="spin" />
               <span>{sendingLabel(flying)}</span>
-              <button className="key" onPointerDown={keepFocus} onClick={() => { track("action:queue.manage"); openActivityOn(flying, "the messages going out now"); }}><ListOrdered size={14} /> Manage</button>
+              <Button onPointerDown={keepFocus} onClick={() => { track("action:queue.manage"); openActivityOn(flying, "the messages going out now"); }}><ListOrdered size={14} /> Manage</Button>
             </>
           )}
         </div>

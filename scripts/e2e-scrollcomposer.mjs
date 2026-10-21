@@ -17,7 +17,7 @@
 // from running behind a gravestone.
 //
 // So: everything the box is holding being a window onto this text is an echo
-// (`echo.ts`'s `scrolled` rule). What must hold here is the whole contract at
+// (`composer.ts`'s `scrolled` rule). What must hold here is the whole contract at
 // once — the text is written exactly ONCE, Return is pressed after it, and the
 // item completes rather than failing "not confirmed".
 import "./lib-tmuxiso.mjs"; // tmux in a socket dir of its own, killed on exit

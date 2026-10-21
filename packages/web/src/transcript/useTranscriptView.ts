@@ -23,6 +23,7 @@ const READ_SETTLE_MS = 1200;  // a turn's end must stay on screen this long to c
  */
 export function useTranscriptView(p: TranscriptViewProps) {
   const { sessionId, refreshKey, status, cliPeek, onToast, jumpTo, toolsMode, cmd } = p;
+  const sourceRef = useRef(p.source); sourceRef.current = p.source; // a ref: a fresh object per render must not move `load`
   const [doc, setDoc] = useState<TranscriptDoc | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -155,7 +156,7 @@ export function useTranscriptView(p: TranscriptViewProps) {
       // which only ever sent full documents.)
       const held = docRef.current;
       const since = incremental && held && (held.detail ?? "full") === want ? held.updatedAt : undefined;
-      const next = await api.transcript(sessionId, since, want);
+      const next = sourceRef.current ? await sourceRef.current.transcript(since, want) : await api.transcript(sessionId, since, want);
       if (next) {
         gotLiveRef.current = true;
         setDoc(next);
@@ -426,8 +427,6 @@ export function useTranscriptView(p: TranscriptViewProps) {
   }, [cmdKey]);
 
   const markRead = () => { const m = newestTs(turns); writeSeen(sessionId, m); setSeenMark(m); };
-
-
   const toggleBlock = (id: string) =>
     setOpenBlocks((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
@@ -451,7 +450,7 @@ export function useTranscriptView(p: TranscriptViewProps) {
       (b) => b.kind === "tool" && b.ok !== undefined && cached[b.id]?.result === undefined);
     if (cached && !stale) { put({ state: "ok", tools: cached }); return; }
     try {
-      const tools = await api.transcriptTools(sessionId, turnId);
+      const tools = sourceRef.current ? await sourceRef.current.tools(turnId) : await api.transcriptTools(sessionId, turnId);
       put({ state: "ok", tools });
       void putToolDetails(sessionId, turnId, tools);
     } catch (e) {

@@ -2,8 +2,10 @@
  * Copilot's monthly quota — premium requests and chat — read with the GitHub sign-in VS Code
  * already holds, parsed by the desktop app's own `parseCopilotQuota` (copilot-usage extension).
  *
- * The extension's only network call, so it is OFF until the person turns it on from the tree
- * row; the choice is kept per machine. The endpoint (`/copilot_internal/user`) is GitHub's
+ * Before any of that, the row shows what needs no sign-in: the plan and this month's requests
+ * counted off this machine's Copilot Chat logs (`copilot-usage/host/vscodelocal.mts`, shared with the desktop), re-read every few
+ * minutes from disk. The GitHub read is the extension's only network call, so it is OFF until
+ * the person turns it on from the tree row; the choice is kept per machine. The endpoint (`/copilot_internal/user`) is GitHub's
  * internal one: a shape the parser does not know reads as absent, never as a guessed number.
  * A token is asked for silently on refresh; only the person's click may raise VS Code's own
  * sign-in prompt.
@@ -11,12 +13,16 @@
 import * as vscode from "vscode";
 import { BRAND, usageWindowPct } from "@waterplane/shared";
 import type { UsageReading } from "@waterplane/shared";
+import { localLines } from "../../extensions/copilot-usage/host/vscodelocal.mts";
+import type { CopilotLocalDoc, CopilotLocalReader } from "../../extensions/copilot-usage/host/vscodelocal.mts";
 import { parseCopilotQuota } from "../../extensions/copilot-usage/host/ghquota.mts";
 
 const ON_KEY = `${BRAND.slug}.copilotQuota`;
 const URL = "https://api.github.com/copilot_internal/user";
 /** Monthly windows move slowly; ten minutes is plenty and stays far from any rate limit. */
 const EVERY_MS = 10 * 60_000;
+/** The local count reads only files that moved since the last pass, so it can run more often. */
+const LOCAL_EVERY_MS = 2 * 60_000;
 const SCOPES = ["user:email"];
 
 export interface QuotaState {
@@ -25,15 +31,25 @@ export interface QuotaState {
   /** Why there is no reading, in words; null while one is shown or nothing was asked yet. */
   why: string | null;
   busy: boolean;
+  /** The plan and this month's requests off this machine's files; null until the first read. */
+  local: CopilotLocalDoc | null;
 }
 
 export class CopilotQuota implements vscode.Disposable {
   private st: QuotaState;
   private timer: NodeJS.Timeout | null = null;
+  private localTimer: NodeJS.Timeout;
 
-  constructor(private memo: vscode.Memento, private onChange: () => void) {
-    this.st = { on: memo.get<boolean>(ON_KEY, false), reading: null, why: null, busy: false };
+  constructor(private memo: vscode.Memento, private local: CopilotLocalReader, private onChange: () => void) {
+    this.st = { on: memo.get<boolean>(ON_KEY, false), reading: null, why: null, busy: false, local: null };
+    void this.readLocal();
+    this.localTimer = setInterval(() => void this.readLocal(), LOCAL_EVERY_MS);
     if (this.st.on) { void this.read(false); this.arm(); }
+  }
+
+  private async readLocal(): Promise<void> {
+    try { this.st.local = await this.local.read(); } catch { this.st.local = null; }
+    this.onChange();
   }
 
   get state(): QuotaState { return this.st; }
@@ -45,11 +61,12 @@ export class CopilotQuota implements vscode.Disposable {
       await this.memo.update(ON_KEY, true);
       this.arm();
     }
+    void this.readLocal();
     await this.read(true);
   }
 
   async turnOff(): Promise<void> {
-    this.st = { on: false, reading: null, why: null, busy: false };
+    this.st = { on: false, reading: null, why: null, busy: false, local: this.st.local };
     await this.memo.update(ON_KEY, false);
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
@@ -98,7 +115,10 @@ export class CopilotQuota implements vscode.Disposable {
     this.st.why = reading ? null : why;
   }
 
-  dispose(): void { if (this.timer) clearInterval(this.timer); }
+  dispose(): void {
+    if (this.timer) clearInterval(this.timer);
+    clearInterval(this.localTimer);
+  }
 }
 
 const WINDOW_NAME: Record<string, string> = { premium: "premium", chat: "chat" };
@@ -115,6 +135,7 @@ export function quotaWords(r: UsageReading): string | null {
 /** The tooltip: each window with its count, the reset date, when it was read. */
 export function quotaTooltip(st: QuotaState): vscode.MarkdownString {
   const md = new vscode.MarkdownString();
+  if (st.local) for (const l of localLines(st.local)) md.appendText(`${l}\n\n`);
   const r = st.reading;
   if (r) {
     for (const w of r.windows) {
@@ -129,6 +150,6 @@ export function quotaTooltip(st: QuotaState): vscode.MarkdownString {
   if (st.why) md.appendText(`${st.why}\n\n`);
   md.appendText(st.on
     ? "Click to read again. Re-read every 10 minutes while on."
-    : "Off. Click to read Copilot's monthly quota from GitHub with your VS Code GitHub sign-in — the extension's only network call.");
+    : "Click for GitHub's own figure, with the limit and reset date. VS Code asks once to share the GitHub account it is already signed in with (no password); Cancel keeps this local count. It is the extension's only network call.");
   return md;
 }

@@ -14,6 +14,10 @@ import { BUILD_LOCAL_ROW, localAfterSave } from "./buildScope";
 import { BuildEditor } from "./BuildEditor";
 import { BuildRunAsk } from "./BuildRunAsk";
 import { ArtifactPolicyRow, ArtifactRow } from "./BuildArtifacts";
+import { Button } from "./kit/Button";
+import { RowSub, Row, RowTitle } from "./kit/Row";
+import { Hint } from "./kit/Hint";
+import { Tag } from "./kit/Tag";
 
 interface Props {
   repo: RepoTarget;
@@ -178,34 +182,34 @@ export function BuildSheet({ repo, builds, runs, output, outTick, onSave, localI
   return (
     <div className="sheet">
       <SheetHead title={<><Hammer size={16} /> Build · {repo.repoName}</>} onClose={onClose}>
-        {branchLabel(repo) && <span className="row-sub head-branch">{branchLabel(repo)}</span>}
-        <button className="key" title="ask Claude to work out this repo's build commands"
-          onClick={() => { track("action:build.setup"); onSetup(SETUP_PROMPT); }}><Wand2 size={16} /> set up</button>
+        {branchLabel(repo) && <RowSub className="head-branch">{branchLabel(repo)}</RowSub>}
+        <Button title="ask Claude to work out this repo's build commands"
+          onClick={() => { track("action:build.setup"); onSetup(SETUP_PROMPT); }}><Wand2 size={16} /> set up</Button>
         {/* Writing the list is `build.save`, a live-only frame: it edits a file
             on the desktop and there is no honest way to hold one. Opening the
             editor offline would take a typed-out gradle line and answer it with
             a toast — so offline the verb is ABSENT and the hint below says
             why, never a dimmed button whose reason lives in a `title`. */}
-        {online && <button className="key" title="add a build command"
-          onClick={() => openEditor({ id: seqId("b"), name: "", cmd: "", dir: "" })}><Plus size={16} /> new</button>}
+        {online && <Button title="add a build command"
+          onClick={() => openEditor({ id: seqId("b"), name: "", cmd: "", dir: "" })}><Plus size={16} /> new</Button>}
       </SheetHead>
       {/* One line, and the rest behind a `?`: three always-on paragraphs
           stood between the head and the first build. */}
-      <div className="form-hint">
+      <Hint>
         Runs in a shell on the desktop, no tokens spent{" "}
         <Explain of="the build sheet">Works while Claude is rate-limited. What it produces is offered for download under its run.</Explain>
-      </div>
+      </Hint>
       {/* Offline is never folded: it is why `new` and the pencils are absent.
           The second line says the rows came off this device, not the host, and
           when — the commands are cached, the RUN is what needed the link. */}
       {!online && (
-        <div className="form-hint">
+        <Hint>
           <CloudOff size={13} style={{ verticalAlign: "-2px" }} />{" "}
           No connection: a tap is queued and the build starts once the link is back. Adding, editing or deleting a command needs the link.
           {builds.length > 0 && (listAt
             ? ` These commands are this device's copy, last confirmed ${ago(listAt)} ago.`
             : " These commands are this device's copy.")}
-        </div>
+        </Hint>
       )}
 
       {/* ONE scroll region for everything under the hint.
@@ -223,29 +227,29 @@ export function BuildSheet({ repo, builds, runs, output, outTick, onSave, localI
           {builds.map((b) => {
             const running = runs.find((r) => r.buildId === b.id && r.status === "running");
             return (
-              <div key={b.id} className="row-wrap">
-                <button className="row grow" title={b.cmd} onClick={() => { if (running) setSel(running.runId); else fire(b); }}>
-                  <span className="row-title">{b.name}{running ? <> <Loader size={12} className="spin" /></> : null}</span>
+              <Row key={b.id} kind="wrap">
+                <Row as="button" kind="grow" title={b.cmd} onClick={() => { if (running) setSel(running.runId); else fire(b); }}>
+                  <RowTitle>{b.name}{running ? <> <Loader size={12} className="spin" /></> : null}</RowTitle>
                   {/* Two lines, then an ellipsis: a forty-line shell script
                       as a row's subtitle was a whole screen of one row. The
                       full command is one tap away, on the pencil. */}
-                  <span className="row-sub mono build-cmd">{b.dir ? `${b.dir}$ ` : ""}{b.cmd}</span>
+                  <RowSub className="mono build-cmd">{b.dir ? `${b.dir}$ ` : ""}{b.cmd}</RowSub>
                   {/* A button that ASKS is visibly one, before it is tapped. The
                       placeholders are in the command line above, but `{{app}}`
                       in a monospace line is not a promise a reader can act on —
                       this is. */}
-                  {b.params?.length ? <span className="row-sub">{paramsRowNote(b)}</span> : null}
-                  {localIds?.includes(b.id) ? <span className="row-sub">{BUILD_LOCAL_ROW}</span> : null}
-                </button>
+                  {b.params?.length ? <RowSub>{paramsRowNote(b)}</RowSub> : null}
+                  {localIds?.includes(b.id) ? <RowSub>{BUILD_LOCAL_ROW}</RowSub> : null}
+                </Row>
                 {running
-                  ? <button className="key danger" title="cancel build" onClick={() => onCancel(running.runId)}><Square size={16} /></button>
-                  : <button className="key" title={b.params?.length ? "run build — it asks first" : "run build"} onClick={() => fire(b)}><Play size={16} /></button>}
+                  ? <Button variant="danger" title="cancel build" onClick={() => onCancel(running.runId)}><Square size={16} /></Button>
+                  : <Button title={b.params?.length ? "run build — it asks first" : "run build"} onClick={() => fire(b)}><Play size={16} /></Button>}
                 {/* Delete lives in the editor, behind a confirm: a red bin on
                     every row, one thumb-width from Run, was a one-tap way to
                     lose a command somebody wrote. Offline the pencil is absent
                     and the hint above says why. */}
-                {online && <button className="key" title="edit or delete" onClick={() => openEditor(b)}><Pencil size={16} /></button>}
-              </div>
+                {online && <Button title="edit or delete" onClick={() => openEditor(b)}><Pencil size={16} /></Button>}
+              </Row>
             );
           })}
           {/* Two different nothings. With the link up the host has told us this
@@ -283,10 +287,10 @@ export function BuildSheet({ repo, builds, runs, output, outTick, onSave, localI
                 <div key={r.runId} className="build-run-item">
                 <button className={`row ${selRun?.runId === r.runId ? "active" : ""}`}
                   onClick={() => setSel(selRun?.runId === r.runId ? "" : r.runId)}>
-                  <span className="row-title">
+                  <RowTitle>
                     {r.status === "running" ? <Loader size={12} className="spin" /> : null} {r.name}
-                    {" "}<span className={`tag ${r.status === "done" ? "idle" : r.status === "running" ? "coding" : "dead"}`}>{r.status}{r.exitCode ? ` ${r.exitCode}` : ""}</span>
-                  </span>
+                    {" "}<Tag className={r.status === "done" ? "idle" : r.status === "running" ? "coding" : "dead"}>{r.status}{r.exitCode ? ` ${r.exitCode}` : ""}</Tag>
+                  </RowTitle>
                   {/* WHEN, then how long. Five rows all reading "Debug APK ·
                       done · 17s · 2 artifacts" are five rows a reader cannot
                       tell apart: the only thing separating them was a sort
@@ -300,9 +304,9 @@ export function BuildSheet({ repo, builds, runs, output, outTick, onSave, localI
                       one button are two different builds, so the values are the
                       only thing separating these rows from each other. */}
                   {r.params && Object.keys(r.params).length > 0 && (
-                    <span className="row-sub mono">{Object.entries(r.params).map(([k, v]) => `${k}=${v}`).join(" · ")}</span>
+                    <RowSub className="mono">{Object.entries(r.params).map(([k, v]) => `${k}=${v}`).join(" · ")}</RowSub>
                   )}
-                  <span className="row-sub">{when(r.finishedAt ?? r.startedAt)} · {durSpan(r.startedAt, r.finishedAt)}{r.artifacts?.length ? ` · ${r.artifacts.length} artifact${r.artifacts.length > 1 ? "s" : ""}` : ""}</span>
+                  <RowSub>{when(r.finishedAt ?? r.startedAt)} · {durSpan(r.startedAt, r.finishedAt)}{r.artifacts?.length ? ` · ${r.artifacts.length} artifact${r.artifacts.length > 1 ? "s" : ""}` : ""}</RowSub>
                   {selRun?.runId === r.runId ? <ChevronUp size={16} className="build-run-fold" /> : <ChevronDown size={16} className="build-run-fold" />}
                 </button>
                 {selRun?.runId === r.runId && (

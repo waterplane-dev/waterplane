@@ -62,6 +62,12 @@ repo's own meaning and say so in one line rather than guess.
   and must never ask for one in chat; ask the person to set KEY from the phone.
   If the desktop has a secrets tool and its skill is installed, follow that skill
   for anything it covers (reading a key, using a login).
+- **Subagent windows are not capped by the session's compaction setting.** An
+  agent re-reads its whole window on every step, so one that grows to 500k
+  costs that much per step. Give each agent one narrow work package, set
+  \`model\` explicitly (Sonnet for mechanical lanes), and brief it to return
+  before about 200k of context. For a repo's own agent definitions, \`maxTurns\`
+  in the frontmatter caps how many steps an agent may take.
 
 ## Showing the person something: the outbox
 

@@ -29,6 +29,8 @@ import { showToast } from "../../toast";
 import { track } from "../../usage";
 import { WheelPicker, type WheelPick } from "../../WheelChart";
 import { ModeSection, hasModeSection } from "./ModeSection";
+import { Button } from "../../kit/Button";
+import { Hint } from "../../kit/Hint";
 
 export interface ModelWheelProps {
   cur: SessionInfo;
@@ -99,10 +101,10 @@ function WheelBody({ cur, backends, canSlash, submitInput, relaunch, liveAsk, on
     return (
       <div className="model-wheel-pop" role="dialog" aria-label="model wheel">
         <WheelHead onClose={onClose} withMode={withMode} />
-        <div className="form-hint">
+        <Hint>
           This backend did not name its models, so there is nothing to put on a wheel. Switch model in the menu
           takes a typed id.
-        </div>
+        </Hint>
         {modes}
       </div>
     );
@@ -176,7 +178,7 @@ function WheelBody({ cur, backends, canSlash, submitInput, relaunch, liveAsk, on
             above the chart it would shove the wheel down under a dragging finger.
             Present only when there is something to do — never a greyed Apply;
             the sentence above already says why there is none. */}
-        {cost && <div className="form-hint mw-cost">{cost}</div>}
+        {cost && <Hint className="mw-cost">{cost}</Hint>}
         {plan && plan.kind !== "none" && (
           <button className="send mw-apply" onClick={apply}>
             {plan.kind === "live" ? `Switch to ${pickName}` : `Relaunch on ${pickName}`}
@@ -192,7 +194,7 @@ function WheelHead({ onClose, withMode }: { onClose(): void; withMode: boolean }
   return (
     <div className="mw-head">
       <span>Model · effort{withMode ? " · mode" : ""}</span>
-      <button className="key" aria-label="close the model wheel" onClick={onClose}><X size={16} /></button>
+      <Button aria-label="close the model wheel" onClick={onClose}><X size={16} /></Button>
     </div>
   );
 }

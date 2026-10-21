@@ -4,6 +4,7 @@ import { Check, Copy, Share2 } from "lucide-react";
 import { copyText } from "./api";
 import { CLIPBOARD_NEEDS_HTTPS, canCopyDirectly, pairShareText } from "./pairShare";
 import { showToast } from "./toast";
+import { Button } from "./kit/Button";
 
 /**
  * The pairing as TEXT, under the QR: the link and the code, each selectable and
@@ -42,19 +43,19 @@ export function PairCopyRows({ m, hostName }: { m: PairMintResponse; hostName: s
       <div className="pair-copy-label">Link</div>
       <div className="pair-copy-row">
         <code style={SELECTABLE}>{m.landingUrl}</code>
-        <button className="key" onClick={() => void copy("link", m.landingUrl)}>
+        <Button onClick={() => void copy("link", m.landingUrl)}>
           {done === "link" ? <Check size={ICON} /> : <Copy size={ICON} />} {done === "link" ? "copied" : "copy link"}
-        </button>
+        </Button>
       </div>
       <div className="pair-copy-label">Code</div>
       <div className="pair-copy-row">
         <code style={SELECTABLE}>{formatPairCode(m.code)}</code>
-        <button className="key" onClick={() => void copy("code", formatPairCode(m.code))}>
+        <Button onClick={() => void copy("code", formatPairCode(m.code))}>
           {done === "code" ? <Check size={ICON} /> : <Copy size={ICON} />} {done === "code" ? "copied" : "copy code"}
-        </button>
+        </Button>
       </div>
       {canShare && (
-        <button className="key pair-wide" style={{ marginTop: 12 }} onClick={() => void share()}><Share2 size={ICON} /> share link and code</button>
+        <Button className="pair-wide" style={{ marginTop: 12 }} onClick={() => void share()}><Share2 size={ICON} /> share link and code</Button>
       )}
       {(failed || !direct) && <div className="set-note" style={{ marginTop: 6 }}>{failed ? "The phone refused to copy. " : ""}{CLIPBOARD_NEEDS_HTTPS}</div>}
     </div>

@@ -7,6 +7,9 @@ import { track } from "../usage";
 import { rowsFor, toolTally } from "./tvRows";
 import { Collapse, ToolRow } from "./tvParts";
 import type { TvModel } from "./useTranscriptView";
+import { Button } from "../kit/Button";
+import { RowSub } from "../kit/Row";
+import { Tag } from "../kit/Tag";
 
 /** One turn's blocks: prose, thinking, screen text, and the tool calls (folded in `fold` mode). */
 export function TvBlocks({ m, t }: { m: TvModel; t: TranscriptTurn }) {
@@ -27,7 +30,7 @@ export function TvBlocks({ m, t }: { m: TvModel; t: TranscriptTurn }) {
                 <span className="tr-tools-head">
                   <Wrench size={12} /> <b>{row.blocks.length} tool calls</b>
                   <span className="tr-tool-label">{toolTally(row.blocks)}</span>
-                  {row.blocks.some((b) => b.ok === false) && <span className="tag danger">error</span>}
+                  {row.blocks.some((b) => b.ok === false) && <Tag tone="danger">error</Tag>}
                 </span>
               }>
               <>{row.blocks.map((b, k) => <ToolRow key={`${key}:${k}`} m={m} t={t} b={b} k={`${key}:${k}`} />)}</>
@@ -50,16 +53,16 @@ export function TvBlocks({ m, t }: { m: TvModel; t: TranscriptTurn }) {
             <pre className="tr-screen">{b.text}</pre>
             {b.scrollable && (
               <div className="tr-clipped">
-                <span className="row-sub">
+                <RowSub>
                   The CLI drew this in a panel it could scroll, and only the rows it painted
                   were recorded. Anything past them was never printed{panelOpen
                     ? " — the panel is still open in the CLI, so it can be scrolled there."
                     : ", and once that panel closes it is in no record at all."}
-                </span>
-                {panelOpen && (
-                  <button className="key" onClick={() => { track("action:read.toCliScroll"); onShowCli(); }}>
+                </RowSub>
+                {panelOpen && onShowCli && (
+                  <Button onClick={() => { track("action:read.toCliScroll"); onShowCli(); }}>
                     <TerminalIcon size={13} /> scroll it in the CLI
-                  </button>
+                  </Button>
                 )}
               </div>
             )}

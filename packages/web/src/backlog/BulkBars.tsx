@@ -23,12 +23,13 @@ import {
 } from "../backlogFilter";
 import { track } from "../usage";
 import type { BacklogModel } from "./backlogTypes";
+import { Hint } from "../kit/Hint";
 
 /** A bar's sentence, then its one verb on the sheet's shared edge (`.bl-bulk`). */
 function Bar({ note, children }: { note: ReactNode; children: ReactNode }) {
   return (
     <div className="bl-bulk-bar">
-      <div className="form-hint">{note}</div>
+      <Hint>{note}</Hint>
       <div className="bl-bulk">{children}</div>
     </div>
   );
@@ -57,9 +58,9 @@ export function BulkBars({ m }: { m: BacklogModel }) {
           Auto ON it is reassurance, behind a `?`. Auto OFF it is the reason,
           drawn, with the head chip's own `onSetAuto` beside it. */}
       {focusWords && p.auto && (
-        <div className="bl-bulk-bar"><div className="form-hint">
+        <div className="bl-bulk-bar"><Hint>
           <Explain of="when these run" label="when do these run?">{focusWords}</Explain>
-        </div></div>
+        </Hint></div>
       )}
       {focusWords && !p.auto && (
         <Bar note={focusWords}>

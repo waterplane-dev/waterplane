@@ -36,6 +36,8 @@ import { UI_RESET_KEYS } from "../../resetKeys.ts";
 import { track } from "../../usage.ts";
 import { useHostPush } from "../../features/hostTools";
 import { useHasKeyboard } from "../../ShortcutCard.tsx";
+import { Button } from "../../kit/Button";
+import { offerTabsUnsync } from "../sessions/tabsSyncSaver";
 
 const ICON = 16;
 
@@ -50,6 +52,7 @@ export function AppearanceRows() {
   const tabsN = usePref("tabsN");
   const tabsSort = usePref("tabsSort");
   const tabsMax = usePref("tabsMax");
+  const tabsSync = usePref("tabsSync");
   const netPulse = usePref("netPulse");
   const unfoldToEnd = usePref("unfoldToEnd");
   const repoSort = usePref("repoSort");
@@ -122,8 +125,8 @@ export function AppearanceRows() {
         onMore={bigger != null ? () => applyTermZoom(bigger) : null}
         lessLabel="smaller" moreLabel="bigger"
         extra={tZoom !== 1 && (
-          <button className="key" onClick={() => applyTermZoom(1)}
-            title={`back to the text size on its own — ${termFontPx(txtScale, 1)}px`}><RotateCw size={ICON} /> default</button>
+          <Button onClick={() => applyTermZoom(1)}
+            title={`back to the text size on its own — ${termFontPx(txtScale, 1)}px`}><RotateCw size={ICON} /> default</Button>
         )}
         note="Terminal only, on top of the text size above — a smaller console font is a BIGGER grid."
         more={<p>So the CLI gets more columns and rows to draw in and a wide diff stops wrapping. The desktop is told the new size the moment you tap. The same two buttons float in the terminal's top-right corner, which is where they are worth using: you can see what you are changing while you change it.</p>}
@@ -195,7 +198,25 @@ export function AppearanceRows() {
             showToast(`session tabs: ${TAB_ORDER_LABEL[o]}`);
           }}
           note="Three orders, three different things to want."
-          more={<p><b>In the order opened</b> never moves, so a tab's position is something you learn and reach without reading it. <b>Most opened first</b> keeps the ones you actually go back to under your thumb. <b>Last opened first</b> answers “where was I” instead — the one order that moves under you. Both counts are kept on this device only, and tabs that tie keep the order they were started in, so nothing shuffles on its own.</p>}
+          more={<p><b>In the order opened</b> never moves, so a tab's position is something you learn and reach without reading it. <b>Most opened first</b> keeps the ones you actually go back to under your thumb. <b>Last opened first</b> answers “where was I” instead — the one order that moves under you. Tabs that tie keep the order they were started in, so nothing shuffles on its own.</p>}
+        />
+      )}
+
+      {tabsOn && (
+        <SetSwitch
+          id="tabs-sync" label="same tab order on every device" icon={Layers}
+          on={tabsSync}
+          onChange={() => {
+            const on = !tabsSync;
+            setPref("tabsSync", on);
+            prefs.reload("tabsSort");
+            track(`action:sessiontabs.sync.${on ? "on" : "off"}`);
+            showToast(on ? "tab order shared with your other devices" : "tab order kept on this device only");
+          }}
+          note={tabsSync
+            ? "The order above, and which session you opened last or most, follow you between devices."
+            : "This device keeps its own order and its own record of what you opened."}
+          more={<p>On, a session you open on the desktop moves to the front here too under <b>last opened first</b>, and picking an order on one device picks it on all of them that have this on. How many tabs fit and how many are shown stay per device — they are about the screen. Off, this device goes back to the order and record it kept for itself; pinned files are always this device's. When data saver or the phone's battery saver comes on, you are asked once whether to stop sharing.</p>}
         />
       )}
 
@@ -653,6 +674,8 @@ export function OfflineRows({ install, reconnect }: { install: InstallFacts; rec
           const on = !saver;
           setPref("saver", on); track("action:datasaver");
           showToast(on ? "data saver on — smaller images, slower polling" : "data saver off");
+          // The toast first, then the one ask: sharing the tab order is one more thing it could stop.
+          if (on) void offerTabsUnsync("app");
         }}
         note="For a roaming or hotel link: smaller image copies, slower background polling. Per device."
         more={<p>Asks the host for smaller images in the grids and the full-screen viewer — “full res” is always one tap away — and slows the reader view's background polling.</p>}

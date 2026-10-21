@@ -12,6 +12,7 @@ import { useState, type ReactNode } from "react";
 import { Wallet } from "lucide-react";
 import type { SessionBudget } from "@waterplane/shared";
 import { BudgetField } from "../BudgetField";
+import { Button } from "../kit/Button";
 
 const CAL_FOR = "A percent is converted from dollars at the window's measured rate once the session is running — until there is a fresh usage reading, nothing is held.";
 
@@ -28,10 +29,10 @@ export function RowBudgetEdit({ current, online, onSet }: {
       <BudgetField initial={current ?? null} onChange={setDraft} calFor={CAL_FOR} />
       <div className="bl-close-chips">
         {draft && !same && (
-          <button className="key active" onClick={() => onSet(draft)}><Wallet size={13} /> {current ? "change budget" : "set budget"}</button>
+          <Button className="active" onClick={() => onSet(draft)}><Wallet size={13} /> {current ? "change budget" : "set budget"}</Button>
         )}
         {current && (
-          <button className="key" onClick={() => onSet(null)}><Wallet size={13} /> clear budget</button>
+          <Button onClick={() => onSet(null)}><Wallet size={13} /> clear budget</Button>
         )}
       </div>
     </div>

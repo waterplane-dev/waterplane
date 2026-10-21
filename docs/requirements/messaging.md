@@ -48,3 +48,7 @@ Typed compose words are kept until the user deletes them, and deleting them asks
 A promo that was sent successfully is reported as sent.
 - asked: 2026-10-06
 
+### R-messaging-012 · requested
+A sent message counts as delivered only once the CLI's full framed composer shows the echoed text, never from a one-row bare read.
+- asked: 2026-10-20
+

@@ -5,11 +5,12 @@
 import { Server } from "lucide-react";
 import { showHostName } from "./logic";
 import { useHosts } from "./store";
+import { RowSub } from "../../kit";
 
 export function HostNameTag() {
   const { hosts, activeId } = useHosts();
   if (!showHostName(hosts)) return null;
   const name = hosts.find((h) => h.id === activeId)?.name;
   if (!name) return null;
-  return <span className="row-sub"> · <Server size={11} aria-hidden="true" /> {name}</span>;
+  return <RowSub> · <Server size={11} aria-hidden="true" /> {name}</RowSub>;
 }

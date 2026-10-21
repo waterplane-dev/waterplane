@@ -435,7 +435,7 @@ function paintPaste() {
  * scroll mode. The composer as the real one behaves: a viewport, not a field.
  *
  * The buffer is wrapped at `SCROLL_COLS` and only the last `SCROLL_ROWS` of
- * those rows are drawn, inside a box `echo.ts` recognises. That is what the
+ * those rows are drawn, inside a box `composer.ts` recognises. That is what the
  * live CLI does at a phone's terminal height, and it is the only thing wrong
  * with the screen: the text is accepted, echoed and submittable, and the head
  * of it is off the top of the box.
@@ -463,7 +463,7 @@ function paintScroll() {
 /**
  * stream mode. The composer inside its own box, with the render torn under it.
  *
- * The rules are the characters `echo.ts` anchors on (U+2500, 20 or more of
+ * The rules are the characters `composer.ts` anchors on (U+2500, 20 or more of
  * them) and the input row is `❯` plus the NBSP the real TUI pads the cursor row
  * with. Everything below the closing rule is what the tear leaves behind: the
  * footer twice over, then turn output. `STREAM_BELOW` is chosen so the echo
@@ -924,7 +924,7 @@ function paintMenu() {
 
 /**
  * permmode mode. The footer row the host reads the mode off (`permmode.ts`),
- * under a composer `echo.ts` and `permmode.ts` both recognise, with a status
+ * under a composer `composer.ts` and `permmode.ts` both recognise, with a status
  * line between them like a user's own `statusLine` draws.
  */
 const PM_CYCLE = [

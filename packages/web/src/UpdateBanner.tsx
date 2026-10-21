@@ -38,6 +38,7 @@ import { showToast } from "./toast";
 import {
   SNOOZE_CHOICES, parseSnooze, snoozeActive, snoozeFor, snoozeSentence,
 } from "./updateSnooze";
+import { Button } from "./kit/Button";
 
 /** Dismissal is per BUILD, not per session: waving away this one must not hide
  *  the next. Kept in memory — a reload is exactly when you want to be told
@@ -69,13 +70,13 @@ export function UpdateBanner() {
       <span className="staged-bar-text">
         {picking ? "Hide this for how long?" : "A newer build is ready and verified on this phone."}
       </span>
-      {!picking && <button
-        className="key staged-bar-go"
+      {!picking && <Button
+        className="staged-bar-go"
         title="restart into the new build — anything half-written in a box is lost"
         onClick={() => { track("action:update.applyNow"); void updates.applyNow(); }}
       >
         Restart into it
-      </button>}
+      </Button>}
       <button
         className="staged-bar-later"
         aria-label={picking ? "keep showing it" : "hide for a while"}
@@ -92,9 +93,9 @@ export function UpdateBanner() {
         // for five minutes" costs more taps than the thing it is postponing.
         // The clock stays put while they are open and takes the choice back, so
         // the only way out of the question is not the × that hides the bar.
-        <button
+        <Button
           key={c.ms}
-          className="key staged-bar-span"
+          className="staged-bar-span"
           title={`hide the bar for ${c.label}, across reloads — the build still applies on its own once you put the phone down`}
           onClick={() => {
             track("action:update.snooze");
@@ -103,7 +104,7 @@ export function UpdateBanner() {
             setPicking(false);
             bump((n) => n + 1);
           }}
-        >{c.label}</button>
+        >{c.label}</Button>
       ))}
       <button
         className="staged-bar-x"

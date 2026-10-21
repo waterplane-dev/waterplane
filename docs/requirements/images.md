@@ -64,3 +64,7 @@ Pasting a single image with Ctrl+V produces exactly one attachment, not two.
 - asked: 2026-10-17
 - shipped: a37bbb9a, 4aed6032
 
+### R-images-014 · requested
+Enlarged images opened from the strip can be swiped on the phone and navigated with left/right buttons on the desktop.
+- asked: 2026-10-20
+

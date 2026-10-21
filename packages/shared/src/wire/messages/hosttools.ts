@@ -79,7 +79,13 @@ export type HostToolsMsg =
    * been offline for a day would otherwise render yesterday's misses as today's
    * alarm. `PROTOCOL_VERSION` did not move for it — this is additive.
    */
-  | { t: "clihealth"; health: CliHealth; rollup: HealthRollup }
+  | { t: "clihealth"; health: CliHealth; rollup: HealthRollup;
+      /** Only from a host running out of a source checkout (`devSource`, host
+       *  `clihealth.ts`): what the phone's "inspect in a session" names, both
+       *  absolute desktop paths — the checkout a session opens in, and the
+       *  state dir holding `clihealth.json` + `clifixtures/`. Absent elsewhere,
+       *  so a packaged install never offers to inspect code it does not have. */
+      source?: { repo: string; stateDir: string } }
   /**
    * One reading of the local runner. The host keeps NO history of these — the
    * phone keeps the ring (`shared/wire/localrt.ts`).

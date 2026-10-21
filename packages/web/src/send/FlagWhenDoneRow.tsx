@@ -6,6 +6,7 @@
 import type { ReactNode } from "react";
 import { Flag } from "lucide-react";
 import { flagWhenDoneOffered, type SendTarget, type SendWhen } from "../sendIntent";
+import { Hint } from "../kit/Hint";
 
 export function FlagWhenDoneRow({ target, when, setTarget }: {
   target: SendTarget; when: SendWhen; setTarget: (t: SendTarget) => void;
@@ -20,7 +21,7 @@ export function FlagWhenDoneRow({ target, when, setTarget }: {
           <Flag size={13} fill={on ? "currentColor" : "none"} /> Flag for follow up when done
         </button>
       </div>
-      {on && <div className="form-hint">{target.kind === "repos" ? "Each session it opens" : "The session it opens"} gets the follow-up flag once it is done — not if it failed or stopped on a usage limit.</div>}
+      {on && <Hint>{target.kind === "repos" ? "Each session it opens" : "The session it opens"} gets the follow-up flag once it is done — not if it failed or stopped on a usage limit.</Hint>}
     </>
   );
 }

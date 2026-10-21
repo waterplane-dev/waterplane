@@ -164,3 +164,8 @@ export function goneDisplay(source: DesktopSource, p: ProbeState): string | null
   if (ds.length === 0 || ds.some((d) => d.id === source.id)) return null;
   return `The display picked earlier is not on the desktop any more — macOS renumbers displays when a monitor reconnects or the Mac restarts. It has ${ds.length === 1 ? "one display" : `${ds.length} displays`} now.`;
 }
+
+// ── fullscreen ──────────────────────────────────────────────────────────────
+
+/** Said once per entry into fullscreen: where the controls went, and that the handle moves. */
+export const FULL_ENTERED = "Controls are behind the ⋯ button — tap it to show them, drag it out of the way.";

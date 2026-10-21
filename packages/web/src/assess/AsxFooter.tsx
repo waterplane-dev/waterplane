@@ -7,6 +7,7 @@ import { assessApplyNote, assessPickedLabel, assessCutLabel, assessOpenBacklogLa
 import { Unavailable } from "../Unavailable";
 import { track } from "../usage";
 import type { AssessModel } from "./useAssessSheet";
+import { Button, Hint } from "../kit";
 
 export function AsxFooter({ m }: { m: AssessModel }) {
   const { p, setPickedRows, setPickedMerges, setPickedNews, picked, applyBlocked, apply, applySummary, applyLabel, ready } = m;
@@ -21,13 +22,13 @@ export function AsxFooter({ m }: { m: AssessModel }) {
           ticked is a control whose only honest state is "does nothing", and
           greying it is the thing this app does not do. */}
       {picked ? (
-        <button className="key" title="un-tick everything — nothing has happened yet, so nothing is undone"
+        <Button title="un-tick everything — nothing has happened yet, so nothing is undone"
           onClick={() => {
             track("action:assess.clear");
             setPickedRows(new Set<string>()); setPickedMerges(new Set<string>()); setPickedNews(new Set<number>());
           }}>
           <X size={14} /> clear
-        </button>
+        </Button>
       ) : null}
       {/* **The button restates the whole decision** — `2 retired · 1 kept · 1
           posted in myapp`, not `Apply 4`. It is the last thing read before the
@@ -37,9 +38,9 @@ export function AsxFooter({ m }: { m: AssessModel }) {
       {applyBlocked
         ? <Unavailable cants={[{ label: "apply", reason: applyBlocked }]} />
         : (
-          <button className="key primary" title={applyLabel} onClick={apply}>
+          <Button variant="primary" title={applyLabel} onClick={apply}>
             <CheckCheck size={14} /> {applyLabel}
-          </button>
+          </Button>
         )}
       {/* **The route out of this screen, once the apply has happened.**
 
@@ -57,10 +58,10 @@ export function AsxFooter({ m }: { m: AssessModel }) {
           and the tap opens the list unfiltered, which is the honest shape of
           "every one of them has already started". */}
       {ready ? (
-        <button className="key primary asr-route" title={assessOpenBacklogNote(ready.n)}
+        <Button variant="primary" className="asr-route" title={assessOpenBacklogNote(ready.n)}
           onClick={() => { track("action:assess.backlog"); p.onOpenBacklog?.(ready.ids, assessCutLabel(p.repoName)); }}>
           <ListTodo size={14} /> {assessOpenBacklogLabel(ready.n, p.repoName)}
-        </button>
+        </Button>
       ) : null}
     </div>
     {/* What applying does NOT do, once, under the button — the answer to
@@ -69,11 +70,11 @@ export function AsxFooter({ m }: { m: AssessModel }) {
         "nothing is built or sent by this" would be a promise it cannot keep:
         the sentence then says not-now, one at a time per repo, a session
         each. */}
-    <div className="form-hint">{assessApplyNote(applySummary?.requeue ?? 0)}</div>
+    <Hint>{assessApplyNote(applySummary?.requeue ?? 0)}</Hint>
     {/* The route's own sentence, under it and never only in its `title` — a
         tooltip is invisible on a phone (`Unavailable.tsx`'s rule) and this one
         carries the promise that the tap changes nothing. */}
-    {ready ? <div className="form-hint">{assessOpenBacklogNote(ready.n)}</div> : null}
+    {ready ? <Hint>{assessOpenBacklogNote(ready.n)}</Hint> : null}
     </>
   );
 }

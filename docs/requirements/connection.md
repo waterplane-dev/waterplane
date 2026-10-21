@@ -97,3 +97,8 @@ The Android background notification link receives only the notification, authReq
 The webcam app's port can be changed to any other port.
 - asked: 2026-10-16
 
+### R-connection-018 · shipped
+When the host restarts, the UI says the desktop is restarting, with the reason, the elapsed time and the usual duration, until it is back.
+- asked: 2026-10-20
+- shipped: 445307de
+

@@ -16,6 +16,7 @@
 import { useEffect, useState } from "react";
 import { CircleCheck, CircleSlash, CloudOff, CloudUpload, RefreshCw, type LucideIcon } from "lucide-react";
 import { rowChipWord, subscribeSync, syncSentence, syncSummary, worstSync, type SyncPhase } from "./syncState";
+import { Tag } from "./kit/Tag";
 
 /**
  * The good state is a GREEN CHECK, and that is the whole point of the mark.
@@ -95,9 +96,9 @@ export function SyncChip({ phase, thing = "it", plural = false, saidAbove = fals
   if (!word) return null;
   const Icon = ICON[phase as Exclude<SyncPhase, "unknown">];
   return (
-    <span className={`tag sync-chip sync-${phase}`} title={syncSentence({ phase, wroteAt: null, ackedAt: null }, thing, plural) ?? undefined}>
+    <Tag className={`sync-chip sync-${phase}`} title={syncSentence({ phase, wroteAt: null, ackedAt: null }, thing, plural) ?? undefined}>
       <Icon size={12} /> {word}
-    </span>
+    </Tag>
   );
 }
 
@@ -111,8 +112,8 @@ export function SyncSummary({ phases }: { phases: readonly SyncPhase[] }) {
   const s = syncSummary(phases);
   if (!s) return null;
   return (
-    <span className="tag sync-chip sync-synced" title={s.title}>
+    <Tag className="sync-chip sync-synced" title={s.title}>
       <CircleCheck size={12} /> {s.word}
-    </span>
+    </Tag>
   );
 }

@@ -17,6 +17,7 @@ import { ArrowUpRight, Circle, Crop, Eraser, EyeOff, Highlighter, Minus, Move, S
 import { shownControls, type AnnControl } from "../annLayout";
 import { COLORS, THICKS, type Tool } from "./annTypes";
 import type { AnnModel } from "./useAnnotator";
+import { Button } from "../kit/Button";
 
 const TOOL_ICONS: Partial<Record<AnnControl, { tool: Tool; icon: ReactNode; label: string }>> = {
   circle: { tool: "circle", icon: <Circle size={16} />, label: "circle" },
@@ -36,26 +37,26 @@ export function AnnToolbar({ m }: { m: AnnModel }) {
     const t = TOOL_ICONS[id];
     if (t) {
       return (
-        <button key={id} className={`key ${tool === t.tool ? "active" : ""}`} onClick={() => pickTool(t.tool)}
-          title={t.label} aria-label={t.label} aria-pressed={tool === t.tool}>{t.icon}</button>
+        <Button key={id} className={tool === t.tool ? "active" : ""} onClick={() => pickTool(t.tool)}
+          title={t.label} aria-label={t.label} aria-pressed={tool === t.tool}>{t.icon}</Button>
       );
     }
     switch (id) {
       // Undo is first by default: reached for mid-mark, and at the far end of a scrolling bar it was a scroll away from a slip.
       case "undo":
-        return <button key={id} className="key" onClick={undoShape} disabled={!shapes.length} title="undo" aria-label="undo the last mark"><Undo2 size={16} /></button>;
+        return <Button key={id} onClick={undoShape} disabled={!shapes.length} title="undo" aria-label="undo the last mark"><Undo2 size={16} /></Button>;
       case "crop":
-        return <button key={id} className={`key ${cropMode ? "active" : ""}`} onClick={toggleCrop} title="crop" aria-label="crop" aria-pressed={cropMode}><Crop size={16} /></button>;
+        return <Button key={id} className={cropMode ? "active" : ""} onClick={toggleCrop} title="crop" aria-label="crop" aria-pressed={cropMode}><Crop size={16} /></Button>;
       case "move":
         return [
-          <button key={id} className={`key ${moveMode ? "active" : ""}`} onClick={toggleMove} disabled={!shapes.length} title="move/reshape a mark" aria-label="move a mark" aria-pressed={moveMode}><Move size={16} /></button>,
+          <Button key={id} className={moveMode ? "active" : ""} onClick={toggleMove} disabled={!shapes.length} title="move/reshape a mark" aria-label="move a mark" aria-pressed={moveMode}><Move size={16} /></Button>,
           moveMode && (
-            <button key="del" className="key" onClick={deleteSelected} disabled={selected == null} title="delete the selected mark" aria-label="delete the selected mark"><Trash2 size={16} /></button>
+            <Button key="del" onClick={deleteSelected} disabled={selected == null} title="delete the selected mark" aria-label="delete the selected mark"><Trash2 size={16} /></Button>
           ),
           moveMode && (
-            <button key="knobs" className={`key ${knobs ? "active" : ""}`} onClick={toggleKnobs} aria-pressed={knobs}
+            <Button key="knobs" className={knobs ? "active" : ""} onClick={toggleKnobs} aria-pressed={knobs}
               title="knobs: move, size and turn a mark (or drag an arrow's ends) by knobs on strings, instead of dragging from anywhere"
-              aria-label="knobs on the selected mark">knobs</button>
+              aria-label="knobs on the selected mark">knobs</Button>
           ),
         ];
       // One dot of the current colour, carrying the stroke letter: colour and
@@ -69,8 +70,8 @@ export function AnnToolbar({ m }: { m: AnnModel }) {
         );
       case "clear":
         return (
-          <button key={id} className="key" onClick={() => { moveRef.current = null; setSelected(null); setTarget(null); setMoveNote(null); setShapes([]); }}
-            disabled={!shapes.length} title="clear all marks" aria-label="clear all marks"><Eraser size={16} /></button>
+          <Button key={id} onClick={() => { moveRef.current = null; setSelected(null); setTarget(null); setMoveNote(null); setShapes([]); }}
+            disabled={!shapes.length} title="clear all marks" aria-label="clear all marks"><Eraser size={16} /></Button>
         );
     }
     return null;
@@ -92,8 +93,8 @@ export function AnnToolbar({ m }: { m: AnnModel }) {
               title={`colour ${c}`} aria-label={`colour ${c}`} aria-pressed={color === c} />
           ))}
           {THICKS.map((t) => (
-            <button key={t.label} className={`key ${factor === t.factor ? "active" : ""}`} onClick={() => { setFactor(t.factor); setPaletteOpen(false); }}
-              title={`stroke ${t.label}`} aria-label={`stroke ${t.label}`} aria-pressed={factor === t.factor}>{t.label}</button>
+            <Button key={t.label} className={factor === t.factor ? "active" : ""} onClick={() => { setFactor(t.factor); setPaletteOpen(false); }}
+              title={`stroke ${t.label}`} aria-label={`stroke ${t.label}`} aria-pressed={factor === t.factor}>{t.label}</Button>
           ))}
         </div>
       )}

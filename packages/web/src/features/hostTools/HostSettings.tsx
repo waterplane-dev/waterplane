@@ -11,7 +11,7 @@
 import { useState } from "react";
 import { BatteryCharging, Bell, BellOff, Copy, ExternalLink, Smartphone, Wifi, WifiOff } from "lucide-react";
 import { core } from "../../sdk";
-import { SetAction, SetCustom, SetSwitch, SetWarn } from "../../SettingsKit";
+import { SetAction, SetCustom, SetNote, SetSwitch, SetWarn } from "../../SettingsKit";
 import { copyText } from "../../api";
 import { requestShellBatteryExemption, shellLinkSupported } from "../../shellLink";
 import { usePhoneSetup } from "../../usePhoneSetup";
@@ -23,6 +23,7 @@ import { showToast } from "../../toast";
 import { refreshShellLink, togglePush, toggleShellLink, useShellLinkPoll } from "./actions";
 import { NO_BACKGROUND_ALERTS, endpoints, serveCmd } from "./logic";
 import { useHostPush, useShellLink } from "./store";
+import { Button } from "../../kit";
 
 const ICON = 16;
 
@@ -42,9 +43,9 @@ function PhoneSetupChecklist() {
   if (steps.every((s) => s.done) && !open) {
     return (
       <SetCustom id="phone-setup" label={`phone setup · ${setupSummary(steps)}`} icon={Smartphone}>
-        <div className="set-note">
+        <SetNote>
           Everything Android needs is allowed. <button className="link-btn" onClick={() => setOpen(true)}>show the {steps.length} steps</button>
-        </div>
+        </SetNote>
       </SetCustom>
     );
   }
@@ -73,13 +74,13 @@ export function HostNotifySettings() {
             OS-level push is off: you're on {location.protocol}//{location.host} — plain HTTP over Tailscale
             is not a secure context, so service workers &amp; Web Push are disabled. The in-app feed above still works.
           </SetWarn>
-          <div className="set-note">
+          <SetNote>
             <div>Enable OS push — run on the desktop host, then reopen via the HTTPS name (if 443 is already taken here, use any free port instead: <code>--https=8771</code>):</div>
             <div className="cmd-copy">
               <code>{cmd}</code>
-              <button className="key" onClick={async () => showToast(await copyText(cmd) ? "command copied" : "copy failed")}><Copy size={ICON} /></button>
+              <Button onClick={async () => showToast(await copyText(cmd) ? "command copied" : "copy failed")}><Copy size={ICON} /></Button>
             </div>
-          </div>
+          </SetNote>
         </SetCustom>
       ) : push === "native" && !shellLinkSupported() ? (
         /* A shell with no background link — the iOS shell. No push either
@@ -191,14 +192,14 @@ export function HostConnectionSettings() {
             {list.map((e) => {
               const here = location.origin === new URL(e.url).origin;
               return (
-                <button
+                <Button
                   key={e.url}
-                  className={`key ${here ? "active" : ""}`}
+                  className={here ? "active" : ""}
                   title={e.note}
                   onClick={() => { if (!here) location.href = e.url; }}
                 >
                   <ExternalLink size={12} /> {e.label}: {e.url.replace(/^https?:\/\//, "")}{here ? " ✓" : ""}
-                </button>
+                </Button>
               );
             })}
           </div>

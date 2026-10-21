@@ -8,7 +8,7 @@ import { useEffect, useRef } from "react";
 import { REQUIREMENT_STATUSES } from "@waterplane/shared";
 import { ListChecks } from "lucide-react";
 import { useStore } from "@waterplane/sdk";
-import { CountChips, FilterBar, SearchBox, StaleHead, ago, useNow } from "@waterplane/kit";
+import { CountChips, FilterBar, SearchBox, StaleHead, ago, useNow, Button, Hint } from "@waterplane/kit";
 import { NO_CUT, areaBucket, builtWords, cutItems, cutWords, statusBucket } from "./cut.ts";
 import { closeRequirements, focusItem, handUpdate, lists, readList, setUp, view } from "./data.ts";
 import { ItemRow } from "./ItemRow.tsx";
@@ -54,7 +54,7 @@ export function RequirementsSheet() {
           tells the agent the format, and an index — and spends nothing. After that this sheet lists what you asked
           for, and the update goes to this repo’s agent through the backlog.
         </div>
-        <div className="annot-tools wrap"><button className="key" onClick={() => void setUp(repo)}>set up</button></div>
+        <div className="annot-tools wrap"><Button onClick={() => void setUp(repo)}>set up</Button></div>
       </div>
     );
   }
@@ -72,15 +72,15 @@ export function RequirementsSheet() {
       {head}
       <div className="sheet-scroll">
         <div className="annot-tools wrap">
-          <span className="form-hint" style={{ flex: "1 1 14em" }}>{builtWords(l, ago)}</span>
+          <Hint as="span" style={{ flex: "1 1 14em" }}>{builtWords(l, ago)}</Hint>
           {l.scriptFound
-            ? <button className="key" onClick={() => void handUpdate(repo)}>update</button>
-            : <span className="form-hint">This host cannot find the build script, so it cannot hand the update over — the setup checklist says where it looked.</span>}
+            ? <Button onClick={() => void handUpdate(repo)}>update</Button>
+            : <Hint as="span">This host cannot find the build script, so it cannot hand the update over — the setup checklist says where it looked.</Hint>}
         </div>
         {l.promptsBehind != null && l.promptsBehind >= l.stalePrompts && (
-          <div className="form-hint" style={{ padding: "0 14px" }}>
+          <Hint style={{ padding: "0 14px" }}>
             That is {l.stalePrompts} or more prompts behind — the repo’s setup checklist flags it too.
-          </div>
+          </Hint>
         )}
         <div className="search-row">
           <SearchBox placeholder="search the list" value={q} onChange={(e) => view.set((x) => ({ ...x, q: e.target.value }))} />

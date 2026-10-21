@@ -19,5 +19,19 @@ export function compactToast(online: boolean, title: string): string {
   return online ? `sent /compact to ${title}` : "queued /compact — sends when the link is back";
 }
 
+/** The receipt for "interrupt and re-plan": the Esc went and the prompt is queued (one sentence, one toast). */
+export function replanDoneToast(title: string): string {
+  return `sent Esc to ${title} and queued the re-plan prompt`;
+}
+
+/** Said when the socket is not open: Esc is a live key, so it is never queued and the prompt is not either. */
+export function replanBlockedToast(title: string): string {
+  return `no connection — Esc did not reach ${title}, and the re-plan prompt was not queued. Try again when the link is back.`;
+}
+
+/** The line under the button: what Esc does, and what it costs. */
+export const REPLAN_NOTE =
+  "Sends Esc, which stops the agent the session is waiting on, then queues a prompt asking the main agent to re-plan it narrower. Work that agent has not reported back is lost. An agent running in the background keeps going; the prompt asks the main agent to stop it.";
+
 // The session's own budget, worded once (top-level) for this panel and the budget sheet.
 export { budgetStateLine as budgetLine } from "../../budgetInput.ts";

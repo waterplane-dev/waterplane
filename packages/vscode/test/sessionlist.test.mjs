@@ -196,3 +196,13 @@ test("the ledger forgets a log that left the list", async () => {
   await ledger.rows(listed, "/f", null);
   assert.equal(ledger.reads, 2, "read again from scratch after it was dropped");
 });
+
+test("anyLive: a row written under 30 min ago counts, an older one and none do not; a running row is always recent", () => {
+  const MIN = 60_000;
+  assert.ok(data.RUNNING_FRESH_MS <= data.RECENT_MS, "running implies recent, so anyLive need not ask isRunning");
+  assert.equal(data.anyLive([{ mtime: NOW - 29 * MIN }], NOW), true);
+  assert.equal(data.anyLive([{ mtime: NOW - 31 * MIN }, { mtime: NOW - 2 * MIN }], NOW), true, "any row");
+  assert.equal(data.anyLive([{ mtime: NOW - 31 * MIN }], NOW), false);
+  assert.equal(data.anyLive([{ mtime: 0 }], NOW), false, "undated");
+  assert.equal(data.anyLive([], NOW), false);
+});

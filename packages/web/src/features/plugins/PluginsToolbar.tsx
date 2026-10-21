@@ -17,6 +17,7 @@ import { useStore } from "../../sdk";
 import { runPluginAction, setSessionAnswer, setSessionToggle } from "./actions";
 import { actionKey, nextToggleValue, sessionBadges, sessionControls, sessionRuleGroups } from "./logic";
 import { plugins, results } from "./store";
+import { Button, Tag } from "../../kit";
 
 const ICON = 16;
 
@@ -62,10 +63,10 @@ export function PluginsToolbar({ active, dismiss }: { active: SessionInfo | null
           {g.actions.map((a) => {
             const r = res[actionKey(g.id, a.id, active.id)];
             return (
-              <button key={a.id} className="key" title={a.note}
+              <Button key={a.id} title={a.note}
                 onClick={() => { dismiss(); runPluginAction(g.id, a.id, active.id); }}>
                 <Play size={ICON} /> {a.label}{r?.pending ? " …" : ""}
-              </button>
+              </Button>
             );
           })}
         </div>
@@ -84,8 +85,8 @@ export function PluginBadges({ s }: { s: Pick<SessionInfo, "pluginBadges"> }): R
 
 function BadgeTag({ name, badge }: { name: string; badge: PluginBadge }) {
   return (
-    <span className={`tag plugin-badge plugin-${badge.tone}`} title={`${name}: ${badge.text}`}>
+    <Tag className={`plugin-badge plugin-${badge.tone}`} title={`${name}: ${badge.text}`}>
       <Puzzle size={12} /> {badge.text}
-    </span>
+    </Tag>
   );
 }

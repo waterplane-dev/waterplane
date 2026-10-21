@@ -8,6 +8,9 @@ import { Explain } from "./Explain";
 import { FilterBar } from "./kit/FilterBar";
 import { FilterChip } from "./kit/FilterChip";
 import { ago } from "./format";
+import { Button } from "./kit/Button";
+import { Hint } from "./kit/Hint";
+import { Tag } from "./kit/Tag";
 
 interface Props {
   entries: SentCommand[];
@@ -115,7 +118,7 @@ export function SentLogSheet({ entries, filterSessionId, sessionTitle, onClose, 
             a long session name pushed refresh and clear straight off the right
             edge of the phone. */}
         <span className="head-acts tight">
-          <button className="key" onClick={onRefresh} title="refresh"><RefreshCw size={16} /></button>
+          <Button onClick={onRefresh} title="refresh"><RefreshCw size={16} /></Button>
           {/* Absent, not dimmed, on an empty log: there is nothing for it to clear, and the
               header carries no count either (a "0" over "Nothing sent yet." says it twice). */}
           {entries.length > 0 && (
@@ -130,14 +133,14 @@ export function SentLogSheet({ entries, filterSessionId, sessionTitle, onClose, 
       {/* One line says what this is; the rest of what it means is behind the `?`. The words are
           the sheet's own, unchanged but for the last clause: it said a tap on the row opens the
           session, when the row's text expands and "open the session" is the button that opens it. */}
-      <div className="form-hint">
+      <Hint>
         Every command this app typed into a session.
         <Explain of="the sent log">
           Including the ones it decided on by itself (backlog, fan-out, plugin auto-answers,
           usage-limit auto-continue). One row per command, stamped with how the delivery ended; tap a
           row&apos;s text to read all of it, or &ldquo;open the session&rdquo; to check it against the terminal.
         </Explain>
-      </div>
+      </Hint>
 
       {/* One chip is always lit (a choice, not a cut), so none carries an x. */}
       {mixed && (
@@ -166,24 +169,24 @@ export function SentLogSheet({ entries, filterSessionId, sessionTitle, onClose, 
           return (
             <div key={e.id} className="olog-row">
               <div className="olog-head">
-                <span className={`tag oracle-${res.cls}`}><res.Icon size={12} /> {res.label}</span>
+                <Tag className={`oracle-${res.cls}`}><res.Icon size={12} /> {res.label}</Tag>
                 {set && (
-                  <span
-                    className={`tag oracle-${set.cls}`}
+                  <Tag
+                    className={`oracle-${set.cls}`}
                     title={e.settledDetail ?? (e.settledAt ? `settled ${ago(e.settledAt)}` : undefined)}
                   >
                     <Check size={12} /> {set.label}
-                  </span>
+                  </Tag>
                 )}
-                <span className="tag" title={e.actor === "auto" ? "the app decided on this one" : "you sent this"}>
+                <Tag title={e.actor === "auto" ? "the app decided on this one" : "you sent this"}>
                   {e.actor === "auto" ? <Bot size={12} /> : <User size={12} />} {src.label}
-                </span>
+                </Tag>
                 <span className="olog-when" title={new Date(e.ts).toLocaleString()}>{clock(e.ts)} · {ago(e.ts)}</span>
               </div>
 
               <button className="olog-body" onClick={() => toggle(e.id)} title={expanded ? "collapse" : "show the full text"}>
                 <code className={expanded ? "sent-text open" : "sent-text"}>{expanded ? e.text : oneLine}</code>
-                {e.truncated && expanded && <span className="form-hint"> …(truncated for the log)</span>}
+                {e.truncated && expanded && <Hint as="span"> …(truncated for the log)</Hint>}
               </button>
 
               {e.detail && <div className="olog-why">{e.detail}</div>}

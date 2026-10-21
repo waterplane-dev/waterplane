@@ -21,9 +21,6 @@
 }
 .ctx-cost-heavy .ctx-cost-head, .ctx-cost-steep .ctx-cost-head { color: var(--warn); }
 .ctx-cost-note { margin-top: var(--sp-6); font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14); color: var(--fg); }
-/* The mechanism, once, in the smallest type on the panel: it is the sentence
-   that stops this reading as a scold and starts it reading as arithmetic. */
-.ctx-cost-why { margin-top: var(--sp-8); font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-14); color: var(--muted); }
 .ctx-cost .sheet-actions { margin-top: var(--sp-8); padding: 0; border: 0; background: none; }
 /* Two doors that are not the same offer, so the recommended one carries the
    weight. `.key.primary` is the app's one primary fill; the pair WRAPS
@@ -577,3 +574,19 @@ button.ts-lim-used { cursor: pointer; }
    spent a round learning that one fact deserves one colour, and "work that
    cannot start yet" is the family that colour names. */
 .repo-group-stat.queued { color: var(--limit); }
+
+/* The dearest subagents under the swim lanes (`AgentTopList.tsx`): numbers right,
+   the name left, a row is a tap target. Mono is not needed; tabular is. */
+.agent-top { padding: 0 var(--sp-12); }
+.agent-top .ctx-summary { padding-left: 0; padding-right: 0; }
+.agent-top-t { width: 100%; border-collapse: collapse; font-size: calc(var(--fs-12) * var(--ui-font, 1)); font-variant-numeric: tabular-nums; }
+.agent-top-t thead th { font-weight: var(--fw-medium); color: var(--muted); font-size: calc(var(--fs-11) * var(--ui-font, 1)); text-align: right; padding: 0 0 var(--sp-4) var(--sp-6); }
+.agent-top-t thead th:first-child, .agent-top-t tbody th { text-align: left; padding-left: 0; }
+.agent-top-t tbody th { font-weight: var(--fw-medium); }
+.agent-top-t tbody th small { display: block; color: var(--muted); font-weight: normal; font-size: calc(var(--fs-11) * var(--ui-font, 1)); }
+.agent-top-t td { text-align: right; padding: var(--sp-6) 0 var(--sp-6) var(--sp-6); }
+.agent-top-t tbody tr { cursor: pointer; border-top: 1px solid var(--line); min-height: 44px; }
+.agent-top-t tbody tr.on { box-shadow: inset 2px 0 0 var(--accent); }
+.agent-top-t tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.agent-warn { margin-top: var(--sp-8); }
+.agent-warn-row { padding-left: 0; padding-right: 0; }

@@ -3,6 +3,8 @@ import { PromptAnswer } from "../PromptAnswer";
 import { ConfirmButton } from "../Confirm";
 import { track } from "../usage";
 import type { TvModel } from "./useTranscriptView";
+import { Button } from "../kit/Button";
+import { RowSub } from "../kit/Row";
 
 /** What follows the last turn: the open question, or the turn still in flight. */
 export function TvTail({ m }: { m: TvModel }) {
@@ -38,7 +40,7 @@ export function TvTail({ m }: { m: TvModel }) {
                     <span className="tr-ask-opt" key={o.index}>{o.index}. {o.label}</span>
                   ))}
                 </div>
-                <div className="row-sub">answer it in the CLI — press the option's number</div>
+                <RowSub as="div">answer it in the CLI — press the option's number</RowSub>
               </>
             : status?.asking
             ? <>
@@ -46,16 +48,16 @@ export function TvTail({ m }: { m: TvModel }) {
                     means anything here — the reply is prose — so the only
                     control is the one that opens a place to type it. */}
                 <div className="tr-ask-q">{status.asking.text}</div>
-                <div className="row-sub">the turn ended on this — nothing is running, it is waiting for your reply</div>
-                <button className="key" onClick={() => { track("action:read.toCli"); onShowCli(); }}>
+                <RowSub as="div">the turn ended on this — nothing is running, it is waiting for your reply</RowSub>
+                <Button onClick={() => { track("action:read.toCli"); onShowCli?.(); }}>
                   <TerminalIcon size={13} /> open the CLI
-                </button>
+                </Button>
               </>
             : <>
                 <div className="tr-ask-q">A dialog is open in the CLI that has no one-tap buttons here.</div>
-                <button className="key" onClick={() => { track("action:read.toCli"); onShowCli(); }}>
+                <Button onClick={() => { track("action:read.toCli"); onShowCli?.(); }}>
                   <TerminalIcon size={13} /> open the CLI
-                </button>
+                </Button>
               </>}
         </div>
       )}
@@ -70,11 +72,11 @@ export function TvTail({ m }: { m: TvModel }) {
           </span>
           {work
             ? <span className="tr-live-line">{work.text}</span>
-            : <span className="row-sub">
+            : <RowSub>
                 {stale
                   ? "no connection — nothing new can arrive until the link is back"
                   : "output appears here as claude writes it"}
-              </span>}
+              </RowSub>}
           {/* Two taps (ConfirmButton): it sits on the bottom edge beside the
               composer, and a stray tap there must not throw away a turn.
               Not drawn with the link down — the key could not arrive. */}

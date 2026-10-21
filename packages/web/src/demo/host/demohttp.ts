@@ -22,7 +22,7 @@ export const ONBOARD_NOT_IN_DEMO = "Not in the demo — this builds a real app o
 const json = (v: unknown, status = 200): DemoHttpResponse =>
   ({ status, contentType: "application/json", body: JSON.stringify(v) });
 
-const repoTargets = (m: DemoModel): { id?: unknown; outboxSeenAt?: unknown }[] =>
+const repoTargets = (m: DemoModel): { id?: unknown; outboxSeenAt?: unknown; outboxCount?: unknown }[] =>
   (m.repos ?? []).filter((r): r is { id?: unknown } => !!r && typeof r === "object");
 
 const MEDIA_EXT = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".heic", ".heif", ".svg", ".avif", ".tif", ".tiff", ".ico", ".jfif", ".mp4", ".webm", ".mov", ".m4v", ".ogv", ".mkv"]);
@@ -67,7 +67,13 @@ export function demoHttp(m: DemoModel, now: number, req: DemoHttpRequest): DemoH
     const target = repoTargets(m).find((r) => r.id === id);
     if (!target) return json({ error: "That is not one of the demo's repos." }, 404);
     if (seen && method === "POST") {
-      if (kind === "artifacts") target.outboxSeenAt = now;
+      // The badge is RE-COUNTED against the new mark, as the host's `countOutbox` does (files newer
+      // than the seen marker). Moving only the mark left `outboxCount` at 2: the next tap on the
+      // badge opened a cut from "just now" that listed none of its own 2 files ("0 still here").
+      if (kind === "artifacts") {
+        target.outboxSeenAt = now;
+        target.outboxCount = ((m.gallery?.[id] ?? []) as { mtime?: unknown }[]).filter((f) => Number(f?.mtime) > now).length;
+      }
       return json({ ok: true });
     }
     if (!seen && method === "GET") {

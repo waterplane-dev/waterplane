@@ -4,6 +4,7 @@ import { ago } from "./format";
 import type { NotificationItem } from "@waterplane/shared";
 import { clearToastLog, onToastLog, type ToastEntry } from "./toast";
 import { ConfirmButton } from "./Confirm";
+import { RowSub } from "./kit/Row";
 
 /**
  * The messages THIS PHONE has shown, in the notification feed.
@@ -64,8 +65,8 @@ export function ToastLog({ rows, onOpen }: { rows: ToastEntry[]; onOpen: (n: Not
               </span>
             </>
           )}
-          {r.n > 1 && <span className="row-sub">×{r.n}</span>}
-          <span className="row-sub notif-time">{ago(r.ts)}</span>
+          {r.n > 1 && <RowSub>×{r.n}</RowSub>}
+          <RowSub className="notif-time">{ago(r.ts)}</RowSub>
         </div>
       ))}
     </>

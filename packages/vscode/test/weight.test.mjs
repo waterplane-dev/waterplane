@@ -80,6 +80,17 @@ test("an instructions file is every request at applyTo **, scoped at a narrower 
   assert.equal(data.classifyInstructions("no frontmatter", ["copilot"])[0].when.kind, "on-demand");
 });
 
+test("the lens is asked for every kind of file the inventory reads, and saving one re-weighs", () => {
+  const yes = ["CLAUDE.md", "/r/.claude/CLAUDE.md", "/r/AGENTS.md", "/r/.github/copilot-instructions.md",
+    "/r/.github/instructions/api.instructions.md", "/r/.claude/rules/style.md", "/r/.claude/rules/deep/x.md",
+    "C:\\r\\.claude\\rules\\style.md", "/r/.claude/skills/s/SKILL.md"];
+  for (const p of yes) assert.ok(data.isInstructionPath(p), p);
+  for (const p of ["/r/README.md", "/r/.claude/rules/notes.txt", "/r/docs/CLAUDE.md.bak"]) assert.ok(!data.isInstructionPath(p), p);
+  const pats = data.LENS_PATTERNS.join(" ");
+  assert.match(pats, /\*\.instructions\.md/);
+  assert.match(pats, /\.claude\/rules\/\*\*\/\*\.md/);
+});
+
 test("a .claude/rules file without paths is every turn, with paths is scoped", () => {
   assert.equal(data.classifyRule("plain rule", ["claude"])[0].when.kind, "always");
   const scoped = data.classifyRule("---\npaths:\n  - \"src/api/**\"\n---\nrule", ["claude"]);
@@ -114,4 +125,27 @@ test("a CLAUDE.md copied from AGENTS.md is named as a repeat both agents carry; 
 
 test("short shared lines are not a repeat", () => {
   assert.equal(data.sharedChars("# Rules\n\n- yes\n", "# Rules\n\n- yes\n"), 0);
+});
+
+// The CodeLens above an instruction file says what the Always-on view's row for it says.
+test("lensWords: one line per file kind, from the file's own inventory row", async () => {
+  const doc = await data.weighFolder(REPO);
+  const row = (p) => doc.files.find((f) => f.path === p);
+  const md = readFileSync(join(REPO, "CLAUDE.md"), "utf8").length;
+  const words = data.lensWords(row("CLAUDE.md"));
+  assert.match(words, /^~\d+(\.\d)?k? tokens every request · Claude Code/);
+  const skill = data.lensWords(row(".claude/skills/a/SKILL.md"));
+  assert.match(skill, /^description ~\d+ tokens every request · body ~\d+ on demand · Claude Code$/);
+  assert.equal(data.lensWords(row("CLAUDE.local.md")), null);
+  assert.equal(data.lensWords(undefined), null);
+});
+
+test("lensWords: scoped, off and unknown", () => {
+  const part = (readers, when, chars) => ({ readers, when, chars });
+  const f = (parts, extra = {}) => ({ path: "x.md", kind: "k", parts, ...extra });
+  assert.equal(data.lensWords(f([part(["copilot"], { kind: "scoped", globs: ["src/**", "*.ts", "lib/**"] }, 800)])),
+    "~200 tokens when a file matches src/**, *.ts +1 more · Copilot");
+  assert.equal(data.lensWords(f([part([], { kind: "always" }, 800)], { off: "chat.useAgentsMdFile" })), "nobody reads this: chat.useAgentsMdFile is off");
+  assert.equal(data.lensWords(f([part([], { kind: "always" }, 800)])), null);
+  assert.equal(data.lensWords(f([part(["claude", "copilot"], { kind: "always" }, 12400)])), "~3.1k tokens every request · Claude Code + Copilot");
 });

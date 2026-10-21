@@ -18,6 +18,7 @@ import {
   createLauncherItemTable, createMenuItemTable, createSecretFillerTable, createRepoActionTable, createRepoChipList, createSessionViewTable, menuItemCatalog, setupRowDefs, type ContributedEntry, type RepoActionItem,
 } from "./featureRun.ts";
 import { bindLedgerViews } from "../sdk/ledgers.ts";
+import { bindSecretFillers } from "../sdk/secretFillers.ts";
 import { bindMenuCatalog } from "../toolbar.ts";
 import type { FeatureManifest, LedgerViewDef, SecretFillContext } from "../sdk/types.ts";
 
@@ -63,6 +64,8 @@ bindMenuCatalog(() => (menuCatalog ??= menuItemCatalog(FEATURES)));
 /** The buttons extensions add to the masked password field's row (`SecretFillerDef`); [] when none does. */
 export const secretFillers = (ctx: SecretFillContext): ContributedEntry[] =>
   (secretFillerTable ??= createSecretFillerTable(FEATURES, core)).items(ctx);
+// The same buttons for an extension's own masked field (the live desktop's protected typing).
+bindSecretFillers(secretFillers);
 
 /** Every repo chip def, registry order. */
 export const repoChips = () => (chips ??= createRepoChipList(FEATURES));

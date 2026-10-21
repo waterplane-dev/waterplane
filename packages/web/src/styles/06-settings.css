@@ -460,7 +460,6 @@ button.notif-dl:active { background: var(--raise); border-radius: var(--r-8); }
    overrode `color` but not it, so "auto-continue" rendered accent-on-lilac and
    "error" red-on-red: both unreadable. */
 .tag.oracle-choice { color: var(--accent); border: 1px solid var(--accent); }
-.oracle-rationale { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--accent); margin: var(--sp-4) 0; line-height: var(--lh-14); }
 /* The decision log's and the sent log's rows: divided, like the Notifications feed (`.notif-row`), not
    bordered cards. A row's outcome is said ONCE, by its pill (`.tag.oracle-*`); the 3px coloured
    left stripe that used to say it again is gone with the card. `.olog-card` below is the Archive
@@ -505,14 +504,17 @@ button.notif-dl:active { background: var(--raise); border-radius: var(--r-8); }
 .olog-why { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); line-height: var(--lh-14); font-style: italic; }
 .olog-foot { display: flex; align-items: center; gap: var(--sp-10); flex-wrap: wrap; }
 .olog-foot .link-btn { margin-left: auto; }
+/* Bookmarks (R-conversations-007): the mark in the accent, the note one muted line, the editor a row. */
+.bm-btn.on, .bm-mark { color: var(--accent); }
+.olog-foot .link-btn.bm-btn.on { color: var(--accent); }
+.bm-note-line { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); line-height: var(--lh-14); display: flex; align-items: center; gap: var(--sp-6); }
+.bm-edit { display: flex; align-items: center; gap: var(--sp-6); width: 100%; }
+.arch-reader { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
 /* Compose → backlog dialog. */
 .bl-modal-backdrop { position: fixed; inset: 0; background: var(--scrim); display: flex; align-items: center; justify-content: center; z-index: 30; padding: var(--sp-16); }
 .bl-modal { width: 100%; max-width: 360px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-12); padding: var(--sp-16); display: flex; flex-direction: column; gap: var(--sp-12); box-shadow: var(--elev-3); }
 .bl-modal-title { font-size: calc(var(--fs-15) * var(--ui-font, 1)); font-weight: var(--fw-semibold); color: var(--fg); }
-.bl-modal-label { display: flex; flex-direction: column; gap: var(--sp-4); font-size: calc(var(--fs-11) * var(--ui-font, 1)); color: var(--muted); }
-/* .search carries a page-level margin; inside a modal label the label owns spacing. */
-.bl-modal-label .search { margin: 0; width: 100%; box-sizing: border-box; }
 .bl-modal-repo { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); }
 .bl-modal-repo b { color: var(--fg); }
 .bl-modal-actions { display: flex; flex-direction: column; gap: var(--sp-8); }

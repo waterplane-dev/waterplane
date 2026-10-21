@@ -4,6 +4,10 @@ import type { HistoryEntry } from "@waterplane/shared";
 import { SheetHead } from "./Sheet";
 import { ago } from "./format";
 import { Empty } from "./Empty";
+import { Button } from "./kit/Button";
+import { RowSub } from "./kit/Row";
+import { Hint } from "./kit/Hint";
+import { Tag } from "./kit/Tag";
 
 interface Props {
   title: string;
@@ -42,12 +46,12 @@ export function HistorySheet({ title, entries, pinnedEntryId, onClose, onResend,
   return (
     <div className="sheet">
       <SheetHead title={<>History · {title}</>} onClose={onClose} />
-      <div className="form-hint">
+      <Hint>
         Every command and backlog item sent to this session, with the output captured for that turn.
         Output is the terminal's text, stripped of formatting — not a perfect transcript.
         Pin an entry to show it as this session's overview label — handy when the last prompt is just a "yes".
         {offline && " You're offline — showing the last synced prompts; captured output isn't cached and comes back once the connection is."}
-      </div>
+      </Hint>
       <div className="list hist">
         {entries.length === 0 && <Empty>Nothing sent yet.</Empty>}
         {entries.map((e) => {
@@ -57,13 +61,13 @@ export function HistorySheet({ title, entries, pinnedEntryId, onClose, onResend,
           return (
             <div key={e.id} className={`hist-item${pinned ? " pinned" : ""}`}>
               <div className="hist-head">
-                <span className={`tag hist-${e.kind}`}><meta.Icon size={12} /> {meta.label}</span>
-                {pinned && <span className="tag hist-pinned"><Pin size={12} /> overview</span>}
-                <span className="row-sub">{ago(e.sentAt)}</span>
+                <Tag className={`hist-${e.kind}`}><meta.Icon size={12} /> {meta.label}</Tag>
+                {pinned && <Tag className="hist-pinned"><Pin size={12} /> overview</Tag>}
+                <RowSub>{ago(e.sentAt)}</RowSub>
                 <span className="hist-actions">
                   <button className={`key${pinned ? " active" : ""}`} title={pinned ? "unpin from overview" : "pin as overview label"} onClick={() => onPin(pinned ? null : e.id)}><Pin size={14} fill={pinned ? "currentColor" : "none"} /></button>
-                  <button className="key" title="copy prompt" onClick={() => void navigator.clipboard?.writeText(e.text)}><Copy size={14} /></button>
-                  <button className="key" title="re-send" onClick={() => onResend(e.text)}><CornerUpLeft size={14} /></button>
+                  <Button title="copy prompt" onClick={() => void navigator.clipboard?.writeText(e.text)}><Copy size={14} /></Button>
+                  <Button title="re-send" onClick={() => onResend(e.text)}><CornerUpLeft size={14} /></Button>
                 </span>
               </div>
               <div className="hist-prompt">{e.text}</div>

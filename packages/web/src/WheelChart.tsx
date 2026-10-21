@@ -19,6 +19,7 @@ import { useState, useRef, type PointerEvent as ReactPointerEvent, type ReactNod
 import type { Effort } from "@waterplane/shared";
 import { MAX_SPOKES, nodeAt, nodeXY, ringRadius, spokeAngle, spokeLabel, wheelCandidates, wheelSpokes, type WheelGeom } from "./modelWheel";
 import { LS, lsJson, lsSetJson } from "./storage";
+import { Hint } from "./kit/Hint";
 
 // The drawing's own units; the SVG scales to its container's width. Wider than
 // tall because spoke labels run sideways off the left and right spokes.
@@ -145,7 +146,7 @@ export function WheelPicker({ cat, efforts, current, value, onPick, onClear, now
   return (
     <>
       <div className="mw-now muted">{now}</div>
-      <div className="form-hint mw-says">{says}</div>
+      <Hint className="mw-says">{says}</Hint>
       <WheelChart spokes={spokes} efforts={efforts} current={current} value={value} onPick={onPick} />
       {children}
       {all.length > 1 && (
@@ -162,10 +163,10 @@ export function WheelPicker({ cat, efforts, current, value, onPick, onClear, now
             })}
           </div>
           {keep && hidden.includes(keep) && (
-            <div className="form-hint">{spokeLabel(keep)} stays on the wheel while it is {current ? "this session’s model" : "the pick"}.</div>
+            <Hint>{spokeLabel(keep)} stays on the wheel while it is {current ? "this session’s model" : "the pick"}.</Hint>
           )}
           {shown.length > MAX_SPOKES && (
-            <div className="form-hint">The wheel holds {MAX_SPOKES}; the first {MAX_SPOKES} chips that are on are drawn.</div>
+            <Hint>The wheel holds {MAX_SPOKES}; the first {MAX_SPOKES} chips that are on are drawn.</Hint>
           )}
         </div>
       )}

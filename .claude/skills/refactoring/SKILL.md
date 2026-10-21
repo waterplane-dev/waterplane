@@ -40,6 +40,9 @@ sections are what each package decided).
 
 ## Rules that bit
 
+- **A file at the cap is cut by subject; its notes are never trimmed to make room.** The comments are
+  where this repo records why a rule exists — deleting them to get back under `max-lines` loses the
+  reason and still owes the split. `capSqueeze` (`tools/healthreadings.mjs`) counts the commits that did.
 - **Behaviour-neutral.** A refactor commit changes structure only. An intended change is named in
   the commit and in the report — never discovered by the user.
 - **Effect/hook ORDER and what a callback reads (ref vs render value) are behaviour.** A moved mount

@@ -52,6 +52,9 @@ import type { SessionChrome } from "./useSessionChrome";
 import type { Connection } from "../conn/useConnection";
 import { StowTray } from "../../Stowable";
 import { useSpendWarn } from "../sessions/spendWarn";
+import { Button } from "../../kit/Button";
+import { RowSub } from "../../kit/Row";
+import { ChromeFrame } from "./ChromeGrip";
 
 const ICON = 16;
 /**
@@ -65,6 +68,13 @@ const ICON = 16;
  */
 const SPEND_SPARK_W = 54;
 const SPEND_SPARK_H = 12;
+/**
+ * The pins drawn on the TITLE row, beside the name buttons, instead of among
+ * the chips: star and follow-up flag are marks ON this session, the same kind
+ * of thing as its name — not verbs on its output like the rest of the pins.
+ * Still pins: unpinned, they are in the menu only, as before.
+ */
+const TITLE_PINS: ReadonlySet<string> = new Set(["star", "followup", "bookmark"]);
 
 export interface SessionHeaderProps {
   active: SessionInfo;
@@ -124,7 +134,7 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
   // session is not running, exactly as the pill was absent then.
   const ctxWarm = contextPill(active)?.cls ?? null;
   return (
-    <>
+    <ChromeFrame off={chromeHidden || toolbarOpen || typingPeeking} hidden={chromeHidden}>
       {/* `sess-top` on top of `topbar`: the launcher wears the same class and its
           brand is a 32 px logo that must stay beside the menu, while THIS one is
           a title that takes the row. One extra token rather than a second
@@ -153,6 +163,9 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
             into a 120px column, six lines tall. */}
         <div className="hdr-view">
         <PairTabsSeg active={active} sessions={sessions} pending={pending} backends={backends} />
+        {pinnedToolbarItems(toolbar.toolbarCfg).filter((t) => TITLE_PINS.has(t.id)).map((t) => (
+          <span key={t.id} className="hdr-pin">{renderToolbarItem(toolbar, t, true)}</span>
+        ))}
         {/* Name this conversation, now.
 
             The desktop names a session ONCE, off the first summary that lands,
@@ -167,7 +180,7 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
             this one is about the words six pixels to its left. It SPENDS, so it says so in its title and its
             receipt is the toast `liveSend` writes. */}
         {!pending && (
-          <button className="key hdr-name-btn"
+          <Button className="hdr-name-btn"
             title={active.tabTitle
               ? "write this session a new name — one cheap call on the desktop"
               : "name this session — one cheap call on the desktop"}
@@ -177,15 +190,15 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
               liveSend({ t: "session.name", id: active.id }, "writing a name for this session…");
             }}>
             <Sparkles size={ICON} />
-          </button>
+          </Button>
         )}
         {/* …or type one. The desktop's name and a person's land in the same
             field (`record.ts` `renameTab`), so the line above shows either. */}
         {!pending && (
-          <button className="key hdr-name-btn" title="type a name for this session" aria-label="rename this session"
+          <Button className="hdr-name-btn" title="type a name for this session" aria-label="rename this session"
             onClick={() => { void renameSession(active, liveSend); }}>
             <Pencil size={ICON} />
-          </button>
+          </Button>
         )}
         </div>
         {/* User-configured one-tap commands. They live HERE rather than in the
@@ -206,7 +219,7 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
               own to the right of this one, which is how a pinned `outline` and
               the reader's outline toggle ended up as two identical buttons side
               by side doing different things. The STAR came in the same way. */}
-          {pinnedToolbarItems(toolbar.toolbarCfg).filter((t) => t.id !== "outline").map((t) => (
+          {pinnedToolbarItems(toolbar.toolbarCfg).filter((t) => t.id !== "outline" && !TITLE_PINS.has(t.id)).map((t) => (
             <span key={t.id} className="hdr-pin">{renderToolbarItem(toolbar, t, true)}</span>
           ))}
           {/* `shown`, not the whole list: a chip whose text starts with `/` is
@@ -217,12 +230,12 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
               edits every one of them) and not dimmed (`Unavailable.tsx`): what
               is missing is counted in the strip below the toolbar instead. */}
           {hdrShown.map((c) => (
-            <button key={c.id} className="key hdr-cmd" title={c.text} onClick={() => runHeaderCmd(c)}>{c.title}</button>
+            <Button key={c.id} className="hdr-cmd" title={c.text} onClick={() => runHeaderCmd(c)}>{c.title}</Button>
           ))}
-          <button className="key hdr-cmd hdr-cmd-manage" title="header commands — one-tap chips you configure"
+          <Button className="hdr-cmd hdr-cmd-manage" title="header commands — one-tap chips you configure"
             onClick={() => { track("action:hdrcmd.manage"); setOverlay("hdrcmd"); }}>
             {headerCmds.length ? <Pencil size={12} /> : <><Plus size={12} /> command</>}
-          </button>
+          </Button>
         </div>
         {/* The reader/CLI toggle USED TO BE HERE, and is now in the corner group
             on the surface it switches (`ScreenCorner`). It was in the
@@ -248,33 +261,33 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
         <div className="hdr-ctl">
         <>
         <HintToggle compact />
-        <button className="key notif-btn" title="notifications" onClick={openNotifs}>
+        <Button className="notif-btn" title="notifications" onClick={openNotifs}>
           <Bell size={ICON} />{unreadNotifs > 0 && <span className="notif-badge">{badgeText(unreadNotifs)}</span>}
-        </button>
+        </Button>
         {/* Nothing to close on the host yet: what exists is the queued create,
             so the destructive verb here drops THAT — and the prompts written
             behind it are surfaced as failed rows rather than silently binned
             (`removeQueued`). */}
         {pending ? (
-          <button className="key danger" title={isLaterId(active.id) ? "close — nothing was queued; a draft stays here for next time"
+          <Button variant="danger" title={isLaterId(active.id) ? "close — nothing was queued; a draft stays here for next time"
             : "drop this open — the prompts written for it stay in Activity"}
             onClick={() => { const id = pendingEntry?.ackId; setActiveId(null); if (id) { removeQueued(id); showToast("open dropped"); } }}>
             <X size={ICON} />
-          </button>
+          </Button>
         ) : (
-        <button className="key danger" title={active.running ? "close session — reopen under “Recently closed”" : "remove session"} onClick={() => { closeSession(active); setActiveId(null); }}>
+        <Button variant="danger" title={active.running ? "close session — reopen under “Recently closed”" : "remove session"} onClick={() => { closeSession(active); setActiveId(null); }}>
           <X size={ICON} />
-        </button>
+        </Button>
         )}
         {/* The menu's own switch. It sits HERE, in the header, and not in the
             menu it opens, which would be a button you can only reach when you
             no longer need it. */}
-        <button className={`key burger-btn${toolbarOpen ? " active" : ""}`}
+        <Button className={`burger-btn${toolbarOpen ? " active" : ""}`}
           title={toolbarOpen ? "close the menu" : "menu — refresh, slash commands, files, and the rest"}
           aria-label="toolbar" aria-expanded={toolbarOpen}
           onClick={() => setToolbarOpen(!toolbarOpen)}>
           <Menu size={ICON} />
-        </button>
+        </Button>
         </>
         </div>
         </div>
@@ -290,16 +303,16 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
             brought the whole chrome back with it: a button that says outline and
             un-hides the header is doing the other button's job. */}
         {chromeHidden && !pending && !(toolbar.toolbarCfg.pinned ?? []).includes("outline") && (
-          <button className="key hdr-typing-keep hdr-typing-outline" onPointerDown={keepFocus}
+          <Button className="hdr-typing-keep hdr-typing-outline" onPointerDown={keepFocus}
             title={`outline — where you are in this session${tallyTitle(turnTally(active))}`}
             onClick={() => toolbar.runToolbar("outline")}>
             <List size={ICON} />{turnTally(active) == null ? null : <> {turnTally(active)}</>}
-          </button>
+          </Button>
         )}
         {/* …and the way to everything typing room hid, without giving up the
             caret or the keyboard. */}
         {chromeHidden && (
-          <button className="key hdr-typing-keep hdr-typing-menu" onPointerDown={keepFocus}
+          <Button className="hdr-typing-keep hdr-typing-menu" onPointerDown={keepFocus}
             title={typingMode
               ? "show the header, status and keys again — the keyboard stays up"
               : "leave full screen — the header, status and toolbar come back"}
@@ -314,18 +327,18 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
               else { track("action:fullscreen.off"); setFullScreen(false); }
             }}>
             <Menu size={ICON} />
-          </button>
+          </Button>
         )}
         {/* Back to typing room. Only reachable from the peek, and it is on the
             header because in the peek the header is what is covering the
             output. */}
         {typingPeeking && (
-          <button className="key hdr-typing-hide" onPointerDown={keepFocus}
+          <Button className="hdr-typing-hide" onPointerDown={keepFocus}
             title="hide these again and give the rows back to the output"
             aria-label="hide controls" aria-expanded={true}
             onClick={() => { track("action:typing.hide"); setTypingPeek(false); }}>
             <ChevronsDownUp size={ICON} />
-          </button>
+          </Button>
         )}
         {/* ── The toolbar, as the burger's MENU ──────────────────────────────
             It used to be a horizontal scroll strip of its own row below the
@@ -351,15 +364,15 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
       </header>
       {pending && (
       <div className="sess-status">
-        <span className="row-sub">{repoForCwd(active.cwd) ? repoBranchLabel(repoForCwd(active.cwd)!) : active.cwd}</span>
-        <span className="row-sub">
+        <RowSub>{repoForCwd(active.cwd) ? repoBranchLabel(repoForCwd(active.cwd)!) : active.cwd}</RowSub>
+        <RowSub>
           {isLaterId(active.id) ? <><Hourglass size={11} /> starts when its backlog item runs</> : <>
           <Loader size={11} className={pendingEntry?.status === "failed" ? "" : "spin"} />{" "}
           {pendingEntry?.status === "failed" ? "not started"
             : !pendingEntry || pendingEntry.status === "pending" ? "opening…"
             : status === "open" ? "queued" : "queued — waiting for the link"}
           </>}
-        </span>
+        </RowSub>
         <StowTray />
       </div>
       )}
@@ -399,7 +412,7 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
             ("done · 5m ago", "working · 1m") — it is a time about the
             session's life, and at the end of the strip it sat beside the
             usage windows instead. */}
-        {active.createdAt && active.running && <span className="row-sub"><Clock size={11} /> open {dur(active.createdAt)}</span>}
+        {active.createdAt && active.running && <RowSub><Clock size={11} /> open {dur(active.createdAt)}</RowSub>}
         {/* The usage windows ride on the FIRST line, right after the state and
             its age: those two are short, and the context readout below is long
             enough to need a line of its own. Placed last, the windows wrapped
@@ -414,17 +427,17 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
             account-wide and says so. */}
         {sessionCan(active, "usageLimits") && face.kind === "windows" && <SessionUsage backend={active.backend} />}
         {/* No windows on this account: the dollar period, or nothing (never `?`). */}
-        {sessionCan(active, "usageLimits") && face.kind === "usd" && <span
-          className={`row-sub usage-inline${face.chip.hot ? " danger" : ""}`}
+        {sessionCan(active, "usageLimits") && face.kind === "usd" && <RowSub
+          className={`usage-inline${face.chip.hot ? " danger" : ""}`}
           title={`${face.chip.title}\ntap for the token history`}
           onClick={() => { track("overlay:tokens"); setOverlay("tokens"); }}
         >
           <Gauge size={11} /> {face.chip.text}
-        </span>}
+        </RowSub>}
         {/* The backend's own channel, only when it is DOWN: said in words
             (never a dimmed control). Up and absent draw nothing. */}
         {sideChannelLine(active.sideChannel) && (
-          <span className="row-sub act-cant"><Unplug size={11} /> {sideChannelLine(active.sideChannel)}</span>
+          <RowSub className="act-cant"><Unplug size={11} /> {sideChannelLine(active.sideChannel)}</RowSub>
         )}
         {limitTag(active, limitAuto)}
         {shellsTag(active, () => openShellsFor(active))}
@@ -521,7 +534,7 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
         <StowTray />
       </div>
       )}
-    </>
+    </ChromeFrame>
   );
 }
 

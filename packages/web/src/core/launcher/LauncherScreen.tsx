@@ -46,6 +46,9 @@ import { RepoGroup } from "./RepoGroup";
 import { ClosedRows } from "./ClosedRows";
 import { CloseSheet } from "./CloseSheet";
 import { LauncherItemKeys, LauncherItems, LauncherMenuBadge } from "./LauncherItems";
+import { Button } from "../../kit/Button";
+import { Row, RowTitle, RowSub } from "../../kit/Row";
+import { Hint } from "../../kit/Hint";
 
 export type { LauncherProps } from "./types";
 export { openShotPick } from "./useLauncherModel";
@@ -133,13 +136,13 @@ export function LauncherScreen(p: LauncherProps) {
           // Standing reminder: the launch default is armed to skip every
           // approval, and it persists across reloads. It should not be
           // discoverable only by reopening the settings sheet.
-          <button
-            className="key danger"
+          <Button
+            variant="danger"
             title={`New sessions launch with --permission-mode ${launch.permissionMode}: every tool call runs without asking. Tap to change it.`}
             onClick={() => setOverlay("settings")}
           >
             <ShieldAlert size={ICON} /> no approvals
-          </button>
+          </Button>
         )}
         {/* Nine navigation chips wrapped onto three rows above the first
             repo. They are one tap into a sheet and nothing more, so they go
@@ -155,7 +158,7 @@ export function LauncherScreen(p: LauncherProps) {
             ON the bar (it was inside the menu) so the two screens match, and
             gone from both once the one-time ask is answered "remove it". */}
         <HintToggle compact />
-        <button className={`key nav-key${navMenu ? " on" : ""}`} data-nohint
+        <Button className={`nav-key${navMenu ? " on" : ""}`} data-nohint
           aria-label="menu" aria-expanded={navMenu}
           title={`menu — new, pad, activity, search, files, downloads, archive, logs, local/external${tab === "external" ? "\nshowing: external processes" : ""}`}
           onClick={() => { track("action:nav.menu"); setNavMenu((v) => !v); }}>
@@ -189,7 +192,7 @@ export function LauncherScreen(p: LauncherProps) {
               counted line inside (activity, apps ready, extension items); the
               inventories (local/external, files on the phone) are not news. */}
           <LauncherMenuBadge base={activityBadge + (nativeInstallSupported() ? appsReady : 0)} />
-        </button>
+        </Button>
         {navMenu && (
           <div className="row-more nav-more">
             {isNativeShell() && <HostMenuItem size={ICON} onOpen={() => setNavMenu(false)} />}
@@ -298,29 +301,29 @@ export function LauncherScreen(p: LauncherProps) {
         ) : (
           /* An account with no 5-hour or weekly window: dollars for its period, or the gauge alone
              (a door into token statistics) when none is measured — never a `?`. */
-          <button
-            className={`key usage-key ${face.kind === "usd" && face.chip.hot ? "danger" : ""}`}
+          <Button
+            className={`usage-key ${face.kind === "usd" && face.chip.hot ? "danger" : ""}`}
             aria-label={face.kind === "usd" ? face.chip.text : "token statistics"}
             title={`${face.kind === "usd" ? face.chip.title : "Spend on this desktop"}\ntap for the token history`}
             onClick={() => { track("overlay:tokens"); setOverlay("tokens"); }}
           >
             <Gauge size={ICON} />
             {face.kind === "usd" && <span className={face.chip.hot ? "usage-hot" : ""}>{face.chip.text}</span>}
-          </button>
+          </Button>
         )}
         {/* The unprompted mark for Decision 8 — why it is here: features/cliHealth. */}
         <CliHealthChip />
         {/* An extension item with something waiting (the vault's asks), out of the ☰ menu while it waits. */}
         <LauncherItemKeys size={ICON} />
-        <button className="key notif-btn" title="notifications" onClick={openNotifs}>
+        <Button className="notif-btn" title="notifications" onClick={openNotifs}>
           <Bell size={ICON} />{unreadNotifs > 0 && <span className="notif-badge">{badgeText(unreadNotifs)}</span>}
-        </button>
-        <button
-          className={`key ${push === "insecure" ? "danger" : ""}`}
+        </Button>
+        <Button
+          className={push === "insecure" ? "danger" : ""}
           aria-label="settings"
           title="settings — notifications, launch defaults, plugins, tools"
           onClick={() => setOverlay("settings")}
-        ><Settings size={ICON} /></button>
+        ><Settings size={ICON} /></Button>
         {/* With a second desktop saved, which one this is becomes a reading
             and switching a habit: a split key — toggle to the next desktop /
             open the switcher — sized to fit beside the cog. One host ⇒ none. */}
@@ -563,15 +566,15 @@ export function LauncherScreen(p: LauncherProps) {
         </div>
         {visibleExternal.length === 0 && <Empty>No `claude` running outside {BRAND.name}. Started one in a terminal? It shows here.</Empty>}
         {visibleExternal.map((e) => (
-          <div key={e.pid} className="row-wrap">
-            <button className="row grow" onClick={() => openCwd(e.cwd, baseName(e.cwd), true)}>
-              <span className="row-title mono">{baseName(e.cwd)}</span>
-              <span className="row-sub">pid {e.pid} · <Waypoints size={12} /> resume here</span>
-            </button>
+          <Row key={e.pid} kind="wrap">
+            <Row as="button" kind="grow" onClick={() => openCwd(e.cwd, baseName(e.cwd), true)}>
+              <RowTitle className="mono">{baseName(e.cwd)}</RowTitle>
+              <RowSub>pid {e.pid} · <Waypoints size={12} /> resume here</RowSub>
+            </Row>
             {repoForCwd(e.cwd) && <button className="row-act" title="send image to this repo" onClick={() => pickImageFor(repoForCwd(e.cwd)!.id)}><Camera size={ICON} /></button>}
-          </div>
+          </Row>
         ))}
-        <div className="form-hint">Can't attach to another terminal's TTY directly — "resume here" opens a session here in that directory with <span className="mono">--continue</span>.</div>
+        <Hint>Can't attach to another terminal's TTY directly — "resume here" opens a session here in that directory with <span className="mono">--continue</span>.</Hint>
       </div>
       )}
       <CloseSheet p={p} m={m} />
@@ -582,14 +585,14 @@ export function LauncherScreen(p: LauncherProps) {
             <div className="bl-modal-repo">The capture is saved into the chosen repo, then opens in the annotator.</div>
             <div className="list">
               {visibleRepos.map((t) => (
-                <button key={t.id} className="row" onClick={() => { setShotPick(false); void takeShot(t.id); }}>
-                  <span className="row-title">{t.repoName}</span>
-                  {branchLabel(t) && <span className="row-sub">{branchLabel(t)}</span>}
-                </button>
+                <Row key={t.id} as="button" onClick={() => { setShotPick(false); void takeShot(t.id); }}>
+                  <RowTitle>{t.repoName}</RowTitle>
+                  {branchLabel(t) && <RowSub>{branchLabel(t)}</RowSub>}
+                </Row>
               ))}
             </div>
             <div className="bl-modal-actions">
-              <button className="key" onClick={() => setShotPick(false)}>Cancel</button>
+              <Button onClick={() => setShotPick(false)}>Cancel</Button>
             </div>
           </div>
         </div>

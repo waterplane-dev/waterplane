@@ -1085,3 +1085,24 @@ test("a running agent's readout says it is still running, not when it ended", ()
   assert.match(text, /started .* · still running, last wrote /);
   assert.doesNotMatch(text, /\(10 min\)/);
 });
+import { agentTop } from "./contextPlot/cplotAgentTop.ts";
+
+test("the dearest agents: dollars lead, unpriced follow by tokens, absent stays absent, n caps", () => {
+  const models = ["claude-opus-5", "claude-haiku-4-5"];
+  const rows = agentTop([
+    run(1, 0, { id: "cheap", tok: 9_000, costUsd: 0.5, turns: 3 }),
+    run(2, 1, { id: "unpriced", tok: 5_000_000, type: "Explore" }),
+    run(3, 0, { id: "dear", tok: 100, costUsd: 12.5, turns: 40, peakTok: 600_000, running: true }),
+  ], models, 5);
+  assert.deepEqual(rows.map((r) => r.id), ["dear", "cheap", "unpriced"]);
+  assert.equal(rows[0].turns, 40);
+  assert.equal(rows[0].running, true);
+  assert.equal(rows[0].type, "agent");
+  assert.equal(rows[1].peakTok, null);
+  assert.equal(rows[2].turns, null);
+  assert.equal(rows[2].costUsd, null);
+  assert.equal(rows[2].type, "Explore");
+  assert.match(rows[2].model, /haiku/);
+  assert.equal(agentTop(rows.map((r) => r.run), models, 2).length, 2);
+  assert.deepEqual(agentTop([], models), []);
+});

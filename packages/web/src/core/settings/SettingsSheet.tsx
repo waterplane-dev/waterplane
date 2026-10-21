@@ -55,6 +55,7 @@ import { showHostStat, takeShot } from "../../features/hostTools";
 import {
   AppearanceRows, OfflineRows, WritingRows, type InstallFacts, type ReconnectFacts, type VoiceFacts,
 } from "./SettingsGroups.tsx";
+import { Button } from "../../kit/Button";
 
 /**
  * The search box. Transient on purpose — no storage key, no sync: a filter is
@@ -444,15 +445,15 @@ function ConnectionRows({ redial }: { redial(): void }) {
             {/* A password shorter than four characters is refused in
                 words, where a grey button used to say it silently. */}
             {lanPw.length >= 4 ? (
-              <button
-                className="key primary"
+              <Button
+                variant="primary"
                 onClick={() => { c.conn.send({ t: "auth.set", password: lanPw }); lanPwDraft.set(""); showToast(authState.enabled ? "password changed" : "password set"); }}
-              >{authState.enabled ? "change" : "set password"}</button>
+              >{authState.enabled ? "change" : "set password"}</Button>
             ) : (
               <span className="set-cant-why">{lanPw.length === 0 ? "type a password of at least four characters" : "at least four characters"}</span>
             )}
             {authState.enabled && (
-              <button className="key danger" onClick={() => { c.conn.send({ t: "auth.clear" }); showToast("password cleared — LAN blocked"); }}>clear</button>
+              <Button variant="danger" onClick={() => { c.conn.send({ t: "auth.clear" }); showToast("password cleared — LAN blocked"); }}>clear</Button>
             )}
           </div>
         </SetCustom>

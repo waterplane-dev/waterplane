@@ -9,6 +9,7 @@ import { useCore } from "../../sdk";
 import { dismissFirstRun, openOnboard } from "./actions";
 import { useFirstRunDismissed, useOnboardJob } from "./store";
 import { existingReposLine, firstRunCard } from "./logic";
+import { Button } from "../../kit";
 
 export function FirstRunCard({ repos, demo, onDemo }: { repos: number; demo: boolean; onDemo(): void }) {
   const c = useCore();
@@ -45,13 +46,13 @@ export function FirstRunCard({ repos, demo, onDemo }: { repos: number; demo: boo
       <div className="onb-card-acts">
         <button className="send onb-build" onClick={openOnboard}><Rocket size={16} /> Build your first app</button>
         {!reposLine && (
-          <button className="key" onClick={() => { dismissFirstRun(); c.say.toast("No repos under the host root yet: new, in the menu, makes one."); }}>
+          <Button onClick={() => { dismissFirstRun(); c.say.toast("No repos under the host root yet: new, in the menu, makes one."); }}>
             <FolderOpen size={16} /> Open an existing repo
-          </button>
+          </Button>
         )}
-        <button className="key" onClick={() => { c.say.track("action:onboard.demo"); onDemo(); }}>
+        <Button onClick={() => { c.say.track("action:onboard.demo"); onDemo(); }}>
           <PlayCircle size={16} /> Try the demo
-        </button>
+        </Button>
       </div>
     </div>
   );

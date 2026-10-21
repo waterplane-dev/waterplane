@@ -34,6 +34,7 @@
  */
 import { useCallback, useEffect, useId, useState, type ReactNode } from "react";
 import { AlertTriangle, Info } from "lucide-react";
+import { Button } from "./kit/Button";
 
 /**
  * How long an armed button stays armed.
@@ -250,8 +251,8 @@ export function ConfirmHost() {
         )}
         <div className="bl-modal-actions">
           <button className={`send confirm-go${ask.tone === "info" ? " info" : ""}`} onClick={() => answer(true, remember)}>{ask.confirmLabel}</button>
-          <button className="key" onClick={() => answer(false, remember)}>{ask.cancelLabel}</button>
-          {ask.altLabel && <button className="key" onClick={() => answer(false, remember, false, true)}>{ask.altLabel}</button>}
+          <Button onClick={() => answer(false, remember)}>{ask.cancelLabel}</Button>
+          {ask.altLabel && <Button onClick={() => answer(false, remember, false, true)}>{ask.altLabel}</Button>}
         </div>
       </div>
     </div>

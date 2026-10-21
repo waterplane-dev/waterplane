@@ -9,7 +9,7 @@
  */
 import { fmtCount, fmtExact, type BackendTokensDoc, type LocalUsageDoc, type TokenStatsDoc } from "@waterplane/shared";
 import { ledgers } from "@waterplane/sdk";
-import { useRemoteResource } from "@waterplane/kit";
+import { useRemoteResource, Button } from "@waterplane/kit";
 import { runnerCardLines } from "./localRunner.ts";
 import { KindBars, NumRow } from "./LedgerParts.tsx";
 import { claudeCard, guestCard, lastDayWords, ledgerCard, type OverviewCard } from "./overview.ts";
@@ -27,7 +27,7 @@ function Head({ label, onOpen }: { label: string; onOpen?: () => void }) {
   return (
     <div className="section section-head">
       <span>{label}</span>
-      {onOpen && <button className="key" onClick={onOpen}>open</button>}
+      {onOpen && <Button onClick={onOpen}>open</Button>}
     </div>
   );
 }

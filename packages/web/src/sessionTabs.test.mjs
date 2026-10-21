@@ -18,7 +18,7 @@ import { dirname, join } from "node:path";
 
 import {
   TAB_COUNT_DEFAULT, TAB_COUNT_MAX, TAB_COUNT_MIN, TAB_STRIP_H, tabStripHeight,
-  TAB_LIMIT_DEFAULT, bumpOpen, cleanFileTabs, fileOpenKey, mergeStrip, fileTabKey, fileTabLabel, setPinned, clampTabCount, clampTabLimit, limitTabs, cleanTabOrder, migrateOpens, openOwed, orderTabs, pruneOpens, tabCloseAsk, tabLabel,
+  TAB_LIMIT_DEFAULT, SHARED_OPENS_TTL_MS, adoptOpens, mergeOpens, offerUnsync, saverOn, bumpOpen, cleanFileTabs, fileOpenKey, mergeStrip, fileTabKey, fileTabLabel, setPinned, clampTabCount, clampTabLimit, limitTabs, cleanTabOrder, migrateOpens, openOwed, orderTabs, pruneOpens, tabCloseAsk, tabLabel,
 } from "./sessionTabs.ts";
 
 const tab = (id, createdAt, over = {}) => ({
@@ -257,4 +257,37 @@ test("a session is owed an open whenever it comes on screen, by any route, once 
   // A pending lane is not a session; its real id is counted when it lands.
   assert.equal(openOwed(null, "create:/x", ["a"]), null);
   assert.equal(openOwed(null, "a", []), null, "a cold start's empty list counts nothing yet");
+});
+
+test("the shared history merges: later instant, higher count, union, sorted, aged out", () => {
+  const now = 10 * SHARED_OPENS_TTL_MS;
+  const a = { b: { n: 2, at: now - 5 }, old: { n: 9, at: now - SHARED_OPENS_TTL_MS - 1 } };
+  const c = { b: { n: 1, at: now - 1 }, a: { n: 3, at: now - 2 } };
+  const m = mergeOpens(a, c, now);
+  assert.deepEqual(m, { a: { n: 3, at: now - 2 }, b: { n: 2, at: now - 1 } });
+  assert.deepEqual(Object.keys(m), ["a", "b"]);
+});
+
+test("adopting the shared history converges: a merge that adds nothing writes what arrived", () => {
+  const now = 10 * SHARED_OPENS_TTL_MS;
+  const phone = JSON.stringify({ x: { n: 1, at: now - 10 } });
+  const desk = JSON.stringify({ y: { n: 1, at: now - 5 } });
+  // The desktop adopts the phone's copy: it holds y, so the merge differs and is re-pushed.
+  const merged = adoptOpens(phone, desk, now);
+  assert.equal(merged, JSON.stringify({ x: { n: 1, at: now - 10 }, y: { n: 1, at: now - 5 } }));
+  // The phone adopts that: nothing to add, so it writes the incoming copy and pushes nothing.
+  assert.equal(adoptOpens(merged, phone, now), undefined);
+  assert.equal(adoptOpens("garbage", null, now), JSON.stringify({}));
+});
+
+test("a saver coming on offers once per spell to stop sharing the tab order", () => {
+  assert.equal(saverOn({ app: false, phoneData: false, battery: null }), null);
+  assert.equal(saverOn({ app: false, phoneData: false, battery: false }), null);
+  assert.equal(saverOn({ app: true, phoneData: true, battery: true }), "app");
+  assert.equal(saverOn({ app: false, phoneData: true, battery: true }), "battery");
+  assert.equal(saverOn({ app: false, phoneData: true, battery: null }), "phone-data");
+  assert.equal(offerUnsync("battery", true, false), true);
+  assert.equal(offerUnsync("battery", true, true), false, "asked this spell");
+  assert.equal(offerUnsync("battery", false, false), false, "nothing shared to stop");
+  assert.equal(offerUnsync(null, true, false), false);
 });

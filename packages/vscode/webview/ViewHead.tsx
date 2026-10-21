@@ -13,15 +13,17 @@ const base = (f: string): string => f.split(/[\\/]/).filter(Boolean).pop() ?? f;
  * tab bar and no session list — the tree in the activity bar is its navigation — so the header is
  * the one place that says which session the numbers below belong to.
  */
-export function ViewHead({ tab, folder, row, following, post }: {
+export function ViewHead({ tab, folder, row, following, scannedAt, post }: {
   tab: TabId;
   folder: string;
   /** The selected session's row, for the Session view's title; null when not listed yet. */
   row: SessionSummary | null;
   following: boolean;
+  /** When the log scan behind All sessions finished; null before the first one. */
+  scannedAt?: number | null;
   post: (m: ToExtension) => void;
 }) {
-  const now = useNow(tab === "session" && !!row, 15_000);
+  const now = useNow((tab === "session" && !!row) || (tab === "all" && scannedAt != null), 15_000);
   const crumb = folder ? `${base(folder)} · ${TITLES[tab]}` : TITLES[tab];
   if (tab !== "session") {
     return (
@@ -29,7 +31,10 @@ export function ViewHead({ tab, folder, row, following, post }: {
         <div className="view-crumb">{crumb}</div>
         <h1>{TITLES[tab]}</h1>
         {tab === "all" && (
-          <div className="view-sub"><button type="button" className="link-btn" onClick={() => post({ t: "rescan" })}>Re-read every log now</button></div>
+          <div className="view-sub">
+            {scannedAt != null && <>Read {fmtAge(now - scannedAt)} · </>}
+            <button type="button" className="link-btn" onClick={() => post({ t: "rescan" })}>Re-read every log now</button>
+          </div>
         )}
       </header>
     );

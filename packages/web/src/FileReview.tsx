@@ -9,6 +9,8 @@ import {
   lineSpanText, nextSel, orderRemarks, relocate, remarksAt, remarksBlock, sliceLines,
   type Remark, type Sel,
 } from "./fileRemarks";
+import { Button } from "./kit/Button";
+import { Hint } from "./kit/Hint";
 
 /**
  * Review mode of the file viewer: mark lines, say what should change, send
@@ -164,7 +166,7 @@ export function FileReview({ repoId, path, body, rendered, files, onCopy, onSend
 
   return (
     <>
-      <div className="form-hint rv-hint">{hint}</div>
+      <Hint className="rv-hint">{hint}</Hint>
 
       {rendered ? (
         <div className="viewer-doc-body rv-md" onClickCapture={onTapMd}>
@@ -199,7 +201,7 @@ export function FileReview({ repoId, path, body, rendered, files, onCopy, onSend
             <span className="grow">{editing ? `Remark ${editing} · ` : ""}{lineSpanText(sel.from, sel.to)}</span>
             {text.trim()
               ? <ConfirmButton title="cancel this remark" confirm="discard words?" onConfirm={reset}><X size={16} /></ConfirmButton>
-              : <button className="key" title="cancel" onClick={reset}><X size={16} /></button>}
+              : <Button title="cancel" onClick={reset}><X size={16} /></Button>}
           </div>
           <PromptComposer inline rows={2} prompts={[text]} onChange={(next) => setText(next[0] ?? "")}
             placeholder="What should change here? Type or dictate." />
@@ -209,15 +211,15 @@ export function FileReview({ repoId, path, body, rendered, files, onCopy, onSend
             <span className="spacer" />
             {text.trim()
               ? <button className="send" onClick={commit}>{editId ? "Save remark" : "Add remark"}</button>
-              : <span className="form-hint rv-why">Say what should change to add it.</span>}
+              : <Hint as="span" className="rv-why">Say what should change to add it.</Hint>}
           </div>
         </div>
       ) : remarks.length > 0 && (
         <div className="rv-compose">
           <div className="sheet-actions rv-compose-acts">
-            <button className="key" onClick={() => setListOpen((v) => !v)}>
+            <Button onClick={() => setListOpen((v) => !v)}>
               {listOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />} {remarks.length} remark{remarks.length === 1 ? "" : "s"}
-            </button>
+            </Button>
             <span className="spacer" />
             <button className="send" onClick={send}>
               <Send size={16} /> Send {remarks.length === 1 ? "remark" : `${remarks.length} remarks`} to the chat
@@ -232,7 +234,7 @@ export function FileReview({ repoId, path, body, rendered, files, onCopy, onSend
                     <div className="rv-item-where">{lineSpanText(r.from, r.to)}{r.moved ? " · these lines have changed since" : ""}</div>
                     <div className="rv-item-text">{r.text}</div>
                   </div>
-                  <button className="key" title="edit this remark" onClick={() => edit(r)}><Pencil size={16} /></button>
+                  <Button title="edit this remark" onClick={() => edit(r)}><Pencil size={16} /></Button>
                   <ConfirmButton title="delete this remark" confirm="delete?" onConfirm={() => drop(r.id)}><Trash2 size={16} /></ConfirmButton>
                 </div>
               ))}

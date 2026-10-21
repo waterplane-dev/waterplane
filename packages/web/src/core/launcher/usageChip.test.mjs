@@ -84,7 +84,7 @@ test("two sources or more: one Gauge, header-key metrics, the group last in the 
 
 test("the markup keeps today's claude chip and never prints ? for another source", () => {
   const src = readFileSync(new URL("./UsageChip.tsx", import.meta.url), "utf8");
-  for (const needle of ['className="usage-unit usage-reset"', 'className="usage-sep"', '<span className="usage-unit">wk</span>', "key usage-key"]) {
+  for (const needle of ['className="usage-unit usage-reset"', 'className="usage-sep"', '<span className="usage-unit">wk</span>', "className={`usage-key ${figuresHot(f)", "className={`usage-key${group"]) {
     assert.ok(src.includes(needle), needle);
   }
   const other = src.slice(src.indexOf("function OtherFace"), src.indexOf("/** The long-press wording"));

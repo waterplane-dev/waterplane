@@ -12,6 +12,8 @@ import { editTargetOptions, headlineEditHint } from "../backlogFilter";
 import { PromptComposer } from "../PromptComposer";
 import { RepoSelect } from "../RepoPicker";
 import type { BacklogModel } from "./backlogTypes";
+import { Button } from "../kit/Button";
+import { Hint } from "../kit/Hint";
 
 export function RowEditor({ m, it }: { m: BacklogModel; it: BacklogItem }) {
   const {
@@ -39,7 +41,7 @@ export function RowEditor({ m, it }: { m: BacklogModel; it: BacklogItem }) {
                       pins. */}
                   <input className="search" value={editHeadline} maxLength={MAX_HEADLINE_CHARS}
                     onChange={(e) => setEditHeadline(e.target.value)} placeholder="Suggested title (optional)" />
-                  <div className="form-hint">{headlineEditHint(it.headlineBy)}</div>
+                  <Hint>{headlineEditHint(it.headlineBy)}</Hint>
                   {/* **Absent is an answer**, so `— none —` is a real option and
                       not a placeholder: it clears the kind and its author, and
                       the row then draws no chip at all rather than a default
@@ -53,7 +55,7 @@ export function RowEditor({ m, it }: { m: BacklogModel; it: BacklogItem }) {
                       offerable, or picking a session below silently re-aims it
                       at whatever sorts first. */}
                   {running
-                    ? <span className="form-hint">{repoLabel(editRepo)}</span>
+                    ? <Hint as="span">{repoLabel(editRepo)}</Hint>
                     : <RepoSelect repos={p.repos} value={editRepo} keepValue aria-label="repo"
                         onChange={(dir) => { setEditRepo(dir); setEditTarget(""); }} />}
                   {/* **The target the row actually carries is always one of
@@ -80,11 +82,11 @@ export function RowEditor({ m, it }: { m: BacklogModel; it: BacklogItem }) {
                         while the editor is open, and `backlog.update` is a bare
                         send that would then be dropped silently. */}
                     {editText.trim() && p.online && <button className="send" onClick={() => saveEdit(it)}>Save</button>}
-                    <button className="key" onClick={() => setEditingId(null)}>Cancel</button>
+                    <Button onClick={() => setEditingId(null)}>Cancel</Button>
                   </div>
-                  {!editText.trim() && <div className="form-hint">Nothing to save — type the task text.</div>}
-                  {running && <div className="form-hint">Repo & session can't change while running.</div>}
-                  {!p.online && <div className="form-hint">Offline — edits can't be saved until the connection is back.</div>}
+                  {!editText.trim() && <Hint>Nothing to save — type the task text.</Hint>}
+                  {running && <Hint>Repo & session can't change while running.</Hint>}
+                  {!p.online && <Hint>Offline — edits can't be saved until the connection is back.</Hint>}
                 </div>
               </div>
   );

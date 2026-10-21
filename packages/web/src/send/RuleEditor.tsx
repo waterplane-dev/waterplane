@@ -1,6 +1,6 @@
 /** How often, the once and weekly fields, the next-fire line and the week bar. Split from `SendSheet.tsx` (docs/notes/send-architecture.md). */
 import { DAY_LABELS, composeRule, describeRule } from "@waterplane/shared";
-import { RadioRows } from "../kit";
+import { RadioRows, Hint } from "../kit";
 import { ScheduleWeekBar } from "../ScheduleWeekBar";
 import { DEVICE_TZ, fmtWhen, inWords, quickTimes, toLocalInput } from "../sendIntent";
 import type { SendSheetModel } from "./useSendSheet";
@@ -84,7 +84,7 @@ export function RuleEditor({ m }: { m: SendSheetModel }) {
               onChange={(e) => patchRule({ tz: e.target.value.trim() })} />
           </div>
           {!rule.tz && (
-            <div className="form-hint">No zone — the host&apos;s own clock decides, which is a different time than yours whenever the two machines disagree.</div>
+            <Hint>No zone — the host&apos;s own clock decides, which is a different time than yours whenever the two machines disagree.</Hint>
           )}
           {/* A weekly PATTERN that only fires once — "next Thursday
               18:00", named by its own weekday rather than resolved to
@@ -103,7 +103,7 @@ export function RuleEditor({ m }: { m: SendSheetModel }) {
 
       {rule.kind === "window" && <WindowRule m={m} />}
       <MoreRule m={m} />
-      <div className="form-hint">
+      <Hint>
         {preview != null
           ? <>Next fire: <b>{fmtWhen(preview)}</b> · {inWords(preview)}{rule.tz ? ` (anchor in ${rule.tz})` : ""}{recurs ? "" : " · then it stops"}</>
           : rule.kind === "window"
@@ -114,7 +114,7 @@ export function RuleEditor({ m }: { m: SendSheetModel }) {
             // control to do.
             ? <>Not armed yet — the desktop arms this the first time it reads the window. {describeRule(rule)}.</>
             : <>This never fires — the time it resolves to has already passed. Pick a later one.</>}
-      </div>
+      </Hint>
       {/* A window rule names an instant nobody can see — draw it: the
           same week bar the Schedules sheet carries, with this one
           draft as its only pin, at the preview the line above prints. */}

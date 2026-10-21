@@ -22,7 +22,7 @@ export function commitWords(sha: string | null | undefined, day: string | null |
  * A rank fraction as the percentile a sentence prints — the ONE conversion on
  * this side of the wire.
  *
- * `tools/repohealth/narrate.mjs` keeps its own `pct` to a single call site and
+ * `tools/repohealth/events.mjs` keeps its own `pct` to a single call site and
  * says in its header what two of them cost: every percentile in production
  * printed `0th` for months because a second conversion existed and the tests
  * exercised the copy production did not use. The wire therefore carries the

@@ -3,6 +3,8 @@ import { Check } from "lucide-react";
 import type { RepoTarget } from "@waterplane/shared";
 import { branchLabel, repoBranchLabel } from "@waterplane/shared";
 import { Empty } from "./Empty";
+import { RowTitle, RowSub } from "./kit/Row";
+import { Hint } from "./kit/Hint";
 
 /**
  * **Which repo?** — asked once, in one place.
@@ -136,7 +138,7 @@ export function RepoPicker({
 
   return (
     <>
-      {hint && <div className="form-hint">{hint}</div>}
+      {hint && <Hint>{hint}</Hint>}
       {(label || offerFilter || multi) && (
         <div className="section section-head">
           {/* A single-select picker usually has a `hint` above it already, so
@@ -170,17 +172,17 @@ export function RepoPicker({
               className={`row${on ? " sched-on" : ""}${isHome ? " home" : ""}`}
               onClick={() => toggle(r)}
             >
-              <span className="row-title">
+              <RowTitle>
                 {multi ? (on ? <Check size={14} /> : null) : icon}{" "}
                 {repoTitle(r)}
-              </span>
-              <span className="row-sub">
+              </RowTitle>
+              <RowSub>
                 {subLead ? `${subLead} · ` : ""}{repoBranchLine(r)}
                 {/* Why this row is at the top. Said on the row rather than in a
                     legend: the ordering is only useful if it explains itself. */}
                 {isHome ? " · where these words came from" : ""}
                 {extra ? ` · ${extra}` : ""}
-              </span>
+              </RowSub>
             </button>
           );
         })}

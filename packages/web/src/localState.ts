@@ -259,7 +259,9 @@ export function saveSchedulesSnap(entries: ScheduleEntry[]): void {
 export function loadCliHealthSnap(): { value: CliHealthDoc; savedAt: number } | null {
   const c = lsJson<Cached<CliHealthDoc> | null>(LS.snapCliHealth, null);
   if (!c || typeof c.at !== "number" || !c.v?.health || !c.v?.rollup) return null;
-  return { value: { health: cleanHealth(c.v.health), rollup: c.v.rollup }, savedAt: c.at };
+  const src = c.v.source;
+  const source = src && typeof src.repo === "string" && typeof src.stateDir === "string" ? { repo: src.repo, stateDir: src.stateDir } : undefined;
+  return { value: { health: cleanHealth(c.v.health), rollup: c.v.rollup, source }, savedAt: c.at };
 }
 
 export function saveCliHealthSnap(doc: CliHealthDoc): void {

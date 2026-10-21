@@ -150,3 +150,12 @@ The build entry for the VS Code extension has a restart option for updating open
 Granting access to development builds is quick and convenient rather than a repeated manual chore.
 - asked: 2026-10-19
 
+### R-distribution-033 · shipped
+The VS Code extension is published to the VS Code Marketplace on each release by its own separate release command; Open VSX is not a release target for now. The publish token lives only in the vault and is minted when needed, never left on disk, and each release needs a phone fingerprint approval.
+- asked: 2026-10-20, 2026-10-20
+- shipped: 6cbd0fd8, 72cf8462, a700d413
+
+### R-distribution-034 · requested
+The public mirror always carries the latest released version of the product.
+- asked: 2026-10-20
+

@@ -8,6 +8,8 @@ import { PromptAnswer } from "./PromptAnswer";
 import { CliSuggestion } from "./CliSuggestion";
 import { SheetHead } from "./Sheet";
 import { Empty } from "./Empty";
+import { Button } from "./kit/Button";
+import { Hint } from "./kit/Hint";
 
 interface Props {
   /** Every live session — the ones with a question are what this lists. */
@@ -94,11 +96,11 @@ export function QuestionsSheet({ sessions, outbox, online, seenAt, onAnswer, onO
       </SheetHead>
 
       {!online && (
-        <div className="form-hint">
+        <Hint>
           <CloudOff size={13} style={{ verticalAlign: "-2px" }} />{" "}
           offline — {seenAt ? <>these are the questions as of {ago(seenAt)}</> : <>nothing has been synced to this device yet</>}.
           Answer anyway: it is queued and sent the moment the link is back.
-        </div>
+        </Hint>
       )}
 
       {total === 0 && (
@@ -209,7 +211,7 @@ export function QuestionsSheet({ sessions, outbox, online, seenAt, onAnswer, onO
       </div>
 
       <div className="sheet-actions">
-        <button className="key" onClick={onClose}><X size={16} /> close</button>
+        <Button onClick={onClose}><X size={16} /> close</Button>
       </div>
     </div>
   );

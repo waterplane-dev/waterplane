@@ -14,6 +14,8 @@ import { LS } from "./storage";
 import { SheetHead } from "./Sheet";
 import { ConfirmButton } from "./Confirm";
 import { Empty } from "./Empty";
+import { Button } from "./kit/Button";
+import { Hint } from "./kit/Hint";
 
 interface Props {
   /** Repos — for the inbox an attachment needs, and for naming a note's own. */
@@ -296,11 +298,11 @@ export function PadSheet({ repos, onDispatch, onFile, outbox, online, repoIdForC
     return (
       <div className="sheet">
         <SheetHead title={<><NotebookPen size={16} /> {editing === "new" ? "New note" : "Edit note"}</>} onClose={closeEditor} />
-        <div className="form-hint">
+        <Hint>
           Just the text. You pick where it goes when you get there.
           {attachRepo && <> Files go to <strong>{attachRepo.repoName}</strong>&apos;s inbox — that much the note has decided.</>}
-        </div>
-        {refused && <div className="form-hint warn">{refused}</div>}
+        </Hint>
+        {refused && <Hint tone="warn">{refused}</Hint>}
         <PromptComposer
           prompts={prompts}
           onChange={updatePrompts}
@@ -312,9 +314,9 @@ export function PadSheet({ repos, onDispatch, onFile, outbox, online, repoIdForC
           autoFocus
         >
           {shots.length > 0 && (
-            <div className="form-hint">
+            <Hint>
               <Files size={12} /> {shots.length} file{shots.length > 1 ? "s" : ""} queued for {attachRepo?.repoName ?? "that repo"}&apos;s inbox — the paths are in the note above.
-            </div>
+            </Hint>
           )}
           {/* The same check the queue and the Send sheet run: a note that names
               a file is only as good as the file arriving. */}
@@ -327,7 +329,7 @@ export function PadSheet({ repos, onDispatch, onFile, outbox, online, repoIdForC
             once, then remembered as the note's cwd. */}
         {askRepo && (
           <div className="queue-aim attach-aim">
-            <div className="form-hint">Whose inbox do these files go to?</div>
+            <Hint>Whose inbox do these files go to?</Hint>
             <RepoPicker repos={repos} listClass="" onPick={(r) => {
               const held = heldRef.current;
               heldRef.current = [];
@@ -337,7 +339,7 @@ export function PadSheet({ repos, onDispatch, onFile, outbox, online, repoIdForC
           </div>
         )}
         <div className="sheet-actions">
-          <button className="key" onClick={closeEditor}><X size={16} /> cancel</button>
+          <Button onClick={closeEditor}><X size={16} /> cancel</Button>
           <AttachButtons prompts={promptsRef} onPrompts={updatePrompts} focusRef={focusStep} busy={busy} onFiles={(f) => pickFiles(f)}
             disabled={!repos.length} disabledTitle="no repos under the host root to upload into"
             trackImage="action:pad.attach" trackFile="action:pad.attachfile" />
@@ -351,7 +353,7 @@ export function PadSheet({ repos, onDispatch, onFile, outbox, online, repoIdForC
   return (
     <div className="sheet">
       <SheetHead title={<><NotebookPen size={16} /> Prompt pad</>} onClose={onClose}>
-        <button className="key" onClick={startNew}><Plus size={16} /> new</button>
+        <Button onClick={startNew}><Plus size={16} /> new</Button>
       </SheetHead>
       {/* The pad is synced, and it is by design the last copy of words nobody
           has decided about yet. The merge is per NOTE now (`shared/pad.ts`, on
@@ -360,7 +362,7 @@ export function PadSheet({ repos, onDispatch, onFile, outbox, online, repoIdForC
           those words identically whether the desktop has them or not is still
           the omission this mark exists for. */}
       <SyncMark keys={[LS.pad]} thing="your notes" />
-      <div className="form-hint">{PAD_HINT}</div>
+      <Hint>{PAD_HINT}</Hint>
       <div className="list">
         {drafts.length === 0 && <Empty>Nothing on the pad. Tap “new” to park a thought.</Empty>}
         {drafts.map((d) => {
@@ -382,18 +384,18 @@ export function PadSheet({ repos, onDispatch, onFile, outbox, online, repoIdForC
                       the top says so, and a dimmed sibling would put the reason
                       in a `title` no phone renders. */}
                   {home && (
-                    <button className="key" title={FILE_WORDS.title(home.repoName)}
+                    <Button title={FILE_WORDS.title(home.repoName)}
                       onClick={() => { track("action:pad.file"); onFile(d, home); }}>
                       <ListPlus size={16} /> {FILE_WORDS.label}
-                    </button>
+                    </Button>
                   )}
                   {/* One button. Where it goes, when it runs and whether N repos
                       run together are the Send sheet's four questions, and this
                       note has already answered one of them. */}
-                  <button className="key" title="send it — pick where and when in one sheet"
+                  <Button title="send it — pick where and when in one sheet"
                     onClick={() => { track("action:pad.dispatch"); onDispatch(d); }}>
                     <SendHorizontal size={16} /> send…
-                  </button>
+                  </Button>
                   {/* Two taps. A delete here writes a TOMBSTONE that travels
                       (`removePadNotes`) — it is a real delete on every device,
                       not a note that disappears from this one and comes back at
@@ -414,7 +416,7 @@ export function PadSheet({ repos, onDispatch, onFile, outbox, online, repoIdForC
         })}
       </div>
       <div className="sheet-actions">
-        <button className="key" onClick={onClose}><ChevronLeft size={16} /> back</button>
+        <Button onClick={onClose}><ChevronLeft size={16} /> back</Button>
         <span className="spacer" />
         <span className="set-note" style={{ padding: 0 }}>{drafts.length} note{drafts.length === 1 ? "" : "s"}</span>
       </div>

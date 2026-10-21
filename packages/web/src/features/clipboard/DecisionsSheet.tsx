@@ -14,6 +14,7 @@ import { useCore, useStore } from "../../sdk";
 import { SheetHead } from "../../Sheet";
 import { decisionBlock, decisionItems } from "./logic";
 import { decide, decideAnswers } from "./store";
+import { Button, Hint } from "../../kit";
 
 /** Offered on every item, after its own options. "your call" hands the
  *  decision back explicitly, which is different from leaving it blank. */
@@ -46,13 +47,13 @@ export function DecisionsSheet() {
   return (
     <div className="sheet">
       <SheetHead title="Answer the list" onClose={() => core.nav.close("answers")} />
-      <div className="form-hint">
+      <Hint>
         {items.length
           ? <>{items.length} item{items.length > 1 ? "s" : ""} from {FROM[from]}. Answer the ones you have a view on; blank ones are left out.</>
           : lines.length || from !== "transcript"
             ? <>Nothing numbered or bulleted in {FROM[from]}. Long-press the terminal and choose <b>pick lines</b> to answer any lines you like.</>
             : <>Reading {FROM[from]}…</>}
-      </div>
+      </Hint>
       <div className="decide-list">
         {items.map((it, i) => (
           <div className="decide-item" key={`${i}:${it.text}`}>
@@ -60,7 +61,7 @@ export function DecisionsSheet() {
             <div className="decide-a">
               <input type="text" value={values[i]} placeholder="your answer"
                 enterKeyHint="next" onChange={(e) => set(it.text, e.target.value)} />
-              {values[i] && <button className="key" title="clear this answer" onClick={() => set(it.text, "")}><X size={16} /></button>}
+              {values[i] && <Button title="clear this answer" onClick={() => set(it.text, "")}><X size={16} /></Button>}
             </div>
             <div className="decide-chips">
               {[...it.options, ...ALWAYS].map((o) => (
@@ -74,7 +75,7 @@ export function DecisionsSheet() {
         <span className="set-note">{answered ? `${answered} of ${items.length} answered` : "nothing answered yet"}</span>
         {/* Cancel keeps what was typed (`decideAnswers`): reopening on the same
             list brings it back. Typed words are never thrown away by a close. */}
-        <button className="key" onClick={() => core.nav.close("answers")}><X size={16} /> cancel</button>
+        <Button onClick={() => core.nav.close("answers")}><X size={16} /> cancel</Button>
         {block && <button className="send" onClick={insert}><MessageSquareReply size={16} /> into compose</button>}
       </div>
     </div>
