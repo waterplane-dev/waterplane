@@ -290,6 +290,15 @@ test("verify-public-tree rehearses CI's tarball: release:build --unsigned, then 
   assert.equal(npmTarballProblems({ ...ok, listing: [], pkgJson: "nope" }).length, 2, "every failure is listed");
 });
 
+test("the npm tarball names the public repo, or npm refuses its provenance (0.1.5: E422)", () => {
+  const pkg = (repository) => JSON.stringify({ name: "waterplane", version: "1.2.3", repository });
+  const at = (pkgJson) => npmTarballProblems({ slug: "waterplane", version: "1.2.3", listing: ["package/npm-shrinkwrap.json"], pkgJson, org: "waterplane-dev" });
+  assert.deepEqual(at(pkg({ type: "git", url: "git+https://github.com/waterplane-dev/waterplane.git" })), []);
+  assert.deepEqual(at(pkg({ url: "https://github.com/waterplane-dev/waterplane" })), []);
+  assert.match(at(pkg(undefined))[0], /repository\.url is missing, not https:\/\/github\.com\/waterplane-dev\/waterplane/);
+  assert.match(at(pkg({ url: "https://github.com/someone/waterplane" }))[0], /"https:\/\/github\.com\/someone\/waterplane"/);
+});
+
 test("isTargetGit: the root .git is the target's, as a clone's directory or a worktree's file; nothing else is", () => {
   assert.equal(isTargetGit(".git"), true, "a linked worktree's .git FILE is never deleted");
   assert.equal(isTargetGit(".git/HEAD"), true);

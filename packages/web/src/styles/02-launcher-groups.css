@@ -475,6 +475,10 @@ html[data-typing="1"] .screen { padding-top: env(safe-area-inset-top); }
    amber and emphatically not the failure red: nothing has gone wrong yet, and
    for the first minute of a send's life that colour was the whole complaint. */
 .outbox-recover.confirming { color: var(--muted); }
+/* The sentence takes the room between the icon and "Which" and wraps INSIDE
+   it. Without this the span sized to its whole text, wrapped onto its own row,
+   and the icon and the button each got a row too — three rows for one fact. */
+.outbox-recover.confirming > span { flex: 1 1 0; min-width: 0; }
 .outbox-recover .key { margin-left: 0; }
 .outbox-recover.failed .key:first-of-type,
 .outbox-recover.confirming .key:first-of-type,

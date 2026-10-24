@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Check the npm tarball `npm run release:build` left in dist-release/, the way the public repo's
 // npm-publish workflow checks it before `npm publish`: it is <slug>@<version> (package.json's
-// version) and carries package/npm-shrinkwrap.json. Read-only; run from the repo root.
+// version), names the public repo as its repository (npm checks provenance against it) and carries
+// package/npm-shrinkwrap.json. Read-only; run from the repo root.
 // `scripts/verify-public-tree.mjs` runs it in the copy. Pure part: public-lib.mjs npmTarballProblems.
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -21,7 +22,7 @@ const tar = (...a) => execFileSync("tar", [...a, tgz], { encoding: "utf8", maxBu
 let listing = [], pkgJson = null;
 try { listing = tar("-tzf").split("\n").filter(Boolean); } catch { /* reported as problems */ }
 try { pkgJson = execFileSync("tar", ["-xOzf", tgz, "package/package.json"], { encoding: "utf8" }); } catch { /* ditto */ }
-const problems = npmTarballProblems({ slug: BRAND.slug, version, listing, pkgJson });
+const problems = npmTarballProblems({ slug: BRAND.slug, version, listing, pkgJson, org: BRAND.githubOrg });
 for (const p of problems) console.error(`check-npm-tarball: ${p}`);
 if (problems.length) process.exit(1);
-console.log(`check-npm-tarball: dist-release/${BRAND.slug}-${version}.tgz is ${BRAND.slug}@${version} and has package/npm-shrinkwrap.json`);
+console.log(`check-npm-tarball: dist-release/${BRAND.slug}-${version}.tgz is ${BRAND.slug}@${version}, names github.com/${BRAND.githubOrg}/${BRAND.slug} and has package/npm-shrinkwrap.json`);

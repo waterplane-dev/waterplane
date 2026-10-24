@@ -74,11 +74,12 @@ export function hostStillConfirming(e: OutboxEntry, now: number): boolean {
 }
 
 /** The strip's sentence. Says what is happening and what will happen without
- *  it, because "confirming" alone reads as a spinner nobody can act on. */
+ *  it, because "confirming" alone reads as a spinner nobody can act on. Kept
+ *  short: it shares one row with its icon and "Which" on a 360 px phone. */
 export function confirmingLine(n: number): string {
   return n === 1
-    ? "1 message typed — the desktop is confirming it ran, and types it again itself if it never did"
-    : `${n} messages typed — the desktop is confirming they ran, and types one again itself if it never did`;
+    ? "1 message typed — confirming it ran; types it again itself if not"
+    : `${n} messages typed — confirming they ran; types one again itself if not`;
 }
 
 /** Why "try again" is not the move while this is true. The same fact as the

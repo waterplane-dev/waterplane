@@ -23,7 +23,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 // `packages/shared/dist`, which a fresh `npm ci` does not have: build it BEFORE the first import
 // that needs it, or a clean clone dies with ERR_MODULE_NOT_FOUND before saying anything.
 if (!existsSync(join(ROOT, "packages/shared/dist/brand.js"))) execFileSync("npm", ["run", "build:shared"], { cwd: ROOT, stdio: "inherit" });
-const { E, SLUG } = await import("../lib-brand.mjs");
+const { E, GITHUB_ORG, SLUG } = await import("../lib-brand.mjs");
 const { verifyDevApk } = await import("./apk-lib.mjs");
 const { buildShrinkwrap } = await import("./shrinkwrap-lib.mjs");
 const { privateExtensions } = await import("./public-lib.mjs");
@@ -303,6 +303,11 @@ deps[sharedPkg.name] = sharedPkg.version;
 const npmPkg = {
   name: SLUG, version, type: "module", description: rootPkg.description, license: rootPkg.license,
   author: rootPkg.author, keywords: rootPkg.keywords,
+  // npm checks provenance against this: a publish whose repository.url is not the repo the CI run
+  // came from is refused (E422, "Failed to validate repository information").
+  repository: { type: "git", url: `git+https://github.com/${GITHUB_ORG}/${SLUG}.git` },
+  homepage: `https://github.com/${GITHUB_ORG}/${SLUG}#readme`,
+  bugs: { url: `https://github.com/${GITHUB_ORG}/${SLUG}/issues` },
   bin: { [SLUG]: `bin/${SLUG}.mjs` }, engines: { node: rootPkg.engines.node },
   dependencies: deps, bundleDependencies: [sharedPkg.name],
 };

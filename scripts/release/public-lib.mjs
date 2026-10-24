@@ -407,15 +407,20 @@ export const topDir = (p) => (p.includes("/") ? p.slice(0, p.indexOf("/")) : "(r
  * What CI's "The tarball is this version, with its shrinkwrap" step (`.github/workflows/npm-publish.yml`)
  * asserts of `dist-release/<slug>-<version>.tgz`, as a list of sentences (empty = it would pass):
  * `listing` is the tarball's member names (`tar -tzf`), `pkgJson` the text of `package/package.json`
- * (null = unreadable). Pure; `scripts/release/check-npm-tarball.mjs` gathers the facts.
+ * (null = unreadable). `org` given: `repository.url` must name github.com/<org>/<slug>, or npm refuses
+ * the provenance (E422) after the whole CI run. Pure; `scripts/release/check-npm-tarball.mjs` gathers the facts.
  */
-export function npmTarballProblems({ slug, version, listing, pkgJson }) {
+export function npmTarballProblems({ slug, version, listing, pkgJson, org = null }) {
   const tgz = `dist-release/${slug}-${version}.tgz`;
   const out = [];
-  let got = null;
-  try { const p = JSON.parse(pkgJson ?? ""); got = `${p.name}@${p.version}`; } catch { /* reported below */ }
+  let got = null, repo = null;
+  try { const p = JSON.parse(pkgJson ?? ""); got = `${p.name}@${p.version}`; repo = p.repository?.url ?? null; } catch { /* reported below */ }
   if (got === null) out.push(`${tgz}: package/package.json is missing or unreadable`);
   else if (got !== `${slug}@${version}`) out.push(`${tgz} is ${got}, not ${slug}@${version}`);
+  const want = `https://github.com/${org}/${slug}`;
+  if (got !== null && org && repo?.replace(/^git\+/, "").replace(/\.git$/, "") !== want) {
+    out.push(`${tgz}: repository.url is ${repo ? `"${repo}"` : "missing"}, not ${want}: npm refuses the provenance of such a publish`);
+  }
   if (!listing.includes("package/npm-shrinkwrap.json")) {
     out.push(`${tgz} has no package/npm-shrinkwrap.json: npm i -g would re-resolve every transitive dependency`);
   }

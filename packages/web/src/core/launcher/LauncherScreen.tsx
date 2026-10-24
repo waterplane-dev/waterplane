@@ -10,7 +10,7 @@
  */
 import { useLayoutEffect, useRef } from "react";
 import { useBackStep } from "../../backStep";
-import { Archive, Bell, Boxes, CalendarClock, Camera, ChevronsDownUp, ChevronsUpDown, CircleDot, CloudOff, Download, Eraser, Flag, Gauge, Hourglass, Images, ListOrdered, ListRestart, ListTodo, Loader, Menu, MessageSquare, NotebookPen, Plus, RotateCw, ScrollText, Search, Settings, ShieldAlert, Split, SquareTerminal, Star, Terminal as TerminalIcon, Waypoints, X } from "lucide-react";
+import { Archive, ArrowDownUp, Bell, Boxes, CalendarClock, Camera, ChevronsDownUp, ChevronsUpDown, CircleDot, CloudOff, Download, Eraser, Flag, Gauge, Hourglass, Images, ListOrdered, ListRestart, ListTodo, Loader, Menu, MessageSquare, NotebookPen, Plus, RotateCw, ScrollText, Search, Settings, ShieldAlert, Split, SquareTerminal, Star, Terminal as TerminalIcon, Waypoints, X } from "lucide-react";
 import { BRAND, branchLabel } from "@waterplane/shared";
 import { Empty } from "../../Empty";
 import { Logo } from "../Logo";
@@ -496,6 +496,7 @@ export function LauncherScreen(p: LauncherProps) {
                 title={scheduleTitle} onClick={() => { track("overlay:schedule"); openSchedules(scheduleWords ? scheduleLead : null); }}>
                 <CalendarClock size={ICON} />{scheduleWords && <span className="head-act-n">{scheduleWords}</span>}
               </button>
+              <button className="head-act" aria-label="sync repos" title="sync repos — pull, push or sync every repo at once" onClick={() => { track("overlay:reposync"); setOverlay("reposync"); }}><ArrowDownUp size={ICON} /></button>
               <button className="head-act" aria-label="rescan repos" title="rescan the host root for repos and worktrees" onClick={() => { refreshRepos(); showToast("repos rescanned"); }}><RotateCw size={ICON} /></button>
               {visibleSessions.some((s) => !s.running) && <button className="head-act" aria-label="clear exited sessions" title="clear exited — drop the sessions that have already ended" onClick={clearExited}><Eraser size={ICON} /></button>}
               {visibleSessions.length > 0 && (

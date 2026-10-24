@@ -3,6 +3,16 @@
 Notable changes. This project has no release branches — `main` is the supported
 version — so entries are grouped by the release they shipped in.
 
+## 0.1.6
+
+### New
+
+- **Sync every repo at once.** A sync button in the launcher header pulls, pushes or syncs every repo that has an origin and an upstream, the git view's three buttons over the whole list. Pulls run three at a time and pushes one at a time, each with its pre-push checks on the desktop. The run continues if you close the sheet, and Stop drops what is still waiting.
+
+### Fixes
+
+- **waterplane is on npm.** 0.1.5's npm publish was refused because the package did not name its repository, which npm needs to check the provenance. `npm i -g waterplane` now installs this release, with a provenance attestation.
+
 ## 0.1.5
 
 ### New

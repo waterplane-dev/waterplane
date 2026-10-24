@@ -56,6 +56,7 @@ import { manifest as newSession } from "./newSession";
 import { manifest as halt } from "./halt";
 import { manifest as askRules } from "./askRules";
 import { manifest as cliRestart } from "./cliRestart";
+import { manifest as repoSync } from "./repoSync";
 
 // In-repo EXTENSIONS (packages/extensions/<id>/web): the same contract, globbed, listed after the core.
 const EXTENSION_MODULES = import.meta.glob<{ manifest: FeatureManifest }>("../../../extensions/*/web/index.ts", { eager: true });
@@ -103,6 +104,7 @@ export const FEATURES: readonly FeatureManifest[] = [
   halt,
   askRules,
   cliRestart,
+  repoSync,
   // extensions
   ...EXTENSIONS,
 ];
