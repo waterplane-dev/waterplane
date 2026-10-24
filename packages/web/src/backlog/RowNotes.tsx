@@ -10,6 +10,7 @@
 import { ArrowRight, ChevronDown, ChevronRight, DoorClosed, Wallet, X } from "lucide-react";
 import { RowFlagChoice } from "./RowFlagChoice";
 import { RowBudgetEdit } from "./RowBudgetEdit";
+import { launchWindowsOff } from "../budgetInput";
 import { RadioRows, Button } from "../kit";
 import type { RowFacts } from "./BacklogRow";
 import { AGENT_POSTED_WORDS, MANUAL_HOLD_TEXT } from "@waterplane/shared";
@@ -187,8 +188,8 @@ export function RowNotes({ m, row }: { m: BacklogModel; row: RowFacts }) {
                           Send sheet's. A set cap is the chip in the meta line. */}
                       {p.online && budgetEditable(it) && !it.budget && (
                         <div className="bl-close-chips">
-                          <button className={`key${m.budgetOpen.has(it.id) ? " active" : ""}`} aria-pressed={m.budgetOpen.has(it.id)}
-                            onClick={() => m.toggleBudget(it.id)}><Wallet size={13} /> budget…</button>
+                          <Button className={m.budgetOpen.has(it.id) ? "active" : undefined} aria-pressed={m.budgetOpen.has(it.id)}
+                            onClick={() => m.toggleBudget(it.id)}><Wallet size={13} /> budget…</Button>
                         </div>
                       )}
                     </div>
@@ -196,7 +197,7 @@ export function RowNotes({ m, row }: { m: BacklogModel; row: RowFacts }) {
                   {/* The cap's editor — the one `BudgetField`, opened from either chip. */}
                   {budgetEditable(it) && m.budgetOpen.has(it.id) && (
                     <RowBudgetEdit key={`${it.id}:${it.budget ? `${it.budget.unit}${it.budget.max}${it.budget.interrupt}` : "none"}`}
-                      current={it.budget} online={p.online}
+                      current={it.budget} online={p.online} windowsOff={launchWindowsOff(p.backends ?? null, it.launch?.backend)}
                       onSet={(b) => { p.verbs.onSetBudget(it.id, b); m.toggleBudget(it.id); }} />
                   )}
                   {openText.has(it.id) && (

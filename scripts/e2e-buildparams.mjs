@@ -64,7 +64,7 @@ bootWait(PORT, 800, async () => {
 
   const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
   const send = (m) => ws.send(JSON.stringify(m));
-  let saved = false, out = "", sawOptions = false, refusal = "", sawTraversalRefusal = false;
+  let saved = false, out = "", sawOptions = false, sawGate = false, refusal = "", sawTraversalRefusal = false;
 
   ws.on("open", () => send({ t: "hello", protocol: 1 }));
   ws.on("message", (raw) => {
@@ -77,13 +77,18 @@ bootWait(PORT, 800, async () => {
       if (!shoot?.params?.length) fail("params were not persisted: " + JSON.stringify(m.builds));
       if (shoot.params[0].kind !== "choice" || shoot.params[0].optionsCmd !== "ls -1 apps") fail("param not round-tripped: " + JSON.stringify(shoot.params));
       // The options behind the drop-down, then the three runs.
+      // The entries were saved to the SHARED file, so their listing commands do
+      // not run until a person approves them: the first ask is gated, the
+      // approve-and-list ask is the tap.
       send({ t: "build.options", repoDir: wt, buildId: "shoot" });
-      send({ t: "build.options", repoDir: wt, buildId: "broken" });
+      send({ t: "build.options", repoDir: wt, buildId: "shoot", approve: true, paramId: "app", cmd: "ls -1 apps" });
+      send({ t: "build.options", repoDir: wt, buildId: "broken", approve: true, paramId: "app", cmd: "exit 7" });
       send({ t: "build.run", repoDir: wt, buildId: "shoot", params: { app: "acorn" } });
       send({ t: "build.run", repoDir: wt, buildId: "nodefault" });
       send({ t: "build.run", repoDir: wt, buildId: "shoot", params: { app: "../../../etc" } });
     } else if (m.t === "build.options" && m.buildId === "shoot") {
       const a = m.options.app;
+      if (a?.needsApproval) { if (a.cmd !== "ls -1 apps") fail("the gate must show the command: " + JSON.stringify(a)); sawGate = true; return; }
       if (!a?.options) fail("the listing command answered nothing: " + JSON.stringify(m.options));
       if (a.options.join(",") !== "acorn,boulder") fail("wrong options: " + JSON.stringify(a.options));
       // A parameter with no `optionsCmd` needs no round trip — the phone
@@ -119,6 +124,7 @@ bootWait(PORT, 800, async () => {
         if (!/ENV=acorn/.test(out)) fail(`${E.PARAM_APP} was not exported: ` + JSON.stringify(out));
         if (!/CWD=acorn/.test(out)) fail("the build did not run in the substituted dir: " + JSON.stringify(out));
         if (!sawOptions) fail("build.options never answered");
+        if (!sawGate) fail("an unapproved shared optionsCmd must answer needsApproval, not run");
         if (!refusal) fail("a parameter with no value and no default must refuse the run, naming the field");
         if (!/needs a value for “Garmin app”/.test(refusal)) fail("the refusal must name the field: " + refusal);
         if (!sawTraversalRefusal) fail("a working dir built out of a value must still be traversal-guarded");

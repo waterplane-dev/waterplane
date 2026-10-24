@@ -27,6 +27,7 @@ export function ZoomPair({ smaller, bigger, onZoom, what = "", subject = "the te
   /** Tail of each button's title, after "smaller text". */
   smallerHint?: string;
   biggerHint?: string;
+  /** raw span, not RowSub: the class is the caller's (TermArea passes its own); "row-sub" is only the default */
   endClassName?: string;
   iconSize?: number;
 }) {

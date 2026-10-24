@@ -150,10 +150,11 @@ A shared item can go to the currently open session, a new session, or an existin
 Sessions started from the backlog or by the scheduler appear in the main session view.
 - asked: 2026-10-06
 
-### R-sessions-035 · shipped
+### R-sessions-035 · superseded
 A worktree is shown next to the session it belongs to, not visually closer to the session below it.
 - asked: 2026-10-06
 - shipped: dc5373ce
+- superseded-by: R-git-014
 
 ### R-sessions-036 · requested
 The user can see the kick-off progress of a session.
@@ -237,4 +238,13 @@ Each session appears once in the session list.
 ### R-sessions-053 · requested
 Long sessions auto-compact at the configured 400k context, and the phone offers intervention buttons when a session nears its context limit.
 - asked: 2026-10-20
+
+### R-sessions-054 · requested
+Each session shows which project or repo it belongs to.
+- asked: 2026-10-22
+
+### R-sessions-055 · shipped
+Closed and archived sessions are listed in the same card style as open sessions.
+- asked: 2026-10-22
+- shipped: 1ab33702, a82b2f95
 

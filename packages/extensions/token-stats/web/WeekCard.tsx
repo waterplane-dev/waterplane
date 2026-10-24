@@ -107,8 +107,8 @@ export function WeekCard({ doc, res, openedAt, samples, everyMs, cal, span, comp
   const launches = !span || !!doc?.convos.some((c) => c.launch) || !!doc?.rest?.some((r) => r.launch);
   // Compact: the repo/launch choice only matters to the list, so it appears with it.
   const chips = cut && cut.total > 0 && launches && (!compact || open.has("*list") || !!pick) ? <>
-    <button className={`key${by === "repo" ? " active" : ""}`} onClick={() => setBy("repo")}>by repo</button>
-    <button className={`key${by === "launch" ? " active" : ""}`} onClick={() => setBy("launch")}>by launch</button>
+    <Button className={by === "repo" ? "active" : undefined} onClick={() => setBy("repo")}>by repo</Button>
+    <Button className={by === "launch" ? "active" : undefined} onClick={() => setBy("launch")}>by launch</Button>
   </> : null;
 
   if (openedAt == null) {

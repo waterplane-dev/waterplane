@@ -42,8 +42,8 @@ what this project vouches for; the topic is everything that exists.
 
 ## The API is versioned: semver, one rule
 
-`PLUGIN_API_VERSION` is `MAJOR.MINOR.PATCH` (`1.3.0` now). A manifest's `apiVersion` (`"1.2"`, or a
-bare `1`, which is what every manifest before semver says and means `1.0`) loads when its **major
+`PLUGIN_API_VERSION` is `MAJOR.MINOR.PATCH` (`2.2.0` now). A manifest's `apiVersion` (`"2.2"`, or a
+bare `2`, meaning `2.0`) loads when its **major
 equals the host's and its minor is no newer**; the patch is never compared. Anything else is
 refused before any of its code runs, as a sentence naming both versions and which side is behind
 (`pluginApiProblem`, from `manifestProblems`), and the plugin is listed broken. What bumps which
@@ -51,6 +51,26 @@ number is in the JSDoc on `PLUGIN_API_VERSION` — removing, renaming or narrowi
 adding anything is MINOR — and the public reference, [docs/plugins-api.md](../plugins-api.md), is
 GENERATED from `plugin.ts` (`npm run docs:plugins`; `tools/plugindocs.test.mjs` fails when stale), so
 the contract and its documentation are one file. Pinned by `packages/shared/test/pluginapi.test.mjs`.
+
+**2.0 was a deliberate break** (backend contract v2, [the plan](../plans/backend-contract-v2.md)): a
+backend says WHERE each fact comes from in one provider table (`facts`), not in a string per reader on
+`caps`, and its launch is `prepare()` (async) instead of `launchArgs()`. A 1.x manifest is refused
+with a sentence that names the 2.0 contract; a 2.0 def that still carries `caps.hooks`/`promptBoxes`/
+`transcript`/… is refused naming the keys that moved. Every in-repo extension moved with it; an
+external BACKEND plugin written for 1.x stops loading until it is ported. **Only the backend
+descriptor broke**, so a 1.x plugin whose manifest lists no `backends` (a reader, a panel, a usage
+probe) still loads on 2.x if it declares 1.0–1.8 (`V1_LAST_MINOR`; `pluginApiProblem(…, {backends:false})`
+— the loader passes whether the manifest lists backends).
+
+**2.1 is additive**: `api.supports.dialogKeysThenTyped` (absent on a 2.0 host, so a plugin asks
+before it relies on it — see "Typed answers" under Backends), and a source turn's `ended(at)` WAITS
+≤ `CONTEXT_FRESH_MS` (1.5 s) for a `sources.context` sample stamped at or after `at`, so a plugin
+needs no end-gate hold of its own to get THIS turn's context fill.
+
+**2.2 is additive** ([backend parity v3 §7](../plans/backend-parity-v3.md)): the `mode` and
+`commands` facts and their slots, Tab / Shift+Tab in `SourceKeys`, `SourceContextSample.window` and
+`context.compactions`, and `tokens.session` — all under Backends below. A 2.1 plugin loads unchanged;
+one that fills a 2.2 slot declares `"2.2"`, so a 2.1 host refuses it in words instead of ignoring it.
 
 ## The fork contract
 
@@ -98,6 +118,7 @@ and what holds it now:
 | crash isolation: a bad plugin must not take the app down | one error boundary per contributed sheet, row, chip and action; a throw shows `Unavailable` with the reason, like a host plugin in `state: "error"` |
 | version skew between plugin UI and app | `sdkVersion` in the manifest, checked at load like `apiVersion`; React, lucide and the kit are the app's, never bundled by the plugin |
 | access to the phone's origin (localStorage, auth token, the socket) | the same trust as the host half, which can do worse; in-repo it is lint-enforced by `local/extension-boundary`, for an external one it is what installing means |
+| an engine too big for every OTA update (2026-10-24, `ocr`) | the ONE exception: an extension's manifest `assets` dir is served by the host at `/api/plugin/<id>/asset/<file>` and downloaded to the phone when the person ENABLES the extension, kept in IndexedDB (`sdk` `extAssets`, store `extassets`) for offline use — not Cache Storage, which the APK (no service worker) and plain http (no Cache API) lack; the `/ext-asset/` service-worker route stays unused. Only a worker/WASM engine and its data, started by the extension's bundle code; never a sheet, row or UI piece, never fetched when a sheet opens. Same trust: the host already serves the bundle |
 | the invariants (one socket, the queue, no draft clobber, the answer gate) | the ONLY route to each goes through the SDK: send = the queue, answer = the gate, wire = `plugin.call` on the one socket. Reaching past the SDK is what the lint catches |
 
 Still true: a plugin that wants no UI code DECLARES its UI (settings fields, action buttons,
@@ -129,6 +150,8 @@ external plugin needs UI. The contract as requirements: `docs/requirements/plugi
 | `handle()` | the registry's `call(pluginId, method, args)` — the one entry the generic `plugin.call` wire message routes to, through `callOnce` and its ledger (`plugins/pluginrpc.ts`). Answers `{ok, result}` or `{ok:false, error}` in words; a result past 512 KB or not JSON is refused |
 | `push(event, data)` | broadcast as `plugin.push {plugin, event, data}` to every phone (the web half's `pushes`). Returns null when sent, else the refusal in words: bad event name (`PLUGIN_EVENT_RE`), not JSON, over 64 KB, plugin not running |
 | `handToAgent()` | `agentintents.ts`'s `handToAgentVia` → `addClientBacklogItem`, the SAME add the phone's `backlog.add` and an agent's `POST /api/agent/backlog` take: contained, persisted, `origin: "plugin:<id>"`, waiting for a tap (`manual`) unless `fire`, then fired by the intent ladder. A `key` makes it at-most-once in the store (`plugin-<id>-<key>`, 64 chars in all). The first argument is a repo id, or an absolute worktree path (starts with `/`, matched by realpath — ids stay `sha1(worktreePath)[:10]`, which a plugin must not re-derive). Never `deliver.ts`, never a session's PTY |
+| `bindConversation(look)` / `tail(path, onLine)` / `screen(sessionId)` / `sessionFiles(hostSessionId)` (2.0) | the backend toolkit (`plugins/plugintoolkit/`), so a backend plugin stops copying helpers: `bindConversation` is `shared/bindconv.ts`'s pure ladder over the candidates the plugin's own queries found (exactly one survivor or nothing); `tail` is `tailJsonl` (complete lines once, rotation-safe, ≤ 1 MiB per `advance()`); `screen` is the live VT grid as rows plus the `echo.ts`-squashed form (null for an unknown session); `sessionFiles` is the launch dir the host wrote for a session THIS plugin's backend spawned (null otherwise) |
+| `supports` (2.1) | `{ dialogKeysThenTyped: true }` on this host; absent on a 2.0 host |
 | `backend(def)` | `backends/registry.ts`'s `registerBackend`, through `pluginapi.ts`'s `pluginDescriptor` (see **Backends** below). Refused by THROWING a sentence; unregistered on switch-off |
 | `screenReader(name, r)` / `storeReader(name, r)` (1.1) | `backends/readers.ts`'s `registerScreenReader` / `registerStoreReader` (see **Contributed readers** below). A malformed or taken name THROWS; unregistered on switch-off, after the plugin's backends |
 | `thermalReader(name, r)` (1.3) | `sysstat.ts`'s `registerThermalReader`: asked on the readout's slow cadence BEFORE core's own sysfs reader, first reading wins. Every figure passes `cleanThermal` — a temperature outside 1..149 °C, a non-finite or negative figure is DROPPED, never shown — and a throw or an answer past `PLUGIN_THERMAL_TIMEOUT_MS` is no reading. Its `{ note, fix }` shows only when nothing reads. Added so macOS's SMC helpers (which third-party tool, built how) live outside this repo; core names none of them. Unregistered on switch-off |
@@ -158,8 +181,9 @@ rule that is not about pixels or rows**:
   watcher's cadence (`sessions/convid.ts`), the poll contract (`sessions/record.ts`), the window on the
   series (`backendContextWindow`, `windowFrom: "config"`), and the fallback to the approximate history
   document. Every member degrades to null; a throw is absent.
-- **By NAME, registered BEFORE the backend that names them**, so `registerBackend`'s reader check
-  still refuses a misspelling in words. Lookups happen at CALL time: a reader whose plugin was switched
+- **By NAME, registered BEFORE the backend that names them** (`facts.dialogs: [{ screen: "<name>" }]`,
+  `facts.transcript: [{ store: "<name>" }]`), so `registerBackend`'s `factProblems` still refuses a
+  misspelling in words. Lookups happen at CALL time: a reader whose plugin was switched
   off answers nothing, and a session still running on it reads as having no box and no record.
 - **The preflight lines** are the other thing `--doctor` could not get from a plugin (it loads none):
   `HostPluginModule.doctor({ usedBackends })` is asked of the IN-REPO extensions only, without
@@ -172,18 +196,144 @@ A plugin may add a CLI to the launcher. It is the same
 `BackendDescriptor` core's three are, registered while the plugin is on:
 
 - **Declared first.** The manifest lists `backends: ["<id>"]`; `api.backend(def)` refuses any other
-  id. Then `registerBackend` refuses a taken id and a `caps.promptBoxes`/`caps.transcript` NAME core
-  has no reader for ("no screen reader called `copilot-numbered`; this host has: …"). Every refusal
-  is a THROWN sentence, so a refusal in `activate()` lists the plugin broken with that reason, and
-  nothing is half-registered.
+  id. Then `registerBackend` refuses a taken id and a `facts` table that names a reader core has no
+  such reader for ("facts.dialogs: no screen reader called `copilot-numbered` answers dialogs; this
+  host has: …"), an unknown fact name, or a screen or store reader where only a source may answer (`delivery`, and
+  2.2's `mode` and `commands`: no reader of either exists, core's or contributed).
+  Every refusal is a THROWN sentence, so a refusal in `activate()` lists the plugin broken with that
+  reason, and nothing is half-registered.
+- **One provider table, one deriver** (contract 2.0, `backends/derive.ts`). `caps` holds only the
+  binary facts (`turns`, `slash`, `effort` — the level NAMES, `permissionModes`, `remoteControl`);
+  optional `launchModes` (2.2) is the subset of `permissionModes` a session can START in — a mode the CLI
+  switches into live but has no launch flag for is left out; absent means every `permissionModes` entry,
+  and an empty list, a mode outside `permissionModes` or a mode listed twice is refused at registration
+  in words. **Narrowing the set refuses stored launches**: a backlog item, schedule, intent, fork or
+  limit relaunch whose stored mode is outside it is refused at create in words (`sessions.ts`,
+  `shared/launchmodes.ts`'s `launchModeRefusal`) — never started in the default in silence; the
+  phone's `launchFor` leaves such a mode off a fresh launch and SAYS so (`launchModeDropNote`: a
+  toast at the create, a note under Settings' permission row);
+  `facts` maps each `FactName` to an ordered `Provider[]` — `{ source: true }` (the backend's own
+  `sources` slot), `{ screen: "<reader>" }`, `{ store: "<reader>" }` — first that answers wins, a throw
+  passes to the next, an empty list means "has none". `derive(descriptor)` is the ONE reader of that
+  table: `screen(fact)`, `store(fact)`, `askSource(fact)`, `hooksInBand`, `keepsClaudeLog` and
+  `wireCaps()` (the wire `BackendInfo.caps`, byte-identical to 1.x's —
+  `packages/host/test/backendinfos.pin.test.mjs`). No gate in core reads a `caps` reader string any
+  more. `forkVia: "server"` and `measured: { versions, version() }` sit beside `caps`.
 - **What the plugin cannot say is the core's** (`pluginDescriptor`): `healthScope` is always false
   (the health board measures core readers against the claude TUI); booleans left out are false;
   delivery anchors left out are null, which is `deliver.ts`'s existing no-anchor rule; a
-  `launchArgs` answer that is not a list of strings is a refused launch in words; a `models()` that
-  throws or answers garbage is an EMPTY catalogue (a free-text field, never a guessed list). The
-  descriptor is frozen, but `delivery`, `caps` and `sources` are read THROUGH the def on every access
+  `prepare()` plan whose `args` are not a list of strings is a refused launch in words; a `models()`
+  that throws or answers garbage is an EMPTY catalogue (a free-text field, never a guessed list); a
+  `measured.version()` that throws is an unknown version. The host AWAITS a plugin's `prepare()`
+  (any promise; `create()` awaits it before the spawn, core backends' stay synchronous); a plan that
+  does not say `instructionsVia` and `askRulesVia` is refused in words, and its `files` are written
+  by the HOST before the spawn (`launchfiles.ts`): `session:<name>` ⇒ `<state dir>/launch/<hostSessionId>/<name>`,
+  an absolute path only inside the plugin's `dataDir` (realpath, no symlink on the way), ≤ 16 files,
+  ≤ 1 MiB each — anything else refuses the whole plan before a byte is written. In an `env` value a
+  comma-separated item spelled `session:<name>` becomes that path. The dir is never the repo and never
+  `~/.<cli>`; it is swept 7 days after its session is gone (`sweepLaunchDirs`, in the boot orphan
+  sweep, never a dir a live session owns), and the plugin finds it again through `api.sessionFiles`. The
+  descriptor is frozen, but `delivery`, `caps`, `facts`, `forkVia` and `sources` are read THROUGH the def on every access
   (a def may answer them from getters a knob switches; the opencode extension does). Path containment is untouched: a session's `cwd` is contained by
   `containRepoDir` before any backend is asked anything.
+- **The repo-facing text and the ask rules travel IN the launch plan.** `PluginLaunchRequest` carries
+  `instructions` (the core's one text, `reposkill.ts`'s `repoInstructions` — the outbox/inbox, builds,
+  screenshots; a plugin never writes its own) and `askRules` (already cut for the repo,
+  `shared/askrules.ts`). The plan says how each reached the CLI, and the phone is told in words:
+  `instructionsVia` ∈ `plugin-dir` (claude's `--plugin-dir`) · `env-file` (a launch file plus an env
+  pointing at its dir — Copilot's `AGENTS.md` under `COPILOT_CUSTOM_INSTRUCTIONS_DIRS`, measured
+  1.0.91) · `config` · `flag` · `none` (published as `SessionInfo.told`, so the phone says the agent
+  was NOT told); `askRulesVia` ∈ `native` (the CLI's own policy) · `gate` (the CLI has allow/deny but
+  no ASK, so the host's answer gate holds the rules the session was LAUNCHED with and refuses to
+  auto-answer a box matching one — `answergate.ts`, memory only, a re-attached session falls back to
+  its repo's current rules) · `none`. Both are stored with the live record, so a re-attach still
+  publishes them.
+- **The slots beyond turns/dialogs** (`BackendSources`, `shared/backendsources.ts`), each reached
+  only through its `facts` provider and absent from the wire caps where nothing answers:
+  `questions` (a question with no choice box, `kind:"question"` on the one answer dispatcher),
+  `usage` (an ACCOUNT's windows, `usagesources.ts` — never `source:"claude"` — plus an optional
+  `wall(s)`, the backend's own verdict on whether THIS session is blocked, which `sessions/wall.ts` walks as the
+  `limits` fact; `resetAt` only when the CLI stated it — a wall WITHOUT one schedules nothing: no
+  probe, no ladder, no unattended `continue`; its `why` rides as `SessionLimit.needsYou` and the
+  phone says it needs the person), `agents` (a
+  backend's own running subagents, polled on `agents.ts`'s cadence; rows with `endedAt` are not
+  running), `conversations` (`list(cwd)` feeds the archive and the resume picker; `remove` is optional and is
+  what the delete uses; `fork` is optional, consumed by `session.create` for a backend without
+  `forkVia: "server"`; declaring it turns the wire `fork` cap on). The wire caps these add (`efforts`,
+  `questions`, `plan`, `usage`, `agents`, `conversations`) are ABSENT, never `false`, where no provider
+  answers. **`plan` (`PlanSource`) is consumed by the host** (P4b1, 2.2 wave): `sessions/sidechannel.ts`
+  watches it — only where the `plan` fact is `{source:true}`, the table the wire cap is read from — and
+  publishes a posed plan as the SAME box claude's screen read produces: `kind:"plan"`, the question
+  worded as claude's (so `planbox.ts`'s `isPlanBox` knows it), two rows (1 = `approve()`, 2 =
+  `keepPlanning()`), `nav`, `askId` = the plan's id, the text on `DetectedPrompt.plan` capped at
+  `PLAN_CAP` with `path` EMPTY — there is no file, and a made-up path would be a wrong value. Oldest
+  first with dialogs and questions; `closed` retires it; the channel going down hands it back. It is
+  answered only through `answerBox` → `sourceanswer.ts`'s `answerSourcePlan`: a PERSON's tap (the
+  answer gate refuses a `plan` box, and the plan rung refuses an answer without `byPerson` again),
+  never words, and at most ONE verb call per plan — a latch released only when the answer provably
+  did nothing (the source said no or threw, its keys were refused); a re-pose under the same id keeps
+  it. A `SourceKeys` reply is typed by the core while the plan is still open; a reply carrying words
+  is refused, nothing typed.
+- **Typed answers (2.1).** A question's or dialog row's `answer()` may resolve to `SourceKeys`
+  (`{keys}`), `SourceTyped` (`{typed, then?:"\r"}`, ≤ `SOURCE_TYPED_MAX` = 1000 characters, no
+  control character) or, for a row that takes a reason, both (`{keys, typed, then?}` — keys first, a
+  pause of 500 ms, the words, Return as a separate write). `sourceanswer.ts` is the one place
+  words reach a session outside `deliver.ts`; it types only while the source still holds that
+  question open and a gated plugin never carries words. A plugin that needs the combined form checks
+  `api.supports?.dialogKeysThenTyped`.
+- **The 2.2 slots** (`shared/backendsources.ts`; typed and validated, each consumer named on its
+  bullet as it lands). Each answers only through `{source:true}` and, like every source, says
+  `null` for "cannot say". One rule judges every answer, `shared/sourceshape.ts`, asked by the host's
+  consumers and the testkit alike; an answer it refuses is dropped WHOLE to absent, never clamped.
+  - `mode` (`ModeSource`): `current(s)` is one of the descriptor's `caps.permissionModes` or null
+    (anything else is unknown, never a guess); optional `watch`; `set(s, target)` either switches
+    itself (`{ok, reason?}`) or answers ONE press as `SourceKeys` (Shift+Tab, say) that the core
+    types and then re-reads `current()` until it moves — `livemode.ts`'s ladder (stop on the target,
+    a repeat or 6 presses), never counting positions. **Consumed by `sessions/livemode.ts`** (P4b1):
+    `SessionInfo.liveMode` = `current()` judged by `sourceModeProblem` (null, a throw or a refused
+    answer DELETES the field), re-read on the quiet tick, on the channel's `up` edge and on every
+    `watch` call — a cue to re-read `current()`, never a second reading that could disagree.
+    `session.mode` asks `set()` once per step: `{ok}` ⇒ `current()` is polled until it reads the
+    target, and a switch the reading does not show is said in words; keys ⇒ bounded by
+    `sourceKeysProblem`, typed only from a reading (none ⇒ nothing pressed), re-read until it moves.
+    The footer walk's refusals (a box open, remote control off) and its per-session chain hold; the
+    footer itself is never asked for such a backend, and no claude backend has the fact.
+  - `commands` (`CommandSource`): `list(cwd)` — the CLI's slash commands as it lists them: `name` with
+    its slash, one word (`"/compact"`), unique, at most `SOURCE_COMMANDS_MAX` (200); optional
+    `description`, `args` as its help writes them, and `local` (runs in the TUI, starts no turn — the
+    delivery's proof is then the screen moving). **Consumed (P4b2):** `GET /api/slash?backend=<id>`
+    answers `list(cwd)` validated whole by `sourceCommandsProblems` — a malformed, null, throwing or
+    late (5 s) answer is `{ commands: [], why }`, never a partial list and never claude's — each row
+    `source: "backend"`, `local: true` only where the plugin said so. A delivery asks the session's
+    own `delivery.isLocalCommand`/`startsNoTurn` (claude's list used to be asked of every backend),
+    and a listed command's `local` beats that static rule: `true` ⇒ the proof is the screen moving.
+  - Context: `SourceContextSample.window` is the window the CLI STATES for the model in use — absent
+    is unknown, never a table lookup or a neighbouring model's; `context.compactions(s)` is this
+    session's, oldest first (`at`, and `preTok` / `postTok` / `auto` only where stated). **Consumed
+    (P3):** `window` makes the phone's percentage present for that session and scales its graph;
+    `compactions()` marks the graph. Both are asked on every turn end and every graph read.
+  - Spend: `tokens.session(s)` is THIS session's spend so far in the backend's own figures — `tok`,
+    `agentTok`, `usd` / `agentUsd` only where the CLI states dollars, and `native {amount, unit,
+    agentAmount?}` for a unit that is not dollars (Copilot's AI credits): never converted, never
+    summed with dollars or another unit. Every figure finite and ≥ 0, absent when not stated.
+    **Consumed (P2):** a session with no claude log is judged from it (the session budget; why the
+    period/week views do not take it: [host.md](host.md#sessionbudgetts--a-sessions-own-budget)).
+  - `conversations.fork(id, atTurn)` (**consumed, P4b2**) is called by `session.create` carrying
+    `forkAtTurn` for a backend without `forkVia: "server"`: the turn id is the one from the plugin's
+    own transcript, the answer must be a NEW bare id within 20 s, and the new conversation is resumed
+    plainly under the same backend. Declaring `fork` turns the wire `fork` cap on — declare it only if
+    it works.
+  - Wire caps: `modes: true` (the phone may switch live; the reading is `SessionInfo.liveMode`, as
+    claude's) and `commands: true` (the slash sheet lists the backend's own commands; `slash` keeps
+    meaning claude's set) — sent only while the source answers, ABSENT otherwise, never `false`, so
+    claude's frame is unchanged (`backendinfos.pin.test.mjs`).
+  - Worked example, Codex 0.160.0 (an external plugin): the window is Codex's own
+    `modelContextWindow` only when it is `floor(95 %)` of the `model_context_window` THIS launch wrote
+    — never Codex's 258400 fallback; the fill is `last.totalTokens` (the figure `/status` calls used);
+    compactions come off the rollout's `compacted` lines; the plan box is the TUI's own (keys `1` /
+    `3`, no server request); the mode is `thread/settings/updated` with one Shift+Tab per step, while
+    approvals and sandbox are taken only at launch (`-a`/`-s` keep the daemon), which is why it
+    declares `launchModes`; fork is `thread/fork` + `codex resume <new id>`.
 - **Switching the plugin off unregisters its backends** (`clearHandlers`), so the next
   `session.create` on that id is refused by `resolveBackend` in words naming what would work; a
   session already running keeps its descriptor until it ends. Every backends change re-broadcasts
@@ -213,8 +363,9 @@ A plugin may add a CLI to the launcher. It is the same
   tap takes. Only for a dialog the source itself posed and still has open (keep it open until the
   CLI confirms; retire it then), only as the result of that `answer()` call — a tap or the gate's
   gated answer — and bounded (`SourceKeys` in `shared/backendsources.ts`): at most 8 keys, each a
-  printable character or Return / Escape / an arrow (an arrow counts as one). Anything else is
-  refused in words, nothing typed (`boxes.ts`'s `sourceKeysProblem`).
+  printable character or Return / Escape / an arrow, or (2.2) Tab / Shift+Tab (`\t`, `\x1b[Z`) — each
+  of those counts as one. Anything else is refused in words, nothing typed (`boxes.ts`'s
+  `sourceKeysProblem`; the testkit restates it and `plugintestkit.test.mjs` pins the two together).
 - **A pane that outlives the daemon is parked, not dropped.** `rediscover()` runs before external
   plugins activate, so a live tmux record whose backend is not registered yet is held in
   `parkedLive` (`sessions/tmux.ts`), retried on every backends change, and — once `loadAll()` has
@@ -231,6 +382,60 @@ The fixture `scripts/fixtures/plugin-backend-stub/` is the whole pattern in 100 
 the claude stub TUI with `STUB_HOOK_URL` at the sink, and turns `SessionStart` / `UserPromptSubmit` /
 `Stop` / a held `permissionRequest` into channel health, turns and a dialog, and a `tuiDialog` into
 a dialog answered `{ keys }`, which `e2e-pluginbackend.mjs` reads back off the stub's `STUB_LOG`.
+
+**Setup rows and the doctor.** Every backend that declares `measured` gets a core
+`backend-cli-<id>` row on the desktop checklist (binary resolves, running version;
+`plugins/setupcontrib.ts`'s `backendCliRows`) — no plugin code. What only the plugin can tell
+(signed in, local runner ready) goes through `api.setupCheck` (synchronous: serve a cached answer
+and refresh in the background; return `null` when you cannot tell) and, for `npm run doctor`, an
+exported `doctor({ usedBackends })` that stands alone. External plugins' `doctor` is asked too
+(`plugins/builtin.ts`'s `externalDoctorChecks`): the host imports the host module WITHOUT
+`activate` — the same trust the loader already gives it — so its top-level code must have no side
+effects; each call is bounded to 10 s and a throw drops the lines. Neither may call a model:
+`--version`, config files and free local probes only.
+
+### Testing a backend plugin
+
+A plugin repo depends on nothing from this one at runtime, but its TESTS share one kit:
+`packages/plugin-testkit/` (plain ESM, no build, not a workspace). It holds `fakeApi(opts)`, a fake
+`HostPluginApi` as of 2.1 that records every call (`api._calls`) — `env()` answers declared names only,
+`backend()` refuses an id the manifest does not list, and `bindConversation`/`tail`/`screen`/
+`sessionFiles`/`supports` behave as `plugintoolkit/` does — and `runConformance(...)`, the contract a
+host enforces on registration, run from one `node --test` file. Validators and constants are imported
+from `packages/shared/dist` (run `npm run build:shared` once); the rules that live only in host TS
+are restated in the kit and pinned to the host's real checks by `packages/host/test/plugintestkit.test.mjs`,
+and `tools/plugintestkit.test.mjs` fails when `HostPluginApi` gains a member the fake lacks.
+
+Two kinds of check: PINNED ones (descriptor shape, ids, facts, files, plan vias, keys, typed answers, `caps`) get the same fixtures through the host and the kit, so they cannot drift; `caps` is judged the host's way (it normalises, never refuses: an absent cap is fine, a mistyped one is flagged). `planLints` (a non-string `env` value, a non-list `dropEnv`, a relative `exec`) is KIT-ONLY: the host silently drops or keeps those, the kit fails them as lints, and the host test pins only that the host accepts them.
+
+A new plugin (the Gemini CLI, say) adds `test/conformance.test.mjs`:
+
+```js
+import { runConformance } from "<kit>/index.mjs";
+import * as plugin from "../host.mjs";
+import manifest from "../waterplane-plugin.json" with { type: "json" };
+runConformance({ plugin, manifest, env: { GEMINI_CLI_BIN: "/nonexistent/gemini" } });
+```
+
+Point the binary env at a path that does not exist: the suite then never runs the CLI or a model.
+It checks the manifest and API version; that `activate` registers only manifest-declared ids; the
+descriptor (2.0 shape, no 1.x caps); every `facts` name and reader, and every `{source:true}` backed
+by its `sources` slot; `prepare()` answering a plan (`instructionsVia`, `askRulesVia`, string args,
+`files` at most 16 and 1 MiB, `session:<name>` or inside `dataDir`) for a fresh launch and each
+resume; `models()` lists (empty allowed); `measured.version()` answering or throwing but never hanging.
+Pass `answers: async () => [{ label, answer }]` to have the answers a source gives checked against the
+bounds (`SourceKeys` at most 8 allowed keys, `SourceTyped` at most 1000 characters, no control chars).
+The 2.2 slots a backend fills are asked once COLD (no channel attached: a throw or null is fine, a hang
+is not) and any answer must hold `sourceshape.ts`'s shape; pass `readings: async () => [{ label, kind,
+value }]` (`kind` ∈ `mode`/`commands`/`spend`/`compactions`/`context`) to check what the slots make of
+your own fixtures, a parsed `/help` or a recorded usage event, against the same rule.
+
+How a plugin reaches the kit: the two in-tree-style plugins keep a thin `test/fakeapi.mjs` that
+imports `packages/plugin-testkit/index.mjs` from `$WATERPLANE_REPO` (else `$MAIN_REPO`, else
+`~/dev/usmc`), so no install step and a plugin's other test files keep importing `./fakeapi.mjs`. An
+author without a checkout beside theirs uses a `file:` devDependency on that directory
+(`@waterplane/plugin-testkit`); the kit finds `shared/dist` relative to itself, so it needs the
+checkout either way.
 
 ## In-repo extensions
 
@@ -407,6 +612,15 @@ answer path, a `sent.json` row with `source: "plugin"`, a decision-log row, and 
 notification. Caps (per session, per week) are the PLUGIN's policy, not the gate's: they are about
 what the plugin spends, and the oracle keeps its own.
 
+**A folder-trust question outside the gate.** Delivery answers claude's first-launch trust box itself
+(`deliver/deliverrun.ts`, `trustKeys`) — and ONLY claude's: `delivery.autoAcceptsTrust`, set by
+`backends/claude.ts` alone (a plugin's `delivery` cannot carry it). Any other backend whose screen
+shows claude's trust words or its own `delivery.trustPromptRe` (`derive.ts`'s `trustRule`) gets
+`retry` naming it ("<label> is asking whether to trust this folder — answer it on the phone or in
+the terminal"), nothing typed, and auto-fire (`autoFireBlocker`) will not walk into its `trust`
+box. Final review B1: Gemini's question squashed to claude's words, and a digit there trusts the
+repo's own hooks and servers for good.
+
 ### Standing rules: a "don't ask again" a person tapped
 
 Some CLIs ask permission through a hook whose answer cannot persist anything (Copilot 1.0.91: the
@@ -468,6 +682,46 @@ It was the oracle's log, and it also held the usage-limit auto-continue events. 
   (a key the core no longer needs is not a finding), the oracle settings/toolbar/log UI.
 - **Legacy on disk:** `sent.json` rows with `source: "oracle"` still type-check and render.
 
+## Plugin manager
+
+Plan: [plugin-manager-and-self-update.md](../plans/plugin-manager-and-self-update.md). Code:
+`packages/host/src/updates/`; wire: `shared/src/wire/updates.ts`. The phone lists, installs and
+updates plugins from Settings → Tools → updates.
+
+- **Discovery is a read.** `catalog.ts` lists the PUBLIC repos of the `waterplane-dev` org
+  (`BRAND.githubOrg`) that carry the `waterplane-plugin` topic (`PLUGIN_TOPIC`), then reads each repo's
+  manifest and newest release tag through `github.ts`. Unauthenticated, so few calls (60 an hour
+  is the ceiling): `checker.ts` runs once a day, a few minutes after boot, and on a tap, with a
+  **10-minute floor** between checks; a failed check does not reset the floor's clock into a retry loop.
+  The phone's `updates.autoCheck` governs only the daily one; `WATERPLANE_UPDATE_CHECK=0` stops all.
+  A check never installs anything.
+- **Maturity** is what the plugin SAYS: `maturity` in `waterplane-plugin.json`, `stable` |
+  `preview` | `experimental`; absent is `unrated`, never shown as stable. The words ("Preview: may break
+  between versions") live in ONE place, `shared/src/pluginmaturity.ts` (`pluginMaturity`); the host and
+  the phone both word a plugin through it. A value outside the three is a manifest problem.
+- **Zero dependencies.** A plugin whose `package.json` lists `dependencies` is refused at install
+  and at update (`dependenciesProblem`): there is no `npm ci` anywhere in this feature, so a
+  dependency would be code nobody fetched. Bundle it into the plugin or do without.
+- **Install by repo or by URL.** A repo from the list, or a pasted address. The address comes from a
+  phone, so `gitops.ts` holds it to an allowlist BEFORE it reaches argv (`https://`, `ssh://`,
+  `git@host:path`; no `file:`, no local path; git runs with `protocol.ext`/`protocol.file` off). The
+  repo is cloned to a temp dir and validated (manifest problems, dependencies, duplicate id) before
+  anything is moved into `<config dir>/plugins/<id>/`; then `PluginRegistry.loadOne` loads it
+  **live**, no restart. Version: the newest version tag (the GitHub release for a github.com
+  address, `git ls-remote --tags` otherwise), else the default branch ("untagged").
+- **The install record**, `<plugin dir>/.waterplane-install.json` (`installrecord.ts`): `{url, kind:
+  tag|branch, ref, commit, installedAt}`. It is what makes a plugin `manager`-installed. **No record ⇒
+  `local`**: a dir put there by hand, or a `plugin-paths.json` checkout, is listed and **never
+  updated**. The record is added to the clone's `.git/info/exclude`, so it does not make the tree dirty.
+- **Update.** A tagged install moves to the newest tag; an untagged one tracks the default branch's
+  head. A **dirty working tree is refused** (nothing changed, said in words): the person's edits are
+  the last copy. The new code is validated again (manifest, dependencies) before the swap. **A
+  restart is needed** to run it: an ESM module cannot be re-imported, so the phone says "updated,
+  restart to switch" and the running plugin is the old one until then.
+- **Knobs** (`.env.example`, "Update check"): `WATERPLANE_UPDATE_CHECK` (`0` = no checks),
+  `WATERPLANE_GITHUB_API` and `WATERPLANE_GITHUB_RAW` (where the reads go; tests point both at a fake
+  local server).
+
 ## Where it lives in the host
 
 - `packages/host/src/plugins/pluginloader.ts` — discovery (`<config dir>/plugins/*/`, `plugin-paths.json`
@@ -498,6 +752,11 @@ It was the oracle's log, and it also held the usage-limit auto-continue events. 
 - `packages/host/src/plugins/pluginfiles.ts` — `api.offerFile`'s offers (token → file, TTL timer,
   delete on delivery) and `rangeLastByte`; the route is `GET /api/plugin-file/:id/:token` in
   `routes/apisystem.ts`.
+- `packages/host/src/updates/` — the plugin manager and the self-update view: `github.ts` (the
+  unauthenticated reads), `catalog.ts` (org + topic → rows), `checker.ts` (daily/on-demand, floor, cache,
+  `status()`), `self.ts` (install mode, newest release), `gitops.ts` (URL allowlist, git), `remote.ts`
+  (what to install from an address), `installrecord.ts`, `apply.ts` (install, update, self
+  update/rollback), `restart.ts` (supervised in-process restart), `wire.ts`.
 - `packages/host/src/decisionlog.ts` — the log and its migration.
 - Per-session state (`pluginToggles`, `pluginAnswer`, `pluginBadges`) is on the session record
   (`sessions/roster.ts`), **memory only**: a restart puts every "let <plugin> answer" switch back to

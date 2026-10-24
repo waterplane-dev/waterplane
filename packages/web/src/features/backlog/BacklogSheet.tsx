@@ -52,7 +52,7 @@ export function BacklogSheet() {
   const repoIdForDir = (dir: string) => core.world.repos.find((r) => r.worktreePath === dir)?.id;
   return (
     <Backlog
-      items={items} auto={bl.auto} repos={visibleRepos}
+      items={items} auto={bl.auto} repos={visibleRepos} backends={core.world.backends}
       waiting={bl.waiting}
       /* A fact about this second, like `waiting` — live only. */
       autoSlots={online ? bl.autoSlots : null}

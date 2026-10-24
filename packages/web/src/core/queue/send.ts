@@ -27,7 +27,7 @@ import { noteUploadRate } from "../../uploadScale";
 import type { DurableOp, QueueBacklogOpts } from "../../sdk/types.ts";
 import {
   ACK_TIMEOUT_MS, LANE_GAP_MS, PENDING_PREFIX, UPLOAD_STALL_MS, ackWindow, goneLanesOf, isLaterId, isPendingId, laneFor, requeue,
-  serialStates, serialTextFor, markAttempt, entryFrame,
+  serialStates, serialTextFor, markAttempt, entryFrame, answerSendingToast,
 } from "./logic.ts";
 import type { QueueCtx, SendFns } from "./types.ts";
 
@@ -769,14 +769,16 @@ export function sendFns(c: QueueCtx): SendFns {
    * by definition (waiting for you IS the turn), and a dialog takes raw
    * keystrokes rather than the type-echo-Return composer path.
    */
-  function answerPrompt(s: SessionInfo, data: string, label: string, submitBox?: boolean, choice?: number): void {
+  function answerPrompt(s: SessionInfo, data: string, label: string, submitBox?: boolean, choice?: number, text?: string): void {
     const p = s.prompt;
     if (!p) return;
     const offline = connRef.current.status !== "open";
     addOutboxFirstInLane({
       ackId: newAckId(), sessionId: s.id, cwd: s.cwd, text: data,
       ts: Date.now(), status: "queued", attempts: 0, mode: "input",
-      answer: { fingerprint: promptFingerprint(p), question: p.question, label, ...(submitBox ? { submitBox: true } : {}), ...(choice != null ? { choice } : {}) },
+      // `text` rides the same entry as the option it goes with (`promptText`): one answer,
+      // one ackId — a typed answer is never a second send.
+      answer: { fingerprint: promptFingerprint(p), question: p.question, label, ...(submitBox ? { submitBox: true } : {}), ...(choice != null ? { choice } : {}), ...(text !== undefined ? { text } : {}) },
       // Nothing here is bounded by a clock any more, and an answer is the case
       // that argument was first made for: it is refused host-side once its
       // question is gone, so a late one is either still right or rejected —
@@ -790,7 +792,7 @@ export function sendFns(c: QueueCtx): SendFns {
     // option that looks unchanged for two seconds is a dead button.
     showToast(offline
       ? `answer saved — “${label}” goes out when the link is back`
-      : `sending “${label}”…`);
+      : answerSendingToast(label));
     flushOutbox();
   }
 

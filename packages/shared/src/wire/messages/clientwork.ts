@@ -70,7 +70,17 @@ export type ClientWorkMsg =
    * listing and answers the same. CONTAINED like `build.list`, because the
    * directory is the client's word and this ends in a shell.
    */
-  | { t: "build.options"; repoDir: string; buildId: string }
+  /**
+   * `approve: true` is the person's tap on "Run this listing": it records this
+   * exact `optionsCmd` (per repo, by hash) as approved on this desktop and runs
+   * it. Additive. Without it an `optionsCmd` from the repo's COMMITTED builds
+   * file is not run — the answer carries `needsApproval` and the command text.
+   * `paramId` limits an approval to the one parameter that was shown, and `cmd`
+   * is the exact text the person read: the host approves only when it still
+   * equals the file's current command (else it answers `needsApproval` anew).
+   * Additive, no PROTOCOL_VERSION change; an approve without `cmd` approves nothing.
+   */
+  | { t: "build.options"; repoDir: string; buildId: string; approve?: boolean; paramId?: string; cmd?: string }
   // ── Verified capture (take a picture of a running screen, and say how much
   //    the picture can be trusted) ──
   //

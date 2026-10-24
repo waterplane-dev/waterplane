@@ -72,6 +72,7 @@ export const DURABLE_OPS = [
   "intent.update",
   "intent.waive",
   "intent.retarget",
+  "updates.apply",
 ] as const satisfies readonly ClientMessage["t"][];
 
 type DurableOp = (typeof DURABLE_OPS)[number];

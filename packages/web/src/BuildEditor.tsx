@@ -14,6 +14,7 @@ import { Button } from "./kit/Button";
 import { Row, RowTitle, RowSub } from "./kit/Row";
 import { Hint } from "./kit/Hint";
 import { Tag } from "./kit/Tag";
+import { SetLine, SetNote } from "./SettingsKit";
 
 /**
  * Add or edit one build command — and the reason this screen is not three blank
@@ -290,7 +291,7 @@ function ParamsEditor({ params, cmd, dir, unknown, onChange }: {
           </Hint>
           {params.map((p, i) => (
             <div key={i} className="build-param">
-              <div className="set-row">
+              <SetLine>
                 <label>id
                   <input className="search mono" placeholder="app" value={p.id}
                     onChange={(e) => set(i, { id: e.target.value.trim() })} />
@@ -311,7 +312,7 @@ function ParamsEditor({ params, cmd, dir, unknown, onChange }: {
                       <input className="search mono" placeholder="ls -1 apps" value={p.optionsCmd ?? ""}
                         onChange={(e) => set(i, { optionsCmd: e.target.value })} />
                     </label>
-                    <span className="set-note">Run in the repo root when the form opens, one option per line. Leave it empty and type the options below instead — a list that can change is better read than transcribed.</span>
+                    <SetNote as="span">Run in the repo root when the form opens, one option per line. Leave it empty and type the options below instead — a list that can change is better read than transcribed.</SetNote>
                     <label>or fixed options
                       <input className="search" placeholder="debug, release" value={(p.options ?? []).join(", ")}
                         onChange={(e) => set(i, { options: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} />
@@ -322,10 +323,10 @@ function ParamsEditor({ params, cmd, dir, unknown, onChange }: {
                   <input className="search mono" placeholder="(none — an unattended run is refused)" value={p.default ?? ""}
                     onChange={(e) => set(i, { default: e.target.value })} />
                 </label>
-                <span className="set-note">
+                <SetNote as="span">
                   With no default, a run nobody is watching — a schedule, a chain, “run it now” — is refused in words rather than guessing this value.
-                </span>
-              </div>
+                </SetNote>
+              </SetLine>
               <div className="sheet-actions">
                 {/* What this question is actually wired to, so an id that is in
                     the form but not in the command is visible here rather than

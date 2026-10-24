@@ -102,6 +102,10 @@ export function axisNote(
       return `100% is ${tok} — the window ${model ?? "this model"} has been SEEN to hold, so it is the same scale as every other session’s graph.`;
     case "screen":
       return `100% is the ${tok} window the CLI printed on screen.`;
+    case "source":
+      // The CLI's own statement for this session, over its channel — attributed
+      // to the backend that said it, and never confused with the screen.
+      return `100% is ${tok}, the window ${backendLabel ?? "this backend"} states${model ? ` for ${model}` : ""} in this session.`;
     case "config":
       // Attributed, never asserted. The two clauses are the whole point: whose
       // claim it is, and what would make it wrong.

@@ -7,7 +7,7 @@
 import { homedir } from "node:os";
 import { BRAND, envName, claudeNewerThanTested } from "@waterplane/shared";
 import { env } from "./env.js";
-import { claudeBinResolution, tilde } from "./claudebin.js";
+import { claudeBinResolution, tilde, type ClaudeBinResult } from "./claudebin.js";
 import { run, which } from "./doctorproc.js";
 import type { Check } from "./doctor.js";
 
@@ -61,20 +61,31 @@ export async function claudeSignInState(bin: string, now = Date.now()): Promise<
   return authInflight;
 }
 
+/** " Looked in: …" plus the WSL Windows-side hint, said once for the doctor and a refused session start. */
+export function claudeMissingTail(res: ClaudeBinResult, home: string): string {
+  const tried = res.tried.length ? ` Looked in: ${res.tried.map((t) => tilde(t, home)).join(", ")}.` : "";
+  const win = res.windowsSide
+    ? ` Claude is installed on the Windows side (${res.windowsSide}), but WSL cannot use that one — install it inside WSL too, in the WSL shell: \`npm i -g @anthropic-ai/claude-code\` or the native installer.`
+    : "";
+  return tried + win;
+}
+
+/** The refusal a session start gets when the binary cannot be resolved (null when it can). The knob wins: a set knob is never "missing". */
+export function claudeMissingRefusal(knob: string | undefined, res: ClaudeBinResult, home: string): string | null {
+  if (knob || !res.missing) return null;
+  return `Claude Code is not installed on this desktop. Install it with \`${CLAUDE_INSTALL_CMD}\` (or \`npm i -g @anthropic-ai/claude-code\`), or point ${envName("CLAUDE_BIN")} at the binary, then start the session again.${claudeMissingTail(res, home)}`;
+}
+
 export async function checkClaude(bin: string, usedBackends: readonly string[]): Promise<Check[]> {
   const resolved = await which(bin);
   const res = claudeBinResolution();
   const home = homedir();
   if (!resolved) {
-    const tried = res.tried.length ? ` Looked in: ${res.tried.map((t) => tilde(t, home)).join(", ")}.` : "";
-    const win = res.windowsSide
-      ? ` Claude is installed on the Windows side (${res.windowsSide}), but WSL cannot use that one — install it inside WSL too, in the WSL shell: \`npm i -g @anthropic-ai/claude-code\` or the native installer.`
-      : "";
     return [{
       id: "claude-binary",
       status: "fail",
       detail: `\`${bin}\` not found — ${BRAND.name} currently drives Claude Code primarily (other CLIs come as plugins)`,
-      fix: `Install Claude Code: \`${CLAUDE_INSTALL_CMD}\` (or \`npm i -g @anthropic-ai/claude-code\`), or point ${envName("CLAUDE_BIN")} at the binary. It runs on a paid Claude plan or an Anthropic API key — or, with no account, on a local model through Ollama.${tried}${win}`,
+      fix: `Install Claude Code: \`${CLAUDE_INSTALL_CMD}\` (or \`npm i -g @anthropic-ai/claude-code\`), or point ${envName("CLAUDE_BIN")} at the binary. It runs on a paid Claude plan or an Anthropic API key — or, with no account, on a local model through Ollama.${claudeMissingTail(res, home)}`,
     }];
   }
   const out: Check[] = [];

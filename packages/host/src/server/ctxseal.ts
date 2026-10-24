@@ -21,11 +21,11 @@ export function serverCtxKeys() {
   "deliverInput", "deliverySnapshot", "DOCTOR", "durableOp", "enforceAuth", "fanout", "fmtSize",
   "handleClientMessage", "healthWatch", "imgSeen", "inputsInFlight", "installLog", "intents", "intentSnapshot",
   "isAttachedToSomeone", "launchSnapshot", "meter", "naming", "netstats", "notifications", "notify",
-  "notifyPrefs", "onboard", "openDeliveries", "outSeen", "padNotesFor", "peers", "plugins", "PORT",
+  "notifyPrefs", "onboard", "openDeliveries", "outSeen", "padNotesFor", "peers", "pluginUpdates", "plugins", "PORT",
   "publishBudget", "pullCatchUp", "pullNewFiles", "pullSeen", "push", "recomputeWatched", "review", "ROOT",
   "scanImages", "scanOutboxDocs", "scanPullCandidates", "scheduleSnapshot", "send", "sentLogStore",
-  "sessions", "settings", "setupWatch", "startPrompt", "syncUsagePolling", "tokenStats",
-  "uiStats", "updates", "usage", "usageLog", "usageSources", "wsDevice", "wsKind", "wsRole", "wsToken",
+  "sessions", "settings", "setupWatch", "socketAuthorized", "startPrompt", "syncUsagePolling", "tokenStats",
+  "uiStats", "updateApplier", "updates", "usage", "usageLog", "usageSources", "wsDevice", "wsKind", "wsRole", "wsToken",
   ] as const satisfies readonly (keyof ServerCtx)[];
 }
 

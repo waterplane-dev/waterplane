@@ -104,6 +104,8 @@ export function LimitSheet({
   const state = (s: SessionInfo): string => {
     const l = s.limit!;
     if (l.spend && !l.resetAt && !l.nextAttemptAt) return "spend limit — needs you: add credit or raise the limit, then resume it";
+    // The backend's own wall with no time it lifts: nothing is scheduled, its words say why.
+    if (l.needsYou && !l.nextAttemptAt) return `needs you — ${l.needsYou}; nothing is retried by itself, resume it once that is sorted`;
     if (l.resuming) return "resuming now — the queue is waiting to see whether it took";
     // A manual row draws no "go first" and no "now" (never dimmed ones), so its
     // sentence carries why they are missing.

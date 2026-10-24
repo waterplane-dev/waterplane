@@ -126,6 +126,10 @@ export type SentSource =
   | "create"
   /** A plugin answered a choice box through the core's gate (`api.answer`). */
   | "plugin"
+  /** A person's answer to a question the CLI posed on its own channel, which the CLI asked the
+   *  host to TYPE into its own form (`SourceTyped`, `sourceanswer.ts`) — the one place words
+   *  reach a session outside `deliver.ts`, so every one is on this log. */
+  | "phone"
   /** Legacy: the in-core Gemini oracle, before it became a plugin. Kept so old
    *  rows on disk still type-check and render. */
   | "oracle"

@@ -24,7 +24,7 @@ export async function which(bin: string): Promise<string | null> {
   // An absolute/relative path (WATERPLANE_CLAUDE_BIN often is one) isn't on PATH.
   if (bin.includes("/")) return existsSync(bin) ? bin : null;
   const began = Date.now();
-  const { out, ok } = await run("/bin/sh", ["-c", `command -v ${JSON.stringify(bin)}`], WHICH_TIMEOUT_MS);
+  const { out, ok } = await run("/bin/sh", ["-c", 'command -v -- "$1"', "sh", bin], WHICH_TIMEOUT_MS);
   if (ok && out) return out.split("\n")[0].trim();
   // An answer that took the whole leash is no answer: with the event loop held up (WSL reading a
   // Windows drive), the timer fires on an exited child and its stdout comes back EMPTY, which read

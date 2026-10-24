@@ -23,10 +23,10 @@ import { useId, useState } from "react";
 import type { SessionBudget, SessionBudgetCal, SessionBudgetSpark, SessionBudgetUnit } from "@waterplane/shared";
 import { SetNote, SetSwitch } from "./SettingsKit";
 import {
-  BUDGET_MODES, BUDGET_UNITS, type BudgetMode, budgetPreview, budgetSpentLine, budgetText, calibrationWords, isPctUnit, parseBudgetInput, presetLabel, unitInfo,
+  BUDGET_MODES, type BudgetMode, budgetPreview, budgetSpentLine, budgetText, budgetUnitsFor, calibrationWords, isPctUnit, parseBudgetInput, presetLabel, unitInfo,
 } from "./budgetInput";
 
-export function BudgetField({ initial, cal, onChange, calFor, spark }: {
+export function BudgetField({ initial, cal, onChange, calFor, spark, windowsOff }: {
   /** The cap already set, if any — read once, where the field STARTS. */
   initial?: SessionBudget | null;
   /** The host's calibration: null = the host sent none; undefined = none to expect (a launch, or no budget set yet). */
@@ -37,6 +37,10 @@ export function BudgetField({ initial, cal, onChange, calFor, spark }: {
   calFor?: string;
   /** The live session's spend, for the "so far" line and the preview. Absent: no session (a launch). */
   spark?: SessionBudgetSpark | null;
+  /** The session's backend does not spend from claude's windows: no percent
+   *  unit is offered, and THIS sentence stands under the units saying why
+   *  (shared `sessionBudgetWindowsOffText`). Absent: all four, as ever. */
+  windowsOff?: string | null;
 }) {
   const id = useId();
   const [unit, setUnit] = useState<SessionBudgetUnit>(initial?.unit ?? "usd");
@@ -62,10 +66,11 @@ export function BudgetField({ initial, cal, onChange, calFor, spark }: {
         <div className="set-lead"><span className="set-lbl">measured in</span></div>
         <RadioRows
           label="budget unit"
-          options={BUDGET_UNITS.map((u) => ({ key: u.unit, label: u.label }))}
+          options={budgetUnitsFor(!!windowsOff, initial?.unit).map((u) => ({ key: u.unit, label: u.label }))}
           value={unit}
           onChange={(u) => { setUnit(u); emit(u, text, interrupt); }} />
       </div>
+      {windowsOff && <SetNote>{windowsOff}</SetNote>}
       {spent && <div className="budget-spent"><span className="budget-k">spent</span> {spent}</div>}
       <div className="set-item">
         <label className="set-lead" htmlFor={id}><span className="set-lbl">cap</span></label>
@@ -85,10 +90,10 @@ export function BudgetField({ initial, cal, onChange, calFor, spark }: {
                 onClick={() => { setText(p); emit(unit, p, interrupt); }}>{presetLabel(unit, p)}</button>
             );
           })}
-          <span className="set-note budget-blank">a blank field is no budget</span>
+          <SetNote as="span" className="budget-blank">a blank field is no budget</SetNote>
         </div>
       </div>
-      {parsed && !parsed.ok && <div className="set-note warn">{parsed.reason}</div>}
+      {parsed && !parsed.ok && <SetNote className="warn">{parsed.reason}</SetNote>}
       {preview && <div className="budget-preview">{preview}</div>}
       {calWords && <SetNote>{calWords}</SetNote>}
       <div className="set-item">

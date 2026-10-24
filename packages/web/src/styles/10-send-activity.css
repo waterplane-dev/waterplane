@@ -119,6 +119,11 @@
 }
 .act-cant svg { flex: 0 0 auto; margin-top: var(--sp-2); opacity: .8; }
 .act-cant-inline { padding: 0 var(--sp-2); }
+/* The folded strip (`UnavailableFold`): ONE line, the sentences on a tap. The summary IS the target. */
+.act-cants-fold > summary { list-style: none; cursor: pointer; padding: var(--sp-6) 0; }
+.act-cants-fold > summary::-webkit-details-marker { display: none; }
+.act-cants-fold[open] > summary svg:last-child { transform: rotate(180deg); }
+.act-cants-fold > .act-cants { padding: 0 0 var(--sp-6); }
 .act-aim { padding: 0 var(--sp-12) var(--sp-10); border-left: 2px solid var(--accent); margin-left: var(--sp-12); }
 .act-aim .row { padding-left: var(--sp-6); }
 .act-aim .form-hint { padding-left: 0; }

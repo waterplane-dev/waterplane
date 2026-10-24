@@ -15,15 +15,17 @@
  * looks like nothing at all until the context they were relying on is gone.
  */
 import { randomUUID } from "node:crypto";
-import type { PermissionMode } from "@waterplane/shared";
+import type { BackendFacts, PermissionMode } from "@waterplane/shared";
 import { isLocalCommand, startsNoTurn } from "@waterplane/shared";
 import { PASTE_CHIT } from "../echo.js";
 import { COMPOSER_RULE_RE } from "../composer.js";
-import type { BackendDescriptor, LaunchPlan, LaunchRequest } from "./types.js";
+import type { CoreBackendDescriptor, LaunchPlan, LaunchRequest } from "./types.js";
 import { claudeSources } from "./claude-sources.js";
 import { claudeModels } from "./claudemodels.js";
 import { ensureRepoClaudePlugin } from "../reposkill.js";
+import { homedir } from "node:os";
 import { claudeBinResolution } from "../claudebin.js";
+import { claudeMissingRefusal } from "../doctorclaude.js";
 import { env } from "../env.js";
 
 /**
@@ -97,7 +99,8 @@ const PERMISSION_MODES: readonly PermissionMode[] =
   ["default", "plan", "acceptEdits", "auto", "dontAsk", "bypassPermissions"];
 
 /**
- * argv for one launch — moved verbatim out of `SessionManager.create()`.
+ * argv for one launch — moved verbatim out of `SessionManager.create()`. Synchronous
+ * (`BackendDescriptor.prepare`): the create spawns before its first `await`.
  *
  * Resume modes: "continue" → --continue (most recent conversation in this
  * dir); "pick" → --resume (claude's interactive session picker, so an OLDER
@@ -107,7 +110,9 @@ const PERMISSION_MODES: readonly PermissionMode[] =
  * conversation (`--resume <uuid>`) instead of the directory's most recent —
  * this is what lets several conversations per repo restore independently.
  */
-function launchArgs(req: LaunchRequest): LaunchPlan {
+function prepare(req: LaunchRequest): LaunchPlan {
+  const missing = claudeMissingRefusal(env("CLAUDE_BIN"), claudeBinResolution(), homedir());
+  if (missing) throw new Error(missing); // before any tmux spawn: the phone gets this sentence, not tmux's [exited]
   const { resumeMode, resumeSessionId: rid, launch, hookPort, askRules } = req;
   const args: string[] =
     resumeMode === "pick" ? ["--resume"]
@@ -141,7 +146,9 @@ function launchArgs(req: LaunchRequest): LaunchPlan {
   // precondition.
   const pluginDir = ensureRepoClaudePlugin(hookPort);
   if (pluginDir) args.push("--plugin-dir", pluginDir);
-  return { args, sessionId };
+  // Told through that plugin dir, and only when it was written — a launch without it was
+  // told nothing, and says so. The ask rules are the CLI's own `permissions.ask`.
+  return { args, sessionId, instructionsVia: pluginDir ? "plugin-dir" : "none", askRulesVia: "native" };
 }
 
 /**
@@ -165,12 +172,42 @@ function launchArgs(req: LaunchRequest): LaunchPlan {
  */
 export const CLAUDE_SPAWN_ENV: Readonly<Record<string, string>> = { DISABLE_AUTOUPDATER: "1" };
 
-export const claudeBackend: BackendDescriptor = {
+/** The `--effort` ladder the CLI accepts, in order (the phone's `CLAUDE_EFFORTS` until WP10 reads it off the wire). */
+export const CLAUDE_EFFORTS: readonly string[] = ["low", "medium", "high", "xhigh", "max"];
+
+/** claude's provider table; `claude-local`/`claude-endpoint` start from it. */
+export const CLAUDE_FACTS: BackendFacts = {
+  turns: [{ source: true }, { screen: "silence" }],
+  dialogs: [{ screen: "claude-numbered" }],
+  questions: [{ screen: "question-ts" }],
+  plan: [{ screen: "planbox" }],
+  asking: [{ screen: "question-ts" }],
+  limits: [{ screen: "limit-ts" }],
+  transcript: [{ store: "claude-jsonl" }],
+  context: [{ screen: "context-meter" }, { store: "claude-jsonl" }],
+  usage: [{ screen: "usage-probe" }],
+  agents: [{ store: "claude-agents" }],
+  conversations: [{ store: "claude-jsonl" }],
+};
+
+/**
+ * The same CLI against an account that is NOT claude.ai's (`claude-local`, `claude-endpoint`):
+ * the TUI's gauge assumes a window for the model id, and the limit wall and the `/usage`
+ * report are claude.ai's — so those three providers are dropped and the facts are ABSENT.
+ */
+export const ACCOUNTLESS_CLAUDE_FACTS: BackendFacts = {
+  ...CLAUDE_FACTS,
+  context: [{ store: "claude-jsonl" }],
+  limits: [],
+  usage: [],
+};
+
+export const claudeBackend: CoreBackendDescriptor = {
   id: "claude",
   label: "Claude Code",
   bin: claudeBin,
   spawnEnv: CLAUDE_SPAWN_ENV,
-  launchArgs,
+  prepare,
   delivery: {
     submitKey: "\r",
     // `deliver.ts` spends this as the step of a bounded poll toward a quiet
@@ -180,26 +217,27 @@ export const claudeBackend: BackendDescriptor = {
     composerCursorRe: COMPOSER_CURSOR_RE,
     composerRuleRe: COMPOSER_RULE_RE,
     trustPromptRe: TRUST_PROMPT_RE,
+    // claude's own first-launch box is the one delivery answers itself (`deliverrun.ts`).
+    autoAcceptsTrust: true,
     isLocalCommand,
     startsNoTurn,
   },
   caps: {
-    hooks: "settings-inject",
-    contextMeter: true,
-    usageLimits: true,
-    usageProbe: true,
-    transcript: "claude-jsonl",
-    slash: "claude",
-    // `prompt.ts` — numbered rows, a `\u276f` cursor, an "Enter to confirm"
-    // footer, answered with the option's digit. Named rather than `true` so a
-    // reader written for another TUI can never be armed against this one.
-    promptBoxes: "claude-numbered",
-    asking: true,
-    remoteControl: true,
-    effort: true,
-    permissionModes: PERMISSION_MODES,
     turns: true,
+    slash: "claude",
+    remoteControl: true,
+    effort: CLAUDE_EFFORTS,
+    permissionModes: PERMISSION_MODES,
   },
+  /**
+   * The first full provider table (backend contract v2): every fact is answered by the module
+   * that always answered it — this table only NAMES them (`derive.ts`). Turns: the hook pipe
+   * (`claude-sources.ts`, in-band), then silence. Dialogs: `prompt.ts`, named rather than
+   * `true` so a reader written for another TUI can never be armed against this one. Context:
+   * the TUI's gauge, then the jsonl. The usage probe, the limit wall and the gauge are the
+   * claude.ai account's — `claude-local`/`claude-endpoint` drop them.
+   */
+  facts: CLAUDE_FACTS,
   /**
    * THE catalogue (`claudemodels.ts`): built-ins plus the optional
    * `<config dir>/models.json`. The phone reads this off the wire and carries no

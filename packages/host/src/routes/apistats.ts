@@ -8,7 +8,7 @@
 import { PRICES_AS_OF, zeroCost, zeroTotals, type BackendTokensDoc, type CostWindowDoc } from "@waterplane/shared";
 import { costMeta } from "../costwindow.js";
 import { hostStoreDir } from "../hoststore.js";
-import { BACKENDS, backendInfos, storeReaderFor } from "../backends/index.js";
+import { BACKENDS, DEFAULT_BACKEND, backendInfos, derive, storeReaderFor } from "../backends/index.js";
 import { localUsageDoc } from "../localusage.js";
 import { localSliceLedger, modelOwner, readUserPrices, rememberCatalogues } from "../localledger.js";
 import { json } from "./apiio.js";
@@ -92,7 +92,7 @@ export const STATS_ROUTES: readonly ApiEntry[] = [
       json(res, doc);
       return true;
     }
-    const store = storeReaderFor(backend.caps);
+    const store = storeReaderFor(backend);
     if (store?.ledger) {
       let doc: unknown;
       try { doc = await store.ledger(fresh ? 0 : undefined); }
@@ -104,7 +104,7 @@ export const STATS_ROUTES: readonly ApiEntry[] = [
     // CLAUDE's logs, so its ledger is a CUT of that one by model id — the
     // non-Anthropic models — never a second tally (`localSliceLedger`). Priced
     // per model from its catalogue's `zeroCost` and the person's `prices.json`.
-    if (backend.caps.transcript === "claude-jsonl" && backend.id !== "claude") {
+    if (derive(backend).keepsClaudeLog && backend !== DEFAULT_BACKEND) {
       let doc: BackendTokensDoc;
       try {
         const all = await ctx.tokenStats.read(fresh ? 0 : undefined);
@@ -114,7 +114,7 @@ export const STATS_ROUTES: readonly ApiEntry[] = [
         // Several backends write into Claude's logs: each tab keeps only the models it owns.
         // A catalogue that is down lists nothing; the remembered one keeps its models on its tab.
         const sharers = rememberCatalogues(hostStoreDir(ctx.root), BACKENDS
-          .filter((b) => b.caps.transcript === "claude-jsonl" && b.id !== "claude")
+          .filter((b) => derive(b).keepsClaudeLog && b !== DEFAULT_BACKEND)
           .map((b) => ({ id: b.id, ids: infos.find((i) => i.id === b.id)?.models.ids ?? [] })));
         const keep = (m: string) => modelOwner(m, sharers) === backend.id;
         doc = localSliceLedger(all, { label: backend.label, prices: prices.table, pricesFile: prices.file, zeroCost: zero, keep });
@@ -126,7 +126,7 @@ export const STATS_ROUTES: readonly ApiEntry[] = [
     }
     json(res, {
       available: false,
-      reason: backend.caps.transcript === "claude-jsonl"
+      reason: derive(backend).keepsClaudeLog
         ? `${backend.label}'s tokens are the ones /api/tokenstats counts; it keeps no second ledger`
         : `${backend.label} hands this host no ledger of its own`,
     } satisfies BackendTokensDoc);
@@ -185,6 +185,17 @@ export const STATS_ROUTES: readonly ApiEntry[] = [
       return true;
     }
     json(res, doc);
+    return true;
+  }),
+
+  // The account facts the phone's socket pushes (`usage.status`, `billing.status`, `budget.state`,
+  // `backends`), as ONE read for a client that has no socket: the VS Code panel drawing the phone's
+  // token screen from the extension host on loopback. Read-only and copied verbatim from the same
+  // getters those frames read — never a second derivation. Starts no scrape and no probe: the
+  // reading is whatever this daemon last took, with its own `checkedAt`.
+  route("GET", "/api/usagenow", ({ res }, ctx) => {
+    if (!ctx.usageNow) return false;
+    json(res, ctx.usageNow());
     return true;
   }),
 

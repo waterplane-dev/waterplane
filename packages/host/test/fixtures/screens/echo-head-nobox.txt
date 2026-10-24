@@ -1,0 +1,20 @@
+⏺ I'll list the files in the repository root.
+
+⏺ Bash(ls)
+  ⎿  README.md
+     package.json
+     src
+
+⏺ Three entries: README.md, package.json and src.
+
+> Round 1: list the files
+
+⏺ Bash(ls)
+  ⎿  README.md
+     package.json
+     src
+
+⏺ Same three entries as before.
+
+❯
+  ? for shortcuts

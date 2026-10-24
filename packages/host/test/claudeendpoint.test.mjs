@@ -17,7 +17,7 @@ import {
   apiKeyHelperCommand, claudeEndpointBackend, claudeEndpointEnv, endpointConfig, endpointLaunch, endpointModels,
   idsFromCatalogue, keychainReadProblem, keyProblem, parseModelList, withSettings,
 } from "../dist/backends/claude-endpoint.js";
-import { backendInfos, primeBackendModels } from "../dist/backends/index.js";
+import { backendInfos, derive, primeBackendModels } from "../dist/backends/index.js";
 import { claudeBackend } from "../dist/backends/claude.js";
 
 const SECRET = "sk-ant-THIS-MUST-NEVER-APPEAR-0123456789";
@@ -81,7 +81,7 @@ test("apiKeyHelper names WHERE the key is, quoted, never the key", () => {
 });
 
 test("withSettings merges into the hook blob, leaves other args alone", () => {
-  const base = claudeBackend.launchArgs(req({ model: "m" })).args;
+  const base = claudeBackend.prepare(req({ model: "m" })).args;
   const merged = withSettings(base, { apiKeyHelper: "cat '/k'" });
   const at = merged.indexOf("--settings");
   const blob = JSON.parse(merged[at + 1]);
@@ -238,11 +238,12 @@ test("unconfigured / bad key: LISTED with a sentence, never hidden", async () =>
 
 test("caps: claude's TUI readers, no account features, off the health board", () => {
   const c = claudeEndpointBackend.caps;
-  assert.equal(c.usageLimits, false);
-  assert.equal(c.usageProbe, false);
-  assert.equal(c.contextMeter, false);
+  const d = derive(claudeEndpointBackend);
+  assert.equal(d.screen("limits"), null);
+  assert.equal(d.has("usage"), false);
+  assert.equal(d.screen("context"), null);
   assert.equal(c.remoteControl, false);
-  assert.equal(c.transcript, "claude-jsonl");
+  assert.equal(d.store("transcript"), "claude-jsonl");
   assert.equal(claudeEndpointBackend.healthScope, false);
   assert.equal(claudeEndpointBackend.spawnEnv.DISABLE_AUTOUPDATER, "1");
   assert.equal(claudeEndpointBackend.delivery, claudeBackend.delivery);

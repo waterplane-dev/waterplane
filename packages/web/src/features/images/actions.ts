@@ -16,7 +16,7 @@ import { SEND_DRAFT } from "../../sendIntent";
 import type { SwipeItem } from "../../ImageSwiper";
 import { core } from "../../sdk";
 import {
-  ann, collage, flow, newImages, swipe,
+  ann, boxReturn, collage, flow, newImages, swipe,
 } from "./store";
 import {
   annReturnOverlay, markedRef, ocrBlock, pasteRepeatsHeld,
@@ -230,6 +230,17 @@ async function uploadMany(files: File[], repoId: string): Promise<void> {
     ? `Sent ${saved.length} · paths copied`
     : `${saved.length} queued · they upload when the link is back`);
 }
+
+/** A close back onto the compose box, taken once. Stale after a few seconds or
+ *  under a sheet (the backlog-item return opens one), so a later remount never
+ *  steals the caret. */
+export function takeBoxReturn(): boolean {
+  const at = boxReturn.get();
+  if (!at) return false;
+  boxReturn.set(0);
+  return Date.now() - at < BOX_RETURN_MS && core().nav.overlay == null;
+}
+const BOX_RETURN_MS = 3000;
 
 /** The annotator's `onPark` (backlog / gallery flows upload inline inside the
  *  sheet; with no tunnel that used to throw away a picture that had just been
@@ -554,8 +565,17 @@ export function bootImages(): () => void {
   window.addEventListener(ATTACH_OPEN_EVENT, on);
   // Write-through on every change so the strip survives reloads.
   const off = newImages.subscribe(() => lsSetJson(LS.newImages, trimNewImages(newImages.get())));
+  // The flow is read when the annotator OPENS: every close resets `flow.ret`
+  // to "session" before it clears `ann`, a Send-sheet round trip included.
+  let toBox = false;
+  const offAnn = ann.subscribe(() => {
+    const open = ann.get() != null;
+    if (open) { toBox = flow.ret === "session"; return; }
+    if (toBox) boxReturn.set(Date.now());
+    toBox = false;
+  });
   return () => {
-    unmount(); off();
+    unmount(); off(); offAnn();
     window.removeEventListener(ATTACH_OPEN_EVENT, on);
     // The viewer's blob dies with it, on unmount too.
     const u = swipe.get()?.revoke;

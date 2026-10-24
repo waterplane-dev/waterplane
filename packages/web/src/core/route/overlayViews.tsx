@@ -2,6 +2,7 @@ import type { MutableRefObject, ReactNode } from "react";
 import type { BackendInfo, Intent, RepoTarget, SessionInfo, UsageInfo } from "@waterplane/shared";
 import type { Overlay } from "../../routing";
 import { SlashSheet } from "../../SlashSheet";
+import { backendIdOf, ownCommandsHere } from "../../backendCaps";
 import { GitView } from "../../GitView";
 import { gitFailSeed } from "../../gitFailPrompt";
 import { OutlineSheet } from "../../OutlineSheet";
@@ -101,13 +102,13 @@ export function overlayLayer(ctx: OverlayCtx): ReactNode | null {
     ...launchCore.sheets,
     slash: () => {
       if (!(active)) return null;
-        return <SlashSheet cwd={active.cwd} onClose={() => setOverlay(null)}
+        return <SlashSheet cwd={active.cwd} backends={backends} backend={ownCommandsHere(backends, backendIdOf(active)) ? backendIdOf(active) : undefined} onClose={() => setOverlay(null)}
         // A backend that does not understand `/name` has no palette to show,
         // and the repo's `.claude/commands` are not its commands either. The
         // list is replaced by the reason, never by an empty palette captioned
         // "no matches" — that would be a claim about this repo rather than
         // about the binary in the PTY.
-        unsupported={sessionCant(active, "slash") ?? undefined}
+        unsupported={ownCommandsHere(backends, backendIdOf(active)) ? undefined : sessionCant(active, "slash") ?? undefined}
         onPick={(name, runNow) => {
         // "run" was the ONE prompt-runner in the app that went straight onto
         // the socket: text and Return as two bare writes plus a `session.record`

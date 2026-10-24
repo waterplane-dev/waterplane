@@ -84,7 +84,7 @@ test("a synthesized turn is refused, and never stepped over", () => {
   // would silently drop it.
   const d = doc([LOGGED, SYNTH]);
   assert.equal(forkAnchor(d, SYNTH), null);
-  assert.equal(forkBlocker(d, SYNTH, true), "this turn isn't in the conversation log");
+  assert.equal(forkBlocker(d, SYNTH, true), "this turn isn't in the conversation record");
   const after = turn("uuid-d", 4);
   const d2 = doc([LOGGED, SYNTH, after]);
   assert.equal(forkAnchor(d2, after), null);
@@ -94,8 +94,8 @@ test("a synthesized turn is refused, and never stepped over", () => {
 test("the history fallback has no log to cut at all", () => {
   const d = doc([turn("h1", 1)], { source: "history", claudeSessionId: undefined });
   assert.equal(forkAnchor(d, d.turns[0]), null);
-  assert.equal(forkBlocker(d, d.turns[0], true), "this turn isn't in the conversation log");
-  assert.equal(forkBlocker(null, LOGGED, true), "this turn isn't in the conversation log");
+  assert.equal(forkBlocker(d, d.turns[0], true), "this turn isn't in the conversation record");
+  assert.equal(forkBlocker(null, LOGGED, true), "this turn isn't in the conversation record");
 });
 
 test("a jsonl document with no conversation id is not forkable", () => {
@@ -108,7 +108,7 @@ test("the link is its own reason, and it outranks nothing", () => {
   assert.match(forkBlocker(d, LOGGED2, false), /no connection/);
   assert.match(forkBlocker(d, SCREEN, false), /no connection/);
   // A turn with no cut point says THAT offline too — the link is not why.
-  assert.match(forkBlocker(d, SYNTH, false), /isn't in the conversation log/);
+  assert.match(forkBlocker(d, SYNTH, false), /isn't in the conversation record/);
 });
 
 test("the two row predicates", () => {

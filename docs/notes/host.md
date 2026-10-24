@@ -4028,6 +4028,26 @@ The pure rule is `shared/sessionbudget.ts`; the host half is three pieces.
   delete it), `workItemInherits` hands it to a recurring rule's child, `postClientDraft` passes it
   through. A fork does not inherit one, and a reopened closed row starts without one.
 
+- **A plugin session's spend (P2, C1).** A backend that keeps no claude log is judged from its own
+  `tokens.session` (`readSourceSpend`, on every judge, published as `SessionInfo.sourceSpend`; `{at}`
+  when it states nothing). `sourceSpendSpark`: a source's `tok` EXCLUDES its agents, so the total is
+  `tok + agentTok` (no `agentTok` ⇒ a floor, no split claimed); a reading `sourceSpendProblems`
+  refuses is dropped whole. `budgetSparkOf(info)` is the one reader on both ends (`sourceSpend`, else
+  `contextSpark`). A percent cap there is `notClaude` (the backend spends from no claude window) and a
+  figure the source does not state is `unstated`; both are unknown, so neither trips. A `native` unit
+  (Copilot's AI credits) is never converted and is not a budget unit: it would need
+  `SessionBudgetUnit` `"native"` with the label on the cap and a per-backend wire cap
+  (`caps.spendUnit`, a 2.3 descriptor field) so the picker can offer it before any reading exists.
+
+  **Why a plugin's spend is not in the period/week views (C2).** `periodspend.ts` ("Where the month
+  went") is CLAUDE's account cap: folding Copilot's spend in would trip it on another account, and a
+  plugin ledger is keyed by the host's local DAY while a period is `[start, reset)` folded on whole
+  hours. `costwindow.ts` ("Where the week went") is hour × claude conversation, priced per claude
+  record; a ledger has days × model. `burnwatch.json` latches per window, not per `UsageSourceId`.
+  The honest bridge is a "beside" line (a pure `ledgerOverDays` answering only when both edges are
+  local midnights of the ledger's zone, which `BackendTokensDoc` does not state yet); today a plugin's
+  spend sits beside claude's in the token-stats sheet's **All backends** view.
+
 ### `notifyprefs.ts` and the small stores
 
 - `push.ts` · `notifyprefs.ts` (**which notification KINDS may fire at all** — `.waterplane/notify.json`,
@@ -5494,9 +5514,10 @@ in `SessionManager.create()`, a settings blob a hundred lines above it, and a ha
 `deliver.ts` / `echo.ts`. Every copy was correct on its own, which is exactly why nothing in review
 would have caught the seventh reader spelling the default differently.
 
-`backends/types.ts` is the shape: **`id`, `label`, `bin()`, `launchArgs()`, `delivery`, `caps`,
-`models()`, `healthScope`**. Data plus two functions, deliberately — `bin()` and `launchArgs()` are
-the only things a backend has to compute; the rest are constants and regexes. A third function per
+`backends/types.ts` is the shape: **`id`, `label`, `bin()`, `prepare()`, `delivery`, `caps`, `facts`,
+`models()`, `healthScope`** (`prepare` was `launchArgs` until backend contract v2, below). Data plus
+two functions, deliberately — `bin()` and `prepare()` are the only things a backend has to compute;
+the rest are constants, regexes and the `facts` table. A third function per
 backend is the sign this has started growing into a plugin interface, and goes back through review.
 
 `backends/claude.ts` is today's behaviour, moved rather than rewritten: `claudeBin()` (the ONE place
@@ -5539,7 +5560,7 @@ from `attach`, never published as `sideChannel`, health is `hooked`) and `turns.
 `deliver.ts`'s `prompt-hook` rung over the words `started` records. `claudehooks.test.mjs`.
 **The router stays in core** because a source never sees this host's session table (live
 `claudeSessionId`s, cwds, spawn times). Its cwd-fallback candidates are the sessions subscribed to the
-claude hook pipe (`claudeHookWatched`), not "any backend whose `caps.hooks` is not none", so a
+claude hook pipe (`claudeHookWatched`), not "any backend that lists a hooks source", so a
 `plugin-inject` backend is never handed a claude hook. `turnHookSeen` stays a fact the sink sets, not a
 source edge (`SessionEnd` maps to `ready` but never sets it). One known difference from the old switch:
 a hook routed to a session whose channel already closed is dropped instead of applied to a dead record,
@@ -5581,20 +5602,21 @@ is asking again. The e2e suite cannot see it either: the stub binary ignores its
 
 #### `backends/claude-local.ts` — the real `claude`, pointed at Ollama (WP5)
 
-`claudeBackend` spread over four changes: `launchArgs` adds `LaunchPlan.env`
+`claudeBackend` spread over four changes: `prepare` adds `LaunchPlan.env`
 (`ANTHROPIC_BASE_URL` = `WATERPLANE_OLLAMA_URL`, `ANTHROPIC_AUTH_TOKEN=ollama`, `ANTHROPIC_API_KEY=""`) and
 **refuses a launch with no model in words** (the CLI would ask Ollama for a `claude-*` id and die with
 `not_found_error` a minute in); `models()` reads `/api/tags`, drops only what Ollama's OWN `capabilities`
 say cannot chat, and reads each window from `/api/show` (`windowFromShow`: the Modelfile `num_ctx`, else
 the architecture's `context_length`; **0 or missing is absent**, and a failed `/api/show` keeps the id
-with no window). Caps `usageLimits`/`usageProbe`/`remoteControl`/`contextMeter` are false and
-`healthScope` is false. **Unreachable Ollama keeps the backend LISTED**: an empty catalogue plus
+with no window). `remoteControl` is false, `healthScope` is false, and its `facts` are claude's
+minus the three claude.ai ones (`ACCOUNTLESS_CLAUDE_FACTS`: `limits` and `usage` empty, `context` only
+from the jsonl). **Unreachable Ollama keeps the backend LISTED**: an empty catalogue plus
 `BackendModels.unavailable` = `Ollama not reachable at <url>`, which rides `BackendInfo.unavailable`.
 Cost is absent with no code of its own (`pricing.ts` prices only `claude-*`), and
 `resolveContextWindow` refuses a non-claude id, so the claude table is never borrowed. Measured
 2026-10-01 on claude 2.1.287 + `qwen3-coder:30b-64k` (probe: `scripts/probe-claude-local.mjs`): the TUI prints **no context gauge at all** after a
-turn, hooks (SessionStart/UserPromptSubmit/Stop) and the jsonl work unchanged, so `contextMeter:false`
-is the right cap, not a workaround. `packages/host/test/claudelocal.test.mjs`.
+turn, hooks (SessionStart/UserPromptSubmit/Stop) and the jsonl work unchanged, so dropping the
+`context-meter` provider is the right fact, not a workaround. `packages/host/test/claudelocal.test.mjs`.
 
 **Lean, warm, and the window sentence (2026-10-02, Ollama 0.35.0, `scripts/probe-claude-local.mjs`
 with `PROBE_LEAN=1`).** The 64k window was half spent before
@@ -5607,7 +5629,7 @@ work. `--tools` is the whole saving; `--disable-slash-commands` measured nothing
 and `--setting-sources project,local` (−1k) would drop the person's own permissions, so neither is
 used. `--strict-mcp-config` measured nothing in an empty dir and is kept so a repo's `.mcp.json`
 cannot add schemas to every turn. The warm ping (`localrt.ts`'s `warmLocalModel`, `WATERPLANE_CLAUDE_LOCAL_KEEP_ALIVE`, default
-`30m`, `off`) is fired from `launchArgs` and never awaited — `warmDeps` is the seam a test replaces
+`30m`, `off`) is fired from `prepare` and never awaited — `warmDeps` is the seam a test replaces
 so no unit test loads 18 GB. Ollama's `/v1/messages` IGNORES a `keep_alive` in the body (measured:
 expiry stayed at the 5-minute default), but a model loaded with an explicit `keep_alive` KEEPS it:
 later `/v1/messages` calls re-arm the same 30 minutes. `backends/overhead.ts` reads the input of the
@@ -5682,11 +5704,42 @@ Return). `answerBox` (`typeSourceKeys`) types them into the SAME session through
 path the digit tap takes, once, and only while the channel still has that dialog open — a source
 that withdrew it before returning gets "no longer open" and nothing is typed. The bound is
 `sourceKeysProblem`: at most `SOURCE_KEYS_MAX` (8) keys, each printable or one of the keys the walks
-already press (`\r`, `\x1b`, `\x1b[A`–`\x1b[D`, an arrow counted as one); a control character, a
+already press (`\r`, `\x1b`, `\x1b[A`–`\x1b[D`, an arrow counted as one; since 2.2 also Tab `\t` and
+Shift+Tab `\x1b[Z`, which a mode cycle presses, each one key); a control character, a
 bracketed paste or a prompt's worth of text is refused in words. Why not a keystroke API for plugins:
 typing into a session is core's, and a general one would be a second way to answer a box around
 `answergate.ts`. A box with no channel never reaches this rung, so no source can address it.
 `sidechannel.test.mjs` · `e2e-pluginbackend.mjs` (a `tuiDialog` → the stub TUI receives exactly `1`).
+
+**Questions, and typed answers (contract 2.0, WP4).** `sources.questions` is the third box shape a
+channel can pose: a question with NO choice box (Copilot's `ask_user`, codex's `requestUserInput`,
+opencode's `question` tool). The slice publishes it exactly like a dialog — `askId` = the CLI's id,
+`nav: true`, oldest open first across dialogs AND questions (`SessionChannel.posedAt`, a per-channel
+counter, because two maps have no common order), `pending()` on the up edge where the source has one,
+retired on `closed` and on `down` — as `kind: "question"` with `freeText` when a typed answer is
+accepted; its options may be empty, and a question with neither options nor `freeText` is not
+published (nobody could answer it from a phone). claude's own box-less question is NOT this: it stays
+`question.ts`'s screen read (`SessionInfo.asking`), answered in the composer. The phone answers with
+`session.input`'s `promptText` (with `promptChoice` where an option is named too) on the ONE answer
+entry, so a typed answer is one ackId, fingerprinted like any answer (`freeText` is in
+`promptFingerprint`, appended only when set — `nav`'s rule). `answerBox` takes `{text}`: checked by
+`answerTextProblem` (shared — one line, ≤1000, no control character; the phone asks the same before it
+queues), handed to `SourceQuestion.answer({choice, text})`, or to `SourceDialog.answer(choice, {text})`
+only on a `takesText` row ("No, and tell the agent why"); a box the screen read takes no words —
+refused in words, because the composer is `deliver.ts`'s. The answer gate never carries words (its
+`BLOCK_KINDS` are unchanged): only a person types an answer.
+
+A question may be a FORM in the CLI's TUI, answered by typing into it. Then the source returns
+`SourceTyped {typed, then?: "\r"}` and **`sourceanswer.ts` is the one place words reach a session
+outside `deliver.ts`** — deliberately not a fork of it: it proves no echo and re-presses nothing,
+because it is not a delivery but the answer to a form the source says is open. The bound is
+`sourceTypedProblem`: ≤`SOURCE_TYPED_MAX` (1000) characters, no control character at all, Return
+only as `then` and only as a SECOND write after a pause (text and Return together read as a paste);
+typed only while the source still holds that question open (re-checked before the Return); a
+`sent.json` row each, `source: "phone"` for a person's answer and `"plugin"` for a gated one. The
+one thing it CAN check is the source closing the question: no `closed` within `TYPED_CLOSE_MS` (5 s)
+⇒ `DetectedPrompt.answerNote` says so on the box, outside the fingerprint. `sourceKeysProblem` moved
+there beside it (`boxes.ts` re-exports it). `questions.test.mjs`.
 
 #### Plugin backends and parked panes (WP3a)
 
@@ -5705,6 +5758,60 @@ drops that row. The hook sink is `POST /api/plugin/<id>/hook` (`api.ts`, loopbac
 and answers `{}` at `maxHoldMs` or on switch-off. Reasoning: [plugins.md](plugins.md#backends-apibackend-hooksink-onhook).
 `pluginbackend.test.mjs`, `scripts/e2e-pluginbackend.mjs`.
 
+#### Backend contract v2: the provider table, the launch plan, the slots (plugin API 2.0 and 2.1)
+
+The plan is `docs/plans/backend-contract-v2.md`; this is what the code does now.
+
+- **`facts` replaced the reader strings on `caps`.** `caps` keeps the binary's own facts (`turns`,
+  `slash`, `effort` as the ladder's NAMES, `permissionModes`, `remoteControl`); `facts` maps each
+  fact (`turns dialogs questions plan delivery transcript context tokens usage agents conversations
+  asking limits`) to an ordered `Provider[]` — `{source:true}`, `{screen:name}`, `{store:name}`.
+  **`backends/derive.ts` is the one reader**: `derive(b).screen/store/askSource/has`, `hooksInBand`,
+  `keepsClaudeLog`, and `wireCaps()`, the `BackendInfo.caps` the phone gets (pinned byte for byte by
+  `backendinfos.pin.test.mjs`; the v2 additions are absent, never `false`, where nothing answers).
+  `walk()` asks providers in order, a null or a throw passes to the next, an empty list is absent.
+  `factProblems` refuses at registration a misspelt fact or a reader name this host does not have,
+  and a screen reader where only a source may answer (`delivery`). `tools/backendparity.mjs`
+  renders every registered backend's table into `docs/notes/backend-parity.md`.
+- **`prepare(req)` replaced `launchArgs`**, and a plugin's may be async: `SessionManager.create`
+  awaits it before the spawn (a create retried under the same ackId joins the first, never spawns
+  twice — `durableOp`). The request carries `cwd`, `hostSessionId`, `instructions` (the core's one
+  repo-facing text, `reposkill.ts`'s `repoInstructions`) and `askRules`; the plan answers `args`,
+  `env`, `dropEnv`, `exec`, `files`, and MUST say `instructionsVia` and `askRulesVia`. Both are kept
+  on the live record (re-attach publishes them again) and reach the phone as `SessionInfo.told` /
+  `askRulesVia`, so "the agent was not told" and "these rules are held by the gate" are said in words.
+- **`launchfiles.ts` writes the plan's `files`** — never the plugin, never the repo, never
+  `~/.<cli>`: `session:<name>` is `<state dir>/launch/<hostSessionId>/<name>`; an absolute path only
+  inside the plugin's `dataDir` (realpath, no symlink); everything is checked before the first
+  byte, so a refused plan writes nothing. `env` items spelled `session:<name>` are replaced by the
+  path. The boot orphan sweep removes a launch dir seven days after its session is gone.
+  Why a directory: Copilot reads `<dir>/AGENTS.md` off `COPILOT_CUSTOM_INSTRUCTIONS_DIRS` (measured
+  1.0.91, a `--plugin-dir` skill and a `.github` file were not loaded).
+- **Ask rules by `askRulesVia`**: claude's are `permissions.ask` in `--settings` (`native`); a CLI
+  with allow/deny but no ask is `gate` — `sessions.ts` calls `holdAskRules(id, rules)` and
+  `answergate.ts` refuses a plugin's answer to a box that matches a rule the session was LAUNCHED
+  with (memory only; a restart falls back to the repo's current rules, the stricter unknown).
+- **Slots** (`BackendSources`, each behind its `facts` provider): `questions` (above),
+  `usage` → `usagesources.ts`'s `backendUsageProbe` (an account's windows beside claude's) and
+  `usage.wall` → `sessions/wall.ts` as the `limits` fact, `agents` → `agents.ts`'s `readAgents`,
+  `conversations` → `archive.ts` (`sourceList`, `deleteConversation` through the optional `remove`,
+  `pickRefusal`). `conversations.fork` is only ADVERTISED (the wire `fork` cap); nothing calls it yet —
+  a fork happens through `forkVia: "server"` or claude's `convfork.ts`. `plan` is typed but nothing consumes it yet (only claude's `planbox` screen reader).
+- **A source turn's `ended(at)` waits for a fresh context sample** (`CONTEXT_FRESH_MS` 1.5 s,
+  polled every 50 ms where the source has no `watch`) so the turn-end context read is that turn's
+  fill; absent or still stale ⇒ the end settles as before and the reading stays what it was or
+  absent. In-band channels (claude's hooks) never wait. A source turn also needs no end-gate hold.
+- **A dialog row that takes a reason** (`takesText`) is answered keys-then-words (2.1): `answer()`
+  returns `{keys, typed, then?}`, `sourceanswer.ts` types the keys, waits `TYPED_AFTER_KEYS_MS`
+  (500), types the words, then Return as a separate write. `api.supports.dialogKeysThenTyped` says
+  the host has it.
+- **The toolkit** (`plugins/plugintoolkit/`): `tail.ts` (`api.tail`, rotation-safe JSONL follower),
+  `screen.ts` (`api.screen`, the live grid and the squashed form), `sessionfiles.ts`
+  (`api.sessionFiles`, only for a session this plugin's backend spawned), and `bindConversation`
+  from `shared/bindconv.ts` (pure: exactly one candidate survives or none).
+- **Version compatibility**: `PLUGIN_API_VERSION` 2.2.0 (2.2 additive: mode, commands, Tab keys, window, compactions, session spend); a 1.x manifest that lists `backends` is refused
+  naming the plan, one that lists none (a reader, a panel, a usage probe) loads if it declares ≤ 1.8.
+
 #### The four reading rungs and `livesources.ts` (WP1c)
 
 `livesources.ts` is the one lookup from a session id to its live `BackendSources` (+ the
@@ -5720,8 +5827,8 @@ while the channel is up; audit `submit: "source"`, no health observation. **Sett
 rules (whole text, recency floor, the spent-turn ledger keyed on the source's turn id), and `absent`
 still needs a list the source actually returned. **Transcript** — `sources.transcript.updatedAt`
 replaces the opencode store's `MAX(time_updated)` poll when it can say; `read` is the document
-(`source: "backend"`) only for a backend with `caps.transcript: "none"`, with `history` still the
-last rung. **Context** — `sources.context.sample` is `contextUsedTok`; the window is
+(`source: "backend"`) only for a backend whose `transcript` fact lists no store reader, with
+`history` still the last rung. **Context** — `sources.context.sample` is `contextUsedTok`; the window is
 `backendContextWindow` (a 0 is not one), and without a window `contextTotalTok`/`contextLeft` are
 absent. The claude-jsonl series and spark take the same configured window too (`contextWindow` in
 `ctxseries.ts`: screen → measured → the backend's `config` → the id table → none), which is what gives
@@ -6299,7 +6406,7 @@ on a binary that never draws one, a bare rule says nothing.
   null reading DELETES the field rather than keeping the last one: the thing that
   hides the footer is usually a box, and a box can change the mode. Never
   persisted (`live/` records carry no `SessionInfo`), so after a restart the first
-  quiet tick reads it again. Claude's TUI only (`caps.promptBoxes ===
+  quiet tick reads it again. Claude's TUI only (`derive(backend).screen("dialogs") ===
   "claude-numbered"` with permission modes); another backend has no field.
 - **`ultracode` is sticky**: the confirmation scrolls away, so the last screen
   that said something stands until another does. Absent until one did. Memory
@@ -6357,6 +6464,8 @@ Pinned by `packages/host/test/keyhints.test.mjs` over the real 2.1.293 grids in
 `fixtures/permmode/` and `fixtures/screens/`. Requirement R-cli-010.
 
 ## `repohealth.ts` — the codebase's own vital signs, asked for from the phone
+
+(The approval half — engine key, approvals store, gates, consent token — lives in `repohealthapproval.ts`, split out for the 900-line cap; the key also covers the entry's relative imports, transitively — static, and dynamic `import()`/`require()` with a literal path — contained to the worktree. An engine the key cannot pin is never approvable and the phone is told why: an `import()`/`require()` argument that is not one plain string, `eval` in any form, `Function()`, the `vm` or `worker_threads` module, `module.register` hooks, a `#` import-map entry, a module from a URL or an absolute path, an import outside the repo, a dependency committed under ANY `node_modules` (a nested or symlinked one too) or imported by the repo's own `package.json` name, a `/dev/zero` link where the entry or health.json should be, or a tree too big to read whole; comments and string text are stripped first (one tokenizer, recursive through `${…}`; a doubtful `/` is a division so a misread exposes code rather than hiding it) so prose about `import()` is not a hit. Honest scope: the plain shapes — a child process running `node <file>`, or an alias the scan does not know, still loads what the approval never saw. Found by the 2026-10-22 security pass: `await import(new URL("./lib/x.mjs", import.meta.url))` kept the key unchanged while `lib/x.mjs` could be swapped by a pull.)
 
 `tools/repohealth.mjs` is a **zero-token metric series over git history**: git, regex and
 arithmetic, one row per first-parent commit in `.waterplane/repohealth.jsonl`, the sentences about what
@@ -7440,7 +7549,7 @@ A file that is present but does not parse reads as **halted** — the person ask
 stop, and a torn write must not be what starts it again. Absent is off. A restart comes back halted.
 
 **The gates** (each refuses with `HALT_REFUSAL`, `shared/halt.ts`):
-- `create()` through `openRefusal` — BEFORE the backend's `launchArgs`, because opencode's starts an
+- `create()` through `openRefusal` — BEFORE the backend's `prepare`, because opencode's starts an
   `opencode serve` there. Every create caller (a person, `doResurrect`, the intent tick, the backlog,
   fan-out) already turns a throw into a refusal. Shell sessions are not AI and still open.
 - The intent ladder's `pass` returns at once, and `runNow` refuses: a row that fired and was refused
@@ -7499,7 +7608,14 @@ The `host-core` bullet as it stood, including the `(S2)…(S11)` plan labels:
   store — exactly one candidate or none) and the running model; `health.ts` (S3) holds `noteFor`,
   the ONE direct `noteHealth` under `sessions/`, gated on `healthScope`.
   `ctxseries.ts` (S8) is a CLASS (`CtxSlice`, owns `ctxWindows`): the context gauge, the row's
-  spark, the per-model window, and the context-series/tool-detail documents (`host-ledgers`).
+  spark, the per-model window, and the context-series/tool-detail documents (`host-ledgers`). It also
+  RECORDS a source session's series (`recordSource`): for a backend with no claude log and no store
+  reader whose `context` fact is a source, each vetted sample newer than the last becomes a point,
+  bounded by `MAX_SAMPLES` (newest last), kept in `<state dir>/ctxseries/<id>.json` (only a
+  `STORE_FILE_RE` id), swept with `history/` and `summaries/`; a remove keeps it. The window is the
+  sample's stated `window` (`windowFrom: "source"`), else the backend's configuration for that model
+  (`"config"`), else none — never claude's table. Compactions come from `compactions()`, each answer
+  vetted whole, marked as claude's are.
   `roster.ts` (S9) is a CLASS (`RosterSlice`): the recent shortlist, the reopen stack (each row built by
   `closedRowOf` — **`closedBy` is named by whoever calls `remove`/`kill` (`s.closeBy`), the exit path
   only infers `limit`/`exited` for a session nobody killed; every fact optional, absent = unknown**), stars, pins and

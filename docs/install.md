@@ -267,6 +267,8 @@ npm run doctor       # new checks arrive with new releases; re-read what it says
 npm run restart      # builds, then restarts the host (the service if installed, else detached)
 ```
 
+- **Or tap Update** in Settings → Tools → updates (the `curl | sh` installer's install only; other
+  installs show the command above).
 - **Sessions survive it.** They run inside tmux; the phone reconnects and carries on.
 - **The phone updates itself.** The new UI is served by the host; the web app and the Android app
   pick it up on their next launch. A new APK is needed only when the native shell changed:

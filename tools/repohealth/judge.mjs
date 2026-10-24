@@ -61,7 +61,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { resolveEnv } from "../../packages/shared/dist/index.js";
+import { resolveEnv } from "@waterplane/shared";
 
 /** Named in full at every mention; a bare filename does not resolve on a phone. */
 export const OUTBOX_DIR = ".claude/outbox";

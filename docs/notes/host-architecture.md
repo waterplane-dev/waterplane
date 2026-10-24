@@ -238,6 +238,10 @@ sessions/
                 applyLogin, setAwaiting, choosePromptBox, submitPromptBox, scheduleChecks, healthTail)
   turn.ts       setTurn/markIdle/checkIdle, the hook sink (onHookEvent, routeHook), sourceTurn, turn watch,
                 stop verify), asking + agents, the submits ring, the turn queries
+  idlewatch.ts  noteOutput/checkIdleWatch/clearIdle: when PTY output ends idle. A redraw over an idle
+                prompt (cursor blink, resize, status-line tick) is not work, so on claude's TUI idle
+                clears only when the working line is on the grid; setTurn(true) clears it for every
+                turn start; a backend with no working-line reader keeps any-output-clears (2026-10-22)
   health.ts     healthScope, noteFor, noteLogHealth, noteContextHealth
   wall.ts       the usage-limit wall: limit config, checkLimit, markLimitBlocked, clearLimitBlock,
                 the attempt ladder, doLimitContinue

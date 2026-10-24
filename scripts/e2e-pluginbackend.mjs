@@ -6,6 +6,9 @@
 //  - the backend is in `backends` once the plugin has activated;
 //  - a session spawns on it, and goes `hooked` off the PLUGIN's sink (its
 //    SessionStart, posted to /api/plugin/stubcli/hook), not the core's;
+//  - its prepare() is AWAITED: a create re-sent under the same ackId while it waits
+//    opens ONE session; the plan's file (the core's instructions) is written into
+//    the session's launch dir, and the session publishes `told`/`askRulesVia`;
 //  - a held hook (a permission request) publishes a box with the CLI's own id,
 //    and a tap (`promptChoice` → `answerBox` → the dialog's `answer`) is the
 //    hook's HTTP response;
@@ -24,7 +27,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { WebSocket } from "ws";
 import { bootWait, freePort } from "./lib-e2e.mjs";
-import { E, SLUG, rootEnv } from "./lib-brand.mjs";
+import { E, SLUG, STATE, rootEnv } from "./lib-brand.mjs";
 
 const PORT = await freePort();
 const HOLD_MS = 2500;
@@ -91,12 +94,23 @@ bootWait(PORT, 900, async () => {
       "a backend registered after boot has its catalogue asked and re-broadcast");
 
     // ── 2. A session spawns on it, hooked off the plugin's sink ────────
+    // Sent TWICE under one ackId while the plugin's prepare() is still waiting (400 ms):
+    // the retry joins the first create, so exactly one session opens.
+    send({ t: "session.create", cwd: repo.path, cols: 100, rows: 30, ackId: "create-1", launch: { backend: "stubcli" } });
+    await sleep(100);
     send({ t: "session.create", cwd: repo.path, cols: 100, rows: 30, ackId: "create-1", launch: { backend: "stubcli" } });
     check(await until(() => ops.has("create-1")), "the create is answered");
     check(ops.get("create-1")?.ok === true, `…ok (${ops.get("create-1")?.reason ?? ""})`);
     check(await until(() => created.some((s) => s.backend === "stubcli")), "a session is created on stubcli");
+    await sleep(800);
+    const made = created.filter((s) => s.backend === "stubcli").length;
+    check(made === 1, `one ackId sent twice opens ONE session (${made})`);
     const sid = created.find((s) => s.backend === "stubcli")?.id;
     const cur = () => sessions.get(sid);
+    check(cur()?.told === "env-file" && cur()?.askRulesVia === "gate", `the session says how it was told and how its rules hold (${cur()?.told}, ${cur()?.askRulesVia})`);
+    const agentsMd = join(ROOT, STATE, "launch", sid ?? "-", "instructions", "AGENTS.md");
+    const toldText = existsSync(agentsMd) ? readFileSync(agentsMd, "utf8") : "";
+    check(/outbox/.test(toldText), `the host wrote the core's instructions where the plan asked, before the spawn (${agentsMd}: ${toldText.length} chars)`);
     check(typeof cur()?.backendSessionId === "string", `the launch's own id rides on the session (${cur()?.backendSessionId})`);
     check(await until(() => cur()?.hooked === true && cur()?.sideChannel?.state === "up", 10000),
       `hooked goes true off the plugin's sink (hooked=${cur()?.hooked} sideChannel=${JSON.stringify(cur()?.sideChannel)})`);

@@ -23,6 +23,8 @@ import { LS, lsGet, lsSet } from "../storage";
 import { usePhoneSetup } from "../usePhoneSetup";
 import { setupMissingText } from "../phoneSetup";
 import { haltBannerWords, liftHalt, useHalt } from "../features/halt";
+import { bannerView, openUpdates, useUpdatesStatus } from "../features/plugins";
+import { armRestart, disarmRestart, useArmedRestart } from "../features/cliRestart";
 import { Button } from "../kit/Button";
 
 const ICON = 16;
@@ -60,7 +62,7 @@ export function HaltBanner(): ReactNode {
     <div className="staged-bar halt-bar" role="alert">
       <OctagonX size={16} />
       <span className="staged-bar-text">{haltBannerWords(h)}</span>
-      <button type="button" className="key staged-bar-go" onClick={liftHalt}>Lift halt</button>
+      <Button className="staged-bar-go" type="button" onClick={liftHalt}>Lift halt</Button>
     </div>
   );
 }
@@ -148,6 +150,29 @@ export function PhoneSetupBanner({ onOpen }: { onOpen: () => void }): ReactNode 
   );
 }
 
+/**
+ * A waterplane update is due on the desktop (the updates view's `updatesDue`). It NEVER applies
+ * itself: the button opens the updates sheet, where the confirm lives. The × is per version, so a
+ * newer one asks again.
+ */
+export function UpdatesBanner(): ReactNode {
+  const dismissed = usePref("dismissedSelfUpdate");
+  const v = bannerView(useUpdatesStatus(), dismissed);
+  if (!v.show) return null;
+  return (
+    <div className="update-bar-wrap">
+      <div className="update-bar">
+        <Download size={ICON} />
+        <span className="update-text">{v.text}</span>
+        <Button title="see what changed and update the desktop" onClick={openUpdates}>review</Button>
+        <Button title="dismiss this — it comes back for a newer version" onClick={() => setPref("dismissedSelfUpdate", v.sig)}>
+          <X size={ICON} /> dismiss
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export interface CliUpdateBannerProps {
   update: UpdateInfo | null;
   liveAsk: (frame: ClientMessage, blocked?: string) => boolean;
@@ -224,6 +249,11 @@ export function CliUpdateBanner({ update, liveAsk, liveSend }: CliUpdateBannerPr
  *  per session and per version, so a newer install asks again. In memory — a
  *  reload is a fine moment to be told once more. */
 const restartDismissed = new Set<string>();
+/** Waved away or already sent: the compose bar's "restart first?" then stays quiet too. */
+export function restartOfferClosed(id: string, installed: string): boolean {
+  const key = `${id}|${installed}`;
+  return restartDismissed.has(key) || restartSent.has(key);
+}
 /** Restarts already sent, same key. The button is replaced by words the moment
  *  it is tapped: it stayed tappable until the replacement arrived, and two taps
  *  were two relaunches — two claudes on one conversation. */
@@ -243,10 +273,13 @@ export interface CliRestartBannerProps {
  * op, resuming this exact conversation (`--resume <id>`), so the process is
  * replaced and the conversation is not. What it WOULD kill — a running turn, a
  * background agent — is named and asked about first; it never fires itself
- * (`shared/clirestart.ts`).
+ * (`shared/clirestart.ts`). **When idle** is the other answer: the person arms
+ * it and `features/cliRestart` fires the same relaunch the first time a
+ * restart would stop nothing.
  */
 export function CliRestartBanner({ active, update, relaunch }: CliRestartBannerProps): ReactNode {
   const [, bump] = useState(0);
+  const armedFor = useArmedRestart(active.id);
   const due = cliRestartDue(active.cliVersion, update?.current);
   if (!due) return null;
   const key = `${active.id}|${due.installed}`;
@@ -280,9 +313,18 @@ export function CliRestartBanner({ active, update, relaunch }: CliRestartBannerP
           ? <span className="update-text">restarting — the new session opens here</span>
           : v.cant
           ? <CantInline>can't restart here — {v.cant}</CantInline>
-          : <Button onClick={() => void restart()}>Restart, same conversation</Button>}
-        <Button title="hide this for this version — a newer install asks again"
-          onClick={() => { restartDismissed.add(key); bump((n) => n + 1); }}>
+          : armedFor === due.installed
+          ? <>
+            <span className="update-text">restarts by itself once nothing is running</span>
+            <Button onClick={() => disarmRestart(active.id)}>Cancel</Button>
+          </>
+          : <>
+            <Button onClick={() => void restart()}>Restart, same conversation</Button>
+            {/* The other answer to "what would it stop": wait until it stops nothing. */}
+            <Button onClick={() => armRestart(active.id, due.installed)}>When idle</Button>
+          </>}
+        <Button title="hide this for this version (and cancel a restart waiting for idle) — a newer install asks again"
+          onClick={() => { restartDismissed.add(key); disarmRestart(active.id); bump((n) => n + 1); }}>
           <X size={ICON} />
         </Button>
       </div>

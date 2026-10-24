@@ -311,13 +311,13 @@ export class LadderSlice {
       //
       // Subtracting this pass's own fires from it was a double count, and it
       // shipped in the first version of this re-read. `autoSlotsFree()` is `BACKLOG_SESSIONS_MAX -
-      // backlog.autoSessionCount()`, and `autoSessionCount()` counts sessions
-      // that ALREADY EXIST — a fired row's session exists synchronously (`fire()`
-      // → `execute()` → `freshSession()` → `openItemSession()` → `sessions.
-      // create()` all run before the executor's first `await`). So the host's
-      // live count already holds every session this pass opened, and taking them
-      // off again put the figure one-per-fire below the truth on every pass that
-      // had fired anything.
+      // backlog.autoSessionCount() - startingSlotCount(…)`: the sessions that
+      // ALREADY EXIST plus every `starting` row whose session is still being
+      // opened (a plugin backend's `create()` awaits `prepare()` before the
+      // session is registered, so "it exists synchronously" holds for claude
+      // only — `server/intentDeps.ts`). So the host's figure already holds every
+      // session this pass opened, and taking them off again put the figure
+      // one-per-fire below the truth on every pass that had fired anything.
       //
       // Reproduced: cap 3, an empty host, three due rows in three repos (the
       // re-ask runs for every `go` row) — `a` and `b` fire, and `c` reads `noSlot` with one slot genuinely free — and

@@ -96,8 +96,8 @@ export const repoOpsApi = {
    * running and saying no, not a transport failure. Read `ok` and `last.refused`
    * off the body — an HTTP error here means the host, not the tool.
    */
-  repoHealthRefresh: (repoId: string, scope?: string | null) =>
+  repoHealthRefresh: (repoId: string, scope?: string | null, approveEngine?: boolean, approveToken?: string) =>
     jpost<RepoHealthView & { ok: boolean }>(
-      `/api/repos/${repoId}/repohealth/refresh`, scope ? { scope } : {}, 200_000,
+      `/api/repos/${repoId}/repohealth/refresh`, { ...(scope ? { scope } : {}), ...(approveEngine ? { approveEngine: true, ...(approveToken ? { approveToken } : {}) } : {}) }, 200_000,
     ),
 };

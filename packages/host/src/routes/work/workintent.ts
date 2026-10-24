@@ -1,8 +1,14 @@
 /**
  * Work routes — intent slice of `routes/work.ts` (see that file for the whole picture).
  */
-import { postClientDraft } from "../../agentintents.js";
+import { containPayloadCwd, postClientDraft } from "../../agentintents.js";
 import type { Route, RouteSpec, RouteTable } from "../types.js";
+
+const OUTSIDE = "that folder is outside the configured root";
+function refuseOutside(a: { c: { send(ws: any, m: any): void }; ws: any }, intentId: string) {
+  a.c.send(a.ws, { t: "toast", text: `intent: ${OUTSIDE}` });
+  return { ok: false, reason: OUTSIDE, intentId };
+}
 
 const onIntentList: Route<"intent.list"> = (a) => {
     a.c.send(a.ws, a.c.intentSnapshot());
@@ -95,8 +101,20 @@ const onIntentRequeue: RouteSpec<"intent.requeue"> = {
 
 const onIntentUpdate: RouteSpec<"intent.update"> = {
   durable: true,
-  run: (a) => {
-    const r = a.c.intents.update(a.msg.id, a.msg.patch);
+  run: async (a) => {
+    // Same gate as `intent.post`: wire directories are contained, never raw.
+    const patch = { ...a.msg.patch };
+    if (patch.cwd !== undefined) {
+      const cwd = await a.c.containRepoDir(patch.cwd);
+      if (!cwd) return refuseOutside(a, a.msg.id);
+      patch.cwd = cwd;
+    }
+    if (patch.payload !== undefined) {
+      const payload = await containPayloadCwd(a.c, patch.payload);
+      if (!payload) return refuseOutside(a, a.msg.id);
+      patch.payload = payload;
+    }
+    const r = a.c.intents.update(a.msg.id, patch);
     if (!r.ok) a.c.send(a.ws, { t: "toast", text: `intent: ${r.reason}` });
     return { ok: r.ok, reason: r.reason, intentId: a.msg.id };
   },
@@ -115,8 +133,14 @@ const onIntentWaive: RouteSpec<"intent.waive"> = {
 
 const onIntentRetarget: RouteSpec<"intent.retarget"> = {
   durable: true,
-  run: (a) => {
-    const r = a.c.intents.retarget(a.msg.id, a.msg.target, a.msg.cwd);
+  run: async (a) => {
+    let cwd = a.msg.cwd;
+    if (cwd !== undefined) {
+      const inside = await a.c.containRepoDir(cwd);
+      if (!inside) return refuseOutside(a, a.msg.id);
+      cwd = inside;
+    }
+    const r = a.c.intents.retarget(a.msg.id, a.msg.target, cwd);
     if (!r.ok) a.c.send(a.ws, { t: "toast", text: `intent: ${r.reason}` });
     return { ok: r.ok, reason: r.reason, intentId: a.msg.id };
   },

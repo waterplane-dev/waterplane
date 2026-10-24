@@ -71,6 +71,7 @@ export function StowTray() {
       {rows.map((r) => {
         const Icon = r.icon;
         return (
+          // raw: a <button> that is itself the part (RowTitle/RowSub are span/div); the chip is a tap target
           <button key={r.slot} className="row-sub stow-chip"
             onPointerDown={(e) => e.preventDefault()} onClick={r.unfold}
             title={`open ${r.label} again`}>

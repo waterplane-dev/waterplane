@@ -63,16 +63,16 @@ export function FoundDesktops({ onPassword }: {
   }
 
   if (load.s === "busy") {
-    return <div className="set-note" style={{ marginBottom: 12 }}><Loader2 size={13} className="spin" style={{ verticalAlign: "-2px" }} /> looking on your tailnet…</div>;
+    return <SetNote style={{ marginBottom: 12 }}><Loader2 size={13} className="spin" style={{ verticalAlign: "-2px" }} /> looking on your tailnet…</SetNote>;
   }
-  if (load.s === "bad") return <div className="set-note" style={{ marginBottom: 12 }}>{load.why}</div>;
+  if (load.s === "bad") return <SetNote style={{ marginBottom: 12 }}>{load.why}</SetNote>;
 
   const rows = foundRows(load.res.peers, saved);
   const fresh = rows.filter((r) => !r.saved);
   return (
     <div style={{ marginBottom: 14 }}>
       <SetNote><Radar size={13} style={{ verticalAlign: "-2px" }} /> found on your tailnet</SetNote>
-      {fresh.length === 0 && <div className="set-note" style={{ marginTop: 6 }}>{emptyFoundText(load.res.note, rows.length > 0)}</div>}
+      {fresh.length === 0 && <SetNote style={{ marginTop: 6 }}>{emptyFoundText(load.res.note, rows.length > 0)}</SetNote>}
       <div className="list" style={{ marginTop: 6 }}>
         {rows.map((r) => r.saved ? (
           <Row key={r.base}>
@@ -88,7 +88,7 @@ export function FoundDesktops({ onPassword }: {
           </Row>
         ))}
       </div>
-      {say && <div className="set-note" style={{ marginTop: 8, color: "var(--dead)" }}>{say}</div>}
+      {say && <SetNote style={{ marginTop: 8, color: "var(--dead)" }}>{say}</SetNote>}
     </div>
   );
 }

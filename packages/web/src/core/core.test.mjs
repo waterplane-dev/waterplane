@@ -157,7 +157,7 @@ test("toolbar items: undefined for an id no feature owns, null passes through, a
       { id: "bad", render: () => { throw new Error("z"); } },
     ] },
   ], () => core);
-  const ctx = { label: true, dismiss: () => {}, active: null };
+  const ctx = { label: true, dismiss: () => {}, openMenu: () => {}, active: null };
   assert.equal(t.item("nope", ctx), undefined);
   assert.equal(t.item("mine", ctx), "drawn");
   assert.deepEqual(seen, [[true, true]]);

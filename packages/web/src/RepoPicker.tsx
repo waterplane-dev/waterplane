@@ -216,7 +216,7 @@ interface SelectProps extends CommonProps {
  * an inconsistency: a `<select>` IS a disclosure. Thirty options behind a
  * dropdown cost a scroll; thirty full-width rows cost the screen the rest of
  * the form was going to use. A sheet that wants the primaries-only default
- * (the setup checklist, the secret writer) asks for it.
+ * (the secret writer) asks for it.
  */
 export function RepoSelect({
   repos, home, worktreeFilter = false, value, onChange, note, keepValue, placeholder,

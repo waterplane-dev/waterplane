@@ -128,8 +128,7 @@
 .localrt-bar .lrt-models { color: var(--fg); flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* A reading that is no longer current goes muted and carries its age, because
    a memory figure looks exactly as authoritative at two hours old. */
-.localrt-bar .lrt-models.stale { color: var(--muted); }
-.localrt-bar .lrt-age { color: var(--muted); }
+.localrt-bar .lrt-models.stale, .localrt-bar .lrt-age { color: var(--muted); }
 .localrt-bar .lrt-spark { flex: 0 0 auto; display: block; overflow: visible; }
 .localrt-bar .lrt-line { fill: none; stroke: var(--accent); stroke-width: 1.2; stroke-linejoin: round; stroke-linecap: round; }
 .localrt-bar .lrt-dot { fill: var(--accent); }
@@ -144,9 +143,8 @@
    is. A resident model is the headline — accent and weight — because it is the
    one thing on the desktop that holds gigabytes without anybody typing. */
 .localrt-bar .lrt-lead { color: var(--fg); display: flex; align-items: center; gap: var(--sp-4); }
-.localrt-bar .lrt-lead.stale { color: var(--muted); }
+.localrt-bar .lrt-lead.stale, .localrt-bar.lrt-has-model .lrt-lead.stale { color: var(--muted); }
 .localrt-bar.lrt-has-model .lrt-lead { color: var(--accent); font-weight: var(--fw-semibold); flex: 0 1 auto; min-width: 0; }
-.localrt-bar.lrt-has-model .lrt-lead.stale { color: var(--muted); }
 .localrt-bar .lrt-lead svg { flex: 0 0 auto; }
 /* The model's name is what gives way at phone width — never the memory on the right. */
 .localrt-bar .lrt-lead-size { flex: 0 0 auto; white-space: nowrap; font-weight: var(--fw-regular); }

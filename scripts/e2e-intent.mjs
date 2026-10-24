@@ -272,6 +272,13 @@ ws.send(JSON.stringify({
   },
 }));
 await waitFor(() => opAcks.some((a) => a.ackId === "ip-3"), 8000);
+// A wire cwd goes through the same containment gate as intent.post.
+ws.send(JSON.stringify({ t: "intent.update", ackId: "iu-out", id: "doomed-1", patch: { cwd: "/" } }));
+ws.send(JSON.stringify({ t: "intent.retarget", ackId: "ir-out", id: "doomed-1", target: { kind: "repo" }, cwd: "/" }));
+await waitFor(() => opAcks.some((a) => a.ackId === "iu-out") && opAcks.some((a) => a.ackId === "ir-out"), 8000);
+check(opAcks.find((a) => a.ackId === "iu-out")?.ok === false, "intent.update with cwd '/' is refused (outside the root)");
+check(opAcks.find((a) => a.ackId === "ir-out")?.ok === false, "intent.retarget with cwd '/' is refused");
+check(row("doomed-1")?.cwd === repo.path, "…and the row still points at its repo");
 ws.send(JSON.stringify({ t: "intent.cancel", id: "doomed-1" }));
 check(await waitFor(() => row("doomed-1")?.state === "canceled", 6000),
   `a cancel settles the row (${row("doomed-1")?.state})`);

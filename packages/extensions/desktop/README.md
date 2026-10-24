@@ -10,9 +10,10 @@ that is also off by default and is enforced on the host, not hidden on the phone
   VideoToolbox) is compiled on first use. macOS ties Screen Recording and Accessibility to the
   helper's signature, so an update that changes the helper's source rebuilds it and you grant both
   again; the setup checklist says when.
-- **Windows (host in WSL):** written and tested under Mono only; never run on a real Windows
-  desktop yet. The helper (`helper-win/`, C# 5, Media Foundation) is compiled by the `csc.exe`
-  Windows already carries.
+- **Windows (host in WSL):** not working yet. The helper (`helper-win/`, C# 5, Media Foundation)
+  builds with the `csc.exe` Windows already carries, and JPEG streams on a real Windows 11 machine
+  (synthetic source); H.264 crashes there when it reads the encoder's sequence header, and real
+  screen capture and input are unverified.
 
 No codec is bundled: encoding uses the operating system's encoder, decoding the browser's WebCodecs.
 How it works and what is still unverified: [`docs/notes/desktop.md`](../../../docs/notes/desktop.md).

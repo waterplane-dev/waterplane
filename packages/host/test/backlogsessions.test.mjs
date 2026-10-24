@@ -158,9 +158,9 @@ const workingShell = (over = {}) => ({
 
 // ── 1. what a fired item's session is called ────────────────────────────────
 
-test("an item's session is titled after the ITEM, under the prefix everything else recognises", () => {
+test("an item's session is titled after the ITEM, under the prefix everything else recognises", async () => {
   const { backlog, state, root } = makeBacklog();
-  const id = backlog.openItemSession({
+  const id = await backlog.openItemSession({
     id: "i1", cwd: REPO, label: "fix the flaky test",
     payload: { kind: "prompt", steps: ["fix it"] },
   });
@@ -174,9 +174,9 @@ test("an item's session is titled after the ITEM, under the prefix everything el
   rmSync(root, { recursive: true, force: true });
 });
 
-test("no label falls back to the words, clipped, and `resume` is passed through", () => {
+test("no label falls back to the words, clipped, and `resume` is passed through", async () => {
   const { backlog, state, root } = makeBacklog();
-  backlog.openItemSession({
+  await backlog.openItemSession({
     id: "i2", cwd: REPO, resume: true,
     payload: { kind: "prompt", steps: ["work out why the settle sweep re-reads the conversation log every poll\nand write it down"] },
   });
@@ -188,11 +188,11 @@ test("no label falls back to the words, clipped, and `resume` is passed through"
   rmSync(root, { recursive: true, force: true });
 });
 
-test("an item with its own budget opens its session WITH that budget; one without opens one without", () => {
+test("an item with its own budget opens its session WITH that budget; one without opens one without", async () => {
   const { backlog, state, root } = makeBacklog();
   const budget = { unit: "usd", max: 2, interrupt: true };
-  backlog.openItemSession({ id: "ib", cwd: REPO, budget, payload: { kind: "prompt", steps: ["fix it"] } });
-  backlog.openItemSession({ id: "in", cwd: REPO, payload: { kind: "prompt", steps: ["fix it"] } });
+  await backlog.openItemSession({ id: "ib", cwd: REPO, budget, payload: { kind: "prompt", steps: ["fix it"] } });
+  await backlog.openItemSession({ id: "in", cwd: REPO, payload: { kind: "prompt", steps: ["fix it"] } });
   assert.deepEqual(state.created[0].budget, budget, "the session is born with the item's cap (Intent.budget)");
   assert.equal("budget" in state.created[1], false, "no budget is not a zero budget — the key is absent");
   rmSync(root, { recursive: true, force: true });
@@ -627,11 +627,11 @@ test("global ON, the item said keep it open: the sweep leaves it", () => {
   rmSync(root, { recursive: true, force: true });
 });
 
-test("the item that OPENED the session decides, found by the mark openItemSession leaves", () => {
+test("the item that OPENED the session decides, found by the mark openItemSession leaves", async () => {
   const { backlog, state, isAttached, root } = makeBacklog();
   const row = { id: "i-keep", cwd: REPO, closeWhenDone: false, state: "done", createdAt: 5, payload: { kind: "prompt", steps: ["go"] } };
   state.rows.push(row); // NO sessionId on it: the mark alone has to find it
-  const sid = backlog.openItemSession(row);
+  const sid = await backlog.openItemSession(row);
   state.sessions.find((s) => s.id === sid).idle = 9_000;
   assert.equal(backlog.closesWhenDone(sid), false);
   assert.deepEqual(backlog.lingerSweep(isAttached), []);
@@ -691,11 +691,11 @@ test("the linger sweep closes as auto-done", () => {
   rmSync(root, { recursive: true, force: true });
 });
 
-test("an item's session is opened carrying the item: kind, id and its label", () => {
+test("an item's session is opened carrying the item: kind, id and its label", async () => {
   const { backlog, state, root } = makeBacklog();
-  backlog.openItemSession({ id: "i9", cwd: REPO, label: "fix the flaky test", trigger: { kind: "now" }, payload: { kind: "prompt", steps: ["fix it"] } });
+  await backlog.openItemSession({ id: "i9", cwd: REPO, label: "fix the flaky test", trigger: { kind: "now" }, payload: { kind: "prompt", steps: ["fix it"] } });
   assert.deepEqual(state.created[0].origin, { kind: "backlog", itemId: "i9", itemLabel: "fix the flaky test" });
-  backlog.openItemSession({ id: "a1", cwd: REPO, origin: "agent", trigger: { kind: "now" }, payload: { kind: "prompt", steps: ["look at the logs"] } });
+  await backlog.openItemSession({ id: "a1", cwd: REPO, origin: "agent", trigger: { kind: "now" }, payload: { kind: "prompt", steps: ["look at the logs"] } });
   assert.deepEqual(state.created[1].origin, { kind: "agent", itemId: "a1", itemLabel: "look at the logs" });
   rmSync(root, { recursive: true, force: true });
 });

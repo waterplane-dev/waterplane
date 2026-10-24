@@ -75,3 +75,18 @@ Elements on screen do not overlap each other.
 On desktop the conversation uses the available screen space so the main content is comfortable to read.
 - asked: 2026-10-19
 
+### R-layout-020 · shipped
+The gap at the top of the screen is tight.
+- asked: 2026-10-21
+- shipped: 6e037f89
+
+### R-layout-021 · shipped
+The section above the terminal/reader output is resizable by a drag grip, shrinking from the bottom first.
+- asked: 2026-10-21
+- shipped: 1d999d11
+
+### R-layout-022 · shipped
+The two buttons sit at the top-right of the section above the terminal/reader output.
+- asked: 2026-10-21
+- shipped: 1d999d11
+

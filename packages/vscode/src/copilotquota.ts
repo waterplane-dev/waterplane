@@ -5,9 +5,9 @@
  * Before any of that, the row shows what needs no sign-in: the plan and this month's requests
  * counted off this machine's Copilot Chat logs (`copilot-usage/host/vscodelocal.mts`, shared with the desktop), re-read every few
  * minutes from disk. The GitHub read is the extension's only network call, so it is OFF until
- * the person turns it on from the tree row; the choice is kept per machine. The endpoint (`/copilot_internal/user`) is GitHub's
+ * the person turns it on with the tree row's GitHub button; the choice is kept per machine. The endpoint (`/copilot_internal/user`) is GitHub's
  * internal one: a shape the parser does not know reads as absent, never as a guessed number.
- * A token is asked for silently on refresh; only the person's click may raise VS Code's own
+ * A token is asked for silently on refresh; only the person's press of that button may raise VS Code's own
  * sign-in prompt.
  */
 import * as vscode from "vscode";
@@ -54,7 +54,7 @@ export class CopilotQuota implements vscode.Disposable {
 
   get state(): QuotaState { return this.st; }
 
-  /** The tree row's click: turn it on (first time), else read again. May raise VS Code's sign-in. */
+  /** The row's GitHub button: turn it on (first time), else read again. May raise VS Code's sign-in. */
   async click(): Promise<void> {
     if (!this.st.on) {
       this.st.on = true;
@@ -149,7 +149,7 @@ export function quotaTooltip(st: QuotaState): vscode.MarkdownString {
   }
   if (st.why) md.appendText(`${st.why}\n\n`);
   md.appendText(st.on
-    ? "Click to read again. Re-read every 10 minutes while on."
-    : "Click for GitHub's own figure, with the limit and reset date. VS Code asks once to share the GitHub account it is already signed in with (no password); Cancel keeps this local count. It is the extension's only network call.");
+    ? "Click for Copilot Chat's token use on this machine. The GitHub button reads the quota again; it is re-read every 10 minutes while on."
+    : "Click for Copilot Chat's token use on this machine, no sign-in. For GitHub's own figure (the limit and reset date), use the row's GitHub button: VS Code asks once to share the GitHub account it is already signed in with; Cancel keeps this local count. That is the extension's only network call.");
   return md;
 }

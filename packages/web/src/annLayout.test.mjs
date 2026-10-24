@@ -5,7 +5,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  ANN_CONTROLS, DEFAULT_LAYOUT, isDefaultLayout, moveControl, readLayout, shownControls, toggleHidden,
+  ANN_CONTROLS, DEFAULT_LAYOUT, autoPlace, isDefaultLayout, moveControl, readLayout, shownControls, toggleHidden,
 } from "./annLayout.ts";
 
 const ids = ANN_CONTROLS.map((c) => c.id);
@@ -43,4 +43,22 @@ test("hide, show and reorder", () => {
   assert.equal(moveControl(l, "undo", -1), l);
   assert.equal(moveControl(l, "clear", 1), l);
   assert.ok(!isDefaultLayout(l));
+});
+
+test("auto puts the bar where the picture is drawn larger", () => {
+  const phone = { w: 390, h: 560 }; // the body between the head and the send bar
+  // A wide collage on an upright phone is width-bound: a rail would shrink it.
+  assert.equal(autoPlace(phone, { w: 1500, h: 580 }), "top");
+  // A phone screenshot is height-bound there: a row would shrink it.
+  assert.equal(autoPlace(phone, { w: 1008, h: 2244 }), "left");
+  // Landscape box, tall picture: the rail costs nothing it needs.
+  assert.equal(autoPlace({ w: 900, h: 400 }, { w: 1008, h: 2244 }), "left");
+  // Landscape box, wide picture.
+  assert.equal(autoPlace({ w: 900, h: 400 }, { w: 3000, h: 600 }), "top");
+});
+
+test("auto is undecided until both sizes are known", () => {
+  assert.equal(autoPlace(null, { w: 10, h: 10 }), null);
+  assert.equal(autoPlace({ w: 400, h: 800 }, null), null);
+  assert.equal(autoPlace({ w: 0, h: 800 }, { w: 10, h: 10 }), null);
 });

@@ -3,6 +3,7 @@ import { Cpu } from "lucide-react";
 import { LaunchPicker, launchOf } from "../LaunchPicker";
 import { launchOfTarget, launchWords, withLaunch, withoutLaunch } from "../sendIntent";
 import type { SendSheetModel } from "./useSendSheet";
+import { SetNote } from "../SettingsKit";
 
 /**
  * **The Start-with picker, offered on a chip and never forced.** The launch
@@ -33,14 +34,14 @@ export function LaunchRow({ m }: { m: SendSheetModel }) {
             nowLead={target.kind === "repos" ? "Every repo starts on" : "Starts on"}
             value={{ backend: at.backend, model: at.model, effort: at.effort }}
             onChange={(p) => setTarget((t) => withLaunch(t, launchOf(defaults, p)))}>
-            <span className="set-note">
+            <SetNote as="span">
               {/* Where a later run's "nothing picked" lands: the DESKTOP opens
                   it, on its own defaults — not this phone's. */}
               {lau ? "Just this send — your new-session defaults don’t change." : when.kind === "now"
                 ? "Nothing picked: it starts on your new-session defaults."
                 : "Nothing picked: the desktop opens it on its own defaults."}{" "}
               {lau && <button className="link-btn" onClick={() => setTarget(withoutLaunch)}>use the defaults</button>}
-            </span>
+            </SetNote>
           </LaunchPicker>
         </div>
       )}

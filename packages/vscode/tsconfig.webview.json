@@ -15,6 +15,7 @@
     "paths": {
       "@waterplane/shared": ["../shared/src/index.ts"],
       "@waterplane/kit": ["./webview/shims/kit.ts"],
+      "@waterplane/sdk": ["./webview/shims/sdk.ts"],
       "react": ["./node_modules/@types/react"],
       "react/jsx-runtime": ["./node_modules/@types/react/jsx-runtime"],
       "react-dom/client": ["./node_modules/@types/react-dom/client"],

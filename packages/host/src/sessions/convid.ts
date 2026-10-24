@@ -11,7 +11,7 @@ import { execFile } from "node:child_process";
 import { closeSync, existsSync, openSync, readdirSync, readSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { parseCliVersion } from "@waterplane/shared";
-import { DEFAULT_BACKEND, storeReaderFor, type BackendDescriptor } from "../backends/index.js";
+import { DEFAULT_BACKEND, derive, storeReaderFor, type BackendDescriptor } from "../backends/index.js";
 import { realResolve } from "../paths.js";
 import { claudeProjectDir } from "../transcript.js";
 import type { Session, SessionCore } from "./core.js";
@@ -85,7 +85,7 @@ export function transcriptTail(transcriptPath: string, sinceMs: number): { model
  * A log reading that already landed wins (it is the process speaking).
  */
 export function readSpawnVersion(core: SessionCore, s: Session | undefined): void {
-  if (!s || s.backend.caps.transcript !== "claude-jsonl") return;
+  if (!s || !derive(s.backend).keepsClaudeLog) return;
   execFile(s.backend.bin(), ["--version"], { timeout: 15_000 }, (err, stdout) => {
     if (err) return;
     const v = parseCliVersion(String(stdout));
@@ -106,7 +106,7 @@ export function readSpawnVersion(core: SessionCore, s: Session | undefined): voi
  * the end of setup. Imported lazily: `doctor.ts` pulls half the host in at import.
  */
 export function readSignInAtSpawn(core: SessionCore, s: Session | undefined): void {
-  if (!s || s.backend.caps.transcript !== "claude-jsonl") return;
+  if (!s || !derive(s.backend).keepsClaudeLog) return;
   void import("../doctor.js").then(({ claudeSignInState }) => claudeSignInState(s.backend.bin())).then((state) => {
     if (state !== "out" || s.info.hooked || !s.info.running || core.sessions.get(s.info.id) !== s) return;
     s.info.cliSetup = true;
@@ -186,7 +186,7 @@ export function stopClaudeIdWatch(s: Session): void {
  * unambiguous; null when the reader is not there (its plugin switched off) or could not tell.
  */
 export function detectBackendId(core: SessionCore, s: Session): string | null {
-  const reader = storeReaderFor(s.backend.caps);
+  const reader = storeReaderFor(s.backend);
   if (!reader) return null;
   const used = new Set<string>();
   for (const o of core.sessions.values()) {
@@ -248,7 +248,7 @@ export function watchBackendId(core: SessionCore, s: Session): void {
  *  broadcast if either changed. Called on turn boundaries — catches a
  *  mid-session `/model` switch. */
 export function refreshModel(core: SessionCore, s: Session, transcriptPath?: string): void {
-  if (s.backend.caps.transcript !== "claude-jsonl") return;
+  if (!derive(s.backend).keepsClaudeLog) return;
   const path = transcriptPath
     || (s.info.claudeSessionId ? join(claudeProjectDir(s.info.cwd), s.info.claudeSessionId + ".jsonl") : null);
   if (!path || !existsSync(path)) return;

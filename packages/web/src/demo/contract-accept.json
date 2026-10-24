@@ -1,6 +1,8 @@
 {
   "//": "What the demo deliberately does not do, one line of reason each. Read by contract.test.mjs: a host->client message type the demo never builds, or an /api route the phone calls that the demo answers with its fall-through 404, must be listed here. An entry the demo now handles, or that no longer exists, fails as stale.",
   "messages": {
+    "updates.status": "not reachable in demo: the demo host has no install to check, and updates.get/check/apply are refused in words by the handler table",
+    "updates.result": "not reachable in demo: updates.apply is refused in words, so no apply ever completes",
     "host.restarting": "not reachable in demo: the demo host lives in the page and never restarts, so there is no SIGTERM to announce",
     "billing.status": "not reachable in demo: a demo host has no billing profile to probe, so the phone reads its absence as unknown (billing.get is answered with nothing)",
     "authRequired": "not reachable in demo: there is no password gate, so no socket is ever refused for a missing token",
@@ -29,6 +31,7 @@
     "stream.status": "not reachable in demo: stream.open is refused, so no stream is ever open to report on"
   },
   "routes": {
+    "DELETE /api/conversations": "not reachable in demo: no demo backend's facts include conversations, so the archive draws claude's list only",
     "DELETE /api/netstats": "phone's own link telemetry about a real host; nothing to reset in the demo",
     "DELETE /api/peers/:param": "not reachable in demo: peer desktops (one desktop, no pairing)",
     "DELETE /api/repos/:param/archive": "not reachable in demo: no archived conversations on disk",
@@ -38,6 +41,7 @@
     "DELETE /api/repos/:param/inbox/:param": "gap: inbox uploads are listed but deleting one is not modelled",
     "DELETE /api/ui-usage": "phone-usage telemetry about a real host; nothing to reset in the demo",
     "GET /api/auth/status": "not reachable in demo: no password gate (LAN auth)",
+    "GET /api/conversations": "not reachable in demo: no demo backend's facts include conversations, so the archive draws claude's list only",
     "GET /api/devices": "not reachable in demo: no paired devices ledger",
     "GET /api/host/dictate": "not reachable in demo: dictation transcribes on the desktop",
     "GET /api/host/root": "not reachable in demo: the demo has no code folder to scan (the dialog and its Settings row read a real host)",
@@ -49,6 +53,7 @@
     "GET /api/netstats": "phone's own link telemetry about a real host; not modelled",
     "GET /api/peers": "not reachable in demo: peer desktops",
     "GET /api/peers/:param/status": "not reachable in demo: peer desktops",
+    "GET /api/plugin/:param/asset/:param": "not reachable in demo: no plugins installed, so no extension is switched on to download its engine files",
     "GET /api/push/key": "not reachable in demo: web push needs a real host's VAPID key",
     "GET /api/repos/:param/archive": "not reachable in demo: no archived conversations on disk",
     "GET /api/repos/:param/archive/transcript": "not reachable in demo: no archived conversations on disk to read",

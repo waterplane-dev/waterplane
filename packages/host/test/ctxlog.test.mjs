@@ -1398,3 +1398,57 @@ test("a re-write is not a mark on the spark — the window did not move", () => 
   assert.equal(spark.marks.length, 0);
   assert.equal(spark.coldStarts.count, 1);
 });
+
+// ── Skills ────────────────────────────────────────────────────────────────
+// The `Skill` tool writes the skill's text into the log as a meta user record
+// tied to its tool call (`sourceToolUseID`) — the one dated moment a skill
+// entered the window. Shape copied from a real 2.1.30x log.
+
+const skillBody = (at, dir, body = "# body\n", extra = {}) => JSON.stringify({
+  type: "user",
+  isMeta: true,
+  timestamp: iso(at),
+  uuid: `k${at}`,
+  sourceToolUseID: `toolu_${at}`,
+  ...extra,
+  message: { role: "user", content: [{ type: "text", text: `Base directory for this skill: ${dir}\n\n${body}` }] },
+});
+
+test("a skill body is a dated load, named by its directory, and never a turn", () => {
+  const body = "# heuristics\n" + "x".repeat(500);
+  const doc = readContextLog(logFile([
+    prompt(T0, "fix the detector"),
+    skillBody(T0 + 1_000, "/repo/.claude/skills/heuristics", body),
+    turn(T0 + 2_000, "m1", 30_000),
+    skillBody(T0 + 3_000, "/cache/plugins/wp/skills/waterplane/"),
+  ]));
+  assert.deepEqual(doc.skills.map((s) => [s.t, s.name]), [[T0 + 1_000, "heuristics"], [T0 + 3_000, "waterplane"]]);
+  assert.equal(doc.skills[0].chars, "Base directory for this skill: /repo/.claude/skills/heuristics\n\n".length + body.length);
+  assert.equal(doc.turns, 1);
+});
+
+test("a prompt quoting the skill phrase is not a load, nor is an undated or tool-less body", () => {
+  const doc = readContextLog(logFile([
+    prompt(T0, "Base directory for this skill: /x/skills/fake"),
+    skillBody(T0 + 1_000, "/x/skills/notool", "b", { sourceToolUseID: undefined }),
+    JSON.stringify({ ...JSON.parse(skillBody(0, "/x/skills/undated")), timestamp: undefined }),
+  ]));
+  assert.deepEqual(doc.skills, []);
+});
+
+test("a subagent's skill loads ride on its own roster row, never the parent's list", () => {
+  const dir = agentDir({
+    "agent-aaa.jsonl": [
+      skillBody(T0, "/r/.claude/skills/host", "b", { isSidechain: true }),
+      agentTurn(T0 + 1_000, "a1", 20_000),
+      skillBody(T0 + 2_000, "/r/.claude/skills/host-core", "b", { isSidechain: true }),
+    ],
+    "agent-bbb.jsonl": [agentTurn(T0 + 500, "b1", 10_000)],
+  });
+  const use = agentUsage(dir, null);
+  const byId = Object.fromEntries(use.runs.map((r) => [r.id, r]));
+  assert.deepEqual(byId.aaa.skills.map((s) => s.name), ["host", "host-core"]);
+  assert.equal(byId.bbb.skills, undefined);
+  // The body is not spend: the tally is the one request alone.
+  assert.equal(use.tok, 20_000 + 300 + 10_000 + 300);
+});

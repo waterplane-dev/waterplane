@@ -161,3 +161,18 @@ test("every socket mode carries firstSentAt; an upload writes no frame", () => {
   assert.equal(at({ mode: "upload" }), null);
   assert.equal(at({ mode: "op" }), null);
 });
+
+test("a typed answer rides the answer's own frame as promptText — one entry, one ackId, never `submit`", () => {
+  const at = (o) => entryFrame(markAttempt(row(o), 7));
+  const typed = at({ text: "", answer: { fingerprint: "fp", label: "“blue”", question: "colour?", text: "blue" } });
+  assert.equal(typed.t, "session.input");
+  assert.equal(typed.promptText, "blue");
+  assert.equal(typed.promptChoice, undefined, "words alone name no option");
+  assert.equal(typed.expectPrompt, "fp");
+  assert.equal(typed.submit, undefined, "an answer, never the composer's delivery");
+  const reason = at({ text: "", answer: { fingerprint: "fp", label: "No", question: "run it?", choice: 3, text: "use the other file" } });
+  assert.equal(reason.promptChoice, 3);
+  assert.equal(reason.promptText, "use the other file");
+  const plain = at({ answer: { fingerprint: "fp", label: "Yes", question: "q?" } });
+  assert.equal("promptText" in plain, false, "absent when nobody typed — an older host never sees the field");
+});

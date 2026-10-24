@@ -24,7 +24,7 @@
  *
  * Pure: the caller hands in a synchronous reader over the folder (`AgentFilesFs`).
  */
-import { CHARS_PER_TOKEN, skillDescChars } from "./contextweight.js";
+import { CHARS_PER_TOKEN, frontmatterLines, skillDescChars } from "./contextweight.js";
 import type { ContextWeightInput, SkillWeight } from "./contextweight.js";
 
 export type InstructionReader = "claude" | "copilot";
@@ -52,8 +52,14 @@ export interface InstructionFile {
 
 export interface InstructionTotals { always: number; scoped: number; onDemand: number; files: number }
 
-/** The three VS Code settings that switch a family of files off for Copilot; false = off, absent = not known. */
-export interface CopilotSwitches { instructionFiles?: boolean; agentsMd?: boolean; claudeMd?: boolean }
+/** The VS Code settings that switch a family of files off for Copilot; false = off, absent = not known. */
+export interface CopilotSwitches {
+  instructionFiles?: boolean; agentsMd?: boolean; claudeMd?: boolean;
+  /** `chat.useAgentSkills`: skills in `.claude/skills`, `.github/skills`, `.agents/skills`. */
+  skills?: boolean;
+  /** `chat.includeApplyingInstructions`: `.instructions.md` files attached by their `applyTo`. */
+  applyingInstructions?: boolean;
+}
 
 /** Two always-on files one agent carries both of, repeating each other. */
 export interface InstructionOverlap { a: string; b: string; chars: number; ofSmaller: number; readers: InstructionReader[] }
@@ -70,8 +76,7 @@ export const READER_NAME: Record<InstructionReader, string> = { claude: "Claude 
 
 /** The YAML frontmatter as raw lines, or null. Only flat keys and simple lists are read. */
 function frontmatter(text: string): string[] | null {
-  const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text);
-  return fm ? fm[1].split(/\r?\n/) : null;
+  return frontmatterLines(text);
 }
 
 /** A key's value as globs: `k: "a, b"`, `k: [a, b]`, or a `- a` list under `k:`. Null when the key is absent. */
@@ -185,7 +190,10 @@ export function instructionInventory(fs: AgentFilesFs, sw: CopilotSwitches = {})
   }
   for (const p of walk(fs, ".github/instructions", (n) => n.endsWith(".instructions.md"))) {
     const t = fs.read(p);
-    if (t != null) add({ path: p, kind: "instructions", parts: classifyInstructions(t, ["copilot"]) }, t);
+    if (t == null) continue;
+    const applies = (fmGlobs(t, "applyTo") ?? []).length > 0;
+    const off = applies && sw.applyingInstructions === false;
+    add({ path: p, kind: "instructions", parts: classifyInstructions(t, off ? [] : ["copilot"]), ...(off ? { off: "chat.includeApplyingInstructions" } : {}) }, t);
   }
   for (const p of walk(fs, ".claude/rules", (n) => n.endsWith(".md"))) {
     const t = fs.read(p);
@@ -197,7 +205,10 @@ export function instructionInventory(fs: AgentFilesFs, sw: CopilotSwitches = {})
       if (!e.dir) continue;
       const p = `${dir}/${e.name}/SKILL.md`;
       const t = fs.read(p);
-      if (t != null) add({ path: p, kind: "skill", parts: classifySkill(t, readers) }, t);
+      if (t == null) continue;
+      // A skill with no description read is not a quiet 0: the row says the frontmatter had none.
+      const kind = skillDescChars(t) > 0 ? "skill" : "skill — no description found in its frontmatter";
+      add({ path: p, kind, parts: classifySkill(t, without(readers, "copilot", sw.skills)), ...offWord(sw.skills, "chat.useAgentSkills") }, t);
     }
   }
   // Copilot also reads CLAUDE.md and `.claude/skills`, but a repo with no file of Copilot's own is
@@ -300,4 +311,48 @@ export function copilotWeightWords(t: InstructionTotals, fmt: (n: number) => str
   if (!t.files) return null;
   const scoped = t.scoped ? `, plus ${fmt(t.scoped)} characters when a matching file is touched` : "";
   return `Copilot carries ~${fmt(Math.round(t.always / CHARS_PER_TOKEN))} tokens (${fmt(t.always)} characters) from ${t.files} ${t.files === 1 ? "file" : "files"} here on every request${scoped}. Copilot bills per request, not per token, so this costs context room, not money.`;
+}
+
+/** One instruction file's weight as the file viewer states it: the whole, and the share that rides every turn. */
+export interface InstructionFileWeight { kind: string; chars: number; always: number; scoped: number; onDemand: number }
+
+/**
+ * The weight of ONE file opened on its own, recognised by its name and folder — the viewer has no
+ * inventory, and a SKILL.md or CLAUDE.md is the same file under any root. Null for anything else.
+ * Whole-file kinds (CLAUDE.md, AGENTS.md, …) count as always-on; a skill, subagent or command
+ * carries its description every turn and its body when used.
+ */
+export function instructionFileWeight(path: string, text: string): InstructionFileWeight | null {
+  const p = path.replace(/\\/g, "/");
+  const name = p.split("/").pop() ?? p;
+  let kind: string;
+  let parts: InstructionPart[];
+  if (["CLAUDE.md", "AGENTS.md", "GEMINI.md", "copilot-instructions.md"].includes(name)) {
+    kind = name === "copilot-instructions.md" ? "Copilot instructions" : name;
+    parts = [{ readers: [], when: { kind: "always" }, chars: text.length }];
+  } else if (name === "SKILL.md") { kind = "skill"; parts = classifySkill(text, []); }
+  else if (name.endsWith(".instructions.md")) { kind = "instructions"; parts = classifyInstructions(text, []); }
+  else if (/(^|\/)\.claude\/rules\/.+\.md$/.test(p)) { kind = "rule"; parts = classifyRule(text, []); }
+  else if (/(^|\/)\.claude\/agents\/[^/]+\.md$/.test(p)) { kind = "subagent"; parts = classifySkill(text, []); }
+  else if (/(^|\/)\.claude\/commands\/.+\.md$/.test(p)) { kind = "command"; parts = classifySkill(text, []); }
+  else return null;
+  const w: InstructionFileWeight = { kind, chars: text.length, always: 0, scoped: 0, onDemand: 0 };
+  for (const part of parts) {
+    if (part.when.kind === "always") w.always += part.chars;
+    else if (part.when.kind === "scoped") w.scoped += part.chars;
+    else w.onDemand += part.chars;
+  }
+  return w;
+}
+
+/** `~740 tokens · 2,950 chars`, then the split: what rides every turn and what waits. Never the total alone. */
+export function instructionFileWeightWords(w: InstructionFileWeight, fmt: (n: number) => string = String): string {
+  const tok = (c: number) => `~${fmt(Math.round(c / CHARS_PER_TOKEN))} tokens`;
+  const head = `${tok(w.chars)} · ${fmt(w.chars)} chars`;
+  if (w.always === w.chars) return `${head}, all of it every turn`;
+  const split: string[] = [];
+  if (w.always) split.push(`${tok(w.always)} every turn`);
+  if (w.scoped) split.push(`${tok(w.scoped)} when a matching file is touched`);
+  if (w.onDemand) split.push(`${tok(w.onDemand)} only when used`);
+  return split.length ? `${head} (${split.join(", ")})` : head;
 }

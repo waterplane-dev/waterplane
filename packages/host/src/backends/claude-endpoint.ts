@@ -38,10 +38,10 @@ import { execFile } from "node:child_process";
 import { readFile, stat } from "node:fs/promises";
 import { envName } from "@waterplane/shared";
 import { env } from "../env.js";
-import { claudeBackend, CLAUDE_SPAWN_ENV } from "./claude.js";
+import { ACCOUNTLESS_CLAUDE_FACTS, claudeBackend, CLAUDE_SPAWN_ENV } from "./claude.js";
 import { leanArgs, windowFromShow } from "./claude-local.js";
 import { measuredOverhead } from "./overhead.js";
-import type { BackendDescriptor, BackendModels, LaunchPlan, LaunchRequest } from "./types.js";
+import type { CoreBackendDescriptor, BackendModels, LaunchPlan, LaunchRequest } from "./types.js";
 import { expandHome } from "../pathx.js";
 
 /** Everything this backend is configured with — data, so a test pins it. */
@@ -158,7 +158,7 @@ export function endpointLaunch(req: LaunchRequest, cfg: EndpointConfig = endpoin
   if (!req.launch.model) {
     throw new Error(`Claude on a custom endpoint needs a model chosen first — pick one of the models ${cfg.url} offers.`);
   }
-  const base = claudeBackend.launchArgs(req);
+  const base = claudeBackend.prepare(req);
   const helper = apiKeyHelperCommand(cfg.key);
   let args = helper ? withSettings(base.args, { apiKeyHelper: helper }) : [...base.args];
   if (cfg.lean) args = [...args, ...leanArgs({ lean: true, tools: cfg.tools })];
@@ -325,20 +325,19 @@ export async function endpointModels(cfg: EndpointConfig, deps: {
   };
 }
 
-export const claudeEndpointBackend: BackendDescriptor = {
+export const claudeEndpointBackend: CoreBackendDescriptor = {
   ...claudeBackend,
   id: "claude-endpoint",
   label: "Claude Code (custom endpoint)",
   spawnEnv: CLAUDE_SPAWN_ENV,
-  launchArgs: (req) => endpointLaunch(req),
+  prepare: (req) => endpointLaunch(req),
   caps: {
     ...claudeBackend.caps,
-    // An account's limits and usage report are claude.ai's; this is someone else's endpoint.
-    contextMeter: false,
-    usageLimits: false,
-    usageProbe: false,
     remoteControl: false,
   },
+  // An account's limits and usage report are claude.ai's; this is someone else's endpoint.
+  // (no gauge, no limit wall, no usage probe: those three providers are dropped).
+  facts: ACCOUNTLESS_CLAUDE_FACTS,
   models: () => endpointModels(endpointConfig()),
   healthScope: false,
 };

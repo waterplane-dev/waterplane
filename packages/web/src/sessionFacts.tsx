@@ -149,6 +149,15 @@ export function statusPill(s: SessionInfo, backends: BackendList = null): Pill {
   const st = sessionStatus(s, backends);
   if (st === "exited") return { cls: "dead", title: "", body: "exited" };
   const lim = s.limit;
+  if (st === "limit" && lim?.needsYou && !lim.nextAttemptAt) {
+    // A wall the backend's own channel reported with no time it lifts (Gemini's credit wall): the
+    // host schedules nothing, so the row says it is the person's, in the backend's words.
+    return {
+      cls: "limit-manual",
+      title: `blocked — it needs you: ${lim.needsYou}; resume it once that is sorted`,
+      body: <><Hourglass size={12} /> blocked · needs you</>,
+    };
+  }
   if (st === "limit" && lim?.spend) {
     // An API account out of credit or over a spend limit: not a plan window, so no "usage" and no
     // invented clock. A time is worded only where the host has one (a printed reset or the period's).

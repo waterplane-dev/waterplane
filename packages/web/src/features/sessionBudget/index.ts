@@ -8,7 +8,7 @@ import { createElement } from "react";
 import type { FeatureManifest } from "../../sdk";
 import { budgetSid } from "../../sessionBudgetDoor";
 import { SessionBudgetSheet } from "./SessionBudgetSheet";
-import { budgetSubject } from "./logic";
+import { budgetSubject, budgetWindowsOff } from "./logic";
 
 export { openSessionBudget, closeSessionBudget } from "./actions";
 export { budgetTagFacts, budgetToast, shouldNoticeBudget } from "./logic";
@@ -20,7 +20,9 @@ export const manifest: FeatureManifest = {
     // null and the screen underneath paints, never an empty sheet.
     { id: "sessionBudget", persisted: false, render: (c) => {
       const subject = budgetSubject(budgetSid.get(), c.world.sessions, c.world.active);
-      return subject ? createElement(SessionBudgetSheet, { subject, title: c.world.sessionRowTitle(subject) }) : null;
+      return subject ? createElement(SessionBudgetSheet, {
+        subject, title: c.world.sessionRowTitle(subject), windowsOff: budgetWindowsOff(subject, c.world.backends),
+      }) : null;
     } },
   ],
 };

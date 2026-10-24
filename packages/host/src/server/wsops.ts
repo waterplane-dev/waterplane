@@ -18,7 +18,7 @@ import { existsSync } from "node:fs";
 import type { WebSocket, WebSocketServer } from "ws";
 import { PROTOCOL_VERSION, decode, isClientFrame, type SendStamp, logTag, envName, roleFromUserAgent } from "@waterplane/shared";
 import { WIRE, recordWireFrame } from "../wirerecord.js";
-import { requestPeerKind } from "../net.js";
+import { requestPeerKind, isProxied } from "../net.js";
 import { checkRequestOrigin } from "../origin.js";
 import { tokenFromRequest } from "../auth.js";
 import { lanIdentity } from "../lanid.js";
@@ -194,7 +194,7 @@ export function createWsOps(ctx: ServerCtx) {
       // A WebSocket is exempt from the same-origin policy, so without this any
       // web page open in a browser that can reach us could drive the daemon —
       // and the daemon spawns `claude`. Refuse anything not from our own origin.
-      const originOk = checkRequestOrigin(req.headers);
+      const originOk = checkRequestOrigin(req.headers, { proxied: isProxied(req.headers) });
       if (!originOk.ok) {
         console.warn(`${logTag} refused ws upgrade: ${originOk.reason}. If this is your own hostname, set ${envName("ALLOWED_HOSTS")}.`);
         try { ws.close(1008, "origin not allowed"); } catch { /* already closing */ }
@@ -251,6 +251,10 @@ export function createWsOps(ctx: ServerCtx) {
       // connects (at most every 10 s) and the list re-sent only if it changed.
       void recheckUnavailableBackends(10_000).then((changed) => { if (changed) ctx.broadcast({ t: "backends", list: backendInfos() }); });
       ws.on("message", (raw) => {
+        // A revoke, a relock or a password change closes this socket
+        // asynchronously; a frame that still arrives from it is dropped before
+        // it is even decoded or logged (`clients.ts`, `socketAuthorized`).
+        if (!ctx.socketAuthorized(ws)) return;
         try {
           const msg = decode<unknown>(raw.toString());
           if (WIRE) recordWireFrame("in", msg);

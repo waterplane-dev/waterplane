@@ -1,0 +1,11 @@
+{
+  "id": "ocr",
+  "name": "Text in marks",
+  "version": "0.1.0",
+  "apiVersion": "2.0",
+  "description": "Reads the words under a highlight, box or circle you draw on a picture, on the phone itself (English and German), so the note to the agent quotes them. Switching it on downloads its reader once from this desktop (about 8 MB) and keeps it on the phone for offline use; nothing is sent to the desktop or a cloud service.",
+  "host": "host/index.mts",
+  "web": "web/index.ts",
+  "assets": "assets",
+  "optional": true
+}

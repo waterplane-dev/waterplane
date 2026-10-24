@@ -8,7 +8,7 @@
  * was folded from is somebody else's number and is dropped by the caller (`configDir`).
  * Pure: no vscode, no IO.
  */
-import { fmtCount, fmtUsd } from "@waterplane/shared";
+import { fmtCount, fmtUsd, localDayKey } from "@waterplane/shared";
 import type { CostBreakdown, TokenTotals } from "@waterplane/shared";
 import { HEADLINE_DAYS, headline, headlineSpan } from "../../../extensions/token-stats/web/headline.js";
 import type { HeadlineDay } from "../../../extensions/token-stats/web/headline.js";
@@ -104,4 +104,17 @@ export function weekSplit(s: HeadlineSummary): string {
   if (c) return `input ${fmtUsd(c.input)} · output ${fmtUsd(c.output)} · cache read ${fmtUsd(c.cacheRead)} · cache write ${fmtUsd(c.cacheWrite)}`;
   const t = s.week.split;
   return `input ${fmtCount(t.input)} · output ${fmtCount(t.output)} · cache read ${fmtCount(t.cacheRead)} · cache write ${fmtCount(t.cacheWrite)} tokens`;
+}
+
+/**
+ * Copilot Chat's last seven days off the scan's own ledger, for a week Claude's logs left empty.
+ * Tokens in Copilot's own kinds, never priced and never added to Claude's; null when there are none.
+ */
+export function copilotWeekWords(corpus: CorpusDoc | null, now = Date.now()): string | null {
+  const led = corpus?.copilot;
+  if (!led?.available) return null;
+  const from = localDayKey(now - 6 * 86_400_000);
+  let n = 0;
+  for (const d of led.days) if (d.day >= from) for (const v of Object.values(d.kinds)) n += v;
+  return n > 0 ? `7 d: Copilot ${fmtCount(n)} tokens` : null;
 }

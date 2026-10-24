@@ -57,6 +57,8 @@ export interface DevicePrefs {
   confirmQueue: boolean;
   /** Ask before closing a session that would lose work. Default ON, synced. */
   confirmClose: boolean;
+  updatesAutoCheck: boolean;
+  dismissedSelfUpdate: string;
   /** Ask backend + model before every fresh launch. Default OFF, synced. */
   launchAsk: boolean;
   /** The spend marks' thresholds (`shared/spendwarn.ts`). Default ON at 2%/5% of a week, synced. */
@@ -145,6 +147,13 @@ export const prefs = createPrefs<DevicePrefs>({
   serialSessions: flag(LS.serialSessions, onUnlessZero, true),
   confirmQueue: flag(LS.confirmQueue, onUnlessZero, true),
   confirmClose: flag(LS.confirmClose, onUnlessZero, true),
+  // Default ON, and the host's own words for off: it reads this key as a STRING ("false"/"0"/"off").
+  updatesAutoCheck: {
+    load: () => !["false", "0", "off"].includes((lsGet(LS.updatesAutoCheck) ?? "").trim().toLowerCase()),
+    save: (v) => lsSet(LS.updatesAutoCheck, v ? "true" : "false"),
+    keys: [LS.updatesAutoCheck],
+  },
+  dismissedSelfUpdate: { load: () => lsGet(LS.dismissedSelfUpdate) || "", save: (v) => lsSet(LS.dismissedSelfUpdate, v) },
   // Default OFF, so `lsBool` and not `!== "0"`: a device that has never heard
   // of this key must not read its absence as "ask me".
   launchAsk: { load: () => lsBool(LS.launchAsk), save: (v) => lsSetBool(LS.launchAsk, v), keys: [LS.launchAsk] },

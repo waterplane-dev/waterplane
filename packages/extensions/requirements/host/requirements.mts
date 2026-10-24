@@ -143,18 +143,29 @@ export async function promptsSinceAsync(worktree: string, since: string | null |
 
 const GIT_MS = 5000;
 const execFileP = promisify(execFile);
-const revListArgs = (worktree: string, sha: string | null | undefined) =>
-  ["-C", worktree, "rev-list", "--count", sha ? `${sha}..HEAD` : "HEAD"];
+/** `commitsThrough` comes from the repo's committed `.state.json`: only a hex sha
+ *  reaches git's argv (a `--flag` there would be read as an option), and a value
+ *  that is not one answers null — never a count from the wrong anchor. */
+const SHA_RE = /^[0-9a-f]{7,40}$/;
+const revListArgs = (worktree: string, sha: string | null | undefined): string[] | null => {
+  if (sha && !SHA_RE.test(sha)) return null;
+  return ["-C", worktree, "rev-list", "--count", sha ? `${sha}..HEAD` : "HEAD"];
+};
 
 export function commitsSince(worktree: string, sha: string | null | undefined): number | null {
+  const args = revListArgs(worktree, sha);
+  if (!args) return null;
   try {
-    return Number(execFileSync("git", revListArgs(worktree, sha), { encoding: "utf8", timeout: GIT_MS, stdio: ["ignore", "pipe", "ignore"] }).trim());
+    const n = Number(execFileSync("git", args, { encoding: "utf8", timeout: GIT_MS, stdio: ["ignore", "pipe", "ignore"] }).trim());
+    return Number.isFinite(n) ? n : null;
   } catch { return null; }
 }
 
 export async function commitsSinceAsync(worktree: string, sha: string | null | undefined): Promise<number | null> {
+  const args = revListArgs(worktree, sha);
+  if (!args) return null;
   try {
-    const n = Number((await execFileP("git", revListArgs(worktree, sha), { encoding: "utf8", timeout: GIT_MS })).stdout.trim());
+    const n = Number((await execFileP("git", args, { encoding: "utf8", timeout: GIT_MS })).stdout.trim());
     return Number.isFinite(n) ? n : null;
   } catch { return null; }
 }

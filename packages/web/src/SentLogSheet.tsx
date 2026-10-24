@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, Bot, ChevronRight, Check, CircleSlash, Hourglass, Layers, MessageSquare, PencilLine, Puzzle, RefreshCw, Send, SquareTerminal, Trash2, User } from "lucide-react";
+import { AlertTriangle, Bot, ChevronRight, Check, CircleSlash, Hourglass, Layers, MessageSquare, PencilLine, Puzzle, RefreshCw, Send, SquareTerminal, TextCursorInput, Trash2, User } from "lucide-react";
 import type { SentCommand, SentSource } from "@waterplane/shared";
 import { SheetHead } from "./Sheet";
 import { ConfirmButton } from "./Confirm";
@@ -32,6 +32,7 @@ const SOURCE: Record<SentSource, { label: string; Icon: typeof Bot }> = {
   "fanout-followup": { label: "fan-out follow-up", Icon: Send },
   create: { label: "new session's first prompt", Icon: SquareTerminal },
   plugin: { label: "plugin auto-answer", Icon: Puzzle },
+  phone: { label: "your typed answer to the CLI's question", Icon: TextCursorInput },
   // Rows written before the oracle became a plugin keep their own word.
   oracle: { label: "oracle auto-answer (legacy)", Icon: Bot },
   limit: { label: "usage-limit auto-continue", Icon: Hourglass },

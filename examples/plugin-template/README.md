@@ -32,13 +32,29 @@ Settings; a broken one is listed there with the reason, never skipped in silence
    `waterplane-plugin.json`.
 2. Replace the action and the setting with your own. What a manifest may declare and what `api`
    offers `host.mjs`: [docs/plugins-api.md](https://github.com/waterplane-dev/waterplane/blob/main/docs/plugins-api.md).
-3. Keep `apiVersion` at the oldest API version whose features you use. This template uses only
-   `1.0` features, so it loads on every 1.x host.
+3. Optionally add `"maturity": "stable" | "preview" | "experimental"` to the manifest (absent
+   shows as *Unrated*). Keep `apiVersion` at the oldest API version whose features you use. This template uses only
+   `2.0` features, so it loads on every 2.x host.
 4. Publish it in its own repo and **add the `waterplane-plugin` topic** to that repo (the gear next
    to *About* on its GitHub page), so people can
    [find it](https://github.com/topics/waterplane-plugin). To be listed in waterplane's own
    [plugin list](https://github.com/waterplane-dev/waterplane/blob/main/docs/plugins.md), open an
    issue or a pull request there.
+
+## Adding a CLI of your own (a backend)
+
+This template adds a button and a setting. A plugin can also add a whole CLI to the launcher
+(`api.backend`, plugin API 2.x): list its id under `backends` in the manifest, then hand `api.backend`
+a definition with `bin()`, `prepare()` (async; it answers the argv, how the agent was told what the
+phone offers, and how the ask rules hold), `facts` (for each thing the phone shows, an ordered list
+of where it comes from: the CLI's own events, or a named screen or store reader) and `sources` (the
+CLI's turns, dialogs, questions and so on). Declare only the facts you can read; a fact you list
+nothing for is absent on the phone, never guessed. `api.tail`, `api.screen`, `api.bindConversation`
+and `api.sessionFiles` are there so you do not write those helpers again. A manifest that lists
+`backends` must declare `apiVersion` `2.0` or newer. The reference is
+[docs/plugins-api.md](https://github.com/waterplane-dev/waterplane/blob/main/docs/plugins-api.md);
+[`scripts/fixtures/plugin-backend-stub/host.mjs`](https://github.com/waterplane-dev/waterplane/blob/main/scripts/fixtures/plugin-backend-stub/host.mjs)
+is a complete small backend to read.
 
 ## Trust
 

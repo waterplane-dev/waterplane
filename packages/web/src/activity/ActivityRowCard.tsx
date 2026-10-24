@@ -40,13 +40,12 @@ function ActionButton({ a, onPress }: { a: ActivityAction; onPress: () => void }
   const Icon = ACTION_ICON[a.id];
   // `primary` decides ORDER (it leads the strip), never paint: the solid accent fill is a
   // sheet's one primary verb, and a list of rows each with its own read as twenty of them.
-  const cls = `key${a.danger ? " danger" : ""}`;
   // No verb here asks first: *run it now* into a busy checkout was the last
   // one, and it is the manual override — one tap, its consequence in `a.note`.
   return (
-    <button className={cls} title={a.label} data-hint={`activity.${a.id}`} onClick={onPress}>
+    <Button className={a.danger ? "danger" : undefined} title={a.label} data-hint={`activity.${a.id}`} onClick={onPress}>
       <Icon size={ICON} /> {a.label}
-    </button>
+    </Button>
   );
 }
 

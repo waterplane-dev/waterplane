@@ -31,8 +31,14 @@ on GitHub in either theme and in the phone's gallery.
   local Ollama model and Claude Code on a custom endpoint are core; opencode is an in-repo extension
   you can switch off; Copilot and Codex (in the picture as examples) are external plugins in their
   own repos, separate projects and not part of waterplane ([plugins.md](plugins.md)).
-- **One ladder per fact.** Turn ends, dialogs, transcript, context and tokens come first from the
-  CLI's own side channel, then from a regex over the screen, then they are absent. Never guessed.
+- **One provider list per fact.** Each backend states, per fact (turns, dialogs, questions,
+  transcript, context, tokens, usage, limits, agents, conversations…), an ordered list of where it
+  comes from: the CLI's own side channel, a named screen reader, or a named store reader. The first
+  that answers wins; an empty list means the fact is absent. Never guessed. One module
+  (`backends/derive.ts`) reads those lists, so no gate in core names a backend.
+- **What the agent is told.** The repo-facing text (outbox, inbox, builds) is one core text; each
+  backend's launch plan says how it reached the CLI (a plugin dir, a launch file, or not at all, which
+  the phone then says), and likewise how the ask-before-irreversible rules hold.
 - **Ledgers.** Token and cost readings stay per backend, in that backend's unit, and are never
   summed: Claude's is read from its own logs and priced in dollars
   ([token-stats-architecture.md](token-stats-architecture.md)). Claude and claude-local share
@@ -82,7 +88,9 @@ daemon exit for every loaded module and is where child processes are killed.
 **May do.** Everything goes through `HostPluginApi`: read sessions and repo files (path-guarded),
 listen for boxes, questions and actions, declare UI (status, badges, suggestions, notifications),
 answer a box only through the answer gate, hand work to an agent only as a backlog item a person
-taps, talk to the phone over `plugin.call` / `plugin.push` on the one socket, and register a backend.
+taps, talk to the phone over `plugin.call` / `plugin.push` on the one socket, and register a backend
+(a backend plugin also gets a small toolkit: follow a JSONL file, read the live screen, bind a
+session to the CLI's conversation, find its per-session launch files).
 
 **Trust.** A plugin runs in the daemon with the daemon's rights — this is not a sandbox. The API's
 job is that core rules (the answer gate's five checks, path containment, metering) cannot be skipped
@@ -91,12 +99,15 @@ job is that core rules (the answer gate's five checks, path containment, meterin
 **A plugin backend at runtime.** The CLI's hook posts to a loopback-only route; the plugin turns it
 into a dialog with the CLI's own id and holds the reply (≤ 8 s by default); the phone's tap goes
 through `sessions.answerBox()` to that dialog's `answer()`, and the held reply lets the CLI go on.
-No tap inside the hold ⇒ the CLI draws its own dialog and the same box answers by keystrokes.
+No tap inside the hold ⇒ the CLI draws its own dialog and the same box answers by keystrokes. A
+question the agent asks with no box at all is answered the same way, by the CLI's own channel or by
+words typed into its form (a dialog row that takes a reason is answered keys, then words).
 
 Detail: [plugins.md](plugins.md) (seams, answer gate, decision log), the source interfaces in
 `packages/shared/src/backendsources.ts`. **Why each backend lives where it does:** claude,
 claude-local and claude-endpoint are core (one TUI, one jsonl, one hook pipe). opencode is an in-repo
 extension, kept private, because the first proof of `api.backend()` had to be a backend that ships,
 and `local/extension-boundary` is what proves it. Further CLIs are external plugins
-(`plugin-paths.json`). A screen reader is core work either way: it is measured against one binary and
-pinned by fixtures, so a plugin names one and never brings its own.
+(`plugin-paths.json`). A screen or store reader is measured against one binary and pinned by
+fixtures; core's are named by a backend's provider list, and a backend extension may contribute its
+own by name (`api.screenReader` / `api.storeReader`), registered before the backend that names them.

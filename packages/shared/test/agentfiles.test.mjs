@@ -75,3 +75,47 @@ test("a Claude-only repo is not weighed for Copilot; one Copilot file brings CLA
   const withAgents = instructionInventory(fsOf({ "CLAUDE.md": "z".repeat(50), "AGENTS.md": "y".repeat(10) }));
   assert.equal(instructionTotals(withAgents.files, "copilot").always, 60);
 });
+
+test("instructionFileWeight: a skill splits description (every turn) from body (when used)", async () => {
+  const { instructionFileWeight, instructionFileWeightWords } = await import("../dist/index.js");
+  const text = `---\nname: x\ndescription: ${"d".repeat(400)}\n---\n${"b".repeat(3600)}`;
+  const w = instructionFileWeight("tools/skill/SKILL.md", text);
+  assert.equal(w.kind, "skill");
+  assert.equal(w.always, 400);
+  assert.equal(w.always + w.onDemand, text.length);
+  assert.equal(instructionFileWeightWords(w), `~${Math.round(text.length / 4)} tokens · ${text.length} chars (~100 tokens every turn, ~${Math.round((text.length - 400) / 4)} tokens only when used)`);
+});
+
+test("instructionFileWeight: CLAUDE.md is all always-on; a plain markdown file is not weighed", async () => {
+  const { instructionFileWeight, instructionFileWeightWords } = await import("../dist/index.js");
+  const w = instructionFileWeight("packages/x/CLAUDE.md", "a".repeat(800));
+  assert.equal(instructionFileWeightWords(w), "~200 tokens · 800 chars, all of it every turn");
+  assert.equal(instructionFileWeight("docs/README.md", "a".repeat(800)), null);
+  assert.equal(instructionFileWeight(".claude/rules/web.md", "---\npaths: \"src/**\"\n---\nbody").scoped > 0, true);
+});
+
+test("a skill with no description says so; chat.useAgentSkills off drops Copilot from skills", () => {
+  const fs = fsOf({
+    ".github/copilot-instructions.md": "x",
+    ".github/skills/a/SKILL.md": "# no frontmatter\nbody",
+    ".github/skills/b/SKILL.md": "---\ndescription: does b\n---\nbody",
+  });
+  const on = instructionInventory(fs).files;
+  assert.equal(on.find((f) => f.path.includes("/a/")).kind, "skill — no description found in its frontmatter");
+  assert.equal(on.find((f) => f.path.includes("/b/")).kind, "skill");
+  const off = instructionInventory(fs, { skills: false }).files.find((f) => f.path.includes("/b/"));
+  assert.deepEqual(off.parts.map((p) => p.readers), [[], []]);
+  assert.equal(off.off, "chat.useAgentSkills");
+});
+
+test("chat.includeApplyingInstructions off drops Copilot from applyTo instructions only", () => {
+  const fs = fsOf({
+    ".github/instructions/ts.instructions.md": "---\napplyTo: \"src/**\"\n---\nuse strict",
+    ".github/instructions/d.instructions.md": "---\ndescription: when asked\n---\nbody",
+  });
+  const files = instructionInventory(fs, { applyingInstructions: false }).files;
+  const ts = files.find((f) => f.path.endsWith("ts.instructions.md"));
+  assert.deepEqual(ts.parts[0].readers, []);
+  assert.equal(ts.off, "chat.includeApplyingInstructions");
+  assert.deepEqual(files.find((f) => f.path.endsWith("d.instructions.md")).parts[0].readers, ["copilot"]);
+});

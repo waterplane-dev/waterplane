@@ -102,7 +102,8 @@ const PINS = [
     name: "ack-ledger writes (acks.remember)",
     re: /\backs\.remember\(/g,
     // routes/session.ts 6 → 7: a phone's bare `/fork` opens a tab instead of being typed (`forkFromInput`).
-    today: { "routes/session.ts": 7, "routes/work/workbacklog.ts": 3, "server/wsops.ts": 2 },
+    // 7 → 6: the checkbox Submit row's receipt goes through `answerReply` (in flight under its ackId, like every answer).
+    today: { "routes/session.ts": 6, "routes/work/workbacklog.ts": 3, "server/wsops.ts": 2 },
     why: "at-most-once rests on each verdict being remembered exactly once",
   },
   {
@@ -148,9 +149,11 @@ const PINS = [
   {
     name: "intervals (setInterval)",
     re: /\bsetInterval\(/g,
+    // +1 main.ts (2026-10-21): the MagicDNS name is re-read until known (origin fallback, S1).
+    // +1 sessions/sidechannel.ts (2026-10-22): a source turn's end re-asks for a fresh context sample (≤1.5 s).
     today: {
-      "intents/manager.ts": 1, "localrt.ts": 1, "main.ts": 1, "opendeliveries.ts": 1,
-      "server/billingwire.ts": 1, "server/sessionEvents.ts": 1, "server/wsops.ts": 1, "sessions.ts": 1, "sessions/sidechannel.ts": 1, "setupwatch.ts": 1, "healthwatch.ts": 1, "update.ts": 3, "usage.ts": 3, "usagesources.ts": 1,
+      "intents/manager.ts": 1, "localrt.ts": 1, "main.ts": 2, "opendeliveries.ts": 1,
+      "server/billingwire.ts": 1, "server/sessionEvents.ts": 1, "server/wsops.ts": 1, "sessions.ts": 1, "sessions/sidechannel.ts": 2, "setupwatch.ts": 1, "healthwatch.ts": 1, "diskwatch.ts": 1, "update.ts": 3, "usage.ts": 3, "usagesources.ts": 1,
     },
     why: "an interval left in the facade AND its slice ticks twice",
   },
@@ -158,7 +161,8 @@ const PINS = [
     name: "timeouts in the three files and their slices (setTimeout)",
     re: /\bsetTimeout\(/g,
     scope: (f) => BIG3(f) || f.startsWith("sessions/") || f.startsWith("server/") || INTENTS(f),
-    today: { "main.ts": 2, "server/http.ts": 1, "sessions/boxes.ts": 3, "sessions/convid.ts": 4, "sessions/drive.ts": 1, "sessions/links.ts": 1, "sessions/livemode.ts": 1, "sessions/resume.ts": 3, "sessions/tmux.ts": 1, "sessions/turn.ts": 2, "sessions/wall.ts": 3 },
+    // server/clients.ts: the one-second grace before a distrusted socket is `terminate()`d (2026-10-22 security pass).
+    today: { "main.ts": 2, "server/clients.ts": 1, "server/http.ts": 1, "sessions/boxes.ts": 3, "sessions/convid.ts": 4, "sessions/drive.ts": 1, "sessions/idlewatch.ts": 1, "sessions/links.ts": 1, "sessions/livemode.ts": 1, "sessions/resume.ts": 3, "sessions/sidechannel.ts": 1, "sessions/tmux.ts": 1, "sessions/turn.ts": 2, "sessions/wall.ts": 3 },
   },
   {
     name: "summary spends (runSummaryTask calls)",
@@ -207,8 +211,10 @@ const PINS = [
     name: "sessions emits",
     // roster.ts 11 → 13 (2026-10-21, R-conversations-007): `bookmarkChanged` re-sends a live
     // session's `updated` and the closed stack when its conversation's bookmark moves.
+    // boxes.ts 6 → 7 (2026-10-21, backend v2 WP4): a typed answer the CLI never closed puts
+    // `prompt.answerNote` on the box and re-sends `updated` once.
     re: /\b(?:this|core)\.emit\(\s*"/g, scope: SESSIONS,
-    today: { "sessions.ts": 9, "sessions/boxes.ts": 6, "sessions/budgetwatch.ts": 4, "sessions/convid.ts": 5, "sessions/drive.ts": 3, "sessions/links.ts": 1, "sessions/livemode.ts": 2, "sessions/record.ts": 6, "sessions/ctxseries.ts": 2, "sessions/resume.ts": 6, "sessions/roster.ts": 13, "sessions/sidechannel.ts": 2, "sessions/turn.ts": 11, "sessions/wall.ts": 18 },
+    today: { "sessions.ts": 9, "sessions/boxes.ts": 7, "sessions/budgetwatch.ts": 4, "sessions/convid.ts": 5, "sessions/drive.ts": 3, "sessions/idlewatch.ts": 1, "sessions/links.ts": 1, "sessions/livemode.ts": 2, "sessions/record.ts": 6, "sessions/ctxseries.ts": 2, "sessions/resume.ts": 6, "sessions/roster.ts": 13, "sessions/sidechannel.ts": 2, "sessions/turn.ts": 11, "sessions/wall.ts": 18 },
     // turn.ts 10 → 11: `setCliSuggestion` is a NEW fact (the CLI's next-prompt proposal), its own emit, not a copy.
     // claude onto the sources seam (design §10): the pipe-live emit moved turn.ts → sidechannel.ts, and
     // UserPromptSubmit's idle-clear emit was the SAME line as `sourceTurn`'s started edge — one path now, one site.

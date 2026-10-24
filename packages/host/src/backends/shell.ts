@@ -25,7 +25,7 @@ import { join } from "node:path";
 import { envName } from "@waterplane/shared";
 import { env, STATE_DIR } from "../env.js";
 import { writeTextAtomic } from "../jsonstore.js";
-import type { BackendDescriptor, LaunchPlan, LaunchRequest } from "./types.js";
+import type { CoreBackendDescriptor, LaunchPlan, LaunchRequest } from "./types.js";
 
 /** The binary: `WATERPLANE_SHELL_BIN`, else the person's own `$SHELL`, else `/bin/sh`. */
 export const shellBin = (): string => env("SHELL_BIN") || process.env.SHELL || "/bin/sh";
@@ -83,13 +83,16 @@ export function ensureBrowserShim(port: number, dir: string = STATE_DIR): string
  */
 export const SHELL_DROP_ENV: readonly string[] = ["*_API_KEY", "*_KEY_FILE", "*_KEYCHAIN"];
 
-function launchArgs(req: LaunchRequest): LaunchPlan {
+function prepare(req: LaunchRequest): LaunchPlan {
   // A shell keeps no conversation; "continue" / "pick" / "fork" would be a
   // launch that silently means something else. Refused in words, before a spawn.
   if (req.resumeMode) throw new Error("A shell has no conversation to continue — open a new shell instead.");
   return {
     args: ["-l"],
     dropEnv: SHELL_DROP_ENV,
+    // A shell is a person's own prompt: no agent to tell, no rule to hold.
+    instructionsVia: "none",
+    askRulesVia: "none",
     env: {
       BROWSER: ensureBrowserShim(req.hookPort),
       [envName("SESSION")]: req.hostSessionId ?? "",
@@ -98,12 +101,12 @@ function launchArgs(req: LaunchRequest): LaunchPlan {
   };
 }
 
-export const shellBackend: BackendDescriptor = {
+export const shellBackend: CoreBackendDescriptor = {
   id: "shell",
   label: "Shell",
   bin: shellBin,
   spawnEnv: {},
-  launchArgs,
+  prepare,
   delivery: {
     submitKey: "\r",
     textThenSubmitDelayMs: 150,
@@ -115,19 +118,13 @@ export const shellBackend: BackendDescriptor = {
     startsNoTurn: () => false,
   },
   caps: {
-    hooks: "none",
-    contextMeter: false,
-    usageLimits: false,
-    usageProbe: false,
-    transcript: "none",
-    slash: "none",
-    promptBoxes: false,
-    asking: false,
-    remoteControl: false,
-    effort: false,
-    permissionModes: [],
     turns: false,
+    slash: "none",
+    remoteControl: false,
+    permissionModes: [],
   },
+  // A plain shell: no provider for anything — every fact ABSENT (`derive.ts`).
+  facts: {},
   // No model: an empty catalogue, which the phone never asks about for `kind: "shell"`.
   async models() { return { aliases: [], ids: [] }; },
   healthScope: false,

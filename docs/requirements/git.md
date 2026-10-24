@@ -5,11 +5,11 @@ Git status shows the count of files with untracked changes.
 - asked: 2026-09-18
 - shipped: 58066b0
 
-### R-git-002 · shipped
+### R-git-002 · superseded
 A worktree row is visually tied to its parent repo: repo fill, hued connector, "worktree of <repo>".
 - asked: 2026-10-02
 - shipped: da987ee
-
+- superseded-by: R-git-014
 
 ### R-git-003 · shipped
 The git sheet pulls and syncs, not only pushes: Pull fetches then fast-forwards (or replays local commits on a clean tree, undone on conflict), Sync pulls then pushes what is still ahead.
@@ -20,10 +20,11 @@ In the diff view, changed images, GIFs and videos show both the old and new vers
 - asked: 2026-10-05
 - shipped: 695f6ed6
 
-### R-git-005 · shipped
+### R-git-005 · superseded
 Worktrees with no session are shown with a clear explanation of why they exist, and can be deleted with one button, with confidence that nothing is left behind.
 - asked: 2026-10-05
 - shipped: 7416cbd5
+- superseded-by: R-git-014
 
 ### R-git-006 · shipped
 The diff view can switch to show either document in full, not only the changes, and offers a side-by-side view on desktop that stays out of the way on mobile.
@@ -59,4 +60,13 @@ A new session can start from a remote: the New sheet clones an https or ssh URL 
 Repos without a remote origin are marked as such.
 - asked: 2026-10-12
 - shipped: 210a702
+
+### R-git-013 · shipped
+Git availability is detected by whether a usable git runs, not by a fixed path check, and a folder git refuses is explained with the real cause.
+- asked: 2026-10-21, 2026-10-21
+- shipped: 74c7719e, a362d9ce, e335f4a6
+
+### R-git-014 · requested
+Work trees are not offered anywhere in the product; the work-tree feature is removed.
+- asked: 2026-10-22
 

@@ -10,7 +10,8 @@ import type { WebSocket } from "ws";
 import { cliHealth } from "../clihealth.js";
 import { backendInfos, recheckUnavailableBackends } from "../backends/index.js";
 import { evictLocalModel, localRtWatch } from "../localrt.js";
-import type { HostCtx, Route, RouteTable } from "./types.js";
+import { BUSY_SENTENCE } from "../updates/apply.js";
+import type { HostCtx, Route, RouteSpec, RouteTable } from "./types.js";
 
 /**
  * The CLI-health frame.
@@ -170,6 +171,7 @@ const onHello: Route<"hello"> = (a) => {
     // connected once can still paint the board with the tunnel down.
     const health = cliHealthFrame();
     if (health) a.c.send(a.ws, health);
+    a.c.send(a.ws, { t: "updates.status", status: a.c.pluginUpdates.status() }); // the cache, no network
 };
 
 const onUpdateStatus: Route<"update.status"> = (a) => {
@@ -182,6 +184,37 @@ const onUpdateCheck: Route<"update.check"> = (a) => {
 
 const onUpdateApply: Route<"update.apply"> = (a) => {
     void a.c.updates.apply();
+};
+
+// The updates view (waterplane + plugins). A passive device token never holds a socket (`wsops.ts`:
+// closed 4403), so these need no second gate. `get` is the cached reading; `check` is a read with a
+// 10-minute floor — the broadcast from `onChange` answers a check that ran, `status()` one that did not.
+const onUpdatesGet: Route<"updates.get"> = (a) => {
+    a.c.send(a.ws, { t: "updates.status", status: a.c.pluginUpdates.status() });
+};
+
+const onUpdatesCheck: Route<"updates.check"> = (a) => {
+    void a.c.pluginUpdates.check().then((ran) => { if (!ran) a.c.send(a.ws, { t: "updates.status", status: a.c.pluginUpdates.status() }); });
+};
+
+/**
+ * Durable (at-most-once per ackId): it changes the machine. The ack means STARTED; the outcome comes
+ * back as `updates.result` on the asking socket (the receipt of a self update also rides
+ * `updates.status.self.lastResult`, for the phone that reconnects after the restart). One at a time:
+ * a second is refused synchronously, and that refusal is remembered like any `ok:false`.
+ */
+const onUpdatesApply: RouteSpec<"updates.apply"> = {
+  durable: true,
+  run: (a) => {
+    const { reqId, target } = a.msg;
+    const applier = a.c.updateApplier;
+    if (applier.busy) {
+      a.c.send(a.ws, { t: "updates.result", reqId, ok: false, message: BUSY_SENTENCE, restart: "none" });
+      return { ok: false, reason: BUSY_SENTENCE };
+    }
+    void applier.apply(target).then((r) => a.c.send(a.ws, { t: "updates.result", reqId, ...r }));
+    return { ok: true };
+  },
 };
 
 const onUsageGet: Route<"usage.get"> = (a) => {
@@ -210,6 +243,13 @@ const onAuthSet: Route<"auth.set" | "auth.clear" | "auth.gateTailscale"> = (a) =
     const kind = a.c.wsKind.get(a.ws);
     if (!kind || !a.c.auth.canManage(kind)) {
       a.c.send(a.ws, { t: "error", message: "not allowed from this connection", context: "auth" });
+      return;
+    }
+    // A passive device, unlocked or not, never changes the password or the
+    // gate: the change would outlive its 30-minute unlock (`passive.ts`).
+    const dev = a.c.wsDevice.get(a.ws);
+    if (dev && a.c.auth.devices.get(dev)?.scope === "passive") {
+      a.c.send(a.ws, { t: "error", message: "a passive device cannot change the password or the gate", context: "auth" });
       return;
     }
     try {
@@ -474,6 +514,9 @@ export const systemRoutes: RouteTable = {
   "update.status": onUpdateStatus,
   "update.check": onUpdateCheck,
   "update.apply": onUpdateApply,
+  "updates.get": onUpdatesGet,
+  "updates.check": onUpdatesCheck,
+  "updates.apply": onUpdatesApply,
   "usage.get": onUsageGet,
   "usage.refresh": onUsageRefresh,
   "auth.set": onAuthSet as Route<"auth.set">,

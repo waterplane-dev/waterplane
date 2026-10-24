@@ -184,6 +184,15 @@ export const STOP_VERIFY_MS = Number(env("STOP_VERIFY_MS") || 1200);
  *  session that dumped a megabyte in that gap costs a regex over the tail of it
  *  and not over the whole ring. */
 export const STOP_VERIFY_BYTES = 64_000;
+/**
+ * How long after output lands on an IDLE session the screen is read to decide
+ * whether that output was work or a redraw (`idlewatch.ts`'s `noteOutput`). Only a
+ * parse lag: the recorder's headless VT applies a write asynchronously, so the
+ * grid read on the chunk's own tick can be the frame before it. One pending
+ * read per session; a spinner repaints several times a second, so a turn that
+ * starts is seen within one or two of these.
+ */
+export const IDLE_WATCH_MS = 250;
 
 // ── CLI-health observation gates (see `clihealth.ts`) ───────────────────
 /**
@@ -386,6 +395,16 @@ export const STALE_LIVE_MIN_AGE_MS = Math.max(0, Number(env("STALE_LIVE_MIN_AGE_
 /** How often a backend's `sources.sweep` is asked to reap what a gone session left behind
  *  (`sidechannel.ts`; opencode's seat servers and records). Also run once when plugins settle. */
 export const SEAT_SWEEP_MS = Math.max(1000, Number(env("SEAT_SWEEP_MS") || 60_000));
+
+/**
+ * A source turn's `ended(at)` waits at most this long for the backend's `context` sample to be
+ * stamped at or after `at` (`sidechannel.ts`), so the turn-end context read is THIS turn's fill.
+ * Absent or still stale past it ⇒ the end settles as before: the reading stays what it was or
+ * absent, never a guessed number. In-band channels (claude's hooks) never wait.
+ */
+export const CONTEXT_FRESH_MS = 1500;
+/** How often that wait asks `sample()` again when the source has no `watch()` to wake it. */
+export const CONTEXT_FRESH_POLL_MS = 50;
 
 /**
  * Bytes typed INTO a pane through our tmux client: tmux reads ctrl+b (`\x02`)

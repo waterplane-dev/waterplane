@@ -29,6 +29,22 @@ export const treeApi = {
     const r = await nfetch(`/api/repos/${repoId}/archive?id=${encodeURIComponent(id)}`, { method: "DELETE" });
     return r.json() as Promise<{ ok: boolean; error?: string }>;
   },
+  /** A NON-claude backend's conversations (the `conversations` slot) by backend id and ABSOLUTE cwd:
+   *  the repo archive's `ArchiveListing`. Not `jget`, which keeps only the status: a 404's `error` is
+   *  the host's sentence (`pickRefusal`), thrown so `useRemoteResource` lands in `error` and `Empty`
+   *  says it. A transport failure still throws what `isOffline` reads as offline. */
+  conversations: async (backend: string, cwd: string, o: { offset?: number; limit?: number; q?: string } = {}, signal?: AbortSignal): Promise<ArchiveListing> => {
+    const s = new URLSearchParams({ backend, cwd, ...(o.offset ? { offset: String(o.offset) } : {}), ...(o.limit ? { limit: String(o.limit) } : {}), ...(o.q ? { q: o.q } : {}) });
+    const r = await nfetch(`/api/conversations?${s}`, signal ? { signal } : undefined, SLOW_OP_TIMEOUT_MS);
+    if (r.ok) return readJsonFused<ArchiveListing>(r, SLOW_OP_TIMEOUT_MS);
+    const j = await readJsonFused<{ error?: unknown }>(r, SLOW_OP_TIMEOUT_MS).catch(() => ({ error: undefined }));
+    throw new Error(typeof j.error === "string" && j.error ? j.error : `${r.status}`);
+  },
+  /** `archiveDelete`'s twin for another backend: the caller confirms first, toasts `error` verbatim. */
+  conversationsDelete: async (backend: string, cwd: string, id: string): Promise<{ ok: boolean; error?: string }> => {
+    const r = await nfetch(`/api/conversations?${new URLSearchParams({ backend, cwd, id })}`, { method: "DELETE" });
+    return r.json() as Promise<{ ok: boolean; error?: string }>;
+  },
   /**
    * Bookmark one conversation, or update its note / remembered tab name. A
    * field left out keeps what it had; one sent empty clears it. `nfetch`: a

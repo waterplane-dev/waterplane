@@ -139,3 +139,25 @@ test("a non-canonical request path is refused, a canonical one passes unchanged"
     assert.equal(canonicalRequestPath(url), p, String(url));
   }
 });
+
+test("MagicDNS name unreadable: the *.ts.net suffix applies only to a proxied request on a tailnet", () => {
+  const hdr = { origin: "https://evil.ts.net", host: "127.0.0.1:8770" };
+  const through = { origin: "https://mac.some.ts.net", host: "mac.some.ts.net" };
+  try {
+    configureOrigins({ port: 8770, tailscaleIp: "100.64.0.1", tailscaleDns: null });
+    // A browser page on evil.ts.net talking straight to loopback is not the serve front door.
+    assert.equal(checkRequestOrigin(hdr, { path: "/ws" }).ok, false, "direct loopback caller");
+    assert.equal(checkRequestOrigin(hdr).ok, false, "no request info");
+    // Through `tailscale serve` (proxy headers present) the suffix fallback still works.
+    assert.equal(checkRequestOrigin(through, { proxied: true }).ok, true);
+    // Another tailnet's page (a Funnel origin) is not ours even through the front door.
+    assert.equal(checkRequestOrigin({ origin: "https://evil.ts.net", host: "mac.tn.ts.net" }, { proxied: true }).ok, false);
+    assert.equal(checkRequestOrigin({ origin: "https://mac.tn.ts.net", host: "mac.tn.ts.net" }, { proxied: true }).ok, true);
+    // Not on a tailnet at all: never, proxied or not.
+    configureOrigins({ port: 8770, tailscaleIp: null, tailscaleDns: null });
+    assert.equal(checkRequestOrigin(hdr).ok, false);
+    assert.equal(checkRequestOrigin(through, { proxied: true }).ok, false);
+  } finally {
+    configureOrigins({ port: 8770, tailscaleIp: "100.64.0.1", tailscaleDns: "mac.example-tailnet.ts.net" });
+  }
+});

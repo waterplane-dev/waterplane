@@ -21,7 +21,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cacheLikelyCold, sessionCostOf, type BackendInfo, type ClientMessage, type Effort, type LaunchOpts, type SessionInfo } from "@waterplane/shared";
-import { CLAUDE, backendIdOf, effortChoices, modelChoices } from "../../backendCaps";
+import { effortChoices, liveEffortHere, modelChoices } from "../../backendCaps";
 import { planPick, switchCostText, wheelCandidates, wheelLanded, wheelNow, wheelTop } from "../../modelWheel";
 import { ago } from "../../format";
 import { resumeIdOf } from "../../sessionFacts";
@@ -119,7 +119,7 @@ function WheelBody({ cur, backends, canSlash, submitInput, relaunch, liveAsk, on
   const sent = sentSwitch.get(cur.id);
   if (sent && wheelLanded(sent, now, cat.ids)) sentSwitch.delete(cur.id);
   const waiting = sent && sentSwitch.has(cur.id) ? sent : null;
-  const plan = sel ? planPick(now, sel, { slash: canSlash, effort: backendIdOf(cur) === CLAUDE }) : null;
+  const plan = sel ? planPick(now, sel, { slash: canSlash, effort: liveEffortHere(backends, cur.backend, true) }) : null;
   const pickName = sel ? `${sel.model}${sel.effort ? ` · ${sel.effort}` : ""}` : "";
   const keepsConvo = resumeIdOf(cur) ? "the conversation is resumed" : "no conversation id is known, so it starts clean";
   const says = !plan

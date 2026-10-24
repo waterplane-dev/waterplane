@@ -9,7 +9,7 @@ import { VERDICT_TAG } from "./asxConst";
 import { RowCard } from "./AsxRowCard";
 import { MergeCard } from "./AsxMergeCard";
 import type { AssessModel } from "./useAssessSheet";
-import { Button } from "../kit/Button";
+import { Button, Tag } from "../kit";
 
 export function AsxStrips({ m }: { m: AssessModel }) {
   const { p, pickedRows, setPickedRows, pickedMerges, setPickedMerges, rejected, flipped, setFlipped, groups, itemsById, toggleRow, toggleReject, bulkGroup, acceptMerge } = m;
@@ -25,7 +25,7 @@ export function AsxStrips({ m }: { m: AssessModel }) {
         return (
           <div key={g.verdict} className="act-group">
             <div className="act-group-head">
-              <span className={VERDICT_TAG[g.verdict]}>{g.label}</span>
+              <Tag className={VERDICT_TAG[g.verdict]}>{g.label}</Tag>
               {/* **The number is the ITEMS this strip is about**, which is not
                   `rows.length` on the merged strip: a merge is one card
                   standing for N items, and counting cards there said "1" over

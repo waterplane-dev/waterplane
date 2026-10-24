@@ -24,14 +24,14 @@ const ROW = { touchAction: "pan-x", flex: "0 0 auto" } as const;
 export function KeyRow({ ctl, held, typing, onType }: { ctl: DesktopController; held: readonly Modifier[]; typing: boolean; onType(): void }) {
   return (
     <div className="keys" style={ROW}>
-      <button className={`key${typing ? " active" : ""}`} title={typing ? "close the typing box (what you wrote stays)" : "type words on the desktop"}
-        aria-label="type" onClick={onType}><Keyboard size={ICON} /> type</button>
+      <Button className={typing ? "active" : undefined} title={typing ? "close the typing box (what you wrote stays)" : "type words on the desktop"}
+        aria-label="type" onClick={onType}><Keyboard size={ICON} /> type</Button>
       {MOD_ORDER.map((m) => {
         const on = held.includes(m);
         return (
-          <button key={m} className={`key${on ? " active" : ""}`} aria-pressed={on}
+          <Button key={m} className={on ? "active" : undefined} aria-pressed={on}
             title={on ? `${MOD_NAME[m]} is held for the next key — tap to let go` : `${MOD_NAME[m]} — held for the next key, then released`}
-            onClick={() => ctl.toggleMod(m)}>{MOD_GLYPH[m]}</button>
+            onClick={() => ctl.toggleMod(m)}>{MOD_GLYPH[m]}</Button>
         );
       })}
       {ROW_KEYS.map((k) => (

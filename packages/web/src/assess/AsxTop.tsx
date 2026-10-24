@@ -9,7 +9,7 @@ import { track } from "../usage";
 import { ICON, VERDICT_TAG } from "./asxConst";
 import { RunLog } from "./AsxParts";
 import type { AssessModel } from "./useAssessSheet";
-import { Button, Hint } from "../kit";
+import { Button, Hint, Tag } from "../kit";
 
 export function AsxTop({ m }: { m: AssessModel }) {
   const { p, run, proposal, counts, watch, guideOpen, setGuideOpen, res, nothing, guide } = m;
@@ -22,7 +22,7 @@ export function AsxTop({ m }: { m: AssessModel }) {
       {counts ? (
         <div className="act-filters">
           {ASSESS_VERDICTS.map((v) => (
-            <span key={v} className={VERDICT_TAG[v]}>{assessVerdictLabel(v)} <span className="act-count">{counts[v]}</span></span>
+            <Tag key={v} className={VERDICT_TAG[v]}>{assessVerdictLabel(v)} <span className="act-count">{counts[v]}</span></Tag>
           ))}
         </div>
       ) : null}

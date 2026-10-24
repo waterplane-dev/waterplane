@@ -7,9 +7,10 @@
  */
 import * as vscode from "vscode";
 import { BRAND, CHARS_PER_TOKEN, contextPct, fmtCount, fmtUsd, isoWeekOf, repoHealthIndexOf } from "@waterplane/shared";
+import { COPILOT_LEDGER } from "./protocol.js";
 import type { HealthDoc, SessionSummary, TabId, WeightDoc, CorpusDoc } from "./protocol.js";
 import { fmtAge, isLive, isRunning } from "./data/running.js";
-import { currentSummary, thisRepoWeek, weekFigure, weekSplit } from "./data/summary.js";
+import { copilotWeekWords, currentSummary, thisRepoWeek, weekFigure, weekSplit } from "./data/summary.js";
 import type { HeadlineSummary } from "./data/summary.js";
 import { seriesValueWords } from "../../web/src/repoHealthWords.js";
 import { signedWhole, weekWhenWords } from "../../web/src/healthIndexWords.js";
@@ -158,7 +159,11 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
     }
     if (n.kind !== "sessions") return [];
     this.nodes.clear();
-    if (!s.rows.length) return [{ kind: "note", text: s.why ?? "No session in this folder has been written to lately." }];
+    if (!s.rows.length) {
+      // This list is Claude Code's sessions only; on a Copilot-only machine say where Copilot's went.
+      if (s.corpus?.copilot?.available) return [{ kind: "note", text: "No Claude Code sessions here. Copilot Chat's tokens are under All sessions.", tab: "all" }];
+      return [{ kind: "note", text: s.why ?? "No session in this folder has been written to lately." }];
+    }
     const out: Node[] = [];
     if (!s.following) out.push({ kind: "follow" });
     for (const row of s.rows) {
@@ -240,7 +245,9 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
         const local = q.local ? localWords(q.local) : null;
         it.description = words ?? local ?? (q.on && q.why ? "not read · hover for why" : q.busy ? "reading…" : "not read yet");
         it.tooltip = quotaTooltip(q);
-        it.command = { command: QUOTA, title: "Read Copilot's quota" };
+        // A click stays local: it opens Copilot Chat's token ledger. GitHub's figure needs a sign-in,
+        // so it is its own action (the row's GitHub button, or right-click), never the row's click.
+        it.command = { command: SHOW, title: "Open Copilot Chat's token use", arguments: ["all", COPILOT_LEDGER.id] };
         return it;
       }
       case "view": {
@@ -268,7 +275,7 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
         // the all-time total is the panel footer's. A week with nothing in it says so once scanned.
         const sum = currentSummary(s.summary, Date.now());
         const words = sum ? this.summaryWords(sum, s.folderKeys) : null;
-        return words ?? (s.corpus ? "nothing in the last 7 days" : "read when opened");
+        return words ?? copilotWeekWords(s.corpus) ?? (s.corpus ? "nothing in the last 7 days" : "read when opened");
       }
       case "always-on":
         if (!s.weight) return "nothing measured";
@@ -331,3 +338,4 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
     this.changed.dispose();
   }
 }
+

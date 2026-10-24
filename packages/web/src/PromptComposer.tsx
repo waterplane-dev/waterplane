@@ -8,6 +8,7 @@ import { useVoice } from "./useVoice";
 import { VoiceButton } from "./VoiceButton";
 import { Button } from "./kit/Button";
 import { Hint } from "./kit/Hint";
+import { CantInline } from "./Unavailable";
 
 /**
  * The one prompt-writing surface.
@@ -183,9 +184,10 @@ interface AttachProps {
   /** An attach is being prepared (shrink + park). Only labels the button — the
    *  primary action of a sheet is never disabled by it — `SendSheet` waits. */
   busy?: boolean;
-  /** Nothing can be attached yet (no repo picked, say) — with a reason. */
-  disabled?: boolean;
-  disabledTitle?: string;
+  /** Nothing can be attached yet (no repo picked, say): the reason, as a
+   *  sentence in place of the image/file buttons (`Unavailable.tsx`) — never
+   *  dimmed buttons with the reason in a `title`. */
+  unavailable?: string;
   /** Picked files, routed by the SHEET: images usually go to the annotator,
    *  everything else straight into the send queue. Routing by the file's own
    *  type and not by which button was tapped is the rule everywhere in this app,
@@ -221,7 +223,7 @@ interface AttachProps {
  * `accept="image/*"` is what makes a phone offer the camera, so the image
  * button keeps it and documents get their own input.
  */
-export function AttachButtons({ prompts, onPrompts, busy, disabled, disabledTitle, onFiles, trackImage, trackFile, focusRef, onBrowse, browseLabel = "in repo" }: AttachProps) {
+export function AttachButtons({ prompts, onPrompts, busy, unavailable, onFiles, trackImage, trackFile, focusRef, onBrowse, browseLabel = "in repo" }: AttachProps) {
   const imgRef = useRef<HTMLInputElement>(null);
   const docRef = useRef<HTMLInputElement>(null);
   const take = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -233,22 +235,24 @@ export function AttachButtons({ prompts, onPrompts, busy, disabled, disabledTitl
     <>
       <DictateButton prompts={prompts} onPrompts={onPrompts} focusRef={focusRef} />
       <SnippetButton prompts={prompts} onPrompts={onPrompts} focusRef={focusRef} />
-      <Button disabled={busy || disabled} title={disabled ? disabledTitle : "attach an image (mark it up before it goes)"}
+      {unavailable ? <CantInline>no attach — {unavailable}</CantInline> : <>
+      <Button disabled={busy} title="attach an image (mark it up before it goes)"
         onClick={() => { if (trackImage) track(trackImage); imgRef.current?.click(); }}>
         <Camera size={16} /> {busy ? "adding…" : "image"}
       </Button>
-      <Button disabled={busy || disabled}
-        title={disabled ? disabledTitle : "attach a file of any kind (PDF, doc, zip, audio…)"}
+      <Button disabled={busy}
+        title="attach a file of any kind (PDF, doc, zip, audio…)"
         onClick={() => { if (trackFile) track(trackFile); docRef.current?.click(); }}>
         <Paperclip size={16} /> file
       </Button>
       {onBrowse && (
-        <Button disabled={busy || disabled}
-          title={disabled ? disabledTitle : "name a file that is already in this repo — the gallery, and the path comes back into the prompt"}
+        <Button disabled={busy}
+          title="name a file that is already in this repo — the gallery, and the path comes back into the prompt"
           onClick={onBrowse}>
           <Images size={16} /> {browseLabel}
         </Button>
       )}
+      </>}
       <input ref={imgRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={take} />
       <input ref={docRef} type="file" multiple style={{ display: "none" }} onChange={take} />
     </>
@@ -283,10 +287,10 @@ function SnippetButton({ prompts, onPrompts, focusRef }:
   };
   return (
     <>
-      <button className={`key${open ? " on" : ""}`} title="insert a saved snippet into the turn the caret is in"
+      <Button className={open ? "on" : undefined} title="insert a saved snippet into the turn the caret is in"
         onClick={() => setOpen((v) => (v ? null : loadSnippets()))}>
         <Quote size={16} /> snippet
-      </button>
+      </Button>
       {open && (
         <div className="snippet-pop">
           <div className="snippet-pop-head">

@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Check, Loader2, Rocket } from "lucide-react";
-import type { RepoTarget } from "@waterplane/shared";
+import type { BackendInfo, RepoTarget } from "@waterplane/shared";
 import { api, isOffline } from "./api";
 import { track } from "./usage";
 import { SheetHead } from "./Sheet";
-import { backendOptionLabel } from "./backendCaps";
+import { backendDrift, backendOptionLabel } from "./backendCaps";
 import { Unavailable } from "./Unavailable";
 import { Button } from "./kit/Button";
 import { Hint } from "./kit/Hint";
@@ -25,7 +25,7 @@ interface Props {
    * in an immediate `onOpen`, which is what makes this part of the new-session
    * flow rather than a setting that happens to apply to it.
    */
-  backends?: { id: string; label: string; experimental?: boolean; unavailable?: string }[];
+  backends?: readonly BackendInfo[];
   backend?: string;
   onBackend?: (id: string | undefined) => void;
   /** "Build another app": the first-app journey (`features/onboard`), opened by the caller —
@@ -36,6 +36,7 @@ interface Props {
 /** Create a new folder, a new git repo, a clone of a remote, or a new worktree of an existing repo. */
 export function NewMenu({ root, repos, onOpen, onChanged, onClose, backends, backend, onBackend, onBuildApp }: Props) {
   const [tab, setTab] = useState<"repo" | "clone" | "folder" | "worktree">("repo");
+  const drift = backends ? backendDrift(backends, backend ?? "claude") : null;
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
   const [url, setUrl] = useState("");
@@ -122,7 +123,7 @@ export function NewMenu({ root, repos, onOpen, onChanged, onClose, backends, bac
       </div>
 
       <div className="form">
-        <Hint tone="mono">{root}</Hint>
+        <Hint>{root}</Hint>
         {tab === "clone" && (
           <>
             <input className="search" type="url" inputMode="url" autoCapitalize="off" autoCorrect="off" spellCheck={false}
@@ -177,6 +178,7 @@ export function NewMenu({ root, repos, onOpen, onChanged, onClose, backends, bac
             <Hint>
               The session this opens runs {backends.find((b) => b.id === (backend ?? "claude"))?.label ?? "the default"}.
               Every new session does, until you change it back.
+              {drift ? <> {drift}</> : null}
             </Hint>
           </>
         )}

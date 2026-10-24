@@ -35,7 +35,7 @@ import { KPI_MEANING, rankChipWords, kpiMeaning,
   readFailedWords, outcomeRepeatsReadError,
   refreshBusyLabel,
   refreshFailedWords,
-  refreshLabel,
+  refreshLabel, approveRunLabel, skipOwnLabel,
   runningWords,
   seriesHeadWords,
   seriesSizeWords,
@@ -1189,4 +1189,12 @@ test("a failed run over an unreadable tree is said once: the read error, not the
   assert.equal(outcomeRepeatsReadError({ ok: false, refused: { text: "no" } }, "x", false), false);
   assert.equal(outcomeRepeatsReadError(failed, null, false), false);
   assert.equal(outcomeRepeatsReadError({ ok: true, added: 3 }, "x", false), false);
+});
+
+test("a pending approval names both of its verbs apart", () => {
+  assert.equal(approveRunLabel("repo", { rows: 3 }), "approve and run its engine");
+  assert.equal(approveRunLabel("bundled", { rows: 3 }), "approve and update");
+  assert.equal(approveRunLabel("bundled", null), "approve and build");
+  assert.equal(skipOwnLabel({ rows: 3 }), "update without them");
+  assert.equal(skipOwnLabel({ rows: 0 }), "build without them");
 });

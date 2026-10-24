@@ -18,8 +18,14 @@ export interface Shape extends Mark {
    *  delete and clear all renumber it, and words typed onto a band land after
    *  it — landing them by index puts one mark's sentence on another. */
   id: number;
-  /** Why a band carries no words (dropped, or typed empty) — SAID, never silently absent. */
+  /** Why a mark carries no words (dropped, typed empty, or the phone's reader found none) — SAID,
+   *  never silently absent. */
   readErr?: string;
+  /** Whose words `read` is: the person's (`hand` — typed, or dropped; a reader never overwrites
+   *  them) or the phone's text-in-marks reader (`phone`; re-read when the mark moves). */
+  readBy?: "hand" | "phone";
+  /** The phone's reader is working on this mark right now (`annAutoRead.ts`). */
+  reading?: boolean;
 }
 
 /** Source can be a freshly-picked File or an existing image fetched by URL. */

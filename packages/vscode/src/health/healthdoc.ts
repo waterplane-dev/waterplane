@@ -1,6 +1,7 @@
 /**
  * The repo-health engine's raw step results folded into one `HealthDoc` — PURE apart from
- * `gitOnPath` / `isShallow`, which stat the filesystem and spawn nothing.
+ * `gitOnPath` / `gitCandidates` / `isShallow`, which stat the filesystem and spawn nothing, and
+ * `pickGit`, which runs only the probe it is handed.
  *
  * The engine states, this reads: every number comes off the engine's own JSON through the shared
  * parsers the phone uses (`parseRepoHealthStatus`, `parseRepoHealthPlot`, `classifyExit`, …), and
@@ -154,6 +155,34 @@ export function gitOnPath(env: Record<string, string | undefined>, extra?: strin
     }
   }
   return null;
+}
+
+/** Where a Mac keeps a git that is not `/usr/bin/git`'s Xcode shim: Homebrew (Apple silicon, Intel)
+ *  and the Command Line Tools' own binary, which runs without Xcode's license gate. */
+const MAC_GIT_DIRS = ["/opt/homebrew/bin", "/usr/local/bin", "/Library/Developer/CommandLineTools/usr/bin"];
+
+/** The dirs `gitCandidates` tries after PATH on this platform. */
+export function fallbackGitDirs(platform: string): readonly string[] {
+  return platform === "darwin" ? MAC_GIT_DIRS : [];
+}
+
+/**
+ * Every directory holding an executable `git`, in the order to try them: `extra` (VS Code's
+ * `git.path` directory), then PATH, then `fallback` (`fallbackGitDirs`). Stats only; which one RUNS is
+ * `pickGit`'s question — the first on PATH can be a shim that refuses every command.
+ */
+export function gitCandidates(env: Record<string, string | undefined>, extra?: string | null, fallback: readonly string[] = []): string[] {
+  const dirs = [...(extra ? [extra] : []), ...pathOf(env).split(delimiter), ...fallback];
+  const out: string[] = [];
+  for (const d of dirs) if (d.length > 0 && !out.includes(d) && gitOnPath({ PATH: d }) === d) out.push(d);
+  return out;
+}
+
+/** The first candidate whose `git --version` succeeds; when none does, the first (its refusal is the
+ *  engine's sentence to quote); null when there is no git at all. */
+export async function pickGit(dirs: readonly string[], runs: (dir: string) => Promise<boolean>): Promise<string | null> {
+  for (const d of dirs) if (await runs(d)) return d;
+  return dirs[0] ?? null;
 }
 
 /** `.git/shallow` exists; null when `.git` is a file (a linked worktree) or missing — cannot tell. */

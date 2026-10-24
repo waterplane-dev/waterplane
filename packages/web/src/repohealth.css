@@ -120,6 +120,7 @@
 .rh-region .hix-bar.down { background: var(--hix-down); }
 /* Names wrap to two lines rather than ellipsising ("CLAUDE.md + skills"). */
 .rh-region .hix-bar-row { grid-template-columns: minmax(0, 7.5em) 1fr 2em 3em; min-height: 28px; }
+.rh-region .hix-bar-rows.still .hix-bar-row { grid-template-columns: minmax(0, 1fr) auto; }
 .rh-region .hix-barname { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.2; overflow-wrap: anywhere; }
 .rh-region .hix-bar-legend { padding-top: 2px; }
 .rh-region .hix-swatch { display: inline-block; width: 10px; height: 8px; border-radius: 2px; background: currentColor; }

@@ -429,6 +429,7 @@
 .hix-barname { color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hix-barscore { text-align: right; font-variant-numeric: tabular-nums; font-weight: var(--fw-semibold); }
 .hix-barval { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.hix-bar-rows.still .hix-bar-row { grid-template-columns: minmax(0, 1fr) auto; }
 /* The track is the whole row's height so the zero lines join into one axis. */
 .hix-track { position: relative; align-self: stretch; }
 .hix-track::before { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; border-left: 1px solid currentColor; opacity: .25; }

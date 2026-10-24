@@ -13,7 +13,7 @@
  */
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { BRAND, LEGACY } from "../../packages/shared/dist/index.js";
+import { BRAND, LEGACY } from "@waterplane/shared";
 
 /** Every state dir name, current first. */
 export const STATE_DIRS = [BRAND.stateDirName, ...LEGACY.map((l) => l.stateDirName)];

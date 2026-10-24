@@ -15,8 +15,9 @@ import { TAB_FILE_EVENT, type FileTab } from "../../sessionTabs";
 export {
   alreadyMarking, annotate, annotateUrl, annotatorBusy, appendToBatch, attachForInbox, backlogEditImage, downloadArtifact, openArtifact, openBrowseAt,
   openBrowseFor, openFileRef, openGalleryFor, openGalleryForSend, openNewImages, openOutboxFor, openSweep, pickFileFor,
-  pickImageFor, routeFiles, seedFromRoute, viewImage,
+  pickImageFor, routeFiles, seedFromRoute, takeBoxReturn, viewImage,
 } from "./actions";
+export { useBoxReturn } from "./store";
 export { useAnnBeside } from "./ImageSheets";
 export { NewImagesStrip, NewImagesTag } from "./NewImages";
 export { galleryCtxForFile, pasteRoute, type GalleryCtx } from "./logic";

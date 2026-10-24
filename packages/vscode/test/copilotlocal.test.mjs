@@ -92,3 +92,46 @@ test("planWords names the plans it knows and passes others through", () => {
   assert.equal(data.planWords("something_new"), "something_new");
   assert.equal(data.planWords(null), null);
 });
+
+test("copilotLedger counts Copilot's own prompt and output tokens per day and model, and only answers that recorded them", () => {
+  const tokens = (n, details, promptTokens, outputTokens) =>
+    line({ kind: 1, k: ["requests", n, "result"], v: { details, metadata: { promptTokens, outputTokens } } });
+  const a = data.replayRequests([
+    snapshot([request(OCT(1), "copilot/claude-sonnet-4.6"), request(OCT(1) + 60_000, "copilot/gpt-5.4")]),
+    tokens(0, "Claude Sonnet 4.6 • 1x", 80_000, 1_000),
+    tokens(1, "GPT-5.4 • 0x", 2_000, 50),
+    push([request(OCT(2), "copilot/claude-sonnet-4.6")]),
+    result(2, "Claude Sonnet 4.6 • 1x"), // no counts: a premium request, not a turn
+  ].join("\n"));
+  assert.deepEqual(a.map((r) => [r.prompt, r.output]), [[80_000, 1_000], [2_000, 50], [null, null]]);
+  const none = data.replayRequests(snapshot([request(OCT(3), "copilot/gpt-5.4")]));
+  const doc = data.copilotLedger([a, none], NOW);
+  assert.equal(doc.available, true);
+  assert.deepEqual(doc.totals, { kinds: { prompt: 82_000, output: 1_050 }, turns: 2 });
+  assert.equal(doc.sessions, 1); // the log with no counts is not a session counted
+  assert.deepEqual(doc.models.map((m) => [m.key, m.turns]), [["Claude Sonnet 4.6", 1], ["GPT-5.4", 1]]);
+  assert.equal(doc.days.length, 1);
+  assert.deepEqual(doc.days[0].byModel.map((m) => m.key), ["Claude Sonnet 4.6", "GPT-5.4"]);
+  assert.deepEqual(Object.values(doc.unit.perDay), [1, 1]);
+  assert.equal(doc.unit.name, "premium requests");
+  assert.equal(doc.firstAt, OCT(1));
+  assert.equal(doc.lastAt, OCT(1) + 60_000);
+});
+
+test("the ledger of a VS Code with no chat logs is a sentence, and the cache survives a fresh reader", async () => {
+  const empty = await new data.CopilotLocalReader(tmp("cpl-ledger-none-")).ledger(NOW);
+  assert.equal(empty.available, false);
+  assert.match(empty.reason, /No Copilot Chat sessions/);
+  const user = tmp("cpl-ledger-");
+  const dir = join(user, "workspaceStorage", "w", "chatSessions");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "s.jsonl"), [snapshot([request(OCT(5), "copilot/gpt-5.4")]),
+    line({ kind: 1, k: ["requests", 0, "result"], v: { details: "GPT-5.4 • 0x", metadata: { promptTokens: 10, outputTokens: 2 } } })].join("\n"));
+  const r1 = new data.CopilotLocalReader(user);
+  assert.deepEqual((await r1.ledger(NOW)).totals, { kinds: { prompt: 10, output: 2 }, turns: 1 });
+  const r2 = new data.CopilotLocalReader(user);
+  r2.seed(JSON.parse(JSON.stringify(r1.cached())));
+  r2.seed({ bogus: { size: "x" } });
+  assert.deepEqual(Object.keys(r2.cached()), Object.keys(r1.cached()));
+  assert.deepEqual((await r2.ledger(NOW)).totals, { kinds: { prompt: 10, output: 2 }, turns: 1 });
+});

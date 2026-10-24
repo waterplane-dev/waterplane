@@ -16,11 +16,14 @@ import { editActions } from "./annEdit";
 import { clampRect, normRect } from "./annGeom";
 import { pointerActions } from "./annPointer";
 import { readActions } from "./annRead";
+import { autoReadActions, type ReadSlot } from "./annAutoRead";
+import { useImageTextReader } from "../sdk/extensions";
 import { sendActions } from "./annSend";
 import { ocrActions, type OcrState } from "./annOcr";
 import { COLORS, type AnnCtx, type AnnotatorProps, type AnnRect, type Shape, type Tool } from "./annTypes";
 import { LS, lsBool, lsJson, lsSetBool, lsSetJson } from "../storage";
 import { readLayout, type AnnLayout } from "../annLayout";
+import { useAutoPlace } from "./useAutoPlace";
 import { type Knob } from "../annKnobs";
 
 export function useAnnotator({ source, repoId, index, total, facts, onUploaded, onDispatch, onPark, onSkip, onSendAll, onText, onClose }: AnnotatorProps) {
@@ -101,6 +104,10 @@ export function useAnnotator({ source, repoId, index, total, facts, onUploaded, 
   const [editRead, setEditRead] = useState<number | null>(null);
   const [readDraft, setReadDraft] = useState("");
   const readInputRef = useRef<HTMLInputElement>(null);
+  // The phone's reader for a mark's words (an enabled text-in-marks extension; null = none, and
+  // nothing reads), and the reads it has out, by mark id (`annAutoRead.ts`).
+  const reader = useImageTextReader();
+  const readsRef = useRef<Map<number, ReadSlot>>(new Map());
 
   // One dot of the CURRENT colour opens the palette: five always-on swatches
   // cost a phone's toolbar five slots to say one thing.
@@ -115,6 +122,8 @@ export function useAnnotator({ source, repoId, index, total, facts, onUploaded, 
   const [layout, setLayoutState] = useState<AnnLayout>(() => readLayout(lsJson<unknown>(LS.annTools, null)));
   const setLayout = (l: AnnLayout) => { setLayoutState(l); lsSetJson(LS.annTools, l); };
   const [configOpen, setConfigOpen] = useState(false);
+  const { bodyRef, side: autoSide } = useAutoPlace(canvasRef);
+  const place = layout.place === "auto" ? (autoSide ?? "auto") : layout.place;
 
   // Zoom/pan transform (CSS px, transform-origin 0 0). Canvas is absolutely
   // placed with NO css scaling, so screen = t + canvasPx * k exactly.
@@ -265,19 +274,24 @@ export function useAnnotator({ source, repoId, index, total, facts, onUploaded, 
   const pointer = pointerActions(ctx);
   const { send, sendAll } = sendActions(ctx);
   const ocrAct = ocrActions({ canvasRef, genRef, redraw, setOcr, setOcrDraft, onText });
+  const autoRead = autoReadActions({ canvasRef, imgRef, setShapes, genRef, readsRef });
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `autoRead` is rebuilt per render over refs; the marks and the reader are what change
+  useEffect(() => autoRead.sync(shapes, reader), [shapes, reader]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount only: every read still out is called off
+  useEffect(() => () => autoRead.abortAll(), []);
   const zoomed = view.k > fitRef.current.k * 1.02;
 
-  // The newest highlighted band — the one a person has just drawn and is about
-  // to send. One bar, never one per mark: a stack of transcriptions is a screen
-  // of text on a phone that is trying to show a picture.
-  const lastBand = [...shapes].reverse().find((s) => s.tool === "marker");
+  // The newest mark whose words matter — a highlighted band, or with a reader on this phone also a
+  // box or circle. One bar, never one per mark: a stack of transcriptions is a screen of text on a
+  // phone that is trying to show a picture.
+  const lastBand = [...shapes].reverse().find((s) => s.tool === "marker" || (!!reader && (s.tool === "rect" || s.tool === "circle")));
 
   return {
     props: { index, total, onSkip, onSendAll, onDispatch, onText, onClose },
     canvasRef, wrapRef, tool, color, setColor, factor, setFactor, shapes, setShapes, moveMode, selected, setSelected,
     target, setTarget, moveNote, setMoveNote, knobs, busy, err, cropMode, pendingCrop, pendingText, textDraft, setTextDraft,
     textInputRef, editRead, setEditRead, readDraft, setReadDraft, readInputRef, paletteOpen, setPaletteOpen, view, fitRef,
-    layout, setLayout, configOpen, setConfigOpen,
+    layout, setLayout, configOpen, setConfigOpen, bodyRef, place,
     moveRef, zoomed, lastBand, hintHidden, hideHint, ...edit, ...read, ...pointer, send, sendAll,
     ocr, ocrDraft, setOcrDraft, ...ocrAct,
   };

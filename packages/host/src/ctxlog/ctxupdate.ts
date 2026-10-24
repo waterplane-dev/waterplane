@@ -4,7 +4,7 @@ import type { TokenTotals } from "@waterplane/shared";
 import { addCost, addTotals, costOf, isColdRebuild, normalizeModel, tokenTotal, zeroCost, zeroTotals } from "@waterplane/shared";
 import { localDay, stamp, toMs } from "../convlog.js";
 import { opensTurn } from "../transcript/transcriptlog.js";
-import { RAW_CAP, EVENT_CAP, readRange, num, blankCold, blankCompaction, addSaved, remember, blank } from "./ctxcursor.js";
+import { RAW_CAP, EVENT_CAP, readRange, num, blankCold, blankCompaction, addSaved, remember, blank, skillLoadOf, pushSkill } from "./ctxcursor.js";
 import type { SeriesCursor } from "./ctxcursor.js";
 
 /**
@@ -42,7 +42,7 @@ export function updateContextLog(path: string, prev?: SeriesCursor | null): Seri
     cur.compaction = blankCompaction(); cur.shedAuto = 0; cur.shedManual = 0;
     cur.pendingRebuild = null;
     cur.prevTok = 0; cur.prevAt = 0; cur.cold = blankCold();
-    cur.autoCompactTok = null; cur.model = null; cur.effort = null; cur.truncated = false;
+    cur.autoCompactTok = null; cur.model = null; cur.effort = null; cur.skills = []; cur.truncated = false;
     cur.seen.clear(); cur.seenOrder.length = 0;
   }
 
@@ -75,6 +75,10 @@ export function updateContextLog(path: string, prev?: SeriesCursor | null): Seri
     if (row.isSidechain === true) continue;
     if (maybeTurn) {
       if (opensTurn(row)) cur.turns++;
+      // A skill body is a meta user record — never a turn, but the one
+      // moment the log says a skill's text entered this window.
+      const sk = skillLoadOf(row, stamp(row));
+      if (sk) pushSkill(cur.skills, sk);
       // A user record is never a reading, a compaction or a wall — nothing
       // below this line can match one, and the stamp it lacks would drop it.
       continue;

@@ -6940,7 +6940,7 @@ and `contextMeter` until a backend arrived with one and not the others:
 
 - a conversation record this app may **read and must not rewrite** — so a transcript it cannot fork;
 - a readable record with **no "pick an older conversation" list** this host knows how to drive —
-  `launchArgs` refuses `"pick"` in words, so a button there offers a refusal;
+  `prepare` refuses `"pick"` in words, so a button there offers a refusal;
 - a **plottable history behind a screen that prints no gauge** — `contextMeter` is a statement about
   what the TUI PAINTS, and a series is a statement about what can be read back.
 

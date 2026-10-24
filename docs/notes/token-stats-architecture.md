@@ -12,7 +12,7 @@
 extensions/token-stats/web   (the screen)
         |  imports only
         v
-   sdk/ (ledgers, explainCost)  +  kit/ (kit/chart, until, ResourceState)  +  @waterplane/shared
+   sdk/ (ledgers, explainCost)  +  kit/ (kit/chart, Button, Tag, RowTitle/RowSub, Explain, Empty, until, useRemoteResource)  +  @waterplane/shared
         |
         v
       core
@@ -204,3 +204,35 @@ entry is a sentence on the tab. On claude-local, a model the backend's catalogue
 `zeroCost` (loopback Ollama) is priced at zero FIRST, so a glob written for a hosted twin cannot
 charge a local model. The prices reach the claude-local ledger only; the Claude Code tab's money is
 still the Anthropic list and nothing else, and opencode stays unpriced.
+
+## The VS Code panel draws this screen, not a copy of it
+
+Until 2026-10-22 the VS Code extension's All sessions view (`packages/vscode/webview/OverviewView.tsx`)
+imported the leaf cards and re-wrote `TokenStatsBody`'s state and derivations itself, "kept to what
+these cards read". Every fix and feature landed on the phone first, and the panel fell behind until
+someone ported it — the owner noticed the two screens no longer matched. Now the panel renders
+`TokenStatsBody` itself; the only seams are the ones a webview genuinely lacks:
+
+- **The body's three optional props.** `onClose` absent = no sheet head (the panel's own header owns
+  the title and the re-read); `lead` = the panel's headline drawn first in the NOW block;
+  `liveWindows={false}` = no limit windows, week-since-reset card or dollar period, because a bar
+  with no reading claims nobody scraped yet, which is a different fact from "this side cannot scrape".
+- **`@waterplane/sdk` and `@waterplane/kit` are shims in the webview** (`webview/shims/`), and they
+  re-export the phone's own modules: `useRemoteResource`, `Empty`, `SheetHead`, `periodWords.ts`,
+  and `ledgers` built on the phone's `webapiStats.ts`. Only the socket-facing imports are swapped, by
+  `esbuild.mjs`'s `phone-reads` plugin (`useRemoteResource`'s `./api` and `./link`, `webapiStats`'
+  `./webapiFetch`). So each read the panel makes is the phone's request, spelled once.
+- **The desktop is read by the extension host, over loopback, off by default** (`src/hostlink.ts`,
+  setting `waterplane.desktopUrl`): a webview cannot open that socket, and the extension's listing
+  promises no network call but Copilot's. Only a loopback origin is accepted and only the
+  token-screen routes are forwarded (`forwardable`). The account facts the phone gets over its
+  socket (`usage.status`, `billing.status`, `budget.state`, `backends`) are one HTTP read for a
+  client with no socket: `GET /api/usagenow` (`UsageNowDoc`), copied from the same getters, deriving
+  nothing. Claude's ledger itself stays the panel's own scan of the logs.
+- **The styles are the phone's too**: the webview imports `styles/00-tokens.css` and
+  `styles/11-token-stats.css`, and `theme.css` loads after them to map colours onto the editor's
+  `--vscode-*` variables. The rules `theme.css` used to carry as hand-ported copies are gone.
+
+What the panel still lacks, and why: contributed ledger views (`ledgers.views()` is empty — they are
+other extensions' code, opencode's is private), so a backend with a ledger is a generic tab; and
+re-scraping `/usage` (the reading is whatever the desktop last took).

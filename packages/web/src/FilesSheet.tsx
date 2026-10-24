@@ -3,6 +3,7 @@ import {
   AtSign, Copy, Eye, File as FileIcon, Folder, MessageSquarePlus, Pencil, Pin, PinOff, RotateCw, Save, Search, X,
 } from "lucide-react";
 import { api, copyText, type TreeEntry, type TreeFile, type TreeListing } from "./api";
+import { instructionFileWeight, instructionFileWeightWords } from "@waterplane/shared";
 import { ago, fmtSize } from "./format";
 import { getArtifactText, getTreeListing, putArtifactText, putTreeListing } from "./offlineCache";
 import { track } from "./usage";
@@ -395,6 +396,11 @@ function FileView({ repoId, repoName, file, socketOpen, onReopen, onInsertPath, 
     : !socketOpen ? "the link is down — saving needs the host, and a write held until later would land on a file that moved on"
     : null;
 
+  // An agent-instruction file (CLAUDE.md, a SKILL.md, …) is read for what it
+  // costs a session, so say it in tokens with its every-turn split. Absent on
+  // a truncated preview: the start of a file is not its weight.
+  const weight = file.body != null && !file.truncated && !file.binary ? instructionFileWeight(file.path, file.body) : null;
+
   return (
     <div className="sheet">
       <SheetHead title={file.path} brandClass="mono" onClose={onClose}>
@@ -424,7 +430,7 @@ function FileView({ repoId, repoName, file, socketOpen, onReopen, onInsertPath, 
       </SheetHead>
 
       <Hint>
-        {fmtSize(file.size)} · {ago(file.mtime)}{why && !review ? ` · ${why}` : ""}{dirty ? " · unsaved" : ""}
+        {fmtSize(file.size)} · {ago(file.mtime)}{weight ? ` · ${instructionFileWeightWords(weight, (n) => n.toLocaleString())}` : ""}{why && !review ? ` · ${why}` : ""}{dirty ? " · unsaved" : ""}
         {review && dirty ? " · remarks name the lines as saved on disk, not your unsaved edits" : ""}
         {!review && remarkCount > 0 ? ` · ${remarkCount} remark${remarkCount === 1 ? "" : "s"} waiting` : ""}
         {rendered && !editing && (

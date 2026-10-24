@@ -16,6 +16,7 @@ import { ConfirmButton } from "./Confirm";
 import { Empty } from "./Empty";
 import { Button } from "./kit/Button";
 import { Hint } from "./kit/Hint";
+import { SetNote } from "./SettingsKit";
 
 interface Props {
   /** Repos — for the inbox an attachment needs, and for naming a note's own. */
@@ -341,7 +342,7 @@ export function PadSheet({ repos, onDispatch, onFile, outbox, online, repoIdForC
         <div className="sheet-actions">
           <Button onClick={closeEditor}><X size={16} /> cancel</Button>
           <AttachButtons prompts={promptsRef} onPrompts={updatePrompts} focusRef={focusStep} busy={busy} onFiles={(f) => pickFiles(f)}
-            disabled={!repos.length} disabledTitle="no repos under the host root to upload into"
+            unavailable={repos.length ? undefined : "no repos under the host root to upload into"}
             trackImage="action:pad.attach" trackFile="action:pad.attachfile" />
           <span className="spacer" />
           <button className="send" onClick={commit}>Save</button>
@@ -418,7 +419,7 @@ export function PadSheet({ repos, onDispatch, onFile, outbox, online, repoIdForC
       <div className="sheet-actions">
         <Button onClick={onClose}><ChevronLeft size={16} /> back</Button>
         <span className="spacer" />
-        <span className="set-note" style={{ padding: 0 }}>{drafts.length} note{drafts.length === 1 ? "" : "s"}</span>
+        <SetNote as="span" style={{ padding: 0 }}>{drafts.length} note{drafts.length === 1 ? "" : "s"}</SetNote>
       </div>
     </div>
   );

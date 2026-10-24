@@ -8,7 +8,7 @@ Start a new plugin from `examples/plugin-template/`; installing one and the list
 it shows up at https://github.com/topics/waterplane-plugin. A plugin is not a fork, so that topic is
 the only place it is counted.
 
-**API version: `1.8.0`** (`PLUGIN_API_VERSION`). A manifest's `apiVersion` loads when it has the
+**API version: `2.2.0`** (`PLUGIN_API_VERSION`). A manifest's `apiVersion` loads when it has the
 same major and a minor no newer than this one; the rules for what bumps which number are under
 `PLUGIN_API_VERSION` below. Why the API looks the way it does: `docs/notes/plugins.md`.
 
@@ -45,6 +45,8 @@ shape for both, so moving an extension out of the repo is a folder move.
 ## Contents
 
 - [`PLUGIN_API_VERSION`](#plugin_api_version) — const
+- [`PLUGIN_API_V2_DOC`](#plugin_api_v2_doc) — const
+- [`V1_LAST_MINOR`](#v1_last_minor) — const
 - [`PluginCaller`](#plugincaller) — interface
 - [`PluginApiVersion`](#pluginapiversion) — interface
 - [`parsePluginApiVersion`](#parsepluginapiversion) — function
@@ -79,8 +81,6 @@ shape for both, so moving an extension out of the repo is a folder move.
 - [`PluginHttpRequest`](#pluginhttprequest) — interface
 - [`PluginHttpReply`](#pluginhttpreply) — interface
 - [`PLUGIN_BACKEND_ID_RE`](#plugin_backend_id_re) — const
-- [`PluginLaunchRequest`](#pluginlaunchrequest) — interface
-- [`PluginLaunchPlan`](#pluginlaunchplan) — interface
 - [`PluginBackendDef`](#pluginbackenddef) — interface
 - [`PLUGIN_READER_NAME_RE`](#plugin_reader_name_re) — const
 - [`PluginScreenSpan`](#pluginscreenspan) — interface
@@ -95,6 +95,15 @@ shape for both, so moving an extension out of the repo is a folder move.
 - [`PluginThermalReader`](#pluginthermalreader) — interface
 - [`PluginUsageProbe`](#pluginusageprobe) — interface
 - [`PLUGIN_USAGE_PROBE_TIMEOUT_MS`](#plugin_usage_probe_timeout_ms) — const
+- [`PluginLaunchRequest`](#pluginlaunchrequest) — interface
+- [`InstructionsVia`](#instructionsvia) — type
+- [`AskRulesVia`](#askrulesvia) — type
+- [`PluginLaunchPlan`](#pluginlaunchplan) — interface
+- [`Provider`](#provider) — type
+- [`FactName`](#factname) — type
+- [`FACT_NAMES`](#fact_names) — const
+- [`BackendFacts`](#backendfacts) — type
+- [`BackendCapsV2`](#backendcapsv2) — interface
 - [`PluginDoctorCheck`](#plugindoctorcheck) — interface
 - [`PLUGIN_HOOK_HOLD_DEFAULT_MS`](#plugin_hook_hold_default_ms) — const
 - [`PLUGIN_HOOK_HOLD_MAX_MS`](#plugin_hook_hold_max_ms) — const
@@ -138,8 +147,41 @@ A bare number (`"apiVersion": 1`, every manifest written before semver) means `1
 - PATCH: wording, documentation and fixes that change no shape — nothing a plugin
   can observe through types.
 
+**2.0** (backend contract v2, `PLUGIN_API_V2_DOC`): `PluginBackendDef` replaces the v1
+reader caps (`hooks`, `promptBoxes`, `transcript`, `contextMeter`, `usageLimits`,
+`usageProbe`, `asking`, `forkVia` inside caps) with `facts` — one ordered provider list per
+fact — and `launchArgs` with an async `prepare`; it adds `measured`. A 1.x manifest that
+lists `backends` is refused in words; there is no shim. Everything else in 2.0 is additive,
+so a 1.x plugin that registers NO backend (a reader, a panel, a usage probe) still loads:
+`V1_LAST_MINOR` is the newest 1.x it may declare.
+
+**2.1** (additive): `HostPluginApi.supports` (`dialogKeysThenTyped`), and a source turn's
+`ended(at)` waits ≤1.5 s for a `sources.context` sample stamped `>= at` — no end-gate hold needed.
+**2.2** (additive, `docs/plans/backend-parity-v3.md` §7): facts + slots `mode`/`commands`, Tab and
+Shift+Tab in `SourceKeys`, context `window` + `compactions`, `tokens.session`. 2.1 plugins load as-is.
+
 ```ts
-export const PLUGIN_API_VERSION = "1.8.0";
+export const PLUGIN_API_VERSION = "2.2.0";
+```
+
+## PLUGIN_API_V2_DOC
+
+*const*
+
+Where the 2.0 backend contract is written down; the 1.x refusal names it.
+
+```ts
+export const PLUGIN_API_V2_DOC = "docs/plans/backend-contract-v2.md";
+```
+
+## V1_LAST_MINOR
+
+*const*
+
+The last 1.x minor: a 1.0–1.8 plugin with no `backends` in its manifest loads on 2.x.
+
+```ts
+export const V1_LAST_MINOR = 8;
 ```
 
 ## PluginCaller
@@ -195,7 +237,9 @@ Why a plugin declaring `declared` cannot load on a host speaking `host`
 `PLUGIN_API_VERSION`'s: same major, minor no newer than the host's.
 
 ```ts
-export function pluginApiProblem(declared: unknown, host: string = PLUGIN_API_VERSION): string | null;
+export function pluginApiProblem(declared: unknown, host: string = PLUGIN_API_VERSION, opts: {
+    backends?: boolean;
+} = {}): string | null;
 ```
 
 ## PluginMethods
@@ -420,6 +464,7 @@ export interface PluginManifest { … }
 | `version` | `version: string` |  |
 | `apiVersion` | `apiVersion: string \| number` | The plugin API this plugin was written against: semver (`"1.0"`), or a bare major (`1`, read as `1.0`). Checked by `pluginApiProblem` before any of its code runs. |
 | `description` | `description?: string` |  |
+| `maturity` | `maturity?: "stable" \| "preview" \| "experimental"` |  |
 | `host` | `host?: string` | Host module, relative to the plugin dir. Absent ⇒ `host.mjs`. |
 | `settings` | `settings?: PluginField[]` |  |
 | `actions` | `actions?: PluginActionDef[]` |  |
@@ -429,6 +474,7 @@ export interface PluginManifest { … }
 | `web` | `web?: string` | In-repo extensions only: the web half's source module, relative to the extension dir (`web/index.ts`). Compiled into the phone bundle, never loaded from outside the repo. |
 | `backends` | `backends?: string[]` | The backend ids this plugin will register with `api.backend()`. An id not listed here is refused at registration, so what a plugin may add to the launcher is readable from its manifest before it runs. |
 | `optional` | `optional?: boolean` | In-repo extensions only: the person may switch this one OFF (an ordinary builtin is always on). Its default comes from the install's `release.json` (`builtins`, written from `deploy/ship.json`), else on. Listed on the phone so the switch can be reached. |
+| `assets` | `assets?: string` | Folder (inside the extension) of static files served at `GET\|HEAD /api/plugin/<id>/asset/<file>`; gated like `/api/*`, 403 while off. |
 | `experimental` | `experimental?: boolean` | Labelled "experimental" wherever its backends are listed (`BackendInfo.experimental`). |
 
 ## PluginView
@@ -553,7 +599,7 @@ export interface PluginPromptEvent { … }
 | `sessionId` | `sessionId: string` |  |
 | `question` | `question: string` |  |
 | `options` | `options: { index: number; label: string; }[]` |  |
-| `kind` | `kind: "trust" \| "tool" \| "plan" \| "select"` |  |
+| `kind` | `kind: "trust" \| "tool" \| "plan" \| "select" \| "question"` | `question` (2.0): a question the CLI posed on its own channel; a plugin may answer one of its OPTIONS through the gate, never its typed words — those are only a person's. |
 | `multi` | `multi?: boolean` |  |
 | `blocked` | `blocked: boolean` | Core's answer gate would refuse this box whatever the switches say (trust/tool/plan, or a destructive option). Suggesting is still allowed. |
 
@@ -617,6 +663,11 @@ export interface HostPluginApi { … }
 | `on` | `on(event: "action", fn: (e: { action: string; sessionId?: string; }) => { ok: boolean; message: string; } \| Promise<{ ok: boolean; message: string; }>): () => void` | A declared action was tapped. The returned message is shown on the phone. |
 | `session` | `session(id: string): PluginSession \| null` |  |
 | `scrollback` | `scrollback(id: string, lines?: number): string` | The last `lines` lines of the rendered screen/scrollback, plain text. |
+| `bindConversation` | `bindConversation(look: BindLook): BindVerdict` | Toolkit (2.0). Which backend conversation is this session's: the host's pure ladder (`bindconv.ts`) over the candidates YOUR queries found. Exactly one survivor or nothing. |
+| `tail` | `tail(path: string, onLine: (obj: unknown) => void, opts?: { filter?: (line: string) => boolean; }): { advance(): boolean \| null; offset(): number; close(): void; }` | Follow a JSONL file the CLI appends to: each complete line once, rotation-safe (inode or shrink re-reads from 0), 1 MiB per `advance()`. `advance()` is true when it read, false when nothing is new, null when the file is absent or the tail closed. |
+| `screen` | `screen(sessionId: string): { rows(lines?: number): string[]; squashed(lines?: number): string; } \| null` | The host's reading of the session's live screen: the last rows, and the squashed (`echo.ts`) form. Null for an unknown session. |
+| `sessionFiles` | `sessionFiles(hostSessionId: string): string \| null` | The directory the host wrote this session's launch `files` into, if this plugin's backend spawned it. |
+| `supports` | `readonly supports?: { readonly dialogKeysThenTyped?: boolean; }` | What this host does beyond 2.0 (absent on a 2.0 host ⇒ "no"). `dialogKeysThenTyped`: a takesText row's `answer` may return `{keys, typed: extra.text, then?}` — keys, 500 ms, words, Return apart. |
 | `readRepoFile` | `readRepoFile(sessionId: string, relPath: string, maxBytes?: number): string \| null` | A file inside the session's repo (containment-guarded); null if absent or outside. |
 | `inlineImages` | `inlineImages(sessionId: string, max?: number): { mime: string; data: string; relPath: string; }[]` | Recent images in the session repo's inbox/outbox, base64, newest first. |
 | `suggest` | `suggest(sessionId: string, s: Omit<AnswerSuggestion, "by" \| "byName"> \| null): void` | Show (or clear) a suggestion on the session's current question. |
@@ -635,9 +686,9 @@ export interface HostPluginApi { … }
 | `handle` | `handle(method: string, fn: (args: unknown, caller: PluginCaller) => unknown \| Promise<unknown>): () => void` | Answer `method` when the phone (or core) calls this plugin — the registry's `call(pluginId, method, args)`. One handler per method; a second replaces the first. The second argument (since 1.8) says who asked: the socket's trust tier and, when it presented a paired device's token, that device's id and name. A handler that ignores it is unchanged. A throw is the caller's `{ ok:false, error }` and the plugin's status line. Returns an unregister. |
 | `push` | `push(event: string, data?: unknown): string \| null` | Broadcast `event` to every phone as `plugin.push` (the web half's `pushes`). Returns null when sent, or a refusal in words (bad event name, not JSON, over PLUGIN_PUSH_MAX, this plugin not running). |
 | `handToAgent` | `handToAgent(repoId: string, prompt: string, opts?: { label?: string; key?: string; fire?: boolean; }): Promise<HandToAgentResult>` | Put `prompt` in that repo's backlog for its agent — the SAME path the phone's and an agent's backlog adds take (`addClientBacklogItem`), so it is contained, persisted, at-most-once by `key`, and fired by the intent ladder. It waits for a person's tap unless `fire` is set, and even then it runs only when the ladder lets it. Never types into a session directly. |
-| `backend` | `backend(def: PluginBackendDef): () => void` | Register a backend (a CLI the launcher may spawn). THROWS a sentence — and the plugin is listed broken when that escapes `activate()` — when the id is not in the manifest's `backends`, is already taken, or `caps` names a reader this host does not have. Unregistered when the plugin is switched off; the returned function unregisters it earlier. |
-| `screenReader` | `screenReader(name: string, reader: PluginScreenReader): () => void` | Contribute a SCREEN reader under `name` (since 1.1): the reader for a TUI whose choice dialog has no numbers and is answered by walking a selection (`PluginScreenReader`). A backend this plugin registers may then name it in `caps.promptBoxes` — so register the reader FIRST. THROWS a sentence when the name is not a short lowercase word or is already taken (core's own `claude-numbered` among them). Unregistered with the plugin; the returned function earlier. A reader is measured against ONE binary's screen and pinned by the plugin's own fixtures. |
-| `storeReader` | `storeReader(name: string, reader: PluginStoreReader): () => void` | Contribute a STORE reader under `name` (since 1.1): the reader of a CLI's own conversation record — a database or files on disk it writes (`PluginStoreReader`). A backend may then name it in `caps.transcript`, and the core asks it for the reader view, the context graph, the tool details, which conversation a session is in, and the backend's ledger. Same rules as `screenReader`: register it before the backend; a taken name (`claude-jsonl`) throws. |
+| `backend` | `backend(def: PluginBackendDef): () => void` | Register a backend (a CLI the launcher may spawn). THROWS a sentence — and the plugin is listed broken when that escapes `activate()` — when the id is not in the manifest's `backends`, is already taken, or `facts` names a reader this host does not have (or one not allowed for that fact). Unregistered when the plugin is switched off; the returned function unregisters it earlier. |
+| `screenReader` | `screenReader(name: string, reader: PluginScreenReader): () => void` | Contribute a SCREEN reader under `name` (since 1.1): the reader for a TUI whose choice dialog has no numbers and is answered by walking a selection (`PluginScreenReader`). A backend this plugin registers may then name it as a `{screen}` provider in `facts.dialogs` — so register it FIRST. THROWS a sentence when the name is not a short lowercase word or is already taken (core's own `claude-numbered` among them). Unregistered with the plugin; the returned function earlier. A reader is measured against ONE binary's screen and pinned by the plugin's own fixtures. |
+| `storeReader` | `storeReader(name: string, reader: PluginStoreReader): () => void` | Contribute a STORE reader under `name` (since 1.1): the reader of a CLI's own conversation record — a database or files on disk it writes (`PluginStoreReader`). A backend may then name it as a `{store}` provider in `facts.transcript`, and the core asks it for the reader view, the context graph, the tool details, which conversation a session is in, and the backend's ledger. Same rules as `screenReader`: register it before the backend; a taken name (`claude-jsonl`) throws. |
 | `thermalReader` | `thermalReader(name: string, reader: PluginThermalReader): () => void` | Contribute a THERMAL reader under `name` (since 1.3): temperature and fan speed for the machine readout, where the core has no reader of its own (macOS keeps the SMC behind root). Asked on the readout's slow cadence, before the core's own sysfs reader; the first reading wins. A reading the core cannot vouch for (non-finite, outside 1..149 °C, a negative rpm) is DROPPED — answer null. A note (`{ note, fix? }`) is shown only when nothing reads. A throw or an answer slower than `PLUGIN_THERMAL_TIMEOUT_MS` counts as no reading. Same naming rules as `screenReader`. |
 | `usageProbe` | `usageProbe(def: PluginUsageProbe): () => void` | Contribute a USAGE PROBE (since 1.7): one account's quota as its own segment beside claude's on the usage chip. `claude` or a taken `source` throws. Null = ABSENT; a throw or timeout keeps the last reading until its reset; an unvouchable window is dropped. Returns an unregister. |
 | `hookSink` | `hookSink(): string` | The loopback URL this plugin's hooks POST to: `http://127.0.0.1:<port>/api/plugin/<id>/hook`. Loopback only, like the core's own hook sink; a remote caller is refused. |
@@ -709,64 +760,19 @@ A backend id: a short lowercase word — the same rule the host's registry appli
 export const PLUGIN_BACKEND_ID_RE = /^[a-z][a-z0-9-]{0,31}$/;
 ```
 
-## PluginLaunchRequest
-
-*interface*
-
-What `launchArgs` is handed. `hookPort` is the daemon's loopback port.
-
-```ts
-export interface PluginLaunchRequest { … }
-```
-
-| member | signature | notes |
-|---|---|---|
-| `resumeMode` | `readonly resumeMode?: "continue" \| "pick" \| "fork"` |  |
-| `resumeSessionId` | `readonly resumeSessionId?: string` |  |
-| `launch` | `readonly launch: LaunchOpts` |  |
-| `hookPort` | `readonly hookPort: number` |  |
-| `cwd` | `readonly cwd?: string` | The session's working directory and the host's own id for it — for a backend that brings up a per-session server before its TUI (opencode's hybrid). Every other backend ignores them. |
-| `hostSessionId` | `readonly hostSessionId?: string` |  |
-| `forkAtTurn` | `readonly forkAtTurn?: string` | Fork `resumeSessionId` AT this turn — only reaches a backend with `caps.forkVia: "server"`. |
-
-## PluginLaunchPlan
-
-*interface*
-
-What `launchArgs` answers. `sessionId` is CLAUDE's conversation uuid only (a
-reader turns it into a path under claude's projects dir); any other CLI's id
-rides on `backendSessionId`, and only when the launch KNOWS it. `env` is
-merged after `spawnEnv` into the pane's environment.
-
-```ts
-export interface PluginLaunchPlan { … }
-```
-
-| member | signature | notes |
-|---|---|---|
-| `args` | `readonly args: string[]` |  |
-| `sessionId` | `readonly sessionId?: string` |  |
-| `backendSessionId` | `readonly backendSessionId?: string` |  |
-| `createsRecord` | `readonly createsRecord?: boolean` |  |
-| `env` | `readonly env?: Readonly<Record<string, string>>` |  |
-| `exec` | `readonly exec?: string` | Spawn THIS program in the PTY instead of `bin()` (absolute path), `args` as its argv — e.g. a POSIX `sh` that waits for the backend's own server, then `exec`s the CLI. |
-
 ## PluginBackendDef
 
 *interface*
 
-A backend a plugin registers: the host descriptor's shape with the reader
-names as plain strings — a name this host has no reader for is refused at
-registration in words, never armed. Booleans left out are false; `delivery`
-fields left out are the "no anchor" defaults (`submitKey` "\r", every regex
-null, no local commands), which is the shape `deliver.ts` already falls back
-to. A plugin backend is never on the claude health board (`healthScope` is
-the core's to say, and it says false).
+A backend a plugin registers (2.0). Reader names in `facts` are plain strings — a name this host
+has no reader for is refused at registration in words, never armed. `delivery` fields left out
+are the "no anchor" defaults (`submitKey` "\r", every regex null, no local commands), which is
+the shape `deliver.ts` already falls back to. A plugin backend is never on the claude health
+board (`healthScope` is the core's to say, and it says false); `measured` is its health signal.
 
-`delivery`, `caps` and `sources` may be GETTERS (a knob read per call switches
-them): the core reads them through on every access and never copies them at
-registration. Each answer must name readers this host has — checked against
-the answer at registration.
+`delivery`, `caps`, `facts`, `forkVia` and `sources` may be GETTERS (a knob read per call
+switches them): the core reads them through on every access and never copies them at
+registration. Each answer must name readers this host has — checked at registration.
 
 ```ts
 export interface PluginBackendDef { … }
@@ -778,9 +784,12 @@ export interface PluginBackendDef { … }
 | `label` | `label: string` |  |
 | `bin` | `bin(): string` |  |
 | `spawnEnv` | `spawnEnv?: Readonly<Record<string, string>>` |  |
-| `launchArgs` | `launchArgs(req: PluginLaunchRequest): PluginLaunchPlan` |  |
+| `prepare` | `prepare(req: PluginLaunchRequest): Promise<PluginLaunchPlan>` | One launch's plan (replaces 1.x's sync `launchArgs`). A refusal is a thrown sentence. |
 | `delivery` | `delivery?: { submitKey?: string; textThenSubmitDelayMs?: number; requiresChannel?: boolean; pastePlaceholder?: RegExp \| null; composerCursorRe?: RegExp \| null; composerRuleRe?: RegExp \| null; composerPlaceholderRe?: RegExp \| null; trustPromptRe?: RegExp \| null; isLocalCommand?(text: string): boolean; startsNoTurn?(text: string): boolean; }` |  |
-| `caps` | `caps: { hooks: "settings-inject" \| "plugin-inject" \| "none"; promptBoxes: false \| string; transcript: string; slash?: "claude" \| "own" \| "none"; contextMeter?: boolean; usageLimits?: boolean; usageProbe?: boolean; asking?: boolean; remoteControl?: boolean; effort?: boolean; permissionModes?: PermissionMode[]; forkVia?: "jsonl" \| "server" \| false; turns?: boolean; }` |  |
+| `caps` | `caps: BackendCapsV2` |  |
+| `facts` | `facts: BackendFacts` | Which provider answers each fact, in order (replaces 1.x's reader caps). |
+| `forkVia` | `forkVia?: "server"` | The backend forks a conversation on its own server (opencode's `POST /session/{id}/fork`). |
+| `measured` | `measured: { versions: readonly string[]; version(): Promise<string \| null>; }` | The CLI versions this plugin was MEASURED on, and how to ask the running one (null = cannot tell). The host compares and says a drift in a sentence — never a refusal — and the phone shows it verbatim where a backend is chosen (launch picker, Settings, new-repo menu). |
 | `models` | `models(): Promise<{ aliases: string[]; ids: string[]; where?: Record<string, "local" \| "hosted">; zeroCost?: string[]; contextWindow?: Record<string, number>; unavailable?: string; note?: string; }>` | The model catalogue. Empty ⇒ a free-text field on the phone, never a guessed list. |
 | `sources` | `sources?: BackendSources` | A source per fact beside the screen readers (`backendsources.ts`). |
 
@@ -925,7 +934,7 @@ export interface PluginStoreReader { … }
 | `toolDetails` | `toolDetails(conversationId: string, turnId: string): Record<string, TranscriptToolDetail> \| null` | The inputs/results one turn's `lite` tool blocks withheld. |
 | `contextSeries` | `contextSeries(conversationId: string): PluginStoreContext \| null` | How full the context window has been, over time. |
 | `discover` | `discover(look: PluginStoreLook): { id: string \| null; carry: unknown; }` | One pass of finding WHICH conversation a session is in, for a backend whose launch does not know the id. `id` only when exactly one candidate answers — a guess points the reader at somebody else's conversation. `carry` is handed back on the next pass. |
-| `ledger` | `ledger?(maxAgeMs: number \| undefined): Promise<unknown>` | The backend's own ledger, served verbatim at `GET /api/tokenstats/<backendId>` for a backend whose `caps.transcript` names this reader and which has no `sources.tokens`. JSON; a store that cannot be read answers `{ available: false, reason }`, never throws. |
+| `ledger` | `ledger?(maxAgeMs: number \| undefined): Promise<unknown>` | The backend's own ledger, served verbatim at `GET /api/tokenstats/<backendId>` for a backend whose `facts.transcript` names this reader and which has no `sources.tokens`. JSON; a store that cannot be read answers `{ available: false, reason }`, never throws. |
 
 ## PLUGIN_THERMAL_TIMEOUT_MS
 
@@ -999,6 +1008,146 @@ How long a usage probe may take before it counts as a failure (its last reading 
 ```ts
 export const PLUGIN_USAGE_PROBE_TIMEOUT_MS = 20000;
 ```
+
+## PluginLaunchRequest
+
+*interface*
+
+What `prepare` is handed. `hookPort` is the daemon's loopback port.
+
+```ts
+export interface PluginLaunchRequest { … }
+```
+
+| member | signature | notes |
+|---|---|---|
+| `resumeMode` | `readonly resumeMode?: "continue" \| "pick" \| "fork"` |  |
+| `resumeSessionId` | `readonly resumeSessionId?: string` |  |
+| `launch` | `readonly launch: LaunchOpts` |  |
+| `hookPort` | `readonly hookPort: number` |  |
+| `cwd` | `readonly cwd: string` | The session's working directory (realpath) and the host's own id for it (2.0: always set). |
+| `hostSessionId` | `readonly hostSessionId: string` |  |
+| `forkAtTurn` | `readonly forkAtTurn?: string` | Fork `resumeSessionId` AT this turn — only reaches a backend with `forkVia: "server"`. |
+| `instructions` | `readonly instructions: string` | The core's repo-facing text (`reposkilltext.ts`), the ONE text every agent is told: the outbox, the inbox, builds, screenshots. The plan says how it reached the CLI (`instructionsVia`): e.g. `files: [{ path: "session:instructions/AGENTS.md", content: req.instructions }]` plus an `env` value `"session:instructions"`, which the host resolves to that directory's absolute path (`"env-file"`). |
+| `askRules` | `readonly askRules: readonly string[]` | Ask rules already cut for this repo (`shared/askrules.ts`); the plan says how they hold (`askRulesVia`). |
+
+## InstructionsVia
+
+*type*
+
+How the core's `instructions` reached the CLI; `"none"` is published so the phone can say so.
+
+```ts
+export type InstructionsVia = "plugin-dir" | "env-file" | "config" | "flag" | "none";
+```
+
+## AskRulesVia
+
+*type*
+
+How the ask rules hold: the CLI's own policy, the host's answer gate on dialogs, or not at all.
+
+```ts
+export type AskRulesVia = "native" | "gate" | "none";
+```
+
+## PluginLaunchPlan
+
+*interface*
+
+What `prepare` answers. `sessionId` is CLAUDE's conversation uuid only (a
+reader turns it into a path under claude's projects dir); any other CLI's id
+rides on `backendSessionId`, and only when the launch KNOWS it. `env` is
+merged after `spawnEnv` into the pane's environment.
+
+```ts
+export interface PluginLaunchPlan { … }
+```
+
+| member | signature | notes |
+|---|---|---|
+| `args` | `readonly args: string[]` |  |
+| `sessionId` | `readonly sessionId?: string` |  |
+| `backendSessionId` | `readonly backendSessionId?: string` |  |
+| `createsRecord` | `readonly createsRecord?: boolean` |  |
+| `env` | `readonly env?: Readonly<Record<string, string>>` |  |
+| `dropEnv` | `readonly dropEnv?: readonly string[]` | Variables the pane must NOT inherit from the daemon: exact names, or `*_SUFFIX` (2.0). |
+| `exec` | `readonly exec?: string` | Spawn THIS program in the PTY instead of `bin()` (absolute path), `args` as its argv — e.g. a POSIX `sh` that waits for the backend's own server, then `exec`s the CLI. |
+| `instructionsVia` | `readonly instructionsVia: InstructionsVia` |  |
+| `askRulesVia` | `readonly askRulesVia: AskRulesVia` |  |
+| `files` | `readonly files?: readonly { path: string; content: string; mode?: number; }[]` | Written by the HOST before spawn. `session:<name>` ⇒ `<state dir>/launch/<hostSessionId>/<name>`; an absolute path is refused unless inside the plugin's `dataDir` (realpath). Never the repo, never `~/.<cli>`. In an `env` value, an item (comma-separated) spelled `session:<name>` is replaced by that path, so a variable can name a launch file or directory; any other item is passed as written. |
+
+## Provider
+
+*type*
+
+One way a fact can be answered, in the order the host asks (`facts`):
+ - `{source: true}` — ask `sources.<fact>` (re-read per call; a getter may switch it off);
+ - `{screen}` — a NAMED screen reader: core's (below) or one `api.screenReader` contributed;
+ - `{store}` — a NAMED store reader: core's `claude-jsonl`, or one `api.storeReader` contributed.
+A provider answering null passes to the next; an empty walk is ABSENT, never a guess.
+
+```ts
+export type Provider = {
+    source: true;
+} | {
+    screen: string;
+} | {
+    store: string;
+};
+```
+
+## FactName
+
+*type*
+
+```ts
+export type FactName = "turns" | "dialogs" | "questions" | "plan" | "delivery" | "transcript" | "context" | "tokens" | "usage" | "agents" | "conversations" | "asking" | "limits" | "mode" | "commands";
+```
+
+## FACT_NAMES
+
+*const*
+
+```ts
+export const FACT_NAMES: readonly FactName[] = ["turns", "dialogs", "questions", "plan", "delivery", "transcript",
+    "context", "tokens", "usage", "agents", "conversations", "asking", "limits", "mode", "commands"];
+```
+
+## BackendFacts
+
+*type*
+
+The providers per fact. A fact left out has none — ABSENT. Core names per fact (the host
+refuses any other at registration, naming the ones it has):
+ turns: screen `silence` · dialogs: screen `claude-numbered` (+ contributed screen readers) ·
+ questions / asking: screen `question-ts` · plan: screen `planbox` · context: screen
+ `context-meter` · limits: screen `limit-ts` · usage: screen `usage-probe` · transcript /
+ context / conversations / tokens: store `claude-jsonl` (+ contributed store readers) ·
+ agents: store `claude-agents`. `delivery`, `mode` and `commands` (2.2) take `{source:true}` only.
+
+```ts
+export type BackendFacts = Partial<Record<FactName, readonly Provider[]>>;
+```
+
+## BackendCapsV2
+
+*interface*
+
+Facts about the BINARY — what it accepts, never which reader answers what (that is `facts`).
+
+```ts
+export interface BackendCapsV2 { … }
+```
+
+| member | signature | notes |
+|---|---|---|
+| `turns` | `turns: boolean` | False = a plain shell: no turns, no idle ping, no model-made tab name. |
+| `slash` | `slash: "claude" \| "own" \| "none"` | Whose slash-command vocabulary the composer speaks. |
+| `effort` | `effort?: readonly string[]` | The reasoning-effort ladder the binary accepts, in order; absent = no knob. Measured, never guessed. |
+| `permissionModes` | `permissionModes: readonly PermissionMode[]` | The permission modes it accepts, in the order offered; empty = no such concept. |
+| `launchModes` | `launchModes?: readonly PermissionMode[]` | 2.2: the subset of `permissionModes` a session can START in; absent = all of them. Non-empty, each mode once. Narrowing it refuses a stored launch (backlog, schedule, intent, fork, limit relaunch) whose mode falls outside, in words at create. |
+| `remoteControl` | `remoteControl: boolean` | It accepts a remote-control flag. |
 
 ## PluginDoctorCheck
 
@@ -1158,9 +1307,7 @@ export function handleAll<M extends PluginMethods>(api: Pick<HostPluginApi, "han
 
 *function*
 
-Validate a parsed manifest. Returns the problems in words (empty =
-valid). Unknown fields are allowed — a newer manifest on an older daemon
-loads with what it understands.
+Validate a parsed manifest: problems in words (empty = valid). Unknown fields are allowed — a newer manifest on an older daemon loads with what it understands.
 
 ```ts
 export function manifestProblems(m: unknown): string[];

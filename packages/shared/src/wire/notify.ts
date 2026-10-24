@@ -29,6 +29,12 @@
  * delivery-confirmation failure ran for a week with nobody told. This is the
  * telling.
  *
+ * `disk` sits right after `cli`, same class: the desktop's home volume is
+ * nearly full (`host/diskwatch.ts`). Not cosmetic — on macOS, low space starts
+ * `cache_delete`, which ENDS apps to empty their caches, Tailscale among them
+ * (2026-10-21: the tunnel died that way, cutting the phone off). Default ON,
+ * once per level crossed, words only: nothing is deleted.
+ *
  * `burn` sits right after `limit` because it is the limit's early warning: the
  * weekly figure is climbing faster than a threshold (`shared/burn.ts`). Default
  * ON — it fires at most once per cooldown and never twice for one stretch, so
@@ -52,7 +58,7 @@
  * agent, words only; nothing is stopped or held.
  */
 export const NOTIFICATION_KINDS = [
-  "prompt", "approval", "limit", "burn", "cli", "undelivered", "backlog", "followup", "health", "agent", "artifact", "image", "plugin", "autofire", "idle", "info",
+  "prompt", "approval", "limit", "burn", "cli", "disk", "undelivered", "backlog", "followup", "health", "agent", "artifact", "image", "plugin", "autofire", "idle", "info",
 ] as const;
 
 /** Kind of in-app notification (drives the icon shown). */

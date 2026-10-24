@@ -71,6 +71,15 @@ export type CleanTargetResult =
   | { ok: false; reason: string };
 
 /**
+ * A name that ends up positionally in `ciqkit sim shot <screen> --device <d>`. It comes from a
+ * repo-committed file, so a leading `-` would be parsed as a flag: dropped, not repaired.
+ */
+const ARG_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/;
+function argName(v: unknown): string | undefined {
+  return typeof v === "string" && ARG_NAME.test(v.trim()) ? v.trim() : undefined;
+}
+
+/**
  * Sanitize one persisted capture target — `builds.ts`'s `cleanConfig`, with
  * refusals that can speak.
  *
@@ -138,8 +147,8 @@ export function cleanTarget(v: unknown, i: number): CleanTargetResult {
       viewports: viewports?.length ? viewports : undefined,
       theme,
       serial: str(raw.serial, 120),
-      screen: str(raw.screen, 120),
-      device: str(raw.device, 120),
+      screen: argName(raw.screen),
+      device: argName(raw.device),
       windowTitle: str(raw.windowTitle, 200),
     },
   };

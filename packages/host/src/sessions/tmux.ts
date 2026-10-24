@@ -22,11 +22,14 @@ import { hostStateDir } from "../branddirs.js";
 import { spawnFailure } from "../ptycap.js";
 import { ptyEnv } from "../ptyenv.js";
 import { inCopyModeSync } from "../tmuxscroll.js";
-import { knownBackend, resolveBackend, type BackendDescriptor } from "../backends/index.js";
+import { derive, knownBackend, resolveBackend, type BackendDescriptor } from "../backends/index.js";
+import { hasAccountLimit } from "../usagesources.js";
 import type { LiveMeta, SessionCore } from "./core.js";
 import { ORPHAN_MAX_AGE_MS, ORPHAN_SWEEP_DELAY_MS, STALE_LIVE_MIN_AGE_MS, STORE_FILE_RE, TMUX_SERVER, TMUX_SOCKET_DEFAULT, TMUX_SOCKET_ID, tmuxName } from "./knobs.js";
 import { tmuxRefusal } from "../tmuxreq.js";
 import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
+import { heldAskRules, holdAskRules } from "../answergate.js";
+import { ENV_NAME_RE, sweepLaunchDirs } from "../launchfiles.js";
 
 /**
  * The `env(1)` prefix that carries a backend's `spawnEnv` into the tmux PANE.
@@ -47,13 +50,17 @@ import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
  * would drop it from the client's env.
  */
 export function tmuxEnvPrefix(spawnEnv: Readonly<Record<string, string>>, unset: readonly string[] = []): string[] {
-  const pairs = Object.entries(spawnEnv);
-  if (!pairs.length && !unset.length) return [];
+  // Only valid NAMES: a key such as `-u` or `` would be an option to env, not a
+  // variable. A plugin's plan is refused for one before it gets here
+  // (`launchfiles.ts`'s `resolveSessionEnv`); this is the backstop for every caller.
+  const pairs = Object.entries(spawnEnv).filter(([k]) => ENV_NAME_RE.test(k));
+  const names = unset.filter((n) => ENV_NAME_RE.test(n));
+  if (!pairs.length && !names.length) return [];
   // Absolute, not a bare `env`: the pane's PATH is the server's, which is not
   // necessarily the daemon's. `--` would need tmux to pass it through, and
-  // nothing here starts with a dash, so it buys nothing. `-u NAME` (BSD and GNU
+  // nothing here starts with a dash (names are checked above), so it buys nothing. `-u NAME` (BSD and GNU
   // env alike) removes a variable the server's environment would hand down.
-  return ["/usr/bin/env", ...unset.flatMap((n) => ["-u", n]), ...pairs.map(([k, v]) => `${k}=${v}`)];
+  return ["/usr/bin/env", ...names.flatMap((n) => ["-u", n]), ...pairs.map(([k, v]) => `${k}=${v}`)];
 }
 
 /**
@@ -69,7 +76,26 @@ export function droppedEnvNames(patterns: readonly string[] | undefined, names: 
     if (p.startsWith("*")) { const suffix = p.slice(1); for (const n of names) if (n.endsWith(suffix) && n.length > suffix.length) out.add(n); }
     else out.add(p);
   }
-  return [...out].filter((n) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(n) && !Object.hasOwn(keep, n)).sort();
+  return [...out].filter((n) => ENV_NAME_RE.test(n) && !Object.hasOwn(keep, n)).sort();
+}
+
+/**
+ * What every pane's command runs WITHOUT: `TMUX`, which tmux sets in the pane to
+ * name ITS server's socket. A bare `tmux kill-server` (no `-L`/`-S`) inside a
+ * pane goes to the server `$TMUX` names, and `TMUX_TMPDIR` does not override it:
+ * on 2026-10-22 an agent tearing down its own scratch tmux that way killed this
+ * host's server and every session on it at once. Without `TMUX` the same
+ * command reaches the user's default server (or none). `TMUX_PANE` stays: the
+ * vault extension attributes a `wp-secret` call to its session by it, and tmux
+ * never picks a server from it. Claude still knows it is under tmux — tmux also
+ * sets `TERM_PROGRAM=tmux`, which the CLI checks first.
+ */
+export const PANE_UNSET_ENV: readonly string[] = ["TMUX"];
+
+/** The names a pane's `env -u` removes: `PANE_UNSET_ENV` always, then the launch's
+ *  `dropEnv` (`droppedEnvNames`). Deduped, in that order. */
+export function paneUnsetNames(dropEnv: readonly string[] | undefined, names: readonly string[] = Object.keys(process.env), keep: Readonly<Record<string, string>> = {}): string[] {
+  return [...new Set([...PANE_UNSET_ENV, ...droppedEnvNames(dropEnv, names, keep)])];
 }
 
 /**
@@ -258,7 +284,7 @@ export function cliConfigEnv(paneEnv: Readonly<Record<string, string>>): Record<
  * containing spaces and quotes — claude's `--settings <json>` — survives
  * byte-for-byte through the prefix), so this adds no shell and no quoting.
  *
- * A backend with an EMPTY `spawnEnv` gets no prefix at all.
+ * Every pane gets the prefix: it always unsets `TMUX` (`PANE_UNSET_ENV`).
  */
 export function spawnBackend(core: SessionCore, id: string, cwd: string, cols: number, rows: number, args: string[], backend: BackendDescriptor, launchEnv?: Readonly<Record<string, string>>, dropEnv?: readonly string[]): IPty {
   // The descriptor's `spawnEnv` first, THEN this launch's own (`LaunchPlan.env`):
@@ -279,7 +305,7 @@ export function spawnBackend(core: SessionCore, id: string, cwd: string, cols: n
     const conf = ensureTmuxConf(core);
     // new-session -A: create running the binary, or attach if it already exists.
     const argv = ["-L", TMUX_SERVER, "-u", "-f", conf, "new-session", "-A", "-s", tmuxName(id),
-      "-x", String(cols), "-y", String(rows), "-c", cwd, ...tmuxEnvPrefix(cliConfigEnv(paneEnv), droppedEnvNames(dropEnv, Object.keys(process.env), paneEnv)), BIN, ...args];
+      "-x", String(cols), "-y", String(rows), "-c", cwd, ...tmuxEnvPrefix(cliConfigEnv(paneEnv), paneUnsetNames(dropEnv, Object.keys(process.env), paneEnv)), BIN, ...args];
     return pty.spawn("tmux", argv, { name: "xterm-256color", cols, rows, cwd, env });
   } catch (err) {
     const why = spawnFailure(err);
@@ -341,16 +367,18 @@ export function reattach(core: SessionCore, m: LiveMeta): void {
     ...core.backendField(backend),
     model: l.model, effort: l.effort, permissionMode: l.permissionMode, remoteControlled: l.remoteControlled,
     prompt: null, idle: false,
-    ...(backend.caps.usageLimits ? { limit: core.newLimitState() } : {}),
+    ...(hasAccountLimit(backend) ? { limit: core.newLimitState() } : {}),
     claudeSessionId: m.claudeSessionId,
     ...(m.backendSessionId ? { backendSessionId: m.backendSessionId } : {}),
     createdAt: m.createdAt,
+    ...(m.told ? { told: m.told } : {}), ...(m.askRulesVia ? { askRulesVia: m.askRulesVia } : {}),
   };
+  if (m.askRulesVia === "gate" && m.askRules) holdAskRules(m.id, m.askRules); // the rules it was LAUNCHED with
   // The cap a person set survives the restart; its verdict is re-derived on
   // the next sweep (`budgetwatch.ts`), and garbage on disk is no cap at all.
   const budget = cleanSessionBudget(m.budget);
   if (budget) info.budget = { cfg: budget, verdict: sessionBudgetVerdict(budget, null, null, Date.now()) };
-  if (backend.caps.transcript === "claude-jsonl") info.lastTurnAt = core.lastTurnOf(cwd, m.claudeSessionId) ?? undefined;
+  if (derive(backend).keepsClaudeLog) info.lastTurnAt = core.lastTurnOf(cwd, m.claudeSessionId) ?? undefined;
   core.applyStar(info);
   core.register(m.id, proc, info, l, cols, rows, backend);
   // A pane outlives the daemon, and it can outlive it IN COPY-MODE — where it
@@ -423,7 +451,9 @@ export function persistLive(core: SessionCore, m: LiveMeta): void {
   // stamp is a fact about the pane — what the boot reclaim (`staleLiveIds`)
   // checks before it believes a listing that lacks the name.
   const rec: LiveMeta = live
-    ? { ...m, budget: live.info.budget?.cfg, budgetTripped: live.budgetTripped ? true : undefined, budgetEscOwed: live.budgetEscOwed ? true : undefined, askDismissed: live.askDismissed?.text, tmuxSocket: TMUX_SOCKET_ID }
+    ? { ...m, budget: live.info.budget?.cfg, budgetTripped: live.budgetTripped ? true : undefined, budgetEscOwed: live.budgetEscOwed ? true : undefined, askDismissed: live.askDismissed?.text, tmuxSocket: TMUX_SOCKET_ID,
+      // …and the launch's own answers, which those writers do not name either.
+      told: live.info.told, askRulesVia: live.info.askRulesVia, askRules: live.info.askRulesVia === "gate" ? (m.askRules ?? heldAskRules(m.id)) : undefined }
     : { ...m, tmuxSocket: TMUX_SOCKET_ID };
   try { mkdirSync(liveDir(core), { recursive: true }); writeJsonAtomic(livePath(core, m.id), rec); } catch (e) {
     // Non-fatal, but not silent: a record that never lands is a session that
@@ -472,14 +502,19 @@ export function aliveSessionIds(core: SessionCore): Set<string> | null {
   return alive;
 }
 
-/** One deferred pass over the two per-session stores. See `sweepSessionStores`. */
+/** One deferred pass over the per-session stores. See `sweepSessionStores`. */
 export function armOrphanSweep(core: SessionCore): void {
   const t = setTimeout(() => {
     const base = hostStateDir(core.root);
     try {
-      const r = sweepSessionStores([join(base, "history"), join(base, "summaries")], aliveSessionIds(core));
+      const alive = aliveSessionIds(core);
+      // `ctxseries/`: a source session's recorded context series (`ctxseries.ts`), the same rule.
+      const r = sweepSessionStores([join(base, "history"), join(base, "summaries"), join(base, "ctxseries")], alive);
       if (r.skipped) console.warn(`${logTag} orphan sweep skipped — the live store could not be read`);
       else if (r.deleted) console.log(`${logTag} swept ${r.deleted} orphaned session file(s), kept ${r.kept}`);
+      // A launch's own files (`launchfiles.ts`, `<state dir>/launch/<id>/`): the same rule, by dir.
+      const l = sweepLaunchDirs(core.root, alive);
+      if (l.deleted) console.log(`${logTag} swept ${l.deleted} orphaned launch dir(s), kept ${l.kept}`);
     } catch (e) { console.error(`${logTag} orphan sweep failed`, e); }
   }, ORPHAN_SWEEP_DELAY_MS);
   t.unref?.();

@@ -106,8 +106,30 @@ export function askRulesStore(): AskRulesStore | null {
   return current;
 }
 
-/** What a claude launch in `cwd` is given as `permissions.ask`; empty with no store. */
+/** The ask rules a launch in `cwd` is given (claude: `permissions.ask`; a gate backend: the gate's); empty with no store. */
 export function askRulesForCwd(cwd: string | undefined): string[] {
   if (!current || !cwd) return [];
   try { return current.rulesFor(cwd); } catch { return []; }
+}
+
+/**
+ * Does an ask rule match this text? For the answer GATE (`answergate.ts`, `askRulesVia: "gate"`),
+ * where the command sits inside a dialog's prose rather than being the whole line, so the rule's
+ * pattern is looked for ANYWHERE: `Bash(git push*)` → `git push` followed by anything. The tool
+ * name is dropped (a dialog names its tool in its own words), `*` is any run, case and whitespace
+ * runs are ignored. Matching too much refuses an automatic answer — a person then taps it — which
+ * is the safe direction; a bare tool rule (`Bash`) or a pattern of only `*` matches nothing here.
+ */
+export function askRuleMatches(rule: string, text: string): boolean {
+  const m = /^[A-Za-z][A-Za-z0-9_-]*\((.+)\)$/.exec(rule.trim());
+  const pat = m?.[1]?.trim();
+  if (!pat || !pat.replace(/\*/g, "").trim()) return false;
+  const norm = (s: string) => s.replace(/\s+/g, " ").toLowerCase();
+  const re = norm(pat).split("*").map((p) => p.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/ /g, "\\s*")).join(".*");
+  return new RegExp(re).test(norm(text));
+}
+
+/** The first ask rule the text matches, or null. */
+export function askRuleHit(rules: readonly string[], text: string): string | null {
+  return rules.find((r) => askRuleMatches(r, text)) ?? null;
 }

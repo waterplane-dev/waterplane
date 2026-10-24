@@ -216,6 +216,12 @@ public class ShellLinkService extends Service {
         return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
+    /** The host's `ws(s)://` address the link uses, or null before one was saved. */
+    @Nullable
+    static String savedUrl(Context ctx) {
+        return prefs(ctx).getString(KEY_URL, null);
+    }
+
     /** Has the user switched this on? The single question every entry point —
      *  boot receiver, periodic worker, sticky restart — asks first. */
     static boolean isEnabled(Context ctx) {

@@ -47,3 +47,22 @@ Each CLI health signal has a fixture current for the installed CLI version, harv
 - asked: 2026-10-20
 - shipped: d1d922d1, f69cd06b
 
+### R-diagnostics-011 · shipped
+A failing CLI health row has an "inspect in a session" button that sends its facts and fixture paths to a new session in the checkout; it shows only on a developer's git-checkout install, never for regular users.
+- asked: 2026-10-21
+- shipped: aee461a2
+
+### R-diagnostics-012 · shipped
+The deliver.submit signal reports a prompt's turn start correctly on current CLI versions, so rule misses are not false alarms.
+- asked: 2026-10-21
+- shipped: 01fca91a
+
+### R-diagnostics-013 · requested
+Each screen-reading signal (prompt.box, prompt.submit, askbox.enrich, context.meter, limit.reset) has at least one real captured match fixture from a current Claude CLI release; harvested captures are checked for paths, names and secrets before commit.
+- asked: 2026-10-21
+
+### R-diagnostics-014 · shipped
+The app shows which skills are loaded into context and when each was used, per conversation and per subagent.
+- asked: 2026-10-21
+- shipped: ad8ac0e0
+

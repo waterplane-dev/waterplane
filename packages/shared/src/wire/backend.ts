@@ -92,7 +92,50 @@ export interface BackendInfo {
     /** Which `PermissionMode`s this backend actually understands — empty when
      *  it has no such concept, never a guessed subset of claude's list. */
     permissionModes: PermissionMode[];
+    /** 2.2, OPTIONAL: the subset of `permissionModes` a session can START in (a mode the CLI
+     *  switches into live but has no launch flag for is left out). ABSENT means INHERIT:
+     *  every `permissionModes` entry. Sent only when the backend declares it, never empty. */
+    launchModes?: PermissionMode[];
+    /**
+     * Backend contract v2 (`docs/plans/backend-contract-v2.md`), all OPTIONAL and additive —
+     * typed now, each SENT by the package that consumes it (the `backends` frame is byte-pinned
+     * until then, `packages/host/test/backendinfos.pin.test.mjs`). Absent = an older host:
+     * `efforts` absent with `effort` true is claude's ladder; the others absent = not offered.
+     */
+    /** The effort ladder itself, in order (`effort` stays derived from it for older phones). */
+    efforts?: string[];
+    /** A question with no box can be posed and answered from the phone (free text). */
+    questions?: boolean;
+    /** The CLI's plan mode is read as a plan box. */
+    plan?: boolean;
+    /** An account usage reading exists for this backend. */
+    usage?: boolean;
+    /** Live subagents under a session can be listed. */
+    agents?: boolean;
+    /** Past conversations can be listed (closed rows, the pick sheet). */
+    conversations?: boolean;
+    /**
+     * Contract 2.2 (`docs/plans/backend-parity-v3.md` §7): ABSENT unless the backend's own source
+     * answers (`sources.mode` / `sources.commands`) — never `false`; absent = not offered.
+     */
+    /** The phone may switch the mode LIVE; the reading is `SessionInfo.liveMode`, as claude's. */
+    modes?: true;
+    /** The phone's slash sheet lists the backend's OWN commands (`slash` keeps meaning claude's set and header chips). */
+    commands?: true;
+    /** How the core's repo instructions reach this backend by default (the session's actual: `SessionInfo.told`). */
+    told?: "plugin-dir" | "env-file" | "config" | "flag" | "none";
   };
+  /**
+   * The CLI versions a plugin backend's screen and store readers were MEASURED on
+   * (`PluginBackendDef.measured`), and the version this desktop is running when the
+   * binary could say. `drift` is the host's sentence ("… measured on 1.0.91, and this
+   * desktop is running 1.0.95 …") when the running version is none of the measured
+   * ones — a reading a person acts on, never a refusal: the backend still launches.
+   * Absent for every core backend (their health is the CLI health board) and from an
+   * older host; `running` absent = the binary could not tell; `drift` absent = no
+   * drift known.
+   */
+  measured?: { versions: string[]; running?: string; drift?: string };
   /**
    * The model catalogue this backend will accept, split into short aliases
    * (e.g. "opus") and full ids. Either or both may be empty — an empty

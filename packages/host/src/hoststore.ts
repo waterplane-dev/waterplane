@@ -9,8 +9,8 @@
  * almost everything in here is already bounded by whoever writes it:
  * `sentlog.ts` a 1000-entry ring, `decisionlog.ts` a 500-entry ring,
  * `limit-events.jsonl` a 256 KB rotation, `usagelog.ts` 5000 rows / 30 days,
- * `history/` and `summaries/` a boot sweep behind a 7-day gate and an alive-set
- * guard, `thumbs/` a 256 MB prune.
+ * `history/`, `summaries/` and `ctxseries/` a boot sweep behind a 7-day gate and an
+ * alive-set guard, `thumbs/` a 256 MB prune.
  *
  * So this module is not a second eviction policy — it is the report that makes
  * those bounds visible, and the one finding inside it: `tokenstats.json` is the
@@ -108,6 +108,8 @@ const TOKENSTATS = "tokenstats.json";
 const KNOWN_DIRS: Record<string, "live"> = {
   history: "live",
   summaries: "live",
+  /** A source session's recorded context series (`sessions/ctxseries.ts`), swept with `history/`. */
+  ctxseries: "live",
   live: "live",
   /** Each plugin's `settings.json` and its own `dataDir` (`plugins/pluginregistry.ts`). */
   plugins: "live",
@@ -159,7 +161,7 @@ const LIVE_FILES = new Set([
   "installs.json", "intents-archive.jsonl", "intents.json", "launches.json", "limit.json",
   "notify.json", "oracle.json", "peer-jobs.json", "plugins.json", "pulls.json", "push-subs.json", "reviews.json",
   "schedules.json", "sessions.json", "settings.json", "setup.json",
-  "stars.json", "tmux.conf", "vapid.json",
+  "stars.json", "tmux.conf", "updates.json", "vapid.json",
 ]);
 
 /** Fold a bucket of files into one row. A row per file would be forty rows

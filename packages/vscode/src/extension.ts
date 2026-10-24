@@ -35,8 +35,10 @@ import type { NavState } from "./navtree.js";
 import { deliver, PROMPTS, render } from "./prompts.js";
 import type { ScanJob, ScanMsg } from "./scanworker.js";
 import type { CopilotSwitches } from "./protocol.js";
-import type { CorpusDoc, HealthDoc, PromptId, TabId, SessionDoc, SessionRow, SessionSummary, ToExtension, ToWebview, WeightDoc } from "./protocol.js";
+import { COPILOT_LEDGER } from "./protocol.js";
+import type { CorpusDoc, HealthDoc, LiveState, PromptId, TabId, SessionDoc, SessionRow, SessionSummary, ToExtension, ToWebview, WeightDoc } from "./protocol.js";
 import { RestartWatch } from "./restartwatch.js";
+import { DEFAULT_DESKTOP_URL, readLive, readPath } from "./hostlink.js";
 import { StatusBar } from "./statusbar.js";
 import { LogWatch } from "./logwatch.js";
 
@@ -46,6 +48,8 @@ interface RowsState { folder: string | null; rows: SessionSummary[]; selected: s
 const blankRows = (folder: string | null): RowsState => ({ folder, rows: [], selected: null, older: 0, capped: 0, automated: 0 });
 
 const RESCAN_MS = 10 * 60_000;
+/** How often the waterplane desktop's live facts are re-read while the panel is on screen. */
+const LIVE_MS = 60_000;
 /** The globalState key of the last finished scan's `HeadlineSummary`. */
 const SUMMARY_KEY = `${BRAND.slug}.headline`;
 
@@ -82,6 +86,8 @@ class Ext implements vscode.Disposable {
   private health: HealthRun;
   /** A tab the panel should show once it says `ready` (rides the ready round-trip). */
   private wantTab: TabId | null = null;
+  /** The ledger tab All sessions should open on with `wantTab` (the Copilot row's click). */
+  private wantLedger: string | undefined;
   /**
    * The panel said `ready` with no view of its own before the active folder's rows were read:
    * its default (Session while one is live, else All sessions) is chosen once they are, by
@@ -105,6 +111,10 @@ class Ext implements vscode.Disposable {
   private lens!: InstructionLens;
   private corpus: { doc: CorpusDoc | null; why?: string } = { doc: null };
   private scanning: { done: number; total: number } | null = null;
+  /** The waterplane desktop on this machine, as last read (`hostlink.ts`); null before the first read. */
+  private live: LiveState | null = null;
+  /** Re-reads the desktop's live facts while the panel is on screen — a limit bar is a clock. */
+  private liveTimer2: NodeJS.Timeout | null = null;
   /** The running scan's worker; terminated when the panel closes or the config dir changes. */
   private worker: Worker | null = null;
   /** When the last scan finished (ms); 0 = none this window. */
@@ -156,7 +166,7 @@ class Ext implements vscode.Disposable {
       this.lens,
       new RestartWatch(ctx),
       vscode.commands.registerCommand(`${BRAND.slug}.open`, () => this.openCommand()),
-      vscode.commands.registerCommand(SHOW, (tab: unknown) => this.showTab(isTab(tab) ? tab : "session")),
+      vscode.commands.registerCommand(SHOW, (tab: unknown, ledger: unknown) => this.showTab(isTab(tab) ? tab : "session", typeof ledger === "string" ? ledger : undefined)),
       vscode.commands.registerCommand(PICK, (id: unknown) => this.pickCommand(typeof id === "string" ? id : null)),
       vscode.commands.registerCommand(PICK_FOLDER, () => this.pickFolderCommand()),
       vscode.commands.registerCommand(`${BRAND.slug}.healthRefresh`, () => this.healthCommand()),
@@ -206,12 +216,13 @@ class Ext implements vscode.Disposable {
 
   private onConfig(e: vscode.ConfigurationChangeEvent): void {
     // A Copilot instruction switch changes who reads which file: weigh again.
-    if (["github.copilot.chat.codeGeneration.useInstructionFiles", "chat.useAgentsMdFile", "chat.useClaudeMdFile"].some((k) => e.affectsConfiguration(k))) {
+    if (["github.copilot.chat.codeGeneration.useInstructionFiles", "chat.useAgentsMdFile", "chat.useClaudeMdFile", "chat.useAgentSkills", "chat.includeApplyingInstructions"].some((k) => e.affectsConfiguration(k))) {
       void this.refreshSession();
       this.lens.reset();
     }
     if (!e.affectsConfiguration(BRAND.slug)) return;
     const cfg = vscode.workspace.getConfiguration(BRAND.slug);
+    if (e.affectsConfiguration(`${BRAND.slug}.desktopUrl`)) void this.readLive();
     this.statusBar.setEnabled(cfg.get<boolean>("statusBar", true));
     this.watch.setPollSeconds(cfg.get<number>("pollSeconds", 5));
     if (e.affectsConfiguration(`${BRAND.slug}.claudeConfigDir`)) {
@@ -402,7 +413,10 @@ class Ext implements vscode.Disposable {
     this.statusBar.setScan(this.scanning);
     this.post({ t: "corpus", ...this.corpus, scanning: this.scanning });
     const dir = this.ctx.globalStorageUri.fsPath;
-    const job: ScanJob = { configDir: this.configDir(), cacheFile: path.join(dir, "tokenstore.v5.json") };
+    const job: ScanJob = {
+      configDir: this.configDir(), cacheFile: path.join(dir, "tokenstore.v5.json"),
+      copilot: { userDir: userDirOf(dir), cacheFile: path.join(dir, "copilotchat.v1.json") },
+    };
     return new Promise<void>((resolve) => {
       let w: Worker;
       const finish = (next: { doc: CorpusDoc | null; why?: string }): void => {
@@ -454,10 +468,27 @@ class Ext implements vscode.Disposable {
   private onVisible(visible: boolean): void {
     if (this.rescanTimer) clearInterval(this.rescanTimer);
     this.rescanTimer = null;
+    if (this.liveTimer2) clearInterval(this.liveTimer2);
+    this.liveTimer2 = null;
     if (!visible || this.disposed) return;
+    void this.readLive();
+    this.liveTimer2 = setInterval(() => void this.readLive(), LIVE_MS);
     // Revealing the panel again is not a reason to re-read 9k logs: a scan under 10 minutes old stands.
     if (Date.now() - this.lastScanAt >= RESCAN_MS) void this.scan();
     this.rescanTimer = setInterval(() => void this.scan(), RESCAN_MS);
+  }
+
+  // ---- the waterplane desktop on this machine (off until `desktopUrl` is set) -------------------
+  private desktopUrl(): string {
+    return vscode.workspace.getConfiguration(BRAND.slug).get<string>("desktopUrl", "");
+  }
+
+  /** Ask the desktop for its live account facts and hand them to the panel. Never throws. */
+  private async readLive(): Promise<void> {
+    const live = await readLive(this.desktopUrl());
+    if (this.disposed) return;
+    this.live = live;
+    this.post({ t: "live", live });
   }
 
   // ---- webview traffic ------------------------------------------------------------------------
@@ -522,12 +553,13 @@ class Ext implements vscode.Disposable {
     return { ...doc, index: { ...doc.index, spend } };
   }
 
-  private showTab(tab: TabId): void {
+  private showTab(tab: TabId, ledger?: string): void {
     this.defaultPending = false;
     this.panel.setView(tab);
     // An open panel will not say `ready` again, so tell it now; a new one gets it on its `ready`.
-    if (this.panel.open) { this.panel.show(); this.post({ t: "tab", id: tab }, "panel"); return; }
+    if (this.panel.open) { this.panel.show(); this.post({ t: "tab", id: tab, ledger }, "panel"); return; }
     this.wantTab = tab;
+    this.wantLedger = ledger;
     this.panel.show();
   }
 
@@ -606,11 +638,14 @@ class Ext implements vscode.Disposable {
     if (this.activeFolder && this.rows.folder === this.activeFolder) this.post(this.sessionsMsg(this.activeFolder), to);
     this.post({ t: "weight", ...this.weight }, to);
     this.post({ t: "corpus", ...this.corpus, scanning: this.scanning ?? undefined }, to);
+    if (this.live) this.post({ t: "live", live: this.live }, to);
+    else void this.readLive();
     this.sendPrompts(to);
     if (this.activeFolder) this.postHealth(this.activeFolder, to);
     if (to === "panel" && this.wantTab) {
-      this.post({ t: "tab", id: this.wantTab }, "panel");
+      this.post({ t: "tab", id: this.wantTab, ledger: this.wantLedger }, "panel");
       this.wantTab = null;
+      this.wantLedger = undefined;
     }
   }
 
@@ -631,7 +666,28 @@ class Ext implements vscode.Disposable {
           }
           break;
         }
-        case "rescan": void this.scan(); break;
+        case "rescan": void this.scan(); void this.readLive(); break;
+        case "liveRead": void this.readLive(); break;
+        case "desktop":
+          await vscode.workspace.getConfiguration(BRAND.slug).update("desktopUrl", m.on ? DEFAULT_DESKTOP_URL : "", vscode.ConfigurationTarget.Global);
+          break;
+        case "get": {
+          const id = m.id;
+          // Copilot Chat's ledger is this panel's own scan, answered here: a machine with Copilot and
+          // no desktop (or no Claude) still has it.
+          if (String(m.path).split("?")[0] === `/api/tokenstats/${COPILOT_LEDGER.id}`) {
+            const value = this.corpus.doc?.copilot ?? { available: false, reason: "Copilot Chat's logs are read with the other logs: re-read to count them." };
+            this.post({ t: "ledgerAnswer", id, ok: true, value }, from);
+            break;
+          }
+          try {
+            const value = await readPath(this.desktopUrl(), String(m.path), typeof m.ms === "number" ? m.ms : undefined);
+            this.post({ t: "ledgerAnswer", id, ok: true, value }, from);
+          } catch (e) {
+            this.post({ t: "ledgerAnswer", id, ok: false, error: (e as Error)?.message || String(e) }, from);
+          }
+          break;
+        }
         case "pickFolder":
           if (this.folders().includes(m.folder)) { this.activeFolder = m.folder; this.sendFolders(); await this.refreshSession(); }
           break;
@@ -706,6 +762,7 @@ class Ext implements vscode.Disposable {
     if (this.liveTimer) clearTimeout(this.liveTimer);
     if (this.rescanTimer) clearInterval(this.rescanTimer);
     this.rescanTimer = null;
+    if (this.liveTimer2) clearInterval(this.liveTimer2);
     this.health.dispose();
     this.watch.dispose();
     this.panel.dispose();
@@ -724,6 +781,8 @@ function copilotSwitches(): CopilotSwitches {
     instructionFiles: get("github.copilot.chat.codeGeneration.useInstructionFiles"),
     agentsMd: get("chat.useAgentsMdFile"),
     claudeMd: get("chat.useClaudeMdFile"),
+    skills: get("chat.useAgentSkills"),
+    applyingInstructions: get("chat.includeApplyingInstructions"),
   };
 }
 

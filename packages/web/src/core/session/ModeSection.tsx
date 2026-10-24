@@ -19,7 +19,7 @@
 import type { ReactNode } from "react";
 import { Check, Code, Hand, Loader2, Lock, ScrollText, ShieldOff, Sparkles, Zap } from "lucide-react";
 import type { BackendInfo, ClientMessage, PermissionMode, SessionInfo } from "@waterplane/shared";
-import { CLAUDE, backendIdOf, backendInfo, effortChoices, permModeChoices } from "../../backendCaps";
+import { effortChoices, isShellBackend, liveModesHere, modesReason, permModeChoices, runsClaudeTui, backendInfo } from "../../backendCaps";
 import { askConfirm } from "../../Confirm";
 import {
   MODE_DEFS, modeNow, modeNowText, modeRows, modeTap, modeTitle, ultraCommand, ultraState, ultraText,
@@ -27,7 +27,6 @@ import {
 } from "../../modePick";
 import { showToast } from "../../toast";
 import { track } from "../../usage";
-import { Unavailable } from "../../Unavailable";
 import { RISKY_PERM_WARNING } from "../settings/permModes";
 import { beginModeSwitch, useModeSwitch } from "./modeSwitch";
 import { Button } from "../../kit/Button";
@@ -44,13 +43,18 @@ export function ModeGlyph({ mode, size = 16 }: { mode: PermissionMode; size?: nu
 }
 
 /** What the section draws: the mode rows this backend lists, and whether
- *  ultracode applies (`/effort` is claude's, and ultracode rides on it). */
+ *  ultracode applies. Keyed on facts the wire states, never on the id: a live switch is the
+ *  CLI's shift+tab cycle, so any backend that lists permission modes has it (a backend with
+ *  none draws no section); ultracode rides on `/effort`, so it needs modes, a slash door and
+ *  an effort ladder. */
 function parts(backends: BackendInfo[] | null, cur: SessionInfo, canSlash: boolean) {
-  const isClaude = backendIdOf(cur) === CLAUDE;
+  // Live switching only where something can do it (claude's TUI, or a stated `caps.modes`);
+  // otherwise the mode is a launch-time choice and `modesReason` says so.
+  const modes = liveModesHere(backends, cur.backend) ? permModeChoices(backends, cur.backend) : [];
   return {
-    isClaude,
-    rows: modeRows(permModeChoices(backends, cur.backend), cur),
-    ultraOk: isClaude && canSlash && effortChoices(backends, cur.backend).length > 0,
+    rows: modeRows(modes, cur, runsClaudeTui(backends, cur.backend)),
+    // Ultracode is `/effort ultracode` in claude's TUI, whatever else can switch modes.
+    ultraOk: modes.length > 0 && runsClaudeTui(backends, cur.backend) && canSlash && effortChoices(backends, cur.backend).length > 0,
   };
 }
 
@@ -72,9 +76,14 @@ export interface ModeSectionProps {
 
 export function ModeSection({ cur, backends, canSlash, submitInput, liveAsk, onClose }: ModeSectionProps): ReactNode {
   const switching = useModeSwitch(cur.id);
-  const { isClaude, rows, ultraOk } = parts(backends, cur, canSlash);
+  const { rows, ultraOk } = parts(backends, cur, canSlash);
   const now = modeNow(cur);
-  if (rows.length === 0 && !ultraOk) return null;
+  if (rows.length === 0 && !ultraOk) {
+    // Not a vanished section: where the picker would be, the sentence says why it is not
+    // (a shell has no agent to switch, so it says nothing).
+    const why = isShellBackend(backends, cur.backend) ? null : modesReason(backends, cur.backend);
+    return why ? <Hint className="mode-sec">{why}</Hint> : null;
+  }
 
   const send = (mode: PermissionMode) => {
     track(`action:mode.${mode}`);
@@ -106,38 +115,29 @@ export function ModeSection({ cur, backends, canSlash, submitInput, liveAsk, onC
   return (
     <div className="mode-sec">
       {rows.length > 0 && <>
-        <div className="mode-head muted">Mode{isClaude ? " · shift+tab on the desktop" : ""}</div>
-        <Hint className="mode-now">{modeNowText(now)}</Hint>
-        {isClaude ? (
-          <div className="mode-rows" role="group" aria-label="permission mode">
-            {rows.map((r) => {
-              const isNow = now.mode === r.mode;
-              const busy = switching === r.mode;
-              return (
-                <button key={r.mode} className={`mode-row${isNow && now.source === "live" ? " cur" : ""}`}
-                  aria-pressed={isNow && now.source === "live"} onClick={() => void pick(r.mode)}>
-                  <span className="mode-ico"><ModeGlyph mode={r.mode} /></span>
-                  <span className="mode-txt">
-                    <span className="mode-title">{r.title}</span>
-                    <span className="mode-desc muted">{busy ? "switching…" : r.desc}</span>
-                  </span>
-                  <span className="mode-mark">
-                    {busy ? <Loader2 size={16} className="spin" />
-                      : isNow && now.source === "live" ? <Check size={16} />
-                        : isNow ? <span className="muted">at launch</span> : null}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          // Switching live is claude's shift+tab; another backend's mode is the
-          // launch flag it started with. A sentence, never a dimmed list.
-          <Unavailable cants={[{
-            label: "switching mode here",
-            reason: `${backendInfo(backends, cur.backend)?.label ?? cur.backend} takes its mode at launch — change it in Settings and relaunch.`,
-          }]} />
-        )}
+        <div className="mode-head muted">{runsClaudeTui(backends, cur.backend) ? "Mode · shift+tab on the desktop" : "Mode"}</div>
+        <Hint className="mode-now">{modeNowText(now, runsClaudeTui(backends, cur.backend) ? undefined : (backendInfo(backends, cur.backend)?.label ?? "this backend"))}</Hint>
+        <div className="mode-rows" role="group" aria-label="permission mode">
+          {rows.map((r) => {
+            const isNow = now.mode === r.mode;
+            const busy = switching === r.mode;
+            return (
+              <button key={r.mode} className={`mode-row${isNow && now.source === "live" ? " cur" : ""}`}
+                aria-pressed={isNow && now.source === "live"} onClick={() => void pick(r.mode)}>
+                <span className="mode-ico"><ModeGlyph mode={r.mode} /></span>
+                <span className="mode-txt">
+                  <span className="mode-title">{r.title}</span>
+                  <span className="mode-desc muted">{busy ? "switching…" : r.desc}</span>
+                </span>
+                <span className="mode-mark">
+                  {busy ? <Loader2 size={16} className="spin" />
+                    : isNow && now.source === "live" ? <Check size={16} />
+                      : isNow ? <span className="muted">at launch</span> : null}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </>}
       {ultraOk && (
         <div className="mode-ultra">

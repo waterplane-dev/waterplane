@@ -97,6 +97,14 @@ export interface SessionLimit {
    * does not retry - it needs the person. Absent = a plan window, as ever.
    */
   spend?: boolean;
+  /**
+   * The wall came from the backend's OWN channel (`sources.usage.wall`) with no time it lifts —
+   * Gemini's "no credit left" — and this is the backend's sentence saying why. The host then
+   * schedules NOTHING (`nextAttemptAt` null, no probe, no ladder): every unattended `continue`
+   * would be a prompt nobody sent, and the one after credit lands would spend it. It needs the
+   * person. Absent = not such a wall (claude's walls never carry it); an older host never sends it.
+   */
+  needsYou?: string;
   /** Effective auto-continue for THIS session (override ?? global switch). */
   autoContinue: boolean;
   /** Per-session override; null = inherit the global switch. */

@@ -274,7 +274,9 @@ function Root() {
       <div className="auth-gate">
         <div className="auth-card">
           <div className="auth-title"><FlaskConical size={16} style={{ verticalAlign: "-3px" }} /> Demo not available</div>
+          {/* raw: boot screen, loads before the settings kit */}
           <div className="set-note">{noDemo}</div>
+          {/* raw: boot screen, loads before the settings kit */}
           <div className="set-row demo-problem">
             <Button variant="primary" onClick={leaveDemo}>Leave the demo</Button>
           </div>

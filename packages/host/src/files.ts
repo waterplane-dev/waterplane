@@ -17,8 +17,8 @@ import {
 import { readdir as readdirAsync, stat as statAsync } from "node:fs/promises";
 import { extname, join, relative, resolve, sep } from "node:path";
 
-import { isSecretFile } from "./git.js";
-import { contained } from "./paths.js";
+import { secretAt } from "./git.js";
+import { contained, containedReal } from "./paths.js";
 
 export const INBOX_SUBDIR = ".claude/inbox";
 export const OUTBOX_SUBDIR = ".claude/outbox";
@@ -121,8 +121,8 @@ export interface TreeReadOpts {
  * (it writes these and swears they can't come back). Not a security boundary:
  * a `claude` session in the repo can read anything.
  */
-function serveable(full: string, relPath: string, opts: TreeReadOpts): boolean {
-  if (isSecretFile(relPath)) return false;
+function serveable(wt: string, full: string, relPath: string, opts: TreeReadOpts): boolean {
+  if (secretAt(wt, relPath, full)) return false;
   if (opts.anyType) return true;
   return VIEWABLE.has(extname(full).toLowerCase());
 }
@@ -244,6 +244,15 @@ function inboxDir(worktree: string, subdir = INBOX_SUBDIR): string {
   return join(worktree, ...subdir.split("/"));
 }
 
+/** The transport dir to actually touch: `null` when `.claude/inbox` (or the
+ *  outbox) is a link that resolves outside the worktree — a cloned repo can
+ *  commit `.claude/inbox -> ~/.ssh`. An in-repo link, or no dir yet, is fine. */
+function transportDir(worktree: string, subdir = INBOX_SUBDIR): string | null {
+  return containedReal(worktree, subdir);
+}
+
+const NOT_PLAIN_INBOX = "inbox is not a plain folder in this repo";
+
 /** Reject names that try to escape the inbox. */
 function safeName(name: string): string | null {
   const base = name.replace(/[/\\]/g, "_").trim();
@@ -286,7 +295,8 @@ export function saveInboxFile(
 ): FileEntry | { error: string } {
   const safe = safeName(originalName);
   if (!safe) return { error: "invalid filename" };
-  const dir = inboxDir(worktree);
+  const dir = transportDir(worktree);
+  if (dir === null) return { error: NOT_PLAIN_INBOX };
   mkdirSync(dir, { recursive: true });
   if (opts.dedupe) {
     const existing = join(dir, safe);
@@ -322,7 +332,9 @@ export function newOutboxPath(
   prefix: string,
   ext: string,
 ): { full: string; relPath: string; name: string } {
-  const dir = inboxDir(worktree, OUTBOX_SUBDIR);
+  const dir = transportDir(worktree, OUTBOX_SUBDIR);
+  // Throws: every caller already wraps this (capture run, peer save, route) and degrades to a refusal.
+  if (dir === null) throw new Error("outbox is not a plain folder in this repo");
   mkdirSync(dir, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:T]/g, "-").replace(/\..+$/, "");
   const name = ensureUnique(dir, `${prefix}-${stamp}${ext}`);
@@ -336,8 +348,8 @@ export function newOutboxPath(
 const SEEN_MARKER = ".seen";
 
 export function listInbox(worktree: string): FileEntry[] {
-  const dir = inboxDir(worktree);
-  if (!existsSync(dir)) return [];
+  const dir = transportDir(worktree);
+  if (dir === null || !existsSync(dir)) return [];
   return readdirSync(dir)
     .map((name) => {
       if (name.startsWith(".")) return null; // skip the .seen marker + dotfiles
@@ -362,8 +374,8 @@ export function listInbox(worktree: string): FileEntry[] {
 export function countOutbox(worktree: string): number {
   const marks = new Map<string, number>();
   for (const sub of OUTBOX_SUBDIRS) {
-    const dir = inboxDir(worktree, sub);
-    if (!existsSync(dir)) continue;
+    const dir = transportDir(worktree, sub);
+    if (dir === null || !existsSync(dir)) continue;
     let seenAt = 0;
     try { seenAt = statSync(join(dir, SEEN_MARKER)).mtimeMs; } catch { /* never opened */ }
     marks.set(sub, seenAt);
@@ -389,8 +401,8 @@ export function countOutbox(worktree: string): number {
 export function outboxSeenAt(worktree: string): number | undefined {
   let oldest: number | undefined;
   for (const sub of OUTBOX_SUBDIRS) {
-    const dir = inboxDir(worktree, sub);
-    if (!existsSync(dir)) continue;
+    const dir = transportDir(worktree, sub);
+    if (dir === null || !existsSync(dir)) continue;
     let seenAt = 0;
     try { seenAt = statSync(join(dir, SEEN_MARKER)).mtimeMs; } catch { /* never opened */ }
     oldest = oldest === undefined ? seenAt : Math.min(oldest, seenAt);
@@ -401,15 +413,16 @@ export function outboxSeenAt(worktree: string): number | undefined {
 /** Stamp this repo's outbox as seen — zeroes the unread badge until the next drop. */
 export function markOutboxSeen(worktree: string): void {
   for (const sub of OUTBOX_SUBDIRS) {
-    const dir = inboxDir(worktree, sub);
-    if (!existsSync(dir)) continue; // no dir ⇒ nothing to count ⇒ nothing to stamp
+    const dir = transportDir(worktree, sub);
+    if (dir === null || !existsSync(dir)) continue; // no dir ⇒ nothing to count ⇒ nothing to stamp
     try { writeFileSync(join(dir, SEEN_MARKER), ""); } catch { /* best-effort */ }
   }
 }
 
 /** Stamp this repo's inbox as seen — zeroes the unread badge until new uploads. */
 export function markInboxSeen(worktree: string): void {
-  const dir = inboxDir(worktree);
+  const dir = transportDir(worktree);
+  if (dir === null) return;
   try {
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, SEEN_MARKER), "");
@@ -419,7 +432,9 @@ export function markInboxSeen(worktree: string): void {
 export function deleteInboxFile(worktree: string, name: string): boolean {
   const safe = safeName(name);
   if (!safe) return false;
-  const full = join(inboxDir(worktree), safe);
+  const dir = transportDir(worktree);
+  if (dir === null) return false;
+  const full = join(dir, safe);
   if (!existsSync(full)) return false;
   try {
     rmSync(full);
@@ -435,7 +450,9 @@ export function deleteInboxFile(worktree: string, name: string): boolean {
 export function deleteArtifact(worktree: string, relPath: string): boolean {
   const rel = relPath.replace(/\\/g, "/");
   const allowedRoots = [INBOX_SUBDIR, ...OUTBOX_SUBDIRS];
-  const full = contained(worktree, rel);
+  // `containedReal`: a committed `.claude/outbox/evildir -> /` must not let a
+  // delete under it unlink a file outside the tree.
+  const full = containedReal(worktree, rel);
   if (full === null) return false; // escape guard
   // The "inbox or outbox only" test is made on the RESOLVED path, never on the
   // string the client sent. Asked of the string, `.claude/inbox/../../src/x.ts`
@@ -459,7 +476,7 @@ export function deleteArtifact(worktree: string, relPath: string): boolean {
 
 /** Resolve a worktree-relative path, refusing anything that escapes the tree. */
 export function resolveInTree(worktree: string, relPath: string): string | null {
-  const full = contained(worktree, relPath);
+  const full = containedReal(worktree, relPath);
   if (full === null) return null;
   if (!existsSync(full) || !statSync(full).isFile()) return null;
   return full;
@@ -480,7 +497,7 @@ export function statInTree(
 ): { full: string; size: number; mtime: number } | null {
   const full = resolveInTree(worktree, relPath);
   if (!full) return null;
-  if (!serveable(full, relPath, opts)) return null;
+  if (!serveable(worktree, full, relPath, opts)) return null;
   try {
     const st = statSync(full);
     return { full, size: st.size, mtime: st.mtimeMs };
@@ -492,7 +509,7 @@ export function statInTree(
 export function readInTree(worktree: string, relPath: string, opts: TreeReadOpts = {}): Buffer | null {
   const full = resolveInTree(worktree, relPath);
   if (!full) return null;
-  if (!serveable(full, relPath, opts)) return null;
+  if (!serveable(worktree, full, relPath, opts)) return null;
   try {
     return readFileSync(full);
   } catch {
@@ -528,7 +545,7 @@ export function discoverArtifacts(
   // Outbox can live in more than one place; seed the walk with every variant
   // that exists. Repo scope just starts at the worktree root.
   const starts = scope === "outbox"
-    ? OUTBOX_SUBDIRS.map((sub) => inboxDir(worktree, sub)).filter((d) => existsSync(d))
+    ? OUTBOX_SUBDIRS.map((sub) => transportDir(worktree, sub)).filter((d): d is string => d !== null && existsSync(d))
     : (existsSync(root) ? [root] : []);
   if (!starts.length) return { files: [], truncated: false };
 
@@ -548,6 +565,9 @@ export function discoverArtifacts(
       const full = join(dir, name);
       let st;
       try {
+        // A link that leaves the worktree is neither walked nor listed: a committed
+        // `docs/home -> ~` would otherwise list every picture under the home directory.
+        if (lstatSync(full).isSymbolicLink() && containedReal(root, relative(root, full)) === null) continue;
         st = statSync(full);
       } catch {
         continue;
@@ -588,7 +608,7 @@ export async function discoverArtifactsAsync(
   const q = opts.query?.trim().toLowerCase() || "";
   const root = resolve(worktree);
   const starts = scope === "outbox"
-    ? OUTBOX_SUBDIRS.map((sub) => inboxDir(worktree, sub)).filter((d) => existsSync(d))
+    ? OUTBOX_SUBDIRS.map((sub) => transportDir(worktree, sub)).filter((d): d is string => d !== null && existsSync(d))
     : (existsSync(root) ? [root] : []);
   if (!starts.length) return { files: [], truncated: false };
 
@@ -610,7 +630,8 @@ export async function discoverArtifactsAsync(
       let isDir = e.isDirectory();
       let isFile = e.isFile();
       if (e.isSymbolicLink()) {
-        // The sync walk follows links (statSync); so does this one.
+        // Followed like the sync walk — only while its target stays in the worktree.
+        if (containedReal(root, relative(root, full)) === null) continue;
         try { const st = await statAsync(full); isDir = st.isDirectory(); isFile = st.isFile(); } catch { continue; }
       }
       if (isDir) {
@@ -654,7 +675,7 @@ export function listTransport(worktree: string, scope: "outbox" | "inbox"): File
   const subs = scope === "inbox" ? [INBOX_SUBDIR] : OUTBOX_SUBDIRS;
   const root = resolve(worktree);
   const out: FileEntry[] = [];
-  const stack = subs.map((sub) => inboxDir(worktree, sub)).filter((d) => existsSync(d));
+  const stack = subs.map((sub) => transportDir(worktree, sub)).filter((d): d is string => d !== null && existsSync(d));
   while (stack.length) {
     const dir = stack.pop()!;
     let entries: string[];

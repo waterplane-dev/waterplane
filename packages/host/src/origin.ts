@@ -72,7 +72,7 @@ interface Compiled {
   ports: Set<number>;
   /** Verbatim extra origins from WATERPLANE_ALLOWED_ORIGINS, already normalised. */
   origins: Set<string>;
-  /** Accept any `*.ts.net`, because we couldn't learn our own MagicDNS name. */
+  /** Accept `*.ts.net` by suffix (proxied requests only), because we are on a tailnet but couldn't read our own MagicDNS name. */
   anyMagicDns: boolean;
 }
 
@@ -155,7 +155,7 @@ function compile(cfg: OriginConfig): Compiled {
     }
   }
 
-  return { hosts, ports, origins, anyMagicDns: !cfg.tailscaleDns };
+  return { hosts, ports, origins, anyMagicDns: !cfg.tailscaleDns && !!cfg.tailscaleIp };
 }
 
 function splitEnv(v: string | undefined): string[] {
@@ -174,27 +174,27 @@ export function configureOrigins(cfg: OriginConfig): void {
  * when we could not read our own MagicDNS name — otherwise the exact name is
  * required, so a name under someone else's tailnet is not automatically trusted.
  */
-function hostAllowed(host: string): boolean {
+function hostAllowed(host: string, proxied = false): boolean {
   const h = host.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
   if (!h) return false;
   if (compiled.hosts.has(h)) return true;
   if (/^127\.\d+\.\d+\.\d+$/.test(h)) return true;
-  if (compiled.anyMagicDns && h.endsWith(".ts.net")) return true;
+  if (proxied && compiled.anyMagicDns && h.endsWith(".ts.net")) return true;
   return false;
 }
 
 /** The `Host` header names something we serve (DNS-rebinding check). */
-export function hostHeaderAllowed(hostHeader: string | undefined): boolean {
+export function hostHeaderAllowed(hostHeader: string | undefined, proxied = false): boolean {
   if (!hostHeader) return true; // HTTP/1.0 or a raw client — no name to rebind
   const { host } = splitAuthority(hostHeader);
-  return hostAllowed(host);
+  return hostAllowed(host, proxied);
 }
 
 /**
  * The `Origin` header, if present, is one of ours. Absent = allowed (non-browser
  * client). `null` (sandboxed iframe, file://) is a real value and is refused.
  */
-export function originHeaderAllowed(origin: string | undefined): boolean {
+export function originHeaderAllowed(origin: string | undefined, proxied = false, requestHost?: string): boolean {
   if (origin === undefined) return true;
   const raw = origin.trim();
   if (!raw) return true;
@@ -205,7 +205,12 @@ export function originHeaderAllowed(origin: string | undefined): boolean {
   if (NATIVE_SHELL_ORIGINS.has(n)) return true;
   const u = new URL(n);
   if (!webScheme(u.protocol)) return false;
-  if (!hostAllowed(u.hostname)) return false;
+  if (!hostAllowed(u.hostname, false)) {
+    // Admitted only by the `*.ts.net` suffix fallback: the Origin must also name
+    // the very host this request was sent to, never another tailnet's page.
+    if (!hostAllowed(u.hostname, proxied)) return false;
+    if (!requestHost || splitAuthority(requestHost).host.replace(/^\[|\]$/g, "").replace(/\.$/, "") !== u.hostname.toLowerCase().replace(/\.$/, "")) return false;
+  }
   const port = u.port ? Number(u.port) : u.protocol === "https:" ? 443 : 80;
   return compiled.ports.has(port);
 }
@@ -237,6 +242,10 @@ const OPAQUE_READ_ROUTES = [
 export interface RequestInfo {
   path?: string;
   method?: string;
+  /** The request carries a proxy header (came through `tailscale serve`). Only
+   *  then may the `*.ts.net` suffix fallback apply; a direct loopback caller
+   *  naming evil.ts.net is a browser page, not the serve front door. */
+  proxied?: boolean;
 }
 
 function opaqueReadOk(req?: RequestInfo): boolean {
@@ -295,8 +304,8 @@ export function checkRequestOrigin(headers: {
   if (origin === undefined && site && site !== "same-origin" && site !== "none" && !opaqueReadOk(req)) {
     return { ok: false, reason: `sec-fetch-site ${site} with no origin` };
   }
-  if (!originHeaderAllowed(origin)) return { ok: false, reason: `origin ${origin} not allowed` };
-  if (!hostHeaderAllowed(host)) return { ok: false, reason: `host ${host} not allowed` };
+  if (!originHeaderAllowed(origin, req?.proxied, host)) return { ok: false, reason: `origin ${origin} not allowed` };
+  if (!hostHeaderAllowed(host, req?.proxied)) return { ok: false, reason: `host ${host} not allowed` };
   return { ok: true };
 }
 

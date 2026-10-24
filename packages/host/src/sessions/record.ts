@@ -18,7 +18,7 @@ import { hostStateDir } from "../branddirs.js";
 import { renderCapture } from "../render.js";
 import type { HistoryEntry, SessionSearchMatch, SessionSearchResult, SessionSearchScope, TranscriptDoc } from "@waterplane/shared";
 import { cleanTabTitle } from "@waterplane/shared";
-import { namesStoreReader } from "../backends/index.js";
+import { derive, namesStoreReader } from "../backends/index.js";
 import { boxAnswersOf, lastTurnAt as readLastTurnAt, logMtime, mergeLocalTurns, parseTranscript, queuedTurns, screenCommandTurns, transcriptFromHistory, transcriptPath } from "../transcript.js";
 import { agentsMtime } from "../turnagents.js";
 import { scanHistory, scanPrompts, scanText, searchResult } from "../sessionSearch.js";
@@ -77,7 +77,7 @@ export function recordPrompt(core: SessionCore, id: string, text: string, kind: 
   // later, so the confirmation lands on the very next tick. Re-arming costs a
   // poll only while an id is still unknown, and the first thing an adoption
   // does is stop it.
-  if (!s.info.backendSessionId && namesStoreReader(s.backend.caps)) {
+  if (!s.info.backendSessionId && namesStoreReader(s.backend)) {
     s.storePromptProbe = { text, at: entry.sentAt };
     // A new prompt is a new question: a sighting of the OLD probe's match is
     // not evidence about this one.
@@ -284,7 +284,7 @@ function sourceStamp(id: string): number | null {
 /**
  * The reader's document from a backend's own `TranscriptSource`
  * (`source: "backend"`, design §2) — ONLY for a live session whose backend has
- * no core reader (`caps.transcript === "none"`). Core keeps `claude-jsonl` and
+ * no store reader in `facts.transcript`, only `{source:true}`. Core keeps `claude-jsonl` and
  * `opencode-db`; a source never replaces a reader this host measured.
  *
  * `undefined` = this rung does not apply, and `getTranscript` carries on exactly
@@ -300,7 +300,8 @@ function sourceStamp(id: string): number | null {
  */
 function sourceTranscript(core: SessionCore, id: string, since: number, detail: "lite" | "full"): TranscriptDoc | "unchanged" | null | undefined {
   const s = core.sessions.get(id);
-  if (!s || s.backend.caps.transcript !== "none") return undefined;
+  const d = s ? derive(s.backend) : null;
+  if (!s || !d || d.store("transcript") !== null || !d.askSource("transcript")) return undefined;
   const live = liveSourceFor(id);
   const src = live?.sources.transcript;
   if (!live || !src) return undefined;

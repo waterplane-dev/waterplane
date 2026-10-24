@@ -3,6 +3,7 @@ import { DICTATE_MAX_SECONDS, DICTATE_MIN_SECONDS, DICTATE_RATE, appendDictation
 import { api } from "./api";
 import { dictateLang, dictateTerms, speechLang } from "./dictateLang";
 import { claimDictation, dictationState, holdDictation, subscribeDictations } from "./dictateQueue";
+import { linkSnapshot, subscribeLink } from "./link";
 import { showToast } from "./toast";
 import { mergeSpeechResults } from "./speechMerge";
 import { dictateFallbackWhy } from "./dictateFallback";
@@ -275,16 +276,29 @@ export function useVoice(box: VoiceBox): Voice {
 
   useEffect(() => {
     let live = true;
-    if (canRecord()) {
+    let isHost = false;
+    const ask = () => {
+      if (!canRecord() || isHost) return;
       void hostStatus().then((s) => {
         if (!live) return;
-        if (s.available) setEngine("host");
+        if (s.available) { isHost = true; setEngine("host"); }
         setFallback(dictateFallbackWhy({ secure: window.isSecureContext, canRecord: true, status: s }));
       });
-    }
+    };
+    ask();
+    // A "no" asked while the desktop was down (a reboot, a host restart) is
+    // asked again when the link comes back — otherwise the phone's recogniser
+    // stays the engine until a reload, which is how it was found.
+    let wasOpen = linkSnapshot().status === "open";
+    const offLink = subscribeLink((l) => {
+      const open = l.status === "open";
+      if (open && !wasOpen) ask();
+      wasOpen = open;
+    });
     const off = subscribeDictations(() => setHold(dictationState()));
     return () => {
       live = false;
+      offLink();
       off();
       meantStopRef.current = true;
       recRef.current?.stop();

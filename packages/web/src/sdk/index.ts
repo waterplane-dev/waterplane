@@ -10,7 +10,7 @@
  * feature needs it, not before.
  */
 export type {
-  Availability, CommandDef, ConnInfo, ContributionIcon, CoreApi, DurableOp, FeatureManifest, LauncherItemCount, LauncherItemDef, LedgerSummary, MenuItemDef, SecretFillContext, SecretFillerDef, SecretFillerEntry, LedgerViewDef, LedgerViewParts, LedgerViewProps,
+  Availability, CommandDef, ImageTextReader, ConnInfo, ContributionIcon, CoreApi, DurableOp, FeatureManifest, LauncherItemCount, LauncherItemDef, LedgerSummary, MenuItemDef, SecretFillContext, SecretFillerDef, SecretFillerEntry, LedgerViewDef, LedgerViewParts, LedgerViewProps,
   MessageHandlers, QueueBacklogOpts, RepoActionDef, RepoChipCount, RepoChipDef, ReturnTo, SessionViewDef, SettingsGroupId, SettingsRowsDef, SetupRowDef, SheetDef, SheetId,
   ToolbarItemDef, UploadApi, UploadBuf, UploadProgress,
 } from "./types.ts";
@@ -29,6 +29,11 @@ export { pluginClient, type PluginClient } from "./pluginClient.ts";
 /** The demo seam: `isDemo()` and a plugin's registered fixture (`registerDemoPlugin`; see `demoPlugin.ts`). */
 export { isDemo, registerDemoPlugin, demoPluginPushes, type DemoPlugin } from "./demoPlugin.ts";
 export { extStorage, type ExtStorage } from "./extStorage.ts";
+/** Is an extension switched on (`useExtensionEnabled`/`isExtensionEnabled`, by its manifest id),
+ *  and where its downloaded assets are cached and served (`extAssetCacheName`, `extAssetUrl`). */
+export { EXT_CACHE_PREFIX, extAssetCacheName, extAssetUrl, isExtensionEnabled, useExtensionEnabled, watchExtensionEnabled } from "./extensions.ts";
+/** An extension's downloaded engine files, kept in IndexedDB for offline use (works in the APK and on plain http). */
+export { extAssets, type ExtAssets } from "./extAssets.ts";
 export type { PluginCallResult, PluginMethods } from "@waterplane/shared";
 export { openStream, type StreamCallbacks, type StreamHandle, type StreamState, type StreamStats, type StreamStopCause } from "./stream.ts";
 export type { StreamFrame } from "@waterplane/shared";

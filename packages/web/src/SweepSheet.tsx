@@ -284,7 +284,7 @@ export function SweepSheet({ repoId, repoName, scope, onScope, onDone, onClose }
           another route, the other is bytes still on disk. */}
       {result && (
         <div className="form">
-          <Hint className={result.failed.length ? "warn" : ""}>{sweepResultText(result)}</Hint>
+          <Hint className={result.failed.length ? "warn" : undefined}>{sweepResultText(result)}</Hint>
           {result.failed.length > 0 && (
             <div className="list">
               {result.failed.map((p) => <div key={p} className="row sweep-row"><span className="sweep-path mono">{p}</span></div>)}

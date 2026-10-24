@@ -31,7 +31,7 @@ import {
   type PeerStatusResponse,
 } from "@waterplane/shared";
 import type { PeerKind } from "@waterplane/shared";
-import { peerKind } from "../net.js";
+import { requestPeerKind } from "../net.js";
 import type { PeerPublic, PeerStore } from "./store.js";
 import type { PeerReply, PeerTarget } from "./client.js";
 
@@ -115,7 +115,8 @@ export async function handlePeerRoutes(
   deps: PeerRouteDeps,
 ): Promise<boolean> {
   const method = req.method ?? "GET";
-  const kind = peerKind(req.socket.remoteAddress);
+  // The REQUEST's tier, not the socket's: behind `tailscale serve`/funnel the socket is loopback.
+  const kind = requestPeerKind(req.socket.remoteAddress, req.headers);
 
   // ── the phone reads what this desktop has delegated (read-only, trusted path) ──
   if (path === "/api/peerjobs") {

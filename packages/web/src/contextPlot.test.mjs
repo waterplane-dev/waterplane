@@ -540,6 +540,22 @@ test("a CONFIG window is ATTRIBUTED, never presented as a measurement", () => {
   assert.doesNotMatch(s, /printed on screen/);
 });
 
+test("a window the CLI STATED over its channel is attributed to it — not the screen, not a configuration", () => {
+  // A plugin backend's ContextSource sample carrying `window` (contract 2.2).
+  const s = axisNote("source", 272_000, "gpt-5-codex", "Codex");
+  assert.match(s, /^100% is 272k/);
+  assert.match(s, /Codex states for gpt-5-codex/);
+  assert.doesNotMatch(s, /printed on screen/);
+  assert.doesNotMatch(s, /configuration/);
+  assert.doesNotMatch(s, /not known here/);
+  // No label, no model: a neutral noun, never a hole.
+  const bare = axisNote("source", 128_000, undefined, undefined);
+  assert.match(bare, /this backend states in this session/);
+  assert.doesNotMatch(bare, /undefined/);
+  // No window is no window, whoever said what.
+  assert.match(axisNote("source", null, "m", "Codex"), /not known here/);
+});
+
 test("the config sentence needs no edit for a third backend, and never says “undefined”", () => {
   // Every wording here takes the backend's own label. A host that never named
   // one falls back to a neutral noun rather than printing a hole.

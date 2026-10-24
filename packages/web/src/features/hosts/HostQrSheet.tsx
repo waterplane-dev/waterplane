@@ -135,10 +135,10 @@ export function HostQrSheet() {
               <Qr text={minted.m.landingUrl} />
               <div className="pair-code">{formatPairCode(minted.m.code)}</div>
               <div className="pair-ttl"><Clock size={12} /> {left} · works once</div>
-              <div className="set-note pair-centre">
+              <SetNote className="pair-centre">
                 Scan with the other phone's camera, or type the code into its "pair with code" with the address{" "}
                 <code>{minted.m.base.replace(/^https?:\/\//, "")}</code>.
-              </div>
+              </SetNote>
             </section>
             <section className="pair-card">
               <PairCopyRows m={minted.m} hostName={null} />

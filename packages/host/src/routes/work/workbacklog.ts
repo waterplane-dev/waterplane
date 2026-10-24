@@ -280,9 +280,10 @@ const onBacklogOpenRepoSession: Route<"backlog.openRepoSession"> = (a) => {
     // `inRoot` was stricter in the safe direction — it refuses a legitimate
     // discovered worktree outside ROOT — but a copy of a rule is a copy, and
     // this repo has already paid for six of them (`paths.ts`).
-    void a.c.containRepoDir(a.msg.repoDir).then((okDir) => {
+    void a.c.containRepoDir(a.msg.repoDir).then(async (okDir) => {
       if (!okDir) { a.c.send(a.ws, { t: "toast", text: "that folder is outside the configured root" }); return; }
-      const sid = a.c.backlog.ensureRepoSession(okDir);
+      let sid: string;
+      try { sid = await a.c.backlog.ensureRepoSession(okDir); } catch (e) { a.c.send(a.ws, { t: "toast", text: `could not open a session there: ${String((e as Error)?.message || e)}` }); return; }
       a.att.add(sid);
       // Navigate the requester to it whether it was just created or already open
       // (the "created" event only fires for new sessions).

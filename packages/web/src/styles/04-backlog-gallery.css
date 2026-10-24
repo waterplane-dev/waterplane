@@ -124,7 +124,7 @@
 /* Words for a screen reader that the picture already says (the unread dot). */
 .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .viewer { position: fixed; inset: 0; background: var(--scrim-media); display: flex; align-items: center; justify-content: center; z-index: 10; }
-.viewer-body { width: 100vw; height: 100dvh; display: flex; flex-direction: column; gap: var(--sp-8); }
+.viewer-body { width: 100vw; height: 100dvh; box-sizing: border-box; padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pulse-h, 0px) + var(--ui-localrt-h, 0px) + var(--ui-tabs-h, 0px)); display: flex; flex-direction: column; gap: var(--sp-8); }
 /* The pinch/pan stage fills all space above the path + action row. */
 .zoom-stage {
   flex: 1; min-height: 0; overflow: hidden; position: relative;
@@ -147,8 +147,7 @@
 .viewer-body > a { margin: auto; }
 /* A file this viewer cannot preview (an .apk, an archive). It has to GROW like
    every other body — `.viewer-doc` and `.zoom-stage` do — or its content stacks
-   at the very top of a body that deliberately has no top padding, half of it
-   under the connection strip and the path lines under the close button. */
+   at the very top of the body, the path lines under the close button. */
 .viewer-none {
   flex: 1; min-height: 0; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: var(--sp-10);
@@ -330,7 +329,7 @@
    so it reads as an explanation you can act on rather than a second control. */
 .bl-waiting-act { padding: 0; border: none; background: none; font: inherit; font-size: calc(var(--fs-11) * var(--ui-font, 1)); text-align: left;
   color: var(--muted); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
-.bl-check { display: block; font-size: calc(var(--fs-11) * var(--ui-font, 1)); margin-top: var(--sp-2); max-width: 100%; padding: 0; background: none; border: none; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: inherit; font-size: calc(var(--fs-11) * var(--ui-font, 1)); }
+.bl-check { display: block; margin-top: var(--sp-2); max-width: 100%; padding: 0; background: none; border: none; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: inherit; font-size: calc(var(--fs-11) * var(--ui-font, 1)); }
 button.bl-check { cursor: pointer; }
 .bl-check-done { color: var(--ok); }
 .bl-check-partial, .bl-check-questions { color: var(--warn); }
@@ -418,7 +417,7 @@ button.bl-check { cursor: pointer; }
    is the accent because it is the thing about to happen, these are facts about
    what already happened to the row. `bl-merged` (the schedule link) is a
    BUTTON; `bl-hand` is not, because "you placed this" is nothing to tap. */
-.bl-chip { margin-left: var(--sp-8); font-size: calc(var(--fs-11) * var(--ui-font, 1)); border-radius: var(--r-6); padding: 1px var(--sp-6); border: 1px solid var(--line); background: none; color: var(--muted); font: inherit; font-size: calc(var(--fs-11) * var(--ui-font, 1)); }
+.bl-chip { margin-left: var(--sp-8); border-radius: var(--r-6); padding: 1px var(--sp-6); border: 1px solid var(--line); background: none; color: var(--muted); font: inherit; font-size: calc(var(--fs-11) * var(--ui-font, 1)); }
 button.bl-chip { cursor: pointer; }
 .bl-merged { color: var(--purple); border-color: var(--purple); }
 /* **What KIND of thing a row is — a word and an icon, and NO colour of its

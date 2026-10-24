@@ -51,6 +51,43 @@ test("a window with no reset instant, or one already past, has no grid", () => {
   assert.deepEqual(calSpecs({ ...u, weeklyResetAt: u.checkedAt - 1 }).map((s) => s.id), ["session"]);
 });
 
+// The calibrator reads WINDOWS now (`calSpecsOf`, WP5); claude's two are the same grids as before.
+const { calSpecsOf } = await import("../dist/sessionbudget.js");
+/** The pre-WP5 `calSpecs`, verbatim, as the pin. */
+function oldCalSpecs(u) {
+  const out = [];
+  const add = (id, resetAt, len) => {
+    if (resetAt == null || !(resetAt > u.checkedAt)) return;
+    const lenMs = u.checkedAt - (resetAt - len);
+    if (lenMs > 0 && lenMs <= len) out.push({ id, anchor: u.checkedAt, lenMs });
+  };
+  add("session", u.sessionResetAt, SESSION_WINDOW_MS);
+  add("weekly", u.weeklyResetAt, WEEK_WINDOW_MS);
+  return out;
+}
+
+test("claude's grids are byte-identical through the windows path", () => {
+  const u = reading();
+  for (const r of [
+    u, reading({ sessionResetAt: null }), reading({ weeklyResetAt: null }), reading({ sessionPct: null }),
+    { ...u, weeklyResetAt: u.checkedAt - 1 }, { ...u, sessionResetAt: u.checkedAt + 6 * H }, { ...u, weeklyResetAt: u.checkedAt + 8 * 24 * H },
+    reading({ sessionResetAt: null, weeklyResetAt: null }),
+  ]) assert.deepEqual(JSON.stringify(calSpecs(r)), JSON.stringify(oldCalSpecs(r)));
+});
+
+test("another backend's windows: a known length gets a grid under its own id; a calendar month or an unknown unit gets none", () => {
+  const at = NOW - 60_000;
+  const specs = calSpecsOf(at, [
+    { id: "premium", unit: "mo", pct: 40, resetAt: NOW + 10 * 24 * H },
+    { id: "chat", unit: "5h", pct: 10, resetAt: NOW + 2 * H },
+    { id: "odd", unit: "zz", pct: 10, resetAt: NOW + 2 * H },
+    { id: "day", unit: "1d", pct: 10, resetAt: NOW + 2 * H },
+  ]);
+  assert.deepEqual(specs.map((s) => s.id), ["chat", "day"]);
+  assert.equal(specs[0].lenMs, at - (NOW + 2 * H - 5 * H));
+  assert.equal(specs[1].lenMs, at - (NOW + 2 * H - 24 * H));
+});
+
 test("the newest cell's money is the window's cost; an empty grid is null, never zero", () => {
   assert.deepEqual(calCosts(doc(12, 180)), { session: 12, weekly: 180 });
   assert.deepEqual(calCosts(doc(null, 180)), { session: null, weekly: 180 });
@@ -347,4 +384,100 @@ test("flipping only `interrupt` keeps the latch: one crossing is told once and n
   slice.set("s1", { unit: "tok", max: 1, interrupt: true });
   assert.equal(s.budgetTripped, true, "a new unit is a new cap: cleared, then re-tripped by the judge");
   assert.equal(trips(), 2);
+});
+
+// ── P2: a backend's OWN spend (`TokenSource.session`) ────────────────────────
+
+const { setLiveSourceLookup } = await import("../dist/livesources.js");
+const { resolveBackend } = await import("../dist/backends/index.js");
+
+/** One plugin-shaped session (a backend with no claude log) whose live source
+ *  answers `reading()` — swapped per step by the test. */
+function makeSourceSlice(cfg, reading) {
+  const h = makeSlice(undefined, cfg);
+  const sh = resolveBackend("shell"); // keeps no claude log; a plugin backend takes turns, a shell does not
+  h.s.backend = { ...sh, caps: { ...sh.caps, turns: true } };
+  let calls = 0;
+  setLiveSourceLookup((id) => (id === "s1" ? {
+    session: { id: "s1" },
+    sources: { tokens: { ledger: async () => ({ available: false, reason: "n/a" }), session: () => { calls++; return reading(); } } },
+    health: () => ({ state: "up", since: 0 }),
+  } : null));
+  return { ...h, calls: () => calls };
+}
+
+test("a plugin session's budget is judged from its source: over trips ONCE, the split rides", (t) => {
+  t.after(() => setLiveSourceLookup(null));
+  let r = { at: 1, tok: 1000, usd: 0.2 };
+  const { slice, s, trips } = makeSourceSlice({ unit: "usd", max: 0.5, interrupt: true }, () => r);
+  slice.judge(s);
+  assert.equal(s.info.budget.verdict.state, "ok");
+  assert.deepEqual(s.info.sourceSpend, r, "published for the phone's spent line");
+  r = { at: 2, tok: 1500, usd: 0.4, agentUsd: 0.15 };
+  slice.judge(s);
+  assert.equal(s.info.budget.verdict.state, "over", "own 0.40 + agents 0.15 is past 0.50");
+  assert.ok(Math.abs(s.info.budget.verdict.spent - 0.55) < 1e-9);
+  assert.equal(s.info.budget.verdict.agentShare, 0.15);
+  assert.equal(trips(), 1);
+  r = { at: 3, tok: 2000, usd: 0.9 };
+  slice.judge(s);
+  assert.equal(trips(), 1, "still over is not a second crossing");
+  assert.equal(s.budgetTripped, true);
+});
+
+test("a plugin session: tokens work where stated; unstated, refused, thrown and null never trip", (t) => {
+  t.after(() => setLiveSourceLookup(null));
+  let r = { at: 1, tok: 5000 };
+  const { slice, s, trips } = makeSourceSlice({ unit: "tok", max: 4000, interrupt: true }, () => r);
+  slice.judge(s);
+  assert.equal(s.info.budget.verdict.state, "over");
+  assert.equal(trips(), 1);
+  // A fresh cap in dollars: the source states none.
+  slice.set("s1", { unit: "usd", max: 1, interrupt: true });
+  assert.equal(s.info.budget.verdict.state, "unknown");
+  assert.equal(s.info.budget.verdict.why, "unstated");
+  for (const bad of [null, { at: 2, tok: -1, usd: 5 }, { at: 3, usd: 5, native: { amount: 1, unit: "USD" } }, () => { throw new Error("x"); }]) {
+    r = bad;
+    const reading = typeof bad === "function" ? bad : () => bad;
+    setLiveSourceLookup((id) => (id === "s1" ? { session: { id }, sources: { tokens: { ledger: async () => ({ available: false, reason: "n/a" }), session: reading } }, health: () => ({ state: "up", since: 0 }) } : null));
+    slice.judge(s);
+    assert.equal(s.info.budget.verdict.state, "unknown", `never over on ${JSON.stringify(bad)}`);
+    assert.deepEqual(Object.keys(s.info.sourceSpend), ["at"], "a refused answer is dropped WHOLE, never part-kept");
+  }
+  assert.equal(trips(), 1, "no new crossing from any of them");
+});
+
+test("a plugin session: a percent cap is notClaude, never a conversion of its dollars", (t) => {
+  t.after(() => setLiveSourceLookup(null));
+  const { slice, s, trips } = makeSourceSlice({ unit: "weeklyPct", max: 1, interrupt: true }, () => ({ at: 1, usd: 50 }));
+  slice.setCal({ checkedAt: Date.now(), sessionUsdPerPct: 1, weeklyUsdPerPct: 1 });
+  assert.equal(s.info.budget.verdict.state, "unknown");
+  assert.equal(s.info.budget.verdict.why, "notClaude");
+  assert.equal(trips(), 0);
+});
+
+test("a shell session is never given sourceSpend: no source, no spend, no call", (t) => {
+  t.after(() => setLiveSourceLookup(null));
+  const { slice, s, calls } = makeSourceSlice({ unit: "tok", max: 1e9, interrupt: true }, () => ({ at: 1, tok: 10 }));
+  s.backend = resolveBackend("shell");
+  slice.judge(s);
+  assert.equal(calls(), 0);
+  assert.equal(s.info.sourceSpend, undefined);
+});
+
+test("a re-read that moved only `at` is not news; claude's sessions are never asked", (t) => {
+  t.after(() => setLiveSourceLookup(null));
+  let at = 1;
+  const { slice, s, calls } = makeSourceSlice({ unit: "tok", max: 1e9, interrupt: true }, () => ({ at: at++, tok: 10 }));
+  slice.judge(s);
+  assert.equal(slice.judge(s), false, "same figures, later clock: no updated");
+  delete s.info.budget;
+  assert.equal(slice.judge(s), false, "no budget: the spend is still read, unchanged");
+  assert.equal(calls(), 3);
+  // Claude: no call, no field — today's path byte for byte.
+  s.backend = resolveBackend("claude");
+  delete s.info.sourceSpend;
+  slice.judge(s);
+  assert.equal(calls(), 3);
+  assert.equal(s.info.sourceSpend, undefined);
 });

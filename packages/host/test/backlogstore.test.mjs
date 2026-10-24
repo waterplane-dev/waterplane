@@ -122,7 +122,7 @@ test("`backlog · ` is stripped from a title that came off the wire", () => {
   assert.equal(isBacklogTitle(withoutBacklogMark("backlog · myapp") ?? ""), false);
 });
 
-test("a session REOPENED from Recently closed is not counted, reaped or lingered as machinery's", () => {
+test("a session REOPENED from Recently closed is not counted, reaped or lingered as machinery's", async () => {
   // The prefix is the only mark: it is what `autoSessionCount()` counts against
   // the cap and what
   // `lingerSweep` retires after ten minutes. A finished item's session is closed
@@ -149,7 +149,7 @@ test("a session REOPENED from Recently closed is not counted, reaped or lingered
       send: () => {},
     },
   };
-  const res = sessionRoutes["session.create"].run(a);
+  const res = await sessionRoutes["session.create"].run(a);
   assert.equal(res.ok, true);
   assert.equal(created.length, 1);
   assert.equal(isBacklogTitle(created[0].title ?? ""), false, "the person's tab does not wear the machine's mark");
@@ -157,7 +157,7 @@ test("a session REOPENED from Recently closed is not counted, reaped or lingered
   assert.equal(created[0].resumeSessionId, "conv-1", "and it is still the same conversation");
 });
 
-test("an ordinary create's title is passed through exactly", () => {
+test("an ordinary create's title is passed through exactly", async () => {
   const created = [];
   const a = {
     dir: "/tmp/waterplane-reopen-repo",
@@ -169,7 +169,7 @@ test("an ordinary create's title is passed through exactly", () => {
       recomputeWatched: () => {}, startPrompt: () => {}, send: () => {},
     },
   };
-  sessionRoutes["session.create"].run(a);
+  await sessionRoutes["session.create"].run(a);
   assert.equal(created[0].title, "review the diff");
 });
 

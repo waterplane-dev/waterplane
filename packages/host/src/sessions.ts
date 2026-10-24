@@ -7,10 +7,10 @@ import { SessionScreenLog } from "./screenlog.js";
 // CJS bundle — only the default export resolves under Node ESM.
 import type { RenderRow } from "./render.js";
 import type { ClosedBy, ContextSeriesDoc, FollowUp, PermissionMode, HistoryEntry, LaunchOpts, LimitResumeMode, SessionBudget, SessionBudgetCal, SessionInfo, SessionLimit, SessionOrigin, SessionSearchResult, SessionSearchScope, SessionShellDetail, ShellLink, TranscriptDoc, TranscriptToolDetail } from "@waterplane/shared";
-import { ptySize, SCREENLOG_MAX_LINES, sessionBudgetVerdict } from "@waterplane/shared";
+import { ptySize, SCREENLOG_MAX_LINES, sessionBudgetVerdict, launchModeRefusal } from "@waterplane/shared";
 import { stripAnsi } from "./prompt.js";
 import { detectUpdateBanner } from "./update.js";
-import { DEFAULT_BACKEND, namesStoreReader, resolveBackend, type BackendDescriptor } from "./backends/index.js"; import { askRulesForCwd } from "./askrules.js";
+import { DEFAULT_BACKEND, derive, namesStoreReader, resolveBackend, type BackendDescriptor } from "./backends/index.js"; import { backendBinRefusal } from "./binguard.js"; import { askRulesForCwd } from "./askrules.js"; import { holdAskRulesFor } from "./answergate.js";
 import type { ClosedRow, LiveMeta, RecentRow, Session, SessionCore } from "./sessions/core.js";
 // After the flat imports, before the slices (which import knobs too). Not behaviour: nothing
 // in the host assigns process.env at import (tools/hostshape.test.mjs checks that).
@@ -22,7 +22,7 @@ import {
 } from "./sessions/knobs.js";
 // After knobs, which tmux.ts also imports: knobs is still evaluated first.
 import { adoptOrPark, armOrphanSweep, deleteLive, exitReport, hasLiveTmux, loadLive, persistLive, reattach, reclaimStaleLive, retryParked, settleParked, spawnBackend } from "./sessions/tmux.js";
-export { droppedEnvNames, exitReport, staleLiveIds, sweepSessionStores, tmuxEnvPrefix } from "./sessions/tmux.js";
+export { droppedEnvNames, exitReport, paneUnsetNames, staleLiveIds, sweepSessionStores, tmuxEnvPrefix } from "./sessions/tmux.js";
 import {
   adoptBackendId, adoptClaudeId, backendField, detectBackendId, detectClaudeId, readSignInAtSpawn, readSpawnVersion, refreshModel,
   stopClaudeIdWatch, watchBackendId, watchClaudeId,
@@ -31,13 +31,13 @@ import { healthScope, noteContextHealth, noteFor, noteLogHealth } from "./sessio
 import { CtxSlice } from "./sessions/ctxseries.js";
 import { BudgetSlice } from "./sessions/budgetwatch.js"; import { ChannelSlice, type SendHold } from "./sessions/sidechannel.js";
 import { RosterSlice } from "./sessions/roster.js";
-import { WallSlice } from "./sessions/wall.js";
+import { WallSlice } from "./sessions/wall.js"; import { hasAccountLimit } from "./usagesources.js";
 import { ResumeSlice } from "./sessions/resume.js";
-import * as turn from "./sessions/turn.js";
+import * as turn from "./sessions/turn.js"; import * as idle from "./sessions/idlewatch.js";
 import * as boxes from "./sessions/boxes.js";
 import * as drive from "./sessions/drive.js";
 import * as record from "./sessions/record.js";
-import * as links from "./sessions/links.js"; import * as mode from "./sessions/livemode.js"; import * as halt from "./sessions/haltall.js";
+import * as links from "./sessions/links.js"; import * as mode from "./sessions/livemode.js"; import * as halt from "./sessions/haltall.js"; import { finishLaunch } from "./launchfiles.js"; import { repoInstructions } from "./reposkill.js";
 import { env } from "./env.js"; import { answerTermQueries, lateQueryLog } from "./termqueries.js"; import { hostTermColors } from "./themeoverlay.js";
 /** Matches DECSET/DECRST private-mode sequences, e.g. `\x1b[?1049h`, `\x1b[?1000;1006h`. */
 const PRIVATE_MODE_RE = /\x1b\[\?([0-9;]+)([hl])/g;
@@ -110,7 +110,7 @@ export class SessionManager extends EventEmitter {
       noteLogHealth: (s, outcome, raw, fixture) => noteLogHealth(s, outcome, raw, fixture),
       // ctxseries.ts
       refreshSpark: (s) => this.ctx.refreshSpark(s), checkContext: (s) => this.ctx.checkContext(s), checkMode: (s) => mode.checkMode(this.core, s), // + livemode.ts
-      storeFor: (id) => this.ctx.storeFor(id), logFor: (id) => this.ctx.logFor(id), judgeBudget: (s) => this.budget.judge(s),
+      storeFor: (id) => this.ctx.storeFor(id), logFor: (id) => this.ctx.logFor(id), judgeBudget: (s) => this.budget.judge(s), clearIdle: (s) => idle.clearIdle(this.core, s), // + idlewatch.ts
       // roster.ts
       rememberRecent: (s) => this.roster.rememberRecent(s), applyStar: (info) => this.roster.applyStar(info),
       applyPromptLabels: (s) => this.roster.applyPromptLabels(s),
@@ -213,7 +213,8 @@ export class SessionManager extends EventEmitter {
     }, LIMIT_SWEEP_MS).unref();
   }
 
-  create(cwd: string, opts: { cols?: number; rows?: number; title?: string; resume?: boolean; resumeMode?: "continue" | "pick" | "fork"; resumeSessionId?: string; forkAtTurn?: string; launch?: LaunchOpts; origin?: SessionOrigin; budget?: SessionBudget; carry?: record.SessionCarry | null } = {}): SessionInfo {
+  /** Async for a plugin's `prepare()`; a core backend's plan is sync, so it spawns + registers before any await. */
+  async create(cwd: string, opts: { cols?: number; rows?: number; title?: string; resume?: boolean; resumeMode?: "continue" | "pick" | "fork"; resumeSessionId?: string; forkAtTurn?: string; launch?: LaunchOpts; origin?: SessionOrigin; budget?: SessionBudget; carry?: record.SessionCarry | null } = {}): Promise<SessionInfo> {
     const id = randomUUID().slice(0, 8);
     // Same floor as `resize()`: a create carries the client's geometry too, and
     // a session BORN three rows tall is a session nothing can be confirmed in.
@@ -230,15 +231,14 @@ export class SessionManager extends EventEmitter {
     // (`resolveBackend`). Never `?? claude`: spawning something other than what
     // was asked for, silently, is the one outcome this indirection exists to
     // prevent. Same for a resume mode the backend has no flag for.
-    const backend = resolveBackend(launch.backend); const refused = halt.openRefusal(backend, opts.origin); if (refused) throw new Error(refused); // a job never opens a shell; nothing AI opens while halted — before `launchArgs`, which may start a server
-    // Two ids, and never one field: `sessionId` is claude's conversation uuid,
-    // which every log reader here turns into a path; `backendSessionId` is the
-    // other backend's own id, which only its own reader understands. A launch
-    // sets at most one of them, and only when it KNOWS (`backends/types.ts`).
-    const { args, sessionId: claudeSessionId, backendSessionId, createsRecord, env: launchEnv, exec, dropEnv } = backend.launchArgs({
-      resumeMode, resumeSessionId: opts.resumeSessionId, launch, hookPort: this.port, cwd, hostSessionId: id, ...(opts.forkAtTurn ? { forkAtTurn: opts.forkAtTurn } : {}), askRules: askRulesForCwd(cwd), // ask rules: read per launch, only claude uses them
-    });
-    const proc = this.spawnBackend(id, cwd, cols, rows, args, exec ? { ...backend, bin: () => exec } : backend, launchEnv, dropEnv); // `exec`: opencode's waiter (`LaunchPlan.exec`)
+    const backend = resolveBackend(launch.backend); const refused = halt.openRefusal(backend, opts.origin); if (refused) throw new Error(refused); const modeRefused = launchModeRefusal(backend.label, launch.permissionMode, backend.caps) ?? backendBinRefusal(backend); /* `?? `: a missing or mid-upgrade binary is a sentence, never tmux's [exited] */ if (modeRefused) throw new Error(modeRefused); /* a mode it cannot START in (`caps.launchModes`): refused in words before `prepare` */ // a job never opens a shell; nothing AI opens while halted — before `prepare`, which may start a server
+    // Two ids, never one field: `sessionId` is claude's uuid (a log path), `backendSessionId` the other backend's own; at most one, only when KNOWN (`backends/types.ts`).
+    // Order (prepare → files → spawn → persist → register): a refused plan writes nothing, spawns nothing.
+    const askRules = askRulesForCwd(cwd); // read per launch; the plan says how they hold
+    const asked = backend.prepare({ resumeMode, resumeSessionId: opts.resumeSessionId, launch, hookPort: this.port, cwd, hostSessionId: id, ...(opts.forkAtTurn ? { forkAtTurn: opts.forkAtTurn } : {}), askRules, instructions: repoInstructions(this.port) });
+    const { args, sessionId: claudeSessionId, backendSessionId, createsRecord, env: launchEnv, exec, dropEnv, instructionsVia: told0, askRulesVia } = finishLaunch(backend, asked instanceof Promise ? await asked : asked, this.root, id); const told = backend.caps.turns === false ? undefined : told0; // a shell has no agent to tell
+    // The gate holds them (`answergate.ts`) — released again if the spawn throws (no session to forget them).
+    const proc = holdAskRulesFor(id, askRulesVia, askRules, () => this.spawnBackend(id, cwd, cols, rows, args, exec ? { ...backend, bin: () => exec } : backend, launchEnv, dropEnv)); // `exec`: opencode's waiter (`LaunchPlan.exec`)
 
     const info: SessionInfo = {
       id,
@@ -258,15 +258,15 @@ export class SessionManager extends EventEmitter {
       // session in every list that counts limits, claiming "not at a limit"
       // about an account that does not exist; absent is the only shape that says
       // the question does not apply. Every limit path already bails on `!lim`.
-      ...(backend.caps.usageLimits ? { limit: this.newLimitState() } : {}),
+      ...(hasAccountLimit(backend) ? { limit: this.newLimitState() } : {}),
       claudeSessionId,
       ...(backendSessionId ? { backendSessionId } : {}),
-      createdAt: Date.now(),
+      createdAt: Date.now(), told, askRulesVia,
       ...(opts.budget ? { budget: { cfg: opts.budget, verdict: sessionBudgetVerdict(opts.budget, null, null, Date.now()) } } : {}),
     };
     this.roster.applyStar(info);
     // Persist so a boot after a restart can rebuild this session from tmux.
-    this.persistLive({ id, cwd, title: info.title, launch, createdAt: info.createdAt, claudeSessionId, backendSessionId, ...(opts.origin ? { origin: opts.origin } : {}), ...(opts.budget ? { budget: opts.budget } : {}) });
+    this.persistLive({ id, cwd, title: info.title, launch, createdAt: info.createdAt, claudeSessionId, backendSessionId, told, askRulesVia, ...(askRulesVia === "gate" ? { askRules } : {}), ...(opts.origin ? { origin: opts.origin } : {}), ...(opts.budget ? { budget: opts.budget } : {}) });
     const out = this.register(id, proc, info, launch, cols, rows, backend, createsRecord === true); const made = this.sessions.get(id); if (made && opts.origin) made.origin = opts.origin; const carry = opts.carry ?? this.closedCarry(opts.resumeSessionId, resumeMode); if (made && carry) record.adoptCarry(this.core, made, carry); readSpawnVersion(this.core, made); readSignInAtSpawn(this.core, made); if (made) record.shellTabTitle(this.core, made); return out;
   }
 
@@ -278,7 +278,7 @@ export class SessionManager extends EventEmitter {
    * (`--resume <id> --fork-session`); only for legacy sessions without a known
    * id does it fall back to `--continue`. No geometry ⇒ the source's; `title` replaces "<src> (fork)".
    */
-  fork(id: string, opts: { cols?: number; rows?: number; title?: string } = {}): SessionInfo | null {
+  async fork(id: string, opts: { cols?: number; rows?: number; title?: string } = {}): Promise<SessionInfo | null> {
     const s = this.sessions.get(id);
     if (!s || !s.info.running) return null;
     return this.create(s.info.cwd, {
@@ -331,13 +331,13 @@ export class SessionManager extends EventEmitter {
     // conversation id — a plausible wrong answer, which is the failure mode this
     // whole design refuses. An opencode id is discovered by asking opencode, not
     // by watching claude's filesystem.
-    if (!info.claudeSessionId && backend.caps.transcript === "claude-jsonl") this.watchClaudeId(session);
+    if (!info.claudeSessionId && derive(backend).keepsClaudeLog) this.watchClaudeId(session);
     // The same job for a backend whose record is opencode's store. Armed only
     // where the DESCRIPTOR says that is the record and no id is known yet —
     // never for claude (whose id has its own watcher and its own field), never
     // for a backend with no record at all, and never once an exact
     // `--session <id>` already told us.
-    if (!info.backendSessionId && namesStoreReader(backend.caps)) this.watchBackendId(session);
+    if (!info.backendSessionId && namesStoreReader(backend)) this.watchBackendId(session);
 
     // The tmux client's terminal queries: answered, and STRIPPED before any consumer below (`termqueries.ts`).
     const queries = answerTermQueries(proc, (chunk) => {
@@ -369,7 +369,7 @@ export class SessionManager extends EventEmitter {
         const m = REMOTE_URL_RE.exec(session.scrollback);
         if (m) { session.info.remoteUrl = m[0]; this.emit("updated", session.info); }
       }
-      // New output ⇒ idle is stale. It does NOT retire a prompt: a choice box
+      // New output does NOT retire a prompt: a choice box
       // sits on screen with the TUI's working line animating under it, so
       // clearing here and re-detecting only after 600 ms of quiet made a LIVE
       // dialog blink in and out about once a second — visible for a fraction of
@@ -384,12 +384,12 @@ export class SessionManager extends EventEmitter {
       const sug = session.info.suggestion;
       const replySug = sug && sug.choice == null && sug.reply != null;
       const staleChoiceSug = !!sug && !replySug && !session.info.prompt;
-      if (session.info.idle || staleChoiceSug) {
-        session.info.idle = false;
-        session.info.idleSince = undefined;
-        if (staleChoiceSug) session.info.suggestion = null;
+      if (staleChoiceSug) {
+        session.info.suggestion = null;
         this.emit("updated", session.info);
       }
+      // Nor does output alone end idle: a redraw is not work (`sessions/idlewatch.ts`).
+      idle.noteOutput(this.core, session, session.seq - chunk.length);
       // The CLI prints its own "Update available!" nag when npm is ahead of the
       // installed binary — surface it so the in-app update button appears even
       // while the Homebrew cask lags. Scan only FRESH output (a short rolling
@@ -447,7 +447,7 @@ export class SessionManager extends EventEmitter {
       if (!session.info.claudeSessionId) this.adoptClaudeId(session, this.detectClaudeId(session));
       // …and the same last chance for the other backend's own id, so a reader
       // opened right after the session died still has a conversation to read.
-      if (!session.info.backendSessionId && namesStoreReader(session.backend.caps)) {
+      if (!session.info.backendSessionId && namesStoreReader(session.backend)) {
         this.adoptBackendId(session, this.detectBackendId(session));
       }
       // A real exit (claude quit / killed) ⇒ the tmux session is gone too; drop
@@ -529,7 +529,7 @@ export class SessionManager extends EventEmitter {
   // ── boxes (sessions/boxes.ts): the choice box — when to look, reading and publishing it, the
   // answer walks. The private delegation is for `register`.
   private scheduleChecks(s: Session): void { boxes.scheduleChecks(this.core, s); }
-  answerBox(id: string, choice: number, opts?: { walk?: boolean; byPerson?: boolean }): Promise<{ ok: boolean; reason?: string }> { return boxes.answerBox(this.core, id, choice, opts); }
+  answerBox(id: string, choice: number, opts?: { walk?: boolean; byPerson?: boolean; text?: string }): Promise<{ ok: boolean; reason?: string }> { return boxes.answerBox(this.core, id, choice, opts); }
 
   // ── turn (sessions/turn.ts): the turn flag and the hook lifecycle (the turn watch and the
   // Stop verify behind it), and the turn queries. `clearStopVerify` is for `register`.

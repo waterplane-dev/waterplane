@@ -144,6 +144,26 @@ export interface AgentRun {
    *  with every bucket's MAXIMUM kept, so the peak survives thinning. Absent
    *  from an older host. */
   ctx?: [t: number, tok: number][];
+  /** Every skill this agent loaded, oldest first — see `SkillLoad`. Absent
+   *  when it loaded none, and from an older host. */
+  skills?: SkillLoad[];
+}
+
+/**
+ * One skill body entering a context window: the CLI's `Skill` tool ran and
+ * wrote the skill's text into the log as a meta user record
+ * (`sourceToolUseID`, text opening "Base directory for this skill: …").
+ *
+ * Dated by that record, so it sits on the same time axis as every reading.
+ * `chars` is the body's length in characters — what the log holds. Tokens are
+ * NOT measured per skill (the request that carried it reports one total), so
+ * any token figure drawn from this is an estimate and must say so.
+ */
+export interface SkillLoad {
+  t: number;
+  /** The skill directory's name — what was asked for (`host`, `web-numbers`). */
+  name: string;
+  chars: number;
 }
 
 /** Points per agent context series on the wire. */

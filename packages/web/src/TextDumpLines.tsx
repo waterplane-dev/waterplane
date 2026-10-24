@@ -63,9 +63,9 @@ export const TextDumpLines = forwardRef<TextDumpHandle, { text: string }>(functi
   return (
     <>
       <div className="text-dump-bar">
-        <button className={`key${wrap ? " on" : ""}`} aria-pressed={wrap} onClick={flipWrap}>
+        <Button className={wrap ? "on" : undefined} aria-pressed={wrap} onClick={flipWrap}>
           <WrapText size={16} /> {wrap ? "wrapping lines" : "wrap lines"}
-        </button>
+        </Button>
       </div>
       {ticked.size > 0 && (
         <div className="text-dump-ticked">

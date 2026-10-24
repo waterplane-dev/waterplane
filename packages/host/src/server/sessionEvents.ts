@@ -215,7 +215,11 @@ export function wireSessionEvents(ctx: ServerCtx) {
     // (Wording deliberately dodges the detection regexes in limit.ts — this file
     // printed inside a session must not trip them.)
     const retryMin = Math.max(1, Math.round(Number(env("LIMIT_RETRY_MS") || 600000) / 60000));
-    const plan = lim?.autoContinue
+    // A source wall nobody can date (`SessionLimit.needsYou`) schedules nothing: say so, in the
+    // backend's own words, never "will retry".
+    const plan = lim?.needsYou
+      ? `nothing is retried by itself — it needs you: ${lim.needsYou}`
+      : lim?.autoContinue
       ? (when ? `auto-continue after the reset (~${when})` : `auto-continue will retry every ${retryMin} min`)
       : "auto-continue is off — resume manually";
     const dur = lim?.blockedSince ? fmtDur(Date.now() - lim.blockedSince) : "";
@@ -224,7 +228,7 @@ export function wireSessionEvents(ctx: ServerCtx) {
     // Activity-log entry ("scheduled" ticks stay out — they'd drown the log).
     if (phase !== "scheduled") {
       const question =
-        phase === "blocked" ? "Session stopped at the Claude usage limit."
+        phase === "blocked" ? (lim?.needsYou ? "Session stopped: its CLI reports a wall with no time it lifts." : "Session stopped at the Claude usage limit.")
         : phase === "attempt" ? `Auto-continue attempt ${att} — typing "continue" into the session.`
         : phase === "resumed" ? "Usage limit lifted — session resumed."
         : `Auto-continue gave up after ${att} attempt${att === 1 ? "" : "s"}.`;
@@ -240,7 +244,7 @@ export function wireSessionEvents(ctx: ServerCtx) {
     }
 
     if (phase === "blocked") {
-      ctx.notify("limit", { title: `Usage limit · ${info.title}`, body: plan, sessionId: id, tag: `limit-${id}` });
+      ctx.notify("limit", { title: `${lim?.needsYou ? "Needs you" : "Usage limit"} · ${info.title}`, body: plan, sessionId: id, tag: `limit-${id}` });
     } else if (phase === "attempt") {
       ctx.notify("limit", {
         title: `Auto-continue sent · ${info.title}`,

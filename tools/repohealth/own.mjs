@@ -54,7 +54,7 @@
  * engine was pointed at, never a path the file names.
  */
 import { spawnSync } from "node:child_process";
-import { BRAND } from "../../packages/shared/dist/index.js";
+import { BRAND } from "@waterplane/shared";
 
 /** Where a repo declares its own readings, repo-relative. Committed. */
 export const OWN_FILE = `${BRAND.sharedDirName}/health.json`;

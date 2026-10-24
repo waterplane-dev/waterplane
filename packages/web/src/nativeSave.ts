@@ -108,7 +108,10 @@ export async function findInDownloads(name: string, size?: number): Promise<Foun
 export async function saveToDownloads(blob: Blob, name: string): Promise<string> {
   const p = plugin();
   if (!p) throw new Error("no native save on this device");
-  const { token } = await p.begin({ name, mime: blob.type || "" });
+  // An unlisted extension's blob is typed octet-stream on this side (`pull/pullMime.ts`, so a
+  // local copy is never sniffed); MediaStore gets a better answer from the NAME, which Java
+  // guesses when the mime is empty.
+  const { token } = await p.begin({ name, mime: blob.type === "application/octet-stream" ? "" : blob.type || "" });
   try {
     for (let off = 0; off < blob.size; off += CHUNK) {
       const buf = await blob.slice(off, Math.min(off + CHUNK, blob.size)).arrayBuffer();

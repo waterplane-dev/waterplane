@@ -28,7 +28,7 @@ import { activeHost } from "./hosts";
 import { isNativeShell, routeBase, savedHostBase, setRouteBase, wsUrl } from "./hostUrl";
 import { isDemo } from "./demo/mode";
 import { deviceModel, deviceName } from "./installLog";
-import { createLanRouter, lanDropOnSave, parseLanIdentity, type LanIdentity, type LanRouter, type LanVerdict, type TokenState } from "./lanRoute";
+import { createLanRouter, lanDropOnSave, lanProbeAnswered, parseLanIdentity, type LanIdentity, type LanRouter, type LanVerdict, type TokenState } from "./lanRoute";
 import { currentNet, onShellNet } from "./shellNet";
 import { LS, lsDel, lsJson, lsSetJson } from "./storage";
 
@@ -48,13 +48,14 @@ export interface LanConn {
 // the host base IN FORCE, so the probe and the verify — made while the LAN is
 // not yet the route — carry nothing but a nonce.
 
-/** `GET <lan>/api/health` within `ms`; how long it took. Never throws. */
+/** `GET <lan>/api/health` within `ms`; how long it took. Never throws. A gated
+ *  host's 401 counts as an answer (`lanProbeAnswered`). */
 async function lanProbe(lan: string, ms: number): Promise<{ ok: boolean; ms?: number; at: number }> {
   const t0 = performance.now();
   try {
     const r = await bgFetch(`${lan}/api/health`, { cache: "no-store", credentials: "omit" }, ms);
     const took = performance.now() - t0;
-    return { ok: r.ok, ms: took, at: Date.now() };
+    return { ok: lanProbeAnswered(r.status), ms: took, at: Date.now() };
   } catch {
     return { ok: false, at: Date.now() };
   }

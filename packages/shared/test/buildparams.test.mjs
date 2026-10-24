@@ -112,3 +112,25 @@ test("a discovered option list is one per line, deduped, and says what it cut", 
   assert.equal(many.options.length, 200);
   assert.equal(many.total, 250);   // the cut is SAYABLE, not silent
 });
+
+import { unsafeParamIds, unsafeParamsText } from "../dist/buildparams.js";
+
+test("a value with a shell metacharacter is flagged only where the command line names it", () => {
+  const bad = ["a;b", "a&&b", "a|b", "$(x)", "`x`", "a>b", "a<b", "a'b", 'a"b', "a\\b"];
+  for (const v of bad) assert.deepEqual(unsafeParamIds("echo {{app}}", { app: v }), ["app"], v);
+  // a value only the env copy / dir uses is not on the command line
+  assert.deepEqual(unsafeParamIds("echo hi", { app: "a;b" }), []);
+});
+
+test("real values stay allowed, bare or inside the entry's own double quotes", () => {
+  for (const v of ["acorn-squirrel_v2", "apps/foo.bar", "--flag=a,b", "two words", "none", "publish", "a@b+c:d", "x*"]) {
+    assert.deepEqual(unsafeParamIds('[ "{{mode}}" = publish ]; echo {{mode}}', { mode: v }), [], v);
+  }
+});
+
+test("the refusal sentence names the field and points at the env copy", () => {
+  const s = unsafeParamsText(["app"]);
+  assert.match(s, /“app”/);
+  assert.match(s, /PARAM_APP/);
+  assert.equal(unsafeParamsText([]), "");
+});

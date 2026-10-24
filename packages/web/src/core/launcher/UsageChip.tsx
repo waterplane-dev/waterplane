@@ -27,6 +27,12 @@ const ICON = 16;
 const TAP = "\ntap for both windows, their reset times and the token history";
 const TAP_OTHER = "\ntap for its quota windows and the readings kept";
 
+/** Does this segment carry the RICHER shape — the CLI's own `/usage` scrape (`UsageInfo`: both
+ *  windows, reset times, `usageTitle`)? Only claude's reading has one; every other source draws
+ *  the generic `label text unit` face. The ONE test, so the chip keys on the shape and not on an
+ *  id scattered through the file (the source id here is a usage source, not a backend). */
+const hasScrape = (seg: ChipSegment): boolean => seg.source === "claude";
+
 /** Both windows: the 5-hour one paces the next hour, the weekly one is what
  *  actually strands you for days — showing only the former hid a 90% week behind
  *  a comfortable-looking 11%. The 5-hour reset rides right after THAT number,
@@ -60,8 +66,8 @@ function OtherFace({ seg, size, gauge = true }: { seg: ChipSegment; size: number
 
 /** The long-press wording of one segment (claude keeps `usageTitle`, byte for byte). */
 export function segmentTitle(seg: ChipSegment, usage: UsageInfo | null, now = Date.now()): string {
-  const base = seg.source === "claude" && usage ? usageTitle(usage) : usageReadingTitle(seg.reading, now);
-  return `${base}${seg.source === "claude" ? TAP : TAP_OTHER}${hiddenNote(seg.hidden)}`;
+  const base = hasScrape(seg) && usage ? usageTitle(usage) : usageReadingTitle(seg.reading, now);
+  return `${base}${hasScrape(seg) ? TAP : TAP_OTHER}${hiddenNote(seg.hidden)}`;
 }
 
 /** The launcher's chip. Another backend's quota only while one of its sessions runs (`launcherReadings`). */
@@ -75,7 +81,7 @@ export function UsageChip({ sessions }: { sessions: readonly { backend?: string;
   const door = () => {
     const f = infoFigures(usage);
     return (
-      <Button key="claude" className={`usage-key ${figuresHot(f) ? "danger" : ""}`} title={`${usageTitle(usage)}${TAP}`}
+      <Button key="claude" className={`usage-key${figuresHot(f) ? " danger" : ""}`} title={`${usageTitle(usage)}${TAP}`}
         onClick={() => { track("overlay:tokens"); openTokensOn(null); }}>
         <ClaudeFace f={f} size={ICON} />
       </Button>
@@ -86,12 +92,11 @@ export function UsageChip({ sessions }: { sessions: readonly { backend?: string;
   const withDoor = claudeDoorBeside(segments, usage);
   const group = withDoor || segments.length > 1;
   const buttons = segments.map((seg, i) => {
-    const claude = seg.source === "claude";
-    const f = claude ? claudeSegmentFigures(seg.reading, usage) : null;
+    const f = hasScrape(seg) ? claudeSegmentFigures(seg.reading, usage) : null;
     // One Gauge per meter: on the lone button, else on the group's first segment only.
     const gauge = !group || (!withDoor && i === 0);
     return (
-      <Button key={seg.source} className={`usage-key${group ? " usage-seg" : ""} ${(f ? figuresHot(f) : seg.hot) ? "danger" : ""}`}
+      <Button key={seg.source} className={`usage-key${group ? " usage-seg" : ""}${(f ? figuresHot(f) : seg.hot) ? " danger" : ""}`}
         title={segmentTitle(seg, usage)} onClick={() => open(seg)}>
         {f ? <ClaudeFace f={f} size={ICON} gauge={gauge} /> : <OtherFace seg={seg} size={ICON} gauge={gauge} />}
       </Button>
@@ -121,7 +126,7 @@ export function SessionUsage({ backend }: { backend: string | null | undefined }
     </RowSub>
   );
   if (!segments.length) return claudeInline(infoFigures(usage), `${usageTitle(usage)}${TAP}`, null);
-  return <>{segments.map((seg: ChipSegment) => seg.source === "claude"
+  return <>{segments.map((seg: ChipSegment) => hasScrape(seg)
     ? claudeInline(claudeSegmentFigures(seg.reading, usage), segmentTitle(seg, usage), seg)
     : (
       <RowSub key={seg.source} className={`usage-inline${seg.hot ? " danger" : ""}`} title={segmentTitle(seg, usage)} onClick={() => open(seg)}>

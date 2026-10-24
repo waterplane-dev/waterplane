@@ -36,9 +36,9 @@
  */
 import { env } from "../env.js";
 import { ollamaUrl, warmLocalModel } from "../localrt.js";
-import { claudeBackend, CLAUDE_SPAWN_ENV } from "./claude.js";
+import { ACCOUNTLESS_CLAUDE_FACTS, claudeBackend, CLAUDE_SPAWN_ENV } from "./claude.js";
 import { measuredOverhead } from "./overhead.js";
-import type { BackendDescriptor, BackendModels, LaunchPlan, LaunchRequest } from "./types.js";
+import type { CoreBackendDescriptor, BackendModels, LaunchPlan, LaunchRequest } from "./types.js";
 
 /** The built-in tools a lean launch keeps: enough to read, change and run a repo. */
 export const LEAN_TOOLS = "Read,Edit,Write,Bash,Grep,Glob";
@@ -105,13 +105,13 @@ export function claudeLocalEnv(window?: number | null): Record<string, string> {
   };
 }
 
-function launchArgs(req: LaunchRequest): LaunchPlan {
+function prepare(req: LaunchRequest): LaunchPlan {
   // Without --model the CLI asks for its own default (a `claude-*` id) and
   // Ollama answers not_found_error minutes into the first turn. Refuse here.
   if (!req.launch.model) {
     throw new Error(`Claude on a local model needs a model chosen first — pick one of the models Ollama has at ${claudeLocalUrl()}.`);
   }
-  const base = claudeBackend.launchArgs(req);
+  const base = claudeBackend.prepare(req);
   const keepAlive = claudeLocalKeepAlive();
   // Never awaited, never thrown: a launch does not wait on the runner.
   if (keepAlive) void Promise.resolve().then(() => warmDeps.warm(req.launch.model!, keepAlive)).catch(() => undefined);
@@ -194,20 +194,19 @@ async function models(): Promise<BackendModels> {
   };
 }
 
-export const claudeLocalBackend: BackendDescriptor = {
+export const claudeLocalBackend: CoreBackendDescriptor = {
   ...claudeBackend,
   id: "claude-local",
   label: "Claude Code (local model)",
   spawnEnv: CLAUDE_SPAWN_ENV,
-  launchArgs,
+  prepare,
   caps: {
     ...claudeBackend.caps,
-    // The CLI's gauge assumes a window for the model id; the probe spike records what it printed.
-    contextMeter: false,
-    usageLimits: false,
-    usageProbe: false,
     remoteControl: false,
   },
+  // The CLI's gauge assumes a window for the model id; the probe spike records what it printed.
+  // (no gauge, no limit wall, no usage probe: those three providers are dropped).
+  facts: ACCOUNTLESS_CLAUDE_FACTS,
   models,
   localRunner: "ollama",
   healthScope: false,

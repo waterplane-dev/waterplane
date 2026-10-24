@@ -159,8 +159,8 @@
  * module can build — including the argv `--root=` now rides in.
  */
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync, statSync } from "node:fs";
-import { isAbsolute, join, resolve } from "node:path";
+import { readFileSync, statSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { readScopes } from "./repohealthscopes.js";
 import {
   REPOHEALTH_HTML,
@@ -173,7 +173,9 @@ import {
   parseRepoHealthStatus,
   parseUpdateSummary, secondsToMs, envName } from "@waterplane/shared";
 import type { RepoHealthMeasure, RepoHealthOutcome, RepoHealthPlot, RepoHealthRun, RepoHealthSeries, RepoHealthView } from "@waterplane/shared";
-import { env } from "./env.js";
+import { ROOT, env } from "./env.js";
+import { HEALTH_JSON, bundledEngine, engineApproved, engineUnapprovable, needsApprovalText, ownApprovalText, ownCommandsDeclared, resolveRepoHealthEngine, type RepoHealthEngine } from "./repohealthapproval.js";
+export { resolveRepoHealthEngine, type RepoHealthEngine } from "./repohealthapproval.js";
 
 /**
  * How long ONE step of the tool may run before its process group is killed.
@@ -230,14 +232,6 @@ export interface RepoHealthProc {
   timedOut: boolean;
 }
 
-/** Which engine will read a worktree, and whose it is. */
-export interface RepoHealthEngine {
-  /** Absolute path to the script that gets spawned. */
-  path: string;
-  /** `repo` = the worktree's own copy, which decides its own root; `bundled` =
-   *  this desktop's, pointed at the worktree with `--root=`. */
-  kind: "repo" | "bundled";
-}
 
 /**
  * The seams a test drives this through: a fake `spawn` (so the engine need not
@@ -260,7 +254,23 @@ export interface RepoHealthDeps {
   ) => Promise<RepoHealthProc>;
   now?: () => number;
   engine?: (wt: string) => RepoHealthEngine | null;
+  /** Has the person approved this REPO-shipped engine? Default: the remembered
+   *  approval in the host state dir (`engineApproved`). A test seam. */
+  approved?: (wt: string, engine: RepoHealthEngine) => boolean;
+  /** The root whose host state dir holds the approvals. Default `ROOT`. */
+  root?: string;
 }
+
+const approvedFor = (engine: RepoHealthEngine, wt: string, deps: RepoHealthDeps): boolean =>
+  deps.approved ? deps.approved(wt, engine) : engineApproved(wt, deps.root ?? ROOT, engine.kind);
+
+/** The repo's own engine, not yet approved: nothing spawns. */
+export const gated = (engine: RepoHealthEngine, wt: string, deps: RepoHealthDeps): boolean =>
+  engine.kind === "repo" && !approvedFor(engine, wt, deps);
+
+/** The BUNDLED engine with the repo's committed commands not yet approved: it runs, without them. */
+export const ownGated = (engine: RepoHealthEngine, wt: string, deps: RepoHealthDeps): boolean =>
+  engine.kind === "bundled" && ownCommandsDeclared(wt) && !approvedFor(engine, wt, deps);
 
 /**
  * One promise per worktree — see the header. The map is memory-only: a restart
@@ -278,45 +288,6 @@ const running = new Map<string, RepoHealthRun>();
  *  the latch: a restart loses it, and the series on disk is the durable half. */
 const lastOutcome = new Map<string, RepoHealthOutcome>();
 
-/**
- * This desktop's own engine: the env override, else this checkout's copy.
- *
- * Read on every call rather than frozen at import. Since `env.ts` (`main.ts`'s
- * first import) loads the `.env` files, a constant would now see them too — but
- * a call-time read also serves a caller that never went through `main.ts`.
- *
- * The three hops are `env.ts`'s rule for `.env` and `webbundle.ts`'s for
- * `packages/web/dist`: `import.meta.dirname` is `packages/host/src` under tsx
- * and `packages/host/dist` after a build, and both are one level under
- * `packages/host`, so the same path reaches the repo root from either.
- *
- * `WATERPLANE_REPOHEALTH_ENGINE` is taken as an ABSOLUTE path and is not repaired: a
- * relative one would resolve against whatever `cwd` the daemon was started in,
- * which on a launchd service is `/`. A value that is not absolute, or names
- * nothing, is no engine — never a quiet fallback to the bundled one, because a
- * desktop that named an engine and typo'd it must not be told its reading came
- * from the engine it asked for.
- */
-function bundledEngine(): string | null {
-  const named = env("REPOHEALTH_ENGINE");
-  if (named) return isAbsolute(named) && existsSync(named) ? named : null;
-  const own = resolve(import.meta.dirname, "../../..", REPOHEALTH_TOOL);
-  return existsSync(own) ? own : null;
-}
-
-/**
- * Which engine reads this worktree — its own copy first, then the desktop's.
- *
- * The order is the header's: a repo carrying the tool is the authority on its
- * own root, and it is also how waterplane keeps reading itself with the engine it
- * ships rather than with a copy of the same file reached by a different path.
- */
-export function resolveRepoHealthEngine(wt: string): RepoHealthEngine | null {
-  const own = join(wt, REPOHEALTH_TOOL);
-  if (existsSync(own)) return { path: own, kind: "repo" };
-  const bundled = bundledEngine();
-  return bundled ? { path: bundled, kind: "bundled" } : null;
-}
 
 /**
  * Can repo-health be read for this worktree at all?
@@ -345,8 +316,11 @@ export function repoHealthArgv(
   step: RepoHealthStep,
   /** A subtree to measure as though it were the repo, or null for the repo. */
   scope: string | null = null,
+  /** The bundled engine without the repo's committed commands (not approved). */
+  noOwn = false,
 ): string[] {
   const argv = engine.kind === "repo" ? [engine.path, step] : [engine.path, step, `--root=${wt}`];
+  if (noOwn && engine.kind === "bundled" && step === "update") argv.push("--no-own");
   // One token, like `--root=`, and for the same reason: an engine that
   // predates scopes must IGNORE it rather than read the path as a subcommand.
   // That silence is also the danger — an older engine would measure the whole
@@ -491,7 +465,8 @@ const step1 = (
   step: RepoHealthStep,
   onStderr: (chunk: string) => void = () => {},
   scope: string | null = null,
-): Promise<RepoHealthProc> => spawnOf(deps)(wt, step, onStderr, repoHealthArgv(engine, wt, step, scope));
+): Promise<RepoHealthProc> =>
+  spawnOf(deps)(wt, step, onStderr, repoHealthArgv(engine, wt, step, scope, step === "update" && ownGated(engine, wt, deps)));
 
 
 /** The `head` and `behind` the tool prints beside the series.
@@ -752,19 +727,33 @@ export async function readRepoHealth(
       narrative: null, page: null, measure: null, readError: noEngineText(), ...base,
     };
   }
+  if (gated(engine, wt, deps)) {
+    // NO spawn: the repo's own engine is committed code nobody has approved — or
+    // code an approval could not pin, which offers no approve tap, only the why.
+    // The why is computed once: it hashes the engine's whole import graph.
+    const why = engineUnapprovable(wt);
+    return {
+      tool: true, head: null, series: null, behind: null, plot: null, plotError: null,
+      narrative: null, page: null, measure: null, readError: needsApprovalText(why),
+      ...base,
+      engine: { kind: engine.kind, bundled: bundledEngine(), needsApproval: why === null, path: engine.path },
+    };
+  }
   const { series, head, behind, measure, readError } = await readStatus(wt, engine, deps, scope);
   // One after the other, not in parallel: both are reads of the same file, the
   // pair costs about a tenth of a second, and a sheet opening must have exactly
   // two spawns in the log for the assertion that it has no THIRD one to mean
   // anything.
   const { plot, why: plotError } = await readPlot(wt, engine, deps, series !== null, scope);
+  // The bundled engine reads fine; only the repo's own commands wait.
+  const ownWaits = ownGated(engine, wt, deps);
   return {
     tool: true,
     head,
     series,
     behind,
     measure,
-    readError,
+    readError: readError ?? (ownWaits ? ownApprovalText() : null),
     plot,
     plotError,
     // Root only, both of them. `narrate` and `html` write one file for the
@@ -774,6 +763,7 @@ export async function readRepoHealth(
     narrative: scope ? null : readNarrative(wt),
     page: scope ? null : readPage(wt),
     ...base,
+    ...(ownWaits && base.engine ? { engine: { ...base.engine, needsApproval: true, path: join(wt, HEALTH_JSON) } } : {}),
   };
 }
 
@@ -813,6 +803,8 @@ async function runRefresh(wt: string, deps: RepoHealthDeps, scope: string | null
   // and no `last` outcome is recorded — a run that never started is not a run
   // that failed.
   if (!engine) return readRepoHealth(wt, deps, scope);
+  // An unapproved repo engine never spawns, here or on the weekly sweep.
+  if (gated(engine, wt, deps)) return readRepoHealth(wt, deps, scope);
 
   const key = keyOf(wt, scope);
   const startedAt = now();

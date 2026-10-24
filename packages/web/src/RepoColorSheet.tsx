@@ -35,6 +35,7 @@ import { Empty } from "./Empty";
 import { repoColors, saveRepoColors, useRepoColors } from "./repoColors";
 import { showToast } from "./toast";
 import { track } from "./usage";
+import { SetLine, SetNote } from "./SettingsKit";
 
 /** The swatch a hue is shown as — the colour the app will actually paint, built
  *  the way every other repo-coloured thing builds it (`format.ts`'s inline
@@ -79,7 +80,7 @@ export function RepoColorSheet({ repos, onClose }: { repos: RepoTarget[]; onClos
   return (
     <Sheet title="Repo colours" icon={<Palette size={18} />} onClose={onClose}>
       <div className="sheet-scroll">
-        <div className="set-row">
+        <SetLine>
           <RadioRows
             label="repo colour ring"
             options={REPO_PALETTES.map((p) => ({ key: p.id, label: p.label }))}
@@ -94,7 +95,7 @@ export function RepoColorSheet({ repos, onClose }: { repos: RepoTarget[]; onClos
           <div className="rc-ring" aria-hidden="true">
             {ring.hues.map((h) => <span key={h} className="rc-dot" style={hueStyle(h)} />)}
           </div>
-          <span className="set-note">
+          <SetNote as="span">
             {ring.note}{" "}
             A repo’s colour is a hue out of this ring, picked by its name — the same on every device
             and in every list, and two repos are either the same colour or a clearly different one.
@@ -102,10 +103,10 @@ export function RepoColorSheet({ repos, onClose }: { repos: RepoTarget[]; onClos
             360 hues, so <b>nothing you pick here can make a name unreadable</b>.
             {" "}A colour you pin below <b>survives a change of ring</b>: you chose that colour, not
             a slot.
-          </span>
-        </div>
+          </SetNote>
+        </SetLine>
 
-        <div className="set-row">
+        <SetLine>
           {clashes.length > 0 ? (
             <>
               {/* The count IS the cut. */}
@@ -120,7 +121,7 @@ export function RepoColorSheet({ repos, onClose }: { repos: RepoTarget[]; onClos
                 const left = repoColorClashes(names, next).flat().length;
                 showToast(left ? `separated — ${left} still share a colour` : "every repo has its own colour");
               }}><RefreshCw size={14} /> give them separate colours</Button>
-              <span className="set-note">
+              <SetNote as="span">
                 {clashes.map((g) => g.join(" + ")).join(" · ")} land on the same hue.
                 {" "}Separating them <b>moves only the ones that collide</b>: a repo already alone on
                 its colour keeps it, and a colour you pinned yourself is never moved — so the repos
@@ -128,14 +129,14 @@ export function RepoColorSheet({ repos, onClose }: { repos: RepoTarget[]; onClos
                 {crowded ? <> With {names.length} repos and {ring.hues.length} hues in this ring, some
                   of them must share whatever it does; a wider ring or a hue pinned by hand is the
                   only way past that.</> : null}
-              </span>
+              </SetNote>
             </>
           ) : (
-            <span className="set-note">
+            <SetNote as="span">
               <Check size={13} /> Every repo has a colour of its own.
-            </span>
+            </SetNote>
           )}
-        </div>
+        </SetLine>
 
         {cut ? (
           <div className="filter-bar">

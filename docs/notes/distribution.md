@@ -159,6 +159,7 @@ packages/shared/{package.json,dist}
 packages/host/{package.json,dist}          dist/extensions = compiled built-in extensions
 packages/web/dist                          host resolves it as ../../web/dist from host/dist
 packages/extensions/*/<plugin manifest>   manifests only; the host reads built-in manifests from source folders
+packages/extensions/<id>/<assets>          a shipped builtin's manifest `assets` folder (the OCR engine), built by `npm run build`
 tools/repohealth.mjs, tools/repohealth/   the engine repohealth.ts looks for at <root>/tools
 node_modules/    PRODUCTION deps as the lockfile resolved them; @waterplane/shared is a REAL copy
 LICENSE README.md SECURITY.md NOTICES.md DISCLAIMER.md CHANGELOG.md
@@ -217,7 +218,9 @@ goes to `cli/windows.ts` instead, which runs the host inside WSL ([below](#windo
 ## Self-update
 
 `<slug> update` (`packages/host/src/cli/selfupdate.ts`). **Nothing applies itself:** no timer, no
-boot hook, no update-on-restart; only this explicit command downloads or switches anything.
+boot hook, no update-on-restart; only this explicit command (or a tap on the phone, below) downloads or
+switches anything. The daily update check (`updates/checker.ts`) is a READ: it asks GitHub what is
+newest and says so on the phone; it never installs.
 
 **Install mode is read off the running file's REAL path, never guessed** (`detectMode`, pure):
 `<data>/versions/<v>/` carrying `release.json` = tarball; `…/node_modules/<slug>/` = npm global;
@@ -263,6 +266,26 @@ Source: `--from <dir-or-url>` > `<ENV_PREFIX>RELEASE_URL` > `github.com/<org>/<s
   by a tarball update. No such service ⇒ the user is told to restart. `--no-restart` skips it.
 - Exit codes: 0 done/current · 1 failed or refused · 2 usage · 3 this install does not update
   itself · 10 (`--check`) newer release available.
+
+### From the phone
+
+Settings → Tools → updates (`updates/`, plan [plugin-manager-and-self-update.md](../plans/plugin-manager-and-self-update.md)).
+
+- **The button is tarball-only** (`updates/self.ts`: `canApply` only for the install the updater above
+  understands). An npm or checkout install shows the command instead (`npm i -g <slug>@latest`;
+  `git pull` + `npm run restart`), the same ones this section gives.
+- A tap runs `applyInProcess` (`cli/selfupdate.ts`, the CLI's own code, same signature and checksum
+  checks, same snapshot) with `noRestart`; then `updates/apply.ts` writes the receipt and
+  restarts through `updates/restart.ts`: SIGTERM after the reply, and ONLY when a supervisor
+  (launchd/systemd) will start the host again; unsupervised it says "restart the desktop to switch".
+- **The receipt** is `lastResult` in the checker's status, written BEFORE the restart; the phone
+  reads it after it reconnects ("updated to 0.x").
+- **Known gap: a rollback from the phone does not restore the state snapshot.** `update --rollback`
+  on the CLI stops the service, flips and restores; the in-process one cannot stop the host it runs
+  in, so it flips only. After it, `update --restore-state` (host stopped) is still the way to put
+  the older stores back.
+- **The phone's web UI follows over the air:** the new host serves the new bundle; the app picks it
+  up on its next launch. No APK is involved.
 
 **Doctor row `self-update`** (tarball mode only; else no row): one `release.json` request, 4 s
 timeout. Newer ⇒ `warn` "<v> available — run `<slug> update`"; a network failure is an `ok` row

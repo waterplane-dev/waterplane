@@ -14,7 +14,7 @@ import { dur, hhmm, until } from "./format";
 import { SheetHead } from "./Sheet";
 import { BRAND } from "@waterplane/shared";
 import { ConfirmButton } from "./Confirm";
-import { SetWarn } from "./SettingsKit";
+import { SetWarn, SetNote } from "./SettingsKit";
 import { copyText } from "./api";
 import { showToast } from "./toast";
 import {
@@ -212,16 +212,16 @@ export function LocalRtSheet({ onClose, focus, onOpenSession }: Props) {
                   </div>
                 ))}
               </div>
-              <span className="set-note">
+              <SetNote as="span">
                 {gbText(heldBytes(models))} held in total by {models.length === 1 ? "one model" : `${models.length} models`}.
                 The runner still evicts on its own schedule; *eject* on a row is the one thing on this
                 screen that acts instead of just reading — nothing else here does.
-              </span>
+              </SetNote>
             </>
           ) : (
             // Four different reasons there is no list, and they are four
             // different sentences. `localRtState` already picked which one.
-            <span className="set-note">{r.text}</span>
+            <SetNote as="span">{r.text}</SetNote>
           )}
         </section>
 
@@ -235,24 +235,24 @@ export function LocalRtSheet({ onClose, focus, onOpenSession }: Props) {
             <>
               <SysGraph lines={[{ key: "held", label: "held", tone: "app", series }]}
                 lo={0} hi={seriesCeiling(series)} fmt={gbAxis} {...span} />
-              <span className="set-note">
+              <SetNote as="span">
                 The last {series.length} reading{series.length === 1 ? "" : "s"} (at most {RING_CAP}, roughly ten
                 minutes). A model being loaded or evicted is a step, not a slope. A reading where the
                 runner did not answer is drawn as its own full-height mark rather than averaged into
                 the line or bridged across — those are a different kind of event, not a small number.
-              </span>
-              <span className="set-note">
+              </SetNote>
+              <SetNote as="span">
                 It is a series of READINGS, not a time axis: nothing is measured while this phone is
                 in a pocket or off the tunnel, so the marks are not evenly spaced in time. Kept in
                 memory only — a chart rebuilt from an old buffer after a reload would look exactly as
                 current as this one, which is the failure this whole readout exists to avoid.
-              </span>
+              </SetNote>
             </>
           ) : (
-            <span className="set-note">
+            <SetNote as="span">
               Nothing to draw yet. Readings arrive every few seconds while this screen or the strip is
               open, and they are not kept across a reload.
-            </span>
+            </SetNote>
           )}
         </section>
 
@@ -266,24 +266,24 @@ export function LocalRtSheet({ onClose, focus, onOpenSession }: Props) {
             <>
               <SysGraph lines={[{ key: "gpu", label: "GPU busy", tone: "app", series: gpuS }]}
                 lo={0} hi={100} fmt={pctAxis} {...span} />
-              <span className="set-note">
+              <SetNote as="span">
                 Same shape as the memory graph above, but fixed 0-100% rather than fitted to the
                 data — a line drawn to a floating ceiling makes 20% look identical to 80% across two
                 readings. A gap is a stretch this phone was not watching, drawn as a break, never
                 bridged.
-              </span>
+              </SetNote>
             </>
           ) : s.samples.length > 1 ? (
-            <span className="set-note">
+            <SetNote as="span">
               No GPU reading from this desktop. Today that reader only exists for Apple Silicon
               (the OS's own utilization figure) — a discrete-GPU host or one running Linux has none
               yet, and this says so rather than drawing a flat line at 0%.
-            </span>
+            </SetNote>
           ) : (
-            <span className="set-note">
+            <SetNote as="span">
               Nothing to draw yet. Readings arrive every few seconds while this screen or the strip is
               open, and they are not kept across a reload.
-            </span>
+            </SetNote>
           )}
         </section>
 
@@ -378,7 +378,7 @@ export function LocalRtSheet({ onClose, focus, onOpenSession }: Props) {
                   </div>
                 )}
               </div>
-              <span className="set-note">
+              <SetNote as="span">
                 These are the operating system's numbers, not the model's. Free memory understates
                 what is really available — a page cache and a compressor are not in it — which is why
                 this app warns about a second local model in a sentence and never refuses to start one.
@@ -386,10 +386,10 @@ export function LocalRtSheet({ onClose, focus, onOpenSession }: Props) {
                   <> GPU figures are the driver's own, system-wide — not just what a model above is
                     holding, and absent entirely on a host this app has no reader for.</>
                 )}
-              </span>
+              </SetNote>
             </>
           ) : (
-            <span className="set-note">No reading from this desktop yet.</span>
+            <SetNote as="span">No reading from this desktop yet.</SetNote>
           )}
         </section>
 
@@ -408,19 +408,19 @@ export function LocalRtSheet({ onClose, focus, onOpenSession }: Props) {
                 <SysGraph lines={[{ key: "mem", label: "memory in use", tone: "wired", series: memS }]}
                   lo={0} hi={memTotal} fmt={gbAxis} {...span} />
               )}
-              <span className="set-note">
+              <SetNote as="span">
                 CPU busy, then memory in use, over the last {cpuS.length} readings — both drawn against the
                 whole machine (0-100%, 0 to {gbText(memTotal)}), never fitted to the data, so a flat line
                 means a flat machine. A break is a stretch this phone was not watching, never bridged.
                 Kept in memory only, so a reload starts it again rather than drawing an old buffer as
                 current.
-              </span>
+              </SetNote>
             </>
           ) : (
-            <span className="set-note">
+            <SetNote as="span">
               Nothing to draw yet. Readings arrive every few seconds while this screen or the strip is
               open, and they are not kept across a reload.
-            </span>
+            </SetNote>
           )}
         </section>
     </>
@@ -467,6 +467,7 @@ export function LocalRtSheet({ onClose, focus, onOpenSession }: Props) {
                 </div>
               )}
             </div>
+            {/* raw: memNote can be null, and SetNote would drop the empty box this draws */}
             <span className="set-note">{memNote(sys.mem, r.sample?.memFree ?? 0)}</span>
           </section>
         )}
@@ -489,11 +490,11 @@ export function LocalRtSheet({ onClose, focus, onOpenSession }: Props) {
                   </div>
                 ))}
               </div>
-              <span className="set-note">
+              <SetNote as="span">
                 {rssSumText(sys.procs.rssSumBytes, r.sample?.memTotal ?? 0)} {sys.procs.count} processes are
                 running; these are the {sys.procs.byMem.length} biggest.
                 {procAge != null ? ` Read ${procAge}s before the rest of this sample.` : ""}
-              </span>
+              </SetNote>
               {sys.procs.byCpu.length > 0 && (
                 <>
                   <h3 className="set-title">…and what is using the CPU</h3>
@@ -506,10 +507,10 @@ export function LocalRtSheet({ onClose, focus, onOpenSession }: Props) {
                       </div>
                     ))}
                   </div>
-                  <span className="set-note">
+                  <SetNote as="span">
                     A percentage per core, summed across the fold, exactly as `top` reports it — so a
                     row can read well past 100% and that is several cores, not an error.
-                  </span>
+                  </SetNote>
                 </>
               )}
             </>
@@ -517,6 +518,7 @@ export function LocalRtSheet({ onClose, focus, onOpenSession }: Props) {
             // Switched off, unreadable, or a host that predates this — three
             // different facts, and the host words which. Never "nothing is
             // running", which is not a thing this can mean.
+            // raw: a host-sent note may be "" (?? keeps it); SetNote would drop the empty box
             <span className="set-note">
               {sys?.procsNote ?? `This desktop is not sending a process list — its ${BRAND.name} predates this readout.`}
             </span>
@@ -553,14 +555,15 @@ export function LocalRtSheet({ onClose, focus, onOpenSession }: Props) {
                   )}
                 </div>
               ))}
-              <span className="set-note">
+              <SetNote as="span">
                 Free is what a program could still write. On a Mac it leaves out purgeable space
                 (local snapshots, files iCloud can fetch again), so Finder may say more is free.
                 What this app itself keeps on the desktop is listed on the Storage screen.
                 {diskAge != null ? ` Read ${diskAge}s before the rest of this sample.` : ""}
-              </span>
+              </SetNote>
             </>
           ) : (
+            // raw: a host-sent note may be "" (?? keeps it); SetNote would drop the empty box
             <span className="set-note">
               {sys?.disksNote ?? `This desktop is not sending disk readings — its ${BRAND.name} predates this readout.`}
             </span>
@@ -608,7 +611,7 @@ export function LocalRtSheet({ onClose, focus, onOpenSession }: Props) {
               {fanLines.length > 0 && s.samples.length > 1 && (
                 <SysGraph lines={fanLines} lo={0} hi={fanHi} fmt={rpmAxis} {...span} />
               )}
-              <span className="set-note">
+              <SetNote as="span">
                 {s.samples.length > 1 && (tempRead || fanLines.length > 0) && (
                   <>Temperature is drawn 20-100°C, fixed, so a warm minute is not stretched into a
                     fever. Fans are the one fitted axis — the sensor names no maximum — so read their
@@ -619,10 +622,11 @@ export function LocalRtSheet({ onClose, focus, onOpenSession }: Props) {
                 does not own, so these are its numbers and not ours.
                 {sys.thermal.fans.length === 0 ? " It reported no fans: a fanless machine, or a VM." : ""}
                 {thermAge != null ? ` Read ${thermAge}s before the rest of this sample.` : ""}
-              </span>
+              </SetNote>
             </>
           ) : (
             <>
+              {/* raw: a host-sent note may be "" (?? keeps it); SetNote would drop the empty box */}
               <span className="set-note">
                 {sys?.thermalNote ?? `This desktop is not sending a temperature reading — its ${BRAND.name} predates this readout.`}
               </span>
@@ -642,14 +646,14 @@ export function LocalRtSheet({ onClose, focus, onOpenSession }: Props) {
     <>
         <section className="set-group">
           <h3 className="set-title">What is not here</h3>
-          <span className="set-note">
+          <SetNote as="span">
             There is no tokens-per-second figure anywhere in this app, deliberately. Neither the
             runner nor the coding CLI publishes live throughput, and the only thing that could be
             estimated from what this host can see — bytes off the terminal over wall clock — is wrong
             in both directions that matter: a terminal repaints, so screen bytes are not output
             tokens, and a model thinking silently produces nothing at all while doing the expensive
             part. A speed nobody can act on is worse than a blank space.
-          </span>
+          </SetNote>
         </section>
     </>
   );
@@ -668,11 +672,11 @@ export function LocalRtSheet({ onClose, focus, onOpenSession }: Props) {
             printed beside a live number is noise; printed beside a stale one it
             is the entire difference between a readout and a lie. */}
         {r.stale && r.at != null && (
-          <p className="set-note">
+          <SetNote as="p">
             Read {dur(r.at)} ago, at {hhmm(r.at)}
             {online ? "" : " — this phone is not connected to the desktop right now"}.
             {s.seenAt != null && s.seenAt !== r.at ? ` Last frame from the desktop ${dur(s.seenAt)} ago.` : ""}
-          </p>
+          </SetNote>
         )}
 
         {/* Arriving from the strip's agent count, the agents lead; otherwise

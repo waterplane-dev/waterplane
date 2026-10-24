@@ -41,7 +41,7 @@ import type { Effort, LaunchOpts, SessionBudget } from "@waterplane/shared";
 import { SheetHead } from "./Sheet";
 import { LaunchPicker, launchOf, pickHasWheel } from "./LaunchPicker";
 import { BudgetField } from "./BudgetField";
-import { budgetChipWords } from "./budgetInput";
+import { budgetChipWords, launchWindowsOff } from "./budgetInput";
 import { CantInline } from "./Unavailable";
 import { backendUnavailable, launchAskStart, showBackendPicker, type BackendList } from "./backendCaps";
 import { LS, lsJson, lsSetJson } from "./storage";
@@ -122,6 +122,7 @@ export function LaunchAskSheet({ title, backends, defaults, budget: startBudget,
         </div>
         {budgetOpen && (
           <BudgetField initial={budget ?? startBudget ?? null} onChange={setBudget}
+            windowsOff={launchWindowsOff(backends, backend)}
             calFor="A percent is converted from dollars at the window's measured rate once this session is running — until there is a fresh usage reading, nothing is held." />
         )}
         <Hint>

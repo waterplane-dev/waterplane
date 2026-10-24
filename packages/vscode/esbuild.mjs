@@ -51,6 +51,24 @@ const hintChip = {
   },
 };
 
+// The phone's read hook and its stats API run in the webview as they are; only their socket-facing
+// imports are swapped: `useRemoteResource.ts`'s `./api` and `./link`, `webapiStats.ts`'s
+// `./webapiFetch` (its `jget` goes through the extension host to the desktop on loopback).
+const phoneReads = {
+  name: "phone-reads",
+  setup(b) {
+    const swaps = [
+      [path.join(webSrc, "useRemoteResource.ts"), /^\.\/api(\.ts)?$/, "webview/shims/api.ts"],
+      [path.join(webSrc, "useRemoteResource.ts"), /^\.\/link(\.ts)?$/, "webview/shims/link.ts"],
+      [path.join(webSrc, "webapi", "webapiStats.ts"), /^\.\/webapiFetch(\.ts)?$/, "webview/shims/jget.ts"],
+    ];
+    b.onResolve({ filter: /^\.\/(api|link|webapiFetch)(\.ts)?$/ }, (a) => {
+      const hit = swaps.find(([importer, re]) => a.importer === importer && re.test(a.path));
+      return hit ? { path: at(hit[2]) } : null;
+    });
+  },
+};
+
 // The repo-health engine (tools/repohealth.mjs) is bundled as it is. Two of its modules are
 // swapped: statefile.mjs (the series goes to VS Code's global storage, never into the folder),
 // judge.mjs (the one module that spends tokens — nothing here does), narrate.mjs + html.mjs
@@ -143,10 +161,10 @@ const configs = [
     target: "es2022",
     jsx: "automatic",
     // The webview's own kit barrel (chart pieces + `until` + `Explain`), never the full kit.
-    alias: { ...alias, "@waterplane/kit": at("webview/shims/kit.ts") },
+    alias: { ...alias, "@waterplane/kit": at("webview/shims/kit.ts"), "@waterplane/sdk": at("webview/shims/sdk.ts") },
     define: { "process.env.NODE_ENV": JSON.stringify(release ? "production" : "development") },
     loader: { ".css": "css" },
-    plugins: [hintChip, oneReact],
+    plugins: [hintChip, oneReact, phoneReads],
   },
   {
     ...common,

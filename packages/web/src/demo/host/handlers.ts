@@ -506,6 +506,9 @@ export const HANDLERS = {
   "stream.open": DESKTOP,
   "stream.params": DESKTOP,
   "update.apply": UPDATE,
+  "updates.apply": UPDATE,
+  "updates.check": UPDATE,
+  "updates.get": UPDATE,
   "update.check": UPDATE,
   // A re-read answers the reading the demo holds (a scenario's turns move it). The app asks on
   // every screen change, so this is answered quietly like `usage.get`: a toast about the demo's own

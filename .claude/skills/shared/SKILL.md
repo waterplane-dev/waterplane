@@ -156,7 +156,7 @@ barrel, for `sessionWall` (`queuelane`), `cacheLikelyCold` (`costtypes`), `hours
   clock, null when it cannot answer; zone maths via local `Intl` — importing `schedule.ts`/`budget.ts`
   closes a cycle. `spendwarn.ts` is a READOUT (orange/red marks past a chosen threshold) — it holds
   nothing.
-- `sessionbudget.ts` — **a cap on ONE session** ([host.md](../../../docs/notes/host.md#sessionbudgetts--a-sessions-own-budget); tokens, dollars or ≈% of a window; spend = the session's own `ContextSpark` total). **Unknown never trips**: a stale/missing reading, uncalibrated window or unpriced model is `unknown` with a `why`; `sessionBudgetHeld` — the ONE predicate for the phone queue and the intent ladder — is true only for `over`. Separate from the account's `budget.ts`.
+- `sessionbudget.ts` — **a cap on ONE session** ([host.md](../../../docs/notes/host.md#sessionbudgetts--a-sessions-own-budget); tokens, dollars or ≈% of a window; spend = `budgetSparkOf` (a source's `sourceSpendSpark` — its `tok` EXCLUDES agents, so the total is the sum — else the `ContextSpark`); a native unit is not a budget unit). **Unknown never trips**: a stale/missing reading, uncalibrated window or unpriced model is `unknown` with a `why`; `sessionBudgetHeld` — the ONE predicate for the phone queue and the intent ladder — is true only for `over`. Separate from the account's `budget.ts`.
 - `assess.ts` — a BARREL over `assess/` (`sass*`): **what an assessment is ALLOWED to conclude.** Every
   cap is on a COUNT, a citation or a label, **never on the words**: prose past `MAX_PROMPT_CHARS` is
   DROPPED with a note. Names (`headline`, `category`) ride even on `unclear` rows
@@ -233,7 +233,7 @@ barrel, for `sessionWall` (`queuelane`), `cacheLikelyCold` (`costtypes`), `hours
   `DEFAULT_CONTEXT_LIMITS.maxChars`, or `WATERPLANE_CONTEXT_WARN_CHARS`) — not a hardcoded number.
   **Lockstep:** `HEALTH_INDEX_DEFAULT_WARN_CHARS` restates `DEFAULT_CONTEXT_LIMITS.maxChars` (an import
   cycle) and a test pins them equal — change both together. **Wire fields added after the score (`mean`, `cappedBy`, `alert`,
-  `alertText`) are optional: absent = that host did not say.** `healthIndexCommits` is the same formula PER ROW, thinned (every week's last row kept, then min/max per run), and calls no move; `commits` absent = an older host (`healthCommitsAvailability`). **The whole route answer is `healthIndexResponseOf`** (`healthindexresponse.ts`, with `parseHealthRows`): the host's `respond()` and the extension's `healthindexdoc.ts` both call it — never re-derive it beside one. Why absolute and why capped: [host.md](../../../docs/notes/host.md#the-health-score-kept-current-by-healthwatchts).
+  `alertText`) are optional: absent = that host did not say.** `healthIndexCommits` is the same formula PER ROW, thinned (every week's last row kept, then min/max per run), and calls no move; `commits` absent = an older host (`healthCommitsAvailability`). **The whole route answer is `healthIndexResponseOf`** (`healthindexresponse.ts`, with `parseHealthRows`): the host's `respond()` and the VS Code extension's `packages/vscode/src/health/healthindexdoc.ts` both call it — never re-derive it beside one. Why absolute and why capped: [host.md](../../../docs/notes/host.md#the-health-score-kept-current-by-healthwatchts).
 - `hosts.ts` — the multi-host DTO and pure rules (`planHostMigration` idempotent, `planHostSwitch`:
   every copy lands before the bare key it came from is removed).
 - `lanroute.ts` — `decideLanRoute`: the three ANDed gates (saved SSID, a fresh `/api/health`

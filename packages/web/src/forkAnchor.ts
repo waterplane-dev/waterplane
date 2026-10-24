@@ -67,6 +67,18 @@ export interface ForkAnchor {
 }
 
 /**
+ * Is this document the conversation's own exact record? claude's log names its conversation in the
+ * document (`claudeSessionId`); a backend's own record (`"store"`, `"backend"`) does not — the
+ * session's `backendSessionId` is the id, which `runForkRequest` supplies. Only the approximate
+ * `"history"` fallback is never cut (equality, as everywhere: an unknown source reads as exact).
+ * Whether the BACKEND can fork at all is the `fork` cap's call, made before a row is drawn.
+ */
+export function exactLog(doc: TranscriptDoc | null): doc is TranscriptDoc {
+  if (!doc || doc.source === "history") return false;
+  return doc.source !== "jsonl" || !!doc.claudeSessionId;
+}
+
+/**
  * The cut point for a tap on `turn`, or null when there is none.
  *
  * **"Here" is the START of the tapped turn.** The verbs sit on the turn's
@@ -87,7 +99,7 @@ export interface ForkAnchor {
  * Null when nothing logged comes first — there is no conversation to keep.
  */
 export function forkAnchor(doc: TranscriptDoc | null, turn: TranscriptTurn): ForkAnchor | null {
-  if (!doc || doc.source !== "jsonl" || !doc.claudeSessionId) return null;
+  if (!exactLog(doc)) return null;
   if (!isLogTurn(turn) && !isScreenTurn(turn)) return null; // synthesized: see the header
   const i = doc.turns.findIndex((t) => t.id === turn.id);
   if (i < 0) return null;
@@ -110,10 +122,13 @@ export function forkAnchor(doc: TranscriptDoc | null, turn: TranscriptTurn): For
  * the others of the TURN. `Unavailable.tsx` is how they are rendered — a verb
  * that cannot run is not drawn as a control at all.
  */
-export function forkBlocker(doc: TranscriptDoc | null, turn: TranscriptTurn, online: boolean): string | null {
+export function forkBlocker(doc: TranscriptDoc | null, turn: TranscriptTurn, online: boolean, hasId = true): string | null {
+  // A backend's record is readable before the plugin has bound its conversation id: say it here,
+  // where the control is, not in a toast after the tap.
+  if (!hasId) return "this conversation has no id yet, so nothing can be cut from it";
   if (!forkAnchor(doc, turn)) {
-    if (!doc || doc.source !== "jsonl" || !doc.claudeSessionId || (!isLogTurn(turn) && !isScreenTurn(turn))) {
-      return "this turn isn't in the conversation log";
+    if (!exactLog(doc) || (!isLogTurn(turn) && !isScreenTurn(turn))) {
+      return "this turn isn't in the conversation record";
     }
     const i = doc.turns.findIndex((t) => t.id === turn.id);
     const before = doc.turns.slice(0, Math.max(0, i));

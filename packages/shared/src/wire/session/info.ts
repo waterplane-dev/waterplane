@@ -1,7 +1,7 @@
 import type { PeerJobLocalState, PeerJobOrigin, PeerJobSummary } from "../../peer.js";
 import type { AnswerSuggestion, PluginBadge } from "../../plugin.js";
 import type { SessionBudgetInfo } from "../../sessionbudget.js";
-import type { ChannelHealth } from "../../backendsources.js";
+import type { ChannelHealth, SourceSessionSpend } from "../../backendsources.js";
 import type { StandingRule, DetectedPrompt } from "./promptbox.js";
 import type { Effort, PermissionMode, SessionLimit, SessionLogin, ShellLink, SessionAgent, SessionAsk, SessionShell } from "./launch.js";
 import type { ContextSpark } from "./contextspark.js";
@@ -178,6 +178,15 @@ export interface SessionInfo {
    */
   sideChannel?: ChannelHealth;
   /**
+   * Backend contract v2, additive (published by the launch package, WP3): how the core's repo
+   * instructions reached THIS session's CLI (`"none"` = it was not told about the outbox), how
+   * its ask rules hold, and the CLI version against what its backend was measured on.
+   * Absent = an older host, or nobody said.
+   */
+  told?: "plugin-dir" | "env-file" | "config" | "flag" | "none";
+  askRulesVia?: "native" | "gate" | "none";
+  measured?: { versions: string[]; running: string | null };
+  /**
    * True while a turn is IN FLIGHT — the CLI is working, not waiting on you.
    * Exact when `hooked` (UserPromptSubmit → Stop), so it stays true through a
    * long, silent tool run; with no hook pipe it's set on real input and cleared
@@ -284,6 +293,16 @@ export interface SessionInfo {
    * say, never a pass or a trip — `sessionBudgetHeld` is the one predicate.
    */
   budget?: SessionBudgetInfo;
+  /**
+   * (P2) What this session has spent so far in its backend's OWN figures —
+   * `TokenSource.session(s)`, vetted by `sourceSpendProblems` and dropped whole
+   * on any problem. **Present iff the host judges this session's spend from its
+   * backend's source** (a backend that keeps no claude log), so `{at}` with no
+   * figure is "the backend stated none", not zero; absent on every claude
+   * session, whose spend is `contextSpark`'s. `budgetSparkOf` is the one reader.
+   * `native` (Copilot's AI credits) is carried, never converted, never summed.
+   */
+  sourceSpend?: SourceSessionSpend;
   /**
    * Claude CLI's own conversation UUID (`~/.claude/projects/<dir>/<uuid>.jsonl`).
    * Known up front for fresh sessions (we pass --session-id) and exact resumes;

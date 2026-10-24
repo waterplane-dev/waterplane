@@ -8,7 +8,7 @@ import { stamp, took } from "../turnWhen";
 import { track } from "../usage";
 import { TvBlocks } from "./TvBlocks";
 import type { TvModel } from "./useTranscriptView";
-import { Button, Tag } from "../kit";
+import { Button, Tag, RowSub } from "../kit";
 
 /** One turn: its header, the prompt, the notes about how it was sent, its blocks and its foot. */
 export function TvTurn({ m, t }: { m: TvModel; t: TranscriptTurn }) {
@@ -29,7 +29,7 @@ export function TvTurn({ m, t }: { m: TvModel; t: TranscriptTurn }) {
       )}
       <div className="tr-turn-head">
         <span className="tr-n">#{t.n}</span>
-        <span className="row-sub">{clock(t.sentAt)}</span>
+        <RowSub>{clock(t.sentAt)}</RowSub>
         {/* A command the CLI answered itself. It is not a model turn, and
             a reader that let it pass for one would have the conversation
             claim an answer nobody was billed for. `screen` says more:

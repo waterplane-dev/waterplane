@@ -71,7 +71,7 @@ export function AskRulesSettings() {
                 </div>
                 {off && (
                   <div className="set-chips" aria-label={off}>
-                    <span className="set-note">off in (tap a repo to ask there again)</span>
+                    <SetNote as="span">off in (tap a repo to ask there again)</SetNote>
                     {(r.offIn ?? []).map((p) => (
                       <FilterChip key={p} on
                         onClick={() => void ask.save(withOffIn(ask.rules, r.id, p, false), say)}>

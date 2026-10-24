@@ -21,7 +21,7 @@ import { envName, parseRepoHealthProgress } from "@waterplane/shared";
 import type { HealthDoc, HealthRunState } from "../protocol.js";
 import { chooseSource, readScopes, repoSeriesDir } from "./healthsource.js";
 import type { HealthSource } from "./healthsource.js";
-import { foldHealth, gitOnPath, isShallow, NO_GIT_WHY } from "./healthdoc.js";
+import { fallbackGitDirs, foldHealth, gitCandidates, isShallow, NO_GIT_WHY, pickGit } from "./healthdoc.js";
 import type { HealthStepResult, HealthUpdateResult } from "./healthdoc.js";
 import { healthSlug } from "./healthslug.js";
 import { healthIndexOfFile } from "./healthindexdoc.js";
@@ -38,6 +38,8 @@ export interface HealthRunDeps {
   stepMs: () => number;
   /** The directory of VS Code's `git.path`, or null. Searched before PATH and prepended to it. */
   extraPath: () => string | null;
+  /** Dirs tried after PATH (`fallbackGitDirs(process.platform)` when absent; a test passes []). */
+  fallbackGitDirs?: readonly string[];
   onChange: (folder: string) => void;
   now?: () => number;
 }
@@ -73,7 +75,9 @@ interface Slot {
  * Windows needs to start a process at all (SYSTEMROOT), the locale, and a temp dir. No GIT_*:
  * an inherited GIT_DIR or GIT_WORK_TREE would point every command at another repository.
  */
-const ENV_KEEP = new Set(["PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "XDG_CONFIG_HOME", "LANG", "LC_ALL", "TMPDIR", "TEMP", "TMP"]);
+// DEVELOPER_DIR: a shell that points it at the Command Line Tools is how `/usr/bin/git` runs there
+// without Xcode's license; dropping it made the worker's git refuse where the terminal's did not.
+const ENV_KEEP = new Set(["PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "XDG_CONFIG_HOME", "LANG", "LC_ALL", "TMPDIR", "TEMP", "TMP", "DEVELOPER_DIR"]);
 
 export function workerEnv(from: Record<string, string | undefined>, healthDir: string, extraPath: string | null, readFrom: string | null = null): Record<string, string> {
   const env: Record<string, string> = {};
@@ -94,6 +98,8 @@ function repoFileOf(folder: string): string | null {
 export class HealthRun {
   private readonly slots = new Map<string, Slot>();
   private disposed = false;
+  /** The git that ran, per PATH + `git.path` (`envFor`). */
+  private git: { key: string; dir: string } | null = null;
   private readonly now: () => number;
 
   constructor(private readonly d: HealthRunDeps) {
@@ -200,14 +206,26 @@ export class HealthRun {
     return p;
   }
 
-  /** null = git is there (and the env to run with); a string = why nothing can run. */
-  private envFor(folder: string): { env: Record<string, string | undefined> } | { why: string } {
+  /**
+   * The env to run with, its PATH led by a git that RUNS; a string = why nothing can run. The first
+   * `git` on PATH is not enough: on a Mac it is `/usr/bin/git`, a shim that refuses every command
+   * until Xcode's license is accepted, while a terminal's PATH reaches Homebrew's first. A working
+   * pick is kept per PATH + `git.path`; a refusing one is probed again next time, after a fix.
+   */
+  private async envFor(folder: string): Promise<{ env: Record<string, string | undefined> } | { why: string }> {
     const extra = this.d.extraPath();
-    const gitDir = gitOnPath(process.env, extra);
-    if (!gitDir) return { why: NO_GIT_WHY };
     const dir = join(this.d.storageDir, healthSlug(folder));
+    const key = `${extra ?? ""}\0${process.env.PATH ?? ""}`;
+    let gitDir = this.git?.key === key ? this.git.dir : null;
+    if (!gitDir) {
+      const cands = gitCandidates(process.env, extra, this.d.fallbackGitDirs ?? fallbackGitDirs(process.platform));
+      let ok = false;
+      gitDir = await pickGit(cands, async (d) => (ok = await this.gitRuns(workerEnv(process.env, dir, d))));
+      if (!gitDir) return { why: NO_GIT_WHY };
+      this.git = ok ? { key, dir: gitDir } : null;
+    }
     mkdirSync(dir, { recursive: true });
-    return { env: workerEnv(process.env, dir, extra) };
+    return { env: workerEnv(process.env, dir, gitDir) };
   }
 
   /** Cut a torn last row off before the engine reads the file (`seriestail.ts`). */
@@ -216,14 +234,14 @@ export class HealthRun {
   }
 
   private async readSteps(s: Slot, folder: string): Promise<void> {
-    const e = this.envFor(folder);
+    const e = await this.envFor(folder);
     if ("why" in e) return this.noGit(s);
     this.mendTail(s, folder);
     await this.readWith(s, folder, e.env);
   }
 
   private async refreshSteps(s: Slot, folder: string): Promise<void> {
-    const e = this.envFor(folder);
+    const e = await this.envFor(folder);
     if ("why" in e) return this.noGit(s);
     this.mendTail(s, folder);
     const startedAt = this.now();
@@ -270,6 +288,32 @@ export class HealthRun {
     s.doc = null;
     s.why = NO_GIT_WHY;
     s.readAt = this.now();
+  }
+
+  /** `git --version` exits 0 with this env's PATH: the worker's `gitprobe`, so the extension itself
+   *  still starts no process. Anything but a clean 0 within 10 s is "does not run". */
+  private gitRuns(env: Record<string, string | undefined>): Promise<boolean> {
+    return new Promise((resolve) => {
+      let w: Worker;
+      try {
+        w = new Worker(this.d.workerFile, { argv: ["gitprobe"], env, stdout: true, stderr: true });
+      } catch {
+        resolve(false);
+        return;
+      }
+      let done = false;
+      const finish = (ok: boolean): void => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        void w.terminate();
+        resolve(ok);
+      };
+      const timer = setTimeout(() => finish(false), 10_000);
+      w.on("message", (m: { t: string; code?: number }) => { if (m.t === "exit") finish(m.code === 0); });
+      w.on("error", () => finish(false));
+      w.on("exit", () => finish(false));
+    });
   }
 
   /** One engine step in a fresh Worker. Never rejects: a crash is a result with `code: null`. */

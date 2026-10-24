@@ -6,19 +6,18 @@ description: waterplane host — a live session and how words reach it (packages
 # waterplane host — a live session and how words reach it
 
 One live PTY session, end to end: which binary it drives, how words get typed into it and proven to have landed, and what can be read back off the screen afterwards. Router: `host`. Reasoning: [host.md](../../../docs/notes/host.md), [host-architecture.md](../../../docs/notes/host-architecture.md), [plugins.md](../../../docs/notes/plugins.md).
-- `backends/` + `claude.ts` + `claude-local.ts` + `claude-endpoint.ts` + `overhead.ts` + `shell.ts` + `claudemodels.ts` + `claudebin.ts` (src root, not in `backends/`) (+ `packages/extensions/opencode/`) — WHICH binary a session drives, as data. `types.ts` is the descriptor
-  (`bin`/`launchArgs`/`delivery`/`caps`/`models`/`healthScope`); `backends/claude.ts` is today's
+- `backends/` + `claude.ts` + `claude-local.ts` + `claude-endpoint.ts` + `overhead.ts` + `shell.ts` + `claudemodels.ts` + `claudebin.ts` (src root, not in `backends/`) + `derive.ts` (+ `packages/extensions/opencode/`) — WHICH binary a session drives, as data. `types.ts` is the descriptor
+  (`bin`/`prepare`/`delivery`/`caps`/`facts`/`models`/`healthScope`; `prepare` may be async for a plugin and `create()` awaits it before the spawn); `caps` is binary facts only, `facts` the provider table (`{source}`/`{screen}`/`{store}` per fact, first that answers wins), and **`derive.ts` is the ONE reader of it** — every gate asks `derive(b).screen/store/askSource/hooksInBand/keepsClaudeLog`, the wire caps are `wireCaps()` (byte-pinned, `backendinfos.pin.test.mjs`), never a `caps.<reader>` string; `backends/claude.ts` is today's
   behaviour moved verbatim and **the ONE place `WATERPLANE_CLAUDE_BIN` is read**, plus the
   four-mode argv and the `--settings` hook blob. `claudebin.ts` resolves it: knob > PATH > the usual install dirs > bare `claude`; under WSL a Windows-side install is reported, never used. `resolveBackend(id?)`: absent ⇒ claude; an
   **unknown id THROWS, naming it and the known ids** — never `?? claude`, which would spawn
-  something other than what was asked for and say nothing. **`caps` gates whether a reader RUNS,
+  something other than what was asked for and say nothing. **`facts` gates whether a reader RUNS,
   never what it ANSWERS**, so fewer capabilities can only mean absent facts; `healthScope:false`
   files NOTHING with `noteHealth`. An empty `models()` means a free-text field, never a guess. **An unavailable backend is LISTED with a sentence, never hidden.**
   `claude-endpoint.ts`: the KEY never travels in argv, env, a log or the wire (`apiKeyHelper` inside the `--settings` blob; no key ⇒ `ANTHROPIC_AUTH_TOKEN=none`, so the claude.ai credential never reaches a third party; `claudeendpoint.test.mjs`).
   `claude-local.ts`: ABSENT beats borrowed (a 0/failed probe ⇒ absent window and cost, never claude's table); LEAN tools by default (`WATERPLANE_CLAUDE_LOCAL_LEAN`). `overhead.ts`: no entry rather than a neighbour's.
-  `deliver.ts`/`echo.ts` literals are DECLARED here and still owned there — pinned equal by
-  `packages/host/test/backendargs.test.mjs`. A second backend (opencode) is an IN-REPO EXTENSION on `api.backend()`, with its readers on
-  `api.screenReader`/`api.storeReader` (`backends/readers.ts`); its rules are in that extension's README (private).
+  **A launch plan must say `instructionsVia` and `askRulesVia`** (`SessionInfo.told`/`askRulesVia`: the phone says "not told"; `gate` ⇒ `answergate.ts`'s `holdAskRules`, refusing a plugin's answer to a box matching a launch-time rule). The repo text is `reposkill.ts`'s `repoInstructions`, handed in as `req.instructions`, never a plugin's own. **`launchfiles.ts` writes the plan's `files`** (`session:<n>` ⇒ `<state dir>/launch/<hostSessionId>/<n>`; absolute only inside the plugin's `dataDir`; all checked before byte one; never the repo or `~/.<cli>`; boot sweep at 7 days). Slots beyond turns/dialogs: `questions`, `usage` (+`wall` as the `limits` fact), `agents`, `conversations`; `plan` is consumed (`sidechannel.ts` publishes claude's plan box from it, `plan.path` EMPTY — no file; answered by `sourceanswer.ts`'s `answerSourcePlan`: a person's tap only, one verb at most once per plan) and so is `mode` (2.2, `livemode.ts`); `conversations.fork` is consumed by `session.create` (`convfork.ts`), `commands` by `/api/slash?backend=` and `slash.ts`'s `deliveryCommandFacts` (the SESSION's descriptor rule, never claude's list; a listed `local` beats it). `deliver.ts`/`echo.ts` literals are DECLARED here and still owned there — pinned equal by
+  `packages/host/test/backendargs.test.mjs`. opencode (IN-REPO EXTENSION on `api.backend()`; readers `api.screenReader`/`api.storeReader` in `backends/readers.ts`; toolkit `plugins/plugintoolkit/`; rules in its private README) fills 2.2 slots `context.sample().window`, `context.compactions`, `tokens.session`, `commands`, `conversations.remove`; `mode` is absent by measurement.
 - `ptyenv.ts` — the env floor every PTY starts from: launchd inherits almost nothing, so a UTF-8 `LANG` is supplied when the environment has none (a tmux client that cannot conclude UTF-8 flattens `❯` to `_` and prompt detection reads nothing — the `protocol` skill's locale trap) and `USER`/`LOGNAME` are filled (without `USER` a `/usage` scrape never paints the account rows); a value already set is never overwritten; never spawn a PTY from raw `process.env`.
 - `sessions.ts` — `SessionManager`, the facade: the constructor and hub, `create`/`fork`/`register`
   (the ONE PTY wiring), `rediscover`, the lookups and one-line delegations; the rules below live in
@@ -30,7 +29,7 @@ One live PTY session, end to end: which binary it drives, how words get typed in
   `turn.ts`); and one private
   `noteFor` (`health.ts`) gates every `noteHealth` on `healthScope`. Its `--settings` hooks curl `POST /api/hook` (the positive turn-boundary signal; no pipe ⇒ silence heuristics; meaning: `backends/claude-sources.ts`). Limit-exit resurrection is `resume.ts`. **`drive.ts`'s `resize()` and the facade's `create()` FLOOR the
   client's geometry** (rule: `shared` skill, `ptysize.ts`). Clamped, never refused.
-- `sessions/core.ts` + `sessions/knobs.ts` + `sessions/tmux.ts` + `sessions/convid.ts` + `sessions/health.ts` + `sessions/ctxseries.ts` + `sessions/roster.ts` + `sessions/wall.ts` + `sessions/resume.ts` + `sessions/turn.ts` + `sessions/boxes.ts` + `sessions/drive.ts` + `sessions/record.ts` + `sessions/links.ts` + `sessions/livemode.ts` — the first cut of `sessions.ts` into slices
+- `sessions/core.ts` + `sessions/knobs.ts` + `sessions/tmux.ts` + `sessions/convid.ts` + `sessions/health.ts` + `sessions/ctxseries.ts` (also RECORDS a source's series; [host.md](../../../docs/notes/host.md)) + `sessions/roster.ts` + `sessions/wall.ts` + `sessions/resume.ts` + `sessions/turn.ts` + `sessions/idlewatch.ts` + `sessions/boxes.ts` + `sessions/drive.ts` + `sessions/record.ts` + `sessions/links.ts` + `sessions/livemode.ts` — the first cut of `sessions.ts` into slices
   ([host-architecture.md](../../../docs/notes/host-architecture.md); the per-slice ownership inventory: [host.md](../../../docs/notes/host.md#sessions-slices--the-per-slice-ownership-inventory)). `core.ts` is TYPES ONLY: `Session`,
   `LiveMeta`, `ClosedRow`/`RecentRow`, and **`SessionCore` — the one way a `sessions/` slice reaches
   shared state or another slice**. The facade implements it as a PRIVATE object literal whose every
@@ -45,7 +44,7 @@ One live PTY session, end to end: which binary it drives, how words get typed in
   `roster.ts`: **`closedBy` is named by whoever calls `remove`/`kill` (`s.closeBy`); the exit path
   only infers `limit`/`exited` for a session nobody killed; every fact optional, absent = unknown.** The per-session plugin state (toggles, the "let <plugin> answer" switch) is memory only, so a restart puts it back OFF. **File read order: roster's files, then `revived.json`, `limit.json` LAST** (`resume.ts`, then `wall.ts` — `limit.json` LAST; the resume queue's state is reached only through `core`).
   `wall.ts` + `resume.ts`: the auto-continue config, reading a block off screen + log (`checkLimit`), the continue ladder, resurrection of a limit-exited session and `revivedSessionFor`.
-  `boxes.ts`: the two answer walks (`choosePromptBox`, `submitPromptBox`) and the earliest-wins `armPromptCheck`. `turn.ts`: the hook lifecycle and turn flag.
+  `boxes.ts`: the two answer walks (`choosePromptBox`, `submitPromptBox`) and the earliest-wins `armPromptCheck`. `turn.ts`: the hook lifecycle and turn flag. `idlewatch.ts`: output ends idle only when the working line is on the grid (a redraw is not work).
   `record.ts`: the prompt history, the reader's transcript, search, the tab name, `lastTurnOf`. **There is NO per-turn AI
   summary**. **`nameTab()` is the ≤4-word
   name a phone TAB wears** (`SessionInfo.tabTitle`): its ONLY
@@ -74,6 +73,8 @@ One live PTY session, end to end: which binary it drives, how words get typed in
   memory only) and `setMode` (`session.mode`): one shift+tab via `write`, re-read the LIVE grid until
   the footer changes, stop on the target / a repeat (not in the cycle) / 6 presses; refused in words
   with a box open or the footer unreadable; serialised per session (`modeChain`). Never counts positions.
+  A backend whose `mode` fact is a source never reaches the footer: `liveMode` = `current()` checked by
+  `sourceModeProblem`, `setMode` asks `set()` per step on the same ladder ([plugins.md](../../../docs/notes/plugins.md)).
 - `deliver.ts` + `deliver/deliverrun.ts` + `deliver/deliverreturn.ts` + `deliver/deliverknobs.ts` + `deliver/delivertypes.ts` + `deliver/deliverscreen.ts` + `deliver/deliverproof.ts` + `echo.ts` + `composer.ts` — **the one implementation** of "type into a live session like a human, and confirm".
   `echo.ts` is the text rule ("is THIS text in that string", probes, paste chits, the log); `composer.ts` finds the box on rendered rows and hands what it holds to `echo.ts`'s `screenEcho` — it imports `echo.ts`, never the reverse. `deliver.ts` is the facade and the ONLY way in (`local/host-boundary` refuses a `deliver/*` import from outside the folder); `deliver/` holds its halves, MOVED, never copied — `runDelivery` to the echo verdict, its submit tail, the knobs, the types, the composer reader, the log/hook proof ([host-architecture.md](../../../docs/notes/host-architecture.md), "The deliver slices").
   `ok` / `retry` (nothing typed) / `unconfirmed` (written, never seen — never auto-retry) /
@@ -152,6 +153,7 @@ One live PTY session, end to end: which binary it drives, how words get typed in
   `sessions.write`, never a `deliver.ts` fork. Flipping only `interrupt` keeps the latch.
   **The Esc is OWED** (`budgetEscOwed`, persisted): retried on every judge while over
   (`budgetEscDue`) until sent; a person's send, `interrupt` off, a new cap or `ok` settles it.
+  A backend with no claude log is judged from its own `tokens.session` (`readSourceSpend`, `SessionInfo.sourceSpend`); `budgetSparkOf` reads both ends; percent ⇒ `notClaude`, no figure ⇒ `unstated`, both unknown.
   `packages/host/test/sessionbudget.test.mjs`.
 - `limitretry.ts` — the pure retry cadence for a limit-blocked session (`wall.ts`/`resume.ts` ask it): **a weekly wall's cadence must REACH the reset**. A DATED reset is trusted, a bare scraped clock is not. Reasoning: [host.md](../../../docs/notes/host.md#a-weekly-wall-gave-up-the-same-afternoon-it-started).
 - `halt.ts` + `sessions/haltall.ts` — the emergency halt: latch first, then kill. New spawn path ⇒ ask `haltRefusal()`.
@@ -182,6 +184,12 @@ One live PTY session, end to end: which binary it drives, how words get typed in
   `SourceHandle.backendSessionId`, `suspend()`s rather than closes on a tmux detach, and answers
   `sendHold` (`delivery.requiresChannel` + channel not up ⇒ `deliver.ts` returns `retry` with the
   sentence, waiting ≤30 s only while still connecting). `packages/host/test/sidechannel.test.mjs`.
+  `sources.questions` (2.0) publishes the same way as `kind:"question"` (`freeText`, options may be
+  empty), oldest first ACROSS dialogs and questions (`posedAt`); `answerBox` takes `{text}` (phone
+  `promptText` only — the gate never carries words). **`sourceanswer.ts` is the ONE place words reach
+  a session outside `deliver.ts`**: a source's `SourceTyped` (≤1000 chars, no control char, Return
+  only as a second write) typed only while the source holds that question open, a `sent.json` row
+  each (`phone`/`plugin`), no `closed` in 5 s ⇒ `prompt.answerNote`. A `takesText` row answers keys, 500 ms, words, Return apart (2.1, `supports.dialogKeysThenTyped`). A source turn's `ended(at)` waits ≤`CONTEXT_FRESH_MS` for a context sample stamped ≥`at`. `packages/host/test/questions.test.mjs`.
 - `plugins/pluginregistry.ts` + `plugins/pluginloader.ts` + `plugins/pluginapi.ts` + `plugins/pluginfiles.ts` + `plugins/pluginroutes.ts` + `plugins/pluginrpc.ts` + `plugins/pluginstreams.ts` + `plugins/builtin.ts` + `plugins/setupcontrib.ts` — the plugin host.
   Loader: `<config dir>/plugins/*/` + `plugin-paths.json`, `manifestProblems`, host module CONTAINED in its dir. Registry: **a broken plugin is LISTED
   (`state: "error"`, reason verbatim), never skipped, never fatal** — bad manifest, duplicate id,

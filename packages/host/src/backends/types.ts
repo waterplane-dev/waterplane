@@ -11,15 +11,16 @@
  * they belong together.
  *
  * A descriptor is that scattered knowledge, gathered and named. It is DATA plus
- * two functions, deliberately: `bin()` and `launchArgs()` are the only things a
- * backend has to COMPUTE, everything else is a constant or a regex. A third
- * function per backend is a sign this has started growing into a plugin
- * interface, and goes back through review.
+ * a few functions, deliberately: `bin()` and `prepare()` are what a backend
+ * has to COMPUTE to start, and `models()`, `measured.version()` and
+ * `delivery.isLocalCommand` / `startsNoTurn` joined them later; everything
+ * else is a constant or a regex. Another function per backend goes back
+ * through review: it is a sign this is growing into a plugin interface.
  *
  * ── The rule that makes a second backend safe ───────────────────────────────
  *
- * `caps` is read ONLY to decide whether a reader runs at all — never to decide
- * what it answers. This repo's standing rule is that a heuristic degrades to
+ * `caps` and `facts` (through `derive.ts`) are read ONLY to decide whether a
+ * reader runs at all — never to decide what it answers. This repo's standing rule is that a heuristic degrades to
  * null or absent and never to a wrong number, so a backend that declares FEWER
  * capabilities is structurally incapable of making anything WORSE: the context
  * meter that is not armed publishes nothing, and the phone already renders
@@ -31,94 +32,18 @@
  * never a mutation and never a refusal. `resolveBackend()` in `./index.ts` is
  * where an unknown id turns into a sentence a person can act on.
  */
-import type { BackendSources, LaunchOpts, PermissionMode } from "@waterplane/shared";
-import type { PromptReaderName, TranscriptReaderName } from "./readers.js";
-
-/** How a backend takes hook-style lifecycle reporting, if it takes any. */
-export type BackendHooks =
-  /** Injected additively into the launch as a settings blob (`claude --settings <json>`). */
-  | "settings-inject"
-  /** Injected as a plugin/extension the binary loads by itself. */
-  | "plugin-inject"
-  /** No positive turn-boundary signal exists — the session falls back to silence. */
-  | "none";
-
-/**
- * Whether the CLI keeps a conversation record this host can read — and WHICH.
- *
- * Not a boolean, and the reason is the whole point of the enum: every existing
- * gate in `sessions.ts` and `sessions/` tests `=== "claude-jsonl"`, so adding a value here
- * cannot arm a claude-shaped reader against a record it was never written for.
- * A `transcript: true` would have done exactly that, silently, at eleven call
- * sites.
- *
- * `"opencode-db"` is the SQLite store at `~/.local/share/opencode/opencode.db`
- * — global, live, and written by opencode while we read it. Everything that
- * reads it goes through `ocdb.ts`/`octranscript.ts`; nothing in this app writes
- * to it, which is also why `caps.fork` is false for that backend on the wire: a
- * conversation cut at a turn would mean writing new rows into somebody else's
- * database.
- */
-export type BackendTranscript = TranscriptReaderName | "none";
+import type { AskRulesVia, BackendFacts, BackendSources, InstructionsVia, LaunchOpts, PermissionMode } from "@waterplane/shared";
 
 /** Whose slash-command vocabulary the composer is speaking. */
 export type BackendSlash = "claude" | "own" | "none";
 
 /**
- * WHICH box reader this backend's dialogs need — and, like `BackendTranscript`,
- * a name rather than a boolean so that a reader written for one TUI can never be
- * armed against another.
- *
- * `"claude-numbered"` is `prompt.ts`: numbered rows, a `\u276f` cursor, an
- * "Enter to confirm" footer, answered by typing the option's digit.
- * `"opencode-highlight"` is `ocprompt.ts`: unnumbered options on one row with the
- * armed one marked by BACKGROUND COLOUR, answered by walking the selection onto
- * it with the arrow keys and pressing Return. The two share no rule and no
- * keystroke, and every existing gate in `sessions/boxes.ts` asks for the exact name it
- * was written for — so adding a third cannot quietly arm either of these.
- *
- * `false` still means what it always meant: this host reads no dialog on this
- * backend, publishes no box, and the phone SAYS the session must be answered at
- * the terminal rather than greying a control out.
- */
-export type BackendPromptBoxes = false | PromptReaderName;
-
-/**
- * What this backend can be ASKED — never what it answers.
- *
- * Every flag here gates whether a reader is armed at all. See the file header:
- * an absent capability must produce an absent fact, never a manufactured one.
+ * Facts about the BINARY (backend contract v2): what it accepts, never which reader answers
+ * what. Every question about READERS — is there a transcript, which box reader, is there a
+ * context gauge, an account limit, a box-less question — is `facts` now, asked through
+ * `derive.ts`, so a cap and a source can never disagree.
  */
 export interface BackendCaps {
-  /** How lifecycle events (turn start/end) get back to the host, if at all. */
-  readonly hooks: BackendHooks;
-  /** The TUI prints a context gauge this host knows how to read. */
-  readonly contextMeter: boolean;
-  /** The TUI prints account usage-limit notices this host knows how to read. */
-  readonly usageLimits: boolean;
-  /** The binary can be driven to print an account usage report on demand. */
-  readonly usageProbe: boolean;
-  /** What conversation log, if any, sits on disk for this backend. */
-  readonly transcript: BackendTranscript;
-  /** Whose slash commands the composer accepts. */
-  readonly slash: BackendSlash;
-  /** Which box reader, if any, can read this TUI's choice/permission dialogs. */
-  readonly promptBoxes: BackendPromptBoxes;
-  /** The turn can end on a question with no box (`question.ts`'s signal). */
-  readonly asking: boolean;
-  /** The binary accepts a remote-control flag. */
-  readonly remoteControl: boolean;
-  /** The binary accepts a reasoning-effort flag. */
-  readonly effort: boolean;
-  /** The permission modes this binary accepts, in the order they are offered. */
-  readonly permissionModes: readonly PermissionMode[];
-  /**
-   * How a conversation can be forked, when `transcript` alone does not say.
-   * `"server"` = the backend forks it itself (opencode's `POST /session/{id}/fork`);
-   * `"jsonl"` = `convfork.ts` copies the file; absent/false = from `transcript`
-   * as today. `forkAtTurnRefusal` and the wire `fork` cap read it.
-   */
-  readonly forkVia?: "jsonl" | "server" | false;
   /**
    * The session has TURNS: words go in, the binary works, then it stops at its
    * prompt again. False = a plain shell (`shell.ts`), where silence is not a
@@ -128,6 +53,16 @@ export interface BackendCaps {
    * Gates whether those readers run, never what they answer.
    */
   readonly turns: boolean;
+  /** Whose slash commands the composer accepts. */
+  readonly slash: BackendSlash;
+  /** The reasoning-effort ladder the binary accepts, in order; absent = no knob. */
+  readonly effort?: readonly string[];
+  /** The permission modes this binary accepts, in the order they are offered. */
+  readonly permissionModes: readonly PermissionMode[];
+  /** 2.2: the subset of `permissionModes` a session can START in; absent = all of them (`launchModesOf`). */
+  readonly launchModes?: readonly PermissionMode[];
+  /** The binary accepts a remote-control flag. */
+  readonly remoteControl: boolean;
 }
 
 /**
@@ -190,8 +125,16 @@ export interface BackendDelivery {
    * backend draws no such hint, or draws it dim.
    */
   readonly composerPlaceholderRe?: RegExp | null;
-  /** The first-launch "do you trust this directory" dialog, squashed. */
+  /** The first-launch "do you trust this directory" dialog, squashed. Read by `derive.ts`'s
+   *  `trustRule`: delivery refuses in words while it (or claude's words) is on screen. */
   readonly trustPromptRe: RegExp | null;
+  /**
+   * Delivery may ANSWER that box itself (`deliver/deliverrun.ts`, `trustKeys`) and auto-fire may
+   * walk into it. Only `backends/claude.ts` sets it (claude-local and claude-endpoint spread it);
+   * a plugin's `delivery` can never carry it (`pluginapi.ts`'s `normDelivery` builds a fresh
+   * object). Absent ⇒ another CLI's trust question is a person's call: nothing typed.
+   */
+  readonly autoAcceptsTrust?: boolean;
   /**
    * Is this text a command the TUI handles ITSELF, by opening a VIEW?
    *
@@ -237,18 +180,31 @@ export interface LaunchRequest {
   readonly hostSessionId?: string;
   /**
    * Fork `resumeSessionId` AT this turn (`TranscriptTurn.id`) rather than whole —
-   * only for a backend whose server forks (`caps.forkVia: "server"`); a claude
+   * only for a backend whose server forks (`forkVia: "server"`); a claude
    * fork-at-turn is a file copy done before the launch and never reaches here.
    */
   readonly forkAtTurn?: string;
   /**
    * Claude Code permission rules this launch must ASK before running
-   * (`shared/askrules.ts`, already cut for this repo). Only the claude backends
-   * read it (`permissions.ask` in the `--settings` blob); absent/empty ⇒ the
-   * launch is byte-identical to one made before ask rules existed.
+   * (`shared/askrules.ts`, already cut for this repo). The claude backends put them
+   * in the `--settings` blob (`permissions.ask`, `askRulesVia: "native"`); a plugin
+   * answering `"gate"` has the answer gate hold them (`answergate.ts`). Absent/empty ⇒
+   * the launch is byte-identical to one made before ask rules existed.
    */
   readonly askRules?: readonly string[];
+  /**
+   * The core's repo-facing text (`reposkill.ts`'s `repoInstructions`, the ONE text
+   * every agent is told: outbox, inbox, builds, screenshots). claude ignores it — its
+   * copy is the `--plugin-dir` plugin, written from the same text; a plugin backend
+   * says how it reached its CLI (`instructionsVia`). Absent = "" (a test, `--doctor`).
+   */
+  readonly instructions?: string;
 }
+
+/** One file the HOST writes before the spawn (`launchfiles.ts`): `session:<name>` lands in
+ *  `<state dir>/launch/<hostSessionId>/<name>`; an absolute path only inside the plugin's
+ *  `dataDir`. Anything else refuses the launch in words. */
+export interface LaunchFile { readonly path: string; readonly content: string; readonly mode?: number }
 
 export interface LaunchPlan {
   /** argv after the binary. */
@@ -330,6 +286,21 @@ export interface LaunchPlan {
    * PTY's own process. `bin()` keeps naming the CLI (version, doctor, exit report).
    */
   readonly exec?: string;
+  /**
+   * How the core's instructions reached the CLI — published as `SessionInfo.told`, so a
+   * session that was NOT told about the outbox (`"none"`) says so on the phone.
+   */
+  readonly instructionsVia: InstructionsVia;
+  /** How the ask rules hold: the CLI's own policy (`native`), the host's answer gate on
+   *  the dialogs it poses (`gate`), or not at all (`none`) — `SessionInfo.askRulesVia`. */
+  readonly askRulesVia: AskRulesVia;
+  /**
+   * Files the host writes BEFORE the spawn (`launchfiles.ts`). An `env` value item
+   * spelled `session:<name>` (comma-separated items, each on its own) names one of them
+   * by its absolute path — how a CLI that reads instructions from a directory
+   * (`COPILOT_CUSTOM_INSTRUCTIONS_DIRS`, `instructionsVia: "env-file"`) is pointed at it.
+   */
+  readonly files?: readonly LaunchFile[];
 }
 
 /** The model catalogue a launch may choose from. */
@@ -416,10 +387,28 @@ export interface BackendDescriptor {
    * person's config file — which this app must not edit.
    */
   readonly spawnEnv: Readonly<Record<string, string>>;
-  /** argv for one launch, plus the conversation id if it is knowable now. */
-  launchArgs(req: LaunchRequest): LaunchPlan;
+  /**
+   * argv for one launch, plus the conversation id if it is knowable now, how the
+   * instructions and ask rules reach the CLI, and the files to write first. A core
+   * backend answers SYNCHRONOUSLY, so `SessionManager.create()` spawns and registers
+   * its session before its first `await` (the slot rung counts sessions that exist —
+   * `intents/ladder.ts`); a plugin's `prepare()` is awaited. A refusal is a thrown sentence.
+   */
+  prepare(req: LaunchRequest): LaunchPlan | Promise<LaunchPlan>;
   readonly delivery: BackendDelivery;
   readonly caps: BackendCaps;
+  /**
+   * Which provider answers each fact, in order (`@waterplane/shared`'s `BackendFacts`): the
+   * backend's own channel (`{source:true}` ⇒ `sources.<slot>`), a named screen reader, a named
+   * store reader. Every reader gate in the host asks `derive(descriptor)` (`derive.ts`); a fact
+   * with no provider is ABSENT. Names are checked at registration (`registry.ts`).
+   */
+  readonly facts: BackendFacts;
+  /** The backend forks a conversation on its OWN server (opencode's `POST /session/{id}/fork`).
+   *  A claude fork is `convfork.ts`'s file copy, implied by the `claude-jsonl` transcript. */
+  readonly forkVia?: "server";
+  /** The CLI versions its facts were measured on, and the running one (plugins; core leaves it out). */
+  readonly measured?: { readonly versions: readonly string[]; version(): Promise<string | null> };
   /**
    * What this backend may be launched with. An EMPTY catalogue means "ask the
    * person", i.e. a free-text field — never a guessed list, because a wrong
@@ -446,8 +435,8 @@ export interface BackendDescriptor {
   readonly healthScope: boolean;
   /**
    * A source per fact, beside the screen readers (`@waterplane/shared`'s
-   * `backendsources.ts`). Absent = exactly today's backend. `caps` still says
-   * the fact EXISTS; a source only adds a higher rung for it.
+   * `backendsources.ts`). Absent = exactly today's backend. A slot is asked only where
+   * `facts` lists `{source:true}` for it (`derive.ts`'s `askSource`).
    */
   readonly sources?: BackendSources;
   /** From an extension its manifest marks experimental — the phone labels it (`BackendInfo.experimental`). */
@@ -458,4 +447,11 @@ export interface BackendDescriptor {
    * it (`answergate.ts`) — never by the backend id, which a second plugin may also declare.
    */
   readonly plugin?: string;
+  /** That plugin's own data dir (`api.dataDir`): the one place outside the launch dir a
+   *  `LaunchPlan.files` entry may name by absolute path (realpath-contained). */
+  readonly dataDir?: string;
 }
+
+/** A core backend: its plan is decided synchronously (`prepare` returns no promise), so
+ *  tests and the claude variants read it at once and `create()` spawns before its first `await`. */
+export type CoreBackendDescriptor = Omit<BackendDescriptor, "prepare"> & { prepare(req: LaunchRequest): LaunchPlan };

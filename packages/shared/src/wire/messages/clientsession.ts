@@ -132,6 +132,17 @@ export type ClientSessionMsg =
   // it. `data` is ignored when this is present and is sent as "" — the field is
   // not optional on the message, and inventing a keystroke to fill it would put
   // one on the wire that must never be typed.
+  //
+  // `promptText` (optional, with `expectPrompt`; contract 2.0): TYPED WORDS answering a box
+  // the CLI posed on its own channel — a `kind: "question"` box with `freeText` (alone, or
+  // with `promptChoice` naming an option), or a dialog row with `takesText` (with
+  // `promptChoice`). One line, at most `ANSWER_TEXT_MAX` (1000) characters, no control
+  // character (`answerTextProblem`, asked on both ends). It is an ANSWER, never a prompt:
+  // the host hands it to the CLI's own channel through the one answer dispatcher
+  // (`answerBox`), and types it only if the CLI asks for that, into its own form
+  // (`SourceTyped`) — never into the composer, never through `deliver.ts`. A box that takes
+  // no typed answer refuses it in words, nothing typed. Additive (PROTOCOL_VERSION stays 2):
+  // an older host never publishes a box that takes one, so the phone never offers the field.
   /**
    * `cwd` is the repo the prompt was composed for, and it exists for ONE case:
    * the session is gone by the time the text arrives.
@@ -146,7 +157,7 @@ export type ClientSessionMsg =
    * Optional because it is a hint, not a target: a delivery into a LIVE session
    * never reads it, and a client that does not send it gets the old refusal.
    */
-  | ({ t: "session.input"; id: string; data: string; ackId?: string; submit?: boolean; expectPrompt?: string; promptSubmit?: boolean; promptChoice?: number; cwd?: string; view?: SendView } & SendStamp)
+  | ({ t: "session.input"; id: string; data: string; ackId?: string; submit?: boolean; expectPrompt?: string; promptSubmit?: boolean; promptChoice?: number; promptText?: string; cwd?: string; view?: SendView } & SendStamp)
   /**
    * "What actually became of these deliveries?" — asked about sends the host
    * already answered `unconfirmed` or `unsubmitted`.

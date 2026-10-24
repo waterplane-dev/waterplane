@@ -151,7 +151,8 @@ html[data-layout="wide"] .ws-beside { container: beside / inline-size; }
 @container beside (max-width: 760px) {
   .annot-body.place-auto { flex-direction: row; }
   .annot-body.place-auto > .annot-tools {
-    flex-direction: column; flex-wrap: nowrap; overflow-x: hidden; overflow-y: auto;
+    display: grid; grid-auto-flow: column; grid-template-rows: repeat(auto-fill, 44px); grid-auto-columns: 44px;
+    justify-items: center; align-content: start; overflow: hidden;
     padding: var(--sp-6); gap: var(--sp-6); border-bottom: 0; border-right: 1px solid var(--line); flex: 0 0 auto;
   }
   .annot-body.place-auto > .annot-tools > .key { padding: 0; width: 44px; }
@@ -176,7 +177,7 @@ html[data-layout="wide"] .ws-side :is(.row-chip, .row-act.count) {
 html[data-layout="wide"] .ws-side :is(.row-meta, .repo-sub, .row-tags) { min-width: 0; flex-wrap: wrap; }
 /* The corner group's grip (`useCornerDrag`): the browser must not pan or
    scroll the terminal under a finger that is dragging the group. */
-.term-zoom .term-zoom-grip { touch-action: none; cursor: grab; padding: var(--sp-4) var(--sp-2); }
+.term-zoom .term-zoom-grip { touch-action: none; cursor: grab; min-width: 28px; padding: 0 var(--sp-2); }
 .term-zoom .term-zoom-grip:active { cursor: grabbing; }
 
 /* ── Desktop workspace, phase 3 (P3c): the wide window finished ───────────
@@ -190,7 +191,7 @@ html[data-layout="wide"] .ws-side :is(.row-meta, .repo-sub, .row-tags) { min-wid
    from the scroller's CONTENT edge, inside that padding. `top: var(--ws-strips)`
    counted the strips twice and pushed the head 62px down over the sheet's
    first row (the annotator's whole toolbar). */
-html[data-layout="wide"] .ws-panel > .sheet > .sheet-head { position: sticky; top: 0; z-index: 3; }
+html[data-layout="wide"] .ws-panel > .sheet > .sheet-head,
 html[data-layout="wide"] #root > .ws-side + .sheet > .sheet-head { position: sticky; top: 0; z-index: 3; }
 
 /* The sidebar's session card is the PHONE's card (the grid in the base
@@ -203,14 +204,14 @@ html[data-layout="wide"] #root > .ws-side + .sheet > .sheet-head { position: sti
    - a card with NO prompt (a fresh session) would be the right-hand column
      alone, 220px tall over an empty left half: its outline and chart sit on
      one line beside the verbs instead. */
-html[data-layout="wide"] .ws-side .row-wrap[data-sid] .row-head { flex-wrap: wrap; row-gap: var(--sp-2); }
-html[data-layout="wide"] .ws-side .row-wrap[data-sid]:has(.row-gist:empty) {
+html[data-layout="wide"] .ws-side .row-wrap:is([data-sid], .closed-card) .row-head { flex-wrap: wrap; row-gap: var(--sp-2); }
+html[data-layout="wide"] .ws-side .row-wrap:is([data-sid], .closed-card):has(.row-gist:empty) {
   grid-template-areas: "head stat" "side ctl" "tags tags"; grid-template-rows: auto;
 }
-html[data-layout="wide"] .ws-side .row-wrap[data-sid]:has(.row-gist:empty) .row-side {
+html[data-layout="wide"] .ws-side .row-wrap:is([data-sid], .closed-card):has(.row-gist:empty) .row-side {
   justify-self: start; flex-direction: row; flex-wrap: wrap; align-items: center;
 }
-html[data-layout="wide"] .ws-side .row-wrap[data-sid] .row-gist:empty { display: none; }
+html[data-layout="wide"] .ws-side .row-wrap:is([data-sid], .closed-card) .row-gist:empty { display: none; }
 /* The sidebar's top bar: logo and the icon keys first, the usage meter LAST.
    Left in source order it wrapped after the meter, stranding bell, settings
    and Desktop on a ragged second row. Last, at its content basis and free to

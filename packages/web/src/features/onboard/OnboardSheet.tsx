@@ -113,11 +113,11 @@ export function OnboardSheet() {
             <input className="search" placeholder="one line: what should the app do?" value={answers.description}
               onChange={(e) => set({ description: e.target.value })} aria-label="description" />
           )}
-          <div className="set-note">
+          <SetNote>
             {answers.describe
               ? "The hello world is built first, so the tools are proven; then your line is the new session's first prompt."
               : "A working hello world, built from a template. Changing it is your first prompt."}
-          </div>
+          </SetNote>
         </div>
         <div className="set-group">
           <div className="onb-q">Where does it run?</div>
@@ -129,19 +129,19 @@ export function OnboardSheet() {
               <AppWindow size={14} /> web page
             </Button>
           </div>
-          <div className="set-note">
+          <SetNote>
             {answers.path === "android"
               ? "Needs the Android build tools on the desktop; the next screen says what is missing before anything is downloaded."
               : "Needs nothing installed. The page opens in the gallery here."}
-          </div>
+          </SetNote>
         </div>
         <div className="set-group">
-          <Button className={`onb-tick ${answers.setup ? "active" : ""}`} onClick={() => set({ setup: !answers.setup })}>
+          <Button className={`onb-tick${answers.setup ? " active" : ""}`} onClick={() => set({ setup: !answers.setup })}>
             {answers.setup ? <CheckSquare size={14} /> : <Square size={14} />} set this repo up for the phone (recommended)
           </Button>
           <SetNote>The setup checklist's one-tap fixes, run as one step.</SetNote>
         </div>
-        {error && <div className="set-group"><div className="set-note warn" role="alert">{error}</div></div>}
+        {error && <div className="set-group"><SetNote className="warn" role="alert">{error}</SetNote></div>}
       </div>
     </Sheet>
   );
@@ -183,7 +183,7 @@ function Consent({ plan, canInstall, title, icon, onBack, onWeb, onStarted }: {
             installed before you tap it. Cancel goes back to the questions.
           </SetNote>
         </div>
-        {plan.signIn && <div className="set-group"><div className="set-note warn" role="status">{plan.signIn}</div></div>}
+        {plan.signIn && <div className="set-group"><SetNote className="warn" role="status">{plan.signIn}</SetNote></div>}
         <div className="set-group onb-lines">
           {rows.map((r) => <ConsentLine key={r.id} row={r} on={ticks[r.id] === true}
             onToggle={() => setTicks((t) => ({ ...t, [r.id]: t[r.id] === true ? false : true }))}
@@ -193,7 +193,7 @@ function Consent({ plan, canInstall, title, icon, onBack, onWeb, onStarted }: {
           <div className="onb-q">Then, in order</div>
           <ol className="onb-steps">{plannedSteps(plan).map((w, i) => <li key={i}>{w}</li>)}</ol>
         </div>
-        {error && <div className="set-group"><div className="set-note warn" role="alert">{error}</div></div>}
+        {error && <div className="set-group"><SetNote className="warn" role="alert">{error}</SetNote></div>}
       </div>
     </Sheet>
   );
@@ -283,7 +283,7 @@ function Progress({ job, onAnother }: { job: OnboardJob; onAnother(): void }) {
             </div>
           );
         })}
-        {error && <div className="set-note warn" role="alert">{error}</div>}
+        {error && <SetNote className="warn" role="alert">{error}</SetNote>}
       </div>
       {job.state === "stopped" && (
         <div className="set-group">
@@ -300,7 +300,7 @@ function Progress({ job, onAnother }: { job: OnboardJob; onAnother(): void }) {
           )}
           {switchOff && (
             <>
-              <div className="set-note warn">{INSTALL_SWITCH_OFF}</div>
+              <SetNote className="warn">{INSTALL_SWITCH_OFF}</SetNote>
               <Button onClick={() => void openInstallSwitch()}><Smartphone size={14} /> open Android's setting</Button>
             </>
           )}

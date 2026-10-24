@@ -3,6 +3,37 @@
 Notable changes. This project has no release branches — `main` is the supported
 version — so entries are grouped by the release they shipped in.
 
+## 0.1.5
+
+### New
+
+- **A plugin manager on the phone.** Settings › Tools › plugins lists the plugins published in the waterplane-dev GitHub organisation, each with a maturity label. Install one, update one, or add a plugin by its repository URL. Only plugins with no dependencies of their own can be installed this way, and nothing installs or updates by itself: every change waits for your tap and ends in a receipt.
+- **Update waterplane from the phone.** For installs made with `install.sh`, Settings › Tools › updates has an update button and a roll-back to the previous version, and says when the restart is done. The desktop checks once a day for a new version; that check can be switched off. Installs from npm or a git checkout show the exact command to run instead of a button.
+- **The GitHub Copilot CLI plugin is available as a preview.** Install it from the plugin manager to drive Copilot sessions from the same phone: its launch modes, slash commands, plan box, context window and usage show up where they do for `claude`, and the conversation archive lists its conversations too. What a backend cannot do is said in words next to the control instead of the control being greyed out.
+- **"When idle" on the CLI restart banner.** Arm a restart of the CLI and it fires once the session has nothing running.
+- **The words in a marked area, read on the phone.** A new optional extension, text in marks (off until you switch it on), reads the text inside a highlight, box or circle you draw in the annotator (English and German) and writes it into that mark's note, unless you have already typed one. Switching it on downloads its engine (about 8 MB) from your desktop once; the reading runs on the phone.
+- **Send offers to restart onto the newer `claude` first.** When a session still runs an older `claude` than the one installed, a plain Send asks: "Restart, then send" reopens the same conversation on the new version with your words as its first prompt; "Send on <old>" sends as before and is not asked again for that version.
+- **The context sheet has a Skills chart.** It shows which skills entered a window, when, and what brought them in.
+- **Closed sessions look like open ones.** "Recently closed" in the launcher and the conversation archive draw each row as the session's own card, including the context spark it ended with.
+- **Small things.** A day axis on a chart names days (one dated tick per day, not 12:00 / 00:00). The files viewer shows the token and character count of instruction files. The annotator toolbar picks the top or the left edge, whichever leaves the picture larger, and wraps instead of scrolling. The floating terminal toolbar has uniform 36 px buttons. The Android app follows the phone's light or dark setting. Back from the annotator on a desktop, the caret is at the end of the compose box. A skill's description is read the way a YAML loader reads it, so the context weight no longer counts a skill with a byte-order mark or a quoted key as all body.
+- **VS Code extension 0.6.0 and 0.6.1.** All sessions shows the same token stats as the phone, with live limits from a local desktop, and token stats work on a machine with Copilot and no Claude Code. In 0.6.1 the Copilot row opens Copilot Chat's token use without asking to sign in to GitHub.
+
+### Fixes
+
+- **Repo readings work on an installed release.** 0.1.4's release left out a file the health engine imports, so every reading on an `install.sh` or npm install failed with `ERR_MODULE_NOT_FOUND`. The release build now refuses to ship an engine with a missing import.
+- **Re-running `install.sh` says what it did.** It names the run up front and at the end: a first install, an update from the version you had ("updated 0.1.4 -> 0.1.5"), or the same version again because there is nothing newer.
+- **Starting a session on a desktop without Claude Code now says so.** You get "Claude Code isn't installed" and how to install it, instead of a bare "[exited]".
+- **A session started while its CLI is being updated says so.** A package-manager upgrade removes the command for a few minutes; a session opened then (Claude Code, opencode or any other backend) is refused with "being updated, start it again once it is done" instead of `[exited]`, and the update button will not start a second install over one already running.
+- **Security hardening (third pass).** Repo files that are links pointing out of the repo are refused rather than followed (inbox, outbox, `.env`, screenshots). A repo's own committed health engine, and the build listings a repo supplies, run only after a one-time approval you give. Thumbnails run under a deny policy. Origin and Host checks, the login rate limit and device-token minting are tighter, the release APK is no longer remote-debuggable or backed up, and several commands no longer pass values through a shell.
+- **Answers and queue rows say what happened.** An answer is shown as queued only when the link is down, a failed queue row says it needs trying again, and a question cut at the host's length cap is marked as cut.
+- **Unavailable controls say why in text** instead of being greyed out.
+- **Idle and agent state is steadier.** A redraw over an idle prompt no longer clears "idle", an agent that woke after its notification ends when the CLI marks it finished, and a dynamic workflow's agents are read so the reader stops saying idle over one.
+- **Dictation comes back after a dropped link.** The desktop's speech recogniser is asked again when the link returns.
+- **A `tmux kill-server` typed inside a session can no longer kill the host's own tmux server.**
+- **Repo readings:** the worktree toggle is gone (a worktree's readings are its repo's history again), and a pending health approval holds both verbs in one box.
+- **A gated desktop's refusal to a tokenless probe counts as an answer** on the LAN route, so the host is no longer shown as unreachable.
+- **A header pin for a plugin is one icon that opens its menu**, not the whole panel. The setup button for the build list reads "write build list", with what it writes said in text under the finding.
+
 ## 0.1.4
 
 0.1.3 was tagged but never published; its notes below ship with this release.

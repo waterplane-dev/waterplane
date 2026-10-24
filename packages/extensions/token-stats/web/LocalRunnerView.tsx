@@ -10,7 +10,7 @@
 import { useState } from "react";
 import type { LocalUsageDoc } from "@waterplane/shared";
 import { localUsageNotes } from "@waterplane/shared";
-import { Empty, type RemoteResource } from "@waterplane/kit";
+import { Empty, type RemoteResource, Button } from "@waterplane/kit";
 import { NumRow } from "./LedgerParts.tsx";
 import { RUNNER_SPANS, runnerDayRows, runnerViews, spanFromDay, type RunnerModelView, type RunnerSpan } from "./localRunner.ts";
 
@@ -76,7 +76,7 @@ export function LocalRunnerView({ res }: { res: RemoteResource<LocalUsageDoc> })
           <div className="ts-filter">
             <span className="empty">over</span>
             {RUNNER_SPANS.map((s) => (
-              <button key={s.id} className={`key${span === s.id ? " active" : ""}`} onClick={() => setSpan(s.id)}>{s.label}</button>
+              <Button key={s.id} className={span === s.id ? "active" : undefined} onClick={() => setSpan(s.id)}>{s.label}</Button>
             ))}
           </div>
           {views.length === 0 && ok.days.length > 0 && <div className="empty ts-caveat">Nothing recorded in this span — a wider one has days.</div>}

@@ -45,6 +45,10 @@
  *    inside the Android shell — so in the APK this store IS the offline grid
  *    (thumbCache.ts).
  *
+ *  - `extassets` (v13) — keyed `<extension id>/<file>`: an extension's downloaded
+ *    engine (the OCR reader's worker, wasm and language data) as Blobs. Not Cache
+ *    Storage: the APK has no service worker and plain http has no Cache API.
+ *
  * Everything here is store-agnostic on purpose — a third store is a DB_VERSION
  * bump plus one more `createObjectStore` call in `upgrade()` and nothing else.
  *
@@ -84,7 +88,7 @@ function afterMigration(db: IDBDatabase): Promise<IDBDatabase> {
   const copy = copyLegacyStores(db, thisLegacyDbNames()).catch(() => { /* best-effort */ });
   return Promise.race([copy, new Promise((r) => setTimeout(r, MIGRATE_WAIT_MS))]).then(() => db);
 }
-const DB_VERSION = 12;
+const DB_VERSION = 13;
 
 function upgrade(db: IDBDatabase) {
   if (!db.objectStoreNames.contains("transcripts")) db.createObjectStore("transcripts");
@@ -146,6 +150,12 @@ function upgrade(db: IDBDatabase) {
   // is why a dictation into a dead tunnel is now a wait instead of a loss
   // (dictateHold.ts).
   if (!db.objectStoreNames.contains("dictations")) db.createObjectStore("dictations");
+  // v13 — an extension's downloaded ENGINE files (`sdk/extAssets.ts`), keyed `<id>/<file>`: the
+  // OCR reader's worker, wasm core and language data, fetched once from the desktop when the
+  // person switches the extension on. Here and not in Cache Storage because the Android shell
+  // registers no service worker and a plain-http page has no Cache API at all. Re-fetchable, but
+  // megabytes; the extension's own row deletes them when it is switched off.
+  if (!db.objectStoreNames.contains("extassets")) db.createObjectStore("extassets");
 }
 
 let dbPromise: Promise<IDBDatabase | null> | null = null;
@@ -252,9 +262,9 @@ async function run<T>(store: string, mode: IDBTransactionMode, op: (s: IDBObject
 export const idbGet = <T,>(store: string, key: string): Promise<T | null> =>
   run<T>(store, "readonly", (s) => s.get(key));
 
-export const idbSet = async (store: string, key: string, value: unknown): Promise<void> => {
-  await run(store, "readwrite", (s) => s.put(value, key));
-};
+/** True when the write landed (`put` answers the key); false on any failure — quota above all. */
+export const idbSet = async (store: string, key: string, value: unknown): Promise<boolean> =>
+  (await run(store, "readwrite", (s) => s.put(value, key))) !== null;
 
 export const idbDel = async (store: string, key: string): Promise<void> => {
   await run(store, "readwrite", (s) => s.delete(key));

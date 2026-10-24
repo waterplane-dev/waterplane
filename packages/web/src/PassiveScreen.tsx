@@ -6,6 +6,7 @@ import { passiveApi } from "./passiveApi";
 import { passiveRows, passiveRowText, relockDelayMs } from "./passiveMode";
 import { hhmm } from "./format";
 import { showToast } from "./toast";
+import { Button } from "./kit/Button";
 
 /** How often the passive screen asks the desktop for new builds while visible. */
 const CHECK_MS = 60_000;
@@ -55,15 +56,18 @@ export function PassiveScreen({ onUnlocked }: { onUnlocked: (until: number) => v
       <div className="auth-card">
         <div className="auth-title"><Package size={16} style={{ verticalAlign: "-3px" }} /> Apps</div>
         {rows.length === 0 && (
+          // raw: SetNote lives in SettingsKit, which brings the settings catalogue into the passive (kids') screen
           <div className="set-note">No new app builds right now. New ones download here by themselves.</div>
         )}
         {rows.map((r) => (
           <div key={r.item.id} className="passive-row">
             <div className="passive-name">{r.item.name}</div>
+            {/* raw: SetNote lives in SettingsKit, which brings the settings catalogue into the passive (kids') screen */}
             <div className="set-note">{r.item.repoName} · {passiveRowText(r)}</div>
           </div>
         ))}
         <div className="passive-foot">
+          {/* raw: SetNote lives in SettingsKit, which brings the settings catalogue into the passive (kids') screen */}
           <span className="set-note">
             {reach === "unreachable"
               ? `Desktop not reachable${checkedAt ? ` — last check ${hhmm(checkedAt)}` : ""}`
@@ -116,10 +120,11 @@ function PinForm({ onCancel, onUnlocked }: { onCancel: () => void; onUnlocked: (
         onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 12))}
         aria-label="unlock PIN"
       />
-      <button type="submit" className="key primary" title="unlock for 30 minutes">
+      <Button variant="primary" type="submit" title="unlock for 30 minutes">
         {busy ? "checking…" : "unlock"}
-      </button>
-      <button type="button" className="key" onClick={onCancel}>not now</button>
+      </Button>
+      <Button type="button" onClick={onCancel}>not now</Button>
+      {/* raw: SetNote lives in SettingsKit, which brings the settings catalogue into the passive (kids') screen */}
       {why && <div className="set-note" style={{ color: "var(--dead)" }}>{why}</div>}
     </form>
   );

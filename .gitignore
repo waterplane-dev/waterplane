@@ -4,6 +4,8 @@ dist/
 .DS_Store
 .env
 .env.local
+.env.*
+!.env.example
 packages/*/dist/
 dist-release/
 dist-demo/
@@ -25,8 +27,10 @@ dist-demo/
 # upload key must never be committed (packages/app/README.md, Build).
 *.jks
 *.keystore
-keystore-dev.properties
-keystore-play.properties
+keystore*.properties
+*.p12
+*.pfx
+local.properties
 
 # waterplane phone↔repo transport — do not commit
 .claude/inbox
@@ -36,3 +40,6 @@ keystore-play.properties
 
 # Python bytecode (the vault test imports cli/client/wp_secret.py)
 __pycache__/
+
+# The OCR extension engine, copied from node_modules at build (packages/extensions/ocr/scripts/build-assets.mjs).
+packages/extensions/ocr/assets/

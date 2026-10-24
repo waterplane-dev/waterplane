@@ -35,8 +35,15 @@
          the same APK laid out one way on one phone and the other way on the
          next, and on the newer phone the app's own top strip ran under the
          clock and the battery. Edge-to-edge is now entered on purpose and the
-         insets are handled once, in one place, for every version. -->
-    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.NoActionBar">
+         insets are handled once, in one place, for every version.
+
+         The parent is DayNight on purpose. From targetSdk 33 the WebView answers
+         prefers-color-scheme from this theme's isLightTheme, not from the phone:
+         a plain (dark) AppCompat parent made "follow device" read dark on a phone
+         set to light. DayNight flips isLightTheme with the phone's night mode;
+         the colours below stay pinned, and the page repaints them per theme
+         (applyBarAppearance). -->
+    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>

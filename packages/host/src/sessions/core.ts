@@ -14,12 +14,13 @@
 import type { IPty } from "node-pty";
 import type {
   ClosedBy, ClosedSession, CliSignalId, DetectedPrompt, HealthOutcome, HistoryEntry, LaunchOpts, LimitResumeMode,
-  RecentSession, SessionAsk, SessionBudget, SessionInfo, SessionLimit, SessionOrigin, SourceDialog, SourceHandle, TurnFacts,
+  RecentSession, SessionAsk, SessionBudget, SessionInfo, SessionLimit, SessionOrigin, SourceDialog, SourceHandle, SourceQuestion, TurnFacts,
 } from "@waterplane/shared";
 import type { AskQuestion } from "../askbox.js";
 import type { HealthOpts } from "../clihealth.js";
 import type { FixtureSource } from "../clifixtures.js";
 import type { PendingPlan } from "../planbox.js";
+import type { PlanEntry } from "../sourceanswer.js";
 import type { BackendDescriptor } from "../backends/index.js";
 import type { PluginStoreReader } from "@waterplane/shared";
 import type { AgentUsage, SeriesCursor } from "../ctxlog.js";
@@ -83,6 +84,12 @@ export interface LiveMeta {
    *  record only against a listing of THIS server; absent on records written
    *  before the stamp existed. */
   tmuxSocket?: string;
+  /** How the launch was told and how its ask rules hold (`LaunchPlan.instructionsVia` /
+   *  `askRulesVia`), so a re-attached session still publishes `SessionInfo.told` /
+   *  `askRulesVia`; and, for `"gate"`, the rules it was launched with (`answergate.ts`). */
+  told?: SessionInfo["told"];
+  askRulesVia?: SessionInfo["askRulesVia"];
+  askRules?: string[];
 }
 
 /**
@@ -336,6 +343,12 @@ export interface Session {
   /** Armed while a `Stop` hook is still being settled against the screen — see
    *  `STOP_VERIFY_MS`. Null when no Stop is in question. */
   stopVerifyTimer: NodeJS.Timeout | null;
+  /** Armed while output that landed on an IDLE session waits to be read as
+   *  work or a redraw (`idlewatch.ts`'s `noteOutput`, `IDLE_WATCH_MS`). Optional:
+   *  absent and null both mean nothing is pending. */
+  idleWatchTimer?: NodeJS.Timeout | null;
+  /** The output offset the pending idle watch measures fresh bytes from. */
+  idleWatchSeq?: number;
   /** A `Stop` hook has arrived and its consequences (turn ended, the ping, the
    *  `turnEnded` event) have not been applied yet. The flag, not the timer, is
    *  what says a Stop is owed an answer: the timer is null in the moment
@@ -519,6 +532,23 @@ export interface SessionChannel {
   /** Dialogs the source can see but cannot pose (`DialogSource` `unposed`): while above 0
    *  the screen reader keeps its duty even though the channel owns the dialogs. */
   unposed: number;
+  /** Questions the CLI posed with no choice box (`sources.questions`, contract 2.0) and has
+   *  not closed, by the CLI's id. Published beside the dialogs, oldest first across both. */
+  questions: Map<string, SourceQuestion>;
+  /** When each open dialog or question was first posed (a per-channel counter, by id) — what
+   *  "oldest first" across the two maps is read off. */
+  posedAt: Map<string, number>;
+  /** The counter `posedAt` is stamped from. */
+  posedSeq: number;
+  /** `sources.questions` is live on this up edge: reconciled against `pending()`, or it has
+   *  none. Cleared when the channel goes down. */
+  questionsLive: boolean;
+  /** Plans the CLI posed on its own channel (`sources.plan`) and has not closed, by the CLI's id,
+   *  each with its at-most-once answer latch. Published beside dialogs and questions, oldest first. */
+  plans: Map<string, PlanEntry>;
+  /** A source turn's `ended` held for a fresh `context` sample (`CONTEXT_FRESH_MS`): `flush`
+   *  settles it now (a later edge arrived, in ORDER), `cancel` drops it (the channel closed). */
+  pendingEnd?: { flush(): void; cancel(): void } | null;
 }
 
 /**
@@ -552,7 +582,7 @@ export interface SessionCore {
   create(
     cwd: string,
     opts?: { cols?: number; rows?: number; title?: string; resume?: boolean; resumeMode?: "continue" | "pick" | "fork"; resumeSessionId?: string; forkAtTurn?: string; launch?: LaunchOpts; origin?: SessionOrigin; budget?: SessionBudget },
-  ): SessionInfo;
+  ): Promise<SessionInfo>;
   /** PRIVATE on the facade and stays there — the one PTY wiring. A hub member
    *  because `tmux.ts`'s `reattach` wires a PTY it did not spawn. */
   register(
@@ -675,6 +705,9 @@ export interface SessionCore {
   /** Re-read the footer's permission mode and ultracode off the live grid
    *  (`permmode.ts`); emits `updated` on a change. Claude's TUI only. */
   checkMode(s: Session): void;
+  // ── idlewatch.ts ──
+  /** Retire the idle flag (and its clock), announcing only a change — `setTurn(true)`'s end of idle. */
+  clearIdle(s: Session): void;
   // ── links.ts ──
   /** Arm the shell-links read (`shelllinks.ts`) on the quiet tick — a no-op unless `caps.turns === false`. */
   armLinksCheck(s: Session): void;

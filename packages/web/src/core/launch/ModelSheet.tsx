@@ -9,7 +9,7 @@
 import type { BackendInfo, LaunchOpts, SessionInfo } from "@waterplane/shared";
 import { SheetHead } from "../../Sheet.tsx";
 import { Unavailable } from "../../Unavailable.tsx";
-import { CLAUDE, backendIdOf, effortChoices, freeTextNote, modelChoices, type capReason, type hasCap } from "../../backendCaps.ts";
+import { effortChoices, freeTextNote, liveEffortHere, modelChoices, type capReason, type hasCap } from "../../backendCaps.ts";
 import { shortModel } from "../../sessionFacts.tsx";
 import { showToast } from "../../toast.ts";
 import { Button } from "../../kit/Button";
@@ -52,7 +52,7 @@ export function ModelSheet({ cur, backends, modelInput, setModelInput, submitInp
   const applyModel = (m: string) => (canSlash ? pickModel(m) : relaunchWith({ model: m }));
   // Effort is live too where the CLI has `/effort` (claude's — read off the
   // binary); elsewhere it stays the launch flag and the relaunch says so.
-  const liveEffort = canSlash && backendIdOf(cur) === CLAUDE;
+  const liveEffort = liveEffortHere(backends, cur.backend, canSlash);
   const applyEffort = (e: (typeof efforts)[number]) => {
     if (!liveEffort) { relaunchWith({ effort: e }); return; }
     submitInput(cur.id, cur.cwd, `/effort ${e}`, "command"); onClose(); showToast(`/effort ${e}`);

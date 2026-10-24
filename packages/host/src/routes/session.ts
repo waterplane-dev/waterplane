@@ -2,15 +2,15 @@
  * Routes about ONE session: its lifecycle, what is typed into it, what it
  * remembers, and the usage limit it may be blocked on.
  */
-import { cleanSessionBudget, promptStillCurrent, safeRel, slashForkTitle } from "@waterplane/shared";
+import { cleanSessionBudget, isConversationId, promptStillCurrent, safeRel, slashForkTitle } from "@waterplane/shared";
 import type { SessionInfo } from "@waterplane/shared";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
 import { gitCloseCheck } from "../git.js";
 import { randomUUID } from "node:crypto";
 import { settleDelivery } from "../settle.js";
-import { forkConversationFile } from "../convfork.js";
-import { backendForksOnServer, forkAtTurnRefusal } from "../backends/index.js";
+import { forkConversationFile, forkViaSource } from "../convfork.js";
+import { backendForkingSource, backendForksOnServer, derive, forkAtTurnRefusal, resolveBackend } from "../backends/index.js";
 import { rivalTexts } from "../opendeliveries.js";
 import { createToIntent } from "../intents/adapters.js";
 import { withoutBacklogMark } from "../backlog.js";
@@ -52,7 +52,7 @@ const onSessionCreate: RouteSpec<"session.create"> = {
   durable: true,
   contain: "cwd",
   refusal: "that folder is outside the configured root — session not opened",
-  run: (a) => {
+  run: async (a) => {
       // create() emits "created" → broadcast happens in the sessions.on("created")
       // handler above. Here we just attach the creating socket so it streams.
       const cwd = a.dir;
@@ -161,6 +161,12 @@ const onSessionCreate: RouteSpec<"session.create"> = {
       // in the reader, carries no attachments and so never names files, and the
       // park only triggers for a create that has both `needs` and a prompt.
       let resumeSessionId = a.msg.resumeSessionId;
+      // The id reaches `--resume <id>` and `transcriptPath` (a `join`), so a
+      // `../../x` would traverse. Every backend's ids (claude uuids, opencode
+      // `ses_…`) are plain `[A-Za-z0-9_-]`; anything else is refused in words.
+      if (resumeSessionId !== undefined && resumeSessionId !== null && resumeSessionId !== "" && !isConversationId(resumeSessionId)) {
+        return { ok: false, reason: "that is not a conversation id" };
+      }
       let serverFork = false;
       if (a.msg.forkAtTurn) {
         if (!resumeSessionId) return { ok: false, reason: "fork needs the conversation to fork from" };
@@ -182,7 +188,23 @@ const onSessionCreate: RouteSpec<"session.create"> = {
         // nothing is copied here, and the new id comes back from the server.
         if (backendForksOnServer(a.msg.launch?.backend)) serverFork = true;
       }
-      if (a.msg.forkAtTurn && resumeSessionId && !serverFork) {
+      // A backend whose own SOURCE cuts its conversation (`sources.conversations.fork`, 2.2) is
+      // asked here, in the same place and order as the file copy: before the kill, a failure
+      // refused in words with NOTHING launched, and the new id resumed PLAINLY below under the
+      // SAME backend (`launch` carries it). The request is the phone's existing one —
+      // `resumeSessionId` = the backend's conversation id, `forkAtTurn` = a turn id from its own
+      // transcript. Same accepted gap as the file: a crash between the fork and the ack leaves
+      // one extra conversation in that backend's list, never a second agent.
+      const viaSource = a.msg.forkAtTurn && resumeSessionId && !serverFork ? backendForkingSource(a.msg.launch?.backend) : null;
+      if (a.msg.forkAtTurn && resumeSessionId && viaSource) {
+        const forked = await forkViaSource(viaSource, resumeSessionId, a.msg.forkAtTurn);
+        if ("error" in forked) {
+          a.c.send(a.ws, { t: "toast", text: `could not fork this conversation: ${forked.error}` });
+          return { ok: false, reason: forked.error };
+        }
+        console.log(`[fork] ${viaSource.id} ${resumeSessionId} @${a.msg.forkAtTurn} → ${forked.newId} (the backend's own fork)`);
+        resumeSessionId = forked.newId;
+      } else if (a.msg.forkAtTurn && resumeSessionId && !serverFork) {
         const forked = forkConversationFile(cwd, resumeSessionId, a.msg.forkAtTurn);
         if ("error" in forked) {
           a.c.send(a.ws, { t: "toast", text: `could not fork this conversation: ${forked.error}` });
@@ -211,7 +233,7 @@ const onSessionCreate: RouteSpec<"session.create"> = {
       }
       const carry = a.msg.replaceSessionId && !a.msg.forkAtTurn ? a.c.sessions.carryFor(a.msg.replaceSessionId, resumeSessionId) : null;
       if (a.msg.replaceSessionId) a.c.sessions.kill(a.msg.replaceSessionId, undefined, "replaced");
-      const info = a.c.sessions.create(cwd, { cols: a.msg.cols, rows: a.msg.rows, title, resume: a.msg.resume, carry,
+      const info = await a.c.sessions.create(cwd, { cols: a.msg.cols, rows: a.msg.rows, title, resume: a.msg.resume, carry,
         origin: { kind: a.msg.forkAtTurn ? "fork" : "hand", ...(companionOf ? { companionOf } : {}) },
         // A forked file is already its own conversation, so it is resumed
         // PLAINLY — `--fork-session` on top would fork the copy again and open a
@@ -242,11 +264,12 @@ const onSessionCreate: RouteSpec<"session.create"> = {
 const onSessionFork: Route<"session.fork"> = (a) => {
     // Branch the conversation into a fresh parallel session. create() inside
     // fork() emits "created" (broadcast above); focus navigates the requester.
-    const info = a.c.sessions.fork(a.msg.id, { cols: a.msg.cols, rows: a.msg.rows });
-    if (!info) { a.c.send(a.ws, { t: "toast", text: "session not available to fork" }); return; }
-    a.att.add(info.id);
-    a.c.recomputeWatched();
-    a.c.send(a.ws, { t: "session.focus", id: info.id });
+    void a.c.sessions.fork(a.msg.id, { cols: a.msg.cols, rows: a.msg.rows }).then((info) => {
+      if (!info) { a.c.send(a.ws, { t: "toast", text: "session not available to fork" }); return; }
+      a.att.add(info.id);
+      a.c.recomputeWatched();
+      a.c.send(a.ws, { t: "session.focus", id: info.id });
+    }, (e) => a.c.send(a.ws, { t: "toast", text: `could not fork this session: ${String((e as Error)?.message || e)}` }));
 };
 
 const onSessionAttach: Route<"session.attach"> = (a) => {
@@ -271,14 +294,25 @@ const onSessionDetach: Route<"session.detach"> = (a) => {
 };
 
 /** An answer's receipt: remembered against its ackId (a repeat re-acks, never
- *  re-answers) and sent with the dispatcher's sentence when it refused. */
+ *  re-answers) and sent with the dispatcher's sentence when it refused.
+ *
+ *  IN FLIGHT under its ackId from before this returns, exactly as a submit is: a
+ *  typed answer takes seconds (keys, a pause, words, Return; a source's own round
+ *  trip), and a phone whose socket dies inside that window re-sends the SAME ackId
+ *  when it comes back — which must join this answer in `onSessionInput`, never
+ *  run `answerBox` a second time and type the words twice. */
 function answerReply(a: Parameters<Route<"session.input">>[0], answered: Promise<{ ok: boolean; reason?: string }>): void {
   const ackId = a.msg.ackId;
-  void answered.then(({ ok, reason }) => {
-    if (!ackId) return;
-    a.c.acks.remember(ackId, { ok, reason });
-    a.c.send(a.ws, { t: "input.ack", id: a.msg.id, ackId, ok, reason });
-  });
+  if (!ackId) { void answered.catch(() => {}); return; }
+  const settled: Promise<InputVerdict> = answered
+    .then(({ ok, reason }): InputVerdict => ({ ok, reason }), (e): InputVerdict => ({ ok: false, reason: `the answer failed: ${String((e as Error)?.message || e)}` }))
+    .then((v) => {
+      a.c.acks.remember(ackId, v);
+      a.c.send(a.ws, { t: "input.ack", id: a.msg.id, ackId, ok: v.ok, reason: v.reason });
+      return v;
+    })
+    .finally(() => a.c.inputsInFlight.delete(ackId));
+  a.c.inputsInFlight.set(ackId, settled);
 }
 
 /**
@@ -292,45 +326,59 @@ function answerReply(a: Parameters<Route<"session.input">>[0], answered: Promise
  * launch flags), so there is no second spawn path — and the asking socket is
  * focused on it, as `session.fork` does.
  *
- * At-most-once by ackId: the fork is synchronous, so its verdict is remembered
- * before this returns and a retried ackId is re-acked by the ledger check in
- * `onSessionInput`, never forked a second time. A refusal is remembered too —
+ * At-most-once by ackId: the fork is IN FLIGHT under its ackId from before this
+ * returns (`inputsInFlight`, the map a verified delivery joins), and its verdict is
+ * remembered when it settles, so a retried ackId joins it or is re-acked by the
+ * ledger check in `onSessionInput` — never forked a second time. A refusal is remembered too —
  * each one (the session gone, remote control off, no conversation id yet) is a
  * property of the request — and NEVER falls back to typing `/fork`, which is
  * the invisible fork this exists to prevent.
  *
  * `false` ⇒ not this command, or not a claude session: delivered as before.
  */
+/**
+ * Does a bare `/fork` on this backend go to the CLI's daemon, and can the tab path do it instead?
+ * claude's slash vocabulary, the jsonl `sessions.fork()` resumes from, and the remote-control
+ * flag the CLI's daemon rides — today exactly `claude` (the local/endpoint variants launch without
+ * remote control, so their `/fork` is typed as before). Derived, never an id test (`derive.ts`).
+ */
+function forksSlashInTab(backendId?: string): boolean {
+  let b;
+  try { b = resolveBackend(backendId); } catch { return false; }
+  return b.caps.slash === "claude" && b.caps.remoteControl && derive(b).keepsClaudeLog;
+}
+
 function forkFromInput(a: Parameters<Route<"session.input">>[0], ackId: string): boolean {
   const asked = slashForkTitle(a.msg.data);
   if (asked === null) return false;
   const info = a.c.sessions.get(a.msg.id);
-  if (info?.backend && info.backend !== "claude") return false; // absent = claude (`SessionInfo.backend`)
+  if (info && !forksSlashInTab(info.backend)) return false; // absent = claude (`SessionInfo.backend`)
   const refusal = !info || !info.running ? "that session is gone, so there is nothing to fork — /fork was not typed"
     : !info.remoteControl ? "remote control is off for this session — not forked"
     : !info.claudeSessionId ? "this session's conversation is not known yet, so it cannot be forked into a new tab — /fork was not typed, because the CLI would open that fork where this phone cannot see it"
     : null;
-  let verdict: InputVerdict;
-  if (refusal || !info) verdict = { ok: false, reason: refusal ?? "session not available" };
-  else {
+  const run = async (): Promise<InputVerdict> => {
+    if (refusal || !info) return { ok: false, reason: refusal ?? "session not available" };
     let made: SessionInfo | null = null;
     let why = "";
     // A person's fork never wears the machine's mark (`withoutBacklogMark`, as on
     // `session.create`): a forked `backlog · …` tab would count against the
     // automatic-session cap and be reapable under the person driving it.
     const title = withoutBacklogMark(asked) || `${withoutBacklogMark(info.title) || info.title} (fork)`;
-    try { made = a.c.sessions.fork(info.id, { title }); } catch (e) { why = String((e as Error)?.message || e); }
-    if (!made) verdict = { ok: false, reason: `could not fork this session${why ? `: ${why}` : ""}` };
-    else {
-      console.log(`[fork] /fork from ${info.id} (${info.claudeSessionId}) → ${made.id}`);
-      a.att.add(made.id);
-      a.c.recomputeWatched();
-      a.c.send(a.ws, { t: "session.focus", id: made.id });
-      verdict = { ok: true, state: "forked", reason: `forked into a new session — ${made.title}` };
-    }
-  }
-  a.c.acks.remember(ackId, verdict);
-  a.c.send(a.ws, { t: "input.ack", id: a.msg.id, ackId, ...verdict });
+    try { made = await a.c.sessions.fork(info.id, { title }); } catch (e) { why = String((e as Error)?.message || e); }
+    if (!made) return { ok: false, reason: `could not fork this session${why ? `: ${why}` : ""}` };
+    console.log(`[fork] /fork from ${info.id} (${info.claudeSessionId}) → ${made.id}`);
+    a.att.add(made.id);
+    a.c.recomputeWatched();
+    a.c.send(a.ws, { t: "session.focus", id: made.id });
+    return { ok: true, state: "forked", reason: `forked into a new session — ${made.title}` };
+  };
+  const settled = run().then((verdict) => {
+    a.c.acks.remember(ackId, verdict);
+    a.c.send(a.ws, { t: "input.ack", id: a.msg.id, ackId, ...verdict });
+    return verdict;
+  }).finally(() => a.c.inputsInFlight.delete(ackId));
+  a.c.inputsInFlight.set(ackId, settled);
   return true;
 }
 
@@ -423,13 +471,20 @@ const onSessionInput: Route<"session.input"> = (a) => {
       // cursor there needs the rendered screen, so it happens here and the
       // receipt waits for it. Bounded (`submitPromptBox`), and it degrades to
       // the same bare Return when the screen shows no Submit row.
-      const ackId = a.msg.ackId;
-      void a.c.sessions.submitPromptBox(a.msg.id).then(({ ok }) => {
-        if (!ackId) return;
-        const reason = ok ? undefined : "session not available";
-        a.c.acks.remember(ackId, { ok, reason });
-        a.c.send(a.ws, { t: "input.ack", id: a.msg.id, ackId, ok, reason });
-      });
+      // In flight under its ackId like every answer (`answerReply`): the walk takes time.
+      answerReply(a, a.c.sessions.submitPromptBox(a.msg.id).then(({ ok }) => ({ ok, reason: ok ? undefined : "session not available" })));
+      return;
+    }
+    if (a.msg.promptText !== undefined && a.msg.expectPrompt) {
+      // TYPED WORDS answering a box the CLI posed on its own channel (contract 2.0): a
+      // `question` with `freeText` (alone, or with `promptChoice`), or a `takesText` dialog row.
+      // An ANSWER, never a prompt: through the one dispatcher, which hands the words to the
+      // CLI's channel and types only what that channel asks for, into its own form
+      // (`sourceanswer.ts`). A box that takes no words refuses them there, nothing typed.
+      // `NaN` = no option named. Passed as a variable: the facade's `opts` type gains `text` in
+      // WP3's `sessions.ts` (handover); it forwards the object unchanged.
+      const answer = { walk: true, byPerson: true, text: a.msg.promptText };
+      answerReply(a, a.c.sessions.answerBox(a.msg.id, a.msg.promptChoice ?? NaN, answer));
       return;
     }
     if (a.msg.promptChoice != null) {

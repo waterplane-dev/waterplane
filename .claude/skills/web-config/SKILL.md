@@ -7,7 +7,7 @@ description: waterplane phone client — settings, hosts, models and sign-in (pa
 
 How this app is configured and what it is allowed to launch: the Settings screen and its sync, sign-in, the local runner, model and backend choice, and the health readout. Router: `web`. Reasoning: [web.md](../../../docs/notes/web.md).
 
-- `features/cliHealth/CliHealthChip.tsx` + `CliHealthSheet.tsx` — the health board's readout: one row per signal, and **nothing is
+- `features/cliHealth/CliHealthChip.tsx` + `CliHealthSheet.tsx` (src root) — the health board's readout: one row per signal, and **nothing is
   re-derived** — verdict, sentence, order and prose all come from `@waterplane/shared`. **The unprompted
   mark is the feature**: an amber/red chip in the launcher TOPBAR (not beside "N at limit", whose
   section is absent exactly when a broken heuristic matters), plus one toast when an arriving rollup
@@ -31,7 +31,8 @@ How this app is configured and what it is allowed to launch: the Settings screen
   *on* — and a chevron ONLY when it opens another screen). `disabled` is gone: `cant` draws the REASON
   where the button was (`Unavailable.tsx`), `busy` is a running verb in its own glyph. **`SetNote`
   folds all but one line** into `hint-more`; **`SetWarn` never folds** — an absence and a warning are
-  what must be read unasked. **Search is `settingsIndex.ts`** — keywords carry the words the LABELS do
+  what must be read unasked. `SetLine` is the uncounted `.set-row` layout line inside a sheet (no id, never a row);
+  `SetNote as/className` for the line notes. **Search is `settingsIndex.ts`** — keywords carry the words the LABELS do
   not; its matching rules (AND, substring, no group keywords, group title matches) are pinned by
   `settingsIndex.test.mjs`. **A group never skips rendering its rows**; only the SECTION hides (`gone`,
   exact and `:has()`-free, plus a `:has()` rule for a group whose every row is absent). **The counts
@@ -138,7 +139,7 @@ How this app is configured and what it is allowed to launch: the Settings screen
   the OPERATOR's terms. **Never restate a third party's data policy**; the test forbids naming a vendor. **"Free"
   is MEASURED** (`models.zeroCost`, 0/0 from the binary), never inferred from a `-free` name, and an
   unknown price is never drawn as free.
-- `backendCaps.ts` — the pure capability slice for a multi-backend host. `showBackendPicker`
+- `backendCaps.ts` — the pure capability slice for a multi-backend host. The wire also states the effort ladder (`caps.efforts`; absent with `effort` true is an older host = claude's), and `questions`/`plan`/`usage`/`agents`/`conversations`, absent where nothing answers — advertised, but only `efforts` is read here so far. `showBackendPicker`
   renders NOTHING when the `backends` hello frame never arrived (old host ⇒ UI pixel-identical),
   and `launchFor()` strips a backend/effort/permissionMode the target cannot satisfy off EVERY
   `session.create`. An absent capability becomes a SENTENCE (`capReason`/`reasonText`,

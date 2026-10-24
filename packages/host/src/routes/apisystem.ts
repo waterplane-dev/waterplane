@@ -185,6 +185,27 @@ export const SYSTEM_ROUTES: readonly ApiEntry[] = [
     if (last === f.size - 1) res.on("finish", () => f.delivered());
     return true;
   }),
+  // ── a plugin's static ASSETS (`manifest.assets`) ─────────────────────
+  // GET|HEAD only (any other verb falls through to the plugin's own routes), ahead of
+  // `* /api/plugin/:id/*` so no plugin route shadows it. Same gates as every /api route; NOT an
+  // OPAQUE_READ_ROUTE and not in `passive.ts`. Streamed (multi-MB wasm), ranges honoured, ETag.
+  route("*", "/api/plugin/:id/asset/:file", ({ req, res, method, params }, ctx) => {
+    if ((method !== "GET" && method !== "HEAD") || !PLUGIN_HOOK_ID.test(params.id!) || !ctx.pluginAsset) return false;
+    const a = ctx.pluginAsset(params.id!, params.file!);
+    if (!a.ok) { json(res, { error: a.error }, a.status); return true; }
+    const etag = `"a-${a.size.toString(36)}-${Math.floor(a.mtimeMs).toString(36)}"`;
+    const headers = { etag, "cache-control": "no-cache", "x-content-type-options": "nosniff" };
+    if (notModified(req, res, etag, "no-cache")) return true;
+    const ifRange = req.headers["if-range"];
+    if (ifRange && ifRange !== etag) delete req.headers.range;
+    if (method === "HEAD") {
+      res.writeHead(200, { "content-type": a.mime, "content-length": String(a.size), "accept-ranges": "bytes", ...headers });
+      res.end();
+      return true;
+    }
+    serveFileStream(req, res, a.file, a.size, a.mime, headers);
+    return true;
+  }),
   // ── a plugin's OWN routes (`api.route()`, plugin API 1.2) ────────────
   // Namespaced under its id, and served HERE — so behind the same origin/Host
   // and token gates as every route in this file; not loopback-only, never in

@@ -26,8 +26,7 @@
   font-variant-numeric: tabular-nums;
 }
 .rv-txt { white-space: pre; padding-right: var(--sp-12); }
-.rv-line.rv-marked { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
-.rv-line.rv-marked .rv-no { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
+.rv-line.rv-marked, .rv-line.rv-marked .rv-no { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
 .rv-line.rv-sel, .rv-line.rv-sel .rv-no {
   background: color-mix(in srgb, var(--accent) 22%, var(--well));
   box-shadow: var(--stripe);
@@ -74,21 +73,30 @@
    the bar a rail down the left: on a phone held upright a dozen 44 px keys in
    a row scroll sideways and take a strip of height the picture needs, while a
    rail takes a thumb's width the picture's aspect mostly leaves empty anyway.
-   `place-auto` is left on a phone-sized screen (narrow, or short in landscape)
-   and top otherwise. The palette rides next to the bar either way. */
+   `auto` is resolved per picture to `place-left`/`place-top` (`autoPlace`:
+   whichever side leaves it drawn larger); `place-auto` only stands until the
+   picture's size is known — left on a phone-sized screen, top otherwise. The palette rides next to the bar either way. */
 .annot-body { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
 .annot-body > .annot-canvas-wrap { flex: 1; min-height: 0; min-width: 0; }
 .annot-style { display: inline-flex; align-items: center; justify-content: center; font-weight: var(--fw-bold); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000; }
+/* The bar never scrolls (owner's ask): a row WRAPS onto a second line, a rail
+   onto a second column (a column-flow grid — flex column-wrap does not widen
+   its box in Chromium). The scroll cue's ‹ › pseudos would be grid items in
+   a rail, so they are dropped there; a wrapped row never scrolls to show them. */
+.annot-body > .annot-tools { flex-wrap: wrap; overflow-x: visible; }
+.annot-body > .annot-tools::before, .annot-body > .annot-tools::after { content: none; }
 .annot-body.place-left { flex-direction: row; }
 .annot-body.place-left > .annot-tools {
-  flex-direction: column; flex-wrap: nowrap; overflow-x: hidden; overflow-y: auto;
+  display: grid; grid-auto-flow: column; grid-template-rows: repeat(auto-fill, 44px); grid-auto-columns: 44px;
+  justify-items: center; align-content: start; overflow: hidden;
   padding: var(--sp-6); gap: var(--sp-6); border-bottom: 0; border-right: 1px solid var(--line); flex: 0 0 auto;
 }
 .annot-body.place-left > .annot-tools > .key { padding: 0; width: 44px; }
 @media (max-width: 600px), (max-height: 500px) {
   .annot-body.place-auto { flex-direction: row; }
   .annot-body.place-auto > .annot-tools {
-    flex-direction: column; flex-wrap: nowrap; overflow-x: hidden; overflow-y: auto;
+    display: grid; grid-auto-flow: column; grid-template-rows: repeat(auto-fill, 44px); grid-auto-columns: 44px;
+    justify-items: center; align-content: start; overflow: hidden;
     padding: var(--sp-6); gap: var(--sp-6); border-bottom: 0; border-right: 1px solid var(--line); flex: 0 0 auto;
   }
   .annot-body.place-auto > .annot-tools > .key { padding: 0; width: 44px; }

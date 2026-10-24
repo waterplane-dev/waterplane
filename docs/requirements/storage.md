@@ -24,3 +24,13 @@ The private disk-space plugin gives one-click cleanup for purely temporary files
 - asked: 2026-10-07
 - shipped: ac002699
 
+### R-storage-006 · shipped
+The host warns once when free disk falls under 10 GB (default) and again under 3 GB, before macOS starts ending apps.
+- asked: 2026-10-21
+- shipped: d9bcc454
+
+### R-storage-007 · shipped
+The disk space plugin UI looks polished and well designed.
+- asked: 2026-10-21
+- shipped: aba149fa
+

@@ -4,7 +4,7 @@ import type { CostBreakdown } from "../pricing.js";
 import type { ColdStarts } from "../sessioncost.js";
 
 /**
- * One metered LLM call waterplane itself made (the highlighter's text reader, a plugin's model calls).
+ * One metered LLM call waterplane itself made (a plugin's model calls).
  * Token counts come from the provider response; cost from a per-model price table.
  */
 export interface MeterEvent {
@@ -14,7 +14,7 @@ export interface MeterEvent {
   service: string;
   /** Full model id. */
   model: string;
-  /** What the call was for, e.g. "ocr" or "plugin:<id>". */
+  /** What the call was for, e.g. "plugin:<id>". */
   kind: string;
   /** Input (prompt) tokens. */
   inTok: number;
@@ -651,4 +651,20 @@ export interface TokenWindowsDoc {
   /** When the ledger behind this was last brought up to date (the same scan
    *  `TokenStatsDoc.scannedAt` reports), so a grid can say how old it is. */
   scannedAt: number;
+}
+
+/**
+ * `GET /api/usagenow`: what the desktop pushes over the socket about the ACCOUNT — the `/usage`
+ * reading and the other sources' (`usage.status`), the billing profile (`billing.status`), the
+ * budget and its dollar periods (`budget.state`) and the backend list (`backends`) — as one read,
+ * for a client with no socket (the VS Code panel drawing the phone's token screen). Each part is
+ * exactly what its frame carries; nothing here is derived for this route.
+ */
+export interface UsageNowDoc {
+  usage: UsageInfo | null;
+  readings: UsageReading[];
+  billing: import("../billing.js").BillingStatus;
+  budget: import("../budget.js").UsageBudget | null;
+  periods: import("../period.js").PeriodState[];
+  backends: import("./backend.js").BackendInfo[];
 }

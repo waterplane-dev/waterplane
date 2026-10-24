@@ -72,6 +72,17 @@ export async function verifyLanAnswer(id: LanIdentity, nonce: string, answer: La
   return !!want && sameHex(want, answer.mac.toLowerCase());
 }
 
+/**
+ * Whether the probe's HTTP status means the desktop ANSWERED. The probe carries
+ * no token (the LAN is not the route yet), and a gated host refuses an
+ * unauthenticated `/api/health` over the LAN with 401 — that IS this host
+ * answering, and the HMAC verify after it proves which host. Any other non-2xx
+ * (a 403 origin refusal, a 5xx, a captive portal) is not a usable answer.
+ */
+export function lanProbeAnswered(status: number): boolean {
+  return (status >= 200 && status < 300) || status === 401;
+}
+
 export type TokenState = "ok" | "no-password" | "failed";
 
 export interface LanRouterDeps {

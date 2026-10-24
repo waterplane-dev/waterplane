@@ -56,6 +56,7 @@ const SESSION_SURFACE = [
   "SessionShell:type",
   "SessionShellDetail:type",
   "ShellLink:type",
+  "SkillLoad:type",
   "StandingRule:type",
 ];
 const MESSAGES_SURFACE = [
@@ -210,6 +211,9 @@ const CLIENT_T = [
   "update.apply",
   "update.check",
   "update.status",
+  "updates.apply",
+  "updates.check",
+  "updates.get",
   "usage.get",
   "usage.refresh",
 ];
@@ -292,6 +296,8 @@ const HOST_T = [
   "shell.killed",
   "toast",
   "update.status",
+  "updates.result",
+  "updates.status",
   "usage.status",
   "welcome",
 ];
@@ -334,11 +340,11 @@ test("wire/messages.ts exports exactly its pinned surface, values and types alik
 test("ClientMessage carries exactly the pinned message types", () => {
   const { tags: got, members } = tags("ClientMessage");
   assert.deepEqual(got, [...CLIENT_T].sort());
-  assert.equal(members, 142, "a member was added or merged");
+  assert.equal(members, 145, "a member was added or merged");
 });
 
 test("HostMessage carries exactly the pinned message types", () => {
   const { tags: got, members } = tags("HostMessage");
   assert.deepEqual(got, [...HOST_T].sort());
-  assert.equal(members, 80, "a member was added or merged");
+  assert.equal(members, 82, "a member was added or merged");
 });

@@ -308,8 +308,13 @@ export interface OutboxEntry {
    * on such an entry — the queue sheet and the failure toast read `label`, which
    * every answer already carries, so nothing downstream needs the keystroke that
    * does not exist.
+   *
+   * `text` is a TYPED answer (contract 2.0): words for a `question` box with
+   * `freeText`, or the reason on a `takesText` row — sent as `promptText`, checked
+   * by `answerTextProblem` before it is queued and again by the host. Still an
+   * answer, never a prompt: the host hands it to the CLI's own channel.
    */
-  answer?: { fingerprint: string; question: string; label: string; submitBox?: boolean; choice?: number };
+  answer?: { fingerprint: string; question: string; label: string; submitBox?: boolean; choice?: number; text?: string };
   /**
    * Serialization group (`shared/queue.ts`). Set on a queued `session.create`
    * that CARRIES A PROMPT, so a repo's queued work runs one session at a time

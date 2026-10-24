@@ -34,7 +34,8 @@ import {
 import { hostStateDir } from "./branddirs.js";
 import { contextLimitsFor } from "./compliance.js";
 import { discoverTargets } from "./repos.js";
-import { refreshRepoHealth } from "./repohealth.js";
+import { refreshRepoHealth, resolveRepoHealthEngine } from "./repohealth.js";
+import { engineApproved } from "./repohealthapproval.js";
 import { env } from "./env.js";
 import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
 
@@ -299,7 +300,12 @@ export function createHealthWatch(root: string, notify: HealthWatchDeps["notify"
   return new HealthWatch({
     root, notify,
     repos: async () => (await discoverTargets(root)).filter((t) => t.isPrimary).map((t) => ({ id: t.id, repoName: t.repoName, worktreePath: t.worktreePath })),
-    refresh: async (wt) => (await refreshRepoHealth(wt)).last?.ok === true,
+    refresh: async (wt) => {
+      // A repo's own committed engine never runs unapproved: skip, don't throw.
+      // (The bundled engine's refresh drops the repo's own commands by itself.)
+      if (resolveRepoHealthEngine(wt)?.kind === "repo" && !engineApproved(wt, root)) return false;
+      return (await refreshRepoHealth(wt, { root })).last?.ok === true;
+    },
     warnChars: (wt) => contextLimitsFor(wt).effective.maxChars ?? null,
   });
 }

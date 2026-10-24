@@ -12,7 +12,7 @@
  * confirmed each repo's list — a cached list that cannot say how old it is
  * reads as current. (`scripts/e2e-offlinelists.mjs` holds both.)
  */
-import type { ArtifactPolicy, BuildCandidate, BuildConfig, BuildRun, RepoTarget } from "@waterplane/shared";
+import type { ArtifactPolicy, BuildCandidate, BuildParamAnswer, BuildConfig, BuildRun, RepoTarget } from "@waterplane/shared";
 import { useCallback } from "react";
 import { createStore, repoRunStore, useStore } from "../../sdk";
 import { loadBuildsSnap, saveBuildsSnap } from "../../localState";
@@ -44,7 +44,7 @@ export const buildRepo = createStore<RepoTarget | null>(null);
  */
 export const buildCands = createStore<ReadonlyMap<string, { list: BuildCandidate[]; total: number }>>(new Map());
 
-export type ParamOptions = Record<string, Record<string, { options?: string[]; total?: number; error?: string }>>;
+export type ParamOptions = Record<string, Record<string, BuildParamAnswer>>;
 /**
  * What a parameterised build's questions may be answered with, keyed
  * `repoDir` → `buildId` → `paramId` (`build.options`).

@@ -32,7 +32,7 @@
  * `backendCaps.test.mjs` runs it under `node --test` straight over the
  * TypeScript.
  */
-import { BRAND } from "@waterplane/shared";
+import { BRAND, launchModeRefusal, launchModesOf } from "@waterplane/shared";
 import type { BackendInfo, Effort, LaunchOpts, PermissionMode } from "@waterplane/shared";
 
 /** The backend every session had before `SessionInfo.backend` existed. An
@@ -199,6 +199,11 @@ export function capReason(list: BackendList, id: string | undefined, cap: AnyCap
   return reasonText(cap, b.label);
 }
 
+/** The usage-limits row for a backend whose usage IS read but whose limit wall is not detected. */
+export function usageReadNoWallText(label: string): string {
+  return `${label}'s quota is read (see usage), but no limit wall is detected here, so a session is never held for a reset.`;
+}
+
 /** The wording, split out so the test can pin it without building a descriptor
  *  per case. One sentence per capability, worded once. */
 export function reasonText(cap: AnyCap, label: string): string {
@@ -239,6 +244,80 @@ export function reasonText(cap: AnyCap, label: string): string {
       // never an empty graph captioned as a conversation that has done nothing.
       return `${label} leaves no context history this app can plot, so nothing here is measured — this is not a session that has run out of room.`;
   }
+}
+
+/**
+ * Does this session run claude's own TUI — the one whose shortcuts, `/effort` and wording this
+ * app was built around? Decided by CAPS, never an id: claude's TUI is the one that takes
+ * claude's slash commands AND draws readable choice boxes AND reports turn ends by hook AND
+ * keeps a readable conversation log. claude, claude-local and claude-endpoint state all four;
+ * a backend missing any of them (Copilot, Codex, opencode, a shell) is not claude's TUI.
+ * No `backends` frame ⇒ true (an old host only knows claude; `hasCap`'s rule).
+ */
+export function runsClaudeTui(list: BackendList, id?: string): boolean {
+  return hasCap(list, id, "slash") && hasCap(list, id, "promptBoxes") && hasCap(list, id, "hooks") && hasCap(list, id, "transcript");
+}
+
+/** Who Esc interrupts, in words: `claude` in claude's TUI, a shell's command, else the backend's
+ *  own label ("the agent" before any label is known). */
+export function interruptWho(list: BackendList, id?: string): string {
+  if (runsClaudeTui(list, id)) return "claude";
+  if (isShellBackend(list, id)) return "the running command";
+  return backendInfo(list, id)?.label ?? "the agent";
+}
+
+/**
+ * Does `/effort <level>` land LIVE (typed into the session) instead of via a relaunch? Today:
+ * claude's own id only — claude-local and claude-endpoint relaunch with `--effort`, unchanged.
+ * The id test is deliberate and lives HERE, named, so the two wheel call sites share one
+ * answer; the cap half keeps a non-claude backend with the same id impossible.
+ */
+export function liveEffortHere(list: BackendList, id: string | undefined, canSlash: boolean): boolean {
+  return canSlash && backendIdOf({ backend: id }) === CLAUDE && runsClaudeTui(list, id);
+}
+
+/**
+ * Can the phone switch the permission mode of a RUNNING session of this backend? Two honest
+ * sources: claude's TUI (the shift+tab cycle `livemode.ts` walks) or a backend that STATES
+ * `caps.modes` (2.2: its own `sources.mode` reads and sets it). `caps.modes` is typed `true`
+ * and absent otherwise, so there is no "false" to inherit. No `backends` frame => true (today's UI).
+ */
+export function liveModesHere(list: BackendList, id?: string): boolean {
+  const b = backendInfo(list, id);
+  if (!b) return true;
+  return runsClaudeTui(list, id) || b.caps.modes === true;
+}
+
+/** Does the slash sheet list THIS backend's own commands (`caps.commands`, 2.2)? Never inherited. */
+export function ownCommandsHere(list: BackendList, id?: string): boolean {
+  return backendInfo(list, id)?.caps.commands === true;
+}
+
+/** The sentence for a backend whose permission mode cannot be switched live from the phone:
+ *  none listed (`caps.permissionModes` empty), or listed but only taken at launch (no `caps.modes`).
+ *  Null when it can (or no frame arrived). Worded once, like `reasonText`. */
+export function modesReason(list: BackendList, id?: string): string | null {
+  const b = backendInfo(list, id);
+  if (!b) return null;
+  if (b.caps.permissionModes.length === 0) {
+    return `${b.label} has no permission modes to switch between, so there is no mode picker${runsClaudeTui(list, id) ? " and no ultracode switch" : ""} here.`;
+  }
+  if (!liveModesHere(list, id)) {
+    return `${b.label} takes its permission mode when a session starts; the phone cannot switch it on a running session, so choose it when you start one.`;
+  }
+  return null;
+}
+
+/** The toast when the terminal is held up over the reader for the CLI's first-launch setup. */
+export function cliSetupHold(list: BackendList, id?: string): string {
+  const who = runsClaudeTui(list, id) ? "claude" : (backendInfo(list, id)?.label ?? "the agent");
+  return `${who} is not signed in on the desktop yet: the terminal stays up for its setup (theme, sign-in). The reader comes back once it reaches its prompt.`;
+}
+
+/** …and when it lets go. */
+export function cliSetupDone(list: BackendList, id?: string): string {
+  const who = runsClaudeTui(list, id) ? "claude" : (backendInfo(list, id)?.label ?? "the agent");
+  return `${who} is set up: back to the reader.`;
 }
 
 /**
@@ -284,10 +363,28 @@ export function sessionCants(
   // Only where the reader is actually drawn.
   if (hasCap(list, id, "transcript")) add("fork or reset to a turn", "fork");
   add("context graph", "contextSeries");
+  // The three absences `reasonText` already worded but nothing drew. Only where the session is
+  // NOT claude's TUI: claude-local / claude-endpoint state some of these false by design and
+  // must look as they always did.
+  if (!runsClaudeTui(list, id)) {
+    // A backend whose usage IS read (`caps.usage`, Copilot's premium requests) is not "counted
+    // against no quota": what is absent there is only the wall, so say that.
+    if (backendInfo(list, id)?.caps.usage === true && !hasCap(list, id, "usageLimits")) {
+      out.push({ label: "usage limits", reason: usageReadNoWallText(backendInfo(list, id)?.label ?? "this backend") });
+    } else add("usage limits", "usageLimits");
+    add("turn-end reports", "hooks");
+    add("readable choice boxes", "promptBoxes");
+  }
   const n = opts.hiddenSlash ?? 0;
-  add("slash commands", "slash", n > 0
-    ? ` — ${n} of your header chips ${n === 1 ? "is a Claude slash command and is" : "are Claude slash commands and are"} not offered here.`
-    : "");
+  // A backend with its OWN command list (`caps.commands`) does have a palette: the row would
+  // claim "nothing to send" about a sheet that opens.
+  const hidden = n > 0
+    ? `${n} of your header chips ${n === 1 ? "is a Claude slash command and is" : "are Claude slash commands and are"} not offered here`
+    : "";
+  if (!ownCommandsHere(list, id)) add("slash commands", "slash", hidden ? ` — ${hidden}.` : "");
+  // The filtered view SAYS what it hides (CLAUDE.md: a count on a control is a filter): a backend
+  // with its own command list has a palette, but the Claude chips in the header are still withheld.
+  else if (hidden) out.push({ label: "your Claude header chips", reason: `${hidden} — ${backendInfo(list, id)?.label ?? "this backend"} lists its own commands under /.` });
   return out;
 }
 
@@ -339,7 +436,32 @@ export function shouldAskLaunch(on: boolean, resume: boolean, hasOverride: boole
 export function effortChoices(list: BackendList, id?: string): Effort[] {
   const b = backendInfo(list, id);
   if (!b) return CLAUDE_EFFORTS;
+  // The wire states the ladder (v2). `efforts` absent with `effort` true is an older host: claude's.
+  const stated = b.caps.efforts;
+  if (stated && stated.length > 0) return stated as Effort[];
   return b.caps.effort ? CLAUDE_EFFORTS : [];
+}
+
+/** Header-tab wording for labels the host sends long. Keyed by LABEL (what the host says),
+ *  never by id: a backend this app has never heard of is named by its own label. */
+const SHORT_LABEL: Readonly<Record<string, string>> = { "Claude Code": "Claude" };
+
+/** What the header's agent tab calls this backend: the host's label (shortened only where
+ *  `SHORT_LABEL` says so), else "Claude" for an absent backend before any frame arrived
+ *  (absent means claude), else "CLI". */
+export function agentTabLabel(list: BackendList, id?: string): string {
+  const label = backendInfo(list, id)?.label;
+  if (label) return SHORT_LABEL[label] ?? label;
+  return !id || id === CLAUDE ? "Claude" : "CLI";
+}
+
+/** The modes a NEW session can start in: `caps.launchModes` when the backend declares a narrower
+ *  set, else every `permissionModes` entry (an absent optional cap INHERITS). The launch pickers
+ *  and `launchFor` read this; the LIVE switch (`permModeChoices`, ModeSection) keeps the full list. */
+export function launchModeChoices(list: BackendList, id?: string): PermissionMode[] {
+  const b = backendInfo(list, id);
+  if (!b) return CLAUDE_PERM_MODES;
+  return [...launchModesOf(b.caps)];
 }
 
 /** Which permission modes this backend understands. Empty ⇒ it has no such
@@ -416,8 +538,26 @@ export function launchFor(o: LaunchOpts, list: BackendList): LaunchOpts {
   if (b.id === CLAUDE) delete n.backend;
   if (!b.caps.effort) delete n.effort;
   if (!b.caps.remoteControl) delete n.remoteControlled;
-  if (n.permissionMode && !b.caps.permissionModes.includes(n.permissionMode)) delete n.permissionMode;
+  if (n.permissionMode && !launchModesOf(b.caps).includes(n.permissionMode)) delete n.permissionMode;
   return prune(n);
+}
+
+/**
+ * The sentence for a stored permission mode `launchFor` takes OFF this launch because the backend
+ * understands it but cannot START in it (`caps.launchModes`, plugin API 2.2) — a default chosen for
+ * another backend, or kept from before the set narrowed. The session then starts in the backend's
+ * default, and that is SAID, never silent (review minor 5): the host's own refusal of the same mode
+ * on a stored launch is `launchModeRefusal`, so both ends word it once. Null when nothing is dropped,
+ * and for a mode the backend has no concept of at all (not in `permissionModes`: no such switch,
+ * the quiet strip `launchFor` has always made).
+ */
+export function launchModeDropNote(o: LaunchOpts, list: BackendList): string | null {
+  const mode = o.permissionMode;
+  if (!mode || isShellBackend(list, o.backend)) return null;
+  const b = backendInfo(list, o.backend);
+  if (!b || !b.caps.permissionModes.includes(mode) || launchModesOf(b.caps).includes(mode)) return null;
+  const why = launchModeRefusal(b.label, mode, b.caps);
+  return why ? `${why} This launch goes without it.` : null;
 }
 
 /** Drop empty selections, so an unset field falls back to the backend's own
@@ -588,6 +728,12 @@ export function showWhereFilter(groups: readonly { ids: string[] }[]): boolean {
 export function backendUnavailable(list: BackendList, id?: string): string | null {
   const u = backendInfo(list, id)?.unavailable;
   return typeof u === "string" && u.trim() ? u.trim() : null;
+}
+
+/** The host's drift sentence for this backend (BackendInfo.measured.drift), or null. Shown verbatim; never a refusal. */
+export function backendDrift(list: BackendList, id?: string): string | null {
+  const d = backendInfo(list, id)?.measured?.drift;
+  return d && d.trim() ? d.trim() : null;
 }
 
 /** A backend's label in a picker: the label alone, or with the plain facts that

@@ -119,8 +119,7 @@ export function RowCard({ r, accepted, rejected, onAccept, onReject, onOpen, rep
             and on an `unclear` row it is the only thing worth doing. */}
         {blocked ? null : (
           <>
-            <button
-              className={`key${accepted ? " primary" : ""}`}
+            <Button className={accepted ? "primary" : undefined}
               title={accepted ? words.pickedTitle : words.title}
               onClick={onAccept}
             >
@@ -131,14 +130,13 @@ export function RowCard({ r, accepted, rejected, onAccept, onReject, onOpen, rep
                   at all. The words are `assessRows.ts`'s, per verdict and per
                   store. */}
               <Check size={ICON} /> {accepted ? words.picked : words.label}
-            </button>
-            <button
-              className={`key${rejected ? " active" : ""}`}
+            </Button>
+            <Button className={rejected ? "active" : undefined}
               title={rejected ? LEAVE_WORDS.pickedTitle : LEAVE_WORDS.title}
               onClick={onReject}
             >
               <X size={ICON} /> {rejected ? LEAVE_WORDS.picked : LEAVE_WORDS.label}
-            </button>
+            </Button>
           </>
         )}
         {onOpen ? (

@@ -16,7 +16,7 @@ export type AnnControl =
   | "undo" | "circle" | "rect" | "arrow" | "line" | "text" | "marker" | "blur" | "crop" | "move"
   | "style" | "clear";
 
-/** `auto`: a vertical rail on the left on a phone-sized screen, a row on top otherwise. */
+/** `auto`: whichever side leaves the picture drawn larger (`autoPlace`); before its size is known, a rail on a phone-sized screen, a row otherwise. */
 export type AnnPlace = "auto" | "left" | "top";
 
 export interface AnnLayout {
@@ -95,4 +95,26 @@ export function moveControl(l: AnnLayout, id: AnnControl, dir: -1 | 1): AnnLayou
 
 export function isDefaultLayout(l: AnnLayout): boolean {
   return l.place === "auto" && !l.hidden.length && l.order.every((id, i) => id === IDS[i]);
+}
+
+/** What a bar costs the picture, in CSS px: a rail's width (44 px keys + padding + border), a row's height. */
+export const BAR_RAIL = 57;
+export const BAR_ROW = 61;
+
+/**
+ * Where an `auto` bar goes for THIS picture in THIS box: whichever side leaves
+ * the picture drawn larger when fitted. A wide picture on an upright phone is
+ * width-bound, so a rail steals the width it needs and a row costs it only
+ * height it was not using; a tall one is the other way round. Null when either
+ * size is not known yet (the CSS media fallback stands until then).
+ */
+export function autoPlace(
+  box: { w: number; h: number } | null, img: { w: number; h: number } | null,
+): "left" | "top" | null {
+  if (!box || !img || box.w < 1 || box.h < 1 || img.w < 1 || img.h < 1) return null;
+  const fit = (w: number, h: number) => Math.min(Math.max(w, 0) / img.w, Math.max(h, 0) / img.h);
+  const left = fit(box.w - BAR_RAIL, box.h);
+  const top = fit(box.w, box.h - BAR_ROW);
+  // A tie keeps the rail: it is the phone default this replaced.
+  return top > left ? "top" : "left";
 }

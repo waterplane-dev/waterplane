@@ -109,6 +109,68 @@ test("x labels are placed by pixel, evenly, and read back as dates", () => {
   assert.ok(t.every((x) => x.label.length > 0));
 });
 
+test("a day axis names days, never clock times", () => {
+  const noClock = (ts) => assert.ok(ts.every((x) => !x.label.includes(":")), JSON.stringify(ts));
+  const one = plot([pt("2026-10-02", 5)]);
+  const t1 = dayTicks(one);
+  assert.equal(t1.length, 1);
+  assert.equal(t1[0].anchor, "middle");
+  assert.ok(Math.abs(t1[0].x - (one.x + one.w / 2)) < 0.001);
+  assert.match(t1[0].label, /^2 \S+$/);
+  noClock(t1);
+
+  const t3 = dayTicks(plot([pt("2026-10-01", 1), pt("2026-10-03", 1)]));
+  assert.equal(t3.length, 3);
+  assert.deepEqual(t3.map((x) => x.anchor), ["start", "middle", "end"]);
+  assert.ok(t3[0].label.startsWith("1 ") && t3[2].label.startsWith("3 "));
+  assert.ok(t3[0].x < t3[1].x && t3[1].x < t3[2].x);
+  noClock(t3);
+
+  const gap = dayTicks(plot([pt("2026-10-01", 1), pt("2026-10-05", 1)]));
+  assert.equal(gap.length, 5);
+  noClock(gap);
+
+  const long = dayTicks(plot([pt("2026-05-01", 1), pt("2026-08-31", 1)]));
+  assert.equal(long.length, 3);
+  assert.deepEqual(long.map((x) => x.anchor), ["start", "middle", "end"]);
+  noClock(long);
+  // The edges name the first and last BUCKET, not the padded half-day beyond.
+  assert.ok(long[0].label.startsWith("1 ") && long[2].label.startsWith("31 "), JSON.stringify(long));
+  const eight = dayTicks(plot([pt("2026-10-10", 1), pt("2026-10-17", 1)]));
+  assert.ok(eight[0].label.startsWith("10 ") && eight[2].label.startsWith("17 "), JSON.stringify(eight));
+});
+
+test("a day axis survives a DST day in the running zone", (t) => {
+  // Find a 23h/25h day this year; zone-free otherwise (skips in UTC).
+  let start = null;
+  for (let m = 0; m < 12 && !start; m++) {
+    for (let d = 1; d <= 28; d++) {
+      if (new Date(2026, m, d + 1) - new Date(2026, m, d) !== 86_400_000) { start = [m, d]; break; }
+    }
+  }
+  if (!start) return t.skip("no DST in this zone");
+  const [m, d0] = start;
+  const days = [-1, 0, 1, 2].map((k) => new Date(2026, m, d0 + k));
+  const pts = days.map((dt) => ({ day: "x", t: dt.getTime(), v: 1 }));
+  const p = plot(pts);
+  const ticks = dayTicks(p);
+  assert.equal(ticks.length, 4);
+  assert.deepEqual(ticks.map((x) => parseInt(x.label, 10)), days.map((dt) => dt.getDate()), JSON.stringify(ticks));
+  ticks.forEach((x, i) => assert.ok(Math.abs(x.x - p.px(pts[i].t)) < 0.001, `tick ${i} off its column`));
+  // a gap series ending on the far side of the change
+  const gap = dayTicks(plot([pts[0], pts[3]]));
+  assert.deepEqual(gap.map((x) => parseInt(x.label, 10)), days.map((dt) => dt.getDate()));
+});
+
+test("an intraday plot keeps its clock labels, and a plot knows its step", () => {
+  const base = { width: 340, height: 150, pad: PAD };
+  const h = (n) => ({ day: "x", t: hourToMs(`2026-10-02T${String(n).padStart(2, "0")}`), v: 1 });
+  const ip = makeDayPlot({ ...base, points: [h(9), h(14)], stepMs: 3_600_000 });
+  assert.ok(dayTicks(ip).some((x) => x.label.includes(":")));
+  assert.equal(ip.step, 3_600_000);
+  assert.equal(plot([pt("2026-10-02", 1)]).step, 86_400_000);
+});
+
 // ── columns ───────────────────────────────────────────────────────────────
 
 test("a column never fills its slot — the leftover is air", () => {

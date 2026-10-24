@@ -19,7 +19,7 @@
 import { useMemo } from "react";
 import { fmtCount, fmtExact, fmtMoney, type UsageReading } from "@waterplane/shared";
 import { ledgers } from "@waterplane/sdk";
-import { Empty, fillSeries, rollingMean, useBoxWidth, useRemoteResource } from "@waterplane/kit";
+import { Empty, fillSeries, rollingMean, useBoxWidth, useRemoteResource, Button } from "@waterplane/kit";
 import {
   type AvailableLedger, costLines, kindRows, kindsTotal, ledgerAbsent, ledgerHero, dayWords, modelRows, recentDays, scopeWords,
   tokenDayPoints, turnsWords, unitDayPoints, unitHero,
@@ -85,8 +85,8 @@ export function BackendLedgerView({ id, label, online, fresh, reading = null, ta
           {onTable && (hero || unit) && (
             <div className="ts-filter" role="group" aria-label="show as">
               <span className="ctx-stackpick-lab">show as</span>
-              <button className={`key${!table ? " active" : ""}`} onClick={() => onTable(false)}>chart</button>
-              <button className={`key${table ? " active" : ""}`} onClick={() => onTable(true)}>values</button>
+              <Button className={!table ? "active" : undefined} onClick={() => onTable(false)}>chart</Button>
+              <Button className={table ? "active" : undefined} onClick={() => onTable(true)}>values</Button>
             </div>
           )}
 

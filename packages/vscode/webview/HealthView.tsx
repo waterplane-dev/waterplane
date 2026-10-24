@@ -13,6 +13,7 @@ import { AxisRow, HealthNav, RefreshKey, SectionCard, navKeysOf, shownSections }
 import { foldPlot } from "../../web/src/repoHealthFoldPlot";
 import { Explain } from "../../web/src/Explain";
 import { FilterChip } from "../../web/src/kit/FilterChip";
+import { Button } from "@waterplane/kit";
 import type { HealthAxisMode } from "../../web/src/healthIndexWords";
 import { CLAUDE_MD_KEY, DESC_KEY } from "../../web/src/repoHealthPlot";
 import {
@@ -98,7 +99,7 @@ export function HealthView({ folder, doc, why, run, prompts, terminal, post }: {
       <span className="rh-busy" role="status">
         <RefreshCw size={14} className="spin" aria-hidden /> {refreshBusyLabel(series, now - run.startedAt)}
       </span>
-      <button type="button" className="key rh-nav-refresh" onClick={stop}><Square size={14} aria-hidden /> stop</button>
+      <Button type="button" className="rh-nav-refresh" onClick={stop}><Square size={14} aria-hidden /> stop</Button>
     </>
   ) : (
     <RefreshKey busy={false} label={refreshLabel(series)} onClick={refresh} />
@@ -231,16 +232,16 @@ export function HealthView({ folder, doc, why, run, prompts, terminal, post }: {
                 measures the whole history again under the current definition. Nothing in your folder is touched.
               </div>
               <div className="btn-row">
-                <button type="button" className="key" onClick={() => { setAsking(false); post({ t: "healthForget", folder }); }}>
+                <Button type="button" onClick={() => { setAsking(false); post({ t: "healthForget", folder }); }}>
                   <Trash2 size={14} aria-hidden /> Yes, forget it and measure again
-                </button>
-                <button type="button" className="key" onClick={() => setAsking(false)}>Keep it</button>
+                </Button>
+                <Button type="button" onClick={() => setAsking(false)}>Keep it</Button>
               </div>
             </>
           ) : (
-            <button type="button" className="key" onClick={() => setAsking(true)}>
+            <Button type="button" onClick={() => setAsking(true)}>
               <Trash2 size={14} aria-hidden /> Forget this series and measure again…
-            </button>
+            </Button>
           )}
         </div>
       ) : null}

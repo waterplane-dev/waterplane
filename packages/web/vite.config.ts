@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join, resolve } from "node:path";
+import { networkInterfaces } from "node:os";
 // The BUILT shared package (shared builds first — already the rule): the
 // product's names come from `shared/src/brand.ts` and nowhere else.
 import { BRAND, BRAND_MIGRATED_KEY, LEGACY, legacyEnvText, logTag, resolveEnv } from "@waterplane/shared";
@@ -11,6 +12,42 @@ import { BRAND, BRAND_MIGRATED_KEY, LEGACY, legacyEnvText, logTag, resolveEnv } 
 const hostTarget = resolveEnv(process.env, "HOST_TARGET");
 if (hostTarget.legacy) console.warn(legacyEnvText(hostTarget.name, "HOST_TARGET"));
 const HOST_TARGET = hostTarget.value || "http://127.0.0.1:8770";
+
+/** Tailscale hands out 100.64.0.0/10 (100.64.x.x – 100.127.x.x); loopback is the other trusted tier. */
+function isTailnetOrLoopback(addr: string): boolean {
+  if (addr === "localhost" || addr === "::1" || /^127\.\d+\.\d+\.\d+$/.test(addr)) return true;
+  const m = /^100\.(\d+)\.\d+\.\d+$/.exec(addr);
+  return !!m && Number(m[1]) >= 64 && Number(m[1]) <= 127;
+}
+
+/**
+ * Where the dev server listens: the same boundary as the daemon. `host: true`
+ * (every interface) put the daemon one proxy hop from the Wi-Fi — the proxied
+ * request reached it from 127.0.0.1 with no forwarding header, i.e. as a
+ * trusted local process. So: this machine's Tailscale address when it has one
+ * (the phone reaches it there — and then `localhost:5173` no longer answers,
+ * vite binds ONE address and prints it), else loopback. `WATERPLANE_DEV_HOST`
+ * names one of those two tiers on purpose; a Wi-Fi address is refused, because
+ * a proxied request is classed by its proxy header, not by the forwarded
+ * address — every Wi-Fi peer would arrive as a TAILSCALE-tier caller, trusted
+ * without the password, weaker than the daemon's own LAN rule. Never `true`.
+ */
+function devHost(): string {
+  const named = resolveEnv(process.env, "DEV_HOST");
+  if (named.legacy) console.warn(legacyEnvText(named.name, "DEV_HOST"));
+  if (named.value) {
+    if (!isTailnetOrLoopback(named.value)) {
+      throw new Error(`${named.name}=${named.value}: the dev server binds a tailnet (100.64/10) or loopback address only — the daemon trusts nothing else without a password`);
+    }
+    return named.value;
+  }
+  for (const addrs of Object.values(networkInterfaces())) {
+    for (const a of addrs ?? []) {
+      if (a.family === "IPv4" && isTailnetOrLoopback(a.address) && !a.internal) return a.address;
+    }
+  }
+  return "127.0.0.1";
+}
 
 /**
  * The placeholders the files that cannot import `brand.ts` carry —
@@ -314,10 +351,12 @@ export default defineConfig({
     chunkSizeWarningLimit: 1600,
   },
   server: {
-    host: true, // listen on all interfaces so the phone can reach the dev server
+    host: devHost(), // the Tailscale address or loopback — never every interface (see devHost)
+    // `xfwd`: the daemon sees `x-forwarded-for` and classes the request as proxied —
+    // a Tailscale peer, gateable — never as a local process (`net.ts` `requestPeerKind`).
     proxy: {
-      "/api": { target: HOST_TARGET, changeOrigin: true },
-      "/ws": { target: HOST_TARGET, ws: true, changeOrigin: true },
+      "/api": { target: HOST_TARGET, changeOrigin: true, xfwd: true },
+      "/ws": { target: HOST_TARGET, ws: true, changeOrigin: true, xfwd: true },
     },
   },
 });

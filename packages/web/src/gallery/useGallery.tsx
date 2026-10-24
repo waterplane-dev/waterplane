@@ -52,7 +52,6 @@ export function useGallery(props: GalleryProps) {
 
   /** Chip class — `busy` marks the chip whose listing is on the wire, so the tap
    *  keeps its highlight (and a spinner) instead of releasing back to plain. */
-  const chipCls = (active: boolean) => `key ${active ? "active" : ""}${active && loading ? " busy" : ""}`;
   const busyMark = (active: boolean) => (active && loading ? <> <Loader2 size={12} className="spin" /></> : null);
 
   const repoOf = (f: Row) => repoOfRow(repoId, f);
@@ -195,7 +194,7 @@ export function useGallery(props: GalleryProps) {
   }
 
   return {
-    props, ...lst, ...vw, open, showFile, closeDoc, copied, note, badSrc, markBad, chipCls, busyMark,
+    props, ...lst, ...vw, open, showFile, closeDoc, copied, note, badSrc, markBad, busyMark,
     repoOf, urlFor, thumbFor, canFullRes, isInboxFile, markOf, pullOf, dlTarget, pullBadge,
     localUrl, mediaSrc, fileSrc, htmlLive, imgs, openIdx, nav, removeInbox, del, copy,
     ...pick,

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { CloudOff, Hammer, Loader, Pencil, Play, Plus, Square, Wand2, ChevronDown, ChevronUp } from "lucide-react";
-import type { ArtifactPolicy, BuildArtifact, BuildCandidate, BuildConfig, BuildRun, RepoTarget } from "@waterplane/shared";
+import type { ArtifactPolicy, BuildArtifact, BuildCandidate, BuildParamAnswer, BuildConfig, BuildRun, RepoTarget } from "@waterplane/shared";
 import { branchLabel } from "@waterplane/shared";
 import { SETUP_PROMPT, oneBuildPrompt, paramsRowNote, type BuildDraftSeed } from "./buildPrompt";
 import { track } from "./usage";
@@ -83,10 +83,10 @@ interface Props {
    * as a build whose listing command answered nothing, and the form words the
    * two differently (`Empty`'s rule, one screen down).
    */
-  paramOptions?: Record<string, Record<string, { options?: string[]; total?: number; error?: string }>>;
+  paramOptions?: Record<string, Record<string, BuildParamAnswer>>;
   /** Run this build's `optionsCmd`s on the desktop. Called when the ask form
    *  opens — a listing, not the build. */
-  onAskOptions: (buildId: string) => void;
+  onAskOptions: (buildId: string, approve?: { paramId: string; cmd: string }) => void;
   onClose: () => void;
 }
 
@@ -175,6 +175,7 @@ export function BuildSheet({ repo, builds, runs, output, outTick, onSave, localI
 
   if (asking) {
     return <BuildRunAsk build={asking} options={paramOptions?.[asking.id]} online={online}
+      onApprove={(paramId, cmd) => { track("action:build.approve-options"); onAskOptions(asking.id, { paramId, cmd }); }}
       onCancel={() => setAsking(null)}
       onRun={(values) => { track("action:build.run"); onRun(asking.id, values); setAsking(null); }} />;
   }

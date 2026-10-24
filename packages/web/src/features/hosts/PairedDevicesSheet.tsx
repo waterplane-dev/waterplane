@@ -23,6 +23,7 @@ import { useCore } from "../../sdk";
 import { openSettingsAt } from "../../settingsFocus";
 import { deviceRouteText, devicesEmptyText, revokeLines, seenAgo } from "./logic";
 import { Button, Row, RowTitle, RowSub, Hint } from "../../kit";
+import { SetLine } from "../../SettingsKit";
 
 const ICON = 16;
 
@@ -117,9 +118,9 @@ export function PairedDevicesSheet() {
       {!passwordSet && rows.length > 0 && (
         <>
           <Hint>No host password is set right now, so these rows cannot sign in until one is.</Hint>
-          <div className="set-row">
+          <SetLine>
             <Button onClick={() => openSettingsAt("lan-password")}><KeyRound size={ICON} /> set the LAN password</Button>
-          </div>
+          </SetLine>
         </>
       )}
       {(anyPassive || pinSet) && (
@@ -129,11 +130,11 @@ export function PairedDevicesSheet() {
               : pinSet ? "Passive devices get app updates only; the unlock PIN opens the full app on one for 30 minutes."
               : "No unlock PIN is set, so a passive device cannot be unlocked."}
           </Hint>
-          <div className="set-row">
+          <SetLine>
             <Button title="the PIN a passive device unlocks with" onClick={() => void setPin()}>
               <Lock size={ICON} /> {pinSet ? "change the unlock PIN" : "set the unlock PIN"}
             </Button>
-          </div>
+          </SetLine>
         </>
       )}
       <Hint>

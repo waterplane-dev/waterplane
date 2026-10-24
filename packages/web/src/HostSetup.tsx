@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { nativePlugin } from "./shellBridge";
 import { BRAND, envName, PROTOCOL_VERSION, normalizeHostBase, normalizeHostName, normalizeSsid, defaultHostName, type PairTarget, type SavedHost } from "@waterplane/shared";
 import { CheckCircle2, FlaskConical, KeyRound, Loader2, Plug, Plus, Router, Wifi, X, XCircle } from "lucide-react";
-import { SetNote, SetSwitch } from "./SettingsKit";
+import { SetNote, SetSwitch, SetLine } from "./SettingsKit";
 import { PairForm } from "./PairForm";
 import { FoundDesktops } from "./FoundDesktops";
 import { passwordSentence } from "./hostDiscover";
@@ -223,7 +223,7 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
           <FoundDesktops onPassword={(b, n) => { setFound({ target: { base: b, code: "" }, note: passwordSentence(n) }); setPairing(true); }} />
         )}
         {found && pairing && (
-          <div className="set-note warn" style={{ marginBottom: 10 }}>{found.note}</div>
+          <SetNote className="warn" style={{ marginBottom: 10 }}>{found.note}</SetNote>
         )}
         {mode !== "edit" && !(pairFromLink && pair) && (
           <div className="pair-modes" role="tablist">
@@ -241,17 +241,17 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
               onDone={(h) => onDone(h)}
             />
             {onCancel && (
-              <div className="set-row" style={{ marginTop: 10 }}>
+              <SetLine style={{ marginTop: 10 }}>
                 <Button onClick={onCancel}>cancel</Button>
-              </div>
+              </SetLine>
             )}
           </>
         ) : (<>
-        <div className="set-note" style={{ marginBottom: 12 }}>
+        <SetNote style={{ marginBottom: 12 }}>
           The address the {BRAND.name} daemon prints at boot — usually its Tailscale IP.
           Port {" "}
           <code>8770</code> is assumed unless you type another one.
-        </div>
+        </SetNote>
 
         <input
           className="auth-input"
@@ -265,11 +265,11 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
           onKeyDown={(e) => { if (e.key === "Enter" && base && mode === "first") void test().then((ok) => { if (ok) save(true); }); }}
         />
 
-        {base && <div className="set-note" style={{ marginTop: 8, opacity: 0.75 }}>will use <code>{base}</code></div>}
+        {base && <SetNote style={{ marginTop: 8, opacity: 0.75 }}>will use <code>{base}</code></SetNote>}
         {text.trim() && !base && (
-          <div className="set-note" style={{ marginTop: 8, color: "var(--dead)" }}>
+          <SetNote style={{ marginTop: 8, color: "var(--dead)" }}>
             Not an address. Use a host name or IP, optionally with a port — http or https only.
-          </div>
+          </SetNote>
         )}
 
         <input
@@ -284,30 +284,31 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
         />
 
         {probe.s === "busy" && (
-          <div className="set-note" style={{ marginTop: 10 }}>
+          <SetNote style={{ marginTop: 10 }}>
             <Loader2 size={13} className="spin" style={{ verticalAlign: "-2px" }} /> checking…
-          </div>
+          </SetNote>
         )}
         {probe.s === "ok" && (
-          <div className="set-note" style={{ marginTop: 10, color: "var(--ok)" }}>
+          <SetNote style={{ marginTop: 10, color: "var(--ok)" }}>
             <CheckCircle2 size={13} style={{ verticalAlign: "-2px" }} /> daemon found — root <code>{probe.root}</code>
             {probe.protocol !== PROTOCOL_VERSION && ` · protocol ${probe.protocol}, this app speaks ${PROTOCOL_VERSION}`}
-          </div>
+          </SetNote>
         )}
         {probe.s === "bad" && (
-          <div className="set-note" style={{ marginTop: 10, color: "var(--dead)" }}>
+          <SetNote style={{ marginTop: 10, color: "var(--dead)" }}>
             <XCircle size={13} style={{ verticalAlign: "-2px" }} /> {probe.why}
             {probe.hint && <div style={{ opacity: 0.8, marginTop: 4 }}>{probe.hint}</div>}
-          </div>
+          </SetNote>
         )}
 
         {mode !== "first" && (
           <details style={{ marginTop: 14 }} open={!!host?.lan}>
+            {/* raw: the <summary> of a hand-rolled <details>, not SetNote's fold (a div) */}
             <summary className="set-note"><Router size={13} style={{ verticalAlign: "-2px" }} /> on the same Wi-Fi (optional)</summary>
-            <div className="set-note" style={{ marginTop: 6 }}>
+            <SetNote style={{ marginTop: 6 }}>
               The desktop's address on your home network. The app uses it only on the Wi-Fi names
               below, only after the desktop proves who it is, and only when the switch is on.
-            </div>
+            </SetNote>
             <input
               className="auth-input"
               inputMode="url"
@@ -319,7 +320,7 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
               onChange={(e) => setLanText(e.target.value)}
             />
             {lanText.trim() && !lanBase && (
-              <div className="set-note" style={{ marginTop: 6, color: "var(--dead)" }}>Not an address.</div>
+              <SetNote style={{ marginTop: 6, color: "var(--dead)" }}>Not an address.</SetNote>
             )}
             {lanSuggest.length > 0 && (
               <div className="set-chips" style={{ marginTop: 6 }}>
@@ -350,9 +351,9 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
           </details>
         )}
 
-        {problem && <div className="set-note" style={{ marginTop: 10, color: "var(--dead)" }}>{problem}</div>}
+        {problem && <SetNote style={{ marginTop: 10, color: "var(--dead)" }}>{problem}</SetNote>}
 
-        <div className="set-row" style={{ marginTop: 14, flexWrap: "wrap", gap: 8 }}>
+        <SetLine style={{ marginTop: 14, flexWrap: "wrap", gap: 8 }}>
           {base ? (
             <>
               {probe.s !== "busy" && <Button onClick={() => void test()}>test</Button>}
@@ -365,10 +366,10 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
               {mode === "edit" && <Button variant="primary" onClick={() => save(false)}>save</Button>}
             </>
           ) : (
-            <span className="set-note">Type the desktop's address to test or save it.</span>
+            <SetNote as="span">Type the desktop's address to test or save it.</SetNote>
           )}
           {onCancel && <Button onClick={onCancel}>cancel</Button>}
-        </div>
+        </SetLine>
         </>)}
 
         {mode === "first" && (
@@ -381,10 +382,10 @@ export function HostSetup({ mode, host, lanSuggest = [], pair, pairFromLink, onD
         )}
 
         {mode === "first" && (
-          <div className="set-note" style={{ marginTop: 14, opacity: 0.65 }}>
+          <SetNote style={{ marginTop: 14, opacity: 0.65 }}>
             This app keeps its interface inside the APK, so it stays usable — queue,
             drafts, cached transcripts — even when the desktop is unreachable.
-          </div>
+          </SetNote>
         )}
       </div>
     </div>

@@ -181,7 +181,7 @@ export class BacklogManager {
   autoSlotFacts(): AutoSlotFacts { return sess.autoSlotFacts(this.core); }
 
   /** The session ONE fired item runs in. */
-  openItemSession(i: Intent): string { return sess.openItemSession(this.core, i); }
+  openItemSession(i: Intent): Promise<string> { return sess.openItemSession(this.core, i); }
 
   /** Flags first (`followUpSweep`), so a session that wants one is never closed ahead of it. */
   lingerSweep(isAttached: (id: string) => boolean): string[] { followUpSweep(this.core); return sess.lingerSweep(this.core, isAttached); }
@@ -189,7 +189,7 @@ export class BacklogManager {
   /** Flag for follow up the sessions whose item said so and finished ok — once per row. */
   followUpSweep(): string[] { return followUpSweep(this.core); }
 
-  ensureRepoSession(repoDir: string): string { return sess.ensureRepoSession(this.core, repoDir); }
+  ensureRepoSession(repoDir: string): Promise<string> { return sess.ensureRepoSession(this.core, repoDir); }
 
   resolveRepoSession(repoDir: string, adopt = false): string | null { return sess.resolveRepoSession(this.core, repoDir, adopt); }
 

@@ -4,7 +4,7 @@
 import { scanRepoBuilds } from "../../buildscan.js";
 import { artifactPolicy, saveArtifactPolicy } from "../../artifacts.js";
 import { probeCaptureBackends } from "../../capture.js";
-import type { BuildCandidate } from "@waterplane/shared";
+import type { BuildCandidate, BuildParamAnswer } from "@waterplane/shared";
 import type { Route, RouteSpec, RouteTable } from "../types.js";
 
 const onBuildList: Route<"build.list"> = (a) => {
@@ -69,8 +69,8 @@ const onBuildRun: RouteSpec<"build.run"> = {
 const onBuildOptions: Route<"build.options"> = (a) => {
     void a.c.containRepoDir(a.msg.repoDir).then(async (repoDir) => {
       if (!repoDir) return;
-      let options: Record<string, { options?: string[]; total?: number; error?: string }> = {};
-      try { options = await a.c.builds.paramOptions(repoDir, a.msg.buildId); }
+      let options: Record<string, BuildParamAnswer> = {};
+      try { options = await a.c.builds.paramOptions(repoDir, a.msg.buildId, a.msg.approve === true && typeof a.msg.paramId === "string" ? { paramId: a.msg.paramId, cmd: typeof a.msg.cmd === "string" ? a.msg.cmd : undefined } : undefined); }
       catch { options = {}; }
       a.c.send(a.ws, { t: "build.options", repoDir, buildId: a.msg.buildId, options });
     });

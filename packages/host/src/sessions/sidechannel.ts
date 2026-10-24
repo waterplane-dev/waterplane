@@ -20,6 +20,22 @@
  *    against `pending()`. The screen reader stands down while the channel owns
  *    the dialogs (`boxes.ts`'s `screenReaderOff`), because two readers on one
  *    box re-key its fingerprint.
+ *  - **questions** (contract 2.0): a question the CLI posed with NO choice box
+ *    (`sources.questions` — an agent's ask-the-user tool) publishes the same way,
+ *    `kind: "question"`, `askId` = the CLI's id, `freeText` when a typed answer is
+ *    accepted, options possibly empty; `closed` retires it; oldest first ACROSS
+ *    dialogs and questions (`posedAt`). claude's box-less question is not this —
+ *    it stays `question.ts`'s screen read, answered in the composer.
+ *  - **plan** (`sources.plan`, typed in 2.0, consumed since 2.2): a plan the CLI posed
+ *    publishes as the SAME plan box claude's screen read produces (`kind: "plan"`, the plan
+ *    text on `DetectedPrompt.plan`, capped at `planbox.ts`'s `PLAN_CAP`), two rows — approve,
+ *    keep planning — `askId` = the CLI's id, `nav`; `closed` retires it; oldest first across
+ *    dialogs, questions and plans. Answered only by a person's tap (`sourceanswer.ts`'s
+ *    `answerSourcePlan`, at most once per plan); the answer gate refuses a plan box.
+ *  - **mode** (`sources.mode`, 2.2): its `watch` is a cue to re-read — `core.checkMode`, which
+ *    asks `current()` (`livemode.ts`) — and so is the channel's `up` edge. Not handed back on
+ *    `down`: there is no screen reader for another CLI's mode, and `current()` says null when
+ *    it cannot tell.
  *  - **down**: everything above is handed back — `hooked` false (silence again),
  *    the source's box retired, the screen reader re-armed at once.
  *
@@ -34,18 +50,23 @@
  * changes nothing.
  */
 import { realpathSync } from "node:fs";
-import type { ChannelHealth, DetectedPrompt, SourceDialog, SourceHandle, SourceSession, TurnFacts } from "@waterplane/shared";
+import type { ChannelHealth, DetectedPrompt, SourceDialog, SourceHandle, SourcePlan, SourceQuestion, SourceSession, TurnFacts } from "@waterplane/shared";
 import { MAX_BOX_OPTIONS } from "../prompt.js";
-import { ruleLabel } from "../answergate.js";
+import { PLAN_CAP } from "../planbox.js";
+import { PLAN_APPROVE, PLAN_KEEP } from "../sourceanswer.js";
+import { dialogAskRuleHit, ruleLabel, sessionAskRules } from "../answergate.js";
 import { setLiveSourceLookup } from "../livesources.js";
-import { BACKENDS } from "../backends/index.js";
+import { BACKENDS, derive } from "../backends/index.js";
 import type { Session, SessionChannel, SessionCore } from "./core.js";
-import { SEAT_SWEEP_MS } from "./knobs.js";
+import { CONTEXT_FRESH_MS, CONTEXT_FRESH_POLL_MS, SEAT_SWEEP_MS } from "./knobs.js";
 
 /** The wire shape of a dialog the CLI posed — or null when it states too little
  *  to be a box anybody could answer from a phone. */
-export function dialogToPrompt(d: SourceDialog, opts: { keepsRules?: boolean } = {}): DetectedPrompt | null {
+export function dialogToPrompt(d: SourceDialog, opts: { keepsRules?: boolean; askRules?: readonly string[] } = {}): DetectedPrompt | null {
   if (!d || typeof d.id !== "string" || !d.id || typeof d.question !== "string") return null;
+  // A dialog an ask rule the gate holds names is a person's every time: no option promises a
+  // standing rule the gate would refuse (`answergate.ts`'s `ruleRefusal`, `rememberRule`).
+  const keepsRules = !!opts.keepsRules && !(opts.askRules?.length && dialogAskRuleHit(opts.askRules, d));
   const options = (Array.isArray(d.options) ? d.options : [])
     .filter((o) => o && Number.isInteger(o.index) && typeof o.label === "string" && o.label.trim())
     .slice(0, MAX_BOX_OPTIONS)
@@ -53,15 +74,54 @@ export function dialogToPrompt(d: SourceDialog, opts: { keepsRules?: boolean } =
       // A tap on this option makes a standing rule (`answergate.ts`): say so ON the option, in
       // the label the HOST will keep — never the plugin's `key`, and only where a rule can be
       // made at all (`keepsRules`: the backend has an owning plugin to key it by).
-      const kept = opts.keepsRules ? ruleLabel(o.remember) : null;
+      const kept = keepsRules ? ruleLabel(o.remember) : null;
       return {
         index: o.index, label: o.label,
         ...(typeof o.desc === "string" && o.desc ? { desc: o.desc } : {}),
         ...(kept !== null ? { remembers: { label: kept.slice(0, 300) } } : {}),
+        // The row takes a typed reason (2.0): the phone offers a field, `answerBox` hands the words over.
+        ...(o.takesText === true ? { takesText: true } : {}),
       };
     });
   if (!options.length) return null;
   return { kind: d.kind, question: d.question, options, nav: true, askId: d.id };
+}
+
+/** The wire shape of a question the CLI posed with no choice box (`sources.questions`) — or
+ *  null when nobody could answer it from a phone: no question, or neither options nor a typed
+ *  answer. `nav`: an option is NAMED (`promptChoice`), never typed as a digit. */
+export function questionToPrompt(q: SourceQuestion): DetectedPrompt | null {
+  if (!q || typeof q.id !== "string" || !q.id || typeof q.question !== "string") return null;
+  const options = (Array.isArray(q.options) ? q.options : [])
+    .filter((o) => o && Number.isInteger(o.index) && typeof o.label === "string" && o.label.trim())
+    .slice(0, MAX_BOX_OPTIONS)
+    .map((o) => ({ index: o.index, label: o.label, ...(typeof o.desc === "string" && o.desc ? { desc: o.desc } : {}) }));
+  const freeText = q.freeText === true;
+  if (!options.length && !freeText) return null;
+  return { kind: "question", question: q.question, options, nav: true, askId: q.id, ...(freeText ? { freeText: true } : {}) };
+}
+
+/**
+ * The wire shape of a plan the CLI posed on its own channel (`sources.plan`) — claude's plan box,
+ * from a source: `kind: "plan"`, the question worded as claude's box words it (so `planbox.ts`'s
+ * `isPlanBox` reads it as one), two rows the phone names (`nav`) and `answerSourcePlan` maps to
+ * the two verbs, and the plan text capped at `PLAN_CAP` exactly as the plan file is. `plan.path`
+ * is EMPTY: the text came over the backend's own channel and there is no file to point at — never
+ * a made-up path (the wire field says so). No text ⇒ the box without a plan, as claude's box is
+ * published when the file cannot be read.
+ * Null when it states too little to answer: no id, or a verb missing.
+ */
+export function planToPrompt(p: SourcePlan, label: string): DetectedPrompt | null {
+  if (!p || typeof p.id !== "string" || !p.id || typeof p.approve !== "function" || typeof p.keepPlanning !== "function") return null;
+  const text = typeof p.text === "string" ? p.text : "";
+  const cut = text.length > PLAN_CAP;
+  return {
+    kind: "plan",
+    question: `${label} has written up a plan and is ready to execute. Would you like to proceed?`,
+    options: [{ index: PLAN_APPROVE, label: "Yes, proceed with the plan" }, { index: PLAN_KEEP, label: "No, keep planning" }],
+    nav: true, askId: p.id,
+    ...(text.trim() ? { plan: { text: cut ? text.slice(0, PLAN_CAP) : text, path: "", ...(cut ? { cut: true } : {}) } } : {}),
+  };
 }
 
 const sameHealth = (a: ChannelHealth | undefined, b: ChannelHealth) =>
@@ -79,6 +139,9 @@ export interface SendHold { connecting: boolean; sentence: string }
 
 export class ChannelSlice {
   private sweepTimer: NodeJS.Timeout | null = null;
+  /** The turn-end wait for a fresh context sample, and its re-ask cadence (tests shorten them). */
+  contextWaitMs = CONTEXT_FRESH_MS;
+  contextPollMs = CONTEXT_FRESH_POLL_MS;
 
   constructor(private readonly core: SessionCore) {
     // The readers outside the slices (`deliver.ts`, `settle.ts`, `record.ts`, `ctxseries.ts`)
@@ -148,7 +211,8 @@ export class ChannelSlice {
     if (s.channel && !s.channel.closed) return;
     const ch: SessionChannel = {
       handle: null, attaching: true, unwatch: [], turnsLive: false, dialogsLive: false, reconciling: false, dialogs: new Map(), published: null, closed: false,
-      suspendOnClose: false, everUp: false, screenOnly: null, unposed: 0,
+      suspendOnClose: false, everUp: false, screenOnly: null, unposed: 0, questions: new Map(), posedAt: new Map(), posedSeq: 0, questionsLive: false,
+      plans: new Map(),
     };
     s.channel = ch;
     // Not yet up, so said so: a `requiresChannel` backend holds its sends
@@ -197,11 +261,12 @@ export class ChannelSlice {
     if (!ch || ch.closed) return;
     ch.closed = true;
     ch.suspendOnClose = s.detaching;
+    ch.pendingEnd?.cancel();
     for (const u of ch.unwatch) { try { u(); } catch { /* a source's own teardown */ } }
     ch.unwatch = [];
-    ch.dialogs.clear();
+    ch.dialogs.clear(); ch.questions.clear(); ch.plans.clear(); ch.posedAt.clear();
     ch.published = null;
-    ch.turnsLive = false; ch.dialogsLive = false;
+    ch.turnsLive = false; ch.dialogsLive = false; ch.questionsLive = false;
     const h = ch.handle; ch.handle = null;
     if (h) void (s.detaching && h.suspend ? h.suspend() : h.close()).catch(() => { /* already gone */ });
   }
@@ -216,13 +281,20 @@ export class ChannelSlice {
   }
 
   private watch(s: Session, ch: SessionChannel, ss: SourceSession): void {
-    const { turns, dialogs } = s.backend.sources ?? {};
+    const { turns, dialogs, questions, plan, mode } = s.backend.sources ?? {};
     const live = () => !ch.closed && s.channel === ch;
     if (turns) {
       const edge = (e: "started" | "ended" | "ready", f?: TurnFacts) => { if (live()) this.core.sourceTurn(s, e, f); };
+      // Every edge first settles an end still waiting for its context sample: edges stay in order.
+      const next = (e: "started" | "ended" | "ready", f?: TurnFacts) => { ch.pendingEnd?.flush(); edge(e, f); };
       try {
         ch.unwatch.push(turns.watch(ss, {
-          started: (_at, f) => edge("started", f), ended: (_at, f) => edge("ended", f), ready: (f) => edge("ready", f),
+          started: (_at, f) => next("started", f), ready: (f) => next("ready", f),
+          ended: (at, f) => {
+            if (!live()) return;
+            ch.pendingEnd?.flush();
+            this.endWhenFresh(s, ch, ss, at, () => edge("ended", f));
+          },
           identified: (id) => { if (live() && typeof id === "string") this.core.sourceIdentified(s, id); },
         }));
       } catch { /* a source that cannot watch is a source with no turns */ }
@@ -235,6 +307,69 @@ export class ChannelSlice {
           unposed: (n) => { if (live()) this.unposed(s, ch, n); },
         }));
       } catch { /* same */ }
+    }
+    if (questions) {
+      try {
+        ch.unwatch.push(questions.watch(ss, {
+          asked: (q) => { if (live()) this.askedQuestion(s, ch, q); },
+          closed: (id) => { if (live()) this.closedQuestion(s, ch, id); },
+        }));
+      } catch { /* same */ }
+    }
+    // The 2.2 consumers ask the FACT, not the slot alone: the wire cap (`has("plan")`,
+    // `modes`) is read off the same table, so the phone is offered exactly what runs here.
+    const facts = derive(s.backend);
+    if (plan && facts.askSource("plan")) {
+      try {
+        ch.unwatch.push(plan.watch(ss, {
+          posed: (p) => { if (live()) this.posedPlan(s, ch, p); },
+          closed: (id) => { if (live()) this.closedPlan(s, ch, id); },
+        }));
+      } catch { /* same */ }
+    }
+    if (mode?.watch && facts.askSource("mode")) {
+      try {
+        ch.unwatch.push(mode.watch(ss, () => { if (live()) this.core.checkMode(s); }));
+      } catch { /* a source that cannot watch is re-read on the quiet tick */ }
+    }
+  }
+
+  /**
+   * Settle a source turn's end once the backend's `context` sample is stamped at or after the
+   * end's `at`, waiting at most `contextWaitMs` — so the turn-end context read (`markIdle` →
+   * `checkContext` → `ctxseries.ts`'s `sourceContext`) is THIS turn's fill, and a plugin needs no
+   * hold of its own before calling `ended`. Woken by the source's `watch()` when it has one, else
+   * re-asked every `contextPollMs`. No context source, an in-band channel (claude's hooks: its
+   * end path takes no wait), an `at` that is not a number, or a sample already fresh ⇒ at once.
+   * Past the bound the end settles as it always did: the reading is whatever the source holds,
+   * or absent — never a number made up to fill the gap. A later edge flushes the wait first.
+   */
+  private endWhenFresh(s: Session, ch: SessionChannel, ss: SourceSession, at: number, settle: () => void): void {
+    const ctx = s.backend.sources?.context;
+    const fresh = (): boolean => {
+      let c;
+      try { c = ctx!.sample(ss); } catch { c = null; }
+      return !!c && typeof c.at === "number" && c.at >= at;
+    };
+    if (!ctx || s.backend.sources?.inBand || !Number.isFinite(at) || fresh()) { settle(); return; }
+    let unwatch: (() => void) | null = null;
+    const finish = (run: boolean) => {
+      if (ch.pendingEnd !== held) return;
+      ch.pendingEnd = null;
+      clearInterval(poll); clearTimeout(bound);
+      try { unwatch?.(); } catch { /* a source's own teardown */ }
+      if (run && !ch.closed && s.channel === ch) settle();
+    };
+    const held = { flush: () => finish(true), cancel: () => finish(false) };
+    ch.pendingEnd = held;
+    const poll = setInterval(() => { if (fresh()) finish(true); }, this.contextPollMs);
+    const bound = setTimeout(() => finish(true), this.contextWaitMs);
+    poll.unref?.(); bound.unref?.();
+    if (ctx.watch) {
+      try {
+        unwatch = ctx.watch(ss, (c) => { if ((c && typeof c.at === "number" && c.at >= at) || fresh()) finish(true); });
+      } catch { unwatch = null; /* polled instead */ }
+      if (ch.pendingEnd !== held) { try { unwatch?.(); } catch { /* same */ } }
     }
   }
 
@@ -270,6 +405,9 @@ export class ChannelSlice {
       // Until a reconcile has answered with a list, the screen reader keeps
       // the dialogs; every `up` report until then asks again, never two at once.
       if (sources?.dialogs && !ch.dialogsLive && !ch.reconciling) this.reconcile(s, ch);
+      if (sources?.questions && !ch.questionsLive) this.reconcileQuestions(s, ch);
+      // The mode may be readable from here on: read it now, not at the next quiet tick.
+      if (sources?.mode && derive(s.backend).askSource("mode")) this.core.checkMode(s);
     } else if (h.state === "down") {
       this.handBack(s, ch);
     }
@@ -283,8 +421,8 @@ export class ChannelSlice {
       s.hooksActive = false; s.info.hooked = false;
     }
     const owned = ch.dialogsLive || !!ch.published;
-    ch.dialogsLive = false;
-    ch.dialogs.clear();
+    ch.dialogsLive = false; ch.questionsLive = false;
+    ch.dialogs.clear(); ch.questions.clear(); ch.plans.clear(); ch.posedAt.clear();
     if (ch.published) {
       ch.published = null;
       this.core.applyPrompt(s, null);
@@ -292,7 +430,7 @@ export class ChannelSlice {
     // The screen reader is back on duty NOW, not at the next burst of output:
     // a dialog still open on the TUI is the one thing a person must not lose
     // sight of while the channel is out.
-    if (owned && s.info.running && s.backend.caps.promptBoxes) this.core.armPromptCheck(s, 0);
+    if (owned && s.info.running && derive(s.backend).screen("dialogs") !== null) this.core.armPromptCheck(s, 0);
   }
 
   /** On the `up` edge: what is pending NOW. `null` = cannot say ⇒ the screen
@@ -312,7 +450,9 @@ export class ChannelSlice {
       // list, and is kept; one that was there before and is not in the list
       // was resolved during the gap.
       for (const [id, d] of ch.dialogs) if (!before.has(id) && !next.has(id)) next.set(id, d);
+      for (const id of ch.dialogs.keys()) if (!next.has(id)) ch.posedAt.delete(id);
       ch.dialogs = next;
+      for (const id of next.keys()) this.posed(ch, id);
       ch.dialogsLive = true;
       this.publish(s, ch);
     }, () => { /* cannot say ⇒ the screen reader stays on */ });
@@ -321,6 +461,64 @@ export class ChannelSlice {
   private asked(s: Session, ch: SessionChannel, d: SourceDialog): void {
     if (!dialogToPrompt(d)) return; // states too little to be a box; the screen may still read it
     ch.dialogs.set(d.id, d);
+    this.posed(ch, d.id);
+    this.publish(s, ch);
+  }
+
+  /** Stamp when an id was first posed — "oldest first" across dialogs AND questions. */
+  private posed(ch: SessionChannel, id: string): void {
+    if (!ch.posedAt.has(id)) ch.posedAt.set(id, ++ch.posedSeq);
+  }
+
+  /** On the `up` edge: the questions open NOW, where the source can say (`pending`); one
+   *  `asked` during the gap is newer than the list and kept. No `pending` ⇒ live at once. */
+  private reconcileQuestions(s: Session, ch: SessionChannel): void {
+    const questions = s.backend.sources?.questions;
+    if (!questions) return;
+    ch.questionsLive = true;
+    if (!questions.pending) return;
+    const before = new Set(ch.questions.keys());
+    let pending: Promise<SourceQuestion[] | null>;
+    try { pending = questions.pending(this.sourceSession(s)); } catch { return; }
+    pending.then((list) => {
+      if (ch.closed || s.channel !== ch || !ch.questionsLive || !Array.isArray(list)) return;
+      const next = new Map<string, SourceQuestion>();
+      for (const q of list) if (q && typeof q.id === "string" && questionToPrompt(q)) next.set(q.id, q);
+      for (const [id, q] of ch.questions) if (!before.has(id) && !next.has(id)) next.set(id, q);
+      for (const id of ch.questions.keys()) if (!next.has(id)) ch.posedAt.delete(id);
+      ch.questions = next;
+      for (const id of next.keys()) this.posed(ch, id);
+      this.publish(s, ch);
+    }, () => { /* cannot say ⇒ what `asked` reported stands */ });
+  }
+
+  private askedQuestion(s: Session, ch: SessionChannel, q: SourceQuestion): void {
+    if (!questionToPrompt(q)) return; // nothing a phone could answer with
+    ch.questions.set(q.id, q);
+    this.posed(ch, q.id);
+    this.publish(s, ch);
+  }
+
+  private closedQuestion(s: Session, ch: SessionChannel, id: string): void {
+    ch.posedAt.delete(id);
+    if (!ch.questions.delete(id) && ch.published !== id) return;
+    this.publish(s, ch);
+  }
+
+  /** A plan posed (or re-posed under the same id: new text, the SAME answer latch — a re-pose
+   *  mid-answer must not let a second tap call a verb again). */
+  private posedPlan(s: Session, ch: SessionChannel, p: SourcePlan): void {
+    if (!planToPrompt(p, s.backend.label)) return; // nothing a phone could answer
+    const had = ch.plans.get(p.id);
+    // Mutate in place: an in-flight answer holds THIS entry and releases its latch on it.
+    if (had) had.plan = p; else ch.plans.set(p.id, { plan: p, answering: false });
+    this.posed(ch, p.id);
+    this.publish(s, ch);
+  }
+
+  private closedPlan(s: Session, ch: SessionChannel, id: string): void {
+    ch.posedAt.delete(id);
+    if (!ch.plans.delete(id) && ch.published !== id) return;
     this.publish(s, ch);
   }
 
@@ -334,24 +532,45 @@ export class ChannelSlice {
     ch.unposed = n;
     // No screen reader to hand it to (Copilot's `ask_user` form): the session is still blocked
     // on you, so the fact the source CAN give — one is open — is what the status says.
-    if (!s.backend.caps.promptBoxes) this.core.setAwaiting(s, n > 0 && s.info.running);
+    if (derive(s.backend).screen("dialogs") === null) this.core.setAwaiting(s, n > 0 && s.info.running);
     if (n > 0 && was === 0) {
-      if (s.info.running && s.backend.caps.promptBoxes) this.core.armPromptCheck(s, 0);
+      if (s.info.running && derive(s.backend).screen("dialogs") !== null) this.core.armPromptCheck(s, 0);
     } else if (n === 0) {
       this.publish(s, ch);
     }
   }
 
   private resolved(s: Session, ch: SessionChannel, id: string): void {
+    ch.posedAt.delete(id);
     if (!ch.dialogs.delete(id) && ch.published !== id) return;
     this.publish(s, ch);
   }
 
-  /** Publish the OLDEST open dialog (the one the TUI is showing), or retire
+  /** Publish the OLDEST open dialog, question or plan (the one the TUI is showing), or retire
    *  what the channel published when none is open. */
   private publish(s: Session, ch: SessionChannel): void {
     let first: DetectedPrompt | null = null;
-    for (const d of ch.dialogs.values()) { first = dialogToPrompt(d, { keepsRules: !!s.backend.plugin }); if (first) break; }
+    let at = Infinity;
+    const age = (id: string) => ch.posedAt.get(id) ?? Infinity;
+    const askRules = sessionAskRules(s.info.id, s.info);
+    for (const d of ch.dialogs.values()) {
+      if (age(d.id) >= at && first) continue;
+      const p = dialogToPrompt(d, { keepsRules: !!s.backend.plugin, askRules });
+      if (p) { first = p; at = age(d.id); }
+    }
+    for (const q of ch.questions.values()) {
+      if (age(q.id) >= at && first) continue;
+      const p = questionToPrompt(q);
+      if (p) { first = p; at = age(q.id); }
+    }
+    for (const { plan } of ch.plans.values()) {
+      if (age(plan.id) >= at && first) continue;
+      const p = planToPrompt(plan, s.backend.label);
+      if (p) { first = p; at = age(plan.id); }
+    }
+    // The box is the same box (`samePrompt`): keep the host's note on the last answer to it.
+    const note = s.info.prompt?.answerNote;
+    if (first && note && s.info.prompt?.askId === first.askId) first = { ...first, answerNote: note };
     if (first) {
       ch.published = first.askId ?? null;
       this.core.applyPrompt(s, first);
@@ -365,6 +584,6 @@ export class ChannelSlice {
     const retire = !!ch.published || (ch.dialogsLive && !ch.unposed && !!s.info.prompt);
     ch.published = null;
     if (retire) this.core.applyPrompt(s, null);
-    if (retire && ch.unposed && s.info.running && s.backend.caps.promptBoxes) this.core.armPromptCheck(s, 0);
+    if (retire && ch.unposed && s.info.running && derive(s.backend).screen("dialogs") !== null) this.core.armPromptCheck(s, 0);
   }
 }

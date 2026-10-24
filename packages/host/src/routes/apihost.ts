@@ -25,7 +25,8 @@ import { surveyTransport } from "../transportsurvey.js";
 import { clearHostStore, hostStoreReport } from "../hoststore.js";
 import { worktreeOwners } from "../worktreeowner.js";
 import { ROOT_PICKED } from "../env.js";
-import { peerKind } from "../net.js";
+import { requestPeerKind } from "../net.js";
+import { restartSelf } from "../updates/restart.js";
 import { cleanRootInput, hostSupervisor, readChosenRoot, rootCandidates, rootChoicePath, writeChosenRoot } from "../rootchoice.js";
 import { json, readBody, readJson } from "./apiio.js";
 import { route, type ApiEntry, type ApiHandler } from "./apitable.js";
@@ -129,7 +130,7 @@ const rootInfo: ApiHandler = async ({ req, res }, ctx) => {
     pending: chosen && chosen !== ctx.root ? chosen : null,
     choicePath: rootChoicePath(),
     envName: envName("ROOT"),
-    canChange: !!ctx.canManage?.(peerKind(req.socket.remoteAddress)),
+    canChange: !!ctx.canManage?.(requestPeerKind(req.socket.remoteAddress, req.headers)),
     restart: hostSupervisor() ? "auto" : "manual",
     candidates,
   };
@@ -139,7 +140,7 @@ const rootInfo: ApiHandler = async ({ req, res }, ctx) => {
 
 const rootPost: ApiHandler = async ({ req, res }, ctx) => {
   const reply = (r: RootPostReply, status = 200): true => (json(res, r, status), true);
-  if (!ctx.canManage?.(peerKind(req.socket.remoteAddress))) {
+  if (!ctx.canManage?.(requestPeerKind(req.socket.remoteAddress, req.headers))) {
     return reply({ ok: false, error: "The code folder can only be changed from this desktop or over Tailscale." }, 403);
   }
   const body = await readJson(req);
@@ -155,14 +156,11 @@ const rootPost: ApiHandler = async ({ req, res }, ctx) => {
   }
   console.log(`[root] code folder chosen: ${c.root} (${rootChoicePath()})`);
   if (c.root === ctx.root) return reply({ ok: true, root: c.root, repos, saved: true, restart: "none" });
+  // After the reply is out: the SIGTERM flush (`shutdown.ts`) runs as for any restart, and
+  // launchd/systemd start the host again, which reads the new folder at boot.
   const sup = hostSupervisor();
-  if (sup) {
-    // After the reply is out: the SIGTERM flush (`shutdown.ts`) runs as for any restart, and
-    // launchd/systemd start the host again, which reads the new folder at boot.
-    console.log(`[root] restarting under ${sup} to scan it`);
-    setTimeout(() => process.kill(process.pid, "SIGTERM"), 800).unref();
-  }
-  return reply({ ok: true, root: c.root, repos, saved: true, restart: sup ? "auto" : "manual" });
+  if (sup) console.log(`[root] restarting under ${sup} to scan it`);
+  return reply({ ok: true, root: c.root, repos, saved: true, restart: restartSelf(null) });
 };
 
 export const HOST_ROUTES: readonly ApiEntry[] = [
@@ -317,8 +315,9 @@ export const HOST_ROUTES: readonly ApiEntry[] = [
   route("POST", "/api/host/screenshot", async ({ res, url }, ctx) => {
     const target = await findTarget(ctx.root, url.searchParams.get("repo") || "");
     if (!target) return json(res, { error: "unknown repo" }, 404), true;
-    const dest = newOutboxPath(target.worktreePath, "screenshot", ".png");
+    let dest: ReturnType<typeof newOutboxPath>;
     try {
+      dest = newOutboxPath(target.worktreePath, "screenshot", ".png");
       await takeScreenshot(dest.full);
     } catch (e) {
       return json(res, { error: String((e as Error).message || e) }, 500), true;

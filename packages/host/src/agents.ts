@@ -34,7 +34,8 @@
  */
 import { closeSync, openSync, readdirSync, readFileSync, readSync, statSync } from "node:fs";
 import { join } from "node:path";
-import type { SessionAgent } from "@waterplane/shared";
+import type { SessionAgent, SourceAgent, SourceSession } from "@waterplane/shared";
+import type { BackendDescriptor } from "./backends/types.js";
 import { claudeConfigDir, claudeProjectDir } from "./claudeconfig.js";
 import { env } from "./env.js";
 import { pidAlive } from "./proc.js";
@@ -66,7 +67,13 @@ const AGENT_FILE_RE = /^agent-([A-Za-z0-9_-]+)\.jsonl$/;
  *  foreground Task call never emits one (it is inside a turn that is busy). */
 const NOTIFY_RE = /<task-id>([A-Za-z0-9_-]+)<\/task-id>/g;
 
-export interface MetaFile { agentType?: string; description?: string; model?: string }
+export interface MetaFile { agentType?: string; description?: string; model?: string; finished?: boolean }
+
+/** The CLI rewrites an agent's `.meta.json` with `finished: true` as it stops,
+ *  a few tens of ms BEFORE the transcript's last line lands (measured −115…+6 ms
+ *  over 61 agents, 2.1 on 2026-10-23). A write later than this slack is the
+ *  agent resumed, so the flag no longer speaks for it. */
+const FINISHED_SLACK_MS = 2_000;
 
 /** Memo on (path, size, mtime): a meta file is written once and then read on
  *  every poll for the life of the agent. */
@@ -190,16 +197,65 @@ export function subagentsDir(cwd: string, conversationId: string): string {
 }
 
 /**
- * The agents still running under this conversation, newest first. Empty when
- * there are none, when the conversation has no agent directory at all, or when
- * anything about the read fails.
+ * A dynamic workflow's agents and what ends them. The Workflow tool runs its
+ * agents one level down, out of reach of a reader that only lists `subagents/`:
+ *
+ *   <conversation>/subagents/workflows/<wf_…>/agent-<id>.jsonl + .meta.json
+ *   <conversation>/subagents/workflows/<wf_…>/journal.jsonl
+ *
+ * and no agent there ever gets a task-notification of its own — only the
+ * workflow does, once, at the very end. Missing them, a session whose main loop
+ * was "Waiting for 1 dynamic workflow to finish" with three agents at work read
+ * as "idle — nothing running" (CLI 2.1.308). The journal is the exact per-agent
+ * signal: `started` names an agent against a key, and a record for that key that
+ * is not `started` — `result`, or a type that says it failed — is its end.
  */
-export function readRunningAgents(cwd: string, conversationId: string | undefined, now = Date.now()): SessionAgent[] {
-  if (!conversationId) return [];
-  const dir = subagentsDir(cwd, conversationId);
+const WORKFLOW_DIR_RE = /^wf_[A-Za-z0-9_-]+$/;
+/** A journal record that ends the agent its key names, besides `result`. */
+const WORKFLOW_END_RE = /error|fail|cancel|abort|kill|stop/i;
+/** The parent's launch receipt: the task id the workflow's notification will
+ *  carry, and the transcript dir that says which `wf_…` it is. Matched on the
+ *  raw JSONL line, so newlines are still `\n` escapes. */
+const WORKFLOW_LAUNCH_RE = /Task ID: ([A-Za-z0-9_-]+)\\n[\s\S]*?Transcript dir: [^"]*?\/subagents\/workflows\/(wf_[A-Za-z0-9_-]+)/;
+
+export interface WorkflowJournal { agentKey: Map<string, string>; ended: Set<string> }
+
+/** `agentId → key` for every agent the journal saw start, and the keys that ended.
+ *  An unreadable line costs that line; an unreadable journal answers nothing
+ *  ended, which leaves the agents to the freshness backstop. */
+export function readWorkflowJournal(text: string | null): WorkflowJournal {
+  const agentKey = new Map<string, string>();
+  const ended = new Set<string>();
+  for (const line of (text ?? "").split("\n")) {
+    if (!line.trim()) continue;
+    let rec: { type?: string; key?: string; agentId?: string };
+    try { rec = JSON.parse(line); } catch { continue; }
+    if (typeof rec.key !== "string" || typeof rec.type !== "string") continue;
+    if (rec.type === "started") { if (rec.agentId) agentKey.set(rec.agentId, rec.key); }
+    else if (rec.type === "result" || WORKFLOW_END_RE.test(rec.type)) ended.add(rec.key);
+  }
+  return { agentKey, ended };
+}
+
+/** `wf_… → task id`, off the launch receipts in the parent's tail. A launch
+ *  older than the tail is simply not mapped: the journal and freshness still
+ *  answer for its agents. */
+export function workflowTaskIds(parentTail: string | null): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const line of (parentTail ?? "").split("\n")) {
+    if (!line.includes("Transcript dir:") || !line.includes("/subagents/workflows/")) continue;
+    const m = WORKFLOW_LAUNCH_RE.exec(line);
+    if (m) out.set(m[2], m[1]);
+  }
+  return out;
+}
+
+interface LiveAgent { file: string; dir: string; id: string; lastWriteAt: number; workflow?: string }
+
+function freshAgents(dir: string, now: number, workflow?: string): LiveAgent[] {
   let names: string[];
   try { names = readdirSync(dir); } catch { return []; }
-  const live: { file: string; id: string; lastWriteAt: number }[] = [];
+  const out: LiveAgent[] = [];
   for (const name of names) {
     const m = AGENT_FILE_RE.exec(name);
     if (!m) continue;
@@ -207,19 +263,55 @@ export function readRunningAgents(cwd: string, conversationId: string | undefine
     let st;
     try { st = statSync(file); } catch { continue; }
     if (now - st.mtimeMs > STALE_MS) continue; // nothing to ask the parent about
-    live.push({ file, id: m[1], lastWriteAt: st.mtimeMs });
+    out.push({ file, dir, id: m[1], lastWriteAt: st.mtimeMs, workflow });
   }
+  return out;
+}
+
+/**
+ * The agents still running under this conversation, newest first — the Task
+ * tool's and a dynamic workflow's alike. Empty when there are none, when the
+ * conversation has no agent directory at all, or when anything about the read
+ * fails.
+ */
+export function readRunningAgents(cwd: string, conversationId: string | undefined, now = Date.now()): SessionAgent[] {
+  if (!conversationId) return [];
+  const dir = subagentsDir(cwd, conversationId);
+  const live = freshAgents(dir, now);
+  const wfRoot = join(dir, "workflows");
+  let wfNames: string[] = [];
+  try { wfNames = readdirSync(wfRoot).filter((n) => WORKFLOW_DIR_RE.test(n)); } catch { /* no workflow ever ran */ }
+  for (const wf of wfNames) live.push(...freshAgents(join(wfRoot, wf), now, wf));
   if (!live.length) return [];
   // Paid for only when some agent log is fresh — an idle conversation with a
   // year of finished agents under it never reads the parent at all.
-  const notified = notifiedAt(readTail(join(claudeProjectDir(cwd), `${conversationId}.jsonl`), PARENT_TAIL));
+  const parentTail = readTail(join(claudeProjectDir(cwd), `${conversationId}.jsonl`), PARENT_TAIL);
+  const notified = notifiedAt(parentTail);
+  const wfTask = wfNames.length ? workflowTaskIds(parentTail) : new Map<string, string>();
+  const journals = new Map<string, WorkflowJournal>();
   const out: SessionAgent[] = [];
   for (const a of live) {
-    const stopped = notified.get(a.id);
-    if (stopped !== undefined && stopped >= a.lastWriteAt) continue; // it ended, and the parent wrote that down
-    const meta = readMeta(join(dir, `agent-${a.id}.meta.json`));
+    if (a.workflow) {
+      let j = journals.get(a.workflow);
+      if (!j) { j = readWorkflowJournal(readTail(join(a.dir, "journal.jsonl"), PARENT_TAIL)); journals.set(a.workflow, j); }
+      const key = j.agentKey.get(a.id);
+      if (key !== undefined && j.ended.has(key)) continue; // the workflow recorded its result
+      const task = wfTask.get(a.workflow);
+      const done = task === undefined ? undefined : notified.get(task);
+      if (done !== undefined && done >= a.lastWriteAt) continue; // the whole workflow ended
+    } else {
+      const stopped = notified.get(a.id);
+      if (stopped !== undefined && stopped >= a.lastWriteAt) continue; // it ended, and the parent wrote that down
+    }
+    const metaPath = join(a.dir, `agent-${a.id}.meta.json`);
+    const meta = readMeta(metaPath);
     let startedAt = a.lastWriteAt;
-    try { startedAt = statSync(join(dir, `agent-${a.id}.meta.json`)).mtimeMs; } catch { /* keep the fallback */ }
+    try { startedAt = statSync(metaPath).mtimeMs; } catch { /* keep the fallback */ }
+    // The CLI's own end mark: an agent that wakes AFTER its parent's notification
+    // (a late notice about its own background shell) writes once more and stops,
+    // and no second notification follows — without this it read as running until
+    // the freshness backstop.
+    if (meta.finished === true && startedAt >= a.lastWriteAt - FINISHED_SLACK_MS) continue;
     out.push({
       id: a.id,
       what: cap((meta.description || meta.agentType || "agent").trim(), 120),
@@ -232,6 +324,47 @@ export function readRunningAgents(cwd: string, conversationId: string | undefine
   }
   out.sort((x, y) => y.lastWriteAt - x.lastWriteAt);
   return out.slice(0, MAX_AGENTS);
+}
+
+/**
+ * What runs under a session, asked of the backend's `agents` providers in order (backend contract
+ * v2): `{store:"claude-agents"}` is `readRunningAgents` above, unchanged; `{source:true}` is the
+ * plugin's `AgentSource.list()` on the same poll. SYNC, like the poll that asks it.
+ *
+ * `null` = no provider answered, so the list stays ABSENT on the wire (a backend that cannot say
+ * what runs under it must not look like one with nothing running); an empty list is an answer.
+ * A source's rows count as running unless they carry `endedAt`; the cap and newest-first order are
+ * the claude reader's. A provider that throws has not answered; the next one is asked.
+ */
+export function readAgents(
+  d: Pick<BackendDescriptor, "facts" | "sources">,
+  s: SourceSession & { claudeSessionId?: string },
+  now = Date.now(),
+): SessionAgent[] | null {
+  const providers = Array.isArray(d.facts?.agents) ? d.facts.agents : [];
+  for (const p of providers) {
+    try {
+      if ((p as { store?: unknown }).store === "claude-agents") return readRunningAgents(s.cwd, s.claudeSessionId, now);
+      if ((p as { source?: unknown }).source === true && d.sources?.agents) {
+        const rows = d.sources.agents.list(s);
+        if (rows) return fromSource(rows);
+      }
+    } catch { /* a provider that throws has not answered */ }
+  }
+  return null;
+}
+
+function fromSource(rows: readonly SourceAgent[]): SessionAgent[] {
+  return rows
+    .filter((a) => a && typeof a.id === "string" && a.id && a.endedAt === undefined)
+    .map<SessionAgent>((a) => ({
+      id: a.id,
+      what: cap((a.name ?? "").trim() || "agent", 120),
+      startedAt: a.startedAt,
+      lastWriteAt: a.lastWriteAt ?? a.startedAt,
+    }))
+    .sort((x, y) => y.lastWriteAt - x.lastWriteAt)
+    .slice(0, MAX_AGENTS);
 }
 
 /** Did the published set change in a way a person would SEE? Elapsed is counted

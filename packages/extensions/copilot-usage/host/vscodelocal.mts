@@ -13,6 +13,9 @@
  *   `requests[]`, each with a `timestamp` and a `result.details` such as
  *   `"Claude Opus 4.7 • 7.5x"` — the premium multiplier Copilot itself showed under the answer.
  *
+ * - The tokens: the same answers' `result.metadata.promptTokens` / `outputTokens`, where Copilot
+ *   recorded them, folded by `copilotLedger` into the token-stats screen's generic ledger.
+ *
  * Only this machine's chats are seen, so it is a floor, never GitHub's count; a request with no
  * multiplier is counted as a request and left out of the premium sum, never guessed.
  */
@@ -20,6 +23,7 @@ import { existsSync } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { localDayKey, type BackendTokensDoc } from "@waterplane/shared";
 
 export interface CopilotModelCount { model: string; requests: number; premium: number }
 
@@ -43,7 +47,9 @@ export interface CopilotLocalDoc {
   why: string | null;
 }
 
-export interface CopilotRequest { ts: number; model: string; mult: number | null; credits: number | null }
+/** `prompt` / `output`: the token counts Copilot recorded on the answer (`result.metadata.promptTokens` /
+ *  `outputTokens`); null where it recorded none (an older Copilot, a cancelled or failed answer). */
+export interface CopilotRequest { ts: number; model: string; mult: number | null; credits: number | null; prompt: number | null; output: number | null }
 
 const KNOWN_PLANS: Record<string, string> = {
   free_limited_copilot: "Copilot Free",
@@ -74,6 +80,8 @@ function at(root: unknown, k: (string | number)[]): unknown {
   for (const p of k) { if (o == null || typeof o !== "object") return undefined; o = (o as Obj)[p]; }
   return o;
 }
+
+const tokenCount = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.round(v) : null);
 
 /** Replays one chat session log into its requests. A line that does not parse is skipped. */
 export function replayRequests(text: string): CopilotRequest[] {
@@ -107,7 +115,7 @@ export function replayRequests(text: string): CopilotRequest[] {
     if (!Number.isFinite(ts)) continue;
     const d = parseDetails(at(r, ["result", "details"]));
     const id = typeof (r as Obj).modelId === "string" ? String((r as Obj).modelId).replace(/^copilot\//, "") : "unknown model";
-    out.push({ ts, model: d.model ?? id, mult: d.mult, credits: d.credits });
+    out.push({ ts, model: d.model ?? id, mult: d.mult, credits: d.credits, prompt: tokenCount(at(r, ["result", "metadata", "promptTokens"])), output: tokenCount(at(r, ["result", "metadata", "outputTokens"])) });
   }
   return out;
 }
@@ -186,30 +194,126 @@ export class CopilotLocalReader {
 
   constructor(private userDir: string) {}
 
+  /** The per-file cache, for a reader that lives one scan (the panel's worker) to keep across runs. */
+  cached(): Record<string, { size: number; mtime: number; reqs: CopilotRequest[] }> {
+    return Object.fromEntries(this.files);
+  }
+
+  /** Seed the cache from `cached()`; an entry not in that shape is dropped (re-read), never trusted. */
+  seed(entries: unknown): void {
+    if (!entries || typeof entries !== "object") return;
+    for (const [f, e] of Object.entries(entries as Record<string, unknown>)) {
+      const v = e as { size?: unknown; mtime?: unknown; reqs?: unknown } | null;
+      if (v && typeof v.size === "number" && typeof v.mtime === "number" && Array.isArray(v.reqs)) this.files.set(f, { size: v.size, mtime: v.mtime, reqs: v.reqs as CopilotRequest[] });
+    }
+  }
+
   async read(now: number = Date.now()): Promise<CopilotLocalDoc> {
     const { start, month } = monthStart(now);
-    const [sku, logs] = [await readSku(this.userDir), await sessionLogs(this.userDir)];
-    const all: CopilotRequest[] = [];
-    const seen = new Set<string>();
-    for (const f of logs) {
-      seen.add(f);
-      let st;
-      try { st = await stat(f); } catch { continue; }
-      if (st.mtimeMs < start) continue; // nothing appended this month
-      const hit = this.files.get(f);
-      if (hit && hit.size === st.size && hit.mtime === st.mtimeMs) { all.push(...hit.reqs); continue; }
-      let reqs: CopilotRequest[] = [];
-      try { reqs = replayRequests(await readFile(f, "utf8")); } catch { /* unreadable: skipped */ }
-      this.files.set(f, { size: st.size, mtime: st.mtimeMs, reqs });
-      all.push(...reqs);
-    }
-    for (const f of this.files.keys()) if (!seen.has(f)) this.files.delete(f);
-    const t = tallyMonth(all, now);
+    const [sku, { logs, perFile }] = [await readSku(this.userDir), await this.scan(start)];
+    const t = tallyMonth(perFile.flat(), now);
     return {
       sku, plan: planWords(sku), ...t, month, logs: logs.length,
       why: logs.length ? null : "No Copilot Chat sessions found in this VS Code's storage.",
     };
   }
+
+  /** Every session log's tokens, as the token-stats screen's generic ledger (`copilotLedger`). */
+  async ledger(now: number = Date.now()): Promise<BackendTokensDoc> {
+    const { logs, perFile } = await this.scan(0);
+    if (!logs.length) return { available: false, reason: "No Copilot Chat sessions found in this VS Code's storage." };
+    return copilotLedger(perFile, now);
+  }
+
+  /** The requests of each log written to since `since` (one array per file); files that went are forgotten. */
+  private async scan(since: number): Promise<{ logs: string[]; perFile: CopilotRequest[][] }> {
+    const logs = await sessionLogs(this.userDir);
+    const perFile: CopilotRequest[][] = [];
+    const seen = new Set<string>();
+    for (const f of logs) {
+      seen.add(f);
+      let st;
+      try { st = await stat(f); } catch { continue; }
+      if (st.mtimeMs < since) continue; // nothing appended since
+      const hit = this.files.get(f);
+      if (hit && hit.size === st.size && hit.mtime === st.mtimeMs) { perFile.push(hit.reqs); continue; }
+      let reqs: CopilotRequest[] = [];
+      try { reqs = replayRequests(await readFile(f, "utf8")); } catch { /* unreadable: skipped */ }
+      this.files.set(f, { size: st.size, mtime: st.mtimeMs, reqs });
+      perFile.push(reqs);
+    }
+    for (const f of this.files.keys()) if (!seen.has(f)) this.files.delete(f);
+    return { logs, perFile };
+  }
+}
+
+/** The tokens of a request, as the ledger's kinds; null when Copilot recorded neither count. */
+function kindsOf(r: CopilotRequest): Record<string, number> | null {
+  if (r.prompt == null && r.output == null) return null;
+  return { ...(r.prompt != null ? { prompt: r.prompt } : {}), ...(r.output != null ? { output: r.output } : {}) };
+}
+
+function addKinds(into: Record<string, number>, k: Record<string, number>): void {
+  for (const [n, v] of Object.entries(k)) into[n] = (into[n] ?? 0) + v;
+}
+
+/**
+ * Copilot Chat's own token counts (`result.metadata.promptTokens` / `outputTokens`), as the generic
+ * `BackendTokensDoc` the token-stats screen draws for any backend. Two kinds, Copilot's words, never
+ * folded: `prompt` is the whole prompt as Copilot sent it (it records no cache split, so none is
+ * claimed) and `output` the answer. A turn is a request that recorded a count; a request without one
+ * is not a turn and not a 0. The premium multipliers shown under the answers ride as the unit, per
+ * day, over every request that showed one. Days are local-zone, as the Claude ledger's are.
+ */
+export function copilotLedger(perFile: readonly (readonly CopilotRequest[])[], now: number): BackendTokensDoc {
+  const totals: Record<string, number> = {};
+  let turns = 0, sessions = 0;
+  let firstAt: number | null = null, lastAt: number | null = null;
+  const days = new Map<string, { kinds: Record<string, number>; turns: number; byModel: Map<string, { kinds: Record<string, number>; turns: number }> }>();
+  const models = new Map<string, { kinds: Record<string, number>; turns: number }>();
+  const premium: Record<string, number> = {};
+  for (const reqs of perFile) {
+    let counted = false;
+    for (const r of reqs) {
+      if (r.ts > now) continue;
+      const day = localDayKey(r.ts);
+      if (r.mult != null) premium[day] = Math.round(((premium[day] ?? 0) + r.mult) * 100) / 100;
+      const k = kindsOf(r);
+      if (!k) continue;
+      counted = true;
+      turns++;
+      addKinds(totals, k);
+      firstAt = firstAt == null ? r.ts : Math.min(firstAt, r.ts);
+      lastAt = lastAt == null ? r.ts : Math.max(lastAt, r.ts);
+      const d = days.get(day) ?? { kinds: {}, turns: 0, byModel: new Map() };
+      addKinds(d.kinds, k);
+      d.turns++;
+      const dm = d.byModel.get(r.model) ?? { kinds: {}, turns: 0 };
+      addKinds(dm.kinds, k);
+      dm.turns++;
+      d.byModel.set(r.model, dm);
+      days.set(day, d);
+      const m = models.get(r.model) ?? { kinds: {}, turns: 0 };
+      addKinds(m.kinds, k);
+      m.turns++;
+      models.set(r.model, m);
+    }
+    if (counted) sessions++;
+  }
+  const sum = (k: Record<string, number>) => Object.values(k).reduce((a, b) => a + b, 0);
+  const bySize = <T extends { kinds: Record<string, number> }>(a: T, b: T) => sum(b.kinds) - sum(a.kinds);
+  return {
+    available: true,
+    totals: { kinds: totals, turns },
+    days: [...days].sort(([a], [b]) => (a < b ? -1 : 1)).map(([day, d]) => ({
+      day, kinds: d.kinds, turns: d.turns,
+      byModel: [...d.byModel].map(([key, v]) => ({ key, ...v })).sort(bySize),
+    })),
+    models: [...models].map(([key, v]) => ({ key, label: key, ...v })).sort(bySize),
+    sessions,
+    ...(Object.keys(premium).length ? { unit: { name: "premium requests", perDay: premium } } : {}),
+    firstAt, lastAt, scannedAt: now,
+  };
 }
 
 const num = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1).replace(/\.0$/, ""));

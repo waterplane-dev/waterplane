@@ -18,19 +18,22 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync, realpathSync } from "node:fs";
 import { join, relative } from "node:path";
 import { randomUUID } from "node:crypto";
-import { BRAND, pluginValues, PLUGIN_EVENT_RE, PLUGIN_HOOK_HOLD_DEFAULT_MS, PLUGIN_HOOK_HOLD_MAX_MS, PLUGIN_PUSH_MAX } from "@waterplane/shared";
-import type { HandToAgentResult, HostPluginApi, PluginBackendDef, PluginRepoScope, PluginSession, RepoTarget } from "@waterplane/shared";
+import { BRAND, bindConversation, pluginValues, PLUGIN_API_V2_DOC, PLUGIN_EVENT_RE, PLUGIN_HOOK_HOLD_DEFAULT_MS, PLUGIN_HOOK_HOLD_MAX_MS, PLUGIN_PUSH_MAX } from "@waterplane/shared";
+import type { BackendFacts, HandToAgentResult, HostPluginApi, PluginBackendDef, PluginLaunchRequest, PluginRepoScope, PluginSession, Provider, RepoTarget } from "@waterplane/shared";
 import { forgetRules, gateAnswer, gateRule, rulesFor } from "../answergate.js";
-import { registerBackend, registerScreenReader, registerStoreReader, unregisterBackend, type BackendDescriptor, type BackendModels } from "../backends/index.js";
+import { registerBackend, registerScreenReader, registerStoreReader, unregisterBackend, type BackendDescriptor, type BackendModels, type LaunchRequest } from "../backends/index.js";
 import { readInlineImages } from "../files.js";
-import { isSecretFile } from "../git.js";
-import { contained, inRoot } from "../paths.js";
+import { isSecretFile, secretAt } from "../git.js";
+import { contained, containedReal, inRoot } from "../paths.js";
 import { targetId } from "../repos.js";
 import { stripAnsi } from "../prompt.js";
 import { registerThermalReader } from "../sysstat.js";
 import type { PluginEntry, PluginRegistry } from "./pluginregistry.js";
 import { hostStateDir } from "../branddirs.js";
 import { makePluginRoute, pluginRouteProblem } from "./pluginroutes.js";
+import { screenOf } from "./plugintoolkit/screen.js";
+import { sessionFilesDir } from "./plugintoolkit/sessionfiles.js";
+import { tailJsonl } from "./plugintoolkit/tail.js";
 
 /** A text file's bytes, or null for binary / unreadable — the `readRepoFile` rule. */
 function readText(full: string, maxBytes: number): string | null {
@@ -72,7 +75,7 @@ export function repoScope(t: RepoTarget): PluginRepoScope {
   const inside = (rel: unknown): string | null => {
     if (typeof rel !== "string") return null;
     const full = contained(wt, rel);
-    if (!full || !inRoot(wt, full) || isSecretFile(relative(wt, full))) return null;
+    if (!full || !inRoot(wt, full) || secretAt(wt, relative(wt, full), full)) return null;
     return full;
   };
   return {
@@ -109,10 +112,13 @@ const strMap = (v: unknown): Record<string, string> | undefined => {
 };
 const regexOrNull = (v: unknown): RegExp | null => (v instanceof RegExp ? v : null);
 
+/** The 1.x descriptor members 2.0 removed — named in the refusal so a stale plugin says what moved. */
+const V1_CAPS = ["hooks", "promptBoxes", "transcript", "contextMeter", "usageLimits", "usageProbe", "asking", "forkVia"] as const;
+
 /**
  * A plugin's backend as the core's descriptor — or a THROWN sentence saying
  * what is missing. Shape only: the registry (`registerBackend`) refuses a taken
- * id and an unknown reader name in its own words.
+ * id and an unknown reader name (`derive.ts`'s `factProblems`) in its own words.
  *
  * What the plugin cannot say is the core's: `healthScope` is false (the health
  * board measures core readers against the claude TUI), every boolean it left
@@ -121,29 +127,40 @@ const regexOrNull = (v: unknown): RegExp | null => (v instanceof RegExp ? v : nu
  * that is not a list of strings is a refused launch in words, and a catalogue
  * that throws or answers garbage is an EMPTY catalogue — a free-text field,
  * never a guessed list.
+ *
+ * 2.0: `prepare` (async, awaited by `create()`) replaces `launchArgs`; `facts` replaces the
+ * reader caps. The plan's `instructionsVia`/`askRulesVia` are checked here (a plan that does
+ * not say is refused in words); its `files` are the host's to check and write (`launchfiles.ts`).
  */
-export function pluginDescriptor(def: PluginBackendDef, pluginName: string, opts: { experimental?: boolean; plugin?: string } = {}): BackendDescriptor {
-  const d = (def ?? {}) as Partial<PluginBackendDef>;
+export function pluginDescriptor(def: PluginBackendDef, pluginName: string, opts: { experimental?: boolean; plugin?: string; dataDir?: string } = {}): BackendDescriptor {
+  const d = (def ?? {}) as Partial<PluginBackendDef> & { launchArgs?: unknown };
   const missing: string[] = [];
   if (typeof d.id !== "string") missing.push("id");
   if (typeof d.label !== "string" || !d.label.trim()) missing.push("label");
   if (typeof d.bin !== "function") missing.push("bin()");
-  if (typeof d.launchArgs !== "function") missing.push("launchArgs()");
+  if (typeof d.prepare !== "function") missing.push(typeof d.launchArgs === "function" ? "prepare() (2.0 replaced launchArgs())" : "prepare()");
   if (typeof d.models !== "function") missing.push("models()");
-  const c0 = (d.caps ?? {}) as Partial<PluginBackendDef["caps"]>;
   if (!d.caps || typeof d.caps !== "object") missing.push("caps");
-  else if (!HOOKS.includes(c0.hooks as string)) missing.push(`caps.hooks ("plugin-inject", "settings-inject" or "none")`);
+  if (!d.facts || typeof d.facts !== "object" || Array.isArray(d.facts)) missing.push("facts");
+  const ms = d.measured as { versions?: unknown; version?: unknown } | undefined;
+  if (!ms || !Array.isArray(ms.versions) || typeof ms.version !== "function") missing.push("measured ({ versions, version() })");
   if (missing.length) throw new Error(`${pluginName}'s backend ${JSON.stringify(d.id ?? null)} is missing ${missing.join(", ")}`);
+  const stale = V1_CAPS.filter((k) => Object.hasOwn(d.caps as object, k));
+  if (stale.length) {
+    throw new Error(`${pluginName}'s backend ${JSON.stringify(d.id)} still declares ${stale.map((k) => `caps.${k}`).join(", ")} — the 2.0 contract moved these into \`facts\` (${PLUGIN_API_V2_DOC})`);
+  }
   const id = d.id!;
-  const launch = d.launchArgs!.bind(d);
+  const prepare = d.prepare!.bind(d);
   const models = d.models!.bind(d);
   const bin = d.bin!.bind(d);
-  // `delivery`, `caps` and `sources` are read THROUGH on every access, never copied here: a plugin
-  // may answer them from getters a knob switches (opencode's `OPENCODE_SERVE`). Each normalised
-  // answer is remembered against the object it came from, so an unchanged answer is the same
-  // frozen object every time.
+  const measuredVersion = ms!.version as () => Promise<string | null>;
+  // `delivery`, `caps`, `facts`, `forkVia` and `sources` are read THROUGH on every access, never
+  // copied here: a plugin may answer them from getters a knob switches (opencode's
+  // `OPENCODE_SERVE`). Each normalised answer is remembered against the object it came from, so
+  // an unchanged answer is the same frozen object every time.
   const delivery = throughDef(() => d.delivery, normDelivery);
   const caps = throughDef(() => d.caps!, normCaps);
+  const facts = throughDef(() => d.facts!, normFacts);
   return Object.freeze({
     id,
     label: d.label!.trim().slice(0, 60),
@@ -153,23 +170,45 @@ export function pluginDescriptor(def: PluginBackendDef, pluginName: string, opts
       return b;
     },
     spawnEnv: Object.freeze(strMap(d.spawnEnv) ?? {}),
-    launchArgs: (req) => {
-      const p = launch(req) as unknown as Record<string, unknown> | null;
+    prepare: async (req) => {
+      const p = (await prepare(pluginRequest(req))) as unknown as Record<string, unknown> | null;
       if (!p || !Array.isArray(p.args) || p.args.some((a) => typeof a !== "string")) {
         throw new Error(`${pluginName}'s backend "${id}" did not answer a launch as a list of arguments`);
       }
+      const told = INSTRUCTIONS_VIA.find((v) => v === p.instructionsVia);
+      const ask = ASK_RULES_VIA.find((v) => v === p.askRulesVia);
+      if (!told || !ask) {
+        throw new Error(`${pluginName}'s backend "${id}" did not say how its launch was told (instructionsVia: ${INSTRUCTIONS_VIA.join("/")}) and how its ask rules hold (askRulesVia: ${ASK_RULES_VIA.join("/")})`);
+      }
       const env = strMap(p.env);
+      const dropEnv = strList(p.dropEnv);
+      const files = Array.isArray(p.files) ? (p.files as unknown[]).map((f) => {
+        const o = (f ?? {}) as Record<string, unknown>;
+        return { path: typeof o.path === "string" ? o.path : "", content: typeof o.content === "string" ? o.content : (null as unknown as string), ...(typeof o.mode === "number" ? { mode: o.mode } : {}) };
+      }) : undefined;
       return {
+        instructionsVia: told, askRulesVia: ask,
+        ...(files ? { files } : {}),
         args: [...(p.args as string[])],
         ...(typeof p.sessionId === "string" && p.sessionId ? { sessionId: p.sessionId } : {}),
         ...(typeof p.backendSessionId === "string" && p.backendSessionId ? { backendSessionId: p.backendSessionId } : {}),
         ...(p.createsRecord === true ? { createsRecord: true } : {}),
         ...(env && Object.keys(env).length ? { env } : {}),
+        ...(dropEnv.length ? { dropEnv } : {}),
         ...(typeof p.exec === "string" && p.exec ? { exec: p.exec } : {}),
       };
     },
     get delivery() { return delivery(); },
     get caps() { return caps(); },
+    get facts() { return facts(); },
+    get forkVia() { return d.forkVia === "server" ? "server" as const : undefined; },
+    measured: Object.freeze({
+      versions: Object.freeze(strList(ms!.versions)),
+      version: async (): Promise<string | null> => {
+        try { const v = await measuredVersion.call(ms); return typeof v === "string" && v.trim() ? v.trim().slice(0, 80) : null; }
+        catch { return null; }
+      },
+    }),
     models: async (): Promise<BackendModels> => {
       const m = (await models()) as unknown as Record<string, unknown> | null;
       if (!m || typeof m !== "object") return { aliases: [], ids: [] };
@@ -188,10 +227,26 @@ export function pluginDescriptor(def: PluginBackendDef, pluginName: string, opts
     get sources() { const v = d.sources; return v && typeof v === "object" ? v : undefined; },
     ...(opts.experimental === true ? { experimental: true } : {}),
     ...(typeof opts.plugin === "string" && opts.plugin ? { plugin: opts.plugin } : {}),
+    ...(typeof opts.dataDir === "string" && opts.dataDir ? { dataDir: opts.dataDir } : {}),
   } satisfies BackendDescriptor);
 }
 
-const HOOKS: readonly string[] = ["settings-inject", "plugin-inject", "none"];
+/** How a plan may say it was told / its rules hold — anything else refuses the launch. */
+const INSTRUCTIONS_VIA = ["plugin-dir", "env-file", "config", "flag", "none"] as const;
+const ASK_RULES_VIA = ["native", "gate", "none"] as const;
+
+/** The host's launch request as a 2.0 plugin sees it. */
+function pluginRequest(req: LaunchRequest): PluginLaunchRequest {
+  return {
+    ...(req.resumeMode ? { resumeMode: req.resumeMode } : {}),
+    ...(req.resumeSessionId ? { resumeSessionId: req.resumeSessionId } : {}),
+    launch: req.launch, hookPort: req.hookPort,
+    cwd: req.cwd ?? "", hostSessionId: req.hostSessionId ?? "",
+    ...(req.forkAtTurn ? { forkAtTurn: req.forkAtTurn } : {}),
+    instructions: req.instructions ?? "",
+    askRules: [...(req.askRules ?? [])],
+  };
+}
 
 /** Read `get()` on every call; normalise only when it answers a different object than last time. */
 function throughDef<I, O>(get: () => I, norm: (i: I) => O): () => O {
@@ -225,20 +280,27 @@ function normDelivery(v: PluginBackendDef["delivery"]): BackendDescriptor["deliv
 
 function normCaps(v: PluginBackendDef["caps"]): BackendDescriptor["caps"] {
   const c = (v ?? {}) as Partial<PluginBackendDef["caps"]>;
+  const effort = strList(c.effort);
   return Object.freeze({
-    // Checked at registration; a later answer that is not one of the three is no hooks at all.
-    hooks: (HOOKS.includes(c.hooks as string) ? c.hooks : "none") as BackendDescriptor["caps"]["hooks"],
-    // Strings on purpose: `registerBackend` refuses a name core has no reader for.
-    promptBoxes: (c.promptBoxes === false || c.promptBoxes === undefined ? false : c.promptBoxes) as BackendDescriptor["caps"]["promptBoxes"],
-    transcript: (c.transcript ?? "none") as BackendDescriptor["caps"]["transcript"],
-    slash: c.slash === "claude" || c.slash === "own" ? c.slash : "none",
-    contextMeter: c.contextMeter === true, usageLimits: c.usageLimits === true, usageProbe: c.usageProbe === true,
-    asking: c.asking === true, remoteControl: c.remoteControl === true, effort: c.effort === true,
-    permissionModes: Object.freeze(strList(c.permissionModes)) as BackendDescriptor["caps"]["permissionModes"],
-    ...(c.forkVia === "jsonl" || c.forkVia === "server" ? { forkVia: c.forkVia } : {}),
-    // Absent ⇒ true: every plugin backend written before this cap is an agent with turns.
+    // Absent ⇒ true: an agent with turns; false = a plain shell.
     turns: c.turns !== false,
+    slash: c.slash === "claude" || c.slash === "own" ? c.slash : "none",
+    ...(effort.length ? { effort: Object.freeze(effort) } : {}),
+    permissionModes: Object.freeze(strList(c.permissionModes)) as BackendDescriptor["caps"]["permissionModes"],
+    // Copied as written (a non-list is kept so registration refuses it in words, `launchModesProblems`).
+    ...(c.launchModes !== undefined ? { launchModes: (Array.isArray(c.launchModes) ? Object.freeze([...c.launchModes]) : c.launchModes) as BackendDescriptor["caps"]["launchModes"] } : {}),
+    remoteControl: c.remoteControl === true,
   });
+}
+
+/** Provider lists copied and frozen; shapes are `factProblems`' to refuse at registration. */
+function normFacts(v: PluginBackendDef["facts"]): BackendFacts {
+  const out: Record<string, readonly Provider[]> = {};
+  for (const [k, list] of Object.entries(v ?? {})) {
+    if (!Array.isArray(list)) { out[k] = list as unknown as Provider[]; continue; } // refused by name at registration
+    out[k] = Object.freeze(list.map((p) => (p && typeof p === "object" ? Object.freeze({ ...p }) : p)) as Provider[]);
+  }
+  return Object.freeze(out) as BackendFacts;
 }
 
 export function makeApi(reg: PluginRegistry, e: PluginEntry, gen: number): HostPluginApi {
@@ -284,11 +346,20 @@ export function makeApi(reg: PluginRegistry, e: PluginEntry, gen: number): HostP
       const text = stripAnsi(sessions.scrollback(sid)).replace(/\r/g, "");
       return text.split("\n").slice(-Math.max(1, Math.min(5000, lines))).join("\n");
     },
+    // Toolkit (2.0): the host's one implementation of what every backend plugin copied.
+    bindConversation,
+    tail: (path, onLine, opts) => {
+      const t = tailJsonl(path, (o) => { if (live()) onLine(o); }, opts);
+      return { advance: () => (live() ? t.advance() : null), offset: () => t.offset(), close: () => t.close() };
+    },
+    screen: (sid) => (live() ? screenOf(sessions, sid) : null),
+    sessionFiles: (sid) => (live() ? sessionFilesDir(sessions, hostStateDir(root), e.backends, sid) : null),
+    supports: Object.freeze({ dialogKeysThenTyped: true }),
     readRepoFile: (sid, relPath, maxBytes = 256 * 1024) => {
       const s = sessions.get(sid);
       if (!s || typeof relPath !== "string") return null;
-      const full = contained(s.cwd, relPath);
-      if (!full || isSecretFile(relative(s.cwd, full))) return null;
+      const full = containedReal(s.cwd, relPath);
+      if (!full || secretAt(s.cwd, relative(s.cwd, full), full)) return null;
       return readText(full, maxBytes);
     },
     inlineImages: (sid, max = 4) => {
@@ -410,7 +481,7 @@ export function makeApi(reg: PluginRegistry, e: PluginEntry, gen: number): HostP
           ? `${e.manifest.name} may register only the backends its manifest lists (${declared.join(", ")}), not ${JSON.stringify(bid ?? null)}`
           : `${e.manifest.name} lists no "backends" in its manifest, so it may not register ${JSON.stringify(bid ?? null)}`);
       }
-      const desc = pluginDescriptor(def, e.manifest.name, { experimental: e.manifest.experimental === true, plugin: id });
+      const desc = pluginDescriptor(def, e.manifest.name, { experimental: e.manifest.experimental === true, plugin: id, dataDir: api.dataDir });
       registerBackend(desc); // throws its own sentence: id taken, unknown reader
       e.backends.add(desc.id);
       return () => {

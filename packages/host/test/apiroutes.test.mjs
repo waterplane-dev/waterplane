@@ -25,6 +25,8 @@ const ROUTES = [
   "POST /api/plugin/:id/hook",
   // A file a plugin offered (`api.offerFile`, plugin API 1.5): bytes, deleted once fetched.
   "GET /api/plugin-file/:id/:token",
+  // A plugin's static assets (`manifest.assets`): GET|HEAD, flat names, streamed.
+  "* /api/plugin/:id/asset/:file",
   // A plugin's own routes (`api.route`, plugin API 1.2) — added in the commit that added them.
   "* /api/plugin/:id/*",
   "MOUNT peers/routes",
@@ -58,8 +60,11 @@ const ROUTES = [
   "GET /api/tokenwindows",
   "GET /api/usagelog",
   "GET /api/usagelog/:source",
+  "GET /api/usagenow",
   "GET /api/costwindow",
   "GET /api/slash",
+  "GET /api/conversations",
+  "DELETE /api/conversations",
   "GET /api/external",
   "GET /api/host/root",
   "POST /api/host/root",

@@ -179,8 +179,7 @@ button.notif-dl:active { background: var(--raise); border-radius: var(--r-8); }
 .notif-open:active { background: var(--raise); }
 .notif-icon { flex: none; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-8); background: var(--bg); border: 1px solid var(--line); color: var(--muted); }
 .notif-icon.notif-prompt { color: var(--accent); border-color: var(--accent); }
-.notif-icon.notif-image { color: var(--purple); border-color: var(--purple); }
-.notif-icon.notif-autofire, .notif-icon.notif-plugin { color: var(--purple); border-color: var(--purple); }
+.notif-icon.notif-image, .notif-icon.notif-autofire, .notif-icon.notif-plugin { color: var(--purple); border-color: var(--purple); }
 .notif-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
 .notif-title { font-size: calc(var(--fs-14) * var(--ui-font, 1)); color: var(--fg); font-weight: var(--fw-medium); }
 .notif-text { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); white-space: pre-wrap; word-break: break-word; }
@@ -449,7 +448,6 @@ button.notif-dl:active { background: var(--raise); border-radius: var(--r-8); }
 
 
 .annot-tools.tri { padding: 0; background: none; border: none; overflow: visible; gap: var(--sp-4); }
-.annot-tools.tri .key { padding: var(--sp-6) var(--sp-10); }
 .guardrail-text { width: 100%; box-sizing: border-box; background: var(--well); color: var(--fg); border: 1px solid var(--line); border-radius: var(--r-8); padding: var(--sp-8) var(--sp-10); font-size: calc(var(--fs-13) * var(--ui-font, 1)); line-height: var(--lh-14); font-family: inherit; resize: vertical; }
 
 /* Decision log sheet (plugin decisions + usage-limit events; features/plugins). */

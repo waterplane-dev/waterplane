@@ -89,7 +89,10 @@ test("a desktop row is on the desktop's checklist, never a repo's, and only its 
   const wt = mkdtempSync(join(tmpdir(), "waterplane-seamhost-"));
   assert.deepEqual(contributedChecks(wt).map((r) => r.id), ["repo"], "the repo checklist leaves the desktop row out");
   assert.ok(!inspectRepo(wt).some((c) => c.id === "desk"));
-  assert.deepEqual(hostChecks(wt).map((r) => r.id), ["desk"]);
+  // Core host rows (the Tailscale watchdog on a Mac) ride the same list, so pin the plugin's
+  // two rows by name rather than the whole list: the desk row is there, the repo row is not.
+  const hostIds = hostChecks(wt).map((r) => r.id);
+  assert.ok(hostIds.includes("desk") && !hostIds.includes("repo"), `host checklist: ${hostIds.join(", ")}`);
   assert.deepEqual(hostFixes(["desk-fix", "repo-fix"], wt), [{ id: "desk-fix", outcome: { applied: true, note: "asked" } }],
     "a repo row's fix never runs from the desktop checklist");
 });
@@ -167,6 +170,15 @@ test("handToAgent(): through the backlog add, waiting for a tap unless asked to 
   await reg.setEnabled("hander", false);
   assert.match((await api.handToAgent("r1", "x")).reason, /not running/);
   assert.equal(handed.length, 2);
+});
+
+test("supports (2.1): this host says it types a dialog's keys-then-words, frozen", async () => {
+  const { reg, pd } = boot({});
+  plugin(pd, "asker", `export function activate(api) { globalThis.__supportsApi = api; }`);
+  await reg.loadAll();
+  const api = globalThis.__supportsApi;
+  assert.deepEqual({ ...api.supports }, { dialogKeysThenTyped: true });
+  assert.ok(Object.isFrozen(api.supports), "a plugin cannot flip a host fact");
 });
 
 test("handToAgent(): an absolute worktree path resolves the same repo as its id (realpath-compared)", async () => {

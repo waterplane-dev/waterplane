@@ -15,7 +15,7 @@
  * hold that ban, and `repoHealthPlot.ts` computes no rank.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Activity, FolderTree, Send } from "lucide-react";
+import { Activity, FolderTree, Play, RefreshCw, Send } from "lucide-react";
 import {
   recutCommandOf, repoHealthAvailability, repoHealthPlotAvailability,
   repoHealthPlotUnavailableText, repoHealthUnavailableText,
@@ -29,6 +29,7 @@ import { ago } from "./format";
 import { Empty } from "./Empty";
 import { Explain } from "./Explain";
 import { HealthIndexSection } from "./HealthIndexSection";
+import { Button } from "./kit/Button";
 import { FilterChip } from "./kit/FilterChip";
 import { CantInline } from "./Unavailable";
 import { Markdown } from "./Markdown";
@@ -46,7 +47,7 @@ import {
   SCOPE_ALL_LABEL, SERIES_ASK_LABEL, centralFileLines, centralHeadWords, drawnPageWords, emptySeriesWords, engineLineWords, lastCommitWords,
   mixedPlotWords, mixedVersionWords, narrativeWrittenWords, notPlottedWords, outcomeRepeatsReadError, outcomeWords,
   rankSentence, readFailedWords, refreshBusyLabel,
-  refreshFailedWords, refreshLabel, runningWords, seriesHeadWords,
+  approveRunLabel, refreshFailedWords, refreshLabel, runningWords, skipOwnLabel, seriesHeadWords,
   scopeChoiceHeadWords, scopeEmptyWords, scopeHeadWords, scopePickWords,
   seriesSizeWords, seriesStatusWords, seriesValueWords, staleRowsWords, stalenessWords,
   warningsWords,
@@ -115,6 +116,8 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
   const [busy, setBusy] = useState(false);
   const [startedAt, setStartedAt] = useState(0);
   const [runError, setRunError] = useState<string | null>(null);
+  /** The desktop answered the approval with a refusal sentence: shown as it came, not as a failure to reach it. */
+  const [approvalRefusal, setApprovalRefusal] = useState<string | null>(null);
   const [showPreamble, setShowPreamble] = useState(false);
   const now = useNow(1000);
 
@@ -170,18 +173,22 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
     }
   }
 
-  async function refresh() {
+  async function refresh(approveEngine = false) {
     if (busy || !repo) return;
     track("action:repohealth.refresh");
     setBusy(true);
     setStartedAt(Date.now());
     setRunError(null);
+    setApprovalRefusal(null);
     try {
       // 200 s on the phone against the host's 180 s cap — see `api.ts`. The
       // route answers 200 even when the tool refuses, so there is nothing to
       // read off the status: the outcome is in the body.
-      const next = await api.repoHealthRefresh(repo.id, scope);
-      res.set(next);
+      const next = await api.repoHealthRefresh(repo.id, scope, approveEngine, approveEngine ? view?.engine?.approveToken : undefined);
+      // A refused approval answers with a sentence and no reading: show it, keep the view.
+      const refusal = (next as { error?: unknown }).error;
+      if (typeof refusal === "string" && !next.engine) setApprovalRefusal(refusal);
+      else res.set(next);
     } catch (e) {
       // Only a transport failure reaches here. A refusal is a body.
       setRunError(String((e as Error)?.message || e));
@@ -316,7 +323,8 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
   // so another refresh runs the same file. The fix is in the repo: seed a
   // prompt for its agent (`engineAdoptPrompt`). Absent — not greyed — when the
   // desktop's engine is the one that failed, since adopting it changes nothing.
-  const ownEngineFailed = view?.engine?.kind === "repo" && !!(last?.error || view.readError);
+  const needsApproval = view?.engine?.needsApproval === true;
+  const ownEngineFailed = view?.engine?.kind === "repo" && !needsApproval && !!(last?.error || view.readError);
   const askAdopt = () => {
     if (!onRemedy || !repo || !view) return;
     track("action:repohealth.adoptengine");
@@ -346,7 +354,9 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
 
   // The head is the status line and its `?` only; the refresh verb lives at
   // the end of the sticky jump bar, in reach from every card.
-  const refreshable = !!repo && !noEngine;
+  // While the repo's own commands wait, the approval box holds BOTH choices;
+  // a bare refresh in the bar beside it read as the same verb twice.
+  const refreshable = !!repo && !noEngine && !needsApproval;
   const refreshKey = refreshable ? (
     <RefreshKey busy={busy} onClick={() => void refresh()}
       label={busy ? refreshBusyLabel(series, now - startedAt) : refreshLabel(series)} />
@@ -427,6 +437,10 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
       <Empty res={res} empty={!series && !plot} thing="the repo-health series" noun="reading">
         {noEngine
           ? repoHealthUnavailableText("absent")
+          : view?.engine?.needsApproval && view.engine.kind === "repo"
+            ? "Not read yet — the repo's own engine is waiting for your approval."
+          : view?.engine?.needsApproval && view.engine.kind === "bundled"
+            ? "Measured without this repo's own readings — they wait for your approval."
           : view?.readError
             ? readFailedWords(view.readError)
             : scope
@@ -461,14 +475,32 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
         </div>
       ) : null}
 
-      {ownEngineFailed && onRemedy && repo ? (
-        <div className="section">
-          <button type="button" className="key rh-verb" onClick={askAdopt}>
-            <Send size={12} aria-hidden /> {ENGINE_ADOPT_LABEL}…
-          </button>
+      {needsApproval && repo ? (
+        <div className="section section-hint">
+          <div>{view?.readError}</div>
+          {view?.engine?.path ? <div><code>{view.engine.path}</code></div> : null}
+          <div className="rh-tile-acts">
+            <Button type="button" className="rh-verb" onClick={() => void refresh(true)}>
+              <Play size={12} aria-hidden /> {busy ? refreshBusyLabel(series, now - startedAt) : approveRunLabel(view?.engine?.kind === "repo" ? "repo" : "bundled", series)}
+            </Button>
+            {view?.engine?.kind !== "repo" ? (
+              <Button type="button" className="rh-verb" onClick={() => void refresh()}>
+                <RefreshCw size={12} aria-hidden /> {skipOwnLabel(series)}
+              </Button>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
+      {ownEngineFailed && onRemedy && repo ? (
+        <div className="section">
+          <Button className="rh-verb" type="button" onClick={askAdopt}>
+            <Send size={12} aria-hidden /> {ENGINE_ADOPT_LABEL}…
+          </Button>
+        </div>
+      ) : null}
+
+      {approvalRefusal ? <div className="section section-hint">{approvalRefusal}</div> : null}
       {runError ? <div className="section section-hint">{refreshFailedWords(runError)}</div> : null}
       {plotMissing ? <div className="section section-hint">{plotMissing}</div> : null}
 
@@ -547,9 +579,9 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
           {repo ? (
             <OwnReadings plot={plot} repoName={repo.repoName} series={drawn.own?.series} axis={drawnAxis}
               actionsFor={onRemedy ? (s) => (
-                <button type="button" className="key rh-verb" onClick={() => askAbout({ ...s, detail: s.means })}>
+                <Button className="rh-verb" type="button" onClick={() => askAbout({ ...s, detail: s.means })}>
                   <Send size={12} aria-hidden /> {SERIES_ASK_LABEL}…
-                </button>
+                </Button>
               ) : undefined} />
           ) : null}
         </>

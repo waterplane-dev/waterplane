@@ -113,9 +113,9 @@ function classify(ip: string): PathKind {
 
 const IPV4 = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
 
-/** Run a tailscale subcommand via the resolved (possibly quoted) CLI path. */
-async function ts(bin: string, args: string, timeout: number): Promise<string> {
-  const { stdout } = await execFileP("/bin/sh", ["-c", `${bin} ${args}`], { timeout, maxBuffer: 1 << 20 });
+/** Run a tailscale subcommand via the resolved CLI path — argv, never a shell. */
+async function ts(bin: string, args: string[], timeout: number): Promise<string> {
+  const { stdout } = await execFileP(bin, args, { timeout, maxBuffer: 1 << 20 });
   return stdout;
 }
 
@@ -135,10 +135,10 @@ export async function collectDebug(req: IncomingMessage): Promise<SpeedDebug> {
       // --until-direct=false so it reports the live route instead of blocking
       // while it tries to upgrade to direct.
       if (overTailscale && IPV4.test(clientIp)) {
-        out.ping = await ts(bin, `ping --c 3 --until-direct=false ${clientIp}`, 8000).catch((e) => `ping failed: ${e.message ?? e}`);
+        out.ping = await ts(bin, ["ping", "--c", "3", "--until-direct=false", clientIp], 8000).catch((e) => `ping failed: ${e.message ?? e}`);
       }
-      out.netcheck = await ts(bin, "netcheck", 12000).catch((e) => `netcheck failed: ${e.message ?? e}`);
-      out.status = await ts(bin, "status", 8000).catch((e) => `status failed: ${e.message ?? e}`);
+      out.netcheck = await ts(bin, ["netcheck"], 12000).catch((e) => `netcheck failed: ${e.message ?? e}`);
+      out.status = await ts(bin, ["status"], 8000).catch((e) => `status failed: ${e.message ?? e}`);
       return out;
     })(),
   ]);

@@ -29,6 +29,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { discoverPluginDirs, readPluginDir } from "./pluginloader.js";
 import { PLUGIN_MANIFEST, type HostPluginModule, type PluginDoctorCheck } from "@waterplane/shared";
 
 
@@ -117,4 +118,62 @@ export async function builtinDoctorChecks(usedBackends: readonly string[]): Prom
     } catch { /* nothing from this one */ }
   }
   return out;
+}
+
+/** How long one external plugin's `doctor` may take: a hung probe must not hang the preflight. */
+const EXTERNAL_DOCTOR_MS = 10_000;
+
+/**
+ * The preflight lines EXTERNAL plugins contribute (`~/.config/waterplane/plugins/`, `plugin-paths.json`),
+ * contract 2.1+. The same `HostPluginModule.doctor` the in-repo extensions answer, asked the same
+ * way: WITHOUT `activate`, so a plugin's `doctor` must stand alone (read config files, run
+ * `--version`; never call a model). Containment is the loader's: only a directory whose manifest
+ * validated and whose host module sits inside it is imported (`readPluginDir`); a module that
+ * will not import, has no `doctor`, throws or outlives `EXTERNAL_DOCTOR_MS` contributes nothing (the
+ * plugin list on the phone is where a broken plugin is said). Each line's id is prefixed with the
+ * plugin's id so two plugins cannot collide.
+ */
+export async function externalDoctorChecks(configDir: string, usedBackends: readonly string[], stateDir?: string): Promise<PluginDoctorCheck[]> {
+  let dirs: { dir: string; source: string }[] = [];
+  try { dirs = discoverPluginDirs(configDir).dirs; } catch { return []; }
+  // What the registry honours: a plugin switched off on the phone (`<state dir>/plugins.json`) and a
+  // second plugin of an id already taken are not asked.
+  let off: Record<string, unknown> = {};
+  if (stateDir) {
+    try {
+      const doc = JSON.parse(readFileSync(join(stateDir, "plugins.json"), "utf8")) as { enabled?: Record<string, unknown> } | null;
+      if (doc && typeof doc.enabled === "object" && doc.enabled) off = doc.enabled;
+    } catch { /* absent or unreadable: nothing is switched off */ }
+  }
+  const seen = new Set<string>();
+  const wanted: { dir: string; source: string }[] = [];
+  for (const d of dirs) {
+    try {
+      const pd = readPluginDir(d.dir, d.source);
+      if (pd.problems.length || !pd.hostFile) continue;
+      if (off[pd.manifest.id] === false || seen.has(pd.manifest.id)) continue;
+      seen.add(pd.manifest.id);
+      wanted.push(d);
+    } catch { /* unreadable: contributes nothing */ }
+  }
+  const per = await Promise.all(wanted.map(async ({ dir, source }): Promise<PluginDoctorCheck[]> => {
+    try {
+      const pd = readPluginDir(dir, source);
+      if (pd.problems.length || !pd.hostFile) return [];
+      const raw: any = await import(pathToFileURL(pd.hostFile).href);
+      const doctor = typeof raw?.doctor === "function" ? raw.doctor : typeof raw?.default?.doctor === "function" ? raw.default.doctor : null;
+      if (!doctor) return [];
+      let timer: NodeJS.Timeout | undefined;
+      const lines = await Promise.race([
+        Promise.resolve(doctor({ usedBackends })),
+        new Promise<null>((r) => { timer = setTimeout(() => r(null), EXTERNAL_DOCTOR_MS); timer.unref?.(); }),
+      ]).finally(() => clearTimeout(timer));
+      if (!Array.isArray(lines)) return [];
+      const pid = pd.manifest.id;
+      return lines
+        .filter((c: any) => c && typeof c.id === "string" && typeof c.detail === "string" && (c.status === "ok" || c.status === "warn" || c.status === "fail"))
+        .map((c: PluginDoctorCheck) => ({ ...c, id: c.id.startsWith(`${pid}-`) ? c.id : `${pid}-${c.id}` }));
+    } catch { return []; }
+  }));
+  return per.flat();
 }

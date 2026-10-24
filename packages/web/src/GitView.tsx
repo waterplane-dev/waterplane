@@ -489,10 +489,10 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose }: Props) {
             <Empty res={branchRes} empty={!branches?.length} thing="branches" noun="branch list">No local branches.</Empty>
             {branches?.map((b) => (
               <Row key={b.name} kind="wrap">
-                <Row as="button" kind="grow" disabled={b.current || b.inUseElsewhere} onClick={() => switchTo(b)}
-                  title={b.inUseElsewhere ? "checked out in another worktree" : b.current ? "current branch" : "switch to this branch"}>
+                <Row as={b.current || b.inUseElsewhere ? "div" : "button"} kind="grow" onClick={b.current || b.inUseElsewhere ? undefined : () => switchTo(b)}
+                  title={b.current || b.inUseElsewhere ? undefined : "switch to this branch"}>
                   <span className={`gstat ${b.current ? "g-added" : ""}`}>{b.current ? "●" : "○"}</span>
-                  <RowTitle className="mono">{b.name}{b.upstream ? ` → ${b.upstream}` : ""}{b.inUseElsewhere ? " (in use)" : ""}</RowTitle>
+                  <RowTitle className="mono">{b.name}{b.upstream ? ` → ${b.upstream}` : ""}{b.inUseElsewhere ? " (checked out in another worktree)" : b.current ? " (current)" : ""}</RowTitle>
                 </Row>
                 {!b.current && (
                   <ConfirmButton className="row-act" title={`delete branch ${b.name}`}

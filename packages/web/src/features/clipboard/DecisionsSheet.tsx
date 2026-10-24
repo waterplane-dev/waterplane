@@ -15,6 +15,7 @@ import { SheetHead } from "../../Sheet";
 import { decisionBlock, decisionItems } from "./logic";
 import { decide, decideAnswers } from "./store";
 import { Button, Hint } from "../../kit";
+import { SetNote } from "../../SettingsKit";
 
 /** Offered on every item, after its own options. "your call" hands the
  *  decision back explicitly, which is different from leaving it blank. */
@@ -65,14 +66,14 @@ export function DecisionsSheet() {
             </div>
             <div className="decide-chips">
               {[...it.options, ...ALWAYS].map((o) => (
-                <button key={o} className={`key${values[i] === o ? " on" : ""}`} onClick={() => set(it.text, o)}>{o}</button>
+                <Button className={values[i] === o ? "on" : undefined} key={o} onClick={() => set(it.text, o)}>{o}</Button>
               ))}
             </div>
           </div>
         ))}
       </div>
       <div className="sheet-actions">
-        <span className="set-note">{answered ? `${answered} of ${items.length} answered` : "nothing answered yet"}</span>
+        <SetNote as="span">{answered ? `${answered} of ${items.length} answered` : "nothing answered yet"}</SetNote>
         {/* Cancel keeps what was typed (`decideAnswers`): reopening on the same
             list brings it back. Typed words are never thrown away by a close. */}
         <Button onClick={() => core.nav.close("answers")}><X size={16} /> cancel</Button>

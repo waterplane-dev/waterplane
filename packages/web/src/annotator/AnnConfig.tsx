@@ -38,14 +38,14 @@ export function AnnConfig({ m }: { m: AnnModel }) {
         ))}
       </div>
       <div className="annot-config-hint">
-        {layout.place === "auto" ? "auto: a rail on the left on a phone, a row on top on a wider screen" : `always on the ${layout.place}`}
+        {layout.place === "auto" ? "auto: whichever side leaves this picture larger — a row on top for a wide one, a rail on the left for a tall one" : `always on the ${layout.place}`}
       </div>
       <div className="annot-config-list">
         {layout.order.map((id, i) => {
           const shown = !layout.hidden.includes(id);
           return (
             <div key={id} className={`annot-config-row ${shown ? "" : "off"}`}>
-              <Button className={`annot-config-toggle ${shown ? "active" : ""}`} aria-pressed={shown}
+              <Button className={`annot-config-toggle${shown ? " active" : ""}`} aria-pressed={shown}
                 onClick={() => setLayout(toggleHidden(layout, id))}>{shown ? "shown" : "hidden"}</Button>
               <span className="annot-config-label">{labelOf(id)}</span>
               {/* At either end the arrow is absent, not dimmed: there is nowhere to go. */}

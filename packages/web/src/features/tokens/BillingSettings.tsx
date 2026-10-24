@@ -154,7 +154,7 @@ export function BillingSettings() {
           <div className="set-item">
             <div className="set-chips" role="group" aria-label="period kind">
               {PERIOD_KINDS.map((k) => (
-                <button key={k.id} className={`key${draft.kind === k.id ? " active" : ""}`} onClick={() => set("kind", k.id)}>{k.label}</button>
+                <Button className={draft.kind === k.id ? "active" : undefined} key={k.id} onClick={() => set("kind", k.id)}>{k.label}</Button>
               ))}
             </div>
             {draft.kind === "month" && (
@@ -166,7 +166,7 @@ export function BillingSettings() {
             {draft.kind === "week" && (
               <div className="set-chips" role="group" aria-label="week starts on">
                 {DOW.map((d, i) => (
-                  <button key={d} className={`key${draft.startDow === i ? " active" : ""}`} onClick={() => set("startDow", i)}>{d}</button>
+                  <Button className={draft.startDow === i ? "active" : undefined} key={d} onClick={() => set("startDow", i)}>{d}</Button>
                 ))}
               </div>
             )}

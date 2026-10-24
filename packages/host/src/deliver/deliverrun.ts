@@ -10,12 +10,12 @@ import { fixtureWanted, noteHealth } from "../clihealth.js";
 import { asksYesNo } from "../shelllinks.js";
 import { readNavBox, trustKeys } from "../prompt.js";
 import { ROW_WINDOW, composerFramesAmbiguous } from "../composer.js";
-import { isLocalCommand, startsNoTurn, worksUnannounced } from "../slash.js";
+import { deliveryCommandFacts, worksUnannounced } from "../slash.js";
 import { CHANNEL_CONNECT_WAIT_MS, ECHO_WAIT_MS, PROMPT_HOOK_WAIT_MS, sleep } from "./deliverknobs.js";
 import type { DeliverOpts, DeliveryResult } from "./delivertypes.js";
 import { composerHoldsOnlyHint, foreignInComposer, makeScreenReader } from "./deliverscreen.js";
 import { makeLogProof, makeSubmitProof } from "./deliverproof.js";
-import { hasTurns, submitAndConfirm } from "./deliverreturn.js";
+import { hasTurns, submitAndConfirm, trustRuleFor } from "./deliverreturn.js";
 
 /**
  * The delivery itself. Returns the verdict AND, where the verdict needs one, the
@@ -121,8 +121,12 @@ export async function runDelivery(
   // `/btw` is the command that made the difference real: it submits, files a
   // note and clears the box, opening nothing, so it needs the submit contract
   // and must NOT be spared the Esc. (`shared/slash.ts` carries the rest.)
-  const local = isLocalCommand(text);
-  const noTurn = startsNoTurn(text);
+  //
+  // Both are asked of THIS session's backend (`slash.ts`'s `deliveryCommandFacts`): its own
+  // descriptor's rule — claude's is `shared/slash.ts`, unchanged — and, where the backend's
+  // source lists its commands (2.2), that list's `local`. Never claude's list typed at another binary.
+  const live = sessions.get(sessionId);
+  const { local, noTurn } = await deliveryCommandFacts(live?.backend, live?.cwd, text);
   // …and the third fact, narrower than both: this SUBMITS and does a turn's
   // worth of work while announcing none of it (`/compact`). The echo contract
   // is the ordinary one — the words go in the composer like any prompt — and
@@ -215,13 +219,15 @@ export async function runDelivery(
   // redraws the whole TUI — so we must wait for it to settle.
   // Never in a shell: those words on a shell's screen are output, and `1⏎` a command.
   //
-  // The keys are `trustKeys`', never a bare `1⏎`: since 2.1.293 the box is
-  // UNNUMBERED with the cursor on "No, exit", so the digit typed nothing and the
-  // Return chose "No, exit" — every first prompt into a new repo quit claude
-  // (code 0, "session gone, left no readable conversation log"). An unnumbered
-  // box this cannot place a Yes on is refused, nothing typed: a Return there is
-  // a guess, and the guess under the cursor is "exit".
-  if (!shell && /trustthisfolder|createdoroneyoutrust|doyoutrust/.test(await screen())) {
+  // The keys are `trustKeys`', never a bare `1⏎`: since 2.1.293 the box is UNNUMBERED with the
+  // cursor on "No, exit", so the digit typed nothing and the Return chose "No, exit" — every first
+  // prompt into a new repo quit claude (code 0, "session gone, left no readable conversation log").
+  // An unnumbered box this cannot place a Yes on is refused, nothing typed: a Return there is a
+  // guess, and the guess under the cursor is "exit". CLAUDE's box only (`trustRule`): another
+  // CLI's (Gemini's digit trusts the repo's hooks for good) is a person's — `retry`, nothing typed.
+  const trust = trustRuleFor(live?.backend);
+  if (!shell && trust.asks(await screen())) {
+    if (!trust.autoAccept) return { result: "retry", detail: trust.refusal };
     const nav = readNavBox(await sessions.screenText(sessionId, 60));
     const keys = trustKeys(nav);
     if (!keys || (!nav && /noexit/.test(await screen()))) {

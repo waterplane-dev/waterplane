@@ -7,8 +7,8 @@
 import { bindPendingSession } from "@waterplane/shared";
 import { isCreateOp, type OutboxEntry } from "../../outbox";
 import { noteSendConfirmed } from "../../link";
-import { showToast } from "../../toast";
-import { requeue } from "./logic.ts";
+import { dismissToastIf, showToast } from "../../toast";
+import { answerSendingToast, requeue } from "./logic.ts";
 import type { Msg, QueueCtx } from "./types.ts";
 
 export interface WireFns {
@@ -154,6 +154,9 @@ export function wireFns(c: QueueCtx): WireFns {
       // and the receipt's own sentence says where the words went.
       if (msg.state === "forked") showToast(msg.reason || "forked into a new session");
       else if (entry) noteSendConfirmed(Date.now() - entry.ts);
+      // The receipt retires the "sending …" toast an answer tap raised: that
+      // toast ran its own clock and outlived the very thing it announced.
+      if (entry?.answer) dismissToastIf(answerSendingToast(entry.answer.label));
       writeOutbox(outboxRef.current.filter((e) => e.ackId !== msg.ackId));
       releaseLane();
     } else if (msg.retryable) {

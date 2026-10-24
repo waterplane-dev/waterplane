@@ -2,7 +2,7 @@
   "id": "plugin-template",
   "name": "Plugin template",
   "version": "0.1.0",
-  "apiVersion": "1.0",
+  "apiVersion": "2.0",
   "description": "Saves the last lines of a session's screen to a text file. A starting point for your own plugin.",
   "settings": [
     {

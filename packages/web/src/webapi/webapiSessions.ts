@@ -1,15 +1,14 @@
 import { timedFetch, TRANSCRIPT_TIMEOUT_MS } from "@waterplane/shared";
-import type { ContextSeriesDoc, ExternalSession, RepoTarget, SessionShellDetail, TranscriptDoc, TranscriptToolDetail } from "@waterplane/shared";
+import type { ContextSeriesDoc, ExternalSession, RepoTarget, SessionShellDetail, SlashListDoc, TranscriptDoc, TranscriptToolDetail } from "@waterplane/shared";
 import { nfetch, jget } from "./webapiFetch";
 import { readJsonFused } from "./webapiBody";
-import type { SlashCommand } from "./webapiTypes";
 
 /** Sessions, transcripts and the reader's reads. One slice of `api` (see api.ts). */
 export const sessionsApi = {
   repos: () => jget<{ targets: RepoTarget[] }>("/api/repos").then((d) => d.targets),
-
-  slash: (cwd: string) =>
-    jget<{ commands: SlashCommand[] }>(`/api/slash?cwd=${encodeURIComponent(cwd)}`).then((d) => d.commands),
+  /** `backend` only where `caps.commands` is stated: that backend's own list, else claude's. */
+  slash: (cwd: string, backend?: string) =>
+    jget<SlashListDoc>(`/api/slash?cwd=${encodeURIComponent(cwd)}${backend ? `&backend=${encodeURIComponent(backend)}` : ""}`),
 
   external: () => jget<{ sessions: ExternalSession[] }>("/api/external").then((d) => d.sessions),
 

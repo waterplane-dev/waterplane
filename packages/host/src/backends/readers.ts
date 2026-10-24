@@ -1,5 +1,5 @@
 /**
- * The screen/log readers a descriptor's `caps` may point at, by NAME
+ * The screen/log readers a descriptor's `facts` may point at, by NAME
  * (`docs/analysis/backends-design.md` §1.2).
  *
  * A reader is measured against ONE binary's TUI or store and pinned by fixtures,
@@ -23,7 +23,7 @@
  * every lookup is by name at CALL time, so a session still running on it reads
  * as having no box and no record — absent, never stale.
  */
-import type { PluginScreenReader, PluginStoreReader } from "@waterplane/shared";
+import type { BackendFacts, PluginScreenReader, PluginStoreReader } from "@waterplane/shared";
 import { PLUGIN_READER_NAME_RE } from "@waterplane/shared";
 
 export const PROMPT_READERS = {
@@ -71,45 +71,38 @@ export function registerStoreReader(name: string, reader: PluginStoreReader): ()
   return register("store", name, reader, TRANSCRIPT_READERS, STORE);
 }
 
-/** The contributed screen reader a caps value names — null for core's, `false`, or a name that left. */
-export function screenReaderFor(caps: { promptBoxes?: unknown }): PluginScreenReader | null {
-  return typeof caps.promptBoxes === "string" ? SCREEN.get(caps.promptBoxes) ?? null : null;
+/** What `screenReaderFor` & co. read: a descriptor's `facts` (`derive.ts` owns the provider rules). */
+type WithFacts = { facts?: BackendFacts };
+const firstNamed = (b: WithFacts, fact: "dialogs" | "transcript", key: "screen" | "store"): string | null => {
+  const list = b.facts?.[fact];
+  if (!Array.isArray(list)) return null;
+  for (const p of list) { const n = (p as Record<string, unknown>)[key]; if (typeof n === "string") return n; }
+  return null;
+};
+
+/** The CONTRIBUTED screen reader a descriptor's `facts.dialogs` names — null for core's, none, or a name that left. */
+export function screenReaderFor(b: WithFacts): PluginScreenReader | null {
+  const n = firstNamed(b, "dialogs", "screen");
+  return n ? SCREEN.get(n) ?? null : null;
 }
 
-/** The contributed store reader a caps value names — null for `claude-jsonl`, `none`, or a name that left. */
-export function storeReaderFor(caps: { transcript?: unknown }): PluginStoreReader | null {
-  return typeof caps.transcript === "string" ? STORE.get(caps.transcript) ?? null : null;
+/** The CONTRIBUTED store reader a descriptor's `facts.transcript` names — null for `claude-jsonl`, none, or a name that left. */
+export function storeReaderFor(b: WithFacts): PluginStoreReader | null {
+  const n = firstNamed(b, "transcript", "store");
+  return n ? STORE.get(n) ?? null : null;
 }
 
-/** Does this caps value name a contributed store reader (whether or not it is registered right now)? */
-export function namesStoreReader(caps: { transcript?: unknown }): boolean {
-  const t = caps.transcript;
-  return typeof t === "string" && t !== "none" && !Object.hasOwn(TRANSCRIPT_READERS, t);
+/** Does `facts.transcript` name a CONTRIBUTED store reader (whether or not it is registered right now)? */
+export function namesStoreReader(b: WithFacts): boolean {
+  const n = firstNamed(b, "transcript", "store");
+  return n !== null && !Object.hasOwn(TRANSCRIPT_READERS, n);
+}
+
+/** The names plugins have contributed right now — `derive.ts`'s `factProblems` checks a descriptor against them. */
+export function contributedReaders(): { screen: ReadonlySet<string>; store: ReadonlySet<string> } {
+  return { screen: new Set(SCREEN.keys()), store: new Set(STORE.keys()) };
 }
 
 function names(core: Readonly<Record<string, string>>, map: Map<string, unknown>): string[] {
   return [...Object.keys(core), ...map.keys()];
-}
-
-/** The sentence for a reader name this host does not have. */
-function noReader(kind: string, name: string, list: string[]): string {
-  return `no ${kind} reader called \`${name}\`; this host has: ${list.join(", ")}`;
-}
-
-/**
- * Every reader a caps object names that this host does not have, as sentences.
- * Empty ⇒ all named readers exist. Takes the caps loosely typed on purpose: a
- * plugin hands over a string the compiler never saw.
- */
-export function readerProblems(caps: { promptBoxes?: unknown; transcript?: unknown }): string[] {
-  const out: string[] = [];
-  const pb = caps.promptBoxes;
-  if (pb !== false && !(typeof pb === "string" && (Object.hasOwn(PROMPT_READERS, pb) || SCREEN.has(pb)))) {
-    out.push(noReader("screen", String(pb), names(PROMPT_READERS, SCREEN)));
-  }
-  const tr = caps.transcript;
-  if (tr !== "none" && !(typeof tr === "string" && (Object.hasOwn(TRANSCRIPT_READERS, tr) || STORE.has(tr)))) {
-    out.push(noReader("transcript", String(tr), names(TRANSCRIPT_READERS, STORE)));
-  }
-  return out;
 }

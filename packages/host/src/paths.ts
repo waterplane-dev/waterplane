@@ -1,5 +1,5 @@
 import { dirname, isAbsolute, join, resolve, sep } from "node:path";
-import { realpathSync } from "node:fs";
+import { lstatSync, realpathSync } from "node:fs";
 
 /**
  * The two containment guards, written once.
@@ -25,18 +25,55 @@ import { realpathSync } from "node:fs";
  *
  * `contained` guards a repo-RELATIVE path joined onto a worktree we already
  * trust. Since the caller supplies the root, `..` is the whole attack surface
- * and `resolve` handles it. Making this one realpath-strict would ALSO refuse a
- * symlink that legitimately lives inside a repo and points elsewhere — a
- * symlinked asset directory, a linked package — and would break serving those
- * files for no gain: a symlink inside a worktree is not a privilege boundary
- * here, because whoever can create one can already run code in that repo (the
- * daemon spawns `claude` there, which is the entire product). The boundary is
- * the tailnet and `origin.ts`; this is traversal hygiene under it.
+ * and `resolve` handles it. It stays lexical because callers use it for paths
+ * that do not exist yet (a sweep of something already gone, a file to create).
+ *
+ * A symlink is NOT harmless, though: a COMMITTED `link -> ~/.ssh/id_rsa` is
+ * content from a clone, not something the person chose. So every path that
+ * READS or WRITES file bytes on a client's say-so goes through `containedReal`
+ * below, which realpaths an existing target and refuses one that resolves
+ * outside the worktree. In-repo symlinks (to elsewhere inside the worktree)
+ * keep working.
  */
 export function contained(root: string, rel: string): string | null {
   const base = resolve(root);
   const full = resolve(base, rel);
   if (full !== base && !full.startsWith(base + sep)) return null;
+  return full;
+}
+
+/**
+ * `contained` plus the symlink rule: when the target exists, its realpath must
+ * lie inside the realpath of `root`. A dangling or looping link is refused too
+ * (nothing legitimate reads it). A target that does not exist is returned as
+ * `contained` would — creating is the caller's own check. Returns the LEXICAL
+ * path (what callers already display and relativise), not the resolved one.
+ *
+ * A target that does not exist yet is checked through its nearest existing
+ * ancestor (`evildir -> /tmp/x`, target `evildir/new.txt` is refused).
+ * TOCTOU: a symlink swapped in between this check and the open is not caught;
+ * only someone who already writes inside the worktree can race it.
+ */
+export function containedReal(root: string, rel: string): string | null {
+  const full = contained(root, rel);
+  if (full === null) return null;
+  let real: string | null = null;
+  let there = true;
+  try { lstatSync(full); } catch { there = false; }
+  if (there) {
+    try { real = realpathSync(full); } catch { return null; }   // dangling or looping link
+  } else {
+    // Not there yet: judge the nearest existing ancestor.
+    let anc = dirname(full);
+    for (;;) {
+      try { real = realpathSync(anc); break; } catch { /* keep climbing */ }
+      const up = dirname(anc);
+      if (up === anc) return null;
+      anc = up;
+    }
+  }
+  const r = realResolve(root);
+  if (real !== r && !real.startsWith(r + sep)) return null;
   return full;
 }
 

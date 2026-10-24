@@ -3,9 +3,10 @@ import { rowClass, rowPartClass, type RowKind } from "./rowClass";
 
 /**
  * THE list row: the `.row` / `.row grow` / `.row-wrap` wrapper and the `.row-title` / `.row-sub`
- * parts inside it. Like `Button`, each renders EXACTLY the DOM its call sites wrote by hand
+ * parts inside it. Each renders EXACTLY the DOM its call sites wrote by hand
  * (docs/plans/ui-kit-components.md, P3), so every rule here is about reproducing a class string or
- * an attribute order byte for byte.
+ * an attribute order byte for byte. (Button gave that up in the follow-up: it drops an empty
+ * className and writes class first.)
  *
  * - `Row` — `kind` picks the class (none → `row`, `"grow"` → `row grow`, `"wrap"` → `row-wrap`);
  *   `as="button"` for a tappable row (no `type` default: a call site that wrote none gets none).
@@ -17,8 +18,10 @@ import { rowClass, rowPartClass, type RowKind } from "./rowClass";
  *   `" " + className` whenever className is not undefined (an EMPTY one keeps its space, as
  *   `row-sub ${bad ? "warn" : ""}` always rendered `"row-sub "`; `rowClass.ts`, node-tested).
  */
+/** The button-only attributes a `div` row must not carry (a `disabled` div is a lie, and Button has no disabled branch). */
+type NotOnDiv = { disabled?: never; type?: never; form?: never; name?: never; value?: never };
 export type RowProps =
-  | ({ as?: "div"; kind?: RowKind } & Omit<HTMLAttributes<HTMLDivElement>, "className">)
+  | ({ as?: "div"; kind?: RowKind } & NotOnDiv & Omit<HTMLAttributes<HTMLDivElement>, "className">)
   | ({ as: "button"; kind?: RowKind } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "className">);
 
 export function Row({ as = "div", kind, ...rest }: RowProps) {

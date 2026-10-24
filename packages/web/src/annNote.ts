@@ -49,9 +49,10 @@ export interface Mark {
   color: string;
   /** What the sender typed onto the image (the `text` tool). */
   text?: string;
-  /** What the host read INSIDE a highlighted band, verbatim. Absent whenever
-   *  there is no reader, the call failed, or the band held no words — never a
-   *  guess, and never a partial line dressed up as a full one. */
+  /** The words INSIDE a highlight, box or circle, verbatim: typed by the person,
+   *  or read on the phone by an enabled text-in-marks extension (never the desktop
+   *  or a cloud model). Absent whenever there is no reader, the read failed or is
+   *  not back yet, or the area held no words — never a guess. */
   read?: string;
 }
 
@@ -81,11 +82,12 @@ export function posDetail(x: number, y: number, w: number, h: number): string {
   return `${posName(x, y, w, h)} (x ${pct(x / w)}, y ${pct(y / h)})`;
 }
 
-/** A drawn region as its coarse position plus the box it actually covers. */
+/** A drawn region as the box it actually covers, `(x a-b%, y c-d%)` — no position word: the box
+ *  already says where, and a word like "top-left" for a band across half the picture misleads. */
 export function regionDetail(m: Mark, w: number, h: number): string {
   const x0 = Math.min(m.x0, m.x1), x1 = Math.max(m.x0, m.x1);
   const y0 = Math.min(m.y0, m.y1), y1 = Math.max(m.y0, m.y1);
-  return `${posName((x0 + x1) / 2, (y0 + y1) / 2, w, h)} (x ${pct(x0 / w)}-${pct(x1 / w)}, y ${pct(y0 / h)}-${pct(y1 / h)})`;
+  return `(x ${pct(x0 / w)}-${pct(x1 / w)}, y ${pct(y0 / h)}-${pct(y1 / h)})`;
 }
 
 /**
@@ -132,16 +134,13 @@ export function visibleMarks(marks: Mark[], w: number, h: number): Mark[] {
 /** One mark, without its number or its colour — those are decided by the set. */
 function markBody(m: Mark, w: number, h: number): string {
   switch (m.tool) {
-    case "blur": return `blurred/redacted region at ${regionDetail(m, w, h)}`;
+    case "blur": return `blurred/redacted region ${regionDetail(m, w, h)}`;
     case "text": return `text ${quoteText(m.text || "")} at ${posDetail(m.x0, m.y0, w, h)}`;
-    case "marker": {
-      const where = regionDetail(m, w, h);
-      return m.read ? `highlight over ${quoteText(m.read)} at ${where}` : `highlight at ${where}`;
-    }
+    case "marker": return m.read ? `highlight over ${quoteText(m.read)} ${regionDetail(m, w, h)}` : `highlight ${regionDetail(m, w, h)}`;
     case "arrow": return `arrow pointing to ${posDetail(m.x1, m.y1, w, h)}`;
     case "line": return `line from ${posDetail(m.x0, m.y0, w, h)} to ${posDetail(m.x1, m.y1, w, h)}`;
-    case "rect": return `box at ${regionDetail(m, w, h)}`;
-    default: return `circle at ${regionDetail(m, w, h)}`;
+    case "rect": return m.read ? `box around ${quoteText(m.read)} ${regionDetail(m, w, h)}` : `box ${regionDetail(m, w, h)}`;
+    default: return m.read ? `circle around ${quoteText(m.read)} ${regionDetail(m, w, h)}` : `circle ${regionDetail(m, w, h)}`;
   }
 }
 

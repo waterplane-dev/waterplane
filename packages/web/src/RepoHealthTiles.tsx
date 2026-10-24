@@ -61,6 +61,7 @@ import { HintChip } from "./HintChip";
 import {
   CURVE_OPACITY, DOT_R, TICK_BASELINE, TICK_H, Crosshair, XAxis, clearsOnLeave, gutterFor, plotX, values,
 } from "./RepoHealthChartKit";
+import { Button } from "./kit/Button";
 
 // The chart marks, the stack and the weight card live beside this file; every name stays importable from here.
 export { CURVE_OPACITY, DOT_R, TICK_BASELINE, TICK_H, Crosshair, XAxis, clearsOnLeave, gutterFor, plotX, values } from "./RepoHealthChartKit";
@@ -405,9 +406,9 @@ export function SeriesTile({ s, width, actions, means, open, onToggle }: {
         <div className="rh-tile-acts">
           {actions}
           {grid ? (
-            <button type="button" className="key rh-verb" onClick={toggle}>
+            <Button className="rh-verb" type="button" onClick={toggle}>
               <ChevronUp size={12} aria-hidden /> {TILE_FOLD_LABEL}
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : null}
@@ -471,9 +472,9 @@ export function TilesCard({ series, windowReadings, minReadings, axis, onAsk, on
       {title ? <h3 className="rh-h">{title}</h3> : null}
       <TileGrid series={series} axis={axis}
         actionsFor={actionsFor ?? (onAsk ? (s) => (
-          <button type="button" className="key rh-verb" onClick={() => onAsk(s)}>
+          <Button className="rh-verb" type="button" onClick={() => onAsk(s)}>
             <Send size={12} aria-hidden /> {SERIES_ASK_LABEL}…
-          </button>
+          </Button>
         ) : undefined)} />
       <div className="rh-cap">
         {mode.lead} <HintChip id="repohealth.reading" of="the percentile and the arrow" />
@@ -481,9 +482,9 @@ export function TilesCard({ series, windowReadings, minReadings, axis, onAsk, on
       {/* Under the tiles: it sends what they say, so it comes after them. */}
       {onAskAll ? (
         <div className="rh-tile-acts">
-          <button type="button" className="key rh-verb" onClick={onAskAll}>
+          <Button className="rh-verb" type="button" onClick={onAskAll}>
             <Send size={12} aria-hidden /> {SERIES_ASK_ALL_LABEL}…
-          </button>
+          </Button>
         </div>
       ) : null}
       {after}

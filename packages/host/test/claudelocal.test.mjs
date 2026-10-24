@@ -15,7 +15,7 @@ import {
   claudeLocalBackend, claudeLocalEnv, claudeLocalKeepAlive, claudeLocalLeanArgs, leanArgs, LEAN_TOOLS, warmDeps, windowFromShow,
 } from "../dist/backends/claude-local.js";
 import { firstRequestOf, measuredOverhead } from "../dist/backends/overhead.js";
-import { backendContextWindow, backendInfos, primeBackendModels, resolveBackend } from "../dist/backends/index.js";
+import { backendContextWindow, backendInfos, derive, primeBackendModels, resolveBackend } from "../dist/backends/index.js";
 import { claudeBackend } from "../dist/backends/claude.js";
 import { costOf, rateFor, resolveContextWindow } from "@waterplane/shared";
 
@@ -29,8 +29,8 @@ process.env.WATERPLANE_CLAUDE_HOME = mkdtempSync(join(tmpdir(), "cl-home-"));
 
 test("argv is claude's plus --model, and the env points the CLI at Ollama", () => {
   process.env.WATERPLANE_OLLAMA_URL = "http://127.0.0.1:11434";
-  const plan = claudeLocalBackend.launchArgs(req({ model: "qwen3-coder:30b-64k" }));
-  const claude = claudeBackend.launchArgs(req({ model: "qwen3-coder:30b-64k" }));
+  const plan = claudeLocalBackend.prepare(req({ model: "qwen3-coder:30b-64k" }));
+  const claude = claudeBackend.prepare(req({ model: "qwen3-coder:30b-64k" }));
   // The session id is minted per call; the plugin dir is a best-effort write to
   // a shared config dir that a parallel test file can race (absent ⇒ no flag).
   const strip = (a) => a.filter((x, i, all) => !["--session-id", "--plugin-dir"].includes(all[i - 1]) && x !== "--session-id" && x !== "--plugin-dir");
@@ -54,20 +54,21 @@ test("the base url follows the documented knob", () => {
 });
 
 test("no model is refused in words, not launched with claude's default id", () => {
-  assert.throws(() => claudeLocalBackend.launchArgs(req({})), /needs a model chosen first/);
+  assert.throws(() => claudeLocalBackend.prepare(req({})), /needs a model chosen first/);
 });
 
 test("caps: no account limits, no usage probe, no gauge, no health board", () => {
   const c = claudeLocalBackend.caps;
-  assert.equal(c.usageLimits, false);
-  assert.equal(c.usageProbe, false);
-  assert.equal(c.contextMeter, false);
+  const d = derive(claudeLocalBackend);
+  assert.equal(d.screen("limits"), null);
+  assert.equal(d.has("usage"), false);
+  assert.equal(d.screen("context"), null);
   assert.equal(c.remoteControl, false);
   assert.equal(claudeLocalBackend.healthScope, false);
   // everything else is claude's: same hooks, jsonl, boxes
-  assert.equal(c.hooks, claudeBackend.caps.hooks);
-  assert.equal(c.transcript, "claude-jsonl");
-  assert.equal(c.promptBoxes, "claude-numbered");
+  assert.equal(d.hooksInBand, derive(claudeBackend).hooksInBand);
+  assert.equal(d.store("transcript"), "claude-jsonl");
+  assert.equal(d.screen("dialogs"), "claude-numbered");
   assert.equal(claudeLocalBackend.delivery, claudeBackend.delivery);
 });
 
@@ -126,7 +127,7 @@ test("models come from /api/tags, windows from /api/show, embedders are left out
     assert.equal(backendContextWindow("claude-local", "chat:zero"), null);
     // …and the CLI is told that window, so its auto-compact fires inside it;
     // an unmeasured model gets no variable at all, never claude's 200k guess
-    const env = (model) => claudeLocalBackend.launchArgs(req({ model })).env;
+    const env = (model) => claudeLocalBackend.prepare(req({ model })).env;
     assert.equal(env("chat:64k").CLAUDE_CODE_MAX_CONTEXT_TOKENS, "65536");
     assert.equal("CLAUDE_CODE_MAX_CONTEXT_TOKENS" in env("chat:zero"), false);
   } finally {
@@ -167,7 +168,7 @@ test("lean argv: pinned byte for byte, a custom list, and off", () => {
   process.env.WATERPLANE_CLAUDE_LOCAL_LEAN = "0";
   try {
     assert.deepEqual(claudeLocalLeanArgs(), []);
-    assert.equal(claudeLocalBackend.launchArgs(req({ model: "m" })).args.includes("--tools"), false, "the knob turns the lean tail off");
+    assert.equal(claudeLocalBackend.prepare(req({ model: "m" })).args.includes("--tools"), false, "the knob turns the lean tail off");
   } finally { delete process.env.WATERPLANE_CLAUDE_LOCAL_LEAN; }
   process.env.WATERPLANE_CLAUDE_LOCAL_TOOLS = "Read,Bash";
   try { assert.deepEqual(claudeLocalLeanArgs(), ["--tools", "Read,Bash", "--strict-mcp-config"]); }
@@ -188,17 +189,17 @@ test("a launch warms the model without waiting on it; off means no ping", async 
   try {
     warmed.length = 0;
     warmDeps.warm = (model, ka) => { warmed.push([model, ka]); return new Promise(() => {}); }; // never answers
-    const plan = claudeLocalBackend.launchArgs(req({ model: "qwen3-coder:30b-64k" }));
+    const plan = claudeLocalBackend.prepare(req({ model: "qwen3-coder:30b-64k" }));
     assert.ok(plan.args.includes("--model"), "the plan is back while the runner has not answered");
     await new Promise((r) => setImmediate(r));
     assert.deepEqual(warmed, [["qwen3-coder:30b-64k", "30m"]]);
     warmDeps.warm = async () => { throw new Error("runner down"); };
-    assert.doesNotThrow(() => claudeLocalBackend.launchArgs(req({ model: "m" })), "a failed warm never fails a launch");
+    assert.doesNotThrow(() => claudeLocalBackend.prepare(req({ model: "m" })), "a failed warm never fails a launch");
     await new Promise((r) => setImmediate(r));
     warmed.length = 0;
     warmDeps.warm = recorder;
     process.env.WATERPLANE_CLAUDE_LOCAL_KEEP_ALIVE = "off";
-    claudeLocalBackend.launchArgs(req({ model: "m" }));
+    claudeLocalBackend.prepare(req({ model: "m" }));
     await new Promise((r) => setImmediate(r));
     assert.deepEqual(warmed, []);
   } finally {

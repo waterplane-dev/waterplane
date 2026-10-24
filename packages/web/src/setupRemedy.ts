@@ -202,10 +202,18 @@ export function fixConfirmWords(fix: string, size: string = AUTO_COMPACT_SUGGEST
  */
 export function fixVerb(fix: string, size: string = AUTO_COMPACT_SUGGESTED, rows: SetupRowLookup = NO_ROWS): string {
   if (fix === "auto-compact") return `set ${size} in this repo's .claude/settings.json`;
-  if (fix === "builds-configured") return `write ${sharedRel("builds.json")} from what this repo builds`;
+  if (fix === "builds-configured") return "write build list";
   if (fix === "android-toolchain") return "install the Android build tools (JDK and SDK) on this desktop";
   if (fix === "signing-key") return "create or link the desktop signing key";
   return rows.byFix(fix)?.fixVerb ?? "fix";
+}
+
+/** The full effect of a short row-fix verb, drawn as text under the finding (never a `title`). */
+export function fixTitle(fix: string): string | undefined {
+  if (fix === "builds-configured") {
+    return `write ${sharedRel("builds.json")} from this repo's build commands; existing lists stay untouched`;
+  }
+  return undefined;
 }
 
 /**

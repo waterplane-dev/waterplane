@@ -52,7 +52,7 @@
  *   node tools/repohealth.mjs plot [--fixture]
  *   node tools/repohealth.mjs judge <event-id> [--yes]
  */
-import { readFileSync, statSync } from "node:fs";
+import { readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -70,6 +70,7 @@ import {
   preregVersions,
   readRank,
   staleRows,
+  stringifyRow,
   writeFixture,
 } from "./repohealth/series.mjs";
 
@@ -83,7 +84,7 @@ import { measureCochange } from "./repohealth/metrics/cochange.mjs";
 import { measureDups } from "./repohealth/metrics/dups.mjs";
 import { measureDeadExports } from "./repohealth/metrics/deadexports.mjs";
 import { measureTripwires } from "./repohealth/metrics/tripwires.mjs";
-import { declaresOwn, measureOwn } from "./repohealth/own.mjs";
+import { OWN_FILE, declaresOwn, measureOwn } from "./repohealth/own.mjs";
 import { declarationsByIndex, measureCentral } from "./repohealth/central.mjs";
 
 /**
@@ -155,6 +156,8 @@ function resolveScope(argv) {
 }
 
 const SCOPE = resolveScope(process.argv.slice(2));
+/** The repo's committed `run` commands are not to be spawned (the host passes it until they are approved). */
+const NO_OWN = process.argv.slice(2).includes("--no-own");
 const SERIES = stateFile(ROOT, SCOPE ? `repohealth.${slugFor(SCOPE)}.jsonl` : "repohealth.jsonl");
 const FIXTURE = join(ENGINE_ROOT, "tools", "repohealth", "fixture.json");
 /** This script, as a reader would type it. See `recutCommand`. */
@@ -308,6 +311,22 @@ const CHUNK = 25;
  * throwing away the intermediate commits here would mean they could never be
  * recovered without recomputing the series under today's constants.
  */
+/** Rewrite the file's LAST line for `row.sha` in place (atomically); the rest, stale rows included, stays byte for byte. */
+function replaceRow(path, row) {
+  const lines = readFileSync(path, "utf8").split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (!lines[i].trim()) continue;
+    let sha;
+    try { sha = JSON.parse(lines[i]).sha; } catch { continue; }
+    if (sha !== row.sha) continue;
+    lines[i] = stringifyRow(row);
+    const tmp = `${path}.tmp-${process.pid}`;
+    writeFileSync(tmp, lines.join("\n"), "utf8");
+    renameSync(tmp, path);
+    return;
+  }
+}
+
 function update({ fixture }) {
   const started = Date.now();
   const CFG = cfg();
@@ -371,7 +390,9 @@ function update({ fixture }) {
     // The repo's OWN readings (`own.mjs`): HEAD only, the whole tree only. Not
     // one of the measurements above — no definition here moves when a repo
     // declares one, and nothing that reads the five index entries reads this.
-    if (!SCOPE && index === history.commits.length - 1) {
+    // `--no-own`: the host has not approved this repo's committed commands, so
+    // none of them runs (neither its readings here nor its central overrides).
+    if (!SCOPE && !NO_OWN && index === history.commits.length - 1) {
       const own = measureOwn(ROOT, commit.sha, git);
       if (own) row.own = own;
     }
@@ -380,7 +401,7 @@ function update({ fixture }) {
     // — so an override's series starts at its first measurement, and the
     // fingerprint on the row is what carries the index across that start.
     if (decls) {
-      const central = measureCentral(ROOT, decls[index], { atHead: index === history.commits.length - 1 });
+      const central = measureCentral(ROOT, decls[index], { atHead: !NO_OWN && index === history.commits.length - 1 });
       if (central) row.central = central;
     }
     fresh.push(row);
@@ -397,6 +418,20 @@ function update({ fixture }) {
   });
 
   append(SERIES, pending);
+  // A HEAD row measured under `--no-own` (the bundled engine, before the person
+  // approved the repo's commands) has no `own`, and `missing` will never visit it
+  // again: re-measure that one row's own + central readings and rewrite it.
+  const headIdx = history.commits.length - 1;
+  const headKnown = headIdx >= 0 ? known.get(history.commits[headIdx].sha) : null;
+  if (!SCOPE && !NO_OWN && headKnown && !headKnown.own && declaresOwn(ROOT, headKnown.sha, git)) {
+    const own = measureOwn(ROOT, headKnown.sha, git);
+    const central = measureCentral(ROOT, git.readFileAt(ROOT, headKnown.sha, OWN_FILE), { atHead: true });
+    const redone = { ...headKnown, ...(own ? { own } : {}), ...(central ? { central } : {}) };
+    if (own || central) {
+      replaceRow(SERIES, redone);
+      rows[rows.indexOf(headKnown)] = redone;
+    }
+  }
   const all = rows.concat(fresh);
   const last = all[all.length - 1];
   const secs = ((Date.now() - started) / 1000).toFixed(1);

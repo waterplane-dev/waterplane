@@ -34,6 +34,8 @@ import type { AutoPullManager } from "../autopull.js";
 import type { IntentManager } from "../intents/manager.js";
 import type { OpenDeliveries } from "../opendeliveries.js";
 import type { UpdateChecker } from "../update.js";
+import type { UpdatesChecker } from "../updates/checker.js";
+import type { UpdateApplier } from "../updates/apply.js";
 import type { PluginRegistry } from "../plugins/pluginregistry.js";
 import type { DecisionLog } from "../decisionlog.js";
 import type { SentLog } from "../sentlog.js";
@@ -119,6 +121,10 @@ export interface HostCtx {
   /** Deliveries whose fate the host could not confirm, and is still asking about. */
   readonly openDeliveries: OpenDeliveries;
   readonly updates: UpdateChecker;
+  /** waterplane + plugin update check (`updates/checker.ts`): cached, daily, a read. */
+  readonly pluginUpdates: UpdatesChecker;
+  /** Install / update / restart on a tap (`updates/apply.ts`): one at a time. */
+  readonly updateApplier: UpdateApplier;
   /** The installed plugins (`plugins/pluginregistry.ts`, docs/notes/plugins.md). */
   readonly plugins: PluginRegistry;
   /** Limit auto-continues + plugin decisions; a change broadcasts `decisions.log`. */

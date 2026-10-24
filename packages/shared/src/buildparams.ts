@@ -17,10 +17,15 @@
  *
  *  • **A value is substituted VERBATIM into `cmd` and `dir`** at `{{id}}`, and
  *    is ALSO exported as `<PREFIX>PARAM_<ID>`. Verbatim rather than shell-quoted
- *    because a parameter is as legitimately a flag fragment as it is a word;
- *    the env copy is what a command that wants safety reads (`"$<PREFIX>PARAM_APP"`),
- *    and it is there for every parameter whether or not the command line names
- *    it.
+ *    because a parameter is as legitimately a flag fragment as it is a word,
+ *    and real entries already place it bare (`echo {{app}}`) or inside their own
+ *    double quotes (`[ "{{mode}}" = publish ]`) — quoting would double-quote the
+ *    second and still be wrong in a third context. So instead a value carrying a
+ *    SHELL METACHARACTER (`unsafeParamIds`) REFUSES the run, with a sentence: a
+ *    repo-supplied default or option must not be able to smuggle `; curl … | sh`
+ *    onto a command line. The env copy is what a command that wants an
+ *    arbitrary string reads (`"$<PREFIX>PARAM_APP"`), and it is there for every
+ *    parameter whether or not the command line names it.
  *  • **A value is ONE LINE.** A newline substituted into a command line is a
  *    second command, and nobody typed it. Control characters are stripped on
  *    the way in, here, once, so neither end has to remember to.
@@ -124,6 +129,37 @@ export function cleanBuildParams(v: unknown): BuildParam[] | undefined {
     out.push(p);
   }
   return out.length ? out : undefined;
+}
+
+/** Characters that let a value end the word it was substituted into and start
+ *  another command: separators, pipes, redirects, substitutions, quotes, and the
+ *  backslash that escapes them. Spaces, `-`, `_`, `.`, `/`, `=`, `:`, `,`, `@`,
+ *  `+` and globs are NOT here: a flag fragment or a path is a legitimate value. */
+const SHELL_META_RE = /[;&|`$()<>\\"'\n\r]/;
+
+/** The wire answer for one parameter's discovered options. `needsApproval`
+ *  means the `optionsCmd` came from the repo's COMMITTED file and this desktop
+ *  has not yet been told to run that exact command: `cmd` carries its text so
+ *  the person can read it before a tap runs it. Never set together with
+ *  `options`. */
+export interface BuildParamAnswer {
+  options?: string[];
+  total?: number;
+  error?: string;
+  needsApproval?: boolean;
+  cmd?: string;
+}
+
+/** Ids whose value would reach `cmd` carrying a shell metacharacter. */
+export function unsafeParamIds(cmd: string, values: Record<string, string>): string[] {
+  return paramRefs(cmd).filter((id) => typeof values[id] === "string" && SHELL_META_RE.test(values[id]));
+}
+
+/** The refusal sentence for `unsafeParamIds`; empty when there is none. */
+export function unsafeParamsText(ids: string[]): string {
+  if (!ids.length) return "";
+  const list = ids.map((n) => `“${n}”`).join(", ");
+  return `the value for ${list} contains a shell character (; & | \` $ ( ) < > \\ quotes) and would be run as part of the command — change it, or have the command read $${paramEnvName(ids[0])} instead`;
 }
 
 /** Every `{{id}}` a string references, in order, deduped. */

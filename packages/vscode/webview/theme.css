@@ -1,9 +1,10 @@
 /*
  * waterplane inside VS Code. The reused charts paint with the web app's own names (--fg, --muted,
  * --line, --panel, --chart-N, --ctx-*); this file maps every one of them onto a --vscode-* variable,
- * so light, dark and high-contrast themes all follow the editor. The rules below the mapping are
- * ported from packages/web/src/styles.css (chart, composition strip, bars, legends, empty, hint-more)
- * with nothing else of the phone UI.
+ * so light, dark and high-contrast themes all follow the editor. The token screen's own rules are the
+ * phone's, imported unchanged (`main.tsx`: styles/00-tokens.css for the scale, then
+ * styles/11-token-stats.css); this file loads AFTER them, so its colour mapping and the rules below —
+ * the panel's own views, and the phone rules that live in sheets not imported here — win.
  */
 :root {
   --bg: var(--vscode-editor-background);
@@ -29,6 +30,15 @@
   --accent-edge: var(--vscode-focusBorder, var(--vscode-textLink-foreground));
   --accent-tint: var(--vscode-list-activeSelectionBackground, transparent);
   --ui-font: 1;
+  /* The phone palette's other meanings its token sheet paints with, onto the editor's. `--accent-rgb`
+     (the heat grid's one hue at five alphas) has no RGB twin among the --vscode-* variables, so it
+     stays the phone's blue. */
+  --ok: var(--vscode-charts-green);
+  --star: var(--vscode-charts-yellow);
+  --limit: var(--vscode-charts-red);
+  --warn-wash: color-mix(in srgb, var(--warn) 8%, transparent);
+  --warn-tint: color-mix(in srgb, var(--warn) 12%, transparent);
+  --warn-edge: color-mix(in srgb, var(--warn) 40%, transparent);
 }
 
 * { box-sizing: border-box; }
@@ -96,47 +106,11 @@ footer { margin-top: 24px; padding-top: 10px; border-top: 1px solid var(--line);
   font-variant-numeric: tabular-nums; line-height: 1.45;
 }
 .ctx-chart-title { padding: 18px 0 0; font-size: calc(15px * var(--ui-font, 1)); font-weight: 600; color: var(--fg); }
-.ctx-chart-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
-.ctx-readout {
-  min-height: 18px; padding: 4px 0; font-size: calc(12.5px * var(--ui-font, 1)); color: var(--fg);
-  font-variant-numeric: tabular-nums;
-}
-.ctx-legend {
-  display: flex; flex-wrap: wrap; gap: 6px 14px;
-  padding: 2px 0 12px; font-size: calc(12px * var(--ui-font, 1)); color: var(--muted);
-}
-.ctx-legend span { display: inline-flex; align-items: center; gap: 5px; }
-.ctx-legend-stack { padding-top: 6px; }
-.ctx-legend-stack b { font-weight: 600; color: var(--fg); font-variant-numeric: tabular-nums; }
-.ctx-legend-pct { opacity: 0.65; font-variant-numeric: tabular-nums; }
 .ctx-spark { display: block; overflow: visible; }
 
 /* ── ported: composition strip (KindBar) ── */
-.ts-comp { padding: 4px 0 2px; }
-.ts-bar { position: relative; height: 14px; border-radius: 7px; overflow: hidden; background: var(--line); }
-.ts-seg { position: absolute; top: 0; bottom: 0; }
-.ts-legend {
-  display: flex; flex-wrap: wrap; gap: 6px 16px;
-  padding: 10px 0 2px; font-size: calc(12.5px * var(--ui-font, 1)); color: var(--muted);
-}
-.ts-leg { display: inline-flex; align-items: baseline; gap: 5px; }
-.ts-leg i { width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto; align-self: center; }
-.ts-leg b { font-weight: 600; color: var(--fg); }
-.ts-leg em { font-style: normal; opacity: .75; }
-.ts-caveat { font-size: calc(12.5px * var(--ui-font, 1)); line-height: 1.5; padding: 4px 0 0; }
-.ts-caveat b { color: var(--fg); font-weight: 600; }
 
 /* ── ported: horizontal bars (Bars) ── */
-.ts-bars { padding: 6px 0 10px; display: flex; flex-direction: column; gap: 11px; }
-.ts-barhead { display: flex; align-items: baseline; gap: 10px; font-size: calc(13px * var(--ui-font, 1)); }
-.ts-barlabel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
-.ts-barval { flex: 0 0 auto; color: var(--muted); font-variant-numeric: tabular-nums; }
-.ts-barval em { font-style: normal; opacity: .85; margin-left: 6px; white-space: nowrap; }
-.ts-bartrack { margin-top: 4px; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
-.ts-barfill { display: block; height: 100%; border-radius: 4px; background: var(--chart-1); }
-.ts-barfill-split { display: flex; background: none; overflow: hidden; }
-.ts-barseg { display: block; height: 100%; min-width: 1.5px; }
-.ts-barseg + .ts-barseg { border-left: 1px solid var(--bg); }
 
 /* ── waterplane's own: cost headline, turns, tables, prompts ── */
 .cost-block { padding-bottom: 4px; }
@@ -201,7 +175,6 @@ footer { margin-top: 24px; padding-top: 10px; border-top: 1px solid var(--line);
 .update-log.rh-refusal { max-height: none; overflow: visible; }
 .rh-forget { padding: 4px 0 8px; }
 
-.rh-box { padding: 4px 0 0; }
 .rh-chart { padding: 8px 0 2px; }
 .rh-spark { display: block; overflow: visible; color: var(--fg); touch-action: pan-y; }
 .rh-tiles { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
@@ -269,7 +242,6 @@ footer { margin-top: 24px; padding-top: 10px; border-top: 1px solid var(--line);
 .explain-chip.open { color: var(--fg); }
 .explain-label { font-size: calc(12px * var(--ui-font, 1)); line-height: 1.2; }
 .explain-body { flex-basis: 100%; font-size: calc(12px * var(--ui-font, 1)); color: var(--muted); margin-top: 4px; }
-.scrub-hint { color: var(--muted); }
 .rh-tape-pick { display: flex; align-items: flex-start; gap: 8px; }
 .rh-tape-pick-words { flex: 1; min-width: 0; }
 .rh-tape-pick .key { flex: none; display: inline-flex; align-items: center; gap: 4px; }
@@ -292,7 +264,6 @@ footer { margin-top: 24px; padding-top: 10px; border-top: 1px solid var(--line);
 .rh-filter .key.on { color: var(--accent); border-color: var(--accent-edge); background: var(--accent-tint); }
 .rh-types .rh-cap .key { min-height: 26px; padding: 2px 8px; font-size: calc(12px * var(--ui-font, 1)); vertical-align: middle; }
 .ctx-stackpick { display: flex; align-items: center; gap: 6px; padding: 2px 0 8px; flex-wrap: wrap; }
-.ctx-stackpick-lab { font-size: calc(12px * var(--ui-font, 1)); color: var(--muted); flex: 0 0 auto; }
 .ctx-stackpick .key { padding: 3px 10px; font-size: calc(12.5px * var(--ui-font, 1)); }
 
 /* The HintChip shim: the web's chip opens a card; here it is a disclosure that opens beside the label. */
@@ -322,17 +293,8 @@ footer { margin-top: 24px; padding-top: 10px; border-top: 1px solid var(--line);
 /* ── ported: the token-usage sheet's cards (.ts-*) from packages/web/src/styles.css ──
  * The panel has no side gutter of its own (top-level rules above zero it), so inside a card —
  * a scope box or the headline — the phone's 12–14px insets come back. */
-.ts-list { padding-bottom: 24px; }
-.ts-foot { font-size: calc(11.5px * var(--ui-font, 1)); line-height: 1.5; padding: 14px 0 0; }
-.ts-filter { display: flex; align-items: center; gap: 6px; padding: 4px 0 0; flex-wrap: wrap; }
 /* The span filter reaches every box under it, so it stays in sight (the phone's sticky bar). */
 .ts-global { position: sticky; top: 0; z-index: 3; background: var(--bg); padding: 6px 0 8px; border-bottom: 1px solid var(--line); }
-.ts-seg-chips { display: inline-flex; gap: 4px; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
-.ts-seg-chips::-webkit-scrollbar { display: none; }
-.ts-seg-chips .key, .ts-seg-chips .ts-seg-sep { flex: 0 0 auto; }
-.ts-seg-chips .key { text-transform: lowercase; min-height: 24px; padding: 2px 8px; font-size: calc(11.5px * var(--ui-font, 1)); }
-.ts-seg-sep { width: 1px; align-self: stretch; margin: 2px 5px; background: var(--muted); opacity: .4; }
-.ctx-method { padding-top: 4px; }
 .linkish {
   display: inline-flex; align-items: center; gap: 5px; max-width: 100%;
   background: transparent; border: none; padding: 0; cursor: pointer;
@@ -360,31 +322,7 @@ footer { margin-top: 24px; padding-top: 10px; border-top: 1px solid var(--line);
   color: var(--accent); background: var(--accent-tint); border: 1px solid var(--accent-edge); vertical-align: 1px;
 }
 .ts-scope-tag-muted { color: var(--muted); background: transparent; border-color: var(--line); }
-
-.ts-hero-wrap { padding: 18px 14px 6px; }
-.ts-hero { font-size: calc(44px * var(--ui-font, 1)); line-height: 1; font-weight: 650; letter-spacing: -0.02em; color: var(--fg); }
-.ts-hero-sub { margin-top: 6px; font-size: calc(13px * var(--ui-font, 1)); color: var(--muted); }
-.ts-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 8px; padding: 10px 14px 4px; }
-.ts-tile { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 9px 10px; }
-.ts-tile-v { font-size: calc(20px * var(--ui-font, 1)); font-weight: 620; color: var(--fg); font-variant-numeric: tabular-nums; }
-.ts-tile-l { font-size: calc(11.5px * var(--ui-font, 1)); color: var(--muted); margin-top: 2px; }
-.ts-tile-n { font-size: calc(11px * var(--ui-font, 1)); color: var(--muted); opacity: .8; margin-top: 1px; }
 .ts-numrow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; padding: 6px 14px; border-bottom: 1px solid var(--line); }
-.ts-numrow .row-title { flex: 1 1 auto; min-width: 7em; font-size: calc(13.5px * var(--ui-font, 1)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ts-numrow .row-meta { flex: 0 0 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 3px 10px; }
-.ts-numrow .row-sub { color: var(--muted); font-size: calc(11.5px * var(--ui-font, 1)); font-variant-numeric: tabular-nums; }
-.ts-num { font-variant-numeric: tabular-nums; font-size: calc(13.5px * var(--ui-font, 1)); color: var(--fg); }
-.ts-cost { color: var(--muted); font-variant-numeric: tabular-nums; margin-left: 10px; }
-
-.ts-week { padding: 8px 14px 2px; }
-.ts-week-nav { display: flex; align-items: center; gap: 8px; }
-.ts-week-gap { flex: 0 0 auto; width: 32px; height: 1px; }
-.ts-week-label { flex: 1 1 auto; min-width: 0; text-align: center; font-size: calc(14px * var(--ui-font, 1)); font-weight: 600; color: var(--fg); }
-.ts-week-sum { margin-top: 6px; font-size: calc(13px * var(--ui-font, 1)); color: var(--muted); }
-.ts-week-sum b { color: var(--fg); font-size: calc(17px * var(--ui-font, 1)); font-weight: 620; font-variant-numeric: tabular-nums; }
-.ts-week-delta { display: block; margin-top: 2px; }
-.ts-week-note { margin-top: 5px; font-size: calc(11.5px * var(--ui-font, 1)); line-height: 1.5; }
-.ts-week-note .linkish { margin-left: 0; }
 .ts-week-chart { padding: 6px 12px 0; min-height: 1px; }
 .ts-week-filter { padding: 8px 14px 2px; font-size: calc(12.5px * var(--ui-font, 1)); color: var(--fg); }
 .ts-week-rowhead { cursor: pointer; }

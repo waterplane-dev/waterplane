@@ -12,11 +12,12 @@ import { AnnToolbar } from "./AnnToolbar";
 import type { AnnModel } from "./useAnnotator";
 
 export function AnnStage({ m }: { m: AnnModel }) {
-  const { canvasRef, wrapRef, view, onDown, onMove, onUp, layout, configOpen } = m;
+  const { canvasRef, wrapRef, bodyRef, view, onDown, onMove, onUp, place, configOpen } = m;
   return (
     // Bar and picture share one box so the bar can be a row on top or a rail
     // down the left (`.place-*`, annLayout.ts) without the gesture knowing.
-    <div className={`annot-body place-${layout.place}`}>
+    // `place` is `auto` resolved for this picture once its size is known.
+    <div className={`annot-body place-${place}`} ref={bodyRef}>
       <AnnToolbar m={m} />
       {/* The gesture is the WRAPPER's, not the canvas's: a mark may start (and
           end) off the picture, which is the only way a thumb reliably encloses

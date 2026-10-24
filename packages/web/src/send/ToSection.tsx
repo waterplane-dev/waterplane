@@ -4,7 +4,7 @@ import { RadioRows, RowTitle, RowSub, Hint } from "../kit";
 import { LaunchRow } from "./LaunchRow";
 import { FlagWhenDoneRow } from "./FlagWhenDoneRow";
 import { BudgetField } from "../BudgetField";
-import { budgetChipWords } from "../budgetInput";
+import { budgetChipWords, launchWindowsOff } from "../budgetInput";
 import { RepoPicker, RepoSelect } from "../RepoPicker";
 import { Unavailable } from "../Unavailable";
 import { clockSessionNote, budgetOfTarget, launchOfTarget, targetWords, withBudget, withLaunch } from "../sendIntent";
@@ -36,6 +36,7 @@ export function ToSection({ m }: { m: SendSheetModel }) {
       </div>
       {budgetOpen && (
         <BudgetField initial={bud ?? null} onChange={(b) => setTarget((t) => withBudget(t, b))}
+          windowsOff={launchWindowsOff(m.backends ?? null, ("launch" in target ? target.launch?.backend : undefined))}
           calFor="A percent is converted from dollars at the window's measured rate once the session is running — until there is a fresh usage reading, nothing is held." />
       )}
     </>

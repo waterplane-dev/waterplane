@@ -17,7 +17,7 @@
  * a failure keeps the previous figure (it goes stale on its own, and stale is
  * `unknown`, which never trips).
  */
-import type { SessionBudgetCal, TokenWindowsDoc, UsageInfo } from "@waterplane/shared";
+import type { SessionBudgetCal, TokenWindowsDoc, UsageInfo, UsageWindow } from "@waterplane/shared";
 import { sessionBudgetCal } from "@waterplane/shared";
 
 export const SESSION_WINDOW_MS = 5 * 3_600_000;
@@ -25,18 +25,42 @@ export const WEEK_WINDOW_MS = 7 * 24 * 3_600_000;
 
 type WindowSpec = { id: string; anchor: number; lenMs: number };
 
-/** The two grids for one reading: each window from its opening up to the
- *  reading. A window with no reset instant, or one already past, has none. */
-export function calSpecs(u: UsageInfo): WindowSpec[] {
+/**
+ * How long a ROLLING window is, read off its chip unit (`UsageWindow.unit`): `5h`, `1d`, `wk`,
+ * `<n>h`/`<n>d`. A calendar unit (`mo`) has no fixed length — its opening is a date, not
+ * `resetAt − len` — and an unknown unit is not guessed: both null, so the window gets no grid.
+ */
+export function windowLenMs(unit: string): number | null {
+  if (unit === "wk") return WEEK_WINDOW_MS;
+  const m = /^(\d{1,2})([hd])$/.exec(unit);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return n > 0 ? n * (m[2] === "h" ? 3_600_000 : 24 * 3_600_000) : null;
+}
+
+/**
+ * One grid per window of a reading taken at `checkedAt`: each from its opening up to the reading,
+ * under the window's own id. A window with no reset instant, one already past, or no fixed
+ * length (`windowLenMs`) has none — absent, never a guessed opening.
+ */
+export function calSpecsOf(checkedAt: number, windows: readonly Pick<UsageWindow, "id" | "unit" | "resetAt">[]): WindowSpec[] {
   const out: WindowSpec[] = [];
-  const add = (id: string, resetAt: number | null, len: number) => {
-    if (resetAt == null || !(resetAt > u.checkedAt)) return;
-    const lenMs = u.checkedAt - (resetAt - len);
-    if (lenMs > 0 && lenMs <= len) out.push({ id, anchor: u.checkedAt, lenMs });
-  };
-  add("session", u.sessionResetAt, SESSION_WINDOW_MS);
-  add("weekly", u.weeklyResetAt, WEEK_WINDOW_MS);
+  for (const w of windows) {
+    const len = windowLenMs(w.unit);
+    if (len == null || w.resetAt == null || !(w.resetAt > checkedAt)) continue;
+    const lenMs = checkedAt - (w.resetAt - len);
+    if (lenMs > 0 && lenMs <= len) out.push({ id: w.id, anchor: checkedAt, lenMs });
+  }
   return out;
+}
+
+/** claude's two grids — its `/usage` windows through `calSpecsOf`, under the ids `calCosts`
+ *  reads (`session`, `weekly`). Byte-identical to the pre-windows rule (sessionbudget.test.mjs). */
+export function calSpecs(u: UsageInfo): WindowSpec[] {
+  return calSpecsOf(u.checkedAt, [
+    { id: "session", unit: "5h", resetAt: u.sessionResetAt },
+    { id: "weekly", unit: "wk", resetAt: u.weeklyResetAt },
+  ]);
 }
 
 /** The newest cell's priced total per grid, null where there is none. */

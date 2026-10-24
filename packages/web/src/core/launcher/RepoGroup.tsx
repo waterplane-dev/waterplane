@@ -455,7 +455,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
         <div className="row-more">
           {/* First, so a person looking for "a terminal here" finds it
               without reading the whole menu. */}
-          {main && canShell && <button className="more-act" title="a plain terminal on the desktop in this repo — no Claude"
+          {main && canShell && <button className="more-act" title="a plain terminal on the desktop in this repo — no agent"
             onClick={() => { setRepoMenu(null); openShell(main); }}><Terminal size={ICON} />open a shell here</button>}
           {!focusRepo && <button className="more-act" data-hint="repo.focus" onClick={() => { track("action:repo.focus"); setRepoMenu(null); openFocusWindow(repoName); }}><ExternalLink size={ICON} />{isNativeShell() ? "focus this repo" : "focus window"}</button>}
           {/* The repo TREE, the one entry point that does not need a
@@ -552,7 +552,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
         title="more actions" onClick={() => { track("action:repo.more"); setRepoMenu((v) => (v === t.id ? null : t.id)); }}><MoreHorizontal size={ICON} /></button>
       {repoMenu === t.id && (
         <div className="row-more">
-          {canShell && <button className="more-act" title="a plain terminal on the desktop in this worktree — no Claude"
+          {canShell && <button className="more-act" title="a plain terminal on the desktop in this worktree — no agent"
             onClick={() => { setRepoMenu(null); openShell(t); }}><Terminal size={ICON} />open a shell here</button>}
           <button className="more-act" onClick={() => { track("action:repo.build"); setRepoMenu(null); openBuildFor(t); }}><Hammer size={ICON} />build</button>
           <button className="more-act" onClick={() => { track("action:repo.capture"); setRepoMenu(null); openCaptureFor(t); }}><ScanEye size={ICON} />capture</button>

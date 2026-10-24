@@ -102,3 +102,11 @@ When the host restarts, the UI says the desktop is restarting, with the reason, 
 - asked: 2026-10-20
 - shipped: 445307de
 
+### R-connection-019 · requested
+Tailscale keeps running when the disk is nearly full: a checklist row installs a watchdog that reopens it if macOS ended it, and names standalone tailscaled as the lasting fix; after switching, pairing, serve ports, allowed hosts and peer links still reach the Mac.
+- asked: 2026-10-21, 2026-10-21, 2026-10-21
+
+### R-connection-020 · requested
+The WordPress site is reachable from the app.
+- asked: 2026-10-22
+

@@ -4,6 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { findClaudeBin, tilde } from "../dist/claudebin.js";
+import { claudeMissingRefusal } from "../dist/doctorclaude.js";
 
 const home = "/home/me";
 const mk = (present = [], over = {}) => ({
@@ -78,4 +79,24 @@ test("nothing found: plain claude, with what was tried", () => {
 test("tilde abbreviates home only", () => {
   assert.equal(tilde("/home/me/.local/bin/claude", home), "~/.local/bin/claude");
   assert.equal(tilde("/home/meow/x", home), "/home/meow/x");
+});
+
+test("a miss is flagged missing; a hit or the knob is not", () => {
+  assert.equal(findClaudeBin(mk()).missing, true);
+  assert.equal(findClaudeBin(mk([`${home}/.local/bin/claude`])).missing, undefined);
+  assert.equal(findClaudeBin(mk([], { onPath: () => true })).missing, undefined);
+  assert.equal(findClaudeBin(mk([], { knob: "/x/claude" })).missing, undefined);
+});
+
+test("refusal: install command, tilde'd locations, WSL hint; null when resolvable", () => {
+  const miss = findClaudeBin(mk());
+  const text = claudeMissingRefusal(undefined, miss, home);
+  assert.match(text, /^Claude Code is not installed on this desktop\./);
+  assert.match(text, /curl -fsSL https:\/\/claude\.ai\/install\.sh \| bash/);
+  assert.match(text, /Looked in: ~\/\.local\/bin\/claude/);
+  assert.ok(!text.includes(home + "/"));
+  assert.equal(claudeMissingRefusal("/x/claude", miss, home), null);
+  assert.equal(claudeMissingRefusal(undefined, findClaudeBin(mk([`${home}/.local/bin/claude`])), home), null);
+  const wsl = claudeMissingRefusal(undefined, { ...miss, windowsSide: "/mnt/c/Users/a/.local/bin/claude.exe" }, home);
+  assert.match(wsl, /Windows side/);
 });

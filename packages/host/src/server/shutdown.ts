@@ -10,6 +10,7 @@
 import type { ServerCtx } from "./ctx.js";
 import { logTag, envName } from "@waterplane/shared";
 import { restartReason } from "../restartnote.js";
+import { runPendingRestore } from "../cli/selfupdate.js";
 
 export function installShutdown(ctx: ServerCtx): void {
   /**
@@ -70,6 +71,9 @@ export function installShutdown(ctx: ServerCtx): void {
       // opencode's per-session `serve` children): they own the session state on disk, so
       // nothing above may depend on them being alive.
       try { ctx.plugins.shutdownAll(); } catch { /* shutdown must never throw */ }
+      // A phone-tapped rollback owes the older state back (`cli/selfupdate.ts`): AFTER every flush above,
+      // so nothing rewrites it, and before the supervisor starts the older version on it.
+      try { const r = runPendingRestore(); if (r) console.error(`${logTag} rollback: ${r}`); } catch { /* shutdown must never throw */ }
       process.exit(0);
     });
   }

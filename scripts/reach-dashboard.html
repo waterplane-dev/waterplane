@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reach</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f4f3f0;
+    --surface-1: #fcfcfb;
+    --border: #e3e2dd;
+    --grid: #ebeae6;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #77766f;
+    --series-1: #2a78d6;
+    --series-1-hover: #1c5cab;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #111110;
+      --surface-1: #1a1a19;
+      --border: #2e2e2c;
+      --grid: #272725;
+      --text-primary: #f0efec;
+      --text-secondary: #c3c2b7;
+      --text-muted: #94938a;
+      --series-1: #3987e5;
+      --series-1-hover: #6da7ec;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #111110;
+    --surface-1: #1a1a19;
+    --border: #2e2e2c;
+    --grid: #272725;
+    --text-primary: #f0efec;
+    --text-secondary: #c3c2b7;
+    --text-muted: #94938a;
+    --series-1: #3987e5;
+    --series-1-hover: #6da7ec;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--text-primary);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin-bottom: 16px; }
+  h1 { font-size: 22px; margin: 0; }
+  .asof { color: var(--text-muted); font-size: 13px; flex: 1; min-width: 180px; }
+  .range { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .range button {
+    font: inherit; font-size: 13px; padding: 6px 12px; border: 0; background: var(--surface-1);
+    color: var(--text-secondary); cursor: pointer;
+  }
+  .range button + button { border-left: 1px solid var(--border); }
+  .range button[aria-pressed="true"] { background: var(--text-primary); color: var(--surface-1); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .tile, .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; }
+  .tile { padding: 12px 14px; }
+  .tile .label { color: var(--text-secondary); font-size: 13px; }
+  .tile .value { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2; margin-top: 2px; }
+  .tile .sub { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 12px; }
+  .card { padding: 14px 14px 10px; min-width: 0; }
+  .card h2 { font-size: 15px; margin: 0; }
+  .card .note { color: var(--text-muted); font-size: 12px; margin: 2px 0 6px; }
+  .plot { position: relative; height: 180px; }
+  .plot svg { display: block; width: 100%; height: 100%; overflow: visible; }
+  .axis { fill: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .gridline { stroke: var(--grid); stroke-width: 1; }
+  .baseline { stroke: var(--border); stroke-width: 1; }
+  .bar { fill: var(--series-1); }
+  .bar.on { fill: var(--series-1-hover); }
+  .line { fill: none; stroke: var(--series-1); stroke-width: 2; stroke-linejoin: round; }
+  .dot { fill: var(--series-1); stroke: var(--surface-1); stroke-width: 2; }
+  .cross { stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 3 3; }
+  .empty { color: var(--text-muted); font-size: 13px; display: grid; place-items: center; height: 100%; }
+  .tip {
+    position: absolute; pointer-events: none; background: var(--text-primary); color: var(--surface-1);
+    font-size: 12px; padding: 6px 8px; border-radius: 6px; white-space: nowrap; transform: translate(-50%, -100%);
+    font-variant-numeric: tabular-nums; z-index: 2;
+  }
+  details { margin-top: 6px; font-size: 13px; }
+  summary { color: var(--text-secondary); cursor: pointer; padding: 4px 0; }
+  .tablewrap { max-height: 220px; overflow: auto; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 3px 8px; border-bottom: 1px solid var(--grid); }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--text-secondary); font-weight: 500; position: sticky; top: 0; background: var(--surface-1); }
+  .error { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Reach</h1>
+    <span class="asof" id="asof">Loading…</span>
+    <div class="range" role="group" aria-label="Time range" id="range">
+      <button data-days="14">14 days</button><button data-days="30">30 days</button><button data-days="90">90 days</button><button data-days="0">All</button>
+    </div>
+  </header>
+  <section class="tiles" id="tiles"></section>
+  <section class="grid" id="charts"></section>
+</main>
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const fmt = (n) => n == null ? "–" : Number(n).toLocaleString("en-US");
+const dayMs = 86400e3;
+const fmtDay = (d) => new Date(d + "T00:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+let DATA = null;
+let days = 30;
+try { const v = localStorage.getItem("reach.days"); if (v != null && [0, 14, 30, 90].includes(Number(v))) days = Number(v); } catch {}
+
+function since() {
+  if (!days) return "0000-00-00";
+  return new Date(Date.now() - days * dayMs).toISOString().slice(0, 10);
+}
+const cut = (series) => (series ?? []).filter((p) => p.day >= since());
+const sum = (series, f = "count") => series.reduce((a, p) => a + (p[f] ?? 0), 0);
+const first = (obj) => Object.entries(obj ?? {});
+/** The store name once a listing has given one, else the package id. */
+const appName = (id) => (DATA.playListing?.[id] ?? []).map((p) => p.name).filter(Boolean).at(-1) ?? id;
+
+function niceMax(v) {
+  if (v <= 0) return 4;
+  const p = 10 ** Math.floor(Math.log10(v));
+  for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= v) return Math.max(m * p, 4);
+  return v;
+}
+
+/** Bars for a count per day; the day axis is continuous so a missing day reads as a gap. */
+function barChart(plot, pts, valueOf, tipOf) {
+  drawChart(plot, pts, valueOf, tipOf, "bar");
+}
+function lineChart(plot, pts, valueOf, tipOf) {
+  drawChart(plot, pts, valueOf, tipOf, "line");
+}
+
+function drawChart(plot, pts, valueOf, tipOf, form) {
+  plot.innerHTML = "";
+  if (!pts.length) { plot.innerHTML = `<div class="empty">No readings in this range yet.</div>`; return; }
+  const W = plot.clientWidth, H = plot.clientHeight;
+  const m = { l: 34, r: 8, t: 8, b: 22 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const t0 = Date.parse(pts[0].day), t1 = Date.parse(pts.at(-1).day);
+  const n = Math.round((t1 - t0) / dayMs) + 1;
+  const slot = iw / n;
+  const xOf = (d) => m.l + ((Date.parse(d) - t0) / dayMs) * slot + slot / 2;
+  const max = niceMax(Math.max(...pts.map(valueOf)));
+  const yOf = (v) => m.t + ih - (v / max) * ih;
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("role", "img");
+  const el = (tag, attrs, parent = svg) => {
+    const e = document.createElementNS(ns, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    parent.appendChild(e);
+    return e;
+  };
+  for (const f of [0.5, 1]) {
+    const y = yOf(max * f);
+    el("line", { class: "gridline", x1: m.l, x2: W - m.r, y1: y, y2: y });
+    el("text", { class: "axis", x: m.l - 6, y: y + 4, "text-anchor": "end" }).textContent = fmt(max * f);
+  }
+  el("line", { class: "baseline", x1: m.l, x2: W - m.r, y1: yOf(0), y2: yOf(0) });
+  el("text", { class: "axis", x: m.l - 6, y: yOf(0) + 4, "text-anchor": "end" }).textContent = "0";
+  el("text", { class: "axis", x: m.l, y: H - 4 }).textContent = fmtDay(pts[0].day);
+  if (n > 1) el("text", { class: "axis", x: W - m.r, y: H - 4, "text-anchor": "end" }).textContent = fmtDay(pts.at(-1).day);
+
+  const marks = [];
+  if (form === "bar") {
+    const bw = Math.max(1, Math.min(slot - 2, 28));
+    const r = Math.min(4, bw / 2);
+    for (const p of pts) {
+      const v = valueOf(p);
+      const x = xOf(p.day) - bw / 2, y0 = yOf(0), h = y0 - yOf(v);
+      if (h <= 0) { marks.push(null); continue; }
+      const rr = Math.min(r, h);
+      marks.push(el("path", { class: "bar", d: `M${x},${y0}V${y0 - h + rr}Q${x},${y0 - h} ${x + rr},${y0 - h}H${x + bw - rr}Q${x + bw},${y0 - h} ${x + bw},${y0 - h + rr}V${y0}Z` }));
+    }
+  } else {
+    el("path", { class: "line", d: pts.map((p, i) => `${i ? "L" : "M"}${xOf(p.day)},${yOf(valueOf(p))}`).join("") });
+    const last = pts.at(-1);
+    el("circle", { class: "dot", cx: xOf(last.day), cy: yOf(valueOf(last)), r: 4 });
+  }
+  const cross = el("line", { class: "cross", y1: m.t, y2: m.t + ih, visibility: "hidden" });
+  const hot = el("circle", { class: "dot", r: 5, visibility: "hidden" });
+  plot.appendChild(svg);
+  const tip = document.createElement("div");
+  tip.className = "tip"; tip.hidden = true; plot.appendChild(tip);
+
+  let on = -1;
+  const show = (clientX) => {
+    const box = svg.getBoundingClientRect();
+    const x = clientX - box.left;
+    let i = 0, best = Infinity;
+    pts.forEach((p, j) => { const d = Math.abs(xOf(p.day) - x); if (d < best) { best = d; i = j; } });
+    if (on >= 0 && marks[on]) marks[on].classList.remove("on");
+    on = i;
+    const p = pts[i], px = xOf(p.day), py = yOf(valueOf(p));
+    if (form === "bar") { if (marks[i]) marks[i].classList.add("on"); }
+    else { hot.setAttribute("cx", px); hot.setAttribute("cy", py); hot.setAttribute("visibility", "visible"); }
+    cross.setAttribute("x1", px); cross.setAttribute("x2", px); cross.setAttribute("visibility", form === "line" ? "visible" : "hidden");
+    tip.innerHTML = `<strong>${fmtDay(p.day)}</strong> · ${tipOf(p)}`;
+    tip.hidden = false;
+    const tw = tip.offsetWidth;
+    tip.style.left = Math.min(Math.max(px, tw / 2), W - tw / 2) + "px";
+    tip.style.top = Math.max(py - 8, 24) + "px";
+  };
+  const hide = () => {
+    tip.hidden = true; cross.setAttribute("visibility", "hidden"); hot.setAttribute("visibility", "hidden");
+    if (on >= 0 && marks[on]) marks[on].classList.remove("on");
+    on = -1;
+  };
+  svg.addEventListener("pointermove", (e) => show(e.clientX));
+  svg.addEventListener("pointerdown", (e) => show(e.clientX));
+  svg.addEventListener("pointerleave", hide);
+}
+
+function card({ title, note, pts, form, valueOf, tipOf, cols }) {
+  const c = document.createElement("article");
+  c.className = "card";
+  c.innerHTML = `<h2></h2><p class="note"></p><div class="plot"></div>
+    <details><summary>Table</summary><div class="tablewrap"><table><thead><tr></tr></thead><tbody></tbody></table></div></details>`;
+  $("h2", c).textContent = title;
+  $(".note", c).textContent = note;
+  $("thead tr", c).innerHTML = ["Day", ...cols.map((x) => x[0])].map((h) => `<th>${h}</th>`).join("");
+  $("tbody", c).innerHTML = [...pts].reverse().map((p) => `<tr><td>${p.day}</td>${cols.map((x) => `<td>${fmt(x[1](p))}</td>`).join("")}</tr>`).join("");
+  $("#charts").appendChild(c);
+  const draw = () => (form === "bar" ? barChart : lineChart)($(".plot", c), pts, valueOf, tipOf);
+  draws.push(draw);
+}
+
+function tile(label, value, sub) {
+  const t = document.createElement("div");
+  t.className = "tile";
+  t.innerHTML = `<div class="label"></div><div class="value"></div><div class="sub"></div>`;
+  $(".label", t).textContent = label;
+  $(".value", t).textContent = value;
+  $(".sub", t).textContent = sub;
+  $("#tiles").appendChild(t);
+}
+
+/** A running total now, and how much it grew inside the range (null when the range holds its first reading). */
+function growth(series, f) {
+  const all = series ?? [];
+  if (!all.length) return { now: null, delta: null };
+  const last = all.at(-1);
+  const base = all.filter((p) => p.day < since()).at(-1);
+  return { now: last[f], delta: base ? last[f] - base[f] : null, firstDay: all[0].day };
+}
+
+let draws = [];
+function render() {
+  const D = DATA;
+  draws = [];
+  $("#tiles").innerHTML = "";
+  $("#charts").innerHTML = "";
+  const rangeWord = days ? `last ${days} days` : "all archived days";
+  $("#asof").textContent = `${D.rows.toLocaleString("en-US")} archived rows, read ${new Date(D.at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}. Updated daily at 10:00.`;
+
+  for (const [repo, s] of first(D.views)) {
+    const v = cut(s);
+    tile("GitHub page views", fmt(sum(v)), `${rangeWord} · ${repo.split("/")[1]}`);
+  }
+  for (const [repo, s] of first(D.clones)) tile("GitHub clones", fmt(sum(cut(s))), `${rangeWord} · mostly bots and mirrors`);
+  for (const [pkg, s] of first(D.npm)) tile("npm downloads", fmt(sum(cut(s))), `${rangeWord} · ${pkg}`);
+  for (const [ext, s] of first(D.marketplace)) {
+    const g = growth(s, "installs");
+    tile("VS Code installs", fmt(g.now), g.delta == null ? `total · first reading ${fmtDay(g.firstDay)}` : `total · +${fmt(g.delta)} in ${rangeWord}`);
+  }
+  for (const app of Object.keys(D.playInstalls ?? {})) if (!D.playListing?.[app]) (D.playListing ??= {})[app] = [{ listed: false, day: D.playInstalls[app].at(-1).day }];
+  for (const [app, s] of first(D.playListing)) {
+    // Play leaves "Total User Installs" at 0 in its current reports, so the headline is active devices.
+    const exact = (D.playInstalls?.[app] ?? []).filter((p) => p.active != null).at(-1);
+    const last = s.at(-1);
+    const value = exact ? fmt(exact.active) : last.listed ? last.range : "Not public";
+    const sub = exact ? `active devices · ${fmtDay(exact.day)}` : last.listed ? `Play's public range · ${fmtDay(last.day)}` : `no store page yet · checked ${fmtDay(last.day)}`;
+    tile(`Play: ${appName(app)}`, value, sub);
+  }
+  for (const [repo, s] of first(D.releases)) {
+    const g = growth(s, "total");
+    tile("Release installs", fmt(g.now), g.delta == null ? `.tar.gz + .apk · first reading ${fmtDay(g.firstDay)}` : `.tar.gz + .apk · +${fmt(g.delta)} in ${rangeWord}`);
+  }
+
+  const uniq = (p) => `${fmt(p.count)} (${fmt(p.uniques)} unique)`;
+  for (const [repo, s] of first(D.views)) card({
+    title: "GitHub page views per day", note: `${repo} · GitHub forgets these after 14 days; the archive keeps them.`,
+    pts: cut(s), form: "bar", valueOf: (p) => p.count, tipOf: uniq, cols: [["Views", (p) => p.count], ["Unique", (p) => p.uniques]],
+  });
+  for (const [repo, s] of first(D.clones)) card({
+    title: "GitHub clones per day", note: "Mostly mirrors, scanners and your own desktops, rarely people.",
+    pts: cut(s), form: "bar", valueOf: (p) => p.count, tipOf: uniq, cols: [["Clones", (p) => p.count], ["Unique", (p) => p.uniques]],
+  });
+  for (const [pkg, s] of first(D.npm)) card({
+    title: "npm downloads per day", note: `${pkg} · includes registry mirrors; publish days spike.`,
+    pts: cut(s), form: "bar", valueOf: (p) => p.count, tipOf: (p) => fmt(p.count), cols: [["Downloads", (p) => p.count]],
+  });
+  for (const [ext, s] of first(D.marketplace)) card({
+    title: "VS Code Marketplace installs, total", note: `${ext} · one reading per day. Downloads in the tooltip include updates.`,
+    pts: cut(s), form: "line", valueOf: (p) => p.installs ?? 0, tipOf: (p) => `${fmt(p.installs)} installs · ${fmt(p.downloads)} downloads`,
+    cols: [["Installs", (p) => p.installs], ["Downloads", (p) => p.downloads]],
+  });
+  for (const [repo, s] of first(D.releases)) card({
+    title: "Release installs, total", note: "Every release's .tar.gz and .apk downloads added up; checksums and signatures left out.",
+    pts: cut(s), form: "line", valueOf: (p) => p.total, tipOf: (p) => `${fmt(p.total)} downloads`, cols: [["Total", (p) => p.total]],
+  });
+  for (const [app, s] of first(D.playInstalls)) card({
+    title: `Play installs per day: ${appName(app)}`, note: `${app} · from Play Console's reports, which lag about two days.`,
+    pts: cut(s), form: "bar", valueOf: (p) => p.installs ?? 0,
+    tipOf: (p) => `${fmt(p.installs)} installs · ${fmt(p.uninstalls)} uninstalls · ${fmt(p.active)} active`,
+    cols: [["Installs", (p) => p.installs], ["Uninstalls", (p) => p.uninstalls], ["Active", (p) => p.active]],
+  });
+  for (const [app, s] of first(D.playListing)) {
+    if (D.playInstalls?.[app]?.length) continue;
+    const pts = cut(s).filter((p) => p.listed && p.min != null);
+    if (!pts.length) continue;
+    card({
+      title: `Play download range: ${appName(app)}`, note: `${app} · the public listing's rough figure; exact numbers come from the Console reports.`,
+      pts, form: "line", valueOf: (p) => p.min, tipOf: (p) => p.range, cols: [["Range", (p) => p.range]],
+    });
+  }
+  if (!$("#charts").children.length) $("#charts").innerHTML = `<div class="error">The archive has no rows yet. It fills when the daily job runs.</div>`;
+  for (const b of $("#range").children) b.setAttribute("aria-pressed", String(Number(b.dataset.days) === days));
+  draws.forEach((d) => d());
+}
+
+$("#range").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  days = Number(b.dataset.days);
+  try { localStorage.setItem("reach.days", String(days)); } catch {}
+  render();
+});
+let rt;
+addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => draws.forEach((d) => d()), 120); });
+
+fetch("data.json", { cache: "no-store" })
+  .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+  .then((d) => { DATA = d; render(); })
+  .catch((e) => {
+    $("#asof").textContent = "";
+    $("#charts").innerHTML = `<div class="error">Could not read the archive: ${e.message}</div>`;
+  });
+</script>
+</body>
+</html>

@@ -2,6 +2,6 @@
   "id": "streamer",
   "name": "Streamer",
   "version": "1.0.0",
-  "apiVersion": "1.4",
+  "apiVersion": "2.0",
   "description": "e2e fixture (scripts/e2e-stream.mjs): a live stream of small JSON frames on a timer, with params, input and close recorded."
 }

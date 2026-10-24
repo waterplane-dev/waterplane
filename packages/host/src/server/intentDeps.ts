@@ -11,7 +11,7 @@
  * Never destructure `ctx` here.
  */
 import { basename } from "node:path";
-import { autoSlotsWaitText, budgetHoldText, isAutomaticOrigin, isCaptureRow, scheduleItemOrigin, sessionBudgetHeld, sessionOriginOfIntent, waitedSessionName, LOCAL_SESSIONS_KEY, type LaunchOpts } from "@waterplane/shared";
+import { autoSlotsWaitText, budgetHoldText, isAutomaticOrigin, isCaptureRow, needsSlot, scheduleItemOrigin, sessionBudgetHeld, sessionOriginOfIntent, waitedSessionName, LOCAL_SESSIONS_KEY, type Intent, type LaunchOpts } from "@waterplane/shared";
 import { BACKLOG_SESSIONS_MAX, REAP_CEILING_MS, chainDeliveryError, isBacklogTitle, retryableStep } from "../backlog.js";
 import { intentToCaptureRun } from "../capture.js";
 import { FANOUT_CONCURRENCY } from "../fanout.js";
@@ -140,7 +140,11 @@ export function makeIntentDeps(ctx: ServerCtx): IntentDeps {
     // real share of the account — counted while WORKING, an idle one left open holds none — and a host that has been away for a week must not
     // answer a pile of due work by spawning a dozen agents. The ladder's `noSlot`
     // rung reads this; nothing here refuses anything.
-    autoSlotsFree: () => Math.max(0, BACKLOG_SESSIONS_MAX - ctx.backlog.autoSessionCount()),
+    // `startingSlotCount` adds the sessions being OPENED right now: a plugin backend's
+    // `create()` awaits `prepare()` before the session exists, and the fire is `void`, so a tick
+    // inside that window would otherwise read a slot as free that is already spoken for (R4).
+    autoSlotsFree: () => Math.max(0, BACKLOG_SESSIONS_MAX - ctx.backlog.autoSessionCount()
+      - startingSlotCount(ctx.intents.list(), (id) => ctx.sessions.get(id)?.running === true)),
     // …and the numbers for the sentence, which only this side knows (the pure rule
     // is handed the difference, never the ceiling). Same shape as `budgetDetail`.
     // The wording is `autoSlotsWaitText`'s (shared, one sentence for both
@@ -229,7 +233,7 @@ export function makeIntentDeps(ctx: ServerCtx): IntentDeps {
           // here means somebody pressed "run now" (`localslot.ts`).
           const localOver = localStartNotice(i.launch, { rowId: i.id });
           try {
-            sessionId = ctx.backlog.openItemSession(i);
+            sessionId = await ctx.backlog.openItemSession(i);
           } catch (err) {
             // `spawnFailure` already turned a bare `posix_spawnp failed.` into a
             // sentence about the pty table. Carry it, and mark it retryable: the
@@ -278,7 +282,7 @@ export function makeIntentDeps(ctx: ServerCtx): IntentDeps {
             retry: retryableStep(last, failedStep),
           };
         }
-        const info = ctx.sessions.create(i.cwd, { cols: i.cols, rows: i.rows, title: i.title, launch: i.launch as LaunchOpts | undefined, resume: i.resume, origin: sessionOriginOfIntent(i), ...(i.budget ? { budget: i.budget } : {}) });
+        const info = await ctx.sessions.create(i.cwd, { cols: i.cols, rows: i.rows, title: i.title, launch: i.launch as LaunchOpts | undefined, resume: i.resume, origin: sessionOriginOfIntent(i), ...(i.budget ? { budget: i.budget } : {}) });
         ctx.recomputeWatched();
         if (steps[0]) void ctx.startPrompt(info.id, steps[0]);
         // The rest of a chain is delivered one turn at a time — `deliverPrompt`
@@ -389,6 +393,17 @@ export function makeIntentDeps(ctx: ServerCtx): IntentDeps {
     // op itself; this is the sentence for whoever is not sending anything.
     onWriteError: (message) => ctx.notify("backlog", intentsWriteNotice(message)),
   };
+}
+
+/**
+ * Sessions an automatic slot is spent on that `autoSessionCount()` cannot see yet: rows `starting`
+ * whose target OPENS a session (`needsSlot`) and whose session is not live — the executor is still
+ * inside `sessions.create()`, which for a plugin backend awaits `prepare()` before the session is
+ * registered. Once the session is live the row names it (`noteSession`) and the host's own count
+ * has it, so it is never counted twice for longer than that one step. Pure; exported for the test.
+ */
+export function startingSlotCount(rows: readonly Pick<Intent, "state" | "target" | "sessionId">[], isLive: (sessionId: string) => boolean): number {
+  return rows.filter((r) => r.state === "starting" && needsSlot(r as Intent) && !(r.sessionId && isLive(r.sessionId))).length;
 }
 
 /** The feed row for an `intents.json` that can no longer be written. */

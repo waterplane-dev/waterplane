@@ -20,12 +20,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   CLAUDE_EFFORTS, freeTextNote,
-  backendIdOf, backendMark, capReason, effortChoices, hasCap, launchFor,
+  backendIdOf, backendMark, capReason, effortChoices, hasCap, launchFor, launchModeDropNote,
   HOSTED_DISCLAIMER, ZERO_COST_DISCLAIMER, isZeroCost,
-  backendUnavailable, backendOptionLabel, sideChannelLine,
-  launchAskStart, modelChoices, modelGroups, permModeChoices, sessionCants, shouldAskLaunch, showBackendPicker,
+  backendDrift, backendUnavailable, backendOptionLabel, sideChannelLine,
+  launchAskStart, modelChoices, modelGroups, permModeChoices, launchModeChoices, sessionCants, shouldAskLaunch, showBackendPicker,
   showWhereFilter, windowNote,
-  agentBackends, isShellBackend, shellBackend, shellQuietLine,
+  agentBackends, agentTabLabel, isShellBackend, shellBackend, shellQuietLine,
 } from "./backendCaps.ts";
 
 const caps = (o = {}) => ({
@@ -489,19 +489,19 @@ test("claude's session names NOTHING it cannot do — the byte-identical case", 
   assert.deepEqual(sessionCants(BOTH, "claude", { hiddenSlash: 2 }), []);
 });
 
-test("a readable-but-unforkable backend names fork and slash, and nothing else", () => {
+test("a readable-but-unforkable backend names fork, slash and the three unmeasured readers, and nothing else", () => {
   // With `transcript` and `contextSeries` true, the reader and the graph are
   // REAL on this screen — so their sentences must be gone, replaced by the
   // things themselves. What is left is what is genuinely absent.
   const rows = sessionCants([OC_READABLE], "othercli");
-  assert.deepEqual(rows.map((r) => r.label), ["fork or reset to a turn", "slash commands"]);
+  assert.deepEqual(rows.map((r) => r.label), ["fork or reset to a turn", "usage limits", "turn-end reports", "readable choice boxes", "slash commands"]);
 });
 
 test("fork is silent when there is no reader to miss it from", () => {
   // Two sentences for one absence make it read as two separate losses. The
   // transcript row already says there is nothing to fork from.
   const rows = sessionCants(BOTH, "othercli"); // OPENCODE: transcript false
-  assert.deepEqual(rows.map((r) => r.label), ["reader view", "context graph", "slash commands"]);
+  assert.deepEqual(rows.map((r) => r.label), ["reader view", "context graph", "usage limits", "turn-end reports", "readable choice boxes", "slash commands"]);
   assert.ok(!rows.some((r) => r.label.includes("fork")));
 });
 
@@ -619,4 +619,61 @@ test("isShellBackend: a plugin backend of kind shell is a shell whatever its id"
   const PLUG = { ...SHELL, id: "plug-term" };
   assert.equal(isShellBackend([CLAUDE, PLUG], "plug-term"), true);
   assert.equal(isShellBackend([CLAUDE, PLUG], "claude"), false);
+});
+
+test("effortChoices: the wire's ladder wins; an older host (no efforts, effort true) is claude's", () => {
+  const withLadder = [{ ...OPENCODE, caps: caps({ effort: true, efforts: ["low", "high"] }) }];
+  assert.deepEqual(effortChoices(withLadder, "othercli"), ["low", "high"]);
+  assert.deepEqual(effortChoices([{ ...CLAUDE, caps: caps({ efforts: ["minimal", "max"] }) }], "claude"), ["minimal", "max"]);
+  assert.deepEqual(effortChoices([{ ...OPENCODE, caps: caps({ effort: true }) }], "othercli"), CLAUDE_EFFORTS);
+  assert.deepEqual(effortChoices([{ ...OPENCODE, caps: caps({ effort: false }) }], "othercli"), []);
+  assert.deepEqual(permModeChoices(BOTH, "claude"), ["default", "plan"]);
+});
+
+test("the header's agent tab is named by the host's label, shortened only by label", () => {
+  assert.equal(agentTabLabel(BOTH, "claude"), "Claude");
+  assert.equal(agentTabLabel(BOTH, undefined), "Claude");
+  assert.equal(agentTabLabel(BOTH, "othercli"), "othercli");
+  assert.equal(agentTabLabel([{ ...OPENCODE, id: "x9", label: "Acme Agent" }], "x9"), "Acme Agent");
+  assert.equal(agentTabLabel(null, undefined), "Claude");
+  assert.equal(agentTabLabel(null, "gone"), "CLI");
+});
+
+test("backendDrift: the host's sentence verbatim, else null", () => {
+  const SAY = "Acme was measured on 1.0.91, and this desktop is running 1.0.95 — its screens or records may read differently until the plugin is measured on 1.0.95. It still starts.";
+  const acme = (measured) => ({ id: "acme", label: "Acme", caps: caps(), ...(measured ? { measured } : {}) });
+  assert.equal(backendDrift(null, "acme"), null);
+  assert.equal(backendDrift([acme()], "acme"), null);
+  assert.equal(backendDrift([acme({ versions: ["1.0.91"] })], "acme"), null);
+  const drifted = acme({ versions: ["1.0.91"], running: "1.0.95", drift: SAY });
+  assert.equal(backendDrift([CLAUDE, drifted], "acme"), SAY);
+  assert.equal(backendDrift([acme({ versions: ["1.0.91"], drift: "  " })], "acme"), null);
+  assert.equal(backendDrift([CLAUDE, drifted], "claude"), null);
+  // Drift is a sentence, not a cant: the refusal strip never carries it.
+  assert.ok(!sessionCants([CLAUDE, drifted], "acme").some((c) => String(c.reason).includes("measured on")));
+});
+
+test("launchModes: the launch picker narrows, the live switch and the absent case do not", () => {
+  const NARROW = { ...OPENCODE, id: "narrow", caps: caps({ permissionModes: ["default", "plan"], launchModes: ["default"] }) };
+  const list = [CLAUDE, NARROW];
+  assert.deepEqual(launchModeChoices(list, "narrow"), ["default"]);
+  assert.deepEqual(permModeChoices(list, "narrow"), ["default", "plan"], "the live switch keeps permissionModes");
+  assert.deepEqual(launchModeChoices(list, "claude"), ["default", "plan"], "absent inherits");
+  assert.equal(launchFor({ backend: "narrow", permissionMode: "plan" }, list).permissionMode, undefined);
+  assert.equal(launchFor({ backend: "narrow", permissionMode: "default" }, list).permissionMode, "default");
+});
+
+test("launchModes: a mode launchFor drops for a narrowed set is SAID, never silent (review minor 5)", () => {
+  const NARROW = { ...OPENCODE, id: "narrow", label: "Narrow CLI", caps: caps({ permissionModes: ["default", "plan"], launchModes: ["default"] }) };
+  const list = [CLAUDE, NARROW];
+  const note = launchModeDropNote({ backend: "narrow", permissionMode: "plan" }, list);
+  assert.match(note, /^Narrow CLI cannot start in "plan" mode \(it can switch to it once running\); it starts in: default\. This launch goes without it\.$/);
+  assert.equal(launchFor({ backend: "narrow", permissionMode: "plan" }, list).permissionMode, undefined, "the note describes exactly what launchFor did");
+  // Nothing dropped ⇒ nothing said: a mode it can start in, no mode, claude, an old host.
+  assert.equal(launchModeDropNote({ backend: "narrow", permissionMode: "default" }, list), null);
+  assert.equal(launchModeDropNote({ backend: "narrow" }, list), null);
+  assert.equal(launchModeDropNote({ permissionMode: "plan" }, list), null, "claude starts in every mode it lists");
+  assert.equal(launchModeDropNote({ backend: "narrow", permissionMode: "plan" }, null), null, "no list: no descriptor to judge by");
+  // A mode the backend has no concept of is today's quiet strip, not this sentence.
+  assert.equal(launchModeDropNote({ backend: "narrow", permissionMode: "bypassPermissions" }, list), null);
 });

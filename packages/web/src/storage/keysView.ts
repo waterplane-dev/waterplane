@@ -236,12 +236,18 @@ export const LS_VIEW = {
   /** The code-folder dialog's "later": the guesses it was dismissed on, as `<picked>:<root>`
    *  (`features/codeFolder/logic.ts`). Per device; a host that guesses differently asks again. */
   codeFolderLater: lsKey("codeFolderLater"),
+  /** The waterplane version whose update banner was dismissed (`features/plugins`); a newer one asks again. */
+  dismissedSelfUpdate: lsKey("dismissedSelfUpdate"),
+  /** `at` of the last desktop update receipt shown, so `self.lastResult` is said once (`features/plugins`). */
+  updatesReceiptSeen: lsKey("updatesReceiptSeen"),
   dismissedUpdate: lsKey("dismissedUpdate"), annHintHidden: lsKey("annHintHidden"),
   /** Strips folded into the session's status line (`stow.ts`): `<slot>|<content key>` → when.
    *  Per device; a NEW content key unfolds by itself. Bounded on write. */
   stowed: lsKey("stowed"),
   /** The first fold said where folded strips go; once per device. */
   stowTold: lsKey("stowTold"),
+  /** Backends this phone has shown "was not told about the outbox" for (`toldWords.ts`): once each. */
+  toldNoticed: lsKey("toldNoticed"),
   /** The watchdog reload's own loop guard. */
   lastForcedReload: lsKey("lastForcedReload"),
   /** Web bundle staged for the next start, and whether to take it unasked. */

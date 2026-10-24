@@ -21,11 +21,12 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync } from "node:fs";
-import { extname, join } from "node:path";
+import { delimiter, extname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { BRAND } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
 import { env } from "./env.js";
+import { writeTextAtomic } from "./jsonstore.js";
 
 const ENABLED = env("THUMBS") !== "0";
 /** Widths the client may ask for. An open list would let a caller fill the cache. */
@@ -39,11 +40,49 @@ const CONVERT_TIMEOUT_MS = 20_000;
 const THUMBABLE = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".heic", ".heif", ".tif", ".tiff"]);
 const VIDEO = new Set([".mp4", ".webm", ".mov", ".m4v", ".ogv", ".mkv"]);
 
+/**
+ * ImageMagick picks a decoder by file CONTENT, so a committed `foo.png` that is
+ * really MVG/MSL/TEXT (local file read into the thumb) or a `foo.mp4` that is an
+ * HLS/concat playlist (outbound fetch, local read) would be interpreted. Two
+ * belts: name the decoder from the extension (`png:<file>`, `-f mov`), and a
+ * policy that denies the scriptable coders outright.
+ */
+const DENIED_CODERS = ["MVG", "MSL", "TEXT", "SVG", "PS", "EPS", "PDF", "XPS", "URL", "HTTP", "HTTPS", "FTP", "LABEL", "CAPTION", "EPHEMERAL"];
+const POLICY_XML = `<policymap>\n${DENIED_CODERS.map((c) => `  <policy domain="coder" rights="none" pattern="${c}"/>`).join("\n")}\n  <policy domain="path" rights="none" pattern="@*"/>\n</policymap>\n`;
+const MAGICK_CODER: Record<string, string> = {
+  ".png": "png", ".jpg": "jpeg", ".jpeg": "jpeg", ".gif": "gif", ".webp": "webp", ".bmp": "bmp",
+  ".heic": "heic", ".heif": "heic", ".tif": "tiff", ".tiff": "tiff",
+};
+const FFMPEG_DEMUXER: Record<string, string> = {
+  ".mp4": "mov", ".mov": "mov", ".m4v": "mov", ".webm": "matroska", ".mkv": "matroska", ".ogv": "ogg",
+  ".heic": "image2", ".heif": "image2", ".png": "image2", ".jpg": "image2", ".jpeg": "image2", ".gif": "image2", ".webp": "image2",
+  ".bmp": "image2", ".tif": "image2", ".tiff": "image2",
+};
+
 let cacheDir = "";
+let policyDir = "";
 /** Set once at boot; until then thumbnails are off (no root = nowhere to cache). */
 export function initThumbs(root: string): void {
-  cacheDir = join(hostStateDir(root), "thumbs");
+  const state = hostStateDir(root);
+  cacheDir = join(state, "thumbs");
   try { mkdirSync(cacheDir, { recursive: true }); } catch { cacheDir = ""; }
+  try {
+    const dir = join(state, "thumbs-policy");
+    mkdirSync(dir, { recursive: true });
+    writeTextAtomic(join(dir, "policy.xml"), POLICY_XML);
+    policyDir = dir;
+  } catch { policyDir = ""; }
+}
+
+/** MAGICK_CONFIGURE_PATH with our deny policy first, keeping any path the user set. */
+function policyPath(dir: string): string {
+  const prior = process.env.MAGICK_CONFIGURE_PATH;
+  return prior ? `${dir}${delimiter}${prior}` : dir;
+}
+
+/** The env that polices ImageMagick, or null before initThumbs wrote a policy. */
+export function magickEnv(): Record<string, string> | null {
+  return policyDir ? { MAGICK_CONFIGURE_PATH: policyPath(policyDir) } : null;
 }
 
 /** Snap a requested width to the allow-list, or null if it isn't one. */
@@ -57,12 +96,12 @@ export function canThumb(path: string): boolean {
   return THUMBABLE.has(ext) || VIDEO.has(ext);
 }
 
-function run(cmd: string, args: string[]): Promise<boolean> {
+function run(cmd: string, args: string[], env?: Record<string, string>): Promise<boolean> {
   return new Promise((resolve) => {
     let done = false;
     const finish = (ok: boolean) => { if (!done) { done = true; resolve(ok); } };
     try {
-      const p = spawn(cmd, args, { stdio: "ignore" });
+      const p = spawn(cmd, args, { stdio: "ignore", ...(env ? { env: { ...process.env, ...env } } : {}) });
       const timer = setTimeout(() => { try { p.kill("SIGKILL"); } catch { /* gone */ } finish(false); }, CONVERT_TIMEOUT_MS);
       p.on("error", () => { clearTimeout(timer); finish(false); });
       p.on("exit", (code) => { clearTimeout(timer); finish(code === 0); });
@@ -87,30 +126,55 @@ async function probeTools() {
   return tools;
 }
 
-/** Encode `src` down to `width` px wide as JPEG at `out`. */
-async function convert(src: string, out: string, width: number, isVideo: boolean): Promise<boolean> {
-  const t = await probeTools();
-  if (isVideo) {
+export interface ConvertTools { sips: boolean; magick: string | null; ffmpeg: boolean; policyDir?: string }
+export interface ConvertPlan { cmd: string; args: string[]; env?: Record<string, string> }
+
+/**
+ * The command that encodes `src` down to `width` px wide as JPEG at `out`, or
+ * null when no tool here can do it safely. Pure: the decoder is always named
+ * from the EXTENSION, never left to content sniffing; an extension we have no
+ * decoder for gets no plan (the caller serves the original).
+ */
+export function convertPlan(src: string, out: string, width: number, tools: ConvertTools): ConvertPlan | null {
+  const ext = extname(src).toLowerCase();
+  const scale = `scale='min(${width},iw)':-2`;
+  const demuxer = FFMPEG_DEMUXER[ext];
+  if (VIDEO.has(ext)) {
+    if (!tools.ffmpeg || !demuxer) return null;
     // One frame a second in (past a black lead-in), scaled, never upscaled.
-    return t.ffmpeg && run("ffmpeg", [
-      "-y", "-loglevel", "error", "-ss", "1", "-i", src, "-frames:v", "1",
-      "-vf", `scale='min(${width},iw)':-2`, "-q:v", "6", out,
-    ]);
+    return { cmd: "ffmpeg", args: [
+      "-nostdin", "-y", "-loglevel", "error", "-ss", "1", "-protocol_whitelist", "file", "-f", demuxer, "-i", src,
+      "-frames:v", "1", "-vf", scale, "-q:v", "6", out,
+    ] };
   }
-  if (t.sips) {
+  if (tools.sips) {
     // sips resamples in place-ish: --out writes the copy. -Z bounds the LONGEST
     // edge, which is what we want for a grid cell either orientation.
-    return run("sips", ["-s", "format", "jpeg", "-s", "formatOptions", "60", "-Z", String(width), src, "--out", out]);
+    return { cmd: "sips", args: ["-s", "format", "jpeg", "-s", "formatOptions", "60", "-Z", String(width), src, "--out", out] };
   }
-  if (t.magick) {
+  const coder = MAGICK_CODER[ext];
+  // No deny policy on disk ⇒ no magick: an unpoliced ImageMagick is the hole.
+  if (tools.magick && coder && tools.policyDir) {
     // `Wx>` = shrink only. -auto-orient so an EXIF-rotated phone photo isn't sideways.
     // Both `magick` and legacy `convert` take `<in> [ops] <out>`.
-    return run(t.magick, [src, "-auto-orient", "-resize", `${width}x${width}>`, "-quality", "60", "-strip", out]);
+    return {
+      cmd: tools.magick,
+      args: [`${coder}:${src}`, "-auto-orient", "-resize", `${width}x${width}>`, "-quality", "60", "-strip", out],
+      env: { MAGICK_CONFIGURE_PATH: policyPath(tools.policyDir) },
+    };
   }
-  if (t.ffmpeg) {
-    return run("ffmpeg", ["-y", "-loglevel", "error", "-i", src, "-vf", `scale='min(${width},iw)':-2`, "-q:v", "6", out]);
+  if (tools.ffmpeg && demuxer) {
+    return { cmd: "ffmpeg", args: [
+      "-nostdin", "-y", "-loglevel", "error", "-protocol_whitelist", "file", "-f", demuxer, ...(demuxer === "image2" ? ["-pattern_type", "none"] : []), "-i", src, "-vf", scale, "-q:v", "6", out,
+    ] };
   }
-  return false;
+  return null;
+}
+
+async function convert(src: string, out: string, width: number): Promise<boolean> {
+  const t = await probeTools();
+  const plan = convertPlan(src, out, width, { ...t, policyDir: policyDir || undefined });
+  return plan ? run(plan.cmd, plan.args, plan.env) : false;
 }
 
 /** Trim the cache to CACHE_MAX_BYTES, oldest-used first. Best-effort. */
@@ -162,7 +226,7 @@ export async function thumbnail(absPath: string, width: number): Promise<Thumb |
       // a half-written JPEG at the cache path.
       const tmp = join(tmpdir(), `${BRAND.slug}-thumb-${key}-${process.pid}.jpg`);
       try {
-        const ok = await convert(absPath, tmp, width, isVideo);
+        const ok = await convert(absPath, tmp, width);
         if (!ok || !existsSync(tmp)) return null;
         const buf = readFileSync(tmp);
         // A "thumbnail" bigger than the source is a failed optimisation — drop it.

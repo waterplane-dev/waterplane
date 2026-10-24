@@ -40,9 +40,27 @@ test("pluginApiProblem: a newer minor, another major or no version is refused in
   assert.match(pluginApiProblem("one", "1.0.0"), /must be a version/);
 });
 
-test("today's manifests (a bare 1) still load on this daemon, and 99 is refused", () => {
+test("2.0: a 1.x plugin is refused, and the sentence names where the 2.0 contract is written", () => {
+  assert.equal(PLUGIN_API_VERSION, "2.2.0");
+  const why = pluginApiProblem("1.8");
+  assert.match(why, /^apiVersion is "1\.8"; this daemon speaks 2\.2\.0, and loads plugins written for 2\.0 up to 2\.2; this plugin was written for an older API and must be updated/);
+  assert.ok(why.endsWith(" — the 2.0 contract is docs/plans/backend-contract-v2.md"), why);
+  assert.match(pluginApiProblem(1), /docs\/plans\/backend-contract-v2\.md$/);
+  assert.equal(pluginApiProblem("2.0"), null);
+  assert.equal(pluginApiProblem("2.1"), null); // 2.1: `supports` (dialogKeysThenTyped) — still loads on 2.2
+  assert.equal(pluginApiProblem("2.2"), null); // 2.2: mode / commands facts, Tab keys, window, compactions, session spend
+  assert.match(pluginApiProblem("2.3"), /this daemon speaks 2\.2\.0, and loads plugins written for 2\.0 up to 2\.2; this plugin needs a newer daemon$/);
+  assert.doesNotMatch(pluginApiProblem("3.0"), /backend-contract-v2/); // a newer plugin needs a newer daemon, not this doc
+});
+
+test("a 2.x manifest (a bare 2 too) loads on this daemon; a 1.x one and 99 are refused", () => {
   const base = { id: "echo", name: "Echo", version: "1.0.0" };
+  assert.deepEqual(manifestProblems({ ...base, apiVersion: 2 }), []);
+  assert.match(manifestProblems({ ...base, apiVersion: 1, backends: ["x"] }).join(";"), /older API and must be updated — the 2\.0 contract is/);
+  // 2.0 broke only the backend descriptor: a 1.x manifest that registers no backend still loads
   assert.deepEqual(manifestProblems({ ...base, apiVersion: 1 }), []);
+  assert.deepEqual(manifestProblems({ ...base, apiVersion: "1.8", backends: [] }), []);
+  assert.match(manifestProblems({ ...base, apiVersion: "1.9" }).join(";"), /older API and must be updated/);
   assert.deepEqual(manifestProblems({ ...base, apiVersion: PLUGIN_API_VERSION }), []);
   assert.match(manifestProblems({ ...base, apiVersion: 99 }).join(";"), /apiVersion is 99; this daemon speaks/);
 });

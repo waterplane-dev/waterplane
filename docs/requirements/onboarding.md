@@ -128,3 +128,8 @@ Setup shows the npm install command for Claude Code, states that a paid Claude s
 - asked: 2026-10-19
 - shipped: c45c5387
 
+### R-onboarding-022 · shipped
+The setup checklist mentions low disk space with a recommendation.
+- asked: 2026-10-21
+- shipped: ab5ce674
+

@@ -29,3 +29,12 @@ Login support is visible on the login screen.
 Signing in with the phone authenticator works even when the desktop is out of the phone's nearby range.
 - asked: 2026-10-20
 
+### R-login-007 · shipped
+The app shows the Copilot plan name and this month's local request count without requiring a sign-in.
+- asked: 2026-10-21
+- shipped: 28095657
+
+### R-login-008 · requested
+The login page can be opened again on demand, fills its credentials from the vault, and stays open until the user is done with it.
+- asked: 2026-10-21
+

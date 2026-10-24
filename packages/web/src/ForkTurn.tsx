@@ -50,6 +50,8 @@ export interface ForkRequest {
  */
 export interface ForkCtx {
   online: boolean;
+  /** The session names its conversation (`resumeIdOf`); absent = assume so. Said before the tap. */
+  hasId?: boolean;
   run: (req: ForkRequest) => void;
 }
 
@@ -69,16 +71,16 @@ export function ForkTurnRow({ doc, turn, fork, onRun }: {
   onRun: () => void;
 }) {
   const anchor = forkAnchor(doc, turn);
-  const why = forkBlocker(doc, turn, fork.online);
+  const why = forkBlocker(doc, turn, fork.online, !!doc?.claudeSessionId || fork.hasId !== false);
   const note = anchor ? anchorNote(turn, anchor) : null;
   const run = (mode: "fork" | "reset") => {
-    if (why || !anchor || !doc?.claudeSessionId) return;
+    if (why || !anchor || !doc) return;
     track(`action:read.${mode}`);
     onRun();
     // The ANCHOR's uuid (the host cuts AFTER a turn) with the TAPPED row's
     // number: every word the person reads afterwards says "before #N", which is
     // the same cut named by the row they tapped.
-    fork.run({ mode, sourceId: doc.claudeSessionId, turnId: anchor.turn.id, n: turn.n });
+    fork.run({ mode, sourceId: doc.claudeSessionId ?? "", turnId: anchor.turn.id, n: turn.n });
   };
   return (
     <div className="tr-fork">

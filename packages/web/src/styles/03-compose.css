@@ -14,7 +14,7 @@
    is unreadable exactly when reading it is the point (deciding whether to still
    send it). So the row WRAPS: the text keeps a 240 px floor and the buttons
    drop onto their own line below it when that no longer fits. */
-.queue-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--sp-8); padding: var(--sp-6) var(--sp-12) var(--sp-10); }
+.queue-row { display: flex; flex-wrap: wrap; padding: var(--sp-6) var(--sp-12) var(--sp-10); }
 .queue-row.pending { opacity: .65; }
 .queue-row.failed .queue-meta { color: var(--dead); }
 .queue-text {
@@ -26,7 +26,7 @@
    to one line would make "is this still what I want to send?" unanswerable. */
 .queue-text-body { white-space: pre-wrap; overflow-wrap: anywhere; }
 .queue-meta { display: flex; align-items: center; gap: var(--sp-4); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); }
-.queue-row-acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6); flex: 0 0 auto; }
+.queue-row-acts { display: flex; align-items: center; flex: 0 0 auto; }
 /* Only in a ROW — the same class inside `.queue-edit` is a full-width
    cancel/spacer/Save bar and must keep its stretch. */
 .queue-row > .queue-row-acts { margin-left: auto; }
@@ -331,15 +331,20 @@
    Keyed on `data-typing`, which `App` already stamps on <html> for this mode,
    so nothing has to be threaded through the terminal to know. */
 html[data-typing="1"] .term-zoom { top: calc(env(safe-area-inset-top) + 48px); }
+/* One height and one minimum width for every button in the group (owner's
+   ask: lower and more even). `.key`'s 44px fingertip is for header rows; this
+   group floats over the terminal, where every pixel of height hides output.
+   Centred content so an icon with a count or badge only grows sideways. */
 .term-zoom .key {
-  min-width: 0; padding: var(--sp-4) var(--sp-6);
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 36px; min-height: 36px; height: 36px; padding: 0 var(--sp-6);
   background: var(--panel-veil-hi); border-color: var(--float-edge);
   box-shadow: var(--elev-1);
 }
 /* The readout rides over live output, so it gets the same veil the buttons have
    — muted text straight on a repainting TUI is unreadable half the time. */
 .term-zoom .term-zoom-px {
-  padding: var(--sp-4) var(--sp-6); border-radius: var(--r-8);
+  height: 36px; box-sizing: border-box; padding: 0 var(--sp-6); border-radius: var(--r-8);
   background: var(--panel-veil-hi); border: 1px solid var(--float-edge);
 }
 /* The model wheel (`ModelWheel.tsx`): floats for the same reason the corner
@@ -380,9 +385,8 @@ html[data-typing="1"] .term-zoom { top: calc(env(safe-area-inset-top) + 48px); }
 .mw-spoke { stroke: color-mix(in srgb, var(--line) 55%, transparent); stroke-width: 1; }
 .mw-label { fill: var(--muted); font-size: var(--fs-12); }
 .mw-label.cur { fill: var(--ok); font-weight: var(--fw-semibold); }
-.mw-label.sel { fill: var(--accent); font-weight: var(--fw-bold); }
 .mw-effort { fill: var(--muted); font-size: var(--fs-9); paint-order: stroke; stroke: var(--panel); stroke-width: 3px; }
-.mw-effort.sel { fill: var(--accent); font-weight: var(--fw-bold); }
+.mw-label.sel, .mw-effort.sel { fill: var(--accent); font-weight: var(--fw-bold); }
 .mw-node { fill: var(--muted); opacity: 0.6; }
 .mw-node.cur, .mw-node.sel { opacity: 1; }
 .mw-node.cur { fill: var(--panel); stroke: var(--ok); stroke-width: 2.5; }
@@ -432,12 +436,11 @@ html[data-typing="1"] .term-zoom { top: calc(env(safe-area-inset-top) + 48px); }
 .key.active { background: var(--pick-fill); color: var(--fg); border-color: var(--pick-edge); }
 /* "you already have this" — a positive state, not an action. */
 .key.ok { color: var(--ok); border-color: var(--ok); }
-.key.danger { color: var(--dead); }
 .key.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .key:disabled { opacity: .4; }
 
 /* LAN password gate (full-screen login takeover) + Settings inputs */
-.auth-gate { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: var(--sp-24); }
+.auth-gate { display: flex; justify-content: center; min-height: 100vh; }
 .auth-card { width: 100%; max-width: 360px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-12); padding: var(--sp-24); }
 .auth-title { font-size: calc(var(--fs-18) * var(--ui-font, 1)); font-weight: var(--fw-semibold); margin-bottom: var(--sp-10); }
 .auth-input {
@@ -580,6 +583,3 @@ select.search { appearance: none; }
    one message: `.empty-stale`'s age line and the gallery's own notes land here
    the same way. */
 .grid > .empty, .grid > .gallery-note { grid-column: 1 / -1; }
-/* An empty state is a sentence, not a tile: without this it inherits one 96px
-   grid column and wraps to one word per line. */
-.grid > .empty { grid-column: 1 / -1; }

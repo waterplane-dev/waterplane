@@ -179,7 +179,10 @@ machine or a user's desktop. Each line is a check, not a promise:
 - **The APK's Gradle deps are hash-verified** (`packages/app/android/gradle/verification-metadata.xml`).
 
 Not covered, by design: a plugin in `~/.config/waterplane/plugins/` runs as you (you installed it),
-and the `claude` CLI comes from your own global npm.
+and the `claude` CLI comes from your own global npm — except where there is no "you" at the keyboard
+yet: the Docker image (`deploy/docker/entrypoint.sh`, `CLAUDE_INSTALL=0` to opt out) and the WSL
+setup (`scripts/windows/wsl-setup.sh`) install it with Anthropic's own `curl -fsSL
+https://claude.ai/install.sh | bash` when none is on the PATH.
 
 ## The lint layer (`eslint.config.js`, `tools/eslint/rules.js`)
 
@@ -975,8 +978,18 @@ each of 22 demo screens in dark and light at 412x915, writes `<name>.<theme>.png
 normalised). Run it on the base commit's dist and on the changed one, then `node scripts/ui/screendiff.mjs
 <before> <after> [diffDir]`: DOM files are compared as text (first differing line printed), PNGs are
 decoded in Playwright's Chromium and counted by changed pixels with a bounding box, and it exits 1 on any
-DOM difference or more than 10 changed pixels in a shot (a pixel counts only above 2 per colour channel;
-the rest is sub-pixel antialias noise). No Python, no extra dependency. The measured noise is in the header of `screens.mjs`.
+DOM difference or more than 10 changed pixels in a shot (`NOISE_PX`; 20 for `01-repo-list` alone, whose
+measured antialias band is in `SHOT_NOISE_PX`; a pixel counts only above 2 per colour channel, `TOL`; the rest is
+sub-pixel antialias noise), and on any shot `screens.json` lists as UNSTABLE or MISSING in either run. `screens.mjs`
+itself exits 1 when a screen is MISSING or UNSTABLE (no two identical frames in 12 tries), because such a shot is
+not a baseline. No Python, no extra dependency. The measured noise and the known clock flakes are in the header of `screens.mjs`.
+
+A CSS-only refactor (merging rules, deleting dead or overridden declarations) has a stricter gate beside
+it: `node scripts/ui/styledump.mjs <distDir> <outDir>` reaches the same screens (`scripts/ui/screenlist.mjs`
+is the one list both use) and dumps `getComputedStyle` of every element plus its drawn `::before`/`::after`,
+and `styledump.mjs --diff <before> <after>` names each element and property that moved. Identical dumps
+mean the cascade resolved the same on those screens; states nobody puts the page in (`:active`, `:hover`)
+and other pseudo-elements stay the reader's to reason about.
 
 ## The demo terminal is drawn like the real CLI
 

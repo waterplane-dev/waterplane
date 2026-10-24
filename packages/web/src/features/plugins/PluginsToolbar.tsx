@@ -8,6 +8,10 @@
  * common case); an action is a choice and does. Nothing is drawn for a session
  * no active plugin has anything to say about, and a queued (pending) session
  * gets nothing — there is no session on the desktop for a plugin to act on.
+ *
+ * Pinned into the header (`label` false) it is ONE icon that opens the menu:
+ * the panel itself is a column of switches and sentences, and drawn into the
+ * header's one-line strip it stretched the row and squeezed its notes sideways.
  */
 import { BRAND } from "@waterplane/shared";
 import { Bot, Play, Puzzle, ToggleLeft, ToggleRight } from "lucide-react";
@@ -21,13 +25,24 @@ import { Button, Tag } from "../../kit";
 
 const ICON = 16;
 
-export function PluginsToolbar({ active, dismiss }: { active: SessionInfo | null; dismiss(): void }): ReactNode {
+export function PluginsToolbar({ active, label, dismiss, openMenu }: {
+  active: SessionInfo | null; label: boolean; dismiss(): void; openMenu(): void;
+}): ReactNode {
   const list = useStore(plugins);
   const res = useStore(results);
   if (!active || active.id.startsWith("pending:")) return null;
   const groups = sessionControls(list, active);
   const ruled = sessionRuleGroups(active, list);
   if (!groups.length && !ruled.length) return null;
+  if (!label) {
+    const names = [...new Set([...groups, ...ruled].map((g) => g.name))].join(", ");
+    return (
+      <Button title={`${names}: this session's switches — opens the menu`} aria-label={`${names} session switches`}
+        onClick={openMenu}>
+        <Puzzle size={ICON} />
+      </Button>
+    );
+  }
   return (
     <>
       {ruled.map((g) => (
@@ -42,18 +57,18 @@ export function PluginsToolbar({ active, dismiss }: { active: SessionInfo | null
         <div key={g.id} className="plugin-menu" role="group" aria-label={g.name}>
           <div className="plugin-menu-head"><Puzzle size={12} /> {g.name}</div>
           {g.toggles.map((t) => (
-            <button key={t.def.id} className={`key${t.on ? " active" : ""}`} aria-pressed={t.on}
+            <Button className={t.on ? "active" : undefined} key={t.def.id} aria-pressed={t.on}
               title={t.def.note}
               onClick={() => setSessionToggle(g.id, active.id, t.def.id, nextToggleValue(t), `${g.name} · ${t.def.label}`)}>
               {t.on ? <ToggleRight size={ICON} /> : <ToggleLeft size={ICON} />} {t.def.label}: {t.on ? "on" : "off"}{t.overridden ? "" : " (default)"}
-            </button>
+            </Button>
           ))}
           {g.mayAnswer !== null && (
             <>
-              <button className={`key${g.mayAnswer ? " active" : ""}`} aria-pressed={g.mayAnswer}
+              <Button className={g.mayAnswer ? "active" : undefined} aria-pressed={g.mayAnswer}
                 onClick={() => setSessionAnswer(g.id, g.name, active.id, !g.mayAnswer)}>
                 <Bot size={ICON} /> let {g.name} answer: {g.mayAnswer ? "on" : "off"}
-              </button>
+              </Button>
               <div className="plugin-menu-note">
                 {g.mayAnswer ? `${g.name} may pick an option in this session's choice boxes without a tap.` : `Off: ${g.name} can only suggest here.`}{" "}
                 {BRAND.displayName} itself still refuses permission, plan, trust and destructive boxes, whatever this says.

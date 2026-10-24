@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AuthManager } from "../dist/auth.js";
 import { PairStore, redeemPair } from "../dist/pair.js";
-import { PassiveGate, passiveAllows, passiveItems, queuedApkIn } from "../dist/passive.js";
+import { PassiveGate, passiveAllows, passiveItems, passiveNeverAllows, queuedApkIn } from "../dist/passive.js";
 import { requestPeerKind } from "../dist/net.js";
 
 const root = () => mkdtempSync(join(tmpdir(), "waterplane-passive-"));
@@ -38,6 +38,17 @@ test("passiveAllows: default deny — every other route is refused", () => {
   ]) assert.equal(passiveAllows(m, p, q(), () => true), false, `${m} ${p}`);
 });
 
+test("passiveNeverAllows: auth material is refused to a passive row even while unlocked; the rest of full scope is not its business", () => {
+  for (const [m, p] of [
+    ["POST", "/api/pair/mint"], ["POST", "/api/devices/revoke"], ["POST", "/api/peers"], ["DELETE", "/api/peers/pc"], ["PUT", "/api/peers/pc"],
+    ["GET", "/api/lan/identity"], ["HEAD", "/api/lan/identity"],
+  ]) assert.equal(passiveNeverAllows(m, p), true, `${m} ${p}`);
+  for (const [m, p] of [
+    ["GET", "/api/peers"], ["GET", "/api/peers/pc/status"], ["GET", "/api/peerjobs"], ["GET", "/api/devices"], ["GET", "/api/pair/mint"],
+    ["POST", "/api/auth/lock"], ["POST", "/api/auth/unlock"], ["GET", "/api/repos"], ["POST", "/api/repos/r1/sweep"], ["GET", "/api/lan/verify"],
+  ]) assert.equal(passiveNeverAllows(m, p), false, `${m} ${p}`);
+});
+
 test("passiveAllows: an artifact only when it is an APK in the auto-pull queue now", () => {
   const items = [item(), item({ id: "i2", name: "shot.png", relPath: ".claude/outbox/shot.png" })];
   const has = queuedApkIn(items);
@@ -59,6 +70,9 @@ test("requestPeerKind: a proxied loopback request is tailscale, so the gate appl
   assert.equal(requestPeerKind("::ffff:127.0.0.1", { "x-forwarded-for": "100.1.2.3" }), "tailscale");
   assert.equal(requestPeerKind("127.0.0.1", { "tailscale-user-login": "x@y" }), "tailscale");
   assert.equal(requestPeerKind("192.168.1.5", { "x-forwarded-for": "127.0.0.1" }), "lan", "never an upgrade");
+  // L2: funnel traffic is the public internet through the same proxy.
+  assert.equal(requestPeerKind("127.0.0.1", { "tailscale-funnel-request": "?1", "x-forwarded-for": "1.2.3.4" }), "public");
+  assert.equal(requestPeerKind("127.0.0.1", { "tailscale-funnel-request": "?1" }), "public");
   assert.equal(requestPeerKind("100.80.1.2", {}), "tailscale");
 });
 
@@ -74,7 +88,8 @@ test("a passive pairing stores scope, switches the Tailscale gate on and holds i
 
   const store = new PairStore();
   const { code } = store.mint(null, true);
-  const deps = { root: r, auth, store, net: async () => ({ name: "desk", base: "http://h:1", httpsUrl: null }) };
+  let gateChanges = 0;
+  const deps = { root: r, auth, store, net: async () => ({ name: "desk", base: "http://h:1", httpsUrl: null }), onGateChange: () => { gateChanges++; } };
   const out = await redeemPair({ code, deviceName: "kids" }, "lan", deps);
   assert.equal(out.status, 200);
   assert.equal(out.body.scope, "passive");
@@ -82,8 +97,13 @@ test("a passive pairing stores scope, switches the Tailscale gate on and holds i
   assert.equal(auth.restricted(out.body.token), true);
   assert.equal(auth.restricted(full.token), false);
   assert.equal(auth.gateTailscale(), true, "pairing a passive device switches the gate on");
+  assert.equal(gateChanges, 1, "…and the open sockets are re-checked right then (`onGateChange`)");
   assert.equal(auth.needsToken("tailscale"), true);
   assert.throws(() => auth.setGateTailscale(false), /passive device/);
+  // A second redeem — the gate is already on — re-checks nothing.
+  const again2 = store.mint(null, true);
+  assert.equal((await redeemPair({ code: again2.code, deviceName: "kids2" }, "lan", deps)).status, 200);
+  assert.equal(gateChanges, 1);
 
   // Survives a restart: scope is on disk, the gate with it.
   const again = new AuthManager(r);

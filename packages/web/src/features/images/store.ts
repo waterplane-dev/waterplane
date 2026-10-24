@@ -22,6 +22,13 @@ import type { GalleryCtx, ImageReturn, NewImages, NewImg, SwipeState, SweepFor }
 export type AnnState = { source: AnnSource; repoId: string; rest?: AnnSource[]; total?: number; index?: number; facts?: string };
 export const ann = createStore<AnnState | null>(null);
 
+/** When the annotator last closed back onto the session's compose box (ms; 0 =
+ *  nothing pending). The box puts the caret home on a desktop (`ComposeBar`):
+ *  a Ctrl/⌘+Return on the annotator otherwise left focus nowhere, and the next
+ *  words needed the mouse. Written by `bootImages`, taken by `takeBoxReturn`. */
+export const boxReturn = createStore(0);
+export function useBoxReturn(): number { return useStore(boxReturn); }
+
 /** More than one image was picked, and the combine-or-not question is on
  *  screen. `separate` is the flow that WOULD have run — held as a closure so
  *  each pick site keeps its own answer (a batch through the annotator for the

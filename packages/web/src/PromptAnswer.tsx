@@ -1,10 +1,14 @@
-import { Bot, CloudOff, ScrollText, Square, SquareCheck } from "lucide-react";
-import type { AnswerSuggestion, DetectedPrompt } from "@waterplane/shared";
+import { useState } from "react";
+import { Bot, CloudOff, ScrollText, Send, Square, SquareCheck } from "lucide-react";
+import { answerTextProblem, type AnswerSuggestion, type DetectedPrompt } from "@waterplane/shared";
 import { copyText } from "./api";
 import { Markdown } from "./Markdown";
 import { showToast } from "./toast";
 import { track } from "./usage";
+import { useLink } from "./link";
+import { queuedAnswerNote } from "./answerQueued";
 import { remembersText, suggestionBy } from "./suggestionBy";
+import { planHint } from "./planHint";
 
 interface Props {
   /** The box, as the host published it (`prompt.ts` + `askbox.ts`). */
@@ -18,8 +22,9 @@ interface Props {
   queued: readonly { label: string }[];
   /** A plugin's suggested answer (`plugin.ts`). A person still taps. */
   suggestion?: AnswerSuggestion | null;
-  /** App's `answerPrompt`, bound to the session this card is about. */
-  onAnswer: (data: string, label: string, submitBox?: boolean, choice?: number) => void;
+  /** App's `answerPrompt`, bound to the session this card is about. `text` = typed words
+   *  (a `freeText` question, a `takesText` row), sent as `promptText` on the same entry. */
+  onAnswer: (data: string, label: string, submitBox?: boolean, choice?: number, text?: string) => void;
   /** Usage-counter prefix — which surface this card is (`prompt` / `questions`). */
   ev: string;
 }
@@ -54,8 +59,14 @@ interface Props {
  * Nothing about WHAT an answer is changed: every tap goes through App's
  * `answerPrompt`, which queues it durably, fingerprinted and first-in-lane, and
  * the host refuses it if the box it names has gone. No new send path.
+ *
+ * Typed words (contract 2.0) are the same answer with `text` on it: a `question` box the
+ * CLI posed on its own channel with `freeText`, or a `takesText` row ("No, and tell the
+ * agent why"), opens a `TypedAnswer` field; the words ride the one queued entry as
+ * `promptText`, and the host hands them to the CLI's channel — never to the composer.
  */
 export function PromptAnswer({ prompt: p, queued, suggestion, onAnswer, ev }: Props) {
+  const online = useLink((s) => s.online);
   // Options carrying the CLI's own descriptions (host `askbox.ts`) go one per
   // row: a chip grid is right for "1. Yes / 2. No" and useless for a paragraph.
   // `open` (nothing clamped) is unconditional here — both callers are scrolling
@@ -64,12 +75,19 @@ export function PromptAnswer({ prompt: p, queued, suggestion, onAnswer, ev }: Pr
   // enrichment.
   const rich = p.options.some((o) => o.desc);
   const submitWord = p.submitLabel ?? "Submit";
+  const question = p.ask || p.question;
+  const questionTruncated = !p.ask && p.questionTruncated;
+  // Typed words (contract 2.0): the field is open for a `freeText` question, or once a
+  // `takesText` row ("No, and tell the agent why") was tapped — that row's index.
+  const [reasonFor, setReasonFor] = useState<number | null>(null);
+  const reasonRow = reasonFor == null ? undefined : p.options.find((o) => o.index === reasonFor && o.takesText);
   return (
     <>
       {/* The CLI's own question where the host could read it out of the
           conversation log; the scraped one is whatever fit above option 1. */}
       {p.plan && <PlanBody plan={p.plan} />}
-      <div className="approve-q">{p.ask || p.question}</div>
+      <div className="approve-q">{question}{questionTruncated ? "…" : ""}</div>
+      {questionTruncated && <div className="approve-hint">this text was shortened — read the full version in the CLI</div>}
       {p.truncated && (
         // Not cosmetic: options exist that cannot be tapped. Two shapes, two
         // sentences, because they are cut in two different directions — a
@@ -98,9 +116,7 @@ export function PromptAnswer({ prompt: p, queued, suggestion, onAnswer, ev }: Pr
       {queued.length > 0 && (
         <div className="approve-hint approve-queued">
           <CloudOff size={12} style={{ verticalAlign: "-2px" }} />{" "}
-          {queued.length > 1
-            ? `${queued.length} answers queued (${queued.map((e) => e.label).join(", ")})`
-            : `“${queued[0].label}” queued`} — sent, in order, as soon as the link is back
+          {queuedAnswerNote(queued, online)}
         </div>
       )}
       {suggestion?.choice != null && (
@@ -130,6 +146,9 @@ export function PromptAnswer({ prompt: p, queued, suggestion, onAnswer, ev }: Pr
               // printed on the button: "2." beside an option the terminal never
               // numbered would teach the one keystroke that does not work here.
               onClick={() => {
+                // A row that takes a reason opens the field first; it answers from there,
+                // with the words or without them.
+                if (o.takesText && p.nav) { setReasonFor(o.index); return; }
                 track(`action:${ev}.answer`);
                 if (p.nav) onAnswer("", o.label, undefined, o.index);
                 else onAnswer(String(o.index) + (p.multi ? "" : "\r"), `${o.index}. ${o.label}`);
@@ -150,10 +169,29 @@ export function PromptAnswer({ prompt: p, queued, suggestion, onAnswer, ev }: Pr
               {/* A tap here makes a standing rule (host `answergate.ts`): said on the
                   option, in the host's own label, before anyone taps it. */}
               {o.remembers && <span className="approve-desc approve-remembers">{remembersText(o.remembers)}</span>}
+              {o.takesText && p.nav && <span className="approve-desc">takes a typed reason — tap to write one</span>}
             </button>
           );
         })}
       </div>
+      {reasonRow && (
+        <TypedAnswer
+          key={`reason-${reasonRow.index}`}
+          intro={`your reason for “${reasonRow.label}” — the agent reads it`}
+          placeholder="why"
+          send={(text) => { track(`action:${ev}.reason`); onAnswer("", `${reasonRow.label} — “${clip(text)}”`, undefined, reasonRow.index, text); setReasonFor(null); }}
+          without={() => { track(`action:${ev}.answer`); onAnswer("", reasonRow.label, undefined, reasonRow.index); setReasonFor(null); }}
+        />
+      )}
+      {p.freeText && (
+        <TypedAnswer
+          key={`free-${p.askId ?? p.question}`}
+          intro={p.options.length ? "or type your own answer" : "type your answer"}
+          placeholder="your answer"
+          send={(text) => { track(`action:${ev}.typed`); onAnswer("", `“${clip(text)}”`, undefined, undefined, text); }}
+        />
+      )}
+      {p.answerNote && <div className="approve-hint">{p.answerNote}</div>}
       {/* The commit row, never inside the option list: on a multi-select Submit
           is the only control that answers anything, and a commit button you have
           to find by scrolling past six options is a commit button that gets
@@ -176,6 +214,43 @@ export function PromptAnswer({ prompt: p, queued, suggestion, onAnswer, ev }: Pr
   );
 }
 
+/** A typed answer's words, cut for the queue sheet's and the toast's label only — the entry carries them whole. */
+const clip = (t: string) => (t.length > 40 ? `${t.slice(0, 39)}…` : t);
+
+/**
+ * The text field a `freeText` question or a `takesText` row is answered with. One line of
+ * words (`answerTextProblem`, the host asks the same): a refusal is SAID under the field,
+ * never a greyed button, and the words stay where they are until they are queued — the
+ * queue entry is then their copy (`answerPrompt`), so clearing the field loses nothing.
+ */
+function TypedAnswer({ intro, placeholder, send, without }: { intro: string; placeholder: string; send: (text: string) => void; without?: () => void }) {
+  const [draft, setDraft] = useState("");
+  const [why, setWhy] = useState<string | null>(null);
+  const go = () => {
+    const text = draft.trim();
+    const problem = answerTextProblem(text);
+    if (problem) { setWhy(without && !text ? "no reason written — tap without a reason to answer without one" : problem); return; }
+    setWhy(null);
+    send(text);
+    setDraft("");
+  };
+  return (
+    <div className="approve-typed">
+      <div className="approve-hint">{intro}</div>
+      <input
+        className="search" value={draft} placeholder={placeholder} enterKeyHint="send"
+        onChange={(e) => { setDraft(e.target.value); if (why) setWhy(null); }}
+        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); go(); } }}
+      />
+      {why && <div className="approve-hint">{why}</div>}
+      <div className="approve-commit">
+        <button className="approve-btn primary" onClick={go}><Send size={13} style={{ verticalAlign: "-2px" }} /> send</button>
+        {without && <button className="approve-btn" onClick={without}>without a reason</button>}
+      </div>
+    </div>
+  );
+}
+
 /**
  * The plan a plan-approval box asks about (host `planbox.ts`): the CLI draws it
  * ABOVE the box, so on the terminal it has scrolled away long before anyone
@@ -194,9 +269,7 @@ function PlanBody({ plan }: { plan: NonNullable<DetectedPrompt["plan"]> }) {
       <div className="approve-plan-body">
         <Markdown src={plan.text} q="" onCopy={copy} />
       </div>
-      <div className="approve-hint">
-        {plan.cut ? "longer than the host sends — the rest is in " : "from "}{plan.path.replace(/^\/(Users|home)\/[^/]+/, "~")}
-      </div>
+      {planHint(plan) && <div className="approve-hint">{planHint(plan)}</div>}
     </details>
   );
 }

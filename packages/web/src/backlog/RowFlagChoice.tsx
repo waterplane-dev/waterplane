@@ -6,13 +6,14 @@
  */
 import type { ReactNode } from "react";
 import { Flag } from "lucide-react";
+import { Button } from "../kit/Button";
 
 export function RowFlagChoice({ on, onSet }: { on: boolean; onSet: (on: boolean) => void }): ReactNode {
   return (
     <div className="bl-close-chips">
-      <button className={`key${on ? " active" : ""}`} aria-pressed={on} data-hint="session.followup" onClick={() => onSet(!on)}>
+      <Button className={on ? "active" : undefined} aria-pressed={on} data-hint="session.followup" onClick={() => onSet(!on)}>
         <Flag size={13} fill={on ? "currentColor" : "none"} /> Flag for follow up when done
-      </button>
+      </Button>
     </div>
   );
 }

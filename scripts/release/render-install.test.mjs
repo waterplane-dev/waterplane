@@ -5,7 +5,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -424,6 +424,21 @@ test("install_release: a release signed by the installer's key installs", async 
     assert.equal(r.code, 0, r.out);
     assert.match(r.out, /verified the publisher's signature/);
     assert.ok(r.installed);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("install_release: says whether this run installed, updated or reinstalled", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "inst-sig-"));
+  try {
+    const { rel, key } = signedRelease(dir);
+    const first = await installSigned(dir, rel, key.publicPem);
+    assert.match(first.out, /\] installed 9\.9\.9\n/, first.out);
+    const again = await installSigned(dir, rel, key.publicPem);
+    assert.match(again.out, /reinstalled 9\.9\.9 \(it was already installed\)/, again.out);
+    const cur = join(dir, "data", "current");
+    rmSync(cur); mkdirSync(join(dir, "data", "versions", "9.9.8")); symlinkSync("versions/9.9.8", cur);
+    const up = await installSigned(dir, rel, key.publicPem);
+    assert.match(up.out, /updated 9\.9\.8 -> 9\.9\.9/, up.out);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

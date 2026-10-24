@@ -32,10 +32,25 @@
  * What the crossing DOES — the notification, the one Esc — is
  * `server/sessionEvents.ts`'s, where the delivery facts are. This file decides
  * and types nothing.
+ *
+ * **Where the spend comes from** (P2, `budgetSparkOf` is the one reader on both
+ * ends): a backend that keeps claude's log is judged off `contextSpark`, exactly
+ * as before; any other backend off its OWN `TokenSource.session(s)`, read here on
+ * every judge and published as `SessionInfo.sourceSpend` (with or without a
+ * budget, so the phone's "spent so far" line has it before a cap is set). A
+ * throw, a null or an answer `sourceSpendProblems` refuses is `{at}` with no
+ * figure — `unstated`, never a zero — and a percent cap there is `notClaude`.
+ * Both are `unknown`, so neither trips.
  */
-import type { SessionBudget, SessionBudgetCal, SessionBudgetInfo, SessionInfo } from "@waterplane/shared";
-import { sessionBudgetVerdict } from "@waterplane/shared";
+import type { SessionBudget, SessionBudgetCal, SessionBudgetInfo, SessionInfo, SourceSessionSpend } from "@waterplane/shared";
+import { budgetSparkOf, sessionBudgetVerdict, sourceSpendProblems } from "@waterplane/shared";
+import { derive } from "../backends/index.js";
+import { liveSourceFor } from "../livesources.js";
 import type { Session, SessionCore } from "./core.js";
+
+/** The figures of a reading, without its clock: a re-read that only moved `at`
+ *  is not news (an `updated` fans the whole `SessionInfo` out). */
+const figures = (r: SourceSessionSpend | undefined) => (r ? JSON.stringify({ ...r, at: 0 }) : "");
 
 const isPctUnit = (b: SessionBudget) => b.unit === "sessionPct" || b.unit === "weeklyPct";
 
@@ -46,11 +61,13 @@ export class BudgetSlice {
 
   constructor(private readonly core: SessionCore) {}
 
-  /** Recompute one session's verdict. Returns whether `info.budget` changed. */
+  /** Re-read the source spend, then recompute one session's verdict. Returns
+   *  whether `info.sourceSpend` or `info.budget` changed. */
   judge(s: Session, now = Date.now()): boolean {
+    const spendMoved = this.readSourceSpend(s, now);
     const b = s.info.budget;
-    if (!b) return false;
-    const verdict = sessionBudgetVerdict(b.cfg, s.info.contextSpark, this.cal, now, s.info.running);
+    if (!b) return spendMoved;
+    const verdict = sessionBudgetVerdict(b.cfg, budgetSparkOf(s.info), this.cal, now, s.info.running);
     const next: SessionBudgetInfo = { cfg: b.cfg, verdict, ...(this.cal ? { cal: this.cal } : {}) };
     const changed = JSON.stringify(next) !== JSON.stringify(b);
     s.info.budget = next;
@@ -66,7 +83,31 @@ export class BudgetSlice {
       s.budgetEscOwed = undefined;
       this.persist(s);
     }
-    return changed;
+    return changed || spendMoved;
+  }
+
+  /**
+   * `info.sourceSpend` off the backend's own `tokens.session` — only for a
+   * backend that keeps no claude log (claude's three stay untouched: no field,
+   * no call). No live source, no `session` slot, a throw, a null or a refused
+   * answer ⇒ `{at: now}`: the host judges from the source, which stated
+   * nothing. A re-read whose figures did not move keeps the old reading and
+   * reports no change.
+   */
+  private readSourceSpend(s: Session, now: number): boolean {
+    // No descriptor (a record from before backends) is claude's: today's path.
+    if (!s.backend || derive(s.backend).keepsClaudeLog) return false;
+    if (!s.backend.caps.turns) return false; // a shell has no source and spends nothing
+    const live = liveSourceFor(s.info.id);
+    const src = live?.sources.tokens;
+    let r: SourceSessionSpend | null = null;
+    if (live && typeof src?.session === "function") {
+      try { r = src.session(live.session) ?? null; } catch { r = null; }
+    }
+    const next: SourceSessionSpend = r && !sourceSpendProblems(r).length ? r : { at: now };
+    if (s.info.sourceSpend && figures(next) === figures(s.info.sourceSpend)) return false;
+    s.info.sourceSpend = next;
+    return true;
   }
 
   /** The owed Esc is settled — it went out, or a person sent to the session by

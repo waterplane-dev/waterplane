@@ -18,10 +18,11 @@ import { inspectOptIns, standingPromptsOf } from "../optins.js";
 import { setOptInChoice } from "../setupprefs.js";
 import type { OptInChoice, OptInReport, RepoTarget } from "@waterplane/shared";
 import { REPOHEALTH_TIMEOUT_MS, readRepoHealth, refreshRepoHealth } from "../repohealth.js";
+import { approveWithConsent, withApproveToken } from "../repohealthapproval.js";
 import { cleanScope, writeScopes } from "../repohealthscopes.js";
 import { removeLeftover, worktreeLeftover, type LeftoverInput } from "../worktreeleftover.js";
 import { worktreeOwners } from "../worktreeowner.js";
-import { MIME, json, readJson, serveRange } from "./apiio.js";
+import { MIME, json, readJson, serveRange, treeFileSecurityHeaders } from "./apiio.js";
 import { route, type ApiCtx, type ApiEntry, type RepoReq } from "./apitable.js";
 
 /**
@@ -223,7 +224,7 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
     // refuse: an unmeasured repo, a series it could not parse and a repo
     // without the tool are all ANSWERS, and each of them is a different
     // field of the view rather than a failure of the request.
-    json(res, { ok: true, ...(await readRepoHealth(wt, {}, scope)) });
+    json(res, { ok: true, ...withApproveToken(wt, await readRepoHealth(wt, {}, scope)) });
     return true;
   }),
   // Which subtrees this repo measures separately. A write, so POST, and the
@@ -258,7 +259,17 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
     // left unread is still a body, and node answers and then destroys the
     // socket, which the NEXT request on that pooled connection fails on
     // ("other side closed") with nothing in this daemon's log to explain it.
-    const body = await readJson(req, { optional: true }) as { scope?: unknown } | null;
+    const body = await readJson(req, { optional: true }) as { scope?: unknown; approveEngine?: unknown; approveToken?: unknown } | null;
+    // The one tap that lets a repo's OWN committed code run on this desktop —
+    // its engine, or the commands its health.json declares. Consent, so it goes
+    // through the confirm gate: a browser Origin and the token the read minted.
+    if (body?.approveEngine === true) {
+      const why = approveWithConsent(req, wt, body.approveToken);
+      if (why) {
+        json(res, { ok: false, error: why }, 403);
+        return true;
+      }
+    }
     const askedScope = typeof body?.scope === "string" ? body.scope : null;
     const scope = askedScope ? cleanScope(wt, askedScope) : null;
     if (askedScope && !scope) {
@@ -280,7 +291,7 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
     if (!waited) {
       // The run was NOT called off. The view carries the live run row, whose
       // `note` is the tool's own progress line.
-      const view = await readRepoHealth(wt, {}, scope);
+      const view = withApproveToken(wt, await readRepoHealth(wt, {}, scope));
       json(res, {
         ok: false,
         ...view,
@@ -296,7 +307,7 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
     }
     // A repo-level run that finished moves the index: recompute the cache and stamp the refresh.
     if (!scope && waited.view.last?.ok === true) ctx.health?.refreshed(wt);
-    json(res, { ok: waited.view.last?.ok === true, ...waited.view }, 200);
+    json(res, { ok: waited.view.last?.ok === true, ...withApproveToken(wt, waited.view) }, 200);
     return true;
   }),
 
@@ -322,7 +333,7 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
     const side = url.searchParams.get("side") === "old" ? "old" : "new";
     const buf = await gitBlob(wt, p, side, url.searchParams.get("staged") === "1");
     if (!buf) return json(res, { error: "no such file on that side" }, 404), true;
-    serveRange(req, res, buf, mime, { "cache-control": "no-store", "x-content-type-options": "nosniff" });
+    serveRange(req, res, buf, mime, { "cache-control": "no-store", ...treeFileSecurityHeaders(mime) });
     return true;
   }),
   // One side of a changed TEXT file, whole — the diff view's "before" / "after"

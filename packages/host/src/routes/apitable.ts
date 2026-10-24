@@ -57,6 +57,8 @@ export interface ApiCtx {
   /** The checker's poll period, passed through so the history can say what
    *  a dense series would have looked like. */
   usagePollMs: number;
+  /** The account facts the socket pushes, as one read (`GET /api/usagenow`, `UsageNowDoc`). */
+  usageNow?(): import("@waterplane/shared").UsageNowDoc;
   /**
    * The verified capture loop, so an AGENT can trigger one without a phone and
    * without a session (`capture.ts`).
@@ -93,6 +95,8 @@ export interface ApiCtx {
    *  is served at `parts` for `method`. Never rejects. */
   pluginRoute?(pluginId: string, method: string, parts: readonly string[]):
     ((req: { query: Record<string, string>; body: unknown }) => Promise<{ status: number; body: unknown }>) | null;
+  /** A plugin's static asset (`manifest.assets`, `PluginRegistry.assetFile`). */
+  pluginAsset?(pluginId: string, file: string): import("../plugins/pluginassets.js").AssetResult;
   /** A file a plugin offered (`api.offerFile`, `PluginRegistry.offeredFile`); null when gone. */
   pluginFile?(pluginId: string, token: string): { file: string; name: string; size: number; mtime: number; token: string; delivered(): void } | null;
 }

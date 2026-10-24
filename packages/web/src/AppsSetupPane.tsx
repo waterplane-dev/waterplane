@@ -14,6 +14,7 @@ import type { AppRow, InstallCaps, InstallSources } from "./installPolicy";
 import { Button } from "./kit/Button";
 import { Row, RowSub } from "./kit/Row";
 import { Hint } from "./kit/Hint";
+import { SetLine } from "./SettingsKit";
 
 /**
  * **Which apps are set up to install themselves** — the Apps screen's `setup`
@@ -73,7 +74,7 @@ export function AppsSetupPane({ rows, caps, allow, log, me, onFlip, onOpenDownlo
 
       {/* Two chips, each a filter that opens exactly what it counts. */}
       {all.length > 0 && (
-        <div className="set-row">
+        <SetLine>
           <Button className={cut === "blocked" ? "active" : ""}
             onClick={() => { setCut(cut === "blocked" ? "all" : "blocked"); track("action:apps.setup.blocked"); }}>
             <CircleX size={14} /> not yet · {blocked.length}
@@ -82,7 +83,7 @@ export function AppsSetupPane({ rows, caps, allow, log, me, onFlip, onOpenDownlo
             onClick={() => { setCut(cut === "ready" ? "all" : "ready"); track("action:apps.setup.ready"); }}>
             <CircleCheck size={14} /> set up · {ready.length}
           </Button>
-        </div>
+        </SetLine>
       )}
       {cut !== "all" && (
         <Hint>
@@ -135,7 +136,7 @@ function ReadyCard({ r, open, onToggle, onFlip, onOpenDownloads }: {
           <span className="check-kind">{open ? "hide" : `${r.checks.filter((c) => c.state === "ok").length}/${r.checks.length}`}</span>
         </span>
         <RowSub className="mono">{r.pkg}{r.repo ? ` · ${r.repo}` : ""}</RowSub>
-        <RowSub className={b ? "warn" : ""}>{readinessVerdict(r)}</RowSub>
+        <RowSub className={b ? "warn" : undefined}>{readinessVerdict(r)}</RowSub>
         {!open && b && <span className="check-detail">{b.text}</span>}
       </Row>
       {open && (

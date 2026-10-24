@@ -30,6 +30,8 @@ export const LS_PREFS = {
   dictateTerms: lsKey("dictate.terms"),
   /** Drain the send queue automatically when the link returns. */
   autoSend: lsKey("autoSend"),
+  /** Check daily for waterplane and plugin updates (host: `updates/checker.ts`). `"false"`/`"0"`/`"off"` = off, else on. Synced. */
+  updatesAutoCheck: lsKey("updates.autoCheck"),
   /** Run queued session-opens for one repo one at a time. */
   serialSessions: lsKey("serialSessions"),
   /** Ask before draining text that was queued offline. */

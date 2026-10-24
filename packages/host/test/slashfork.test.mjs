@@ -42,18 +42,23 @@ function harness(info, opts = {}) {
     recomputeWatched: () => {},
     send: (_ws, m) => sent.push(m),
   };
-  const input = (data, ackId = "a1") => route({ c, ws: {}, att: { add: (id) => attached.push(id) },
-    msg: opts.raw ? { t: "session.input", id: info?.id ?? "gone", data }
-      : { t: "session.input", id: info?.id ?? "gone", data, ackId, submit: true } });
+  // The fork is awaited (`sessions.fork()` is async since backend v2), so a receipt lands a turn
+  // of the event loop after the route returns; `input` waits that turn.
+  const input = async (data, ackId = "a1") => {
+    route({ c, ws: {}, att: { add: (id) => attached.push(id) },
+      msg: opts.raw ? { t: "session.input", id: info?.id ?? "gone", data }
+        : { t: "session.input", id: info?.id ?? "gone", data, ackId, submit: true } });
+    await new Promise((r) => setImmediate(r));
+  };
   return { input, sent, forks, typed, attached, ledger, raw };
 }
 
 const live = (over = {}) => ({ id: "s1", cwd: "/r", title: "myapp", running: true, remoteControl: true, claudeSessionId: "conv-1", ...over });
 const acks = (sent) => sent.filter((m) => m.t === "input.ack");
 
-test("/fork opens a new tab through sessions.fork, focuses it, and the receipt says so", () => {
+test("/fork opens a new tab through sessions.fork, focuses it, and the receipt says so", async () => {
   const h = harness(live());
-  h.input("/fork");
+  await h.input("/fork");
   assert.equal(h.typed.length, 0, "/fork was never typed into the CLI");
   assert.deepEqual(h.forks, [{ id: "s1", title: "myapp (fork)" }]);
   assert.deepEqual(h.attached, ["f1"], "the asking socket streams the new tab");
@@ -64,37 +69,37 @@ test("/fork opens a new tab through sessions.fork, focuses it, and the receipt s
   assert.match(ack.reason, /forked into a new session/);
 });
 
-test("a title after /fork names the new tab", () => {
+test("a title after /fork names the new tab", async () => {
   const h = harness(live());
-  h.input("/fork try the other schema");
+  await h.input("/fork try the other schema");
   assert.equal(h.forks[0].title, "try the other schema");
   assert.match(acks(h.sent)[0].reason, /try the other schema/);
 });
 
-test("a person's fork of a work item's tab does not wear the machine's mark", () => {
+test("a person's fork of a work item's tab does not wear the machine's mark", async () => {
   // `backlog · ` is what the automatic-session cap counts and the reaper may
   // close: a fork the person asked for must not inherit it.
   const h = harness(live({ title: "backlog · myapp · fix the flaky test" }));
-  h.input("/fork");
+  await h.input("/fork");
   assert.equal(h.forks[0].title, "myapp · fix the flaky test (fork)");
 });
 
-test("a retried ackId is re-acked with the same words and never forks a second time", () => {
+test("a retried ackId is re-acked with the same words and never forks a second time", async () => {
   const h = harness(live());
-  h.input("/fork", "k1");
-  h.input("/fork", "k1");
+  await h.input("/fork", "k1");
+  await h.input("/fork", "k1");
   assert.equal(h.forks.length, 1, "one ackId, one fork");
   const [first, replay] = acks(h.sent);
   assert.equal(replay.ok, true);
   assert.equal(replay.state, "forked");
   assert.equal(replay.reason, first.reason, "the replayed receipt says what the first one said");
-  h.input("/fork", "k2");
+  await h.input("/fork", "k2");
   assert.equal(h.forks.length, 2, "a NEW ackId is a new request");
 });
 
-test("no known conversation id ⇒ refused in words, nothing typed, nothing spawned", () => {
+test("no known conversation id ⇒ refused in words, nothing typed, nothing spawned", async () => {
   const h = harness(live({ claudeSessionId: undefined }));
-  h.input("/fork");
+  await h.input("/fork");
   assert.equal(h.forks.length, 0);
   assert.equal(h.typed.length, 0, "never falls back to typing /fork");
   const [ack] = acks(h.sent);
@@ -105,24 +110,24 @@ test("no known conversation id ⇒ refused in words, nothing typed, nothing spaw
   assert.equal(h.ledger.get("a1").ok, false, "the refusal is remembered");
 });
 
-test("a gone session and a session with remote control off are refused in words", () => {
+test("a gone session and a session with remote control off are refused in words", async () => {
   const gone = harness(null);
-  gone.input("/fork");
+  await gone.input("/fork");
   assert.equal(gone.typed.length + gone.forks.length, 0);
   assert.match(acks(gone.sent)[0].reason, /session is gone/);
 
   const off = harness(live({ remoteControl: false }));
-  off.input("/fork");
+  await off.input("/fork");
   assert.equal(off.typed.length + off.forks.length, 0);
   assert.match(acks(off.sent)[0].reason, /remote control is off/);
 });
 
-test("a fork the manager cannot make is a sentence, not a silence", () => {
+test("a fork the manager cannot make is a sentence, not a silence", async () => {
   // `fork()` answers null for a session that stopped between the check and the
   // call, and the spawn can throw (an unknown backend, a missing tmux).
   for (const fork of [() => null, () => { throw new Error("tmux is not installed"); }]) {
     const h = harness(live(), { fork });
-    h.input("/fork");
+    await h.input("/fork");
     assert.equal(h.typed.length, 0);
     const [ack] = acks(h.sent);
     assert.equal(ack.ok, false);
@@ -130,34 +135,50 @@ test("a fork the manager cannot make is a sentence, not a silence", () => {
     assert.equal(h.sent.some((m) => m.t === "session.focus"), false, "nothing to focus");
   }
   const thrown = harness(live(), { fork: () => { throw new Error("tmux is not installed"); } });
-  thrown.input("/fork");
+  await thrown.input("/fork");
   assert.match(acks(thrown.sent)[0].reason, /tmux is not installed/, "the cause is carried into the sentence");
 });
 
-test("other backends, and anything that is not exactly /fork, are delivered as before", () => {
+test("other backends, and anything that is not exactly /fork, are delivered as before", async () => {
   const oc = harness(live({ backend: "another-cli", claudeSessionId: undefined, backendSessionId: "b-1" }));
-  oc.input("/fork");
+  await oc.input("/fork");
   assert.equal(oc.forks.length, 0);
   assert.equal(oc.typed.length, 1, "another backend gets the words typed, unchanged");
 
   for (const t of ["/forked", "/fork-it", "please /fork this", "fork"]) {
     const h = harness(live());
-    h.input(t);
+    await h.input(t);
     assert.equal(h.forks.length, 0, t);
     assert.equal(h.typed.length, 1, `${t} is typed`);
   }
 
   // An explicit `backend: "claude"` is the same as absent.
   const cl = harness(live({ backend: "claude" }));
-  cl.input("/fork");
+  await cl.input("/fork");
   assert.equal(cl.forks.length, 1);
 });
 
-test("a raw (non-submit) write is never intercepted", () => {
+test("a raw (non-submit) write is never intercepted", async () => {
   // Without `submit` the client owns the Return and these are bare keystrokes —
   // the host cannot know they will become a whole `/fork` line.
   const h = harness(live(), { raw: true });
-  h.input("/fork");
+  await h.input("/fork");
   assert.equal(h.forks.length, 0);
   assert.deepEqual(h.raw, [["s1", "/fork"]], "written as the keystrokes they are");
+});
+
+test("a retry that arrives WHILE the fork is still being made joins it — one ackId, one fork", async () => {
+  // `sessions.fork()` awaits the backend's `prepare()` (backend v2): the retry must find the
+  // first one in flight (`inputsInFlight`), never start a second.
+  let release;
+  const made = [];
+  const h = harness(live(), { fork: (id, o) => { made.push(id); return new Promise((r) => { release = () => r({ id: "f9", title: o.title }); }); } });
+  await h.input("/fork", "k9");
+  await h.input("/fork", "k9");
+  assert.equal(made.length, 1, "the second delivery of the ackId joined the first");
+  release();
+  await new Promise((r) => setImmediate(r));
+  const both = acks(h.sent);
+  assert.equal(both.length, 2, "both deliveries are answered");
+  assert.deepEqual(both.map((a) => [a.ok, a.state]), [[true, "forked"], [true, "forked"]]);
 });

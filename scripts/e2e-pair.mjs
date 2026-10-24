@@ -111,6 +111,16 @@ bootWait(PORT, 600, async () => {
     await sleep(TTL + 300);
     const r3 = await redeem(m2.json.code);
     check(r3.json?.ok === false && r3.json.error === "expired", "an expired code fails (expired)");
+
+    // ── L2: a funnel request (public internet via the serve proxy) is never loopback-trusted ──
+    const fm = await api("/api/pair/mint", { method: "POST", headers: { "tailscale-funnel-request": "?1", "x-forwarded-for": "203.0.113.9" } });
+    check(fm.status === 401 || fm.status === 403, "a Tailscale-Funnel-Request mint is refused (needs a token / cannot manage)");
+
+    // ── M2: password login is rate-limited before the hash is checked ──
+    const codes = [];
+    for (let i = 0; i < 16; i++) codes.push((await api("/api/auth/login", { method: "POST", body: { password: "wrong-" + i } })).status);
+    const lr = await api("/api/auth/login", { method: "POST", body: { password: "wrong-x" } });
+    check(codes.includes(401) && lr.status === 429 && Number(lr.headers.get("retry-after")) >= 1, "a login flood is answered 429 with retry-after");
   } catch (e) {
     console.error(e);
     failed = true;

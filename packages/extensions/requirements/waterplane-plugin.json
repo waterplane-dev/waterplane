@@ -2,7 +2,7 @@
   "id": "requirements",
   "name": "Requirements",
   "version": "0.1.0",
-  "apiVersion": 1,
+  "apiVersion": "2.0",
   "description": "A repo's requirements list, rebuilt from the person's prompts and the commits: the setup row that says how far behind it is, the one-time set up, and a sheet that lists the items (cut by status and area) with an update that goes through the backlog.",
   "host": "host/index.mts",
   "web": "web/index.ts"

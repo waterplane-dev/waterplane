@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 
 import {
-  NO_IDENTITY_SENTENCE, NO_PASSWORD_SENTENCE, createLanRouter, lanMacHex, newNonce, parseLanIdentity, verifyLanAnswer,
+  NO_IDENTITY_SENTENCE, NO_PASSWORD_SENTENCE, createLanRouter, lanMacHex, lanProbeAnswered, newNonce, parseLanIdentity, verifyLanAnswer,
 } from "./lanRoute.ts";
 import { LOCATION_DISCLOSURE, LOCATION_SKIPPED_TEXT, parseNetState } from "./shellNet.ts";
 
@@ -201,4 +201,12 @@ test("saving LAN settings drops a LAN route they no longer allow, at once", asyn
   assert.match(lanDropOnSave(LAN, null), /automatically is off/, "LAN address removed");
   assert.match(lanDropOnSave(LAN, { base: "http://192.168.1.21:8770", auto: true }), /address changed/);
   assert.equal(lanDropOnSave(LAN, { base: LAN, auto: true }), null, "still allowed: the ladder re-decides");
+});
+
+test("the LAN probe counts a gated host's 401 as an answer — the probe carries no token", () => {
+  assert.equal(lanProbeAnswered(200), true);
+  assert.equal(lanProbeAnswered(401), true, "a password-gated host refuses a tokenless /api/health over LAN with 401");
+  assert.equal(lanProbeAnswered(403), false, "an origin refusal is not a usable answer");
+  assert.equal(lanProbeAnswered(500), false);
+  assert.equal(lanProbeAnswered(302), false, "a captive portal redirect is not this host");
 });

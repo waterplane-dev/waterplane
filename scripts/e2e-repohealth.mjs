@@ -330,6 +330,12 @@ const STUB = join(PROJ, "tools", "repohealth.mjs");
 writeFileSync(STUB, stubSource("refuse"));
 chmodSync(STUB, 0o755);
 await commit(PROJ, "adopt the repo-health tool");
+// A repo's OWN engine runs only after a person's one-time approval
+// (`repohealthapproval.ts`, pinned in packages/host/test/repohealth.test.mjs).
+// This suite is about what runs once it may, so the approval is recorded up
+// front, in the state dir `rootEnv` pins — the same key the host computes.
+const { approveEngine } = await import("../packages/host/dist/repohealthapproval.js");
+approveEngine(PROJ, ROOT);
 
 /**
  * The desktop's bundled engine, OUTSIDE every worktree.

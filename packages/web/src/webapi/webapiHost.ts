@@ -126,4 +126,9 @@ export const hostApi = {
   /** Push text onto the desktop host's system clipboard (phone→desktop). */
   setClipboard: (text: string) =>
     jpost<{ ok: boolean; chars?: number; error?: string }>("/api/host/clipboard", { text }),
+  /** One file of an extension's `assets` folder (`GET /api/plugin/<id>/asset/<file>`), behind the
+   *  same origin + token gates as every call here; the RESPONSE, so the caller can stream it with
+   *  progress (`sdk/extAssets.ts`). The fuse covers the headers; the body is the caller's to time. */
+  pluginAsset: (id: string, file: string, signal?: AbortSignal) =>
+    nfetch(`/api/plugin/${encodeURIComponent(id)}/asset/${encodeURIComponent(file)}`, { signal, cache: "no-store" }, 30_000),
 };

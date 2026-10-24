@@ -94,6 +94,17 @@ test("the one client path: contains, strips what only the host may write, and ow
   assert.deepEqual(out, { ok: false, reason: "cwd outside root", refusedCwd: true });
   assert.equal(posted.length, 0, "a refused cwd writes nothing");
 
+  const build = (cwd) => ({ ...base, payload: { kind: "build", buildId: "b", name: "n", cmd: "true", cwd } });
+  assert.deepEqual(await postClientDraft(deps, build("/etc")), { ok: false, reason: "cwd outside root", refusedCwd: true }, "a build payload cwd is contained too");
+  assert.equal(posted.length, 0);
+  const okBuild = await postClientDraft(deps, build("/root/proj"));
+  assert.equal(okBuild.ok, true, "a build in a repo is accepted from a device");
+  assert.equal(posted.length, 1);
+  posted.length = 0;
+  const viaAgent = await postClientDraft(deps, build("/root/proj"), { origin: "agent" });
+  assert.deepEqual(viaAgent, { ok: false, reason: "a build is started with build.run" });
+  assert.equal(posted.length, 0);
+
   await postClientDraft(deps, { ...base, origin: "agent", headline: "h", headlineBy: "assess", pastBudget: { until: 1 }, budgetPass: { window: "weekly" } });
   const d = posted.at(-1);
   assert.equal(d.origin, undefined, "a socket client cannot claim the agent mark");

@@ -42,6 +42,9 @@ export function fmtAxisTime(t: number, spanMs: number): string {
   const d = new Date(t);
   const hhmm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   if (spanMs < 36 * 3600_000) return hhmm;
-  const day = `${d.getDate()} ${d.toLocaleString(undefined, { month: "short" })}`;
-  return spanMs < 14 * 86_400_000 ? `${day} ${hhmm}` : day;
+  return spanMs < 14 * 86_400_000 ? `${fmtAxisDay(t)} ${hhmm}` : fmtAxisDay(t);
 }
+
+/** A calendar day's axis label ("2 Oct") — what a DAY bucket is named by, never a clock. */
+export const fmtAxisDay = (t: number): string =>
+  `${new Date(t).getDate()} ${new Date(t).toLocaleString(undefined, { month: "short" })}`;

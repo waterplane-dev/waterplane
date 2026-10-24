@@ -302,18 +302,22 @@ export function HealthIndexChart({ view, empty, onAsk, onAskTrend, axis = "weeks
               {mode === "commits" ? <div className="rh-cap">{barsWeeksOnlyWords(at.week)}</div> : null}
               {/* Four columns — name, track, score, move — so no word ever sits on a bar or
                   runs off the edge. Bar geometry is in percent of the track. */}
-              <div className="hix-bar-rows" role="img" aria-label={HEALTH_ENTRY_ORDER.filter((k) => at.scores?.[k] !== undefined)
+              {/* No moves (first scored week, gap week): no track at all — an empty track
+                  between name and score reads as a chart that failed to draw. */}
+              <div className={`hix-bar-rows${bars?.bars.length ? "" : " still"}`} role="img" aria-label={HEALTH_ENTRY_ORDER.filter((k) => at.scores?.[k] !== undefined)
                 .map((k) => `${HEALTH_ENTRY_NAME[k]} ${Math.round(at.scores[k] as number)}`).join(", ")}>
                 {HEALTH_ENTRY_ORDER.filter((k) => at.scores?.[k] !== undefined).map((k) => {
                   const b = bars?.bars.find((x) => x.key === k) ?? null;
                   return (
                     <div key={k} className="hix-bar-row" aria-hidden>
                       <span className="hix-barname">{HEALTH_ENTRY_NAME[k]}</span>
-                      <span className="hix-track">
-                        {b && b.side !== "none" ? <span className={`hix-bar ${b.side}`} style={{ left: `${b.x}%`, width: `${b.w}%` }} /> : null}
-                      </span>
+                      {bars?.bars.length ? (
+                        <span className="hix-track">
+                          {b && b.side !== "none" ? <span className={`hix-bar ${b.side}`} style={{ left: `${b.x}%`, width: `${b.w}%` }} /> : null}
+                        </span>
+                      ) : null}
                       <span className="hix-barscore">{Math.round(at.scores[k] as number)}</span>
-                      <span className="hix-barval">{b ? signedTenths(b.value) : ""}</span>
+                      {bars?.bars.length ? <span className="hix-barval">{b ? signedTenths(b.value) : ""}</span> : null}
                     </div>
                   );
                 })}

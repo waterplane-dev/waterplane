@@ -33,6 +33,80 @@ import {
 } from "@waterplane/shared";
 import { sourceLogOpener, type SourceUsageRow } from "./usagesourcelog.js";
 import { USAGE_POLL_MS } from "./usage.js";
+import { derive } from "./backends/derive.js";
+import { BACKENDS, onBackendsChanged } from "./backends/registry.js";
+import type { BackendDescriptor } from "./backends/types.js";
+
+type DescriptorFacts = Pick<BackendDescriptor, "caps" | "facts" | "sources" | "forkVia">;
+
+/**
+ * Does this backend have an ACCOUNT limit at all — some `limits` provider that can answer
+ * (claude's `{screen:"limit-ts"}`, or a `{source:true}` whose `sources.usage.wall` exists)?
+ * The one gate for whether a session carries a `SessionLimit` (`sessions.ts` create,
+ * `tmux.ts` re-attach): none ⇒ the field is ABSENT, never an unblocked one.
+ */
+export function hasAccountLimit(b: DescriptorFacts): boolean {
+  try { return derive(b).has("limits"); } catch { return false; }
+}
+
+/**
+ * A backend's `sources.usage` (contract 2.0) as the registry's probe, or null when the backend
+ * lists no `{source:true}` usage provider or has no such slot. claude is not asked here — its
+ * `{screen:"usage-probe"}` is `UsageChecker`, adapted by `claudeReading()` in `readings()`.
+ * `windows()` answering null ⇒ absent; an empty list ⇒ no reading sent (`vetReading` drops a
+ * reading with nothing in it). Identity stays the source's: the registry refuses `"claude"`.
+ */
+export function backendUsageProbe(b: BackendDescriptor): UsageProbeDef | null {
+  let usage;
+  try {
+    if (!derive(b).askSource("usage")) return null;
+    usage = b.sources?.usage;
+  } catch { return null; }
+  if (!usage || typeof usage.windows !== "function") return null;
+  const src = usage;
+  return {
+    source: src.source, label: src.label, backend: b.id,
+    ...(src.everyMs != null ? { everyMs: src.everyMs } : {}),
+    probe: async () => {
+      const windows = await src.windows();
+      return windows == null ? null : { source: src.source, label: src.label, checkedAt: Date.now(), windows };
+    },
+  };
+}
+
+/**
+ * Keep one registered probe per backend whose `sources.usage` answers — registered when the
+ * backend appears (its plugin switched on), unregistered when it leaves (switched off, the
+ * channel's owner gone). Idempotent: call it on every `onBackendsChanged`. Registered as
+ * `yields`: a probe already holding the same source id for the same backend is that backend's
+ * reading, never doubled (and one registered later takes over). A registration the
+ * registry refuses (a taken or malformed id, `"claude"`) is logged once and skipped, never fatal.
+ */
+export function syncBackendUsage(reg: Pick<UsageSourceRegistry, "register">, backends: readonly BackendDescriptor[], held: Map<string, { usage: unknown; off: () => void }>, log?: (m: string) => void): void {
+  const want = new Map<string, BackendDescriptor>();
+  for (const b of backends) {
+    let usage: unknown;
+    try { usage = backendUsageProbe(b) ? b.sources?.usage : null; } catch { usage = null; }
+    if (usage) want.set(b.id, b);
+  }
+  for (const [id, h] of [...held]) {
+    const b = want.get(id);
+    let same = false;
+    try { same = !!b && b.sources?.usage === h.usage; } catch { same = false; }
+    if (!same) { try { h.off(); } catch { /* already gone */ } held.delete(id); }
+  }
+  for (const [id, b] of want) {
+    if (held.has(id)) continue;
+    const def = backendUsageProbe(b);
+    if (!def) continue;
+    try {
+      const off = reg.register(def, { yields: true });
+      held.set(id, { usage: b.sources?.usage, off });
+    } catch (e) {
+      log?.(`backend ${id}: its usage source was not registered — ${(e instanceof Error ? e.message : String(e)).slice(0, 200)}`);
+    }
+  }
+}
 
 /** The probe seam — `PluginUsageProbe`, the shape `api.usageProbe` takes. */
 export type UsageProbeDef = PluginUsageProbe;
@@ -155,6 +229,8 @@ const sameReading = (a: UsageReading | null, b: UsageReading | null): boolean =>
 export class UsageSourceRegistry {
   private readonly states = new Map<UsageSourceId, SourceState>();
   private readonly logs = new Map<UsageSourceId, UsageSourceLogLike>();
+  /** Sources held by a backend's own `sources.usage` — they give way to a probe for the same backend. */
+  private readonly yielding = new Set<UsageSourceId>();
   private polling = false;
   private readonly now: () => number;
   private readonly ttlMs: number;
@@ -181,11 +257,20 @@ export class UsageSourceRegistry {
    * is core's), no label, no probe function. Re-offers the source's last kept
    * row (`seed`) and arms its poll when polling is on. Returns an unregister.
    */
-  register(def: UsageProbeDef): () => void {
+  register(def: UsageProbeDef, opts?: { yields?: boolean }): () => void {
     if (!def || typeof def !== "object") throw new Error("usageProbe needs a definition");
     if (!isUsageSourceId(def.source)) throw new Error(`usage source id ${JSON.stringify(def.source)} is not short lowercase [a-z0-9:_-]`);
     if (def.source === "claude") throw new Error("usage source \"claude\" is core's own reading");
-    if (this.states.has(def.source)) throw new Error(`usage source "${def.source}" is already registered`);
+    // One account, one reading: a backend's own `sources.usage` (`yields`) naming a source another
+    // probe already registered FOR THAT BACKEND is that reading — not a second one; and such a probe
+    // registered later replaces the backend's (Copilot: the copilot-usage extension's "copilot").
+    const held = this.states.get(def.source);
+    if (held) {
+      const sameBackend = !!def.backend && held.def.backend === def.backend;
+      if (sameBackend && opts?.yields) return () => {};
+      if (sameBackend && this.yielding.has(def.source)) this.unregister(def.source, held);
+      else throw new Error(`usage source "${def.source}" is already registered`);
+    }
     if (!shortStr(def.label, 24)) throw new Error(`usage source "${def.source}" needs a label of 1-24 characters`);
     if (typeof def.probe !== "function") throw new Error(`usage source "${def.source}" needs a probe() function`);
     const asked = Number(def.everyMs);
@@ -194,6 +279,7 @@ export class UsageSourceRegistry {
       reading: null, inflight: null, failedAt: 0, emptyAt: 0, warned: false, timer: null,
     };
     this.states.set(def.source, st);
+    if (opts?.yields) this.yielding.add(def.source); else this.yielding.delete(def.source);
     const row = this.logFor(def.source, false)?.last();
     if (row) this.seed(def.source, row);
     if (this.polling) this.arm(st);
@@ -204,6 +290,7 @@ export class UsageSourceRegistry {
     if (this.states.get(source) !== st) return;
     this.disarm(st);
     this.states.delete(source);
+    this.yielding.delete(source);
     if (st.reading) this.opts.onUpdate?.(source, null);
   }
 
@@ -345,6 +432,13 @@ export class UsageSourceRegistry {
  *  tick both carry the whole list, and the phone's last write wins. */
 export function createUsageSources(root: string, claude: () => UsageInfo, broadcast: (msg: HostMessage) => void): UsageSourceRegistry & { publish(): void } {
   const publish = () => broadcast({ t: "usage.status", usage: claude(), readings: reg.readings() });
-  const reg = new UsageSourceRegistry({ claude, onUpdate: () => publish(), openLog: sourceLogOpener(root), ttlMs: USAGE_POLL_MS, log: (m) => console.log(`${logTag} ${m}`) });
+  const log = (m: string) => console.log(`${logTag} ${m}`);
+  const reg = new UsageSourceRegistry({ claude, onUpdate: () => publish(), openLog: sourceLogOpener(root), ttlMs: USAGE_POLL_MS, log });
+  // Every backend's own `sources.usage` (contract 2.0) beside `api.usageProbe`'s: the same
+  // registry, one probe per backend, following the backend list.
+  const held = new Map<string, { usage: unknown; off: () => void }>();
+  const sync = () => syncBackendUsage(reg, BACKENDS, held, log);
+  sync();
+  onBackendsChanged(sync);
   return Object.assign(reg, { publish });
 }

@@ -117,7 +117,7 @@ export function SecretSheet({ repos, onClose }: Props) {
                 <option key={t.id} value={t.id}>{t.label} · {t.mode}</option>
               ))}
             </select>
-            <Hint tone="mono">
+            <Hint>
               → {target?.path ?? `~/.config/${BRAND.configDirName}/.env`}
               {target?.hotReload || targetId === "env" ? " · applied live, no restart" : ""}
             </Hint>

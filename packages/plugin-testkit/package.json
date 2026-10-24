@@ -1,0 +1,16 @@
+{
+  "name": "@waterplane/plugin-testkit",
+  "version": "0.1.0",
+  "description": "A faithful fake of the waterplane HostPluginApi and a conformance suite for backend plugins (plain ESM, no build).",
+  "private": true,
+  "type": "module",
+  "main": "./index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./fakeapi": "./fakeapi.mjs",
+    "./checks": "./checks.mjs"
+  },
+  "engines": { "node": ">=20" },
+  "scripts": { "test": "node --test" },
+  "license": "MIT"
+}

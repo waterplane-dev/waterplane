@@ -17,6 +17,7 @@ import { rmSync } from "node:fs";
 import type { ClosedBy, SessionInfo, SessionShell, SessionShellDetail } from "@waterplane/shared";
 import { ptySize, SCREENLOG_MAX_LINES, sessionWall } from "@waterplane/shared";
 import { namesStoreReader } from "../backends/index.js";
+import { trustRule } from "../backends/derive.js";
 import { readCliRecord } from "../agents.js";
 import { renderCapture, renderCells, type RenderRow } from "../render.js";
 import { foregroundWrapperPids, killShellGroup, readPsTable, readPsTableAsync, readShellDetail, readShellList, shellsUnder, type PsRow } from "../shells.js";
@@ -326,10 +327,13 @@ export function autoFireBlocker(core: SessionCore, id: string, quietMs: number):
   const wall = sessionWall({
     limitBlocked: s.info.limit?.blocked,
     awaitingInput: s.info.awaitingInput,
-    promptKind: s.info.prompt?.kind,   // trust is fine — feed() accepts it
+    promptKind: s.info.prompt?.kind,   // claude's trust box is fine — delivery accepts it
   });
   if (wall === "limit") return "the session is blocked on a usage limit";  // the item would bounce
   if (wall === "awaitingAnswer") return "the session is waiting for an answer";
+  // …and ONLY claude's (`derive.ts`'s `trustRule`): another CLI's trust box is a person's call,
+  // never walked into by auto-fire (delivery would refuse it anyway, but nothing should try).
+  if (s.info.prompt?.kind === "trust") { const t = trustRule(s.backend); if (!t.autoAccept) return t.refusal; }
   // Hook-driven: the Stop hook is the authoritative "turn finished, at the
   // prompt, ready for input" signal — no silence guessing, no fixed threshold,
   // and it never reads a mid-task pause (long bash, thinking) as ready.
@@ -415,7 +419,7 @@ export function detach(core: SessionCore, id: string): boolean {
   s.detaching = true; // suppress the onExit "closed" (this isn't a death)
   core.stopClaudeIdWatch(s);
   if (!s.info.claudeSessionId) core.adoptClaudeId(s, core.detectClaudeId(s));
-  if (!s.info.backendSessionId && namesStoreReader(s.backend.caps)) {
+  if (!s.info.backendSessionId && namesStoreReader(s.backend)) {
     core.adoptBackendId(s, core.detectBackendId(s));
   }
   try { execFileSync("tmux", ["-L", TMUX_SERVER, "detach-client", "-s", tmuxName(id)], { stdio: "ignore" }); } catch { /* no client */ }

@@ -132,3 +132,11 @@ test("a typed slash command is never a row's Started or Latest", () => {
   assert.equal(mixed.info.lastPrompt, "fix the flaky test");
   rmSync(root, { recursive: true, force: true });
 });
+
+test("the context spark at close rides on the row, and is absent when the session had none", () => {
+  const { r, root } = roster();
+  const spark = { pts: [1, 2, 3] };
+  assert.deepEqual(r.closedRowOf(session({ info: { contextSpark: spark } }), false).contextSpark, spark);
+  assert.equal("contextSpark" in r.closedRowOf(session(), false), false);
+  rmSync(root, { recursive: true, force: true });
+});

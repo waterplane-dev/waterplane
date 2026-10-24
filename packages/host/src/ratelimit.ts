@@ -12,6 +12,8 @@
  * addresses cannot grow it for ever.
  */
 import type { IncomingMessage } from "node:http";
+import { isIP } from "node:net";
+import { isProxied, peerKind } from "./net.js";
 
 export interface RateLimitOpts {
   /** Most requests one key may make in a burst. */
@@ -73,7 +75,16 @@ export class RateLimiter {
 }
 
 /** The key a request is limited by: its remote address, IPv4-mapped prefix
- *  stripped so one peer is one key whichever family the socket reports. */
+ *  stripped so one peer is one key whichever family the socket reports.
+ *  Behind `tailscale serve` every caller's socket is 127.0.0.1, which would put
+ *  everyone in ONE bucket (one attacker starves the rest). serve SETS (never
+ *  appends) a single `X-Forwarded-For` to the real source, so when the socket is
+ *  loopback AND a proxy header is present, key on that value, if it is an IP.
+ *  A header on a non-loopback socket is client-supplied and never trusted. */
 export function rateKey(req: IncomingMessage): string {
-  return (req.socket.remoteAddress ?? "unknown").replace(/^::ffff:/, "");
+  const sock = (req.socket.remoteAddress ?? "unknown").replace(/^::ffff:/, "");
+  if (peerKind(sock) !== "loopback" || !isProxied(req.headers ?? {})) return sock;
+  const raw = req.headers["x-forwarded-for"];
+  const last = (Array.isArray(raw) ? raw.join(",") : raw ?? "").split(",").pop()?.trim().replace(/^::ffff:/, "") ?? "";
+  return last && isIP(last) ? last : sock;
 }

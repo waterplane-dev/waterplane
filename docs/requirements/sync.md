@@ -18,3 +18,8 @@ A running git push or pull shows a busy indicator on the repo's git button.
 The phone's sync button pushes work while the user is away from the computer.
 - asked: 2026-10-20
 
+### R-sync-005 · shipped
+The tab order is the same on every device, on by default; when data saver or power saving comes on, the user is offered to stop sharing it.
+- asked: 2026-10-21, 2026-10-21
+- shipped: 771b06a2, 4f7ffe5d
+

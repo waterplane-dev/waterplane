@@ -15,17 +15,17 @@ import { join } from "node:path";
 import { BRAND, envName } from "@waterplane/shared";
 
 process.env[envName("CONFIG_DIR")] = mkdtempSync(join(tmpdir(), `${BRAND.slug}-shell-`));
-const { shellBackend, ensureBrowserShim, browserShimText, BROWSER_SHIM, backendInfos, resolveBackend } = await import("../dist/backends/index.js");
+const { shellBackend, ensureBrowserShim, browserShimText, BROWSER_SHIM, backendInfos, derive, resolveBackend } = await import("../dist/backends/index.js");
 const { pluginDescriptor } = await import("../dist/plugins/pluginapi.js");
 const { addBrowserLink, setScreenLinks, armLinksCheck, BROWSER_KEEP_MS, cleanLinkUrl } = await import("../dist/sessions/links.js");
 const { shellOpenRefusal, SHELL_DROP_ENV } = await import("../dist/backends/index.js");
-const { droppedEnvNames, tmuxEnvPrefix } = await import("../dist/sessions/tmux.js");
+const { droppedEnvNames, paneUnsetNames, tmuxEnvPrefix } = await import("../dist/sessions/tmux.js");
 const { recordPrompt } = await import("../dist/sessions/record.js");
 
 const PORT = 8771;
 
 test("argv is a login shell; env carries BROWSER, the session id and the hook port", () => {
-  const plan = shellBackend.launchArgs({ launch: {}, hookPort: PORT, hostSessionId: "ab12cd34", cwd: "/tmp" });
+  const plan = shellBackend.prepare({ launch: {}, hookPort: PORT, hostSessionId: "ab12cd34", cwd: "/tmp" });
   assert.deepEqual(plan.args, ["-l"]);
   assert.deepEqual(Object.keys(plan.env).sort(), ["BROWSER", envName("HOOK_PORT"), envName("SESSION")].sort());
   assert.equal(plan.env[envName("SESSION")], "ab12cd34");
@@ -55,18 +55,21 @@ test("bin: the knob, else $SHELL, else /bin/sh", () => {
 
 test("every resume mode is refused in words", () => {
   for (const resumeMode of ["continue", "pick", "fork"]) {
-    assert.throws(() => shellBackend.launchArgs({ launch: {}, hookPort: PORT, resumeMode }), /A shell has no conversation to continue/);
+    assert.throws(() => shellBackend.prepare({ launch: {}, hookPort: PORT, resumeMode }), /A shell has no conversation to continue/);
   }
 });
 
 test("caps: nothing claude-shaped is armed, and there are no turns", () => {
   const c = shellBackend.caps;
+  const d = derive(shellBackend);
   assert.equal(c.turns, false);
-  assert.equal(c.hooks, "none");
-  assert.equal(c.promptBoxes, false);
-  assert.equal(c.transcript, "none");
+  assert.equal(d.hooksInBand, false);
+  assert.equal(d.screen("dialogs"), null);
+  assert.equal(d.store("transcript"), null);
   assert.equal(c.slash, "none");
-  for (const k of ["contextMeter", "usageLimits", "usageProbe", "asking", "remoteControl", "effort"]) assert.equal(c[k], false, k);
+  for (const f of ["turns", "context", "limits", "usage", "asking", "questions", "plan"]) assert.equal(d.has(f), false, f);
+  assert.equal(c.remoteControl, false);
+  assert.equal(c.effort, undefined);
   assert.deepEqual([...c.permissionModes], []);
   assert.equal(shellBackend.healthScope, false);
   assert.equal(shellBackend.delivery.composerCursorRe, null);
@@ -85,9 +88,9 @@ test("backendInfos: kind shell for the shell, absent for every agent", () => {
 });
 
 test("a plugin backend that says nothing about turns HAS turns", () => {
-  const def = { id: "stubcli", label: "Stub", bin: () => "stub", launchArgs: () => ({ args: [] }),
-    delivery: { submitKey: "\r", textThenSubmitDelayMs: 0 }, caps: { hooks: "none", promptBoxes: false, transcript: "none" },
-    models: async () => ({ aliases: [], ids: [] }) };
+  const def = { id: "stubcli", label: "Stub", bin: () => "stub", prepare: async () => ({ args: [], instructionsVia: "none", askRulesVia: "none" }),
+    delivery: { submitKey: "\r", textThenSubmitDelayMs: 0 }, caps: {}, facts: {},
+    measured: { versions: [], version: async () => null }, models: async () => ({ aliases: [], ids: [] }) };
   assert.equal(pluginDescriptor(def, "stub").caps.turns, true);
   assert.equal(pluginDescriptor({ ...def, caps: { ...def.caps, turns: false } }, "stub").caps.turns, false);
 });
@@ -163,14 +166,23 @@ test("a job never opens a shell; a person's tap does", () => {
 });
 
 test("the shell drops the daemon's secrets from the pane's env; claude drops nothing", () => {
-  const plan = shellBackend.launchArgs({ launch: {}, hookPort: PORT, hostSessionId: "ab12cd34", cwd: "/tmp" });
+  const plan = shellBackend.prepare({ launch: {}, hookPort: PORT, hostSessionId: "ab12cd34", cwd: "/tmp" });
   assert.deepEqual(plan.dropEnv, SHELL_DROP_ENV);
   const names = ["GEMINI_API_KEY", envName("SIDECAR_API_KEY"), envName("CLAUDE_ENDPOINT_KEY_FILE"), envName("CLAUDE_ENDPOINT_KEYCHAIN"), "PATH", "HOME", "LANG", "_API_KEY"];
   assert.deepEqual(droppedEnvNames(plan.dropEnv, names, plan.env), ["GEMINI_API_KEY", envName("CLAUDE_ENDPOINT_KEYCHAIN"), envName("CLAUDE_ENDPOINT_KEY_FILE"), envName("SIDECAR_API_KEY")].sort());
   assert.deepEqual(droppedEnvNames(["*_API_KEY"], ["X_API_KEY"], { X_API_KEY: "mine" }), [], "a name the launch sets itself stays");
   assert.deepEqual(tmuxEnvPrefix({ A: "1" }, ["GEMINI_API_KEY"]), ["/usr/bin/env", "-u", "GEMINI_API_KEY", "A=1"]);
   assert.deepEqual(tmuxEnvPrefix({}, []), []);
-  assert.equal(resolveBackend("claude").launchArgs({ launch: {}, hookPort: PORT, hostSessionId: "ab12cd34", cwd: "/tmp" }).dropEnv, undefined);
+  assert.deepEqual(tmuxEnvPrefix({ "-u": "PATH", "": "x", A: "1" }), ["/usr/bin/env", "A=1"], "a key that is not a name never becomes an option to env");
+  assert.deepEqual(tmuxEnvPrefix({ "-u": "PATH" }), [], "nothing left ⇒ no prefix");
+  assert.equal(resolveBackend("claude").prepare({ launch: {}, hookPort: PORT, hostSessionId: "ab12cd34", cwd: "/tmp" }).dropEnv, undefined);
+});
+
+test("every pane runs without TMUX, so a bare `tmux kill-server` in it cannot reach this host's server", () => {
+  assert.deepEqual(paneUnsetNames(undefined, ["TMUX", "TMUX_PANE", "PATH"]), ["TMUX"], "claude drops nothing else; TMUX_PANE stays for the vault");
+  assert.deepEqual(paneUnsetNames(["*_API_KEY"], ["GEMINI_API_KEY", "TMUX"]), ["TMUX", "GEMINI_API_KEY"]);
+  assert.deepEqual(paneUnsetNames(["TMUX"], []), ["TMUX"], "deduped");
+  assert.deepEqual(tmuxEnvPrefix({}, paneUnsetNames(undefined, [])), ["/usr/bin/env", "-u", "TMUX"], "an empty spawnEnv still gets the prefix");
 });
 
 test("a shell's commands never become prompt history", () => {

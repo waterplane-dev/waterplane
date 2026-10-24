@@ -12,6 +12,7 @@ import { fmtUsd, type AgentRun } from "@waterplane/shared";
 import { fmtTokens } from "./kit/chart/chartFmt";
 import { agentTop } from "./contextPlot/cplotAgentTop";
 import { Hint } from "./kit/Hint";
+import { Button } from "./kit/Button";
 
 const TOP_N = 5;
 
@@ -71,9 +72,9 @@ export function AgentWarnLine({ value, onChange }: { value: number; onChange: (t
       <div className="ts-filter agent-warn-row" role="group" aria-label="warn when an agent passes">
         <span className="ctx-stackpick-lab">warn when an agent passes</span>
         {AGENT_WARN_CHOICES.map((t) => (
-          <button key={t} className={`key${t === value ? " active" : ""}`} aria-pressed={t === value} onClick={() => onChange(t)}>
+          <Button className={t === value ? "active" : undefined} key={t} aria-pressed={t === value} onClick={() => onChange(t)}>
             {fmtTokens(t)}
-          </button>
+          </Button>
         ))}
       </div>
       <div className="ctx-cost-note">

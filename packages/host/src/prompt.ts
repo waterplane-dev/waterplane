@@ -53,6 +53,13 @@ const GAP_MAX = 8;
 const QUESTION_LINES = 4;
 const QUESTION_MAX = 300;
 
+function boundedQuestion(text: string): { text: string; truncated: boolean } {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  return normalized.length > QUESTION_MAX
+    ? { text: normalized.slice(0, QUESTION_MAX), truncated: true }
+    : { text: normalized, truncated: false };
+}
+
 const FOOTER_RE = /enter to (confirm|select)|esc to (cancel|exit|interrupt)/i;
 /**
  * The footer of an interactive DIALOG specifically — "esc to interrupt" (the
@@ -410,10 +417,16 @@ function navBoxOf(lines: string[]): NavBoxRead | null {
     para.unshift(t);
   }
   if (para.length && paras.length < NAV_QUESTION_PARAS) paras.push(para.join(" "));
-  const question = (paras.find((p) => p.includes("?")) ?? paras[0] ?? "").replace(/\s+/g, " ").trim().slice(0, QUESTION_MAX);
+  const question = boundedQuestion(paras.find((p) => p.includes("?")) ?? paras[0] ?? "");
   const options = rows.map((r, k) => ({ index: k + 1, label: r.label }));
   return {
-    prompt: { kind: kindOf(question, options), question: question || PLACEHOLDER_QUESTION, options, nav: true },
+    prompt: {
+      kind: kindOf(question.text, options),
+      question: question.text || PLACEHOLDER_QUESTION,
+      options,
+      nav: true,
+      ...(question.truncated ? { questionTruncated: true as const } : {}),
+    },
     cursor: rows.findIndex((r) => r.cursor) + 1,
   };
 }
@@ -566,16 +579,17 @@ export function detectPrompt(rawTail: string, opts: DetectOpts = {}): DetectedPr
   if (options.some((o) => !o.label || o.label.length > MAX_LABEL)) return null;
   if (options.some((o, i) => o.index !== first + i)) return null;
 
-  const questionLine = questionParts.join(" ").replace(/\s+/g, " ").trim().slice(0, QUESTION_MAX);
-  const kind = kindOf(questionLine, options);
+  const question = boundedQuestion(questionParts.join(" "));
+  const kind = kindOf(question.text, options);
 
   return {
     kind,
-    question: questionLine || PLACEHOLDER_QUESTION,
+    question: question.text || PLACEHOLDER_QUESTION,
     // Sliced from the FRONT: on a truncated box the rows that survived are the
     // ones nearest the footer, and dropping them would leave the cap holding
     // options the user cannot see either.
     options: options.slice(0, 8),
+    ...(question.truncated ? { questionTruncated: true as const } : {}),
     ...(multi ? { multi: true } : {}),
     ...(first > 1 ? { truncated: true } : {}),
   };

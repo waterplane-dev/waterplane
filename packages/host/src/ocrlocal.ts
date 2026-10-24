@@ -144,7 +144,10 @@ async function windowsOcrReachable(platform: string): Promise<boolean> {
 }
 
 /** A string literal PowerShell takes verbatim: single quotes, doubled inside. */
-export function psQuote(s: string): string { return `'${s.replace(/'/g, "''")}'`; }
+export function psQuote(s: string): string {
+  // PowerShell reads U+2018 U+2019 U+201A U+201B as single quotes too.
+  return `'${s.replace(/['\u2018\u2019\u201A\u201B]/g, (c) => c + c)}'`;
+}
 
 /**
  * The Windows reader, as one PowerShell 5.1 script (`-EncodedCommand`, so no

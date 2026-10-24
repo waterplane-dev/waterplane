@@ -365,22 +365,24 @@ stayed inside one — a change that needed `core/`, `sdk/` or `App.tsx` says whi
 
 `kit/` holds a component for each pattern the screens repeated by hand: `Button` (`.key`, with
 `primary` and `danger`), `Row`/`RowTitle`/`RowSub`, `Hint` (`form-hint`), `Tag`, and in
-`SettingsKit.tsx` `SetNote`/`SetWarn`. The owner's rules ride on the props (one `primary` per sheet,
+`SettingsKit.tsx` `SetNote`/`SetWarn`/`SetLine` (the uncounted `.set-row` layout line). The owner's rules ride on the props (one `primary` per sheet,
 `danger` only for destructive, mono only for keys and commands), so a rule is a prop instead of a
 class string to remember. Class composition is in node-tested `keyClass.ts`, `rowClass.ts`,
 `hintClass.ts`.
 
-The migration was render-neutral on purpose: the harness (`scripts/ui/screens.mjs` +
-`screendiff.mjs`, [testing-and-ops.md](testing-and-ops.md#the-render-gate-for-ui-refactors-scriptsuiscreensmjs-screendiffmjs)) compares the DOM and the pixels before and after, so every
-component reproduces the hand-written element exactly. That is why `className` is written FIRST
-(React sets attributes in props order, and `outerHTML` shows it), why there is no `type` default
-(a site that wrote none gets none), and why an EMPTY `className`
-keeps its space: ~70 sites rendered `"key "` from `` `key ${on ? "active" : ""}` ``. Dropping that
-space is a render change and waits for a package that is allowed to change renders. A site with a
-DOM attribute before `className` stays raw, with a reason in a comment. `Row` takes no `className` at all: `kind` is the only way to its class, so nothing can replace `row`.
+The first migration was render-neutral on purpose: the harness (`scripts/ui/screens.mjs` +
+`screendiff.mjs`, [testing-and-ops.md](testing-and-ops.md#the-render-gate-for-ui-refactors-scriptsuiscreensmjs-screendiffmjs)) compares the DOM and the pixels before and after. That is why `className` is written FIRST
+(React sets attributes in props order, and `outerHTML` shows it) and why there is no `type` default
+(a site that wrote none gets none). The follow-up (docs/plans/ui-kit-followups.md) allowed DOM-only
+changes with identical pixels. `Button` now drops an empty `className` (`` `key ${on ? "active" : ""}` ``
+renders `"key"`, not `"key "`), sites that wrote `type`/`data-hint` before the class moved onto it with
+`class` serialised first, and `ConfirmButton` renders through `Button` whenever its class starts with
+`key`. `Hint`, `Tag`, `RowTitle`/`RowSub` and `SetNote` skip an empty `className` the same way
+(`hintClass`, `tagClass`, `rowPartClass`, `noteClass`). A site the kit cannot express stays raw, with a
+reason in a comment. `Row` takes no `className` at all: `kind` is the only way to its class, so nothing can replace `row`.
 
-Each pattern has a ratchet in `tools/webshape.test.mjs` (`MAX_RAW_KEY_BUTTONS`, `_EXT`,
-`MAX_RAW_ROW_PARTS`, `MAX_RAW_SET_PARTS`, `MAX_RAW_FORM_HINT`, `MAX_RAW_TAG`): the count of raw
+Each pattern has a ratchet in `tools/webshape.test.mjs` (`MAX_RAW_KEY_BUTTONS`, `_EXT`, `_VSCODE`,
+`MAX_RAW_ROW_PARTS`, `_EXT`, `MAX_RAW_SET_PARTS`, `MAX_RAW_FORM_HINT`, `MAX_RAW_TAG`): the count of raw
 copies may only go down, and the test prints the new value to lock in when it does.
 
 ## Extension points (in-repo extensions)

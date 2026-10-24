@@ -383,7 +383,7 @@ function StoreRows({ rows, busy, onClear }: { rows: StoreUse[]; busy: boolean; o
           {r.cant ? (
             <Unavailable className="form-hint" cants={[{ label: `clear ${r.label}`, reason: r.cant }]} />
           ) : r.count > 0 ? (
-            <ConfirmButton className={`key ${r.kind === "keep" ? "danger" : ""}`} confirm={clearConfirmText(r)}
+            <ConfirmButton className={r.kind === "keep" ? "key danger" : "key"} confirm={clearConfirmText(r)}
               disabled={busy} onConfirm={() => onClear(r)}>
               <Trash2 size={13} /> {clearButtonText(r)}
             </ConfirmButton>

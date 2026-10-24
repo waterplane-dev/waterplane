@@ -35,7 +35,7 @@ function Chips<T>({ label, opts, value, show, onPick, radio }: { radio?: boolean
         </div>
       ) : <div style={CHIPS}>
         {opts.map((o) => (
-          <button key={String(show(o))} className={`key${o === value ? " active" : ""}`} style={SMALL} aria-pressed={o === value} onClick={() => onPick(o)}>{show(o)}</button>
+          <Button key={String(show(o))} className={o === value ? "active" : undefined} style={SMALL} aria-pressed={o === value} onClick={() => onPick(o)}>{show(o)}</Button>
         ))}
       </div>}
     </div>
@@ -45,9 +45,9 @@ function Chips<T>({ label, opts, value, show, onPick, radio }: { radio?: boolean
 function Toggle({ label, on, hint, onFlip }: { label: string; on: boolean; hint: string; onFlip(): void }) {
   return (
     <li className="check-row">
-      <button className={`key${on ? " active" : ""}`} style={{ alignSelf: "flex-start", ...SMALL }} aria-pressed={on} onClick={onFlip}>
+      <Button className={on ? "active" : undefined} style={{ alignSelf: "flex-start", ...SMALL }} aria-pressed={on} onClick={onFlip}>
         {label}: {on ? "on" : "off"}
-      </button>
+      </Button>
       <Hint style={{ padding: 0 }}>{hint}</Hint>
     </li>
   );
@@ -61,7 +61,7 @@ function SourcePicker({ c }: { c: QualityChoice }) {
   const displays = p.k === "ok" ? p.r.displays : [];
   const pick = (source: DesktopSource) => setChoice({ source });
   const row = (key: string, on: boolean, icon: ReactNode, text: string, src: DesktopSource) => (
-    <button key={key} className={`key${on ? " active" : ""}`} style={{ ...SMALL, textAlign: "left" }} aria-pressed={on} onClick={() => pick(src)}>{icon} {text}</button>
+    <Button key={key} className={on ? "active" : undefined} style={{ ...SMALL, textAlign: "left" }} aria-pressed={on} onClick={() => pick(src)}>{icon} {text}</Button>
   );
   return (
     <div>

@@ -21,6 +21,7 @@
 import { spawn } from "node:child_process";
 import { openSync, readSync, closeSync, statSync, readFileSync } from "node:fs";
 import type { CaptureViewport } from "@waterplane/shared";
+import { magickEnv } from "../thumbs.js";
 
 /** A pathological source must not wedge a converter for ever. */
 const TOOL_TIMEOUT_MS = 20_000;
@@ -37,12 +38,12 @@ export const BLANK_SD = 0.004;
 
 interface Spawned { code: number | null; out: string; err: string }
 
-function run(cmd: string, args: string[]): Promise<Spawned | null> {
+function run(cmd: string, args: string[], env?: Record<string, string> | null): Promise<Spawned | null> {
   return new Promise((resolve) => {
     let done = false;
     const finish = (v: Spawned | null) => { if (!done) { done = true; resolve(v); } };
     try {
-      const p = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"] });
+      const p = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"], ...(env ? { env: { ...process.env, ...env } } : {}) });
       let out = "", err = "";
       p.stdout.on("data", (d) => { out += d.toString(); });
       p.stderr.on("data", (d) => { err += d.toString(); });
@@ -152,8 +153,11 @@ export function pngSize(path: string): CaptureViewport | null {
 export async function blankVariance(path: string): Promise<number | null> {
   const t = await probePixelTools();
   if (!t.identify) return null;
+  // No policed environment: absent, never an unpoliced identify (`thumbs.ts`).
+  const env = magickEnv();
+  if (!env) return null;
   const [bin, ...pre] = t.identify;
-  const r = await run(bin, [...pre, "-format", "%[fx:standard_deviation]", path]);
+  const r = await run(bin, [...pre, "-format", "%[fx:standard_deviation]", `png:${path}`], env);
   if (!r || r.code !== 0) return null;
   const n = Number(r.out.trim().split(/\s+/)[0]);
   return Number.isFinite(n) ? n : null;

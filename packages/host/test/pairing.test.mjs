@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PAIR_TTL_MS, formatPairCode } from "@waterplane/shared";
 import {
-  PairStore, PAIR_MAX_OUTSTANDING, redeemPair, redeemLimit, invalidPage, landingPage, latestApk, handlePairPage, apkSource, releaseApkUrl,
+  PairStore, PAIR_MAX_OUTSTANDING, redeemPair, redeemLimit, invalidPage, landingPage, latestApk, handlePairPage, apkSource, releaseApkUrl, handlePairAuthed,
 } from "../dist/pair.js";
 import { AuthManager } from "../dist/auth.js";
 
@@ -285,4 +285,22 @@ test("the landing page names the web route as a URL in words, not only as a butt
   const plain = landingPage("ABCDEFGH", { name: "h", base: "http://100.64.1.2:8770", httpsUrl: null }, null);
   assert.match(plain, /<code>http:\/\/100\.64\.1\.2:8770\/<\/code>/);
   assert.doesNotMatch(plain, /home screen to keep it/, "plain http cannot install");
+});
+
+test("L7: minting a pairing code is the trusted path's alone (loopback / Tailscale), never a LAN token", async () => {
+  const auth = new AuthManager(root());
+  auth.setPassword("pw-for-mint-test");
+  const d = { ...deps(root(), auth, new PairStore()), port: 8770, apk: () => null };
+  const post = () => ({ url: "/api/pair/mint", method: "POST", headers: {}, socket: { remoteAddress: "192.168.1.9" }, on() {}, [Symbol.asyncIterator]: async function* () { yield Buffer.from("{}"); } });
+  for (const kind of ["lan", "public", "unknown"]) {
+    const res = fakeRes();
+    assert.equal(await handlePairAuthed(post(), res, null, d, kind), true);
+    assert.equal(res.status, 403, kind);
+    assert.match(res.body, /Tailscale/, "refused in words");
+  }
+  for (const kind of ["loopback", "tailscale"]) {
+    const res = fakeRes();
+    await handlePairAuthed(post(), res, null, d, kind);
+    assert.equal(res.status, 200, kind);
+  }
 });

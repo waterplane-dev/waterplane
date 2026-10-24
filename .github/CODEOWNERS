@@ -24,6 +24,7 @@
 /packages/web/src/features/authGate/ @johanneshoh
 /packages/web/src/features/sentLog/ @johanneshoh
 /packages/web/src/features/cliHealth/ @johanneshoh
+/packages/web/src/features/cliRestart/ @johanneshoh
 /packages/web/src/features/tokens/ @johanneshoh
 /packages/web/src/features/oracle/ @johanneshoh
 /packages/web/src/features/pull/ @johanneshoh
@@ -61,3 +62,4 @@
 # In-repo extensions.
 /packages/extensions/token-stats/ @johanneshoh
 /packages/extensions/requirements/ @johanneshoh
+/packages/extensions/ocr/ @johanneshoh

@@ -20,11 +20,11 @@
  *            neither ignored nor tracked, so a secret can never land in history.
  */
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { BRAND } from "@waterplane/shared";
 import { configDir } from "./branddirs.js";
-import { contained } from "./paths.js";
+import { contained, containedReal } from "./paths.js";
 import { expandHome } from "./pathx.js";
 import { writeTextAtomic, writeTextAtomicKeepMode } from "./jsonstore.js";
 
@@ -242,6 +242,9 @@ export function setSecret(opts: SetSecretOpts): SecretResult {
   const full = inDir(opts.worktree, file);
   if (!full) return { ok: false, error: "path escapes repo" };
 
+  // A committed `.env -> ~/.ssh/config` would be read AND rewritten through the link.
+  try { if (lstatSync(full).isSymbolicLink()) return { ok: false, error: `${file} is a link, not a file` }; } catch { /* absent — created below */ }
+
   const { ignored, tracked } = gitChecks(opts.worktree, file);
   if (!ignored && tracked) {
     // Committed file → writing here would stage the secret for commit. Refuse.
@@ -255,14 +258,18 @@ export function setSecret(opts: SetSecretOpts): SecretResult {
     // Untracked & unignored → guarantee it can never be committed before writing.
     try {
       const gi = join(opts.worktree, ".gitignore");
+      // Refused BEFORE the read: a committed `.gitignore -> ~/.gitconfig` must not even be
+      // consulted (whether it already lists `.env` would be one bit about a file outside the repo).
+      if (containedReal(opts.worktree, ".gitignore") === null) return { ok: false, error: ".gitignore is a link out of the repo — refusing to read or write through it" };
       const cur = existsSync(gi) ? readFileSync(gi, "utf8") : "";
       const has = cur.split("\n").some((l) => l.trim() === file || l.trim() === "/" + file);
       if (!has) {
-        writeTextAtomicKeepMode(gi, (cur && !cur.endsWith("\n") ? cur + "\n" : cur) + file + "\n");
+        // `opts.worktree`: a committed `.gitignore -> ~/.gitconfig` is refused, not written through.
+        writeTextAtomicKeepMode(gi, (cur && !cur.endsWith("\n") ? cur + "\n" : cur) + file + "\n", opts.worktree);
         addedToGitignore = true;
       }
-    } catch {
-      return { ok: false, error: "could not update .gitignore to protect the secret — refusing to write" };
+    } catch (e) {
+      return { ok: false, error: `could not update .gitignore to protect the secret — refusing to write (${(e as Error).message})` };
     }
   }
 

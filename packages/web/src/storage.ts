@@ -116,7 +116,7 @@ export const KEY_SCOPE = {
   // synced — the settings document is per host
   snippets: "host", headerCmds: "host", fanoutPresets: "host", toolbar: "host", launch: "host",
   launchAsk: "host", spendWarn: "host", pad: "host", hiddenRepos: "host", enterSends: "host", dictateTerms: "host",
-  autoSend: "host", serialSessions: "host", confirmQueue: "host", confirmClose: "host", readerTools: "host", annKnobs: "host", annTools: "host", annPrompt: "device",
+  autoSend: "host", updatesAutoCheck: "host", serialSessions: "host", confirmQueue: "host", confirmClose: "host", readerTools: "host", annKnobs: "host", annTools: "host", annPrompt: "device",
   hints: "host", repoColors: "host", installAllow: "host", closeWhenDone: "host", localSessions: "host", agentWarn: "host", agentWindowWarn: "host", syncTs: "host",
   // identity and the host list itself; healthAxis is this screen's choice
   healthAxis: "device", deviceId: "device", deviceName: "device", hostBase: "device", hosts: "device", hostActive: "device",
@@ -155,8 +155,8 @@ export const KEY_SCOPE = {
   schedPctLeft: "device", schedLeadMin: "device", closeBy: "device", closeKeepStar: "device", collageGap: "device",
   collageLabels: "device", toastLog: "device", hostedAck: "device",
   // dismissals and the app's own update machinery
-  dismissInsecure: "device", dismissPhoneSetup: "device", codeFolderLater: "device", dismissedUpdate: "device", annHintHidden: "device",
-  stowed: "device", stowTold: "device", hostBoots: "device",
+  dismissInsecure: "device", dismissPhoneSetup: "device", codeFolderLater: "device", dismissedUpdate: "device", dismissedSelfUpdate: "host", updatesReceiptSeen: "host", annHintHidden: "device",
+  stowed: "device", stowTold: "device", toldNoticed: "device", hostBoots: "device",
   lastForcedReload: "device", webUpdateRecoverySeen: "device",
   webUpdateStaged: "host", webUpdateAuto: "host", webUpdateApply: "host", webUpdateApplyTries: "host",
   webUpdateSnooze: "host", routeLast: "host", routeResume: "host", headerViews: "host",

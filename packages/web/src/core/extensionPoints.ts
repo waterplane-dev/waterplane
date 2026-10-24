@@ -19,6 +19,8 @@ import {
 } from "./featureRun.ts";
 import { bindLedgerViews } from "../sdk/ledgers.ts";
 import { bindSecretFillers } from "../sdk/secretFillers.ts";
+import { bindImageTextFeatures, bindPluginList } from "../sdk/extensions.ts";
+import { pluginList } from "../features/plugins";
 import { bindMenuCatalog } from "../toolbar.ts";
 import type { FeatureManifest, LedgerViewDef, SecretFillContext } from "../sdk/types.ts";
 
@@ -107,3 +109,11 @@ bindLedgerViews(() => {
   }
   return views;
 });
+
+// `useExtensionEnabled`/`isExtensionEnabled` (sdk) read the host's plugin list through this binding:
+// sdk/ never imports a feature.
+bindPluginList(pluginList);
+
+// The annotator asks `sdk/extensions.ts`'s `useImageTextReader()`, never this module: importing the
+// registry from the annotator closes a cycle through `features/images`.
+bindImageTextFeatures(() => FEATURES);

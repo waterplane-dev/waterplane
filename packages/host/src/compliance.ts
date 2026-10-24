@@ -664,7 +664,8 @@ function ensureGitignore(worktree: string, entries: string[], exact = false): st
   const missing = entries.filter((e) => !have.has(norm(e)));
   if (!missing.length) return [];
   const block = `\n# ${BRAND.displayName} phone↔repo transport — do not commit\n` + missing.join("\n") + "\n";
-  writeTextAtomicKeepMode(gi, (cur && !cur.endsWith("\n") ? cur + "\n" : cur) + block);
+  // `worktree`: a committed `.gitignore -> ~/.gitconfig` is refused, not written through.
+  writeTextAtomicKeepMode(gi, (cur && !cur.endsWith("\n") ? cur + "\n" : cur) + block, worktree);
   return missing;
 }
 
@@ -692,7 +693,7 @@ export function fixRepoCompliance(target: RepoTarget, fixes: string[]): Complian
         // graft our conventions onto an existing file.
         notes.push("no CLAUDE.md — run `/init` first, then re-run this fix to add the outbox convention");
       } else if (!hasClaudeMdMarker(cur)) {
-        writeTextAtomicKeepMode(path, cur + (cur.endsWith("\n") ? "" : "\n") + "\n" + claudeMdBlock());
+        writeTextAtomicKeepMode(path, cur + (cur.endsWith("\n") ? "" : "\n") + "\n" + claudeMdBlock(), wt);
         applied.push("claude-md"); notes.push(`appended ${BRAND.displayName} conventions to CLAUDE.md`);
       } else {
         notes.push(`CLAUDE.md already has the ${BRAND.displayName} conventions section`);
@@ -758,7 +759,7 @@ export function fixRepoCompliance(target: RepoTarget, fixes: string[]): Complian
           notes.push(`${PROJECT_SETTINGS_REL}: ${r.error}`);
         } else {
           mkdirSync(dirname(path), { recursive: true });
-          writeTextAtomicKeepMode(path, r.text);
+          writeTextAtomicKeepMode(path, r.text, wt);
           applied.push("auto-compact");
           notes.push(`set "autoCompactWindow": "${value}" in ${PROJECT_SETTINGS_REL}`);
         }

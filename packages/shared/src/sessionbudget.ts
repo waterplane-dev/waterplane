@@ -18,12 +18,23 @@
  * reason, and `sessionBudgetHeld` is false for it. A wrong "over" stops work a
  * person asked for; a missing one costs only the cap not yet biting.
  *
+ * A backend that keeps no claude log (a plugin: Copilot, Codex, opencode) is
+ * judged from its OWN figures instead — `TokenSource.session(s)`, published
+ * as `SessionInfo.sourceSpend` and read through `sourceSpendSpark`. Tokens
+ * and dollars only where its CLI STATES them (`unstated` otherwise — nothing
+ * here prices another backend's tokens), and a percent never: the 5-hour and
+ * weekly windows are claude's account, which that session does not spend
+ * from (`notClaude`). A unit of its own (Copilot's AI credits) is not a budget
+ * unit — it is carried on the wire, never converted, never summed.
+ *
  * Pure, and the clock arrives as an argument. Calibration is the host's
  * (`host/src/sessionbudget.ts` feeds window costs in); both ends read the
  * result off `SessionInfo.budget`.
  */
 import type { ContextSpark, SessionInfo } from "./wire/session.js";
 import type { UsageInfo } from "./wire/telemetry.js";
+import type { SourceSessionSpend } from "./backendsources.js";
+import { sourceSpendProblems } from "./sourceshape.js";
 import { BUDGET_STALE_MS } from "./budget.js";
 import { weekUsdPerPct } from "./sessioncost.js";
 import { fmtUsd } from "./pricing.js";
@@ -47,7 +58,11 @@ export interface SessionBudget {
 }
 
 /** Why a verdict cannot say. Present iff `state === "unknown"`. */
-export type SessionBudgetUnknown = "noSpark" | "unpriced" | "noReading" | "stale" | "noCalibration" | "notRunning";
+export type SessionBudgetUnknown = "noSpark" | "unpriced" | "noReading" | "stale" | "noCalibration" | "notRunning"
+  /** A backend's own source did not state the spend in this unit (tokens, dollars). */
+  | "unstated"
+  /** A percent, on a session whose backend does not spend from claude's windows. */
+  | "notClaude";
 
 /** Host-computed dollars per window point, riding `SessionInfo.budget`. */
 export interface SessionBudgetCal {
@@ -78,6 +93,7 @@ export interface SessionBudgetInfo {
 export const SESSION_BUDGET_CAL_MIN_USD = 1;
 
 const UNITS: readonly SessionBudgetUnit[] = ["tok", "usd", "sessionPct", "weeklyPct"];
+const isPct = (u: SessionBudgetUnit) => u === "sessionPct" || u === "weeklyPct";
 
 /** A budget off the wire or out of a file, or null. Garbage is refused whole —
  *  a cap that was rounded into something the person never typed is worse than
@@ -123,8 +139,46 @@ export function sessionBudgetCal(
   };
 }
 
-/** What `sessionSpend` reads off a `ContextSpark`. */
-export type SessionBudgetSpark = Pick<ContextSpark, "usageTok" | "agentTok" | "costUsd" | "agentCostUsd">;
+/** What `sessionSpend` reads off a `ContextSpark` — or off a backend's own
+ *  source (`sourceSpendSpark`), which says so with `source: true`. */
+export type SessionBudgetSpark = Pick<ContextSpark, "usageTok" | "agentTok" | "costUsd" | "agentCostUsd"> & {
+  /** The figures are the backend's own `tokens.session` reading, not claude's
+   *  log: a figure it did not state is `unstated` (never `unpriced` — nothing
+   *  prices another backend's tokens), and a percent is `notClaude`. */
+  source?: true;
+};
+
+/**
+ * A backend's own reading (`SessionInfo.sourceSpend`) as the spend a budget is
+ * judged from. **Claude's `usageTok` HOLDS its agents' share; a source's `tok`
+ * does NOT** (`tok` is the session's own turns, `agentTok` its subagents'), so
+ * the total is their sum and `agentTok` rides apart as the split — a missing
+ * `agentTok` leaves the total a FLOOR, which is what claude's is too. A reading
+ * `sourceSpendProblems` refuses is dropped WHOLE: the result is then a spark
+ * with no figures, which reads `unstated`. `native` is not a budget unit and
+ * never enters a figure here.
+ */
+export function sourceSpendSpark(r: SourceSessionSpend | null | undefined): SessionBudgetSpark {
+  const out: SessionBudgetSpark = { source: true };
+  if (!r || sourceSpendProblems(r).length) return out;
+  if (r.tok != null) {
+    out.usageTok = r.tok + (r.agentTok ?? 0);
+    if (r.agentTok != null) out.agentTok = r.agentTok;
+  }
+  if (r.usd != null) {
+    out.costUsd = r.usd + (r.agentUsd ?? 0);
+    if (r.agentUsd != null) out.agentCostUsd = r.agentUsd;
+  }
+  return out;
+}
+
+/** The spend a session's budget is read from, on either end: the backend's own
+ *  source where the host says it judges from one (`sourceSpend` present), else
+ *  claude's log (`contextSpark`). One predicate, so the phone's "spent so far"
+ *  and the host's verdict cannot read two different numbers. */
+export function budgetSparkOf(s: Pick<SessionInfo, "contextSpark" | "sourceSpend">): SessionBudgetSpark | null {
+  return s.sourceSpend ? sourceSpendSpark(s.sourceSpend) : s.contextSpark ?? null;
+}
 
 /** The session's spend in a budget's unit, with its subagent share. `value`
  *  null means unknown, and `why` says why. */
@@ -136,11 +190,12 @@ export function sessionSpend(
 ): { value: number | null; agent: number | null; why?: SessionBudgetUnknown } {
   const unknown = (why: SessionBudgetUnknown) => ({ value: null, agent: null, why });
   if (!spark) return unknown("noSpark");
+  if (spark.source && isPct(unit)) return unknown("notClaude");
   if (unit === "tok") {
-    if (spark.usageTok == null) return unknown("noSpark");
+    if (spark.usageTok == null) return unknown(spark.source ? "unstated" : "noSpark");
     return { value: spark.usageTok, agent: spark.agentTok ?? null };
   }
-  if (spark.costUsd == null) return unknown("unpriced");
+  if (spark.costUsd == null) return unknown(spark.source ? "unstated" : "unpriced");
   if (unit === "usd") return { value: spark.costUsd, agent: spark.agentCostUsd ?? null };
   if (!cal) return unknown("noReading");
   if (now - cal.checkedAt > BUDGET_STALE_MS) return unknown("stale");
@@ -171,8 +226,6 @@ export function sessionBudgetHeld(s: Pick<SessionInfo, "budget">): boolean {
   return s.budget?.verdict.state === "over";
 }
 
-const isPct = (u: SessionBudgetUnit) => u === "sessionPct" || u === "weeklyPct";
-
 function fmtPct(n: number): string {
   return n < 10 ? n.toFixed(1).replace(/\.0$/, "") : String(Math.round(n));
 }
@@ -197,8 +250,9 @@ export function sessionBudgetLabel(cfg: SessionBudget): string {
 }
 
 /** Why a verdict cannot say, as a sentence that ends on what it means for the
- *  person: nothing is held. `readingAgeMs` sharpens the stale case. */
-export function sessionBudgetUnknownText(why: SessionBudgetUnknown, readingAgeMs?: number): string {
+ *  person: nothing is held. `readingAgeMs` sharpens the stale case, `unit` the
+ *  `unstated` one. */
+export function sessionBudgetUnknownText(why: SessionBudgetUnknown, readingAgeMs?: number, unit?: SessionBudgetUnit): string {
   const tail = " — nothing is held";
   switch (why) {
     case "noSpark": return `can't tell: this session has not logged a turn yet${tail}`;
@@ -210,7 +264,20 @@ export function sessionBudgetUnknownText(why: SessionBudgetUnknown, readingAgeMs
         : `can't tell: the usage reading is too old${tail}`;
     case "noCalibration": return `can't tell: this window has not run enough here to say what one percent costs${tail}`;
     case "notRunning": return `can't tell: the session is not running${tail}`;
+    case "unstated":
+      return `can't tell: this session's backend has not stated what it spent${unit === "tok" ? " in tokens" : unit === "usd" ? " in dollars" : ""}${tail}`;
+    case "notClaude": return `can't tell: ${SESSION_BUDGET_WINDOWS_CLAUDE}, which this session's backend does not spend from${tail}`;
   }
+}
+
+/** Why a percent of a window is claude's only — the host's `notClaude` verdict
+ *  and the phone's unit picker say it in these words. */
+export const SESSION_BUDGET_WINDOWS_CLAUDE = "the 5-hour and weekly windows are claude's account";
+
+/** The unit picker's sentence where it offers no percent: `label` is the
+ *  session's backend as the phone names it. */
+export function sessionBudgetWindowsOffText(label: string): string {
+  return `No ≈% of a window here: ${SESSION_BUDGET_WINDOWS_CLAUDE}, and ${label} does not spend from it.`;
 }
 
 /**
@@ -224,7 +291,7 @@ export const SESSION_BUDGET_PCT_CAVEAT = "≈, from this desktop's spend — oth
 
 /** The verdict in a sentence: spend, its subagent share, and where it stands. */
 export function sessionBudgetText(v: SessionBudgetVerdict): string {
-  if (v.state === "unknown" || v.spent == null) return sessionBudgetUnknownText(v.why ?? "noSpark");
+  if (v.state === "unknown" || v.spent == null) return sessionBudgetUnknownText(v.why ?? "noSpark", undefined, v.unit);
   const share = v.agentShare != null && v.agentShare > 0 ? `, ${fmtIn(v.unit, v.agentShare)} of it in subagents` : "";
   const cap = isPct(v.unit) ? fmtIn(v.unit, v.max).replace("≈", "") : fmtIn(v.unit, v.max);
   const caveat = isPct(v.unit) ? ` (${SESSION_BUDGET_PCT_CAVEAT})` : "";

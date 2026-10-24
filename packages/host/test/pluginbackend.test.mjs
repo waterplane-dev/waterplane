@@ -33,8 +33,10 @@ function setup(id, hostSrc, extra = {}) {
   return reg;
 }
 
-const def = (id, over = "") => `{ id: "${id}", label: "L", bin: () => "/bin/true", launchArgs: () => ({ args: [] }),
-  caps: { hooks: "plugin-inject", promptBoxes: false, transcript: "none" ${over} }, models: async () => ({ aliases: [], ids: [] }) }`;
+const def = (id, facts = "") => `{ id: "${id}", label: "L", bin: () => "/bin/true",
+  prepare: async () => ({ args: [], instructionsVia: "none", askRulesVia: "none" }),
+  caps: { turns: true, slash: "none", permissionModes: [], remoteControl: false }, facts: { ${facts} },
+  measured: { versions: [], version: async () => null }, models: async () => ({ aliases: [], ids: [] }) }`;
 
 test("manifest: backends must be a list of short lowercase ids", () => {
   const base = { id: "pp", name: "P", version: "1", apiVersion: PLUGIN_API_VERSION };
@@ -64,9 +66,9 @@ test("api.backend: registered while on, refused in words when undeclared or nami
   assert.match(undeclared.byId("pbund").error, /lists no "backends" in its manifest, so it may not register "pbund-cli"/);
   assert.equal(knownBackend("pbund-cli"), false);
 
-  const reader = setup("pbrd", `export function activate(api) { api.backend(${def("pbrd-cli", ', promptBoxes: "copilot-numbered"')}); }`, { backends: ["pbrd-cli"] });
+  const reader = setup("pbrd", `export function activate(api) { api.backend(${def("pbrd-cli", 'dialogs: [{ screen: "copilot-numbered" }]')}); }`, { backends: ["pbrd-cli"] });
   await reader.loadAll();
-  assert.match(reader.byId("pbrd").error, /no screen reader called `copilot-numbered`; this host has: claude-numbered\b/);
+  assert.match(reader.byId("pbrd").error, /no screen reader called `copilot-numbered` answers dialogs; this host has: claude-numbered\b/);
   assert.equal(knownBackend("pbrd-cli"), false, "nothing is half-added");
 
   const taken = setup("pbtk", `export function activate(api) { api.backend(${def("claude")}); }`, { backends: ["claude"] });
@@ -76,45 +78,71 @@ test("api.backend: registered while on, refused in words when undeclared or nami
 });
 
 test("pluginDescriptor: missing pieces are named; a bad launch plan is refused; a bad catalogue is empty", async () => {
-  assert.throws(() => pluginDescriptor({ id: "x" }, "P"), /P's backend "x" is missing label, bin\(\), launchArgs\(\), models\(\), caps/);
+  assert.throws(() => pluginDescriptor({ id: "x" }, "P"), /P's backend "x" is missing label, bin\(\), prepare\(\), models\(\), caps, facts, measured/);
+  const M = { versions: ["1.0"], version: async () => { throw new Error("no binary"); } };
   const d = pluginDescriptor({
-    id: "pd", label: " PD ", bin: () => "/bin/x", launchArgs: () => ({ args: [1] }),
-    caps: { hooks: "none", promptBoxes: false, transcript: "none" }, models: async () => ({ ids: "nope" }),
+    id: "pd", label: " PD ", bin: () => "/bin/x", prepare: async () => ({ args: [1], instructionsVia: "none", askRulesVia: "none" }),
+    caps: {}, facts: {}, measured: M, models: async () => ({ ids: "nope" }),
   }, "P");
   assert.equal(d.label, "PD");
   assert.equal(d.delivery.submitKey, "\r");
   assert.equal(d.delivery.composerCursorRe, null, "no anchor ⇒ deliver.ts's own fallback");
-  assert.equal(d.caps.contextMeter, false);
-  assert.throws(() => d.launchArgs({ launch: {}, hookPort: 1 }), /did not answer a launch as a list of arguments/);
+  assert.deepEqual(d.caps, { turns: true, slash: "none", permissionModes: [], remoteControl: false }, "every cap left out is off; turns absent ⇒ true");
+  await assert.rejects(d.prepare({ launch: {}, hookPort: 1 }), /did not answer a launch as a list of arguments/);
   assert.deepEqual(await d.models(), { aliases: [], ids: [] });
+  assert.deepEqual([...d.measured.versions], ["1.0"]);
+  assert.equal(await d.measured.version(), null, "a version() that throws is an unknown version, never a refusal");
 });
 
-test("pluginDescriptor: delivery, caps and sources are READ THROUGH a def's getters, never copied; exec and the launch request pass", () => {
+test("pluginDescriptor 2.0: a 1.x shape is refused in words naming what moved; a pending plan is AWAITED; a plan that does not say how it told is refused", async () => {
+  const base = { id: "v1", label: "V1", bin: () => "/bin/x", models: async () => ({ aliases: [], ids: [] }), measured: { versions: [], version: async () => null } };
+  assert.throws(() => pluginDescriptor({ ...base, launchArgs: () => ({ args: [] }), caps: {}, facts: {} }, "P"), /missing prepare\(\) \(2\.0 replaced launchArgs\(\)\)/);
+  assert.throws(() => pluginDescriptor({ ...base, prepare: async () => ({}), caps: { hooks: "none", transcript: "none" }, facts: {} }, "P"),
+    /still declares caps\.hooks, caps\.transcript — the 2\.0 contract moved these into `facts` \(docs\/plans\/backend-contract-v2\.md\)/);
+  // The host awaits prepare() now: a plan that takes a while is waited for, never refused.
+  const later = pluginDescriptor({ ...base, prepare: () => new Promise((r) => setTimeout(() => r({ args: ["x"], instructionsVia: "env-file", askRulesVia: "gate", files: [{ path: "session:i/AGENTS.md", content: "hi" }] }), 30)), caps: {}, facts: {} }, "P");
+  const plan = await later.prepare({ launch: {}, hookPort: 1 });
+  assert.deepEqual([plan.args, plan.instructionsVia, plan.askRulesVia, plan.files], [["x"], "env-file", "gate", [{ path: "session:i/AGENTS.md", content: "hi" }]]);
+  const silent = pluginDescriptor({ ...base, prepare: async () => ({ args: [] }), caps: {}, facts: {} }, "P");
+  await assert.rejects(silent.prepare({ launch: {}, hookPort: 1 }), /did not say how its launch was told \(instructionsVia: plugin-dir\/env-file\/config\/flag\/none\) and how its ask rules hold/);
+  const refused = pluginDescriptor({ ...base, prepare: () => { throw new Error("no picker here"); }, caps: {}, facts: {} }, "P");
+  await assert.rejects(async () => refused.prepare({ launch: {}, hookPort: 1 }), /no picker here/, "a refusal is the plugin's own sentence");
+});
+
+test("pluginDescriptor: delivery, caps and sources are READ THROUGH a def's getters, never copied; exec and the launch request pass", async () => {
   let hybrid = true;
   const src = { attach: () => ({ close() {} }) };
   const seen = [];
   const DL = [{ requiresChannel: true }, {}];
-  const CP = [{ hooks: "none", promptBoxes: false, transcript: "none", forkVia: "server" }, { hooks: "none", promptBoxes: false, transcript: "none" }];
+  const FX = [{ dialogs: [{ source: true }, { screen: "claude-numbered" }] }, { dialogs: [{ screen: "claude-numbered" }] }];
   const d = pluginDescriptor({
     id: "pg", label: "PG", bin: () => "/bin/x", models: async () => ({ aliases: [], ids: [] }),
-    launchArgs: (req) => { seen.push(req); return { args: ["-c", "x"], exec: "/bin/sh", backendSessionId: "ses_1" }; },
+    prepare: async (req) => { seen.push(req); return { args: ["-c", "x"], exec: "/bin/sh", backendSessionId: "ses_1", dropEnv: ["*_KEY"], instructionsVia: "none", askRulesVia: "none" }; },
     get delivery() { return DL[hybrid ? 0 : 1]; },
-    get caps() { return CP[hybrid ? 0 : 1]; },
+    caps: {},
+    get facts() { return FX[hybrid ? 0 : 1]; },
+    get forkVia() { return hybrid ? "server" : undefined; },
     get sources() { return hybrid ? src : undefined; },
+    measured: { versions: [], version: async () => null },
   }, "P", { experimental: true });
   assert.equal(d.delivery.requiresChannel, true);
-  assert.equal(d.caps.forkVia, "server");
+  assert.equal(d.forkVia, "server");
+  assert.equal(d.facts.dialogs.length, 2);
+  assert.equal(d.facts, d.facts, "an unchanged answer is the same normalised object");
   assert.equal(d.sources, src);
   assert.equal(d.delivery, d.delivery, "an unchanged answer is the same normalised object");
   hybrid = false;
   assert.equal(d.delivery.requiresChannel, undefined, "the knob flipped ⇒ the descriptor follows");
-  assert.equal(d.caps.forkVia, undefined);
+  assert.equal(d.forkVia, undefined);
+  assert.equal(d.facts.dialogs.length, 1);
   assert.equal(d.sources, undefined);
   assert.equal(d.experimental, true);
-  const plan = d.launchArgs({ launch: {}, hookPort: 1, cwd: "/tmp", hostSessionId: "h1", forkAtTurn: "t3" });
+  const plan = await d.prepare({ launch: {}, hookPort: 1, cwd: "/tmp", hostSessionId: "h1", forkAtTurn: "t3", instructions: "the outbox text", askRules: ["Bash(git push*)"] });
   assert.equal(plan.exec, "/bin/sh");
   assert.equal(plan.backendSessionId, "ses_1");
+  assert.deepEqual(plan.dropEnv, ["*_KEY"], "2.0: a plugin may drop the daemon's variables from its pane");
   assert.deepEqual([seen[0].cwd, seen[0].hostSessionId, seen[0].forkAtTurn], ["/tmp", "h1", "t3"]);
+  assert.deepEqual([seen[0].instructions, seen[0].askRules], ["the outbox text", ["Bash(git push*)"]], "the core's text and the repo's rules reach prepare()");
 });
 
 test("hook: 404s in words, answers sync, HOLDS a promise, expires to {} and calls onExpired, a throw is {}", async () => {

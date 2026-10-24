@@ -69,9 +69,9 @@ export function AnnBars({ m }: { m: AnnModel }) {
           <Button onClick={hideHint} aria-label="hide this hint for good"><X size={14} aria-hidden /></Button>
         </div>
       )}
-      {/* What the agent will be told this band says, when someone typed it —
-          shown BEFORE anything is sent, and editable. Nothing reads the band
-          by itself: the agent reads the picture. */}
+      {/* What the agent will be told this mark says — typed, or read on this phone by an
+          enabled text-in-marks extension (annAutoRead.ts) — shown BEFORE anything is sent,
+          and editable. With no such extension nothing reads a mark: the agent reads the picture. */}
       {lastBand && !cropMode && pendingText == null && editRead == null && (
         <div className="annot-read">
           {lastBand.read ? (
@@ -79,6 +79,11 @@ export function AnnBars({ m }: { m: AnnModel }) {
               <span className="annot-hint annot-read-text">reads: “{lastBand.read}”</span>
               <Button onClick={() => startEditRead(lastBand)}>edit</Button>
               <Button onClick={() => dropRead(lastBand)}>drop</Button>
+            </>
+          ) : lastBand.reading ? (
+            <>
+              <span className="annot-hint">reading…</span>
+              <Button onClick={() => startEditRead(lastBand)}>type its words</Button>
             </>
           ) : (
             <>

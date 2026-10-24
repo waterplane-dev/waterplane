@@ -102,6 +102,8 @@ export const SYNCED_SETTING_KEYS = [
   lsKey("dictate.terms"),
   /** Drain the send queue automatically when the link returns. */
   lsKey("autoSend"),
+  /** Check for waterplane and plugin updates once a day (a read; nothing applies itself). Default on. `host/updates/checker.ts` reads it. */
+  lsKey("updates.autoCheck"),
   /**
    * Run queued session-opens for one repo ONE AT A TIME rather than all at once
    * (`shared/queue.ts`'s `serial`). A statement about how the person wants their

@@ -145,6 +145,21 @@ bootWait(PORT, 900, async () => {
     const w1 = await openWs(kid);
     check(w1.first === "welcome", `unlocked: the WebSocket opens (${w1.first})`);
     check((await api("/api/auth/token", { method: "POST", tok: kid, body: { deviceName: "sneaky" } })).status === 403, "unlocked or not, it never mints a full token");
+    // Auth material stays out of reach while unlocked: each of these would outlive the 30 minutes.
+    check((await api("/api/pair/mint", { method: "POST", tok: kid, body: {} })).status === 403, "unlocked or not, it never mints a pairing code");
+    check((await api("/api/devices/revoke", { method: "POST", tok: kid, body: { id: "d-0000000000" } })).status === 403, "unlocked or not, it never revokes a device");
+    check((await api("/api/peers", { method: "POST", tok: kid, body: { name: "pc", addr: "http://127.0.0.1:1" } })).status === 403, "unlocked or not, it never pairs a peer");
+    check((await api("/api/lan/identity", { tok: kid })).status === 403, "unlocked or not, it never reads the LAN identity secret");
+    check((await api("/api/repos", { tok: kid })).status === 200, "…while the rest of full scope still answers");
+    // Bounded: on a host without the refusal the answer is `auth.state`, never `error`, and a
+    // regression must fail in words rather than hang the script.
+    const onKidSocket = (ws, msg, want) => new Promise((resolve) => {
+      const t = setTimeout(() => { ws.off("message", h); resolve({ t: "timeout" }); }, 3000);
+      const h = (raw) => { const m = JSON.parse(raw.toString()); if (want(m)) { clearTimeout(t); ws.off("message", h); resolve(m); } };
+      ws.on("message", h); ws.send(JSON.stringify(msg));
+    });
+    const ga = await onKidSocket(w1.ws, { t: "auth.gateTailscale", enabled: true }, (m) => m.t === "error" && m.context === "auth");
+    check(ga.t === "error" && /passive device/.test(ga.message), `unlocked or not, its socket cannot change the password or the gate (${ga.t})`);
 
     // ── expiry: back to passive, the socket closed ──
     check(await closedWithin(w1.ws, UNLOCK_MS + 2000), "the unlock running out closes its socket");

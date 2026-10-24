@@ -3,7 +3,7 @@ import { type ComponentProps, type ReactNode } from "react";
 import { fmtCount, type TokenStatsDoc } from "@waterplane/shared";
 import { ScopeCard, ScopeTag } from "./TokenInsights.tsx";
 import { PerRequestSection } from "./PerRequestSection.tsx";
-import { type DayPoint, HOUR_MS, modelBands } from "@waterplane/kit";
+import { type DayPoint, HOUR_MS, modelBands, Button } from "@waterplane/kit";
 import { TREND_DAYS } from "./constants.ts";
 import { ClockChart, ModelLegend } from "./charts/Bars.tsx";
 import { AgentDayChart, DayChart } from "./charts/DayChart.tsx";
@@ -89,8 +89,8 @@ export function OverTimeCard({ doc, money, table, dayCharts, narrow, chips = nul
               WINDOW — two different decisions must not share a control. */}
           <span className="ts-seg-chips">
             {([["total", "total"], ["mix", "mix"], ["share", "share"]] as const).map(([id, label]) => (
-              <button key={id} className={`key${dayView === id ? " active" : ""}`}
-                onClick={() => setDayView(id)}>{label}</button>
+              <Button key={id} className={dayView === id ? "active" : undefined}
+                onClick={() => setDayView(id)}>{label}</Button>
             ))}
             {/* The FORM, separated from the question. The area chip is
                 absent, not dimmed, when the window is too wide to fill —
@@ -103,21 +103,21 @@ export function OverTimeCard({ doc, money, table, dayCharts, narrow, chips = nul
                 flat fill wearing a legend. */}
             {dayView !== "total" && canModel && <>
               <span className="ts-seg-sep" aria-hidden="true" />
-              <button className={`key${mixBy === "kind" ? " active" : ""}`}
+              <Button className={mixBy === "kind" ? "active" : undefined}
                 onClick={() => setMixBy("kind")}
-                title="what the traffic was made of — input, output, cache read, cache write">kind</button>
-              <button className={`key${mixBy === "model" ? " active" : ""}`}
+                title="what the traffic was made of — input, output, cache read, cache write">kind</Button>
+              <Button className={mixBy === "model" ? "active" : undefined}
                 onClick={() => setMixBy("model")}
-                title="which model carried it — the one split a migration is visible in">model</button>
+                title="which model carried it — the one split a migration is visible in">model</Button>
             </>}
             <span className="ts-seg-sep" aria-hidden="true" />
-            <button className={`key${!dayArea ? " active" : ""}`}
+            <Button className={!dayArea ? "active" : undefined}
               onClick={() => setDayShape("bars")}
-              title="one mark per bucket — exact, and right while a column still has a width">bars</button>
+              title="one mark per bucket — exact, and right while a column still has a width">bars</Button>
             {dayAreaOk && (
-              <button className={`key${dayArea ? " active" : ""}`}
+              <Button className={dayArea ? "active" : undefined}
                 onClick={() => setDayShape("area")}
-                title="the same numbers as a filled band — readable at a width where a column is a hairline">area</button>
+                title="the same numbers as a filled band — readable at a width where a column is a hairline">area</Button>
             )}
           </span>
         </div>
@@ -236,11 +236,11 @@ export function OverTimeCard({ doc, money, table, dayCharts, narrow, chips = nul
           <span>Per hour <ScopeTag>{hourWords}</ScopeTag></span>
           {hourRows.length > 1 && (
             <span className="ts-seg-chips">
-              <button className={`key${!hourArea ? " active" : ""}`}
-                onClick={() => setHourShape("bars")}>bars</button>
+              <Button className={!hourArea ? "active" : undefined}
+                onClick={() => setHourShape("bars")}>bars</Button>
               {!!hourlyFilled && (
-                <button className={`key${hourArea ? " active" : ""}`}
-                  onClick={() => setHourShape("area")}>area</button>
+                <Button className={hourArea ? "active" : undefined}
+                  onClick={() => setHourShape("area")}>area</Button>
               )}
             </span>
           )}

@@ -10,6 +10,7 @@ import type { ClosedSession, HistoryEntry, NewImage, OpenDelivery, PermissionMod
 import type { StreamEndCause } from "../../stream.js";
 import type { UsageInfo, UsageReading } from "../telemetry.js";
 import type { BacklogItem } from "../work.js";
+import type { HostUpdatesMsg } from "./hostupdates.js";
 
 /** Trust tier of a socket's remote address (see host `net.peerKind`). */
 export type PeerKind = "loopback" | "tailscale" | "lan" | "public" | "unknown";
@@ -25,6 +26,7 @@ export interface AuthState {
 }
 
 export type HostCoreMsg =
+  | HostUpdatesMsg
   // `httpsUrl` is the URL `tailscale serve` actually fronts us with, port and
   // all — NOT `https://<tailscaleDns>`, which assumes the listener is on 443 and
   // points at whatever else is served there when it isn't. null = not fronted.

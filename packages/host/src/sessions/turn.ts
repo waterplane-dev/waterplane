@@ -12,10 +12,13 @@
  * functions taking `core` first (docs/notes/host-architecture.md). Moved
  * verbatim from `sessions.ts`; `this.<another slice>` became `core.<hub>`.
  */
-import type { SessionAgent, SessionAsk, SessionShell, TurnFacts } from "@waterplane/shared";
+import { realpathSync } from "node:fs";
+import type { SessionAgent, SessionAsk, SessionShell, SourceSession, TurnFacts } from "@waterplane/shared";
 import { shellBucket, workingLine } from "@waterplane/shared";
-import { agentsChanged, readCliRecord, readRunningAgents } from "../agents.js";
+import { agentsChanged, readAgents, readCliRecord, readRunningAgents } from "../agents.js";
 import { claudeHookWatched, postClaudeHook, type ClaudeHookPayload } from "../backends/claude-sources.js";
+import { derive } from "../backends/derive.js";
+import { liveSourceFor } from "../livesources.js";
 import { samePromptText } from "../echo.js";
 import { stripAnsi } from "../prompt.js";
 import { askLine, looksLikeQuestion, sameAsk } from "../question.js";
@@ -25,6 +28,20 @@ import type { Session, SessionCore } from "./core.js";
 import {
   AGENT_POLL_MS, HEALTH_SPAWN_GRACE_MS, QUESTION_TAIL_BYTES, STOP_VERIFY_BYTES, STOP_VERIFY_MS, SUBMIT_RING, tmuxName,
 } from "./knobs.js";
+
+/**
+ * The `SourceSession` `agents.list()` is handed — the SAME one every other slot gets (review R7):
+ * the live channel's own when one is attached (`sidechannel.ts`'s `sourceSession`), else built the
+ * same way, `cwd` REALPATHED (`/var` -> `/private/var`), so a plugin keying its agent list by cwd sees
+ * one string on every call. `backendSessionId` absent rather than `undefined`. Exported for the test.
+ */
+export function agentsSourceSession(s: Pick<Session, "spawnedAt"> & { info: Pick<Session["info"], "id" | "cwd" | "backendSessionId"> }): SourceSession {
+  const live = liveSourceFor(s.info.id)?.session;
+  if (live) return live;
+  let cwd = s.info.cwd;
+  try { cwd = realpathSync(cwd); } catch { /* the record's own path */ }
+  return { id: s.info.id, cwd, spawnedAt: s.spawnedAt, ...(s.info.backendSessionId ? { backendSessionId: s.info.backendSessionId } : {}) };
+}
 
 /**
  * Did this turn end on a question to the person, asked in prose?
@@ -45,7 +62,7 @@ function checkAsking(core: SessionCore, s: Session): void {
   // signs off a turn. A backend it was not written against records nothing:
   // `SessionInfo.asking` stays absent, and the phone's "asked you" badge can
   // never be raised by a paragraph that merely ends in a question mark.
-  if (!s.backend.caps.asking) { setAsking(core, s, null); return; }
+  if (derive(s.backend).screen("asking") !== "question-ts") { setAsking(core, s, null); return; }
   if (s.info.prompt || s.info.limit?.blocked) { setAsking(core, s, null); return; }
   // A turn still IN FLIGHT is not a turn that ended on a question. The
   // silence timer re-enters `markIdle` four seconds after any output, so on a
@@ -83,8 +100,9 @@ function checkAsking(core: SessionCore, s: Session): void {
  * with attributes is paid once per distinct composer text.
  */
 function checkCliSuggestion(core: SessionCore, s: Session): void {
-  // Measured on claude's TUI only; another backend's dim hint is a placeholder.
-  if (s.backend.id !== "claude" || s.turnActive || s.info.prompt || s.info.limit?.blocked) {
+  // Measured on claude's TUI only (`clisuggest.ts`); another TUI's dim hint is a placeholder. The
+  // claude TUI is the one whose dialogs `prompt.ts` reads — so every backend that runs it.
+  if (derive(s.backend).screen("dialogs") !== "claude-numbered" || s.turnActive || s.info.prompt || s.info.limit?.blocked) {
     s.hintRead = null;
     setCliSuggestion(core, s, null);
     return;
@@ -145,9 +163,17 @@ export function checkAgents(core: SessionCore, s: Session): void {
   // to read, so the list stays ABSENT — which is what "this app cannot tell
   // you" looks like, as against an empty list, which would claim nothing is
   // running.
-  if (s.backend.caps.transcript !== "claude-jsonl") return;
+  // claude keeps its own reader and its own error rule (a throw reads as "none running");
+  // another backend asks its `agents` providers, and no answer keeps the list ABSENT.
   let rows: SessionAgent[] = [];
-  try { rows = readRunningAgents(s.info.cwd, s.info.claudeSessionId); } catch { rows = []; }
+  if (derive(s.backend).keepsClaudeLog) {
+    try { rows = readRunningAgents(s.info.cwd, s.info.claudeSessionId); } catch { rows = []; }
+  } else {
+    let read: SessionAgent[] | null = null;
+    try { read = readAgents(s.backend, agentsSourceSession(s)); } catch { read = null; }
+    if (read === null) return;
+    rows = read;
+  }
   // Background SHELLS are the same fact by another route (a `run_in_background`
   // Bash or a Monitor outlives its turn too), and no log records them — the
   // CLI's own session record does (`agents.ts`'s `readCliRecord`).
@@ -255,6 +281,9 @@ export function setTurn(core: SessionCore, s: Session, active: boolean, opts: { 
   // when the flag itself does not move (a hook overtaking a screen-inferred
   // turn hands ownership back to the pipe).
   s.turnFromScreen = active ? !!opts.fromScreen : false;
+  // A turn running is the end of idle — the one place that says so for every
+  // route a turn starts by, now that raw output no longer does (`noteOutput`).
+  if (active) core.clearIdle(s);
   if (s.turnActive === active && s.info.turnActive === active) return;
   s.turnActive = active;
   s.info.turnActive = active;
@@ -340,7 +369,7 @@ function markIdle(core: SessionCore, s: Session, emitPing: boolean): void {
   core.checkLimit(s);
   core.checkContext(s);
   // The footer's mode and ultracode (`livemode.ts`): a shift+tab typed at the desk
-  // is output, and this is the quiet tick after it. Claude's TUI only.
+  // is output, and this is the quiet tick after it. A source session's mode is re-read here too.
   core.checkMode(s);
   // Cheap (one statSync) and correct on a repaint: the log's mtime only moves
   // when the CLI writes a turn, so re-reading it here cannot manufacture
@@ -350,7 +379,7 @@ function markIdle(core: SessionCore, s: Session, emitPing: boolean): void {
   // field stays ABSENT — stamping `now` here would be the wrong number the
   // rule exists to refuse (it would say "a turn just ended" every time a
   // screen repainted).
-  const turnAt = s.backend.caps.transcript === "claude-jsonl" ? core.lastTurnOf(s.info.cwd, s.info.claudeSessionId) : null;
+  const turnAt = derive(s.backend).keepsClaudeLog ? core.lastTurnOf(s.info.cwd, s.info.claudeSessionId) : null;
   if (turnAt && turnAt !== s.info.lastTurnAt) s.info.lastTurnAt = turnAt;
   if (!s.info.idle) {
     s.info.idle = true;
@@ -607,7 +636,7 @@ export function sourceTurn(core: SessionCore, s: Session, edge: "started" | "end
  */
 export function sourceIdentified(core: SessionCore, s: Session, id: string): void {
   if (!id) return;
-  if (s.backend.caps.transcript === "claude-jsonl") { core.adoptClaudeId(s, id); core.stopClaudeIdWatch(s); return; }
+  if (derive(s.backend).keepsClaudeLog) { core.adoptClaudeId(s, id); core.stopClaudeIdWatch(s); return; }
   if (!s.info.backendSessionId) core.adoptBackendId(s, id);
 }
 
@@ -615,6 +644,7 @@ export function sourceIdentified(core: SessionCore, s: Session, id: string): voi
  *  where `running` is already false and the turn has been ended by hand. */
 export function clearStopVerify(s: Session): void {
   if (s.stopVerifyTimer) { clearTimeout(s.stopVerifyTimer); s.stopVerifyTimer = null; }
+  if (s.idleWatchTimer) { clearTimeout(s.idleWatchTimer); s.idleWatchTimer = null; }
   s.stopPending = false;
 }
 
@@ -809,7 +839,7 @@ export function lastSubmittedPrompt(core: SessionCore, id: string, since: number
  */
 export function claimSubmittedPrompt(core: SessionCore, id: string, text: string, since: number): boolean {
   const s = core.sessions.get(id);
-  if (!s || s.backend.caps.hooks === "none") return false;
+  if (!s || !derive(s.backend).hooksInBand) return false;
   const hit = s.submits.find((e) => !e.claimed && e.at >= since && samePromptText(e.prompt, text));
   if (!hit) return false;
   hit.claimed = true;

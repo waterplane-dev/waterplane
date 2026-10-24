@@ -10,7 +10,7 @@ The two surfaces that show what the CLI is doing — the live terminal and the t
 - `suggestionBy.ts` — who a suggested answer is from, in words: the plugin's `byName`, then
   its model only when it named one — for the answer card, the reply bar and the reader alike. Never
   a model id alone (that was the oracle's wording), never blank.
-- `PromptAnswer.tsx` + `TermArea.tsx` (`core/session/`) — **the one card a choice box is answered by tapping**, drawn by the reader's
+- `PromptAnswer.tsx` + `TermArea.tsx` (`core/session/`; the card itself is `PromptAnswer.tsx` at the src root) — **the one card a choice box is answered by tapping**, drawn by the reader's
   `tr-ask` and by `QuestionsSheet`. The `approve` BAR under the terminal is GONE (it took its height from
   the PTY and hid options a scroll region Android draws no scrollbar on), so the surfaces that draw the
   card are the two with a scroll of their own, and nothing here is capped or clamped. In the terminal view
@@ -21,7 +21,9 @@ The two surfaces that show what the CLI is doing — the live terminal and the t
   predicate only for a box with the same argument. **The commit row is never inside the option list** (on a
   multi-select Submit is the only control that answers). Every tap is still `answerPrompt` — durable,
   fingerprinted, refused host-side once the box is gone — **no new send path**; sharing one body is
-  what stopped the sheet's copy sending a DIGIT at a `nav` box. `CliPeek.tsx` (the reader's empty state: the top of the live
+  what stopped the sheet's copy sending a DIGIT at a `nav` box. A `freeText` question or a `takesText`
+  row opens `TypedAnswer`: the words ride the SAME answer entry as `promptText` (`answerTextProblem`
+  on both ends, a refusal said under the field), never the composer. `CliPeek.tsx` (the reader's empty state: the top of the live
   screen), `useReaderPick.tsx` and `useTermPick.tsx` (line pick in the reader and the terminal) live in `core/session/`.
 - `TranscriptView.tsx` + `transcriptUtil.ts` — reader view (code: `transcript/` — the compaction divider in `TvTurn.tsx`, the `source === "history"` test in `TvOutline.tsx`, folding in `tvRows.ts`; map: [transcript-architecture.md](../../../docs/notes/transcript-architecture.md)). **A `marker: "compaction"` turn is a labelled DIVIDER**
   (`.tr-mark`), never a prompt somebody sent and left blank — that would be a claim about a person
@@ -43,7 +45,7 @@ The two surfaces that show what the CLI is doing — the live terminal and the t
   carries the newest logged turn ABOVE the tapped one, and the words say "before #N". Reset KILLS a running session, so it goes through
   `askConfirm` and peeks at the WORKTREE (never `session.closecheck`, whose reply handler would
   ARCHIVE the session being reset). **A cached transcript is fine to compose from, but the verb is
-  disabled rather than queued** — a reset replayed an hour late kills an hour of work.
+  withheld (its reason said in words, `Unavailable`) rather than queued** — a reset replayed an hour late kills an hour of work.
   `forkAnchor.ts` is WHERE the cut lands: a `screen:` turn (`/btw` — the CLI wrote nothing to the
   log) cuts at the newest LOGGED turn before it, which is exact because a screen turn changed
   nothing, and the row SAYS which number it used; a synthesized `t<N>` is refused instead, because

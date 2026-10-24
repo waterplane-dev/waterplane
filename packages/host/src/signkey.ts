@@ -75,6 +75,16 @@ export type EnsureResult =
   | { ok: true; created: boolean; jks: string; note: string }
   | { ok: false; error: string };
 
+/** keytool argv for a new key. The password travels in the env (`:env`), never argv (visible in `ps`). */
+export function keytoolArgv(tmp: string): string[] {
+  return [
+    "-genkeypair", "-keystore", tmp, "-storetype", "PKCS12", "-alias", KEY_ALIAS,
+    "-keyalg", "RSA", "-keysize", "2048", "-validity", String(VALIDITY_DAYS),
+    "-storepass:env", "WP_KEYPASS", "-keypass:env", "WP_KEYPASS",
+    "-dname", `CN=${BRAND.displayName} sideload, O=${BRAND.displayName}`,
+  ];
+}
+
 /** Make the desktop key if it does not exist. Idempotent: a second call touches nothing. */
 export function ensureDesktopKey(opts: SignKeyOpts = {}): EnsureResult {
   const dir = keysDir(), jks = jksPath(), props = propsPath();
@@ -89,12 +99,9 @@ export function ensureDesktopKey(opts: SignKeyOpts = {}): EnsureResult {
     const password = randomBytes(24).toString("base64url");
     const tmp = `${jks}.${process.pid}.tmp`;
     rmSync(tmp, { force: true });
-    execFileSync(opts.keytool ?? "keytool", [
-      "-genkeypair", "-keystore", tmp, "-storetype", "PKCS12", "-alias", KEY_ALIAS,
-      "-keyalg", "RSA", "-keysize", "2048", "-validity", String(VALIDITY_DAYS),
-      "-storepass", password, "-keypass", password,
-      "-dname", `CN=${BRAND.displayName} sideload, O=${BRAND.displayName}`,
-    ], { stdio: ["ignore", "pipe", "pipe"], timeout: 60_000 });
+    execFileSync(opts.keytool ?? "keytool", keytoolArgv(tmp), {
+      stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, env: { ...process.env, WP_KEYPASS: password },
+    });
     chmodSync(tmp, 0o600);
     // Properties first (a jks without them is the "broken" state), jks last.
     writeTextAtomic(props, fmtProps({ storeFile: jks, storePassword: password, keyAlias: KEY_ALIAS, keyPassword: password }), { mode: 0o600 });
@@ -121,7 +128,8 @@ function ensureIgnores(repo: string): string[] {
   const have = new Set(cur.split("\n").map((l) => l.trim().replace(/^\//, "")));
   const missing = IGNORES.filter((e) => !have.has(e));
   if (!missing.length) return [];
-  writeTextAtomicKeepMode(gi, (cur && !cur.endsWith("\n") ? cur + "\n" : cur) + "\n# signing key pointer — never commit\n" + missing.join("\n") + "\n");
+  // `repo`: a committed `.gitignore -> ~/.gitconfig` is refused, not written through.
+  writeTextAtomicKeepMode(gi, (cur && !cur.endsWith("\n") ? cur + "\n" : cur) + "\n# signing key pointer — never commit\n" + missing.join("\n") + "\n", repo);
   return missing;
 }
 

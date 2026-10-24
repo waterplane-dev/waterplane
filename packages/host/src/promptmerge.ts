@@ -101,7 +101,8 @@ const GENERIC_ROW_RE = /^(other|chat about this|type something\.?|none of these)
 export function samePrompt(a: DetectedPrompt | null, b: DetectedPrompt | null, ticks?: "ignore"): boolean {
   if (!a || !b) return a === b || (!a && !b);
   if (a.kind !== b.kind || a.question !== b.question) return false;
-  if (!!a.multi !== !!b.multi || !!a.nav !== !!b.nav || !!a.truncated !== !!b.truncated) return false;
+  if (!!a.multi !== !!b.multi || !!a.nav !== !!b.nav || !!a.truncated !== !!b.truncated ||
+    !!a.questionTruncated !== !!b.questionTruncated) return false;
   if ((a.ask ?? "") !== (b.ask ?? "")) return false;
   if ((a.askId ?? "") !== (b.askId ?? "")) return false;
   if ((a.submitLabel ?? "") !== (b.submitLabel ?? "")) return false;
@@ -153,7 +154,8 @@ export function mergeBox(published: DetectedPrompt, parsed: DetectedPrompt): Det
   // Lowest indices first and capped there: the head is the half that scrolled
   // away, so if anything has to go it is the tail — which is on screen.
   const options = [...byIndex.values()].sort((x, y) => x.index - y.index).slice(0, MAX_BOX_OPTIONS);
-  const question = realQuestion(published) ? published.question : (realQuestion(parsed) ? parsed.question : published.question);
+  const questionSource = realQuestion(published) ? published : (realQuestion(parsed) ? parsed : published);
+  const question = questionSource.question;
   const ask = published.ask ?? parsed.ask;
   const submitLabel = published.submitLabel ?? parsed.submitLabel;
   // The freshest reading wins here, not the oldest: this is the CLI's own
@@ -178,6 +180,7 @@ export function mergeBox(published: DetectedPrompt, parsed: DetectedPrompt): Det
     ...(published.multi ? { multi: true as const } : {}),
     ...(published.nav ? { nav: true as const } : {}),
     ...(ask ? { ask } : {}),
+    ...(questionSource.questionTruncated ? { questionTruncated: true as const } : {}),
     ...(askId ? { askId } : {}),
     ...(submitLabel ? { submitLabel } : {}),
     ...(plan ? { plan } : {}),

@@ -51,6 +51,7 @@ export function TextSheet() {
           <div className="link-list">
             {links.map((l) => (
               <Row key={l.url}>
+                {/* raw: a <button> that is itself the part (RowTitle/RowSub are span/div) */}
                 <button className="row-title link-row" title={l.url} onClick={() => openLink(l.url)}>
                   <ExternalLink size={ICON} /> <span className="link-url">{l.url}</span>
                 </button>

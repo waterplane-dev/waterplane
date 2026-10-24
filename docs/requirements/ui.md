@@ -489,3 +489,23 @@ The VS Code extension logo looks clean and recognisable at small sizes, with tra
 - asked: 2026-10-20
 - shipped: 0b83f4d2
 
+### R-ui-118 · shipped
+Buttons, rows, hints and tags across the web app and extensions use shared kit components, render the same DOM and pixels as before in dark and light mode, and the count of raw hand-written ones only goes down.
+- asked: 2026-10-21
+- shipped: 35bc0e92, 35ecd0c9, 246db90a, 5173b09f, 88386404, e4e1648c, 4a03bb50
+
+### R-ui-119 · shipped
+The development build of the Android app is visibly labelled with a DEV ribbon on its launcher icon.
+- asked: 2026-10-21
+- shipped: e0dc2f49
+
+### R-ui-120 · shipped
+Marker 2 in the marked screenshot is clearly visible.
+- asked: 2026-10-22
+- shipped: 761be680
+
+### R-ui-121 · shipped
+The two buttons are never shown on screen at the same time, so the screen is not confusing.
+- asked: 2026-10-22
+- shipped: 13640e8d
+

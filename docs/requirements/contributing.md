@@ -43,3 +43,8 @@ Every source file in the extension host, shared and cli halves, and tools script
 - asked: 2026-10-21
 - shipped: df9a900b, 49307dc3
 
+### R-contributing-009 · shipped
+A file at the line cap is split by subject, never by deleting its explanatory comments; echo.ts stays the proof a typed prompt reached the composer, split from composer.ts, each under about 750 lines, with its notes kept.
+- asked: 2026-10-21, 2026-10-21
+- shipped: d01ebdd4, 169d15ab
+

@@ -7,7 +7,7 @@
  * every id `track()` can emit: keep it in sync when adding a `track()` call,
  * wherever that call now lives.
  */
-import { ASSESS_VERDICTS, type SessionInfo } from "@waterplane/shared";
+import { ASSESS_VERDICTS, type BackendInfo, type SessionInfo } from "@waterplane/shared";
 
 // ── Feature-usage catalog ────────────────────────────────────────────
 // Every id `track()` can emit, so the usage sheet can list features with ZERO
@@ -195,9 +195,57 @@ export function knownFeatureIds(toolbarIds: readonly string[]): string[] {
 /** Conversation ids that are open RIGHT NOW as live sessions. The archive
  *  shows every conversation on disk, including the ones already on screen —
  *  those rows must offer a jump, never a second `--resume` of the same chat
- *  (two claudes in one conversation is how a turn gets lost). */
-export function liveConversationIds(sessions: readonly Pick<SessionInfo, "claudeSessionId">[]): Set<string> {
-  return new Set(sessions.map((s) => s.claudeSessionId).filter((x): x is string => !!x));
+ *  (two claudes in one conversation is how a turn gets lost).
+ *
+ *  Either id counts: `claudeSessionId` is claude's own, `backendSessionId` is
+ *  the conversation id a plugin backend's session adopted — the same match the
+ *  host's closed rows make. Ids from two backends never collide in practice
+ *  (uuids), and a false "open now" would only offer a jump, never a delete. */
+export function liveConversationIds(sessions: readonly Pick<SessionInfo, "claudeSessionId" | "backendSessionId">[]): Set<string> {
+  const out = new Set<string>();
+  for (const s of sessions) {
+    if (s.claudeSessionId) out.add(s.claudeSessionId);
+    if (s.backendSessionId) out.add(s.backendSessionId);
+  }
+  return out;
+}
+
+/** The live session holding one conversation, by either id (see above). */
+export function liveSessionFor<S extends Pick<SessionInfo, "claudeSessionId" | "backendSessionId">>(sessions: readonly S[], conversationId: string): S | undefined {
+  return sessions.find((s) => s.claudeSessionId === conversationId || s.backendSessionId === conversationId);
+}
+
+/** One list the archive can show: a backend id and its own label. */
+export interface ArchiveBackend { id: string; label: string }
+
+/**
+ * Which backends' conversations the archive can list: claude first, always
+ * (its jsonl archive predates the backends frame), then every non-shell backend
+ * whose DERIVED facts include `conversations` (`caps.conversations === true`,
+ * sent only when a provider answers — absent is not a tab), in frame order.
+ *
+ * `null` (no frame: an older host) or `[]` → claude alone, which is what keeps
+ * the sheet byte-for-byte as it was: one entry draws no chip row.
+ */
+export function archiveBackends(backends: readonly BackendInfo[] | null): ArchiveBackend[] {
+  const claude = backends?.find((b) => b.id === "claude");
+  const out: ArchiveBackend[] = [{ id: "claude", label: claude?.label || "Claude Code" }];
+  for (const b of backends ?? []) {
+    if (b.id === "claude" || b.kind === "shell" || b.id === "shell") continue;
+    if (b.caps?.conversations === true) out.push({ id: b.id, label: b.label || b.id });
+  }
+  return out;
+}
+
+/**
+ * The one sentence a non-claude list says about itself, naming the backend's
+ * own label: what a tap does, and what is not offered there. A verb that
+ * cannot run is a SENTENCE (Unavailable rule), never a dimmed button — so the
+ * read, fork and bookmark controls are absent on that list and this says why,
+ * once, above it.
+ */
+export function archiveBackendHint(label: string): string {
+  return `Every conversation here is one ${label} wrote; resuming one starts ${label}. Reading one without starting it, forking and bookmarks are not offered for ${label} yet.`;
 }
 
 /** Which repo the archive opens on: the one in context, else the first one

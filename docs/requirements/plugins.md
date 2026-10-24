@@ -62,7 +62,7 @@ A plugin mechanism lets users add customizations from outside the waterplane rep
 ### R-plugins-013 · shipped
 A plugin may add a backend (a CLI the launcher spawns) that it declares in its manifest; an undeclared id, a taken id or a reader name this host does not have is refused in words, and switching the plugin off removes the backend so the next create on it is refused in words. Its hooks reach the daemon only over loopback at `/api/plugin/<id>/hook`, where a held response is answered by the phone's tap through the one answer dispatcher, or `{}` when the hold runs out.
 - asked: 2026-10-01 (backends design, docs/analysis/backends-design.md §3, WP3a)
-- shipped: this change (`plugins/pluginapi.ts` `backend`/`hookSink`/`onHook`, `scripts/e2e-pluginbackend.mjs`)
+- shipped: this change (`plugins/pluginapi.ts` `backend`/`hookSink`/`onHook`, `scripts/e2e-pluginbackend.mjs`), 3943f989 (descriptor v2)
 
 ### R-plugins-014 · shipped
 A session still running in tmux on a plugin's backend survives a host restart: it is held until that plugin registers the backend and then taken back, and meanwhile listed as a closed, still-alive row that names the plugin it waits for.
@@ -103,3 +103,48 @@ The plugin docs explain installing a plugin, starting from the template, and a c
 - asked: 2026-10-15
 - shipped: 4fadc65b
 
+
+### R-plugins-023 · shipped
+A backend plugin says where each fact comes from (turns, dialogs, questions, transcript, context, tokens, usage, limits, agents, conversations) as an ordered list of providers; the first that answers wins and an empty list means the fact is absent on the phone, never guessed. One reader of that list decides what the wire advertises.
+- asked: 2026-10-21 (session: backend contract v2 plan, docs/plans/backend-contract-v2.md, id not recorded)
+- shipped: 3943f989, 0f6c8763
+
+### R-plugins-024 · shipped
+A backend plugin gets a small toolkit instead of copying helpers: bind a session to the CLI's conversation, follow a JSONL file, read the live screen, find its per-session launch files. A 1.x plugin that registers no backend still loads on the 2.x host; one that registers a backend is refused in words naming the 2.0 contract.
+- asked: 2026-10-21 (session: backend contract v2 plan, docs/plans/backend-contract-v2.md, id not recorded)
+- shipped: 5da43157, d9aa5b6b
+
+### R-plugins-025 · shipped
+Every spawned agent is told what the phone offers (outbox, inbox, builds), whichever CLI it is; the launch plan says how it was told, and where a backend cannot be told the phone says so. The ask-before rules hold natively where the CLI has them and through the answer gate where it has only allow and deny.
+- asked: 2026-10-21 (session: backend contract v2 plan, docs/plans/backend-contract-v2.md, id not recorded)
+- shipped: 6e92af08
+
+### R-plugins-026 · shipped
+A question an agent asks with no choice box reaches the phone from any backend that can pose it, and a typed answer, or a reason on a "No" row, goes back into the CLI's own form. Only a person types an answer: a gated plugin never carries words.
+- asked: 2026-10-21 (session: backend contract v2 plan, docs/plans/backend-contract-v2.md, id not recorded)
+- shipped: ea856e88, aa0e0668
+
+### R-plugins-027 · shipped
+A backend can supply its account's usage windows and usage-limit wall, its running subagents and its list of conversations (resume picker, archive, optional fork and delete), and a turn's context reading is the one from that turn's end.
+- asked: 2026-10-21 (session: backend contract v2 plan, docs/plans/backend-contract-v2.md, id not recorded)
+- shipped: 1ef834a7, 570bd0d4, aa0e0668
+
+### R-plugins-028 · shipped
+The plugin manager lists every plugin it can find in the waterplane-dev GitHub org (repos tagged `waterplane-plugin`), installed or not, each with its maturity label (stable, preview, experimental; a plugin that declares none is "unrated", never shown as stable) and an install button. A curated public catalogue for outside authors is later, not now.
+- asked: 2026-10-23
+- shipped: fb0cb3c0, 960d75fd, 645751cf, 58a89d29, fb5061cc, 84b05d48
+
+### R-plugins-029 · shipped
+A person can add a plugin by its git URL; a repo with no valid plugin manifest is refused in words and nothing is left behind, and the confirm says plainly when the code is not from waterplane-dev and that it runs with full access to the desktop.
+- asked: 2026-10-23
+- shipped: fb0cb3c0, 960d75fd, 645751cf, 58a89d29, fb5061cc, 84b05d48
+
+### R-plugins-030 · shipped
+An installed plugin shows an update button when its repo holds a newer release tag (untagged repos track the default branch and say so); install and update only ever happen on a tap, and the row says when a restart is needed to load the change.
+- asked: 2026-10-23
+- shipped: fb0cb3c0, 960d75fd, 645751cf, 58a89d29, fb5061cc, 84b05d48
+
+### R-plugins-031 · shipped
+A plugin that declares npm dependencies is refused at install in words; plugins are zero-dependency for now.
+- asked: 2026-10-23
+- shipped: fb0cb3c0, 960d75fd, 645751cf, 58a89d29, fb5061cc, 84b05d48

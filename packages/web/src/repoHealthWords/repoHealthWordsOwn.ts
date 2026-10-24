@@ -55,3 +55,18 @@ export function ownShow(plot: Pick<RepoHealthPlot, "own" | "scope"> | null | und
   if (!own.declared && own.series.length === 0 && !own.absent) return { kind: "add", file: own.file };
   return { kind: "drawn", own };
 }
+
+/** The two verbs of a pending approval, side by side in ONE box. While the
+ *  repo's own commands wait, the jump bar's refresh verb is absent: beside an
+ *  approve button it read as a second way to do the same thing, and it is not
+ *  — it skips the repo's commands (bundled engine) or does nothing at all (the
+ *  repo's own engine, which never runs unapproved). */
+export function approveRunLabel(kind: "repo" | "bundled", series: { rows?: number } | null | undefined): string {
+  if (kind === "repo") return "approve and run its engine";
+  return series && (series.rows ?? 0) > 0 ? "approve and update" : "approve and build";
+}
+
+/** The other verb, offered only where the bundled engine can run without them. */
+export function skipOwnLabel(series: { rows?: number } | null | undefined): string {
+  return series && (series.rows ?? 0) > 0 ? "update without them" : "build without them";
+}

@@ -87,6 +87,7 @@ export function cleanClosedRow(raw: unknown): ClosedSession | null {
   keep("closedBy", typeof r.closedBy === "string" && CLOSED_BY.has(r.closedBy));
   keep("kind", typeof r.kind === "string" && KINDS.has(r.kind));
   keep("itemState", typeof r.itemState === "string" && ITEM_STATES.has(r.itemState));
+  keep("contextSpark", Array.isArray((r.contextSpark as { pts?: unknown } | undefined)?.pts));
   keep("itemOk", typeof r.itemOk === "boolean");
   for (const k of ["exitCode", "exitSignal", "openedAt", "lastActiveAt"] as const) keep(k, num(r[k]) !== undefined);
   // The per-turn AI summary is retired: a row an older build persisted still

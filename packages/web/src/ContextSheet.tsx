@@ -54,6 +54,7 @@ import {
 import { GAP_BREAK_MS } from "./contextPlot";
 import { AgentTopList, AgentWarnLine } from "./AgentTopList";
 import { DollarsWhy } from "./TurnCostCard";
+import { SkillSection } from "./SkillLanes";
 import { Button } from "./kit/Button";
 import { Hint } from "./kit/Hint";
 
@@ -452,6 +453,10 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, onReplan
               <AgentTopList agents={agents} models={doc?.models} picked={pickedAgent} onPick={setPickedAgent} />
             </>}
             {undated && <div className="empty ctx-note">{undated}</div>}
+
+            {/* Which skills entered a window, and when — one row per skill. */}
+            <SkillSection samples={samples} events={events} own={doc?.skills} agents={agents}
+              width={width} span={span} />
 
             {/* HOW the two lower charts are counted — method, so folded. */}
             {(spendNotes || agents.length > 0) && (

@@ -175,3 +175,16 @@ test("an out-of-range threshold is refused, never repaired", () => {
   assert.ok(contextLimitError("maxSkills", 2.5));
   assert.equal(contextLimitError("maxSkills", 2), null);
 });
+
+// A YAML loader reads these as a description; the strict match read 0 and called the whole file body.
+test("skillDescChars: BOM, leading blank lines, quoted key, CRLF and block scalars", () => {
+  const want = "does a thing".length;
+  assert.equal(skillDescChars("﻿---\nname: a\ndescription: does a thing\n---\nbody"), want);
+  assert.equal(skillDescChars("\n\n---\ndescription: does a thing\n---\nbody"), want);
+  assert.equal(skillDescChars('---\n"description": does a thing\n---\n'), want);
+  assert.equal(skillDescChars("---\r\ndescription: does a thing\r\n---\r\nbody"), want);
+  assert.equal(skillDescChars("---\ndescription: >\n  does a\n  thing\n---\n"), want);
+  assert.equal(skillDescChars("---\ndescription: |-\n  does a\n  thing\nname: x\n---\n"), want);
+  assert.equal(skillDescChars("---\n---\nbody"), 0);
+  assert.equal(skillDescChars("no frontmatter\n---\ndescription: x\n---"), 0);
+});

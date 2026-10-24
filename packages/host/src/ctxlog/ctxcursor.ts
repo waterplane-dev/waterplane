@@ -1,6 +1,6 @@
 /** The context log's cursor: the types, the ranged line reader and the accumulators' blanks and projections. Moved from ctxlog.ts. */
 import { closeSync, openSync, readSync, statSync } from "node:fs";
-import type { ColdStarts, CompactionCost, CompactionLedger, ContextEvent, ContextSample, CostBreakdown, TokenTotals } from "@waterplane/shared";
+import type { ColdStarts, CompactionCost, CompactionLedger, ContextEvent, ContextSample, CostBreakdown, SkillLoad, TokenTotals } from "@waterplane/shared";
 import { costOf, zeroCost, zeroTotals } from "@waterplane/shared";
 import { localDay } from "../convlog.js";
 
@@ -40,6 +40,8 @@ export interface ContextLog {
    *  from when nobody is holding a live `SessionInfo` (a closed session's
    *  graph), and the authority on what actually ran either way. */
   model: string | null;
+  /** Every skill body the conversation loaded — see `SkillLoad`. */
+  skills: SkillLoad[];
   truncated: boolean;
   mtime: number;
 }
@@ -249,6 +251,8 @@ export interface SeriesCursor {
   /** The same record's top-level `effort` — what that turn ran at. Null when
    *  the CLI did not write one. Feeds `SessionInfo.turnEffort`. */
   effort: string | null;
+  /** Skill bodies the log carried, oldest first, capped at `SKILL_CAP`. */
+  skills: SkillLoad[];
   truncated: boolean;
   /** Recent `message.id`s, for the streaming-duplicate rule. Bounded — the
    *  duplicates are adjacent, so a short memory is enough and an unbounded Set
@@ -326,6 +330,38 @@ export function projectCompaction(c: CompactRows): CompactionLedger {
 export const RAW_CAP = 20_000;
 export const EVENT_CAP = 2_000;
 export const SEEN_CAP = 512;
+/** Skill loads held per log. A conversation that loads more keeps the newest. */
+export const SKILL_CAP = 1_000;
+
+/** How the CLI opens a skill body it writes into the log. No quote in it, so
+ *  the raw JSON line contains it verbatim — usable as a pre-filter. */
+export const SKILL_BODY = "Base directory for this skill: ";
+
+/**
+ * A skill body entering the window, or null. The `Skill` tool's result is a
+ * meta user record carrying `sourceToolUseID` whose text opens with
+ * `SKILL_BODY` and the skill's directory; the name is that directory's last
+ * segment. Anything else — a prompt that quotes the phrase, a record with no
+ * tool behind it — is null. Undated ⇒ null: a load placed at "now" would be a
+ * moment nobody saw.
+ */
+export function skillLoadOf(row: Record<string, unknown>, t: number | null): SkillLoad | null {
+  if (t == null || row.type !== "user" || row.isMeta !== true || typeof row.sourceToolUseID !== "string") return null;
+  const content = (row.message as { content?: unknown } | undefined)?.content;
+  const first = Array.isArray(content) ? content[0] as { type?: unknown; text?: unknown } | undefined : undefined;
+  const text = first && first.type === "text" && typeof first.text === "string" ? first.text : null;
+  if (!text || !text.startsWith(SKILL_BODY)) return null;
+  const nl = text.indexOf("\n");
+  const dir = text.slice(SKILL_BODY.length, nl < 0 ? undefined : nl).trim().replace(/[\\/]+$/, "");
+  const name = dir.split(/[\\/]/).pop() ?? "";
+  if (!name) return null;
+  return { t, name, chars: text.length };
+}
+
+export function pushSkill(list: SkillLoad[], s: SkillLoad): void {
+  list.push(s);
+  if (list.length > SKILL_CAP) list.splice(0, list.length - SKILL_CAP);
+}
 
 export function remember(cur: SeriesCursor, id: string): boolean {
   if (cur.seen.has(id)) return false;
@@ -345,7 +381,7 @@ export function blank(path: string): SeriesCursor {
     cost: zeroCost(), unpriced: 0, models: [], modelTok: [], cum: zeroTotals(),
     compaction: blankCompaction(), shedAuto: 0, shedManual: 0, pendingRebuild: null,
     prevTok: 0, prevAt: 0, cold: blankCold(),
-    autoCompactTok: null, model: null, effort: null, truncated: false,
+    autoCompactTok: null, model: null, effort: null, skills: [], truncated: false,
     seen: new Set(), seenOrder: [],
   };
 }

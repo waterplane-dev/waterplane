@@ -751,8 +751,9 @@ public class MainActivity extends BridgeActivity {
                     return true;
                 }
                 if (request.isForMainFrame() && isWeb(url) && !isOurOrigin(url)) {
-                    if (isHostFileRoute(url)) {
-                        saveToDownloads(url.toString(), fileNameOf(url), null, null);
+                    if (isHostFileRoute(url) && isPairedHost(url)) {
+                        String name = Downloads.safeName(fileNameOf(url));
+                        saveToDownloads(url.toString(), name != null ? name : "download", null, null);
                         return true;
                     }
                     confirmLeaving(url);
@@ -796,17 +797,34 @@ public class MainActivity extends BridgeActivity {
      * shell loads them as `<img src>`/`<a download>`". A hit here is a file the
      * user asked for, never a page to hand to a browser.
      *
-     * Deliberately the PATH only, and deliberately not a check against the
-     * configured host address: the shell does not hold the daemon's address (the
-     * web layer does), and a wrong guess would be the failure this exists to fix.
-     * The worst case of a false positive is a file saved instead of a page
-     * opened, on a URL nothing but this app produces.
+     * The PATH shape alone used to decide it. That let any origin spell the
+     * route: a Markdown link `https://evil/api/repos/x/artifact?path=app.apk`
+     * in an agent-written file was fetched into Downloads with one tap and no
+     * dialog — the dialog every other foreign link gets. So the shortcut now
+     * also needs the URL to be ON the paired host (`isPairedHost`); a foreign
+     * origin that merely looks like the route is confirmed like any other link.
      */
     private static boolean isHostFileRoute(Uri url) {
         String path = url.getPath();
         if (path == null) return false;
         return path.matches("/api/repos/[^/]+/artifact")
                 || path.matches("/api/repos/[^/]+/inbox/[^/]+");
+    }
+
+    /**
+     * Is this URL on the host this phone is paired with — scheme AND authority?
+     * The background link keeps the host's `ws(s)://` address (`ShellLinkService`);
+     * the app's own download links use the same base. No saved host, or another
+     * one: not the paired host, so the leave-the-app dialog decides.
+     */
+    private boolean isPairedHost(Uri url) {
+        String base = ShellLinkService.httpBase(ShellLinkService.savedUrl(this));
+        if (base == null) return false;
+        Uri b = Uri.parse(base);
+        String scheme = url.getScheme(), auth = url.getEncodedAuthority();
+        return scheme != null && auth != null
+                && scheme.equalsIgnoreCase(b.getScheme())
+                && auth.equalsIgnoreCase(b.getEncodedAuthority());
     }
 
     /**

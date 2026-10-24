@@ -6,6 +6,7 @@
  */
 import { fmtCount, fmtShare } from "@waterplane/shared";
 import type { KindRow } from "./backendLedger.ts";
+import { RowTitle, RowSub } from "@waterplane/kit";
 
 /** The split under a hero, as the same bars a contributed ledger view draws. */
 export function KindBars({ rows, name = (k) => k }: { rows: KindRow[]; name?: (kind: string) => string }) {
@@ -29,11 +30,11 @@ export function KindBars({ rows, name = (k) => k }: { rows: KindRow[]; name?: (k
 export function NumRow({ label, value, subs, title }: { label: string; value: string; subs: string[]; title?: string }) {
   return (
     <div className="row ctx-row ts-numrow" title={title}>
-      <span className="row-title">{label}</span>
+      <RowTitle>{label}</RowTitle>
       <span className="ts-num">{value}</span>
       {subs.length > 0 && (
         <span className="row-meta">
-          {subs.map((t) => <span key={t} className="row-sub">{t}</span>)}
+          {subs.map((t) => <RowSub key={t}>{t}</RowSub>)}
         </span>
       )}
     </div>

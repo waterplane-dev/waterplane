@@ -372,6 +372,7 @@ export function CaptureSheet({ repo, targets, runs, backends, output, outTick, o
                 const n = captureCut(runs, s).length;
                 if (!n) return null;
                 return (
+                  /* raw: a <button> that is itself the chip (kit Tag is a span) */
                   <button key={s} className={`tag tag-filter ${cut === s ? "on" : ""} ${s === "failed" ? "dead" : s === "running" ? "coding" : "idle"}`}
                     title={`show only the ${n} ${CUT_LABEL[s].chip}`}
                     onClick={() => { track("action:capture.filter"); setCut(cut === s ? "all" : s); setSel(null); }}>

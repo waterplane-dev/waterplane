@@ -60,6 +60,25 @@ export function passiveAllows(
   return !!rel && queuedApk(repoId, rel);
 }
 
+/** Writes a passive row may NEVER make, unlocked or not. */
+const PASSIVE_NEVER_WRITES = new Set(["/api/pair/mint", "/api/devices/revoke"]);
+
+/**
+ * Auth MATERIAL is out of a passive row's reach even while it is unlocked: a
+ * pairing code (it mints a full token), a revoke, a peer pairing, the LAN
+ * identity secret. The unlock lifts the device to full scope for 30 minutes;
+ * each of these would outlive it as a credential or an auth change in its own
+ * right. `/api/auth/token` and `/api/auth/pin` refuse a passive row the same
+ * way in `server/http.ts`, and the WebSocket `auth.*` ops in `routes/system.ts`.
+ * Pure: `passive.test.mjs` asks it.
+ */
+export function passiveNeverAllows(method: string, path: string): boolean {
+  if (path === "/api/lan/identity") return true;
+  const write = !READ.has(method.toUpperCase());
+  if (path === "/api/peers" || path.startsWith("/api/peers/")) return write;
+  return write && PASSIVE_NEVER_WRITES.has(path);
+}
+
 /** The auto-pull queue as a passive device may see it: APKs only. */
 export function passiveItems(items: readonly PullItem[]): PullItem[] {
   return items.filter(isPassiveItem);

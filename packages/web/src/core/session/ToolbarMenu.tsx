@@ -24,7 +24,7 @@ import { featureToolbarItem } from "../toolbarItems";
 import { menuItems, sessionViews } from "../extensionPoints";
 import { pinHeaderView } from "./headerViews";
 import { tallyTitle, turnTally } from "../sessions/tags";
-import { closeToolbarMenu } from "../../features/toolbarCfg";
+import { closeToolbarMenu, setToolbarOpen } from "../../features/toolbarCfg";
 import { showToast } from "../../toast";
 import { track } from "../../usage";
 import type { Connection } from "../conn/useConnection";
@@ -137,7 +137,7 @@ export function renderToolbarItem(c: ToolbarCtx, t: ToolbarItem, compact = false
           <ext.icon size={ICON} />{label && <> {ext.label}</>}
         </Button>
       );
-      const own = featureToolbarItem(t.id, { label, dismiss, active });
+      const own = featureToolbarItem(t.id, { label, dismiss, openMenu: () => setToolbarOpen(true), active });
       if (own !== undefined) return <Fragment key={t.id}>{own}</Fragment>;
       // The toolbar is the worst offender the hints exist for: icons-only by
       // default, and a `title` of "fork" / "ctx" / "teleport" explains

@@ -532,7 +532,19 @@ export interface RepoHealthView {
    * own copy cannot run: "the latest engine" is a file on this desktop, and an
    * agent told to adopt it without the path goes looking in the wrong tree.
    */
-  engine: { kind: "repo" | "bundled"; bundled?: string | null } | null;
+  engine: {
+    kind: "repo" | "bundled";
+    bundled?: string | null;
+    /** The repo's own engine is committed code this desktop has not been told
+     *  to run: nothing was spawned. Absent = approved (or bundled). */
+    needsApproval?: boolean;
+    /** The file that waits for approval (with `needsApproval`): the repo's own
+     *  engine, or — with `kind: "bundled"` — its committed health.json commands. */
+    path?: string;
+    /** One-shot consent token minted by the read that drew the approval; the
+     *  refresh that approves sends it back (`confirmgate.ts`). */
+    approveToken?: string;
+  } | null;
   /** The repo's own HEAD, so "measured through" can be compared to "now". */
   head: { sha: string; ts: number } | null;
   series: RepoHealthSeries | null;

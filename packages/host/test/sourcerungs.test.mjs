@@ -31,7 +31,10 @@ const { handleApi } = await import("../dist/api.js");
 function fakeBackend(id, extra = {}) {
   return {
     ...claudeBackend, id, label: id,
-    caps: { ...claudeBackend.caps, transcript: "none", contextMeter: false, promptBoxes: false, hooks: "none" },
+    // Every fact from its own channel only (no core reader): `{source:true}` is the whole table.
+    facts: { turns: [{ source: true }], dialogs: [{ source: true }], transcript: [{ source: true }], context: [{ source: true }], delivery: [{ source: true }] },
+    // The slots its `facts` list (what the live lookup below answers with is the test's).
+    sources: { attach, turns: {}, dialogs: {}, transcript: {}, context: {}, delivery: {} },
     healthScope: false,
     ...extra,
   };

@@ -11,6 +11,7 @@ import { useStore } from "../../sdk";
 import { gate } from "./store";
 import { unlocked } from "./actions";
 import { Button } from "../../kit";
+import { SetNote } from "../../SettingsKit";
 
 const ICON = 16;
 
@@ -43,7 +44,7 @@ export function AuthGate({ reconnect }: {
         <div className="auth-title"><Lock size={20} style={{ verticalAlign: "-3px", marginRight: 6 }} />Locked</div>
         {authGate.enabled ? (
           <>
-            <p className="set-note">This device is on the {authGate.kind === "lan" ? "local network" : "network"}, which is password-protected. Enter the password to continue.</p>
+            <SetNote as="p">This device is on the {authGate.kind === "lan" ? "local network" : "network"}, which is password-protected. Enter the password to continue.</SetNote>
             {/* The button stays pressable with nothing typed and SAYS why it did not
                 unlock, rather than greying out (`Unavailable.tsx`). */}
             <form onSubmit={(e) => { e.preventDefault(); if (!authPw) setAuthErr("type the password first"); else if (!authBusy) doLogin(); }}>
@@ -51,7 +52,7 @@ export function AuthGate({ reconnect }: {
                 className="auth-input" type="password" autoFocus placeholder="password"
                 value={authPw} onChange={(e) => { setAuthPw(e.target.value); setAuthErr(null); }}
               />
-              {authErr && <div className="set-note oracle-warn" style={{ marginTop: 8 }}>{authErr}</div>}
+              {authErr && <SetNote className="oracle-warn" style={{ marginTop: 8 }}>{authErr}</SetNote>}
               <Button variant="primary" type="submit" style={{ marginTop: 12, width: "100%" }}>
                 {authBusy ? "checking…" : "unlock"}
               </Button>
@@ -59,7 +60,7 @@ export function AuthGate({ reconnect }: {
           </>
         ) : (
           <>
-            <p className="set-note">This device is on the local network, and LAN access is protected — but no password has been set yet. Set one from the desktop itself, or from a phone connected over Tailscale (Settings → LAN access), then retry.</p>
+            <SetNote as="p">This device is on the local network, and LAN access is protected — but no password has been set yet. Set one from the desktop itself, or from a phone connected over Tailscale (Settings → LAN access), then retry.</SetNote>
             <Button style={{ marginTop: 12 }} onClick={() => reconnect()}><RotateCw size={ICON} /> retry</Button>
           </>
         )}

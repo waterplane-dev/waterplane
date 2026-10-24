@@ -65,3 +65,12 @@ With a picture open in the annotator, Ctrl/Cmd+Return sends the picture first; t
 - asked: 2026-10-20
 - shipped: abcd5220
 
+### R-input-015 · requested
+Remote desktop keyboard input accepts upper-case letters.
+- asked: 2026-10-21
+
+### R-input-016 · shipped
+Typed answers sent to a backend are limited to 1000 characters and sent with Return only.
+- asked: 2026-10-22
+- shipped: ea856e88
+

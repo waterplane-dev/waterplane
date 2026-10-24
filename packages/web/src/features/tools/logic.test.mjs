@@ -1,7 +1,53 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { ACTION_IDS, OVERLAY_IDS, archiveStartRepo, knownFeatureIds, liveConversationIds } from "./logic.ts";
+import {
+  ACTION_IDS, OVERLAY_IDS, archiveBackendHint, archiveBackends, archiveStartRepo, knownFeatureIds, liveConversationIds, liveSessionFor,
+} from "./logic.ts";
+
+const desc = (id, label, caps = {}, extra = {}) => ({ id, label, caps, ...extra });
+
+test("archive backends: no frame, or an empty one, is claude alone (no chip row)", () => {
+  assert.deepEqual(archiveBackends(null), [{ id: "claude", label: "Claude Code" }]);
+  assert.deepEqual(archiveBackends([]), [{ id: "claude", label: "Claude Code" }]);
+});
+
+test("archive backends: claude first, then only backends whose facts include conversations, in frame order", () => {
+  const frame = [
+    desc("bravo", "Bravo"), // fact absent: never a tab
+    desc("acme", "Acme", { conversations: true }),
+    desc("shell", "Shell", { conversations: true }, { kind: "shell" }),
+    desc("claude", "Claude Code (desk)", { conversations: true }),
+    desc("delta", "Delta", { conversations: false }),
+  ];
+  assert.deepEqual(archiveBackends(frame), [
+    { id: "claude", label: "Claude Code (desk)" },
+    { id: "acme", label: "Acme" },
+  ]);
+});
+
+test("the non-claude hint names the backend's own label and says what is not offered", () => {
+  const h = archiveBackendHint("Acme");
+  assert.match(h, /one Acme wrote; resuming one starts Acme\./);
+  assert.match(h, /forking and bookmarks are not offered for Acme yet/);
+});
+
+test("live conversation ids include a plugin session's backendSessionId", () => {
+  const s = liveConversationIds([{ claudeSessionId: "c1" }, { backendSessionId: "p1" }, {}]);
+  assert.deepEqual([...s].sort(), ["c1", "p1"]);
+});
+
+test("a session with neither id contributes nothing", () => {
+  assert.equal(liveConversationIds([{}, { claudeSessionId: undefined, backendSessionId: undefined }]).size, 0);
+});
+
+test("the live session for a conversation is found by either id", () => {
+  const a = { id: "a", claudeSessionId: "c1" };
+  const b = { id: "b", backendSessionId: "p1" };
+  assert.equal(liveSessionFor([a, b], "c1"), a);
+  assert.equal(liveSessionFor([a, b], "p1"), b);
+  assert.equal(liveSessionFor([a, b], "zz"), undefined);
+});
 
 test("the catalog prefixes every id the way track() records it, toolbar ids first", () => {
   const ids = knownFeatureIds(["diff", "model"]);

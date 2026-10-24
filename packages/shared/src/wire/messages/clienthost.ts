@@ -6,8 +6,10 @@ import type { NotifyPrefs } from "../notify.js";
 import type { StallReport } from "../../netstall.js";
 import type { PluginValue } from "../../plugin.js";
 import type { LimitResumeMode } from "../session.js";
+import type { ClientUpdatesMsg } from "./clientupdates.js";
 
 export type ClientHostMsg =
+  | ClientUpdatesMsg
   | { t: "update.status" }
   | { t: "update.check" }
   | { t: "update.apply" }

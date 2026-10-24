@@ -29,6 +29,17 @@ not a redistribution of Claude Code.
 | `react` | 18.3.1 | MIT | https://reactjs.org/ |
 | `react-dom` | 18.3.1 | MIT | https://reactjs.org/ |
 
+## `packages/extensions/ocr` (downloaded to the phone, not in the web bundle)
+
+The text-in-marks extension's engine is copied from these packages into its `assets/` folder at
+build time and downloaded to the phone only when the person switches the extension on.
+
+| Package | Version | License | Project |
+| --- | --- | --- | --- |
+| `tesseract.js` (worker script) | 7.0.0 | Apache-2.0 | https://github.com/naptha/tesseract.js |
+| `tesseract.js-core` (Tesseract + Leptonica in wasm) | 7.0.0 | Apache-2.0 | https://github.com/naptha/tesseract.js-core |
+| `@tesseract.js-data/eng`, `@tesseract.js-data/deu` (`4.0.0_best_int`) | 1.0.0 | MIT (package); the traineddata is Apache-2.0 (tesseract-ocr/tessdata_best) | https://github.com/naptha/tessdata |
+
 ## `packages/shared`
 
 No runtime dependencies — it's the wire-protocol type definitions shared by

@@ -14,7 +14,12 @@
  *  4. the box is not blocked (`isBlocked`: trust/tool/plan kinds, or a question
  *     or option naming something destructive, permission-granting or secret);
  *     a checkbox box is refused too, because a digit TOGGLES a row there;
- *  5. `choice` is one of the box's options.
+ *  5. `choice` is one of the box's options;
+ *  6. on a session whose backend holds its ask rules through this gate
+ *     (`askRulesVia: "gate"` — a CLI with allow/deny but no ASK, Copilot 1.0.91),
+ *     a box whose question or options match one of the rules it was launched
+ *     with (`askrules.ts`'s `askRuleMatches`) is a person's, and the refusal
+ *     names the rule.
  *
  * Refused ⇒ `{ ok:false, reason }` in words and nothing typed. Accepted ⇒ the
  * same dispatcher a phone's tap goes through (`sessions.answerBox`: the CLI's
@@ -29,6 +34,7 @@ import { randomUUID } from "node:crypto";
 import { promptFingerprint } from "@waterplane/shared";
 import type { DecisionLogEntry, DetectedPrompt, NotificationKind } from "@waterplane/shared";
 import { questionWindow } from "./question.js";
+import { askRuleHit, askRulesForCwd } from "./askrules.js";
 import { recordSent } from "./sentlog.js";
 
 /** Squash to a whitespace-free, lowercase view — the TUI renders without spaces. */
@@ -77,6 +83,8 @@ export interface GateInput {
   /** Fingerprint of the box the plugin was last told about on this session, or null. */
   told: string | null;
   choice: number;
+  /** The ask rules the gate holds for this session (`askRulesVia: "gate"`); absent/empty = none. */
+  askRules?: readonly string[];
 }
 
 /** The reason the gate refuses, in words — or null when it lets the answer through. */
@@ -87,6 +95,8 @@ export function gateRefusal(g: GateInput): string | null {
   if (!g.prompt) return "no question is open on that session";
   if (!g.told || g.told !== promptFingerprint(g.prompt)) return "the question on screen is not the one the plugin was told about";
   if (BLOCK_KINDS.has(g.prompt.kind)) return `a ${g.prompt.kind} box is always a person's call`;
+  const rule = g.askRules?.length ? askRuleHit(g.askRules, `${g.prompt.question}\n${g.prompt.options.map((o) => o.label).join("\n")}`) : null;
+  if (rule) return `that question matches the ask rule ${rule} — a person's call`;
   if (isBlocked(g.prompt)) return "that question names something destructive, permission-granting or secret — a person's call";
   if (g.prompt.multi) return "a checkbox box is never answered automatically (a digit toggles a row there)";
   if (!Number.isInteger(g.choice) || !g.prompt.options.some((o) => o.index === g.choice)) return `${g.choice} is not one of the box's options`;
@@ -96,7 +106,7 @@ export function gateRefusal(g: GateInput): string | null {
 /** What `gateAnswer` needs from the host — narrow, so it runs against fakes. */
 export interface GateDeps {
   sessions: {
-    get(id: string): { title: string; running: boolean; prompt?: DetectedPrompt | null; pluginAnswer?: Record<string, boolean> } | null | undefined;
+    get(id: string): { title: string; running: boolean; cwd?: string; prompt?: DetectedPrompt | null; pluginAnswer?: Record<string, boolean>; askRulesVia?: string } | null | undefined;
     /** The ONE answer dispatcher (`sessions/boxes.ts`): the CLI's own channel
      *  for a dialog it posed, else the walk for a `nav` box, else the digit. */
     answerBox(id: string, choice: number): Promise<{ ok: boolean; reason?: string }>;
@@ -119,6 +129,7 @@ export async function gateAnswer(
   const reason = gateRefusal({
     pluginName: plugin.name, answers: plugin.answers, sessionLive: !!s?.running,
     switchOn: !!s?.pluginAnswer?.[plugin.id], prompt, told, choice,
+    ...(s?.askRulesVia === "gate" ? { askRules: gateAskRules(sessionId, s.cwd) } : {}),
   });
   if (reason || !s || !prompt) return { ok: false, reason: reason ?? "no question is open on that session" };
   const label = prompt.options.find((o) => o.index === choice)?.label ?? `option ${choice}`;
@@ -142,6 +153,62 @@ export async function gateAnswer(
   if (!ok) return { ok: false, reason: failed ?? "the answer could not be typed" };
   deps.notify("autofire", { title: `Answered by ${plugin.name} · ${s.title}`, body: `Chose ${choice}. ${label}${why ? ` — ${why}` : ""}`, sessionId, tag: `autofire-${sessionId}` });
   return { ok: true };
+}
+
+// ── Ask rules held by the gate (`askRulesVia: "gate"`) ─────────────────────
+//
+// The rules a session was LAUNCHED with, the same "a running session keeps the rules it started
+// with" as claude's `permissions.ask` (`askrules.ts`). Memory only: after a restart a re-attached
+// session falls back to the rules its repo has NOW — the stricter of two unknowns is a person's
+// tap. Dropped with the session's other rules (`forgetRules({sessionId})`).
+const launchAskRules = new Map<string, readonly string[]>();
+
+/** Record the ask rules a gate-held launch was given (`SessionManager.create`, `tmux.ts`'s re-attach). */
+export function holdAskRules(sessionId: string, rules: readonly string[] | undefined): void {
+  launchAskRules.set(sessionId, [...(rules ?? [])]);
+}
+
+/** The rules recorded for a session's launch, or undefined (never held, or a restart). */
+export function heldAskRules(sessionId: string): string[] | undefined {
+  const r = launchAskRules.get(sessionId);
+  return r ? [...r] : undefined;
+}
+
+/** The ask rules the gate holds for a session: its launch's, else its repo's current ones. */
+export function gateAskRules(sessionId: string, cwd: string | undefined): readonly string[] {
+  return launchAskRules.get(sessionId) ?? askRulesForCwd(cwd);
+}
+
+/**
+ * Hold a gate launch's ask rules around its spawn: a spawn that THROWS (no tmux, the PTY cap)
+ * registers no session, so nothing would ever `forgetRules` it — the entry is released here.
+ * A launch whose rules are not the gate's (`native`) holds nothing.
+ */
+export function holdAskRulesFor<T>(sessionId: string, via: string | undefined, rules: readonly string[] | undefined, spawn: () => T): T {
+  if (via !== "gate") return spawn();
+  holdAskRules(sessionId, rules);
+  try { return spawn(); } catch (e) { launchAskRules.delete(sessionId); throw e; }
+}
+
+/** The ask rules the gate holds for THIS session — none unless it was launched `askRulesVia: "gate"`. */
+export function sessionAskRules(sessionId: string, s: { cwd?: string; askRulesVia?: string } | null | undefined): readonly string[] {
+  return s?.askRulesVia === "gate" ? gateAskRules(sessionId, s.cwd) : [];
+}
+
+/**
+ * The ask rule a CLI-posed dialog names, or null — over its question, every option's label and
+ * any `remember` the source put on a row (the key is often the command line itself). The same
+ * words `gateRefusal` reads, plus what a standing rule would be keyed by.
+ */
+export function dialogAskRuleHit(rules: readonly string[], d: { question?: unknown; options?: readonly { label?: unknown; remember?: { key?: unknown; label?: unknown } }[] }): string | null {
+  if (!rules.length) return null;
+  const words: string[] = [typeof d.question === "string" ? d.question : ""];
+  for (const o of d.options ?? []) {
+    if (typeof o?.label === "string") words.push(o.label);
+    if (typeof o?.remember?.key === "string") words.push(o.remember.key);
+    if (typeof o?.remember?.label === "string") words.push(o.remember.label);
+  }
+  return askRuleHit(rules, words.join("\n"));
 }
 
 // ── Standing rules: a "don't ask again" a PERSON tapped ─────────────────────
@@ -206,10 +273,13 @@ export function ruleLabel(r: { key: unknown; label: unknown } | null | undefined
  * Record the rule a person's tap made (`boxes.ts`'s `answerBox`, `byPerson`). Returns the rule,
  * or null when the option's `remember` is not something to keep (no key, too long, no owner).
  */
-export function rememberRule(r: { sessionId: string; plugin: string | undefined; backend: string; key: unknown; label: unknown }, now = Date.now()): AnswerRule | null {
+export function rememberRule(r: { sessionId: string; plugin: string | undefined; backend: string; key: unknown; label: unknown; askRules?: readonly string[]; text?: string }, now = Date.now()): AnswerRule | null {
   const label = ruleLabel(r);
   if (label === null || !r.sessionId || !r.backend || !r.plugin) return null;
   const key = r.key as string;
+  // A dialog an ask rule the gate holds names is a person's EVERY time: the tap answers it, but
+  // keeps no rule `ruleAllows` would then have to refuse (`dialogToPrompt` promised none).
+  if (r.askRules?.length && askRuleHit(r.askRules, `${r.text ?? ""}\n${label}\n${key}`)) return null;
   const id = ruleId(r.sessionId, r.plugin, r.backend, key);
   const had = rules.get(id);
   if (had) return had;
@@ -236,6 +306,8 @@ export function sessionRules(sessionId: string): Record<string, { label: string;
 
 /** Drop rules: one session's, one plugin's, or both (and optionally only these backends'). Returns how many. */
 export function forgetRules(f: { sessionId?: string; plugin?: string; backends?: readonly string[] }): number {
+  // A session's end (no plugin named) also drops the ask rules the gate held for it.
+  if (f.sessionId !== undefined && f.plugin === undefined && !f.backends) launchAskRules.delete(f.sessionId);
   let n = 0;
   const hit: string[] = [];
   for (const [k, r] of rules) {
@@ -249,14 +321,18 @@ export function forgetRules(f: { sessionId?: string; plugin?: string; backends?:
 }
 
 /** Why `ruleAllows` says no, in words — or null when that exact rule exists. Pure but for the store. */
-export function ruleRefusal(g: { pluginId: string; pluginName: string; answers: boolean; backends: readonly string[]; session: { running: boolean; backend?: string } | null; sessionId: string; key: unknown }): string | null {
+export function ruleRefusal(g: { pluginId: string; pluginName: string; answers: boolean; backends: readonly string[]; session: { running: boolean; backend?: string } | null; sessionId: string; key: unknown; askRules?: readonly string[] }): string | null {
   // The same first rung as `gateRefusal`: a rule answers unattended, so it is an answer.
   if (!g.answers) return `${g.pluginName} did not declare "answers" in its manifest, so it may only suggest`;
   if (!g.session || !g.session.running) return "that session is not running";
   const b = g.session.backend ?? "claude";
   if (!g.backends.includes(b)) return `that session runs ${b}, which is not a backend ${g.pluginName} declares`;
   if (typeof g.key !== "string" || !g.key) return "no rule was named";
-  if (!rules.has(ruleId(g.sessionId, g.pluginId, b, g.key))) return `no rule a person made on this session for ${g.pluginName} covers that — ask them`;
+  const rule = rules.get(ruleId(g.sessionId, g.pluginId, b, g.key));
+  if (!rule) return `no rule a person made on this session for ${g.pluginName} covers that — ask them`;
+  // An ask rule outranks every standing allow, as claude's `permissions.ask` does (`askRulesVia: "gate"`).
+  const ask = g.askRules?.length ? askRuleHit(g.askRules, `${rule.label}\n${rule.key}`) : null;
+  if (ask) return `that request matches the ask rule ${ask} — a person's call, whatever "don't ask again" was tapped`;
   return null;
 }
 
@@ -265,12 +341,12 @@ export function ruleRefusal(g: { pluginId: string; pluginName: string; answers: 
  * rule; a yes is counted and audited (sent row, decision row, autofire note) exactly as a gated answer.
  */
 export function gateRule(
-  deps: Pick<GateDeps, "decision" | "notify"> & { sessions: { get(id: string): { title: string; running: boolean; backend?: string } | null | undefined } },
+  deps: Pick<GateDeps, "decision" | "notify"> & { sessions: { get(id: string): { title: string; running: boolean; backend?: string; cwd?: string; askRulesVia?: string } | null | undefined } },
   plugin: { id: string; name: string; answers: boolean; backends: readonly string[] },
   sessionId: string, key: unknown, why: string,
 ): { ok: boolean; reason?: string } {
   const s = deps.sessions.get(sessionId) ?? null;
-  const reason = ruleRefusal({ pluginId: plugin.id, pluginName: plugin.name, answers: plugin.answers, backends: plugin.backends, session: s, sessionId, key });
+  const reason = ruleRefusal({ pluginId: plugin.id, pluginName: plugin.name, answers: plugin.answers, backends: plugin.backends, session: s, sessionId, key, askRules: sessionAskRules(sessionId, s) });
   if (reason || !s) return { ok: false, reason: reason ?? "that session is not running" };
   const rule = rules.get(ruleId(sessionId, plugin.id, s.backend ?? "claude", key as string))!;
   rule.uses++;

@@ -318,8 +318,10 @@ export interface CoreApi {
     openCwd(cwd: string, title: string, resume?: boolean, resumeMode?: "continue" | "pick" | "fork",
       launchOverride?: LaunchOpts, resumeSessionId?: string): string | null;
     /** Kill this session and start it again on `patch`, as ONE durable
-     *  `session.create` with `replaceSessionId` — the model sheet's relaunch. */
-    relaunch(s: SessionInfo, patch: Partial<LaunchOpts>): void;
+     *  `session.create` with `replaceSessionId` — the model sheet's relaunch.
+     *  `quiet`: no sheet closed, no toast, focus only if `s` is on screen.
+     *  `prompt`: the new session's first prompt, inside the same op. */
+    relaunch(s: SessionInfo, patch: Partial<LaunchOpts>, opts?: { quiet?: boolean; prompt?: string }): void;
     /**
      * Switch to a plain shell tab on the desktop — for a sheet whose job is half on the phone and
      * half at a prompt (a command to run, a code to confirm). `key` is the caller's own name for
@@ -532,6 +534,8 @@ export interface ToolbarItemDef {
     label: boolean;
     /** Shut the menu behind the tap (no-op for a pin). */
     dismiss(): void;
+    /** Open the ☰ menu: how a pin whose content is a panel hands over to the menu line. */
+    openMenu(): void;
     active: SessionInfo | null;
   }) => ReactNode | null;
 }
@@ -612,6 +616,21 @@ export interface FeatureManifest {
   menuItems?: readonly MenuItemDef[];
   /** Buttons on the masked password field's row (`SecretFillerDef`). */
   secretFillers?: readonly SecretFillerDef[];
+  /** Reads the words inside a mark on an image, on the phone (`ImageTextReader`). Consulted only
+   *  while this extension is switched on (`isExtensionEnabled(id)`); the first such one wins. */
+  imageText?: ImageTextReader;
+}
+
+/**
+ * Text recognition ON THE PHONE for the annotator: when a highlight, box or circle is finished,
+ * core crops that mark's area from the clean picture (upscaled for small text, PNG) and asks.
+ * The answer becomes the mark's `reads: "…"` — only if the person has not typed words for it
+ * meanwhile, and never sent anywhere but the note. `null` or empty = nothing read; a throw, a
+ * timeout or an abort is the same absence. `signal` aborts when the mark goes, the annotator
+ * closes or 10 s pass. Never a desktop or cloud call (R-images-012, R-images-015).
+ */
+export interface ImageTextReader {
+  read(crop: Blob, opts: { signal: AbortSignal }): Promise<string | null>;
 }
 
 /** An icon a contribution draws — wide enough for a lucide-react icon's own propTypes. */

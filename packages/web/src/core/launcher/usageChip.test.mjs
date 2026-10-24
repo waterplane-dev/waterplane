@@ -84,9 +84,13 @@ test("two sources or more: one Gauge, header-key metrics, the group last in the 
 
 test("the markup keeps today's claude chip and never prints ? for another source", () => {
   const src = readFileSync(new URL("./UsageChip.tsx", import.meta.url), "utf8");
-  for (const needle of ['className="usage-unit usage-reset"', 'className="usage-sep"', '<span className="usage-unit">wk</span>', "className={`usage-key ${figuresHot(f)", "className={`usage-key${group"]) {
+  for (const needle of ['className="usage-unit usage-reset"', 'className="usage-sep"', '<span className="usage-unit">wk</span>', "className={`usage-key${figuresHot(f)", "className={`usage-key${group"]) {
     assert.ok(src.includes(needle), needle);
   }
+  // The chip IS a key button: every usage-key element is the kit <Button> (a bare <div>/<span> would still carry the class).
+  const keyTags = src.match(/<\w+ [^>]*className=\{`usage-key/g) ?? [];
+  assert.equal(keyTags.length, 2, "the lone claude chip and the group's segments");
+  assert.ok(keyTags.every((t) => t.startsWith("<Button ")), `usage-key is a <Button>: ${keyTags}`);
   const other = src.slice(src.indexOf("function OtherFace"), src.indexOf("/** The long-press wording"));
   assert.ok(!other.includes('"?"'), "another source never draws ?");
 });

@@ -842,6 +842,7 @@ const PULLLINK_SPLIT_FILES = {
   "pull/pullConsts.ts": 100,
   "pull/pullEngine.ts": 170,
   "pull/pullManager.ts": 130,
+  "pull/pullMime.ts": 60,
   "pull/pullNative.ts": 235,
   "pull/pullQueue.ts": 320,
   "pull/pullRange.ts": 220,
@@ -886,6 +887,7 @@ const CHART_SPLIT_FILES = {
   "contextPlot/cplotAxis.ts": 275,
   "contextPlot/cplotModels.ts": 130,
   "contextPlot/cplotPaths.ts": 195,
+  "contextPlot/cplotSkills.ts": 135,
   "contextPlot/cplotSpark.ts": 185,
   "contextPlot/cplotSpend.ts": 295,
   "contextPlot/cplotWords.ts": 150,
@@ -895,6 +897,7 @@ const CHART_SPLIT_FILES = {
   "kit/chart/chartWords.ts": 15,
   "kit/chart/stats/splotBars.ts": 150,
   "kit/chart/stats/splotDay.ts": 180,
+  "kit/chart/stats/splotTicks.ts": 35,
   "kit/chart/stats/splotMix.ts": 375,
   "kit/chart/stats/splotUsage.ts": 305,
   "kit/chart/stats/splotWeeks.ts": 215,
@@ -937,6 +940,7 @@ const ANNOTATOR_SPLIT_FILES = {
   "annotator/AnnStage.tsx": 48,
   "annotator/AnnTextOnly.tsx": 45,
   "annotator/AnnToolbar.tsx": 105,
+  "annotator/annAutoRead.ts": 140, // the phone's text-in-marks read (R-images-015)
   "annotator/annDraw.ts": 270,
   "annotator/annEdit.ts": 150,
   "annotator/annGeom.ts": 95,
@@ -945,7 +949,8 @@ const ANNOTATOR_SPLIT_FILES = {
   "annotator/annRead.ts": 115,
   "annotator/annSend.ts": 155,
   "annotator/annTypes.ts": 170,
-  "annotator/useAnnotator.ts": 290, // +"text only" (annOcr.ts) state
+  "annotator/useAnnotator.ts": 305, // +"text only" (annOcr.ts) state, +the phone's mark reader (annAutoRead.ts)
+  "annotator/useAutoPlace.ts": 35,
 };
 
 test("the annotator facade does not grow", () => {
@@ -999,7 +1004,7 @@ const WEBCLIENT_SPLIT_FILES = {
   "webapi/webapiRoot.ts": 20,
   "webapi/webapiSessions.ts": 105,
   "webapi/webapiStats.ts": 85,
-  "webapi/webapiTree.ts": 100, // +bookmark set/remove and the archived reader's two reads
+  "webapi/webapiTree.ts": 116, // +bookmark set/remove and the archived reader's two reads; +another backend's conversations list/delete
   "webapi/webapiTypes.ts": 145,
   "gallery/DocIcon.tsx": 30,
   "gallery/GalleryBar.tsx": 105, // where/what moved to GalleryFilters
@@ -1054,12 +1059,11 @@ test("every file in webapi/, gallery/ and repoHealthWords/ is listed once, under
   assert.deepEqual(bad, []);
 });
 
-/** `.key` buttons still hand-written outside kit/ (kit/Button.tsx is the one). The
- *  leftovers are of two kinds (docs/plans/ui-kit-components.md, P1): sites with a DOM attribute
- *  before className (Button writes className first), and `key${c ? " x" : ""}` templates with no
- *  space after `key` (Button would render "key  x"). A later package may move them. Lower it,
- *  never raise it. */
-const MAX_RAW_KEY_BUTTONS = 36;
+/** `.key` buttons still hand-written outside kit/ (kit/Button.tsx is the one). None are left: the
+ *  no-space templates, whole-string ternaries and attribute-order sites all moved to <Button> (the
+ *  trailing "key " space and the attribute order are DOM-only changes). `ConfirmButton` is its own
+ *  component and takes the caller's whole class string, so it is not counted. Lower it, never raise it. */
+const MAX_RAW_KEY_BUTTONS = 0;
 
 /** The STRING text of a className initializer (identifiers are never read, so a variable that
  *  happens to be called `key` is not the class). */
@@ -1109,10 +1113,9 @@ test(`at most ${MAX_RAW_KEY_BUTTONS} hand-written <button className="key …"> o
 
 /** Same ratchet over the in-repo extensions' web code (every packages/extensions/<name>/web, found by
  *  reading the directory — a checkout may hold more or fewer extensions than the public mirror, so the
- *  count can only ever be lower there). What is left: `key${c ? " x" : ""}` templates with no space
- *  after `key`, whole-string ternaries (`c ? "key active" : "key"`), `key` on a button that also
- *  carries `type=` first, and a `ref` + `style` before className. Lower it, never raise it. */
-const MAX_RAW_KEY_BUTTONS_EXT = 48;
+ *  count can only ever be lower there). What is left: a button that is a `.seg` chip as often as a `.key`
+ *  (a kit Button always adds "key"). Lower it, never raise it. */
+const MAX_RAW_KEY_BUTTONS_EXT = 1;
 
 function extWebTsx() {
   const dir = join(ROOT, "packages", "extensions");
@@ -1131,7 +1134,7 @@ function extWebTsx() {
 test(`at most ${MAX_RAW_KEY_BUTTONS_EXT} hand-written <button className="key …"> in extensions (use kit <Button>)`, () => {
   const raw = [];
   for (const file of extWebTsx()) {
-    for (const b of jsxTags(file.slice(ROOT.length + 1), readFileSync(file, "utf8"), (t) => t === "button")) {
+    for (const b of jsxTags(file.slice(ROOT.length), readFileSync(file, "utf8"), (t) => t === "button")) {
       if (b.strings.some((s) => /(^|\s)key(\s|$)/.test(s))) raw.push(b.at);
     }
   }
@@ -1140,12 +1143,46 @@ test(`at most ${MAX_RAW_KEY_BUTTONS_EXT} hand-written <button className="key …
   if (raw.length < MAX_RAW_KEY_BUTTONS_EXT) console.log(`# ${raw.length} raw .key buttons in extensions — lower MAX_RAW_KEY_BUTTONS_EXT in tools/webshape.test.mjs to lock that in`);
 });
 
+/** Same ratchet over the VS Code webview (packages/vscode/webview): its `.key` buttons use the Button
+ *  the kit shim lends (shims/kit.ts). Lower it, never raise it. */
+const MAX_RAW_KEY_BUTTONS_VSCODE = 0;
+
+test(`at most ${MAX_RAW_KEY_BUTTONS_VSCODE} hand-written <button className="key …"> in the VS Code webview (use the shim's Button)`, () => {
+  const dir = join(ROOT, "packages", "vscode", "webview");
+  const raw = [];
+  for (const f of readdirSync(dir, { recursive: true })) {
+    const rel = f.split("\\").join("/");
+    if (!rel.endsWith(".tsx") || rel.includes("node_modules")) continue;
+    for (const b of jsxTags(`packages/vscode/webview/${rel}`, readFileSync(join(dir, rel), "utf8"), (t) => t === "button")) {
+      if (b.strings.some((s) => /(^|\s)key(\s|$)/.test(s))) raw.push(b.at);
+    }
+  }
+  assert.ok(raw.length <= MAX_RAW_KEY_BUTTONS_VSCODE,
+    `${raw.length} raw .key buttons in the VS Code webview, over the ${MAX_RAW_KEY_BUTTONS_VSCODE} ratchet. Use <Button> from @waterplane/kit.\n${raw.join("\n")}`);
+  if (raw.length < MAX_RAW_KEY_BUTTONS_VSCODE) console.log(`# ${raw.length} raw .key buttons in the VS Code webview — lower MAX_RAW_KEY_BUTTONS_VSCODE in tools/webshape.test.mjs to lock that in`);
+});
+
+/**
+ * The VS Code All sessions view draws the phone's token screen (`TokenStatsBody`), never a copy of
+ * it: it once re-derived the body's spans and cuts itself and fell behind the phone
+ * (docs/notes/token-stats-architecture.md, "The VS Code panel draws this screen"). So it may import
+ * the body and the panel-only lead (`Headline`, `WeekCard`), and none of the cards or derivation
+ * modules the body composes.
+ */
+test("the VS Code All sessions view renders TokenStatsBody, and none of the cards it composes", () => {
+  const src = readFileSync(join(ROOT, "packages", "vscode", "webview", "OverviewView.tsx"), "utf8");
+  const from = [...src.matchAll(/from\s+"([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(from.some((f) => /token-stats\/web\/TokenStatsBody(\.tsx)?$/.test(f)), "OverviewView.tsx must render TokenStatsBody");
+  const composed = ["TotalsCard", "OverTimeCard", "TokenInsights", "statsInsights", "span", "usageCut", "weekBands", "LimitWindows", "PeriodCard"];
+  const hits = from.filter((f) => composed.some((c) => new RegExp(`token-stats/web/${c}(\\.tsx?)?$`).test(f)));
+  assert.deepEqual(hits, [], "OverviewView.tsx re-composes the body's cards — pass a prop to TokenStatsBody instead");
+});
+
 /** `row-title` / `row-sub` elements still hand-written outside kit/ (kit/Row.tsx is the one:
  *  `RowTitle`, `RowSub`, and `Row` for the wrapper). What is left (docs/plans/ui-kit-components.md,
- *  P3): a `<button>` that is itself the part, `row-sub${c ? " x" : ""}` templates with no space
- *  after the class (RowSub would render two), and a file at its line cap with no kit import.
- *  Lower it, never raise it. */
-const MAX_RAW_ROW_PARTS = 10;
+ *  P3, F4): a `<button>` that is itself the part (5: RowTitle/RowSub are span/div, and `as="button"`
+ *  would be a third button implementation). Lower it, never raise it. */
+const MAX_RAW_ROW_PARTS = 5;
 
 test(`at most ${MAX_RAW_ROW_PARTS} hand-written row-title / row-sub elements outside kit/ (use kit RowTitle / RowSub)`, () => {
   const raw = [];
@@ -1160,15 +1197,32 @@ test(`at most ${MAX_RAW_ROW_PARTS} hand-written row-title / row-sub elements out
   if (raw.length < MAX_RAW_ROW_PARTS) console.log(`# ${raw.length} raw row-title/row-sub elements — lower MAX_RAW_ROW_PARTS in tools/webshape.test.mjs to lock that in`);
 });
 
+/** The same over the in-repo extensions' web code (literal class strings, all moved to RowTitle / RowSub
+ *  by F4b). Lower it, never raise it. */
+const MAX_RAW_ROW_PARTS_EXT = 0;
+
+test(`at most ${MAX_RAW_ROW_PARTS_EXT} hand-written row-title / row-sub elements in extensions (use kit RowTitle / RowSub)`, () => {
+  const raw = [];
+  for (const [rel, abs] of allWebTsx()) {
+    if (!rel.startsWith("extensions/")) continue;
+    for (const b of jsxTags(rel, readFileSync(abs, "utf8"), (t) => t !== "RowTitle" && t !== "RowSub")) {
+      if (b.strings.some((s) => /(^|\s)row-(title|sub)(\s|$)/.test(s))) raw.push(b.at);
+    }
+  }
+  assert.ok(raw.length <= MAX_RAW_ROW_PARTS_EXT,
+    `${raw.length} raw row-title/row-sub elements in extensions, over the ${MAX_RAW_ROW_PARTS_EXT} ratchet. Use <RowTitle> / <RowSub> from @waterplane/kit.\n${raw.join("\n")}`);
+  if (raw.length < MAX_RAW_ROW_PARTS_EXT) console.log(`# ${raw.length} raw row-title/row-sub in extensions — lower MAX_RAW_ROW_PARTS_EXT in tools/webshape.test.mjs to lock that in`);
+});
+
 /** Hand-written `set-note` / `set-row` elements outside SettingsKit.tsx, in the phone client and in
- *  the in-repo extensions' web code. What is left is deliberate: the `div.set-note` whose children
- *  are a bare expression with no guard (SetNote renders nothing for an empty one, the raw div drew
- *  an empty box), `<span>`/`<p>`/`<summary>` notes (SetNote is a div), notes that carry a `style`,
- *  a second class (`warn`, `mono`, `nh-saved`, ...) or `role`, the boot screens (main, AuthGate,
- *  PassiveScreen: they load before the settings kit), the extension rows, and every `set-row` --
- *  a catalogued row is SetSwitch/SetChoice/... with an id and counts toward search, whereas these
- *  are controls laid out inside one sheet. Lower it, never raise it. */
-const MAX_RAW_SET_PARTS = 166;
+ *  the in-repo extensions' web code. Component tags (`<Unavailable className="set-note">`) are not
+ *  counted: they pass the class to their own element. What is left is deliberate and each site says
+ *  why: the boot screens (main, PassiveScreen: they load before the settings kit), the `<summary>`
+ *  of a hand-rolled details, and bare expressions that may be empty (SetNote renders nothing for an
+ *  empty one, the raw span drew an empty box). Every `set-row` is
+ *  `SetLine` (a catalogued row is SetSwitch/SetChoice/... with an id and counts toward search;
+ *  these are controls laid out inside one sheet) except main.tsx's boot one. Lower it, never raise it. */
+const MAX_RAW_SET_PARTS = 11;
 
 test(`at most ${MAX_RAW_SET_PARTS} hand-written set-note / set-row elements outside SettingsKit (use SetNote / SetWarn)`, () => {
   const raw = [];
@@ -1178,10 +1232,10 @@ test(`at most ${MAX_RAW_SET_PARTS} hand-written set-note / set-row elements outs
   for (const e of readdirSync(EXT)) {
     const web = join(EXT, e, "web");
     if (!existsSync(web)) continue;
-    for (const f of readdirSync(web, { recursive: true })) if (String(f).endsWith(".tsx")) files.push([`extensions/${e}/web/${f}`, join(web, String(f))]);
+    for (const f of readdirSync(web, { recursive: true })) if (String(f).endsWith(".tsx") && !String(f).includes("node_modules")) files.push([`extensions/${e}/web/${f}`, join(web, String(f))]);
   }
   for (const [rel, abs] of files) {
-    for (const b of jsxTags(rel, readFileSync(abs, "utf8"), () => true)) {
+    for (const b of jsxTags(rel, readFileSync(abs, "utf8"), (t) => /^[a-z]/.test(t))) {
       if (b.strings.some((s) => /(^|\s)set-(note|row)(\s|$)/.test(s))) raw.push(b.at);
     }
   }
@@ -1198,7 +1252,7 @@ function allWebTsx() {
   for (const e of readdirSync(EXT)) {
     const web = join(EXT, e, "web");
     if (!existsSync(web)) continue;
-    for (const f of readdirSync(web, { recursive: true })) if (String(f).endsWith(".tsx")) files.push([`extensions/${e}/web/${f}`, join(web, String(f))]);
+    for (const f of readdirSync(web, { recursive: true })) if (String(f).endsWith(".tsx") && !String(f).includes("node_modules")) files.push([`extensions/${e}/web/${f}`, join(web, String(f))]);
   }
   return files;
 }
@@ -1207,7 +1261,7 @@ function rawWith(token, kitName) {
   const raw = [];
   const re = new RegExp(`(^|\\s)${token}(\\s|$)`);
   for (const [rel, abs] of allWebTsx()) {
-    for (const b of jsxTags(rel, readFileSync(abs, "utf8"), (t) => t !== kitName)) {
+    for (const b of jsxTags(rel, readFileSync(abs, "utf8"), (t) => /^[a-z]/.test(t) && t !== kitName)) {
       if (b.strings.some((s) => re.test(s))) raw.push(b.at);
     }
   }
@@ -1215,10 +1269,10 @@ function rawWith(token, kitName) {
 }
 
 /** `form-hint` elements still hand-written outside kit/ (kit/Hint.tsx is the one). What is left
- *  (docs/plans/ui-kit-components.md, P5): a tag other than div/span (label, li, summary, button),
- *  `Unavailable`'s own className, a whole-string ternary (`c ? "form-hint" : "x-warn"`), the class
- *  after another one (`mono form-hint`), and a DOM attribute before `className`. Lower it, never raise it. */
-const MAX_RAW_FORM_HINT = 30;
+ *  (17; in the public tree 1): an li or a button carrying the class (Hint is div/span/label/summary), and
+ *  whole-string ternaries that switch AWAY from form-hint (c ? "form-hint" : "x-warn"; Hint is always
+ *  form-hint). Component tags (<Unavailable className="form-hint">) are not counted. Lower it, never raise it. */
+const MAX_RAW_FORM_HINT = 17;
 
 test(`at most ${MAX_RAW_FORM_HINT} hand-written form-hint elements outside kit/ (use kit Hint)`, () => {
   const raw = rawWith("form-hint", "Hint");
@@ -1227,8 +1281,8 @@ test(`at most ${MAX_RAW_FORM_HINT} hand-written form-hint elements outside kit/ 
   if (raw.length < MAX_RAW_FORM_HINT) console.log(`# ${raw.length} raw form-hint elements -- lower MAX_RAW_FORM_HINT in tools/webshape.test.mjs to lock that in`);
 });
 
-/** `tag` chips still hand-written outside kit/ (kit/Tag.tsx is the one). What is left: a `<button>`
- *  that is the chip, and a DOM attribute before `className`. Lower it, never raise it. */
+/** `tag` chips still hand-written outside kit/ (kit/Tag.tsx is the one). What is left: one <button> that is
+ *  the chip (CaptureSheet's run filter; Tag is a span). Lower it, never raise it. */
 const MAX_RAW_TAG = 1;
 
 test(`at most ${MAX_RAW_TAG} hand-written tag chips outside kit/ (use kit Tag)`, () => {

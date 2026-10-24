@@ -28,7 +28,7 @@ interface Props {
    *  cursor on it before the Return (App's `answerPrompt`). */
   /** `choice` names a `nav` box's option by index — that box has no digits, so
    *  the host walks its selection there instead of typing one. */
-  onAnswer: (session: SessionInfo, data: string, label: string, submitBox?: boolean, choice?: number) => void;
+  onAnswer: (session: SessionInfo, data: string, label: string, submitBox?: boolean, choice?: number, text?: string) => void;
   /** Open that session's terminal, for a question the parser could not read. */
   onOpen: (sessionId: string) => void;
   /**
@@ -136,7 +136,7 @@ export function QuestionsSheet({ sessions, outbox, online, seenAt, onAnswer, onO
                 prompt={p}
                 queued={queued.map((e) => ({ label: e.answer!.label }))}
                 suggestion={s.suggestion}
-                onAnswer={(data, label, submitBox, choice) => onAnswer(s, data, label, submitBox, choice)}
+                onAnswer={(data, label, submitBox, choice, text) => onAnswer(s, data, label, submitBox, choice, text)}
                 ev="questions"
               />
             </div>

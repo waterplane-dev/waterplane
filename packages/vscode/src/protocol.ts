@@ -5,11 +5,22 @@
  * null (never $0) when nothing could be priced.
  */
 import type {
-  ColdStarts, CompactionLedger, ContextEvent, ContextSample, ContextWindowSource, CostBreakdown,
-  CostConvo, CostWindowDoc, SkillWeight, ContextWeightReading, TokenStatsDoc, TokenTotals,
+  BackendTokensDoc, ColdStarts, CompactionLedger, ContextEvent, ContextSample, ContextWindowSource, CostBreakdown,
+  CostConvo, CostWindowDoc, SkillWeight, ContextWeightReading, TokenStatsDoc, TokenTotals, UsageNowDoc,
 } from "@waterplane/shared";
 import type { InstructionFile, InstructionOverlap, InstructionReader, InstructionTotals } from "@waterplane/shared";
 import type { AgentRun, HealthIndexResponse, RepoHealthMeasure, RepoHealthOutcome, RepoHealthPlot, RepoHealthSeries } from "@waterplane/shared";
+
+/**
+ * The waterplane host on this machine, as the panel sees it. `doc` is its `GET /api/usagenow`
+ * (the live limits, billing, budget and backends); null with `why` when no host answered — the
+ * screen then draws only what the panel's own log scan can say.
+ */
+export interface LiveState { doc: UsageNowDoc | null; host: string | null; why?: string; at: number }
+
+/** The ledger tab for Copilot Chat's own token counts: an id no desktop backend has, so a desktop's
+ *  `copilot` ledger (the Copilot CLI) sits beside it rather than under it. */
+export const COPILOT_LEDGER = { id: "copilot-chat", label: "Copilot Chat" } as const;
 
 export type TabId = "session" | "all" | "always-on" | "health" | "prompts";
 
@@ -102,6 +113,9 @@ export interface SessionDoc {
  * under 30 or 90 days are cost inside the span.
  */
 export interface CorpusDoc extends TokenStatsDoc {
+  /** Copilot Chat's own token counts off this VS Code's chat logs (`copilotLedger`), drawn as the
+   *  `COPILOT_LEDGER` tab and answered locally — no desktop needed. Absent = not read in this scan. */
+  copilot?: BackendTokensDoc;
   top: CostConvo[];
   coldStarts?: ColdStarts;
   week: CostWindowDoc;
@@ -186,7 +200,11 @@ export type ToWebview =
   | { t: "receipt"; text: string; tap?: number }
   | { t: "health"; folder: string; doc: HealthDoc | null; why?: string; run: HealthRunState | null }
   /** Which tab the panel should show (sent on `ready` after an openPanel request). */
-  | { t: "tab"; id: TabId };
+  | { t: "tab"; id: TabId; ledger?: string }
+  | { t: "live"; live: LiveState }
+  /** The answer to one `get`, by its id. `error` is a sentence; the card that asked draws it. */
+  | { t: "ledgerAnswer"; id: number; ok: true; value: unknown }
+  | { t: "ledgerAnswer"; id: number; ok: false; error: string };
 
 export type ToExtension =
   /** `tab` = the view the panel last showed on this machine (webview storage), null = none remembered. */
@@ -209,4 +227,10 @@ export type ToExtension =
   /** Open a file named by the plot (relative to the folder); the extension contains it to the folder. */
   | { t: "openFile"; folder: string; path: string }
   /** From a link inside the panel: switch it to another view. */
-  | { t: "openPanel"; tab: TabId };
+  | { t: "openPanel"; tab: TabId }
+  /** One of the phone's ledger reads (`webapiStats.ts` built the path), forwarded to the waterplane host on loopback (`hostlink.ts`). */
+  | { t: "get"; id: number; path: string; ms?: number }
+  /** All sessions came on screen, or its re-read was tapped: ask the host for `usagenow` again. */
+  | { t: "liveRead" }
+  /** The panel's own switch for reading the desktop: on sets `desktopUrl` to this machine's default, off clears it. */
+  | { t: "desktop"; on: boolean };

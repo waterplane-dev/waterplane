@@ -36,7 +36,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Minimize, Monitor, MonitorUp, MousePointerClick, RefreshCw, ShieldCheck, Shrink, SlidersHorizontal, X } from "lucide-react";
 import { shellImmersive, useBackStep, useConnStatus, useStore } from "@waterplane/sdk";
-import { Sheet, Button } from "@waterplane/kit";
+import { Sheet, Button, RowSub } from "@waterplane/kit";
 import { DesktopController } from "./controller.ts";
 import { KeyRow } from "./KeyRow.tsx";
 import { Handle } from "./Handle.tsx";
@@ -231,11 +231,11 @@ export function DesktopSheet() {
       // The arrow lands where the Back gesture does: an open panel shuts first, then the view.
       onClose={panel !== null ? () => setPanel(null) : closeDesktop}
       actions={<>
-        {ready && <button className={`key${following ? " active" : ""}`} aria-pressed={following}
+        {ready && <Button className={following ? "active" : undefined} aria-pressed={following}
           title={following ? "streaming the front window, following focus — tap to go back to the previous source" : "stream only the front window, following focus"}
-          onClick={flipFocus}><MousePointerClick size={16} /> focus</button>}
-        <button className={`key${panel === "quality" ? " active" : ""}`} title="Quality — presets, bitrate, source, data cap"
-          onClick={() => setPanel(panel === "quality" ? null : "quality")}><SlidersHorizontal size={16} /> quality</button>
+          onClick={flipFocus}><MousePointerClick size={16} /> focus</Button>}
+        <Button className={panel === "quality" ? "active" : undefined} title="Quality — presets, bitrate, source, data cap"
+          onClick={() => setPanel(panel === "quality" ? null : "quality")}><SlidersHorizontal size={16} /> quality</Button>
         <Button title="close the desktop view — open it again from the session's ☰ menu" onClick={closeDesktop}><X size={16} /> close</Button>
       </>}
       head={ready ? <Toolbar ctl={ctl} ui={ui} onFull={() => setFull(true)} /> : undefined}>
@@ -271,7 +271,7 @@ export function DesktopSheet() {
                 <ShieldCheck size={16} /> ask macOS for Screen Recording
               </Button>
             )}
-            {avail === GRANT_SCREEN && asked && <div className="row-sub">{asked}</div>}
+            {avail === GRANT_SCREEN && asked && <RowSub as="div">{asked}</RowSub>}
             <Button style={{ alignSelf: "flex-start" }} onClick={() => void refreshProbe()}><RefreshCw size={16} /> ask the desktop again</Button>
           </div>
         )}

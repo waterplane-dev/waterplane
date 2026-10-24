@@ -59,11 +59,7 @@ export interface SearchHit extends FileEntry {
   branch: string;
 }
 
-export interface SlashCommand {
-  name: string;
-  source: "builtin" | "project" | "user";
-  description?: string;
-}
+export type { SlashCommand } from "@waterplane/shared";
 
 export interface EnvFileInfo {
   name: string;

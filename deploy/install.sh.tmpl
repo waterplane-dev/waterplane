@@ -18,8 +18,9 @@
 #      and that .sha256 against the publisher's signature (.sha256.sig) with
 #      the public key written into this script (RELEASE_PUBKEY below);
 #   4. unpacks both under ${XDG_DATA_HOME:-~/.local/share}/@@SLUG@@/ and
-#      writes ~/.local/bin/@@SLUG@@ — it edits no shell rc file and uses no sudo
-#      (except the tmux install of step 1, and only when you say yes);
+#      writes ~/.local/bin/@@SLUG@@ — it edits no shell rc file and runs at most
+#      one sudo line (the package manager's tmux install of step 1), only after
+#      asking you on the terminal; everything else is unprivileged;
 #   5. runs `@@SLUG@@ service install` (skip: --no-service) and `@@SLUG@@ doctor`.
 #
 # Optional, only when you ask: `--with <id>` clones a plugin from this script's
@@ -496,6 +497,12 @@ install_node() {
 
 # ── the release ──────────────────────────────────────────────────────────
 
+# The version $DATA/current points at, or nothing on a first install.
+installed_version() {
+  v="$(readlink "$DATA/current" 2>/dev/null || true)"
+  printf '%s' "${v#versions/}"
+}
+
 install_release() {
   TARBALL="$SLUG-$VERSION.tar.gz"
   say "downloading $TARBALL from $BASE"
@@ -513,7 +520,9 @@ install_release() {
       die "the signature on $TARBALL.sha256 does not match this installer's release key: it was not published by the $NAME release key, or it was altered. Nothing was installed."
     say "verified the publisher's signature on $TARBALL.sha256"
   fi
-  verify "$TMP/$TARBALL" "$(awk 'NR==1 {print $1}' "$TMP/$TARBALL.sha256")" "$TARBALL"
+  # The line that NAMES this tarball, as `waterplane update` reads it (`parseShaLines`) — never
+  # simply the first line; an empty match fails `verify` ("expected nothing").
+  verify "$TMP/$TARBALL" "$(awk -v f="$TARBALL" '$2 == f || $2 == "*" f {print $1; exit}' "$TMP/$TARBALL.sha256")" "$TARBALL"
   say "verified $TARBALL"
 
   mkdir -p "$DATA/versions"
@@ -533,13 +542,15 @@ install_release() {
   fi
   mv "$top" "$dest"
   rm -rf "$stage" "$DATA/versions/.old.$$"
-  PREV="$(readlink "$DATA/current" 2>/dev/null || true)"
+  prev="$(installed_version)"
   flip "versions/$VERSION" "$DATA/current"
-  if [ -n "$PREV" ] && [ "$PREV" != "versions/$VERSION" ]; then
-    say "upgraded: ${PREV#versions/} -> $VERSION (older versions stay in $DATA/versions; delete them when you like)"
-  else
-    say "installed $VERSION"
-  fi
+  case "$prev" in
+    '') OUTCOME="installed $VERSION" ;;
+    "$VERSION") OUTCOME="reinstalled $VERSION (it was already installed)" ;;
+    *) OUTCOME="updated $prev -> $VERSION" ;;
+  esac
+  say "$OUTCOME"
+  case "$prev" in ''|"$VERSION") ;; *) say "older versions stay in $DATA/versions; delete them when you like" ;; esac
 }
 
 # Checked before anything is unpacked, so a refusal leaves the old install as it was.
@@ -752,7 +763,21 @@ main() {
   fi
 
   detect_platform
-  say "installing $NAME $VERSION for $OS-$ARCH$([ "$IS_WSL" = 1 ] && echo ' (WSL2)' || true) into $DATA"
+  # Re-running the installer IS the update path, so say up front which of the three this run is:
+  # a first install, an update from an older version, or the same version again.
+  PREV_VERSION="$(installed_version)"
+  PLATFORM="$OS-$ARCH$([ "$IS_WSL" = 1 ] && echo ' (WSL2)' || true)"
+  if [ -z "$PREV_VERSION" ]; then
+    say "installing $NAME $VERSION for $PLATFORM into $DATA"
+  elif [ "$PREV_VERSION" = "$VERSION" ]; then
+    if [ "$VERSION_GIVEN" = 1 ]; then
+      say "$NAME $VERSION is already installed in $DATA; installing the same version again"
+    else
+      say "$NAME $VERSION is already installed in $DATA and is the latest release; there is nothing newer, so this run reinstalls it"
+    fi
+  else
+    say "updating $NAME $PREV_VERSION -> $VERSION for $PLATFORM in $DATA"
+  fi
   check_prereqs
   ensure_tmux
   check_wrapper_path
@@ -781,11 +806,11 @@ main() {
   DOCTOR_OK=1
   "$W" doctor || DOCTOR_OK=0
   LEAD=''
-  [ "$DOCTOR_OK" = 0 ] || LEAD='done — '
+  [ "$DOCTOR_OK" = 0 ] || LEAD="done ($OUTCOME) — "
   if ! finish_https "$LEAD" && [ "$DOCTOR_OK" = 1 ]; then
-    say "done — but Tailscale is not on this machine, so your phone cannot reach the host yet: $TAILSCALE_DL"
+    say "done ($OUTCOME) — but Tailscale is not on this machine, so your phone cannot reach the host yet: $TAILSCALE_DL"
   fi
-  [ "$DOCTOR_OK" = 1 ] || warn "installed, but doctor reported problems (see above) — fix those, then run: $SLUG doctor"
+  [ "$DOCTOR_OK" = 1 ] || warn "$OUTCOME, but doctor reported problems (see above) — fix those, then run: $SLUG doctor"
 }
 
 main "$@"

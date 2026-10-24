@@ -83,3 +83,23 @@ export function cliRestartView(due: CliRestartDue, st: CliRestartState): CliRest
   if (st.shells) parts.push("the background shells");
   return parts.length ? { text, loses: parts.join(" and ") } : { text };
 }
+
+/**
+ * **Send on a session the restart is due on: ask first.** The moment before a
+ * prompt is the cheapest restart there is — nothing is running, and once the
+ * turn starts on the old binary the next chance is when it ends. Yes relaunches
+ * the same conversation with the words as its first prompt (one op); the
+ * other answer sends on the old version and is not asked again for it.
+ */
+export function cliRestartSendAsk(due: CliRestartDue): { title: string; lines: string[]; confirmLabel: string; cancelLabel: string } {
+  return {
+    title: `Restart on Claude ${due.installed} first?`,
+    lines: [
+      `This session still runs Claude ${due.running}; ${due.installed} is installed.`,
+      `Restart, then send: the same conversation reopens on ${due.installed} and this message is its first prompt.`,
+      `Send on ${due.running}: the message goes now and the bar above stays — this is not asked again for this version.`,
+    ],
+    confirmLabel: "Restart, then send",
+    cancelLabel: `Send on ${due.running}`,
+  };
+}

@@ -43,8 +43,24 @@ export function peerKind(addr: string | undefined | null): PeerKind {
  */
 export const PROXY_HEADERS: readonly string[] = [
   "x-forwarded-for", "x-forwarded-host", "x-forwarded-proto", "x-real-ip", "forwarded", "via",
-  "tailscale-user-login", "tailscale-user-name", "tailscale-user-profile-pic", "tailscale-headers-info",
+  "tailscale-funnel-request", "tailscale-user-login", "tailscale-user-name", "tailscale-user-profile-pic", "tailscale-headers-info",
 ];
+
+/** Whether the request carries a proxy header (came through `tailscale serve`/Funnel) — the one implementation. */
+export function isProxied(headers: Record<string, unknown> | undefined): boolean {
+  return PROXY_HEADERS.some((h) => headers?.[h] !== undefined);
+}
+
+/** Whether a `Host` header names this machine itself (port and brackets stripped); absent counts as local. */
+export function hostHeaderIsLocal(h: string | string[] | undefined): boolean {
+  const raw = Array.isArray(h) ? h[0] : h;
+  if (!raw) return true;
+  let host = raw.trim().toLowerCase();
+  if (host.startsWith("[")) host = host.slice(1, host.indexOf("]") === -1 ? undefined : host.indexOf("]"));
+  else if (host.split(":").length === 2) host = host.split(":")[0];
+  if (!host) return true;
+  return host === "localhost" || host === "::1" || host === "0.0.0.0" || /^127\.\d+\.\d+\.\d+$/.test(host);
+}
 
 /**
  * Why this request is not a process on THIS desktop, or null when it is: the
@@ -55,7 +71,10 @@ export const PROXY_HEADERS: readonly string[] = [
  */
 export function localProcessRefusal(remoteAddress: string | undefined, headers: Readonly<Record<string, string | string[] | undefined>>): string | null {
   if (peerKind(remoteAddress) !== "loopback") return "local only — this route answers a process on this desktop";
-  if (PROXY_HEADERS.some((h) => headers[h] !== undefined)) return "local only — a proxied request is not a process on this desktop";
+  if (isProxied(headers)) return "local only — a proxied request is not a process on this desktop";
+  // A front proxy that forgets its headers makes every remote caller loopback; a local process
+  // names this machine in Host, a request relayed for a tailnet name does not.
+  if (!hostHeaderIsLocal(headers.host)) return "local only — a request named for another host is not a process on this desktop";
   return null;
 }
 
@@ -70,7 +89,13 @@ export function localProcessRefusal(remoteAddress: string | undefined, headers: 
  */
 export function requestPeerKind(remoteAddress: string | undefined | null, headers: Readonly<Record<string, string | string[] | undefined>>): PeerKind {
   const kind = peerKind(remoteAddress);
-  return kind === "loopback" && PROXY_HEADERS.some((h) => headers[h] !== undefined) ? "tailscale" : kind;
+  // `tailscale funnel` traffic comes through the same serve proxy, but from the
+  // PUBLIC internet; the proxy marks it with `Tailscale-Funnel-Request` (and a
+  // tailnet request never carries it). Treat it as public: always needs a
+  // token, can never manage auth. A local process adding it only loses trust.
+  if (kind === "loopback" && headers["tailscale-funnel-request"] !== undefined) return "public";
+  if (kind === "loopback" && (isProxied(headers) || !hostHeaderIsLocal(headers.host))) return "tailscale";
+  return kind;
 }
 
 /** This desktop's name as a person would call it: the OS hostname, minus the
@@ -146,7 +171,7 @@ export async function tailscaleBin(): Promise<string | null> {
   const bundled = "/Applications/Tailscale.app/Contents/MacOS/Tailscale";
   try {
     await access(bundled, constants.X_OK);
-    return `"${bundled}"`;
+    return bundled;
   } catch { /* not a Mac GUI install */ }
 
   // WSL with mirrored networking: Tailscale runs on Windows, and its CLI is reachable through
@@ -159,7 +184,7 @@ export async function tailscaleBin(): Promise<string | null> {
     // Found is not runnable: with WSL interop off, `command -v` and X_OK still pass and every .exe
     // then dies with "Exec format error". A CLI that cannot be run is no CLI (the doctor's
     // `wsl-interop` row says why).
-    if (p && (await windowsExeRuns(p))) return `"${p}"`;
+    if (p && (await windowsExeRuns(p))) return p;
   }
 
   return null;
@@ -186,7 +211,7 @@ export async function tailscaleDnsName(): Promise<string | null> {
   const bin = await tailscaleBin();
   if (!bin) return null;
   try {
-    const { stdout } = await execFileP("/bin/sh", ["-c", `${bin} status --json`]);
+    const { stdout } = await execFileP(bin, ["status", "--json"]);
     const dns = JSON.parse(stdout)?.Self?.DNSName as string | undefined;
     if (dns) return dns.replace(/\.$/, "");   // strip the trailing root-zone dot
   } catch { /* no tailnet / CLI failed */ }
@@ -207,7 +232,7 @@ export async function serveHttpsUrl(port: number): Promise<string | null> {
   const bin = await tailscaleBin();
   if (!bin) return null;
   try {
-    const { stdout } = await execFileP("/bin/sh", ["-c", `${bin} serve status --json`]);
+    const { stdout } = await execFileP(bin, ["serve", "status", "--json"]);
     const cfg = JSON.parse(stdout) as {
       Web?: Record<string, { Handlers?: Record<string, { Proxy?: string }> }>;
     };

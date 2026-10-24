@@ -4,7 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { BRAND } from "../packages/shared/dist/brand.js";
-import { launchdPlist, newRows, rowsFrom, stateDir } from "../scripts/traffic-archive.mjs";
+import { launchdPlist, marketplaceRow, newRows, npmRows, playCsvRows, playListingRow, report, rowsFrom, stateDir } from "../scripts/traffic-archive.mjs";
 
 const NOW = new Date("2026-10-15T20:00:00Z");
 const day = (d, count) => ({ timestamp: `${d}T00:00:00Z`, count, uniques: 1 });
@@ -13,7 +13,7 @@ const answers = {
     clones: { clones: [day("2026-10-13", 3), day("2026-10-14", 2), day("2026-10-15", 9)] },
     views: { views: [day("2026-10-14", 5)] },
   },
-  releases: [{ tag_name: "v0.1.0", assets: [{ name: "a.tgz", download_count: 4 }, { name: "b.apk", download_count: 1 }] }],
+  releases: [{ tag_name: "v0.1.0", assets: [{ name: "a.tar.gz", download_count: 4 }, { name: "b.apk", download_count: 1 }] }],
 };
 
 test("today's traffic is still counting, so it is never written", () => {
@@ -25,7 +25,7 @@ test("today's traffic is still counting, so it is never written", () => {
 test("download totals are one row per asset per day", () => {
   const dl = rowsFrom("o/r", answers, NOW).filter((r) => r.kind === "downloads");
   assert.deepEqual(dl.map((r) => [r.day, r.tag, r.asset, r.count]),
-    [["2026-10-15", "v0.1.0", "a.tgz", 4], ["2026-10-15", "v0.1.0", "b.apk", 1]]);
+    [["2026-10-15", "v0.1.0", "a.tar.gz", 4], ["2026-10-15", "v0.1.0", "b.apk", 1]]);
 });
 
 test("a re-run adds nothing; a later day adds only the new rows; a torn line is skipped", () => {
@@ -35,7 +35,7 @@ test("a re-run adds nothing; a later day adds only the new rows; a torn line is 
   const later = new Date("2026-10-16T09:00:00Z");
   const added = newRows(file, rowsFrom("o/r", answers, later));
   assert.deepEqual(added.map((r) => `${r.kind}:${r.day}${r.asset ? ":" + r.asset : ""}`),
-    ["clones:2026-10-15", "downloads:2026-10-16:a.tgz", "downloads:2026-10-16:b.apk"]);
+    ["clones:2026-10-15", "downloads:2026-10-16:a.tar.gz", "downloads:2026-10-16:b.apk"]);
 });
 
 test("the archive lives in the state dir, outside any repo", () => {
@@ -44,9 +44,70 @@ test("the archive lives in the state dir, outside any repo", () => {
   assert.equal(stateDir({}, "/h"), `/h/.local/state/${BRAND.configDirName}`);
 });
 
-test("the launchd job runs weekly with an explicit PATH (launchd's own has no gh)", () => {
-  const p = launchdPlist({ node: "/n/node", script: "/r/s.mjs", out: "/o.jsonl", repos: ["o/r"], pathEnv: "/gh/bin:/usr/bin", logDir: "/l" });
-  assert.match(p, /<key>Weekday<\/key><integer>1<\/integer>/);
+test("the launchd job runs daily with an explicit PATH (launchd's own has no gh)", () => {
+  const p = launchdPlist({ node: "/n/node", script: "/r/s.mjs", out: "/o.jsonl", repos: ["o/r"], exts: ["p.x"], npms: ["pk"], pathEnv: "/gh/bin:/usr/bin", logDir: "/l" });
+  assert.doesNotMatch(p, /Weekday/);
+  assert.match(p, /<key>Hour<\/key><integer>10<\/integer>/);
+  assert.match(p, /<string>--ext<\/string><string>p\.x<\/string>/);
+  assert.match(p, /<string>--npm<\/string><string>pk<\/string>/);
   assert.match(p, /<string>\/gh\/bin:\/usr\/bin<\/string>/);
   assert.match(p, /<string>--repo<\/string><string>o\/r<\/string>/);
+});
+
+test("a Marketplace reading is one row per extension per day; a missing extension or stat is no row", () => {
+  const answer = { results: [{ extensions: [{ statistics: [{ statisticName: "install", value: 3 }, { statisticName: "downloadCount", value: 86 }] }] }] };
+  const r = marketplaceRow("p.x", answer, NOW);
+  assert.deepEqual([r.kind, r.day, r.installs, r.downloads], ["marketplace", "2026-10-15", 3, 86]);
+  assert.deepEqual(newRows(JSON.stringify(r) + "\n", [marketplaceRow("p.x", answer, NOW)]), []);
+  assert.equal(marketplaceRow("p.x", { results: [{ extensions: [] }] }, NOW), null);
+  assert.equal(marketplaceRow("p.x", { results: [{ extensions: [{ statistics: [] }] }] }, NOW), null);
+});
+
+test("the report sums the window and says a total with no older reading is a first reading", () => {
+  const rows = [
+    ...rowsFrom("o/r", answers, NOW),
+    { repo: "p.x", kind: "marketplace", day: "2026-10-01", installs: 1, downloads: 10 },
+    { repo: "p.x", kind: "marketplace", day: "2026-10-15", installs: 3, downloads: 86 },
+  ];
+  const md = report(rows.map((r) => JSON.stringify(r)).join("\n"), NOW, 7);
+  assert.match(md, /- Views: 5 /);
+  assert.match(md, /- Clones: 5 /);
+  assert.match(md, /p\.x \(Marketplace installs\): 3 on 2026-10-15, 86 downloads incl\. updates, \+2 since 2026-10-01/);
+  assert.match(md, /a\.tar\.gz \(downloads\): 4 on 2026-10-15, first reading 2026-10-15/);
+});
+
+test("npm downloads are one row per finished day, re-runs add nothing, and the report sums them", () => {
+  const answer = { downloads: [{ day: "2026-10-13", downloads: 3 }, { day: "2026-10-14", downloads: 0 }, { day: "2026-10-15", downloads: 7 }] };
+  const rows = npmRows("pk", answer, NOW);
+  assert.deepEqual(rows.map((r) => [r.kind, r.day, r.count]), [["npm", "2026-10-13", 3], ["npm", "2026-10-14", 0]]);
+  assert.deepEqual(newRows(rows.map((r) => JSON.stringify(r)).join("\n"), npmRows("pk", answer, NOW)), []);
+  const md = report(rows.map((r) => JSON.stringify(r)).join("\n"), NOW, 7);
+  assert.match(md, /## npm pk\n\n- Downloads: 3\n- Days with downloads: 2026-10-13 \(3\)/);
+});
+
+test("a Play listing's range is read off the page; no public page is a row saying so", () => {
+  const html = `<title id="main-title">Tom &amp; Jerry - Apps on Google Play</title><div class="wVqUob"><div class="ClM7O">1.5K+</div><div class="g1rdde">Downloads</div></div>`;
+  const r = playListingRow("a.b.c", html, NOW);
+  assert.deepEqual([r.kind, r.listed, r.range, r.min, r.name], ["playlisting", true, "1.5K+", 1500, "Tom & Jerry"]);
+  const gone = playListingRow("a.b.c", null, NOW);
+  assert.deepEqual([gone.listed, gone.range, gone.min], [false, null, null]);
+  assert.equal(playListingRow("a.b.c", "<html>no figure</html>", NOW), null);
+});
+
+test("a Play installs report is read by header name, UTF-16 or UTF-8, and its last two days wait", () => {
+  const csv = [
+    "Date,Package Name,Daily Device Installs,Daily Device Uninstalls,Daily Device Upgrades,Total User Installs,Daily User Installs,Daily User Uninstalls,Active Device Installs",
+    "2026-10-10,a.b.c,4,1,0,12,3,1,9",
+    "2026-10-12,a.b.c,2,0,0,14,2,0,11",
+    "2026-10-14,a.b.c,5,0,0,19,5,0,16",
+  ].join("\r\n");
+  const utf16 = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(csv, "utf16le")]);
+  for (const buf of [utf16, Buffer.from(csv, "utf8")]) {
+    const rows = playCsvRows("a.b.c", buf, NOW);
+    assert.deepEqual(rows.map((r) => [r.day, r.installs, r.uninstalls, r.active, r.total]),
+      [["2026-10-10", 3, 1, 9, 12], ["2026-10-12", 2, 0, 11, 14]]);
+  }
+  const old = playCsvRows("a.b.c", Buffer.from("Date,Package Name,Daily Device Installs\n2026-10-01,a.b.c,7"), NOW);
+  assert.deepEqual([old[0].installs, old[0].active, old[0].total], [7, null, null]);
+  assert.deepEqual(playCsvRows("a.b.c", Buffer.from("nothing,here\n1,2"), NOW), []);
 });

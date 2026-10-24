@@ -79,3 +79,18 @@ scripts/release/public-lib.test.mjs:215:422e825151  # session-url fixture
 site/game-privacy.html:43:2bf2ef5834  # personal-email, privacy contact (owner decision)
 site/privacy.html:115:2bf2ef5834  # personal-email, privacy contact (owner decision)
 tools/screenfixtures.test.mjs:190:8cd7a354b3
+# 0.1.5: made-up ts.net names and 100.64/100.80 test addresses (origin, net, passive, securityfixes, reach dashboard), and a session id in a requirement's source line
+docs/requirements/images.md:74:4edd0f63ff
+packages/host/src/origin.ts:247:586fd92a28
+packages/host/test/net.test.mjs:7:cb86471a1a
+packages/host/test/origin.test.mjs:144:6e626b1538
+packages/host/test/origin.test.mjs:145:7ae359aa9a
+packages/host/test/origin.test.mjs:148:434ab82865
+packages/host/test/origin.test.mjs:154:1c61bb6814
+packages/host/test/origin.test.mjs:155:bae543f995
+packages/host/test/origin.test.mjs:161:042a9016ee
+packages/host/test/passive.test.mjs:76:5813271df0
+packages/host/test/securityfixes.test.mjs:92:21a8975db4
+packages/host/test/securityfixes.test.mjs:93:21744bef01
+packages/host/test/securityfixes.test.mjs:96:e744027cd7
+tools/reachdashboard.test.mjs:15:a6d61ba3db

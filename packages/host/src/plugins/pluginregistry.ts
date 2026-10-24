@@ -54,6 +54,7 @@ import { makeApi } from "./pluginapi.js";
 import { PluginStreams, type StreamSink } from "./pluginstreams.js";
 import { setSetupSource } from "./setupcontrib.js";
 import { PluginFiles, type ServedFile } from "./pluginfiles.js";
+import { resolveAsset, type AssetResult } from "./pluginassets.js";
 import { hostStateDir } from "../branddirs.js";
 import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
 
@@ -266,6 +267,27 @@ export class PluginRegistry {
     this.deps.changed();
   }
 
+  /**
+   * Load ONE plugin dir after boot (an install from the updates view takes effect without a restart).
+   * Refused in words, nothing added, when the dir does not read or its id is already loaded; a plugin
+   * that reads but fails to start is LISTED in error like at boot, and its reason is returned.
+   */
+  async loadOne(dir: string): Promise<string | null> {
+    const d = readPluginDir(dir, dir);
+    if (d.problems.length) return d.problems.join("; ");
+    if (this.entries.some((x) => x.manifest.id === d.manifest.id)) return `a plugin with the id "${d.manifest.id}" is already loaded`;
+    const e = this.newEntry({
+      dir, source: dir, manifest: d.manifest, hostFile: d.hostFile, loadError: null,
+      enabled: this.readEnabled()[d.manifest.id] !== false,
+      stored: this.readStored(d.manifest.id, d.manifest),
+      ...(d.manifestLegacy ? { manifestLegacy: true } : {}),
+    });
+    this.entries.push(e);
+    if (e.enabled) await this.activate(e);
+    this.deps.changed();
+    return e.state === "error" ? (e.error ?? "failed to start") : null;
+  }
+
   /** The loadable plugin with this id (never a duplicate or broken copy). */
   byId(id: string): PluginEntry | null {
     return this.entries.find((e) => e.manifest.id === id && !e.loadError?.startsWith("duplicate id")) ?? null;
@@ -405,6 +427,14 @@ export class PluginRegistry {
     const e = this.byId(pluginId);
     if (!e || e.state !== "active") return null;
     return this.files.get(pluginId, token);
+  }
+
+  /** `GET|HEAD /api/plugin/<id>/asset/<file>`: unknown plugin / no `assets` / no file ⇒ 404 in words; switched off or not running ⇒ 403. */
+  assetFile(pluginId: string, file: string): AssetResult {
+    const e = this.byId(pluginId);
+    if (!e) return { ok: false, status: 404, error: "no such plugin" };
+    if (e.state !== "active") return { ok: false, status: 403, error: `${e.manifest.name} is ${e.state === "off" ? "turned off" : "not running"}` };
+    return resolveAsset(e.manifest.name, e.dir, e.manifest.assets, file);
   }
 
   route(pluginId: string, method: string, parts: readonly string[]): ((req: { query: Record<string, string>; body: unknown }) => Promise<PluginHookReply>) | null {

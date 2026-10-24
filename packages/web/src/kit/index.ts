@@ -1,6 +1,6 @@
 /**
  * The kit: what a list sheet is built from. Extensions import this and `sdk/`,
- * nothing else. The first four are the kit's own; the rest are the shared pieces
+ * nothing else. Everything down to chips is the kit's own; the rest are shared pieces
  * that already existed, re-exported from where they live (no churn).
  */
 export { FilterBar } from "./FilterBar";
@@ -25,6 +25,8 @@ export { useNow } from "../useNow";
 /** A Settings row of the extension's own: declares its `id` (catalogued in its manifest's
  *  `SettingsRowsDef.rows`) so search counts it, finds it and hides it like a core row. */
 export { SetCustom } from "../SettingsKit";
+/** The note under an extension's own row (`as`/`className`/style pass through; never an `id`). */
+export { SetNote } from "../SettingsKit";
 /** THE prompt box (CLAUDE.md: never a second one). Lent so a sheet whose words go somewhere other
  *  than a session — the live desktop's typing — writes them in the same box with the same
  *  dictation, and owns only where they go (the composer never sends: its caller does). */

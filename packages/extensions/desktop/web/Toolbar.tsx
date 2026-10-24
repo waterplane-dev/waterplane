@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { Eye, Hand, Maximize, MousePointer2, Power, ShieldCheck } from "lucide-react";
 import { useStore } from "@waterplane/sdk";
-import { ConfirmButton, Button, Hint } from "@waterplane/kit";
+import { ConfirmButton, Button, Hint, RowSub } from "@waterplane/kit";
 import type { InputMode } from "./gestures.ts";
 import { chipText, detailLines } from "./stats.ts";
 import { presetLabel } from "./quality.ts";
@@ -44,7 +44,8 @@ export function Toolbar({ ctl, ui, onFull }: { ctl: DesktopController; ui: Ui; o
         <ShotButton />
         <Button title="fullscreen — the desktop gets the whole screen" aria-label="fullscreen" onClick={onFull}><Maximize size={15} /></Button>
       </div>
-      <button className="form-hint mono" style={{ ...LINE, background: "none", border: 0, textAlign: "left", width: "100%", cursor: "pointer" }}
+      {/* raw: a button drawn as a hint line (Hint has no li/button, a button is Button) */}
+      <button className="form-hint" style={{ ...LINE, background: "none", border: 0, textAlign: "left", width: "100%", cursor: "pointer" }}
         title="what this view costs — tap for the split" aria-expanded={open} onClick={() => setOpen(!open)}>
         {chipText(ui.kbps, ui.fps, ui.meter)}
       </button>
@@ -66,7 +67,7 @@ export function Toolbar({ ctl, ui, onFull }: { ctl: DesktopController; ui: Ui; o
               ) : (
                 <Button style={STEP_BTN} onClick={() => void askGrant("accessibility")}><ShieldCheck size={15} /> {st.button}</Button>
               )}
-              {st.need === "accessibility" && asked && <div className="row-sub">{asked}</div>}
+              {st.need === "accessibility" && asked && <RowSub as="div">{asked}</RowSub>}
             </div>
           ))}
         </Hint>

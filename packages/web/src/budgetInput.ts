@@ -13,9 +13,22 @@
  * typed string becomes a cap, and what the calibration is, as a sentence.
  */
 import {
-  BUDGET_STALE_MS, SESSION_BUDGET_PCT_CAVEAT, fmtCount, fmtUsd, sessionBudgetHoldText, sessionBudgetLabel, sessionBudgetText, sessionBudgetUnknownText, sessionSpend,
+  BUDGET_STALE_MS, SESSION_BUDGET_PCT_CAVEAT, fmtCount, fmtUsd, sessionBudgetHoldText, sessionBudgetLabel, sessionBudgetText, sessionBudgetUnknownText, sessionBudgetWindowsOffText, sessionSpend,
   type SessionBudgetInfo, type SessionBudget, type SessionBudgetCal, type SessionBudgetSpark, type SessionBudgetUnit,
 } from "@waterplane/shared";
+import { runsClaudeTui, type BackendList } from "./backendCaps.ts";
+
+/**
+ * The budget field's `windowsOff` sentence for a backend named at LAUNCH time (no session yet):
+ * null where a percent is offered as ever (claude's TUI, and a host that never listed backends),
+ * else the shared sentence — a percent cap on another backend's session would never hold.
+ * Lives here, not in the feature, because the launch ask, the Send sheet and the backlog row
+ * all draw the field and may not import a feature.
+ */
+export function launchWindowsOff(backends: BackendList, backend: string | undefined): string | null {
+  if (runsClaudeTui(backends, backend)) return null;
+  return sessionBudgetWindowsOffText(backends?.find((b) => b.id === backend)?.label || "this backend");
+}
 
 /**
  * The four units, in the order the picker draws them (dollars first: it is the
@@ -31,6 +44,17 @@ export const BUDGET_UNITS: readonly {
   { unit: "sessionPct", label: "% of 5h window", example: "2 or 0.5", suffix: "% of 5h", presets: ["5", "10", "25"] },
   { unit: "weeklyPct", label: "% of week", example: "5 or 0.5", suffix: "% of week", presets: ["5", "10", "25"] },
 ];
+
+/**
+ * The units this session's picker offers. `windowsOff`: the session's backend
+ * does not spend from claude's 5-hour and weekly windows, so a percent of one
+ * could never trip and is not offered (the field says why in a sentence) —
+ * except the unit a cap was ALREADY set in, which stays so it is never
+ * silently swapped for another.
+ */
+export function budgetUnitsFor(windowsOff: boolean, keep?: SessionBudgetUnit): typeof BUDGET_UNITS {
+  return windowsOff ? BUDGET_UNITS.filter((u) => !isPctUnit(u.unit) || u.unit === keep) : BUDGET_UNITS;
+}
 
 export const unitInfo = (u: SessionBudgetUnit) => BUDGET_UNITS.find((x) => x.unit === u) ?? BUDGET_UNITS[0];
 
@@ -117,8 +141,8 @@ function fmtLong(unit: SessionBudgetUnit, n: number): string {
 }
 
 /** A total and its subagent split, in one unit — never the total alone. */
-function withSplit(value: number, agent: number | null, f: (n: number) => string, part: (n: number) => string = f): string {
-  if (agent == null) return `${f(value)} so far — the subagent share is not logged for this session`;
+function withSplit(value: number, agent: number | null, f: (n: number) => string, part: (n: number) => string = f, source = false): string {
+  if (agent == null) return `${f(value)} so far — the subagent share is not ${source ? "stated by this session's backend" : "logged for this session"}`;
   if (!(agent > 0)) return `${f(value)} so far, none of it in subagents`;
   return `${f(value)} so far — ${part(Math.max(0, value - agent))} in this conversation, ${part(agent)} in subagents`;
 }
@@ -134,14 +158,14 @@ export function budgetSpentLine(unit: SessionBudgetUnit, spark: SessionBudgetSpa
   if (spark === undefined) return null;
   // `cal` undefined: the host sends a calibration only with a budget, so before
   // one is set a percent cannot be converted here — say the dollars, not "no reading".
-  if (isPctUnit(unit) && cal === undefined) {
+  if (isPctUnit(unit) && cal === undefined && !spark?.source) {
     if (spark && spark.costUsd != null) return `in dollars, ${withSplit(spark.costUsd, spark.agentCostUsd ?? null, fmtUsd)}`;
     return sessionBudgetUnknownText(spark ? "unpriced" : "noSpark");
   }
   const s = sessionSpend(unit, spark, cal, now);
   // The window is named once, on the total; the two parts are its shares.
-  if (s.value != null) return withSplit(s.value, s.agent, (n) => fmtLong(unit, n), isPctUnit(unit) ? (n) => fmtShort(unit, n, true) : undefined);
-  const why = sessionBudgetUnknownText(s.why ?? "noSpark", s.why === "stale" && cal ? now - cal.checkedAt : undefined);
+  if (s.value != null) return withSplit(s.value, s.agent, (n) => fmtLong(unit, n), isPctUnit(unit) ? (n) => fmtShort(unit, n, true) : undefined, !!spark?.source);
+  const why = sessionBudgetUnknownText(s.why ?? "noSpark", s.why === "stale" && cal ? now - cal.checkedAt : undefined, unit);
   if (isPctUnit(unit) && spark && spark.costUsd != null) {
     return `${why}. In dollars: ${withSplit(spark.costUsd, spark.agentCostUsd ?? null, fmtUsd)}.`;
   }
@@ -225,7 +249,7 @@ export function budgetStateLine(b: SessionBudgetInfo | undefined, now: number, s
     return line ? `Spent: ${line}.` : null;
   }
   const v = b.verdict;
-  if (v.state === "unknown") return sessionBudgetUnknownText(v.why ?? "noSpark", v.why === "stale" && b.cal ? now - b.cal.checkedAt : undefined);
+  if (v.state === "unknown") return sessionBudgetUnknownText(v.why ?? "noSpark", v.why === "stale" && b.cal ? now - b.cal.checkedAt : undefined, v.unit);
   return `${sessionBudgetText(v)}${v.state === "over" ? `. ${sessionBudgetHoldText(b.cfg)}` : "."}`;
 }
 

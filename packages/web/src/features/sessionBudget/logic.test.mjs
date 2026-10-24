@@ -107,3 +107,17 @@ test("a set is only ASKED until the desktop answers with exactly that cap", () =
   assert.equal(budgetConfirmed(null, cap), false);
   assert.match(BUDGET_UNCONFIRMED, /nothing is capped/);
 });
+
+// ── P2: no percent unit where the backend spends from no claude window ───────
+import { budgetWindowsOff } from "./logic.ts";
+
+test("budgetWindowsOff: a source-judged or non-claude session says why; claude and an old host offer percents", () => {
+  const backends = [
+    { id: "claude", label: "Claude Code", caps: { slash: true, promptBoxes: true, hooks: true, transcript: true } },
+    { id: "copilot", label: "Copilot", caps: { slash: false, promptBoxes: false, hooks: false, transcript: true } },
+  ];
+  assert.equal(budgetWindowsOff({ backend: "claude" }, backends), null);
+  assert.equal(budgetWindowsOff({ backend: "claude" }, null), null, "an old host only knows claude");
+  assert.match(budgetWindowsOff({ backend: "copilot" }, backends), /and Copilot does not spend from it\.$/);
+  assert.match(budgetWindowsOff({ backend: "gone", sourceSpend: { at: 1 } }, null), /this session's backend does not spend from it/);
+});

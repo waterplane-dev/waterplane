@@ -24,6 +24,7 @@
  */
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import { inRoot } from "./paths.js";
 
 export interface WriteJsonOpts {
   /** File mode for the result (e.g. 0o600 for a key). Default: the umask's. */
@@ -70,14 +71,23 @@ export function writeTextAtomic(path: string, body: string, opts: Pick<WriteJson
  * symlink is written THROUGH (a rename over the link would replace it with a
  * regular file and orphan the real one). A file that does not exist yet gets the
  * same mode a plain `writeFileSync` would have given it.
+ *
+ * Writing THROUGH a link is also how a committed `.gitignore -> ~/.gitconfig`
+ * would rewrite a file outside the repo, so a caller rewriting a file inside a
+ * worktree names it as `within`: a target that resolves outside it is refused,
+ * in words, before any byte is written (`inRoot`, realpath on both sides).
+ * In-repo links keep working.
  */
-export function writeTextAtomicKeepMode(path: string, body: string): void {
+export function writeTextAtomicKeepMode(path: string, body: string, within?: string): void {
   let target = path;
   let mode: number | undefined;
   try {
     target = realpathSync(path);
     mode = statSync(target).mode & 0o7777;
   } catch { /* absent: a new file, today's default mode */ }
+  if (within !== undefined && inRoot(within, target) === null) {
+    throw new Error(`${basename(path)} is a link out of the repo — not written through`);
+  }
   writeTextAtomic(target, body, { mode });
 }
 

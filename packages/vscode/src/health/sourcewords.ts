@@ -115,7 +115,7 @@ export const XCODE_LICENSE = /xcodebuild -license|Xcode license/i;
  *  extension is wrong, so neither a rebuild nor forgetting the series answers it — the view offers
  *  no Forget here, and the sentence says so, or the build button reads like a remedy. */
 export function xcodeLicenseWords(): string {
-  return "git is blocked on this Mac: Apple's git runs through Xcode, and Xcode's license has not been accepted, so every git command refuses (VS Code's Source Control too). Nothing is wrong with this folder or its series, and building again will not change that until git works. Fix it once in Terminal: sudo xcodebuild -license accept. Or, if the Command Line Tools are installed, sudo xcode-select -s /Library/Developer/CommandLineTools. Without admin rights, set VS Code's git.path to another git, such as Homebrew's. Then build the series.";
+  return "git is blocked on this Mac: Apple's git runs through Xcode, and Xcode's license has not been accepted, so it refuses every command, and no other git that runs was found (git.path, PATH, Homebrew's, the Command Line Tools'). Nothing is wrong with this folder or its series, and building again will not change that until git works. Fix it once in Terminal: sudo xcodebuild -license accept. Or, if the Command Line Tools are installed, sudo xcode-select -s /Library/Developer/CommandLineTools. Without admin rights, set VS Code's git.path to another git, such as Homebrew's. Then build the series.";
 }
 
 /** The read error said in our words when we know what it means; null = quote the engine. */

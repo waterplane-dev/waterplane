@@ -34,12 +34,15 @@ import { claudeEndpointBackend } from "./claude-endpoint.js";
 import { shellBackend } from "./shell.js";
 import type { BackendDescriptor, BackendModels } from "./types.js";
 import { BACKENDS, liveIds, registerCore } from "./registry.js";
+import { derive } from "./derive.js";
 
 export * from "./types.js";
 export * from "./registry.js";
-export { PROMPT_READERS, TRANSCRIPT_READERS, readerProblems, registerScreenReader, registerStoreReader, screenReaderFor, storeReaderFor, namesStoreReader } from "./readers.js";
+export { PROMPT_READERS, TRANSCRIPT_READERS, contributedReaders, registerScreenReader, registerStoreReader, screenReaderFor, storeReaderFor, namesStoreReader } from "./readers.js";
 export type { PromptReaderName, TranscriptReaderName } from "./readers.js";
-export { claudeBackend, claudeBin, hookSettingsArg } from "./claude.js";
+export { derive, walk, factProblems, CORE_SCREEN, CORE_STORE } from "./derive.js";
+export type { Derived } from "./derive.js";
+export { claudeBackend, claudeBin, hookSettingsArg, CLAUDE_FACTS, ACCOUNTLESS_CLAUDE_FACTS, CLAUDE_EFFORTS } from "./claude.js";
 export { claudeLocalBackend, claudeLocalEnv, claudeLocalUrl, claudeLocalLeanArgs, claudeLocalKeepAlive, leanArgs, LEAN_TOOLS, windowFromShow } from "./claude-local.js";
 export { claudeEndpointBackend, endpointConfig } from "./claude-endpoint.js";
 export { shellBackend, shellBin, ensureBrowserShim, browserShimText, BROWSER_SHIM, SHELL_DROP_ENV } from "./shell.js";
@@ -89,11 +92,42 @@ export function resolveBackend(id?: string): BackendDescriptor {
  */
 const MODEL_CACHE = new Map<string, BackendModels>();
 
-/** Ask every backend for its catalogue. Never throws; never rejects. */
+/**
+ * The running CLI version of each backend that declares `measured` (plugins), asked beside the
+ * catalogue and remembered the same way: `null` = the binary could not tell. Absent = never asked
+ * or no `measured` at all.
+ */
+const RUNNING_VERSION = new Map<string, string | null>();
+
+/**
+ * "measured on X, running Y" as the sentence a person reads (review R6; plan §3.6): present only
+ * when the plugin named the versions it was measured on AND the running binary answered with one
+ * that is none of them. Never a refusal — the backend still launches; the sentence says what may
+ * be misread. Pure.
+ */
+export function measuredDriftText(label: string, versions: readonly string[], running: string | null | undefined): string | null {
+  if (!running || !versions.length || versions.includes(running)) return null;
+  const on = versions.length === 1 ? versions[0] : `${versions.slice(0, -1).join(", ")} or ${versions[versions.length - 1]}`;
+  return `${label} was measured on ${on}, and this desktop is running ${running} — its screens or records may read differently until the plugin is measured on ${running}. It still starts.`;
+}
+
+/** Ask one backend for its running version, when it declares `measured`. Never throws. */
+async function askRunning(b: BackendDescriptor): Promise<void> {
+  if (!b.measured) { RUNNING_VERSION.delete(b.id); return; }
+  let v: string | null = null;
+  try { v = await b.measured.version(); } catch { v = null; }
+  if (!BACKENDS.includes(b)) return; // removed while it was being asked
+  RUNNING_VERSION.set(b.id, v);
+  const drift = measuredDriftText(b.label, b.measured.versions, v);
+  if (drift) console.log(`[backend] ${b.id}: ${drift}`);
+}
+
+/** Ask every backend for its catalogue (and a plugin for its running version). Never throws; never rejects. */
 export async function primeBackendModels(): Promise<void> {
   await Promise.all(BACKENDS.map(async (b) => {
     try { MODEL_CACHE.set(b.id, await b.models()); }
     catch { MODEL_CACHE.set(b.id, { aliases: [], ids: [] }); }
+    await askRunning(b);
   }));
 }
 
@@ -106,6 +140,7 @@ export async function primeBackendModels(): Promise<void> {
 export async function primeNewBackendModels(): Promise<boolean> {
   const live = new Set(BACKENDS.map((b) => b.id));
   for (const id of [...MODEL_CACHE.keys()]) if (!live.has(id)) MODEL_CACHE.delete(id);
+  for (const id of [...RUNNING_VERSION.keys()]) if (!live.has(id)) RUNNING_VERSION.delete(id);
   const fresh = BACKENDS.filter((b) => !MODEL_CACHE.has(b.id));
   // Marked first, so two changes in a row do not ask one backend twice.
   for (const b of fresh) MODEL_CACHE.set(b.id, { aliases: [], ids: [] });
@@ -114,6 +149,7 @@ export async function primeNewBackendModels(): Promise<boolean> {
     try { m = await b.models(); } catch { m = { aliases: [], ids: [] }; }
     // Removed (or replaced) while it was being asked: the answer is about nobody.
     if (BACKENDS.includes(b)) MODEL_CACHE.set(b.id, m);
+    await askRunning(b);
   }));
   return fresh.length > 0;
 }
@@ -202,9 +238,14 @@ export function forkAtTurnRefusal(backendId?: string): string | null {
   // moment later with a sentence naming the known ids, and answering here would
   // replace that sentence with a less useful one.
   try { backend = resolveBackend(backendId); } catch { return null; }
-  if (backend.caps.forkVia === "server") return null; // the backend forks it itself; `convfork.ts` never sees it
-  if (backend.caps.transcript === "claude-jsonl" || backend.caps.transcript === "none") return null;
-  return `${backend.label} keeps its conversation in a live database this host only ever reads, so a conversation cannot be cut at a turn and re-opened as a new one. Resume this conversation instead, or start a fresh session.`;
+  if (backend.forkVia === "server") return null; // the backend forks it itself; `convfork.ts` never sees it
+  // claude's jsonl is cut by `convfork.ts` — and ONLY claude's: every other backend is refused
+  // here, before `routes/session.ts` reaches `forkConversationFile` with an id that is not a
+  // claude conversation — unless its own source cuts it (`conversations.fork`, `forkViaSource`).
+  const d = derive(backend);
+  if (d.keepsClaudeLog || d.sourceForks) return null;
+  if (d.store("transcript") !== null) return `${backend.label} keeps its conversation in a live database this host only ever reads, so a conversation cannot be cut at a turn and re-opened as a new one. Resume this conversation instead, or start a fresh session.`;
+  return `${backend.label} keeps no conversation file this host can copy, so a conversation cannot be cut at a turn and re-opened as a new one. Resume this conversation instead, or start a fresh session.`;
 }
 
 /**
@@ -222,10 +263,15 @@ export function shellOpenRefusal(backend: Pick<BackendDescriptor, "caps">, origi
   return "a job never opens a shell — open one from the repo's menu";
 }
 
-/** Does this backend fork a conversation on its own server (`caps.forkVia: "server"`)?
+/** Does this backend fork a conversation on its own server (`forkVia: "server"`)?
  *  An unknown id answers false — `create()` refuses it in words a moment later. */
 export function backendForksOnServer(backendId?: string): boolean {
-  try { return resolveBackend(backendId).caps.forkVia === "server"; } catch { return false; }
+  try { return resolveBackend(backendId).forkVia === "server"; } catch { return false; }
+}
+
+/** The descriptor when its own source cuts a conversation at a turn (`derive`'s `sourceForks`), else null. */
+export function backendForkingSource(backendId?: string): BackendDescriptor | null {
+  try { const b = resolveBackend(backendId); return derive(b).sourceForks ? b : null; } catch { return null; }
 }
 
 /**
@@ -234,61 +280,26 @@ export function backendForksOnServer(backendId?: string): boolean {
  *
  * A second table of capabilities would be a second opinion about what a backend
  * can do, and the one that was wrong would be the one the phone believes. The
- * translation is only where the two vocabularies differ: `caps.transcript` and
- * `caps.slash` are host-side enums (which log shape, whose commands) and the
- * wire asks the simpler question a client can act on (is there one at all).
+ * translation is `derive.ts`'s `wireCaps`: the host's provider lists (which reader, which
+ * channel) become the simpler question a client can act on (is there one at all).
  */
+function measuredInfo(label: string, versions: readonly string[], running: string | null | undefined): NonNullable<BackendInfo["measured"]> {
+  const drift = measuredDriftText(label, versions, running);
+  return { versions: [...versions], ...(running ? { running } : {}), ...(drift ? { drift } : {}) };
+}
+
 export function backendInfos(): BackendInfo[] {
   return BACKENDS.map((b): BackendInfo => {
     const m = MODEL_CACHE.get(b.id) ?? { aliases: [], ids: [] };
-    // The wire booleans are derived from BOTH halves: a fact exists when the
-    // backend has a screen reader for it (`caps`) OR a source supplies it
-    // (`sources`). The phone sees no new field.
-    const src = b.sources;
     return {
       id: b.id,
       label: b.label,
       // A backend with no turns is a SHELL to the phone — offered as "open a
       // shell here", never in the model picker. Absent for every agent.
       ...(b.caps.turns === false ? { kind: "shell" as const } : {}),
-      caps: {
-        contextMeter: b.caps.contextMeter,
-        usageLimits: b.caps.usageLimits,
-        transcript: b.caps.transcript !== "none" || !!src?.transcript,
-        slash: b.caps.slash !== "none",
-        // Host-side this NAMES a reader (`prompt.ts` or `ocprompt.ts`); the wire
-        // asks the simpler question a client can act on — is there one at all.
-        // Which reader is not the phone's business: a box that needs walking
-        // rather than a digit says so on the BOX (`DetectedPrompt.nav`), so a
-        // client never has to know which binary drew the dialog it is answering.
-        promptBoxes: !!b.caps.promptBoxes || !!src?.dialogs,
-        hooks: b.caps.hooks !== "none" || !!src?.turns,
-        effort: b.caps.effort,
-        remoteControl: b.caps.remoteControl,
-        /**
-         * The three that used to be IMPLIED by `transcript` and `contextMeter`,
-         * and stopped being implied the moment a backend had one without the
-         * others. Each is derived HERE, from the host-side enum, so there is one
-         * statement of each rule rather than a second table to keep true:
-         *
-         *  • `fork` — a conversation can be cut at a turn and written under a
-         *    new id. Only `claude-jsonl`: `convfork.ts` copies a FILE, and
-         *    opencode's record is a live SQLite database this app must never
-         *    write to. A readable transcript is not a forkable one.
-         *  • `resumePick` — the binary has an interactive "choose an older
-         *    conversation" list. Only `claude-jsonl`: opencode's `launchArgs`
-         *    REFUSES `"pick"` in words, so offering the button would be
-         *    offering a refusal.
-         *  • `contextSeries` — a history can be drawn at all. True wherever
-         *    there is a record to read it out of, OR where the TUI prints a
-         *    live gauge. opencode has the first and not the second, which is
-         *    exactly the case that forced the split.
-         */
-        fork: b.caps.transcript === "claude-jsonl" || b.caps.forkVia === "server",
-        resumePick: b.caps.transcript === "claude-jsonl",
-        contextSeries: b.caps.transcript !== "none" || b.caps.contextMeter || !!src?.transcript || !!src?.context,
-        permissionModes: [...b.caps.permissionModes],
-      },
+      // Every boolean is DERIVED from the provider table (`derive.ts`), so a cap and a source
+      // can never disagree; the bytes are pinned (`backendinfos.pin.test.mjs`).
+      caps: derive(b).wireCaps(),
       // `where` rides along only when the backend could actually determine it.
       // Spread rather than `where: m.where` so an absent map stays ABSENT on
       // the wire instead of becoming an explicit `undefined` key — the phone
@@ -302,6 +313,9 @@ export function backendInfos(): BackendInfo[] {
         ...(m.note ? { note: m.note } : {}) },
       ...(m.unavailable ? { unavailable: m.unavailable } : {}),
       ...(b.experimental ? { experimental: true as const } : {}),
+      // The versions a plugin was measured on, the running one, and the drift sentence (R6).
+      // Absent for a backend that declares no `measured` — every core backend (the pin holds).
+      ...(b.measured ? { measured: measuredInfo(b.label, b.measured.versions, RUNNING_VERSION.get(b.id)) } : {}),
       // `contextWindowTokens` is deliberately never set: no backend here has a
       // window size that is a fixed fact about the BACKEND rather than about a
       // model on somebody's disk, and absent is what that must read as.

@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { CircleAlert, CloudOff, Loader2 } from "lucide-react";
-import { api, type SlashCommand } from "./api";
+import { api } from "./api";
+import type { SlashListDoc } from "@waterplane/shared";
+import { backendInfo, type BackendList } from "./backendCaps";
 import { getSlashCacheEntry, putSlashCache } from "./offlineCache";
 import { useRemoteResource, agoText } from "./useRemoteResource";
 import { SheetHead } from "./Sheet";
@@ -9,6 +11,11 @@ import { Unavailable } from "./Unavailable";
 
 interface Props {
   cwd: string;
+  /** Set only for a backend whose `caps.commands` is stated: the sheet then lists THAT backend's own
+   *  commands (`/api/slash?backend=`), cached apart from the repo's claude set. */
+  backend?: string;
+  /** What the host described: names the backend in the sheet's empty state. */
+  backends?: BackendList;
   onPick: (name: string, runNow: boolean) => void;
   /**
    * Why there is no palette here — passed only when the session's backend does
@@ -25,7 +32,7 @@ interface Props {
 }
 
 /** Slash-command palette. Tap inserts into the compose box; ⏎ runs it now. */
-export function SlashSheet({ cwd, onPick, unsupported, onClose }: Props) {
+export function SlashSheet({ cwd, backend, backends = null, onPick, unsupported, onClose }: Props) {
   const [q, setQ] = useState("");
   /**
    * One host read, told honestly (`useRemoteResource`).
@@ -38,14 +45,20 @@ export function SlashSheet({ cwd, onPick, unsupported, onClose }: Props) {
    * palette's own (`offlineCache.ts`), keyed per repo; only the five states and
    * the age label are now shared.
    */
-  const res = useRemoteResource<SlashCommand[]>(cwd, () => api.slash(cwd), {
+  const key = backend ? `${cwd}\n${backend}` : cwd;
+  const res = useRemoteResource<SlashListDoc>(key, () => api.slash(cwd, backend), {
     // Not even asked for a backend that has no such concept — see `unsupported`.
     enabled: !unsupported,
-    fromCache: async () => getSlashCacheEntry(cwd),
-    toCache: (list) => putSlashCache(cwd, list),
+    fromCache: async () => {
+      const hit = getSlashCacheEntry(key);
+      return hit ? { value: { commands: hit.value }, savedAt: hit.savedAt } : null;
+    },
+    // An empty list WITH the host's reason is an answer about that moment, not a list to keep.
+    toCache: (doc) => { if (!doc.why) putSlashCache(key, doc.commands); },
   });
+  const label = backend ? (backendInfo(backends, backend)?.label ?? "this backend") : null;
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `res.data ?? []` is a new array only while nothing has loaded; memoising would change when the filter recomputes
-  const cmds = res.data ?? [];
+  const cmds = res.data?.commands ?? [];
 
   const filtered = useMemo(
     () => cmds.filter((c) => c.name.toLowerCase().includes(q.toLowerCase()) || (c.description ?? "").toLowerCase().includes(q.toLowerCase())),
@@ -71,18 +84,19 @@ export function SlashSheet({ cwd, onPick, unsupported, onClose }: Props) {
         {res.state === "offline" && <span className="gallery-meta"><CloudOff size={12} /> offline</span>}
         {res.state === "error" && <span className="gallery-meta"><CircleAlert size={12} /> host refused</span>}
       </SheetHead>
-      <div className="btw-row">
+      {!backend && <div className="btw-row">
         <button className="btw" onClick={() => onPick("/btw ", false)}>
           /btw — queue a note without interrupting
         </button>
-      </div>
+      </div>}
       <input className="search" placeholder="Filter…" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
       <div className="list">
         {filtered.map((c) => (
           <div key={c.name} className="cmd-row">
             <button className="cmd-name" onClick={() => onPick(c.name + " ", false)}>
               <span className="mono">{c.name}</span>
-              <span className={`src src-${c.source}`}>{c.source}</span>
+              {/* A backend's list is all one source: the pill would repeat on every row. */}
+              {!backend && <span className={`src src-${c.source}`}>{c.source}</span>}
             </button>
             {c.description && <span className="cmd-desc">{c.description}</span>}
             <button className="run" onClick={() => onPick(c.name, true)}>run</button>
@@ -91,10 +105,12 @@ export function SlashSheet({ cwd, onPick, unsupported, onClose }: Props) {
         {/* Four states, one worded ladder (`Empty.tsx`). The way out — typing
             the command by hand — holds whatever the state is, which is why it
             is a `note` and not part of any one sentence. */}
-        <Empty res={res} empty={filtered.length === 0} thing="this repo’s commands" noun="palette"
-          note="You can still type any command.">
-          No matches.
-        </Empty>
+        {backend && cmds.length === 0 && res.data?.why
+          ? <Unavailable cants={[{ label: "slash commands", reason: res.data.why }]} />
+          : <Empty res={res} empty={filtered.length === 0} thing={label ? `${label}’s commands` : "this repo’s commands"} noun="palette"
+            note="You can still type any command.">
+            No matches.
+          </Empty>}
       </div>
     </div>
   );

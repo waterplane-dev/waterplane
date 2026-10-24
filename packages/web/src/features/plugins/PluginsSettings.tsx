@@ -9,7 +9,7 @@
  * app's own controls — the phone never runs plugin code.
  */
 import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, CircleDashed, FolderOpen, KeyRound, Play, Puzzle, ScrollText, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleDashed, Download, FolderOpen, KeyRound, Play, Puzzle, ScrollText, XCircle } from "lucide-react";
 import { BRAND, PLUGIN_MANIFEST } from "@waterplane/shared";
 import type { PluginField, PluginView } from "@waterplane/shared";
 import { useCore, useStore } from "../../sdk";
@@ -19,6 +19,11 @@ import { enablePlugin, openDecisions, refuseValue, runPluginAction, setPluginVal
 import { actionKey, envRows, fieldValue, globalActions, parseFieldInput, pluginStateLine, pluginWords } from "./logic";
 import { errors, plugins as pluginStore, results } from "./store";
 import { Button, RowSub, Tag } from "../../kit";
+import { AddByUrl, ApplyNote, AvailableList, CheckedLine, MaturityTag } from "./UpdatesParts";
+import { updatePlugin } from "./updatesActions";
+import { installedRows } from "./logic";
+import type { InstalledRow } from "./logic";
+import { updatesStatus } from "./store";
 
 /** The rack's door to the decision log. */
 export function DecisionLogDoor() {
@@ -32,6 +37,8 @@ export function DecisionLogDoor() {
 export function PluginsSettings() {
   const c = useCore();
   const list = useStore(pluginStore);
+  const status = useStore(updatesStatus);
+  const rows = installedRows(list ?? [], status);
   // The host sends the list on connect and after every change; asking once
   // when the screen comes up covers a phone that connected before an older
   // host knew the message. Nobody tapped anything, so no receipt.
@@ -41,22 +48,25 @@ export function PluginsSettings() {
   }, []);
   return (
     <SetCustom id="plugins" label="plugins" icon={Puzzle}
-      note={list?.length ? `Code you installed on the desktop that extends ${BRAND.displayName}. A changed plugin takes effect after the desktop restarts.` : undefined}>
+      note={`Code that runs on the desktop and extends ${BRAND.displayName}, with full access to it. A new or changed plugin takes effect after the desktop restarts.`}>
       {list === null && <SetNote>The desktop has not listed its plugins yet.</SetNote>}
       {list?.length === 0 && (
         <SetNote>
-          No plugins installed. A plugin is a folder under <code>~/.config/{BRAND.configDirName}/plugins/</code> on the
-          desktop, or a path listed in <code>~/.config/{BRAND.configDirName}/plugin-paths.json</code>; the desktop loads them when it starts.
+          No plugins installed. Install one below, or put a folder under <code>~/.config/{BRAND.configDirName}/plugins/</code> on the
+          desktop (or list its path in <code>~/.config/{BRAND.configDirName}/plugin-paths.json</code>); the desktop loads plugins when it starts.
         </SetNote>
       )}
-      {list?.map((p) => <PluginSection key={p.source} p={p} />)}
+      {list?.map((p) => <PluginSection key={p.source} p={p} row={rows.find((r) => r.id === p.manifest.id)} />)}
+      <CheckedLine status={status} />
+      <AvailableList status={status} />
+      <AddByUrl />
     </SetCustom>
   );
 }
 
 const TONE_ICON = { ok: CheckCircle2, bad: XCircle, dim: CircleDashed } as const;
 
-function PluginSection({ p }: { p: PluginView }) {
+function PluginSection({ p, row }: { p: PluginView; row: InstalledRow | undefined }) {
   const m = p.manifest;
   const err = useStore(errors)[m.id];
   const res = useStore(results);
@@ -69,11 +79,20 @@ function PluginSection({ p }: { p: PluginView }) {
     <div className="plugin-sec">
       <div className="plugin-head">
         <b>{m.name}</b> <RowSub>v{m.version}</RowSub>
-        {m.experimental === true && <Tag>experimental</Tag>}
+        {row?.untagged && <RowSub>{row.untagged}</RowSub>}
+        {row && <MaturityTag m={row.maturity} />}
+        {m.experimental === true && m.maturity === undefined && <Tag>experimental</Tag>}
         <Tag className={`plugin-${state.tone}`}><StateIcon size={12} /> {p.state}</Tag>
       </div>
+      {row?.due && (
+        <div className="plugin-head">
+          <RowSub>{row.due.from ?? `v${m.version}`} → {row.due.to}</RowSub>
+          <Button variant="primary" onClick={() => updatePlugin(m.id, m.name, row.due!.from, row.due!.to, { fromOrg: row.fromOrg, url: row.url })}><Download size={14} /> update</Button>
+        </div>
+      )}
+      <ApplyNote target={{ kind: "plugin-update", id: m.id }} />
       {m.description && <SetNote>{m.description}</SetNote>}
-      <div className="set-note plugin-src"><FolderOpen size={12} /> <code>{p.source}</code></div>
+      <SetNote className="plugin-src">{row?.source} · <FolderOpen size={12} /> <code>{p.source}</code></SetNote>
       {state.tone !== "ok" && <SetWarn tone={state.tone === "bad" ? "bad" : "plain"}>{state.text}</SetWarn>}
       {p.status && p.state === "active" && (
         <SetWarn tone={p.status.tone === "bad" ? "bad" : "plain"} icon={p.status.tone === "ok" ? CheckCircle2 : AlertTriangle}>
@@ -87,12 +106,12 @@ function PluginSection({ p }: { p: PluginView }) {
       <SetSwitch label={`use ${m.name}`} icon={Puzzle} on={p.enabled} onChange={() => enablePlugin(p, !p.enabled)}
         note={p.enabled ? undefined : "Off: the desktop does not activate it, and it sees nothing."} />
       {env.length > 0 && (
-        <div className="set-note plugin-env">
+        <SetNote className="plugin-env">
           <KeyRound size={12} /> {env.map((e, i) => (
             <span key={e.name}>{i > 0 && " · "}<code>{e.name}</code> {e.set ? "set" : "not set"}</span>
           ))}
           {env.some((e) => !e.set) && <> — set it with the secret tool, or in the desktop&apos;s environment.</>}
-        </div>
+        </SetNote>
       )}
       {p.state !== "error" && (m.settings ?? []).map((f) => <PluginFieldRow key={f.key} p={p} f={f} />)}
       {p.state === "active" && globalActions(p).map((a) => {

@@ -18,9 +18,11 @@ const IDS = TAB_IDS;
 export function App() {
   const [tab, setTab] = useState<TabId>(() => loadTab(IDS, "all"));
   const [turn, setTurn] = useState<number | null>(null);
+  // A ledger tab All sessions was asked to open on (the tree's Copilot row); every tree click sets it anew.
+  const [ledger, setLedger] = useState<string | null>(null);
   const choose = (id: TabId) => { setTab(id); saveTab(id); };
   // The tree asked for a view: it arrives after `ready`, so it wins over the remembered one.
-  const { session, sessions, corpus, weight, prompts, folders, health } = useExtension((id) => { if (IDS.includes(id)) choose(id); });
+  const { session, sessions, corpus, live, weight, prompts, folders, health } = useExtension((id, led) => { if (IDS.includes(id)) { choose(id); setLedger(led ?? null); } });
 
   // A selected prompt belongs to one session; another session's numbers mean nothing.
   const sessionId = session?.doc?.id;
@@ -44,7 +46,7 @@ export function App() {
           <SessionView doc={session?.doc ?? null} why={session ? session.why : "Waiting for the extension…"}
             prompts={prompts.list} terminal={prompts.terminal} selectedTurn={turn} onSelectTurn={setTurn} post={post} />
         )}
-        {tab === "all" && <OverviewView doc={corpus?.doc ?? null} why={corpus ? corpus.why : "Waiting for the extension…"} scanning={corpus?.scanning} />}
+        {tab === "all" && <OverviewView doc={corpus?.doc ?? null} why={corpus ? corpus.why : "Waiting for the extension…"} scanning={corpus?.scanning} live={live} post={post} askedLedger={ledger} />}
         {tab === "always-on" && (
           <WeightView doc={weight?.doc ?? null} why={weight ? weight.why : "Waiting for the extension…"}
             prompts={prompts.list} terminal={prompts.terminal} post={post} />

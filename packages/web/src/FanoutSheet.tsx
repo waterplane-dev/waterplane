@@ -19,6 +19,7 @@ import { Button } from "./kit/Button";
 import { Row, RowTitle, RowSub } from "./kit/Row";
 import { Hint } from "./kit/Hint";
 import { Tag } from "./kit/Tag";
+import { SetNote } from "./SettingsKit";
 
 interface Props {
   repos: RepoTarget[];
@@ -133,6 +134,8 @@ export function FanoutSheet({ repos, runs, backends, launch, onRun, onFollowUp, 
   // picker is filtered to primaries — hiding a row must not silently drop it
   // from the run. `RepoPicker` carries that rule now (`visibleRepos`).
   const chosen = useMemo(() => repos.filter((r) => sel.has(r.worktreePath)), [repos, sel]);
+  // Why "later" / "Run" are not drawn: a sentence, never a dimmed button.
+  const gate = !chosen.length ? "pick at least one repo" : !text.trim() ? "write the instruction first" : null;
   const dirs = useMemo(() => [...sel], [sel]);
 
   /** Tapping a preset must never eat a prompt that was typed by hand: it REPLACES
@@ -257,10 +260,10 @@ export function FanoutSheet({ repos, runs, backends, launch, onRun, onFollowUp, 
         <LaunchPicker backends={backends} defaults={launch} nowLead="Every repo starts on"
           value={chose} onChange={pickLaunch}>
           {pick && (
-            <span className="set-note">
+            <SetNote as="span">
               This sweep only — new sessions still start on {launch.model ?? "the default"}{launch.effort ? ` · ${launch.effort}` : ""}.{" "}
               <button className="link-btn" onClick={() => pickLaunch(defaults)}>use that</button>
-            </span>
+            </SetNote>
           )}
         </LaunchPicker>
         <div className="annot-tools wrap">
@@ -285,16 +288,16 @@ export function FanoutSheet({ repos, runs, backends, launch, onRun, onFollowUp, 
             const picking = fuRun === run.id;
             return (
             <div key={run.id} id={`fanout-run-${run.id}`}>
-              <Hint tone="mono">{run.text.length > 90 ? `${run.text.slice(0, 90)}…` : run.text}</Hint>
+              <Hint>{run.text.length > 90 ? `${run.text.slice(0, 90)}…` : run.text}</Hint>
               {run.followUps?.map((f, i) => (
-                <Hint key={i} tone="mono"><CornerDownRight size={11} /> {f.text.length > 90 ? `${f.text.slice(0, 90)}…` : f.text}
+                <Hint key={i}><CornerDownRight size={11} /> {f.text.length > 90 ? `${f.text.slice(0, 90)}…` : f.text}
                   {f.dirs.length < run.targets.length ? <span className="section-hint"> · {f.dirs.length} of {run.targets.length}</span> : null}
                 </Hint>
               ))}
               <div className="list">
                 {run.targets.map((t) => (
                   <Row key={t.dir} kind="wrap">
-                    <Row as="button" kind="grow" disabled={!t.sessionId} onClick={() => t.sessionId && onOpen(t.sessionId)}>
+                    <Row as={t.sessionId ? "button" : "div"} kind="grow" onClick={t.sessionId ? () => onOpen(t.sessionId!) : undefined}>
                       <RowTitle>
                         {t.status === "starting" || t.status === "running" ? <Loader size={12} className="spin" /> : null}
                         {t.status === "done" ? <CircleCheck size={12} /> : null}
@@ -305,13 +308,13 @@ export function FanoutSheet({ repos, runs, backends, launch, onRun, onFollowUp, 
                     </Row>
                     {/* Picking targets is a SEPARATE control from the row: tapping
                         the row must keep meaning "open that session". */}
-                    {picking && (
-                      <button className={`row-act ${t.sessionId && fuSel.has(t.dir) ? "on" : ""}`} disabled={!t.sessionId}
-                        title={t.sessionId ? "include in the follow-up" : "no session to send to"}
-                        onClick={() => t.sessionId && toggleFu(t.dir)}>
-                        {t.sessionId && fuSel.has(t.dir) ? <SquareCheck size={16} /> : <Square size={16} />}
+                    {picking && (t.sessionId ? (
+                      <button className={`row-act ${fuSel.has(t.dir) ? "on" : ""}`}
+                        title="include in the follow-up"
+                        onClick={() => toggleFu(t.dir)}>
+                        {fuSel.has(t.dir) ? <SquareCheck size={16} /> : <Square size={16} />}
                       </button>
-                    )}
+                    ) : <CantInline>no session to send to</CantInline>)}
                   </Row>
                 ))}
               </div>
@@ -337,10 +340,13 @@ export function FanoutSheet({ repos, runs, backends, launch, onRun, onFollowUp, 
                     <Button onClick={() => setFuSel(new Set())}>none</Button>
                     <Button onClick={() => { setFuRun(null); setFuText(""); }}>cancel</Button>
                     <span className="spacer" />
-                    <button className="send" disabled={!fuText.trim() || !live.some((t) => fuSel.has(t.dir))}
-                      onClick={() => sendFollowUp(run)}>
-                      <Send size={14} /> send to {live.filter((t) => fuSel.has(t.dir)).length}
-                    </button>
+                    {!fuText.trim() ? <CantInline>write the instruction first</CantInline>
+                      : !live.some((t) => fuSel.has(t.dir)) ? <CantInline>pick a session to send to</CantInline>
+                      : (
+                        <button className="send" onClick={() => sendFollowUp(run)}>
+                          <Send size={14} /> send to {live.filter((t) => fuSel.has(t.dir)).length}
+                        </button>
+                      )}
                   </div>
                 </div>
               )}
@@ -375,17 +381,16 @@ export function FanoutSheet({ repos, runs, backends, launch, onRun, onFollowUp, 
 
       <div className="sheet-actions">
         <span className="spacer" />
-        <Button data-hint="fanout.schedule"
-          disabled={!chosen.length || !text.trim()}
+        {gate ? <CantInline>{gate}</CantInline> : <Button data-hint="fanout.schedule"
           title="Run it later instead — once tonight, or every week at a time you pick"
           onClick={() => {
             track("action:fanout.schedule");
             save(TEXT_KEY, text);
             onSchedule(chosen.map((r) => r.worktreePath), text.trim(), sweep);
           }}
-        ><CalendarClock size={16} /> later</Button>
-        {blocked ? <CantInline>{blocked}</CantInline> : (
-        <button className="send" data-hint="fanout.run" disabled={!chosen.length || !text.trim()} onClick={go}
+        ><CalendarClock size={16} /> later</Button>}
+        {blocked ? <CantInline>{blocked}</CantInline> : gate ? null : (
+        <button className="send" data-hint="fanout.run" onClick={go}
           title={online ? undefined : "no connection — the sweep is queued and runs when the link is back"}>
           <Play size={16} /> {online ? "Run" : "Queue"} in {chosen.length} repo{chosen.length === 1 ? "" : "s"}
         </button>

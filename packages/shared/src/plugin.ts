@@ -29,11 +29,14 @@
  */
 import type { PeerKind } from "./wire/messages.js";
 import type { PluginStreamHandlers } from "./stream.js";
+import { maturityProblems } from "./pluginmaturity.js";
 import type { ComplianceCheck } from "./wire/repo.js";
-import type { ContextEvent, ContextSample, DetectedPrompt, LaunchOpts, PermissionMode } from "./wire/session.js";
+import type { ContextEvent, ContextSample, DetectedPrompt } from "./wire/session.js";
 import type { TranscriptDoc, TranscriptToolDetail } from "./wire/transcript.js";
 import type { BackendSources } from "./backendsources.js";
 import type { PluginThermalReader, PluginUsageProbe } from "./pluginreadings.js";
+import type { BackendCapsV2, BackendFacts, PluginLaunchPlan, PluginLaunchRequest } from "./pluginlaunch.js";
+import type { BindLook, BindVerdict } from "./bindconv.js";
 import { BRAND, LEGACY } from "./brand.js";
 
 /**
@@ -61,8 +64,27 @@ import { BRAND, LEGACY } from "./brand.js";
  *   refuses it in words instead of failing at the first call.
  * - PATCH: wording, documentation and fixes that change no shape — nothing a plugin
  *   can observe through types.
+ *
+ * **2.0** (backend contract v2, `PLUGIN_API_V2_DOC`): `PluginBackendDef` replaces the v1
+ * reader caps (`hooks`, `promptBoxes`, `transcript`, `contextMeter`, `usageLimits`,
+ * `usageProbe`, `asking`, `forkVia` inside caps) with `facts` — one ordered provider list per
+ * fact — and `launchArgs` with an async `prepare`; it adds `measured`. A 1.x manifest that
+ * lists `backends` is refused in words; there is no shim. Everything else in 2.0 is additive,
+ * so a 1.x plugin that registers NO backend (a reader, a panel, a usage probe) still loads:
+ * `V1_LAST_MINOR` is the newest 1.x it may declare.
+ *
+ * **2.1** (additive): `HostPluginApi.supports` (`dialogKeysThenTyped`), and a source turn's
+ * `ended(at)` waits ≤1.5 s for a `sources.context` sample stamped `>= at` — no end-gate hold needed.
+ * **2.2** (additive, `docs/plans/backend-parity-v3.md` §7): facts + slots `mode`/`commands`, Tab and
+ * Shift+Tab in `SourceKeys`, context `window` + `compactions`, `tokens.session`. 2.1 plugins load as-is.
  */
-export const PLUGIN_API_VERSION = "1.8.0";
+export const PLUGIN_API_VERSION = "2.2.0";
+
+/** Where the 2.0 backend contract is written down; the 1.x refusal names it. */
+export const PLUGIN_API_V2_DOC = "docs/plans/backend-contract-v2.md";
+
+/** The last 1.x minor: a 1.0–1.8 plugin with no `backends` in its manifest loads on 2.x. */
+export const V1_LAST_MINOR = 8;
 
 /** Who a `handle` method was called by (since 1.8): the socket's trust tier, and the paired
  *  device's id/name (null: no token, or an in-process call). Never a proof beyond pairing. */
@@ -85,15 +107,19 @@ export function parsePluginApiVersion(v: unknown): PluginApiVersion | null {
  * (default: this one), in a sentence — or null when it can. The rule is
  * `PLUGIN_API_VERSION`'s: same major, minor no newer than the host's.
  */
-export function pluginApiProblem(declared: unknown, host: string = PLUGIN_API_VERSION): string | null {
+export function pluginApiProblem(declared: unknown, host: string = PLUGIN_API_VERSION, opts: { backends?: boolean } = {}): string | null {
   const h = parsePluginApiVersion(host);
   if (!h) throw new Error(`PLUGIN_API_VERSION ${host} is not semver`);
   const range = `${h.major}.0 up to ${h.major}.${h.minor}`;
   const said = `apiVersion is ${JSON.stringify(declared)}; this daemon speaks ${host}`;
   const d = parsePluginApiVersion(declared);
   if (!d) return `${said}, and loads plugins written for ${range} — "apiVersion" must be a version like "${h.major}.${h.minor}"`;
+  // 2.0 broke only the backend descriptor: a 1.x plugin registering no backend is unaffected.
+  if (h.major === 2 && d.major === 1 && d.minor <= V1_LAST_MINOR && opts.backends === false) return null;
   if (d.major !== h.major) {
-    return `${said}, and loads plugins written for ${range}; ${d.major > h.major ? "this plugin needs a newer daemon" : "this plugin was written for an older API and must be updated"}`;
+    // A 1.x plugin on a 2.x daemon: v1 is broken, not shimmed — the sentence names where 2.0 is written down.
+    const where = d.major < h.major && h.major === 2 ? ` — the 2.0 contract is ${PLUGIN_API_V2_DOC}` : "";
+    return `${said}, and loads plugins written for ${range}; ${d.major > h.major ? "this plugin needs a newer daemon" : "this plugin was written for an older API and must be updated"}${where}`;
   }
   if (d.minor > h.minor) return `${said}, and loads plugins written for ${range}; this plugin needs a newer daemon`;
   return null;
@@ -166,6 +192,7 @@ export interface PluginManifest {
    *  (`1`, read as `1.0`). Checked by `pluginApiProblem` before any of its code runs. */
   apiVersion: string | number;
   description?: string;
+  maturity?: "stable" | "preview" | "experimental"; // absent = "unrated" (`pluginMaturity`)
   /** Host module, relative to the plugin dir. Absent ⇒ `host.mjs`. */
   host?: string;
   settings?: PluginField[];
@@ -196,6 +223,8 @@ export interface PluginManifest {
    * so the switch can be reached.
    */
   optional?: boolean;
+  /** Folder (inside the extension) of static files served at `GET|HEAD /api/plugin/<id>/asset/<file>`; gated like `/api/*`, 403 while off. */
+  assets?: string;
   /** Labelled "experimental" wherever its backends are listed (`BackendInfo.experimental`). */
   experimental?: boolean;
 }
@@ -287,7 +316,9 @@ export interface PluginPromptEvent {
   sessionId: string;
   question: string;
   options: { index: number; label: string }[];
-  kind: "trust" | "tool" | "plan" | "select";
+  /** `question` (2.0): a question the CLI posed on its own channel; a plugin may answer one of
+   *  its OPTIONS through the gate, never its typed words — those are only a person's. */
+  kind: "trust" | "tool" | "plan" | "select" | "question";
   multi?: boolean;
   /** Core's answer gate would refuse this box whatever the switches say
    *  (trust/tool/plan, or a destructive option). Suggesting is still allowed. */
@@ -349,6 +380,24 @@ export interface HostPluginApi {
   session(id: string): PluginSession | null;
   /** The last `lines` lines of the rendered screen/scrollback, plain text. */
   scrollback(id: string, lines?: number): string;
+  /**
+   * Toolkit (2.0). Which backend conversation is this session's: the host's pure ladder
+   * (`bindconv.ts`) over the candidates YOUR queries found. Exactly one survivor or nothing.
+   */
+  bindConversation(look: BindLook): BindVerdict;
+  /**
+   * Follow a JSONL file the CLI appends to: each complete line once, rotation-safe (inode or shrink
+   * re-reads from 0), 1 MiB per `advance()`. `advance()` is true when it read, false when nothing is
+   * new, null when the file is absent or the tail closed.
+   */
+  tail(path: string, onLine: (obj: unknown) => void, opts?: { filter?: (line: string) => boolean }): { advance(): boolean | null; offset(): number; close(): void };
+  /** The host's reading of the session's live screen: the last rows, and the squashed (`echo.ts`) form. Null for an unknown session. */
+  screen(sessionId: string): { rows(lines?: number): string[]; squashed(lines?: number): string } | null;
+  /** The directory the host wrote this session's launch `files` into, if this plugin's backend spawned it. */
+  sessionFiles(hostSessionId: string): string | null;
+  /** What this host does beyond 2.0 (absent on a 2.0 host ⇒ "no"). `dialogKeysThenTyped`: a takesText
+   *  row's `answer` may return `{keys, typed: extra.text, then?}` — keys, 500 ms, words, Return apart. */
+  readonly supports?: { readonly dialogKeysThenTyped?: boolean };
   /** A file inside the session's repo (containment-guarded); null if absent or outside. */
   readRepoFile(sessionId: string, relPath: string, maxBytes?: number): string | null;
   /** Recent images in the session repo's inbox/outbox, base64, newest first. */
@@ -427,15 +476,15 @@ export interface HostPluginApi {
   /**
    * Register a backend (a CLI the launcher may spawn). THROWS a sentence — and
    * the plugin is listed broken when that escapes `activate()` — when the id is
-   * not in the manifest's `backends`, is already taken, or `caps` names a reader
-   * this host does not have. Unregistered when the plugin is switched off; the
+   * not in the manifest's `backends`, is already taken, or `facts` names a reader
+   * this host does not have (or one not allowed for that fact). Unregistered when the plugin is switched off; the
    * returned function unregisters it earlier.
    */
   backend(def: PluginBackendDef): () => void;
   /**
    * Contribute a SCREEN reader under `name` (since 1.1): the reader for a TUI whose choice dialog
    * has no numbers and is answered by walking a selection (`PluginScreenReader`). A backend this
-   * plugin registers may then name it in `caps.promptBoxes` — so register the reader FIRST. THROWS
+   * plugin registers may then name it as a `{screen}` provider in `facts.dialogs` — so register it FIRST. THROWS
    * a sentence when the name is not a short lowercase word or is already taken (core's own
    * `claude-numbered` among them). Unregistered with the plugin; the returned function earlier.
    * A reader is measured against ONE binary's screen and pinned by the plugin's own fixtures.
@@ -444,7 +493,7 @@ export interface HostPluginApi {
   /**
    * Contribute a STORE reader under `name` (since 1.1): the reader of a CLI's own conversation
    * record — a database or files on disk it writes (`PluginStoreReader`). A backend may then name
-   * it in `caps.transcript`, and the core asks it for the reader view, the context graph, the tool
+   * it as a `{store}` provider in `facts.transcript`, and the core asks it for the reader view, the context graph, the tool
    * details, which conversation a session is in, and the backend's ledger. Same rules as
    * `screenReader`: register it before the backend; a taken name (`claude-jsonl`) throws.
    */
@@ -535,57 +584,24 @@ export interface PluginHttpReply {
 /** A backend id: a short lowercase word — the same rule the host's registry applies. */
 export const PLUGIN_BACKEND_ID_RE = /^[a-z][a-z0-9-]{0,31}$/;
 
-/** What `launchArgs` is handed. `hookPort` is the daemon's loopback port. */
-export interface PluginLaunchRequest {
-  readonly resumeMode?: "continue" | "pick" | "fork";
-  readonly resumeSessionId?: string;
-  readonly launch: LaunchOpts;
-  readonly hookPort: number;
-  /** The session's working directory and the host's own id for it — for a backend that brings up a
-   *  per-session server before its TUI (opencode's hybrid). Every other backend ignores them. */
-  readonly cwd?: string;
-  readonly hostSessionId?: string;
-  /** Fork `resumeSessionId` AT this turn — only reaches a backend with `caps.forkVia: "server"`. */
-  readonly forkAtTurn?: string;
-}
-
 /**
- * What `launchArgs` answers. `sessionId` is CLAUDE's conversation uuid only (a
- * reader turns it into a path under claude's projects dir); any other CLI's id
- * rides on `backendSessionId`, and only when the launch KNOWS it. `env` is
- * merged after `spawnEnv` into the pane's environment.
- */
-export interface PluginLaunchPlan {
-  readonly args: string[];
-  readonly sessionId?: string;
-  readonly backendSessionId?: string;
-  readonly createsRecord?: boolean;
-  readonly env?: Readonly<Record<string, string>>;
-  /** Spawn THIS program in the PTY instead of `bin()` (absolute path), `args` as its argv — e.g. a
-   *  POSIX `sh` that waits for the backend's own server, then `exec`s the CLI. */
-  readonly exec?: string;
-}
-
-/**
- * A backend a plugin registers: the host descriptor's shape with the reader
- * names as plain strings — a name this host has no reader for is refused at
- * registration in words, never armed. Booleans left out are false; `delivery`
- * fields left out are the "no anchor" defaults (`submitKey` "\r", every regex
- * null, no local commands), which is the shape `deliver.ts` already falls back
- * to. A plugin backend is never on the claude health board (`healthScope` is
- * the core's to say, and it says false).
+ * A backend a plugin registers (2.0). Reader names in `facts` are plain strings — a name this host
+ * has no reader for is refused at registration in words, never armed. `delivery` fields left out
+ * are the "no anchor" defaults (`submitKey` "\r", every regex null, no local commands), which is
+ * the shape `deliver.ts` already falls back to. A plugin backend is never on the claude health
+ * board (`healthScope` is the core's to say, and it says false); `measured` is its health signal.
  *
- * `delivery`, `caps` and `sources` may be GETTERS (a knob read per call switches
- * them): the core reads them through on every access and never copies them at
- * registration. Each answer must name readers this host has — checked against
- * the answer at registration.
+ * `delivery`, `caps`, `facts`, `forkVia` and `sources` may be GETTERS (a knob read per call
+ * switches them): the core reads them through on every access and never copies them at
+ * registration. Each answer must name readers this host has — checked at registration.
  */
 export interface PluginBackendDef {
   id: string;
   label: string;
   bin(): string;
   spawnEnv?: Readonly<Record<string, string>>;
-  launchArgs(req: PluginLaunchRequest): PluginLaunchPlan;
+  /** One launch's plan (replaces 1.x's sync `launchArgs`). A refusal is a thrown sentence. */
+  prepare(req: PluginLaunchRequest): Promise<PluginLaunchPlan>;
   delivery?: {
     submitKey?: string;
     textThenSubmitDelayMs?: number;
@@ -595,30 +611,21 @@ export interface PluginBackendDef {
     composerRuleRe?: RegExp | null;
     /** An empty composer's hint text when it is NOT drawn dim (dim is discounted already). */
     composerPlaceholderRe?: RegExp | null;
+    /** Read with claude's trust words before every delivery: a match makes delivery `retry` with a
+     * sentence, nothing typed (only claude's own descriptor may answer a trust box). */
     trustPromptRe?: RegExp | null;
     isLocalCommand?(text: string): boolean;
     startsNoTurn?(text: string): boolean;
   };
-  caps: {
-    /** Who may post lifecycle hooks: `"plugin-inject"` = through this plugin's `hookSink()`. */
-    hooks: "settings-inject" | "plugin-inject" | "none";
-    /** A screen reader's NAME — core's, or one a plugin contributed (`screenReader`) — or false. */
-    promptBoxes: false | string;
-    /** A transcript reader's NAME — core's, or a contributed `storeReader` — or "none" (a `sources.transcript` is still allowed). */
-    transcript: string;
-    slash?: "claude" | "own" | "none";
-    contextMeter?: boolean;
-    usageLimits?: boolean;
-    usageProbe?: boolean;
-    asking?: boolean;
-    remoteControl?: boolean;
-    effort?: boolean;
-    permissionModes?: PermissionMode[];
-    forkVia?: "jsonl" | "server" | false;
-    /** The session has TURNS (a prompt runs, then ends) — the idle ping and the
-     *  automatic tab name hang off one. Absent ⇒ true; false = a plain shell. */
-    turns?: boolean;
-  };
+  caps: BackendCapsV2;
+  /** Which provider answers each fact, in order (replaces 1.x's reader caps). */
+  facts: BackendFacts;
+  /** The backend forks a conversation on its own server (opencode's `POST /session/{id}/fork`). */
+  forkVia?: "server";
+  /** The CLI versions this plugin was MEASURED on, and how to ask the running one (null = cannot
+   *  tell). The host compares and says a drift in a sentence — never a refusal — and the phone
+   *  shows it verbatim where a backend is chosen (launch picker, Settings, new-repo menu). */
+  measured: { versions: readonly string[]; version(): Promise<string | null> };
   /** The model catalogue. Empty ⇒ a free-text field on the phone, never a guessed list. */
   models(): Promise<{
     aliases: string[]; ids: string[];
@@ -736,13 +743,14 @@ export interface PluginStoreReader {
   discover(look: PluginStoreLook): { id: string | null; carry: unknown };
   /**
    * The backend's own ledger, served verbatim at `GET /api/tokenstats/<backendId>` for a backend
-   * whose `caps.transcript` names this reader and which has no `sources.tokens`. JSON; a store
+   * whose `facts.transcript` names this reader and which has no `sources.tokens`. JSON; a store
    * that cannot be read answers `{ available: false, reason }`, never throws.
    */
   ledger?(maxAgeMs: number | undefined): Promise<unknown>;
 }
 
 export * from "./pluginreadings.js";
+export * from "./pluginlaunch.js";
 
 /** One line of the preflight report a builtin's `doctor` contributes. */
 export interface PluginDoctorCheck {
@@ -825,10 +833,8 @@ export interface HostPluginModule {
   doctor?(req: { usedBackends: readonly string[] }): Promise<PluginDoctorCheck[]>;
 }
 
-/**
- * Register every method of a typed table with `api.handle`; returns one unregister.
- * Args arrive from the wire UNCHECKED — the types are a convenience, each handler validates.
- */
+/** Register every method of a typed table with `api.handle`; returns one unregister.
+ * Args arrive from the wire UNCHECKED — the types are a convenience, each handler validates. */
 export function handleAll<M extends PluginMethods>(
   api: Pick<HostPluginApi, "handle">,
   fns: { [K in keyof M & string]: (args: M[K]["args"], caller: PluginCaller) => M[K]["result"] | Promise<M[K]["result"]> },
@@ -837,11 +843,7 @@ export function handleAll<M extends PluginMethods>(
   return () => { for (const off of offs) off(); };
 }
 
-/**
- * Validate a parsed manifest. Returns the problems in words (empty =
- * valid). Unknown fields are allowed — a newer manifest on an older daemon
- * loads with what it understands.
- */
+/** Validate a parsed manifest: problems in words (empty = valid). Unknown fields are allowed — a newer manifest on an older daemon loads with what it understands. */
 export function manifestProblems(m: unknown): string[] {
   const out: string[] = [];
   if (!m || typeof m !== "object" || Array.isArray(m)) return [`${PLUGIN_MANIFEST} is not a JSON object`];
@@ -849,8 +851,7 @@ export function manifestProblems(m: unknown): string[] {
   if (typeof o.id !== "string" || !PLUGIN_ID_RE.test(o.id)) out.push(`id must match ${PLUGIN_ID_RE}`);
   if (typeof o.name !== "string" || !o.name.trim()) out.push("name is required");
   if (typeof o.version !== "string") out.push("version is required");
-  const api = pluginApiProblem(o.apiVersion);
-  if (api) out.push(api);
+  const api = pluginApiProblem(o.apiVersion, PLUGIN_API_VERSION, { backends: Array.isArray(o.backends) && o.backends.length > 0 }); if (api) out.push(api);
   const keys = new Set<string>();
   for (const f of Array.isArray(o.settings) ? o.settings as PluginField[] : []) {
     if (!f || typeof f.key !== "string" || !f.key) { out.push("a setting has no key"); continue; }
@@ -864,20 +865,18 @@ export function manifestProblems(m: unknown): string[] {
     if (!a?.id || !a.label) out.push("an action needs an id and a label");
     else if (a.scope !== "global" && a.scope !== "session") out.push(`action "${a.id}" scope must be global or session`);
   }
-  for (const t of Array.isArray(o.toggles) ? o.toggles as PluginToggleDef[] : []) {
-    if (!t?.id || !t.label || typeof t.default !== "boolean") out.push("a toggle needs an id, a label and a boolean default");
-  }
+  for (const t of Array.isArray(o.toggles) ? o.toggles as PluginToggleDef[] : []) if (!t?.id || !t.label || typeof t.default !== "boolean") out.push("a toggle needs an id, a label and a boolean default");
   if (o.env !== undefined && (!Array.isArray(o.env) || o.env.some((e) => typeof e !== "string"))) out.push("env must be a list of names");
   if (o.web !== undefined && typeof o.web !== "string") out.push("web must be a path string");
-  if (o.optional !== undefined && typeof o.optional !== "boolean") out.push("optional must be true or false");
-  if (o.experimental !== undefined && typeof o.experimental !== "boolean") out.push("experimental must be true or false");
+  if (o.assets !== undefined && (typeof o.assets !== "string" || !o.assets || /^([\\/]|[A-Za-z]:)/.test(o.assets) || o.assets.split(/[\\/]/).includes(".."))) out.push("assets must be a folder path inside the extension (relative, no ..)");
+  for (const k of ["optional", "experimental"]) if (o[k] !== undefined && typeof o[k] !== "boolean") out.push(`${k} must be true or false`);
   if (o.backends !== undefined) {
     if (!Array.isArray(o.backends)) out.push("backends must be a list of backend ids");
     else for (const b of o.backends) {
       if (typeof b !== "string" || !PLUGIN_BACKEND_ID_RE.test(b)) out.push(`backend id ${JSON.stringify(b)} is not a short lowercase word (letters, digits, dashes)`);
     }
   }
-  return out;
+  return [...out, ...maturityProblems(o)];
 }
 
 /** A value as the manifest allows it, or undefined (refused, never repaired). */

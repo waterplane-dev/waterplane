@@ -26,6 +26,8 @@ import { closeSync, openSync, readSync, readdirSync, rmSync, statSync } from "no
 import { join } from "node:path";
 import { isConversationId } from "@waterplane/shared";
 import type { ArchivedConversation, ArchiveListing, Bookmark, TranscriptDoc, TranscriptToolDetail } from "@waterplane/shared";
+import { walk } from "./backends/derive.js";
+import type { BackendDescriptor } from "./backends/types.js";
 import { claudeProjectDir, logMtime, parseTranscript, promptLabel, promptOf, toolDetails, transcriptPath } from "./transcript.js";
 
 /** Bytes read from the head of a log to find its first prompt. A conversation
@@ -100,6 +102,40 @@ function statAll(cwd: string): Array<{ id: string; path: string; mtime: number; 
 }
 
 /**
+ * One page's bounds, from whatever a query string handed over. A value that is not a finite
+ * number (`?offset=x` is `NaN`) is the DEFAULT, never carried on: `Math.max(1, NaN)` is `NaN`,
+ * and a `NaN` limit slices an empty page that reads as "no conversations here" (review R9).
+ */
+export function pageBounds(offset: unknown, limit: unknown): { offset: number; limit: number } {
+  const num = (v: unknown): number | null => {
+    const n = typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : NaN;
+    return Number.isFinite(n) ? Math.floor(n) : null;
+  };
+  const o = num(offset), l = num(limit);
+  return { offset: Math.max(0, o ?? 0), limit: Math.max(1, Math.min(500, l && l > 0 ? l : PAGE)) };
+}
+
+/**
+ * Conversation id -> the session's tab name, where this host still knows one: a live session's
+ * first, then the newest closed row's. Keyed by the conversation id each row carries — claude's
+ * `claudeSessionId` and another backend's own `backendSessionId` — so a plugin's rows get the name
+ * claude's do. Never derived here: a conversation with no recorded name stays without one.
+ */
+export function conversationTabNames(
+  live: readonly { claudeSessionId?: string; backendSessionId?: string; tabTitle?: string }[],
+  closed: readonly { claudeSessionId?: string; backendSessionId?: string; tabTitle?: string }[],
+): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const rows of [live, closed]) {
+    for (const r of rows) {
+      if (!r.tabTitle) continue;
+      for (const id of [r.claudeSessionId, r.backendSessionId]) if (id && !out.has(id)) out.set(id, r.tabTitle);
+    }
+  }
+  return out;
+}
+
+/**
  * One page of a repo's archive.
  *
  * `q` filters on the title, which means titling every log — the expensive path,
@@ -121,8 +157,7 @@ export function listArchive(
 ): ArchiveListing {
   const all = statAll(cwd);
   const q = (opts.q ?? "").trim().toLowerCase();
-  const offset = Math.max(0, opts.offset ?? 0);
-  const limit = Math.max(1, Math.min(500, opts.limit ?? PAGE));
+  const { offset, limit } = pageBounds(opts.offset, opts.limit);
   const marks = opts.bookmarks ?? new Map<string, Bookmark>();
   const nameOf = (id: string): string | undefined => opts.names?.get(id) || marks.get(id)?.name || undefined;
 
@@ -200,4 +235,72 @@ export function deleteArchived(cwd: string, id: string): { ok: boolean; error?: 
   try { rmSync(path, { force: true }); } catch { return { ok: false, error: "delete failed" }; }
   titles.delete(id);
   return { ok: true };
+}
+
+// ── The `conversations` slot (backend contract v2) ─────────────────────────────────────────────
+// Claude's `{store:"claude-jsonl"}` provider is every function above, untouched. A plugin's
+// `{source:true}` provider is `ConversationSource.list/remove`; these asks walk the descriptor's
+// providers in order and answer null where none lists (ABSENT, never an empty archive).
+
+type Conv = Pick<BackendDescriptor, "facts" | "sources">;
+
+async function sourceList(d: Conv, cwd: string) {
+  return walk(d as Parameters<typeof walk>[0], "conversations", async (p) => {
+    if ((p as { source?: unknown }).source !== true) return null;
+    return (await d.sources!.conversations!.list(cwd)) ?? null;
+  });
+}
+
+/** One page of a PLUGIN backend's conversations for `cwd`, in `listArchive`'s shape. Null where the
+ *  backend lists none (the caller falls back to claude's `listArchive`, or says so). */
+export async function listConversations(
+  d: Conv, cwd: string,
+  opts: { offset?: number; limit?: number; q?: string; bookmarked?: boolean; bookmarks?: ReadonlyMap<string, Bookmark>; names?: ReadonlyMap<string, string> } = {},
+): Promise<ArchiveListing | null> {
+  const all = await sourceList(d, cwd);
+  if (!all) return null;
+  const q = (opts.q ?? "").trim().toLowerCase();
+  const { offset, limit } = pageBounds(opts.offset, opts.limit);
+  const marks = opts.bookmarks ?? new Map<string, Bookmark>();
+  const titleFor = (c: { title?: string; firstPrompt?: string }): string => promptLabel((c.title || c.firstPrompt || "").trim(), TITLE_CAP);
+  const nameOf = (id: string): string | undefined => opts.names?.get(id) || marks.get(id)?.name || undefined;
+  let rows = [...all].sort((a, b) => b.updatedAt - a.updatedAt);
+  if (opts.bookmarked) rows = rows.filter((r) => marks.has(r.id));
+  if (q) {
+    rows = rows.filter((r) => titleFor(r).toLowerCase().includes(q) || (r.firstPrompt ?? "").toLowerCase().includes(q)
+      || r.id.toLowerCase().includes(q) || (nameOf(r.id) ?? "").toLowerCase().includes(q)
+      || (marks.get(r.id)?.note ?? "").toLowerCase().includes(q));
+  }
+  const page = rows.slice(offset, offset + limit).map<ArchivedConversation>((r) => {
+    const name = nameOf(r.id);
+    const bookmark = marks.get(r.id);
+    return { id: r.id, cwd, title: titleFor(r), mtime: r.updatedAt, size: 0, ...(name ? { name } : {}), ...(bookmark ? { bookmark } : {}) };
+  });
+  return { cwd, total: rows.length, offset, rows: page, scanned: all.length, ...(opts.bookmarked ? { bookmarked: true } : {}) };
+}
+
+/** Does the backend list a conversation `id` for `cwd`? False where it lists none. */
+export async function conversationExists(d: Conv, cwd: string, id: string): Promise<boolean> {
+  const all = await sourceList(d, cwd);
+  return !!all?.some((c) => c.id === id);
+}
+
+/** Delete one conversation through the backend's own `remove`. A backend without one cannot — said
+ *  in words, nothing touched. Same verb and same phone confirm as `deleteArchived`. */
+export async function deleteConversation(d: Conv, cwd: string, id: string): Promise<{ ok: boolean; error?: string }> {
+  const src = d.sources?.conversations;
+  if (!src?.remove) return { ok: false, error: "this backend cannot delete a conversation from here" };
+  if (!(await conversationExists(d, cwd, id))) return { ok: false, error: "no such conversation" };
+  try {
+    const r = await src.remove(cwd, id);
+    return r.ok ? { ok: true } : { ok: false, error: r.reason || "delete failed" };
+  } catch { return { ok: false, error: "delete failed" }; }
+}
+
+/** The refusal for "pick a conversation to resume" on a backend that lists none, else null. */
+export function pickRefusal(d: Conv): string | null {
+  const providers = Array.isArray(d.facts?.conversations) ? d.facts.conversations : [];
+  const lists = providers.some((p) => (p as { store?: unknown }).store === "claude-jsonl"
+    || ((p as { source?: unknown }).source === true && !!d.sources?.conversations));
+  return lists ? null : "this backend does not keep a list of conversations this host can show, so there is nothing to pick from. Continue the latest one or start a fresh session.";
 }

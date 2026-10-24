@@ -259,3 +259,101 @@ test("flush reaches every opened log", async () => {
   h.reg.flush();
   assert.equal(h.fakeLog.flushed, 1);
 });
+
+// ── a backend's own `sources.usage` (contract 2.0, WP5) ──────────────────────
+const { backendUsageProbe, syncBackendUsage, hasAccountLimit } = await import("../dist/usagesources.js");
+const { resolveBackend } = await import("../dist/backends/index.js");
+
+const CAPS2 = { turns: true, slash: "none", remoteControl: false, permissionModes: [] };
+function acmeBackend({ windows = async () => [], listed = true, source = "acme", wall } = {}) {
+  const usage = { source, label: "Acme", windows };
+  if (wall) usage.wall = wall;
+  return { id: "acme", plugin: "acme", label: "Acme", caps: CAPS2, facts: listed ? { usage: [{ source: true }] } : {}, sources: { usage, attach: async () => ({}) } };
+}
+
+test("claude's chip readings are untouched by the backend slot: claude registers no probe of its own", () => {
+  assert.equal(backendUsageProbe(resolveBackend("claude")), null, "claude's usage is UsageChecker, adapted in readings()");
+  const h = harness();
+  syncBackendUsage(h.reg, [resolveBackend("claude")], new Map());
+  assert.deepEqual(h.reg.sources(), []);
+  assert.deepEqual(h.reg.readings().map((r) => r.source), ["claude"]);
+});
+
+test("a backend's usage source registers under its own id and backend; windows() becomes the reading", async () => {
+  const h = harness();
+  const b = acmeBackend({ windows: async () => [{ id: "premium", unit: "mo", pct: null, used: 9, limit: 300, unitName: "requests", resetAt: T0 + 9 * DAY }] });
+  const held = new Map();
+  syncBackendUsage(h.reg, [b], held);
+  assert.deepEqual(h.reg.sources(), ["acme"]);
+  await h.reg.refresh();
+  const r = h.reg.readings().find((x) => x.source === "acme");
+  assert.equal(r.backend, "acme");
+  assert.equal(r.label, "Acme");
+  assert.deepEqual(r.windows, [{ id: "premium", unit: "mo", pct: null, used: 9, limit: 300, unitName: "requests", resetAt: T0 + 9 * DAY }]);
+  syncBackendUsage(h.reg, [b], held);
+  assert.deepEqual(h.reg.sources(), ["acme"], "idempotent");
+  syncBackendUsage(h.reg, [], held);
+  assert.deepEqual(h.reg.sources(), [], "the backend leaving unregisters its source");
+  assert.equal(h.updates.at(-1)[1], null, "and says it is gone");
+});
+
+test("an empty windows() sends nothing; null is absent", async () => {
+  for (const windows of [async () => [], async () => null]) {
+    const h = harness();
+    syncBackendUsage(h.reg, [acmeBackend({ windows })], new Map());
+    await h.reg.refresh();
+    assert.deepEqual(h.reg.readings().map((r) => r.source), ["claude"]);
+    assert.equal(h.updates.length, 0, "nothing to publish");
+  }
+});
+
+test("a slot the facts do not list is not asked; a plugin claiming the core id is refused in a log line, not fatal", () => {
+  const h = harness();
+  syncBackendUsage(h.reg, [acmeBackend({ listed: false })], new Map());
+  assert.deepEqual(h.reg.sources(), []);
+  const logs = [];
+  syncBackendUsage(h.reg, [acmeBackend({ source: "claude" })], new Map(), (m) => logs.push(m));
+  assert.deepEqual(h.reg.sources(), []);
+  assert.match(logs[0], /backend acme: its usage source was not registered — .*core/);
+});
+
+test("api.usageProbe and a backend's source share the registry; the second of one id is refused in words", () => {
+  const h = harness();
+  h.reg.register({ source: "acme", label: "Acme", probe: async () => null });
+  const logs = [];
+  syncBackendUsage(h.reg, [acmeBackend()], new Map(), (m) => logs.push(m));
+  assert.deepEqual(h.reg.sources(), ["acme"]);
+  assert.match(logs[0], /already registered/);
+});
+
+test("hasAccountLimit: claude yes; a usage slot alone is not a wall", () => {
+  assert.equal(hasAccountLimit(resolveBackend("claude")), true);
+  assert.equal(hasAccountLimit(acmeBackend()), false);
+  const walled = acmeBackend({ wall: () => null });
+  walled.facts.limits = [{ source: true }];
+  assert.equal(hasAccountLimit(walled), true);
+});
+
+test("one account, one reading: a backend's own usage source yields to a probe for the same backend, either order", () => {
+  const ext = { source: "copilot", label: "Copilot", backend: "copilot", probe: async () => null };
+  const own = { source: "copilot", label: "Copilot", backend: "copilot", probe: async () => null };
+  // extension first: the backend's registration is a no-op, the extension keeps the id
+  const a = harness();
+  a.reg.register(ext);
+  const off = a.reg.register(own, { yields: true });
+  assert.deepEqual(a.reg.sources(), ["copilot"]);
+  off();
+  assert.deepEqual(a.reg.sources(), ["copilot"], "the no-op unregister leaves the extension's probe");
+  // backend first: the extension's probe replaces the backend's stand-in
+  const b = harness();
+  const offOwn = b.reg.register(own, { yields: true });
+  b.reg.register(ext);
+  assert.deepEqual(b.reg.sources(), ["copilot"]);
+  offOwn();
+  assert.deepEqual(b.reg.sources(), ["copilot"], "the replaced registration's off() does not remove the newcomer");
+  // a clash across backends, or two plain probes, still throws
+  const c = harness();
+  c.reg.register(ext);
+  assert.throws(() => c.reg.register({ ...own, backend: "other" }, { yields: true }), /already registered/);
+  assert.throws(() => c.reg.register({ ...own }), /already registered/);
+});

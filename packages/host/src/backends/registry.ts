@@ -4,7 +4,7 @@
  * §1.2, §3).
  *
  * **Refusals are sentences.** A duplicate id, an id that is not a plain word, or
- * a `caps` that names a reader this host does not have all throw at
+ * `facts` that name a reader this host does not have all throw at
  * REGISTRATION, listing what would have worked — so a bad plugin is a
  * listed-broken plugin, never a backend that half-exists. Registration never
  * replaces: two backends answering to one id would mean a launch might spawn
@@ -20,7 +20,9 @@
  * reference sees the current list; callers get it as `readonly`.
  */
 import type { BackendDescriptor } from "./types.js";
-import { readerProblems } from "./readers.js";
+import { contributedReaders } from "./readers.js";
+import { launchModesProblems } from "@waterplane/shared";
+import { factProblems } from "./derive.js";
 
 const LIST: BackendDescriptor[] = [];
 const CORE = new Set<string>();
@@ -48,7 +50,9 @@ function refusal(d: BackendDescriptor): string | null {
   if (LIST.some((b) => b.id === id)) {
     return `a backend called "${id}" is already registered; the live ones are: ${liveIds()}`;
   }
-  const bad = readerProblems(d.caps ?? {});
+  const capsBad = launchModesProblems(d.caps?.permissionModes ?? [], (d.caps as { launchModes?: unknown } | undefined)?.launchModes);
+  if (capsBad.length) return `backend "${id}": ${capsBad.join("; ")}`;
+  const bad = factProblems((d as { facts?: unknown }).facts, contributedReaders());
   if (bad.length) return `backend "${id}": ${bad.join("; ")}`;
   return null;
 }

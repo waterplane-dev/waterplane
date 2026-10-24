@@ -33,7 +33,7 @@ Steps ([full](../../../docs/notes/web-architecture.md#adding-a-feature-step-by-s
 
 - `kit/` — shared controls. **`kit/chips.ts`
   `chipText`/`chipRows` implements CLAUDE.md's "a count is a filter" ONCE** — new count chips call it.
-  **A button is `Button`, a row `Row`/`RowTitle`/`RowSub`, a note `Hint`/`SetNote`/`SetWarn`, a chip `Tag`**; raw only
+  **A button is `Button`, a row `Row`/`RowTitle`/`RowSub`, a note `Hint`/`SetNote`/`SetWarn` (layout line `SetLine`), a chip `Tag`**; raw only
   with a reason in a comment ([why](../../../docs/notes/web-architecture.md#the-kit-one-component-per-repeated-pattern)).
 - `sdk/` — an extension's web half imports only `@waterplane/sdk` (the `sdk/index.ts` barrel: `core()`, `createStore`/`useStore`, `usePref`, `pluginClient`, `extStorage`, …), `@waterplane/kit`, `@waterplane/shared`, react(-dom) and lucide-react; a feature imports `sdk` by its index, never `sdk/<file>`.
 - `webapi/` — `api.ts` (src root) spreads 9 slices; the folder's other files are helpers. A new endpoint's call goes in the slice of its SUBJECT as a literal
@@ -51,7 +51,7 @@ Steps ([full](../../../docs/notes/web-architecture.md#adding-a-feature-step-by-s
 - `Unavailable.tsx` — **what a row cannot do, as a sentence, never as a dimmed button** (CLAUDE.md); the button components
   have **no disabled branch**. Tests here assert the REASON, not a `disabled` attribute.
 - `Confirm.tsx` — "are you sure?", once (never `window.confirm`: CLAUDE.md). `ConfirmButton` **disarms itself after `ARM_MS`**;
-  `<ConfirmHost />` is mounted in `main.tsx`.
+  `<ConfirmHost />` is mounted in `main.tsx`. `className` is the WHOLE class: `key…` renders via kit `Button`, else (`link-btn`) a raw `<button>`.
 - `useRemoteResource.ts` — one host read, told honestly: cache seeded FIRST, live read second, and a
   `state` of `fresh`/`cached`(+age)/`loading`/`error`/`offline`. **The last two are deliberately
   separate**; `offline` takes the SOCKET signal, not `navigator.onLine`. **`inflight` is a SIXTH fact, not a sixth state**: `loading` means *nothing to show yet*,

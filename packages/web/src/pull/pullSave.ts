@@ -3,6 +3,7 @@ import { findInDownloads, nativeFindSupported, nativeSaveSupported, saveToDownlo
 import { nativeFileUrl, nativeList, nativePublish } from "../nativePull";
 import type { PullRecord, SaveResult, PullBlob } from "./pullTypes";
 import { PUBLISH_WAIT_MS, PUBLISH_POLL_MS } from "./pullConsts";
+import { typedBlob } from "./pullMime";
 import type { PullManager } from "./pullManager";
 
 // ── device-side delivery ──────────────────────────────────────────
@@ -58,7 +59,9 @@ export async function pullSave(this: PullManager, id: string): Promise<SaveResul
       return { ok: false, error };
     }
   }
-  const url = URL.createObjectURL(rec.blob);
+  // Typed by NAME like every other object URL (`pullMime.ts`): a browser that ignores
+  // `download` on a blob: URL would otherwise navigate to a typeless, sniffed document.
+  const url = URL.createObjectURL(typedBlob([rec.blob], rec.name));
   const a = document.createElement("a");
   a.href = url;
   a.download = rec.name;
@@ -208,5 +211,8 @@ export async function pullObjectUrl(this: PullManager, id: string): Promise<stri
     if (url) return url;
   }
   const rec = await idbGet<PullBlob>("pulls", id);
-  return rec?.blob ? URL.createObjectURL(rec.blob) : null;
+  // Re-typed by NAME here too: a record stored typeless by an older build would
+  // otherwise be sniffed, and a `.pdf` holding HTML would render as a page on
+  // this origin (`pullMime.ts`).
+  return rec?.blob ? URL.createObjectURL(typedBlob([rec.blob], rec.name)) : null;
 }

@@ -7,6 +7,7 @@ import { assessRowHead, type AssessMergeCard } from "../assessRows";
 import type { OutboxEntry } from "../outbox";
 import { ICON } from "./asxConst";
 import { NameHead, ItemFiles } from "./AsxParts";
+import { Button } from "../kit/Button";
 
 /**
  * A merge, whole.
@@ -92,16 +93,16 @@ export function MergeCard({ card, accepted, rejected, onAccept, onReject, repoId
       ) : null}
 
       <div className="act-acts">
-        <button className={`key${accepted ? " primary" : ""}`}
+        <Button className={accepted ? "primary" : undefined}
           title={accepted ? "approved — tap to un-approve" : `approve this merge: one new item, and all ${n} retired with a reason`}
           onClick={onAccept}>
           <Check size={ICON} /> {accepted ? "approved" : "approve the merge"}
-        </button>
-        <button className={`key${rejected ? " active" : ""}`}
+        </Button>
+        <Button className={rejected ? "active" : undefined}
           title={rejected ? "un-mark it" : "leave all of them exactly as they are"}
           onClick={onReject}>
           <X size={ICON} /> leave all {n}
-        </button>
+        </Button>
       </div>
     </div>
   );

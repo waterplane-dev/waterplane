@@ -46,22 +46,24 @@
    growing text button the icons stretched to the row's full height — a row
    carrying a long prompt drew vertical rules the length of that prompt and the
    list read as a table of mostly-empty cells, with the icons drifting further
-   from the text the taller the row got. Scoped to [data-sid] (only the live
-   session row) so repo/worktree/closed rows keep their column layout. */
-.row-wrap[data-sid] { flex-wrap: wrap; background: var(--panel); }
-.row-wrap[data-sid].row-recent { background: var(--accent-wash); }
+   from the text the taller the row got. Scoped to the live session card
+   ([data-sid]) and the "Recently closed" card that copies it (`.closed-card`,
+   `ClosedRows.tsx` — never `data-sid`, the drag/scroll lookup for LIVE rows),
+   so repo/worktree rows keep their column layout. */
+.row-wrap:is([data-sid], .closed-card) { flex-wrap: wrap; background: var(--panel); }
+.row-wrap:is([data-sid], .closed-card).row-recent { background: var(--accent-wash); }
 /* The wash is translucent: painted again on the text button it stacked to
    twice the tint there and left the chip strip above it a different shade, so
    the card read as two blocks. The wrapper carries it once, for the whole card. */
-.row-wrap[data-sid].row-recent > .row:not(:active) { background: transparent; }
-.row-wrap[data-sid] > .row.grow { flex: 1 0 100%; padding-top: var(--sp-6); padding-bottom: var(--sp-12); }
+.row-wrap:is([data-sid], .closed-card).row-recent > .row:not(:active) { background: transparent; }
+.row-wrap:is([data-sid], .closed-card) > .row.grow { flex: 1 0 100%; }
 /* ANY row carrying the strip needs the wrap, not just the session row:
    `.row-acts` is `flex: 0 0 100%`, so in a non-wrapping wrapper it claimed the
    whole line and the `min-width: 0` text beside it shrank to nothing — the
    hosts, paired-devices and phone-setup rows drew their buttons over a tall
    empty cell with no name in it. Download rows keep their own rules below. */
-.row-wrap:not(.pull-row):not([data-sid]):has(> .row-acts) { flex-wrap: wrap; background: var(--panel); }
-.row-wrap:not(.pull-row):not([data-sid]):has(> .row-acts) > .row.grow { flex: 1 0 100%; padding-top: var(--sp-6); padding-bottom: var(--sp-12); }
+.row-wrap:not(.pull-row):not([data-sid], .closed-card):has(> .row-acts) { flex-wrap: wrap; background: var(--panel); }
+.row-wrap:not(.pull-row):not([data-sid], .closed-card):has(> .row-acts) > .row.grow { flex: 1 0 100%; padding-top: var(--sp-6); padding-bottom: var(--sp-12); }
 /* ...and that strip sits ABOVE the text (`order: -1`, DOM order unchanged so the
    row still READS title → status → prompt → actions). Half the row's buttons had
    drifted onto the badge line at the top — status filter pills, the outbox count,
@@ -76,18 +78,18 @@
    of chips (images, status, context, RC, repo counts) before it found out
    WHICH conversation the card is — the title was the fourth line down. The
    strip is still one edge, just the lower one, and DOM order now matches. */
-.row-wrap[data-sid] > .row-acts { order: 0; padding: 0 var(--sp-8) var(--sp-10); }
-.row-wrap[data-sid] > .row.grow { padding-top: var(--sp-12); padding-bottom: var(--sp-8); }
+.row-wrap:is([data-sid], .closed-card) > .row-acts { order: 0; padding: 0 var(--sp-8) var(--sp-10); }
+.row-wrap:is([data-sid], .closed-card) > .row.grow { padding-top: var(--sp-12); padding-bottom: var(--sp-8); }
 /* With the strip at the bottom, one card's buttons sat a hairline above the
    next card's title and the two read as one block. A gutter in the page colour
    (not `--line`, which is barely a shade off `--panel` in the dark theme) makes
    each session its own card; drawn as the border so it works whatever the list
    behind it is painted. */
-.row-wrap[data-sid] { border-top: 1px solid var(--line); border-bottom: 8px solid var(--bg); }
+.row-wrap:is([data-sid], .closed-card) { border-top: 1px solid var(--line); border-bottom: 8px solid var(--bg); }
 /* An agent's worktree row is part of the card that made it: the gutter moves
    from under the session to under its last worktree row. Left where it was, the
    row sat flush against the NEXT card and read as belonging to that one. */
-.row-wrap[data-sid]:has(+ .row-wt-owned) { border-bottom: 1px solid var(--line); }
+.row-wrap:is([data-sid], .closed-card):has(+ .row-wt-owned) { border-bottom: 1px solid var(--line); }
 .row-wrap.row-wt-owned:not(:has(+ .row-wt-owned)) { border-bottom: 8px solid var(--bg); }
 /* The session card is a GRID:
      title line ·········· status
@@ -100,18 +102,18 @@
    sit at the BOTTOM of the left column, level with the tile's foot: the slack
    the right column leaves goes under the prompt, never as a band of nothing
    under the chips. */
-.row-wrap[data-sid] {
+.row-wrap:is([data-sid], .closed-card) {
   display: grid; grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas: "head stat" "gist ctl" "gist side" "tags side";
   grid-template-rows: auto auto 1fr auto;
   column-gap: var(--sp-10); row-gap: var(--sp-8); padding: var(--sp-12) var(--sp-8) var(--sp-10) var(--sp-14);
 }
-.row-wrap[data-sid] > .row, .row-wrap[data-sid] > .row-acts { display: contents; }
-.row-wrap[data-sid] .row-head { grid-area: head; display: flex; align-items: center; gap: var(--sp-10); min-width: 0; }
-.row-wrap[data-sid] .row-head > .row-title, .row-wrap[data-sid] .row-head > .row-name { flex: 0 1 auto; }
+.row-wrap:is([data-sid], .closed-card) > .row, .row-wrap:is([data-sid], .closed-card) > .row-acts { display: contents; }
+.row-wrap:is([data-sid], .closed-card) .row-head { grid-area: head; display: flex; align-items: center; gap: var(--sp-10); min-width: 0; }
+.row-wrap:is([data-sid], .closed-card) .row-head > .row-title, .row-wrap:is([data-sid], .closed-card) .row-head > .row-name { flex: 0 1 auto; }
 /* The session's number among its repo's open ones: a small fixed-width
    chip leading the title line, so a column of them lines up down the list. */
-.row-wrap[data-sid] .row-head > .row-num {
+.row-wrap:is([data-sid], .closed-card) .row-head > .row-num {
   flex: 0 0 auto; min-width: 1.6em; padding: 0 var(--sp-6); border-radius: var(--r-6); text-align: center;
   font-size: calc(var(--fs-12) * var(--ui-font, 1)); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums;
   color: var(--muted); border: 1px solid var(--line);
@@ -121,15 +123,15 @@
    wraps ran straight out of it, under the status pill beside it. Now it drops
    to its own line, still right-aligned, and if even that is too narrow it
    shrinks and wraps its own facts instead of overflowing. */
-.row-wrap[data-sid] .row-head { flex-wrap: wrap; row-gap: var(--sp-2); }
-.row-wrap[data-sid] .row-head > .row-meta { flex: 0 1 auto; min-width: 0; width: auto; margin-left: auto; }
-.row-wrap[data-sid] .row-gist { grid-area: gist; }
-.row-wrap[data-sid] .row-stat { grid-area: stat; justify-self: end; align-self: center; display: flex; }
-.row-wrap[data-sid] .row-ctl { grid-area: ctl; justify-self: end; align-self: start; margin: 0; }
-.row-wrap[data-sid] .row-side { grid-area: side; justify-self: end; align-self: start; margin: 0; }
-.row-wrap[data-sid] .row-tags { grid-area: tags; align-self: end; }
-.row-wrap[data-sid] .row-tags:empty { display: none; }
-.row-stat > .tag, .row-wrap[data-sid] .row-tags > * { height: 28px; padding: 0 var(--sp-10); gap: var(--sp-4); border-radius: var(--r-pill); font-size: calc(var(--fs-12) * var(--ui-font, 1)); display: inline-flex; align-items: center; flex: 0 0 auto; }
+.row-wrap:is([data-sid], .closed-card) .row-head { flex-wrap: wrap; row-gap: var(--sp-2); }
+.row-wrap:is([data-sid], .closed-card) .row-head > .row-meta { flex: 0 1 auto; min-width: 0; width: auto; margin-left: auto; }
+.row-wrap:is([data-sid], .closed-card) .row-gist { grid-area: gist; }
+.row-wrap:is([data-sid], .closed-card) .row-stat { grid-area: stat; justify-self: end; align-self: center; display: flex; }
+.row-wrap:is([data-sid], .closed-card) .row-ctl { grid-area: ctl; justify-self: end; align-self: start; margin: 0; }
+.row-wrap:is([data-sid], .closed-card) .row-side { grid-area: side; justify-self: end; align-self: start; margin: 0; }
+.row-wrap:is([data-sid], .closed-card) .row-tags { grid-area: tags; align-self: end; }
+.row-wrap:is([data-sid], .closed-card) .row-tags:empty { display: none; }
+.row-stat > .tag, .row-wrap:is([data-sid], .closed-card) .row-tags > * { height: 28px; padding: 0 var(--sp-10); gap: var(--sp-4); border-radius: var(--r-pill); font-size: calc(var(--fs-12) * var(--ui-font, 1)); display: inline-flex; align-items: center; flex: 0 0 auto; }
 /* "new" as a mark on the status pill: the star in the star colour. */
 .tag.tag-fresh > svg:first-child { color: var(--star); }
 /* The readings column: outline / context · token limit / the cost tile.
@@ -436,6 +438,9 @@
    it reads as part of the same block without being part of its scroll. */
 .approve-commit { display: flex; gap: var(--sp-8); margin-top: var(--sp-6); flex: 0 0 auto; }
 .approve-commit .approve-btn { flex: 1 1 auto; }
+/* A typed answer (a `freeText` question, a `takesText` row): the field under the options, its own commit row. */
+.approve-typed { display: flex; flex-direction: column; gap: var(--sp-6); margin-top: var(--sp-8); }
+.approve-typed .approve-hint { margin: 0; }
 .approve-esc { padding: var(--sp-8) var(--sp-14); border-radius: var(--r-10); border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
 /* "Your tap is queued, not ignored" — the one thing worth saying on a dead
    tunnel, so it is calm (accent, not the bar's alarm red) and sits above the

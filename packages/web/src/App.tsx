@@ -49,7 +49,7 @@ import { useTabStripBridge } from "./core/sessions/useTabStripBridge";
 import { useOutsideOpens } from "./core/route/useOutsideOpens";
 import { useQueueSignals } from "./core/queue/useQueueSignals";
 import { useHostState } from "./core/sessions/useHostState";
-import { CliUpdateBanner, InsecureBanner, PhoneSetupBanner } from "./core/Banners";
+import { CliUpdateBanner, InsecureBanner, PhoneSetupBanner, UpdatesBanner } from "./core/Banners";
 import { SessionScreen } from "./core/session/SessionScreen";
 import { useSessionChrome } from "./core/session/useSessionChrome";
 import { LauncherScreen } from "./core/launcher/LauncherScreen";
@@ -227,7 +227,7 @@ export function App() {
   const composeCore = useCompose(draft, {
     conn, active, pending, activeId, sessions, readerShown, enterSends, cliModeOn,
     setCliModeOn: (on) => setPref("cliMode", on), showCli: () => setView(false),
-    queue: q, sender: sendCore, repoForCwd: (cwd) => repoForCwd(cwd), leave: () => setActiveId(null),
+    queue: q, sender: sendCore, repoForCwd: (cwd) => repoForCwd(cwd), leave: () => setActiveId(null), cliInstalled: update?.current, relaunch,
   });
   const { cliMode, voice } = composeCore;
   /**
@@ -388,7 +388,7 @@ export function App() {
           autoSend={autoSend} confirmQueue={confirmQueue} pullRecords={pullRecords} setOverlay={setOverlay} />
         <InsecureBanner httpsUrl={httpsUrl} />
         <PhoneSetupBanner onOpen={() => setOverlay("phonesetup")} />
-        <CliUpdateBanner update={update} liveAsk={liveAsk} liveSend={liveSend} />
+        <CliUpdateBanner update={update} liveAsk={liveAsk} liveSend={liveSend} /><UpdatesBanner />
       </>} />
   } />;
 }

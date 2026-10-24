@@ -38,7 +38,7 @@ export type { TurnCursor } from "./turns.js";
 export { TokenStore } from "./store.js";
 export type { Files, ScanStats } from "./store.js";
 export { foldCorpus } from "./corpus.js";
-export { currentSummary, summaryOf, thisRepoWeek, weekFigure, weekSplit } from "./summary.js";
+export { copilotWeekWords, currentSummary, summaryOf, thisRepoWeek, weekFigure, weekSplit } from "./summary.js";
 export type { HeadlineSummary } from "./summary.js";
 export { weighFolder } from "./weight.js";
 export { isInstructionPath, LENS_PATTERNS, lensWords } from "./lenswords.js";
@@ -62,7 +62,7 @@ export { MAX_ROWS, WINDOW_MS, SessionLedger, recentRows, summarize, isAutomated,
 
 // ── Repo health: the pure fold, the PATH check, the storage slug, the prompt builders, and the
 // worker lifecycle (`HealthRun` is vscode-free; extension.ts imports it from here).
-export { foldHealth, gitOnPath, isShallow, headAndBehind, outcomeOf, NO_GIT_WHY, NOT_READ_WHY } from "../health/healthdoc.js";
+export { fallbackGitDirs, foldHealth, gitCandidates, gitOnPath, isShallow, pickGit, headAndBehind, outcomeOf, NO_GIT_WHY, NOT_READ_WHY } from "../health/healthdoc.js";
 export type { HealthFoldInput, HealthStepResult, HealthUpdateResult } from "../health/healthdoc.js";
 export { healthSlug } from "../health/healthslug.js";
 export { healthIndexOf, healthIndexOfFile, parseHealthRows } from "../health/healthindexdoc.js";
@@ -76,5 +76,7 @@ export { knownReadErrorWords, measureWords, notRunHere, notRunWords, ownAddNoteW
 export { NO_RUN } from "../shims/healthnorun.js";
 
 // ── Copilot without a sign-in: the plan and this month's requests, off VS Code's own files.
-export { CopilotLocalReader, localLines, localWords, monthStart, parseDetails, planWords, readSku, replayRequests, tallyMonth, userDirOf, vscodeUserDirs } from "../../../extensions/copilot-usage/host/vscodelocal.mts";
+export { CopilotLocalReader, copilotLedger, localLines, localWords, monthStart, parseDetails, planWords, readSku, replayRequests, tallyMonth, userDirOf, vscodeUserDirs } from "../../../extensions/copilot-usage/host/vscodelocal.mts";
 export type { CopilotLocalDoc, CopilotModelCount, CopilotRequest } from "../../../extensions/copilot-usage/host/vscodelocal.mts";
+// The loopback guard on the one read of the waterplane desktop (`hostlink.ts`).
+export { desktopBase, forwardable, readLive, readPath } from "../hostlink.js";

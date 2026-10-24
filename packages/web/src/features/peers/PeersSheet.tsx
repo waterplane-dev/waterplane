@@ -15,6 +15,7 @@ import { loadPeers, pairHosts, pairableHosts, pick, unpair } from "./actions";
 import { pairCandidates, pairRefusal, selfAddrs, pairedNote, pairedRows, pairedTitle, peerSignInNote } from "./logic";
 import { usePeers } from "./store";
 import { Button, Row, RowTitle, RowSub, Hint } from "../../kit";
+import { SetLine } from "../../SettingsKit";
 
 const ICON = 16;
 
@@ -52,7 +53,7 @@ export function PeersSheet({ onClose }: { onClose: () => void }) {
       {cands.length < 2 ? (
         <div className="empty">Pairing needs two saved desktops. Add the other one under Hosts first.</div>
       ) : (
-        <div className="set-row" style={{ display: "grid", gap: 8 }}>
+        <SetLine style={{ display: "grid", gap: 8 }}>
           {(["a", "b"] as const).map((w) => (
             <select key={w} aria-label={w === "a" ? "first desktop" : "second desktop"} value={st.pick[w] ?? ""}
               onChange={(e) => pick(w, e.target.value || null)}>
@@ -70,7 +71,7 @@ export function PeersSheet({ onClose }: { onClose: () => void }) {
           {cands.filter((c) => c.why).map((c) => (
             <Hint key={c.host.id} as="span">{c.host.name}: {c.why}</Hint>
           ))}
-        </div>
+        </SetLine>
       )}
 
       {st.busy > 0 && <Hint>working…</Hint>}

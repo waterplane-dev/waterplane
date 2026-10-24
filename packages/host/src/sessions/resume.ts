@@ -19,6 +19,7 @@ import type { Session, SessionCore } from "./core.js";
 import { LIMIT_RESUME_GAP_MS, LIMIT_RESUME_SETTLE_MS, LIMIT_RETRY_MS, LIMIT_RESET_BUFFER_MS } from "./knobs.js";
 import { hostStateDir } from "../branddirs.js";
 import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
+import { derive } from "../backends/derive.js";
 
 export class ResumeSlice {
   /**
@@ -299,7 +300,7 @@ export class ResumeSlice {
     this.publishQueue();
     this.armResumeGuard(id);
     if (next.info.running) void this.core.doLimitContinue(next);
-    else this.doResurrect(next);
+    else void this.doResurrect(next).catch((e) => console.error(`[resume] could not reopen ${id}: ${(e as Error)?.message ?? e}`)); // the resume guard releases the slot
     // The gap is a RATE limit, not a concurrency one: even in `all` mode the
     // resumes are spaced, so a mis-set mode cannot type "continue" into eleven
     // sessions inside one second. The re-pump after it is what starts the next.
@@ -373,7 +374,13 @@ export class ResumeSlice {
     // "fail". A backend with no account limit can never have died at one, and
     // answering `true` from a banner-shaped line on its screen would park work
     // for ever on a reset that is never coming.
-    if (!s.backend.caps.usageLimits) return false;
+    //
+    // Only claude's `limit-ts` answers this, deliberately — not a backend's `usage.wall`
+    // (`{source:true}` in `limits`): `true` here makes a row FOLLOW a resurrection, and only a
+    // `limit-ts` exit is ever resurrected (`maybeScheduleResurrect`). A source-walled session
+    // that dies is an exit, so its work fails in words rather than waiting for a revival that
+    // nothing would ever start.
+    if (derive(s.backend).screen("limits") !== "limit-ts") return false;
     // Same asymmetry `checkLimit` documents: the screen cannot date its banner,
     // so a session that exited hours after an old wall looks identical to one
     // the wall just killed. A readable log settles it.
@@ -429,8 +436,10 @@ export class ResumeSlice {
   maybeScheduleResurrect(s: Session): void {
     // Resurrection is "reopen the conversation when the ACCOUNT serves again".
     // A backend with no account limit has no such moment to wait for, so an exit
-    // is just an exit.
-    if (!s.backend.caps.usageLimits) return;
+    // is just an exit. A backend whose wall is its own `usage.wall` is resumed while it RUNS
+    // (`wall.ts` → the same queue); reopening one that exited is claude's `--continue`, read off
+    // claude's screen and log, so it stays `limit-ts`'s alone.
+    if (derive(s.backend).screen("limits") !== "limit-ts") return;
     // If this was the session the queue let through, its verdict is in: it EXITED
     // rather than resuming. Treat a limit exit as evidence about the account (so
     // the rest of the queue holds off), anything else as merely gone.
@@ -487,14 +496,14 @@ export class ResumeSlice {
   /** Reopen a limit-exited conversation with `--continue`, carrying the block —
    *  its attempt count AND when it started — forward, so the backoff and the
    *  patience clock go on counting instead of restarting per reopen. */
-  private doResurrect(old: Session): void {
+  private async doResurrect(old: Session): Promise<void> {
     old.resurrectTimer = null;
     const id = old.info.id;
     if (old.killed || !this.core.limitAuto(old)) { this.releaseResume(id, "gone"); return; }
     // Someone already reopened this id (manual resume) → nothing to do.
     if (this.core.sessions.get(id)?.info.running) { this.releaseResume(id, "gone"); return; }
     const attempts = (old.info.limit?.attempts ?? 0) + 1;
-    const created = this.core.create(old.info.cwd, {
+    const created = await this.core.create(old.info.cwd, {
       cols: old.cols, rows: old.rows, title: old.info.title,
       resumeMode: "continue", resumeSessionId: old.info.claudeSessionId, launch: old.launch,
       // The item it was working for (if any) is still what it is working for.

@@ -26,7 +26,7 @@ const { hostStateDir } = await import("../dist/branddirs.js");
 const { isBlocked, gateRefusal } = await import("../dist/answergate.js");
 
 const PORT = 8770;
-const plan = (req) => claudeBackend.launchArgs({ launch: {}, hookPort: PORT, ...req });
+const plan = (req) => claudeBackend.prepare({ launch: {}, hookPort: PORT, ...req });
 const settingsOf = (args) => JSON.parse(args[args.indexOf("--settings") + 1]);
 
 // The blob every claude launch carried BEFORE ask rules existed, written out by hand so a

@@ -549,7 +549,7 @@ export interface OnboardHost {
     get(id: string): Intent | undefined;
     post(draft: IntentDraft, now?: number): { ok: boolean; intent?: Intent; existing?: boolean; reason?: string };
   };
-  sessions: { list(): Array<{ id: string; cwd: string; running: boolean }>; create(cwd: string, o: { title?: string }): { id: string } };
+  sessions: { list(): Array<{ id: string; cwd: string; running: boolean }>; create(cwd: string, o: { title?: string }): Promise<{ id: string }> };
   recomputeWatched(): void;
   broadcast(job: OnboardJob): void;
 }
@@ -595,7 +595,7 @@ export function makeOnboardDeps(h: OnboardHost): OnboardDeps {
         // A bare open: a live session in the new repo (this job's, before a restart) is adopted.
         const live = h.sessions.list().find((s) => s.cwd === repoDir && s.running);
         if (live) return { sessionId: live.id, note: "a session is already open in the new repo" };
-        const s = h.sessions.create(repoDir, { title });
+        const s = await h.sessions.create(repoDir, { title });
         h.recomputeWatched();
         return { sessionId: s.id, note: "opened a session in the new repo; the suggested prompt is ready to send" };
       }

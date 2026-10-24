@@ -83,3 +83,15 @@ test("currentSummary: a scan more than seven days old is absent, not a stale 'la
   assert.equal(data.currentSummary(s, NOW + 7 * DAY + 1), null);
   assert.equal(data.currentSummary(null, NOW), null);
 });
+
+// A Copilot-only machine: the tree's headline counts Copilot Chat's own week, and says nothing for
+// days outside it or a ledger that is absent.
+test("copilotWeekWords: the last seven days of Copilot Chat's ledger, else null", () => {
+  const now = new Date(2026, 9, 24, 12).getTime();
+  const day = (d) => ({ day: `2026-10-${String(d).padStart(2, "0")}`, kinds: { prompt: 1000 * d, output: 100 }, turns: 1 });
+  const led = { available: true, totals: { kinds: {}, turns: 0 }, days: [day(10), day(18), day(24)], models: [] };
+  assert.equal(data.copilotWeekWords({ copilot: led }, now), "7 d: Copilot 42.2k tokens");
+  assert.equal(data.copilotWeekWords({ copilot: { ...led, days: [day(10)] } }, now), null);
+  assert.equal(data.copilotWeekWords({ copilot: { available: false, reason: "x" } }, now), null);
+  assert.equal(data.copilotWeekWords(null, now), null);
+});

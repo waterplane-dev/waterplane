@@ -47,7 +47,7 @@ const PLUGIN = ["--plugin-dir", join(process.env[envName("CONFIG_DIR")], "claude
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** One launch, with everything the caller did not care about left out. */
-const plan = (req) => claudeBackend.launchArgs({ launch: {}, hookPort: PORT, ...req });
+const plan = (req) => claudeBackend.prepare({ launch: {}, hookPort: PORT, ...req });
 
 test("a fresh conversation mints its own session id", () => {
   const { args, sessionId } = plan({});
@@ -55,6 +55,22 @@ test("a fresh conversation mints its own session id", () => {
   assert.deepEqual(args, ["--session-id", sessionId, "--model", "default", "--settings", HOOKS, ...PLUGIN]);
   // Two fresh launches are two conversations.
   assert.notEqual(plan({}).sessionId, sessionId);
+});
+
+test("backend v2: prepare() is the same argv, answered SYNCHRONOUSLY, and says how claude is told and how its rules hold", () => {
+  // Every case in this file reads `prepare()` without an await: a core backend's plan is not a
+  // promise, so `SessionManager.create()` spawns and registers before its first `await` (the
+  // automatic-session cap counts sessions that exist — `intents/ladder.ts`).
+  const p = claudeBackend.prepare({ launch: {}, hookPort: PORT });
+  assert.equal(typeof p.then, "undefined", "a core plan is never a promise");
+  assert.equal(p.instructionsVia, "plugin-dir", "claude is told through the repo-skill plugin dir");
+  assert.equal(p.askRulesVia, "native", "and holds its ask rules itself (`permissions.ask`)");
+  assert.equal(p.files, undefined, "claude asks the host to write nothing");
+  // The core's text riding the request changes nothing about claude's argv: its copy is the
+  // plugin dir, written from the same text.
+  const told = claudeBackend.prepare({ launch: {}, hookPort: PORT, instructions: "the outbox text", cwd: "/tmp", hostSessionId: "ab12cd34" });
+  assert.deepEqual(told.args, ["--session-id", told.sessionId, "--model", "default", "--settings", HOOKS, ...PLUGIN]);
+  assert.deepEqual(Object.keys(told).sort(), ["args", "askRulesVia", "instructionsVia", "sessionId"], "nothing else rides claude's plan");
 });
 
 test("continue resumes the directory's most recent conversation", () => {

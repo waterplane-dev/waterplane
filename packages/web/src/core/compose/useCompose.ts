@@ -21,8 +21,13 @@ import { besidePicture } from "../../besideRoom";
 import { askChoice, askConfirm, askConfirmRemember } from "../../Confirm";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ChangeEvent, KeyboardEvent as ReactKeyboardEvent, MutableRefObject } from "react";
-import { answeredOnlyInCli, budgetReasonText, isLocalCommand, sessionBudgetHeld, sessionBudgetText } from "@waterplane/shared";
-import type { ClientMessage, RepoTarget, SessionInfo } from "@waterplane/shared";
+import {
+  answeredOnlyInCli, budgetReasonText, cliRestartDue, cliRestartSendAsk, cliRestartView, isLocalCommand, sessionBudgetHeld,
+  sessionBudgetText,
+} from "@waterplane/shared";
+import type { ClientMessage, LaunchOpts, RepoTarget, SessionInfo } from "@waterplane/shared";
+import { resumeIdOf } from "../../sessionFacts";
+import { restartOfferClosed } from "../Banners";
 import {
   PAD_EMPTY_TOAST, PAD_KEPT_TOAST, WHERE_UNPICKED_TOAST, sendModeToast, whereGoneToast, type SendMode, type SendWhere,
   busyPastBudgetToast, busySendAsk, busySendRememberedToast, busySendRoute,
@@ -57,6 +62,9 @@ type Ref<T> = { readonly current: T };
 // showing something, so the input stops growing here and scrolls instead.
 // Keep in sync with `.compose textarea { max-height }` in styles.css.
 const COMPOSE_MAX_H = 200;
+
+/** `<session id>|<installed version>` answered "send on the old one" — not asked again. In memory, as the bar's own. */
+const restartPassed = new Set<string>();
 
 /**
  * The compose box's state — no behaviour, no dependencies. Called above
@@ -164,6 +172,9 @@ export interface ComposeDeps {
   queue: Pick<QueueApi, "submitInput" | "queueBacklog" | "budget"> & { uploads: { parkingRef: MutableRefObject<number> } };
   sender: Pick<SendApi, "dispatchIntent" | "openSend" | "noteSendAim" | "sendMemRef">;
   repoForCwd(cwd: string): RepoTarget | null;
+  /** `claude --version` on the desktop (`UpdateInfo.current`) — a session older than it is asked about on Send. */
+  cliInstalled: string | undefined;
+  relaunch(s: SessionInfo, patch: Partial<LaunchOpts>, opts?: { quiet?: boolean; prompt?: string }): void;
   /** Off the session screen — the `+ later` screen once its words are posted. */
   leave(): void;
 }
@@ -613,7 +624,7 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
    * (`/usage`) opens a view and starts no turn, so a pinned item watching for
    * one would never settle.
    */
-  function sendCompose(mode?: SendMode, pictureAsked = false, busyPick?: SendMode, pastBudget = false, budgetAsked = false) {
+  function sendCompose(mode?: SendMode, pictureAsked = false, busyPick?: SendMode, pastBudget = false, budgetAsked = false, restartAsked = false) {
     // A picture open on the annotator beside this box: ask whether it goes
     // too, every time — sending the words alone and leaving the marked picture
     // behind is the mistake this exists for. Yes is the annotator's own Send &
@@ -672,6 +683,39 @@ export function useCompose(draft: ComposeDraft, deps: ComposeDeps) {
         if (yes) sendCompose(mode, true, how, pastBudget, true);
       });
       return;
+    }
+    // The bar's CLI restart, asked at the cheapest moment there is: nothing is
+    // running, and this prompt is about to start a turn on the old binary —
+    // after which the next chance is when that turn ends (`cliRestartSendAsk`).
+    // Yes relaunches the same conversation with these words as its first
+    // prompt, one op; the other answer sends here and is not asked again for
+    // that version. A tap outside keeps the words in the box.
+    const due = !restartAsked && how === "now" && sendWhere === "this" && !pending && !isLocalCommand(compose)
+      ? cliRestartDue(active.cliVersion, deps.cliInstalled) : null;
+    const restartKey = due ? `${active.id}|${due.installed}` : "";
+    if (due && !restartOfferClosed(active.id, due.installed) && !restartPassed.has(restartKey)) {
+      const v = cliRestartView(due, {
+        turnActive: active.turnActive, agents: active.agents?.length, shells: active.shells, resumeId: resumeIdOf(active),
+      });
+      if (!v.cant && !v.loses) {
+        const cur = active;
+        void askChoice({ ...cliRestartSendAsk(due), tone: "info" }).then((r) => {
+          if (!r) return;
+          if (!r.ok) {
+            track("action:compose.restart.sendOld");
+            restartPassed.add(restartKey);
+            sendCompose(mode, true, how, pastBudget, true, true);
+            return;
+          }
+          track("action:compose.restart.thenSend");
+          const text = compose;
+          deps.relaunch(cur, {}, { prompt: text });
+          pushHistory(text);
+          setCompose("");
+          afterSend();
+        });
+        return;
+      }
     }
     // What the button stays armed with afterwards: an answer to the busy ask
     // is about THIS message, never a new mode for the repo.

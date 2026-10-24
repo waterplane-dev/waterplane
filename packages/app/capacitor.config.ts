@@ -68,10 +68,10 @@ const config: CapacitorConfig = {
 
     /**
      * The terminal is xterm.js and the app is full of long-press gestures
-     * (session reorder, image zoom). The default WebView debugging flag stays
-     * off in release builds; Capacitor honours the build type.
+     * (session reorder, image zoom). `webContentsDebuggingEnabled` is left
+     * unset on purpose: Capacitor then follows the build's debuggable flag, so
+     * DevTools work in debug builds and are off in release builds.
      */
-    webContentsDebuggingEnabled: true,
   },
 
   ios: {
@@ -110,8 +110,7 @@ const config: CapacitorConfig = {
      */
     scrollEnabled: true,
 
-    /** Same reasoning as Android's flag: Safari's Web Inspector on the simulator. */
-    webContentsDebuggingEnabled: true,
+    /** `webContentsDebuggingEnabled` is unset, same reasoning as Android: follows the build type. */
   },
 
   plugins: {

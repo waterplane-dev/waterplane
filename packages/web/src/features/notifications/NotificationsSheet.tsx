@@ -4,7 +4,7 @@
  */
 import { useEffect } from "react";
 import type { LucideIcon } from "lucide-react";
-import { AlertTriangle, Bell, Bot, CircleDot, CornerDownLeft, Download, Fingerprint, Flag, Flame, HeartPulse, Hourglass, Images, ListTodo, Puzzle, SendHorizontal, Trash2 } from "lucide-react";
+import { AlertTriangle, Bell, Bot, CircleDot, CornerDownLeft, Download, Fingerprint, Flag, Flame, HardDrive, HeartPulse, Hourglass, Images, ListTodo, Puzzle, SendHorizontal, Trash2 } from "lucide-react";
 import { useCore, useStore } from "../../sdk";
 import { SheetHead } from "../../Sheet";
 import { Empty } from "../../Empty";
@@ -32,6 +32,7 @@ export const NOTIF_ICON: Record<string, LucideIcon> = {
   limit: Hourglass,
   burn: Flame,
   agent: Bot,
+  disk: HardDrive,
   artifact: Download,
   undelivered: AlertTriangle,
 };

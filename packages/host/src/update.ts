@@ -57,6 +57,7 @@ import type { InstallRoute, UpdateInfo } from "@waterplane/shared";
 import { cmpCliVersion, envName } from "@waterplane/shared";
 import { claudeBackend } from "./backends/index.js";
 import { claudeConfigDir } from "./claudeconfig.js";
+import { installerRunning, installingWords } from "./binguard.js";
 
 const CASK = "claude-code";
 const PKG = "@anthropic-ai/claude-code";
@@ -380,6 +381,14 @@ export class UpdateChecker {
             message: `can't tell what installed this claude${where} — upgrade it the way you installed it, or set ${envName("CLAUDE_BIN")} to one this desktop manages`,
           },
         };
+        this.onChange(this.info);
+        return;
+      }
+      // A second install over a running one races it for the same link and directory (an npm
+      // typed in a shell, then this button): refused in words, the running one finishes alone.
+      const other = installerRunning(claudeBackend.bin());
+      if (other) {
+        this.info = { ...this.info, running: false, lastResult: { ok: false, at: Date.now(), message: `${installingWords("Claude Code", other)}. Nothing was started; check again when it is done.` } };
         this.onChange(this.info);
         return;
       }

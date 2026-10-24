@@ -1,7 +1,7 @@
 /** The one door to the extension host: `acquireVsCodeApi()` may be called ONCE per webview. */
 import { useEffect, useRef, useState } from "react";
 import type {
-  CorpusDoc, HealthDoc, HealthRunState, PromptDef, SessionDoc, SessionSummary, TabId, ToExtension, ToWebview, WeightDoc,
+  CorpusDoc, HealthDoc, HealthRunState, LiveState, PromptDef, SessionDoc, SessionSummary, TabId, ToExtension, ToWebview, WeightDoc,
 } from "../src/protocol";
 
 interface VsCodeApi {
@@ -14,6 +14,29 @@ declare function acquireVsCodeApi(): VsCodeApi;
 const api: VsCodeApi = acquireVsCodeApi();
 
 export const post = (m: ToExtension): void => api.postMessage(m);
+
+// ── the desktop reads: one ask per `get`, answered by id (`hostlink.ts` on the other side) ──
+
+let nextAsk = 1;
+const asks = new Map<number, { ok: (v: unknown) => void; fail: (e: Error) => void }>();
+
+/** One GET of the waterplane desktop on this machine, through the extension host. Rejects with its sentence. */
+export function get(path: string, ms?: number): Promise<unknown> {
+  const id = nextAsk++;
+  return new Promise((ok, fail) => {
+    asks.set(id, { ok, fail });
+    post({ t: "get", id, path, ...(ms != null ? { ms } : {}) });
+  });
+}
+
+window.addEventListener("message", (e: MessageEvent<ToWebview>) => {
+  const m = e.data;
+  if (!m || typeof m !== "object" || m.t !== "ledgerAnswer") return;
+  const a = asks.get(m.id);
+  if (!a) return;
+  asks.delete(m.id);
+  if (m.ok) a.ok(m.value); else a.fail(new Error(m.error));
+});
 
 /** The state this webview keeps across hides: the selected tab and the Health view's x axis. */
 interface Kept { tab?: string; healthAxis?: string }
@@ -41,6 +64,8 @@ export interface ExtensionState {
   /** The folder's recently active sessions (the panel's header reads the selected row); `selected` is the drilled-in one. */
   sessions: { folder: string; rows: SessionSummary[]; selected: string | null; older: number; capped: number; automated: number; following: boolean } | null;
   corpus: { doc: CorpusDoc | null; why?: string; scanning?: { done: number; total: number } } | null;
+  /** The waterplane desktop's live account facts, or why there are none; null before the first answer. */
+  live: LiveState | null;
   weight: { doc: WeightDoc | null; why?: string } | null;
   prompts: { list: PromptDef[]; terminal: string | null };
   folders: { list: string[]; active: string };
@@ -49,10 +74,11 @@ export interface ExtensionState {
 }
 
 /** Subscribes to the extension's messages and says `ready`. `onTab` fires on a `tab` message (tree → panel round trip). */
-export function useExtension(onTab?: (id: TabId) => void): ExtensionState {
+export function useExtension(onTab?: (id: TabId, ledger?: string) => void): ExtensionState {
   const [session, setSession] = useState<ExtensionState["session"]>(null);
   const [sessions, setSessions] = useState<ExtensionState["sessions"]>(null);
   const [corpus, setCorpus] = useState<ExtensionState["corpus"]>(null);
+  const [live, setLive] = useState<ExtensionState["live"]>(null);
   const [weight, setWeight] = useState<ExtensionState["weight"]>(null);
   const [prompts, setPrompts] = useState<ExtensionState["prompts"]>({ list: [], terminal: null });
   const [folders, setFolders] = useState<ExtensionState["folders"]>({ list: [], active: "" });
@@ -68,11 +94,12 @@ export function useExtension(onTab?: (id: TabId) => void): ExtensionState {
         case "session": setSession({ folder: m.folder, doc: m.doc, why: m.why, following: m.following }); break;
         case "sessions": setSessions({ folder: m.folder, rows: m.rows, selected: m.selected, older: m.older, capped: m.capped, automated: m.automated, following: m.following }); break;
         case "corpus": setCorpus({ doc: m.doc, why: m.why, scanning: m.scanning }); break;
+        case "live": setLive(m.live); break;
         case "weight": setWeight({ doc: m.doc, why: m.why }); break;
         case "prompts": setPrompts({ list: m.list, terminal: m.terminal }); break;
         case "folders": setFolders({ list: m.list, active: m.active }); break;
         case "health": setHealth((h) => ({ ...h, [m.folder]: { doc: m.doc, why: m.why, run: m.run } })); break;
-        case "tab": tabCb.current?.(m.id); break;
+        case "tab": tabCb.current?.(m.id, m.ledger); break;
       }
     };
     window.addEventListener("message", on);
@@ -80,5 +107,5 @@ export function useExtension(onTab?: (id: TabId) => void): ExtensionState {
     return () => window.removeEventListener("message", on);
   }, []);
 
-  return { session, sessions, corpus, weight, prompts, folders, health };
+  return { session, sessions, corpus, live, weight, prompts, folders, health };
 }

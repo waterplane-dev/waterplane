@@ -38,6 +38,7 @@ export const GUARDS = [
   { test: "backlogpins", tier: "edit", paths: WEB },
   { test: "backstep", tier: "edit", paths: WEB },
   { test: "trafficarchive", tier: "edit", paths: ["scripts/traffic-archive.mjs"] },
+  { test: "reachdashboard", tier: "edit", paths: ["scripts/reach-dashboard.mjs", "scripts/traffic-archive.mjs"] },
   { test: "tokenstatspins", tier: "edit", paths: [...WEB, "packages/extensions/*/web/**"] },
   { test: "hostshape", tier: "edit", paths: [...HOST, ...SKILLS, "eslint.config.js", "tools/skillmap.mjs"] },
   { test: "hostpins", tier: "edit", paths: HOST },
@@ -79,6 +80,8 @@ export const GUARDS = [
   { test: "stublogo", tier: "commit", paths: ["scripts/media/**", "scripts/claude-stub-tui.mjs"] },
   { test: "uiencode", tier: "commit", paths: ["scripts/ui/**"] },
   { test: "withtmp", tier: "commit", paths: ["scripts/with-tmp.mjs", "scripts/lib-testtmp.mjs"] },
+  { test: "plugintestkit", tier: "push", paths: [], why: "imports the testkit, which loads @waterplane/shared's dist" },
+  { test: "backendparity", tier: "push", paths: [], why: "renders the descriptors from packages/host/dist" },
 
   // ── push only ─────────────────────────────────────────────────────────────
   { test: "activitypins", tier: "push", paths: [], why: "imports web sources that load @waterplane/shared's dist" },

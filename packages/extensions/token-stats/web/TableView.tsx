@@ -1,6 +1,7 @@
 /** The table twin: every value the charts show, as numbers, scoped by the same window. */
 import { type CostBreakdown, fmtCount, fmtExact, fmtUsd, type TokenGroup, type TokenStatsDoc, tokenTotal } from "@waterplane/shared";
 import { type WindowCut } from "./usageCut.ts";
+import { RowTitle, RowSub } from "@waterplane/kit";
 
 /** The table twin: every value the charts show, as numbers, in full. */
 /**
@@ -70,15 +71,15 @@ function NumRow({ label, t, title, cost }: {
 }) {
   return (
     <div className="row ctx-row ts-numrow" title={title}>
-      <span className="row-title">{label}</span>
+      <RowTitle>{label}</RowTitle>
       <span className="ts-num">{fmtExact(tokenTotal(t))}</span>
       {cost && <span className="ts-num ts-cost">{fmtUsd(cost.total)}</span>}
       <span className="row-meta">
-        <span className="row-sub">in {fmtCount(t.input)}</span>
-        <span className="row-sub">out {fmtCount(t.output)}</span>
-        <span className="row-sub">cache r {fmtCount(t.cacheRead)}</span>
-        <span className="row-sub">cache w {fmtCount(t.cacheWrite)}</span>
-        <span className="row-sub">{fmtExact(t.turns)} turns</span>
+        <RowSub>in {fmtCount(t.input)}</RowSub>
+        <RowSub>out {fmtCount(t.output)}</RowSub>
+        <RowSub>cache r {fmtCount(t.cacheRead)}</RowSub>
+        <RowSub>cache w {fmtCount(t.cacheWrite)}</RowSub>
+        <RowSub>{fmtExact(t.turns)} turns</RowSub>
       </span>
     </div>
   );

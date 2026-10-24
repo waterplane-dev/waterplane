@@ -58,13 +58,15 @@ export function modeNow(s: { liveMode?: PermissionMode; permissionMode?: Permiss
   return { mode: null, source: "unknown" };
 }
 
-/** The line above the rows. A launch value is NAMED as one. */
-export function modeNowText(now: ModeNow): string {
-  if (now.source === "live") return `Now: ${modeTitle(now.mode)}, read off the CLI’s footer.`;
+/** The line above the rows. A launch value is NAMED as one. `readFrom` says where the live reading
+ *  comes from: claude's footer, or a source backend's own answer (its label). */
+export function modeNowText(now: ModeNow, readFrom = "the CLI’s footer"): string {
+  const fromFooter = readFrom === "the CLI’s footer";
+  if (now.source === "live") return `Now: ${modeTitle(now.mode)}, read ${fromFooter ? "off" : "from"} ${readFrom}.`;
   if (now.source === "launch") {
-    return `Launched in ${modeTitle(now.mode)}. The footer can’t be read right now, so it may have changed since.`;
+    return `Launched in ${modeTitle(now.mode)}. ${fromFooter ? "The footer" : "Its mode"} can’t be read right now, so it may have changed since.`;
   }
-  return "The footer can’t be read right now and this session launched with no mode flag, so its mode is not known here.";
+  return `${fromFooter ? "The footer" : "Its mode"} can’t be read right now and this session launched with no mode flag, so its mode is not known here.`;
 }
 
 /**
@@ -76,10 +78,13 @@ export function modeNowText(now: ModeNow): string {
 export function modeRows(
   choices: readonly PermissionMode[],
   s: { liveMode?: PermissionMode; permissionMode?: PermissionMode },
+  /** True for claude's TUI (shift+tab reaches only the cycle). A source backend's `set()` reaches
+   *  any mode it declares, so with `false` every declared mode is a row (a risky one still asks). */
+  cycleOnly = true,
 ): ModeDef[] {
   const rows = CYCLE_MODES.filter((m) => choices.includes(m));
   for (const r of RISKY_MODES) {
-    if (choices.includes(r) && (s.liveMode === r || s.permissionMode === r)) rows.push(r);
+    if (choices.includes(r) && (!cycleOnly || s.liveMode === r || s.permissionMode === r)) rows.push(r);
   }
   return rows.map((m) => MODE_DEFS[m]);
 }

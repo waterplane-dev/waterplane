@@ -44,7 +44,7 @@ import {
 } from "../../SettingsKit.tsx";
 import { CantInline, Unavailable } from "../../Unavailable.tsx";
 import { ModelField } from "../../ModelField.tsx";
-import { CLAUDE as CLAUDE_ID, agentBackends, backendOptionLabel, backendUnavailable, capReason, effortChoices, hasCap, permModeChoices, showBackendPicker, windowNote } from "../../backendCaps.ts";
+import { CLAUDE as CLAUDE_ID, agentBackends, backendOptionLabel, backendUnavailable, capReason, effortChoices, hasCap, launchModeChoices, launchModeDropNote, showBackendPicker, windowNote, backendDrift } from "../../backendCaps.ts";
 import { clearHostedAck } from "../../hostedAck.ts";
 import { askConfirm } from "../../Confirm.tsx";
 import { pushAllSettings } from "../../settings.ts";
@@ -56,6 +56,7 @@ import {
   AppearanceRows, OfflineRows, WritingRows, type InstallFacts, type ReconnectFacts, type VoiceFacts,
 } from "./SettingsGroups.tsx";
 import { Button } from "../../kit/Button";
+import { SetNote, SetWarn } from "../../SettingsKit";
 
 /**
  * The search box. Transient on purpose — no storage key, no sync: a filter is
@@ -223,7 +224,7 @@ function SessionRows({ pickBackend }: { pickBackend: SettingsSheetProps["pickBac
               {agentBackends(backends)!.map((b) => <option key={b.id} value={b.id}>{backendOptionLabel(b)}</option>)}
             </select>
           }
-          note={<>What a new session runs.{windowNote(backends, launch.backend) ? ` ${windowNote(backends, launch.backend)}.` : ""}</>}
+          note={<>What a new session runs.{windowNote(backends, launch.backend) ? ` ${windowNote(backends, launch.backend)}.` : ""}{backendDrift(backends, launch.backend) ? ` ${backendDrift(backends, launch.backend)}` : ""}</>}
           more={<p>Sessions already open keep the binary they started with. The window size is said only when it is known — never a 0k, and never claude's window borrowed for a local model.</p>}
         >
           {/* What this backend cannot do, as sentences — the controls
@@ -231,7 +232,7 @@ function SessionRows({ pickBackend }: { pickBackend: SettingsSheetProps["pickBac
               went (`Unavailable.tsx`). Never folded: an absence is the
               one thing that has to be read without being asked for. */}
           {backendUnavailable(backends, launch.backend) && (
-            <div className="act-cants set-note"><CantInline>{backendUnavailable(backends, launch.backend)}</CantInline></div>
+            <SetNote className="act-cants"><CantInline>{backendUnavailable(backends, launch.backend)}</CantInline></SetNote>
           )}
           <Unavailable className="set-note" cants={([
             ["context meter", "contextMeter"], ["transcript", "transcript"],
@@ -255,6 +256,9 @@ function SessionRows({ pickBackend }: { pickBackend: SettingsSheetProps["pickBac
           onChange={(model) => setLaunchOpt({ model })} />}
       />
 
+      {effortChoices(backends, launch.backend).length === 0 && capReason(backends, launch.backend, "effort") && (
+        <SetNote>{capReason(backends, launch.backend, "effort")}</SetNote>
+      )}
       {effortChoices(backends, launch.backend).length > 0 && (
         <SetPick
           id="launch-effort" label="effort"
@@ -267,7 +271,7 @@ function SessionRows({ pickBackend }: { pickBackend: SettingsSheetProps["pickBac
         />
       )}
 
-      {permModeChoices(backends, launch.backend).length > 0 && (
+      {launchModeChoices(backends, launch.backend).length > 0 && (
         <SetPick
           id="launch-permission" label="permission"
           control={
@@ -296,17 +300,20 @@ function SessionRows({ pickBackend }: { pickBackend: SettingsSheetProps["pickBac
               {/* The modes this backend actually understands — never a
                   guessed subset. An empty list means it has no such
                   concept and the control above is not drawn at all. */}
-              {permModeChoices(backends, launch.backend).map((x) => <option key={x} value={x}>{x}{RISKY_PERM_MODES.has(x) ? " — no approvals" : ""}</option>)}
+              {launchModeChoices(backends, launch.backend).map((x) => <option key={x} value={x}>{x}{RISKY_PERM_MODES.has(x) ? " — no approvals" : ""}</option>)}
             </select>
           }
         >
           {launch.permissionMode && RISKY_PERM_MODES.has(launch.permissionMode) && (
-            <div className="set-note danger-note">
+            <SetNote className="danger-note">
               <ShieldAlert size={13} style={{ verticalAlign: "-2px" }} /> New sessions run every tool call
               without asking. Nothing will stop a destructive command.{" "}
               <button className="link-btn" onClick={() => setLaunchOpt({ permissionMode: undefined })}>back to default</button>
-            </div>
+            </SetNote>
           )}
+          {/* A stored mode this backend cannot START in renders as "default" in the select (no
+              option matches); say what it is and that launches go without it (`launchFor`). */}
+          {launchModeDropNote(launch, backends) && <SetWarn tone="plain">{launchModeDropNote(launch, backends)}</SetWarn>}
         </SetPick>
       )}
 

@@ -87,7 +87,7 @@ export function ModelField({ backends, backend, value, onChange, placeholder }: 
       <input className="search" placeholder={placeholder ?? "model id (blank = this backend’s default)"}
         value={value ?? ""} onChange={(e) => onChange(e.target.value.trim() || undefined)} />
     );
-    return listNote ? <div className="model-field">{field}<div className="set-note">{listNote}</div></div> : field;
+    return listNote ? <div className="model-field">{field}<SetNote>{listNote}</SetNote></div> : field;
   }
   const listed = new Set([...cat.aliases, ...cat.ids]);
   const offList = value && !listed.has(value) ? value : null;

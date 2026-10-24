@@ -61,17 +61,28 @@ summary:
   still deny-until-set for LAN — and if its bytes may have held
   `gateTailscale`, Tailscale stays gated too until the password is set
   again from loopback. A corrupt file never opens the gate.
+- **Funnel is never trusted.** A loopback request carrying `Tailscale-Funnel-Request` (what
+  `tailscale funnel` adds, from the public internet) is classed `public` (`requestPeerKind` in
+  `net.ts`, used by the token gate, the host-management routes and `/api/peer*`): it always needs a
+  token and can never manage auth or mint pairing codes. Behind `tailscale serve` every socket is
+  loopback, so the rate limiter (`ratelimit.ts`) keys on the real client address serve writes into
+  `X-Forwarded-For` (only when the socket is loopback and a proxy header is present), not on
+  127.0.0.1. `POST /api/auth/login` is rate-limited per address (429 + retry-after) before the
+  password hash is checked.
 - **Device tokens.** Every token belongs to one row of the paired-device
   ledger, `<state dir>/devices.json` (mode 0600): 32 random bytes,
   base64url, returned once and kept on disk **only as its sha256**, looked up
   with a constant-time compare. Tokens survive a host restart; revoking a row
   (`POST /api/devices/revoke`, authenticated) kills its token at once and
-  closes that device's open sockets; setting, changing or clearing the
-  password drops every row. A browser gets one from `POST /api/auth/login`
+  closes that device's open sockets — the close frame first, then the socket
+  is torn down after one second whatever the peer did with it, and a frame
+  that still arrives from it meanwhile is dropped, not dispatched
+  (`socketAuthorized`, asked for every frame); setting, changing or clearing
+  the password drops every row. A browser gets one from `POST /api/auth/login`
   as an httpOnly cookie. The Android shell (whose cross-site cookie is
   withheld) mints one with `POST /api/auth/token` — **only from a caller that
-  is already trusted** (loopback, an ungated Tailscale peer, or a valid
-  token), so no password is retyped over the tailnet, and never while no
+  is already trusted** (loopback, or a Tailscale peer holding a valid token
+  when that path is gated — never LAN or Funnel, even with a token), so no password is retyped over the tailnet, and never while no
   password is set — and carries it as `Authorization: Bearer <tok>` on HTTP
   and as the WebSocket subprotocol `waterplane-tok.<tok>` on the upgrade (the host
   echoes only the base protocol, never the token). No token is valid while
@@ -120,7 +131,19 @@ summary:
   `POST /api/auth/unlock` checks it, rate-limited per device (5, then one per
   minute), and lifts that one token to full scope for 30 minutes, held in the
   host's memory only — expiry, "Lock now" (`POST /api/auth/lock`), a PIN
-  change or a host restart end it, and its sockets are closed.
+  change or a host restart end it, and its sockets are closed. **Auth
+  material is the one part of full scope an unlock never grants**, because
+  each piece would outlive the 30 minutes: an unlocked passive device still
+  cannot mint a pairing code (`POST /api/pair/mint` — a redeemed code is a
+  permanent full token) or a device token, revoke a device, pair or unpair a
+  peer (`/api/peers` writes), read the LAN identity secret, or set the
+  password, the Tailscale gate or the PIN. Three places say no: `passive.ts`'s
+  `passiveNeverAllows` for the pairing, revoke, peer and identity routes
+  (checked in `server/http.ts` right after the allowlist), the `/api/auth/token`
+  and `/api/auth/pin` handlers' own scope checks, and the WebSocket
+  `auth.set`/`auth.clear`/`auth.gateTailscale` ops (`routes/system.ts`, by the
+  socket's device row). A passive caller that knows the PASSWORD itself can
+  still log in like any browser — the PIN model never covered that.
 - Password management (`auth.set` / `auth.clear` / `gateTailscale`) is only
   accepted from an already-trusted connection (loopback or Tailscale). A LAN
   caller — even one who knows the current password — can never set or change
@@ -132,6 +155,10 @@ summary:
   (`X-Forwarded-*`, `Forwarded`, `X-Real-IP`, `Via`, `Tailscale-User-*` —
   one list, `net.ts`'s `localProcessRefusal`). Loopback alone is not enough:
   behind `tailscale serve` every tailnet request arrives from 127.0.0.1.
+  A loopback request whose `Host` names anything but this machine's loopback is
+  treated as proxied; a reverse proxy that forwards neither a proxy header nor
+  the client `Host` is treated as local — front the daemon only with one that
+  sets `X-Forwarded-For`.
 - A shell session (a plain login shell in a repo, `backends/shell.ts`) is the
   same `session.create` op behind the same gates as a `claude` session and
   widens nothing. Its `$BROWSER` shim posts to `POST /api/shell/open` (local
@@ -161,7 +188,11 @@ summary:
   non-web origin: `capacitor://localhost`, the iOS shell's page (WKWebView
   cannot serve an app from `http`, so it is the twin of the Android shell's
   `http://localhost`). Any other scheme is refused, and the CORS header only
-  ever reflects an origin that passed — never `*`.
+  ever reflects an origin that passed — never `*`. `*.ts.net` is accepted by
+  suffix only while on a tailnet whose MagicDNS name could not be read, only
+  for requests arriving through `tailscale serve`, and only when the Origin
+  names the same host the request was sent to; the name is re-read
+  until known.
 - `/api/agent/intents` and `/api/agent/backlog` (an agent in a driven repo
   posting work for later, `agentintents.ts`) answers only a loopback caller that is neither a browser
   (any `Origin` or `Sec-Fetch-Site` header is refused, same-origin included)
@@ -203,6 +234,27 @@ summary:
   per-user data dir, are created with `O_EXCL`, and are hashed and unpacked
   from there, never from a shared temp dir another local account could plant
   a file or symlink in.
+- **Files the host rewrites inside a repo** — `.gitignore` (the secret writer,
+  the checklist's gitignore fix, the signing-key link), `CLAUDE.md` and
+  `.claude/settings.json` (checklist fixes) — are written through an in-repo
+  symlink but never through one that leaves the worktree: a committed
+  `.gitignore -> ~/.gitconfig` is refused in words (`writeTextAtomicKeepMode`'s
+  `within`), the same realpath rule the file routes apply to reads. The repo
+  walks (tree search, artifact discovery, directory entry counts) neither
+  descend into nor list the contents of a link whose target is outside the
+  worktree (the link itself is shown as a link, nothing more).
+- **A repo's own repo-health engine** (`tools/repohealth.mjs`, run by the host
+  after one approval — `repohealthapproval.ts`) is pinned by a hash of the
+  entry, its siblings and every module it imports with a plain relative path,
+  static or dynamic. An engine whose loads the hash cannot see is never
+  approvable and the phone is told why: an `import()`/`require()` argument that
+  is not one plain string, `eval`, `Function()`, `vm`, a worker, loader hooks, a
+  `#` import-map entry, a module from a URL or an absolute path, an import
+  outside the repo, a dependency committed under any `node_modules` or reached
+  by the repo's own package name, or a tree too big to read whole. Honest scope:
+  a comment- and string-aware text scan, not a parser — it closes the plain
+  shapes; an engine that spawns `node <file>` or reaches code through an alias
+  the scan does not know still runs what the approval never saw.
 - **Plugins** (`packages/host/src/plugins/`, `docs/notes/plugins.md`) are code
   the machine's owner put in their own config dir (`~/.config/waterplane/plugins/`
   or `plugin-paths.json`). They run in the daemon's process with its rights —
@@ -212,7 +264,9 @@ summary:
   manifest's `answers`, a per-session switch default OFF that only the phone
   flips, the same box it was told about, never a trust/tool/plan box or one
   naming something destructive or secret), reads files only through the
-  containment guard, and reads only the env names its manifest declares.
+  containment guard, and — when loaded from outside this repo — reads only
+  the env names its manifest declares (the in-repo extensions under
+  `packages/extensions/` are part of the host and read its own knobs directly).
   Nothing on the network can install, load or reload one.
 - **Peer tokens (paired desktops).** Two waterplane hosts can be paired so one
   delegates a job to the other (`<state dir>/peers.json`, mode 0600;
@@ -239,7 +293,9 @@ summary:
 - **The installer** (`curl -fsSL https://github.com/waterplane-dev/waterplane/releases/latest/download/install.sh | sh`,
   generated from `deploy/install.sh.tmpl`) is code you run as yourself, so
   read it first if you prefer: download it, open it, then `sh install.sh`.
-  It never uses sudo and edits no shell rc file. It verifies the Node runtime
+  It edits no shell rc file and runs at most one `sudo` line — the Linux
+  package manager installing `tmux` — and only after asking on the terminal;
+  everything else is unprivileged. It verifies the Node runtime
   against nodejs.org's `SHASUMS256.txt` and the release archive against the
   `.sha256` published beside it, and installs nothing on a mismatch. Those
   checksums come over the same HTTPS channel as the files, so on their own
@@ -254,7 +310,13 @@ summary:
   itself swapped (the key travels inside it — read it, or compare it with the
   one in the repository). Rotating the key means a new `install.sh`: copies
   already downloaded trust only the old key. `WATERPLANE_INSECURE_SKIP_SIG=1`
-  skips the check, loudly, for a release you built yourself.
+  skips the check, loudly, for a release you built yourself. **Honest scope,
+  freshness:** the signature proves who published a release, not that it is
+  the newest — whoever can write the release assets can keep offering an
+  OLDER signed release as "latest" (a freeze), though never one below the
+  version already installed, which `waterplane update` refuses. A signed
+  expiry would close that and needs re-signing on a schedule; until then a
+  "current" that stays put for long is worth a glance at the releases page.
   `waterplane update` holds a release to the same rule with the same key,
   embedded in the host (`host/cli/releasesig.ts`, test-pinned to
   `deploy/release-pubkey.pem`): it verifies `release.json.sig` before it
@@ -265,8 +327,9 @@ summary:
   warning on every run; the doctor's self-update row believes a newer release
   only after the same check. The
   login service it installs (`waterplane service install`) bakes in only PATH,
-  HOME and the variables passed with `--env`, never the installing shell's
-  environment, and refuses `WATERPLANE_ALLOW_PUBLIC` outright: a public bind
+  HOME, its own state dir (and the root and Claude config dir when the shell
+  named them) and the variables passed with `--env`, never the installing
+  shell's environment, and refuses `WATERPLANE_ALLOW_PUBLIC` outright: a public bind
   stays an explicit, visible opt-in in `.env`.
 
 ### In scope
@@ -313,6 +376,12 @@ do so anyway, e.g.:
   upstream.
 - Anything that requires physical access to an already-unlocked machine
   running the daemon.
+- **A paired host is fully trusted by the Android shell.** The app's UI
+  updates over the air from the host it is paired with
+  (`packages/web/src/webUpdate.ts`); the manifest's sha256 hashes come from
+  that same host, so they catch corruption, not a hostile host. A host you
+  pair with can ship JS that runs with the shell's native plugins. Pair only
+  with desktops you control.
 
 If you're not sure whether something is in scope, report it privately anyway
 and let us sort it out together — a false positive costs us a few minutes; a

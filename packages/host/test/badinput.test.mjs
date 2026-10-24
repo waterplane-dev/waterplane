@@ -151,6 +151,7 @@ test("a WS frame that is not an object with a string t is answered with an error
     ROOT, BOOT_ID: "test", PORT: 0,
     auth: { deviceFor: () => null, needsToken: () => false, isEnabled: () => false, passive: { restricted: () => false } },
     authStateFor: () => ({}),
+    socketAuthorized: () => true, // every frame is dispatched here; the revoke/relock drop is clients.test.mjs's subject
     send: (_ws, m) => sent.push(m), broadcast() {},
     clients: new Set(), attached: new Map(), wsKind: new Map(), wsToken: new Map(), wsDevice: new Map(),
     netstats: { noteSocketOpen() {}, noteSocketClose() {} },

@@ -19,6 +19,7 @@ import { hostAddress, hostRows } from "./logic";
 import { useHostRoute, useHosts, useSwitcherView } from "./store";
 import { usePeersSheet } from "../../peersSlot";
 import { Button, Row, RowTitle, RowSub, Hint } from "../../kit";
+import { SetLine } from "../../SettingsKit";
 
 const ICON = 16;
 
@@ -124,13 +125,13 @@ export function HostSwitcherSheet() {
           })}
         </div>
       )}
-      {PeersSheet && <div className="set-row" style={{ marginTop: 10 }}>
+      {PeersSheet && <SetLine style={{ marginTop: 10 }}>
         <Button onClick={() => setPeers(true)}><Link2 size={ICON} /> Peer desktops</Button>
-      </div>}
+      </SetLine>}
       {!hosts.some(isDemoHost) && (
-        <div className="set-row" style={{ marginTop: 10 }}>
+        <SetLine style={{ marginTop: 10 }}>
           <Button onClick={() => tryDemo()}><FlaskConical size={ICON} /> Try the demo</Button>
-        </div>
+        </SetLine>
       )}
       <Hint>
         Each desktop keeps its own drafts, queue and caches on this phone; switching reloads the app onto the other one.

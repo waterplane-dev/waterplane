@@ -47,7 +47,7 @@ import {
   type HostMessage,
   type SignalRecord,
 } from "@waterplane/shared";
-import { ConfirmButton, Empty, FilterBar, StaleHead, useRemoteResource, Hint } from "./kit";
+import { ConfirmButton, Empty, FilterBar, StaleHead, useRemoteResource, Hint, Button } from "./kit";
 import { loadCliHealthSnap } from "./localState";
 
 /** The `clihealth` frame's checkout pointer — present only from a developer's install. */
@@ -309,7 +309,7 @@ function Row({ sig, now, version, onInspect }: {
       </div>
 
       {onInspect && (check.verdict === "degraded" || check.verdict === "broken") && (
-        <button type="button" className="key cli-inspect"
+        <Button className="cli-inspect" type="button"
           title="open the Send sheet with this row's facts and where its record and captures live, aimed at a new session in the checkout"
           onClick={() => onInspect({
             id: sig.id, name: spec.name, verdict: check.verdict, version,
@@ -323,7 +323,7 @@ function Row({ sig, now, version, onInspect }: {
             ].filter(Boolean).join(" · ") || undefined,
           })}>
           <Bug size={13} /> inspect in a session
-        </button>
+        </Button>
       )}
     </div>
   );

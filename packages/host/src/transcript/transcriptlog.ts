@@ -1,7 +1,7 @@
 /** The CLI log's location, freshness and record predicates. Moved from transcript.ts. */
 import { closeSync, openSync, readSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { LABEL_CAP } from "@waterplane/shared";
+import { LABEL_CAP, isConversationId } from "@waterplane/shared";
 import { claudeProjectDir } from "../claudeconfig.js";
 
 /** Parse at most this much of the log (tail-read beyond it). Transcripts of a
@@ -9,6 +9,10 @@ import { claudeProjectDir } from "../claudeconfig.js";
 export const MAX_READ = 24 * 1024 * 1024;
 
 export function transcriptPath(cwd: string, claudeSessionId: string): string {
+  // A non-id (`../../x`) never becomes a path: the join would leave the project
+  // dir. The returned path simply does not exist, so every reader (stat, read,
+  // tail) degrades to "no log" instead of throwing.
+  if (!isConversationId(claudeSessionId)) return join(claudeProjectDir(cwd), "invalid-conversation-id.jsonl");
   return join(claudeProjectDir(cwd), claudeSessionId + ".jsonl");
 }
 

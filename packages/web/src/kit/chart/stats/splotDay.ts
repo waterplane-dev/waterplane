@@ -5,7 +5,6 @@
  * facade that re-exports every module in `stats/`.
  */
 
-import { fmtAxisTime } from "../chartFmt.ts";
 import { yScale, plotBox, plotY, nearestByTime } from "../chartScale.ts";
 import { f1, polyline, closedArea } from "../chartPath.ts";
 
@@ -30,6 +29,8 @@ export interface DayPlot {
   py: (v: number) => number;
   /** Width one day occupies — the column width before its gap is taken out. */
   slot: number;
+  /** What one bucket is worth, ms — a day unless the plot is intraday. */
+  step: number;
 }
 
 export interface DayPlotInput {
@@ -90,6 +91,7 @@ export function makeDayPlot(inp: DayPlotInput): DayPlot {
     px: (t) => pad.left + ((t - t0) / span) * w,
     py: plotY(pad.top, h, yMax),
     slot: (step / span) * w,
+    step,
   };
 }
 
@@ -128,16 +130,6 @@ export function columns(p: DayPlot, pts: DayPoint[], maxW = 14): Column[] {
  *  the width. Same rule, and the same past bug, as `contextPlot`. */
 export function nearestDay(p: DayPlot, pts: DayPoint[], clientX: number): DayPoint | null {
   return nearestByTime(pts, p.t0 + ((clientX - p.x) / p.w) * (p.t1 - p.t0), (s) => s.t);
-}
-
-/** Three x labels, placed by pixel and read back as dates. */
-export function dayTicks(p: DayPlot): { x: number; label: string; anchor: "start" | "middle" | "end" }[] {
-  const span = p.t1 - p.t0;
-  return ([0, 0.5, 1] as const).map((f, i) => ({
-    x: p.x + f * p.w,
-    label: fmtAxisTime(p.t0 + f * span, span),
-    anchor: i === 0 ? "start" : i === 2 ? "end" : "middle",
-  }));
 }
 
 // ── the trend line ────────────────────────────────────────────────────────

@@ -107,9 +107,20 @@ export function savePolicy(repoDir: string, policy: ArtifactPolicy): void {
  * with the reason. There is nothing to queue, since a listing delivered on
  * reconnect answers a form that closed an hour ago.
  */
-export function askOptions(repoDir: string, buildId: string): void {
+export function askOptions(repoDir: string, buildId: string, approve?: { paramId: string; cmd: string }): void {
+  // The receipt for the tap on "Run this listing": drop that parameter's stored
+  // answer (the gate card), so the form's own "reading the list…" shows until
+  // the frame lands.
+  if (approve) {
+    buildOpts.set((prev) => {
+      const cur = prev.get(repoDir)?.[buildId];
+      if (!cur || !(approve.paramId in cur)) return prev;
+      const { [approve.paramId]: _gone, ...rest } = cur;
+      return mapWith(prev, repoDir, { ...(prev.get(repoDir) ?? {}), [buildId]: rest });
+    });
+  }
   // eslint-disable-next-line local/no-silent-send -- the ask form is the receipt: it shows "reading the list…" until the frame lands, says so itself when there is no socket (`online`), and falls back to a typed field naming why. A toast would be a second, worse wording of what the form already says.
-  core().conn.send({ t: "build.options", repoDir, buildId });
+  core().conn.send(approve ? { t: "build.options", repoDir, buildId, approve: true, paramId: approve.paramId, cmd: approve.cmd } : { t: "build.options", repoDir, buildId });
 }
 
 /**

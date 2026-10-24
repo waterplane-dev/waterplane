@@ -153,6 +153,12 @@ export function dismissToast(): void {
   emit();
 }
 
+/** Take the toast off screen only if it is still THESE words — a receipt
+ *  retiring the "sending …" it answers, never a newer sentence that replaced it. */
+export function dismissToastIf(text: string): void {
+  if (current === text) dismissToast();
+}
+
 /** Subscribe; the current text arrives immediately. Returns the unsubscribe. */
 export function onToast(fn: (m: string | null) => void): () => void {
   listeners.add(fn);

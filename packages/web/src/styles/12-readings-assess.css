@@ -364,11 +364,6 @@ svg.lucide[width="28"] { width: calc(28px * var(--ui-icon, 1)); height: calc(28p
 .fchips.rh-scope { padding: 0 var(--sp-10); }
 .rh-scope > .ctx-stackpick-lab { padding: 0 var(--sp-4); }
 
-/* The measured box. Its own side padding is the gutter every other row in the
-   sheet has, and `SeriesRegion` subtracts it before drawing — `clientWidth` is
-   the padding box, and an SVG drawn at that width pushes its right-hand marks
-   past the visible edge (`ContextSheet.tsx`'s `.ctx-box` learnt this first). */
-.rh-box { padding: var(--sp-4) var(--sp-14) 0; }
 .rh-chart { padding: var(--sp-8) 0 var(--sp-2); }
 /* `touch-action: pan-y` and not `none`: a horizontal drag scrubs the curve,
    a vertical one still scrolls the sheet the chart is halfway down. `none`
@@ -524,9 +519,9 @@ svg.lucide[width="28"] { width: calc(28px * var(--ui-icon, 1)); height: calc(28p
    units where there is no cascade to read the variable from. So at `TEXT_MAX`
    (1.45) the widest label here, `143,176`, wants ~55px against the ~45px the
    gutter reserves and overhangs about ten to its left. That is deliberate
-   rather than unnoticed: `.rh-spark` is `overflow: visible` and `.rh-box`
-   carries the sheet's own 14px side gutter, so the overhang lands in padding
-   and the number stays whole. Clipping a figure would be the real fault. */
+   rather than unnoticed: `.rh-spark` is `overflow: visible` and its card
+   (`.rh-region .rh-card`, repohealth.css) has 14px of side padding, so the
+   overhang lands in that padding and the number stays whole. Clipping a figure would be the real fault. */
 .rh-tick {
   fill: var(--muted); font-size: calc(var(--fs-10) * var(--ui-font, 1));
   font-variant-numeric: tabular-nums;

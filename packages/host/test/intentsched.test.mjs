@@ -2622,6 +2622,8 @@ const weeklyOnce = (id, minsAgo, extra = {}, oneShot = true) => {
   };
 };
 /** Within the minute the wall clock was truncated to. */
+// The same wall-clock time a calendar day later — not +24 h, which is an hour off across a DST change.
+const nextDay = (t) => { const d = new Date(t); d.setDate(d.getDate() + 1); return d.getTime(); };
 const nearly = (a, b, what) => assert.ok(Math.abs(a - b) <= 61_000, `${what}: ${new Date(a).toISOString()} vs ${new Date(b).toISOString()}`);
 
 test("a one-shot weekly saved INSIDE its grace runs now, late, like a `once`", async () => {
@@ -2657,7 +2659,7 @@ test("…past its grace it arms the NEXT occurrence, and records no miss", async
     await settle();
     const row = store.get("wo2");
     assert.ok(row.nextAt > Date.now(), "armed ahead");
-    nearly(row.nextAt, Date.now() - 180 * 60_000 + 24 * HOUR, "tomorrow's occurrence");
+    nearly(row.nextAt, nextDay(Date.now() - 180 * 60_000), "tomorrow's occurrence");
     assert.notEqual(row.state, "done");
     assert.notEqual(row.state, "failed");
     assert.equal(row.result, undefined, "nothing settled");
@@ -2677,7 +2679,7 @@ test("…and the same rule WITHOUT oneShot is the control: it arms from now", as
     store.kick();
     await settle();
     const row = store.get("wo3");
-    nearly(row.nextAt, Date.now() - 30 * 60_000 + 24 * HOUR, "a standing rule's first occurrence is the next one");
+    nearly(row.nextAt, nextDay(Date.now() - 30 * 60_000), "a standing rule's first occurrence is the next one");
     assert.equal(state.ran.length, 0);
   } finally {
     store.stop();
@@ -2738,7 +2740,7 @@ test("…and toggling `just the next one` ON a queued weekly re-arms it at today
     nearly(held.store.get("wo6").nextAt, Date.now() - 30 * 60_000, "armed at today's instant while one-shot");
     const r = held.store.update("wo6", { trigger: weeklyOnce("x", 30, {}, false).trigger });
     assert.equal(r.ok, true, r.reason);
-    nearly(held.store.get("wo6").nextAt, Date.now() - 30 * 60_000 + 24 * HOUR, "standing again ⇒ tomorrow");
+    nearly(held.store.get("wo6").nextAt, nextDay(Date.now() - 30 * 60_000), "standing again ⇒ tomorrow");
   } finally {
     held.store.stop();
     rmSync(held.root, { recursive: true, force: true });

@@ -263,11 +263,20 @@ export function makeScreenReader(
     // the rival check in front of it.
     const whole = rows.slice(hit).join("");
     const exact = whole.includes(squash(text));
-    if (rows.length - 1 - hit <= composerRows) return exact ? "exact" : "head";
+    // BEFORE typing, a bare head on a screen with no box is not "already
+    // typed": it is the PREVIOUS prompt's transcript row when the new one
+    // shares its first fourteen characters (the codex plugin's "Host bug found
+    // by the harness", `SAME_HEAD=1`: nothing typed, Return pressed into an
+    // empty composer, `unsubmitted`). Only `exact`/`paste` may short-circuit
+    // the write from here; a head an open RIVAL shares is still reported, so
+    // `proven()` refuses it in words as before. After our write the head
+    // stays evidence — we typed the text moments ago.
+    const head = (): EchoRule => (newestOnly && !echoAmbiguous("head", text, rivals()) ? "none" : "head");
+    if (rows.length - 1 - hit <= composerRows) return exact ? "exact" : head();
     if (!text.startsWith("/")) return "none";
     const below = rows.slice(hit + 1).filter(Boolean);
     if (below.filter((l) => l.startsWith("/")).length < 2) return "none";
-    return exact ? "exact" : "head";
+    return exact ? "exact" : head();
   };
   /** The after-write poll: any frame will do, we typed the text moments ago.
    *  The BEFORE-typing question renders its own rows, because it has a second

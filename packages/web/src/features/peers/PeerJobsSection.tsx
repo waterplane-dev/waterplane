@@ -46,7 +46,7 @@ export function PeerJobsSection({ sessions, onOpenSession }: {
             <Row key={r.jobId} kind="wrap">
               <Row kind="grow">
                 <RowTitle>{f.title}</RowTitle>
-                <span className={`row-sub${f.bad ? " warn" : ""}`}>{f.state}</span>
+                <RowSub className={f.bad ? "warn" : undefined}>{f.state}</RowSub>
                 {f.cost && <RowSub>{f.cost}</RowSub>}
                 {f.tokens && <RowSub>{f.tokens}</RowSub>}
                 {f.costNote && <RowSub>{f.costNote}</RowSub>}

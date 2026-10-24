@@ -5,6 +5,7 @@
 import { assessAppliedWords } from "../assessRows";
 import { ago } from "../format";
 import { RUN_TAG } from "./asxConst";
+import { Tag } from "../kit";
 import type { AssessModel } from "./useAssessSheet";
 
 export function AsxHead({ m }: { m: AssessModel }) {
@@ -12,7 +13,7 @@ export function AsxHead({ m }: { m: AssessModel }) {
   if (!run) return null;
   return (
     <div className="act-triage">
-      <span className={RUN_TAG[run.status]}>{run.status}</span>
+      <Tag className={RUN_TAG[run.status]}>{run.status}</Tag>
       {finishedAt ? <span className="act-count">{ago(finishedAt)}</span> : null}
       {run.assessableCount != null
         ? <span className="act-count">{run.assessableCount} judged{run.itemCount != null && run.itemCount > run.assessableCount ? ` · ${run.itemCount - run.assessableCount} read as context` : ""}</span>

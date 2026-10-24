@@ -6,8 +6,8 @@ export function rowClass(kind?: RowKind): string {
   return kind === "wrap" ? "row-wrap" : kind === "grow" ? "row grow" : "row";
 }
 
-/** `base` (`row-title` | `row-sub`), then " " + className whenever it is not undefined — an EMPTY
- *  className still adds its space, because `row-sub ${bad ? "warn" : ""}` rendered "row-sub ". */
+/** `base` (`row-title` | `row-sub`), then " " + className when it is non-empty — an EMPTY
+ *  className adds nothing (the "row-sub " of `row-sub ${bad ? "warn" : ""}` is gone, as in keyClass). */
 export function rowPartClass(base: "row-title" | "row-sub", className?: string): string {
-  return base + (className !== undefined ? ` ${className}` : "");
+  return base + (className ? ` ${className}` : "");
 }

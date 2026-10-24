@@ -30,6 +30,9 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 const STUB = fileURLToPath(new URL("../../claude-stub-tui.mjs", import.meta.url));
+/** How long `prepare()` takes: long enough that a create retried under the same ackId
+ *  arrives while the first is still waiting on it (the host must join, never spawn twice). */
+const PREPARE_MS = 400;
 
 export function activate(api) {
   /** backendSessionId → what each waterplane session's channel watches. */
@@ -128,15 +131,24 @@ export function activate(api) {
     id: "stubcli",
     label: "Stub CLI",
     bin: () => process.execPath,
-    launchArgs: (req) => {
+    // A real wait, the way a CLI that must ask its own server first answers. Told the way
+    // Copilot is (an `AGENTS.md` in a per-session dir named by a variable); rules held by the gate.
+    prepare: async (req) => {
+      await new Promise((r) => setTimeout(r, PREPARE_MS));
       const sid = req.resumeSessionId || randomUUID();
       return {
         args: [STUB],
         backendSessionId: sid,
-        env: { STUB_HOOKS: "1", STUB_HOOK_URL: api.hookSink(), STUB_SESSION_ID: sid, ...(api.env("STUB_LOG") ? { STUB_LOG: api.env("STUB_LOG") } : {}) },
+        env: { STUB_HOOKS: "1", STUB_HOOK_URL: api.hookSink(), STUB_SESSION_ID: sid, STUB_INSTRUCTIONS_DIRS: "session:instructions", ...(api.env("STUB_LOG") ? { STUB_LOG: api.env("STUB_LOG") } : {}) },
+        files: [{ path: "session:instructions/AGENTS.md", content: req.instructions }],
+        instructionsVia: "env-file",
+        askRulesVia: "gate",
       };
     },
-    caps: { hooks: "plugin-inject", promptBoxes: false, transcript: "none" },
+    caps: { turns: true, slash: "none", remoteControl: false, permissionModes: [] },
+    // Every fact from its own channel: turn boundaries and dialogs from `sources` below.
+    facts: { turns: [{ source: true }], dialogs: [{ source: true }] },
+    measured: { versions: [], version: async () => null },
     models: async () => ({ aliases: [], ids: ["stub-1"] }),
     sources: {
       turns: {

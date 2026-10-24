@@ -159,3 +159,25 @@ The VS Code extension is published to the VS Code Marketplace on each release by
 The public mirror always carries the latest released version of the product.
 - asked: 2026-10-20
 
+### R-distribution-035 · shipped
+Play Store listing screenshots and images are generated from the demo; no personal photos are included.
+- asked: 2026-10-21
+- shipped: 4643873b, 8364511d
+
+### R-distribution-036 · shipped
+The remote desktop plugin stays in the public mirror and is marked experimental.
+- asked: 2026-10-21
+- shipped: 7c84990e
+
+### R-distribution-037 · requested
+The apps collect no user data (and the Play data-safety form says so), request only the minimum Android permissions, and comply with Google Play policies and the EU GDPR.
+- asked: 2026-10-21
+
+### R-distribution-038 · requested
+Waterplane Game, TalkingPictures and Little Painter are published on Google Play through the Play Console with the same flow; listings declare their assets as AI-made, each labelled.
+- asked: 2026-10-21, 2026-10-21, 2026-10-21
+
+### R-distribution-039 · requested
+The Waterplane AAB is on the internal testing track assigned to the owner's account, not published to production.
+- asked: 2026-10-21
+

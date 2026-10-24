@@ -279,7 +279,7 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
 
 .back {
   background: none; border: none; color: var(--accent);
-  font-size: calc(26px * var(--ui-font, 1)); line-height: var(--lh-1); padding: 0 var(--sp-8) 0 0; cursor: pointer;
+  font-size: calc(26px * var(--ui-font, 1)); line-height: var(--lh-1); cursor: pointer;
 }
 /* Pill toggle (backlog "build a queue" / "auto"). */
 .rc {
@@ -313,6 +313,9 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
    one button cycling through them: a cycle shows only the state you are in, so
    the two you are not in are invisible and unreachable by looking. Wraps —
    three labels do not fit one phone line. */
+/* Shared name: ModeSection's `.mode-row` (03-compose.css) is a later rule and wins
+   display/gap/padding for LimitSheet.tsx's row today — a collision to resolve by
+   renaming LimitSheet's class, which is a visible change. */
 .mode-row { display: flex; flex-wrap: wrap; gap: var(--sp-6); padding: var(--sp-6) var(--sp-10) var(--sp-2); }
 .mode-row .key { flex: 1 1 auto; justify-content: center; }
 .link-btn {
@@ -512,6 +515,23 @@ padding-top: calc(env(safe-area-inset-top) + var(--ui-demo-h, 0px) + var(--ui-pu
 .pp-start .pp-text { color: var(--muted); }
 .pp-now .pp-text { color: var(--fg); }
 .closed-meta { font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
+/* The closed CARD (`.closed-card`, the live card's grid): its gist is a block,
+   so the lines in it are blocks too, spaced like the prompt pair's parts. The
+   status slot says "closed …" in the quiet outline the kind tag wears — a fact
+   about the card, not a state that wants attention. */
+.closed-card .row-gist > .closed-line:not(.closed-outcome) { display: block; }
+.closed-card .row-gist > * + * { margin-top: var(--sp-4); }
+.tag.closed-stat { color: var(--muted); border: 1px solid var(--line); }
+/* The Archive's conversation card (`ArchiveSheet.tsx`) is the same card. Its
+   foot holds the bookmark note and the open-session sentence, which are LINES,
+   not chips: they take the run's full width at their own height. An armed
+   fork/delete tile widens to carry its question in words. */
+.archive-card .row-acts .row-tags > :is(.archive-note, .act-cant) { flex: 1 0 100%; height: auto; min-height: 28px; padding: 0; border-radius: 0; }
+/* The bookmark toggle is a tappable chip in that run: outlined like the
+   status pill, the accent when on (`.bm-btn.on`). */
+.bm-chip { background: none; color: var(--muted); border: 1px solid var(--line); cursor: pointer; }
+.bm-chip.danger { color: var(--dead); border-color: var(--dead-edge); }
+.archive-card .row-acts .row-ctl > .row-act.danger { width: auto; padding: 0 var(--sp-8); gap: var(--sp-4); display: inline-flex; align-items: center; font-size: calc(var(--fs-12) * var(--ui-font, 1)); }
 .annot-tools.closed-chips { background: none; border-bottom: 0; padding: var(--sp-4) var(--sp-8); }
 
 /* The session chrome as one frame a person can shorten (`ChromeGrip.tsx`):

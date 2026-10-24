@@ -4,12 +4,18 @@
  * scaled against (`ctxWindows`, the one piece of state here), and the two
  * documents read off a conversation's record — the context series and a turn's
  * tool details — for claude's jsonl (`logFor`) and opencode's store (`ocFor`).
+ * A backend with neither, whose `ContextSource` hands over samples, gets a series
+ * RECORDED as they arrive (`recordSource`, kept under `<state dir>/ctxseries/`).
  *
  * Moved verbatim out of `sessions.ts` (docs/notes/host-architecture.md, S8).
  * Reaches the rest of the manager only through `core`.
  */
-import type { ContextSeriesDoc, ContextWindowSource, Effort, TranscriptToolDetail } from "@waterplane/shared";
-import { resolveContextWindow } from "@waterplane/shared";
+import { join } from "node:path";
+import type { ContextEvent, ContextSample, ContextSeriesDoc, ContextWindowSource, Effort, SourceCompaction, TranscriptToolDetail } from "@waterplane/shared";
+import { MAX_SAMPLES, downsample, resolveContextWindow, sourceCompactionsProblems, sourceContextSampleProblems } from "@waterplane/shared";
+import { hostStateDir } from "../branddirs.js";
+import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
+import { STORE_FILE_RE } from "./knobs.js";
 import { stripAnsi } from "../prompt.js";
 import { subagentsDir } from "../agents.js";
 import { autoCompactFor } from "../compliance.js";
@@ -17,14 +23,85 @@ import { detectContext } from "../context.js";
 import { agentCumOf, agentUsage, projectContextLog, sparkOf, updateContextLog, withAgentRuns, type AgentUsage, type SeriesCursor } from "../ctxlog.js";
 import { ContextWindowStore } from "../ctxwindow.js";
 import { logMtime, toolDetails, transcriptPath } from "../transcript.js";
-import { backendContextWindow, namesStoreReader, resolveBackend, storeReaderFor, type BackendDescriptor } from "../backends/index.js";
+import { backendContextWindow, derive, namesStoreReader, resolveBackend, storeReaderFor, type BackendDescriptor } from "../backends/index.js";
 import type { Session, SessionCore, StoreSession } from "./core.js";
 import type { SourceContextSample } from "@waterplane/shared";
-import { liveSourceFor } from "../livesources.js";
+import { liveSourceFor, type LiveSource } from "../livesources.js";
 
 /** A contributed reader's answer, or `fallback` when it threw: a store that cannot be read is absent. */
 function guarded<T>(fn: () => T, fallback: T): T {
   try { return fn(); } catch { return fallback; }
+}
+
+/**
+ * A source session's context series (P3, `docs/plans/backend-parity-v3.md` C3): what its
+ * `ContextSource` said, KEPT — the backend writes no log this host could read the history back
+ * out of, so the only series there can be is the one recorded as the samples arrive.
+ *
+ * Bounded like claude's: `MAX_SAMPLES`, cut by `downsample` (the envelope survives, so a drop is
+ * never smoothed away). Persisted to `<state dir>/ctxseries/<id>.json` so a restart and a close
+ * keep it the way claude's log keeps its series, and swept with `history/` and `summaries/`
+ * (`tmux.ts`'s orphan sweep: 7 days past the last write, never a live session's).
+ */
+interface SourceSeries {
+  samples: ContextSample[];
+  /** The newest sample's model (else the session's); absent = nobody named one. */
+  model?: string;
+  /** The window as last resolved: the CLI's statement, else the backend's configuration, else none. */
+  windowTok: number | null;
+  windowFrom: ContextWindowSource;
+  /** The last `compactions()` answer that passed `sourceCompactionsProblems`; absent = never said. */
+  compactions?: SourceCompaction[];
+  /** Stamp of the last change — what a poll passes back as `since`. Strictly rising. */
+  updatedAt: number;
+}
+
+const WINDOW_FROM: readonly ContextWindowSource[] = ["source", "config", "none"];
+
+/** A persisted series is used only if it still has this shape; anything else is a corrupt file. */
+function isSourceSeries(v: unknown): v is SourceSeries {
+  const o = v as SourceSeries | null;
+  return !!o && typeof o === "object" && Array.isArray(o.samples) && Number.isFinite(o.updatedAt)
+    && o.samples.every((p) => !!p && Number.isFinite(p.t) && Number.isFinite(p.tok))
+    && (o.windowTok === null || (Number.isInteger(o.windowTok) && o.windowTok > 0))
+    && WINDOW_FROM.includes(o.windowFrom)
+    && (o.compactions === undefined || sourceCompactionsProblems(o.compactions).length === 0);
+}
+
+/** The live series of each source session; a session that goes is collected with its entry. */
+const SOURCE_SERIES = new WeakMap<Session, SourceSeries>();
+
+/** One vetted `ContextSource` reading and the window it is read against. */
+interface SourceRead { live: LiveSource; sample: SourceContextSample; model: string | undefined; window: { tok: number | null; from: ContextWindowSource } }
+
+/**
+ * The window a source session's fill is a fraction of: the CLI's own statement for the model in
+ * use (`SourceContextSample.window`, already vetted a whole number above 0) as `"source"`, else the
+ * backend's configuration for THAT model as `"config"` (what opencode, Copilot and Codex get today),
+ * else none. Never claude's id table and never another model's — ABSENT beats borrowed.
+ */
+function sourceWindow(backendId: string, model: string | undefined, stated: number | undefined): { tok: number | null; from: ContextWindowSource } {
+  if (stated) return { tok: stated, from: "source" };
+  const cfg = backendContextWindow(backendId, model);
+  return cfg ? { tok: cfg, from: "config" } : { tok: null, from: "none" };
+}
+
+/** Is this backend's context series the one RECORDED off its source? Not where a record exists to
+ *  read one out of — claude's log (`logFor`) or a contributed store (`storeFor`) — and only where
+ *  the `context` fact is asked of the source at all. */
+function recordsSeries(b: BackendDescriptor): boolean {
+  const d = derive(b);
+  return !d.keepsClaudeLog && !namesStoreReader(b) && d.askSource("context");
+}
+
+/** Only the four stated fields of a compaction are kept — a plugin's extras never reach the disk. */
+function cleanCompaction(c: SourceCompaction): SourceCompaction {
+  return {
+    at: c.at,
+    ...(c.preTok !== undefined ? { preTok: c.preTok } : {}),
+    ...(c.postTok !== undefined ? { postTok: c.postTok } : {}),
+    ...(c.auto !== undefined ? { auto: c.auto } : {}),
+  };
 }
 
 export class CtxSlice {
@@ -32,7 +109,7 @@ export class CtxSlice {
    *  context graph's y axis the same 0–100%. See `ctxwindow.ts`. */
   private ctxWindows: ContextWindowStore;
 
-  constructor(private readonly core: SessionCore, root: string) {
+  constructor(private readonly core: SessionCore, private readonly root: string) {
     this.ctxWindows = new ContextWindowStore(root);
   }
 
@@ -50,8 +127,8 @@ export class CtxSlice {
     // a 0% would be a claim about a window nobody stated. (The two halves are
     // separately capable: `refreshSpark` below reads the conversation log, so it
     // is gated on the transcript, not on the meter.)
-    if (fromSource === null && !s.backend.caps.contextMeter) {
-      if (s.backend.caps.transcript === "claude-jsonl" && this.refreshSpark(s)) this.core.emit("updated", s.info);
+    if (fromSource === null && derive(s.backend).screen("context") !== "context-meter") {
+      if (derive(s.backend).keepsClaudeLog && this.refreshSpark(s)) this.core.emit("updated", s.info);
       return;
     }
     let changed = fromSource === true;
@@ -80,32 +157,171 @@ export class CtxSlice {
    * caller then takes the old ladder untouched. Otherwise whether a field moved.
    *
    * What is written, and what is NOT:
-   *  - `contextUsedTok` is the source's own count, as stated. A non-number, a
-   *    negative or a non-finite one is not a reading, so the rung is null.
-   *  - The window is `backendContextWindow(backend, model)` — the CONFIGURED
-   *    window for the model the sample names (else the session's), never a
-   *    guess and never claude's. **A 0 is not a window** (that function already
-   *    refuses one), and no window means `contextTotalTok` and `contextLeft`
-   *    are ABSENT, not 0% and not a percentage of somebody else's window.
+   *  - The sample passes `sourceContextSampleProblems` or is not a reading at
+   *    all: any problem (no `at`, a negative count, a `window` of 0 or 1.5)
+   *    drops the WHOLE sample and the rung is null — never a kept half.
+   *  - `contextUsedTok` is the source's own count, as stated.
+   *  - The window (`sourceWindow`) is the one the CLI STATES for the model in
+   *    use (`window`, 2.2), else `backendContextWindow(backend, model)` — the
+   *    CONFIGURED window for the model the sample names (else the session's) —
+   *    never a guess, never a neighbouring model's and never claude's table.
+   *    **A 0 is not a window**, and no window means `contextTotalTok` and
+   *    `contextLeft` are ABSENT, not 0% and not a percentage of somebody else's.
    *  - `contextLeft` only beside a window, clamped to 0–100: a used count past
-   *    the configured window is a full window, not a negative one.
+   *    the window is a full window, not a negative one.
+   *  - The sample is also KEPT (`recordSource`): the series the graph reads.
    */
   private sourceContext(s: Session): boolean | null {
+    const read = this.readSource(s);
+    if (!read) return null;
+    const { sample, window } = read;
+    const used = sample.usedTok;
+    const left = window.tok ? Math.max(0, Math.min(100, Math.round(100 * (1 - used / window.tok)))) : undefined;
+    const before = [s.info.contextUsedTok, s.info.contextTotalTok, s.info.contextLeft];
+    s.info.contextUsedTok = used;
+    if (window.tok) s.info.contextTotalTok = window.tok; else delete s.info.contextTotalTok;
+    if (left != null) s.info.contextLeft = left; else delete s.info.contextLeft;
+    if (recordsSeries(s.backend)) this.recordSource(s, read);
+    return before[0] !== s.info.contextUsedTok || before[1] !== s.info.contextTotalTok || before[2] !== s.info.contextLeft;
+  }
+
+  /** The live source's sample for `s`, vetted, with the window it is read against; null = no reading. */
+  private readSource(s: Session): SourceRead | null {
     const live = liveSourceFor(s.info.id);
     const src = live?.sources.context;
     if (!live || !src) return null;
-    let sample: SourceContextSample | null = null;
-    try { sample = src.sample(live.session); } catch { sample = null; }
-    const used = sample?.usedTok;
-    if (typeof used !== "number" || !Number.isFinite(used) || used < 0) return null;
-    const model = sample?.model || s.info.model || undefined;
-    const window = backendContextWindow(s.backend.id, model);
-    const left = window ? Math.max(0, Math.min(100, Math.round(100 * (1 - used / window)))) : undefined;
-    const before = [s.info.contextUsedTok, s.info.contextTotalTok, s.info.contextLeft];
-    s.info.contextUsedTok = used;
-    if (window) s.info.contextTotalTok = window; else delete s.info.contextTotalTok;
-    if (left != null) s.info.contextLeft = left; else delete s.info.contextLeft;
-    return before[0] !== s.info.contextUsedTok || before[1] !== s.info.contextTotalTok || before[2] !== s.info.contextLeft;
+    let raw: unknown = null;
+    try { raw = src.sample(live.session); } catch { raw = null; }
+    if (!raw || sourceContextSampleProblems(raw).length) return null;
+    const sample = raw as SourceContextSample;
+    const model = sample.model || s.info.model || undefined;
+    return { live, sample, model, window: sourceWindow(s.backend.id, model, sample.window) };
+  }
+
+  /**
+   * Keep one vetted sample in the session's series, and the source's compactions beside it.
+   *
+   * A sample is a new point only when it is NEWER than the last one kept (`at`): the same reading
+   * asked twice — the idle tick, then the graph's own read — is one point, and an older one is a
+   * clock this series does not go back on. The window and model are re-resolved with each sample
+   * (the CLI may switch models). Compactions are the source's WHOLE list for the session, each
+   * answer vetted: a problem drops that answer and the last good one stands; null is "cannot say"
+   * and changes nothing; [] is "none happened". Written to disk only when something moved.
+   */
+  private recordSource(s: Session, read: SourceRead): void {
+    const ser = this.sourceSeriesOf(s);
+    const { sample, model, window } = read;
+    let moved = false;
+    const last = ser.samples[ser.samples.length - 1];
+    // Same figures as the last point (tok, model, window) is the same reading, whatever `at` says.
+    const same = !!last && last.tok === sample.usedTok && ser.model === model
+      && ser.windowTok === window.tok && ser.windowFrom === window.from;
+    if (!last || (sample.at > last.t && !same)) {
+      const point = { t: sample.at, tok: sample.usedTok };
+      // Past the cap the OLDER points are cut (envelope kept) and the newest always stays: it is
+      // the reading the session is at now, and a bucket's lo/hi need not include it.
+      ser.samples = ser.samples.length + 1 > MAX_SAMPLES
+        ? [...downsample(ser.samples, MAX_SAMPLES - 1), point]
+        : [...ser.samples, point];
+      moved = true;
+    }
+    if (ser.model !== model || ser.windowTok !== window.tok || ser.windowFrom !== window.from) {
+      if (model) ser.model = model; else delete ser.model;
+      ser.windowTok = window.tok;
+      ser.windowFrom = window.from;
+      moved = true;
+    }
+    const ask = read.live.sources.context?.compactions;
+    if (ask) {
+      let list: unknown = null;
+      try { list = ask(read.live.session); } catch { list = null; }
+      if (Array.isArray(list) && !sourceCompactionsProblems(list).length) {
+        const clean = (list as SourceCompaction[]).map(cleanCompaction);
+        if (JSON.stringify(clean) !== JSON.stringify(ser.compactions)) { ser.compactions = clean; moved = true; }
+      }
+    }
+    if (!moved) return;
+    ser.updatedAt = Math.max(Date.now(), ser.updatedAt + 1);
+    const path = this.sourceSeriesPath(s.info.id);
+    // Best-effort: the live series still answers from memory; only a closed one would go absent.
+    if (path) { try { writeJsonAtomic(path, ser); } catch { /* the next sample tries again */ } }
+  }
+
+  /** The live series for `s`: in memory, else the one this host kept on disk (a restart), else new. */
+  private sourceSeriesOf(s: Session): SourceSeries {
+    let ser = SOURCE_SERIES.get(s);
+    if (!ser) {
+      ser = this.loadSourceSeries(s.info.id) ?? { samples: [], windowTok: null, windowFrom: "none", updatedAt: 0 };
+      SOURCE_SERIES.set(s, ser);
+    }
+    return ser;
+  }
+
+  /** `<state dir>/ctxseries/<id>.json`, or null for an id that is not a bare store name — the
+   *  graph's route hands this an id off a URL, and a path is never built from anything else. */
+  private sourceSeriesPath(id: string): string | null {
+    return STORE_FILE_RE.test(`${id}.json`) ? join(hostStateDir(this.root), "ctxseries", `${id}.json`) : null;
+  }
+
+  private loadSourceSeries(id: string): SourceSeries | null {
+    const path = this.sourceSeriesPath(id);
+    return path ? readJsonGuarded<SourceSeries | null>(path, null, isSourceSeries) : null;
+  }
+
+  /**
+   * Is `id` a session whose context series is the one this host RECORDS off a `ContextSource`?
+   * `undefined` = no, ask the claude log as before; otherwise its series (null = nothing kept).
+   *
+   * A backend that keeps claude's log, or has a store reader (`storeFor`, asked first), is never
+   * one: those have a record to read the history out of. A live one is sampled first, so the
+   * graph opened mid-turn has the newest point. A closed one answers from the kept file — also
+   * when its plugin has since gone, because the file is this host's own record of what was said.
+   */
+  private sourceSeriesFor(id: string): SourceSeries | null | undefined {
+    const s = this.core.sessions.get(id);
+    if (s) {
+      if (!recordsSeries(s.backend)) return undefined;
+      const read = s.info.running ? this.readSource(s) : null;
+      if (read) this.recordSource(s, read);
+      return SOURCE_SERIES.get(s) ?? this.loadSourceSeries(id);
+    }
+    const closed = this.core.closedRow(id);
+    if (!closed) return undefined;
+    try {
+      if (!recordsSeries(resolveBackend(closed.launch?.backend))) return undefined;
+    } catch { /* a backend no longer registered: only the kept file can answer */ }
+    return this.loadSourceSeries(id);
+  }
+
+  /** The series document for a source session — the same shape the graph reads for claude's. */
+  private sourceSeriesDoc(id: string, ser: SourceSeries, since: number): ContextSeriesDoc | "unchanged" | null {
+    if (since && ser.updatedAt <= since) return "unchanged";
+    // Nothing kept yet is no document, exactly as claude's not-yet-written log is.
+    if (!ser.samples.length && !ser.compactions?.length) return null;
+    const comps = ser.compactions ?? [];
+    // Marked the way claude's are (`ctxlog/ctxupdate.ts`): who asked only where the CLI said, the
+    // two fills only where stated and above 0, and the auto threshold the newest auto compaction's
+    // own `preTok` — a measurement, absent when no auto compaction stated one.
+    const events: ContextEvent[] = comps.map((c) => ({
+      kind: "compact" as const, t: c.at,
+      ...(c.auto === true ? { trigger: "auto" as const } : c.auto === false ? { trigger: "manual" as const } : {}),
+      ...(c.preTok ? { preTok: c.preTok } : {}),
+      ...(c.postTok ? { postTok: c.postTok } : {}),
+    }));
+    let autoCompactTok: number | null = null;
+    for (const c of comps) if (c.auto === true && c.preTok) autoCompactTok = c.preTok;
+    return {
+      sessionId: id,
+      updatedAt: ser.updatedAt,
+      samples: ser.samples.slice(),
+      events,
+      windowTok: ser.windowTok,
+      windowFrom: ser.windowFrom,
+      ...(ser.model ? { model: ser.model } : {}),
+      autoCompactTok,
+      // The series starts where this host first heard the source, which is all it claims.
+      truncated: false,
+    };
   }
 
   /**
@@ -135,7 +351,7 @@ export class CtxSlice {
     // and `detectClaudeId` below must not be asked either: it answers by picking
     // the newest jsonl in a project directory, which for a session that wrote
     // none would be somebody else's conversation.
-    if (s.backend.caps.transcript !== "claude-jsonl") return false;
+    if (!derive(s.backend).keepsClaudeLog) return false;
     const cid = s.info.claudeSessionId ?? this.core.detectClaudeId(s);
     if (!cid) return false;
     const path = transcriptPath(s.info.cwd, cid);
@@ -242,16 +458,16 @@ export class CtxSlice {
   storeFor(id: string): StoreSession | null {
     const s = this.core.sessions.get(id);
     if (s) {
-      return namesStoreReader(s.backend.caps)
-        ? { convId: s.info.backendSessionId, backend: s.backend, reader: storeReaderFor(s.backend.caps), live: s }
+      return namesStoreReader(s.backend)
+        ? { convId: s.info.backendSessionId, backend: s.backend, reader: storeReaderFor(s.backend), live: s }
         : null;
     }
     const closed = this.core.closedRow(id);
     if (!closed?.backendSessionId) return null;
     let backend: BackendDescriptor;
     try { backend = resolveBackend(closed.launch?.backend); } catch { return null; }
-    return namesStoreReader(backend.caps)
-      ? { convId: closed.backendSessionId, backend, reader: storeReaderFor(backend.caps), live: null }
+    return namesStoreReader(backend)
+      ? { convId: closed.backendSessionId, backend, reader: storeReaderFor(backend), live: null }
       : null;
   }
 
@@ -325,7 +541,7 @@ export class CtxSlice {
     // null rather than "the newest jsonl in this directory", which is what
     // `detectClaudeId` would hand back — somebody else's conversation, read as
     // this session's.
-    if (s && s.backend.caps.transcript !== "claude-jsonl") return null;
+    if (s && !derive(s.backend).keepsClaudeLog) return null;
     const closed = s ? null : (this.core.closedRow(id) ?? null);
     const cwd = s?.info.cwd ?? closed?.cwd;
     if (!cwd) return null;
@@ -371,6 +587,9 @@ export class CtxSlice {
   getContextSeries(id: string, since = 0): ContextSeriesDoc | "unchanged" | null {
     const st = this.storeFor(id);
     if (st) return this.storeContextSeries(id, st, since);
+    // A source session's series is the one this host KEPT off its `ContextSource` (`recordSource`).
+    const kept = this.sourceSeriesFor(id);
+    if (kept !== undefined) return kept ? this.sourceSeriesDoc(id, kept, since) : null;
     const log = this.logFor(id);
     if (!log?.cid) return null;
     const path = transcriptPath(log.cwd, log.cid);
@@ -422,6 +641,10 @@ export class CtxSlice {
       // says in words, and withholding it there would be indistinguishable
       // from a host too old to have counted.
       compaction: parsed.compaction,
+      // Which skills the conversation loaded, and when. Always sent with the
+      // log, empty included — "loaded none" is an answer an older host's
+      // absence is not. Each agent's own loads ride on its roster row.
+      skills: parsed.skills,
       // The same two facts the row's spark carries, off the full series. The
       // agent tally is the LIVE session's when there is one (it is already
       // warm); a closed session pays one directory read, once.

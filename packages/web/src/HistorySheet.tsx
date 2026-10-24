@@ -65,7 +65,7 @@ export function HistorySheet({ title, entries, pinnedEntryId, onClose, onResend,
                 {pinned && <Tag className="hist-pinned"><Pin size={12} /> overview</Tag>}
                 <RowSub>{ago(e.sentAt)}</RowSub>
                 <span className="hist-actions">
-                  <button className={`key${pinned ? " active" : ""}`} title={pinned ? "unpin from overview" : "pin as overview label"} onClick={() => onPin(pinned ? null : e.id)}><Pin size={14} fill={pinned ? "currentColor" : "none"} /></button>
+                  <Button className={pinned ? "active" : undefined} title={pinned ? "unpin from overview" : "pin as overview label"} onClick={() => onPin(pinned ? null : e.id)}><Pin size={14} fill={pinned ? "currentColor" : "none"} /></Button>
                   <Button title="copy prompt" onClick={() => void navigator.clipboard?.writeText(e.text)}><Copy size={14} /></Button>
                   <Button title="re-send" onClick={() => onResend(e.text)}><CornerUpLeft size={14} /></Button>
                 </span>

@@ -183,7 +183,7 @@ export class FanoutManager {
     const text = i.payload.kind === "prompt" ? i.payload.steps[0] : "";
     let sessionId: string;
     try {
-      const info = this.sessions.create(i.cwd, {
+      const info = await this.sessions.create(i.cwd, {
         cols: i.cols, rows: i.rows,
         title: i.title,
         launch: i.launch as LaunchOpts | undefined,

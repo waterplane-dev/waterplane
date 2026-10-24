@@ -9,9 +9,10 @@
  * `budget ?` says why in its own text and the sentence ends on "nothing is held".
  */
 import {
-  sessionBudgetChip, sessionBudgetHoldText, sessionBudgetText, sessionBudgetUnknownText,
-  type SessionBudget, type SessionBudgetInfo, type SessionBudgetUnknown,
+  sessionBudgetChip, sessionBudgetHoldText, sessionBudgetText, sessionBudgetUnknownText, sessionBudgetWindowsOffText,
+  type BackendInfo, type SessionBudget, type SessionBudgetInfo, type SessionBudgetUnknown, type SessionInfo,
 } from "@waterplane/shared";
+import { runsClaudeTui } from "../../backendCaps.ts";
 import { HELD_SENDS, budgetStateLine } from "../../budgetInput.ts";
 
 // One copy of both: the context sheet's panel words the state with the same line.
@@ -25,7 +26,22 @@ export const BUDGET_WHY_SHORT: Record<SessionBudgetUnknown, string> = {
   stale: "usage reading is old",
   noCalibration: "window too young to convert",
   notRunning: "not running",
+  unstated: "backend states no figure",
+  notClaude: "not claude's window",
 };
+
+/**
+ * The budget field's sentence for a session whose backend does not spend from
+ * claude's 5-hour and weekly windows — or null, where a percent is offered as
+ * ever. The host judging from the backend's own source (`sourceSpend`) says so;
+ * so does a backend that is not claude's TUI (`runsClaudeTui`, which answers
+ * true on a host too old to list backends).
+ */
+export function budgetWindowsOff(s: Pick<SessionInfo, "backend" | "sourceSpend">, backends: readonly BackendInfo[] | null): string | null {
+  if (!s.sourceSpend && runsClaudeTui(backends, s.backend)) return null;
+  const label = backends?.find((b) => b.id === s.backend)?.label;
+  return sessionBudgetWindowsOffText(label || "this session's backend");
+}
 
 export interface BudgetTagFacts {
   /** An existing `.tag` class — no new colour for this chip. */
@@ -58,7 +74,7 @@ export function budgetTagFacts(s: { running?: boolean; budget?: SessionBudgetInf
   if (v.state === "unknown") {
     const age = v.why === "stale" && b.cal ? now - b.cal.checkedAt : undefined;
     const why = v.why ?? "noSpark";
-    return { cls: "idle", text: `budget ? — ${BUDGET_WHY_SHORT[why]}`, title: sessionBudgetUnknownText(why, age) };
+    return { cls: "idle", text: `budget ? — ${BUDGET_WHY_SHORT[why]}`, title: sessionBudgetUnknownText(why, age, v.unit) };
   }
   return { cls: "ctx-ok", text: sessionBudgetChip(v), title: sessionBudgetText(v) };
 }

@@ -29,6 +29,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deliverPrompt } from "../dist/deliver.js";
+import { makeScreenReader } from "../dist/deliver/deliverscreen.js";
 import { CliHealthStore, setCliHealth } from "../dist/clihealth.js";
 import { noteDeliveryEnded, noteDeliveryStarted } from "../dist/opendeliveries.js";
 import { samePromptText } from "../dist/echo.js";
@@ -524,4 +525,74 @@ test("a long paste the CLI drew as a run of chits is an echo, confirmed by the s
   assert.equal(result, "ok");
   assert.equal(h.echo().window.at(-1).ok, true, "the echo rule ANSWERED — no fallback, no hook needed");
   assert.equal(sessions.state.writes.filter((w) => w === "\r").length, 1, "one Return");
+});
+
+/**
+ * **The echo-probe head collision** (`~/dev/waterplane-plugin-codex` README,
+ * "Host bug found by the harness"; `docs/analysis/backend-v2-impl.md` §1D,
+ * WP0b). Before typing, a FULL reader (claude, Copilot: cursor AND rule
+ * anchors) that cannot place its box fell through to the distance rule, which
+ * found the PREVIOUS prompt's transcript row — same fourteen-character head —
+ * within `composerRows` of the bottom, answered `"head"`, typed nothing and
+ * pressed Return into an empty composer (`unsubmitted`, the prompt never ran).
+ *
+ * Asked of the screen reader itself, because the rule is about which answer
+ * may mean "already typed", not about what the run then does with it.
+ */
+const FX_SCREENS = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "screens");
+const fxRows = (name) => readFileSync(join(FX_SCREENS, name), "utf8").replace(/\n$/, "").split("\n");
+const ROUND_TEXT = "Round 1: list the files again";
+const SAME_HEAD_TEXT = "Run exactly this one shell command and nothing else, then reply done: touch /tmp/wp-race/r2.txt";
+/** The screen reader for `text` on a claude session (the full reader). */
+function reader(text, rows) {
+  const sessions = { get: () => ({ id: "rd1", running: true }), screenText: async () => rows.join("\n") };
+  return makeScreenReader(sessions, "rd1", text, `rd-${Math.random()}`, {});
+}
+/** The same screen, its bare `❯` row drawn as a real box holding `held`. */
+function boxed(rows, held) {
+  const at = rows.findIndex((r) => r.startsWith("❯"));
+  return [...rows.slice(0, at), RULE, `❯ ${held}`, RULE, ...rows.slice(at + 1)];
+}
+
+test("before typing, an unplaceable box plus the previous prompt's head is NOT 'already typed'", () => {
+  const rows = fxRows("echo-head-nobox.txt");
+  assert.equal(reader(ROUND_TEXT, rows).placeEcho(rows, true), "none", "the transcript row is the last prompt, not this one in a box");
+});
+
+test("…the same screen with the box drawn and holding our text stays 'exact'", () => {
+  const rows = boxed(fxRows("echo-head-nobox.txt"), ROUND_TEXT);
+  assert.equal(reader(ROUND_TEXT, rows).placeEcho(rows, true), "exact");
+});
+
+test("…and the codex harness's SAME_HEAD shape — previous prompt visible, no cursor glyph at all — is 'none'", () => {
+  const rows = fxRows("echo-head-samehead.txt");
+  assert.equal(reader(SAME_HEAD_TEXT, rows).placeEcho(rows, true), "none");
+});
+
+test("…while a rival delivery sharing the head on a no-box screen is still refused as the rival", (t) => {
+  // Not "already typed" and not "free to type over": `proven()` refuses it and
+  // the run answers `retry` with nothing written, as it did before.
+  const rows = fxRows("echo-head-samehead.txt");
+  const r = reader(SAME_HEAD_TEXT, rows);
+  noteDeliveryStarted("rival-key", "rd1", SAME_HEAD_TEXT.replace("r2.txt", "r1.txt"));
+  t.after(() => noteDeliveryEnded("rival-key"));
+  const rule = r.placeEcho(rows, true);
+  assert.equal(rule, "head");
+  assert.equal(r.proven(rule), false);
+});
+
+test("after the write the no-box fallback is unchanged: the head still counts", () => {
+  const rows = fxRows("echo-head-nobox.txt");
+  assert.equal(reader(ROUND_TEXT, rows).placeEcho(rows, false), "head", "after our own write any frame will do — the old degrade stays");
+  const same = fxRows("echo-head-samehead.txt");
+  assert.equal(reader(SAME_HEAD_TEXT, same).placeEcho(same, false), "head");
+});
+
+test("a delivery onto that screen TYPES the text, then submits it — never a bare Return", async () => {
+  store();
+  const base = fxRows("echo-head-nobox.txt");
+  const sessions = fakeSessions({ hooked: true, render: (c) => (c ? boxed(base, c) : base).join("\n") });
+  const result = await deliverPrompt(sessions, "s1", ROUND_TEXT, "prompt", { watch: false });
+  assert.equal(result, "ok");
+  assert.deepEqual(sessions.state.writes, [ROUND_TEXT, "\r"]);
 });

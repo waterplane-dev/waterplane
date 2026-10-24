@@ -127,6 +127,7 @@ export function SnippetSheet({
               style={{ touchAction: "none", cursor: "grab" }}
               onPointerDown={(e) => { e.preventDefault(); setDragId(s.id); }}
             ><GripVertical size={16} /></Button>
+            {/* raw: a <button> that is itself the part (RowTitle/RowSub are span/div) */}
             <button className="row-title snippet-title" title={s.text} onClick={() => setEditing(s)}>
               {s.title || autoTitle(s.text)}
             </button>

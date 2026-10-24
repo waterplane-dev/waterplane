@@ -33,6 +33,7 @@ import { showToast } from "../../toast";
 import { track } from "../../usage";
 import { useSnippets } from "../../features/snippets";
 import { openBacklogIn } from "../../features/backlog";
+import { takeBoxReturn, useBoxReturn } from "../../features/images";
 import type { ComposeApi } from "./useCompose";
 import { useFileDrop } from "./useFileDrop";
 import { isShellBackend } from "../../backendCaps";
@@ -102,6 +103,18 @@ export function ComposeBar(p: ComposeBarProps) {
     if (!isPendingId(activeId) || coarsePointer()) return;
     composeRef.current?.focus();
   }, [activeId, composeRef]);
+  // **Back from the annotator, the caret is in the box, at the end** — on a
+  // desktop. Its Ctrl/⌘+Return closed a sheet that held the focus, and the next
+  // words needed the mouse. Read on mount too: on a phone-width screen the
+  // annotator was a sheet, and this bar remounts under it.
+  const boxReturnAt = useBoxReturn();
+  useEffect(() => {
+    if (!boxReturnAt || !takeBoxReturn() || coarsePointer() || cliMode) return;
+    const el = composeRef.current;
+    if (!el) return;
+    el.focus();
+    try { el.setSelectionRange(el.value.length, el.value.length); } catch { /* not focusable yet */ }
+  }, [boxReturnAt, composeRef, cliMode]);
   return (
     <>
       {/* **The armed aim, said out loud for as long as it is not this session.**

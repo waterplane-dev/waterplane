@@ -205,6 +205,27 @@ export function headerFilename(raw: string | string[] | undefined): string {
 }
 
 /**
+ * What a repo-controlled file may do when someone NAVIGATES to its URL. It is served on the host's
+ * own origin, so a `.html`/`.svg` opened top-level would run repo script same-origin, pass
+ * `origin.ts` and drive the whole API (which spawns `claude`). `sandbox` (no allow-same-origin)
+ * forces an opaque origin, so its `Origin: null` is refused; `connect-src`/`form-action` 'none'
+ * stop it phoning out. 'self' is the host URL, which still matches under sandbox, so a report's
+ * inline CSS/JS and same-folder images/media render (the gallery frame is `sandbox="allow-scripts"`
+ * on top of this). A PDF is exempt from `sandbox` only: Chrome refuses to show a PDF in a sandboxed
+ * frame, and the PDF viewer runs its own scripts apart from the page.
+ */
+const TREE_CSP = (script: string): string[] => [
+  "default-src 'none'", "img-src 'self' data: blob:", "media-src 'self' data: blob:",
+  "style-src 'self' 'unsafe-inline'", script, "font-src 'self' data:",
+  "connect-src 'none'", "form-action 'none'", "base-uri 'none'",
+];
+export function treeFileSecurityHeaders(mime: string): Record<string, string> {
+  // The PDF viewer runs its own scripts; the page itself needs none.
+  const parts = mime === "application/pdf" ? TREE_CSP("script-src 'none'") : [...TREE_CSP("script-src 'self' 'unsafe-inline'"), "sandbox allow-scripts"];
+  return { "x-content-type-options": "nosniff", "content-security-policy": parts.join("; ") };
+}
+
+/**
  * Serve a file out of a worktree: thumbnail when asked for one, byte-range when
  * asked for one, and always with a validator so a revisit costs a 304 instead of
  * the bytes again.
@@ -248,6 +269,7 @@ export async function serveTreeFile(
           "content-length": String(t.buf.length),
           "cache-control": cc,
           etag,
+          ...treeFileSecurityHeaders(t.mime),
         });
         res.end(t.buf);
         return;
@@ -268,7 +290,7 @@ export async function serveTreeFile(
   const cc = "private, max-age=0, must-revalidate";
   if (!req.headers.range && notModified(req, res, etag, cc)) return;
   const mime = MIME[extname(rel).toLowerCase()] || "application/octet-stream";
-  const headers = { ...(dispo ?? {}), "cache-control": cc, etag };
+  const headers = { ...(dispo ?? {}), "cache-control": cc, etag, ...treeFileSecurityHeaders(mime) };
 
   // `if-range`: the resuming client is saying "only continue if this is still
   // the same file". Without honouring it, a rebuilt APK at the same path answers

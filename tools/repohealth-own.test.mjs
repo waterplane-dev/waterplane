@@ -7,7 +7,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -185,4 +185,34 @@ test("plot says when a repo declares nothing — and a scope carries no own read
   execFileSync(node, [ENGINE, "update", `--root=${root}`, "--scope=sub"], { encoding: "utf8" });
   const scoped = JSON.parse(execFileSync(node, [ENGINE, "plot", `--root=${root}`, "--scope=sub"], { encoding: "utf8" }));
   assert.equal("own" in scoped, false);
+});
+
+test("a HEAD row measured with --no-own is re-measured, and rewritten in place, once the commands are approved", (t) => {
+  const root = tmp(t);
+  git(root, ["init", "-q", "-b", "main"]);
+  writeFileSync(join(root, "a.js"), "export const a = 1;\n");
+  git(root, ["add", "."]);
+  git(root, ["commit", "-qm", "one"], "2026-01-01T12:00:00Z");
+  mkdirSync(join(root, ".waterplane-shared"));
+  writeFileSync(join(root, "count.mjs"), "console.log(3);\n");
+  writeFileSync(join(root, OWN_FILE), JSON.stringify({
+    readings: [{ key: "three", name: "Three", means: "Always three.", better: "higher", unit: "x", run: ["node", "count.mjs"] }],
+  }));
+  git(root, ["add", "."]);
+  git(root, ["commit", "-qm", "two"], "2026-01-02T12:00:00Z");
+
+  const series = join(root, ".waterplane", "repohealth.jsonl");
+  const read = () => readFileSync(series, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+  execFileSync(node, [ENGINE, "update", `--root=${root}`, "--no-own"], { encoding: "utf8" });
+  assert.equal(read()[1].own, undefined, "nothing of the repo's ran before approval");
+  const first = read()[0];
+
+  execFileSync(node, [ENGINE, "update", `--root=${root}`], { encoding: "utf8" });
+  const lines = read();
+  assert.equal(lines.length, 2, "rewritten in place, not appended");
+  assert.deepEqual(lines[1].own.readings.map((r) => [r.key, r.value]), [["three", 3]]);
+  assert.deepEqual(lines[0], first, "the other rows are untouched");
+
+  execFileSync(node, [ENGINE, "update", `--root=${root}`, "--no-own"], { encoding: "utf8" });
+  assert.ok(read()[1].own, "a later --no-own run does not strip it");
 });

@@ -14,7 +14,7 @@ const home = mkdtempSync(join(tmpdir(), "signkey-home-"));
 process.env.HOME = home;
 process.env.XDG_CONFIG_HOME = join(home, ".config");
 for (const k of Object.keys(process.env)) if (/CONFIG_DIR$/.test(k)) delete process.env[k];
-const { findKey, ensureDesktopKey, linkKey, readLink, parseProps, keysDir } = await import("../dist/signkey.js");
+const { findKey, ensureDesktopKey, linkKey, readLink, parseProps, keysDir, keytoolArgv } = await import("../dist/signkey.js");
 const { apkInstallCheck } = await import("../dist/apkcheck.js");
 
 let hasKeytool = true;
@@ -87,6 +87,13 @@ test("a jks whose properties are gone is never regenerated over", () => {
   const r = ensureDesktopKey({ keytool: "/nonexistent/keytool" });
   assert.equal(r.ok, false);
   assert.equal(readFileSync(join(keysDir(), "sideload.jks"), "utf8"), "precious");
+});
+
+test("keytool gets the password through the environment, never argv", () => {
+  const argv = keytoolArgv("/x/tmp.jks");
+  assert.ok(argv.includes("-storepass:env") && argv.includes("-keypass:env"));
+  assert.ok(!argv.includes("-storepass") && !argv.includes("-keypass"));
+  assert.ok(argv.includes("WP_KEYPASS"));
 });
 
 test("keytool failure is a sentence and leaves no properties behind", () => {

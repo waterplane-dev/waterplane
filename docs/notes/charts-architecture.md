@@ -38,7 +38,8 @@ Then each plot is split by subject; the original path is a facade of `export *`:
 
 | `kit/chart/stats/` | holds |
 | --- | --- |
-| `splotDay.ts` | the day axis, step/area paths, columns, ticks, the trend line, `DAY_MS`/`HOUR_MS` |
+| `splotDay.ts` | the day axis, step/area paths, columns, the trend line, `DAY_MS`/`HOUR_MS` |
+| `splotTicks.ts` | the day axis's x labels: one per day up to a week, walked by calendar (DST-safe), never a clock |
 | `splotBars.ts` | horizontal bars, the composition strip, the clock face |
 | `splotWeeks.ts` | calendar weeks |
 | `splotMix.ts` | stacked columns, gap-filled series, stacked areas |

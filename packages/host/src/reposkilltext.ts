@@ -3,8 +3,10 @@ import { BRAND, legacyParamEnvNames, paramEnvName } from "@waterplane/shared";
 /**
  * The BODY of the repo-facing skill — what the agent in a driven repo learns
  * about this product. `reposkill.ts` adds the frontmatter and hands it to every spawned
- * `claude` via `--plugin-dir`; editing this text IS the release — the next
- * session started reads it.
+ * `claude` via `--plugin-dir`; another backend gets the same text through its
+ * `prepare()` (`LaunchRequest.instructions`, e.g. an AGENTS.md its CLI reads). Editing
+ * this text IS the release — the next session started reads it. Written for any
+ * coding-agent CLI, so it never assumes which one is reading.
  *
  * Grow it when the product gains something a repo's agent has to know about.
  * `tools/reposkill.test.mjs` fails when the host reads a per-repo state-dir
@@ -24,7 +26,7 @@ export function repoSkillBody(port: number): string {
   return `
 # Working in a repo driven by ${N}
 
-${N} runs this \`claude\` session in a pseudo-terminal
+${N} runs this coding-agent session in a pseudo-terminal
 on the desktop and lets a person drive it from their PHONE over Tailscale. It is
 the real CLI — every slash command works — but the person reading you is on a
 small screen, often away, and sometimes not reading at all while you work.
@@ -95,7 +97,7 @@ unless asked (copy what you need).
 \`${S}/builds.json\` is the list of build buttons the phone shows for this
 repo. It is COMMITTED with the repo, so every clone and every desktop gets the
 same buttons — this is where you add one. A tap runs the command in a plain
-shell here — no \`claude\` session, no tokens — which is how the person still
+shell here — no agent session, no tokens — which is how the person still
 gets an APK while rate-limited. You may add or fix entries when asked; keep
 every other entry as it is. \`${D}/builds.json\` (gitignored) has the same shape
 and is only for an entry that holds a path existing on THIS desktop alone (a

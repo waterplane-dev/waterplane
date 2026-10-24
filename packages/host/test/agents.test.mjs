@@ -31,9 +31,11 @@ function project({ agents, parent = [] }) {
   for (const a of agents) {
     const log = join(subs, `agent-${a.id}.jsonl`);
     writeFileSync(log, (a.lines ?? []).map((r) => JSON.stringify(r)).join("\n"));
-    writeFileSync(join(subs, `agent-${a.id}.meta.json`), JSON.stringify(a.meta ?? {}));
+    const metaFile = join(subs, `agent-${a.id}.meta.json`);
+    writeFileSync(metaFile, JSON.stringify(a.meta ?? {}));
     const t = a.lastWriteAt / 1000;
     utimesSync(log, t, t);
+    if (a.metaAt !== undefined) utimesSync(metaFile, a.metaAt / 1000, a.metaAt / 1000);
   }
   return CWD;
 }
@@ -87,6 +89,30 @@ test("an agent RESUMED after its notification is running again", () => {
   assert.equal(readRunningAgents(cwd, CONV, now).length, 1);
 });
 
+test("the CLI's finished mark retires an agent that woke after its notification", () => {
+  // Measured 2026-10-23: a background agent was told about its own stray
+  // background search after it had reported, answered in one line and stopped.
+  // That last write came after the parent's only notification, so the session
+  // read "1 agent" for ten minutes after everything had ended. The meta file is
+  // rewritten with `finished: true` ~100 ms before that last line.
+  const now = Date.now();
+  const cwd = project({
+    agents: [{ id: "aaa", lastWriteAt: now - 1000, metaAt: now - 1100, meta: { description: "review", finished: true } }],
+    parent: [notification("aaa", now - 60_000)],
+  });
+  assert.deepEqual(readRunningAgents(cwd, CONV, now), []);
+});
+
+test("a finished mark older than the agent's last write does not retire it", () => {
+  // Resumed with SendMessage after it finished: it is writing again, and the
+  // stale flag no longer speaks for it.
+  const now = Date.now();
+  const cwd = project({
+    agents: [{ id: "aaa", lastWriteAt: now - 1000, metaAt: now - 60_000, meta: { description: "review", finished: true } }],
+  });
+  assert.equal(readRunningAgents(cwd, CONV, now).length, 1);
+});
+
 test("an agent whose ending was never written down goes stale rather than running for ever", () => {
   const now = Date.now();
   const cwd = project({ agents: [{ id: "aaa", lastWriteAt: now - 60 * 60_000, meta: { description: "review" } }] });
@@ -110,6 +136,70 @@ test("a missing description costs the wording, never the row", () => {
   const now = Date.now();
   const cwd = project({ agents: [{ id: "aaa", lastWriteAt: now, meta: { agentType: "general-purpose" } }] });
   assert.equal(readRunningAgents(cwd, CONV, now)[0].what, "general-purpose");
+});
+
+/**
+ * A dynamic workflow's agents live one level down and never get a notification
+ * of their own; the journal says which ended. CLI 2.1.308: the terminal said
+ * "Waiting for 1 dynamic workflow to finish" over three working agents while
+ * the reader said "idle — nothing running".
+ */
+function workflow(cwd, wf, { agents, journal }) {
+  const proj = join(process.env.WATERPLANE_CLAUDE_HOME, ".claude", "projects", cwd.replace(/[^a-zA-Z0-9]/g, "-"));
+  const dir = join(proj, CONV, "subagents", "workflows", wf);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "journal.jsonl"), journal.map((r) => JSON.stringify(r)).join("\n") + "\n");
+  for (const a of agents) {
+    const log = join(dir, `agent-${a.id}.jsonl`);
+    writeFileSync(log, "");
+    writeFileSync(join(dir, `agent-${a.id}.meta.json`), JSON.stringify({ agentType: "workflow-subagent", description: a.label }));
+    utimesSync(log, a.lastWriteAt / 1000, a.lastWriteAt / 1000);
+  }
+}
+
+test("a workflow's agents are running until the journal records their result", () => {
+  const now = Date.now();
+  const cwd = project({ agents: [] });
+  workflow(cwd, "wf_93053e76-e8d", {
+    agents: [
+      { id: "a1", label: "impl:backend", lastWriteAt: now - 3000 },
+      { id: "a2", label: "impl:watch", lastWriteAt: now - 2000 },
+      { id: "a3", label: "fix:backend", lastWriteAt: now - 1000 },
+    ],
+    journal: [
+      { type: "launched" },
+      { type: "started", key: "v2:k1", agentId: "a1", label: "impl:backend" },
+      { type: "started", key: "v2:k2", agentId: "a2", label: "impl:watch" },
+      { type: "result", key: "v2:k1", result: {} },
+      { type: "started", key: "v2:k3", agentId: "a3", label: "fix:backend" },
+    ],
+  });
+  assert.deepEqual(readRunningAgents(cwd, CONV, now).map((r) => r.what), ["fix:backend", "impl:watch"]);
+});
+
+test("the workflow's own notification retires every agent under it", () => {
+  const now = Date.now();
+  const launch = {
+    type: "user",
+    timestamp: new Date(now - 60_000).toISOString(),
+    message: { role: "user", content: [{ type: "tool_result", content: "Workflow launched in background. Task ID: wlmr7wulb\nSummary: x\nTranscript dir: /h/.claude/projects/p/c/subagents/workflows/wf_15b48c06-78a\nScript file: /h/s.js" }] },
+  };
+  const cwd = project({ agents: [], parent: [launch, notification("wlmr7wulb", now - 500)] });
+  workflow(cwd, "wf_15b48c06-78a", {
+    agents: [{ id: "b1", label: "review:css", lastWriteAt: now - 1000 }],
+    journal: [{ type: "launched" }, { type: "started", key: "v2:k1", agentId: "b1" }],
+  });
+  assert.deepEqual(readRunningAgents(cwd, CONV, now), []);
+});
+
+test("a workflow agent nobody ended still goes stale", () => {
+  const now = Date.now();
+  const cwd = project({ agents: [] });
+  workflow(cwd, "wf_x", {
+    agents: [{ id: "c1", label: "impl", lastWriteAt: now - 60 * 60_000 }],
+    journal: [{ type: "started", key: "v2:k1", agentId: "c1" }],
+  });
+  assert.deepEqual(readRunningAgents(cwd, CONV, now), []);
 });
 
 test("notifiedAt keeps the NEWEST stop per agent, and tolerates an unparseable line", () => {

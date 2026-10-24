@@ -2,6 +2,7 @@ import { idbDel, idbGet, idbSet } from "../idb";
 import { nativeDiscard } from "../nativePull";
 import type { PullRecord, PullBlob } from "./pullTypes";
 import { FLUSH_BYTES, FLUSH_MS, HEADERS_TIMEOUT_MS, STALL_MS, KEEP_DONE_MS, artifactUrl } from "./pullConsts";
+import { typedBlob } from "./pullMime";
 import type { PullManager } from "./pullManager";
 
 // ── engine 2: resumable Range fetch ───────────────────────────────
@@ -84,7 +85,8 @@ export async function pullRangeFetch(this: PullManager, id: string): Promise<voi
     if (!res.body) {
       // No streaming reader (very old browser): one shot, no progress.
       const blob = await res.blob();
-      const merged = received > 0 ? new Blob([have, blob]) : blob;
+      // Typed by NAME (`pullMime.ts`): a merged Blob would otherwise be typeless and sniffed.
+      const merged = typedBlob(received > 0 ? [have, blob] : [blob], rec.item.name);
       await this.store(id, merged, merged.size, total, rec.item.name);
       this.patch(id, { state: "done", received: merged.size, etag, rate: undefined });
       return;
@@ -100,7 +102,7 @@ export async function pullRangeFetch(this: PullManager, id: string): Promise<voi
       if (!pendingBytes) return;
       const now = Date.now();
       const bytes = pendingBytes;
-      have = new Blob([have, ...pending]);
+      have = typedBlob([have, ...pending], rec.item.name);
       pending = [];
       pendingBytes = 0;
       received = have.size;

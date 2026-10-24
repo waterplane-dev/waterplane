@@ -290,6 +290,8 @@ export interface PairDeps {
   store: PairStore;
   net(): Promise<PairNet>;
   apk(): ApkFile | null;
+  /** The Tailscale gate just switched on (a passive redeem): re-check the open sockets, as `auth.gateTailscale` does. */
+  onGateChange?(): void;
 }
 
 /** 5 attempts in a burst, then one every 10 s, per remote IP: 32^8 codes do
@@ -341,7 +343,7 @@ const refuse = (error: PairRedeemRefusal, message = error === "no-password" ? NO
  *  a ghost row in Paired devices. Only the holder of a token can retire it,
  *  and only after the code checked out and a new row was minted. */
 export async function redeemPair(
-  body: Record<string, unknown>, kind: PeerKind, deps: Pick<PairDeps, "root" | "auth" | "store" | "net">, presented: string | null = null,
+  body: Record<string, unknown>, kind: PeerKind, deps: Pick<PairDeps, "root" | "auth" | "store" | "net" | "onGateChange">, presented: string | null = null,
 ): Promise<{ status: number; body: PairRedeemReply }> {
   const code = normalizePairCode(body.code);
   if (!code) return { status: 400, body: refuse("bad-request") };
@@ -357,11 +359,16 @@ export async function redeemPair(
   const host: PairRedeemHost = { name: net.name, base: net.base, httpsUrl: net.httpsUrl, ...(net.lanBase ? { lanBase: net.lanBase } : {}) };
   const out: PairRedeemReply = { ok: true, host };
   if (deps.auth.isEnabled()) {
+    const gateBefore = deps.auth.gateTailscale();
     const { token, deviceId } = deps.auth.issueToken(normalizeDeviceName(body.deviceName) ?? "paired phone", kind, spent.passive ? "passive" : undefined);
     out.token = token;
     out.deviceId = deviceId;
     if (spent.passive) out.scope = "passive";
     if (presented && deps.auth.deviceFor(presented)) deps.auth.revoke(presented);
+    // A passive row switches the gate on for good: every tokenless Tailscale socket open right
+    // now is no longer authorized, and must be told and closed rather than left to have its
+    // frames dropped in silence.
+    if (deps.auth.gateTailscale() !== gateBefore) deps.onGateChange?.();
   } else {
     out.note = NO_PASSWORD_NOTE;
   }
@@ -388,10 +395,12 @@ export async function handlePairPreAuth(req: IncomingMessage, res: ServerRespons
 }
 
 /** `POST /api/pair/mint`, behind the auth gate. True when it answered. */
-export async function handlePairAuthed(req: IncomingMessage, res: ServerResponse, tok: string | null, deps: PairDeps): Promise<boolean> {
+export async function handlePairAuthed(req: IncomingMessage, res: ServerResponse, tok: string | null, deps: PairDeps, kind: PeerKind): Promise<boolean> {
   const path = (req.url ?? "/").split("?")[0];
   if (path !== "/api/pair/mint") return false;
   if (req.method !== "POST") { reply(req, res, 405, { error: "POST only" }); return true; }
+  // Pairing hands out a full token: only the trusted path (loopback / Tailscale) mints, never a LAN token.
+  if (!deps.auth.canManage(kind)) { reply(req, res, 403, { error: "Pairing codes are made from the desktop or from a phone over Tailscale — not over the Wi-Fi route." }); return true; }
   const passive = (await readJson(req)).passive === true;
   if (passive && !deps.auth.isEnabled()) { reply(req, res, 409, { error: NO_PASSWORD_PASSIVE }); return true; }
   const { code, expiresAt } = deps.store.mint(deps.auth.deviceFor(tok)?.id ?? null, passive);

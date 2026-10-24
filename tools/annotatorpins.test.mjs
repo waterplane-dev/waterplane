@@ -94,6 +94,6 @@ test("the annotator's never-do list and tracked sends hold, file-agnostically", 
   assert.equal(count(text, /api\.uploadInbox\(/g), 1);
   assert.equal(count(text, /api\.readText\(/g), 0);
   assert.equal(count(text, /lsSetBool\(LS\.annKnobs/g), 1);
-  assert.equal(count(text, /new ResizeObserver\(/g), 1);
+  assert.equal(count(text, /new ResizeObserver\(/g), 2); // the canvas fit, and the toolbar side (useAutoPlace)
   assert.equal(count(text, /<UploadScalePicker/g), 1);
 });

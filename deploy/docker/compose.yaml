@@ -33,7 +33,12 @@ services:
     devices:
       - /dev/net/tun:/dev/net/tun
     environment:
-      # A reusable or one-off auth key from https://login.tailscale.com/admin/settings/keys.
+      # An auth key from https://login.tailscale.com/admin/settings/keys — prefer a ONE-OFF
+      # (single-use or ephemeral) key: the entrypoint drops it from the environment right after
+      # enrolment, but a reusable key that leaks is a device on your tailnet for whoever holds it.
+      # What the unset cannot reach: `docker inspect` shows this value for the container's life,
+      # and the root-owned tailscaled keeps it in its own environment — a one-off key makes both
+      # worthless after the first start.
       # Unset: the log prints a login link once; the node identity is then kept in the volume.
       TS_AUTHKEY: "${TS_AUTHKEY:-}"
       TS_HOSTNAME: "${TS_HOSTNAME:-waterplane}"

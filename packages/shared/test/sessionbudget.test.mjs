@@ -14,6 +14,9 @@ import {
   sessionBudgetVerdict,
   sessionSpend,
   windowUsdPerPct,
+  sourceSpendSpark,
+  budgetSparkOf,
+  sessionBudgetWindowsOffText,
 } from "../dist/index.js";
 
 const NOW = 1_700_000_000_000;
@@ -131,4 +134,57 @@ test("a schedule action's budget is three answers: a cap, an explicit clear (nul
   assert.equal("budget" in cleanAction({ kind: "backlog", repoDir: "/r", text: "x", budget: { unit: "usd", max: -1 } }), false,
     "a malformed cap is nobody said — never a clear that deletes a cap somebody set");
   assert.equal(cleanAction({ kind: "fanout", dirs: ["/a"], text: "x", budget: null }).budget, null, "a sweep too");
+});
+
+// ── P2: a backend's own spend ────────────────────────────────────────────────
+
+test("sourceSpendSpark: a source's tok EXCLUDES its agents, so the total is the sum and the split rides", () => {
+  assert.deepEqual(sourceSpendSpark({ at: 1, tok: 100, agentTok: 40, usd: 1, agentUsd: 0.5 }),
+    { source: true, usageTok: 140, agentTok: 40, costUsd: 1.5, agentCostUsd: 0.5 });
+  assert.deepEqual(sourceSpendSpark({ at: 1, tok: 100 }), { source: true, usageTok: 100 }, "no agent figure: a floor, no split claimed");
+  assert.deepEqual(sourceSpendSpark({ at: 1, agentTok: 40 }), { source: true }, "agents alone are no total");
+  assert.deepEqual(sourceSpendSpark({ at: 1, native: { amount: 300, unit: "AI credits" } }), { source: true }, "native never becomes a figure");
+  assert.deepEqual(sourceSpendSpark(null), { source: true });
+  assert.deepEqual(sourceSpendSpark({ at: 1, tok: -5, usd: 2 }), { source: true }, "a refused reading is dropped WHOLE");
+  assert.deepEqual(sourceSpendSpark({ at: 1, usd: 2, native: { amount: 2, unit: "$" } }), { source: true }, "dollars in native are refused whole");
+});
+
+test("budgetSparkOf: sourceSpend present ⇒ the source; absent ⇒ claude's spark, untouched", () => {
+  const spark = { usageTok: 9, costUsd: 0.1, windowTok: null };
+  assert.equal(budgetSparkOf({ contextSpark: spark }), spark);
+  assert.equal(budgetSparkOf({}), null);
+  assert.deepEqual(budgetSparkOf({ contextSpark: spark, sourceSpend: { at: 1, tok: 5 } }), { source: true, usageTok: 5 });
+});
+
+test("a source spend: tok and usd judge where stated, unstated and percents never trip", () => {
+  const cal = { checkedAt: NOW, sessionUsdPerPct: 1, weeklyUsdPerPct: 1 };
+  const both = sourceSpendSpark({ at: 1, tok: 2000, usd: 3 });
+  assert.equal(sessionBudgetVerdict({ unit: "tok", max: 1000, interrupt: true }, both, null, NOW).state, "over");
+  assert.equal(sessionBudgetVerdict({ unit: "usd", max: 5, interrupt: true }, both, null, NOW).state, "ok");
+  const tokOnly = sourceSpendSpark({ at: 1, tok: 2000 });
+  const v = sessionBudgetVerdict({ unit: "usd", max: 0.01, interrupt: true }, tokOnly, null, NOW);
+  assert.equal(v.state, "unknown");
+  assert.equal(v.why, "unstated", "never 'unpriced': nothing prices another backend's tokens");
+  assert.equal(sessionBudgetHeld({ budget: { cfg: { unit: "usd", max: 0.01, interrupt: true }, verdict: v } }), false);
+  for (const unit of ["sessionPct", "weeklyPct"]) {
+    const p = sessionBudgetVerdict({ unit, max: 1, interrupt: true }, both, cal, NOW);
+    assert.equal(p.state, "unknown");
+    assert.equal(p.why, "notClaude", "dollars are never converted into claude's window");
+  }
+  assert.equal(sessionSpend("tok", sourceSpendSpark(null), null, NOW).why, "unstated");
+});
+
+test("the source sentences: unstated names the unit, notClaude names claude's windows, both end on nothing held", () => {
+  assert.match(sessionBudgetUnknownText("unstated", undefined, "tok"), /has not stated what it spent in tokens — nothing is held$/);
+  assert.match(sessionBudgetUnknownText("unstated", undefined, "usd"), /in dollars — nothing is held$/);
+  assert.match(sessionBudgetUnknownText("notClaude"), /claude's account.*nothing is held$/);
+  const v = sessionBudgetVerdict({ unit: "usd", max: 1, interrupt: true }, sourceSpendSpark({ at: 1, tok: 1 }), null, NOW);
+  assert.match(sessionBudgetText(v), /in dollars/);
+  assert.equal(sessionBudgetWindowsOffText("Copilot"), "No ≈% of a window here: the 5-hour and weekly windows are claude's account, and Copilot does not spend from it.");
+});
+
+test("claude's spark is unchanged by the source rules (no `source` ⇒ noSpark / unpriced as before)", () => {
+  assert.equal(sessionSpend("tok", {}, null, NOW).why, "noSpark");
+  assert.equal(sessionSpend("usd", { usageTok: 5 }, null, NOW).why, "unpriced");
+  assert.equal(sessionSpend("weeklyPct", { costUsd: 1 }, null, NOW).why, "noReading");
 });

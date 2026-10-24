@@ -31,8 +31,8 @@ import { InstallLogStore } from "./installlog.js";
 import { SettingsStore } from "./settings.js";
 import { PushManager } from "./push.js";
 import { NotifyPrefsStore } from "./notifyprefs.js";
-import { UpdateChecker } from "./update.js";
-import { SetupWatcher } from "./setupwatch.js"; import { createHealthWatch } from "./healthwatch.js";
+import { UpdateChecker } from "./update.js"; import { createPluginUpdates, createUpdateApplier } from "./updates/wire.js";
+import { SetupWatcher } from "./setupwatch.js"; import { createHealthWatch } from "./healthwatch.js"; import { startDiskWatch } from "./diskwatch.js";
 import { NetStats } from "./netstats.js";
 import { DecisionLog } from "./decisionlog.js";
 import { PluginRegistry } from "./plugins/pluginregistry.js";
@@ -131,12 +131,12 @@ installChecklistStores(ROOT);
  *  auth re-evaluation, the watched set, the notification feed and `notify()`.
  *  See `server/clients.ts`. */
 const {
-  attached, clients, wsKind, wsToken, wsDevice, wsRole, closeDevice,
+  attached, clients, wsKind, wsToken, wsDevice, wsRole, closeDevice, socketAuthorized,
   authStateFor, enforceAuth, broadcastAuthState, recomputeWatched, isAttachedToSomeone,
   send, broadcast, notifications, notify,
 } = createClients({ auth, notifyPrefs, push, sessions }); ctx.healthWatch = createHealthWatch(ROOT, notify);
 Object.assign(ctx, {
-  attached, clients, wsKind, wsToken, wsDevice, wsRole, closeDevice,
+  attached, clients, wsKind, wsToken, wsDevice, wsRole, closeDevice, socketAuthorized,
   authStateFor, enforceAuth, broadcastAuthState, recomputeWatched, isAttachedToSomeone,
   send, broadcast, notifications, notify,
 });
@@ -449,6 +449,8 @@ const plugins = new PluginRegistry({
   changed: () => broadcast({ t: "plugin.list", plugins: plugins.views() }), hookPort: PORT, streamSink: () => ({ sendJson: (ws, msg) => send(ws as WebSocket, msg), ptyHeld: (ws) => ptyFanout.ptyHeld(ws as WebSocket) }), usageProbe: (_plugin, def) => usageSources.register(def), // `api.stream`, `api.usageProbe`
 });
 ctx.plugins = plugins;
+ctx.pluginUpdates = createPluginUpdates({ root: ROOT, plugins, settings, broadcast });
+ctx.updateApplier = createUpdateApplier({ configDir: hostSecretDir(), plugins, checker: ctx.pluginUpdates });
 if (!DOCTOR) void plugins.loadBuiltins().then(() => plugins.loadAll()).then(() => { sessions.parked((b) => plugins.backendOwner(b)); syncUsagePolling(); });
 // Unconditional in the daemon: the budget is armed by default.
 // Never in a doctor run — each poll is a `claude` in a PTY (see `DOCTOR`).
@@ -591,6 +593,23 @@ async function main(): Promise<void> {
   // into a 403 — which is how someone ends up stuck on plain http://100.x with
   // no service worker.
   configureOrigins({ port: PORT, tailscaleIp: ip, tailscaleDns: tsDns, lanIps: boundLan, serveUrl: httpsUrl });
+  // On a tailnet whose MagicDNS name could not be read (tailscaled still
+  // starting, CLI hiccup) the guard has no exact name to trust; keep asking
+  // once a minute, up to 30 times, and re-arm it with the name when it comes.
+  if (!tsDns && ip) {
+    let tries = 0;
+    const timer = setInterval(() => {
+      void (async () => {
+        tries++;
+        const dns = await tailscaleDnsName();
+        if (dns) {
+          clearInterval(timer);
+          configureOrigins({ port: PORT, tailscaleIp: ip, tailscaleDns: dns, lanIps: boundLan, serveUrl: await serveHttpsUrl(PORT) });
+        } else if (tries >= 30) clearInterval(timer);
+      })();
+    }, 60_000);
+    timer.unref();
+  }
 
   initThumbs(ROOT);       // <STATE_DIR>/thumbs — image thumbnails for the gallery
   // Fold every repo's old `<repoDir>/.waterplane/backlog.json` into the intent store,
@@ -598,8 +617,9 @@ async function main(): Promise<void> {
   // launches/schedules migration above because it needs the repo list, which
   // needs git — and before `listen()`, so reconciliation sees the imported rows.
   await Promise.all([backlog.init(), plugins.builtinsLoaded]); // extensions: rows in the first checklist
-  updates.start();
+  updates.start(); if (!DOCTOR) ctx.pluginUpdates.start(); // a few minutes after boot, never in the preflight
   setupWatch.start(); if (!DOCTOR) void ctx.healthWatch.start(); // setup checklist swept; health index cached, engine re-run weekly
+  if (!DOCTOR) startDiskWatch({ notify }); // low disk: one push per level (macOS ends Tailscale to free space)
 
   const attachWs = (server: ReturnType<typeof createServer>) => {
     // permessage-deflate: the socket carries base64'd PTY output, and a claude

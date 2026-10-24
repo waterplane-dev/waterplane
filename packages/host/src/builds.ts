@@ -40,25 +40,26 @@
  * daemon died is a row that says so, rather than a run nobody can account for.
  */
 import { EventEmitter } from "node:events";
-import { existsSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
-import { extname, join, relative, resolve, sep } from "node:path";
-import { randomUUID } from "node:crypto";
+import { existsSync, readdirSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
+import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { createHash, randomUUID } from "node:crypto";
 import * as pty from "node-pty";
 import type { IPty } from "node-pty";
 import { spawnFailure } from "./ptycap.js";
-import type { BuildArtifact, BuildConfig, BuildRun, Intent } from "@waterplane/shared";
+import type { BuildArtifact, BuildParamAnswer, BuildConfig, BuildRun, Intent } from "@waterplane/shared";
 import {
-  applyParams, buildRunTitle, cleanBuildParams, missingParamsText, paramEnv, parseParamOptions,
+  applyParams, buildRunTitle, unsafeParamIds, unsafeParamsText, cleanBuildParams, missingParamsText, paramEnv, parseParamOptions,
   resolveParamValues, logTag,
 } from "@waterplane/shared";
-import { repoSharedDir, repoStateDir } from "./branddirs.js";
+import { hostStateDir, repoSharedDir, repoStateDir } from "./branddirs.js";
+import { ROOT } from "./env.js";
 import { targetId } from "./repos.js";
 import type { ExecutorResult, IntentManager } from "./intents/manager.js";
 import { intentToBuildRun, isBuildRow } from "./intents/adapters.js";
 import { contained } from "./paths.js";
 import { artifactPolicy, collectArtifacts } from "./artifacts.js";
 import { execFileP } from "./proc.js";
-import { writeJsonAtomic } from "./jsonstore.js";
+import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
 
 const SHELL = process.env.SHELL || "/bin/bash";
 /** ASYNC, deliberately: this runs on the loop that pumps every live PTY, and a
@@ -259,6 +260,28 @@ const OPTIONS_TIMEOUT_MS = 6000;
  *  drop-down is worth; this is the bound under that bound. */
 const OPTIONS_MAX_BYTES = 256_000;
 
+/** True only when git ANSWERS "this path is not tracked" (`ls-files
+ *  --error-unmatch` exits 1 inside a repo). Exit 128 (not a repo), a missing git
+ *  binary, a timeout: all false — the caller fails closed. argv + `--`, no shell.
+ *  The probe asks about the file's REAL path: git never sees a path through a
+ *  symlink, so a committed `.waterplane -> payload` would otherwise read as
+ *  "untracked" while serving committed bytes. A real path outside the repo is
+ *  refused outright. `cwd` is the repo, so its own `.git/config` (fsmonitor,
+ *  hooks) is consulted — the same pre-existing exposure as every other git call
+ *  this daemon makes in a repo; `.git/config` is never cloned. */
+async function localFileUntracked(repoDir: string, file: string): Promise<boolean> {
+  let real: string, repoReal: string;
+  try { real = realpathSync.native(file); repoReal = realpathSync.native(repoDir); } catch { return false; }
+  const rel = relative(repoReal, real);
+  if (!rel || rel.startsWith("..") || isAbsolute(rel)) return false;
+  try {
+    await execFileP("git", ["ls-files", "--error-unmatch", "--", rel], { cwd: repoReal, timeout: 5000 });
+    return false; // exit 0: tracked
+  } catch (e) {
+    return (e as { code?: unknown }).code === 1;
+  }
+}
+
 export class BuildManager extends EventEmitter {
   private procs = new Map<string, IPty>();     // runId → live process
   private output = new Map<string, string>();  // runId → retained output tail
@@ -267,7 +290,47 @@ export class BuildManager extends EventEmitter {
    *  so the fact that it was cancelled has to be remembered here. */
   private cancelled = new Set<string>();
 
-  constructor(private intents: IntentManager) { super(); }
+  private approvalsPath: string;
+
+  constructor(private intents: IntentManager, root: string = ROOT) {
+    super();
+    this.approvalsPath = join(hostStateDir(root), "build-approvals.json");
+  }
+
+  /* An `optionsCmd` is a shell command. One from the SHARED file arrived with a
+     checkout (clone/pull of a repo somebody else wrote), so running it when the
+     form merely OPENS would be code execution without a tap. One from the LOCAL
+     file was written on this desktop. The person's approval of a shared command
+     is remembered here as (repo, sha256(command)) in the host's own state — a
+     changed command is a different hash and asks again. Running a build does
+     NOT approve it: approval is its own explicit tap (`build.options` with
+     `approve`). */
+  private approvalKey(repoDir: string, cmd: string): string {
+    let repo: string;
+    try { repo = realpathSync.native(repoDir); } catch { repo = resolve(repoDir); }
+    return createHash("sha256").update(repo).update("\0").update(cmd).digest("hex");
+  }
+  private readApprovals(): string[] {
+    const v = readJsonGuarded<unknown>(this.approvalsPath, []);
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  }
+  private approve(repoDir: string, cmd: string): void {
+    const key = this.approvalKey(repoDir, cmd);
+    const cur = this.readApprovals();
+    if (cur.includes(key)) return;
+    try { writeJsonAtomic(this.approvalsPath, [...cur, key].slice(-2000), { space: 2 }); } catch { /* not remembered: asks again */ }
+  }
+  /** May this entry's `optionsCmd` run without a tap? Only a LOCAL-file entry
+   *  whose file git reports as NOT tracked — the local dir sits INSIDE the
+   *  checkout, so "local" is a gitignore convention a hostile repo controls: a
+   *  committed `.waterplane/builds.json` is shared in every way that matters.
+   *  Fails CLOSED: not a git repo, git missing or any probe error asks for the
+   *  tap (one tap, remembered by hash), never runs unasked. */
+  private async optionsTrusted(repoDir: string, buildId: string, cmd: string): Promise<boolean> {
+    const lp = this.localPath(repoDir);
+    if ((readBuildsFile(lp) ?? []).some((b) => b.id === buildId) && await localFileUntracked(repoDir, lp)) return true;
+    return this.readApprovals().includes(this.approvalKey(repoDir, cmd));
+  }
 
   private sharedPath(repoDir: string): string { return join(repoSharedDir(repoDir), "builds.json"); }
   private localPath(repoDir: string): string { return join(repoStateDir(repoDir), "builds.json"); }
@@ -332,13 +395,20 @@ export class BuildManager extends EventEmitter {
    * failed" and "this monorepo has no apps" are opposite facts, and only one of
    * them means the form should quietly offer a typed field instead.
    */
-  async paramOptions(repoDir: string, buildId: string): Promise<Record<string, { options?: string[]; total?: number; error?: string }>> {
+  async paramOptions(repoDir: string, buildId: string, approve?: { paramId?: string; cmd?: string }): Promise<Record<string, BuildParamAnswer>> {
     const cfg = this.list(repoDir).find((b) => b.id === buildId);
-    const out: Record<string, { options?: string[]; total?: number; error?: string }> = {};
+    const out: Record<string, BuildParamAnswer> = {};
     if (!cfg) return out;
     const root = resolve(repoDir);
     for (const p of cfg.params ?? []) {
       if (!p.optionsCmd) continue;
+      // The approval is for the text the person READ: if the file moved under
+      // them (autopull, a replayed queue), approve nothing and show the new text.
+      if (approve?.paramId === p.id && approve.cmd === p.optionsCmd) this.approve(repoDir, p.optionsCmd);
+      if (!(await this.optionsTrusted(repoDir, buildId, p.optionsCmd))) {
+        out[p.id] = { needsApproval: true, cmd: p.optionsCmd };
+        continue;
+      }
       try {
         const { stdout } = await execFileP(SHELL, ["-lc", p.optionsCmd], {
           cwd: root, encoding: "utf8", timeout: OPTIONS_TIMEOUT_MS, maxBuffer: OPTIONS_MAX_BYTES,
@@ -396,6 +466,10 @@ export class BuildManager extends EventEmitter {
      */
     const { values, missing } = resolveParamValues(cfg.params, given);
     if (missing.length) return { error: missingParamsText(missing) };
+    // A value is substituted verbatim, so a shell metacharacter in one would be
+    // a second command. Refused here, synchronously, for every origin of a value.
+    const unsafe = unsafeParamIds(cfg.cmd, values);
+    if (unsafe.length) return { error: unsafeParamsText(unsafe) };
 
     // Resolve the working dir, guarding the optional per-build subdir to the
     // repo. Substituted FIRST: `apps/{{app}}` is how one entry serves one member

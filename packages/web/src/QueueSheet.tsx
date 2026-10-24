@@ -13,6 +13,8 @@ import { useLink } from "./link";
 import { Button } from "./kit/Button";
 import { Row, RowTitle, RowSub } from "./kit/Row";
 import { Hint } from "./kit/Hint";
+import { Unavailable, type Cant } from "./Unavailable";
+import { SetNote } from "./SettingsKit";
 
 interface Props {
   /** The whole send queue, in send order (queued + in-flight + failed). */
@@ -230,6 +232,9 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
       const st = STATUS[e.status] ?? STATUS.queued;
       const StIcon = st.icon;
       const locked = e.status === "pending";
+      // Why a row's hold/serial/retarget/add are off: a pending row is on its
+      // way; a failed one has to be sent again (the ↻ on the row) first.
+      const notQueued = e.status === "failed" ? "it didn't go through — try it again first" : "already on its way";
       // An OP is an ACTION, not text: "start a session here", "fan out",
       // "run this build". Two consequences in this sheet — its body is
       // only editable when the text IS the payload (a fan-out prompt),
@@ -272,6 +277,15 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
         || e.status === "queued"
         || (!locked && !isOp && !isUpload && !isAnswer)
         || (!locked && !isAnswer && !!resendTarget);
+      // What the "⋯" strip leaves out for good (not for the second a send is on
+      // the wire), said as a sentence instead of a dimmed button.
+      const noText = isOp ? "this is an action, not text" : isUpload ? "this is a file, not text" : isAnswer ? "this is a tapped answer, not text" : "";
+      const moreCants: Cant[] = [
+        ...(i === 0 ? [{ label: "move earlier", reason: "already first" }] : []),
+        ...(i === arr.length - 1 ? [{ label: "move later", reason: "already last" }] : []),
+        ...(noText ? [{ label: "put it back in the message box", reason: noText }] : []),
+        ...(isAnswer ? [{ label: "send again", reason: "an answer only fits the question it was tapped on" }] : []),
+      ];
       if (editing === e.ackId) {
         return (
           <div key={e.ackId} className="queue-edit">
@@ -336,16 +350,22 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
                 sheet in the report, where nothing a person pressed did
                 anything. Everything else still needs a socket to mean
                 anything, so it stays gated. */}
+            {/* Offline, a row that is not `failed` cannot be sent: the button is
+                ABSENT and the sentence under the row says why (Unavailable.tsx).
+                `pending` stays a disabled button on purpose: that is the ~second a
+                delivery attempt is on the wire, and unmounting it per flip is the
+                flicker the comment above is about. */}
+            {(online || e.status === "failed") && (
             <Button data-hint="queue.sendone"
-              disabled={e.status === "pending" || (!online && e.status !== "failed")}
+              disabled={e.status === "pending"}
               title={e.status === "pending" ? "already on its way"
                 : e.status === "failed" ? (online ? "try this one again" : "put it back in the queue — it goes out when the link is back")
-                : !online ? "no connection yet"
                 : backoffIn != null ? "waiting before the next attempt — tap to try it right now"
                 : "send this one now"}
               onClick={() => { track("action:queue.sendone"); onSendNow(e.ackId); }}>
               {e.status === "failed" ? <RotateCw size={16} /> : <SendHorizontal size={16} />}
             </Button>
+            )}
             <Button variant="danger" data-hint="queue.remove" title="discard" disabled={locked}
               onClick={() => { track("action:queue.remove"); onRemove(e.ackId); }}><Trash2 size={16} /></Button>
             {hasMore && (
@@ -356,6 +376,7 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
             )}
           </div>
         </div>
+        {!online && e.status === "queued" && <Unavailable cants={[{ label: "send now", reason: "no connection yet" }]} />}
         {/* The files this message names, as the files they are. A minted inbox
             name ("1000074539-mtjv8u52a489a0.jpg") is unreadable on purpose —
             it is built not to collide, not to be recognised — so a queue of
@@ -366,15 +387,15 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
           <AttachStrip compact text={isUpload ? e.upload!.relPath : e.text} repoId={repoIdOf(e)}
             outbox={entries} online={online} />
         )}
-        {moreFor === e.ackId && (
+        {moreFor === e.ackId && (<>
           <div className="queue-row-acts queue-more">
-            <Button data-hint="queue.moveup" title="move earlier" disabled={locked || i === 0} onClick={() => onMove(e.ackId, -1)}><ArrowUp size={16} /></Button>
-            <Button data-hint="queue.movedown" title="move later" disabled={locked || i === arr.length - 1} onClick={() => onMove(e.ackId, 1)}><ArrowDown size={16} /></Button>
+            {i > 0 && <Button data-hint="queue.moveup" title="move earlier" disabled={locked} onClick={() => onMove(e.ackId, -1)}><ArrowUp size={16} /></Button>}
+            {i < arr.length - 1 && <Button data-hint="queue.movedown" title="move later" disabled={locked} onClick={() => onMove(e.ackId, 1)}><ArrowDown size={16} /></Button>}
             <Button className={e.holdUntilIdle ? "on" : ""} data-hint="queue.hold" disabled={e.status !== "queued"}
               // The composer's words for this WHEN, not a fifth spelling of it:
               // *when it's free* on the split button, on the Backlog row and on
               // the next-prompt strip, and the same sentence here.
-              title={e.status !== "queued" ? "already on its way"
+              title={e.status !== "queued" ? notQueued
                 : e.holdUntilIdle
                 ? "when it's free — the turn has ended, no question box is up and it isn't blocked on a usage limit. Tap to send at the next opportunity instead"
                 : "when it's free: the turn ended, no question is on screen, no usage-limit block (exact for sessions that report turn boundaries; a guess from silence otherwise)"}
@@ -384,7 +405,7 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
                 serialize. */}
             {isSerializable(e) && (
               <Button className={e.serial ? "on" : ""} data-hint="queue.serial" disabled={e.status !== "queued"}
-                title={e.status !== "queued" ? "already on its way"
+                title={e.status !== "queued" ? notQueued
                   : e.serial
                   ? "waiting until this repo's other sessions have finished — one agent at a time, so they don't spend the usage limit in parallel or edit the same files. Tap to let it start straight away"
                   : "start it straight away, even if another session in this repo is working. Tap to make it wait its turn instead"}
@@ -392,7 +413,7 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
             )}
             {canAim && (
               <Button className={retargeting === e.ackId ? "on" : ""} data-hint="queue.retarget" disabled={e.status !== "queued"}
-                title={e.status !== "queued" ? "already on its way" : "send it somewhere else"}
+                title={e.status !== "queued" ? notQueued : "send it somewhere else"}
                 onClick={() => setRetargeting(retargeting === e.ackId ? null : e.ackId)}><Shuffle size={16} /></Button>
             )}
             {/* A queued open is worth queuing only for what runs in it.
@@ -400,15 +421,17 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
                 the one before it has finished its turn. */}
             {isCreateOp(e) && (
               <Button className={adding === e.ackId ? "on" : ""} data-hint="queue.addprompt" disabled={e.status !== "queued"}
-                title={e.status !== "queued" ? "already on its way" : "add a prompt to run after this session opens"}
+                title={e.status !== "queued" ? notQueued : "add a prompt to run after this session opens"}
                 onClick={() => { setAdding(adding === e.ackId ? null : e.ackId); setAddDraft(""); }}><Plus size={16} /></Button>
             )}
             {/* An op has no text to hand back to a compose box — its
                 label is a description, not something you'd retype. Nor
                 does an answer: pasting "2" into the composer would type
                 a stray digit at whatever the session is doing now. */}
-            <Button data-hint="queue.restore" title="put the text back in the message box" disabled={locked || isOp || isUpload || isAnswer}
-              onClick={() => { track("action:queue.restore"); onRestore(e.ackId); }}><CornerDownLeft size={16} /></Button>
+            {!isOp && !isUpload && !isAnswer && (
+              <Button data-hint="queue.restore" title="put the text back in the message box" disabled={locked}
+                onClick={() => { track("action:queue.restore"); onRestore(e.ackId); }}><CornerDownLeft size={16} /></Button>
+            )}
             {/* Rewrite it, check the files it names, send it as a new message.
                 What "try again" cannot do: a retry re-sends the same words at
                 the same target with the same attachments, which is precisely
@@ -416,14 +439,17 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
                 names the file — the editor's whole job there is picking the
                 file again or dropping the mention, and this row IS where the
                 failure is printed. */}
-            <Button data-hint="queue.resend"
-              title={isUpload
-                ? "rewrite the message that names this file — re-attach it, swap it, or drop the mention"
-                : "rewrite it, check the files it names, and send it again"}
-              disabled={locked || isAnswer || !resendTarget}
-              onClick={() => { track("action:queue.resend"); onResend(resendTarget!); }}><FilePenLine size={16} /></Button>
+            {!isAnswer && !!resendTarget && (
+              <Button data-hint="queue.resend"
+                title={isUpload
+                  ? "rewrite the message that names this file — re-attach it, swap it, or drop the mention"
+                  : "rewrite it, check the files it names, and send it again"}
+                disabled={locked}
+                onClick={() => { track("action:queue.resend"); onResend(resendTarget!); }}><FilePenLine size={16} /></Button>
+            )}
           </div>
-        )}
+          <Unavailable cants={moreCants} />
+        </>)}
         {adding === e.ackId && (
           <div className="queue-edit">
             <Hint style={{ padding: 0 }}>
@@ -615,7 +641,7 @@ export function QueueSheet({ entries, laneLabel, sessions, repos, goneLanes, onE
       <div className="sheet-actions">
         <Button onClick={onClose}><ChevronLeft size={16} /> back</Button>
         <span className="spacer" />
-        <span className="set-note" style={{ padding: 0 }}>{queuedCount} waiting</span>
+        <SetNote as="span" style={{ padding: 0 }}>{queuedCount} waiting</SetNote>
         <Pencil size={14} style={{ opacity: 0.35 }} />
       </div>
     </div>

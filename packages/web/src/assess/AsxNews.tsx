@@ -8,6 +8,7 @@ import { track } from "../usage";
 import { ICON } from "./asxConst";
 import { NameHead, ItemFiles } from "./AsxParts";
 import type { AssessModel } from "./useAssessSheet";
+import { Button } from "../kit/Button";
 
 export function AsxNews({ m }: { m: AssessModel }) {
   const { p, proposal, pickedNews, setPickedNews, rejected, toggleNew, toggleReject } = m;
@@ -93,18 +94,18 @@ export function AsxNews({ m }: { m: AssessModel }) {
                   own words routinely name one outright. */}
               <ItemFiles text={n.prompt} repoId={p.repoId} outbox={p.outbox} online={p.online} />
               <div className="act-acts">
-                <button className={`key${pickedNews.has(i) ? " primary" : ""}`}
+                <Button className={pickedNews.has(i) ? "primary" : undefined}
                   title={pickedNews.has(i) ? words.pickedTitle : words.title}
                   onClick={() => { track(offer ? "action:assess.accept.note" : "action:assess.accept.new"); toggleNew(i); }}>
                   <Check size={ICON} /> {pickedNews.has(i) ? words.picked : words.label}
-                </button>
-                <button className={`key${rejected.has(`new:${i}`) ? " active" : ""}`}
+                </Button>
+                <Button className={rejected.has(`new:${i}`) ? "active" : undefined}
                   title={rejected.has(`new:${i}`)
                     ? LEAVE_WORDS.pickedTitle
                     : offer ? "leave the note on the pad — nothing is filed and nothing is removed" : "do not add this"}
                   onClick={() => { track("action:assess.leave"); toggleReject(`new:${i}`, () => setPickedNews((s) => { const x = new Set(s); x.delete(i); return x; })); }}>
                   <X size={ICON} /> {rejected.has(`new:${i}`) ? LEAVE_WORDS.picked : LEAVE_WORDS.label}
-                </button>
+                </Button>
               </div>
             </div>
             );

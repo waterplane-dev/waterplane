@@ -55,6 +55,7 @@ export function projectContextLog(cur: SeriesCursor): ContextLog {
     coldStarts: projectCold(cur.cold),
     autoCompactTok: cur.autoCompactTok,
     model: cur.model,
+    skills: cur.skills,
     truncated: cur.truncated,
     mtime: cur.mtime,
   };

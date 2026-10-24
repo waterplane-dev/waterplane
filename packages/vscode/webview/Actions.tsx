@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ClipboardCopy, SquareTerminal } from "lucide-react";
 import type { PromptId, ToExtension, ToWebview } from "../src/protocol";
 import { Absent } from "./Absent";
+import { Button } from "@waterplane/kit";
 
 let taps = 0;
 
@@ -40,13 +41,13 @@ export function PromptActions({ id, turn, terminal, post }: {
   return (
     <div className="prompt-actions">
       <div className="btn-row">
-        <button type="button" className="key" onClick={() => send("copy")}>
+        <Button type="button" onClick={() => send("copy")}>
           <ClipboardCopy size={14} aria-hidden /> Copy
-        </button>
+        </Button>
         {terminal != null && (
-          <button type="button" className="key" onClick={() => send("terminal")}>
+          <Button type="button" onClick={() => send("terminal")}>
             <SquareTerminal size={14} aria-hidden /> Type into terminal
-          </button>
+          </Button>
         )}
       </div>
       {terminal == null && <Absent>No terminal is open, so this can only be copied. Open one to type it there.</Absent>}

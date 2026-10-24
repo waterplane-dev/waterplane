@@ -91,7 +91,7 @@ Everything on the path from a typed word to a delivery the desktop has confirmed
   **the one send surface** (code: `send/` + `core/send/{useSend.tsx,SendSheetEntry.tsx}` for the sheet; `sendIntent/` — `sendChain`/`sendClock`/`sendRule`/`sendRetime`… — for the rules). Four orthogonal decisions — WHAT,
   WHERE, WHEN, HOW MANY AT ONCE. Text
   first, then two collapsed rows *To* and *When*; the primary button **restates the whole decision**
-  and, disabled, **says why**. **The decision survives the annotator round trip, not just the words**.
+  and when it cannot go **says why in a sentence** (`CantInline`; only `busy` stays a disabled button). **The decision survives the annotator round trip, not just the words**.
   `dispatchIntent()` maps one `SendIntent` onto send paths that already
   exist and **adds none**. **To is `this session` · `a new session` · `several repos`** — `work
   item` named the retired shared backlog conversation and is gone; what was different about

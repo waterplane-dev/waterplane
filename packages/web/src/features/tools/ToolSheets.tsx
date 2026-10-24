@@ -7,7 +7,7 @@
 import type { LaunchOpts } from "@waterplane/shared";
 import { useMemo } from "react";
 import { useCore, useQueueEntries, useStore } from "../../sdk";
-import { ArchiveSheet } from "../../ArchiveSheet";
+import { ArchiveSheet, type ArchiveBackendTab } from "../../ArchiveSheet";
 import { showBackendPicker } from "../../backendCaps";
 import { Empty } from "../../Empty";
 import { LocalRtSheet } from "../../LocalRtSheet";
@@ -19,7 +19,7 @@ import { SpeedTestSheet } from "../../SpeedTestSheet";
 import { StorageSheet } from "../../StorageSheet";
 import { toolbarItems } from "../../toolbar";
 import { UsageSheet } from "../../UsageSheet";
-import { archiveStartRepo, knownFeatureIds, liveConversationIds } from "./logic";
+import { archiveBackendHint, archiveBackends, archiveStartRepo, knownFeatureIds, liveConversationIds, liveSessionFor } from "./logic";
 import { localRtFocus, netFocus } from "./store";
 
 export function SpeedTestToolSheet() {
@@ -93,24 +93,34 @@ export function ArchiveToolSheet() {
       <Empty>No repo in context — open a session first.</Empty>
     </div>
   );
-  // Every row here is a CLAUDE conversation log — that is what the archive
-  // reads off disk. So both verbs launch claude explicitly, whatever the
-  // launcher's current default backend is: resuming a claude conversation
-  // under another binary is not a resume, it is a new session with someone
-  // else's id on the command line. `backendMark` decides whether the sheet
-  // bothers to say so, which it only does where a second backend exists.
+  // Every row on a list was written by THAT list's backend — claude's jsonl
+  // archive, or another backend whose facts include `conversations`. So each
+  // resume launches the backend that wrote the row, explicitly, whatever the
+  // launcher's current default is: resuming one backend's conversation under
+  // another binary is not a resume, it is a new session with someone else's
+  // id on the command line. Claude's list says so only where a second backend
+  // exists (`showBackendPicker`); every other list always says whose it is.
   const claudeLaunch: LaunchOpts = core.launch.wire({ ...launch, backend: undefined });
+  // A model, effort or permission mode picked for the launcher's DEFAULT
+  // backend is not carried onto another one's binary: the resumed backend
+  // starts on its own defaults unless it already is the default.
+  const launchFor = (bid: string): LaunchOpts => bid === "claude" ? claudeLaunch
+    : core.launch.wire(launch.backend === bid ? { ...launch } : { ...launch, backend: bid, model: undefined, effort: undefined, permissionMode: undefined });
+  const tabs: ArchiveBackendTab[] = archiveBackends(backends).map((t) => t.id === "claude"
+    ? { ...t, ...(showBackendPicker(backends)
+      ? { note: `Every conversation here is one ${t.label} wrote, so resuming or forking one starts ${t.label} — not whichever backend new sessions currently default to.` }
+      : {}) }
+    : { ...t, note: archiveBackendHint(t.label) });
   return <ArchiveSheet repos={visibleRepos} initialRepoId={start}
     liveIds={liveIds}
-    backendNote={showBackendPicker(backends)
-      ? "Every conversation here is one Claude Code wrote, so resuming or forking one starts Claude Code — not whichever backend new sessions currently default to."
-      : undefined}
-    onResume={(cwd, title, cid) => { close(); core.launch.openCwd(cwd, title, true, "continue", claudeLaunch, cid); }}
+    archiveBackends={tabs}
+    onResume={(cwd, title, cid, bid) => { close(); core.launch.openCwd(cwd, title, true, "continue", launchFor(bid), cid); }}
     // The same durable create, one flag different: `--resume <id>
     // --fork-session` mints a new conversation and leaves the original file
     // untouched, so this is additive — nothing in the archive changes.
+    // Claude's only: the sheet draws fork on claude's list alone.
     onFork={(cwd, title, cid) => { close(); core.launch.openCwd(cwd, title, true, "fork", claudeLaunch, cid); }}
-    onOpenLive={(cid) => { const s = sessions.find((x) => x.claudeSessionId === cid); if (s) core.nav.attach(s); }}
+    onOpenLive={(cid) => { const s = liveSessionFor(sessions, cid); if (s) core.nav.attach(s); }}
     showToast={core.say.toast}
     onClose={close} />;
 }

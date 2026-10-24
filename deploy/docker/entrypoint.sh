@@ -71,6 +71,10 @@ else
   fi
   # shellcheck disable=SC2086
   tailscale --socket="$TS_SOCKET" up $UP_ARGS ${TS_EXTRA_ARGS:-}
+  # The key has done its one job. Nothing below needs it — least of all the agents the
+  # daemon spawns, which inherit its environment (`ptyenv.ts`): a key an agent could print
+  # or commit is a device on your tailnet for whoever reads it.
+  unset TS_AUTHKEY TS_EXTRA_ARGS UP_ARGS
   TS_IP="$(tailscale --socket="$TS_SOCKET" ip -4 2>/dev/null | head -n1 || true)"
   say "on the tailnet as $TS_HOSTNAME${TS_IP:+ ($TS_IP)}"
 
@@ -104,9 +108,12 @@ fi
 
 # ── 5. waterplane ───────────────────────────────────────────────────────
 cd "$WP_HOME"
+# Belt to the unset above: whatever path got here, the daemon and every PTY under it
+# start without the tailnet key.
+unset TS_AUTHKEY TS_EXTRA_ARGS
 case "${1:-start}" in
   start|doctor|pair|version|--version|help|--help) exec setpriv --reuid="$WP_USER" --regid="$WP_USER" --init-groups \
-    env HOME="$WP_HOME" USER="$WP_USER" LOGNAME="$WP_USER" SHELL=/bin/bash waterplane "$@" ;;
+    env -u TS_AUTHKEY HOME="$WP_HOME" USER="$WP_USER" LOGNAME="$WP_USER" SHELL=/bin/bash waterplane "$@" ;;
   *) exec setpriv --reuid="$WP_USER" --regid="$WP_USER" --init-groups \
-    env HOME="$WP_HOME" USER="$WP_USER" LOGNAME="$WP_USER" SHELL=/bin/bash "$@" ;;
+    env -u TS_AUTHKEY HOME="$WP_HOME" USER="$WP_USER" LOGNAME="$WP_USER" SHELL=/bin/bash "$@" ;;
 esac

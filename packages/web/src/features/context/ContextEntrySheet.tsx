@@ -2,7 +2,7 @@
  * The `context` sheet, wired: `ContextSheet.tsx` (unchanged, rules in
  * `web-numbers`) handed the subject session and its two doors.
  */
-import { AGENT_LARGE_TOK, agentWindowWarnSetting, liveAgentText, sessionBudgetLabel, type SessionInfo } from "@waterplane/shared";
+import { AGENT_LARGE_TOK, agentWindowWarnSetting, budgetSparkOf, liveAgentText, sessionBudgetLabel, type SessionInfo } from "@waterplane/shared";
 import { setPref, useCore, usePref } from "../../sdk";
 import { backendMark } from "../../backendCaps";
 import { ContextSheet } from "../../ContextSheet";
@@ -30,9 +30,9 @@ export function ContextEntrySheet({ subject }: { subject: SessionInfo }) {
     // than a true one about the binary, so it states NON-MEASUREMENT
     // instead — never a 0%.
     unmeasured={core.world.sessionCant(subject, "contextSeries") ?? undefined}
-    // Only the `windowFrom: "config"` caption uses this, and only to
-    // ATTRIBUTE the window to whoever's configuration stated it. Null for
-    // claude, which is the sheet's neutral fallback.
+    // Only the `windowFrom: "config"` and `"source"` captions use this, and
+    // only to ATTRIBUTE the window to whoever's configuration or channel
+    // stated it. Null for claude, which is the sheet's neutral fallback.
     backendLabel={backendMark(backends, subject.backend) ?? undefined}
     onFresh={repo ? () => freshFromContext(repo) : undefined}
     onCompact={core.world.sessionCan(subject, "slash") ? () => compactSubject(subject) : undefined}
@@ -52,6 +52,7 @@ export function ContextEntrySheet({ subject }: { subject: SessionInfo }) {
     agentWarn={{ value: warnTok, onChange: (tok) => { core.say.track("action:ctx.agentWarn"); setPref("agentWindowWarn", tok === AGENT_LARGE_TOK ? "" : String(tok)); } }}
     // The session's own budget, worded by shared; the door opens the budget
     // sheet for THIS subject (a launcher row's tile is not the attached one).
-    budget={{ label: subject.budget ? sessionBudgetLabel(subject.budget.cfg) : null, line: budgetLine(subject.budget, Date.now(), subject.contextSpark ?? null), onOpen: () => openSessionBudget(subject.id) }}
+    // Its spend is `budgetSparkOf`: a source session's own (`sourceSpend`), else the log's spark.
+    budget={{ label: subject.budget ? sessionBudgetLabel(subject.budget.cfg) : null, line: budgetLine(subject.budget, Date.now(), budgetSparkOf(subject)), onOpen: () => openSessionBudget(subject.id) }}
     onClose={closeContext} />;
 }

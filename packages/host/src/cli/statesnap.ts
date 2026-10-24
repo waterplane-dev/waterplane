@@ -27,6 +27,9 @@ import { writeJsonAtomic } from "../jsonstore.js";
 
 /** Is `name` one of the stores a snapshot carries? */
 export function isSnapshotFile(name: string): boolean {
+  // A NAME, never a path: `snapshot.json` is read back by `--rollback`, and a
+  // hand-edited entry with a separator in it would copy outside the state dir.
+  if (name.includes("/") || name.includes("\\") || name.includes("\0")) return false;
   if (name.startsWith(".") || name.includes(".corrupt-") || name.endsWith(".tmp")) return false;
   return /\.(json|jsonl|bak)$/.test(name);
 }

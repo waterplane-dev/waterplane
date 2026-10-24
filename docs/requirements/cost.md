@@ -92,3 +92,7 @@ The VS Code extension shows the last seven days' cost the moment VS Code opens, 
 - asked: 2026-10-21 (owner)
 - shipped: 4eac8074, f6fb1a70, f41b5db5
 
+
+### R-cost-019 · shipped
+The VS Code extension's All sessions view is the phone's token-usage screen, the same screen rather than a lookalike: the same spans, switches, cards, charts and sentences, over the logs on this machine. With a waterplane desktop running on the same machine and its reading switched on (off by default; only a loopback address is ever read), it also shows the live five-hour and weekly limit windows, the week since the reset, the dollar period, the past-window grids and the other backends' ledgers; without one those are absent and a line says why, with the switch.
+- asked: 2026-10-22 (owner: "a more exact replica with more single source code … test on the mac studio")

@@ -1,11 +1,11 @@
 /** What the Task tool's subagents spent: agentUsage and its roster, cumulative and live folds. Moved from ctxlog.ts. */
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import type { AgentRun, CostBreakdown, TokenTotals } from "@waterplane/shared";
+import type { AgentRun, CostBreakdown, SkillLoad, TokenTotals } from "@waterplane/shared";
 import { AGENT_CTX_POINTS, AGENT_CUM_POINTS, AGENT_LIVE_MS, addCost, addTotals, costOf, normalizeModel, tokenTotal, zeroCost, zeroTotals } from "@waterplane/shared";
 import { localDay, stamp, toMs } from "../convlog.js";
 import { readMeta } from "../agents.js";
-import { SEEN_CAP, readRange, num } from "./ctxcursor.js";
+import { SEEN_CAP, SKILL_BODY, readRange, num, pushSkill, skillLoadOf } from "./ctxcursor.js";
 
 // ── What the subagents spent ──────────────────────────────────────────────
 
@@ -129,6 +129,8 @@ export interface AgentFile {
    *  Halved past `AGENT_CTX_RAW` keeping the LATER of each pair, which is
    *  still a true value of the running total. */
   cum: [number, number][];
+  /** Skill bodies this agent loaded, oldest first — see `SkillLoad`. */
+  skills: SkillLoad[];
   seen: Set<string>;
   seenOrder: string[];
 }
@@ -201,9 +203,15 @@ function readAgentFile(path: string, f: AgentFile): void {
 
 function readAgentLines(lines: string[], f: AgentFile): void {
   for (const line of lines) {
-    if (!line || line.charCodeAt(0) !== 123 /* { */ || !line.includes('"usage"')) continue;
+    if (!line || line.charCodeAt(0) !== 123 /* { */) continue;
+    const skill = line.includes(SKILL_BODY);
+    if (!skill && !line.includes('"usage"')) continue;
     let row: Record<string, unknown>;
     try { row = JSON.parse(line) as Record<string, unknown>; } catch { continue; }
+    if (skill) {
+      const sk = skillLoadOf(row, stamp(row));
+      if (sk) { pushSkill(f.skills, sk); continue; }
+    }
     if (row.type !== "assistant") continue;
     const msg = row.message as { id?: unknown; model?: unknown; usage?: Record<string, unknown> } | undefined;
     if (!msg || typeof msg !== "object") continue;
@@ -300,7 +308,7 @@ export function agentUsage(dir: string, prev?: AgentUsage | null): AgentUsage | 
     if (f && (st.size < f.size || st.mtimeMs < f.mtime)) f = undefined;
     else if (f && st.size === f.size && st.mtimeMs === f.mtime) continue;
     if (!f) {
-      f = { consumed: 0, size: 0, mtime: 0, tok: 0, split: zeroTotals(), cost: zeroCost(), unpriced: 0, firstAt: 0, lastAt: 0, ctx: [], peak: 0, curTok: 0, curAt: 0, cum: [], seen: new Set(), seenOrder: [] };
+      f = { consumed: 0, size: 0, mtime: 0, tok: 0, split: zeroTotals(), cost: zeroCost(), unpriced: 0, firstAt: 0, lastAt: 0, ctx: [], peak: 0, curTok: 0, curAt: 0, cum: [], skills: [], seen: new Set(), seenOrder: [] };
       cur.files.set(name, f);
     }
     readAgentFile(path, f);
@@ -334,6 +342,7 @@ export function agentUsage(dir: string, prev?: AgentUsage | null): AgentUsage | 
       ...(f.peak > 0 ? { peakTok: f.peak } : {}),
       ...(f.split.turns > 0 ? { turns: f.split.turns } : {}),
       ...(f.ctx.length ? { ctx: thinMax(f.ctx, AGENT_CTX_POINTS) } : {}),
+      ...(f.skills.length ? { skills: f.skills } : {}),
     });
   }
   runs.sort((a, b) => a.at - b.at);

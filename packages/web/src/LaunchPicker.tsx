@@ -17,9 +17,10 @@
 import { useState, type ReactNode } from "react";
 import type { Effort, LaunchOpts } from "@waterplane/shared";
 import { ModelField } from "./ModelField";
-import { CLAUDE, agentBackends, backendIdOf, backendOptionLabel, effortChoices, modelChoices, showBackendPicker, windowNote, type BackendList } from "./backendCaps";
+import { CLAUDE, agentBackends, backendIdOf, backendOptionLabel, effortChoices, modelChoices, showBackendPicker, windowNote, backendDrift, type BackendList } from "./backendCaps";
 import { wheelSpokes } from "./modelWheel";
 import { WheelPicker } from "./WheelChart";
+import { SetLine, SetNote } from "./SettingsKit";
 
 export interface LaunchPick { backend?: string; model?: string; effort?: Effort }
 
@@ -68,13 +69,14 @@ export function LaunchPicker({ backends, value, onChange, defaults, nowLead, chi
   const spokes = wheel ? wheelSpokes(cat, model) : [];
   const atDefaults = backend === defaults.backend && model === defaults.model && effort === defaults.effort;
   const win = windowNote(backends, backend);
+  const drift = backendDrift(backends, backend);
   return <>
     {/* `.set-row` and not a bare `<label>`: the labelled-control styling in
         this app lives on that class (the settings screen's own rows), and a
         `<label><select>` outside it is an unstyled browser widget flush
         against the screen edge. One class, so every launch choice and the
         settings screen cannot drift into two looks for the same controls. */}
-    <div className="set-row">
+    <SetLine>
       {pickBackends && (
         <label>backend
           <select value={backend ?? CLAUDE}
@@ -90,9 +92,10 @@ export function LaunchPicker({ backends, value, onChange, defaults, nowLead, chi
       )}
       {/* Said only when it IS known — never a 0k, and never claude's window
           borrowed for a local model (`windowNote`). */}
-      {win && <span className="set-note">{win}.</span>}
+      {win && <SetNote as="span">{win}.</SetNote>}
+      {drift && <SetNote as="span">{drift}</SetNote>}
       {children}
-    </div>
+    </SetLine>
     {wheel && spokes.length > 0 && <>
       {/* The same picker the live session's popover draws (`WheelPicker`):
           one look everywhere a model is chosen. */}
@@ -112,7 +115,7 @@ export function LaunchPicker({ backends, value, onChange, defaults, nowLead, chi
           </button>
         )}
       </div>
-      {versionOpen && <div className="set-row"><ModelField backends={backends} backend={backend} value={model} onChange={setModel} /></div>}
+      {versionOpen && <SetLine><ModelField backends={backends} backend={backend} value={model} onChange={setModel} /></SetLine>}
     </>}
   </>;
 }

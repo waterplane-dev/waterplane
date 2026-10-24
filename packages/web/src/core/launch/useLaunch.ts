@@ -30,7 +30,7 @@ import { askConfirm } from "../../Confirm.tsx";
 import { CantInline } from "../../Unavailable.tsx";
 import { noteSynced } from "../../link.ts";
 import { launchLabel, resumeIdOf } from "../../sessionFacts.tsx";
-import { backendIdOf, backendMark, isShellBackend, backendUnavailable, capReason, hasCap, launchFor, shellBackend, shouldAskLaunch } from "../../backendCaps.ts";
+import { backendIdOf, backendMark, isShellBackend, backendUnavailable, capReason, hasCap, launchFor, launchModeDropNote, shellBackend, shouldAskLaunch } from "../../backendCaps.ts";
 import { needsHostedAck, readHostedAck } from "../../hostedAck.ts";
 import { showToast } from "../../toast.ts";
 import { track } from "../../usage.ts";
@@ -202,6 +202,9 @@ export function useLaunch(deps: LaunchDeps) {
    */
   function createOp(o: Omit<Extract<DurableOp, { t: "session.create" }>, "t" | "cols" | "rows" | "ackId">): DurableOp {
     const { launch: l, ...rest } = o;
+    // A stored mode the backend cannot START in is left off by `wireLaunch` — said, never silent.
+    const dropped = l ? launchModeDropNote(l, backendsRef.current) : null;
+    if (dropped) showToast(dropped);
     return {
       t: "session.create",
       ...rest,
@@ -568,7 +571,12 @@ export function useLaunch(deps: LaunchDeps) {
    * online; `queueOp` is still the path, because the ack ledger is what makes a
    * retry that races the first delivery harmless.
    */
-  async function runForkRequest(cur: SessionInfo, req: ForkRequest) {
+  async function runForkRequest(cur: SessionInfo, req0: ForkRequest) {
+    // claude's document names its conversation; a backend's own record does not, and the id is the
+    // session's (`resumeIdOf`) — never a guess, so none ⇒ say so.
+    const sourceId = req0.sourceId || resumeIdOf(cur);
+    if (!sourceId) { showToast("This session's conversation is not identified yet, so it cannot be cut here."); return; }
+    const req = { ...req0, sourceId };
     if (req.mode === "reset") {
       const drift = await resetFileDrift(cur.cwd);
       const lines = [
@@ -612,7 +620,7 @@ export function useLaunch(deps: LaunchDeps) {
    * start (`createOp.test.mjs`'s NOT_FRESH): kill THIS session and start it
    * again on `patch`, as ONE durable op.
    */
-  function relaunch(cur: SessionInfo, patch: Partial<LaunchOpts>) {
+  function relaunch(cur: SessionInfo, patch: Partial<LaunchOpts>, opts?: { quiet?: boolean; prompt?: string }) {
     // This session's own backend, not the launcher's current default: a
     // relaunch replaces THIS session, and swapping the binary under it
     // because the new-session picker has moved on since is not a relaunch.
@@ -639,11 +647,22 @@ export function useLaunch(deps: LaunchDeps) {
     // whichever conversation in this directory is newest — so that relaunch
     // starts clean rather than land in somebody else's.
     const rid = resumeIdOf(cur);
+    // A prompt rides INSIDE the op (the compose bar's "restart, then send"):
+    // the new session has no id a `session.input` could name yet — exactly
+    // `startSessionWithPrompt`'s case — and the files it names go as `needs`.
+    const prompt = opts?.prompt?.trim() || undefined;
+    const needs = prompt ? inboxNeeds(prompt) : [];
     queueOp(
       createOp({ cwd: cur.cwd, title: cur.title, launch: next, replaceSessionId: cur.id,
+        ...(prompt ? { prompt } : {}), ...(needs.length ? { needs } : {}),
         ...(rid ? { resumeMode: "continue" as const, resumeSessionId: rid } : {}) }),
-      `create:${cur.cwd}`, `relaunch ${cur.title} · ${launchLabel(next, backendMark(backends, next.backend), backends)}`, { cwd: cur.cwd, focus: true },
+      // Quiet (`features/cliRestart`, a restart nobody is tapping at that
+      // moment): follow the new session only if this tab is the one on screen,
+      // and leave whatever sheet is open alone — the caller says its own toast.
+      `create:${cur.cwd}`, `relaunch ${cur.title} · ${launchLabel(next, backendMark(backends, next.backend), backends)}`,
+      { cwd: cur.cwd, focus: !opts?.quiet || deps.active?.id === cur.id, frontOfLane: needs.length > 0 },
     );
+    if (opts?.quiet) return;
     setOverlay(null);
     showToast(`relaunch · ${launchLabel(next, backendMark(backends, next.backend), backends)}`);
   }

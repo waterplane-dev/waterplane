@@ -44,7 +44,7 @@ export function BuildButtonsSheet({ repo }: { repo: RepoTarget }) {
       paramOptions={opts}
       policy={policy}
       onSavePolicy={(p) => savePolicy(dir, p)}
-      onAskOptions={(buildId) => askOptions(dir, buildId)}
+      onAskOptions={(buildId, approve) => askOptions(dir, buildId, approve)}
       onScan={() => scanRepo(dir)}
       onClose={() => core.nav.close("build")}
     />

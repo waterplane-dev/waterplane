@@ -15,7 +15,7 @@ import { clipClosedText, closedItemFacts, cleanClosedRow, cleanFollowUp } from "
 import type { ClosedBy, FollowUp, Intent, PluginBadge, SessionInfo } from "@waterplane/shared";
 import type { ClosedRow, RecentRow, Session, SessionCore } from "./core.js";
 import { onRulesChanged, sessionRules } from "../answergate.js";
-import { resolveBackend } from "../backends/index.js";
+import { derive, resolveBackend } from "../backends/index.js";
 import { hostStateDir } from "../branddirs.js";
 import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
 import { bookmarkStore, type BookmarkStore } from "../bookmarks.js";
@@ -125,10 +125,10 @@ export class RosterSlice {
    */
   keepsClaudeLog(id: string): boolean {
     const s = this.core.sessions.get(id);
-    if (s) return s.backend.caps.transcript === "claude-jsonl";
+    if (s) return derive(s.backend).keepsClaudeLog;
     const closed = this.closedRow(id);
     if (!closed) return true;
-    try { return resolveBackend(closed.launch?.backend).caps.transcript === "claude-jsonl"; }
+    try { return derive(resolveBackend(closed.launch?.backend)).keepsClaudeLog; }
     catch { return false; } // a backend id this host no longer knows ⇒ no log it can read
   }
 
@@ -283,6 +283,7 @@ export class RosterSlice {
       ...(o ? { kind: o.kind } : {}),
       ...txt("itemId", o?.itemId), ...txt("itemLabel", o?.itemLabel), ...txt("fromSession", o?.fromSession),
       ...item,
+      ...(i.contextSpark ? { contextSpark: i.contextSpark } : {}),
       ...(typeof i.createdAt === "number" ? { openedAt: i.createdAt } : {}),
       ...(typeof lastActiveAt === "number" ? { lastActiveAt } : {}),
       ...(h.length > 0 ? { turns: h.length } : {}),

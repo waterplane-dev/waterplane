@@ -2,8 +2,8 @@
   "name": "waterplane",
   "displayName": "waterplane: Cost & Context for Claude Code and Copilot",
   "publisher": "waterplane-dev",
-  "version": "0.5.0",
-  "description": "What each Claude Code prompt cost, the context window over time, and what your CLAUDE.md, AGENTS.md and Copilot instructions cost every request — read from files on this machine. Copilot's monthly quota on request, with your VS Code GitHub sign-in; nothing else touches the network. No telemetry.",
+  "version": "0.6.1",
+  "description": "What each Claude Code prompt cost, the context window over time, and what your CLAUDE.md, AGENTS.md and Copilot instructions cost every request — read from files on this machine. Copilot's monthly quota on request, with your VS Code GitHub sign-in, and a waterplane desktop on this machine if you switch that on; nothing else touches the network. No telemetry.",
   "license": "MIT",
   "icon": "icon.png",
   "repository": {
@@ -76,7 +76,8 @@
       },
       {
         "command": "waterplane.copilotQuota",
-        "title": "Read Copilot's quota from GitHub",
+        "title": "Read Copilot's quota from GitHub (asks to sign in)",
+        "icon": "$(github)",
         "category": "waterplane"
       },
       {
@@ -103,6 +104,11 @@
           "type": "string",
           "default": "",
           "description": "Override the claude CLI's config dir (else CLAUDE_CONFIG_DIR, else ~/.claude)."
+        },
+        "waterplane.desktopUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Read the live rate-limit windows, budget and other backends' ledgers for All sessions from a waterplane desktop on THIS machine (e.g. http://127.0.0.1:8770). Empty = off. Only a loopback address is ever read."
         },
         "waterplane.healthSeconds": {
           "type": "number",
@@ -156,6 +162,15 @@
       ],
       "view/item/context": [
         {
+          "command": "waterplane.copilotQuota",
+          "when": "view == waterplane.sidebar && viewItem =~ /^copilotQuota/",
+          "group": "inline"
+        },
+        {
+          "command": "waterplane.copilotQuota",
+          "when": "view == waterplane.sidebar && viewItem =~ /^copilotQuota/"
+        },
+        {
           "command": "waterplane.copilotQuotaOff",
           "when": "view == waterplane.sidebar && viewItem == copilotQuotaOn"
         }
@@ -169,7 +184,7 @@
     "test": "npm run build && node --test --test-timeout=120000 \"test/*.test.mjs\"",
     "test:integration": "node test/integration/run.mjs",
     "screenshots": "node scripts/screenshot.mjs",
-    "package": "npm run build -- --release && vsce package --no-dependencies --baseImagesUrl https://raw.githubusercontent.com/waterplane-dev/waterplane/main/packages/vscode -o waterplane-0.5.0.vsix && node scripts/check-vsix.mjs waterplane-0.5.0.vsix",
+    "package": "npm run build -- --release && vsce package --no-dependencies --baseImagesUrl https://raw.githubusercontent.com/waterplane-dev/waterplane/main/packages/vscode -o waterplane-0.6.0.vsix && node scripts/check-vsix.mjs waterplane-0.6.0.vsix",
     "check": "npm run typecheck && npm test && npm run package",
     "release": "node scripts/release.mjs"
   },
@@ -186,5 +201,9 @@
     "react-dom": "18.3.1",
     "typescript": "5.9.3"
   },
-  "dependencies": {}
+  "overrides": {
+    "ovsx": {
+      "@vscode/vsce": "$@vscode/vsce"
+    }
+  }
 }

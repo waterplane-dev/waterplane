@@ -29,6 +29,8 @@ export function Handle({ open, onToggle }: { open: boolean; onToggle(): void }) 
         left: `calc(${spot.x * 100}% - ${SIZE / 2}px)`, top: `calc(${spot.y * 100}% - ${SIZE / 2}px)`,
         display: "flex", alignItems: "center", justifyContent: "center", touchAction: "none",
         opacity: open ? 0.95 : 0.6, boxShadow: "0 0 4px #000",
+        // `.key.active`'s fill is a translucent tint: over the desktop picture it vanished. Lay it on the opaque key face.
+        ...(open ? { background: "linear-gradient(var(--pick-fill), var(--pick-fill)), var(--raise)" } : null),
       }}
       onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); press.current = { x: e.clientX, y: e.clientY, moved: false }; }}
       onPointerMove={(e) => {

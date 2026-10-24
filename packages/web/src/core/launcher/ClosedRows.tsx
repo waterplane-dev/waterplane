@@ -4,6 +4,7 @@
  * rows and repos in a hidden repo, each with the verb that brings it back).
  */
 import { PromptPair } from "../../PromptPair";
+import { ContextSparkline, SpendSparkline } from "../../ContextGraph";
 import { useState } from "react";
 import { Archive, Ban, Bot, Camera, ChevronDown, ChevronRight, CircleCheck, Eye, History, RotateCw, Search, Trash2, X, XCircle } from "lucide-react";
 import { branchLabel, trimDefaultBranch } from "@waterplane/shared";
@@ -136,29 +137,58 @@ export function ClosedRows({ p, m }: { p: LauncherProps; m: LauncherModel }) {
         {shown.map((c) => {
           // What it was and why it ended (`closedRowWords.ts`). Every piece is
           // absent when the host did not know — an old row draws exactly its
-          // title, launch label and "reopen · closed …", as before.
+          // title, launch label and "closed …", as before.
           const sub = closedSubtitle(c);
           const kind = closedKindWord(c);
           const reason = closedReason(c);
           const outcome = closedOutcome(c);
           const meta = closedMeta(c, now);
+          const spark = c.contextSpark;
+          const reopen = () => openCwd(c.cwd, trimDefaultBranch(c.title) || c.title, true, "continue", c.launch, resumeIdOf(c));
           return (
-          <div key={c.id} className={`row-wrap${isAutoClosed(c) ? " closed-auto-row" : ""}`} style={repoAccentStyle(repoForCwd(c.cwd)?.repoName ?? baseName(c.cwd))}>
-            <Row as="button" kind="grow" title={`reopen ${trimDefaultBranch(c.title)} — ${reopenHint(c)}`} onClick={() => openCwd(c.cwd, trimDefaultBranch(c.title) || c.title, true, "continue", c.launch, resumeIdOf(c))}>
-              {/* A bookmark (R-conversations-007) is drawn ONCE: its note as a
-                  line below when it has one, else this small mark. */}
-              <RowTitle>{c.bookmark && !c.bookmark.note && <><span className="bm-mark"><BookmarkIcon on size={12} /></span> </>}{closedHeadline(c)}</RowTitle>
-              {reason?.tone === "auto" && (
-                <span className="closed-line"><Tag className="closed-auto"><Bot size={12} /> {reason.text}</Tag></span>
-              )}
-              <span className="row-meta">
-                {sub && <RowSub className="closed-folder">{sub}</RowSub>}
-                <RowSub className={`row-launch${backendMark(backends, c.launch?.backend) ? " row-foreign" : ""}`}>{launchLabel(c.launch ?? {}, backendMark(backends, c.launch?.backend), backends)}</RowSub>
-                {kind && <Tag className="closed-kind">{kind}</Tag>}
-                {reason && reason.tone !== "auto" && <span className={`row-sub${reason.tone === "note" ? " closed-note" : ""}`}>{reason.text}</span>}
-                <RowSub><RotateCw size={12} /> {isShell(c) ? "new shell here" : "reopen"} · closed {ago(c.closedAt)}</RowSub>
+          // The open session's CARD (`SessionRow.tsx`, the grid in
+          // `05-rows-approve.css`), not a table row: title + launch facts on
+          // the head line, "closed …" where the live card's status pill sits,
+          // the prompts as the left column, the verbs pinned right with the
+          // readings under them, the repo's counts as chips at the foot.
+          // `.closed-card`, never `data-sid`: that attribute is the drag and
+          // scroll lookup for LIVE rows.
+          <div key={c.id} className={`row-wrap closed-card${isAutoClosed(c) ? " closed-auto-row" : ""}`} style={repoAccentStyle(repoForCwd(c.cwd)?.repoName ?? baseName(c.cwd))}>
+            {/* The whole card still reopens on tap: the row button is
+                `display: contents` (its children are the grid's items), and
+                every part that is not itself a control lives inside it. */}
+            <Row as="button" kind="grow" title={`reopen ${trimDefaultBranch(c.title)} — ${reopenHint(c)}`} onClick={reopen}>
+              <span className="row-head">
+                {/* A bookmark (R-conversations-007) is drawn ONCE: its note as a
+                    line in the gist when it has one, else this small mark. */}
+                <RowTitle>{c.bookmark && !c.bookmark.note && <><span className="bm-mark"><BookmarkIcon on size={12} /></span> </>}{closedHeadline(c)}</RowTitle>
+                <span className="row-meta">
+                  {sub && <RowSub className="closed-folder">{sub}</RowSub>}
+                  <RowSub className={`row-launch${backendMark(backends, c.launch?.backend) ? " row-foreign" : ""}`}>{launchLabel(c.launch ?? {}, backendMark(backends, c.launch?.backend), backends)}</RowSub>
+                  {kind && <Tag className="closed-kind">{kind}</Tag>}
+                  {reason && reason.tone !== "auto" && <RowSub className={reason.tone === "note" ? "closed-note" : undefined}>{reason.text}</RowSub>}
+                  {isShell(c) && <RowSub>new shell here</RowSub>}
+                </span>
+              </span>
+              {/* Where the live card says "coding" / "done": what this one IS. */}
+              <span className="row-stat"><Tag className="closed-stat" title={`closed ${new Date(c.closedAt).toLocaleString()}`}>closed {ago(c.closedAt)}</Tag></span>
+              <span className="row-gist">
+                {reason?.tone === "auto" && (
+                  <span className="closed-line"><Tag className="closed-auto"><Bot size={12} /> {reason.text}</Tag></span>
+                )}
+                {outcome && (
+                  <RowSub className={`closed-line closed-outcome ${outcome.tone}`}>
+                    {outcome.tone === "ok" ? <CircleCheck size={12} /> : outcome.tone === "bad" ? <XCircle size={12} /> : <Ban size={12} />} {outcome.text}
+                  </RowSub>
+                )}
+                <PromptPair firstPrompt={c.firstPrompt} lastPrompt={c.lastPrompt} className="closed-gist" />
+                {meta.length > 0 && <RowSub className="closed-line closed-meta">{meta.join(" · ")}</RowSub>}
+                {/* The follow-up flag outlives the session (R-sessions-041): its
+                    one line here, and its "done" among the verbs. */}
+                {c.followUp && <span className="closed-line"><FollowUpLine f={c.followUp} /></span>}
+                {c.bookmark?.note && <span className="closed-line bm-mark"><BookmarkIcon on size={12} /> {c.bookmark.note}</span>}
                 {/* …and when the reopen is APPROXIMATE, that is said HERE
-                    — on the row where the tap is decided — rather than in
+                    — on the card where the tap is decided — rather than in
                     the cants strip of the session you land in, which is
                     after the fact and on a different screen. The sentence
                     is `capReason`'s own (`resumePick`), so the missing
@@ -172,50 +202,60 @@ export function ClosedRows({ p, m }: { p: LauncherProps; m: LauncherModel }) {
                     about the folder's conversation would be false. */}
                 {reopenCant(c)}
               </span>
-              {outcome && (
-                <RowSub className={`closed-line closed-outcome ${outcome.tone}`}>
-                  {outcome.tone === "ok" ? <CircleCheck size={12} /> : outcome.tone === "bad" ? <XCircle size={12} /> : <Ban size={12} />} {outcome.text}
-                </RowSub>
+              {/* The live card's cost tile, as it stood at the close: the
+                  window curve and the spend curve. A READOUT here, inside the
+                  row button — a tap on it reopens like the rest of the card.
+                  No `costTag`: it reads the live turn clock and answers
+                  nothing for a session that is not running. */}
+              {spark && (
+                <span className="row-side">
+                  <span className="row-spark">
+                    <ContextSparkline spark={spark} value />
+                    <SpendSparkline spark={spark} />
+                  </span>
+                </span>
               )}
-              <span className="row-gist"><PromptPair firstPrompt={c.firstPrompt} lastPrompt={c.lastPrompt} className="closed-gist" /></span>
-              {meta.length > 0 && <RowSub className="closed-line closed-meta">{meta.join(" · ")}</RowSub>}
-              {/* The follow-up flag outlives the session (R-sessions-041): its
-                  one line here, and its "done" beside the row. */}
-              {c.followUp && <span className="closed-line"><FollowUpLine f={c.followUp} /></span>}
-              {c.bookmark?.note && <span className="closed-line bm-mark"><BookmarkIcon on size={12} /> {c.bookmark.note}</span>}
             </Row>
-            {/* Marked read from here too — keyed on the CONVERSATION, which is
-                what the desktop keeps the flag by; answered by a fresh list. */}
-            {c.followUp && (
-              <button className={`row-act fu-btn${followUpClass(c.followUp)}`} data-hint="session.followup" aria-pressed
-                title={`${FOLLOWUP_CLEAR} — the conversation stays where it is`}
-                onClick={() => {
-                  track("action:session.followup.closed");
-                  liveSend({ t: "session.followup", id: c.claudeSessionId ?? c.id, on: false },
-                    "flag cleared", "no connection — the desktop didn't get that, the flag is still set");
-                }}><FlagIcon on size={ICON} /></button>
-            )}
-            {/* "Pick an older conversation" is claude's own `--resume`
-                list. A backend whose session ids are DISCOVERED rather
-                than minted, and whose conversations do not live beside
-                the repo, has nothing to put in that list — so the verb
-                is absent rather than opening a picker that would be
-                empty for a reason the picker could not explain.
-                `reopen` beside it still works and is the whole row.
+            <div className="row-acts">
+              <span className="row-tags">{countBadges(repoForCwd(c.cwd), openGitFor)}</span>
+              <span className="row-ctl">
+                {/* Marked read from here too — keyed on the CONVERSATION, which is
+                    what the desktop keeps the flag by; answered by a fresh list. */}
+                {c.followUp && (
+                  <button className={`row-act fu-btn${followUpClass(c.followUp)}`} data-hint="session.followup" aria-pressed
+                    title={`${FOLLOWUP_CLEAR} — the conversation stays where it is`}
+                    onClick={() => {
+                      track("action:session.followup.closed");
+                      liveSend({ t: "session.followup", id: c.claudeSessionId ?? c.id, on: false },
+                        "flag cleared", "no connection — the desktop didn't get that, the flag is still set");
+                    }}><FlagIcon on size={ICON} /></button>
+                )}
+                {/* "Pick an older conversation" is claude's own `--resume`
+                    list. A backend whose session ids are DISCOVERED rather
+                    than minted, and whose conversations do not live beside
+                    the repo, has nothing to put in that list — so the verb
+                    is absent rather than opening a picker that would be
+                    empty for a reason the picker could not explain.
+                    `reopen` beside it still works and is the whole card.
 
-                Gated on `resumePick`, NOT on `transcript`. They were the
-                same flag until a backend arrived with a readable
-                conversation record and no picker this host knows how to
-                drive — and the host's `launchArgs` REFUSES `"pick"` for
-                it in words. The moment `transcript` flips true for such
-                a backend, a `transcript` gate here offers a button whose
-                only possible outcome is that refusal. `resumePick`
-                resolves to `transcript` when a descriptor never heard of
-                it, so every older host keeps the button exactly where it
-                was (`backendCaps.ts`). */}
-            {hasCap(backends, c.launch?.backend, "resumePick")
-              && <button className="row-act" title="pick an older conversation in this folder — the binary's own list" onClick={() => openCwd(c.cwd, c.title, true, "pick", c.launch)}><History size={ICON} /></button>}
-            {countBadges(repoForCwd(c.cwd), openGitFor)}
+                    Gated on `resumePick`, NOT on `transcript`. They were the
+                    same flag until a backend arrived with a readable
+                    conversation record and no picker this host knows how to
+                    drive — and the host's `launchArgs` REFUSES `"pick"` for
+                    it in words. The moment `transcript` flips true for such
+                    a backend, a `transcript` gate here offers a button whose
+                    only possible outcome is that refusal. `resumePick`
+                    resolves to `transcript` when a descriptor never heard of
+                    it, so every older host keeps the button exactly where it
+                    was (`backendCaps.ts`). */}
+                {hasCap(backends, c.launch?.backend, "resumePick")
+                  && <button className="row-act" title="pick an older conversation in this folder — the binary's own list" onClick={() => openCwd(c.cwd, c.title, true, "pick", c.launch)}><History size={ICON} /></button>}
+                {/* The card's own verb, said as a button too: the whole card
+                    is the same tap, but a card with no visible verb read as
+                    a record rather than something to bring back. */}
+                <button className="row-act" title={`${isShell(c) ? "start a new shell in this folder" : "reopen"} — ${reopenHint(c)}`} onClick={reopen}><RotateCw size={ICON} /></button>
+              </span>
+            </div>
           </div>
           );
         })}
@@ -262,7 +302,7 @@ export function ClosedRows({ p, m }: { p: LauncherProps; m: LauncherModel }) {
           {hiddenSessions.map((s) => (
             <Row key={s.id} kind="wrap">
               <Row as="button" kind="grow" onClick={() => attach(s)}>
-                <RowTitle>{s.title}<span className={`row-sub${backendMark(backends, s.backend) ? " row-foreign" : ""}`}> {launchLabel(s, backendMark(backends, s.backend), backends)}</span></RowTitle>
+                <RowTitle>{s.title}<RowSub className={backendMark(backends, s.backend) ? "row-foreign" : undefined}> {launchLabel(s, backendMark(backends, s.backend), backends)}</RowSub></RowTitle>
                 <SessionName s={s} />
                 {statusTags(s, undefined, undefined, backends)}
               </Row>

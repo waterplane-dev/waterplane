@@ -1,5 +1,5 @@
 /** Everything the screen draws, given a document: all of the sheet's state and derivations, the skeleton, and the contributed tabs. */
-import { useCallback, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { BarChart3, Loader, RefreshCw } from "lucide-react";
 import {
   coldStartText, type CostBreakdown, type CostWindowDoc, cumulative, dayToMs, hourToMs, ptsCalibration, ptsText,
@@ -85,7 +85,17 @@ export interface SpendView {
  * that can be skipped on a chart — three real bugs in this app's other chart
  * were found by exactly that and by nothing else.
  */
-export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, usageHistory, online = true, onRefreshUsage, onClose, onRescan, initialSpan = { id: "week", back: 0 }, initialSource = "claude", ledgerTabs = [], fresh = 0, nameOf, onExplain, isLive, onOpenConvo, readings, openedOn = null, onClearOn }: {
+export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, usageHistory, online = true, onRefreshUsage, onClose, onRescan, initialSpan = { id: "week", back: 0 }, initialSource = "claude", ledgerTabs = [], localLedgers = [], fresh = 0, nameOf, onExplain, isLive, onOpenConvo, readings, openedOn = null, onClearOn, lead, liveWindows = true }: {
+  /** Drawn first in the NOW block, above the limit windows — the VS Code panel's headline. */
+  lead?: ReactNode;
+  /**
+   * Whether this render has the desktop's live account readings at all. False draws no limit
+   * windows, no week-since-reset card and no dollar period — the VS Code panel with no waterplane
+   * host to ask: a bar with no reading would be a box claiming nobody scraped yet, which is a
+   * different fact from "this side cannot scrape". The live spans need no flag: with no reading
+   * there is no cut, so no chip.
+   */
+  liveWindows?: boolean;
   /** The usage readings per source (`world.usageReadings`): a source with one and no ledger gets a chip (`SourceWindows`). */
   readings?: readonly UsageReading[];
   /** The source the launcher chip's tap filtered this sheet to; null for a lone-claude tap or a plain open. */
@@ -102,6 +112,9 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
   guests?: readonly GuestLedger[];
   /** One tab per other backend that keeps a ledger of its own, and the sheet's rescan counter. */
   ledgerTabs?: { id: string; label: string }[];
+  /** Ledger tab ids answered on this machine, not by the desktop (the VS Code panel's Copilot Chat):
+   *  read even while `online` is false. */
+  localLedgers?: readonly string[];
   fresh?: number;
   /** Both live windows, or null when nothing has been scraped yet. Optional so
    *  a static render of the charts needs no host snapshot. */
@@ -115,7 +128,8 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
    *  than left to time out with the tunnel down. */
   online?: boolean;
   onRefreshUsage?: (quiet?: boolean) => void;
-  onClose: () => void;
+  /** Absent = no sheet head at all: the page around the body (the VS Code panel) owns the title and the re-read. */
+  onClose?: () => void;
   onRescan: () => void;
   /** Which window the charts open on. Only a static render passes it — the
    *  "render it and look at it" step cannot click a filter chip, and a chart
@@ -359,15 +373,16 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
   // An account with no weekly window (API key, Bedrock, Vertex) has no week to explain and no limit
   // bars to draw; its screen leads with the dollar period instead. Any host with a dollar period
   // configured gets that card too, beside the week's.
-  const scraped = hasScrapedWindows(spend?.profile);
+  const scraped = liveWindows && hasScrapedWindows(spend?.profile);
   const periodNow = Date.now();
   const periodState: PeriodState | null = useMemo(() => {
+    if (!liveWindows) return null;
     const configured = primaryUsdPeriod(spend?.periods, spend?.budget);
     if (configured || scraped) return configured;
     // Nothing configured on such an account: the calendar month, so the card has an answer before
     // the person has set anything up (no cap, and no chip — the chip needs a measured period).
     return periodStates([{ id: "month", kind: "calendar", unit: "usd", cycle: "month", anchorDay: 1, tz: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC" }], periodNow)[0];
-  }, [spend?.periods, spend?.budget, scraped, Math.floor(periodNow / 60_000)]); // eslint-disable-line react-hooks/exhaustive-deps -- the minute is the fact; `periodNow` is rebuilt each render
+  }, [liveWindows, spend?.periods, spend?.budget, scraped, Math.floor(periodNow / 60_000)]); // eslint-disable-line react-hooks/exhaustive-deps -- the minute is the fact; `periodNow` is rebuilt each render
   const periodSpan = periodState ? periodReadSpan(periodState, periodNow) : null;
   const periodFrom = periodSpan && "from" in periodSpan ? windowStartHour(periodSpan.from) : null;
   const periodRead = useRemoteResource<CostWindowDoc>(
@@ -656,7 +671,7 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
    */
   return (
     <>
-      <SheetHead title={<><BarChart3 size={16} style={{ verticalAlign: "-3px", marginRight: 4 }} />Token usage</>} onClose={onClose}>
+      {onClose && <SheetHead title={<><BarChart3 size={16} style={{ verticalAlign: "-3px", marginRight: 4 }} />Token usage</>} onClose={onClose}>
         {/* One re-read for both sources — they are two readings of the same
             question and a button that refreshed only the chip you happen to be
             on would leave the other one silently older.
@@ -675,7 +690,7 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
             : "re-scan the conversation logs — a point-in-time answer, not a live feed"}>
           {res.inflight ? <Loader size={14} className="spin" /> : <RefreshCw size={14} />}
         </Button>
-      </SheetHead>
+      </SheetHead>}
 
       {/* ONE scroll region for the whole screen. Since 2026-10-15 ONE row in it is pinned: the
           span filter, because it reaches every box under it and a switch scrolled out of sight is
@@ -687,24 +702,24 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
             cutting one. One line that SCROLLS rather than wraps (it took three rows of a phone). */}
         {showPicker && (
           <div className="ts-filter ts-src" role="group" aria-label="ledger">
-            <button className={`key${!extra && !overview && !readingChip && view === "claude" ? " active" : ""}`}
-              onClick={() => { setExtraId(null); setSource("claude"); }}>Claude Code</button>
+            <Button className={!extra && !overview && !readingChip && view === "claude" ? "active" : undefined}
+              onClick={() => { setExtraId(null); setSource("claude"); }}>Claude Code</Button>
             {shown.map((g) => (
-              <button key={g.def.id} ref={!extra && !overview && !readingChip && view === g.def.id ? revealChip : undefined} className={`key${!extra && !overview && !readingChip && view === g.def.id ? " active" : ""}`}
-                onClick={() => { setExtraId(null); setSource(g.def.id); }}>{g.def.label}</button>
+              <Button key={g.def.id} ref={!extra && !overview && !readingChip && view === g.def.id ? revealChip : undefined} className={!extra && !overview && !readingChip && view === g.def.id ? "active" : undefined}
+                onClick={() => { setExtraId(null); setSource(g.def.id); }}>{g.def.label}</Button>
             ))}
             {chips.map((c) => (
-              <button key={c.source} ref={readingChip?.source === c.source ? revealChip : undefined} className={`key${readingChip?.source === c.source ? " active" : ""}`}
-                onClick={() => setExtraId(READING_TAB + c.source)}>{c.label}</button>
+              <Button key={c.source} ref={readingChip?.source === c.source ? revealChip : undefined} className={readingChip?.source === c.source ? "active" : undefined}
+                onClick={() => setExtraId(READING_TAB + c.source)}>{c.label}</Button>
             ))}
             {ledgerTabs.map((t) => (
-              <button key={t.id} ref={extra?.id === t.id ? revealChip : undefined} className={`key${extra?.id === t.id ? " active" : ""}`}
-                onClick={() => setExtraId(t.id)}>{t.label}</button>
+              <Button key={t.id} ref={extra?.id === t.id ? revealChip : undefined} className={extra?.id === t.id ? "active" : undefined}
+                onClick={() => setExtraId(t.id)}>{t.label}</Button>
             ))}
             {showRunner && (
-              <button className={`key${runner ? " active" : ""}`} onClick={() => setExtraId(RUNNER_TAB)}>Local runner</button>
+              <Button className={runner ? "active" : undefined} onClick={() => setExtraId(RUNNER_TAB)}>Local runner</Button>
             )}
-            <button className={`key${overview ? " active" : ""}`} onClick={() => setExtraId(ALL_TAB)}>All backends</button>
+            <Button className={overview ? "active" : undefined} onClick={() => setExtraId(ALL_TAB)}>All backends</Button>
           </div>
         )}
 
@@ -731,7 +746,7 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
         ) : readingChip ? (
           <SourceWindows reading={readingNow} online={online} />
         ) : extra ? (
-          <BackendLedgerView id={extra.id} label={extra.label} online={online} fresh={fresh} table={table} onTable={setTable}
+          <BackendLedgerView id={extra.id} label={extra.label} online={online || localLedgers.includes(extra.id)} fresh={fresh} table={table} onTable={setTable}
             reading={(() => { const r = readingForLedger(readings, extra.id); return r ? readingAfterResets(r, Date.now()) : null; })()} />
         ) : view === "claude" ? <>
           {/* ── NOW: the one exception to the span filter ──────────────────
@@ -740,6 +755,7 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
               outside `Empty`, so a desktop with no conversation logs still answers "when do my
               limits reset". A figure under a bar is a filter: it sets the span below. */}
           <div className="ts-now">
+          {lead}
           {scraped && <LimitWindows usage={usage ?? null} onRefresh={onRefreshUsage}
             history={history} compact
             cuts={cuts} scope={scopeOn}
@@ -758,18 +774,18 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
             <div className="ts-global">
               <div className="ts-filter" role="group" aria-label="span">
                 {SPANS.filter((x) => !isLiveSpan(x.id) || scopable.some((w) => w.id === x.id)).map((x) => (
-                  <button key={x.id} className={`key${effId === x.id ? " active" : ""}`}
-                    onClick={() => setSpan({ id: x.id, back: 0 })}>{x.label}</button>
+                  <Button key={x.id} className={effId === x.id ? "active" : undefined}
+                    onClick={() => setSpan({ id: x.id, back: 0 })}>{x.label}</Button>
                 ))}
               </div>
               <div className="ts-filter" role="group" aria-label="count in">
                 <span className="ctx-stackpick-lab">count in</span>
-                <button className={`key${!money ? " active" : ""}`} onClick={() => setMetric("tokens")}>tokens</button>
-                <button className={`key${money ? " active" : ""}`} onClick={() => setMetric("cost")}>cost</button>
+                <Button className={!money ? "active" : undefined} onClick={() => setMetric("tokens")}>tokens</Button>
+                <Button className={money ? "active" : undefined} onClick={() => setMetric("cost")}>cost</Button>
                 <span className="ts-seg-sep" aria-hidden="true" />
                 <span className="ctx-stackpick-lab">show as</span>
-                <button className={`key${!table ? " active" : ""}`} onClick={() => setTable(false)}>chart</button>
-                <button className={`key${table ? " active" : ""}`} onClick={() => setTable(true)}>values</button>
+                <Button className={!table ? "active" : undefined} onClick={() => setTable(false)}>chart</Button>
+                <Button className={table ? "active" : undefined} onClick={() => setTable(true)}>values</Button>
               </div>
             </div>
           )}

@@ -33,3 +33,8 @@ The waterplane.dev page links prominently to the GitHub repository and states cl
 - asked: 2026-10-20
 - shipped: 9d23550a
 
+### R-content-008 · shipped
+The website has an Impressum with the owner's name, postal address and email, and the privacy pages carry a GDPR paragraph and controller address.
+- asked: 2026-10-21
+- shipped: 719de2a2
+

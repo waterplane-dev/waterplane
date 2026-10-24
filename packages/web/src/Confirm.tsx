@@ -91,6 +91,9 @@ export interface ConfirmButtonProps {
  * through it: a socket write in here must still end in a toast or a queue
  * entry, exactly as it must in an `onClick`. Wrapping the handler in a
  * component is not a way out of that rule.
+ *
+ * `className` is the caller's WHOLE class string. One that starts with `key` renders through the
+ * kit `Button` (which re-adds `key`); anything else (`link-btn`, `row-act`…) stays a raw `<button>`.
  */
 export function ConfirmButton({ children, confirm = "sure?", className = "key", title, confirmTitle, disabled, onConfirm, ...rest }: ConfirmButtonProps) {
   const id = useId();
@@ -101,21 +104,21 @@ export function ConfirmButton({ children, confirm = "sure?", className = "key", 
     return () => { armListeners.delete(fn); if (armedId === id) setArmed(null); };
   }, [id]);
   const armed = armedId === id;
-  return (
-    <button
-      className={armed ? `${className} danger` : className}
-      title={armed ? (confirmTitle ?? title) : title}
-      aria-label={rest["aria-label"]}
-      disabled={disabled}
-      onClick={() => {
-        if (!armed) { setArmed(id); return; }
-        setArmed(null);
-        onConfirm();
-      }}
-    >
-      {armed ? confirm : children}
-    </button>
-  );
+  const cls = armed ? `${className} danger` : className;
+  const props = {
+    title: armed ? (confirmTitle ?? title) : title,
+    "aria-label": rest["aria-label"],
+    disabled,
+    onClick: () => {
+      if (!armed) { setArmed(id); return; }
+      setArmed(null);
+      onConfirm();
+    },
+  };
+  const k = /^key(?:\s+|$)(.*)$/.exec(cls);
+  return k
+    ? <Button className={k[1] || undefined} {...props}>{armed ? confirm : children}</Button>
+    : <button className={cls} {...props}>{armed ? confirm : children}</button>;
 }
 
 // ── The dialog, for a question that arrives too late to be a label ──────

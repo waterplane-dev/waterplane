@@ -26,7 +26,10 @@ import type { ServerCtx } from "./ctx.js";
 import { WIRE, recordWireFrame } from "../wirerecord.js";
 
 /** What `createClients` needs — the managers constructed ahead of it in main. */
-export type ClientsDeps = Pick<ServerCtx, "auth" | "notifyPrefs" | "push" | "sessions">;
+export type ClientsDeps = Pick<ServerCtx, "auth" | "notifyPrefs" | "push" | "sessions"> & {
+  /** How long a distrusted socket may answer the close frame before `terminate()` (default 1 s; a test seam). */
+  closeGraceMs?: number;
+};
 
 /** Everything `createClients` built; `main.ts` assigns each into `ctx`. */
 export type Clients = ReturnType<typeof createClients>;
@@ -52,6 +55,39 @@ export function createClients(deps: ClientsDeps) {
     return { enabled: auth.isEnabled(), gateTailscale: auth.gateTailscale(), canManage: auth.canManage(kind) };
   }
 
+  /** How long a socket the host no longer trusts gets to answer the close frame
+   *  before it is torn down. `ws.close()` alone keeps parsing and dispatching
+   *  the peer's frames until the handshake completes — or for 30 s if the peer
+   *  never answers it. */
+  const CLOSE_GRACE_MS = deps.closeGraceMs ?? 1000;
+
+  /** Close a socket the host no longer trusts: the close frame first (the phone
+   *  reads its reason), then `terminate()` whatever the peer did with it. */
+  function drop(ws: WebSocket): void {
+    try { ws.close(); } catch { /* already closing */ }
+    const t = setTimeout(() => { try { ws.terminate(); } catch { /* already gone */ } }, CLOSE_GRACE_MS);
+    t.unref?.();
+  }
+
+  /**
+   * Is this socket still one the host would accept a frame from? Decided at the
+   * upgrade once; asked again for every frame (`server/wsops.ts`), because a
+   * revoke, a relock or a password change happens while the socket is open and
+   * its close is asynchronous. The same two questions `enforceAuth` asks, so
+   * the two never disagree: the token it presented must still be valid WHERE
+   * ONE IS NEEDED (on a trusted kind a vanished row changes nothing — the same
+   * phone could reconnect tokenless and be accepted, so refusing its frames
+   * would only freeze the owner's phone after a password change), and the
+   * device it is must not be a locked passive row.
+   */
+  function socketAuthorized(ws: WebSocket): boolean {
+    const kind = wsKind.get(ws);
+    if (kind && auth.needsToken(kind) && !auth.checkToken(wsToken.get(ws) ?? null)) return false;
+    const id = wsDevice.get(ws);
+    const row = id ? auth.devices.get(id) : null;
+    return !(row && auth.passive.restricted(row));
+  }
+
   /** Kick any currently-open socket that is no longer authorized (e.g. the password
    *  was just set/changed, invalidating its token). Sent authRequired, then closed. */
   function enforceAuth(): void {
@@ -59,7 +95,7 @@ export function createClients(deps: ClientsDeps) {
       const kind = wsKind.get(ws);
       if (kind && auth.needsToken(kind) && !auth.checkToken(wsToken.get(ws) ?? null)) {
         send(ws, { t: "authRequired", enabled: auth.isEnabled(), kind });
-        try { ws.close(); } catch { /* already closing */ }
+        drop(ws);
       }
     }
   }
@@ -73,7 +109,7 @@ export function createClients(deps: ClientsDeps) {
       if (wsDevice.get(ws) !== id) continue;
       const kind = wsKind.get(ws) ?? "unknown";
       send(ws, { t: "authRequired", enabled: auth.isEnabled(), kind });
-      try { ws.close(); } catch { /* already closing */ }
+      drop(ws);
       n++;
     }
     return n;
@@ -150,7 +186,7 @@ export function createClients(deps: ClientsDeps) {
   auth.passive.onRelock = (id) => { closeDevice(id); };
 
   return {
-    attached, clients, wsKind, wsToken, wsDevice, wsRole, closeDevice,
+    attached, clients, wsKind, wsToken, wsDevice, wsRole, closeDevice, socketAuthorized,
     authStateFor, enforceAuth, broadcastAuthState, recomputeWatched,
     attachedIds, isAttachedToSomeone,
     send, broadcast,

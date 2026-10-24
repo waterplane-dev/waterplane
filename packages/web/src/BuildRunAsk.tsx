@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { AlertTriangle, CloudOff, Loader, Play, X } from "lucide-react";
+import { AlertTriangle, CloudOff, Loader, Play, ShieldCheck, X } from "lucide-react";
 import type { BuildConfig, BuildParam } from "@waterplane/shared";
-import { cleanParamValue, missingParamsText, paramLabel, resolveParamValues } from "@waterplane/shared";
+import type { BuildParamAnswer } from "@waterplane/shared";
+import { cleanParamValue, missingParamsText, paramLabel, resolveParamValues, unsafeParamIds, unsafeParamsText } from "@waterplane/shared";
 import { SheetHead } from "./Sheet";
 import { Unavailable } from "./Unavailable";
 import { Button } from "./kit/Button";
 import { Hint } from "./kit/Hint";
+import { SetNote, SetLine } from "./SettingsKit";
 
 /**
  * The form between the tap and the build: what this run is for.
@@ -21,10 +23,12 @@ import { Hint } from "./kit/Hint";
  *    drop-down and a broken one look identical, and only one of them is about
  *    this repo.
  */
-export function BuildRunAsk({ build, options, online, onCancel, onRun }: {
+export function BuildRunAsk({ build, options, online, onApprove, onCancel, onRun }: {
   build: BuildConfig;
-  options?: Record<string, { options?: string[]; total?: number; error?: string }>;
+  options?: Record<string, BuildParamAnswer>;
   online: boolean;
+  /** The person's tap on "Run this listing" for one parameter. */
+  onApprove: (paramId: string, cmd: string) => void;
   onCancel: () => void;
   onRun: (values: Record<string, string>) => void;
 }) {
@@ -37,6 +41,7 @@ export function BuildRunAsk({ build, options, online, onCancel, onRun }: {
     return seed;
   });
   const { values, missing } = resolveParamValues(build.params, vals);
+  const unsafe = unsafeParamIds(build.cmd, values);
 
   return (
     <div className="sheet">
@@ -44,16 +49,16 @@ export function BuildRunAsk({ build, options, online, onCancel, onRun }: {
       <Hint tone="mono">{build.dir ? `${build.dir}$ ` : ""}{build.cmd}</Hint>
       <div className="build-params">
         {(build.params ?? []).map((p) => (
-          <ParamField key={p.id} p={p} value={vals[p.id] ?? ""} answer={options?.[p.id]} online={online} asked={options !== undefined}
+          <ParamField key={p.id} p={p} value={vals[p.id] ?? ""} answer={options?.[p.id]} online={online} onApprove={(cmd) => onApprove(p.id, cmd)} asked={options !== undefined}
             onChange={(v) => setVals((prev) => ({ ...prev, [p.id]: cleanParamValue(v) }))} />
         ))}
       </div>
       <div className="sheet-actions">
         <Button onClick={onCancel}><X size={16} /> cancel</Button>
         <span className="spacer" />
-        {missing.length === 0
+        {missing.length === 0 && unsafe.length === 0
           ? <button className="send" onClick={() => onRun(values)}><Play size={14} /> Run</button>
-          : <Unavailable cants={[{ label: "run", reason: missingParamsText(missing) }]} />}
+          : <Unavailable cants={[{ label: "run", reason: missing.length ? missingParamsText(missing) : unsafeParamsText(unsafe) }]} />}
       </div>
       {!online && (
         <Hint>
@@ -65,11 +70,12 @@ export function BuildRunAsk({ build, options, online, onCancel, onRun }: {
 }
 
 /** One question, in whichever of its four states it is actually in. */
-function ParamField({ p, value, answer, online, asked, onChange }: {
+function ParamField({ p, value, answer, online, asked, onChange, onApprove }: {
   p: BuildParam;
   value: string;
-  answer?: { options?: string[]; total?: number; error?: string };
+  answer?: BuildParamAnswer;
   online: boolean;
+  onApprove: (cmd: string) => void;
   /** Has the host been asked at all yet? Un-asked and answered-with-nothing are
    *  two different claims, and only the second is about this repo. */
   asked: boolean;
@@ -77,19 +83,20 @@ function ParamField({ p, value, answer, online, asked, onChange }: {
 }) {
   const discovered = answer?.options;
   const list = discovered ?? p.options ?? [];
+  const gated = !!answer?.needsApproval;
   const waiting = p.kind === "choice" && !!p.optionsCmd && !answer && !p.options?.length;
   const typed = p.kind === "text" || (!list.length && !waiting);
 
   return (
     <div className="build-param">
-      <div className="set-row">
+      <SetLine>
         <label>{paramLabel(p)}
           {typed
             ? <input className="search mono" value={value} autoFocus={!value} onChange={(e) => onChange(e.target.value)} />
             : waiting
-              ? <span className="set-note">{online
+              ? <SetNote as="span">{online
                 ? <><Loader size={13} className="spin" style={{ verticalAlign: "-2px" }} /> reading the list…</>
-                : <><CloudOff size={13} style={{ verticalAlign: "-2px" }} /> no connection — the list is read on the desktop</>}</span>
+                : <><CloudOff size={13} style={{ verticalAlign: "-2px" }} /> no connection — the list is read on the desktop</>}</SetNote>
               : <select value={value} onChange={(e) => onChange(e.target.value)}>
                 {/* No selection until there is one. The first option is not an
                     answer somebody gave. */}
@@ -97,22 +104,32 @@ function ParamField({ p, value, answer, online, asked, onChange }: {
                 {list.map((o) => <option key={o} value={o}>{o}</option>)}
               </select>}
         </label>
-        {p.hint && <span className="set-note">{p.hint}</span>}
+        {p.hint && <SetNote as="span">{p.hint}</SetNote>}
         {/* Where the list came from, shown because it is a command out of the
             build config that ran when this form opened — before anybody
             confirmed a run. Never a surprise. */}
-        {p.optionsCmd && !p.options?.length && (
-          <span className="set-note">from <span className="mono">{p.optionsCmd}</span> in the repo{answer?.total && answer.total > list.length ? ` · showing ${list.length} of ${answer.total}` : ""}</span>
+        {gated && (
+          <SetNote>
+            <ShieldCheck size={12} style={{ verticalAlign: "-2px" }} /> This list comes from a command in the repo&apos;s committed build file. It has not been run on this desktop yet:
+            <div className="mono">{answer?.cmd ?? p.optionsCmd}</div>
+            {online
+              ? <Button onClick={() => onApprove(answer?.cmd ?? p.optionsCmd ?? "")}><ShieldCheck size={14} /> Run this listing</Button>
+              : <span><CloudOff size={12} style={{ verticalAlign: "-2px" }} /> no connection — the listing runs on the desktop.</span>}
+            <span> You can also type the value instead.</span>
+          </SetNote>
+        )}
+        {!gated && p.optionsCmd && !p.options?.length && (
+          <SetNote as="span">from <span className="mono">{p.optionsCmd}</span> in the repo{answer?.total && answer.total > list.length ? ` · showing ${list.length} of ${answer.total}` : ""}</SetNote>
         )}
         {answer?.error && (
-          <span className="set-note warn">
+          <SetNote as="span" className="warn">
             <AlertTriangle size={12} style={{ verticalAlign: "-2px" }} /> {answer.error} — type the value instead.
-          </span>
+          </SetNote>
         )}
         {typed && !p.optionsCmd && p.kind === "choice" && asked && !list.length && (
-          <span className="set-note">no options to offer — type the value.</span>
+          <SetNote as="span">no options to offer — type the value.</SetNote>
         )}
-      </div>
+      </SetLine>
     </div>
   );
 }

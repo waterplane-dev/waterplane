@@ -60,6 +60,24 @@ bootWait(PORT, 800, async () => {
       const buf = Buffer.from(await res.arrayBuffer());
       if (!/attachment; filename="app-299.apk"/.test(dispo)) fail("bad disposition: " + dispo);
       if (buf.length !== 2048) fail("bad bytes: " + buf.length);
+      // H1: repo bytes on the host origin must not run as the host. Buffered, ranged, and 304-less.
+      const url = `http://127.0.0.1:${PORT}/api/repos/${f.repoId}/artifact?path=`;
+      for (const [label, r] of [["download", res], ["inline", await fetch(url + encodeURIComponent(f.relPath))],
+        ["ranged", await fetch(url + encodeURIComponent(f.relPath), { headers: { range: "bytes=0-9" } })]]) {
+        const csp = r.headers.get("content-security-policy") || "";
+        if (r.headers.get("x-content-type-options") !== "nosniff") fail(label + ": no nosniff");
+        if (!/(^|; )sandbox allow-scripts(;|$)/.test(csp) || /allow-same-origin/.test(csp)) fail(label + ": csp sandbox: " + csp);
+        if (!/connect-src 'none'/.test(csp) || !/form-action 'none'/.test(csp)) fail(label + ": csp exfil: " + csp);
+        if (r !== res) await r.arrayBuffer();
+      }
+      console.log("PASS: artifact responses carry nosniff + sandboxed CSP (download, inline, ranged)");
+      // The git sheet's picture route serves an .svg too: same sandbox, never script on the host origin.
+      writeFileSync(join(wt, "logo.svg"), '<svg xmlns="http://www.w3.org/2000/svg"><script>1</script></svg>');
+      const blob = await fetch(`http://127.0.0.1:${PORT}/api/repos/${f.repoId}/git/blob/x?path=logo.svg&side=new`);
+      const bcsp = blob.headers.get("content-security-policy") || "";
+      await blob.arrayBuffer();
+      if (blob.status !== 200 || !/(^|; )sandbox allow-scripts(;|$)/.test(bcsp) || /allow-same-origin/.test(bcsp)) fail("git/blob svg: " + blob.status + " csp: " + bcsp);
+      console.log("PASS: git/blob serves an svg under the sandboxed CSP");
       console.log("PASS: outbox artifact notification with working download link (attachment, 2048 B)");
       seenApk = true;
       // Both alerts are wanted; whichever lands second ends the run.

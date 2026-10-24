@@ -7,11 +7,18 @@
 import { LOCAL_MOVE_POLLS, LOCAL_SUBMIT_TRIES, UNANNOUNCED_POLLS, UNANNOUNCED_TRIES, sleep } from "./deliverknobs.js";
 import type { DeliveryResult, DeliveryRun } from "./delivertypes.js";
 import { resolveBackend } from "../backends/index.js";
+import { trustRule, type TrustRule } from "../backends/derive.js";
 
 /** Does this session's backend have TURNS? A shell does not (`caps.turns`).
  *  Unknown backend / no lookup on a test double ⇒ true, today's behaviour. */
 export function hasTurns(run: Pick<DeliveryRun, "sessions" | "sessionId">): boolean {
   try { return resolveBackend(run.sessions.get?.(run.sessionId)?.backend).caps.turns !== false; } catch { return true; }
+}
+
+/** This session's folder-trust rule (`derive.ts`'s `trustRule`). No backend id ⇒ claude (today's
+ *  default, and every test double's); an id this host cannot resolve ⇒ never answered. */
+export function trustRuleFor(id: string | undefined): TrustRule {
+  try { return trustRule(resolveBackend(id)); } catch { return trustRule(null); }
 }
 
 export async function submitAndConfirm(run: DeliveryRun): Promise<{ result: DeliveryResult; detail?: string }> {

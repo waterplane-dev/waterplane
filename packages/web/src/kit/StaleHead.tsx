@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
 import { SheetHead } from "../Sheet";
+import { Button } from "./Button";
 import { ago } from "../format";
 import { useNow } from "../useNow";
 
@@ -32,7 +33,7 @@ export function StaleHead({ title, onClose, onRefresh, refreshTitle, at, iconSiz
     <>
       {at != null && <Age at={at} />}
       {children}
-      <button className="key" title={refreshTitle} onClick={onRefresh}><RefreshCw size={iconSize} /></button>
+      <Button title={refreshTitle} onClick={onRefresh}><RefreshCw size={iconSize} /></Button>
     </>
   );
   return (

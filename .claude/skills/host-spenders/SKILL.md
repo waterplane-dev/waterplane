@@ -67,8 +67,8 @@ Every place the daemon spends on a model with nobody waiting, and the one engine
   never cancels, and is refused if a row chains `after` it; a conflict has no apply branch. A stop sets every unstarted half aside; a merge takes the members' lowest seat and carries their `latestClock` or is refused in words; count a post only if `intents.post` accepted it — never `ok:true` for an apply that posted nothing. The assess argv has NO
   `--thinking disabled` — unmeasured for a tool run.
 - `commitmsg.ts` — **the commit message the Review sheet's button asks for**: the tab-name call
-  wearing a different prompt, and literally the same function (`sidecar.ts`'s `runCommitTask` IS
-  `runNameTask`, second routing knob), so the measured flags cannot drift into a second copy. TAPPED,
+  wearing a different prompt, and literally the same function (`sidecar.ts`'s `runCommitTask` and
+  `runNameTask` both just call `runTextTask`, second routing knob), so the measured flags cannot drift into a second copy. TAPPED,
   never unattended — hence the timeout knob the naming pass deliberately lacks. The diff is
   `git.ts`'s **`gitPendingDiff`, never `gitReviewDiff`** (that one diffs against MAIN and would
   describe work already committed on a feature branch); untracked files arrive as NAMES, and the

@@ -10,6 +10,7 @@
  * `App` returns early per overlay.
  */
 import { useCallback, useEffect, useState } from "react";
+import { Button } from "./kit/Button";
 
 interface Ask {
   title: string;
@@ -66,7 +67,7 @@ export function AskTextHost() {
         {ask.note && <div className="ask-text-note">{ask.note}</div>}
         <div className="bl-modal-actions">
           <button type="submit" className="send">{ask.okLabel}</button>
-          <button type="button" className="key" onClick={() => answer(null)}>Cancel</button>
+          <Button type="button" onClick={() => answer(null)}>Cancel</Button>
         </div>
       </form>
     </div>

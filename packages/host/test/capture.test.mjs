@@ -257,6 +257,16 @@ test("an unknown backend is REFUSED, naming every known id", () => {
   assert.ok(r.reason.includes("droplet"), "names the row it is talking about");
 });
 
+test("a garmin screen/device that would parse as a flag is dropped, a normal name kept", () => {
+  const bad = cleanTarget({ id: "g", name: "g", backend: "garmin", screen: "--force", device: "-x" }, 0);
+  assert.equal(bad.ok, true);
+  assert.equal(bad.target.screen, undefined);
+  assert.equal(bad.target.device, undefined);
+  const good = cleanTarget({ id: "g", name: "g", backend: "garmin", screen: "main_view.1", device: "fenix7" }, 0);
+  assert.equal(good.target.screen, "main_view.1");
+  assert.equal(good.target.device, "fenix7");
+});
+
 test("a missing backend is refused too — never coerced to a default", () => {
   // Silently defaulting to `window` would hand back a real-looking picture of
   // the whole desktop and nothing would say so.

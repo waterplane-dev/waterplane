@@ -5,6 +5,7 @@ import { usePref } from "./core/prefs";
 import { SysGraph } from "./SysGraph";
 import { roomyCeiling } from "./graphGeom";
 import { dur } from "./format";
+import { SetNote } from "./SettingsKit";
 
 /**
  * *This desktop*'s agents section (`agentCount.ts`): the parallel-agent count
@@ -37,7 +38,7 @@ export const AgentsSection = forwardRef<HTMLElement, { onOpenSession?: (id: stri
             {level === "alarm" ? ` — more than your limit of ${cfg.alarm}.` : level === "warn" ? ` — more than your warning of ${cfg.warn}.` : "."}
           </span>
         ) : (
-          <span className="set-note">No session list from the desktop yet.</span>
+          <SetNote as="span">No session list from the desktop yet.</SetNote>
         )}
         {total.length > 1 ? (
           <>
@@ -45,14 +46,14 @@ export const AgentsSection = forwardRef<HTMLElement, { onOpenSession?: (id: stri
               { key: "agents", label: "all agents", tone: "app", series: total },
               { key: "subagents", label: "of them subagents", tone: "wired", series: subs },
             ]} lo={0} hi={hi} fmt={(v) => String(Math.round(v))} {...span} />
-            <span className="set-note">
+            <SetNote as="span">
               One reading every 10 seconds and one on every change, while this app is open — kept in memory
               only, so a reload starts it again. A break is a stretch this phone was not watching, never bridged.
               {marks.length > 0 && <> Your marks: amber above {cfg.warn || "—"}, red above {cfg.alarm || "—"} (Settings → Appearance).</>}
-            </span>
+            </SetNote>
           </>
         ) : (
-          <span className="set-note">The graph starts with the next reading — every 10 seconds while this app is open.</span>
+          <SetNote as="span">The graph starts with the next reading — every 10 seconds while this app is open.</SetNote>
         )}
         {rows.length > 0 && (
           <div className="lrt-rows">

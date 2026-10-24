@@ -121,3 +121,21 @@ test("calibration: dollars and tokens need none; a percent says what one point c
   // Every unknown ends on what it means for the person.
   for (const w of [calibrationWords("weeklyPct", cal, now), calibrationWords("sessionPct", null, now)]) assert.match(w, /nothing is held/);
 });
+
+// ── P2: a session judged from its backend's own source ───────────────────────
+import { budgetUnitsFor } from "./budgetInput.ts";
+import { sourceSpendSpark } from "@waterplane/shared";
+
+test("budgetUnitsFor: no percent where the backend spends from no claude window — except a cap already set in one", () => {
+  assert.deepEqual(budgetUnitsFor(false).map((u) => u.unit), ["usd", "tok", "sessionPct", "weeklyPct"]);
+  assert.deepEqual(budgetUnitsFor(true).map((u) => u.unit), ["usd", "tok"]);
+  assert.deepEqual(budgetUnitsFor(true, "weeklyPct").map((u) => u.unit), ["usd", "tok", "weeklyPct"], "never silently swapped");
+});
+
+test("the spent line off a source: its own figures and split, and a sentence where it stated none", () => {
+  const spark = sourceSpendSpark({ at: 1, tok: 1000, agentTok: 400 });
+  assert.match(budgetSpentLine("tok", spark, undefined, 0), /^1\.4k tokens so far — 1k tokens in this conversation, 400 tokens in subagents$/);
+  assert.match(budgetSpentLine("usd", spark, undefined, 0), /has not stated what it spent in dollars — nothing is held/);
+  assert.match(budgetSpentLine("weeklyPct", spark, undefined, 0), /claude's account/);
+  assert.match(budgetSpentLine("tok", sourceSpendSpark({ at: 1, tok: 10 }), undefined, 0), /not stated by this session's backend/);
+});

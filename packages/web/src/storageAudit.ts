@@ -133,6 +133,13 @@ const ROWS: readonly RowSpec[] = [
     id: "tokenstats", store: "tokenstats", label: "token statistics", kind: "cache",
     cost: "One re-read, which is expensive for the DESKTOP to rebuild — the screen shows nothing until it answers.",
   },
+  {
+    id: "extassets", store: "extassets", label: "extension downloads", kind: "cache",
+    cost: "An extension's engine fetched from the desktop — the text-in-marks reader is about 8 MB. Re-downloaded when it is switched on again.",
+    // A sentence, not a button here: deleting under a switched-ON extension would leave it saying
+    // "Ready" over nothing. Its own row offers the delete once it is off.
+    cant: "switch the extension off in Settings › Tools & diagnostics › plugins — its row there then offers to delete the download.",
+  },
   // ── the only copy on this phone ──────────────────────────────────────────
   {
     id: "screenlog", store: "screenlog", label: "terminal scrollback", kind: "keep",
@@ -261,6 +268,7 @@ export async function clearRow(row: StoreUse): Promise<{ ok: boolean; note?: str
       const r = await forgetDictations();
       return { ok: true, note: r.kept ? `${r.kept} kept — it is being transcribed right now.` : undefined };
     }
+    case "extassets":
     case "queueduploads":
       // Has a `cant`; the sheet draws no button for it. Refused here too, so a
       // second caller cannot route around the sentence.

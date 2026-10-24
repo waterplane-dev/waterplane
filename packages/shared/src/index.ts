@@ -38,6 +38,8 @@ export * from "./wire/backend.js";
 export * from "./wire/sent.js";
 export * from "./plugin.js";
 export * from "./pluginfile.js";
+export * from "./pluginmaturity.js";
+export * from "./wire/updates.js";
 export * from "./stream.js";
 
 /** Metering, feature usage, scraped CLI usage, and the desktop's own load. */
@@ -163,6 +165,12 @@ export * from "./wire/backendtokens.js";
 
 /** The seam a backend hands a fact over through, beside its screen reader. */
 export * from "./backendsources.js";
+/** One rule for what a 2.2 source slot may answer — the host's consumers and the plugin testkit both ask it. */
+export * from "./sourceshape.js";
+/** `caps.launchModes` (2.2): the modes a session can START in, one rule for host and phone. */
+export * from "./launchmodes.js";
+/** The conversation-binding ladder a backend plugin calls (plugin contract 2.0). */
+export * from "./bindconv.js";
 
 /** What became of the FILES a queued prompt names — the difference between a
  *  prompt that is sendable as written and one that points at nothing. */
@@ -261,6 +269,8 @@ export * from "./itempaths.js";
 // `/login` link on a phone something you can tap instead of transcribe.
 export * from "./urls.js";
 export * from "./slash.js";
+/** The slash sheet's answer (`GET /api/slash`), a backend's own list included (2.2 `commands`). */
+export * from "./wire/slash.js";
 
 /** What a repo can already build, read out of its own manifests — the free half
  *  of the Build sheet's "set up", for adding one more command without spending

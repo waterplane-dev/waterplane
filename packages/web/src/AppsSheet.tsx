@@ -27,6 +27,7 @@ import { AppsSetupPane } from "./AppsSetupPane";
 import { Button } from "./kit/Button";
 import { Row, RowTitle, RowSub } from "./kit/Row";
 import { Hint } from "./kit/Hint";
+import { SetLine, SetNote } from "./SettingsKit";
 
 /**
  * **Your own apps, and which of them install themselves.**
@@ -187,7 +188,7 @@ export function AppsSheet({ onClose, onOpenDownloads }: {
             shell because it runs at the install's receiver with the page
             asleep. An old shell gets the sentence, never a dead switch. */}
         {caps?.supported && !isPlayBuild(caps) && cleanup !== undefined && (
-          <div className="set-row">
+          <SetLine>
             {cleanup !== null && (
               <Button className={cleanup ? "active" : ""}
                 onClick={() => {
@@ -201,8 +202,8 @@ export function AppsSheet({ onClose, onOpenDownloads }: {
                   }).catch((e: unknown) => showToast(e instanceof Error ? e.message : "could not change it"));
                 }}><Trash2 size={14} /> {cleanupLabel(cleanup)}</Button>
             )}
-            <span className="set-note">{cleanupText(cleanup)}</span>
-          </div>
+            <SetNote as="span">{cleanupText(cleanup)}</SetNote>
+          </SetLine>
         )}
         <Hint className="dim">
           Which repo sends builds to this phone at all is the auto-download rule, per repo.{" "}
@@ -358,7 +359,7 @@ function InstallLogPane({ log, cut, onCut, naming, draft, onNaming, onDraft }: {
       {/* Naming THIS phone. Not a synced setting: it is the one preference whose
           entire job is to be different on each device, and a synced copy would
           have the second phone overwrite the first one's name with its own. */}
-      <div className="set-row">
+      <SetLine>
         {naming ? (
           <>
             <input className="search" value={draft} autoFocus
@@ -373,20 +374,20 @@ function InstallLogPane({ log, cut, onCut, naming, draft, onNaming, onDraft }: {
             <Button onClick={() => { onDraft(deviceName()); onNaming(true); track("action:apps.name"); }}>
               <Pencil size={14} /> name this phone
             </Button>
-            <span className="set-note">
+            <SetNote as="span">
               This phone reports as <span className="mono">{deviceName() || deviceLabel({ id: mine })}</span>.
               A name makes the rows below readable when there is more than one device.
-            </span>
+            </SetNote>
           </>
         )}
-      </div>
+      </SetLine>
 
       {/* One chip per device that has ever reported. Each is a filter and says
           how many rows it opens — installs AND failures, since that is what the
           cut contains; a chip counting only the successes would open more rows
           than its own number. */}
       {doc.devices.length > 1 && (
-        <div className="set-row">
+        <SetLine>
           {doc.devices.map((d) => (
             <Button key={d.id} className={cut.deviceId === d.id ? "active" : ""}
               title={d.failures
@@ -396,7 +397,7 @@ function InstallLogPane({ log, cut, onCut, naming, draft, onNaming, onDraft }: {
               <Smartphone size={14} /> {deviceLabel(d)}{d.id === mine ? " (this phone)" : ""} · {d.installs + d.failures}
             </Button>
           ))}
-        </div>
+        </SetLine>
       )}
 
       {/* A filtered view SAYS what it is hiding, with one tap back to all of it. */}
@@ -435,7 +436,7 @@ function InstallLogRow({ entry, mine }: { entry: InstallLogEntry; mine: string }
           {entry.outcome === "installed" ? <PackageCheck size={12} /> : <X size={12} />} {installTitle(entry)}
         </RowTitle>
         <RowSub className="mono">{entry.pkg}</RowSub>
-        <RowSub className={entry.outcome === "failed" ? "warn" : ""}>
+        <RowSub className={entry.outcome === "failed" ? "warn" : undefined}>
           {installLogLine(entry, when)}
         </RowSub>
         {(entry.repo || entry.file) && (

@@ -394,3 +394,12 @@ A password asked on a shell's screen can be filled from a stored login: the mask
 The desktop plugin supports the vault plugin, so secrets can be stored in the vault from there.
 - asked: 2026-10-20, 2026-10-20
 
+### R-vault-078 · shipped
+The vault refuses to release a secret when the grant has expired, the repo or purpose does not match, the vault is locked, or the standing grant was revoked, and tests cover each refusal.
+- asked: 2026-10-21
+- shipped: 30ff6133
+
+### R-vault-079 · requested
+gcloud CLI credentials are stored in the vault, and no unvaulted copy remains on the machine.
+- asked: 2026-10-22
+

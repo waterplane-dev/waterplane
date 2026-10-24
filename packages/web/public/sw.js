@@ -51,6 +51,16 @@ const THUMBS = `${BRAND_SLUG}-thumbs-v1`;
 const PULLS = `${BRAND_SLUG}-pulls-v1`;
 /** The same cache under an older name: kept by the purge for the page to copy. */
 const LEGACY_PULLS = LEGACY_SLUGS.map((s) => `${s}-pulls-v1`);
+
+// An extension's downloaded assets (the OCR engine and its language data: megabytes,
+// fetched once from the person's own host when the extension was switched ON).
+// One Cache per extension, `wp-ext-<id>`, filled by the EXTENSION with authenticated
+// fetches of `/api/plugin/<id>/asset/<file>` stored under `/ext-asset/<id>/<file>`
+// (sdk/extAssets.ts names both; its test reads this file). Not build-scoped, so the
+// activate purge spares the prefix: a UI deploy must not re-download 7 MB. Served
+// CACHE-ONLY below — never the network, which has no such route.
+const EXT_CACHE_PREFIX = "wp-ext-";
+const EXT_ROUTE = /^\/ext-asset\/([a-z0-9][a-z0-9-]*)\/([A-Za-z0-9][A-Za-z0-9._-]*)$/;
 /** Cap on cached thumbnails, evicted oldest-insertion-first (cache.keys() is
  *  insertion-ordered). ~400 × ~30 KB ≈ 12 MB, well inside a phone's quota. */
 const THUMB_MAX = 400;
@@ -84,6 +94,14 @@ function precacheDemo(c) {
   return Promise.all(urls.map((u) => c.add(u).catch(() => {})));
 }
 
+/** `/ext-asset/<id>/<file>` from Cache `wp-ext-<id>`, or 404. `caches.has` first:
+ *  `caches.open` would CREATE an empty cache for an extension that never downloaded. */
+async function extAsset(id, path) {
+  const name = EXT_CACHE_PREFIX + id;
+  const hit = (await caches.has(name)) ? await (await caches.open(name)).match(path, { ignoreSearch: true }) : undefined;
+  return hit ?? new Response(`${id}: ${path.split("/").pop()} is not downloaded on this phone`, { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
+}
+
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     (async () => {
@@ -91,7 +109,7 @@ self.addEventListener("activate", (e) => {
       // exempt BY NAME: it is not build-scoped, and a plain `n !== SHELL` filter
       // would silently wipe it on every single deploy.
       const names = await caches.keys();
-      await Promise.all(names.filter((n) => n !== SHELL && n !== THUMBS && n !== PULLS && !LEGACY_PULLS.includes(n)).map((n) => caches.delete(n)));
+      await Promise.all(names.filter((n) => n !== SHELL && n !== THUMBS && n !== PULLS && !LEGACY_PULLS.includes(n) && !n.startsWith(EXT_CACHE_PREFIX)).map((n) => caches.delete(n)));
       await self.clients.claim();
     })(),
   );
@@ -177,6 +195,13 @@ self.addEventListener("fetch", (event) => {
   //    network-first — the stored copy answers only when the network can't.
   if (THUMB_ROUTE.test(url.pathname) && url.searchParams.has("thumb") && !url.searchParams.has("download")) {
     event.respondWith(url.searchParams.has("v") ? thumbFirst(event.request) : thumbNetworkFirst(event.request));
+    return;
+  }
+  // An extension's own asset: cache-only (see EXT_CACHE_PREFIX). Absent ⇒ a plain 404,
+  // never a fall-through to the shell (which would answer index.html as "the wasm").
+  const ext = EXT_ROUTE.exec(url.pathname);
+  if (ext) {
+    event.respondWith(extAsset(ext[1], url.pathname));
     return;
   }
   // Never intercept the rest of the API, or the websocket upgrade.

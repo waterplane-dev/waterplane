@@ -19,8 +19,9 @@ import { existsSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { normalizeDeviceName, type DeviceTokenResponse, type PassiveAuthFields, type PassiveStateResponse, type PeerKind, logTag, envName, BRAND } from "@waterplane/shared";
-import { passiveAllows, passiveItems, queuedApkIn } from "../passive.js";
-import { requestPeerKind } from "../net.js";
+import { passiveAllows, passiveItems, passiveNeverAllows, queuedApkIn } from "../passive.js";
+import { requestPeerKind, isProxied } from "../net.js";
+import { RateLimiter, rateKey } from "../ratelimit.js";
 import { canonicalRequestPath, checkRequestOrigin, corsHeaders } from "../origin.js";
 import { cookieToken, tokenFromRequest, authCookie, clearAuthCookie } from "../auth.js";
 import { handleAuthedRoutes, handleLanPreAuth, type AuthRouteDeps } from "../authroutes.js";
@@ -34,6 +35,7 @@ import { WEB_DIST } from "../webbundle.js";
 import { brandIndexHtml, brandManifest, iconUrlsTag, themeIconFile, themeIconUrls, themeOverlayState, THEME_ICON_PREFIX } from "../themeoverlay.js";
 import type { ServerCtx } from "./ctx.js";
 import { appReadinessReport } from "../appready.js";
+import { backendInfos } from "../backends/index.js";
 
 // ── HTTP: API router, then static web app ────────────────────────────
 
@@ -45,9 +47,18 @@ const MIME = {
 } as Record<string, string>;
 
 export function createHttp(ctx: ServerCtx) {
+  /** Password logins per source address: a burst of 10, then one every two seconds. */
+  const loginLimit = new RateLimiter({ burst: 10, perSec: 0.5 });
+  /** All source addresses together: behind a proxy every caller can look like one, and many can look like many. */
+  const globalLoginLimit = new RateLimiter({ burst: 60, perSec: 2 });
   // Pairing codes: memory only, so a restart invalidates every outstanding one.
   const pairs = new PairStore();
-  const pairDeps = (): PairDeps => ({ root: ctx.ROOT, port: ctx.PORT, auth: ctx.auth, store: pairs, net: () => pairNet(ctx.PORT), apk: () => latestApk() });
+  const pairDeps = (): PairDeps => ({
+    root: ctx.ROOT, port: ctx.PORT, auth: ctx.auth, store: pairs, net: () => pairNet(ctx.PORT), apk: () => latestApk(),
+    // A passive redeem switches the Tailscale gate on: the tokenless Tailscale sockets that
+    // are open right now are told (`authRequired`) and closed, as `auth.gateTailscale` would.
+    onGateChange: () => { ctx.enforceAuth(); ctx.broadcastAuthState(); },
+  });
   // Empty ⇒ `{}` (the field checks below refuse in their own words); malformed
   // or over 1 MB ⇒ `BadBody`, answered 400/413 by `fail` — never "wrong password"
   // for a body that never arrived whole.
@@ -107,6 +118,13 @@ export function createHttp(ctx: ServerCtx) {
       return;
     }
     if (url.pathname === "/api/auth/login" && method === "POST") {
+      // Before the scrypt verify: a guess costs the host CPU and the attacker only a request.
+      const lk = rateKey(req);
+      if (!globalLoginLimit.take("*") || !loginLimit.take(lk)) {
+        res.writeHead(429, { ...jsonHead, "retry-after": String(Math.ceil(Math.max(loginLimit.retryAfterMs(lk), globalLoginLimit.retryAfterMs("*")) / 1000) || 1) });
+        res.end(JSON.stringify({ ok: false, error: "too many attempts — wait a moment and try again" }));
+        return;
+      }
       const body = await readSmallJson(req);
       if (!ctx.auth.isEnabled()) { res.writeHead(403, jsonHead); res.end(JSON.stringify({ ok: false, error: "no password set on host" })); return; }
       if (!ctx.auth.verify(String(body.password ?? ""))) { res.writeHead(401, jsonHead); res.end(JSON.stringify({ ok: false, error: "wrong password" })); return; }
@@ -123,6 +141,9 @@ export function createHttp(ctx: ServerCtx) {
     // header and a WS subprotocol instead. No password retyping over the
     // tailnet; still nothing while no password is set (deny-until-set).
     if (url.pathname === "/api/auth/token" && method === "POST") {
+      // Minting is a desktop / Tailscale act: a token already in hand over the
+      // Wi-Fi route (or Funnel) must not breed more of them.
+      if (!ctx.auth.canManage(kind)) { res.writeHead(403, jsonHead); res.end(JSON.stringify({ ok: false, error: "a device token is minted on the desktop or over Tailscale, never from the Wi-Fi route" })); return; }
       const presented = ctx.auth.deviceFor(tokenFromRequest(req.headers), kind);
       // A passive token never mints another — unlocked or not, a full token
       // would outlive the 30 minutes.
@@ -244,7 +265,7 @@ export function createHttp(ctx: ServerCtx) {
     // including the auth endpoints, so a drive-by page can't brute-force the
     // password either. Static assets stay ungated (the SPA shell is public).
     if (p.startsWith("/api/")) {
-      const originOk = checkRequestOrigin(req.headers, { path: p, method: req.method });
+      const originOk = checkRequestOrigin(req.headers, { path: p, method: req.method, proxied: isProxied(req.headers) });
       if (!originOk.ok) {
         console.warn(`${logTag} refused ${p}: ${originOk.reason}. If this is your own hostname, set ${envName("ALLOWED_HOSTS")}.`);
         res.writeHead(403, { "content-type": "application/json" });
@@ -305,6 +326,13 @@ export function createHttp(ctx: ServerCtx) {
           return;
         }
       }
+      // An UNLOCKED passive row is full scope for 30 minutes — except for auth
+      // material, which would outlive the unlock (`passiveNeverAllows`).
+      if (p.startsWith("/api/") && passiveNeverAllows(req.method ?? "GET", p) && ctx.auth.deviceFor(tok)?.scope === "passive") {
+        res.writeHead(403, { "content-type": "application/json", ...corsHeaders(req.headers) });
+        res.end(JSON.stringify({ error: "passive device", passive: true }));
+        return;
+      }
       if (p === "/api/passive/state" && req.method === "GET") {
         const row = ctx.auth.deviceFor(tok);
         const out: PassiveStateResponse = {
@@ -328,16 +356,21 @@ export function createHttp(ctx: ServerCtx) {
         res.end(JSON.stringify(found));
         return;
       }
-      if (p.startsWith("/api/pair/") && await handlePairAuthed(req, res, tok, pairDeps())) return;
+      if (p.startsWith("/api/pair/") && await handlePairAuthed(req, res, tok, pairDeps(), kind)) return;
       // `launches` is the intent store: `api.ts` needs exactly one method of it —
       // "an upload landed in this worktree, re-ask the gate now".
       const handled = await handleApi(req, res, {
         root: ctx.ROOT, push: ctx.push, sessions: ctx.sessions, uiStats: ctx.uiStats, netstats: ctx.netstats, setup: ctx.setupWatch, health: ctx.healthWatch, builds: ctx.builds, launches: ctx.intents,
         periods: () => ctx.budget.get().periods ?? [], tokenStats: ctx.tokenStats, usageLog: ctx.usageLog, usageSources: ctx.usageSources, usagePollMs: USAGE_POLL_MS, capture: ctx.capture,
+        usageNow: () => ({
+          usage: ctx.usage.get(), readings: ctx.usageSources.readings(), billing: ctx.billing.status(),
+          budget: ctx.budget.get(), periods: ctx.budget.periods(), backends: backendInfos(),
+        }),
         intents: ctx.intents, acks: ctx.acks, backlog: ctx.backlog, containRepoDir: (d) => ctx.containRepoDir(d), onboard: ctx.onboard,
         appReadiness: () => appReadinessReport(ctx.ROOT, (d) => ctx.builds.list(d), (d) => ctx.autopull.config(d)),
         pluginHook: (id, payload) => ctx.plugins.hook(id, payload),
         pluginRoute: (id, method, parts) => ctx.plugins.route(id, method, parts),
+        pluginAsset: (id, file) => ctx.plugins.assetFile(id, file),
         pluginFile: (id, token) => ctx.plugins.offeredFile(id, token),
         peers: ctx.peers, canManage: (k) => ctx.auth.canManage(k),
       });

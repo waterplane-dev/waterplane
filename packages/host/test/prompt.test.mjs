@@ -27,6 +27,21 @@ test("a well-formed box is detected, with its options in order", () => {
   assert.equal(p.options[0].label, "Yes");
   assert.match(p.question, /make this edit/);
   assert.ok(!p.truncated, "a run starting at 1 is not truncated");
+  assert.ok(!p.questionTruncated, "a short question is not text-truncated");
+});
+
+test("a long screen question says its displayed text was truncated", () => {
+  const p = detectPrompt([
+    `Do you want to make this edit? ${"x".repeat(400)}`,
+    "",
+    "❯ 1. Yes",
+    "  2. No",
+    "",
+    "Enter to confirm · Esc to cancel",
+  ].join("\n"));
+  assert.ok(p);
+  assert.equal(p.question.length, 300);
+  assert.equal(p.questionTruncated, true);
 });
 
 test("a repaint that swallowed the spaces still reads as a dialog footer", () => {
@@ -342,6 +357,11 @@ test("the merge keeps the options that scrolled off, and the real question", () 
   assert.ok(!m.truncated, "nothing is unreachable from the card any more");
 });
 
+test("the merge keeps the truncation marker with the question it keeps", () => {
+  const clipped = { ...PUB, questionTruncated: true };
+  assert.equal(mergeBox(clipped, PUB).questionTruncated, true);
+});
+
 test("a description that arrives a pass late is added, and changes no fingerprint", () => {
   const bare = { ...PUB, options: PUB.options.map(({ desc, ...o }) => o) };
   const m = mergeBox(bare, PUB);
@@ -492,6 +512,8 @@ test("samePrompt compares FIELDS, so a merge does not look like a change", () =>
   const merged = mergeBox(fresh, fresh);
   assert.notEqual(JSON.stringify(fresh), JSON.stringify(merged), "the key order genuinely differs — that is the trap");
   assert.equal(samePrompt(fresh, merged), true);
+  assert.equal(samePrompt(fresh, { ...merged, questionTruncated: true }), false,
+    "a change in whether the displayed text is complete must reach the card");
   assert.equal(samePrompt(fresh, { ...fresh, options: [{ index: 1, label: "A" }] }), false);
   assert.equal(samePrompt(null, null), true);
   assert.equal(samePrompt(fresh, null), false);

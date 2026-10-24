@@ -26,6 +26,7 @@ import {
   installStatus, nativeInstall, nativeInstallSupported, openInstallSettings,
   readInstallAllow, writeInstallAllow,
 } from "./nativeInstall";
+import { SetLine, SetNote } from "./SettingsKit";
 
 interface Props {
   repos: RepoTarget[];
@@ -315,45 +316,45 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
       {/* ── What this phone does with what arrives ───────────────── */}
       <div className="section">This phone <span className="section-hint">· the same on every repo</span></div>
       <div className="set-group">
-        <div className="set-row">
+        <SetLine>
           <Button className={auto ? "active" : ""}
             onClick={() => { const on = !auto; setAutoPull(on); setAuto(on); track("action:pull.auto"); }}>
             {auto ? <Check size={14} /> : <X size={14} />} auto-download: {auto ? "on" : "off"}
           </Button>
-          <span className="set-note">
+          <SetNote as="span">
             The master switch. Off, nothing is fetched without a tap — whatever the per-repo rules below say.
             {isNativeShell() ? "" : ` It is this browser's own: the ${BRAND.displayName} app keeps a separate one, so with the app on this phone too, off here means each file downloads once — in the app.`}
-          </span>
-        </div>
+          </SetNote>
+        </SetLine>
 
         {/* Where a finished download GOES. The save button on every row was a
             second step nobody wants to take 28 times, and taking it twice made a
             second copy rather than overwriting the first — so the hand-off is
             automatic and the rows say what the folder holds. */}
-        <div className="set-row">
+        <SetLine>
           <Button className={autoSave ? "active" : ""}
             onClick={() => { const on = !autoSave; setAutoSaveOut(on); setAutoSaveState(on); track("action:pull.autosave"); }}>
             {autoSave ? <Check size={14} /> : <X size={14} />} save to Downloads: {autoSave ? "automatic" : "on tap"}
           </Button>
-          <span className="set-note">
+          <SetNote as="span">
             {nativeSaveSupported()
               ? "Every file that finishes downloading is put in the phone's Downloads by itself. A file already there is left alone — saving it again would only add a copy beside it."
               : "In a browser the file is handed to the browser's own downloads, which it may refuse unless a tap asked for it — so here this only covers files you tapped."}
-          </span>
-        </div>
+          </SetNote>
+        </SetLine>
 
         {/* Installing is its OWN screen — this is the pointer to it, on the
             settings pane where somebody looking for "which apps update
             themselves" will look for it. */}
         {nativeInstallSupported() && (
-          <div className="set-row">
+          <SetLine>
             <Button onClick={() => { track("action:pull.apps"); onOpenApps(); }}>
               <Boxes size={14} /> apps
             </Button>
-            <span className="set-note">
+            <SetNote as="span">
               Which of your apps install themselves when a new build lands here. {installIntro ?? ""}
-            </span>
-          </div>
+            </SetNote>
+          </SetLine>
         )}
       </div>
 
@@ -372,53 +373,53 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
       {repoDir && (
         <>
           <div className="set-group">
-          <div className="set-row">
+          <SetLine>
             <Button className={cfg.enabled ? "active" : ""}
               onClick={() => { patch({ enabled: !cfg.enabled }); track("action:pull.enable"); }}>
               {cfg.enabled ? <Check size={14} /> : <X size={14} />} auto-download: {cfg.enabled ? "on" : "off"}
             </Button>
-            <span className="set-note">Off means files from this repo are never fetched on their own — a file you tap to download still is, wherever you tap it.</span>
-          </div>
+            <SetNote as="span">Off means files from this repo are never fetched on their own — a file you tap to download still is, wherever you tap it.</SetNote>
+          </SetLine>
 
-          <div className="set-row">
+          <SetLine>
             <RadioRows
               label="what auto-download watches"
               options={[{ key: "outbox", label: "outbox only" }, { key: "repo", label: "whole repo" }]}
               value={cfg.scope}
               onChange={(k) => patch({ scope: k })}
             />
-            <span className="set-note">
+            <SetNote as="span">
               The outbox (<span className="mono">.claude/outbox</span>) is the curated repo→phone drop. Whole-repo
               catches files an agent wrote anywhere, and is noisier by exactly that much.
-            </span>
-          </div>
+            </SetNote>
+          </SetLine>
 
-          <div className="set-row">
+          <SetLine>
             <Button className={cfg.builds ? "active" : ""} onClick={() => patch({ builds: !cfg.builds })}>
               build outputs: {cfg.builds ? "on" : "off"}
             </Button>
-            <span className="set-note">Also queue what a build button produces (the APK), wherever it lands.</span>
-          </div>
+            <SetNote as="span">Also queue what a build button produces (the APK), wherever it lands.</SetNote>
+          </SetLine>
 
-          <div className="set-row">
+          <SetLine>
             <Button className={cfg.supersede ? "active" : ""} data-hint="pull.supersede" onClick={() => { patch({ supersede: !cfg.supersede }); track("action:pull.supersede"); }}>
               newest only: {cfg.supersede ? "on" : "off"}
             </Button>
-            <span className="set-note">
+            <SetNote as="span">
               When a rebuilt version of a file already in the queue turns up, the older ones are dropped and a
               download in flight for them is cancelled — five APKs of the same build is 100+ MB spent on four
               files you don't want. A file already ON the phone is never deleted.
-            </span>
-          </div>
+            </SetNote>
+          </SetLine>
 
-          <div className="set-row">
+          <SetLine>
             {CAPS.map((c) => (
               <Button key={c} className={cfg.maxBytes === c ? "active" : ""} onClick={() => patch({ maxBytes: c })}>
                 {capLabel(c)}
               </Button>
             ))}
-            <span className="set-note">Skip anything bigger. A phone should not silently pull a 2 GB tarball over a metered link.</span>
-          </div>
+            <SetNote as="span">Skip anything bigger. A phone should not silently pull a 2 GB tarball over a metered link.</SetNote>
+          </SetLine>
           </div>
 
           <div className="section">Match <span className="section-hint">· empty = every file in the scope</span></div>
@@ -437,14 +438,14 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
             <input className="search mono" placeholder="Pattern, e.g. *.apk or report-*.md" value={pattern}
               onChange={(e) => setPattern(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") addPattern(); }} />
-            <div className="set-row">
+            <SetLine>
               <Button disabled={!pattern.trim()} onClick={addPattern}><Plus size={14} /> add</Button>
               {PRESETS.map((p) => (
                 <Button key={p.label} onClick={() => patch({ match: dedupe([...cfg.match, ...p.patterns]) })}>
                   {p.label}
                 </Button>
               ))}
-            </div>
+            </SetLine>
           </div>
         </>
       )}
@@ -582,7 +583,7 @@ function PullRow({ rec, repos, onDismiss, caps, allow, onAllow }: {
         {item.mtime ? (
           <RowSub className="dim">created {fmtStamp(item.mtime)}{fmtAgo(item.mtime)}</RowSub>
         ) : null}
-        <RowSub className={state === "failed" || stalled || (saveError && state === "done") ? "warn" : ""}>{status}</RowSub>
+        <RowSub className={state === "failed" || stalled || (saveError && state === "done") ? "warn" : undefined}>{status}</RowSub>
         {showBar && (
           <span className="pull-bar"><span className={`pull-bar-fill ${state === "downloading" && !stalled ? "live" : ""}`} style={{ width: `${pct}%` }} /></span>
         )}
@@ -602,7 +603,7 @@ function PullRow({ rec, repos, onDismiss, caps, allow, onAllow }: {
             where the phone refuses — why, as a sentence rather than a dead
             button (`Unavailable.tsx`). */}
         {installLine && (
-          <RowSub className={rec.install === "failed" ? "warn" : ""}>{installLine}</RowSub>
+          <RowSub className={rec.install === "failed" ? "warn" : undefined}>{installLine}</RowSub>
         )}
         {offer.reason && <RowSub className="dim">{offer.reason}</RowSub>}
         {autoLine && autoLine !== offer.reason && <RowSub className="dim">{autoLine}</RowSub>}

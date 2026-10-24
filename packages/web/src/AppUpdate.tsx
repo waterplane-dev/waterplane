@@ -4,7 +4,7 @@ import { autoApply, autoUpdate, nativeInfo, setAutoApply, setAutoUpdate, updates
 import { ago } from "./format";
 import { track } from "./usage";
 import { Button } from "./kit/Button";
-import { SetNote } from "./SettingsKit";
+import { SetNote, SetLine } from "./SettingsKit";
 
 /**
  * Settings → App version. Android shell only.
@@ -62,21 +62,21 @@ export function AppUpdateSection({ onToast, bare }: {
         themselves; the buttons here are for when you don't want to wait.
       </SetNote>
 
-      <div className="set-row">
-        <span className="set-note" style={{ flexBasis: "auto" }}>
+      <SetLine>
+        <SetNote as="span" style={{ flexBasis: "auto" }}>
           running <code>{s.current ?? "unknown"}</code>
           {s.available && !fresh && <> · host has <code>{s.available}</code></>}
           {fresh && <> · up to date</>}
           {s.lastCheckedAt && <> · checked {ago(s.lastCheckedAt)}</>}
-        </span>
-      </div>
+        </SetNote>
+      </SetLine>
       {native && (
-        <div className="set-row">
-          <span className="set-note" style={{ flexBasis: "auto" }}>
+        <SetLine>
+          <SetNote as="span" style={{ flexBasis: "auto" }}>
             {native.builtIn ? "serving the APK's own built-in bundle" : "serving a downloaded bundle"}
             {native.versionName && <> · shell version <code>{native.versionName}{native.versionCode ? ` (${native.versionCode})` : ""}</code></>}
-          </span>
-        </div>
+          </SetNote>
+        </SetLine>
       )}
       {s.phase === "unsupported" && (
         <SetNote>
@@ -94,29 +94,29 @@ export function AppUpdateSection({ onToast, bare }: {
         </SetNote>
       )}
       {s.phase === "staged" && (
-        <div className="set-note" style={{ color: "var(--ok)" }}>
+        <SetNote style={{ color: "var(--ok)" }}>
           <CheckCircle2 size={13} style={{ verticalAlign: "-2px" }} /> build <code>{s.stagedId}</code> downloaded
           and verified — {apply
             ? "it starts by itself once you put the app down."
             : "it starts the next time the app does."}
-        </div>
+        </SetNote>
       )}
       {s.phase === "held" && (
-        <div className="set-note" style={{ color: "var(--warn)" }}>
+        <SetNote style={{ color: "var(--warn)" }}>
           <ShieldAlert size={13} style={{ verticalAlign: "-2px" }} /> {s.message}. Not downloaded
           again by itself — the desktop's next build is taken as usual.
-        </div>
+        </SetNote>
       )}
       {s.phase === "unavailable" && (
         <SetNote>the desktop cannot serve a bundle: {s.message}</SetNote>
       )}
       {s.phase === "error" && (
-        <div className="set-note" style={{ color: "var(--dead)" }}>
+        <SetNote style={{ color: "var(--dead)" }}>
           <XCircle size={13} style={{ verticalAlign: "-2px" }} /> {s.message}
-        </div>
+        </SetNote>
       )}
 
-      <div className="set-row" style={{ flexWrap: "wrap" }}>
+      <SetLine style={{ flexWrap: "wrap" }}>
         <Button
           disabled={s.phase === "checking" || s.phase === "downloading"}
           onClick={() => { track("action:appUpdate.check"); void updates.check(); }}
@@ -148,7 +148,7 @@ export function AppUpdateSection({ onToast, bare }: {
           className={apply ? "active" : ""}
           onClick={() => { const n = !apply; setApply(n); setAutoApply(n); track("action:appUpdate.autoApply"); }}
         >{apply ? "auto-restart on" : "auto-restart off"}</Button>
-      </div>
+      </SetLine>
       <SetNote>
         A downloaded build never replaces the screen you are reading: the restart
         waits until the app has been in your pocket for a bit, or takes the moment
@@ -156,18 +156,18 @@ export function AppUpdateSection({ onToast, bare }: {
         starting rather than as the app reloading.
       </SetNote>
 
-      <div className="set-row">
+      <SetLine>
         <Button
           variant="danger"
           onClick={() => { track("action:appUpdate.revert"); onToast?.("back to the built-in build"); void updates.revertToBuiltIn(); }}
         ><RotateCcw size={12} /> use the build inside the APK</Button>
-        <span className="set-note">
+        <SetNote as="span">
           The escape hatch if a downloaded build misbehaves. The app does this by
           itself too, when a downloaded build has not started after 15 seconds on
           screen, or after three launches that never finish starting — and then
           leaves that build alone until the desktop serves a different one.
-        </span>
-      </div>
+        </SetNote>
+      </SetLine>
     </Frame>
   );
 }

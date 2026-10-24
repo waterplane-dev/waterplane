@@ -161,6 +161,8 @@ async function phaseB(a) {
   check(bare.status === 401 && bare.json?.authRequired === true, "LAN without a token → 401");
   check((await http(lan, "/api/health", { headers: bearer("not-a-real-token") })).status === 401, "LAN with a wrong token → 401");
   check((await http(lan, "/api/health", { headers: bearer(a.t1.token) })).status === 200, "Bearer token survived the restart and is accepted over LAN");
+  const lanMint = await http(lan, "/api/auth/token", { method: "POST", headers: bearer(a.t1.token), body: { deviceName: "bred over wifi" } });
+  check(lanMint.status === 403 && /never from the Wi-Fi route/.test(lanMint.json?.error ?? ""), "a LAN token cannot mint another device token (403)");
 
   const pre = await http(lan, "/api/health", { method: "OPTIONS", headers: { origin: `http://${lan}:${PORT}`, "access-control-request-headers": "authorization" } });
   check(pre.status === 204 && /authorization/i.test(pre.headers.get("access-control-allow-headers") ?? ""), "preflight passes the token gate and allows Authorization");

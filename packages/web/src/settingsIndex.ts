@@ -197,7 +197,9 @@ export const SETTING_ROWS: SettingRowMeta[] = [
   { id: "tool-features", group: "tools", label: "feature usage", keywords: "which features used never analytics track" },
   { id: "tool-host-stat", group: "tools", label: "host stat", keywords: "cpu memory load desktop mac pressure temperature" },
   { id: "tool-screenshot", group: "tools", label: "screenshot the desktop", keywords: "capture screen mac image" },
+  { id: "tool-updates", group: "tools", label: "updates", keywords: "update self plugin install available new version restart roll back" },
   { id: "tool-decisions", group: "tools", label: "decision log", keywords: "activity auto-continue usage limit what a plugin answered suggested history archive" },
+  { id: "updates-auto", group: "tools", label: "check daily for updates", keywords: "update plugin automatic check github new version" },
   { id: "plugins", group: "tools", label: "plugins", keywords: "plugin extension add-on installed oracle gemini enable disable" },
 ];
 

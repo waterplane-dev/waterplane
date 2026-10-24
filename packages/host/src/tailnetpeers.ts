@@ -64,7 +64,7 @@ async function realStatus(): Promise<string | null> {
   const bin = await tailscaleBin();
   if (!bin) return null;
   try {
-    const { stdout } = await execFileP("/bin/sh", ["-c", `${bin} status --json`], { maxBuffer: 8 * 1024 * 1024, timeout: 5000 });
+    const { stdout } = await execFileP(bin, ["status", "--json"], { maxBuffer: 8 * 1024 * 1024, timeout: 5000 });
     return stdout;
   } catch { return null; }
 }

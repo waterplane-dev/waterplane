@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { showToast, toastMs, toastLog, clearToastLog, onToast, dismissToast, phoneHalfFirst } from "./toast.ts";
+import { showToast, toastMs, toastLog, clearToastLog, onToast, dismissToast, dismissToastIf, phoneHalfFirst } from "./toast.ts";
 
 // ── Where the feed puts this phone's messages ─────────────────────────────
 //
@@ -110,4 +110,20 @@ test("a toast that announced an alert keeps it on its row, across a repeat", () 
   assert.equal(toastLog()[0].notif, undefined);
   clearToastLog();
   dismissToast();
+});
+
+test("dismissToastIf retires only the toast that still says those words", () => {
+  let now = "x";
+  const off = onToast((m) => { now = m; });
+  showToast("sending Yes");
+  dismissToastIf("sending No");
+  assert.equal(now, "sending Yes");
+  dismissToastIf("sending Yes");
+  assert.equal(now, null);
+  showToast("something newer");
+  dismissToastIf("sending Yes");
+  assert.equal(now, "something newer");
+  dismissToast();
+  clearToastLog();
+  off();
 });

@@ -184,3 +184,123 @@ test("gateRule: plugin B declaring the same backend cannot use the rule a person
   assert.deepEqual(decisions, []);
   forgetRules({});
 });
+
+// ── Ask rules held by the gate (`askRulesVia: "gate"`, backend contract v2) ──
+//
+// A CLI with allow/deny but no ASK (Copilot 1.0.91) cannot hold "always ask before `git push`"
+// itself, so the host's gate does: a plugin's automatic answer on a dialog that names a rule's
+// command is refused, and the sentence names the rule. A person's tap is untouched.
+const { askRuleMatches, askRuleHit } = await import("../dist/askrules.js");
+const gate = await import("../dist/answergate.js");
+
+test("askRuleMatches: the rule's pattern ANYWHERE in the dialog's words; a bare tool or a lone * matches nothing", () => {
+  assert.equal(askRuleMatches("Bash(git push*)", "Run git push origin main?"), true);
+  assert.equal(askRuleMatches("Bash(git push * main)", "Run `git push origin main` in /repo?"), true);
+  assert.equal(askRuleMatches("Bash(git push * main)", "Run git push origin dev?"), false);
+  assert.equal(askRuleMatches("Bash(npm publish*)", "Run NPM  Publish --tag next"), true, "case and whitespace runs are ignored");
+  assert.equal(askRuleMatches("Bash(git push*)", "Run gitpush origin"), true, "a squashed render still matches");
+  assert.equal(askRuleMatches("Bash(git push*)", "Run git status"), false);
+  assert.equal(askRuleMatches("Bash", "Run git push"), false, "a bare tool rule names no command to look for");
+  assert.equal(askRuleMatches("Bash(*)", "anything"), false, "a pattern of only * would refuse every dialog");
+  assert.equal(askRuleMatches("Bash(a.b(c)*)", "run a.b(c) now"), true, "regex characters in a rule are literal");
+  assert.equal(askRuleMatches("Bash(a.b*)", "run axb"), false);
+  assert.equal(askRuleHit(["Bash(npm publish*)", "Bash(git push*)"], "git push origin"), "Bash(git push*)");
+  assert.equal(askRuleHit([], "git push origin"), null);
+});
+
+test("gateRefusal with the gate's ask rules: a dialog naming `git push` is a person's, and the sentence names the rule", () => {
+  // The rule is asked BEFORE the blocklist ("push" is on it), so the sentence says which rule.
+  const p = box({ question: "Allow the shell command git push origin main?", options: [{ index: 1, label: "Yes" }, { index: 2, label: "No" }] });
+  const g = base({ prompt: p, told: promptFingerprint(p), askRules: ["Bash(git push*)"] });
+  assert.match(gateRefusal(g), /that question matches the ask rule Bash\(git push\*\) — a person's call/);
+  // No rules held ⇒ the gate is exactly what it was (here: the blocklist's own sentence).
+  assert.match(gateRefusal({ ...g, askRules: undefined }), /destructive, permission-granting or secret/);
+  // A rule that does not match lets an ordinary answer through.
+  assert.equal(gateRefusal(base({ askRules: ["Bash(git push*)"] })), null);
+  // An option's label counts too: the command can be on the row, not the question.
+  const onRow = box({ question: "Run this?", options: [{ index: 1, label: "Yes: npm publish" }, { index: 2, label: "No" }] });
+  assert.match(gateRefusal(base({ prompt: onRow, told: promptFingerprint(onRow), askRules: ["Bash(npm publish*)"] })), /ask rule Bash\(npm publish\*\)/);
+});
+
+test("gateAnswer: only a session launched askRulesVia:\"gate\" is held to its launch's rules; they go with the session", async () => {
+  const p = box({ question: "Run git push origin feature?", options: [{ index: 1, label: "Yes" }, { index: 2, label: "No" }] });
+  const info = { title: "demo", running: true, prompt: p, pluginAnswer: { echo: true }, askRulesVia: "gate", cwd: "/nowhere" };
+  gate.holdAskRules("g1", ["Bash(git push*)"]);
+  assert.deepEqual([...gate.gateAskRules("g1", "/nowhere")], ["Bash(git push*)"]);
+  const held = deps(info);
+  const r = await gateAnswer(held.d, plugin, "g1", 1, "", promptFingerprint(p));
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /ask rule Bash\(git push\*\)/);
+  assert.deepEqual(held.answered, [], "nothing typed");
+  // A native-rules session (claude: the CLI's own `permissions.ask`) is not the gate's business.
+  const native = deps({ ...info, askRulesVia: "native" });
+  gate.holdAskRules("g2", ["Bash(git push*)"]);
+  const r2 = await gateAnswer(native.d, plugin, "g2", 1, "", promptFingerprint(p));
+  assert.match(r2.reason ?? "", /destructive, permission-granting or secret/, "the ordinary blocklist, not a rule");
+  // The session's end (no plugin named) drops what the gate held for it.
+  gate.forgetRules({ sessionId: "g1" });
+  assert.equal(gate.heldAskRules("g1"), undefined);
+  assert.deepEqual([...gate.gateAskRules("g1", undefined)], [], "with no store and no launch record: none");
+  gate.forgetRules({ sessionId: "g2" });
+});
+
+// ── a standing "don't ask again" never outranks an ask rule the gate holds ──
+// Copilot (`askRulesVia:"gate"`): the repo's ask rules hold `git push*`. A person taps "Yes, and
+// don't ask again" on `git push origin main` — that tap answers the dialog, but it must not leave a
+// rule the plugin's `api.ruleAllows` can use to push next time with nobody asked; and a rule made
+// before the ask rule existed is refused all the same.
+test("gateRule: a standing rule whose request matches the gate's ask rules is refused, nothing audited", () => {
+  gate.forgetRules({});
+  const decisions = [], notes = [];
+  const sess = {
+    c1: { title: "copilot", running: true, backend: "copilot", askRulesVia: "gate", cwd: "/nowhere" },
+    n1: { title: "native", running: true, backend: "copilot", askRulesVia: "native", cwd: "/nowhere" },
+  };
+  const deps = { sessions: { get: (id) => sess[id] ?? null }, decision: (r) => decisions.push(r), notify: (k, p) => notes.push([k, p]) };
+  const copilot = { id: "copilot", name: "Copilot", answers: true, backends: ["copilot"] };
+  gate.holdAskRules("c1", ["Bash(git push*)"]);
+  gate.holdAskRules("n1", ["Bash(git push*)"]);
+  // A rule a person made (say, before the repo's ask rules said otherwise): held, but not usable.
+  gate.rememberRule({ sessionId: "c1", plugin: "copilot", backend: "copilot", key: "git push origin main", label: "git push origin main" });
+  const r = gate.gateRule(deps, copilot, "c1", "git push origin main", "the same command again");
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /matches the ask rule Bash\(git push\*\) — a person's call/);
+  assert.deepEqual(decisions, [], "nothing audited");
+  assert.deepEqual(notes, []);
+  assert.equal(gate.rulesFor("c1", "copilot")[0].uses, 0, "never counted as used");
+  // The key alone can carry the command when the label is the plugin's prose.
+  gate.rememberRule({ sessionId: "c1", plugin: "copilot", backend: "copilot", key: "git push --force", label: "that shell command" });
+  assert.match(gate.gateRule(deps, copilot, "c1", "git push --force", "").reason, /ask rule Bash\(git push\*\)/);
+  // A rule that names no ask-rule command still answers.
+  gate.rememberRule({ sessionId: "c1", plugin: "copilot", backend: "copilot", key: "touch a.txt", label: "touch a.txt" });
+  assert.deepEqual(gate.gateRule(deps, copilot, "c1", "touch a.txt", ""), { ok: true });
+  // A native-rules session is not the gate's business (the CLI's own ask outranks allow there).
+  gate.rememberRule({ sessionId: "n1", plugin: "copilot", backend: "copilot", key: "git push origin main", label: "git push origin main" });
+  assert.deepEqual(gate.gateRule(deps, copilot, "n1", "git push origin main", ""), { ok: true });
+  // ruleRefusal itself takes the rules.
+  assert.match(gate.ruleRefusal({ pluginId: "copilot", pluginName: "Copilot", answers: true, backends: ["copilot"], session: sess.c1, sessionId: "c1", key: "git push origin main", askRules: ["Bash(git push*)"] }), /ask rule/);
+  assert.equal(gate.ruleRefusal({ pluginId: "copilot", pluginName: "Copilot", answers: true, backends: ["copilot"], session: sess.c1, sessionId: "c1", key: "git push origin main" }), null, "no rules passed ⇒ none consulted");
+  gate.forgetRules({ sessionId: "c1" }); gate.forgetRules({ sessionId: "n1" });
+});
+
+test("rememberRule: a tap on a dialog that matches an ask rule keeps no rule", () => {
+  gate.forgetRules({});
+  const rules = ["Bash(git push*)"];
+  assert.equal(gate.rememberRule({ sessionId: "c1", plugin: "copilot", backend: "copilot", key: "git push origin main", label: "git push origin main", askRules: rules }), null, "the key names it");
+  assert.equal(gate.rememberRule({ sessionId: "c1", plugin: "copilot", backend: "copilot", key: "k1", label: "this command", askRules: rules, text: "Allow the shell command git push origin main?" }), null, "the dialog's words name it");
+  assert.ok(gate.rememberRule({ sessionId: "c1", plugin: "copilot", backend: "copilot", key: "touch a.txt", label: "touch a.txt", askRules: rules, text: "Allow touch a.txt?" }));
+  assert.deepEqual(gate.rulesFor("c1", "copilot").map((r) => r.key), ["touch a.txt"]);
+  assert.equal(gate.dialogAskRuleHit(rules, { question: "Run it?", options: [{ index: 1, label: "Yes" }, { index: 2, label: "Always", remember: { key: "git push", label: "x" } }] }), "Bash(git push*)", "a remember key counts");
+  assert.equal(gate.dialogAskRuleHit([], { question: "git push", options: [] }), null);
+  gate.forgetRules({});
+});
+
+test("holdAskRulesFor: a spawn that throws releases what the gate held; a native launch holds nothing", () => {
+  assert.throws(() => gate.holdAskRulesFor("t1", "gate", ["Bash(git push*)"], () => { throw new Error("no tmux"); }), /no tmux/);
+  assert.equal(gate.heldAskRules("t1"), undefined, "nothing left for a session that never registered");
+  assert.equal(gate.holdAskRulesFor("t2", "gate", ["Bash(git push*)"], () => 7), 7);
+  assert.deepEqual(gate.heldAskRules("t2"), ["Bash(git push*)"]);
+  assert.equal(gate.holdAskRulesFor("t3", "native", ["Bash(git push*)"], () => 8), 8);
+  assert.equal(gate.heldAskRules("t3"), undefined);
+  gate.forgetRules({ sessionId: "t2" });
+});

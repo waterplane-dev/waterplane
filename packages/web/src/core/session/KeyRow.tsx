@@ -15,6 +15,7 @@ import type { ComposeApi } from "../compose/useCompose";
 import type { ChordMod, ModState } from "../compose/chordState.ts";
 import { keepFocus } from "../compose/ComposeBar";
 import { Button } from "../../kit/Button";
+import { interruptWho, runsClaudeTui, type BackendList } from "../../backendCaps";
 
 const ICON = 16;
 
@@ -34,8 +35,8 @@ const blurCompose = (e: ReactPointerEvent) => {
 // reader says: four of these are bare glyphs, which explained nothing.
 // `key` is the name a held modifier combines with (`useChord`, `shared/chord.ts`).
 // No `key` (^C): it IS a chord already, sent as is, and a held modifier waits for the next key.
-const SPECIAL_KEYS: { label: ReactNode; title: string; data: string; key?: ChordKey; nav?: boolean }[] = [
-  { label: "Esc", title: "Esc — close a menu or interrupt claude", data: "\x1b", key: "esc" }, { label: "Tab", title: "Tab — complete", data: "\t", key: "tab" },
+const specialKeys = (who: string): { label: ReactNode; title: string; data: string; key?: ChordKey; nav?: boolean }[] => [
+  { label: "Esc", title: `Esc — close a menu or interrupt ${who}`, data: "\x1b", key: "esc" }, { label: "Tab", title: "Tab — complete", data: "\t", key: "tab" },
   { label: <ArrowUp size={ICON} />, title: "up — move the selection in a box", data: "\x1b[A", key: "up", nav: true },
   { label: <ArrowDown size={ICON} />, title: "down — move the selection in a box", data: "\x1b[B", key: "down", nav: true },
   { label: <ArrowLeft size={ICON} />, title: "left", data: "\x1b[D", key: "left", nav: true }, { label: <ArrowRight size={ICON} />, title: "right", data: "\x1b[C", key: "right", nav: true },
@@ -52,8 +53,10 @@ const modTitle = (label: string, s: ModState) =>
   : s === "once" ? `${label} is held for the next key. Tap again to lock it, a third time to let go.`
   : `${label} is locked for every key until you tap it again.`;
 
-export function KeyRow({ active, compose, keysOpen, setKeysOpen }: {
-  active: Pick<SessionInfo, "keyHints">;
+export function KeyRow({ active, backends, compose, keysOpen, setKeysOpen }: {
+  active: Pick<SessionInfo, "keyHints" | "backend">;
+  /** Which backend the session runs decides whose shortcut list the Keys button offers. */
+  backends: BackendList;
   compose: Pick<ComposeApi, "chord" | "tapChordMod" | "cliMode" | "sendInput" | "toggleCliMode">;
   keysOpen: boolean;
   setKeysOpen(f: (open: boolean) => boolean): void;
@@ -94,7 +97,7 @@ export function KeyRow({ active, compose, keysOpen, setKeysOpen }: {
           </Button>
         );
       })}
-      {SPECIAL_KEYS.map((k, i) => (
+      {specialKeys(interruptWho(backends, active.backend)).map((k, i) => (
         <Button key={i} title={k.title} aria-label={k.title}
           onPointerDown={k.nav && !cliMode ? blurCompose : keepFocus}
           onClick={() => (k.key ? compose.chord.sendKey(k.key, k.data) : sendInput(k.data))}>{k.label}</Button>
@@ -114,9 +117,13 @@ export function KeyRow({ active, compose, keysOpen, setKeysOpen }: {
           </Button>
         );
       })}
-      <button className={`key${keysOpen ? " active" : ""}`} onPointerDown={keepFocus} onClick={() => setKeysOpen((o) => !o)}
+      {/* claude's own list, only where the session runs claude's TUI (a cap test, `runsClaudeTui`):
+          offered in a Copilot or shell session it would type claude's keys at another program. */}
+      {runsClaudeTui(backends, active.backend) && (
+      <Button className={keysOpen ? "active" : undefined} onPointerDown={keepFocus} onClick={() => setKeysOpen((o) => !o)}
         aria-expanded={keysOpen} title="claude's own shortcuts (ctrl+o transcript, ctrl+t todos, alt+p model…) — one tap each"
-        aria-label="claude's shortcuts"><Keyboard size={ICON} /> Keys</button>
+        aria-label="claude's shortcuts"><Keyboard size={ICON} /> Keys</Button>
+      )}
       {/* Lives at the END of this row on purpose: the row IS raw input, and
           CLI mode is the same thing with the alphabet added. */}
       <Button

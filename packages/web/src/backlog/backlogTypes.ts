@@ -5,6 +5,7 @@
  * Shape: docs/notes/backlog-architecture.md.
  */
 import type { AutoSlotFacts, BacklogItem, Intent, ItemCategory, RepoTarget, SessionBudget, SessionInfo } from "@waterplane/shared";
+import type { BackendList } from "../backendCaps";
 import type { CloseChoice } from "../autoSessions";
 import type { RenderRetime } from "../RetimeBar";
 import type { SlotCheck } from "../slotCheck";
@@ -17,6 +18,8 @@ import type { useBacklogUi } from "./useBacklogUi";
 
 export interface BacklogProps {
   items: BacklogItem[];
+  /** What this host described (null: it never said) — names a row's backend for the budget field's units. */
+  backends?: BackendList;
   auto: boolean;
   repos: RepoTarget[];
   /**

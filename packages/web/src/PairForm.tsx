@@ -11,6 +11,7 @@ import {
 } from "./pairRedeem";
 import { showToast } from "./toast";
 import { Button } from "./kit/Button";
+import { SetNote, SetLine } from "./SettingsKit";
 
 /**
  * "Pair with code" — the half of `HostSetup` that takes a code shown as a QR
@@ -85,11 +86,11 @@ export function PairForm({ mode, initial, fromLink, onDone }: {
   const status = (
     <>
       {busy && (
-        <div className="set-note" style={{ marginTop: 10 }}>
+        <SetNote style={{ marginTop: 10 }}>
           <Loader2 size={13} className="spin" style={{ verticalAlign: "-2px" }} /> pairing…
-        </div>
+        </SetNote>
       )}
-      {problem && <div className="set-note" style={{ marginTop: 10, color: "var(--dead)" }}>{problem}</div>}
+      {problem && <SetNote style={{ marginTop: 10, color: "var(--dead)" }}>{problem}</SetNote>}
     </>
   );
 
@@ -109,10 +110,10 @@ export function PairForm({ mode, initial, fromLink, onDone }: {
         {!busy && mode === "add" && (
           <Button className="pair-wide" style={{ marginTop: 8 }} onClick={() => void pair(false)}>pair, stay here</Button>
         )}
-        <div className="set-note warn pair-confirm-note">
+        <SetNote className="warn pair-confirm-note">
           <Link2 size={12} style={{ verticalAlign: "-2px" }} /> A pairing link filled this in. Nothing is sent until you tap pair —
           if you did not open a link just now, do not.
-        </div>
+        </SetNote>
         {!busy && (
           <Button className="pair-link-btn" onClick={() => setEditing(true)}><Pencil size={13} /> change address or code</Button>
         )}
@@ -123,9 +124,9 @@ export function PairForm({ mode, initial, fromLink, onDone }: {
   return (
     <>
       {fromLink && initial && (
-        <div className="set-note warn" style={{ marginBottom: 10 }}>
+        <SetNote className="warn" style={{ marginBottom: 10 }}>
           <Link2 size={13} style={{ verticalAlign: "-2px" }} /> {pairLinkSentence(initial)}
-        </div>
+        </SetNote>
       )}
       <ol className="pair-steps">
         <li>On a phone already paired, or the desktop's web page: Settings → <b>pair another phone</b>.</li>
@@ -152,25 +153,25 @@ export function PairForm({ mode, initial, fromLink, onDone }: {
         onChange={(e) => { setProblem(null); setFields({ ...fields, code: e.target.value }); }}
       />
       {target ? (
-        <div className="set-note" style={{ marginTop: 8, opacity: 0.75 }}>
+        <SetNote style={{ marginTop: 8, opacity: 0.75 }}>
           will connect to <code>{target.base}</code> with code <code>{formatPairCode(target.code)}</code>
-        </div>
+        </SetNote>
       ) : (fields.address.trim() || fields.code.trim()) ? (
-        <div className="set-note" style={{ marginTop: 8 }}>
+        <SetNote style={{ marginTop: 8 }}>
           {!fields.address.trim() ? "Type the desktop's address too."
             : !pairTargetOf({ address: fields.address, code: "AAAAAAAA" }) ? "Not an address. Use a host name or IP, optionally with a port."
             : "The code is 8 letters and digits, as the paired phone shows it."}
-        </div>
+        </SetNote>
       ) : (
-        <div className="set-note" style={{ marginTop: 8 }}>A pasted pairing link fills both fields.</div>
+        <SetNote style={{ marginTop: 8 }}>A pasted pairing link fills both fields.</SetNote>
       )}
       {status}
       {target && !busy && (
-        <div className="set-row" style={{ marginTop: 14, flexWrap: "wrap", gap: 8 }}>
+        <SetLine style={{ marginTop: 14, flexWrap: "wrap", gap: 8 }}>
           {mode === "first" && <Button variant="primary" className="pair-wide" onClick={() => void pair(true)}><KeyRound size={14} /> pair</Button>}
           {mode === "add" && <Button variant="primary" onClick={() => void pair(true)}><KeyRound size={14} /> pair and switch</Button>}
           {mode === "add" && <Button onClick={() => void pair(false)}>pair</Button>}
-        </div>
+        </SetLine>
       )}
     </>
   );

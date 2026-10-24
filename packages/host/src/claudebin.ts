@@ -25,6 +25,8 @@ export interface ClaudeBinResult {
   tried: string[];
   /** Under WSL, nothing on the Linux side, but Claude is installed on Windows: that path. Never used as `bin`. */
   windowsSide?: string;
+  /** Nothing resolved: no knob, not on PATH, no candidate exists. `bin` is then the bare `claude` fallback, which will not spawn. */
+  missing?: true;
 }
 
 export interface ClaudeBinFacts {
@@ -76,7 +78,7 @@ export function findClaudeBin(f: ClaudeBinFacts): ClaudeBinResult {
     tried.push(c);
     if (f.exists(c)) return { bin: c, source: "found", tried };
   }
-  const out: ClaudeBinResult = { bin: "claude", source: "path", tried };
+  const out: ClaudeBinResult = { bin: "claude", source: "path", tried, missing: true };
   if (f.wsl && !win) {
     for (const u of ls("/mnt/c/Users")) {
       for (const rel of ["AppData/Roaming/npm/claude.cmd", ".local/bin/claude.exe"]) {
@@ -93,7 +95,7 @@ export const tilde = (s: string, home: string): string =>
   home && (s === home || s.startsWith(home + "/") || s.startsWith(home + "\\")) ? "~" + s.slice(home.length) : s;
 
 /** The real machine's PATH, scanned synchronously. */
-function pathHas(name: string, platform: NodeJS.Platform): boolean {
+export function pathHas(name: string, platform: NodeJS.Platform): boolean {
   const win = platform === "win32";
   const dirs = (process.env.PATH ?? "").split(win ? ";" : ":").filter(Boolean);
   const names = win ? [`${name}.exe`, `${name}.cmd`, name] : [name];
@@ -107,7 +109,11 @@ let cached: ClaudeBinResult | null = null;
 
 /** Resolved once per process from the real machine (the knob is read live by `claudeBin()`, not here). */
 export function claudeBinResolution(): ClaudeBinResult {
-  cached ??= findClaudeBin({
+  // A miss is never cached: installing claude and retrying must work without a host restart. Nor is
+  // a hit trusted blindly: a package-manager upgrade unlinks the command for minutes, so the cached
+  // answer is re-checked (one stat or PATH scan) and re-resolved when it has gone.
+  if (cached && !cached.missing && (cached.bin.includes("/") ? existsSync(cached.bin) : pathHas(cached.bin, process.platform))) return cached;
+  cached = findClaudeBin({
     env: process.env,
     platform: process.platform,
     home: homedir(),

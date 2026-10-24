@@ -77,8 +77,8 @@ function windowOf(which: "session" | "weekly", u: WindowResets | null | undefine
  *   fraction of the bar — the caller's fact, since it depends on the width
  */
 export function weekBar(entries: readonly ScheduleEntry[], usage: WindowResets | null | undefined, now: number, minGap = 0.07): WeekBar {
-  const from = now;
-  const to = now + WEEK_MS;
+  const from = Math.floor(now / 60_000) * 60_000; // positions on a minute grid: a week bar cannot draw a minute, and the render gate needs them fixed
+  const to = from + WEEK_MS;
   const span = to - from;
   const days: { t: number; x: number }[] = [];
   const d = new Date(now);

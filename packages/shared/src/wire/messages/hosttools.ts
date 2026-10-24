@@ -11,6 +11,7 @@ import type { ScheduleEntry } from "../../schedule.js";
 import type { SettingsDoc } from "../../settings.js";
 import type { InstallLogDoc } from "../install.js";
 import type { NotificationItem, NotifyPrefs } from "../notify.js";
+import type { BuildParamAnswer } from "../../buildparams.js";
 import type { BuildCandidate } from "../../buildscan.js";
 import type { CaptureBackendInfo, CaptureRun, CaptureTarget } from "../capture.js";
 import type { OnboardJob } from "../onboard.js";
@@ -151,7 +152,7 @@ export type HostToolsMsg =
    * monorepo has no apps" are opposite facts and only one of them means the
    * form should offer a typed field instead.
    */
-  | { t: "build.options"; repoDir: string; buildId: string; options: Record<string, { options?: string[]; total?: number; error?: string }> }
+  | { t: "build.options"; repoDir: string; buildId: string; options: Record<string, BuildParamAnswer> }
   // ── Verified capture ──
   /**
    * A repo's capture targets + recent runs (sent on request and on save).

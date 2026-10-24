@@ -149,6 +149,27 @@ function copy(from, to) {
 }
 
 /** The files every layout carries: the sources, the compiled tree, the docs. */
+// Every relative import reachable from `entry` must exist in the staged tree: a file the engine
+// imports but the stage lacks is a crash on the user's machine, never one here.
+function assertClosure(dir, entry) {
+  const seen = new Set(), todo = [entry], missing = [];
+  while (todo.length) {
+    const rel = todo.pop();
+    if (seen.has(rel)) continue;
+    seen.add(rel);
+    const abs = join(dir, rel);
+    if (!existsSync(abs)) { missing.push(rel); continue; }
+    const src = readFileSync(abs, "utf8");
+    for (const m of src.matchAll(/(?:^|\n)\s*(?:import|export)\s[^'"]*?from\s+["'](\.{1,2}\/[^"']+)["']|import\(\s*["'](\.{1,2}\/[^"']+)["']\s*\)/g)) {
+      todo.push(relative(dir, resolve(dirname(abs), m[1] ?? m[2])));
+    }
+  }
+  if (missing.length) {
+    console.error(`release: ${entry} imports files the release does not ship: ${missing.join(", ")}. Copy them in stageTree, then build the release again.`);
+    process.exit(1);
+  }
+}
+
 function stageTree(dir, { sharedAtPackages }) {
   const t = { base: dir };
   mkdirSync(dir, { recursive: true });
@@ -179,8 +200,21 @@ function stageTree(dir, { sharedAtPackages }) {
   // compiled code behind either, and `release.json` does not name it.
   const extDir = join(ROOT, "packages/extensions");
   for (const id of existsSync(extDir) ? readdirSync(extDir) : []) {
-    if (builtins[id]) copy(`packages/extensions/${id}/${BRAND_MANIFEST}`, t);
-    else rmSync(join(dir, "packages/host/dist/extensions", id), { recursive: true, force: true });
+    if (builtins[id]) {
+      copy(`packages/extensions/${id}/${BRAND_MANIFEST}`, t);
+      // A manifest `assets` folder (the OCR engine, built by `npm run build`) is served by the host
+      // from the SOURCE folder too (`plugins/pluginassets.ts`): it ships beside the manifest, and a
+      // shipped extension whose folder is missing or empty stops the build — it could never be ready.
+      const assets = readJson(`packages/extensions/${id}/${BRAND_MANIFEST}`).assets;
+      if (typeof assets === "string") {
+        const a = `packages/extensions/${id}/${assets}`;
+        if (!existsSync(join(ROOT, a)) || readdirSync(join(ROOT, a)).length === 0) {
+          console.error(`release: ${a} is missing or empty — ${id} ships and its manifest serves that folder. Run \`npm run build\` (it fills it), then build the release again.`);
+          process.exit(1);
+        }
+        copy(a, t);
+      }
+    } else rmSync(join(dir, "packages/host/dist/extensions", id), { recursive: true, force: true });
   }
   // The Windows launcher (`host/dist/cli/windows.ts`) runs the host inside WSL from this tree: it
   // starts the keeper, and `setup` provisions the distro with the pinned Node and gh it names.
@@ -194,9 +228,13 @@ function stageTree(dir, { sharedAtPackages }) {
     }
     copy(f, t);
   }
-  // repohealth's engine is resolved at <root>/tools/repohealth.mjs (repohealth.ts).
+  // repohealth's engine is resolved at <root>/tools/repohealth.mjs (repohealth.ts). It imports
+  // outside its folder (skillmap.mjs, packages/shared/dist): 0.1.4 shipped without skillmap.mjs and
+  // every reading died ERR_MODULE_NOT_FOUND. `assertClosure` walks its relative imports in the stage.
   copy("tools/repohealth.mjs", t);
   copy("tools/repohealth", t);
+  copy("tools/skillmap.mjs", t);
+  assertClosure(dir, "tools/repohealth.mjs");
   for (const f of ["LICENSE", "README.md", "SECURITY.md", "NOTICES.md", "DISCLAIMER.md", "CHANGELOG.md"]) copy(f, t);
 }
 

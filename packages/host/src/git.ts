@@ -1,7 +1,7 @@
 /** Git review operations for a worktree: status, diff, stage, commit, pull, push. */
 import { readFile, stat } from "node:fs/promises";
-import { resolve } from "node:path";
-import { contained } from "./paths.js";
+import { relative, resolve } from "node:path";
+import { contained, containedReal, realResolve } from "./paths.js";
 import { spawn } from "node:child_process";
 import type { GitPushState } from "@waterplane/shared";
 import { execFileP as pexec } from "./proc.js";
@@ -311,8 +311,9 @@ const BLOB_MAX = 64 * 1024 * 1024;
  * past `BLOB_MAX`. Never a guess at another revision.
  */
 export async function gitBlob(wt: string, rel: string, side: "old" | "new", staged: boolean): Promise<Buffer | null> {
-  const full = pathInTree(wt, rel);
-  if (!full || isSecretFile(rel)) return null;
+  // Reads bytes: a symlink out of the tree is refused (`containedReal`).
+  const full = containedReal(wt, rel);
+  if (!full || secretAt(wt, rel, full)) return null;
   if (side === "new" && !staged) {
     try {
       const st = await stat(full);
@@ -410,15 +411,25 @@ export function isSecretFile(rel: string): boolean {
   return !/\.(example|sample|template|dist|defaults?)$/i.test(p);
 }
 
+/**
+ * Is the file at `full` (inside worktree `wt`) a dotenv file, by the name asked
+ * for OR by where it really is? A committed in-repo link `docs/x.txt -> ../.env`
+ * passes containment and the name check on the requested path; the resolved
+ * target's name gives it away. `full` need not be resolved — it is here.
+ */
+export function secretAt(wt: string, rel: string, full: string): boolean {
+  return isSecretFile(rel) || isSecretFile(relative(realResolve(wt), realResolve(full)));
+}
+
 export async function readTextFile(wt: string, rel: string): Promise<string | null> {
-  const full = pathInTree(wt, rel);
+  const full = containedReal(wt, rel);
   if (!full) return null;
   // Never render a dotenv file into the app. The secret sheet writes these and
   // promises it won't show them back, and the file/diff viewers are the one
   // place that promise could quietly break. (This is a UI guarantee, not a
   // security boundary — a `claude` session in the repo can read anything.)
   // Committed templates are exempt: they exist to be read and hold no secrets.
-  if (isSecretFile(rel)) return null;
+  if (secretAt(wt, rel, full)) return null;
   try {
     const buf = await readFile(full);
     if (buf.length > 1024 * 1024) return buf.subarray(0, 1024 * 1024).toString("utf8") + "\n…(truncated)";
@@ -516,7 +527,7 @@ export async function gitCheckout(wt: string, branch: string): Promise<{ ok: boo
   const safe = safeBranch(branch);
   if (!safe) return { ok: false, error: "invalid branch name" };
   try {
-    const { stdout, stderr } = await git(wt, ["checkout", safe]);
+    const { stdout, stderr } = await git(wt, ["checkout", safe, "--"]);
     return { ok: true, output: (stderr || stdout || "switched").toString().trim() };
   } catch (err) {
     return { ok: false, error: errText(err) };

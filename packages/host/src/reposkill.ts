@@ -51,6 +51,15 @@ ${repoSkillBody(port)}`,
   };
 }
 
+/**
+ * The same text as the skill's body, for a backend that is told some other way
+ * (`LaunchRequest.instructions` → a plugin's `prepare()`: Copilot's `AGENTS.md` in a
+ * per-session dir, `instructionsVia: "env-file"`). One text, whichever route it takes.
+ */
+export function repoInstructions(port: number): string {
+  return repoSkillBody(port);
+}
+
 /** `<config dir>/claude-plugin` — beside the host's own `.env`, never in a repo. */
 export function repoClaudePluginDir(): string {
   return join(hostSecretDir(), "claude-plugin");

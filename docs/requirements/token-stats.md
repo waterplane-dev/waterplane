@@ -23,3 +23,16 @@ The context window mini graph uses the auto-compact value as its maximum y value
 The Copilot stats page has the same quality and layout as the Claude stats page, built from shared code; other providers' pages match where it makes sense.
 - asked: 2026-10-15
 
+### R-token-stats-006 · requested
+The token stats view shows a turns section beside the token charts, with a button to set a limit on the number of turns.
+- asked: 2026-10-21
+
+### R-token-stats-007 · shipped
+Token stats pages look and behave identically in the web app, APK and VS Code, built from one shared source.
+- asked: 2026-10-22
+- shipped: 1264a52c, abd94826, d4ff3668
+
+
+### R-token-stats-008 · shipped
+The VS Code panel's All sessions shows token statistics on a machine with GitHub Copilot and no Claude Code: a Copilot Chat tab counts Copilot's own prompt and output tokens per day and model off VS Code's chat logs, with no waterplane desktop needed, and the view opens on it when Claude's logs hold nothing.
+- asked: 2026-10-23

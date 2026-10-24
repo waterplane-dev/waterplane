@@ -140,7 +140,7 @@
 //
 //   STUB_MODE=logo — the turn filmed in docs/media/apk-install.gif (scripts/media/apk-install.mjs).
 //     Opens on Claude Code's welcome header. A submitted prompt carrying a marked image
-//     (`… (marked: circle at top-left (x 5%-31%, y 8%-19%) …)`, annNote.ts's wording) is read for
+//     (`… (marked: circle (x 5%-31%, y 8%-19%) …)`, annNote.ts's wording) is read for
 //     WHERE the mark is, and the turn really edits the sample app in the cwd: a logo drawable, the
 //     logo placed at those percentages, the version bumped (scripts/media/tide-tables.mjs). The tool
 //     lines come out one by one on a fixed pace (STUB_LOGO_STEP_MS), so it reads as work; no model,

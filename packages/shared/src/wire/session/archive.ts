@@ -1,5 +1,6 @@
 import type { LaunchOpts } from "./launch.js";
 import type { FollowUp } from "./info.js";
+import type { ContextSpark } from "./contextspark.js";
 
 /** A file a session's turn left in its worktree: an image or video that
  *  appeared, or a markdown file that appeared or was rewritten. */
@@ -138,6 +139,10 @@ export interface ClosedSession {
   //    `CLOSED_TEXT_CAP` (`shared/closed.ts`) so the persisted stack stays small.
   /** Why the session ended. See `ClosedBy`. */
   closedBy?: ClosedBy;
+  /** `SessionInfo.contextSpark` as it stood at close, so a closed row draws the
+   *  same context/spend miniature as an open one. Absent when the session had
+   *  none, or on an older row. */
+  contextSpark?: ContextSpark;
   /** The conversation's follow-up flag, stamped by the host when it lists the
    *  closed stack (never persisted on the row — the flag store owns it). */
   followUp?: FollowUp;

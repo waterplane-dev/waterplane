@@ -47,7 +47,7 @@ export function HeaderCmdsSheet() {
           {toolbarItems().map((t) => {
             const on = (toolbarCfg.pinned ?? []).includes(t.id);
             return (
-              <Button key={t.id} className={`hdr-cmd ${on ? "active" : ""}`}
+              <Button key={t.id} className={`hdr-cmd${on ? " active" : ""}`}
                 title={on ? `unpin ${t.name} from the header` : `pin ${t.name} into the header`}
                 onClick={() => toggleToolbarPin(t.id)}>
                 <t.Icon size={12} /> {t.name}{on ? <Pin size={11} /> : null}

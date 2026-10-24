@@ -18,7 +18,7 @@ import {
 import { blockedReasonText, promptFingerprint, sessionCostOf } from "@waterplane/shared";
 import type { BackendInfo, SessionInfo } from "@waterplane/shared";
 import { api } from "../../api";
-import { backendIdOf, isShellBackend, sessionCants, shellQuietLine } from "../../backendCaps";
+import { backendIdOf, cliSetupDone, cliSetupHold, isShellBackend, runsClaudeTui, sessionCants, shellQuietLine } from "../../backendCaps";
 import { ago } from "../../format";
 import { LoginBar } from "../../LoginBar";
 import { ShellLinksBar } from "../../ShellLinksBar";
@@ -44,7 +44,7 @@ import { tallyTitle, turnTally } from "../sessions/tags";
 import { TermCostStrip } from "../../TermCostStrip";
 import { nextReaderZoom, nextTermZoom, readerScale } from "../../uiScale";
 import { track } from "../../usage";
-import { Unavailable } from "../../Unavailable";
+import { UnavailableFold } from "../../Unavailable";
 import type { Connection } from "../conn/useConnection";
 import type { TermFeed } from "../term/useTermFeed";
 import type { QueueApi } from "../queue/useQueue";
@@ -242,14 +242,14 @@ function ScreenCorner({ zoom: zoomOn, active, pending, readerShown, readMode, se
         const badge = badgeMode(active);
         const label = `model, effort and mode${badge ? ` — now ${modeTitle(badge)}` : ""}`;
         return (
-          <button ref={wheelBtn} className={`key${wheelOpen ? " active" : ""}${badge ? " mw-badged" : ""}`} data-hint="term.modelwheel"
+          <Button ref={wheelBtn} className={[wheelOpen && "active", badge && "mw-badged"].filter(Boolean).join(" ")} data-hint="term.modelwheel"
             onPointerDown={keepFocus}
             aria-label={label} aria-expanded={wheelOpen}
             title={label}
             onClick={() => { track("action:modelwheel.open"); setWheelOpen((o) => !o); }}>
             <Radar size={ICON} />
             {badge && <span className="mw-badge"><ModeGlyph mode={badge} size={12} /></span>}
-          </button>
+          </Button>
         );
       })()}
       {withZoom && (
@@ -269,7 +269,7 @@ function ScreenCorner({ zoom: zoomOn, active, pending, readerShown, readMode, se
           ☰ peek had brought back — a dead tap both times. `fullScreenTap`
           asks for the opposite of what is visible and moves both hiders to
           agree. */}
-      <button className={`key${shut ? " active" : ""}`} data-hint="term.fullscreen"
+      <Button className={shut ? "active" : undefined} data-hint="term.fullscreen"
         /* `keepFocus` for the reason the header's two typing-room buttons
            carry it: with the keyboard up, the pointerdown blurs the box,
            typing room ends, the chrome comes back and the whole terminal —
@@ -286,7 +286,7 @@ function ScreenCorner({ zoom: zoomOn, active, pending, readerShown, readMode, se
           track(next.fullScreen ? "action:fullscreen.on" : "action:fullscreen.off");
           setFullScreen(next.fullScreen);
           setTypingPeek(next.typingPeek);
-        }}>{shut ? <Minimize2 size={ICON} /> : <Maximize2 size={ICON} />}</button>
+        }}>{shut ? <Minimize2 size={ICON} /> : <Maximize2 size={ICON} />}</Button>
     </div>
     {wheelOpen && !pending && !isShellBackend(wheel.backends, active.backend) && (
       <ModelWheel cur={active} backends={wheel.backends} canSlash={sessionCan(active, "slash")}
@@ -297,8 +297,7 @@ function ScreenCorner({ zoom: zoomOn, active, pending, readerShown, readMode, se
 }
 
 /** Said when the terminal is held up over the reader for the CLI's setup, and when it lets go. */
-export const CLI_SETUP_HOLD = "claude is not signed in on the desktop yet: the terminal stays up for its setup (theme, sign-in). The reader comes back once it reaches its prompt.";
-export const CLI_SETUP_DONE = "claude is set up: back to the reader.";
+// Worded by the session's backend (`backendCaps.ts`): claude's words for claude's TUI, else its label.
 
 export function TermArea(p: TermAreaProps): ReactNode {
   const {
@@ -332,7 +331,7 @@ export function TermArea(p: TermAreaProps): ReactNode {
         .filter((e) => e.answer?.fingerprint === promptFingerprint(active.prompt!) && e.status !== "failed")
         .map((e) => ({ label: e.answer!.label }))
     : [];
-  const onAnswer = (data: string, label: string, submitBox?: boolean, choice?: number) => answerPrompt(active, data, label, submitBox, choice);
+  const onAnswer = (data: string, label: string, submitBox?: boolean, choice?: number, text?: string) => answerPrompt(active, data, label, submitBox, choice, text);
   const readerRef = useRef<HTMLDivElement>(null);
   const readerPick = useReaderPick(readerRef, active.id, readerShown);
   // The CLI's first-launch setup holds the terminal up over the reader preference (App's
@@ -341,12 +340,12 @@ export function TermArea(p: TermAreaProps): ReactNode {
   const heldFor = useRef<string | null>(null);
   useEffect(() => {
     if (setupHold) {
-      if (heldFor.current !== active.id) { heldFor.current = active.id; showToast(CLI_SETUP_HOLD); }
+      if (heldFor.current !== active.id) { heldFor.current = active.id; showToast(cliSetupHold(backends, active.backend)); }
     } else if (heldFor.current === active.id) {
       heldFor.current = null;
-      if (readMode && active.running && !active.cliSetup) showToast(CLI_SETUP_DONE);
+      if (readMode && active.running && !active.cliSetup) showToast(cliSetupDone(backends, active.backend));
     }
-  }, [setupHold, active.id, active.running, active.cliSetup, readMode]);
+  }, [setupHold, active.id, active.running, active.cliSetup, active.backend, backends, readMode]);
   // A desktop key typed at no field goes to the terminal (`strayKeys.ts`) — while the grid is the view.
   const sendRef = useRef(sendInput);
   sendRef.current = sendInput;
@@ -395,7 +394,7 @@ export function TermArea(p: TermAreaProps): ReactNode {
            user's own header chips being withheld THIS RENDER. The number and
            the cut come from the same `splitHeaderCmds` call the header used
            three rows up — never a second pass over the list. */
-        <Unavailable className="toolbar-cants"
+        <UnavailableFold className="toolbar-cants"
           cants={sessionCants(backends, backendIdOf(active), { hiddenSlash })} />
       )}
       {/* A shell: no strip of missing Claude features — ONE quiet line. */}
@@ -492,7 +491,7 @@ export function TermArea(p: TermAreaProps): ReactNode {
             // saying why is in the strip under the toolbar (`sessionCants`),
             // where it is shown only because a reader exists to miss it from.
             fork={sessionCan(active, "fork")
-              ? { online: status === "open", run: (req) => void runForkRequest(active, req) }
+              ? { online: status === "open", hasId: !!resumeIdOf(active), run: (req) => void runForkRequest(active, req) }
               : undefined}
             jumpTo={outlineJump ?? undefined}
             onOpenCost={openContext}
@@ -580,7 +579,7 @@ export function TermArea(p: TermAreaProps): ReactNode {
                 cursor on "No, exit". The reader's own card body, over the bottom of the grid
                 where the CLI draws the same box — an overlay, so the PTY is never resized. */}
             {/* Not under the trust card (same corner): that box is answered first. */}
-            {keysOpen && !pending && !termAnswersBox(active.prompt, active.running) && <KeysPop sendInput={sendInput} onClose={() => setKeysOpen(false)} />}
+            {keysOpen && !pending && runsClaudeTui(backends, active.backend) && !termAnswersBox(active.prompt, active.running) && <KeysPop sendInput={sendInput} onClose={() => setKeysOpen(false)} />}
             {termAnswersBox(active.prompt, active.running) && (
               <div className="term-answer" data-box="trust">
                 <PromptAnswer prompt={active.prompt} queued={queuedAnswers} suggestion={active.suggestion}
@@ -798,7 +797,7 @@ export function TermArea(p: TermAreaProps): ReactNode {
           reads `readerShown` as well — hiding the way out of a live pipe would
           strand the composer in it. */}
       {!pending && !readerShown && (
-      <KeyRow active={active} compose={compose} keysOpen={keysOpen} setKeysOpen={setKeysOpen} />
+      <KeyRow active={active} backends={backends} compose={compose} keysOpen={keysOpen} setKeysOpen={setKeysOpen} />
       )}
 
       <NewImagesStrip sessionId={active.id} />

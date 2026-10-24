@@ -19,10 +19,10 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ADVISORY_CHECKS, isSetupConsider, isSetupFinding } from "@waterplane/shared";
+import { ADVISORY_CHECKS, isSetupConsider, isSetupFinding, sharedRel } from "@waterplane/shared";
 import { HEALTH_ENTRY_MEASURE } from "./healthIndexWords.ts";
 import {
-  agentFindings, agentVerb, engineAdoptPrompt, bulkLabel, bulkNote, findingsCutWords, fixConfirmWords, fixNeedsConfirm, fixVerb,
+  agentFindings, agentVerb, engineAdoptPrompt, bulkLabel, bulkNote, findingsCutWords, fixConfirmWords, fixNeedsConfirm, fixTitle, fixVerb,
   patchFindings, patchIds,
   healthAskContextOf, healthIndexRemedyPrompt, healthTrendRemedyPrompt, remedyPrompt, setupRowLookup, seriesAbsenceWords, seriesAllRemedyPrompt, seriesRemedyPrompt,
 } from "./setupRemedy.ts";
@@ -472,6 +472,14 @@ test("auto-compact's write CHOOSES a setting: never in Fix all, never handed to 
   const envRow = check({ id: "auto-compact", label: "Auto-compact window", status: "warn", fix: null });
   assert.deepEqual(agentFindings([envRow]).map((c) => c.id), ["auto-compact"]);
   assert.match(remedyPrompt([envRow], "r"), /change nothing/);
+});
+
+test("the build-list patch has a short button and its exact effect as text under it", () => {
+  assert.equal(fixVerb("builds-configured"), "write build list");
+  assert.equal(
+    fixTitle("builds-configured"),
+    `write ${sharedRel("builds.json")} from this repo's build commands; existing lists stay untouched`,
+  );
 });
 
 test("the toolchain and the signing key are core fixes behind their own consent words (first-app WP3/WP4 handover)", async () => {

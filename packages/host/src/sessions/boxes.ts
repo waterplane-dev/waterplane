@@ -7,8 +7,11 @@
  * Reasoning: `waterplane-heuristics` (`prompt.ts`, `ocprompt.ts`, `askbox.ts`,
  * `login.ts`) and docs/notes/host-architecture.md.
  */
-import { SOURCE_KEYS_MAX, type DetectedPrompt, type PluginScreenBox, type PluginScreenReader, type SourceKeys } from "@waterplane/shared";
+import { answerTextProblem, type DetectedPrompt, type PluginScreenBox, type PluginScreenReader, type SourceKeys, type SourceQuestion, type SourceTyped } from "@waterplane/shared";
+import { answerSourcePlan, applySourceReply, type SourceReplyDeps } from "../sourceanswer.js";
+export { sourceKeysProblem } from "../sourceanswer.js";
 import { screenReaderFor } from "../backends/readers.js";
+import { derive } from "../backends/derive.js";
 import { detectPrompt, dialogStillUp, dialogEvidence, hasDialogFooter, isDialogFooterRow, MAX_BOX_OPTIONS, mergeBox, navToSubmit, readNavBox, sameBox, samePrompt, stripAnsi } from "../prompt.js";
 import { asksFromCall, descFor, pendingAskQuestions, pendingAskRecord, pickAsk, recoverHead, type AskQuestion } from "../askbox.js";
 import { isPlanBox, planPathFor, readPlan } from "../planbox.js";
@@ -16,12 +19,11 @@ import { detectLimitText, STOP_WAIT_RE } from "../limit.js";
 import { detectLogin, loginCandidate, sameLogin, type DetectedLogin } from "../login.js";
 import { logMtime, transcriptPath } from "../transcript.js";
 import { recordSent } from "../sentlog.js";
-import { rememberRule } from "../answergate.js";
+import { rememberRule, sessionAskRules } from "../answergate.js";
 import type { Session, SessionCore } from "./core.js";
 import {
-  PROMPT_CHECK_MS, PROMPT_MAX_STALE_MS, PROMPT_MISS_MAX, PROMPT_SETTLE_MS, RESIZE_REPAINT_MS, PROMPT_GATE_BYTES,
-  SUBMIT_NAV_TRIES, SUBMIT_NAV_MAX_KEYS, SUBMIT_NAV_LINES, SUBMIT_NAV_SETTLE_MS, CHOOSE_NAV_TRIES,
-  CHOOSE_NAV_SETTLE_MS, PROMPT_CELL_ROWS, IDLE_PING_MS, HEALTH_SAMPLE_ROWS,
+  PROMPT_CHECK_MS, PROMPT_MAX_STALE_MS, PROMPT_MISS_MAX, PROMPT_SETTLE_MS, RESIZE_REPAINT_MS, PROMPT_GATE_BYTES, SUBMIT_NAV_TRIES,
+  SUBMIT_NAV_MAX_KEYS, SUBMIT_NAV_LINES, SUBMIT_NAV_SETTLE_MS, CHOOSE_NAV_TRIES, CHOOSE_NAV_SETTLE_MS, PROMPT_CELL_ROWS, IDLE_PING_MS, HEALTH_SAMPLE_ROWS,
 } from "./knobs.js";
 
 /**
@@ -112,7 +114,7 @@ function checkPrompt(core: SessionCore, s: Session): void {
   // The sign-in link rides on this same render, which is the right place for
   // it too: a claude account's sign-in screen is not a fact about a binary
   // that has no claude account.
-  const reader = s.backend.caps.promptBoxes;
+  const reader = derive(s.backend).screen("dialogs");
   if (!reader) return;
   // The CLI's own channel is posing the dialogs: the screen reader stands down,
   // because two readers on one box re-key its fingerprint (a card re-opened, a
@@ -124,7 +126,7 @@ function checkPrompt(core: SessionCore, s: Session): void {
   // nothing else, so a second TUI gets its own reader rather than a looser
   // version of this one. See `backends/types.ts`.
   // A reader a plugin contributed (`backends/readers.ts`) — opencode's, for one.
-  const nav = screenReaderFor(s.backend.caps);
+  const nav = screenReaderFor(s.backend);
   if (nav) { checkNavBox(core, s, nav); return; }
   if (reader !== "claude-numbered") return; // a contributed name whose plugin left: no reader, no box
   // A pane in copy-mode is showing HISTORY, not the live screen: the rendered
@@ -401,9 +403,9 @@ function checkNavBox(core: SessionCore, s: Session, reader: PluginScreenReader):
 export async function choosePromptBox(core: SessionCore, id: string, choice: number): Promise<{ ok: boolean; reason?: string }> {
   const s = core.sessions.get(id);
   if (!s || !s.info.running) return { ok: false, reason: "session not available" };
-  const reader = screenReaderFor(s.backend.caps);
+  const reader = screenReaderFor(s.backend);
   if (!reader) {
-    if (s.backend.caps.promptBoxes === "claude-numbered" && s.info.prompt?.nav) return chooseClaudeNavBox(core, id, choice);
+    if (derive(s.backend).screen("dialogs") === "claude-numbered" && s.info.prompt?.nav) return chooseClaudeNavBox(core, id, choice);
     return { ok: false, reason: "this backend's boxes are answered with a keystroke, not a selection" };
   }
   let box: PluginScreenBox | null = null;
@@ -487,17 +489,24 @@ export function screenReaderOff(s: Session): boolean {
 
 /**
  * **The one answer dispatcher** — every answer to a choice box goes through
- * here: the phone's tap (`routes/session.ts`, a digit or a `promptChoice`) and
- * anything the answer gate let through (`answergate.ts`). Three rungs, in order:
+ * here: the phone's tap (`routes/session.ts`, a digit, a `promptChoice`, typed
+ * `promptText`) and anything the answer gate let through (`answergate.ts`, a
+ * choice only — the gate never carries words). Three rungs, in order:
  *
- *  1. the box is a dialog the CLI posed on its OWN channel ⇒ answered there
- *     (`SourceDialog.answer`), nothing typed into the PTY — unless the source
- *     answers `{ keys }` (its dialog moved into its TUI): then exactly those
- *     keys, bounded by `sourceKeysProblem`, typed by `typeSourceKeys` into this
- *     session through `core.input`, the path a digit tap takes;
+ *  1. the box is a dialog, QUESTION or PLAN the CLI posed on its OWN channel ⇒
+ *     answered there (`SourceDialog.answer(choice, {text})` — `text` only on a
+ *     `takesText` row; `SourceQuestion.answer({choice, text})`; a plan's verb, a
+ *     person's tap only, at most once), nothing typed into the PTY — unless the
+ *     source hands back `{ keys }` or, for a question, `{ typed }`: then exactly
+ *     that, bounded and typed by `sourceanswer.ts` into this session through
+ *     `core.input`, the path a digit tap takes, only while it is still open;
  *  2. the box has no numbers (`nav`), or the caller asked for a walk ⇒
  *     `choosePromptBox`, which refuses rather than pressing a blind Return;
  *  3. otherwise the digit and a Return, which is what a tap always sent.
+ *
+ * Typed words reach only rung 1: a box the screen read takes none (refused in
+ * words — the composer is `deliver.ts`'s, never this). `choice` is `NaN` for a
+ * question answered with words alone.
  *
  * **While the channel owns the dialogs, a box it does not know is not answered
  * by guessing.** A dialog the channel resolved a moment ago (answered at the
@@ -508,87 +517,87 @@ export function screenReaderOff(s: Session): boolean {
  * Without `sources` none of rung 1 or the refusal can apply (`s.channel` is
  * absent) and this is exactly the two calls the route and the gate made before.
  */
-export async function answerBox(core: SessionCore, id: string, choice: number, opts: { walk?: boolean; byPerson?: boolean } = {}): Promise<{ ok: boolean; reason?: string }> {
+export async function answerBox(core: SessionCore, id: string, choice: number, opts: { walk?: boolean; byPerson?: boolean; text?: string } = {}): Promise<{ ok: boolean; reason?: string }> {
   const s = core.sessions.get(id);
   if (!s || !s.info.running) return { ok: false, reason: "session not available" };
   const p = s.info.prompt ?? null;
   const ch = s.channel && !s.channel.closed ? s.channel : null;
+  const text = opts.text;
+  const textWhy = text === undefined ? null : answerTextProblem(text);
+  if (textWhy) return { ok: false, reason: textWhy };
   const sourceOwned = !!ch && !!p?.askId && p.askId === ch.published;
   // A screen-read box while the channel reports a dialog it cannot pose is the screen's to
   // answer (the walk below), never refused as "not the channel's".
   if (sourceOwned || (ch?.dialogsLive && !ch.unposed)) {
+    const q = p?.askId ? ch!.questions.get(p.askId) : undefined;
     const d = p?.askId ? ch!.dialogs.get(p.askId) : undefined;
+    const reply: SourceReplyDeps = {
+      input: (data) => core.input(id, data), label: s.backend.label,
+      stillOpen: () => !ch!.closed && s.channel === ch && !!p?.askId && (ch!.questions.has(p.askId) || ch!.dialogs.has(p.askId) || ch!.plans.has(p.askId)),
+      log: { sessionId: id, source: opts.byPerson ? "phone" : "plugin" },
+      onUnclosed: (note) => {
+        if (s.info.prompt?.askId !== p?.askId) return;
+        s.info.prompt = { ...s.info.prompt!, answerNote: note };
+        core.emit("updated", s.info);
+      },
+    };
+    if (p && q) return answerQuestion(q, choice, text, reply);
+    if (p?.askId && ch!.plans.has(p.askId)) return answerSourcePlan(ch!.plans.get(p.askId)!, choice, { byPerson: !!opts.byPerson, text }, reply);
     if (!p || !d) return { ok: false, reason: "that question is no longer open — it was answered or withdrawn" };
-    if (!Number.isInteger(choice) || !d.options.some((o) => o.index === choice)) {
-      return { ok: false, reason: `${choice} is not one of the box's options` };
-    }
+    const option = Number.isInteger(choice) ? d.options.find((o) => o.index === choice) : undefined;
+    if (!option) return { ok: false, reason: `${choice} is not one of the box's options` };
+    if (text !== undefined && !option.takesText) return { ok: false, reason: `“${option.label}” takes no typed reason — tap it without one` };
     // Read BEFORE answering: a source may re-word its options once answered (they are its own).
-    const remember = d.options.find((o) => o.index === choice)?.remember;
-    let r: { ok: boolean; reason?: string } | SourceKeys;
+    const remember = option.remember;
+    const dialogWords = remember ? [d.question, ...d.options.map((o) => o.label)].join("\n") : "";
+    let r: { ok: boolean; reason?: string } | SourceKeys | (SourceKeys & SourceTyped);
     try {
-      r = await d.answer(choice);
+      r = await (text === undefined ? d.answer(choice) : d.answer(choice, { text }));
     } catch (e) {
       return { ok: false, reason: `the CLI's own channel did not take that answer (${(e as Error)?.message || String(e)})` };
     }
-    const done = r && typeof r === "object" && "keys" in r
-      ? typeSourceKeys(core, id, d.id, r.keys)
-      : r?.ok ? { ok: true } : { ok: false, reason: r?.reason || "the CLI's own channel did not take that answer" };
+    // A dialog's reply is `{ok}` or `{keys}`: typed words are a question's (`SourceTyped`) —
+    // except keys-then-words (2.1): the row's key opens a reason field, and the words are the
+    // ones the PERSON typed on a `takesText` row (checked above), never the source's own.
+    const done = r && typeof r === "object" && "typed" in r
+      ? dialogWordsProblem(r, text) ?? await applySourceReply(r, reply)
+      : await applySourceReply(r, reply);
     // A PERSON chose an option the source marked `remember`: the host keeps that standing rule
     // (`answergate.ts`), keyed by the plugin that registered this backend — the owner of the source.
-    // Only the phone's route sets `byPerson` — a gated answer never makes one.
-    if (done.ok && opts.byPerson && remember) rememberRule({ sessionId: id, plugin: s.backend.plugin, backend: s.backend.id, key: remember.key, label: remember.label });
+    // Only the phone's route sets `byPerson` — a gated answer never makes one; a dialog an ask rule the gate holds names keeps none.
+    if (done.ok && opts.byPerson && remember) rememberRule({ sessionId: id, plugin: s.backend.plugin, backend: s.backend.id, key: remember.key, label: remember.label, askRules: sessionAskRules(id, s.info), text: dialogWords });
     return done;
   }
+  if (text !== undefined) return { ok: false, reason: "this box takes no typed answer — only a question the CLI posed on its own channel does" };
   if (opts.walk || p?.nav) return choosePromptBox(core, id, choice);
   const ok = core.input(id, `${choice}\r`);
   return ok ? { ok } : { ok, reason: "session not available" };
 }
 
-/** The control keys a source may ask for — exactly the ones a box walk presses. */
-const SOURCE_CONTROL_KEYS = ["\x1b[A", "\x1b[B", "\x1b[C", "\x1b[D", "\r", "\x1b"] as const;
-
 /**
- * Why `keys` is not something a source may have typed, or null when it may.
- *
- * At most `SOURCE_KEYS_MAX` keys, each a printable character or one of
- * `SOURCE_CONTROL_KEYS` (longest first, so an arrow is one key and not an
- * Escape plus two characters). Anything else — a control character, a
- * bracketed paste, a prompt's worth of text — is not an answer to a box.
+ * Why a dialog's reply carrying `typed` is refused, or null when it is keys-then-words for the
+ * person's own reason. `text` is only ever set on a `takesText` row (`answerBox` refused it
+ * otherwise before the source was asked).
  */
-export function sourceKeysProblem(keys: unknown): string | null {
-  if (typeof keys !== "string" || keys.length === 0) return "it asked for no keystrokes";
-  let n = 0;
-  for (let i = 0; i < keys.length; n++) {
-    const ctl = SOURCE_CONTROL_KEYS.find((k) => keys.startsWith(k, i));
-    if (ctl) { i += ctl.length; continue; }
-    const cp = keys.codePointAt(i)!;
-    if (cp < 0x20 || (cp >= 0x7f && cp < 0xa0)) {
-      return `it asked for a control character (0x${cp.toString(16).padStart(2, "0")}) that is not Return, Escape or an arrow`;
-    }
-    i += cp > 0xffff ? 2 : 1;
-  }
-  if (n > SOURCE_KEYS_MAX) return `it asked for ${n} keystrokes, and a box is answered with at most ${SOURCE_KEYS_MAX}`;
+function dialogWordsProblem(r: SourceKeys | SourceTyped | (SourceKeys & SourceTyped), text: string | undefined): { ok: false; reason: string } | null {
+  if (text === undefined || !("keys" in r)) return { ok: false, reason: "the CLI's own channel asked to type words into a dialog — only a question's form takes them" };
+  if ((r as SourceTyped).typed !== text) return { ok: false, reason: "the CLI's own channel asked to type a reason that is not the words you typed — nothing was typed" };
   return null;
 }
 
-/**
- * A source's `{ keys }`: its dialog is now in its own TUI and is answered by
- * keystrokes. Typed HERE — the core's raw-input path, the same `core.input` a
- * digit tap takes — into THIS session only, once, and only while the dialog
- * that asked is still one the channel has open. A source has no way to call
- * this but by answering a dialog `answerBox` put to it.
- */
-function typeSourceKeys(core: SessionCore, id: string, dialogId: string, keys: unknown): { ok: boolean; reason?: string } {
-  const why = sourceKeysProblem(keys);
-  if (why) return { ok: false, reason: `the CLI's own channel answered with keystrokes this host will not type — ${why}` };
-  const s = core.sessions.get(id);
-  const ch = s?.channel;
-  if (!s || !s.info.running) return { ok: false, reason: "session not available" };
-  if (!ch || ch.closed || !ch.dialogs.has(dialogId)) {
-    return { ok: false, reason: "that question is no longer open — it was answered or withdrawn" };
+/** Rung 1 for a QUESTION: an option, typed words, or both — each only where it offers one. */
+async function answerQuestion(q: SourceQuestion, choice: number, text: string | undefined, reply: SourceReplyDeps): Promise<{ ok: boolean; reason?: string }> {
+  const picked = Number.isInteger(choice) ? choice : undefined;
+  if (picked !== undefined && !(q.options ?? []).some((o) => o.index === picked)) return { ok: false, reason: `${picked} is not one of the question's options` };
+  if (text !== undefined && q.freeText !== true) return { ok: false, reason: "this question takes one of its options, not typed words" };
+  if (picked === undefined && text === undefined) return { ok: false, reason: "an answer to this question needs an option or typed words" };
+  let r;
+  try {
+    r = await q.answer({ ...(picked !== undefined ? { choice: picked } : {}), ...(text !== undefined ? { text } : {}) });
+  } catch (e) {
+    return { ok: false, reason: `the CLI's own channel did not take that answer (${(e as Error)?.message || String(e)})` };
   }
-  const ok = core.input(id, keys as string);
-  return ok ? { ok } : { ok, reason: "session not available" };
+  return applySourceReply(r, reply);
 }
 
 /**

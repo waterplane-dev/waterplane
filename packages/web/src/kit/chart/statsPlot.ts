@@ -32,13 +32,14 @@
  * The `.ts` extensions are explicit so `node --test` can resolve these modules straight over the
  * TypeScript; `moduleResolution: Bundler` accepts them and Vite rewrites them.
  *
- *   splotDay     the day axis: cumulative/daily plot, step/area paths, columns, ticks, trend line
+ *   splotDay     the day axis: cumulative/daily plot, paths, columns, trend line; splotTicks its x labels
  *   splotBars    horizontal bars, the composition strip, the clock face
  *   splotWeeks   calendar weeks
  *   splotMix     composition over time: stacked columns, gap-filled series, stacked areas
  *   splotUsage   the limit windows' history: segments, burn rate, outlook, crosshair pick
  */
 export * from "./stats/splotDay.ts";
+export * from "./stats/splotTicks.ts";
 export * from "./stats/splotBars.ts";
 export * from "./stats/splotWeeks.ts";
 export * from "./stats/splotMix.ts";

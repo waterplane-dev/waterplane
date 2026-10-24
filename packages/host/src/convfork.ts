@@ -66,6 +66,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { claudeProjectDir, promptOf, transcriptPath } from "./transcript.js";
+import type { BackendDescriptor } from "./backends/types.js";
 
 /**
  * The same bare-id regex `deleteArchived` uses, for the same reason: an id
@@ -316,4 +317,45 @@ export function forkConversationFile(cwd: string, sourceId: string, atTurnUuid: 
   }
 
   return { newId, records: kept.length, dropped, pruned };
+}
+
+// ── A backend that cuts its OWN conversation (plugin contract 2.2 consumer) ────────────────────
+
+/**
+ * How long a backend's `conversations.fork` may take. Past it the create is refused in words and
+ * nothing is launched; a fork that lands later is an extra row in that backend's conversation list
+ * — the same bounded orphan a crash between `forkConversationFile` and the ack leaves.
+ */
+export const FORK_SOURCE_WAIT_MS = 20_000;
+
+/**
+ * Fork through the backend's own source (`sources.conversations.fork(id, atTurn)`): the cut is the
+ * BACKEND's, made in its own store, and this host only asks and checks the answer. `atTurn` is the
+ * turn id the phone took from that backend's transcript, handed over untouched — the same "keep
+ * everything up to and including this turn" `forkConversationFile` keeps. Every failure is a
+ * sentence naming the backend: a throw, null, a late answer, an id that is not a bare id, or the
+ * SAME id back (that is the conversation, not a fork of it). `records`/`dropped`/`pruned` are a file
+ * copy's counts and are not claimed here.
+ */
+export async function forkViaSource(
+  b: Pick<BackendDescriptor, "label" | "sources">, sourceId: string, atTurn: string, waitMs = FORK_SOURCE_WAIT_MS,
+): Promise<{ newId: string } | { error: string }> {
+  const fork = b.sources?.conversations?.fork;
+  if (typeof fork !== "function") return { error: `${b.label} cannot fork a conversation` };
+  if (!BARE_ID.test(sourceId)) return { error: "bad id" };
+  if (!atTurn || atTurn.length > 256) return { error: "that turn is not one this conversation can be cut at" };
+  let timer: NodeJS.Timeout | undefined;
+  const late = new Promise<"late">((r) => { timer = setTimeout(() => r("late"), waitMs); });
+  let answer: unknown;
+  try {
+    answer = await Promise.race([fork.call(b.sources!.conversations, sourceId, atTurn), late]);
+  } catch (e) {
+    return { error: `${b.label} could not fork it: ${e instanceof Error ? e.message : String(e)}` };
+  } finally { clearTimeout(timer); }
+  if (answer === "late") return { error: `${b.label} did not fork it in time — nothing was opened` };
+  if (answer === null || answer === undefined) return { error: `${b.label} did not fork it — nothing was opened` };
+  const id = (answer as { id?: unknown }).id;
+  if (typeof id !== "string" || !BARE_ID.test(id)) return { error: `${b.label} answered a fork with no usable conversation id — nothing was opened` };
+  if (id === sourceId) return { error: `${b.label} answered the same conversation, not a fork of it — nothing was opened` };
+  return { newId: id };
 }

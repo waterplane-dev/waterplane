@@ -37,6 +37,7 @@ import { useHostRoute, useHostRouteEditor } from "./hostRoute";
 import { NO_PASSWORD_SENTENCE } from "./lanRoute";
 import { openSettingsAt } from "./settingsFocus";
 import { Button } from "./kit/Button";
+import { SetLine, SetNote } from "./SettingsKit";
 
 const ICON = 16;
 
@@ -189,12 +190,12 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
       <div className="sheet-body">
         <p className={`nh-verdict nh-${v.tone}`}>{v.text}</p>
         {stuck > 0 && (
-          <div className="set-row">
+          <SetLine>
             <Button className={armed ? "active" : ""} onClick={resetWindow}>
               <RotateCcw size={ICON} /> {armed ? "tap again to clear" : "checked them — clear"}
             </Button>
-            <span className="set-note">Resets this window's counters; the prompts themselves stay in Activity.</span>
-          </div>
+            <SetNote as="span">Resets this window's counters; the prompts themselves stay in Activity.</SetNote>
+          </SetLine>
         )}
 
         {/* The one part of this screen that is a decision rather than a
@@ -225,51 +226,51 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
         <section className="set-group" ref={focus === "sends" && notDelivered === 0 ? focusRef : undefined}>
           <h3 className="set-title">On this phone only</h3>
           {link.outstanding > 0 ? (
-            <span className="set-note nh-unsaved">
+            <SetNote as="span" className="nh-unsaved">
               <CloudUpload size={ICON} style={{ verticalAlign: "-2px" }} />{" "}
               {link.outstanding === 1 ? "One thing" : `${link.outstanding} things`} written here
               {link.outstanding === 1 ? " has" : " have"} not reached the desktop yet — queued sends and
               synced settings still to push. They go on their own as soon as the link allows; nothing
               here needs a tap.
-            </span>
+            </SetNote>
           ) : (
-            <span className="set-note nh-saved">
+            <SetNote as="span" className="nh-saved">
               <CircleCheck size={ICON} style={{ verticalAlign: "-2px" }} />{" "}
               Everything written on this phone has reached the desktop and is stored there. Nothing is
               waiting on this device{notDelivered > 0 ? " — except the sends below, which stopped and will not go on their own" : ""}.
-            </span>
+            </SetNote>
           )}
         </section>
 
         {notDelivered > 0 && (
           <section className="set-group" ref={focus === "sends" ? focusRef : undefined}>
             <h3 className="set-title">The sends that stopped</h3>
-            <span className="set-note">
+            <SetNote as="span">
               {notDelivered === 1 ? "One message" : `${notDelivered} messages`} written on this phone
               stopped short of a session. Nothing was lost and nothing expires: each one keeps its full
               words and the repo they were written for, in Activity, with the button that puts it back
               in that repo&apos;s backlog — where it opens a new session of its own.
-            </span>
-            <div className="set-row">
+            </SetNote>
+            <SetLine>
               <Button onClick={onOpenActivity}>
                 <ListOrdered size={ICON} /> open the {notDelivered} in Activity
               </Button>
-            </div>
+            </SetLine>
           </section>
         )}
 
         <section className="set-group" ref={focus === "link" ? focusRef : undefined}>
           <h3 className="set-title">Link right now</h3>
           {route && (
-            <div className="set-note nh-route">
+            <SetNote className="nh-route">
               {route.route === "lan" ? <Router size={14} aria-hidden="true" /> : <Globe size={14} aria-hidden="true" />}
               <span>{route.sentence}</span>
-            </div>
+            </SetNote>
           )}
           {/* The sentence reports settings (LAN address, auto-switch); the
               place they change is one tap away, not three screens. */}
           {route && editRoute && (
-            <div className="set-row">
+            <SetLine>
               <Button onClick={editRoute}>
                 <Settings2 size={ICON} /> change LAN settings
               </Button>
@@ -279,7 +280,7 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
                   <KeyRound size={ICON} /> set the LAN password
                 </Button>
               )}
-            </div>
+            </SetLine>
           )}
           {/* The detail behind the strip's dot, graph and loss count. The strip
               has 22 px and can only show the shape; the numbers it is drawn
@@ -314,13 +315,13 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
             />
           </div>
           {!pulse.enabled && (
-            <div className="set-row">
+            <SetLine>
               <Button onClick={() => openSettingsAt("net-pulse")}>
                 <Settings2 size={ICON} /> turn the connection strip on
               </Button>
-            </div>
+            </SetLine>
           )}
-          <span className="set-note">
+          <SetNote as="span">
             Probes go out every 3 s while the app is on screen and are kept as the last {PULSE_CAP}; a phone in
             a pocket measures nothing, so this window is a count of pings, not a stretch of time. An
             unanswered probe is its own kind of event — a link losing one ping in four feels nothing like a
@@ -328,7 +329,7 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
             median. It is a ping, though, not a prompt: nothing you typed was lost because one went
             missing, which is why the strip draws them in the graph and no longer spells them out. This
             readout never acts: a missed probe reconnects nothing.
-          </span>
+          </SetNote>
         </section>
 
         <section className="set-group">
@@ -347,11 +348,11 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
               <Stat label="host: unsubmitted" value={String(d.unsubmitted)} note="in the composer, Return swallowed" />
             </div>
           )}
-          <span className="set-note">
+          <SetNote as="span">
             A confirmed send means the host typed the prompt, saw it echo and proved the turn started — not
             just that bytes reached the machine. The last two host counters are the ones that used to be
             invisible: the prompt is on the far side, so re-sending it stacks a second copy.
-          </span>
+          </SetNote>
         </section>
 
         <section className="set-group">
@@ -385,18 +386,18 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
             />
           </div>
           {sync.online && sync.syncedAt == null && (
-            <p className="set-note">
+            <SetNote as="p">
               Connected, but still waiting on {sync.pending.join(" and ")} for this socket — until they land, the
               lists on screen are from before the reconnect.
-            </p>
+            </SetNote>
           )}
-          <span className="set-note">
+          <SetNote as="span">
             “Last connected” is the newest frame the desktop actually sent, not the last time the socket
             claimed to be open — a tunnel can die under a socket that still reads as connected. A full sync
             is both halves the main screen is built from: the session list, pushed over the socket, and the
             repo listing, which is a separate HTTP call and can be stale on its own. The time shown is the
             older of the two, because that is when everything on screen was last current.
-          </span>
+          </SetNote>
         </section>
 
         <section className="set-group" ref={focus === "data" ? focusRef : undefined}>
@@ -408,13 +409,13 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
             <Stat label="downloaded" value={fmtTotal(traf.down)} note={fmtRate(traf.downRate) ? `${fmtRate(traf.downRate)} right now` : undefined} />
             <Stat label="uploaded" value={fmtTotal(traf.up)} note={fmtRate(traf.upRate) ? `${fmtRate(traf.upRate)} right now` : undefined} />
           </div>
-          <span className="set-note">
+          <SetNote as="span">
             Counted in this app: requests by their declared length (so gzip is already off it), images and
             other page loads by what actually came off the network — a thumbnail served from the on-device
             cache costs nothing here, correctly — and socket frames as their payload before compression,
             which over-states a busy terminal. Files a background download fetched while the app was closed
             are not in here. It is a usage readout, not a bill.
-          </span>
+          </SetNote>
         </section>
 
         <section className="set-group">
@@ -440,16 +441,16 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
               onClick={onOpenStorage} />
           </div>
           {store.supported && !store.persisted && (
-            <p className="set-note">
+            <SetNote as="p">
               Installing this app to the home screen usually earns persistent storage — until then,
               anything queued offline is best-effort.
-            </p>
+            </SetNote>
           )}
         </section>
 
         <section className="set-group">
           <h3 className="set-title">Host {host ? `— last ${since(host.since)}` : ""}</h3>
-          {err && <p className="set-note">Couldn’t read the host’s side: {err}</p>}
+          {err && <SetNote as="p">Couldn’t read the host’s side: {err}</SetNote>}
           {host && (
             <>
               <div className="nh-stats">
@@ -459,23 +460,23 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
                 <Stat label="devices" value={String(Object.keys(host.clients).length)} />
               </div>
               {codes.length > 0 && (
-                <span className="set-note">
+                <SetNote as="span">
                   Close codes: {codes.map(([c, n]) => `${c}×${n}`).join(", ")}
                   {" — "}1000 is a clean close, 1001 the phone backgrounding, 1006 the tunnel dying under the socket.
-                </span>
+                </SetNote>
               )}
             </>
           )}
         </section>
 
         <section className="set-group">
-          <div className="set-row">
+          <SetLine>
             <Button className={armed ? "active" : ""} onClick={resetWindow}><RotateCcw size={ICON} /> {armed ? "tap again to reset" : "reset window"}</Button>
-          </div>
-          <span className="set-note">
+          </SetLine>
+          <SetNote as="span">
             Everything here is local: the device half lives in this browser, the host half in
             <code> {stateRel("netstats.json")}</code>. Nothing is sent anywhere.
-          </span>
+          </SetNote>
         </section>
       </div>
     </div>

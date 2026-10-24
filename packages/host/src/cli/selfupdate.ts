@@ -37,6 +37,7 @@ import { env, STATE_DIR } from "../env.js";
 import { identity } from "./index.js";
 import { sigPolicy, sigRefusal, type SigPolicy } from "./releasesig.js";
 import { plistEnv, unitEnv } from "./service.js";
+import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
 import { readSnapshot, restoreState, snapshotState } from "./statesnap.js";
 
 // ── pure parts (pinned by packages/host/test/selfupdate.test.mjs) ──────────
@@ -223,7 +224,7 @@ function swapLink(link: string, target: string): void {
   renameSync(tmp, link);
 }
 
-function installedVersions(dataDir: string): string[] {
+export function installedVersions(dataDir: string): string[] {
   try {
     return readdirSync(join(dataDir, "versions"), { withFileTypes: true })
       .filter((d) => d.isDirectory() && !d.name.startsWith(".") && parseSemver(d.name))
@@ -293,7 +294,7 @@ async function installNode(dataDir: string, version: string): Promise<string> {
   mkdirSync(runtime, { recursive: true });
   if (existsSync(join(runtime, name, "bin", "node"))) return name;
   const base = `https://nodejs.org/dist/v${version}/`;
-  console.log(`  downloading Node ${version} (${name})…`);
+  say.log(`  downloading Node ${version} (${name})…`);
   const sums = parseShaLines((await fetchBytes(base, "SHASUMS256.txt", 30_000)).toString("utf8"));
   const want = sums.get(`${name}.tar.gz`);
   if (!want) throw new Error(`SHASUMS256.txt lists no ${name}.tar.gz`);
@@ -319,7 +320,7 @@ function pruneRuntimes(dataDir: string): void {
     const nv = nodeVersionOfDir(d);
     if (!nv || d === live || wanted.has(nv)) continue;
     rmSync(join(runtime, d), { recursive: true, force: true });
-    console.log(`  removed runtime ${d}`);
+    say.log(`  removed runtime ${d}`);
   }
 }
 
@@ -401,35 +402,39 @@ async function noteRestart(dataDir: string, reason: string): Promise<void> {
 function restartOrSay(dataDir: string, noRestart: boolean): number {
   const svc = serviceFor(dataDir);
   if (!svc) {
-    console.log(`No service runs this install — restart the host yourself (\`${BRAND.slug} start\`, or \`${BRAND.slug} service install\`).`);
+    say.log(`No service runs this install — restart the host yourself (\`${BRAND.slug} start\`, or \`${BRAND.slug} service install\`).`);
     return 0;
   }
   if (noRestart) {
-    console.log(`Not restarting (--no-restart). Restart with: ${svc.restart[0]} ${svc.restart[1].join(" ")}`);
+    say.log(`Not restarting (--no-restart). Restart with: ${svc.restart[0]} ${svc.restart[1].join(" ")}`);
     return 0;
   }
   try {
     execFileSync(svc.restart[0], svc.restart[1], { stdio: "inherit", timeout: 60_000 });
-    console.log(`Restarted the service (${svc.restart[0]} ${svc.restart[1].join(" ")}).`);
+    say.log(`Restarted the service (${svc.restart[0]} ${svc.restart[1].join(" ")}).`);
     return 0;
   } catch (e) {
-    console.error(`The new version is in place, but the restart failed: ${String((e as Error).message ?? e)}\nRun: ${svc.restart[0]} ${svc.restart[1].join(" ")}`);
+    say.error(`The new version is in place, but the restart failed: ${String((e as Error).message ?? e)}\nRun: ${svc.restart[0]} ${svc.restart[1].join(" ")}`);
     return 1;
   }
 }
+
+/** Where the update's lines go: the console for the CLI, a collector when the daemon applies it. */
+export interface Say { log: (m: string) => void; error: (m: string) => void }
+let say: Say = console;
 
 // ── commands ───────────────────────────────────────────────────────────────
 
 function notSelfUpdating(mode: InstallMode): number {
   switch (mode.kind) {
     case "npm":
-      console.log(`This is an npm global install. Update it with:\n  npm i -g ${BRAND.slug}@latest\nthen restart the host.`);
+      say.log(`This is an npm global install. Update it with:\n  npm i -g ${BRAND.slug}@latest\nthen restart the host.`);
       break;
     case "checkout":
-      console.log(`This is a source checkout (${mode.root}). Update it with:\n  git pull\n  npm run restart`);
+      say.log(`This is a source checkout (${mode.root}). Update it with:\n  git pull\n  npm run restart`);
       break;
     default:
-      console.log(`Cannot tell how this copy was installed (${mode.root}): not under <data>/versions/<v>/, not an npm global, not a git checkout. Not updating.`);
+      say.log(`Cannot tell how this copy was installed (${mode.root}): not under <data>/versions/<v>/, not an npm global, not a git checkout. Not updating.`);
   }
   return 3;
 }
@@ -437,8 +442,8 @@ function notSelfUpdating(mode: InstallMode): number {
 /** Say why release.json could not be used: a refused signature is named as one, never as "could not read". */
 function sayLatestFailed(source: string, e: unknown, current: string): void {
   const msg = String((e as Error)?.message ?? e);
-  if (e instanceof SignatureRefused) console.error(`release.json from ${source}: ${msg}. Nothing was installed; ${current} is untouched.`);
-  else console.error(`Could not read the latest release from ${source}: ${msg}`);
+  if (e instanceof SignatureRefused) say.error(`release.json from ${source}: ${msg}. Nothing was installed; ${current} is untouched.`);
+  else say.error(`Could not read the latest release from ${source}: ${msg}`);
 }
 
 async function check(mode: InstallMode, source: string, policy: SigPolicy): Promise<number> {
@@ -449,10 +454,10 @@ async function check(mode: InstallMode, source: string, policy: SigPolicy): Prom
     return 1;
   }
   const cmp = compareVersions(current, latest.version);
-  if (cmp === null) { console.log(`${current} → ${latest.version} (cannot compare these versions)`); return 1; }
-  if (cmp >= 0) { console.log(`${current} is current (latest ${latest.version}).`); return 0; }
-  console.log(`${current} → ${latest.version} available.`);
-  if (mode.kind === "tarball") console.log(`Run \`${BRAND.slug} update\` to install it.`);
+  if (cmp === null) { say.log(`${current} → ${latest.version} (cannot compare these versions)`); return 1; }
+  if (cmp >= 0) { say.log(`${current} is current (latest ${latest.version}).`); return 0; }
+  say.log(`${current} → ${latest.version} available.`);
+  if (mode.kind === "tarball") say.log(`Run \`${BRAND.slug} update\` to install it.`);
   else notSelfUpdating(mode);
   return 10;
 }
@@ -467,20 +472,20 @@ async function update(mode: Extract<InstallMode, { kind: "tarball" }>, source: s
     return 1;
   }
   const cmp = compareVersions(current, latest.version);
-  if (cmp === null) { console.error(`Cannot compare ${current} with ${latest.version}; not updating.`); return 1; }
-  if (cmp >= 0) { console.log(`${current} is current (latest ${latest.version}). Nothing to do.`); return 0; }
-  console.log(`Updating ${current} → ${latest.version}`);
+  if (cmp === null) { say.error(`Cannot compare ${current} with ${latest.version}; not updating.`); return 1; }
+  if (cmp >= 0) { say.log(`${current} is current (latest ${latest.version}). Nothing to do.`); return 0; }
+  say.log(`Updating ${current} → ${latest.version}`);
 
   const release = takeLock(dataDir);
-  if (typeof release === "string") { console.error(release); return 1; }
+  if (typeof release === "string") { say.error(release); return 1; }
   try {
     const target = join(versionsDir, latest.version);
     if (existsSync(target) && readRelease(target)?.version === latest.version) {
-      console.log(`  ${latest.version} is already unpacked (kept from an earlier update) — reusing it.`);
+      say.log(`  ${latest.version} is already unpacked (kept from an earlier update) — reusing it.`);
     } else {
       rmSync(target, { recursive: true, force: true });
       const file = `${BRAND.slug}-${latest.version}.tar.gz`;
-      console.log(`  downloading ${file}…`);
+      say.log(`  downloading ${file}…`);
       let tar: Buffer, shaText: Buffer;
       try {
         [tar, shaText] = await Promise.all([
@@ -489,20 +494,20 @@ async function update(mode: Extract<InstallMode, { kind: "tarball" }>, source: s
         ]);
       } catch (e) {
         if (!(e instanceof SignatureRefused)) throw e;
-        console.error(`${String(e.message)}. Nothing was installed; ${current} is untouched.`);
+        say.error(`${String(e.message)}. Nothing was installed; ${current} is untouched.`);
         return 1;
       }
-      if (policy.kind === "verify") console.log(`  verified the publisher's signature on ${file}.sha256`);
+      if (policy.kind === "verify") say.log(`  verified the publisher's signature on ${file}.sha256`);
       const want = parseShaLines(shaText.toString("utf8")).get(file);
-      if (!want) { console.error(`${file}.sha256 names no checksum for ${file} — refusing.`); return 1; }
+      if (!want) { say.error(`${file}.sha256 names no checksum for ${file} — refusing.`); return 1; }
       const got = sha256(tar);
-      if (got !== want) { console.error(`Checksum mismatch for ${file} (expected ${want}, got ${got}) — refusing; nothing changed.`); return 1; }
-      console.log("  checksum ok");
+      if (got !== want) { say.error(`Checksum mismatch for ${file} (expected ${want}, got ${got}) — refusing; nothing changed.`); return 1; }
+      say.log("  checksum ok");
       extractInto(tar, versionsDir, latest.version, latest.version);
       const unpacked = readRelease(target);
       if (unpacked?.version !== latest.version || !existsSync(join(target, "bin", `${BRAND.slug}.mjs`))) {
         rmSync(target, { recursive: true, force: true });
-        console.error(`The archive does not hold release ${latest.version} — refusing; nothing changed.`);
+        say.error(`The archive does not hold release ${latest.version} — refusing; nothing changed.`);
         return 1;
       }
     }
@@ -514,9 +519,9 @@ async function update(mode: Extract<InstallMode, { kind: "tarball" }>, source: s
       try {
         const dir = await installNode(dataDir, wantNode);
         swapLink(join(dataDir, "runtime", "current"), dir);
-        console.log(`  runtime → Node ${wantNode}${haveNode ? ` (was ${haveNode})` : ""}`);
+        say.log(`  runtime → Node ${wantNode}${haveNode ? ` (was ${haveNode})` : ""}`);
       } catch (e) {
-        console.error(`Could not install Node ${wantNode}: ${String((e as Error).message ?? e)} — not switching versions.`);
+        say.error(`Could not install Node ${wantNode}: ${String((e as Error).message ?? e)} — not switching versions.`);
         return 1;
       }
     }
@@ -527,18 +532,18 @@ async function update(mode: Extract<InstallMode, { kind: "tarball" }>, source: s
     const stateDir = stateDirFor(dataDir);
     try {
       const snap = snapshotState(stateDir, snapDirFor(dataDir, current), { from: current, to: latest.version });
-      console.log(`  state snapshot: ${snap.files.length} store${snap.files.length === 1 ? "" : "s"} from ${stateDir} kept for a rollback`);
+      say.log(`  state snapshot: ${snap.files.length} store${snap.files.length === 1 ? "" : "s"} from ${stateDir} kept for a rollback`);
     } catch (e) {
-      console.error(`Could not snapshot the host's state (${stateDir}): ${String((e as Error).message ?? e)} — not switching versions; ${current} is untouched.`);
+      say.error(`Could not snapshot the host's state (${stateDir}): ${String((e as Error).message ?? e)} — not switching versions; ${current} is untouched.`);
       return 1;
     }
 
     swapLink(join(dataDir, "current"), join("versions", latest.version));
-    console.log(`  current → ${latest.version} (previous ${current} kept; \`${BRAND.slug} update --rollback\` goes back, with its state)`);
+    say.log(`  current → ${latest.version} (previous ${current} kept; \`${BRAND.slug} update --rollback\` goes back, with its state)`);
     for (const v of selectPrune(installedVersions(dataDir), latest.version)) {
       rmSync(join(versionsDir, v), { recursive: true, force: true });
       rmSync(snapDirFor(dataDir, v), { recursive: true, force: true });
-      console.log(`  removed ${v}`);
+      say.log(`  removed ${v}`);
     }
     pruneRuntimes(dataDir);
   } finally {
@@ -548,40 +553,83 @@ async function update(mode: Extract<InstallMode, { kind: "tarball" }>, source: s
   return restartOrSay(dataDir, noRestart);
 }
 
-function rollback(mode: Extract<InstallMode, { kind: "tarball" }>, noRestart: boolean): number {
+/**
+ * The state restore a daemon-side rollback owes: set by `rollback` when it swapped `current` while the
+ * host (this process) is still running, run by `server/shutdown.ts` AFTER every store has flushed and
+ * just before exit, so nothing rewrites the restored files. No detached child: launchd and systemd
+ * kill a service's children with it.
+ */
+let pendingRestore: { stateDir: string; snapDir: string; version: string } | null = null;
+export const hasPendingRestore = (): boolean => pendingRestore !== null;
+
+/** Run the owed restore (shutdown path). Returns a sentence, or null when nothing was owed. Never throws. */
+export function runPendingRestore(): string | null {
+  const p = pendingRestore;
+  if (!p) return null;
+  pendingRestore = null;
+  try {
+    // The restore puts back the PRE-update `updates.json`, which would drop the rollback's own receipt
+    // (lastResult / lastApply) and the phone would never see "Rolled back ...". Carry just those two over
+    // into the restored file: minimal, and the restored catalogue cache stays the older one.
+    const file = join(p.stateDir, "updates.json"); // = updates/checker.ts UPDATES_FILE (not imported: a runtime cycle)
+    const ok = (v: unknown) => !!v && typeof v === "object";
+    const receipt = readJsonGuarded<Record<string, unknown>>(file, {}, ok);
+    const r = restoreState(p.stateDir, p.snapDir);
+    if (receipt.lastResult || receipt.lastApply) {
+      const back = readJsonGuarded<Record<string, unknown>>(file, {}, ok);
+      writeJsonAtomic(file, { raw: [], ...back, ...(receipt.lastResult ? { lastResult: receipt.lastResult } : {}), ...(receipt.lastApply ? { lastApply: receipt.lastApply } : {}) });
+    }
+    return `restored ${r.restored.length} store(s) of ${p.version} from ${p.snapDir}${r.keptIn ? `; the newer state is kept in ${r.keptIn}` : ""}`;
+  } catch (e) {
+    return `could not restore ${p.version}'s state from ${p.snapDir}: ${String((e as Error).message ?? e)}`;
+  }
+}
+
+/** `restore`: how a rollback with a snapshot gets its state back when no service can be stopped here. */
+export type RestoreVia = "cli" | "defer" | "refuse";
+
+export function rollback(mode: Extract<InstallMode, { kind: "tarball" }>, noRestart: boolean, via: RestoreVia = "cli"): number {
   const { dataDir } = mode;
   const current = currentVersion(dataDir) ?? mode.version;
   const to = rollbackTarget(installedVersions(dataDir), current);
-  if (!to) { console.error(`No version older than ${current} is installed — nothing to roll back to.`); return 1; }
+  if (!to) { say.error(`No version older than ${current} is installed — nothing to roll back to.`); return 1; }
+  const snapDir = snapDirFor(dataDir, to);
+  const snap = readSnapshot(snapDir);
+  if (snap && via === "refuse") {
+    say.error(`This rollback also puts back the older state, which needs the desktop stopped, so it cannot run from here. Run \`${BRAND.slug} update --rollback\` on the desktop. Nothing was switched.`);
+    return 1;
+  }
   const release = takeLock(dataDir);
-  if (typeof release === "string") { console.error(release); return 1; }
+  if (typeof release === "string") { say.error(release); return 1; }
   try {
     const wantNode = readRelease(join(dataDir, "versions", to))?.node;
     const name = wantNode ? nodeDistName(wantNode, process.platform, process.arch) : null;
     if (wantNode && wantNode !== runtimeVersion(dataDir)) {
       if (name && existsSync(join(dataDir, "runtime", name, "bin", "node"))) {
         swapLink(join(dataDir, "runtime", "current"), name);
-        console.log(`  runtime → Node ${wantNode}`);
+        say.log(`  runtime → Node ${wantNode}`);
       } else {
-        console.log(`  ${to} was built for Node ${wantNode}, which is not installed here; keeping the current runtime.`);
+        say.log(`  ${to} was built for Node ${wantNode}, which is not installed here; keeping the current runtime.`);
       }
     }
-    const snapDir = snapDirFor(dataDir, to);
-    const snap = readSnapshot(snapDir);
     const svc = serviceFor(dataDir);
     if (!snap) {
       swapLink(join(dataDir, "current"), join("versions", to));
-      console.log(`Rolled back ${current} → ${to}. No state snapshot was taken when ${to} was left; the state is used as it is.`);
+      say.log(`Rolled back ${current} → ${to}. No state snapshot was taken when ${to} was left; the state is used as it is.`);
+    } else if (via === "defer") {
+      swapLink(join(dataDir, "current"), join("versions", to));
+      pendingRestore = { stateDir: stateDirFor(dataDir), snapDir, version: to };
+      say.log(`Rolled back ${current} → ${to}. Its state from before the update is put back when the host restarts.`);
     } else if (!svc || noRestart) {
       // A running host flushes its stores on exit, over any restore made now —
       // so without a service to stop, the restore is the person's step.
       swapLink(join(dataDir, "current"), join("versions", to));
-      console.log(`Rolled back ${current} → ${to}. Its state from before the update is NOT restored yet: ` +
+      say.log(`Rolled back ${current} → ${to}. Its state from before the update is NOT restored yet: ` +
         `stop the host, then run \`${BRAND.slug} update --restore-state\`.`);
     } else {
       try { execFileSync(svc.stop[0], svc.stop[1], { stdio: "inherit", timeout: 60_000 }); } catch (e) {
         swapLink(join(dataDir, "current"), join("versions", to));
-        console.error(`Rolled back ${current} → ${to}, but could not stop the service (${String((e as Error).message ?? e)}), so its state was NOT restored. ` +
+        say.error(`Rolled back ${current} → ${to}, but could not stop the service (${String((e as Error).message ?? e)}), so its state was NOT restored. ` +
           `Stop it, run \`${BRAND.slug} update --restore-state\`, then start it.`);
         return restartOrSay(dataDir, noRestart);
       }
@@ -589,10 +637,10 @@ function rollback(mode: Extract<InstallMode, { kind: "tarball" }>, noRestart: bo
       sayRestore(stateDirFor(dataDir), snapDir, to);
       try {
         execFileSync(svc.start[0], svc.start[1], { stdio: "inherit", timeout: 60_000 });
-        console.log(`Rolled back ${current} → ${to} and started the service (${cmdline(svc.start)}).`);
+        say.log(`Rolled back ${current} → ${to} and started the service (${cmdline(svc.start)}).`);
         return 0;
       } catch (e) {
-        console.error(`Rolled back ${current} → ${to}, but the service did not start: ${String((e as Error).message ?? e)}\nRun: ${cmdline(svc.start)}`);
+        say.error(`Rolled back ${current} → ${to}, but the service did not start: ${String((e as Error).message ?? e)}\nRun: ${cmdline(svc.start)}`);
         return 1;
       }
     }
@@ -606,11 +654,11 @@ function rollback(mode: Extract<InstallMode, { kind: "tarball" }>, noRestart: bo
 function sayRestore(stateDir: string, snapDir: string, version: string): boolean {
   try {
     const r = restoreState(stateDir, snapDir);
-    console.log(`  restored ${r.restored.length} store${r.restored.length === 1 ? "" : "s"} from before the update to ${stateDir}` +
+    say.log(`  restored ${r.restored.length} store${r.restored.length === 1 ? "" : "s"} from before the update to ${stateDir}` +
       (r.keptIn ? `; the newer state is kept in ${r.keptIn}` : ""));
     return true;
   } catch (e) {
-    console.error(`  could not restore ${version}'s state from ${snapDir}: ${String((e as Error).message ?? e)}. The state is used as it is.`);
+    say.error(`  could not restore ${version}'s state from ${snapDir}: ${String((e as Error).message ?? e)}. The state is used as it is.`);
     return false;
   }
 }
@@ -620,9 +668,9 @@ function restoreCurrent(mode: Extract<InstallMode, { kind: "tarball" }>): number
   const { dataDir } = mode;
   const version = currentVersion(dataDir) ?? mode.version;
   const snapDir = snapDirFor(dataDir, version);
-  if (!readSnapshot(snapDir)) { console.error(`No state snapshot for ${version} (${snapDir}) — nothing to restore.`); return 1; }
+  if (!readSnapshot(snapDir)) { say.error(`No state snapshot for ${version} (${snapDir}) — nothing to restore.`); return 1; }
   const release = takeLock(dataDir);
-  if (typeof release === "string") { console.error(release); return 1; }
+  if (typeof release === "string") { say.error(release); return 1; }
   try {
     return sayRestore(stateDirFor(dataDir), snapDir, version) ? 0 : 1;
   } finally {
@@ -651,22 +699,50 @@ export async function run(args: string[]): Promise<number> {
     else if (a === "--no-restart") noRestart = true;
     else if (a === "--from" && args[i + 1]) from = args[++i]!;
     else if (a.startsWith("--from=")) from = a.slice("--from=".length);
-    else if (a === "--help" || a === "-h") { console.log(USAGE); return 0; }
-    else { console.error(`${BRAND.slug} update: unknown argument "${a}"\n\n${USAGE}`); return 2; }
+    else if (a === "--help" || a === "-h") { say.log(USAGE); return 0; }
+    else { say.error(`${BRAND.slug} update: unknown argument "${a}"\n\n${USAGE}`); return 2; }
   }
-  if (Number(wantCheck) + Number(wantRollback) + Number(wantRestore) > 1) { console.error(USAGE); return 2; }
+  if (Number(wantCheck) + Number(wantRollback) + Number(wantRestore) > 1) { say.error(USAGE); return 2; }
   if (from && !/^(https?|file):/.test(from)) from = resolve(from);
   const source = releaseSource(from);
   const mode = currentMode();
   const needsRelease = wantCheck || (mode.kind === "tarball" && !wantRollback && !wantRestore);
   let policy: SigPolicy;
   try { policy = currentSigPolicy(); } catch (e) {
-    console.error(`The embedded release key is unreadable (${String((e as Error).message ?? e)}) — refusing; nothing changed.`);
+    say.error(`The embedded release key is unreadable (${String((e as Error).message ?? e)}) — refusing; nothing changed.`);
     return 1;
   }
-  if (needsRelease && policy.kind === "skip") console.error(SKIP_SIG_WARNING);
+  if (needsRelease && policy.kind === "skip") say.error(SKIP_SIG_WARNING);
   if (wantCheck) return check(mode, source, policy);
   if (mode.kind !== "tarball") return notSelfUpdating(mode);
   if (wantRestore) return restoreCurrent(mode);
   return wantRollback ? rollback(mode, noRestart) : update(mode, source, noRestart, policy);
+}
+
+/**
+ * `update` / `rollback` run INSIDE the daemon (the phone's updates view): the same code as the CLI,
+ * its lines handed to `lines`, `noRestart` always on (the caller restarts under the supervisor
+ * pattern). Only a tarball install; anything else is refused in words, nothing touched.
+ */
+export async function applyInProcess(
+  what: "update" | "rollback", lines: Say, source = releaseSource(null),
+  opts: { deferRestore?: boolean } = {},
+): Promise<{ code: number; version: string | null; warning?: string }> {
+  const mode = currentMode();
+  if (mode.kind !== "tarball") { lines.error("This install cannot update itself: only the release tarball install can."); return { code: 1, version: null }; }
+  let policy: SigPolicy;
+  try { policy = currentSigPolicy(); } catch (e) {
+    lines.error(`The embedded release key is unreadable (${String((e as Error).message ?? e)}) — refusing; nothing changed.`);
+    return { code: 1, version: null };
+  }
+  const prev = say;
+  say = lines;
+  const warning = what === "update" && policy.kind === "skip" ? SKIP_SIG_WARNING : undefined;
+  if (warning) lines.error(warning);
+  try {
+    // A rollback with a snapshot needs its state restored AFTER the host's last write: only the shutdown
+    // path of a supervised restart can do that (`deferRestore`); otherwise it is refused in words.
+    const code = what === "rollback" ? rollback(mode, true, opts.deferRestore ? "defer" : "refuse") : await update(mode, source, true, policy);
+    return { code, version: currentVersion(mode.dataDir), ...(warning ? { warning } : {}) };
+  } finally { say = prev; }
 }

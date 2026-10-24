@@ -22,10 +22,11 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
 
 // Small enough that the real-spawn test finishes; the module floors it at 1000.
 process.env.WATERPLANE_REPOHEALTH_TIMEOUT_MS = "1200";
@@ -130,6 +131,7 @@ function fake(answer = {}, { emit, engine = BUNDLED } = {}) {
     argvs,
     deps: {
       engine: typeof engine === "function" ? engine : () => engine,
+      approved: () => true, // the gate has its own tests at the end, on the real approval store
       spawn: async (wt, step, onStderr, argv) => {
         calls.push(step);
         argvs.push([...argv]);
@@ -536,7 +538,7 @@ test("a step that overruns takes its whole process group with it", async () => {
   );
   process.env.WATERPLANE_TEST_PIDFILE = join(wt, "kid.pid");
   const started = Date.now();
-  const view = await refreshRepoHealth(wt);
+  const view = await refreshRepoHealth(wt, { approved: () => true });
   const took = Date.now() - started;
 
   assert.ok(took < REPOHEALTH_TIMEOUT_MS + 5_000, `the cap must ANSWER, not wait for the corpse; took ${took}ms`);
@@ -578,7 +580,15 @@ test("a repo's own readings: the trust is SAID here, and this module never reads
   // The engine reads the committed file itself; nothing on the request path
   // here names it, so nothing a client sends can reach that argv.
   const strip = (s) => s.replace(/\/\*[\s\S]*?\*\/|(^|\s)\/\/[^\n]*/g, "");
-  assert.doesNotMatch(strip(text), /health\.json|REPOHEALTH_OWN_FILE/);
+  // This module reads the file for ONE reason — its bytes (and whether it
+  // declares `run`) fold into the approval key — and names it once. It never
+  // reaches an argv: `--no-own` is the only thing the declaration changes.
+  assert.doesNotMatch(strip(text), /REPOHEALTH_OWN_FILE/);
+  // The reading moved with the approval code (`repohealthapproval.ts`): it names the file once; this one never does.
+  assert.equal((strip(text).match(/health\.json/g) ?? []).length, 0);
+  assert.equal((strip(readFileSync(join(dirname(SRC), "repohealthapproval.ts"), "utf8")).match(/health\.json/g) ?? []).length, 1);
+  const argvFn = text.slice(text.indexOf("export function repoHealthArgv"), text.indexOf("const keyOf"));
+  assert.doesNotMatch(strip(argvFn), /HEALTH_JSON/);
 });
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -668,4 +678,307 @@ test("the stored scope list is what the client must draw, not what it asked for"
   const many = Array.from({ length: MAX_SCOPES + 3 }, (_, i) => `d${i}`);
   for (const d of many) mkdirSync(join(wt, d), { recursive: true });
   assert.equal(writeScopes(wt, many).length, MAX_SCOPES);
+});
+
+// ── A repo's OWN committed engine runs only after a one-time approval ──────────
+
+const { approveEngine, engineApproved } = await import("../dist/repohealthapproval.js");
+
+/** A recorder over REAL resolution and the REAL approval store (temp root). */
+function gatedFake() {
+  const argvs = [];
+  const root = mkdtempSync(join(tmpdir(), "waterplane-rh-state-"));
+  return {
+    argvs, root,
+    deps: {
+      root,
+      spawn: async (wt, step, onStderr, argv) => { argvs.push([...argv]); return ok(canned(step)); },
+    },
+  };
+}
+
+test("an unapproved repo engine is never spawned: needsApproval, path, a sentence", async () => {
+  const wt = worktree("// committed code\n");
+  const g = gatedFake();
+  const view = await readRepoHealth(wt, g.deps);
+  assert.deepEqual(g.argvs, [], "no spawn at all");
+  assert.equal(view.engine.kind, "repo");
+  assert.equal(view.engine.needsApproval, true);
+  assert.equal(view.engine.path, join(wt, "tools", "repohealth.mjs"));
+  assert.equal(view.series, null);
+  assert.equal(view.plot, null);
+  assert.match(view.readError, /only after you approve it once/);
+  const r = await refreshRepoHealth(wt, g.deps);
+  assert.deepEqual(g.argvs, [], "a refresh does not spawn it either");
+  assert.equal(r.engine.needsApproval, true);
+});
+
+test("an approved repo engine runs status then plot", async () => {
+  const wt = worktree("// committed code\n");
+  const g = gatedFake();
+  approveEngine(wt, g.root);
+  assert.equal(engineApproved(wt, g.root), true);
+  const view = await readRepoHealth(wt, g.deps);
+  assert.deepEqual(g.argvs.map((a) => a[1]), ["status", "plot"]);
+  assert.notEqual(view.engine.needsApproval, true);
+  assert.equal(view.series.rows, 158);
+});
+
+test("an engine edited after approval asks again", async () => {
+  const wt = worktree("// v1\n");
+  const g = gatedFake();
+  approveEngine(wt, g.root);
+  writeFileSync(join(wt, "tools", "repohealth.mjs"), "// v2 — pulled in\n");
+  assert.equal(engineApproved(wt, g.root), false);
+  const view = await readRepoHealth(wt, g.deps);
+  assert.deepEqual(g.argvs, []);
+  assert.equal(view.engine.needsApproval, true);
+});
+
+test("an edit to a module the entry imports (tools/lib, transitively) asks again; an import out of the tree makes the engine unapprovable", () => {
+  const wt = worktree('import "./lib/a.mjs";\n');
+  mkdirSync(join(wt, "tools", "lib"), { recursive: true });
+  writeFileSync(join(wt, "tools", "lib", "a.mjs"), 'export * from "./b.mjs";\n');
+  writeFileSync(join(wt, "tools", "lib", "b.mjs"), "export const b = 1;\n");
+  const root = mkdtempSync(join(tmpdir(), "waterplane-rh-state-"));
+  approveEngine(wt, root);
+  assert.equal(engineApproved(wt, root), true);
+  writeFileSync(join(wt, "tools", "lib", "b.mjs"), "export const b = 2; // pulled in\n");
+  assert.equal(engineApproved(wt, root), false);
+  // A sibling checkout under ROOT is pull-controlled by the same author: not followed, not approvable.
+  const out = worktree('import x from "../../outside.mjs";\n');
+  writeFileSync(join(dirname(out), "outside.mjs"), "export default 1;\n");
+  assert.match(engineUnapprovable(out) ?? "", /outside the repo/);
+  approveEngine(out, root);
+  assert.equal(engineApproved(out, root), false);
+});
+
+// ── 2026-10-22 security pass: what the key could not see ───────────────────────
+
+const awaitImport = await import("../dist/repohealthapproval.js");
+const { engineUnapprovable } = awaitImport;
+
+test("a dynamic import or a require with a literal relative path is followed: editing that module asks again", () => {
+  const wt = worktree('const m = await import("./lib/dyn.mjs");\nconst r = require_("./lib/req.mjs");\n');
+  mkdirSync(join(wt, "tools", "lib"), { recursive: true });
+  writeFileSync(join(wt, "tools", "lib", "dyn.mjs"), "export const v = 1;\n");
+  writeFileSync(join(wt, "tools", "lib", "req.mjs"), "export const r = 1;\n");
+  const root = mkdtempSync(join(tmpdir(), "waterplane-rh-state-"));
+  assert.equal(engineUnapprovable(wt), null);
+  approveEngine(wt, root);
+  assert.equal(engineApproved(wt, root), true);
+  writeFileSync(join(wt, "tools", "lib", "dyn.mjs"), "export const v = 2; // pulled in\n");
+  assert.equal(engineApproved(wt, root), false, "the dynamically imported module changed");
+  approveEngine(wt, root);
+  writeFileSync(join(wt, "tools", "lib", "req.mjs"), "export const r = 2; // pulled in\n");
+  assert.equal(engineApproved(wt, root), false, "the required module changed");
+});
+
+test("an engine that loads code the key cannot pin is never approvable, says why, and offers no approve tap", async () => {
+  const root = mkdtempSync(join(tmpdir(), "waterplane-rh-state-"));
+  for (const [body, why] of [
+    ['const m = await import(new URL("./lib/x.mjs", import.meta.url));\n', /not one plain string/],
+    ['import { createRequire } from "node:module";\nconst require = createRequire(import.meta.url);\nrequire(process.argv[2]);\n', /not one plain string/],
+    ["eval(process.argv[2]);\n", /eval/],
+    ['import vm from "node:vm";\n', /vm module/],
+    ['import "#engine";\n', /import map entry \(#engine\)/],
+    ['import { Worker } from "node:worker_threads";\nnew Worker("./lib/w.mjs");\n', /worker thread/],
+  ]) {
+    const wt = worktree(body);
+    assert.match(engineUnapprovable(wt) ?? "", why, body);
+    approveEngine(wt, root);
+    assert.equal(engineApproved(wt, root), false, body);
+    const g = gatedFake();
+    const view = await readRepoHealth(wt, g.deps);
+    assert.deepEqual(g.argvs, [], "never spawned: " + body);
+    assert.equal(view.engine.needsApproval, false, "no approve tap to offer: " + body);
+    assert.match(view.readError, /loads code an approval cannot pin/);
+  }
+  // Prose in a comment or a string is not a hit; a literal argument is followed, not flagged.
+  const prose = worktree([
+    "// a dynamic `import(mod)` or `require(name)` is fine to talk about, as is Python's `from a import (\\n X)`",
+    "/* and so is eval(thing) in a block comment */",
+    'const words = "see import(x) and a // slash in a string";',
+    "const re = /import\\(x\\)/; const ratio = words.length / 2;",
+    'const x = await import("./lib/ok.mjs");',
+    "",
+  ].join("\n"));
+  mkdirSync(join(prose, "tools", "lib"), { recursive: true });
+  writeFileSync(join(prose, "tools", "lib", "ok.mjs"), "export const ok = 1;\n");
+  assert.equal(engineUnapprovable(prose), null);
+  // …but a `//` inside a string does not hide what follows it on the line, and a
+  // template's `${…}` is code, not text.
+  const hidden = worktree('const s = "//"; await import(process.argv[2]);\n');
+  assert.match(engineUnapprovable(hidden) ?? "", /not one plain string/);
+  const inTemplate = worktree("const t = `loaded ${await import(process.argv[2])}`;\n");
+  assert.match(engineUnapprovable(inTemplate) ?? "", /not one plain string/);
+});
+
+test("review probes: every import() argument that is not one plain string, a URL module, eval in any form, Function(), aliased createRequire, loader hooks and worker_threads are refused; a wrapped literal, a division and a comment in the call are not", async () => {
+  const root = mkdtempSync(join(tmpdir(), "waterplane-rh-state-"));
+  for (const [body, why] of [
+    ['const m = await import("./lib/" + "x.mjs");\n', /not one plain string/],
+    ['const m = await import("./lib/x.mjs", {});\n', /not one plain string/],
+    ["const m = await import(`./lib/x.mjs`);\n", /not one plain string/],
+    ['const m = await import("data:text/javascript,export default 1");\n', /URL or an absolute path/],
+    ['const z = {} / 1, m = await import(new URL("x", import.meta.url)), q = 1 / 1;\n', /not one plain string/],
+    ["const t = `${ (/}/, await import(p)) }`;\n", /not one plain string|does not scan/],
+    ["(0, eval)(x);\n", /eval/],
+    ["Function(x)();\n", /Function/],
+    ['import { createRequire } from "node:module";\nconst load = createRequire(import.meta.url);\nload(x);\n', /createRequire bound/],
+    ['import { createRequire } from "node:module";\ncreateRequire(import.meta.url)(x);\n', /createRequire called/],
+    ['import { register } from "node:module";\nregister("./lib/hooks.mjs", import.meta.url);\n', /register/],
+    ['import { Worker as W } from "node:worker_threads";\nnew W("./lib/w.mjs");\n', /worker_threads/],
+    ['const m = await import("node:" + "vm");\n', /not one plain string/],
+  ]) {
+    const wt = worktree(body);
+    assert.match(engineUnapprovable(wt) ?? "", why, body);
+    approveEngine(wt, root);
+    assert.equal(engineApproved(wt, root), false, body);
+  }
+  // Prettier's wrap, a comment inside the call, a postfix division and a `}` division are all fine.
+  const ok = worktree([
+    "#!/usr/bin/env node",
+    'const m = await import(\n  "./lib/x.mjs"\n);',
+    'const r = require_(/* lazy */ "./lib/y.mjs");',
+    "const z = i++ / 2;",
+    "const w = {} / 1;",
+    "if (x) /re/.test(s);",
+    "",
+  ].join("\n"));
+  mkdirSync(join(ok, "tools", "lib"), { recursive: true });
+  writeFileSync(join(ok, "tools", "lib", "x.mjs"), "export const x = 1;\n");
+  writeFileSync(join(ok, "tools", "lib", "y.mjs"), "export const y = 1;\n");
+  assert.equal(engineUnapprovable(ok), null);
+  approveEngine(ok, root);
+  assert.equal(engineApproved(ok, root), true);
+  writeFileSync(join(ok, "tools", "lib", "x.mjs"), "export const x = 2; // pulled in\n");
+  assert.equal(engineApproved(ok, root), false, "the wrapped import was followed");
+});
+
+test("review probes: a dependency committed under a nested or symlinked node_modules, or imported by the repo's own package name, is refused", () => {
+  const nested = worktree('import x from "left-pad";\n');
+  execFileSync("git", ["-C", nested, "init", "-q"]);
+  mkdirSync(join(nested, "tools", "node_modules", "left-pad"), { recursive: true });
+  writeFileSync(join(nested, "tools", "node_modules", "left-pad", "index.js"), "module.exports = 1;\n");
+  assert.equal(engineUnapprovable(nested), null, "installed only: fine");
+  execFileSync("git", ["-C", nested, "add", "-f", "tools/node_modules/left-pad/index.js"]);
+  assert.match(engineUnapprovable(nested) ?? "", /committed in the repo/);
+  const linked = worktree('import x from "left-pad";\n');
+  execFileSync("git", ["-C", linked, "init", "-q"]);
+  mkdirSync(join(linked, "vendor", "left-pad"), { recursive: true });
+  writeFileSync(join(linked, "vendor", "left-pad", "index.js"), "module.exports = 1;\n");
+  symlinkSync("vendor", join(linked, "node_modules"));
+  execFileSync("git", ["-C", linked, "add", "-f", "node_modules", "vendor/left-pad/index.js"]);
+  assert.match(engineUnapprovable(linked) ?? "", /committed in the repo/);
+  const self = worktree('import x from "selfref";\n');
+  execFileSync("git", ["-C", self, "init", "-q"]);
+  writeFileSync(join(self, "package.json"), JSON.stringify({ name: "selfref", exports: "./tools/lib/x.mjs" }));
+  assert.match(engineUnapprovable(self) ?? "", /own package name/);
+});
+
+test("review probes: an entry or health.json that is a link to a device is refused before anything reads it", () => {
+  const { HEALTH_JSON, ownCommandsDeclared } = awaitImport;
+  const wt = worktree("// placeholder\n");
+  rmSync(join(wt, "tools", "repohealth.mjs"));
+  symlinkSync("/dev/zero", join(wt, "tools", "repohealth.mjs"));
+  assert.match(engineUnapprovable(wt) ?? "", /link out of the repo/);
+  const wt2 = worktree("// fine\n");
+  mkdirSync(join(wt2, dirname(HEALTH_JSON)), { recursive: true });
+  symlinkSync("/dev/zero", join(wt2, HEALTH_JSON));
+  assert.equal(ownCommandsDeclared(wt2), true, "unreadable health.json counts as declaring (fails closed), without reading it");
+  assert.equal(engineUnapprovable(wt2), null);
+});
+
+test("a bare dependency is pinnable while it is only installed, and not once the repo commits it", () => {
+  const wt = worktree('import x from "left-pad";\nimport fs from "fs";\n');
+  execFileSync("git", ["-C", wt, "init", "-q"]);
+  mkdirSync(join(wt, "node_modules", "left-pad"), { recursive: true });
+  writeFileSync(join(wt, "node_modules", "left-pad", "index.js"), "module.exports = 1;\n");
+  assert.equal(engineUnapprovable(wt), null, "installed, not committed: node_modules is the person's");
+  execFileSync("git", ["-C", wt, "add", "-f", "node_modules/left-pad/index.js"]);
+  assert.match(engineUnapprovable(wt) ?? "", /dependency committed in the repo \(node_modules\/left-pad\/index\.js\)/);
+  const nogit = worktree('import x from "left-pad";\n');
+  assert.match(engineUnapprovable(nogit) ?? "", /git cannot tell/, "no repository: fail closed");
+});
+
+test("waterplane's own engine stays approvable under these rules", () => {
+  const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+  assert.equal(engineUnapprovable(repo), null);
+});
+
+// ── Review fixes: siblings, health.json commands, and the consent token ──────
+
+const { approveWithConsent, withApproveToken } = await import("../dist/repohealthapproval.js");
+const { createConfirmGate } = await import("../dist/confirmgate.js");
+
+const browserReq = { headers: { origin: "http://localhost:8770" } };
+
+test("a sibling module edited after approval asks again", async () => {
+  const wt = worktree("// entry\n");
+  mkdirSync(join(wt, "tools", "repohealth"), { recursive: true });
+  writeFileSync(join(wt, "tools", "repohealth", "own.mjs"), "export const a = 1;\n");
+  const g = gatedFake();
+  approveEngine(wt, g.root);
+  assert.equal(engineApproved(wt, g.root), true);
+  writeFileSync(join(wt, "tools", "repohealth", "own.mjs"), "export const a = 2; // pulled\n");
+  assert.equal(engineApproved(wt, g.root), false);
+  const view = await readRepoHealth(wt, g.deps);
+  assert.deepEqual(g.argvs, []);
+  assert.equal(view.engine.needsApproval, true);
+});
+
+function bundledWorktree(healthJson) {
+  const wt = mkdtempSync(join(tmpdir(), "waterplane-rh-bundled-"));
+  mkdirSync(join(wt, ".waterplane-shared"), { recursive: true });
+  writeFileSync(join(wt, ".waterplane-shared", "health.json"), healthJson);
+  return wt;
+}
+const OWN_RUN = JSON.stringify({ readings: [{ key: "x", name: "x", means: "x", better: "higher", unit: "n", run: ["node", "x.mjs"] }] });
+
+test("health.json commands unapproved: the bundled engine updates with --no-own and the view asks", async () => {
+  const wt = bundledWorktree(OWN_RUN);
+  const g = gatedFake();
+  const deps = { ...g.deps, engine: () => ({ path: "/bundled/repohealth.mjs", kind: "bundled" }) };
+  const view = await refreshRepoHealth(wt, deps);
+  const update = g.argvs.find((a) => a[1] === "update");
+  assert.ok(update, "the bundled engine still runs");
+  assert.ok(update.includes("--no-own"), "without the repo's own commands");
+  assert.equal(view.engine.needsApproval, true);
+  assert.equal(view.engine.path, join(wt, ".waterplane-shared", "health.json"));
+  assert.match(view.readError ?? "", /health\.json/);
+  // no commands declared: nothing to approve, no flag
+  const wt2 = bundledWorktree(JSON.stringify({ central: { size: { disable: true, why: "x" } } }));
+  const g2 = gatedFake();
+  await refreshRepoHealth(wt2, { ...g2.deps, engine: deps.engine });
+  assert.ok(!g2.argvs.find((a) => a[1] === "update").includes("--no-own"));
+  assert.ok(!repoHealthArgv({ path: "/b.mjs", kind: "bundled" }, wt, "status", null, true).includes("--no-own"), "only update takes it");
+});
+
+test("approving needs the token the read minted", () => {
+  const wt = worktree("// committed code\n");
+  const other = worktree("// another repo\n");
+  const g = gatedFake();
+  const gate = createConfirmGate();
+  const view = withApproveToken(wt, { engine: { kind: "repo", needsApproval: true } }, gate);
+  const token = view.engine.approveToken;
+  assert.ok(token);
+  const refused = (r, w, t) => assert.match(approveWithConsent(r, w, t, g.root, gate) ?? "", /nothing was approved/);
+  refused(browserReq, wt, undefined);
+  refused(browserReq, wt, "bogus");
+  refused({ headers: {} }, wt, token); // no Origin cannot consent
+  refused(browserReq, other, token); // bound to the worktree
+  assert.equal(engineApproved(wt, g.root), false);
+  assert.equal(approveWithConsent(browserReq, wt, token, g.root, gate), null);
+  assert.equal(engineApproved(wt, g.root), true);
+});
+
+test("with the token, the approved engine runs", async () => {
+  const wt = worktree("// committed code\n");
+  const g = gatedFake();
+  const gate = createConfirmGate();
+  const token = gate.mint("repohealth.approve", wt);
+  assert.equal(approveWithConsent(browserReq, wt, token, g.root, gate), null);
+  await refreshRepoHealth(wt, g.deps);
+  assert.ok(g.argvs.some((a) => a[1] === "update"));
 });

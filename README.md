@@ -12,9 +12,9 @@ customized: a plugin adds the button, switch or status line your way of working 
 [How it compares](#how-it-compares) · [Security](SECURITY.md) · [Open source (MIT)](LICENSE) ·
 macOS, Linux, Windows via WSL2 · Android app or web app, no iOS app yet
 
-<a href="https://waterplane-dev.github.io/media/first-look-8a2bff9544.mp4"><img src="docs/media/first-look.gif" width="270" alt="A session starts from the phone; Claude Code on the desktop builds the app and screenshots it in the iOS simulator and the Android emulator; the two screenshots are combined, the clipped Android button circled and sent back; Claude fixes it, re-checks both, and the debug APK arrives as a download for the real phone"></a>
+<a href="https://waterplane-dev.github.io/media/first-look-01e0e72583.mp4"><img src="docs/media/first-look.gif" width="270" alt="A session starts from the phone; Claude Code on the desktop builds the app and screenshots it in the iOS simulator and the Android emulator; the two screenshots are combined, the clipped Android button circled and sent back; Claude fixes it, re-checks both, and the debug APK arrives as a download for the real phone"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/first-look-8a2bff9544.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/first-look-01e0e72583.mp4), with pause and seek.*
 <!-- /site:intro -->
 
 - **The real CLI, not a re-implementation.** Every slash command, plan and trust prompt and the
@@ -35,9 +35,9 @@ elsewhere: the Mac Studio builds and runs the simulators while the notebook only
 The window gets a sidebar of repos, the session in the middle and a panel beside it, and it is
 the same sessions, queue and costs, so what you left on the laptop is waiting on the phone.
 
-<a href="https://waterplane-dev.github.io/media/desktop-436d6fea59.mp4"><img src="docs/media/desktop.gif" width="720" alt="The same app in a laptop's browser: repos in a sidebar, todo-garden's session started in the main pane, the prompt sent with Cmd+Return, Claude Code builds and checks the iOS simulator and the Android emulator, and the gallery opens as a panel beside the session with both screenshots"></a>
+<a href="https://waterplane-dev.github.io/media/desktop-179819b225.mp4"><img src="docs/media/desktop.gif" width="720" alt="The same app in a laptop's browser: repos in a sidebar, todo-garden's session started in the main pane, the prompt sent with Cmd+Return, Claude Code builds and checks the iOS simulator and the Android emulator, and the gallery opens as a panel beside the session with both screenshots"></a>
 
-*A short loop. [The whole film as a video](https://waterplane-dev.github.io/media/desktop-436d6fea59.mp4).*
+*A short loop. [The whole film as a video](https://waterplane-dev.github.io/media/desktop-179819b225.mp4).*
 
 Desktops can also work for each other. Pair two of them and an agent on one can hand a job to the
 other (run the Windows build, the tests on the bigger machine): the branch travels through your
@@ -147,9 +147,9 @@ npm run build
 npm start
 ```
 
-<a href="https://waterplane-dev.github.io/media/setup-b40cd154ba.mp4"><img src="docs/media/setup.gif" width="270" alt="The desktop builds and starts the host; on the phone the app lists the repo, + now starts claude in it, and its trust question is answered with a tap"></a>
+<a href="https://waterplane-dev.github.io/media/setup-7fd327bf01.mp4"><img src="docs/media/setup.gif" width="270" alt="The desktop builds and starts the host; on the phone the app lists the repo, + now starts claude in it, and its trust question is answered with a tap"></a>
 
-*From `npm run build` on the desktop to claude running in your repo on the phone. [The whole setup as a video](https://waterplane-dev.github.io/media/setup-b40cd154ba.mp4), with pause and seek.*
+*From `npm run build` on the desktop to claude running in your repo on the phone. [The whole setup as a video](https://waterplane-dev.github.io/media/setup-7fd327bf01.mp4), with pause and seek.*
 
 `npm run doctor` (or `waterplane doctor`) is the first thing to re-run when something misbehaves:
 it names what is wrong and what to type. The host lists the git repos under `~/dev` (or
@@ -229,9 +229,9 @@ than a guess.
 <!-- site:health -->
 ### Repo health, so the vibe coding stays maintainable
 
-<a href="https://waterplane-dev.github.io/media/repo-health-0e9419dde7.mp4"><img src="docs/media/repo-health.gif" width="270" alt="A repo vibe-coded for eight months scores 46 out of 100: one 8,397-line file caps the score, two severe warnings name it, and the trend slides from 100 in February"></a>
+<a href="https://waterplane-dev.github.io/media/repo-health-55ce394cae.mp4"><img src="docs/media/repo-health.gif" width="270" alt="A repo vibe-coded for eight months scores 46 out of 100: one 8,397-line file caps the score, two severe warnings name it, and the trend slides from 100 in February"></a>
 
-*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/repo-health-0e9419dde7.mp4), with pause and seek.*
+*A short loop. [The whole walkthrough as a video](https://waterplane-dev.github.io/media/repo-health-55ce394cae.mp4), with pause and seek.*
 
 Vibe coding drifts into a mess quietly, and a steady number does not mean a healthy repo. Each repo
 gets one health score out of 100, measured against fixed good values: file length, files reworked
@@ -261,9 +261,9 @@ why it is shaped this way: [docs/notes/plugins.md](docs/notes/plugins.md).
 
 *Android app developers only (optional).*
 
-<a href="https://waterplane-dev.github.io/media/apk-install-a541f6b014.mp4"><img src="docs/media/apk-install.png" width="490" alt="Your phone circles a spot on a screenshot of the app, Claude Code adds a logo there, the build runs, the notifications on the phone with the app (a second one here, or the same one) say the build succeeded and the update is ready to install, one tap on Install updates it, and it opens with the logo in the circled spot"></a>
+<a href="https://waterplane-dev.github.io/media/apk-install-ef86db40c1.mp4"><img src="docs/media/apk-install.png" width="490" alt="Your phone circles a spot on a screenshot of the app, Claude Code adds a logo there, the build runs, the notifications on the phone with the app (a second one here, or the same one) say the build succeeded and the update is ready to install, one tap on Install updates it, and it opens with the logo in the circled spot"></a>
 
-*[The walkthrough as a video](https://waterplane-dev.github.io/media/apk-install-a541f6b014.mp4).*
+*[The walkthrough as a video](https://waterplane-dev.github.io/media/apk-install-ef86db40c1.mp4).*
 
 Save a build command per repo and run it from the phone without a Claude session, so it spends no
 tokens; it is the way out when you are rate limited and still need a build. Produced files are

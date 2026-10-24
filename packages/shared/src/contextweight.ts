@@ -179,6 +179,18 @@ export function weighContext(
   };
 }
 
+const DESC_KEY = /^["']?description["']?[ \t]*:[ \t]*/;
+
+/**
+ * A file's YAML frontmatter as raw lines, or null when it has none. Tolerates what YAML loaders
+ * do — a UTF-8 BOM, blank lines before the opening `---`, CRLF and an empty block — because a
+ * strict match read such a skill's description as 0 chars and its whole text as body.
+ */
+export function frontmatterLines(text: string): string[] | null {
+  const fm = /^(?:[ \t]*\r?\n)*---[ \t]*\r?\n(?:([\s\S]*?)\r?\n)?---[ \t]*(?:\r?\n|$)/.exec(text.replace(/^\uFEFF/, ""));
+  return fm ? (fm[1] ?? "").split(/\r?\n/) : null;
+}
+
 /**
  * The always-loaded length of one skill file: its `description:` frontmatter.
  *
@@ -189,12 +201,13 @@ export function weighContext(
  * skills whose descriptions are worth looking at.
  */
 export function skillDescChars(text: string): number {
-  const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text);
-  if (!fm) return 0;
-  const lines = fm[1].split(/\r?\n/);
-  const start = lines.findIndex((l) => /^description:/.test(l));
+  const lines = frontmatterLines(text);
+  if (!lines) return 0;
+  const start = lines.findIndex((l) => DESC_KEY.test(l));
   if (start < 0) return 0;
-  const parts = [lines[start].replace(/^description:[ \t]*/, "")];
+  // A `>` / `|` block-scalar indicator is YAML syntax, not words the model reads.
+  const first = lines[start].replace(DESC_KEY, "").trim();
+  const parts = /^[>|][+-]?\d*$/.test(first) ? [] : [first];
   for (let i = start + 1; i < lines.length; i++) {
     if (/^[A-Za-z_-]+:/.test(lines[i])) break;   // the next top-level key
     parts.push(lines[i].trim());

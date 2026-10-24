@@ -1,7 +1,6 @@
 /**
  * Lightweight LLM metering — call counting, token tracking, and estimated cost
- * for the API calls waterplane itself makes (the highlighter's text reader, kind
- * `ocr`, and plugins, kind `plugin:<id>`). Modeled on the podcast app's pattern, trimmed to a single JSON file:
+ * for the API calls waterplane itself makes (plugins, kind `plugin:<id>`). Modeled on the podcast app's pattern, trimmed to a single JSON file:
  *
  *  - One MeterEvent per call: service, model, kind, in/out tokens, cost, ts.
  *  - Token counts come from the provider response (Gemini usageMetadata); cost

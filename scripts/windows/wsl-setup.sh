@@ -71,9 +71,21 @@ elif command -v curl >/dev/null && command -v xz >/dev/null; then
   if [ ! -x "$dir/bin/node" ]; then
     say "installing node $want into $dir…"
     mkdir -p "$HOME/.local/opt"
-    if ! curl -fsSL --retry 3 "https://nodejs.org/dist/v$want/node-v$want-linux-$arch.tar.xz" | tar -xJ -C "$HOME/.local/opt"; then
-      say "node download failed"; fail=1
+    # Checked against nodejs.org's SHASUMS256.txt before it is unpacked — the same rule as
+    # install.sh's Node step (the sums come over the same https channel as the tarball, so
+    # this catches corruption and a swapped file, not a compromised nodejs.org).
+    tarball="node-v$want-linux-$arch.tar.xz"
+    opt="$HOME/.local/opt"
+    if curl -fsSL --retry 3 -o "$opt/$tarball" "https://nodejs.org/dist/v$want/$tarball" \
+       && curl -fsSL --retry 3 "https://nodejs.org/dist/v$want/SHASUMS256.txt" | grep -F -- " $tarball" > "$opt/$tarball.sha256" \
+       && [ -s "$opt/$tarball.sha256" ] \
+       && (cd "$opt" && sha256sum -c --quiet "$tarball.sha256") \
+       && tar -xJ -C "$opt" -f "$opt/$tarball"; then
+      :
+    else
+      say "node download failed, or its checksum did not match nodejs.org's SHASUMS256.txt"; fail=1
     fi
+    rm -f "$opt/$tarball" "$opt/$tarball.sha256"
   fi
   for b in node npm npx; do [ -x "$dir/bin/$b" ] && ln -sf "$dir/bin/$b" "$BIN/$b"; done
   say "node $("$BIN/node" -v 2>/dev/null) → $BIN/node"

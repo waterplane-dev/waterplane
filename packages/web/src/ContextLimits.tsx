@@ -146,7 +146,7 @@ export function ContextLimitsEditor({ repoId, view, setAt, onReport }: {
         host's line — blank is “inherit”, not zero.
       </Hint>
       {FIELDS.map((f) => (
-        <label key={f.key} className="form-hint">
+        <Hint as="label" key={f.key}>
           {f.label} — now {f.chars ? shorten(view.effective[f.key]) : view.effective[f.key]} ({SOURCE_WORD[view.source[f.key]]})
           <input
             className="search"
@@ -160,7 +160,7 @@ export function ContextLimitsEditor({ repoId, view, setAt, onReport }: {
             onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value })}
           />
           <span style={{ opacity: 0.7 }}>{f.hint}</span>
-        </label>
+        </Hint>
       ))}
       {Number.isFinite(warnPreview) && warnPreview > 0 && (
         <Hint>

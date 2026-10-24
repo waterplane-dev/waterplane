@@ -43,6 +43,9 @@ const CLEARS = {
   "core/compose/useCompose.ts": [
     // clearCompose: the SECOND tap — the first only arms and returns.
     /if \(!clearArmed\) \{[^\n]*return; \}/,
+    // sendCompose's "restart, then send": the words ride inside the relaunch's
+    // create op, which `queueOp` parks in the outbox before it returns.
+    /deps\.relaunch\(cur, \{\}, \{ prompt: text \}\);/,
     // sendCompose ×3: dispatchIntent / queueBacklog / submitInput accepted it.
     /if \(!dispatchIntent\(/,
     /if \(offline === null\) return;/,

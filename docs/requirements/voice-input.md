@@ -20,3 +20,7 @@ Every dictation button in the app is the same reusable voice input component, lo
 - asked: 2026-10-05
 - shipped: 6792295e
 
+### R-voice-input-005 · requested
+The voice input button feels like on-device speech-to-text: responsive and native-feeling.
+- asked: 2026-10-22
+

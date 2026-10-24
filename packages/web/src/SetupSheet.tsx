@@ -69,7 +69,7 @@ import { Sheet } from "./Sheet";
 import { Empty } from "./Empty";
 import { loadPresets, remedyFor, type Preset } from "./presets";
 import {
-  agentFindings, agentVerb, bulkLabel, bulkNote, findingsCutWords, fixConfirmWords, fixNeedsConfirm, fixVerb, patchFindings, patchIds, remedyPrompt, setupRows,
+  agentFindings, agentVerb, bulkLabel, bulkNote, findingsCutWords, fixConfirmWords, fixNeedsConfirm, fixTitle, fixVerb, patchFindings, patchIds, remedyPrompt, setupRows,
 } from "./setupRemedy";
 import { ConfirmButton } from "./Confirm";
 import { ContextLimitsEditor } from "./ContextLimits";
@@ -289,9 +289,11 @@ export function SetupSheet({
               every other one — the id round-trip is local to this sheet, which
               talks to both APIs in repo ids. Above the region switch, because
               it changes what BOTH regions are about. */}
+          {/* Primaries only, no worktree toggle: a worktree's readings are its
+              repo's first-parent history again. The current value stays listed
+              (`RepoSelect` keeps it) when the sheet was opened on a worktree. */}
           <RepoSelect
-            repos={repos}
-            worktreeFilter
+            repos={repos.filter((r) => r.isPrimary || r.id === repoId)}
             value={repos.find((r) => r.id === repoId)?.worktreePath ?? ""}
             onChange={(dir) => { const r = repos.find((x) => x.worktreePath === dir); if (r) setRepoId(r.id); }}
             aria-label="repo"
@@ -624,6 +626,8 @@ function Row({ c, busy, onFix, onIgnore, size, remedy, extra }: {
         )}
       </div>
       <div className="check-detail">{c.detail}</div>
+      {/* A short verb on the button, its full effect as TEXT: a title is invisible on a phone. */}
+      {c.fix && !fixNeedsConfirm(c.fix) && fixTitle(c.fix) && <Hint>{fixTitle(c.fix)}</Hint>}
       {consider && (
         <div className="check-acts check-acts-split">
           <Hint as="span">Not counted in the badge. Leaving it is a fine answer.</Hint>

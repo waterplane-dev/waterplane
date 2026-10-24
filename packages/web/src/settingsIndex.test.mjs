@@ -338,3 +338,17 @@ test("a nested section shows whole under its parent's catalogued words, else onl
   setRowWords("plugins", "");
   assert.ok(wordsMatch("Open The Notary", "notary open"), "case-insensitive, AND, substring");
 });
+
+test("SetLine and SetNote never become a counted row", () => {
+  const src = readFileSync(join(here, "SettingsKit.tsx"), "utf8");
+  for (const name of ["SetLine", "SetNote"]) {
+    const from = src.indexOf(`export function ${name}`);
+    assert.ok(from >= 0, `${name} is gone from SettingsKit.tsx`);
+    const rest = src.slice(from + 10);
+    const next = rest.indexOf("export function");
+    const body = src.slice(from, next < 0 ? undefined : from + 10 + next);
+    for (const banned of ["useRowVisible", "useNestedShown", "useContext", "ctx.seen"]) {
+      assert.ok(!body.includes(banned), `${name} uses ${banned}: a note or a layout line must never become a counted row; a decision is SetSwitch/SetChoice/…`);
+    }
+  }
+});

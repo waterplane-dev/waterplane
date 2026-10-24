@@ -88,7 +88,7 @@ export function RequirementsSheet() {
         <CountChips keys={REQUIREMENT_STATUSES} bucket={statusB} label={(s) => s} active={cut.status}
           onPick={(status) => view.set((x) => ({ ...x, cut: { ...x.cut, status } }))} className="annot-tools wrap" />
         {l.areas.length > MANY_AREAS && !cut.area
-          ? <details><summary className="form-hint" style={{ padding: "8px 14px" }}>areas · {l.areas.length}</summary>{areaChips}</details>
+          ? <details><Hint as="summary" style={{ padding: "8px 14px" }}>areas · {l.areas.length}</Hint>{areaChips}</details>
           : areaChips}
         {words && (
           <FilterBar section onClear={() => view.set((x) => ({ ...x, cut: NO_CUT, q: "" }))}>{words}</FilterBar>

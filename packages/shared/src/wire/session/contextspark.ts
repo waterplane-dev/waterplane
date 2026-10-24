@@ -2,7 +2,7 @@ import type { CostBreakdown } from "../../pricing.js";
 import type { ColdStarts } from "../../sessioncost.js";
 import type { AutoCompactSource } from "../../autocompact.js";
 import type { TokenTotals } from "../telemetry.js";
-import type { ContextSample, AgentRun, ContextEvent, CompactionLedger } from "./context.js";
+import type { ContextSample, AgentRun, ContextEvent, CompactionLedger, SkillLoad } from "./context.js";
 
 /**
  * The context series, small enough to ride on every `SessionInfo` — the
@@ -222,6 +222,14 @@ export type ContextWindowSource =
    * than present it as a measurement.
    */
   | "config"
+  /**
+   * The CLI SAID it, over its own channel, for the model this session is on —
+   * a plugin backend's `ContextSource` sample carrying `window` (contract 2.2).
+   * A statement about THIS session, like `screen`, but not something printed
+   * on screen, so it gets its own caption. Only a source session's series
+   * carries it; claude's never does.
+   */
+  | "source"
   /** None of them: the axis falls back to tokens and the graph says so. */
   | "none";
 
@@ -362,6 +370,13 @@ export interface ContextSeriesDoc {
    * ships an empty list, which is a different claim and reads as one).
    */
   agents?: AgentRun[];
+  /**
+   * Every skill the conversation ITSELF loaded, oldest first (its agents'
+   * ride on each `AgentRun.skills`). Always sent where the log was read, an
+   * empty list when none were — absent only from an older host, so "loaded
+   * none" and "nobody looked" stay apart.
+   */
+  skills?: SkillLoad[];
   /**
    * What this conversation's compactions shed, saved and cost.
    *

@@ -4,9 +4,15 @@
  * relayed to the extension as messages, and every way it can end posts `{ t: "exit", code }` first,
  * so the extension never has to guess an exit code from a vanished thread.
  *
- * The only program this file can start is `git` (the engine's `git.mjs`); `judge.mjs`, the one
- * engine module that would spend tokens, is swapped for a throwing shim at bundle time.
+ * The only program this file can start is `git` (the engine's `git.mjs`, and `gitprobe` below);
+ * `judge.mjs`, the one engine module that would spend tokens, is swapped for a throwing shim at
+ * bundle time.
+ *
+ * `gitprobe` is not an engine step: it runs `git --version` on the PATH it was given and exits
+ * with its status, so the extension can tell a git that RUNS from a shim that refuses (macOS's
+ * `/usr/bin/git` before Xcode's license) without starting a process of its own.
  */
+import { spawnSync } from "node:child_process";
 import { parentPort } from "node:worker_threads";
 
 type Msg = { t: "out" | "err"; s: string } | { t: "exit"; code: number };
@@ -32,7 +38,10 @@ if (parentPort) {
     post({ t: "exit", code: Number(code ?? process.exitCode ?? 0) });
     return realExit(code);
   }) as never;
-  try {
+  if (process.argv[2] === "gitprobe") {
+    const r = spawnSync("git", ["--version"], { stdio: "ignore", timeout: 5_000, windowsHide: true });
+    post({ t: "exit", code: r.status === 0 && !r.error ? 0 : 1 });
+  } else try {
     // @ts-expect-error -- the engine is plain JS with no declarations; esbuild bundles it.
     await import("../../../tools/repohealth.mjs");
     post({ t: "exit", code: Number(process.exitCode ?? 0) });

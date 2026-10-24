@@ -16,6 +16,32 @@ import {
 import { logTag } from "@waterplane/shared";
 import { hostStateDir } from "../branddirs.js";
 import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
+import { derive } from "../backends/derive.js";
+import { liveSourceFor } from "../livesources.js";
+import type { Provider } from "@waterplane/shared";
+
+/** The gate for a `SessionLimit` existing at all; in `usagesources.ts` because `tmux.ts` asks it
+ *  too and a slice never imports a slice. */
+export { hasAccountLimit } from "../usagesources.js";
+
+/** A source's answer to "is THIS session blocked by the account?" (`UsageSource.wall`). */
+export interface SourceWall { blocked: boolean; resetAt?: number; why: string }
+
+/** A source wall, vetted: a boolean `blocked`, a finite positive `resetAt` or none. Else null. */
+function vetWall(v: unknown): SourceWall | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  if (typeof o.blocked !== "boolean") return null;
+  const out: SourceWall = { blocked: o.blocked, why: typeof o.why === "string" ? o.why.slice(0, 300) : "" };
+  if (typeof o.resetAt === "number" && Number.isFinite(o.resetAt) && o.resetAt > 0) out.resetAt = o.resetAt;
+  return out;
+}
+
+const isSourceProvider = (p: Provider): boolean => (p as { source?: unknown }).source === true;
+const screenName = (p: Provider): string | null => {
+  const n = (p as { screen?: unknown }).screen;
+  return typeof n === "string" ? n : null;
+};
 
 /**
  * The account wall, per session: the auto-continue config (the global switch,
@@ -117,7 +143,7 @@ export class WallSlice {
    * into a verdict.
    */
   limitLog(s: Session): LimitLogVerdict {
-    if (!s.backend.caps.usageLimits || s.backend.caps.transcript !== "claude-jsonl") return LIMIT_LOG_UNKNOWN;
+    if (derive(s.backend).screen("limits") !== "limit-ts" || !derive(s.backend).keepsClaudeLog) return LIMIT_LOG_UNKNOWN;
     if (!s.info.claudeSessionId) return LIMIT_LOG_UNKNOWN;
     const path = transcriptPath(s.info.cwd, s.info.claudeSessionId);
     const mtime = logMtime(path);
@@ -146,7 +172,59 @@ export class WallSlice {
     // a wall — `SessionInfo.limit` is absent for these sessions, so every path
     // below (the badge, the queue, the auto-continue schedule) has nothing to
     // write to anyway. This is the early exit that keeps the SCAN from running.
-    if (!s.backend.caps.usageLimits) return;
+    if (!s.info.limit) return;
+    // The `limits` fact, walked in the descriptor's order (`derive.ts`'s `walk`, asked
+    // synchronously because every caller — the idle tick, the sweep, a turn starting — expects
+    // the verdict in the same tick): claude's `{screen:"limit-ts"}` is the screen + log reading
+    // below, unchanged and always an answer; a `{source:true}` is the backend's own
+    // `usage.wall(s)`, where null or a throw passes to the next provider. Nothing answering
+    // changes nothing — the screen is never read for a backend that did not list it.
+    const providers = Array.isArray(s.backend.facts?.limits) ? s.backend.facts.limits : [];
+    for (const p of providers) {
+      if (screenName(p) === "limit-ts") { this.checkLimitScreen(s); return; }
+      if (isSourceProvider(p)) {
+        const v = this.sourceWall(s);
+        if (v) { this.applySourceWall(s, v); return; }
+      }
+    }
+  }
+
+  /** `sources.usage.wall` for this live session, vetted; null when there is no answer. */
+  private sourceWall(s: Session): SourceWall | null {
+    const live = liveSourceFor(s.info.id);
+    const wall = live?.sources.usage?.wall;
+    if (!live || typeof wall !== "function") return null;
+    try { return vetWall(wall.call(live.sources.usage, live.session)); } catch { return null; }
+  }
+
+  /**
+   * A source's verdict. The CLI's own channel is DATED the way the log is, so it outranks
+   * nothing but itself: blocked ⇒ marked (its `resetAt` trusted as an instant — never the
+   * weekly special case, which is a screen's undated clock), clear ⇒ a standing block lifts.
+   * A resume typed into a wall that still stands is caught by `markLimitBlocked`'s
+   * resuming branch exactly as for claude.
+   */
+  private applySourceWall(s: Session, v: SourceWall): void {
+    const lim = s.info.limit;
+    if (!lim) return;
+    if (v.blocked) {
+      if (!lim.blocked) console.log(`${logTag} limit (${s.backend.id}) · ${s.info.title} (${s.info.id}) · ${v.why || "blocked"}`);
+      // No reset ⇒ nobody can say when it lifts (a credit wall): the PERSON's call, said in the
+      // backend's words, and `scheduleLimitAttempt` arms nothing. Set before the mark, so the
+      // "blocked" event already carries it. A dated verdict drops it.
+      const needsYou = v.resetAt == null ? (v.why || `${s.backend.label} reports this session blocked and gives no time it lifts`) : undefined;
+      const dropTimer = needsYou != null && lim.blocked && needsYou !== lim.needsYou;
+      if (needsYou) lim.needsYou = needsYou; else delete lim.needsYou;
+      this.markLimitBlocked(s, v.resetAt ?? null, false, undefined, v.resetAt != null, false, true);
+      // A wall that WAS dated still holds its timer: re-asked, `scheduleLimitAttempt` clears it.
+      if (dropTimer) this.scheduleLimitAttempt(s);
+    } else if (lim.blocked) {
+      this.clearLimitBlock(s);
+    }
+  }
+
+  /** claude's `limit-ts`: the screen, outranked by the CLI's dated log. */
+  private checkLimitScreen(s: Session): void {
     const lim = s.info.limit;
     const cleaned = stripAnsi(s.scrollback.slice(-6000));
     let scan = cleaned;
@@ -268,7 +346,7 @@ export class WallSlice {
    * screen false-positives the very detector the sample documents. Nothing in
    * `clihealth.ts` writes to a session; keep it that way.
    */
-  markLimitBlocked(s: Session, resetAt: number | null, weekly = false, sample?: string, dated = false, spend = false): void {
+  markLimitBlocked(s: Session, resetAt: number | null, weekly = false, sample?: string, dated = false, spend = false, fromSource = false): void {
     const lim = s.info.limit;
     if (!lim) return;
     const was = lim.blocked;
@@ -315,7 +393,8 @@ export class WallSlice {
       // there is no clock in it to parse, so it is neither a miss nor a good.
       // The fixture is the same sample, kept ROT13'd (`clifixtures.ts`): the
       // notice must never sit in plain bytes in a file a session might print.
-      if (!spend || parsedReset) this.core.noteFor(s, "limit.reset", parsedReset ? "good" : "fallback", {
+      // A backend's own `usage.wall` is not claude's notice: it records no `limit.reset`.
+      if (!fromSource && (!spend || parsedReset)) this.core.noteFor(s, "limit.reset", parsedReset ? "good" : "fallback", {
         ...(parsedReset ? (sample ? { fixture: () => sample } : {}) : { via: "a periodic re-scan with no scheduled resume" }),
         ...(sample ? { raw: sample } : {}),
       });
@@ -348,6 +427,7 @@ export class WallSlice {
     if (!lim?.blocked) return;
     this.clearLimitTimer(s);
     lim.blocked = false;
+    delete lim.needsYou;
     s.limitGaveUp = false;
     // Served again ⇒ whatever wall this session was carrying is over.
     s.limitCarried = undefined;
@@ -413,7 +493,10 @@ export class WallSlice {
     this.clearLimitTimer(s);
     const lim = s.info.limit;
     if (!lim || !lim.blocked || !s.info.running) return;
-    if (!this.limitAuto(s)) {
+    // Auto-continue off — or a SOURCE wall nobody can date (`needsYou`, set by `applySourceWall`):
+    // no probe, no ladder, no `atOverride`. Each `continue` there would be a prompt nobody sent,
+    // and the first one after the person adds credit would spend it; only `resumeNow` types.
+    if (!this.limitAuto(s) || lim.needsYou != null) {
       if (lim.nextAttemptAt != null) { lim.nextAttemptAt = null; this.core.emit("updated", s.info); }
       return;
     }

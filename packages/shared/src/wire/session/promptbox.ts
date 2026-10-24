@@ -34,13 +34,27 @@ export interface PromptOption {
    * next queued tap or re-open a hidden card.
    */
   checked?: boolean;
+  /**
+   * This row takes a typed REASON with it ("No, and tell the agent why"), on a dialog the
+   * CLI posed on its own channel (`SourceDialog.options[].takesText`, contract 2.0). The
+   * phone then offers a text field before the tap; the words ride as `session.input`'s
+   * `promptText`. Absent = a plain row. Outside `promptFingerprint`: the source states it with
+   * the dialog, so it cannot change under a queued answer.
+   */
+  takesText?: boolean;
 }
 
 /** One standing rule, on the wire: what it allows, when a person made it, how often it answered. */
 export interface StandingRule { label: string; at: number; uses: number }
 
 export interface DetectedPrompt {
-  kind: "trust" | "tool" | "plan" | "select";
+  /**
+   * `question` (contract 2.0): a question the CLI posed on its OWN channel with no choice
+   * box (`BackendSources.questions` — an agent's ask-the-user tool). Its `options` may be
+   * empty: then `freeText` is the only way to answer it. Never read off a screen — claude's
+   * box-less question stays `SessionInfo.asking` (`question.ts`), answered in the composer.
+   */
+  kind: "trust" | "tool" | "plan" | "select" | "question";
   /** The question as SCRAPED from the screen. The fingerprint is built from this
    *  — see `ask` for the one worth reading. */
   question: string;
@@ -81,6 +95,11 @@ export interface DetectedPrompt {
    * placeholder. Outside the fingerprint for the same reason as `desc`.
    */
   ask?: string;
+  /**
+   * The screen reading exceeded the host's text cap, so `question` is only a
+   * prefix. Display-only; it does not change what an answer means.
+   */
+  questionTruncated?: true;
   /**
    * The run of options on screen does not start at 1: the box is taller than the
    * terminal and its top has scrolled off. The options published are the ones
@@ -130,9 +149,25 @@ export interface DetectedPrompt {
    * the box. Without it the card is "ready to execute — proceed?" with the thing
    * being approved nowhere on the phone.
    *
-   * `path` is where the CLI keeps it; `cut` says `text` stopped at the host's cap.
+   * `path` is where the CLI keeps it; `cut` says `text` stopped at the host's cap. `path` is
+   * EMPTY for a plan a backend posed on its own channel (`BackendSources.plan`): there is no
+   * file, and a made-up path would be a wrong value — the phone then names no file.
    * Outside `promptFingerprint` for `desc`'s reason: it changes nothing about what
    * a keystroke means, and a plan edited mid-box must not stale a queued answer.
    */
   plan?: { text: string; path: string; cut?: boolean };
+  /**
+   * A typed answer is accepted (`kind: "question"` only; `SourceQuestion.freeText`): the
+   * phone draws a text field and sends the words as `session.input`'s `promptText`. Inside
+   * `promptFingerprint`, appended only when set (`nav`'s rule) — "type a word" and "pick
+   * one" are different questions.
+   */
+  freeText?: boolean;
+  /**
+   * The host's own sentence about the last answer to THIS box, when it could not prove it
+   * landed: words typed into the CLI's own question form that the CLI has not closed
+   * (`sourceanswer.ts`). Absent = nothing to say. Outside `promptFingerprint`: it is about
+   * an answer, not about what one MEANS.
+   */
+  answerNote?: string;
 }

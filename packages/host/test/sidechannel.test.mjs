@@ -21,6 +21,7 @@ const boxes = await import("../dist/sessions/boxes.js");
 
 const flush = async () => { for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r)); };
 
+const CAPS = { turns: true, slash: "none", remoteControl: false, permissionModes: [] };
 function harness({ sources, promptBoxes = "fakeplug-highlight", plugin = "fakeplug" } = {}) {
   const events = []; const typed = []; const armed = [];
   const sessions = new Map();
@@ -37,7 +38,7 @@ function harness({ sources, promptBoxes = "fakeplug-highlight", plugin = "fakepl
   const core = new Proxy(base, { get: (t, k) => (k in t ? t[k] : () => undefined) });
   const s = {
     info: { id: "s1", cwd: tmpdir(), running: true, title: "demo" },
-    backend: { id: "fake", ...(plugin ? { plugin } : {}), caps: { promptBoxes, transcript: "none", asking: false, hooks: "none" }, ...(sources ? { sources } : {}) },
+    backend: { id: "fake", ...(plugin ? { plugin } : {}), caps: CAPS, facts: { turns: [{ source: true }], dialogs: [{ source: true }, ...(promptBoxes ? [{ screen: promptBoxes }] : [])] }, ...(sources ? { sources } : {}) },
     scrollback: "", seq: 0, spawnedAt: Date.now(),
     stopPending: false, stopVerifyTimer: null, turnActive: false, turnFromScreen: false,
     hooksActive: false, turnHookSeen: false, stopCount: 0, idleNotified: false, askDismissed: null,
@@ -415,8 +416,8 @@ test("sweep: every backend with sources.sweep is asked, with alive = a held sess
   const { pluginDescriptor } = await import("../dist/plugins/pluginapi.js");
   const asked = [];
   registerBackend(pluginDescriptor({
-    id: "sweepy", label: "S", bin: () => "/bin/true", launchArgs: () => ({ args: [] }), models: async () => ({ aliases: [], ids: [] }),
-    caps: { hooks: "none", promptBoxes: false, transcript: "none" },
+    id: "sweepy", label: "S", bin: () => "/bin/true", prepare: async () => ({ args: [], instructionsVia: "none", askRulesVia: "none" }), models: async () => ({ aliases: [], ids: [] }),
+    caps: {}, facts: {}, measured: { versions: [], version: async () => null },
     sources: { attach: async () => ({ close: async () => {}, health: () => ({ state: "up", since: 1 }) }), sweep: (alive) => asked.push([alive("s1"), alive("gone")]) },
   }, "P"));
   try {
@@ -492,4 +493,144 @@ test("dialogToPrompt: `remembers` carries the host's label (trimmed, the key whe
   assert.deepEqual(dialogToPrompt(d({ key: "ls -la", label: "" }), { keepsRules: true }).options[0].remembers, { label: "ls -la" });
   assert.equal(dialogToPrompt(d({ key: "", label: "x" }), { keepsRules: true }).options[0].remembers, undefined);
   assert.equal(dialogToPrompt(d({ key: "k", label: "k" })).options[0].remembers, undefined, "no owner ⇒ nothing promised");
+  // A dialog that matches an ask rule the gate holds promises no rule: the gate would refuse it.
+  const push = { id: "y", kind: "tool", question: "Run git push origin main?", options: [{ index: 1, label: "Yes" }, { index: 2, label: "Yes, and don't ask again", remember: { key: "git push origin main", label: "git push origin main" } }], answer: async () => ({ ok: true }) };
+  assert.equal(dialogToPrompt(push, { keepsRules: true, askRules: ["Bash(git push*)"] }).options[1].remembers, undefined);
+  assert.deepEqual(dialogToPrompt(push, { keepsRules: true, askRules: ["Bash(npm publish*)"] }).options[1].remembers, { label: "git push origin main" });
+});
+
+test("Copilot `git push` under askRulesVia:\"gate\": no `remembers` on the wire, and a person's tap answers but keeps no rule", async () => {
+  const gate = await import("../dist/answergate.js");
+  gate.forgetRules({});
+  const f = fakeSources();
+  const h = harness({ sources: f.sources });
+  h.s.info.askRulesVia = "gate";
+  gate.holdAskRules("s1", ["Bash(git push*)"]);
+  h.slice.attach(h.s);
+  await flush();
+  f.st.dialogOn.asked(f.dialog("per_p1", {
+    question: "Allow the shell command git push origin main?",
+    options: [{ index: 1, label: "Yes" }, { index: 2, label: "Yes, and don't ask again", remember: { key: "git push origin main", label: "git push origin main" } }, { index: 3, label: "No" }],
+  }));
+  assert.equal(h.s.info.prompt.options[1].remembers, undefined, "the option promises no rule the gate would refuse");
+  assert.deepEqual(await boxes.answerBox(h.core, "s1", 2, { byPerson: true }), { ok: true }, "the tap still answers");
+  assert.deepEqual(gate.rulesFor("s1", "fakeplug"), [], "…and keeps no standing rule");
+  gate.forgetRules({});
+});
+
+// ── context freshness at a turn's end ────────────────────────────────
+// A source's `ended(at)` is settled once its `context` sample is stamped at or after `at`
+// (bounded by `CONTEXT_FRESH_MS`), so the turn-end context read sees THIS turn's fill and a
+// plugin needs no end-gate hold of its own. claude (in-band, no context source) never waits.
+const { CONTEXT_FRESH_MS } = await import("../dist/sessions/knobs.js");
+
+function withContext(f, sample, { inBand = false } = {}) {
+  f.sources.context = { sample: () => sample.v };
+  if (inBand) f.sources.inBand = true;
+  return f;
+}
+
+test("context freshness: the bound is 1500 ms", () => {
+  assert.equal(CONTEXT_FRESH_MS, 1500);
+});
+
+test("context freshness: an ended edge waits for a sample at or after its `at`, then settles once", async () => {
+  const sample = { v: { at: 900, usedTok: 10 } };
+  const f = withContext(fakeSources(), sample);
+  const h = harness({ sources: f.sources });
+  h.slice.attach(h.s);
+  await flush();
+  f.st.turnOn.started(800);
+  f.st.turnOn.ended(1000);
+  assert.equal(h.s.stopCount, 0, "a stale sample (900 < 1000) holds the end");
+  assert.equal(h.s.info.turnActive, true);
+  sample.v = { at: 1000, usedTok: 42 };
+  await new Promise((r) => setTimeout(r, 150));
+  assert.equal(h.s.stopCount, 1);
+  assert.equal(h.s.info.turnActive, false);
+});
+
+test("context freshness: a fresh sample already there settles at once; a source with watch() wakes the wait", async () => {
+  const sample = { v: { at: 2000, usedTok: 10 } };
+  const f = withContext(fakeSources(), sample);
+  const h = harness({ sources: f.sources });
+  h.slice.attach(h.s);
+  await flush();
+  f.st.turnOn.started(1500);
+  f.st.turnOn.ended(2000);
+  assert.equal(h.s.stopCount, 1, "fresh ⇒ no wait");
+
+  const s2 = { v: null }; let push = null;
+  const g = withContext(fakeSources(), s2);
+  g.sources.context.watch = (ss, on) => { push = on; return () => { push = null; }; };
+  const h2 = harness({ sources: g.sources });
+  h2.slice.contextPollMs = 10_000; // only the watch can wake it inside the test
+  h2.slice.attach(h2.s);
+  await flush();
+  g.st.turnOn.started(1);
+  g.st.turnOn.ended(5);
+  assert.equal(h2.s.stopCount, 0);
+  s2.v = { at: 6, usedTok: 1 };
+  push(s2.v);
+  assert.equal(h2.s.stopCount, 1, "the watch callback settles the end in its own tick");
+  assert.equal(push, null, "the wait unsubscribes once settled");
+});
+
+test("context freshness: absent or stale past the bound ⇒ the end settles as today", async () => {
+  const sample = { v: null };
+  const f = withContext(fakeSources(), sample);
+  const h = harness({ sources: f.sources });
+  h.slice.contextWaitMs = 40;
+  h.slice.attach(h.s);
+  await flush();
+  f.st.turnOn.started(1);
+  f.st.turnOn.ended(5);
+  assert.equal(h.s.stopCount, 0);
+  await new Promise((r) => setTimeout(r, 120));
+  assert.equal(h.s.stopCount, 1, "no sample ever ⇒ proceed after the bound");
+});
+
+test("context freshness: a turn starting while an end waits settles that end FIRST, in order", async () => {
+  const sample = { v: { at: 1, usedTok: 1 } };
+  const f = withContext(fakeSources(), sample);
+  const h = harness({ sources: f.sources });
+  h.slice.attach(h.s);
+  await flush();
+  f.st.turnOn.started(1);
+  f.st.turnOn.ended(10);
+  assert.equal(h.s.stopCount, 0);
+  f.st.turnOn.started(11);
+  assert.equal(h.s.stopCount, 1, "the old turn ended");
+  assert.equal(h.s.info.turnActive, true, "the new turn runs");
+  await new Promise((r) => setTimeout(r, 120));
+  assert.equal(h.s.stopCount, 1, "the flushed end does not fire again");
+});
+
+test("context freshness: a channel closed while an end waits settles nothing late", async () => {
+  const sample = { v: null };
+  const f = withContext(fakeSources(), sample);
+  const h = harness({ sources: f.sources });
+  h.slice.contextWaitMs = 30;
+  h.slice.attach(h.s);
+  await flush();
+  f.st.turnOn.started(1);
+  f.st.turnOn.ended(5);
+  h.slice.detach(h.s);
+  await new Promise((r) => setTimeout(r, 80));
+  assert.equal(h.s.stopCount, 0);
+});
+
+test("context freshness: claude's path (in-band) takes no wait, even beside a stale context source", async () => {
+  const sample = { v: { at: 0, usedTok: 1 } };
+  const f = withContext(fakeSources(), sample, { inBand: true });
+  const h = harness({ sources: f.sources });
+  h.slice.attach(h.s);
+  await flush();
+  f.st.turnOn.started(1);
+  f.st.turnOn.ended(10);
+  assert.equal(h.s.stopCount, 1, "settled in the same tick");
+  // …and the real claude source is exactly that shape: in-band, no context source to wait on.
+  const { claudeSources } = await import("../dist/backends/claude-sources.js");
+  assert.equal(claudeSources.inBand, true);
+  assert.equal(claudeSources.context, undefined);
 });

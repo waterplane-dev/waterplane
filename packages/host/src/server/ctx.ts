@@ -72,6 +72,8 @@ export interface ServerCtx extends HostCtx {
   readonly wsDevice: WeakMap<WebSocket, string>;
   /** Close every socket of a revoked device; how many. Read by http. */
   closeDevice(id: string): number;
+  /** May a frame from this socket still be dispatched? Read by wsops for every frame. */
+  socketAuthorized(ws: WebSocket): boolean;
   /** Is anybody looking at this session right now? Read by intentDeps and by
    *  main's linger sweep. */
   isAttachedToSomeone(id: string): boolean;

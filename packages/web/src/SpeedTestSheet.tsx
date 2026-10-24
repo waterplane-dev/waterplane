@@ -4,7 +4,7 @@ import { api, copyText, type SpeedDebug, type SpeedResult } from "./api";
 import { track } from "./usage";
 import { SheetHead } from "./Sheet";
 import { Button } from "./kit/Button";
-import { SetNote } from "./SettingsKit";
+import { SetNote, SetLine } from "./SettingsKit";
 import { Hint } from "./kit/Hint";
 
 interface Props {
@@ -104,10 +104,10 @@ export function SpeedTestSheet({ onClose }: Props) {
           ))}
         </div>
 
-        <label className="form-hint" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Hint as="label" style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <input type="checkbox" checked={withDebug} disabled={busy} onChange={(e) => setWithDebug(e.target.checked)} />
           Capture debug info (Tailscale route, DERP relay, host LAN IPs)
-        </label>
+        </Hint>
 
         <button className="send" onClick={run} disabled={busy}>
           {phase === "down" ? `Downloading… ${pct}%`
@@ -122,16 +122,16 @@ export function SpeedTestSheet({ onClose }: Props) {
         {(down || up) && (
           <div className="set-group" style={{ marginTop: 4 }}>
             {down && (
-              <div className="set-row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
+              <SetLine style={{ justifyContent: "space-between", alignItems: "baseline" }}>
                 <span><Download size={14} style={{ verticalAlign: "-2px" }} /> Download</span>
                 <strong>{fmtMbps(down.mbps)} Mbps <span style={{ opacity: 0.6, fontWeight: 400 }}>· {fmtMBs(down.mbps)} MB/s</span></strong>
-              </div>
+              </SetLine>
             )}
             {up && (
-              <div className="set-row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
+              <SetLine style={{ justifyContent: "space-between", alignItems: "baseline" }}>
                 <span><Upload size={14} style={{ verticalAlign: "-2px" }} /> Upload</span>
                 <strong>{fmtMbps(up.mbps)} Mbps <span style={{ opacity: 0.6, fontWeight: 400 }}>· {fmtMBs(up.mbps)} MB/s</span></strong>
-              </div>
+              </SetLine>
             )}
           </div>
         )}
@@ -150,11 +150,11 @@ export function SpeedTestSheet({ onClose }: Props) {
               <span>{debug.verdict}</span>
             </Hint>
 
-            <div className="set-note mono">
+            <SetNote>
               <Wifi size={12} style={{ verticalAlign: "-2px" }} /> phone seen as {debug.clientIp} ({debug.clientKind})
               {debug.dialedHost && <> · dialed {debug.dialedHost}</>}
               {debug.route !== "unknown" && <> · route {debug.route}{debug.derpRegion ? `(${debug.derpRegion})` : ""}</>}
-            </div>
+            </SetNote>
 
             {/* bypass links: hit these on the same WiFi to skip the tunnel */}
             {debug.lanIps.length > 0 && (
@@ -171,16 +171,16 @@ export function SpeedTestSheet({ onClose }: Props) {
               </SetNote>
             )}
             {debug.tailscaleIp && (
-              <div className="set-note mono">tailscale IP: {debug.tailscaleIp}</div>
+              <SetNote>tailscale IP: {debug.tailscaleIp}</SetNote>
             )}
             {!debug.tailscaleCli && (
-              <div className="set-note" style={{ opacity: 0.7 }}>No <code>tailscale</code> CLI on the host — route detection skipped.</div>
+              <SetNote style={{ opacity: 0.7 }}>No <code>tailscale</code> CLI on the host — route detection skipped.</SetNote>
             )}
 
             {/* raw probe output */}
             {(debug.raw.ping || debug.raw.netcheck || debug.raw.status) && (
               <details style={{ marginTop: 6 }}>
-                <summary className="form-hint" style={{ cursor: "pointer" }}>Raw tailscale output</summary>
+                <Hint as="summary" style={{ cursor: "pointer" }}>Raw tailscale output</Hint>
                 {debug.raw.ping && <><SetNote>ping</SetNote><pre className="mono" style={{ overflowX: "auto", fontSize: 11 }}>{debug.raw.ping}</pre></>}
                 {debug.raw.netcheck && <><SetNote>netcheck</SetNote><pre className="mono" style={{ overflowX: "auto", fontSize: 11 }}>{debug.raw.netcheck}</pre></>}
                 {debug.raw.status && <><SetNote>status</SetNote><pre className="mono" style={{ overflowX: "auto", fontSize: 11 }}>{debug.raw.status}</pre></>}

@@ -5,6 +5,7 @@ import { copyText } from "./api";
 import { CLIPBOARD_NEEDS_HTTPS, canCopyDirectly, pairShareText } from "./pairShare";
 import { showToast } from "./toast";
 import { Button } from "./kit/Button";
+import { SetNote } from "./SettingsKit";
 
 /**
  * The pairing as TEXT, under the QR: the link and the code, each selectable and
@@ -57,7 +58,7 @@ export function PairCopyRows({ m, hostName }: { m: PairMintResponse; hostName: s
       {canShare && (
         <Button className="pair-wide" style={{ marginTop: 12 }} onClick={() => void share()}><Share2 size={ICON} /> share link and code</Button>
       )}
-      {(failed || !direct) && <div className="set-note" style={{ marginTop: 6 }}>{failed ? "The phone refused to copy. " : ""}{CLIPBOARD_NEEDS_HTTPS}</div>}
+      {(failed || !direct) && <SetNote style={{ marginTop: 6 }}>{failed ? "The phone refused to copy. " : ""}{CLIPBOARD_NEEDS_HTTPS}</SetNote>}
     </div>
   );
 }

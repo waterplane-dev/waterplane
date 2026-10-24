@@ -36,9 +36,9 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { spawn } from "node:child_process";
 
 import { BRAND } from "@waterplane/shared";
-import { isSecretFile } from "./git.js";
+import { secretAt } from "./git.js";
 import { SKIP_DIRS } from "./files.js";
-import { contained } from "./paths.js";
+import { containedReal } from "./paths.js";
 import { execFileP as exec } from "./proc.js";
 
 /** `git`, with a body on stdin. `check-ignore` exits 1 for "nothing matched",
@@ -99,7 +99,7 @@ export interface TreeListing {
 
 /** Resolve a worktree-relative path, refusing anything that escapes. */
 export function inTree(wt: string, rel: string): string | null {
-  return contained(wt, rel || ".");
+  return containedReal(wt, rel || ".");
 }
 
 const relOf = (root: string, full: string) => relative(root, full).split(sep).join("/");
@@ -181,6 +181,16 @@ export async function listDir(wt: string, rel: string): Promise<TreeListing | nu
     const name = names[i];
     const p = paths[i];
     const child = join(full, name);
+    // `statSync` below follows the link (that is what we want for size/mtime),
+    // so the link itself has to be asked about separately — and one that leaves
+    // the worktree is shown as a link and nothing more: a committed
+    // `docs/home -> ~` would otherwise report the home directory's entry count.
+    let link = false;
+    try { link = lstatSync(child).isSymbolicLink(); } catch { /* ignore */ }
+    if (link && containedReal(root, p) === null) {
+      entries.push({ name, path: p, dir: false, size: 0, mtime: 0, link: true });
+      continue;
+    }
     let cst;
     try { cst = statSync(child); } catch {
       // Broken symlink — still worth showing, since it explains a build failure.
@@ -192,10 +202,6 @@ export async function listDir(wt: string, rel: string): Promise<TreeListing | nu
     if (isDir && !HEAVY.has(name)) {
       try { count = readdirSync(child).length; } catch { /* unreadable — no count */ }
     }
-    // `statSync` follows the link (that is what we want for size/mtime), so the
-    // link itself has to be asked about separately.
-    let link = false;
-    try { link = lstatSync(child).isSymbolicLink(); } catch { /* ignore */ }
     const code = statusFor(p, isDir, status);
     entries.push({
       name, path: p, dir: isDir,
@@ -232,9 +238,12 @@ export async function searchTree(wt: string, rel: string, query: string): Promis
     try { names = readdirSync(dir); } catch { continue; }
     for (const name of names) {
       const child = join(dir, name);
+      const p = relOf(root, child);
+      // A link that leaves the worktree is neither walked nor listed: a committed
+      // `docs/home -> ~` would otherwise answer `?q=id_rsa` with the home directory's.
+      try { if (lstatSync(child).isSymbolicLink() && containedReal(root, p) === null) continue; } catch { continue; }
       let cst;
       try { cst = statSync(child); } catch { continue; }
-      const p = relOf(root, child);
       if (cst.isDirectory()) {
         if (SKIP_DIRS.has(name)) continue;
         stack.push(child);
@@ -276,7 +285,7 @@ export const sha256 = (buf: Buffer | string) => createHash("sha256").update(buf)
 export function readTreeFile(wt: string, rel: string): TreeFile | null {
   const root = resolve(wt);
   const full = inTree(root, rel);
-  if (!full || isSecretFile(rel)) return null;
+  if (!full || secretAt(wt, rel, full)) return null;
   let st;
   try { st = statSync(full); } catch { return null; }
   if (!st.isFile()) return null;
@@ -311,7 +320,7 @@ export function writeTreeFile(wt: string, rel: string, body: string, baseSha: st
   const root = resolve(wt);
   const full = inTree(root, rel);
   if (!full) return { ok: false, error: "path escapes the worktree", code: "refused" };
-  if (isSecretFile(rel)) return { ok: false, error: "this app never writes .env files — see the secrets sheet", code: "refused" };
+  if (secretAt(wt, rel, full)) return { ok: false, error: "this app never writes .env files — see the secrets sheet", code: "refused" };
   if (!baseSha) return { ok: false, error: "no base revision — reopen the file and try again", code: "refused" };
   if (Buffer.byteLength(body, "utf8") > MAX_EDIT_BYTES) return { ok: false, error: "too large to save from here", code: "toobig" };
 

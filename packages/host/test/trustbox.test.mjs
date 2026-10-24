@@ -129,7 +129,7 @@ function harness({ deaf = false, screenFor = trustAt } = {}) {
   const core = new Proxy(base, { get: (t, k) => (k in t ? t[k] : () => undefined) });
   sessions.set("s1", {
     info: { id: "s1", cwd: tmpdir(), running: true, title: "t", prompt: detectPrompt(TRUST) },
-    backend: { id: "claude", caps: { promptBoxes: "claude-numbered", transcript: "none", asking: false, hooks: "none" } },
+    backend: { id: "claude", caps: { turns: true, slash: "claude", remoteControl: false, permissionModes: [] }, facts: { dialogs: [{ screen: "claude-numbered" }] } },
     scrollback: "", seq: 0, spawnedAt: Date.now(),
   });
   return { core, typed };

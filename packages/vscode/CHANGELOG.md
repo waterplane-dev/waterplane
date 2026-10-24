@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.6.1 - 2026-10-24
+
+- **Clicking the Copilot row no longer asks to sign in to GitHub.** It opens Copilot Chat's token use read off this machine's logs. GitHub's quota figure is its own optional action: the GitHub button on the row, or right-click.
+- **The tree counts Copilot on a machine without Claude Code.** All sessions' headline shows Copilot Chat's tokens for the last seven days when Claude Code's logs have none, and Sessions says where Copilot's went instead of only "No Claude Code logs".
+- **Always-on context reads skill descriptions the way a YAML loader does.** A `SKILL.md` with a byte-order mark, blank lines before its `---`, a quoted `"description"` key or an empty frontmatter block showed 0 chars every request and its whole text as body; a `>`/`|` description no longer counts the marker. A skill whose frontmatter really has no description says so on its row.
+- **Two more Copilot settings are followed:** `chat.useAgentSkills` (off drops Copilot from every skill row) and `chat.includeApplyingInstructions` (off drops Copilot from `.instructions.md` files attached by `applyTo`).
+
+## 0.6.0 - 2026-10-23
+
+- **Token statistics with Copilot and no Claude Code.** All sessions gains a **Copilot Chat** tab: the prompt and output tokens Copilot itself recorded under each answer, per day and per model, with the premium requests beside them — read off this VS Code's chat logs, no desktop needed. On a machine where Claude Code has no logs, the view opens on it instead of an empty Claude screen.
+
+- **All sessions is the phone's token screen itself.** The view used to re-create it from the phone's cards with its own copy of the screen's logic, and fell behind it; it now draws the phone's own body and stylesheet, so every span, switch, chart and sentence is the same and stays the same.
+- **Live limits from the waterplane desktop, if you want them.** Off until switched on (the line at the top of All sessions, or `waterplane.desktopUrl`): the view then reads a waterplane desktop on this machine — loopback only — and adds the five-hour and weekly limit windows, the week since the reset, the dollar period, the past-window grids and the other backends' ledgers.
+
+## 0.5.1 - 2026-10-21
+
+- Repo health uses a git that runs, not just the first one on the extension's PATH: each candidate (`git.path`, PATH, and on macOS Homebrew's and the Command Line Tools' git) is tried with `git --version` and the first that works is used. A Mac whose `/usr/bin/git` refuses until Xcode's license is accepted, while the terminal's git works, now measures. `DEVELOPER_DIR` reaches the engine too.
+
 ## 0.5.0 - 2026-10-21
 
 - Insight first: the tree leads with **All sessions** and its last seven days (`7 d: here $14 · all $80 · 2 h ago`), before and after a read, then Repo health, Always-on context and Copilot. Sessions sits second and open while a session ran in the last 30 minutes, last and closed otherwise; a fold you set yourself is kept.

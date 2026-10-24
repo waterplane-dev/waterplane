@@ -78,10 +78,10 @@ export function AsxSlotCards({ m }: { m: AssessModel }) {
                 })}
                 {!p.online ? <Hint>No connection — edit and drop wait for the link.</Hint> : null}
                 <div className="act-acts">
-                  <button className={`key${left ? " active" : ""}`} title={left ? "un-mark it" : "leave every row here as it is — nothing is sent either way"}
+                  <Button className={left ? "active" : undefined} title={left ? "un-mark it" : "leave every row here as it is — nothing is sent either way"}
                     onClick={() => { track("action:assess.conflict.ignore"); flip(`conflict:${c.cid}`); }}>
                     <Check size={ICON} /> {left ? "left as they are" : CONFLICT_IGNORE_LABEL}
-                  </button>
+                  </Button>
                 </div>
               </div>
             );
@@ -107,19 +107,19 @@ export function AsxSlotCards({ m }: { m: AssessModel }) {
                   </div></div>
                 ))}
                 <div className="act-acts">
-                  <button className={`key${on ? " primary" : ""}`}
+                  <Button className={on ? "primary" : undefined}
                     title={on ? "approved — tap to un-approve" : "approve: the original is archived (words kept) and these two are posted on its clock"}
                     onClick={() => acceptSplit(s)}>
                     <Check size={ICON} /> {on ? "approved" : "approve the split"}
-                  </button>
-                  <button className={`key${left ? " active" : ""}`} title={left ? "un-mark it" : "keep it as one item"}
+                  </Button>
+                  <Button className={left ? "active" : undefined} title={left ? "un-mark it" : "keep it as one item"}
                     onClick={() => {
                       track("action:assess.split.leave");
                       flip(`split:${s.sid}`);
                       setPickedSplits((x) => { const n = new Set(x); n.delete(s.sid); return n; });
                     }}>
                     <X size={ICON} /> keep it as one
-                  </button>
+                  </Button>
                 </div>
               </div>
             );

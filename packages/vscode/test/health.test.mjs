@@ -217,12 +217,47 @@ test("HealthRun without git on PATH says so and spawns nothing", async () => {
   const saved = process.env.PATH;
   process.env.PATH = tmp("emptypath");
   try {
-    const run = new data.HealthRun({ workerFile: WORKER, storageDir: tmp("hstore"), stepMs: () => 1000, extraPath: () => null, onChange: () => {} });
+    const run = new data.HealthRun({ workerFile: WORKER, storageDir: tmp("hstore"), stepMs: () => 1000, extraPath: () => null, fallbackGitDirs: [], onChange: () => {} });
     await run.read("/nowhere");
     assert.deepEqual(run.state("/nowhere"), { doc: null, why: data.NO_GIT_WHY, run: null });
   } finally {
     process.env.PATH = saved;
   }
+});
+
+test("HealthRun passes over a git that refuses (the Xcode-license shim) for the next one that runs", { skip: noGit || process.platform === "win32" }, async () => {
+  const d = tmp("hshim");
+  git(d, ["init", "-q"]);
+  git(d, ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "a"]);
+  const shim = tmp("shimgit");
+  writeFileSync(join(shim, "git"), "#!/bin/sh\necho 'You have not agreed to the Xcode license agreements.' >&2\nexit 69\n", { mode: 0o755 });
+  const saved = process.env.PATH;
+  process.env.PATH = [shim, saved].join(":");
+  try {
+    const run = new data.HealthRun({ workerFile: WORKER, storageDir: tmp("hstore"), stepMs: () => 30_000, extraPath: () => null, fallbackGitDirs: [], onChange: () => {} });
+    await run.read(d);
+    const { doc } = run.state(d);
+    assert.ok(doc, "a doc was read");
+    assert.doesNotMatch(doc.readError ?? "", /Xcode/, "the refusing shim was not the git that ran");
+  } finally {
+    process.env.PATH = saved;
+  }
+});
+
+test("gitCandidates lists every dir with a git, git.path first, once each; pickGit takes the first that runs", async () => {
+  const name = process.platform === "win32" ? "git.exe" : "git";
+  const a = tmp("gita"), b = tmp("gitb"), none = tmp("gitnone");
+  for (const d of [a, b]) writeFileSync(join(d, name), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  const PATH = [none, a, b, a].join(process.platform === "win32" ? ";" : ":");
+  assert.deepEqual(data.gitCandidates({ PATH }, null), [a, b]);
+  assert.deepEqual(data.gitCandidates({ PATH }, b, [none, a]), [b, a]);
+  // A shim that refuses (the Xcode license) is passed over for the next git that runs.
+  assert.equal(await data.pickGit([a, b], async (d) => d === b), b);
+  // None runs: the first, so the engine's refusal is what gets quoted; no git at all: null.
+  assert.equal(await data.pickGit([a, b], async () => false), a);
+  assert.equal(await data.pickGit([], async () => true), null);
+  assert.deepEqual(data.fallbackGitDirs("linux"), []);
+  assert.ok(data.fallbackGitDirs("darwin").includes("/Library/Developer/CommandLineTools/usr/bin"));
 });
 
 test("gitOnPath finds an executable git without running it; the git.path dir counts too", () => {

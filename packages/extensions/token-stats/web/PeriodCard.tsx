@@ -56,8 +56,8 @@ export function PeriodCard({ state, cap, doc, res, refusal, now }: {
   const words = pacingLine({ ...state, spentUsd: total }, cap, now);
   const sessions = doc.convosTotal ?? doc.convos.length;
   const chips = total > 0 || totalTok > 0 ? <>
-    <button className={`key${by === "repo" ? " active" : ""}`} onClick={() => setBy("repo")}>by repo</button>
-    <button className={`key${by === "model" ? " active" : ""}`} onClick={() => setBy("model")}>by model</button>
+    <Button className={by === "repo" ? "active" : undefined} onClick={() => setBy("repo")}>by repo</Button>
+    <Button className={by === "model" ? "active" : undefined} onClick={() => setBy("model")}>by model</Button>
   </> : null;
 
   return (

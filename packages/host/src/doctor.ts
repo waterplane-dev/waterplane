@@ -17,7 +17,8 @@ import { join, resolve } from "node:path";
 import { tailscaleBin, serveHttpsUrl, lanIps } from "./net.js";
 import { probeCaptureBackends } from "./capture.js";
 import { dictateStatusLive } from "./dictate.js";
-import { builtinDoctorChecks } from "./plugins/builtin.js";
+import { builtinDoctorChecks, externalDoctorChecks } from "./plugins/builtin.js";
+import { hostSecretDir } from "./secrets.js";
 import { ptyMax, ptyOpen } from "./ptycap.js";
 import { lanIdentityPresent } from "./lanid.js";
 import { env } from "./env.js";
@@ -702,7 +703,7 @@ export async function runChecks(i: DoctorInput, skipPort = false, skipCapture = 
     checkPty(),
     checkPtyCapacity(),
     checkClaude(i.claudeBin, i.usedBackends ?? []),
-    builtinDoctorChecks(i.usedBackends ?? []),
+    Promise.all([builtinDoctorChecks(i.usedBackends ?? []), externalDoctorChecks(hostSecretDir(), i.usedBackends ?? [], hostStateDir(i.root))]).then(([a, b]) => [...a, ...b]),
     checkCurl(),
     checkGit(mac),
     checkTmux(),

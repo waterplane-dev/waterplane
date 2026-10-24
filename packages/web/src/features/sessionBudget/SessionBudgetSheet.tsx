@@ -14,7 +14,7 @@
  */
 import { useEffect, useState } from "react";
 import { Wallet } from "lucide-react";
-import { sessionBudgetLabel, type SessionBudget, type SessionInfo } from "@waterplane/shared";
+import { budgetSparkOf, sessionBudgetLabel, type SessionBudget, type SessionInfo } from "@waterplane/shared";
 import { Sheet } from "../../Sheet";
 import { ConfirmButton } from "../../Confirm";
 import { BudgetField } from "../../BudgetField";
@@ -29,7 +29,12 @@ import { SetNote } from "../../SettingsKit";
 
 const CAL_LATER = "A percent is converted from dollars at the window's measured rate; the desktop sends that rate with a budget, so once one is set this line says what 1% is worth — until then nothing is held.";
 
-export function SessionBudgetSheet({ subject, title }: { subject: SessionInfo; title: string }) {
+export function SessionBudgetSheet({ subject, title, windowsOff }: {
+  subject: SessionInfo;
+  title: string;
+  /** `budgetWindowsOff`'s sentence: this session's backend spends from no claude window. */
+  windowsOff?: string | null;
+}) {
   const now = useNow(30_000);
   const cur = subject.budget;
   const [draft, setDraft] = useState<SessionBudget | null>(cur?.cfg ?? null);
@@ -79,7 +84,7 @@ export function SessionBudgetSheet({ subject, title }: { subject: SessionInfo; t
             {/* No budget: the head already says "no budget", and the line said it again. */}
             {cur && <div className="ctx-cost-note">{budgetStateLine(cur, now)}</div>}
           </div>
-          {asked && late && <div className="set-note warn">{BUDGET_UNCONFIRMED}</div>}
+          {asked && late && <SetNote className="warn">{BUDGET_UNCONFIRMED}</SetNote>}
           <SetNote>
             What this one conversation may spend, its subagents included. At the cap its sends are held
             and you are told; raising or clearing the budget lets them go.
@@ -88,7 +93,7 @@ export function SessionBudgetSheet({ subject, title }: { subject: SessionInfo; t
         <div className="set-group">
           {/* Keyed by session: switching subject restarts the field on ITS cap. */}
           <BudgetField key={subject.id} initial={cur?.cfg ?? null} cal={cur ? cur.cal ?? null : undefined} onChange={setDraft}
-            spark={subject.contextSpark ?? null} calFor={cur ? undefined : CAL_LATER} />
+            spark={budgetSparkOf(subject)} calFor={cur ? undefined : CAL_LATER} windowsOff={windowsOff} />
         </div>
       </div>
     </Sheet>

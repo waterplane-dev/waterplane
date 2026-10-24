@@ -48,13 +48,14 @@
  * — but it counts itself FIRST, so `SetFilterBar` can say "9 of 54" off the
  * same render pass without a second tally that could disagree with the screen.
  */
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, createElement, useContext, type HTMLAttributes, type ReactNode } from "react";
 import { ChevronRight, Loader, Minus, Plus, Search, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { RadioRows } from "./kit/RadioRows";
 import { filterSummary, groupShown, nestedMatches, rowShown } from "./settingsIndex";
 import { Button } from "./kit/Button";
+import { noteClass } from "./kit/hintClass";
 
 /** Matches `App.tsx`'s own constant; the icon SCALE setting is applied in CSS
  *  off the `width` attribute, so this is a base size and not a final one. */
@@ -131,9 +132,19 @@ export function useNestedShown(parentId: string, words: string): boolean {
  * writing and is not worth re-reading every time you come here to change
  * something else.
  */
-export function SetNote({ children, more }: { children?: ReactNode; more?: ReactNode }) {
+type SetNoteFold = { children?: ReactNode; more: ReactNode };
+/** The plain line: `as` picks div (default) / span / p; `className` appends after `set-note`
+ *  (`noteClass`, node-tested); the rest of the call site's props follow, in its own order. No `id`:
+ *  a note is never a catalogued row. */
+type SetNoteLine = { more?: undefined; children?: ReactNode; as?: "div" | "span" | "p"; className?: string }
+  & Omit<HTMLAttributes<HTMLElement>, "className" | "id" | "children">;
+export function SetNote(p: SetNoteFold | SetNoteLine) {
+  const { children, more } = p;
   if (!children && !more) return null;
-  if (!more) return <div className="set-note">{children}</div>;
+  if (!more) {
+    const { as, className, children: _c, more: _m, ...rest } = p as SetNoteLine;
+    return createElement(as ?? "div", { className: noteClass(className), ...rest }, children);
+  }
   // The LINE ITSELF is the disclosure. A separate "why" control underneath cost
   // a whole extra line and a 36px tap target on every one of thirty rows, which
   // on a screen whose entire problem was length is most of a phone-height spent
@@ -145,6 +156,14 @@ export function SetNote({ children, more }: { children?: ReactNode; more?: React
       <div className="set-more-body">{more}</div>
     </details>
   );
+}
+
+/** A line of controls laid out INSIDE a sheet or a row (`.set-row`): a button and its note, a pair of
+ *  selects. NOT a catalogued setting — no id, never counted by search, never hidden by a query. A
+ *  decision on the Settings screen is SetSwitch/SetChoice/…; this is the layout those sheets share. */
+export type SetLineProps = Omit<HTMLAttributes<HTMLDivElement>, "className" | "id">;
+export function SetLine(props: SetLineProps) {
+  return createElement("div", { className: "set-row", ...props });
 }
 
 /**

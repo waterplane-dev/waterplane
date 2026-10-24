@@ -24,7 +24,10 @@ storage).
 - `logic.ts` — the **feature-usage catalog** (`OVERLAY_IDS`, `ACTION_IDS`, `knownFeatureIds`),
   moved here from `App.tsx` with the sheet that reads it: every id `track()` can emit, so the usage
   sheet can list features with ZERO uses. Keep it in sync when adding a `track()` call anywhere.
-  Plus `liveConversationIds` and `archiveStartRepo` for the archive.
+  Plus, for the archive: `archiveStartRepo`; `liveConversationIds`/`liveSessionFor` (either
+  `claudeSessionId` or a plugin session's `backendSessionId`); `archiveBackends` (claude first, then
+  every non-shell backend whose `caps.conversations` is true — one entry draws no switch) and
+  `archiveBackendHint` (the one sentence a non-claude list says about itself).
 - `ToolSheets.tsx` — the eight wirings.
 - Sheets: `storage`, `repocolor`, `archive` persisted (as `PERSISTED_OVERLAYS` says); the rest not.
 - Track ids: `overlay:nethealth`, `overlay:localrt`, `overlay:storage`, `overlay:sweep`,

@@ -99,7 +99,7 @@ export function autoSlotFacts(c: BacklogCore): AutoSlotFacts {
  * It does NOT go through `repoSessions`: there is no per-repo session to track
  * any more, and caching one would be the shared-session model growing back.
  */
-export function openItemSession(c: BacklogCore, i: Intent): string {
+export async function openItemSession(c: BacklogCore, i: Intent): Promise<string> {
   const label = i.label || (i.payload.kind === "prompt" ? i.payload.steps[0] : "") || i.id;
   // `?.` and not `.`: a hand-built row (a caller inside this host, a test)
   // may carry no target at all, and refusing to OPEN A SESSION over a missing
@@ -107,7 +107,7 @@ export function openItemSession(c: BacklogCore, i: Intent): string {
   const convId = i.target?.kind === "session" && !c.sessions.get(i.target.sessionId)?.running
     ? i.target.resumeConvId
     : undefined;
-  const id = c.sessions.create(i.cwd, {
+  const id = (await c.sessions.create(i.cwd, {
     title: itemTitle(i.cwd, label),
     resume: i.resume,
     ...(convId ? { resumeMode: "continue" as const, resumeSessionId: convId } : {}),
@@ -118,7 +118,7 @@ export function openItemSession(c: BacklogCore, i: Intent): string {
     // the send sheet's *model* row). Absent = the desktop's new-session
     // defaults, which is what a backlog item has always opened on.
     ...(i.launch ? { launch: i.launch } : {}),
-  }).id;
+  })).id;
   // Which item opened it — the shortcut `closesWhenDone` asks first.
   c.openedBy.set(id, i.id);
   // A slot has just been spent and a session has just appeared: every row
@@ -261,7 +261,7 @@ export function reapable(c: BacklogCore, id: string, isAttached: (sid: string) =
  * the cap and the sweeps above still count it. Reused if alive, (re)created if
  * absent or dead.
  */
-export function ensureRepoSession(c: BacklogCore, repoDir: string): string {
+export async function ensureRepoSession(c: BacklogCore, repoDir: string): Promise<string> {
   const id = c.repoSessions.get(repoDir);
   if (id && c.sessions.get(id)?.running) return id;
   // A session this host opened for this very purpose, before it was restarted.
@@ -273,7 +273,7 @@ export function ensureRepoSession(c: BacklogCore, repoDir: string): string {
   // other half of the forty stranded rows; the title is the mark.
   const known = adoptBacklogSession(c, repoDir);
   if (known) return known;
-  const fresh = c.sessions.create(repoDir, { title: backlogTitle(repoDir), origin: { kind: "backlog" } }).id;
+  const fresh = (await c.sessions.create(repoDir, { title: backlogTitle(repoDir), origin: { kind: "backlog" } })).id;
   c.repoSessions.set(repoDir, fresh);
   // A repo that had nothing to fire into a moment ago now has somewhere: every
   // row blocked on `sessionGone` is free, and none of them is watching a timer.

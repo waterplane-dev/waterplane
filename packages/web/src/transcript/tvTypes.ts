@@ -106,7 +106,7 @@ export interface TranscriptViewProps {
    * the box it names has gone. Absent ⇒ the question is drawn as a READOUT and
    * the CLI is where it gets answered.
    */
-  onAnswer?: (data: string, label: string, submitBox?: boolean, choice?: number) => void;
+  onAnswer?: (data: string, label: string, submitBox?: boolean, choice?: number, text?: string) => void;
   /**
    * Answers already queued for the open box, matched by the caller on the
    * prompt FINGERPRINT — the difference between "your tap did nothing" and

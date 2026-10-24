@@ -9,6 +9,7 @@ import { hhmm } from "../../format";
 import { useLimitAuto } from "./store";
 import { cycleSessionOverride } from "./actions";
 import { nextOverride, overrideSource } from "./logic";
+import { Button } from "../../kit";
 
 const ICON = 16;
 
@@ -20,13 +21,12 @@ export function LimitToggle({ active, label, dismiss }: { active: SessionInfo | 
   const state = lim.autoContinue ? "on" : "off";
   const src = overrideSource(lim.autoContinueOverride, limitAuto);
   return (
-    <button
+    <Button className={lim.blocked ? "limit" : lim.autoContinue ? "active" : undefined}
       data-hint="toolbar:limit"
-      className={`key ${lim.blocked ? "limit" : lim.autoContinue ? "active" : ""}`}
-      title={`auto-continue after a usage-limit reset: ${state} · ${src}${lim.blocked ? `\ncurrently limit-blocked${lim.nextAttemptAt ? ` — continue fires ~${hhmm(lim.nextAttemptAt)}` : ""}` : ""}\ntap to cycle: inherit → on → off`}
+      title={`auto-continue after a usage-limit reset: ${state} · ${src}${lim.blocked ? `\ncurrently limit-blocked${lim.nextAttemptAt ? ` — continue fires ~${hhmm(lim.nextAttemptAt)}` : lim.needsYou ? ` — it needs you: ${lim.needsYou}` : ""}` : ""}\ntap to cycle: inherit → on → off`}
       onClick={() => { dismiss(); cycleSessionOverride(active.id, next); }}
     >
-      <Hourglass size={ICON} />{label && <> {lim.blocked ? (lim.spend && !lim.nextAttemptAt ? "spend limit" : lim.nextAttemptAt ? `${lim.spend ? "spend" : "limit"} · ${hhmm(lim.nextAttemptAt)}` : "limit") : `auto-cont ${state}${lim.autoContinueOverride != null ? "*" : ""}`}</>}
-    </button>
+      <Hourglass size={ICON} />{label && <> {lim.blocked ? (lim.needsYou && !lim.nextAttemptAt ? "needs you" : lim.spend && !lim.nextAttemptAt ? "spend limit" : lim.nextAttemptAt ? `${lim.spend ? "spend" : "limit"} · ${hhmm(lim.nextAttemptAt)}` : "limit") : `auto-cont ${state}${lim.autoContinueOverride != null ? "*" : ""}`}</>}
+    </Button>
   );
 }

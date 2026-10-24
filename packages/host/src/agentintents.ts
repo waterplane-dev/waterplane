@@ -69,6 +69,19 @@ export type ClientPostResult =
   | { ok: false; reason: string; refusedCwd?: true };
 
 /**
+ * A build payload names the directory `builds.execute` spawns in, apart from
+ * the intent's own `cwd` — so it goes through the same gate. `null` => outside
+ * the root (refuse). Any other payload passes through untouched.
+ */
+export async function containPayloadCwd<P extends { kind?: string; cwd?: string } | undefined>(
+  deps: { containRepoDir(dir: unknown): Promise<string | null> }, payload: P,
+): Promise<P | null> {
+  if (!payload || payload.kind !== "build" || payload.cwd === undefined) return payload;
+  const cwd = await deps.containRepoDir(payload.cwd);
+  return cwd ? { ...payload, cwd } : null;
+}
+
+/**
  * Post a draft that came from OUTSIDE the host — a phone's `intent.post`, or an
  * agent's HTTP call. `origin` is the host's to write: pass `ORIGIN_AGENT` from
  * the agent route and nothing from the socket.
@@ -80,6 +93,12 @@ export async function postClientDraft(deps: ClientPostDeps, raw: IntentDraft, op
   const cwd = await deps.containRepoDir(raw?.cwd);
   if (!cwd) return { ok: false, reason: "cwd outside root", refusedCwd: true };
   const draft: IntentDraft = { ...raw, cwd };
+  // A build is started with `build.run`: an agent or a peer (an `origin` is
+  // passed) never posts one. A device's own `intent.post` may (schedules).
+  if (opts.origin && raw.payload?.kind === "build") return { ok: false, reason: "a build is started with build.run" };
+  const payload = await containPayloadCwd(deps, raw.payload);
+  if (!payload) return { ok: false, reason: "cwd outside root", refusedCwd: true };
+  draft.payload = payload;
   /**
    * **A client may bring a name; it may never bring an AUTHOR.** Off the wire
    * the authors are forced to `hand`, because the author decides whether a

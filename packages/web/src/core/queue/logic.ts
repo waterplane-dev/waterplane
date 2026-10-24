@@ -344,7 +344,7 @@ export function entryFrame(e: OutboxEntry): ClientMessage | null {
     // `promptSubmit` — only the side that can see the screen can do it — and
     // the client knows to use it because the published box said `nav`, never
     // because it knows which binary drew the dialog.
-    return { t: "session.input", id: e.sessionId, data: e.text, ackId: e.ackId, firstSentAt, expectPrompt: e.answer.fingerprint, promptSubmit: e.answer.submitBox, promptChoice: e.answer.choice };
+    return { t: "session.input", id: e.sessionId, data: e.text, ackId: e.ackId, firstSentAt, expectPrompt: e.answer.fingerprint, promptSubmit: e.answer.submitBox, promptChoice: e.answer.choice, ...(e.answer.text !== undefined ? { promptText: e.answer.text } : {}) };
   }
   // `submit: true` — the host types it, checks the echo, presses Return and
   // proves the turn started (deliver.ts), then acks. The client used to own
@@ -360,4 +360,10 @@ export function entryFrame(e: OutboxEntry): ClientMessage | null {
   // clock, which only ticks while a tab is foregrounded, i.e. never on the
   // device this queue exists for.
   return { t: "session.input", id: e.sessionId, data: e.text, ackId: e.ackId, firstSentAt, submit: true, cwd: e.cwd, view: e.view };
+}
+
+/** The toast an answer tap raises while it is on its way. One function so the
+ *  receipt (`wire.ts`) retires exactly these words. */
+export function answerSendingToast(label: string): string {
+  return `sending “${label}”…`;
 }

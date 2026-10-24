@@ -142,7 +142,7 @@ export interface SendFns {
   rewriteQueuedPath(from: string, to: string): void;
   armLane(sessionId: string): void;
   queueBacklog(opts: QueueBacklogOpts): boolean | null;
-  answerPrompt(s: SessionInfo, data: string, label: string, submitBox?: boolean, choice?: number): void;
+  answerPrompt(s: SessionInfo, data: string, label: string, submitBox?: boolean, choice?: number, text?: string): void;
 }
 
 /** `pending.ts`: the session screen that exists before its session does. */

@@ -55,6 +55,7 @@ export const NOTIF_LABEL: Record<string, { name: string; note: string }> = {
   approval: { name: "Approvals", note: "A plugin asked for something you must approve now, such as a vault fingerprint. Loud on purpose." },
   limit: { name: "Usage limit", note: "A session hit the account limit, and whether auto-continue got it running again." },
   burn: { name: "Week burning fast", note: "The weekly limit climbed faster than the threshold over the last stretch of readings — one push naming what spent it. Nothing is paused." },
+  disk: { name: "Desktop disk almost full", note: "The desktop's disk dropped under 10 GB free (and again under 3 GB). On a Mac, low space makes macOS end apps to clear their caches — Tailscale among them, which cuts this phone off. Words only; nothing is deleted." },
   agent: { name: "Large subagent", note: "A running subagent passed the context size you set on the context sheet (default 500k) — one push per agent, naming it. It warns only; nothing is stopped." },
   backlog: { name: "Backlog", note: "A queued backlog item started, finished, or failed." },
   followup: { name: "Follow up", note: "A session was flagged for follow up without your tap — by a launch you ticked to flag when done, or by its own agent with one line on what to read. A flag you set by hand sends none." },

@@ -26,6 +26,7 @@ import {
 } from "./healthIndexWords";
 import { MIN_READINGS } from "./repoHealthPlot";
 import { ownShow } from "./repoHealthWords";
+import { Button } from "./kit/Button";
 
 /**
  * Which cards are drawn, in screen order — the jump bar names exactly these (a
@@ -83,9 +84,9 @@ export function HealthNav({ keys, refresh }: { keys: readonly HealthNavKey[]; re
 /** The refresh verb as the bar draws it: a running run says so in its glyph and its words, never `disabled`. */
 export function RefreshKey({ busy, label, onClick }: { busy: boolean; label: string; onClick: () => void }) {
   return (
-    <button type="button" className="key rh-nav-refresh" onClick={onClick}>
+    <Button className="rh-nav-refresh" type="button" onClick={onClick}>
       <RefreshCw size={14} className={busy ? "spin" : undefined} aria-hidden /> {label}
-    </button>
+    </Button>
   );
 }
 

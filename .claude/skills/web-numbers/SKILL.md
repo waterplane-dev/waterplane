@@ -29,7 +29,7 @@ Context, tokens, money and repo health as things a person reads: the context win
   drawn, a chip that is not offered, an outlined box standing for *nobody measured this*:
   `Unavailable.tsx`'s rule applied to prose. `axisNote` is the caption, one per `windowFrom`:
   **`"config"` is ATTRIBUTED, never presented as a measurement** (what the backend's configuration
-  STATES; a local runner may hold less). The sheet is gated on derived `contextSeries`, not the live gauge.
+  STATES; a local runner may hold less); **`"source"` is the CLI's own statement over its channel**, attributed to the backend label, its own sentence. The sheet is gated on derived `contextSeries`, not the live gauge.
   **CHARTS TOGETHER, then panels, then captions** — name → spend chart → context chart + summary +
   legends → agent lanes + readout + legend → composition strip → cost panel (one door) → expired
   cache → compactions → captions. The three charts share one `makePlot` x axis; charts are NAMED
@@ -159,7 +159,7 @@ Context, tokens, money and repo health as things a person reads: the context win
   (with `SessionBudgetSheet.tsx`, `budgetInput.ts`) **the session budget**: shared
   words it (never re-worded here); **unknown never trips** and says why in text; blank is no budget; a
   percent is “≈”; with no valid cap the set button is ABSENT and a sentence stands there; clear is a
-  `ConfirmButton`; “Set” is said only when the desktop answers with the cap (`budgetConfirmed`). `budgetInput.ts` stays top-level (Send sheet, launch ask, context sheet all draw `BudgetField`); it never imports `features/sessionBudget`.
+  `ConfirmButton`; “Set” is said only when the desktop answers with the cap (`budgetConfirmed`). `windowsOff` (`budgetWindowsOff`): no percent unit where the backend spends from no claude window, said in a sentence; a cap already set in one stays. `budgetInput.ts` stays top-level (Send sheet, launch ask, context sheet all draw `BudgetField`); it never imports `features/sessionBudget`.
 - `TokenStatsSheet.tsx` + `TokenInsights.tsx` + `statsInsights.ts` + `statsPlot.ts` + `usageCut.ts` + `guests.ts` — **now
   `packages/extensions/token-stats/web/`** (plot + strip in `kit/chart/`, `statsPlot.ts` a barrel over
   `kit/chart/stats/splot*`; [token-stats-architecture.md](../../../docs/notes/token-stats-architecture.md)).

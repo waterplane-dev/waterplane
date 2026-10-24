@@ -19,7 +19,7 @@ import type { HeaderCmd } from "../../headerCmds";
 import type { Overlay } from "../../routing";
 import type { OutboxEntry } from "../../outbox";
 import { isLaterId } from "../queue/logic.ts";
-import { backendIdOf, backendInfo, backendMark, isShellBackend, sideChannelLine } from "../../backendCaps";
+import { agentTabLabel, backendMark, isShellBackend, sideChannelLine } from "../../backendCaps";
 import { sessionSegs } from "../../pairTabs";
 import { askTabAttach } from "../../sessionTabs";
 import { ContextSparkline, SpendSparkline } from "../../ContextGraph";
@@ -51,6 +51,8 @@ import { ToolbarMenu, renderToolbarItem, type ToolbarCtx } from "./ToolbarMenu";
 import type { SessionChrome } from "./useSessionChrome";
 import type { Connection } from "../conn/useConnection";
 import { StowTray } from "../../Stowable";
+import { ToldNotice } from "./ToldNotice";
+import { AskRulesNotice } from "./AskRulesNotice";
 import { useSpendWarn } from "../sessions/spendWarn";
 import { Button } from "../../kit/Button";
 import { RowSub } from "../../kit/Row";
@@ -142,7 +144,7 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
           bar. */}
       <header className="topbar sess-top" style={repoAccentStyle(sessionRepoName(active))}>
         <button className="back" onClick={() => setActiveId(null)}><ChevronLeft size={24} /></button>
-        <div className="brand">{trimDefaultBranch(active.title) || active.title}<span className={`row-sub${backendMark(backends, active.backend) ? " row-foreign" : ""}`}> {launchLabel(liveLaunch(active), backendMark(backends, active.backend), backends)}</span><HostNameTag />
+        <div className="brand">{trimDefaultBranch(active.title) || active.title}<RowSub className={backendMark(backends, active.backend) ? "row-foreign" : undefined}> {launchLabel(liveLaunch(active), backendMark(backends, active.backend), backends)}</RowSub><HostNameTag /><ToldNotice key={active.id} active={active} backends={backends} /><AskRulesNotice key={`ar:${active.id}`} active={active} backends={backends} />
           {/* The name the desktop derived for this session, IN FULL and on its
               own line — the tab strip has ~85 px for it and clips, and this is
               the screen you land on, where the words are worth having whole.
@@ -398,6 +400,7 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
             fact ("✓ handled" — as if it already was), a strip away from the
             red badge it acts on. */}
         {active.asking && !active.prompt && !active.awaitingInput && (
+          // raw: a <button> that is itself the part (RowTitle/RowSub are span/div)
           <button className="row-sub ack-asking"
             title={`mark “${active.asking.text}” as handled — clears the “asked you” badge and the waiting count here. Nothing is typed into the session, and the next turn's question raises it again.`}
             onClick={() => {
@@ -466,7 +469,8 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
             chip is BARE: the icon and the word, a door to the graph and no
             figure. A number here would be the measurement that never happened,
             which is the one thing this chip must never invent. For claude both
-            gates are true and the chip is byte-identical. */}
+            gates are true and the chip is byte-identical. Raw: a <button> that is itself the part
+           (RowSub is a span). */}
         {sessionCan(active, "contextSeries") && <button className="row-sub usage-inline" data-hint="session.context"
           title={`${sessionCan(active, "contextMeter") && active.contextTotalTok != null
             ? `context window: ${fmtTok(active.contextUsedTok ?? 0)} of ${fmtTok(active.contextTotalTok)} tokens`
@@ -580,7 +584,7 @@ function PairTabsSeg({ active, sessions, pending, backends }: {
   if (!segs) return null;
   let agent = active;
   for (const g of segs) if (g.kind === "cli" && !g.on) agent = g.target;
-  const agentName = backendIdOf(agent) === "claude" ? "Claude" : backendInfo(backends, agent.backend)?.label ?? "CLI";
+  const agentName = agentTabLabel(backends, agent.backend);
   const cliTab = <><Bot size={14} aria-hidden="true" /> {agentName}</>;
   const shellTab = <><SquareTerminal size={14} aria-hidden="true" /> Shell</>;
   return (
