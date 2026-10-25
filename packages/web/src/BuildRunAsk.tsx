@@ -69,8 +69,9 @@ export function BuildRunAsk({ build, options, online, onApprove, onCancel, onRun
   );
 }
 
-/** One question, in whichever of its four states it is actually in. */
-function ParamField({ p, value, answer, online, asked, onChange, onApprove }: {
+/** One question, in whichever of its four states it is actually in. Also the
+ *  schedule-a-build form's (`BuildScheduleForm.tsx`): one field, two forms. */
+export function ParamField({ p, value, answer, online, asked, onChange, onApprove }: {
   p: BuildParam;
   value: string;
   answer?: BuildParamAnswer;

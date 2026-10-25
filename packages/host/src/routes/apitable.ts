@@ -39,6 +39,9 @@ export interface ApiCtx {
   setup: SetupWatcher;
   /** The health index cache (`healthwatch.ts`): `/api/repos` reads it, never runs the engine. */
   health?: import("../healthwatch.js").HealthWatch;
+  /** The persisted attention items (`attentionstore.ts`) — `/api/repos` derives
+   *  `gitFailed`/`buildFailed` from them, the same predicate as the bell. */
+  attention?: Pick<import("../attentionstore.js").AttentionStore, "unhandled">;
   /** Build runs in flight — `/api/repos` marks a repo whose build is running. */
   builds?: Pick<import("../builds.js").BuildManager, "runningIn">;
   /** Sessions parked until their files arrive. An inbox POST is the event that

@@ -15,14 +15,14 @@ import type { ServerCtx } from "./ctx.js";
 
 export function serverCtxKeys() {
   return [
-  "acks", "announceBuild", "assess", "assessExecutor", "assessSnapshot", "attached", "auth", "authStateFor",
+  "acks", "announceBuild", "attention", "assess", "assessExecutor", "assessSnapshot", "attached", "auth", "authStateFor",
   "autopull", "backlog", "backlogSnapshot", "billing", "BOOT_ID", "broadcast", "broadcastAuthState", "budget", "builds",
-  "capture", "clients", "cliHealthStore", "closeDevice", "containRepoDir", "decisionLog", "deliverChain",
+  "capture", "clearNotifications", "clients", "cliHealthStore", "closeDevice", "containRepoDir", "decisionLog", "deliverChain",
   "deliverInput", "deliverySnapshot", "DOCTOR", "durableOp", "enforceAuth", "fanout", "fmtSize",
-  "handleClientMessage", "healthWatch", "imgSeen", "inputsInFlight", "installLog", "intents", "intentSnapshot",
-  "isAttachedToSomeone", "launchSnapshot", "meter", "naming", "netstats", "notifications", "notify",
+  "handleClientMessage", "handleNotification", "healthWatch", "imgSeen", "inputsInFlight", "installLog", "intents", "intentSnapshot",
+  "isAttachedToSomeone", "launchSnapshot", "meter", "naming", "netstats", "notificationFeed", "notifications", "notify",
   "notifyPrefs", "onboard", "openDeliveries", "outSeen", "padNotesFor", "peers", "pluginUpdates", "plugins", "PORT",
-  "publishBudget", "pullCatchUp", "pullNewFiles", "pullSeen", "push", "recomputeWatched", "review", "ROOT",
+  "publishBudget", "pullCatchUp", "pullNewFiles", "pullSeen", "push", "recomputeWatched", "resolveAttention", "resolveAttentionPrefix", "review", "ROOT",
   "scanImages", "scanOutboxDocs", "scanPullCandidates", "scheduleSnapshot", "send", "sentLogStore",
   "sessions", "settings", "setupWatch", "socketAuthorized", "startPrompt", "syncUsagePolling", "tokenStats",
   "uiStats", "updateApplier", "updates", "usage", "usageLog", "usageSources", "weekBurn", "wsDevice", "wsKind", "wsRole", "wsToken",

@@ -242,7 +242,8 @@ export async function measureStorage(): Promise<StorageAudit> {
 function measureDownloads(): DownloadUse {
   const out: DownloadUse = { savedIds: [], savedBytes: 0, unsavedIds: [], unsavedBytes: 0, nativeCount: 0, nativeBytes: 0 };
   for (const r of pulls.list()) {
-    if (r.state !== "done" || r.evicted) continue;
+    // Dropped after the save: the bytes are Downloads', not this app's.
+    if (r.state !== "done" || r.evicted || r.droppedAt) continue;
     const bytes = r.received || r.item.size || 0;
     if (!bytes) continue;
     if (r.nativePath) { out.nativeCount++; out.nativeBytes += bytes; }

@@ -41,7 +41,7 @@
  */
 import { EventEmitter } from "node:events";
 import { existsSync, readdirSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
-import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename as basenameOf, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import * as pty from "node-pty";
 import type { IPty } from "node-pty";
@@ -49,7 +49,7 @@ import { spawnFailure } from "./ptycap.js";
 import type { BuildArtifact, BuildParamAnswer, BuildConfig, BuildRun, Intent } from "@waterplane/shared";
 import {
   applyParams, buildRunTitle, unsafeParamIds, unsafeParamsText, cleanBuildParams, missingParamsText, paramEnv, parseParamOptions,
-  resolveParamValues, logTag,
+  resolveParamValues, logTag, scheduleItemOrigin,
 } from "@waterplane/shared";
 import { hostStateDir, repoSharedDir, repoStateDir } from "./branddirs.js";
 import { ROOT } from "./env.js";
@@ -451,7 +451,7 @@ export class BuildManager extends EventEmitter {
    * synchronously, while there is still a socket to tell, rather than minutes
    * later inside an executor.
    */
-  run(repoDir: string, buildId: string, given?: Record<string, string>): BuildRun | { error: string } {
+  run(repoDir: string, buildId: string, given?: Record<string, string>, opts?: { origin?: string }): BuildRun | { error: string } {
     const cfg = this.list(repoDir).find((b) => b.id === buildId);
     if (!cfg) return { error: "unknown build" };
 
@@ -497,9 +497,56 @@ export class BuildManager extends EventEmitter {
       // row can tell this run from the four above it. `buildRunTitle` leaves a
       // paramless build reading exactly as it always did.
       title: buildRunTitle(cfg.name, values),
+      // Provenance only — `scheduleItemOrigin(rule id)` for a run a schedule
+      // posted, read back by `scheduleIdFromOrigin`. A tap leaves it absent.
+      ...(opts?.origin ? { origin: opts.origin } : {}),
     });
     if (!posted.ok || !posted.intent) return { error: posted.reason || "could not be written down" };
     return intentToBuildRun(posted.intent);
+  }
+
+  /**
+   * Would a rule that runs this build, with these values, be able to fire?
+   * Asked by `schedule.save` so a rule naming a build this repo does not have,
+   * or leaving a parameter with neither a value nor a default, is refused in
+   * words at SAVE time — not discovered at 03:00. The same three checks
+   * `run()` makes (entry, values, metacharacters); `fireScheduled` asks them
+   * again at every occurrence, because the entry can change in between.
+   */
+  checkScheduled(repoDir: string, buildId: string, given?: Record<string, string>): { error: string } | { name: string } {
+    const repo = basenameOf(repoDir);
+    const cfg = this.list(repoDir).find((b) => b.id === buildId);
+    if (!cfg) return { error: `build ${buildId} does not exist in ${repo}` };
+    const { values, missing } = resolveParamValues(cfg.params, given);
+    if (missing.length) return { error: `build ${cfg.name} ${missingParamsText(missing)} — an unattended run cannot ask` };
+    const unsafe = unsafeParamIds(cfg.cmd, values);
+    if (unsafe.length) return { error: `build ${cfg.name}: ${unsafeParamsText(unsafe)}` };
+    return { name: cfg.name };
+  }
+
+  /**
+   * A build RULE's occurrence (`postsScheduledBuild`): post one ordinary run.
+   *
+   * It goes through `run()` itself — the same parameter resolution, the same
+   * metacharacter refusal, the same containment of `dir`, the same snapshot —
+   * so a scheduled run and a tapped one cannot differ in what they check. It
+   * resolves as soon as the run is POSTED (the rule's job is the posting, the
+   * run's own row carries the build's outcome), and `childId` names that row.
+   *
+   * At-most-once is the store's: the rule row is `starting` on disk before this
+   * is called and the post is synchronous, so one occurrence is one run. Every
+   * refusal is the rule's FAILURE in words — a build entry deleted since the
+   * rule was saved, or a parameter that has lost its value — never a guess.
+   */
+  fireScheduled(i: Intent): Promise<ExecutorResult> {
+    const p = i.payload.kind === "build" ? i.payload : null;
+    const repo = basenameOf(i.cwd);
+    if (!p?.buildId) return Promise.resolve({ ok: false, detail: "this schedule names no build" });
+    const cfg = this.list(i.cwd).find((b) => b.id === p.buildId);
+    if (!cfg) return Promise.resolve({ ok: false, detail: `build ${p.buildId} no longer exists in ${repo}` });
+    const res = this.run(i.cwd, p.buildId, p.params, { origin: scheduleItemOrigin(i.id) });
+    if ("error" in res) return Promise.resolve({ ok: false, detail: `build ${cfg.name} in ${repo} was not started: ${res.error}` });
+    return Promise.resolve({ ok: true, childId: res.runId, detail: `started ${res.name} in ${repo} · run ${res.runId}` });
   }
 
   /**

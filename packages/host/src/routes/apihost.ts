@@ -15,6 +15,7 @@ import { dictateStatusLive, transcribe } from "../dictate.js";
 import { ocrStatus, readImageLocal } from "../ocrlocal.js";
 import { cloneRepo, newFolder, newRepo, newWorktree, type TemplateId } from "../scaffold.js";
 import { changedCountsWithin, gitRunningIn } from "../git.js";
+import { buildFailedFor, gitFailedFor } from "../attentionstore.js";
 import { listWriteTargets, setSecret } from "../secrets.js";
 import { setupPrefsStore } from "../setupprefs.js";
 import { askRulesStore } from "../askrules.js";
@@ -203,6 +204,13 @@ export const HOST_ROUTES: readonly ApiEntry[] = [
     }
     // A push or pull in flight, off the jobs' own maps — no subprocess.
     for (const t of targets) { const g = gitRunningIn(t.worktreePath); if (g) t.gitRunning = g; }
+    // A failed pull/push or build still waiting on the person, off the attention
+    // store — the ONE predicate (`needsYou`) the bell counts with, so the chip
+    // and the count cannot disagree. Memory reads, no subprocess.
+    if (ctx.attention) for (const t of targets) {
+      const g = gitFailedFor(ctx.attention, t.id); if (g) t.gitFailed = g;
+      const b = buildFailedFor(ctx.attention, t.id); if (b) t.buildFailed = b;
+    }
     // A build command in flight, off the intent rows that are its runs.
     for (const t of targets) { const b = ctx.builds?.runningIn(t.worktreePath); if (b) t.buildRunning = b; }
     json(res, { targets });

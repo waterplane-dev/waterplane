@@ -16,6 +16,14 @@
   flex-basis: 100%; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden; word-break: break-all;
 }
+/* A build row with rules: the run button and, UNDER it, the clock cue — two
+   taps side by side in a column, never a button in a button. The cue is its own
+   44 px target (it opens Automation cut to those rules); it wraps rather than
+   clipping, since "2 schedules · next in 3h" is the whole point of the line. */
+.build-main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--panel); }
+.build-main > .row.grow { flex: 0 0 auto; }
+.linkish.build-cue { min-height: 44px; padding: 0 var(--sp-14) var(--sp-8); white-space: normal; text-align: left; }
+.linkish.build-clock { min-height: 44px; padding: 0 var(--sp-14); }
 /* A run row: its name on a line of its own (it was cut to "Public mirror
    (wat…" by the meta beside it), the fold chevron at the end, the meta under. */
 .build-runs .row-title { flex: 1 1 0; min-width: 0; white-space: normal; }
@@ -188,6 +196,7 @@ button.notif-dl:active { background: var(--raise); border-radius: var(--r-8); }
    own messages. The label is the point: they are different kinds of fact. */
 .notif-sec { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-8); padding: var(--sp-10) var(--sp-14) var(--sp-6); border-bottom: 1px solid var(--line); background: var(--panel); }
 .notif-sec-title { display: inline-flex; align-items: center; gap: var(--sp-6); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.notif-done { color: var(--ok); }
 .cmd-copy { display: flex; align-items: center; gap: var(--sp-8); margin-top: var(--sp-6); }
 .cmd-copy code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; background: var(--well); border: 1px solid var(--line); border-radius: var(--r-8); padding: var(--sp-8) var(--sp-10); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--fg); }
 

@@ -6,6 +6,7 @@
  */
 import type { BacklogItem } from "@waterplane/shared";
 import { describeRule } from "@waterplane/shared";
+import { SHEET } from "../sheetNames.ts";
 
 // ── Re-time many ──────────────────────────────────────────────────────
 
@@ -64,8 +65,8 @@ export function retimeQueuedToast(n: number, when: string, repos: string[], held
 /** Under the When editor while re-timing to a when with no clock. */
 export function retimeOffClockNote(n: number): string {
   return n === 1
-    ? "No clock: it leaves the Schedules clock list and waits in its repo's queue — the ⌛ chip on the repo's row."
-    : "No clock: these leave the Schedules clock list and wait in their repo's queue — the ⌛ chip on the repo's row.";
+    ? `No clock: it leaves the ${SHEET.automation} clock list and waits in its repo's queue — the ⌛ chip on the repo's row.`
+    : `No clock: these leave the ${SHEET.automation} clock list and wait in their repo's queue — the ⌛ chip on the repo's row.`;
 }
 /**
  * The ⌛ chip's words beyond the count: what is holding the queue, when the

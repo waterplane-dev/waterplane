@@ -390,6 +390,8 @@ export class RosterSlice {
       if (f && f.by !== "hand") this.core.emit("followUp", s.info, f);
     }
     if (closed || !s) this.core.emit("closed", this.listClosed());
+    // A closed row emits no `updated`, so say the flag is gone by every id it was filed under.
+    if (!f) this.core.emit("followUpCleared", keys);
     return true;
   }
 

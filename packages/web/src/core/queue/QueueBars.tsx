@@ -30,6 +30,7 @@ import { WHICH_MAX, sendingLabel, whichWords } from "./logic.ts";
 import type { QueueApi } from "./useQueue.ts";
 import type { Connection } from "../conn/useConnection";
 import { Button } from "../../kit/Button";
+import { SHEET } from "../../sheetNames";
 
 /** Stop a tap from blurring the compose box (which would dismiss the keyboard). */
 const keepFocus = (e: ReactPointerEvent) => e.preventDefault();
@@ -172,7 +173,7 @@ export function QueueBars(props: QueueBarsProps) {
                 <div className="outbox-which">
                   {failed.slice(0, WHICH_MAX).map((e) => (
                     <button key={e.ackId} className="outbox-which-row" onPointerDown={keepFocus}
-                      title="open this one in Activity"
+                      title={`open this one in ${SHEET.activity}`}
                       onClick={() => { track("action:queue.which"); openActivityOn([e], "the message you tapped"); }}>
                       <span className="outbox-which-where">{laneLabel(e)}</span>
                       <span className="outbox-which-text">{whichWords(e)}</span>

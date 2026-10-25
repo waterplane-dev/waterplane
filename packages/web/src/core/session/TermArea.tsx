@@ -69,6 +69,7 @@ import { useReaderPick } from "./useReaderPick";
 import { useCornerDrag } from "./useCornerDrag";
 import { OVER_TERMINAL, startStrayKeys } from "./strayKeys";
 import { Button } from "../../kit/Button";
+import { SHEET } from "../../sheetNames";
 
 const ICON = 16;
 
@@ -638,7 +639,7 @@ export function TermArea(p: TermAreaProps): ReactNode {
                       </span>
                       <span className="term-overlay-hint">
                         {failed
-                          ? "Anything typed here is still in the queue and can be re-aimed from Activity."
+                          ? `Anything typed here is still in the queue and can be re-aimed from ${SHEET.activity}.`
                           : "Write, chain and attach now — it all goes into this session the moment it opens."}
                       </span>
                       <span className="term-overlay-acts">
@@ -647,7 +648,7 @@ export function TermArea(p: TermAreaProps): ReactNode {
                             <RotateCw size={14} /> try again
                           </Button>
                         )}
-                        <Button title={failed ? "back to the launcher" : "stop waiting — the open stays queued and can be dropped in Activity"}
+                        <Button title={failed ? "back to the launcher" : `stop waiting — the open stays queued and can be dropped in ${SHEET.activity}`}
                           onClick={() => setActiveId(null)}>
                           <ChevronLeft size={14} /> back
                         </Button>

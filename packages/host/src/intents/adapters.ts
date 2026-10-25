@@ -27,6 +27,7 @@ import {
   LAUNCH_WAIT_MS,
   budgetPassAt,
   cleanAction,
+  scheduleActionText,
   cleanRule,
   describeRule,
   isTimedWorkRow,
@@ -47,7 +48,7 @@ import {
   type ScheduleEntry,
   type SessionBudget,
 } from "@waterplane/shared";
-import { ORIGIN_SCHEDULE_SWEEP, ORIGIN_SCHEDULE_WORK } from "./manager.js";
+import { ORIGIN_SCHEDULE_BUILD, ORIGIN_SCHEDULE_SWEEP, ORIGIN_SCHEDULE_WORK } from "./manager.js";
 
 // ── Launches ────────────────────────────────────────────────────────────────
 
@@ -219,13 +220,36 @@ export function scheduleToIntent(raw: unknown, now: number): IntentDraft | null 
   const graceMin = Number.isFinite(g) ? Math.min(7 * 24 * 60, Math.max(0, g)) : DEFAULT_GRACE_MIN;
   const name = typeof e.name === "string" && e.name.trim()
     ? e.name.trim().slice(0, 120)
-    : action.text.split("\n")[0].slice(0, 120);
+    : scheduleActionText(action).split("\n")[0].slice(0, 120);
   // `waitUntilFree` is one tick on the sheet but two gates on the intent: this
   // repo (`serial`, already the store's own per-cwd rule) and the whole host
   // (`holdForHost`, new — see `IntentFacts.hostBusy`). Set together, never one
   // without the other, because a ticked box that only half-worked would look
   // exactly like this one did before it existed.
   const waitUntilFree = e.waitUntilFree === true;
+  // ── A build rule ─────────────────────────────────────────────────────────
+  //
+  // The rule's own row holds WHICH build and WHICH values — never a command:
+  // the command is resolved from the repo's `builds.json` at each occurrence,
+  // by `BuildManager.fireScheduled`, through the same `run()` a tap uses, so a
+  // later edit of the entry is what the next night runs and a deleted entry
+  // fails in words. `postsScheduledBuild` (origin + payload) routes it; the
+  // `shell` target is what every build row has, so rung 5 asks nothing of a
+  // session it does not have.
+  if (action.kind === "build") {
+    return {
+      id,
+      cwd: action.repoDir,
+      payload: { kind: "build" as const, buildId: action.buildId, ...(action.params ? { params: { ...action.params } } : {}) },
+      target: { kind: "shell" as const },
+      trigger: { kind: "at" as const, rule, graceMin, keepAfterRun: e.keepAfterRun === true ? true : undefined },
+      title: name,
+      createdAt: Number(e.createdAt) > 0 ? Number(e.createdAt) : now,
+      origin: ORIGIN_SCHEDULE_BUILD,
+      serial: waitUntilFree || undefined,
+      holdForHost: waitUntilFree || undefined,
+    } as IntentDraft;
+  }
   // The CHAIN, if the action carries one. `steps[0]` repeats `text` by the same
   // contract `backlog.add` uses, so `[action.text]` is what an action without
   // one means and what every rule stored before the field existed means. Until
@@ -302,12 +326,17 @@ export function intentToSchedule(i: Intent): ScheduleEntry | null {
   if (i.trigger.kind !== "at") return null;
   if (isTimedWorkRow(i)) return null;
   const text = i.payload.kind === "prompt" ? i.payload.steps[0] : "";
+  const build = i.payload.kind === "build" && i.origin === ORIGIN_SCHEDULE_BUILD ? i.payload : null;
   // The chain rides back out as well as in. An edit of the rule's NAME goes
   // through this function and `scheduleToIntent` again, so a chain read back as
   // its first turn would vanish the first time somebody renamed the schedule —
   // the same silent drop the whole-rule round trip above is written to avoid.
   const chain = i.payload.kind === "prompt" && i.payload.steps.length > 1 ? [...i.payload.steps] : undefined;
-  const action: ScheduleAction = i.target.kind === "repos"
+  // A build rule rides back with its id AND its values, or renaming the rule
+  // would leave it running the build with nothing picked.
+  const action: ScheduleAction = build
+    ? { kind: "build", repoDir: i.cwd, buildId: build.buildId, ...(build.params ? { params: { ...build.params } } : {}) }
+    : i.target.kind === "repos"
     ? { kind: "fanout", dirs: i.target.dirs, text, launch: i.launch, ...(i.budget ? { budget: i.budget } : {}) }
     : {
       kind: "backlog", repoDir: i.cwd, text, label: i.label, autoFire: i.auto !== false, ...(chain ? { steps: chain } : {}),
@@ -319,7 +348,7 @@ export function intentToSchedule(i: Intent): ScheduleEntry | null {
     };
   return {
     id: i.id,
-    name: i.title || text.split("\n")[0].slice(0, 120),
+    name: i.title || scheduleActionText(action).split("\n")[0].slice(0, 120),
     // There is no separate `enabled` flag on an intent, and there does not need
     // to be: `nextAt === null` is already the explicit "nothing is armed", which
     // is exactly what disabling one means and exactly what a spent `once` is.

@@ -40,3 +40,48 @@ test("a non-object (corrupt file, array, null) cleans to no preferences at all",
     assert.deepEqual(cleanNotifyPrefs(bad), {});
   }
 });
+
+// Two levels (owner, 2026-10-25): only `attention` counts on the bell and is
+// pushed. The table below IS the plan's level map — a change here is a
+// decision, not a fix (.claude/outbox/notifications-attention-plan.md §1).
+import { ATTENTION_KINDS, notifyLevel, levelOf, needsYou, gitAttentionKey, buildAttentionKey } from "../dist/index.js";
+
+test("the kinds that wait on a person default to attention; every other kind is information", () => {
+  assert.deepEqual([...ATTENTION_KINDS], ["prompt", "approval", "cli", "disk", "undelivered", "followup"]);
+  for (const kind of NOTIFICATION_KINDS) {
+    assert.equal(notifyLevel(kind), ATTENTION_KINDS.includes(kind) ? "attention" : "info", kind);
+  }
+});
+
+test("a known outcome beats the kind: failed is attention, ok is information", () => {
+  assert.equal(notifyLevel("backlog", "failed"), "attention");
+  assert.equal(notifyLevel("git", "failed"), "attention");
+  assert.equal(notifyLevel("info", "failed"), "attention");
+  assert.equal(notifyLevel("git", "ok"), "info");
+  assert.equal(notifyLevel("limit", "ok"), "info");
+});
+
+test("an explicit level from the call site wins over both", () => {
+  assert.equal(notifyLevel("followup", undefined, "info"), "info");
+  assert.equal(notifyLevel("info", "ok", "attention"), "attention");
+  assert.equal(notifyLevel("prompt", undefined, /** @type {any} */ ("loud")), "attention");
+});
+
+test("an item from an older host (no level) is judged by the same rule over its kind", () => {
+  assert.equal(levelOf({ kind: "prompt" }), "attention");
+  assert.equal(levelOf({ kind: "artifact" }), "info");
+  assert.equal(levelOf({ kind: "artifact", level: "attention" }), "attention");
+});
+
+test("needsYou: unhandled attention only", () => {
+  assert.equal(needsYou({ kind: "prompt" }), true);
+  assert.equal(needsYou({ kind: "prompt", handled: { at: 1, by: "person" } }), false);
+  assert.equal(needsYou({ kind: "backlog", level: "info" }), false);
+  assert.equal(needsYou({ kind: "git", level: "attention" }), true);
+});
+
+test("attention keys are spelled once, per repo and verb / build entry", () => {
+  assert.equal(gitAttentionKey("r1", "push"), "git:r1:push");
+  assert.notEqual(gitAttentionKey("r1", "push"), gitAttentionKey("r1", "pull"));
+  assert.equal(buildAttentionKey("r1", "apk"), "build:r1:apk");
+});

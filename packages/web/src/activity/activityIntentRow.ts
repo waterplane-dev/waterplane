@@ -31,6 +31,7 @@ import {
   bucketOf,
 } from "./activityBucket.ts";
 import type { ActivityAction, ActivityInput, ActivityRow } from "./activityTypes.ts";
+import { buildRunFromSchedule } from "../buildSchedule.ts";
 
 export function intentRow(i: Intent, input: ActivityInput, run: FanoutRun | null): ActivityRow {
   const { online, now, deps } = input;
@@ -278,9 +279,16 @@ export function intentRow(i: Intent, input: ActivityInput, run: FanoutRun | null
     attempts: i.attempts ?? 0,
     actions,
     subject: { source: "intent", intent: i, run },
+    ...(kind === "build" ? fromScheduleOf(i, input.intents ?? []) : {}),
   };
 }
 
 const FANOUT_TARGET_STATE: Record<string, Lifecycle> = {
   pending: "queued", starting: "starting", running: "running", done: "done", failed: "failed",
 };
+
+/** A build run a rule fired wears its rule (`buildRunFromSchedule`, the one join). */
+function fromScheduleOf(i: Intent, intents: readonly Intent[]): { fromSchedule?: { id: string; name: string } } {
+  const from = buildRunFromSchedule(i, intents);
+  return from ? { fromSchedule: from } : {};
+}

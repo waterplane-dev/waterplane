@@ -9,6 +9,7 @@
 import { intentKind, isTimedWorkRow } from "@waterplane/shared";
 import { bulkLines, entryProse, queueRowKey, type ActivityActionId, type ActivityRow } from "../../activityRows";
 import { scheduleRemovedToast } from "../../clockCuts";
+import { scheduleRuleLabel } from "../../backlogFilter";
 import { dismissRows, undismissRows } from "../../activityDismiss";
 import { markRowsDone } from "../../activityDone";
 import { saveNow, startDownload } from "../../download";
@@ -18,6 +19,7 @@ import { pulls } from "../../pull";
 import { core, type CoreApi } from "../../sdk";
 import { BL_OFFLINE, HELD_OFFLINE, refireSummary, runLane, runNowToast } from "./logic";
 import { confirmedDone, filed, focus, pullList, type ActivityFocus } from "./store";
+import { SHEET } from "../../sheetNames";
 
 const repoNameOf = (c: CoreApi, cwd: string) => c.world.repoForCwd(cwd)?.repoName ?? baseName(cwd);
 
@@ -100,6 +102,11 @@ export function act(id: ActivityActionId, row: ActivityRow): void {
   if (id === "confirmDone") {
     confirmedDone.set(markRowsDone([row.key]));
     c.say.toast("marked done — the desktop's own check never confirmed it, this is your call");
+    return;
+  }
+  // The `from the schedule “x”` chip on a run a rule fired: that rule's card.
+  if (id === "openSchedule") {
+    if (row.fromSchedule) c.nav.openScheduleCut([row.fromSchedule.id], scheduleRuleLabel(row.fromSchedule.name));
     return;
   }
   switch (sub.source) {
@@ -215,6 +222,16 @@ export function act(id: ActivityActionId, row: ActivityRow): void {
 
       // `edit` and everything unhandled: the row's own list owns rewriting. A
       // TIMED row's clock is a whole rule, composed only by the Send sheet.
+      // A BUILD rule has no prose: its form is the build's own, on its repo's Build sheet.
+      if (kind === "schedule" && i.payload.kind === "build") {
+        const e = c.world.schedules.find((x) => x.id === i.id);
+        const repo = c.world.repoForCwd(i.cwd);
+        if (e && repo) { c.nav.openBuild(repo, { schedule: e }); return; }
+        // Never fall through to the Send sheet: a prompt saved under this id
+        // would REPLACE the build rule.
+        c.say.toast(e ? `that rule's repo is not listed on this phone — edit it from its card in ${SHEET.automation}` : "that rule is not in the list yet — try again in a moment");
+        return;
+      }
       if (kind === "schedule" || isTimedWorkRow(i)) { c.nav.openSend(c.send.seedFromIntent(i)); return; }
       c.nav.open("backlog");
       c.say.toast("rewrite it on its row, in the backlog");

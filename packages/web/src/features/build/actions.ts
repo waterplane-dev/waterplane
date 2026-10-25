@@ -2,10 +2,12 @@
  * Every writer of the build feature's stores, and every frame it sends. The
  * wire handlers in `index.ts` and the sheet call these; nothing else writes.
  */
-import { buildRunTitle, repoBranchLabel, type ArtifactPolicy, type BuildCandidate, type BuildConfig, type BuildRun, type RepoTarget } from "@waterplane/shared";
+import { buildRunTitle, repoBranchLabel, type ArtifactPolicy, type BuildCandidate, type BuildConfig, type BuildRun, type RepoTarget, type ScheduleEntry } from "@waterplane/shared";
+import { buildScheduleEntry, buildScheduleToast, type BuildScheduleCue } from "../../buildSchedule";
+import type { SendWhen } from "../../sendIntent";
 import { core, mapWith, type CoreApi } from "../../sdk";
 import { buildLane, buildQueueTitle, buildQueuedToast, buildRunToast } from "./logic";
-import { artifactPolicies, buildCands, buildLocalIds, buildNameOf, buildOpts, buildRepo, builds, type ParamOptions } from "./store";
+import { artifactPolicies, buildCands, buildLocalIds, buildNameOf, buildOpts, buildRepo, buildScheduleEdit, builds, type ParamOptions } from "./store";
 
 export function onBuildLocalIds(repoDir: string, localIds: string[] | undefined): void {
   buildLocalIds.set((prev) => mapWith(prev, repoDir, localIds));
@@ -31,9 +33,12 @@ export function onBuildRun(run: BuildRun, c: CoreApi): void {
 }
 
 /** Open the build-buttons sheet for a repo and fetch its configs + runs. */
-export function openBuildFor(repo: RepoTarget): void {
+export function openBuildFor(repo: RepoTarget, opts?: { schedule?: ScheduleEntry }): void {
   const c = core();
   buildRepo.set(repo);
+  // A build rule's card *edit*: the sheet opens that rule's form once the
+  // entry is in the list (`BuildButtonsSheet`).
+  buildScheduleEdit.set(opts?.schedule ? { entry: opts.schedule, at: Date.now() } : null);
   c.conn.send({ t: "build.list", repoDir: repo.worktreePath });
   // What becomes of what a build produces is read with the list, not on a
   // second tap: it is one small frame, and the answer has to be on screen
@@ -134,4 +139,24 @@ export function askOptions(repoDir: string, buildId: string, approve?: { paramId
 export function scanRepo(repoDir: string): void {
   // eslint-disable-next-line local/no-silent-send -- the editor IS the receipt, and a better one than a toast: it shows "reading the repo…" until the frame lands, names the no-connection case itself (`online`), and degrades to the three fields it always had. There is nothing to queue — a scan delivered on reconnect would answer a form that closed an hour ago.
   core().conn.send({ t: "build.scan", repoDir });
+}
+
+/**
+ * The schedule-a-build form's Save: `schedule.save` through the durable queue
+ * (`queueOp`, an ackId, the rule's own `sched:<id>` lane) — the Send sheet's
+ * path for a rule, never a second one. `schedule.save` upserts on the id, so
+ * an edit re-saves the same rule and an offline replay cannot add a second.
+ */
+export function saveBuildSchedule(repoDir: string, build: BuildConfig, editing: ScheduleEntry | null,
+  when: Extract<SendWhen, { kind: "at" }>, vals: Record<string, string>, preview: number | null): void {
+  const c = core();
+  const id = editing?.id ?? `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  const entry = buildScheduleEntry({ id, repoDir, build, vals, when, preview, now: Date.now() });
+  const offline = c.queue.queueOp({ t: "schedule.save", entry }, `sched:${entry.id}`, entry.name);
+  c.say.toast(buildScheduleToast(offline, !!editing));
+}
+
+/** The cue's tap: Automation cut to exactly the rules the cue counted. */
+export function openBuildScheduleCut(cue: BuildScheduleCue): void {
+  core().nav.openScheduleCut(cue.ids, cue.label);
 }

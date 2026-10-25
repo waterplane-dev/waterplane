@@ -61,3 +61,7 @@ With both the APK and a browser tab open on one phone, auto-downloads can be dir
 - asked: 2026-10-09, 2026-10-10, 2026-10-11
 - shipped: 7afaac5
 
+
+### R-downloads-014 · shipped
+Once a downloaded file (an APK included) is saved to the phone's Downloads folder, waterplane deletes its own copy automatically, so the file is held once. APKs still install, from the Downloads copy. A per-phone switch, on by default, turns this off.
+- asked: 2026-10-25

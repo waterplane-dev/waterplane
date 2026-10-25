@@ -164,6 +164,21 @@ public class ShellPullPlugin extends Plugin implements ShellPullService.Watcher 
         call.resolve();
     }
 
+    /** The "keep only the Downloads copy" switch, held by the shell because the
+     *  save it follows runs with the page frozen
+     *  ({@link ShellPullService#dropAfterSave}). */
+    @PluginMethod
+    public void setDropAfterSave(PluginCall call) {
+        boolean on = !Boolean.FALSE.equals(call.getBoolean("on"));
+        ShellPullService.setDrop(getContext(), on);
+        // Turning it on covers what is already in Downloads, off the main thread:
+        // each row is a MediaStore query.
+        if (on) new Thread(() -> {
+            for (String id : ShellPullService.ids(getContext())) ShellPullService.dropAfterSave(getContext(), id);
+        }, "shell-pull-drop").start();
+        call.resolve();
+    }
+
     @PluginMethod
     public void list(PluginCall call) {
         call.resolve(state());
@@ -182,6 +197,7 @@ public class ShellPullPlugin extends Plugin implements ShellPullService.Watcher 
         JSObject ret = new JSObject();
         ret.put("items", items);
         ret.put("running", ShellPullService.isRunning());
+        ret.put("dropAfterSave", ShellPullService.dropEnabled(getContext()));
         return ret;
     }
 }

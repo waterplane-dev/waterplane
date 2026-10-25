@@ -267,6 +267,10 @@ public class ShellPullService extends Service {
         /** Why a Downloads copy STAYED, where the clean-up could not remove it
          *  ("" = nothing stayed, or there was no copy). Said, never swallowed. */
         String cleanNote = "";
+        /** When the app's own copy was deleted because Downloads holds the file
+         *  ({@link #dropAfterSave}). 0 = the app still has it. The Downloads
+         *  copy is then the only one, and installing reads it from there. */
+        long droppedAt;
 
         JSONObject toJson() throws JSONException {
             JSONObject o = new JSONObject();
@@ -305,6 +309,7 @@ public class ShellPullService extends Service {
                 o.put("cleanedBytes", cleanedBytes);
                 if (!cleanNote.isEmpty()) o.put("cleanNote", cleanNote);
             }
+            if (droppedAt > 0) o.put("droppedAt", droppedAt);
             if (!origin.isEmpty()) {
                 o.put("origin", origin);
                 try { o.put("item", new JSONObject(pullItem)); } catch (JSONException e) { /* adopted by nobody */ }
@@ -342,6 +347,7 @@ public class ShellPullService extends Service {
             it.cleanedAt = o.optLong("cleanedAt", 0);
             it.cleanedBytes = o.optLong("cleanedBytes", 0);
             it.cleanNote = o.optString("cleanNote", "");
+            it.droppedAt = o.optLong("droppedAt", 0);
             it.origin = o.optString("origin", "");
             JSONObject pi = o.optJSONObject("item");
             it.pullItem = pi == null ? "" : pi.toString();
@@ -374,6 +380,11 @@ public class ShellPullService extends Service {
             try { out.put(it.toJson()); } catch (JSONException e) { Log.w(TAG, "bad row: " + e); }
         }
         return out;
+    }
+
+    /** Every row's id — for the plugin, which may not see an `Item`. */
+    static List<String> ids(Context ctx) {
+        return new ArrayList<>(load(ctx).keySet());
     }
 
     private static Map<String, Item> load(Context ctx) {
@@ -557,7 +568,7 @@ public class ShellPullService extends Service {
         String id = intent != null ? intent.getStringExtra(EXTRA_ID) : null;
         if (ACTION_CANCEL.equals(action) && id != null) cancel(id);
         else if (ACTION_DISCARD.equals(action) && id != null) discard(id);
-        else if (ACTION_PUBLISH.equals(action) && id != null) worker.execute(() -> publishNow(id, true));
+        else if (ACTION_PUBLISH.equals(action) && id != null) worker.execute(() -> { publishNow(id, true); dropAfterSave(this, id); });
         else if (ACTION_INSTALL.equals(action) && id != null) worker.execute(() -> installNow(id, true));
 
         pump();
@@ -831,6 +842,9 @@ public class ShellPullService extends Service {
         // start, the receiver posts the same notification on the way to asking.
         Item after = load(this).get(id);
         if (after != null && after.install.isEmpty()) ShellInstallReceiver.postReady(this, id, null);
+        // Last, after everything that reads the app's copy (inspect, install —
+        // whose session has the bytes by the time it returns).
+        dropAfterSave(this, id);
     }
 
     // ── ready to install ─────────────────────────────────────────────────
@@ -853,7 +867,7 @@ public class ShellPullService extends Service {
         Item it = items.get(id);
         if (it == null || !"done".equals(it.state) || !Installs.isApk(it.name, it.mime)) return null;
         if ("installed".equals(it.install) || "installing".equals(it.install)) return null;
-        if (!binOf(ctx, id).isFile()) return null;
+        if (!hasBytes(ctx, it)) return null;
         // The `play` build never installs itself, nor an archive it could not
         // name (Installs.refusal), so it never offers either as ready.
         if (!BuildConfig.SELF_UPDATE && (it.pkg.isEmpty() || it.pkg.equals(ctx.getPackageName()))) return null;
@@ -960,8 +974,8 @@ public class ShellPullService extends Service {
         // desktop then logs as two installs of one build, attributed wrongly.
         // `settleInstalls` is what unsticks a row whose callback never came.
         if ("installing".equals(it.install)) return;
-        File bin = binOf(this, id);
-        if (!bin.isFile()) {
+        File bin = installSource(this, it);
+        if (bin == null) {
             if (asked) patch(id, r -> {
                 r.install = "failed";
                 r.installError = "the file is not on this phone any more";
@@ -982,7 +996,7 @@ public class ShellPullService extends Service {
             });
             return;
         }
-        if (!asked && !Installs.mayAutoInstall(this, info)) return;
+        if (!asked && !Installs.mayAutoInstall(this, info)) { unstage(this, id); return; }
         // A silent install is only ever possible for an UPDATE, and only with a
         // consent: the person's tap on Install (a second "Update?" after it was
         // the same question twice), or the package on the list for the
@@ -1008,7 +1022,9 @@ public class ShellPullService extends Service {
             r.installSession = 0;
         });
         try {
-            int session = Installs.install(this, id, bin, info, silent);
+            int session;
+            try { session = Installs.install(this, id, bin, info, silent); }
+            finally { unstage(this, id); }
             // Only while the row is still waiting: a silent update can answer
             // before this line runs, and writing the session id over a row that
             // has already settled would leave a finished install pointing at a
@@ -1040,12 +1056,14 @@ public class ShellPullService extends Service {
         Item it = load(ctx).get(id);
         if (it == null || !"installing".equals(it.install)) return false;
         if (session != 0 && it.installSession != 0 && it.installSession != session) return false;
-        File bin = binOf(ctx, id);
-        if (!bin.isFile()) return false;
+        File bin = installSource(ctx, it);
+        if (bin == null) return false;
         Installs.Info info = Installs.read(ctx, bin);
         patch(ctx, id, r -> { r.installSession = 0; r.installError = ""; });
         try {
-            int next = Installs.install(ctx, id, bin, info, false);
+            int next;
+            try { next = Installs.install(ctx, id, bin, info, false); }
+            finally { unstage(ctx, id); }
             patch(ctx, id, r -> { if ("installing".equals(r.install)) r.installSession = next; });
             return true;
         } catch (IOException | RuntimeException e) {
@@ -1202,6 +1220,82 @@ public class ShellPullService extends Service {
         }
         // Outside the lock: the clean-up takes it itself, and touches MediaStore.
         for (String id : landed) cleanAfterInstall(ctx, id);
+    }
+
+    // ── one copy once it is in Downloads ─────────────────────────────────
+
+    private static final String KEY_DROP = "dropAfterSave";
+
+    /**
+     * The page's "keep only the Downloads copy" switch, held here for the
+     * reason the clean-up switch is: the save happens at the end of a transfer
+     * the service runs with the document frozen. On by default — once
+     * Downloads holds the file the app's copy is the same bytes twice. Per
+     * phone, never synced.
+     */
+    static boolean dropEnabled(Context ctx) {
+        return prefs(ctx).getBoolean(KEY_DROP, true);
+    }
+
+    static void setDrop(Context ctx, boolean on) {
+        prefs(ctx).edit().putBoolean(KEY_DROP, on).apply();
+    }
+
+    /**
+     * The file is in Downloads: with the switch on, delete the app's own copy.
+     *
+     * Only on proof, never on the row's word: Downloads is asked for the saved
+     * name at the app copy's exact size, so a copy the person already deleted,
+     * or a different file under the name, keeps the app's copy where it is.
+     * An install started from this row already has its bytes in the installer
+     * session; a later one (a tap, the loud retry) stages the Downloads copy
+     * ({@link #installSource}).
+     */
+    static void dropAfterSave(Context ctx, String id) {
+        if (!dropEnabled(ctx)) return;
+        Item it = load(ctx).get(id);
+        if (it == null || !"done".equals(it.state) || !it.where.startsWith("Downloads/")) return;
+        File bin = binOf(ctx, id);
+        if (!bin.isFile()) return;
+        String saved = it.where.substring("Downloads/".length());
+        Downloads.Found found = Downloads.find(ctx, saved, bin.length());
+        if (found == null || !found.name.equals(saved) || found.size != bin.length()) return;
+        if (!bin.delete()) return;
+        long now = System.currentTimeMillis();
+        patch(ctx, id, r -> r.droppedAt = now);
+    }
+
+    /** Are this row's bytes anywhere this app can install from? */
+    static boolean hasBytes(Context ctx, Item it) {
+        if (binOf(ctx, it.id).isFile()) return true;
+        if (it.droppedAt <= 0 || !it.where.startsWith("Downloads/")) return false;
+        Downloads.Found f = Downloads.find(ctx, it.where.substring("Downloads/".length()), it.size);
+        return f != null && f.name.equals(it.where.substring("Downloads/".length()));
+    }
+
+    /**
+     * The file an install reads: the app's own copy, or — dropped after the
+     * save — the Downloads copy staged into {@link #stagedOf} for this one
+     * install. Null when neither is there. A staged file is removed by
+     * {@link #unstage} once the installer session has the bytes.
+     */
+    @Nullable
+    static File installSource(Context ctx, Item it) {
+        File bin = binOf(ctx, it.id);
+        if (bin.isFile()) return bin;
+        if (it.droppedAt <= 0 || !it.where.startsWith("Downloads/")) return null;
+        File staged = stagedOf(ctx, it.id);
+        if (staged.isFile() && (it.size <= 0 || staged.length() == it.size)) return staged;
+        return Downloads.stage(ctx, it.where.substring("Downloads/".length()), it.size, staged) ? staged : null;
+    }
+
+    static File stagedOf(Context ctx, String id) {
+        return new File(new File(ctx.getCacheDir(), "install"), safeId(id) + ".apk");
+    }
+
+    static void unstage(Context ctx, String id) {
+        //noinspection ResultOfMethodCallIgnored
+        stagedOf(ctx, id).delete();
     }
 
     // ── clean-up after an install, opt-in ────────────────────────────────

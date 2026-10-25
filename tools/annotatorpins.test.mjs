@@ -19,7 +19,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import ts from "typescript";
+import { assertSurface } from "./exportsurface.mjs";
 import { build } from "esbuild";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -32,17 +32,7 @@ const GOLDEN_DOC = (() => { try { return JSON.parse(readFileSync(GOLDEN, "utf8")
 const SURFACE = ["AnnDispatch:type", "AnnSend:type", "AnnSource:type", "ImageAnnotator:value"];
 
 test("ImageAnnotator.tsx exports exactly its pinned surface", () => {
-  const program = ts.createProgram([FACADE], {
-    module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler, target: ts.ScriptTarget.ES2022,
-    jsx: ts.JsxEmit.ReactJSX, noEmit: true, skipLibCheck: true, allowImportingTsExtensions: true,
-  });
-  const checker = program.getTypeChecker();
-  const mod = checker.getSymbolAtLocation(program.getSourceFile(FACADE));
-  const got = checker.getExportsOfModule(mod).map((s) => {
-    const target = s.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(s) : s;
-    return `${s.name}:${target.flags & ts.SymbolFlags.Value ? "value" : "type"}`;
-  }).sort();
-  assert.deepEqual(got, SURFACE);
+  assertSurface(FACADE, SURFACE);
 });
 
 test("the sheet's server-rendered markup is byte-identical to the golden", async () => {

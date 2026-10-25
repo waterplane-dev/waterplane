@@ -92,7 +92,9 @@ export type ActivityActionId =
   | "dismiss"
   /** A person, not the desktop's own detector, says this one actually ran.
    *  Only offered where `delivery === "unconfirmed"` (`activityDone.ts`). */
-  | "confirmDone";
+  | "confirmDone"
+  /** Open the rule that fired this run (`fromSchedule`): a chip, never in `actions`. */
+  | "openSchedule";
 
 export interface ActivityAction {
   id: ActivityActionId;
@@ -248,6 +250,10 @@ export interface ActivityRow {
   attempts: number;
   actions: ActivityAction[];
   subject: ActivitySubject;
+  /** The rule that fired this build run (`buildRunFromSchedule`): the row
+   *  wears `from the schedule “name”`, opening that rule. Absent = no rule
+   *  fired it, or the rule is gone — never guessed. */
+  fromSchedule?: { id: string; name: string };
   /**
    * When the user filed this row as seen-and-not-wanted. Absent = not filed.
    *

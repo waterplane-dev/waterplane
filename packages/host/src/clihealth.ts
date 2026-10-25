@@ -90,6 +90,8 @@ export class CliHealthStore {
   private health: CliHealth = emptyHealth();
   private saveTimer: NodeJS.Timeout | null = null;
   private changeTimer: NodeJS.Timeout | null = null;
+  /** A signal left `degraded`/`broken` (its attention item can resolve). No buzz. */
+  onRecovered?: (id: CliSignalId) => void;
   /**
    * The verdict each signal was last KNOWN to hold — the thing a transition is
    * measured against.
@@ -161,7 +163,10 @@ export class CliHealthStore {
     if (verdict === was) return;
     // Into trouble only. Recovering is worth a broadcast (the badge clears) and
     // is not worth a buzz: nobody needs waking to be told a thing works.
-    if (verdict !== "degraded" && verdict !== "broken") return;
+    if (verdict !== "degraded" && verdict !== "broken") {
+      if (was === "degraded" || was === "broken") this.onRecovered?.(id);
+      return;
+    }
     this.alert("cli", {
       title: `Claude CLI: ${signalSpec(id).name.toLowerCase()}`,
       body: healthSentence(sig, now),
@@ -192,7 +197,11 @@ export class CliHealthStore {
     this.schedulePersist();
     this.scheduleChange();
     if (!changed) return;
-    for (const id of this.lastVerdict.keys()) this.lastVerdict.set(id, "unknown");
+    for (const id of [...this.lastVerdict.keys()]) {
+      this.lastVerdict.set(id, "unknown");
+      // The CLI changed: whatever it said about the old build is stale — checking again.
+      this.onRecovered?.(id as CliSignalId);
+    }
     // Said ONCE, before the readout goes grey, because it is the most likely
     // explanation for whatever the readout says next — and working that out
     // afterwards from ten signals that all went unknown in the same minute is
@@ -221,6 +230,7 @@ export class CliHealthStore {
       const next = clearSeen(sig, Math.min(at, now));
       this.health.signals[id] = next;
       this.lastVerdict.set(id, signalVerdict(next, now).verdict);
+      this.onRecovered?.(id as CliSignalId); // the person read it and cleared it
       touched = true;
     }
     if (!touched) return;

@@ -168,6 +168,15 @@ export interface RepoTarget {
    *  pre-push checks take minutes) or a pull — so the launcher's git button can
    *  spin while it runs. ABSENT = none running (or an older host). */
   gitRunning?: "push" | "pull";
+  /** The last pull or push of a verb here FAILED and nobody has handled it —
+   *  derived on the host from its attention store with `needsYou`, so this
+   *  chip, the bell and the feed row are one predicate. `id` is the feed
+   *  item's (the git view's done sends `notification.handle` with it); `error`
+   *  is the full failure text. ABSENT = none (or an older host). */
+  gitFailed?: { verb: "pull" | "push"; at: number; error: string; id: string };
+  /** The newest build entry here whose last run FAILED, unhandled — same
+   *  predicate as `gitFailed`. ABSENT = none (or an older host). */
+  buildFailed?: { buildId: string; name: string; at: number; error?: string; id: string };
   /** A build command the desktop is running in this worktree right now (the
    *  newest, when several are), so the launcher's build button can spin while
    *  it runs. The live `build.run` frames take over once the phone has seen

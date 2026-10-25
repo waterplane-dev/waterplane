@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { CalendarClock, CircleAlert, CircleCheck, CloudOff, History, ListTodo, Loader, Pause, Pencil, Play, Plus, Power, Repeat, SkipForward, Terminal, Trash2, X } from "lucide-react";
 import type { HorizonBucket, Intent, RepoTarget, ScheduleEntry, SessionInfo, WindowResets } from "@waterplane/shared";
-import { HORIZON_LABEL, SPENT_ONCE_TEXT, describeRule, hoursOpenFrom, inHours, isStandingSchedule, nextFireAt, ruleRecurs, typedName } from "@waterplane/shared";
+import { HORIZON_LABEL, SPENT_ONCE_TEXT, describeRule, hoursOpenFrom, inHours, isStandingSchedule, nextFireAt, ruleRecurs, scheduleActionText, typedName } from "@waterplane/shared";
 import { track } from "./usage";
 import { ago } from "./format";
 import { clockCuts } from "./clockCuts";
@@ -21,6 +21,7 @@ import { queueSync, rowChipWord, type SyncPhase } from "./syncState";
 import { Button } from "./kit/Button";
 import { Hint } from "./kit/Hint";
 import { Tag } from "./kit/Tag";
+import { SHEET } from "./sheetNames";
 
 interface Props {
   repos: RepoTarget[];
@@ -77,6 +78,9 @@ interface Props {
   onOpenBacklog?: (repoDir: string, ids?: string[], label?: string) => void;
   /** The When editor for the ticked directory lines — every repo's at once. */
   renderRetime?: RenderRetime;
+  /** "Runs on its own, no clock" (`AutomationFoot`, built by the caller: its
+   *  sources live in other features). Not drawn under a horizon cut or a search. */
+  foot?: ReactNode;
   /** false = no socket. The live-only toggles are disabled; editing still works
    *  (a save queues like any other send). */
   online?: boolean;
@@ -206,7 +210,7 @@ function childState(i: Intent): string {
 export function ScheduleSheet({
   repos, entries, onRemove, onSetEnabled, onRunNow, onSkipNext, onEdit, onClose,
   intents = [], sessions = [], onOpenSession, onOpenBacklog, renderRetime,
-  online = true, pending = [], listAt = 0, focus = null, focusIds = null, onClearFocus, onOpenSpent, usage = null,
+  online = true, pending = [], listAt = 0, focus = null, focusIds = null, onClearFocus, onOpenSpent, usage = null, foot,
 }: Props) {
   const repoName = (dir: string) => repos.find((r) => r.worktreePath === dir)?.repoName ?? dir.split("/").pop() ?? dir;
 
@@ -359,7 +363,7 @@ export function ScheduleSheet({
      * calling one row two different things is the failure this is fixing, not a
      * fix for it.
      */
-    const typed = typedName(e.name, act.text);
+    const typed = typedName(e.name, scheduleActionText(act));
     // What this fire made, and where it ended up. A `backlog` schedule's whole
     // effect is a work item, so the row can say what became of it instead of
     // leaving an id in a sentence — and the CLI it ran in is one field further.
@@ -403,7 +407,9 @@ export function ScheduleSheet({
     const turns = act.kind === "backlog" && act.steps && act.steps.length > 1 ? ` · ${act.steps.length} turns` : "";
     const what = act.kind === "fanout"
       ? `fan-out · ${act.dirs.length} repo${act.dirs.length === 1 ? "" : "s"}`
-      : act.autoFire === false
+      : act.kind === "build"
+        ? `build ${act.buildId} in ${repoName(act.repoDir)}`
+        : act.autoFire === false
         ? `${repoName(act.repoDir)} · added to the backlog, not run${turns}`
         : `a new session in ${repoName(act.repoDir)}${turns}`;
     /**
@@ -501,7 +507,7 @@ export function ScheduleSheet({
           title={openText === e.id ? "collapse" : "expand — the whole prompt this fires"}
           onClick={() => setOpenText((cur) => (cur === e.id ? null : e.id))}
         >
-          {act.text}
+          {scheduleActionText(act)}
         </button>
         {e.lastResult && (
           <div className="approve-hint">
@@ -658,7 +664,7 @@ export function ScheduleSheet({
 
   return (
     <div className="sheet">
-      <SheetHead title={<><CalendarClock size={16} /> Schedules</>} onClose={onClose}>
+      <SheetHead title={<><CalendarClock size={16} /> {SHEET.automation}</>} onClose={onClose}>
         {/* The count, only when there is a list to count and no cut on it: a
             "0" over a body saying nothing is scheduled is the empty state said
             twice, and under a filter the bar below carries "n of N" with its
@@ -810,7 +816,7 @@ export function ScheduleSheet({
           reading (`scheduleWeekPlot.ts`). */}
       {standingTotal > 0 && (
         <ScheduleWeekBar entries={shown} usage={usage} now={now}
-          title={(e) => typedName(e.name, e.action.text) ?? e.action.text.split("\n")[0]} />
+          title={(e) => typedName(e.name, scheduleActionText(e.action)) ?? scheduleActionText(e.action).split("\n")[0]} />
       )}
       {/* A section's count is said only beside ANOTHER section's: with one on screen it is the
           head's number (or, under a cut, the filter bar's n), and `2` over `Repeating · 2`
@@ -864,7 +870,7 @@ export function ScheduleSheet({
           {onOpenSpent && (
             <> <Button data-hint="schedule.spent"
               onClick={() => { track("action:schedule.spent"); onOpenSpent(spentRows.map((e) => e.id)); }}>
-              see {spentRows.length === 1 ? "it" : "them"} in Activity
+              see {spentRows.length === 1 ? "it" : "them"} in {SHEET.activity}
             </Button></>
           )}
         </Hint>
@@ -879,6 +885,8 @@ export function ScheduleSheet({
       {!focus && !focusIds && !searching && (
         <ClocksGone goneByRepo={clocks.goneByRepo} repoName={repoName} onOpen={onOpenBacklog} />
       )}
+
+      {!focus && !searching && foot}
       </div>
 
       <div className="sheet-actions">

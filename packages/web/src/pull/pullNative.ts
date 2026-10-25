@@ -100,7 +100,10 @@ export async function pullSyncNative(this: PullManager, state?: NativePullState)
       // cleared, or the phone reclaimed it. That is exactly what `evicted`
       // means for a range download, and the row must offer a fresh fetch
       // rather than a save of bytes nobody has.
-      patch.evicted = !row.path;
+      // Dropped after the save is not gone: Downloads holds it, until the
+      // folder says otherwise (`verifySaved`).
+      patch.droppedAt = row.droppedAt || undefined;
+      patch.evicted = !row.path && !(row.droppedAt && rec.savedPresent !== false);
       patch.rate = undefined;
       patch.nextRetryAt = undefined;
       patch.error = undefined;

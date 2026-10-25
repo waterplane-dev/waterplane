@@ -101,7 +101,9 @@
    (nested buttons are invalid) and the click still bubbles to it. The chips
    sit at the BOTTOM of the left column, level with the tile's foot: the slack
    the right column leaves goes under the prompt, never as a band of nothing
-   under the chips. */
+   under the chips. The readings (outline, context, cost tile) dock to the
+   card's FOOT, under the verbs: on a card with a long prompt they floated
+   mid-card with a band of nothing below them (owner, 2026-10-25). */
 .row-wrap:is([data-sid], .closed-card) {
   display: grid; grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas: "head stat" "gist ctl" "gist side" "tags side";
@@ -128,7 +130,7 @@
 .row-wrap:is([data-sid], .closed-card) .row-gist { grid-area: gist; }
 .row-wrap:is([data-sid], .closed-card) .row-stat { grid-area: stat; justify-self: end; align-self: center; display: flex; }
 .row-wrap:is([data-sid], .closed-card) .row-ctl { grid-area: ctl; justify-self: end; align-self: start; margin: 0; }
-.row-wrap:is([data-sid], .closed-card) .row-side { grid-area: side; justify-self: end; align-self: start; margin: 0; }
+.row-wrap:is([data-sid], .closed-card) .row-side { grid-area: side; justify-self: end; align-self: end; margin: 0; }
 .row-wrap:is([data-sid], .closed-card) .row-tags { grid-area: tags; align-self: end; }
 .row-wrap:is([data-sid], .closed-card) .row-tags:empty { display: none; }
 .row-stat > .tag, .row-wrap:is([data-sid], .closed-card) .row-tags > * { height: 28px; padding: 0 var(--sp-10); gap: var(--sp-4); border-radius: var(--r-pill); font-size: calc(var(--fs-12) * var(--ui-font, 1)); display: inline-flex; align-items: center; flex: 0 0 auto; }
@@ -494,6 +496,7 @@
 .git-bar { display: flex; gap: var(--sp-10); align-items: center; padding: var(--sp-8) var(--sp-14); background: var(--panel); border-bottom: 1px solid var(--line); font-size: calc(var(--fs-13) * var(--ui-font, 1)); color: var(--muted); }
 .git-ab { color: var(--accent); }
 .git-ab.no-origin { color: var(--warn); }
+.git-ab.failed { color: var(--dead); }
 /* The review's file list scrolls sideways instead of ellipsizing a path: two
    files under one long directory read identically when both are cut at the
    same width. The row takes its content's width; the stage button is sticky
@@ -563,3 +566,4 @@
 }
 /* A repo-health refusal is ~10 lines and ends in the remedy: never clipped. */
 .update-log.rh-refusal { max-height: none; overflow: visible; }
+.build-failed { white-space: pre-wrap; padding: 0 var(--sp-14); }

@@ -10,6 +10,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
+import { assertSurface } from "./exportsurface.mjs";
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 
@@ -18,17 +19,6 @@ function program(file) {
     module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext, target: ts.ScriptTarget.ES2022,
     noEmit: true, skipLibCheck: true, types: ["node"], strict: true,
   });
-}
-
-function surface(file) {
-  const p = program(file);
-  const checker = p.getTypeChecker();
-  const mod = checker.getSymbolAtLocation(p.getSourceFile(file));
-  assert.ok(mod, `${file} did not parse as a module`);
-  return checker.getExportsOfModule(mod).map((s) => {
-    const target = s.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(s) : s;
-    return `${s.name}:${target.flags & ts.SymbolFlags.Value ? "value" : "type"}`;
-  }).sort();
 }
 
 function members(file, className) {
@@ -47,10 +37,10 @@ const BACKLOG_MEMBERS = ["add","archive","autoSessionCount","autoSlotFacts","clo
 const CAPTURE_MEMBERS = ["cancel","execute","getOutput","list","run","runsFor","save"];
 
 test("capture.ts exports exactly its pinned surface", () => {
-  assert.deepEqual(surface(here("../packages/host/src/capture.ts")), CAPTURE_SURFACE);
+  assertSurface(here("../packages/host/src/capture.ts"), CAPTURE_SURFACE);
 });
 test("backlog.ts exports exactly its pinned surface", () => {
-  assert.deepEqual(surface(here("../packages/host/src/backlog.ts")), BACKLOG_SURFACE);
+  assertSurface(here("../packages/host/src/backlog.ts"), BACKLOG_SURFACE);
 });
 test("BacklogManager keeps every public member it had", () => {
   const have = members(here("../packages/host/src/backlog.ts"), "BacklogManager");
@@ -82,7 +72,7 @@ const DELIVER_SIGS = {
   ],
 };
 test("deliver.ts exports exactly its pinned surface", () => {
-  assert.deepEqual(surface(here("../packages/host/src/deliver.ts")), DELIVER_SURFACE);
+  assertSurface(here("../packages/host/src/deliver.ts"), DELIVER_SURFACE);
 });
 test("deliver.ts keeps its exact signatures", () => {
   const file = here("../packages/host/src/deliver.ts");

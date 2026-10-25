@@ -18,7 +18,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import ts from "typescript";
+import { assertSurface } from "./exportsurface.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const SRC = join(ROOT, "packages", "web", "src");
@@ -31,7 +31,7 @@ const SURFACE = [
   "WHEN_EDIT_RUNNING:value", "WHEN_EDIT_SWEEP:value", "WHEN_PATCH_OFFLINE:value", "WINDOW_LABEL:value",
   "WhenRoute:type", "afterWords:value", "anchorWindowOf:value", "atClock:value", "budgetHeldIds:value",
   "budgetOfTarget:value", "busyInCheckout:value", "chainCandidates:value", "chainOkWords:value",
-  "clockSessionNote:value", "flagWhenDoneOf:value", "flagWhenDoneOffered:value", "fmtWhen:value", "guardWindowOf:value", "guardWords:value", "hoursWords:value",
+  "clockBlocker:value", "clockSessionNote:value", "flagWhenDoneOf:value", "flagWhenDoneOffered:value", "fmtWhen:value", "guardWindowOf:value", "guardWords:value", "hoursWords:value",
   "inWords:value", "inboxRefs:value", "isBudgetHeld:value", "launchClause:value", "launchOfTarget:value",
   "launchWords:value", "leadChoices:value", "leadLabel:value",
   "leadOk:value", "leadWords:value", "offlineLabel:value", "onceIn:value",
@@ -46,22 +46,7 @@ const SURFACE = [
 
 test("P1: sendIntent.ts exports exactly its pinned surface, values and types alike", () => {
   const barrel = join(SRC, "sendIntent.ts");
-  const program = ts.createProgram([barrel], {
-    module: ts.ModuleKind.ESNext,
-    moduleResolution: ts.ModuleResolutionKind.Bundler,
-    target: ts.ScriptTarget.ES2022,
-    allowImportingTsExtensions: true,
-    noEmit: true,
-    skipLibCheck: true,
-  });
-  const checker = program.getTypeChecker();
-  const mod = checker.getSymbolAtLocation(program.getSourceFile(barrel));
-  assert.ok(mod, "sendIntent.ts did not parse as a module");
-  const got = checker.getExportsOfModule(mod).map((s) => {
-    const target = s.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(s) : s;
-    return `${s.name}:${target.flags & ts.SymbolFlags.Value ? "value" : "type"}`;
-  }).sort();
-  assert.deepEqual(got, [...SURFACE].sort());
+  assertSurface(barrel, SURFACE);
 });
 
 /** `SendSheet.tsx` plus everything under `send/` (tests excluded), as text. */

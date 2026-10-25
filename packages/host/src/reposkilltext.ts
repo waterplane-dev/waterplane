@@ -252,6 +252,11 @@ not fix, a call only they can make, a risky change to review — flag this sessi
 with one line, so it is marked on the phone and they get a push. Most of all on
 unattended, backlog or scheduled runs, where nobody is watching. Not for routine
 success, and at most once per finished task. You can set the flag, never clear it.
+A flag counts on the phone's bell as needing the person, so raise it only when they
+must act: new crashes in a report, a failing check or push you cannot fix, a broken
+environment (the API unreachable, a tool missing), a decision only they can make.
+Never for a run that went fine or found nothing new — the transcript and the outbox
+already hold that.
 
 \`\`\`sh
 curl -s -X POST ${base}/api/agent/followup -H 'content-type: application/json' \\

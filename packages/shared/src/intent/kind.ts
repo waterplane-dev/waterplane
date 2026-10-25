@@ -93,7 +93,7 @@ export const MANUAL_HOLD_TEXT = "waits for your tap — nothing starts it by its
  * the wire would read those as an entry id called "work".
  */
 export const ORIGIN_SCHEDULE_PREFIX = "schedule:";
-const SCHEDULE_ROLE_SUFFIXES = new Set(["work", "sweep"]);
+const SCHEDULE_ROLE_SUFFIXES = new Set(["work", "sweep", "build"]);
 
 /** What a schedule stamps on the item it creates. */
 export const scheduleItemOrigin = (entryId: string): string => `${ORIGIN_SCHEDULE_PREFIX}${entryId}`;
@@ -157,6 +157,10 @@ export const isScheduleRow = (i: Intent): boolean => i.trigger.kind === "at" && 
  */
 export const ORIGIN_SCHEDULE_WORK = "schedule:work";
 export const ORIGIN_SCHEDULE_SWEEP = "schedule:sweep";
+/** A rule whose action is "run build X" (`ScheduleAction.build`): its row
+ *  holds the build's id and values, never a command, and each occurrence
+ *  posts one ordinary build run through the build manager's own path. */
+export const ORIGIN_SCHEDULE_BUILD = "schedule:build";
 
 /**
  * Does firing this row ADD a backlog item rather than run anything? A standing
@@ -165,6 +169,15 @@ export const ORIGIN_SCHEDULE_SWEEP = "schedule:sweep";
  * fires it skips nothing and starts no second agent.
  */
 export const queuesBacklogItem = (i: Intent): boolean => i.origin === ORIGIN_SCHEDULE_WORK && isScheduleRow(i);
+
+/**
+ * Does firing this row POST a build run rather than be one? The build twin of
+ * `queuesBacklogItem`: the rule's own row carries a `build` payload (which
+ * build, which values) but is never a run — every occurrence makes a fresh
+ * `br_…` row stamped `scheduleItemOrigin(rule id)`, and that row is the run.
+ */
+export const postsScheduledBuild = (i: Intent): boolean =>
+  i.origin === ORIGIN_SCHEDULE_BUILD && i.payload.kind === "build" && isScheduleRow(i);
 
 /**
  * Equality key for *these two rows wait on the SAME clock* — what any rule
@@ -196,8 +209,10 @@ export const timedWorkKey = (i: Intent): string | undefined =>
 export const clockKey = (rule: ScheduleRule, graceMin: number, holdForHost?: boolean): string =>
   JSON.stringify([rule, graceMin, holdForHost ? 1 : 0]);
 
-/** A shell command with no agent in it. */
-export const isBuildRow = (i: Intent): boolean => i.payload.kind === "build";
+/** A shell command with no agent in it — a RUN. A standing rule that posts
+ *  builds (`postsScheduledBuild`) carries a build payload too, and is not one:
+ *  it is a schedule card, never a line in the build history. */
+export const isBuildRow = (i: Intent): boolean => i.payload.kind === "build" && !isScheduleRow(i);
 
 /** The plainest intent there is: prose, aimed at a repo or a session, run when
  *  the target is free. Defined by SHAPE and not by an `origin` marker, and

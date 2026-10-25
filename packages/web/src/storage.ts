@@ -153,7 +153,7 @@ export const KEY_SCOPE = {
   typingRoom: "device", hintChip: "device", termCornerPos: "device", wideSideW: "device", wideBesideW: "device", widePanelW: "device", sessChromeH: "device", closeKbOnSend: "device", shortcutCard: "device", busySend: "device", btwToCli: "device", theme: "device", textScale: "device", iconScale: "device", termZoom: "device",
   readerZoom: "device", scrollZoom: "device", gitZoom: "device", textDumpWrap: "device", closeCustomH: "device",
   schedPctLeft: "device", schedLeadMin: "device", closeBy: "device", closeKeepStar: "device", collageGap: "device",
-  collageLabels: "device", toastLog: "device", hostedAck: "device",
+  collageLabels: "device", toastLog: "device", hostedAck: "device", notifInfoNote: "device",
   // dismissals and the app's own update machinery
   dismissInsecure: "device", dismissPhoneSetup: "device", codeFolderLater: "device", dismissedUpdate: "device", dismissedSelfUpdate: "host", updatesReceiptSeen: "host", annHintHidden: "device",
   stowed: "device", stowTold: "device", toldNoticed: "device", hostBoots: "device",

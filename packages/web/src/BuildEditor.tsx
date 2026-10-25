@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, Check, CloudOff, HelpCircle, Loader, Plus, Search, Trash2, Wand2, X } from "lucide-react";
+import { AlertTriangle, CalendarClock, Check, CloudOff, HelpCircle, Loader, Plus, Search, Trash2, Wand2, X } from "lucide-react";
 import type { BuildCandidate, BuildConfig, BuildParam } from "@waterplane/shared";
 import { cleanBuildParams, filterCandidates, paramEnvName, unknownParamRefs } from "@waterplane/shared";
 import { ONE_BUILD_ASK, ONE_BUILD_ASK_NOTE, ONE_BUILD_LABEL, ONE_BUILD_NOTHING, ONE_BUILD_PLACEHOLDER, ONE_BUILD_TITLE, type BuildDraftSeed } from "./buildPrompt";
@@ -42,7 +42,7 @@ import { SetLine, SetNote } from "./SettingsKit";
  *    yet gets a different one — an empty list and an unanswered one are not the
  *    same claim.
  */
-export function BuildEditor({ draft, candidates, candidatesTotal, online, saved, scope, onAssist, onDelete, onCancel, onSave }: {
+export function BuildEditor({ draft, candidates, candidatesTotal, online, saved, scope, onAssist, onDelete, onCancel, onSave, onSchedule }: {
   draft: BuildConfig;
   candidates: BuildCandidate[] | null;
   candidatesTotal: number;
@@ -61,12 +61,17 @@ export function BuildEditor({ draft, candidates, candidatesTotal, online, saved,
   onDelete: () => void;
   onCancel: () => void;
   onSave: (b: BuildConfig, local: boolean) => void;
+  /** *run on a clock…* — the schedule-a-build form for THIS saved entry. */
+  onSchedule?: () => void;
 }) {
   const [local, setLocal] = useState(scope?.local ?? false);
   const [name, setName] = useState(draft.name);
   const [cmd, setCmd] = useState(draft.cmd);
   const [dir, setDir] = useState(draft.dir ?? "");
   const [params, setParams] = useState<BuildParam[]>(draft.params ?? []);
+  const dirty = name !== draft.name || cmd !== draft.cmd || dir !== (draft.dir ?? "")
+    || JSON.stringify(cleanBuildParams(params)) !== JSON.stringify(cleanBuildParams(draft.params ?? []))
+    || local !== (scope?.local ?? false);
   /*
    * The wand's own question, asked HERE and not in the prompt.
    *
@@ -221,6 +226,14 @@ export function BuildEditor({ draft, candidates, candidatesTotal, online, saved,
       )}
 
       {scope && <BuildScopeChoice local={local} wasShared={saved && !scope.local} onChange={setLocal} />}
+
+      {/* The entry's own way onto a clock — here, on the item, and not a third
+          square on every row. A clock runs the SAVED command, so with edits in
+          the fields the verb is a sentence instead: leaving now would drop
+          them, and a rule over words the file does not hold would lie. */}
+      {saved && onSchedule && (dirty
+        ? <Hint>Save first — a clock runs the saved command, not these edits.</Hint>
+        : <button className="linkish build-clock" onClick={onSchedule}><CalendarClock size={14} /> run on a clock…</button>)}
 
       <div className="sheet-actions">
         <Button onClick={onCancel}><X size={16} /> cancel</Button>

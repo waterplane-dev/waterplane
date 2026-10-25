@@ -14,7 +14,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import ts from "typescript";
+import { assertSurface } from "./exportsurface.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const SRC = join(ROOT, "packages", "web", "src");
@@ -23,23 +23,7 @@ const SURFACE = ["TranscriptStatus:type", "TranscriptView:value"];
 
 test("P1: TranscriptView.tsx exports exactly its pinned surface, values and types alike", () => {
   const file = join(SRC, "TranscriptView.tsx");
-  const program = ts.createProgram([file], {
-    module: ts.ModuleKind.ESNext,
-    moduleResolution: ts.ModuleResolutionKind.Bundler,
-    target: ts.ScriptTarget.ES2022,
-    jsx: ts.JsxEmit.ReactJSX,
-    allowImportingTsExtensions: true,
-    noEmit: true,
-    skipLibCheck: true,
-  });
-  const checker = program.getTypeChecker();
-  const mod = checker.getSymbolAtLocation(program.getSourceFile(file));
-  assert.ok(mod, "TranscriptView.tsx did not parse as a module");
-  const got = checker.getExportsOfModule(mod).map((s) => {
-    const target = s.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(s) : s;
-    return `${s.name}:${target.flags & ts.SymbolFlags.Value ? "value" : "type"}`;
-  }).sort();
-  assert.deepEqual(got, [...SURFACE].sort());
+  assertSurface(file, SURFACE);
 });
 
 /** `TranscriptView.tsx` plus everything under `transcript/`, as text. */

@@ -3,11 +3,11 @@ import { DAY_LABELS, composeRule, describeRule } from "@waterplane/shared";
 import { RadioRows, Hint } from "../kit";
 import { ScheduleWeekBar } from "../ScheduleWeekBar";
 import { DEVICE_TZ, fmtWhen, inWords, quickTimes, toLocalInput } from "../sendIntent";
-import type { SendSheetModel } from "./useSendSheet";
+import type { RuleModel } from "./useRuleFields";
 import { MoreRule } from "./MoreRule";
 import { WindowRule } from "./WindowRule";
 
-export function RuleEditor({ m }: { m: SendSheetModel }) {
+export function RuleEditor({ m }: { m: RuleModel }) {
   const {
     usage, preview, days, recurs, quickKey, setQuickKey, patchRule, replaceRule,
   } = m;

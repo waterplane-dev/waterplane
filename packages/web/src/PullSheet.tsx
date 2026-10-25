@@ -15,7 +15,7 @@ import { RadioRows, Button, Row, RowTitle, RowSub, Hint } from "./kit";
 import { Empty } from "./Empty";
 import { hostBase, isNativeShell } from "./hostUrl";
 import { LS, lsGet, lsSet } from "./storage";
-import { nativePullSupported } from "./nativePull";
+import { nativeDropAfterSave, nativePullSupported, setNativeDropAfterSave } from "./nativePull";
 import { ConfirmButton } from "./Confirm";
 import { showToast } from "./toast";
 import {
@@ -128,6 +128,14 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
   const [records, setRecords] = useState<PullRecord[]>([]);
   const [auto, setAuto] = useState(autoPull());
   const [autoSave, setAutoSaveState] = useState(autoSaveOutPref());
+  // Held by the shell (the save it follows runs with the page frozen), so it is
+  // ASKED on open. Undefined: no shell, or one older than the switch.
+  const [dropCopy, setDropCopy] = useState<boolean | undefined>(undefined);
+  useEffect(() => {
+    let live = true;
+    void nativeDropAfterSave().then((on) => { if (live) setDropCopy(on); });
+    return () => { live = false; };
+  }, []);
   // `rulesFor` wins over the primary repo — it is the repo whose menu was
   // tapped, and picking one of fifteen again on a phone select is the step that
   // door exists to skip. Read at MOUNT only: the sheet is a fresh mount per
@@ -342,6 +350,31 @@ export function PullSheet({ repos, configs, onLoadConfig, onSaveConfig, onDismis
               : "In a browser the file is handed to the browser's own downloads, which it may refuse unless a tap asked for it — so here this only covers files you tapped."}
           </SetNote>
         </SetLine>
+
+        {/* One copy, not two: once Downloads holds the file, this app's own
+            copy is the same bytes again. APKs still install — the shell reads
+            the Downloads copy. */}
+        {isNativeShell() && (
+          <SetLine>
+            {dropCopy !== undefined && (
+              <Button className={dropCopy ? "active" : ""}
+                onClick={() => {
+                  const on = !dropCopy;
+                  track("action:pull.dropcopy");
+                  void setNativeDropAfterSave(on).then(
+                    () => setDropCopy(on),
+                    (e: unknown) => showToast(`could not change it — ${e instanceof Error ? e.message : String(e)}`));
+                }}>
+                {dropCopy ? <Check size={14} /> : <X size={14} />} keep only the Downloads copy: {dropCopy ? "on" : "off"}
+              </Button>
+            )}
+            <SetNote as="span">
+              {dropCopy === undefined
+                ? "Deleting this app's copy once a file is in Downloads needs a newer build of the app."
+                : "Once a file is in Downloads, this app deletes its own copy. Apps still install from the Downloads copy; delete that one and the file has to be fetched again."}
+            </SetNote>
+          </SetLine>
+        )}
 
         {/* Installing is its OWN screen — this is the pointer to it, on the
             settings pane where somebody looking for "which apps update

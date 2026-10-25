@@ -21,9 +21,10 @@ import { join } from "node:path";
 import {
   BURN_DEFAULT_COOLDOWN_MS, BURN_DEFAULT_PTS_PER_HOUR,
   burnPushText, burnStretch, burnVerdict, envName, fmtUsd, foldLaunches, projectedEnd, ptsCalibration, ptsText,
-  type BurnState, type CostWindowDoc, type NotificationKind, type NotifyOpen, type UsageHistoryDoc, type UsageInfo,
+  type BurnState, type CostWindowDoc, type UsageHistoryDoc, type UsageInfo,
 } from "@waterplane/shared";
 import { writeJsonAtomic, readJsonGuarded } from "./jsonstore.js";
+import type { Notify } from "./notifytypes.js";
 
 const HOUR = 3_600_000;
 /** The week-long readings the points calibration is checked against. */
@@ -33,7 +34,7 @@ export interface BurnWatchDeps {
   usageLog: { read(sinceMs?: number): UsageHistoryDoc };
   /** The fold over `[from, to)`; may reject (a ledger that cannot be read). */
   costWindow(from: number, to: number): Promise<CostWindowDoc>;
-  notify(kind: NotificationKind, p: { title: string; body: string; tag?: string; open?: NotifyOpen }): void;
+  notify: Notify;
   /** `hostStateDir(root)`; `burnwatch.json` lives here. */
   stateDir: string;
   now?: () => number;
@@ -117,7 +118,7 @@ export function createBurnWatch(deps: BurnWatchDeps): { observe(u: UsageInfo): P
 export interface PaceWatchDeps {
   /** Each capped dollar period right now: where it stands, its cap, what is measured. Empty = nothing to judge. */
   paces(now: number): { id: string; label: string; start: number; resetAt: number | null; max: number; spentUsd: number | null }[];
-  notify(kind: NotificationKind, p: { title: string; body: string; tag?: string; open?: NotifyOpen }): void;
+  notify: Notify;
   stateDir: string;
   now?: () => number;
 }

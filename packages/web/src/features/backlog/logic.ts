@@ -3,7 +3,7 @@
  * schedule wrote it, and the receipts App carried inline. Pinned by
  * `logic.test.mjs`.
  */
-import { isTimedWorkRow, typedName, type Intent, type ScheduleEntry } from "@waterplane/shared";
+import { isTimedWorkRow, scheduleActionText, typedName, type Intent, type ScheduleEntry } from "@waterplane/shared";
 
 /** Every backlog mutation's refusal with the link down — one copy (`backlogFilter.ts`). */
 export { BL_OFFLINE } from "../../backlogFilter.ts";
@@ -16,7 +16,7 @@ export interface ChipRef { id: string; name: string }
  *  rule nobody named carries a slice of its own prompt in that field, and a
  *  chip is no place for a 120-character truncation. */
 export function schedChipName(e: ScheduleEntry): string {
-  return typedName(e.name, e.action.text) ?? (e.name.length > 40 ? `${e.name.slice(0, 40)}…` : e.name);
+  return typedName(e.name, scheduleActionText(e.action)) ?? (e.name.length > 40 ? `${e.name.slice(0, 40)}…` : e.name);
 }
 
 /**

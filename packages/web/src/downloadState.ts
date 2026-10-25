@@ -94,6 +94,14 @@ export function downloadStatus(rec: PullRecord | undefined): DownloadStatus {
     // browser could not tie to a gesture is refused SILENTLY, and this row is
     // the only place that could be honest about it. The bytes are still here
     // either way, so the offer to hand them over again stands.
+    // The keep-one-copy switch deleted this app's copy: Downloads holds the
+    // only one, so there is nothing here to save again.
+    if (rec.droppedAt && rec.savedPresent !== false) {
+      return {
+        phase: "saved", pct: 100, label: "in Downloads",
+        detail: `in ${rec.savedTo} · the only copy — this app kept none of its own`,
+      };
+    }
     if (rec.saveVia === "browser") {
       return {
         phase: "saved", pct: 100, label: "save again",
@@ -150,7 +158,7 @@ export function downloadStatus(rec: PullRecord | undefined): DownloadStatus {
  */
 export function downloadAction(rec: PullRecord | undefined): DownloadAction {
   const { phase } = downloadStatus(rec);
-  if (phase === "saved" && rec?.savedPresent === true) return "open";
+  if (phase === "saved" && (rec?.savedPresent === true || rec?.droppedAt)) return "open";
   if (phase === "have" || phase === "saved") return "save";
   if (phase === "downloading" || phase === "queued") return "open";
   return "start";

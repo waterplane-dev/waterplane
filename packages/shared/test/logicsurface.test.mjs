@@ -7,7 +7,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
-import ts from "typescript";
+import { assertSurface } from "../../../tools/exportsurface.mjs";
 
 const SURFACES = {
   sessioncost: [
@@ -43,7 +43,8 @@ const SURFACES = {
     "horizonWords:value", "hoursOpenFrom:value", "hoursZone:value",
     "inHours:value", "inWords:value", "isSpentOnce:value",
     "isStandingSchedule:value", "nextFireAt:value", "ruleAnchor:value",
-    "ruleRecurs:value", "scheduleHorizon:value", "typedName:value",
+    "ruleRecurs:value", "scheduleActionDirs:value", "scheduleActionText:value",
+    "scheduleHorizon:value", "schedulesForBuild:value", "typedName:value",
     "wallClockToEpoch:value", "whenWords:value", "windowCondition:value",
     "windowPct:value", "windowResetAt:value", "zoneOffsetMs:value",
   ],
@@ -83,20 +84,6 @@ const SURFACES = {
 for (const [mod, SURFACE] of Object.entries(SURFACES)) {
   test(`${mod}.ts exports exactly its pinned surface, values and types alike`, () => {
     const file = fileURLToPath(new URL(`../src/${mod}.ts`, import.meta.url));
-    const program = ts.createProgram([file], {
-      module: ts.ModuleKind.NodeNext,
-      moduleResolution: ts.ModuleResolutionKind.NodeNext,
-      target: ts.ScriptTarget.ES2022,
-      noEmit: true,
-      skipLibCheck: true,
-    });
-    const checker = program.getTypeChecker();
-    const sym = checker.getSymbolAtLocation(program.getSourceFile(file));
-    assert.ok(sym, `${mod}.ts did not parse as a module`);
-    const got = checker.getExportsOfModule(sym).map((s) => {
-      const target = s.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(s) : s;
-      return `${s.name}:${target.flags & ts.SymbolFlags.Value ? "value" : "type"}`;
-    }).sort();
-    assert.deepEqual(got, [...SURFACE].sort());
+    assertSurface(file, SURFACE);
   });
 }

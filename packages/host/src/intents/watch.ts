@@ -7,7 +7,7 @@
  * `reconcileOne` never persists; `reconcile` persists once, if dirty.
  */
 import type { Intent, IntentResult } from "@waterplane/shared";
-import { needsSlot } from "@waterplane/shared";
+import { needsSlot, postsScheduledBuild } from "@waterplane/shared";
 import { isRecurring, spanWords, type IntentCore } from "./contract.js";
 
 export class WatchSlice {
@@ -361,6 +361,13 @@ export class WatchSlice {
     // honest reading is "there is no verdict", not "there is nothing".
     if (row.payload.kind === "capture") {
       fail("the host restarted while this capture was running — any frames it had already written are in .claude/outbox/, but no verdict was, so run it again");
+      return;
+    }
+    // A build RULE runs nothing itself — it posts a run, synchronously — so a
+    // restart caught it between `starting` and that post. Whether the run was
+    // written is the build list's to say; it is NOT posted again.
+    if (postsScheduledBuild(row)) {
+      fail("the host restarted while this rule was posting its build — check the build's runs; it was NOT started again");
       return;
     }
     if (row.target.kind === "shell" || row.payload.kind === "build") {

@@ -38,7 +38,7 @@ import type { PluginCaller, PluginCallResult, PluginUsageProbe } from "@waterpla
 import { createCallLedger } from "./pluginrpc.js";
 import type {
   AnswerSuggestion, ComplianceCheck, DecisionLogEntry, DetectedPrompt, HandToAgentResult, HostPluginModule,
-  NotificationKind, PluginHookHold, PluginPromptEvent, PluginQuestionEvent, PluginStatus, PluginValue, PluginView, RepoTarget,
+  PluginHookHold, PluginPromptEvent, PluginQuestionEvent, PluginStatus, PluginValue, PluginView, RepoTarget,
   SetupFixOutcome, SetupSubject, UsageInfo,
 } from "@waterplane/shared";
 import { forgetRules, isBlocked } from "../answergate.js";
@@ -57,6 +57,7 @@ import { PluginFiles, type ServedFile } from "./pluginfiles.js";
 import { resolveAsset, type AssetResult } from "./pluginassets.js";
 import { hostStateDir } from "../branddirs.js";
 import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
+import type { Notify } from "../notifytypes.js";
 
 const ACTIVATE_MS = 10_000;
 const ACTION_MS = 90_000;
@@ -118,7 +119,7 @@ export interface RegistryDeps {
   sessions: SessionManager;
   decision(row: DecisionLogEntry): void;
   meter(e: { service: string; model: string; kind: string; inTok: number; outTok: number; ts: number }): void;
-  notify(kind: NotificationKind, p: { title: string; body: string; sessionId?: string; tag?: string; plugin?: string }): void;
+  notify: Notify;
   usage(): UsageInfo;
   /** The plugin list changed — broadcast it. */
   changed(): void;

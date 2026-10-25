@@ -14,6 +14,7 @@ import type { OutboxEntry } from "../outbox";
 import { SessionName } from "../SessionName";
 import { CantInline, Unavailable } from "../Unavailable";
 import { track } from "../usage";
+import { fromScheduleWords } from "../backlogFilter";
 import { ACTION_ICON, DELIVERY_TEXT, ICON, KIND_ICON, STATE_ICON, inWords } from "./activityLabels";
 import { bytes } from "./activityPullRow";
 import type { ReviewMarks } from "./activitySheetTypes";
@@ -190,6 +191,14 @@ export function Row({ row, now, sessions, repos, pick, outbox, online, review, r
         ) : null}
         {row.attempts > 1 ? <span className="act-tries">{row.attempts} attempts</span> : null}
       </button>
+
+      {/* A run a rule fired says which and opens it (`fromScheduleWords`, the backlog chip's
+          sentence); outside `act-body` for the AttachStrip's reason below. */}
+      {row.fromSchedule ? (
+        <button className="linkish act-from-sched" title={`open the schedule “${row.fromSchedule.name}” — the rule that ran this`} onClick={() => onAction("openSchedule", row)}>
+          <CalendarClock size={11} /> {fromScheduleWords(row.fromSchedule.name)}
+        </button>
+      ) : null}
 
       {/* The files this row names, as the files they are — and each of them
           opens full-screen on a tap.

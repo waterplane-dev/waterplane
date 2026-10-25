@@ -20,7 +20,7 @@ socket and the screens. Rules for all of it: skill `web-files` (`pull.ts`, `nati
   idempotent, so they are live sends, never durable ops.
 - `actions.ts` — `putCfg`, `openPullRules`, `clearRules`, and `bootPull`. `DownloadsSheet.tsx` /
   `AppsListSheet.tsx` — the two sheets. `store.ts` also holds `usePullRecords()`.
-- `boot` (`bootPull`): `pulls.start()`, the records mirror, and the `OPEN_DOWNLOADS_EVENT` listener that opens
+- `boot` (`bootPull`): `pulls.start()`, the records mirror, the Automation foot's rule source (`automationSlot.ts`), and the `OPEN_DOWNLOADS_EVENT` listener that opens
   the sheet from a toast or a gallery button.
 - No storage keys of its own — `pull.ts` and `installPolicy.ts` own theirs.
 

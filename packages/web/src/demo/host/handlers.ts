@@ -483,6 +483,7 @@ export const HANDLERS = {
     run: (c) => { c.reply({ t: "localrt.sample", disabled: true, sample: { at: c.now, models: [], reachable: false, cpuPct: 0, memTotal: 0, memFree: 0 } }); },
   },
   "notification.clear": STORE,
+  "notification.handle": STORE,
   "notify.prefs.set": STORE,
   "plugin.action": PLUGINS,
   "plugin.call": PLUGINS,

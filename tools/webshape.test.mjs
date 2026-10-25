@@ -531,6 +531,7 @@ const BACKLOG_SPLIT_FILES = {
   "backlogFilter/clockGroups.ts": 200,
   "backlogFilter/cutCounts.ts": 330, // +drawnChips (a chip that cuts nothing is not drawn) and the pools it reads
   "backlogFilter/dropClock.ts": 150,
+  "backlogFilter/nextFire.ts": 70, // the one `▶ next` predicate, shared with the Automation foot
   "backlogFilter/rowFilter.ts": 130,
   "backlogFilter/titleWords.ts": 175,
   "backlogFilter/retimeMany.ts": 110, // +clockPicks: one clock's movable rows as one tap
@@ -591,7 +592,8 @@ const SEND_SPLIT_FILES = {
   "send/WindowRule.tsx": 150,
   "send/sendSheetTypes.ts": 80,
   "send/sendTargets.ts": 90,
-  "send/useSendSheet.ts": 350,
+  "send/useRuleFields.ts": 120, // the at-rule's fields, shared with BuildScheduleForm
+  "send/useSendSheet.ts": 300, // was 350: the at-rule fields moved to useRuleFields.ts
   "sendIntent/sendChain.ts": 175,
   "sendIntent/sendClock.ts": 150,
   "sendIntent/sendFlag.ts": 30,
@@ -844,11 +846,11 @@ const PULLLINK_SPLIT_FILES = {
   "pull/pullEngine.ts": 170,
   "pull/pullManager.ts": 130,
   "pull/pullMime.ts": 60,
-  "pull/pullNative.ts": 235,
+  "pull/pullNative.ts": 245, // +the keep-only-the-Downloads-copy switch
   "pull/pullQueue.ts": 320,
   "pull/pullRange.ts": 220,
-  "pull/pullSave.ts": 220,
-  "pull/pullTypes.ts": 175,
+  "pull/pullSave.ts": 240, // +a dropped app copy: no save, and gone from Downloads is gone
+  "pull/pullTypes.ts": 185, // +droppedAt
 };
 const PULLLINK_SPLIT_DIRS = ["pull", "link"];
 

@@ -45,7 +45,40 @@ export type ScheduleAction =
     /** The model/effort/backend each occurrence's session starts with
      *  (`Intent.launch`); absent is the desktop's new-session defaults —
      *  the fan-out arm's rule, so an edit that omits it clears it. */
-    launch?: LaunchOpts };
+    launch?: LaunchOpts }
+  /** Run one configured build command (`BuildConfig.id` in `repoDir`'s
+   *  builds) — each occurrence posts ONE ordinary build run, stamped with
+   *  this rule's origin (`scheduleItemOrigin`). There is NO `text`: a build
+   *  has no prose, so a reader wanting a line for any action asks
+   *  `scheduleActionText`. `params` are the values picked on the schedule
+   *  form; a parameter with neither a value here nor a stored default makes
+   *  the occurrence FAIL in words, never guess. */
+  | { kind: "build"; repoDir: string; buildId: string; params?: Record<string, string> };
+
+/**
+ * The one line an action is about, for any arm — the prompt for a sweep or a
+ * work item, "run build <id>" for a build. Every reader that used to say
+ * `action.text` and may now meet a build asks this instead, so a build rule
+ * never renders as an empty card or a crash on `.split`.
+ */
+export function scheduleActionText(action: ScheduleAction): string {
+  return action.kind === "build" ? `run build ${action.buildId}` : action.text;
+}
+
+/** Which repos an action touches: a sweep's dirs, else its one repo. */
+export function scheduleActionDirs(action: ScheduleAction): string[] {
+  return action.kind === "fanout" ? action.dirs : [action.repoDir];
+}
+
+/**
+ * **The schedules that run a given build** — the Build sheet's cue and the cut
+ * it opens are the SAME list (a count is a filter): one predicate, here, so the
+ * number on the entry and the rules the tap shows cannot disagree.
+ * Order is the input's. Matches on the exact `repoDir` and `buildId`.
+ */
+export function schedulesForBuild<E extends Pick<ScheduleEntry, "action">>(entries: readonly E[], repoDir: string, buildId: string): E[] {
+  return entries.filter((e) => e.action.kind === "build" && e.action.repoDir === repoDir && e.action.buildId === buildId);
+}
 
 /** Outcome of the last time a schedule fired — the row's honesty budget. */
 export interface ScheduleResult {

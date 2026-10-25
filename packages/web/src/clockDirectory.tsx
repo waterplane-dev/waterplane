@@ -30,7 +30,7 @@
 import { useState } from "react";
 import { CalendarClock, History, ListChecks, ListTodo } from "lucide-react";
 import type { Intent } from "@waterplane/shared";
-import { describeRule, hoursOpenFrom, inHours, typedName } from "@waterplane/shared";
+import { describeRule, hoursOpenFrom, inHours, scheduleActionText, typedName } from "@waterplane/shared";
 import type { PendingClock } from "./clockCuts";
 import { intentTitle } from "./activityRows";
 import { RETIME_PICK_LABEL, goneOnClockLabel, onClockLabel } from "./backlogFilter";
@@ -137,7 +137,7 @@ function PendingClockLine({ p, repoName, online }: { p: PendingClock; repoName: 
   const repo = e.action.kind === "backlog" ? repoName(e.action.repoDir) : "";
   return (
     <div className="sched-clock">
-      <span className="sched-clock-name">{typedName(e.name, e.action.text) ?? e.action.text}</span>
+      <span className="sched-clock-name">{typedName(e.name, scheduleActionText(e.action)) ?? scheduleActionText(e.action)}</span>
       <span className="sched-clock-when">
         {describeRule(e.rule)}
         {e.nextAt && !p.failed ? <> · next {fmtWhen(e.nextAt)}</> : null}

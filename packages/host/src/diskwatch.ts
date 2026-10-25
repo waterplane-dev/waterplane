@@ -20,7 +20,8 @@
  */
 import { statfs } from "node:fs/promises";
 import os from "node:os";
-import { envName, type NotificationKind } from "@waterplane/shared";
+import { envName } from "@waterplane/shared";
+import type { Notify } from "./notifytypes.js";
 
 export type DiskLevel = "ok" | "low" | "critical";
 
@@ -71,7 +72,9 @@ export function diskPushText(level: DiskLevel, availBytes: number, totalBytes: n
 }
 
 export interface DiskWatchDeps {
-  notify(kind: NotificationKind, p: { title: string; body: string; tag?: string }): void;
+  notify: Notify;
+  /** Called on every read that finds the volume back at "ok" (a silent no-op when nothing is open). */
+  recovered?(): void;
   /** The home volume's free and total bytes, or null when it did not answer. */
   read?(): Promise<{ availBytes: number; totalBytes: number } | null>;
   warnGb?: number | null;
@@ -103,7 +106,8 @@ export function startDiskWatch(deps: DiskWatchDeps): () => void {
       if (!r) return;
       const step = diskStep(told, r.availBytes, warnGb);
       told = step.told;
-      if (step.push) deps.notify("disk", { ...diskPushText(step.push, r.availBytes, r.totalBytes, process.platform), tag: "disk" });
+      if (step.push) deps.notify("disk", { ...diskPushText(step.push, r.availBytes, r.totalBytes, process.platform), tag: "disk", key: "disk" });
+      if (step.told === "ok") deps.recovered?.();
     } finally {
       busy = false;
     }

@@ -22,7 +22,7 @@
  */
 import { useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import {
-  budgetReasonText, describeRule, ruleRecurs, typedName, DEFAULT_GRACE_MIN, DRAFT_KEPT_TOAST, DRAFT_REFUSED_TOAST,
+  budgetReasonText, describeRule, ruleRecurs, scheduleActionText, typedName, DEFAULT_GRACE_MIN, DRAFT_KEPT_TOAST, DRAFT_REFUSED_TOAST,
   repoBranchLabel,
 } from "@waterplane/shared";
 import type {
@@ -270,14 +270,16 @@ export function useSend(deps: SendDeps) {
       // The WHOLE chain comes back, not its head. An edit re-posts whatever this
       // seed produced, so seeding one turn of a three-turn rule would delete the
       // other two. `[a.text]` is what a rule with no chain means.
-      prompts: a.kind === "backlog" && a.steps?.length ? [...a.steps] : [a.text],
+      // A build rule has no prose; its own form is the schedule-a-build one
+      // (another package) — here it seeds a line that says what it runs.
+      prompts: a.kind === "backlog" && a.steps?.length ? [...a.steps] : [scheduleActionText(a)],
       target: a.kind === "fanout" ? { kind: "repos", dirs: a.dirs, ...(a.budget ? { budget: a.budget } : {}), ...(a.launch ? { launch: a.launch } : {}) }
-        : { kind: "repo", cwd: a.repoDir, ...(typeof a.closeWhenDone === "boolean" ? { closeWhenDone: a.closeWhenDone } : {}), ...(a.kind === "backlog" && a.flagWhenDone ? { flagWhenDone: true } : {}), ...(a.budget ? { budget: a.budget } : {}), ...(a.kind === "backlog" && a.launch ? { launch: a.launch } : {}) },
+        : { kind: "repo", cwd: a.repoDir, ...(a.kind === "backlog" && typeof a.closeWhenDone === "boolean" ? { closeWhenDone: a.closeWhenDone } : {}), ...(a.kind === "backlog" && a.flagWhenDone ? { flagWhenDone: true } : {}), ...(a.kind === "backlog" && a.budget ? { budget: a.budget } : {}), ...(a.kind === "backlog" && a.launch ? { launch: a.launch } : {}) },
       // `seedFromIntent`'s rule, on the DTO: `e.name` is the host's derived
       // slice unless a person typed one.
       when: {
         kind: "at", rule: e.rule, graceMin: e.graceMin ?? DEFAULT_GRACE_MIN,
-        name: typedName(e.name, a.text) || undefined,
+        name: typedName(e.name, scheduleActionText(a)) || undefined,
         waitUntilFree: e.waitUntilFree,
       },
       cwdHint: a.kind === "fanout" ? a.dirs[0] ?? null : a.repoDir,

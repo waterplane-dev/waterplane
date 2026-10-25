@@ -8,10 +8,11 @@ import { NotificationsSheet } from "./NotificationsSheet";
 import { onNotification, onNotificationList, onNotifyPrefs } from "./actions";
 import { NotificationSettings } from "./NotificationSettings";
 
+export { BellButton } from "./BellButton";
 export { useUnread } from "./store";
 export { NOTIF_LABEL, badgeText } from "./logic";
 export { NOTIF_ICON } from "./NotificationsSheet";
-export { openNotif, openNotifFromOutside, openNotifs } from "./actions";
+export { handleNotif, openBell, openNotif, openNotifFromOutside, openNotifs } from "./actions";
 
 export const manifest: FeatureManifest = {
   id: "notifications",
@@ -19,7 +20,7 @@ export const manifest: FeatureManifest = {
   messages: {
     notification: (msg, core) => onNotification(msg.item, core),
     "notification.list": (msg) => onNotificationList(msg.items),
-    "notify.prefs": (msg) => onNotifyPrefs(msg.prefs),
+    "notify.prefs": (msg) => onNotifyPrefs(msg.prefs, msg.pushInfo),
   },
   settings: [
     // The head of Notifications: the feed, and which kinds may fire.

@@ -2,11 +2,18 @@
  * The `schedule` overlay: `ScheduleSheet.tsx` wired to this feature's stores
  * and the core — the prop list `App.tsx`'s `overlayViews.schedule` spelled out.
  */
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
+import type { ScheduleEntry, WeekBurnStatus } from "@waterplane/shared";
+import { fmtWhen } from "@waterplane/shared";
 import { onceIn } from "../../sendIntent";
 import { intentRowKey } from "../../activityRows";
 import { useCore, useQueueEntries, useStore } from "../../sdk";
 import { ScheduleSheet } from "../../ScheduleSheet";
+import { AutomationFoot } from "../../AutomationFoot";
+import { automationLines } from "../../automationLines";
+import { usePullRules } from "../../automationSlot";
+import { api } from "../../api";
+import { useRemoteResource } from "../../useRemoteResource";
 import { pendingSchedulesOf, spentLabel } from "./logic";
 import { scheduleFocus, scheduleFocusIds, schedules, schedulesAt as schedulesAtStore } from "./store";
 import { clearScheduleFocus, removeSchedule, runScheduleNow } from "./actions";
@@ -15,6 +22,12 @@ export function ScheduleRulesSheet() {
   const core = useCore();
   const { liveSend } = core.conn;
   const { sessions, visibleRepos, active, intents } = core.world;
+  /** A build rule's *edit*: its repo's Build sheet, opening the rule's form. */
+  const openBuildRule = (e: ScheduleEntry) => {
+    const repo = e.action.kind === "build" ? core.world.repoForCwd(e.action.repoDir) : null;
+    if (repo) core.nav.openBuild(repo, { schedule: e });
+    else core.say.toast("that build's repo is not on this desktop's list — the rule cannot be edited from here");
+  };
   const entries = useStore(schedules);
   const schedulesAt = useStore(schedulesAtStore);
   const focus = useStore(scheduleFocus);
@@ -28,7 +41,33 @@ export function ScheduleRulesSheet() {
   // upserts on the id, which is what lets the sheet show one row per schedule
   // rather than a queued copy beside the armed one it edits.
   const pendingSchedules = useMemo(() => pendingSchedulesOf(outbox), [outbox]);
+  // ── "Runs on its own, no clock" ─────────────────────────────────────────
+  // Per repo when the repo row's clock chip opened this sheet (the cut carries
+  // its `repoDir`), across repos when nothing is cut; no foot under a rule-id
+  // cut. Every word is `automationLines.ts`'s; a source not read is absent.
+  const footRepo = focusIds ? (focusIds.repoDir ?? null) : null;
+  const showFoot = !focusIds || !!focusIds.repoDir;
+  const pull = usePullRules();
+  const hasRule = footRepo ? !!pull?.configs.has(footRepo) : true;
+  const askRule = pull?.ask;
+  useEffect(() => { if (footRepo && askRule && !hasRule) askRule(footRepo); }, [footRepo, askRule, hasRule]);
+  // Same key as the week-end burn sheet's read, so the two share one cache. Only
+  // a FRESH answer draws a line: a cached copy may describe last week's pick.
+  const burn = useRemoteResource<WeekBurnStatus>("weekburn", () => api.getWeekBurn());
+  const repoName = (dir: string) => core.world.repoForCwd(dir)?.repoName ?? (dir.split(/[/\\]/).filter(Boolean).pop() || dir);
+  const lines = showFoot ? automationLines({
+    repoDir: footRepo, items: core.world.backlog, auto: core.world.backlogAuto, sessions, now: Date.now(), repoName,
+    pull: footRepo ? pull?.configs.get(footRepo) : undefined,
+    weekburn: burn.state === "fresh" ? burn.data : null, when: fmtWhen,
+  }) : [];
+  const foot = <AutomationFoot lines={lines} onDoor={(d) => {
+    if (d.kind === "pull") pull?.open(d.repoDir);
+    else if (d.kind === "weekburn") core.nav.open("weekburn");
+    else if (d.repoDir) core.nav.openBacklogCut(d.repoDir, d.ids, d.label);
+    else core.nav.open("backlog");
+  }} />;
   return <ScheduleSheet
+    foot={foot}
     repos={visibleRepos}
     entries={entries}
     pending={pendingSchedules}
@@ -64,7 +103,9 @@ export function ScheduleRulesSheet() {
     // wall-clock rule, and `schedule.save` is what `dispatchIntent` posts
     // for it — upserted on the id, so an offline replay overwrites rather
     // than adding a second copy of the same weekly sweep.
-    onEdit={(e) => core.nav.openSend(e ? core.send.seedFromSchedule(e) : {
+    // …except a BUILD rule, which has no prose: its edit is the build's own
+    // schedule form, on the Build sheet of its repo.
+    onEdit={(e) => e?.action.kind === "build" ? openBuildRule(e) : core.nav.openSend(e ? core.send.seedFromSchedule(e) : {
       when: onceIn(3600e3),
       target: { kind: "repo", cwd: active?.cwd ?? visibleRepos.find((r) => r.isPrimary)?.worktreePath ?? "" },
       cwdHint: active?.cwd ?? null,

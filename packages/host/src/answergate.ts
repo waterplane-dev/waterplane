@@ -32,10 +32,11 @@
  */
 import { randomUUID } from "node:crypto";
 import { promptFingerprint } from "@waterplane/shared";
-import type { DecisionLogEntry, DetectedPrompt, NotificationKind } from "@waterplane/shared";
+import type { DecisionLogEntry, DetectedPrompt } from "@waterplane/shared";
 import { questionWindow } from "./question.js";
 import { askRuleHit, askRulesForCwd } from "./askrules.js";
 import { recordSent } from "./sentlog.js";
+import type { Notify } from "./notifytypes.js";
 
 /** Squash to a whitespace-free, lowercase view — the TUI renders without spaces. */
 const squash = (s: string) => s.replace(/\s+/g, "").toLowerCase();
@@ -112,7 +113,7 @@ export interface GateDeps {
     answerBox(id: string, choice: number): Promise<{ ok: boolean; reason?: string }>;
   };
   decision(row: DecisionLogEntry): void;
-  notify(kind: NotificationKind, p: { title: string; body: string; sessionId?: string; tag?: string }): void;
+  notify: Notify;
 }
 
 /**

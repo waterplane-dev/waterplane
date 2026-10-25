@@ -2,7 +2,7 @@
  * Work routes — schedule slice of `routes/work.ts` (see that file for the whole picture).
  */
 import { scheduleToIntent } from "../../intents/adapters.js";
-import { fmtOffset, windowRuleRefusal } from "@waterplane/shared";
+import { cleanAction, fmtOffset, windowRuleRefusal } from "@waterplane/shared";
 import type { Route, RouteSpec, RouteTable } from "../types.js";
 
 /**
@@ -46,8 +46,37 @@ const onScheduleSave: Route<"schedule.save"> = (a) => {
     // twice, so the id has to be the identity. The ackId is on top of that,
     // for the phone's send queue — a schedule written offline is queued like a
     // prompt, and a replay lands on the same row.
-    const entry = a.msg.entry;
-    a.c.durableOp(a.ws, a.msg.ackId, () => {
+    const raw = a.msg.entry;
+    a.c.durableOp(a.ws, a.msg.ackId, async () => {
+      // A BUILD rule runs a shell command at every occurrence, so its repo is
+      // contained here exactly as `build.run`'s is (`contain: "repoDir"`): an
+      // unchecked dir would be command execution anywhere. The build must
+      // exist in that repo and every parameter must have a value — refused in
+      // words now, never discovered by a failed run at 03:00.
+      let entry = raw;
+      const action = cleanAction(raw?.action);
+      if (action?.kind === "build") {
+        const dir = await a.c.containRepoDir(action.repoDir);
+        const check = dir ? a.c.builds.checkScheduled(dir, action.buildId, action.params) : { error: "that repo is not one this desktop serves" };
+        if ("error" in check) {
+          a.c.send(a.ws, { t: "toast", text: `schedule: not saved — ${check.error}` });
+          return { ok: false, reason: check.error };
+        }
+        // The rule is called what the build is called when nobody typed a name.
+        const name = typeof raw.name === "string" && raw.name.trim() ? raw.name : check.name;
+        entry = { ...raw, name, action: { ...action, repoDir: dir! } };
+      } else if (action?.kind === "backlog") {
+        // A BACKLOG rule opens a `claude` session in its repo at every
+        // occurrence, so the dir gets the same gate as the socket's
+        // `backlog.add` (`contain: "repoDir"`) — nothing downstream re-checks it.
+        const dir = await a.c.containRepoDir(action.repoDir);
+        if (!dir) {
+          const reason = "that repo is not one this desktop serves";
+          a.c.send(a.ws, { t: "toast", text: `schedule: not saved — ${reason}` });
+          return { ok: false, reason };
+        }
+        entry = { ...raw, action: { ...action, repoDir: dir } };
+      }
       // A `window` rule on a rolling period has no edge to anchor to: refused in
       // words, never saved to wait for ever (`windowRuleRefusal`). `ok:false` is
       // remembered, so a replayed ack answers the same sentence.

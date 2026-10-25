@@ -134,8 +134,8 @@ const onHello: Route<"hello"> = (a) => {
     a.c.send(a.ws, { t: "decisions.log", entries: a.c.decisionLog.list().slice(0, 100) });
     a.c.send(a.ws, { t: "usage.status", usage: a.c.usage.get(), readings: a.c.usageSources.readings() });
     a.c.send(a.ws, { t: "meter.status", summary: a.c.meter.summary() });
-    a.c.send(a.ws, { t: "notification.list", items: a.c.notifications });
-    a.c.send(a.ws, { t: "notify.prefs", prefs: a.c.notifyPrefs.get() });
+    a.c.send(a.ws, { t: "notification.list", items: a.c.notificationFeed() });
+    a.c.send(a.ws, { t: "notify.prefs", prefs: a.c.notifyPrefs.get(), pushInfo: a.c.notifyPrefs.pushInfo() });
     a.c.send(a.ws, budgetState(a.c));
     a.c.send(a.ws, { t: "billing.status", ...a.c.billing.status() }); // unknown too: it resets a face a phone kept from another host or an earlier answer
     a.c.send(a.ws, { t: "halt.state", halt: haltState() });
@@ -424,18 +424,28 @@ const onMeterGet: Route<"meter.get"> = (a) => {
 };
 
 const onNotificationGet: Route<"notification.get"> = (a) => {
-    a.c.send(a.ws, { t: "notification.list", items: a.c.notifications });
+    a.c.send(a.ws, { t: "notification.list", items: a.c.notificationFeed() });
 };
 
 const onNotificationClear: Route<"notification.clear"> = (a) => {
-    a.c.notifications.length = 0;
-    a.c.broadcast({ t: "notification.list", items: a.c.notifications });
+    a.c.clearNotifications();
+};
+
+// The person's done on one attention item, on any device. Idempotent by
+// nature (an item already handled, or gone, changes nothing), so it needs no
+// ackId; a change persists and broadcasts the list to every phone. A passive
+// device never holds a socket (`wsops.ts`), and the notify link's inbound
+// allow-list does not name it, exactly as for `notification.clear`.
+const onNotificationHandle: Route<"notification.handle"> = (a) => {
+    if (typeof a.msg.id !== "string" || !a.msg.id) return;
+    a.c.handleNotification(a.msg.id);
 };
 
 const onNotifyPrefsSet: Route<"notify.prefs.set"> = (a) => {
     // Broadcast, not send: the mute is the user's, not this device's, so a
     // second phone must not keep showing a switch the desktop just flipped.
-    a.c.broadcast({ t: "notify.prefs", prefs: a.c.notifyPrefs.set(a.msg.prefs) });
+    const prefs = a.c.notifyPrefs.set(a.msg.prefs, a.msg.pushInfo);
+    a.c.broadcast({ t: "notify.prefs", prefs, pushInfo: a.c.notifyPrefs.pushInfo() });
     // Muting `burn` is one of the things that decides whether `/usage` is polled at all.
     a.c.syncUsagePolling();
 };
@@ -550,6 +560,7 @@ export const systemRoutes: RouteTable = {
   "meter.get": onMeterGet,
   "notification.get": onNotificationGet,
   "notification.clear": onNotificationClear,
+  "notification.handle": onNotificationHandle,
   "notify.prefs.set": onNotifyPrefsSet,
   "budget.get": onBudgetGet,
   "clihealth.get": onCliHealthGet,

@@ -38,6 +38,7 @@ import { NO_PASSWORD_SENTENCE } from "./lanRoute";
 import { openSettingsAt } from "./settingsFocus";
 import { Button } from "./kit/Button";
 import { SetLine, SetNote } from "./SettingsKit";
+import { SHEET } from "./sheetNames";
 
 const ICON = 16;
 
@@ -194,7 +195,7 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
             <Button className={armed ? "active" : ""} onClick={resetWindow}>
               <RotateCcw size={ICON} /> {armed ? "tap again to clear" : "checked them — clear"}
             </Button>
-            <SetNote as="span">Resets this window's counters; the prompts themselves stay in Activity.</SetNote>
+            <SetNote as="span">Resets this window's counters; the prompts themselves stay in {SHEET.activity}.</SetNote>
           </SetLine>
         )}
 
@@ -336,7 +337,7 @@ export function NetHealthSheet({ onClose, onToast, notDelivered, onOpenActivity,
           <h3 className="set-title">Delivery — last {since(me.since)}</h3>
           <div className="nh-stats">
             <Stat label="confirmed" value={String(me.sent)} note="typed, echoed, turn started" />
-            <Stat label="gave up" value={String(me.failed)} note="each one keeps its own row, in full, in Activity" />
+            <Stat label="gave up" value={String(me.failed)} note={`each one keeps its own row, in full, in ${SHEET.activity}`} />
             <Stat label="typical wait" value={ms(me.sendP50)} note="queued → running" />
             <Stat label="worst wait" value={ms(me.queuedMaxMs)} />
           </div>

@@ -26,7 +26,7 @@ What this project is expected to do, as the person asked for it. Format and rule
 | [downloads](downloads.md) | 1 | 12 | 0 |
 | [feedback](feedback.md) | 1 | 2 | 0 |
 | [files](files.md) | 1 | 8 | 0 |
-| [git](git.md) | 1 | 11 | 2 |
+| [git](git.md) | 1 | 13 | 2 |
 | [images](images.md) | 1 | 13 | 0 |
 | [input](input.md) | 5 | 11 | 0 |
 | [instructions](instructions.md) | 2 | 3 | 0 |
@@ -40,7 +40,7 @@ What this project is expected to do, as the person asked for it. Format and rule
 | [models](models.md) | 5 | 11 | 0 |
 | [monitoring](monitoring.md) | 0 | 1 | 0 |
 | [navigation](navigation.md) | 1 | 12 | 0 |
-| [notifications](notifications.md) | 1 | 9 | 0 |
+| [notifications](notifications.md) | 1 | 18 | 0 |
 | [offline](offline.md) | 4 | 3 | 0 |
 | [onboarding](onboarding.md) | 4 | 18 | 0 |
 | [outline](outline.md) | 2 | 4 | 0 |

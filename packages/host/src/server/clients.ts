@@ -18,16 +18,23 @@ import {
   type HostMessage,
   type NotificationItem,
   type NotificationKind,
-  type NotifyOpen,
   type PeerKind,
   type ClientRole,
   roleAllows,
+  notifyLevel,
+  NOTIFY_DEFAULT_OFF,
 } from "@waterplane/shared";
 import type { ServerCtx } from "./ctx.js";
+import type { NotifyParams } from "../routes/types.js";
+import { AttentionStore } from "../attentionstore.js";
 import { WIRE, recordWireFrame } from "../wirerecord.js";
 
 /** What `createClients` needs — the managers constructed ahead of it in main. */
-export type ClientsDeps = Pick<ServerCtx, "auth" | "notifyPrefs" | "push" | "sessions"> & {
+export type ClientsDeps = Pick<ServerCtx, "auth" | "push" | "sessions"> & {
+  /** `pushInfo` is optional so a test's stub may leave it out (⇒ off). */
+  notifyPrefs: Pick<ServerCtx["notifyPrefs"], "enabled"> & Partial<Pick<ServerCtx["notifyPrefs"], "pushInfo" | "get">>;
+  /** The persisted attention items; absent ⇒ a memory-only store (tests). */
+  attention?: AttentionStore;
   /** How long a distrusted socket may answer the close frame before `terminate()` (default 1 s; a test seam). */
   closeGraceMs?: number;
 };
@@ -37,6 +44,7 @@ export type Clients = ReturnType<typeof createClients>;
 
 export function createClients(deps: ClientsDeps) {
   const { auth, notifyPrefs, push, sessions } = deps;
+  const attention = deps.attention ?? new AttentionStore(null);
 
   /** Each socket tracks which sessions it is viewing, so we only stream those. */
   const attached = new WeakMap<WebSocket, Set<string>>();
@@ -161,11 +169,23 @@ export function createClients(deps: ClientsDeps) {
     for (const ws of clients) send(ws, msg);
   }
 
-  /** In-app notification feed (newest first), so alerts work without OS push. */
+  /** The INFORMATION feed (newest first, memory only), so alerts work without
+   *  OS push. Attention items live in `attention` (persisted); a client is
+   *  always sent `notificationFeed()`, the two merged. */
   const notifications: NotificationItem[] = [];
-  /** Fire a notification: record it in-app, broadcast it, AND send an OS push.
-   *  The in-app feed is the source of truth; OS push is best-effort on top. */
-  function notify(kind: NotificationKind, p: { title: string; body: string; sessionId?: string; tag?: string; image?: { repoId: string; relPath: string }; file?: { repoId: string; relPath: string; name: string; size: number; mtime?: number }; pull?: string; backlog?: { cwd: string; ids: string[] }; plugin?: string; open?: NotifyOpen }): void {
+  const pushInfo = (): boolean => notifyPrefs.pushInfo?.() === true;
+
+  function notificationFeed(): NotificationItem[] {
+    const att = attention.items();
+    if (!att.length) return notifications.slice();
+    return [...att, ...notifications].sort((a, b) => b.ts - a.ts);
+  }
+  const broadcastFeed = (): void => broadcast({ t: "notification.list", items: notificationFeed() });
+
+  /** Fire a notification: record it in-app, broadcast it, and — when it is
+   *  attention, carries `pull`, or the person asked for information too — send
+   *  an OS push. The in-app feed is the source of truth; OS push is best-effort on top. */
+  function notify(kind: NotificationKind, p: NotifyParams): void {
     // A muted kind is dropped WHOLE: no feed row, no broadcast, no push. Recording
     // it and hiding it client-side would still buzz the phone, and would still
     // bury the two kinds a person actually has to answer.
@@ -175,14 +195,59 @@ export function createClients(deps: ClientsDeps) {
     // Fetch from the push handler with the app closed, so dropping it would
     // silently turn auto-pull off for anyone who muted "artifact".
     if (!p.pull && !notifyPrefs.enabled(kind)) return;
-    const item: NotificationItem = { id: randomUUID().slice(0, 8), ts: Date.now(), kind, title: p.title, body: p.body, sessionId: p.sessionId, tag: p.tag, image: p.image, file: p.file, backlog: p.backlog, plugin: p.plugin, open: p.open };
-    notifications.unshift(item);
-    if (notifications.length > 100) notifications.length = 100;
-    broadcast({ t: "notification", item });
+    const { detail, build, outcome, level: explicit, ...wire } = p;
+    const level = notifyLevel(kind, outcome, explicit);
+    const item: NotificationItem = { id: randomUUID().slice(0, 8), ts: Date.now(), kind, title: wire.title, body: wire.body, sessionId: wire.sessionId, tag: wire.tag, image: wire.image, file: wire.file, backlog: wire.backlog, plugin: wire.plugin, open: wire.open, level };
+    if (wire.key) item.key = wire.key;
+    let replaced = false;
+    if (level === "attention") replaced = attention.add(item, { detail, build });
+    else {
+      notifications.unshift(item);
+      if (notifications.length > 100) notifications.length = 100;
+    }
+    // Information is not a radio wakeup on the APK's background link unless the
+    // person asked for it pushed; a `pull` frame is the auto-download transport
+    // and always goes. A full client gets every frame.
+    // A default-off kind (`idle`) the person switched ON asked to be pushed: they said so.
+    const askedFor = NOTIFY_DEFAULT_OFF.includes(kind) && notifyPrefs.get?.()[kind] === true;
+    const toLinks = level === "attention" || !!wire.pull || pushInfo() || askedFor;
+    const frame: HostMessage = { t: "notification", item };
+    for (const ws of clients) { if (toLinks || wsRole.get(ws) !== "notify") send(ws, frame); }
+    // The older item under this key just became handled — say so, or every
+    // phone keeps counting it until its next reconnect.
+    if (replaced) broadcastFeed();
     // The push carries the item's identity and targets too, so a tap on the OS
     // notification can land where a tap on the feed row does (`sw.js`).
-    void push.notify({ ...p, id: item.id, kind, ts: item.ts });
+    if (toLinks) void push.notify({ ...wire, id: item.id, kind, ts: item.ts, level });
   }
+
+  function clearNotifications(): void {
+    notifications.length = 0;
+    attention.clear();
+    broadcastFeed();
+  }
+
+  function handleNotification(id: string): boolean {
+    const changed = attention.handle(id);
+    if (changed) broadcastFeed();
+    return changed;
+  }
+
+  function resolveAttention(key: string, note: string): number {
+    const n = attention.resolve(key, note);
+    if (n) broadcastFeed();
+    return n;
+  }
+
+  function resolveAttentionPrefix(prefix: string, note: string): number {
+    const n = prefix ? attention.resolve(prefix, note, { prefix: true }) : 0;
+    if (n) broadcastFeed();
+    return n;
+  }
+
+  // A box that was open when the desktop went down is detected again if it is still open (and files
+  // a new item); one that is gone has no event left to resolve it. followup:/undelivered: need the person.
+  attention.resolve("prompt:", "the desktop restarted", { prefix: true });
 
   // A passive device's PIN unlock ending (expiry, "Lock now") closes its
   // sockets, so an open WebSocket never outlives the unlock (`passive.ts`).
@@ -193,6 +258,7 @@ export function createClients(deps: ClientsDeps) {
     authStateFor, enforceAuth, broadcastAuthState, recomputeWatched,
     attachedIds, isAttachedToSomeone,
     send, broadcast,
-    notifications, notify,
+    notifications, notify, notificationFeed, clearNotifications, handleNotification,
+    resolveAttention, resolveAttentionPrefix, attention,
   };
 }

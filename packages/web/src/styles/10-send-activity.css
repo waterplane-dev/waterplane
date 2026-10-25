@@ -80,6 +80,8 @@
   display: flex; align-items: center; gap: var(--sp-6); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted);
 }
 .act-stale { color: var(--warn); }
+/* The rule that fired a build run — opens it. Its own tap target, under the body. */
+.linkish.act-from-sched { min-height: 36px; padding: 0 var(--sp-12); white-space: normal; text-align: left; }
 .act-last-bad { color: var(--dead); }
 .act-bar { flex: 1 1 auto; height: 3px; background: var(--line); border-radius: var(--r-2); overflow: hidden; }
 .act-bar > i { display: block; height: 100%; background: var(--accent); }

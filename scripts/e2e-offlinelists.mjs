@@ -89,7 +89,10 @@ check(/"schedule\.list":?[^\n]*saveSchedulesSnap\(msg\.entries\)/.test(schedHome
 // ── Each cached list can say how old it is ──────────────────────────
 // A cached list that cannot state its age reads as current, and a build command
 // deleted at the desk last week then looks exactly like a live one.
-check(/stamps\.set\(repoDir, at\)/.test(cached) && /listAt=\{cfgs\.at\.get\(dir\) \?\? 0\}/.test(buildView),
+// Inline or hoisted into `const listAt` (the schedule-edit handover reads it too).
+check(/stamps\.set\(repoDir, at\)/.test(cached)
+  && (/listAt=\{cfgs\.at\.get\(dir\) \?\? 0\}/.test(buildView)
+    || (/const listAt = cfgs\.at\.get\(dir\) \?\? 0;/.test(buildView) && /listAt=\{listAt\}/.test(buildView))),
   "the build sheet is told when its list was last confirmed");
 check(/listAt=\{schedulesAt\}/.test(schedHome), "the schedule sheet is told when its list was last confirmed");
 check(/listAt/.test(build) && /ago\(listAt\)/.test(build), "the build sheet renders that age");

@@ -3,16 +3,19 @@
  * actions. The sheet itself stays a flat module (its props are its contract);
  * this is the prop list `App.tsx`'s `overlayViews.build` used to spell out.
  */
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import type { BuildArtifact, RepoTarget } from "@waterplane/shared";
 import { useCore, useStore } from "../../sdk";
 import { BuildSheet } from "../../BuildSheet";
 import { buildLogSeed } from "../../buildLogPrompt";
-import { artifactPolicies, buildCands, buildLocalIds, buildOpts, builds } from "./store";
-import { askOptions, cancelBuild, runBuild, saveBuilds, savePolicy, scanRepo, setupBuilds } from "./actions";
+import { artifactPolicies, buildCands, buildLocalIds, buildOpts, buildScheduleEdit, builds } from "./store";
+import { buildScheduleCue } from "../../buildSchedule";
+import { askOptions, cancelBuild, openBuildScheduleCut, runBuild, saveBuildSchedule, saveBuilds, savePolicy, scanRepo, setupBuilds } from "./actions";
 
-export function BuildButtonsSheet({ repo }: { repo: RepoTarget }) {
+export function BuildButtonsSheet({ repo: opened }: { repo: RepoTarget }) {
   const core = useCore();
+  // `opened` is the snapshot taken at the tap; the failure the sheet shows is the LIVE listing's.
+  const repo = core.world.repos.find((r) => r.id === opened.id) ?? opened;
   const dir = repo.worktreePath;
   const cfgs = useStore(builds.cfgs);
   const allRuns = useStore(builds.runs);
@@ -22,11 +25,32 @@ export function BuildButtonsSheet({ repo }: { repo: RepoTarget }) {
   const localIds = useStore(buildLocalIds).get(dir);
   const policy = useStore(artifactPolicies).get(dir);
   const runs = useMemo(() => allRuns.filter((r) => r.repoDir === dir), [allRuns, dir]);
+  const list = cfgs.lists.get(dir) ?? [];
+  const listAt = cfgs.at.get(dir) ?? 0;
+  // A build rule's card *edit*: handed to the sheet once its entry is in the
+  // list; a list that has ARRIVED without it means the build is gone — said.
+  const handOver = useStore(buildScheduleEdit);
+  const pendingEdit = handOver?.entry ?? null;
+  const editBuild = pendingEdit?.action.kind === "build" ? list.find((b) => b.id === (pendingEdit.action as { buildId: string }).buildId) : undefined;
+  const scheduleEdit = useMemo(() => (pendingEdit && editBuild ? { build: editBuild, entry: pendingEdit } : null), [pendingEdit, editBuild]);
+  useEffect(() => {
+    if (!pendingEdit || !handOver) return;
+    if (scheduleEdit) { buildScheduleEdit.set(null); return; }
+    // Only a list read after the tap may say the build is gone; the device
+    // cache seeds `listAt` with an older one.
+    if (listAt > handOver.at && pendingEdit.action.kind === "build") {
+      core.say.toast(`build ${pendingEdit.action.buildId} is no longer in this repo — the rule cannot be edited here`);
+      buildScheduleEdit.set(null);
+    }
+  }, [handOver, pendingEdit, scheduleEdit, listAt, core]);
+  const schedules = core.world.schedules;
   return (
     <BuildSheet
       repo={repo}
-      builds={cfgs.lists.get(dir) ?? []}
-      listAt={cfgs.at.get(dir) ?? 0}
+      failed={repo.buildFailed}
+      onDone={(id) => core.conn.liveSend({ t: "notification.handle", id }, "marked done")}
+      builds={list}
+      listAt={listAt}
       runs={runs}
       // The buffer itself (read-only, moved in place); `outTick` says when to look again.
       output={builds.output}
@@ -47,6 +71,12 @@ export function BuildButtonsSheet({ repo }: { repo: RepoTarget }) {
       onAskOptions={(buildId, approve) => askOptions(dir, buildId, approve)}
       onScan={() => scanRepo(dir)}
       onClose={() => core.nav.close("build")}
+      // A clock: the cue off the phone's rule list, its cut, and the form's save.
+      scheduleCue={(b) => buildScheduleCue(schedules, dir, b, Date.now())}
+      onOpenScheduleCut={openBuildScheduleCut}
+      onSaveSchedule={(b, entry, when, vals, preview) => saveBuildSchedule(dir, b, entry, when, vals, preview)}
+      usage={core.world.usage}
+      scheduleEdit={scheduleEdit}
     />
   );
 }

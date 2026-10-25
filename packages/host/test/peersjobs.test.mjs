@@ -46,7 +46,7 @@ function rig(over = {}) {
     postReport: async (draft, peer) => { r.posted.push({ draft, peer }); r.intents.set(draft.id, "queued"); return { ok: true, existing: false }; },
     addBacklog: async (p) => { r.backlog.push(p); return true; },
     saveArtifact: (cwd, peer, name) => { r.saved.push([cwd, peer, name]); return `.claude/outbox/peer-${peer}-${name}`; },
-    notify: (title, body, b) => r.notes.push({ title, body, b }),
+    notify: ({ title, body, backlog: b }) => r.notes.push({ title, body, b }),
   };
   r.make = () => new PeerJobs(r.deps);
   return r;

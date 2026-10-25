@@ -3,10 +3,16 @@
 Notable changes. This project has no release branches — `main` is the supported
 version — so entries are grouped by the release they shipped in.
 
-## 0.1.7
+## 0.1.8
+
+0.1.7 was tagged but never released; its changes ship here.
 
 ### New
 
+- **Notifications split into *needs you* and *information*.** Only what needs you counts on the bell and buzzes the phone; a tap on the bell opens exactly those, and each one has *done*. Information stays readable in the feed and is pushed only when Settings › Notifications › *Push information too* is on. What needs you is the same on every device and survives a desktop restart.
+- **Failed pulls, pushes and builds show on the repo.** A git pull or push the desktop ran that failed raises *Push failed · repo* and a red *push failed* / *pull failed* / *build failed* chip on that repo's buttons; the git view and build sheet show the stored failure until it is fixed or marked done.
+- **A schedule can run a build.** *Run on a clock…* in a build entry's editor sets when it runs; the entry then shows its clock (*every weekday 07:00 · next in 3h*). The Schedules sheet is now **Automation**, and its foot lists what runs on its own without a clock.
+- **Downloads are kept once.** A file saved to the phone's Downloads no longer keeps a second copy inside the app (a per-phone switch, on by default). APKs still install from the Downloads copy. Needs this release's APK.
 - **This week's burn.** Settings → Sessions → *This week's burn* lets you pick repos to spend leftover weekly budget on before the reset: a stop line, a start time, and one backlog row per picked repo. Picking is the approval — nothing starts on its own, and *Same as last week* is one tap. A once-a-week nudge says when you are on pace to leave budget unused.
 - **Every notification tap lands somewhere.** An alert with no session or file behind it used to open the bare launcher; now it opens the screen it is about (a health move opens that repo's health chart, a burn alert opens token stats), or its own row in the feed. Needs this release's APK.
 
@@ -17,6 +23,7 @@ version — so entries are grouped by the release they shipped in.
 - The composer's backlog button counts waiting and failed rows as two numbers, and a tap opens exactly those rows.
 - The fan-out prompt has a clear button (two taps, with *put it back* until you type).
 - The LAN address chips skip VM bridges and tunnels.
+- Combined screenshots keep each panel at the chosen upload width, instead of the whole collage, so four phone screens side by side stay readable.
 
 ## 0.1.6
 

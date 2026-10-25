@@ -31,6 +31,8 @@ import { InstallLogStore } from "./installlog.js";
 import { SettingsStore } from "./settings.js";
 import { PushManager } from "./push.js";
 import { NotifyPrefsStore } from "./notifyprefs.js";
+import { AttentionStore } from "./attentionstore.js";
+import { setGitOutcomeSink } from "./git.js"; import { reportGitOutcome } from "./gitnotify.js";
 import { UpdateChecker } from "./update.js"; import { createPluginUpdates, createUpdateApplier } from "./updates/wire.js";
 import { SetupWatcher } from "./setupwatch.js"; import { createHealthWatch } from "./healthwatch.js"; import { startDiskWatch } from "./diskwatch.js";
 import { NetStats } from "./netstats.js";
@@ -133,13 +135,17 @@ installChecklistStores(ROOT);
 const {
   attached, clients, wsKind, wsToken, wsDevice, wsRole, closeDevice, socketAuthorized,
   authStateFor, enforceAuth, broadcastAuthState, recomputeWatched, isAttachedToSomeone,
-  send, broadcast, notifications, notify,
-} = createClients({ auth, notifyPrefs, push, sessions }); ctx.healthWatch = createHealthWatch(ROOT, notify);
+  send, broadcast, notifications, notify, notificationFeed, clearNotifications, handleNotification,
+  resolveAttention, resolveAttentionPrefix, attention,
+} = createClients({ auth, notifyPrefs, push, sessions, attention: new AttentionStore(ROOT) }); ctx.healthWatch = createHealthWatch(ROOT, notify);
 Object.assign(ctx, {
   attached, clients, wsKind, wsToken, wsDevice, wsRole, closeDevice, socketAuthorized,
   authStateFor, enforceAuth, broadcastAuthState, recomputeWatched, isAttachedToSomeone,
-  send, broadcast, notifications, notify,
+  send, broadcast, notifications, notify, notificationFeed, clearNotifications, handleNotification,
+  resolveAttention, resolveAttentionPrefix, attention,
 });
+// A host-run pull or push that ended is told once (`gitnotify.ts`): failed ⇒ attention, pushed ⇒ a receipt.
+setGitOutcomeSink((o) => reportGitOutcome(o, ctx));
 
 const deliveries = createDeliveries(ctx);
 ctx.startPrompt = deliveries.startPrompt; ctx.deliverChain = deliveries.deliverChain;
@@ -158,8 +164,10 @@ ctx.deliverySnapshot = deliveries.deliverySnapshot; ctx.deliverInput = deliverie
 const cliHealthStore = new CliHealthStore(
   ROOT,
   (health, rollup) => broadcast({ t: "clihealth", health, rollup, source: cliHealthStore.source() }),
-  (kind, p) => notify(kind, p),
+  // Keyed per signal so a recovery can resolve it (tag `clihealth-<id>` → key `cli:<id>`).
+  (kind, p) => notify(kind, p.tag.startsWith("clihealth-") ? { ...p, key: `cli:${p.tag.slice(10)}` } : p),
 );
+cliHealthStore.onRecovered = (id) => { ctx.resolveAttention(`cli:${id}`, "recovered"); };
 setCliHealth(cliHealthStore);
 ctx.cliHealthStore = cliHealthStore;
 
@@ -489,8 +497,8 @@ const acks = new AckLedger(ROOT);
 ctx.acks = acks; if (acks.lost) notify("undelivered", lostLedgerNotice(acks.lost)); // a lost ledger is TOLD (acks.ts)
 acks.onWriteError = (message) => notify("undelivered", ackWriteNotice(message)); // …and so is one that stopped reaching the disk
 // So is a lost password file (auth.ts: fails closed) and an unreadable or newer intent store (intents/disk.ts).
-if (auth.lost) notify("info", authLostNotice(auth.lost));
-{ const n = intents.storeNotice(); if (n) notify("backlog", n); }
+if (auth.lost) notify("info", { ...authLostNotice(auth.lost), level: "attention" });
+{ const n = intents.storeNotice(); if (n) notify("backlog", { ...n, level: "attention" }); }
 
 /**
  * Connectivity + delivery telemetry. Counts the things you can only see in
@@ -631,7 +639,7 @@ async function main(): Promise<void> {
   await Promise.all([backlog.init(), plugins.builtinsLoaded]); // extensions: rows in the first checklist
   updates.start(); if (!DOCTOR) ctx.pluginUpdates.start(); // a few minutes after boot, never in the preflight
   setupWatch.start(); if (!DOCTOR) void ctx.healthWatch.start(); // setup checklist swept; health index cached, engine re-run weekly
-  if (!DOCTOR) startDiskWatch({ notify }); // low disk: one push per level (macOS ends Tailscale to free space)
+  if (!DOCTOR) startDiskWatch({ notify, recovered: () => { ctx.resolveAttention("disk", "disk space back"); } }); // low disk: one push per level (macOS ends Tailscale to free space)
 
   const attachWs = (server: ReturnType<typeof createServer>) => {
     // permessage-deflate: the socket carries base64'd PTY output, and a claude

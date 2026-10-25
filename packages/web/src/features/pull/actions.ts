@@ -2,6 +2,7 @@ import type { AutoPullConfig } from "@waterplane/shared";
 import { core, mapWith } from "../../sdk";
 import { pulls } from "../../pull";
 import { OPEN_DOWNLOADS_EVENT } from "../../download";
+import { setPullRuleSource } from "../../automationSlot";
 import { cfgs, records, rulesFor } from "./store";
 
 export function putCfg(repoDir: string, config: AutoPullConfig): void {
@@ -25,10 +26,13 @@ export function clearRules(): void {
  */
 export function bootPull(): () => void {
   pulls.start();
+  // The Automation sheet's auto-download line reads the rules through the
+  // top-level slot (features never import each other).
+  setPullRuleSource({ configs: cfgs, ask: (repoDir) => { core().conn.trySend({ t: "pull.get", repoDir }); }, open: openPullRules });
   const off = pulls.subscribe((list) => records.set(list));
   // "see Downloads" is a tap as well as a word: `download.ts` fires this from
   // a toast, a gallery button, anywhere — one listener.
   const open = () => core().nav.open("pull");
   window.addEventListener(OPEN_DOWNLOADS_EVENT, open);
-  return () => { off(); window.removeEventListener(OPEN_DOWNLOADS_EVENT, open); };
+  return () => { off(); setPullRuleSource(null); window.removeEventListener(OPEN_DOWNLOADS_EVENT, open); };
 }

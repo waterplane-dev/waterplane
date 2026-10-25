@@ -60,17 +60,22 @@
   .range button + button { border-left: 1px solid var(--border); }
   .range button[aria-pressed="true"] { background: var(--text-primary); color: var(--surface-1); }
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
-  .tile, .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; }
+  .tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; }
   .tile { padding: 12px 14px; }
   .tile .label { color: var(--text-secondary); font-size: 13px; }
   .tile .value { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2; margin-top: 2px; }
   .tile .sub { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 12px; }
-  .card { padding: 14px 14px 10px; min-width: 0; }
-  .card h2 { font-size: 15px; margin: 0; }
-  .card .note { color: var(--text-muted); font-size: 12px; margin: 2px 0 6px; }
+  .tile { min-width: 0; display: flex; flex-direction: column; }
+  .tile .label { overflow-wrap: anywhere; }
+  .tile[aria-expanded] { cursor: pointer; }
+  .tile[aria-expanded="true"] { grid-column: 1 / -1; cursor: default; }
+  .tile[aria-expanded="true"] .head { cursor: pointer; }
+  .tile .note { color: var(--text-muted); font-size: 12px; margin: 8px 0 6px; }
+  .spark { position: relative; height: 44px; margin-top: auto; }
+  .tile .head { padding-bottom: 8px; }
+  .spark .empty { font-size: 12px; place-items: center start; }
   .plot { position: relative; height: 180px; }
-  .plot svg { display: block; width: 100%; height: 100%; overflow: visible; }
+  .plot svg, .spark svg { display: block; width: 100%; height: 100%; overflow: visible; }
   .axis { fill: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
   .gridline { stroke: var(--grid); stroke-width: 1; }
   .baseline { stroke: var(--border); stroke-width: 1; }
@@ -106,7 +111,6 @@
     </div>
   </header>
   <section class="tiles" id="tiles"></section>
-  <section class="grid" id="charts"></section>
 </main>
 <script>
 // Reports script errors and progress to the server log (GET /beacon), for a phone that shows a blank page.
@@ -146,22 +150,31 @@ function niceMax(v) {
   return v;
 }
 
-/** Bars for a count per day; the day axis is continuous so a missing day reads as a gap. */
-function barChart(plot, pts, valueOf, tipOf, events) {
-  drawChart(plot, pts, valueOf, tipOf, "bar", events);
-}
-function lineChart(plot, pts, valueOf, tipOf, events) {
-  drawChart(plot, pts, valueOf, tipOf, "line", events);
+/** The one day axis every chart draws on: the chosen range up to today, or for "All" from the first
+ *  archived day of any series. Charts sharing it line up, so a spike on one day sits in the same column. */
+let DOMAIN = { from: "", to: "" };
+function domainOf(D) {
+  const to = new Date().toISOString().slice(0, 10);
+  if (days) return { from: since(), to };
+  let from = to;
+  for (const v of Object.values(D)) {
+    if (!v || typeof v !== "object") continue;
+    for (const s of Object.values(v)) if (Array.isArray(s) && s[0]?.day && s[0].day < from) from = s[0].day;
+  }
+  return { from, to };
 }
 
-/** `events`: [{ day, label }] drawn as a dashed line with its label at the top (a publish day). */
-function drawChart(plot, pts, valueOf, tipOf, form, events = []) {
+/** Bars for a count per day or a line for a total; the day axis is continuous so a missing day reads as
+ *  a gap. `events`: [{ day, label }] drawn as a dashed line with its label at the top (a publish day).
+ *  `compact`: the tile's sparkline — no axis text or event labels; the tooltip on hover still names them. */
+function drawChart(plot, pts, valueOf, tipOf, form, events = [], compact = false) {
   plot.innerHTML = "";
+  pts = pts.filter((p) => p.day >= DOMAIN.from && p.day <= DOMAIN.to);
   if (!pts.length) { plot.innerHTML = `<div class="empty">No readings in this range yet.</div>`; return; }
   const W = plot.clientWidth, H = plot.clientHeight;
-  const m = { l: 34, r: 8, t: events.length ? 20 : 8, b: 22 };
+  const m = compact ? { l: 0, r: 0, t: 3, b: 1 } : { l: 34, r: 8, t: events.length ? 20 : 8, b: 22 };
   const iw = W - m.l - m.r, ih = H - m.t - m.b;
-  const t0 = Date.parse(pts[0].day), t1 = Date.parse(pts.at(-1).day);
+  const t0 = Date.parse(DOMAIN.from), t1 = Date.parse(DOMAIN.to);
   const n = Math.round((t1 - t0) / dayMs) + 1;
   const slot = iw / n;
   const xOf = (d) => m.l + ((Date.parse(d) - t0) / dayMs) * slot + slot / 2;
@@ -177,15 +190,17 @@ function drawChart(plot, pts, valueOf, tipOf, form, events = []) {
     parent.appendChild(e);
     return e;
   };
-  for (const f of [0.5, 1]) {
+  if (!compact) for (const f of [0.5, 1]) {
     const y = yOf(max * f);
     el("line", { class: "gridline", x1: m.l, x2: W - m.r, y1: y, y2: y });
     el("text", { class: "axis", x: m.l - 6, y: y + 4, "text-anchor": "end" }).textContent = fmt(max * f);
   }
   el("line", { class: "baseline", x1: m.l, x2: W - m.r, y1: yOf(0), y2: yOf(0) });
-  el("text", { class: "axis", x: m.l - 6, y: yOf(0) + 4, "text-anchor": "end" }).textContent = "0";
-  el("text", { class: "axis", x: m.l, y: H - 4 }).textContent = fmtDay(pts[0].day);
-  if (n > 1) el("text", { class: "axis", x: W - m.r, y: H - 4, "text-anchor": "end" }).textContent = fmtDay(pts.at(-1).day);
+  if (!compact) {
+    el("text", { class: "axis", x: m.l - 6, y: yOf(0) + 4, "text-anchor": "end" }).textContent = "0";
+    el("text", { class: "axis", x: m.l, y: H - 4 }).textContent = fmtDay(DOMAIN.from);
+    if (n > 1) el("text", { class: "axis", x: W - m.r, y: H - 4, "text-anchor": "end" }).textContent = fmtDay(DOMAIN.to);
+  }
 
   // Event lines sit behind the marks. A label that would overlap the previous one is left off; its
   // line stays and the tooltip names it.
@@ -197,7 +212,7 @@ function drawChart(plot, pts, valueOf, tipOf, form, events = []) {
     const w = e.label.length * 6.2;
     const anchor = x + w / 2 > W - m.r ? "end" : x - w / 2 < m.l ? "start" : "middle";
     const left = anchor === "end" ? x - w : anchor === "start" ? x : x - w / 2;
-    if (left < lastLabelX + 6) continue;
+    if (compact || left < lastLabelX + 6) continue;
     el("text", { class: "axis eventlabel", x, y: m.t - 8, "text-anchor": anchor }).textContent = e.label;
     lastLabelX = left + w;
   }
@@ -205,7 +220,7 @@ function drawChart(plot, pts, valueOf, tipOf, form, events = []) {
 
   const marks = [];
   if (form === "bar") {
-    const bw = Math.max(1, Math.min(slot - 2, 28));
+    const bw = Math.max(1, Math.min(slot > 4 ? slot - 2 : slot * 0.75, 28));
     const r = Math.min(4, bw / 2);
     for (const p of pts) {
       const v = valueOf(p);
@@ -217,7 +232,7 @@ function drawChart(plot, pts, valueOf, tipOf, form, events = []) {
   } else {
     el("path", { class: "line", d: pts.map((p, i) => `${i ? "L" : "M"}${xOf(p.day)},${yOf(valueOf(p))}`).join("") });
     const last = pts.at(-1);
-    el("circle", { class: "dot", cx: xOf(last.day), cy: yOf(valueOf(last)), r: 4 });
+    el("circle", { class: "dot", cx: xOf(last.day), cy: yOf(valueOf(last)), r: compact ? 3 : 4 });
   }
   const cross = el("line", { class: "cross", y1: m.t, y2: m.t + ih, visibility: "hidden" });
   const hot = el("circle", { class: "dot", r: 5, visibility: "hidden" });
@@ -249,33 +264,47 @@ function drawChart(plot, pts, valueOf, tipOf, form, events = []) {
     if (on >= 0 && marks[on]) marks[on].classList.remove("on");
     on = -1;
   };
-  svg.addEventListener("pointermove", (e) => show(e.clientX));
-  svg.addEventListener("pointerdown", (e) => show(e.clientX));
+  // A tap on a sparkline opens its tile, so only a hovering mouse shows the tooltip there.
+  svg.addEventListener("pointermove", (e) => { if (!compact || e.pointerType === "mouse") show(e.clientX); });
+  if (!compact) svg.addEventListener("pointerdown", (e) => show(e.clientX));
   svg.addEventListener("pointerleave", hide);
 }
 
-function card({ title, note, pts, form, valueOf, tipOf, cols, events }) {
-  const c = document.createElement("article");
-  c.className = "card";
-  c.innerHTML = `<h2></h2><p class="note"></p><div class="plot"></div>
-    <details><summary>Table</summary><div class="tablewrap"><table><thead><tr></tr></thead><tbody></tbody></table></div></details>`;
-  $("h2", c).textContent = title;
-  $(".note", c).textContent = note;
-  $("thead tr", c).innerHTML = ["Day", ...cols.map((x) => x[0])].map((h) => `<th>${h}</th>`).join("");
-  $("tbody", c).innerHTML = [...pts].reverse().map((p) => `<tr><td>${p.day}</td>${cols.map((x) => `<td>${cell(x[1](p))}</td>`).join("")}</tr>`).join("");
-  $("#charts").appendChild(c);
-  const draw = () => (form === "bar" ? barChart : lineChart)($(".plot", c), pts, valueOf, tipOf, events);
-  draws.push(draw);
-}
+/** Tiles the person opened, by label, kept across range changes and reloads. */
+let open = new Set();
+try { open = new Set(JSON.parse(localStorage.getItem("reach.open") ?? "[]")); } catch {}
 
-function tile(label, value, sub) {
+/** A figure with its chart inside: a sparkline while folded; a tap opens the full chart, its note and
+ *  table across the row. `chart` is optional (a store page that is not public has nothing to draw). */
+function tile(label, value, sub, chart) {
   const t = document.createElement("div");
   t.className = "tile";
-  t.innerHTML = `<div class="label"></div><div class="value"></div><div class="sub"></div>`;
+  t.innerHTML = `<div class="head"><div class="label"></div><div class="value"></div><div class="sub"></div></div>`;
   $(".label", t).textContent = label;
   $(".value", t).textContent = value;
   $(".sub", t).textContent = sub;
   $("#tiles").appendChild(t);
+  if (!chart) return;
+  const { note, pts, form, valueOf, tipOf, cols, events } = chart;
+  const isOpen = open.has(label);
+  t.setAttribute("aria-expanded", String(isOpen));
+  t.tabIndex = 0;
+  if (isOpen) {
+    t.insertAdjacentHTML("beforeend", `<p class="note"></p><div class="plot"></div>
+      <details><summary>Table</summary><div class="tablewrap"><table><thead><tr></tr></thead><tbody></tbody></table></div></details>`);
+    $(".note", t).textContent = `${note} Tap the figure to fold this.`;
+    $("thead tr", t).innerHTML = ["Day", ...cols.map((x) => x[0])].map((h) => `<th>${h}</th>`).join("");
+    $("tbody", t).innerHTML = [...pts].reverse().map((p) => `<tr><td>${p.day}</td>${cols.map((x) => `<td>${cell(x[1](p))}</td>`).join("")}</tr>`).join("");
+  } else t.insertAdjacentHTML("beforeend", `<div class="spark"></div>`);
+  const plot = $(isOpen ? ".plot" : ".spark", t);
+  draws.push(() => drawChart(plot, pts, valueOf, tipOf, form, events, !isOpen));
+  const toggle = () => {
+    if (isOpen) open.delete(label); else open.add(label);
+    try { localStorage.setItem("reach.open", JSON.stringify([...open])); } catch {}
+    render();
+  };
+  t.addEventListener("click", (e) => { if (!isOpen || e.target.closest(".head")) toggle(); });
+  t.addEventListener("keydown", (e) => { if (e.target === t && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggle(); } });
 }
 
 /** A running total now, and how much it grew inside the range (null when the range holds its first reading). */
@@ -291,40 +320,10 @@ let draws = [];
 function render() {
   const D = DATA;
   draws = [];
+  DOMAIN = domainOf(D);
   $("#tiles").innerHTML = "";
-  $("#charts").innerHTML = "";
   const rangeWord = days ? `last ${days} days` : "all archived days";
-  $("#asof").textContent = `${D.rows.toLocaleString("en-US")} archived rows, read ${new Date(D.at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}. Updated daily at 10:00.`;
-
-  for (const [repo, s] of first(D.views)) {
-    const v = cut(s);
-    tile(`${short(repo)}: page views`, fmt(sum(v)), rangeWord);
-  }
-  for (const [repo, s] of first(D.stars)) {
-    const g = growth(s, "stars");
-    const last = s.at(-1);
-    const extra = last.forks != null ? ` · ${fmt(last.forks)} forks` : "";
-    tile(`${short(repo)}: stars`, fmt(g.now), (g.delta == null ? `total${extra}` : `+${fmt(g.delta)} in ${rangeWord}${extra}`));
-  }
-  for (const [repo, s] of first(D.clones)) tile(`${short(repo)}: clones`, fmt(sum(cut(s))), `${rangeWord} · mostly bots and mirrors`);
-  for (const [pkg, s] of first(D.npm)) tile("npm downloads", fmt(sum(cut(s))), `${rangeWord} · ${pkg}`);
-  for (const [ext, s] of first(D.marketplace)) {
-    const g = growth(s, "installs");
-    tile("VS Code installs", fmt(g.now), g.delta == null ? `total · first reading ${fmtDay(g.firstDay)}` : `total · +${fmt(g.delta)} in ${rangeWord}`);
-  }
-  for (const app of Object.keys(D.playInstalls ?? {})) if (!D.playListing?.[app]) (D.playListing ??= {})[app] = [{ listed: false, day: D.playInstalls[app].at(-1).day }];
-  for (const [app, s] of first(D.playListing)) {
-    // Play leaves "Total User Installs" at 0 in its current reports, so the headline is active devices.
-    const exact = (D.playInstalls?.[app] ?? []).filter((p) => p.active != null).at(-1);
-    const last = s.at(-1);
-    const value = exact ? fmt(exact.active) : last.listed ? last.range : "Not public";
-    const sub = exact ? `active devices · ${fmtDay(exact.day)}` : last.listed ? `Play's public range · ${fmtDay(last.day)}` : `no store page yet · checked ${fmtDay(last.day)}`;
-    tile(`Play: ${appName(app)}`, value, sub);
-  }
-  for (const [repo, s] of first(D.releases)) {
-    const g = growth(s, "total");
-    tile(`${short(repo)}: release installs`, fmt(g.now), g.delta == null ? `.tar.gz + .apk · first reading ${fmtDay(g.firstDay)}` : `.tar.gz + .apk · +${fmt(g.delta)} in ${rangeWord}`);
-  }
+  $("#asof").textContent = `${D.rows.toLocaleString("en-US")} archived rows, read ${new Date(D.at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}. Updated daily at 10:00. Every chart spans ${fmtDay(DOMAIN.from)} – ${fmtDay(DOMAIN.to)}; tap a tile for its full chart and table.`;
 
   const uniq = (p) => `${fmt(p.count)} (${fmt(p.uniques)} unique)`;
   // One dashed line per day something went out; two on one day share it ("0.0.0-stage, 0.0.1").
@@ -335,25 +334,32 @@ function render() {
   };
   const rel = (repo) => eventsOf(D.releaseDays?.[repo], "tag", "released");
   const relCol = (repo) => ["Released", (p) => rel(repo).byDay.get(p.day)?.join(", ") ?? ""];
-  for (const [repo, s] of first(D.views)) card({
-    title: `Page views per day: ${short(repo)}`, note: `${repo} · GitHub forgets these after 14 days; the archive keeps them. Dashed lines are release days.`,
-    pts: cut(s), form: "bar", valueOf: (p) => p.count, tipOf: uniq, events: rel(repo).events,
-    cols: [["Views", (p) => p.count], ["Unique", (p) => p.uniques], relCol(repo)],
-  });
+
+  for (const [repo, s] of first(D.views)) {
+    const v = cut(s);
+    tile(`${short(repo)}: page views`, fmt(sum(v)), rangeWord, {
+      note: `${repo} · views per day. GitHub forgets these after 14 days; the archive keeps them. Dashed lines are release days.`,
+      pts: v, form: "bar", valueOf: (p) => p.count, tipOf: uniq, events: rel(repo).events,
+      cols: [["Views", (p) => p.count], ["Unique", (p) => p.uniques], relCol(repo)],
+    });
+  }
   for (const [repo, s] of first(D.stars)) {
+    const g = growth(s, "stars");
+    const last = s.at(-1);
+    const extra = last.forks != null ? ` · ${fmt(last.forks)} forks` : "";
     // A total: the line starts from the last reading before the range, so a quiet range is flat, not empty.
     const before = s.filter((p) => p.day < since()).at(-1);
     const pts = cut(s);
     if (before && (!pts.length || pts[0].day > since())) pts.unshift({ ...before, day: since() });
-    card({
-      title: `Stars, total: ${short(repo)}`, note: `${repo} · history from each star's date; forks and watchers from the first daily reading on.`,
+    tile(`${short(repo)}: stars`, fmt(g.now), (g.delta == null ? `total${extra}` : `+${fmt(g.delta)} in ${rangeWord}${extra}`), {
+      note: `${repo} · history from each star's date; forks and watchers from the first daily reading on.`,
       pts, form: "line", valueOf: (p) => p.stars, events: rel(repo).events,
       tipOf: (p) => `${fmt(p.stars)} stars` + (p.forks != null ? ` · ${fmt(p.forks)} forks · ${fmt(p.watchers)} watchers` : ""),
       cols: [["Stars", (p) => p.stars], ["Forks", (p) => p.forks], ["Watchers", (p) => p.watchers]],
     });
   }
-  for (const [repo, s] of first(D.clones)) card({
-    title: `Clones per day: ${short(repo)}`, note: `${repo} · mostly mirrors, scanners and your own desktops, rarely people. Dashed lines are release days.`,
+  for (const [repo, s] of first(D.clones)) tile(`${short(repo)}: clones`, fmt(sum(cut(s))), `${rangeWord} · mostly bots and mirrors`, {
+    note: `${repo} · clones per day: mostly mirrors, scanners and your own desktops, rarely people. Dashed lines are release days.`,
     pts: cut(s), form: "bar", valueOf: (p) => p.count, tipOf: uniq, events: rel(repo).events,
     cols: [["Clones", (p) => p.count], ["Unique", (p) => p.uniques], relCol(repo)],
   });
@@ -361,40 +367,49 @@ function render() {
     const { byDay, events } = eventsOf(D.npmPublish?.[pkg], "version", "published");
     const pts = cut(s);
     const after = events.filter((e) => pts.length && e.day > pts.at(-1).day);
-    card({
-      title: "npm downloads per day",
-      note: `${pkg} · dashed lines are publish days: registry mirrors and security scanners fetch every new version, so those days spike without people.`
+    tile("npm downloads", fmt(sum(pts)), `${rangeWord} · ${pkg}`, {
+      note: `${pkg} · downloads per day. Dashed lines are publish days: registry mirrors and security scanners fetch every new version, so those days spike without people.`
         + (after.length ? ` npm has not reported ${after.map((e) => fmtDay(e.day)).join(", ")} yet (${after.map((e) => e.label.replace("published ", "")).join("; ")}).` : ""),
       pts, form: "bar", valueOf: (p) => p.count, tipOf: (p) => fmt(p.count), events,
       cols: [["Downloads", (p) => p.count], ["Published", (p) => byDay.get(p.day)?.join(", ") ?? ""]],
     });
   }
-  for (const [ext, s] of first(D.marketplace)) card({
-    title: "VS Code Marketplace installs, total", note: `${ext} · one reading per day. Downloads in the tooltip include updates.`,
-    pts: cut(s), form: "line", valueOf: (p) => p.installs ?? 0, tipOf: (p) => `${fmt(p.installs)} installs · ${fmt(p.downloads)} downloads`,
-    cols: [["Installs", (p) => p.installs], ["Downloads", (p) => p.downloads]],
-  });
-  for (const [repo, s] of first(D.releases)) card({
-    title: `Release installs, total: ${short(repo)}`, note: `${repo} · every release's .tar.gz and .apk downloads added up; checksums and signatures left out.`,
-    pts: cut(s), form: "line", valueOf: (p) => p.total, tipOf: (p) => `${fmt(p.total)} downloads`, events: rel(repo).events,
-    cols: [["Total", (p) => p.total], relCol(repo)],
-  });
-  for (const [app, s] of first(D.playInstalls)) card({
-    title: `Play installs per day: ${appName(app)}`, note: `${app} · from Play Console's reports, which lag about two days.`,
-    pts: cut(s), form: "bar", valueOf: (p) => p.installs ?? 0,
-    tipOf: (p) => `${fmt(p.installs)} installs · ${fmt(p.uninstalls)} uninstalls · ${fmt(p.active)} active`,
-    cols: [["Installs", (p) => p.installs], ["Uninstalls", (p) => p.uninstalls], ["Active", (p) => p.active]],
-  });
-  for (const [app, s] of first(D.playListing)) {
-    if (D.playInstalls?.[app]?.length) continue;
-    const pts = cut(s).filter((p) => p.listed && p.min != null);
-    if (!pts.length) continue;
-    card({
-      title: `Play download range: ${appName(app)}`, note: `${app} · the public listing's rough figure; exact numbers come from the Console reports.`,
-      pts, form: "line", valueOf: (p) => p.min, tipOf: (p) => p.range, cols: [["Range", (p) => p.range]],
+  for (const [ext, s] of first(D.marketplace)) {
+    const g = growth(s, "installs");
+    tile("VS Code installs", fmt(g.now), g.delta == null ? `total · first reading ${fmtDay(g.firstDay)}` : `total · +${fmt(g.delta)} in ${rangeWord}`, {
+      note: `${ext} · Marketplace installs, one reading per day. Downloads in the tooltip include updates.`,
+      pts: cut(s), form: "line", valueOf: (p) => p.installs ?? 0, tipOf: (p) => `${fmt(p.installs)} installs · ${fmt(p.downloads)} downloads`,
+      cols: [["Installs", (p) => p.installs], ["Downloads", (p) => p.downloads]],
     });
   }
-  if (!$("#charts").children.length) $("#charts").innerHTML = `<div class="error">The archive has no rows yet. It fills when the daily job runs.</div>`;
+  for (const app of Object.keys(D.playInstalls ?? {})) if (!D.playListing?.[app]) (D.playListing ??= {})[app] = [{ listed: false, day: D.playInstalls[app].at(-1).day }];
+  for (const [app, s] of first(D.playListing)) {
+    // Play leaves "Total User Installs" at 0 in its current reports, so the headline is active devices.
+    const exact = (D.playInstalls?.[app] ?? []).filter((p) => p.active != null).at(-1);
+    const last = s.at(-1);
+    const value = exact ? fmt(exact.active) : last.listed ? last.range : "Not public";
+    const sub = exact ? `active devices · ${fmtDay(exact.day)}` : last.listed ? `Play's public range · ${fmtDay(last.day)}` : `no store page yet · checked ${fmtDay(last.day)}`;
+    const ranged = cut(s).filter((p) => p.listed && p.min != null);
+    const chart = D.playInstalls?.[app]?.length ? {
+      note: `${app} · installs per day from Play Console's reports, which lag about two days.`,
+      pts: cut(D.playInstalls[app]), form: "bar", valueOf: (p) => p.installs ?? 0,
+      tipOf: (p) => `${fmt(p.installs)} installs · ${fmt(p.uninstalls)} uninstalls · ${fmt(p.active)} active`,
+      cols: [["Installs", (p) => p.installs], ["Uninstalls", (p) => p.uninstalls], ["Active", (p) => p.active]],
+    } : ranged.length ? {
+      note: `${app} · the public listing's rough download range; exact numbers come from the Console reports.`,
+      pts: ranged, form: "line", valueOf: (p) => p.min, tipOf: (p) => p.range, cols: [["Range", (p) => p.range]],
+    } : null;
+    tile(`Play: ${appName(app)}`, value, sub, chart);
+  }
+  for (const [repo, s] of first(D.releases)) {
+    const g = growth(s, "total");
+    tile(`${short(repo)}: release installs`, fmt(g.now), g.delta == null ? `.tar.gz + .apk · first reading ${fmtDay(g.firstDay)}` : `.tar.gz + .apk · +${fmt(g.delta)} in ${rangeWord}`, {
+      note: `${repo} · every release's .tar.gz and .apk downloads added up; checksums and signatures left out.`,
+      pts: cut(s), form: "line", valueOf: (p) => p.total, tipOf: (p) => `${fmt(p.total)} downloads`, events: rel(repo).events,
+      cols: [["Total", (p) => p.total], relCol(repo)],
+    });
+  }
+  if (!$("#tiles").children.length) $("#tiles").innerHTML = `<div class="error">The archive has no rows yet. It fills when the daily job runs.</div>`;
   for (const b of $("#range").children) b.setAttribute("aria-pressed", String(Number(b.dataset.days) === days));
   draws.forEach((d) => d());
 }
@@ -411,12 +426,12 @@ addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => draws
 
 fetch("data.json", { cache: "no-store" })
   .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-  .then((d) => { DATA = d; render(); beacon(`rendered ${document.querySelectorAll(".card").length} cards at ${innerWidth}px`);
+  .then((d) => { DATA = d; render(); beacon(`rendered ${document.querySelectorAll(".tile").length} tiles at ${innerWidth}px`);
   })
   .catch((e) => {
     beacon(`failed ${e.message}`);
     $("#asof").textContent = "";
-    $("#charts").innerHTML = `<div class="error">Could not read the archive: ${e.message}</div>`;
+    $("#tiles").innerHTML = `<div class="error">Could not read the archive: ${e.message}</div>`;
   });
 </script>
 </body>

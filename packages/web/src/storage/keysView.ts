@@ -189,6 +189,8 @@ export const LS_VIEW = {
   usage: lsKey("usage"),
   /** Notification feed: what has been seen. */
   notifSeen: lsKey("notifSeen"),
+  /** The one-time note that information no longer counts on the bell: set once dismissed. */
+  notifInfoNote: lsKey("notifInfoNote"),
   /**
    * The sentences this phone has shown as toasts, newest first and bounded.
    *

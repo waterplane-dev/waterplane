@@ -13,7 +13,7 @@ but never counted into the badge.
   including what arrives while it is open). Components only read.
 - `notifFocus` (`store.ts`): the row a tap asked to see; written by `openNotif`, cleared by the sheet
   once scrolled to (`clearNotifFocus`).
-- Storage key: `LS.notifSeen` (`waterplane.notifSeen`) — per device, not synced.
+- Storage key: `LS.notifInfoNote` (`waterplane.notifInfoNote`) — per device: the one-time "information no longer counts" note was dismissed. `LS.notifSeen` is retired (the bell counts `needsYou`, not unseen).
 - Sheet: overlay `notifications` (not in `PERSISTED_OVERLAYS` — a reload lands on the screen
   underneath).
 - Wire frames: `notification`, `notification.list`, `notify.prefs` (in); `notify.prefs.set` (out); `notification.clear` (out, via

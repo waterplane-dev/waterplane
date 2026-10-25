@@ -123,6 +123,66 @@ final class Downloads {
                 : removeLegacy(ctx, name, size);
     }
 
+    /**
+     * Copy a file this app saved to Downloads back into {@code dest} — the
+     * installer's source once the app's own copy was dropped after the save
+     * ({@link ShellPullService#dropAfterSave}). The package manager reads an
+     * archive by PATH and a MediaStore row has none this app may use, so the
+     * bytes are staged for the length of one install and deleted after it.
+     *
+     * Matched exactly as {@link #remove} is: the display name the save read
+     * back and the byte count, so a later build sharing the name is never
+     * installed in this one's place. Returns false when the copy is gone or
+     * could not be read — the caller says the file is not on this phone.
+     */
+    static boolean stage(Context ctx, String name, long size, File dest) {
+        if (name == null || name.isEmpty() || name.contains("/")) return false;
+        File parent = dest.getParentFile();
+        if (parent != null && !parent.isDirectory() && !parent.mkdirs()) return false;
+        try (InputStream in = openSaved(ctx, name, size)) {
+            if (in == null) return false;
+            try (OutputStream out = new FileOutputStream(dest)) {
+                byte[] buf = new byte[64 * 1024];
+                int n;
+                while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            }
+        } catch (IOException | RuntimeException e) {
+            Log.w(TAG, "cannot stage from Downloads: " + e);
+            //noinspection ResultOfMethodCallIgnored
+            dest.delete();
+            return false;
+        }
+        if (size > 0 && dest.length() != size) {
+            //noinspection ResultOfMethodCallIgnored
+            dest.delete();
+            return false;
+        }
+        return true;
+    }
+
+    @Nullable
+    private static InputStream openSaved(Context ctx, String name, long size) throws IOException {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+            File f = dir == null ? null : new File(dir, name);
+            if (f == null || !f.isFile() || (size > 0 && f.length() != size)) return null;
+            return new FileInputStream(f);
+        }
+        ContentResolver cr = ctx.getContentResolver();
+        String sel = MediaStore.Downloads.DISPLAY_NAME + " = ?";
+        String[] args = { name };
+        if (size > 0) {
+            sel += " AND " + MediaStore.Downloads.SIZE + " = ?";
+            args = new String[] { name, String.valueOf(size) };
+        }
+        try (android.database.Cursor c = cr.query(MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                new String[] { MediaStore.Downloads._ID }, sel, args, null)) {
+            if (c == null || !c.moveToFirst()) return null;
+            Uri uri = android.content.ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, c.getLong(0));
+            return cr.openInputStream(uri);
+        }
+    }
+
     @RequiresApi(Build.VERSION_CODES.Q)
     @Nullable
     private static String removeMediaStore(Context ctx, String name, long size) {

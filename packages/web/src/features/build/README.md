@@ -31,6 +31,13 @@ lane per repo — never a second send path), `nav.overlay/open/close/startSessio
 `core().nav.overlay === "build"`; the buffer still moves so opening the sheet shows everything.
 `build.save`/`build.cancel`/`artifacts.save` are live-only and say so when there is no link.
 `build.scan`/`build.options` are plain sends because the form is the receipt.
+**A build on a clock**: an entry a rule runs wears a `CalendarClock` cue under its command
+(`buildSchedule.ts` `buildScheduleCue`, off `core().world.schedules`); its tap is Automation cut to
+exactly the ids counted. *run on a clock…* lives in the entry's own editor (absent with a sentence
+while the fields hold unsaved edits) and opens `BuildScheduleForm.tsx` — the Send sheet's `RuleEditor`
+over `useRuleFields`, `BuildRunAsk`'s `ParamField`s. Save is `schedule.save` on the durable queue
+(`saveBuildSchedule`). A build rule's card *edit* arrives as `openBuildFor(repo, { schedule })` via
+`buildScheduleEdit`, taken once the entry is in the list.
 
-**Exports for App**: `openBuildFor(repo)`, `useBuildNames()` (Send sheet's `buildName`, subscribed so
+**Exports for App**: `openBuildFor(repo, opts?)`, `useBuildNames()` (Send sheet's `buildName`, subscribed so
 a list that lands later repaints), `buildNameOf(cwd, id)` (the `shell` intent, read at tap time), and the receipt words `buildLane`/`buildQueueTitle`/`buildQueuedToast`.

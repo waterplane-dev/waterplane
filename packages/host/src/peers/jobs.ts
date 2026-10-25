@@ -45,6 +45,7 @@ import {
 import type { PeerClient, PeerReply, PeerTarget } from "./client.js";
 import type { PeerStore } from "./store.js";
 import { readJsonGuarded, writeJsonAtomic } from "../jsonstore.js";
+import type { NotifyParams } from "../notifytypes.js";
 
 /** What the ledger keeps beyond `PeerJobRecord` — additive, so a ledger from a build without it still reads. */
 export interface PeerJobRec extends PeerJobRecord {
@@ -90,7 +91,7 @@ export interface PeerJobsDeps {
   addBacklog(p: { cwd: string; text: string; label: string; id: string; peer: string }): Promise<boolean>;
   /** Write bytes into the repo's outbox as `peer-<peer>-<stem>`; the repo-relative path, or null. */
   saveArtifact(cwd: string, peer: string, name: string, bytes: Buffer): string | null;
-  notify(title: string, body: string, backlog?: { cwd: string; ids: string[] }): void;
+  notify(n: Pick<NotifyParams, "title" | "body" | "backlog" | "outcome">): void;
   log?(msg: string): void;
 }
 
@@ -450,6 +451,11 @@ export class PeerJobs {
     r.reported = true;
     r.updatedAt = this.d.now();
     this.persist();
-    this.d.notify(`Report from ${r.peer}`, `${r.peer}'s job ${r.state === "done" ? "finished" : r.state}; ${why} — the report is in this repo's backlog.`, ok ? { cwd: r.cwd, ids: [`${peerReportId(r.peer, r.key)}-backlog`] } : undefined);
+    this.d.notify({
+      title: `Report from ${r.peer}`,
+      body: `${r.peer}'s job ${r.state === "done" ? "finished" : r.state}; ${why} — the report is in this repo's backlog.`,
+      ...(ok ? { backlog: { cwd: r.cwd, ids: [`${peerReportId(r.peer, r.key)}-backlog`] } } : {}),
+      outcome: r.state === "done" ? "ok" : "failed",
+    });
   }
 }

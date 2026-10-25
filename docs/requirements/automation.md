@@ -128,7 +128,7 @@ Headroom (percentage) scheduling conditions accept a custom user-entered value, 
 - shipped: 6a63d3b
 
 ### R-automation-029 · shipped
-Multiple queued or scheduled items can be multi-selected and rescheduled to a new execution time in one action, using the full When editor (not just a time), from both the global schedules list and per-repository lists.
+Multiple queued or scheduled items can be multi-selected and rescheduled to a new execution time in one action, using the full When editor (not just a time), from both the Automation sheet's clock list and per-repository lists.
 - asked: 2026-09-24
 - shipped: 6e339d7, be32b89, 6beef0b
 
@@ -324,3 +324,11 @@ When the person has not picked repos and is on pace to leave a large part of the
 ### R-automation-069 · requested
 A weekly pass over the week-end burn rows, and only those, lifts the weekly and session budget caps for them until the weekly reset.
 - asked: 2026-10-24
+
+### R-automation-070 · shipped
+The schedules sheet is called Automation. Its foot, "Runs on its own, no clock", lists what else this desktop starts by itself — backlog auto with the rows it will start next, the repo's auto-download rule, the week-end burn, peer jobs waiting here — one sentence and one door each, to where that thing is managed; per repo when the sheet is cut to one repo. A count opens exactly those rows; a source the phone has not read draws no line.
+- asked: 2026-10-25 (automation UI plan, section C)
+
+### R-automation-071 · shipped
+A schedule can run a build entry: each occurrence posts one ordinary build run (no agent, no tokens) that says which rule fired it. Parameter values are picked on the rule's form, seeded from the build's defaults; a missing value, an unknown build or a repo this desktop does not serve is refused on save in words, and a build deleted later fails that occurrence in words. On the build sheet an entry with rules wears a clock and one line ("every weekday 07:00 · next in 3h", "paused" said in text) whose tap opens Automation cut to exactly those rules; "run on a clock…" sits in the entry's editor.
+- asked: 2026-10-25 (owner, dictated: "if build tool entries are automated they should link to it and have visual clues for that")

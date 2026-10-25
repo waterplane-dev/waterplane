@@ -10,7 +10,7 @@ import { extname } from "node:path";
 import { healthSpendWeeks, logTag, type SessionInfo } from "@waterplane/shared";
 import { repoOfWorktree } from "../tokenstats.js";
 import { suggestCommitMessage } from "../commitmsg.js";
-import { gitBranches, gitCheckout, gitCommit, gitCreateBranch, gitDeleteBranch, gitBlob, gitDiff, gitPull, gitStage, gitStatus, isSecretFile, pushState, readTextFile, startPush } from "../git.js";
+import { gitBranches, gitCheckout, gitCommit, gitCreateBranch, gitDeleteBranch, gitBlob, gitDiff, gitPull, gitStage, gitStatus, isSecretFile, pushState, readTextFile, startPush, type GitRepoRef } from "../git.js";
 import { gitFetch, gitLog, gitShow } from "../gitlog.js";
 import { confirmGate, fixGateRefusal, withFixConfirms } from "../confirmgate.js";
 import { checkRepoCompliance, fixRepoCompliance, setCheckIgnored, setRepoContextLimits } from "../compliance.js";
@@ -44,6 +44,13 @@ const TEXT_SIDE_MAX = 1024 * 1024;
 
 function leftoverInput(wt: string, branch: string, sessions: SessionInfo[]): LeftoverInput {
   return { wt, branch, sessions, ownerLive: worktreeOwners(sessions).has(wt) };
+}
+
+/** The repo a git run is filed under: the worktree's own id (a worktree is
+ *  its own chip), named the way a person tells it apart — the repo, plus the
+ *  branch for a linked worktree. */
+function gitRef(t: RepoTarget): GitRepoRef {
+  return { id: t.id, name: t.isPrimary ? t.repoName : `${t.repoName} (${t.branch})`, branch: t.branch };
 }
 
 export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
@@ -383,8 +390,10 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
   }),
   // A pull is seconds (a fetch and a fast-forward or rebase, no hook), so it
   // is one held request, not a job like the push below.
-  route<RepoReq>("POST", "git/pull/*", async ({ res, wt }) => {
-    const r = await gitPull(wt);
+  // Both report their outcome (`gitRef`): a failure is a notification and the
+  // repo's red chip until the next success of that verb (`gitnotify.ts`).
+  route<RepoReq>("POST", "git/pull/*", async ({ res, wt, target }) => {
+    const r = await gitPull(wt, gitRef(target));
     json(res, r, r.ok ? 200 : 400);
     return true;
   }),
@@ -392,9 +401,9 @@ export const REPO_WORK_ROUTES: readonly ApiEntry<RepoReq>[] = [
   // answers at once with its state; the phone then asks GET until it ends.
   // Without it the request is held open until the push ends — what a bundle
   // from before the job asks for, and it waits on the SAME job.
-  route<RepoReq>("POST", "git/push/*", async ({ req, res, wt }) => {
+  route<RepoReq>("POST", "git/push/*", async ({ req, res, wt, target }) => {
     const body = await readJson(req, { optional: true }) as { background?: unknown } | null;
-    const job = startPush(wt);
+    const job = startPush(wt, gitRef(target));
     if (body?.background === true) { json(res, pushState(wt)); return true; }
     const r = await job.done;
     json(res, r, r.ok ? 200 : 400);

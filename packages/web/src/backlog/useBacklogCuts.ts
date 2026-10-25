@@ -15,6 +15,7 @@ import {
   nameableInCut, realLabel, retimeEligible, clockPicks, runAgainAimedCount, runAgainEligible, runAgainIds, runAgainState,
   type BacklogFilter, type FocusRunBreakdown,
 } from "../backlogFilter";
+import { clockAhead as clockAheadAt, nextFireIdsOf, runGroupKey } from "../backlogFilter/nextFire";
 import { autoSlotSessions } from "../autoSessions";
 import { busyInCheckout } from "../sendIntent";
 import { slotChecks } from "../slotCheck";
@@ -216,17 +217,8 @@ export function useBacklogCuts(
   // never keeps for a session-target row: nothing re-aims it, so it waits
   // exactly where it is until a person does. It also fed `nextFireIds`, so the
   // default group's `▶ next` could point at a row that is never going to run.
-  const groupKeyOf = (it: BacklogItem) =>
-    !it.targetSessionId ? ""
-      : repoSessions.some((s) => s.id === it.targetSessionId) ? it.targetSessionId
-        // A row that reopens its conversation is not held by the closed
-        // session: it runs, in a session of its own, which is exactly what the
-        // default group's head promises. Filing it under *Aimed at a session
-        // that closed* would put a row that is going to fire under a head that
-        // says nothing will — and take it out of `nextFireIds`, where it
-        // belongs.
-        : it.reopensConv ? ""
-          : CLOSED_GROUP;
+  const repoSessionIds = new Set(repoSessions.map((s) => s.id));
+  const groupKeyOf = (it: BacklogItem) => runGroupKey(it, repoSessionIds);
   const groups: BLGroup[] = [];
   const defaultItems = visible.filter((it) => groupKeyOf(it) === "");
   // A group is drawn only with rows in it: an empty head plus "Nothing aimed
@@ -280,15 +272,12 @@ export function useBacklogCuts(
   // that the host will not make until, in the user's case, next Saturday. A row
   // whose instant has already come (`nextAt <= now`) is genuinely next and
   // keeps the mark.
-  const nextFireIds = new Set<string>();
   // A `manual` row (an agent's add) is never next either: nothing but its own
   // `fire` starts it, so it is held like a row whose clock is still ahead.
-  const clockAhead = (it: BacklogItem) => !!it.manual || (!!it.at && (it.at.nextAt == null || it.at.nextAt > now));
-  if (p.auto) for (const g of groups) {
-    if (g.key === CLOSED_GROUP) continue;
-    const n = g.items.find((it) => it.status === "queued" && !clockAhead(it));
-    if (n) nextFireIds.add(n.id);
-  }
+  // ONE predicate (`nextFireIdsOf`, `backlogFilter/nextFire.ts`), shared with
+  // the Automation sheet's "N rows will start when free".
+  const clockAhead = (it: BacklogItem) => clockAheadAt(it, now);
+  const nextFireIds = nextFireIdsOf(displayOrder, repoSessionIds, p.auto, now);
   /**
    * **What the ids cut on screen is actually going to do** — the same facts
    * `nextFireIds` is derived from, counted once, for the one sentence that used

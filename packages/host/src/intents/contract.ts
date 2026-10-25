@@ -171,6 +171,10 @@ export interface IntentExecutors {
   deliver(i: Intent, sessionId: string): Promise<ExecutorResult>;
   /** The schedule's "queue a work item" adapter — see `ORIGIN_SCHEDULE_WORK`. */
   workItem(i: Intent): Promise<ExecutorResult>;
+  /** A build rule's occurrence (`postsScheduledBuild`): post ONE ordinary
+   *  build run through the build manager's own `run()`, stamped with the
+   *  rule's origin, and finish — `childId` is the run. */
+  scheduledBuild?(i: Intent): Promise<ExecutorResult>;
   /** `{kind:"sessions"}` — re-drive sessions that already exist, spawn nothing. */
   followUp?(i: Intent, sessionIds: string[]): Promise<ExecutorResult>;
   /** `{kind:"shell"}` — a build command, no agent. Resolves when the process

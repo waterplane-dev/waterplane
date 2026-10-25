@@ -93,9 +93,10 @@ export function CollageSheet({ files, onCombine, onSeparate, onClose }: Props) {
   // has to re-create (or worse, mis-match) them.
   const thumbs = useRef(new Map<CollageItem, string>());
 
-  // The width this image will actually be uploaded at. Drawing wider than that
-  // is memory spent on pixels `scaleForUpload` throws away on the way out — and
-  // on a phone that is where the encode fails.
+  // The width each PANEL will actually be uploaded at (`uploadWidthFor`: the
+  // cap is per panel, so four across is not four quarter-width screens).
+  // Drawing wider than that is memory spent on pixels `scaleForUpload` throws
+  // away on the way out — and on a phone that is where the encode fails.
   const upload = effectiveMaxWidth();
 
   // Decode once, up front. Every later render draws these bitmaps again; a
@@ -147,7 +148,7 @@ export function CollageSheet({ files, onCombine, onSeparate, onClose }: Props) {
   const auto = items && items.length > 1 ? autoCols(items, gap) : 1;
   const chosen = cols ?? auto;
   const plan = items && items.length > 1
-    ? planCollage(items, { cols: chosen, gap, ...(upload.width ? { maxWidth: upload.width } : {}) })
+    ? planCollage(items, { cols: chosen, gap, ...(upload.width ? { maxWidth: upload.width * chosen } : {}) })
     : null;
 
   function thumbUrl(it: CollageItem): string {
@@ -191,8 +192,10 @@ export function CollageSheet({ files, onCombine, onSeparate, onClose }: Props) {
     setBusy(true);
     setErr(null);
     const res = await renderCollage(items, {
-      cols: cols ?? undefined, gap, labels,
-      ...(upload.width ? { maxWidth: upload.width } : {}),
+      // `chosen`, not `cols ?? undefined`: the width cap below is per column,
+      // so the column count must be the one it was computed for.
+      cols: chosen, gap, labels,
+      ...(upload.width ? { maxWidth: upload.width * chosen } : {}),
     });
     if (!res) {
       setBusy(false);
@@ -201,7 +204,7 @@ export function CollageSheet({ files, onCombine, onSeparate, onClose }: Props) {
     }
     setReduced(res.reduced);
     onCombine(
-      new File([res.blob], collageFileName(items.length), { type: "image/jpeg" }),
+      new File([res.blob], collageFileName(items.length, res.layout.cols), { type: "image/jpeg" }),
       collagePanelNote(items.length, res.layout.cols, labels),
     );
   }
@@ -284,7 +287,7 @@ export function CollageSheet({ files, onCombine, onSeparate, onClose }: Props) {
       {preview && !err && (
         <Hint>
           One image, {collageLabel(count, chosen)}{labels ? ", panels numbered" : ""} · goes to the
-          annotator next, and uploads at {widthLabel(upload.width)}{upload.auto ? " (auto)" : ""}.
+          annotator next, and uploads at {widthLabel(upload.width)}{upload.width ? " per panel" : ""}{upload.auto ? " (auto)" : ""}.
           {reduced ? " This device couldn't draw it at full size, so it was drawn smaller." : ""}
           {` Preview is ${fmtSize(preview.bytes)}.`}
         </Hint>

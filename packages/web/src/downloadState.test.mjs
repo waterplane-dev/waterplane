@@ -198,6 +198,17 @@ test("a file the folder confirms is THERE is not an offer to save", () => {
   assert.equal(downloadAction(saved({ savedPresent: true })), "open");
 });
 
+test("a file whose app copy was dropped after the save is in Downloads, never an offer to save", () => {
+  // Not yet re-asked: the drop itself was the folder's answer.
+  const st = downloadStatus(saved({ droppedAt: 10 }));
+  assert.equal(st.label, "in Downloads");
+  assert.match(st.detail, /the only copy/);
+  assert.equal(downloadAction(saved({ droppedAt: 10 })), "open");
+  // Gone from Downloads too: the record turns `evicted` (`verifySaved`), and
+  // the button offers a fresh fetch.
+  assert.equal(downloadAction(saved({ droppedAt: 10, savedPresent: false, evicted: true })), "start");
+});
+
 test("a file that WAS saved and is gone from Downloads says so, and offers to put it back", () => {
   const st = downloadStatus(saved({ savedPresent: false }));
   assert.match(st.detail, /not in Downloads any more/);

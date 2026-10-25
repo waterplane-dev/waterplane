@@ -15,8 +15,9 @@
  *  - Pure decision (`shouldPushAgent`) apart from the plumbing, like
  *    `healthwatch.ts`: `notify` and the setting are injected and read at call time.
  */
-import type { NotificationKind, SessionInfo } from "@waterplane/shared";
+import type { SessionInfo } from "@waterplane/shared";
 import { agentPushText, agentWindowWarnSetting } from "@waterplane/shared";
+import type { Notify } from "./notifytypes.js";
 
 /** Agent ids already pushed, per session id. */
 export type AgentSeen = Map<string, Set<string>>;
@@ -33,7 +34,7 @@ export function shouldPushAgent(
 }
 
 export interface AgentWatchDeps {
-  notify(kind: NotificationKind, p: { title: string; body: string; sessionId?: string; tag?: string }): void;
+  notify: Notify;
   /** The raw synced `agentWindowWarn` string, or undefined; asked on every reading. */
   setting(): string | undefined;
 }

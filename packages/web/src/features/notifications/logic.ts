@@ -1,3 +1,5 @@
+import { levelOf, needsYou, notifyLevel, type NotificationItem, type NotificationKind } from "@waterplane/shared";
+
 /**
  * The notification feed's pure half — no React, no storage, no socket — so
  * `logic.test.mjs` runs it under `node --test` straight over the TypeScript.
@@ -6,21 +8,95 @@
 /** Rows kept in the feed on this phone; a live push past this drops the oldest. */
 export const FEED_CAP = 100;
 
-/** A live `notification` push: newest first, capped. A new array, never a mutation. */
-export function pushNotif<T>(prev: readonly T[], item: T, cap = FEED_CAP): T[] {
-  return [item, ...prev].slice(0, cap);
+/** A live `notification` push: newest first, capped. A new array, never a
+ *  mutation. The cap only ever drops information and handled rows: an
+ *  unhandled attention item stays until it is handled, however busy the day. */
+export function pushNotif<T extends Pick<NotificationItem, "kind" | "level" | "handled">>(prev: readonly T[], item: T, cap = FEED_CAP): T[] {
+  const all = [item, ...prev];
+  let room = cap - all.filter((n) => needsYou(n)).length;
+  return all.filter((n) => {
+    if (needsYou(n)) return true;
+    if (room > 0) { room--; return true; }
+    return false;
+  });
 }
 
-/** The newest `ts` in the feed — what "seen" is advanced to when the feed is on
- *  screen. 0 for an empty feed. */
-export function newestTs(items: readonly { ts: number }[]): number {
-  return items.reduce((m, n) => Math.max(m, n.ts), 0);
+/** Every desktop alert that still needs the person: the ONE cut behind the
+ *  bell's number, the sheet a tap on it opens, and its "n of N". */
+/**
+ * The unhandled attention keys the repo listing turns into chips (`git:` and
+ * `build:`, `RepoTarget.gitFailed`/`buildFailed`). The listing is an HTTP read,
+ * so a change in this set is the phone's cue to re-read it — the chip and the
+ * bell stay one predicate instead of the chip waiting for the next rescan.
+ */
+export function repoChipKeys(items: readonly NotificationItem[]): string {
+  return items.filter((n) => needsYou(n) && /^(git|build):/.test(n.key ?? "")).map((n) => n.key).sort().join("\n");
 }
 
-/** How many desktop alerts arrived after the seen marker. This phone's own
- *  toasts are never counted — a badge that counts "copied" is one nobody reads. */
-export function unreadCount(items: readonly { ts: number }[], seenTs: number): number {
-  return items.filter((n) => n.ts > seenTs).length;
+export function needsYouItems<T extends Pick<NotificationItem, "kind" | "level" | "handled">>(items: readonly T[]): T[] {
+  return items.filter((n) => needsYou(n));
+}
+
+/** The bell's number: items that need you. Information never counts. */
+export function needsYouCount(items: readonly Pick<NotificationItem, "kind" | "level" | "handled">[]): number {
+  return needsYouItems(items).length;
+}
+
+/** What the sheet lists. `only` (ids) is a cut a count opened; null = everything.
+ *  `shown`/`total` feed "n of N" — the same predicate the number used. */
+export function feedCut<T extends Pick<NotificationItem, "id">>(items: readonly T[], only: readonly string[] | null): { shown: T[]; total: number; filtered: boolean } {
+  if (!only) return { shown: [...items], total: items.length, filtered: false };
+  const set = new Set(only);
+  return { shown: items.filter((n) => set.has(n.id)), total: items.length, filtered: true };
+}
+
+export function feedCutWords(shown: number, total: number): string {
+  return `${shown} of ${total} shown`;
+}
+
+/** The two sections of a (cut) feed. Needs-you: unhandled first, then handled
+ *  (a handled attention item stays, saying how). Information: the rest. */
+export function feedSections<T extends Pick<NotificationItem, "kind" | "level" | "handled" | "ts">>(items: readonly T[]): { needs: T[]; handled: T[]; info: T[] } {
+  const needs: T[] = [], handled: T[] = [], info: T[] = [];
+  for (const n of items) {
+    if (levelOf(n) === "info") info.push(n);
+    else if (n.handled) handled.push(n);
+    else needs.push(n);
+  }
+  return { needs, handled, info };
+}
+
+/** Items that turned handled-by-cause between two `notification.list`s AND
+ *  whose red chip (`git:` / `build:` key) vanishes with it: each is toasted
+ *  once. Other resolves are silent (the row already says the note), and a
+ *  repeat failure replacing the old one is never told. Only items the phone
+ *  already held as unhandled count, so a first list never toasts history. */
+export function newlyResolved<T extends Pick<NotificationItem, "id" | "handled" | "key">>(prev: readonly T[], next: readonly T[]): T[] {
+  const was = new Map(prev.map((n) => [n.id, n]));
+  return next.filter((n) => {
+    const o = was.get(n.id);
+    return !!o && !o.handled && n.handled?.by === "resolved" && !!n.handled.note && n.handled.note !== "replaced by a newer one" && /^(git|build):/.test(n.key ?? "");
+  });
+}
+
+/** The toast for one resolved chip: what it refers to, then why it went. */
+export function resolvedWords(n: Pick<NotificationItem, "title" | "handled">): string {
+  return `${n.title} — ${n.handled?.note ?? "resolved"}`;
+}
+
+/** "done 14:02", or the host's note when the cause went away. */
+export function handledWords(h: NonNullable<NotificationItem["handled"]>): string {
+  if (h.note) return h.note;
+  const d = new Date(h.at);
+  return `done ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+export const INFO_NOTE_TEXT = "Information no longer counts on the bell; it is listed below. Settings › Notifications can push it again.";
+
+/** Which level a kind lands in, in the settings row's words. */
+export function levelWords(kind: NotificationKind): string {
+  if (kind === "followup") return "needs you — a launch option's flag is information";
+  return notifyLevel(kind) === "attention" ? "needs you" : "information — failures of a run are needs you";
 }
 
 /** The badge's words: the count, or `9+` past nine. */
@@ -67,6 +143,7 @@ export const NOTIF_LABEL: Record<string, { name: string; note: string }> = {
   autofire: { name: "Auto-answered", note: "A question was answered for you, and with what." },
   idle: { name: "Turn finished", note: "Fires on EVERY turn of EVERY session — a handful of agents on a backlog is a notification a minute, which buries the two kinds above. Off unless you turn it on." },
   info: { name: "Other", note: "Sessions opening, builds, host notices." },
+  git: { name: "Git pull / push", note: "A pull or push the desktop ran ended. A failed one needs you and stays until the next run of that verb works or you tap done; a successful push is information; a successful pull says nothing." },
   undelivered: { name: "Prompt not delivered", note: "A session opened but the prompt never made it in. The only report of a message that is otherwise gone — the phone acked the op long before the typing failed." },
 };
 
@@ -86,12 +163,14 @@ export type NotifTarget =
   | { to: "backlogByName" }
   | { to: "repohealth"; repoId: string }
   | { to: "tokens" }
+  | { to: "git"; repoId: string }
+  | { to: "build"; repoId: string; buildId?: string }
   | { to: "weekburn" }
   | { to: "row" };
 
 export function notifTarget(n: {
   kind: string; file?: unknown; image?: unknown; sessionId?: string; plugin?: string;
-  backlog?: { cwd: string; ids: string[] }; open?: { to: string; repoId?: string; id?: string };
+  backlog?: { cwd: string; ids: string[] }; open?: { to: string; repoId?: string; id?: string; buildId?: string };
 }): NotifTarget {
   if (n.file) return { to: "file" };
   if (n.plugin && !n.sessionId && !n.image) return { to: "plugin", id: n.plugin };
@@ -101,6 +180,8 @@ export function notifTarget(n: {
   const o = n.open;
   if (o?.to === "repohealth" && o.repoId) return { to: "repohealth", repoId: o.repoId };
   if (o?.to === "tokens") return { to: "tokens" };
+  if (o?.to === "git" && o.repoId) return { to: "git", repoId: o.repoId };
+  if (o?.to === "build" && o.repoId) return { to: "build", repoId: o.repoId, buildId: o.buildId };
   if (n.kind === "weekburn") return { to: "weekburn" };
   if (o?.to === "plugin" && o.id) return { to: "plugin", id: o.id };
   if (n.kind === "backlog") return { to: "backlogByName" };

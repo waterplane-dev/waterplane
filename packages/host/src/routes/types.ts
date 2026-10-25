@@ -89,6 +89,9 @@ export interface InputVerdict {
  * change that matters is that they are now PASSED, which is what lets a test
  * construct two of them instead of booting the whole daemon.
  */
+export type { Notify, NotifyParams } from "../notifytypes.js";
+import type { NotifyParams } from "../notifytypes.js";
+
 export interface HostCtx {
   readonly ROOT: string;
   readonly BOOT_ID: string;
@@ -155,8 +158,31 @@ export interface HostCtx {
    *  allow-list by `send`). Set at the upgrade, overridden by `hello.role`. */
   readonly wsRole: WeakMap<WebSocket, ClientRole>;
 
-  /** The in-app notification feed, newest first. */
+  /** The INFORMATION half of the feed, newest first, memory only (cap 100).
+   *  The feed a client is sent is `notificationFeed()`, never this alone. */
   readonly notifications: NotificationItem[];
+  /** The whole feed a client is sent: information (memory) merged with the
+   *  persisted attention items (`attentionstore.ts`), newest first. */
+  notificationFeed(): NotificationItem[];
+  /** The feed's trash button: both halves emptied, the empty list broadcast. */
+  clearNotifications(): void;
+  /** The person's done on one attention item (`notification.handle`):
+   *  idempotent; a change persists and broadcasts `notification.list`. */
+  handleNotification(id: string): boolean;
+  /**
+   * The CAUSE of an attention item went away: every unhandled item filed under
+   * exactly `key` becomes handled `{by:"resolved", note}`, is kept (it stays in
+   * the feed, stops counting) and `notification.list` is broadcast. `note` is
+   * one line the phone shows on the row ("fixed by the 14:02 push", "answered").
+   * Returns how many items it resolved; 0 is a silent no-op (nothing written,
+   * nothing broadcast), so a call site may call it on every success.
+   */
+  resolveAttention(key: string, note: string): number;
+  /** The same over every key starting with `prefix` (e.g. `build:<repoId>:`
+   *  when a repo is gone). Exact `resolveAttention` is what a cause normally uses. */
+  resolveAttentionPrefix(prefix: string, note: string): number;
+  /** The persisted attention items (read by the repo listing's chips). */
+  readonly attention: import("../attentionstore.js").AttentionStore;
   /** Per-session memory of the strip's files already announced: relPath → mtime. */
   readonly imgSeen: Map<string, Map<string, number>>;
   readonly pullSeen: Map<string, { scope: "outbox" | "repo"; paths: Set<string> }>;
@@ -170,14 +196,9 @@ export interface HostCtx {
 
   send(ws: WebSocket, msg: HostMessage): void;
   broadcast(msg: HostMessage): void;
-  notify(kind: NotificationKind, p: {
-    title: string; body: string; sessionId?: string; tag?: string;
-    image?: { repoId: string; relPath: string };
-    file?: { repoId: string; relPath: string; name: string; size: number; mtime?: number };
-    pull?: string;
-    /** Id of the plugin that posted it (host-filled); a tap opens that plugin. */
-    plugin?: string;
-  }): void;
+  /** Fire a notification (`server/clients.ts`): feed + broadcast, and an OS
+   *  push when it is attention (or carries `pull`, or `pushInfo` is on). */
+  notify(kind: NotificationKind, p: NotifyParams): void;
 
   backlogSnapshot(): HostMessage;
   /** Both of these are now VIEWS of the intent store — see `intents/adapters.ts`

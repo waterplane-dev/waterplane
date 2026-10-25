@@ -209,12 +209,14 @@ const PINS = [
   },
   {
     name: "sessions emits",
+    // roster.ts 13 → 14 (2026-10-25, R-notifications-015): `followUpCleared` names the keys a cleared
+    // flag leaves, closed sessions included, so their attention item resolves — a new fact, not a copy.
     // roster.ts 11 → 13 (2026-10-21, R-conversations-007): `bookmarkChanged` re-sends a live
     // session's `updated` and the closed stack when its conversation's bookmark moves.
     // boxes.ts 6 → 7 (2026-10-21, backend v2 WP4): a typed answer the CLI never closed puts
     // `prompt.answerNote` on the box and re-sends `updated` once.
     re: /\b(?:this|core)\.emit\(\s*"/g, scope: SESSIONS,
-    today: { "sessions.ts": 9, "sessions/boxes.ts": 7, "sessions/budgetwatch.ts": 4, "sessions/convid.ts": 5, "sessions/drive.ts": 3, "sessions/idlewatch.ts": 1, "sessions/links.ts": 1, "sessions/livemode.ts": 2, "sessions/record.ts": 6, "sessions/ctxseries.ts": 2, "sessions/resume.ts": 6, "sessions/roster.ts": 13, "sessions/sidechannel.ts": 2, "sessions/turn.ts": 11, "sessions/wall.ts": 18 },
+    today: { "sessions.ts": 9, "sessions/boxes.ts": 7, "sessions/budgetwatch.ts": 4, "sessions/convid.ts": 5, "sessions/drive.ts": 3, "sessions/idlewatch.ts": 1, "sessions/links.ts": 1, "sessions/livemode.ts": 2, "sessions/record.ts": 6, "sessions/ctxseries.ts": 2, "sessions/resume.ts": 6, "sessions/roster.ts": 14, "sessions/sidechannel.ts": 2, "sessions/turn.ts": 11, "sessions/wall.ts": 18 },
     // turn.ts 10 → 11: `setCliSuggestion` is a NEW fact (the CLI's next-prompt proposal), its own emit, not a copy.
     // claude onto the sources seam (design §10): the pipe-live emit moved turn.ts → sidechannel.ts, and
     // UserPromptSubmit's idle-clear emit was the SAME line as `sourceTurn`'s started edge — one path now, one site.
@@ -223,7 +225,7 @@ const PINS = [
   {
     name: "main's subscriptions (sessions.on)",
     re: /\bsessions\.on\(\s*"/g, scope: MAIN,
-    today: { "server/sessionEvents.ts": 21 }, // +2 (2026-10-21): agentwatch.ts's `updated` and `exit`
+    today: { "server/sessionEvents.ts": 22 }, // +2 (2026-10-21): agentwatch.ts's `updated` and `exit`; +1 (2026-10-25): `followUpCleared`
     why: "a listener registered twice runs twice",
   },
   {
@@ -309,7 +311,7 @@ const ORDERED = [
   {
     name: "sessions.on registration order (server/sessionEvents.ts)",
     file: "server/sessionEvents.ts", re: /\bsessions\.on\(\s*"(\w+)"/g,
-    today: ["turnEnded", "exit", "updateBanner", "data", "exit", "closed", "updated", "followUp", "history", "created", "exit", "awaiting", "prompt", "limitQueue", "limit", "idle", "budgetTripped", "budgetEscDue", "updated", "exit", "created"],
+    today: ["turnEnded", "exit", "updateBanner", "data", "exit", "closed", "updated", "followUpCleared", "followUp", "history", "created", "exit", "awaiting", "prompt", "limitQueue", "limit", "idle", "budgetTripped", "budgetEscDue", "updated", "exit", "created"],
   },
   {
     name: "intents.on registration order (server/intentEvents.ts)",

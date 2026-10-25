@@ -4,16 +4,18 @@
  * APK's background link) is the host tools' rows, drawn after these.
  */
 import { NOTIFICATION_KINDS, notifyEnabled } from "@waterplane/shared";
-import { Bell, BellOff } from "lucide-react";
+import { Bell, BellOff, Info } from "lucide-react";
 import { SetAction, SetCustom, SetSwitch } from "../../SettingsKit";
-import { openNotifs, setNotifyKind } from "./actions";
-import { NOTIF_LABEL } from "./logic";
+import { openNotifs, setNotifyKind, setPushInfo } from "./actions";
+import { NOTIF_LABEL, levelWords } from "./logic";
 import { NOTIF_ICON } from "./NotificationsSheet";
-import { useNotifyPrefs, useUnread } from "./store";
+import { pushInfo, useNotifyPrefs, useUnread } from "./store";
+import { useStore } from "../../sdk";
 
 export function NotificationSettings() {
   const unreadNotifs = useUnread();
   const notifyPrefs = useNotifyPrefs();
+  const infoPushed = useStore(pushInfo);
   return (
     <>
       <SetAction
@@ -40,12 +42,18 @@ export function NotificationSettings() {
                 key={k} label={meta?.name ?? k} icon={on ? Icon : BellOff}
                 on={on}
                 onChange={() => setNotifyKind(k, !on, meta?.name ?? k)}
-                note={meta?.note}
+                note={meta ? `${meta.note} Lands in: ${levelWords(k)}.` : undefined}
               />
             );
           })}
         </div>
       </SetCustom>
+
+      <SetSwitch
+        label="Push information too" icon={Info} on={infoPushed}
+        onChange={() => setPushInfo(!infoPushed)}
+        note="Off: only what needs you buzzes the phone. On: receipts (a push that went through, a new file) push as well. Either way they are listed in the feed and never count on the bell."
+      />
     </>
   );
 }

@@ -30,7 +30,7 @@ export const schedulesAt = createStore<number>(loadSchedulesSnap().at);
 export const scheduleFocus = createStore<HorizonBucket | null>(null);
 /** …and the rules cut the sheet was opened on by ids (a backlog row's
  *  *from the schedule “x”*, a repo row's clock chip). Same lifetime. */
-export const scheduleFocusIds = createStore<{ ids: string[]; label: string } | null>(null);
+export const scheduleFocusIds = createStore<{ ids: string[]; label: string; repoDir?: string } | null>(null);
 
 /** The rule list as the host last said it (or as the cache remembers it). */
 export function useSchedules(): ScheduleEntry[] {

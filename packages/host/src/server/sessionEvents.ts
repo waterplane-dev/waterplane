@@ -89,14 +89,25 @@ export function wireSessionEvents(ctx: ServerCtx) {
     ctx.broadcast({ t: "session.exit", id, code });
     // A standing rule a person made lives exactly as long as its session (`answergate.ts`).
     forgetRules({ sessionId: id });
+    ctx.resolveAttention(`prompt:${id}`, "session closed");
   });
   ctx.sessions.on("closed", (closed) => ctx.broadcast({ t: "closed.list", closed }));
-  ctx.sessions.on("updated", (info: SessionInfo) => ctx.broadcast({ t: "session.updated", session: info }));
+  ctx.sessions.on("updated", (info: SessionInfo) => {
+    ctx.broadcast({ t: "session.updated", session: info });
+    // An attention item resolves by its cause: the box is gone (answered, or the turn moved on)
+    // / the follow-up flag was cleared. A silent no-op when nothing matches.
+    if (!info.prompt && !info.awaitingInput && !info.asking) ctx.resolveAttention(`prompt:${info.id}`, "answered");
+    if (!info.followUp) ctx.resolveAttention(`followup:${info.id}`, "flag cleared");
+  });
+  ctx.sessions.on("followUpCleared", (ids: string[]) => {
+    for (const k of ids) ctx.resolveAttention(`followup:${k}`, "flag cleared");
+  });
   // A follow-up flag nobody tapped (a launch option on finishing, or the session's
   // agent): one push saying who and why. A hand flag never gets here (`roster.ts`).
   ctx.sessions.on("followUp", (info: SessionInfo, f: FollowUp) => {
     const p = followUpPushText(f, info.tabTitle || info.title);
-    if (p) ctx.notify("followup", { ...p, sessionId: info.id, tag: `followup-${info.id}` });
+    // The launch option ("flag when done") is a receipt, so info; the session's own agent asking is attention.
+    if (p) ctx.notify("followup", { ...p, sessionId: info.id, tag: `followup-${info.id}`, key: `followup:${info.id}`, ...(f.by === "launch" ? { level: "info" as const } : {}) });
   });
   // History updates stream only to sockets viewing that session (like PTY frames).
   ctx.sessions.on("history", (id: string, entries: HistoryEntry[]) => {
@@ -156,7 +167,7 @@ export function wireSessionEvents(ctx: ServerCtx) {
     ctx.notify("prompt", {
       title: `${s?.title ?? "Session"} needs you`,
       body: "A dialog is open in the CLI — open the session to answer.",
-      sessionId: id, tag: `prompt-${id}`,
+      sessionId: id, tag: `prompt-${id}`, key: `prompt:${id}`,
     });
   });
 
@@ -164,7 +175,7 @@ export function wireSessionEvents(ctx: ServerCtx) {
   ctx.sessions.on("prompt", (id: string, prompt: DetectedPrompt) => {
     const s = ctx.sessions.get(id);
     const opts = prompt.options.map((o) => `${o.index}. ${o.label}`).join("  ");
-    ctx.notify("prompt", { title: `${s?.title ?? "Session"} needs you`, body: `${prompt.question}\n${opts}`, sessionId: id, tag: `prompt-${id}` });
+    ctx.notify("prompt", { title: `${s?.title ?? "Session"} needs you`, body: `${prompt.question}\n${opts}`, sessionId: id, tag: `prompt-${id}`, key: `prompt:${id}` });
 
     // Plugins hear about every box (docs/notes/plugins.md). `blocked` is the
     // core's gate verdict, precomputed; answering goes through that gate.
@@ -252,9 +263,10 @@ export function wireSessionEvents(ctx: ServerCtx) {
         sessionId: id, tag: `limit-${id}`, // replaces the "blocked" push (state update, not a new thread)
       });
     } else if (phase === "resumed") {
-      ctx.notify("limit", { title: `Session resumed · ${info.title}`, body: `usage limit lifted after ${att} attempt${att === 1 ? "" : "s"}${dur ? ` · blocked ${dur}` : ""} — work continues`, sessionId: id, tag: `limit-${id}-done` });
+      ctx.notify("limit", { title: `Session resumed · ${info.title}`, body: `usage limit lifted after ${att} attempt${att === 1 ? "" : "s"}${dur ? ` · blocked ${dur}` : ""} — work continues`, sessionId: id, tag: `limit-${id}-done`, outcome: "ok" });
+      ctx.resolveAttention(`limit:${id}`, "session resumed");
     } else if (phase === "gaveup") {
-      ctx.notify("limit", { title: `Auto-continue gave up · ${info.title}`, body: `still limit-blocked after ${att} attempts — resume manually`, sessionId: id, tag: `limit-${id}-done` });
+      ctx.notify("limit", { title: `Auto-continue gave up · ${info.title}`, body: `still limit-blocked after ${att} attempts — resume manually`, sessionId: id, tag: `limit-${id}-done`, outcome: "failed", key: `limit:${id}` });
     }
   });
 
@@ -281,7 +293,7 @@ export function wireSessionEvents(ctx: ServerCtx) {
       ctx.notify("prompt", {
         title: `Needs your decision · ${info.title}`,
         body: info.asking.text,
-        sessionId: id, tag: `prompt-${id}`,
+        sessionId: id, tag: `prompt-${id}`, key: `prompt:${id}`,
       });
     } else {
       // "Turn finished" is the main loop's fact and not always the whole one: a
@@ -396,7 +408,7 @@ export function wireSessionEvents(ctx: ServerCtx) {
     ctx.notify("limit", {
       title: `Session budget hit · ${info.title}`,
       body: `${sessionBudgetText(b.verdict)}. ${sessionBudgetHoldText(b.cfg)} ${esc.why}${tail}`,
-      sessionId: id, tag: `session-budget:${id}`,
+      sessionId: id, tag: `session-budget:${id}`, level: "attention", key: `budget:${id}`,
     });
   });
   ctx.sessions.on("budgetEscDue", (id: string, info: SessionInfo) => {
@@ -408,7 +420,7 @@ export function wireSessionEvents(ctx: ServerCtx) {
     ctx.notify("limit", {
       title: `Session budget · ${info.title} interrupted`,
       body: `${sessionBudgetText(b.verdict)}. ${esc.why} ${sessionBudgetHoldText(b.cfg)}`,
-      sessionId: id, tag: `session-budget:${id}`,
+      sessionId: id, tag: `session-budget:${id}`, level: "attention", key: `budget:${id}`,
     });
   });
   // A running subagent over the person's line: one `agent` push per agent

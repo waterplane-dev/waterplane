@@ -28,10 +28,11 @@ import { join } from "node:path";
 import {
   cleanWeekBurnPrefs, envName, healthCapWords, pickedFor, weekBurnItemPrompt, weekBurnNudge, weekBurnPlan, weekBurnStopText,
   RESET_MATCH_MS, WEEKBURN_MEASURE_MS,
-  type BudgetPass, type Intent, type NotificationKind, type NotifyOpen, type RepoHealthIndex, type UsageHistoryDoc, type UsageInfo,
+  type BudgetPass, type Intent, type RepoHealthIndex, type UsageHistoryDoc, type UsageInfo,
   type WeekBurnPrefs, type WeekBurnStatus,
 } from "@waterplane/shared";
 import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
+import type { Notify } from "./notifytypes.js";
 
 /** Origin prefix every row this module posts carries: `weekburn:<weekOf>`. */
 export const WEEKBURN_ORIGIN = "weekburn:";
@@ -65,7 +66,7 @@ export interface WeekBurnDeps {
   add(text: string, repoDir: string, label: string, opts: { origin: string; closeWhenDone: true; budgetPass: BudgetPass }): WeekBurnPostedItem;
   /** The latest repo-health summary for a worktree, if the host has one (`HealthWatch.summaryFor`). */
   health?(repoDir: string): RepoHealthIndex | undefined;
-  notify(kind: NotificationKind, p: { title: string; body: string; tag?: string; open?: NotifyOpen }): void;
+  notify: Notify;
   /** Whether the `weekburn` notification kind is on. */
   notifyOn(): boolean;
   /** Something `armed()` depends on moved — `syncUsagePolling`. */

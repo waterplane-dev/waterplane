@@ -26,7 +26,8 @@ async function run(sources) {
   }
   const pushed = [];
   const clients = createClients({
-    auth: { passive: {} }, notifyPrefs: { enabled: () => true }, push: { notify: (p) => { pushed.push(p); } }, sessions: { list: () => [] },
+    // `plugin` is information: pushed only with pushInfo on.
+    auth: { passive: {} }, notifyPrefs: { enabled: () => true, pushInfo: () => true }, push: { notify: (p) => { pushed.push(p); } }, sessions: { list: () => [] },
   });
   const reg = new PluginRegistry({
     root, configDir: cfg, sessions: fakeSessions, decision: () => {}, meter: () => {},

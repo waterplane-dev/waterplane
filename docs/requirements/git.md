@@ -70,3 +70,13 @@ Git availability is detected by whether a usable git runs, not by a fixed path c
 Work trees are not offered anywhere in the product; the work-tree feature is removed.
 - asked: 2026-10-22
 
+
+### R-git-015 · shipped
+A failed git pull or push of a repo raises a *needs you* notification naming the verb and the repo. A tap on it, from the push, the tray or the feed, opens that repo's git view showing the full error with the fix and copy buttons, also after a desktop restart and on another device. A push that succeeds is information; a pull that succeeds raises nothing.
+- asked: 2026-10-25 — "Failed git pull or push also needs a red indicator and notification and tapping it for details must lead to the right place. Note that we have it per repo"
+- shipped: 52910130
+
+### R-git-016 · shipped
+While a repo's last pull or push failed and nobody has handled it, its git button carries a red worded chip ("push failed" / "pull failed"). It goes away, saying so, when the next pull or push of that verb succeeds or the person taps done.
+- asked: 2026-10-25
+- shipped: 52910130

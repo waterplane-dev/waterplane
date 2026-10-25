@@ -4,6 +4,7 @@
 import type { SessionBudget } from "../sessionbudget.js";
 import { cleanSessionBudget } from "../sessionbudget.js";
 import { cleanLaunchOpts } from "../launch.js";
+import { cleanParamValue } from "../buildparams.js";
 import type { ScheduleRule } from "./schedrule.js";
 import { INTENT_MAX_STEPS, type ScheduleAction } from "./schedaction.js";
 import { zoneOffsetMs } from "./schedzone.js";
@@ -124,9 +125,32 @@ export function cleanRule(v: any): ScheduleRule {
   };
 }
 
+/** A build parameter id — the shape `cleanIntentPayload` keeps (`BuildParam.id`). */
+const PARAM_KEY = /^[A-Za-z][A-Za-z0-9_]{0,31}$/;
+
 /** Sanitize an action. Returns null when it names nothing runnable. */
 export function cleanAction(v: any): ScheduleAction | null {
   const raw = v && typeof v === "object" ? v : {};
+  // A build has no prose, so it is cleaned BEFORE the "no text, nothing to
+  // run" test below. The values go through the one rule a build run's own
+  // row uses (`cleanIntentPayload`'s build arm): the key shape, then
+  // `cleanParamValue` — one line, bounded — and an empty value is DROPPED,
+  // so a blank field reads as "not given" and falls to the stored default or
+  // to the refusal, never to an empty string on a command line.
+  if (raw.kind === "build") {
+    const repoDir = typeof raw.repoDir === "string" ? raw.repoDir : "";
+    const buildId = typeof raw.buildId === "string" ? raw.buildId.trim().slice(0, 64) : "";
+    if (!repoDir || !buildId) return null;
+    const params: Record<string, string> = {};
+    if (raw.params && typeof raw.params === "object" && !Array.isArray(raw.params)) {
+      for (const [k, val] of Object.entries(raw.params as Record<string, unknown>)) {
+        if (!PARAM_KEY.test(k)) continue;
+        const c = cleanParamValue(val);
+        if (c) params[k] = c;
+      }
+    }
+    return { kind: "build", repoDir, buildId, ...(Object.keys(params).length ? { params } : {}) };
+  }
   const text = typeof raw.text === "string" ? raw.text.trim() : "";
   if (!text) return null;
   if (raw.kind === "backlog") {

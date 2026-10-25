@@ -12,7 +12,7 @@
  * confirmed each repo's list — a cached list that cannot say how old it is
  * reads as current. (`scripts/e2e-offlinelists.mjs` holds both.)
  */
-import type { ArtifactPolicy, BuildCandidate, BuildParamAnswer, BuildConfig, BuildRun, RepoTarget } from "@waterplane/shared";
+import type { ArtifactPolicy, BuildCandidate, BuildParamAnswer, BuildConfig, BuildRun, RepoTarget, ScheduleEntry } from "@waterplane/shared";
 import { useCallback } from "react";
 import { createStore, repoRunStore, useStore } from "../../sdk";
 import { loadBuildsSnap, saveBuildsSnap } from "../../localState";
@@ -28,6 +28,12 @@ export const builds = repoRunStore<BuildConfig, BuildRun>({ load: loadBuildsSnap
 /** The repo whose BuildSheet is open (and which a reconnect re-asks for). Never
  *  cleared — App never cleared `buildRepo` either; the overlay is what closes. */
 export const buildRepo = createStore<RepoTarget | null>(null);
+
+/** A build rule's card *edit*, waiting for the sheet to open its form — taken
+ *  (cleared) by `BuildButtonsSheet` once the entry is found, or said and
+ *  dropped once a list read AFTER the hand-over (`at`) proves the build is gone
+ *  — a cached list from before the tap proves nothing. */
+export const buildScheduleEdit = createStore<{ entry: ScheduleEntry; at: number } | null>(null);
 
 /**
  * What each repo can already build, read off its own manifests (`build.scan`).

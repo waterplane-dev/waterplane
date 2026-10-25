@@ -61,9 +61,15 @@
  * week-end burn's once-a-week offer, "pick repos for the rest of the week's
  * budget" (`weekburn.ts`). Default ON — at most one per week, words only; it
  * starts nothing, the person's pick is the approval.
+ *
+ * `git` sits after `weekburn` (added 2026-10-25): a pull or push the desktop
+ * ran in one worktree — from the git view or the sync sheet — ended. A FAILED
+ * one is attention and stays until the next run of that verb succeeds or the
+ * person taps done (`gitAttentionKey`); a successful push is information; a
+ * successful pull raises nothing at all. Default ON.
  */
 export const NOTIFICATION_KINDS = [
-  "prompt", "approval", "limit", "burn", "cli", "disk", "undelivered", "backlog", "followup", "health", "agent", "artifact", "image", "plugin", "autofire", "idle", "info", "weekburn",
+  "prompt", "approval", "limit", "burn", "cli", "disk", "undelivered", "backlog", "followup", "health", "agent", "artifact", "image", "plugin", "autofire", "idle", "info", "weekburn", "git",
 ] as const;
 
 /** Kind of in-app notification (drives the icon shown). */
@@ -99,6 +105,67 @@ export function notifyEnabled(prefs: NotifyPrefs | null | undefined, kind: Notif
   const explicit = prefs?.[kind];
   if (typeof explicit === "boolean") return explicit;
   return !NOTIFY_DEFAULT_OFF.includes(kind);
+}
+
+/**
+ * Two levels, and only one of them is allowed to ask for a person (owner,
+ * 2026-10-25: the bell read 9+ and stopped meaning anything).
+ *
+ * - `attention` — something waits on the person or broke: it counts on the
+ *   bell's red badge, it is pushed, and it stays until handled (`handled`).
+ * - `info` — a receipt (a run that went fine, a new file): readable in the
+ *   feed, never counted, pushed only when the person asked for that
+ *   (`notify.prefs`' `pushInfo`).
+ */
+export type NotifyLevel = "attention" | "info";
+
+/** What a run that raised the alert came to, when the call site knows. */
+export type NotifyOutcome = "ok" | "failed";
+
+/**
+ * The level a kind has when its call site says nothing more. A kind not here
+ * is `info`. `followup` is attention because a session's AGENT chose to raise
+ * it; the launch option's routine "done" flag passes `level: "info"` itself.
+ */
+export const ATTENTION_KINDS: readonly NotificationKind[] = ["prompt", "approval", "cli", "disk", "undelivered", "followup"];
+
+/**
+ * THE one rule for a notification's level, run by the host when it fires and
+ * by the phone for an item an older host sent without one. An explicit level
+ * from the call site wins; then a known outcome (failed ⇒ attention, ok ⇒
+ * info, whatever the kind); then the kind's default.
+ */
+export function notifyLevel(kind: NotificationKind, outcome?: NotifyOutcome, explicit?: NotifyLevel): NotifyLevel {
+  if (explicit === "attention" || explicit === "info") return explicit;
+  if (outcome === "failed") return "attention";
+  if (outcome === "ok") return "info";
+  return ATTENTION_KINDS.includes(kind) ? "attention" : "info";
+}
+
+/** An item's level: the host's stamp, else the same rule over its kind. */
+export function levelOf(item: Pick<NotificationItem, "kind" | "level">): NotifyLevel {
+  return item.level === "attention" || item.level === "info" ? item.level : notifyLevel(item.kind);
+}
+
+/**
+ * Does this item still need the person — the ONE predicate behind the bell's
+ * count, the cut a tap on it opens, and the per-repo chips (the host derives
+ * `RepoTarget.gitFailed`/`buildFailed` from its own store with it).
+ */
+export function needsYou(item: Pick<NotificationItem, "kind" | "level" | "handled">): boolean {
+  return levelOf(item) === "attention" && !item.handled;
+}
+
+/** The `key` a failed pull or push of one repo/worktree is filed under —
+ *  spelled once, so the host's resolve and the phone's chip cannot drift. */
+export function gitAttentionKey(repoId: string, verb: "pull" | "push"): string {
+  return `git:${repoId}:${verb}`;
+}
+
+/** The `key` a failed build is filed under: one per build ENTRY of one
+ *  repo/worktree, so only the next successful run of that same entry resolves it. */
+export function buildAttentionKey(repoId: string, buildId: string): string {
+  return `build:${repoId}:${buildId}`;
 }
 
 /** Drop anything that is not a known kind / boolean — the file is hand-editable. */
@@ -159,6 +226,24 @@ export interface NotificationItem {
    */
   open?: NotifyOpen;
   /**
+   * `attention` or `info` (`notifyLevel`). ABSENT on an older host: the phone
+   * derives it with `levelOf`, never a second way.
+   */
+  level?: NotifyLevel;
+  /**
+   * What an attention item is ABOUT, so its cause going away can resolve it:
+   * `gitAttentionKey`, `buildAttentionKey`, `prompt:<sessionId>`,
+   * `followup:<sessionId>`, `undelivered:<sessionId>`. Absent = only the
+   * person's done clears it.
+   */
+  key?: string;
+  /**
+   * Set once an attention item is dealt with: by the person's `done`, or by
+   * its cause going away (`by: "resolved"`, `note` saying how — "fixed by the
+   * 14:02 push"). A handled item stays in the feed and stops counting.
+   */
+  handled?: NotifyHandled;
+  /**
    * A stable key: a later notification with the same tag REPLACES the earlier one in the OS tray (the APK posts
    * under `tag`; web push passes it to `showNotification`). A plugin's own tag is namespaced by the HOST
    * (`plugin-<id>-<tag>`), so no plugin can replace another's. The in-app feed keeps every item.
@@ -175,7 +260,19 @@ export interface NotificationItem {
 export type NotifyOpen =
   | { to: "repohealth"; repoId: string }
   | { to: "tokens" }
-  | { to: "plugin"; id: string };
+  | { to: "plugin"; id: string }
+  /** That repo's (or worktree's) git view, showing the stored failure. */
+  | { to: "git"; repoId: string; verb?: "pull" | "push" }
+  /** That repo's (or worktree's) build sheet, on the failed entry. */
+  | { to: "build"; repoId: string; buildId?: string };
+
+/** How an attention item was dealt with. */
+export interface NotifyHandled {
+  at: number;
+  by: "person" | "resolved";
+  /** One line, for `resolved`: what took it away. */
+  note?: string;
+}
 
 /**
  * A notification as the Android shell hands it back on a tap: `notif:<item JSON>`

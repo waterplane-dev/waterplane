@@ -1,6 +1,7 @@
 /** Which items a chain may hang off, and what a clock may name. Split from `sendIntent.ts` (docs/notes/send-architecture.md); pure, no React. */
 import { nextFireAt, ruleRecurs, type Intent, type WindowResets } from "@waterplane/shared";
 import { type SendTarget, type SendWhen } from "./sendTypes.ts";
+import { SHEET } from "../sheetNames.ts";
 
 // ── Which items a chain may hang off ─────────────────────────────────────────
 
@@ -56,7 +57,7 @@ export const chainOkWords = (onlyIfOk?: boolean): string =>
  *  by looking for the row in the wrong sheet. */
 export const CHAIN_NOTE =
   "The desktop holds this, with no deadline: if it was asleep when that item finished, this still goes in when it wakes. "
-  + "A chain is not a schedule — it has no clock to arm and appears in Activity as work, not in Schedules.";
+  + `A chain is not a schedule — it has no clock to arm and appears in ${SHEET.activity} as work, not in ${SHEET.automation}.`;
 
 /** An empty picker, as a SENTENCE. The segment that opens it is never dimmed:
  *  a `title` saying why is invisible on the device this sheet is used from, so

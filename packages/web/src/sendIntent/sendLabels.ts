@@ -235,6 +235,11 @@ export function whenPatchToast(w: SendWhen): string {
 export const WHEN_PATCH_OFFLINE =
   "no connection — this row's clock lives on the desktop and nothing here changed. Its words are still in the box.";
 
+/** Only a `once` can be out of time (a weekly always finds a day; a window's null is "not armed
+ *  YET"). Every form that saves a rule asks this — `sendBlocker`, `buildSchedule.ts`. */
+export const clockBlocker = (when: SendWhen, preview: number | null): string | null =>
+  when.kind === "at" && preview == null && when.rule.kind === "once" ? "the time it resolves to has already passed" : null;
+
 /**
  * Why the button is off, or null when it is on.
  *
@@ -256,12 +261,7 @@ export function sendBlocker(i: SendIntent, preview: number | null, editing?: Int
   if (i.target.kind === "repos" && !i.target.dirs.length) return "pick at least one repo";
   if (i.target.kind === "repo" && !i.target.cwd) return "pick the repo it runs in";
   if (i.target.kind === "session" && !i.target.sessionId) return "pick where it goes";
-  // Only a `once` rule can be genuinely out of time: a weekly search always
-  // finds a next day, and a `window` rule's null is "not armed YET" — the host
-  // re-asks on every tick, so refusing to save it was refusing the feature.
-  if (i.when.kind === "at" && preview == null && i.when.rule.kind === "once") {
-    return "the time it resolves to has already passed";
-  }
+  const late = clockBlocker(i.when, preview); if (late) return late;
   if (i.when.kind === "at" && i.target.kind === "shell") return "a build cannot be scheduled — the clock only fires prompts";
   // A clock aimed at a session is no longer refused: the row remembers the
   // CONVERSATION as well as the process, so a session that has gone by the time

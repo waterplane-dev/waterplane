@@ -18,6 +18,10 @@
  * small stores here. Sparse on purpose (see `NotifyPrefs`): a kind added in a
  * later version arrives with its own default instead of being silently muted
  * by a file written before it existed.
+ *
+ * `pushInfo` sits in the same file beside the kinds (`cleanNotifyPrefs` reads
+ * kinds only, so it never leaks into the kind map): off ⇒ only `attention`
+ * items are pushed and information stays in the feed (notifications plan §2).
  */
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -28,13 +32,18 @@ import { readJsonGuarded, writeJsonAtomic } from "./jsonstore.js";
 export class NotifyPrefsStore {
   private path: string;
   private prefs: NotifyPrefs = {};
+  private info = false;
 
   constructor(root: string) {
     const dir = hostStateDir(root);
     mkdirSync(dir, { recursive: true });
     this.path = join(dir, "notify.json");
     try {
-      if (existsSync(this.path)) this.prefs = cleanNotifyPrefs(readJsonGuarded<any>(this.path, null));
+      if (existsSync(this.path)) {
+        const raw = readJsonGuarded<any>(this.path, null);
+        this.prefs = cleanNotifyPrefs(raw);
+        this.info = raw?.pushInfo === true;
+      }
     } catch { /* corrupt or unreadable → defaults, never throw on boot */ }
   }
 
@@ -47,16 +56,23 @@ export class NotifyPrefsStore {
     return notifyEnabled(this.prefs, kind);
   }
 
-  /** Merge a sparse patch in — a client sends only what it changed. */
-  set(patch: NotifyPrefs): NotifyPrefs {
+  /** Whether information (not only attention) is pushed too. Default off. */
+  pushInfo(): boolean {
+    return this.info;
+  }
+
+  /** Merge a sparse patch in — a client sends only what it changed. A
+   *  non-boolean `pushInfo` (absent included) leaves it as it was. */
+  set(patch: NotifyPrefs, pushInfo?: unknown): NotifyPrefs {
     this.prefs = { ...this.prefs, ...cleanNotifyPrefs(patch) };
+    if (typeof pushInfo === "boolean") this.info = pushInfo;
     this.save();
     return this.get();
   }
 
   private save(): void {
     try {
-      writeJsonAtomic(this.path, this.prefs, { space: 2 });
+      writeJsonAtomic(this.path, this.info ? { ...this.prefs, pushInfo: true } : this.prefs, { space: 2 });
     } catch { /* a lost preference is not worth taking the daemon down for */ }
   }
 }

@@ -16,7 +16,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
-import ts from "typescript";
+import { assertSurface } from "../../../tools/exportsurface.mjs";
 
 const BARREL = fileURLToPath(new URL("../src/intent.ts", import.meta.url));
 
@@ -29,33 +29,19 @@ const SURFACE = [
   "IntentSettlement:type", "IntentTarget:type", "IntentTrigger:type", "IntentVerdict:type",
   "Lifecycle:type", "LocalSlotFacts:type", "MANUAL_HOLD_TEXT:value", "ON_TIME_MS:value", "ORIGIN_AGENT:value",
   "ORIGIN_FANOUT_FOLLOWUP:value", "ORIGIN_FANOUT_RUN:value", "ORIGIN_FANOUT_TARGET:value", "ORIGIN_PEER_PREFIX:value",
-  "ORIGIN_SCHEDULE_PREFIX:value", "ORIGIN_SCHEDULE_SWEEP:value", "ORIGIN_SCHEDULE_WORK:value", "REQUEUE_KEEP:value",
+  "ORIGIN_SCHEDULE_BUILD:value", "ORIGIN_SCHEDULE_PREFIX:value", "ORIGIN_SCHEDULE_SWEEP:value", "ORIGIN_SCHEDULE_WORK:value", "REQUEUE_KEEP:value",
   "RESET_MATCH_MS:value", "autoSlotsBusy:value", "autoSlotsWaitText:value", "budgetAfterResetOf:value", "budgetLeftoverOf:value", "budgetPassAt:value", "budgetPassOf:value",
   "budgetWaived:value", "budgetWaiverPeriod:value", "budgetWaiverUntil:value", "busyIntentGroups:value", "cleanBudgetWaiver:value", "intentSerialHolders:value",
   "cleanIntentRow:value", "clockKey:value", "closeWhenDoneOf:value", "intentKind:value",
   "intentReasonText:value", "intentVerdict:value", "isAgentPosted:value", "isAssessRow:value",
   "isBacklogRow:value", "isBuildRow:value", "isCaptureRow:value", "isFanoutRow:value",
   "isLaunchRow:value", "isPeerPosted:value", "isScheduleRow:value", "isTimedWorkRow:value",
-  "liveConvSession:value", "localSlotOverText:value", "localSlotWaitText:value", "needsSlot:value", "peerOfOrigin:value", "queuesBacklogItem:value",
+  "liveConvSession:value", "localSlotOverText:value", "localSlotWaitText:value", "needsSlot:value", "peerOfOrigin:value", "postsScheduledBuild:value", "queuesBacklogItem:value",
   "reopensConversation:value", "scheduleIdFromOrigin:value", "scheduleItemOrigin:value", "timedWorkKey:value",
   "ClockMember:type", "Slot:type", "SlotRow:type", "findSlot:value", "latestClock:value", "parseSlotKey:value",
   "slotMates:value", "slotOf:value", "slotOthersText:value", "slotRowOfIntent:value", "slotRowOfItem:value", "slotsOf:value",
 ];
 
 test("the intent module exports exactly its pinned surface, values and types alike", () => {
-  const program = ts.createProgram([BARREL], {
-    module: ts.ModuleKind.NodeNext,
-    moduleResolution: ts.ModuleResolutionKind.NodeNext,
-    target: ts.ScriptTarget.ES2022,
-    noEmit: true,
-    skipLibCheck: true,
-  });
-  const checker = program.getTypeChecker();
-  const mod = checker.getSymbolAtLocation(program.getSourceFile(BARREL));
-  assert.ok(mod, "src/intent.ts did not parse as a module");
-  const got = checker.getExportsOfModule(mod).map((s) => {
-    const target = s.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(s) : s;
-    return `${s.name}:${target.flags & ts.SymbolFlags.Value ? "value" : "type"}`;
-  }).sort();
-  assert.deepEqual(got, [...SURFACE].sort());
+  assertSurface(BARREL, SURFACE);
 });

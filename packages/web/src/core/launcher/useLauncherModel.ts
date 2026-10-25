@@ -37,6 +37,7 @@ import {
   sessionNumbersOf, sortSessions, starredByRepoOf,
 } from "./model";
 import { flaggedByRepoOf, flaggedTotalOf } from "../sessions/followUpFacts";
+import { SHEET } from "../../sheetNames";
 
 // ── The stores ─────────────────────────────────────────────────────────────
 // Every status badge in the launcher is a FILTER, because every one of them is
@@ -489,8 +490,8 @@ export function useLauncherModel(p: LauncherProps) {
     scheduleKinds.timed ? `${scheduleKinds.timed} on a clock in a backlog` : "",
   ].filter(Boolean).join(" · ");
   const scheduleTitle = scheduleWords
-    ? `schedules · ${schedulePool} — ${scheduleWords}${scheduleHz.unarmed && !scheduleUnarmedOnly ? ` · ${scheduleHz.unarmed} not armed` : ""} — tap to see the ${scheduleLead ? HORIZON_LABEL[scheduleLead] : ""} ones`
-    : "schedules — run a prompt on its own at a time you pick (once, every week, or around a usage window)";
+    ? `${SHEET.automation.toLowerCase()} · ${schedulePool} — ${scheduleWords}${scheduleHz.unarmed && !scheduleUnarmedOnly ? ` · ${scheduleHz.unarmed} not armed` : ""} — tap to see the ${scheduleLead ? HORIZON_LABEL[scheduleLead] : ""} ones`
+    : `${SHEET.automation.toLowerCase()} — run a prompt on its own at a time you pick (once, every week, or around a usage window)`;
 
   /**
    * The launcher's activity badge: what has NOT settled on this phone.

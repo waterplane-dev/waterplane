@@ -44,7 +44,7 @@ export type HostToolsMsg =
   | { t: "notification.list"; items: NotificationItem[] }
   /** Which notification kinds are muted (sent on hello and on every change).
    *  Sparse: a kind not present takes `NOTIFY_DEFAULT_OFF`'s default. */
-  | { t: "notify.prefs"; prefs: NotifyPrefs }
+  | { t: "notify.prefs"; prefs: NotifyPrefs; /** Information is pushed too. Absent = off (or an older host). */ pushInfo?: boolean }
   /**
    * The usage budget and what it currently says (sent on hello, on every
    * change, and whenever the verdict itself flips).

@@ -16,6 +16,7 @@
 import {
   INTENT_MAX_ATTEMPTS,
   isTimedWorkRow,
+  postsScheduledBuild,
   queuesBacklogItem,
   liveConvSession,
   reopensConversation,
@@ -328,6 +329,12 @@ export class FireSlice {
     // rule STARTING is this occurrence, but the work is the child's, so the
     // child is what inherits it (`workItemInherits`), window and all.
     if (queuesBacklogItem(row)) return ex.workItem(row);
+    // The build twin, before the build branch below would run the RULE's own
+    // row as if it were a run: a build rule's occurrence POSTS one ordinary
+    // run (`postsScheduledBuild`), and that row is what executes.
+    if (postsScheduledBuild(row)) {
+      return ex.scheduledBuild?.(row) ?? Promise.resolve({ ok: false, detail: "this host cannot run scheduled builds yet" });
+    }
     // Before the shell branch, because an assessment is a `shell` target too:
     // it runs no session and delivers nothing, but it is a headless agent and
     // not a build command, so the PAYLOAD decides here and the target does not.

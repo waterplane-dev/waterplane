@@ -5,24 +5,58 @@
 import type { NotificationItem, NotificationKind, NotifyPrefs } from "@waterplane/shared";
 import { core, type CoreApi } from "../../sdk";
 import { viewerHandles } from "../../docKind";
-import { LS, lsSet } from "../../storage";
-import { backlogRepoFor, newestTs, notifTarget, pushNotif } from "./logic";
-import { mutes, notifFocus, notifs, seenTs } from "./store";
+import { LS, lsBool, lsSetBool } from "../../storage";
+import { backlogRepoFor, needsYouItems, newlyResolved, notifTarget, pushNotif, repoChipKeys, resolvedWords } from "./logic";
+import { mutes, notifCut, notifFocus, notifs, pushInfo } from "./store";
 
 /** A live `notification`: into the feed, and said once as a toast. */
 export function onNotification(item: NotificationItem, c: CoreApi): void {
+  const before = repoChipKeys(notifs.get());
   notifs.set((prev) => pushNotif(prev, item));
   c.say.toast(item.title, item);
+  if (repoChipKeys(notifs.get()) !== before) c.world.refreshRepos();
 }
 
 export function onNotificationList(items: NotificationItem[]): void {
+  // An attention item whose cause went away is told once, on the screen the
+  // person is on: a red chip that vanishes without a word reads as a bug.
+  const c = core();
+  for (const n of newlyResolved(notifs.get(), items)) c.say.toast(resolvedWords(n));
+  const chipsMoved = repoChipKeys(notifs.get()) !== repoChipKeys(items);
   notifs.set(items);
+  if (chipsMoved) c.world.refreshRepos();
+}
+
+/** `done` on a needs-you row: the host stores it (idempotent, any device).
+ *  Optimistic here — the host's next `notification.list` replaces it. */
+export function handleNotif(id: string): void {
+  const c = core();
+  // Not sent (socket down): no optimistic write — the row would read "done"
+  // while the desktop never heard. The host's next list marks it.
+  if (!c.conn.liveSend({ t: "notification.handle", id }, "marked done")) return;
+  const before = repoChipKeys(notifs.get());
+  notifs.set((prev) => prev.map((n) => (n.id === id && !n.handled ? { ...n, handled: { at: Date.now(), by: "person" as const } } : n)));
+  // The chip and the stored banner are an HTTP read: re-read when one went.
+  if (repoChipKeys(notifs.get()) !== before) c.world.refreshRepos();
 }
 
 /** `notify.prefs`: the host's merged set of muted kinds. */
-export function onNotifyPrefs(prefs: NotifyPrefs): void {
+export function onNotifyPrefs(prefs: NotifyPrefs, info?: boolean): void {
   mutes.set(prefs);
+  pushInfo.set(!!info);
 }
+
+/** "Push information too": off by default, host-persisted. */
+export function setPushInfo(on: boolean): void {
+  const c = core();
+  pushInfo.set(on);
+  c.conn.send({ t: "notify.prefs.set", prefs: {}, pushInfo: on });
+  c.say.toast(on ? "Information is pushed too" : "Information is listed only, not pushed");
+}
+
+/** The one-time note at the top of the sheet (ux §1): shown until `got it`. */
+export function infoNoteSeen(): boolean { return lsBool(LS.notifInfoNote, false); }
+export function dismissInfoNote(): void { lsSetBool(LS.notifInfoNote, true); }
 
 /**
  * Switch one kind on or off. Optimistic — the host echoes the merged set back
@@ -36,21 +70,26 @@ export function setNotifyKind(kind: NotificationKind, on: boolean, name: string)
   c.say.toast(`${name}: ${on ? "on" : "muted"}`);
 }
 
-/** The feed is on screen: everything in it — including anything that arrives
- *  while it is open — is seen. */
-export function markAllSeen(): void {
-  const items = notifs.get();
-  if (!items.length) return;
-  const newest = newestTs(items);
-  if (newest > seenTs.get()) {
-    seenTs.set(newest);
-    lsSet(LS.notifSeen, String(newest));
-  }
-}
-
+/** The whole feed (settings door, a tap that wants a row). */
 export function openNotifs(): void {
+  notifCut.set(null);
   core().nav.open("notifications");
 }
+
+/** The bell. With a number on it the tap is a filter: exactly those items. */
+export function openBell(): void {
+  const ids = needsYouItems(notifs.get()).map((n) => n.id);
+  notifCut.set(ids.length ? ids : null);
+  core().nav.open("notifications");
+}
+
+/** The sheet on exactly these ids (a repo's failures), "n of N", clearable. */
+export function openNotifCut(ids: string[]): void {
+  notifCut.set(ids.length ? ids : null);
+  core().nav.open("notifications");
+}
+
+export function showAllNotifs(): void { notifCut.set(null); }
 
 /**
  * Act on a tapped notification — its row in the feed, or the OS shade's
@@ -113,6 +152,17 @@ export function openNotif(n: NotificationItem): void {
     case "tokens":
       c.nav.open("tokens");
       return;
+    case "git": {
+      if (c.world.repos.some((r) => r.id === t.repoId)) c.nav.openGit(t.repoId);
+      else showRow(n, "that repo is not in the list on this desktop any more");
+      return;
+    }
+    case "build": {
+      const repo = c.world.repos.find((r) => r.id === t.repoId);
+      if (repo) c.nav.openBuild(repo);
+      else showRow(n, "that repo is not in the list on this desktop any more");
+      return;
+    }
     case "weekburn":
       c.nav.open("weekburn");
       return;
@@ -129,6 +179,7 @@ function showRow(n: NotificationItem, why?: string): void {
   const c = core();
   if (!notifs.get().some((x) => x.id === n.id)) notifs.set((prev) => pushNotif(prev, n));
   notifFocus.set(n.id);
+  notifCut.set(null); // the row asked for may be outside a cut
   c.nav.open("notifications");
   if (why) c.say.toast(why);
 }
@@ -149,7 +200,7 @@ export function openNotifFromOutside(n: NotificationItem): void {
   const ready = () => {
     const w = core().world;
     if (t.to === "session") return w.sessions.some((s) => s.id === t.sessionId);
-    if (t.to === "repohealth") return w.repos.some((r) => r.id === t.repoId);
+    if (t.to === "repohealth" || t.to === "git" || t.to === "build") return w.repos.some((r) => r.id === t.repoId);
     if (t.to === "backlogByName") return w.visibleRepos.length > 0;
     return true;
   };

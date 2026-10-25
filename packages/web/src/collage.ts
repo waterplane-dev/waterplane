@@ -258,13 +258,4 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 }
 
-/**
- * The name the combined file gets.
- *
- * It says what it is and how many screens went into it, because this name is
- * what the minted inbox path is built from (`plannedInboxPath`) and therefore
- * the only human-readable thing about the path the prompt ends up naming.
- */
-export function collageFileName(count: number): string {
-  return `combined-${count}-screens.jpg`;
-}
+export { collageFileName } from "./collageName";

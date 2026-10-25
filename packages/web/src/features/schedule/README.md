@@ -6,6 +6,14 @@ the read-only directory of backlog rows that wear a clock. The sheet itself is t
 `web-work` skill: **recurrence decides the list**, `clockCuts()` is ONE call producing every
 list and every number on the subject, and **a count on a control is a filter**.
 
+The sheet is titled **Automation** (overlay id, routes and keys stay `schedule`). Its foot, **"Runs
+on its own, no clock"**, is `AutomationFoot.tsx` over the pure `automationLines.ts` (node-tested):
+backlog auto and the rows it starts next (`backlogFilter/nextFire.ts`, the backlog's own `▶ next`
+predicate), the repo's auto-download rule (through `automationSlot.ts`, which `features/pull` fills at
+boot), the week-end burn (`GET /api/weekburn`, fresh reads only) and peer jobs waiting here. One
+sentence and one door per line; per repo when the repo chip's cut carries `repoDir`; a source not
+read draws no line. No health-watch line: the phone has no fact saying it runs.
+
 **Owns** (`store.ts`, one writer each — `actions.ts`):
 
 - `schedules` — the host's `schedule.list`, **seeded from the device cache

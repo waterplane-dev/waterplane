@@ -289,8 +289,9 @@ export interface CoreApi {
     openPlugin(pluginId: string): boolean;
     /** One repo's health chart (the readings sheet's `repohealth` door). */
     openRepoHealth(repo: RepoTarget): void;
-    /** Schedules, cut to exactly these rules under `label`. */
-    openScheduleCut(ids: string[], label: string): void;
+    /** Automation (the `schedule` sheet), cut to exactly these rules under `label`;
+     *  `repoDir` when the cut IS one repo's, so the sheet's foot speaks for that repo. */
+    openScheduleCut(ids: string[], label: string, repoDir?: string): void;
     /** A backlog row was fired by hand: jump to the session it lands in once
      *  the host says it is running (App's `wantNavRef` + fire-nav effect). */
     followFire(id: string): void;
@@ -307,6 +308,9 @@ export interface CoreApi {
     /** The capture sheet for one repo (`features/capture`'s `openCaptureFor`) —
      *  for a feature that is not the capture feature. */
     openCapture(repo: RepoTarget): void;
+    /** The build sheet of one repo (`features/build`'s `openBuildFor`); with
+     *  `schedule`, a build rule's form opens on arrival (its card's *edit*). */
+    openBuild(repo: RepoTarget, opts?: { schedule?: ScheduleEntry }): void;
   };
   /** Session launch options and the one way to open a session in a folder. */
   launch: {
@@ -412,6 +416,8 @@ export interface CoreApi {
     readonly schedules: ScheduleEntry[];
     /** The backlog's rows (`features/backlog`) — Activity reads their check verdicts. */
     readonly backlog: BacklogItem[];
+    /** The backlog's global auto switch (`backlog.list`'s `auto`, snapshotted) — the Automation foot reads it. */
+    readonly backlogAuto: boolean;
     repoForCwd(cwd: string): RepoTarget | null;
     /** Rescan the host root for repos (and their setup badges). */
     refreshRepos(): void;

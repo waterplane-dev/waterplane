@@ -72,6 +72,11 @@ export interface PullRecord {
   cleanedAt?: number;
   cleanedBytes?: number;
   cleanNote?: string;
+  /** This app's copy was deleted once Downloads held the file (the per-phone
+   *  "keep only the Downloads copy" switch). NOT `evicted`: the file is still
+   *  on the phone, and an APK still installs — from the Downloads copy. A
+   *  Downloads copy found missing afterwards makes the row `evicted`. */
+  droppedAt?: number;
   /**
    * The bytes were handed to the phone's own Downloads and it has not said
    * where they went yet.

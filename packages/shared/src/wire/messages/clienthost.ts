@@ -120,6 +120,10 @@ export type ClientHostMsg =
   | { t: "notification.get" }
   /** Clear all in-app notifications. */
   | { t: "notification.clear" }
+  /** Mark ONE attention item handled (the row's done). Idempotent — a repeat
+   *  or a replay finds it already handled — so no ackId. The host answers
+   *  every client with `notification.list`. */
+  | { t: "notification.handle"; id: string }
   /**
    * Mute or unmute notification KINDS, host-wide.
    *
@@ -129,7 +133,7 @@ export type ClientHostMsg =
    * parses. Sparse — only the kinds this write changes are sent, the rest keep
    * whatever the host holds.
    */
-  | { t: "notify.prefs.set"; prefs: NotifyPrefs }
+  | { t: "notify.prefs.set"; prefs: NotifyPrefs; /** Push information too (absent = unchanged). */ pushInfo?: boolean }
   /**
    * The usage BUDGET — "stop starting automatic work past this much of the
    * window, and start again when it resets" (`shared/budget.ts`).

@@ -94,7 +94,7 @@ import { WatchSlice } from "./watch.js";
  */
 // Defined in `@waterplane/shared` (the phone asks `queuesBacklogItem` too), re-exported
 // here for the adapters that have always imported them from this file.
-export { ORIGIN_SCHEDULE_WORK, ORIGIN_SCHEDULE_SWEEP } from "@waterplane/shared";
+export { ORIGIN_SCHEDULE_WORK, ORIGIN_SCHEDULE_SWEEP, ORIGIN_SCHEDULE_BUILD } from "@waterplane/shared";
 
 export type { ExecutorResult, IntentExecutors, IntentDeps } from "./contract.js";
 

@@ -4,7 +4,7 @@
  * collapsed — its live sessions, each followed by the agent worktrees it made.
  */
 import { Fragment, useLayoutEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, CalendarClock, Camera, Check, ChevronDown, ChevronRight, CircleDot, CircleSlash, ClipboardCheck, CloudOff, Download, ExternalLink, EyeOff, FileDiff, Flag, FolderTree, GitBranch, Hammer, HeartPulse, Hourglass, Images, ListChecks, ListTodo, Loader, Minus, MoreHorizontal, Plus, ScanEye, SendHorizontal, Star, Terminal, X } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarClock, Camera, Check, ChevronDown, ChevronRight, CircleAlert, CircleDot, CircleSlash, ClipboardCheck, CloudOff, Download, ExternalLink, EyeOff, FileDiff, Flag, FolderTree, GitBranch, Hammer, HeartPulse, Hourglass, Images, ListChecks, ListTodo, Loader, Minus, MoreHorizontal, Plus, ScanEye, SendHorizontal, Star, Terminal, X } from "lucide-react";
 import type { RepoTarget, SessionInfo } from "@waterplane/shared";
 import { branchLabel, horizonWords, isoWeekOf, repoBranchLabel } from "@waterplane/shared";
 import { repoAccentStyle } from "../../format";
@@ -153,13 +153,14 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
             exactly then. The counts are files, then ↑out ↓in. */}
         {main && (
           <button className={`focus-btn${gitPending(main) ? " count" : ""}`}
-            title={main.gitRunning ? `${main.gitRunning === "push" ? "a push" : "a pull"} is running on the desktop — open git to follow it` : gitTitle(main)}
+            title={main.gitFailed ? `the last ${main.gitFailed.verb} failed — open git to see why` : main.gitRunning ? `${main.gitRunning === "push" ? "a push" : "a pull"} is running on the desktop — open git to follow it` : gitTitle(main)}
             onClick={() => openGitFor(main.id)}>
             {/* A push runs the pre-push checks for minutes; the spinner says so
                 here, so the row is not read as "22 still to push, nothing doing". */}
             {main.gitRunning ? <Loader size={13} className="spin" /> : <FileDiff size={13} />}{main.changedCount > 0 && main.changedCount}
             {gitSyncText(main) && <span className="git-ab">{gitSyncText(main)}</span>}
             {noOrigin(main) && <span className="git-ab no-origin"><CloudOff size={12} />no remote</span>}
+            {main.gitFailed && <span className="git-ab failed"><CircleAlert size={12} />{main.gitFailed.verb} failed</span>}
           </button>
         )}
         {/* Build stays ON the header. It is the rate-limit escape
@@ -415,7 +416,7 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
               title={`${n} thing${n > 1 ? "s" : ""} on a clock in ${repoName}${words ? ` — ${words}` : ""}. Tap to show only those.`}
               onClick={() => {
                 track("action:repo.clocks.open");
-                openScheduleCut(rc.ids, repoClocksLabel(repoName, n));
+                openScheduleCut(rc.ids, repoClocksLabel(repoName, n), main?.worktreePath);
               }}>
               <CalendarClock size={12} />{n}
             </button>
@@ -526,6 +527,10 @@ export function RepoGroup({ p, m, repoName, sessions: groupSessions }: {
             <button className="row-chip" title={`${t.outboxCount} new outbox file${t.outboxCount > 1 ? "s" : ""} since last opened — open gallery`}
               onClick={(e) => { e.stopPropagation(); track("action:repo.inbox"); openOutboxFor(t.id); }}><Images size={12} />{t.outboxCount}</button>
           )}
+          {t.gitFailed && (
+            <button className="row-chip bad" title={`the last ${t.gitFailed.verb} failed — open git to see why`}
+              onClick={(e) => { e.stopPropagation(); track("action:repo.git"); openGitFor(t.id); }}><CircleAlert size={12} />{t.gitFailed.verb} failed</button>
+          )}
           {gitPending(t) && (
             <button className="row-chip" title={gitTitle(t)}
               onClick={(e) => { e.stopPropagation(); track("action:repo.git"); openGitFor(t.id); }}>
@@ -601,6 +606,7 @@ function BuildHeaderButton({ repo, repoName }: { repo: RepoTarget; repoName: str
       title={busy ? `build “${busy.name}” is running on the desktop — open build to follow it` : `build ${repoName} (run a build command, no tokens)`}
       onClick={() => { track("action:repo.build.header"); openBuildFor(repo); }}>
       {busy ? <Loader size={17} className="spin" /> : <Hammer size={17} />}
+      {repo.buildFailed && <span className="git-ab failed" title={`build “${repo.buildFailed.name}” failed — open build to see why`}><CircleAlert size={12} />build failed</span>}
     </button>
   );
 }

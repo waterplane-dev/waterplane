@@ -62,6 +62,9 @@ export interface NativePullRow {
   updatedAt: number;
   /** Absolute path of the finished file inside the app. Only on `done` rows. */
   path?: string;
+  /** When the app's copy was deleted because Downloads holds the file
+   *  (`ShellPullService.dropAfterSave`). Absent = never dropped. */
+  droppedAt?: number;
   /** What a finished APK says it IS, read off the archive — three repos on this
    *  desktop all build `app-debug.apk`, so the name says nothing. Empty where
    *  the file is not an app, or could not be read: absent, never a guess. */
@@ -104,7 +107,9 @@ interface NativePullPlugin {
   cancel(o: { id: string }): Promise<void>;
   discard(o: { id: string }): Promise<void>;
   publish(o: { id: string }): Promise<void>;
-  list(): Promise<{ items: NativePullRow[]; running: boolean }>;
+  list(): Promise<{ items: NativePullRow[]; running: boolean; dropAfterSave?: boolean }>;
+  /** Absent on a shell older than the keep-one-copy switch. */
+  setDropAfterSave?(o: { on: boolean }): Promise<void>;
   /** Absent on a shell older than the link service's own auto-download. */
   setAuto?(o: { on: boolean }): Promise<void>;
   /**
@@ -215,6 +220,28 @@ export async function nativeList(): Promise<NativePullState> {
   } catch {
     return { items: [], running: false };
   }
+}
+
+/**
+ * The shell's "keep only the Downloads copy" switch (`dropAfterSave`): read off
+ * `list()`, because the shell holds it — the save it follows runs with the page
+ * frozen. Undefined where no shell answers, or one older than the switch.
+ */
+export async function nativeDropAfterSave(): Promise<boolean | undefined> {
+  const p = plugin();
+  if (!p?.setDropAfterSave) return undefined;
+  try {
+    const r = await p.list();
+    return typeof r?.dropAfterSave === "boolean" ? r.dropAfterSave : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function setNativeDropAfterSave(on: boolean): Promise<void> {
+  const p = plugin();
+  if (!p?.setDropAfterSave) throw new Error("this app build cannot do that yet");
+  await p.setDropAfterSave({ on });
 }
 
 /** Live changes while the page is awake. Returns an unsubscribe. */

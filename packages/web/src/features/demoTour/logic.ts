@@ -4,6 +4,7 @@
  * runs it under node.
  */
 import type { Overlay } from "../../routing.ts";
+import { SHEET } from "../../sheetNames.ts";
 
 /** The demo's session the tour drives into (`demo/scenarios/first-look.ts`). */
 export const TOUR_SESSION = "demo-g1";
@@ -70,7 +71,7 @@ export const TOUR: readonly TourGroup[] = [
         target: { kind: "sheet", overlay: "backlog" },
       },
       {
-        id: "schedule", icon: "clock", headline: "Schedules",
+        id: "schedule", icon: "clock", headline: SHEET.automation,
         sentence: "Run a prompt on a clock — a weekly dependency check, a nightly test run — without being there.",
         target: { kind: "sheet", overlay: "schedule" },
       },

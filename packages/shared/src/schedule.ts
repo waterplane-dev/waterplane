@@ -50,7 +50,7 @@ export type {
   WindowResets,
 } from "./schedule/schedrule.js";
 export {
-  INTENT_MAX_STEPS,
+  INTENT_MAX_STEPS, scheduleActionText, scheduleActionDirs, schedulesForBuild,
 } from "./schedule/schedaction.js";
 export type {
   ScheduleAction,

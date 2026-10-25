@@ -84,6 +84,7 @@ import { ActivityList } from "./activity/ActivityList";
 import { ActivityNotices } from "./activity/ActivityNotices";
 import { useActivityModel } from "./activity/useActivityModel";
 import type { ActivitySheetProps } from "./activity/activitySheetTypes";
+import { SHEET } from "./sheetNames";
 
 export type { ActivitySheetProps, ReviewMarks } from "./activity/activitySheetTypes";
 
@@ -91,7 +92,7 @@ export function ActivitySheet(p: ActivitySheetProps) {
   const m = useActivityModel(p);
   const { PeerJobs } = m;
   return (
-    <Sheet title="Activity" icon={<Hourglass size={18} />} onClose={p.onClose}
+    <Sheet title={SHEET.activity} icon={<Hourglass size={18} />} onClose={p.onClose}
       footer={m.selecting ? <ActivityBulkBar m={m} p={p} /> : null}
       head={<ActivityHead m={m} />}>
       <ActivityNotices m={m} online={p.online} />

@@ -160,7 +160,7 @@ export async function pullStore(this: PullManager, id: string, blob: Blob, recei
 export async function pullEvictOld(this: PullManager): Promise<void> {
   const cutoff = Date.now() - KEEP_DONE_MS;
   for (const r of this.list()) {
-    if (r.state === "done" && !r.evicted && r.updatedAt < cutoff && r.received > 0) {
+    if (r.state === "done" && !r.evicted && !r.droppedAt && r.updatedAt < cutoff && r.received > 0) {
       await this.dropOne(r);
     }
   }
@@ -203,7 +203,7 @@ export async function pullDropBytes(this: PullManager, ids: string[]): Promise<{
   let bytes = 0;
   for (const id of ids) {
     const r = this.records[id];
-    if (!r || r.state !== "done" || r.evicted) continue;
+    if (!r || r.state !== "done" || r.evicted || r.droppedAt) continue;
     const had = r.received || r.item.size || 0;
     await this.dropOne(r);
     count++;

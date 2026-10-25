@@ -14,7 +14,7 @@ import { viewerHandles } from "./docKind";
 import { showToast } from "./toast";
 import { backendIdOf, hasCap } from "./backendCaps";
 import { useRepoColors } from "./repoColors";
-import { openCaptureFor } from "./features/capture"; import { openRepoHealth } from "./features/setup";
+import { openCaptureFor } from "./features/capture"; import { openRepoHealth } from "./features/setup"; import { openBuildFor } from "./features/build";
 import { useUsedOrderSnapshot } from "./features/toolbarCfg";
 import { usePullRecords } from "./features/pull";
 import { openScheduleCut, useSchedules } from "./features/schedule";
@@ -332,7 +332,7 @@ export function App() {
       followFire: (id) => { wantNavRef.current = true; firedIdRef.current = id; },
       openPadAt,
       sendSeeded: () => sendSeedRef.current != null,
-      openActivity, openGit: openGitFor, openReader: term.openReader, openCapture: openCaptureFor,
+      openActivity, openGit: openGitFor, openReader: term.openReader, openCapture: openCaptureFor, openBuild: openBuildFor,
     },
     launch: { setOpt: setLaunchOpt, wire: wireLaunch, openCwd, relaunch, focusShell: launchCore.focusShell, shellCant: launchCore.shellCant },
     term: { snapshot: term.snapshot, geom: () => geomRef.current },
@@ -343,7 +343,7 @@ export function App() {
     world: {
       sessions, repos, visibleRepos, active, activeRepo, backends, recent, closed, intents, launches: q.launches, budget: q.budget, billing, meter, usage, get usageReadings() { return readingsNow(); }, get tokensOpenOn() { return tokensOpenOnNow(); }, clearTokensOn, launch, update,
       sessionRepo, sessionRowTitle, sessionCan, sessionCant, repoForCwd, refreshRepos,
-      schedules, pending, backlog: bl.items,
+      schedules, pending, backlog: bl.items, backlogAuto: bl.auto,
       cwdVisible,
     },
     files: {

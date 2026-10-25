@@ -23,7 +23,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import ts from "typescript";
+import { assertSurface } from "./exportsurface.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 
@@ -46,18 +46,7 @@ const defsIn = (t) => code(t).split("\n").map((l) => DEF.exec(l)?.[1]).filter(Bo
 for (const [key, m] of Object.entries(MODULES)) {
   test(`${key}: the barrel exports exactly its pinned surface, values and types alike`, () => {
     const barrel = join(srcOf(m), `${m.name}.ts`);
-    const program = ts.createProgram([barrel], {
-      module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext,
-      target: ts.ScriptTarget.ES2022, noEmit: true, skipLibCheck: true,
-    });
-    const checker = program.getTypeChecker();
-    const mod = checker.getSymbolAtLocation(program.getSourceFile(barrel));
-    assert.ok(mod, `${barrel} did not parse as a module`);
-    const got = checker.getExportsOfModule(mod).map((s) => {
-      const t = s.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(s) : s;
-      return `${s.name}:${t.flags & ts.SymbolFlags.Value ? "value" : "type"}`;
-    }).sort();
-    assert.deepEqual(got, [...m.surface].sort());
+    assertSurface(barrel, m.surface);
   });
 
   test(`${key}: the barrel only shrinks and every slice is under ${MAX_SLICE_LINES} lines`, () => {

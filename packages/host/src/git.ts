@@ -630,14 +630,44 @@ interface GitPushJob {
   done: Promise<{ ok: boolean; output?: string; error?: string }>;
 }
 
-/** Start a push in `wt`, or join the one already running there. */
-export function startPush(wt: string): GitPushJob {
+/**
+ * How a host-run pull or push ended, for whoever turns it into a notification
+ * (`gitnotify.ts`, installed by `main.ts`). Reported ONCE per run — a joiner of
+ * a running push adds no second report — and never for a run refused because
+ * the other verb (or the same pull) was already running in that worktree: that
+ * refusal is the answer to the tap, not an outcome.
+ */
+export interface GitOutcome {
+  repo: GitRepoRef;
+  verb: "pull" | "push";
+  ok: boolean;
+  output?: string;
+  error?: string;
+  startedAt: number;
+  finishedAt: number;
+}
+/** Which repo/worktree a run was for, as the route resolved it (`RepoTarget`). */
+export interface GitRepoRef { id: string; name: string; branch?: string }
+
+let outcomeSink: ((o: GitOutcome) => void) | null = null;
+/** Install (or, with null, remove) the one listener for git outcomes. */
+export function setGitOutcomeSink(fn: ((o: GitOutcome) => void) | null): void { outcomeSink = fn; }
+function report(o: GitOutcome): void {
+  try { outcomeSink?.(o); } catch (e) { console.error(`[git] outcome sink threw: ${(e as Error).message}`); }
+}
+
+/** Start a push in `wt`, or join the one already running there. `repo`, when
+ *  given, has the run's outcome reported (`setGitOutcomeSink`) — once, by the
+ *  run that started it. */
+export function startPush(wt: string, repo?: GitRepoRef): GitPushJob {
   const live = pushes.get(wt);
   if (live?.running) return live;
+  const refused = pulling.has(wt);
   const job: GitPushJob = { running: true, startedAt: Date.now(), progress: new PushProgress(), done: null as never };
   job.done = gitPush(wt, (k, d) => job.progress.feed(k, d)).then((r) => {
     job.running = false;
     job.result = { ...r, finishedAt: Date.now() };
+    if (repo && !refused) report({ repo, verb: "push", ...r, startedAt: job.startedAt, finishedAt: job.result.finishedAt });
     return r;
   });
   pushes.set(wt, job);
@@ -675,47 +705,56 @@ const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
  * Refused while a push runs here: the pre-push hook is building and testing
  * this very tree, and moving HEAD under it would test one thing and push another.
  */
-export async function gitPull(wt: string): Promise<{ ok: boolean; output?: string; error?: string }> {
+export async function gitPull(wt: string, repo?: GitRepoRef): Promise<{ ok: boolean; output?: string; error?: string }> {
   if (pushes.get(wt)?.running) return { ok: false, error: "A push is running in this worktree — pull once it has ended." };
   if (pulling.has(wt)) return { ok: false, error: "A pull is already running in this worktree." };
   pulling.add(wt);
+  const startedAt = Date.now();
+  let r: { ok: boolean; output?: string; error?: string };
   try {
-    let up: string;
-    try {
-      up = (await git(wt, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])).stdout.trim();
-    } catch {
-      return { ok: false, error: "This branch has no upstream to pull from. Push it once to set one." };
-    }
-    try {
-      await pexec("git", ["fetch", "--no-tags"], { cwd: wt, timeout: 120_000, env: NO_PROMPT, maxBuffer: 4 * 1024 * 1024 });
-    } catch (err) {
-      return { ok: false, error: `The fetch from ${up} failed — nothing was changed.\n\n${errText(err)}` };
-    }
-    const [ahead, behind] = (await git(wt, ["rev-list", "--left-right", "--count", "HEAD...@{u}"])).stdout.trim().split(/\s+/).map(Number);
-    const toPush = ahead ? ` ${plural(ahead, "local commit")} still to push.` : "";
-    if (!behind) return { ok: true, output: `Already up to date with ${up}.${toPush}` };
-    if (!ahead) {
-      try {
-        await git(wt, ["merge", "--ff-only", "@{u}"]);
-      } catch (err) {
-        return { ok: false, error: `Could not fast-forward to ${up} — nothing was changed.\n\n${errText(err)}` };
-      }
-      return { ok: true, output: `Pulled ${plural(behind, "commit")} from ${up}.` };
-    }
-    const dirty = (await git(wt, ["status", "--porcelain", "--untracked-files=no"])).stdout.trim();
-    if (dirty) {
-      return { ok: false, error: `Both sides moved — ${plural(ahead, "local commit")}, ${plural(behind, "commit")} on ${up} — and the working tree has uncommitted edits. Commit them, then pull again. Nothing was changed.` };
-    }
-    try {
-      await git(wt, ["rebase", "@{u}"]);
-    } catch (err) {
-      await git(wt, ["rebase", "--abort"]).catch(() => undefined);
-      return { ok: false, error: `Replaying ${plural(ahead, "local commit")} on top of ${up} hit a conflict, so it was undone — nothing was changed. Resolve it in a session on the desktop.\n\n${errText(err)}` };
-    }
-    return { ok: true, output: `Pulled ${plural(behind, "commit")} from ${up} and replayed your ${plural(ahead, "local commit")} on top.${toPush}` };
+    r = await pullOnce(wt);
   } finally {
     pulling.delete(wt);
   }
+  if (repo) report({ repo, verb: "pull", ...r, startedAt, finishedAt: Date.now() });
+  return r;
+}
+
+/** One pull's body; `gitPull` holds the per-worktree latch around it. */
+async function pullOnce(wt: string): Promise<{ ok: boolean; output?: string; error?: string }> {
+  let up: string;
+  try {
+    up = (await git(wt, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])).stdout.trim();
+  } catch {
+    return { ok: false, error: "This branch has no upstream to pull from. Push it once to set one." };
+  }
+  try {
+    await pexec("git", ["fetch", "--no-tags"], { cwd: wt, timeout: 120_000, env: NO_PROMPT, maxBuffer: 4 * 1024 * 1024 });
+  } catch (err) {
+    return { ok: false, error: `The fetch from ${up} failed — nothing was changed.\n\n${errText(err)}` };
+  }
+  const [ahead, behind] = (await git(wt, ["rev-list", "--left-right", "--count", "HEAD...@{u}"])).stdout.trim().split(/\s+/).map(Number);
+  const toPush = ahead ? ` ${plural(ahead, "local commit")} still to push.` : "";
+  if (!behind) return { ok: true, output: `Already up to date with ${up}.${toPush}` };
+  if (!ahead) {
+    try {
+      await git(wt, ["merge", "--ff-only", "@{u}"]);
+    } catch (err) {
+      return { ok: false, error: `Could not fast-forward to ${up} — nothing was changed.\n\n${errText(err)}` };
+    }
+    return { ok: true, output: `Pulled ${plural(behind, "commit")} from ${up}.` };
+  }
+  const dirty = (await git(wt, ["status", "--porcelain", "--untracked-files=no"])).stdout.trim();
+  if (dirty) {
+    return { ok: false, error: `Both sides moved — ${plural(ahead, "local commit")}, ${plural(behind, "commit")} on ${up} — and the working tree has uncommitted edits. Commit them, then pull again. Nothing was changed.` };
+  }
+  try {
+    await git(wt, ["rebase", "@{u}"]);
+  } catch (err) {
+    await git(wt, ["rebase", "--abort"]).catch(() => undefined);
+    return { ok: false, error: `Replaying ${plural(ahead, "local commit")} on top of ${up} hit a conflict, so it was undone — nothing was changed. Resolve it in a session on the desktop.\n\n${errText(err)}` };
+  }
+  return { ok: true, output: `Pulled ${plural(behind, "commit")} from ${up} and replayed your ${plural(ahead, "local commit")} on top.${toPush}` };
 }
 
 /**

@@ -332,6 +332,9 @@ export function makeIntentDeps(ctx: ServerCtx): IntentDeps {
         };
       },
       build: (i) => ctx.builds.execute(i),
+      // A build RULE's occurrence: post one run through `run()`, stamped with
+      // the rule's origin — never the rule's own row run as a build.
+      scheduledBuild: (i) => ctx.builds.fireScheduled(i),
       // Checked on the PAYLOAD before the shell/build branch, in the manager: an
       // assessment is a `shell` target too, and routing on the target alone would
       // run it through the build pty.
@@ -391,7 +394,7 @@ export function makeIntentDeps(ctx: ServerCtx): IntentDeps {
     // `intents.json` stopped reaching the disk: told once per failing streak
     // (`intents/disk.ts`), never per tick. New work is refused in words at the
     // op itself; this is the sentence for whoever is not sending anything.
-    onWriteError: (message) => ctx.notify("backlog", intentsWriteNotice(message)),
+    onWriteError: (message) => ctx.notify("backlog", { ...intentsWriteNotice(message), level: "attention" }),
   };
 }
 

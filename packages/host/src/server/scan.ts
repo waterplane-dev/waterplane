@@ -17,10 +17,12 @@
 import { statSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { BuildRun, NewImage, PullItem } from "@waterplane/shared";
+import { buildAttentionKey } from "@waterplane/shared";
 import { discoverArtifacts, discoverArtifactsAsync, isMarkdownPath } from "../files.js";
 import { targetId } from "../repos.js";
 import { catchUpCandidates } from "../autopull.js";
 import type { ServerCtx } from "./ctx.js";
+import type { NotifyParams } from "../routes/types.js";
 import { logTag } from "@waterplane/shared";
 
 /**
@@ -65,6 +67,22 @@ export function createScan(ctx: ServerCtx) {
         return { name: a.name, relPath: a.relPath, size: a.size, mtime };
       }), "build");
     }
+    // One attention item per build ENTRY of one repo/worktree (`RepoTarget.id`, so the chip lines
+    // up with /api/repos): a failure files it, the next success of the same entry resolves it.
+    const repoId = targetId(run.repoDir);
+    const key = buildAttentionKey(repoId, run.buildId);
+    let fail: Pick<NotifyParams, "outcome" | "key" | "build" | "detail" | "open"> | undefined;
+    if (run.status === "failed") {
+      let out = "";
+      try { out = ctx.builds.getOutput(run.runId).slice(-1500).trim(); } catch { /* no tail is fine */ }
+      fail = {
+        outcome: "failed", key, build: { id: run.buildId, name: run.name },
+        detail: out || verdict, open: { to: "build", repoId, buildId: run.buildId },
+      };
+    } else {
+      const at = new Date(run.finishedAt ?? Date.now());
+      ctx.resolveAttention(key, `fixed by the ${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")} run`);
+    }
     const art = run.artifacts?.[0];
     if (art) {
       ctx.notify("artifact", {
@@ -72,9 +90,10 @@ export function createScan(ctx: ServerCtx) {
         body: `${fmtSize(art.size)} · ${verdict} — tap to download`,
         tag: `build-${run.runId}`,
         file: { repoId: art.repoId, relPath: art.relPath, name: art.name, size: art.size, mtime: art.mtime },
+        ...(fail ?? { outcome: "ok" as const }),
       });
     } else {
-      ctx.notify("info", { title: `Build “${run.name}” ${verdict}`, body: run.cwd, tag: `build-${run.runId}` });
+      ctx.notify("info", { title: `Build “${run.name}” ${verdict}`, body: run.cwd, tag: `build-${run.runId}`, ...(fail ?? { outcome: "ok" as const }) });
     }
   }
 

@@ -1,15 +1,15 @@
 /** All of the sheet's state, refs, effects, derivations and handlers, in the order they always ran. Split from `SendSheet.tsx` (docs/notes/send-architecture.md). */
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { RuleAnchor, ScheduleRule } from "@waterplane/shared";
-import { attachBlockers, attachmentsReady, composeRule, describeRule, ruleAnchor, ruleRecurs, type AttachStatus } from "@waterplane/shared";
+import type { RuleAnchor } from "@waterplane/shared";
+import { attachBlockers, attachmentsReady, composeRule, describeRule, ruleAnchor, type AttachStatus } from "@waterplane/shared";
 import { intentTitle } from "../activityRows";
 import { loadSheetDraft, saveSheetDraft } from "../outbox";
-import { LS, lsGet } from "../storage";
 import { track } from "../usage";
-import { DEVICE_TZ, anchorWindowOf, chainCandidates, guardWindowOf, inboxRefs, onceIn, leadLabel, leadOk, previewOf, pctOk, resumeWhen, retimeBlocker, retimeWhenLabel, RETIME_NOW_SEG, sendBlocker, sendLabel, sequentialMeans, whenWords, windowIn, type SendIntent, type SendNames, type SendTarget, type SendWhen } from "../sendIntent";
+import { DEVICE_TZ, chainCandidates, inboxRefs, onceIn, previewOf, resumeWhen, retimeBlocker, retimeWhenLabel, RETIME_NOW_SEG, sendBlocker, sendLabel, sequentialMeans, whenWords, windowIn, type SendIntent, type SendNames, type SendTarget, type SendWhen } from "../sendIntent";
 import { usePref } from "../core/prefs";
 import type { SendSheetProps } from "./sendSheetTypes";
 import { defaultTarget } from "./sendTargets";
+import { useRuleFields } from "./useRuleFields";
 
 export function useSendSheet(props: SendSheetProps) {
   const {
@@ -63,6 +63,13 @@ export function useSendSheet(props: SendSheetProps) {
   // so the pair of answers is sayable and nothing has to be replaced.
   const [target, setTarget] = useState<SendTarget>(() => seededTarget);
   const [when, setWhen] = useState<SendWhen>(() => resumed.when);
+  // The `at` rule's own fields — shared with the schedule-a-build form, so it
+  // draws the same `RuleEditor` off the same state (`useRuleFields.ts`).
+  const {
+    more, setMore, quickKey, setQuickKey, pctOpen, setPctOpen, savedPct, setSavedPct, pctRaw, setPctRaw,
+    leadOpen, setLeadOpen, savedLead, setSavedLead, leadRaw, setLeadRaw, ruleMemo,
+    patchRule, replaceRule, switchAnchor, rule, days, anchor, recurs, anchorW, guardW,
+  } = useRuleFields(when, setWhen);
   // The global *close automatic sessions when done* — what the per-item
   // choice's default (inherit) means today.
   const closeGlobal = usePref("closeWhenDone");
@@ -86,42 +93,10 @@ export function useSendSheet(props: SendSheetProps) {
   /** Which summary row is expanded. One at a time — two open pickers on a phone
    *  is a scroll, and the point of a summary row is that it is one line. */
   const [open, setOpen] = useState<null | "to" | "when">(retime ? "when" : null);
-  /** The `at` editor's rarely-touched half (repeat, lead, grace, name). */
-  const [more, setMore] = useState(false);
   /** The `budget…` row's field is open. The cap itself lives ON the target
    *  (`SendTarget.budget`), so closing the field keeps it and the button says so. */
   const [budgetOpen, setBudgetOpen] = useState(false);
   const [launchOpen, setLaunchOpen] = useState(false); // the *model* row's picker; the pick lives ON the target
-  /** Which quick chip set the instant, so it can stay lit. Compared by identity,
-   *  never by re-deriving the time — the chips move with the clock. */
-  const [quickKey, setQuickKey] = useState<string | null>(null);
-  /**
-   * The headroom condition's *another…* field: whether it is open, and the raw
-   * string in it.
-   *
-   * Raw, like every other number field on this phone, so a half-typed "3" on
-   * the way to "30" is not snapped back under the finger — and applied only
-   * once it parses, so the rule never holds a number nobody finished typing.
-   * The last one that DID parse is kept on this device (`LS.schedPctLeft`) and
-   * comes back as a chip beside the fixed four, which is the whole point: a
-   * percentage somebody chose once is a habit, and re-typing it on every rule
-   * is the tax the four presets were supposed to remove.
-   */
-  const [pctOpen, setPctOpen] = useState(false);
-  const [savedPct, setSavedPct] = useState<number | null>(() => pctOk(lsGet(LS.schedPctLeft)));
-  const [pctRaw, setPctRaw] = useState<string>(() => String(pctOk(lsGet(LS.schedPctLeft)) ?? ""));
-  /** *How long before*'s *another…* field — the same shape as the headroom one
-   *  above, kept in minutes under `LS.schedLeadMin`. */
-  const [leadOpen, setLeadOpen] = useState(false);
-  const [savedLead, setSavedLead] = useState<number | null>(() => leadOk(lsGet(LS.schedLeadMin)));
-  const [leadRaw, setLeadRaw] = useState<string>(() => {
-    const n = leadOk(lsGet(LS.schedLeadMin));
-    return n == null ? "" : leadLabel(n);
-  });
-  /** The last rule seen under each ANCHOR, so flipping between "at a time" and
-   *  "a usage window" is not a delete — a ref, not state, because it is only
-   *  ever read back into a fresh rule, never rendered itself. */
-  const ruleMemo = useRef<{ clock?: ScheduleRule; window?: ScheduleRule }>({});
   /**
    * The whole `at` decision, kept across a trip OUT of the clock — to `now`, to
    * `when it's free`, to `after another…`.
@@ -233,17 +208,6 @@ export function useSendSheet(props: SendSheetProps) {
     if (images.length) onAnnotate(images, attachRepo);
   }
 
-  function patchRule(patch: Partial<ScheduleRule>) {
-    setWhen((w) => (w.kind === "at" ? { ...w, rule: { ...w.rule, ...patch } } : w));
-  }
-
-  /** Hand over a whole rule rather than merging one — what switching ANCHOR or
-   *  RECURRENCE needs, since a merge leaves the fields of the kind just left
-   *  behind (harmless — `cleanRule` strips them host-side — but stale). */
-  function replaceRule(next: ScheduleRule) {
-    setWhen((w) => (w.kind === "at" ? { ...w, rule: next } : w));
-  }
-
   /** Switch the ANCHOR — clock time vs. a usage window — without discarding
    *  whichever the phone is not looking at: the last rule under each is kept
    *  in `ruleMemo`, so tapping back and forth restores the days/zone/condition
@@ -269,11 +233,7 @@ export function useSendSheet(props: SendSheetProps) {
       setWhen(next === "window" ? windowIn() : onceIn(3600e3));
       return;
     }
-    setQuickKey(null);
-    const prevAnchor = ruleAnchor(when.rule);
-    if (prevAnchor !== next) ruleMemo.current[prevAnchor] = when.rule;
-    const remembered = ruleMemo.current[next];
-    replaceRule(remembered ?? composeRule(next, false, when.rule, Date.now(), DEVICE_TZ));
+    switchAnchor(next);
   }
 
   /**
@@ -323,27 +283,10 @@ export function useSendSheet(props: SendSheetProps) {
 
   const ready = attachmentsReady(states);
   const blockers = attachBlockers(states);
-  const rule = when.kind === "at" ? when.rule : null;
-  const days = rule?.days ?? [];
-  const anchor: RuleAnchor | null = rule ? ruleAnchor(rule) : null;
-  const recurs = rule ? ruleRecurs(rule) : false;
-  /**
-   * The two usage meters, kept apart: the one this rule is ANCHORED to, and the
-   * one its condition READS. They were the same field until the instruction
-   * people kept asking for turned out to need both at once — *right after the
-   * session window resets, but only if 30% of the week is left*. Naming one of
-   * them meant giving up the other.
-   *
-   * The same defaults `shared/schedule.ts` reads with (`anchorWindow` /
-   * `guardOf`), so the sentence under the control and the sentence `describeRule`
-   * puts on the row cannot disagree about which meter was read.
-   */
-  const anchorW = rule ? anchorWindowOf(rule) : "session";
-  const guardW = rule ? guardWindowOf(rule) : "session";
 
   return {
     ...props,
-    live, draftKey, retime, promptsRef, names, resumed, seededTarget, closeGlobal, decideRef, ruleMemo, atMemo, focusStep, text, intent, preview, editing, blocker, label, seqMeans, openedAt, chainRows, attachCwd, attachRepo, repoId, waitsForFiles, ready, blockers, rule, days, anchor, recurs, anchorW, guardW, prompts, setPrompts, target, setTarget, when, setWhen, sequential, setSequential, open, setOpen, more, setMore, budgetOpen, setBudgetOpen, launchOpen, setLaunchOpen, quickKey, setQuickKey, pctOpen, setPctOpen, savedPct, setSavedPct, pctRaw, setPctRaw, leadOpen, setLeadOpen, savedLead, setSavedLead, leadRaw, setLeadRaw, states, setStates, nonce, setNonce, busy, setBusy, shots, setShots, updatePrompts, guard, pick, patchRule, replaceRule, setAnchor, setAfter, leaveAt, go,
+    live, draftKey, retime, promptsRef, names, resumed, seededTarget, closeGlobal, decideRef, ruleMemo, atMemo, focusStep, text, intent, preview, editing, blocker, label, seqMeans, openedAt, chainRows, attachCwd, attachRepo, repoId, waitsForFiles, ready, blockers, rule, days, anchor, recurs, anchorW, guardW, prompts, setPrompts, target, setTarget, when, setWhen, sequential, setSequential, open, setOpen, more, setMore, budgetOpen, setBudgetOpen, launchOpen, setLaunchOpen, quickKey, setQuickKey, pctOpen, setPctOpen, savedPct, setSavedPct, pctRaw, setPctRaw, leadOpen, setLeadOpen, savedLead, setSavedLead, leadRaw, setLeadRaw, states, setStates, nonce, setNonce, busy, setBusy, shots, setShots, updatePrompts, guard, pick, patchRule, replaceRule, switchAnchor, setAnchor, setAfter, leaveAt, go,
   };
 }
 

@@ -1,10 +1,10 @@
 /** Lead time, run hours, late runs and the name. Split from `SendSheet.tsx` (docs/notes/send-architecture.md). */
 import { GRACES, LEADS, hoursWords } from "../sendIntent";
-import type { SendSheetModel } from "./useSendSheet";
+import type { RuleModel } from "./useRuleFields";
 import { HOURS_FROM, HOURS_TO, hhmm, minuteOfDay } from "./sendTargets";
 import { Hint } from "../kit/Hint";
 
-export function MoreRule({ m }: { m: SendSheetModel }) {
+export function MoreRule({ m }: { m: RuleModel }) {
   const {
     retime, setWhen, more, setMore, patchRule,
   } = m;

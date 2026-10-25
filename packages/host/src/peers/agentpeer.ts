@@ -228,7 +228,7 @@ export function startPeerJobs(ctx: ServerCtx): PeerJobs | null {
       return r.ok;
     },
     saveArtifact: saveOutboxArtifact,
-    notify: (title, body, backlog) => ctx.notify("backlog", { title, body, ...(backlog ? { backlog } : {}) }),
+    notify: (n) => ctx.notify("backlog", { ...n, level: "attention" }),
     log: (m) => console.warn(m),
   });
   registered = makePeerAgentHandler({

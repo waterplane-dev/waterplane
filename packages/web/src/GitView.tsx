@@ -14,6 +14,7 @@ import { GitTextDiff } from "./GitTextDiff";
 import { GitLogView, type GitLogFocus } from "./GitLogView";
 import { GIT_COPIED, GIT_COPY_FAILED, GIT_COPY_LABEL, GIT_FIX_LABEL, gitFailPrompt, type GitFailure } from "./gitFailPrompt";
 import { showToast } from "./toast";
+import { ago } from "./format";
 import { gitZoom, nextReaderZoom, readerScale, setGitZoom, textScale } from "./uiScale";
 import { Button } from "./kit/Button";
 import { Row, RowTitle } from "./kit/Row";
@@ -30,6 +31,11 @@ interface Props {
   /** The repo's file tree; closing it lands back here. Absent ⇒ no button. */
   onBrowse?: () => void;
   onClose: () => void;
+  /** The host's stored failure of the last pull/push here (`RepoTarget.gitFailed`), kept
+   *  across restarts and devices; shown when this screen holds no failure note of its own. */
+  stored?: { verb: "pull" | "push"; at: number; error: string; id: string };
+  /** `done` on the stored failure — `notification.handle(stored.id)`. */
+  onDone?: (id: string) => void;
 }
 
 /** Map a porcelain code to a short human label. */
@@ -111,7 +117,7 @@ function PushProgressView({ p, fill }: { p: GitPushProgress; fill: boolean }) {
 }
 
 /** Review changed files, view diffs, stage, commit, pull and push from the phone. */
-export function GitView({ repoId, onAskAgent, onBrowse, onClose }: Props) {
+export function GitView({ repoId, onAskAgent, onBrowse, onClose, stored, onDone }: Props) {
   const [openFile, setOpenFile] = useState<GitFile | null>(null);
   const [diff, setDiff] = useState<string>("");
   const [message, setMessage] = useState("");
@@ -574,6 +580,24 @@ export function GitView({ repoId, onAskAgent, onBrowse, onClose }: Props) {
             <Copy size={16} /> {GIT_COPY_LABEL}
           </Button>
         </div>
+      )}
+      {stored && !note && (
+        <>
+          <Hint className="git-note">The last {stored.verb} failed {ago(stored.at)}.{"\n"}{stored.error}</Hint>
+          <div className="sheet-actions">
+            {onAskAgent && (
+              <Button onClick={() => { track("action:git.askAgent"); onAskAgent(fullFailure({ verb: stored.verb === "pull" ? "pull" : "push", error: stored.error })); }}
+                title="open the Send sheet with this log and its context, aimed at a new session in this repo — nothing is sent yet">
+                <SquareTerminal size={16} /> {GIT_FIX_LABEL}
+              </Button>
+            )}
+            <Button onClick={async () => { showToast(await copyText(gitFailPrompt(fullFailure({ verb: stored.verb, error: stored.error }))) ? GIT_COPIED : GIT_COPY_FAILED); }}
+              title="copy the same words to the clipboard: the log, with the branch, upstream and how long it ran">
+              <Copy size={16} /> {GIT_COPY_LABEL}
+            </Button>
+            {onDone && <Button onClick={() => onDone(stored.id)} title="mark this failure as dealt with; the red chip on the repo goes away"><Check size={16} /> done</Button>}
+          </div>
+        </>
       )}
       {note && <Hint className="git-note">{note}</Hint>}
       {pushStart != null && pushProgress && <PushProgressView p={pushProgress} fill={!!status?.clean} />}

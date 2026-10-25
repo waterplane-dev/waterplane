@@ -10,7 +10,7 @@
  */
 import { useLayoutEffect, useRef } from "react";
 import { useBackStep } from "../../backStep";
-import { Archive, ArrowDownUp, Bell, Boxes, CalendarClock, Camera, ChevronsDownUp, ChevronsUpDown, CircleDot, CloudOff, Download, Eraser, Flag, Gauge, Hourglass, Images, ListOrdered, ListRestart, ListTodo, Loader, Menu, MessageSquare, NotebookPen, Plus, RotateCw, ScrollText, Search, Settings, ShieldAlert, Split, SquareTerminal, Star, Terminal as TerminalIcon, Waypoints, X } from "lucide-react";
+import { Archive, ArrowDownUp, Boxes, CalendarClock, Camera, ChevronsDownUp, ChevronsUpDown, CircleDot, CloudOff, Download, Eraser, Flag, Gauge, Hourglass, Images, ListOrdered, ListRestart, ListTodo, Loader, Menu, MessageSquare, NotebookPen, Plus, RotateCw, ScrollText, Search, Settings, ShieldAlert, Split, SquareTerminal, Star, Terminal as TerminalIcon, Waypoints, X } from "lucide-react";
 import { BRAND, branchLabel } from "@waterplane/shared";
 import { Empty } from "../../Empty";
 import { Logo } from "../Logo";
@@ -27,7 +27,7 @@ import { RISKY_PERM_MODES } from "../settings/permModes";
 import { CliHealthChip } from "../../features/cliHealth";
 import { useUsageFace } from "../../features/tokens";
 import { UsageChip } from "./UsageChip";
-import { badgeText, openNotifs, useUnread } from "../../features/notifications";
+import { BellButton } from "../../features/notifications";
 import { openDecisions } from "../../features/plugins";
 import { openSentLog } from "../../features/sentLog";
 import { DemoStartCue } from "../../features/demoTour";
@@ -49,6 +49,7 @@ import { LauncherItemKeys, LauncherItems, LauncherMenuBadge } from "./LauncherIt
 import { Button } from "../../kit/Button";
 import { Row, RowTitle, RowSub } from "../../kit/Row";
 import { Hint } from "../../kit/Hint";
+import { SHEET } from "../../sheetNames";
 
 export type { LauncherProps } from "./types";
 export { openShotPick } from "./useLauncherModel";
@@ -93,7 +94,6 @@ export function LauncherScreen(p: LauncherProps) {
   // The screenshot repo picker: Back shuts it, never exits the app from under it.
   useBackStep(shotPick, () => setShotPick(false));
   const face = useUsageFace(); // windows (subscription) / dollars (api, cloud) / a bare door
-  const unreadNotifs = useUnread();
   const push = useHostPush();
 
   // Returning to the launcher — from a session or from a sheet — React remounts
@@ -315,9 +315,7 @@ export function LauncherScreen(p: LauncherProps) {
         <CliHealthChip />
         {/* An extension item with something waiting (the vault's asks), out of the ☰ menu while it waits. */}
         <LauncherItemKeys size={ICON} />
-        <Button className="notif-btn" title="notifications" onClick={openNotifs}>
-          <Bell size={ICON} />{unreadNotifs > 0 && <span className="notif-badge">{badgeText(unreadNotifs)}</span>}
-        </Button>
+        <BellButton size={ICON} />
         <Button
           className={push === "insecure" ? "danger" : ""}
           aria-label="settings"
@@ -489,7 +487,7 @@ export function LauncherScreen(p: LauncherProps) {
                   are opposite situations. So the chip carries the HORIZON
                   (`scheduleHorizon`, node-tested): the two nearest non-empty
                   buckets, disjoint, and nothing at all when nothing is armed. */}
-              <button className={`head-act${scheduleWords ? " head-act-wide" : ""}`} aria-label="schedules"
+              <button className={`head-act${scheduleWords ? " head-act-wide" : ""}`} aria-label={SHEET.automation.toLowerCase()}
                 // The number is the filter: open the list already cut to the
                 // bucket the chip is counting. With nothing armed there is no
                 // number and no claim to check, so it opens whole.

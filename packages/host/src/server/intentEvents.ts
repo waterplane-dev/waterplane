@@ -172,8 +172,13 @@ export function wireIntentEvents(ctx: ServerCtx): void {
       ctx.notify("info", {
         title: `${res.ok ? "Scheduled" : "Schedule failed"}: ${i.title || i.id}`,
         body: `${res.detail}${late}`,
-        tag: `schedule-${i.id}`,
+        tag: `schedule-${i.id}`, outcome: res.ok ? "ok" : "failed",
+        ...(res.ok ? {} : { key: `schedule:${i.id}` }),
       });
+      if (res.ok) {
+        const at = new Date();
+        ctx.resolveAttention(`schedule:${i.id}`, `fixed by the ${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")} run`);
+      }
       return;
     }
     if (isBuildRow(i)) { ctx.announceBuild(intentToBuildRun(i)); return; }
@@ -183,11 +188,11 @@ export function wireIntentEvents(ctx: ServerCtx): void {
     // false alarm this rework exists to stop.
     if (!isBacklogRow(i)) return;
     if (i.state === "done") {
-      ctx.notify("backlog", { title: "Backlog item done", body: i.label || textOf(i), sessionId: i.sessionId, tag: "backlog" });
+      ctx.notify("backlog", { title: "Backlog item done", body: i.label || textOf(i), sessionId: i.sessionId, tag: "backlog", outcome: "ok" });
       return;
     }
     if (i.state === "failed") {
-      ctx.notify("backlog", { title: "Backlog item not delivered", body: i.label || textOf(i), sessionId: i.sessionId, tag: "backlog" });
+      ctx.notify("backlog", { title: "Backlog item not delivered", body: i.label || textOf(i), sessionId: i.sessionId, tag: "backlog", outcome: "failed" });
     }
   });
 
@@ -201,7 +206,7 @@ export function wireIntentEvents(ctx: ServerCtx): void {
    */
   ctx.intents.on("requeued", (i: Intent) => {
     if (!isBacklogRow(i)) return;
-    ctx.notify("backlog", { title: "Backlog paused · usage limit", body: i.label || textOf(i), tag: "backlog" });
+    ctx.notify("backlog", { title: "Backlog paused · usage limit", body: i.label || textOf(i), tag: "backlog", level: "info" });
   });
 
   /** One row's words, for a notification body. */

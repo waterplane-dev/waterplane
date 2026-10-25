@@ -1,4 +1,5 @@
 import { LS, lsGet, lsSet } from "./storage";
+import { uploadWidthFor } from "./collageName";
 /**
  * Upload sizing — the phone half of "don't push 4 MB of screenshot up a 3G
  * uplink". Downloads already have server-made thumbnails (`media.ts` +
@@ -123,7 +124,7 @@ export function etaText(bytes: number, kbps: number | null): string | null {
 const SCALABLE = /^image\/(png|jpeg|webp|bmp|heic|heif)$/i;
 
 /**
- * Re-encode an image down to `maxWidth` (JPEG, since the source is a screenshot
+ * Re-encode an image down to `maxWidth` per panel (`uploadWidthFor`) (JPEG, since the source is a screenshot
  * or a photo, never line art that needs lossless). Returns the ORIGINAL blob
  * whenever shrinking wouldn't help — already narrow enough, unsupported type,
  * decode failure, or a result that came out bigger. Never throws, and never
@@ -133,6 +134,7 @@ export async function scaleForUpload(
   blob: Blob, name: string, maxWidth: number,
 ): Promise<{ blob: Blob; name: string; scaled: boolean; width?: number; height?: number }> {
   const keep = { blob, name, scaled: false };
+  maxWidth = uploadWidthFor(name, maxWidth);
   if (!maxWidth || !SCALABLE.test(blob.type || "")) return keep;
   // A file already smaller than one screenshot's worth of bytes isn't the problem.
   if (blob.size < 120_000) return keep;

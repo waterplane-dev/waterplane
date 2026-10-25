@@ -10,7 +10,7 @@
  */
 import type { ReactNode } from "react";
 import {
-  BarChart3, Bell, Bot, Check, ChevronLeft, ChevronsDownUp, Clock, Gauge, Hourglass, List, Loader, Menu, Pencil, Plus,
+  BarChart3, Bot, Check, ChevronLeft, ChevronsDownUp, Clock, Gauge, Hourglass, List, Loader, Menu, Pencil, Plus,
   Sigma, Sparkles, SquareTerminal, Unplug, X,
 } from "lucide-react";
 import { repoBranchLabel, trimDefaultBranch, usageChip, usageText, weekShareText } from "@waterplane/shared";
@@ -38,7 +38,7 @@ import { renameSession } from "./rename";
 import { sessionViews } from "../extensionPoints";
 import { unpinHeaderView, useHeaderViews } from "./headerViews";
 import { budgetTag, contextTag, costTag, limitTag, liveAgentTag, shellsTag, statusTags, tallyTitle, turnTally } from "../sessions/tags";
-import { badgeText, openNotifs, useUnread } from "../../features/notifications";
+import { BellButton } from "../../features/notifications";
 import { useUsageFace, useWeekUsdPerPct } from "../../features/tokens";
 import { useLimitAuto } from "../../features/limits";
 import { openContext } from "../../features/context";
@@ -57,6 +57,7 @@ import { useSpendWarn } from "../sessions/spendWarn";
 import { Button } from "../../kit/Button";
 import { RowSub } from "../../kit/Row";
 import { ChromeFrame } from "./ChromeGrip";
+import { SHEET } from "../../sheetNames";
 
 const ICON = 16;
 /**
@@ -120,7 +121,6 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
   // (`useUsedOrderSnapshot`, App's): re-ranking on every tap would move buttons
   // out from under the finger.
   const usedOrder = useUsedOrder();
-  const unreadNotifs = useUnread();
   const face = useUsageFace();
   const usdPerWeekPct = useWeekUsdPerPct();
   const spendWarnOf = useSpendWarn();
@@ -263,16 +263,14 @@ export function SessionHeader(p: SessionHeaderProps): ReactNode {
         <div className="hdr-ctl">
         <>
         <HintToggle compact />
-        <Button className="notif-btn" title="notifications" onClick={openNotifs}>
-          <Bell size={ICON} />{unreadNotifs > 0 && <span className="notif-badge">{badgeText(unreadNotifs)}</span>}
-        </Button>
+        <BellButton size={ICON} />
         {/* Nothing to close on the host yet: what exists is the queued create,
             so the destructive verb here drops THAT — and the prompts written
             behind it are surfaced as failed rows rather than silently binned
             (`removeQueued`). */}
         {pending ? (
           <Button variant="danger" title={isLaterId(active.id) ? "close — nothing was queued; a draft stays here for next time"
-            : "drop this open — the prompts written for it stay in Activity"}
+            : `drop this open — the prompts written for it stay in ${SHEET.activity}`}
             onClick={() => { const id = pendingEntry?.ackId; setActiveId(null); if (id) { removeQueued(id); showToast("open dropped"); } }}>
             <X size={ICON} />
           </Button>

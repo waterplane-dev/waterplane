@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { readJsonGuarded, readJsonGuardedDetail, writeJsonAtomic } from "./jsonstore.js";
 import webpush, { type PushSubscription } from "web-push";
 import { env } from "./env.js";
-import { BRAND, type NotifyOpen } from "@waterplane/shared";
+import { BRAND, type NotifyLevel, type NotifyOpen } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
 
 export interface PushPayload {
@@ -42,6 +42,12 @@ export interface PushPayload {
   backlog?: { cwd: string; ids: string[] };
   /** The screen a tap opens (`NotificationItem.open`). */
   open?: NotifyOpen;
+  /** `attention` or `info` (`notifyLevel`), so the service worker can word or
+   *  channel the two apart. Only attention is pushed unless the person asked for
+   *  information too (`notify.prefs`' `pushInfo`) or the payload carries `pull`. */
+  level?: NotifyLevel;
+  /** The attention item's cause key (`NotificationItem.key`). */
+  key?: string;
 }
 
 export class PushManager {

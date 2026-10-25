@@ -21,10 +21,12 @@ export function openSchedules(focus: HorizonBucket | null): void {
   core().nav.open("schedule");
 }
 
-/** Open Schedules cut to exactly these rules, under `label`. */
-export function openScheduleCut(ids: string[], label: string): void {
+/** Open Automation cut to exactly these rules, under `label` — with `repoDir`
+ *  when the cut is one repo's (the repo row's clock chip), so the sheet's
+ *  "Runs on its own" foot speaks for that repo. */
+export function openScheduleCut(ids: string[], label: string, repoDir?: string): void {
   scheduleFocus.set(null);
-  scheduleFocusIds.set({ ids, label });
+  scheduleFocusIds.set(repoDir ? { ids, label, repoDir } : { ids, label });
   core().nav.open("schedule");
 }
 

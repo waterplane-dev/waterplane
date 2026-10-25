@@ -85,7 +85,7 @@ export function createDeliveries(ctx: ServerCtx) {
           ? `${why.charAt(0).toUpperCase()}${why.slice(1)}. Kept as a work item — fire it from the Backlog. “${head}”`
           : `The session opened but never became ready, so nothing was typed. Kept as a work item — fire it from the Backlog. “${head}”`,
         sessionId,
-        tag: `undelivered-${sessionId}`,
+        tag: `undelivered-${sessionId}`, key: `undelivered:${sessionId}`,
       });
       return res;
     }
@@ -148,6 +148,8 @@ export function createDeliveries(ctx: ServerCtx) {
       ctx.broadcast({ t: "delivery.settled", item: q });
       const repo = q.repoName || "that repo";
       if (q.verdict === "landed") {
+        // An "undelivered" item is NOT resolved here: its words are still unrun (they went to
+        // the backlog); only the person's `done` clears it.
         // It ran. Nothing to tell anybody — the row retires and the queue row with
         // it — UNLESS the host is the reason it ran, in which case a turn nobody
         // started is a surprise worth naming.
@@ -172,7 +174,7 @@ export function createDeliveries(ctx: ServerCtx) {
         title: q.verdict === "composer" ? `Prompt waiting · ${repo}` : `Prompt not delivered · ${repo}`,
         body: `${q.reason ?? "the host could not confirm it"} — “${q.head}”`,
         sessionId: q.sessionId,
-        tag: `undelivered-${q.sessionId}`,
+        tag: `undelivered-${q.sessionId}`, key: `undelivered:${q.sessionId}`,
       });
     });
   }

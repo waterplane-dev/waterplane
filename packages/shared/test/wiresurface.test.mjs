@@ -8,6 +8,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
+import { assertSurface } from "../../../tools/exportsurface.mjs";
 
 const SESSION = fileURLToPath(new URL("../src/wire/session.ts", import.meta.url));
 const MESSAGES = fileURLToPath(new URL("../src/wire/messages.ts", import.meta.url));
@@ -151,6 +152,7 @@ const CLIENT_T = [
   "net.stalls",
   "notification.clear",
   "notification.get",
+  "notification.handle",
   "notify.prefs.set",
   "ping",
   "plugin.action",
@@ -312,11 +314,6 @@ const program = ts.createProgram([SESSION, MESSAGES], {
 const checker = program.getTypeChecker();
 const exportsOf = (file) => checker.getExportsOfModule(checker.getSymbolAtLocation(program.getSourceFile(file)));
 
-const surface = (file) => exportsOf(file).map((s) => {
-  const target = s.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(s) : s;
-  return `${s.name}:${target.flags & ts.SymbolFlags.Value ? "value" : "type"}`;
-}).sort();
-
 const tags = (name) => {
   const sym = exportsOf(MESSAGES).find((s) => s.name === name);
   const ty = checker.getDeclaredTypeOfSymbol(sym);
@@ -330,17 +327,17 @@ const tags = (name) => {
 };
 
 test("wire/session.ts exports exactly its pinned surface, values and types alike", () => {
-  assert.deepEqual(surface(SESSION), [...SESSION_SURFACE].sort());
+  assertSurface(SESSION, SESSION_SURFACE);
 });
 
 test("wire/messages.ts exports exactly its pinned surface, values and types alike", () => {
-  assert.deepEqual(surface(MESSAGES), [...MESSAGES_SURFACE].sort());
+  assertSurface(MESSAGES, MESSAGES_SURFACE);
 });
 
 test("ClientMessage carries exactly the pinned message types", () => {
   const { tags: got, members } = tags("ClientMessage");
   assert.deepEqual(got, [...CLIENT_T].sort());
-  assert.equal(members, 145, "a member was added or merged");
+  assert.equal(members, 146, "a member was added or merged");
 });
 
 test("HostMessage carries exactly the pinned message types", () => {

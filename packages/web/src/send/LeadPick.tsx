@@ -2,10 +2,10 @@
  *  the chip a typed one leaves behind. Split from `WindowRule.tsx`. */
 import { LS, lsSet } from "../storage";
 import { leadChoices, leadLabel, leadOk, leadWords } from "../sendIntent";
-import type { SendSheetModel } from "./useSendSheet";
+import type { RuleModel } from "./useRuleFields";
 import { Hint } from "../kit/Hint";
 
-export function LeadPick({ m }: { m: SendSheetModel }) {
+export function LeadPick({ m }: { m: RuleModel }) {
   const { leadOpen, setLeadOpen, savedLead, setSavedLead, leadRaw, setLeadRaw, patchRule } = m;
   const rule = m.rule as NonNullable<typeof m.rule>;
   return (

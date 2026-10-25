@@ -51,6 +51,7 @@ import { migrateGiveUps, migratePadRescue } from "./migrate.ts";
 import type {
   BudgetState, CoreFns, PendingFns, QueueCtx, QueueDeps, QueueEnv, QueueRefs, SendFns, UploadFns, VerbFns,
 } from "./types.ts";
+import { SHEET } from "../../sheetNames.ts";
 
 export type { QueueDeps } from "./types.ts";
 
@@ -336,7 +337,7 @@ export function useQueue(input: QueueDeps): QueueApi {
           noteSendFailed();
           return { ...x, status: "failed" as const, reason, failedAt: Date.now() };
         });
-        showToast(`queue full — ${victims.size} older message${victims.size > 1 ? "s" : ""} stopped; their words are in Activity`);
+        showToast(`queue full — ${victims.size} older message${victims.size > 1 ? "s" : ""} stopped; their words are in ${SHEET.activity}`);
       }
     }
     // The real ceiling, and the ONLY delete left on this path. See

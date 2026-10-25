@@ -3,9 +3,9 @@ import { RadioRows, Hint } from "../kit";
 import { LS, lsSet } from "../storage";
 import { GUARD_LABEL, guardWords, pctChoices, pctOk, pctWords } from "../sendIntent";
 import { LeadPick } from "./LeadPick";
-import type { SendSheetModel } from "./useSendSheet";
+import type { RuleModel } from "./useRuleFields";
 
-export function WindowRule({ m }: { m: SendSheetModel }) {
+export function WindowRule({ m }: { m: RuleModel }) {
   const {
     anchorW, guardW, pctOpen, setPctOpen, savedPct, setSavedPct, pctRaw, setPctRaw, patchRule,
   } = m;

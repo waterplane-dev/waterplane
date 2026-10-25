@@ -1,6 +1,7 @@
 import { idbGet } from "../idb";
 import { findInDownloads, nativeFindSupported, nativeSaveSupported, saveToDownloads } from "../nativeSave";
-import { nativeFileUrl, nativeList, nativePublish } from "../nativePull";
+import { idbDel } from "../idb";
+import { nativeDropAfterSave, nativeFileUrl, nativeList, nativePublish } from "../nativePull";
 import type { PullRecord, SaveResult, PullBlob } from "./pullTypes";
 import { PUBLISH_WAIT_MS, PUBLISH_POLL_MS } from "./pullConsts";
 import { typedBlob } from "./pullMime";
@@ -22,6 +23,11 @@ import type { PullManager } from "./pullManager";
  */
 export async function pullSave(this: PullManager, id: string): Promise<SaveResult> {
   const native = this.records[id];
+  // Already in Downloads and nowhere else: a save would read bytes this app no
+  // longer has, and the folder is the answer.
+  if (native?.droppedAt && native.savedTo && native.savedPresent !== false) {
+    return { ok: true, where: native.savedTo, already: true };
+  }
   if (native?.engine === "native" && native.nativePath) return this.saveNative(id, native);
   const rec = await idbGet<PullBlob>("pulls", id);
   if (!rec?.blob) {
@@ -52,6 +58,13 @@ export async function pullSave(this: PullManager, id: string): Promise<SaveResul
         savedTo: where, savedAt: Date.now(), saveError: undefined, saveVia: "device",
         savedPresent: true, savedCheckedAt: Date.now(),
       });
+      // The shell's keep-one-copy switch covers this engine too: Downloads has
+      // the bytes now, so the blob here is the same megabytes twice. Unknown
+      // (an older shell) keeps it, as before.
+      if (await nativeDropAfterSave()) {
+        await idbDel("pulls", id);
+        this.patch(id, { droppedAt: Date.now() });
+      }
       return { ok: true, where };
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e);
@@ -168,6 +181,8 @@ export async function pullVerifySaved(this: PullManager, id: string): Promise<bo
   this.patch(id, {
     savedPresent: found.present,
     savedCheckedAt: Date.now(),
+    // The Downloads copy was the only one: gone from there is gone.
+    ...(!found.present && rec.droppedAt ? { evicted: true } : {}),
     // A file found under a name we never recorded (the phone was reinstalled,
     // the record predates saving) is still where it is: say so — and that
     // answer RETIRES a `saveError`, because the folder holding the file is

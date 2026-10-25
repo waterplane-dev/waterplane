@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { CloudOff, Hammer, Loader, Pencil, Play, Plus, Square, Wand2, ChevronDown, ChevronUp } from "lucide-react";
-import type { ArtifactPolicy, BuildArtifact, BuildCandidate, BuildParamAnswer, BuildConfig, BuildRun, RepoTarget } from "@waterplane/shared";
+import { CalendarClock, CloudOff, Hammer, Loader, Pencil, Play, Plus, Square, Wand2, ChevronDown, ChevronUp } from "lucide-react";
+import type { ArtifactPolicy, BuildArtifact, BuildCandidate, BuildParamAnswer, BuildConfig, BuildRun, RepoTarget, ScheduleEntry, WindowResets } from "@waterplane/shared";
 import { branchLabel } from "@waterplane/shared";
 import { SETUP_PROMPT, oneBuildPrompt, paramsRowNote, type BuildDraftSeed } from "./buildPrompt";
 import { track } from "./usage";
@@ -13,6 +13,9 @@ import { Explain } from "./Explain";
 import { BUILD_LOCAL_ROW, localAfterSave } from "./buildScope";
 import { BuildEditor } from "./BuildEditor";
 import { BuildRunAsk } from "./BuildRunAsk";
+import { BuildScheduleForm } from "./BuildScheduleForm";
+import type { BuildScheduleCue } from "./buildSchedule";
+import type { SendWhen } from "./sendIntent";
 import { ArtifactPolicyRow, ArtifactRow } from "./BuildArtifacts";
 import { Button } from "./kit/Button";
 import { RowSub, Row, RowTitle } from "./kit/Row";
@@ -21,6 +24,10 @@ import { Tag } from "./kit/Tag";
 
 interface Props {
   repo: RepoTarget;
+  /** The host's stored failure of the newest failed build here (`RepoTarget.buildFailed`) and
+   *  `done` on it (`notification.handle`). Both absent on an older host. */
+  failed?: RepoTarget["buildFailed"];
+  onDone?: (id: string) => void;
   builds: BuildConfig[];
   runs: BuildRun[];                       // this repo's runs, newest first
   output: ReadonlyMap<string, string>;    // runId → retained output
@@ -88,6 +95,16 @@ interface Props {
    *  opens — a listing, not the build. */
   onAskOptions: (buildId: string, approve?: { paramId: string; cmd: string }) => void;
   onClose: () => void;
+  /** The rules that run an entry, as its cue (`buildSchedule.ts`); absent draws none. */
+  scheduleCue?: (b: BuildConfig) => BuildScheduleCue | null;
+  /** The cue's tap: Automation cut to exactly `cue.ids`. */
+  onOpenScheduleCut?: (cue: BuildScheduleCue) => void;
+  /** Save the schedule-a-build form (`schedule.save`, durable). */
+  onSaveSchedule?: (b: BuildConfig, entry: ScheduleEntry | null, when: Extract<SendWhen, { kind: "at" }>, vals: Record<string, string>, preview: number | null) => void;
+  /** The usage reading a window-anchored rule resolves against. */
+  usage?: WindowResets | null;
+  /** A build rule's card *edit* landed here: open its form on arrival. */
+  scheduleEdit?: { build: BuildConfig; entry: ScheduleEntry } | null;
 }
 
 /* `SETUP_PROMPT` and the editor's one-entry wand live in `buildPrompt.ts`: they
@@ -101,12 +118,21 @@ interface Props {
  * claude session (works when you're rate-limited), watch live output, and
  * download the produced artifact (APK/zip/…).
  */
-export function BuildSheet({ repo, builds, runs, output, outTick, onSave, localIds, onRun, onCancel, onDownload, onSetup, onSendLog, onScan, onAskOptions, onClose, candidates = null, candidatesTotal = 0, paramOptions, online = true, listAt = 0, policy, onSavePolicy }: Props) {
+export function BuildSheet({ repo, failed, onDone, builds, runs, output, outTick, onSave, localIds, onRun, onCancel, onDownload, onSetup, onSendLog, onScan, onAskOptions, onClose, candidates = null, candidatesTotal = 0, paramOptions, online = true, listAt = 0, policy, onSavePolicy, scheduleCue, onOpenScheduleCut, onSaveSchedule, usage, scheduleEdit }: Props) {
   const [editing, setEditing] = useState<BuildConfig | null>(null);
   /* The build whose questions are being answered. A tap on a parameterised
      button opens this instead of running — the values ARE part of the command,
      so there is no honest way to start without them. */
   const [asking, setAsking] = useState<BuildConfig | null>(null);
+  /* The schedule-a-build form: a NEW rule (from the editor's `run on a clock…`)
+     or an EXISTING one (a build rule's card `edit`, arriving as `scheduleEdit`). */
+  const [scheduling, setScheduling] = useState<{ build: BuildConfig; entry: ScheduleEntry | null } | null>(null);
+  useEffect(() => {
+    if (!scheduleEdit) return;
+    setScheduling(scheduleEdit);
+    if (scheduleEdit.build.params?.length) onAskOptions(scheduleEdit.build.id);   // a listing, not the build
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- once per hand-over, not per new callback identity
+  }, [scheduleEdit]);
   /* Which run is open: `null` = the newest (so a run just started is the one
      you see), `""` = none, because the open run's detail sits UNDER its own
      row now and a person who has read it should be able to fold it away.
@@ -165,12 +191,21 @@ export function BuildSheet({ repo, builds, runs, output, outTick, onSave, localI
   // Back — the gesture as much as the arrow — closes this step, not the sheet.
   useBackStep(editing !== null, () => setEditing(null));
   useBackStep(asking !== null, () => setAsking(null));
+  useBackStep(scheduling !== null, () => setScheduling(null));
+  if (scheduling && onSaveSchedule) {
+    const { build, entry } = scheduling;
+    return <BuildScheduleForm build={build} entry={entry} usage={usage} options={paramOptions?.[build.id]} online={online}
+      onApprove={(paramId, cmd) => { track("action:build.approve-options"); onAskOptions(build.id, { paramId, cmd }); }}
+      onCancel={() => setScheduling(null)}
+      onSave={(w, vals, preview) => { track("action:build.schedule"); onSaveSchedule(build, entry, w, vals, preview); setScheduling(null); }} />;
+  }
   if (editing) {
     return <BuildEditor draft={editing} candidates={candidates} candidatesTotal={candidatesTotal} online={online}
       saved={builds.some((b) => b.id === editing.id)}
       scope={localIds ? { local: localIds.includes(editing.id) } : null}
       onDelete={() => remove(editing.id)} onAssist={(seed: BuildDraftSeed) => { track("action:build.one"); onSetup(oneBuildPrompt(seed, repo.repoName)); }}
-      onCancel={() => setEditing(null)} onSave={upsert} />;
+      onCancel={() => setEditing(null)} onSave={upsert}
+      onSchedule={onSaveSchedule ? () => { const b = editing; setEditing(null); setScheduling({ build: b, entry: null }); if (b.params?.length) onAskOptions(b.id); } : undefined} />;
   }
 
   if (asking) {
@@ -194,6 +229,12 @@ export function BuildSheet({ repo, builds, runs, output, outTick, onSave, localI
         {online && <Button title="add a build command"
           onClick={() => openEditor({ id: seqId("b"), name: "", cmd: "", dir: "" })}><Plus size={16} /> new</Button>}
       </SheetHead>
+      {failed && (
+        <div className="build-failed">
+          <Hint>Build “{failed.name}” failed {ago(failed.at)}.{failed.error ? `\n${failed.error}` : ""}</Hint>
+          {onDone && <Button onClick={() => onDone(failed.id)} title="mark this failure as dealt with; the red chip on the repo goes away">done</Button>}
+        </div>
+      )}
       {/* One line, and the rest behind a `?`: three always-on paragraphs
           stood between the head and the first build. */}
       <Hint>
@@ -227,8 +268,10 @@ export function BuildSheet({ repo, builds, runs, output, outTick, onSave, localI
         <div className="list build-cmds">
           {builds.map((b) => {
             const running = runs.find((r) => r.buildId === b.id && r.status === "running");
+            const cue = scheduleCue?.(b) ?? null;
             return (
               <Row key={b.id} kind="wrap">
+                <div className="build-main">
                 <Row as="button" kind="grow" title={b.cmd} onClick={() => { if (running) setSel(running.runId); else fire(b); }}>
                   <RowTitle>{b.name}{running ? <> <Loader size={12} className="spin" /></> : null}</RowTitle>
                   {/* Two lines, then an ellipsis: a forty-line shell script
@@ -242,6 +285,16 @@ export function BuildSheet({ repo, builds, runs, output, outTick, onSave, localI
                   {b.params?.length ? <RowSub>{paramsRowNote(b)}</RowSub> : null}
                   {localIds?.includes(b.id) ? <RowSub>{BUILD_LOCAL_ROW}</RowSub> : null}
                 </Row>
+                {/* The rules that run this entry, in the cards' own words. A
+                    sibling of the run button, never inside it (a button in a
+                    button), and its tap is the cut it counts: exactly these ids. */}
+                {cue && (
+                  <button className="linkish build-cue" title="open these schedules"
+                    onClick={() => { track("action:build.cue"); onOpenScheduleCut?.(cue); }}>
+                    <CalendarClock size={13} /> {cue.words}
+                  </button>
+                )}
+                </div>
                 {running
                   ? <Button variant="danger" title="cancel build" onClick={() => onCancel(running.runId)}><Square size={16} /></Button>
                   : <Button title={b.params?.length ? "run build — it asks first" : "run build"} onClick={() => fire(b)}><Play size={16} /></Button>}

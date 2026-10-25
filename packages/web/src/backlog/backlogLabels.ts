@@ -100,4 +100,4 @@ export const CATEGORY_ICON: Record<ItemCategory, LucideIcon> = {
 /** Group key for rows aimed at a session that has since closed. Not a session
  *  id and not the default group: those rows run nowhere until a person moves
  *  them, which is a third thing to say and so a third heading. */
-export const CLOSED_GROUP = "__closed";
+export { CLOSED_GROUP } from "../backlogFilter/nextFire.ts";

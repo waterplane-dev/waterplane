@@ -28,7 +28,7 @@
  * second count that agrees — it IS `standingTotal`.
  */
 import type { Intent, ScheduleEntry, HorizonBucket, ScheduleHorizon } from "@waterplane/shared";
-import { horizonBucket, isStandingSchedule, isTimedWorkRow, ruleRecurs, typedName } from "@waterplane/shared";
+import { horizonBucket, isStandingSchedule, isTimedWorkRow, ruleRecurs, scheduleActionText, typedName } from "@waterplane/shared";
 import { intentProse, intentTitle } from "./activity/activityIntentWords.ts";
 
 /**
@@ -256,7 +256,7 @@ function intentMatches(i: Intent, q: string): boolean {
   return `${intentTitle(i)}\n${intentProse(i) ?? ""}\n${baseName(i.cwd)}`.toLowerCase().includes(q);
 }
 function entryMatches(e: ScheduleEntry, q: string): boolean {
-  const text = e.action.text;
+  const text = scheduleActionText(e.action);
   return `${typedName(e.name, text) ?? ""}\n${text}\n${entryDirs(e).map(baseName).join(" ")}`.toLowerCase().includes(q);
 }
 

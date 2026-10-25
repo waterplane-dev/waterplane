@@ -1,5 +1,5 @@
 import {
-  AlertTriangle, CheckCheck, Download, FileUp, Hammer, Hourglass, Loader, MessageCircleQuestion, Pencil, Play,
+  AlertTriangle, CalendarClock, CheckCheck, Download, FileUp, Hammer, Hourglass, Loader, MessageCircleQuestion, Pencil, Play,
   Save, SearchCheck, SendHorizontal, Share2, Shuffle, SquareCheck, Terminal, Trash2, X, Clock, CloudOff,
 } from "lucide-react";
 import type { ActivityActionId } from "../activityRows";
@@ -26,6 +26,7 @@ export const ACTION_ICON: Record<ActivityActionId, typeof SendHorizontal> = {
   discard: Trash2,
   dismiss: Clock,
   confirmDone: CheckCheck,
+  openSchedule: CalendarClock,
 };
 
 /** What KIND of thing a row is, at a glance. Icons only — the word is in the
