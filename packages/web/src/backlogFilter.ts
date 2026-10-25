@@ -55,3 +55,4 @@ export * from "./backlogFilter/scheduleWords.ts";
 export * from "./backlogFilter/titleWords.ts";
 export * from "./backlogFilter/rowWords.ts";
 export * from "./backlogFilter/retimeMany.ts";
+export * from "./backlogFilter/badgeCut.ts";

@@ -10,7 +10,7 @@
  */
 import { useEffect, useLayoutEffect, type PointerEvent as ReactPointerEvent } from "react";
 import {
-  ArrowDown, ArrowUp, Camera, Check, ChevronsUpDown, Eye, EyeOff, Hourglass, KeyRound, ListTodo, Loader, NotebookPen, Paperclip, Pencil,
+  ArrowDown, ArrowUp, Camera, Check, ChevronsUpDown, CircleAlert, Eye, EyeOff, Hourglass, KeyRound, ListTodo, Loader, NotebookPen, Paperclip, Pencil,
   Plus, Quote, SendHorizontal, Terminal as TerminalIcon, Trash2, Waypoints, X, Zap,
 } from "lucide-react";
 import { sessionPickLabel } from "@waterplane/shared";
@@ -26,13 +26,13 @@ import { dropFileRef } from "../../fileRefs";
 import { VoiceButton } from "../../VoiceButton";
 import { Empty } from "../../Empty";
 import { SessionName } from "../../SessionName";
-import { hiddenByArchive } from "../../backlogFilter";
+import { backlogBadgeCut, badgeCutLabel, badgeCutWords } from "../../backlogFilter";
 import { PIPE_PAD } from "../../cliKeys";
 import { baseName } from "../../format";
 import { showToast } from "../../toast";
 import { track } from "../../usage";
 import { useSnippets } from "../../features/snippets";
-import { openBacklogIn } from "../../features/backlog";
+import { openBacklogCut, openBacklogIn } from "../../features/backlog";
 import { takeBoxReturn, useBoxReturn } from "../../features/images";
 import type { ComposeApi } from "./useCompose";
 import { useFileDrop } from "./useFileDrop";
@@ -488,23 +488,21 @@ export function ComposeBar(p: ComposeBarProps) {
               now scopes the sheet to the session on screen, and the number is
               the length of what that tap opens. */}
           {(() => {
-            // …and the tap's OTHER cut: the sheet's default view hides archived
-            // rows, so a count that included them described a longer list than
-            // the one it opened.
-            // done/failed rows stay in, because the default view draws those.
-            //
-            // …and `hiddenByArchive`, not `!archived`: a row archived while it
-            // RUNS is still doing something, and a badge
-            // that drops by one for a session still typing is the count
-            // describing a shorter list than the sheet it opens.
-            const here = (active ? visibleBacklogItems.filter((it) => it.repoDir === active.cwd) : visibleBacklogItems)
-              .filter((it) => !hiddenByArchive(it));
+            // Two numbers, never done rows (`backlogBadgeCut`): waiting work
+            // and failed work ask different things of you. The tap opens both
+            // as ONE cut (`n of N`, with its clear) whose status chips split
+            // them further; with neither, no number and the whole list.
+            const c = backlogBadgeCut(active ? visibleBacklogItems.filter((it) => it.repoDir === active.cwd) : visibleBacklogItems);
+            const ids = [...c.waiting, ...c.failed];
             return (
               <button className="mic show-backlog" onPointerDown={keepFocus}
-                onClick={() => openBacklogIn(active?.cwd)}
-                title={active ? `Backlog for this repo — ${here.length} item${here.length === 1 ? "" : "s"}` : "Show backlog"}>
+                onClick={() => active && ids.length
+                  ? openBacklogCut(active.cwd, ids, badgeCutLabel(c))
+                  : openBacklogIn(active?.cwd)}
+                title={active ? `Backlog for this repo — ${badgeCutWords(c)}` : "Show backlog"}>
                 <ListTodo size={18} />
-                {here.length > 0 && <span className="mic-badge">{here.length}</span>}
+                {c.waiting.length > 0 && <span className="mic-badge"><Hourglass size={9} />{c.waiting.length}</span>}
+                {c.failed.length > 0 && <span className="mic-badge failed"><CircleAlert size={9} />{c.failed.length}</span>}
               </button>
             );
           })()}

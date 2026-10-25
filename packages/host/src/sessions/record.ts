@@ -19,7 +19,7 @@ import { renderCapture } from "../render.js";
 import type { HistoryEntry, SessionSearchMatch, SessionSearchResult, SessionSearchScope, TranscriptDoc } from "@waterplane/shared";
 import { cleanTabTitle } from "@waterplane/shared";
 import { derive, namesStoreReader } from "../backends/index.js";
-import { boxAnswersOf, lastTurnAt as readLastTurnAt, logMtime, mergeLocalTurns, parseTranscript, queuedTurns, screenCommandTurns, transcriptFromHistory, transcriptPath } from "../transcript.js";
+import { boxAnswersOf, cliHeldOf, cliHeldTable, lastTurnAt as readLastTurnAt, logMtime, mergeLocalTurns, parseTranscript, queuedTurns, screenCommandTurns, transcriptFromHistory, transcriptPath } from "../transcript.js";
 import { agentsMtime } from "../turnagents.js";
 import { scanHistory, scanPrompts, scanText, searchResult } from "../sessionSearch.js";
 import { runSummaryTask } from "../sidecar.js";
@@ -225,7 +225,11 @@ export function getTranscript(core: SessionCore, id: string, since = 0, detail: 
       }
       core.noteLogHealth(live, logHealthOutcome(logTurns, parsed.bytes, live?.history ?? [], logBirth(path)),
         `${parsed.bytes} bytes, ${logTurns} turns`, () => logRecords(path));
-      return { sessionId: id, claudeSessionId: cid, source: "jsonl", ...parsed };
+      const doc: TranscriptDoc = { sessionId: id, claudeSessionId: cid, source: "jsonl", ...parsed };
+      // The spread is a new object, so the side table follows it by hand.
+      const held = cliHeldOf(parsed);
+      if (held.length) cliHeldTable.set(doc, held);
+      return doc;
     }
   }
   if (!live) return null;

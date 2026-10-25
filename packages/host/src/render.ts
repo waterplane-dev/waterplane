@@ -11,7 +11,8 @@
  * turn printed, not a true chat transcript.
  *
  * It lives here rather than in `sessions.ts` because it has two callers with no
- * session between them: `screenText()` (a live PTY's scrollback) and `usage.ts`
+ * session between them: `screenText()` (a live PTY's scrollback, outside the
+ * alternate screen) and `usage.ts`
  * (a short-lived probe's capture). The second one is why the extraction happened
  * — `/usage` prints each window's reset instant as WORDS under its heading
  * ("Resets Sep 10 at 7pm (Europe/Berlin)"), and a scraper reading stripped bytes
@@ -71,9 +72,18 @@ export function renderCapture(raw: string, cols: number): Promise<string> {
       const line = buf.getLine(i);
       lines.push(line ? line.translateToString(true) : "");
     }
-    // Trim trailing spaces and squeeze 3+ blank lines down to one gap.
-    return lines.join("\n").replace(/[ \t]+$/gm, "").replace(/\n{3,}/g, "\n\n").trim();
+    return screenTextOf(lines);
   });
+}
+
+/**
+ * Rendered rows as `renderCapture()` hands them out: trailing spaces trimmed and
+ * 3+ blank lines squeezed to one gap. Shared with the recorder's grid read
+ * (`drive.ts`'s `screenText`), whose callers measure distance from the LAST
+ * row — an untrimmed grid's blank tail would push every echo out of reach.
+ */
+export function screenTextOf(lines: readonly string[]): string {
+  return lines.join("\n").replace(/[ \t]+$/gm, "").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 /**
@@ -137,38 +147,48 @@ function fgKey(c: { getFgColor(): number; isFgRGB(): boolean; isFgPalette(): boo
 export function renderCells(raw: string, cols: number, tailRows = 0): Promise<RenderRow[]> {
   if (!raw) return Promise.resolve([]);
   return replay(raw, cols, (term) => {
-    const buf = term.buffer.active;
-    const width = term.cols;
-    const start = tailRows > 0 ? Math.max(0, buf.length - tailRows) : 0;
-    const rows: RenderRow[] = [];
-    // One reusable cell for the whole walk: `getCell(x)` allocates a fresh
-    // object per call, and this loop makes one call per cell on screen.
-    const scratch = buf.getNullCell?.();
-    for (let i = start; i < buf.length; i++) {
-      const line = buf.getLine(i);
-      if (!line) { rows.push({ text: "", spans: [], undimmed: "" }); continue; }
-      const spans: RenderSpan[] = [];
-      let lit = "";
-      let cur: RenderSpan | null = null;
-      for (let x = 0; x < width; x++) {
-        const cell = line.getCell(x, scratch);
-        if (!cell) continue;
-        const bg = bgKey(cell);
-        const fg = fgKey(cell);
-        if (!cur || cur.bg !== bg || cur.fg !== fg) {
-          cur = { from: x, to: x, text: "", bg, fg };
-          spans.push(cur);
-        }
-        cur.to = x;
-        // A cell the VT left empty reads as "", and a row of those must still
-        // occupy its columns — a span's text is one character per cell or the
-        // column arithmetic every reader does on top of it is wrong.
-        cur.text += cell.getChars() || " ";
-        // The second cell of a wide character has width 0 and no text of its own.
-        if (cell.getWidth() > 0) lit += cell.isDim() ? " " : cell.getChars() || " ";
-      }
-      rows.push({ text: line.translateToString(true), spans, undimmed: lit.trimEnd() });
-    }
-    return rows;
+    const len = term.buffer.active.length;
+    return cellRows(term, tailRows > 0 ? Math.max(0, len - tailRows) : 0, len);
   });
+}
+
+/**
+ * Rows `start` (inclusive) to `end` (exclusive) of a terminal's ACTIVE buffer,
+ * read as `RenderRow`s. The cell walk behind `renderCells()`, shared with
+ * `screenlog.ts`'s `gridCells()` so a replay and the recorder's live grid can
+ * never disagree about what a row's text, runs or dim cells are.
+ */
+export function cellRows(term: InstanceType<typeof Terminal>, start: number, end: number): RenderRow[] {
+  const buf = term.buffer.active;
+  const width = term.cols;
+  const rows: RenderRow[] = [];
+  // One reusable cell for the whole walk: `getCell(x)` allocates a fresh
+  // object per call, and this loop makes one call per cell on screen.
+  const scratch = buf.getNullCell?.();
+  for (let i = start; i < end; i++) {
+    const line = buf.getLine(i);
+    if (!line) { rows.push({ text: "", spans: [], undimmed: "" }); continue; }
+    const spans: RenderSpan[] = [];
+    let lit = "";
+    let cur: RenderSpan | null = null;
+    for (let x = 0; x < width; x++) {
+      const cell = line.getCell(x, scratch);
+      if (!cell) continue;
+      const bg = bgKey(cell);
+      const fg = fgKey(cell);
+      if (!cur || cur.bg !== bg || cur.fg !== fg) {
+        cur = { from: x, to: x, text: "", bg, fg };
+        spans.push(cur);
+      }
+      cur.to = x;
+      // A cell the VT left empty reads as "", and a row of those must still
+      // occupy its columns — a span's text is one character per cell or the
+      // column arithmetic every reader does on top of it is wrong.
+      cur.text += cell.getChars() || " ";
+      // The second cell of a wide character has width 0 and no text of its own.
+      if (cell.getWidth() > 0) lit += cell.isDim() ? " " : cell.getChars() || " ";
+    }
+    rows.push({ text: line.translateToString(true), spans, undimmed: lit.trimEnd() });
+  }
+  return rows;
 }

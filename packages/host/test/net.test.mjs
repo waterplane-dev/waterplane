@@ -29,3 +29,17 @@ test("a non-loopback peer is never upgraded by a local Host", () => {
   assert.notEqual(N.localProcessRefusal("100.64.0.2", { host: "localhost" }), null);
   assert.equal(N.hostHeaderIsLocal("evil.example"), false);
 });
+
+test("LAN addresses skip VM bridges and tunnels a phone cannot reach", () => {
+  const v4 = (address) => [{ family: "IPv4", address, internal: false }];
+  const ifaces = {
+    lo0: [{ family: "IPv4", address: "127.0.0.1", internal: true }],
+    en1: v4("192.168.0.62"),
+    utun4: v4("100.64.0.9"),
+    bridge100: v4("192.168.139.3"),
+    bridge101: v4("192.168.215.0"),
+    docker0: v4("172.17.0.1"),
+    eth0: v4("10.0.0.5"),
+  };
+  assert.deepEqual(N.lanIpsFrom(ifaces), ["192.168.0.62", "10.0.0.5"]);
+});

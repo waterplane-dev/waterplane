@@ -18,6 +18,7 @@ import {
   type HostMessage,
   type NotificationItem,
   type NotificationKind,
+  type NotifyOpen,
   type PeerKind,
   type ClientRole,
   roleAllows,
@@ -164,7 +165,7 @@ export function createClients(deps: ClientsDeps) {
   const notifications: NotificationItem[] = [];
   /** Fire a notification: record it in-app, broadcast it, AND send an OS push.
    *  The in-app feed is the source of truth; OS push is best-effort on top. */
-  function notify(kind: NotificationKind, p: { title: string; body: string; sessionId?: string; tag?: string; image?: { repoId: string; relPath: string }; file?: { repoId: string; relPath: string; name: string; size: number; mtime?: number }; pull?: string; backlog?: { cwd: string; ids: string[] }; plugin?: string }): void {
+  function notify(kind: NotificationKind, p: { title: string; body: string; sessionId?: string; tag?: string; image?: { repoId: string; relPath: string }; file?: { repoId: string; relPath: string; name: string; size: number; mtime?: number }; pull?: string; backlog?: { cwd: string; ids: string[] }; plugin?: string; open?: NotifyOpen }): void {
     // A muted kind is dropped WHOLE: no feed row, no broadcast, no push. Recording
     // it and hiding it client-side would still buzz the phone, and would still
     // bury the two kinds a person actually has to answer.
@@ -174,11 +175,13 @@ export function createClients(deps: ClientsDeps) {
     // Fetch from the push handler with the app closed, so dropping it would
     // silently turn auto-pull off for anyone who muted "artifact".
     if (!p.pull && !notifyPrefs.enabled(kind)) return;
-    const item: NotificationItem = { id: randomUUID().slice(0, 8), ts: Date.now(), kind, title: p.title, body: p.body, sessionId: p.sessionId, tag: p.tag, image: p.image, file: p.file, backlog: p.backlog, plugin: p.plugin };
+    const item: NotificationItem = { id: randomUUID().slice(0, 8), ts: Date.now(), kind, title: p.title, body: p.body, sessionId: p.sessionId, tag: p.tag, image: p.image, file: p.file, backlog: p.backlog, plugin: p.plugin, open: p.open };
     notifications.unshift(item);
     if (notifications.length > 100) notifications.length = 100;
     broadcast({ t: "notification", item });
-    void push.notify(p);
+    // The push carries the item's identity and targets too, so a tap on the OS
+    // notification can land where a tap on the feed row does (`sw.js`).
+    void push.notify({ ...p, id: item.id, kind, ts: item.ts });
   }
 
   // A passive device's PIN unlock ending (expiry, "Lock now") closes its

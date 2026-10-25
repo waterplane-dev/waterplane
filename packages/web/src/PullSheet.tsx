@@ -755,10 +755,14 @@ export function PullBar({ records, onOpen, onRemove }: {
       {running ? (stalled ? <CloudOff size={14} /> : <Loader size={14} className="spin" />) : failed.length ? <TriangleAlert size={14} /> : paused.length ? <Pause size={14} /> : <CloudDownload size={14} />}
       <span>
         {running
-          ? `${running.item.name} · ${stalled ? `stalled at ${pct}%` : `${pct}%`}`
+          // Numbers lead and the name trails: the strip is one ellipsised line
+          // (`.pull-strip > span`), and a clipped file name loses nothing the
+          // sheet does not name, where a clipped "74% · 2 MB left" lost the point.
+          ? `${stalled ? `stalled at ${pct}%` : `${pct}%`}`
             + (runLeft > 0 ? ` · ${fmtSize(runLeft)} left` : "")
             + (!stalled && running.rate ? ` · ${fmtRate(running.rate)}` : "")
             + (rest > 0 ? ` · +${rest} more (${fmtSize(queueLeft)})` : "")
+            + ` · ${running.item.name}`
           : failed.length
             ? failed.every(pullGone)
               ? `${failed.length} download${failed.length > 1 ? "s" : ""} no longer on the desktop`

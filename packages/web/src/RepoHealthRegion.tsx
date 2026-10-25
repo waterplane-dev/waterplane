@@ -213,6 +213,7 @@ export function SeriesRegion({ repo, res, view, onRemedy, scope, onScope, onOpen
     series?.versions, measure?.engineVersion ?? series?.preregVersion, recutCommandOf(measure));
   const engineLine = engineLineWords({
     kind: view?.engine?.kind ?? null,
+    ownSkipped: view?.engine?.ownSkipped,
     version: measure?.engineVersion,
     packs: measure?.packs,
   });

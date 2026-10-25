@@ -544,6 +544,10 @@ export interface RepoHealthView {
     /** One-shot consent token minted by the read that drew the approval; the
      *  refresh that approves sends it back (`confirmgate.ts`). */
     approveToken?: string;
+    /** With `kind: "bundled"`: the repo ships its own engine and it was passed
+     *  over because it cannot load (a package not installed or not built) —
+     *  the host's sentence. Absent = the repo has no copy, or it ran. */
+    ownSkipped?: string;
   } | null;
   /** The repo's own HEAD, so "measured through" can be compared to "now". */
   head: { sha: string; ts: number } | null;

@@ -468,7 +468,7 @@ export function WritingRows({ voice }: { voice: VoiceFacts }) {
         ]}
         onChange={(v) => setPref("busySend", v)}
         note={busySend === "now"
-          ? "Send on a session that is still working types the words into the running turn straight away."
+          ? "Send on a session that is still working hands the words to claude, which takes them at its next pause."
           : busySend === "idle"
             ? "Send on a session that is still working hands the words to the desktop, which sends them when the turn ends."
             : "Send on a session that is still working asks: send now, or when it's free."}

@@ -122,7 +122,10 @@
   position: absolute; top: -2px; right: -2px; min-width: 16px; height: 16px; padding: 0 var(--sp-4);
   border-radius: var(--r-8); background: var(--accent); color: var(--on-accent);
   font-size: calc(var(--fs-10) * var(--ui-font, 1)); font-weight: var(--fw-bold); line-height: 16px; text-align: center;
+  display: inline-flex; align-items: center; justify-content: center; gap: 1px; pointer-events: none;
 }
+/* The backlog's second number: failed rows, alert colour AND an icon. */
+.mic-badge.failed { top: auto; bottom: -2px; background: var(--dead); color: #fff; }
 /* How long the open microphone has HEARD (`useVoice`'s `heard`), under the
    glyph. Counted from audio that arrived, so a frozen clock is a stopped mic. */
 .mic-clock {

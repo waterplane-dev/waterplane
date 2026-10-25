@@ -1,6 +1,6 @@
 import { SLOW_OP_TIMEOUT_MS } from "@waterplane/shared";
-import type { BackendTokensDoc, CostWindowDoc, LocalUsageDoc, TokenStatsDoc, TokenWindowsDoc, UsageHistoryDoc, UsageSourceHistoryDoc, PeerJobLedgerRow } from "@waterplane/shared";
-import { jget } from "./webapiFetch";
+import type { BackendTokensDoc, CostWindowDoc, LocalUsageDoc, TokenStatsDoc, TokenWindowsDoc, UsageHistoryDoc, UsageSourceHistoryDoc, PeerJobLedgerRow, WeekBurnStatus } from "@waterplane/shared";
+import { jget, jpostOk } from "./webapiFetch";
 
 /** Token, usage and cost readings. One slice of `api` (see api.ts). */
 export const statsApi = {
@@ -19,6 +19,9 @@ export const statsApi = {
 
   /** The local runner's own ledger (`LocalUsageDoc`): compute, tokens, memory per model. An
    *  older host answers 404, which the view treats as "no such ledger here". */
+  /** The week-end burn (`weekburn.ts`): this week's pick and plan; the POST answers the new status. */
+  getWeekBurn: () => jget<WeekBurnStatus>("/api/weekburn"),
+  postWeekBurn: (b: { repos?: string[]; recurring?: boolean; stopPct?: number; sameAsLast?: true }) => jpostOk<WeekBurnStatus>("/api/weekburn", b),
   localUsage: () => jget<LocalUsageDoc>("/api/localusage"),
   /** What THIS desktop has handed to peer desktops (`host/peers/routes.ts`, trusted path, read-only). */
   peerJobs: () => jget<{ ok: boolean; jobs: PeerJobLedgerRow[] }>("/api/peerjobs").then((d) => (Array.isArray(d?.jobs) ? d.jobs : [])),

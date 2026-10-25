@@ -204,6 +204,48 @@ export function boxAnswersOf(doc: object | null | undefined): BoxAnswer[] {
   return (doc && boxAnswerTable.get(doc)) || [];
 }
 
+/**
+ * **Prompts the CLI took into its OWN queue and did not hand back**, off the
+ * log's `queue-operation` rows.
+ *
+ * A prompt submitted into a busy session leaves the composer at once (2.1.310
+ * draws it as a grey block above the box, "ctrl+enter to send now") and is in
+ * the log only as `{"type":"queue-operation","operation":"enqueue","content":…}`
+ * until the CLI absorbs it into the running turn or starts it after — measured
+ * on this desktop: 2 min 49 s between the two for one prompt. For that window
+ * the log has no turn and the composer is empty, so `settle.ts` could only have
+ * answered `absent`: the verdict that authorises typing it a second time.
+ *
+ * A `remove` with NO reason is the CLI handing the words back (edited out of
+ * the queue), so that enqueue is withdrawn. Every other ending — `dequeue`,
+ * `absorbed_mid_turn`, `delivered_to_agent` — means the CLI took it, and is
+ * kept: a prompt in here is never `absent`, whatever else the log says.
+ * Measured across this desktop's logs: 24,907 enqueues, 750 reasonless removes.
+ *
+ * Kept OFF the wire like `boxAnswerTable`: a fact for settling, not for a reader.
+ */
+export type CliHeld = { at: number; text: string };
+export const cliHeldTable = new WeakMap<object, CliHeld[]>();
+/** The prompts `parseTranscript` saw the CLI hold, oldest first. */
+export function cliHeldOf(doc: object | null | undefined): CliHeld[] {
+  return (doc && cliHeldTable.get(doc)) || [];
+}
+/** Fold one log record into `held`. True when the record was a queue row. */
+export function noteQueueOp(rec: any, held: CliHeld[]): boolean {
+  if (rec?.type !== "queue-operation") return false;
+  const text = typeof rec.content === "string" ? rec.content : "";
+  if (!text) return true;
+  if (rec.operation === "enqueue") {
+    const at = Date.parse(rec.timestamp ?? "");
+    if (Number.isFinite(at)) held.push({ at, text });
+  } else if (rec.operation === "remove" && rec.reason == null) {
+    for (let i = held.length - 1; i >= 0; i--) {
+      if (held[i].text === text) { held.splice(i, 1); break; }
+    }
+  }
+  return true;
+}
+
 export function queuedTurns(entries: HistoryEntry[], logged: TranscriptTurn[], answers: BoxAnswer[] = []): TranscriptTurn[] {
   const newestLogged = logged.reduce((m, t) => Math.max(m, t.sentAt ?? 0), 0);
   const heads = logged.map((t) => squash(t.prompt).slice(0, QUEUED_HEAD)).filter(Boolean);

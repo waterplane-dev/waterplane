@@ -475,10 +475,17 @@ html[data-typing="1"] .screen { padding-top: env(safe-area-inset-top); }
    amber and emphatically not the failure red: nothing has gone wrong yet, and
    for the first minute of a send's life that colour was the whole complaint. */
 .outbox-recover.confirming { color: var(--muted); }
-/* The sentence takes the room between the icon and "Which" and wraps INSIDE
-   it. Without this the span sized to its whole text, wrapped onto its own row,
-   and the icon and the button each got a row too — three rows for one fact. */
-.outbox-recover.confirming > span { flex: 1 1 0; min-width: 0; }
+/* The sentence takes the room between the icon and "Which" on ONE line,
+   ellipsised. Without this the span sized to its whole text, wrapped onto its
+   own row, and the icon and the button each got a row too — three rows for one
+   fact. The count leads, so a clipped tail still says what is pending. */
+.outbox-recover.confirming > span { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The download strip, the same way: it was three rows on a phone — spinner,
+   the wrapped sentence, then Downloads alone — for one line of progress, and
+   above the composer that is three rows taken from the output. */
+.outbox-recover.pull-strip { flex-wrap: nowrap; }
+.outbox-recover.pull-strip > span { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.outbox-recover.pull-strip > svg, .outbox-recover.pull-strip > .key { flex: 0 0 auto; }
 .outbox-recover .key { margin-left: 0; }
 .outbox-recover.failed .key:first-of-type,
 .outbox-recover.confirming .key:first-of-type,

@@ -9,3 +9,9 @@ import { get } from "../host";
 export function jget<T>(url: string, ms?: number): Promise<T> {
   return get(url, ms) as Promise<T>;
 }
+
+/** The phone's POSTs (this week's burn sheet) have no route through the extension host, which
+ *  forwards GETs only: refuse in words rather than send nothing. */
+export function jpostOk<T>(url: string, _body: unknown, _ms?: number): Promise<T> {
+  return Promise.reject(new Error(`${url} is not available in VS Code`));
+}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ComponentType } from "react";
-import { CalendarClock, ChevronDown, ChevronUp, CircleAlert, CircleCheck, CornerDownRight, Flag, Loader, Pencil, Play, Send, Split, Square, SquareCheck } from "lucide-react";
+import { CalendarClock, ChevronDown, ChevronUp, CircleAlert, CircleCheck, CornerDownRight, Flag, Loader, Pencil, Play, Send, Split, Square, SquareCheck, Trash2, Undo2 } from "lucide-react";
 import type { BackendInfo, FanoutRun, FanoutTarget, LaunchOpts, RepoTarget } from "@waterplane/shared";
 import { track } from "./usage";
 import { PromptComposer } from "./PromptComposer";
@@ -16,6 +16,7 @@ import { backendUnavailable, launchAskStart } from "./backendCaps";
 import { CantInline } from "./Unavailable";
 import { kickoff, kickoffSent, targetSubline } from "./fanoutKickoff";
 import { Button } from "./kit/Button";
+import { ConfirmButton } from "./Confirm";
 import { Row, RowTitle, RowSub } from "./kit/Row";
 import { Hint } from "./kit/Hint";
 import { Tag } from "./kit/Tag";
@@ -147,9 +148,14 @@ export function FanoutSheet({ repos, runs, backends, launch, onRun, onFollowUp, 
     const cur = text.trim();
     const isPreset = presets.some((x) => x.text.trim() === cur);
     const next = !cur || isPreset ? p.text : `${text.replace(/\s+$/, "")}\n\n${p.text}`;
-    setText(next);
-    save(TEXT_KEY, next);
+    writeText(next);
   }
+  /** Clear is a delete of the last copy of typed words: two taps like the
+   *  composer's trash, and the words are still offered back (`put it back`)
+   *  until new words arrive — typed or a preset, both go through `writeText`. */
+  const [cleared, setCleared] = useState<string | null>(null);
+  function writeText(v: string) { setText(v); save(TEXT_KEY, v); if (v.trim()) setCleared(null); }
+  function clearText() { track("action:fanout.clear"); setCleared(text); writeText(""); }
   function writePresets(next: Preset[]) { setPresets(next); savePresets(next); }
 
   /** The one writer of the selection: state + the sticky copy, together. */
@@ -242,9 +248,19 @@ export function FanoutSheet({ repos, runs, backends, launch, onRun, onFollowUp, 
         <PromptComposer
           inline rows={3}
           prompts={[text]}
-          onChange={(next) => { const v = next[0] ?? ""; setText(v); save(TEXT_KEY, v); }}
+          onChange={(next) => writeText(next[0] ?? "")}
           placeholder="What should every selected repo do?"
-        />
+        >
+          {/* Right under the words it clears, the composer's own trash icon. */}
+          {(text.trim() || cleared) && (
+            <div className="annot-tools">
+              {text.trim()
+                ? <ConfirmButton title="Clear message box" confirmTitle="Tap again to clear" aria-label="Clear message box"
+                    confirm={<><Trash2 size={14} /> clear?</>} onConfirm={clearText}><Trash2 size={14} /></ConfirmButton>
+                : cleared && <Button title="restore the words you cleared" onClick={() => writeText(cleared)}><Undo2 size={14} /> put it back</Button>}
+            </div>
+          )}
+        </PromptComposer>
         <div className="annot-tools wrap">
           {(allPresets ? presets : presets.slice(0, PRESETS_SHOWN)).map((p) => (
             <Button key={p.id} title={p.text} onClick={() => applyPreset(p)}>{p.title}</Button>

@@ -51,6 +51,8 @@ import {
   composerEcho,
 } from "./composer.js";
 import { liveSourceFor } from "./livesources.js";
+import { cliHeldOf } from "./transcript.js";
+import type { CliHeld } from "./transcript/transcriptturns.js";
 
 export type SettleVerdict = "landed" | "composer" | "absent" | "unknown";
 
@@ -62,6 +64,9 @@ export interface SettleResult {
    *  Kept so the caller can write it down and no second delivery can settle on
    *  the same turn — see `spendTurn`. */
   turnId?: string;
+  /** `unknown` because the CLI holds the words in its own queue (`LogMatch.held`):
+   *  they will run when it takes them, and must never be typed again. */
+  held?: true;
 }
 
 /**
@@ -185,7 +190,8 @@ function spentByAnother(turnId: string | undefined, claimer: string | undefined)
  * per call is cheaper than being wrong, and `getTranscript` already answers
  * "unchanged" from one.
  */
-const cache = new Map<string, { at: number; prompts: { id: string; text: string; at?: number }[] | null }>();
+type Logged = { prompts: { id: string; text: string; at?: number }[]; held: CliHeld[] };
+const cache = new Map<string, { at: number; prompts: Logged | null }>();
 
 /**
  * How many sessions' parsed prompts to keep — the same argument as `SPENT_CAP`
@@ -204,8 +210,9 @@ const cache = new Map<string, { at: number; prompts: { id: string; text: string;
  */
 const CACHE_CAP = 40;
 
-/** User turns from the CLI's OWN log, or null when there is no such log. */
-function loggedPrompts(sessions: SessionManager, sessionId: string): { id: string; text: string; at?: number }[] | null {
+/** User turns from the CLI's OWN log, and the prompts it is holding in its own
+ *  queue (`cliHeldOf`), or null when there is no such log. */
+function loggedPrompts(sessions: SessionManager, sessionId: string): Logged | null {
   // A backend that keeps no claude log is asked NOTHING, and the bail is here
   // rather than at the verdict below. `source === "jsonl"` already made an
   // opencode document count as no evidence — correctly, these verdicts are about
@@ -220,7 +227,7 @@ function loggedPrompts(sessions: SessionManager, sessionId: string): { id: strin
   // Stamped BEFORE the read: a write that lands during the parse must look
   // newer than the cache entry, or it is invisible until the next one.
   const at = Date.now();
-  let prompts: { id: string; text: string; at?: number }[] | null = null;
+  let prompts: Logged | null = null;
   try {
     const doc = sessions.getTranscript(sessionId, hit?.at ?? 0, "lite");
     if (doc === "unchanged" && hit) {
@@ -238,7 +245,16 @@ function loggedPrompts(sessions: SessionManager, sessionId: string): { id: strin
       // `t.id` is the conversation log's own uuid for the prompt record — a
       // name for THIS turn that survives a re-parse, which is what makes the
       // spent-turn ledger possible at all.
-      prompts = doc.turns.map((t) => ({ id: t.id, text: t.prompt, at: t.sentAt }));
+      //
+      // …and the jsonl document is not only the log either: `getTranscript`
+      // splices in OUR OWN rows — a prompt we typed that the log has not caught
+      // up with (`queued`), a command off our PTY capture (`local: "screen"`).
+      // Both are the history fallback above by another door, and the first is
+      // recorded the moment the echo is seen, Return or no Return.
+      prompts = {
+        prompts: doc.turns.filter((t) => !t.queued && t.local !== "screen").map((t) => ({ id: t.id, text: t.prompt, at: t.sentAt })),
+        held: cliHeldOf(doc),
+      };
     }
   } catch { /* unreadable log → no evidence, never an exception into a socket */ }
   if (!cache.has(sessionId)) {
@@ -283,6 +299,9 @@ export interface LogMatch {
   verdict: "landed" | "absent" | "unknown";
   /** The turn that proved it, when one did. */
   turnId?: string;
+  /** `unknown` because the CLI is holding these words in its own queue: taken,
+   *  not yet a turn. Never `absent` — see `cliHeldOf`. */
+  held?: true;
 }
 
 export function logMatch(
@@ -300,7 +319,7 @@ export function logMatch(
   /** A turn carrying our words that another delivery has already spent. It is
    *  not proof FOR us and it is emphatically not proof against us. */
   let taken = false;
-  for (const p of logged) {
+  for (const p of logged.prompts) {
     if (p.at != null && p.at < floor) continue;
     if (!logEcho(p.text, text)) continue;
     if (spentByAnother(p.id, opts.claimer)) { taken = true; continue; }
@@ -310,7 +329,12 @@ export function logMatch(
   // A readable log whose only matching turn belongs to someone else says
   // nothing about this delivery — so it says `unknown`. Answering `absent` here
   // would be the ledger causing the very duplicate it exists to prevent.
-  return { verdict: taken ? "unknown" : "absent" };
+  if (taken) return { verdict: "unknown" };
+  // The CLI took the words into its own queue and has not started them yet:
+  // no turn, an empty composer, and one keypress from a second copy if this
+  // said `absent`.
+  if (logged.held.some((h) => h.at >= floor && logEcho(h.text, text))) return { verdict: "unknown", held: true };
+  return { verdict: "absent" };
 }
 
 /**
@@ -434,6 +458,9 @@ export async function settleDelivery(
   //    channel instead (`sourceMatch`); everything else is `logMatch`, unchanged.
   const fromLog = (await sourceMatch(sessions, sessionId, text, since, opts)) ?? logMatch(sessions, sessionId, text, since, opts);
   if (fromLog.verdict === "landed") return { verdict: "landed", alive, turnId: fromLog.turnId };
+  // Held in the CLI's own queue: off the composer, not yet a turn. Nothing on
+  // the screen can improve on that, and nothing may be typed about it.
+  if (fromLog.held) return { verdict: "unknown", alive, held: true };
 
   // 2. Is it SITTING THERE? Only a live session has a screen to read.
   if (!alive) return { verdict: fromLog.verdict === "absent" ? "absent" : "unknown", alive };

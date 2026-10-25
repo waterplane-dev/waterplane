@@ -11,7 +11,7 @@ import { NotificationSettings } from "./NotificationSettings";
 export { useUnread } from "./store";
 export { NOTIF_LABEL, badgeText } from "./logic";
 export { NOTIF_ICON } from "./NotificationsSheet";
-export { openNotif, openNotifs } from "./actions";
+export { openNotif, openNotifFromOutside, openNotifs } from "./actions";
 
 export const manifest: FeatureManifest = {
   id: "notifications",

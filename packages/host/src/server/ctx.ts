@@ -50,6 +50,8 @@ export interface ServerCtx extends HostCtx {
   readonly setupWatch: SetupWatcher;
   /** The health index cache + weekly refresh. Read by http (`/api/repos`, `healthindex`). */
   readonly healthWatch: HealthWatch;
+  /** The week-end burn (`weekburn.ts`). Read by http (`/api/weekburn`). */
+  readonly weekBurn: import("../weekburn.js").WeekBurn;
   /** The peer ledger (`peers/store.ts`). Read by http (`/api/peers*`, `/api/peer/*`). */
   readonly peers: PeerStore;
   /** The first-app onboarding job. Read by http (`/api/onboard*`). */

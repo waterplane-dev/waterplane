@@ -133,11 +133,19 @@ self.addEventListener("push", (event) => {
       renotify: false,
       icon: "/assets/icon-192.png",
       badge: "/assets/icon-192.png",
-      data: { sessionId: data.sessionId, plugin: data.plugin, image: data.image, file: data.file },
+      data: { sessionId: data.sessionId, plugin: data.plugin, image: data.image, file: data.file, item: notifItem(data) },
       requireInteraction: true,
     }),
   );
 });
+
+// The feed item a push stands for, for a tap with no session, file, image or
+// plugin to open: the page's `openNotif` lands it (a health move opens its repo's
+// chart; anything else its own row in the feed). Null on an older host's push.
+function notifItem(d) {
+  if (typeof d.id !== "string" || typeof d.kind !== "string") return null;
+  return { id: d.id, kind: d.kind, ts: d.ts, title: d.title, body: d.body, tag: d.tag, backlog: d.backlog, open: d.open };
+}
 
 // Tapping a notification focuses the app and asks it to open that session.
 self.addEventListener("notificationclick", (event) => {
@@ -146,6 +154,7 @@ self.addEventListener("notificationclick", (event) => {
   const image = event.notification.data?.image;
   const file = event.notification.data?.file;
   const plugin = event.notification.data?.plugin;
+  const item = event.notification.data?.item;
   // An artifact notification used to navigate straight to `…&download=1`, which
   // is the browser's own download: no resume, no row in the app, and nothing at
   // all in the Android shell. It goes through the app's ONE download path now
@@ -159,6 +168,7 @@ self.addEventListener("notificationclick", (event) => {
         else if (image) w.postMessage({ type: "open-image", sessionId, image });
         else if (sessionId) w.postMessage({ type: "open-session", sessionId });
         else if (plugin) w.postMessage({ type: "open-plugin", plugin });
+        else if (item) w.postMessage({ type: "open-notif", item });
         return;
       }
       // Cold start (no open window): encode the target in the hash so the app
@@ -166,6 +176,7 @@ self.addEventListener("notificationclick", (event) => {
       const p = new URLSearchParams();
       if (sessionId) p.set("a", sessionId);
       if (plugin && !sessionId) p.set("plugin", plugin);
+      if (item && !sessionId && !plugin && !image && !file) p.set("notif", JSON.stringify(item));
       if (image) { p.set("imgRepo", image.repoId); p.set("imgPath", image.relPath); }
       if (file) {
         p.set("dlRepo", file.repoId);

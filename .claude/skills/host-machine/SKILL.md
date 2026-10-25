@@ -145,7 +145,7 @@ This desktop as a resource the phone reaches: its files and worktrees, its build
   row PERMANENTLY. **A plain POST, not a durable op with an ackId**: it types into no session. **Both routes ALWAYS 200 with an `ok`** — exit 3 is a REFUSAL, not an error
   (stderr relayed VERBATIM in `refused.text`, `narrate` skipped). **Staleness in COMMITS, never
   wall-clock**. **WHICH ENGINE:
-  the worktree's own `tools/repohealth.mjs` when it has one (argv WITHOUT `--root=`, because a repo
+  the worktree's own `tools/repohealth.mjs` when it has one AND its bare imports resolve — else bundled with `ownSkipped` saying which package (argv WITHOUT `--root=`, because a repo
   shipping the tool is the authority on its own root), else the bundled engine with
   `--root=<worktree>`** (`WATERPLANE_REPOHEALTH_ENGINE`, else this checkout's copy three hops up — the
   rule `main.ts` uses for `.env`). Neither ⇒ the sentence blames THE DESKTOP, never the repo, and

@@ -91,6 +91,9 @@ const ROUTES = [
   "POST /api/worktree",
   "GET /api/secret/targets",
   "POST /api/secret",
+  // The week-end burn (weekburn.ts): the status and the weekly pick.
+  "GET /api/weekburn",
+  "POST /api/weekburn",
   // The repo scope: resolves the target, then the table below (relative to it).
   "* /api/repos/:id/*",
   "POST /api/repos/:id/archive/bookmark",

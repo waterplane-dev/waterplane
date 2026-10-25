@@ -4,7 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { BRAND } from "../packages/shared/dist/brand.js";
-import { launchdPlist, marketplaceRow, newRows, npmRows, playCsvRows, playListingRow, report, rowsFrom, stateDir } from "../scripts/traffic-archive.mjs";
+import { launchdPlist, marketplaceRow, newRows, npmPublishRows, npmRows, playCsvRows, starRows, playListingRow, report, rowsFrom, stateDir } from "../scripts/traffic-archive.mjs";
 
 const NOW = new Date("2026-10-15T20:00:00Z");
 const day = (d, count) => ({ timestamp: `${d}T00:00:00Z`, count, uniques: 1 });
@@ -26,6 +26,15 @@ test("download totals are one row per asset per day", () => {
   const dl = rowsFrom("o/r", answers, NOW).filter((r) => r.kind === "downloads");
   assert.deepEqual(dl.map((r) => [r.day, r.tag, r.asset, r.count]),
     [["2026-10-15", "v0.1.0", "a.tar.gz", 4], ["2026-10-15", "v0.1.0", "b.apk", 1]]);
+});
+
+test("a release is one row on the day it went out; a draft has none", () => {
+  const rows = rowsFrom("o/r", { traffic: {}, releases: [
+    { tag_name: "v0.2.0", published_at: "2026-10-12T08:00:00Z", assets: [] },
+    { tag_name: "v0.3.0", draft: true, published_at: null, assets: [] },
+  ] }, NOW).filter((r) => r.kind === "release");
+  assert.deepEqual(rows.map((r) => [r.day, r.tag]), [["2026-10-12", "v0.2.0"]]);
+  assert.deepEqual(newRows(rows.map((r) => JSON.stringify(r)).join("\n"), rows), []);
 });
 
 test("a re-run adds nothing; a later day adds only the new rows; a torn line is skipped", () => {
@@ -110,4 +119,19 @@ test("a Play installs report is read by header name, UTF-16 or UTF-8, and its la
   const old = playCsvRows("a.b.c", Buffer.from("Date,Package Name,Daily Device Installs\n2026-10-01,a.b.c,7"), NOW);
   assert.deepEqual([old[0].installs, old[0].active, old[0].total], [7, null, null]);
   assert.deepEqual(playCsvRows("a.b.c", Buffer.from("nothing,here\n1,2"), NOW), []);
+});
+
+test("stars: the history comes from starred_at, today's total from the repo, and a re-run adds nothing", () => {
+  const gazers = [{ starred_at: "2026-10-10T08:00:00Z" }, { starred_at: "2026-10-10T09:00:00Z" }, { starred_at: "2026-10-12T01:00:00Z" }, { starred_at: "2026-10-15T10:00:00Z" }];
+  const rows = starRows("o/r", { stargazers_count: 3, forks_count: 1, subscribers_count: 2 }, gazers, NOW);
+  assert.deepEqual(rows.map((r) => [r.day, r.stars, r.forks]), [["2026-10-10", 2, null], ["2026-10-12", 3, null], ["2026-10-15", 3, 1]]);
+  assert.deepEqual(newRows(rows.map((r) => JSON.stringify(r)).join("\n"), starRows("o/r", { stargazers_count: 3 }, gazers, NOW)), []);
+});
+
+test("npm publish days are one row per version, two versions on one day kept apart", () => {
+  const doc = { time: { created: "2026-10-07T12:15:22Z", modified: "2026-10-24T09:41:32Z", "0.0.0-stage": "2026-10-07T12:15:22Z", "0.0.1": "2026-10-07T12:17:30Z", "0.1.6": "2026-10-24T09:41:31Z" } };
+  const rows = npmPublishRows("pk", doc, NOW);
+  assert.deepEqual(rows.map((r) => [r.day, r.version]), [["2026-10-07", "0.0.0-stage"], ["2026-10-07", "0.0.1"], ["2026-10-24", "0.1.6"]]);
+  assert.equal(newRows("", rows).length, 3);
+  assert.deepEqual(newRows(rows.map((r) => JSON.stringify(r)).join("\n"), npmPublishRows("pk", doc, NOW)), []);
 });

@@ -57,6 +57,8 @@ export interface ApiCtx {
   /** The checker's poll period, passed through so the history can say what
    *  a dense series would have looked like. */
   usagePollMs: number;
+  /** The week-end burn (`weekburn.ts`): `GET|POST /api/weekburn`. */
+  weekBurn?: import("../weekburn.js").WeekBurn;
   /** The account facts the socket pushes, as one read (`GET /api/usagenow`, `UsageNowDoc`). */
   usageNow?(): import("@waterplane/shared").UsageNowDoc;
   /**

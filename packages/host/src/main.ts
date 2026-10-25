@@ -41,7 +41,7 @@ import { Meter } from "./meter.js";
 import { UiStats } from "./uistats.js";
 import { UsageChecker } from "./usage.js"; import { createUsageSources } from "./usagesources.js";
 import { UsageLog } from "./usagelog.js";
-import { createBurnWatch } from "./burnwatch.js"; import { costMeta } from "./costwindow.js"; import { hostStateDir } from "./branddirs.js";
+import { createBurnWatch } from "./burnwatch.js"; import { createWeekBurn } from "./weekburn.js"; import { discoverTargets } from "./repos.js"; import { costMeta } from "./costwindow.js"; import { hostStateDir } from "./branddirs.js";
 import { BudgetStore } from "./budget.js";
 import { setSpendPeriodSource } from "./spendwall.js";
 import { createBillingWire } from "./server/billingwire.js";
@@ -388,9 +388,20 @@ ctx.uiStats = uiStats;
  */
 const usageLog = new UsageLog(ROOT);
 const burnWatch = createBurnWatch({ usageLog, costWindow: (a, b) => tokenStats.costWindow(a, b, costMeta(sessions, intents), 60_000), notify, stateDir: hostStateDir(ROOT) });
+// The week-end burn (weekburn.ts): the weekly pick, its lazy backlog packages and the once-a-week nudge.
+// Closures, not values: `usage` and `billingWire` are defined below and read only when the callback runs.
+const weekBurn = createWeekBurn({
+  stateDir: hostStateDir(ROOT), usage: () => usage.get(), usageLog, subscription: () => billingWire.scraped(),
+  rows: () => intents.list(), repos: () => discoverTargets(ROOT),
+  add: (text, repoDir, label, opts) => backlog.add(text, repoDir, label, undefined, true, opts),
+  health: (dir) => ctx.healthWatch.summaryFor(dir), notify, notifyOn: () => notifyEnabled(notifyPrefs.get(), "weekburn"),
+  changed: () => syncUsagePolling(),
+});
+ctx.weekBurn = weekBurn;
 const usage = new UsageChecker(ROOT, (u) => {
   usageLog.note(u);
   void burnWatch.observe(u);
+  void weekBurn.observe(u);
   usageSources.publish(); // `usage` + every source's `readings` (usagesources.ts)
   // A fresh reading can flip the budget either way (over, or back under after a
   // reset): publishing it HERE makes the phone's queue rows explain themselves unasked.
@@ -433,7 +444,8 @@ function syncUsagePolling() {
   billingWire.syncSpendFold();
   const forBurn = burnWatch.armed() && notifyEnabled(notifyPrefs.get(), "burn"); // the burn push only sees polled readings
   // A known non-subscription account has no /usage screen worth a `claude` spawn; `unknown` polls as before.
-  const gated = forPlugins || forBudget || forBurn || sessions.wantsBudgetUsage(); usageSources.setPolling(gated); // other sources: same predicate, not claude's billing gate
+  const forWeekBurn = weekBurn.armed(); // a pick for this week, `recurring`, or this week's nudge still possible
+  const gated = forPlugins || forBudget || forBurn || forWeekBurn || sessions.wantsBudgetUsage(); usageSources.setPolling(gated); // other sources: same predicate, not claude's billing gate
   if (!billingWire.scraped()) usage.stopPolling();
   else if (gated) usage.startPolling(); else usage.stopPolling();
 }

@@ -24,6 +24,9 @@
 //   {"repo","kind":"downloads","day","tag","asset","count","at"}                the running total, as of `day`
 //   {"repo":"<pub.name>","kind":"marketplace","day","installs","downloads","at"} the running totals, as of `day`
 //   {"repo":"<pkg>","kind":"npm","day","count","at"}                          one per UTC day
+//   {"repo":"<pkg>","kind":"npmpublish","day","version","at"}                 one per published version
+//   {"repo","kind":"release","day","tag","at"}                                  one per published GitHub release
+//   {"repo","kind":"stars","day","stars","forks","watchers","at"}             the running total, as of `day`
 //   {"repo":"<app>","kind":"playlisting","day","listed","range","min","name","at"} the public range, as of `day`
 //   {"repo":"<app>","kind":"playinstalls","day","installs","uninstalls","active","total","at"}  one per day
 // A traffic day is written only once it is over (UTC): today's bucket is still counting. A day
@@ -56,7 +59,7 @@ export function stateDir(env = process.env, home = os.homedir()) {
 }
 
 /** The dedup key: one row per repo, kind, day (and asset, for downloads). */
-export const rowKey = (r) => [r.repo, r.kind, r.day, r.kind === "downloads" ? `${r.tag}/${r.asset}` : ""].join("|");
+export const rowKey = (r) => [r.repo, r.kind, r.day, r.kind === "downloads" ? `${r.tag}/${r.asset}` : r.kind === "npmpublish" ? r.version : r.kind === "release" ? r.tag : ""].join("|");
 
 /** Rows from GitHub's answers, as of `now`. `traffic` is { clones, views } (the API bodies), `releases` the releases list. */
 export function rowsFrom(repo, { traffic, releases }, now) {
@@ -71,9 +74,34 @@ export function rowsFrom(repo, { traffic, releases }, now) {
     }
   }
   for (const rel of releases ?? []) {
+    // The day it went out, so the traffic charts can mark it; a draft has no such day yet.
+    if (!rel.draft && typeof rel.published_at === "string") rows.push({ repo, kind: "release", day: rel.published_at.slice(0, 10), tag: rel.tag_name, at });
     for (const a of rel.assets ?? []) {
       rows.push({ repo, kind: "downloads", day: today, tag: rel.tag_name, asset: a.name, count: a.download_count, at });
     }
+  }
+  return rows;
+}
+
+/** Star totals: one row per past day a star arrived (from each stargazer's `starred_at`, so the
+ *  first run carries the history too), and today's count off the repo itself, which also sees an
+ *  unstar. Forks and watchers are known only as of today, so the past rows carry null for them. */
+export function starRows(repo, info, stargazers, now) {
+  const today = now.toISOString().slice(0, 10);
+  const at = now.toISOString();
+  const perDay = new Map();
+  for (const s of stargazers ?? []) {
+    const day = String(s.starred_at ?? "").slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(day) && day < today) perDay.set(day, (perDay.get(day) ?? 0) + 1);
+  }
+  const rows = [];
+  let total = 0;
+  for (const day of [...perDay.keys()].sort()) {
+    total += perDay.get(day);
+    rows.push({ repo, kind: "stars", day, stars: total, forks: null, watchers: null, at });
+  }
+  if (typeof info?.stargazers_count === "number") {
+    rows.push({ repo, kind: "stars", day: today, stars: info.stargazers_count, forks: info.forks_count ?? null, watchers: info.subscribers_count ?? null, at });
   }
   return rows;
 }
@@ -138,6 +166,16 @@ export function playCsvRows(app, buf, now) {
     rows.push({ repo: app, kind: "playinstalls", day, installs: num(c, iIn), uninstalls: num(c, iOut), active: num(c, iAct), total: num(c, iTot), at });
   }
   return rows;
+}
+
+/** Publish days from a registry document's `time` map: one row per version, so a download chart
+ *  can mark the days npm's mirrors and scanners fetch every new version. */
+export function npmPublishRows(pkg, doc, now) {
+  const at = now.toISOString();
+  return Object.entries(doc?.time ?? {})
+    .filter(([v, t]) => v !== "created" && v !== "modified" && typeof t === "string")
+    .map(([version, t]) => ({ repo: pkg, kind: "npmpublish", day: t.slice(0, 10), version, at }))
+    .sort((a, b) => a.day.localeCompare(b.day));
 }
 
 /** A release download a person installs: the signatures, checksums and release.json are fetched by
@@ -287,6 +325,12 @@ async function npm(pkg) {
   return res.json();
 }
 
+async function npmDoc(pkg) {
+  const res = await fetch(`https://registry.npmjs.org/${encodeURIComponent(pkg)}`, { signal: AbortSignal.timeout(20_000) });
+  if (!res.ok) throw new Error(`npm registry ${pkg}: HTTP ${res.status}`);
+  return res.json();
+}
+
 async function playListing(app) {
   const res = await fetch(`https://play.google.com/store/apps/details?id=${encodeURIComponent(app)}&hl=en&gl=US`, { signal: AbortSignal.timeout(20_000) });
   if (res.status === 404) return null; // not public yet (in review), or unpublished
@@ -350,6 +394,8 @@ async function main() {
     };
     const releases = gh(["--paginate", "--slurp", `repos/${repo}/releases?per_page=100`]).flat();
     rows.push(...rowsFrom(repo, { traffic, releases }, now));
+    const stargazers = gh(["-H", "Accept: application/vnd.github.star+json", "--paginate", "--slurp", `repos/${repo}/stargazers?per_page=100`]).flat();
+    rows.push(...starRows(repo, gh([`repos/${repo}`]), stargazers, now));
   }
   for (const ext of o.exts) {
     // A Marketplace outage must not cost the GitHub rows, which expire; say it and carry on.
@@ -361,6 +407,7 @@ async function main() {
   }
   for (const pkg of o.npms) {
     try { rows.push(...npmRows(pkg, await npm(pkg), now)); } catch (e) { console.error(`traffic-archive: ${e.message}`); }
+    try { rows.push(...npmPublishRows(pkg, await npmDoc(pkg), now)); } catch (e) { console.error(`traffic-archive: ${e.message}`); }
   }
   for (const app of o.plays) {
     try {

@@ -53,7 +53,9 @@ const COMPOSER_CURSOR_RE = /^\u276f(?:[\s\u00a0]|$)/;
  * repaint caught half-done leaves stale rows — a duplicated footer, then rows
  * of streaming turn output — sitting UNDER the newest composer frame. Reading
  * more rows costs nothing extra: it is still one render call, asked for more of
- * what it already produced.
+ * what it already produced. (In the alternate screen — every tmux-hosted
+ * session — `drive.ts` now reads the recorder's live grid instead, which is the
+ * pane's height; the window is then simply larger than the screen.)
  *
  * `FALLBACK_ROWS` is what the DISTANCE rule gets, and it is deliberately the
  * old 40 rather than the wider window. That rule places a hit by counting rows

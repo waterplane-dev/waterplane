@@ -7,8 +7,8 @@ import { MAX_TURNS, TOOL_INPUT_CAP, TOOL_RESULT_CAP, TEXT_CAP, oneLine, summariz
 import { localDay } from "../convlog.js";
 import { agentsMtime, attachAgentSpend, noteRetired } from "../turnagents.js";
 import { localCommandOf, localOutputOf, promptOf, queuedPromptOf, readLog, resultText } from "./transcriptlog.js";
-import { BOX_ANSWER_LEAD, absorbedOpeners, boxAnswerTable } from "./transcriptturns.js";
-import type { BoxAnswer } from "./transcriptturns.js";
+import { BOX_ANSWER_LEAD, absorbedOpeners, boxAnswerTable, cliHeldTable, noteQueueOp } from "./transcriptturns.js";
+import type { BoxAnswer, CliHeld } from "./transcriptturns.js";
 
 /** A readable one-liner for a tool call, per tool. Falls back to the first
  *  string-ish field so an unknown/MCP tool still says something useful. */
@@ -114,6 +114,7 @@ export function parseTranscript(
   const ensure = (at?: number): TranscriptTurn => (cur ??= open("", "", at));
   const absorbed = absorbedOpeners(log.lines);
   const answers: BoxAnswer[] = [];
+  const held: CliHeld[] = [];
   // What each turn's requests cost, and the conversation's running total —
   // `ctxlog.ts`'s accounting (dedupe by `message.id`, `<synthetic>` skipped,
   // priced on the record's own model and day). A tail-read log has lost its
@@ -133,6 +134,7 @@ export function parseTranscript(
     noteRetired(ln, ts(rec?.timestamp) ?? 0, retired);
     const type = rec?.type;
     if (type !== "user" && type !== "assistant") {
+      if (noteQueueOp(rec, held)) continue;
       // mode/ai-title/queue-operation/attachment/… noise — with ONE exception.
       // A prompt the CLI absorbed into the running turn is written as an
       // attachment and as nothing else, so this record is the only place those
@@ -282,6 +284,7 @@ export function parseTranscript(
     detail,
   };
   if (answers.length) boxAnswerTable.set(doc, answers);
+  if (held.length) cliHeldTable.set(doc, held);
   return doc;
 }
 

@@ -31,3 +31,7 @@ export const mutes = createStore<NotifyPrefs>({});
 export function useNotifyPrefs(): NotifyPrefs {
   return useStore(mutes);
 }
+
+/** The feed row a tap asked to see — scrolled to and flashed once by the
+ *  sheet, then cleared. Written only by `openNotif`. */
+export const notifFocus = createStore<string | null>(null);

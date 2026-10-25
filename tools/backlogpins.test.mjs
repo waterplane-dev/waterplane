@@ -41,7 +41,7 @@ function tally(re) {
 }
 
 // ── P1: the barrel exports exactly what the one file did ───────────────────
-test("P1: backlogFilter.ts exports the same 92 runtime names and 8 types", async () => {
+test("P1: backlogFilter.ts exports the same 95 runtime names and 9 types", async () => {
   const m = await import(join(SRC, "backlogFilter.ts"));
   assert.deepEqual(Object.keys(m).sort(), [
     "AGE_LABEL", "ASSESS_NONE_IN_CUT", "BACKLOG_AGES", "BACKLOG_STATUSES", "BL_OFFLINE", "CATEGORY_BUCKETS",
@@ -50,8 +50,8 @@ test("P1: backlogFilter.ts exports the same 92 runtime names and 8 types", async
     "NAME_COST_NOTE", "NAME_RUNNING_NOTE", "NEW_SESSION_OPTION", "NO_BACKLOG_FILTER", "PAST_BUDGET_CHIP",
     "PAST_BUDGET_TITLE", "PAST_BUDGET_UNDONE_TOAST", "RETIME_NONE_PICKED",
     "RETIME_PICK_LABEL", "RUN_AGAIN_LABEL", "RUN_AGAIN_TOAST", "ageBucket", "archiveDoneLabel", "archiveDoneNote",
-    "archiveDoneToast", "assessScopeLabel", "assessScopeNote", "assessableInCut", "backlogCountWords",
-    "backlogCounts", "backlogFilterSentence", "categoryBucket", "categoryChipTitle", "clockGroupWords",
+    "archiveDoneToast", "assessScopeLabel", "assessScopeNote", "assessableInCut", "backlogBadgeCut", "backlogCountWords",
+    "backlogCounts", "backlogFilterSentence", "badgeCutLabel", "badgeCutWords", "categoryBucket", "categoryChipTitle", "clockGroupWords",
     "clockGroups", "clockPickLabel", "clockPicks", "clockSeat", "clockSeatWords", "clockWords", "drawnChips", "dropClockNote", "dropClockTitle",
     "dropClocksLabel", "dropClocksNote", "dropClocksToast", "editTargetOptions", "fmtSpan", "focusRunWords",
     "fromScheduleWords", "goneOnClockLabel", "hasBacklogFilter", "headlineEditHint", "hiddenByArchive",
@@ -67,7 +67,7 @@ test("P1: backlogFilter.ts exports the same 92 runtime names and 8 types", async
   const dir = join(SRC, "backlogFilter");
   const texts = [readFileSync(join(SRC, "backlogFilter.ts"), "utf8"),
     ...(existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".ts")).map((f) => readFileSync(join(dir, f), "utf8")) : [])].join("\n");
-  for (const t of ["BacklogAge", "CategoryBucket", "BacklogFilter", "FocusRunBreakdown", "BacklogClock", "ClockGroup", "ClockPick", "EditTargetOption"]) {
+  for (const t of ["BacklogAge", "CategoryBucket", "BacklogFilter", "FocusRunBreakdown", "BacklogClock", "ClockGroup", "ClockPick", "EditTargetOption", "BadgeCut"]) {
     assert.equal([...texts.matchAll(new RegExp(`^export (?:type|interface) ${t}\\b`, "gm"))].length, 1, t);
   }
 });

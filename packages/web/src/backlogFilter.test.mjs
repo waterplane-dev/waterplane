@@ -19,6 +19,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { NO_CATEGORY_LABEL, describeRule } from "@waterplane/shared";
 import {
+  backlogBadgeCut, badgeCutLabel, badgeCutWords,
   BACKLOG_AGES, BACKLOG_STATUSES, DROP_CLOCK_TOAST, HOLD_FOR_HOST_TEXT, HOLD_FOR_HOST_TITLE, holdChipWords,
   NO_BACKLOG_FILTER,
   ageBucket, backlogCountWords, backlogCounts, backlogFilterSentence, clockGroupWords, clockGroups, drawnChips,
@@ -257,6 +258,22 @@ test("the archived cut never hides a running row", () => {
     "a row archived mid-run is still running; hiding it is how a row stops saying what happened to it");
   assert.equal(hiddenByArchive({ archived: false, status: "done" }), false);
   assert.equal(hiddenByArchive({ status: "queued" }), false, "absent means not archived");
+});
+
+/** The composer badge: a lone done row wore a "1" that read as new work. */
+test("the composer badge splits waiting from failed, counts no done row, and its cut is both", () => {
+  const rows = [
+    { id: "q", status: "queued" }, { id: "r", status: "running", archived: true },
+    { id: "f", status: "failed" }, { id: "fa", status: "failed", archived: true },
+    { id: "qa", status: "queued", archived: true }, { id: "d", status: "done" },
+  ];
+  const c = backlogBadgeCut(rows);
+  assert.deepEqual(c, { waiting: ["q", "r"], failed: ["f"] }, "running beats archived, as in hiddenByArchive");
+  assert.equal(badgeCutLabel(c), "waiting, running or failed");
+  assert.equal(badgeCutWords(c), "2 waiting or running, 1 failed");
+  assert.equal(badgeCutLabel({ waiting: [], failed: ["f"] }), "failed");
+  assert.equal(badgeCutLabel({ waiting: ["q"], failed: [] }), "waiting or running");
+  assert.equal(badgeCutWords(backlogBadgeCut([{ id: "d", status: "done" }])), "nothing waiting");
 });
 
 /**

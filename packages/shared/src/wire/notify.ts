@@ -56,9 +56,14 @@
  * `agent` sits after `health`: a RUNNING subagent's window passed the person's
  * line (`agentWindowWarnSetting`), pushed once per agent. Default ON — once per
  * agent, words only; nothing is stopped or held.
+ *
+ * `weekburn` sits last (a kind added later arrives with its own default): the
+ * week-end burn's once-a-week offer, "pick repos for the rest of the week's
+ * budget" (`weekburn.ts`). Default ON — at most one per week, words only; it
+ * starts nothing, the person's pick is the approval.
  */
 export const NOTIFICATION_KINDS = [
-  "prompt", "approval", "limit", "burn", "cli", "disk", "undelivered", "backlog", "followup", "health", "agent", "artifact", "image", "plugin", "autofire", "idle", "info",
+  "prompt", "approval", "limit", "burn", "cli", "disk", "undelivered", "backlog", "followup", "health", "agent", "artifact", "image", "plugin", "autofire", "idle", "info", "weekburn",
 ] as const;
 
 /** Kind of in-app notification (drives the icon shown). */
@@ -146,9 +151,45 @@ export interface NotificationItem {
    */
   plugin?: string;
   /**
+   * Where a tap lands for an alert that names no session, file, image, backlog
+   * cut or plugin of its own (a health move, a burning week).
+   * Every tap has to land on a page that says more about what was tapped; an
+   * alert with none of these opens the feed on its own row (`openNotif`).
+   * Absent on an older host — never a guess.
+   */
+  open?: NotifyOpen;
+  /**
    * A stable key: a later notification with the same tag REPLACES the earlier one in the OS tray (the APK posts
    * under `tag`; web push passes it to `showNotification`). A plugin's own tag is namespaced by the HOST
    * (`plugin-<id>-<tag>`), so no plugin can replace another's. The in-app feed keeps every item.
    */
   tag?: string;
+}
+
+/**
+ * A screen a tapped alert opens. `repohealth`: that repo's health chart;
+ * `tokens`: the token-stats sheet (the week's burn); `plugin`: that in-repo
+ * extension's screen. The phone ignores a `to` it does not
+ * know and falls back to the alert's own row in the feed.
+ */
+export type NotifyOpen =
+  | { to: "repohealth"; repoId: string }
+  | { to: "tokens" }
+  | { to: "plugin"; id: string };
+
+/**
+ * A notification as the Android shell hands it back on a tap: `notif:<item JSON>`
+ * (`ShellLinkService.openAppIntent`, for an alert with no session or plugin).
+ * Null when the string is not one, or the JSON is not an item — never a
+ * half-read item.
+ */
+export function notifFromShell(s: string): NotificationItem | null {
+  if (!s.startsWith("notif:")) return null;
+  try {
+    const v = JSON.parse(s.slice("notif:".length)) as Partial<NotificationItem> | null;
+    if (!v || typeof v !== "object" || typeof v.id !== "string" || typeof v.title !== "string" || typeof v.kind !== "string") return null;
+    return { ...v, body: typeof v.body === "string" ? v.body : "", ts: typeof v.ts === "number" ? v.ts : Date.now() } as NotificationItem;
+  } catch {
+    return null;
+  }
 }

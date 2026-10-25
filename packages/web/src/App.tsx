@@ -14,7 +14,7 @@ import { viewerHandles } from "./docKind";
 import { showToast } from "./toast";
 import { backendIdOf, hasCap } from "./backendCaps";
 import { useRepoColors } from "./repoColors";
-import { openCaptureFor } from "./features/capture";
+import { openCaptureFor } from "./features/capture"; import { openRepoHealth } from "./features/setup";
 import { useUsedOrderSnapshot } from "./features/toolbarCfg";
 import { usePullRecords } from "./features/pull";
 import { openScheduleCut, useSchedules } from "./features/schedule";
@@ -328,7 +328,7 @@ export function App() {
     },
     nav: {
       overlay, open: setOverlay, close: closeSheet, attach, openRepo, openSend, startSessionWithPrompt, openBacklogCut,
-      openScheduleCut, closeSession, openPlugin: (id) => { openPluginFromNotification(id); },
+      openScheduleCut, closeSession, openPlugin: (id) => openPluginFromNotification(id), openRepoHealth,
       followFire: (id) => { wantNavRef.current = true; firedIdRef.current = id; },
       openPadAt,
       sendSeeded: () => sendSeedRef.current != null,

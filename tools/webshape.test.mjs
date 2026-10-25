@@ -537,6 +537,7 @@ const BACKLOG_SPLIT_FILES = {
   "backlogFilter/rowWords.ts": 120, // +holderOffer (the serial row's way to the session it waits behind)
   "backlogFilter/runAgain.ts": 355,
   "backlogFilter/scheduleWords.ts": 60,
+  "backlogFilter/badgeCut.ts": 45,
 };
 const BACKLOG_SPLIT_DIRS = ["backlog", "backlogFilter"];
 

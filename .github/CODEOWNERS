@@ -33,6 +33,7 @@
 /packages/web/src/features/build/ @johanneshoh
 /packages/web/src/features/capture/ @johanneshoh
 /packages/web/src/features/limits/ @johanneshoh
+/packages/web/src/features/weekburn/ @johanneshoh
 /packages/web/src/features/questions/ @johanneshoh
 /packages/web/src/features/search/ @johanneshoh
 /packages/web/src/features/history/ @johanneshoh

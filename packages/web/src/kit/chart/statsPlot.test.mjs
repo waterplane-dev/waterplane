@@ -860,3 +860,17 @@ test("modelBands: every model of a family gets a band, newest in the full hue, o
   ]);
   assert.equal(m.restName, "gpt-x");
 });
+
+test("time labels stay on the clock across a DST change", () => {
+  // Berlin's week of 2026-10-22 18:00 → 10-29 18:00 crosses the end of summer
+  // time on the 25th. Stepping by fixed milliseconds put every label after it
+  // at 23:00 the day before ("Sa, 23:00, 23:00"). Run under TZ=Europe/Berlin
+  // to exercise the change; in any zone every label is a local midnight.
+  const t0 = new Date(2026, 9, 22, 18).getTime();
+  const t1 = new Date(2026, 9, 29, 18).getTime();
+  const ticks = timeTicks(t0, t1, 4);
+  assert.ok(ticks.length >= 2, `got ${ticks.length} labels`);
+  for (const t of ticks) assert.equal(new Date(t).getHours(), 0, new Date(t).toString());
+  const sub = timeTicks(new Date(2026, 9, 24, 12).getTime(), new Date(2026, 9, 26, 12).getTime(), 8);
+  for (const t of sub) assert.equal(new Date(t).getHours() % 6, 0, new Date(t).toString());
+});

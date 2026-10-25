@@ -13,6 +13,7 @@
  * well as `routeToHash` filtering on the way out — a hand-edited or stale URL is
  * as much a source of an unrestorable overlay as our own writer is.
  */
+import { notifFromShell, type NotificationItem } from "@waterplane/shared";
 
 /** A sheet an in-repo extension owns: `feature:<manifest id>/<sheet>`. No `|` or `#`, so `routeKey`,
  *  `overlayFromKey` and the step keys carry it unchanged. NEVER persisted (see `PERSISTED_OVERLAYS`). */
@@ -25,7 +26,7 @@ export function featureSheetId(feature: string, sheet: string): FeatureSheetId {
 }
 export const isFeatureSheetId = (o: unknown): o is FeatureSheetId => typeof o === "string" && FEATURE_SHEET_RE.test(o);
 
-export type Overlay = null | "slash" | "image" | "swipe" | "gallery" | "new" | "send" | "backlog" | "git" | "model" | "text" | "toolbar" | "history" | "secret" | "setup" | "speedtest" | "branches" | "decisions" | "updates" | "settings" | "notifications" | "snippets" | "build" | "capture" | "search" | "features" | "nethealth" | "fanout" | "queue" | "pad" | "pull" | "hdrcmd" | "sentlog" | "questions" | "outline" | "limits" | "schedule" | "clip" | "scrollback" | "browse" | "collage" | "archive" | "activity" | "clihealth" | "assess" | "context" | "tokens" | "launchask" | "hostedack" | "localrt" | "sweep" | "repocolor" | "apps" | "repohealth" | "storage" | "hosts" | "pairqr" | "devices" | "shells" | "logins" | "answers" | "sessionBudget" | "phonesetup" | "codefolder" | "reposync" | "onboard" | "demotour" | "share" | FeatureSheetId;
+export type Overlay = null | "slash" | "image" | "swipe" | "gallery" | "new" | "send" | "backlog" | "git" | "model" | "text" | "toolbar" | "history" | "secret" | "setup" | "speedtest" | "branches" | "decisions" | "updates" | "settings" | "notifications" | "snippets" | "build" | "capture" | "search" | "features" | "nethealth" | "fanout" | "queue" | "pad" | "pull" | "hdrcmd" | "sentlog" | "questions" | "outline" | "limits" | "weekburn" | "schedule" | "clip" | "scrollback" | "browse" | "collage" | "archive" | "activity" | "clihealth" | "assess" | "context" | "tokens" | "launchask" | "hostedack" | "localrt" | "sweep" | "repocolor" | "apps" | "repohealth" | "storage" | "hosts" | "pairqr" | "devices" | "shells" | "logins" | "answers" | "sessionBudget" | "phonesetup" | "codefolder" | "reposync" | "onboard" | "demotour" | "share" | FeatureSheetId;
 
 // Overlays worth putting in the URL (reload-stable; the transient ones —
 // "image"/"collage"/"slash"/"text" — need in-memory state, so they're never
@@ -110,6 +111,8 @@ export function parseHash(): {
   file?: { repoId: string; relPath: string; name?: string; mtime?: number };
   /** A cold plugin-alert tap (`sw.js`): open this plugin's screen. */
   plugin?: string;
+  /** A cold tap on an alert with no session, file, image or plugin (`sw.js`): the whole item. */
+  notif?: NotificationItem;
 } {
   const p = new URLSearchParams(location.hash.replace(/^#/, ""));
   const o = p.get("o") as Overlay;
@@ -126,7 +129,8 @@ export function parseHash(): {
   const file = dlRepo && dlPath
     ? { repoId: dlRepo, relPath: dlPath, name: p.get("dlName") || undefined, mtime: mtime || undefined }
     : undefined;
-  return { activeId: p.get("a") || null, overlay: o && PERSISTED_OVERLAYS.has(o) ? o : null, image, file, plugin: p.get("plugin") || undefined };
+  const notif = notifFromShell(`notif:${p.get("notif") ?? ""}`) ?? undefined;
+  return { activeId: p.get("a") || null, overlay: o && PERSISTED_OVERLAYS.has(o) ? o : null, image, file, plugin: p.get("plugin") || undefined, notif };
 }
 
 /** Serialize route → hash string ("" when at the session list root). */

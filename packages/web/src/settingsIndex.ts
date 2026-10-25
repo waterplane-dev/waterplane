@@ -109,6 +109,7 @@ export const SETTING_ROWS: SettingRowMeta[] = [
   { id: "limit-auto", group: "sessions", label: "auto-continue after a usage limit", keywords: "rate limit resume reset blocked wall resurrect" },
   { id: "budget", group: "sessions", label: "usage budget", keywords: "reserve headroom pause unattended percent ceiling session window" },
   { id: "budget-session", group: "sessions", label: "session ceiling", keywords: "5-hour window percent reserve pause headroom" },
+  { id: "weekburn", group: "sessions", label: "this week's burn", keywords: "week-end burn spend leftover unused budget subscription repos improve" },
   { id: "budget-weekly", group: "sessions", label: "weekly ceiling", keywords: "week cap percent reserve" },
   { id: "budget-leftover", group: "sessions", label: "leftovers in a new week", keywords: "leftover reset week spare budget before reset waiver" },
   { id: "billing-profile", group: "sessions", label: "billing profile", keywords: "api key subscription bedrock vertex cloud account detect override console" },

@@ -95,6 +95,14 @@ const GIVE_UP_MS = Math.max(BASE_MS * 4, Number(env("SETTLE_GIVEUP_MS") || 15 * 
  */
 const SLASH_GIVE_UP_MS = Math.min(GIVE_UP_MS, BASE_MS * 4);
 /**
+ * …and how long for a prompt the CLI is HOLDING in its own queue (`settle.ts`'s
+ * `held`). That row is not short of evidence: the log says the CLI took it and
+ * will run it when the turn in front of it pauses or ends — which can be a long
+ * build later. So it is asked past `GIVE_UP_MS`, until the log shows the turn,
+ * for up to two hours.
+ */
+const HELD_GIVE_UP_MS = Math.max(GIVE_UP_MS, 2 * 60 * 60_000);
+/**
  * How many times the host will type a provably-absent prompt again.
  *
  * One was too few, and the complaint was about the WORDING before it was about
@@ -386,6 +394,22 @@ export class OpenDeliveries extends EventEmitter {
     }
     if (res.verdict === "absent") {
       await this.onAbsent(q, res.alive);
+      return;
+    }
+    if (res.held) {
+      // Taken by the CLI, not yet run. The one move that is never right here is
+      // a second copy, so every ending says so.
+      if (!res.alive) {
+        this.finish(q, "unknown", "claude had it queued when that session ended — open the conversation to see whether it ran before sending it again");
+        return;
+      }
+      if (now - q.startedAt >= HELD_GIVE_UP_MS) {
+        this.finish(q, "unknown", "claude still has it queued behind the running turn — it runs when claude takes it; do not send it again");
+        return;
+      }
+      q.nextAskAt = now + Math.min(MAX_GAP_MS, BASE_MS * 2 ** Math.min(q.asks, 20));
+      this.persist();
+      this.onChange();
       return;
     }
 

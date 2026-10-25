@@ -25,7 +25,7 @@ export function serverCtxKeys() {
   "publishBudget", "pullCatchUp", "pullNewFiles", "pullSeen", "push", "recomputeWatched", "review", "ROOT",
   "scanImages", "scanOutboxDocs", "scanPullCandidates", "scheduleSnapshot", "send", "sentLogStore",
   "sessions", "settings", "setupWatch", "socketAuthorized", "startPrompt", "syncUsagePolling", "tokenStats",
-  "uiStats", "updateApplier", "updates", "usage", "usageLog", "usageSources", "wsDevice", "wsKind", "wsRole", "wsToken",
+  "uiStats", "updateApplier", "updates", "usage", "usageLog", "usageSources", "weekBurn", "wsDevice", "wsKind", "wsRole", "wsToken",
   ] as const satisfies readonly (keyof ServerCtx)[];
 }
 

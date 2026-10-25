@@ -10,7 +10,7 @@
  *   node tools/backendparity.mjs --plugins  print (never write) the same table for the external
  *                                           plugins the daemon would discover (its config dir's plugin list)
  *
- * The committed doc covers core + in-repo extensions only: an external plugin exists on one machine,
+ * The committed doc covers core + public in-repo extensions only: an external plugin exists on one machine,
  * and a doc that changed with the machine could never be checked. Needs `npm run build` first.
  */
 import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync, readdirSync } from "node:fs";
@@ -44,13 +44,22 @@ async function loaders() {
   return { pluginDescriptor: pd.pluginDescriptor, readPluginDir: pl.readPluginDir, discoverPluginDirs: pl.discoverPluginDirs, importHost: pl.importHost, configDir: bd.configDir };
 }
 
-/** Core backends, then every in-repo extension that declares backends (found by folder, never by name). */
+/**
+ * Core backends, then every in-repo extension that declares backends (found by folder, never by
+ * name) — minus the PRIVATE ones (`deploy/public-allowlist.txt`). The public snapshot does not
+ * carry their folders, so a column for one would make the committed doc a render no public tree
+ * can reproduce: 0.1.5 and 0.1.6 shipped an opencode column and a test that failed on it.
+ */
 export async function loadInRepo() {
   const reg = await imp(join(DIST, "backends/index.js"));
   const { pluginDescriptor, readPluginDir, importHost } = await loaders();
+  const { privateExtensions } = await imp(join(ROOT, "scripts/release/public-lib.mjs"));
+  const allow = join(ROOT, "deploy/public-allowlist.txt");
+  const hidden = new Set(existsSync(allow) ? privateExtensions(readFileSync(allow, "utf8")) : []);
   const out = [...reg.BACKENDS];
   const base = join(ROOT, "packages/extensions");
   for (const ext of readdirSync(base).sort()) {
+    if (hidden.has(ext)) continue;
     const dir = join(base, ext);
     const hostFile = join(DIST, "extensions", ext, "host/index.mjs");
     const pd = readPluginDir(dir, "in-repo", { hostFile });

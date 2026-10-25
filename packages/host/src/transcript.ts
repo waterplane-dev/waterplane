@@ -32,4 +32,4 @@ export { claudeConfigDir, claudeProjectDir } from "./claudeconfig.js";
 export { lastTurnAt, localCommandOf, localOutputOf, logMtime, opensTurn, promptOf, queuedPromptOf, transcriptPath } from "./transcript/transcriptlog.js";
 export { parseTranscript, toolDetails } from "./transcript/transcriptparse.js";
 export { foldRepaints, scrollHintTrimmed, sliceToCommand, trimTuiChrome } from "./transcript/transcriptscreen.js";
-export { absorbedOpeners, boxAnswersOf, mergeLocalTurns, queuedTurns, screenCommandTurns, transcriptFromHistory } from "./transcript/transcriptturns.js";
+export { absorbedOpeners, boxAnswersOf, cliHeldOf, cliHeldTable, mergeLocalTurns, queuedTurns, screenCommandTurns, transcriptFromHistory } from "./transcript/transcriptturns.js";

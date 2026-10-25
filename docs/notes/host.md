@@ -3925,6 +3925,35 @@ happens on the clock and never in the file. `e2e-limitreset.mjs`.
   cost window, not the stretch (a calibration needs 6 h+ stretches with cost in them) and is
   simply absent when `ptsCalibration` refuses.
 
+### `weekburn.ts` — the week-end burn
+
+- `weekburn.ts` — **spend what is left of a subscription week on small repo improvements, in
+  repos the person picked FOR THIS WEEK.** The rules (start time from measured 5 h windows, the
+  stop line, the nudge, the agent's prompt) are `shared/weekburn.ts`; this module is plumbing over
+  `<state dir>/weekburn.json` (`{prefs, nudgedWeekOf, posted: {[repoDir]: {weekOf, count}}}`).
+  - **The pick is the approval, and it is bound to one week** (`prefs.weekOf` = the weekly reset it
+    was made for, `RESET_MATCH_MS` tolerance). A new week starts with no pick; `recurring` only
+    re-asks (the nudge says "Pick this week's repos") and never runs last week's repos by itself.
+  - **Ordinary backlog rows, posted lazily**: `BacklogManager.add` with `origin: weekburn:<weekOf>`,
+    `closeWhenDone`, a fresh session (repo target), `auto` + pinned (the pick is the person's tap, so
+    the global auto-fire switch does not hold it; serial per repo, the slot cap, halt and the ladder
+    all still apply), and a weekly `budgetPass {from: now, until: weeklyResetAt}` — the weekly ceiling
+    is lifted for these rows only. At most ONE live (`queued`/`blocked`/`starting`/`running`) burn
+    row per repo; the next is posted after it settles, up to `WATERPLANE_WEEKBURN_MAX_PER_REPO` (6)
+    a week. The count is written BEFORE the post — lose a package, never double one. Repos are
+    checked against `discoverTargets()` at the pick and again at each post.
+  - **Nothing posts** before the plan's start, at or past the stop line (default 95%), within 20 min
+    of the reset, on a stale or missing reading (`weekBurnStopText`), or on an account with no
+    scraped windows. In-flight rows finish. An empty pick cancels this week the same way.
+  - **No timer**: `UsageChecker`'s callback drives `observe` beside `burnwatch.ts`, and
+    `syncUsagePolling` keeps `/usage` polled while `armed()`: a pick for this week, `recurring`, or
+    this week's nudge still possible with the `weekburn` kind on. The nudge is words only, once per
+    week (`nudgedWeekOf`, written before the push); no `NotifyOpen` names a sheet, so it opens the
+    feed row.
+  - `routes/apiweekburn.ts`: `GET /api/weekburn` → `WeekBurnStatus`; `POST /api/weekburn` `{repos?, recurring?, stopPct?,
+    sameAsLast?}` → `WeekBurnStatus`, or 409 `{error}` in words when there is no weekly reset to bind
+    a pick to. Not on the passive allowlist. `packages/host/test/weekburn.test.mjs`.
+
 ### `budget.ts`
 
 - `budget.ts` — **the ceiling before the wall.** Stores the usage budget (`.waterplane/budget.json`,

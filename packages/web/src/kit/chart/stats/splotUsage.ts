@@ -113,10 +113,20 @@ export function timeTicks(t0: number, t1: number, want = 4): number[] {
     6 * HOUR_MS, 12 * HOUR_MS, DAY_MS, 2 * DAY_MS, 7 * DAY_MS,
   ];
   const step = LADDER.find((s) => span / s <= want) ?? LADDER[LADDER.length - 1];
-  const origin = new Date(t0);
-  origin.setHours(0, 0, 0, 0);
+  // Stepped on the CALENDAR, never by adding milliseconds: a day is 23 or 25
+  // hours across a DST change, and a fixed step put every label after the
+  // October one at 23:00 the day before — "Sa, 23:00, 23:00" on a week chart.
+  const day = new Date(t0);
+  day.setHours(0, 0, 0, 0);
+  const days = Math.max(1, Math.round(step / DAY_MS));
+  const stepMin = step / 60_000;
   const out: number[] = [];
-  for (let t = origin.getTime(); t <= t1; t += step) if (t >= t0) out.push(t);
+  for (; day.getTime() <= t1; day.setDate(day.getDate() + (step >= DAY_MS ? days : 1))) {
+    for (let m = 0; m < 24 * 60; m += step >= DAY_MS ? 24 * 60 : stepMin) {
+      const t = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, m).getTime();
+      if (t >= t0 && t <= t1 && t !== out[out.length - 1]) out.push(t);
+    }
+  }
   return out;
 }
 

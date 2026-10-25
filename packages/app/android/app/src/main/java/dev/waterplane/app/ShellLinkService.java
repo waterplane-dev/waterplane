@@ -434,7 +434,7 @@ public class ShellLinkService extends Service {
                 .setSilent(true)
                 .setPriority(NotificationCompat.PRIORITY_MIN)
                 .setCategory(NotificationCompat.CATEGORY_SERVICE)
-                .setContentIntent(openAppIntent(null, null, STATUS_NOTIFICATION_ID))
+                .setContentIntent(openAppIntent(null, null, null, STATUS_NOTIFICATION_ID))
                 .build();
     }
 
@@ -829,7 +829,7 @@ public class ShellLinkService extends Service {
                 .setAutoCancel(true)
                 .setWhen(item.optLong("ts", System.currentTimeMillis()))
                 .setPriority(isUrgent(kind) ? NotificationCompat.PRIORITY_HIGH : NotificationCompat.PRIORITY_DEFAULT)
-                .setContentIntent(openAppIntent(sessionId, plugin, id))
+                .setContentIntent(openAppIntent(sessionId, plugin, item, id))
                 .build();
         NotificationManager nm = getSystemService(NotificationManager.class);
         if (nm == null) return;
@@ -878,8 +878,14 @@ public class ShellLinkService extends Service {
      * The request code is the notification's own, so two alerts do not share
      * one {@code PendingIntent} and hand the second one's tap the first one's
      * session.
+     *
+     * An alert with neither (a health move, a burning week, a full disk) hands
+     * the page the WHOLE item as {@code notif:<json>}: the page's {@code openNotif}
+     * decides where it lands, the same as a tap on its row in the feed, so a new
+     * kind of target never needs a new APK. An older web bundle finds no session
+     * by that string, which is harmless.
      */
-    private PendingIntent openAppIntent(@Nullable String sessionId, @Nullable String plugin, int requestCode) {
+    private PendingIntent openAppIntent(@Nullable String sessionId, @Nullable String plugin, @Nullable JSONObject item, int requestCode) {
         Intent i = new Intent(this, MainActivity.class)
                 .setAction(Intent.ACTION_MAIN)
                 .addCategory(Intent.CATEGORY_LAUNCHER)
@@ -891,6 +897,8 @@ public class ShellLinkService extends Service {
             // "plugin:<id>" as a plugin's screen (session ids never contain ':'). An older
             // web bundle finds no session by that name, which is harmless.
             i.putExtra(MainActivity.EXTRA_OPEN_SESSION, "plugin:" + plugin);
+        } else if (item != null) {
+            i.putExtra(MainActivity.EXTRA_OPEN_SESSION, "notif:" + item.toString());
         }
         // IMMUTABLE unconditionally: `minSdk` is 24, and nothing here wants the
         // receiver to be able to fill in fields of this intent.

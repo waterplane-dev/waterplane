@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import type { RepoTarget, SessionInfo } from "@waterplane/shared";
+import type { NotificationItem, RepoTarget, SessionInfo } from "@waterplane/shared";
 import { setRepoNamer, startDownload } from "../../download";
 import { viewerHandles } from "../../docKind";
 import { onServiceWorkerPullMessage } from "../../pull";
 import { onShellOpenSession } from "../../shellLink";
 import { openPluginFromNotification } from "../extensionPoints";
+import { openNotifFromOutside } from "../../features/notifications";
 import { shellOpenTarget } from "./shellOpenTarget";
 import { openArtifact, viewImage } from "../../features/images";
 import type { Route } from "./useRoute";
@@ -48,6 +49,8 @@ export function useOutsideOpens(ctx: UseOutsideOpensCtx) {
     if (initRoute.file && !viewerHandles(initRoute.file.relPath)) startDownload(initRoute.file);
     // Same errand for a plugin's alert: `sw.js` put `plugin=<id>` in the hash.
     if (initRoute.plugin) openPluginFromNotification(initRoute.plugin);
+    // ...and for an alert with none of those: the whole item (`openNotif`).
+    if (initRoute.notif) openNotifFromOutside(initRoute.notif);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- cold-tap download fires once at mount from the initial route
   }, []);
 
@@ -75,6 +78,8 @@ export function useOutsideOpens(ctx: UseOutsideOpensCtx) {
         viewImage(e.data.image as { repoId: string; relPath: string }, e.data.sessionId);
       } else if (e.data?.type === "open-plugin" && typeof e.data.plugin === "string") {
         openPluginFromNotification(e.data.plugin);
+      } else if (e.data?.type === "open-notif" && e.data.item) {
+        openNotifFromOutside(e.data.item as NotificationItem);
       }
     };
     navigator.serviceWorker.addEventListener("message", h);
@@ -98,6 +103,8 @@ export function useOutsideOpens(ctx: UseOutsideOpensCtx) {
     // `plugin:<id>` is a plugin's alert, not a session (see `shellOpenTarget`): no list to wait for.
     const target = shellOpenTarget(sessionId);
     if ("plugin" in target) { openPluginFromNotification(target.plugin); return; }
+    // A whole alert with no session (a health move, a burning week): `openNotif` lands it.
+    if ("notif" in target) { openNotifFromOutside(target.notif); return; }
     shellWantRef.current = sessionId;
     setShellWant(sessionId);
   }), []);

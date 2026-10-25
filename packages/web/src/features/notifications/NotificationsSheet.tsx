@@ -2,9 +2,9 @@
  * The notification feed: what the DESKTOP raised, then what THIS PHONE said
  * (`ToastLog.tsx`), as two labelled halves — never one merged stream.
  */
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
-import { AlertTriangle, Bell, Bot, CircleDot, CornerDownLeft, Download, Fingerprint, Flag, Flame, HardDrive, HeartPulse, Hourglass, Images, ListTodo, Puzzle, SendHorizontal, Trash2 } from "lucide-react";
+import { AlertTriangle, Bell, Bot, CalendarClock, CircleDot, CornerDownLeft, Download, Fingerprint, Flag, Flame, HardDrive, HeartPulse, Hourglass, Images, ListTodo, Puzzle, SendHorizontal, Trash2 } from "lucide-react";
 import { useCore, useStore } from "../../sdk";
 import { SheetHead } from "../../Sheet";
 import { Empty } from "../../Empty";
@@ -12,8 +12,8 @@ import { ToastLog, useToastLog } from "../../ToastLog";
 import { phoneHalfFirst } from "../../toast";
 import { ago } from "../../format";
 import { viewerHandles } from "../../docKind";
-import { notifs as notifStore } from "./store";
-import { markAllSeen, openNotif } from "./actions";
+import { notifFocus, notifs as notifStore } from "./store";
+import { clearNotifFocus, markAllSeen, openNotif } from "./actions";
 import { Button, RowSub } from "../../kit";
 
 // Lucide icon per notification kind (no emoji) — the feed's rows and App's
@@ -31,6 +31,7 @@ export const NOTIF_ICON: Record<string, LucideIcon> = {
   info: Bell,
   limit: Hourglass,
   burn: Flame,
+  weekburn: CalendarClock,
   agent: Bot,
   disk: HardDrive,
   artifact: Download,
@@ -56,6 +57,17 @@ export function NotificationsSheet() {
   // Being on screen marks everything read — including anything that arrives
   // while it is open (the newest ts becomes the seen marker).
   useEffect(() => { markAllSeen(); }, [notifs]);
+  // A tap that had nowhere else to land (`openNotif`'s floor) asked for ONE
+  // row: scroll it into view and flash it once, so the reader sees which.
+  const focus = useStore(notifFocus);
+  const focusRef = useRef<HTMLDivElement | null>(null);
+  const [flash, setFlash] = useState<string | null>(null);
+  useEffect(() => {
+    if (!focus) return;
+    focusRef.current?.scrollIntoView({ block: "center" });
+    setFlash(focus);
+    clearNotifFocus();
+  }, [focus]);
   return (
     <div className="sheet">
       <SheetHead title={<><Bell size={16} style={{ verticalAlign: "-3px", marginRight: 4 }} /> Notifications</>} onClose={() => core.nav.close("notifications")}>
@@ -83,7 +95,8 @@ export function NotificationsSheet() {
           // started a transfer nobody asked for.
           const readable = !!n.file && viewerHandles(n.file.relPath);
           return (
-            <div key={n.id} className="notif-row">
+            <div key={n.id} ref={n.id === focus ? focusRef : undefined}
+              className={n.id === flash ? "notif-row nh-flash" : "notif-row"}>
               <button className="notif-open" onClick={() => openNotif(n)}>
                 <span className={`notif-icon notif-${n.kind}`}><Icon size={16} /></span>
                 <span className="notif-body">

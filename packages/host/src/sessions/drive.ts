@@ -19,7 +19,7 @@ import { ptySize, SCREENLOG_MAX_LINES, sessionWall } from "@waterplane/shared";
 import { namesStoreReader } from "../backends/index.js";
 import { trustRule } from "../backends/derive.js";
 import { readCliRecord } from "../agents.js";
-import { renderCapture, renderCells, type RenderRow } from "../render.js";
+import { renderCapture, renderCells, screenTextOf, type RenderRow } from "../render.js";
 import { foregroundWrapperPids, killShellGroup, readPsTable, readPsTableAsync, readShellDetail, readShellList, shellsUnder, type PsRow } from "../shells.js";
 import { exitCopyMode as tmuxExitCopyMode, exitCopyModeSync as tmuxExitCopyModeSync, paneWantsMouse, parseWheel, scroll as tmuxScroll } from "../tmuxscroll.js";
 import type { Session, SessionCore } from "./core.js";
@@ -544,7 +544,11 @@ export function scrollback(core: SessionCore, id: string): string {
 export async function screenText(core: SessionCore, id: string, lines = 40): Promise<string> {
   const s = core.sessions.get(id);
   if (!s) return "";
-  const text = await renderCapture(s.scrollback, s.cols);
+  // In the alternate screen the recorder's grid IS the screen, and the replay
+  // is not: the ring holds no resizes (`screenlog.ts`'s `gridCells`).
+  const text = s.screenLog?.alternate()
+    ? screenTextOf(s.screenLog.gridText().split("\n"))
+    : await renderCapture(s.scrollback, s.cols);
   return text.split("\n").slice(-lines).join("\n");
 }
 
@@ -611,17 +615,18 @@ export async function screenLines(core: SessionCore, id: string, max = SCREENLOG
 }
 
 /**
- * The same replay, read back WITH the attributes (`render.ts`'s `renderCells`).
+ * The same screen, read back WITH the attributes (`render.ts`'s `renderCells`).
  *
- * One caller: `ocprompt.ts`, whose whole reason for existing is that opencode
- * marks the armed option of a permission dialog with a background colour and
- * nothing else. Everything in this daemon that reads a screen still reads
- * `screenText()`; this is not a better `screenText()` and must not become the
- * default one, because the per-cell walk is the expensive half of it.
+ * For the readers that need a cell's colour or dimness — opencode's armed
+ * option, an empty composer's dim hint (`deliver/deliverscreen.ts`). This is
+ * not a better `screenText()` and must not become the default one, because the
+ * per-cell walk is the expensive half of it. In the alternate screen it is the
+ * recorder's live grid, for `screenText()`'s reason.
  */
 export async function screenCells(core: SessionCore, id: string, lines = 60): Promise<RenderRow[]> {
   const s = core.sessions.get(id);
   if (!s) return [];
+  if (s.screenLog?.alternate()) return s.screenLog.gridCells(lines);
   return renderCells(s.scrollback, s.cols, lines);
 }
 

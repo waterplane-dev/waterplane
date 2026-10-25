@@ -65,6 +65,9 @@ export function shape(text) {
     views: group("views", (r) => ({ count: r.count, uniques: r.uniques })),
     clones: group("clones", (r) => ({ count: r.count, uniques: r.uniques })),
     npm: group("npm", (r) => ({ count: r.count })),
+    npmPublish: group("npmpublish", (r) => ({ version: r.version })),
+    releaseDays: group("release", (r) => ({ tag: r.tag })),
+    stars: group("stars", (r) => ({ stars: r.stars, forks: r.forks, watchers: r.watchers })),
     marketplace: group("marketplace", (r) => ({ installs: r.installs, downloads: r.downloads })),
     playListing: group("playlisting", (r) => ({ listed: r.listed !== false, range: r.range, min: r.min, name: r.name ?? null })),
     playInstalls: group("playinstalls", (r) => ({ installs: r.installs, uninstalls: r.uninstalls, active: r.active, total: r.total })),
@@ -76,6 +79,8 @@ export function shape(text) {
 export function handler(file) {
   return (req, res) => {
     const send = (code, type, body) => {
+      // One line per request: the only way to see what a phone that "does not load" actually sent.
+      console.log(`${new Date().toISOString()} ${code} ${req.method} ${req.url} host=${req.headers.host ?? "-"} dest=${req.headers["sec-fetch-dest"] ?? "-"} ua=${String(req.headers["user-agent"] ?? "-").slice(0, 160)}`);
       res.writeHead(code, { "content-type": type, "cache-control": "no-store", "x-content-type-options": "nosniff" });
       res.end(body);
     };
@@ -83,6 +88,12 @@ export function handler(file) {
     if (req.method !== "GET" && req.method !== "HEAD") return send(405, "text/plain", "read-only\n");
     const url = new URL(req.url, "http://x");
     if (url.pathname === "/") return send(200, "text/html; charset=utf-8", fs.readFileSync(PAGE));
+    // The page reports what it got to (and any script error) here, so a phone that shows a blank
+    // page says why in this log. Read-only in effect: it only writes a log line, truncated.
+    if (url.pathname === "/beacon") {
+      console.log(`${new Date().toISOString()} beacon ${String(url.searchParams.get("m") ?? "").slice(0, 300)}`);
+      return send(204, "text/plain", "");
+    }
     if (url.pathname === "/data.json") {
       const text = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
       return send(200, "application/json", JSON.stringify({ ...shape(text), file, at: new Date().toISOString() }));

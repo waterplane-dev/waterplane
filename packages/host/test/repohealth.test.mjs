@@ -520,6 +520,30 @@ test("resolution and argv, unfaked: the rule itself", () => {
   );
 });
 
+test("a repo's own engine that cannot load its imports is passed over for the desktop's, and says why", () => {
+  // A fresh clone of a repo whose engine imports its own workspace package
+  // (waterplane's mirror, before `npm ci && npm run build:shared`): the copy died
+  // with ERR_MODULE_NOT_FOUND on every read and the sheet drew nothing.
+  const wt = worktree('import { x } from "@acme/kit";\nimport { y } from "node:fs";\nprocess.exit(0);\n');
+  const skipped = resolveRepoHealthEngine(wt);
+  assert.equal(skipped?.kind, "bundled", "not installed ⇒ the desktop's engine reads it");
+  assert.match(skipped?.ownSkipped ?? "", /@acme\/kit/, "…and the sentence names the missing package");
+  assert.deepEqual(repoHealthArgv(skipped, wt, "status"), [skipped.path, "status", `--root=${wt}`]);
+
+  // Linked but never built: the package is there, its entry file is not.
+  const pkg = join(wt, "node_modules", "@acme", "kit");
+  mkdirSync(pkg, { recursive: true });
+  writeFileSync(join(pkg, "package.json"), JSON.stringify({ name: "@acme/kit", exports: { ".": { import: "./dist/index.js" } } }));
+  assert.equal(resolveRepoHealthEngine(wt)?.kind, "bundled", "a workspace package not built is still a miss");
+
+  // Built: the repo's own copy outranks the desktop's again, with no restart.
+  mkdirSync(join(pkg, "dist"));
+  writeFileSync(join(pkg, "dist", "index.js"), "export const x = 1;\n");
+  const own = resolveRepoHealthEngine(wt);
+  assert.equal(own?.kind, "repo");
+  assert.equal(own?.ownSkipped, undefined);
+});
+
 test("a step that overruns takes its whole process group with it", async () => {
   // A tool that starts a grandchild and then never exits — the shape that made
   // the kill matter: `proc.kill()` reaches the direct child only, and the

@@ -55,6 +55,7 @@ export const NOTIF_LABEL: Record<string, { name: string; note: string }> = {
   approval: { name: "Approvals", note: "A plugin asked for something you must approve now, such as a vault fingerprint. Loud on purpose." },
   limit: { name: "Usage limit", note: "A session hit the account limit, and whether auto-continue got it running again." },
   burn: { name: "Week burning fast", note: "The weekly limit climbed faster than the threshold over the last stretch of readings — one push naming what spent it. Nothing is paused." },
+  weekburn: { name: "Week-end burn", note: "Once a week, if you are on pace to leave budget unused: pick repos to spend it on." },
   disk: { name: "Desktop disk almost full", note: "The desktop's disk dropped under 10 GB free (and again under 3 GB). On a Mac, low space makes macOS end apps to clear their caches — Tailscale among them, which cuts this phone off. Words only; nothing is deleted." },
   agent: { name: "Large subagent", note: "A running subagent passed the context size you set on the context sheet (default 500k) — one push per agent, naming it. It warns only; nothing is stopped." },
   backlog: { name: "Backlog", note: "A queued backlog item started, finished, or failed." },
@@ -68,3 +69,40 @@ export const NOTIF_LABEL: Record<string, { name: string; note: string }> = {
   info: { name: "Other", note: "Sessions opening, builds, host notices." },
   undelivered: { name: "Prompt not delivered", note: "A session opened but the prompt never made it in. The only report of a message that is otherwise gone — the phone acked the op long before the typing failed." },
 };
+
+/**
+ * Where a tapped alert lands, read off the item alone — the one ladder the
+ * feed row, the service worker's tap and the Android shell's tap all take
+ * (`openNotif`). `row` is the floor: an alert that names nothing else opens
+ * the feed on its own row, whose full text is the "more" — a tap never lands
+ * on the bare launcher. A `to` this bundle does not know is `row` too.
+ */
+export type NotifTarget =
+  | { to: "file" }
+  | { to: "plugin"; id: string }
+  | { to: "image" }
+  | { to: "session"; sessionId: string }
+  | { to: "backlog"; cwd: string; ids: string[] }
+  | { to: "backlogByName" }
+  | { to: "repohealth"; repoId: string }
+  | { to: "tokens" }
+  | { to: "weekburn" }
+  | { to: "row" };
+
+export function notifTarget(n: {
+  kind: string; file?: unknown; image?: unknown; sessionId?: string; plugin?: string;
+  backlog?: { cwd: string; ids: string[] }; open?: { to: string; repoId?: string; id?: string };
+}): NotifTarget {
+  if (n.file) return { to: "file" };
+  if (n.plugin && !n.sessionId && !n.image) return { to: "plugin", id: n.plugin };
+  if (n.image) return { to: "image" };
+  if (n.sessionId) return { to: "session", sessionId: n.sessionId };
+  if (n.backlog?.cwd) return { to: "backlog", cwd: n.backlog.cwd, ids: n.backlog.ids ?? [] };
+  const o = n.open;
+  if (o?.to === "repohealth" && o.repoId) return { to: "repohealth", repoId: o.repoId };
+  if (o?.to === "tokens") return { to: "tokens" };
+  if (n.kind === "weekburn") return { to: "weekburn" };
+  if (o?.to === "plugin" && o.id) return { to: "plugin", id: o.id };
+  if (n.kind === "backlog") return { to: "backlogByName" };
+  return { to: "row" };
+}

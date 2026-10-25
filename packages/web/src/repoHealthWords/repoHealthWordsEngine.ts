@@ -65,12 +65,13 @@ export function seriesHeadWords(): string {
  */
 export function engineLineWords(a: {
   kind?: "repo" | "bundled" | null;
+  ownSkipped?: string | null; // why the repo's own copy was passed over (host's words)
   version?: string | null;
   packs?: readonly { name: string; files?: number | null }[] | null;
 }): string | null {
   const bits: string[] = [];
   if (a.kind === "repo") bits.push("read by this repo's own copy of the engine");
-  else if (a.kind === "bundled") bits.push("read by this desktop's engine, pointed at the worktree");
+  else if (a.kind === "bundled") bits.push(a.ownSkipped ? `read by this desktop's engine, because ${a.ownSkipped}` : "read by this desktop's engine, pointed at the worktree");
   if (a.version) bits.push(`version ${a.version}`);
   // **Nothing recognised, said in words** — the one reachable form of that
   // state, and it used to print `packs common 0` while the tiles beside it

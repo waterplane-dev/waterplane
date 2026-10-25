@@ -13,8 +13,14 @@ import { BRAND } from "@waterplane/shared";
 
 const scratch = mkdtempSync(join(tmpdir(), "wp-roll-root-"));
 process.env[`${BRAND.envPrefix}ROOT`] ??= scratch;
+// Assigned, never `??=`: STATE_DIR does not follow ROOT, and without this the
+// restore below ran against the desktop's real state dir on every test run —
+// moving every live store into `.before-rollback-*` and leaving the fixture's
+// `{"schema":2}` as the person's intents.
+process.env[`${BRAND.envPrefix}STATE_DIR`] = join(scratch, "state");
 const { rollback, runPendingRestore, hasPendingRestore } = await import("../dist/cli/selfupdate.js");
 const { STATE_DIR } = await import("../dist/env.js");
+assert.ok(STATE_DIR.startsWith(scratch), `refusing to run against a real state dir: ${STATE_DIR}`);
 const { snapshotState } = await import("../dist/cli/statesnap.js");
 const { dispatch } = await import("../dist/routes/index.js");
 const { createWsOps } = await import("../dist/server/wsops.js");

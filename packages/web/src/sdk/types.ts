@@ -285,8 +285,10 @@ export interface CoreApi {
      *  those rows under `label` (a count is a filter). */
     openBacklogCut(cwd: string, ids?: string[], label?: string): void;
     /** A tapped alert from this plugin: opens its first launcher item (the vault's home shows live
-     *  asks). Unknown id = nothing. */
-    openPlugin(pluginId: string): void;
+     *  asks). Unknown id = nothing, and false — so a caller can land the tap somewhere else. */
+    openPlugin(pluginId: string): boolean;
+    /** One repo's health chart (the readings sheet's `repohealth` door). */
+    openRepoHealth(repo: RepoTarget): void;
     /** Schedules, cut to exactly these rules under `label`. */
     openScheduleCut(ids: string[], label: string): void;
     /** A backlog row was fired by hand: jump to the session it lands in once

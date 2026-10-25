@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { readJsonGuarded, readJsonGuardedDetail, writeJsonAtomic } from "./jsonstore.js";
 import webpush, { type PushSubscription } from "web-push";
 import { env } from "./env.js";
-import { BRAND } from "@waterplane/shared";
+import { BRAND, type NotifyOpen } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
 
 export interface PushPayload {
@@ -33,6 +33,15 @@ export interface PushPayload {
   pull?: string;
   /** Id of the plugin that posted this; a tap opens that plugin's screen. */
   plugin?: string;
+  /** The feed item's own id, kind and stamp, so the service worker can hand a
+   *  tapped alert back to the page whole (`openNotif`). */
+  id?: string;
+  kind?: string;
+  ts?: number;
+  /** A backlog cut to open (`NotificationItem.backlog`). */
+  backlog?: { cwd: string; ids: string[] };
+  /** The screen a tap opens (`NotificationItem.open`). */
+  open?: NotifyOpen;
 }
 
 export class PushManager {

@@ -98,7 +98,10 @@
  *     is also what keeps waterplane self-hosting and every test written against that
  *     shape green. (The flag was designed as ONE argv token precisely so an
  *     old parser ignores it rather than reading it as a subcommand, so the
- *     omission is not a compatibility crutch — it is who decides.)
+ *     omission is not a compatibility crutch — it is who decides.) **Unless it
+ *     cannot load**: a bare package it imports is not installed or not built
+ *     (a fresh clone) ⇒ the bundled engine reads instead, with `ownSkipped`
+ *     saying why; the copy wins again the moment the clone is installed.
  *  2. **The bundled engine** — `WATERPLANE_REPOHEALTH_ENGINE` when set, else this
  *     checkout's own `tools/repohealth.mjs`, three hops up from this module
  *     (the rule `main.ts` uses for `.env` and `webbundle.ts` for the web
@@ -706,7 +709,7 @@ export async function readRepoHealth(
     // the one where nothing ran: a phone saying how long a backfill may take
     // must not hold its own copy of a number this desktop can change.
     stepTimeoutMs: REPOHEALTH_TIMEOUT_MS,
-    engine: engine ? { kind: engine.kind, bundled: bundledEngine() } : null,
+    engine: engine ? { kind: engine.kind, bundled: bundledEngine(), ...(engine.ownSkipped ? { ownSkipped: engine.ownSkipped } : {}) } : null,
     // WHICH reading this is, and which others exist. Both ride on every answer
     // including the one where nothing ran: a client that cannot see the list
     // cannot offer the subtrees, and one that cannot see which it is holding

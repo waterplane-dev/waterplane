@@ -3,6 +3,21 @@
 Notable changes. This project has no release branches — `main` is the supported
 version — so entries are grouped by the release they shipped in.
 
+## 0.1.7
+
+### New
+
+- **This week's burn.** Settings → Sessions → *This week's burn* lets you pick repos to spend leftover weekly budget on before the reset: a stop line, a start time, and one backlog row per picked repo. Picking is the approval — nothing starts on its own, and *Same as last week* is one tap. A once-a-week nudge says when you are on pace to leave budget unused.
+- **Every notification tap lands somewhere.** An alert with no session or file behind it used to open the bare launcher; now it opens the screen it is about (a health move opens that repo's health chart, a burn alert opens token stats), or its own row in the feed. Needs this release's APK.
+
+### Fixes
+
+- **Sends no longer stick at "the desktop hasn't answered yet".** After the phone's keyboard had opened and closed a few times, the desktop could misread an empty input box as holding text (`──⏵⏵ auto mode on …`) and refuse every send to that session, retrying forever. It now reads the screen at the pane's real size. Affected every release since 0.1.0.
+- A prompt claude is holding in its own queue is no longer reported as lost.
+- The composer's backlog button counts waiting and failed rows as two numbers, and a tap opens exactly those rows.
+- The fan-out prompt has a clear button (two taps, with *put it back* until you type).
+- The LAN address chips skip VM bridges and tunnels.
+
 ## 0.1.6
 
 ### New

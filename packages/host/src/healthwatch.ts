@@ -29,7 +29,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, statSync } from "nod
 import { join } from "node:path";
 import {
   BRAND, LEGACY, healthIndexResponseOf, logTag, repoHealthIndexOf,
-  type HealthIndexResponse, type RepoHealthIndex,
+  type HealthIndexResponse, type NotifyOpen, type RepoHealthIndex,
 } from "@waterplane/shared";
 import { hostStateDir } from "./branddirs.js";
 import { contextLimitsFor } from "./compliance.js";
@@ -57,7 +57,7 @@ export interface HealthWatchDeps {
   refresh(wt: string): Promise<boolean>;
   /** The context-weight warn line for this repo, or null. */
   warnChars(wt: string): number | null;
-  notify(kind: "health", p: { title: string; body: string; tag: string }): void;
+  notify(kind: "health", p: { title: string; body: string; tag: string; open: NotifyOpen }): void;
   now?(): number;
   /** The series file's text, or null when there is none. Default: the real file. */
   readSeries?(wt: string): string | null;
@@ -217,11 +217,13 @@ export class HealthWatch {
     const move = this.maybeNotifyMove(wt, repoName, r);
     const severe = this.maybeNotifySevere(wt, r);
     const tag = `health:${repoId}`;
+    // A tap lands on this repo's health chart, never on the bare launcher.
+    const open: NotifyOpen = { to: "repohealth", repoId };
     if (severe) {
       const body = [...severe.texts, ...(move ? [move.body] : [])].join("\n");
-      this.deps.notify("health", { title: severe.title(repoName), body, tag });
+      this.deps.notify("health", { title: severe.title(repoName), body, tag, open });
     } else if (move) {
-      this.deps.notify("health", { title: move.title, body: move.body, tag });
+      this.deps.notify("health", { title: move.title, body: move.body, tag, open });
     }
   }
 

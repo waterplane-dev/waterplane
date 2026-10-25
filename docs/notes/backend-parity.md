@@ -5,64 +5,64 @@ extensions) — do not edit; `tools/backendparity.test.mjs` fails when this file
 plugins are not in this file (they differ per machine): `node tools/backendparity.mjs --plugins`.
 A cell reads `n/a` when the descriptor does not declare the fact (yet).
 
-| fact | `claude` | `claude-local` | `claude-endpoint` | `shell` | `opencode` |
-|---|---|---|---|---|---|
-| **Declares** ||||||
-| label | Claude Code | Claude Code (local model) | Claude Code (custom endpoint) | Shell | opencode |
-| experimental | n/a | n/a | n/a | n/a | yes |
-| plugin | n/a | n/a | n/a | n/a | n/a |
-| healthScope | yes | no | no | no | no |
-| localRunner | n/a | ollama | n/a | n/a | n/a |
-| **Caps** ||||||
-| turns | yes | yes | yes | no | yes |
-| slash | claude | claude | claude | none | none |
-| effort | low, medium, high, xhigh, max | low, medium, high, xhigh, max | low, medium, high, xhigh, max | n/a | n/a |
-| permissionModes | default, plan, acceptEdits, auto, dontAsk, bypassPermissions | default, plan, acceptEdits, auto, dontAsk, bypassPermissions | default, plan, acceptEdits, auto, dontAsk, bypassPermissions | none | none |
-| launchModes | n/a | n/a | n/a | n/a | n/a |
-| remoteControl | yes | no | no | no | no |
-| forkVia | n/a | n/a | n/a | n/a | server |
-| measured.versions | n/a | n/a | n/a | n/a | 1.14.44 |
-| **Facts (providers, first that answers wins)** ||||||
-| turns | source → screen:silence | source → screen:silence | source → screen:silence | n/a | source → screen:silence |
-| dialogs | screen:claude-numbered | screen:claude-numbered | screen:claude-numbered | n/a | source → screen:opencode-highlight |
-| questions | screen:question-ts | screen:question-ts | screen:question-ts | n/a | source |
-| plan | screen:planbox | screen:planbox | screen:planbox | n/a | n/a |
-| delivery | n/a | n/a | n/a | n/a | source |
-| transcript | store:claude-jsonl | store:claude-jsonl | store:claude-jsonl | n/a | store:opencode-db |
-| context | screen:context-meter → store:claude-jsonl | store:claude-jsonl | store:claude-jsonl | n/a | source → store:opencode-db |
-| tokens | n/a | n/a | n/a | n/a | store:opencode-db |
-| usage | screen:usage-probe | none | none | n/a | n/a |
-| agents | store:claude-agents | store:claude-agents | store:claude-agents | n/a | source |
-| conversations | store:claude-jsonl | store:claude-jsonl | store:claude-jsonl | n/a | source |
-| asking | screen:question-ts | screen:question-ts | screen:question-ts | n/a | n/a |
-| limits | screen:limit-ts | none | none | n/a | n/a |
-| mode | n/a | n/a | n/a | n/a | n/a |
-| commands | n/a | n/a | n/a | n/a | source |
-| **Delivery** ||||||
-| submitKey | "\r" | "\r" | "\r" | "\r" | "\r" |
-| requiresChannel | n/a | n/a | n/a | n/a | yes |
-| textThenSubmitDelayMs | 150 | 150 | 150 | 150 | 400 |
-| pastePlaceholder | yes | yes | yes | no | yes |
-| composerCursorRe | yes | yes | yes | no | no |
-| composerRuleRe | yes | yes | yes | no | yes |
-| composerPlaceholderRe | no | no | no | no | yes |
-| trustPromptRe | yes | yes | yes | no | no |
-| **Sources (provider kinds)** ||||||
-| any source | yes | yes | yes | no | yes |
-| inBand | yes | yes | yes | n/a | n/a |
-| turns | yes | yes | yes | no | yes |
-| dialogs | no | no | no | no | yes |
-| delivery | no | no | no | no | yes |
-| transcript | no | no | no | no | no |
-| context | no | no | no | no | yes |
-| tokens | no | no | no | no | yes |
-| sweep | no | no | no | no | yes |
-| mode | no | no | no | no | no |
-| commands | no | no | no | no | yes |
-| tokens.session | no | no | no | no | yes |
-| context.compactions | no | no | no | no | yes |
-| conversations.fork | no | no | no | no | no |
-| **Wire caps (2.2, absent unless a source answers; `fork` always sent)** ||||||
-| modes | absent | absent | absent | absent | absent |
-| commands | absent | absent | absent | absent | yes |
-| fork | yes | yes | yes | no | yes |
+| fact | `claude` | `claude-local` | `claude-endpoint` | `shell` |
+|---|---|---|---|---|
+| **Declares** |||||
+| label | Claude Code | Claude Code (local model) | Claude Code (custom endpoint) | Shell |
+| experimental | n/a | n/a | n/a | n/a |
+| plugin | n/a | n/a | n/a | n/a |
+| healthScope | yes | no | no | no |
+| localRunner | n/a | ollama | n/a | n/a |
+| **Caps** |||||
+| turns | yes | yes | yes | no |
+| slash | claude | claude | claude | none |
+| effort | low, medium, high, xhigh, max | low, medium, high, xhigh, max | low, medium, high, xhigh, max | n/a |
+| permissionModes | default, plan, acceptEdits, auto, dontAsk, bypassPermissions | default, plan, acceptEdits, auto, dontAsk, bypassPermissions | default, plan, acceptEdits, auto, dontAsk, bypassPermissions | none |
+| launchModes | n/a | n/a | n/a | n/a |
+| remoteControl | yes | no | no | no |
+| forkVia | n/a | n/a | n/a | n/a |
+| measured.versions | n/a | n/a | n/a | n/a |
+| **Facts (providers, first that answers wins)** |||||
+| turns | source → screen:silence | source → screen:silence | source → screen:silence | n/a |
+| dialogs | screen:claude-numbered | screen:claude-numbered | screen:claude-numbered | n/a |
+| questions | screen:question-ts | screen:question-ts | screen:question-ts | n/a |
+| plan | screen:planbox | screen:planbox | screen:planbox | n/a |
+| delivery | n/a | n/a | n/a | n/a |
+| transcript | store:claude-jsonl | store:claude-jsonl | store:claude-jsonl | n/a |
+| context | screen:context-meter → store:claude-jsonl | store:claude-jsonl | store:claude-jsonl | n/a |
+| tokens | n/a | n/a | n/a | n/a |
+| usage | screen:usage-probe | none | none | n/a |
+| agents | store:claude-agents | store:claude-agents | store:claude-agents | n/a |
+| conversations | store:claude-jsonl | store:claude-jsonl | store:claude-jsonl | n/a |
+| asking | screen:question-ts | screen:question-ts | screen:question-ts | n/a |
+| limits | screen:limit-ts | none | none | n/a |
+| mode | n/a | n/a | n/a | n/a |
+| commands | n/a | n/a | n/a | n/a |
+| **Delivery** |||||
+| submitKey | "\r" | "\r" | "\r" | "\r" |
+| requiresChannel | n/a | n/a | n/a | n/a |
+| textThenSubmitDelayMs | 150 | 150 | 150 | 150 |
+| pastePlaceholder | yes | yes | yes | no |
+| composerCursorRe | yes | yes | yes | no |
+| composerRuleRe | yes | yes | yes | no |
+| composerPlaceholderRe | no | no | no | no |
+| trustPromptRe | yes | yes | yes | no |
+| **Sources (provider kinds)** |||||
+| any source | yes | yes | yes | no |
+| inBand | yes | yes | yes | n/a |
+| turns | yes | yes | yes | no |
+| dialogs | no | no | no | no |
+| delivery | no | no | no | no |
+| transcript | no | no | no | no |
+| context | no | no | no | no |
+| tokens | no | no | no | no |
+| sweep | no | no | no | no |
+| mode | no | no | no | no |
+| commands | no | no | no | no |
+| tokens.session | no | no | no | no |
+| context.compactions | no | no | no | no |
+| conversations.fork | no | no | no | no |
+| **Wire caps (2.2, absent unless a source answers; `fork` always sent)** |||||
+| modes | absent | absent | absent | absent |
+| commands | absent | absent | absent | absent |
+| fork | yes | yes | yes | no |

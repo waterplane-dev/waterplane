@@ -104,14 +104,24 @@ export function hostName(): string {
   return hostname().replace(/\.local$/i, "") || "desktop";
 }
 
-export function lanIps(): string[] {
+/** Interfaces a phone on the same Wi-Fi can never reach: VM and container
+ *  bridges (OrbStack/UTM `bridge*` + `vmenet*`, Docker, libvirt, VirtualBox,
+ *  VMware) and tunnels. Offering their addresses as a LAN link is a dead chip. */
+const VIRTUAL_IFACE = /^(bridge|vmenet|vmnet|vboxnet|docker|br-|veth|virbr|utun|tun|tap|wg|zt|cni|flannel|lxc|lxd)/i;
+
+export function lanIpsFrom(ifaces: ReturnType<typeof networkInterfaces>): string[] {
   const out: string[] = [];
-  for (const addrs of Object.values(networkInterfaces())) {
+  for (const [name, addrs] of Object.entries(ifaces)) {
+    if (VIRTUAL_IFACE.test(name)) continue;
     for (const a of addrs ?? []) {
       if (a.family === "IPv4" && !a.internal && !a.address.startsWith("100.")) out.push(a.address);
     }
   }
   return out;
+}
+
+export function lanIps(): string[] {
+  return lanIpsFrom(networkInterfaces());
 }
 
 export async function tailscaleIp(): Promise<string | null> {

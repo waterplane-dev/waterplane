@@ -350,7 +350,7 @@ export function busySendRoute(o: {
 export const BUSY_SEND_ASK = {
   title: "This session is still working",
   lines: [
-    "Send now: the words go into the running turn straight away.",
+    "Send now: claude queues the words and takes them at its next pause — after the command it is running, which can be minutes.",
     "When it's free: the desktop holds them and sends them once this turn ends.",
     "Tap outside to keep the words in the box.",
   ],

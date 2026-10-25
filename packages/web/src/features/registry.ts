@@ -26,6 +26,7 @@ import { manifest as notifications } from "./notifications";
 import { manifest as build } from "./build";
 import { manifest as capture } from "./capture";
 import { manifest as limits } from "./limits";
+import { manifest as weekburn } from "./weekburn";
 import { manifest as questions } from "./questions";
 import { manifest as search } from "./search";
 import { manifest as history } from "./history";
@@ -74,6 +75,7 @@ export const FEATURES: readonly FeatureManifest[] = [
   build,
   capture,
   limits,
+  weekburn,
   questions,
   search,
   history,

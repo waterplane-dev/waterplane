@@ -373,3 +373,7 @@ export * from "./themeoverlay.js";
 
 /** The code folder: `GET/POST /api/host/root` and whether the first-start dialog asks. */
 export * from "./rootchoice.js";
+
+/** The week-end burn: when to start spending the rest of a week, when to stop,
+ *  the once-a-week nudge, and the words — one reading for host and phone. */
+export * from "./weekburn.js";

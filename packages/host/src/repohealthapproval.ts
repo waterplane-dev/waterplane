@@ -487,6 +487,9 @@ export interface RepoHealthEngine {
   /** `repo` = the worktree's own copy, which decides its own root; `bundled` =
    *  this desktop's, pointed at the worktree with `--root=`. */
   kind: "repo" | "bundled";
+  /** With `kind: "bundled"`: the worktree HAS its own copy, and it was passed
+   *  over because it cannot load — the sentence says which package is missing. */
+  ownSkipped?: string;
 }
 
 /**
@@ -524,7 +527,78 @@ export function bundledEngine(): string | null {
  */
 export function resolveRepoHealthEngine(wt: string): RepoHealthEngine | null {
   const own = join(wt, REPOHEALTH_TOOL);
-  if (existsSync(own)) return { path: own, kind: "repo" };
   const bundled = bundledEngine();
+  if (existsSync(own)) {
+    // A copy whose imports are not installed dies on its first line with
+    // ERR_MODULE_NOT_FOUND, every time: a fresh clone of a repo that builds its
+    // own workspace packages. The desktop's engine reads that tree fine, so it
+    // stands in — and SAYS so, since the repo's copy still outranks it the
+    // moment the clone is installed.
+    const missing = bundled ? ownEngineMissing(wt, own) : null;
+    if (!missing) return { path: own, kind: "repo" };
+    return { path: bundled!, kind: "bundled", ownSkipped: `this repo's own ${REPOHEALTH_TOOL} cannot load ${missing} — it is not installed or not built in this checkout` };
+  }
   return bundled ? { path: bundled, kind: "bundled" } : null;
+}
+
+/** The bare packages an engine imports, per entry, keyed on the entry's mtime:
+ *  resolution runs once per repo in every listing, and the scan reads the
+ *  engine's whole import graph. Whether each one is INSTALLED is re-checked on
+ *  every call — a few `existsSync`s — so an `npm ci` takes effect at once. */
+const bareMemo = new Map<string, { mtime: number; bare: string[] }>();
+
+function enginePackages(wt: string, entry: string): string[] {
+  let mtime: number;
+  try { mtime = statSync(entry).mtimeMs; } catch { return []; }
+  const hit = bareMemo.get(entry);
+  if (hit && hit.mtime === mtime) return hit.bare;
+  let wtReal: string;
+  try { wtReal = realpathSync.native(wt); } catch { wtReal = resolve(wt); }
+  const bare = [...scanModules(entry, wtReal, createHash("sha256")).bare].sort();
+  bareMemo.set(entry, { mtime, bare });
+  return bare;
+}
+
+/** The file a package's root import loads, relative to its directory — or null when it does not say plainly. */
+function packageEntry(pkgJson: { exports?: unknown; main?: unknown }): string | null {
+  let e: unknown = pkgJson.exports;
+  if (e && typeof e === "object" && !Array.isArray(e) && "." in e) e = (e as Record<string, unknown>)["."];
+  for (let i = 0; i < 3 && e && typeof e === "object" && !Array.isArray(e); i++) {
+    const c = e as Record<string, unknown>;
+    e = c.import ?? c.node ?? c.default;
+  }
+  if (typeof e === "string") return e;
+  if (pkgJson.exports !== undefined) return null;
+  return typeof pkgJson.main === "string" ? pkgJson.main : "index.js";
+}
+
+/**
+ * The first package the repo's own engine imports that Node would not find —
+ * no `node_modules/<name>` on the way up from the engine, or one whose root
+ * entry file is not there (a workspace package linked but never built) — or
+ * null when every one resolves. A package that IS a `package.json` on the way
+ * up (self-reference) counts as found. Only a definite miss returns a name:
+ * an entry this cannot read plainly is taken as present, and the copy runs.
+ */
+function ownEngineMissing(wt: string, entry: string): string | null {
+  for (const pkg of enginePackages(wt, entry)) {
+    let found = false;
+    for (let d = dirname(entry); ; d = dirname(d)) {
+      try {
+        const self = JSON.parse(readFileSync(join(d, "package.json"), "utf8")) as { name?: unknown };
+        if (self?.name === pkg) { found = true; break; }
+      } catch { /* no package.json here */ }
+      const dir = join(d, "node_modules", pkg);
+      let meta: { exports?: unknown; main?: unknown } | null = null;
+      try { meta = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")); } catch { /* not here */ }
+      if (meta) {
+        const rel = packageEntry(meta);
+        found = rel === null || existsSync(join(dir, rel));
+        break;
+      }
+      if (dirname(d) === d) break;
+    }
+    if (!found) return pkg;
+  }
+  return null;
 }

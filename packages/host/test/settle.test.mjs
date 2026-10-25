@@ -18,6 +18,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { forgetSpentTurns, logMatch, logVerdict, settleDelivery } from "../dist/settle.js";
 import { setLiveSourceLookup } from "../dist/livesources.js";
+import { cliHeldTable, parseTranscript, cliHeldOf } from "../dist/transcript.js";
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 /** Two prompts sharing a fourteen-character head — i.e. what a re-send looks
  *  like to the old probe, and what two neighbouring instructions look like too. */
@@ -33,14 +37,17 @@ const B = "please rewrite the docs index so it links the new notes";
  * the one that is not sets it, and asserts that the transcript is then never
  * even asked for.
  */
-function fakeSessions({ turns, screen = "", running = true, claudeLog = true, onTranscript = () => {} }) {
+function fakeSessions({ turns, held = [], screen = "", running = true, claudeLog = true, onTranscript = () => {} }) {
   return {
     get: () => ({ running }),
     keepsClaudeLog: () => claudeLog,
     screenText: async () => screen,
     getTranscript: () => {
       onTranscript();
-      return turns == null ? null : { source: "jsonl", turns };
+      if (turns == null) return null;
+      const doc = { source: "jsonl", turns };
+      if (held.length) cliHeldTable.set(doc, held);
+      return doc;
     },
   };
 }
@@ -301,4 +308,62 @@ test("a claude session never asks the source, even when one is installed", async
   const r = await settleDelivery(claude, "s-claude", A, Date.now());
   assert.equal(calls.length, 0, "claude's log is the evidence there, as it always was");
   assert.notEqual(r.verdict, "landed");
+});
+
+// ── The CLI's own queue (2.1.310) ────────────────────────────────────────────
+//
+// A prompt submitted into a busy session leaves the composer at once and is in
+// the log only as a `queue-operation` enqueue until the CLI takes it — measured:
+// 2 min 49 s for one prompt. Log without a turn + an empty composer used to read
+// `absent`, the verdict that types it a second time.
+
+test("a prompt the CLI holds in its own queue is never `absent`", async (t) => {
+  forgetSpentTurns();
+  t.after(forgetSpentTurns);
+  const now = Date.now();
+  const sessions = fakeSessions({ turns: [turn("u1", "an unrelated earlier prompt", now - 60_000)], held: [{ at: now + 500, text: A }] });
+  const r = await settleDelivery(sessions, "s1", A, now);
+  assert.equal(r.verdict, "unknown");
+  assert.equal(r.held, true, "the caller is told WHY it cannot say, so it keeps asking instead of giving up");
+  assert.equal(logVerdict(sessions, "s1", A, now), "unknown", "the intents' re-fire check reads the same rule");
+  // Somebody else's held words are not ours.
+  assert.equal(logVerdict(sessions, "s1", B, now), "absent");
+});
+
+test("an enqueue older than the delivery is somebody else's", async (t) => {
+  forgetSpentTurns();
+  t.after(forgetSpentTurns);
+  const now = Date.now();
+  const sessions = fakeSessions({ turns: [], held: [{ at: now - 10 * 60_000, text: A }] });
+  assert.equal(logVerdict(sessions, "s1", A, now), "absent");
+});
+
+test("our own spliced rows in the jsonl document are not the log", async (t) => {
+  forgetSpentTurns();
+  t.after(forgetSpentTurns);
+  // `getTranscript` merges what WE typed and the log has not caught up with
+  // (`queued: true`) — recorded the moment the echo is seen, Return or not.
+  const now = Date.now();
+  const sessions = fakeSessions({ turns: [{ ...turn("queued:h1", A, now + 100), queued: true }] });
+  assert.equal(logVerdict(sessions, "s1", A, now), "absent", "our history is not the CLI saying it ran");
+});
+
+test("parseTranscript reads the queue rows: enqueue held, a reasonless remove handed back", () => {
+  const dir = mkdtempSync(join(tmpdir(), "wp-held-"));
+  try {
+    const path = join(dir, "c.jsonl");
+    const op = (operation, content, ts, reason) => JSON.stringify({ type: "queue-operation", operation, timestamp: ts, sessionId: "x", content, ...(reason ? { reason } : {}) });
+    writeFileSync(path, [
+      op("enqueue", A, "2026-10-24T09:29:23.344Z"),
+      op("enqueue", B, "2026-10-24T09:29:30.000Z"),
+      op("remove", B, "2026-10-24T09:29:40.000Z"),
+      op("enqueue", "taken mid-turn", "2026-10-24T09:29:50.000Z"),
+      op("remove", "taken mid-turn", "2026-10-24T09:32:12.358Z", "absorbed_mid_turn"),
+      JSON.stringify({ type: "queue-operation", operation: "dequeue", timestamp: "2026-10-24T09:33:00.000Z", sessionId: "x" }),
+    ].join("\n") + "\n");
+    const doc = parseTranscript(path, dir, "lite");
+    assert.deepEqual(cliHeldOf(doc).map((h) => h.text), [A, "taken mid-turn"],
+      "B was handed back; an absorbed prompt was taken, so it stays held (never `absent`)");
+    assert.equal(cliHeldOf(doc)[0].at, Date.parse("2026-10-24T09:29:23.344Z"));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

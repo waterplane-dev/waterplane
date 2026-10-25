@@ -61,6 +61,7 @@
  */
 import xtermHeadless from "@xterm/headless";
 import { absorbScreen, newScreenLog, screenLogLines, SCREENLOG_MAX_LINES, type ScreenLogState } from "@waterplane/shared";
+import { cellRows, type RenderRow } from "./render.js";
 
 const { Terminal } = xtermHeadless;
 
@@ -143,6 +144,37 @@ export class SessionScreenLog {
       }
       return out.join("\n");
     } catch { return ""; }   // a read that throws costs one sample, never the session
+  }
+
+  /**
+   * The same grid WITH attributes (`render.ts`'s `RenderRow`), last `rows` rows.
+   *
+   * Why the readers that decide a delivery ask this rather than a replay of the
+   * byte ring: the ring carries no record of a resize. A phone's keyboard
+   * opening and closing reshapes the pane all session long — measured on one
+   * session: scroll regions `1;13r` through `1;45r` in a single ring — and a
+   * replay into ONE fixed 50-row VT applies every one of those repaints to the
+   * wrong grid. The live composer came back with its closing rule overdrawn by
+   * the mode row (`──⏵⏵ auto mode on …───`), read as text someone had typed,
+   * and every send to that session was refused as "the input box already holds
+   * text" while the real box was empty. This VT is resized in step
+   * (`drive.ts`'s `resize`), so its grid is the pane's.
+   */
+  gridCells(rows = 0): RenderRow[] {
+    if (this.disposed) return [];
+    try {
+      const top = this.term.buffer.active.viewportY;
+      const take = rows > 0 ? Math.min(rows, this.term.rows) : this.term.rows;
+      return cellRows(this.term, top + this.term.rows - take, top + this.term.rows);
+    } catch { return []; }
+  }
+
+  /** Is the program drawing in the ALTERNATE screen? Only there is the grid
+   *  the whole truth — a normal-buffer program (a shell) has scrollback this
+   *  VT does not keep, and its readers still need the replay. */
+  alternate(): boolean {
+    if (this.disposed) return false;
+    try { return this.term.buffer.active.type === "alternate"; } catch { return false; }
   }
 
   /** A SIGWINCH reshapes the grid, so the VT has to follow or every line wraps

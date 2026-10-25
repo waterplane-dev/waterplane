@@ -300,3 +300,27 @@ While a build tool entry runs in a repo, its header button shows a busy indicato
 Scheduled work items, including the midnight run, appear in the waterplane schedule.
 - asked: 2026-10-18
 
+
+### R-automation-064 · requested
+Each week the person picks the repos for the week-end burn, and that pick is the approval: it covers only the week it was made for, a new week starts with no picks, and "repeat each week" only asks again (push and one-tap "same as last week"), never runs last week's repos by itself.
+- asked: 2026-10-24
+
+### R-automation-065 · requested
+The week-end burn posts one small improvement package per picked repo at a time, the next only after the previous settles, up to a per-repo weekly cap. Each package makes one focused change, runs the repo's tests and commits only if they pass; the weekly budget cap is lifted for these rows only.
+- asked: 2026-10-24
+
+### R-automation-066 · requested
+The week-end burn stops posting once the week reaches its stop line (default 95%) or the weekly reset is under 20 minutes away; rows already running finish. A missing or stale weekly reading posts nothing, and a non-subscription account is told the feature does not apply.
+- asked: 2026-10-24
+
+### R-automation-067 · requested
+The week-end burn starts early enough, from the measured weekly points one 5-hour window can burn, to use the week's budget before the reset, never before now. With no measured full window it starts a day before the reset and says so in one sentence the phone and host both print.
+- asked: 2026-10-24
+
+### R-automation-068 · requested
+When the person has not picked repos and is on pace to leave a large part of the week unused, one push per week offers the week-end burn and opens its sheet; a repeating burn gets the same push to pick the week's repos.
+- asked: 2026-10-24
+
+### R-automation-069 · requested
+A weekly pass over the week-end burn rows, and only those, lifts the weekly and session budget caps for them until the weekly reset.
+- asked: 2026-10-24
