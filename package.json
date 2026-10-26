@@ -66,7 +66,7 @@
     "@resvg/resvg-js": "^2.6.2",
     "@tesseract.js-data/deu": "1.0.0",
     "@tesseract.js-data/eng": "1.0.0",
-    "concurrently": "^9.1.0",
+    "concurrently": "^10.0.6",
     "eslint": "^9.39.5",
     "eslint-plugin-react-hooks": "^5.2.0",
     "playwright": "^1.64.0",
