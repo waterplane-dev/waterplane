@@ -79,7 +79,7 @@
  * takes — a second copy of that edge is how a number and the view it opens
  * start disagreeing.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { BackendInfo, TokenConvo, TokenStatsDoc, UsageInfo, UsageReading } from "@waterplane/shared";
 import { ledgers, type LedgerViewDef } from "@waterplane/sdk";
 import { useRemoteResource } from "@waterplane/kit";
@@ -119,10 +119,12 @@ function GuestRead({ def, fresh, online, onRead }: {
   return null;
 }
 
-export function TokenStatsSheet({ online, ledgerTabs, usage, spend, onRefreshUsage, onClose, nameOf, onExplain, isLive, onOpenConvo, views = [], backends, readings, openedOn, onClearOn }: {
+export function TokenStatsSheet({ online, ledgerTabs, usage, spend, onRefreshUsage, onClose, nameOf, onExplain, isLive, onOpenConvo, views = [], backends, readings, openedOn, onClearOn, doors }: {
   /** Usage readings per source, and the one the launcher chip opened this sheet on (see `TokenStatsBody`). */
   readings?: readonly UsageReading[];
   openedOn?: string | null;
+  /** Doors drawn first in the body — see `TokenStatsBody`. */
+  doors?: ReactNode;
   onClearOn?: () => void;
   /** The socket's verdict, not `navigator.onLine` — see `useRemoteResource`. */
   online: boolean;
@@ -169,7 +171,7 @@ export function TokenStatsSheet({ online, ledgerTabs, usage, spend, onRefreshUsa
         onRefreshUsage={onRefreshUsage}
         onClose={onClose} onRescan={() => setFresh((n) => n + 1)}
         nameOf={nameOf} onExplain={onExplain} isLive={isLive} onOpenConvo={onOpenConvo} ledgerTabs={ledgerTabs} fresh={fresh}
-        readings={readings} openedOn={openedOn} onClearOn={onClearOn} />
+        readings={readings} openedOn={openedOn} onClearOn={onClearOn} doors={doors} />
     </div>
   );
 }

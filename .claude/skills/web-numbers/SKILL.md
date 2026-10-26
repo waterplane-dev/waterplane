@@ -14,7 +14,7 @@ Context, tokens, money and repo health as things a person reads: the context win
   its source (default / set on this host / set for this repo); **nothing is greyed out** — a refusal
   is a sentence, and the host refuses too (this validates for speed, never as the gate). The host
   answers with the RE-RUN report, so the row restates itself.
-- `ContextSheet.tsx` + `ContextGraph.tsx` + `contextPlot.ts` — the context window as a SHAPE, geometry
+- `ContextSheet.tsx` (+ `CarriedSection.tsx`, "What every turn carries", AFTER the skills section, measured on this log's first request, remainder a named row, absent on an older host with its sentence; two doors in `.ctx-doors`) + `ContextGraph.tsx` + `contextPlot.ts` — the context window as a SHAPE, geometry
   and sentences pure and node-tested (code: `contextPlot/cplot*.ts`; [charts-architecture.md](../../../docs/notes/charts-architecture.md)).
   **One y axis for every graph: 0 to 100% of the model's window**, never re-fitted to the data,
   falling back to tokens **while saying so**. Row spark: top = `autoCompactSetTok`. The TIME axis is

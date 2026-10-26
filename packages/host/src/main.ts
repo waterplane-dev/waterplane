@@ -34,7 +34,7 @@ import { NotifyPrefsStore } from "./notifyprefs.js";
 import { AttentionStore } from "./attentionstore.js";
 import { setGitOutcomeSink } from "./git.js"; import { reportGitOutcome } from "./gitnotify.js";
 import { UpdateChecker } from "./update.js"; import { createPluginUpdates, createUpdateApplier } from "./updates/wire.js";
-import { SetupWatcher } from "./setupwatch.js"; import { createHealthWatch } from "./healthwatch.js"; import { startDiskWatch } from "./diskwatch.js";
+import { SetupWatcher } from "./setupwatch.js"; import { createHealthWatch } from "./healthwatch.js"; import { createExposurePush } from "./exposurepush.js"; import { startDiskWatch } from "./diskwatch.js";
 import { NetStats } from "./netstats.js";
 import { DecisionLog } from "./decisionlog.js";
 import { PluginRegistry } from "./plugins/pluginregistry.js";
@@ -639,6 +639,7 @@ async function main(): Promise<void> {
   await Promise.all([backlog.init(), plugins.builtinsLoaded]); // extensions: rows in the first checklist
   updates.start(); if (!DOCTOR) ctx.pluginUpdates.start(); // a few minutes after boot, never in the preflight
   setupWatch.start(); if (!DOCTOR) void ctx.healthWatch.start(); // setup checklist swept; health index cached, engine re-run weekly
+  if (!DOCTOR) createExposurePush(ROOT, notify, (k, n) => ctx.resolveAttention(k, n)).start(); // one push per new exposure alert on a watched repo; boot sweep after 30 s, then every 10 min
   if (!DOCTOR) startDiskWatch({ notify, recovered: () => { ctx.resolveAttention("disk", "disk space back"); } }); // low disk: one push per level (macOS ends Tailscale to free space)
 
   const attachWs = (server: ReturnType<typeof createServer>) => {

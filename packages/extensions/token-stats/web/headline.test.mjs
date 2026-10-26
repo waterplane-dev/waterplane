@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { headline, headlineDaysWords, headlineSpan, headlineSpanWords } from "./headline.ts";
+import { firstRequestWords, headline, headlineDaysWords, headlineSpan, headlineSpanWords } from "./headline.ts";
 
 const C = (usd) => ({ input: usd / 4, output: usd / 4, cacheRead: usd / 4, cacheWrite: usd / 4, total: usd });
 const D = (day, n, usd) => ({ day, input: n, output: n, cacheRead: n * 10, cacheWrite: n, cacheWrite1h: 0, turns: 1, cost: C(usd) });
@@ -40,4 +40,10 @@ test("the line under the split is the days and the busiest one — the span and 
 
 test("no days at all is no headline (the screen's Empty speaks), not a zero", () => {
   assert.equal(headline([], NOW), null);
+});
+
+test("first request words appear only for a measured figure", () => {
+  assert.equal(firstRequestWords(undefined), null);
+  assert.equal(firstRequestWords(0), null);
+  assert.match(firstRequestWords(61000), /^first request 61.*tokens$/);
 });

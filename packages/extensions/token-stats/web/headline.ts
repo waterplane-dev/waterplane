@@ -119,3 +119,9 @@ export function headlineDaysWords(h: Headline): string {
   if (known < n) return `${known} of the last ${n} days on record, ${h.active} with work in them · ${busiest}`;
   return `${h.active} of ${n} days with work in them · ${busiest}`;
 }
+
+/** A costliest row's measured first request ("first request 61k tokens"), or null when the host
+ *  did not measure one (older host, or a log with no answered request) — never an estimate. */
+export function firstRequestWords(firstTok: number | undefined): string | null {
+  return typeof firstTok === "number" && firstTok > 0 ? `first request ${fmtCount(firstTok)} tokens` : null;
+}

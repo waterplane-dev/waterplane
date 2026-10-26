@@ -28,6 +28,7 @@ import { TokenStatsBody } from "../../extensions/token-stats/web/TokenStatsBody.
 import { ledgerAbsent, ledgerBackends } from "../../extensions/token-stats/web/backendLedger.ts";
 import { COPILOT_LEDGER, type CorpusDoc, type LiveState, type ToExtension } from "../src/protocol";
 import { Absent } from "./Absent";
+import { TabLinks } from "./TabLinks";
 
 export function OverviewView({ doc, why, scanning, live, post, askedLedger = null }: {
   doc: CorpusDoc | null;
@@ -73,7 +74,7 @@ export function OverviewView({ doc, why, scanning, live, post, askedLedger = nul
           localLedgers={[COPILOT_LEDGER.id]} openedOn={openOn}
           initialSpan={d ? { id: "week", back: 0 } : { id: "30", back: 0 }}
           onRescan={() => post({ t: "rescan" })}
-          lead={lead} />
+          lead={lead} doors={<TabLinks tabs={["session", "always-on"]} post={post} />} />
       </div>
     </>
   );

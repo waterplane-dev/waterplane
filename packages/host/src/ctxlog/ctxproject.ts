@@ -3,7 +3,7 @@ import { updateContextLog } from "./ctxupdate.js";
 import { agentEnvelope, agentSpendAt, liveAgentOf } from "./ctxagents.js";
 import type { ContextSpark, ContextWindowSource } from "@waterplane/shared";
 import { seriesCostFields, downsample } from "@waterplane/shared";
-import { projectCold, projectCompaction } from "./ctxcursor.js";
+import { projectCarried, projectCold, projectCompaction } from "./ctxcursor.js";
 import type { ContextLog, SeriesCursor } from "./ctxcursor.js";
 import type { AgentUsage } from "./ctxagents.js";
 
@@ -56,6 +56,7 @@ export function projectContextLog(cur: SeriesCursor): ContextLog {
     autoCompactTok: cur.autoCompactTok,
     model: cur.model,
     skills: cur.skills,
+    carried: projectCarried(cur.carried),
     truncated: cur.truncated,
     mtime: cur.mtime,
   };

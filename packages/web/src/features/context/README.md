@@ -15,14 +15,20 @@ the `web-numbers` skill. This folder is WHICH session it is about and its two do
 - `logic.ts` — `contextSubject` (the row's session, else the attached one, else null so the sheet
   falls through to the screen underneath) and `compactToast`.
 - `ContextEntrySheet.tsx` — the wiring. Sheet: `context`, persisted.
-- Track ids: `action:session.context`, `action:ctx.compact` (unchanged).
+- Two doors under the title (`ContextSheet`'s `.ctx-doors`): `openSetupFromContext(repoId)` → the
+  repo readings sheet's Setup region (`nav.openSetup(repoId, { region: "setup" })`), and
+  `openTokensFromContext()` → the all-sessions token screen (`nav.open("tokens")`). Neither closes
+  the context sheet; Back returns. A session whose repo the desktop does not list gets the Setup
+  door as a sentence (`setupCant`), never a greyed button. Beside them the sheet draws
+  `CarriedSection.tsx` (what the first request carried), off the same `GET /api/context` doc.
+- Track ids: `action:session.context`, `action:ctx.compact`, `action:ctx.setup`, `action:ctx.tokens`.
 
 **Reads from core**: `world.sessions/active/backends/sessionRepo/sessionRowTitle/sessionCan/
 sessionCant` (the `/compact` door is drawn only where the backend takes slash commands, and its
 absence is a sentence), `queue.submitInput` (the `/compact` goes through the send queue with an
 ackId, aimed at the SUBJECT, never the attached session), `compose.pushHistory`, `nav.open/close/
-openRepo`, `conn.status`, `say.toast/track`.
+openRepo/openSetup`, `conn.status`, `say.toast/track`.
 
-**Exports for App**: `openContextFor(s)` (launcher row cost tile), `openContext()` (header chip).
+**Exports for App**: `openContextById(id)` (nav.openContext; an unknown id says which session it showed), `openContextFor(s)` (launcher row cost tile), `openContext()` (header chip).
 
 **Tests**: `logic.test.mjs`.

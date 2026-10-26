@@ -8,7 +8,9 @@ import type { RepoTarget } from "@waterplane/shared";
 import { SetupSheet } from "../../SetupSheet";
 import { useCore, useStore } from "../../sdk";
 import { setupAim, setupRepo } from "./store";
-import { closeRepoHealth, closeSetup, openCaptureFromReadings, openRepoFile, remedy, seedSend } from "./actions";
+import {
+  closeRepoHealth, closeSetup, openAllSessions, openCaptureFromReadings, openInstructionFile, openRepoFile, remedy, seedSend, sessionDoorsFor,
+} from "./actions";
 
 /** The checklist door (and the settings door, with no repo). */
 export function RepoReadingsSheet() {
@@ -25,6 +27,10 @@ export function RepoReadingsSheet() {
     onOpenFile={openRepoFile}
     onSeed={seedSend}
     onCapture={openCaptureFromReadings}
+    // The context-weight row's doors: what a live session of this repo carried, and every session.
+    sessionDoorsFor={sessionDoorsFor}
+    onAllSessions={openAllSessions}
+    onOpenInstructionFile={openInstructionFile}
     onClose={closeSetup} />;
 }
 
@@ -46,6 +52,9 @@ export function RepoHealthAliasSheet({ repo }: { repo: RepoTarget }) {
     onOpenFile={openRepoFile}
     onSeed={seedSend}
     onCapture={openCaptureFromReadings}
+    sessionDoorsFor={sessionDoorsFor}
+    onAllSessions={openAllSessions}
+    onOpenInstructionFile={openInstructionFile}
     onClose={closeRepoHealth}
   />;
 }

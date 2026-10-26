@@ -19,10 +19,12 @@ const ROOT = mkdtempSync(join(tmpdir(), `${SLUG}-setup-`));
 // Isolated config dir so the host doesn't load the real ~/.config/<app>/.env, and
 // drop GEMINI_API_KEY so a key on this desktop cannot change what is checked.
 const CONFIG = mkdtempSync(join(tmpdir(), `${SLUG}-cfg-`));
+// An empty claude home, so the always-on list's desktop half reads nothing of this desktop's.
+const CLAUDE_HOME = mkdtempSync(join(tmpdir(), `${SLUG}-claudehome-`));
 const env = {
   ...process.env,
   [E.PREFLIGHT]: "0", 
-  [E.PORT]: String(PORT), [E.HOST]: "127.0.0.1", ...rootEnv(ROOT), [E.CONFIG_DIR]: CONFIG,
+  [E.PORT]: String(PORT), [E.HOST]: "127.0.0.1", ...rootEnv(ROOT), [E.CONFIG_DIR]: CONFIG, [E.CLAUDE_HOME]: CLAUDE_HOME,
   // The context-weight thresholds are env-overridable, and `process.env` is
   // inherited — a desktop that had tuned them would otherwise silently move this
   // script's goalposts. Stating them pins the override wiring as well.
@@ -31,6 +33,7 @@ const env = {
 delete env.GEMINI_API_KEY;
 // The auto-compact row reads this ahead of every settings file.
 delete env.CLAUDE_CODE_AUTO_COMPACT_WINDOW;
+delete env.CLAUDE_CONFIG_DIR;
 const host = spawn("node", ["packages/host/dist/main.js"], { env, stdio: ["ignore", "pipe", "pipe"] });
 host.stderr.on("data", (d) => process.stderr.write("[host] " + d));
 const base = `http://127.0.0.1:${PORT}`;
@@ -138,6 +141,22 @@ bootWait(PORT, 900, async () => {
     const cw1 = find(r1, "context-weight");
     check(cw1 && cw1.status === "pass", "a small CLAUDE.md weighs in as a pass");
     check(cw1 && cw1.fix === null, "a passing context-weight row still offers no fix");
+
+    // ── The always-on list: a subagent and two MCP servers are LISTED, not weighed (D1) ─
+    mkdirSync(join(repo.path, ".claude", "agents"), { recursive: true });
+    writeFileSync(join(repo.path, ".claude", "agents", "a.md"), "---\nname: a\ndescription: An agent that does a.\n---\n\nBody.\n");
+    writeFileSync(join(repo.path, ".mcp.json"), JSON.stringify({ mcpServers: { one: {}, two: {} } }));
+    const rA = await j(`/api/repos/${id}/compliance`);
+    const inv = rA.instructions;
+    check(!!inv && Array.isArray(inv.files), "the report carries the always-on list");
+    check(inv?.files.some((f) => f.kind === "subagent" && f.path === ".claude/agents/a.md"), "the subagent is a row");
+    check(inv?.files.filter((f) => f.unsized && /^MCP server /.test(f.kind)).length === 2, "each .mcp.json server is an unsized row");
+    check(find(rA, "context-weight")?.alwaysOnChars === cw1?.alwaysOnChars,
+      `the threshold reading is unchanged by them (D1): ${cw1?.alwaysOnChars} → ${find(rA, "context-weight")?.alwaysOnChars}`);
+    check(Array.isArray(inv?.desktop) && inv.desktop.length === 1 && inv.desktop[0].kind === "managed plugin skills" && !!inv.desktop[0].unsized,
+      `an empty claude home lists only the unsized managed-packs row (got ${JSON.stringify(inv?.desktop)})`);
+    rmSync(join(repo.path, ".claude", "agents"), { recursive: true, force: true });
+    rmSync(join(repo.path, ".mcp.json"), { force: true });
 
     // ── claude-md fix now GRAFTS the outbox section onto the real file ───
     const fxc = await post(`/api/repos/${id}/compliance/fix`, { fixes: ["claude-md"] });

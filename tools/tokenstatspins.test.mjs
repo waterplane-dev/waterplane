@@ -155,10 +155,10 @@ test("P4: each resource key is written once across the viewer", () => {
 });
 
 // ── P5: the wrapper and the door ─────────────────────────────────────────────
-test("P5: the explain action is tracked once, the sheet closes itself twice, App still reads the usage store", () => {
+test("P5: the explain action is tracked once, the sheet closes itself four times (onClose, explain, two always-on doors), App still reads the usage store", () => {
   const sum = (c) => Object.values(c).reduce((a, b) => a + b, 0);
   assert.equal(sum(counts('"action:tokens.explainCost"')), 1);
-  assert.equal(sum(counts('nav.close("tokens")')), 2);
+  assert.equal(sum(counts('nav.close("tokens")')), 4);
   assert.match(FILES.find((f) => f.rel === "web/src/App.tsx").text, /\buseUsage\(\)/);
   const routing = readFileSync(join(SRC, "routing.ts"), "utf8");
   const persisted = /export const PERSISTED_OVERLAYS[^[]*\[([^\]]*)\]/.exec(routing)?.[1] ?? "";

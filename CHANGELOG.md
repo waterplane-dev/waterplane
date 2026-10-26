@@ -3,6 +3,30 @@
 Notable changes. This project has no release branches — `main` is the supported
 version — so entries are grouped by the release they shipped in.
 
+## 0.1.9
+
+### Breaking
+
+- **Node 22.12 or newer.** Node 20 reached end of life on 2026-04-30; the host, the doctor and `engines` now refuse anything older than 22.12. The release installer already pins a current Node.
+
+### New
+
+- **What's new.** One place that opens every new thing, with its state.
+- **What every turn carries.** The context sheet, Repo readings and token stats show the always-on part of each request — CLAUDE.md, skills, subagents, MCP servers and this desktop's files — measured on a session's first request, with doors between the three views. The VS Code extension shows the same list.
+- **Exposure watch.** A daily, model-free reading of a repo's dependencies, runtimes, settings and store listings. Findings show as Repo readings rows you can accept with a reason, a new finding pushes once, and an unprotected default branch can be fixed with one tap. An optional OpenSSF Scorecard reading sits beside it, scored locally for private repos.
+- **Offline terminals.** Every session's terminal screen is cached for offline, not only the one you had open, and the offline card points at the cached transcript.
+- **Git Explain.** The desktop explains what a push sends and what a pull brings. It says it is an AI call, and what it cost.
+- **A push a branch rule refused says so in words**, with the remote's rules and a link to their page. A failed push clears once its commits are upstream, however they got there.
+- **Tabs list from anywhere.** Ctrl+E opens it, with type-to-filter and arrow/Return navigation, even with the tab strip switched off.
+- A build rule's card opens its last run. The menu's activity badge counts desktop rows that wait on a person, and Activity lands on what is open.
+
+### Fixes
+
+- **Security:** the iOS shell pins Capacitor 8.5.2 (GHSA-rvm3-566m-v7fv). The Android APK already shipped with the fix in 0.1.8.
+- Filters and bulk actions sit above their lists: backlog, commit form, sweep, Week-end burn.
+- Week-end burn (was *This week's burn*): the sheet scrolls, has one start line, hides agent worktrees unless picked and tells twin clone names apart by path.
+- New settings are findable: *Push information too*, Automation and the Downloads switches.
+
 ## 0.1.8
 
 0.1.7 was tagged but never released; its changes ship here.

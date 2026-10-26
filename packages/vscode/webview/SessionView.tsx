@@ -18,6 +18,8 @@ import { Absent } from "./Absent";
 import { CostBlock, ListPrice } from "./Money";
 import { sessionTotal } from "../src/data/sessiontotal";
 import { TurnList } from "./TurnList";
+import { TabLinks } from "./TabLinks";
+import { CarriedSection } from "../../web/src/CarriedSection";
 
 const CHART_H = 200;
 const SPEND_H = 96;
@@ -182,6 +184,9 @@ export function SessionView({ doc, why, prompts, terminal, selectedTurn, onSelec
         </>
       )}
       {undated && <div className="empty ctx-note">{undated}</div>}
+
+      <CarriedSection carried={doc.carried ?? undefined} />
+      <TabLinks tabs={["always-on", "all"]} post={post} />
 
       {anyHappened && (
         <>

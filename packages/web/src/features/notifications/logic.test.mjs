@@ -111,6 +111,11 @@ test("a week-end burn alert opens its sheet, by kind", () => {
   assert.deepEqual(notifTarget({ kind: "weekburn" }), { to: "weekburn" });
 });
 
+test("an exposure push opens that repo's readings; without a repo id it lands on its row", () => {
+  assert.deepEqual(notifTarget({ kind: "exposure", open: { to: "setup", repoId: "r1" } }), { to: "setup", repoId: "r1" });
+  assert.deepEqual(notifTarget({ kind: "exposure", open: { to: "setup" } }), { to: "row" });
+});
+
 test("followup's level words say the launch flag is information", () => {
   assert.match(levelWords("followup"), /launch option's flag is information/);
 });

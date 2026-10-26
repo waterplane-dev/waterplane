@@ -30,7 +30,7 @@
  *    above its chart, and the drag readout is a text line under it.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BarChart3, Bot, Loader, RefreshCw, RotateCcw, Scissors, SearchCheck, Wallet } from "lucide-react";
+import { BarChart3, Bot, Coins, ListChecks, Loader, RefreshCw, RotateCcw, Scissors, SearchCheck, Wallet } from "lucide-react";
 import type { AgentRun, ContextSample, ContextSeriesDoc } from "@waterplane/shared";
 import {
   coldStartText, sessionCostOfSeries, tokenTotal as tokenTot,
@@ -55,6 +55,7 @@ import { GAP_BREAK_MS } from "./contextPlot";
 import { AgentTopList, AgentWarnLine } from "./AgentTopList";
 import { DollarsWhy } from "./TurnCostCard";
 import { SkillSection } from "./SkillLanes";
+import { CarriedSection } from "./CarriedSection";
 import { Button } from "./kit/Button";
 import { Hint } from "./kit/Hint";
 
@@ -66,7 +67,7 @@ const CHART_H = 220;
  *  are equally hard to read rather than that one is the answer to the other. */
 const SPEND_H = 110;
 
-export function ContextSheet({ sessionId, title, online, liveAgentNote, onReplan, replanCant, replanNote, agentWarn, budget, onFresh, onCompact, compactCant, onExplainCost, unmeasured, backendLabel, onClose }: {
+export function ContextSheet({ sessionId, title, online, liveAgentNote, onReplan, replanCant, replanNote, agentWarn, budget, onFresh, onCompact, compactCant, onExplainCost, unmeasured, backendLabel, onOpenSetup, setupCant, onOpenAllSessions, onClose }: {
   sessionId: string;
   /** The session's own name, so the sheet says WHICH conversation this is. */
   title: string;
@@ -173,6 +174,15 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, onReplan
    * to a wrong number.
    */
   unmeasured?: string;
+  /**
+   * The repo readings sheet (Setup region) of this session's repo: what the repo and this desktop
+   * WILL put in every turn, beside what this one's first request DID carry. Navigation, not a
+   * body-changing choice, so a door row and not a `.ts-filter`. Absent ⇒ `setupCant` in text.
+   */
+  onOpenSetup?: () => void;
+  setupCant?: string;
+  /** The all-sessions token screen. */
+  onOpenAllSessions?: () => void;
   onClose: () => void;
 }) {
   const res = useRemoteResource<ContextSeriesDoc>(
@@ -312,10 +322,24 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, onReplan
     .map((s, i) => samples[i + 1].t - s.t)
     .filter((d) => d > GAP_BREAK_MS);
 
+  const doorsRow = (onOpenSetup || onOpenAllSessions) && <div className="sheet-actions ctx-doors">
+        {onOpenSetup && (
+          <Button onClick={onOpenSetup} title="What this repo and this desktop put in every turn, file by file">
+            <ListChecks size={12} /> repo readings
+          </Button>
+        )}
+        {onOpenAllSessions && (
+          <Button onClick={onOpenAllSessions} title="Every conversation on this desktop, with its token split">
+            <Coins size={12} /> all sessions
+          </Button>
+        )}
+      </div>;
+
   if (unmeasured) {
     return (
       <div className="sheet">
         <SheetHead title={<><BarChart3 size={16} style={{ verticalAlign: "-3px", marginRight: 4 }} />Context window &amp; cost</>} onClose={onClose} />
+        {doorsRow}
         <Unavailable cants={[{ label: "context graph", reason: unmeasured }]} />
         <Hint>
           {title} — nothing on this screen is a measurement of it. The terminal is still the whole story.
@@ -366,11 +390,16 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, onReplan
 
       {/* WHICH conversation, and nothing else — the method caption is at the foot. */}
       <Hint>{title}</Hint>
+      {doorsRow}
+      {!onOpenSetup && setupCant && <Unavailable cants={[{ label: "repo readings", reason: setupCant }]} />}
 
       <Empty res={res} empty={!samples.length} thing="the context history" noun="graph"
         note={res.state === "error" ? "A session that has not run a turn yet has no log to read." : undefined}>
         Nothing to plot yet — this conversation has not completed a turn.
       </Empty>
+
+      {/* Attachments are written before the first answer: measured without a single sample. */}
+      {!samples.length && doc && <CarriedSection carried={doc.carried} />}
 
       {samples.length > 0 && (
         <div className="list">
@@ -457,6 +486,9 @@ export function ContextSheet({ sessionId, title, online, liveAgentNote, onReplan
             {/* Which skills entered a window, and when — one row per skill. */}
             <SkillSection samples={samples} events={events} own={doc?.skills} agents={agents}
               width={width} span={span} />
+
+            {/* What the FIRST request carried, part by part (after the skills, owner D). */}
+            {doc && <CarriedSection carried={doc.carried} />}
 
             {/* HOW the two lower charts are counted — method, so folded. */}
             {(spendNotes || agents.length > 0) && (

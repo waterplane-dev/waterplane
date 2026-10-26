@@ -69,6 +69,7 @@ export * from "./wire/capture.js";
 /** The exposure watch: rows, accepts and the setup-checklist rows built from them — the CLI and
  *  the phone must agree on what is accepted. */
 export * from "./exposure.js";
+export * from "./exposurepush.js";
 
 /** A repo or worktree: its git state, its setup verdict, the CLI install behind it. */
 export * from "./wire/repo.js";

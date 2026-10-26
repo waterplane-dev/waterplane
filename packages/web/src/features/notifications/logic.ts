@@ -140,6 +140,7 @@ export const NOTIF_LABEL: Record<string, { name: string; note: string }> = {
   disk: { name: "Desktop disk almost full", note: "The desktop's disk dropped under 10 GB free (and again under 3 GB). On a Mac, low space makes macOS end apps to clear their caches — Tailscale among them, which cuts this phone off. Words only; nothing is deleted." },
   agent: { name: "Large subagent", note: "A running subagent passed the context size you set on the context sheet (default 500k) — one push per agent, naming it. It warns only; nothing is stopped." },
   backlog: { name: "Backlog", note: "A queued backlog item started, finished, or failed." },
+  exposure: { name: "New exposure finding", note: "A repo on the exposure watch has a new open finding, such as a vulnerable dependency or a store listing problem. One push per finding, never repeated; more than three at once in one repo are one push. Critical and high need you; the rest are information. Words only." },
   followup: { name: "Follow up", note: "A session was flagged for follow up without your tap — by a launch you ticked to flag when done, or by its own agent with one line on what to read. A flag you set by hand sends none." },
   health: { name: "Repo health index", note: "A repo's health index moved by more than is usual for that repo's own past — at most one push per repo per week, in words, naming the readings that carried it." },
   artifact: { name: "Artifacts", note: "A build produced a file, or an auto-download queued one. Auto-download itself keeps working when this is off — the push is how the phone starts fetching with the app closed." },
@@ -171,6 +172,7 @@ export type NotifTarget =
   | { to: "git"; repoId: string }
   | { to: "build"; repoId: string; buildId?: string }
   | { to: "weekburn" }
+  | { to: "setup"; repoId: string }
   | { to: "row" };
 
 export function notifTarget(n: {
@@ -187,6 +189,7 @@ export function notifTarget(n: {
   if (o?.to === "tokens") return { to: "tokens" };
   if (o?.to === "git" && o.repoId) return { to: "git", repoId: o.repoId };
   if (o?.to === "build" && o.repoId) return { to: "build", repoId: o.repoId, buildId: o.buildId };
+  if (o?.to === "setup" && o.repoId) return { to: "setup", repoId: o.repoId };
   if (n.kind === "weekburn") return { to: "weekburn" };
   if (o?.to === "plugin" && o.id) return { to: "plugin", id: o.id };
   if (n.kind === "backlog") return { to: "backlogByName" };

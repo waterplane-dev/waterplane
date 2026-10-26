@@ -127,6 +127,7 @@ export async function readSession(
     agentsUnread: sub.unread,
     turnCosts: projectTurns(turns),
     pricesAsOf: PRICES_AS_OF,
+    carried: log.carried,
   };
   return { cursor: { ctx, turns, agents: sub.use }, doc };
 }

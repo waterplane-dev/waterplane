@@ -4,7 +4,7 @@ import type { TokenTotals } from "@waterplane/shared";
 import { addCost, addTotals, costOf, isColdRebuild, normalizeModel, tokenTotal, zeroCost, zeroTotals } from "@waterplane/shared";
 import { localDay, stamp, toMs } from "../convlog.js";
 import { opensTurn } from "../transcript/transcriptlog.js";
-import { RAW_CAP, EVENT_CAP, readRange, num, blankCold, blankCompaction, addSaved, remember, blank, skillLoadOf, pushSkill } from "./ctxcursor.js";
+import { RAW_CAP, EVENT_CAP, readRange, num, blankCold, blankCompaction, addSaved, remember, blank, skillLoadOf, pushSkill, blankCarried, carriedPartsOf, foldCarried, CARRIED_MARKS } from "./ctxcursor.js";
 import type { SeriesCursor } from "./ctxcursor.js";
 
 /**
@@ -42,7 +42,7 @@ export function updateContextLog(path: string, prev?: SeriesCursor | null): Seri
     cur.compaction = blankCompaction(); cur.shedAuto = 0; cur.shedManual = 0;
     cur.pendingRebuild = null;
     cur.prevTok = 0; cur.prevAt = 0; cur.cold = blankCold();
-    cur.autoCompactTok = null; cur.model = null; cur.effort = null; cur.skills = []; cur.truncated = false;
+    cur.autoCompactTok = null; cur.model = null; cur.effort = null; cur.skills = []; cur.carried = blankCarried(); cur.truncated = false;
     cur.seen.clear(); cur.seenOrder.length = 0;
   }
 
@@ -60,7 +60,9 @@ export function updateContextLog(path: string, prev?: SeriesCursor | null): Seri
     // appears as real structure — a prompt that talks ABOUT tool results is
     // written `\"type\":\"tool_result\"` and still gets through.
     const maybeTurn = line.includes('"type":"user"') && !line.includes('"type":"tool_result"');
-    if (!maybeTurn
+    // The always-on attachments pass by the same unescaped-structure argument.
+    const maybeCarried = line.includes('"type":"attachment"') && CARRIED_MARKS.some((m) => line.includes(m));
+    if (!maybeTurn && !maybeCarried
       && !line.includes('"usage"') && !line.includes('"compactMetadata"') && !line.includes('"quotaLimits"')) continue;
 
     let row: Record<string, unknown>;
@@ -73,6 +75,8 @@ export function updateContextLog(path: string, prev?: SeriesCursor | null): Seri
     // that directory — counting the inline form here as well would double it on
     // any CLI that writes both.
     if (row.isSidechain === true) continue;
+    // What the first request carried (`CarriedTally`): never a turn or a reading.
+    if (row.type === "attachment") { foldCarried(cur.carried, carriedPartsOf(row)); continue; }
     if (maybeTurn) {
       if (opensTurn(row)) cur.turns++;
       // A skill body is a meta user record — never a turn, but the one
@@ -263,6 +267,9 @@ export function updateContextLog(path: string, prev?: SeriesCursor | null): Seri
     // The kinds ride ON the sample, not beside it: they are what the stacked
     // chart is drawn from, and a parallel array would have to survive the
     // downsampler's min/max pick — which reorders — to stay index-for-index.
+    // The anchor of `carried`: the first request that carried context, deduped
+    // and non-synthetic like every reading.
+    cur.carried.firstReq ??= { t, tok };
     cur.samples.push({
       t, tok, used: cur.usageTok,
       kinds: [bag.input, bag.output, bag.cacheRead, bag.cacheWrite],

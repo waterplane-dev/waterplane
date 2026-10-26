@@ -67,9 +67,14 @@
  * one is attention and stays until the next run of that verb succeeds or the
  * person taps done (`gitAttentionKey`); a successful push is information; a
  * successful pull raises nothing at all. Default ON.
+ *
+ * `exposure` sits last (added 2026-10-26): the exposure watch (`exposurepush.ts`) found a NEW
+ * open alert in a repo that is on the watch — one push per finding, keyed (repo, measure,
+ * subject, version) and spent for good; more than three at once in one repo is a single push.
+ * Critical and high severity are attention, the rest information. Default ON. Words only.
  */
 export const NOTIFICATION_KINDS = [
-  "prompt", "approval", "limit", "burn", "cli", "disk", "undelivered", "backlog", "followup", "health", "agent", "artifact", "image", "plugin", "autofire", "idle", "info", "weekburn", "git",
+  "prompt", "approval", "limit", "burn", "cli", "disk", "undelivered", "backlog", "followup", "health", "agent", "artifact", "image", "plugin", "autofire", "idle", "info", "weekburn", "git", "exposure",
 ] as const;
 
 /** Kind of in-app notification (drives the icon shown). */
@@ -264,7 +269,9 @@ export type NotifyOpen =
   /** That repo's (or worktree's) git view, showing the stored failure. */
   | { to: "git"; repoId: string; verb?: "pull" | "push" }
   /** That repo's (or worktree's) build sheet, on the failed entry. */
-  | { to: "build"; repoId: string; buildId?: string };
+  | { to: "build"; repoId: string; buildId?: string }
+  /** That repo's readings sheet, on the exposure watch region. */
+  | { to: "setup"; repoId: string };
 
 /** How an attention item was dealt with. */
 export interface NotifyHandled {

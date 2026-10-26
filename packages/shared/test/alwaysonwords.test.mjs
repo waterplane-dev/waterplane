@@ -4,7 +4,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { alwaysOnRows, alwaysOnTotalsWords, carriedRemainder, carriedRows, carriedWords, desktopInventory, instructionInventory } from "../dist/index.js";
+import { alwaysOnRows, alwaysOnTotalsWords, carriedRemainder, carriedRows, carriedWords, desktopInventory, desktopPathWords, instructionInventory } from "../dist/index.js";
 
 function fsOf(files) {
   return {
@@ -54,6 +54,27 @@ test("totals: this desktop's rows are their own sentence and never in the thresh
   assert.match(w, /This desktop adds ~200 tokens \(800 chars\) from 1 file to every session, whatever the repo; the threshold row counts none of it\. 1 MCP server of this desktop's add/);
 });
 
+test("totals: an unsized row that is not an MCP server is never counted as one", () => {
+  // installed_plugins.json unreadable, .claude.json unreadable, plus the managed-packs row: none is a server.
+  const desk = desktopInventory({ fs: fsOf({}), memoryRel: null, plugins: null, userMcp: null });
+  const w = alwaysOnTotalsWords(desk, String);
+  assert.doesNotMatch(w, /MCP server/);
+  assert.equal(w, "3 more rows have no size here; each says why.");
+  const bad = instructionInventory(fsOf({ ".mcp.json": "{nope" })).files;
+  assert.match(alwaysOnTotalsWords(bad, String), /1 more row has no size here/);
+  assert.doesNotMatch(alwaysOnTotalsWords(bad, String), /MCP server/);
+});
+
+test("desktop path words: the config dir only in front of a relative path", () => {
+  assert.equal(desktopPathWords("CLAUDE.md"), "~/.claude/CLAUDE.md");
+  assert.equal(desktopPathWords("skills/a/SKILL.md", "~/cfg/"), "~/cfg/skills/a/SKILL.md");
+  assert.equal(desktopPathWords("CLAUDE.md", "/opt/claude"), "/opt/claude/CLAUDE.md");
+  assert.equal(desktopPathWords("~/.claude.json", "/opt/claude"), "~/.claude.json");
+  assert.equal(desktopPathWords("/Users/x/plugin", "~/.claude"), "/Users/x/plugin");
+  assert.equal(desktopPathWords("C:\\plugins\\x"), "C:\\plugins\\x");
+  assert.equal(desktopPathWords(""), "not on disk");
+});
+
 const carried = {
   firstRequestTok: 60911, firstRequestAt: 1, laterDeltas: 3,
   parts: [
@@ -68,6 +89,9 @@ test("carried rows: CarriedKind order, labels, the undocumented record, the rema
   const rows = carriedRows(carried, String);
   assert.deepEqual(rows.map((r) => r.key), ["instructions", "skill_listing", "deferred_tools", "system_prompt", "remainder"]);
   assert.equal(rows[0].files[0].label, "~/.claude/CLAUDE.md · User");
+  // each sub-row carries its own path and type, so no reader pairs files by index
+  assert.equal(rows[0].files[0].path, "~/.claude/CLAUDE.md");
+  assert.equal(rows[0].files[0].type, "User");
   assert.equal(rows[1].label, "skill listing (136 skills)");
   assert.equal(rows[2].label, "deferred tool names (123)");
   assert.equal(rows[3].label, "system prompt (undocumented record)");
@@ -77,19 +101,31 @@ test("carried rows: CarriedKind order, labels, the undocumented record, the rema
   assert.match(rows[4].words, /^≈/);
 });
 
-test("carried remainder: null without the anchor, clamped at 0", () => {
+test("carried remainder: null without the anchor, and null — never 0 — when the parts overshoot", () => {
   assert.equal(carriedRemainder({ ...carried, firstRequestTok: null }), null);
-  assert.equal(carriedRemainder({ ...carried, firstRequestTok: 10 }), 0);
+  assert.equal(carriedRemainder({ ...carried, firstRequestTok: 10 }), null);
+  const exact = Math.round((29996 + 40000 + 25019 + 3000) / 4);
+  assert.equal(carriedRemainder({ ...carried, firstRequestTok: exact }), 0, "a measured 0 left over is still a number");
   assert.equal(carriedRows({ ...carried, firstRequestTok: null }).some((r) => r.key === "remainder"), false);
+  assert.equal(carriedRows({ ...carried, firstRequestTok: 10 }).some((r) => r.key === "remainder"), false);
+  const w = carriedWords({ ...carried, firstRequestTok: 10, laterDeltas: 0 }, String);
+  assert.match(w, /the parts' estimate already exceeds the request, so the rest \(your prompt among it\) cannot be placed\.$/);
+  assert.doesNotMatch(w, /the rest is/);
+  // the phone's strip caption says it under the bar: the lead then ends on its own clause, never twice
+  const shown = carriedWords({ ...carried, firstRequestTok: 10, laterDeltas: 0 }, String, { unplacedShown: true });
+  assert.doesNotMatch(shown, /cannot be placed/);
+  assert.match(shown, /\(40000 chars\)\.$/);
 });
 
 test("carried words: whole, the documented share as 'about', the snapshot, the rest, later deltas", () => {
   const w = carriedWords(carried, String);
   assert.match(w, /^The first request carried 60911 tokens\. About \d+ of them \(58015 chars\) are the instruction files, the skill listing and deferred tool names the CLI attached;/);
-  assert.match(w, /an undocumented record puts the system prompt at about 10000 tokens \(40000 chars\); the rest is tool schemas and your prompt\./);
-  assert.match(w, / 3 of these changed later in the conversation and are not folded in\.$/);
+  assert.match(w, /an undocumented record puts the system prompt at about 10000 tokens \(40000 chars\); the rest is tool schemas and your prompt with what the harness added to it\./);
+  assert.match(w, / 3 kinds of these changed later in the conversation; the change is not folded in\.$/);
   const plain = carriedWords({ ...carried, laterDeltas: 1, parts: carried.parts.filter((p) => !p.undocumented) }, String);
-  assert.match(plain, /attached; the rest is the system prompt, tool schemas and your prompt\. 1 of these changed later in the conversation and is not folded in\.$/);
+  assert.match(plain, /attached; the rest is the system prompt, tool schemas and your prompt with what the harness added to it\. One kind of these changed later in the conversation; the change is not folded in\.$/);
+  const named = carriedWords({ ...carried, laterDeltas: 2, laterKinds: ["skill_listing", "mcp_instructions"] }, String);
+  assert.match(named, / The skill listing and MCP instructions changed later in the conversation; the change is not folded in\.$/);
 });
 
 test("carried words before any answer say so, in chars", () => {

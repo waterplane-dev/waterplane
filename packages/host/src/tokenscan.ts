@@ -35,6 +35,10 @@ export interface FileSummary {
   /** Turns billed at a non-standard speed (fast mode). Present only when
    *  non-zero — see `scan()` for why it is counted but not priced. */
   f?: number;
+  /** The FIRST counted request's input + cache read + cache write: what the
+   *  conversation carried before anyone had said much (the always-on context
+   *  plus the first prompt). Absent when no request was answered. */
+  b?: number;
   /** `<local hour>\0<model id>` → tally, the hour being `YYYY-MM-DDTHH`.
    *  Averages ~3 entries. */
   x: Record<string, Tally>;
@@ -111,6 +115,7 @@ export async function summarizeLog(path: string, size: number, mtime: number, ch
   const rebuilds: Record<string, [number, number, number]> = {};
   let cwd: string | undefined;
   let fast = 0;
+  let first: number | undefined;
   /** What the previous counted request carried — the context that was in the
    *  cache and could have been read back. See `isColdRebuild`. */
   let prevTok = 0;
@@ -180,6 +185,9 @@ export async function summarizeLog(path: string, size: number, mtime: number, ch
       r[0]++; r[1] += t[3]; r[2] += t[4];
     }
     prevTok = t[0] + t[2] + t[3];
+    // An output-only first record (no input, no cache) is not the anchor: the
+    // first request that carried context is.
+    if (first === undefined && prevTok > 0) first = prevTok;
     compacted = false;
   };
 
@@ -211,7 +219,7 @@ export async function summarizeLog(path: string, size: number, mtime: number, ch
 
   if (!Object.keys(cross).length) return null;
   return {
-    m: mtime, s: size, ...(cwd ? { w: cwd } : {}), ...(fast ? { f: fast } : {}), x: cross,
+    m: mtime, s: size, ...(cwd ? { w: cwd } : {}), ...(fast ? { f: fast } : {}), ...(first ? { b: first } : {}), x: cross,
     ...(Object.keys(rebuilds).length ? { r: rebuilds } : {}),
   };
 }

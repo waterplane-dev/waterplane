@@ -120,7 +120,7 @@ The sheets a person grooms, fires and reviews a repo's work from: the backlog an
   the Backlog form names the row on the Backlog, while Activity, the chain picker and `clockDirectory`
   show the headline (the picker SNAPSHOTS it into `after.title`). One exception, pinned by name; also
   stated in `web-send`.
-- `SetupSheet.tsx` + `setupRemedy.ts` — **`Repo readings`: ONE sheet, THREE regions** (`ReadingsRegion`
+- `SetupSheet.tsx` (+ `AlwaysOnRows.tsx`, the always-on list under the `context-weight` row: repo rows, this desktop's rows, unsized rows say so, doors to sessions that carried them) + `setupRemedy.ts` — **`Repo readings`: ONE sheet, THREE regions** (`ReadingsRegion`
   = `setup` · `series` · `optins`), **and the seam is the COMPARATOR, never time.** Against the
   conventions (`ComplianceCheck`) = a fact against a line somebody chose: stripe, pass/warn/fail,
   counted in the badge, sometimes a `fix`. Against its own past (the series, drawn in

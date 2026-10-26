@@ -318,7 +318,7 @@ class Ext implements vscode.Disposable {
       this.session = { folder, doc: null, why: sentence(e) };
     }
     try {
-      this.weight = { doc: await weighFolder(folder, copilotSwitches()) };
+      this.weight = { doc: await weighFolder(folder, copilotSwitches(), this.configDir()) };
     } catch (e) {
       this.weight = { doc: null, why: sentence(e) };
     }
@@ -344,7 +344,7 @@ class Ext implements vscode.Disposable {
   /** An instruction file was saved: weigh that folder again so the Always-on view and the lenses agree at once. */
   private async reweigh(folder: string): Promise<void> {
     if (folder !== this.activeFolder) return;
-    try { this.weight = { doc: await weighFolder(folder, copilotSwitches()) }; } catch (e) { this.weight = { doc: null, why: sentence(e) }; }
+    try { this.weight = { doc: await weighFolder(folder, copilotSwitches(), this.configDir()) }; } catch (e) { this.weight = { doc: null, why: sentence(e) }; }
     this.post({ t: "weight", ...this.weight });
   }
 

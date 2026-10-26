@@ -67,7 +67,7 @@ test("slugs: every URL form, and the first GitHub remote when origin is elsewher
 
 test("a linked worktree's .git file leads to the common dir's config; the repo name is the primary folder's", () => {
   const base = tmp();
-  const primary = join(base, "usmc"), linked = join(base, "usmc-wt");
+  const primary = join(base, "app"), linked = join(base, "app-wt");
   mkdirSync(join(primary, ".git", "worktrees", "wt"), { recursive: true });
   mkdirSync(linked);
   writeFileSync(join(primary, ".git", "config"), `[remote "origin"]\n\turl = https://github.com/o/n.git\n`);
@@ -75,7 +75,7 @@ test("a linked worktree's .git file leads to the common dir's config; the repo n
   writeFileSync(join(linked, ".git"), `gitdir: ${join(primary, ".git", "worktrees", "wt")}\n`);
   assert.equal(G.slugOfWorktree(linked), "o/n");
   assert.equal(G.slugOfWorktree(primary), "o/n");
-  assert.equal(G.repoNameOfWorktree(linked), "usmc");
+  assert.equal(G.repoNameOfWorktree(linked), "app");
   assert.equal(G.slugOfWorktree(base), null);
 });
 

@@ -159,6 +159,11 @@ export function openNotif(n: NotificationItem): void {
       else showRow(n, "that repo is not in the list on this desktop any more");
       return;
     }
+    case "setup": {
+      if (c.world.repos.some((r) => r.id === t.repoId)) c.nav.openSetup(t.repoId, { region: "watch" });
+      else showRow(n, "that repo is not in the list on this desktop any more");
+      return;
+    }
     case "build": {
       const repo = c.world.repos.find((r) => r.id === t.repoId);
       if (repo) c.nav.openBuild(repo);
@@ -202,7 +207,7 @@ export function openNotifFromOutside(n: NotificationItem): void {
   const ready = () => {
     const w = core().world;
     if (t.to === "session") return w.sessions.some((s) => s.id === t.sessionId);
-    if (t.to === "repohealth" || t.to === "git" || t.to === "build") return w.repos.some((r) => r.id === t.repoId);
+    if (t.to === "repohealth" || t.to === "git" || t.to === "build" || t.to === "setup") return w.repos.some((r) => r.id === t.repoId);
     if (t.to === "backlogByName") return w.visibleRepos.length > 0;
     return true;
   };

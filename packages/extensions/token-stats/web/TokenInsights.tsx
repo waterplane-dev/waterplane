@@ -15,6 +15,8 @@
  */
 import { useState, type ReactNode } from "react";
 import { Lightbulb, SearchCheck, BarChart3 } from "lucide-react";
+import { firstRequestWords } from "./headline.ts";
+import { firstBarPcts, FIRST_BAR_CAPTION } from "./firstBars.ts";
 import { agentModelInsight, fmtCount, fmtUsd, tokenTotal, type TokenConvo } from "@waterplane/shared";
 import type { Insight } from "./statsInsights.ts";
 import { Button } from "@waterplane/kit";
@@ -73,8 +75,11 @@ export function TopConvos({ rows, total, pts, nameOf, onExplain, isLive, onOpen 
   const [all, setAll] = useState(false);
   if (!rows.length) return null;
   const shown = all ? rows : rows.slice(0, TOP_SHOWN);
+  // One scale over ALL ranked rows, so expanding the list never rescales a bar already read.
+  const firstPct = firstBarPcts(rows);
   return (
     <div className="ts-convos">
+      {firstPct.size > 0 && <div className="ts-convo-facts">{FIRST_BAR_CAPTION}</div>}
       {shown.map((c) => {
         const v = c.cost.total;
         const title = nameOf?.(c.id) ?? `${c.label} · ${c.id.slice(0, 8)}`;
@@ -97,6 +102,12 @@ export function TopConvos({ rows, total, pts, nameOf, onExplain, isLive, onOpen 
               {c.coldUsd ? <> · {fmtUsd(c.coldUsd)} re-caching after breaks</> : null}
               {p ? <> · {p}</> : null}
             </div>
+            {firstPct.has(c.id) && (
+              <div role="img" aria-label={firstRequestWords(c.firstTok) ?? ""}>
+                <div className="ts-convo-facts">{firstRequestWords(c.firstTok)}</div>
+                <div className="ts-bartrack"><span className="ts-barfill ts-barfill-first" style={{ width: `${firstPct.get(c.id)}%` }} /></div>
+              </div>
+            )}
             {insight && <div className="ts-convo-facts">{insight}</div>}
             {onExplain && (
               <div className="ts-convo-acts">

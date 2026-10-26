@@ -161,3 +161,12 @@ test("a log that is gone: null doc with a sentence", async () => {
   assert.equal(r.cursor, null);
   assert.match(r.why, /no longer there/);
 });
+
+test("fixture: what the first request carried is read off the attachments before it", async () => {
+  const { doc } = await data.readSession(LOG, null, "/Users/x/repo");
+  const byKind = Object.fromEntries(doc.carried.parts.map((p) => [p.kind, p]));
+  assert.equal(byKind.instructions.chars, 400);
+  assert.equal(byKind.instructions.files[0].path, "/Users/x/repo/CLAUDE.md");
+  assert.equal(byKind.skill_listing.chars, 200);
+  assert.equal(byKind.skill_listing.count, 2);
+});

@@ -4,8 +4,9 @@
  * will put in every turn (`RepoInstructionsDoc`, on `ComplianceReport.instructions`).
  *
  * Chars are the fact; tokens per part are an estimate (`~chars / CHARS_PER_TOKEN`) and only ever
- * worded as one. Everything here degrades to ABSENT, never to a wrong number: a truncated log has
- * no `carried`, an unsized row (an MCP server) has no chars.
+ * worded as one. Everything here degrades to ABSENT, never to a wrong number: a log whose head held
+ * no attachment record and no answered request has no `carried` (a log capped past `MAX_READ` still
+ * has it — the log is read from byte 0), an unsized row (an MCP server) has no chars.
  */
 import type { InstructionFile } from "../agentfiles.js";
 
@@ -41,8 +42,14 @@ export interface SessionCarried {
   firstRequestTok: number | null;
   firstRequestAt: number | null;
   parts: CarriedPart[];
-  /** Attachments of these kinds that arrived AFTER the first request (an MCP connecting late, a skill listing refresh) — counted, never folded in. */
+  /**
+   * How many KINDS (never records) changed AFTER the first request (an MCP connecting late, a skill
+   * listing refresh) — noted, never folded in. Not a change: per-turn hook context, or a record
+   * identical to one of the initial set (a `--resume` re-attaching it).
+   */
   laterDeltas: number;
+  /** Those kinds, in `CARRIED_KINDS` order. Absent from an older host, or when none changed. */
+  laterKinds?: CarriedKind[];
 }
 
 export const CARRIED_NAMES_CAP = 64;
@@ -56,4 +63,8 @@ export interface RepoInstructionsDoc {
   desktopWhy?: string;
   /** The memory file this repo's sessions get (its slug), for the sentence. */
   memoryPath?: string;
+  /** The CLI config dir desktop paths are relative to, as words (`~/.claude`, or `CLAUDE_CONFIG_DIR`). Absent from an older host: `desktopPathWords` assumes `~/.claude`. */
+  configDir?: string;
+  /** Set when building this list threw on the host: `files` is then empty and `desktop` null — a failed read, not an older host. */
+  why?: string;
 }

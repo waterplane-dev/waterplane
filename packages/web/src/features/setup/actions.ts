@@ -85,3 +85,35 @@ export function closeRepoHealth(): void {
   healthRepo.set(null);
   core().nav.close("repohealth");
 }
+
+/**
+ * The context-weight row's always-on list opens a repo file: Back lands on the checklist region the
+ * tap came from (`openRepoFile` re-aims at the series, where the longest-files tape lives).
+ */
+export function openInstructionFile(repoId: string, relPath: string): void {
+  const c = core();
+  c.say.track("action:files.fromReadings");
+  const back = c.nav.overlay;
+  if (back === "setup") setupAim.set({ ...setupAim.get(), region: "setup" });
+  c.files.browseTo(repoId, relPath, back);
+}
+
+/** The always-on list's door into ONE live session's context sheet: what its first request carried. */
+export function openSessionContext(sessionId: string): void {
+  core().say.track("action:setup.ctxFromRow");
+  core().nav.openContext(sessionId);
+}
+
+/** The always-on list's door to the all-sessions token screen. */
+export function openAllSessions(): void {
+  core().say.track("action:setup.allSessions");
+  core().nav.open("tokens");
+}
+
+/** This repo's live sessions as the always-on list's doors (a pending create has no log yet). */
+export function sessionDoorsFor(repoId: string): { id: string; title: string; open: () => void }[] {
+  const w = core().world;
+  return w.sessions
+    .filter((s) => s.running && !s.id.startsWith("pending:") && w.sessionRepo(s)?.id === repoId)
+    .map((s) => ({ id: s.id, title: w.sessionRowTitle(s), open: () => openSessionContext(s.id) }));
+}

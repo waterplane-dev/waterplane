@@ -645,6 +645,9 @@ export class CtxSlice {
       // log, empty included — "loaded none" is an answer an older host's
       // absence is not. Each agent's own loads ride on its roster row.
       skills: parsed.skills,
+      // What this conversation's first request carried, measured off the log
+      // (`ctxcursor.ts` `projectCarried`). Absent when the log said nothing.
+      ...(parsed.carried ? { carried: parsed.carried } : {}),
       // The same two facts the row's spark carries, off the full series. The
       // agent tally is the LIVE session's when there is one (it is already
       // warm); a closed session pays one directory read, once.

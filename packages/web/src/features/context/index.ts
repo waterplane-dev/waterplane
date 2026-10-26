@@ -9,7 +9,7 @@ import { ContextEntrySheet } from "./ContextEntrySheet";
 import { contextSubject } from "./logic";
 import { ctxSid } from "./store";
 
-export { openContext, openContextFor } from "./actions";
+export { openContext, openContextFor, openContextById } from "./actions";
 
 export const manifest: FeatureManifest = {
   id: "context",

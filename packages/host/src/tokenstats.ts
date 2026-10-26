@@ -73,7 +73,7 @@ const FLUSH_MS = 5_000;
 const YIELD_EVERY = 64;
 /** Store format. A bump discards the file and rebuilds rather than migrating —
  *  it is a cache of something still on disk, so rebuilding is always available. */
-const VERSION = 5;
+const VERSION = 6;
 /** How far back the HOUR buckets travel on the wire. The store keeps every hour
  *  it ever saw (they cost ~3 entries per conversation); this bounds only what a
  *  phone is asked to download and cache. 14 days is two full weeks of the
@@ -393,6 +393,7 @@ export class TokenStatsStore {
         }).get(cKey)!;
         // The parent's own worktree names the conversation's repo; an agent
         // file seen first only holds the place until the parent arrives.
+        if (!sum.sub && sum.b) cv.firstTok = sum.b;
         if (!sum.sub && sum.w) { cv.repo = repoKey; cv.label = basename(repoKey) || repoKey; }
         if (sum.sub) cv.agents++;
         // A subagent transcript is ONE launch, dated by the earliest bucket it

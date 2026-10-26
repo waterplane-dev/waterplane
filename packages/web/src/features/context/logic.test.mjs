@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { REPLAN_NOTE, compactToast, contextSubject, replanBlockedToast, replanDoneToast } from "./logic.ts";
+import { REPLAN_NOTE, compactToast, contextFallbackToast, contextSubject, replanBlockedToast, replanDoneToast } from "./logic.ts";
 
 const a = { id: "a" }, b = { id: "b" };
 
@@ -29,4 +29,19 @@ test("re-plan: the offline sentence says neither the Esc nor the prompt went; th
   assert.match(replanDoneToast("api"), /Esc to api and queued the re-plan prompt/);
   assert.match(REPLAN_NOTE, /not reported back is lost/);
   assert.match(REPLAN_NOTE, /background keeps going/);
+});
+
+test("a door that asked for another conversation says which one it opened", () => {
+  assert.match(contextFallbackToast("myapp · fix"), /not listed — showing myapp · fix/);
+  assert.match(contextFallbackToast(null), /none is attached/);
+});
+
+test("the carried section is drawn without samples, and the doors in the unmeasured branch (source pin)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../../ContextSheet.tsx", import.meta.url), "utf8");
+  assert.match(src, /!samples\.length && doc && <CarriedSection/);
+  const unmeasured = src.slice(src.indexOf("if (unmeasured) {"));
+  assert.ok(unmeasured.slice(0, unmeasured.indexOf("</Hint>")).includes("{doorsRow}"));
+  const setup = readFileSync(new URL("./actions.ts", import.meta.url), "utf8");
+  assert.match(setup, /focus: "context-weight"/);
 });

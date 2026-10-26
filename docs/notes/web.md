@@ -3903,6 +3903,16 @@ the thresholds themselves. Four things it does deliberately:
 The store, the resolution order and why the override is a host file rather than one written into the
 repo are in [host.md](host.md#context-weight--what-a-repo-costs-to-have-open).
 
+### Always-on context: three doors, and why all-sessions shows one number
+
+`CarriedSection.tsx` (context sheet, after the skills section) says what every turn of THIS log carried;
+`AlwaysOnRows.tsx` (Repo readings, under the `context-weight` row) lists what the repo and this desktop
+add. Each links to the other through `nav.openContext` / `nav.openSetup`, and the tokens sheet carries
+the same two doors (`AlwaysOnDoors.tsx`, closing the sheet first). These are links only; nothing is
+computed in the door. The all-sessions view deliberately shows just one measured figure, the first
+request's tokens on each costliest conversation (`TokenConvo.firstTok`): no estimates and no
+per-desktop average, because repos differ and an average would be a number with no object.
+
 ### `SendSheet.tsx` + `sendIntent.ts`
 
 - `SendSheet.tsx` + `sendIntent.ts` — **the one send surface**, behind every entry point that used

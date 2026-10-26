@@ -215,6 +215,9 @@
 .ts-barval em { font-style: normal; opacity: .65; margin-left: var(--sp-6); }
 .ts-bartrack { margin-top: var(--sp-4); height: 8px; border-radius: var(--r-4); background: var(--line); overflow: hidden; }
 .ts-barfill { display: block; height: 100%; border-radius: var(--r-4); background: var(--chart-1); }
+/* A costliest row's first-request bar: a different yardstick (the largest first request here) from
+   the `--chart-1` share-of-cost bars on the same screen, so it is drawn in ink, not the series hue. */
+.ts-barfill.ts-barfill-first { background: color-mix(in srgb, var(--fg) 55%, var(--panel)); }
 
 /* The same bar, split by the model that ran there. The rounded ends stay on
    the FILL, so the bar keeps its shape and the segments inside it are square —
@@ -590,3 +593,56 @@ button.ts-lim-used { cursor: pointer; }
 .agent-top-t tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .agent-warn { margin-top: var(--sp-8); }
 .agent-warn-row { padding-left: 0; padding-right: 0; }
+
+/* The context sheet's two doors under the title (`ContextSheet.tsx`): navigation, so a plain
+   action row, never a `.ts-filter`. Wraps at 390 px rather than running off the sheet. */
+.ctx-doors { flex-wrap: wrap; padding: var(--sp-4) var(--sp-12) 0; }
+
+/* "What every turn carries" (`CarriedSection.tsx`): one row per part, label left, its figure
+   right-aligned; a long label or path wraps instead of pushing the number off a phone. */
+.carried-list, .carried-files { list-style: none; margin: 0; padding: 0; }
+.carried-list { margin: var(--sp-4) var(--sp-12) 0; }
+.carried-list .row { flex-direction: column; align-items: stretch; gap: var(--sp-2); padding: var(--sp-8) var(--sp-10); }
+.carried-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-8); }
+.carried-label { flex: 1 1 auto; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.carried-num { flex: 0 0 auto; text-align: right; font-variant-numeric: tabular-nums; }
+.carried-files { padding-left: var(--sp-10); }
+.carried-names { padding: var(--sp-4) 0 0; }
+.carried-names p { overflow-wrap: anywhere; }
+
+/* The first-request strip (`carriedPlot.ts`). Positioned segments like `.ts-bar`, so a sliver keeps
+   its computed width. Colour is a CLASS, not an identity, so it is drawn in INK, never a chart hue
+   (`--chart-1` is the first token kind and `--ctx-series` on the same sheet): a logged attachment is
+   `--fg`, an undocumented record the SAME ink hatched (the pattern, not a second colour, marks it),
+   the remainder the app's one fold grey, `--muted`. A 1px panel seam drawn INSIDE each
+   segment (a shadow, not a border) so it never adds width. */
+.carried-comp { padding: var(--sp-8) var(--sp-12) 0; }
+.carried-bar {
+  position: relative; height: 18px; margin: 0 var(--sp-2); border-radius: var(--r-4); overflow: hidden;
+  background: var(--line); touch-action: pan-y; cursor: pointer;
+}
+.carried-seg { position: absolute; top: 0; bottom: 0; box-shadow: inset -1px 0 0 var(--panel); }
+.carried-seg.carried-on { box-shadow: inset 0 0 0 2px var(--accent); }
+.carried-doc { background: var(--fg); }
+.carried-undoc {
+  background: repeating-linear-gradient(135deg, var(--fg) 0 3px, color-mix(in srgb, var(--fg) 35%, var(--panel)) 3px 6px);
+}
+.carried-rest { background: var(--muted); }
+.carried-comp .carried-readout, .carried-comp .carried-legend { padding-left: var(--sp-2); padding-right: var(--sp-2); }
+.carried-legend { padding-bottom: var(--sp-4); }
+.carried-swatch { display: inline-block; width: 12px; height: 9px; border-radius: var(--r-2); flex: 0 0 auto; }
+/* The list is the strip's legend: same order, and each row wears its share as a meter on the strip's
+   scale. Tapping a row's head (a button) picks its segment; the picked row is outlined in the accent
+   the segment wears. */
+.carried-list > li { border-radius: var(--r-4); }
+.carried-pick { display: flex; flex-direction: column; gap: var(--sp-2); cursor: pointer; }
+.carried-picked { box-shadow: inset 0 0 0 1px var(--accent); }
+.carried-meter { display: block; height: 4px; border-radius: var(--r-2); background: var(--line); overflow: hidden; }
+.carried-fill { display: block; height: 100%; }
+.tag.carried-type { margin-left: var(--sp-4); padding: 0 var(--sp-6); white-space: nowrap; color: var(--muted); border: 1px solid var(--line); }
+.carried-inline { overflow-wrap: anywhere; }
+/* A file sub-row: the path keeps its own line where it fits and the figure drops UNDER it on a
+   phone, instead of the path breaking mid-name to make room for the number. */
+.carried-files > li { flex-wrap: wrap; row-gap: 0; }
+.carried-files .carried-label { flex: 1 1 14em; }
+.carried-path { overflow-wrap: anywhere; }

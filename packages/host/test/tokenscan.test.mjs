@@ -109,3 +109,28 @@ test("a big log does not hold the event loop", async () => {
   for (let i = 0; i < 3 && worst >= oneBuffer * 0.6; i++) worst = Math.min(worst, await longestStall());
   assert.ok(worst < oneBuffer * 0.6, `event loop held for ${Math.round(worst)} ms; the one-buffer read takes ${Math.round(oneBuffer)} ms`);
 });
+
+test("b is the first answered request's input+cache, present only when one was answered", async () => {
+  const { projects } = freshHome();
+  const sums = [];
+  for (const rel of ["-fx-repo-one/conv-a.jsonl", "-fx-repo-two/conv-users.jsonl"]) {
+    const p = join(projects, rel);
+    try { sums.push(await summarizeLog(p, statSync(p).size, 1)); } catch { /* fixture name may differ */ }
+  }
+  const a = sums[0];
+  assert.ok(a && typeof a.b === "number" && a.b > 0, "an answered log carries b");
+  assert.ok(a.b <= Object.values(a.x).reduce((n, t) => n + t[0] + t[2] + t[3], 0));
+  assert.equal(sums[1], null);
+});
+
+test("b skips an output-only first record and anchors on the first request that carried context", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "wp-tokenscan-b-"));
+  const p = join(dir, "conv.jsonl");
+  const rec = (id, usage) => JSON.stringify({ type: "assistant", timestamp: "2026-10-01T10:00:00Z", message: { id, model: "claude-opus-4-1", usage } });
+  writeFileSync(p, [
+    rec("m0", { input_tokens: 0, output_tokens: 12, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }),
+    rec("m1", { input_tokens: 3, output_tokens: 5, cache_read_input_tokens: 100, cache_creation_input_tokens: 40 }),
+  ].join("\n") + "\n");
+  const s = await summarizeLog(p, statSync(p).size, 1);
+  assert.equal(s.b, 143, "b is the first request with input or cache, never 0 from an output-only record");
+});

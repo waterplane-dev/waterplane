@@ -3,7 +3,7 @@
  * SAME `InstructionFile` row the Always-on view lists (`weighFolder` → `WeightDoc.files`). The
  * row counts characters; the lens says tokens, as chars / CHARS_PER_TOKEN, the same division the
  * view's headline prints — so the two cannot disagree. A file the inventory does not hold (nested,
- * `CLAUDE.local.md`, user-level) has no row and so no lens.
+ * user-level) has no row and so no lens; `CLAUDE.local.md` and `.claude/agents/*.md` now have rows, so they get one.
  */
 import { CHARS_PER_TOKEN, READER_NAME, fmtCount } from "@waterplane/shared";
 import type { InstructionFile, InstructionReader } from "@waterplane/shared";
@@ -12,12 +12,14 @@ import type { InstructionFile, InstructionReader } from "@waterplane/shared";
 export const LENS_PATTERNS = [
   "**/{CLAUDE.md,AGENTS.md,copilot-instructions.md,SKILL.md,*.instructions.md}",
   "**/.claude/rules/**/*.md",
+  "**/.claude/agents/*.md",
+  "**/CLAUDE.local.md",
 ];
-const NAMES = new Set(["CLAUDE.md", "AGENTS.md", "copilot-instructions.md", "SKILL.md"]);
+const NAMES = new Set(["CLAUDE.md", "CLAUDE.local.md", "AGENTS.md", "copilot-instructions.md", "SKILL.md"]);
 
 /** Files the inventory reads: saving any of them changes a folder's reading. Either separator. */
 export const isInstructionPath = (p: string): boolean =>
-  NAMES.has(p.split(/[\\/]/).pop() ?? "") || /\.instructions\.md$/.test(p) || /[\\/]\.claude[\\/]rules[\\/].*\.md$/.test(p);
+  NAMES.has(p.split(/[\\/]/).pop() ?? "") || /\.instructions\.md$/.test(p) || /[\\/]\.claude[\\/]rules[\\/].*\.md$/.test(p) || /[\\/]\.claude[\\/]agents[\\/][^\\/]*\.md$/.test(p);
 
 const tok = (chars: number): string => `~${fmtCount(Math.round(chars / CHARS_PER_TOKEN))}`;
 

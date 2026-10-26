@@ -88,6 +88,7 @@ import type { CoreApi } from "./sdk/types";
 import { showToast } from "./toast";
 import { Button } from "./kit/Button";
 import { Hint } from "./kit/Hint";
+import { AlwaysOnRows, type SessionDoor } from "./AlwaysOnRows";
 import { AcceptControl, AcceptedSection, DigestGroup } from "./ExposureAccept";
 import {
   WATCH_HEAD_WORDS, WATCH_REGION_WORDS, cutElsewhereWords, exposureCut, exposureMeta, inExposureMainList,
@@ -132,7 +133,7 @@ interface Props {
    * it: a finding and a reading are not the same kind of thing, and a filter
    * named for one must not appear to have cut the other.
    */
-  focus?: "findings";
+  focus?: "findings" | "context-weight";
   /**
    * Send a check's remedy prompt, or a series reading's question, at the repo
    * it belongs to.
@@ -154,11 +155,20 @@ interface Props {
   onSeed?: (seed: SendSeed) => void;
   /** Region 3: open the capture sheet for this repo. */
   onCapture?: (repo: RepoTarget) => void;
+  /** The context-weight row's doors: this repo's live sessions, each opening what its own first
+   *  request carried. A function because the repo is this sheet's own state. */
+  sessionDoorsFor?: (repoId: string) => SessionDoor[];
+  /** The context-weight row's door to the all-sessions token screen. */
+  onAllSessions?: () => void;
+  /** The always-on list's file door, whose Back lands on the checklist (not the series, as
+   *  `onOpenFile`'s does). Falls back to `onOpenFile`. */
+  onOpenInstructionFile?: (repoId: string, relPath: string) => void;
   onClose: () => void;
 }
 
 export function SetupSheet({
-  repos, initialRepoId, initialRegion = "setup", focus, onRemedy, onOpenFile, onSeed, onCapture, onClose,
+  repos, initialRepoId, initialRegion = "setup", focus, onRemedy, onOpenFile, onSeed, onCapture,
+  sessionDoorsFor, onAllSessions, onOpenInstructionFile, onClose,
 }: Props) {
   const primaryRepos = repos.filter((r) => r.isPrimary);
   // A worktree can be badged too, so the picker (primaries only) may not list
@@ -317,6 +327,12 @@ export function SetupSheet({
     if (!setupChecks.some(isSetupFinding) && watchChecks.some(isSetupFinding)) setRegion("watch");
   }, [landed, report, cut, region, setupChecks, watchChecks]);
 
+  // `focus: "context-weight"` (the context sheet's door): bring that row into view once it is drawn.
+  useEffect(() => {
+    if (focus !== "context-weight" || !report || region !== "setup") return;
+    document.querySelector('[data-check="context-weight"]')?.scrollIntoView({ block: "start" });
+  }, [focus, report, region, repoId]);
+
   const plot = view?.plot ?? null;
   const claudeMdSeries = plot?.series.find((s) => s.key === CLAUDE_MD_KEY) ?? null;
 
@@ -403,6 +419,9 @@ export function SetupSheet({
               onRemedy={onRemedy}
               claudeMdSeries={claudeMdSeries}
               descSeries={plot?.series.find((s) => s.key === DESC_KEY) ?? null}
+              onOpenFile={onOpenInstructionFile ?? onOpenFile}
+              sessionDoors={sessionDoorsFor?.(repoId)}
+              onAllSessions={onAllSessions}
             />
             {/* Not a check — a choice about this repo, kept beside the checklist
                 because this is the screen a repo's own settings are on. */}
@@ -434,6 +453,7 @@ export function SetupSheet({
 function SetupRegion({
   kind, elsewhere, onElsewhere, onOptIns, repoId, repo, res, report, rows, allRows, cut, onClearCut, busy, fixError, fixNotes, presets, canAsk,
   bulkCount, patchable, forAgent, onFix, onIgnore, onAccept, onFixAll, onRemedy, claudeMdSeries, descSeries,
+  onOpenFile, sessionDoors, onAllSessions,
 }: {
   /** Which cut of the checklist this is: the conventions, or the daily watch (`isWatchCheck`). */
   kind: "setup" | "watch";
@@ -469,7 +489,18 @@ function SetupRegion({
    *  there is one. Region 1 draws it on exactly one row and nowhere else. */
   claudeMdSeries: RepoHealthPlotSeries | null;
   descSeries: RepoHealthPlotSeries | null;
+  /** The always-on list under the context-weight row (`AlwaysOnRows`): its file door and session doors. */
+  onOpenFile?: (repoId: string, relPath: string) => void;
+  sessionDoors?: SessionDoor[];
+  onAllSessions?: () => void;
 }) {
+  // What the context-weight row's figure is made of, file by file, plus this desktop's rows and
+  // the doors to what a live session actually carried. Absent `instructions` (an older host) is
+  // said by the component, never drawn as an empty list.
+  const aoRows = report
+    ? <AlwaysOnRows doc={report.instructions} repoId={repoId} onOpenFile={onOpenFile}
+        sessionDoors={sessionDoors} onAllSessions={onAllSessions} />
+    : null;
   function card(c: ComplianceCheck) {
     if (!report) return null;
     // Per row, the same two answers as the bulk button. A preset is
@@ -507,9 +538,10 @@ function SetupRegion({
       : null;
     return <Row key={c.id} c={c} busy={busy} onFix={onFix} remedy={ask}
       size={report.autoCompactDefault} onIgnore={onIgnore}
-      extra={<>{twin}{limits}{xp}</>} />;
+      extra={<>{twin}{c.id === "context-weight" ? aoRows : null}{limits}{xp}</>} />;
   }
   const xcut = exposureCut(allRows);
+  const hasAlwaysOn = !!(report?.instructions?.files.length || report?.instructions?.desktop?.length);
 
   return (
     <>
@@ -614,15 +646,18 @@ function SetupRegion({
               out of nowhere later. Drawn under the cut as well: the line is
               not a finding, so hiding it with the passing rows would remove a
               control that has nothing to do with the filter. */}
-          {kind === "setup" && report.contextLimits && !allRows.some((c) => c.id === "context-weight") && (
+          {kind === "setup" && (report.contextLimits || hasAlwaysOn) && !allRows.some((c) => c.id === "context-weight") && (
             <div className="check-row check-pass">
               <div className="check-top"><span className="check-label">Agent context weight</span></div>
               <div className="check-detail">
-                Nothing to weigh yet — this repo has no CLAUDE.md. These are the thresholds it will be
-                measured against once it does.
+                Nothing to weigh yet — this repo has no CLAUDE.md.
+                {report.contextLimits ? " These are the thresholds it will be measured against once it does." : ""}
               </div>
-              <ContextLimitsEditor repoId={repoId} view={report.contextLimits}
-                setAt={report.contextLimitsSetAt} onReport={(r) => res.set(r)} />
+              {/* No CLAUDE.md is not no always-on context: a `.mcp.json` server, a subagent or
+                  this desktop's own files still ride every turn, so their list is drawn here too. */}
+              {hasAlwaysOn && aoRows}
+              {report.contextLimits && <ContextLimitsEditor repoId={repoId} view={report.contextLimits}
+                setAt={report.contextLimitsSetAt} onReport={(r) => res.set(r)} />}
             </div>
           )}
         </>
@@ -707,7 +742,7 @@ function Row({ c, busy, onFix, onIgnore, size, remedy, extra }: {
   // saying so, because amber beside the badge's findings read as one of them.
   const consider = isSetupConsider(c);
   return (
-    <li className={`check-row check-${consider ? "consider" : c.status}`}>
+    <li className={`check-row check-${consider ? "consider" : c.status}`} data-check={c.id}>
       <div className="check-top">
         <span className="check-icon">{consider ? <Lightbulb size={16} color="var(--accent)" /> : STATUS_ICON[c.status]}</span>
         <span className="check-label">{c.label}{consider && <span className="check-kind"> · consider</span>}</span>

@@ -93,14 +93,22 @@ const agentTurn = (at, id, tok) => JSON.stringify({
   },
 });
 
+/** An always-on `attachment` record, the shape the CLI writes before its first request. */
+const attachment = (at, a) => JSON.stringify({ parentUuid: null, isSidechain: false, type: "attachment", uuid: `att${at}`, timestamp: iso(at), attachment: a });
+
 /** One climb to an auto-compaction, a wall, then a second climb. */
 function writeConversation(home, cwd, cid) {
   const dir = join(home, ".claude", "projects", cwd.replace(/[^a-zA-Z0-9]/g, "-"));
   mkdirSync(dir, { recursive: true });
-  const lines = [];
+  // What the first request carried (`carried`): two kinds before it, one delta after it.
+  const lines = [
+    attachment(T0 - 2_000, { type: "instructions", files: [{ path: `${cwd}/CLAUDE.md`, type: "Project", content: "x".repeat(4_000) }] }),
+    attachment(T0 - 1_900, { type: "skill_listing", content: "s".repeat(1_200), skillCount: 2, isInitial: true, names: ["one", "two"] }),
+  ];
   for (let i = 0; i < 12; i++) {
     lines.push(prompt(T0 + i * 60_000 - 500, `a${i}`, `climbing turn ${i}`));
     lines.push(turn(T0 + i * 60_000, `a${i}`, 20_000 + i * 14_000));
+    if (i === 0) lines.push(attachment(T0 + 1_000, { type: "mcp_instructions_delta", addedNames: ["late"], addedBlocks: ["m".repeat(300)], removedNames: [] }));
   }
   lines.push(compact(T0 + 12 * 60_000, 182_000, 9_000));
   // A streaming duplicate, split so the reader has to dedupe by message id. ONE
@@ -206,6 +214,14 @@ try {
       const l = doc.events.find((e) => e.kind === "limit");
       check(Math.abs((l?.resetAt ?? 0) - (T0 + 18 * 60_000)) < 1000, "the wall carries the reset as an INSTANT, seconds scaled to ms");
       check(l?.weekly !== true, "a five-hour wall is not marked weekly");
+
+      // What the first request carried, anchored on that request's own tokens.
+      const car = doc.carried;
+      check(car?.firstRequestTok === 20_000, `carried is anchored on the first request's tokens (got ${car?.firstRequestTok})`);
+      check(car?.parts?.map((p) => p.kind).join(",") === "instructions,skill_listing",
+        `the parts logged before it, in display order (got ${car?.parts?.map((p) => p.kind).join(",")})`);
+      check(car?.parts?.[0]?.chars === 4_000 && car?.parts?.[1]?.count === 2, "each part's chars and count are the record's");
+      check(car?.laterDeltas === 1, `a delta after the first request is counted, not folded in (got ${car?.laterDeltas})`);
 
       // The window — the whole reason every graph shares one y axis.
       // The series peaked at 174k, inside the default window, so the id rule

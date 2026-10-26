@@ -21,12 +21,13 @@ import { execFile, execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { BRAND, LEGACY } from "@waterplane/shared";
-import type { AutoCompactResolution, BuildCandidate, ComplianceCheck, ComplianceAcceptRequest, ComplianceAcceptResult, ComplianceFixResult, ComplianceIgnoreResult, ComplianceLimitsResult, ComplianceReport, ContextLimitsView, ContextWeightLimits, RepoTarget, RepoSetupState, AgentFilesFs } from "@waterplane/shared";
-import { ADVISORY_CHECKS, AUTO_COMPACT_ENV, CONFIRM_GATED_FIXES, ERA_SEEN_FIX, EXPOSURE_SUMMARY_ID, PROTECT_MAIN_FIX, autoCompactVerdict, isSetupFinding, resolveAutoCompact, resolveContextLimits, sanitizeContextLimits, weighContext, withAutoCompactWindow, claudeWeightInput, copilotWeightWords, fmtCount, instructionInventory, instructionTotals, overlapWords } from "@waterplane/shared";
+import type { AutoCompactResolution, BuildCandidate, ComplianceCheck, ComplianceAcceptRequest, ComplianceAcceptResult, ComplianceFixResult, ComplianceIgnoreResult, ComplianceLimitsResult, ComplianceReport, ContextLimitsView, ContextWeightLimits, RepoTarget, RepoSetupState } from "@waterplane/shared";
+import { ADVISORY_CHECKS, AUTO_COMPACT_ENV, CONFIRM_GATED_FIXES, ERA_SEEN_FIX, EXPOSURE_SUMMARY_ID, PROTECT_MAIN_FIX, autoCompactVerdict, isSetupFinding, resolveAutoCompact, resolveContextLimits, sanitizeContextLimits, weighContext, withAutoCompactWindow, claudeWeightInput, copilotWeightWords, countedByThreshold, fmtCount, instructionInventory, instructionTotals, overlapWords } from "@waterplane/shared";
 import { adoptRepoStateDir, legacyRepoStateDirs, repoSharedDir, repoStateDir } from "./branddirs.js";
 import { mergeBuilds, readBuildsFile } from "./builds.js";
 import { env } from "./env.js";
 import { claudeConfigDir } from "./claudeconfig.js";
+import { repoInstructionsDocOrWhy, worktreeFs } from "./alwayson.js";
 import { contextLimitsStore, repoContextLimits } from "./contextlimits.js";
 import { exposureChecksFor } from "./exposure.js";
 import { acceptCheck, autoCompactDefault, ignoredChecks, setupPrefsStore } from "./setupprefs.js";
@@ -84,22 +85,6 @@ function envContextLimits(): Partial<ContextWeightLimits> {
  */
 export function contextLimitsFor(worktree: string): ContextLimitsView {
   return resolveContextLimits(envContextLimits(), repoContextLimits(worktree));
-}
-
-/** A worktree as `AgentFilesFs`, every path through `contained`: an unreadable file is absent. */
-function worktreeFs(worktree: string): AgentFilesFs {
-  return {
-    read: (rel) => {
-      const abs = contained(worktree, rel);
-      if (!abs) return null;
-      try { return readFileSync(abs, "utf8"); } catch { return null; }
-    },
-    list: (rel) => {
-      const abs = contained(worktree, rel);
-      if (!abs) return [];
-      try { return readdirSync(abs, { withFileTypes: true }).map((e) => ({ name: e.name, dir: e.isDirectory() })); } catch { return []; }
-    },
-  };
 }
 
 /** The repo file the `auto-compact` fix writes. */
@@ -302,9 +287,11 @@ export function inspectRepo(worktree: string, git: GitProbe = liveProbe(worktree
     // the VS Code extension's rules too). The host cannot see VS Code's settings, so no switch is
     // known and Copilot is counted as reading what it reads by default.
     const { files, overlaps } = instructionInventory(worktreeFs(worktree));
-    if (files.length > 0) {
+    if (files.some(countedByThreshold)) {
       const lim = contextLimitsFor(worktree);
-      const claude = files.some((f) => f.parts.some((p) => p.readers.includes("claude")));
+      // Over what the threshold COUNTS (`countedByThreshold`, D1): a repo whose only Claude rows
+      // are a subagent or an `.mcp.json` server has nothing the reading weighs.
+      const claude = files.some((f) => countedByThreshold(f) && f.parts.some((p) => p.readers.includes("claude")));
       const w = weighContext(claudeWeightInput(files), lim.effective, lim.source);
       const said = [
         claude ? (w.advice ? `${w.note} ${w.advice}` : w.note) : null,
@@ -624,6 +611,9 @@ export function checkRepoCompliance(target: RepoTarget): ComplianceReport {
     contextLimits: contextLimitsFor(target.worktreePath),
     contextLimitsSetAt: contextLimitsStore()?.setAt(target.worktreePath) ?? null,
     autoCompactDefault: autoCompactDefault(),
+    // The always-on list (repo + this desktop). Here, not in `inspectRepo`: the sweep records
+    // checks only. Absent on a throw, never a partial list.
+    instructions: repoInstructionsDocOrWhy(target.worktreePath),
   };
 }
 

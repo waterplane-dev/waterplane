@@ -301,6 +301,19 @@ test("no repo hue makes the tab you are IN unreadable", () => {
   }
 });
 
+test("text on a tinted tab row is the ink proven readable on the tint", () => {
+  // The test above proves `--fg` on every hue's fill and nothing else; a row's
+  // second line in `--muted` read ~2:1 on the open row (owner's screenshot,
+  // 2026-10-26). Every text colour inside a `.stab-row` must therefore be `--fg`.
+  for (const sel of [".stab-row", ".stab-row-label", ".stab-row-sub"]) {
+    const at = CSS.indexOf(sel + " {");
+    assert.ok(at >= 0, `no block for ${sel}`);
+    const body = CSS.slice(at, CSS.indexOf("}", at)).replace(/\/\*[\s\S]*?\*\//g, "");
+    const m = /(?:^|[;{\s])color\s*:\s*([^;]+)/.exec(body);
+    if (m) assert.equal(m[1].trim(), "var(--fg)", `${sel} draws text in ${m[1].trim()} on the repo tint`);
+  }
+});
+
 test("the colour-blind-safe ring is actually separable under CVD", () => {
   // A hue GAP cannot say this — 12° and 40° are the same colour to a
   // deuteranope — so the ring is measured HERE, where the saturation and

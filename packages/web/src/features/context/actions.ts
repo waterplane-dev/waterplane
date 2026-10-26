@@ -3,7 +3,7 @@
  */
 import { replanPromptText, type RepoTarget, type SessionInfo } from "@waterplane/shared";
 import { core } from "../../sdk";
-import { compactToast, replanBlockedToast, replanDoneToast } from "./logic";
+import { compactToast, contextFallbackToast, replanBlockedToast, replanDoneToast } from "./logic";
 import { explainCostPrompt } from "../../explainCost";
 import { ctxSid } from "./store";
 
@@ -28,9 +28,42 @@ export function openContext(): void {
   core().nav.open("context");
 }
 
+/**
+ * `nav.openContext(id)`: a session by id, or (null) the sheet already open for another session, else the attached one.
+ * Null with a non-attached session's sheet already open keeps ITS session (the tokens sheet's door closes
+ * itself and must land back on the conversation it was reached from). An id nobody lists falls
+ * back to the attached session AND says so.
+ */
+export function openContextById(id: string | null): void {
+  const c = core();
+  if (id === null && ctxSid.get() !== null) return; // a sheet for another session is open underneath
+  const s = id ? c.world.sessions.find((x) => x.id === id) : undefined;
+  if (s) { openContextFor(s); return; }
+  openContext();
+  if (id) c.say.toast(contextFallbackToast(c.world.active ? c.world.sessionRowTitle(c.world.active) : null));
+}
+
 export function closeContext(): void {
   ctxSid.set(null);
   core().nav.close("context");
+}
+
+/**
+ * The door to the repo readings sheet's Setup region: what this repo and this desktop WILL put in
+ * every turn, beside what this conversation's first request did carry. The context sheet is NOT
+ * closed — Back returns to it.
+ */
+export function openSetupFromContext(repoId: string): void {
+  const c = core();
+  c.say.track("action:ctx.setup");
+  c.nav.openSetup(repoId, { region: "setup", focus: "context-weight" });
+}
+
+/** The door to the all-sessions token screen. The context sheet stays under it. */
+export function openTokensFromContext(): void {
+  const c = core();
+  c.say.track("action:ctx.tokens");
+  c.nav.open("tokens");
 }
 
 /** The sheet's fresh-session door: close it (dropping whose sheet it was) and

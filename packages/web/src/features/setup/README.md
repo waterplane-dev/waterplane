@@ -8,7 +8,7 @@ readings (`shared/optins.ts`), also counted in nothing. The sheet is the flat `S
 `RepoHealthRegion.tsx` + `OptInRegion.tsx`; the rules are the `web-work` skill's.
 
 **Owns** (`store.ts`; one writer, `actions.ts`): where the sheet is AIMED — `setupRepo` (the repo
-a badge or menu opened it on), `setupAim` (`region`, and `focus: "findings"` when a badge's COUNT
+a badge or menu opened it on), `setupAim` (`region`, and `focus: "findings"` (or `"context-weight"`: scroll to that row, from the context sheet) when a badge's COUNT
 opened it: a count on a control is a filter), `healthRepo` (the `repohealth` alias's repo). Each
 is the tap, never a setting; the sheet's close clears it.
 
@@ -25,8 +25,14 @@ chosen; nothing is sent by the tap. Shared by BOTH doors, because inline in one 
 `openRepoFile` — the tree opened on a file, returning to region 2.
 `seedSend` — `remedy`'s opener for a seed built whole (an opt-in's clock and model ride with its
 words); `openCaptureFromReadings` — an opt-in's `open captures`, via `nav.openCapture`.
+The context-weight row's always-on list (`AlwaysOnRows.tsx`, read-only): `openInstructionFile`
+(a repo row's file, returning to region 1), `sessionDoorsFor(repoId)` (this repo's running
+sessions, each a door to `openSessionContext` → `nav.openContext`: what its first request carried)
+and `openAllSessions` (the token screen). Tracked as `action:setup.ctxFromRow` /
+`action:setup.allSessions`.
 
-**Reads from core**: `world.repos`, `nav.openSend/open/close/overlay`, `say.track`,
+**Reads from core**: `world.repos`, `world.sessions/sessionRepo/sessionRowTitle`,
+`nav.openSend/open/openContext/close/overlay`, `say.track`,
 `files.browseTo(repoId, file, back)` (the tree, returning here), `world.refreshRepos()` (closing
 the checklist re-reads the badges).
 

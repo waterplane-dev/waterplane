@@ -593,3 +593,46 @@ svg.lucide[width="28"] { width: calc(28px * var(--ui-icon, 1)); height: calc(28p
   padding: var(--sp-2) 0; font-size: calc(var(--fs-12) * var(--ui-font, 1));
 }
 .rh-twin-key { flex: 1 1 12ch; min-width: 0; color: var(--muted); }
+
+/* The context-weight row's always-on list (`AlwaysOnRows.tsx`): every file a repo and this desktop
+   put in every turn, under the check it explains. Same gutter as the twin, so it reads as part of
+   that row; rows stack path / kind / weight because a path does not fit beside two lines of words. */
+.readings-sheet .ao-rows { margin: var(--sp-6) 0 var(--sp-2) var(--sp-24); }
+.readings-sheet .ao-rows .ts-filter { display: flex; flex-wrap: wrap; gap: var(--sp-4); margin: var(--sp-6) 0; }
+.readings-sheet .ao-group-head {
+  margin-top: var(--sp-8); font-size: calc(var(--fs-12) * var(--ui-font, 1));
+  font-weight: var(--fw-semibold); color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em;
+}
+.readings-sheet .ao-list { list-style: none; margin: var(--sp-4) 0 0; padding: 0; }
+.readings-sheet .ao-list .row {
+  flex-direction: column; align-items: stretch; gap: var(--sp-2); padding: var(--sp-8) var(--sp-10);
+}
+.readings-sheet .ao-row-path {
+  white-space: normal; overflow-wrap: anywhere; font-size: calc(var(--fs-14) * var(--ui-font, 1));
+}
+.readings-sheet .ao-unsized { font-style: italic; }
+.readings-sheet .ao-doors { flex-wrap: wrap; margin-top: var(--sp-8); }
+/* The always-on strip (`alwaysOnPlot.ts`): every-turn chars per file, coloured by what the threshold
+   does with them, drawn on the token screens' `.ts-bar`/`.ts-legend`. A seam separates two files
+   only where both are wide enough to show one; the picked file is ringed in ink. Unsized rows are
+   OUTLINED markers of their own width (their name), never a length on the bar. */
+.readings-sheet .ao-strip { margin: var(--sp-6) 0 var(--sp-8); }
+.readings-sheet .ao-strip-head { font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--fg); margin-bottom: var(--sp-6); }
+.readings-sheet .ao-bar { height: 18px; touch-action: pan-y; cursor: pointer; }
+.readings-sheet .ao-bar .ao-seam { box-shadow: inset -1px 0 0 var(--panel); }
+.readings-sheet .ao-bar .ao-on { box-shadow: inset 0 0 0 2px var(--fg); }
+.readings-sheet .ao-readout {
+  min-height: 2.6em; padding-top: var(--sp-4); overflow-wrap: anywhere;
+  font-size: calc(var(--fs-12) * var(--ui-font, 1)); line-height: var(--lh-15); color: var(--fg);
+}
+.readings-sheet .ao-strip .ts-legend { padding-top: var(--sp-4); }
+.readings-sheet .ao-marks {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4) var(--sp-6); margin-top: var(--sp-8);
+  font-size: calc(var(--fs-12) * var(--ui-font, 1));
+}
+.readings-sheet .ao-marks-lead { color: var(--muted); }
+.readings-sheet .ao-mark {
+  padding: 0 var(--sp-6); border: 1px dashed var(--muted); border-radius: var(--r-4);
+  color: var(--fg); overflow-wrap: anywhere;
+}
+.readings-sheet .ao-strip-note { margin-top: var(--sp-6); font-size: calc(var(--fs-12) * var(--ui-font, 1)); color: var(--muted); }

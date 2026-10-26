@@ -145,6 +145,9 @@ footer { margin-top: 24px; padding-top: 10px; border-top: 1px solid var(--line);
 
 .wt-split { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: var(--line); margin-top: 4px; }
 .wt-seg { display: block; flex-basis: 0; }
+/* Positioned segments (the always-on strip): each at the geometry's own x/w, so a sliver keeps its width. */
+.wt-split.wt-pos { display: block; position: relative; }
+.wt-pos .wt-seg { position: absolute; top: 0; bottom: 0; }
 .wt-a { background: var(--chart-1); }
 .wt-b { background: var(--chart-3); }
 
@@ -443,3 +446,11 @@ button.ts-perreq-row { cursor: pointer; }
 /* A tile's prompt block is a paragraph with its buttons, not one more verb: it takes the whole
    row of the tile's action strip, and the tile's `fold` wraps under it. */
 .rh-region .rh-tile-acts > .rh-ask { flex: 1 1 100%; }
+
+/* What every turn carries (web CarriedSection.tsx): the phone's `.row` lives in a stylesheet this panel does not import. */
+.carried-list .row { display: flex; flex-direction: column; align-items: stretch; gap: 2px; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+.carried-list .row-title { font-weight: 600; }
+.carried-list .row-sub { color: var(--muted); }
+.tab-links { padding: 6px 0 2px; }
+.tab-links .link-btn { padding: 0; }
+.wt-unsized { color: var(--muted); font-style: italic; }

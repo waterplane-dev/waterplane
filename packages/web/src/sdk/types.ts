@@ -290,7 +290,7 @@ export interface CoreApi {
     /** One repo's health chart (the readings sheet's `repohealth` door). */
     openRepoHealth(repo: RepoTarget): void;
     /** The repo-readings checklist on one repo (null = the sheet's own choice), aimed; the setup feature's `openSetup`. */
-    openSetup(repoId: string | null, aim?: { region?: "setup" | "series" | "optins" | "watch"; focus?: "findings" }): void;
+    openSetup(repoId: string | null, aim?: { region?: "setup" | "series" | "optins" | "watch"; focus?: "findings" | "context-weight" }): void;
     /** The context & cost sheet for ONE session by id (null = the attached one); never attaches. */
     openContext(sessionId: string | null): void;
     /** Automation (the `schedule` sheet), cut to exactly these rules under `label`;

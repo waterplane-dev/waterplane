@@ -5237,6 +5237,39 @@ theirs to do, while trimming a `CLAUDE.md` remains a judgement no checklist can 
 `ContextLimits.tsx` is the control, on the one row that quotes a number; `e2e-setup.mjs` pins the
 override reaching the CHECK, outranking env, being refused, and being given back.
 
+### What every turn carries — measured per session
+
+`context-weight` answers "what will this repo put in every turn" from the files. The session's own
+answer is read off the CLI's log: `ctxlog/ctxcursor.ts` keeps the `attachment` records written before
+the first assistant usage (`instructions`, `skill_listing`, `mcp_instructions_delta`,
+`deferred_tools_delta`, `agent_listing_delta`, `hook_additional_context`) through a substring
+pre-filter, and the first `prompt_snapshot`. That record is UNDOCUMENTED, so it is optional and
+labelled so; it may land after the anchor, and whichever is seen first is kept. The anchor is the
+first assistant usage (input + cache_creation + cache_read), shipped as `firstRequestTok` beside the
+per-part chars; what the parts do not explain is a named remainder row, not hidden. Only the INITIAL
+set counts; a later delta is a changed KIND (`laterDeltas` counts kinds, `laterKinds` names them; per-prompt hook context and an identical re-send, as on a resume, never count) and is said in a sentence. A resumed log's first
+request wins, so the phone says "measured on this log's first request". A log past `MAX_READ` is
+truncated but KEEPS `carried` (the head is read from byte 0); `carried` is absent only on an older host or a log whose head held no attachment record. It rides `GET /api/context`; no new
+message.
+
+### The desktop's rows
+
+The pure halves live in `@waterplane/shared`: `agentfiles.ts` (the repo inventory, with `countedByThreshold`), `desktopfiles.ts` (`desktopInventory`, taking an injected fs so the host and VS Code each read their own) and `alwaysonwords.ts` (`alwaysOnRows`, `carriedRows`: the one wording for phone and editor).
+
+`alwayson.ts` (`desktopInstructionRows`, `repoInstructionsDoc`) adds what this desktop puts in every
+session regardless of repo: user `CLAUDE.md`, the auto-memory `MEMORY.md`, user skills, plugin skills
+(`installed_plugins.json`), user MCP server names. It reads through `claudeconfig.ts`; `~/.claude.json`
+sits beside the default config dir and inside it under `CLAUDE_CONFIG_DIR`. MCP rows are unsized
+(names only). An unreadable plugin or MCP source is one row saying so. The compliance report carries
+this as `instructions`; the `context-weight` threshold is untouched (D1: subagent descriptions,
+`CLAUDE.local.md` and MCP rows are listed, not folded in, or the working-tree figure would drift from
+the commit-series figure). `desktopSources()` honours `enabledPlugins` (user < project < local
+settings): a disabled plugin is one row, not its skills. Local-scope MCP servers
+(`~/.claude.json` `projects[<realpath>].mcpServers`) and project plugins are listed unsized; a
+`.mcp.json` server in `disabledMcpjsonServers` is marked declined. Managed or synced plugin packs no
+file names are ONE unsized row pointing at the session's measured skill listing — the disk list is
+what is on disk, the session view is what was sent.
+
 ### `auto-compact` — how large one conversation may grow (`autocompact.ts`)
 
 Measured first: a subagent in one repo ran 819 requests averaging 484k of context and peaking at

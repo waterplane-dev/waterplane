@@ -153,7 +153,7 @@ const PINS = [
     // +1 sessions/sidechannel.ts (2026-10-22): a source turn's end re-asks for a fresh context sample (≤1.5 s).
     today: {
       "intents/manager.ts": 1, "localrt.ts": 1, "main.ts": 2, "opendeliveries.ts": 1,
-      "server/billingwire.ts": 1, "server/sessionEvents.ts": 1, "server/wsops.ts": 1, "sessions.ts": 1, "sessions/sidechannel.ts": 2, "setupwatch.ts": 1, "healthwatch.ts": 1, "diskwatch.ts": 1, "update.ts": 3, "usage.ts": 3, "usagesources.ts": 1,
+      "server/billingwire.ts": 1, "server/sessionEvents.ts": 1, "server/wsops.ts": 1, "sessions.ts": 1, "sessions/sidechannel.ts": 2, "setupwatch.ts": 1, "healthwatch.ts": 1, "diskwatch.ts": 1, "exposurepush.ts": 1, "update.ts": 3, "usage.ts": 3, "usagesources.ts": 1,
     },
     why: "an interval left in the facade AND its slice ticks twice",
   },

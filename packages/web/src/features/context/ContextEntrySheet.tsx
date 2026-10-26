@@ -8,7 +8,7 @@ import { backendMark } from "../../backendCaps";
 import { ContextSheet } from "../../ContextSheet";
 import { openSessionBudget } from "../../sessionBudgetDoor";
 import { REPLAN_NOTE, budgetLine } from "./logic";
-import { closeContext, compactSubject, explainCostOf, freshFromContext, replanSubject } from "./actions";
+import { closeContext, compactSubject, explainCostOf, freshFromContext, openSetupFromContext, openTokensFromContext, replanSubject } from "./actions";
 
 export function ContextEntrySheet({ subject }: { subject: SessionInfo }) {
   const core = useCore();
@@ -54,5 +54,10 @@ export function ContextEntrySheet({ subject }: { subject: SessionInfo }) {
     // sheet for THIS subject (a launcher row's tile is not the attached one).
     // Its spend is `budgetSparkOf`: a source session's own (`sourceSpend`), else the log's spark.
     budget={{ label: subject.budget ? sessionBudgetLabel(subject.budget.cfg) : null, line: budgetLine(subject.budget, Date.now(), budgetSparkOf(subject)), onOpen: () => openSessionBudget(subject.id) }}
+    // Doors to what the repo + desktop WILL carry (repo readings, Setup region) and to every
+    // conversation's split. No repo the desktop lists ⇒ that door is a sentence, never greyed.
+    onOpenSetup={repo ? () => openSetupFromContext(repo.id) : undefined}
+    setupCant={repo ? undefined : "this session's repo is not one the desktop lists"}
+    onOpenAllSessions={openTokensFromContext}
     onClose={closeContext} />;
 }

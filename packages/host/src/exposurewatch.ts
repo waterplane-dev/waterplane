@@ -95,3 +95,10 @@ export function addExposureTarget(wt: string): { added: boolean; note: string } 
   writeJsonAtomic(targetsPath(), { ...fresh, version: typeof fresh.version === "number" ? fresh.version : 1, targets: [...fresh.targets, entry] }, { space: 2, newline: true });
   return { added: true, note: `added ${String(entry.name)} to the exposure watch${gh ? ` (${gh})` : ""}` };
 }
+
+/** The REAL dirs on the watch (`targets.json`), or `null` when the file is present but unusable. */
+export function exposureWatchedDirs(): Set<string> | null {
+  const doc = readDoc();
+  if (!doc) return null;
+  return new Set(doc.targets.filter((t) => typeof t?.dir === "string").map((t) => real(t.dir as string)));
+}

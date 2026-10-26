@@ -1,7 +1,7 @@
 /** The context log's cursor: the types, the ranged line reader and the accumulators' blanks and projections. Moved from ctxlog.ts. */
 import { closeSync, openSync, readSync, statSync } from "node:fs";
-import type { ColdStarts, CompactionCost, CompactionLedger, ContextEvent, ContextSample, CostBreakdown, SkillLoad, TokenTotals } from "@waterplane/shared";
-import { costOf, zeroCost, zeroTotals } from "@waterplane/shared";
+import type { CarriedKind, CarriedPart, ColdStarts, CompactionCost, CompactionLedger, ContextEvent, ContextSample, CostBreakdown, SessionCarried, SkillLoad, TokenTotals } from "@waterplane/shared";
+import { CARRIED_KINDS, CARRIED_NAMES_CAP, costOf, zeroCost, zeroTotals } from "@waterplane/shared";
 import { localDay } from "../convlog.js";
 
 /** The most one read holds in memory. Every log is read forward in chunks of
@@ -42,6 +42,8 @@ export interface ContextLog {
   model: string | null;
   /** Every skill body the conversation loaded — see `SkillLoad`. */
   skills: SkillLoad[];
+  /** What this conversation's FIRST request carried — see `projectCarried`. Null when the log holds neither an attachment nor a first request. */
+  carried: SessionCarried | null;
   truncated: boolean;
   mtime: number;
 }
@@ -253,6 +255,8 @@ export interface SeriesCursor {
   effort: string | null;
   /** Skill bodies the log carried, oldest first, capped at `SKILL_CAP`. */
   skills: SkillLoad[];
+  /** The always-on attachments of the first request — see `CarriedTally`. */
+  carried: CarriedTally;
   truncated: boolean;
   /** Recent `message.id`s, for the streaming-duplicate rule. Bounded — the
    *  duplicates are adjacent, so a short memory is enough and an unbounded Set
@@ -381,8 +385,114 @@ export function blank(path: string): SeriesCursor {
     cost: zeroCost(), unpriced: 0, models: [], modelTok: [], cum: zeroTotals(),
     compaction: blankCompaction(), shedAuto: 0, shedManual: 0, pendingRebuild: null,
     prevTok: 0, prevAt: 0, cold: blankCold(),
-    autoCompactTok: null, model: null, effort: null, skills: [], truncated: false,
+    autoCompactTok: null, model: null, effort: null, skills: [], carried: blankCarried(), truncated: false,
     seen: new Set(), seenOrder: [],
   };
 }
 
+
+// ── What the first request carried ───────────────────────────────────────
+// Before its first request the CLI logs the always-on context it sends as
+// `attachment` records (instruction files, skill listing, MCP instructions,
+// deferred tool names, agent types, hook context) and, UNDOCUMENTED, a
+// `prompt_snapshot` (system prompt + tool schemas). Chars are the fact; tokens
+// per part are only ever an estimate on screen. The anchor is the first
+// sample's `tok`, so the unattributed rest is a named remainder, never hidden.
+
+/**
+ * The initial set, accumulated in the same forward pass. D2: records BEFORE the
+ * first request merge; a documented KIND that changed after it goes in `later`
+ * (a set, never a record count), never folded in. Not a change: `hook_context`
+ * (a UserPromptSubmit hook writes one EVERY turn) and a record identical to one
+ * in the initial set (`seen`: a `--resume` re-attaches it all). A
+ * `prompt_snapshot` fills a part the first time one carries it, before the
+ * anchor or after (measured: the tools came after the first usage).
+ */
+export interface CarriedTally { parts: Map<CarriedKind, CarriedPart>; firstReq: { t: number; tok: number } | null; later: Set<CarriedKind>; seen: Map<CarriedKind, Set<string>> }
+export const blankCarried = (): CarriedTally => ({ parts: new Map(), firstReq: null, later: new Set(), seen: new Map() });
+
+/** What makes two records of one kind the same attachment: its size, count, names and files. */
+const fingerprint = (p: CarriedPart): string =>
+  JSON.stringify([p.chars, p.count ?? null, p.names ?? [], (p.files ?? []).map((f) => [f.path, f.chars])]);
+
+/** The attachment `type`s read, keyed to the part they fill. */
+const ATTACHMENT_KIND: Record<string, CarriedKind> = {
+  instructions: "instructions", skill_listing: "skill_listing", mcp_instructions_delta: "mcp_instructions",
+  deferred_tools_delta: "deferred_tools", agent_listing_delta: "agent_listing", hook_additional_context: "hook_context",
+};
+const SNAPSHOT = "prompt_snapshot";
+/** Pre-filter substrings: unescaped, so they match only as structure (ctxupdate.ts's `tool_result` argument). */
+export const CARRIED_MARKS: readonly string[] = [...Object.keys(ATTACHMENT_KIND), SNAPSHOT].map((k) => `"type":"${k}"`);
+
+const strs = (v: unknown): string[] =>
+  typeof v === "string" ? [v] : Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+const charsOf = (v: unknown): number => strs(v).reduce((n, s) => n + s.length, 0);
+const withNames = (names: string[]) => (names.length ? { names: names.slice(0, CARRIED_NAMES_CAP) } : {});
+const objs = (v: unknown): Record<string, unknown>[] =>
+  Array.isArray(v) ? v.filter((x): x is Record<string, unknown> => !!x && typeof x === "object") : [];
+
+/** The always-on parts one `attachment` record carries; a shape that moved yields NO part, never a zero. */
+export function carriedPartsOf(row: Record<string, unknown>): CarriedPart[] {
+  const a = row.type === "attachment" ? row.attachment as Record<string, unknown> | undefined : undefined;
+  if (!a || typeof a !== "object" || typeof a.type !== "string") return [];
+  if (a.type === SNAPSHOT) {
+    const out: CarriedPart[] = [];
+    if (strs(a.systemPrompt).length) out.push({ kind: "system_prompt", chars: charsOf(a.systemPrompt), undocumented: true });
+    if (Array.isArray(a.tools)) {
+      // `schema` is what goes on the wire; the entry repeats the description beside it.
+      const tools = objs(a.tools);
+      const names = tools.map((x) => x.name).filter((x): x is string => typeof x === "string");
+      out.push({ kind: "tool_schemas", chars: tools.reduce((n, x) => n + JSON.stringify(x.schema ?? x).length, 0), count: tools.length, ...withNames(names), undocumented: true });
+    }
+    return out;
+  }
+  const kind = ATTACHMENT_KIND[a.type];
+  const named = (chars: number, names: string[], count = names.length): CarriedPart[] => [{ kind, chars, count, ...withNames(names) }];
+  switch (kind) {
+    case "instructions": {
+      if (!Array.isArray(a.files)) return [];
+      const files = objs(a.files).map((f) => ({ path: typeof f.path === "string" ? f.path : "", type: typeof f.type === "string" ? f.type : "", chars: charsOf(f.content) }));
+      return [{ kind, chars: files.reduce((n, f) => n + f.chars, 0), count: files.length, files }];
+    }
+    case "skill_listing":
+      return typeof a.content === "string" ? named(a.content.length, strs(a.names), typeof a.skillCount === "number" ? a.skillCount : strs(a.names).length) : [];
+    case "mcp_instructions": return named(charsOf(a.addedBlocks), strs(a.addedNames));
+    // + `surfacedDefinitions`: full MCP tool definitions riding in the same record.
+    case "deferred_tools": return named(charsOf(a.addedLines) + objs(a.surfacedDefinitions).reduce((n, d) => n + JSON.stringify(d.definition ?? d).length, 0), strs(a.addedNames));
+    case "agent_listing": return named(charsOf(a.addedLines), strs(a.addedTypes));
+    case "hook_context": return named(charsOf(a.content), typeof a.hookEvent === "string" ? [a.hookEvent] : [], 1);
+    default: return [];
+  }
+}
+
+/** Fold one record's parts into the tally under D2 (see `CarriedTally`). */
+export function foldCarried(c: CarriedTally, parts: CarriedPart[]): void {
+  for (const p of parts) {
+    const had = c.parts.get(p.kind);
+    if (p.undocumented) { if (!had) c.parts.set(p.kind, p); continue; }
+    if (c.firstReq) {
+      if (p.kind !== "hook_context" && !c.seen.get(p.kind)?.has(fingerprint(p))) c.later.add(p.kind);
+      continue;
+    }
+    let fp = c.seen.get(p.kind);
+    if (!fp) c.seen.set(p.kind, (fp = new Set()));
+    fp.add(fingerprint(p));
+    if (!had) { c.parts.set(p.kind, { ...p }); continue; }
+    had.chars += p.chars;
+    if (p.count != null) had.count = (had.count ?? 0) + p.count;
+    if (p.names) had.names = [...(had.names ?? []), ...p.names].slice(0, CARRIED_NAMES_CAP);
+    if (p.files) had.files = [...(had.files ?? []), ...p.files];
+  }
+}
+
+/**
+ * The wire shape, parts in `CARRIED_KINDS` order; null when the log said nothing
+ * about either side. `truncated` does NOT withhold it: the log is read forward
+ * from byte 0, so the first request is always seen — only the chart is capped.
+ */
+export function projectCarried(c: CarriedTally): SessionCarried | null {
+  if (!c.parts.size && !c.firstReq) return null;
+  const parts = CARRIED_KINDS.flatMap((k) => { const p = c.parts.get(k); return p ? [{ ...p }] : []; });
+  const later = CARRIED_KINDS.filter((k) => c.later.has(k));
+  return { firstRequestTok: c.firstReq?.tok ?? null, firstRequestAt: c.firstReq?.t ?? null, parts, laterDeltas: later.length, ...(later.length ? { laterKinds: later } : {}) };
+}

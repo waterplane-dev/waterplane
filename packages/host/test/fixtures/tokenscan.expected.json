@@ -973,7 +973,8 @@
       "total": 0
      }
     }
-   ]
+   ],
+   "firstTok": 31200
   },
   {
    "id": "conv-b",
@@ -1011,7 +1012,8 @@
     "cacheWrite": 0,
     "total": 0
    },
-   "agents": 0
+   "agents": 0,
+   "firstTok": 900
   }
  ],
  "firstAt": 1782864000000,

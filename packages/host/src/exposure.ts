@@ -108,6 +108,22 @@ function seriesFor(worktree: string): Series | null {
   return null;
 }
 
+/** Every stored series' newest row with its accepts, for the push sweep. Reuses `newestRow`'s mtime+size cache,
+ *  so a quiet day costs one stat per file. A series with no readable row is skipped. Never throws. */
+export function exposureSeriesAll(): Array<{ row: ExposureRow; accepts: Record<string, ExposureAccept> | null; unreadable?: boolean }> {
+  const out: Array<{ row: ExposureRow; accepts: Record<string, ExposureAccept> | null; unreadable?: boolean }> = [];
+  try {
+    const dir = seriesDir();
+    for (const f of readdirSync(dir).filter((n) => n.endsWith(".jsonl")).sort()) {
+      const row = newestRow(join(dir, f));
+      if (!row || typeof row.dir !== "string") continue;
+      const acc = readAccepts(join(dir, `${f.slice(0, -".jsonl".length)}.accepted.json`));
+      out.push({ row, accepts: acc.ok ? acc.data : null, ...(acc.ok ? {} : { unreadable: true }) });
+    }
+  } catch { /* no dir yet: nothing stored */ }
+  return out;
+}
+
 /** A warn summary when a series we read before names this worktree but cannot be read now. */
 function unreadableRow(worktree: string): ComplianceCheck[] {
   const dir = seriesDir();

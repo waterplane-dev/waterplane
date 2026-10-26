@@ -31,3 +31,5 @@ the 900-line cap and the cut order: [token-stats-architecture.md](../../../docs/
   the claude-local tab, a host-side cut of the same buckets); `web/overview.ts` + `AllBackendsView.tsx`
   — the "All backends" cards, one unit each, never summed. Why and the price file:
   [token-stats-architecture.md](../../../docs/notes/token-stats-architecture.md#local-models-all-backends-and-your-own-prices).
+
+- `web/AlwaysOnDoors.tsx` — two doors at the top of the all-sessions screen: the attached session's context view and Repo readings › set-up (Agent context weight), plus one sentence on where "what every turn carries" is read. It links only; no figure is computed or averaged here (repos differ, so a mean would have no object). Without an attached session the context door is a sentence, not a dimmed button.

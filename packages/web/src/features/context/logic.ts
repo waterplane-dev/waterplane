@@ -14,6 +14,11 @@ export function contextSubject<S extends { id: string }>(sid: string | null, ses
   return (sid ? sessions.find((x) => x.id === sid) : null) ?? active;
 }
 
+/** Said when a door asked for a conversation and the sheet opened on another: never a silent swap. */
+export function contextFallbackToast(attachedTitle: string | null): string {
+  return attachedTitle ? `that conversation is not listed — showing ${attachedTitle}` : "that conversation is not listed, and none is attached";
+}
+
 /** The receipt for `/compact` sent from the cost panel. */
 export function compactToast(online: boolean, title: string): string {
   return online ? `sent /compact to ${title}` : "queued /compact — sends when the link is back";

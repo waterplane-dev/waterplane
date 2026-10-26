@@ -8,6 +8,7 @@ import type {
   BackendTokensDoc, ColdStarts, CompactionLedger, ContextEvent, ContextSample, ContextWindowSource, CostBreakdown,
   CostConvo, CostWindowDoc, SkillWeight, ContextWeightReading, TokenStatsDoc, TokenTotals, UsageNowDoc,
 } from "@waterplane/shared";
+import type { SessionCarried } from "@waterplane/shared";
 import type { InstructionFile, InstructionOverlap, InstructionReader, InstructionTotals } from "@waterplane/shared";
 import type { AgentRun, HealthIndexResponse, RepoHealthMeasure, RepoHealthOutcome, RepoHealthPlot, RepoHealthSeries } from "@waterplane/shared";
 
@@ -74,6 +75,8 @@ export interface SessionSummary {
 }
 
 export interface SessionDoc {
+  /** What the first request carried (`SessionCarried`); null when the log's head was not read. */
+  carried?: SessionCarried | null;
   folder: string; id: string; path: string; updatedAt: number;
   /** For the chart only: DOWNSAMPLED (min/max per bucket), so its last point is not the latest reading. */
   samples: ContextSample[]; events: ContextEvent[]; models: string[];
@@ -138,6 +141,13 @@ export interface WeightDoc {
   files: InstructionFile[];
   agents: Record<InstructionReader, InstructionTotals>;
   overlaps: InstructionOverlap[];
+  /** This desktop's own rows (`scope: "desktop"`); null = they could not be read, `desktopWhy` says why. Absent from an older extension host. */
+  desktop?: InstructionFile[] | null;
+  desktopWhy?: string;
+  /** The auto-memory file's path relative to the config dir, when the folder's cwd could be slugged. */
+  memoryPath?: string;
+  /** The CLI config dir desktop paths are relative to, as words (`desktopPathWords`). */
+  configDir?: string;
 }
 
 export type PromptId =

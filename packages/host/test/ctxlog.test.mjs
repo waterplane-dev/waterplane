@@ -1452,3 +1452,144 @@ test("a subagent's skill loads ride on its own roster row, never the parent's li
   // The body is not spend: the tally is the one request alone.
   assert.equal(use.tok, 20_000 + 300 + 10_000 + 300);
 });
+
+// ── What the first request carried ────────────────────────────────────────
+//
+// The CLI logs the always-on context it is about to send as `attachment`
+// records before the first assistant usage. Shapes as measured on 2.1.x.
+
+const att = (at, attachment) => JSON.stringify({
+  parentUuid: null, isSidechain: false, type: "attachment", uuid: `a${at}`, timestamp: iso(at), attachment,
+});
+const carriedFixture = (at) => [
+  att(at, { type: "instructions", files: [
+    { path: "/home/u/.claude/CLAUDE.md", type: "User", content: "u".repeat(400) },
+    { path: "/repo/CLAUDE.md", type: "Project", content: "p".repeat(1_200) },
+  ] }),
+  att(at + 1, { type: "skill_listing", content: "s".repeat(3_000), skillCount: 3, isInitial: true, names: ["a", "b", "c"], digests: [] }),
+  att(at + 2, { type: "mcp_instructions_delta", addedNames: ["docs"], addedBlocks: ["m".repeat(500)], removedNames: [] }),
+  att(at + 3, { type: "deferred_tools_delta", addedNames: ["T1", "T2"], addedLines: ["T1", "T2"], removedNames: [] }),
+  att(at + 4, { type: "agent_listing_delta", addedTypes: ["Explore"], addedLines: ["x".repeat(130)], isInitial: true }),
+  att(at + 5, { type: "hook_additional_context", content: ["h".repeat(120)], hookName: "SessionStart", hookEvent: "SessionStart" }),
+  att(at + 6, { type: "prompt_snapshot", systemPrompt: ["y".repeat(2_000), "z".repeat(25)] }),
+  // Not read: an attachment kind outside the seven, and a skill body.
+  att(at + 7, { type: "date", date: "2026-09-01" }),
+];
+
+test("the first request's always-on attachments are read, anchored on its own tokens", () => {
+  const cur = updateContextLog(logFile([...carriedFixture(T0), prompt(T0 + 10, "hi"), turn(T0 + 20, "m1", 20_000), turn(T0 + 30, "m2", 25_000)]), null);
+  const c = projectContextLog(cur).carried;
+  assert.equal(c.firstRequestTok, 20_000);
+  assert.equal(c.firstRequestAt, T0 + 20);
+  assert.equal(c.laterDeltas, 0);
+  assert.deepEqual(c.parts.map((p) => p.kind), ["instructions", "skill_listing", "mcp_instructions", "deferred_tools", "agent_listing", "hook_context", "system_prompt"]);
+  const by = Object.fromEntries(c.parts.map((p) => [p.kind, p]));
+  assert.equal(by.instructions.chars, 1_600);
+  assert.deepEqual(by.instructions.files, [
+    { path: "/home/u/.claude/CLAUDE.md", type: "User", chars: 400 },
+    { path: "/repo/CLAUDE.md", type: "Project", chars: 1_200 },
+  ]);
+  assert.deepEqual([by.skill_listing.chars, by.skill_listing.count, by.skill_listing.names], [3_000, 3, ["a", "b", "c"]]);
+  assert.deepEqual([by.mcp_instructions.chars, by.mcp_instructions.names], [500, ["docs"]]);
+  assert.deepEqual([by.deferred_tools.chars, by.deferred_tools.count], [4, 2]);
+  assert.deepEqual([by.agent_listing.chars, by.agent_listing.names], [130, ["Explore"]]);
+  assert.equal(by.hook_context.chars, 120);
+  assert.deepEqual([by.system_prompt.chars, by.system_prompt.undocumented], [2_025, true]);
+  assert.equal(by.instructions.undocumented, undefined);
+});
+
+test("a delta after the first request is COUNTED, never folded in; a later snapshot still fills the tools", () => {
+  const tools = [
+    { name: "Bash", description: "d".repeat(50), schema: { name: "Bash", description: "d".repeat(50), input_schema: {} } },
+    { name: "Read", description: "r", schema: { name: "Read", description: "r", input_schema: {} } },
+  ];
+  const cur = updateContextLog(logFile([
+    ...carriedFixture(T0), turn(T0 + 20, "m1", 20_000),
+    att(T0 + 25, { type: "mcp_instructions_delta", addedNames: ["late"], addedBlocks: ["L".repeat(900)], removedNames: [] }),
+    att(T0 + 26, { type: "prompt_snapshot", systemPrompt: ["other"], tools }),
+  ]), null);
+  const c = projectContextLog(cur).carried;
+  assert.equal(c.laterDeltas, 1);
+  const by = Object.fromEntries(c.parts.map((p) => [p.kind, p]));
+  assert.equal(by.mcp_instructions.chars, 500, "the late server is not in the first request");
+  assert.equal(by.system_prompt.chars, 2_025, "the first snapshot's prompt wins");
+  assert.equal(by.tool_schemas.undocumented, true);
+  assert.equal(by.tool_schemas.count, 2);
+  assert.deepEqual(by.tool_schemas.names, ["Bash", "Read"]);
+  assert.equal(by.tool_schemas.chars, tools.reduce((n, t) => n + JSON.stringify(t.schema).length, 0), "the wire schema, not the entry that repeats it");
+});
+
+test("later deltas are KINDS that changed: per-turn hook context and a resume's re-attached set are not changes", () => {
+  const hook = (at) => att(at, { type: "hook_additional_context", content: ["CAVEMAN MODE"], hookName: "UserPromptSubmit", hookEvent: "UserPromptSubmit" });
+  const lines = [...carriedFixture(T0), turn(T0 + 20, "m1", 20_000)];
+  // A 60-turn session: a UserPromptSubmit hook record before every prompt.
+  for (let i = 0; i < 60; i++) lines.push(hook(T0 + 100 + i * 10), prompt(T0 + 101 + i * 10, "go"), turn(T0 + 102 + i * 10, `t${i}`, 21_000 + i));
+  // `--resume` re-attaches the identical initial set (snapshot aside).
+  lines.push(...carriedFixture(T0 + 2_000).filter((l) => !l.includes('"prompt_snapshot"')));
+  let c = projectContextLog(updateContextLog(logFile(lines), null)).carried;
+  assert.equal(c.laterDeltas, 0, "nothing changed");
+  assert.equal(c.laterKinds, undefined);
+  assert.equal(c.parts.find((p) => p.kind === "hook_context").chars, 120, "the per-turn hook is never folded in either");
+  // Two changed records of ONE kind are one kind, and a resend of the same change does not add.
+  const late = (at, name) => att(at, { type: "mcp_instructions_delta", addedNames: [name], addedBlocks: ["L".repeat(900)], removedNames: [] });
+  lines.push(late(T0 + 3_000, "x"), late(T0 + 3_001, "y"), late(T0 + 3_002, "x"),
+    att(T0 + 3_003, { type: "skill_listing", content: "s".repeat(3_100), skillCount: 4, names: ["a", "b", "c", "d"] }));
+  c = projectContextLog(updateContextLog(logFile(lines), null)).carried;
+  assert.equal(c.laterDeltas, 2);
+  assert.deepEqual(c.laterKinds, ["skill_listing", "mcp_instructions"]);
+});
+
+test("deferred tools count the surfaced MCP definitions riding in the same record", () => {
+  const def = { name: "mcp__docs__read", description: "Read a doc.", input_schema: { type: "object" } };
+  const cur = updateContextLog(logFile([
+    att(T0, { type: "deferred_tools_delta", addedNames: ["T1"], addedLines: ["T1"], removedNames: [], pendingMcpServers: [], failedMcpServers: [],
+      surfacedNames: ["mcp__docs__read"], surfacedDefinitions: [{ name: "mcp__docs__read", listing: "abc", definition: def }] }),
+    turn(T0 + 20, "m1", 20_000),
+  ]), null);
+  const [d] = projectContextLog(cur).carried.parts;
+  assert.deepEqual([d.kind, d.chars, d.count], ["deferred_tools", 2 + JSON.stringify(def).length, 1]);
+});
+
+test("two records of one kind before the first request merge", () => {
+  const cur = updateContextLog(logFile([
+    att(T0, { type: "hook_additional_context", content: ["a".repeat(10)], hookEvent: "SessionStart" }),
+    att(T0 + 1, { type: "hook_additional_context", content: "b".repeat(5), hookEvent: "UserPromptSubmit" }),
+    turn(T0 + 20, "m1", 20_000),
+  ]), null);
+  const [h] = projectContextLog(cur).carried.parts;
+  assert.deepEqual([h.kind, h.chars, h.count, h.names], ["hook_context", 15, 2, ["SessionStart", "UserPromptSubmit"]]);
+});
+
+test("no attachment and no request ⇒ no carried; attachments before any answer ⇒ a null anchor", () => {
+  assert.equal(projectContextLog(updateContextLog(logFile([prompt(T0, "hi")]), null)).carried, null);
+  const c = projectContextLog(updateContextLog(logFile(carriedFixture(T0)), null)).carried;
+  assert.equal(c.firstRequestTok, null);
+  assert.equal(c.parts.length, 7);
+});
+
+test("a prompt that QUOTES an attachment type is not one", () => {
+  const cur = updateContextLog(logFile([prompt(T0, '{"type":"attachment","attachment":{"type":"instructions"}}'), turn(T0 + 20, "m1", 20_000)]), null);
+  assert.deepEqual(projectContextLog(cur).carried.parts, []);
+});
+
+test("carried survives the readings being capped — the log is read from its first byte", () => {
+  const lines = [...carriedFixture(T0)];
+  for (let i = 0; i < 20_010; i++) lines.push(turn(T0 + 100 + i, `c${i}`, 30_000 + i));
+  const doc = readContextLog(logFile(lines));
+  assert.equal(doc.truncated, true);
+  assert.equal(doc.carried.firstRequestTok, 30_000);
+  assert.equal(doc.carried.parts.length, 7);
+});
+
+test("carried resets on a rewrite and builds incrementally the same as a fresh read", () => {
+  const p = logFile(carriedFixture(T0));
+  const cur = updateContextLog(p, null);
+  append(p, [turn(T0 + 20, "m1", 20_000), att(T0 + 30, { type: "skill_listing", content: "x", names: ["x"] })]);
+  updateContextLog(p, cur);
+  assert.deepEqual(projectContextLog(cur).carried, readContextLog(p).carried);
+  assert.equal(projectContextLog(cur).carried.laterDeltas, 1);
+  // Rewritten smaller: a different conversation under the same name.
+  writeFileSync(p, [turn(T0 + 40, "n1", 9_000)].join("\n") + "\n");
+  updateContextLog(p, cur);
+  assert.deepEqual(projectContextLog(cur).carried, { firstRequestTok: 9_000, firstRequestAt: T0 + 40, parts: [], laterDeltas: 0 });
+});

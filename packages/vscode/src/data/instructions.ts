@@ -18,6 +18,9 @@ export function folderFs(folder: string): AgentFilesFs {
   };
 }
 
+/** The CLI config dir as `AgentFilesFs` (same reader, rooted elsewhere): what `desktopInventory` reads. */
+export const configFs = folderFs;
+
 export function inventory(folder: string, sw: CopilotSwitches = {}): InstructionInventory {
   return instructionInventory(folderFs(folder), sw);
 }

@@ -149,3 +149,47 @@ test("lensWords: scoped, off and unknown", () => {
   assert.equal(data.lensWords(f([part([], { kind: "always" }, 800)])), null);
   assert.equal(data.lensWords(f([part(["claude", "copilot"], { kind: "always" }, 12400)])), "~3.1k tokens every request · Claude Code + Copilot");
 });
+
+// The widened inventory: subagents and MCP servers are listed beside the counted rows (D1).
+test("subagent descriptions and MCP servers are listed, not counted by the threshold", async () => {
+  const doc = await data.weighFolder(REPO);
+  const agent = doc.files.find((f) => f.kind === "subagent");
+  assert.ok(agent && agent.path.endsWith(".claude/agents/a.md"));
+  const mcp = doc.files.find((f) => f.kind.startsWith("MCP server"));
+  assert.ok(mcp && mcp.parts.length === 0 && typeof mcp.unsized === "string");
+  const md = readFileSync(join(REPO, "CLAUDE.md"), "utf8").length;
+  const descs = doc.skills.reduce((n, s) => n + s.descChars, 0);
+  assert.equal(doc.reading.alwaysOnChars, md + descs);
+});
+
+test("CLAUDE.local.md and .claude/agents get a lens and trigger a re-weigh", () => {
+  assert.ok(data.isInstructionPath("/w/CLAUDE.local.md"));
+  assert.ok(data.isInstructionPath("/w/.claude/agents/a.md"));
+  assert.ok(!data.isInstructionPath("/w/docs/agents/a.md"));
+  assert.ok(data.LENS_PATTERNS.some((p) => p.includes("CLAUDE.local.md")));
+  assert.ok(data.LENS_PATTERNS.some((p) => p.includes(".claude/agents")));
+});
+
+// This desktop: the config dir's own files, from a temp dir so the test never reads the real one.
+test("this desktop: user CLAUDE.md, user skill, memory and plugin skills from the config dir", async () => {
+  const cfg = tree("cfg", {
+    "CLAUDE.md": "u".repeat(120),
+    "skills/mine/SKILL.md": "---\nname: mine\ndescription: Does a thing.\n---\nBody.\n",
+    "plugins/installed_plugins.json": JSON.stringify({ plugins: { "p@m": [{ scope: "user", installPath: "" }] } }),
+  });
+  const doc = await data.weighFolder(REPO, {}, cfg);
+  assert.ok(Array.isArray(doc.desktop));
+  assert.ok(doc.desktop.every((f) => f.scope === "desktop"));
+  assert.equal(doc.desktop.find((f) => f.kind === "user CLAUDE.md").parts[0].chars, 120);
+  assert.ok(doc.desktop.some((f) => f.kind === "user skill"));
+  assert.match(doc.memoryPath, /^projects\/.+\/memory\/MEMORY\.md$/);
+  // The folder's own reading is untouched by any of it.
+  assert.equal((await data.weighFolder(REPO, {}, tmp("empty-cfg"))).reading.alwaysOnChars, doc.reading.alwaysOnChars);
+});
+
+test("this desktop: an unreadable plugins file is a row that says so, never a silent nothing", async () => {
+  const cfg = tree("cfg-bad", { "plugins/installed_plugins.json": "{not json" });
+  const doc = await data.weighFolder(REPO, {}, cfg);
+  const row = doc.desktop.find((f) => f.unsized && /installed_plugins/.test(f.unsized));
+  assert.ok(row && row.parts.length === 0);
+});

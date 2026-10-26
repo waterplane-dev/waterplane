@@ -434,6 +434,10 @@ export interface TokenConvo {
   agentCost: CostBreakdown;
   /** Subagent transcripts folded in. */
   agents: number;
+  /** Tokens the parent log's FIRST answered request carried (input + cache
+   *  read + cache write) — measured. Absent on an older host or a log with no
+   *  answered request; agents' logs never feed it. */
+  firstTok?: number;
   /** Premium over re-reading paid for expired-cache rebuilds, USD; absent when
    *  there were none. */
   coldUsd?: number;

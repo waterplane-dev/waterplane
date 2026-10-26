@@ -85,7 +85,9 @@ export interface SpendView {
  * that can be skipped on a chart — three real bugs in this app's other chart
  * were found by exactly that and by nothing else.
  */
-export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, usageHistory, online = true, onRefreshUsage, onClose, onRescan, initialSpan = { id: "week", back: 0 }, initialSource = "claude", ledgerTabs = [], localLedgers = [], fresh = 0, nameOf, onExplain, isLive, onOpenConvo, readings, openedOn = null, onClearOn, lead, liveWindows = true }: {
+export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, usageHistory, online = true, onRefreshUsage, onClose, onRescan, initialSpan = { id: "week", back: 0 }, initialSource = "claude", ledgerTabs = [], localLedgers = [], fresh = 0, nameOf, onExplain, isLive, onOpenConvo, readings, openedOn = null, onClearOn, lead, liveWindows = true, doors }: {
+  /** Doors to what every turn carries (always-on context); drawn first in the scroll region. */
+  doors?: ReactNode;
   /** Drawn first in the NOW block, above the limit windows — the VS Code panel's headline. */
   lead?: ReactNode;
   /**
@@ -697,6 +699,7 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
           a switch nobody connects to the number it changed. The "now" block above it scrolls
           away — both percentages carry their own reset instant in text. */}
       <div className="sheet-scroll">
+        {doors}
         {/* The source picker: one chip per ledger, only when there is a second to pick. NOT a
             filter — no count rides on it: these chips swap the whole document rather than
             cutting one. One line that SCROLLS rather than wraps (it took three rows of a phone). */}

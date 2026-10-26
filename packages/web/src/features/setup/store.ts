@@ -11,7 +11,7 @@ import type { ReadingsRegion } from "../../SetupSheet";
  *  repo row's badge or menu instead of the launcher's own door. */
 export const setupRepo = createStore<string | null>(null);
 
-export interface SetupAim { region?: ReadingsRegion; focus?: "findings" }
+export interface SetupAim { region?: ReadingsRegion; focus?: "findings" | "context-weight" }
 /** Which of the two regions to land on, and whether a badge's count cut region
  *  1 to exactly those findings (a count on a control is a filter). */
 export const setupAim = createStore<SetupAim>({});
