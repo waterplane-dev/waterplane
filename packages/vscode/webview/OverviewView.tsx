@@ -16,6 +16,9 @@
  *   tab is there whenever that ledger counted something, desktop or not, and the screen opens on it
  *   when Claude's logs hold nothing — a machine with Copilot and no Claude.
  *
+ * A costliest-conversations row that is one of the active folder's listed sessions keeps the phone's
+ * "context & cost" door (`here`); it opens that session in the Session view.
+ *
  * What this file adds is only what the panel has and the phone does not: the seven-day headline
  * (`Headline`) and, with no desktop to say where the week since its reset went, the last seven
  * calendar days in the phone's week card, captioned as exactly that.
@@ -30,8 +33,11 @@ import { COPILOT_LEDGER, type CorpusDoc, type LiveState, type ToExtension } from
 import { Absent } from "./Absent";
 import { TabLinks } from "./TabLinks";
 
-export function OverviewView({ doc, why, scanning, live, post, askedLedger = null }: {
+export function OverviewView({ doc, why, scanning, live, post, askedLedger = null, here = null }: {
   doc: CorpusDoc | null;
+  /** The active folder's listed sessions: a costliest row that is one of them gets the phone's
+   *  "context & cost" door, opening it in the Session view. null = no door anywhere. */
+  here?: { folder: string; ids: ReadonlySet<string> } | null;
   /** The ledger tab the tree asked for (the Copilot row's click); null = the screen's own choice. */
   askedLedger?: string | null;
   why?: string;
@@ -74,6 +80,8 @@ export function OverviewView({ doc, why, scanning, live, post, askedLedger = nul
           localLedgers={[COPILOT_LEDGER.id]} openedOn={openOn}
           initialSpan={d ? { id: "week", back: 0 } : { id: "30", back: 0 }}
           onRescan={() => post({ t: "rescan" })}
+          canOpen={here ? (id) => here.ids.has(id) : undefined}
+          onOpenConvo={here ? (id) => { post({ t: "pickSession", folder: here.folder, id }); post({ t: "openPanel", tab: "session" }); } : undefined}
           lead={lead} doors={<TabLinks tabs={["session", "always-on"]} post={post} />} />
       </div>
     </>

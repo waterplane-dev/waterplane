@@ -85,3 +85,12 @@ While a repo's last pull or push failed and nobody has handled it, its git butto
 The git sheet's Explain button has the desktop explain, in plain words, what a push would send and a pull would bring (fetching first), under focus boxes that are all ticked by default: security, what changes for users, whether a deploy is needed and of which components (e.g. web app only, functions only, an app needing a store release), data and migrations, breaking changes, dependencies and cost, surprises the commit messages do not mention, and what to check by hand — plus an optional focus in the person's own words. It reads only; nothing is pushed or pulled by it.
 - asked: 2026-10-26 — "have another button to let ai explain the summary of the changes that are about to be pushed and if there are ones to pull also what is there to pull"
 - shipped: cd22d678
+### R-git-018 · shipped
+Protected main branches are supported by the WP UI workflows: a push a branch rule refused says so in words with the remote's rules, and an unprotected default branch can get standard rulesets in one tap.
+- asked: 2026-10-26
+- shipped: 04d4ac10, b384fdbf
+
+### R-git-019 · requested
+The default workflow needs no manual branch or PR handling, while users who need branches or PRs remain supported.
+- asked: 2026-10-26
+

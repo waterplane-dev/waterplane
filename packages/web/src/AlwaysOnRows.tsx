@@ -44,7 +44,9 @@ import { Button } from "./kit/Button";
 import { Unavailable } from "./Unavailable";
 
 type Scope = AlwaysOnRow["scope"];
-const SCOPES: readonly Scope[] = ["repo", "desktop"];
+/** The scope chips, in order; VS Code's Always-on view cuts by the same two. */
+export const AO_SCOPES: readonly Scope[] = ["repo", "desktop"];
+const SCOPES = AO_SCOPES;
 const GROUP_HEAD: Record<Scope, string> = { repo: "In this repo", desktop: "On this desktop" };
 
 /** A live session's door into what its own first request carried. */
@@ -61,11 +63,30 @@ function weightWords(r: AlwaysOnRow): string {
 }
 
 
-/** Where the every-turn chars of the shown rows go, file by file; the chip cut decides which rows. */
-function AlwaysOnStrip({ files, scopes, configDir }: { files: InstructionFile[]; scopes: readonly AoScope[]; configDir?: string }) {
+/**
+ * The scope chips' ONE bucketing: the rows, the per-scope cut and the chip texts, from the same
+ * call, so a chip's number and the list it cuts to cannot differ. VS Code's Always-on view uses it
+ * too. An unreadable (or unread) desktop has no rows to count: its chip is left out rather than `desktop · 0`.
+ */
+export function aoScopeChips(doc: { files: InstructionFile[]; desktop?: InstructionFile[] | null }) {
+  const rows = alwaysOnRows([...doc.files, ...(doc.desktop ?? [])]);
+  const bucket = (s: Scope) => rows.filter((r) => r.scope === s);
+  // `undefined` (VS Code before the desktop was read) is as unreadable as `null`: no chip.
+  const chips = chipRows(SCOPES.filter((s) => s !== "desktop" || doc.desktop != null), (s) => ({ count: bucket(s).length }), (s) => s);
+  return { rows, bucket, chips };
+}
+
+/**
+ * Where the every-turn chars of the shown rows go, file by file; the chip cut decides which rows.
+ * Exported for VS Code's Always-on view. A mouse also reads by hovering (the line returns to the
+ * pick when it leaves); touch never hovers, so the phone's tap grammar is unchanged.
+ */
+export function AlwaysOnStrip({ files, scopes, configDir }: { files: InstructionFile[]; scopes: readonly AoScope[]; configDir?: string }) {
   const p = aoPlot(files, scopes);
   const [pick, setPick] = useState<string | null>(null);
-  const picked = p.segs.find((s) => s.key === pick) ?? null;
+  const [hover, setHover] = useState<string | null>(null);
+  const lit = hover ?? pick;
+  const picked = p.segs.find((s) => s.key === lit) ?? null;
   const pathWords = (s: AoSeg) => (s.scope === "desktop" ? desktopPathWords(s.path, configDir) : s.path);
   const at = (e: ReactPointerEvent<HTMLDivElement>): string | null => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -82,10 +103,14 @@ function AlwaysOnStrip({ files, scopes, configDir }: { files: InstructionFile[];
       {p.segs.length > 0 && (
         <>
           <div className="ts-bar ao-bar" role="group" aria-label="where the every-turn characters go; the line under it reads the picked file"
-            onPointerDown={(e) => { const k = at(e); setPick(k != null && k === pick ? null : k); }}
-            onPointerMove={(e) => { if (e.buttons) { const k = at(e); if (k != null) setPick(k); } }}>
+            onPointerDown={(e) => { const k = at(e); const clear = k != null && k === pick; setPick(clear ? null : k); if (e.pointerType === "mouse") setHover(null); }}
+            onPointerMove={(e) => {
+              if (e.buttons) { const k = at(e); if (k != null) setPick(k); if (e.pointerType === "mouse") setHover(null); }
+              else if (e.pointerType === "mouse") setHover(at(e));
+            }}
+            onPointerLeave={(e) => { if (e.pointerType === "mouse") setHover(null); }}>
             {p.segs.map((s) => (
-              <span key={s.key} className={`ts-seg${s.seam ? " ao-seam" : ""}${s.key === pick ? " ao-on" : ""}`}
+              <span key={s.key} className={`ts-seg${s.seam ? " ao-seam" : ""}${s.key === lit ? " ao-on" : ""}`}
                 style={{ left: `${s.x}%`, width: `${s.w}%`, background: SLOT[AO_SLOT[s.band]] }} />
             ))}
           </div>
@@ -163,12 +188,9 @@ export function AlwaysOnRows({ doc, repoId, onOpenFile, sessionDoors, onAllSessi
     );
   }
 
-  const rows = alwaysOnRows([...doc.files, ...(doc.desktop ?? [])]);
   const lead = alwaysOnTotalsWords([...doc.files, ...(doc.desktop ?? [])], fmtCount);
   // ONE bucketing function feeds the chip numbers AND the cut below.
-  const bucket = (s: Scope) => rows.filter((r) => r.scope === s);
-  // An unreadable desktop has no rows to count: its chip is left out rather than saying `desktop · 0`.
-  const chips = chipRows(SCOPES.filter((s) => s !== "desktop" || doc.desktop !== null), (s) => ({ count: bucket(s).length }), (s) => s);
+  const { rows, bucket, chips } = aoScopeChips(doc);
   const shown = cut ? [cut] : SCOPES;
   const listedOnly = rows.some((r) => r.scope === "repo" && !r.counted && !r.unsized && r.readers.includes("claude"));
 

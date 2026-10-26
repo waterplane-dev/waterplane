@@ -80,6 +80,7 @@ export function summarize(doc: SessionDoc, mtime: number): SessionSummary {
     lastPrompt: typed.length ? typed[typed.length - 1].prompt : "",
     open: last?.open === true,
     openAt: last?.open === true ? last.at : 0,
+    firstTok: doc.carried?.firstRequestTok ?? null,
   };
 }
 

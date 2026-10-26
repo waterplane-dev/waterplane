@@ -21,7 +21,7 @@ import { foldStateText } from "./weekBands.ts";
  * grids. Hook-free — every value it reads is a render value of `TokenStatsBody`,
  * which keeps all the state, so moving this out cannot change a hook's position.
  */
-export function TotalsCard({ doc, money, table, active, dcut, scope, setScope, grids, hist, shownTotals, shownCost, shownTok, coldNote, scopeWords, bands, canModel, days, scopeRepos, scopeRes, reposRefusal, top, pts, weekTwin, nameOf, onExplain, isLive, onOpenConvo }: {
+export function TotalsCard({ doc, money, table, active, dcut, scope, setScope, grids, hist, shownTotals, shownCost, shownTok, coldNote, scopeWords, bands, canModel, days, scopeRepos, scopeRes, reposRefusal, top, pts, weekTwin, nameOf, onExplain, isLive, canOpen, onOpenConvo }: {
   doc: TokenStatsDoc;
   money: boolean;
   table: boolean;
@@ -60,6 +60,7 @@ export function TotalsCard({ doc, money, table, active, dcut, scope, setScope, g
   nameOf?: (id: string) => string | undefined;
   onExplain?: (c: TokenConvo, title: string) => void;
   isLive?: (id: string) => boolean;
+  canOpen?: (id: string) => boolean;
   onOpenConvo?: (id: string) => void;
 }) {
   return (
@@ -234,7 +235,7 @@ export function TotalsCard({ doc, money, table, active, dcut, scope, setScope, g
       {!top.rows.length && !top.note && <div className="empty">No conversation ran in {scopeWords}.</div>}
       {!!top.rows.length && <>
         <TopConvos rows={top.rows} total={top.total} pts={pts}
-          nameOf={nameOf} onExplain={onExplain} isLive={isLive} onOpen={onOpenConvo} />
+          nameOf={nameOf} onExplain={onExplain} isLive={isLive} canOpen={canOpen} onOpen={onOpenConvo} />
         <div className="empty ts-caveat">
           Each counts its subagents in{pts ? <>; weekly points are given only for a conversation that ran wholly inside this week, since the rate is this week’s</> : null}. <b>Explain the cost</b> starts a new session that reads
           that conversation’s log, names what made it expensive and lists ideas — it changes

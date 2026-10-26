@@ -51,7 +51,7 @@ function span(c: TokenConvo): string {
 /** Rows shown before *show all*: five is a phone screen of them. */
 const TOP_SHOWN = 5;
 
-export function TopConvos({ rows, total, pts, nameOf, onExplain, isLive, onOpen }: {
+export function TopConvos({ rows, total, pts, nameOf, onExplain, isLive, canOpen, onOpen }: {
   /** Ranked by cost on the host; drawn in that order and IN MONEY whatever the
    *  screen's metric — a list called "costliest" printing token counts that
    *  do not descend reads as a sorting bug. Tokens ride in the facts line. */
@@ -70,6 +70,9 @@ export function TopConvos({ rows, total, pts, nameOf, onExplain, isLive, onOpen 
   /** Whether a LIVE session here holds this conversation — the one case the
    *  context & cost sheet can be opened for it. */
   isLive?: (id: string) => boolean;
+  /** Whether the context & cost door may open for this conversation; defaults to `isLive`.
+   *  VS Code passes it: a conversation listed in this folder can be opened without being live. */
+  canOpen?: (id: string) => boolean;
   onOpen?: (id: string) => void;
 }) {
   const [all, setAll] = useState(false);
@@ -109,12 +112,14 @@ export function TopConvos({ rows, total, pts, nameOf, onExplain, isLive, onOpen 
               </div>
             )}
             {insight && <div className="ts-convo-facts">{insight}</div>}
-            {onExplain && (
+            {(onExplain || (onOpen && (canOpen ?? isLive)?.(c.id))) && (
               <div className="ts-convo-acts">
-                <Button onClick={() => onExplain(c, title)}>
-                  <SearchCheck size={13} /> explain the cost
-                </Button>
-                {onOpen && isLive?.(c.id) && (
+                {onExplain && (
+                  <Button onClick={() => onExplain(c, title)}>
+                    <SearchCheck size={13} /> explain the cost
+                  </Button>
+                )}
+                {onOpen && (canOpen ?? isLive)?.(c.id) && (
                   <Button onClick={() => onOpen(c.id)}>
                     <BarChart3 size={13} /> context & cost
                   </Button>

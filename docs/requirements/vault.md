@@ -341,8 +341,8 @@ Each secret in the vault's list shows its migration step and its last use, and t
 - shipped: 084d2c55, 805a35f6
 
 ### R-vault-066 · requested
-Vault approval can use Windows Hello, Face ID or Touch ID, and WebAuthn security keys as approvers, as the Android Keystore is used.
-- asked: 2026-10-17
+Vault approval can use Windows Hello, Touch ID, Face ID, WebAuthn security keys or a native Mac app as approvers, beside the Android Keystore, never syncing keys between devices, working over localhost and plain LAN without Tailscale, and for any user's setup.
+- asked: 2026-10-17, 2026-10-24, 2026-10-24
 
 ### R-vault-067 · requested
 The vault can hold an old developer key protected by an additional password, usable to publish and release artifacts.
@@ -403,12 +403,17 @@ The vault refuses to release a secret when the grant has expired, the repo or pu
 gcloud CLI credentials are stored in the vault, and no unvaulted copy remains on the machine.
 - asked: 2026-10-22
 
-### R-vault-080 · requested
+### R-vault-080 · shipped
 A program's release card (`exec`/`fetch`) outlives the program's 90 s wait: the program hears that the card stays and to run again after approving; the card stays on the phone 90 min, a rerun meanwhile joins it with no new card or notification, and an approval after the program stopped waiting is kept 15 min for its next run (then its own lease time, or none for a secret released once).
 - asked: 2026-10-25 (owner: "many secret approvals only wait 90 seconds … I don't look at the phone sometimes")
+- shipped: de7b2650
 
 ### R-vault-081 · shipped
 `npm run restart` does not drop live bounded grants and leases (late approvals waiting for their run included): they cross in the same memory-only courier as standing grants, each with its end and spent uses, and are restored only when a value-free check file written by the old process (HMAC under a key that exists only in the courier) vouches for them; anything else is refused in words in one decision row; a reboot or crash still drops them
 - asked: 2026-10-26 (owner: "go ahead with item 1, design the check first")
 - plan: packages/extensions/vault/docs/FOLLOWUPS-PLAN.md §2.4
 - shipped: bd3619f6 fc5f651c
+### R-vault-082 · requested
+Exposure watch reads Play vitals through a narrow Play service account key kept in the vault, usable only by the collector and not unlocked at boot; when its standing grant is dormant the row shows as absent with re-arm instructions instead of waiting. Every secret the watch uses is accessed through the vault.
+- asked: 2026-10-26
+

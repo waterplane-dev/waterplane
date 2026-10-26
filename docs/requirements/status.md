@@ -53,3 +53,8 @@ The red 'Ask you' status has a clearly pressable button right next to it that de
 GitHub Copilot status is never detected covertly; it is determined openly.
 - asked: 2026-10-15
 
+### R-status-013 · shipped
+The composer's backlog button shows waiting and failed as two numbers at once; done rows count nowhere.
+- asked: 2026-10-24
+- shipped: 2fb5b5a0
+

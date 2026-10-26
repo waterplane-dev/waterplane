@@ -28,3 +28,13 @@ The terminal's floating control folds from horizontal to a single vertical colum
 - asked: 2026-10-16
 - shipped: b33c4424, 22addf63, bc1962f9
 
+### R-toolbar-007 · shipped
+The annotation toolbar places itself on top or on the left automatically, whichever leaves the picture larger.
+- asked: 2026-10-23, 2026-10-23
+- shipped: bcb82864
+
+### R-toolbar-008 · shipped
+The annotation toolbar wraps its buttons onto further lines or columns instead of scrolling.
+- asked: 2026-10-23
+- shipped: 4a5d043f
+

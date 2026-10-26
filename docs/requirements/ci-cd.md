@@ -60,3 +60,22 @@ The pre-push gate runs once per code version and identical code reuses the resul
 - asked: 2026-10-20
 - shipped: 3759768a (the gate itself is ~/.local-ci/prelude.sh, outside this repo: tree-hash cache + newer push supersedes)
 
+### R-ci-cd-014 · shipped
+A build card links to its last run, opening the Build sheet with that run unfolded.
+- asked: 2026-10-25
+- shipped: 18a1e09c
+
+### R-ci-cd-015 · shipped
+Every data-hint in the UI names a hint that exists in the hint catalog, so the pre-push e2e suite passes and pushes are not blocked.
+- asked: 2026-10-25
+- shipped: 4d930308
+
+### R-ci-cd-016 · shipped
+Public repos' GitHub Actions workflows default to read-only token permissions with write access granted per job only where needed.
+- asked: 2026-10-26
+- shipped: 15c0ea03
+
+### R-ci-cd-017 · requested
+Every workflow in the public repos pins each action to a commit SHA, and Dependabot keeps those pins current; public repos with dependency manifests have a Dependabot config.
+- asked: 2026-10-26
+

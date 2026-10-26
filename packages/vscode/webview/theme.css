@@ -454,3 +454,23 @@ button.ts-perreq-row { cursor: pointer; }
 .tab-links { padding: 6px 0 2px; }
 .tab-links .link-btn { padding: 0; }
 .wt-unsized { color: var(--muted); font-style: italic; }
+
+/* The always-on strip (web AlwaysOnRows.tsx `AlwaysOnStrip`, geometry alwaysOnPlot.ts): the phone's
+   rules live under `.readings-sheet` in 12-readings-assess.css, which this panel does not import —
+   the same rules here, unscoped, on the editor's colours. Unsized rows are OUTLINED markers, never a length. */
+.wt-chips { padding: 8px 0 0; }
+.ao-strip { margin: 8px 0 10px; }
+.ao-strip-head { font-size: calc(12px * var(--ui-font, 1)); color: var(--fg); margin-bottom: 6px; }
+.ao-bar { height: 18px; touch-action: pan-y; cursor: pointer; }
+.ao-bar .ao-seam { box-shadow: inset -1px 0 0 var(--panel); }
+.ao-bar .ao-on { box-shadow: inset 0 0 0 2px var(--fg); }
+.ao-readout { min-height: 2.6em; padding-top: 4px; overflow-wrap: anywhere; font-size: calc(12px * var(--ui-font, 1)); line-height: 1.5; color: var(--fg); }
+.ao-strip .ts-legend { padding-top: 4px; }
+.ao-marks { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 8px; font-size: calc(12px * var(--ui-font, 1)); }
+.ao-marks-lead { color: var(--muted); }
+.ao-mark { padding: 0 6px; border: 1px dashed var(--muted); border-radius: 4px; color: var(--fg); overflow-wrap: anywhere; }
+.ao-strip-note { margin-top: 6px; font-size: calc(12px * var(--ui-font, 1)); color: var(--muted); }
+.wt-open { padding: 0; text-align: left; overflow-wrap: anywhere; }
+/* A carried row's folded name list sits tight under its row (the panel's `.hint-more` above pads a flat list). */
+.carried-list .hint-more { padding: 2px 0 0; }
+.carried-list .hint-more > summary { padding: 2px 0; min-height: 0; }

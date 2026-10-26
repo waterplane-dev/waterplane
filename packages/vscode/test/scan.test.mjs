@@ -4,7 +4,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { statSync } from "node:fs";
-import { data, LOG, pick } from "./helpers.mjs";
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { data, LOG, pick, tmp } from "./helpers.mjs";
 
 test("summarizeLog dedupes by message.id and skips <synthetic>: 7 records, 1 duplicate → 6", async () => {
   const st = statSync(LOG);
@@ -26,4 +28,23 @@ test("summarizeLog totals equal updateContextLog(...).split field for field", as
   const cur = data.updateContextLog(LOG, null);
   assert.deepEqual(scan, pick(cur.split));
   assert.equal(cur.usageTok, t[0] + t[1] + t[2] + t[3]);
+});
+
+test("store: version 6 is pinned, and the first request `b` survives a save/load round-trip", async () => {
+  const st = statSync(LOG);
+  const sum = await data.summarizeLog(LOG, st.size, Math.round(st.mtimeMs));
+  assert.equal(typeof sum.b, "number", "the fixture log has a first request");
+  const file = join(tmp("store6"), "tokenstore.json");
+  const a = new data.TokenStore(file);
+  a.files.p = { s: sum };
+  await a.save();
+  assert.equal(JSON.parse(readFileSync(file, "utf8")).v, 6, "a format change must bump this on purpose (one full re-read)");
+  const b = new data.TokenStore(file);
+  await b.load();
+  assert.equal(b.files.p.s.b, sum.b);
+  const old = JSON.parse(readFileSync(file, "utf8"));
+  writeFileSync(file, JSON.stringify({ ...old, v: 5 }));
+  const c = new data.TokenStore(file);
+  await c.load();
+  assert.deepEqual(c.files, {}, "another version is discarded and rebuilt");
 });

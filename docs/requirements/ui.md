@@ -303,8 +303,8 @@ A side panel on a desktop window can always be closed with a visible control: it
 - asked: 2026-10-08 — plan: docs/analysis/desktop-workspace-plan.md §3
 - shipped: dda5ea2
 ### R-ui-076 · requested
-The UI never greys out a button; when an action is unavailable it explains why in text. Confirmations never use the browser's window.confirm, and icons contain no emoji.
-- asked: 2026-10-04, 2026-10-06
+The UI never greys out a button; when an action is unavailable it explains why in text. Confirmations never use the browser's window.confirm, and icons are lucide-react icons only, with no emoji.
+- asked: 2026-10-04, 2026-10-06, 2026-10-25, 2026-10-25
 
 ### R-ui-077 · shipped
 The All chip and the worktree chip have the same size and style.
@@ -508,4 +508,27 @@ Marker 2 in the marked screenshot is clearly visible.
 The two buttons are never shown on screen at the same time, so the screen is not confusing.
 - asked: 2026-10-22
 - shipped: 13640e8d
+
+### R-ui-122 · requested
+The UI renders correctly when GitHub Copilot is the backend, with no broken panels.
+- asked: 2026-10-23, 2026-10-23
+
+### R-ui-123 · requested
+Every user-visible reference to the old name "USMC" is replaced with "waterplane".
+- asked: 2026-10-24
+
+### R-ui-124 · shipped
+Text in a marked strip shows on one line and is cut with an ellipsis when it does not fit.
+- asked: 2026-10-24
+- shipped: 34e7cef4, 724f6908
+
+### R-ui-125 · shipped
+Filters, search, bulk buttons and a marked element sit at the top of a list, above its rows, never at the end.
+- asked: 2026-10-25, 2026-10-25
+- shipped: 9896a16e, 723c6cad
+
+### R-ui-126 · shipped
+When the user selects an item in a dialogue, the dialogue states clearly what that selection will do.
+- asked: 2026-10-26
+- shipped: 9dbda67f
 

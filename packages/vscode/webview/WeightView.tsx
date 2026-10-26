@@ -1,9 +1,10 @@
 import { CHARS_PER_TOKEN, READER_NAME as AGENT_NAME, alwaysOnTotalsWords, desktopPathWords, fmtCount, isUnsizedServer, overlapWords } from "@waterplane/shared";
+import type { AlwaysOnRow } from "@waterplane/shared";
 import type { PromptDef, ToExtension, WeightDoc } from "../src/protocol";
 import { useState } from "react";
-import { SCRUB_HINT } from "@waterplane/kit";
-import { AO_BAND_NAME, AO_SLOT, aoBandFigure, aoHeadWords, aoLeftOutWords, aoMarkerFold, aoPick, aoPlot, aoSegWords } from "../../web/src/alwaysOnPlot";
-import type { AoSeg } from "../../web/src/alwaysOnPlot";
+import { AO_SCOPES, AlwaysOnStrip, aoScopeChips } from "../../web/src/AlwaysOnRows";
+import { FilterChip } from "../../web/src/kit/FilterChip";
+import { toggleChip } from "../../web/src/kit/chips";
 import { Absent } from "./Absent";
 import { PromptActions } from "./Actions";
 import { TabLinks } from "./TabLinks";
@@ -42,13 +43,21 @@ function AgentHead({ name, t }: { name: string; t: AgentTotals }) {
  * an MCP server — whose schemas do ride every request — says "every request" in When.
  * `pathWords` words a desktop row's path (shared `desktopPathWords`); repo rows print as they are.
  */
-function FileRows({ files, pathWords = (p: string) => p }: { files: InstructionFile[]; pathWords?: (p: string) => string }) {
+function FileRows({ files, pathWords = (p: string) => p, onOpen }: {
+  files: InstructionFile[];
+  pathWords?: (p: string) => string;
+  /** Opens a repo row's file in the editor; desktop rows live outside the folder and get none. */
+  onOpen?: (relPath: string) => void;
+}) {
+  const name = (f: InstructionFile) => onOpen
+    ? <button type="button" className="link-btn wt-open" title={`Open ${f.path}`} onClick={() => onOpen(f.path)}>{pathWords(f.path)}</button>
+    : pathWords(f.path);
   return (
     <>
       {files.flatMap((f) => f.parts.length === 0
         ? [(
           <tr key={`${f.path}#${f.kind}#unsized`}>
-            <th scope="row">{pathWords(f.path)}<div className="ctx-note">{f.kind}</div></th>
+            <th scope="row">{name(f)}<div className="ctx-note">{f.kind}</div></th>
             <td>Claude Code</td>
             <td>{isUnsizedServer(f) ? "every request" : "—"}</td>
             <td className="num wt-unsized">{f.unsized ?? "not measured"}</td>
@@ -56,7 +65,7 @@ function FileRows({ files, pathWords = (p: string) => p }: { files: InstructionF
         )]
         : f.parts.map((p, i) => (
           <tr key={`${f.path}#${i}`}>
-            <th scope="row">{i === 0 ? <>{pathWords(f.path)}<div className="ctx-note">{f.kind}</div></> : <span className="ctx-note">{pathWords(f.path)}, {p.when.kind === "always" ? "description" : "body"}</span>}</th>
+            <th scope="row">{i === 0 ? <>{name(f)}<div className="ctx-note">{f.kind}</div></> : <span className="ctx-note">{pathWords(f.path)}, {p.when.kind === "always" ? "description" : "body"}</span>}</th>
             <td>{readersWords(p.readers, f.off)}</td>
             <td>{whenWords(p.when)}</td>
             <td className="num">{fmtCount(p.chars)}</td>
@@ -88,62 +97,32 @@ function DesktopBlock({ doc }: { doc: WeightDoc }) {
   );
 }
 
-/** What this folder's CLAUDE.md and skill descriptions cost on EVERY turn (bodies load on demand and are not counted). */
-const SLOT = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)"];
+type Scope = AlwaysOnRow["scope"];
 
 /**
- * The phone's always-on strip (web `alwaysOnPlot.ts`, one geometry): every-turn chars per file,
- * coloured by what the threshold does with them; unsized rows are named outlined markers, never a
- * length. Hovering reads the file under the pointer in a text line.
+ * The phone's repo/desktop chips over the always-on list (web `aoScopeChips`: ONE bucketing feeds
+ * the numbers and the cut), above the phone's strip itself (`AlwaysOnStrip`) over the same cut. A
+ * count on a chip is a filter: the cut view says "n of N" and how to show all.
  */
-function WeightStrip({ files, configDir }: { files: InstructionFile[]; configDir?: string }) {
-  const p = aoPlot(files, ["repo", "desktop"]);
-  const [pick, setPick] = useState<string | null>(null);
-  const picked = p.segs.find((s) => s.key === pick) ?? null;
-  const pathWords = (s: AoSeg) => (s.scope === "desktop" ? desktopPathWords(s.path, configDir) : s.path);
-  const { shown, more } = aoMarkerFold(p.markers);
-  const leftOut = aoLeftOutWords(p);
-  if (!p.segs.length && !p.markers.length) return null;
+function ScopeChips({ chips, cut, setCut, shownN, totalN }: {
+  chips: { key: Scope; text: string }[];
+  cut: Scope | null;
+  setCut: (s: Scope | null) => void;
+  shownN: number;
+  totalN: number;
+}) {
+  if (chips.length < 2) return null;
   return (
     <>
-      <div className="ctx-chart-title">{aoHeadWords(p, fmtCount)}</div>
-      {p.segs.length > 0 && (
-        <>
-          <div className="wt-split wt-pos" role="group" aria-label="where the every-turn characters go, file by file"
-            onPointerMove={(e) => {
-              const r = e.currentTarget.getBoundingClientRect();
-              const i = r.width > 0 ? aoPick(p.segs, (e.clientX - r.left) / r.width) : null;
-              setPick(i == null ? null : p.segs[i].key);
-            }}
-            onPointerLeave={() => setPick(null)}>
-            {p.segs.map((s) => (
-              <span key={s.key} className="wt-seg" style={{
-                left: `${s.x}%`, width: `${s.w}%`, background: SLOT[AO_SLOT[s.band]],
-                boxShadow: s.key === pick ? "inset 0 0 0 2px var(--fg)" : s.seam ? "inset -1px 0 0 var(--panel)" : undefined,
-              }} />
-            ))}
-          </div>
-          <div className="empty ctx-note">{picked ? aoSegWords(picked, p.total, pathWords, fmtCount) : SCRUB_HINT}</div>
-          <div className="ts-legend">
-            {p.bands.map((b) => (
-              <span key={b.band} className="ts-leg">
-                <i style={{ background: SLOT[AO_SLOT[b.band]] }} />
-                <b>{AO_BAND_NAME[b.band]}</b> {aoBandFigure(b, fmtCount)} · {b.files} {b.files === 1 ? "file" : "files"}
-              </span>
-            ))}
-          </div>
-        </>
-      )}
-      {shown.length > 0 && (
-        <div className="empty ctx-note">
-          No size:{" "}
-          {shown.map((m) => (
-            <span key={m.key} style={{ border: "1px dashed var(--muted)", borderRadius: 4, padding: "0 6px", marginRight: 6 }}>{m.kind}</span>
-          ))}
-          {more > 0 ? `+${more} more` : null}
-        </div>
-      )}
-      {leftOut && <div className="empty ctx-note">{leftOut}</div>}
+      <div className="fchips wrap wt-chips" role="group" aria-label="which files">
+        {chips.map((c) => (
+          <FilterChip key={c.key} on={cut === c.key} onClick={() => setCut(toggleChip(cut, c.key))}
+            title={`Only the files ${c.key === "repo" ? "this folder" : "this desktop"} adds`}>
+            {c.text}
+          </FilterChip>
+        ))}
+      </div>
+      {cut && <div className="empty ctx-note">{shownN} of {totalN} files — the other file table is hidden; click the lit chip to show both.</div>}
     </>
   );
 }
@@ -155,6 +134,7 @@ export function WeightView({ doc, why, prompts, terminal, post }: {
   terminal: string | null;
   post: (m: ToExtension) => void;
 }) {
+  const [cut, setCut] = useState<Scope | null>(null);
   if (!doc) return <Absent>{why ?? "No CLAUDE.md or skills were found in this folder."}</Absent>;
   const r = doc.reading;
   const skills = [...doc.skills].sort((a, b) => b.descChars - a.descChars);
@@ -170,6 +150,9 @@ export function WeightView({ doc, why, prompts, terminal, post }: {
     );
   }
   const groom = prompts.find((p) => p.id === "groom-claudemd");
+  const { rows, bucket, chips } = aoScopeChips(doc);
+  const shown = cut ? [cut] : AO_SCOPES;
+  const openFile = (path: string) => post({ t: "openFile", folder: doc.folder, path });
   const shrink = prompts.find((p) => p.id === "shrink-skill-descs");
   const { claude, copilot } = doc.agents;
   return (
@@ -178,7 +161,8 @@ export function WeightView({ doc, why, prompts, terminal, post }: {
       <AgentHead name="Claude Code" t={claude} />
       <AgentHead name="GitHub Copilot" t={copilot} />
       <div className="empty ctx-note">{alwaysOnTotalsWords([...doc.files, ...(doc.desktop ?? [])])}</div>
-      <WeightStrip files={[...doc.files, ...(doc.desktop ?? [])]} configDir={doc.configDir} />
+      <ScopeChips chips={chips} cut={cut} setCut={setCut} shownN={cut ? bucket(cut).length : rows.length} totalN={rows.length} />
+      <div className="wt-strip"><AlwaysOnStrip files={[...doc.files, ...(doc.desktop ?? [])]} scopes={shown} configDir={doc.configDir} /></div>
       <TabLinks tabs={["session", "all"]} post={post} />
 
       {doc.overlaps.map((o) => (
@@ -206,15 +190,19 @@ export function WeightView({ doc, why, prompts, terminal, post }: {
         </div>
       ) : null}
 
-      <div className="ctx-chart-title">Files</div>
-      <table className="plain">{FILE_HEAD}<tbody><FileRows files={doc.files} /></tbody></table>
-      <div className="empty ts-caveat">
+      {cut !== "desktop" && (
+        <>
+          <div className="ctx-chart-title">Files</div>
+          <table className="plain">{FILE_HEAD}<tbody><FileRows files={doc.files} onOpen={openFile} /></tbody></table>
+          <div className="empty ts-caveat">
         This table is the folder’s own files, CLAUDE.local.md, subagent descriptions and MCP servers included; the threshold above counts CLAUDE.md, its imports, rules and skill descriptions, and the rest are listed beside it. A row marked not measured is named, never counted as zero. This desktop’s user-level files are in the “This desktop” table; ~/.copilot/… and nested AGENTS.md files (off by default in VS Code) are not listed.
         Copilot’s readers follow VS Code’s instruction settings: one you turned off drops Copilot from that row.
         About 4 characters to a token. Skill bodies ({fmtCount(r.onDemandChars)} characters for Claude Code) load only when a skill is used.
-      </div>
+          </div>
+        </>
+      )}
 
-      <DesktopBlock doc={doc} />
+      {cut !== "repo" && <DesktopBlock doc={doc} />}
 
       <div className="ctx-chart-title">Skills</div>
       {skills.length === 0 ? <Absent>No skills in this folder.</Absent> : (

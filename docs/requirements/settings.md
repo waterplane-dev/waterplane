@@ -48,3 +48,7 @@ Changing the default level and thinking effort in the dialog applies only to the
 - asked: 2026-10-19
 - shipped: be94de41
 
+### R-settings-011 · requested
+A feature's opt-in has a setup button in the opt-ins section, and that section is shown only when its opt-in is active.
+- asked: 2026-10-26
+

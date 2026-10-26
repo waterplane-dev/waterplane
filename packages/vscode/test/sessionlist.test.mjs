@@ -2,7 +2,7 @@
 // cap, and "only a log that changed is read again".
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { appendFileSync, mkdirSync, utimesSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { data, prompt, req, slash, tmp } from "./helpers.mjs";
 
@@ -86,6 +86,23 @@ test("summarize: cost, context, prompt count and the last prompt, per session", 
   assert.equal(s.open, true);
   assert.equal(s.openAt, doc.turnCosts[1].at);
   assert.ok(Math.abs(s.costUsd - data.sessionTotal(doc).cost.total) < 1e-12, "a row is the headline's own figure");
+  assert.equal(s.firstTok, 1100, "input 100 + cache write 1000 of the first request");
+  assert.equal(s.firstTok, doc.carried?.firstRequestTok, "a row's first request is the Session view's own");
+  const st = statSync(p);
+  const sum = await data.summarizeLog(p, st.size, Math.round(st.mtimeMs));
+  assert.equal(sum.b, s.firstTok, "the All-sessions reader (tokenscan) and the Session reader agree on the first request");
+});
+
+test("first-request words: a measured figure or no clause, never a zero; estimate and measure said apart", () => {
+  assert.equal(data.firstShortWords(60_900), "first request 60.9k");
+  assert.equal(data.firstShortWords(null), null);
+  assert.equal(data.firstShortWords(0), null);
+  assert.equal(data.newestFirstTok([{ firstTok: null }, { firstTok: 5000 }, { firstTok: 9000 }]), 5000);
+  assert.equal(data.newestFirstTok([{ firstTok: null }]), null);
+  const both = data.alwaysOnTipWords(3200, 60_900);
+  assert.match(both, /about 3\.2k tokens .*an estimate/);
+  assert.match(both, /measured 60\.9k tokens on its first request/);
+  assert.match(data.alwaysOnTipWords(null, null), /reads none.*No session here has a measured first request/);
 });
 
 test("summarize: nothing priced is withheld words, never a zero", async () => {

@@ -127,7 +127,8 @@ function CarriedBody({ carried, fmt }: { carried: SessionCarried; fmt: Fmt }) {
 /**
  * The first request as one strip. Positioned segments (as `KindBar`), so a 0.05% sliver keeps the
  * width the geometry gave it; a tap or drag reads the segment under the finger in the text line
- * beneath (the context sheet's grammar), a second tap on the same segment clears it.
+ * beneath (the context sheet's grammar), a second tap on the same segment clears it. A mouse
+ * also reads by hovering, and the line returns to the pick when it leaves.
  */
 function CarriedBar({ strip, picked, onPick, firstRequestTok, fmt }: {
   strip: CarriedStrip;
@@ -140,16 +141,24 @@ function CarriedBar({ strip, picked, onPick, firstRequestTok, fmt }: {
     const box = e.currentTarget.getBoundingClientRect();
     return box.width > 0 ? segAt(strip.segs, (e.clientX - box.left) / box.width) : null;
   };
-  const sel = strip.segs.find((s) => s.key === picked) ?? null;
+  // A mouse reads by hovering (VS Code's webview, a desktop browser); the readout falls back to the
+  // pick when the pointer leaves. Touch never hovers, so the phone's grammar is unchanged.
+  const [hover, setHover] = useState<string | null>(null);
+  const shown = hover ?? picked;
+  const sel = strip.segs.find((s) => s.key === shown) ?? null;
   const note = scaleNote(strip, firstRequestTok, fmt);
   return (
     <div className="carried-comp">
       <div className="carried-bar" role="group"
         aria-label={`${strip.scale === "request" ? "what the first request was made of" : "what the parts were made of"}; the line under it reads the picked part`}
-        onPointerDown={(e) => { const s = at(e); onPick(s && s.key === picked ? null : s?.key ?? null); }}
-        onPointerMove={(e) => { if (e.buttons) { const s = at(e); if (s) onPick(s.key); } }}>
+        onPointerDown={(e) => { const s = at(e); onPick(s && s.key === picked ? null : s?.key ?? null); if (e.pointerType === "mouse") setHover(null); }}
+        onPointerMove={(e) => {
+          if (e.buttons) { const s = at(e); if (s) onPick(s.key); if (e.pointerType === "mouse") setHover(null); }
+          else if (e.pointerType === "mouse") setHover(at(e)?.key ?? null);
+        }}
+        onPointerLeave={(e) => { if (e.pointerType === "mouse") setHover(null); }}>
         {strip.segs.map((s) => (
-          <span key={s.key} className={`carried-seg carried-${s.cls}${s.key === picked ? " carried-on" : ""}`}
+          <span key={s.key} className={`carried-seg carried-${s.cls}${s.key === shown ? " carried-on" : ""}`}
             style={{ left: `${s.x}%`, width: `${s.w}%` }} />
         ))}
       </div>

@@ -85,7 +85,7 @@ export interface SpendView {
  * that can be skipped on a chart — three real bugs in this app's other chart
  * were found by exactly that and by nothing else.
  */
-export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, usageHistory, online = true, onRefreshUsage, onClose, onRescan, initialSpan = { id: "week", back: 0 }, initialSource = "claude", ledgerTabs = [], localLedgers = [], fresh = 0, nameOf, onExplain, isLive, onOpenConvo, readings, openedOn = null, onClearOn, lead, liveWindows = true, doors }: {
+export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, usageHistory, online = true, onRefreshUsage, onClose, onRescan, initialSpan = { id: "week", back: 0 }, initialSource = "claude", ledgerTabs = [], localLedgers = [], fresh = 0, nameOf, onExplain, isLive, canOpen, onOpenConvo, readings, openedOn = null, onClearOn, lead, liveWindows = true, doors }: {
   /** Doors to what every turn carries (always-on context); drawn first in the scroll region. */
   doors?: ReactNode;
   /** Drawn first in the NOW block, above the limit windows — the VS Code panel's headline. */
@@ -146,6 +146,8 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
   nameOf?: (id: string) => string | undefined;
   onExplain?: (c: TokenConvo, title: string) => void;
   isLive?: (id: string) => boolean;
+  /** Door to the context & cost sheet on a top-conversation row; falls back to `isLive`. */
+  canOpen?: (id: string) => boolean;
   onOpenConvo?: (id: string) => void;
 }) {
   /**
@@ -828,7 +830,7 @@ export function TokenStatsBody({ doc: rawDoc, res, guests = [], usage, spend, us
                 dcut={dcut && calDays != null ? { cut: dcut, calendarDays: calDays, caption: rangeCaption } : null}
                 scope={scope} setScope={setScope} grids={grids} hist={hist} shownTotals={shownTotals} shownCost={shownCost}
                 shownTok={shownTok} coldNote={coldNote} scopeWords={scopeWords} bands={bands} canModel={canModel}
-                days={days} nameOf={nameOf} onExplain={onExplain} isLive={isLive} onOpenConvo={onOpenConvo}
+                days={days} nameOf={nameOf} onExplain={onExplain} isLive={isLive} canOpen={canOpen} onOpenConvo={onOpenConvo}
                 scopeRepos={scopeRepos} scopeRes={scopeRes} reposRefusal={reposRefusal} top={top}
                 weekTwin={ss === "week" && !!weekDoc}
                 pts={(usd, c) => (convoInWeek(c, wk?.from) ? ptsText(usd, weekCal) : null)} />

@@ -46,7 +46,8 @@ export function App() {
           <SessionView doc={session?.doc ?? null} why={session ? session.why : "Waiting for the extension…"}
             prompts={prompts.list} terminal={prompts.terminal} selectedTurn={turn} onSelectTurn={setTurn} post={post} />
         )}
-        {tab === "all" && <OverviewView doc={corpus?.doc ?? null} why={corpus ? corpus.why : "Waiting for the extension…"} scanning={corpus?.scanning} live={live} post={post} askedLedger={ledger} />}
+        {tab === "all" && <OverviewView doc={corpus?.doc ?? null} why={corpus ? corpus.why : "Waiting for the extension…"} scanning={corpus?.scanning} live={live} post={post} askedLedger={ledger}
+          here={sessions && sessions.rows.length ? { folder: sessions.folder, ids: new Set(sessions.rows.map((r) => r.id)) } : null} />}
         {tab === "always-on" && (
           <WeightView doc={weight?.doc ?? null} why={weight ? weight.why : "Waiting for the extension…"}
             prompts={prompts.list} terminal={prompts.terminal} post={post} />

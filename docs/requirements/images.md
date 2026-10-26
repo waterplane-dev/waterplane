@@ -73,3 +73,8 @@ Enlarged images opened from the strip can be swiped on the phone and navigated w
 An optional "text in marks" extension, off until the person enables it in the plugin list, reads the words under a highlight, box or circle ON THE PHONE (no desktop, no cloud call — R-images-012 still holds) in English and German, and works in the plain web browser as well as the APK. Enabling it downloads its reader once from the person's own desktop and keeps it for offline use; disabling offers to delete it. The words show under the image as soon as the mark is drawn, editable and removable before sending, and ride in the note as `around "…"`; a read that fails or is not ready when sent is left out, never guessed. An area's note gives its box (`x a-b%, y c-d%`) without a position word.
 - asked: 2026-10-24 (session b550cf2c: "It must also work in the web browser for non APK users"; "Can we put this into an optional plugin/extension that user can install / enable as they like"; chose: assets downloaded on enable, English and German)
 - shipped: be83cad9, 0932e5de, 222b8bbb, a7ad86a6
+### R-images-016 · shipped
+Combined images keep their full resolution: each panel uploads at the chosen width, not the whole collage capped at the upload width.
+- asked: 2026-10-25
+- shipped: c8ffd794
+

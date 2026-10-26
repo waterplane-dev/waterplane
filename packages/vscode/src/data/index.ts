@@ -58,6 +58,7 @@ export { headline } from "../../../extensions/token-stats/web/headline.js";
 export { PROMPTS, render, scrub } from "./promptText.js";
 export { sessionTotal } from "./sessiontotal.js";
 export { isLive, isRunning, fmtAge, fmtElapsed, runningTurn, runningWords, anyLive, isRecent, LIVE_MS, RECENT_MS, RUNNING_FRESH_MS } from "./running.js";
+export { alwaysOnTipWords, firstShortWords, newestFirstTok } from "./firstwords.js";
 export { MAX_ROWS, WINDOW_MS, SessionLedger, recentRows, summarize, isAutomated, peekEntrypoint } from "./sessionlist.js";
 
 // ── Repo health: the pure fold, the PATH check, the storage slug, the prompt builders, and the

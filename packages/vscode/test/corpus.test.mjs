@@ -39,6 +39,9 @@ test("subagent file is counted in subagents and in the totals; one conversation"
   assert.equal(doc.top.length, 1);
   assert.equal(doc.top[0].agents, 1);
   assert.equal(doc.top[0].repo, "/Users/x/repo");
+  const parent = Object.values(store.files).flatMap((f) => Object.values(f)).find((s) => !s.sub);
+  assert.ok(parent.b > 0, "the fixture's parent log records its first request");
+  assert.equal(doc.top[0].firstTok, parent.b, "the row's first request is the parent log's, as the phone's tokenstats sets it");
   assert.equal(doc.repos[0].label, "repo");
   assert.ok(doc.models.some((m) => m.label === "claude-haiku-4-5"), "dated id labelled by its alias");
 });

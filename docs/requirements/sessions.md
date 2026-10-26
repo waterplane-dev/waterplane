@@ -248,3 +248,12 @@ Closed and archived sessions are listed in the same card style as open sessions.
 - asked: 2026-10-22
 - shipped: 1ab33702, a82b2f95
 
+### R-sessions-056 · shipped
+A session still on an older Claude binary than the installed one can be restarted once it is idle, and Send asks whether to restart onto the new binary first.
+- asked: 2026-10-23, 2026-10-24
+- shipped: ba813d9a, 158badcb
+
+### R-sessions-057 · requested
+Sessions can be found again later, so a session with a pending next step can be located.
+- asked: 2026-10-26
+

@@ -10,6 +10,7 @@ import { BRAND, CHARS_PER_TOKEN, contextPct, fmtCount, fmtUsd, isoWeekOf, repoHe
 import { COPILOT_LEDGER } from "./protocol.js";
 import type { HealthDoc, SessionSummary, TabId, WeightDoc, CorpusDoc } from "./protocol.js";
 import { fmtAge, isLive, isRunning } from "./data/running.js";
+import { alwaysOnTipWords, firstShortWords, newestFirstTok } from "./data/firstwords.js";
 import { copilotWeekWords, currentSummary, thisRepoWeek, weekFigure, weekSplit } from "./data/summary.js";
 import type { HeadlineSummary } from "./data/summary.js";
 import { seriesValueWords } from "../../web/src/repoHealthWords.js";
@@ -208,12 +209,14 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
         const label = r.lastPrompt ? clip(r.lastPrompt, 80) : r.prompts ? "(empty prompt)" : "(no prompt yet)";
         const it = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
         it.id = `s:${r.id}`;
-        it.description = `${cost} · ${ctxWords(r)} · ${running ? "running" : fmtAge(now - r.mtime)}`;
+        const first = firstShortWords(r.firstTok);
+        it.description = `${cost} · ${ctxWords(r)} · ${running ? "running" : fmtAge(now - r.mtime)}${first ? ` · ${first}` : ""}`;
         it.iconPath = running ? new vscode.ThemeIcon("loading~spin")
           : live ? new vscode.ThemeIcon("circle-filled", new vscode.ThemeColor("charts.green"))
           : new vscode.ThemeIcon("circle-outline");
         const md = new vscode.MarkdownString();
         md.appendText(`${cost} list price · ${r.lastTok != null ? `${fmtCount(r.lastTok)} tokens of context` : "no context yet"} · ${r.prompts} ${r.prompts === 1 ? "prompt" : "prompts"} · ${fmtAge(now - r.mtime)}${live ? (running ? " · running" : " · live") : ""}\n\n`);
+        if (first) md.appendText(`Its first request carried ${fmtCount(r.firstTok ?? 0)} tokens, before any conversation had built up: what this desktop and folder put in front of every turn.\n\n`);
         md.appendText(r.lastPrompt || "No prompt yet.");
         it.tooltip = md;
         it.accessibilityInformation = { label: `${label}, ${it.description}${live ? (running ? ", running" : ", live") : ""}` };
@@ -256,6 +259,10 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
         it.id = `v:${n.tab}`;
         it.iconPath = new vscode.ThemeIcon(v.icon);
         it.description = this.viewWords(n.tab, s);
+        if (n.tab === "always-on" && s.weight) {
+          const est = s.weight.agents.claude.files ? s.weight.reading.alwaysOnTokens : null;
+          it.tooltip = alwaysOnTipWords(est, newestFirstTok(s.rows));
+        }
         if (n.tab === "all" && !s.scanning) {
           const sum = currentSummary(s.summary, Date.now());
           if (sum && weekFigure(sum)) it.tooltip = this.summaryTip(sum, s.corpus !== null);
@@ -279,14 +286,19 @@ export class NavTree implements vscode.TreeDataProvider<Node>, vscode.Disposable
       }
       case "always-on":
         if (!s.weight) return "nothing measured";
-        if (!s.weight.files.length) return "no instruction files here";
+        if (!s.weight.files.length) {
+          const first = firstShortWords(newestFirstTok(s.rows));
+          return `no instruction files here${first ? ` · ${first}` : ""}`;
+        }
         // Each agent that reads something here, by its every-request weight.
         const { claude, copilot } = s.weight.agents;
         const bits = [
           claude.files ? `Claude ~${fmtCount(s.weight.reading.alwaysOnTokens)}` : null,
           copilot.files ? `Copilot ~${fmtCount(Math.round(copilot.always / CHARS_PER_TOKEN))}` : null,
         ].filter(Boolean);
-        return `${bits.join(" · ")} tokens every request`;
+        // The measured figure beside the estimate: what the newest session here really sent first.
+        const first = firstShortWords(newestFirstTok(s.rows));
+        return `${bits.join(" · ")} tokens every request${first ? ` · ${first}` : ""}`;
       case "health": {
         if (s.healthRunning) return "measuring…";
         // The score leads, as on the phone's launcher chip (trend second, the worst alert level named);

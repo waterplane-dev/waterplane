@@ -72,6 +72,8 @@ export interface SessionSummary {
   open: boolean;
   /** The last turn's `at`, for the running clock; 0 when undated. */
   openAt: number;
+  /** What the log's first request carried, in tokens (`SessionCarried.firstRequestTok`); null = not measured. */
+  firstTok: number | null;
 }
 
 export interface SessionDoc {
@@ -119,7 +121,8 @@ export interface CorpusDoc extends TokenStatsDoc {
   /** Copilot Chat's own token counts off this VS Code's chat logs (`copilotLedger`), drawn as the
    *  `COPILOT_LEDGER` tab and answered locally — no desktop needed. Absent = not read in this scan. */
   copilot?: BackendTokensDoc;
-  top: CostConvo[];
+  /** With the phone's `firstTok` set per row (`data/corpus.ts`). */
+  top: (CostConvo & { firstTok?: number })[];
   coldStarts?: ColdStarts;
   week: CostWindowDoc;
   spans: Partial<Record<number, CostWindowDoc>>;

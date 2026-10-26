@@ -92,6 +92,11 @@ Agents in driven repos are told to flag only when the person must act (new crash
 While a repo's newest failed build is unhandled, its build button carries a red worded "build failed" chip; a tap on the notification opens that repo's build sheet on the failure. The next successful run of that build, or done, clears it and says so.
 - asked: 2026-10-25
 - shipped: 52910130
+### R-notifications-020 · shipped
+Tapping any notification opens a page about that exact notification, ending at its own row in the feed when nothing more specific exists.
+- asked: 2026-10-24
+- shipped: 3b0128b3
+
 
 ### R-notifications-021 · shipped
 A new open exposure alert on a watched repo is pushed once, forever: one push per finding (more than three at once in a repo are one push naming the count), never repeated for the same finding, and silent for findings the phone already showed when the repo joined the watch. Critical and high are *needs you* and clear when the finding is no longer open; the rest are information. A tap opens that repo's readings on the exposure watch.

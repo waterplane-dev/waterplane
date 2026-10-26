@@ -336,3 +336,12 @@ A schedule can run a build entry: each occurrence posts one ordinary build run (
 ### R-automation-072 · shipped
 The week-end burn sheet says, above its repo list, what ticking a repo does: unattended sessions from the start time to the stop line, one at a time, each one small fix committed on the current branch only if tests pass, nothing pushed.
 - asked: 2026-10-26 (owner, on a screenshot: "this dialogue misses to tell what it will do if I select an item")
+### R-automation-073 · requested
+A daily scheduled check runs for a week; on a network/DNS outage it starts a Claude session to investigate and flags the finding in waterplane.
+- asked: 2026-10-25
+
+### R-automation-074 · shipped
+The week-end burn sheet scrolls so every repo is reachable, and two clones with the same name are told apart by their path instead of showing one name twice.
+- asked: 2026-10-25
+- shipped: b5dbb527
+

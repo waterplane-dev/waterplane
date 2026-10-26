@@ -78,6 +78,8 @@ export class StatusBar implements vscode.Disposable {
         ? `Context: ${fmtCount(tok)} of ${fmtCount(d.windowTok ?? 0)} tokens (${Math.round(pct)}%)\n\n`
         : `Context: ${fmtCount(tok)} tokens (window unknown)\n\n`);
     }
+    const first = d.carried?.firstRequestTok;
+    if (first != null && first > 0) md.appendMarkdown(`First request: ${fmtCount(first)} tokens carried before any conversation — the Session view splits it.\n\n`);
     const c = total.cost;
     if (c) {
       md.appendMarkdown(`${fmtUsd(c.total)}: input ${fmtUsd(c.input)} · output ${fmtUsd(c.output)} · cache read ${fmtUsd(c.cacheRead)} · cache write ${fmtUsd(c.cacheWrite)}\n\n`);

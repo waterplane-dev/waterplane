@@ -51,3 +51,8 @@ A shortcut the CLI names on screen (the footer's "shift+tab to cycle", a picker'
 ### R-cli-011 · shipped
 Any key combination can be sent to the CLI from the phone: Ctrl / Alt / Shift on the special-keys row are held for the next key (one on the row, or a letter from the on-screen keyboard), a second tap locks one, and a `Keys` list offers claude's own shortcuts one tap each. A combination a terminal cannot send is refused in words, never sent as another key.
 - asked: 2026-10-20
+### R-cli-012 · shipped
+When a backend CLI (claude or another coding backend) is not installed or not on PATH, starting a session says so in words naming the missing tool, instead of a bare [exited].
+- asked: 2026-10-23, 2026-10-24, 2026-10-24
+- shipped: db06ba93, d791aed3
+

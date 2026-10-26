@@ -174,10 +174,34 @@ The apps collect no user data (and the Play data-safety form says so), request o
 - asked: 2026-10-21
 
 ### R-distribution-038 · requested
-Waterplane Game, TalkingPictures and Little Painter are published on Google Play through the Play Console with the same flow; listings declare their assets as AI-made, each labelled.
-- asked: 2026-10-21, 2026-10-21, 2026-10-21
+Waterplane Game, TalkingPictures and Little Painter are published on Google Play through the Play Console with the same flow; listings declare their assets as AI-made, each labelled, are completed and submitted, and show as in review rather than as a draft.
+- asked: 2026-10-21, 2026-10-22, 2026-10-23
 
 ### R-distribution-039 · requested
 The Waterplane AAB is on the internal testing track assigned to the owner's account, not published to production.
 - asked: 2026-10-21
+
+### R-distribution-040 · requested
+The Waterplane Game does not ship a PC form factor.
+- asked: 2026-10-23
+
+### R-distribution-041 · shipped
+Re-running install.sh on an existing installation says whether it installed, updated or reinstalled.
+- asked: 2026-10-24
+- shipped: fe9c0b9c
+
+### R-distribution-042 · shipped
+The reach/KPI stats scripts and dashboard stay out of the public mirror.
+- asked: 2026-10-25
+- shipped: b380c90f
+
+### R-distribution-043 · shipped
+The release preflight stops a release only for an open, unaccepted high or critical advisory, a newly added install script, or a failed npm verification, each waivable with an accept key; it prints the dependency changes since the last released tag.
+- asked: 2026-10-26
+- shipped: 025ace37
+
+### R-distribution-044 · shipped
+Release assets carry a build provenance attestation.
+- asked: 2026-10-26
+- shipped: 15c0ea03
 

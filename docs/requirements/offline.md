@@ -26,3 +26,18 @@ Responsive layout behavior from offline mode also works in online mode.
 With no connection the phone shows the latest known remote status, and it stays viewable offline.
 - asked: 2026-10-12, 2026-10-13
 
+### R-offline-008 · shipped
+The build sheet and the schedule sheet state when their list was last confirmed from the host.
+- asked: 2026-10-25
+- shipped: 469c9837
+
+### R-offline-009 · shipped
+The offline-capable sweep keeps running when the APK app is in the background, not only in the foreground.
+- asked: 2026-10-25
+- shipped: 9ba71411
+
+### R-offline-010 · shipped
+Every session's terminal screen is cached so it is available offline, not only the attached one.
+- asked: 2026-10-25
+- shipped: 8a51a166, 9ba71411
+

@@ -42,3 +42,7 @@ A conversation can be bookmarked (live or from the archive) with an optional one
 The archive lists a non-claude backend's conversations (when that backend's facts include `conversations`), resumes one under that backend and deletes one after a confirm; reading/forking/bookmarks stay claude's until a backend provides them.
 - asked: 2026-10-22 (backend contract v2 follow-up, workflow backend-v2-followups, package b-archive-non-claude)
 - shipped: this change (`ArchiveSheet.tsx` backend switch over `GET/DELETE /api/conversations`, `features/tools/logic.ts` `archiveBackends` + `liveConversationIds` matching `backendSessionId`, `webapi/webapiTree.ts` `conversations`/`conversationsDelete`)
+### R-conversations-009 · requested
+A chat always renders its turns; it never shows blank or half-drawn where its content should be.
+- asked: 2026-10-23
+

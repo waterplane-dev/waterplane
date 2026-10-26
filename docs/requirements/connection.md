@@ -110,3 +110,16 @@ Tailscale keeps running when the disk is nearly full: a checklist row installs a
 The WordPress site is reachable from the app.
 - asked: 2026-10-22
 
+### R-connection-021 · shipped
+The app shows which other local IP addresses would work as an alternative to Tailscale, skipping VM bridges and tunnels.
+- asked: 2026-10-24
+- shipped: faee1c21
+
+### R-connection-022 · requested
+If the Mac loses internet or DNS, the owner can keep working from the phone through a fallback path (such as a static hosts entry) instead of sessions dying on API Error ENOTFOUND.
+- asked: 2026-10-24
+
+### R-connection-023 · requested
+After the local CA certificate is installed on Windows, the measurement page loads over HTTPS on the LAN host name, and the tailnet link also loads.
+- asked: 2026-10-26
+

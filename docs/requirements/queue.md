@@ -59,3 +59,11 @@ Backlog and scheduled items deliver their prompt into the session they open exac
 Delivered backlog items show their delivered status and never carry a false failed label.
 - asked: 2026-10-15
 
+### R-queue-014 · requested
+The send/queue choice shown before sending matches what actually happens; if Claude queues a message itself, the UI says so instead of offering an unreal option.
+- asked: 2026-10-24
+
+### R-queue-015 · requested
+The repo backlog is never lost; backlog items persist.
+- asked: 2026-10-24, 2026-10-24
+

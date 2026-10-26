@@ -210,13 +210,22 @@ export function foldCorpus(files: Files, now: number, scan?: ScanStats): CorpusD
   const hourOfDay: TokenHourSlot[] = slots.map((t, hour) => ({ hour, ...t, cost: slotCost[hour] }));
 
   // The host's own all-time conversation fold, so the table is the phone's to the cent.
-  const top = foldCostWindow(files, 0, Number.MAX_SAFE_INTEGER, { byConv: new Map() }, now, TOP_CONVOS).convos;
+  const top: CorpusDoc["top"] = foldCostWindow(files, 0, Number.MAX_SAFE_INTEGER, { byConv: new Map() }, now, TOP_CONVOS).convos;
+  // Each row's first request (the parent log's `b`), as the phone's `tokenstats.ts` sets `firstTok`:
+  // the all-sessions rows draw it as a bar. A log that did not record one leaves it absent.
+  const firstOf = new Map<string, number>();
+  for (const byFile of Object.values(files)) {
+    for (const [fileKey, sum] of Object.entries(byFile)) if (!sum.sub && sum.b) firstOf.set(fileKey.split("/")[0], sum.b);
+  }
+  const withFirst = (convos: CorpusDoc["top"]) => { for (const c of convos) { const b = firstOf.get(c.id); if (b) c.firstTok = b; } };
+  withFirst(top);
   // The headline's seven calendar days (local midnight six days back, to now), folded the way the
   // phone's week card is — so "where the week went" breaks down the very figure the headline prints.
   const weekFrom = new Date(now);
   weekFrom.setHours(0, 0, 0, 0);
   weekFrom.setDate(weekFrom.getDate() - (WEEK_DAYS - 1));
   const week = foldCostWindow(files, weekFrom.getTime(), now, { byConv: new Map() }, now);
+  withFirst(week.convos);
   // The span filter's calendar spans, from local midnight n-1 days back like `calendarFrom`.
   const spans: CorpusDoc["spans"] = {};
   for (const n of SPAN_DAYS) {
@@ -224,6 +233,7 @@ export function foldCorpus(files: Files, now: number, scan?: ScanStats): CorpusD
     from.setHours(0, 0, 0, 0);
     from.setDate(from.getDate() - (n - 1));
     spans[n] = foldCostWindow(files, from.getTime(), now, { byConv: new Map() }, now);
+    withFirst(spans[n].convos);
   }
 
   const first = dayRows[0]?.day ?? null;

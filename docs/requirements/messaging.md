@@ -52,3 +52,8 @@ A promo that was sent successfully is reported as sent.
 A sent message counts as delivered only once the CLI's full framed composer shows the echoed text, never from a one-row bare read.
 - asked: 2026-10-20
 
+### R-messaging-013 · shipped
+Sending a message from the phone finishes and does not hang on "Sending… desktop hasn't answered yet; retrying".
+- asked: 2026-10-25
+- shipped: 9b5b9862
+

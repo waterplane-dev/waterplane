@@ -60,3 +60,18 @@ In the VS Code tree the Sessions section stays collapsed after the user collapse
 The VS Code tree leads with insight: All sessions first, then the folder switcher (several folders), then Repo health, Always-on context and Copilot. Sessions sits second and expanded while a session is running or was written to in the last 30 minutes, and last and collapsed when none is; a fold the user sets against that default is remembered. The panel opens on the Session view while a session is live (the same test as Sessions' placement) and on All sessions otherwise, decided once the folder's sessions are read; while the panel stays open (hidden included) it keeps the view it was last left on. All sessions says once how old its reading is, beside the re-read link, and does not repeat the conversation count its footer carries.
 - asked: 2026-10-21 (owner)
 - shipped: f6fb1a70, e5c20ae7, f41b5db5
+### R-navigation-014 · shipped
+One central What's new page links to every new thing, each with its state, instead of scattered entry points.
+- asked: 2026-10-25
+- shipped: 9d5c718f, 17de3b66
+
+### R-navigation-015 · shipped
+A hidden menu entry shows an activity marker when something inside it needs attention.
+- asked: 2026-10-26
+- shipped: 4e07a381
+
+
+### R-navigation-016 · shipped
+The session context view, the repo readings (set-up) sheet and the all-sessions view each link to the other two for what every turn carries; following a link from all-sessions closes it first.
+- asked: 2026-10-26
+- shipped: 3e2685b7, b1e06e5d, 5addc8e8, bcc7de90, eafed83a

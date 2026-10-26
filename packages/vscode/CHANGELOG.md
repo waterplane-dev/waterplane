@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0 - 2026-10-26
+
+- **What every turn carries, measured.** The Session view shows what the conversation's first request actually carried, as Claude Code logged it: instruction files (with `~` paths and their type), the skill listing, MCP instructions, deferred tool names, subagent listing, hook context, and the system prompt and tool schemas (marked undocumented), with the unattributed rest as its own segment. One strip, a meter per row; hover reads a part, a click keeps it.
+- **Always-on context draws the phone's strip.** Every file that reaches Claude Code on every request, by size and coloured by what the threshold does with it; MCP servers and other rows with no size are named markers, never a length. Hover reads a file, a click keeps it. **repo** and **desktop** chips cut the strip and the tables, and say how many rows they hide.
+- **Listed beside the threshold:** `CLAUDE.local.md`, subagent descriptions (`.claude/agents/*.md`) and `.mcp.json` servers, plus this desktop's own files (user CLAUDE.md, auto-memory, user skills, plugin skills, user MCP servers). A line above `CLAUDE.local.md` and subagent files says what each costs. A repo file's name opens it.
+- **The sidebar says the measured figure too.** Each session row ends with its first request's tokens (`first request 61k`), and Always-on context puts the newest session's first request beside the folder's estimate; the tooltip says which is which. The status bar's session tooltip names it as well.
+- **Doors between the three views.** Session, Always-on context and All sessions each link to the other two; a costliest-conversation row in All sessions that is one of this folder's sessions opens it in the Session view (**context & cost**). All sessions' rows show each conversation's first request as a bar.
+
 ## 0.6.1 - 2026-10-24
 
 - **Clicking the Copilot row no longer asks to sign in to GitHub.** It opens Copilot Chat's token use read off this machine's logs. GitHub's quota figure is its own optional action: the GitHub button on the row, or right-click.

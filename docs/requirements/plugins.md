@@ -148,3 +148,11 @@ An installed plugin shows an update button when its repo holds a newer release t
 A plugin that declares npm dependencies is refused at install in words; plugins are zero-dependency for now.
 - asked: 2026-10-23
 - shipped: fb0cb3c0, 960d75fd, 645751cf, 58a89d29, fb5061cc, 84b05d48
+### R-plugins-032 · requested
+Codex works locally without any account sign-in.
+- asked: 2026-10-23
+
+### R-plugins-033 · requested
+The GitHub Copilot plugin is published as a plugin marked as an unstable preview, and its repository becomes public once its audit is done, without further approval.
+- asked: 2026-10-23
+

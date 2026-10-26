@@ -150,3 +150,32 @@ Repo health reports how many recent commits removed only comments or blank lines
 - asked: 2026-10-21
 - shipped: e34537cf
 
+### R-metrics-032 · shipped
+A daily job archives reach numbers (GitHub views, clones and stars, npm downloads, Marketplace and release installs, Google Play installs), one reading per day.
+- asked: 2026-10-24
+- shipped: 599fed7a, 4a57ca39, 39d00f35, 66abcdc2
+
+### R-metrics-033 · shipped
+A local dashboard reachable over Tailscale charts the reach numbers (views, clones, stars, npm downloads, installs) on one day axis, and marks npm publish days and GitHub release days on the charts. Each KPI tile carries its own small chart, all sharing the same x time scale.
+- asked: 2026-10-24, 2026-10-25
+- shipped: 0a3011d3, b98be267, ad48c626, 360f0586
+
+### R-metrics-034 · requested
+The reach dashboard opens from the Links sheet with content, not a blank page, and loads in Brave as in Chrome; the app links to it.
+- asked: 2026-10-24
+
+### R-metrics-035 · shipped
+Scorecard readings are available for private repos too, locally.
+- asked: 2026-10-26
+- shipped: e7ac925c
+
+
+### R-metrics-036 · shipped
+A session's context view says what every turn of it carried (instructions, skills, MCP, agents, hooks, system prompt, tools), measured on that log's first request, next to that request's total tokens with the unexplained remainder named; it says so plainly when the log or host cannot tell.
+- asked: 2026-10-26
+- shipped: e5abc64a, eafed83a
+
+### R-metrics-037 · shipped
+In the all-sessions view each costliest conversation names its first request's tokens, measured, with no estimate or average.
+- asked: 2026-10-26
+- shipped: 2d220c87

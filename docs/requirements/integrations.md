@@ -14,6 +14,6 @@ Fixes to the local Copilot reader apply to both waterplane and the VS Code exten
 - shipped: 6d01e574
 
 ### R-integrations-004 · requested
-Non-Claude backends reach the same level of integration and support as Claude, Copilot first, while Claude's behaviour stays byte-identical and heuristic readings that cannot be determined show as absent, never a wrong number.
-- asked: 2026-10-21, 2026-10-21, 2026-10-22, 2026-10-22
+Non-Claude backends reach the same level of integration and support as Claude, Copilot first, then Gemini CLI, while Claude's behaviour stays byte-identical and heuristic readings that cannot be determined show as absent, never a wrong number.
+- asked: 2026-10-21, 2026-10-22, 2026-10-23
 

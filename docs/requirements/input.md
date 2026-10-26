@@ -74,3 +74,8 @@ Typed answers sent to a backend are limited to 1000 characters and sent with Ret
 - asked: 2026-10-22
 - shipped: ea856e88
 
+### R-input-017 · shipped
+On desktop, after pasting an image and sending it with Ctrl+Return, the caret is in the prompt box at the end of the text, so no mouse is needed.
+- asked: 2026-10-24
+- shipped: 81cd5434
+

@@ -34,8 +34,8 @@ The log view has a Copy Log button and a button sending the log to a CLI session
 - asked: 2026-10-14
 
 ### R-diagnostics-008 · shipped
-A checkbox dialog with the cursor on Submit is still recorded as an open dialog in the health record, even when the footer wraps and includes 'ctrl+g to edit in Vim'.
-- asked: 2026-10-17, 2026-10-17
+A checkbox dialog with the cursor on Submit is still recorded as an open dialog in the health record, even when the footer wraps over two rows at 46 columns and includes 'ctrl+g to edit in Vim' or another short hint.
+- asked: 2026-10-17, 2026-10-17, 2026-10-24, 2026-10-24, 2026-10-24
 - shipped: 5cb8f255
 
 ### R-diagnostics-009 · requested
@@ -65,4 +65,13 @@ Each screen-reading signal (prompt.box, prompt.submit, askbox.enrich, context.me
 The app shows which skills are loaded into context and when each was used, per conversation and per subagent.
 - asked: 2026-10-21
 - shipped: ad8ac0e0
+
+### R-diagnostics-015 · shipped
+Repo health readings work after install and show measured results instead of a module-not-found error; a repo's own engine that cannot load falls back to the desktop's.
+- asked: 2026-10-24
+- shipped: fe9c0b9c, fddf1cd4
+
+### R-diagnostics-016 · requested
+When a connection problem happens, logs are kept ready so the cause can be investigated.
+- asked: 2026-10-24
 
